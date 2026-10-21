@@ -669,4 +669,35 @@ test("warmCarAssets builds casters only where a shadow pass will fetch them", ()
   assert.equal(casters({ casters: true }, (v) => { v.ctx.PerfGov.tier = () => 2; delete v.G.gfx.carShadowBegin; }), 0,
     "tier 2 drops the lamp pass, and with no car pass nothing casts");
   assert.equal(casters({ casters: true }, (v) => { v.ctx.PerfGov.tier = () => 2; }), teams, "tier 2 keeps the car pass");
+  // The backend's map getters, as shadow-pass.js reads them: a Begin hook with no map behind it is a no-op.
+  const phone = (v) => { Object.defineProperty(v.G.gfx, "carShadowEnabled", { get: () => false });
+    Object.defineProperty(v.G.gfx, "lampShadowEnabled", { get: () => false }); };
+  assert.equal(casters({ casters: true }, phone), 0, "no car map and no lamp map (a phone): no caster");
+  assert.equal(casters({ casters: true }, (v) => { Object.defineProperty(v.G.gfx, "carShadowEnabled", { get: () => false }); }), teams,
+    "no car map but a lamp map: the lamp pass still casts");
+  assert.equal(casters({ casters: true }, (v) => { v.ctx.LightTune.LT.shadowStr = 0; Object.defineProperty(v.G.gfx, "lampShadowEnabled", { get: () => false }); }), 0,
+    "shadows at 0 strength and no lamp map: the car pass declines, nothing casts");
+});
+
+test("with no car or lamp map, resolvePlayer builds no first-person caster", () => {
+  const v = carDrawVm({ casters: true, cam: "helmet" });
+  const { ctx, G, carDraw, rec } = v;
+  ctx.CamModes.CAM_MODES.push({ id: "helmet" });
+  ctx.CockpitOpts.layout = () => ({ eyeF: -0.10, eyeU: 0.75 });
+  vm.runInContext(read("js/camera/vantage.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/camera/vantage.js") });
+  vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/shadow-pass.js") });
+  v.field((c, i) => 1000 + 9 * i);
+  G.camMode = ctx.CamModes.CAM_MODES.length - 1; G.state = "race";
+  G.camEye = [0.31, 1.07, 1000.4]; G.camTgt = [0.2, 1, 1030];
+  const sp = ctx.ShadowPass.create(G, { teamMesh: carDraw.teamMesh, vStd: (x) => x, cockpitCaster: carDraw.cockpitCaster });
+  const len = Math.hypot(0, 0.04, 1);
+  const smp = { p: [0, 0, 1000], t: [0, 0.04 / len, 1 / len], r: [-1, 0, 0], hw: 7 };
+  Object.defineProperty(G.gfx, "carShadowEnabled", { get: () => false, configurable: true });
+  Object.defineProperty(G.gfx, "lampShadowEnabled", { get: () => false, configurable: true });
+  const before = rec.builds.filter((x) => x.kind === "sh").length;
+  sp.resolvePlayer(smp, 0.08);
+  assert.equal(rec.builds.filter((x) => x.kind === "sh").length, before, "phone: the first-person caster is not built");
+  Object.defineProperty(G.gfx, "lampShadowEnabled", { get: () => true, configurable: true });
+  sp.resolvePlayer(smp, 0.08);
+  assert.equal(rec.builds.filter((x) => x.kind === "sh").length, before + 1, "a lamp map: the first-person caster is built");
 });

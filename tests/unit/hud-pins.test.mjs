@@ -168,7 +168,7 @@ function boot({ W = 844, H = 390, scale = 1, cssZoom = true, camInRow = true } =
   for (let i = 0; i < 3; i++) hud.updateHud(true);
 
   return {
-    root, announce, strat, docksLit, pub, paintAt,
+    root, announce, strat, docksLit, pub, paintAt, G, els, gaps, hud,
     lane: () => ({
       x: root.style.getPropertyValue("--announce-lane-x"),
       w: root.style.getPropertyValue("--announce-lane-w"),
@@ -183,6 +183,21 @@ test("pin: the radio lane is published on a touch phone with lit docks (harness 
   const h = boot();
   const l = h.lane();
   assert.ok(parseFloat(l.x) > 0 && parseFloat(l.w) > 0, "lane must be published: " + JSON.stringify(l));
+});
+
+test("pin: the gap plate's empty flag follows its two lines (no root :has(), B·H11)", () => {
+  const h = boot();
+  const empty = () => "empty" in h.gaps.dataset;   // mini-dom: dataset is not mirrored into attributes
+  assert.equal(h.els.gapA.textContent + h.els.gapB.textContent, "", "solo fixture: both lines empty");
+  assert.ok(empty(), "both lines empty -> data-empty collapses the plate");
+  const rival = { ...h.G.player, code: "RIV", team: { id: "t2", color: [0, 0, 1] }, rank: 2, prog: 5, s: 5 };
+  h.G.cars.push(rival); h.G.ranked.push(rival);
+  h.hud.updateHud(true);
+  assert.notEqual(h.els.gapB.textContent, "", "a car behind writes the behind line");
+  assert.ok(!empty(), "a line with text clears data-empty");
+  h.G.cars.pop(); h.G.ranked.pop();
+  h.hud.updateHud(true);
+  assert.ok(empty(), "both lines empty again -> data-empty returns");
 });
 
 test("pin: a HIDDEN readout never bounds the radio lane (visible-element-only obstacles)", () => {

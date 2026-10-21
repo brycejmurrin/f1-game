@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * @doc Pokes the repo MCP wrappers (`apex_status`, probe help, chrome-devtools `status`, tinyfish `help`). No Chromium.
+ * @doc Pokes repo MCP wrappers (apex_status, chrome-devtools status, js-debugger/apex-lsp list-tools, probe help). No Chromium.
  * @skill check-changes
- * mcp-smoke — poke the repo shell wrappers (only apex-tools and chrome-devtools are MCP-attached).
+ * mcp-smoke — poke the repo shell wrappers (all five .mcp.json servers; host attach optional).
  *
  * No Chromium. Missing TinyFish key / chrome-devtools clone = warning, not fail.
  * Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json
@@ -76,6 +76,16 @@ export function smokePlan() {
       server: "playwright",
       argv: ["bash", path.join(ROOT, "tools/mcp/playwright-mcp.sh"), "status"],
       note: "status only — run launches Chromium",
+    },
+    {
+      server: "js-debugger",
+      argv: ["bash", path.join(ROOT, "tools/mcp/js-debugger-mcp.sh"), "list-tools"],
+      note: "list-tools only — no browser",
+    },
+    {
+      server: "apex-lsp",
+      argv: ["node", path.join(ROOT, "tools/mcp/lsp-mcp.mjs"), "--list-tools"],
+      note: "catalog only — no tsc spawn",
     },
     {
       server: "tinyfish",

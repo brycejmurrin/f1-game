@@ -229,3 +229,20 @@ test(".cursor/environment.json allowlist covers every stdio MCP command in .mcp.
     ["apex-lsp", "apex-tools", "chrome-devtools", "js-debugger", "playwright-official"],
   );
 });
+
+test(".cursor/environment.json plugin allowlist admits browser-use debugging MCP", () => {
+  const env = JSON.parse(fs.readFileSync(ENV_JSON, "utf8"));
+  const plugins = env.mcpPluginServerAllowlist || [];
+  assert.equal(plugins.length, 1, "one optional Cursor plugin MCP (browser-use)");
+  const bu = plugins.find((r) => r.name === "browser-use");
+  assert.ok(bu, "browser-use row");
+  assert.ok(
+    patternMatches(bu.command, "uvx --python 3.12 browser-use@latest --cli-mcp"),
+    "pattern must admit the plugin mcp.json launch line",
+  );
+  for (const row of plugins) {
+    assert.equal(typeof row.name, "string");
+    assert.ok(row.name.length > 0);
+    assert.match(row.command, /\*/, `${row.name} plugin pattern uses wildcards`);
+  }
+});

@@ -28,6 +28,7 @@
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
  *   node tools/ci/tooling-fast.mjs --stop           # stop the registered run's whole process tree (artifacts/run/tooling-fast.json); never pkill -f / a PID kill
  *   node tools/ci/tooling-fast.mjs --bail           # stop STARTING files after the first failure (CI guard shards)
+ *   node tools/ci/tooling-fast.mjs --changed --quiet  # console: FAIL lines, their detail and the verdict only (the log keeps START/PASS)
  *   node tools/ci/tooling-fast.mjs tests/unit/x…    # subset (same logging)
  *   … --order=list                                   # list order, not longest-first
  *   … --record                                       # rewrite tests/data/tooling-fast-timings.json
@@ -147,6 +148,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/audio-sample-upgrade.test.mjs",
   "tests/unit/audio-tune.test.mjs",
   "tests/unit/audit-circuit.test.mjs",
+  "tests/unit/audit-summary.test.mjs",
   "tests/unit/backend-surface-parity.test.mjs",
   "tests/unit/badges.test.mjs",
   "tests/unit/bahrain-grandstand-rake.test.mjs",
@@ -215,6 +217,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-fx.test.mjs",
   "tests/unit/car-materials.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
+  // Car mesh budget (B·H13): per-body tris/verts for the drawn tiers, and the vertex weld is lossless. ~5 s.
+  "tests/unit/car-mesh-budget.test.mjs",
   "tests/unit/car-mesh-crew-cache.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
@@ -694,6 +698,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The night lamp-shadow map holds one flood while the car sits between two:
   // the real frame-lights.js feeding the real ShadowPass.lampPass. ~0.3 s.
   "tests/unit/lamp-shadow-pick.test.mjs",
+  "tests/unit/lane-preamble.test.mjs",
   // Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.
   "tests/unit/lap-format-rollover.test.mjs",
   "tests/unit/layers-nav-memo.test.mjs",
@@ -729,6 +734,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
   // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
   // livery-contrast (9.7 s) stays CI-only; cover-legibility is in test:node-slow (159 s measured).
+  // live-frame-census.mjs pure helpers (args, percentiles, trace/profile reducers). ~0.2 s.
+  "tests/unit/live-frame-census.test.mjs",
   "tests/unit/live-run-check.test.mjs",
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
@@ -786,6 +793,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/marshal-post-grounding.test.mjs",
   "tests/unit/mcp-cli.test.mjs",
   "tests/unit/mcp-http-origin.test.mjs",
+  // MCP listing-cost meter + the per-tool bound on what output-level-mcp adds to tools/list (docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md). Inline fixture, ~1 s.
+  "tests/unit/mcp-listing-cost.test.mjs",
   "tests/unit/mcp-smoke.test.mjs",
   "tests/unit/measure-pr-ci-after-close.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",
@@ -797,6 +806,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/memory-sync.test.mjs",
   "tests/unit/menu-a11y-audit.test.mjs",
   "tests/unit/menu-capture.test.mjs",
+  // The menu car prep yields one frame, not a fixed 32 ms (B·H8 load hunt). VM, no browser.
+  "tests/unit/menu-car-prep-yield.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
   // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
   // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
@@ -852,6 +863,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/overtake-mode.test.mjs",
   // PaceMath (js/race/pace-math.js): vTop/vStd/aStd + X-mode/ERS/gearHi pins from pre-extract goldens. ~0.1 s.
   "tests/unit/pace-math.test.mjs",
+  // Perf hunt 6 (B·H6): the material strips decode to their stored bytes (DecompressionStream + PNG unfilter) with no GPU readback; every shipped layer is byte-identical to sharp's decode; a missing DecompressionStream or a tagged/palette/corrupt PNG falls back to createImageBitmap.
+  "tests/unit/pack-png-bytes.test.mjs",
   "tests/unit/pad-haptics.test.mjs",
   // particles.js dirty latch: parked rain skips expand/upload until eye cell moves.
   "tests/unit/particles-dirty.test.mjs",
@@ -1042,6 +1055,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
   "tests/unit/screen-looks.test.mjs",
+  // Lazy bundles preload every gated wave and still evaluate in edge order; the boot preloads its likely backend (B·H8 load hunt).
+  "tests/unit/script-loader-preload.test.mjs",
   "tests/unit/script-loader-starved.test.mjs",
   "tests/unit/script-loader-throw.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
@@ -1223,6 +1238,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-mat-key-memo.test.mjs",
   // TLX post P2 / audit #6: fixed H/V blur + per-mip bloom materials (no .tex.value ping-pong).
   "tests/unit/tlx-post-fixed-mats.test.mjs",
+  // TLX perf hunt 6 (B·H6): gfx.warmDraws captures the cockpit rig's draws (never painted) and the next present compiles exactly those pairs, owned like the deferred mirror warm; the first rig frame then links nothing (a cold one links). Race entry awaits it under the cover.
+  "tests/unit/tlx-rig-warm.test.mjs",
   // TLX drops a createTexture() source canvas once three has uploaded it,
   // and freeTexture retires the decal materials bound to it (lifted source
   // against three r186's real Texture). The pit-crew mesh cache is capped.
@@ -1613,9 +1630,10 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   const timings = opts.order === "list" ? {} : (opts.timings || loadTimings());
   if (opts.order !== "list") files = scheduleLongestFirst(files, timings);
   const lines = [];
+  // --quiet keeps START/PASS lines in the log only: a 13-57K console was measured in Cursor agents' context (2026-10-21).
   const emit = (msg) => {
     const line = `[tooling-fast] ${msg}`;
-    console.log(line);
+    if (!opts.quiet || !/^(START|PASS) /.test(msg)) console.log(line);
     lines.push(line);
   };
 
@@ -2191,10 +2209,10 @@ export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against 
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
 const TOOLING_FAST_FLAGS = Object.freeze([
-  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--stop", "--help", "-h",
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--quiet", "--stop", "--help", "-h",
 ]);
 
-export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--bail] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--bail] [--quiet] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
        node tools/ci/tooling-fast.mjs --help`;
 
 /** Split a file list across CI jobs (`--shard=1/2`). Stride, not contiguous. */
@@ -2230,6 +2248,7 @@ export function parseToolingFastArgv(argv) {
     files: args.length ? args : null, // null = full TOOLING_FAST_FILES
     changed: argv.includes("--changed"),
     bail: argv.includes("--bail"),
+    quiet: argv.includes("--quiet"),
     stop: argv.includes("--stop"),
     jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
     order: val("order"),
@@ -2291,6 +2310,7 @@ if (isMain) {
   const { ok } = await runToolingFast(files, {
     jobs: parsed.jobs,
     bail: parsed.bail,
+    quiet: parsed.quiet,
     order: parsed.order,
     record: parsed.record,
     testTimeoutMs: parsed.testTimeoutMs,

@@ -156,9 +156,12 @@ const CarGeometry = (function () {
         zR = zF + dzc * c + dyc * s;
         yR = yF - dzc * s + dyc * c;
       }
+      const u = Math.min(1, Math.abs(x) / half);
+      const contour = (spec.wave || 0) * Math.pow(Math.sin(Math.PI * u), 2)
+        - (spec.bowl || 0) * (1 - u * u);
       return {
         x: xF + (xR - xF) * t,
-        y: yF + (yR - yF) * t - camber * 4 * t * (1 - t),
+        y: yF + (yR - yF) * t - camber * 4 * t * (1 - t) + contour,
         z: zF + (zR - zF) * t,
         h: thick * 0.5 * foilThick(t),
       };
@@ -166,7 +169,9 @@ const CarGeometry = (function () {
     function addWingFoil(out, spec, col, surface) {
       const half = spec.half, mid = half * 0.67, inner = half * 0.34;
       const at = (x, t) => foilAt(spec, x, t);
-      const segments = [[-half, -mid], [-mid, -inner], [-inner, inner], [inner, mid], [mid, half]];
+      const segments = spec.wave || spec.bowl ? Array.from({ length: 6 }, (_, i) =>
+        [-half + 2 * half * i / 6, -half + 2 * half * (i + 1) / 6])
+        : [[-half, -mid], [-mid, -inner], [-inner, inner], [inner, mid], [mid, half]];
       for (const [x0, x1] of segments) {
         for (let i = 0; i < FOIL_T.length - 1; i++) {
           const t0 = FOIL_T[i], t1 = FOIL_T[i + 1];
@@ -317,6 +322,51 @@ const CarGeometry = (function () {
       addFairedArm, addWishboneWeb, addTube };
   }
 
-  return { create };
+  // WELD: merge vertices that are identical in every attribute the GPU reads
+  // (position, normal, colour, surface id, compared as the Float32 the upload
+  // stores), remapping idx. addTri/addQuad emit unshared corners, so about half
+  // of a car's vertices are exact repeats; welding them halves the vertex count
+  // with a bit-identical picture. Vertex ranges (sections, zones) do not survive,
+  // so callers that read them (measure, refinish) skip it. Returns out.
+  const _f = new Float32Array(10), _u = new Uint32Array(_f.buffer);
+  function weld(out) {
+    const n = out.pos.length / 3;
+    if (!n || out.nrm.length !== n * 3 || out.col.length !== n * 3 || (out.mat && out.mat.length !== n)) return out;
+    let cap = 1; while (cap < n * 2) cap <<= 1;
+    const table = new Int32Array(cap).fill(-1), keys = new Uint32Array(n * 10), remap = new Int32Array(n);
+    const pos = [], nrm = [], col = [], mat = out.mat ? [] : null;
+    let m = 0;
+    for (let i = 0; i < n; i++) {
+      _f[0] = out.pos[i*3]; _f[1] = out.pos[i*3+1]; _f[2] = out.pos[i*3+2];
+      _f[3] = out.nrm[i*3]; _f[4] = out.nrm[i*3+1]; _f[5] = out.nrm[i*3+2];
+      _f[6] = out.col[i*3]; _f[7] = out.col[i*3+1]; _f[8] = out.col[i*3+2]; _f[9] = mat ? out.mat[i] : 0;
+      let h = 2166136261;
+      for (let k = 0; k < 10; k++) h = Math.imul(h ^ _u[k], 16777619);
+      let slot = (h >>> 0) & (cap - 1), hit = -1;
+      for (;;) {
+        const j = table[slot];
+        if (j < 0) break;
+        let same = true;
+        for (let k = 0; k < 10; k++) if (keys[j*10+k] !== _u[k]) { same = false; break; }
+        if (same) { hit = j; break; }
+        slot = (slot + 1) & (cap - 1);
+      }
+      if (hit < 0) {
+        hit = m++; table[slot] = hit;
+        for (let k = 0; k < 10; k++) keys[hit*10+k] = _u[k];
+        pos.push(out.pos[i*3], out.pos[i*3+1], out.pos[i*3+2]);
+        nrm.push(out.nrm[i*3], out.nrm[i*3+1], out.nrm[i*3+2]);
+        col.push(out.col[i*3], out.col[i*3+1], out.col[i*3+2]);
+        if (mat) mat.push(out.mat[i]);
+      }
+      remap[i] = hit;
+    }
+    const idx = out.idx;
+    for (let t = 0; t < idx.length; t++) idx[t] = remap[idx[t]];
+    out.pos = pos; out.nrm = nrm; out.col = col; if (mat) out.mat = mat;
+    return out;
+  }
+
+  return { create, weld };
 })();
 Object.freeze(CarGeometry);

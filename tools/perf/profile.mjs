@@ -1,16 +1,21 @@
 #!/usr/bin/env node
-// tools/perf/profile.mjs — one profiler CLI: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, A/B diff.
-// @doc One profiler CLI (spans | cpu | hitch | trace) with --repeat noise floor and --base <ref> A/B delta table.
+// tools/perf/profile.mjs — one profiler CLI: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, physics step, A/B diff.
+// @doc One profiler CLI (spans | cpu | hitch | trace | step) with --repeat noise floor and --base <ref> A/B delta table.
 // @skill playwright-probe
 //
-//   node tools/perf/profile.mjs <track> [--mode spans|cpu|hitch|trace] [--frames N] [--repeat N]
-//                               [--base <git-ref>] [--json]
+//   node tools/perf/profile.mjs <track> [--mode spans|cpu|hitch|trace|step] [--frames N] [--repeat N]
+//                               [--steps N] [--warm N] [--base <git-ref>] [--json]
 //
 // spans  PerfSpans (js/perf/spans.js) over a deterministic scenario: race(track), go(), jump(), throttle plus
 //        a frame-indexed steer sine, N rendered frames. Prints p50/p95/p99/max ms per span. Also records the
 //        rAF cadence ("raf"), which exists on every ref, so --base works on a ref that predates the spans.
 // cpu    wraps tools/shot/profile-gameloop.mjs (V8 sampling profile, top self time).
 // hitch  wraps tools/gfx/frame-hitch.mjs (per-rAF cost, spike period).
+// step   the physics/AI step alone in real Chromium V8 (headless(true): no render, no SwiftShader in the timing):
+//        reset(seed 42) + throttle, --warm steps for the JIT, then --steps timed in batches of 10 (performance.now
+//        is coarse); prints ms/step p50/p95/p99 and a digest of every car's numeric fields, so --base also proves
+//        a perf change bit-identical. The spans "physics" row is NOT one step: a slow SwiftShader frame catches up
+//        to five, and the Node VM (game-vm.cjs) over-weights global lookups ~6x (docs/notes/PERF-SCENE-CPU-2026-10-20.md).
 // trace  CDP Tracing → artifacts/profiles/*.json, open in ui.perfetto.dev or the Chrome Performance panel (spans: User Timing "apex:*", one DevTools track per phase in group "Apex 26").
 // --repeat N    N fresh pages; reports the median of each stat and the spread (max-min) across repeats.
 // --base <ref>  same scenario on an ephemeral git worktree at <ref>; prints a delta table. A delta inside the
@@ -31,10 +36,10 @@ const OUT = join(ROOT, "artifacts/profiles");
 const argv = process.argv.slice(2);
 exitIfHelp(argv, `profile — spans | cpu | hitch | trace, with --repeat and --base A/B
 
-  node tools/perf/profile.mjs <track> [--mode spans|cpu|hitch|trace] [--frames N] [--repeat N] [--base <ref>] [--json] [--capture]
+  node tools/perf/profile.mjs <track> [--mode spans|cpu|hitch|trace|step] [--frames N] [--steps N] [--warm N] [--repeat N] [--base <ref>] [--json] [--capture]
 
 Default track vegas, mode spans, frames 40, repeat 1. Output: artifacts/profiles/.`);
-parseFlags(argv, ["--mode", "--frames", "--repeat", "--base", "--json", "--capture", "--help"]);
+parseFlags(argv, ["--mode", "--frames", "--steps", "--warm", "--repeat", "--base", "--json", "--capture", "--help"]);
 
 function flag(name, dflt) {
   for (let i = 0; i < argv.length; i++) {
@@ -43,12 +48,13 @@ function flag(name, dflt) {
   }
   return dflt;
 }
-const VALUED = new Set(["--mode", "--frames", "--repeat", "--base"]);
+const VALUED = new Set(["--mode", "--frames", "--steps", "--warm", "--repeat", "--base"]);
 const positional = argv.filter((a, i) => !a.startsWith("--") && !VALUED.has(argv[i - 1]));
 const track = positional[0] || "vegas";
 const mode = flag("--mode", "spans");
 const frames = Math.max(10, +flag("--frames", 40) || 40);
 const repeat = Math.max(1, +flag("--repeat", 1) || 1);
+const steps = Math.max(100, +flag("--steps", 3000) || 3000), warm = Math.max(0, +flag("--warm", 3000) || 0);
 const baseRef = flag("--base", null);
 const asJson = argv.includes("--json");
 // Headless TLX blits every frame to #game-soft (a readback: ~8 s a frame on SwiftShader). Timing wants it OFF, as
@@ -114,6 +120,45 @@ async function runSpans(root, label) {
   return { agg: aggregate(runs), scenario: stable ? savedScenario : null, observedScenarios: runs.map(r => r.scenario) };
 }
 
+/** --mode step: one page per repeat; the in-page loop times batches of 10 steps between digest reads. */
+async function runStep(root, label) {
+  const srv = await startStaticServer(root);
+  const browser = await launchChromium({ args: ["--use-angle=swiftshader", "--disable-background-timer-throttling"] });
+  const runs = [];
+  try {
+    for (let r = 0; r < repeat; r++) {
+      const [context, page] = await newPage(browser);
+      await page.goto(srv.url);
+      await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS, polling: 100 });
+      await page.evaluate((t) => { window.__apex.race(t); }, track);
+      await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: WAIT_MS, polling: 100 });
+      const res = await page.evaluate(({ n, w }) => {
+        const A = window.__apex;
+        A.go(); A.headless(true); A.reset(0.02, 55, 0, 42); A.setInput({ throttle: true, steer: 0.02 });
+        for (let i = 0; i < w; i++) A.step(1 / 60, 1);
+        // FNV-1a over fieldState() every 100 steps: rounded fields, but a divergence grows over thousands of
+        // steps. The raw bit-identity check is the Node VM's (tests/unit/determinism-replay-vm.test.mjs).
+        let h = 0x811c9dc5;
+        const digest = () => { const str = JSON.stringify(A.fieldState());
+          for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } };
+        const B = 10, per = [];
+        for (let i = 0; i < n; i += B) {
+          const t0 = performance.now(); A.step(1 / 60, B); per.push((performance.now() - t0) / B);
+          if ((i / B) % 10 === 0) digest();
+        }
+        digest(); A.headless(false);
+        const s = per.slice().sort((a, b) => a - b), q = (p) => +s[Math.min(s.length - 1, Math.floor(s.length * p))].toFixed(4);
+        return { spans: { step: { n: per.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: +s[s.length - 1].toFixed(4) } },
+                 digest: h.toString(16), cars: A.fieldState().length };
+      }, { n: steps, w: warm });
+      runs.push(res);
+      log(`  ${label}: repeat ${r + 1}/${repeat} — ${res.cars} cars, step p50 ${res.spans.step.p50} ms, digest ${res.digest}`);
+      await context.close();
+    }
+  } finally { await browser.close().catch(() => {}); await srv.close?.(); }
+  return { agg: aggregate(runs), digests: [...new Set(runs.map((r) => r.digest))] };
+}
+
 function withWorktree(ref, fn) {
   const sha = execFileSync("git", ["rev-parse", "--verify", ref], { cwd: ROOT, encoding: "utf8" }).trim();
   const dir = join(ROOT, "artifacts/profiles", "wt-" + sha.slice(0, 10));
@@ -159,6 +204,25 @@ try {
   if (mode === "cpu") wrap("tools/shot/profile-gameloop.mjs", [track]);
   else if (mode === "hitch") wrap("tools/gfx/frame-hitch.mjs", [track, "--seconds", String(Math.max(10, Math.round(frames / 6)))]);
   else if (mode === "trace") await runTrace();
+  else if (mode === "step") {
+    mkdirSync(OUT, { recursive: true });
+    log(`profile step: ${track}, warm ${warm} + ${steps} steps x ${repeat} repeat${baseRef ? `, base ${baseRef}` : ""}`);
+    const head = await runStep(ROOT, "head");
+    const out = { track, steps, warm, repeat, head: head.agg, digests: head.digests };
+    console.log(`\nstep — ${track}, ${steps} steps after ${warm}, ${repeat} repeat(s) (ms per step)\n${formatTable(head.agg)}\ndigest ${head.digests.join(" ")}${head.digests.length > 1 ? "  (NOT deterministic across repeats)" : ""}`);
+    if (baseRef) {
+      const base = await withWorktree(baseRef, async (dir, sha) => ({ ...(await runStep(dir, "base")), sha }));
+      out.base = base.agg; out.baseRef = baseRef; out.baseSha = base.sha; out.baseDigests = base.digests;
+      out.delta = diff(base.agg, head.agg);
+      out.bitIdentical = base.digests.length === 1 && head.digests.length === 1 && base.digests[0] === head.digests[0];
+      console.log("\n" + formatDiff(out.delta, `${baseRef}@${base.sha.slice(0, 8)}`, "HEAD"));
+      console.log(`field digest: base ${base.digests.join(" ")}  head ${head.digests.join(" ")}  → ${out.bitIdentical ? "bit-identical" : "DIFFERS"}`);
+    }
+    const file = join(OUT, `${track}-step${baseRef ? "-ab" : ""}.json`);
+    writeFileSync(file, JSON.stringify(out, null, 1));
+    log(`wrote ${file}`);
+    if (asJson) console.log(JSON.stringify(out));
+  }
   else if (mode === "spans") {
     mkdirSync(OUT, { recursive: true });
     log(`profile spans: ${track}, ${frames} frames x ${repeat} repeat${baseRef ? `, base ${baseRef}` : ""}`);

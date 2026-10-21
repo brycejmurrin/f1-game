@@ -296,3 +296,33 @@ test("forArcNear's rear trim skips only cars the traffic scan ignores, in the sa
   }
   assert.ok(trimmed > 100, "the trim must actually fire in this sweep (" + trimmed + ")");
 });
+
+// LIVE-MEMORY-H12-2026-10-20: a bucket slot a later fill never reached kept an earlier race's car — and through
+// car._lk.track its whole track — for the session (+~28 MB per race cycle on the phone profile).
+test("arc buckets never keep a previous field's cars alive (refill and releaseArcBuckets)", async () => {
+  const v8 = await import("node:v8");
+  v8.setFlagsFromString("--expose-gc");
+  const gc = vm.runInNewContext("gc");
+  const Collide = loadCollide();
+  assert.equal(typeof Collide.releaseArcBuckets, "function");
+  const L = 7000;
+  const refs = (() => {
+    const old = makeField(7, L);   // 22 cars spread over the lap
+    Collide.fillArcBuckets(old, L, TRAFFIC_BUCKET_M, (c) => c._snapProg);
+    return old.map((c) => new WeakRef(c));
+  })();
+  const next = makeField(8, L).slice(0, 2);   // the next race fills two buckets only
+  Collide.fillArcBuckets(next, L, TRAFFIC_BUCKET_M, (c) => c._snapProg);
+  Collide.fillArcBuckets(next, L, TRAFFIC_BUCKET_M, (c) => c._snapProg);   // a later step clears the first refill
+  for (let i = 0; i < 3; i++) { gc(); await new Promise((r) => setImmediate(r)); }
+  assert.equal(refs.filter((r) => r.deref()).length, 0, "a refill must not leave the previous field in stale slots");
+  const nextRef = new WeakRef(next[0]);
+  Collide.releaseArcBuckets();
+  next.length = 0;
+  for (let i = 0; i < 3; i++) { gc(); await new Promise((r) => setImmediate(r)); }
+  assert.equal(nextRef.deref(), undefined, "releaseArcBuckets must drop the last field");
+  // ...and the readers still see an empty field, not a stale one.
+  let seen = 0;
+  Collide.forArcNear({ prog: 10, _snapProg: 10 }, L, 200, () => { seen++; }, (c) => c.prog);
+  assert.equal(seen, 0);
+});

@@ -204,6 +204,34 @@ test("ceiling breach", () => assert.deepEqual(["js/net/lobby.js lines: 1895 > 18
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("--quiet keeps START/PASS in the log only; the console still carries FAIL, its detail and the verdict", async () => {
+  const dir = tmp();
+  const seen = [];
+  const log0 = console.log;
+  try {
+    const ok = path.join(dir, "ok.test.mjs");
+    const bad = path.join(dir, "bad.test.mjs");
+    fs.writeFileSync(ok, `import test from "node:test"; test("fine", () => {});\n`);
+    fs.writeFileSync(bad, `import test from "node:test"; import assert from "node:assert/strict";\ntest("quiet contract fails", () => assert.equal(1, 2));\n`);
+    const logPath = path.join(dir, "suite.log");
+    console.log = (...a) => seen.push(a.join(" "));
+    const r = await runToolingFast([ok, bad], { jobs: 1, logPath, localTimingsPath: null, quiet: true });
+    console.log = log0;
+    assert.equal(r.failed, 1);
+    const out = seen.join("\n");
+    assert.ok(!/\] (START|PASS) /.test(out), out);
+    assert.ok(/\] FAIL +\d\/2 \S*bad\.test\.mjs/.test(out) && out.includes("not ok 1 - quiet contract fails"), out);
+    assert.ok(/= run failed/.test(out), out);
+    const log = fs.readFileSync(logPath, "utf8");
+    assert.ok(/\] START /.test(log) && /\] PASS +\d\/2 \S*ok\.test\.mjs/.test(log), log);
+    assert.equal(parseToolingFastArgv(["--changed", "--quiet"]).quiet, true);
+    assert.ok(TOOLING_FAST_USAGE.includes("--quiet"));
+  } finally {
+    console.log = log0;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("CLI: default --jobs stays 1 (AGENTS.md rule 4 load limits); --changed is a first-class flag", () => {
   assert.equal(DEFAULT_JOBS, 1);
   const d = parseToolingFastArgv([]);

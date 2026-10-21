@@ -211,6 +211,15 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/car/tri-census.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/carview.html",
       "classification": "asset",
       "outputPolicy": "no-direct-output"
@@ -784,7 +793,10 @@
       "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--limit"
+        "--json",
+        "--limit",
+        "--out",
+        "--summary"
       ]
     },
     {
@@ -938,6 +950,15 @@
       "path": "tools/ci/junit-failed.mjs",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only"
+    },
+    {
+      "path": "tools/ci/lane-preamble.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--quiet"
+      ]
     },
     {
       "path": "tools/ci/live-run-check.mjs",
@@ -1342,7 +1363,8 @@
       "outputPolicy": "job-status",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--out"
+        "--out",
+        "--quiet"
       ],
       "npmScripts": [
         "test:tooling-fast"
@@ -1868,6 +1890,15 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/gfx/live-frame-census.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/gfx/mem-census.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2007,6 +2038,11 @@
     },
     {
       "path": "tools/lib/css-source.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/cursor-transcript.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
@@ -2326,7 +2362,9 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json",
-        "--out"
+        "--limit",
+        "--out",
+        "--summary"
       ]
     },
     {
@@ -2511,6 +2549,15 @@
     },
     {
       "path": "tools/mcp/mcp-cli.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/mcp/mcp-listing-cost.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
       "interpreter": "node",
@@ -2804,6 +2851,15 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/shot/capture-gallery.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/shot/capture-options.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2929,6 +2985,11 @@
       ]
     },
     {
+      "path": "tools/shot/lib/design-matrix-run.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/shot/lib/design-matrix.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2993,6 +3054,15 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/shot/run-capture-request.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
     },
     {
       "path": "tools/shot/scenery-locations.json",
@@ -3282,6 +3352,16 @@
       "path": "tools/ui/audit-diff.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/ui/audit-summary.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
     },
     {
       "path": "tools/ui/circuit-axis.mjs",
@@ -3582,7 +3662,7 @@
     },
     {
       "name": "test:garage-unit",
-      "command": "node tools/ci/run-node-group.mjs test:garage-unit tests/unit/aero-preview-fields.test.mjs tests/unit/aero-shapes-d3c.test.mjs tests/unit/body-split.test.mjs tests/unit/car-materials.test.mjs tests/unit/car-shade.test.mjs tests/unit/fill-gating.test.mjs tests/unit/fin-design.test.mjs tests/unit/front-wing-decal.test.mjs tests/unit/garage-followups.test.mjs tests/unit/garage-mesh.test.mjs tests/unit/garage-panel-side.test.mjs tests/unit/garage-sign-occlusion.test.mjs tests/unit/helmets.test.mjs tests/unit/livery-cover-graphics.test.mjs tests/unit/livery-decal-surfaces.test.mjs tests/unit/livery-finish-contract.test.mjs tests/unit/livery-paint-zones.test.mjs tests/unit/livery-sidewall.test.mjs tests/unit/livery-wheels.test.mjs tests/unit/livery-zone-finish.test.mjs tests/unit/parts-distinct-mesh.test.mjs tests/unit/parts-locked-equivalent.test.mjs tests/unit/setup-trial-session.test.mjs tests/unit/setup-tune.test.mjs tests/unit/team-livery.test.mjs tests/unit/team-style-relief.test.mjs tests/unit/tyre-recipes-open-rim.test.mjs --"
+      "command": "node tools/ci/run-node-group.mjs test:garage-unit tests/unit/aero-preview-fields.test.mjs tests/unit/aero-shapes-d3c.test.mjs tests/unit/body-split.test.mjs tests/unit/car-materials.test.mjs tests/unit/car-mesh-budget.test.mjs tests/unit/car-shade.test.mjs tests/unit/fill-gating.test.mjs tests/unit/fin-design.test.mjs tests/unit/front-wing-decal.test.mjs tests/unit/garage-followups.test.mjs tests/unit/garage-mesh.test.mjs tests/unit/garage-panel-side.test.mjs tests/unit/garage-sign-occlusion.test.mjs tests/unit/helmets.test.mjs tests/unit/livery-cover-graphics.test.mjs tests/unit/livery-decal-surfaces.test.mjs tests/unit/livery-finish-contract.test.mjs tests/unit/livery-paint-zones.test.mjs tests/unit/livery-sidewall.test.mjs tests/unit/livery-wheels.test.mjs tests/unit/livery-zone-finish.test.mjs tests/unit/parts-distinct-mesh.test.mjs tests/unit/parts-locked-equivalent.test.mjs tests/unit/setup-trial-session.test.mjs tests/unit/setup-tune.test.mjs tests/unit/team-livery.test.mjs tests/unit/team-style-relief.test.mjs tests/unit/tyre-recipes-open-rim.test.mjs --"
     },
     {
       "name": "test:gfx",
@@ -3610,7 +3690,7 @@
     },
     {
       "name": "test:mcp",
-      "command": "node --test --test-concurrency=1 tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-node.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/js-debugger-tracks.test.mjs tests/unit/js-debugger-transport.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp-fixture.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs tests/unit/workflow-harness.test.mjs"
+      "command": "node --test --test-concurrency=1 tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-node.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/js-debugger-tracks.test.mjs tests/unit/js-debugger-transport.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp-fixture.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/mcp-listing-cost.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs tests/unit/workflow-harness.test.mjs"
     },
     {
       "name": "test:mobile-unit",
@@ -3666,7 +3746,7 @@
     },
     {
       "name": "test:state-unit",
-      "command": "node --test tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/apex-diag-canvas.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-determinism.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/pause-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs"
+      "command": "node --test tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/apex-diag-canvas.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-determinism.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/pause-opts.test.mjs tests/unit/post-fx-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs"
     },
     {
       "name": "test:steering-unit",

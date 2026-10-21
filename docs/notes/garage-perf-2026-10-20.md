@@ -22,7 +22,7 @@ software proxy (and a weak one — it is this box's CPU).
 | Car3D.build, team body (median of 3) | ~100 ms | ~100 ms | ~0 |
 | per rendered frame: draws / tris | 37.4 / 61.7 k | 37.4 / 63.7 k | +3 % tris |
 | rendered-frame ms (median) | 5.5 * | 4.7 | ~0 |
-| first part change after ≥ 20 s in the bay | recompiles the car program (86.9 KB) | recompiles the car program (100.5 KB): 2.7 s compile in SwiftShader | pre-existing; +15 % per recompile |
+| first part change after ≥ 20 s in the bay | recompiles the car program (86.9 KB) | recompiles the car program (100.5 KB): 2.7 s compile in SwiftShader | pre-existing; +15 % per recompile — FIXED since by 7c04ff7b (cause 1) |
 | setup-sheet buttons (garage tab) | 49 | 64 | +15 |
 | JS heap | 16–29 MB | 28–29 MB | noise (run-to-run) |
 
@@ -34,7 +34,19 @@ the car. Every car fragment cost is paid twice in the bay.
 
 ## Ranked causes
 
-1. **Car shader recompile on a part change after ~20 s in the bay** (TLX,
+1. **FIXED by 7c04ff7b (B·H7 re-measure, 2026-10-20 PM).** `garage-census.mjs` change phase,
+   six part changes past 20 s in the bay, TLX GL-forced 844x390: on `06c131b7`, programs
+   `[1,0,0,0,0,0]`, 2629 ms compile, worst frame 8868 ms; on the tip `672f2a0c`, programs
+   `[0,0,0,0,0,0]`, worst frame 223 ms. `scratch/h7-garage.mjs` (cursor/tlx-gpu-cost-h7m1),
+   which logs every link with its shader hash: the car program (fs 100,480 B) relinked on a
+   floor change in 3 of 3 runs on `06c131b7` and 0 of 3 on the tip. The 20 s idle is not
+   what triggers it: the relink came on the second change, ~6 s into the bay. The cause was
+   the pipeline release that 7c04ff7b closed: `releaseGeometry` freed the outgoing car's
+   render objects before the new car's first draw, so whenever nothing else held the
+   program (the pool prune drops idle co-holders after 20 s), three released and relinked
+   it. 7c04ff7b holds a freed geometry's render objects for one scene render (guarded in
+   `tests/unit/render-final-contracts.test.mjs`). Original finding:
+   **Car shader recompile on a part change after ~20 s in the bay** (TLX,
    pre-existing on the baseline too, ~15 % longer since wave 2). The new preview
    car links a program byte-identical in size to the live car program (100.5 KB
    fragment) — a pipeline-cache miss, one 2.7 s frame here. INTERMITTENT: 7 of 8

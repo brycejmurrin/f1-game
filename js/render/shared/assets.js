@@ -107,8 +107,117 @@ const Assets = (function () {
   }
 
   const DECODE_CANCELED = Symbol("asset decode canceled");
+
+  // THE STRIP'S OWN BYTES, NO GPU (hunt 6 B·H6). TLX and WGX need raw RGBA
+  // bytes, so every ImageBitmap layer went through readLayerBytes(Async): a
+  // scratch WebGL2 upload + readPixels whose getError() round trips wait on the
+  // whole GPU process. The macOS census measured it as the worst mid-race
+  // hitch: WGX vegas night, a 3726 ms rAF gap 9 s into the driven window
+  // (3657 ms of long task, getError 3505 ms in the CPU profile; run
+  // 39451254370), and 1113 ms on TLX-WebGPU at monaco (run 39449331814).
+  // The shipped strips are 8-bit RGBA, non-interlaced, untagged PNGs (IHDR,
+  // IDAT, IEND only), so their stored bytes ARE the straight, un-colour-managed
+  // values the readback recovers: inflate the IDAT stream with the browser's
+  // DecompressionStream and undo the five scanline filters (PNG spec §9).
+  // Returns per-layer Uint8Array views — a layer form every backend already
+  // takes (GLX texSubImage3D, readLayerBytes*, WGX writeTexture) — or null for
+  // anything else (another PNG format, no DecompressionStream, a blob without
+  // arrayBuffer), and the caller decodes ImageBitmaps as before.
+  //   https://www.w3.org/TR/png-3/#9Filters
+  //   https://developer.mozilla.org/en-US/docs/Web/API/DecompressionStream
+  async function _inflate(parts) {
+    const ds = new DecompressionStream("deflate");   // zlib-wrapped, as PNG IDAT is
+    const w = ds.writable.getWriter();
+    const wrote = (async () => { for (const p of parts) await w.write(p); await w.close(); })();
+    wrote.catch(() => {});   // a corrupt stream errors both ends: the read below reports it, once
+    const chunks = [];
+    let n = 0;
+    const r = ds.readable.getReader();
+    for (;;) {
+      const { done, value } = await r.read();
+      if (done) break;
+      chunks.push(value); n += value.length;
+    }
+    await wrote;
+    const out = new Uint8Array(n);
+    for (let i = 0, o = 0; i < chunks.length; o += chunks[i].length, i++) out.set(chunks[i], o);
+    return out;
+  }
+  // Undo the filters of rows [r0, r1): raw is the inflated stream (a filter
+  // byte + stride bytes per row), out the unfiltered image, 4 bytes a pixel.
+  function _unfilterRows(raw, out, stride, r0, r1) {
+    for (let r = r0; r < r1; r++) {
+      const ft = raw[r * (stride + 1)], s = r * (stride + 1) + 1, o = r * stride, u = o - stride;
+      if (ft === 0 || (ft === 2 && r === 0)) { out.set(raw.subarray(s, s + stride), o); continue; }
+      if (ft === 1) {
+        for (let x = 0; x < stride; x++) out[o + x] = raw[s + x] + (x >= 4 ? out[o + x - 4] : 0);
+      } else if (ft === 2) {
+        for (let x = 0; x < stride; x++) out[o + x] = raw[s + x] + out[u + x];
+      } else if (ft === 3) {
+        for (let x = 0; x < stride; x++) {
+          const a = x >= 4 ? out[o + x - 4] : 0, b = r ? out[u + x] : 0;
+          out[o + x] = raw[s + x] + ((a + b) >> 1);
+        }
+      } else if (ft === 4) {
+        for (let x = 0; x < stride; x++) {
+          const a = x >= 4 ? out[o + x - 4] : 0, b = r ? out[u + x] : 0, c = x >= 4 && r ? out[u + x - 4] : 0;
+          const p = a + b - c, pa = p > a ? p - a : a - p, pb = p > b ? p - b : b - p, pc = p > c ? p - c : c - p;
+          out[o + x] = raw[s + x] + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c);
+        }
+      } else throw new Error("png filter " + ft);
+    }
+  }
+  async function _decodeStripBytes(blob, size, present, check) {
+    if (typeof DecompressionStream !== "function" || !blob || typeof blob.arrayBuffer !== "function") return null;
+    const png = new Uint8Array(await blob.arrayBuffer());
+    check();
+    const SIG = [137, 80, 78, 71, 13, 10, 26, 10];
+    for (let i = 0; i < 8; i++) if (png[i] !== SIG[i]) return null;
+    const dv = new DataView(png.buffer, png.byteOffset, png.byteLength);
+    let w = 0, h = 0, ok = false;
+    const idat = [];
+    for (let p = 8; p + 8 <= png.length;) {
+      const len = dv.getUint32(p), d = p + 8;
+      const type = String.fromCharCode(png[p + 4], png[p + 5], png[p + 6], png[p + 7]);
+      if (d + len > png.length) return null;
+      if (type === "IHDR") {
+        w = dv.getUint32(d); h = dv.getUint32(d + 4);
+        // 8-bit RGBA, deflate, adaptive filtering, no interlace: the bake's format.
+        ok = png[d + 8] === 8 && png[d + 9] === 6 && png[d + 10] === 0 && png[d + 11] === 0 && png[d + 12] === 0;
+      } else if (type === "IDAT") idat.push(png.subarray(d, d + len));
+      else if (type === "IEND") break;
+      // A critical chunk this reader does not know (PLTE…), or a colour tag
+      // the browser would honour: leave the strip to createImageBitmap.
+      else if (!(png[p + 4] & 0x20) || type === "iCCP" || type === "sRGB" || type === "gAMA" || type === "cHRM") return null;
+      p = d + len + 4;
+    }
+    let last = -1;
+    for (let i = 0; i < MAT_LAYERS; i++) if (present[i]) last = i;
+    if (!ok || w !== size || !idat.length || last < 0 || h < (last + 1) * size) return null;
+    const raw = await _inflate(idat);
+    check();
+    const stride = w * 4, rows = (last + 1) * size;
+    if (raw.length < rows * (stride + 1)) return null;
+    const pix = new Uint8Array(rows * stride);
+    const out = new Array(MAT_LAYERS);
+    // One layer's rows per task. A row's filter reads the row above it, so the
+    // layers unfilter in order, up to the last one the pack asks for.
+    for (let i = 0; i <= last; i++) {
+      if (i) { await _yieldDecode(); check(); }
+      _unfilterRows(raw, pix, stride, i * size, (i + 1) * size);
+      if (present[i]) out[i] = pix.subarray(i * size * stride, (i + 1) * size * stride);
+    }
+    return out;
+  }
+
   async function _decodeStrip(blob, size, present, current) {
     const check = () => { if (current && !current()) throw DECODE_CANCELED; };
+    let bytes = null;
+    // A stream this reader refuses (a corrupt IDAT, an unknown filter) goes
+    // to the browser's decoder below; a cancel still cancels.
+    try { bytes = await _decodeStripBytes(blob, size, present, check); }
+    catch (error) { if (error === DECODE_CANCELED) throw error; bytes = null; }
+    if (bytes) return bytes;
     const out = new Array(MAT_LAYERS);
     try {
       let n = 0;

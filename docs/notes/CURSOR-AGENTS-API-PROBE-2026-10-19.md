@@ -97,3 +97,33 @@ tools/ci folder (`cursor-agents.mjs dump` then `digest`); dumps stay in ignored
 1. Bryce enables Cursor on-demand usage (with a cap) so launch works, then re-run only the write test
    (launch haiku/nano on f1-game, status, follow-up, cancel, delete on that agent) in a short follow-up.
 2. Meanwhile read-only coordination already works: build `cursor-agents.mjs` `list|status|last` first.
+
+## Launch tools built and measured (2026-10-20)
+
+On-demand usage was enabled on the account (launch, refused with `usage_limit_exceeded` on 2026-10-19 and for
+most of 2026-10-20, now returns 201). `tools/ci/cursor-agents.mjs` gained `launch`, `followup`, `cancel`, `archive`,
+`delete` and `allowed`, on `fetch` with no dependency. Request shapes are from the OpenAPI spec
+(https://cursor.com/docs-static/cloud-agents-openapi.yaml, read 2026-10-20), not memory.
+
+Design points that came from the spec and the probe:
+
+- `agentId` is client-minted (`bc-<uuid>`), so a retried create that meets `409 agent_id_conflict` means "already
+  created" and never duplicates. A write retries 429 only (unprocessed); only the idempotent create also retries 5xx.
+  The spec forbids combining `agentId` with `envVars`, so launches carry no session secrets.
+- The key is user-scoped, so every write verb refuses an id `launch` did not record in
+  `artifacts/cursor-launched.json` (exit 3, no request sent). `launch` records the id BEFORE the POST and un-records on
+  a refused create; `delete` forgets it. Defaults: `composer-2.5`, `autoCreatePR: false`, `workOnCurrentBranch: false`.
+- `composer-2` is retired and reroutes to `composer-2.5` (https://cursor.com/docs/sdk/typescript); the id list is
+  `GET /v1/models`.
+
+Measured live (composer-2.5, `f1-game`, read-only prompts, one agent, deleted after): `launch` 201 with a run id;
+`status` ACTIVE/RUNNING; `cancel` on the active run CANCELLED, a second cancel `NOT_CANCELLABLE` (exit 1);
+`followup` on the cancelled agent 201, a second one while it ran `BUSY` (exit 1); the follow-up answered `pong`;
+`dump` wrote 3 run streams; `archive` then `delete` both 200 and the agent then 404s. A `followup` and a `delete` aimed
+at a pre-existing agent were REFUSED with exit 3 and that agent's run count did not change. Unit tests
+(`tests/unit/cursor-agents.test.mjs`, stubbed fetch) cover the request shape, the allow-list, idempotent retry, the
+no-retry-on-write-5xx rule and the typed lines; disabling the allow-list check fails 2 of them.
+
+Not built: the fleet-bus bridge (`cursor:bc-<id>` message -> `followup`); the tool prints one typed line per fact and
+never a prompt or transcript body, which a bridge would keep.
+

@@ -201,7 +201,7 @@ body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
      this file on purpose: tests/unit/css-class-ratchet.test.mjs counts class
      tokens by regex and does not skip comments, so writing it here alone
      pushed the count over.) When BOTH children are empty the plate collapses
-     — see `.hud-gaps:not(:has(…))` below — so a ~10×10 junk chip does not sit
+     — see `.hud-gaps[data-empty]` below — so a ~10×10 junk chip does not sit
      under the minimap on portrait cockpit with nobody ahead/behind. */
   background: rgb(8 8 14 / calc(0.55 * var(--hud-panel-a-eff))); padding: 3px 8px; border-radius: var(--r-sm);
   /* no backdrop-filter — over the live canvas (see .hud-box) */
@@ -218,8 +218,13 @@ body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
 .hud-gaps > div:first-child { min-height: 1.3em; }
 /* BOTH LINES EMPTY: hide the plate. Padding (1×7) + the ahead min-height left a
    ~10×10 junk chip under the minimap (portrait cockpit default, nobody in
-   either slot). Collapse fully — do not keep a measurable empty box. */
-.hud-gaps:not(:has(> div:not(:empty))) { display: none; }
+   either slot). Collapse fully — do not keep a measurable empty box.
+   An ATTRIBUTE, not `:not(:has(> div:not(:empty)))`: that rule made every gap
+   text write (10 Hz, two chips) re-run :has() invalidation up to <html> and
+   restyle ~425 elements — 20 ms of style recalc a frame at phone CPU, ~3x the
+   rest of the HUD (docs/notes/LIVE-INPUT-H11-2026-10-20.md). js/ui/hud.js
+   (gapsEmptySync) sets it when both lines go empty and clears it on text. */
+.hud-gaps[data-empty] { display: none; }
 /* THE DROPPED STATE. Set by js/game/hud.js when the slot beside the map is
    smaller than any spelling of the readout — see the threshold table there. The
    widget keeps its column (still beside the minimap, still top-left) and moves

@@ -688,6 +688,14 @@ const Parts = (function () {
       {beam2: 1, lvl: 3.25, vane: 2, beam: 0, drs: 1, board: 1, frontSweep: 0.08, frontTaper: 0.91, frontRise: 0.09, rearSweep: 0.09, rearTaper: 0.9, floorEdge: 1.08, floorCut: 0.1, diffuserRise: 1.16, fin: 1.28}],
     ["aero", "medium", "style_aero_bridge", "Bridge Wing", "2008 bridge wing over the nose (McLaren MP4-23)",
       {fwBridge: 1,  lvl: 2, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04, rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1.00, floorCut: 0.04, diffuserRise: 1.00 }],
+    ["aero", "medium", "style_aero_auralis", "Auralis Contour", "shallow gull rear contour and swept wing tips",
+      {rwBowl: 0.055, rearSweep: 0.10, rearTaper: 0.90, plate: 0, casc: 0, gill: 0, vane: 0, board: 1}],
+    ["aero", "medium", "style_aero_cevora", "Cevora Contour", "nearly flat low-depth rear contour and straight tips",
+      {rwBowl: 0.012, rearSweep: 0.005, rearTaper: 1.04, plate: 0, casc: 0, gill: 0, vane: 0, board: 1}],
+    ["aero", "medium", "style_aero_vantrel", "Vantrel Contour", "deep bowl-shaped rear contour and strongly tapered tips",
+      {rwBowl: 0.085, rearSweep: 0.16, rearTaper: 0.82, plate: 0, casc: 0, gill: 0, vane: 0, board: 1}],
+    ["aero", "medium", "style_aero_orynth", "Orynth Contour", "arched rear contour with a swept trailing edge",
+      {rwBowl: 0.070, rearSweep: 0.12, rearTaper: 0.88, plate: 0, casc: 0, gill: 0, vane: 0, board: 1}],
     // B·D3c concept-sheet wings (2026-10-20), shown as Terrace / Flatline / Updraft /
     // Swell (Bryce: names of their own); ids keep the sheet's rift/keel/delta/serpent
     // so each pairs with the body shell of that id. Opt-in shape fields
@@ -740,7 +748,7 @@ const Parts = (function () {
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
         "floorEdge", "floorCut", "diffuserRise", "fin",
         // B·D3 period aero opt-in fields: absent = shipped mesh.
-        "rwSpoon", "beam2", "fwBridge",
+        "rwSpoon", "rwBowl", "beam2", "fwBridge",
         // B·D3c concept-sheet shape fields: absent = shipped mesh.
         "fwCurve", "fwStep", "epShape", "epTip", "wsFlat", "rwRise", "rwCurve", "rwPlanes", "epChord", "rwGap", "fwGap"]),
       suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave",
