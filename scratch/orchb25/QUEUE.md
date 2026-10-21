@@ -3,7 +3,7 @@
 Live state, refreshed and pushed every tick (branch `cursor/orchb25-queue-o25q`, never merged).
 A successor reads this first. Times UTC (Pacific = UTC−7).
 
-Updated: 2026-10-21 05:00Z
+Updated: 2026-10-21 05:14Z
 
 ## Gate state
 - Pages 39541119371 on a437375b SUCCESS → INCIDENT lifted 04:05Z.
@@ -77,3 +77,5 @@ Next game order: #3382, #3385, #3230, #3377, #3238, O-G train, #3386, #3388, #33
 04:47Z: Pages c6535c78 SUCCESS (#3390 confirmed). MERGED #3382 → eda39fd5 (game). Pages 2fc7a8fe running; eda39fd5 next. Game queue: #3385, #3377, #3238, #3230 (all READY+green). Non-game: #3359 (full tier running), #3403 (R4 deflake, W13), #3301→#3401, #3391. Decisions: H16 owns tlx.js startProgramWarm fix (hidden-frame 3.8 s stall); W11 item 5 (physics catch-up cap) parked as Bryce's feel call. Roll call 04:42Z: 8/10 replied (H17, H18 pending).
 
 05:00Z: MERGED #3359 → e44df10d (hold lifted by Bryce 04:37Z); #3401 → 9d560b86 (merged by someone else). Pages: 2fc7a8fe SUCCESS, eda39fd5 (#3382) running. H16 → B·H21 session_01TWn85zRhZXGUL3FqTvdgno (Opus): #3386 (READY), #3408 (tlx startProgramWarm stall fix, draft). TLX heap lead (+59 MB ArrayBuffers: 27 MB BufferAttribute copies, pack bytes) → B·H19. H17 over context (231k) → HANDOFF pending; H18 ~170k → HANDOFF after #3406. Game queue: #3385, #3377, #3386, #3238, #3230. Non-game: #3403, #3391, #3301.
+
+05:14Z: MERGED #3403 → 7b6a3a75 (non-game), #3385 → 50cc71dd (GAME). Pages: eda39fd5 SUCCESS; 7b6a3a75 running; 50cc71dd next. Game queue: #3377, #3386, #3238, #3230; then #3406 (H18, F6+F9), #3408 (H21, startProgramWarm + ctxLost regex), #3402 train, #3395 (H22, incl. far body — Bryce 'Ship on the numbers' 05:04Z), #3396, #3388, #3399. Non-game: #3391, #3301. Lanes: H17→B·H22 session_01Pn6fvwxngydHg9299ED2TQ; new B·H23 session_01NEB1N6hdJnAAFNPZC23NNu (phone TLX vs GLX side-by-side gallery; Bryce 05:12Z 'Keep both but test side by side first'). H19: pack-bytes + audio copies (mirror-release lever stays parked).
