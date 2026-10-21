@@ -297,7 +297,8 @@ const TLX = (function () {
       let _gpuAdapterOk = false;
       try {
         if (navigator.gpu && navigator.gpu.requestAdapter) {
-          const ad = await navigator.gpu.requestAdapter(); checkInit();
+          // The boot probe's adapter when it resolved one (renderer-boot.js): one GPU-process round trip fewer.
+          const ad = (opts && opts.adapter) || await navigator.gpu.requestAdapter(); checkInit();
           _gpuAdapterOk = !!ad;
           if (ad) {
             const info = ad.info || null;

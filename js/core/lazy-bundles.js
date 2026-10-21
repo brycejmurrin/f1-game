@@ -687,16 +687,22 @@ function raceAssets() {
       try { TrackBuildClient.idleWarm(wantAgentSurface()); } catch (_) { /* warm is best-effort */ }
     }
   };
-  if (typeof queueMicrotask === "function") queueMicrotask(kickScenery);
-  else Promise.resolve().then(kickScenery);
+  // ON IDLE, NOT A MICROTASK: the kick evaluates LAZY_TRACK_BUILD (~535 KB raw, one 40-150 ms task per big file on a
+  // 4x phone) the moment the title takes taps, and the default title builds no world. RACE! / openQuali / the
+  // flyby await ensureScenery themselves (shared in flight), so this only moves a prefetch. game-vm stubs
+  // requestIdleCallback as a no-op: it keeps the microtask (the audioIsGameVm pattern below).
+  if (audioIsGameVm()) queueMicrotask(kickScenery);
+  else scheduleIdle(kickScenery, 6000);
+  // Title prefetches on idle with LONG deadlines: a short one forced the eval as an ordinary task in the first
+  // seconds of title input. RACE! awaits all three, so a late prefetch costs nothing but the prefetch.
   // Lights stay on every link: a race start re-asks only after a FAILED fetch.
-  scheduleIdle(() => { ensureLightPresets(); }, 2500);
+  scheduleIdle(() => { ensureLightPresets(); }, 8000);
   // Prefetch the session stub's real modules on idle so startRace's await is
   // usually a no-op. Do not put them on the title paint path (microtask).
   // Save-Data / 2G skips both: startRace awaits ensureRaceSession and ensureAudio.
   if (!lowDataLink()) {
-    scheduleIdle(() => { ensureRaceSession(); }, 2800);
-    scheduleIdle(() => { prefetchAudio(); }, 4500);
+    scheduleIdle(() => { ensureRaceSession(); }, 9000);
+    scheduleIdle(() => { prefetchAudio(); }, 12000);
   }
   bootDesktopAudio();
 }

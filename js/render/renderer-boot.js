@@ -2,13 +2,6 @@
    Contract: docs/ARCHITECTURE.md. */
 const RendererBoot = (function () {
 "use strict";
-function create(deps) {
-const { $, els, canvas, ensureDataHub, loadBackendScripts } = deps;
-const BACKEND_FILES = ApexRoster.DEFERRED;
-// The boot canary's strike count (start() writes it, proved() clears it) and
-// whether a DEFERRED backend actually took the canvas on THIS load.
-const STRIKE_KEY = "apex26.gfxProbeStrikes";
-let _backendBound = false;
 // Warm the vendored three island for the default or a stored THREE pick, so TLX is not
 // waiting on a cold module fetch after the roster injects it. Idle-scheduled so the
 // ~735 KB modulepreload hints do not fight the last FULL scripts / title CSS for
@@ -16,7 +9,9 @@ let _backendBound = false;
 function preloadThreeVendor() {
   const kick = () => {
     try {
-      for (const href of ["vendor/three-0.186.1/three.webgpu.min.js", "vendor/three-0.186.1/three.tsl.min.js"]) {
+      // three.core too: three.webgpu imports it statically and modulepreload does not fetch dependencies,
+      // so without it core was found only after webgpu had downloaded and parsed (one more round trip).
+      for (const href of ["vendor/three-0.186.1/three.webgpu.min.js", "vendor/three-0.186.1/three.core.min.js", "vendor/three-0.186.1/three.tsl.min.js"]) {
         // querySelector is absent in some VM harnesses — skip the dedupe then.
         if (document.querySelector && document.querySelector('link[rel="modulepreload"][href="' + href + '"]')) continue;
         const el = document.createElement("link");
@@ -31,6 +26,13 @@ function preloadThreeVendor() {
   else if (typeof setTimeout === "function") setTimeout(kick, 0);
   else kick();
 }
+function create(deps) {
+const { $, els, canvas, ensureDataHub, loadBackendScripts } = deps;
+const BACKEND_FILES = ApexRoster.DEFERRED;
+// The boot canary's strike count (start() writes it, proved() clears it) and
+// whether a DEFERRED backend actually took the canvas on THIS load.
+const STRIKE_KEY = "apex26.gfxProbeStrikes";
+let _backendBound = false;
 function storedBackendPreference() {
   try {
     if (typeof ApexXR !== "undefined" && ApexXR.bootPick) {
@@ -57,8 +59,11 @@ function backendPreference() {
 // The probe's verdict for the fallback reason (#2285): "" when an adapter
 // resolved, else why not. "slow" is not "absent": see the WGX pick below.
 let _adapterWhy = "", _adapterSlow = false;
+// The adapter the probe resolved, handed to TLX (Gfx.create opts.adapter) so it does not ask the GPU process
+// again on the boot path; TLX reads only its info/limits, three requests its own device.
+let _probeAdapter = null;
 async function gpuAdapterAvailable() {
-  _adapterWhy = ""; _adapterSlow = false;
+  _adapterWhy = ""; _adapterSlow = false; _probeAdapter = null;
   try {
     if (typeof navigator === "undefined" || !navigator.gpu || !navigator.gpu.requestAdapter) { _adapterWhy = "no navigator.gpu"; return false; }
     const adapterP = navigator.gpu.requestAdapter();
@@ -79,6 +84,7 @@ async function gpuAdapterAvailable() {
       ]);
       if (ad === SLOW) { _adapterSlow = true; _adapterWhy = "requestAdapter() gave no answer in 4 s"; return false; }
       if (!ad) _adapterWhy = "requestAdapter() returned null";
+      _probeAdapter = ad || null;
       return !!ad;
     } finally {
       if (timer != null) clearTimeout(timer);
@@ -230,7 +236,7 @@ try {
     // A slow fetch is the network's verdict, not the device's: GLX for this boot,
     // canary state untouched. A hung create() IS the device's (see _createHung).
     if (fetched !== TIMED_OUT && Gfx.createInitOwner) _initOwner = Gfx.createInitOwner(canvas);
-    const made = fetched === TIMED_OUT ? null : await withTimeout(Gfx.create(canvas, { backend: pref, initOwner: _initOwner }), BOOT_STEP_MS, "backend " + pref + " init", () => { if (_initOwner) _initOwner.abort(); });
+    const made = fetched === TIMED_OUT ? null : await withTimeout(Gfx.create(canvas, { backend: pref, initOwner: _initOwner, adapter: _probeAdapter }), BOOT_STEP_MS, "backend " + pref + " init", () => { if (_initOwner) _initOwner.abort(); });
     const backend = made === TIMED_OUT ? (_createHung = true, null) : made;
     if (fetched === TIMED_OUT) why = "backend script fetch gave no answer in " + BOOT_STEP_MS / 1000 + " s";
     else if (made === TIMED_OUT) why = "backend " + pref + " init gave no answer in " + BOOT_STEP_MS / 1000 + " s";
@@ -370,7 +376,11 @@ function guessBackend() {
 function preloadLikelyBackend() {
   try {
     if (typeof ScriptLoader === "undefined" || !ScriptLoader.preload || typeof ApexRoster === "undefined") return 0;
-    const files = ApexRoster.DEFERRED && ApexRoster.DEFERRED[guessBackend()];
+    const guess = guessBackend();
+    // The vendor island too, from here rather than only inside start(): start() runs after every deferred
+    // script and the adapter probe, so its hint reached the network seconds after this one could.
+    if (guess === "three") preloadThreeVendor();
+    const files = ApexRoster.DEFERRED && ApexRoster.DEFERRED[guess];
     return files ? ScriptLoader.preload(files) : 0;
   } catch (_) { return 0; /* an optimisation only */ }
 }
