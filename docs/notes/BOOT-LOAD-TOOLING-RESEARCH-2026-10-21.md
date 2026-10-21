@@ -86,3 +86,7 @@ The probe is `scratch/h8/boot-probe.mjs` (not committed); it records boot phases
   - The only await outside it, `UpdateCheck.prepareLazyLoad`, is bounded to 1.5 s.
 - **`docs/notes/DEFECT-LEDGER.md:1906`:** the boot canary arms before the deferred-backend fetch, and a transient `checkFramebufferStatus` failure disables post for the session with no retry. Both have no fix tag.
 - **`docs/notes/ASSET-WEIGHT-AUDIT-2026-10-18.md:18`:** 276 defer scripts, 2.28 MB. This is the size basis for hunt row 12, a LAZY_RACE bundle.
+- **Repeat race warm (B·H14 finding, verified 2026-10-21): REFUTED for the common paths, residue PARKED.**
+  - Race entry skips its warm when the menu already warmed that world (`RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx))`, game.js `startRaceBody`), so restart, quali→grid and retry do not re-warm.
+  - The residue: Daily, lobby and agent starts bypass menuFinish and warm at entry without writing `_warmKey`, so a restart of that world warms again.
+  - Recording the key at entry is blocked by three things: the dark-world second warm's "|lit" tag, the missing grid-caster (car set) part of the key, and `_warmed` never being cleared on device loss.
