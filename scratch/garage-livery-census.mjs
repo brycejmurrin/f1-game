@@ -114,6 +114,12 @@ try{
       await page.waitForTimeout(3000);
       const i0=await snapshot(page);await page.waitForTimeout(IDLE_MS);const i1=await snapshot(page);
       row.idleGarage={...await windowStats(page,i0.t,i1.t),delta:delta(i0.calls,i1.calls)};
+      // livery_idle_trace_ms (B·H30, Bryce 2026-10-21 "lagging happens in phases like every 10 seconds"): every frame
+      // interval and long task over a long idle in the bay, timestamped, so a periodic stall shows its period.
+      if(+REQ.livery_idle_trace_ms>0){const t0=(await snapshot(page)).t;await page.waitForTimeout(+REQ.livery_idle_trace_ms);const t1=(await snapshot(page)).t;
+        row.idleTrace=await page.evaluate(([t0,t1])=>({frames:(__livCount.frames||[]).filter(([t])=>t>t0&&t<=t1).map(([t,d])=>[Math.round(t-t0),+d.toFixed(1)]),
+          longs:__livCount.longs.filter(([s])=>s>t0&&s<t1).map(([s,d])=>[Math.round(s-t0),Math.round(d)])}),[t0,t1]);
+        row.idleTraceStats=await windowStats(page,t0,t1);log(`${arm} idle trace ${JSON.stringify(row.idleTraceStats)}`);save();}
       row.phase='editor';await page.evaluate(()=>document.querySelector('#cs-tabs [data-cs-cat="livery"]').click());
       await page.waitForSelector('.cs-liv-create',{timeout:soft?180000:60000});
       const o0=await snapshot(page);await page.evaluate(()=>document.querySelector('.cs-liv-create').click());
