@@ -133,9 +133,10 @@ try{
       // livery, then recovery): save a BRUSHED custom, then alternate stock and custom picks; per pick, ten 1 s buckets.
       if(REQ.livery_select_trace){
         await page.evaluate(()=>document.querySelector('#cs-tabs [data-cs-cat="livery"]').click());await page.waitForSelector('.cs-liv-create',{timeout:60000});
+        // the id list is read BEFORE .cs-liv-create (B·H32): the open editor's draft row already carries the id SAVE keeps
+        const before=await page.evaluate(()=>[...document.querySelectorAll('[data-cs-livery]')].map(b=>b.dataset.csLivery));
         await page.evaluate(()=>document.querySelector('.cs-liv-create').click());await page.waitForSelector('[data-cs-finish="brushed"]',{timeout:60000});
         await page.evaluate(()=>document.querySelector('[data-cs-finish="brushed"]').click());await page.waitForTimeout(1500);
-        const before=await page.evaluate(()=>[...document.querySelectorAll('[data-cs-livery]')].map(b=>b.dataset.csLivery));
         await page.evaluate(()=>document.querySelector('.cs-liv-ed-save').click());
         // a saved paint job's id is livIdCounter()'s Date.now()+seq: wait for a NEW id to appear in the list
         await page.waitForFunction(b=>[...document.querySelectorAll('[data-cs-livery]')].some(x=>!b.includes(x.dataset.csLivery)),before,{polling:250,timeout:60000}).catch(()=>{});
