@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01SoGgREcrd12Mx6CsVHiDDs ORCH B LIVE claude:session_01SoGgREcrd12Mx6CsVHiDDs (replaces session_01MEA1rbzmm59CeZRognYgza) B·O25
+HANDOFF to:* from:claude:session_01MEA1rbzmm59CeZRognYgza OrchB 24 → OrchB 25 (session_01SoGgREcrd12Mx6CsVHiDDs). Fleet B orchestration, merges and lane replacements move to OrchB 25 now; OrchB 24 stops merging. Pages rerun on cfefcbf7 pending; all merges held until it's green.
