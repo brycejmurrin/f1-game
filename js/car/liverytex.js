@@ -2595,7 +2595,7 @@ const LiveryTex = (function () {
   // the first paint lands in an offscreen canvas and later ones blit it. Cached only
   // once web fonts are in (a lockup painted in the fallback face must not stick);
   // a logo install or removal (markChanged) drops every card.
-  const _swatchCache = new Map(), SWATCH_CACHE_MAX = 160;
+  const _swatchCache = new Map(), SWATCH_CACHE_MAX = 160, _swatchStats = { paints: 0, blits: 0 };
   markReady.push(() => _swatchCache.clear());
   function paintSwatch(ctx, teamId, liv, w, h) {
     const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
@@ -2606,12 +2606,14 @@ const LiveryTex = (function () {
       c = document.createElement("canvas"); c.width = w; c.height = h;
       const cx = c.getContext && c.getContext("2d");
       if (!cx) return paintSwatchNow(ctx, teamId, liv, w, h);
-      paintSwatchNow(cx, teamId, liv, w, h);
+      paintSwatchNow(cx, teamId, liv, w, h); _swatchStats.paints++;
       if (_swatchCache.size >= SWATCH_CACHE_MAX) _swatchCache.delete(_swatchCache.keys().next().value);
       _swatchCache.set(key, c);
     }
-    ctx.drawImage(c, 0, 0);
+    ctx.drawImage(c, 0, 0); _swatchStats.blits++;
   }
+  // Counters for tests/specs/garage-pick-cost.spec.js (a pick must blit, not repaint, its cards).
+  function swatchStats() { return { paints: _swatchStats.paints, blits: _swatchStats.blits, cached: _swatchCache.size }; }
   function paintSwatchNow(ctx, teamId, liv, w, h) {
     const c1 = (liv && liv.c1) || [0.20, 0.20, 0.22];
     const c2 = (liv && liv.c2) || c1;
@@ -2636,7 +2638,7 @@ const LiveryTex = (function () {
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
   return { SIZE, SIZE_H, atlasDiv, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
-           MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch,
+           MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch, swatchStats,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,

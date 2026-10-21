@@ -33,7 +33,7 @@ const GarageSurfaceOutline = (() => {
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const i = y * width + x;
       if (!allowed[i]) continue;
-      if (edge[i]) { pixels.set([255, 255, 255, 255], i * 4); continue; }
+      if (edge[i]) { const o = i * 4; pixels[o] = pixels[o + 1] = pixels[o + 2] = pixels[o + 3] = 255; continue; }
       // One dark keyline around the white contour, never a filled overlay.
       if ((x > 0 && edge[i - 1]) || (x + 1 < width && edge[i + 1]) ||
           (y > 0 && edge[i - width]) || (y + 1 < height && edge[i + width])) pixels[i * 4 + 3] = 235;

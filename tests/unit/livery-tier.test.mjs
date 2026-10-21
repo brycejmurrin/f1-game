@@ -237,6 +237,20 @@ test("a phone at GRAPHICS: HIGH never schedules the 2048 player atlas", () => {
   assert.equal(api.frame(cars)[0], "me#1:prev", "the preview stays");
 });
 
+// A queued 2048 kick belongs to the team it was queued for: browsing to another team
+// before the idle slot fires must not paint and upload the one left behind (B·H13 hunt).
+test("browsing to another team abandons the queued 2048 player atlas", () => {
+  const { G, api, built } = decalRig();
+  G.teamIdx = 0;
+  api.frame(grid(3));
+  G.teamIdx = 1;
+  api.flushHiRes();
+  assert.equal(built.filter((a) => a.endsWith(":hi")).length, 0, "no 2048 for the team left behind");
+  G.teamIdx = 0;
+  api.frame(grid(3)); api.flushHiRes();
+  assert.equal(api.hiResDone(), 1, "coming back schedules it again");
+});
+
 test("sync player atlas is preview; hi-res lands only after idle flush", () => {
   const { api, built } = decalRig();
   const cars = grid(3);
