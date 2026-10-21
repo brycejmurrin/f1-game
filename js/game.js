@@ -8258,7 +8258,7 @@ function render(dt) {
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2) * frame.exposure; po.grade = _grade;   // exposed units (BRIGHT_FS): x the TOD exposure keeps the shipped bloom; EXPOSURE now moves it
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
-  // slow at the scale floor sheds those instead. Tier 2 (user+auto) drops dry + car-paint SSR (wet-road SSR at 3);
+  // slow at the scale floor sheds those instead. Tier 2 drops dry + car-paint SSR; wet roads use a reduced budget.
   // autoTier 4 drops SSAO (+2 blurs) and god-ray — not GRAPHICS: LOW alone.
   po.ssao = PerfGov.autoTier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.autoTier() >= 4 ? 0 : _gr;
@@ -8267,10 +8267,10 @@ function render(dt) {
   // so a tier-4 DAYTIME frame (_cs is non-zero whenever the key is bright) would
   // still run the SSAO pass and both of its blurs after po.ssao went to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  // WET-road SSR sheds one tier later (3) than the dry sheens and car paint (2): tier 2 is every phone's
-  // GRAPHICS: MEDIUM, and rain with no mirror read as reflections broken. The governor still sheds it at 3.
-  const _ssrTier = (frame.wetness || 0) > 0.01 ? 3 : 2;
-  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= _ssrTier ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  // Wet-road SSR keeps a reduced budget even at user LOW (tier 4).
+  // Measured overload/crash tier 4 still falls back to material sky/lamp reflections. Dry sheen still sheds at 2.
+  PostCommon.roadReflection(po, frame.wetness || 0, _ssrPo, PerfGov.tier(), PerfGov.autoTier());
+  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   PostFxOpts.gate(po);   // GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS: the tier-4 exit, taken by choice
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and

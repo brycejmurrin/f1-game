@@ -12844,6 +12844,9 @@
       "keepNearest": [
         "tests/unit/godray-keep-nearest.test.mjs"
       ],
+      "roadReflection": [
+        "tests/unit/perf-governor.test.mjs"
+      ],
       "*": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
