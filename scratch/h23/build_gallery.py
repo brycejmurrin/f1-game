@@ -10,9 +10,7 @@ facts = json.load(open(os.path.join(ROOT, "facts.json")))   # hand-assembled num
 ORDER = [
     ("menu-low", "Title menu", "Menu is DOM over a canvas backdrop; identical on both."),
     ("garage-low", "Garage car", ""),
-    ("monza-grid-low", "Monza start grid, chase", ""),
     ("monza-helmet-low", "Monza helmet cam (phone default view)", ""),
-    ("monza-helmet-med", "Monza helmet cam, MED 0.75 + UPSCALE", ""),
     ("monza-straight-low", "Monza straight, chase", ""),
     ("monaco-kerb-low", "Monaco kerbs, orbit", ""),
     ("monaco-kerb-med", "Monaco kerbs, MED 0.75 + UPSCALE", ""),

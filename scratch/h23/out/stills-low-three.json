@@ -1,0 +1,296 @@
+{
+ "backend": "three",
+ "tier": "low",
+ "rows": [
+  {
+   "scene": "menu",
+   "path": "/home/user/f1-game/scratch/h23/out/stills/menu-low-three.png",
+   "ms": 9155,
+   "env": {
+    "backend": "three",
+    "api": null,
+    "mobileTier": true,
+    "isMobile": true,
+    "upscale": false,
+    "renderScale": {
+     "scale": 0.5,
+     "fps": 59.9,
+     "floorMs": 16.7,
+     "auto": false,
+     "tier": 2,
+     "autoTier": 0,
+     "autoShed": 0,
+     "open": {
+      "frames": 0,
+      "maxMs": 0,
+      "slow": 0
+     },
+     "frameTimes": {
+      "frames": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "maxMs": 0,
+      "droppedSimS": 0,
+      "physicsSteps": 0,
+      "windowFrames": 2048
+     },
+     "userTier": 2,
+     "tierFloor": 0,
+     "crashStrikes": 0,
+     "scaleFutile": false,
+     "tierFutile": false,
+     "tierHold": false
+    },
+    "canvas": [
+     633,
+     293
+    ],
+    "coarse": true,
+    "dpr": 3
+   },
+   "mirror": null
+  },
+  {
+   "scene": "garage",
+   "path": "/home/user/f1-game/scratch/h23/out/stills/garage-low-three.png",
+   "ms": 22541,
+   "env": {
+    "backend": "three",
+    "api": null,
+    "mobileTier": true,
+    "isMobile": true,
+    "upscale": false,
+    "renderScale": {
+     "scale": 0.5,
+     "fps": 59.9,
+     "floorMs": 16.7,
+     "auto": false,
+     "tier": 2,
+     "autoTier": 0,
+     "autoShed": 0,
+     "open": {
+      "frames": 0,
+      "maxMs": 0,
+      "slow": 0
+     },
+     "frameTimes": {
+      "frames": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "maxMs": 0,
+      "droppedSimS": 0,
+      "physicsSteps": 0,
+      "windowFrames": 2048
+     },
+     "userTier": 2,
+     "tierFloor": 0,
+     "crashStrikes": 0,
+     "scaleFutile": false,
+     "tierFutile": false,
+     "tierHold": false
+    },
+    "canvas": [
+     633,
+     293
+    ],
+    "coarse": true,
+    "dpr": 3
+   },
+   "mirror": null
+  },
+  {
+   "scene": "monza-grid",
+   "path": "/home/user/f1-game/scratch/h23/out/stills/monza-grid-low-three.png",
+   "ms": 38528,
+   "env": {
+    "backend": "three",
+    "api": null,
+    "mobileTier": true,
+    "isMobile": true,
+    "upscale": false,
+    "renderScale": {
+     "scale": 0.5,
+     "fps": 3.5,
+     "floorMs": 74.7,
+     "auto": false,
+     "tier": 2,
+     "autoTier": 0,
+     "autoShed": 0,
+     "open": {
+      "frames": 10,
+      "maxMs": 12099.5,
+      "slow": 9
+     },
+     "frameTimes": {
+      "frames": 10,
+      "p50": 1250,
+      "p95": 12099.5,
+      "p99": 12099.5,
+      "maxMs": 12099.5,
+      "droppedSimS": 0.3333333333333333,
+      "physicsSteps": 12,
+      "windowFrames": 2048
+     },
+     "userTier": 2,
+     "tierFloor": 0,
+     "crashStrikes": 0,
+     "scaleFutile": false,
+     "tierFutile": false,
+     "tierHold": true
+    },
+    "canvas": [
+     633,
+     293
+    ],
+    "coarse": true,
+    "dpr": 3
+   },
+   "mirror": null
+  },
+  {
+   "scene": "monza-mirror",
+   "path": "/home/user/f1-game/scratch/h23/out/stills/monza-mirror-low-three.png",
+   "ms": 15142,
+   "env": {
+    "backend": "three",
+    "api": null,
+    "mobileTier": true,
+    "isMobile": true,
+    "upscale": false,
+    "renderScale": {
+     "scale": 0.5,
+     "fps": 3.5,
+     "floorMs": 74.4,
+     "auto": false,
+     "tier": 2,
+     "autoTier": 0,
+     "autoShed": 0,
+     "open": {
+      "frames": 80,
+      "maxMs": 12099.5,
+      "slow": 17
+     },
+     "frameTimes": {
+      "frames": 80,
+      "p50": 16.69999999999709,
+      "p95": 1816.5,
+      "p99": 12099.5,
+      "maxMs": 12099.5,
+      "droppedSimS": 0.3333333333333333,
+      "physicsSteps": 12,
+      "windowFrames": 2048
+     },
+     "userTier": 2,
+     "tierFloor": 0,
+     "crashStrikes": 0,
+     "scaleFutile": false,
+     "tierFutile": false,
+     "tierHold": true
+    },
+    "canvas": [
+     633,
+     293
+    ],
+    "coarse": true,
+    "dpr": 3
+   },
+   "mirror": {
+    "mode": "auto",
+    "shown": true,
+    "collapsed": false,
+    "rect": [
+     0.41683019845971564,
+     0.18177083333333333,
+     0.16633960308056872,
+     0.10284455128205128
+    ],
+    "cars": 0,
+    "drawn": 9,
+    "cam": "helmet",
+    "lite": true,
+    "quality": "lite",
+    "instEvery": 1,
+    "instFreezeSkips": 0,
+    "instRefresh": 0,
+    "lampCap": 12,
+    "lampRanks": 0,
+    "lampHeld": 0,
+    "preparing": false,
+    "prepared": true,
+    "pip": {
+     "mode": "auto",
+     "shown": false,
+     "code": null,
+     "cam": "tcam",
+     "rect": null
+    },
+    "backend": {
+     "ready": true,
+     "dead": false,
+     "w": 337,
+     "h": 96,
+     "hdr": true,
+     "renders": 9,
+     "composites": 8,
+     "glass": 8,
+     "rect": [
+      0.41683019845971564,
+      0.18177083333333333,
+      0.16633960308056872,
+      0.10284455128205128
+     ],
+     "flip": true,
+     "error": null,
+     "mips": 9,
+     "mipCap": 3,
+     "mipFull": true
+    },
+    "glass": {
+     "live": 8,
+     "fallback": 7,
+     "screen": [
+      [
+       [
+        0.2630230017756928,
+        0.5658697643335203
+       ],
+       [
+        0.17233585050695388,
+        0.5640235223780862
+       ],
+       [
+        0.1722326453943614,
+        0.5082774372529458
+       ],
+       [
+        0.2629464340010939,
+        0.5086863802708987
+       ]
+      ],
+      [
+       [
+        0.7368848727211126,
+        0.5658651104711678
+       ],
+       [
+        0.8275589764505711,
+        0.564017242719158
+       ],
+       [
+        0.8276621303979229,
+        0.5082758463439981
+       ],
+       [
+        0.7369613964735374,
+        0.5086852048055907
+       ]
+      ]
+     ]
+    }
+   }
+  }
+ ],
+ "errors": []
+}
