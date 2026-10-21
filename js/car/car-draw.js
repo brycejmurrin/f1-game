@@ -287,8 +287,8 @@ const CarDraw = (function () {
         }
       }
     }
-    function invalidateDecalTextures(teamId) {
-      const prefix = teamId + ":";
+    function invalidateDecalTextures(teamId, draftOnly) {
+      const prefix = teamId + ":" + (draftOnly ? DRAFT_TAG : "");
       Object.keys(_decalTexCache).forEach(function (key) {
         if (key.indexOf(prefix) === 0) dropDecalTexture(key);
       });
@@ -369,12 +369,23 @@ const CarDraw = (function () {
     // when something is written to the store.
     // The entry also memoises each FULL key (prefix + num [+ ":P"]) like
     // teamMeshKeyFor, so a per-car-per-frame hit concatenates nothing.
+    // A live garage paint draft keys its own atlases ("<team>:~d<gen>:", one gen per draft object, and
+    // setup-sheet replaces the object on every edit): opening the editor and CANCEL used to invalidate the
+    // whole team, dropping the SAVED atlas (its finished 2048 too) only to repaint it on the way back.
+    const DRAFT_TAG = "~d";
+    let _draftSrc = null, _draftGen = 0;
+    function draftTag(team) {
+      const d = G.livDraftOverride;
+      if (!d || d.teamId !== team.id) return "";
+      if (d !== _draftSrc) { _draftSrc = d; _draftGen++; }
+      return DRAFT_TAG + _draftGen;
+    }
     const _decalPrefixCache = new Map();
     function decalKeyEntry(team) {
-      const c = _decalPrefixCache.get(team.id);
-      if (c && c.rev === G.store.rev) return c;
-      const val = team.id + ":" + G.getLiveryId(team.id) + ":";
-      const e = { val, rev: G.store.rev, full: new Map(), fullP: new Map() };
+      const c = _decalPrefixCache.get(team.id), tag = draftTag(team);
+      if (c && c.rev === G.store.rev && c.tag === tag) return c;
+      const val = team.id + ":" + (tag || G.getLiveryId(team.id)) + ":";
+      const e = { val, tag, rev: G.store.rev, full: new Map(), fullP: new Map() };
       _decalPrefixCache.set(team.id, e);
       return e;
     }

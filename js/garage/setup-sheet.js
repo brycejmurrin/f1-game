@@ -1508,7 +1508,7 @@ function livePreviewDraft(team, d) {
   const skipMesh = draftSkipsMesh(_livPrevDraft, d);
   _livPreviewKey = key;
   _livPrevDraft = Object.assign({}, d);
-  if (invalidateDecalTextures) invalidateDecalTextures(team.id);
+  dropDraftAtlases(team);
   // A custom id, as SAVE & FIT writes: "default" gave the draft the team's brand
   // mark palette, which the saved paint job then lost (audit D1; livDraftFromOwn
   // seeds those colours into the draft instead).
@@ -1517,13 +1517,21 @@ function livePreviewDraft(team, d) {
   if (!skipMesh) G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
+// A draft paints under its own decal keys (car-draw draftTag): drop only those, so the saved livery's
+// atlas survives opening the editor and CANCEL. SAVE mints a fresh id, so its atlas misses by itself.
+function dropDraftAtlases(team) {
+  const cd = typeof CarDraw !== "undefined" && CarDraw.instance && CarDraw.instance();
+  if (cd && cd.invalidateDecalTextures) cd.invalidateDecalTextures(team.id, true);
+  else if (invalidateDecalTextures) invalidateDecalTextures(team.id);
+}
+
 function endLivPreview(team) {
   if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end();
   cancelLivPreview();
   _livPreviewKey = "";
   _livPrevDraft = null;
   G.livDraftOverride = null;
-  if (invalidateDecalTextures) invalidateDecalTextures(team.id);
+  dropDraftAtlases(team);
   // The race body caches key on the SAVED livery id: one built while the draft
   // was live (a garage opened mid-race) holds the draft's paint (#2796 item 4).
   const cd = typeof CarDraw !== "undefined" && CarDraw.instance && CarDraw.instance();

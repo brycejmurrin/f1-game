@@ -4391,7 +4391,8 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   // …and each FULL key (prefix + seat [+ ":P"]) is memoised on that entry, so a hit concatenates nothing.
   assert.match(cd, /const key = decalKeyFor\(team, num, isPlayer\);/, "getCarDecalTexture builds its key from the memoised prefix");
   assert.match(cd, /k = e\.val \+ \(num == null \? "_" : num\) \+ \(isPlayer \? ":P" : ""\)/, "the full key is the prefix + seat (+ :P), as before");
-  assert.match(cd, /if \(c && c\.rev === G\.store\.rev\) return c;[\s\S]{0,200}team\.id \+ ":" \+ G\.getLiveryId\(team\.id\) \+ ":"/, "decalKeyEntry invalidates on store.rev");
+  // A live paint draft swaps the livery id for its own tag (B·H13 hunter finding 3), memoised the same way.
+  assert.match(cd, /if \(c && c\.rev === G\.store\.rev && c\.tag === tag\) return c;[\s\S]{0,200}team\.id \+ ":" \+ \(tag \|\| G\.getLiveryId\(team\.id\)\) \+ ":"/, "decalKeyEntry invalidates on store.rev and on the draft tag");
 });
 
 test("GLX links its core programs as one parallel batch when KHR_parallel_shader_compile exists", () => {
