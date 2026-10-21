@@ -211,3 +211,26 @@ test("reset() clears the drag smoothing so the next press starts at the finger (
   clock.t += 16;
   assert.equal(Input.steer(), 0, "an anchored press reads 0, not the previous drag");
 });
+
+test("a window touchend with no fingers left frees a steering finger whose canvas touchend was lost (B·H20)", () => {
+  const { Input, onCanvas, listeners, clock } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  onCanvas("touchstart", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 200 }] });
+  onCanvas("touchmove", { changedTouches: [{ identifier: 1, clientX: 100 + 2000, clientY: 200 }] });
+  assert.equal(Input.steer(), 1);
+  for (const f of listeners.touchend || []) f({ touches: [] });   // the canvas never saw its own touchend
+  for (let i = 0; i < 60; i++) { clock.t += 16; Input.steer(); }
+  assert.equal(Input.steer(), 0, "the ghost finger no longer pins the wheel");
+});
+
+test("a rotation drops a drag whose anchor lives in the old screen space (B·H20)", () => {
+  const { Input, onCanvas, listeners, clock } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  onCanvas("touchstart", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 200 }] });
+  for (const f of listeners.orientationchange || []) f({});
+  onCanvas("touchmove", { changedTouches: [{ identifier: 1, clientX: 744, clientY: 200 }] });   // the same physical spot, mirrored x
+  for (let i = 0; i < 60; i++) { clock.t += 16; Input.steer(); }
+  assert.equal(Input.steer(), 0, "a finger that did not move reads no steer after a rotation");
+});
