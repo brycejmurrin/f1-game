@@ -340,11 +340,11 @@ test("the bounded team caches hold the menu prep, the race warm and the mirror w
     {
       const count = (k) => v.rec.builds.filter(b => b.kind === k).length;
       // Bodies: playerBodyMesh (its own cache) + teamBodyMesh per rival seat the
-      // menu lists: 21 real; LEGENDS lists its other 11 legends as well, keyed by
-      // number, and most carry 1 (js/data/legends.js): 22 + 2 keys.
+      // menu lists: 21 real; LEGENDS preps ONLY the picked legend, as the race
+      // grids one seat (game.js seatsFor): 21 + the picked legend's key = 22.
       const teamBodies = count("body") - 1, casters = count("sh");
       assert.deepEqual([pick, count("whole"), teamBodies, casters],
-        pick === "legends" ? [pick, 0, 24, 13] : [pick, 0, 21, 12],
+        pick === "legends" ? [pick, 0, 22, 12] : [pick, 0, 21, 12],
         "menu: no whole car; the rivals' bodies; a :sh per team (+ the picked team's) + the player's own build");
       assert.ok(teamBodies <= cap && casters <= cap, `teamBodies ${teamBodies} / teamMeshes ${casters} within ${cap}`);
       const menu = v.rec.builds.length;

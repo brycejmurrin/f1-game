@@ -5016,7 +5016,6 @@
       ],
       "parts": [
         "tests/specs/parts-physics.spec.js",
-        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
