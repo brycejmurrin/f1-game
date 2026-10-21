@@ -100,12 +100,18 @@ const CustomLiveries = (function () {
     // Memoized per team.id, invalidated by store.rev — during a race this resolves to
     // a cached object with zero localStorage access and zero per-frame allocation.
     const _livResolveCache = new Map();
+    let _draftResolved = { src: null, val: null };
     function resolveLivery(team) {
       // The live creator draft wins while it is open — through the same field list
       // as a saved livery, so no editor row can stop short of the atlas or mesh.
       // migratePaint folds the retired keys (ridge, airbox) and drops the retired
       // inks on the way in, so ONE list is still the only thing the atlas reads.
-      if (livDraftOverride && livDraftOverride.teamId === team.id) return pickLivery(migrateLivery(livDraftOverride.liv));
+      // One resolved object per draft: setup-sheet replaces livDraftOverride on every effective edit, so its
+      // identity is the key (identity-keyed memos downstream, CarWheels.tints, missed on every call).
+      if (livDraftOverride && livDraftOverride.teamId === team.id) {
+        if (_draftResolved.src !== livDraftOverride) _draftResolved = { src: livDraftOverride, val: pickLivery(migrateLivery(livDraftOverride.liv)) };
+        return _draftResolved.val;
+      }
       const owner = identityOwner(team.id), identityRev = owner ? owner.identityRevision() : 0;
       const c = _livResolveCache.get(team.id);
       if (c && c.rev === store.rev && c.identityRev === identityRev) return c.val;

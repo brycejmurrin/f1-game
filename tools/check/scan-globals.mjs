@@ -124,7 +124,7 @@ const ENV = new Set([
   "customElements", "reportError", "postMessage", "focus", "blur", "print", "stop",
   "CompressionStream", "DecompressionStream", "orientation",
   // WebGPU host constants (js/render/webgpu/wgx.js)
-  "GPUBufferUsage", "GPUColorWrite", "GPUMapMode", "GPUShaderStage", "GPUTextureUsage",
+  "GPUBufferUsage", "GPUDevice", "GPUColorWrite", "GPUMapMode", "GPUShaderStage", "GPUTextureUsage",
   // Node-side hosts the same files run under (track-build VM, tools)
   "process", "global", "require", "module", "exports", "Buffer",
   "__dirname", "__filename",

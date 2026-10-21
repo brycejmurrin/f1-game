@@ -98,13 +98,18 @@ test("R4: a probe hits vm-loaded copies under relative, absolute and no filename
   assert.equal(run.exitCode, 0, run.stdoutTail);
   assert.equal(run.probes[0].hits, 6); assert.equal(run.probes[0].contexts, 3); assert.equal(run.probes[1].hits, 3);
   assert.equal(run.probes[0].boundBy, "source (unnamed vm script)");
-  // vmTopLevel:false binds off scriptParsed: the unnamed copy is called in its load's tick, so it is missed.
+  // vmTopLevel:false binds off scriptParsed. The two named copies bind by URL before they run, so they count exactly
+  // (triple(1) at load + triple(2)) = 4. The unnamed copy binds asynchronously (getScriptSource + setBreakpoint) while
+  // the load's own tick keeps running, so it is BEST EFFORT by design (see instrument() in js-debugger-node.mjs): it
+  // adds 0 to 2 hits depending on whether the bind beats the calls (a loaded box lets it win: 6 seen on Pages 39542220581).
   const parsed = (await nodeTest({ file: `${FX}/vm.fixture.mjs`, vmTopLevel: false, probes: [probe] })).runs[0];
-  assert.equal(parsed.probes[0].hits, 4);
+  assert.ok(parsed.probes[0].hits >= 4 && parsed.probes[0].hits <= 6, `the named copies give 4, the unnamed one adds 0..2: ${parsed.probes[0].hits}`);
+  assert.ok(parsed.probes[0].contexts >= 2, `both named copies were hit: ${parsed.probes[0].contexts} contexts`);
   // A pause budget of 1 disarms at the first script execution and says so.
   const capped = (await nodeTest({ file: `${FX}/vm.fixture.mjs`, vmPauseBudget: 1, probes: [probe] })).runs[0];
   assert.equal(capped.vmPauses, 1); assert.match(capped.vmNote, /stopped after 1 script executions/);
-  assert.equal(capped.probes[0].hits, 4);
+  // Same split as above: later scripts bind off scriptParsed, so the unnamed copy may add 0..2 hits.
+  assert.ok(capped.probes[0].hits >= 4 && capped.probes[0].hits <= 6, `capped run: the named copies give 4, the unnamed one adds 0..2: ${capped.probes[0].hits}`);
 });
 
 test("a hanging test is killed at timeoutMs and reported, not left running", async () => {

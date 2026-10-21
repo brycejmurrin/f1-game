@@ -372,7 +372,9 @@ test("a commit guard that outlives its time cap BLOCKS (rc 124 → exit 2), for 
   } finally { repo.rm(); }
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
   const bg = settings.hooks.PreToolUse.flatMap((g) => g.hooks).find((h) => h.command.includes("bash-guard.sh"));
-  const inner = Number(fs.readFileSync(HOOK, "utf8").match(/APEX_GUARD_TIMEOUT:-(\d+)/)[1]);
+  const hookSrc = fs.readFileSync(HOOK, "utf8");
+  assert.ok(/GUARD_T=160/.test(hookSrc), "default inner guard cap");
+  const inner = 160;
   assert.ok(inner + 15 <= bg.timeout, `inner guard cap ${inner} s must sit below the hook timeout ${bg.timeout} s`);
   for (const h of settings.hooks.PreToolUse.flatMap((g) => g.hooks))
     assert.equal(h.onFailure, "block", `${h.command}: a PreToolUse guard that crashes or times out must block`);

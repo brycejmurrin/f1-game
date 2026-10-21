@@ -45,6 +45,16 @@ export function cellFileBase(screenId, vpName) {
   return `${screenId}__${vpName}`;
 }
 
+/** Append `?lang=` for layout-audit pseudo-locale / translation stress runs. */
+export function urlWithLang(baseUrl, lang) {
+  if (!lang) return baseUrl;
+  const tag = String(lang).trim();
+  if (!tag) return baseUrl;
+  const u = new URL(baseUrl);
+  u.searchParams.set("lang", tag);
+  return u.href;
+}
+
 export function cellPaths(outDir, screenId, vpName) {
   const base = cellFileBase(screenId, vpName);
   return {
@@ -79,8 +89,9 @@ function expandScreens(screens, circuitsAxis) {
   return expanded;
 }
 
-export async function bootPage(page, base, { hideGame = true, scale = null, timeout = 90000 } = {}) {
-  await page.goto(base, { waitUntil: "domcontentloaded", timeout });
+export async function bootPage(page, base, { hideGame = true, scale = null, timeout = 90000, lang = null } = {}) {
+  const url = urlWithLang(base, lang);
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout });
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, {
     polling: 100,
     timeout: 60000,
@@ -93,10 +104,19 @@ export async function bootPage(page, base, { hideGame = true, scale = null, time
     }
   }, hideGame);
   if (scale != null) await applyScale(page, scale);
+  if (lang) {
+    const wantLang = String(lang).trim();
+    await page.waitForFunction(
+      (expected) => window.I18n && window.I18n.lang() === expected,
+      wantLang,
+      { polling: 100, timeout: 15000 },
+    ).catch(() => {});
+  }
   page.setDefaultTimeout(12000);
 }
 
-export async function resetToTitle(page, base, hideGame) {
+export async function resetToTitle(page, base, hideGame, lang = null) {
+  const url = urlWithLang(base, lang);
   await page.evaluate((ids) => {
     for (const id of ids) {
       const el = document.getElementById(id);
@@ -130,7 +150,7 @@ export async function resetToTitle(page, base, hideGame) {
     return !!hit && (hit === b || b.contains(hit)) && !b.closest("[inert]");
   });
   if (!titleUsable) {
-    await page.goto(base, { waitUntil: "domcontentloaded" });
+    await page.goto(url, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 60000 });
     await page.evaluate((hide) => {
       window.__apex.headless(true);
@@ -210,8 +230,8 @@ export async function runMenuShot(opts = {}) {
     browser = await launchChromium({ args: ["--use-angle=swiftshader", "--hide-scrollbars"] });
     const ctx = await browser.newContext({ ...vpOpts, colorScheme: "dark" });
     const page = await ctx.newPage();
-    await bootPage(page, srv.url, { hideGame: opts.hideGame !== false, scale });
-    await resetToTitle(page, srv.url, opts.hideGame !== false);
+    await bootPage(page, srv.url, { hideGame: opts.hideGame !== false, scale, lang: opts.lang });
+    await resetToTitle(page, srv.url, opts.hideGame !== false, opts.lang);
     await captureOpenScreen(page, screen, { insets });
     const written = await writeMenuCapture(page, screen, outDir, vpTag);
     await ctx.close();
@@ -276,7 +296,7 @@ export async function runMenuGallery(opts = {}) {
     const page = await ctx.newPage();
     let booted = false;
     try {
-      await bootPage(page, srv.url, { hideGame: true, scale });
+      await bootPage(page, srv.url, { hideGame: true, scale, lang: opts.lang });
       booted = true;
     } catch (e) {
       onCell(`${vpName}: BOOT FAILED — ${e.message.split("\n")[0]}`);
@@ -301,7 +321,7 @@ export async function runMenuGallery(opts = {}) {
         continue;
       }
       try {
-        await resetToTitle(page, srv.url, true);
+        await resetToTitle(page, srv.url, true, opts.lang);
         await captureOpenScreen(page, screen, { insets });
         const written = await writeMenuCapture(page, screen, outDir, vpName);
         cell.shot = written.relShot;
@@ -333,6 +353,7 @@ export async function runMenuGallery(opts = {}) {
   const manifest = {
     when: new Date().toISOString(),
     build: JSON.parse(fs.readFileSync(path.join(ROOT, "version.json"), "utf8")).build,
+    lang: opts.lang || null,
     viewports: viewports.map(([n, , w]) => ({ name: n, why: w })),
     screens: screens.map((s) => ({ id: s.id, name: s.name, root: s.root })),
     cells: rows.map((r) => ({

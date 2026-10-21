@@ -272,6 +272,13 @@ function buildLightTunePanel() {
       inp.type = "range"; inp.min = d.min; inp.max = d.max; inp.step = d.step;
       inp.id = "lt-in-" + d.id;
       inp.setAttribute("aria-label", d.label);
+      // A phone never allocates these maps (js/render/three/tlx-shadow.js keys them on the device), so the switch
+      // would do nothing there: show it, disabled and labelled, rather than as a working control.
+      if (d.desktopOnly && typeof GLX !== "undefined" && GLX.isMobile) {
+        inp.disabled = true;
+        span.appendChild(document.createTextNode(" (DESKTOP ONLY)"));
+        inp.setAttribute("aria-label", d.label + " (desktop only)");
+      }
       inp.oninput = () => {
         if (!setLightTune(d.id, parseFloat(inp.value))) return;
         b.textContent = fmtTune(d, LT[d.id]);

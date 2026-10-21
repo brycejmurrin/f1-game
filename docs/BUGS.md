@@ -353,9 +353,10 @@ From the round-2 tooling hunt (`15-tooling-ci`, tip `0f8c88843`). F1-F11 are fix
 - 15-F10 (narrowed) `ratchets --base` now blocks a loosened explicit slack and a deleted entry whose file still exists. A NEW entry
   with an inflated ceiling is still only caught by `--check`'s slack rule (the right place), not by `--base`. · low
 - 15-F11 closed: the ready cap it described was retired 2026-10-16 and its tool deleted in #3013.
-- Observation: `tools/ci/spec-timings.mjs` `parseJunit` feeds the time of FAILED testcases into the rolling record and
-  `spec-timings.yml` has no `conclusion == 'success'` filter, so a test that timed out at 180 s is billed at 180 s until the
-  samples roll off, which can push its spec over the selected-gate budget (a self-reinforcing drop). · low
+- Observation, fixed 2026-10-21: `tools/ci/spec-timings.mjs` `parseJunit` fed the time of FAILED testcases into the rolling
+  record, so a test that timed out at 180 s was billed at 180 s until the samples rolled off (a self-reinforcing drop from the
+  selected gate). A failed or errored FINAL attempt (junit `<failure>`/`<error>`, live-log `x FAIL`) now records nothing;
+  `tests/unit/spec-timings.test.mjs` pins it.
 - Observation: `pages-reuse-verdict.sh` can only reuse a PR run when a merge COMMIT's parent tree equals its tree; merges are
   SQUASH-only, so the reuse path is effectively dead for PR merges (perf only, fails safe). · low
 - Observation: `git diff --name-only` is still used by `pick-tests.mjs:420-435`, `verify-change.mjs:83-87`, `change-kind.mjs:25`

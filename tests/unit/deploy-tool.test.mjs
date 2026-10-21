@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
   REGEN_MESSAGE, mergeTreeConflicts, assertMergeable,
-  sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly, changedPaths, advisoryGet } from "../../tools/ci/deploy.mjs";
+  sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly, changedPaths, advisoryGet, run, CHILD_TIMEOUT_MS } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites, PARTS_ERE, partsFiles } from "../../tools/ci/geometry-paths.mjs";
 import { createRequire } from "node:module";
@@ -886,4 +886,16 @@ test("deploy child keeps default native streams and JSON launch errors identify 
     assert.equal(failed.status,0,failed.stderr);const out=JSON.parse(failed.stdout);
     assert.match(out.error,/ENOENT/);assert.equal(fs.statSync(path.join(dir,out.stdoutArtifact.path)).size,0);
   } finally {fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test("a hung gate child stops at its ceiling and run() names the timeout instead of hanging", () => {
+  // Before: spawnSync had no timeout, so one test file that never ended held --gate-only until the
+  // 30-minute background ceiling killed it without a verdict line.
+  assert.ok(CHILD_TIMEOUT_MS >= 60e3 && CHILD_TIMEOUT_MS < 30 * 60e3, "the default ceiling sits inside the 30-minute task limit");
+  const t0 = Date.now();
+  let err = null;
+  try { run(process.execPath, ["-e", "setInterval(() => {}, 1000)"], "hung child", { timeoutMs: 700, json: false }); } catch (e) { err = e; }
+  assert.ok(err, "run() throws for a child that never exits");
+  assert.ok(err.message.includes("hung child failed") && err.message.includes("timed out"), err.message);
+  assert.ok(Date.now() - t0 < 10000, "…and returns promptly");
 });

@@ -321,13 +321,13 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   // wait on `reuse-draft` asks the question itself, as a step.
   const jobs = parseYAML(ciWorkflow).jobs;
   for (const id of ["reuse-draft", "unit-plan", "ship-filter", "renderer-filter", "xr-filter"]) assert.ok(!jobs[id], `${id} is a step now, not a job`);
-  for (const id of ["guards-a", "guards-b", "sweeps-parts", "driving-model"]) {
+  for (const id of ["guards-a", "guards-b", "guards-c", "sweeps-parts", "driving-model"]) {
     const st = jobs[id].steps.find((x) => x.id === "reuse");
     assert.ok(st && /reuse-draft-fast\.sh/.test(st.run), `${id} asks the reuse question itself`);
     assert.deepEqual(jobs[id].permissions, { contents: "read", actions: "read" }, `${id} needs actions:read for the runs lookup`);
   }
   assert.equal(jobs.guards.steps.length, 1, "the aggregator only joins the halves (no checkout, no npm ci)");
-  assert.deepEqual(jobs.guards.needs, ["guards-a", "guards-b"]);
+  assert.deepEqual(jobs.guards.needs, ["guards-a", "guards-b", "guards-c"]);
   const b = jobs["guards-b"].steps.map((x) => x.name || "");
   for (const n of ["Ratchet ceilings vs the base", "Every test file belongs to a topical group", "What does this gate cover?", "How far behind ship?"])
     assert.ok(b.includes(n), `${n} runs at the end of tooling B`);

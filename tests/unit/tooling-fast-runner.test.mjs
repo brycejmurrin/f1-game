@@ -250,7 +250,7 @@ test("--changed selects pinned unit tests for a tool edit, not the full suite", 
   assert.deepEqual(r.files.sort(), ["tests/unit/agent-config.test.mjs", "tests/unit/test-bg-outcome.test.mjs"].sort());
   assert.ok(r.files.length < all.length);
   // Which CI halves run those files follows the CI split (time-balanced since 2026-10-21), not a stride.
-  const covering = ["1/2", "2/2"].filter((sp) => ciShardFiles(all, sp).some((f) => r.files.includes(f)));
+  const covering = ["1/3", "2/3", "3/3"].filter((sp) => ciShardFiles(all, sp).some((f) => r.files.includes(f)));
   assert.deepEqual(shardsCoveringFiles(r.files, all), covering);
   assert.ok(covering.length >= 1);
 });
@@ -637,6 +637,6 @@ test("ciShardFiles: the two CI halves partition the list, balanced by the commit
   assert.notEqual(a.includes(first), a.includes(second), "the two slowest files are not in the same half");
   // Every shard computes the same plan from the same inputs, and shardsCoveringFiles reads the same split.
   assert.deepEqual(ciShardFiles(all, "1/2"), a);
-  assert.deepEqual(shardsCoveringFiles([a[0]], all), ["1/2"]);
-  assert.deepEqual(shardsCoveringFiles([b[0]], all), ["2/2"]);
+  assert.deepEqual(shardsCoveringFiles([a[0]], all, 2), ["1/2"]);
+  assert.deepEqual(shardsCoveringFiles([b[0]], all, 2), ["2/2"]);
 });

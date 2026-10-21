@@ -795,13 +795,19 @@ test("P4: readLayerBytesAsync degrades the way the sync path does — refused la
     const none = assetLoader({ OffscreenCanvas: class { getContext() { return null; } } });
     assert.equal(none.readLayerBytesAsync(size, images, n, new Uint8Array(page * n)), null, "no WebGL2 at all");
   }
-  // Bytes-only pack: resolves at once, no scratch GL work.
+  // Bytes-only pack (the byte decoder's output): resolves at once and never CREATES the scratch context — creating it
+  // was 0.16–0.79 s of main thread at race entry (B·H14) — even where no WebGL2 exists at all.
   {
     const mock = makeAsyncGl();
     const images = []; images[3] = new Uint8Array(page).fill(5);
     const data = new Uint8Array(page * n);
-    assert.deepEqual([...await ctx(mock).readLayerBytesAsync(size, images, n, data)], [3]);
+    let made = 0;
+    const assets = assetLoader({ setTimeout, OffscreenCanvas: class { constructor() { made++; } getContext() { return mock.gl; } } });
+    assert.deepEqual([...await assets.readLayerBytesAsync(size, images, n, data)], [3]);
     assert.equal(data[3 * page], 5); assert.equal(mock.ops.length, 0, "no upload, no PBO, no fence");
+    assert.equal(made, 0, "no scratch canvas for a bytes-only pack");
+    const noGl = assetLoader({ OffscreenCanvas: class { getContext() { return null; } } });
+    assert.deepEqual([...await noGl.readLayerBytesAsync(size, images, n, new Uint8Array(page * n))], [3], "bytes need no WebGL2");
   }
 });
 

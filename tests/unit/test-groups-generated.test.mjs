@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { nodeGroupPhases } from "../../tools/ci/run-node-group.mjs";
-import { loadGroups, commandFor, filesOnly } from "../../tools/gen/gen-test-groups.mjs";
+import { loadGroups, commandFor, filesOnly, nodeFlags, NODE_TEST_TIMEOUT_MS } from "../../tools/gen/gen-test-groups.mjs";
 import { TOOLING_FAST_FILES } from "../../tools/ci/tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -78,14 +78,15 @@ test("shared benchmark policy generates wrappers only for affected Node groups a
   const def = { kind: "node", flags: ["--test-concurrency=2"], files: ["ordinary-a", "bench-a", "ordinary-b", "bench-b"] };
   const isolated = ["bench-a", "bench-b"], extra = ["--test-name-pattern=selected contract", "--test-reporter=dot"];
   assert.deepEqual(nodeGroupPhases(def, isolated, extra), [
-    ["--test", ...def.flags, ...extra, "bench-a"], ["--test", ...def.flags, ...extra, "bench-b"],
-    ["--test", ...def.flags, ...extra, "ordinary-a", "ordinary-b"],
+    ["--test", ...nodeFlags(def), ...extra, "bench-a"], ["--test", ...nodeFlags(def), ...extra, "bench-b"],
+    ["--test", ...nodeFlags(def), ...extra, "ordinary-a", "ordinary-b"],
   ]);
   assert.equal(commandFor(def, isolated, "fixture"), "node tools/ci/run-node-group.mjs fixture ordinary-a bench-a ordinary-b bench-b --");
-  assert.equal(commandFor(def), "node --test --test-concurrency=2 ordinary-a bench-a ordinary-b bench-b");
+  assert.equal(commandFor(def), `node --test --test-timeout=${NODE_TEST_TIMEOUT_MS} --test-concurrency=2 ordinary-a bench-a ordinary-b bench-b`);
+  assert.equal(commandFor({ kind: "node", flags: ["--test-timeout=5"], files: ["x"] }), "node --test --test-timeout=5 x", "a group-owned bound wins");
   assert.equal(commandFor({ kind: "browser", files: ["bench-a"] }, isolated), "node tools/ci/run-playwright.mjs bench-a");
   assert.equal(commandFor({ kind: "command", cmd: "unchanged" }, isolated), "unchanged");
-  assert.deepEqual(nodeGroupPhases({ kind: "node", files: ["bench-a"] }, isolated), [["--test", "bench-a"]], "no empty pool may trigger Node test discovery");
+  assert.deepEqual(nodeGroupPhases({ kind: "node", files: ["bench-a"] }, isolated), [["--test", `--test-timeout=${NODE_TEST_TIMEOUT_MS}`, "bench-a"]], "no empty pool may trigger Node test discovery");
 });
 
 function nodeGroupFixture(t) {
