@@ -18,13 +18,13 @@ tick every ~5 min (one at a time; report changes only), message the live lanes o
 - INCIDENT 3 OPEN: Pages RED on 141be4bb (#3402 UI train). HARD: photo-studio-conditions.spec.js lighting
   mismatch + menu-traversal.spec.js pause/DISPLAY 5 s timeout. Cause (B·O-G, reproduced in a VM test):
   js/ui/layers.js anyOpen() memo calls navDirty(), which clears the navStale flag shared with navOpen().
-  FIX = PR #3435 (B·O-G, cursor/train-b-fix-o7g1, draft at handoff). It's a game PR but it fixes the red:
+  FIX = PR #3435 (B·O-G, cursor/train-b-fix-o7g1, READY at handoff, full tier running; local repro of the two specs not done, CI is the first real test). It's a game PR but it fixes the red:
   when READY + merge-gate passes, post GAME-SLOT, merge (merge_method merge, expectedHeadSha), 2-parent check,
   DONE. On green Pages post a bus line `INCIDENT lifted: …` (merge-gate only un-freezes on an INCIDENT line
   containing "lifted").
 - Live site is on 9ab83802 (last green Pages) until the fix lands.
 - Game queue after the fix: #3431 (a6557422, flare depth only when sun on screen, green 24/0, owner H15 gone)
-  → #3395 (car draw; CONFLICTING on js/car/car-draw.js, owned by B·H25 session_01MjgeR2rfQBC3baMa2L7eCc).
+  → #3395 (car draw; READY 47a7a5d7, full 57/0, B·H25 session_01MjgeR2rfQBC3baMa2L7eCc resolved car-draw.js).
 - Non-game queue: empty.
 
 ## Merged this shift (OrchB 26)
