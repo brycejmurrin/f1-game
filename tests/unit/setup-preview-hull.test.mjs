@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import vm from "node:vm";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -169,4 +170,26 @@ test("__apex.garageCam reports the effective distance, not just the stored zoom"
   const game = readFileSync(new URL("../../js/garage/setup-camera.js", import.meta.url), "utf8");
   assert.match(game, /_spEffDist = spDist; _spEffFit = homeFit \? homeFit\.dist : spFitD;/,
     "the effective distance and the raw fit must be published from the render path");
+});
+
+// A livery PICK reuses the hull when the new livery gates the same geometry (B·H32, 2026-10-21):
+// partsVisualKey ends "|L:<livery id>", and keyed on that every first visit to a livery re-ran
+// framingHull over ~19k points (~260 ms of a phone-throttled pick at CPU x4).
+test("the hull key ignores the livery id and keeps every input that can move a vertex", () => {
+  const ctx = vm.createContext({ PhysicsConsts: { X_OPEN_RATE: 1, X_CLOSE_RATE: 1 } });
+  vm.runInContext(readFileSync(path.join(ROOT, "js/garage/setup-camera.js"), "utf8"), ctx, { filename: absSrc("js/garage/setup-camera.js") });
+  const { hullKeyOf } = vm.runInContext("SetupCamera", ctx);
+  assert.equal(typeof hullKeyOf, "function", "SetupCamera.hullKeyOf is the hull's cache key");
+  const parts = "aero_a|floor_b|engine_c";
+  const red = { c1: [1, 0, 0], stripe: [1, 1, 1] }, blue = { c1: [0, 0, 1], stripe: [0, 1, 0] };
+  const k = (teamId, liveryId, seat, liv) => hullKeyOf(teamId, parts + "|L:" + liveryId, seat, liv);
+  assert.equal(k("ferrari", "rb_matte", "16", red), k("ferrari", "rb_holo", "16", blue), "two liveries, same geometry: one hull");
+  assert.equal(k("ferrari", "a|L:b:c", "16", red), k("ferrari", "x", "16", red), "an imported id holding the separator is still dropped");
+  assert.notEqual(k("ferrari", "x", "16", red), k("mclaren", "x", "16", red), "team");
+  assert.notEqual(k("ferrari", "x", "16", red), k("ferrari", "x", "55", red), "seat");
+  assert.notEqual(hullKeyOf("ferrari", "aero_a|L:x", "16", red), hullKeyOf("ferrari", "aero_b|L:x", "16", red), "parts");
+  assert.notEqual(k("ferrari", "x", "16", red), k("ferrari", "x", "16", { c1: [1, 0, 0] }), "a geometry-gating field");
+  assert.notEqual(k("ferrari", "x", "16", { finShape: "swept" }), k("ferrari", "x", "16", { finShape: "stub" }), "an enum outline");
+  const src = readFileSync(path.join(ROOT, "js/garage/setup-camera.js"), "utf8");
+  assert.match(src, /const hullKey = hullKeyOf\(/, "getSetupPreviewMesh keys the hull through hullKeyOf");
 });
