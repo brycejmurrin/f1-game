@@ -1,0 +1,1 @@
+Improved: Rainfall now builds and eases independently of road wetness, with soft local-shower edges, gradual dissipation, drizzle audio, and streaks driven by the race wind. Wet roads and spray remain after rain stops.

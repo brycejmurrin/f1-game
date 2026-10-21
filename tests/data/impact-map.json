@@ -6319,7 +6319,6 @@
       ],
       "isRaining": [
         "tests/unit/audio-recovery.test.mjs",
-        "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/light-presets.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
       ],
@@ -12064,6 +12063,9 @@
       "previewPlan": [
         "tests/unit/weather-arc-plan.test.mjs"
       ],
+      "rainfallAt": [
+        "tests/unit/rain-cells.test.mjs"
+      ],
       "rainSectors": [
         "tests/unit/rain-cells.test.mjs"
       ],
@@ -12094,6 +12096,10 @@
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
+      ],
+      "viewRainfall": [
+        "tests/unit/rain-cells.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs"
       ],
       "viewWetness": [
         "tests/unit/rain-cells.test.mjs",

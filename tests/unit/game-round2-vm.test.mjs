@@ -80,7 +80,7 @@ test("LT: a flash cut short by the gate closing restores the saved ambient and e
   try {
     const G = g.G, a = g.apex;
     g.step(30);
-    assert.equal(G.isRaining(), false, "dry: the lightning gate is closed");
+    assert.equal(G.viewRainfall(), 0, "dry: no falling rain");
     G._ltBase = { ambientSky: [0.1, 0.11, 0.12], ambientGround: [0.2, 0.21, 0.22], exposure: 1 };
     for (let i = 0; i < 3; i++) { G.frame.ambientSky[i] = 0.9; G.frame.ambientGround[i] = 0.9; }
     G.frame.exposure = 1.5;

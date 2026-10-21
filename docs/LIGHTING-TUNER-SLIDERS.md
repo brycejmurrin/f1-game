@@ -688,9 +688,9 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `rainCount` | RAIN INTENSITY | 20 … 1000 | 360 | — | ✓ | particles.js×3 |
 | `rainStreak` | RAIN STREAK LEN | 0.04 … 2.44 | 1 | — | ✓ | particles.js×2 |
 | `rainSpeed` | RAIN FALL SPEED | 0.04 … 2.44 | 1 | — | ✓ | particles.js×4 |
-| `drizzleCount` | DRIZZLE DENSITY | 0 … 1 | 0.3 | — | ✓ | particles.js×2 |
-| `drizzleLen` | DRIZZLE STREAK | 0 … 1 | 0.5 | — |   | particles.js×2 |
-| `drizzleSpeed` | DRIZZLE FALL SPEED | 0 … 1 | 0.6 | — |   | particles.js×2 |
+| `drizzleCount` | DRIZZLE DENSITY | 0 … 1 | 0.3 | — | ✓ | particles.js×4 |
+| `drizzleLen` | DRIZZLE STREAK | 0 … 1 | 0.5 | — |   | particles.js×4 |
+| `drizzleSpeed` | DRIZZLE FALL SPEED | 0 … 1 | 0.6 | — |   | particles.js×4 |
 | `rainOpacity` | RAIN OPACITY | 0 … 4 | 1 | — |   | particles.js×4 |
 | `rainWind` | RAIN WIND | -3 … 3 | 0.18 | — | ✓ | particles.js×4 |
 | `rainShearWind` | RAIN SPEED SLANT | 0 … 2.25 | 0.9 | — |   | particles.js×4 |
