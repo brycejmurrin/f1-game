@@ -104,3 +104,5 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 05:57Z: Game order (Bryce wants #3230 soon): #3230 (H24, head e33054a9, full tier running) → #3377 → #3406 → #3238 (W14) → #3399 (W11 archived on Bryce OK; red → fresh worker) → #3408 (C) → #3422 → #3402 → #3396 → #3395 → #3388. W13 archived itself. #3408 follow-up (noEnv warm) parked in body (H21 FINAL after READY). H15 OK for renderer-picker one-liner. W11 follow-ups: PERF-FRESH-HUNT-2026-10-21.md items 6-8 → H15, 9-11 → H20.
 
 05:59Z: MERGED #3420 → 91098189 (non-game, in b2457484 Pages gap). Pages b2457484 push run 39552066410 in_progress.
+
+06:06Z: READY #3230 e33054a9 (H24, full 47/0, ready-gate ok) = NEXT GAME on green Pages b2457484 (watcher armed). Also READY/green game: #3406 f53038dd, #3238 38ebaddf (W14), #3399 e105abe5; READY full-running: #3388 75ba1a2c (H20), #3408 985ac0f4 (H21 FINAL), #3422 acb2d060 (H19). #3377 H19 resyncing. W11 archived (Bryce OK).
