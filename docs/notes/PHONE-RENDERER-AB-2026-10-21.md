@@ -19,9 +19,11 @@ memory counts from this box are valid. Its frame times are not (§3), so frame t
 Bryce, 2026-10-21 05:48Z (relayed by OrchB 26): **keep TLX as the default on phones.** GLX stays available through RENDERER.
 The measurements below stand as the record. The TLX phone gaps they found are open follow-ups:
 
-1. **Missing clouds and night stars on the TLX phone tier.** GLX draws them; TLX's frames at phone settings show a flat sky
-   (Spa, Monza, Singapore, §1). First probe `__tlx.memState().sky.cache` on the phone profile to tell "off" from "empty", then
-   decide whether it is a defect.
+1. ~~**Missing clouds and night stars on the TLX phone tier.**~~ RESOLVED, not a phone gap (B·H26, #3439): the flat TLX sky in §1
+   is the software-GL fallback. On SwiftShader `softContent("sky")` arms `sky.fallbackNode`, a zenith-to-horizon gradient with
+   no clouds, stars, moon or sun disc; GLX has no such swap. A real iPhone ("Apple GPU") draws the full sky, and no mobile,
+   tier, PerfGov or time-of-day gate skips clouds or stars on TLX. The probe is `GLX.__tlx.skyState()` (`fallback: true`
+   names the gradient sky); TLX stills of the sky need `apex26.tlxForceHw=sky` on this box. `docs/notes/LIVE-DEBUGGER-RENDER-2026-10-21.md` R2.
 2. **Memory gap.** TLX holds 30 MiB more than GLX at the menu and 42–53 MiB more in a race (§2), and 59 MiB more JS heap on
    the Mac GPU (§3). This is mostly three's CPU geometry copies (`tlx.js` ~176), the cost that has jetsam-killed an iPhone
    tab before. Releasing them has failed four times (`CEILING-HISTORY.md` ~1478).
@@ -37,7 +39,8 @@ Default phones to GLX and keep TLX one tap away in RENDERER.
   ArrayBuffer backing stores). On the real-GPU Mac it holds 59 MiB less JS heap.
 - **Frame time.** On the Mac GPU with phone caps, GLX keeps its full quality tier at the same frame rate. TLX sheds to tier 3.
 - **Race entry.** GLX enters a race in 5.9 s, TLX in 19.1 s.
-- **Look.** The frames are close, and GLX shows more: clouds and night stars, and smoother edges in the garage.
+- **Look.** The frames are close, and GLX shows more: clouds and night stars, and smoother edges in the garage. (The clouds
+  and stars were a software-GL artefact of the TLX legs, not a phone difference: Decision item 1.)
 - **Cost.** Two first-class renderers, so a look fix lands in both. GLX also has one 1.4 s block during race entry, against
   0.5 s for TLX.
 
@@ -69,9 +72,11 @@ Two pairs were dropped because they compared different moments, not different re
 - **MED helmet.** TLX's slower race entry let the start sequence reset the car to the grid after `park()`, so the TLX frame
   shows the grid. The same slow entry shows on real hardware (§3).
 
-**Sky finding, not traced to a cause.** In these frames TLX draws no clouds or night stars on the phone tier, and GLX does. The
-TLX sky has a cloud cache (`tlx.js` ~1648). Whether it is off or still empty at phone settings needs a follow-up probe of
-`memState().sky.cache` before anyone calls it a defect.
+**Sky finding: a software-GL artefact, not a phone gap** (traced by B·H26). These TLX legs ran on SwiftShader, where TLX
+deliberately draws the zenith-only fallback sky (no clouds, stars, moon or sun disc); GLX draws its full sky on software too,
+so the sky rows above (monza straight, singapore night, spa, monza helmet) compare a fallback against a full sky. A phone GPU
+draws the full TLX sky. The cloud cache never decides whether clouds draw (it is off on software GL and clouds still render
+per pixel). Probe with `GLX.__tlx.skyState().fallback`; re-shoot with `apex26.tlxForceHw=sky` for a like-for-like sky.
 
 ## 2. Memory
 
@@ -131,7 +136,7 @@ and apply to both renderers.
 | liveries / baked pack | shared, phone variants | same |
 | AA | FXAA, no MSAA | FXAA, no MSAA; garage edges smoother |
 | lamp slots per fragment | 16 (TLX cap) | 48 |
-| clouds / stars | not drawn in these frames | drawn |
+| clouds / stars | drawn on a phone GPU; these SwiftShader frames show the software-only fallback sky (Decision item 1) | drawn |
 | CPU geometry copies | about 54 MB (`tlx.js:176`) | none |
 
 GLX lacks nothing a phone player sees. The items only TLX has are cost caps: the lamp-slot cap, the mirror lamp cap, the
