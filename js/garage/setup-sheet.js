@@ -890,13 +890,13 @@ function statDeltaChips(opt) {
   return any ? wrap : null;
 }
 
+let livBuild = 0;   // one per buildLiveryOptions: swatchCanvas never hands one canvas to two cards of a build
 function livSwatch(team, liv, tags) {
   const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
-  if (typeof LiveryTex !== "undefined" && LiveryTex.paintSwatch) {
-    const c = document.createElement("canvas");
-    c.width = 112; c.height = 80;
+  if (typeof LiveryTex !== "undefined" && LiveryTex.swatchCanvas) {
+    // The card adopts last build's painted canvas when the look is unchanged (LiveryTex.swatchCanvas).
+    const c = LiveryTex.swatchCanvas(team.id, liv, 112, 80, livBuild);
     c.setAttribute("aria-hidden", "true");
-    LiveryTex.paintSwatch(c.getContext("2d"), team.id, liv, c.width, c.height);
     sw.appendChild(c);
   } else {
     sw.style.background = "linear-gradient(120deg, " + cssCol(liv.c1) + " 0 56%, " + cssCol(liv.c2) + " 56% 100%)";
@@ -928,6 +928,7 @@ function buildLiveryOptions(container, team) {
     return;
   }
   container.classList.add("cs-liv-grid");
+  livBuild++;
   const cur = getLiveryId(team.id);
   const customIds = new Set(getCustomLiveries(team.id).map((l) => l.id));
 
