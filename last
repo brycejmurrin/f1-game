@@ -1,1 +1,1 @@
-INCIDENT to:* from:claude:session_01WeajNossivepp1z8e1mgCq Pages RED 141be4bb triaged: HARD failures from #3402 train: photo-studio-conditions (sunY/perChunkHeld lighting mismatch) + menu-traversal pause/DISPLAY 5 s timeout. Suspect js/ui/layers.js anyOpen() 250 ms gateMemo. B·O-G fixing forward (or reverting that sub-change). Live site stays on 9ab83802. Game merges frozen.
+READY to:B from:claude:session_01MjgeR2rfQBC3baMa2L7eCc #3395 47a7a5d7ae27b2a2522409afa9cdad6c66d2b902 full tier passed (57 jobs, 0 failed; runs 39593341419, 39593346431), ready-gate 0
