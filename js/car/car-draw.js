@@ -451,6 +451,9 @@ const CarDraw = (function () {
     function schedulePlayerHiRes(team, num, key) {
       if (typeof LiveryTex === "undefined" || !LiveryTex.playerHiResDeferred) return;
       if (!LiveryTex.playerHiResDeferred(!!LiveryTex.IS_MOBILE)) return;
+      // A PHONE keeps the 1024 preview even at GRAPHICS: HIGH (Bryce 2026-10-21, "Cap garage only"):
+      // the 2048 upgrade was a ~21 MB ImageBitmap plus ~27 MB of GPU texture on an iOS jetsam budget.
+      if (LiveryTex.IS_PHONE) return;
       if (_hiResDone.has(key) || _hiResPending.has(key) || (_hiResFail.get(key) || 0) >= HIRES_TRIES) return;
       // A live garage paint draft gives every edit a new key: the preview only, or each edit the idle slot
       // reached paid a 2048 paint and a ~26.7 MB upload. Save / cancel / leave clear it: the next draw upgrades once.
@@ -458,11 +461,12 @@ const CarDraw = (function () {
       // The livery is resolved NOW, with the key (decalKeyFor embeds its id): the idle
       // slot can fire after the garage moved on, and building from the livery selected
       // THEN stored another livery's pixels under this key (A -> B -> A).
-      const livery = deps.resolveLivery(team);
+      const livery = deps.resolveLivery(team), pickAt = G.teamIdx;
       // Re-checked after every await: the idle slot and the bitmap can both land after the garage moved on.
       const owns = () => _hiResPending.get(key) === kick   // dropped, maybe re-scheduled: the newer kick owns the key
         && (key in _decalTexCache)                          // LRU / invalidate won the race
-        && decalKeyFor(team, num, true) === key;            // livery changed since: its next draw re-schedules
+        && decalKeyFor(team, num, true) === key             // livery changed since: its next draw re-schedules
+        && G.teamIdx === pickAt;                            // browsed to another team: no 2048 for the one left behind
       const done = () => { if (_hiResPending.get(key) === kick) _hiResPending.delete(key); };
       const fail = (e) => {
         _hiResFail.set(key, (_hiResFail.get(key) || 0) + 1);
@@ -546,6 +550,7 @@ const CarDraw = (function () {
           // Full 2048 is schedulePlayerHiRes only — never boot / garage-open.
           const canvas = LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer, false);
           t = G.gfx.createTexture(canvas, isPlayer ? { anisotropy: 8 } : undefined);
+          if (!t) throw new Error("createTexture returned no texture");   // a lost GLX context: retry, never cache a silent null
           if (isPlayer) t = crispPlayerDecal(t);
           _decalTexBytes[key] = atlasBytes(canvas);
         }
@@ -748,11 +753,31 @@ const CarDraw = (function () {
       return (typeof scheduler !== "undefined" && scheduler && typeof scheduler.yield === "function")
         ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
     }
+    // THE MENU PREP'S YIELD IS ONE FRAME, NOT 32 ms. A fixed 32 ms sleep after every
+    // 8 ms slice left the prep asleep ~80 % of the time: 44 sleeps (1.4 s) for 2.4 s of
+    // work locally, and on Metal (gpu-census 39462965755) 0.64 s of car work sat behind
+    // ~2 s of timers — on RACE SETTINGS, and under the card when RACE! joins it. Resume
+    // right after the next frame paints (rAF, then a 0 ms task), so the sheet still gets
+    // every frame; the old 32 ms timer stays as the fallback for a stalled rAF (hidden
+    // tab, a soft-GL readback), so no yield is ever longer than before.
+    function menuStepYield() {
+      return new Promise((resolve) => {
+        let done = false;
+        const go = () => { if (!done) { done = true; resolve(); } };
+        setTimeout(go, 32);
+        if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(go, 0));
+      });
+    }
     function shadowCastersWanted() {
       const LT = typeof LightTune !== "undefined" && LightTune.LT, gfx = G.gfx || {};
       if (G.headlessMode || !LT) return false;
       const tier = typeof PerfGov === "undefined" ? 0 : PerfGov.tier();
-      return !!((gfx.carShadowBegin && LT.carShadow && tier < 3) || (gfx.lampShadowBegin && LT.lampShadow && tier < 2));
+      // The passes' own map gates (shadow-pass.js): a backend with no car or lamp map
+      // (every phone on TLX/GLX, a failed target) never casts, so its ~1.5 MB
+      // silhouettes would be built and held for nothing. Undefined = an older stub: wanted.
+      const carMap = gfx.carShadowEnabled !== false && !(LT.shadowStr <= 0);
+      const lampMap = gfx.lampShadowEnabled !== false;
+      return !!((carMap && gfx.carShadowBegin && LT.carShadow && tier < 3) || (lampMap && gfx.lampShadowBegin && LT.lampShadow && tier < 2));
     }
     // Prepare visual descriptors only: do not call makeCars(), advance the seeded
     // simulation, replace the live field, or arm a race from a menu. Existing bounded
@@ -787,12 +812,13 @@ const CarDraw = (function () {
       // each after the bodies, under warmCarAssets' lodWarm gate — race entry then hits.
       const lodPrep = carWarmSliceOn() && FieldLod.on && !!(casters || typeof G.gfx.mirrorBegin === "function");
       const plan = lodPrep ? steps.concat(field.filter(c => !c.isPlayer).map(c => ({ lod: c }))) : steps;
-      let cpuMs = 0, maxCpuMs = 0, sliceAt = performance.now();
+      let cpuMs = 0, maxCpuMs = 0, yields = 0, sliceAt = performance.now();
+      const t0 = sliceAt;
       for (const step of plan) {
         // Cache hits need no per-car timer. Yield only after real work spends
         // the slice; still use the actual caches so eviction/settings stay correct.
         if (performance.now() - sliceAt >= 8) {
-          await new Promise(resolve => setTimeout(resolve, 32));
+          await menuStepYield(); yields++;
           sliceAt = performance.now();
         }
         if (!valid() || (G.gfx.warming && G.gfx.warming())) return;
@@ -815,7 +841,7 @@ const CarDraw = (function () {
         const elapsed = performance.now() - at; cpuMs += elapsed; maxCpuMs = Math.max(maxCpuMs, elapsed);
       }
       // Resolves to its record only when it ran to its end (the export keeps the last: menuCarAssets).
-      const done = { cars: field.length, steps: plan.length, casters, lod: lodPrep, cpuMs: Math.round(cpuMs), maxCpuMs: Math.round(maxCpuMs), at: Math.round(performance.now()) };
+      const done = { cars: field.length, steps: plan.length, casters, lod: lodPrep, cpuMs: Math.round(cpuMs), maxCpuMs: Math.round(maxCpuMs), yields, wallMs: Math.round(performance.now() - t0), at: Math.round(performance.now()) };
       Log.info("gfx", "selector car assets ready", done);
       return done;
     }
@@ -1053,6 +1079,17 @@ const CarDraw = (function () {
     // Windscreen / aeroscreen glass: a faint tint that still shows the road.
     const _glassOpts = { alpha: 0.16, roughness: 0.05, specular: 0.9, doubleSided: true, noAlphaWrite: true };
     const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
+    // The rig's programs before the first onboard frame needs them (TLX gfx.warmDraws captures the draws
+    // and compiles them; GLX/WGX have no warmDraws). Both seats: cockpit/helmet with the wheel, visor without.
+    // Outside a frame: the decal it queues is dropped by the next beginDecals(), and dt 0 moves nothing.
+    // mirrorKey: the world, when the menu already warmed it (the race-entry warm was skipped) — TLX then
+    // compiles the race scene into the mirror target as well, once per world.
+    const _rigWarmBase = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    function warmCockpitRig(c, paint, mirrorKey) {
+      if (!c || carModelBuf || typeof G.gfx.warmDraws !== "function") return Promise.resolve(false);
+      return G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); },
+        { mirror: mirrorKey || null });
+    }
     function drawCockpitRig(c, base, dt, paint, noWheel) {
       // Match game.js sessionDarkFor / skyNight: an explicit night, or a night
       // circuit on the default TOD. (Was the same check; kept next to the glass
@@ -1632,7 +1669,7 @@ const CarDraw = (function () {
       teamMesh, teamBodyMesh, sharedRivalBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
-      drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
+      drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, warmCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
       warmCarAssets, warmCarAssetsAsync, loadCarModel, buildCarData,
       // __apex.menuPrep().cars: the last menu car prep that ran to its end.
       prepareMenuCarAssets: (current) => prepareMenuCarAssets(current).then((r) => { if (r) _menuCarPrep = r; return r; }),

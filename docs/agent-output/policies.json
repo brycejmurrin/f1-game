@@ -146,6 +146,11 @@
       "presentation": "native",
       "preserve": "Generated crest-path source, source bitmap provenance and explicit write mode."
     },
+    "tools/car/tri-census.mjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "The header line naming the measured root, every body x aero x tier row (player/field tris and verts, caster and flap tris) and the far shared rival row; --json keeps every row."
+    },
     "tools/carview.html": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -509,7 +514,7 @@
     "tools/ci/cursor-agents.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "BLOCKED/ERROR lines and exit status (2 no key, 1 API); dump written/skipped counts; digest figures are stored-character proxies, not tokens"
+      "preserve": "typed result lines (LAUNCH, BUSY, REFUSED, TWIN, WAIT, USAGE, CALL, ERROR) and exit status (2 no key, 3 refused or twin, 124 wait timeout, 1 API); dump written/skipped/expired counts; transcript and call output is bounded and masked; digest figures count calls, not events, and are stored-character proxies, not tokens"
     },
     "tools/ci/debug-unit.mjs": {
       "action": "keep-native",
@@ -605,6 +610,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Empty list is real empty; consumers depend on paths only"
+    },
+    "tools/ci/lane-preamble.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "the TOOLING block text and its exact commands; ERROR line with the nearest valid name and exit 2 for a bad screen, viewport or scale"
     },
     "tools/ci/live-run-check.mjs": {
       "action": "keep-native",
@@ -1156,6 +1166,11 @@
       "presentation": "native",
       "preserve": "Noise floor, actual knob values and verdict.json provenance; no visual pass from a screenshot path alone."
     },
+    "tools/gfx/live-frame-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-row frame/JS percentiles, slow-call and pipeline rows, and the --json file; paravirtual ms read as structure only."
+    },
     "tools/gfx/mem-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1262,6 +1277,11 @@
       "preserve": "@c3"
     },
     "tools/lib/css-source.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/cursor-transcript.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
@@ -1686,6 +1706,11 @@
       "presentation": "shared-levels",
       "preserve": "JSON-RPC errors/isError and nontext blocks"
     },
+    "tools/mcp/mcp-listing-cost.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Per-server ERROR rows and the TOTAL line"
+    },
     "tools/mcp/mcp-preflight.sh": {
       "action": "keep-native",
       "presentation": "native",
@@ -1891,6 +1916,16 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/shot/run-capture-request.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Validated cell count, native backend, producer failures and artifact locations; planning does not prove capture."
+    },
+    "tools/shot/capture-gallery.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Image hash failures, exact source/status receipts, native-versus-geometry counts and output path; no capture or upload implied."
+    },
     "tools/shot/design-matrix.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1960,6 +1995,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c5"
+    },
+    "tools/shot/lib/design-matrix-run.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/shot/lib/design-matrix.mjs": {
       "action": "no-direct-output",
@@ -2280,6 +2320,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "@c5"
+    },
+    "tools/ui/audit-summary.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "AUDIT / TOTALS / SKIPPED / CELL / BYSCREEN / CLEAN lines and exit status (2 bad argument or missing file); output is bounded by --top and a per-cell cap, so it is already compact"
     },
     "tools/ui/layout-audit.mjs": {
       "action": "artifact-first",

@@ -183,11 +183,12 @@ test.describe("adaptive buttons are analog triggers for digital steer", () => {
       Input.setSpeedStd(72);
       document.getElementById("btn-steer-right")
         .dispatchEvent(new PointerEvent("pointerdown", { pointerId: 40 + Math.round(m * 10), bubbles: true }));
+      // A FIXED STEP, not setTimeout(20): Input.steer(stepDt) advances the ramp by
+      // exactly stepDt (rampDtSince). On a loaded runner (Pages 17a7d1be, loadavg
+      // 6-7) the real gaps stretched until OFF and MID both saturated at 1. Eleven
+      // 20 ms steps = the 0.22 s the timed version meant (its first call had dt 0).
       let v = 0;
-      for (let i = 0; i < 12; i++) {
-        v = Input.steer();
-        if (i < 11) await new Promise((r) => setTimeout(r, 20));
-      }
+      for (let i = 0; i < 11; i++) v = Input.steer(0.02);
       return v;
     }, mix);
     const off = await run(0);

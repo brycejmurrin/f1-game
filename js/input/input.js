@@ -1122,10 +1122,20 @@ const Input = (function () {
     // Speed widens that range by 1/touchSpeedScale(), so the same finger
     // travel is less lock. At rest the scale is 1 and the range is the
     // static fraction, whatever the mixes.
-    const win = typeof window !== "undefined" ? window : null;
-    const long = Math.max((win && win.innerWidth) || 844, (win && win.innerHeight) || 390);
-    return Math.max(40, long * touchRangeFrac) / touchSpeedScale();
+    return Math.max(40, viewLong() * touchRangeFrac) / touchSpeedScale();
   }
+  // innerWidth/innerHeight force a synchronous style + layout when the tree is dirty, and this ran on
+  // every touchmove (touchCmd and updateDragAnchor) before the frame (B·H11 trace). The long edge only
+  // changes on resize / rotation, so read it then.
+  let _viewLong = 0;
+  function viewLong() {
+    if (!_viewLong) {
+      const win = typeof window !== "undefined" ? window : null;
+      _viewLong = Math.max((win && win.innerWidth) || 844, (win && win.innerHeight) || 390);
+    }
+    return _viewLong;
+  }
+  if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("resize", () => { _viewLong = 0; });
 
   function touchCmd(rec) {
     if (steerMode !== "touch") return 0;
@@ -1753,8 +1763,10 @@ const Input = (function () {
   }
 
   const REMOTE_PEDAL_ON = 0.1;   // travel below this is a resting thumb, not a press
-  function remoteThrottle() { return !remoteDrivingBlocked() && remoteActive() && remThr > REMOTE_PEDAL_ON; }
-  function remoteBrake() { return !remoteDrivingBlocked() && remoteActive() && remBrk > REMOTE_PEDAL_ON; }
+  // remoteActive() FIRST: it is a clock compare, and with no phone paired (the common case) it ends the
+  // test before remoteDrivingBlocked() walks the UI layers — that walk ran every physics step (B·H11).
+  function remoteThrottle() { return remoteActive() && !remoteDrivingBlocked() && remThr > REMOTE_PEDAL_ON; }
+  function remoteBrake() { return remoteActive() && !remoteDrivingBlocked() && remBrk > REMOTE_PEDAL_ON; }
   // anyOpen() = pause/settings/sheets. navOpen() also covers title #overlay.
   // LATCHED ONCE PER FRAME, at the end of poll() (PERF-HUNT-2 S5): updateCar asks
   // throttle/braking/steer/…Level 3-6 times per physics step and each anyOpen() walks
@@ -1861,7 +1873,7 @@ const Input = (function () {
      it was removed on request — the dock had grown to five buttons in one thumb
      column once PIT landed beside it, and a glance over the shoulder is the
      control that least deserves a permanent seat there. */
-  function lookingBack() { return keyLookBack || padLookBack || (!remoteDrivingBlocked() && remoteActive() && !!(remHeld & REMOTE_HELD.lookBack)); }
+  function lookingBack() { return keyLookBack || padLookBack || (remoteActive() && !remoteDrivingBlocked() && !!(remHeld & REMOTE_HELD.lookBack)); }
 
   /* FREE-LOOK inputs for CamFeel. lookStick() is the latest right-stick sample
      (−1..1); consumeLookMouse() returns and clears RMB-drag pixel deltas.

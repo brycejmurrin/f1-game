@@ -1,0 +1,1 @@
+Fixed: starting a race on the three.js renderer no longer waits up to 20 s for the cockpit warm; it now runs behind the race warm instead of being timed out (Monza race entry +20 s on software GL since #3221).

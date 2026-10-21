@@ -229,6 +229,18 @@ const TLX = (function () {
       // mappable pool dies on the first large mesh; PlayCanvas #6676).
       // Phones / WebKit take the same WebGPU path with WGX-lite caps
       // (8-bit canvas, no MSAA 4, low-power) when AUTO tries WebGPU.
+      // A REAL phone (a handset UA, or an iPad that reports as a Mac), as opposed to
+      // GLX.isMobile, which apex26.forceMobileTier=1 also sets on a desktop or CI
+      // VM. The "a phone has no software adapter" rule below protects handsets
+      // from the empty-info tie-break; on a forced-mobile test run it hid a
+      // software/paravirtual adapter (lavapipe, the macOS runner's Apple
+      // Paravirtual device), so TLX presented to the native WebGPU canvas, which
+      // such an adapter cannot composite: [Invalid Texture] CreateView, then
+      // device.lost "Instance reference no longer exists" (gpu-census 39477339291
+      // and 39488541983: the forced-mobile arm lost the device, the same arm with
+      // the software verdict stayed up with 0 GPU errors).
+      const _phoneHw = isMobile && (/iPhone|iPad|iPod|Android/i.test(ua)
+        || ((navigator.maxTouchPoints || 0) > 1 && /Mac/.test(ua)));
       let _softAdapter = false;
       // GPU error tally — see the onuncapturederror hook below.
       let _gpuErrors = 0, _gpuFirstError = null;
@@ -243,7 +255,11 @@ const TLX = (function () {
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
       const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
-        mirrorDeferred: false, mirrorLazy: null };   // B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
+        mirrorDeferred: false, mirrorLazy: null, rig: null };   // rig: warmDraws' { ms, pairs, mirror, ok } (hunt 6). B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
+      // EVERY warm's stages, newest last (cap 6): the menu prep runs a world warm then the garage's, and
+      // _warmStages keeps only the last, so the census read the garage's 3.7 s as "the warm" while the
+      // world's ran 11-15 s on Metal (B·H8 prep timeline, gpu-census 39499541077).
+      const _warmHistory = [];
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -314,7 +330,7 @@ const TLX = (function () {
             // read (measured in-container: byte-identical captures across a
             // camera move, awaitSoftPresent never resolving again). Content
             // gates key off this flag too. Never on a mobile UA.
-            _softAdapter = !isMobile && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
+            _softAdapter = !_phoneHw && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
@@ -3308,6 +3324,9 @@ const TLX = (function () {
             try { Log.warn("gfx", "TLX program warm failed", String(e), (e && e.stack) || ""); } catch (_) { /* logging is optional */ }
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
+            _warmHistory.push({ at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
+              mirror: _warmStages.mirror, draw: _warmStages.draw, total: _warmStages.total, failed: _warmStages.failed });
+            if (_warmHistory.length > 6) _warmHistory.shift();
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
@@ -3350,6 +3369,91 @@ const TLX = (function () {
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
         })().finally(() => { _warmPending = null; });
+      }
+      // THE DRAWS NO WARM FRAME HELD (hunt 6 B·H6): the cockpit rig. The scene warm compiles what its frame drew,
+      // and a chase start draws no rig — the menu path does not even run that warm (its world was warmed in the
+      // menu). So the first onboard frame built the rig's programs and pipelines synchronously: switching
+      // chase->cockpit froze TLX-WebGPU 1109 ms and TLX-WebGL2 1013 ms, then idled the GPU another 2012 / 1111 ms
+      // (macos census 39449331814; locally 14 links on SwiftShader). warmDraws(fn) runs fn with draw() CAPTURING
+      // its records — not drawn, coalesced runs skipped (they share the exterior wheels' program) — and the next
+      // present compiles exactly those (geometry, material, winding) pairs under the scene pass's target and MRT,
+      // owned like startMirrorWarm. Resolves true once compiled (or already compiled), false when nothing ran.
+      let _capture = null, _rigWarm = null;   // the capture in progress; { recs, done } waiting for its present
+      const _rigDone = new WeakMap();         // geometry -> Set of the material ids (+0.5 mirrored) already compiled
+      const _rigKey = (r) => r.mat.id + (r.sx < 0 ? 0.5 : 0);
+      // opts.mirror (a world key): the menu path skipped the race-entry warm, so the mirror stage last compiled the
+      // MENU's world into the mirror target and the first onboard mirror pass built the race's (census 39458228952:
+      // 6 pipelines in mirrorEnd at the switch). Run that stage over the race scene too, once per world.
+      let _rigMirrorKey = null;
+      const _rigMirrorOn = () => !!(_warmFx && post && post.enabled() && !_mirDead && !vizMat && !softGpu() && !softwareGL);
+      function warmDraws(fn, opts) {
+        if (_deviceLost || !lit || _drawMatMode || vizMat || typeof renderer.compileAsync !== "function" || _rigWarm) return Promise.resolve(false);
+        const recs = [];
+        const co = _coOn;
+        _capture = recs; _coOn = false;   // a coalesced draw reaches draw()'s capture, which skips it, never a run
+        try { fn(); } catch (e) { try { Log.warn("gfx", "TLX warmDraws capture failed", String(e)); } catch (_) { /* optional */ } }
+        finally { _capture = null; _coOn = co; }
+        const todo = recs.filter((r) => { const s = _rigDone.get(r.geo); return !(s && s.has(_rigKey(r))); });
+        const mirror = !!(opts && opts.mirror) && opts.mirror !== _rigMirrorKey && _rigMirrorOn() ? opts.mirror : null;
+        if (!todo.length && !mirror) return Promise.resolve(recs.length > 0);
+        // BEHIND A PROGRAM WARM, QUEUE AND RETURN. Race entry requests the program warm just before this, and the rig
+        // job may only start once it is done (present() starts one warm at a time), so awaiting it held race entry for
+        // the whole program warm, and on software GL (a ~17 s warm) the 20 s fallback fired first, dropped the job and
+        // left the rig unwarmed (+20 s per race entry; B·H14, monza-foundation 8.4 -> 26.2 s on CI llvmpipe at #3221).
+        // Queued, the job still runs before any frame paints: present() holds while either warm is pending.
+        if (_warmRequested || _warmPending) {
+          const job = _rigWarm = { recs: todo, mirror, done: () => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; } };
+          // No present ever came (hidden tab, a race abandoned first): drop the queue, or every later warmDraws refuses.
+          job.timer = setTimeout(() => { if (!job.started) job.done(); }, 20000);
+          return Promise.resolve(true);
+        }
+        return new Promise((resolve) => {
+          const job = _rigWarm = { recs: todo, mirror, done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; resolve(ok); } };
+          job.timer = setTimeout(() => job.done(false), 20000);   // no present came (hidden tab): race entry never waits on it
+        });
+      }
+      function _captureRec(mesh, model, opts) {
+        if (!mesh || !mesh.geo || (opts && opts.coalesce)) return;
+        const w = model;
+        const neg = !!w && w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
+        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false), sx: neg ? -1 : 1 });
+      }
+      function startRigWarm() {
+        const job = _rigWarm;
+        if (!job || job.started) return;
+        job.started = true;
+        const target = renderer.getRenderTarget(), mrt = renderer.getMRT();
+        const usePost = !!(post && post.enabled() && _postF.proj && !vizMat);
+        const useTag = usePost && (!post.tagOn || post.tagOn());
+        let ok = false;
+        const t0 = performance.now();
+        _warmPending = (async () => {
+          try {
+            // The materials were minted at capture, so the tag stamps them now, as the scene warm stamps its own.
+            if (lit.setSsrMrt) lit.setSsrMrt(useTag);
+            if (fx && fx.setSsrMrt) fx.setSsrMrt(useTag);
+            renderer.setMRT(useTag ? _ssrMrtNode() : null);
+            renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+            _gpuLastOperation = "compile-rig";
+            for (const r of job.recs) {
+              await compileWarmProbe(r.geo, r.mat, r.sx);
+              let s = _rigDone.get(r.geo);
+              if (!s) _rigDone.set(r.geo, s = new Set());
+              s.add(_rigKey(r));
+            }
+            if (job.mirror) { _gpuLastOperation = "compile-rig-mirror"; await warmMirrorStage(usePost, useTag); _rigMirrorKey = job.mirror; }
+            await _gpuSettled(3000);   // the driver's own compile is GPU-process side, as the draw warm's is
+            ok = true;
+          } catch (e) {
+            try { Log.warn("gfx", "TLX rig warm failed", String(e)); } catch (_) { /* logging is optional */ }
+          } finally {
+            _warmStages.rig = { ms: Math.round(performance.now() - t0), pairs: job.recs.length, mirror: !!job.mirror, ok };
+            if (job.mirror) _mirWarmUnswap();   // warmMirrorStage showed the mirror's own instanced meshes (idempotent)
+            if (lit.setSsrMrt) lit.setSsrMrt(false);
+            if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+            renderer.setMRT(mrt); renderer.setRenderTarget(target);
+          }
+        })().finally(() => { _warmPending = null; job.done(ok); });
       }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
@@ -3674,10 +3778,25 @@ const TLX = (function () {
         if (!_bs || !(_bs.radius >= 0) || !_bs.center
             || !(Math.abs(_bs.center.x) >= 0) || !(Math.abs(_bs.center.y) >= 0)
             || !(Math.abs(_bs.center.z) >= 0)) return 0;
-        let freed = 0;
+        let freed = 0, kept = 0;
+        // three reads attribute.array only while it creates the attribute's GPU
+        // buffer (XB.createAttribute: `r.array` when `get(attr).buffer` is still
+        // undefined). A depth-only first draw (the car shadow casters) uploads
+        // POSITION alone, so freeing every array after it left normal / colour /
+        // MAT without a buffer, and the first lit RenderObject of that geometry
+        // threw "Cannot read properties of null (reading 'constructor')" in
+        // present. Free only what already has its GPU buffer.
+        const _be = renderer && renderer.backend;
+        const uploaded = (a) => {
+          try {
+            const d = _be && _be.get(a);
+            return !!d && (d.buffer !== undefined || d.bufferGPU !== undefined);
+          } catch (_) { return false; }
+        };
         const drop = (a) => {
           if (!a || !a.array || !a.array.length) return;
           if (a.isInstancedBufferAttribute || a.usage === THREE.DynamicDrawUsage) return;
+          if (!uploaded(a)) { kept++; return; }
           freed += a.array.byteLength;
           // NULL, not zero-length — see tlx-chunked.js releaseMirrors() for the
           // evidence (a real-hardware A/B, gpu-census 26 vs 27) and for the
@@ -3695,7 +3814,7 @@ const TLX = (function () {
         // while the WebGL2 control leg reported 0 — WebGL2 tolerates it and
         // WebGPU does not, which is why a tlxForceGL=1 measurement here looked
         // clean. Vertex attributes are sized from count/itemSize and are fine.
-        g.__tlxFreed = true;
+        if (!kept) g.__tlxFreed = true;   // a kept array retries on the next sweep
         return freed;
       }
       const _chunkRelOptIn = (function () {
@@ -5201,6 +5320,7 @@ const TLX = (function () {
           if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !_deviceLost && !!_warmPending; },
+        warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
         // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally
         // NOT three.xr / setAnimationLoop / ArrayCamera: those overwrite the
@@ -5429,6 +5549,7 @@ const TLX = (function () {
         },
         draw(mesh, model, opts) {
           if (opts && opts.coalesce && mesh && mesh.geo && _coAppend(mesh.geo, model, opts)) return;   // R1
+          if (_capture) { _captureRec(mesh, model, opts); return; }   // warmDraws: compile, never paint
           if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false), drawEm(opts), drawAl(opts),
             opts && opts.surfaceId === 16 ? 1 : 0, null, null);
         },
@@ -5738,7 +5859,7 @@ const TLX = (function () {
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
           // later warm passes, but cannot cancel a compile already in flight.
-          if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); }
+          if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }
           if (_warmPending) return;
           // The last rung: even rawUnlitMat throws. AUTO on three's WebGPU takes three WebGL2 next boot (tlxAutoGL, a
           // different configuration). A boot that is ALREADY three WebGL2 (forceWebGL / _autoStayGL) or an explicit pin
@@ -6222,9 +6343,9 @@ const TLX = (function () {
             // pending/done say whether a census beat is inside it (207 was, all 15).
             o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
                        draw: _warmStages.draw, drawn: _warmStages.drawn,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
-                       mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy,   // B-F3.1
+                       mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
-                       pending: !!_warmPending, done: _warmDone };
+                       pending: !!_warmPending, done: _warmDone, history: _warmHistory.slice() };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
             // THIS WAS ALWAYS undefined. `renderer.backend.data` is a
             // WeakMap, which has no `.size`, so the guard never passed and the
