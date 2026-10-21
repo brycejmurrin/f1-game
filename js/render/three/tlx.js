@@ -3857,7 +3857,14 @@ const TLX = (function () {
         if (!kept) g.__tlxFreed = true;   // a kept array retries on the next sweep
         return freed;
       }
-      const _chunkRelOptIn = (function () {
+      // LOW-MEMORY MODE (SETTINGS > GRAPHICS, experimental, default OFF; Bryce 2026-10-21): the player's switch
+      // for the whole lever — the chunk release, the static sweep, and the sweep on a phone too. It exists so a
+      // handset can test what the gates below refuse by default; its help line says to turn it off if the road
+      // or car goes missing. Read once at create, so it applies from the next load.
+      const _lowMemOptIn = (function () {
+        try { return localStorage.getItem("apex26.tlxLowMem") === "1"; } catch (_) { return false; }
+      })();
+      const _chunkRelOptIn = _lowMemOptIn || (function () {
         try { return localStorage.getItem("apex26.tlxChunkRelease") === "1"; } catch (_) { return false; }
       })();
       let _mirrorSweepAt = 0, _carMirrorAt = 0;
@@ -3876,8 +3883,8 @@ const TLX = (function () {
         // one place a plain ROAD mesh reaches here, and no software probe can
         // see it (lavapipe renders the road at every tier — measured). The
         // desktop win (PERF-FINDINGS 2r) is untouched; re-open this only with
-        // evidence from a real handset.
-        if (isMobile) return;
+        // evidence from a real handset. LOW-MEMORY MODE is that handset test: an explicit player opt-in.
+        if (isMobile && !_lowMemOptIn) return;
         // AND KNOW WHAT IT COSTS ON DESKTOP. Freeing an array disarms the
         // two intermediate rungs of the paint-failure ladder below (dropTo ->
         // unlitMat -> rawUnlitMat): dropTo reassigns pm.material, a new
@@ -4046,7 +4053,7 @@ const TLX = (function () {
       // apex26.tlxMirrorSweep (see the static-sweep gates in present()): read
       // once here, not with a localStorage call on every present.
       let _mirrorSweepOptIn = false;
-      try { _mirrorSweepOptIn = localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { /* no storage: off */ }
+      try { _mirrorSweepOptIn = _lowMemOptIn || localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { /* no storage: off */ }
       // The WebGL2 driver's texture ceiling is a device constant: ask once.
       let _glMaxDim = -1, _glMaxTries = 0;
       const cssSizeCache = CanvasCssSize.create(_layoutCanvas, { settleFrames: 30 });
@@ -6355,7 +6362,7 @@ const TLX = (function () {
                         // as "the fix does nothing" (PERF-FINDINGS 2m).
                         mirror: { sweeps: _mirrorStat.sweeps, geos: _mirrorStat.geos,
                                   freedMB: _mirrorStat.freedMB, drains: _mirrorStat.drains,
-                                  chunks: _mirrorStat.chunks, gate: _mirrorStat.gate } };
+                                  chunks: _mirrorStat.chunks, gate: _mirrorStat.gate, lowMem: _lowMemOptIn } };
             try {
               const inf = renderer && renderer.info;
               if (inf) {

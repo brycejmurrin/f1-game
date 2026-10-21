@@ -3234,6 +3234,21 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
     "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
 });
 
+test("B·H26-R3: LOW-MEMORY MODE (apex26.tlxLowMem) is the one player opt-in for the whole mirror lever, default OFF", () => {
+  // Bryce 2026-10-21: an experimental SETTINGS toggle, phones included. It must open all three refusals the A/B knobs
+  // open (chunk release past the env gate, the static sweep, the sweep's mobile refusal) and nothing when unset.
+  const src = read("js/render/three/tlx.js");
+  assert.match(src, /const _lowMemOptIn = \(function \(\) \{\s*try \{ return localStorage\.getItem\("apex26\.tlxLowMem"\) === "1"; \} catch \(_\) \{ return false; \}/,
+    "read once, \"1\" only, storage failure = off");
+  assert.match(src, /const _chunkRelOptIn = _lowMemOptIn \|\|/, "it opens the chunk release");
+  assert.match(src, /_mirrorSweepOptIn = _lowMemOptIn \|\| localStorage\.getItem\("apex26\.tlxMirrorSweep"\) === "1"/, "and the static sweep");
+  const sw = src.indexOf("function sweepGeoMirrors(");
+  assert.notEqual(sw, -1, "sweepGeoMirrors moved");
+  assert.match(src.slice(sw, sw + 1500), /if \(isMobile && !_lowMemOptIn\) return;/, "and only it lifts the phone refusal");
+  assert.doesNotMatch(src.slice(sw, sw + 1500), /if \(isMobile\) return;/, "the bare refusal would make the toggle a no-op on the owner's phone");
+  assert.match(src, /gate: _mirrorStat\.gate, lowMem: _lowMemOptIn \}/, "memState().mirror says whether the mode is on");
+});
+
 test("TLX late sky depth-tests less-equal and does not write depth", () => {
   // WGX's late sky used depthCompare "always" and erased the world. The
   // saving is the covered fraction only when the far-plane triangle tests
@@ -5389,9 +5404,10 @@ test("the geometry mirror sweep caches bounds before it frees, and never runs on
   //    evidence; a software probe cannot see this failure.
   const sweep = tlx.slice(tlx.indexOf("function sweepGeoMirrors("));
   const sweepBody = sweep.slice(0, sweep.indexOf("\n      }"));
-  assert.match(sweepBody, /if \(isMobile\) return;/,
-    "the mirror sweep must decline on a phone — it shipped the missing road on a real handset");
-  const mobileAt = sweepBody.indexOf("if (isMobile) return;");
+  // Only LOW-MEMORY MODE (the player's explicit, default-off, experimental opt-in; B·H26-R3) reaches a phone.
+  assert.match(sweepBody, /if \(isMobile && !_lowMemOptIn\) return;/,
+    "the mirror sweep must decline on a phone unless the player opted in — it shipped the missing road on a real handset");
+  const mobileAt = sweepBody.indexOf("if (isMobile && !_lowMemOptIn) return;");
   const throttleAt = sweepBody.indexOf("_mirrorSweepAt");
   assert.ok(mobileAt >= 0 && mobileAt < throttleAt,
     "the mobile decline must come before the throttle, so it cannot be reached by a clock edge");
