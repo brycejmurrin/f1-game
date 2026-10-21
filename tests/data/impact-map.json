@@ -2739,6 +2739,9 @@
       "castsShadow": [
         "tests/unit/field-lod.test.mjs"
       ],
+      "farBody": [
+        "tests/unit/field-lod.test.mjs"
+      ],
       "flame": [
         "tests/unit/field-lod.test.mjs"
       ],

@@ -216,6 +216,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-draw-decal-sweep.test.mjs",
   "tests/unit/car-front-wing-width.test.mjs",
   "tests/unit/car-fx.test.mjs",
+  "tests/unit/car-geometry-decimate.test.mjs",
   "tests/unit/car-materials.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
   // Car mesh budget (B·H13): per-body tris/verts for the drawn tiers, and the vertex weld is lossless. ~5 s.

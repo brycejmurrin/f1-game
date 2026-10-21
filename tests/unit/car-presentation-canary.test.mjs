@@ -88,7 +88,7 @@ test("the draw loop draws body + planted wheels for every procedural car", () =>
     /const body = carDraw\.modelBuf \? null :[\s\S]{0,520}drawPlayerWheels\(c, _groundMat/
   );
   assert.ok(draw, "body + wheels on _groundMat for every procedural car");
-  assert.match(game, /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(\) : teamBodyMesh\(c\.team, c\)/,
+  assert.match(game, /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(FieldLod\.farBody\(_lodD2, fovY, c\)\) : teamBodyMesh\(c\.team, c\)/,
     "rivals past tier 2 share one distant body mesh");
   assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
   // The player's pair takes the team so livery wheel tints (rimTint / caliperTint) join its cache key.

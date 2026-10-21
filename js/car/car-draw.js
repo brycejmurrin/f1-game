@@ -222,18 +222,36 @@ const CarDraw = (function () {
     // ONE procedural body for every rival past FieldLod tier 2 (~120 m, ±10 %
     // hysteresis on c._lodTier). Team livery stays on the planted wheels; the
     // mesh is neutral grey so we never pay a Car3D.build per seat at range.
-    let _sharedRivalBody = null;
-    function sharedRivalBodyMesh() {
+    // FAR BODY (`far` true, FieldLod.farBody: past ~250 m, 1-3 px tall): the same body clustered down to
+    // FAR_BODY_TRIS (CarGeometry.decimate). The clustering costs ~130 ms, so it runs once in an idle
+    // callback after the full shared body exists; until it lands a far rival draws the full shared body.
+    const FAR_BODY_TRIS = 1500;
+    let _sharedRivalBody = null, _sharedRivalGeom = null, _farRivalBody = null, _farRivalKick = false;
+    function sharedRivalBodyMesh(far) {
       if (carModelBuf) return null;
-      if (_sharedRivalBody) return _sharedRivalBody;
-      const team = Teams.LIST[0];
-      const setup = Parts.getFactorySetup(team);
-      _sharedRivalBody = G.gfx.createMesh(Car3D.build([0.72, 0.72, 0.72], [0.72, 0.72, 0.72], {
-        field: true, silhouette: true, noDriver: true, noWheels: true, livery: {}, smooth: false,
-        parts: Parts.getVisualTiers(setup, team),
-      }));
+      if (!_sharedRivalBody) {
+        const team = Teams.LIST[0];
+        const setup = Parts.getFactorySetup(team);
+        const geom = Car3D.build([0.72, 0.72, 0.72], [0.72, 0.72, 0.72], {
+          field: true, silhouette: true, noDriver: true, noWheels: true, livery: {}, smooth: false,
+          parts: Parts.getVisualTiers(setup, team),
+        });
+        _sharedRivalBody = G.gfx.createMesh(geom);
+        _sharedRivalGeom = geom;
+      }
+      if (far && _farRivalBody) return _farRivalBody;
+      if (far && !_farRivalKick && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
+        _farRivalKick = true;
+        const make = () => {
+          try { _farRivalBody = G.gfx.createMesh(CarGeometry.decimate(_sharedRivalGeom, FAR_BODY_TRIS)); }
+          catch (e) { Log.warn("gfx", "far rival body failed", e); }
+          _sharedRivalGeom = null;
+        };
+        if (typeof requestIdleCallback === "function") requestIdleCallback(make, { timeout: 2000 }); else setTimeout(make, 0);
+      }
       return _sharedRivalBody;
     }
+    function farRivalBodyReady() { return !!_farRivalBody; }
 
     // ── decals ──────────────────────────────────────────────────────
     const _decalTexCache = {}, _decalTexFail = {}, _decalTexOrder = [];
@@ -1730,7 +1748,7 @@ const CarDraw = (function () {
 
     let _menuCarPrep = null;   // the last prepareMenuCarAssets that ran to its end (menuCarAssets)
     return (_instance = {
-      teamMesh, teamBodyMesh, sharedRivalBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
+      teamMesh, teamBodyMesh, sharedRivalBodyMesh, farRivalBodyReady, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures, sweepStaleDecals, decalBytes,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
       drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, warmCockpitRig, drainDeferredCarWarm, drawExhaustFx, glassState, drawMirrorCar,
