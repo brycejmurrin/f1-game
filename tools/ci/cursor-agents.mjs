@@ -65,7 +65,7 @@ export function retryAfterMs(headerValue, attempt, now = Date.now()) {
 }
 
 /** One API call. GETs retry 429/5xx; a write retries 429 only (the request was not processed), plus 5xx when `retry5xx` (idempotent create). */
-async function api(route, { accept = "application/json", tries = 6, method = "GET", body, retry5xx = false } = {}) {
+async function api(route, { accept = "application/json", tries = 6, method = "GET", body, retry5xx = false, signal } = {}) {
   const key = process.env.CURSOR_API_KEY;
   if (!key) {
     console.log("BLOCKED no CURSOR_API_KEY in the environment");
@@ -74,7 +74,7 @@ async function api(route, { accept = "application/json", tries = 6, method = "GE
   const headers = { Authorization: `Bearer ${key}`, Accept: accept };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   for (let a = 0; a < tries; a++) {
-    const r = await fetch(BASE + route, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const r = await fetch(BASE + route, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal });
     const again = r.status === 429 || (r.status >= 500 && (method === "GET" || retry5xx));
     if (again) {
       await sleep(r.status === 429 ? retryAfterMs(r.headers.get("retry-after"), a, clock.now()) : retryAfterMs(null, a));
@@ -648,6 +648,7 @@ export async function dumpRuns(agents, dir, { gapMs = 1500 } = {}) {
   let skipped = 0;
   let expired = 0;
   let live = 0;
+  let slow = 0;
   for (const id of agents) {
     for (const run of (await json(`/v1/agents/${id}/runs`)).items || []) {
       const out = path.join(dir, `${id.slice(-8)}_${run.id.slice(-8)}.sse`);
@@ -665,18 +666,29 @@ export async function dumpRuns(agents, dir, { gapMs = 1500 } = {}) {
         expired++;
         continue;
       }
-      const r = await api(`/v1/agents/${id}/runs/${run.id}/stream`, { accept: "text/event-stream" });
-      if (r.status === 410) {
-        expired++;
+      // A FINISHED run's stream can stay open too: one on an agent with a live follow-up was still sending at 25 s, where
+      // a normal one replays in 2 s. A stream cut by the timeout is counted as slow and not written (it has no `done`).
+      let text;
+      try {
+        const signal = AbortSignal.timeout((Number(process.env.APEX_CURSOR_STREAM_TIMEOUT_S) || 60) * 1000);
+        const r = await api(`/v1/agents/${id}/runs/${run.id}/stream`, { accept: "text/event-stream", signal });
+        if (r.status === 410) {
+          expired++;
+          continue;
+        }
+        if (!r.ok) throw new Error(`stream ${run.id}: HTTP ${r.status}`);
+        text = await r.text();
+      } catch (e) {
+        if (e.name !== "TimeoutError") throw e;
+        slow++;
         continue;
       }
-      if (!r.ok) throw new Error(`stream ${run.id}: HTTP ${r.status}`);
-      fs.writeFileSync(out, await r.text());
+      fs.writeFileSync(out, text);
       got++;
       await sleep(gapMs);
     }
   }
-  return `DUMP dir=${path.relative(ROOT, dir)} written=${got} skipped=${skipped} expired=${expired} live=${live}`;
+  return `DUMP dir=${path.relative(ROOT, dir)} written=${got} skipped=${skipped} expired=${expired} live=${live} slow=${slow}`;
 }
 
 /** Poll an agent until it is neither ACTIVE nor CREATING. Exit code: 0 last run FINISHED, 1 ERROR/CANCELLED/EXPIRED (or other), 124 timeout. */
