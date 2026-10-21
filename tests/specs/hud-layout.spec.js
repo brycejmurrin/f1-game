@@ -35,7 +35,7 @@ const CTRL = ["btn-throttle", "btn-brake", "btn-boost", "btn-ot", "btn-aero",
 // landed the cluster on `.hud-gaps` at 852x393 and this file would still have
 // gone green. `.hud-top`/`.hud-gaps` are checked as CONTAINERS (padding +
 // background). Empty gap lines now collapse the plate
-// (`.hud-gaps:not(:has(> div:not(:empty)))` in css/hud.css) — a solo-race
+// (`.hud-gaps[data-empty]` in css/hud.css, kept by hud.js) — a solo-race
 // fixture with both lines "" has no gaps box; seed text before asserting the
 // plate survives COMPACT (metrics layout below).
 const HUD = ["hud-aero", "hud-ot", "hud-gearbox", "hud-energy", "hud-speed"];
@@ -870,8 +870,10 @@ test.describe("metrics layout", () => {
       // Solo fixture: both gap lines are "". Empty-collapse (css/hud.css) hides
       // the plate on purpose — seed one line so COMPACT is judged against a
       // plate that should stay visible, not against the junk-chip hide.
+      // The collapse is an attribute hud.js keeps (`.hud-gaps[data-empty]`), so a
+      // hand-seeded line clears it here as the next HUD tick would.
       const ahead = document.getElementById("hud-gap-ahead");
-      if (ahead) ahead.textContent = "▲ RIV 0.5s";
+      if (ahead) { ahead.textContent = "▲ RIV 0.5s"; delete ahead.parentNode.dataset.empty; }
       const w = (sel) => {
         const el = document.querySelector(sel);
         return el ? el.getBoundingClientRect().width : -1;
