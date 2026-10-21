@@ -1338,18 +1338,32 @@ const CarDraw = (function () {
     }
     function pitCrewDrawn() { const n = _crewDrawn; _crewDrawn = 0; return n; }
     const VIS_WHEELBASE = WHEELS[0].z - WHEELS[2].z;   // the DRAWN axle spacing (3.3 m)
+    // Visual phases belong to the render frame, not a draw call: a car can be
+    // drawn in the mirror, main view and cockpit, or not drawn at all. Physics
+    // owns c.wheelSpin (traction), so keep this presentation state private.
+    const _wheelPhases = new WeakMap();
+    function advanceWheelPhases(dt) {
+      for (let i = 0; i < G.cars.length; i++) {
+        const c = G.cars[i];
+        let phase = _wheelPhases.get(c);
+        if (!phase) { phase = { rear: 0, front: 0 }; _wheelPhases.set(c, phase); }
+        const spin = (c.speed / PhysicsConsts.WHEEL_R) * dt;
+        phase.rear = ((phase.rear || 0) + spin) % (Math.PI * 2);
+        phase.front = ((phase.front || 0) + spin * (1 - (c.wheelLock || 0))) % (Math.PI * 2);
+      }
+    }
     // `bare` (drawMirrorCar): the 4 rotating wheels at the steer they show and
     // the spin they hold, and nothing else — no fixed layers, compound stripes,
     // spin discs, brake rings or far flares (those are Particles, which a second
-    // camera would emit twice). Pass dt 0 with it: the main pass advances the spin.
+    // camera would emit twice). All views read the same frame's private phases;
+    // dt controls spin blur only, never the phase.
     function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare) {
       const wm = c.isPlayer ? getPlayerWheelMeshes(c.team) : getFieldWheelMeshes(c.team, c);
-      c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / PhysicsConsts.WHEEL_R) * dt) % (Math.PI * 2);
       // Fronts have their own spin so a lock-up (c.wheelLock) freezes them while
       // the car still moves; the flat spot it leaves bumps them once per rev.
-      c.wheelSpinF = ((c.wheelSpinF || 0) + (c.speed / PhysicsConsts.WHEEL_R) * dt * (1 - (c.wheelLock || 0))) % (Math.PI * 2);
-      const spR = Math.sin(c.wheelSpin), cpR = Math.cos(c.wheelSpin);
-      const spF = Math.sin(c.wheelSpinF), cpF = Math.cos(c.wheelSpinF);
+      const phase = _wheelPhases.get(c);
+      const spR = Math.sin(phase ? phase.rear : 0), cpR = Math.cos(phase ? phase.rear : 0);
+      const spF = Math.sin(phase ? phase.front : 0), cpF = Math.cos(phase ? phase.front : 0);
       const flat = (c.flatSpot || 0) * 0.004 * (0.5 + 0.5 * cpF);
       // FRONT-WHEEL ANGLE (visual). An AI's `steer` is a lane-change command,
       // not a steering angle — its TURNING is the arc it follows — so steerVis
@@ -1364,6 +1378,7 @@ const CarDraw = (function () {
       let steerA = M4.clamp(c.steerVis || 0, -1, 1) * WSV;
       if (!c.human) steerA = M4.clamp(steerA - Math.atan(VIS_WHEELBASE * (c.kCur || 0)), -WSV, WSV);
       else if (G.STEER_SPEED_REF > 0) steerA /= 1 + Math.abs(c.speed || 0) * PhysicsConsts.VMAX / (G.vTop() * G.STEER_SPEED_REF);
+      const steerSin = Math.sin(steerA), steerCos = Math.cos(steerA);
       const ws = wScale || 1;   // widen the tyre along its axle (cockpit view)
       const wo = coOpt(opt);    // the opaque layers' bag (R1)
       // The stop, seen (PitLane.stopAnim): a car held in its box is up on its
@@ -1411,8 +1426,7 @@ const CarDraw = (function () {
       for (let w = 0; w < WHEELS.length; w++) {
         const wd = WHEELS[w];
         if (frontsOnly && wd.rear) continue;   // cockpit: rears sit beside the camera and blob the corners
-        const yaw = wd.front ? steerA : 0;
-        const ss = Math.sin(yaw), cs = Math.cos(yaw);
+        const ss = wd.front ? steerSin : 0, cs = wd.front ? steerCos : 1;
         const sp = wd.front ? spF : spR, cp = wd.front ? cpF : cpR;
         const L = _wheelLocal;
         // Local X is the wheel axle (tyre width); scale that column by ws to widen.
@@ -1669,7 +1683,7 @@ const CarDraw = (function () {
       teamMesh, teamBodyMesh, sharedRivalBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
-      drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, warmCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
+      advanceWheelPhases, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, warmCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
       warmCarAssets, warmCarAssetsAsync, loadCarModel, buildCarData,
       // __apex.menuPrep().cars: the last menu car prep that ran to its end.
       prepareMenuCarAssets: (current) => prepareMenuCarAssets(current).then((r) => { if (r) _menuCarPrep = r; return r; }),

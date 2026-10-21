@@ -7588,6 +7588,8 @@ function render(dt) {
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) {
     gfx.envProbeReset(); _envHold = false; _envFace = -1;   // tier 1 sheds PRODUCER; envReady latches
   }
+  // Advance render-only wheel phases once, shared by mirror, PiP and main view.
+  carDraw.advanceWheelPhases(dt);
   // REAR-VIEW MIRROR: its own camera and target, BEFORE the main begin() like the probe above.
   mirrorPass.render(frame, frameSky, night, wet, _floodEmit);
   let _b;
@@ -7690,13 +7692,16 @@ function render(dt) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
     }
-    // Player: reuse frame-cached (s,x). Field: playerAnchor (world px). Cull first.
+    // Reject world-space rivals before playerAnchor projects onto the road.
+    // Keep the same interpolated pose and 6 m grace as the later fallback cull.
+    const rp = renderPosOf(c);
+    if (!c.isPlayer && rp.world && (rp.x - camEye[0]) * _camFwdX + (rp.z - camEye[2]) * _camFwdZ < -6) continue;
+    // Player: reuse frame-cached (s,x). Field: playerAnchor (world px).
     let cS, cX;
     if (c.isPlayer && _plOk) { cS = _plCS; cX = _plCX; }
     else { const pa = playerAnchor(c); cS = pa.cS; cX = pa.cX; }
     c.xVis = cX;   // dump/net field only — pose comes from interpolated px/pz
     const renderX = cX;
-    const rp = renderPosOf(c);
     let bankC;
     if (c.isPlayer && _plBodyOk) {
       // Shadow already sampled/banked the player — restore (env probe may clobber smp2).
@@ -7707,10 +7712,6 @@ function render(dt) {
       tmpP[1] = p[1] + bankC.dy;
       tmpP[2] = rp.world ? rp.z : p[2] + r[2] * renderX;
     } else {
-      // A world pose answers the behind-camera cull below before the track sample
-      // (perf plan C-10): the same predicate on the same tmpP x/z, so a rival
-      // behind the eye skips sampleAt + the normalise.
-      if (!c.isPlayer && rp.world && (rp.x - camEye[0]) * _camFwdX + (rp.z - camEye[2]) * _camFwdZ < -6) continue;
       sampleAt(cS, smp2);
       // sample() lerps unit node vectors, so mid-segment |t|,|r| dip to cos(θ/2)
       // (up to ~4.7% on Spa's tightest) — used un-normalized they SCALE the drawn
@@ -7725,8 +7726,8 @@ function render(dt) {
       tmpP[0] = rp.world ? rp.x : smp2.p[0] + smp2.r[0] * renderX;
       tmpP[2] = rp.world ? rp.z : smp2.p[2] + smp2.r[2] * renderX;
       tmpP[1] = smp2.p[1];
-      // Behind-camera cull: AI cars strictly behind the view are never visible
-      // (no mirrors). Near-eye: only an eye INSIDE the body box (GameCams.eyeInsideCar,
+      // Main-view behind-camera cull (mirrors have their own car pass).
+      // Near-eye: only an eye INSIDE the body box (GameCams.eyeInsideCar,
       // grown by the near plane) — a 3.4 m radius hid a rival ALONGSIDE in the onboard
       // views as the player drew level. Local player is never culled. Y without bank is
       // fine for the near-eye test.
