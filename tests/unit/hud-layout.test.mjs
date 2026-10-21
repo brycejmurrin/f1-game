@@ -1569,7 +1569,7 @@ test("clearance reuses an unchanged slot as an obstacle without writing zero cor
       body: { classList: { contains: () => false }, setAttribute() {} },
       querySelector: (sel) => elements[sel] || null, querySelectorAll: () => [] },
     GameStore: { store: { get: (k, d) => d, set() { throw new Error("clearance must not save"); } } } };
-  vm.createContext(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  vm.createContext(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx, { filename: absSrc("js/ui/hud-layout.js") });
   const resetCounts = () => { for (const count of Object.values(counters)) count.reads = count.writes = 0; };
   resetCounts();
   ctx.HudLayout.clearReadouts();
