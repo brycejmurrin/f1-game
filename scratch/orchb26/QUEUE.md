@@ -198,3 +198,4 @@ All are game PRs (js/) → one GAME-SLOT per green Pages.
 19:30Z: READY #3424 e5248e98 (O-B, full 41/0). Dispatched gpu-census monza macOS on its branch (WGX shader hand-merge, no census on head); merge after Verdict. #3421: no draft/ready re-toggle; sync push instead (gen=FAIL). Pages e696b626 GREEN (#3430 live).
 19:31Z: MERGED #3423 → 89413c86 (GAME, O-C). Next on green Pages 89413c86: #3424 (after census Verdict), #3436, #3438, #3421; #3407 syncs now.
 19:51Z: #3424 census 39661921581 Verdict: 4 legs ok, gpuErrors 0, no WGSL errors → cleared. READY+gate-ok (pacing only): #3436, #3438, #3421, #3424; #3439 after #3438. Order on each green Pages: #3436 → #3424 → #3438 → #3439 → #3421 → #3407.
+19:53Z: #3421 READY 4d70ee7c (full 31/0). NEW #3442 (H28, SettingDeps.refresh write-on-change from H30 G3; test fails→passes; no measured profile) full tier running. #3407 synced locally by O-C. Order: #3436 → #3424 → #3438 → #3439 → #3421 → #3442 → #3407.
