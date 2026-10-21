@@ -1,0 +1,1 @@
+1792554420	Bryce Murrin	Codex performance pass: scalar RealRace booleans at game/audio hot callsites, telemetry prefix search, WATCH disabled guards, fold summary DOM reuse, deselected voice-pack lifetime; excludes TLX packing owned by #3396  [cursor/performance-audit-8d42; session 56eba588143865edc5c81c43]
