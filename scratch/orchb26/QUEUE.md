@@ -123,3 +123,5 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 07:01Z: #3408 merged → cd8b4297 by someone else (no bus line; likely Bryce) just before #3399. Pages cedf3811 covers both. Next game #3388 → #3422 → #3396 → #3238 → #3377 → #3429.
 
 07:17Z: Pages cd8b4297 (#3408) in_progress; cedf3811 (#3399) pending behind it. #3419 READY+gate ok → merge once cedf3811 run starts. H20 FINAL: #3388 then #3429 (both input.js; #3429 may need sync). H23 stopped.
+
+07:23Z: Pages cd8b4297 GREEN (#3408 live). MERGED #3419 → 4929f6fb (non-game, in cedf3811 gap). Next game #3388 on green cedf3811.
