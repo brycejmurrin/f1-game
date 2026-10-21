@@ -2036,6 +2036,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/shot/lib/wx-grid.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/shot/loading-probe.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -2103,6 +2108,11 @@
     },
     "tools/shot/track-session.mjs": {
       "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "@c5"
+    },
+    "tools/shot/wx-grid.mjs": {
+      "action": "keep-native",
       "presentation": "native",
       "preserve": "@c5"
     },

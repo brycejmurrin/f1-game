@@ -3023,6 +3023,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/shot/lib/wx-grid.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/shot/loading-probe.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -3116,6 +3121,15 @@
       "path": "tools/shot/track-session.mjs",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/shot/wx-grid.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--out"
       ]
