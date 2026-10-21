@@ -328,7 +328,7 @@ test("dump skips a 410 stream_expired, counts it, and keeps going", async () => 
   try {
     const line = await dumpRuns([ID], dir, { gapMs: 0 });
     assert.equal(calls.length, 3);
-    assert.ok(/ written=1 skipped=0 expired=1$/.test(line));
+    assert.ok(/ written=1 skipped=0 expired=1 live=0$/.test(line));
     assert.equal(fs.readdirSync(dir).length, 1);
     stub([200, { items: [{ id: "run-cccccccc", status: "FINISHED" }] }], [403, err("forbidden")]);
     await assert.rejects(dumpRuns([ID], dir, { gapMs: 0 }), /HTTP 403/);
@@ -526,9 +526,21 @@ test("dump skips a run past the retention window without a request, and keeps a 
   try {
     const line = await dumpRuns([ID], dir, { gapMs: 0 });
     assert.deepEqual(calls.map((c) => c.url.split("/").slice(-2, -1)[0]), [ID, "run-bbbbbbbb", "run-cccccccc"]);
-    assert.ok(/ written=2 skipped=0 expired=1$/.test(line));
+    assert.ok(/ written=2 skipped=0 expired=1 live=0$/.test(line));
   } finally {
     t.restore();
+    after();
+  }
+});
+
+test("dump counts a RUNNING run as live without opening its stream (it would not close until the run ends)", async () => {
+  const dir = tmpDir();
+  const calls = stub([200, { items: [{ id: "run-aaaaaaaa", status: "RUNNING" }, { id: "run-bbbbbbbb", status: "FINISHED" }] }], [200, "event: status\ndata: {}\n\n"]);
+  try {
+    const line = await dumpRuns([ID], dir, { gapMs: 0 });
+    assert.deepEqual(calls.map((c) => c.url.split("/").slice(-2, -1)[0]), [ID, "run-bbbbbbbb"]);
+    assert.ok(/ written=1 skipped=0 expired=0 live=1$/.test(line));
+  } finally {
     after();
   }
 });
