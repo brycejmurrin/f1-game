@@ -42,7 +42,8 @@
         "tests/unit/agent-view-vm.test.mjs"
       ],
       "create": [
-        "tests/unit/agentview-api-contract.test.mjs"
+        "tests/unit/agentview-api-contract.test.mjs",
+        "tests/unit/three-inspector.test.mjs"
       ],
       "describe": [
         "tests/specs/agent-drive-bench.spec.js",
@@ -117,8 +118,7 @@
         "tests/specs/camera-driving-hooks.spec.js",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs",
-        "tests/unit/three-inspector.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
     "js/agent/apex-cam.js": {
@@ -172,6 +172,7 @@
         "tests/unit/loading-card.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/storm-weather.test.mjs",
+        "tests/unit/three-inspector.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "settled": [
@@ -203,7 +204,6 @@
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
-        "tests/unit/three-inspector.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
         "tests/unit/wgx-labels.test.mjs"
       ]
@@ -4430,7 +4430,8 @@
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs"
+        "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/three-inspector.test.mjs"
       ],
       "ensureAudio": [
         "tests/unit/global-registry.test.mjs",
@@ -4474,7 +4475,6 @@
       ],
       "*": [
         "tests/unit/stage-minify.test.mjs",
-        "tests/unit/three-inspector.test.mjs",
         "tests/unit/verify-live.test.mjs"
       ]
     },
@@ -9571,6 +9571,9 @@
       "begin": [
         "tests/unit/perf-spans.test.mjs"
       ],
+      "clearMeasures": [
+        "tests/unit/perf-spans.test.mjs"
+      ],
       "create": [
         "tests/unit/perf-spans.test.mjs"
       ],
@@ -9587,6 +9590,9 @@
       ]
     },
     "js/perf/three-inspector.js": {
+      "status": [
+        "tests/unit/three-inspector.test.mjs"
+      ],
       "wanted": [
         "tests/unit/three-inspector.test.mjs"
       ]
@@ -13342,6 +13348,7 @@
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/three-inspector.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
