@@ -146,6 +146,33 @@ srv.listen(0, "127.0.0.1", async () => {
     const controlled = await p1.evaluate(() => !!navigator.serviceWorker.controller);
     console.log("controlled after reload:", controlled);
     if (!controlled) bad.push("page is not controlled by the service worker after a reload");
+    // #2194 / #2424: a missing shell-tag entry offline must not make the repair
+    // sweep delete the player's apex26-* caches. Delete one essential key, go
+    // offline, reload, and the install caches must still be there.
+    const repairProbe = await p1.evaluate(async () => {
+      const names = (await caches.keys()).filter((n) => n.indexOf("apex26-") === 0);
+      if (!names.length) return { ok: false, why: "no apex26-* cache after install" };
+      const cache = await caches.open(names[0]);
+      const keys = await cache.keys();
+      const essential = keys.find((r) => /\/js\/game\.js/.test(r.url));
+      if (!essential) return { ok: false, why: "js/game.js not in the precache" };
+      await cache.delete(essential);
+      return { ok: true, cache: names[0], before: names.length };
+    });
+    console.log("repair probe setup:", JSON.stringify(repairProbe));
+    if (!repairProbe.ok) bad.push("repair probe setup: " + repairProbe.why);
+    else {
+      await ctx.setOffline(true);
+      await p1.reload({ waitUntil: "domcontentloaded" });
+      const after = await p1.evaluate(async () => {
+        const names = (await caches.keys()).filter((n) => n.indexOf("apex26-") === 0);
+        return { count: names.length, names };
+      });
+      console.log("repair probe offline caches:", JSON.stringify(after));
+      await ctx.setOffline(false);
+      if (after.count < repairProbe.before) bad.push("offline repair probe deleted apex26-* caches");
+      if (!after.names.includes(repairProbe.cache)) bad.push("offline repair probe lost the install cache name");
+    }
     // The agent surface (js/agent/*.js, window.__apex) is LAZY: the install
     // leaves it out and only a CONTROLLED page's own fetch caches it (sw.js's
     // LAZY_AGENT block, js/game.js loadAgentSurface). Closing this page at

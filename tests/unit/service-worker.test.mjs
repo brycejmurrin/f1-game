@@ -24,7 +24,7 @@ function requestKey(value) {
   return value.url;
 }
 
-function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted, workerURL, globals } = {}) {
+function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted, workerURL, globals, clientWindows } = {}) {
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
@@ -83,7 +83,12 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
       },
       // Worker->page log channel: absent unless a test collects the posts, so
       // every other test also proves sw.js tolerates a missing matchAll.
-      ...(posted ? { async matchAll() { return [{ postMessage: (m) => posted.push(m) }]; } } : {}),
+      ...(posted || clientWindows != null ? {
+        async matchAll() {
+          const n = clientWindows == null ? 1 : clientWindows;
+          return Array.from({ length: n }, () => ({ postMessage: (m) => posted && posted.push(m) }));
+        },
+      } : {}),
     },
     addEventListener(type, listener) {
       listeners.set(type, listener);
@@ -875,10 +880,13 @@ test("with the build still unknown, the newest generation answers first", async 
   assert.equal(await (await nav.responsePromise).text(), "newer shell");
 });
 
-function sweepHarness({ complete, settled = complete }) {
-  const harness = createHarness({ fetchImpl: generationFetch({ offline: false }) });
+function sweepHarness({ complete, settled = complete, clientWindows } = {}) {
+  const harness = createHarness({ fetchImpl: generationFetch({ offline: false }), clientWindows });
   harness.stores.set("apex26-319", new Map([["a", new Response("x")]]));
-  harness.stores.set("apex26-320", new Map([["a", new Response("x")]]));
+  harness.stores.set("apex26-320", new Map([
+    ["a", new Response("x")],
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+  ]));
   harness.stores.set("apex26-321", new Map([
     ...(complete ? [[`${ORIGIN}/__apex_install_complete__`, new Response("complete")]] : []),
     ...(settled ? [[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]] : []),
@@ -895,7 +903,7 @@ async function twoFetches(harness) {
 }
 
 test("stale generations are swept from the fetch path once the current one is complete", async () => {
-  const harness = sweepHarness({ complete: true });
+  const harness = sweepHarness({ complete: true, clientWindows: 0 });
   await twoFetches(harness);   // the first resolves the build name, the second sweeps
   assert.deepEqual(harness.deleted.slice().sort(), ["apex26-319", "apex26-320"]);
   assert.ok(harness.stores.has("apex26-322"), "a NEWER generation is never deleted by an older name");
@@ -903,6 +911,19 @@ test("stale generations are swept from the fetch path once the current one is co
   assert.ok(harness.stores.has("apex26-321"));
   await twoFetches(harness);
   assert.equal(harness.deleted.length, 2, "one sweep per worker lifetime, not one per fetch");
+});
+
+test("the fetch-path sweep keeps one settled prior generation while a window client remains (#2194)", async () => {
+  const harness = sweepHarness({ complete: true, clientWindows: 1 });
+  await twoFetches(harness);
+  assert.deepEqual(harness.deleted, ["apex26-319"], "N-2 and older go; N-1 stays for the open tab");
+  assert.ok(harness.stores.has("apex26-320"));
+});
+
+test("with no window clients, the sweep also deletes the immediate prior generation", async () => {
+  const harness = sweepHarness({ complete: true, clientWindows: 0 });
+  await twoFetches(harness);
+  assert.deepEqual(harness.deleted.slice().sort(), ["apex26-319", "apex26-320"]);
 });
 
 test("no fetch-path sweep between the essential marker and the optional pool (SETTLED gates the sweep)", async () => {
@@ -978,7 +999,7 @@ test("the cache order is computed once per worker, not once per request", async 
 });
 
 test("the memoised cache order is dropped when the sweep deletes generations", async () => {
-  const h = sweepHarness({ complete: true });
+  const h = sweepHarness({ complete: true, clientWindows: 0 });
   await twoFetches(h);   // resolves the name, then sweeps 319/320
   assert.equal(h.deleted.length, 2);
   const before = h.keysCalls;
@@ -1340,10 +1361,13 @@ test("a pack response bypasses a stalled CacheStorage write without abandoning i
 test("a same-URL worker installs a new generation and blocks old-shell lazy injection", async () => {
   const scriptURL = `${ORIGIN}/sw.js?v=320`, lazy = `${ORIGIN}/js/editor/codec.js?v=320`;
   const h = createHarness({ workerURL: scriptURL, fetchImpl: installFetch() });
-  h.stores.set("apex26-320", new Map([[lazy, new Response("old code")]]));
+  h.stores.set("apex26-320", new Map([
+    [lazy, new Response("old code")],
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+  ]));
   await h.lifecycleEvent("install").done();
   await h.lifecycleEvent("activate").done();
-  assert.deepEqual(h.deleted, ["apex26-320"]);
+  assert.deepEqual(h.deleted, [], "the prior settled generation is kept for old-shell lazy assets");
   assert.equal(h.claimed, 1);
   let appended = 0;
   const controller = { scriptURL, postMessage(data, ports) { h.messageEvent(data, ports); } };
@@ -1359,6 +1383,8 @@ test("a same-URL worker installs a new generation and blocks old-shell lazy inje
   assert.equal(await ctx.loader.load(["js/editor/codec.js"], []), false);
   assert.equal(appended, 0, "no request into the replacement generation");
   assert.equal(ctx.u.state().ready, 321, "UPDATE READY names the actual cache generation, not URL320");
+  const lazyFetch = h.fetchEvent({ method: "GET", url: lazy });
+  assert.equal(await (await lazyFetch.responsePromise).text(), "old code", "lazy ?v= from the prior generation still resolves");
   ctx.u.stop();
 });
 
@@ -1649,11 +1675,14 @@ for (const failure of ["503", "quota", "interrupted"]) {
 test("career UI is required under its content-hash key before a successful update retires old caches", async () => {
   const map = { "js/career/career-ui.js": hash12("body of js/career/career-ui.js") };
   const h = createHarness({ fetchImpl: lazyShellFetch(map) });
-  h.stores.set("apex26-321", new Map([["old", new Response("old")]]));
+  h.stores.set("apex26-321", new Map([
+    ["old", new Response("old")],
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+  ]));
   await h.lifecycleEvent("install").done();
   assert.ok(h.stores.get("apex26-322").has(`${ORIGIN}/js/career/career-ui.js?v=${map["js/career/career-ui.js"]}`));
   await h.lifecycleEvent("activate").done();
-  assert.deepEqual(h.deleted, ["apex26-321"]);
+  assert.deepEqual(h.deleted, [], "the settled prior generation stays while matchAll is absent");
 });
 
 
