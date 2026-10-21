@@ -254,7 +254,7 @@ const TLX = (function () {
       // The warm's stage timeline, read by memState().warm: the lights hold for
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
-      const _warmStages = { at: 0, settle: null, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
+      const _warmStages = { at: 0, settle: null, issue: null, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
         mirrorDeferred: false, mirrorLazy: null, rig: null };   // rig: warmDraws' { ms, pairs, mirror, ok } (hunt 6). B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
       // EVERY warm's stages, newest last (cap 6): the menu prep runs a world warm then the garage's, and
       // _warmStages keeps only the last, so the census read the garage's 3.7 s as "the warm" while the
@@ -3306,13 +3306,14 @@ const TLX = (function () {
               _warmStages.mirror = Math.round(performance.now() - _tStage);
             }
             _tStage = performance.now();
-            _warmStages.draw = null; _warmStages.drawn = null; _warmStages.settle = null;
+            _warmStages.draw = null; _warmStages.drawn = null; _warmStages.settle = null; _warmStages.issue = null;
             if (drawWarmOn()) {
               // Its own guard: a draw that throws costs the draw warm, never a re-run of the compiles above.
               try {
                 _gpuLastOperation = "warm-draw";
                 _warmStages.drawn = drawWarmStage(usePost, useTag, opts, _warmStages.mirror !== null);
                 const _tSettle = performance.now();
+                _warmStages.issue = Math.round(_tSettle - _tStage);   // CPU side: uploads, pipeline creation, draw calls
                 const how = await _gpuSettled(5000);   // the driver's first-draw work is GPU-process side: wait it out here
                 _warmStages.settle = { ms: Math.round(performance.now() - _tSettle), how };   // draw = the draws + this wait
               } catch (e) {
@@ -3328,7 +3329,8 @@ const TLX = (function () {
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
             _warmHistory.push({ at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
-              mirror: _warmStages.mirror, draw: _warmStages.draw, total: _warmStages.total, failed: _warmStages.failed });
+              mirror: _warmStages.mirror, draw: _warmStages.draw, issue: _warmStages.issue,
+              settle: _warmStages.settle, total: _warmStages.total, failed: _warmStages.failed });
             if (_warmHistory.length > 6) _warmHistory.shift();
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
@@ -6336,6 +6338,7 @@ const TLX = (function () {
             o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
                        draw: _warmStages.draw, drawn: _warmStages.drawn,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        settle: _warmStages.settle,   // the draw stage's GPU wait: { ms, how: done | cap | none }
+                       issue: _warmStages.issue,     // the draw stage's CPU side (draw = issue + settle.ms)
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
                        pending: !!_warmPending, done: _warmDone, history: _warmHistory.slice() };
