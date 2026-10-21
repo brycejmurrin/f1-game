@@ -1,0 +1,1 @@
+- Faster first garage frame on the three.js renderer: the program warm now compiles garage and menu frames for the target they really paint, so the idle title's garage prebuild no longer freezes for seconds re-linking every shader.
