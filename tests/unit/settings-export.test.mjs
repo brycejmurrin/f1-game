@@ -1647,3 +1647,27 @@ test("garage export and reimport retain new regional finishes alongside sound an
   assert.deepEqual(restored.garage().garage["livery.custom.mclaren"], exported.garage["livery.custom.mclaren"],
     "a second export preserves the cleaned optional fields exactly");
 });
+
+test("SAVE/LOAD SETTINGS carries a calibrated stick rest map to a fresh device (B·H11 hunt)", () => {
+  // KeyBinds stores CALIBRATE STICK per pad ({[padId]: offset}); the row's def is the legacy
+  // scalar 0, and typeOk(map, 0) skipped it on LOAD, so the stick drifted on the new device.
+  const rest = { "0:Xbox Wireless Controller": 0.12, "1:DualSense": -0.05 };
+  const file = boot({ disk: { "apex26.padRest": JSON.stringify(rest) } }).collect("changes");
+  assert.deepEqual(file.settings.driving.padRest, rest, "SAVE exports the map");
+  const fresh = boot();
+  const r = fresh.loadSettings(JSON.parse(JSON.stringify(file)));
+  assert.equal(r.skipped, 0, "nothing skipped: " + JSON.stringify(r));
+  assert.deepEqual(JSON.parse(fresh.disk.get("apex26.padRest")), rest, "LOAD writes the map");
+  // Still strict: out-of-range or junk entries never land.
+  const junk = boot();
+  const rj = junk.loadSettings({ format: file.format, settings: { driving: { padRest: { a: 0.9, b: "x", c: 0.2 } } } });
+  assert.deepEqual(JSON.parse(junk.disk.get("apex26.padRest")), { c: 0.2 }, "only valid offsets: " + JSON.stringify(rj));
+  for (const bad of [0.9, "0.1", [0.1], { a: 2 }]) {
+    const b = boot();
+    assert.equal(b.loadSettings({ format: file.format, settings: { driving: { padRest: bad } } }).skipped, 1, "refused: " + JSON.stringify(bad));
+    assert.equal(b.disk.get("apex26.padRest"), undefined);
+  }
+  const legacy = boot();
+  legacy.loadSettings({ format: file.format, settings: { driving: { padRest: 0.08 } } });
+  assert.equal(JSON.parse(legacy.disk.get("apex26.padRest")), 0.08, "a legacy scalar still loads");
+});

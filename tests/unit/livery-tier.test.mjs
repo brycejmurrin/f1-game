@@ -169,7 +169,7 @@ test("desktop player hi-res atlas upload is deferred off boot and garage-open", 
 // entering photo mode on a grid built ~21 full atlases in one frame and kept
 // ~147 MB of them resident after the mode closed, under a 48-entry FIFO the
 // live set never filled, so nothing was ever evicted.
-function decalRig() {
+function decalRig(opts = {}) {
   const src = fs.readFileSync(path.join(ROOT, "js/car/car-draw.js"), "utf8");
   const body = src.slice(src.indexOf("    // ── decals ──"), src.indexOf("    function carDecalNum("));
   const built = [], freed = [], idle = [], hiLiveries = [];
@@ -178,7 +178,7 @@ function decalRig() {
     gfx: { createTexture: (a) => { const t = { atlas: a }; built.push(a); return t; }, freeTexture: (t) => freed.push(t.atlas) } };
   // 5th arg hiRes: preview vs deferred full. isPlayer without hiRes → preview.
   const LiveryTex = {
-    IS_MOBILE: false,
+    IS_MOBILE: false, IS_PHONE: !!opts.phone,
     playerHiResDeferred: (mobile) => !mobile,
     buildAtlas: (team, l, num, isPlayer, hiRes) => {
       if (hiRes) hiLiveries.push(team + "#" + num + "=" + (l && l.id));
@@ -224,6 +224,32 @@ function grid(n) {
   for (let i = 1; i <= n; i++) cars.push({ team: team("t" + (i % 11)), num: 10 + i, at: [0, 0, 5 + i * 8] });
   return cars;
 }
+
+// Bryce 2026-10-21, "Cap garage only": a phone at GRAPHICS: HIGH (IS_MOBILE false, the
+// tier) keeps the 1024 player preview: the 2048 upgrade never schedules on the device.
+test("a phone at GRAPHICS: HIGH never schedules the 2048 player atlas", () => {
+  const { api, built } = decalRig({ phone: true });
+  const cars = grid(3);
+  assert.equal(api.frame(cars)[0], "me#1:prev");
+  api.flushHiRes();
+  assert.equal(api.hiResDone(), 0, "no deferred hi-res on a phone");
+  assert.equal(built.filter((a) => a.endsWith(":hi")).length, 0, "no 2048 atlas built");
+  assert.equal(api.frame(cars)[0], "me#1:prev", "the preview stays");
+});
+
+// A queued 2048 kick belongs to the team it was queued for: browsing to another team
+// before the idle slot fires must not paint and upload the one left behind (B·H13 hunt).
+test("browsing to another team abandons the queued 2048 player atlas", () => {
+  const { G, api, built } = decalRig();
+  G.teamIdx = 0;
+  api.frame(grid(3));
+  G.teamIdx = 1;
+  api.flushHiRes();
+  assert.equal(built.filter((a) => a.endsWith(":hi")).length, 0, "no 2048 for the team left behind");
+  G.teamIdx = 0;
+  api.frame(grid(3)); api.flushHiRes();
+  assert.equal(api.hiResDone(), 1, "coming back schedules it again");
+});
 
 test("sync player atlas is preview; hi-res lands only after idle flush", () => {
   const { api, built } = decalRig();

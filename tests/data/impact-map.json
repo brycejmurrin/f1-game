@@ -2706,6 +2706,7 @@
         "tests/unit/livery-design.test.mjs"
       ],
       "resolveLivery": [
+        "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
@@ -7470,6 +7471,7 @@
         "tests/unit/input-bindings.test.mjs"
       ],
       "*": [
+        "tests/unit/a11y-opts.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
