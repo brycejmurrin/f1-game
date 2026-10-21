@@ -1686,6 +1686,11 @@
       "presentation": "shared-levels",
       "preserve": "JSON-RPC errors/isError and nontext blocks"
     },
+    "tools/mcp/mcp-listing-cost.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Per-server ERROR rows and the TOTAL line"
+    },
     "tools/mcp/mcp-preflight.sh": {
       "action": "keep-native",
       "presentation": "native",
@@ -1891,6 +1896,16 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/shot/run-capture-request.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Validated cell count, native backend, producer failures and artifact locations; planning does not prove capture."
+    },
+    "tools/shot/capture-gallery.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Image hash failures, exact source/status receipts, native-versus-geometry counts and output path; no capture or upload implied."
+    },
     "tools/shot/design-matrix.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1960,6 +1975,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c5"
+    },
+    "tools/shot/lib/design-matrix-run.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/shot/lib/design-matrix.mjs": {
       "action": "no-direct-output",

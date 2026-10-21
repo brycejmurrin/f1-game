@@ -3082,7 +3082,7 @@ function toolOutputSchema(entry) {
 // first sentences + the "Skill:" pointer, long property prose is cut, and object schemas nested below the
 // top level collapse to their type. apex_help {tool} returns the full text and schema. Validation always
 // uses the full CATALOG schema; only the published copy is compact.
-const DESC_LONG = 240, DESC_KEEP = 60, PROP_KEEP = 60;
+const DESC_LONG = 240, DESC_KEEP = 60, PROP_KEEP = 60, REQUIRED_ENUM_INLINE_MAX = 24;
 function cutAt(text, max) {
   if (text.length <= max) return text;
   const head = text.slice(0, max);
@@ -3107,7 +3107,9 @@ function compactSchema(spec, depth = 0, dense = false, required = false) {
     else if (k === "properties" && v && typeof v === "object") out[k] = Object.fromEntries(Object.entries(v).map(([n, p]) => [n, compactSchema(p, depth + 1, dense, (spec.required || []).includes(n))]));
     else if (k === "items") out[k] = compactSchema(v, depth, dense);
     else if (dense && BOUND_KEYS.has(k)) continue;   // bounds stay enforced by validateArgs; apex_help shows them
-    else if (k === "enum" && Array.isArray(v) && v.length > 6 && !required) {   // 53 circuit ids / 16 devices / 20 cams repeat across tools: apex_catalog lists them
+    // 53 circuit ids / 16 devices / 20 cams repeat across tools: apex_catalog lists them. A required enum stays
+    // inline unless it is the circuit-id list (Bryce 2026-10-20: point `track` at apex_catalog); validateArgs still enforces it.
+    else if (k === "enum" && Array.isArray(v) && v.length > (required ? REQUIRED_ENUM_INLINE_MAX : 6)) {
       out.description = cutAt(`${out.description || spec.description || "Id"} Allowed values: apex_catalog / apex_help.`, PROP_KEEP + 20);
     }
     else if ((k === "maxLength" && v === 4096) || (k === "maxItems" && v === 256)) continue;   // wrapper-wide defaults, enforced server-side
@@ -3140,7 +3142,9 @@ function listTools(compact = true) {
     title: toolAnnotations(t).title,
     description: compactDescription(t.name, t.description),
     inputSchema: publishedInputSchema(t),
-    outputSchema: compactOutput(toolOutputSchema(t)),
+    // The generic CLI envelope ({ok, error, message, fix, out}, additionalProperties) says nothing a
+    // client can use and was 9.5k of the listing on 24 tools; only a tool-specific shape is published.
+    ...(toolOutputSchema(t) === CLI_RESULT_SCHEMA ? {} : { outputSchema: compactOutput(toolOutputSchema(t)) }),
     annotations: toolAnnotations(t),
   }) : ({
     name: t.name,

@@ -178,6 +178,7 @@ const SaveSchemaRegistry = (function () {
     customLogo: entry("js/career/custom-team.js", "json", 1, "json"),
     carSmooth: entry("js/car/car-shade.js", "raw", 1, "rawScalar"),
     freecamMarks: entry("js/camera/photo-kit.js", "json", 1, "json"),
+    gfxBootBound: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
     gfxProbeStrikes: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
     "inputGhost.v1": entry("js/car/input-ghost.js", "json", 1, "json"),
     lastSession: entry("js/ui/share-code.js", "json", 1, "json"),
