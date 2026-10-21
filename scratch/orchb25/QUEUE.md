@@ -1,0 +1,55 @@
+# Fleet B queue — OrchB 25 (session_01SoGgREcrd12Mx6CsVHiDDs)
+
+Live state, refreshed and pushed every tick (branch `cursor/orchb25-queue-o25q`, never merged).
+A successor reads this first. Times UTC (Pacific = UTC−7).
+
+Updated: 2026-10-21 03:45Z
+
+## Gate state
+- Deploy tip cfefcbf7 (#3383 + #3381). Pages run 39536139765: RED after its one rerun
+  (att 1 engine-audio-offline flake, att 2 garage-pick-cost flake). INCIDENT posted on the bus 03:34Z.
+- ALL merges held until the flake fixes land and a fresh Pages run is green.
+
+## Merge order
+Non-game first (batch, each gated on the tip the previous produced):
+1. #3397 engine-audio seeded noise (tests) — owner B·H20 — fast tier running @04bdf7d9
+2. #3398 pick-cost spec invariants (tests) — owner B·H13 → B·H17 — reworking (reuploads 0, uploads ≤ atlases)
+3. #3394 ci.yml guards timeout 12→18 — owner B·W13 — full tier PASSED @62c6b8836
+4. #3393 tools/ci D1/D6/D7 — owner B·W13 — full tier PASSED @5cd32a53b
+→ the merge of 1–4 triggers a new Pages run; INCIDENT lifted only when it is green.
+
+Game, one per green Pages (GAME-SLOT on the bus first):
+5. #3390 PHONE TEST GPU preset — B·H15 — green @516d02e0
+6. #3377 memory pins + qualiField bug — B·H12 (handoff pending) — dirty, syncing
+7. #3385 race-entry cover (−1 s to lights) — B·H18 — CI running @23fc878c3
+8. #3238 parts-livery (Bryce/Cursor author) — B·W13 watches — full tier re-running @c7fdcdc57
+9. #3382 boot/title — B·H16 — full tier running @d3531832
+10. #3386 garage-prebuild quiet gate (+ Car3D build slice) — B·H16 — draft, stacked on #3382
+11. #3388 settings reload + hunt fixes — B·H20 — draft, needs tooling-fast + CI
+12. #3391 CI leak gate — B·H12 — on #3377
+13. #3392 two leak fixes — B·H12
+14. #3395 editor atlas keep + helmet memo — B·H17 — waits for #3385
+15. #3396 TLX road split — B·H15 — draft, needs pixel diff + gpu-census Verdict
+Blocked on Bryce: #3230 (look sign-off from stills, https://apex-garage-review-4d7a.goofy-angel-9204.chatgpt.site).
+Not ours: Fleet D #3301 #3309 #3310 #3357 #3358 #3359; Cursor #3387.
+
+## Lanes
+| slot | session | model | owns / next |
+|---|---|---|---|
+| B·W13 tools/CI | session_01PD38FDVNkjDJyJeAwfnqar | Sonnet | #3394 #3393 #3238 #3230; 3-shard tooling split; D2/D3 need Bryce's typed grant in W13 |
+| B·H15 render | session_013RkCKRatdbAProsEheWyUB | Opus | #3390 #3396; then W11 items 6/7/8/12 |
+| B·H16 boot | session_01TC31we79tZ7DYLFuS5N6P1 | Opus | #3382 #3386 (+Car3D slice); TLX warm split; TLX heap |
+| B·H17 car | session_011JszNgNA2YdTFQLX5vYpqm | Sonnet | #3395; paint-only recolour round; takes #3398 if H13 hands it over |
+| B·H18 race entry | session_014V2r1GZe6gNfZswk9ZFctB | Opus | #3385; PR B step gate; PR C F2–F9 |
+| B·H20 input/HUD | session_01G7Wwq9dTUCBJFkS9XguCyw | Sonnet | #3397 #3388; then phone input/HUD hunt; W11 items 9–11 |
+| B·H13 (retiring) | session_01B7KYWMrBF7UBzxnXns5Vqg | Opus | finishing #3398, then archive |
+| B·H12 memory (retiring) | session_01DYKmSLS6Zs68QChmoZ4jLj | Opus | HANDOFF pending → launch B·H19 memory |
+| B·W11 (KEEP, Bryce's task) | session_01GvgaEXjiHbDmx1spq3tgop | — | perf fresh hunt; measuring 1/2/5/12, governor PR |
+
+Archived: W12, H8, H10, H11, H14, OrchB 24.
+
+## Asks for Bryce (pending)
+- #3230 look sign-off.
+- W11 item 4: Android AUTO picks three-WebGPU — on-device A/B.
+- D2/D3 grant: type it into B·W13's session when it asks.
+- Delete throwaway branches: cursor/live-memory-h12a-hold, cursor/probe-tip-w12a, cursor/probe-3356-w12a, cursor/revert-prep-yield-h8r1.
