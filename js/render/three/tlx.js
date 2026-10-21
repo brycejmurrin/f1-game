@@ -4708,7 +4708,7 @@ const TLX = (function () {
           if (!size || !images) return null;
           try {
             const n = layers || 17;
-            const data = new Uint8Array(size * size * 4 * n);
+            let data = new Uint8Array(size * size * 4 * n);
             data.fill(128);
             for (let i = 3; i < data.length; i += 4) data[i] = 255;
             // Async first (P4): the token comes back at once with `pending` and `ready` (true = filled and
@@ -4734,14 +4734,18 @@ const TLX = (function () {
             // three keeps texture.image.data for the texture's life (~4.4 MB a map at the shipped 256 px, ~36 MB at
             // 512). Drop it once the first upload has run; the dims stay so a later size query still answers. A context
             // loss reloads the page, so nothing re-reads the bytes. (createTexture's releaseTexSource, for arrays.)
-            t.onUpdate = (tex) => { tex.onUpdate = null; tex.image = { data: null, width: size, height: size, depth: n }; };
+            // The readback callback, settle and the dispose listener share one closure context: `data` and the
+            // caller's decoded layers (`images`, ~4.3 MB a strip) stay reachable for the texture's life unless
+            // nulled here (measured 17 MB for the two strips at the shipped 256 px).
+            const letGo = () => { data = null; images = null; };
+            t.onUpdate = (tex) => { tex.onUpdate = null; tex.image = { data: null, width: size, height: size, depth: n }; letGo(); };
             if (!job) { t.needsUpdate = true; return t; }
             t.pending = true;
             t.addEventListener("dispose", () => { t._freed = true; });   // freeTexture / a superseding bind
             const settle = () => {
               t.pending = false;
-              if (t._freed) return false;
-              if (!filled) { t.dispose(); return false; }
+              if (t._freed) { letGo(); return false; }
+              if (!filled) { t.dispose(); letGo(); return false; }
               t.needsUpdate = true;
               return true;
             };
