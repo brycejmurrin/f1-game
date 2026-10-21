@@ -306,3 +306,33 @@ test("disabled observer preserves dynamic owner explanations when disabled remai
   h.dom.dispatch(card, { type: "input", bubbles: true });
   assert.equal(timers.length, 1, "normal settings interaction keeps its deferred refresh");
 });
+
+// A refresh runs after EVERY input event anywhere (capture listener), so a pass
+// that changes nothing must write nothing: each redundant write is a DOM
+// mutation record that wakes AriaState and ScrollFade (B·H30 G3, a colour-picker
+// drag in the garage paid for ~20 reason spans and ~30 describedby rewrites a step).
+test("a refresh that changes nothing writes nothing to the DOM", () => {
+  for (const rule of boot().Deps.RULES) {
+    const h = boot();
+    const live = rule.ids.flatMap((id) => buildTarget(h, id));
+    for (const p of parentsOf(rule)) setParent(h, p, false);
+    if (WHEN[rule.key]) WHEN[rule.key](h, false);
+    h.Deps.refresh();
+    const writes = [];
+    const walk = (n) => {
+      if (n.nodeType !== 1) return;
+      const set = n.setAttribute, rm = n.removeAttribute;
+      n.setAttribute = (k, v) => { writes.push(`${n.id || n.tagName} setAttribute ${k}`); return set(k, v); };
+      n.removeAttribute = (k) => { if (n.hasAttribute(k)) writes.push(`${n.id || n.tagName} removeAttribute ${k}`); return rm(k); };
+      for (const prop of ["textContent", "hidden", "disabled"]) {
+        let v = n[prop];
+        Object.defineProperty(n, prop, { configurable: true, enumerable: true, get: () => v, set: (x) => { writes.push(`${n.id || n.tagName} ${prop}=${x}`); v = x; } });
+      }
+      n.children.forEach(walk);
+    };
+    walk(h.dom.body);
+    h.Deps.refresh();
+    assert.deepEqual(writes, [], `${rule.key}: an idempotent refresh wrote ${writes.length} times: ${writes.slice(0, 4).join("; ")}`);
+    assert.ok(live.length > 0);
+  }
+});

@@ -370,6 +370,25 @@ test("A-P1: no SSAO / contact / godray / SSR / flare input -> the depth is not n
   assert.equal(post.needsDepth({ ...OFF, ssao: 0.5 }, { ...NIGHT, invProj: null }), false, "no invProj: SSAO cannot run");
 });
 
+// B·H26-R1 (GLX twin of B-H15): GLX's present() kept the scene depth (MSAA blit, or no invalidate on the direct
+// phone path) for ANY daytime sun, behind the camera included, though its composite taps texture(uDepth, uSunUV)
+// only under the same three terms as TLX. Both now ask the one shared predicate.
+test("B·H26-R1: PostCommon.flareTapsDepth is the composite's flare-tap guard; GLX keeps depth for the flare only through it", () => {
+  const sun = (F) => PostCommon.sunScreen(F.sunDir, F.viewProj, F.sunColor, {});
+  assert.equal(PostCommon.flareTapsDepth(sun(DAY)), true, "a day sun on screen: the flare taps depth");
+  assert.equal(PostCommon.flareTapsDepth(sun(DAY), 0), false, "LENS FLARE 0: uFlareStr is 0, no tap");
+  assert.equal(PostCommon.flareTapsDepth(sun(DAY_OFF)), false, "in front, bright, off screen: no tap");
+  assert.equal(PostCommon.flareTapsDepth(sun({ ...DAY, sunDir: [0, 0.3, 0.95] })), false, "behind the camera: no tap");
+  assert.equal(PostCommon.flareTapsDepth(sun(NIGHT)), false, "night: the brightness gate zeroes the flare");
+  const glx = read("js/render/glx/post.js");
+  assert.match(glx, /const flareMaybe = PostCommon\.flareTapsDepth\(sun, flareMul\);/);
+  assert.doesNotMatch(glx, /F\.sunDir\[1\] > -0\.02/, "the any-daytime-sun gate kept depth with the sun off screen");
+  assert.match(glx, /gl\.uniform1f\(compU\.uFlareStr, flareStr \* flareMul\)/, "the uniform uses the same flareMul");
+  // The predicate is exact only while the GLSL tap keeps these terms (glsl-post.js composite).
+  assert.match(read("js/render/glx/shaders/glsl-post.js"),
+    /float sunVis = \(uFlareStr > 0\.0 && uSunUV\.x >= 0\.0 && uSunUV\.x <= 1\.0 && uSunUV\.y >= 0\.0 && uSunUV\.y <= 1\.0\)\s*\? smoothstep\(0\.9990, 0\.9999, texture\(uDepth, uSunUV\)\.r\) : 0\.0;/);
+});
+
 test("A-P1: WebGL2 invalidates the scene FBO's depth after the scene pass only on frames that read none of it", async (t) => {
   const h = await postRig(t);
   const off = h.scenePass(OFF, NIGHT);
@@ -409,7 +428,7 @@ test("A-P1: tlx.js brackets the scene pass with depthBegin / depthEnd, before po
 // post chain (tagged scene target, MRT) and shadow subsystem (one caster). Stand-ins: the sky, the late-lit /
 // FX compiles, the instance registry, the soft-adapter verdicts. Every renderer.render() is recorded with the
 // state it ran under; the warm's compile stages render nothing (compileAsync), so every record is the draw stage.
-async function warmRig(t, { ls = {}, soft = false } = {}) {
+async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
   const fg = makeFakeGL(320, 180);
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
@@ -431,7 +450,7 @@ async function warmRig(t, { ls = {}, soft = false } = {}) {
   // One real caster in castScene (the grid's casters are there when the warm runs).
   const VPm = new Float32Array(new THREE.Matrix4().elements);
   shadowSys.shadowBegin(VPm); shadowSys.castShadow({ geo: g }, new Float32Array(new THREE.Matrix4().elements)); shadowSys.shadowEnd();
-  const mk = new Function("THREE", "TSL", "renderer", "scene", "camera", "lit", "post", "shadowSys", "localStorage", "Log", "SOFT", `"use strict";
+  const mk = new Function("THREE", "TSL", "renderer", "scene", "camera", "lit", "post", "shadowSys", "localStorage", "Log", "SOFT", "NOENV", `"use strict";
     let mirRT = null, mirCam = null, _mirRect = null, _mirUsed = false, _glassProbeGeo = null;
     const W = 320, H = 180, presentW = 320, presentH = 180, wantSpatialUpscale = () => false;
     const _instPerPass = true, skipBatches = () => false, _instRegistry = [], _mirOf = () => null;
@@ -439,7 +458,7 @@ async function warmRig(t, { ls = {}, soft = false } = {}) {
     const pinSkyMaterial = () => {}, mintLateLit = () => {}, warmFxPrograms = async () => {}, warmLateLit = async () => {};
     const warmPlusOn = () => true, wantMirrorWarm = () => true, softOutRT = () => null;
     const I = new THREE.Matrix4().toArray();
-    const _postF = { proj: I, invProj: I, invVP: I, viewProj: I, upVS: [0, 1, 0], time: 0, sunVS: [0, 0, -1] };
+    const _postF = { proj: I, invProj: I, invVP: I, viewProj: I, upVS: [0, 1, 0], time: 0, sunVS: [0, 0, -1], noEnv: NOENV };
     const _warmHistory = [];   // tlx.js keeps every warm's stages (B·H8 prep timeline)
     const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0 };
     let _warmAt = 0, _warmAttempts = 0, _warmPending = null, _warmRequested = false, _warmDone = false, _gpuLastOperation = "";
@@ -449,7 +468,7 @@ async function warmRig(t, { ls = {}, soft = false } = {}) {
     ${tslice("      // A-W1 (perf hunt 4): THE DRAW WARM.", "      const ENV_PROBE_TRIES")}
     return { startProgramWarm, pending: () => _warmPending, stages: _warmStages, history: _warmHistory, mrtNode: _ssrMrtNode, mirRT: () => mirRT };`);
   const W1 = mk(THREE, TSL, renderer, scene, camera, lit, post, shadowSys, { getItem: (k) => (k in ls ? ls[k] : null) },
-    globalThis.Log, soft);
+    globalThis.Log, soft, noEnv);
   const calls = [];
   const base = renderer.render.bind(renderer);
   renderer.render = (sc, cam) => {
@@ -513,6 +532,32 @@ test("A-W1: off on a software adapter (unset knob), forced on by apex26.tlxDrawW
   await off.warm();
   assert.equal(off.calls.length, 0, "=0: no draw stage");
   assert.equal(off.W1.stages.drawn, null);
+});
+
+// B·H16 (2026-10-21): a garage/menu frame sets noEnv and keeps proj (SSAO), and present() then paints WITHOUT post
+// (`post && _postF.proj && !_postF.noEnv`). The warm took post for it anyway, so it compiled every program into the
+// tagged scene target and the title prebuild's hidden garage frame re-linked them all on the main thread (3.8–5.8 s
+// long task at 4x CPU, getProgramParameter LINK_STATUS). The warm must compile the frame present() will paint.
+test("garage warm: a noEnv frame compiles into present()'s own target — no post target, no MRT, no draw stage", async (t) => {
+  const spy = (rig) => {
+    const seen = [], base = rig.renderer.compileAsync.bind(rig.renderer);
+    rig.renderer.compileAsync = (sc, cam, ...rest) => { seen.push({ tg: rig.renderer.getRenderTarget(), mrt: rig.renderer.getMRT() }); return base(sc, cam, ...rest); };
+    return seen;
+  };
+  const h = await warmRig(t, { noEnv: true });
+  const compiles = spy(h);
+  await h.warm();
+  assert.equal(h.W1.stages.failed, 0, "the warm did not throw");
+  assert.ok(compiles.length >= 1, "the scene compiled");
+  for (const c of compiles) {
+    assert.notEqual(c.tg, h.post.sceneTarget(), "never the post scene target: present() paints a noEnv frame without post");
+    assert.equal(c.mrt, null, "no ssrTag MRT: a different fragment output is a different program");
+  }
+  assert.equal(h.calls.length, 0, "no draw stage: it draws only into the post scene target");
+  const race = await warmRig(t);
+  const raceCompiles = spy(race);
+  await race.warm();
+  assert.equal(raceCompiles[0].tg, race.post.sceneTarget(), "a race frame (noEnv unset) still warms through post");
 });
 
 function cloudCacheHarness() {

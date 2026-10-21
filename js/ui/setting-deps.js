@@ -270,7 +270,7 @@ const SettingDeps = (function () {
       }
       r.setAttribute("id", rid);
     }
-    if (r.textContent !== text) r.textContent = text;
+    if (r.textContent !== text) r.textContent = text;   // write on change: every write is a mutation record (AriaState, ScrollFade)
     return r;
   }
 
@@ -278,9 +278,9 @@ const SettingDeps = (function () {
     const before = ctrl.getAttribute("aria-describedby");
     const cur = (before || "").split(/\s+/).filter(Boolean);
     const next = add ? (cur.includes(rid) ? cur : cur.concat(rid)) : cur.filter((x) => x !== rid);
-    const value = next.join(" ");
-    if (value) { if (before !== value) ctrl.setAttribute("aria-describedby", value); }
-    else if (before !== null) ctrl.removeAttribute("aria-describedby");
+    const joined = next.join(" ");
+    if (!next.length) ctrl.removeAttribute("aria-describedby");
+    else if (ctrl.getAttribute("aria-describedby") !== joined) ctrl.setAttribute("aria-describedby", joined);
   }
 
   function apply(id, rule, off) {
