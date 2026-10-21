@@ -22,7 +22,9 @@ const scenes = [
   { track: "monaco", frac: 0.37, tod: "day", weather: "dry", label: "Monaco day, dry race traffic" },
 ].map((scene) => ({
   ...scene,
-  cam: "trackside", side: 1, el: 12, dist: 24, clear: true,
+  // Orbit around the staged traffic at a low roadside height. Trackside
+  // framing landed inside buildings/fence posts on two of the city circuits.
+  cam: "orbit", az: 42, el: 10, dist: 30, clear: true,
   traffic: true, noLine: true, showHud: false, backend: "three", team: "mclaren",
   out: join(outDir, `${scene.track}-${scene.tod}-${scene.weather}-4k.png`),
 }));
