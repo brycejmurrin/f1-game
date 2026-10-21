@@ -6135,6 +6135,9 @@ const TLX = (function () {
           skyState() {
             return {
               on: !!(sky && skyMesh && skyMesh.visible),
+              // `on` is true for the zenith-only software fallback too (no clouds/stars/moon/sun disc): a SwiftShader
+              // still was once filed as "TLX phone sky has no clouds". A real GPU reads fallback false.
+              fallback: !!(skyMesh && skyMatFallback && skyMatFallback !== skyMatFull && skyMesh.material === skyMatFallback),
               stars: sky ? sky.uniforms.stars.value : -1,
               cloud: sky ? sky.uniforms.cloud.value : -1,
               sunDir: sky ? sky.uniforms.sunDir.value.toArray() : null,

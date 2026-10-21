@@ -3226,12 +3226,23 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
   assert.notEqual(drawSky, -1, "drawSky moved");
   assert.match(src.slice(drawSky, drawSky + 1100), /frameSky\.zenith\s*\|\|\s*frameSky\.skyZenith/,
     "drawSky must keep the Color fallback in lockstep with the sky node");
-  // softContent("sky") IS (softwareGL || softGpu()), with the apex26.tlxForceHw
-  // escape folded in — the fallback stays the software default for players.
+  // softContent("sky") IS softwareGL && !_forceHw.has("sky") (softGpu() is out
+  // on purpose: headless on a real GPU keeps the full sky) — the fallback is
+  // the software default only; apex26.tlxForceHw=sky lifts it.
   assert.match(src.slice(drawSky, drawSky + 1100), /softContent\("sky"\) && sky\.fallbackNode/,
     "software GL and software WebGPU must arm the zenith-only fallback, not the full SKY_FS node");
   assert.match(read("js/render/three/tsl-sky.js"), /fallbackNode/,
     "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
+});
+
+test("B·H26-R2: TLX skyState() tells the zenith-only software fallback from the full sky", () => {
+  // skyState().on is true for both materials, so a software-GL still with no clouds or stars read as a phone gap.
+  const src = read("js/render/three/tlx.js");
+  const at = src.indexOf("skyState() {");
+  assert.notEqual(at, -1, "skyState moved");
+  assert.match(src.slice(at, at + 900),
+    /fallback: !!\(skyMesh && skyMatFallback && skyMatFallback !== skyMatFull && skyMesh\.material === skyMatFallback\)/,
+    "skyState must report whether the armed sky material is the fallback");
 });
 
 test("TLX late sky depth-tests less-equal and does not write depth", () => {

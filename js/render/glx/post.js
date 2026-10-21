@@ -532,8 +532,14 @@ const GLXPost = (function () {
       const _carReflPre = opts && opts.carReflect != null ? opts.carReflect
         : (PostCommon.knob(opts && opts.tune, "carReflect"));
       const ssrOn = ((opts && opts.reflect) > 0.001) || _carReflPre > 0.001;
-      const _slPre = F.sunColor ? Math.max(F.sunColor[0], F.sunColor[1], F.sunColor[2]) : 1;
-      const flareMaybe = !!(F.sunDir && F.sunDir[1] > -0.02 && _slPre > 0.35);
+      // Sun screen-UV + golden-hour flare / sun-shaft strengths with the
+      // sun-BRIGHTNESS gate — PostCommon.sunScreen (shared with WGX / TLX);
+      // the composite below uploads from this same result. The flare keeps
+      // depth only while its uSunUV tap is on screen (TLX #3431): the old
+      // "any daytime sun" test kept it with the sun behind the camera.
+      const flareMul = opts && opts.flareMul != null ? opts.flareMul : 1;
+      const sun = PostCommon.sunScreen(F.sunDir, F.viewProj, F.sunColor, _sunScr);
+      const flareMaybe = PostCommon.flareTapsDepth(sun, flareMul);
       const needDepth = haveAO || haveGRPre || ssrOn || flareMaybe;
 
       // MSAA resolve: average the multisampled scene into sceneTex (and copy depth
@@ -816,16 +822,13 @@ const GLXPost = (function () {
       gl.bindTexture(gl.TEXTURE_2D, haveGR ? godrayTex : blackTex);
       gl.uniform1i(compU.uGodray, 3);
       uf1(compU.uHaveGodray, "haveGodray", haveGR ? 1 : 0);
-      // Project sun direction to screen UV for lens flare
-      // Sun screen-UV + golden-hour flare / sun-shaft strengths with the
-      // sun-BRIGHTNESS gate — PostCommon.sunScreen (shared with WGX / TLX).
-      const sun = PostCommon.sunScreen(F.sunDir, F.viewProj, F.sunColor, _sunScr);
+      // Project sun direction to screen UV for lens flare (`sun` from above).
       _sunUV[0] = sun.visible ? sun.ndcx * 0.5 + 0.5 : -2;
       _sunUV[1] = sun.visible ? sun.ndcy * 0.5 + 0.5 : -2;
       const flareStr = sun.flare, sunShaft = sun.shaft;
       gl.uniform2fv(compU.uSunUV, _sunUV);
       // LENS FLARE knob scales the whole sun/lamp flare + ghost stack (def 1).
-      gl.uniform1f(compU.uFlareStr, flareStr * (opts && opts.flareMul != null ? opts.flareMul : 1));
+      gl.uniform1f(compU.uFlareStr, flareStr * flareMul);
       const exposure = opts && opts.exposure !== undefined ? opts.exposure : 1.0;
       gl.uniform1f(compU.uExposure, exposure);
       // SCREEN SUN-SHAFT knob scales the radial crepuscular pass (def 1 = as-shipped).
