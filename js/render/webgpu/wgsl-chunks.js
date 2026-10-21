@@ -2152,10 +2152,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let band = exp(-lowH * (0.09 / mh));
       let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
       let dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
-      let mistAmt = mistK * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
+      // HEAVY MIST fill (GLX parity, glsl-lit.js): fog-weather mist closes its gaps.
+      let mistFill = smoothstep(1.1, 1.5, mistK);
+      let mistPatch = smoothstep(0.35, 0.72, cloudFBM(mp));
+      let mistAmt = mistK * band * mix(mistPatch, 0.55 + 0.45 * mistPatch, mistFill) * dRamp;
       // MIST GLOW SHARE knob (F.params5.w; GLX uMistShare parity, def 1.5).
       let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * F.params5.w;
-      color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.45));
+      color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.45 + 0.2 * mistFill));
     }
   }
 

@@ -2466,11 +2466,14 @@
             const band = exp(lowH.negate().mul(float(0.09).div(max(U.mistHeight, 0.05))));
             const mp = wp.xz.mul(0.020).add(vec2(U.time.mul(0.010), U.time.mul(0.006)));
             const dRamp = clamp(vd.sub(8.0).div(45.0), 0.0, 1.0);
-            const mist = U.groundMist.mul(band).mul(smoothstep(0.35, 0.72, cloudFBM(mp, 0.35))).mul(dRamp);
+            // HEAVY MIST fill (GLX parity, glsl-lit.js): fog-weather mist closes its gaps.
+            const mistFill = smoothstep(1.1, 1.5, U.groundMist);
+            const mistPatch = smoothstep(0.35, 0.72, cloudFBM(mp, 0.35));
+            const mist = U.groundMist.mul(band).mul(mix(mistPatch, mistPatch.mul(0.45).add(0.55), mistFill)).mul(dRamp);
             const mistSun = max(sunAmount, 1e-4);
             const mistCol = mix(vec3(U.fogColor), vec3(U.sunColor), mistSun.mul(mistSun).mul(mistSun))
               .add(lampFogC.mul(U.mistShare));
-            color.assign(mix(color, mistCol, clamp(mist, 0.0, 0.45)));
+            color.assign(mix(color, mistCol, clamp(mist, 0.0, mistFill.mul(0.2).add(0.45))));
           });
         });
 

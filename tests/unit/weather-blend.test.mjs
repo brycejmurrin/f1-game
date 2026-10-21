@@ -530,3 +530,18 @@ test("day OVERCAST fog colour follows the grey deck, not the clear-sky blue", ()
   const f = G.frame.fogColor;
   assert.ok(f[2] - f[0] < 0.12, `overcast fog must be near-neutral grey, got ${JSON.stringify(host(f))}`);
 });
+
+test("FOG ground mist out-thickens every other weather and clears the shaders' fill gate", () => {
+  // Bryce 2026-10-21: fog must read close in. glsl-lit/tsl-lit/wgsl-chunks fill the
+  // mist patches from 1.1 x MIST DENSITY up; other weathers stay under the 0.7 cap.
+  for (const id of ["monza", "monaco", "spa", "bahrain"]) {
+    const mist = (wx) => { const { G, atmo } = boot(id); G.raceTimeOfDay = "day"; G.raceWeather = wx; atmo.applyRaceSettings(); return G.frame.groundMist; };
+    const fog = mist("fog");
+    for (const wx of ["dry", "wet", "rain", "storm", "overcast"]) {
+      const m = mist(wx);
+      assert.ok(m <= 0.7, `${id} day ${wx}: ground mist ${m} above the non-fog cap`);
+      assert.ok(fog > m, `${id} day fog mist ${fog} must exceed ${wx} ${m}`);
+    }
+    assert.ok(fog >= 0.6, `${id} day fog mist ${fog} too thin for the fill gate`);
+  }
+});
