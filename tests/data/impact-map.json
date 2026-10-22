@@ -13228,7 +13228,8 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
+        "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "postChain": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -13251,13 +13252,17 @@
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "runPass": [
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "trackMaterial": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "vset": [
+        "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "warm": [
         "tests/unit/gfx-backend-canary.test.mjs",

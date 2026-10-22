@@ -89,14 +89,14 @@
       ownedMaterials.clear(); ownedRTs.clear(); ownedTextures.clear();
     }
     try {
-    // ctx.isMobile is deliberately NOT read here, and that is a decision, not a
-    // dropped gate: the scene MSAA decision is the caller's (ctx.sceneSamples,
-    // 0 on a phone — the GLX mobile-tier recipe, FXAA carries the AA), and
-    // every remaining block is gated by the caller —
-    // present(opts) receives ssao/godray/bloom already zeroed by PerfGov.tier()
-    // and the GRAPHICS preset, so a disabled block allocates nothing (the
-    // per-block bail above). A second phone-only gate here would shadow the
-    // governor's decision rather than add to it. FORMATS: the SSAO pair is R8
+    // Phone post at HALF the scene resolution (BrowserStack iPhone 15 deep
+    // profile 2026-10-22: JS 3.8–6.4 ms while frames 17–28 ms → GPU/fill-bound;
+    // running the look-post chain at full scene res on a tile GPU was the
+    // leftover cost after the governor recovered to autoTier 0). Scene stays
+    // at W×H; LDR + bloom L0 + SSAO/godray base off pW×pH (= W/2 on phone).
+    // Desktop keeps pW===W. Scene MSAA remains the caller's (ctx.sceneSamples).
+    // Block gates still come from present(opts) / PerfGov — this only shrinks
+    // the surfaces those blocks draw into. FORMATS: the SSAO pair is R8
     // and bloom R11F_G11F_B10F (when renderable) on both; the godray pair stays
     // RGBA16F here (GLX: R11F_G11F_B10F) because its alpha carries the folded
     // SSAO term (hunt D7).
@@ -174,6 +174,10 @@
     const VP = ctx.vp || null;
     const fixed = !!(ctx.fixedTargets && VP && VP.enabled);
     let PW = 1, PH = 1;   // the physical (present) size; fixed mode only
+    // Post working size. On phones this is half the scene (W×H); aux passes
+    // (SSAO/godray/bloom) then half THAT again. Desktop keeps pW===W.
+    const phonePost = !!ctx.isMobile;
+    let pW = 1, pH = 1;
 
     // render-target helpers
     function makeRT(w, h, type, format) {
@@ -330,18 +334,23 @@
     }
     const halfOf = (v) => Math.max(1, Math.floor(v / 2));
     function layoutHalf() {
-      aoW = halfOf(W);
-      aoH = halfOf(H);
+      // Base off the post working size so phones get quarter-of-scene AO/GR.
+      aoW = halfOf(pW);
+      aoH = halfOf(pH);
       grW = aoW; grH = aoH;
-      const pw = fixed ? halfOf(PW) : aoW, ph = fixed ? halfOf(PH) : aoH;
+      const physBaseW = fixed ? (phonePost ? halfOf(PW) : PW) : pW;
+      const physBaseH = fixed ? (phonePost ? halfOf(PH) : PH) : pH;
+      const pw = fixed ? halfOf(physBaseW) : aoW, ph = fixed ? halfOf(physBaseH) : aoH;
       if (ssaoRT) { place(ssaoRT, aoW, aoH, pw, ph); place(ssaoBlurRT, aoW, aoH, pw, ph); }
       if (godrayRT) { place(godrayRT, grW, grH, pw, ph); place(godrayBlurRT, grW, grH, pw, ph); }
     }
     function layoutBloom() {
       if (!bloomLv) return;
-      let bw = Math.max(1, Math.floor(W / BLOOM_DIV));
-      let bh = Math.max(1, Math.floor(H / BLOOM_DIV));
-      let pbw = Math.max(1, Math.floor(PW / BLOOM_DIV)), pbh = Math.max(1, Math.floor(PH / BLOOM_DIV));
+      let bw = Math.max(1, Math.floor(pW / BLOOM_DIV));
+      let bh = Math.max(1, Math.floor(pH / BLOOM_DIV));
+      const physBloomW = fixed ? (phonePost ? halfOf(PW) : PW) : pW;
+      const physBloomH = fixed ? (phonePost ? halfOf(PH) : PH) : pH;
+      let pbw = Math.max(1, Math.floor(physBloomW / BLOOM_DIV)), pbh = Math.max(1, Math.floor(physBloomH / BLOOM_DIV));
       nLv = 0;
       for (let i = 0; i < bloomLv.length; i++) {
         // Fixed: a level exists while the PHYSICAL one does; the logical count can only be lower.
@@ -535,15 +544,20 @@
     // w x h: the render (logical) size; pw x ph: the present size (fixed mode only).
     function resize(w, h, pw, ph) {
       const nPW = fixed ? Math.max(1, pw | 0, w | 0) : 0, nPH = fixed ? Math.max(1, ph | 0, h | 0) : 0;
-      if (w === W && h === H && nPW === PW && nPH === PH) {
+      const nPostW = phonePost ? halfOf(Math.max(1, w | 0)) : Math.max(1, w | 0);
+      const nPostH = phonePost ? halfOf(Math.max(1, h | 0)) : Math.max(1, h | 0);
+      if (w === W && h === H && nPW === PW && nPH === PH && nPostW === pW && nPostH === pH) {
         // Still may need aaRT when flag toggles at same render size.
         syncAaRT();
         return;
       }
       W = Math.max(1, w | 0); H = Math.max(1, h | 0);
       PW = nPW; PH = nPH;
+      pW = nPostW; pH = nPostH;
+      const ldrPW = fixed ? (phonePost ? halfOf(PW) : PW) : pW;
+      const ldrPH = fixed ? (phonePost ? halfOf(PH) : PH) : pH;
       place(sceneRT, W, H, PW, PH);
-      place(ldrRT, W, H, PW, PH);
+      place(ldrRT, pW, pH, ldrPW, ldrPH);
       layoutHalf();
       layoutBloom();
       syncAaRT();
@@ -554,10 +568,12 @@
       const want = !!(P.sgsr && (fixed || (ctx.wantSpatialUpscale && ctx.wantSpatialUpscale())));
       if (want) {
         if (!aaRT) {
-          aaRT = makeRT(fixed ? 1 : W, fixed ? 1 : H, THREE.UnsignedByteType);
+          aaRT = makeRT(fixed ? 1 : pW, fixed ? 1 : pH, THREE.UnsignedByteType);
           aaRT.texture.name = "TLXPostAA";
         }
-        place(aaRT, W, H, PW, PH);
+        const aaPW = fixed ? (phonePost ? halfOf(PW) : PW) : pW;
+        const aaPH = fixed ? (phonePost ? halfOf(PH) : PH) : pH;
+        place(aaRT, pW, pH, aaPW, aaPH);
       } else if (aaRT) {
         // _lastPresentRT may still BE this target (present() stores `dest ||
         // aaRT`), and presentedTarget() hands it to a capture. Disposing
@@ -874,6 +890,8 @@
       C.ssrQuality.value = o.ssrQuality >= 2 ? 2 : o.ssrQuality >= 1 ? 1 : 0;
       C.lensDirt.value = dirtTex ? gk("lensDirt") : 0;
       // uReflTexel drives SSR + SHARPEN + the vignette aspect — every frame.
+      // SSR samples the full-res scene, so the UV quantum stays 1/W even when
+      // the LDR composite runs at phone post size pW (= W/2).
       C.reflTexel.value.set(1 / W, 1 / H);
       // Wet-road/car SSR needs depth + view/proj + world-up-in-view; uSsrOk
       // gates the whole branch on probe-less paths (setup preview).
@@ -908,16 +926,16 @@
         if (fixed) { const ps = presentSize(); vset(B, ps[0], ps[1]); }
         runPass(B.mat, dest);
       } else {
-        vset(P.composite, W, H); vset(P.fxaa, W, H);
+        vset(P.composite, pW, pH); vset(P.fxaa, pW, pH);
         runPass(P.composite.mat, ldrRT);
         P.fxaa.tex.value = ldrRT.texture;
-        P.fxaa.U.texel.value.set(1 / W, 1 / H);
+        P.fxaa.U.texel.value.set(1 / pW, 1 / pH);
         const useUpscale = !!(P.sgsr && aaRT && ctx.wantSpatialUpscale && ctx.wantSpatialUpscale());
         if (useUpscale) {
           if (P.fxaa.mirTex) fxaaMirror(false);   // FXAA -> aaRT: the inset goes on after SGSR
           runPass(P.fxaa.mat, aaRT);
           P.sgsr.tex.value = aaRT.texture;
-          P.sgsr.U.viewport.value.set(1 / W, 1 / H, W, H);
+          P.sgsr.U.viewport.value.set(1 / pW, 1 / pH, pW, pH);
           if (fixed) {
             const ps = presentSize();
             vset(P.sgsr, ps[0], ps[1]);   // the canvas / soft target: always present-sized
@@ -1114,11 +1132,14 @@
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],
+        // Post working size (half of scene on phones). Aux passes half of this.
+        postTargets: [pW, pH],
+        phonePost,
         // Lazy targets still alive. A shed that stuck must drop these; the
         // leak test counts them after N closed presents.
         held: { ssao: !!ssaoRT, bloom: !!bloomLv, shafts: !!godrayRT },
         rtResizes: _rtResizes,
-        fixed: fixed ? { physical: [PW, PH], logical: [W, H] } : null,
+        fixed: fixed ? { physical: [PW, PH], logical: [W, H], post: [pW, pH] } : null,
       }),
       // Drop last-presented block flags (Home garage / mid-warm frames must
       // not satisfy a race probe that waits on shafts/bloom before Singapore
