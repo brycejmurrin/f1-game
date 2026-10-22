@@ -422,12 +422,30 @@ function run(env, id, opt, sink) {
   return Object.assign({ id }, analyse(track, prims, opt));
 }
 
+// Flags that consume the NEXT token. Any other `--flag` is boolean: treating
+// every `--x` as a value-taker made `--gate monaco` swallow the circuit id and
+// pass an empty gate.
+const VALUE_FLAGS = new Set(["--gap", "--area", "--fight", "--maxdim", "--site"]);
+
+// The circuit ids named on the command line (not a flag, not a flag's value).
+function idsFrom(argv) {
+  return argv.filter((a, i) => !a.startsWith("--") && isNaN(Number(a)) &&
+                               !(i > 0 && VALUE_FLAGS.has(argv[i - 1])));
+}
+
 // The option set main() derives from argv; `overhead` forces that mode on (for
 // --both) with the same flag-override rules as a plain `--overhead` run.
 function optsFrom(argv, overhead) {
   const flag = (name, def) => {
     const i = argv.indexOf(`--${name}`);
-    return i >= 0 && argv[i + 1] ? Number(argv[i + 1]) : def;
+    if (i < 0) return def;
+    // A bad override used to become NaN (every `gap > NaN` is false, so the
+    // analysis silently stopped filtering) or fall back to the default.
+    const n = Number(argv[i + 1]);
+    if (argv[i + 1] === undefined || !Number.isFinite(n) || n <= 0) {
+      throw new Error(`--${name} needs a positive number, got ${argv[i + 1] === undefined ? "nothing" : JSON.stringify(argv[i + 1])}`);
+    }
+    return n;
   };
   const opt = {
     gap: flag("gap", GAP_MAX),
@@ -458,8 +476,7 @@ function main() {
     ? require("../lib/circuit-scope.cjs").scope(env.Tracks.LIST.map((d) => d.id))   // APEX_CIRCUITS narrows --all
     // Skip any token consumed as a flag's VALUE, or `--site <file>.js:<line>`
     // is read as a track id.
-    : argv.filter((a, i) => !a.startsWith("--") && isNaN(Number(a)) &&
-                            !(i > 0 && argv[i - 1].startsWith("--")));
+    : idsFrom(argv);
 
   // --both --json: the default sweep AND the --overhead sweep from ONE build per
   // circuit, as { default: [...], overhead: [...] } — each array exactly what
@@ -563,5 +580,5 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { fightDist, overlapArea, planeGap, facesOf, analyse, site, SAME_FACING,
+module.exports = { optsFrom, idsFrom, fightDist, overlapArea, planeGap, facesOf, analyse, site, SAME_FACING,
   DEFAULTS: { gap: GAP_MAX, area: AREA_MIN, fight: FIGHT_MAX, maxDim: MAX_DIM } };
