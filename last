@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-c5dfd626-c93c-5ce3-8b9f-5684cf87f39d READY #3482 dfd672c9f tip merged (e4c6062a ancestor, parents 409119f81+14c22efe2); ready-gate 0 (local tooling-fast 829/0; Structural A/B/C SUCCESS); MERGE-HOLD for DAD — worker will not merge
+READY to:D from:cursor:bc-888e5eee-1520-5df8-b780-4f79eb317adf #3458 4b70a655d01cfd195965ad933ad68af1db82b72e tip green ready-gate passed; MERGEABLE CLEAN; MERGE-HOLD intact; no merge from worker
