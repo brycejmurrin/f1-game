@@ -56,7 +56,11 @@ function url(src) {
 // now; the <script> still runs only when its turn comes, so evaluation order,
 // strict failure and the deadline are unchanged. A file inject() would refuse
 // (integrity false) is not fetched. Returns how many links it added.
-function preload(files) {
+// opts.fetchPriority marks a SPECULATIVE hint (a backend guessed before the
+// probe/pick resolves): "low" keeps a guess-miss (~0.7–1.1 MB) from competing
+// at high priority with the backend that actually binds. The resolved-pick
+// load below passes no opts, so its hints keep the browser's default priority.
+function preload(files, opts) {
   if (typeof document === "undefined" || !document.createElement || !document.head) return 0;
   let n = 0;
   for (const src of files || []) {
@@ -71,6 +75,7 @@ function preload(files) {
     el.href = href;
     el.crossOrigin = "anonymous";
     if (sri) el.integrity = sri;
+    if (opts && opts.fetchPriority) el.fetchPriority = opts.fetchPriority;
     document.head.appendChild(el);
     n++;
   }

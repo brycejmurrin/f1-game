@@ -387,7 +387,10 @@ function preloadLikelyBackend() {
     // script and the adapter probe, so its hint reached the network seconds after this one could.
     if (guess === "three") preloadThreeVendor();
     const files = ApexRoster.DEFERRED && ApexRoster.DEFERRED[guess];
-    return files ? ScriptLoader.preload(files) : 0;
+    // Speculative: the probe/pick has not resolved, so hint at low priority —
+    // a guess-miss must not fight the real backend's fetches for bandwidth.
+    // start()'s resolved load goes through ScriptLoader.load (no low mark).
+    return files ? ScriptLoader.preload(files, { fetchPriority: "low" }) : 0;
   } catch (_) { return 0; /* an optimisation only */ }
 }
 preloadLikelyBackend();

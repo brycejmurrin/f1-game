@@ -86,14 +86,15 @@ test("a newer build controlling the tab: nothing is preloaded", async () => {
 function bootRig({ local = {}, session = {}, gpu = false, throws = false } = {}) {
   const store = (m) => ({ getItem: (k) => { if (throws) throw new Error("blocked"); return k in m ? m[k] : null; }, setItem() {}, removeItem() {} });
   const preloaded = [];
+  const preloadCalls = [];
   const ctx = vm.createContext({
     localStorage: store(local), sessionStorage: store(session),
     navigator: gpu ? { gpu: {} } : {},
     ApexRoster: { DEFERRED: { webgl2: ["glx.js"], three: ["tlx.js"], webgpu: ["wgx.js"] } },
-    ScriptLoader: { preload: (files) => { preloaded.push(...files); return files.length; } },
+    ScriptLoader: { preload: (files, opts) => { preloaded.push(...files); preloadCalls.push({ files, opts }); return files.length; } },
   });
   vm.runInContext(boot + "\nthis.RendererBoot = RendererBoot;", ctx, { filename: absSrc("js/render/renderer-boot.js") });
-  return { guess: ctx.RendererBoot.guessBackend(), preloaded };
+  return { guess: ctx.RendererBoot.guessBackend(), preloaded, preloadCalls };
 }
 
 test("renderer boot preloads the backend start() will most likely pick", () => {
@@ -138,4 +139,40 @@ test("a TLX guess modulepreloads the whole three vendor island at eval, three.co
   };
   assert.deepEqual(run(true), ["vendor/three-0.186.1/three.webgpu.min.js", "vendor/three-0.186.1/three.core.min.js", "vendor/three-0.186.1/three.tsl.min.js"]);
   assert.deepEqual(run(false), [], "a GLX guess fetches no three vendor bytes");
+});
+
+test("a speculative preload is marked low priority; an unmarked one keeps the default", () => {
+  const r = rig();
+  assert.equal(r.ctx.ScriptLoader.preload(["spec.js"], { fetchPriority: "low" }), 1);
+  assert.equal(r.ctx.ScriptLoader.preload(["plain.js"]), 1);
+  assert.deepEqual(r.links().map((l) => [l.href, l.fetchPriority]),
+    [["spec.js?v=b7", "low"], ["plain.js?v=b7", undefined]],
+    "fetchPriority is set only when the caller asks for it, before the link is appended");
+});
+
+test("the resolved-pick load path does NOT deprioritise its gated preloads", async () => {
+  const r = rig();
+  const p = r.ctx.ScriptLoader.create().load(["a.js", "b.js"], [["a.js", "b.js"]]);
+  await r.flush();
+  assert.equal(r.links().length, 1, "premise: the gated wave is preloaded");
+  assert.equal(r.links()[0].fetchPriority, undefined,
+    "load() is the resolved pick: its hint keeps the browser's default (high) priority");
+  r.scripts()[0].onload(); await r.flush();
+  r.scripts()[1].onload();
+  assert.equal(await p, true);
+});
+
+test("the eval-time backend guess preloads at low priority (speculative, pre-resolution)", () => {
+  // First-ever boot (nothing stored, WebGPU present) and a stored pick alike:
+  // both go through preloadLikelyBackend before start()'s probe/pick resolves.
+  for (const opts of [{ gpu: true }, {}, { local: { "apex26.gfxBackend": "webgpu" }, gpu: true }]) {
+    const r = bootRig(opts);
+    assert.equal(r.preloadCalls.length, 1, "exactly one speculative preload call at eval");
+    // Field-wise: the opts object was created in the VM realm (different Object.prototype).
+    assert.equal(r.preloadCalls[0].opts && r.preloadCalls[0].opts.fetchPriority, "low",
+      "the guess must not compete at high priority with the backend that actually binds");
+    assert.deepEqual(Object.keys(r.preloadCalls[0].opts || {}), ["fetchPriority"], "no other preload option rides along");
+  }
+  const blocked = bootRig({ throws: true, gpu: true });
+  assert.equal(blocked.preloadCalls.length, 0, "blocked storage: still no guess, no fetch, no priority to mark");
 });
