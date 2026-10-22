@@ -1,11 +1,12 @@
 # Issue triage, #3305 and up (A·T3, 2026-10-22)
 
-Deploy tip `72408e99` (#3478 merge). 68 open issues in range. Counts: STALE 2, VALID 55, PARTLY-VALID 4, FIXED 4, IN-FLIGHT 2, NEEDS-INFO 1.
+Deploy tip `72408e99` (#3478 merge). 68 open issues in range. Counts: STALE 2, VALID 55, PARTLY-VALID 4, FIXED 5, IN-FLIGHT 1, NEEDS-INFO 1.
 
 **Evidence level, stated honestly:** no screenshots were taken; a live pass (06:30-06:50Z) re-ran `tools/ui/layout-audit.mjs` and `menu-fit.mjs` for #3305-#3307, #3330, #3334-#3336 and #3338, with the results in their rows. Doc/skill issues were re-checked by grep on the tip. Scenery issues were re-measured with `tools/track/{ground,clip,coplanar,float}-audit.cjs` where the claim was a count, and otherwise confirmed by "the circuit files have not changed since the surveyed tip `17a7d1be0`". UI/garage and car visual claims are VALID by that same unchanged-code argument and were not re-shot. Merged/open PRs checked: every merge since 10-19 (93) and the 16 open PRs.
 
 ## Close candidates
 - #3416 [D·car] body-shapes: Playwright garage capture gallery aborted (no shots/ tree)
+- #3414 [D·car] wheels: STYLE Arc Script and Raised Letters sidewalls barely visible in garage
 - #3308 [D·scenery] test-permission-check (delete me)
 - #3305 [D·survey] Title mode grid clips when UI scale is 200% on phone landscape
 - #3477 closes itself (flake-tally bot) once #3473 is in its window.
@@ -30,8 +31,8 @@ Deploy tip `72408e99` (#3478 merge). 68 open issues in range. Counts: STALE 2, V
 | #3477 | Base red suspects (auto) | base-red | FIXED | Auto 'Base red suspects' tally. Its only row is garage-out-before-card DAILY; #3473 'fix(intro): await picker build abort before introBuild' merged 04:30Z, ten minutes before the tally was read (04:40Z). The workflow rewrites/closes it itself. | leave to the bot (flake-tally.yml) |
 | #3418 | [D·car] body-shapes: style_engine_zeropod garage silhouette overshoot (dHaus ~228 mm) | - | VALID | Accuracy/stylisation tweak, no commit on the zero-pod engine mesh since. Not re-measured. | keep (low) |
 | #3417 | [D·car] body-shapes: pod-sculpt quartet adds ~+9–10% player body tris vs McLaren factory | - | VALID | Mesh-budget request on the pod-sculpt quartet; needs a re-count against tests/unit/body-styles.test.mjs budgets. #3242 (mesh budget) merged 10-21 and may have moved the numbers. | keep, re-measure with tri-census first |
-| #3416 | [D·car] body-shapes: Playwright garage capture gallery aborted (no shots/ tree) | - | NEEDS-INFO | A single aborted survey run (log path /cursor/stores/...), not a repo defect; the 'restore or document the runner' ask has no failing test or command to verify. | close unless the runner is named |
-| #3414 | [D·car] wheels: STYLE Arc Script and Raised Letters sidewalls barely visible in garage | ready, claimed | IN-FLIGHT | Open PR #3462 'fix(car): STYLE tyre sidewall lettering readable at garage zoom (#3414)'. | keep until #3462 merges |
+| #3416 | [D·car] body-shapes: Playwright garage capture gallery aborted (no shots/ tree) | - | NEEDS-INFO | One aborted survey run, no verifiable ask. Closed not_planned by the orchestrator 2026-10-22. | closed |
+| #3414 | [D·car] wheels: STYLE Arc Script and Raised Letters sidewalls barely visible in garage | ready, claimed | FIXED | PR #3462 merged as 14c22efe (~06:37Z); issue closed completed. | closed |
 | #3413 | [D·car] aero: outwash_max rear wing horizontal z-fight on wing preset | ready | VALID | B·W16 claimed ('car-aero-3413-b16w') then released; no branch/PR exists. Not re-rendered. | keep |
 | #3412 | [D·car] aero: garage TLX shows oversized orange emissive block at tail (minimal wingRear) | ready | VALID | B·W16 claimed ('car-aero-3413-b16w') then released; no branch/PR exists. Not re-rendered. | keep |
 | #3411 | [D·car] aero: S-Duct option has no nose duct geometry (floor vanes only) | ready | VALID | S-Duct recipe still floor vanes only per issue; no nose-duct commit since. | keep |
@@ -91,7 +92,34 @@ Deploy tip `72408e99` (#3478 merge). 68 open issues in range. Counts: STALE 2, V
 | #3314 | [D·scenery] fuji: Mount Fuji snow cap unreadable from pit-straight day orbit | ready | VALID | Survey finding at tip 17a7d1be0; the circuit's js/circuits/<id>.js and scenery/<id>.js have no commit since (git log --since=2026-10-20 lists only donington, spa, silverstone, magny_cours, singapore). Visual claim not re-shot here. | keep |
 | #3313 | [D·scenery] batch2: start/finish trackside cam buried in pit/stand walls (7 circuits) | ready | VALID | Survey finding at tip 17a7d1be0; the circuit's js/circuits/<id>.js and scenery/<id>.js have no commit since (git log --since=2026-10-20 lists only donington, spa, silverstone, magny_cours, singapore). Visual claim not re-shot here. | keep |
 | #3311 | [D·survey] Phone rotation rebuilds post targets and sheds the quality tier | ready | VALID | js/render/three/tlx-post.js:537 `resize` still early-outs only when BOTH axes match; js/render/glx/post.js createTargets has the same check, so an equal-pixel transpose rebuilds. #3429 (rotation drag) and #3478/#3479 do not touch it. | keep |
-| #3308 | [D·scenery] test-permission-check (delete me) | - | STALE | 'test-permission-check (delete me)': a permission probe, no product claim. | close |
+| #3308 | [D·scenery] test-permission-check (delete me) | - | STALE | Permission probe ('delete me'). Closed not_planned by the orchestrator 2026-10-22. | closed |
 | #3307 | [D·survey] Settings Appearance steppers undersized at UI scale 75% | - | PARTLY-VALID | Live: `menu-fit 844x390 --scale=75 --only=settingsappearance` = ok (no tiny rows now), but `layout-audit settingsappearance ios-iphone-landscape@75` still lists 80 soft taps at 39 px high against the 52 px floor (artifacts/agent-output/apex-tools-apex_ui_fit-1792650671381-*.json). | keep, restate as soft-tap (39 px < 52 px floor) rather than tiny |
 | #3306 | [D·survey] VS Friend sheet header clips at UI scale 200% (desktop) | - | VALID | Live: `layout-audit vsfriend desktop-1440x900@200` clipped 1. | keep |
-| #3305 | [D·survey] Title mode grid clips when UI scale is 200% on phone landscape | - | STALE | Live 2026-10-22 on tip afd7ebd8: `layout-audit title ios-iphone-landscape@200` clipped 0 offscreen 0 (only 7 soft taps); `menu-fit 844x390 852x344 --scale=200` prints no vLost rows. The cited vLost on #mb-career/#mb-data does not reproduce. | close (does not reproduce) |
+| #3305 | [D·survey] Title mode grid clips when UI scale is 200% on phone landscape | - | STALE | Live 2026-10-22 on tip afd7ebd8: `layout-audit title ios-iphone-landscape@200` clipped 0 offscreen 0 (only 7 soft taps); `menu-fit 844x390 852x344 --scale=200` prints no vLost rows. The cited vLost on #mb-career/#mb-data does not reproduce. Comment posted; close left to the orchestrator. | close not_planned (orchestrator) |
+
+## Unowned lanes (B·W15 #3330-#3339, B·W16 #3412/#3413): still valid? size
+S = one CSS rule or one mesh tweak; M = several rules/files or a re-render loop; L = needs a design decision.
+
+| # | still valid | size | note |
+|---|---|---|---|
+| #3330 | yes (garagelivery desktop@100: clipped 3) | S | .cs-opt-tag vs .cs-liv-swatch overflow, css/carsetup.css:783-801 |
+| #3331 | unconfirmed (320x568 / 360x640 are not in the layout-audit viewport catalog) | M | needs a custom-viewport run first |
+| #3332 | unconfirmed | S | pair-main width at --ui-scale<1 |
+| #3333 | partly (40 px is deliberate, css/carsetup.css:1264) | S | decide 40 vs 44 first |
+| #3334 | yes (garageteam iphone-portrait@75: tapSoft 28) | S | .sel-chip + #cs-unlimited height |
+| #3335 | yes (trunc 10) | M | ellipsis is the shared rule at css/carsetup.css:560; needs a title/tooltip or wider rail |
+| #3336 | partly (layout-audit clipped 0) | S | re-check with menu-mock first |
+| #3337 | unconfirmed (not run; photostudio desktop@100 not audited) | S | stepper rows in photo-studio |
+| #3338 | partly (layout-audit clipped 0) | S | re-check with menu-mock first |
+| #3339 | yes (design) | L | search/recents/collapse is a product choice |
+| #3412 | yes (not re-rendered) | M | rain-light emissive scale in js/car/car3d.js |
+| #3413 | yes (not re-rendered) | M | rearAssembly flap offsets when casc/lvl high |
+
+## Ready-to-paste rewrites (not applied; my launch prompt forbids editing issues)
+Start each body with: "Rewritten 2026-10-22 by A·T3 (triage), original intent kept".
+
+**#3307 Settings Appearance steppers soft-tap at UI scale 75%.** menu-fit no longer flags tiny rows. Remaining: `node tools/ui/layout-audit.mjs --screens=settingsappearance --viewports=ios-iphone-landscape --scale=75` lists 80 soft taps, steppers/buttons 39 px high against the 52 px floor. Acceptance: that command's tapSoft for the prev/next steppers drops to 0 (or the floor is documented as 40 for 75%), no new clipped rows.
+
+**#3336 MY TEAM (#customize) phone-portrait scroll clip.** layout-audit `customize ios-iphone-portrait@100` reports clipped 0, tapSoft 2. The original 10 px #cz-body clip was a menu-mock reading. Acceptance: re-run `node tools/ui/menu-mock.mjs` for customize/ios-iphone-portrait; if the clip is gone close, else fix css/race-setup.css #cz-body vs footer and keep tapSoft 0.
+
+**#3338 Photo Studio #ps-body iPad portrait.** layout-audit `photostudio ios-ipad-portrait@100` reports clipped 0. Original 10 px clip was a menu-mock reading. Acceptance as #3336, for photostudio/ios-ipad-portrait.
