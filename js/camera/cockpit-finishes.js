@@ -21,7 +21,10 @@ const CockpitFinishes = (function () {
   function set(name, value) {
     const c = CHOICES[name], next = c.values.includes(value) ? value : c.values[0];
     if (get(name) === next) return next;
-    picked[name] = next; GameStore.store.rawSet(c.key, next);
+    picked[name] = next;
+    if (name === "wheel") GameStore.store.rawSet("apex26.cockpitWheelFinish", next);
+    else if (name === "body") GameStore.store.rawSet("apex26.cockpitBodyFinish", next);
+    else GameStore.store.rawSet("apex26.cockpitHaloFinish", next);
     if (name !== "wheel") revision++;
     cache = new WeakMap();
     for (const fn of listeners) fn(name, next);
