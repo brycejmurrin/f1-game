@@ -17,12 +17,12 @@ const outDir = resolve(ROOT, "artifacts", "webgpu-urban-gallery", stamp);
 mkdirSync(outDir, { recursive: true });
 
 const scenes = [
-  { track: "singapore", frac: 0.11, tod: "dusk", weather: "wet", label: "Singapore dusk, wet street reflections" },
+  { track: "singapore", frac: 0.11, tod: "dusk", weather: "wet", side: -1, label: "Singapore dusk, wet street reflections" },
   { track: "vegas", frac: 0.62, tod: "night", weather: "rain", label: "Las Vegas night, rain and city lights" },
-  { track: "monaco", frac: 0.37, tod: "day", weather: "dry", label: "Monaco day, dry race traffic" },
+  { track: "monaco", frac: 0.37, tod: "day", weather: "dry", side: -1, label: "Monaco day, dry race traffic" },
 ].map((scene) => ({
   ...scene,
-  cam: "trackside", side: 1, el: 12, dist: 24, clear: true,
+  cam: "trackside", side: scene.side ?? 1, el: 12, dist: 24, clear: true,
   traffic: true, noLine: true, showHud: false, backend: "three", team: "mclaren",
   out: join(outDir, `${scene.track}-${scene.tod}-${scene.weather}-4k.png`),
 }));
