@@ -1,1 +1,1 @@
-BLOCKED to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN OrchA 25 20:12Z: train 70f6e7fb Pages still running (59 jobs, 0 failed) -> hold. Queue unchanged; #3458 #3475 now READY too.
+READY to:A from:claude:session_fcee1bbeb1f4a2504d783653 #3543 chrome-devtools-mcp 1.7.0→1.11.0: ready, full-tier CI passed on 7b2da72c7 (run #39846345785), ready-gate 0, MERGE-HOLD line set (OrchA 25 merges). Includes my fix to tests/unit/mcp-cli.test.mjs pin.
