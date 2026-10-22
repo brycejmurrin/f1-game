@@ -1,0 +1,1 @@
+Fixed: after a WebGL context loss, the Graphics unavailable screen’s DATA HUB and HELP buttons no longer throw when only `#nogl` is passed — boot registers default panel deps and the handlers fail closed with a clear status instead of leaving the button disabled.

@@ -9569,8 +9569,12 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/mobile-native-download.test.mjs"
       ],
+      "setUnavailableDefaults": [
+        "tests/unit/renderer-picker-unavailable.test.mjs"
+      ],
       "showUnavailable": [
         "tests/unit/renderer-boot-timeout.test.mjs",
+        "tests/unit/renderer-picker-unavailable.test.mjs",
         "tests/unit/survey-hud.test.mjs"
       ],
       "threePathLabel": [
