@@ -44,7 +44,11 @@ const AiCorridor = (function () {
     const blockerSpeed = snap(blocker, "_snapSpeed", blocker.speed);
     const passT = Math.min(8, ((ctx.blockerGap || 0) + 6.3) / Math.max((ctx.freeSpeed || car.speed) - (ctx.blockerVmax || blockerSpeed), (ctx.vTop || 72) / 72));
     const ownAccel = acceleration(car);
-    for (const other of cars) {
+    // Indexed walk: for…of allocates an iterator per candidate call (2 sides ×
+    // every AI that considers a pass). Far-gap reject is a necessary condition
+    // for crosses() to stay false — bit-identical when it fires (D·DP7).
+    for (let oi = 0; oi < cars.length; oi++) {
+      const other = cars[oi];
       if (other === car || other.retired || other.finished) continue;
       const oProg = snap(other, "_snapProg", other.prog), oX = snap(other, "_snapX", other.x), oSpeed = snap(other, "_snapSpeed", other.speed);
       const raw = oProg - car.prog;
@@ -52,16 +56,28 @@ const AiCorridor = (function () {
       const closing = oSpeed - car.speed;
       // Observed motion only: no privileged knowledge of another driver's input.
       const accel = acceleration(other) - ownAccel;
-      if (crosses(gap, oX - car.x, closing, -lateral / seconds, seconds, accel)
-        || crosses(gap + closing * seconds + .5 * accel * seconds * seconds,
-          oX - out.target, closing + accel * seconds, 0, .5, accel)) {
-        out.reason = other === blocker ? "cannot clear the blocker in time" : "traffic in the passing lane"; return;
+      const absGap = gap < 0 ? -gap : gap;
+      const absA = accel < 0 ? -accel : accel;
+      const travel = (closing < 0 ? -closing : closing) * seconds + 0.5 * absA * seconds * seconds;
+      // Second crosses() starts after `seconds` of observed motion (horizon 0.5 s).
+      const s2 = gap + closing * seconds + .5 * accel * seconds * seconds;
+      const absS2 = s2 < 0 ? -s2 : s2;
+      const vs2 = closing + accel * seconds;
+      const travel2 = (vs2 < 0 ? -vs2 : vs2) * 0.5 + 0.5 * absA * 0.25;
+      // Necessary conditions: if the trajectory cannot enter ±5.2 m, crosses is false.
+      const crossPossible = !(absGap - travel > 5.2) || !(absS2 - travel2 > 5.2);
+      if (crossPossible) {
+        if (crosses(gap, oX - car.x, closing, -lateral / seconds, seconds, accel)
+          || crosses(s2, oX - out.target, vs2, 0, .5, accel)) {
+          out.reason = other === blocker ? "cannot clear the blocker in time" : "traffic in the passing lane"; return;
+        }
       }
+      const aheadOk = !ctx.street && other !== blocker && gap > 0 && gap < reach;
       // LOOK DOWN THE LANE, not just beside it: a car ahead in the target lane
       // that we would catch before the pass is done (blocker gap + a car
       // length, at our closing rate on the blocker) is the next blocker — the
       // move pulls out only to queue again. Within 1.5 s of road.
-      if (!ctx.street && other !== blocker && gap > 0 && gap < reach && Math.abs(oX - out.target) < 2.2
+      if (aheadOk && Math.abs(oX - out.target) < 2.2
         && gap - (car.speed - oSpeed) * passT < 6) { out.reason = "traffic ahead in the passing lane"; return; }
     }
     out.reason = "clear passing lane";
