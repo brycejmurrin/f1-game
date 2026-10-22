@@ -132,3 +132,75 @@ test("a stopped loop does not expire its tally on a later quiet clean", () => {
   assert.equal(LoopHealth.state().faults, faultsAtStop, "stopped stays stopped; quiet reset is gated on !stopped");
   assert.equal(LoopHealth.state().stopped, true);
 });
+
+// ── #3510 stall watchdog ────────────────────────────────────────────────────
+/** LoopHealth with the browser surfaces the watchdog acts through. */
+function loadStall({ webdriver = false, search = "", reloadsSpent = null } = {}) {
+  const clock = { t: 0 }, calls = { tier: [], reload: 0 }, ls = new Map(), ss = new Map();
+  if (reloadsSpent != null) ss.set("apex26.stallReloads", String(reloadsSpent));
+  const store = (m) => ({ getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) });
+  const listeners = {};
+  const doc = { visibilityState: "visible", addEventListener: (n, f) => { listeners[n] = f; } };
+  const ctx = {
+    performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,
+    navigator: { webdriver }, document: doc, location: { search, reload: () => { calls.reload++; } },
+    localStorage: store(ls), sessionStorage: store(ss),
+    PerfGov: { setUserTier: (n) => calls.tier.push(n) },
+  };
+  vm.createContext(ctx);
+  seedLog(ctx);
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/perf/loop-health.js") });
+  const frames = (n, ms) => { for (let i = 0; i < n; i++) { clock.t += ms; ctx.LoopHealth.clean(); } };
+  const hide = (hidden) => { doc.visibilityState = hidden ? "hidden" : "visible"; listeners.visibilitychange && listeners.visibilitychange(); };
+  return { LoopHealth: ctx.LoopHealth, frames, hide, calls, ls, ss };
+}
+
+test("stall: a glacial loop sheds at SHED_RUN, then reloads once to the menu notice", () => {
+  const h = loadStall();
+  h.frames(1, 16);
+  h.frames(3, 2500);
+  assert.deepEqual(h.calls.tier, [], "three slow frames: a build hitch, not a stall");
+  h.frames(1, 2500);
+  assert.deepEqual(h.calls.tier, [4], "fourth consecutive >1 s frame sheds to the lowest rung");
+  assert.equal(h.ls.get("apex26.envProbeOff"), "1");
+  assert.equal(h.ls.get("apex26.perChunkOff"), "1");
+  assert.equal(h.LoopHealth.state().stall.act, "shed");
+  h.frames(5, 2500);
+  assert.equal(h.calls.reload, 0);
+  h.frames(1, 2500);
+  assert.equal(h.calls.reload, 1, "still glacial at RELOAD_RUN: reload");
+  assert.equal(h.ss.get("apex26.stallReloads"), "1");
+  assert.equal(h.ss.get("apex26.ctxLostNotice"), "1", "the menu explains the reset");
+  h.frames(20, 2500);
+  assert.equal(h.calls.reload, 1, "one reload per run");
+});
+
+test("stall: with the reload budget spent it only records", () => {
+  const h = loadStall({ reloadsSpent: 1 });
+  h.frames(12, 3000);
+  assert.equal(h.calls.reload, 0);
+  assert.equal(h.LoopHealth.state().stall.act, "budget");
+  assert.equal(h.LoopHealth.state().stall.slowFrames, 11, "the first frame has no gap to judge");
+});
+
+test("stall: healthy, hitchy, hidden and suspended loops never act", () => {
+  const h = loadStall();
+  h.frames(600, 16);
+  for (let i = 0; i < 20; i++) { h.frames(3, 1500); h.frames(1, 16); }   // repeated 3-frame hitches
+  h.hide(true); h.frames(10, 5000); h.hide(false);                        // hidden tab
+  h.frames(1, 16); h.frames(3, 1200);
+  h.frames(1, 120000); h.frames(1, 1200);                                  // laptop sleep breaks the run
+  assert.deepEqual(h.calls.tier, []);
+  assert.equal(h.calls.reload, 0);
+  assert.equal(h.LoopHealth.state().stall.act, "");
+});
+
+test("stall: off under automation unless ?stallwatch=1 forces it", () => {
+  const off = loadStall({ webdriver: true });
+  off.frames(20, 3000);
+  assert.deepEqual(off.calls.tier, []);
+  assert.equal(off.LoopHealth.state().stall.watching, false);
+  const on = loadStall({ webdriver: true, search: "?stallwatch=1" });
+  on.frames(5, 3000);
+  assert.deepEqual(on.calls.tier, [4]);
+});
