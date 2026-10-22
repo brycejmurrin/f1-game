@@ -4111,10 +4111,11 @@ test("the strike ledger is per backend: one death each on two backends retires n
   await rendererBootRun(ls).start();
   assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "a second WGX death retires the pick");
   assert.equal(ls.has("apex26.gfxProbeStrikes"), false);
-  // A legacy bare count names no backend: it still counts, as before.
+  // A legacy bare count names no backend: unattributable, it retires nothing (from Merlin's #3547).
   const legacy = new Map([["apex26.gfxBackend", "three"], ["apex26.gfxProbeStrikes", "1"], ["apex26.gfxBackendProbe", "three"]]);
-  await rendererBootRun(legacy).start();
-  assert.equal(legacy.get("apex26.gfxBackend"), "webgl2");
+  assert.equal((await rendererBootRun(legacy).start()).bound, false, "the armed probe still reverts this boot to GLX");
+  assert.equal(legacy.get("apex26.gfxBackend"), "three", "an unattributable legacy strike must not retire the pick");
+  assert.equal(legacy.get("apex26.gfxProbeStrikes"), "three:1");
 });
 
 test("a pick that proves itself still pays off an older strike", async () => {

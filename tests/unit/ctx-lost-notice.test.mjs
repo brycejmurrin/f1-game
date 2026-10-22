@@ -65,6 +65,27 @@ test("TLX: device-loss reloads (first, second, third) and refuseTab all arm the 
   assert.deepEqual(out.reloads, ["1"], "refuseTab's reload explains itself");
 });
 
+// Negative cases from Merlin's #3534: past the reload budget nothing reloads, so nothing is explained.
+test("past the reload budget: no reload, no notice (TLX loss, TLX refuseTab, GLX restore)", () => {
+  const tlxSrc = read("js/render/three/tlx.js");
+  const lossBody = fnSource(tlxSrc, "renderer.onDeviceLost = function (info) {");
+  const store = { "apex26.ctxLostReloads": "3" }, out = { reloads: [] };
+  const v = tlxLossVm(store, out);
+  vm.runInContext(lossBody + "\n renderer.onDeviceLost", v.ctx, TLX_FILE)({});
+  for (const t of v.timers.splice(0)) t();
+  assert.deepEqual(out.reloads, []);
+  assert.equal(store["apex26.ctxLostNotice"], undefined, "a fourth TLX loss arms no notice");
+  const rs = { "apex26.ctxLostReloads": "2" }, ro = { reloads: [] };
+  vm.runInContext(fnSource(tlxSrc, "const refuseTab = () => {") + ";\n refuseTab();", tlxLossVm(rs, ro).ctx, TLX_FILE);
+  assert.deepEqual(ro.reloads, []);
+  assert.equal(rs["apex26.ctxLostNotice"], undefined, "refuseTab past the budget arms no notice");
+  const h = bootGlx();
+  h.sandbox.sessionStorage.setItem("apex26.ctxLostReloads", "3");
+  h.sandbox.sessionStorage.removeItem("apex26.ctxLostNotice");
+  h.restoreContext();
+  assert.equal(h.sandbox.sessionStorage.getItem("apex26.ctxLostNotice"), null, "GLX restore past the budget arms no notice");
+});
+
 test("TLX: a webglcontextrestored reload after a counted loss arms the notice; a bare one does not", () => {
   const src = read("js/render/three/tlx.js");
   const i = src.indexOf('canvas.addEventListener("webglcontextrestored", onRestored = function () {');
