@@ -2426,6 +2426,7 @@
         "tests/unit/aero-flap-travel.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/cockpit-pale-surfaces.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-stations.test.mjs"
@@ -2433,6 +2434,9 @@
       "carDecalData": [
         "tests/specs/parts-physics.spec.js",
         "tests/unit/livery-stations.test.mjs"
+      ],
+      "cockpitWheelOpts": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
       ],
       "cockpitWheelRoll": [
         "tests/unit/cockpit-wheels.test.mjs"
@@ -2499,6 +2503,7 @@
       ],
       "getCockpitWheel": [
         "tests/unit/car-mesh-crew-cache.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "getCompoundRing": [
@@ -2532,6 +2537,7 @@
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/cockpit-pale-surfaces.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/mirror-glass-night.test.mjs"
@@ -2541,6 +2547,9 @@
       ],
       "stationCtx": [
         "tests/unit/livery-stations.test.mjs"
+      ],
+      "wheelFinish": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
       ],
       "*": [
         "tests/unit/hud-speed-parity.test.mjs",
@@ -4626,6 +4635,7 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
@@ -6067,7 +6077,8 @@
         "tests/unit/skidmarks-cadence.test.mjs",
         "tests/unit/start-lights.test.mjs",
         "tests/unit/storm-weather.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/weather-arc-rain.test.mjs",
+        "tests/unit/weather-blend.test.mjs"
       ],
       "flare": [
         "tests/unit/car-fx.test.mjs",
@@ -6086,7 +6097,8 @@
         "tests/unit/skidmarks-cadence.test.mjs",
         "tests/unit/start-lights.test.mjs",
         "tests/unit/storm-weather.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/weather-arc-rain.test.mjs",
+        "tests/unit/weather-blend.test.mjs"
       ],
       "kickup": [
         "tests/unit/car-fx.test.mjs"
@@ -6099,18 +6111,21 @@
         "tests/unit/particles-dirty.test.mjs",
         "tests/unit/skidmarks-cadence.test.mjs",
         "tests/unit/storm-weather.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/weather-arc-rain.test.mjs",
+        "tests/unit/weather-blend.test.mjs"
       ],
       "rainShow": [
         "tests/unit/particles-dirty.test.mjs",
         "tests/unit/skidmarks-cadence.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/weather-arc-rain.test.mjs",
+        "tests/unit/weather-blend.test.mjs"
       ],
       "rainUpdate": [
         "tests/unit/particles-dirty.test.mjs",
         "tests/unit/skidmarks-cadence.test.mjs",
         "tests/unit/storm-weather.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/weather-arc-rain.test.mjs",
+        "tests/unit/weather-blend.test.mjs"
       ],
       "resetStats": [
         "tests/unit/particles-dirty.test.mjs"
@@ -6361,7 +6376,6 @@
       ],
       "isRaining": [
         "tests/unit/audio-recovery.test.mjs",
-        "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/light-presets.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
       ],
@@ -8445,7 +8459,8 @@
       ],
       "reset": [
         "tests/unit/light-store-copy.test.mjs",
-        "tests/unit/lighting-tuner-reset-weather.test.mjs"
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
+        "tests/unit/weather-blend.test.mjs"
       ],
       "restore": [
         "tests/unit/light-store-copy.test.mjs"
@@ -10183,6 +10198,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/engineer.test.mjs",
         "tests/unit/forecast.test.mjs",
@@ -12219,6 +12235,9 @@
       "previewPlan": [
         "tests/unit/weather-arc-plan.test.mjs"
       ],
+      "rainfallAt": [
+        "tests/unit/rain-cells.test.mjs"
+      ],
       "rainSectors": [
         "tests/unit/rain-cells.test.mjs"
       ],
@@ -12249,6 +12268,10 @@
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
+      ],
+      "viewRainfall": [
+        "tests/unit/rain-cells.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs"
       ],
       "viewWetness": [
         "tests/unit/rain-cells.test.mjs",
@@ -12596,7 +12619,8 @@
         "tests/unit/puddles.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/track-graph.test.mjs",
-        "tests/unit/vertex-pack.test.mjs"
+        "tests/unit/vertex-pack.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs"
       ]
     },
     "js/render/glx/shaders/glsl-post.js": {
@@ -12605,6 +12629,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/puddles.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ]
@@ -13004,14 +13029,14 @@
       ],
       "roadReflection": [
         "tests/unit/perf-governor.test.mjs",
-        "tests/unit/road-reflection-transition.test.mjs"
+        "tests/unit/road-reflection-transition.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs"
       ],
       "sunScreen": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "*": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
-        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
@@ -13349,10 +13374,12 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "_tagSwap": [
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
       "_wantTag": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs"
       ],
       "_writeInstanceMatrices": [
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
@@ -13572,6 +13599,9 @@
       "retireTexture": [
         "tests/unit/tlx-texture-release.test.mjs"
       ],
+      "runProgramWarmStages": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "setInstanceRange": [
         "tests/unit/tlx-hunt4.test.mjs"
       ],
@@ -13691,6 +13721,9 @@
       "setMaterialMaps": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs"
+      ],
+      "setSsrMrt": [
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "updateFrame": [

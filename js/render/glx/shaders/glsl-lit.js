@@ -1356,6 +1356,9 @@ void main() {
   // reflection-side use below must key off this, not plain wet — otherwise soaked
   // grass still mirrors the lamps and the sky.
   float wetSheen = 0.0;
+  // Also classifies the post-process SSR receiver, even when the road is dry.
+  int wmid = int(vMat + 0.5);
+  float porous = (wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11) ? 1.0 : 0.0;
   // NOT on a car (classifiedCar): everything below is keyed to WORLD position —
   // value-noise puddles, ripple cells, the 0.42 tarmac absorb on every up face —
   // so in rain the car tops wore world-space puddles that slid across the moving
@@ -1368,8 +1371,6 @@ void main() {
     // canal with cyan banks. Porous ground drinks the water instead: it darkens
     // (more than tarmac, since wet soil is markedly darker) but never polishes.
     // This is only expressible now that road/terrain carry material ids.
-    int wmid = int(vMat + 0.5);
-    float porous = (wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11) ? 1.0 : 0.0;
     wet = uWetness * upFace;
     // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
     // reference (constants K, mask()); TLX tsl-lit.js and WGX wgsl-chunks.js
@@ -2270,16 +2271,24 @@ void main() {
       float band = exp(-lowH * (0.09 / max(uMistHeight, 0.05)));
       vec2 mp = vWorldPos.xz * 0.020 + vec2(uTime * 0.010, uTime * 0.006);
       float dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
-      float mist = uGroundMist * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
+      // HEAVY MIST (fog weather, ~1.1-1.5 amount): the patches fill in to a
+      // >= 55 % floor and the 0.45 ceiling lifts to 0.65, so fog reads close in.
+      // Every lighter mist (dawn, overcast, humid) stays exactly as it was.
+      float mistFill = smoothstep(1.1, 1.5, uGroundMist);
+      float mistPatch = smoothstep(0.35, 0.72, cloudFBM(mp));
+      float mist = uGroundMist * band * mix(mistPatch, 0.55 + 0.45 * mistPatch, mistFill) * dRamp;
       float mistSun = max(sunAmount, 1e-4);
       vec3 mistCol = mix(uFogColor, uSunColor, mistSun * mistSun * mistSun) + lampFogC * uMistShare;
-      color = mix(color, mistCol, clamp(mist, 0.0, 0.45));
+      color = mix(color, mistCol, clamp(mist, 0.0, 0.45 + 0.2 * mistFill));
     }
   }
   // Car-paint pixels are TAGGED in alpha (opaque draws never blend, so the
   // channel is free): the composite SSR pass reflects the real world on car
   // bodywork every frame — the same world-mirror the wet road gets.
-  outColor = vec4(color, carPaint > 0.001 ? 0.35 : uAlpha);
+  // Opaque metadata: .35 car paint, .75 porous world, 1 sealed world.
+  // Blended/noAlphaWrite draws preserve destination alpha in glx.js.
+  float receiverTag = porous > 0.5 && uAlpha >= 1.0 ? 0.75 : uAlpha;
+  outColor = vec4(color, carPaint > 0.001 ? 0.35 : receiverTag);
 }`;
   window.GLXShaders = Object.assign(window.GLXShaders || {}, { LIT_VS, LIT_FS });
 })();

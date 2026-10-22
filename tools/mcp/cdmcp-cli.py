@@ -613,10 +613,10 @@ def cmd_slider_ab(argv: list[str]) -> None:
 # dawn/dusk/night share one mesh build; day is the other (js/game.js loadTrack).
 # Weather-only flips are applyRaceSettings — no 1.6 s rebuild.
 DEFAULT_LOOK_COMBOS = (
-    "dawn|dry,dawn|wet,dawn|rain,dawn|fog,dawn|overcast,"
-    "day|dry,day|wet,day|rain,day|fog,day|overcast,"
-    "dusk|dry,dusk|wet,dusk|rain,dusk|fog,dusk|overcast,"
-    "night|dry,night|wet,night|rain,night|fog,night|overcast"
+    "dawn|dry,dawn|wet,dawn|rain,dawn|storm,dawn|fog,dawn|overcast,"
+    "day|dry,day|wet,day|rain,day|storm,day|fog,day|overcast,"
+    "dusk|dry,dusk|wet,dusk|rain,dusk|storm,dusk|fog,dusk|overcast,"
+    "night|dry,night|wet,night|rain,night|storm,night|fog,night|overcast"
 )
 
 
@@ -639,7 +639,7 @@ def sort_combos_min_rebuild(
     combos: list[tuple[str, str]], prefer_dark: bool
 ) -> list[tuple[str, str]]:
     """Group by sessionDark so loadTrack rebuilds at most once per track."""
-    wx_order = {"dry": 0, "wet": 1, "rain": 2, "fog": 3, "overcast": 4}
+    wx_order = {"dry": 0, "wet": 1, "rain": 2, "storm": 3, "fog": 4, "overcast": 5}
     tod_order = {"day": 0, "dawn": 1, "dusk": 2, "night": 3}
 
     def key(c: tuple[str, str]) -> tuple[int, int, int]:
@@ -804,11 +804,13 @@ def cmd_look_survey(argv: list[str]) -> None:
     """One Chrome boot, several tod×weather lighting looks, chase+park+snapCam.
 
     Uses chrome-devtools MCP (take_screenshot) — NOT Playwright. This is the
-    right tool for a full per-circuit lighting matrix (4 tod × 5 weather = 20
-    conditions) because it connects to a persistent Chrome session you can
-    also inspect interactively.  slider-effect --live is better for A/B-ing a
-    single LIGHTING TUNER knob because it owns its browser, locks the camera
-    between shots, and produces pixel-diff outputs.
+    right tool for a per-circuit lighting matrix (4 tod × 5 weather = 20, or
+    include storm via --combos / DEFAULT for 24) because it connects to a
+    persistent Chrome session you can also inspect interactively.
+    slider-effect --live is better for A/B-ing a single LIGHTING TUNER knob
+    because it owns its browser, locks the camera between shots, and produces
+    pixel-diff outputs. For a dedicated storm+luminance report use
+    tools/shot/wx-grid.mjs (6 weathers × 4 times + luminance.json).
 
     Do NOT run look-survey while slider-effect --live is active — both open
     Chromium. Check first: pgrep -a chromium | head -3
@@ -839,7 +841,7 @@ def cmd_look_survey(argv: list[str]) -> None:
     p.add_argument(
         "--combos",
         default="day|dry,night|dry,day|rain,dawn|fog",
-        help="comma list of tod|wx (dawn|day|dusk|night × dry|wet|rain|fog|overcast)",
+        help="comma list of tod|wx (dawn|day|dusk|night × dry|wet|rain|storm|fog|overcast)",
     )
     p.add_argument(
         "--plan",

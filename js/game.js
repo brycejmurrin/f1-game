@@ -138,7 +138,7 @@ if (typeof Assets !== "undefined") {
 let _lastFloodEmit = 0;   // prop-emissive ramp actually used this frame (debug: lightState)
 function initRainDrops() {
   // DRIZZLE tier: "wet" (damp track, no storm) — sparse/short/slow streaks.
-  Particles.rainSeed(isWetRoad() && !isRaining());
+  Particles.rainSeed(!(wxArc && wxArc.arc) && isWetRoad() && !isRaining());
 }
 
 // ---------- settings ----------
@@ -2670,9 +2670,8 @@ async function startRaceBody() {
   Input.clearEdges();
   if (Input.dropLatch) Input.dropLatch();
   if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.setVenue(track.def); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
-  // rain patter — a damp "wet" track is silent — and it must STOP too: a
-  // restart after a changeable race had arced into rain kept playing it dry.
-  if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
+  // Rain patter follows precipitation; a cleared cloud leaves a wet road.
+  if (soundOn) { if (wxArc.viewRainfall() > 0.01) GameAudio.startRain(); else GameAudio.stopRain(); }
   holdRaceWake(); syncRotateBlocker(true);   // AFTER the audio: on a portrait phone this pauses (stops engine/rain, drops the wake), and setPaused(false) on rotate restarts them
   if (!vmNoFramePump) await yieldMain(); if (stale()) return false;
   if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
@@ -3305,7 +3304,7 @@ const G = {
   // Stable helpers consumed by js/lighting/atmosphere.js.
   clamp: (v, a, b) => clamp(v, a, b),
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
-  isRaining: () => isRaining(),
+  viewRainfall: () => wxArc ? wxArc.viewRainfall() : 0,
   isWetRoad: () => isWetRoad(),
   initRainDrops: () => initRainDrops(),
   isFloodActiveSession: () => isFloodActiveSession(),
@@ -6904,11 +6903,11 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
   // headless, so it ramps once). LT.wetness ≥ 0 is the live tuner pin only — never a preset.
   if (wxArc) wxArc.syncWetness(dt);
   // Falling rain, for the puddle RIPPLES in the lit shaders (uRain / U.rain /
-  // params4.z): 1 in a storm, a third under the DRIZZLE tier, 0 dry — ramped at
-  // the same 0.8/s as wetness so the rings fade in and out rather than pop.
+  // params4.z): continuous atmospheric intensity, separate from surface water.
+  // Ease the rings in and out rather than popping at a tyre threshold.
   {
-    const vw = wxArc ? wxArc.viewWetness() : trackWetness();   // the camera's road: a local shower falls where you are
-    const rainTarget = vw >= 0.72 ? 1 : vw >= 0.25 ? 0.35 : 0;
+    const rainfall = wxArc ? wxArc.viewRainfall() : 0;
+    const rainTarget = Math.min(1, rainfall);   // cloud intensity, independent of surface water
     const cur = frame.rain || 0;
     frame.rain = cur + (rainTarget - cur) * Math.min(1, dt * 0.8);
   }
@@ -8132,7 +8131,7 @@ function render(dt) {
   // merely WET (rainSeed picked which). Open-cockpit cars have no windscreen,
   // so onboard views get the same field as the chase cam — no water-on-glass
   // beading and no wiper (there is nothing to wipe).
-  if (isWetRoad() && Particles.rainActive()) Particles.rainUpdate(dt, camEye, isRaining());
+  if (Particles.rainActive()) Particles.rainUpdate(dt, camEye, wxArc.viewRainfall());
   startLights.update();   // the gantry's lit lamps: one-frame flares each count frame
   marshalPanels.update(dt);   // the posts' light panels: yellow / red / green from race control
   Particles.update(dt);
@@ -8990,7 +8989,7 @@ function closePitWork() {
   paused = false;
   if (!netPlay.active()) holdRaceWake();   // a hidden tab under the garage may have released the screen lock; RETURN TO RACE holds it again
   lastFrame = performance.now();       // or the frozen minutes arrive as one dt
-  if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); if (isRaining()) GameAudio.startRain(); }
+  if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); if (wxArc.viewRainfall() > 0.01) GameAudio.startRain(); }
 }
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
@@ -9132,7 +9131,7 @@ function setPaused(p, why) {
   // Music + rain too, as startRaceBody does: SOUND turned ON under the pause card defers
   // all of it here (js/audio/panel.js). Rain is SFX (same bus as the engine) and
   // must not hiss over a frozen race; both starts are no-ops when already playing.
-  else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); if (isRaining()) GameAudio.startRain(); }
+  else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); if (wxArc.viewRainfall() > 0.01) GameAudio.startRain(); }
   lastFrame = performance.now(); syncRotateBlocker(false);   // the pause card yields to an active rotate blocker on EVERY entry
 }
 els.pausebtn.onclick = () => setPaused(true);

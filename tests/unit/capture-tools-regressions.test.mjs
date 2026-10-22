@@ -887,6 +887,22 @@ test('WebGPU capture launch uses the verified software adapter pins and refuses 
   assert.throws(() => captureLaunchOptions(parseCaptureOptions(['--gpu', 'llvmpipe']), { backend: 'webgpu' }), /WebGL-only/);
 });
 
+test('hardware WebGPU capture selects full Chromium and never pins a software adapter', () => {
+  const opts = parseCaptureOptions(['--gpu', 'hardware', '--ultra', '--backend', 'webgpu']);
+  assert.equal(opts.ultra, true);
+  const launch = captureLaunchOptions(opts, { backend: 'webgpu' });
+  assert.equal(launch.browserFlavor, 'chromium');
+  assert.ok(launch.args.includes('--enable-gpu'));
+  assert.ok(launch.args.includes('--enable-unsafe-webgpu'));
+  assert.ok(!launch.args.some((arg) => /swiftshader|lavapipe|llvmpipe/i.test(arg)));
+  const tlx = parseCaptureOptions(['--gpu', 'hardware', '--tlx-webgpu']);
+  assert.equal(tlx.tlxWebgpu, true);
+  const tlxLaunch = captureLaunchOptions(tlx, { backend: 'three' });
+  assert.equal(tlxLaunch.browserFlavor, 'chromium');
+  assert.ok(tlxLaunch.args.includes('--enable-gpu'));
+  assert.ok(!tlxLaunch.args.some((arg) => /swiftshader|lavapipe|llvmpipe/i.test(arg)));
+});
+
 
 test('garage capture uses actual native presents when the race camera clock is stationary', async () => {
   let presents = 0, paused = false;

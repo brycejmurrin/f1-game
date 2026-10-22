@@ -1,23 +1,6 @@
-// weather-arc-rain — the falling rain follows the road's wetness through a
-// weather arc, not just the arc's stage flips.
-//
-// js/race/weather-arc.js walks a CHANGEABLE race from one weather to another;
-// the wetness (TyreModel.wetness) ramps linearly over the arc, and the rain is
-// meant to follow it: the streak field shows at isWetRoad (≥ 0.25), the storm
-// tier and the rain loop start at isRaining (≥ 0.72), the DRIZZLE tier is in
-// between. Until 2026-10-04 show and tier were decided only when a stage
-// flipped, and the flips land off those lines: rain→dry flips "dry" at 0.333
-// (still wet, so it showed), then game.js stopped updating the field below
-// 0.25 and Particles kept drawing it, frozen, for the rest of the race;
-// dry→rain flips "rain" at 0.667, so the storm ran on drizzle-tier drops.
-//
-// The real weather-arc.js, tyre-model.js and particles.js in one VM, with G's
-// two predicates and initRainDrops copied from game.js (a source guard below
-// pins them), driven the way game.js drives them: arc.tick on the physics
-// step, then the render path's rainUpdate gate, Particles.update and draw.
-// Each arc is sampled at 10 points of the race. No browser.
-//
-// Run: node --test tests/unit/weather-arc-rain.test.mjs  (npm run test:tooling-fast)
+// Falling rain, audio and particle density follow atmospheric intensity.
+// Surface wetness remains lagged for grip, spray and tyre strategy.
+// Real weather-arc, tyre-model and particles modules run together in a VM.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -54,14 +37,15 @@ function boot() {
     simSeed: () => 1, raceRound: 0, lapsTarget: 3, raceLaps: 3,
     isWetRoad: () => wetness() >= WET,
     isRaining: () => wetness() >= STORM,
-    initRainDrops: () => P.rainSeed(G.isWetRoad() && !G.isRaining()),
+    initRainDrops: () => P.rainSeed(!(wa && wa.arc) && G.isWetRoad() && !G.isRaining()),
   };
   wa = ctx.WeatherArc.create(G, { isTimeTrial: () => false, isQuali: () => false });
   const eye = [0, 1.2, 0];
   // One frame: the physics tick, then game.js render's rain gate, update, draw.
   function frame(dt) {
     wa.tick(dt);
-    if (G.isWetRoad() && P.rainActive()) P.rainUpdate(dt, eye, G.isRaining());
+    const rain = wa.viewRainfall();
+    if (P.rainActive()) P.rainUpdate(dt, eye, rain);
     P.update(dt);
     drawn = 0;
     P.draw();
@@ -72,8 +56,7 @@ function boot() {
 
 // What the frame should show at wetness w: no rain, the drizzle tier
 // (rainCount 360 × drizzleCount 0.3 = 108 seeded) or the storm (360).
-const want = (w) => (w >= STORM ? "storm" : w >= WET ? "drizzle" : "none");
-const saw = (drops) => (drops === 0 ? "none" : drops > 200 ? "storm" : drops >= 60 && drops <= 108 ? "drizzle" : `?${drops}`);
+const want = (rain) => rain > 0.01;
 
 function walk(from, to) {
   const { G, wa, audio, frame, wetness } = boot();
@@ -83,21 +66,22 @@ function walk(from, to) {
   wa.startArc(from, to, DUR);
   const rows = [];
   let t = 0;
-  for (const f of [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95, 1.1, 1.5, 2, 3, 4]) {   // past dur: a drying road settles laps later
+  for (const f of [0.001, 0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95, 1.1, 1.5, 2, 3, 4]) {   // past dur: a drying road settles laps later
     let drops = 0;
     while (t < f * DUR - 1e-9) { drops = frame(DT); t += DT; }
     const w = wetness();
-    rows.push({ f, w: +w.toFixed(3), weather: G.raceWeather, want: want(w), saw: saw(drops), audio: audio.on });
+    const rain = wa.viewRainfall();
+    rows.push({ f, w: +w.toFixed(3), rain, weather: G.raceWeather, want: want(rain), saw: drops > 0, audio: audio.on });
   }
   return { rows, wa };
 }
 
 for (const [from, to] of [["rain", "dry"], ["dry", "rain"], ["overcast", "rain"], ["rain", "overcast"], ["fog", "rain"], ["rain", "fog"]]) {
-  test(`${from} → ${to}: the rain shown, its tier and the rain loop follow wetness at every point of the race`, () => {
+  test(`${from} → ${to}: falling rain and audio follow the atmosphere independently of surface water`, () => {
     const { rows, wa } = walk(from, to);
     for (const r of rows) {
-      assert.equal(r.saw, r.want, `f=${r.f} (${r.weather}, wetness ${r.w}): drew ${r.saw}, wetness says ${r.want}\n${JSON.stringify(rows, null, 1)}`);
-      assert.equal(r.audio, r.w >= STORM, `f=${r.f} wetness ${r.w}: the rain loop is ${r.audio ? "on" : "off"}`);
+      assert.equal(r.saw, r.want, `f=${r.f} (${r.weather}, wetness ${r.w}): rain ${r.rain}\n${JSON.stringify(rows, null, 1)}`);
+      assert.equal(r.audio, r.want, `f=${r.f} rain ${r.rain}: the rain loop is ${r.audio ? "on" : "off"}`);
     }
     assert.equal(rows[rows.length - 1].weather, to, "the arc lands on its target");
     assert.equal(wa.arc, null, "and ends once the road has settled");
@@ -119,13 +103,50 @@ test("a field nobody updates is not drawn: the frozen box a drying race left beh
   assert.equal(drawn, 0, "no rainUpdate this frame → no streaks at a stale eye");
 });
 
-test("source guard: the VM's predicates and drizzle seed are game.js's, and the render gate is unchanged", () => {
+test("source guard: grip predicates stay surface-based while render reads rainfall", () => {
   const game = read("js/game.js");
   assert.match(game, /function isWetRoad\(\) \{ return trackWetness\(\) >= 0\.25; \}/);
   assert.match(game, /function isRaining\(\) \{ return trackWetness\(\) >= 0\.72; \}/);
   assert.match(game, /function trackWetness\(\) \{ return wxArc \? wxArc\.wetness\(\) : TyreModel\.wetness\(raceWeather, null\); \}/);
-  assert.match(game, /Particles\.rainSeed\(isWetRoad\(\) && !isRaining\(\)\);/);
-  assert.match(game, /if \(isWetRoad\(\) && Particles\.rainActive\(\)\) Particles\.rainUpdate\(dt, camEye, isRaining\(\)\);/);
+  assert.ok(game.includes("Particles.rainSeed(!(wxArc && wxArc.arc) && isWetRoad() && !isRaining());"));
+  assert.ok(game.includes("Particles.rainUpdate(dt, camEye, wxArc.viewRainfall())"));
+});
+
+test("rain arrives before the road saturates, then stops while water remains", () => {
+  const { G, wa, frame, wetness, audio } = raced("dry");
+  wa.startArc("dry", "rain", 60);
+  G.raceT = 5;
+  assert.ok(frame(0.1) > 0, "drops appear on the initially dry road");
+  assert.ok(wetness() < 0.25);
+  G.raceT = 80; frame(0.1);
+  assert.ok(wetness() > 0.9);
+  wa.startArc(G.raceWeather, "dry", 10);
+  G.raceT = 90;
+  assert.equal(frame(0.1), 0, "no falling rain when the cloud clears");
+  assert.equal(audio.on, false);
+  assert.ok(wetness() > 0.72, "standing water persists for grip and spray");
+});
+
+test("drizzle to heavier rain changes particle density continuously across 0.72", () => {
+  const { G, wa, frame } = raced("dry");
+  wa.startArc("dry", "rain", 120);
+  G.raceT = 120 * 0.71;
+  const drizzle = frame(0.1);
+  G.raceT = 120 * 0.72;
+  const heavier = frame(0.1);
+  assert.ok(drizzle > 0 && heavier > drizzle);
+  assert.ok(heavier / drizzle < 1.08, `no pool-size jump: ${drizzle} → ${heavier}`);
+});
+
+test("cancelling an arriving cloud clears its early rain audio and particles", () => {
+  const { G, wa, frame, audio } = raced("dry");
+  wa.startArc("dry", "rain", 120);
+  G.raceT = 10;
+  assert.ok(frame(0.1) > 0);
+  assert.equal(audio.on, true);
+  wa.arc = null;
+  assert.equal(audio.on, false);
+  assert.equal(frame(0.1), 0);
 });
 
 test("MIXED plan duration finishes inside a short race; a host plan is not recapped", () => {

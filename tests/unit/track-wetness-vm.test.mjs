@@ -79,7 +79,7 @@ test("A2: mid-arc enum flip cannot force rain FX or wet tread while lerp is dry"
   g.G.raceWeather = "wet";              // stage flip (enum ahead of lerp)
   assert.ok(g.G.trackWetness() < 0.25, "fixture: lerp still below inter threshold");
   assert.equal(g.G.isWetRoad(), false, "road/FX wet gate follows wetness, not enum");
-  assert.equal(g.G.isRaining(), false, "rain audio/lightning gate follows wetness");
+  assert.equal(g.G.viewRainfall(), 0.05, "falling rain follows the cloud ramp independently of tread advice");
   const TyreModel = g.ctx.TyreModel;
   assert.equal(TyreModel.treadFor(g.G.raceWeather, g.G.trackWetness()), 0,
     "tread advice mid-arc near dry must stay slicks despite enum=wet");

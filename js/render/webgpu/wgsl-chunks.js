@@ -773,6 +773,7 @@ struct VSOut {
   @location(3)       trk : vec3<f32>,
   @location(4) @interpolate(flat) matId : f32,
   @location(5)       objPos : vec3<f32>,
+  @location(6) @interpolate(flat) worldMatPresent : u32,
 };
 
 @vertex
@@ -814,10 +815,17 @@ fn vs_main(
   // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
   // fight and then buried cars, AI, and fence feet in the tarmac.
   o.trk = pulled.yzw;           // s, x, hw — vec3 at location 3
-  // Integer car ids travel in normal.w, independent of indexed vertex_index.
-  // Non-car meshes keep the authored storage/LUT path, including FLAG fractions.
+  // Material ids travel in normal.w, independent of indexed vertex_index.
+  // World ids use a +1 prefix so authored MAT0 differs from a missing lane;
+  // restore the integer snorm word before decoding fractional FLAG/foliage ids.
+  // Code 18 includes the rounded upper edge of valid world ids below 17.
+  let packedWorldCode = round(aNrm.w * 32767.0) / 256.0;
+  let hasWorldMat = packedWorldCode >= 1.0 && packedWorldCode <= 18.0;
+  let worldMatId = select(pulled.x, packedWorldCode - 1.0, hasWorldMat);
+  // Keep the existing integer-car encoding and its priority over world ids.
   let packedCarId = floor(aNrm.w * (32767.0 / 256.0) + 0.5);
-  o.matId = select(pulled.x, packedCarId, packedCarId >= 20.0 && packedCarId <= 85.0);
+  o.matId = select(worldMatId, packedCarId, packedCarId >= 20.0 && packedCarId <= 85.0);
+  o.worldMatPresent = select(0u, 1u, hasWorldMat);
   o.nrm  = nm * aNrm.xyz;
   o.col  = col;
   o.wpos = wp.xyz;
@@ -956,7 +964,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let classified = select(select(0.0, 16.0, lutAsphalt), vsMat, vsMat > 0.5);
   // surfaceId 16 is the isRoadDraw flag, not a material stamp. Forcing 16
   // on every fragment painted kerbs, grass shoulders, and skirts as asphalt.
-  let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
+  // Non-road authored MAT0 (and fractions below .5) must remain authoritative:
+  // zero is a real material, while a missing packed lane uses the draw fallback.
+  // Road draws retain their existing per-fragment LUT classification.
+  let worldVertexMat = in.worldMatPresent > 0u && !isRoadDraw;
+  let resolvedMat = select(classified, vsMat, worldVertexMat);
+  let vMatId = select(D.mat2.z, resolvedMat, isRoadDraw || classified > 0.5 || worldVertexMat);
   let fwTrk = select(fwTrkAttr, fwWorld, useWorldTrk);
   // The puddle shape's lateral direction (wet block below): the world xz
   // direction of increasing track x, from derivatives — taken HERE, before the
@@ -1403,14 +1416,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   var wet = 0.0;
   var wetSheen = 0.0;
   var puddle = 0.0;   // read again by the env mirror below (Block 5b)
+  // Share the porous classification with the post-SSR receiver metadata even
+  // when dry: grass/foliage/rock/sand/snow never become polished mirrors.
+  let wmid = i32(vMatId + 0.5);
+  let porousSurface = wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11;
   // NOT on a car: this block is world-keyed (noise puddles, ripple cells, the
   // tarmac absorb) and slid across the moving body in rain — glsl-lit.js.
   if (wetness > 0.001 && !classifiedCar) {
     let upFace = smoothstep(0.50, 0.90, N.y);   // flat ground only
     // Porous ground (grass/foliage/rock/sand/snow) drinks the water: it
     // darkens but never polishes. Reflection-side terms key off wetSheen.
-    let wmid = i32(vMatId + 0.5);
-    let porous = select(0.0, 1.0, wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11);
+    let porous = select(0.0, 1.0, porousSurface);
     wet = wetness * upFace;
     // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
     // reference; GLX glsl-lit.js constant for constant: two octaves of
@@ -2136,14 +2152,21 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let band = exp(-lowH * (0.09 / mh));
       let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
       let dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
-      let mistAmt = mistK * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
+      // HEAVY MIST fill (GLX parity, glsl-lit.js): fog-weather mist closes its gaps.
+      let mistFill = smoothstep(1.1, 1.5, mistK);
+      let mistPatch = smoothstep(0.35, 0.72, cloudFBM(mp));
+      let mistAmt = mistK * band * mix(mistPatch, 0.55 + 0.45 * mistPatch, mistFill) * dRamp;
       // MIST GLOW SHARE knob (F.params5.w; GLX uMistShare parity, def 1.5).
       let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * F.params5.w;
-      color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.45));
+      color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.45 + 0.2 * mistFill));
     }
   }
 
-  return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));
+  // Opaque scene alpha carries SSR eligibility: 1 = world receiver, .75 =
+  // porous exclusion, .35 = existing car-paint tag. Blended/noAlphaWrite
+  // pipelines preserve destination alpha; retain their actual source opacity.
+  let worldTag = select(alpha, 0.75, porousSurface && alpha >= 1.0);
+  return vec4<f32>(color, select(worldTag, 0.35, carPaint > 0.001));
 }`;
 
   //    (no fragment stage) — rasterises clip-space depth into the shadow map from
@@ -2355,6 +2378,9 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // blue gradient among the stars (GLX js/render/glx/shaders/glsl-sky.js).
   let dayGate = smoothstep(0.35, 0.60, sunE);
   let daytime = dayGate * (1.0 - nightSky);
+  // Match the atmosphere's phase-scaled grey targets: cloudy twilight keeps
+  // its lower illumination instead of acquiring the midday ceiling.
+  let greyLight = 0.35 + 0.65 * daytime;
   // TWILIGHT: low sun above the horizon, gated off night (GLX SKY_FS).
   let twilight = smoothstep(0.02, 0.22, sunE) * (1.0 - dayGate) * (1.0 - nightSky);
   // Overcast factor: fades the deep-blue band under heavy cloud so grey days are
@@ -2366,8 +2392,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     // Overcast grey-shift, night-gated (GLX SKY_FS). A day overcast ceiling
     // must not paint a pale lid over a night+rain session.
     let nightLid = (U.zenith.xyz + U.horizon.xyz) * 1.25;
-    let greyZ = mix(vec3<f32>(0.55, 0.56, 0.58), nightLid, nightSky);
-    let greyH = mix(vec3<f32>(0.58, 0.58, 0.60), nightLid, nightSky);
+    let greyZ = mix(vec3<f32>(0.55, 0.56, 0.58) * greyLight, nightLid, nightSky);
+    let greyH = mix(vec3<f32>(0.58, 0.58, 0.60) * greyLight, nightLid, nightSky);
     let zenithO = mix(U.zenith.xyz, greyZ, overcast * 0.75);
     let horizonO = mix(U.horizon.xyz, greyH, overcast * 0.60);
     c = mix(horizonO, zenithO, pow(max(up, 0.0), skyGrad));
@@ -2385,7 +2411,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     }
     // Golden-hour + low-sun band: both amounts are 0 when sunE >= 0.72
     // (GLX SKY_FS). Default day / night moon-key skip; dawn/dusk still enter.
-    if (sunE < 0.72) {
+    if (nightSky < 0.5 && sunE < 0.72) {
     // Golden-hour warm band near the horizon when the sun is low.
     let goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE)) * (1.0 - smoothstep(0.0, 0.32, up))
                   * (1.0 - overcast * 0.9);
@@ -2461,6 +2487,10 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let silver = pow(sd, 6.0) * (1.0 - thick) * (0.55 + goldenCl) * (1.0 - overcast * 0.7);
     lit = lit + sunColor * silver * (1.3 + twilight * 1.6) * cloudSilver;   // CLOUD SILVER LINING knob
     if (twilight > 0.001) { lit = lit + sunColor * pow(sd, 2.5) * twilight * 0.30 * (1.0 - overcast * 0.6); }
+    // Cloud radiance follows the same solar phase as the grey gradient. The
+    // night cloud treatment stays intact; moon tint and lightning remain
+    // separate additions below instead of being dimmed with twilight sunlight.
+    lit = lit * mix(0.35 + 0.65 * daytime, 1.0, nightSky);
     if (moon > 0.0) { lit = mix(lit, lit + vec3<f32>(0.08, 0.10, 0.16), moon * cov * (1.0 - thick * 0.6) * 0.18); }
     // LIGHTNING: cool blue-white flash through the deck (GLX SKY_FS).
     if (lightning > 0.001) {
@@ -2476,8 +2506,12 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   }
 
   let upPos = max(up, 0.0);
+  // The night key direction belongs to the moon. Preserve its cloud lighting
+  // and disc/halo, but suppress the solar Mie lobe. Keep WGX's existing
+  // daytime strength; its separate overcast-damping difference is unchanged.
+  let mieDamp = 1.0 - nightSky;
   // MIE SCATTER knob (clamp keeps the mix blend valid past 1).
-  c = mix(c, sunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieScatter, 0.0, 1.0));
+  c = mix(c, sunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieDamp * mieScatter, 0.0, 1.0));
   // SKIP THE WHOLE BLOCK ON A NIGHT FRAME (GLX SKY_FS) — don't mul-to-zero.
   // uStars/nightSky is a uniform, so the branch is uniform control flow.
   if (nightSky < 0.5) {

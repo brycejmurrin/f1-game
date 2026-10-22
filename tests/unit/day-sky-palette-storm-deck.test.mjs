@@ -12,7 +12,7 @@ const read = (f) => fs.readFileSync(new URL("../../" + f, import.meta.url), "utf
 const plain = (v) => JSON.parse(JSON.stringify(v));        // arrays minted in another vm realm
 const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 
-function run({ palette, tod = "day", weather = "dry", night = false }) {
+function run({ palette, tod = "day", weather = "dry", night = false, knobs = {} }) {
   const sandbox = {
     Math: Object.assign(Object.create(Math), { random: () => 0.5 }), console,
     LampBake: { prebake: () => null, budget: () => 0, forTrack: () => null },
@@ -23,6 +23,7 @@ function run({ palette, tod = "day", weather = "dry", night = false }) {
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/lighting/knobs.js", "js/lighting/atmosphere.js"])
     vm.runInContext(read(f), sandbox, { filename: absSrc(f) });
   vm.runInContext("LightTune = { LT: LightKnobs.LT, buildTrackLights: () => [] };", sandbox);
+  Object.assign(vm.runInContext("LightKnobs.LT", sandbox), knobs);
   const wet = weather === "rain" || weather === "storm";
   const G = {
     clamp: (v, a, b) => Math.min(b, Math.max(a, v)),
@@ -35,7 +36,7 @@ function run({ palette, tod = "day", weather = "dry", night = false }) {
   };
   vm.runInContext("Atmosphere", sandbox).create(G).applyRaceSettings();
   return { zenith: plain(G.frameSky.zenith), horizon: plain(G.frameSky.horizon), fog: plain(G.frame.fogColor),
-           fogDensity: G.frame.fogDensity, sky: G.frame.skyZenith && plain(G.frame.skyZenith) };
+           fogDensity: G.frame.fogDensity, sunDir: plain(G.frameSky.sunDir), sky: G.frame.skyZenith && plain(G.frame.skyZenith) };
 }
 
 const BRIGHT = { zenith: [0.20, 0.45, 0.90], horizon: [0.80, 0.88, 0.95], fog: [0.70, 0.80, 0.90],
@@ -67,6 +68,34 @@ test("a night session's storm keeps the near-black deck, not the day-storm slate
   const night = run({ palette: BRIGHT, tod: "night", weather: "storm", night: true });
   const day = run({ palette: BRIGHT, weather: "storm" });
   assert.ok(lum(night.horizon) < 0.5 * lum(day.horizon), "night storm sky is far darker than day storm");
+});
+
+test("rain and storm cloud decks and fog retain twilight light levels instead of borrowing midday energy", () => {
+  for (const tod of ["dawn", "dusk"]) {
+    const dry = run({ palette: BRIGHT, tod });
+    const rain = run({ palette: BRIGHT, tod, weather: "rain" });
+    const storm = run({ palette: BRIGHT, tod, weather: "storm" });
+    for (const [weather, twilight] of [["rain", rain], ["storm", storm]]) {
+      const day = run({ palette: BRIGHT, weather });
+      assert.ok(lum(twilight.zenith) < lum(day.zenith) * 0.85, `${tod} ${weather}: the cloud ceiling must not emit midday light`);
+      assert.ok(lum(twilight.fog) < lum(day.fog) * 0.85, `${tod} ${weather}: distance fog must share the twilight light budget`);
+      assert.deepEqual(twilight.sunDir, dry.sunDir, `${tod} ${weather}: weather does not move the key light`);
+      for (const colour of [twilight.zenith, twilight.horizon, twilight.fog])
+        assert.ok(colour.every((v) => Number.isFinite(v) && v >= 0), `${tod} ${weather}: finite nonnegative light`);
+    }
+    assert.ok(lum(storm.zenith) <= lum(rain.zenith), `${tod}: a storm must not brighten the rain ceiling`);
+    assert.ok(storm.fogDensity > rain.fogDensity, `${tod}: storm reduces visibility without inventing brighter incident light`);
+  }
+});
+
+test("cloud and fog energy follows the effective key elevation, including the tuner offset", () => {
+  for (const tod of ["dawn", "dusk"]) for (const weather of ["rain", "storm"]) {
+    const low = run({ palette: BRIGHT, tod, weather });
+    const raised = run({ palette: BRIGHT, tod, weather, knobs: { sunElev: 35 } });
+    assert.ok(raised.sunDir[1] > low.sunDir[1], `${tod} ${weather}: the fixture raises the final key light`);
+    assert.ok(lum(raised.zenith) > lum(low.zenith) * 1.2, `${tod} ${weather}: raising the key restores daylight to the cloud deck`);
+    assert.ok(lum(raised.fog) > lum(low.fog) * 1.2, `${tod} ${weather}: fog follows the same effective elevation`);
+  }
 });
 
 test("fog in-scatter sun colour is capped (divided by max(1, brightest channel)) in all three backends", () => {

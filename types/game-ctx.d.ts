@@ -657,7 +657,8 @@ interface GameCtx {
   // ── Atmosphere helpers ────────────────────────────────────────────────────
   readonly clamp: (v: number, a: number, b: number) => number;
   readonly satAdjust: (rgb: Vec3, amt: number) => Vec3;
-  readonly isRaining: () => boolean;
+  /** Falling rain at the followed car, independent of road wetness (0..1.5). */
+  readonly viewRainfall: () => number;
   readonly isWetRoad: () => boolean;
   readonly initRainDrops: () => void;
   readonly isFloodActiveSession: () => boolean;
