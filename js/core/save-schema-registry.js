@@ -117,6 +117,7 @@ const SaveSchemaRegistry = (function () {
     "season": entry("js/career/season-cal.js", "json", 1, "season"),
     "spatialUpscaleGather": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "ssrDayGate": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "stallWatch": entry("js/perf/loop-health.js (?stallwatch=1 forces the stall watchdog under automation)", "raw", 1, "rawScalar"),
     "team": entry("js/garage/setup-sheet.js", "json", 1, "json"),
     "tlxAoFold": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxArrayNearest": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -177,6 +178,7 @@ const SaveSchemaRegistry = (function () {
     crashStrikesBuild: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
     crashSeen: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
     crashSeenBuild: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
+    benchRun: entry("js/perf/bench-run.js", "raw", 1, "string"),   // BENCHMARK plan + last results (JSON text), across its reloads
     customLogo: entry("js/career/custom-team.js", "json", 1, "json"),
     carSmooth: entry("js/car/car-shade.js", "raw", 1, "rawScalar"),
     freecamMarks: entry("js/camera/photo-kit.js", "json", 1, "json"),

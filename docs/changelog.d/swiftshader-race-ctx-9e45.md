@@ -1,0 +1,1 @@
+Fixed: first-race context loss on software GL returns to the restored title menu instead of the Graphics unavailable screen; race-entry soften (render scale 0.72, env probe off) is session-only on software raster and does not write saved settings.

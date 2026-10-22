@@ -928,7 +928,7 @@ const DataRealRace = (function () {
       return loadTraces(script, slot, go);
     }
 
-    function pitDuelCard(script, slot) {
+    function pitDuelCard(script, slot, seats) {
       const card = el("section", "dh-livecard");
       card.appendChild(el("h3", "dh-section", "PIT-STOP DUEL"));
       card.appendChild(el("p", "dh-live-sub", "Observed net gap change across two stops. A negative change means the first driver gained time; this does not isolate the cause."));
@@ -954,7 +954,14 @@ const DataRealRace = (function () {
           " · compounds " + comparison.compounds.join(" / ") + " · " + (comparison.caution ? "caution overlap" : "no recorded caution overlap") + " · " + (comparison.rain === null ? "rain data unavailable" : comparison.rain ? "rain overlap" : "no recorded rain overlap") : comparison.reason;
       };
       picks.forEach((pick) => pick.addEventListener("change", refresh));
-      action.addEventListener("click", () => { if (comparison && comparison.available) { const number = +picks[0].value.split(":")[0]; seatCode = script.drivers.find((d) => d.num === number).code; watch(script, slot, comparison.startLap, false); } });
+      // Follow the first duellist with a roster seat; neither seated keeps the
+      // DRIVE AS pick — RealRace.stage() refuses an unseated code (H3-10).
+      action.addEventListener("click", () => {
+        if (!comparison || !comparison.available) return;
+        const seated = picks.map((p) => script.drivers.find((d) => d.num === +p.value.split(":")[0])).find((d) => d && (!seats || seats.has(d.num)));
+        if (seated) seatCode = seated.code;
+        watch(script, slot, comparison.startLap, false);
+      });
       refresh(); return card;
     }
 
@@ -1073,7 +1080,7 @@ const DataRealRace = (function () {
       const pickRow = el("div", "dh-pick-fields");
       pickRow.appendChild(seatPicker(script, seats)); pickRow.appendChild(watchCameraPicker());
       watchCard.appendChild(pickRow); watchCard.appendChild(replayRow(script, slot)); slot.appendChild(watchCard);
-      slot.appendChild(pitDuelCard(script, slot));
+      slot.appendChild(pitDuelCard(script, slot, seats));
 
       const driveCard = el("section", "dh-livecard");
       driveCard.appendChild(el("h3", "dh-section", "DRIVE THIS RACE"));

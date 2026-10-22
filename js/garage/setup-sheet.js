@@ -79,6 +79,7 @@ let csVisitGeneration = 0;
 let csActiveCat = null;   // id of the tab currently open in the GARAGE
 let csLivCreating = false; // livery creator panel open?
 let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
+let csLivDirty = null;     // () => unsaved design edits? (set with the editor, cleared with the draft)
 let csLivEditId = null;    // id of the custom livery being edited in-place (null = creating new)
 let csLivTeamId = null;    // the team the draft belongs to: a team change discards it
 
@@ -1464,6 +1465,7 @@ function buildLiveryCreator(container, team) {
     changed: applyPreview, flush: flushLivPreview, preview: (value) => livePreviewDraft(team, value),
     pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns, teamId: team.id, scrollRoot: container,
   });
+  csLivDirty = designTools ? designTools.dirty : null;
   container.appendChild(wrap);
   applyPreview();
   container.scrollTop = 0;
@@ -1600,7 +1602,7 @@ function openSetup() {
 // and catches every exit, including the ones that never call this module.
 function discardLivDraft() {
   if (!csLivCreating) return;
-  csLivCreating = false; csLivDraft = null; csLivEditId = null;
+  csLivCreating = false; csLivDraft = null; csLivEditId = null; csLivDirty = null;
   // The DRAFT's team, not the current one: after a team pick the current one
   // is the new team, and the old team's draft atlas stayed cached (car-draw).
   const team = Teams.LIST.find((t) => t.id === csLivTeamId) || Teams.LIST[G.teamIdx];
@@ -1626,6 +1628,24 @@ window.addEventListener("keydown", (e) => {
   e.stopPropagation();
   cancel.click();
 }, true);
+// CLOSE GARAGE is the other door out of an edited design: BACK (game.js garageBack)
+// hides #carsetup, and discardLivDraft() above threw the edits away unasked. Same
+// arm-then-confirm as CANCEL: the first tap on BACK with unsaved edits only arms
+// it (capture phase, so garageBack never runs); the confirming tap falls through.
+{
+  const back = $("cs-back");
+  if (back) back.addEventListener("click", (e) => {
+    const armedNow = back.dataset.armed;
+    if (!armedNow && csLivCreating && csLivDirty && csLivDirty()) {
+      e.stopImmediatePropagation();
+      back.dataset.label = back.textContent;
+      G.armConfirm(back, "DISCARD EDITS?", () => {});
+    } else if (armedNow) {
+      G.armConfirm(back, "", () => {});
+      back.textContent = back.dataset.label || "BACK"; delete back.dataset.label;
+    }
+  }, true);
+}
 // lookRowSpecs: Photo Studio's garage visit offers the same rows (js/ui/photo-studio.js deps.garage.looks).
 return { buildSetup, openSetup, lookRowSpecs };
 }

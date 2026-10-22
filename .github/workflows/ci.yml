@@ -2872,8 +2872,10 @@ jobs:
   # owns the rule for when skipping is honest (selected-verdict owns the
   # selected gate's — an empty or dropped plan — which is why it is needed
   # here, not just `selected`). Branch protection requires `CI` and nothing
-  # else (Bryce, 2026-10-15; it was twelve names): it is the only check that
-  # also carries smoke, the sweeps, renderer-macos and xr.
+  # else (Bryce, 2026-10-15; it was twelve names): it is the only check, and
+  # it carries the FAILURES of smoke, the sweeps, renderer-macos and xr, not their
+  # execution: only REQUIRE_SUCCESS (full-tier PR runs) must have run, and the
+  # job summary lists executed vs skipped jobs (#3507).
   # tools/ci/ci-verdict.mjs.
   #
   # EVERY JOB (2026-10-16): poke-train, the train's dispatcher, is gone with

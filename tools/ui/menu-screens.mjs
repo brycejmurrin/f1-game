@@ -322,6 +322,12 @@ export const SCREENS = [
           || b.find((e) => e.id && e.id.startsWith("cr-guide")))?.click(); });
       await p.waitForSelector("#career-guide:not([hidden])", { timeout: 15000 }); } },
 
+  { id: "bench", name: "Benchmark", root: "#bench", open: async (p) => {
+      // SETTINGS > GRAPHICS > BENCHMARK... (js/perf/bench-run.js mounts the button at the top of the GRAPHICS page).
+      await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
+      await p.click("#pm-open-graphics"); await p.waitForSelector("#pm-bench-open", { state: "visible", timeout: 15000 });
+      await p.click("#pm-bench-open"); await p.waitForSelector("#bench:not([hidden])", { timeout: 15000 }); } },
+
   { id: "careerhub", name: "Career hub (season)", root: "#career", open: async (p) => {
       // #career shows the NEW-CAREER SETUP on a fresh profile and the SEASON HUB
       // once one exists — two different layouts behind one root. The default
@@ -579,7 +585,7 @@ export const SCREENS = [
 export const OVERLAY_IDS = [
   "select", "carsetup", "career", "career-offers", "career-history",
   "career-guide", "teampicker", "race-settings", "quali", "standings", "results", "customize",
-  "season-setup", "howtoplay", "advanced", "pmsettings", "pausemenu", "datahub", "trackdesigner", "track-detail", "vsfriend",
+  "season-setup", "howtoplay", "advanced", "pmsettings", "bench", "pausemenu", "datahub", "trackdesigner", "track-detail", "vsfriend",
   "audioset", "spotifypanel", "lighting", "camtune", "flyby", "photo-controls",
   // Photo Studio is its own full-screen layer (not under photo-controls). Leaving it
   // open after a photostudio cell made every later menu-mock click time out on a

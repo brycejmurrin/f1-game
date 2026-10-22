@@ -104,7 +104,7 @@ materialArray   11,883,816 B    11.33 MB   baked albedo + normal arrays
 
 **Done.** The estimate held (147 → 146.67, 11.9 → 11.33) and the liveries are
 **10.6× the packed world VBO** at 13.8 MB on a mean circuit. Recorded in
-`notes/PERF-FINDINGS.md` §2v.
+`notes/PERF-FINDINGS.md` §2av.
 
 ### Task 2: A desktop AI livery tier — GATED ON TASK 1
 
@@ -172,7 +172,7 @@ after     41.67 MB   player still 1024x1280 (census `biggest` confirms), 21 AI a
       mesh's world-area-to-UV-area ratio, so the GPU samples ~mip 3 and the
       atlas's top level is never reached. The crossover where the AI tier would
       under-sample is 1.2 m, inside the car. Stronger than a one-distance pixel
-      diff because it covers every distance. `notes/PERF-FINDINGS.md` §2x.
+      diff because it covers every distance. `notes/PERF-FINDINGS.md` §2ax.
 - [ ] ~~NOT DONE — a dedicated AI close-up A/B.~~ Superseded by the above. The census proves the memory
       and `tex-census` proves the tier, but neither proves APPEARANCE. What is
       missing is a before/after render of an AI livery at racing distance and
@@ -184,7 +184,7 @@ after     41.67 MB   player still 1024x1280 (census `biggest` confirms), 21 AI a
       `ok=true gpuErrors=0`, no FAILED section, and `meanLuma` 72.0 — the same
       figure as before the change and as the run after it. The `fps` column
       looked like a 27 % regression and is not one: a control run of the SAME
-      code came back 54 % higher. See `notes/PERF-FINDINGS.md` §2w, which now
+      code came back 54 % higher. See `notes/PERF-FINDINGS.md` §2aw, which now
       says never to read census fps off a single before/after.
 
 **Risk:** this is the one task here that can visibly degrade the game. The
