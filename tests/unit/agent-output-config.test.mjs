@@ -19,6 +19,7 @@ test("every configured MCP server uses the common output gateway and retains its
     "js-debugger": ["tools/mcp/js-debugger-mcp.sh", "serve"],
     "chrome-devtools": ["tools/mcp/chrome-devtools-mcp.sh", "run"],
     "playwright-official": ["tools/mcp/playwright-mcp.sh", "run"],
+    "browserstack": ["tools/mcp/browserstack-mcp.sh", "run"],
   };
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), Object.keys(expected).sort());
   for (const [name, row] of Object.entries(cfg.mcpServers)) {

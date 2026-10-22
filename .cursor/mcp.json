@@ -65,6 +65,19 @@
         "tools/mcp/lsp-mcp.sh",
         "serve"
       ]
+    },
+    "browserstack": {
+      "type": "stdio",
+      "command": "bash",
+      "args": [
+        "tools/mcp/output-level-mcp.sh",
+        "--server",
+        "browserstack",
+        "--",
+        "bash",
+        "tools/mcp/browserstack-mcp.sh",
+        "run"
+      ]
     }
   }
 }

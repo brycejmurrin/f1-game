@@ -34,3 +34,11 @@ startup_timeout_sec = 60
 command = "bash"
 args = ["tools/mcp/output-level-mcp.sh", "--server", "apex-lsp", "--", "bash", "tools/mcp/lsp-mcp.sh", "serve"]
 startup_timeout_sec = 30
+
+# Official @browserstack/mcp-server (pinned in the wrapper). Credentials are
+# read from the environment at runtime (BROWSERSTACK_USERNAME /
+# BROWSERSTACK_ACCESS_KEY) — never write their values into this file.
+[mcp_servers.browserstack]
+command = "bash"
+args = ["tools/mcp/output-level-mcp.sh", "--server", "browserstack", "--", "bash", "tools/mcp/browserstack-mcp.sh", "run"]
+startup_timeout_sec = 60
