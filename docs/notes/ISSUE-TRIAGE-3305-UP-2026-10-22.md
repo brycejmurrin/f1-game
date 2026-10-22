@@ -1,6 +1,6 @@
 # Issue triage, #3305 and up (A·T3, 2026-10-22)
 
-Deploy tip `72408e99` (#3478 merge). 68 open issues in range. Counts: STALE 2, VALID 55, PARTLY-VALID 4, FIXED 5, IN-FLIGHT 1, NEEDS-INFO 1.
+Deploy tip `72408e99` (#3478 merge). 68 open issues in range. Counts: VALID 56, PARTLY-VALID 4, STALE 1, FIXED 5, IN-FLIGHT 1, NEEDS-INFO 1.
 
 **Evidence level, stated honestly:** no screenshots were taken; a live pass (06:30-06:50Z) re-ran `tools/ui/layout-audit.mjs` and `menu-fit.mjs` for #3305-#3307, #3330, #3334-#3336 and #3338, with the results in their rows. Doc/skill issues were re-checked by grep on the tip. Scenery issues were re-measured with `tools/track/{ground,clip,coplanar,float}-audit.cjs` where the claim was a count, and otherwise confirmed by "the circuit files have not changed since the surveyed tip `17a7d1be0`". UI/garage and car visual claims are VALID by that same unchanged-code argument and were not re-shot. Merged/open PRs checked: every merge since 10-19 (93) and the 16 open PRs.
 
@@ -8,7 +8,6 @@ Deploy tip `72408e99` (#3478 merge). 68 open issues in range. Counts: STALE 2, V
 - #3416 [D·car] body-shapes: Playwright garage capture gallery aborted (no shots/ tree)
 - #3414 [D·car] wheels: STYLE Arc Script and Raised Letters sidewalls barely visible in garage
 - #3308 [D·scenery] test-permission-check (delete me)
-- #3305 [D·survey] Title mode grid clips when UI scale is 200% on phone landscape
 - #3477 closes itself (flake-tally bot) once #3473 is in its window.
 
 ## Wait for an open PR, then close
@@ -95,7 +94,7 @@ Deploy tip `72408e99` (#3478 merge). 68 open issues in range. Counts: STALE 2, V
 | #3308 | [D·scenery] test-permission-check (delete me) | - | STALE | Permission probe ('delete me'). Closed not_planned by the orchestrator 2026-10-22. | closed |
 | #3307 | [D·survey] Settings Appearance steppers undersized at UI scale 75% | - | PARTLY-VALID | Live: `menu-fit 844x390 --scale=75 --only=settingsappearance` = ok (no tiny rows now), but `layout-audit settingsappearance ios-iphone-landscape@75` still lists 80 soft taps at 39 px high against the 52 px floor (artifacts/agent-output/apex-tools-apex_ui_fit-1792650671381-*.json). | keep, restate as soft-tap (39 px < 52 px floor) rather than tiny |
 | #3306 | [D·survey] VS Friend sheet header clips at UI scale 200% (desktop) | - | VALID | Live: `layout-audit vsfriend desktop-1440x900@200` clipped 1. | keep |
-| #3305 | [D·survey] Title mode grid clips when UI scale is 200% on phone landscape | - | STALE | Live 2026-10-22 on tip afd7ebd8: `layout-audit title ios-iphone-landscape@200` clipped 0 offscreen 0 (only 7 soft taps); `menu-fit 844x390 852x344 --scale=200` prints no vLost rows. The cited vLost on #mb-career/#mb-data does not reproduce. Comment posted; close left to the orchestrator. | close not_planned (orchestrator) |
+| #3305 | [D·survey] Title mode grid clips when UI scale is 200% on phone landscape | - | VALID | CORRECTED 06:55Z (my earlier STALE was wrong: I ran menu-fit with --only=title, which matches no screen id, so it printed nothing). With the right id, `node tools/ui/menu-fit.mjs 844x390 852x344 --scale=200 --only=menu` on tip ed31a5a2 reproduces the filed rows exactly at both sizes: vLost #mb-career 44>40, #mb-daily 44>40, #mb-race 44>40, #mb-tt 81>77, #mb-vs 81>77, #mb-season 44>40, #mb-practice 44>40, #mb-garage 44>40, #mb-data 81>77. layout-audit title@200 clipped 0 does not see it (different metric). css/menus.css:386-398 uses min-height/auto, so the 4 px comes from a clipping parent slot; not traced. | keep; fix the grid row slot (4 px short at 200%) |
 
 ## Unowned lanes (B·W15 #3330-#3339, B·W16 #3412/#3413): still valid? size
 S = one CSS rule or one mesh tweak; M = several rules/files or a re-render loop; L = needs a design decision.
