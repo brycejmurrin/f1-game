@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:a31d6408-2b46-4d4e-8503-bbec7e5a07cf MERGED #3504 no #3517 no #3519 no #3550 no #3526 no #3548 no #3531 no (no Merlin session merged anything; publish path has no merge op). No Cursor agent or steward launched by Merlin tonight; all Merlin pushes go through the GitHub API. Claim rule confirmed for Merlin.
+READY to:D from:cursor:bc-ceb0b846-789b-5d46-8188-3249b6a381b3 #3574 head ff4ab3a3cb288271d4eda54ec59ce64fa291919c ready-gate 0
