@@ -118,12 +118,20 @@ function refuse(o = {}) {
   const ss = o.ssThrows
     ? { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } }
     : { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
+  const ring = [];
+  const recordGfxBudgetExhausted = (where, err) => {
+    const msg = (err && (err.message || err)) || "unknown";
+    ring.push({ t: Date.now(), kind: "caught", msg: "Caught @ " + where + ": " + String(msg).slice(0, 400),
+                detail: String((err && err.stack) || "").slice(0, 800) });
+    out.errors.push([where, msg]);
+  };
   const ctx = vm.createContext({
     _glPin: o.pin ?? null, forceWebGL: !!o.forceWebGL, _autoStayGL: !!o.autoStayGL, _sessLostN: 0,
     sessionStorage: ss,
     localStorage: { removeItem: (k) => { delete out.local[k]; } },
     location: { reload() { out.reloads++; } },
-    window: { __apexReportError: (w, e) => out.errors.push([w, e.message]) },
+    recordGfxBudgetExhausted,
+    window: { __apexErrors: ring, __apexReportError: (w, e) => out.errors.push([w, e.message]) },
   });
   const src = read("js/render/three/tlx.js");
   // Hoisted beside persistFail by perf hunt 3 R13 (one closure per renderer, not one per present()): read
@@ -158,7 +166,7 @@ test("refuseTab: bounded at two reloads per tab; past the cap the latch is kept 
   const r = refuse({ forceWebGL: true });
   for (let i = 0; i < 6; i++) r.call();
   assert.equal(r.reloads, 2, "a tab that fails every boot cannot loop");
-  assert.equal(r.errors.length, 4, "every refused reload says so on the error card");
+  assert.equal(r.errors.length, 4, "every refused reload is recorded on the error ring");
   assert.equal(r.store["apex26.gfxClaimFail"], "1", "the player's own reload still lands on GLX");
   const spent = refuse({ ss: { "apex26.ctxLostReloads": "2" } });
   spent.call();

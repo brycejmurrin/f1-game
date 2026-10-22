@@ -449,14 +449,16 @@ test("GLX restores even when sessionStorage is blocked", () => {
 });
 
 test("GLX's third visible context loss says so instead of leaving a silent dead canvas", () => {
-  // Two counted reloads per tab, then GLX (nothing beneath it) stopped with
-  // no exception, so the error overlay never painted. TLX reports the same
-  // cap through __apexReportError; GLX now matches it. Past the budget also
-  // opens the Graphics unavailable panel (RETRY / USE WEBGL2).
+  // Two counted reloads per tab, then GLX (nothing beneath it) stops with the
+  // Graphics unavailable panel (RETRY / USE WEBGL2). Past the budget the
+  // failure is written to __apexErrors for __apex.diag() only — not the
+  // full-screen error overlay, which would sit on top of #nogl and steal the
+  // first tap (e.g. Close Garage).
   for (const prior of ["0", "2"]) {
     const h = bootGlx();
     const reports = [];
     const panels = [];
+    h.sandbox.__apexErrors = [];
     h.sandbox.__apexReportError = (where, err) => reports.push([where, err && err.message]);
     h.sandbox.RendererPicker = { showUnavailable: (opts) => panels.push(opts && opts.panel && opts.panel.id) };
     h.sandbox.document.getElementById = (id) => ({ id });
@@ -465,13 +467,15 @@ test("GLX's third visible context loss says so instead of leaving a silent dead 
     h.loseContext();
     if (prior === "0") {
       assert.equal(reports.length, 0, "a first loss is a quiet counted reload");
+      assert.equal(h.sandbox.__apexErrors.length, 0, "under the budget: nothing on the error ring");
       assert.equal(h.sandbox.__timers.length, 1, "the self-heal reload timer");
       assert.equal(panels.length, 0, "under the budget: no unavailable panel yet");
     } else {
       assert.equal(h.sandbox.__timers.length, 0, "past the cap: no reload loop");
-      assert.equal(reports.length, 1, "past the cap the player is told");
-      assert.equal(reports[0][0], "gfx");
-      assert.match(reports[0][1], /keeps getting lost \(3 times\)/);
+      assert.equal(reports.length, 0, "past the cap: no full-screen error overlay");
+      assert.equal(h.sandbox.__apexErrors.length, 1, "past the cap: recorded on the error ring");
+      assert.equal(h.sandbox.__apexErrors[0].kind, "caught");
+      assert.match(h.sandbox.__apexErrors[0].msg, /Caught @ gfx:.*keeps getting lost \(3 times\)/);
       assert.deepEqual(panels, ["nogl"], "past the cap: Graphics unavailable panel");
     }
   }
@@ -740,6 +744,12 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
   // The third context loss in a tab surrenders to GLX (TLX has a floor below
   // it, unlike GLX) instead of freezing on the last frame with the label lying.
   assert.match(tlx, /context lost x/);
+  const ctxBudget = span(tlx, "from the fourth, stop and say so instead.", "RendererPicker.showUnavailable", "TLX ctx-loss budget path");
+  assert.match(ctxBudget, /recordGfxBudgetExhausted\("gfx"/);
+  assert.doesNotMatch(ctxBudget, /__apexReportError/, "past the budget: ring only, not the full-screen overlay");
+  const refusePast = span(tlx, "const refuseTab = () => {", "const persistFail = (e, postOnly)", "TLX refuseTab past budget");
+  assert.match(refusePast, /recordGfxBudgetExhausted\("gfx"/);
+  assert.doesNotMatch(refusePast, /__apexReportError/);
   const present = tlx.indexOf("present(opts) {");
   const presentEnd = tlx.indexOf("// debug — the __tlx tooling", present);
   const body = tlx.slice(present, presentEnd);
