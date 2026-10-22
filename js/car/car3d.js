@@ -2835,7 +2835,12 @@ const Car3D = (function () {
 
     if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
     const fin = { sections, zoneRanges, dim: _ckAcc, smooth: shade && !sil };
-    if (opts && opts.refinish) out._refinish = Object.assign(fin, { mat: out.mat.slice(), col: out.col.slice(), nrm: out.nrm.slice(), keep: {} });
+    // opts.shadeKeep: an earlier build's _refinish.keep, handed over ONLY by a caller that knows the geometry is the
+    // same (the garage's hull key: a colour-only livery change never moves a vertex). CarShade.smooth then skips its
+    // geometry prep (~83 of a ~130 ms build here) and never writes to the shared object; a count mismatch starts fresh.
+    const sk = opts && opts.shadeKeep;
+    const keep = sk && sk.vt && sk.fx.length === out.idx.length / 3 && sk.cnt.length === out.pos.length / 3 + 1 ? sk : {};
+    if (opts && opts.refinish) out._refinish = Object.assign(fin, { mat: out.mat.slice(), col: out.col.slice(), nrm: out.nrm.slice(), keep });
     shadeFlags.round = false;
     shadeFlags.coverHi = true;
     finishPass(out, liv, fin);

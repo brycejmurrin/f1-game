@@ -191,8 +191,11 @@
       // Gradient: the overcast-flattened zenith / horizon (night lid = (z+h)*1.25).
       const kz = overcast * 0.75, kh = overcast * 0.60;
       const lid = (a, b) => (a + b) * 1.25;
-      const gz = [lerp(0.55, lid(ze.x, ho.x), night), lerp(0.56, lid(ze.y, ho.y), night), lerp(0.58, lid(ze.z, ho.z), night)];
-      const gh = [lerp(0.58, lid(ze.x, ho.x), night), lerp(0.58, lid(ze.y, ho.y), night), lerp(0.60, lid(ze.z, ho.z), night)];
+      // Match atmosphere's grey deck/fog target: heavy cloud loses solar colour
+      // at twilight without inheriting the full daylight grey radiance.
+      const greyLight = 0.35 + 0.65 * daytime;
+      const gz = [lerp(0.55 * greyLight, lid(ze.x, ho.x), night), lerp(0.56 * greyLight, lid(ze.y, ho.y), night), lerp(0.58 * greyLight, lid(ze.z, ho.z), night)];
+      const gh = [lerp(0.58 * greyLight, lid(ze.x, ho.x), night), lerp(0.58 * greyLight, lid(ze.y, ho.y), night), lerp(0.60 * greyLight, lid(ze.z, ho.z), night)];
       set3(D.zenithO, lerp(ze.x, gz[0], kz), lerp(ze.y, gz[1], kz), lerp(ze.z, gz[2], kz));
       set3(D.horizonO, lerp(ho.x, gh[0], kh), lerp(ho.y, gh[1], kh), lerp(ho.z, gh[2], kh));
       D.dayClear.value = daytime * (1 - overcast);
@@ -234,7 +237,8 @@
       const wk = twilight * 0.30 * (1 - overcast * 0.6);
       set3(D.washCol, sc.x * wk, sc.y * wk, sc.z * wk);
       // Mie + the horizon glow in the sun's compass direction.
-      const mieDamp = 1 - overcast * 0.85;
+      // sunDir is the moon key at night: solar lobes must not follow it.
+      const mieDamp = (1 - overcast * 0.85) * (1 - night);
       D.mieDamp.value = mieDamp;
       D.mieK.value = 0.22 * mieDamp * U.mieScatter.value;
       const hLen = Math.hypot(sd.x, sd.z);
@@ -532,8 +536,8 @@
             .mul(smoothstep(0.0, 0.5, up).oneMinus()).add(1.0));
         });
         // Golden-hour + low-sun band: both amounts are 0 when sunE >= 0.72
-        // (GLX SKY_FS). Default day / night moon-key skip; dawn/dusk still enter.
-        If(sunE.lessThan(0.72), () => {
+        // (GLX SKY_FS). A low moon key must never activate sunset bands.
+        If(D.nightSky.lessThan(0.5).and(sunE.lessThan(0.72)), () => {
         // Golden-hour: warm overlay near the horizon when the sun is low.
         const goldenAmt = D.goldenK.mul(smoothstep(0.0, 0.32, up).oneMinus());
         const goldenColor = D.goldenColor;
@@ -641,6 +645,9 @@
         If(twilight.greaterThan(0.001), () => {
         lit.addAssign(D.washCol.mul(pow(sd, 2.5)));
         });
+        // The cloud body follows the same authored twilight radiance ratio as
+        // the grey gradient. Day/night stay unchanged; moon and flash follow.
+        lit.mulAssign(mix(daytime.mul(0.65).add(0.35), float(1.0), D.nightSky));
         // Moon tints nearby clouds faintly blue-silver.
         If(U.moon.greaterThan(0.0), () => {
           const moonLit = U.moon.mul(cov).mul(thick.mul(0.6).oneMinus()).mul(0.18);

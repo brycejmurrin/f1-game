@@ -127,7 +127,8 @@
       // Key must change when mrtNode is armed: HDR writes 2 attachments,
       // env cube / canvas write 1. A pinned constant key would reuse the
       // wrong program and fail WebGPU validation on the cube.
-      m.customProgramCacheKey = () => key + (m.mrtNode ? "-mrt" : "");
+      m.customProgramCacheKey = () => key + (m.mrtNode
+        ? (m.userData.tlxKeepSsrTag ? "-mrt-keep" : "-mrt") : "");
     }
 
     // M4: the tlx-shadow.js subsystem (null/absent -> no shadow code is
@@ -1733,15 +1734,16 @@
         const wet = float(0.0).toVar();
         const puddle = float(0.0).toVar();
         const wetSheen = float(0.0).toVar();
+        // Shared by the water film and the SSR receiver tag, including dry laps.
+        const wmid = surfaceId;
+        const porous = select(
+          wmid.equal(9.0).or(wmid.equal(6.0)).or(wmid.equal(10.0))
+            .or(wmid.equal(8.0)).or(wmid.equal(11.0)),
+          float(1.0), float(0.0));
         // NOT on a car: the block is world-keyed (noise puddles, ripple cells,
         // the tarmac absorb) and slid across the moving body — glsl-lit.js.
         If(U.wetness.greaterThan(0.001).and(classifiedCar.not()), () => {
           const upFace = smoothstep(0.50, 0.90, N.y);
-          const wmid = surfaceId;
-          const porous = select(
-            wmid.equal(9.0).or(wmid.equal(6.0)).or(wmid.equal(10.0))
-              .or(wmid.equal(8.0)).or(wmid.equal(11.0)),
-            float(1.0), float(0.0));
           wet.assign(U.wetness.mul(upFace));
           // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
           // reference; GLX glsl-lit.js constant for constant: two octaves of
@@ -2464,15 +2466,19 @@
             const band = exp(lowH.negate().mul(float(0.09).div(max(U.mistHeight, 0.05))));
             const mp = wp.xz.mul(0.020).add(vec2(U.time.mul(0.010), U.time.mul(0.006)));
             const dRamp = clamp(vd.sub(8.0).div(45.0), 0.0, 1.0);
-            const mist = U.groundMist.mul(band).mul(smoothstep(0.35, 0.72, cloudFBM(mp, 0.35))).mul(dRamp);
+            // HEAVY MIST fill (GLX parity, glsl-lit.js): fog-weather mist closes its gaps.
+            const mistFill = smoothstep(1.1, 1.5, U.groundMist);
+            const mistPatch = smoothstep(0.35, 0.72, cloudFBM(mp, 0.35));
+            const mist = U.groundMist.mul(band).mul(mix(mistPatch, mistPatch.mul(0.45).add(0.55), mistFill)).mul(dRamp);
             const mistSun = max(sunAmount, 1e-4);
             const mistCol = mix(vec3(U.fogColor), vec3(U.sunColor), mistSun.mul(mistSun).mul(mistSun))
               .add(lampFogC.mul(U.mistShare));
-            color.assign(mix(color, mistCol, clamp(mist, 0.0, 0.45)));
+            color.assign(mix(color, mistCol, clamp(mist, 0.0, mistFill.mul(0.2).add(0.45))));
           });
         });
 
-        // output alpha
+        // SSR metadata: 0.35 car paint, 0.75 porous/non-mirroring world,
+        // 1 opaque sealed world. Real opacity is separate (see sharedFragment).
         // M8: car-paint pixels are TAGGED in alpha (0.35 — js/render/glx/shaders/glsl-lit.js)
         // when the offscreen HDR target carries the frame; the composite's SSR
         // reads the road/car masks off it. Opaque draws write it directly;
@@ -2480,7 +2486,8 @@
         // stage (Zero/One alpha factors in makeMaterial — GLX's colorMask).
         // Without the post chain (direct to canvas) the tag stays off.
         return vec4(color, SSR_TAG
-          ? select(carPaint.greaterThan(0.001), float(0.35), matU.alpha)
+          ? select(carPaint.greaterThan(0.001), float(0.35),
+            select(porous.greaterThan(0.5).and(matU.alpha.greaterThanEqual(1.0)), float(0.75), matU.alpha))
           : matU.alpha);
       })();
     }
@@ -2608,6 +2615,14 @@
       return { draw, pA, pB };
     }
     const _sharedGraph = [null, null, null]; // [plain, chunked, instanced]
+    // The receiver lives in attachment R, not scene alpha. Keeping only A on
+    // translucent/noAlphaWrite materials does not protect this metadata.
+    const _tagKeep = {
+      blending: THREE.CustomBlending,
+      blendSrc: THREE.ZeroFactor, blendDst: THREE.OneFactor,
+      blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
+      blendEquation: THREE.AddEquation, blendEquationAlpha: THREE.AddEquation,
+    };
     const _mats = [];
     let _sharedPos = null;
     function sharedFragment(chunked, instanced) {
@@ -2642,6 +2657,11 @@
           mrt: (SSR_TAG && typeof mrt === "function")
             ? mrt({ output: out, ssrTag: packed.a })
             : null,
+          // Same shader nodes; only this attachment's blend descriptor differs.
+          // Cached per graph, never allocated by the per-frame setSsrMrt loop.
+          mrtKeep: (SSR_TAG && typeof mrt === "function")
+            ? mrt({ output: out, ssrTag: packed.a }).setBlendMode("ssrTag", _tagKeep)
+            : null,
         };
       }
       return g;
@@ -2666,6 +2686,7 @@
       ud.tlxPackB = new THREE.Vector4(ud.tlxClearcoat, ud.tlxCarPaint, ud.tlxSparkle, o.carFinish ? 1 : 0);
       ud.tlxChunked   = !!o.chunked;
       ud.tlxInstanced = !!o.instanced;
+      ud.tlxKeepSsrTag = alpha < 1 || !!o.noAlphaWrite;
       const packed = sharedFragment(!!o.chunked, !!o.instanced);
       _mats.push(m);
       m.colorNode = packed.rgb;
@@ -2801,7 +2822,7 @@
       for (let i = 0; i < _mats.length; i++) {
         const m = _mats[i];
         const g = sharedFragment(!!m.userData.tlxChunked, !!m.userData.tlxInstanced);
-        m.mrtNode = on && g.mrt ? g.mrt : null;
+        m.mrtNode = on ? (m.userData.tlxKeepSsrTag ? g.mrtKeep : g.mrt) : null;
       }
     }
 

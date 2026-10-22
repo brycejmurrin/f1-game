@@ -299,8 +299,16 @@ const Particles = (function () {
   function _sprayRoll() {
     const N = sprayCars();
     if (_sprK <= N) { _sprThr = Infinity; _sprK = 0; return; }
-    const a = Array.prototype.slice.call(_sprD, 0, _sprK).sort((p, q) => p - q);
-    _sprThr = a[N - 1] * 1.05;   // 5 % hysteresis: two cars at equal range do not flicker
+    // Only the nearest N distances matter. Select them in the existing
+    // Float32 prefix: no boxed copy/comparator per wet frame, no full sort.
+    for (let i = 1; i < _sprK; i++) {
+      const d = _sprD[i];
+      let j = Math.min(i, N - 1);
+      if (i >= N && !(d < _sprD[j])) continue;
+      while (j > 0 && _sprD[j - 1] > d) { _sprD[j] = _sprD[j - 1]; j--; }
+      _sprD[j] = d;
+    }
+    _sprThr = _sprD[N - 1] * 1.05;   // 5 % hysteresis: two cars at equal range do not flicker
     _sprK = 0;
   }
 
@@ -430,7 +438,7 @@ const Particles = (function () {
   const RAIN_H = RAIN_DOWN + RAIN_UP;
   const RAIN_EXPO = 0.022;                             // s — the "shutter" that turns apparent velocity into streak length
   const RAIN_COL = [0.69, 0.78, 0.91];                 // the overlay's #afc8e8
-  let _rainOn = false, _rainN = 0, _rainLastShown = 0, _rainRaining = false;
+  let _rainOn = false, _rainN = 0, _rainLastShown = 0;
   let _rainFed = false;                                // rainUpdate ran since the last draw()
   let _rox = null, _roy = null, _roz = null;          // offset from the eye (m)
   let _rspd = null, _rlen = null, _ralpha = null;     // fall speed (m/s), streak-length scale, opacity
@@ -455,6 +463,8 @@ const Particles = (function () {
   // The storm scale the NEXT rainSeed uses ({count, speed, len, alpha}; null or
   // all-1 = RAIN). Set by the weather path before it reseeds.
   let _rainK = null;
+  let _rainAmount = 1, _rainTone = 0, _rainBudget = 0;
+  let _rainDrizzle = false, _rainSpeedScale = 1, _rainLenScale = 1;
   function rainIntensity(k) {
     _rainK = k && k.count > 0 && !(k.count === 1 && k.speed === 1 && k.len === 1 && k.alpha === 1) ? k : null;
     return _rainK ? _rainK.count : 1;
@@ -468,7 +478,7 @@ const Particles = (function () {
     // cell but velocity changes (parked→pullaway); 4 m/s ≈ one gear of slant.
     const spdQ = (Math.hypot(_camVel[0], _camVel[1], _camVel[2]) / 4) | 0;
     const LT = _lt();
-    const key = ((_rainRaining ? 1 : 0) + "|" + _rainShown() + "|" + spdQ + "|" +
+    const key = (Math.round(_rainTone * 100) + "|" + _rainShown() + "|" + spdQ + "|" + _rainSpeedScale + "|" + _rainLenScale + "|" +
       (LT.rainWind != null ? LT.rainWind : 0) + "|" + (LT.rainSpeed != null ? LT.rainSpeed : 1) + "|" +
       (LT.rainOpacity != null ? LT.rainOpacity : 1) + "|" + (LT.rainShearWind != null ? LT.rainShearWind : 0.9) + "|" +
       (LT.rainShearLen != null ? LT.rainShearLen : 2) + "|" + (LT.windDir != null ? LT.windDir : 35));
@@ -499,17 +509,20 @@ const Particles = (function () {
     // STORM (js/race/storm.js RAIN_K, set through rainIntensity): more, faster,
     // longer, denser streaks than RAIN. Never the drizzle tier.
     const hk = drizzle ? null : _rainK;
+    _rainBudget = base * (hk ? hk.count : 1);
     const count = Math.max(0, Math.min(wetCap, Math.round(base * (drizzle ? dzCount : 1) * (hk ? hk.count : 1))));
     if (!_rox || _rox.length < count) {
       _rox = new Float32Array(count); _roy = new Float32Array(count); _roz = new Float32Array(count);
       _rspd = new Float32Array(count); _rlen = new Float32Array(count); _ralpha = new Float32Array(count);
     }
     _rainN = count;
+    _rainAmount = 1;
+    _rainDrizzle = !!drizzle; _rainSpeedScale = drizzle ? dzSpeed : 1; _rainLenScale = drizzle ? dzLen : 1;
     for (let i = 0; i < count; i++) {
       _rainScatter(i);
       // 6.5-9.5 m/s is terminal velocity for 1.5-4 mm drops; the knobs scale it.
-      _rspd[i] = (6.5 + Math.random() * 3.0) * (drizzle ? dzSpeed : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1) * (hk ? hk.speed : 1);
-      _rlen[i] = (0.75 + Math.random() * 0.5) * (LT.rainStreak != null ? LT.rainStreak : 1) * (drizzle ? dzLen : 1) * (hk ? hk.len : 1);
+      _rspd[i] = (6.5 + Math.random() * 3.0) * (LT.rainSpeed != null ? LT.rainSpeed : 1) * (hk ? hk.speed : 1);
+      _rlen[i] = (0.75 + Math.random() * 0.5) * (LT.rainStreak != null ? LT.rainStreak : 1) * (hk ? hk.len : 1);
       _ralpha[i] = (0.16 + Math.random() * 0.34) * (hk ? hk.alpha : 1);
     }
     _rainLastShown = count;
@@ -529,7 +542,7 @@ const Particles = (function () {
   // density returns when it recovers.
   function _rainShown() {
     const d = shedDiv();
-    return d > 1 ? Math.ceil(_rainN / d) : _rainN;
+    return Math.ceil(_rainN * _rainAmount / d);
   }
 
   // Advance the field. `eye` = the camera position (world, m); the camera
@@ -540,7 +553,18 @@ const Particles = (function () {
     if (!_rainN || !_rainOn || !eye) return;
     if (!(dt > 0)) dt = 0;
     if (dt > 0.1) dt = 0.1;      // tab-back / hitch: don't teleport the field
-    _rainRaining = !!raining;
+    const LT = _lt();
+    // A numeric rate is continuous atmospheric rainfall; boolean callers keep
+    // their seeded tier. Apply the hardware cap AFTER density, so mobile and
+    // desktop stay continuous when an arc settles into static drizzle.
+    const rate = typeof raining === "number" ? _clamp01(Number.isFinite(raining) ? raining : 0) : null;
+    const dz = _clamp01(LT.drizzleCount != null ? LT.drizzleCount : 0.3);
+    const density = rate == null ? 1 : rate <= 0.5 ? 2 * rate * dz : dz + 2 * (rate - 0.5) * (1 - dz);
+    _rainTone = rate == null ? (raining ? 1 : 0) : _clamp01(2 * rate - 1);
+    _rainAmount = rate == null ? 1 : _clamp01(density * _rainBudget / _rainN);
+    const shape = rate == null ? (_rainDrizzle ? 0 : 1) : _rainTone;
+    const dzSpeed = LT.drizzleSpeed != null ? LT.drizzleSpeed : 0.6, dzLen = LT.drizzleLen != null ? LT.drizzleLen : 0.5;
+    _rainSpeedScale = dzSpeed + (1 - dzSpeed) * shape; _rainLenScale = dzLen + (1 - dzLen) * shape;
     _rainFed = true;
     if (_rainEyeOk && dt > 0) {
       const dx = eye[0] - _rainEye[0], dy = eye[1] - _rainEye[1], dz = eye[2] - _rainEye[2];
@@ -554,12 +578,13 @@ const Particles = (function () {
     // instead of freezing the streaks until the eye leaves its 2 m cell.
     _rainAcc += dt;
     if (_rainAcc >= 1 / 30) { _rainAcc -= 1 / 30; if (_rainAcc > 1 / 30) _rainAcc = 0; _dirty = true; }
-    const LT = _lt();
     // Horizontal drift along WIND DIRECTION, as a fraction of the fall speed
     // (RAIN WIND 0.18 = a ~10° slant); the trees lean the same way.
     const wd = (LT.windDir != null ? LT.windDir : 35) * (Math.PI / 180);
     const wk = LT.rainWind != null ? LT.rainWind : 0.18;
     _windX = Math.cos(wd) * wk; _windZ = Math.sin(wd) * wk;
+    const wind = typeof Wind !== "undefined" && Wind.state ? Wind.state() : null;
+    if (wind && wind.on) { _windX = wind.wx / 8 * wk / 0.18; _windZ = wind.wz / 8 * wk / 0.18; }
     const shown = _rainShown();
     // Hidden drops do not advance while shedding; re-scatter only the returning
     // tail on a shed transition so stale offsets never pop into view.
@@ -569,7 +594,7 @@ const Particles = (function () {
     // other way: the field stays put in the world and wraps back into the box.
     const mx = _camVel[0] * dt, my = _camVel[1] * dt, mz = _camVel[2] * dt;
     for (let i = 0; i < shown; i++) {
-      const s = _rspd[i] * dt;
+      const s = _rspd[i] * _rainSpeedScale * dt;
       let x = _rox[i] + s * _windX - mx, y = _roy[i] - s - my, z = _roz[i] + s * _windZ - mz;
       if (y < -RAIN_DOWN) { x = rnd(RAIN_R); z = rnd(RAIN_R); }
       y = ((y + RAIN_DOWN) % RAIN_H + RAIN_H) % RAIN_H - RAIN_DOWN;
@@ -589,7 +614,7 @@ const Particles = (function () {
     const LT = _lt();
     // The overlay's per-drop range was 0.16..0.50 (mean 0.33) under a batch
     // alpha of 0.25 (storm) / 0.16 (drizzle); the same mean brightness here.
-    const alphaMul = (_rainRaining ? 0.25 : 0.16) / 0.33 * (LT.rainOpacity != null ? LT.rainOpacity : 1);
+    const alphaMul = (0.16 + 0.09 * _rainTone) / 0.33 * (LT.rainOpacity != null ? LT.rainOpacity : 1);
     // RAIN SPEED SLANT / STRETCH: how much of the camera's velocity reaches the
     // streak's direction and its length. Shipped 0.9 / 2.0 = the physical 1:1.
     const shearW = (LT.rainShearWind != null ? LT.rainShearWind : 0.9) / 0.9;
@@ -600,7 +625,7 @@ const Particles = (function () {
     const cr = RAIN_COL[0], cg = RAIN_COL[1], cb = RAIN_COL[2];
     const shown = _rainLastShown;
     for (let i = 0; i < shown; i++) {
-      const s = _rspd[i];
+      const s = _rspd[i] * _rainSpeedScale;
       const tx = _rox[i], ty = _roy[i], tz = _roz[i];           // eye → drop
       const dist = Math.hypot(tx, ty, tz);
       if (dist < 0.4) continue;                                 // inside the lens
@@ -613,7 +638,7 @@ const Particles = (function () {
       const rl = Math.hypot(rx, ry, rz);
       if (rl < 1e-6) continue;                                  // streak points at the eye
       rx /= rl; ry /= rl; rz /= rl;
-      const halfLen = Math.min(3.0, 0.5 * RAIN_EXPO * _rlen[i] * (s + camSpeed));
+      const halfLen = Math.min(3.0, 0.5 * RAIN_EXPO * _rlen[i] * _rainLenScale * (s + camSpeed));
       const halfW = 0.014 + dist * 0.0022;                      // ~1 px floor at distance (62° fov, 1080p: 1 px ≈ 0.0011 m per m)
       const a = _ralpha[i] * alphaMul * _clamp01((dist - 0.4) / 1.6);   // fade the drops right at the lens
       if (a <= 0.004) continue;

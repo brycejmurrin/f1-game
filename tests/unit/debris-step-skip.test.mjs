@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/physics/debris-world.js"), "utf8");
@@ -319,4 +320,82 @@ test("the cone wake gate's sorted lookup answers exactly as the cones × cars sc
     if (want) hits++; n++;
   }
   assert.ok(hits > n * 0.2 && hits < n * 0.95, "the sweep must exercise both verdicts: " + hits + "/" + n);
+});
+
+function debrisDrawHarness(instancing = true) {
+  const ctx = vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/debris-draw.js"), "utf8"), ctx, { filename: absSrc("js/physics/debris-draw.js") });
+  const drawPool = vm.runInContext("DebrisDraw.drawPool", ctx);
+  const calls = { translations: 0, rotations: 0, uploads: [], draws: 0, freed: 0, last: null };
+  const gfx = {
+    createInstancedBatch: (_geom, mats) => ({ instances: mats.length / 16 }),
+    updateInstances: (_batch, mats, n) => { calls.uploads.push(Array.from(mats).slice(0, n * 16)); },
+    drawInstanced: () => { calls.draws++; }, freeInstancedBatch: () => { calls.freed++; },
+    createMesh: () => ({}), draw: (_mesh, mat) => { calls.draws++; calls.last = Array.from(mat); },
+  };
+  if (!instancing) delete gfx.updateInstances;
+  const slot = x => {
+    const state = { x, asleep: true };
+    return { live: true, scale: 1, state, body: {
+      isSleeping: () => state.asleep,
+      translation: () => { calls.translations++; return { x: state.x, y: 2, z: -state.x }; },
+      rotation: () => { calls.rotations++; return { x: 0, y: 0, z: 0, w: 1 }; },
+    } };
+  };
+  return { calls, gfx, slot,
+    draw: (list, generation, cap = 24, liveOnly = true) => drawPool(gfx, "cone", () => ({}), cap, {}, list, liveOnly, false, generation) };
+}
+
+test("debris draw: unchanged sleeping cones retain poses and upload once while drawing every frame", () => {
+  const h = debrisDrawHarness(), list = Array.from({ length: 17 }, (_, i) => h.slot(i));
+  for (let frame = 0; frame < 60; frame++) h.draw(list, 1);
+  assert.equal(h.calls.translations, 17); assert.equal(h.calls.rotations, 17);
+  assert.equal(h.calls.uploads.length, 1); assert.equal(h.calls.draws, 60);
+  const m = h.calls.uploads[0];
+  for (let i = 0; i < 17; i++) {
+    assert.deepEqual(m.slice(i * 16, i * 16 + 16), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, i, 2, -i, 1]);
+  }
+});
+
+test("debris draw: wake, reseat generation, body replacement and scale each invalidate a sleeping pose", () => {
+  const h = debrisDrawHarness(), s = h.slot(1), list = [s];
+  h.draw(list, 1);
+  s.state.asleep = false; s.state.x = 2; h.draw(list, 1);
+  assert.equal(h.calls.uploads.at(-1)[12], 2, "wake updates even before a generation changes");
+  s.state.asleep = true; h.draw(list, 1);
+  const reads = h.calls.translations;
+  h.draw(list, 1); assert.equal(h.calls.translations, reads);
+  s.state.x = 3; h.draw(list, 2);
+  assert.equal(h.calls.uploads.at(-1)[12], 3, "a solve/reseat can wake, move and sleep between renders");
+  s.scale = 2; h.draw(list, 2);
+  assert.equal(h.calls.uploads.at(-1)[0], 2);
+  const replacement = h.slot(4); s.body = replacement.body;
+  h.draw(list, 2); assert.equal(h.calls.uploads.at(-1)[12], 4);
+  // Without a producer generation, the helper remains conservative for legacy callers.
+  replacement.state.x = 5; h.draw(list, undefined);
+  replacement.state.x = 6; h.draw(list, undefined);
+  assert.equal(h.calls.uploads.at(-1)[12], 6);
+});
+
+test("debris draw: removals, reordering, pooled-slot reuse and capacity rebuilds update batch membership", () => {
+  const h = debrisDrawHarness(), a = h.slot(1), b = h.slot(2);
+  h.draw([a, b], 1, 2);
+  h.draw([b, a], 1, 2);
+  assert.deepEqual(h.calls.uploads.at(-1).filter((_, i) => i % 16 === 12), [2, 1]);
+  b.live = false; h.draw([b, a], 1, 2);
+  assert.equal(h.calls.uploads.at(-1).length, 16);
+  a.live = false; const uploads = h.calls.uploads.length;
+  h.draw([a, b], 1, 2); assert.equal(h.calls.uploads.length, uploads, "empty pools submit no upload");
+  a.live = true; a.state.x = 9; h.draw([a, b], 2, 2);
+  assert.equal(h.calls.uploads.at(-1)[12], 9);
+  h.draw([a], 2, 4);
+  assert.equal(h.calls.freed, 1); assert.equal(h.calls.uploads.at(-1)[12], 9);
+  const fresh = h.slot(12); h.draw([fresh], 2, 4);
+  assert.equal(h.calls.uploads.at(-1)[12], 12, "new-world slots cannot inherit prior matrices");
+});
+
+test("debris draw: a backend without instancing retains the per-body fallback", () => {
+  const h = debrisDrawHarness(false), s = h.slot(1);
+  h.draw([s], 1); s.state.x = 3; h.draw([s], 1);
+  assert.equal(h.calls.draws, 2); assert.equal(h.calls.last[12], 3);
 });

@@ -83,6 +83,40 @@ test("deploy whine gain and pitch rise monotonically with deploy power", () => {
   assert.ok(prevG > 0 && prevHz >= 1000 && prevHz <= 1400, "full deploy stays in the softer electric register");
 });
 
+test("muted ERS preserves pitch through its fade, sleeps while inputs move, and resumes without rebuilding", () => {
+  const { ErsLayer: E, ctx, dest, live, created } = layer();
+  const frame = (deploy, brake, extra = {}) => E.update({ t: ctx.currentTime, deploy, brake, energy: 1, boostTune: 0, ...extra });
+  frame(0.4, 0.5);
+  const freqs = [...live].filter((n) => n.kind === "osc" || (n.kind === "biquad" && n.type === "bandpass")).map((n) => n.frequency);
+  frame(0.5, 0.6, { layerOn: false });
+  const initial = freqs.map((p) => p.sets);
+  ctx.currentTime += 0.2; frame(0.6, 0.7, { layerOn: false });
+  assert.equal(freqs.filter((p, i) => p.sets > initial[i]).length, 3, "deploy and both harvest params track the audible tail");
+  ctx.currentTime += 1.2;
+  const settled = freqs.map((p) => p.sets), nodes = created();
+  for (let i = 0; i < 120; i++) {
+    ctx.currentTime += 1 / 60;
+    frame(i / 119, 1 - i / 119, { layerOn: false });
+  }
+  assert.deepEqual(freqs.map((p) => p.sets), settled, "moving muted ERS inputs schedule no frequency events");
+  const order = [];
+  for (const n of live) for (const key of ["frequency", "gain"]) {
+    const p = n[key], set = p.setTargetAtTime;
+    p.setTargetAtTime = (...args) => { order.push(key); return set(...args); };
+  }
+  frame(0.8, 0.3, { boostTune: 1 });
+  assert.equal(E.inspect().deployHz, E.deployHz(0.8, 1));
+  assert.equal(E.inspect().harvestHz, E.harvestHz(0.3));
+  assert.ok(order.indexOf("frequency") < order.lastIndexOf("gain"), "new pitch arrives before continuous gain opens");
+  assert.equal(created(), nodes, "no oscillator restart or graph allocation");
+  frame(0.4, 0.7, { layerOn: false });
+  const rapid = freqs.map((p) => p.sets);
+  ctx.currentTime += 0.2; frame(0.5, 0.8, { layerOn: false });
+  assert.ok(freqs.some((p, i) => p.sets > rapid[i]), "re-mute restarts the tail window");
+  E.detach(); E.attach(ctx, dest); frame(0.3, 0.2, { layerOn: false });
+  assert.equal(E.inspect().deployHz, E.deployHz(0.3, 1), "fresh muted graph does not inherit the expired deadline");
+});
+
 test("harvest tone is a distinct lower, braking-linked register", () => {
   const { ErsLayer, ctx } = layer();
   ErsLayer.update({ t: ctx.currentTime, deploy: 1, energy: 1, brake: 0, speed: 0.7 });

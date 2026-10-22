@@ -55,6 +55,41 @@ function arm(b, dur, cell) {
 }
 const fracIn = (c, fr, t) => { let d = fr - (c.c0 + c.v * t / TOTAL); d -= Math.round(d); return Math.abs(d) <= c.h; };
 
+test("local rainfall has a soft fringe, wraps the lap and dissipates before the road dries", () => {
+  const b = boot();
+  const cell = { c0: 0.99, h: 0.1, v: 0, life: 120 };
+  arm(b, 60, cell);
+  b.at(100);
+  assert.equal(b.wa.rainfallAt(0.01 * TOTAL), 1, "the cloud wraps start/finish");
+  const fringe = b.wa.rainfallAt(0.085 * TOTAL);
+  assert.ok(fringe > 0 && fringe < 1, `soft edge: ${fringe}`);
+  assert.equal(b.wa.rainfallAt(0.2 * TOTAL), 0);
+  b.G.player.s = 0.99 * TOTAL;
+  assert.equal(b.wa.viewRainfall(), 1);
+  b.at(115);
+  assert.ok(b.wa.viewRainfall() > 0 && b.wa.viewRainfall() < 1, "cloud fades before expiry");
+  b.at(120);
+  assert.equal(b.wa.viewRainfall(), 0);
+  assert.ok(b.wa.viewWetness() > 0.9, "surface remains wet after the shower");
+  b.at(125);
+  assert.equal(b.wa.viewRainfall(), 0, "no rain follows the lingering wet patch");
+});
+
+test("re-targeting a shower preserves the dry sectors and starts from the current cloud", () => {
+  const b = boot();
+  arm(b, 60, { c0: 0.5, h: 0.1, v: 0, life: 200 });
+  b.at(100);
+  b.wa.startArc(b.G.raceWeather, "dry", 60);
+  assert.equal(b.wa.rainfallAt(0.05 * TOTAL), 0);
+  assert.equal(b.wa.rainfallAt(0.5 * TOTAL), 1);
+  b.at(130);
+  assert.equal(b.wa.rainfallAt(0.05 * TOTAL), 0);
+  assert.equal(b.wa.rainfallAt(0.5 * TOTAL), 0.5);
+  b.at(160);
+  assert.equal(b.wa.rainfallAt(0.5 * TOTAL), 0);
+  assert.ok(b.wa.wetnessAt(0.5 * TOTAL) > 0, "the surface lags the clearing cloud");
+});
+
 test("a local cell wets only its window", () => {
   const b = boot();
   const cell = { c0: 0.5, h: 0.1, v: 0, life: 1e9 };

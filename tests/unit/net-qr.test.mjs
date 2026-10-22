@@ -15,9 +15,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import jsQR from "jsqr";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NetQr = eval(fs.readFileSync(path.join(ROOT, "js/net/qr.js"), "utf8") + ";NetQr");
@@ -196,3 +198,51 @@ test("without qr_code support (or without BarcodeDetector) NetScan falls back to
     assert.equal(await NetScan.platformDetector(), null, "no BarcodeDetector at all");
   } finally { w.cleanup(); delete globalThis.jsQR; }
 });
+
+
+for (const oldResult of ["resolve", "reject"]) {
+  test(`a restarted QR scanner keeps its in-flight guard after an old ${oldResult}`, async () => {
+    const intervals = new Map(), pending = [], got = [];
+    let timerId = 0, detectorId = 0;
+    const context = vm.createContext({
+      Log: { info() {}, warn() {} },
+      window: { BarcodeDetector: class {
+        constructor() { this.id = ++detectorId; }
+        static async getSupportedFormats() { return ["qr_code"]; }
+        detect(video) { return new Promise((resolve, reject) => pending.push({ id: this.id, video, resolve, reject })); }
+      } },
+      navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } },
+      setInterval(fn) { intervals.set(++timerId, fn); return timerId; },
+      clearInterval(id) { intervals.delete(id); },
+    });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/net/scan.js"), "utf8") + ";globalThis.Scan=NetScan", context, { filename: absSrc("js/net/scan.js") });
+    const sc = context.Scan.create();
+    const video = () => ({ videoWidth: 4, videoHeight: 4, srcObject: null, setAttribute() {}, play: async () => {} });
+    const flush = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
+    const tick = async () => { for (const fn of intervals.values()) fn(); await flush(); };
+    const firstVideo = video(), nextVideo = video();
+    try {
+      await sc.start(firstVideo, (text) => got.push(text));
+      await tick();
+      assert.equal(pending.length, 1);
+      sc.stop();
+      await sc.start(nextVideo, (text) => got.push(text));
+      await tick();
+      assert.equal(pending.length, 2);
+      assert.notEqual(pending[0].id, pending[1].id, "restart has a fresh platform decoder");
+      assert.equal(pending[0].video, firstVideo);
+      assert.equal(pending[1].video, nextVideo);
+      if (oldResult === "resolve") pending[0].resolve([{ rawValue: "STALE" }]);
+      else pending[0].reject(new Error("stopped decoder"));
+      await flush();
+      await tick();
+      assert.equal(pending.length, 2, "old completion cannot release the new decoder's in-flight request");
+      assert.deepEqual(got, [], "a stale result does not deliver into the restarted scan");
+      pending[1].resolve([{ rawValue: "CURRENT" }]);
+      await flush();
+      assert.deepEqual(got, ["CURRENT"]);
+      assert.equal(sc.active(), false);
+      assert.equal(intervals.size, 0);
+    } finally { sc.stop(); }
+  });
+}

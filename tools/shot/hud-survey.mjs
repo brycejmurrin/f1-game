@@ -223,7 +223,10 @@ export function applyCell(c) {
     const sets = c.presetSet === "both" ? ["cockpit", "other"] : [HudLayout.camSet(c.cam)];
     const pn = c.presetProf && c.presetProf !== "shown" ? c.presetProf : undefined;
     for (const sn of sets) {
-      if (typeof c.preset === "string") { if (!HudLayout.applyPreset(c.preset, sn, pn)) throw new Error("unknown preset " + c.preset); }
+      if (typeof c.preset === "string") {
+        // BIG / CORNERS are not offered on a touch phone (HudLayout.presetFits): the cell measures the shipped layout.
+        if (!HudLayout.applyPreset(c.preset, sn, pn) && !(HudLayout.presetFits && !HudLayout.presetFits(c.preset))) throw new Error("unknown preset " + c.preset);
+      }
       else for (const [id, v] of Object.entries(c.preset)) HudLayout.set(id, v, sn, pn);
     }
   });

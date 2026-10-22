@@ -63,6 +63,28 @@ test("look sample pool reuses rows across beginLook", () => {
   assert.equal(second[0].k, 0.03);
 });
 
+test("indexed look windows preserve every brake decision and repeated-addition distance", () => {
+  let seed = 83;
+  const rnd = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
+  for (let run = 0; run < 600; run++) {
+    const n = run % 65, ks = new Float64Array(n), mus = new Float64Array(n);
+    const firstD = rnd() * 4.3, step = 1.7 + rnd() * 6.1;
+    const ctx = { traits: [mid, ace, rook][run % 3], latMax: 22, brake: 8 + rnd() * 20,
+      grip: 0.4 + rnd(), pace: 0.4 + rnd(), vmax: 92, diffCorner: 0.5 + rnd() * 0.5,
+      aeroLoad: rnd(), speed: rnd() * 95, blocker: run % 3 === 0,
+      blockerGap: rnd() * 22, blockerSpeed: rnd() * 80, roomL: rnd() * 5, roomR: rnd() * 5 };
+    A.beginLook();
+    for (let i = 0, d = firstD; i < n; i++, d += step) {
+      ks[i] = (rnd() - 0.5) * 0.06; mus[i] = A.bankGrip(rnd() * 0.3);
+      A.pushLook(d, ks[i], 0, mus[i]);
+    }
+    const pooled = { ...A.brakeDecision({ ...ctx, samples: A.endLook() }) };
+    const indexed = A.lookWindow(ks, mus, n, firstD, step);
+    assert.deepEqual({ ...A.brakeDecision({ ...ctx, samples: indexed }) }, pooled, `window ${run}, ${n} nodes`);
+    assert.equal(A.lookWindow(ks, mus, n, firstD, step), indexed, "window storage is reused");
+  }
+});
+
 test("brakeTarget: a cached bank grip and the distance-term skip change no result (PERF-HUNT-4 B-F4)", () => {
   // The pooled sample carries mu = bankGrip(bank) (game.js caches it per node in c._lk); a hand-built one may not.
   // The loop skips a sample whose distance term alone reaches the tightest budget so far — exact, and with
@@ -1662,8 +1684,9 @@ test("AI heading reuses current grip without changing normal or recovery steerin
     const { VMAX, LAT_MAX, STEER_VMAX, AI_HEAD_VMIN, AI_XTRACK_GAIN, AI_HEAD_MAX, AI_YAW_LAT, AI_YAW_MAX } = K;
     const vStd = speed => speed * VMAX / (VMAX * Math.max(PACE, 0.05));
     const driveTune = { PACE };
-    // updateCar's per-step weather grip (gripMult(c) × aquaplane, read once into the scratch S.gmC).
-    const S = { gmC: gripMult(c) };
+    // updateCar snapshots weather and tread grip after tyre/pit updates; the
+    // lateral block still samples air at its current speed and wake.
+    const S = { gmC: gripMult(c), tyreGrip: tyres.gripMul(c) };
     ${decl[1]}
     if (c.human) steer = inputSteer; else {
     ${game.slice(start, end)}

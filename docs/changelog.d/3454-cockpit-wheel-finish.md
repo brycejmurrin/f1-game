@@ -1,0 +1,1 @@
+Improved: the cockpit steering wheel has real materials — lacquered carbon faceplate, black rubber grips, bright brushed-alloy rings on the buttons and rotaries, glass LCD — instead of one flat grey-black (#3454).

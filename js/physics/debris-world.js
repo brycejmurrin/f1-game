@@ -30,6 +30,9 @@ let _floorY = -Infinity; // kill plane for pooled bodies: lowest road vertex - F
 const FLOOR_MARGIN_M = 25;
 let _mirrors = [];       // one kinematicPositionBased body per car (cars[] order)
 let _worldGen = 0;       // bumped every buildWorld — the incident sim aborts a takeover if this changes under it
+// Render-pose generation, monotonic across reset. Any solve/reseat invalidates
+// sleeping draw poses too: a body can wake, move and sleep between two renders.
+let _drawPoseGen = 0;
 // Incident-sim takeover (R2/R3/C1, js/physics/incident-sim.js): indices whose mirror
 // has been promoted kinematic→DYNAMIC and is owned by IncidentSim. step()'s
 // mirror-sync loop SKIPS these (a dynamic body must not be pose-driven), so the
@@ -524,6 +527,7 @@ function buildWorld(track, cars) {
   }
   _worldTrack = track;
   _worldGen++;   // a rebuilt world invalidates any incident-sim takeover (checked via worldGen())
+  _drawPoseGen++;
   Log.info("game", "DebrisWorld.buildWorld cars=" + cars.length);
 }
 
@@ -711,6 +715,7 @@ function spawnMarble(c, m, r) {
   _q.x = 0; _q.y = 0; _q.z = 0; _q.w = 1;
   b.setRotation(_q, true);
   slot.live = true; slot.restT = 0; slot.spawnTick = _tick; slot.restPose = null;
+  _drawPoseGen++;   // tyreMarble may re-seat a slot before the next world solve
   _marbleSeq++;
 }
 
@@ -935,6 +940,7 @@ function step(dt) {
 
   try {
     world.step(_events);
+    _drawPoseGen++;
   } catch (e) {
     try { Log.warn("game", "[debris] rapier step trapped — debris disabled", e); } catch (_e) { /* Log absent in isolated VM */ }
     _active = false;
@@ -1256,14 +1262,14 @@ function panelGeom() {
 
 function draw() {
   if (!world) return;
-  if (_slots.length) DebrisDraw.drawPool(G.gfx, "shard", shardGeom, capFor(), _drawOpts, _slots, true, false);
+  if (_slots.length) DebrisDraw.drawPool(G.gfx, "shard", shardGeom, capFor(), _drawOpts, _slots, true, false, _drawPoseGen);
   // A2 marbles — tiny cube, per-body scale.
-  if (_marbles.length) DebrisDraw.drawPool(G.gfx, "marble", marbleGeom, marbleCapFor(), _marbleOpts, _marbles, true, false);
+  if (_marbles.length) DebrisDraw.drawPool(G.gfx, "marble", marbleGeom, marbleCapFor(), _marbleOpts, _marbles, true, false, _drawPoseGen);
   // A3 cones — shared cone at scale 1, and NO liveness test: a cone is either
   // in the world or it is not.
-  if (_furn.length) DebrisDraw.drawPool(G.gfx, "cone", coneGeom, furnCapFor(), _coneOpts, _furn, false, true);
+  if (_furn.length) DebrisDraw.drawPool(G.gfx, "cone", coneGeom, furnCapFor(), _coneOpts, _furn, false, true, _drawPoseGen);
   // B2 promoted barrier panels — shared armco slab at scale 1.
-  if (_panels.length) DebrisDraw.drawPool(G.gfx, "panel", panelGeom, PANEL_CAP, _panelOpts, _panels, true, true);
+  if (_panels.length) DebrisDraw.drawPool(G.gfx, "panel", panelGeom, PANEL_CAP, _panelOpts, _panels, true, true, _drawPoseGen);
 }
 
 // ── status (for __apex.debris and tests) ────────────────────────────────────

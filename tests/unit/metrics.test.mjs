@@ -40,6 +40,8 @@ function load(opts) {
     requestAnimationFrame: undefined,
     PerfGov: opts.PerfGov,
     LoopHealth: opts.LoopHealth,
+    PerformanceObserver: opts.PerformanceObserver,
+    performance: opts.performance,
     __apex: opts.apex,
   };
   const ctx = vm.createContext(sandbox);
@@ -48,6 +50,31 @@ function load(opts) {
   vm.runInContext(SRC, ctx, { filename: absSrc("js/perf/metrics-overlay.js") });
   return { M: vm.runInContext("GameMetrics", ctx), disk, Log: vm.runInContext("Log", ctx) };
 }
+
+test("frametime reset counts only long tasks starting in its current window", () => {
+  let now = 100, resets = 0;
+  const observers = [];
+  class Observer {
+    static supportedEntryTypes = ["longtask"];
+    constructor(cb) { this.cb = cb; observers.push(this); }
+    observe(opts) { this.opts = opts; }
+    disconnect() { this.disconnected = true; }
+    deliver(...starts) { this.cb({ getEntries: () => starts.map(startTime => ({ startTime })) }); }
+  }
+  const { M } = load({ performance: { now: () => now }, PerformanceObserver: Observer,
+    PerfGov: { resetFrameStats() { resets++; } } });
+  M.frametimeBenchReset();
+  observers[0].deliver(10, 99, 100, 125);
+  assert.equal(M.frametimeBenchSnapshot().longTasks, 2, "pre-reset tasks are not part of the sample");
+  now = 200;
+  M.frametimeBenchReset();
+  assert.equal(observers[0].disconnected, true);
+  observers[0].deliver(210);
+  assert.equal(M.frametimeBenchSnapshot().longTasks, 0, "a retired observer cannot contaminate the new window");
+  observers[1].deliver(150, 200, 250);
+  assert.equal(M.frametimeBenchSnapshot().longTasks, 2);
+  assert.equal(resets, 2);
+});
 
 test("METRICS defaults off and persists on toggle", () => {
   const { M, disk } = load({});

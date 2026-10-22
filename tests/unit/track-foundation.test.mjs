@@ -365,6 +365,49 @@ test("TrackModels validates complete finite mesh buffers", () => {
   assert.match(bad.reason, /non-finite|index/);
 });
 
+test("TrackModels staged appends preserve channels and index bases through accumulator growth", () => {
+  const Models = loadGlobal(P.TRACK_MODELS, "TrackModels");
+  const channels = ["pos", "nrm", "col", "mat", "idx"];
+  const outputs = [
+    { pos: [], nrm: [], col: [], mat: [], idx: [] },
+    Models.scratch(1), Models.scratch(32),
+  ];
+  // Values that f32 would round; the accumulator must stay f64 until sealing.
+  const precise = 1 + 2 ** -40;
+  const stages = [
+    { pos: [-0, precise, -precise], nrm: [0, 1, 0], col: [precise, 0, -0], mat: [15.125], idx: [0] },
+    { pos: [2, 3, 4, 5, 6, 7, 8, 9, 10], nrm: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+      col: [0.1, 0.2, 0.3, 2.5, 3.4, 1, 1, 1, 1], mat: [0, 3, 16], idx: [2, 0, 1, 0, 2, 1] },
+  ];
+  for (const out of outputs) {
+    const api = Models.create({ out });
+    for (let i = 0; i < stages.length; i++) {
+      const data = stages[i];
+      assert.equal(api.modelGroup(`stage-${i}`, { center: [0, 0, 0], size: [100, 100, 100] }, (stage) => {
+        for (const channel of channels) stage[channel].push(...data[channel]);
+      }), true);
+    }
+    assert.deepEqual(Array.from(out.idx.seal ? out.idx.seal() : out.idx), [0, 3, 1, 2, 1, 3, 2]);
+    assert.deepEqual(plain(out.__blocks.map(({ base, count, id }) => ({ base, count, id }))), [
+      { base: 0, count: 1, id: "stage-0" }, { base: 1, count: 3, id: "stage-1" },
+    ]);
+  }
+  const plainOut = outputs[0];
+  for (const out of outputs.slice(1)) {
+    for (const channel of channels) {
+      assert.deepEqual(Array.from(out[channel].seal()), plainOut[channel], `${channel} before seal`);
+    }
+    assert.ok(Object.is(out.pos.seal()[0], -0), "signed zero survives the native copy");
+    assert.equal(out.pos.seal()[1], precise, "positions were not narrowed to f32");
+    const sealed = Models.sealGeometry(out);
+    for (const channel of channels) {
+      const expected = channel === "col" ? Array.from(new Float32Array(plainOut.col)) : plainOut[channel];
+      assert.deepEqual(Array.from(sealed[channel]), expected, `${channel} after seal`);
+    }
+    assert.equal(Models.validateGeometry(sealed).ok, true);
+  }
+});
+
 test("envCull build owns one ribbon representation and retains collision geometry", () => {
   const env = buildContext();
   const def = env.Tracks.LIST.find((entry) => entry.id === "monza");
@@ -432,4 +475,68 @@ test("a buried thin prop (kerb flash, paint decal) sets no driving limit — no 
   let minOver = Infinity;
   for (let k = 0; k < track.n; k++) minOver = Math.min(minOver, track.barL[k] - track.hw[k], track.barR[k] - track.hw[k]);
   assert.ok(minOver > 1.0, `a driving limit sits ${minOver.toFixed(2)} m past the road edge`);
+});
+
+test("explicit concrete terrain keeps paved inner rails without changing terrain geometry", () => {
+  const env = buildContext();
+  const def = env.Tracks.LIST.find((entry) => entry.id === "singapore");
+  const MAT = env.TrackGeom.MAT;
+  assert.equal(def.terrainMat, "CONCRETE", "Singapore explicitly authors pavement beyond the kerb");
+  assert.equal(env.Tracks.LIST.find((entry) => entry.id === "monaco").terrainMat, undefined,
+    "a street circuit alone must not opt into the paved-terrain exception");
+  // Materialize the real def once. Its lazy points getter remaps elevations,
+  // bridges and width zones in place; spreading a still-lazy def copies those
+  // earlier fields before the getter runs, making the first clone inconsistent
+  // with later clones. Material designation must be the only varying input.
+  const centerline = env.Tracks.buildCenterline(def, { line: false });
+  centerline.surface = env.TrackSurface.profile(def, centerline);
+  const terrain = (terrainMat) => {
+    // Exercise the native geometry builder without scenery, uploads or a full
+    // circuit sweep. Only material designation differs between these cases.
+    const track = { ...centerline, def: { ...def, terrainMat } };
+    return env.TrackMesh.buildTerrain(track);
+  };
+  const paved = terrain("CONCRETE");
+  assert.ok(paved.idx.length > 0 && paved.mat.length > 0, "the test must inspect real emitted terrain");
+  assert.deepEqual([...new Set(paved.mat)], [MAT.CONCRETE], "inner and outer paved rails both carry concrete");
+  for (const [designation, outer] of [[undefined, MAT.GRASS], ["SAND", MAT.SAND], ["SNOW", MAT.SNOW]]) {
+    const natural = terrain(designation);
+    assert.equal(natural.mat[0], MAT.ROCK, `${designation || "default grass"} retains the inner gravel band`);
+    assert.deepEqual([...new Set(natural.mat)].sort((a, b) => a - b), [MAT.ROCK, outer].sort((a, b) => a - b));
+    for (const channel of ["pos", "nrm", "idx", "col"]) {
+      const label = `${designation || "default grass"} ${channel}: material choice cannot move/recolor terrain or change winding`;
+      assert.equal(natural[channel].length, paved[channel].length, label);
+      // Compare every value exactly, but never ask assert to format two full
+      // geometry arrays on failure: a useful first difference is bounded.
+      let difference = null;
+      for (let i = 0; i < paved[channel].length; i++) {
+        if (!Object.is(natural[channel][i], paved[channel][i])) {
+          difference = { index: i, expected: paved[channel][i], actual: natural[channel][i] };
+          break;
+        }
+      }
+      assert.equal(difference, null, label);
+    }
+  }
+});
+
+test("the base floor carries the authored ground material without moving or recoloring the quad", () => {
+  const env = buildContext(), MAT = env.TrackGeom.MAT;
+  const palette = { grass: [0.25, 0.5, 0.75] };
+  const coords = { n: 4, px: [-30, 30, 30, -30], py: [3, 7, 5, 4], pz: [-20, -20, 20, 20] };
+  const normals = [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0];
+  const colors = Array.from({ length: 4 }, () => palette.grass.map((v) => v * 0.88)).flat();
+  const winding = [0, 1, 2, 0, 2, 3, 0, 2, 1, 0, 3, 2];
+  for (const surface of [undefined, { floorY: -2.3 }]) {
+    const y = surface ? surface.floorY : 2;
+    const positions = [-1430, y, -1420, 1430, y, -1420, 1430, y, 1420, -1430, y, 1420];
+    for (const [terrainMat, expected] of [[undefined, MAT.GRASS], ["SAND", MAT.SAND], ["SNOW", MAT.SNOW], ["CONCRETE", MAT.CONCRETE]]) {
+      const floor = env.TrackMesh.buildFloor({ ...coords, surface, def: { id: "floor-material-fixture", palette, terrainMat } });
+      assert.deepEqual(Array.from(floor.mat), [expected, expected, expected, expected], `${terrainMat || "grass"}: every floor vertex has its real material`);
+      assert.deepEqual(Array.from(floor.pos), positions, "ground identity does not change bounds or height");
+      assert.deepEqual(Array.from(floor.nrm), normals, "ground identity does not change normals");
+      assert.deepEqual(Array.from(floor.col), colors, "ground identity does not change authored colors");
+      assert.deepEqual(Array.from(floor.idx), winding, "ground identity preserves both windings");
+    }
+  }
 });
