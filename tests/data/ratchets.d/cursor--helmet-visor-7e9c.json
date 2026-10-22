@@ -1,7 +1,10 @@
 {
   "files": {
+    "js/car/car3d.js": {
+      "lines": 1
+    },
     "js/game.js": {
-      "lines": 2
+      "lines": 3
     }
   }
 }
