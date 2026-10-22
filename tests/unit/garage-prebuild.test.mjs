@@ -31,7 +31,7 @@ function loadModule(extra = {}) {
 const GO = {
   want: "title", kind: "none", state: "menu", setupOpen: false, starting: false, tabHidden: false, headless: false,
   surface: "title", intro: false, saveData: false, packSettled: true, worldReady: false, homePainted: false,
-  worldWarm: false, warming: false,
+  worldWarm: false, warming: false, sheetOpen: false,
 };
 
 test("blockers: an idle title with nothing in the way goes", () => {
@@ -62,6 +62,13 @@ test("blockers: the title is speculative — Save-Data, the intro and the world 
   assert.deepEqual(why({ kind: "track", worldReady: true }), []);
   assert.deepEqual(why({ kind: "garage" }), ["home-unpainted"], "the Home garage paints before it counts as warm");
   assert.deepEqual(why({ kind: "garage", homePainted: true }), []);
+  assert.deepEqual(why({ sheetOpen: true }), ["menu-sheet"], "Settings open over the title must not prebuild (D·IP2)");
+});
+
+test("blockers: race settings ignores sheetOpen — RACE! still needs that garage", () => {
+  const { GP } = loadModule();
+  const settings = { ...GO, want: "settings", surface: "settings", sheetOpen: true };
+  assert.deepEqual([...GP.blockers(settings)], [], "pmsettings over race-settings is not a title-speculative gate");
 });
 
 test("blockers: race settings keeps its old gates — RACE! needs that garage", () => {

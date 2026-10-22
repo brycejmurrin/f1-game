@@ -1,5 +1,6 @@
 /* settings-open-perf.test.mjs — D·IP2: Settings open must not one-shot
- * LAZY_AUDIO eval, and SettingsNav / ScrollFade emit / coalesce so a phone
+ * LAZY_AUDIO eval; MenuSheetGate defers menuIdle / parks warm frames while
+ * #pmsettings is open; SettingsNav / ScrollFade emit / coalesce so a phone
  * hitch budget can be asserted.
  * Run: node --test tests/unit/settings-open-perf.test.mjs
  */
@@ -203,6 +204,63 @@ test("select-screen vt skips startViewTransition on coarse pointer (phone)", () 
   menus.vt(() => { ran = true; });
   assert.equal(ran, true, "update runs immediately");
   assert.equal(vtCalls, 0, "no view-transition snapshot on a phone pointer");
+});
+
+test("MenuSheetGate.idle defers while Settings is open", async () => {
+  const marks = [];
+  const dom = {
+    getElementById: (id) => (id === "pmsettings" ? { hidden: false } : null),
+    activeElement: null,
+  };
+  const ctx = vm.createContext({
+    performance: { now: () => 1000, mark: (n) => marks.push(n) },
+    setTimeout: (fn) => { fn(); return 1; },
+    document: dom,
+    Object, Promise, WeakMap,
+  });
+  vm.runInContext(read("js/core/menu-sheet-gate.js"), ctx, { filename: absSrc("js/core/menu-sheet-gate.js") });
+  const Gate = vm.runInContext("MenuSheetGate", ctx);
+  assert.equal(Gate.open(dom), true);
+  let ticks = 0;
+  const current = () => (++ticks) < 4;
+  const done = await Gate.idle(current, 0, () => 0, () => Promise.resolve());
+  assert.equal(done, false, "abandons when current() goes false under an open sheet");
+  assert.ok(marks.includes("apex:menu-prep:deferred"), "marks deferred prep while sheet open");
+  dom.getElementById = () => null;
+  ticks = 0;
+  assert.equal(await Gate.idle(() => true, 0, () => 0, () => Promise.resolve()), true);
+});
+
+test("MenuSheetGate.parkWarm holds menu warm counters until resume", () => {
+  const marks = [];
+  const ctx = vm.createContext({
+    performance: { mark: (n) => marks.push(n) },
+    setTimeout: (fn) => { fn(); return 1; },
+    document: { getElementById: () => null, activeElement: null },
+    Object, Promise, WeakMap,
+  });
+  vm.runInContext(read("js/core/menu-sheet-gate.js"), ctx, { filename: absSrc("js/core/menu-sheet-gate.js") });
+  const Gate = vm.runInContext("MenuSheetGate", ctx);
+  const gate = { warm: 2, garageWarm: 1 };
+  assert.equal(Gate.parkWarm(gate), true);
+  assert.equal(gate.warm, 0);
+  assert.equal(gate.garageWarm, 0);
+  const held = Gate.parkedWarm(gate);
+  assert.equal(held.warm, 2);
+  assert.equal(held.garageWarm, 1);
+  assert.ok(marks.includes("apex:menu-prep:parked"));
+  assert.equal(Gate.resumeWarm(gate), true);
+  assert.equal(gate.warm, 2);
+  assert.equal(gate.garageWarm, 1);
+  assert.ok(marks.includes("apex:menu-prep:resume"));
+  assert.equal(Gate.parkedWarm(gate), null);
+});
+
+test("game.js menuIdle routes through MenuSheetGate (no inline idle loop)", () => {
+  const src = read("js/game.js");
+  assert.match(src, /MenuSheetGate\.idle\(/);
+  assert.match(src, /MenuSheetGate\.slice\(/);
+  assert.doesNotMatch(src, /async function menuIdle/);
 });
 
 // Silence unused in case a future assert wants the roster length.

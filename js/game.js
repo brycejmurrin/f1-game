@@ -2150,15 +2150,10 @@ for (const ev of ["pointerdown", "keydown"])
 // Resolves true once the menu has had MENU_IDLE_MS without a tap or key (false
 // if the selection moved on meanwhile): the build and the warm frames each hold
 // the main thread for seconds, so they wait for the player's hands to stop.
-const menuSlice = () => new Promise((r) => setTimeout(r, 32));
-async function menuIdle(current) {
-  for (;;) {
-    const wait = MENU_IDLE_MS - (performance.now() - _menuInputAt);
-    if (wait <= 0) return current();
-    await new Promise((r) => setTimeout(r, wait));
-    if (!current()) return false;
-  }
-}
+// MenuSheetGate: yield while Settings is open so warmPrograms / garage prep
+// do not overlap the sheet (D·IP2). slice/idle live there — keeps game.js flat.
+const menuSlice = () => MenuSheetGate.slice();
+const menuIdle = (c) => MenuSheetGate.idle(c, MENU_IDLE_MS, () => _menuInputAt, menuSlice);
 // Dark sessions: bake the lamp pools in 8 ms slices now, so RACE!'s sync bake hits the cache (lamp-bake.js prebake).
 async function menuLampBake(current) {
   const step = current() && _atmo.prebakeLamps();
