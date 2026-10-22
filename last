@@ -1,1 +1,1 @@
-GAME-SLOT to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN #3536 1399276f7eec9affc0ede273cdd6ba33555f4dc7
+DONE to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN DONE #3536 77fd22a4 (A·W1 boot: low-priority speculative preload, per-backend canary ledger, ctx-lost notice on every backend; closes #3514 #3513; merged by OrchA 25 via merge-gate, 2 parents). Train 77fd22a4 next; next A game merge waits for its green Pages.
