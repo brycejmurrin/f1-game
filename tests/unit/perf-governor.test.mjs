@@ -208,45 +208,63 @@ test("the two futility latches are inspectable, and start clear", () => {
   assert.equal(PerfGov.tierFutile(), false);
 });
 
-test("a sustained-slow device still stops after a successful first rung", () => {
+test("a sustained-slow device now sheds past the first rung (§2au discriminator)", () => {
   // docs/notes/PERF-FINDINGS.md §2au, from a live iPhone capture: Suzuka,
   // 32.2 fps, scale already at the 0.5 mobile floor, tier 0 — nothing optional
   // shed on a device missing half its frames.
   //
-  // The mechanism is _floorMs doing exactly what it was built to do: it creeps
-  // toward the observed interval at FLOOR_UP_A, so degradeAt climbs past the
-  // EMA within ~2.7 s and the ONLY branch that steps the ladder down stops
-  // firing. Whatever was shed in that window is all this device ever gets.
+  // THIS TEST WAS DELIBERATELY REWRITTEN (2026-10-21, the §2au fix;
+  // docs/notes/PERF-IPHONE-AUDIT-2026-10-21.md §3). It used to pin the defect
+  // itself — "a sustained-slow device still stops after a successful first
+  // rung", peak autoShed <= 1 — under a header that said IT PINS THE
+  // BEHAVIOUR, IT DOES NOT BLESS IT, and named the discriminator to build:
+  // an external cap is indifferent to render scale and a fill-bound frame is
+  // not, which is exactly what _pendingVerify measures on every scale step.
   //
-  // SWEPT OVER HOW MUCH A RUNG IS WORTH, because the first version of this
-  // measurement held dt constant against tier — which makes every shed "buy
-  // nothing" BY CONSTRUCTION, so the governor reverts it and latches
-  // _tierFutile. That is the governor being right, and reading it as the defect
-  // is the trap. Whether the rung STICKS varies sensibly with its worth; that
-  // the ladder never takes a SECOND step does not vary at all, which is why
-  // that is what this pins.
+  // That discriminator is now implemented in js/perf/governor.js: a verified
+  // step (a down-step the EMA felt, or an up-step it refused) latches
+  // _computeBound, the derived floor rewinds to the race's observed minimum
+  // and may then only creep at FLOOR_UP_A_BOUND, and a latched step must
+  // clear the held threshold by DEGRADE_OVER twice — so the ladder keeps
+  // shedding on a compute-bound device while a capped clock, which never
+  // produces the evidence, is governed exactly as before (the Low Power Mode
+  // pin at the top of this file). A frame below the race's best cadence (a
+  // cheap moment) taints the episode and the latch cannot engage.
   //
-  // IT PINS THE BEHAVIOUR, IT DOES NOT BLESS IT. The day someone teaches the
-  // governor to tell a capped clock from a slow one, this fails loudly and is
-  // rewritten deliberately, rather than a fix landing with nothing to show it
-  // worked. The discriminator is already computed: an external cap is
-  // indifferent to render scale and a fill-bound frame is not, which is exactly
-  // what _pendingVerify measures on every scale step.
+  // What this pins now, over the same swept model as the old test: the SCALE
+  // ladder completes (the pre-fix governor parked this device at scale 0.9,
+  // EMA 100.6 ms — 10 fps — for the whole run: peak autoShed was 0, so the
+  // old <= 1 assertion passed vacuously), the EMA reaches the captured
+  // cadence, computeBound() is observed, and at least one tier rung is shed
+  // at every rung worth — two at the small gains, where more rungs are
+  // needed. Rungs 3-4 at the large gains land past this window's 4000 frames
+  // (each tier step's verify + confirmation spans hundreds of 31 ms frames);
+  // what is pinned is that the ladder is OPEN, not that it finishes here.
   const AT_HALF = 1000 / 32.2;   // 31.06 ms, the captured frame time
-  // Zero-gain early rungs now continue the bounded trial (covered above).
   for (const gain of [0.04, 0.08, 0.15, 0.25]) {
     const { PerfGov, scale } = makeGov();
     // Start where the phone starts — the 0.5 mobile scale — through the same
     // fake renderer, so the 0.02 dead zone and the 0.5 clamp both still apply.
     PerfGov.setUserTier(0);
-    let peak = 0;
+    let peak = 0, minScale = 1, minEMA = Infinity, boundSeen = false;
     for (let i = 0; i < 4000; i++) {
       const cost = AT_HALF * Math.pow(scale() / 0.5, 2) * Math.pow(1 - gain, PerfGov.autoShed());
       PerfGov.tick(cost);
       peak = Math.max(peak, PerfGov.autoShed());
+      minScale = Math.min(minScale, scale());
+      minEMA = Math.min(minEMA, PerfGov.fpsEMA());
+      boundSeen = boundSeen || PerfGov.computeBound();
     }
-    assert.ok(peak <= 1,
-      `a rung worth ${(gain * 100).toFixed(0)}% still must not buy a second ladder step, got ${peak}`);
+    assert.ok(boundSeen,
+      `a rung worth ${(gain * 100).toFixed(0)}%: the scale-response evidence must latch computeBound`);
+    assert.ok(minScale <= 0.5000000000000001,
+      `a rung worth ${(gain * 100).toFixed(0)}%: the scale ladder must complete to the floor (pre-fix it parked at 0.9), got ${minScale}`);
+    assert.ok(minEMA <= AT_HALF + 1,
+      `a rung worth ${(gain * 100).toFixed(0)}%: the EMA must reach the captured cadence (pre-fix it sat at 100.6 ms), got ${minEMA}`);
+    assert.ok(peak >= 1,
+      `a rung worth ${(gain * 100).toFixed(0)}%: at least one tier rung must now be shed, got ${peak}`);
+    if (gain <= 0.08) assert.ok(peak >= 2,
+      `a rung worth ${(gain * 100).toFixed(0)}%: small rungs must buy a second ladder step, got ${peak}`);
   }
 });
 
@@ -1443,4 +1461,76 @@ test("replay Eq3/LPM: when the bigger probe buys nothing too, the lever is futil
     assert.ok(r.moves <= 3, `one cut, one bigger cut, one revert (${r.moves})`);
     assert.ok(Math.abs(r.floor - 33.3) < 0.5);
   }
+});
+
+// ---------------------------------------------------------------------------
+// THERMAL DRIFT → RENDER RATE: the real governor.js + thermal-drift.js +
+// render-rate.js, driven through tick(). ThermalDrift (opt-in via
+// apex26.thermalDrift) only SAYS a step is due; the governor's response is
+// what these pin: on a phone whose player never chose a render rate
+// (mode "auto"), the first step caps the presented rate at 45 — a quarter
+// less work per second, no quality traded — instead of a governor rung.
+// An explicit player mode is never overridden, and without RenderRate the
+// response is the governor rung exactly as before. Drift timing: 10 s
+// windows of accumulated frame time, 1 warm + 6 baseline windows, then a
+// windowed-p50 EMA that must clear baseline*1.12 (+1 ms) — so ~4300 ticks
+// at 16.7 ms to baseline, then a sustained 20 ms until a step lands.
+const TD_SRC = fs.readFileSync(path.join(ROOT, "js/perf/thermal-drift.js"), "utf8");
+function makeThermalGov(rateMode, { withRate = true } = {}) {
+  const mem = { "apex26.thermalDrift": "1" };
+  if (rateMode) mem["apex26.renderRate"] = rateMode;
+  globalThis.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
+  globalThis.window = { __APEX_BUILD: 1 };
+  globalThis.ThermalDrift = eval(TD_SRC + ";ThermalDrift");
+  // NOT a local named RenderRate: direct eval would hand the governor that
+  // local (null on the withRate:false path) instead of the global binding a
+  // classic script sees in production — the governor must resolve the real
+  // globalThis.RenderRate, present or absent, exactly as shipped.
+  let rr = null;
+  if (withRate) {
+    rr = eval(RR_SRC + ";RenderRate");
+    globalThis.RenderRate = rr;
+    rr.init({ isMobile: true });
+  } else {
+    delete globalThis.RenderRate;
+  }
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = 1;
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale,
+    setRenderScale: (s) => { s = Math.max(0.5, Math.min(1, s)); if (Math.abs(s - scale) < SCALE_EPS) return false; scale = s; return true; } });
+  return { PerfGov, RenderRate: rr, scale: () => scale, mem };
+}
+function feedUntilDriftStep(PerfGov, slowMs, maxTicks) {
+  feed(PerfGov, () => 16.7, 4300);   // warm window + baseline windows
+  let i = 0;
+  while (i < maxTicks && !(PerfGov.thermalDrift() && PerfGov.thermalDrift().steps > 0)) { PerfGov.tick(slowMs); i++; }
+  return i;
+}
+
+test("thermal drift on an undecided phone caps the presented rate at 45 before touching quality", () => {
+  const { PerfGov, RenderRate, scale, mem } = makeThermalGov(null);
+  const used = feedUntilDriftStep(PerfGov, 20, 6000);
+  assert.ok(PerfGov.thermalDrift().steps > 0, `a drift step must land (ticks used: ${used})`);
+  assert.equal(RenderRate.state().mode, "45", "the first response is the render-rate cap, not a quality rung");
+  assert.equal(scale(), 1, "no resolution was traded for a thermal step the rate cap answers");
+  assert.equal(PerfGov.tier(), 0, "no feature tier was shed either");
+  assert.equal(mem["apex26.renderRate"], undefined, "the engagement is session-only: the stored preference is untouched");
+  delete globalThis.RenderRate; delete globalThis.ThermalDrift;
+});
+
+test("an explicit render-rate choice is never overridden by thermal drift", () => {
+  const { PerfGov, RenderRate, scale } = makeThermalGov("30");
+  const used = feedUntilDriftStep(PerfGov, 20, 6000);
+  assert.ok(PerfGov.thermalDrift().steps > 0, `a drift step must land (ticks used: ${used})`);
+  assert.equal(RenderRate.state().mode, "30", "the player's explicit 30 stays exactly as chosen");
+  assert.ok(scale() < 1 || PerfGov.autoShed() > 0, "the governor rung answers instead, as it did before the wiring");
+  delete globalThis.RenderRate; delete globalThis.ThermalDrift;
+});
+
+test("without RenderRate the drift response is the governor rung, unchanged", () => {
+  const { PerfGov, scale } = makeThermalGov(null, { withRate: false });
+  const used = feedUntilDriftStep(PerfGov, 20, 6000);
+  assert.ok(PerfGov.thermalDrift().steps > 0, `a drift step must land (ticks used: ${used})`);
+  assert.ok(scale() < 1 || PerfGov.autoShed() > 0, "driftStep's rung moved, exactly the pre-wiring behaviour");
+  delete globalThis.RenderRate; delete globalThis.ThermalDrift;
 });
