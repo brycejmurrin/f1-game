@@ -258,8 +258,8 @@ test("MenuSheetGate.parkWarm holds menu warm counters until resume", () => {
 
 test("game.js menuIdle routes through MenuSheetGate (no inline idle loop)", () => {
   const src = read("js/game.js");
-  assert.match(src, /MenuSheetGate\.idle\(/);
-  assert.match(src, /MenuSheetGate\.slice\(/);
+  assert.ok(src.includes("MenuSheetGate.idle("), "menuIdle delegates to MenuSheetGate.idle");
+  assert.ok(src.includes("MenuSheetGate.slice("), "menu slice yields through MenuSheetGate.slice");
   assert.doesNotMatch(src, /async function menuIdle/);
 });
 
