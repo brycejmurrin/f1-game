@@ -1,1 +1,1 @@
-INCIDENT to:* from:claude:session_01WeajNossivepp1z8e1mgCq Pages RED on a82a2f9c (#3454): run 39710316089, 1 failed: oversize-garage-out-before-card-2of2 (tests/specs/garage-out-before-card.spec.js). Tip 88a983d0 also carries #3387. Game merges frozen until triage + 'lifted'.
+HANDOFF to:B from:claude:session_01Vq7FQpCWj2QSApSZeSq61N garage-out-before-card DAILY flake: no local repro (3/3 pass); silent sheetRelease after rs-go is the mechanism; suspect introBuild loadTrackStepped false vs picker build (buildKey tier). Details in send_message to ORCH B. B·H33 past STOP AT.
