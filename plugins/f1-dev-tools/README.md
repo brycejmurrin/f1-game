@@ -1,6 +1,6 @@
 # F1 Dev Tools
 
-A private skills plugin for Apex 26 / brycejmurrin/f1-game. Version 0.4.0 expands the existing scene, camera, WATCH and preset workflows with semantic UI inspection, CPU/heap/memory/leak diagnostics, graphics profiling, garage angles and car parts. The manifest advertises the repository MCPs that make those workflows reproducible.
+A private skills plugin for Apex 26 / brycejmurrin/f1-game. Version 0.4.1 expands the existing scene, camera, WATCH and preset workflows with semantic UI inspection, CPU/heap/memory/leak diagnostics, graphics profiling, garage angles and car parts. The manifest advertises the repository MCPs that make those workflows reproducible.
 
 Select this plugin in a coding session with the game checkout and browser execution available. Its skill reuses the game's existing Apex MCP server, browser integrations, camera tuner and production replay API. It needs no new hosted service or credentials. It does not add a new MCP server or run local game tools from a chat without an execution environment.
 
