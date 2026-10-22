@@ -34,7 +34,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { captureAuditEnvironment, captureAuditSource, captureAuditSelectors, auditFindingSelectors } from "./explorer/audit-evidence.mjs";
 import { fileURLToPath } from "node:url";
-import { exitIfHelp } from "../lib/cli-args.mjs";
+import { exitIfHelp, pickIds, CliArgError } from "../lib/cli-args.mjs";
 let setupApiMocks = null;
 try { ({ setupApiMocks } = await import("../../tests/helpers/f1-api-mock.js")); } catch { /* hub degrades to its empty state */ }
 
@@ -122,6 +122,16 @@ const SCREENS = [
   ["datahub", `document.getElementById('mb-data').click(); await until('.dh-race, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
   ["datahub-standings", `document.getElementById('mb-data').click(); await until('#dh-tab-standings'); document.getElementById('dh-tab-standings').click(); await until('.dh-row, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
 ];
+
+// An --only that selects no screen used to run zero cells and exit 0 (#3305).
+if (ONLY) {
+  try { pickIds(arg("only"), SCREENS.map((s) => s[0])); } catch (e) {
+    if (!(e instanceof CliArgError)) throw e;
+    console.error(e.message);
+    process.exit(1);
+  }
+}
+
 
 // Thresholds. 44 is Apple's HIG figure and WCAG 2.5.5 (AAA); 24 is the WCAG 2.2
 // AA floor, and it only passes with clearance, hence SPACE.
