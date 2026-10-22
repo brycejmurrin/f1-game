@@ -13,7 +13,7 @@ import { SCREENS } from "./menu-screens.mjs";
 import { validateScenario } from "./explorer/core.mjs";
 import { MODE_TITLES, MISSIONS, missionBrief } from "./explorer/catalog.mjs";
 import { explore } from "./explorer/modes.mjs";
-import { writeReport } from "./explorer/report.mjs";
+import { writeReport, missingEvidence } from "./explorer/report.mjs";
 import { openSession } from "./explorer/browser.mjs";
 import { resolveUIProfile, measureUIProfile } from "../lib/ui-device-profile.mjs";
 import { inspectSettled, inspectResponsive, installInspector } from "./explorer/inspector.mjs";
@@ -163,7 +163,15 @@ export async function main(argv = process.argv.slice(2)) {
     if (!opts.file) throw new Error("report requires report.json");
     const source = path.resolve(opts.file);
     if (path.dirname(source) !== opts.outDir) throw new Error("Rebuild reports beside their evidence: --out must be the input report.json directory");
-    console.log(await writeReport(readJSON(source), opts.outDir)); return 0;
+    const bundle = readJSON(source);
+    console.log(await writeReport(bundle, opts.outDir));
+    // Rebuilding from the JSON alone succeeds with dead links; say so.
+    const missing = missingEvidence(bundle, opts.outDir);
+    if (missing.length) {
+      console.error(`warning: ${missing.length} evidence file(s) linked by the report are missing from ${opts.outDir} (copy the whole report directory, not just report.json):`);
+      for (const m of missing) console.error(`  ${m.record} ${m.kind}: ${m.path}`);
+    }
+    return 0;
   }
   if (["replay", "minimize"].includes(opts.command) && !opts.file) throw new Error(`${opts.command} requires a scenario JSON file`);
   const scenario = opts.file ? validateScenario(readJSON(opts.file)) : null;

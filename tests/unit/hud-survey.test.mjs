@@ -894,8 +894,8 @@ test("menu-mock: planMenuCells orders race-bound screens last, groups by pointer
   assert.deepEqual(cells.filter((c) => c.viewport === "ios-iphone-landscape-844").map((c) => c.screen),
     ["title", "select", "photostudio", "pause"], "mode/race screens after title clicks");
   assert.ok(MM.planMenuCells("*", "desktop-1280x800").length > 20, "'*' is every catalogued screen");
-  assert.throws(() => MM.planMenuCells("nope", "desktop-1280x800"), /--screens: unknown nope/);
-  assert.throws(() => MM.planMenuCells("title", "nope"), /--viewports: unknown nope/);
+  assert.throws(() => MM.planMenuCells("nope", "desktop-1280x800"), /--screens: no match for "nope"/);
+  assert.throws(() => MM.planMenuCells("title", "nope"), /--viewports: no match for "nope"/);
   assert.equal(MM.groupKey({ hasTouch: true, isMobile: true }), "touch-mobile");
   assert.equal(MM.groupKey({}), "pointer-desktop");
   assert.ok(MM.DEFAULT_SCREENS.split(",").every((id) => MM.planMenuCells(id, MM.DEFAULT_VIEWPORTS).length === 1), "every default screen id exists");

@@ -264,6 +264,9 @@ const NetLobby = (function () {
             selfReady = false;
             _verify.delete(id);
             if (G.setNetRoom) G.setNetRoom(true);
+            // Only a CODE room rotates: a link/QR room never advertised one, and
+            // minting it here left a public code up to expire later (H3-7).
+            const hadCode = !!(codeRoom || codeReopenTimer);
             stopCodeWait();
             dropPending();
             codeReopen = null;
@@ -271,7 +274,7 @@ const NetLobby = (function () {
             _answersSeen = null;
             say("Player removed — invite someone new when you are ready.");
             show("room");
-            rotateRoomAfterEvict();
+            if (hadCode) rotateRoomAfterEvict();
             renderRoom();
             if (G.refreshQualiGate) G.refreshQualiGate();
             return;
@@ -306,6 +309,8 @@ const NetLobby = (function () {
               try { sess.sendEvent(NetPlay.EV.LEFT, { from: id }); } catch (e) { /* a dead session is its own close */ }
             }
           }
+          // A removed player must not walk back in on the code onConnected reopened.
+          if (wasHostEvict && role === "host" && !friendQualifying && !(typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace()) && (codeRoom || codeReopenTimer)) rotateRoomAfterEvict();
         }
         renderRoom(); if (G.refreshQualiGate) G.refreshQualiGate();
       });
@@ -1334,7 +1339,12 @@ const NetLobby = (function () {
       (type, data) => broadcast(type, data), () => !!session);
 
     async function finishStart() {
-      if (!session) return;
+      if (!session) {   // all connections closed: q-go already closed the sheet, a silent return was a blank screen (H3-8)
+        const wasGuest = role === "guest";
+        cancel(); if (G.quitToMenu) G.quitToMenu();
+        if (G.announce) G.announce(wasGuest ? "THE HOST LEFT — BACK TO MENU" : "EVERYONE LEFT — BACK TO MENU", 4, "info");
+        return;
+      }
       const gen = beginOperation(), startingSessions = new Set(sessions.values());
       // A peer can leave this room during the build; an empty room still needs
       // its normal cleanup. Any surviving session must belong to this start.
@@ -1720,7 +1730,9 @@ const NetLobby = (function () {
             dropPending();
             // onConnected() reopens the code for the next arrival; its expiry
             // (HOST_TIMEOUT_MS ≈ 120 s) later is not a failure of a room that is already full.
-            if (r.error === "expired" && (sessions.size || watcherArmed)) {
+            // A quiet room is the waiting room (rotated after a remove): host copy,
+            // never nostr's guest "Check the six characters…" (H3-7; closed PR #3535).
+            if (r.error === "expired" && (sessions.size || watcherArmed || opts.quiet)) {
               const msg = "The room code has expired — INVITE ANOTHER makes a new one.";
               tagFailReason("expired", msg);
               say(msg);
@@ -2006,7 +2018,7 @@ const NetLobby = (function () {
       "#howtoplay,#career,#career-offers,#career-history,#career-guide,#select," +
       "#teampicker,#carsetup,#photo-studio,#season-setup,#track-detail," +
       "#race-settings,#customize,#trackdesigner,#standings,#quali,#spotifypanel," +
-      "#lighting,#camtune,#flyby,#freecam,#garrival,#duel-picker,#datahub"
+      "#lighting,#camtune,#flyby,#freecam,#garrival,#duel-picker,#datahub,#bench"
     );
     function blockingTitleSheet() {
       if (typeof document.querySelectorAll !== "function") return null;

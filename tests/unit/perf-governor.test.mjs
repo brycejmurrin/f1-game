@@ -209,7 +209,7 @@ test("the two futility latches are inspectable, and start clear", () => {
 });
 
 test("a sustained-slow device still stops after a successful first rung", () => {
-  // docs/notes/PERF-FINDINGS.md §2u, from a live iPhone capture: Suzuka,
+  // docs/notes/PERF-FINDINGS.md §2au, from a live iPhone capture: Suzuka,
   // 32.2 fps, scale already at the 0.5 mobile floor, tier 0 — nothing optional
   // shed on a device missing half its frames.
   //
@@ -251,7 +251,7 @@ test("a sustained-slow device still stops after a successful first rung", () => 
 });
 
 test("the adapted floor is what closes the ladder, not a latched-off lever", () => {
-  // The distinction that the first diagnosis of §2u got wrong. _tierFutile does
+  // The distinction that the first diagnosis of §2au got wrong. _tierFutile does
   // latch on a shed that buys nothing, but it is CLEARED again by the restore
   // branch — so a latch is never the durable reason a device stops shedding.
   // The durable reason is floorMs having become the device's own frame time,

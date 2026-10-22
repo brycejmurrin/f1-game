@@ -328,6 +328,8 @@ const GarageLiveryDesignEditor = (function () {
         if (comparing) api.preview(draft);
         comparing = false; if (!restoring) h.record(draft, !!drag); sync();
       },
+      // Edits since the editor opened: CANCEL arms before it throws them away (setup-sheet.js).
+      dirty: () => JSON.stringify(draft) !== JSON.stringify(h.original()),
     });
   }
   return Object.freeze({ attach, label: (id) => LABELS[id] || (typeof LiveryDesign !== "undefined" && LiveryDesign.LABELS && LiveryDesign.LABELS[id]) || id });

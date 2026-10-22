@@ -588,6 +588,15 @@
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
 }
 
+/* #3335: the pair RAIL is vertical and scrolls, so every subtitle may take a
+   second line like ENGINE above ("Keynes Brake Pack", "Circuit Adaptive" were
+   cut to "Keynes Br…" at 140px). The stacked strip stays one line: it is a row
+   and a taller tab there costs list height. */
+#cs-inner[data-pair="on"] .cs-tab-cur {
+  white-space: normal; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+}
+
 /* ---------- option rows ---------- */
 .cs-opt {
   display: flex; align-items: flex-start; gap: calc(var(--gap) * 0.8); text-align: left; width: 100%;
@@ -796,7 +805,10 @@
   overflow: visible;
   text-overflow: clip;
   white-space: nowrap;
-  letter-spacing: var(--ls-1);
+  /* #3330: CHAMELEON/GOLDPLATE overran the swatch by 2px at 1440x900. Zero
+     tracking buys back ~5px; max-width/overflow stay as above (the r6 test
+     freezes "never ellipsis"). */
+  letter-spacing: 0;
 }
 #cs-options.cs-liv-grid .cs-liv-swatch .cs-opt-tag + .cs-opt-tag {
   left: auto;
@@ -1260,9 +1272,10 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
      on the screen you sit on longest outside a race. Same call hud.css and
      overlays.css already make over the race canvas; the tinted bg, raised
      a little to compensate, carries the look. */
-  /* --chip-h: same rung as the touch override below. MEASURED readability
-     survey: desktop #cs-cam/#cs-aero sat at 31px under a 40px chip floor. */
-  min-height: var(--chip-h);
+  /* 44px painted (Apple HIG 44 pt; Bryce chose it for #3333 on 2026-10-22).
+     It was --chip-h alone: 31px on desktop in the readability survey, then a
+     40px chip floor. The /--ui-scale term keeps 44 PAINTED below 100% UI. */
+  min-height: max(var(--chip-h), calc(44px / var(--ui-scale)));
 }
 /* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
 @media (hover: hover) and (pointer: fine) {
@@ -1425,7 +1438,7 @@ body:has(> .screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
      on the screen you sit on longest outside a race. Same call hud.css and
      overlays.css already make over the race canvas; the tinted bg, raised
      a little to compensate, carries the look. */
-  min-height: var(--chip-h);
+  min-height: max(var(--chip-h), calc(44px / var(--ui-scale)));  /* 44 painted, see #cs-cam (#3333) */
 }
 @media (hover: hover) and (pointer: fine) {
   #cs-aero:hover { border-color: rgba(255,255,255,0.3); }
@@ -1663,6 +1676,13 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
    aero chips on touch; full --tap stays off here so the header does not reclaim
    the third of the panel the comment above documented. */
 #cs-inner[data-density="compact"] #cs-unlimited { min-height: var(--chip-h); }
+/* #3334: below 100% UI the sheet zoom paints --chip-h (48) at 36px. Re-floor the
+   touch chips on the PAINTED 44, so 100%+ is unchanged (48 >= 44 already). */
+body:not(.desktop) #carsetup .sel-chip,
+body:not(.desktop) #carsetup #cs-unlimited,
+body:not(.desktop) #carsetup #cs-customize {
+  min-height: max(var(--chip-h), calc(45px / var(--ui-scale)));
+}
 /* One-line tabs on a short sheet. The current-part line doubled the strip
    (measured 54px / scrollWidth 1110 on 852×393) and hid half the catalogue
    behind a sideways pan. The option list already names the fitted part. */
@@ -1843,6 +1863,16 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
      The budget and summary return as soon as the drawer closes. */
   #carsetup:has(#cs-cam-panel:not([hidden])) #cs-stats-inner,
   #carsetup:has(#cs-cam-panel:not([hidden])) #cs-budget-wrap { display: none; }
+}
+/* #3331: on a short portrait viewport (320x568, 360x640, a 390x664 Safari with
+   its toolbar) the 70vh cap leaves #cs-body ~45-70px short of tabs + the options
+   floor, so overflow:hidden cuts the list under CLOSE GARAGE (measured
+   2026-10-22, #cs-body scrollHeight 250 vs clientHeight 194 at 390x664). The
+   row above #cs-stack already bounds the sheet, so lift the cap there; the car
+   band stays on any phone tall enough to afford it. 100% not vh: the sheet is
+   zoomed at UI SIZE < 100%, and vh is not. */
+@media (orientation: portrait) and (max-height: 740px) {
+  #cs-inner { max-height: 100%; }
 }
 
 /* Change Car / garage open: sheet is up while buildSetup fills tabs (aria-busy). */

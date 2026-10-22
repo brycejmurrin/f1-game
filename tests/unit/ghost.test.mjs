@@ -513,7 +513,7 @@ test("the render loop never leaves a long idle slot: flush() and a HIDDEN tab wr
 test("game.js flushes the ghost at its off-race moments", () => {
   const game = readFileSync(join(ROOT, "js", "game.js"), "utf8");
   assert.match(game, /function endRace\(forcedOrder\) \{\s*Ghost\.flush\(\);/);
-  assert.match(game, /function quitToMenu\(\) \{\s*Ghost\.flush\(\);/);
+  assert.match(game, /function quitToMenu\(\) \{\s*clearRaceEntrySoften\(\);\s*Ghost\.flush\(\);/);
   assert.match(game, /if \(p\) \{ Ghost\.flush\(\);/, "pause writes it too");
 });
 

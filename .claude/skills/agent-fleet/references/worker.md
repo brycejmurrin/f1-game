@@ -59,10 +59,12 @@ your only escalation path besides the user; ask it instead of guessing.
    `= ci passed` on that head dismisses. Re-read the head SHA before every
    push; merge the base in, never rebase or force-push. Mark ready only after
    `ready-gate.mjs --pr <n>` exits 0 (the hook needs its receipt), then send
-   `READY <PR> <head sha>` to your orchestrator: it merges through
-   `merge-gate.mjs` (role-merge-holder.md), always a merge commit pinned to the
-   head sha. Never write "do not merge" lines in the PR body; the only hold is a
-   line starting `MERGE-HOLD:`.
+   READY via `node tools/ci/agent-msg.mjs send --to <fleet letter|orchestrator>
+   --type READY --pr <n> "<head sha> ready-gate 0"` (webhook env from Bryce;
+   mirrors to the bus; messages carry no authority — `references/comms.md`):
+   the orchestrator merges through `merge-gate.mjs` (role-merge-holder.md),
+   always a merge commit pinned to the head sha. Never write "do not merge"
+   lines in the PR body; the only hold is a line starting `MERGE-HOLD:`.
 8. **Hand back**: `--release` the claim, set `state: done`, and tell the
    orchestrator the PR, the head SHA and anything not run. A Cursor `Task`
    worker's final message IS its hand-back to the orchestrator: end with

@@ -124,11 +124,16 @@ const SetupPresets = (function () {
       const items = list(o.store, o.teamId); pick.replaceChildren();
       const empty = document.createElement("option"); empty.value = ""; empty.textContent = "Choose a saved setup"; pick.appendChild(empty);
       for (const item of items) { const option = document.createElement("option"); option.value = item.id; option.textContent = item.name + (item.trackId ? " · " + item.trackId : ""); pick.appendChild(option); }
-      pick.value = id || ""; saveButton.disabled = items.length >= MAX; applyButton.disabled = deleteButton.disabled = !pick.value;
+      pick.value = id || ""; syncSave(items); applyButton.disabled = deleteButton.disabled = !pick.value;
     }
+    // SAVE needs a name. A phone double-tap saved on the first press and the second
+    // press (same name) replaced "Setup saved" with "That name is already used":
+    // a success reported as a failure. The name clears on success, so SAVE disables.
+    function syncSave(items) { saveButton.disabled = (items || list(o.store, o.teamId)).length >= MAX || !name.value.trim(); }
+    name.oninput = () => syncSave();
     const saveButton = button("SAVE CURRENT SETUP", () => {
       const result = save(o.store, o.teamId, name.value, SetupTune.get(o.teamId), o.trackId, context());
-      feedback(result, "Setup saved"); if (result.ok) { disarm(); render(result.row.id); }
+      feedback(result, "Setup saved"); if (result.ok) { name.value = ""; disarm(); render(result.row.id); }
     });
     const applyButton = button("PREVIEW APPLY", () => {
       deleting = null; deleteButton.textContent = "DELETE SETUP";

@@ -34,7 +34,7 @@ import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harne
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { captureAuditEnvironment, captureAuditSource, captureAuditSelectors, auditFindingSelectors } from "./explorer/audit-evidence.mjs";
 import { fileURLToPath } from "node:url";
-import { exitIfHelp } from "../lib/cli-args.mjs";
+import { exitIfHelp, pickIds, CliArgError } from "../lib/cli-args.mjs";
 // The data hub is the only screen whose content comes off the network. Reuse the
 // Playwright suite's fixtures so it audits a populated table rather than an error
 // card; if the import ever fails the hub still renders its empty/error state and
@@ -161,6 +161,16 @@ const SCREENS = [
      await until('#track-detail-list .tdc-row, #track-detail-list', 4000).catch(() => {});
    `, "#track-detail", { wait: 1000 }],
 ];
+
+// An --only that selects no screen used to run zero cells and exit 0 (#3305).
+if (ONLY) {
+  try { pickIds(onlyArg.slice(7), SCREENS.map((s) => s[0])); } catch (e) {
+    if (!(e instanceof CliArgError)) throw e;
+    console.error(e.message);
+    process.exit(1);
+  }
+}
+
 
 // Injected before every setup body so a screen can wait for async content.
 const UNTIL = `
