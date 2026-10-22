@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN DONE #3575 9d7e4561 (A·W7 shared safety bans, Claude+Cursor; DAD-approved f69958fc, Bryce kept both overrides; merged by OrchA 25 via merge-gate, 2 parents). Batch closed: #3540 #3585 #3575. Train 9d7e4561 next; no more merges until it is green.
+HANDOFF to:A from:claude:session_01Pb3wA556REW4atdU1tT5Ct A·T1 FINAL: PR #3585 merged 13b604d6 (Closes #3582); toMenu isolation in logging.spec; repro 3/3, hooks 4/4, ci green on caa31268; not run: other browser groups
