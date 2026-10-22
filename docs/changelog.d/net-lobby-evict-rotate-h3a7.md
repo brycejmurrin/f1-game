@@ -1,0 +1,1 @@
+Fixed: removing the last guest from a VS FRIEND link or QR room no longer opens a public room code, and an expired waiting-room code shows the host’s INVITE ANOTHER message instead of the guest’s “six characters” error (H3-7).
