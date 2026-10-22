@@ -21,6 +21,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { boot } from "../helpers/mirror-pass-rig.mjs";
+import { bootGlx } from "../helpers/glx-mock.mjs";
 
 test("AUTO shows the mirror in an onboard view on a hardware renderer, and not in chase", () => {
   const onboard = boot({ mode: "auto", cam: "cockpit" });
@@ -252,6 +253,48 @@ test("the first full pass after a hidden or lite interval always refreshes the i
   assert.equal(g.mp.state().quality, "full");
   g.render();
   assert.deepEqual(flags(g), [false, true], "first full pass refreshes, the next freezes");
+});
+
+for (const preparation of [false, true]) test(`standDown refreshes the first full instance pack after ${preparation ? "same-world preparation" : "re-entry"}`, async () => {
+  const rig = boot({ mode: "on", tier: 0 }), h = bootGlx();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+    col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const matrix = z => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, z, 1];
+  const batch = h.GLX.createInstancedBatch(tri, new Float32Array([...matrix(80), ...matrix(1080)]), null, { cellSize: 50 });
+  const rows = [], begin = rig.gfx.mirrorBegin, end = rig.gfx.mirrorEnd;
+  // Drive the actual backend's cull/pack with the camera and freeze flag that
+  // MirrorPass hands its renderer. The recording GL does not establish pixels.
+  rig.gfx.mirrorBegin = (frame, w, ht) => {
+    assert.equal(h.GLX.mirrorBegin(h.frame({ viewProj: frame.viewProj, eye: frame.eye,
+      cullDist: frame.cullDist, mirrorFreezeInstanced: frame.mirrorFreezeInstanced }), w, ht), true);
+    const n = h.GLX.cullInstances(batch, h.sandbox.Frustum.makeFrustumPlanes(frame.viewProj));
+    h.GLX.drawInstanced(batch, {});
+    rows.push({ freeze: !!frame.mirrorFreezeInstanced,
+      packed: Array.from(batch._mir.packMatrices.slice(0, n * 16)) });
+    return begin(frame, w, ht);
+  };
+  rig.gfx.mirrorEnd = () => { h.GLX.mirrorEnd(); end(); };
+  try {
+    for (let i = 0; i < 3; i++) rig.render();
+    assert.deepEqual(rows.map(row => row.freeze), [false, true, false]);
+    assert.deepEqual(rows.at(-1).packed, matrix(80));
+    // The garage path never calls render() while stood down. Repeated calls
+    // must remain idempotent, and the same world's batch survives the interval.
+    for (let i = 0; i < 3; i++) rig.mp.standDown();
+    rig.G.player.s = 1100;
+    if (preparation) {
+      rig.G.state = "count";
+      const ready = rig.mp.prepareRace();
+      rig.render(); rig.render();
+      assert.equal(await ready, true);
+    } else rig.render();
+    assert.equal(rows.at(-1).freeze, false, "the first full pass after interruption refreshes");
+    assert.deepEqual(rows.at(-1).packed, matrix(1080), "the new view's packed bytes replace the old location");
+    rig.G.state = "race";
+    rig.render();
+    assert.equal(rows.at(-1).freeze, true, "ordinary every-other-pass reuse resumes from the refreshed pack");
+    assert.deepEqual(rows.at(-1).packed, matrix(1080));
+  } finally { h.GLX.freeInstancedBatch(batch); }
 });
 
 test("a tap collapses the mirror to a chip for the session; a tap on the chip brings it back", () => {
