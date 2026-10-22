@@ -93,6 +93,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/agent-experiment.test.mjs",
   // Generated agent index, hook page, coverage page and per-hook help. No browser.
   "tests/unit/agent-indexes.test.mjs",
+  // agent-msg: webhook payload shape, --to aliases, auth redaction, missing-env→bus fallback, --dry-run, mock fetch; < 0.2 s.
+  "tests/unit/agent-msg.test.mjs",
   "tests/unit/agent-output-config.test.mjs",
   "tests/unit/agent-output.test.mjs",
   "tests/unit/agent-surface.test.mjs",
