@@ -312,3 +312,27 @@ test("terrain-over-road does not treat a missing gap as a pass (#1674)", () => {
   assert.equal(/gap === null/.test(src), false,
     "gap === null must not be an accepted success; sample where terrain exists and require a number");
 });
+
+test("ratchet data is validated: own keys only, finite numbers, a clear error", async () => {
+  const file = Object.keys(load().files)[0];
+  // Inherited names are not metrics (`METRICS.constructor` is a function).
+  await assert.rejects(measure({ files: { [file]: { constructor: 1 } } }), /unknown metric "constructor"/);
+  await assert.rejects(measure({ files: {}, tree: { toString: 1 } }), /tree: unknown metric "toString"/);
+  const metric = Object.keys(load().files[file])[0];
+  for (const bad of [NaN, Infinity, -Infinity]) {
+    await assert.rejects(measure({ files: { [file]: { [metric]: bad } } }), /not a finite number/);
+    await assert.rejects(measure({ files: { [file]: { [metric]: { ceiling: 5, slack: bad } } } }), /slack .* finite number/);
+  }
+  await assert.rejects(measure({ files: { [file]: { [metric]: { ceiling: 5, slack: -1 } } } }), /slack -1/);
+  await assert.rejects(measure({ files: { [file]: { [metric]: null } } }), /no ceiling/);
+});
+
+test("applyFragments: a delta is matched on own keys and must be a finite number", () => {
+  const base = { files: { "a.js": { lines: 10 } }, tree: { rawColor: 5 } };
+  // Inherited keys are ignored like any entry the base no longer carries...
+  const ok = applyFragments(base, [{ name: "x.json", data: { files: { constructor: { lines: 1 }, "a.js": { toString: 1, lines: 2 } }, tree: { constructor: 1 } } }]);
+  assert.deepEqual(ok, { files: { "a.js": { lines: 12 } }, tree: { rawColor: 5 } });
+  // ...but a bad number for a real entry is an error that names it, not a silent no-op.
+  assert.throws(() => applyFragments(base, [{ name: "x.json", data: { files: { "a.js": { lines: "3" } } } }]), /a\.js lines must be a finite number/);
+  assert.throws(() => applyFragments(base, [{ name: "x.json", data: { tree: { rawColor: null } } }]), /tree rawColor must be a finite number/);
+});
