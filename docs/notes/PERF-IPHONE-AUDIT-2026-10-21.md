@@ -92,7 +92,8 @@ weakening it.
   tier 4 + `capDpr(1)`; strikes are build-keyed, a clean race pays one back.
 - Thermal machinery exists in two halves that were never wired together: `js/perf/thermal-drift.js`
   detects sustained p50 drift, and `js/perf/render-rate.js` has 45/30 fps tiers — but the tiers
-  are **player-opt-in only**, and drift currently only nudges governor rungs.
+  are **player-opt-in only**, and drift currently only nudges governor rungs. (Wired on this
+  branch — ranked item 3.)
 - Already-fixed iOS landmine worth not re-discovering: `tsl-lit.js` `MAX_LIGHTS` is 16 on
   `_liteGpu` (mobile/WebKit/software) vs 48 elsewhere — 48 overran WebGL2's 224 fragment-uniform
   floor on iOS, failed the lit program link, and made the car see-through.
@@ -143,7 +144,10 @@ Already built, do not engage (this branch, in order):
    signal, only when the player's render-rate setting is "auto"; never override an explicit
    player choice.
 4. **TLX phone shadow allocations** — align them with what GLX refuses on phones (§4), gated to
-   mobileTier / lite GPUs only.
+   mobileTier / lite GPUs only. *Landed on this branch:* the one target still allocated against
+   that rule — the PCSS blocker, built on the WebGPU leg even for phones — is now gated off on
+   mobile; the sun/car/lamp targets were already aligned. The rest of §2q's 40.4 MB is three's
+   shadow-pass machinery rather than target sizes, and is untouched.
 
 New work, later:
 
