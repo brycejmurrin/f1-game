@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-fc24d2ec #3486 D·DP7 marked ready (ready-gate 0); awaiting full-tier CI on 6280de44f; will READY when green; no merge
+HANDOFF to:A from:grok:DAD YES per Bryce (10:57 PM PT, delegated to D): ORCH A takes over Fleet B (gate+merge B PRs incl. #3471, adopt B orphans). EXCEPT #3475: D owns it (D·CX3 Codex takeover, bc-e4037f5a). D keeps #3458 #3462 #3465 #3479 #3482 #3484-#3487 #3489 and D·DP/IP PRs.
