@@ -181,3 +181,23 @@ test("an edited design survives one stray Escape or CANCEL: the editor arms, the
   await expect(editor).toBeHidden();
   expect(await page.evaluate((k) => GameStore.store.get(k, []), key)).toEqual([]);
 });
+
+test("CLOSE GARAGE with an edited design arms DISCARD EDITS? first; the confirming tap closes", async ({ page }) => {
+  const key = await openCreator(page);
+  const back = page.locator("#cs-back");
+  await page.locator(".cs-liv-ed-name").fill("Close Test");
+  await back.tap();
+  await expect(page.locator("#carsetup")).toBeVisible();
+  await expect(page.locator(".cs-liv-editor")).toBeVisible();
+  await expect(back).toHaveText("DISCARD EDITS?");
+  await back.tap();
+  await expect(page.locator("#carsetup")).toBeHidden();
+  await expect(back).toHaveText("BACK");
+  expect(await page.evaluate((k) => GameStore.store.get(k, []), key)).toEqual([]);
+});
+
+test("CLOSE GARAGE with an unedited design closes in one tap", async ({ page }) => {
+  await openCreator(page);
+  await page.locator("#cs-back").tap();
+  await expect(page.locator("#carsetup")).toBeHidden();
+});
