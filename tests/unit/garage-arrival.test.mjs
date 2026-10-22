@@ -1236,3 +1236,25 @@ test('service entry completion uses the extended duration and skips to a finishe
   assert.equal(arrival.state.active,true);assert.equal(arrival.state.z,0);assert.equal($('cs-inner').inert,true);
   $('cs-arrival-skip').onclick();assert.equal(arrival.state.active,false);assert.equal(arrival.state.seconds,Arrival.duration(cfg));assert.equal($('cs-inner').inert,false);
 });
+// #3511: on a GPU drawing one frame every 2 s the render dt reaching step() is
+// capped at 0.1 s, so the arrival — and the inert setup sheet — ran at 1/20 of
+// wall time (≈ 3 min for the 8.7 s cinematic). It now ends on the wall clock.
+test('slow GPU: arrival and the inert sheet end on wall time, not frame count (#3511)', () => {
+  for (const frameS of [2, 1, 0.5, 0.25]) {
+    const { $ } = harness(), clock = { t: 100 };
+    const arrival = Arrival.create($, () => false, () => Arrival.DEFAULT, () => clock.t);
+    arrival.start(); assert.equal($('cs-inner').inert, true);
+    let frames = 0;
+    while (arrival.state.active && frames < 10000) { clock.t += frameS; arrival.step(0.1); frames++; }
+    const wall = frames * frameS, want = Arrival.duration(Arrival.DEFAULT);
+    assert.equal($('cs-inner').inert, false, `inert released at ${frameS}s frames`);
+    assert.ok(wall <= want + frameS + 1e-9, `${frameS}s frames: sheet inert ${wall.toFixed(1)}s of wall time, authored ${want.toFixed(1)}s`);
+  }
+});
+test('slow GPU clock: a suspended-tab gap still cannot swallow the arrival (#3511)', () => {
+  const { $ } = harness(), clock = { t: 0 };
+  const arrival = Arrival.create($, () => false, () => Arrival.DEFAULT, () => clock.t);
+  arrival.start(); clock.t += 600; arrival.step(0.1);
+  assert.equal(arrival.state.active, true); assert.equal($('cs-inner').inert, true);
+  clock.t += 2; arrival.step(0.1); assert.equal(arrival.state.active, true);
+});
