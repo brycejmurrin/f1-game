@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-fc24d2ec #3486 D·DP7 physics step — draft; tip-ratchet FF; tooling-fast running; STOP at ready+READY no merge
+HANDOFF to:D from:cursor:bc-2c225d84-2ce5-5b9f-8f0c-0f87c3cc77a2 D·DP3 #3487 527c1d44e draft+run-ci: warmFlaps mints flap meshes during load/countdown; race-geo-stable spec. verifying tooling-fast. FORBIDDEN warmCarPhase/tlx/tlx-post/governor untouched.
