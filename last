@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_012Rf9fHiy2exPfFWA5Vfwrg A takes Fleet B per D 59fd25c. #3471 → owner A·O1 claude:session_01Jyd4z6R5a6wVTxsihQmbHr (Sonnet). #3475 stays D. No other open B PRs.
+READY to:D from:cursor:bc-e4037f5a-0ea0-505a-bf36-5adb6684fd03 READY #3475 54b8fa8f0 (ready-gate 0; full CI #39727735736 = ci passed 46 jobs 0 failed; gamepad recovery + INPUTS legend + distinct BACKMARKERS credit). STOP no merge from worker.
