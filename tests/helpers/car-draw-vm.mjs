@@ -11,7 +11,7 @@
  *
  * rec.builds: one { kind: "whole" | "body" | "sh", team, num } per Car3D.build;
  * rec.wheels: Car3D.buildWheelLayers calls; rec.freed: meshes an LRU let go;
- * rec.flaps: one { team, blend, m, only, still } per deps.drawAeroFlaps call.
+ * rec.flaps: one { team, blend, m, only, still, viewLivery? } per deps.drawAeroFlaps call.
  * rec.mats: the world matrix (16 numbers, or null) handed to each gfx.draw, parallel to rec.draws.
  * Real teams come from js/data/teams.js (11 x 2 seats); `legends: true` appends
  * js/data/legends.js's twelve-seat LEGENDS entry, the menu's widest pick.
@@ -124,8 +124,11 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
     resolveLivery: () => livery || ({ c1: [1, 0, 0], c2: [0, 0, 1] }), partsVisualKey: () => "111111111111",
     // drawAeroFlaps in game.js, recorded (field-lod.test.mjs drives the real one):
     // `still` = the static flap set, drawn whatever the car's distance.
-    drawAeroFlaps: (team, aLvl, blend, m, paint, style, only, still) =>
-      rec.flaps.push({ team: team.id, blend, m: m[12] + "," + m[14], only: only || null, still: !!still }),
+    drawAeroFlaps: (team, aLvl, blend, m, paint, style, only, still, viewLivery) => {
+      const record = { team: team.id, blend, m: m[12] + "," + m[14], only: only || null, still: !!still };
+      if (viewLivery !== undefined) record.viewLivery = viewLivery;
+      rec.flaps.push(record);
+    },
     damp: (a) => a, isTimeTrial: () => false, isQuali: () => false,
   });
 
