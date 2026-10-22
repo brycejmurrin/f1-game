@@ -13,6 +13,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -46,11 +47,37 @@ test("a livery finish lands on every painted vertex of the cockpit/helmet build,
   }
 });
 
-test("the cockpit and helmet cameras draw the body with the exterior's paint opts (carFinish)", () => {
-  const draw = read("js/car/car-draw.js"), game = read("js/game.js");
-  assert.match(draw, /G\.gfx\.draw\(cockpitBodyMesh\(c\.team, c\), base, paint\)/, "drawCockpitRig: body with the paint opts");
-  assert.match(game, /drawCockpitRig\(c, _cockMat, dt, paint, /, "game.js hands the frame's carPaintMat to the rig");
-  assert.match(read("js/fx/grade-tint.js"), /m\.carFinish = true/, "carPaintMat carries carFinish (the 60-85 finish block)");
+// THE RIG, RUN (tests/helpers/car-draw-vm.mjs, as cockpit-wheels.test.mjs): the real drawCockpitRig, every
+// gfx.draw recorded with its opts, so what reaches the body and the wheel is read from what it DRAWS.
+function rigDraws() {
+  const v = carDrawVm({ cam: "cockpit" }), { ctx, G } = v, rigOpts = [];
+  ctx.CockpitOpts = { wheel: () => "f1", interior: () => "carbon", haloSize: () => 2, body: () => "standard",
+    layout: () => ({ wheelS: 0.8, wheelY: 0.63, wheelZ: 0.26 }), wheelHasScreen: () => false };
+  ctx.Car3D.cockpitMirrorGlass = () => [];
+  const WHEEL_OPTS = { wheelFinishOpts: true };
+  ctx.CarMesh = new Proxy({}, { get: (_o, k) => k === "WHEEL_ROLL_LAMBDA" ? 12 : k === "cockpitWheelRoll" ? (x) => x
+    : k === "cockpitWheelOpts" ? (o) => (rigOpts.push(o), WHEEL_OPTS) : () => ({ carMesh: String(k) }) });
+  Object.assign(G, { raceTimeOfDay: "day", track: { total: 5000, def: {} }, dashKph: (sp) => sp * 3.6, raceT: 0 });
+  v.field(() => 1000);
+  const drawn = [];
+  G.gfx.draw = (mesh, _m, opt) => drawn.push({ name: mesh && mesh.carMesh, opt });
+  const PAINT = { carFinish: true, clearcoat: 0.8 };
+  v.carDraw.drawCockpitRig(Object.assign(G.player, { gear: 3, speed: 50 }), new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]), 1 / 60, PAINT, false);
+  return { drawn, PAINT, WHEEL_OPTS, rigOpts };
+}
+
+test("the cockpit and helmet cameras draw the body with the frame's paint opts (carFinish), as the exterior", () => {
+  const { drawn, PAINT } = rigDraws();
+  assert.equal(drawn[0].opt, PAINT, "drawCockpitRig's first draw, the cockpit body, takes the paint opts it was handed");
+});
+
+test("drawCockpitRig draws the steering wheel with CarMesh.cockpitWheelOpts(rig opts)", () => {
+  const { drawn, WHEEL_OPTS, rigOpts } = rigDraws();
+  const w = drawn.find((d) => d.name === "getCockpitWheel");
+  assert.ok(w, "the wheel draws");
+  assert.equal(w.opt, WHEEL_OPTS, "with the finish's opts");
+  assert.equal(rigOpts.length, 1);
+  assert.equal(rigOpts[0].roughness, 0.88, "built from the rig's card (its night emissive rides along)");
 });
 
 test("the shipped wheel is Bryce's pick A: lacquered carbon, black rubber grips, bright alloy, glass LCD", () => {
@@ -93,6 +120,4 @@ test("the wheel draws with lit opts that let its surfaces' lobes through; stock 
     assert.ok(o.clearcoat > 0.42 && o.roughness < 0.6, name + ": lacquer + a roughness the per-surface clamps can work with");
     assert.equal(o.emissive, rig.emissive, name + ": the night lift follows the rig");
   }
-  assert.match(read("js/car/car-draw.js"), /getCockpitWheel\(deps\.resolveLivery\(c\.team\), wheelStyle\), _rigB, CarMesh\.cockpitWheelOpts\(opt\)\)/,
-    "drawCockpitRig draws the wheel with its finish opts");
 });
