@@ -2,6 +2,16 @@
 const TitleMenu = (function () {
   "use strict";
 
+  // Destination rows after organize() — repairDestinations() re-mounts from this.
+  const DESTINATION_GROUPS = [
+    ["menu-primary", "Play", ["mb-race", "mb-tt", "mb-vs", "mb-season", "mb-practice"]],
+    ["menu-garage", "Garage", ["mb-garage"]],
+    ["menu-explore", "Watch & Explore", ["mb-watch", "mb-data"]],
+    ["menu-create", "Create", ["mb-photo", "mb-designer"]],
+    ["menu-secondary", "Utilities", ["mb-standings", "mb-settings", "mb-phonepad", "mb-help"]],
+  ];
+  const CORE_PLAY_DOORS = ["mb-race", "mb-tt", "mb-watch", "mb-data"];
+
   // Move the existing nodes: their handlers, saved-state labels and visibility
   // remain owned by their original modules. The outer title-layout pieces stay put.
   function organize(doc) {
@@ -25,11 +35,11 @@ const TitleMenu = (function () {
     // parking it in Play put it under the Garage tile on compact-wide Home
     // (Playwright click timeout on #mb-standings after race→menu; ship tip
     // 086e55bfc / nightly 39017766676). Keep it with the under-brand chips.
-    group("menu-primary", "Play", ["mb-race", "mb-tt", "mb-vs", "mb-season", "mb-practice"]);
-    group("menu-garage", "Garage", ["mb-garage"]);
-    group("menu-explore", "Watch & Explore", ["mb-watch", "mb-data"]);
-    const create = group("menu-create", "Create", ["mb-photo", "mb-designer"]);
-    const utilities = group("menu-secondary", "Utilities", ["mb-standings", "mb-settings", "mb-phonepad", "mb-help"]);
+    group(...DESTINATION_GROUPS[0]);
+    group(...DESTINATION_GROUPS[1]);
+    group(...DESTINATION_GROUPS[2]);
+    const create = group(...DESTINATION_GROUPS[3]);
+    const utilities = group(...DESTINATION_GROUPS[4]);
     const shortcut = (row, id, label, page) => {
       if (doc.getElementById(id)) return;
       const button = doc.createElement("button"); button.id = id; button.type = "button";
@@ -43,6 +53,46 @@ const TitleMenu = (function () {
     };
     shortcut(create, "mb-visual", "VISUAL STUDIO", "visual");
     shortcut(utilities, "mb-saves", "SAVES & DATA", "files");
+  }
+
+  /** After a mid-race graphics reset, play doors can be orphaned outside their row. */
+  function repairDestinations(doc) {
+    const menu = doc && doc.getElementById("menu-buttons");
+    if (!menu) return false;
+    const rowFor = (id) => {
+      for (const [rowId, , buttons] of DESTINATION_GROUPS) {
+        if (buttons.includes(id)) return rowId;
+      }
+      return null;
+    };
+    let broken = false;
+    for (const id of CORE_PLAY_DOORS) {
+      const btn = doc.getElementById(id);
+      const rowId = rowFor(id);
+      const row = rowId ? doc.getElementById(rowId) : null;
+      if (!btn || !row || !row.contains(btn)) { broken = true; break; }
+    }
+    if (!broken) {
+      for (const id of CORE_PLAY_DOORS) {
+        const btn = doc.getElementById(id);
+        if (btn) { btn.hidden = false; btn.disabled = false; }
+      }
+      return false;
+    }
+    delete menu.dataset.destinations;
+    for (const el of menu.querySelectorAll(".menu-destination-label")) el.remove();
+    for (const [, , buttons] of DESTINATION_GROUPS) {
+      for (const id of buttons) {
+        const btn = doc.getElementById(id);
+        if (btn) menu.appendChild(btn);
+      }
+    }
+    organize(doc);
+    for (const id of CORE_PLAY_DOORS) {
+      const btn = doc.getElementById(id);
+      if (btn) { btn.hidden = false; btn.disabled = false; }
+    }
+    return true;
   }
 
   function create(G) {
@@ -156,6 +206,6 @@ const TitleMenu = (function () {
     return { refresh };
   }
 
-  return { create, organize };
+  return { create, organize, repairDestinations, CORE_PLAY_DOORS };
 })();
 Object.freeze(TitleMenu);

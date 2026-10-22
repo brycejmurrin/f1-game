@@ -16108,6 +16108,7 @@
       ],
       "*": [
         "tests/unit/aero-zone-tables.test.mjs",
+        "tests/unit/ctx-lost-menu-restore.test.mjs",
         "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
@@ -16498,6 +16499,9 @@
       ],
       "refresh": [
         "tests/unit/career-cross-tab.test.mjs"
+      ],
+      "repairDestinations": [
+        "tests/unit/ctx-lost-menu-restore.test.mjs"
       ],
       "*": [
         "tests/unit/share-code.test.mjs"
