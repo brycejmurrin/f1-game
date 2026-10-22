@@ -2111,6 +2111,11 @@
       "presentation": "native",
       "preserve": "@c5"
     },
+    "tools/shot/webgpu-urban-gallery.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Hardware verification receipts, screenshot/gallery/evidence paths, failed-scene status and child exit code; no software render presented as hardware evidence."
+    },
     "tools/shot/wx-grid.mjs": {
       "action": "keep-native",
       "presentation": "native",

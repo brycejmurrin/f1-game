@@ -212,7 +212,7 @@ const LightStore = (() => {
       if (rebuilt && track) { track._lights = null; track._alwaysLights = null; }
       if (reapply && !fromApplyRace && track && G.state !== "menu" && G.state !== "select")
         G.applyRaceSettings();
-      if (reinit && G.isWetRoad()) G.initRainDrops();
+      if (reinit && (G.viewRainfall ? G.viewRainfall() > 0.01 : G.isWetRoad())) G.initRainDrops();
     }
 
     // opts.holdRebuild (the weather arc's blended re-apply, js/lighting/atmosphere.js):

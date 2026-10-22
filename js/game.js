@@ -138,7 +138,7 @@ if (typeof Assets !== "undefined") {
 let _lastFloodEmit = 0;   // prop-emissive ramp actually used this frame (debug: lightState)
 function initRainDrops() {
   // DRIZZLE tier: "wet" (damp track, no storm) — sparse/short/slow streaks.
-  Particles.rainSeed(isWetRoad() && !isRaining());
+  Particles.rainSeed(!(wxArc && wxArc.arc) && isWetRoad() && !isRaining());
 }
 
 // ---------- settings ----------
@@ -2522,12 +2522,12 @@ async function startRaceBody() {
   // live() also drops on ctxLost so a CONTEXT_LOST mid-step does not wait forever.
   if (_menuGate.join) { const step = _menuGate.join; _menuGate.join = null; await step.catch(() => false); if (stale()) return false; }   // startRace joined the menu's build
   if (vmNoFramePump) loadTrack(trackIdx);
-  else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost())) && !stale()) { loadingScreen.stop(); quitToMenu(); return false; }
+  else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost())) && !stale()) { quitToMenuAfterCtxLost(); return false; }
   if (stale()) return false; rlap("loadTrack");
   // Break the remaining sync legs (settings → car meshes) into separate tasks.
   // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().
   if (!vmNoFramePump) await yieldMain(); if (stale()) return false;
-  if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
+  if (gfxContextLost()) { quitToMenuAfterCtxLost(); return false; }
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
   // must never survive into the next — a race that silently did not count
   // because the last one was practice is the worst possible failure here. A
@@ -2671,12 +2671,11 @@ async function startRaceBody() {
   Input.clearEdges();
   if (Input.dropLatch) Input.dropLatch();
   if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.setVenue(track.def); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
-  // rain patter — a damp "wet" track is silent — and it must STOP too: a
-  // restart after a changeable race had arced into rain kept playing it dry.
-  if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
+  // Rain patter follows precipitation; a cleared cloud leaves a wet road.
+  if (soundOn) { if (wxArc.viewRainfall() > 0.01) GameAudio.startRain(); else GameAudio.stopRain(); }
   holdRaceWake(); syncRotateBlocker(true);   // AFTER the audio: on a portrait phone this pauses (stops engine/rain, drops the wake), and setPaused(false) on rotate restarts them
   if (!vmNoFramePump) await yieldMain(); if (stale()) return false;
-  if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
+  if (gfxContextLost()) { quitToMenuAfterCtxLost(); return false; }
 
   // TLX: the cockpit rig's programs under the cover, whatever camera the race starts on (car-draw.js warmCockpitRig).
   if (!headlessMode && !document.hidden && player) { const nite = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night), wet = isWetRoad();
@@ -2687,7 +2686,7 @@ async function startRaceBody() {
   const entryPlayer = player;
   if (!headlessMode && !document.hidden)
     await RaceEntryProfile.spanAsync("mirrorPrepare", () => mirrorPass.prepareRace());
-  if (stale()) return false; if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
+  if (stale()) return false; if (gfxContextLost()) { quitToMenuAfterCtxLost(); return false; }
   if (player !== entryPlayer || (state !== "count" && state !== "race")) return false;
 
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
@@ -3306,7 +3305,7 @@ const G = {
   // Stable helpers consumed by js/lighting/atmosphere.js.
   clamp: (v, a, b) => clamp(v, a, b),
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
-  isRaining: () => isRaining(),
+  viewRainfall: () => wxArc ? wxArc.viewRainfall() : 0,
   isWetRoad: () => isWetRoad(),
   initRainDrops: () => initRainDrops(),
   isFloodActiveSession: () => isFloodActiveSession(),
@@ -3373,7 +3372,7 @@ const G = {
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   followCar: (c) => { cars.forEach((o) => setCarRole(o, false, o === c)); player = c; },   // a replay: the camera, HUD and audio move to this car; nobody drives (js/race/real-replay.js)
   setPip: (c, m) => mirrorPass.setSubject(c, m),   // the broadcast PiP's car and shot (js/race/broadcast.js → js/render/shared/mirror-pass.js)
-  goRolling: () => { if (state !== "count") return false; setState("race", "rolling-start"); launchT0 = raceT; els.lights.hidden = true; for (const l of els.lights.children) l.classList.remove("on"); lightsLit = COUNTDOWN_S; cars.forEach((c) => { c.launchOn = false; }); return true; },   // a mid-race jump-in: green at once, no gantry, no launch model — the field is already at speed (js/race/real-race.js)
+  goRolling: () => { if (state !== "count") return false; try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* a clean rolling start: the reload budget counts consecutive losses, not the tab's lifetime */ } setState("race", "rolling-start"); launchT0 = raceT; els.lights.hidden = true; for (const l of els.lights.children) l.classList.remove("on"); lightsLit = COUNTDOWN_S; cars.forEach((c) => { c.launchOn = false; }); return true; },   // a mid-race jump-in: green at once, no gantry, no launch model — the field is already at speed (js/race/real-race.js)
   // …and its hand-over counts on the gantry's plate (4, 3, 2, 1, GO; null clears): a big number where the lights are, not a queued radio card.
   handoverCount: (v) => { const on = v != null; els.lights.classList.toggle("count", on); if (on) els.lights.dataset.count = String(v); else delete els.lights.dataset.count; els.lights.hidden = !on; },
   wireId,                               // stable cross-peer car identity
@@ -3486,7 +3485,7 @@ const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
 if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
-const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt } = Menus.create(G);
+const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice } = Menus.create(G);
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's
 // wheel spec, decal queue, cockpit rig, planted wheels, warm-ups, GLB body.
 // resolveLivery lives in CustomLiveries; partsVisualKey / drawAeroFlaps / damp
@@ -4248,6 +4247,18 @@ function syncRotateBlocker(moveFocus) {
 if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", () => syncRotateBlocker(true));
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
+const CTX_LOST_NOTICE_KEY = "apex26.ctxLostNotice";
+const CTX_LOST_NOTICE_MSG = "Graphics reset — retrying with lighter settings";
+function stashCtxLostNotice() {
+  try { sessionStorage.setItem(CTX_LOST_NOTICE_KEY, "1"); } catch (_) { /* blocked storage: quit still lands on the menu */ }
+}
+function quitToMenuAfterCtxLost() {
+  stashCtxLostNotice();
+  loadingScreen.stop();
+  quitToMenu();
+  if (typeof showCtxLostNotice === "function") showCtxLostNotice();
+  else if (typeof announce === "function") announce(CTX_LOST_NOTICE_MSG, 5, "info");
+}
 // A quit from under the pit garage (WORK ON CAR, then any path to quitToMenu) takes the garage down
 // with the race: left open, the title showed RETURN TO RACE, whose closePitWork charged a dead race.
 function quitToMenu() {
@@ -4447,6 +4458,7 @@ function update(dt) {
     }
     if (lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + feel.startHold) {
       setState("race", feel.restartPending ? "restart-green" : "lights-out");
+      try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* survived to green: the loss budget was for the start hitch, not this race */ }
       if (!feel.restartPending) raceT = 0;   // a red-flag restart resumes the clock the flag stopped
       launchT0 = raceT;   // …so the launch model measures from THIS green, not the first one
       // A NETWORKED RACE KEEPS WALL TIME from the shared green (netStart.at is
@@ -6905,11 +6917,11 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
   // headless, so it ramps once). LT.wetness ≥ 0 is the live tuner pin only — never a preset.
   if (wxArc) wxArc.syncWetness(dt);
   // Falling rain, for the puddle RIPPLES in the lit shaders (uRain / U.rain /
-  // params4.z): 1 in a storm, a third under the DRIZZLE tier, 0 dry — ramped at
-  // the same 0.8/s as wetness so the rings fade in and out rather than pop.
+  // params4.z): continuous atmospheric intensity, separate from surface water.
+  // Ease the rings in and out rather than popping at a tyre threshold.
   {
-    const vw = wxArc ? wxArc.viewWetness() : trackWetness();   // the camera's road: a local shower falls where you are
-    const rainTarget = vw >= 0.72 ? 1 : vw >= 0.25 ? 0.35 : 0;
+    const rainfall = wxArc ? wxArc.viewRainfall() : 0;
+    const rainTarget = Math.min(1, rainfall);   // cloud intensity, independent of surface water
     const cur = frame.rain || 0;
     frame.rain = cur + (rainTarget - cur) * Math.min(1, dt * 0.8);
   }
@@ -8133,7 +8145,7 @@ function render(dt) {
   // merely WET (rainSeed picked which). Open-cockpit cars have no windscreen,
   // so onboard views get the same field as the chase cam — no water-on-glass
   // beading and no wiper (there is nothing to wipe).
-  if (isWetRoad() && Particles.rainActive()) Particles.rainUpdate(dt, camEye, isRaining());
+  if (Particles.rainActive()) Particles.rainUpdate(dt, camEye, wxArc.viewRainfall());
   startLights.update();   // the gantry's lit lamps: one-frame flares each count frame
   marshalPanels.update(dt);   // the posts' light panels: yellow / red / green from race control
   Particles.update(dt);
@@ -8991,7 +9003,7 @@ function closePitWork() {
   paused = false;
   if (!netPlay.active()) holdRaceWake();   // a hidden tab under the garage may have released the screen lock; RETURN TO RACE holds it again
   lastFrame = performance.now();       // or the frozen minutes arrive as one dt
-  if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); if (isRaining()) GameAudio.startRain(); }
+  if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); if (wxArc.viewRainfall() > 0.01) GameAudio.startRain(); }
 }
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
@@ -9133,7 +9145,7 @@ function setPaused(p, why) {
   // Music + rain too, as startRaceBody does: SOUND turned ON under the pause card defers
   // all of it here (js/audio/panel.js). Rain is SFX (same bus as the engine) and
   // must not hiss over a frozen race; both starts are no-ops when already playing.
-  else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); if (isRaining()) GameAudio.startRain(); }
+  else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); if (wxArc.viewRainfall() > 0.01) GameAudio.startRain(); }
   lastFrame = performance.now(); syncRotateBlocker(false);   // the pause card yields to an active rotate blocker on EVERY entry
 }
 els.pausebtn.onclick = () => setPaused(true);

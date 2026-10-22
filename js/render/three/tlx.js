@@ -1269,26 +1269,17 @@ const TLX = (function () {
       // The post chain's factory, callable AGAIN: a one-off throw in present()
       // retires the chain ("Post-only death") and the next render-target realloc
       // rebuilds it (applyResize) — WGX's _swapTargets re-enables its chain the same way.
-      // R3 (perf hunt 3): does the scene pass need its ssrTag attachment? Only
-      // car-paint SSR (po.carReflect) and the exhaust haze read it; the wet-road
-      // march does not. On a mobileTier phone at GRAPHICS MEDIUM or LOW (userTier
-      // >= 2) game.js zeroes po.carReflect (tier() >= 2) and never sends a haze, so
-      // the composite never fetches the tag: build the scene target with one
-      // attachment and present() sets no MRT. Re-evaluated every begin(): a
-      // live preset raise rebuilds the chain with the tag (one compile hitch).
-      // apex26.tlxTagLess: unset = that rule, "0" = always tag, "1" = drop it
-      // at userTier >= 2 off phones too (desktop A/B lever: there the haze
-      // still runs and reads white = "not car" over cars — the only delta).
-      let _tagLessKnob = "";
-      try { _tagLessKnob = localStorage.getItem("apex26.tlxTagLess") || ""; } catch (_) { /* no storage: auto */ }
+      // SSR receiver metadata serves road SSR as well as car paint and haze.
+      // Wet-road SSR can run at every user tier, including LOW, with a reduced
+      // march budget. Keep its material eligibility attachment on every active
+      // post chain; white fallback would polish porous verges again. Retain it
+      // through temporary overload shedding to avoid render-target churn.
+      // The old tlxTagLess A/B override is incompatible with this requirement.
       function _wantTag() {
-        if (_tagLessKnob === "0") return true;
-        let ut = 0;
-        try { ut = (typeof PerfGov !== "undefined" && PerfGov.userTier) ? PerfGov.userTier() : 0; } catch (_) { ut = 0; }
-        return !(ut >= 2 && (mobileTier || _tagLessKnob === "1"));
+        return true;
       }
-      // A GRAPHICS change moved the rule: swap the chain for one with/without the
-      // attachment (begin(), before the scene records). Not warmed: one compile hitch.
+      // Preserve compatibility with a chain created without the attachment:
+      // upgrade it before the scene records, then retire the replaced chain.
       function _tagSwap() {
         if (!post || !post.tagOn || _warmPending || post.tagOn() === _wantTag()) return;
         const old = post; post = null;
