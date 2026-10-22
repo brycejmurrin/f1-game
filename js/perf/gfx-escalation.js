@@ -18,11 +18,13 @@ const GfxEscalation = (function () {
     _menuRecover = typeof fn === "function" ? fn : null;
   }
 
+  let _soften = null;
+  function registerRaceEntrySoften(fn) {
+    _soften = typeof fn === "function" ? fn : null;
+  }
   function softenRaceEntry(gfx) {
     try {
-      if (typeof RaceEntryProfile === "undefined" || !RaceEntryProfile.softwareRaster || !RaceEntryProfile.softwareRaster()) return;
-      if (gfx && gfx.setRenderScale && gfx.getRenderScale && gfx.getRenderScale() > 0.72) gfx.setRenderScale(0.72);
-      try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) { /* software cold build */ }
+      if (_soften) _soften(gfx);
     } catch (_) { /* harness */ }
   }
 
@@ -62,6 +64,7 @@ const GfxEscalation = (function () {
   return {
     raceEntryActive,
     registerMenuRecover,
+    registerRaceEntrySoften,
     softenRaceEntry,
     maybeRecoverRaceEntry,
     onReloadBudgetExceeded,

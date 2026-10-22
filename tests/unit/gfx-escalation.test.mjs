@@ -57,5 +57,18 @@ test("GLX dedupes repeated webglcontextlost before spending reload budget", () =
 test("game.js wires GfxEscalation to quitToMenuAfterCtxLost", () => {
   const game = read("js/game.js");
   assert.ok(game.includes("GfxEscalation.registerMenuRecover(quitToMenuAfterCtxLost)"));
-  assert.ok(game.includes("GfxEscalation.softenRaceEntry"));
+  assert.ok(game.includes("installRaceEntrySoften"));
+  assert.ok(!read("js/perf/gfx-escalation.js").includes("localStorage.setItem(\"apex26.envProbeOff\""));
+});
+
+test("race-entry soften does not persist envProbeOff to storage", () => {
+  const game = read("js/game.js");
+  assert.ok(game.includes("_raceEntryEnvProbeSession"));
+  assert.ok(game.includes("clearRaceEntrySoften"));
+  const soften = game.slice(game.indexOf("function installRaceEntrySoften()"), game.indexOf("// Same latch for PER-CHUNK LAMPS"));
+  assert.ok(!soften.includes("localStorage.setItem"));
+  assert.ok(soften.includes("envProbeOptOut"));
+  assert.ok(soften.includes("softwareRaster"));
+  assert.ok(soften.includes("setRenderScale(0.72)"));
+  assert.ok(game.includes("!_raceEntryEnvProbeSession"));
 });

@@ -2689,6 +2689,7 @@ async function startRaceBody() {
     await RaceEntryProfile.spanAsync("mirrorPrepare", () => mirrorPass.prepareRace());
   if (stale()) return false; if (gfxContextLost()) { quitToMenuAfterCtxLost(); return false; }
   if (player !== entryPlayer || (state !== "count" && state !== "race")) return false;
+  clearRaceEntrySoften();
 
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
@@ -4260,6 +4261,7 @@ function stashCtxLostNotice() {
   try { sessionStorage.setItem(CTX_LOST_NOTICE_KEY, "1"); } catch (_) { /* blocked storage: quit still lands on the menu */ }
 }
 function quitToMenuAfterCtxLost() {
+  clearRaceEntrySoften();
   stashCtxLostNotice();
   loadingScreen.stop();
   quitToMenu();
@@ -4280,10 +4282,14 @@ function quitToMenuAfterCtxLost() {
   if (typeof showCtxLostNotice === "function") showCtxLostNotice();
   else if (typeof announce === "function") announce(CTX_LOST_NOTICE_MSG, 5, "info");
 }
-if (typeof GfxEscalation !== "undefined" && GfxEscalation.registerMenuRecover) GfxEscalation.registerMenuRecover(quitToMenuAfterCtxLost);
+if (typeof GfxEscalation !== "undefined" && GfxEscalation.registerMenuRecover) {
+  GfxEscalation.registerMenuRecover(quitToMenuAfterCtxLost);
+  installRaceEntrySoften();
+}
 // A quit from under the pit garage (WORK ON CAR, then any path to quitToMenu) takes the garage down
 // with the race: left open, the title showed RETURN TO RACE, whose closePitWork charged a dead race.
 function quitToMenu() {
+  clearRaceEntrySoften();
   Ghost.flush(); resultsCam.reset(); replayBuf.clear(); cancelIntro();
   if (raceMessageHistory) raceMessageHistory.clear();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
@@ -6676,6 +6682,28 @@ const _envLatch = [NaN, NaN, NaN, NaN, NaN, NaN, NaN, -1], ENV_HOLD_MOVE_M = 4, 
 // the reflection feature can't keep exhausting a memory-constrained GPU.
 let _envProbeOff = false;
 try { _envProbeOff = localStorage.getItem("apex26.envProbeOff") === "1"; } catch (_) {}
+let _raceEntryEnvProbeSession = false;
+let _raceEntryRenderScaleSaved = null;
+function clearRaceEntrySoften() {
+  _raceEntryEnvProbeSession = false;
+  if (_raceEntryRenderScaleSaved != null && gfx && gfx.setRenderScale) {
+    gfx.setRenderScale(_raceEntryRenderScaleSaved);
+    _raceEntryRenderScaleSaved = null;
+  }
+  try { if (gfx && gfx.envProbeOptOut) gfx.envProbeOptOut = false; } catch (_) { /* harness */ }
+}
+function installRaceEntrySoften() {
+  if (typeof GfxEscalation === "undefined" || !GfxEscalation.registerRaceEntrySoften) return;
+  GfxEscalation.registerRaceEntrySoften((g) => {
+    if (typeof RaceEntryProfile === "undefined" || !RaceEntryProfile.softwareRaster || !RaceEntryProfile.softwareRaster()) return;
+    if (g && g.setRenderScale && g.getRenderScale) {
+      const cur = g.getRenderScale();
+      if (cur > 0.72) { _raceEntryRenderScaleSaved = cur; g.setRenderScale(0.72); }
+    }
+    _raceEntryEnvProbeSession = true;
+    try { if (g) g.envProbeOptOut = true; } catch (_) { /* harness */ }
+  });
+}
 // Same latch for PER-CHUNK LAMPS, set by the same webglcontextlost handler. It
 // is the loop-breaker the crash sentinel cannot be: that ledger is mobile-only
 // (js/perf/governor.js gates it on gfx.isMobile so the desktop suite never enters
@@ -7616,7 +7644,7 @@ function render(dt) {
     (gfx.getRenderScale && gfx.getRenderScale() < 0.98) ||
     (PerfGov.autoShed && PerfGov.autoShed() > 0)
   )) ? 7 : 3;
-  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && gfx.envProbeOptOut !== true && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  if (player && (state === "race" || state === "count") && !_envProbeOff && !_raceEntryEnvProbeSession && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && gfx.envProbeOptOut !== true && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x, _pey = smp2.p[1] + 0.9, _pez = smp2.p[2] + smp2.r[2] * player.x;
     const _es = frame.sunDir || _envUp, _ew = frame.wetness || 0, _elg = frame.lampSetGen || 0;   // the lamp SET and scale, not the flicker (hunt 2 F9)

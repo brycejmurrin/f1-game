@@ -6393,6 +6393,9 @@
       "initRainDrops": [
         "tests/unit/light-presets.test.mjs"
       ],
+      "installRaceEntrySoften": [
+        "tests/unit/gfx-escalation.test.mjs"
+      ],
       "introBuild": [
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
@@ -6809,7 +6812,6 @@
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
-        "tests/unit/gfx-escalation.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hooks-documented.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
@@ -12655,6 +12657,7 @@
       ],
       "setRenderScale": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/gfx-escalation.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
@@ -12674,7 +12677,6 @@
         "tests/unit/comment-citations.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/frustum-buckets.test.mjs",
-        "tests/unit/gfx-escalation.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/light-grid.test.mjs",

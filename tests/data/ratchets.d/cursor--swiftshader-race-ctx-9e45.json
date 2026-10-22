@@ -1,8 +1,9 @@
 {
   "files": {
     "js/game.js": {
-      "codeLines": 3,
-      "lines": 1
+      "codeLines": 31,
+      "lines": 29,
+      "topLets": 2
     },
     "js/render/glx/glx.js": {
       "lines": 9
