@@ -28,7 +28,7 @@ body[data-helmet-visor-reflections="off"] { --visor-reflection: 0; }
 body[data-helmet-visor-reflections="medium"] { --visor-reflection: 1.6; }
 body[data-helmet-visor-reflections="strong"] { --visor-reflection: 2.4; }
 /* Only the world is displaced: HUD and menus retain their original pixels. */
-body[data-helmet-cam]:not(.bc-on):not(.watch-controls-on):not(.hud-hidden):not(.pc-uihidden):is([data-helmet-visor="clear"], [data-helmet-visor="smoke"]):has(#hud:not([hidden])) {
+body[data-helmet-cam]:not(.bc-on):not(.watch-controls-on):not(.hud-hidden):not(.pc-uihidden):is([data-helmet-visor="clear"], [data-helmet-visor="smoke"]):has(> #hud:not([hidden])) {
   &[data-helmet-visor-refraction="light"] :is(#game, #game-soft) { filter: url(#visor-bend-light); }
   &[data-helmet-visor-refraction="medium"] :is(#game, #game-soft) { filter: url(#visor-bend-medium); }
   &[data-helmet-visor-refraction="strong"] :is(#game, #game-soft) { filter: url(#visor-bend-strong); }
