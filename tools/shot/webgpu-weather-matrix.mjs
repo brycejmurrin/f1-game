@@ -84,7 +84,7 @@ try {
           a.drivingLine('off');
           a.freeze(true); a.hud(false); a.renderClock(0, true); a.view(camera);
           document.getElementById('btn-cam')?.style.setProperty('display', 'none', 'important');
-          return { race, parkCalls: 1, clockHoldRequested: true, rivals, cars: a.cars(), line: a.drivingLine(), camera: a.camState(), beganAt: Date.now() };
+          return { race, parkCalls: 1, clockHoldRequested: true, rivals, cars: a.cars(), carState: a.carState().slice(0, 7), line: a.drivingLine(), camera: a.camState(), beganAt: Date.now() };
         }, { track, time, camera, parkFrac: CAMERA_FRACS[track] });
         raceRow.time = time;
         raceRow.warmupStart = Date.now();
@@ -97,7 +97,7 @@ try {
           const rivals = a.rivals([{ dProg: 8, dx: -1.4, speed: 31 }, { dProg: 18, dx: 1.3, speed: 29 }, { dProg: 30, dx: -0.3, speed: 30 }]);
           a.step(1 / 60); a.drivingLine('off'); a.freeze(true); a.hud(false); a.renderClock(0, true); a.view(camera);
           document.getElementById('btn-cam')?.style.setProperty('display', 'none', 'important');
-          return { race, parkCalls: 1, clockHoldRequested: true, rivals, cars: a.cars(), line: a.drivingLine(), camera: a.camState(), beganAt: Date.now() };
+          return { race, parkCalls: 1, clockHoldRequested: true, rivals, cars: a.cars(), carState: a.carState().slice(0, 7), line: a.drivingLine(), camera: a.camState(), beganAt: Date.now() };
         }, { track, time, camera, parkFrac: CAMERA_FRACS[track] });
         raceRow.time = time; raceRow.warmupStart = Date.now();
       }
@@ -180,7 +180,7 @@ try {
         schema: 1, commit: COMMIT, captureSourceCommit: process.env.GITHUB_SHA ?? null,
         branch: process.env.GITHUB_REF_NAME ?? null, track, time, weather, label: LABELS[WEATHERS.indexOf(weather)] ?? 'Dry',
         camera, settings: { width: WIDTH, height: HEIGHT, viewport: `${WIDTH}x${HEIGHT}`, dpr: 1, hasTouch: true, reducedMotion: 'no-preference', userAgentOverride: false, seed: 42, renderScale: 1, governor: 'held', physics: 'frozen', renderClock: 0, hud: 'hidden', graphics: 'Ultra' },
-        raceRow: { parkCalls: raceRow.parkCalls, clockHoldRequested: raceRow.clockHoldRequested, parkFrac: CAMERA_FRACS[track], stagedRivals: raceRow.rivals, carCount: raceRow.cars?.length, cars: raceRow.cars?.slice(0, 5), beganAt: raceRow.beganAt },
+        raceRow: { parkCalls: raceRow.parkCalls, clockHoldRequested: raceRow.clockHoldRequested, parkFrac: CAMERA_FRACS[track], stagedRivals: raceRow.rivals, carCount: raceRow.cars?.length, cars: raceRow.cars?.slice(0, 5), carState: raceRow.carState, beganAt: raceRow.beganAt },
         lighting: runtime.lighting, lampBake: { required: cut.requiredBake, generationBeforeReset: cut.previousGen, generationAfterReset: cut.afterResetGen, generationAtCapture: runtime.bakeGen, warmupMs: cut.warmupMs, bakeCompletedAt, elapsedMs: Date.now() - settleAt },
         renderer: { adapter, api: runtime.backend?.api, state: runtime.backend, result: renderer },
         readiness: ready, image, pixels, runtime, errors: [...errors], messages: [...messages], launch,
