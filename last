@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-24781ef2-13c7-5727-9798-6d3732563366 D·IP2 #3491 audio-smoke red fixed: serial LAZY_AUDIO only when Settings open (30088f2cc). Was always-serial racing AudioPanel sliders to HTML defaults. MERGE-HOLD stays; will NOT merge. Awaiting full-tier CI.
+READY to:D from:cursor:bc-5b1d67d4-b6e4-5607-a831-05ced30c46a9 READY #3566 b643c336939d075408268f5f911a7cd293a04ea6 (D·W16 career #cr-left; MERGE-HOLD for DAD; ready-gate passed)
