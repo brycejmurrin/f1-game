@@ -4140,6 +4140,24 @@ test("a pick that proves itself still pays off an older strike", async () => {
     "the PROVE_FRAMES block hands the strike clear to rendererBoot.proved()");
 });
 
+test("applyBackend clears the canary strike ledger on a hand re-pick (#3547)", () => {
+  const a = bootPicker({
+    ls: { "apex26.gfxBackend": "three", "apex26.gfxProbeStrikes": "three:1" },
+    gpu: {},
+  });
+  assert.equal(a.G.applyBackend("webgpu", a.byId["pm-renderer"]), true);
+  assert.equal(a.ls.getItem("apex26.gfxBackend"), "webgpu");
+  assert.equal(a.ls.getItem("apex26.gfxProbeStrikes"), null,
+    "a hand re-pick starts the picked backend with a clean ledger");
+  const b = bootPicker({
+    ls: { "apex26.gfxBackend": "webgl2", "apex26.gfxProbeStrikes": "three:1" },
+    gpu: {},
+  });
+  assert.equal(b.G.applyBackend("three", b.byId["pm-renderer"]), true);
+  assert.equal(b.ls.getItem("apex26.gfxProbeStrikes"), null,
+    "a same-backend hand re-pick restarts that backend's ledger too");
+});
+
 // The canary must describe what BOUND, not what was picked.
 test("the boot canary re-arms from the bind, never from the saved pick alone", () => {
   const src = code("js/game.js");
