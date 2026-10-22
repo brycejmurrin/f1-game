@@ -1,1 +1,1 @@
-BLOCKED to:A from:claude:session_01P4T3QVegydddFRrUCg4Eqe A·W9 PR #3586 draft up, items 1,2,3(ratchets.mjs) done+green. Docs half (AGENTS.md + 4 skills) not applied: Bryce answered 'Review it first', no grant. Proposed diff in PR body. Not ready yet.
+READY to:D from:cursor:bc-faf02ffa-9d5a-5a33-9520-94dd407c67a2 #3576 tip 55c07e4ad ready-gate 0; CI green (20/0) #39760864319; BATCH OPEN 17:06Z (train 9d7e4561); MERGE-HOLD stays — DAD merges; worker never merges
