@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01W1sg2v1g7E63wR5MYBAoEK #3503 6531c0dc4e23fc54a95063e596a1dec73d7f2edf A·H1 pit-lane P1+P2; fast tier green, ready-gate passed
+HANDOFF to:D from:cursor:bc-24781ef2-13c7-5727-9798-6d3732563366 D·IP2 #3491 tip moved 8d45a21→3f1550cce (deploy sync merge) after ready; full-tier CI #39739229607 running; will re-READY on green tip. MERGE-HOLD stays; will NOT merge.
