@@ -322,10 +322,9 @@ export const SCREENS = [
       await p.waitForSelector("#career-guide:not([hidden])", { timeout: 15000 }); } },
 
   { id: "bench", name: "Benchmark", root: "#bench", open: async (p) => {
-      // SETTINGS > METRICS > BENCHMARK... (js/perf/bench-run.js); the button mounts into the METRICS fold.
+      // SETTINGS > GRAPHICS > BENCHMARK... (js/perf/bench-run.js mounts the button at the top of the GRAPHICS page).
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
-      await p.evaluate(() => { const d = document.getElementById("pm-metrics-details"); if (d) d.open = true; });
-      await p.waitForSelector("#pm-bench-open", { timeout: 15000 });
+      await p.click("#pm-open-graphics"); await p.waitForSelector("#pm-bench-open", { state: "visible", timeout: 15000 });
       await p.click("#pm-bench-open"); await p.waitForSelector("#bench:not([hidden])", { timeout: 15000 }); } },
 
   { id: "careerhub", name: "Career hub (season)", root: "#career", open: async (p) => {

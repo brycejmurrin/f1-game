@@ -1,4 +1,4 @@
-/* Apex 26 — BenchRun: SETTINGS > METRICS > BENCHMARK, a hands-free device benchmark with a results file.
+/* Apex 26 — BenchRun: SETTINGS > GRAPHICS > BENCHMARK, a hands-free device benchmark with a results file.
 
    Pick a test, tap RUN, put the phone down. Each LEG reloads the page onto the three.js path it measures (THREE PATH:
    WEBGPU / WEBGL2 is only chosen at boot), seeds the sim (SEED), runs GPU TEST (js/perf/gpu-test-run.js: a dry Monza
@@ -363,9 +363,10 @@ const BenchRun = (function () {
     if (typeof document === "undefined") return false;
     const back = (doc() && doc().getElementById("bench-back")); if (back && !back.__bench) { back.__bench = true; back.addEventListener("click", close); }
     if ((doc() && doc().getElementById("pm-bench-open"))) return true;
-    const host = document.querySelector("#pm-metrics-details .pm-metrics-sub-body");
+    const host = doc().getElementById("pm-panel-graphics");   // GRAPHICS: "Renderer, resolution & effects"
     if (!host) return false;
     const b = btn("BENCHMARK…", null, open); b.id = "pm-bench-open";
+    const sm = el("small", null, "Time this phone: renderer paths, weather, tracks, garage"); b.appendChild(sm);
     host.insertBefore(b, host.firstChild);
     return true;
   }
