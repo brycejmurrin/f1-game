@@ -296,7 +296,9 @@ const Collide = (() => {
       p.sweepGeneration = sweepGeneration;
       p.sweepD = deltaS(c.prog - p.prog); p.sweepX = c.x - p.x;
       p.sweepEligible = false;
-      if (Math.hypot(p.sweepD, p.sweepX) > Math.max(6, Math.abs(c.speed) * dt * 2 + 1)) return;
+      // Squared compare: same reject as Math.hypot(...) > lim (D·DP7).
+      const lim = Math.max(6, Math.abs(c.speed) * dt * 2 + 1);
+      if (p.sweepD * p.sweepD + p.sweepX * p.sweepX > lim * lim) return;
       p.sweepAngle = bodyAngle(c);
       p.sweepEligible = !(Math.abs(wrapDelta(p.sweepAngle - p.angle, TWO_PI)) > 0.15);
     }
@@ -392,7 +394,9 @@ const Collide = (() => {
           sweepMotion(b, pb, dt);
           if (!pb.sweepEligible) continue;
           const db = pb.sweepD, xb = pb.sweepX;
-          if (Math.hypot(da - db, xa - xb) < 1) continue;
+          // Relative travel under 1 m: same gate as Math.hypot < 1 (D·DP7).
+          const rd = da - db, rx = xa - xb;
+          if (rd * rd + rx * rx < 1) continue;
           const x0 = deltaS(pa.prog - pb.prog), y0 = pa.x - pb.x, x1 = x0 + da - db, y1 = y0 + xa - xb;
           if (Math.min(x0, x1) > LCAR_MAX || Math.max(x0, x1) < -LCAR_MAX) continue;
           if (ContactGeometry.overlap(x1, y1, pa.sweepAngle, pb.sweepAngle, geom)) continue;
@@ -504,12 +508,19 @@ const Collide = (() => {
       const dX = aX - bX;
       if (!Number.isFinite(dX)) return null;
       // Pair extents, yaw-aware (see LCAR_MAX above). Identical to LCAR/WCAR
-      // for any pair that is not yawed past the blend's floor.
+      // for any pair that is not yawed past the blend's floor. Unyawed (every
+      // AI–AI pair, and a player under YAW_LO) is ea=eb=0 → cos0=1/sin0=0 in
+      // IEEE754, so the closed form is bit-identical and skips four trig calls
+      // on the common path (D·DP7 iPhone physics step).
       const ea = extentAngle(a), eb = extentAngle(b);
-      const ca = Math.abs(Math.cos(ea)), sa = Math.abs(Math.sin(ea));
-      const cb = Math.abs(Math.cos(eb)), sb = Math.abs(Math.sin(eb));
-      const eLong = (HL * ca + WL * sa) + (HL * cb + WL * sb);
-      const eLat = (HL * sa + WL * ca) + (HL * sb + WL * cb);
+      let eLong, eLat;
+      if (ea === 0 && eb === 0) { eLong = LCAR; eLat = WCAR; }
+      else {
+        const ca = Math.abs(Math.cos(ea)), sa = Math.abs(Math.sin(ea));
+        const cb = Math.abs(Math.cos(eb)), sb = Math.abs(Math.sin(eb));
+        eLong = (HL * ca + WL * sa) + (HL * cb + WL * sb);
+        eLat = (HL * sa + WL * ca) + (HL * sb + WL * cb);
+      }
       const penLong = eLong - Math.abs(dProg);
       const penLat = eLat - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) return null;
