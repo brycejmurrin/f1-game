@@ -75,7 +75,7 @@ The orchestrator judges `pages.yml` at each tick:
 | state | condition | game PRs | docs/tools PRs |
 |---|---|---|---|
 | HEALTHY | latest run green or running; nothing queued for 15 min or more | one per green Pages run, to isolate breakage | merge right after a train starts |
-| JAMMED | a run queued for 15 min or more, or runners saturated | batch gated green PRs back to back, at most 4 game PRs per train | merge into the pending train |
+| JAMMED | a run queued for 15 min or more, or runners saturated | freeze, and drain runners for the train (rule 7) | freeze (rule 7) |
 | RED | the latest Pages run failed | frozen until `pages-red-triage` names the cause | fixes for the red may go |
 
 Never cancel a running train, and never dual-dispatch Pages.
@@ -98,6 +98,43 @@ A push by an agent neither fleet owns is an INCIDENT on the webhook plus a bus
 line. It is never a takeover or a revert. Do not `@cursor`-mention on GitHub
 to stop it, since that wakes the agent. Only the owning Cursor account can stop
 it.
+
+### 7. Train discipline: stop cancelling Pages
+
+Measured 2026-10-22: no Pages run went green between 08:18Z and at least 09:10Z.
+Four runs went `queued` and were then `cancelled`, and six game merges were left
+unshipped. `pages.yml` uses `concurrency: pages-train-<ref>` with
+`cancel-in-progress: false`, so a RUNNING train is safe, but each new merge
+replaces the PENDING one. With runners saturated (64 Linux jobs in flight
+against 40 slots, 24 queued), a pending train never reached a runner before
+the next merge replaced it.
+
+Bryce asked for a discussion and agreed this at 09:11Z (2:11 AM PT), relayed by
+DAD. It binds A, D, Merlin and anyone merging:
+
+1. **Batch window.** Merges happen only right after a train goes green, or
+   when no train is queued or running. In the window, merge every gated green
+   PR back to back, at most 4 game PRs, then freeze. Each game PR still takes
+   `GAME-SLOT`, and each PR is re-run through `merge-gate.mjs` right before
+   its own merge.
+2. **Freeze.** While a `pages.yml` run is queued or in progress, nobody
+   merges to the deploy branch. That includes docs merges, which also replace
+   the pending train.
+3. **Drain for the train.** When a train has been queued for 10 min or more,
+   orchestrators stop marking drafts ready, adding `run-ci`, and pushing to
+   READY PRs (each starts a full tier), so the train gets runners. Fast-tier
+   draft work continues.
+4. **Announce.** Post `TRAIN <sha> queued|running|green|red` on the bus, by
+   whoever sees it first, and `BATCH OPEN` / `BATCH CLOSED` around a window.
+5. **Dispatch.** If a train has been queued for 30 min or more with runners
+   drained, Fleet A's orchestrator dispatches `pages.yml` once, never twice;
+   anyone else needs Bryce's yes. Fleet D never dispatches or re-runs
+   workflows.
+6. **Tooling.** A follow-up makes `merge-gate.mjs` pacing refuse while a
+   `pages.yml` run is queued or in progress (Fleet A).
+
+Rule 7 replaces the HEALTHY/JAMMED batching in rule 3 where they differ: the
+JAMMED "merge into the pending train" is what starved Pages tonight.
 
 ## Messaging
 
