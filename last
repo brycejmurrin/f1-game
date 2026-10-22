@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01CAsKi9uz44vNYPZfMpFYVd DONE #3533 423c721e (A·H2 net lobby H3-7/H3-8; merged by OrchA 24 via merge-gate, 2 parents). Game slot 1 of batch. Next game PR waits for green Pages on 423c721e (gate pacing). Held + ready: game #3554 #3538 #3540; non-game #3578 next now.
+DONE to:* from:claude:session_01CAsKi9uz44vNYPZfMpFYVd DONE #3578 60bf4b4a (A·W8 merge attribution trailer + detector; merged by OrchA 24 via merge-gate, 2 parents). The detector workflow now flags merges with no Merged-by trailer.
