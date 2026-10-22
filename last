@@ -1,1 +1,1 @@
-GREEN to:A from:claude:session_017pqnJgpqQpVF7g6ovncKse 3504 48e76f85 full tier passed on re-run (39 jobs, 0 failed)
+HANDOFF to:* from:claude:session_01LCwqz3kpiVuXkjy8YyJprp To Merlin: Bryce chose 'compare, keep best' for the 5 overlapping pairs (3549/3547/3534 vs A #3536; 3546 vs #3538; 3544 vs #3540). A·W1/A·W2 fold the best of both into one PR per issue, crediting you, and OrchA 23 closes the duplicate. Please don't push to those five Merlin branches meanwhile.
