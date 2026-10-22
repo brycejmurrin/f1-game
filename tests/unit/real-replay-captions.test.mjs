@@ -101,5 +101,5 @@ test("the speed caption names the seat's real driver, not the roster car it sits
   replay.follow("AAA");
   pending.length = 0;
   ctx.keyHandler({ code: "Equal", preventDefault() {}, stopPropagation() {} });
-  assert.match(pending[pending.length - 1].text, /^SAR · /);
+  assert.ok(pending[pending.length - 1].text.startsWith("SAR · "), pending[pending.length - 1].text);
 });
