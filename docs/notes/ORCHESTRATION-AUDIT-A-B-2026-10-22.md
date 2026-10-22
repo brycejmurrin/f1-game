@@ -79,9 +79,11 @@ rather than coding:
 
 The top three changes:
 
-1. Put the train in GitHub. Make `merge-gate` refuse while a Pages run is
-   pending, and trial the GitHub merge queue (merge method "merge", groups of
-   ≤ 4) so Bryce's merges are paced too.
+1. Make the train bind everyone. Now: `merge-gate` refuses while any
+   Pages run is queued or running (DAD agrees). Later, if Bryce decides: a
+   GitHub merge queue so his merges are paced too. That is on hold, because
+   a user-owned repo probably lacks the setting and the queue drops the
+   pinned-head receipt.
 2. Make every merge attributable with a post-push "ungated merge" detector.
 3. Type the bus and cut orchestrator wake cost (real context caps, no
    per-PR events into orchestrators). Each is a change to one or two named files.
@@ -94,12 +96,12 @@ M = Merlin's bus line 82c824f (09:19Z).
 
 | # | change | impact | effort | applies | sources |
 |---|---|---|---|---|---|
-| 1 | Train mechanism that binds every merger | high | M | Both + Bryce | A, D4, M |
+| 1 | Train mechanism that binds every merger (1a now; 1b merge queue: Bryce's decision, on hold) | high | M | Both + Bryce | A, D4, M |
 | 2 | Attribute every merge; flag ungated ones | high | S | Both | A |
 | 3 | Correct rule 7's two wrong assumptions | high | S | Both | A |
 | 4 | Typed bus verbs, reject unknown | med | S | Both | A, D3, M3 |
 | 5 | Cut orchestrator and worker wake cost | high | M | Both | A, D6 |
-| 6 | Caps from measurement, enforced each tick | med | S | Both | A, D9/10 |
+| 6 | Caps from measurement, enforced each tick (cap values: Bryce's decision) | med | S | Both | A, D9/10 |
 | 7 | Claim before launch, for every agent | high | S | Both + Merlin | A, D1, M2 |
 | 8 | READY addressed to the fleet letter; successor drains the backlog | med | S | A/B | A |
 | 9 | One writer per branch; unknown-pusher alarm | med | S | Both | A, D5, M7 |
@@ -108,7 +110,9 @@ M = Merlin's bus line 82c824f (09:19Z).
 | 12 | Fix the orchestrator.md succession contradiction | low | XS | A/B | A |
 | 13 | End condition on the hourly bus-watch routine | low | XS | A | A |
 | 14 | Long-running local checks: explicit timeouts, one gate at a time | low | XS | Both | A |
-| 15 | Cursor-side hooks for the bans bash-guard enforces | med | M | D | D2 |
+| 15 | Cursor-side hooks for the bans bash-guard enforces (Bryce's decision) | med | M | D | D2 |
+| 16 | Workers never merge, arm or send DONE, as one AGENTS.md line | med | XS | Both | D4 |
+| 17 | Owner and brief hygiene: one owner per PR, idle-DIRTY nudge, no sleep, pre-flight checks, end-state message | med | S | Both | D |
 
 ### 1. A train mechanism that binds every merger (Both, and Bryce's merges)
 
@@ -133,13 +137,29 @@ M = Merlin's bus line 82c824f (09:19Z).
 
 **Change.**
 
-- **(a) Now, agents.** `tools/ci/merge-gate.mjs` gets a `train` row that
-  refuses while any `pages.yml` run on the deploy branch is `queued` or
-  `in_progress`. This is rule 7.6 of #3548, still a follow-up. It applies
-  to tools/tests PRs as well as game PRs, because those also start a train
-  (see #3).
-- **(b) Trial, everyone.** Enable the GitHub merge queue on
-  `claude/f1-game-project-26h3ng`:
+- **(a) Now, agents.** `tools/ci/merge-gate.mjs` gets a `train` row. It
+  refuses while ANY `pages.yml` run on the deploy branch is `queued` or
+  `in_progress`, including the `:41` cron run, and prints the blocking run
+  id in the receipt. This is rule 7.6 of #3548, still a follow-up. It
+  applies to tools, tests and game PRs, because all three start a train
+  (see #3). Prose-only PRs skip it. GAME-SLOT stays for game paths.
+  DAD agrees, with these terms.
+- **(b) HOLD: Bryce's decision.** A merge queue on
+  `claude/f1-game-project-26h3ng` would be the stronger fix, but two things
+  argue against it now.
+  - **It may not exist here.** GitHub announced merge queue for public
+    repositories owned by organizations, and for private ones on Enterprise
+    Cloud. `brycejmurrin/f1-game` is user-owned, so the setting is probably
+    unavailable unless the repo moves to a (free) organization. That needs
+    checking in the branch-protection settings or the rulesets API before
+    any plan relies on it
+    ([GA changelog](https://github.blog/changelog/2023-07-12-pull-request-merge-queue-is-now-generally-available/)).
+  - **It drops our safeguards.** Even where available, it drops the pinned
+    `expectedHeadSha`, the gate receipt and the gate-written trailer that
+    #2 relies on. DAD's terms are: only after the freeze, group size 2, and
+    a written rollback path.
+
+  If Bryce wants it, the trial settings are:
   - merge method "merge" (supported, which keeps the two-parent rule);
   - "Maximum pull requests to merge" 4 and build concurrency 1–2;
   - add `merge_group:` to `ci.yml`'s triggers.
@@ -150,7 +170,7 @@ M = Merlin's bus line 82c824f (09:19Z).
   a single push before relying on it. The `CI` required check would need to
   report on `merge_group`, and the queue replaces GAME-SLOT and most of
   merge-gate's pacing row. This is the change DAD also ranked (D4).
-- **(c) If the queue is rejected.** A visible banner: a TRAIN line on the
+- **(c) Until then, and if the queue is rejected.** A visible banner: a TRAIN line on the
   bus (#4) plus the draft-PR status `session-status.mjs` prints. This is
   weaker, because it relies on whoever merges reading it.
 
@@ -168,9 +188,13 @@ M = Merlin's bus line 82c824f (09:19Z).
 
 **Change.** `merge-gate.mjs` already writes `artifacts/merge-gate/<n>.json`.
 Add a small `push`-triggered job, or a `fleet-bus.mjs` sweep each
-orchestrator runs per tick. For each merge commit on the deploy branch with
-no `DONE <PR> <sha>` line within 5 min, it posts
-`UNGATED #<PR> <sha> <author-of-merge-event>`. Pacing and the ABSENT rule
+orchestrator runs per tick. For each merge commit on the deploy branch:
+
+1. Check the gate-written trailer first, then a `DONE <PR> <sha>` line.
+2. If neither appears within 10 min, post one line per SHA:
+   `UNGATED #<PR> <sha> <author-of-merge-event>`.
+
+It flags only; it never reverts or holds anything (DAD's amendment). Pacing and the ABSENT rule
 then read facts instead of guesses. Tool: `tools/ci/fleet-bus.mjs`, or a new merge-audit script under `tools/ci/`.
 
 ### 3. Correct rule 7's two wrong assumptions (Both)
@@ -247,7 +271,9 @@ File: `tools/ci/fleet-bus.mjs` plus its test.
   of chat, and tokens explain about 80% of the performance variance
   (Anthropic, below). Waiting tokens are pure cost.
 
-**Change.**
+**Change.** Cut acknowledgement-only wakes, the ones that end with nothing
+done. The 30-min idle wake (safety-net check-in) stays, because it catches
+lost events (DAD's amendment).
 
 - **(a)** Orchestrators subscribe to no PRs. PR events go to owners; the
   orchestrator reads `pr-board` once per tick. The watcher memory already
@@ -257,13 +283,16 @@ File: `tools/ci/fleet-bus.mjs` plus its test.
   state. It ends the turn with no tool calls when the delta is empty.
 - **(c)** Owners `delete_trigger` their check-ins and unsubscribe at merge
   (role-pr-owner.md).
+- **(c2)** CI wakes only for the head SHA. A check-suite event for an older
+  head is acknowledged without a turn of work. Briefs say "no `sleep`; act
+  on the wake event" (DAD: 95 sleeps in D runs).
 - **(d)** Enforce the orchestrator hand-off at the 200k soft cap. Both
   orchestrators read tonight ran three times past it.
 
 Files: `references/running.md` §Bus routine, `role-pr-owner.md`, a new
 tick-delta script under `tools/ci/`.
 
-### 6. Caps from measurement, enforced each tick (Both)
+### 6. Caps from measurement, enforced each tick (Both; the cap values are Bryce's decision)
 
 **Evidence.**
 
@@ -342,7 +371,12 @@ Files: `references/worker.md`, `references/orchestrator.md` §Hand-off.
 
 **Change.**
 
-- The `fleet` block's `worker:` is the branch's sole writer.
+- The `fleet` block's `worker:` is the branch's sole writer. In-session
+  subagents are read-only; a subagent that writes does it in its own
+  worktree branch, which the writer merges.
+- Before every push, the writer runs `git log HEAD..origin/<branch>`. A
+  commit it did not make stops the push and goes to the orchestrator (DAD's
+  amendment).
 - `pr-board.mjs` flags a head commit whose author or committer is not that
   writer, and an `INCIDENT` follows (adaptive plan rule 6).
 - Never `@cursor`-mention to stop it.
@@ -420,13 +454,46 @@ Bryce decides.
 - `deploy.mjs --gate-only` refuses a second concurrent run, as
   `test-bg.mjs` already does.
 
-### 15. Cursor-side hooks (D)
+### 15. Cursor-side hooks (D; Bryce's decision)
 
 DAD's D2: `bash-guard.sh` does not run in Cursor cloud agents. Port the bans
 on `pkill -f`, `ratchets --auto-raise`, ratchet edits outside OWNED, and
 pushes with a foreign commit to `.cursor/hooks.json`. Bryce's call, since it
-edits agent configuration. Also D: 5 unapproved ratchet raises, 2 still open
-(#3489, #3487).
+edits agent configuration.
+
+D's ratchet ledger, corrected by DAD:
+
+- one raise by hand (#3487);
+- one lower by hand (CX1);
+- #3489 carries an auto-raise, to review at merge.
+
+### 16. Workers never merge, arm or send DONE (Both)
+
+**Evidence.** The rule is spread across briefs ("Do not enable auto-merge
+or merge"), `role-merge-holder.md` and AGENTS.md §Concurrent PRs. A worker
+sending DONE would falsify the attribution #2 depends on. DAD ranked "one
+merge authority" fourth (D4).
+
+**Change.** AGENTS.md §Concurrent PRs gets one standalone line: "Workers,
+owners and hunters never merge, arm auto-merge or post DONE; only the PR's
+fleet orchestrator does, through `merge-gate.mjs`." `github-mcp-guard.sh`
+can already tell the roles apart by the receipt's `--as`.
+
+### 17. Owner and brief hygiene, from DAD's auditor page (Both)
+
+DAD reports these from the Fleet D auditor page (data, cited to DAD):
+
+- **One owner per PR.** It is named in the fleet block, and the session that
+  closes or supersedes a PR tells that owner.
+- **Idle-DIRTY nudge.** A PR that has been CONFLICTING/DIRTY for 15 min with
+  no owner push gets one nudge to its owner, then adoption under #3548
+  rule 2 (D7).
+- **No `sleep` in briefs.** Act on the wake event (see #5 c2).
+- **Pre-flight checks** of token scope and of `$(` in commands before a
+  write route runs.
+- **End-state final message.** The last message a session sends states the
+  PR, head SHA, CI verdict and what is left, so a cold reader needs nothing
+  else.
 
 ## What works: keep it
 
@@ -466,7 +533,7 @@ edits agent configuration. Also D: 5 unapproved ratchet raises, 2 still open
 | Task claiming uses file locking; hooks gate task completion (`TaskCompleted`) | Claude Code agent teams | bus CAS on GAME-SLOT; claims board; ready-gate receipts | same pattern, extend to CLAIM (#4, #7) |
 | Relayed approvals are untrusted | Claude Code agent teams, permissions | same rule (authority.md) | none; reduce its cost (#11) |
 | Keep AGENTS.md concise, task detail in linked files; update after repeated mistakes | OpenAI Codex best practices | AGENTS.md 28 KB + 102 KB fleet skill, 34 rule commits in 5 days | shrink the always-loaded surface (#6) |
-| Merge queue: FIFO groups, max PRs per merge "useful when merges trigger deployments" | GitHub merge queue docs | hand-paced GAME-SLOT + prose freeze | trial merge queue (#1) |
+| Merge queue: FIFO groups, max PRs per merge "useful when merges trigger deployments" | GitHub merge queue docs | hand-paced GAME-SLOT + prose freeze | merge queue on hold (#1b): probably org-owned repos only |
 | Batch up to N PRs, bisect on failure (bors); rollups | bors-ng / Rust | ≤ 4-game batch window, manual triage | merge queue gives batching + auto-eject |
 | One pending run per concurrency group; newer pending replaces older; `queue: max` holds up to 100 | GitHub Actions concurrency docs | the train starves exactly by this rule under saturation | gate before merging (#1a), not after |
 | "Not rocket science rule": keep a repo that always passes all tests, by testing before merge | Graydon Hoare | merge-gate's local `gen:check` on the fresh tip; Pages gates after merge | merge queue tests the merged state before it lands |
@@ -487,7 +554,10 @@ Sources (fetched 2026-10-22):
 
 ## Open questions for Bryce
 
-1. **Merge queue trial (#1b).** Would you press "merge when ready" instead
+1. **Merge queue trial (#1b): your decision, on hold.** It probably needs
+   the repo moved to an organization first, because a user-owned repo may
+   not offer the setting. DAD's terms are: only after the freeze, groups of
+   2, with a rollback path. Would you press "merge when ready" instead
    of "merge"? It is the one change that paces your merges as well as the
    agents'. Without it, rule 7 binds agents only.
 2. **"Deploy now".** When you want one PR live fast (the lens at 07:20Z),
@@ -504,7 +574,9 @@ Sources (fetched 2026-10-22):
 
 ## Fleet D merge-in
 
-Source: DAD (Fleet D coordinator), relayed by OrchA 23 at 09:20Z. Canvas:
+Source: DAD (Fleet D coordinator), relayed by OrchA 23 at 09:20Z.
+DAD's amendments were relayed at 09:37Z. D agrees with 1a, 2, 3, 7 and 10,
+with the terms now written into those items. Canvas:
 cursor.com/canvas/store-e11ec754-…/cb35133f-… (not reachable from here).
 D's ranking, mapped to the combined list above:
 
@@ -513,14 +585,15 @@ D's ranking, mapped to the combined list above:
 | 1 | fleet-owner + who-is-on-it on OWNED before launch; size waves by free path families (3 launches hit held paths) | 7 | Both |
 | 2 | Cursor hooks for pkill -f, ratchet auto-raise, out-of-OWNED ratchet edits, foreign-commit pushes | 15 | D |
 | 3 | strict bus verbs that reject unknown ones (8 of 29 D runs had failed sends) | 4 | Both |
-| 4 | one merge authority in AGENTS.md (workers never merge, arm or send DONE); trial GitHub merge queue | 1, 10 | Both |
-| 5 | one writer per branch; subagents read-only | 9 | Both |
-| 6 | act on wake events instead of sleeping (95 sleeps) | 5 | Both (D: sleeps; A/B: idle-ack wakes) |
-| 7 | nudge DIRTY PRs at 15 min | 8 (stale-PR adoption, #3548 rule 2) | Both |
+| 4 | one merge authority in AGENTS.md (workers never merge, arm or send DONE); trial GitHub merge queue | 16, 10; 1b (hold) | Both |
+| 5 | one writer per branch; subagents read-only; HEAD..origin check | 9 | Both |
+| 6 | act on wake events instead of sleeping (95 sleeps) | 5 (c2), 17 | Both (D: sleeps; A/B: idle-ack wakes) |
+| 7 | nudge idle DIRTY PRs at 15 min | 17 | Both |
 | 8 | size effort to the task | 5, 6 | Both |
 | 9 | pick models from measured outcomes | 6 (Opus median $10.95 vs Sonnet $2.59 across 17 A workers) | Both |
 | 10 | short shared brief, per-wave delta | 6 | Both |
-| — | 5 unapproved ratchet raises, 2 still open (#3489, #3487) | 15 | D |
+| — | ratchet ledger (corrected): 1 hand raise (#3487), 1 hand lower (CX1); #3489 auto-raise reviewed at merge | 15 | D |
+| — | auditor page: one owner per PR, closer tells owner, no sleep in briefs, token-scope and `$(` checks, head-SHA-only CI wakes, end-state final message | 17, 5 | Both |
 
 Overlaps with A's own evidence:
 
