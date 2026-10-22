@@ -218,3 +218,8 @@ All are game PRs (js/) → one GAME-SLOT per green Pages.
 - Fleet B game queue EMPTY. Open B: #3454 (H33 draft), #3387 (L1, MERGE-HOLD).
 - BLOCKED ON BRYCE (in their own sessions): H33 AskUserQuestion (since 22:11Z), L1 AskUserQuestion, H31 waiting for "go" typed in its session (since 19:56Z, never started).
 - Archived: H26 H28 H30 H32. FINAL: H27 (archive ~01:45Z), O-C (Bryce's call).
+
+## 02:16Z
+- #3454 merged a82a2f9c (H33 cockpit/helmet finishes + wheel A). Pages watcher by2oxrdtr. H33 FINAL 02:15Z (archive ~03:15Z). Leads: F6 visor cockpit body not pre-warmed (perf); TLX first-person black under SwiftShader blocks local stills (tlxForceHw=1 does not lift).
+- #3468 2d60f5de tlx-warm-post merged by Bryce outside the bus. H27 archived 01:52Z.
+- Fleet B game queue EMPTY. Waiting on Bryce: L1 AskUserQuestion; H31 "go".
