@@ -3342,10 +3342,11 @@ physics is retuned; the agent should learn dynamics by calling
 ### `seed(n?) → number`
 
 Get or set the **simulation** random seed; setting it also rewinds the stream.
-`seed(42)` then `reset(frac, speed, x)` reproduces an episode exactly — same
-seed + same inputs ⇒ same result. `reset(frac, speed, x, seed)` does both, in
-the right order (the seed is applied *before* the grid is rebuilt, since grid
-order, lane and AI skill are drawn from the stream).
+For a reproducible field across page loads, call `seed(42)` **before**
+`await race(track)`: race creation draws AI skill and the preferred lanes once.
+Then `reset(frac, speed, x, 42)` reproduces episodes with that field and the same
+inputs. Reset seeds before re-gridding positions and clearing episode state;
+it reuses the cars' existing skill and preferred lanes rather than drawing them again.
 
 Only simulation randomness is seeded: AI grid order/lane/skill, the start-lights
 hold, and the per-tick AI overtake decision. **Cosmetic randomness — camera

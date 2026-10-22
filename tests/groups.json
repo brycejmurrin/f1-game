@@ -689,6 +689,8 @@
     "// live-frame-census.mjs pure helpers (args, percentiles, trace/profile reducers). ~0.2 s.",
     "tests/unit/live-frame-census.test.mjs",
     "tests/unit/live-run-check.test.mjs",
+    "// Spine lightning / twoTone / keylineSplit clear the 2.0:1 large-area floor (#3425, #3426). ~3 s.",
+    "tests/unit/livery-contrast-w13b.test.mjs",
     "tests/unit/livery-decal-surfaces.test.mjs",
     "// Pure artwork and paint-editor VM regression; selected for all source edits.",
     "tests/unit/livery-design.test.mjs",

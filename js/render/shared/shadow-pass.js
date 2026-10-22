@@ -208,8 +208,15 @@ const ShadowPass = (function () {
     // Only the car and lamp passes cast the player (_castPlayer). With neither map
     // (phones), resolving would build a first-person caster nothing ever draws.
     function resolvePlayer(smp, yv) {
-      const mapped = G.gfx.carShadowEnabled !== false || G.gfx.lampShadowEnabled !== false;
-      _playerCockpit = mapped && deps.cockpitCaster ? deps.cockpitCaster(G.player, smp, yv, _cockpitShadowMat) : null;
+      _playerCockpit = null;
+      if (!deps.cockpitCaster || !G.player || G.state === "menu") return;
+      const tier = PerfGov.tier();
+      // These are the live consumer gates, not just backend capabilities: a
+      // disabled knob or governor shed leaves no pass to use the silhouette.
+      // Lighting-dependent gates stay in the passes, after lighting is ready.
+      const mapped = (G.gfx.carShadowEnabled !== false && G.gfx.carShadowBegin && LT.carShadow && !(LT.shadowStr <= 0) && tier < 3) ||
+        (G.gfx.lampShadowEnabled !== false && G.gfx.lampShadowBegin && LT.lampShadow && tier < 2 && !G._studioRig);
+      if (mapped) _playerCockpit = deps.cockpitCaster(G.player, smp, yv, _cockpitShadowMat);
     }
     function _playerMat() { return _playerCockpit ? _cockpitShadowMat : _livePlayerShadowMat; }
     function _castPlayer() {
@@ -628,21 +635,26 @@ const ShadowPass = (function () {
               // knows which it is — the renderer clears the flag every present().
               if (G.gfx.lampShadowKeep) G.gfx.lampShadowKeep(flBest);
             } else {
+            // The full lamp key above covers every camera input. Moving only
+            // cars changes the casters, not the lamp's projection or view.
+            if (!_sameLamp) {
+              const fov = Math.min(2.6, 2 * Math.acos(M4.clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
+              const up = Math.abs(L[o + 8]) > 0.95 ? _upX : _upY;
+              _flEye[0] = L[o]; _flEye[1] = L[o + 1]; _flEye[2] = L[o + 2];
+              _flTgt[0] = L[o] + L[o + 7]; _flTgt[1] = L[o + 1] + L[o + 8]; _flTgt[2] = L[o + 2] + L[o + 9];
+              M4.lookAtTo(_mFlView, _flEye, _flTgt, up);
+              // Near plane 2.5 m: the light sits INSIDE its own fixture geometry (the
+              // lamp position IS the visible lens box, with the head/arm right beside
+              // it, all part of the props caster mesh) — a closer near plane renders
+              // the fixture into the map and it eclipses its own beam, blacking out
+              // the whole pool. 2.5 m clips the fixture; every real occluder (cars,
+              // walls, the mast pole below the head) is farther out than that.
+              M4.perspectiveTo(_mFlProj, fov, 1, 2.5, Math.max(rad, 10));
+              M4.mulTo(_mFlVP, _mFlProj, _mFlView);
+            }
+            // Stamp after a successful camera build, so a failed build retries.
             _lampShX = _lx; _lampShY = _ly; _lampShZ = _lz; _lampShCarKey = _carKey;
             _lampShR = rad; _lampShC = L[o + 11]; _lampShDx = L[o + 7]; _lampShDy = L[o + 8]; _lampShDz = L[o + 9];
-            const fov = Math.min(2.6, 2 * Math.acos(M4.clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
-            const up = Math.abs(L[o + 8]) > 0.95 ? _upX : _upY;
-            _flEye[0] = L[o]; _flEye[1] = L[o + 1]; _flEye[2] = L[o + 2];
-            _flTgt[0] = L[o] + L[o + 7]; _flTgt[1] = L[o + 1] + L[o + 8]; _flTgt[2] = L[o + 2] + L[o + 9];
-            M4.lookAtTo(_mFlView, _flEye, _flTgt, up);
-            // Near plane 2.5 m: the light sits INSIDE its own fixture geometry (the
-            // lamp position IS the visible lens box, with the head/arm right beside
-            // it, all part of the props caster mesh) — a closer near plane renders
-            // the fixture into the map and it eclipses its own beam, blacking out
-            // the whole pool. 2.5 m clips the fixture; every real occluder (cars,
-            // walls, the mast pole below the head) is farther out than that.
-            M4.perspectiveTo(_mFlProj, fov, 1, 2.5, Math.max(rad, 10));
-            M4.mulTo(_mFlVP, _mFlProj, _mFlView);
             // THE LAMP MAP = THE STATIC MAP + THE CARS (TLX-PERF-PLAN L1, TLX only).
             // A car-only change copies the static props depth the backend already
             // holds and draws the cars alone. Any other rebuild (a lamp change, the

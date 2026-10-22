@@ -2,6 +2,9 @@
  * "a delta inside the spread is noise" rule. Run: node --test tests/unit/profile-lib.test.mjs */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
+import * as espree from "espree";
 import { aggregate, diff, verdict, formatDiff, formatTable, median, intervalStats } from "../../tools/perf/lib.mjs";
 
 const run = (p50, p95 = p50 * 2) => ({ spans: { physics: { p50, p95, p99: p95, max: p95, n: 100 } } });
@@ -64,7 +67,7 @@ test("incomparable: arms with different capture modes never read as noise/WIN/RE
 
 
 import { profileScenario, profileScenarioSignature, profileComparability } from "../../tools/perf/lib.mjs";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -92,6 +95,71 @@ test("saved profiles require complete matching workload, capture and observed re
   }
   assert.equal(profileComparability({ track: "monaco", frames: 40 }, head).comparable, false, "legacy reports cannot establish capture/renderer");
   assert.equal(profileScenarioSignature({ ...scenario(), frames: NaN }), null);
+});
+
+// Evaluate the actual browser callbacks without importing the CLI (which starts
+// Chromium). AST extraction avoids a duplicate implementation or a new API.
+function profileCallbacks(apex) {
+  const source = readFileSync(new URL("../../tools/perf/profile.mjs", import.meta.url), "utf8");
+  const ast = espree.parse(source, { ecmaVersion: "latest", sourceType: "module", range: true });
+  const declarations = ["prepareRace", "measureSteps"].map(name => {
+    const node = ast.body.find(n => n.type === "FunctionDeclaration" && n.id.name === name);
+    assert.ok(node, name); return source.slice(...node.range);
+  });
+  const ctx = vm.createContext({ window: { __apex: apex }, track: "monza", WAIT_MS: 30000, performance });
+  vm.runInContext(declarations.join("\n"), ctx, { filename: absSrc("tools/perf/profile.mjs") });
+  return ctx;
+}
+
+test("profile race setup seeds before creation, awaits readiness and rejects an unbuilt world", async () => {
+  const events = []; let built = false, state = "menu", actual = "bahrain";
+  const apex = {
+    seed: n => events.push(["seed", n]),
+    race: t => { events.push(["race", t]); return { track: t, then(resolve) {
+      events.push(["settled"]); built = true; state = "count"; actual = t; resolve({ track: t });
+    } }; },
+    info: () => ({ track: actual, state, n: built ? 100 : 0, total: built ? 1000 : 0 }),
+    fieldState: () => built ? [{ id: 0, lap: 0, frac: 0 }, { id: 1, lap: 0, frac: 0.1 }] : [],
+  };
+  const ctx = profileCallbacks(apex);
+  const page = { evaluate: (fn, arg) => fn(arg), waitForFunction: (fn, arg) => {
+    events.push(["ready"]); assert.equal(fn(arg), true, "must observe the actual built world and grid");
+  } };
+  await ctx.prepareRace(page);
+  assert.deepEqual(events, [["seed", 42], ["race", "monza"], ["settled"], ["ready"]]);
+  apex.race = t => ({ track: t }); // old refs may return a plain descriptor
+  await ctx.prepareRace(page);
+  actual = "bahrain";
+  await assert.rejects(ctx.prepareRace(page), /actual built world/);
+  actual = "monza"; state = "menu";
+  await assert.rejects(ctx.prepareRace(page), /actual built world/);
+  state = "count"; built = false;
+  await assert.rejects(ctx.prepareRace(page), /actual built world/);
+  apex.race = () => Promise.resolve(false);
+  await assert.rejects(ctx.prepareRace(page), /race setup rejected/);
+  apex.race = () => Promise.reject(new Error("entry failed"));
+  await assert.rejects(ctx.prepareRace(page), /entry failed/);
+});
+
+test("profile fixed-step samples require real motion, count the final partial batch and restore input/rendering", () => {
+  const steps = [], cleanup = []; let prog = 0, moves = true, reset = true;
+  const ctx = profileCallbacks({
+    go: () => "race", reset: () => reset && {}, info: () => ({ state: "race" }),
+    headless: v => cleanup.push(["headless", v]), clearInput: () => cleanup.push(["clear"]), setInput() {},
+    step: (dt, n) => { assert.equal(dt, 1 / 60); steps.push(n); if (moves) prog += n; },
+    fieldState: () => [{ id: 0, lap: 0, frac: prog / 1000 }, { id: 1, lap: 0, frac: (prog + 10) / 1000 }],
+  });
+  const result = ctx.measureSteps({ n: 101, w: 3 });
+  assert.equal(steps.reduce((a, b) => a + b, 0), 104, "three warm steps plus exactly 101 measured steps");
+  assert.equal(steps.at(-1), 1); assert.equal(result.spans.step.n, 11); assert.equal(result.cars, 2);
+  assert.deepEqual(cleanup, [["headless", true], ["clear"], ["headless", false]]);
+  moves = false; cleanup.length = 0;
+  assert.throws(() => ctx.measureSteps({ n: 100, w: 0 }), /did not advance/);
+  assert.deepEqual(cleanup, [["headless", true], ["clear"], ["headless", false]]);
+  reset = false;
+  assert.throws(() => ctx.measureSteps({ n: 100, w: 0 }), /reset failed/);
+  reset = true; prog = NaN;
+  assert.throws(() => ctx.measureSteps({ n: 100, w: 0 }), /invalid field/);
 });
 
 test("query CLI never awards a win to incompatible or unknown saved profiles; matching captures retain noise rule", () => {

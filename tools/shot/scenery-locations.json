@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "3c705297b621260d8bba6a2ff8f8af3c6b922d9869d6ea50ab972c5af3bb6a55",
+  "sourceDigest": "3dd70a554785eae9138d9d0db8db1d1a5cef42037c1fbfc474355c4d1bd2970c",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -1766,10 +1766,10 @@
       "track": "magny_cours",
       "name": "Control Block",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.996502,
+      "frac": 0.996503,
       "target": [
-        183.58,
-        9.23,
+        183.57,
+        8.99,
         -126.93
       ],
       "stationMethod": "nearest-road-projection",

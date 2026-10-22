@@ -233,6 +233,34 @@ test("stage() seats the player, sets the session, and stop() restores every sett
     [2, 1, 3, "wet", "night", true, "off", true, 0, "career"], "the circuit and the flow the player had are back too");
 });
 
+test("WATCH predicates follow the live director without constructing diagnostic snapshots", () => {
+  const { R, script, Teams, ctx } = load();
+  assert.equal(R.isWatch(), false, "no director has been created");
+  vm.runInContext("var RealReplay = { create: () => ({ stop() {} }) };", ctx);
+  const { G } = makeG(Teams, makeCars(Teams, "ferrari:0"));
+  const rr = R.create(G);
+  rr.status = () => { throw new Error("predicate must not build a status snapshot"); };
+  assert.equal(rr.isActive(), false);
+  assert.equal(rr.isWatch(), false);
+  assert.equal(R.isWatch(), false);
+  rr.stage(script, { seat: "LEC" });
+  assert.equal(rr.isActive(), true, "JUMP IN has an active director");
+  assert.equal(rr.isWatch(), false, "JUMP IN is driven");
+  assert.equal(R.isWatch(), false);
+  rr.stage(script, { seat: "LEC", watch: true, traces: {} });
+  assert.equal(rr.isWatch(), true);
+  assert.equal(R.isWatch(), true);
+  rr.stop();
+  assert.equal(rr.isActive(), false);
+  assert.equal(rr.isWatch(), false);
+  assert.equal(R.isWatch(), false);
+  const next = R.create(G);
+  assert.equal(R.isWatch(), false, "a replacement director starts inactive");
+  next.stage(script, { seat: "LEC", watch: true, traces: {} });
+  assert.equal(R.isWatch(), true, "the static predicate follows the replacement director");
+  next.stop();
+});
+
 test("arming lays the real grid, plans, compounds and retirements over the field on the first countdown frame", () => {
   const { R, script, Teams } = load();
   const cars = makeCars(Teams, "ferrari:0");   // the player is LEC

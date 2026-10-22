@@ -365,6 +365,49 @@ test("TrackModels validates complete finite mesh buffers", () => {
   assert.match(bad.reason, /non-finite|index/);
 });
 
+test("TrackModels staged appends preserve channels and index bases through accumulator growth", () => {
+  const Models = loadGlobal(P.TRACK_MODELS, "TrackModels");
+  const channels = ["pos", "nrm", "col", "mat", "idx"];
+  const outputs = [
+    { pos: [], nrm: [], col: [], mat: [], idx: [] },
+    Models.scratch(1), Models.scratch(32),
+  ];
+  // Values that f32 would round; the accumulator must stay f64 until sealing.
+  const precise = 1 + 2 ** -40;
+  const stages = [
+    { pos: [-0, precise, -precise], nrm: [0, 1, 0], col: [precise, 0, -0], mat: [15.125], idx: [0] },
+    { pos: [2, 3, 4, 5, 6, 7, 8, 9, 10], nrm: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+      col: [0.1, 0.2, 0.3, 2.5, 3.4, 1, 1, 1, 1], mat: [0, 3, 16], idx: [2, 0, 1, 0, 2, 1] },
+  ];
+  for (const out of outputs) {
+    const api = Models.create({ out });
+    for (let i = 0; i < stages.length; i++) {
+      const data = stages[i];
+      assert.equal(api.modelGroup(`stage-${i}`, { center: [0, 0, 0], size: [100, 100, 100] }, (stage) => {
+        for (const channel of channels) stage[channel].push(...data[channel]);
+      }), true);
+    }
+    assert.deepEqual(Array.from(out.idx.seal ? out.idx.seal() : out.idx), [0, 3, 1, 2, 1, 3, 2]);
+    assert.deepEqual(plain(out.__blocks.map(({ base, count, id }) => ({ base, count, id }))), [
+      { base: 0, count: 1, id: "stage-0" }, { base: 1, count: 3, id: "stage-1" },
+    ]);
+  }
+  const plainOut = outputs[0];
+  for (const out of outputs.slice(1)) {
+    for (const channel of channels) {
+      assert.deepEqual(Array.from(out[channel].seal()), plainOut[channel], `${channel} before seal`);
+    }
+    assert.ok(Object.is(out.pos.seal()[0], -0), "signed zero survives the native copy");
+    assert.equal(out.pos.seal()[1], precise, "positions were not narrowed to f32");
+    const sealed = Models.sealGeometry(out);
+    for (const channel of channels) {
+      const expected = channel === "col" ? Array.from(new Float32Array(plainOut.col)) : plainOut[channel];
+      assert.deepEqual(Array.from(sealed[channel]), expected, `${channel} after seal`);
+    }
+    assert.equal(Models.validateGeometry(sealed).ok, true);
+  }
+});
+
 test("envCull build owns one ribbon representation and retains collision geometry", () => {
   const env = buildContext();
   const def = env.Tracks.LIST.find((entry) => entry.id === "monza");

@@ -12,9 +12,9 @@
 // cpu    wraps tools/shot/profile-gameloop.mjs (V8 sampling profile, top self time).
 // hitch  wraps tools/gfx/frame-hitch.mjs (per-rAF cost, spike period).
 // step   the physics/AI step alone in real Chromium V8 (headless(true): no render, no SwiftShader in the timing):
-//        reset(seed 42) + throttle, --warm steps for the JIT, then --steps timed in batches of 10 (performance.now
-//        is coarse); prints ms/step p50/p95/p99 and a digest of every car's numeric fields, so --base also proves
-//        a perf change bit-identical. The spans "physics" row is NOT one step: a slow SwiftShader frame catches up
+//        seed 42 before race creation, reset(seed 42) + throttle, --warm steps for the JIT, then --steps timed in batches of 10 (performance.now
+//        is coarse); prints ms/step p50/p95/p99 and checks the rounded field digest across --base arms.
+//        The spans "physics" row is NOT one step: a slow SwiftShader frame catches up
 //        to five, and the Node VM (game-vm.cjs) over-weights global lookups ~6x (docs/notes/PERF-SCENE-CPU-2026-10-20.md).
 // trace  CDP Tracing → artifacts/profiles/*.json, open in ui.perfetto.dev or the Chrome Performance panel (spans: User Timing "apex:*", one DevTools track per phase in group "Apex 26").
 // --repeat N    N fresh pages; reports the median of each stat and the spread (max-min) across repeats.
@@ -68,23 +68,47 @@ const log = (...a) => console.error(...a);
 // Page-ready / track-load wait: APEX_PROFILE_WAIT_MS raises the 30 s floor on a loaded SwiftShader box (as profile-gameloop.mjs does).
 const WAIT_MS = Math.max(30000, +process.env.APEX_PROFILE_WAIT_MS || 30000);
 
+async function prepareRace(page) {
+  await page.evaluate(async (t) => {
+    const A = window.__apex;
+    // reset() re-grids existing cars; skill and lanePref were drawn by race().
+    A.seed(42);
+    const started = await A.race(t);
+    if (!started || started.track !== t) throw new Error(`profile: race setup rejected ${t}`);
+  }, track);
+  // Also supports older refs whose race descriptor was not yet thenable. A
+  // selected id alone is insufficient: require the built world and live grid.
+  await page.waitForFunction((t) => {
+    const A = window.__apex, i = A.info();
+    return i.track === t && (i.state === "count" || i.state === "race") && i.n > 0 && i.total > 0 && A.fieldState().length > 0;
+  }, track, { timeout: WAIT_MS, polling: 100 });
+}
+
 /** The deterministic scenario, evaluated in the page: same track, same start, same inputs on every ref. */
 async function scenario(page, nFrames) {
-  await page.evaluate((t) => { window.__apex.race(t); }, track);
-  await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: WAIT_MS, polling: 100 });
-  await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); });
+  await prepareRace(page);
+  await page.evaluate(() => {
+    const A = window.__apex;
+    if (A.go() !== "race" || !A.jump(0.1, 55, 0)) throw new Error("profile: race did not reach the driving scenario");
+  });
   return page.evaluate(async (n) => {
     const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
     const iv = new Float64Array(n);
     let steer = (i) => 0.35 * Math.sin(i / 25);
     const drive = (i) => A.setInput({ throttle: true, steer: steer(i) });
     for (let i = 0; i < 20; i++) { drive(i); await raf(); }            // warm-up: shader/pipeline compile out of the numbers
+    const before = A.fieldState();
     if (A.perf) A.perf({ on: true, reset: true });
     let last = performance.now();
     for (let i = 0; i < n; i++) { drive(i); await raf(); const t = performance.now(); iv[i] = t - last; last = t; }
     const rep = A.perf ? A.perf() : {};
     if (A.perf) A.perf({ on: false });
     A.clearInput();
+    const after = A.fieldState();
+    if (A.info().state !== "race" || after.length !== before.length || !after.some(c => {
+      const prev = before.find(b => b.id === c.id); return prev && (c.lap !== prev.lap || c.frac !== prev.frac);
+    }))
+      throw new Error("profile: rendered scenario did not advance the racing field");
     return { intervals: Array.from(iv), spans: rep.spans || null, loaf: rep.loaf || null, gpu: rep.gpu || null, frameTimes: rep.frameTimes || null };
   }, nFrames);
 }
@@ -120,6 +144,40 @@ async function runSpans(root, label) {
   return { agg: aggregate(runs), scenario: stable ? savedScenario : null, observedScenarios: runs.map(r => r.scenario) };
 }
 
+/** Serialized into Chromium: no Node closures; validation stays outside timed batches. */
+function measureSteps({ n, w }) {
+  const A = window.__apex;
+  if (A.go() !== "race") throw new Error("profile: race did not reach the step scenario");
+  A.headless(true);
+  try {
+    if (!A.reset(0.02, 55, 0, 42)) throw new Error("profile: step reset failed");
+    A.setInput({ throttle: true, steer: 0.02 });
+    for (let i = 0; i < w; i++) A.step(1 / 60, 1);
+    const before = A.fieldState();
+    if (!before.length || !before.every(c => Number.isFinite(c.frac) && Number.isFinite(c.lap))) throw new Error("profile: invalid field before fixed steps");
+    // FNV-1a over fieldState() every 100 steps: rounded fields, but a divergence grows over thousands of
+    // steps. The raw bit-identity check is the Node VM's (tests/unit/determinism-replay-vm.test.mjs).
+    let h = 0x811c9dc5;
+    const digest = () => { const str = JSON.stringify(A.fieldState());
+      for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } };
+    const B = 10, per = [];
+    for (let i = 0; i < n; i += B) {
+      const count = Math.min(B, n - i);
+      const t0 = performance.now(); A.step(1 / 60, count); per.push((performance.now() - t0) / count);
+      if ((i / B) % 10 === 0) digest();
+    }
+    const after = A.fieldState();
+    if (A.info().state !== "race" || after.length !== before.length || !after.every(c => Number.isFinite(c.frac) && Number.isFinite(c.lap)) || !after.some(c => {
+      const prev = before.find(b => b.id === c.id); return prev && (c.lap !== prev.lap || c.frac !== prev.frac);
+    }))
+      throw new Error("profile: fixed steps did not advance the racing field");
+    digest();
+    const s = per.slice().sort((a, b) => a - b), q = (p) => +s[Math.min(s.length - 1, Math.floor(s.length * p))].toFixed(4);
+    return { spans: { step: { n: per.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: +s[s.length - 1].toFixed(4) } },
+             digest: h.toString(16), cars: after.length };
+  } finally { A.clearInput(); A.headless(false); }
+}
+
 /** --mode step: one page per repeat; the in-page loop times batches of 10 steps between digest reads. */
 async function runStep(root, label) {
   const srv = await startStaticServer(root);
@@ -130,27 +188,8 @@ async function runStep(root, label) {
       const [context, page] = await newPage(browser);
       await page.goto(srv.url);
       await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS, polling: 100 });
-      await page.evaluate((t) => { window.__apex.race(t); }, track);
-      await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: WAIT_MS, polling: 100 });
-      const res = await page.evaluate(({ n, w }) => {
-        const A = window.__apex;
-        A.go(); A.headless(true); A.reset(0.02, 55, 0, 42); A.setInput({ throttle: true, steer: 0.02 });
-        for (let i = 0; i < w; i++) A.step(1 / 60, 1);
-        // FNV-1a over fieldState() every 100 steps: rounded fields, but a divergence grows over thousands of
-        // steps. The raw bit-identity check is the Node VM's (tests/unit/determinism-replay-vm.test.mjs).
-        let h = 0x811c9dc5;
-        const digest = () => { const str = JSON.stringify(A.fieldState());
-          for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } };
-        const B = 10, per = [];
-        for (let i = 0; i < n; i += B) {
-          const t0 = performance.now(); A.step(1 / 60, B); per.push((performance.now() - t0) / B);
-          if ((i / B) % 10 === 0) digest();
-        }
-        digest(); A.headless(false);
-        const s = per.slice().sort((a, b) => a - b), q = (p) => +s[Math.min(s.length - 1, Math.floor(s.length * p))].toFixed(4);
-        return { spans: { step: { n: per.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: +s[s.length - 1].toFixed(4) } },
-                 digest: h.toString(16), cars: A.fieldState().length };
-      }, { n: steps, w: warm });
+      await prepareRace(page);
+      const res = await page.evaluate(measureSteps, { n: steps, w: warm });
       runs.push(res);
       log(`  ${label}: repeat ${r + 1}/${repeat} — ${res.cars} cars, step p50 ${res.spans.step.p50} ms, digest ${res.digest}`);
       await context.close();
@@ -182,9 +221,12 @@ async function runTrace() {
     const [, page] = await newPage(browser);
     await page.goto(srv.url);
     await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS, polling: 100 });
-    await page.evaluate((t) => { window.__apex.race(t); }, track);
-    await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: WAIT_MS, polling: 100 });
-    await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); window.__apex.setInput({ throttle: true }); window.__apex.perf({ on: true, reset: true, measure: true }); });
+    await prepareRace(page);
+    await page.evaluate(() => {
+      const A = window.__apex;
+      if (A.go() !== "race" || !A.jump(0.1, 55, 0)) throw new Error("profile: race did not reach the trace scenario");
+      A.setInput({ throttle: true }); A.perf({ on: true, reset: true, measure: true });
+    });
     const cdp = await page.context().newCDPSession(page);
     const chunks = [];
     cdp.on("Tracing.dataCollected", (e) => chunks.push(...e.value));
@@ -216,7 +258,7 @@ try {
       out.delta = diff(base.agg, head.agg);
       out.bitIdentical = base.digests.length === 1 && head.digests.length === 1 && base.digests[0] === head.digests[0];
       console.log("\n" + formatDiff(out.delta, `${baseRef}@${base.sha.slice(0, 8)}`, "HEAD"));
-      console.log(`field digest: base ${base.digests.join(" ")}  head ${head.digests.join(" ")}  → ${out.bitIdentical ? "bit-identical" : "DIFFERS"}`);
+      console.log(`field digest: base ${base.digests.join(" ")}  head ${head.digests.join(" ")}  → ${out.bitIdentical ? "rounded digest matches" : "DIFFERS"}`);
     }
     const file = join(OUT, `${track}-step${baseRef ? "-ab" : ""}.json`);
     writeFileSync(file, JSON.stringify(out, null, 1));
