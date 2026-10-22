@@ -69,12 +69,12 @@ try {
       const basename = job.pilot ? 'pilot-day-dry' : `${time}-${weather}`;
       const outPath = path.join(dir, `${basename}-4k.png`);
       if (!job.pilot && (!raceRow || raceRow.time !== time)) {
-        raceRow = await mutateCaptureScene(page, async ({ track, time, camera }) => {
+        raceRow = await mutateCaptureScene(page, async ({ track, time, camera, parkFrac }) => {
           const a = window.__apex;
           a.headless(false); a.govHold(true); a.renderScale(1); a.seed(42);
           const race = await a.race(track, time, 'dry');
           a.go();
-          a.park(CAMERA_FRACS[track]); // Once per time row: repeated calls teleport every AI car.
+          a.park(parkFrac); // Once per time row: repeated calls teleport every AI car.
           const rivals = a.rivals([
             { dProg: 35, dx: -1.4, speed: 31 },
             { dProg: 70, dx: 1.3, speed: 29 },
@@ -84,26 +84,26 @@ try {
           a.drivingLine('off');
           a.freeze(true); a.hud(false); a.renderClock(0, true); a.view(camera);
           return { race, parkCalls: 1, clockHoldRequested: true, rivals, cars: a.cars(), line: a.drivingLine(), camera: a.camState(), beganAt: Date.now() };
-        }, { track, time, camera });
+        }, { track, time, camera, parkFrac: CAMERA_FRACS[track] });
         raceRow.time = time;
         raceRow.warmupStart = Date.now();
       } else if (job.pilot) {
-        raceRow = await mutateCaptureScene(page, async ({ track, time, camera }) => {
+        raceRow = await mutateCaptureScene(page, async ({ track, time, camera, parkFrac }) => {
           const a = window.__apex;
           a.headless(false); a.govHold(true); a.renderScale(1); a.seed(42);
           const race = await a.race(track, time, 'dry');
-          a.go(); a.park(CAMERA_FRACS[track]);
+          a.go(); a.park(parkFrac);
           const rivals = a.rivals([{ dProg: 35, dx: -1.4, speed: 31 }, { dProg: 70, dx: 1.3, speed: 29 }, { dProg: 105, dx: -0.3, speed: 30 }]);
           a.step(1 / 60); a.drivingLine('off'); a.freeze(true); a.hud(false); a.renderClock(0, true); a.view(camera);
           return { race, parkCalls: 1, clockHoldRequested: true, rivals, cars: a.cars(), line: a.drivingLine(), camera: a.camState(), beganAt: Date.now() };
-        }, { track, time, camera });
+        }, { track, time, camera, parkFrac: CAMERA_FRACS[track] });
         raceRow.time = time; raceRow.warmupStart = Date.now();
       }
 
-      const cut = await mutateCaptureScene(page, ({ weather, time, camera }) => {
+      const cut = await mutateCaptureScene(page, ({ weather, time, camera, pilot }) => {
         const a = window.__apex;
         a.headless(false);
-        if (weather !== 'dry' || job.pilot) a.weather(weather);
+        if (weather !== 'dry' || pilot) a.weather(weather);
         const previousGen = LampBake.gen();
         LampBake.reset();
         a.drivingLine('off'); a.view(camera); a.renderClock(0, true);
@@ -114,7 +114,7 @@ try {
           warmupMs: 8 * Math.max(0, light.lampWarmup ?? 1) * 1000,
           cutAt: Date.now(), line: a.drivingLine(), camera: a.camState(),
         };
-      }, { weather, time, camera });
+      }, { weather, time, camera, pilot: !!job.pilot });
       if (cut.requiredBake) {
         await page.waitForFunction(previous => LampBake.gen() > 0 && LampBake.gen() > previous, cut.previousGen, { polling: 100, timeout: 240000 });
       }
