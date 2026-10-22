@@ -403,6 +403,16 @@ function preloadLikelyBackend() {
     if (typeof ScriptLoader === "undefined" || !ScriptLoader.preload || typeof ApexRoster === "undefined") return 0;
     const g = guess();
     const low = !g.sure;
+    let unsetPick = false;
+    try { unsetPick = localStorage.getItem("apex26.gfxBackend") == null; } catch (_) { /* blocked storage: treat like unset */ unsetPick = true; }
+    // The UNSET default read off navigator.gpu is not a pick: start() may still bind
+    // GLX after a null or slow requestAdapter() (SwiftShader often needs the full
+    // 4 s cap). The eval-time TLX prefetch plus the ~735 KB three vendor island
+    // contended with the GLX roster fetch and could push the fallback past
+    // BOOT_STEP_MS into Graphics unavailable — measured after clearing site data
+    // with an installed SW (#3536). Explicit THREE/WGX picks still prefetch;
+    // start() also preloads TLX once the adapter probe commits to THREE.
+    if (unsetPick && !g.sure && g.pick === "three") return 0;
     // The vendor island too, from here rather than only inside start(): start() runs after every deferred
     // script and the adapter probe, so its hint reached the network seconds after this one could.
     if (g.pick === "three") preloadThreeVendor(low);
