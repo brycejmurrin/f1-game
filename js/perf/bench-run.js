@@ -65,8 +65,9 @@ const BenchRun = (function () {
       }
       o.fill.push(leg.gpuTest.fill ? leg.gpuTest.fill.msPerFullFrame : null);
       o.mirrorMs.push(leg.gpuTest.mirrorMs);
-      o.coldMs.push(leg.entry && leg.entry.cold ? leg.entry.cold.goMs : null);
-      o.warmMs.push(leg.entry && leg.entry.warm ? leg.entry.warm.goMs : null);
+      // Entry = start -> race built (buildMs); goMs adds the start lights, a fixed sequence, so it is not the figure.
+      o.coldMs.push(leg.entry && leg.entry.cold ? leg.entry.cold.buildMs : null);
+      o.warmMs.push(leg.entry && leg.entry.warm ? leg.entry.warm.buildMs : null);
       o.gpuTimer = o.gpuTimer || !!(leg.gpuTest.gpuTimer && leg.gpuTest.gpuTimer.supported);
     }
     for (const o of Object.values(out)) {
@@ -81,7 +82,7 @@ const BenchRun = (function () {
     for (const leg of legs || []) {
       if (!leg || (leg.kind !== "race" && leg.kind !== "garage")) continue;
       if (leg.state !== "done") { rows.push({ label: leg.label, state: leg.state, reason: leg.reason || null }); continue; }
-      const coldMs = leg.entry && leg.entry.cold ? leg.entry.cold.goMs : null;
+      const coldMs = leg.entry && leg.entry.cold ? (leg.entry.cold.buildMs != null ? leg.entry.cold.buildMs : leg.entry.cold.goMs) : null;
       for (const st of leg.steps || []) {
         rows.push({ label: leg.kind === "garage" ? leg.label + " · " + st.id : leg.label, state: "done",
           p50: st.p50, p95: st.p95, p99: st.p99, fps: st.fps, links: st.links, pipes: st.pipes, coldMs });
@@ -127,9 +128,12 @@ const BenchRun = (function () {
     return false;
   }
   // Start a race through `fn` and time it: buildMs = until the start promise settles, goMs = until state "race".
+  // Neither wait is open-ended: a start that never settles inside limitMs is a result ("timeout"), not a hung leg.
   async function timedEntry(fn, limitMs) {
     const t0 = now(); let buildMs = null;
-    const ok = await Promise.resolve(fn()).then((v) => { buildMs = r2(now() - t0); return v; }, () => false);
+    const late = new Promise((res) => setTimeout(() => res("timeout"), limitMs));
+    const ok = await Promise.race([Promise.resolve(fn()).then((v) => { buildMs = r2(now() - t0); return v; }, () => false), late]);
+    if (ok === "timeout") return { ok: false, buildMs: null, timedOut: true };
     if (!ok) return { ok: false, buildMs };
     while (now() - t0 < limitMs && !(_G && _G.state === "race")) await sleep(50);
     return { ok: _G && _G.state === "race", buildMs, goMs: _G && _G.state === "race" ? r2(now() - t0) : null };
@@ -152,8 +156,11 @@ const BenchRun = (function () {
     await done;
     if (!stillRunning()) return "aborted";   // STOP BENCHMARK ended the plan under this leg
     leg.gpuTest = result;
-    // WARM: the same race again in this page. SoakRun's finish paused the game; unpause, start, time, stop.
-    try { const b = document.getElementById("pausebtn"); if (_G.paused && b) b.click(); } catch (_) { /* pause is a courtesy */ }
+    // WARM: the same race again in this page. SoakRun's finish paused the game: RESUME through the pause menu's
+    // own button (the player's path), confirm it took, then start, time and stop.
+    try { const b = document.getElementById("pm-resume"); if (_G.paused && b) b.click(); } catch (_) { /* pause is a courtesy */ }
+    await until(() => !_G.paused, 3000);
+    leg.warmPaused = !!_G.paused;
     _G.seed = plan.seed;
     const warm = await timedEntry(() => SoakRun.start({ minutes: 0.2, weather: "dry", cam: "helmet" }), WARM_MS);
     try { if (SoakRun.active()) SoakRun.stop("bench-warm"); } catch (_) { /* soak gone */ }

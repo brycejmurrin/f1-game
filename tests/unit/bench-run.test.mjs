@@ -14,7 +14,7 @@ const load = () => vm.runInNewContext(SRC + "\n;BenchRun", { performance: { now:
 const J = (x) => JSON.parse(JSON.stringify(x));   // the VM's arrays and objects carry its realm's prototypes
 
 const leg = (api, p50s, extra) => Object.assign({ path: api, api, state: "done",
-  entry: { cold: { goMs: 4000 }, warm: { goMs: 900 } },
+  entry: { cold: { buildMs: 4000, goMs: 24000 }, warm: { buildMs: 900, goMs: 7000 } },   // entry = buildMs: goMs adds the start lights
   gpuTest: { reason: "complete", gpuTimer: { supported: false }, fill: { msPerFullFrame: 6 }, mirrorMs: 2,
     phases: [{ id: "default", p50: p50s[0], p95: p50s[0] + 4, fps: 60, links: 0, pipes: 0 }, { id: "s100", p50: p50s[1], p95: p50s[1] + 4, fps: 40, links: 1, pipes: 0 }] } }, extra);
 
@@ -48,7 +48,7 @@ test("bench-run scenes: one row per race and per garage step; an unfinished leg 
   const st = (id, p50) => ({ id, p50, p95: p50 + 5, p99: p50 + 9, fps: 50, links: 0, pipes: 1 });
   const rows = J(B.scenes([
     { kind: "gpu", state: "done", gpuTest: { phases: [] } },
-    { kind: "race", label: "Monza rain", state: "done", entry: { cold: { goMs: 5000 } }, steps: [st("race", 22)] },
+    { kind: "race", label: "Monza rain", state: "done", entry: { cold: { buildMs: 5000, goMs: 25000 } }, steps: [st("race", 22)] },
     { kind: "race", label: "Spa rain", state: "failed", reason: "race ended early: hidden" },
     { kind: "garage", label: "Garage", state: "done", entry: { cold: { goMs: 1200 } }, steps: [st("idle", 16.7), st("livery 1", 18)] },
   ]));
