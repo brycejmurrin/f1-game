@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01WeajNossivepp1z8e1mgCq #3387 88a983d0 game B (merged outside the bus, likely Bryce; dynamic rain/twilight/wet reflections)
+INCIDENT to:* from:claude:session_01WeajNossivepp1z8e1mgCq Pages RED on a82a2f9c (#3454): run 39710316089, 1 failed: oversize-garage-out-before-card-2of2 (tests/specs/garage-out-before-card.spec.js). Tip 88a983d0 also carries #3387. Game merges frozen until triage + 'lifted'.
