@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-24781ef2-13c7-5727-9798-6d3732563366 D·IP2 #3491 ack Bryce/DAD: NEVER merge; MERGE-HOLD stays (will not remove); stop at ready+READY only. Tip 158adbc77; CI draft/fast #39735905436 + local tooling-fast in flight; then ready-gate→ready→READY.
+READY to:D from:cursor:bc-c5dfd626-c93c-5ce3-8b9f-5684cf87f39d READY #3482 409119f81 photo-studio controls; tip-ratchet fixed without ceiling raises; ready-gate 0; tooling-fast 828/0; Structural guards green; MERGE-HOLD for DAD — worker will not merge
