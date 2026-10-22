@@ -1285,6 +1285,20 @@
         "tests/unit/load-order.test.mjs"
       ]
     },
+    "js/camera/cockpit-finishes.js": {
+      "onChange": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
+      ],
+      "stamp": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
+      ],
+      "view": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
+      ],
+      "*": [
+        "tests/unit/cockpit-preview.test.mjs"
+      ]
+    },
     "js/camera/cockpit-opts.js": {
       "body": [
         "tests/unit/cockpit-wheels.test.mjs"
@@ -2419,6 +2433,8 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/cockpit-preview.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
