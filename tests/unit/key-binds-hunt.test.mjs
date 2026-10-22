@@ -65,6 +65,38 @@ test("I-01: a mapping-\"\" pad's buttons 14/15 do not steer; a standard pad's st
   assert.ok(Input.debugState().pad.steer < 0, "control: the standard d-pad left steers");
 });
 
+test("missing gamepad snapshot recovers on elapsed time, not display-frame count", () => {
+  const { Input, sb, fire } = boot();
+  let t = 0; sb.performance.now = () => t;
+  const pad = rawPad({ id: "Recover pad" });
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  Input.poll();
+  assert.equal(Input.debugState().pad.connected, true);
+  // One empty snapshot (focus hole / stale slot) — no gamepaddisconnected.
+  sb.navigator.getGamepads = () => [];
+  Input.poll();
+  assert.equal(Input.debugState().pad.connected, false);
+  // Pad returns without a connection event. At 120 Hz the old 60-frame gate
+  // needed ~500 ms; elapsed-time recovery must see it inside the fast window.
+  sb.navigator.getGamepads = () => [pad];
+  t += 99;
+  Input.poll();
+  assert.equal(Input.debugState().pad.connected, true, "recovers within ~100 ms independent of poll rate");
+  // Long absence: after the fast window a failed re-probe arms the ~1 s gap.
+  sb.navigator.getGamepads = () => [];
+  Input.poll();
+  t += 300;
+  Input.poll();   // age > fast window, still missing → schedule slow probe
+  assert.equal(Input.debugState().pad.connected, false);
+  sb.navigator.getGamepads = () => [pad];
+  Input.poll();
+  assert.equal(Input.debugState().pad.connected, false, "still in the slow-probe gap after the fast window");
+  t += 1000;
+  Input.poll();
+  assert.equal(Input.debugState().pad.connected, true, "recovers on the next ~1 s probe");
+});
+
 test("wheel menu directions honor steering inversion and the signed calibrated centre", () => {
   for (const mapping of ["", "standard"]) for (const invert of [1, -1]) for (const rest of [-0.1, 0, 0.2]) {
     const { Input, sb, fire, dispatched, tick } = menuRig();
