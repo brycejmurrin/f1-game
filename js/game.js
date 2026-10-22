@@ -8445,8 +8445,7 @@ function tickBody(now) {
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
       const settingsOnly = paused && !setupPreviewOn && !replayBuf.isScrubbing() && !photoMode &&
         els.lighting.hidden && els.camtune.hidden && els.flyby.hidden && !els.pmsettings.hidden;
-      // Honor the selected render cadence for ordinary Settings, retaining the skipped
-      // dt for camera/sky motion. Tuners, photo, scrub, garage and resume previews stay live.
+      // Settings cadence gate: retain skipped dt for sky motion; tuners/photo/scrub/garage stay live.
       if (settingsOnly) RenderRate.observe(_dtMs);
       if (settingsOnly ? RenderRate.gate(dt, _dtMs, XrBoot.comfort(), true) : RenderRate.force(dt, _dtMs))
         render(Math.min(RenderRate.dt(), setupPreviewOn ? 0.1 : 1 / 20));   // garage's 100 ms stall limit preserves motion below 20 fps
