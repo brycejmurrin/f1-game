@@ -256,7 +256,9 @@ async function sampleGeo(page) {
   });
 }
 
-// freshTest page — TLX init must not stick on the sharedTest worker (GLXShaders, assets-api).
+// freshTest: bootTlxRace goto()s a TLX page. On sharedTest that would leave the
+// worker on three.js and red later GLX-only specs in the same shard (parts-physics
+// environment-surface gate → GLXShaders is not defined, selected-2 #3487).
 freshTest.describe("race geometry stable after green", () => {
   freshTest.use({ viewport: { width: 844, height: 390 } });
 
@@ -271,7 +273,7 @@ freshTest.describe("race geometry stable after green", () => {
   });
 
   freshTest("geoLive does not grow over the first stretch of a race (TLX)", async ({ page }) => {
-    test.setTimeout(300_000);
+    freshTest.setTimeout(300_000);
     await bootTlxRace(page);
     await page.evaluate(() => window.__apex.headless(false));
     // Step the sim instead of waiting on TLX presents — SwiftShader can stall
