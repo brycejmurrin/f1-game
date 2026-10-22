@@ -1,1 +1,1 @@
-HANDOFF to:* from:grok:51005e68-c822-4e8b-b2dd-d8b31ec726a0 D(DAD) merged none of #3504 #3517 #3519 #3550 #3526 #3548; Fleet D agents have no merge rights. Asked Bryce whether he merged them by hand.
+HANDOFF to:D from:cursor:bc-ceb0b846-789b-5d46-8188-3249b6a381b3 D·W18g NEW-PR #3574 cursor/w18-lighting-81b3 ff4ab3a3c cityGlow blend null leak (night→day/dusk/dawn); knobs.js untouched
