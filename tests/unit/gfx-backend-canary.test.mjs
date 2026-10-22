@@ -481,6 +481,77 @@ test("GLX's third visible context loss says so instead of leaving a silent dead 
   }
 });
 
+test("TLX past ctx-loss budget records ring only, not the full-screen error overlay", () => {
+  const tlxSrc = read("js/render/three/tlx.js");
+  const mkBudgetVm = (store, out) => {
+    const ring = [];
+    const overlays = [];
+    const recordGfxBudgetExhausted = (where, err) => {
+      const msg = (err && (err.message || err)) || "unknown";
+      ring.push({ t: Date.now(), kind: "caught", msg: "Caught @ " + where + ": " + String(msg).slice(0, 400),
+                  detail: String((err && err.stack) || "").slice(0, 800) });
+    };
+    const ss = {
+      getItem: (k) => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = String(v); },
+    };
+    const ctx = vm.createContext({
+      initOwner: { active: true },
+      _threeOnLost: null,
+      _deviceLost: false,
+      _warmRequested: true,
+      _warmPending: {},
+      _warmDone: false,
+      document: { hidden: false, addEventListener() {}, removeEventListener() {} },
+      _nowMs: () => 1e6,
+      _shownAt: 0,
+      localStorage: { setItem() {}, removeItem() {} },
+      sessionStorage: ss,
+      _sessLostN: 0,
+      _fallbackLossCount: () => 0,
+      _rememberFallbackLoss: () => {},
+      _glPin: "1",
+      forceWebGL: true,
+      _autoStayGL: false,
+      setTimeout() {},
+      location: { reload() { out.reloads++; } },
+      recordGfxBudgetExhausted,
+      RendererPicker: { showUnavailable: (opts) => out.panels.push(opts && opts.panel && opts.panel.id) },
+      window: {
+        __apexErrors: ring,
+        __apexReportError: (where, err) => overlays.push([where, err && err.message]),
+        name: "",
+      },
+    });
+    ctx.document.getElementById = (id) => ({ id });
+    return { ctx, ring, overlays };
+  };
+
+  const refuseStore = { "apex26.ctxLostReloads": "2" };
+  const refuseOut = { reloads: 0, panels: [] };
+  const refuseVm = mkBudgetVm(refuseStore, refuseOut);
+  const refuseBody = fnSource(tlxSrc, "const refuseTab = () => {") + ";";
+  vm.runInContext(refuseBody + "\n refuseTab();", refuseVm.ctx);
+  assert.equal(refuseOut.reloads, 0, "refuseTab past the cap does not reload");
+  assert.equal(refuseVm.overlays.length, 0, "refuseTab: no full-screen overlay hook");
+  assert.equal(refuseVm.ring.length, 1, "refuseTab: error ring");
+  assert.ok(/cannot draw on this device/.test(refuseVm.ring[0].msg), "refuseTab: message on ring");
+  assert.deepEqual(refuseOut.panels, [], "refuseTab: present-fail path records only (no picker panel here)");
+
+  const lossStore = { "apex26.ctxLostReloads": "3" };
+  const lossOut = { reloads: 0, panels: [] };
+  const lossVm = mkBudgetVm(lossStore, lossOut);
+  lossVm.ctx.renderer = {};
+  const lossBody = fnSource(tlxSrc, "renderer.onDeviceLost = function (info) {");
+  const onLost = vm.runInContext(lossBody + "\n renderer.onDeviceLost", lossVm.ctx);
+  onLost({});
+  assert.equal(lossOut.reloads, 0, "fourth device loss does not reload");
+  assert.equal(lossVm.overlays.length, 0, "onDeviceLost: no full-screen overlay hook");
+  assert.equal(lossVm.ring.length, 1, "onDeviceLost: error ring");
+  assert.ok(/keeps getting lost \(4 times\)/.test(lossVm.ring[0].msg), "onDeviceLost: message on ring");
+  assert.deepEqual(lossOut.panels, ["nogl"], "onDeviceLost: Graphics unavailable panel");
+});
+
 test("TLX aborts program warm on device loss so race-start cannot hang on warming()", () => {
   // compileAsync after a loss often never settles; warming() stuck true made
   // game.js skip present/afterPresent forever (HUD survey hang).
@@ -744,12 +815,6 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
   // The third context loss in a tab surrenders to GLX (TLX has a floor below
   // it, unlike GLX) instead of freezing on the last frame with the label lying.
   assert.match(tlx, /context lost x/);
-  const ctxBudget = span(tlx, "from the fourth, stop and say so instead.", "RendererPicker.showUnavailable", "TLX ctx-loss budget path");
-  assert.match(ctxBudget, /recordGfxBudgetExhausted\("gfx"/);
-  assert.doesNotMatch(ctxBudget, /__apexReportError/, "past the budget: ring only, not the full-screen overlay");
-  const refusePast = span(tlx, "const refuseTab = () => {", "const persistFail = (e, postOnly)", "TLX refuseTab past budget");
-  assert.match(refusePast, /recordGfxBudgetExhausted\("gfx"/);
-  assert.doesNotMatch(refusePast, /__apexReportError/);
   const present = tlx.indexOf("present(opts) {");
   const presentEnd = tlx.indexOf("// debug — the __tlx tooling", present);
   const body = tlx.slice(present, presentEnd);
