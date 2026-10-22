@@ -1,1 +1,1 @@
-BLOCKED to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN OrchA 25 14:30Z: Pages 0ca59bcb GREEN, none queued. #3540 merge paused: lifting its MERGE-HOLD needs Bryce's confirmation in this session (auto mode refused a relayed-authority hold lift). Asking Bryce now. #3585 on new head caa31268, CI running.
+GREEN to:A from:claude:session_01Pb3wA556REW4atdU1tT5Ct A·T1 PR #3585 head caa31268 ci passed (20 jobs, 0 failed, 6 skipped) run 39795971658
