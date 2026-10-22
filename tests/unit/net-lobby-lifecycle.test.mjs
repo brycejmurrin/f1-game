@@ -1498,6 +1498,24 @@ test("host remove: evicting the last guest keeps the host in the waiting room", 
   } finally { h.lobby.cancel(); }
 });
 
+test("evicting the last guest of a LINK room opens no code room (H3-7)", async () => {
+  // rotateRoomAfterEvict() retires an evicted player's code; a link/QR room has
+  // none, and rotating minted a public code room whose quiet expiry showed the
+  // host the guest's "check the six characters" copy.
+  const rooms = [];
+  const { h } = await connectedHost({ rendezvous: {
+    usingPrivateRelay: () => false, makeCode: () => "XYZ789",
+    hostRoom: async (o) => { rooms.push(o); return { ok: true, stop() {}, rotate() {} }; },
+  } });
+  try {
+    assert.equal(h.lobby.removeGuest("g1"), true);
+    await new Promise((r) => setTimeout(r, 1700));   // the grace close
+    assert.equal(h.lobby.status().guests, 0);
+    assert.equal(h.elements.get("vs-room").hidden, false, "still in the waiting room");
+    assert.equal(rooms.length, 0, "no code room was opened for a link room");
+  } finally { h.lobby.cancel(); }
+});
+
 test("a guest cannot remove anybody, and a transport with no pc shows no code", async () => {
   const { h } = await connectedGuest();
   try {

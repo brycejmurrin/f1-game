@@ -264,6 +264,11 @@ const NetLobby = (function () {
             selfReady = false;
             _verify.delete(id);
             if (G.setNetRoom) G.setNetRoom(true);
+            // Rotate only a CODE room, as the not-last branch below does. A
+            // link/QR room has no code to retire: rotating minted a public
+            // code room the host never opened, whose quiet expiry later showed
+            // the host the guest's "six characters" copy (H3-7).
+            const hadCode = !!(codeRoom || codeReopenTimer || codeReopen);
             stopCodeWait();
             dropPending();
             codeReopen = null;
@@ -271,7 +276,7 @@ const NetLobby = (function () {
             _answersSeen = null;
             say("Player removed — invite someone new when you are ready.");
             show("room");
-            rotateRoomAfterEvict();
+            if (hadCode) rotateRoomAfterEvict();
             renderRoom();
             if (G.refreshQualiGate) G.refreshQualiGate();
             return;
