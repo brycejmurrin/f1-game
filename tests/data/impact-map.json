@@ -11385,6 +11385,7 @@
         "tests/unit/pit-lane.test.mjs"
       ],
       "think": [
+        "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs"
       ],
       "throughM": [
@@ -11852,6 +11853,9 @@
       ]
     },
     "js/race/radio-lines.js": {
+      "commit": [
+        "tests/unit/radio-lines.test.mjs"
+      ],
       "create": [
         "tests/unit/battle-earcon.test.mjs",
         "tests/unit/event-journal.test.mjs",

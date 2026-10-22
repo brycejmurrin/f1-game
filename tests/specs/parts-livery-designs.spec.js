@@ -152,3 +152,32 @@ test("all catalog part styles and body shapes are reachable, previewed and saved
   await presentAndPause(page);
   await page.screenshot({ path: galleryPath("parts-livery-designs", "all-part-styles-editor.png") });
 });
+
+test("an edited design survives one stray Escape or CANCEL: the editor arms, the GARAGE stays", async ({ page }) => {
+  const key = await openCreator(page);
+  const editor = page.locator(".cs-liv-editor"), cancel = page.locator(".cs-liv-ed-cancel");
+  // Unedited, CANCEL is one press (nothing to lose).
+  await cancel.tap();
+  await expect(editor).toBeHidden();
+  await page.locator(".cs-liv-create").evaluate(b => b.click());
+  await expect(editor).toBeVisible();
+  await page.locator(".cs-liv-ed-name").fill("Escape Test");
+  // Escape used to press the GARAGE's door: the garage closed and the design was discarded.
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#carsetup")).toBeVisible();
+  await expect(editor).toBeVisible();
+  await expect(cancel).toHaveText("DISCARD EDITS?");
+  await expect(page.locator(".cs-liv-ed-name")).toHaveValue("Escape Test");
+  // The second press is the confirmation: one level back, still in the GARAGE.
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeHidden();
+  await expect(page.locator("#carsetup")).toBeVisible();
+  // A touch CANCEL on an edited design arms the same way.
+  await page.locator(".cs-liv-create").evaluate(b => b.click());
+  await page.locator(".cs-liv-ed-name").fill("Tap Test");
+  await cancel.tap();
+  await expect(editor).toBeVisible();
+  await cancel.tap();
+  await expect(editor).toBeHidden();
+  expect(await page.evaluate((k) => GameStore.store.get(k, []), key)).toEqual([]);
+});

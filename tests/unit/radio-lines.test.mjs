@@ -58,3 +58,18 @@ test("frequent pools have at least five variants", () => {
     assert.ok(pool && pool.length >= 5, `${key} should have 5+ variants, got ${pool ? pool.length : 0}`);
   }
 });
+
+test("a peeked pick counts as heard only once committed (refused cards must not burn variants)", () => {
+  const rl = RL.create(7);
+  const key = "eng.status";
+  const vars = { pos: 3, gapA: "1.2", gapB: "0.8" };
+  const seen = new Set();
+  for (let i = 0; i < 12; i++) { seen.add(rl.pick(key, vars, true)); }   // refused every time: nothing remembered
+  assert.ok(seen.size > 1, "uncommitted peeks vary freely");
+  const first = rl.pick(key, vars, true);
+  rl.commit();
+  for (let i = 0; i < 20; i++) {
+    const again = rl.pick(key, vars, true);
+    assert.notEqual(again, first, "the committed line is in the anti-repeat window");
+  }
+});
