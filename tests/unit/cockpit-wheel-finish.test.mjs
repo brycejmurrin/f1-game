@@ -53,6 +53,16 @@ test("the cockpit and helmet cameras draw the body with the exterior's paint opt
   assert.match(read("js/fx/grade-tint.js"), /m\.carFinish = true/, "carPaintMat carries carFinish (the 60-85 finish block)");
 });
 
+test("the shipped wheel is Bryce's pick A: lacquered carbon, black rubber grips, bright alloy, glass LCD", () => {
+  const { CarMesh } = loadMesh();
+  assert.equal(CarMesh.WHEEL_DEFAULT, "carbon");
+  const d = CarMesh.getCockpitWheel(LIV, "f1").d, h = hist(d.mat);
+  for (const s of [21, 22, 24, 29]) assert.ok(h[s] > 0, "default wheel carries surface " + s);
+  const alloy = d.mat.findIndex((m) => m === 29);
+  assert.deepEqual(Array.from(d.col.slice(alloy * 3, alloy * 3 + 3), (v) => +v.toFixed(2)), [0.62, 0.63, 0.66], "alloy reads bright, not the old dark fasteners");
+  assert.notEqual(CarMesh.cockpitWheelOpts({ roughness: 0.88 }).roughness, 0.88, "drawn with the finish opts, not the rig's card");
+});
+
 test("every wheel finish is a surface remap of the same geometry; stock is today's wheel", () => {
   const { CarMesh } = loadMesh();
   assert.equal(CarMesh.wheelFinish(), CarMesh.WHEEL_DEFAULT, "boots on the shipped default");

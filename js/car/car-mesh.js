@@ -1132,15 +1132,16 @@ function _wheelRimRound(out, GRIP, acc, grip) {
 // the button bezels, the LCD glass. Gloves and legends keep their surfaces.
 const WHEEL_FINISHES = Object.freeze({
   stock: null,
-  carbon:   Object.freeze({ grip: 22, structure: 21, hardware: 29, bezel: 29, screen: 24 }),
+  carbon:   Object.freeze({ grip: 22, structure: 21, hardware: 29, bezel: 29, screen: 24, metal: Object.freeze([0.62, 0.63, 0.66]) }),
   anodised: Object.freeze({ grip: 22, structure: 21, hardware: 44, bezel: 44, screen: 24, accent: true }),
-  suede:    Object.freeze({ grip: 42, structure: 28, hardware: 39, bezel: 39, screen: 24 }),
+  suede:    Object.freeze({ grip: 42, structure: 28, hardware: 39, bezel: 39, screen: 24, teamGrip: true }),
 });
-const WHEEL_DEFAULT = "stock";   // the shipped wheel finish (Bryce picks among the stills; note §Steering wheel finish)
+const WHEEL_DEFAULT = "carbon";   // Bryce picked A, carbon + alloy, from the stills (2026-10-22; note §Steering wheel finish)
 let _wheelFinish = WHEEL_DEFAULT;
 const _near = (c, r, i) => Math.abs(c[i] - r[0]) < 0.004 && Math.abs(c[i + 1] - r[1]) < 0.004 && Math.abs(c[i + 2] - r[2]) < 0.004;
 const _W_GLOVE = [[0.14,0.155,0.175],[0.34,0.36,0.38]], _W_SCREEN = [0.022,0.028,0.036], _W_BEZEL = [0.12,0.13,0.15];
-function wheelFinishPass(out, name, acc) {
+// acc: the wheel's accent tint (anodised bezels); team: its c1 tint (suede grips).
+function wheelFinishPass(out, name, acc, team) {
   const f = WHEEL_FINISHES[name];
   if (!f) return out;
   const M = out.mat, C = out.col;
@@ -1154,7 +1155,8 @@ function wheelFinishPass(out, name, acc) {
     else if (hi > 0.2 && hi < 0.5 && hi - lo < 0.05) M[v] = f.hardware;   // fasteners, pivots, rotary pointers
     else if (hi < 0.21 && hi - lo < 0.04 && lo > 0.1) M[v] = f.structure;   // paddles and clutch blades
     else continue;
-    if (f.accent && acc && (M[v] === f.bezel || M[v] === f.hardware)) { C[i] = acc[0]; C[i+1] = acc[1]; C[i+2] = acc[2]; }
+    const ink = M[v] === f.bezel || M[v] === f.hardware ? (f.accent ? acc : f.metal) : M[v] === f.grip && f.teamGrip ? team : null;
+    if (ink) { C[i] = ink[0]; C[i+1] = ink[1]; C[i+2] = ink[2]; }
   }
   return out;
 }
@@ -1213,7 +1215,7 @@ function getCockpitWheel(liv, style) {
     }
   }
   _wheelHands(out, acc, c1);
-  cockpitWheelMesh = _gfx.createMesh(wheelFinishPass(_rigMaterials(out), _wheelFinish, acc));
+  cockpitWheelMesh = _gfx.createMesh(wheelFinishPass(_rigMaterials(out), _wheelFinish, acc, c1));
   return cockpitWheelMesh;
 }
 // STEERING LOCK. The wheel used to roll a fixed 0.80 rad (±46 deg) at full

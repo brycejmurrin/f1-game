@@ -26,8 +26,25 @@ a different finish) is a different mesh. The steering wheel, cabin and dash are 
 | F5 | js/car/car-draw.js:1265 (drawCockpitRig wheel) | medium (look) | CODE-TRACED | The steering wheel draws with the rig's `_cockpitOpts` (roughness 0.88, clearcoat 0). The lit shaders' carbon branch takes `min(clearcoat, 0.42)` → 0 lacquer and `max(rough, 0.52)` → 0.88: the wheel's carbon reads as matte plastic, and its alloy fasteners, button bezels and LCD glass are all panel 26 (rough ≥ 0.72). One flat grey-black lump. Fix: B·H33 wheel finish (below). |
 | F6 | js/car/car-draw.js:772 / :941 (warm) | low (perf) | CODE-TRACED | The warm pre-builds `cockpitBodyMesh` for `cockpit`/`helmet` only; `visor` draws the same mesh, so its first frame builds it. Not a finish defect; noted for the perf lane. |
 
-Live pixel proof (cockpit / helmet stills per backend × finish) is pending: this container's capture path
-returned black frames for the native TLX canvas (3 attempts); see Status.
+## Live proof (pixels)
+
+McLaren with a seeded custom livery (`c1` papaya, `finish` gloss/matte/chrome), monza 0.04 day, 844×390, the
+`go → camera → jump` flow (park/freeze leaves the cockpit black: `tools/shot/repro-shot.mjs` header), script
+`scratch/h33/cockpit-finish.mjs` (untracked). Mean |Δ| per channel vs gloss, 0–255:
+
+| backend | view | matte: L pod / R pod / halo | chrome: L pod / R pod / halo | verdict |
+|---|---|---|---|---|
+| GLX | cockpit | 1.3 / 2.5 / 0.5 | 9.8 / 8.7 / 0.0 | CONFIRMED-LIVE |
+| GLX | helmet | 1.4 / 2.6 / 0.6 | 12.2 / 10.6 / 0.0 | CONFIRMED-LIVE |
+| TLX (WebGL2) | cockpit, helmet | — | — | NOT MEASURED: the cockpit 3D frame presents all-black under SwiftShader here (chase renders; GLX cockpit renders; mirror off changes nothing). Handed to B·H26 (render/three owner) as a possible TLX finding. The finish path is the same mesh + the same `carFinish` opts (F1, F2). |
+| WGX | cockpit, helmet | — | — | NOT MEASURED: capture cap; code-traced (F2) |
+
+The halo reads 0.0 for chrome because the factory halo is metal, not paint (`haloFinish` drives it). Matte's
+small Δ is SwiftShader's flat diffuse; the finish id is on every painted vertex (F1).
+
+Two harness traps cost this lane four black captures, recorded so the next one does not: the player team in a
+fresh probe profile is NOT McLaren despite `store.get("team", 2)` (pin `installProbeInit({ team: 2 })` before
+seeding `apex26.livery.<team>`), and a gloss seed carries no `finish` key, so it cannot prove the seed applied.
 
 ## Steering wheel finish
 
@@ -37,6 +54,11 @@ Options shown to Bryce as stills (same geometry, surface remap + finish draw opt
 - `anodised` — carbon structure, team-accent anodised (44) bezels and hardware, glass LCD.
 - `suede` — Alcantara (42) grips, matte (28) structure, gunmetal (39) hardware, glass LCD.
 
+Picked by Bryce (AskUserQuestion, 2026-10-22): **A, carbon + alloy** — `CarMesh.WHEEL_DEFAULT = "carbon"`.
+Close-up mean |Δ| vs stock in the wheel crop (GLX): carbon 3.4, anodised 3.5, suede 2.4. B and C stay in
+`WHEEL_FINISHES` (no UI). Phone budget: no vertex, no texture; one more lit program (the wheel's opts differ
+from the rig card's). GPU frame-time evidence: gpu-census.yml, see the PR.
+
 ## Status
 
-Open — options captured, waiting on Bryce's pick.
+F1–F6 recorded; wheel finish A shipped as default in PR #3454.
