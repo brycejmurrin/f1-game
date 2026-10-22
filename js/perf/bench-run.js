@@ -17,13 +17,21 @@ const BenchRun = (function () {
   const KEY = "apex26.benchRun";
   const SCHEMA = "apex26.bench/1";
   const SEED = 42;
+  const gpu = (path) => ({ kind: "gpu", path, label: path ? "GPU TEST " + path.toUpperCase() : "GPU TEST" });
+  const race = (track, weather, tod, label) => ({ kind: "race", path: null, track, weather, tod, label });
   const TESTS = [
-    { id: "paths", label: "WEBGPU vs WEBGL2", legs: ["webgpu", "webgl2", "webgl2", "webgpu"],
+    { id: "paths", label: "WEBGPU vs WEBGL2", legs: [gpu("webgpu"), gpu("webgl2"), gpu("webgl2"), gpu("webgpu")],
       help: "three.js on both paths, alternating: WebGPU, WebGL2, WebGL2, WebGPU. The game reloads between legs. About 14 min." },
-    { id: "current", label: "THIS PATH", legs: [null],
+    { id: "current", label: "THIS PATH", legs: [gpu(null)],
       help: "GPU TEST once on the renderer you have now, plus race entry. About 4 min." },
+    { id: "races", label: "WEATHER & TRACKS", legs: [race("monza", "dry", "default", "Monza dry"), race("monza", "rain", "default", "Monza rain"),
+      race("monza", "dry", "night", "Monza night"), race("singapore", "dry", "night", "Singapore night"), race("spa", "rain", "default", "Spa rain"),
+      race("monaco", "dry", "default", "Monaco dry")],
+      help: "Six races on the renderer you have now: Monza dry, rain and night, Singapore night, Spa rain, Monaco. Each one reloads, starts cold and is timed for 25 s. About 8 min." },
+    { id: "garage", label: "GARAGE", legs: [{ kind: "garage", path: null, label: "Garage" }],
+      help: "Opens the GARAGE, steps through every tab, tries four liveries and spins the car, timing each step. Your garage choices are put back afterwards. About 3 min." },
   ];
-  const READY_MS = 60000, COLD_MS = 300000, WARM_MS = 60000;
+  const READY_MS = 60000, COLD_MS = 300000, WARM_MS = 60000, RACE_MS = 20000, SETTLE_MS = 5000;
 
   let _G = null, _ui = null, _pick = "paths", _busy = false;
   const r2 = (n) => (n != null && Number.isFinite(+n) ? Math.round(+n * 100) / 100 : null);
@@ -67,10 +75,24 @@ const BenchRun = (function () {
     }
     return out;
   }
+  // Race and garage legs as flat rows: one per race, one per garage step. Unfinished legs keep a row with their state.
+  function scenes(legs) {
+    const rows = [];
+    for (const leg of legs || []) {
+      if (!leg || (leg.kind !== "race" && leg.kind !== "garage")) continue;
+      if (leg.state !== "done") { rows.push({ label: leg.label, state: leg.state, reason: leg.reason || null }); continue; }
+      const coldMs = leg.entry && leg.entry.cold ? leg.entry.cold.goMs : null;
+      for (const st of leg.steps || []) {
+        rows.push({ label: leg.kind === "garage" ? leg.label + " · " + st.id : leg.label, state: "done",
+          p50: st.p50, p95: st.p95, p99: st.p99, fps: st.fps, links: st.links, pipes: st.pipes, coldMs });
+      }
+    }
+    return rows;
+  }
   function newPlan(testId, prefs) {
     const t = TESTS.find((x) => x.id === testId) || TESTS[0];
     return { schema: SCHEMA, test: t.id, seed: SEED, state: "running", i: 0, startedAt: new Date().toISOString(), finishedAt: null,
-      prefs, show: false, facts: null, legs: t.legs.map((path) => ({ path, state: "pending" })) };
+      prefs, show: false, facts: null, legs: t.legs.map((l) => Object.assign({}, l, { state: "pending" })) };
   }
 
   // ---- renderer path ------------------------------------------------------------------------------------------
@@ -120,6 +142,8 @@ const BenchRun = (function () {
     try { leg.fallbackWhy = sessionStorage.getItem("apex26.gfxFallbackWhy"); } catch (_) { leg.fallbackWhy = null; }
     if (!plan.facts) try { plan.facts = PhoneRecorder.liveEnv().facts(); } catch (_) { plan.facts = null; }
     leg.state = "running"; save(plan);
+    if (leg.kind === "race") return raceLeg(plan, leg);
+    if (leg.kind === "garage") return garageLeg(plan, leg);
     let result = null;
     const done = new Promise((res) => { leg._res = res; });
     _G.seed = plan.seed;
@@ -139,10 +163,81 @@ const BenchRun = (function () {
     delete leg._res;
     return leg.state === "done";
   }
+  // rAF intervals over `ms` after `settleMs`, with program links / pipelines counted inside the window (GPU TEST's stats).
+  async function measure(ms, settleMs) {
+    await sleep(settleMs);
+    const counts = { links: 0, pipes: 0 }, unhook = GpuTestRun.hookCounts(counts), d = [];
+    let prev = 0, on = true;
+    const tick = (ts) => { if (!on) return; if (prev) d.push(ts - prev); prev = ts; requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+    await sleep(ms);
+    on = false; unhook();
+    return GpuTestRun.phaseStats(d, [], counts);
+  }
+  async function until(f, ms) { const t0 = now(); while (now() - t0 < ms) { try { if (f()) return true; } catch (_) { /* not yet */ } await sleep(100); } return false; }
+  async function raceLeg(plan, leg) {
+    _G.seed = plan.seed;
+    const cold = await timedEntry(() => SoakRun.start({ track: leg.track, weather: leg.weather, tod: leg.tod, minutes: 2, cam: "helmet" }), COLD_MS);
+    leg.entry = { cold };
+    if (!cold.ok) { leg.state = "failed"; leg.reason = "race could not start"; return false; }
+    const st = await measure(RACE_MS, SETTLE_MS);
+    const alive = SoakRun.active(), why = alive ? null : (SoakRun.status() || {}).reason;
+    try { if (alive) SoakRun.stop("bench"); } catch (_) { /* soak gone */ }
+    if (!stillRunning()) return "aborted";
+    if (!alive) { leg.state = "failed"; leg.reason = "race ended early: " + why; return false; }
+    leg.steps = [Object.assign({ id: "race" }, st)];
+    leg.state = "done";
+    return true;
+  }
+  // Every apex26.* key but the plan: the garage run clicks real controls (a livery pick saves), so it puts them all back.
+  function snapshot() {
+    const o = {};
+    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf("apex26.") === 0 && k !== KEY) o[k] = localStorage.getItem(k); } } catch (_) { /* blocked storage */ }
+    return o;
+  }
+  function restore(snap) {
+    try {
+      const keys = []; for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+      for (const k of keys) if (k && k.indexOf("apex26.") === 0 && k !== KEY && !(k in snap)) localStorage.removeItem(k);
+      for (const k of Object.keys(snap)) localStorage.setItem(k, snap[k]);
+    } catch (_) { /* blocked storage */ }
+  }
+  async function garageLeg(plan, leg) {
+    const D = document;
+    plan.restore = snapshot(); save(plan);
+    const t0 = now(), open = D.getElementById("mb-garage");
+    if (!open) { leg.state = "failed"; leg.reason = "no GARAGE button"; return false; }
+    open.click();
+    const ok = await until(() => { const cs = D.getElementById("carsetup"); return cs && !cs.hidden && !cs.hasAttribute("aria-busy") && D.querySelector('#cs-tabs [role="tab"]'); }, 60000);
+    leg.entry = { cold: { ok, goMs: ok ? r2(now() - t0) : null } };
+    if (!ok) { leg.state = "failed"; leg.reason = "the garage did not open"; return false; }
+    const skip = D.getElementById("cs-arrival-skip");
+    if (skip && skip.offsetParent) skip.click();
+    const steps = [Object.assign({ id: "idle" }, await measure(5000, 2000))];
+    const tabs = () => Array.from(D.querySelectorAll('#cs-tabs [role="tab"]')).filter((b) => !b.disabled && b.offsetParent);
+    const name = (b) => String(b.textContent || "").trim().split(/\s+/)[0].toLowerCase();
+    for (const id of tabs().map(name)) {
+      const b = tabs().find((x) => name(x) === id); if (!b) continue;
+      b.click(); steps.push(Object.assign({ id: "tab " + id }, await measure(2500, 800)));
+      if (!stillRunning()) return "aborted";
+    }
+    const liv = tabs().find((b) => name(b) === "livery");
+    if (liv) {
+      liv.click(); await sleep(800);
+      const opts = Array.from(D.querySelectorAll("#cs-options .cs-liv:not(.cs-liv-create)")).filter((b) => b.offsetParent).slice(0, 4);
+      for (let i = 0; i < opts.length; i++) { opts[i].click(); steps.push(Object.assign({ id: "livery " + (i + 1) }, await measure(2500, 1000))); }
+    }
+    const spin = D.getElementById("cs-view-spin");
+    if (spin) { spin.click(); steps.push(Object.assign({ id: "spin" }, await measure(8000, 1000))); spin.click(); }
+    const back = D.getElementById("cs-back"); if (back) back.click();
+    leg.steps = steps; leg.state = "done";
+    return true;
+  }
   function finishPlan(plan, state) {
     plan.state = state; plan.finishedAt = new Date().toISOString(); plan.show = true;
-    plan.summary = summarize(plan.legs);
-    const changed = JSON.stringify(readPrefs()) !== JSON.stringify(plan.prefs);
+    plan.summary = summarize(plan.legs); plan.scenes = scenes(plan.legs);
+    let changed = JSON.stringify(readPrefs()) !== JSON.stringify(plan.prefs);
+    if (plan.restore) { restore(plan.restore); plan.restoreAfter = plan.restore; delete plan.restore; changed = true; }
     writePrefs(plan.prefs); save(plan);
     log("done " + state);
     if (changed) reload(); else open();
@@ -150,9 +245,18 @@ const BenchRun = (function () {
   async function resume() {
     const plan = load();
     if (!plan || plan.schema !== SCHEMA) return;
-    if (plan.state !== "running") { if (plan.show) { plan.show = false; save(plan); if (await waitReady()) open(); } return; }
+    if (plan.state !== "running") {
+      // A page that saved the garage on its way out could have written the run's picks back: check once, after the reload.
+      if (plan.restoreAfter) {
+        const snap = plan.restoreAfter; delete plan.restoreAfter; save(plan);
+        if (JSON.stringify(snapshot()) !== JSON.stringify(snap)) { restore(snap); reload(); return; }
+      }
+      if (plan.show) { plan.show = false; save(plan); if (await waitReady()) open(); }
+      return;
+    }
     if (_busy) return; _busy = true;
     const leg = plan.legs[plan.i];
+    if (plan.restore && !(leg && leg.state === "booting")) { restore(plan.restore); delete plan.restore; }
     if (leg && leg.state === "running") { leg.state = "reloaded"; leg.reason = "the page reloaded during this leg"; plan.i++; save(plan); }
     else if (leg && leg.state === "booting") {
       const ok = await runLeg(plan);
@@ -205,6 +309,17 @@ const BenchRun = (function () {
     row("legs", (o) => String(o.legs));
     return t;
   }
+  function scenesTable(rows) {
+    const t = el("table"); t.setAttribute("aria-label", "Benchmark results per race and garage step");
+    const head = el("tr"); ["SCENE", "p50 / p95 / p99 ms", "fps", "links / pipelines", "entry ms"].forEach((h) => head.appendChild(el("th", null, h))); t.appendChild(head);
+    rows.forEach((r) => {
+      const tr = el("tr"); tr.appendChild(el("td", null, r.label));
+      if (r.state !== "done") { const td = el("td", null, r.state + (r.reason ? " (" + r.reason + ")" : "")); td.colSpan = 4; tr.appendChild(td); }
+      else [r.p50 + " / " + r.p95 + " / " + r.p99, String(r.fps), r.links + " / " + r.pipes, String(r.coldMs)].forEach((v) => tr.appendChild(el("td", null, v)));
+      t.appendChild(tr);
+    });
+    return t;
+  }
   function paint() {
     if (!_ui) return;
     const plan = load(), body = _ui.body;
@@ -212,7 +327,7 @@ const BenchRun = (function () {
     body.appendChild(_ui.status);
     if (plan && plan.state === "running") {
       const leg = plan.legs[plan.i] || {};
-      body.appendChild(el("p", "adv-help", "Running " + plan.test + ": leg " + (plan.i + 1) + " of " + plan.legs.length + (leg.path ? " (" + leg.path.toUpperCase() + ")" : "") + ". Leave the phone alone; this page comes back with the results."));
+      body.appendChild(el("p", "adv-help", "Running " + plan.test + ": leg " + (plan.i + 1) + " of " + plan.legs.length + (leg.label ? " (" + leg.label + ")" : "") + ". Leave the phone alone; this page comes back with the results."));
       body.appendChild(btn("STOP BENCHMARK", "bigbtn alt", () => { stop(); paint(); }));
       return;
     }
@@ -222,10 +337,12 @@ const BenchRun = (function () {
     body.appendChild(el("p", "adv-help", (TESTS.find((t) => t.id === _pick) || TESTS[0]).help));
     body.appendChild(el("p", "adv-help", "Before RUN: Low Power Mode off, phone cool, Auto-Lock set to Never (Settings › Display & Brightness). Keep the game in front until the results show."));
     body.appendChild(btn("RUN", "bigbtn", () => { if (run(_pick)) say("starting…"); }));
-    if (plan && plan.summary) {
+    const hasSum = !!(plan && plan.summary && Object.keys(plan.summary).length), hasScenes = !!(plan && plan.scenes && plan.scenes.length);
+    if (hasSum || hasScenes) {
       body.appendChild(el("p", "adv-help", "Last run: " + plan.test + " · " + plan.state + " · " + String(plan.finishedAt || "").slice(0, 16).replace("T", " ") + " UTC"));
-      const wrap = el("div"); wrap.style.overflowX = "auto"; wrap.appendChild(summaryTable(plan.summary)); body.appendChild(wrap);
-      plan.legs.forEach((l, i) => { if (l.state !== "done") body.appendChild(el("p", "adv-help", "Leg " + (i + 1) + " " + (l.path || "") + ": " + l.state + (l.reason ? " (" + l.reason + ")" : ""))); });
+      if (hasSum) { const wrap = el("div"); wrap.style.overflowX = "auto"; wrap.appendChild(summaryTable(plan.summary)); body.appendChild(wrap); }
+      if (hasScenes) { const wrap = el("div"); wrap.style.overflowX = "auto"; wrap.appendChild(scenesTable(plan.scenes)); body.appendChild(wrap); }
+      plan.legs.forEach((l, i) => { if (l.state !== "done" && l.kind === "gpu") body.appendChild(el("p", "adv-help", "Leg " + (i + 1) + " " + l.label + ": " + l.state + (l.reason ? " (" + l.reason + ")" : ""))); });
       const row = el("div", "balanced-row");
       row.appendChild(btn("SAVE FILE", "bigbtn", () => { const p = load(); PhoneRecorder.share(resultText(), fileName(p)).then((res) => {
         if (res.how === "download" && res.url) { const a = el("a", null, "DOWNLOAD " + res.name); a.href = res.url; a.download = res.name; _ui.status.textContent = ""; _ui.status.appendChild(a); }
@@ -254,7 +371,7 @@ const BenchRun = (function () {
   }
 
   return {
-    KEY, SCHEMA, SEED, TESTS, median, summarize, newPlan, pathPrefs,
+    KEY, SCHEMA, SEED, TESTS, median, summarize, scenes, newPlan, pathPrefs,
     create(G) {
       _G = G;
       if (typeof setTimeout === "function") [400, 1200, 2500, 5000].forEach((ms) => setTimeout(mount, ms));

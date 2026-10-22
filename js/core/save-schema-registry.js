@@ -176,6 +176,7 @@ const SaveSchemaRegistry = (function () {
     crashStrikesBuild: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
     crashSeen: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
     crashSeenBuild: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
+    benchRun: entry("js/perf/bench-run.js", "raw", 1, "string"),   // BENCHMARK plan + last results (JSON text), across its reloads
     customLogo: entry("js/career/custom-team.js", "json", 1, "json"),
     carSmooth: entry("js/car/car-shade.js", "raw", 1, "rawScalar"),
     freecamMarks: entry("js/camera/photo-kit.js", "json", 1, "json"),

@@ -21,7 +21,8 @@ const leg = (api, p50s, extra) => Object.assign({ path: api, api, state: "done",
 test("bench-run: the path test alternates WebGPU, WebGL2, WebGL2, WebGPU and seeds 42; nothing runs at load", () => {
   const B = load();
   const paths = B.TESTS.find((t) => t.id === "paths");
-  assert.deepEqual(J(paths.legs), ["webgpu", "webgl2", "webgl2", "webgpu"]);
+  assert.deepEqual(J(paths.legs.map((l) => l.path)), ["webgpu", "webgl2", "webgl2", "webgpu"]);
+  assert.ok(paths.legs.every((l) => l.kind === "gpu"));
   assert.equal(B.SEED, 42);
   const plan = B.newPlan("paths", { backend: null, threePath: null });
   assert.equal(plan.state, "running");
@@ -29,6 +30,33 @@ test("bench-run: the path test alternates WebGPU, WebGL2, WebGL2, WebGPU and see
   assert.deepEqual(J(plan.legs.map((l) => l.state)), ["pending", "pending", "pending", "pending"]);
   assert.deepEqual(J(plan.prefs), { backend: null, threePath: null });
   assert.equal(B.newPlan("nope", {}).test, "paths");
+});
+
+test("bench-run: WEATHER & TRACKS and GARAGE run on the player's own renderer (no path switch)", () => {
+  const B = load();
+  const races = B.TESTS.find((t) => t.id === "races"), garage = B.TESTS.find((t) => t.id === "garage");
+  assert.ok(races.legs.length >= 4 && races.legs.every((l) => l.kind === "race" && l.path === null && l.track && l.weather && l.tod));
+  assert.ok(races.legs.some((l) => l.weather === "rain") && races.legs.some((l) => l.tod === "night"));
+  assert.deepEqual(J(garage.legs.map((l) => [l.kind, l.path])), [["garage", null]]);
+  const plan = B.newPlan("races", {});
+  assert.equal(plan.legs[0].track, races.legs[0].track);
+  assert.notEqual(plan.legs[0], races.legs[0]);   // a copy: running a plan never edits the test table
+});
+
+test("bench-run scenes: one row per race and per garage step; an unfinished leg keeps a row with its state", () => {
+  const B = load();
+  const st = (id, p50) => ({ id, p50, p95: p50 + 5, p99: p50 + 9, fps: 50, links: 0, pipes: 1 });
+  const rows = J(B.scenes([
+    { kind: "gpu", state: "done", gpuTest: { phases: [] } },
+    { kind: "race", label: "Monza rain", state: "done", entry: { cold: { goMs: 5000 } }, steps: [st("race", 22)] },
+    { kind: "race", label: "Spa rain", state: "failed", reason: "race ended early: hidden" },
+    { kind: "garage", label: "Garage", state: "done", entry: { cold: { goMs: 1200 } }, steps: [st("idle", 16.7), st("livery 1", 18)] },
+  ]));
+  assert.deepEqual(rows.map((r) => r.label), ["Monza rain", "Spa rain", "Garage · idle", "Garage · livery 1"]);
+  assert.equal(rows[0].p99, 31);
+  assert.equal(rows[0].coldMs, 5000);
+  assert.deepEqual([rows[1].state, rows[1].reason], ["failed", "race ended early: hidden"]);
+  assert.equal(rows[3].coldMs, 1200);
 });
 
 test("bench-run pathPrefs: three.js plus THREE PATH (tlxForceGL 0 = WebGPU, 1 = WebGL2); null keeps the player's", () => {

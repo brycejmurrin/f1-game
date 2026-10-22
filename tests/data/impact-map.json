@@ -9239,6 +9239,9 @@
       "pathPrefs": [
         "tests/unit/bench-run.test.mjs"
       ],
+      "scenes": [
+        "tests/unit/bench-run.test.mjs"
+      ],
       "summarize": [
         "tests/unit/bench-run.test.mjs"
       ]

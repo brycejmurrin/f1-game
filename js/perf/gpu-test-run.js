@@ -157,7 +157,7 @@ const GpuTestRun = (function () {
   }
 
   return {
-    PHASES, SETTLE_MS, MEASURE_MS, TOTAL_MIN, phaseStats, fillSlope,
+    PHASES, SETTLE_MS, MEASURE_MS, TOTAL_MIN, phaseStats, fillSlope, hookCounts,
     start, stop: () => finish("stopped"), active: () => !!_run,
     status: () => Object.assign({}, _last, _run ? { state: _run.i < 0 ? "starting" : "phase " + (_run.i + 1) + "/" + PHASES.length + " " + PHASES[_run.i].id } : null),
   };
