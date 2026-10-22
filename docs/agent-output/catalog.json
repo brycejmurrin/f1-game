@@ -2789,6 +2789,12 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/shot/ab-gallery.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/shot/agent.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
@@ -3127,6 +3133,12 @@
       "nativeOutputFlagMentions": [
         "--out"
       ]
+    },
+    {
+      "path": "tools/shot/visor-lab-export.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
     },
     {
       "path": "tools/shot/webgpu-urban-gallery.mjs",
