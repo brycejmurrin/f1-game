@@ -1,33 +1,27 @@
 @layer hud {
-/* Optional shield over the world, underneath the HUD's children. Reuses the
-   helmet eye port: camera changes, broadcast, WATCH and HUD hiding retain their
-   existing visibility rules. Reflection gradients leave the centre clear; optional scene displacement is below.
-   The middle stays clear, including at phone landscape sizes. */
-body[data-helmet-cam]:is([data-helmet-visor="clear"], [data-helmet-visor="smoke"]) #hud::before {
-  background:
-    radial-gradient(ellipse 10% 62% at 14% 36%, color-mix(in srgb, var(--hud-ink-light) calc(9% * var(--visor-reflection, 1)), transparent), transparent 72%),
-    radial-gradient(ellipse 10% 42% at 86% 40%, color-mix(in srgb, var(--hud-ink-light) calc(8% * var(--visor-reflection, 1)), transparent), transparent 72%),
-    linear-gradient(112deg, transparent 18%, color-mix(in srgb, var(--hud-ink-light) calc(3% * var(--visor-reflection, 1)), transparent) 22%, color-mix(in srgb, var(--hud-ink-light) calc(7% * var(--visor-reflection, 1)), transparent) 23%, transparent 26% 74%, color-mix(in srgb, var(--hud-ink-light) calc(4% * var(--visor-reflection, 1)), transparent) 78%, transparent 81%),
-    radial-gradient(ellipse 76% 72% at 50% 55%, transparent 78%,
-      color-mix(in srgb, var(--hud-ink-light) calc(16% * var(--visor-reflection, 1)), transparent) 79%, color-mix(in srgb, var(--hud-ink-dark) 80%, transparent) 80%, color-mix(in srgb, var(--hud-ink-dark) 96%, transparent) 90%),
-    radial-gradient(ellipse 65% 95% at 50% 65%, transparent 68%, color-mix(in srgb, var(--hud-ink-light) calc(10% * var(--visor-reflection, 1)), transparent) 78%, transparent 86%),
-    linear-gradient(112deg, transparent 8%, color-mix(in srgb, var(--hud-ink-light) calc(10% * var(--visor-reflection, 1)), transparent) 9%, transparent 13%, transparent 83%, color-mix(in srgb, var(--hud-ink-light) calc(6% * var(--visor-reflection, 1)), transparent) 88%, transparent 91%),
-    linear-gradient(to bottom, color-mix(in srgb, var(--hud-ink-light) calc(6% * var(--visor-reflection, 1)), transparent), transparent 36%, transparent 70%, color-mix(in srgb, var(--hud-ink-dark) 7%, transparent));
-  box-shadow: inset 0 calc(var(--gap) / 6) 0 color-mix(in srgb, var(--hud-ink-light) calc(25% * var(--visor-reflection, 1)), transparent), inset 0 calc(var(--gap) / -4) calc(var(--gap) * 2 / 3) color-mix(in srgb, var(--hud-ink-dark) 65%, transparent);
+/* HELMET CAM optics (js/fx/visor-optics.js). Three layers, bottom to top:
+     the world canvas (#game / #game-soft)  — bent at the rim by filter: url(#visor-bend-*) when VISOR REFRACTION is on
+     #fx-visor (z 3, this file)             — the ADDED light: sun glint, rim sheen, lamp glints, chromatic fringe.
+                                              plus-lighter adds the canvas to the scene (screen where unsupported),
+                                              so a reflection can only ever brighten — never the grey multiply
+                                              of a translucent overlay — and a dark scene gets nothing added.
+     #hud::before (z 10, under the HUD)     — the eye-port: the module builds one SVG per viewport aspect and
+                                              tint setting (--visor-port) with the bezel, the cheek pads, the
+                                              soft inner falloff and the TINTED lens colour over the clear area.
+   Until the module has built the port (the first helmet frame, or no JS) css/hud.css's static frame stands.
+   The HUD's own children and the touch controls sit above all three; nothing here takes pointer events. */
+body[data-helmet-cam][data-visor-port] #hud::before {
+  background: var(--visor-port) center / 100% 100% no-repeat;
+  box-shadow: none;
 }
-body[data-helmet-cam][data-helmet-visor="smoke"] #hud::before {
-  background-color: color-mix(in srgb, var(--visor-lens, var(--visor-neutral)) var(--visor-opacity, 12%), transparent);
-}
-body[data-helmet-visor-color="amber"] { --visor-lens: var(--visor-amber); }
-body[data-helmet-visor-color="ice"] { --visor-lens: var(--visor-ice); }
-body[data-helmet-visor-color="rose"] { --visor-lens: var(--visor-rose); }
-body[data-helmet-visor-intensity="medium"] { --visor-opacity: 18%; }
-body[data-helmet-visor-intensity="strong"] { --visor-opacity: 24%; }
 
-body[data-helmet-visor-reflections="off"] { --visor-reflection: 0; }
-body[data-helmet-visor-reflections="medium"] { --visor-reflection: 1.6; }
-body[data-helmet-visor-reflections="strong"] { --visor-reflection: 2.4; }
-/* Only the world is displaced: HUD and menus retain their original pixels. */
+#fx-visor { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; mix-blend-mode: screen; }
+@supports (mix-blend-mode: plus-lighter) { #fx-visor { mix-blend-mode: plus-lighter; } }
+#fx-visor[hidden] { display: none; }
+
+/* Only the world is displaced: HUD and menus retain their original pixels. The map behind each filter is the
+   port-shaped rim field VisorOptics builds (zero across the centre). Broadcast, WATCH, a hidden HUD and photo
+   mode keep the road undistorted. */
 body[data-helmet-cam]:not(.bc-on):not(.watch-controls-on):not(.hud-hidden):not(.pc-uihidden):is([data-helmet-visor="clear"], [data-helmet-visor="smoke"]):has(> #hud:not([hidden])) {
   &[data-helmet-visor-refraction="light"] :is(#game, #game-soft) { filter: url(#visor-bend-light); }
   &[data-helmet-visor-refraction="medium"] :is(#game, #game-soft) { filter: url(#visor-bend-medium); }

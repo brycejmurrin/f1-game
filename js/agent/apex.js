@@ -1467,6 +1467,14 @@ const api = {
       lampCull: LT.lampCull,        // the nearest-lamp budget lampReach competes for
     };
   },
+  // visorScene — what the HELMET visor overlay (js/fx/visor-optics.js) reads at ~15 Hz: the camera basis and this
+  // frame's lighting as LIVE REFERENCES (never written by the caller). `lights` is the frame's culled stride-15 lamp
+  // list (gfx.js §frame; null by day), `tailStart` where the car tail-lights begin inside it.
+  visorScene: () => ({
+    eye: G.camEye, tgt: G.camTgt, fov: G.camFov,
+    sunDir: G.frame.sunDir, sunColor: G.frame.sunColor, exposure: G.frame.exposure != null ? G.frame.exposure : 1,
+    ambientSky: G.frame.ambientSky, lights: G.frame.lights, tailStart: G.frame.tailStart, floodEmit: G._lastFloodEmit,
+  }),
   // GPU frame-time probe: availability follows the bound backend.
   // gpuTimer(true) starts timing, gpuTimer(false) stops, gpuTimer()
   // reads the latest sample: { supported, on, ms, software }. ms is the GPU

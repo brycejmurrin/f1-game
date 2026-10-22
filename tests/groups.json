@@ -1361,6 +1361,8 @@
     "tests/unit/vertex-pack.test.mjs",
     "// tools/viewer: the 3D viewer page carries the engine-built car (within 0.5 mm) and circuit. ~6 s, no browser.",
     "tests/unit/viewer.test.mjs",
+    "// VisorOptics (js/fx/visor-optics.js): eye-port geometry per aspect, the lighting→visor mapping (additive, zero in the dark, projected sun/lamp glints) and the helmet-only / OFF gates. ~0.3 s.",
+    "tests/unit/visor-optics.test.mjs",
     "tests/unit/visual-oracle.test.mjs",
     "// #2960: opt-in vm-debug-preload turns a no-filename brake-cue load into a file:// URL.",
     "tests/unit/vm-debug-preload.test.mjs",

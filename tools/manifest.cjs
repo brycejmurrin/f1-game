@@ -278,6 +278,7 @@ const FULL = [
   "js/garage/pit-signs.js",
   "js/physics/body-attitude.js",
   "js/fx/particles.js",
+  "js/fx/visor-optics.js",     // VisorOptics: HELMET eye-port, additive shield light, rim bend (Droplets.tick calls it; reads window.__apex)
   "js/fx/droplets.js",         // Droplets: onboard lens/visor rain overlay (game.js ticks it at render)
   "js/lighting/atmosphere.js",
   "js/career/regulations.js",

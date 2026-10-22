@@ -6240,6 +6240,26 @@
         "tests/unit/skidmarks-cadence.test.mjs"
       ]
     },
+    "js/fx/visor-optics.js": {
+      "lightMap": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
+      "portBox": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
+      "portImage": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
+      "portPath": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
+      "stats": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
+      "tick": [
+        "tests/unit/visor-optics.test.mjs"
+      ]
+    },
     "js/game.js": {
       "_loadTrackBody": [
         "tests/unit/ghost.test.mjs"
