@@ -91,12 +91,45 @@ test("set() on a phone clamps ULTRA to HIGH and skips it in cycle()", () => {
   delete globalThis.PerfGov;
 });
 
-test("PHONE_ULTRA_NOTE is the visible cap string SettingRow shows", () => {
+test("phone ULTRA row is disabled with the NOT ON PHONES note", () => {
   const Q = loadQuality();
-  assert.match(Q.PHONE_ULTRA_NOTE, /NOT ON PHONES/);
-  const src = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
-  assert.match(src, /phoneBlocked \? \[p\.id, text, true\]/,
-    "ULTRA must be the disabled SettingRow option on phones");
-  assert.match(src, /PHONE_CAP_TITLE/,
-    "the row title explains the BrowserStack cap");
+  assert.ok(Q.PHONE_ULTRA_NOTE.includes("NOT ON PHONES"));
+  // Drive the real paint path: SettingRow.paint gets [id, label, disabled].
+  const painted = [];
+  globalThis.SettingRow = {
+    paint(_row, _cur, values) { painted.push(values); },
+    build(_id, _label, values) {
+      painted.push(values);
+      return { row: { title: "" } };
+    },
+    wire() {},
+  };
+  const disk = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (disk.has(k) ? disk.get(k) : null),
+    setItem: (k, v) => disk.set(k, String(v)),
+    removeItem: (k) => disk.delete(k),
+  };
+  globalThis.document = {
+    readyState: "complete",
+    getElementById: (id) => (id === "pm-gfx"
+      ? { parentNode: { replaceChild(a) { this._row = a; } }, title: "", hidden: true, textContent: "" }
+      : null),
+    addEventListener() {},
+  };
+  globalThis.GLX = { isMobile: true };
+  globalThis.PerfGov = { setUserTier() {} };
+  GameStore.store.set("gfxPreset", "medium");
+  GameStore.store.rawSet("apex26.gfxHigh", null);
+  Q.init();
+  assert.ok(painted.length >= 1, "SettingRow must receive the GRAPHICS values");
+  const ultra = painted[painted.length - 1].find((row) => row[0] === "ultra");
+  assert.ok(ultra, "ULTRA stays in the list");
+  assert.equal(ultra[2], true, "ULTRA is the disabled option on phones");
+  assert.ok(String(ultra[1]).includes("NOT ON PHONES"), "disabled label carries the cap note");
+  delete globalThis.SettingRow;
+  delete globalThis.GLX;
+  delete globalThis.localStorage;
+  delete globalThis.document;
+  delete globalThis.PerfGov;
 });
