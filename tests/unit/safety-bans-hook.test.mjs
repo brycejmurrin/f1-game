@@ -71,13 +71,13 @@ test("bans 1 and 2: ratchets.json raises and other branches' fragments are refus
     const git = gitAs(dir, "a");
     git("init", "-q", "-b", "cursor/t-1");
     fs.mkdirSync(path.join(dir, "tests/data/ratchets.d"), { recursive: true });
-    const base = { _doc: "x", files: { "js/game.js": { lines: 100 }, "js/core/log.js": { lines: { ceiling: 50, slack: 0 } } }, tree: { bareCatches: 3 } };
+    const base = { _doc: "x", files: { "js/agent/apex.js": { lines: 100 }, "js/core/log.js": { lines: { ceiling: 50, slack: 0 } } }, tree: { bareCatches: 3 } };
     fs.writeFileSync(path.join(dir, "tests/data/ratchets.json"), JSON.stringify(base, null, 2));
     const fragDir = path.join(dir, "tests/data/ratchets.d");
     const own = path.join(fragDir, "cursor--t-1" + ".json");          // this branch's (cursor/t-1)
     const other = path.join(fragDir, "cursor--other-2" + ".json");
-    fs.writeFileSync(own, JSON.stringify({ files: { "js/game.js": { lines: 6 } }, tree: { bareCatches: -1 } }));
-    fs.writeFileSync(other, JSON.stringify({ files: { "js/game.js": { lines: 4 } } }));
+    fs.writeFileSync(own, JSON.stringify({ files: { "js/agent/apex.js": { lines: 6 } }, tree: { bareCatches: -1 } }));
+    fs.writeFileSync(other, JSON.stringify({ files: { "js/agent/apex.js": { lines: 4 } } }));
     git("add", "-A"); git("commit", "-qm", "init");
     const edit = (file, payload) => [run(PROTECT, { tool_name: "Write", tool_input: { file_path: file, ...payload } }, dir),
       run(EDIT_GUARD, { tool_name: "Write", tool_input: { file_path: file, ...payload }, cwd: dir }, dir)];
@@ -89,16 +89,16 @@ test("bans 1 and 2: ratchets.json raises and other branches' fragments are refus
     };
     const json = (o) => ({ content: JSON.stringify(o) });
     // Own fragment: lower or revert passes; any raise is refused.
-    both(own, json({ files: { "js/game.js": { lines: 2 } }, tree: { bareCatches: -1 } }), 0, "own fragment lowered");
+    both(own, json({ files: { "js/agent/apex.js": { lines: 2 } }, tree: { bareCatches: -1 } }), 0, "own fragment lowered");
     both(own, json({ tree: { bareCatches: -1 } }), 0, "own fragment: a headroom raise reverted");
-    both(own, json({ files: { "js/game.js": { lines: 9 } }, tree: { bareCatches: -1 } }), 2, "own fragment raised");
-    both(own, json({ files: { "js/game.js": { lines: 6 } } }), 2, "own fragment: a lowering dropped is a raise");
-    both(own, json({ files: { "js/game.js": { lines: 6 }, "js/roster.js": { lines: 1 } }, tree: { bareCatches: -1 } }), 2, "own fragment: a new positive delta");
+    both(own, json({ files: { "js/agent/apex.js": { lines: 9 } }, tree: { bareCatches: -1 } }), 2, "own fragment raised");
+    both(own, json({ files: { "js/agent/apex.js": { lines: 6 } } }), 2, "own fragment: a lowering dropped is a raise");
+    both(own, json({ files: { "js/agent/apex.js": { lines: 6 }, "js/roster.js": { lines: 1 } }, tree: { bareCatches: -1 } }), 2, "own fragment: a new positive delta");
     both(own, { old_string: '"lines":6', new_string: '"lines":60' }, 2, "own fragment raised through Edit");
     assert.equal(run(PROTECT, { tool_name: "Edit", tool_input: { file_path: own, old_string: '"lines":6', new_string: '"lines":1' } }, dir).status, 0, "own fragment lowered through Edit");
     assert.equal(run(PROTECT, { tool_name: "Bash", tool_input: { command: `echo '{}' > ${own}` }, cwd: dir }, dir).status, 2, "a blind Bash rewrite of the own fragment");
     // Another branch's fragment: refused outright, lowering included.
-    both(other, json({ files: { "js/game.js": { lines: 1 } } }), 2, "another branch's fragment");
+    both(other, json({ files: { "js/agent/apex.js": { lines: 1 } } }), 2, "another branch's fragment");
     fs.mkdirSync(path.join(dir, ".claude"), { recursive: true });
     fs.writeFileSync(path.join(dir, ".claude/allow-protected"), "");
     both(other, json({}), 2, "another branch's fragment, under allow-protected");
@@ -106,13 +106,13 @@ test("bans 1 and 2: ratchets.json raises and other branches' fragments are refus
     // ratchets.json under the hatch: a lowering passes, a raise or a dropped ceiling does not.
     const rj = path.join(dir, "tests/data/ratchets.json");
     const with_ = (f) => { const o = structuredClone(base); f(o); return json(o); };
-    both(rj, with_((o) => { o.files["js/game.js"].lines = 90; }), 0, "ratchets.json lowered under the hatch");
-    both(rj, with_((o) => { o.files["js/game.js"].lines = 140; }), 2, "ratchets.json raised under the hatch");
+    both(rj, with_((o) => { o.files["js/agent/apex.js"].lines = 90; }), 0, "ratchets.json lowered under the hatch");
+    both(rj, with_((o) => { o.files["js/agent/apex.js"].lines = 140; }), 2, "ratchets.json raised under the hatch");
     both(rj, with_((o) => { o.files["js/core/log.js"].lines.slack = 5; }), 2, "a slack widened");
     both(rj, with_((o) => { delete o.tree.bareCatches; }), 2, "a ceiling dropped");
     both(rj, { content: "{ not json" }, 2, "unparseable");
     fs.rmSync(path.join(dir, ".claude/allow-protected"));
-    both(rj, with_((o) => { o.files["js/game.js"].lines = 90; }), 2, "ratchets.json without the hatch stays tool-written");
+    both(rj, with_((o) => { o.files["js/agent/apex.js"].lines = 90; }), 2, "ratchets.json without the hatch stays tool-written");
     // Removals and moves are writes (review of c2589f2a): a deleted fragment with a negative delta
     // is a raise, and ratchets.json or another branch's fragment is never removed by hand.
     const bash = (command) => { const r = run(PROTECT, { tool_name: "Bash", tool_input: { command }, cwd: dir }, dir); bash.err = r.stderr; return r.status; };
@@ -120,11 +120,11 @@ test("bans 1 and 2: ratchets.json raises and other branches' fragments are refus
       "find tests/data/ratchets.d -name '*.json' -delete", "git mv tests/data/ratchets.json x.json", `rm ${own}`, `unlink ${own}`])
       assert.equal(bash(cmd), 2, cmd);
     assert.equal(bash("rm -rf artifacts/x && find . -name '*.log' -print"), 0, "ordinary removals pass");
-    fs.writeFileSync(own, JSON.stringify({ files: { "js/game.js": { lines: 6 } } }));
+    fs.writeFileSync(own, JSON.stringify({ files: { "js/agent/apex.js": { lines: 6 } } }));
     assert.equal(bash(`rm ${own}`), 0, "removing the own fragment that only raised is a lowering: " + bash.err);
     // On sync-pr.mjs's sync-pr-<branch>, the PR branch's fragment is still this branch's.
     git("checkout", "-q", "-b", "sync-pr-cursor/t-1");
-    both(own, json({ files: { "js/game.js": { lines: 2 } } }), 0, "own fragment lowered from sync-pr-<branch>");
+    both(own, json({ files: { "js/agent/apex.js": { lines: 2 } } }), 0, "own fragment lowered from sync-pr-<branch>");
     both(other, json({}), 2, "another branch's fragment from sync-pr-<branch>");
     // A detached HEAD has no own fragment.
     git("checkout", "-q", "--detach");
