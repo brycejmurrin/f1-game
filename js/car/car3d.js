@@ -1362,11 +1362,13 @@ const Car3D = (function () {
         }
       }
     });
+    let cockpitHaloFrom = 0, cockpitHaloTo = 0;
     if (!exHalo && opts && opts.halo) {
+      cockpitHaloFrom = out.pos.length / 3;
       const faired = opts.halo === 4;
       const hk = faired || opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];
       const path = haloHoopPath(0.30,0.765,-0.80,0.28,0.18,faired?1.10:1.045,0.62,faired?24:10);
-      const hc = haloTint || (faired ? CARBON : HALO);
+      const hc = opts.cockpitHalo && _ckAcc(opts.cockpitHalo.color) || haloTint || (faired ? CARBON : HALO);
       if (faired) {
         const start=out.pos.length/3;
         // Broad carbon roof; underside curves smoothly into the central Y.
@@ -1404,6 +1406,7 @@ const Car3D = (function () {
         for (let j=0;j<4;j++) addQuad(out,a[j],b[j],b[(j+1)%4],a[(j+1)%4],hc,SURFACES.carbon);
       }
       CarMaterials.smoothSkin(out,stemStart);
+      cockpitHaloTo = out.pos.length / 3;
     }
     // Shared exterior centreline for the fairing and part("halo") below.
     const haloSty = Math.max(0, Math.min(2, Math.round(cockpitStyle.halo || 0)));
@@ -2844,6 +2847,7 @@ const Car3D = (function () {
     shadeFlags.round = false;
     shadeFlags.coverHi = true;
     finishPass(out, liv, fin);
+    if (ckpt && opts.cockpitHalo) for (let i = cockpitHaloFrom; i < cockpitHaloTo; i++) out.mat[i] = opts.cockpitHalo.surface;
     // Measure each closed section from the vertices it emitted.
     if (sil) out._releaseCpuMirror = true;   // TLX: car shadow casters only (plan M-2)
     if (opts && opts.measure) out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {
