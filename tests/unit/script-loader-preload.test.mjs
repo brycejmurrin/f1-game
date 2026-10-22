@@ -174,6 +174,20 @@ test("a speculative ScriptLoader.preload can mark fetchPriority low; an unmarked
     "fetchPriority low is set only when the caller passes opts.low");
 });
 
+test("load reports onSettled after each successful file (#3587 boot progress)", async () => {
+  const r = rig();
+  const settled = [];
+  const p = r.ctx.ScriptLoader.create().load(["a.js", "b.js"], [["a.js", "b.js"]], {
+    onSettled: (src) => settled.push(src),
+  });
+  await r.flush();
+  r.scripts()[0].onload(); await r.flush();
+  assert.deepEqual(settled, ["a.js"]);
+  r.scripts()[1].onload();
+  assert.equal(await p, true);
+  assert.deepEqual(settled, ["a.js", "b.js"]);
+});
+
 test("the resolved-pick load path does NOT deprioritise its gated preloads (#3549)", async () => {
   const r = rig();
   const p = r.ctx.ScriptLoader.create().load(["a.js", "b.js"], [["a.js", "b.js"]]);
