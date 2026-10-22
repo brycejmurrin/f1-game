@@ -83,6 +83,7 @@ try {
           a.step(1 / 60);
           a.drivingLine('off');
           a.freeze(true); a.hud(false); a.renderClock(0, true); a.view(camera);
+          document.getElementById('btn-cam')?.style.setProperty('display', 'none', 'important');
           return { race, parkCalls: 1, clockHoldRequested: true, rivals, cars: a.cars(), line: a.drivingLine(), camera: a.camState(), beganAt: Date.now() };
         }, { track, time, camera, parkFrac: CAMERA_FRACS[track] });
         raceRow.time = time;
@@ -95,6 +96,7 @@ try {
           a.go(); a.park(parkFrac);
           const rivals = a.rivals([{ dProg: 35, dx: -1.4, speed: 31 }, { dProg: 70, dx: 1.3, speed: 29 }, { dProg: 105, dx: -0.3, speed: 30 }]);
           a.step(1 / 60); a.drivingLine('off'); a.freeze(true); a.hud(false); a.renderClock(0, true); a.view(camera);
+          document.getElementById('btn-cam')?.style.setProperty('display', 'none', 'important');
           return { race, parkCalls: 1, clockHoldRequested: true, rivals, cars: a.cars(), line: a.drivingLine(), camera: a.camState(), beganAt: Date.now() };
         }, { track, time, camera, parkFrac: CAMERA_FRACS[track] });
         raceRow.time = time; raceRow.warmupStart = Date.now();
@@ -167,7 +169,7 @@ try {
         clockHeldAtZero: runtime.renderClock === 0 && raceRow.clockHoldRequested === true,
         physicsFrozen: runtime.view.frozen === true,
         hudHidden: runtime.hud === false,
-        racingLineOff: runtime.drivingLine.mode === 'off' && runtime.backend?.line?.visible === 0,
+        racingLineOff: runtime.drivingLine.mode === 'off' && runtime.backend?.line?.inScene === 0 && runtime.backend?.fx?.lineVerts === 0,
         fixedCameraAndLens: cameraMatches,
         resolvedTimeWeather: runtime.time === time && runtime.weather === weather,
         lampBakeCacheCleared: cut.afterResetGen === 0,
