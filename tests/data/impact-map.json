@@ -6542,6 +6542,9 @@
       "setPortraitOk": [
         "tests/unit/source-integrity.test.mjs"
       ],
+      "setState": [
+        "tests/unit/ctx-lost-notice.test.mjs"
+      ],
       "setSteerMode": [
         "tests/specs/touch-buttons.spec.js",
         "tests/specs/touch-pedals.spec.js",
@@ -15961,6 +15964,7 @@
       ],
       "*": [
         "tests/unit/aero-zone-tables.test.mjs",
+        "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/menu-a11y-audit.test.mjs",
