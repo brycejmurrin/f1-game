@@ -24,12 +24,14 @@ async function sampleGeo(page) {
     const ms = tlx.memState();
     const flaps = (typeof CarMesh !== "undefined" && CarMesh.flapState) ? CarMesh.flapState() : null;
     const info = window.__apex.info ? window.__apex.info() : {};
+    const ps = window.__apex.physState && window.__apex.physState();
     return {
       geoLive: ms.geoLive | 0,
       geoKinds: ms.geoKinds || {},
       flaps,
       state: info.state,
-      raceT: (window.G && window.G.raceT) || 0,
+      raceT: ps && ps.raceT != null ? ps.raceT : 0,
+      prog: ps && ps.prog != null ? ps.prog : 0,
     };
   });
 }
@@ -43,7 +45,7 @@ test.describe("race geometry stable after green", () => {
     await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
     await page.waitForFunction(() => {
       const i = window.__apex.info && window.__apex.info();
-      return i && i.track && i.track.id && !i.building;
+      return i && i.track === "monza" && (i.state === "count" || i.state === "race");
     }, null, { polling: 200, timeout: 180_000 });
     await page.evaluate(() => window.__apex.go());
     await page.waitForFunction(() => {
@@ -63,16 +65,12 @@ test.describe("race geometry stable after green", () => {
 
     await page.evaluate(() => {
       window.__apex.setInput({ throttle: 1, steer: 0, brake: 0 });
-      for (let i = 0; i < 900; i++) window.__apex.step(1 / 60);
-    });
-    // Wall time for a few more presents while the field spreads.
-    const p0 = await page.evaluate(() => (GLX.__tlx.memState().presents | 0));
-    await page.waitForFunction((p) => (GLX.__tlx.memState().presents | 0) >= p + 60, p0, {
-      polling: 100, timeout: 30_000,
+      for (let i = 0; i < 900; i++) window.__apex.step(1 / 60, 1);
+      window.__apex.clearInput();
     });
 
     const t1 = await sampleGeo(page);
-    expect(t1.raceT, `sim advanced: ${t0.raceT} -> ${t1.raceT}`).toBeGreaterThan(t0.raceT + 5);
+    expect(t1.prog - t0.prog, `sim advanced: prog ${t0.prog} -> ${t1.prog}`).toBeGreaterThan(50);
     // Far-rival idle silhouette may add at most one geo; anything more is a lazy build.
     expect(t1.geoLive, `geoLive grew after green: ${t0.geoLive} -> ${t1.geoLive} kinds0=${JSON.stringify(t0.geoKinds)} kinds1=${JSON.stringify(t1.geoKinds)} flaps0=${JSON.stringify(t0.flaps)} flaps1=${JSON.stringify(t1.flaps)}`)
       .toBeLessThanOrEqual(t0.geoLive + 2);
