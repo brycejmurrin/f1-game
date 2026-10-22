@@ -73,6 +73,14 @@ const GLXSoft = (function () {
       // snapCam()/invalidateSoftPresent() arms one explicit blit on the next
       // present — not a periodic background readback every N frames.
       if (!_softPresentWaiters.length && !_softCaptureDue) return;
+      // Software GL + garage: skip a full-frame readback (post.js readPixels) while
+      // #carsetup is up — measured as multi-second GPU stalls and ctx loss on close.
+      try {
+        if (typeof PerfGov !== "undefined" && PerfGov.softwareRaster()) {
+          const cs = typeof document !== "undefined" && document.getElementById && document.getElementById("carsetup");
+          if (cs && !cs.hidden) return;
+        }
+      } catch (_) { /* harness */ }
       // Drawing-buffer size, not render width/height: with spatial upscale the
       // canvas (and default FB) is presentW×presentH while width/height stay at
       // the internal render scale — readPixels of the small box only captured a

@@ -4132,6 +4132,17 @@ test("GLX backendState and race entry defer pack retry on software GL (#3584)", 
   assert.ok(game.includes("requestIdleCallback(run, { timeout: 120000 })"));
 });
 
+test("software GL garage path gates readback and stall reload (#3589)", () => {
+  const loop = readFile("js/perf/loop-health.js");
+  assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"'));
+  const soft = readFile("js/render/glx/soft.js");
+  assert.ok(soft.includes("PerfGov.softwareRaster()") && soft.includes('"carsetup"'));
+  const assets = readFile("js/render/shared/assets.js");
+  assert.ok(assets.includes("deferScratchReadback"));
+  const game = readFile("js/game.js");
+  assert.ok(game.includes("openGarage") && game.includes("PerfGov.softwareRaster()") && game.includes("invalidateSoftPresent"));
+});
+
 test("GLX boot waits on progress, not one fixed wall clock (#3587)", () => {
   const src = code("js/render/renderer-boot.js");
   assert.match(src, /withIdleProgressTimeout/);

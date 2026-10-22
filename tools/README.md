@@ -341,6 +341,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/live-frame-census.mjs** | Phone-shaped driven race per backend x track: frame/JS percentiles, GC, slow GL/WebGPU calls, mid-race pipelines. | perf-memory-census |
 | **gfx/mem-census.mjs** | Memory census: heap after GC, live tracks, three render objects and decoded audio per track load (picker or race path). | mcp-probe / check-changes |
 | **gfx/pass-census.mjs** | Draw calls and triangles per render pass (main, mirror, sun/lamp shadow, post) per frame: the exact count behind #2657. | renderer-debug / playwright-probe |
+| **gfx/readback-garage-oracle.mjs** | Measures readPixels during menu→garage→close; optional race-entry path. | — |
 | **gfx/res-scale-ab.mjs** | Pixel A/B of TLX fixed render targets (tlxFixedTargets) vs legacy resize: noise floor, identity at 1.0, edge bleed. | renderer-debug |
 | **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
