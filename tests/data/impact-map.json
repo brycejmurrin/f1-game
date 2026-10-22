@@ -14276,9 +14276,7 @@
     },
     "js/share/share-card-layout.js": {
       "layout": [
-        "tests/unit/share-card-layout.test.mjs"
-      ],
-      "*": [
+        "tests/unit/share-card-layout.test.mjs",
         "tests/unit/share-card.test.mjs"
       ]
     },
