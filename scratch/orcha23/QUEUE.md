@@ -39,3 +39,10 @@ Updated: 2026-10-22 08:32Z. Predecessor: OrchA 22 session_012Rf9fHiy2exPfFWA5Vfw
 - Parallel follow-ups: A·H2 H3-7/H3-8 (js/net/lobby.js, quali-net.js); A·F4 H3-10/H3-9 (real-race-tab.js, netplay.js rejoin); A·F1 H3-11 (js/share QR polarity).
 - Wave 2 (Bryce "launch new sessions"): A·W1 session_01Fsqv6M8vKK4dPQ4feEXz4P Opus boot 3515/3514/3513/3512 (+js/game.js); A·W2 session_01JiMURvzGUNueuJd6GB5Qj2 Opus slow-GPU 3510/3511 (js/perf, garage/arrival.js); A·W3 session_01Wnxkrd19h9eKZkUW6XQfEk Sonnet tools 3505 (expires 10-23)/3507/3506.
 - Lesson: an @cursor mention in a PR comment wakes that PR's Cursor agent (bc-4f8efad5 on #3517, not on D's account). Never @cursor. Only Bryce can stop it from the owning Cursor account.
+
+## 09:07Z
+- Merged #3525 (288b5980). Bryce merged #3504, #3523, #3527, #3508. Pages JAMMED (runs queued, then cancelled by newer merges).
+- Closed Merlin duplicates #3549 #3547 #3534 #3546 #3544 (Bryce: compare, keep best). W1/W2 folded Merlin's ideas in, credited.
+- My PRs: #3548 adaptive plan (READY, full tier), #3551 webhook + template docs (draft, run-ci).
+- Lanes: H2 #3533 | F2 #3519 | F3 #3550 | F4 #3517 (green; Plan ticks pending) | W1 #3536 | W2 #3538 #3540 | W3 #3532 #3537 #3539 | W4 #3541 #3542 | W5 visor (Fable) session_01LbyfrAbJw1GJttfbEixYnv | W6 #3516 session_01L67YcMZy5zTpG7MA8Rtnyp. F1 FINAL (#3523 merged).
+- Routines: tick (3 min), safety net trig_01DZhVpFMeeF2EaLD6vDciVV, account bus watch trig_01JY5wYatqkrVwPXPsMD1ryZ.
