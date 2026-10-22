@@ -167,6 +167,17 @@ test("geometry planning avoids empty fanout without guessing an unknown diff is 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+function rollupStepEnv(result, geometry, targeted) {
+  const env = { ...process.env };
+  delete env.SWEEPS_RESULT;
+  delete env.GEOMETRY;
+  delete env.TARGETED;
+  env.SWEEPS_RESULT = result;
+  env.GEOMETRY = geometry;
+  env.TARGETED = targeted;
+  return env;
+}
+
 test("geometry rollup accepts only successful shards or a proven empty plan", () => {
   const job = parseYAML(ciWorkflow).jobs["sweeps-roll-up"];
   const run = job.steps[0].run;
@@ -176,8 +187,7 @@ test("geometry rollup accepts only successful shards or a proven empty plan", ()
     ["skipped", "false", "tests/unit/car-front-wing-width.test.mjs", false],
     ["failure", "false", "", false], ["cancelled", "false", "", false]
   ]) {
-    const r = cp.spawnSync("bash", ["-e", "-c", run], { env: { ...process.env,
-      SWEEPS_RESULT: result, GEOMETRY: geometry, TARGETED: targeted } });
+    const r = cp.spawnSync("bash", ["-e", "-c", run], { env: rollupStepEnv(result, geometry, targeted) });
     assert.equal(r.status === 0, ok, `${result}/${geometry}/${targeted}`);
   }
   assert.match(job.if, /needs\.select\.result == 'success'/, "a broken planner must not bless skipped shards");
