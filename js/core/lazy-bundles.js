@@ -449,8 +449,10 @@ function audioYieldToMain(kind) {
 }
 /** Settings hub visible (or the Settings door still focused): keep the sheet
  *  interactive by yielding between LAZY_AUDIO chunks instead of one multi-second
- *  eval (D·IP2 iPhone 15: 3.7 s freeze after Settings painted in 299 ms). */
+ *  eval (D·IP2 iPhone 15: 3.7 s freeze after Settings painted in 299 ms).
+ *  MenuSheetGate owns the detector when the shell has loaded it. */
 function settingsUiHot() {
+  if (typeof MenuSheetGate !== "undefined" && MenuSheetGate.open) return MenuSheetGate.open();
   try {
     if (typeof document === "undefined") return false;
     const pm = document.getElementById("pmsettings");

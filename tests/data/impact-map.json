@@ -4767,6 +4767,26 @@
         "tests/unit/xr-visibility-pause.test.mjs"
       ]
     },
+    "js/core/menu-sheet-gate.js": {
+      "idle": [
+        "tests/unit/settings-open-perf.test.mjs"
+      ],
+      "open": [
+        "tests/unit/settings-open-perf.test.mjs"
+      ],
+      "parkedWarm": [
+        "tests/unit/settings-open-perf.test.mjs"
+      ],
+      "parkWarm": [
+        "tests/unit/settings-open-perf.test.mjs"
+      ],
+      "resumeWarm": [
+        "tests/unit/settings-open-perf.test.mjs"
+      ],
+      "slice": [
+        "tests/unit/settings-open-perf.test.mjs"
+      ]
+    },
     "js/core/native-download.js": {
       "isCancelled": [
         "tests/unit/mobile-native-download.test.mjs"
@@ -6252,6 +6272,7 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/results-cam.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
       ],
@@ -6452,10 +6473,6 @@
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
-      "menuIdle": [
-        "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
-      ],
       "menuLampBake": [
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -6576,7 +6593,8 @@
         "tests/unit/net-authority.test.mjs"
       ],
       "scheduleFlybyTrack": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs"
       ],
       "seatsFor": [
         "tests/unit/legends-team.test.mjs"
@@ -6715,6 +6733,9 @@
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/results-cam.test.mjs"
+      ],
+      "tickUi": [
+        "tests/unit/settings-open-perf.test.mjs"
       ],
       "titleIfBare": [
         "tests/unit/flyby-intro.test.mjs",
