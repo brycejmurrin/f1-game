@@ -141,6 +141,9 @@ test("visor mapping: a bright flood leaves a beam along its aim; BLOOM AMOUNT an
   const soft = new Float32Array(lamp(0, -40, [3000, 3000, 3000]));   // under the clamp, so the knob shows
   const glare = V.lightMap({ ...NIGHT, lights: soft }, 844, 390, { level: 1, glare: 0.3 });
   assert.ok(glare.glints[0].k > V.lightMap({ ...NIGHT, lights: soft }, 844, 390, { level: 1 }).glints[0].k, "more lens glare: brighter cores");
+  assert.ok(m.glints[0].star && m.glints[0].star.len > m.glints[0].r * 2, "the brightest flood gets a star flare wider than its halo");
+  const many = V.lightMap({ ...NIGHT, lights: new Float32Array(Array.from({ length: 6 }, (_, i) => lamp(i * 3 - 8, -40)).flat()) }, 844, 390, { level: 1 });
+  assert.equal(many.glints.filter((g) => g.star).length, 3, "stars on the three brightest only");
   const dim = V.lightMap({ ...NIGHT, lights: new Float32Array(lamp(0, -40, [150, 150, 150])) }, 844, 390, { level: 1 });
   assert.ok(dim.glints.length === 0 || !dim.glints[0].beam, "a weak glint carries no beam");
 });

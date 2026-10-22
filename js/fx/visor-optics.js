@@ -158,7 +158,9 @@ const VisorOptics = (function () {
     // The key light: the sun (or the night's moon key — tiny). Brightness in exposed units.
     const key = clampTo(lum(scene.sunColor) * exp, 0, 4);
     const sd = scene.sunDir;
-    const sunUp = sd ? clampTo(sd[1], 0, 1) : 0;         // below the horizon: no sun on the shield
+    // Horizon fade, not elevation: a sun just above the horizon is the one that blinds a driver, so full strength
+    // from ~3° up; only the set sun (below −1°) adds nothing.
+    const sunUp = sd ? clampTo((sd[1] + 0.02) / 0.08, 0, 1) : 0;
     let sceneLight = 0;
     if (sd && key > 0.02 && sunUp > 0.01) {
       const p = projectDir(sd, basis, scene.fov, w, h, _tmpSun);
@@ -181,7 +183,7 @@ const VisorOptics = (function () {
           if (over === 0) out.ghost = { x: w - x, y: h - y, k: k * 0.4, r: base * 0.3, rgb };
           // God rays: a sun in the frame streaks across the shield's micro-scratches and the tear-off film —
           // radial, longest when the sun sits low in the frame (a low sun ahead is what blinds a driver).
-          if (over === 0) out.rays = { x, y, k: k * 0.8, len: Math.hypot(w, h) * 0.6, rgb };
+          if (over === 0) out.rays = { x, y, k: k * 1.0, len: Math.hypot(w, h) * 0.75, rgb };
         }
       }
       // Fresnel rim sheen: the inner rim is seen at grazing angles, where reflectance climbs, and it is lit on
@@ -239,7 +241,11 @@ const VisorOptics = (function () {
         const k = clampTo(g.k * gain * (0.7 + 0.3 * clampTo(glare / 0.12, 0, 2.5)), 0, 1.2);   // LENS GLARE lifts the cores
         // Nearer fixtures smear wider across the curved shield; far ones stay small.
         const r = base * clampTo(0.14 + 8 / Math.max(8, g.d), 0.14, 0.36) * (0.8 + 0.2 * out.bloom);
-        out.glints.push({ x: g.x, y: g.y, k, r, rgb: g.rgb, beam: k > 0.25 ? { dx: g.bx, dy: g.by, len: base * (0.3 + 0.4 * g.beam) * clampTo(k, 0, 1), k: k * 0.35 } : null });
+        out.glints.push({ x: g.x, y: g.y, k, r, rgb: g.rgb,
+          // The fixture's beam, seen in the air and on the shield: longer and brighter the harder the lamp hits the eye.
+          beam: k > 0.25 ? { dx: g.bx, dy: g.by, len: base * (0.45 + 0.55 * g.beam) * clampTo(k, 0, 1), k: k * 0.5 } : null,
+          // A star flare on the brightest three: the shield's micro-scratches split a hard point source into spokes.
+          star: i < 3 && k > 0.45 ? { len: r * 2.8, k: k * 0.4 } : null });
         sceneLight += g.k * 0.6;
       }
     }
@@ -423,9 +429,20 @@ const VisorOptics = (function () {
     if (!on && _ctx && _w) _ctx.clearRect(0, 0, _w, _h);
   }
 
-  function _glow(g, x, y, r, k, rgb, sx) {
+  function _glow(g, x, y, r, k, rgb, sx, bloom = 1) {
     if (!(k > 0.004)) return;
     const a = Math.min(1, k);
+    // BLOOM: a wide, faint halo under everything else — the post pass's glow around a bright source, carried
+    // onto the shield; BLOOM AMOUNT scales both its reach and its weight.
+    if (bloom > 0.05) {
+      const br = r * (1.8 + 1.2 * bloom), ba = a * 0.16 * Math.min(2, bloom);
+      const bg = g.createRadialGradient(x, y, 0, x, y, br);
+      const cb = Math.round(rgb[0]) + "," + Math.round(rgb[1]) + "," + Math.round(rgb[2]);
+      bg.addColorStop(0, "rgba(" + cb + "," + ba.toFixed(3) + ")");
+      bg.addColorStop(0.5, "rgba(" + cb + "," + (ba * 0.4).toFixed(3) + ")");
+      bg.addColorStop(1, "rgba(" + cb + ",0)");
+      g.fillStyle = bg; g.beginPath(); g.arc(x, y, br, 0, Math.PI * 2); g.fill();
+    }
     // A bright core with a wide, faint skirt: the specular image of the source plus its diffuse spread across the shield.
     const grad = g.createRadialGradient(0, 0, 0, 0, 0, r);
     const c = Math.round(rgb[0]) + "," + Math.round(rgb[1]) + "," + Math.round(rgb[2]);
@@ -447,7 +464,7 @@ const VisorOptics = (function () {
   function _rays(g, r) {
     const c = Math.round(r.rgb[0]) + "," + Math.round(r.rgb[1]) + "," + Math.round(r.rgb[2]);
     for (const [ang, lenF, kF] of RAYS) {
-      const a = Math.min(1, r.k * kF * 0.45);
+      const a = Math.min(1, r.k * kF * 0.7);
       if (a < 0.004) continue;
       const len = r.len * lenF, ex = r.x + Math.cos(ang) * len, ey = r.y + Math.sin(ang) * len;
       const grad = g.createLinearGradient(r.x, r.y, ex, ey);
@@ -464,15 +481,37 @@ const VisorOptics = (function () {
   // A lamp's beam: a soft wedge leaving the glint along the fixture's aim, fading with length.
   function _beam(g, s) {
     const b = s.beam, c = Math.round(s.rgb[0]) + "," + Math.round(s.rgb[1]) + "," + Math.round(s.rgb[2]);
-    const ex = s.x + b.dx * b.len, ey = s.y + b.dy * b.len, hw = 0.22;
+    const ex = s.x + b.dx * b.len, ey = s.y + b.dy * b.len;
     const ang = Math.atan2(b.dy, b.dx);
     const grad = g.createLinearGradient(s.x, s.y, ex, ey);
     grad.addColorStop(0, "rgba(" + c + "," + Math.min(1, b.k).toFixed(3) + ")");
+    grad.addColorStop(0.45, "rgba(" + c + "," + (Math.min(1, b.k) * 0.35).toFixed(3) + ")");
     grad.addColorStop(1, "rgba(" + c + ",0)");
-    g.fillStyle = grad; g.beginPath(); g.moveTo(s.x, s.y);
-    g.lineTo(s.x + Math.cos(ang - hw) * b.len, s.y + Math.sin(ang - hw) * b.len);
-    g.lineTo(s.x + Math.cos(ang + hw) * b.len, s.y + Math.sin(ang + hw) * b.len);
-    g.closePath(); g.fill();
+    g.fillStyle = grad;
+    // Three nested wedges: a wide faint skirt, the body, a narrow bright core — soft across the beam, not a hard cone.
+    for (const [hw, al] of [[0.42, 0.25], [0.24, 0.45], [0.1, 0.6]]) {
+      g.globalAlpha = al;
+      g.beginPath(); g.moveTo(s.x, s.y);
+      g.lineTo(s.x + Math.cos(ang - hw) * b.len, s.y + Math.sin(ang - hw) * b.len);
+      g.lineTo(s.x + Math.cos(ang + hw) * b.len, s.y + Math.sin(ang + hw) * b.len);
+      g.closePath(); g.fill();
+    }
+    g.globalAlpha = 1;
+  }
+  // The star flare of a hard point source: six fixed spokes through the glint, the longest horizontal (the
+  // shield's curvature stretches that way), fading to nothing at their tips.
+  const STAR = [[0, 1], [Math.PI, 1], [0.52, 0.55], [0.52 + Math.PI, 0.55], [2.62, 0.55], [2.62 + Math.PI, 0.55]];
+  function _star(g, s) {
+    const c = Math.round(s.rgb[0]) + "," + Math.round(s.rgb[1]) + "," + Math.round(s.rgb[2]);
+    const a = Math.min(1, s.star.k);
+    for (const [ang, lf] of STAR) {
+      const len = s.star.len * lf, ex = s.x + Math.cos(ang) * len, ey = s.y + Math.sin(ang) * len;
+      const grad = g.createLinearGradient(s.x, s.y, ex, ey);
+      grad.addColorStop(0, "rgba(" + c + "," + a.toFixed(3) + ")");
+      grad.addColorStop(1, "rgba(" + c + ",0)");
+      g.strokeStyle = grad; g.lineWidth = Math.max(1.5, s.r * 0.08);
+      g.beginPath(); g.moveTo(s.x, s.y); g.lineTo(ex, ey); g.stroke();
+    }
   }
 
   function _paint(m) {
@@ -499,9 +538,9 @@ const VisorOptics = (function () {
     }
     // The sun and its ghost, then the lamps (drawn wider than tall: the shield curves most horizontally).
     if (m.rays) _rays(g, m.rays);
-    if (m.sun) _glow(g, m.sun.x, m.sun.y, m.sun.r * (0.8 + 0.2 * m.bloom), m.sun.k, m.sun.rgb, 2.4);
-    if (m.ghost) _glow(g, m.ghost.x, m.ghost.y, m.ghost.r, m.ghost.k, m.ghost.rgb, 1.8);
-    for (const s of m.glints) { if (s.beam) _beam(g, s); _glow(g, s.x, s.y, s.r, s.k, s.rgb, 2.0); }
+    if (m.sun) _glow(g, m.sun.x, m.sun.y, m.sun.r * (0.8 + 0.2 * m.bloom), m.sun.k, m.sun.rgb, 2.4, m.bloom);
+    if (m.ghost) _glow(g, m.ghost.x, m.ghost.y, m.ghost.r, m.ghost.k, m.ghost.rgb, 1.8, 0);
+    for (const s of m.glints) { if (s.beam) _beam(g, s); if (s.star) _star(g, s); _glow(g, s.x, s.y, s.r, s.k, s.rgb, 2.0, m.bloom); }
     // Chromatic fringe at the rim: the lens splits the rim's light, magenta outside and cyan inside the edge.
     if (m.fringe > 0.004 && _paths) {
       g.lineWidth = Math.max(1.5, base * 0.006);
