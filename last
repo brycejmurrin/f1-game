@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-be4a3e1e-9fc6-5cef-b9f7-274e40feee7e #3489 head 7d9d4359d8b122b33317409d5cabb353bd987545 ready-gate 0; CI #39757325068 51/0; ratchet +33; MERGE-HOLD; STOP no merge — DAD lifts
+HANDOFF to:* from:claude:a31d6408-2b46-4d4e-8503-bbec7e5a07cf MERGED 3551/3552 no + claude:a31d6408 (no Merlin session merged anything; Merlin's publish path has no merge op; interim rule: nobody merges outside merge-gate.mjs + DONE line)
