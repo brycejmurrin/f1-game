@@ -605,6 +605,15 @@ const VisorOptics = (function () {
   /** Tests: forget the cached canvas and keys (a new stub DOM). */
   function _reset() { _looked = false; _cv = _ctx = _paths = _svg = null; _w = _h = 0; _shown = false; _acc = 1; _portKey = _bendKey = _bendLevelBuilt = ""; for (const k of Object.keys(_stats)) _stats[k] = 0; }
 
-  return { tick, clear, stats, lightMap, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, FRINGE, MAX_GLINTS, _reset };
+  /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
+  function sceneFromG(G) {
+    return {
+      eye: G.camEye, tgt: G.camTgt, fov: G.camFov,
+      sunDir: G.frame.sunDir, sunColor: G.frame.sunColor, exposure: G.frame.exposure != null ? G.frame.exposure : 1,
+      ambientSky: G.frame.ambientSky, lights: G.frame.lights, tailStart: G.frame.tailStart, floodEmit: G._lastFloodEmit,
+    };
+  }
+
+  return { tick, clear, stats, lightMap, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, FRINGE, MAX_GLINTS, sceneFromG, _reset };
 })();
 Object.freeze(VisorOptics);
