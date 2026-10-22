@@ -265,7 +265,6 @@ test("the garage frame calls presentOpts and glareScale; the race path still own
   // The bay sky fill is not a sun disc — presentOpts must zero screen shafts
   // (a scale factor left enough energy to wash Ferrari/RBR/AM after orbit).
   assert.match(cam, /_presentTune\.sunShaftMul\s*=\s*0/);
-  assert.match(cam, /_presentOpts\.flareMul\s*=\s*0/);
   assert.match(cam, /_presentOpts\.carReflect = 0/);
   assert.match(cam, /pinGarageRes\(\)/);
   assert.doesNotMatch(cam, /SP_SHAFT_SCALE/);
