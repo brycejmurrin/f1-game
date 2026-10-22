@@ -57,17 +57,12 @@ const Collide = (() => {
     return t * t * (3 - 2 * t);                // smoothstep, C1 at both ends
   }
   // Support half-widths of one car along the tangent / across it.
-  function extLong(c) {
+  // Deploy tip added k===0 early returns on extLong/extLat; this PR replaced
+  // those AABB helpers with oriented extentAngle — yawMix==0 still yields
+  // ea=0 → cos=1/sin=0 → HL/WL pair extents (same bit-identical unyawed field).
+  function extentAngle(c) {
     const psi = c.human ? (c.yawVis || 0) : 0;
-    const k = yawMix(psi);
-    if (k === 0) return HL;
-    return HL * Math.abs(Math.cos(psi * k)) + WL * Math.abs(Math.sin(psi * k));
-  }
-  function extLat(c) {
-    const psi = c.human ? (c.yawVis || 0) : 0;
-    const k = yawMix(psi);
-    if (k === 0) return WL;
-    return HL * Math.abs(Math.sin(psi * k)) + WL * Math.abs(Math.cos(psi * k));
+    return psi * yawMix(psi);
   }
   function bodyAngle(c) { const psi = c.human && Number.isFinite(c.yawVis) ? c.yawVis : 0; return psi * yawMix(psi); }
   // Both cars can be human and rotated: each support is bounded by its
@@ -510,8 +505,11 @@ const Collide = (() => {
       if (!Number.isFinite(dX)) return null;
       // Pair extents, yaw-aware (see LCAR_MAX above). Identical to LCAR/WCAR
       // for any pair that is not yawed past the blend's floor.
-      const eLong = extLong(a) + extLong(b);
-      const eLat = extLat(a) + extLat(b);
+      const ea = extentAngle(a), eb = extentAngle(b);
+      const ca = Math.abs(Math.cos(ea)), sa = Math.abs(Math.sin(ea));
+      const cb = Math.abs(Math.cos(eb)), sb = Math.abs(Math.sin(eb));
+      const eLong = (HL * ca + WL * sa) + (HL * cb + WL * sb);
+      const eLat = (HL * sa + WL * ca) + (HL * sb + WL * cb);
       const penLong = eLong - Math.abs(dProg);
       const penLat = eLat - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) return null;

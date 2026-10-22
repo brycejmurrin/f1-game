@@ -16,6 +16,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { gameSource, symbolSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -74,4 +75,46 @@ test("wheel LCD and HUD plate print the same number for one dash km/h (km/h and 
   }
   // Clamp is on the DISPLAY integer (after mph convert), so pin it in km/h.
   assert.equal(loadReadouts("kmh").R.spdDigits(1500), 999, "LCD clamp 999");
+});
+
+test("hidden instruments skip visual derivation and resume with current values and redline state", () => {
+  const begin = HUD.indexOf("function paintInstruments(player) {");
+  const end = HUD.indexOf("\n}", begin) + 2;
+  assert.ok(begin >= 0 && end > begin);
+  const writes = [], formatted = [];
+  const on = { speed: false, gear: false };
+  let cockpit = false;
+  const ctx = vm.createContext({
+    Math, IDLE_RPM: 1000, MAX_RPM: 10000, _redline: false, _rpmPct: -1,
+    clamp: (n, lo, hi) => Math.max(lo, Math.min(n, hi)),
+    HudElements: { isOn: id => on[id] },
+    document: { body: { classList: { contains: () => cockpit } } },
+    G: { dashKph: n => { formatted.push(n); return n; } },
+    _ro: { spdPlate: n => ({ n: Math.round(n), unit: "MPH" }) },
+    els: { gear: "gear", rpmFill: "rpm", tach: "tach", speed: "speed" },
+    speedUnitEl: () => "unit",
+    hText: (el, v) => writes.push([el, v]), hStyle: (el, k, v) => writes.push([el, k, v]), hToggle: (el, k, v) => writes.push([el, k, v]),
+  });
+  vm.runInContext(HUD.slice(begin, end), ctx, { filename: absSrc("js/ui/hud.js") });
+  const p = { rpm: 9500, gear: 5, speed: 150 };
+  ctx.paintInstruments(p);
+  assert.equal(ctx._redline, true, "hysteresis enters while gearbox is hidden");
+  p.rpm = 9000; p.gear = 6; p.speed = 187;
+  ctx.paintInstruments(p);
+  assert.equal(ctx._redline, true, "held in the hysteresis band");
+  assert.deepEqual(writes, []); assert.deepEqual(formatted, []);
+  on.speed = true; ctx.paintInstruments(p);
+  assert.deepEqual(writes, [["speed", "187"], ["unit", "MPH"]]);
+  writes.length = 0; on.speed = false; on.gear = true;
+  ctx.paintInstruments(p);
+  assert.deepEqual(writes[0], ["gear", "6"]);
+  assert.deepEqual(writes.at(-1), ["tach", "redline", true]);
+  writes.length = 0; on.gear = false; p.rpm = 8800; ctx.paintInstruments(p);
+  assert.equal(ctx._redline, false, "hysteresis exits while hidden");
+  on.gear = true; ctx.paintInstruments(p);
+  assert.deepEqual(writes.at(-1), ["tach", "redline", false]);
+  writes.length = 0; cockpit = true; ctx.paintInstruments(p);
+  assert.deepEqual(writes, [], "cockpit retains its separate gearbox suppression");
+  delete ctx.HudElements; cockpit = false; ctx.paintInstruments(p);
+  assert.ok(writes.some(([el]) => el === "speed"), "missing policy defaults visible");
 });

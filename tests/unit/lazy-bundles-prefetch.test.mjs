@@ -425,3 +425,17 @@ test("awaitPackSettled: respects stale and timeout without hanging", async () =>
   });
   assert.equal(timed, false, "zero timeout exits unsettled");
 });
+
+test("startRace awaits the LAZY_RACE light presets before its first applyRaceSettings", () => {
+  // A race started inside the idle prefetch window lit itself from TUNE_DEFS defaults,
+  // then re-lit seconds in when presets.js landed (photo-studio-conditions, #3441:
+  // Bahrain's day sun read sunY 0.681, then 0.819 after RESET).
+  const game = read("js/game.js");
+  const start = game.indexOf("async function startRaceBody(");
+  assert.ok(start > 0, "startRaceBody found");
+  const wait = game.indexOf("if (!window.LightPresets) { await ensureLightPresets();", start);
+  const firstApply = game.indexOf("applyRaceSettings();", start);
+  assert.ok(wait > start, "startRace awaits ensureLightPresets()");
+  assert.ok(wait < firstApply, "the await lands before startRace's first applyRaceSettings()");
+  assert.match(read("js/core/lazy-bundles.js"), /return \{[^}]*\bensureLightPresets\b[^}]*\};/, "lazy-bundles exports ensureLightPresets");
+});

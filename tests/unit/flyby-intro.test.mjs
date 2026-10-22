@@ -73,6 +73,72 @@ test("RACE! before the menu's build: prepare under the card, then drive out and 
   assert.match(handoff, /try \{ _introKey = key; raceIntro\(go\); \} catch \(e\) \{[^}]*loadingScreen\.stop\(\); go\(\); \}/, "a throw in raceIntro never strands the timer-less build card");
   assert.equal((ib.match(/await awaitIntroWarm\(live\)/g) || []).length, 1, "the old scene releases compilation before rebuilding");
   assert.match(ib, /introPrepare\(live, key, info0, n, true\)/, "new-world compilation settles through the shared preparation barrier");
+  // Pages 39710316089: claim join before standing the menu down; await a mismatched-tier abort.
+  const own = ib.indexOf("if (join) mp.owner = live"), gen = ib.indexOf("_menuGate.generation++"), prior = ib.indexOf("else if (prior) await prior.catch");
+  assert.ok(own > 0 && gen > own, "join owner is claimed before generation++ so the in-flight build does not abort on null owner");
+  assert.ok(prior > gen && prior < l, "a non-join still awaits the picker's abort before loadTrackStepped");
+  assert.match(handoff, /if \(!prepared && live\(\)\) announce\("PREPARATION FAILED/,
+    "a still-live failed intro announces instead of a silent sheetRelease");
+});
+
+test("introBuild awaits a mismatched-tier picker abort before its own loadTrackStepped", async () => {
+  // Pages 39710316089: join=false (buildKey tier bit) used to start a second
+  // loadTrackStepped while the picker's step was still freeing — track!==null
+  // → false → silent sheetRelease. Owner-before-generation++ + await prior.
+  const game = gameSource();
+  const a = game.indexOf("function cancelIntro()"), b = game.indexOf("\nfunction introWarm(go)", a);
+  let held = { id: "partial" }, loadCalls = 0, sawHeldAtLoad = false;
+  let resolveMenu;
+  const menuStep = new Promise((r) => { resolveMenu = r; });
+  const events = [];
+  const c = {
+    trackIdx: 0, track: held, state: "menu", _introRun: 0, _introKey: "", _introSkip: 0, _menuFly: null,
+    RaceEntryProfile: RACE_ENTRY_PROFILE_STUB,
+    _menuGate: {
+      generation: 0, warm: 0,
+      prep: { building: true, want: 0, bkey: "picker-tier", step: menuStep, owner: null, current: () => false },
+    },
+    flybyBuildTimer: 0, settings: "one",
+    entrySettings: () => c.settings, menuKey: () => "world", motionReduced: () => false, titleIfBare: () => {},
+    clearTimeout() {}, setTimeout: (f) => f(), requestAnimationFrame: (f) => f(),
+    performance: { now: () => 0 }, loadingInfo: () => ({}),
+    loadingScreen: { prep: () => events.push("prep"), building: () => {}, garage: () => events.push("garage"),
+      stop: () => events.push("stop"), phase: () => "", nextFlyMs: () => 24000 },
+    ensureScenery: async () => {},
+    loadTrackStepped: async (idx, liveNow) => {
+      loadCalls++;
+      sawHeldAtLoad = held != null;
+      assert.equal(held, null, "picker abort must finish before intro loadTrackStepped");
+      assert.equal(liveNow(), true);
+      c.track = { id: "ok" };
+      return true;
+    },
+    prepareMenuCarAssets: async () => {}, _atmo: { prebakeLamps: () => null },
+    warmPrograms() {}, gfx: { warming: () => false },
+    menuSlice: async () => {},
+    FlybySeq: { reset() {}, setDuration() {}, DEFAULT: [], vary: () => [], planSteps: () => () => true },
+    raceIntro: () => events.push("intro"),
+    quitToMenu: () => events.push("recover"), announce: (m) => events.push("message:" + m), Log: { warn() {} },
+    LoadingScreen: { SHORT_FLY_MS: 12000 }, headlessMode: false, document: { hidden: false, addEventListener() {} },
+    setupPreviewOn: false, setupCam: { startDriveOut: () => 100, stopDriveOut() {}, driveOutLeft: () => 0 },
+    // Free name: sliced introBuild reads buildKey from the vm context.
+    buildKey: () => "race-tier",   // mismatches prep.bkey → join false
+  };
+  vm.createContext(c);
+  vm.runInContext(game.slice(a, b), c);
+  assert.equal(c.introBuild(() => events.push("go")), true);
+  assert.equal(c._menuGate.prep.owner, null, "join false: no owner claim");
+  assert.ok(c._menuGate.generation >= 1, "menu current() stood down");
+  // Drain ensureScenery / rAF / awaitIntroWarm so intro reaches `await prior`.
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  assert.equal(loadCalls, 0, "must not load while the picker step is still pending");
+  held = null; c.track = null;
+  resolveMenu(false);
+  for (let i = 0; i < 200; i++) await Promise.resolve();
+  assert.equal(loadCalls, 1, "exactly one intro load after the abort");
+  assert.equal(sawHeldAtLoad, false);
+  assert.ok(events.includes("intro") || events.includes("garage") || events.includes("prep"),
+    "intro progressed: " + events.join(","));
 });
 
 test("intro builds cancel at async boundaries and never fly over pending compilation", async () => {

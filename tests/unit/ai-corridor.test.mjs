@@ -121,3 +121,19 @@ test('a car without snapshots falls back to its live fields', () => {
   const withSnap = scenario([{ prog: 999, x: 9, speed: 0, _snapProg: 100, _snapX: -2.8, _snapSpeed: 40 }]);
   assert.equal(withSnap.side, 1, 'the snapshot, not the stale live value, is what the planner reads');
 });
+
+test('subject acceleration is reused within each lane, refreshed between decisions', () => {
+  let reads=0, observed=0;
+  const car={prog:100,x:0,speed:40,get corridorAccel(){reads++;return observed;}};
+  const blocker={prog:115,x:0,speed:37,corridorAccel:0};
+  const distant=Array.from({length:20},(_,i)=>({prog:200+i*20,x:0,speed:40,corridorAccel:0}));
+  const context={roomL:6,roomR:6,roadL:6,roadR:6,kAhead:.01,lane:0};
+  const open=A.choose(context,car,blocker,[car,blocker,...distant],1000,2.8);
+  assert.equal(open.left.reason,'clear passing lane');assert.equal(open.right.reason,'clear passing lane');
+  assert.ok(reads<=4,`subject acceleration reread for every rival: ${reads}`);
+  const following={prog:93,x:-2.8,speed:40,corridorAccel:0};
+  assert.equal(A.choose(context,car,blocker,[car,blocker,following],1000,2.8).side,-1);
+  observed=-40;
+  assert.equal(A.choose(context,car,blocker,[car,blocker,following],1000,2.8).side,1,
+    'new braking observation must close the lane to arriving traffic');
+});
