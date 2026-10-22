@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { verdict, ADVISORY } from "../../tools/ci/ci-verdict.mjs";
+import { verdict, summary, ADVISORY } from "../../tools/ci/ci-verdict.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -140,4 +140,16 @@ test("ci.yml wiring (#2664): REQUIRE_SUCCESS only on a non-draft PR run, naming 
   const needs = body.split("needs:")[1].split("if:")[0];
   for (const j of m[1].split(",")) assert.match(needs, new RegExp(`- ${j}\\b`), `required job ${j} must be in ci-verdict's needs`);
   assert.match(body, /'CI \(draft fast tier\)' \|\| 'CI' \}\}/, "a draft run's success must not carry the required name");
+});
+
+// #3507: a green CI must say which jobs executed and which were skipped.
+test("summary lists executed vs skipped jobs and names the required set", () => {
+  const needs = { guards: { result: "success" }, smoke: { result: "success" }, "node-suites": { result: "skipped" }, sweeps: { result: "skipped" } };
+  const md = summary(verdict(needs, { require: ["guards", "smoke"] }), ["guards", "smoke"]);
+  assert.match(md, /Executed and passed \(2\):\*\* `guards`, `smoke`/);
+  assert.match(md, /NOT verified by this run:\*\* `node-suites`, `sweeps`/);
+  assert.match(md, /Required to have run \(2\)/);
+  const red = summary(verdict({ ...needs, smoke: { result: "skipped" } }, { require: ["guards", "smoke"] }), ["guards", "smoke"]);
+  assert.match(red, /FAIL/);
+  assert.match(red, /smoke: required to succeed/);
 });
