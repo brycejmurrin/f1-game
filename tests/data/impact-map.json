@@ -9715,6 +9715,9 @@
     "js/perf/thermal-drift.js": {
       "drift": [
         "tests/unit/thermal-drift.test.mjs"
+      ],
+      "*": [
+        "tests/unit/perf-governor.test.mjs"
       ]
     },
     "js/perf/three-inspector.js": {
