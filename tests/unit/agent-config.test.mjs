@@ -174,6 +174,41 @@ test("the three MCP catalogs name the same servers with the same launch lines", 
   assert.doesNotMatch(read(".mcp.json"), /"(env|headers)"\s*:\s*\{[^}]*"[^"$]{16,}"/, "no credential literals in .mcp.json");
 });
 
+test("tinyfish stays CLI-only: the lockstep guard owns its deliberate non-attachment", () => {
+  // TinyFish was REMOVED from the catalog in 2026-09 on purpose, and prose
+  // alone does not hold a removal (this file's header: a stale "tinyfish for
+  // deploy" line is one of the drifts that created the guard). The wrapper
+  // (tools/mcp/tinyfish-mcp.sh) is a CLI managing a tmux-held HTTP proxy on
+  // 127.0.0.1:3711 — it has no stdio run/serve mode for output-level-mcp.sh
+  // to spawn — and container egress blocks agent.tinyfish.ai, so the proxy
+  // can never answer from an agent session (docs/AGENT-SURFACE.md, "Removed
+  // 2026-09"; .claude/agents/deploy-research.md routes live-web checks to
+  // the host fetch tool / hosted connector). tests/unit/mcp-smoke.test.mjs
+  // pins the absence against .mcp.json only; this is the same pin at
+  // lockstep scope: the decision cannot drift in ANY catalog, and the CLI
+  // surface cannot silently vanish either. Re-attaching tinyfish is a
+  // deliberate change — it starts by editing this test, with fresh egress
+  // evidence attached.
+  const claude = JSON.parse(read(".mcp.json")).mcpServers;
+  const cursor = JSON.parse(read(".cursor/mcp.json")).mcpServers;
+  assert.equal(claude.tinyfish, undefined, "tinyfish must not be MCP-attached (.mcp.json)");
+  assert.equal(cursor.tinyfish, undefined, "tinyfish must not be MCP-attached (.cursor/mcp.json)");
+  for (const f of [".mcp.json", ".cursor/mcp.json", ".codex/config.toml"])
+    assert.doesNotMatch(read(f), /tinyfish/i,
+      `${f} must not name tinyfish at all — the catalogs stay silent about a CLI-only tool`);
+  const allow = JSON.parse(read(".cursor/environment.json")).mcpServerAllowlist;
+  assert.ok(!allow.some((a) => /tinyfish/i.test(a.name)), "environment.json must not allowlist tinyfish");
+  // The CLI that remains: wrapper + RPC unwrapper, still declaring itself.
+  assert.ok(exists("tools/mcp/tinyfish-mcp.sh"),
+    "the tinyfish CLI wrapper is gone — if that is deliberate, update this pin and AGENT-SURFACE together");
+  assert.ok(exists("tools/mcp/tinyfish-rpc.py"), "the tinyfish RPC helper is gone — see the wrapper pin above");
+  assert.match(read("tools/mcp/tinyfish-mcp.sh"), /CLI ONLY — NOT MCP-ATTACHED/,
+    "the wrapper no longer declares itself CLI-only — a changed interface re-opens the attachment decision here, not by drift");
+  // The doc side of the decision stays in the surface map.
+  assert.match(read("docs/AGENT-SURFACE.md"), /Removed 2026-09 \(CLI only now, not MCP-attached\)/,
+    "AGENT-SURFACE lost the Removed-2026-09 section that explains tinyfish");
+});
+
 test("Claude rules generate Cursor .mdc twins (gen-cursor-rules owns the mirror)", () => {
   // Source of truth: .claude/rules/<x>.md. Cursor twins are generated
   // (paths→globs, no paths→alwaysApply). Hand-mirroring drifted for weeks;
