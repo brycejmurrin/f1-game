@@ -7,7 +7,7 @@
  * that holds object references, a namespace that prints its own tag twice. None
  * of those throw, so nothing else in the suite would notice.
  */
-import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 test.describe("Log", () => {
   test("is live before any game module evaluates", async ({ racePage }) => {
@@ -65,6 +65,15 @@ test.describe("Log", () => {
   });
 
   test("a track build reports through it, so the ring explains a build", async ({ loadTrack, racePage }) => {
+    // Start from a virgin page, as when this spec runs alone. The shared page
+    // arrives with whatever an earlier spec on this worker left up (headless-api
+    // ends on a live monza race), and a build over a live race is a different
+    // path: an in-session SWITCH that drops the old world, goes to the build
+    // Worker and can be quit out from under the start. Under SwiftShader that
+    // stalled the ring or ended in "did not reach the grid" (#3582). Reloading
+    // is the documented way to get a virgin shared page (fixtures.js sharedTest).
+    await racePage.goto("/");
+    await racePage.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await loadTrack("monaco");
     const r = await racePage.evaluate(() => {
       const all = window.__apex.logs();
