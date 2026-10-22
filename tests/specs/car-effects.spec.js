@@ -7,7 +7,7 @@
 // the shared page back to the title and pin the default car (McLaren, nothing
 // fitted) before racing — the ERS and exhaust contracts below are about THAT
 // car, and the shared page carries whatever the previous test fitted.
-import { sharedTest as test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
+import { sharedTest as test, test as freshTest, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 import { syncFactoryMcLarenSeat } from "../helpers/factory-seat.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
@@ -263,11 +263,14 @@ async function sampleGeo(page) {
   });
 }
 
-test.describe("race geometry stable after green", () => {
-  test.use({ viewport: { width: 844, height: 390 } });
+// freshTest: bootTlxRace goto()s a TLX page. On sharedTest that would leave the
+// worker on three.js and red later GLX-only specs in the same shard (parts-physics
+// environment-surface gate → GLXShaders is not defined, selected-2 #3487).
+freshTest.describe("race geometry stable after green", () => {
+  freshTest.use({ viewport: { width: 844, height: 390 } });
 
-  test("geoLive does not grow over the first stretch of a race (TLX)", async ({ page }) => {
-    test.setTimeout(300_000);
+  freshTest("geoLive does not grow over the first stretch of a race (TLX)", async ({ page }) => {
+    freshTest.setTimeout(300_000);
     await bootTlxRace(page);
 
     await page.waitForFunction(() => {
