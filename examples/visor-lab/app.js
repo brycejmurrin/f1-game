@@ -40,6 +40,13 @@ async function init(){
   card.addEventListener('click',()=>{state.scene=scene.id;render();$('lab').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});});$('scene-grid').append(card);
  }
  $('provenance').textContent='1920 × 1080, high-quality WebP exported from PNG originals. '+data.requestedBackend+' renderer, software GPU, Ultra preset, render scale 1. Full-HD output; software presentation may use a smaller internal render buffer. Reduced motion enabled. Synthetic parked race scenes at lap fraction 0.18. Source '+data.source.sha.slice(0,9)+' with working-tree changes; fingerprint '+data.source.fingerprint.slice(0,16)+'. These stills assess appearance and visibility; they do not establish driving performance or physical-GPU behaviour.';
+ if(data.patches?.length)$('provenance').textContent+=' Wet-weather scenes were refreshed with verified surface wetness and reflection inputs; other scenes retain their original captures. Refresh source '+data.patches.at(-1).source.sha.slice(0,9)+' with working-tree changes. See settled-weather.json for measured inputs.';
  render();
 }
 init().catch(e=>{$('status').textContent=e.message;});
+
+// Hiding the selector keeps the chosen lens and gives the image the full row.
+const selectorButton=$('toggle-selector'),selectorPanel=$('visor-selector');
+function showSelector(show){selectorPanel.hidden=!show;document.body.classList.toggle('selector-hidden',!show);selectorButton.setAttribute('aria-expanded',String(show));selectorButton.textContent=show?'Hide selector':'Show selector';}
+selectorButton.addEventListener('click',()=>showSelector(selectorPanel.hidden));
+showSelector(!matchMedia('(max-width:1100px)').matches);

@@ -6,9 +6,9 @@
 <main>
 <section class="intro"><div><p class="eyebrow"><i></i> AN IN-GAME EXPERIMENT</p><h1>Find your view.</h1><p class="lede">A curved shield. A subtle tint. A completely different feeling.<br>Explore the lenses in changing light, with the road held in the same view.</p></div><div class="intro-meta"><strong id="capture-count">—</strong><span>full-HD captures</span><small>Actual game screenshots<br>1920 × 1080 · full resolution</small></div></section>
 <section id="lab" aria-label="Interactive visor comparison">
-<div class="section-heading"><p class="eyebrow">01 / LENS COMPARISON</p><span>Drag the divider to compare</span></div>
+<div class="section-heading"><p class="eyebrow">01 / LENS COMPARISON</p><div class="viewer-actions"><span>Drag the divider to compare</span><button id="toggle-selector" class="viewer-toggle" type="button" aria-controls="visor-selector" aria-expanded="true">Hide selector</button></div></div>
 <div class="lab-layout">
-<aside class="controls">
+<aside class="controls" id="visor-selector">
  <label class="control-title" for="scene">LIGHT &amp; WEATHER</label><select id="scene" aria-label="Lighting and weather scene"></select><p class="help" id="scene-note"></p>
  <fieldset><legend>VISOR</legend><div class="segments" id="mode"><button data-value="off" type="button">Original</button><button data-value="clear" type="button">Clear</button><button data-value="smoke" type="button">Tinted</button></div></fieldset>
  <fieldset id="color-field"><legend>LENS COLOR</legend><div class="colors" id="color"><button data-value="neutral" type="button"><i class="neutral"></i>Neutral</button><button data-value="amber" type="button"><i class="amber"></i>Amber</button><button data-value="ice" type="button"><i class="ice"></i>Ice blue</button><button data-value="rose" type="button"><i class="rose"></i>Rose</button></div></fieldset>

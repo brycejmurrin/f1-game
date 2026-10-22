@@ -8,7 +8,7 @@ const target=process.argv[2];
 if(!target||!path.isAbsolute(target))throw new Error('Usage: node tools/shot/visor-lab-export.mjs /absolute/path/to/existing/site/dist');
 if(path.resolve(target)===source)throw new Error('Export destination must differ from the authoring directory');
 await mkdir(target,{recursive:true});
-for(const name of ['optics.html','index.html','app.js','style.css','shots.json'])await cp(path.join(source,name),path.join(target,name));
+for(const name of ['optics.html','index.html','app.js','style.css','shots.json','settled-weather.json'])await cp(path.join(source,name),path.join(target,name));
 await cp(path.join(source,'images'),path.join(target,'images'),{recursive:true});
 for(const [from,to] of [['js/fx/droplets.js','visor-droplets.js'],['js/camera/cockpit-opts.js','visor-options.js'],['css/helmet-visor.css','visor-optics.css']])await cp(path.join(root,from),path.join(target,to));
 console.log('Exported Visor Lab authoring files, '+(await readdir(path.join(source,'images'))).length+' original captures and the current visor runtime to '+target);

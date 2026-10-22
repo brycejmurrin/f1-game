@@ -23,3 +23,16 @@ Scene images decode before either side changes. Older asynchronous loads cannot
 overwrite a newer selection. Reduced-motion users start with stationary water;
 the animation checkbox enables or freezes motion explicitly. Both sides use the
 same aspect-preserving crop, including narrow portrait screens.
+
+Wet-weather refreshes are listed under `shots.json` → `patches`. Their capture
+records include the rendered surface wetness and post-processing reflection
+inputs: wet uses 0.5, rain/storm use 1. The capture pins the surface through the
+existing light tuner; this does not alter normal gameplay's wetness transition.
+`ssrQuality: 0` means the full reflection budget. Rainfall itself can still be
+ramping when these frozen scenes are captured; animated visor rain uses the
+selected weather's target instead of claiming to replay the captured moment.
+
+Visor reflections are procedural shield highlights, and refraction is a radial
+screen-space approximation. They do not sample reflected track geometry or
+simulate refraction through each individual bead. The settings deliberately
+separate these effects from the game's actual wet-road reflections.

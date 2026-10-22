@@ -42,10 +42,11 @@ const Droplets = (function () {
     const pixels = g.createImageData(128, 128);
     for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
       const dx = (x - 63.5) / 64, dy = (y - 63.5) / 64;
-      const edge = Math.min(1, Math.pow(Math.hypot(dx, dy) / 1.4, 3));
+      const edge = Math.pow(Math.max(0, Math.min(1, (Math.hypot(dx, dy) - 0.18) / 0.95)), 1.4);
       const i = (y * 128 + x) * 4;
-      pixels.data[i] = 128 + dx * edge * 90;
-      pixels.data[i + 1] = 128 + dy * edge * 90;
+      // Sample inward so the curved edge never exposes pixels outside the scene.
+      pixels.data[i] = 128 - dx * edge * 110;
+      pixels.data[i + 1] = 128 - dy * edge * 110;
       pixels.data[i + 2] = 128; pixels.data[i + 3] = 255;
     }
     g.putImageData(pixels, 0, 0);
@@ -53,7 +54,7 @@ const Droplets = (function () {
     const svg = document.createElementNS(ns, "svg");
     svg.setAttribute("width", "0"); svg.setAttribute("height", "0");
     svg.setAttribute("aria-hidden", "true"); svg.style.position = "absolute";
-    for (const [level, scale] of [["light", 12], ["medium", 26], ["strong", 46]]) {
+    for (const [level, scale] of [["light", 24], ["medium", 56], ["strong", 96]]) {
       const filter = document.createElementNS(ns, "filter");
       filter.id = "visor-bend-" + level;
       for (const [key, value] of Object.entries({x:0,y:0,width:1,height:1,"color-interpolation-filters":"sRGB"})) filter.setAttribute(key, value);

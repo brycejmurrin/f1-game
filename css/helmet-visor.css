@@ -5,6 +5,9 @@
    The middle stays clear, including at phone landscape sizes. */
 body[data-helmet-cam]:is([data-helmet-visor="clear"], [data-helmet-visor="smoke"]) #hud::before {
   background:
+    radial-gradient(ellipse 10% 62% at 14% 36%, color-mix(in srgb, var(--hud-ink-light) calc(9% * var(--visor-reflection, 1)), transparent), transparent 72%),
+    radial-gradient(ellipse 10% 42% at 86% 40%, color-mix(in srgb, var(--hud-ink-light) calc(8% * var(--visor-reflection, 1)), transparent), transparent 72%),
+    linear-gradient(112deg, transparent 18%, color-mix(in srgb, var(--hud-ink-light) calc(3% * var(--visor-reflection, 1)), transparent) 22%, color-mix(in srgb, var(--hud-ink-light) calc(7% * var(--visor-reflection, 1)), transparent) 23%, transparent 26% 74%, color-mix(in srgb, var(--hud-ink-light) calc(4% * var(--visor-reflection, 1)), transparent) 78%, transparent 81%),
     radial-gradient(ellipse 76% 72% at 50% 55%, transparent 78%,
       color-mix(in srgb, var(--hud-ink-light) calc(16% * var(--visor-reflection, 1)), transparent) 79%, color-mix(in srgb, var(--hud-ink-dark) 80%, transparent) 80%, color-mix(in srgb, var(--hud-ink-dark) 96%, transparent) 90%),
     radial-gradient(ellipse 65% 95% at 50% 65%, transparent 68%, color-mix(in srgb, var(--hud-ink-light) calc(10% * var(--visor-reflection, 1)), transparent) 78%, transparent 86%),
