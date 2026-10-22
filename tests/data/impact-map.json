@@ -9570,6 +9570,9 @@
       "snapshot": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
+      "softwareRaster": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "span": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"

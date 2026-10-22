@@ -1,0 +1,1 @@
+Fixed: on software GL (SwiftShader / llvmpipe), the material-pack retry no longer runs at race-entry start; it is deferred until after the grid countdown so scratch readbacks cannot stall the main context mid-entry (#3584).

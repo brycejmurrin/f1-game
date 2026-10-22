@@ -2636,6 +2636,11 @@ async function startRaceBody() {
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   RaceEntryProfile.mark("gridCountdown:end");
+  if (typeof Assets !== "undefined" && Assets.retry && PerfGov.softwareRaster()) {
+    const run = () => { try { Assets.retry(); } catch (_) { /* optional pack */ } };
+    if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 120000 });
+    else setTimeout(run, 0);
+  }
   // TLX links programs on first draw — warm during LIGHTS only when the pack is
   // already settled (or unsupported/off), else createTextureArray owns the thread.
   // EXCEPT TLX itself (apex26.tlxWarmBeforePack, default on; "0" = the pack gate): its programs never read the pack
@@ -2717,7 +2722,11 @@ function startRace() {
   }
   practiceMode = false;   // before loadingInfo() reads it: the body clears it only after several awaits
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
-  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome(); if (typeof Assets !== "undefined") Assets.retry();
+  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
+  // Pack retry uses a scratch GL readback on some backends; on SwiftShader that
+  // stall mid race-entry can lose the main context (#3584). Hardware keeps the
+  // idle prefetch; software defers to after the grid is up (startRaceBody).
+  if (typeof Assets !== "undefined" && Assets.retry && !PerfGov.softwareRaster()) Assets.retry();
   // Launches that bypass RACE! (Data Hub, Daily) never ran its gesture work: the gyro was never attached, and
   // quitToMenu dropped the landscape lock while the page stayed fullscreen (no fullscreenchange to re-apply it).
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
