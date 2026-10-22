@@ -248,6 +248,11 @@
   /* Fixed candidates for ink on team plates; menu Light never reverses them. */
   --hud-ink-light: #f6f6f9;
   --hud-ink-dark: #0c0c14;
+  /* Fixed lens colors. */
+  --visor-neutral: var(--hud-ink-dark);
+  --visor-amber: #503d20;
+  --visor-ice: #233b50;
+  --visor-rose: #4c2d3c;
   --dim: #9a9aa8;
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
