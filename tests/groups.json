@@ -236,6 +236,8 @@
     "tests/unit/claude-usage.test.mjs",
     "// tools/lib/cli-args.mjs: unknown flag is an error with the near miss, =/space forms agree, --help (#1697).",
     "tests/unit/cli-args.test.mjs",
+    "// --only/--screens ids: an unknown id exits non-zero with the valid ids instead of running zero cells (#3305).",
+    "tests/unit/cli-only-ids.test.mjs",
     "// ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,",
     "// well under a second; must run where the helper or a call-site is edited.",
     "tests/unit/clipboard.test.mjs",
