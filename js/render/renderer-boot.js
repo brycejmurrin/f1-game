@@ -146,32 +146,38 @@ function withTimeout(promise, ms, label, onTimeout) {
 // maxMs wall since the first touch.
 function withIdleProgressTimeout(run, idleMs, maxMs, label, onTimeout) {
   if (typeof setTimeout !== "function") return Promise.resolve(run(() => {}));
-  const t0 = Date.now();
-  let last = t0;
-  let timer = null;
+  let idleTimer = null;
+  let maxTimer = null;
   let aborted = false;
-  const touch = () => { if (!aborted) last = Date.now(); };
-  const stopWatch = () => { aborted = true; if (timer != null) clearTimeout(timer); };
-  const watchdog = new Promise((resolve) => {
-    const tick = () => {
-      if (aborted) return;
-      const now = Date.now();
-      if (now - last >= idleMs) {
-        if (onTimeout) onTimeout();
-        Log.warn("gfx", label + " made no progress for " + idleMs / 1000 + " s — treating the backend as unavailable");
-        resolve(TIMED_OUT);
-        return;
-      }
-      if (now - t0 >= maxMs) {
-        if (onTimeout) onTimeout();
-        Log.warn("gfx", label + " exceeded " + maxMs / 1000 + " s — treating the backend as unavailable");
-        resolve(TIMED_OUT);
-        return;
-      }
-      timer = setTimeout(tick, Math.min(250, idleMs));
-    };
-    tick();
-  });
+  let resolveWatch;
+  const watchdog = new Promise((resolve) => { resolveWatch = resolve; });
+  const stopWatch = () => {
+    aborted = true;
+    if (idleTimer != null) clearTimeout(idleTimer);
+    if (maxTimer != null) clearTimeout(maxTimer);
+    idleTimer = maxTimer = null;
+  };
+  const timeOut = (suffix) => {
+    if (aborted) return;
+    stopWatch();
+    if (onTimeout) onTimeout();
+    Log.warn("gfx", label + suffix);
+    resolveWatch(TIMED_OUT);
+  };
+  const armIdle = () => {
+    if (aborted) return;
+    if (idleTimer != null) clearTimeout(idleTimer);
+    idleTimer = setTimeout(
+      () => timeOut(" made no progress for " + idleMs / 1000 + " s — treating the backend as unavailable"),
+      idleMs,
+    );
+  };
+  const touch = () => { armIdle(); };
+  maxTimer = setTimeout(
+    () => timeOut(" exceeded " + maxMs / 1000 + " s — treating the backend as unavailable"),
+    maxMs,
+  );
+  armIdle();
   const work = Promise.resolve(run(touch)).then((v) => { stopWatch(); return v; }, (e) => { stopWatch(); throw e; });
   return Promise.race([work, watchdog]).then((v) => { stopWatch(); return v; });
 }

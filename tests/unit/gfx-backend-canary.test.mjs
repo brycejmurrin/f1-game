@@ -4126,18 +4126,18 @@ test("eval-time preload skips TLX on unset navigator.gpu hunch (#3536 Graphics u
 
 test("GLX boot waits on progress, not one fixed wall clock (#3587)", () => {
   const src = code("js/render/renderer-boot.js");
-  assert.match(src, /withIdleProgressTimeout/);
-  assert.match(src, /loadDeferredScripts/);
-  assert.match(src, /onSettled/);
-  assert.match(src, /GLX boot/);
+  assert.ok(src.includes("withIdleProgressTimeout"));
+  assert.ok(src.includes("loadDeferredScripts"));
+  assert.ok(src.includes("onSettled"));
+  assert.ok(src.includes("GLX boot"));
 });
 
 test("Graphics unavailable RETRY and USE WEBGL2 scrub canary state (#3587)", () => {
   const src = code("js/perf/renderer-picker.js");
-  assert.match(src, /function clearGfxBootRecovery/);
-  assert.match(src, /retry\.onclick[\s\S]*clearGfxBootRecovery\(\)/);
-  assert.match(src, /webgl\.onclick[\s\S]*clearGfxBootRecovery\(\{ webgl2Pick: true \}\)/);
-  assert.match(src, /gfxProbeStrikes/);
+  assert.ok(src.includes("function clearGfxBootRecovery"));
+  assert.ok(/retry\.onclick[\s\S]*clearGfxBootRecovery\(\)/.test(src));
+  assert.ok(/webgl\.onclick[\s\S]*clearGfxBootRecovery\(\{ webgl2Pick: true \}\)/.test(src));
+  assert.ok(src.includes("gfxProbeStrikes"));
 });
 
 test("a pick that proves itself still pays off an older strike", async () => {
