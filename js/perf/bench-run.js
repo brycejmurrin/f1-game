@@ -9,7 +9,7 @@
 
    A leg the page never finished (iOS killed the tab, a WebGPU device loss reloaded it) reads as state "running" on
    the next boot: it is recorded as "reloaded" and the run moves on, so a crash is a result, not a loop. A leg that
-   ends early (page hidden, soak refused) stops the run with what it has. Nothing here runs until RUN: idle, the
+   ends early (page hidden, soak refused, a race that never started) is recorded with its reason and the run goes on. Nothing here runs until RUN: idle, the
    module only mounts a button and, after a reload it started, resumes its own plan. */
 const BenchRun = (function () {
   "use strict";
@@ -278,8 +278,8 @@ const BenchRun = (function () {
     else if (leg && leg.state === "booting") {
       const ok = await runLeg(plan);
       if (ok === "aborted" || !stillRunning()) { _busy = false; return; }
-      save(plan);
-      if (!ok && leg.state === "failed" && leg.reason !== "the page reloaded during this leg") { await finishPlan(plan, "stopped"); return; }
+      // A failed leg is a result, not the end: it keeps its state and reason and the run goes on to the next leg,
+      // so a phone left alone always comes back to a results page. Only STOP BENCHMARK ends a run early.
       plan.i++; save(plan);
     }
     if (plan.i >= plan.legs.length) { await finishPlan(plan, "complete"); return; }
