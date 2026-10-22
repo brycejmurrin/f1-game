@@ -1,0 +1,1 @@
+New: SETTINGS → HUD & CAMERA → COCKPIT now offers independent WHEEL FINISH, BODY FINISH and HALO FINISH controls. Follow the fitted livery or choose a different first-person material without repainting the exterior car. The isolated cockpit preview follows the same choices; preferences persist and export with camera settings.

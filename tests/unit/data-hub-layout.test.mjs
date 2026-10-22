@@ -9,7 +9,9 @@ import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DATA_CSS = fs.readFileSync(path.join(ROOT, "css/data.css"), "utf8");
+const OVERLAYS_CSS = fs.readFileSync(path.join(ROOT, "css/overlays.css"), "utf8");
 const rules = cssRules(DATA_CSS);
+const overlayRules = cssRules(OVERLAYS_CSS);
 
 test("portrait schedule venue (.dh-race-sub) wraps on tall narrow", () => {
   assert.match(
@@ -89,4 +91,17 @@ test(".dh-content.sf-b paints a bottom more-below cue (CSS only)", () => {
     DATA_CSS,
     /prefers-reduced-motion:\s*reduce\)[\s\S]*?\.dh-content\.sf-b\s*\{[^}]*box-shadow:\s*inset/,
   );
+});
+
+test("modal Data Hub over #nogl uses opaque scrim/card and stacks above recovery", () => {
+  const noglZ = decl(overlayRules, "#nogl", "z-index");
+  assert.equal(noglZ, "99", "#nogl recovery layer");
+  const hubOverNogl = ruleFor(rules, /body:has\(> #nogl:not\(\[hidden\]\)\) #datahub:modal/);
+  assert.ok(hubOverNogl, "graphics-unavailable hub stack rule");
+  assert.equal(hubOverNogl.decls.get("z-index"), "100");
+  assert.equal(hubOverNogl.decls.get("background"), "var(--scrim-heavy)");
+  const card = ruleFor(rules, /body:has\(> #nogl:not\(\[hidden\]\)\) #datahub:modal \.dh-card/);
+  assert.ok(card, "opaque hub card over nogl");
+  assert.equal(card.decls.get("background"), "var(--bg)", "opaque hub card over nogl");
+  assert.equal(decl(rules, "body:has(> #datahub:modal) #nogl:not([hidden])", "pointer-events"), "none");
 });
