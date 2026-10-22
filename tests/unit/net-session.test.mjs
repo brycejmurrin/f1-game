@@ -153,14 +153,31 @@ test("a pre-sync snapshot is held and delivered once the clock lands", () => {
   const got = [];
   p.b.onState((bytes) => got.push(new Uint8Array(bytes.buffer || bytes).slice()));
   assert.equal(p.b.synced(), false);
-  p.a.sendState(new Uint8Array([1, 2, 3, 4]));
+  // A real empty snapshot (type=1, tick=0, n=0) — short stubs are not held.
+  const snap = new Uint8Array([1, 0, 0, 0, 0, 0]);
+  p.a.sendState(snap);
   // Snapshot one-way is 20 ms; the answering PONG needs the ping's 20+20.
   p.advance(30);
   assert.equal(got.length, 0, "unreliable STATE is held until the first PONG");
   p.advance(1000);
   assert.ok(p.b.synced(), "clock must sync");
   assert.equal(got.length, 1, "the held snapshot is flushed on PONG");
-  assert.deepEqual(Array.from(got[0]), [1, 2, 3, 4]);
+  assert.deepEqual(Array.from(got[0]), [1, 0, 0, 0, 0, 0]);
+});
+
+test("a truncated pre-sync frame does not replace a held snapshot", () => {
+  // Before the fix, any STATE bytes (including a 4-byte stub decode fails on)
+  // overwrote heldState; the first PONG then flushed garbage and lost the good pose.
+  const p = pair({ latency: 20 });
+  const got = [];
+  p.b.onState((bytes) => got.push(new Uint8Array(bytes.buffer || bytes).slice()));
+  const good = new Uint8Array([1, 0, 0, 0, 0, 0]);
+  p.a.sendState(good);
+  p.a.sendState(new Uint8Array([1, 2, 3, 4]));   // truncated: must not displace `good`
+  p.advance(1500);
+  assert.ok(p.b.synced(), "clock must sync");
+  assert.equal(got.length, 1, "only the valid held snapshot flushes");
+  assert.deepEqual(Array.from(got[0]), [1, 0, 0, 0, 0, 0]);
 });
 
 test("events are typed, and only their own handler sees them", () => {

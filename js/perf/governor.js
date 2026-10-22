@@ -989,7 +989,7 @@ return {
   // THE TWO LATCHES THAT CAN DISABLE A LEVER FOR THE REST OF THE SESSION,
   // exported rather than left private so "why did this device shed nothing?"
   // is answerable from a hook, not by re-deriving this file's state by hand
-  // against a diagnostic payload (docs/notes/PERF-FINDINGS.md §2u). A latch is
+  // against a diagnostic payload (docs/notes/PERF-FINDINGS.md §2au). A latch is
   // not a fault on its own: the restore branch clears both the moment headroom
   // returns, so reading them TRUE means a lever is currently parked, not that
   // it is broken. Read them

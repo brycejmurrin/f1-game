@@ -93,6 +93,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/agent-experiment.test.mjs",
   // Generated agent index, hook page, coverage page and per-hook help. No browser.
   "tests/unit/agent-indexes.test.mjs",
+  // agent-msg: webhook payload shape, --to aliases, auth redaction, missing-env→bus fallback, --dry-run, mock fetch; < 0.2 s.
+  "tests/unit/agent-msg.test.mjs",
   "tests/unit/agent-output-config.test.mjs",
   "tests/unit/agent-output.test.mjs",
   "tests/unit/agent-surface.test.mjs",
@@ -615,6 +617,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/geometry-paths-baseline.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
+  "tests/unit/gfx-escalation.test.mjs",
   "tests/unit/ghost-share.test.mjs",
   "tests/unit/ghost.test.mjs",
   // #1807: a git hook's GIT_DIR / GIT_INDEX_FILE must not reach fixture git (a decoy
@@ -967,7 +970,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
   // Nightly process dashboard reducer (tools/ci/process-dashboard.mjs): fixture
-  // percentiles, tier walls, push-to-live, time-ratchet skip. No network, < 0.2 s.
+  // percentiles, tier walls, push-to-live, time-ratchet skip; jobs page at 30 +
+  // 502 retry (#2233 / W18f). No network, < 0.2 s.
   "tests/unit/process-dashboard.test.mjs",
   "tests/unit/profile-lib.test.mjs",
   "tests/unit/profile-mcp.test.mjs",
