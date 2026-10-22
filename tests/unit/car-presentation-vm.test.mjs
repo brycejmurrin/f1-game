@@ -366,11 +366,14 @@ test("the bounded team caches hold the menu prep, the race warm and the mirror w
 // promotes, the least recently used is evicted, each victim freed once. Checked
 // against the old array implementation over a long random sequence.
 test("putBoundedMesh's stamp LRU evicts exactly what the old reorder-on-hit LRU did", () => {
-  const src = fnSource(read("js/car/car-draw.js"), "function putBoundedMesh(");
+  const source = read("js/car/car-draw.js");
+  const src = fnSource(source, "function putBoundedMesh(");
+  const freer = fnSource(source, "function freeBodyPair(");
   const body = src.slice(src.indexOf("{") + 1, src.lastIndexOf("}"));
   const freedNew = [];
   const make = new Function("G", "_lruStamp",
-    "let _lruTick = 0; return function (cache, order, key, create, max, freeOne) {" + body + "};");
+    "let _lruTick = 0, _mirrorBodies = null; " + freer +
+    " return function (cache, order, key, create, max, freeOne) {" + body + "};");
   const put = make({ gfx: { freeMesh: (m) => freedNew.push(m) } }, new WeakMap());
   function oldPut(cache, order, key, create, max, free) {
     if (cache[key]) {

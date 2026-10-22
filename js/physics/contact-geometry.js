@@ -3,17 +3,17 @@
 const ContactGeometry = (function () {
   const HALF_LONG = 2.4, HALF_WIDE = 1;
   const INERTIA = (4.8 * 4.8 + 2 * 2) / 12;
-  function radius(angle, nx, ny) {
-    const c = Math.cos(angle), s = Math.sin(angle);
+  function radius(c, s, nx, ny) {
     return HALF_LONG * Math.abs(nx * c + ny * s) + HALF_WIDE * Math.abs(-nx * s + ny * c);
   }
   // Normal points from B to A. Four SAT axes give the exact rectangle test.
   function overlap(dx, dy, angleA, angleB, out = {}) {
+    const ca = Math.cos(angleA), sa = Math.sin(angleA), cb = Math.cos(angleB), sb = Math.sin(angleB);
     let depth = Infinity, nx = 0, ny = 0;
     for (let i = 0; i < 4; i++) {
       const a = (i < 2 ? angleA : angleB) + (i % 2) * Math.PI / 2;
       const x = Math.cos(a), y = Math.sin(a), d = dx * x + dy * y;
-      const p = radius(angleA, x, y) + radius(angleB, x, y) - Math.abs(d);
+      const p = radius(ca, sa, x, y) + radius(cb, sb, x, y) - Math.abs(d);
       if (!(p > 1e-9)) return null;
       if (p < depth) { depth = p; const sign = d < 0 ? -1 : 1; nx = x * sign; ny = y * sign; }
     }
@@ -23,11 +23,12 @@ const ContactGeometry = (function () {
   // Linear time-of-impact for fixed orientations. Angular sweeps need a
   // separate solver; callers reject a rapidly changing heading.
   function sweep(x0, y0, x1, y1, angleA, angleB, out = {}) {
+    const ca = Math.cos(angleA), sa = Math.sin(angleA), cb = Math.cos(angleB), sb = Math.sin(angleB);
     let enter = 0, leave = 1, nx = 0, ny = 0;
     for (let i = 0; i < 4; i++) {
       const a = (i < 2 ? angleA : angleB) + (i % 2) * Math.PI / 2;
       const x = Math.cos(a), y = Math.sin(a);
-      const r = radius(angleA, x, y) + radius(angleB, x, y);
+      const r = radius(ca, sa, x, y) + radius(cb, sb, x, y);
       const start = x0 * x + y0 * y, delta = (x1 - x0) * x + (y1 - y0) * y;
       if (Math.abs(delta) < 1e-9) { if (Math.abs(start) >= r) return null; continue; }
       let lo = (-r - start) / delta, hi = (r - start) / delta;

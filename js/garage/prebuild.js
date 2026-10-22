@@ -272,6 +272,7 @@ const GaragePrebuild = (function () {
     // garage is on screen (the drive-out studio, a pit visit).
     function release() {
       if (!cam.release || !cam.release()) return false;
+      prepped = null;
       gate.garageReady = false; gate.garageKey = ""; gate.garageWarm = 0;
       Log.info("game", "garage released for the race");
       return true;

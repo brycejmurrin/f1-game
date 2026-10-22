@@ -81,6 +81,14 @@ const RenderRate = (function () {
     }
   }
 
+  // One unconditional draw path for ordinary cadence and active paused previews.
+  function draw(dt, ms) {
+    outDt = dt + accDt; outMs = ms + accMs; accDt = 0; accMs = 0; phase = 0; drawn++;
+    return true;
+  }
+  /** A live preview must draw now: flush skipped time and mark this rAF as drawn. */
+  function force(dt, ms) { return (last = draw(dt, ms)); }
+
   /** True when this rAF should draw. After a true, dt() / ms() hold the time to render
    *  and update the HUD with (this frame's plus any skipped frame's). `presenting` is
    *  XrBoot.comfort(): an immersive session is never gated. */
@@ -97,8 +105,7 @@ const RenderRate = (function () {
       }
     }
     if (presenting || !active() || rate) {
-      outDt = dt + accDt; outMs = ms + accMs; accDt = 0; accMs = 0; phase = 0; drawn++;
-      return true;
+      return draw(dt, ms);
     }
     accDt += dt; accMs += ms;
     if ((++phase & 1) === 1) { skipped++; return false; }
@@ -107,7 +114,7 @@ const RenderRate = (function () {
   }
 
   return {
-    init, observe, gate, setMode,
+    init, observe, gate, force, setMode,
     dt: () => outDt,
     drew: () => last,
     ms: () => outMs,
