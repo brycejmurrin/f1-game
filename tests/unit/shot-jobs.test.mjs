@@ -60,7 +60,7 @@ test("parseShotArgv single + batch + raster", () => {
 
   const raster = parseShotArgv(["monza", "0.1", "--raster"], ROOT);
   assert.equal(raster.jobs[0].raster, true);
-  assert.match(SHOT_USAGE, /--batch/);
+  assert.ok(SHOT_USAGE.includes("--batch"), "usage documents --batch");
 });
 
 test("--clear is opt-in: off by default, on from the flag or a batch field (#2253)", () => {
@@ -69,7 +69,7 @@ test("--clear is opt-in: off by default, on from the flag or a batch field (#225
   assert.equal(flagged.clear, true);
   assert.equal(flagged.cam, "cinematic", "--clear takes no value, so the next positional is still the cam");
   assert.equal(normalizeJob({ track: "vegas", cam: "orbit", clear: true }, { ROOT }).clear, true);
-  assert.match(SHOT_USAGE, /--clear/);
+  assert.ok(SHOT_USAGE.includes("--clear"), "usage documents --clear");
 });
 
 test("traffic and racing-line shot flags preserve AI cars and hide the suggested line", () => {
@@ -188,7 +188,14 @@ test('A/B append, replace and failed imports preserve valid comparisons',async()
   await add({title:'First'});await add({id:'second',title:'Second'});await add({title:'Updated'});
   const read=()=>JSON.parse(fs.readFileSync(path.join(gallery,'comparisons.json'),'utf8'));
   assert.equal(read().pairs.length,2);assert.equal(read().pairs.find(p=>p.id==='first').title,'Updated');
-  assert.match(read().pairs[0].a.file,/^comparison-images\/[a-f0-9]{64}\.webp$/);
+  {
+    const file = read().pairs[0].a.file;
+    const prefix = 'comparison-images/', suffix = '.webp';
+    assert.ok(file.startsWith(prefix) && file.endsWith(suffix), 'stored under comparison-images/*.webp');
+    const hash = file.slice(prefix.length, -suffix.length);
+    assert.equal(hash.length, 64);
+    assert.equal([...hash].every((c) => '0123456789abcdef'.includes(c)), true, 'content-addressed sha256 hex');
+  }
   for(const file of ['comparisons.html','comparisons.js','comparisons.css'])assert.ok(fs.existsSync(path.join(gallery,file)));
   const before=fs.readFileSync(path.join(gallery,'comparisons.json'),'utf8');
   await assert.rejects(add({b:wrong}),/dimensions/);await assert.rejects(add({id:'../escape'}),/slug/);
