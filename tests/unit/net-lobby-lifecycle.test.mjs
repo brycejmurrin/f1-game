@@ -2582,3 +2582,44 @@ test("removing one of two code-room guests rotates the room code (the removed pl
     assert.equal(rooms[rooms.length - 1].code, "NEW567", "the old code is not advertised again");
   } finally { h.lobby.cancel(); }
 });
+
+// ── H3-7 (2026-10-22): removing the LAST guest rotates only a CODE room ──────
+// The last-guest evict branch called rotateRoomAfterEvict() unconditionally:
+// a link/QR room minted a public code nobody asked for, and its expiry ~120 s
+// later fell through to nostr's GUEST copy ("Check the six characters…").
+async function evictOnly(h, ts) {
+  assert.equal(h.lobby.removeGuest("g1"), true, "the host can remove its guest");
+  const t = ts[0];
+  t.status = "closed";
+  for (const fn of t.closers) fn("peer");          // the guest's close is the evict ack
+  assert.equal(h.lobby.status().guests, 0);
+}
+
+test("removing the last guest of a LINK room mints no room code", async () => {
+  const { h, made, rooms, ts, until } = codeRoomHarness();
+  try {
+    assert.equal((await h.lobby.host()).ok, true);
+    h.lobby.watchForOpen();
+    ts[0].status = "open";
+    await until(() => made.length === 1, "the link guest's session was bound");
+    await evictOnly(h, ts);
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal(rooms.length, 0, "a link/QR room never opens a public code room on a remove");
+    assert.equal(h.elements.get("vs-room").hidden, false, "the host stays in the waiting room");
+  } finally { h.lobby.cancel(); }
+});
+
+test("removing the last guest of a CODE room rotates it, and its expiry reads in host copy", async () => {
+  const { h, rooms, ts, until, withGuest, codes } = codeRoomHarness();
+  try {
+    await withGuest();
+    codes.next = "XYZ789";
+    await evictOnly(h, ts);
+    await until(() => rooms.some((r) => r.code === "XYZ789"), "the code rotated after the remove");
+    const fresh = rooms[rooms.length - 1];
+    fresh.onFail({ error: "expired", message: "Check the six characters and try again." });
+    const said = h.status.textContent;
+    assert.doesNotMatch(said, /six characters/, "the host never sees the guest's copy");
+    assert.match(said, /expired/);
+  } finally { h.lobby.cancel(); }
+});
