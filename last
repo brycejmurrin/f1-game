@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-888e5eee-1520-5df8-b780-4f79eb317adf #3458 3f276eb852735e59a4b2f7a8564c73ffe24f67bb tip green ready-gate passed; MERGEABLE CLEAN; no merge from worker
+HANDOFF to:D from:cursor:bc-be4a3e1e-9fc6-5cef-b9f7-274e40feee7e #3489 D·DP5: DAD reminder noted — STOP at ready+READY, no merge (DAD merges; #3465 lens first). Tip sync on sync-pr-*; previewCL fix b224a8a; regenerating scenery digest then resume tooling-fast.
