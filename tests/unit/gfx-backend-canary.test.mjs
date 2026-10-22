@@ -890,7 +890,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.wgxCapture",
   ]);
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
-    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
     // Why this tab's WGX/TLX pick bound WebGL2 (renderer-boot.js, #2285); a
     // RESET must not leave diag() quoting a reason from before it.
@@ -1004,7 +1004,7 @@ test("applyBackend clears session renderer latches before reload", () => {
   // Switching WEBGL2 ↔ THREE ↔ WEBGPU must not inherit wgxHoldPresent /
   // tlxAutoGL from the previous path; RESET already wiped them, a pick did not.
   const latchSeed = Object.fromEntries([
-    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
     "apex26.gfxFallbackWhy",
   ].map((k) => [k, "1"]));
@@ -1023,7 +1023,7 @@ test("applyBackend clears session renderer latches before reload", () => {
 
 test("THREE PATH and SCREENSHOTS clear session renderer latches on reload", () => {
   const latchSeed = Object.fromEntries([
-    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
     "apex26.gfxFallbackWhy",
   ].map((k) => [k, "1"]));
@@ -2283,7 +2283,7 @@ test("terminal graphics failure hides interactive game UI and offers recovery co
 
 test("terminal graphics recovery works before the late menu wiring", async () => {
   const src = read("js/game.js");
-  const from = src.indexOf("function showGraphicsUnavailable()");
+  const from = src.indexOf("function graphicsUnavailableOpts()");
   const to = src.indexOf("async function start()", from);
   assert.ok(from >= 0 && to > from, "early graphics-recovery block found");
 

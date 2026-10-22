@@ -13,16 +13,109 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
+# Cure npm prefix=/ when Cursor's /exec-daemon/node shadows nvm on PATH.
+# Root cause (measured 2026-10-22, D·W14a): `which node` → /exec-daemon/node
+# while `which npm` → ~/.nvm/.../bin/npm. npm's shebang is `#!/usr/bin/env node`,
+# so process.execPath=/exec-daemon/node and npm's default prefix =
+# dirname(dirname(execPath)) = "/". `npm run` then injects npm_config_prefix=/
+# (and global_prefix=/) into children — tooling-fast falls to concurrency 1 and
+# some unit tests fail under `npm run` while plain `node --test` passes. No
+# repo .npmrc sets this. Durable cure: put nvm's node ahead of /exec-daemon via
+# the world-writable /usr/local/cargo/bin slot (already first on Cloud PATH),
+# strip any stray prefix=/ from npmrcs, and refuse to continue if prefix is
+# still /. Do NOT write prefix= into ~/.npmrc — nvm rejects that.
+ensure_npm_prefix() {
+  local nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+  if [[ -s "$nvm_dir/nvm.sh" ]]; then
+    # shellcheck disable=SC1090
+    . "$nvm_dir/nvm.sh"
+    # Prefer the default / current node before any npm invocation.
+    nvm use default >/dev/null 2>&1 || nvm use node >/dev/null 2>&1 || true
+  fi
+
+  # Drop env overrides that force the broken prefix into child processes.
+  if [[ "${npm_config_prefix:-}" == "/" ]]; then
+    unset npm_config_prefix
+  fi
+  if [[ "${npm_config_global_prefix:-}" == "/" ]]; then
+    unset npm_config_global_prefix
+  fi
+
+  # Idempotently strip stray prefix=/ (and a bogus /etc/npmrc globalconfig)
+  # from writable user/global npmrcs. Never invent a prefix= line — nvm owns it.
+  local npmrc
+  for npmrc in "$HOME/.npmrc" /etc/npmrc /usr/local/etc/npmrc; do
+    if [[ -f "$npmrc" && -w "$npmrc" ]] \
+        && grep -qE '^[[:space:]]*(prefix[[:space:]]*=[[:space:]]*/[[:space:]]*|globalconfig[[:space:]]*=[[:space:]]*/etc/npmrc[[:space:]]*)$' "$npmrc"; then
+      local tmp
+      tmp="$(mktemp)"
+      grep -vE '^[[:space:]]*prefix[[:space:]]*=[[:space:]]*/[[:space:]]*$' "$npmrc" \
+        | grep -vE '^[[:space:]]*globalconfig[[:space:]]*=[[:space:]]*/etc/npmrc[[:space:]]*$' >"$tmp" || true
+      mv "$tmp" "$npmrc"
+      echo "stripped stray npm prefix=/ or globalconfig=/etc/npmrc from $npmrc"
+    fi
+  done
+
+  # Resolve nvm's node binary (NVM_BIN after `nvm use`, else newest installed).
+  local nvm_node=""
+  if [[ -n "${NVM_BIN:-}" && -x "${NVM_BIN}/node" ]]; then
+    nvm_node="${NVM_BIN}/node"
+  elif [[ -d "$nvm_dir/versions/node" ]]; then
+    local ver
+    ver="$(ls -1 "$nvm_dir/versions/node" 2>/dev/null | tail -1 || true)"
+    if [[ -n "$ver" && -x "$nvm_dir/versions/node/$ver/bin/node" ]]; then
+      nvm_node="$nvm_dir/versions/node/$ver/bin/node"
+      export NVM_BIN="$nvm_dir/versions/node/$ver/bin"
+    fi
+  fi
+
+  # Persist across sessions: /usr/local/cargo/bin is first on Cloud PATH and
+  # world-writable; symlink nvm's node there so `env node` beats /exec-daemon.
+  local cargo_bin="/usr/local/cargo/bin"
+  if [[ -n "$nvm_node" && -d "$cargo_bin" && -w "$cargo_bin" ]]; then
+    ln -sfn "$nvm_node" "$cargo_bin/node"
+    echo "linked $cargo_bin/node -> $nvm_node (ahead of /exec-daemon)"
+  fi
+
+  # This install process: prefer cargo bin + nvm bin over /exec-daemon.
+  if [[ -d "$cargo_bin" ]]; then
+    export PATH="$cargo_bin:${PATH:-}"
+  fi
+  if [[ -n "${NVM_BIN:-}" && -d "$NVM_BIN" ]]; then
+    export PATH="$NVM_BIN:$PATH"
+  fi
+  hash -r 2>/dev/null || true
+
+  local prefix
+  prefix="$(npm config get prefix 2>/dev/null || true)"
+  if [[ "$prefix" == "/" || -z "$prefix" ]]; then
+    echo "ERROR: npm prefix is '${prefix:-<empty>}' (node=$(command -v node 2>/dev/null || echo missing)). Want nvm's prefix, not /. Refusing to continue." >&2
+    exit 1
+  fi
+  echo "npm prefix ok: $prefix (node=$(command -v node))"
+}
+
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'EOF'
-usage: bash tools/env/cloud-agent-install.sh [--help]
+usage: bash tools/env/cloud-agent-install.sh [--help|--check-npm-prefix]
 
 Cursor Cloud dashboard install: best-effort mesa/vulkan/xvfb, then
 install-browsers.sh, then the chrome-devtools / tinyfish MCP clones.
 Idempotent. Exit 0 when the snapshot already has usable deps.
+
+  --check-npm-prefix  only run the npm prefix=/ cure (nvm PATH + cargo
+                      bin node link + npmrc strip) and exit.
 EOF
   exit 0
 fi
+
+if [[ "${1:-}" == "--check-npm-prefix" ]]; then
+  ensure_npm_prefix
+  exit 0
+fi
+
+# Always cure before any npm use (install-browsers.sh, MCP clones).
+ensure_npm_prefix
 
 need_pkg() {
   dpkg -s "$1" >/dev/null 2>&1

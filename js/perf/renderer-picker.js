@@ -222,7 +222,7 @@ const RENDERER_LS_KEYS = [
 // belongs in one of these two lists. applyBackend clears the session lane
 // too: switching backends must not inherit the previous path's hold/auto-GL
 // latches across the reload (RESET already wiped them; a pick did not).
-const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent", "apex26.gfxFallbackWhy"];
+const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent", "apex26.gfxFallbackWhy"];
 
 function clearRendererStorage() {
   const removed = [];
@@ -258,6 +258,14 @@ function closeUnavailableDialog(dialog) {
     try { dialog.close(); } catch (_) { /* already closed */ }
   }
 }
+let unavailableDefaults = null;
+function setUnavailableDefaults(defs) {
+  unavailableDefaults = defs && typeof defs === "object" ? defs : null;
+}
+function mergeUnavailableOpts(opts) {
+  if (!unavailableDefaults) return opts || {};
+  return Object.assign({}, unavailableDefaults, opts || {});
+}
 function openUnavailableDialog(dialog, closeButton, returnFocus) {
   if (!dialog) return;
   dialog.hidden = false;
@@ -281,7 +289,8 @@ function openUnavailableDialog(dialog, closeButton, returnFocus) {
   queueMicrotask(() => { if (closeButton && closeButton.focus) closeButton.focus(); });
 }
 function showUnavailable(opts) {
-  const panel = opts && opts.panel;
+  opts = mergeUnavailableOpts(opts);
+  const panel = opts.panel;
   // APEX_SURVEY_HUD=1 (#1034): keep cockpit chrome for Wave-3 shots even when
   // gfx is dead (ctxLost / Graphics unavailable — #1033). Do not hide #hud or
   // leave #nogl covering the survey target.
@@ -330,15 +339,32 @@ function showUnavailable(opts) {
     status.textContent = await copyUnavailableDiagnostics(unavailableDiagnostics())
       ? "Renderer diagnostics copied." : "Could not copy diagnostics.";
   };
-  help.onclick = () => openUnavailableDialog(opts.helpDialog, opts.helpClose, help);
+  help.onclick = () => {
+    if (!opts.helpDialog) return;
+    openUnavailableDialog(opts.helpDialog, opts.helpClose, help);
+  };
   data.onclick = async () => {
-    data.disabled = true; status.textContent = "Loading Data Hub…";
-    const ok = await opts.ensureDataHub();
-    data.disabled = false;
-    if (!ok) { status.textContent = "Data Hub could not be loaded."; return; }
-    opts.openDataHub();
-    openUnavailableDialog(opts.dataDialog, opts.dataClose, data);
-    status.textContent = "";
+    data.disabled = true;
+    status.textContent = "Loading Data Hub…";
+    try {
+      const ensure = typeof opts.ensureDataHub === "function" ? opts.ensureDataHub : null;
+      const open = typeof opts.openDataHub === "function" ? opts.openDataHub : null;
+      if (!ensure || !open) {
+        status.textContent = "Data Hub could not be loaded.";
+        return;
+      }
+      let ok = false;
+      try { ok = await ensure(); } catch (_) { ok = false; }
+      if (!ok) {
+        status.textContent = "Data Hub could not be loaded.";
+        return;
+      }
+      open();
+      openUnavailableDialog(opts.dataDialog, opts.dataClose, data);
+      status.textContent = "";
+    } finally {
+      data.disabled = false;
+    }
   };
   actions.append(...buttons); body.append(title, detail, actions, status); panel.appendChild(body);
   panel.hidden = false;
@@ -909,7 +935,7 @@ if (typeof document !== "undefined") {
 
 return { BACKENDS, init,
   nextBackend, prevBackend, applyBackend, backendLabel, readBackend, liveBackend, clearRendererStorage,
-  showUnavailable,
+  showUnavailable, setUnavailableDefaults,
   RENDERER_LS_KEYS, RENDERER_SS_KEYS,
   THREE_PATHS, SHOT_MODES, readThreePath, applyThreePath, threePathLabel, liveThreeApi,
   ENV_PROBES, readEnvProbe, applyEnvProbe, envProbeLabel,
