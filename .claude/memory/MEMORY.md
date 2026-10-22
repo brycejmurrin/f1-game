@@ -15,7 +15,7 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [User timezone: Pacific](user-timezone-pacific.md) — the owner’s time zone is America/Los_Angeles
 - [Parallel survey and review](parallel-survey-and-review.md) — UI/HUD reports: background apex survey job + ≤2 read-only review agents in parallel; plan as a docs/notes file on the PR branch
 - [Orchestrator may spawn sessions](orchestrator-may-spawn-sessions.md) — fleet work: launch sibling sessions without asking, tell Bryce each time; respect a single denied launch
-- [Worker model by task](worker-model-by-task.md) — 2026-10-19: orchestrator picks Opus or Sonnet per worker (launch-policy §Model by task); never Fable
+- [Worker model by task](worker-model-by-task.md) — 2026-10-19: orchestrator picks Opus or Sonnet per worker; Fable only when Bryce names it (2026-10-22 visor)
 - [Fixers may screenshot](fixers-may-screenshot.md) — recorded UI campaign permits screenshot loops without count cap; keep time and host limits
 - [Lanes keep working](lanes-keep-working.md) — 2026-10-17 campaign: continue scoped work after dry rounds; preserve resource and ownership limits
 - [Ask via AskUserQuestion](ask-via-askuserquestion.md) — decisions/asks for Bryce go through AskUserQuestion with what/why/options explained
@@ -31,3 +31,4 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Short PR check-ins](short-pr-check-ins.md) — PR safety-net check-ins every ~15 min, never hours (Bryce 2026-10-19)
 - [Orchestrator saves queue](orchestrator-saves-queue.md) — persist tasks + merge order to a pushed state branch every tick (Bryce 2026-10-21)
 - [Idle lanes do parallel work](idle-lanes-parallel-work.md) — 2026-10-22: idle hunters/workers use worktrees, MCPs, subagents, web research while waiting
+- [Discuss decisions with fleets](discuss-decisions-with-fleets.md) — 2026-10-22: cross-fleet decisions go to bus + webhook (DAD, Merlin) before acting
