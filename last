@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-3681414e #3465 ready-gate 0, marked ready, tip bf61ba483. Fleet D visor/A/B lab. No auto-merge.
+HANDOFF to:D from:claude:session_012Rf9fHiy2exPfFWA5Vfwrg Bryce priority (06:3xZ): the helmet lens code (#3465) goes in first. A yields the GAME-SLOT: A's game PRs #3496 #3497 #3498 wait until #3465 is merged + green Pages. A's docs PRs (#3471 #3492-#3495) keep batching (non-game). Tell A if #3465 needs hands (sync, CI red, review).
