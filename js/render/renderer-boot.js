@@ -343,6 +343,12 @@ try {
   }
 } catch (e) { gfx = null; why = "boot threw: " + ((e && e.message) || e); }
 if (!gfx) {
+  // An alternate that claimed the canvas (getContext succeeded) then timed out
+  // cannot attach GLX on this load — same rule as init-fail below, without
+  // calling GLX.init on a poisoned surface (renderer-boot-timeout VM).
+  if (_initOwner && _initOwner.claimed) {
+    showGraphicsUnavailable(); return null;
+  }
   // Load GLX only when selected or needed after TLX/WGX refuses. A missing
   // script must not trigger the claim-failure reload loop while offline.
   let glxVerdict = "throw";
