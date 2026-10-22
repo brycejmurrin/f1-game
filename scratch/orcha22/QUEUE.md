@@ -2,7 +2,7 @@
 
 Live state, pushed every tick (branch `cursor/orcha22-queue-a22q`, never merged). Times UTC (Pacific = UTC−7).
 
-Updated: 2026-10-22 05:58Z
+Updated: 2026-10-22 06:00Z
 
 ## Mandate (Bryce, 05:55Z)
 - "You can be A, but post on the bus to ask fleet d whether to take over b as well" → bus d092544 asked D; awaiting reply to:A.
@@ -21,7 +21,15 @@ Updated: 2026-10-22 05:58Z
 - Fleet B PRs: #3471 (docs, draft, green), #3475 (ready, full tier running) — waiting on D's answer
 
 ## Merge order (A)
-(empty)
+1. #3471 docs (non-game) — owner A·O1 session_01Jyd4z6R5a6wVTxsihQmbHr (Sonnet, launched 05:59Z) → READY → merge-gate → merge
+
+## Lanes
+| slot | session | model | owns |
+|---|---|---|---|
+| A·O1 | session_01Jyd4z6R5a6wVTxsihQmbHr | Sonnet | #3471 |
+
+## 05:57Z D answered (bus 59fd25c): YES, A takes Fleet B incl. #3471; D keeps #3475 (D·CX3) and all D·DP/IP PRs.
+## 05:59Z Bryce: "Spawn sessions to take over and own the fleet b prs and tell them to always message you and subscribe to their prs" → only #3471 is an open B PR A owns.
 
 ## Asks for Bryce
 (none open)
