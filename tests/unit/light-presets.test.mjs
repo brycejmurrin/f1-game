@@ -260,12 +260,13 @@ test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () 
   assert.equal(shared.nightAmbLift, 1.45);
   assert.equal(shared.ambientMul, 1.05);
   assert.equal(shared.keyMul, 1.2);
-  assert.equal(shared.lampLevel, 0.26);
+  assert.equal(shared.lampLevel, 0.2);
   assert.equal(shared.floodEmitMul, 0.3);
   assert.equal(shared.bloomMul, 1.1);
   assert.equal(shared.glowAmp, 1.85);
   assert.equal(shared.exposureMul, 0.92);
-  assert.equal(shared.poolEnergy, 0.7);
+  assert.equal(shared.poolEnergy, 0.6);
+  assert.equal(shared.lampRadiusMul, 0.8);
   assert.equal(shared.cityGlowMul, 0.55);
   // Fleet core authenticity knobs must not re-pin the pre-stamp crush/wash values.
   const CORE = ["nightAmbLift", "ambientMul", "bloomMul", "glowAmp", "exposureMul"];
@@ -279,6 +280,41 @@ test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () 
     }
   }
   assert.deepEqual(pinned, [], "per-track night|dry must defer core authenticity knobs to *|night|dry");
+});
+
+test("day rain resolves the shared wet grade on every track (storm inherits it)", () => {
+  // Bryce 2026-10-21: per-track saturation 0.80-0.92 washed rain out paler than dry.
+  const P = presets(), stamp = P["*|day|rain"], drift = [];
+  assert.deepEqual({ ...stamp }, { saturation: 1.05, contrast: 1.12, exposureMul: 0.92 });
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+  assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files`);
+  for (const track of circuits) {
+    const { LT } = resolveLive(track, "day", "rain");
+    for (const [id, want] of Object.entries(stamp)) if (LT[id] !== want) drift.push(`${track}|day|rain.${id}=${LT[id]} want ${want}`);
+  }
+  assert.deepEqual(drift, []);
+});
+
+test("overcast and fog nights resolve the dry night's lamp pools on every track", () => {
+  // Weather does not brighten a street lamp: per-track lampLevel 0.28-0.50 made
+  // an overcast/foggy night out-light a clear one (Bryce's 2026-10-21 matrices).
+  const P = presets(), dry = P["*|night|dry"], drift = [];
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+  assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files`);
+  for (const wx of ["overcast", "fog"]) {
+    for (const id of ["lampLevel", "poolEnergy", "lampRadiusMul"]) {
+      assert.equal(P[`*|night|${wx}`][id], dry[id], `*|night|${wx}.${id} matches *|night|dry`);
+    }
+    for (const track of circuits) {
+      const { LT } = resolveLive(track, "night", wx);
+      for (const id of ["lampLevel", "poolEnergy", "lampRadiusMul"]) {
+        if (LT[id] !== dry[id]) drift.push(`${track}|night|${wx}.${id}=${LT[id]} want ${dry[id]}`);
+      }
+    }
+  }
+  assert.deepEqual(drift, []);
 });
 
 test("shared *|dawn|wet stamp supplies the fleet wet-dawn look", () => {

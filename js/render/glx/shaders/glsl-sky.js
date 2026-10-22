@@ -104,8 +104,11 @@ void main() {
     // still lifting: an overcast night really is brighter than a clear one,
     // because the lid catches the city's own light.
     vec3 nightLid = (uZenith + uHorizon) * 1.25;
-    vec3 greyZ = mix(vec3(0.55, 0.56, 0.58), nightLid, nightSky);
-    vec3 greyH = mix(vec3(0.58, 0.58, 0.60), nightLid, nightSky);
+    // Same twilight grey radiance as atmosphere's deck/fog; retain neutral
+    // cloud colour without lifting dawn/dusk to full daylight grey.
+    float greyLight = 0.35 + 0.65 * daytime;
+    vec3 greyZ = mix(vec3(0.55, 0.56, 0.58) * greyLight, nightLid, nightSky);
+    vec3 greyH = mix(vec3(0.58, 0.58, 0.60) * greyLight, nightLid, nightSky);
     vec3 zenithO  = mix(uZenith,  greyZ, overcast * 0.75);
     vec3 horizonO = mix(uHorizon, greyH, overcast * 0.60);
     // pow(up, uSkyGrad): richer blue zenith extends further down, horizon band
@@ -144,9 +147,9 @@ void main() {
     }
     // Golden-hour + low-sun band: first factor is (1-smoothstep(0, 0.72, sunE))
     // / (1-smoothstep(0, 0.60, sunE)). Both are exactly 0 when sunE >= 0.72
-    // (default day ~0.95, night moon key ~1). Skip the two mixes — identity.
-    // sunE is a uniform (uSunDir.y). Dawn/dusk (low sun) still enter.
-    if (sunE < 0.72) {
+    // sunE is a uniform (uSunDir.y). At night it describes the moon key,
+    // whose elevation must never activate solar sunset bands.
+    if (nightSky < 0.5 && sunE < 0.72) {
     // Golden-hour: warm amber/orange overlay near the horizon when the sun is low.
     // Concentrated in the bottom 32% of sky; fades out as sun climbs past ~50°.
     // Damped under overcast so heavy cloud doesn't show warm colour.
@@ -264,6 +267,9 @@ void main() {
     if (twilight > 0.001) {
     lit += uSunColor * pow(sd, 2.5) * twilight * 0.30 * (1.0 - overcast * 0.6);
     }
+    // Same authored twilight radiance ratio as the grey gradient. Preserve
+    // day/night and apply before the separate moon tint and lightning energy.
+    lit *= mix(0.35 + 0.65 * daytime, 1.0, nightSky);
     // Moon tints nearby clouds faintly blue-silver.
     if (uMoon > 0.0) {
       float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.18;
@@ -293,7 +299,9 @@ void main() {
   // --- Mie forward scatter: glow toward the sun, strongest near the horizon ---
   // Damped under overcast (corona hidden behind cloud).
   float upPos = max(up, 0.0);
-  float mieDamp = 1.0 - overcast * 0.85;
+  // sunDir becomes the moon key at night; leave its disc/halo and cloud
+  // illumination intact, but suppress the solar Mie and horizon lobes.
+  float mieDamp = (1.0 - overcast * 0.85) * (1.0 - nightSky);
   // MIE SCATTER knob (def 1.0 = as-shipped) scales the sun-facing sky glow; clamp
   // keeps the mix blend valid when the knob pushes the amount past 1.
   c = mix(c, uSunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieDamp * uMieScatter, 0.0, 1.0));
