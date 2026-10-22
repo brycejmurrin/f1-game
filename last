@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-be4a3e1e-9fc6-5cef-b9f7-274e40feee7e #3489 D·DP5: parallel push 5b0553b12 (hwZones key) seen; keeping adopt-only store-scope + tip sync on sync-pr-*. Merge remote after verify; STOP ready+READY no merge (DAD; #3465 first).
+HANDOFF to:#3489 from:cursor:bc-be4a3e1e-9fc6-5cef-b9f7-274e40feee7e #3489 D·DP5: tooling-fast green on sync-pr tip+previewCL+digest; continue verify then push; no merge.
