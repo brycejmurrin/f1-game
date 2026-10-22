@@ -658,6 +658,56 @@ Next in line, all at score 8 or 12: Rivals and nemesis (19), mid-season
 regulations (21), Make History (8), pass-and-play (7), practice programmes (20)
 and spray that matters (E3).
 
+## Feasibility spikes (round 3) and the revised top 10
+
+These are read-only code spikes run by a subagent on tip `72408e99`. There were no
+edits and no browser runs, and claims marked UNVERIFIED were not confirmed. They
+change three ratings:
+
+- **Idea 11 is largely shipped.** `deployTaper(c)` (`js/game.js:540`) already
+  returns 1 (no taper) when `c.otT > 0`. Only a defender-floor tweak is left
+  (2 × 3 ÷ 1 = **6**), so idea 11 leaves the top 10 and draft 7 is superseded.
+- **Knockout qualifying is L, not M.** `QualiModel.compute` produces one row per
+  car, `lapsTarget = 1` (`js/game.js:2544`), and the hash has no segment term. The
+  new score is 5 × 4 ÷ 3 = **6.7**.
+- **E1 has lower confidence.** `frame.rain` comes from `wxArc.viewRainfall()`
+  (`js/game.js:6924`), which may already be local (UNVERIFIED). `wetnessAt(s)` is
+  lagged surface water, not falling rain. The new score is 3 × 3 ÷ 1 = **9**.
+
+| Idea | Insertion point (verified) | Reuses | Hardest part | Effort |
+|---|---|---|---|---|
+| Gauntlet (1) | `endRace` before `buildResults(order,{duel})`, `js/game.js:2994` | `Duel.asLegend`, `G.duelLegend`, `Badges.unlock`, `G.store` | no duel winner is decided today: duels skip results and badges | S→**M** |
+| Elimination (2) | after `RaceControl.lineTransition` for the leader, `js/game.js:6259` | `G.retireCar(c, reason)` (`js/game.js:6494`), `G.ranked` | `classify()` may leave early outs unclassified. Only the host retires in netplay | **S** |
+| Overtake Attack (3) | a new watch beside `scWatch`, `js/game.js:750` | the `SportingRegs.createPassWatch` set-diff, `Damage.state(c).hits` | passWatch only counts passes under caution, so it needs a sibling gain watch | S→**M** |
+| Daily variety (4) | `DailyChallenge.plan(day)` | a per-field `Hash32.fnv1a("daily:"+day+":"+field)` | none. Tests pin properties, and a new field leaves old draws unchanged | **S** |
+| Timed races (5) | `RaceControl.settleLine` (`c.lap > target`) | `lapsTarget`, `G.raceLaps` | `lapsTarget` feeds reliability, `finishDelay`, the FINAL LAP call, fuel and weather plans | S→**M** |
+| Academy (6) | `RaceInsights.finishDrill` → `lastDrill.score` | `circuitMastery` best per mode | needs a cross-circuit roll-up and per-goal thresholds | **M** |
+| Lift-and-coast (12) | the `Engineer` update → `G.announce(…,"info")` | coast regen at `js/game.js:5468` | the engineer has no lift-point geometry. Needs a per-lap coast-window flag | S→**M** |
+| Pit-wall calls (16) | `RaceControl.flag(prev,next)` (SC) | `PitLane.arm`/`commitNow`, `Forecast.current()` | no event bus: `flag()` needs a callback. The call must arm the player's pit | **M** |
+| Lens wetness (E1) | `Droplets.tick(dt,onboard,frame.rain,…)`, `js/game.js:8155` | `wxArc.viewRainfall()`/`wetnessAt(s)` | rain against lagged wetness semantics | **S** |
+
+Test hooks found for the specs: `__apex.retire`, `retirements()`, `caution({…})`,
+`qualiSim(t)`, `weatherArc(…)`, `carAt(i)` (`otT`, `energy`), and `race(track,tod,wx,{duel})`.
+
+**Revised top 10** (score, then impact on ties):
+
+| # | Idea | Score | Change from round 1 |
+|---|---|---|---|
+| 1 | Elimination race (2) | 16 | ↑ from 2 |
+| 2 | Daily variety (4) | 16 | ↑ from 4 |
+| 3 | Racing Academy (6) | 12.5 | ↑ from 6 |
+| 4 | Pass-and-play party (7) | 12 | new |
+| 5 | Mid-season regulation refinements (21) | 12 | new |
+| 6 | Legends Gauntlet (1) | 10 | ↓ effort M |
+| 7 | Lens shows local rain (E1, needs #3465) | 9 | ↓ confidence 3 |
+| 8 | Overtake Attack (3) | 8 | ↓ effort M |
+| 9 | Pit-wall calls (16) | 8 | = |
+| 10 | Rivals and nemesis (19) | 8 | new (impact 4, fits the career) |
+
+Out of the top 10: timed races (7.5, M), knockout qualifying (6.7, L), lift-and-coast
+(6, M) and the taper (shipped). Their drafts below stay valid as written. Draft 7 is
+superseded, and drafts for the three new entrants follow the existing ones.
+
 ## Ready-to-file issue drafts (top 10)
 
 Do not file these from this note. The orchestrator files the ones Bryce picks.
@@ -735,6 +785,7 @@ Source §6.
 - [ ] The `physics-contract-auditor` agent run is clean.
 
 ### 7. 2026 Overtake: the chasing car keeps full deploy to a higher speed
+**SUPERSEDED (round 3 spike):** `deployTaper` already exempts the car while `c.otT > 0`. Do not file this draft.
 **Body.** Under B7.2.3(c), the Overtake car's deployment holds full power higher
 than a leader's (roughly 337 against 290 km/h, per The Race and PlanetF1). Today
 `deployTaper()` uses one `TAPER_LO/HI` band for all cars. While `OvertakeMode` is
@@ -808,6 +859,35 @@ to helmet and cockpit cameras only. Source §E2.
       touches.
 - [ ] Reduced motion and GRAPHICS LOW keep a static, lighter film.
 - [ ] Visual only, with no physics read.
+
+### 13. Pass-and-play party mode (one phone, 2–6 players)
+**Body.** A player-name roster. The phone rotates between players for a timed lap
+or a short race, each run becomes the next player's ghost, and the game keeps a
+party table. Source §7.
+**Acceptance.**
+- [ ] A roster of 2–6 names, a hand-over screen between runs, and a final table at
+      844×390.
+- [ ] Each player's best is kept for the party only. The time-trial records stay
+      unchanged.
+
+### 14. Mid-season regulation refinements in career
+**Body.** One or two seeded in-season rule changes per career season (energy cap,
+boost cap, tyre allocation) adjust era coefficients in `js/career/regulations.js`,
+with a news card in the career hub. Source §21.
+**Acceptance.**
+- [ ] The events are deterministic per save seed (unit test) and only touch career
+      coefficients.
+- [ ] The hub shows the change on the round it applies.
+
+### 15. Rivals and nemesis in career
+**Body.** A head-to-head record per AI driver in the career save. The top rival
+becomes the nemesis: an AI-only aggression bump when racing the player, radio
+lines, and a "beat your nemesis" badge. Source §19.
+**Acceptance.**
+- [ ] The H2H record persists and migrates (`save-migrate.js`).
+- [ ] The aggression bump applies only to the nemesis and only against the player
+      (AI-only column, physics-contract-auditor clean).
+- [ ] A badge plus radio lines.
 
 ## Sources
 
