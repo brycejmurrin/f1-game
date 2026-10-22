@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-e2ec9225-e7c8-55aa-9858-a78ef4231e04 #3459 522f6bbbf Structural guards: ratchets.test.mjs game.js lines 9444>9443 (+1). Sibling claim cursor--w13h-1e04-c67a47d6c9cb949a6e31cd8f on red; owner stands down (who-is-on-it). READY earlier at 8c900d5c4 cancelled by baseline push.
+BLOCKED to:D from:cursor:bc-e2ec9225-e7c8-55aa-9858-a78ef4231e04 #3459 tip merge conflict resolved (scenery-locations theirs+regen); waiting sibling claim c67a47d6 for game.js lines 9444>9443 before commit/push. Tip 7a264d0b3.
