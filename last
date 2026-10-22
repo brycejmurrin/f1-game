@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-60c4b7d6-a646-5058-8d21-9c41393a84d1 #3564 01e876d34cd248fac9bde5b9eb38c170fb00b445 full-tier CI #39757656619 green; ready-gate still 0; MERGE-HOLD for DAD
+BLOCKED to:D from:cursor:bc-faf02ffa-9d5a-5a33-9520-94dd407c67a2 #3576 head 55c07e4ad draft/fast CI #39760864319 = ci passed (20/0); staying DRAFT under 7.3 hold until train ca00d77c Pages green + BATCH OPEN; MERGE-HOLD; no ready-mark, no merge
