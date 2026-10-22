@@ -121,6 +121,29 @@ function bootImportUI(opts = {}) {
   };
 }
 
+test("visor optics and water settings survive both backup modes and reject invalid choices", () => {
+  const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorRain: "heavy", helmetVisorRunoff: "fast" };
+  const disk = Object.fromEntries(Object.entries(values).map(([key, value]) => ["apex26." + key, value]));
+  for (const mode of ["all", "changes"]) {
+    const saved = boot({ disk }).collect(mode);
+    const restored = boot();
+    restored.loadSettings(saved);
+    for (const [key, value] of Object.entries(values)) {
+      assert.equal(saved.settings.camera[key], value);
+      assert.equal(restored.disk.get("apex26." + key), value);
+    }
+  }
+  const defaults = boot().collect("all").settings.camera;
+  assert.deepEqual(Object.fromEntries(Object.keys(values).map(key => [key, defaults[key]])), {
+    helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorRain: "normal", helmetVisorRunoff: "normal",
+  });
+  const invalid = boot({ disk }).collect("changes");
+  for (const key of Object.keys(values)) invalid.settings.camera[key] = "invalid";
+  const target = boot();
+  target.loadSettings(invalid);
+  for (const key of Object.keys(values)) assert.equal(target.disk.has("apex26." + key), false);
+});
+
 test("backup controls mount once in their own settings page, outside renderer options", () => {
   const b = bootImportUI();
   for (const id of ["pm-settings-changed", "pm-settings-all", "pm-settings-load"]) {
@@ -454,7 +477,7 @@ test("nothing outside the allowlist leaks, whatever the store holds", () => {
     const file = collect(mode);
     const { excluded: _ex, ttlb: _tt, ...rest } = file;
     const scrubbed = JSON.stringify(rest);
-    assert.ok(!/SECRET|parts|livery|setup\.|customTeam|career|ghost|daily|spotify|turn|nostr|envProbeOff|gfxWgxFail|crashStrikes|wss:/.test(scrubbed), mode + " mentions an excluded key");
+    assert.ok(!/SECRET|parts|"livery(?:\.[^"]*)?":|setup\.|customTeam|career|ghost|daily|spotify|turn|nostr|envProbeOff|gfxWgxFail|crashStrikes|wss:/.test(scrubbed), mode + " mentions an excluded key");
     if (mode === "all") {
       assert.ok(file.ttlb && file.ttlb.monza, "poison ttlb board exports in the optional section");
       assert.ok(!/"apex26\.ttlb/.test(JSON.stringify(file)), "raw storage keys never appear in the file");
@@ -560,7 +583,7 @@ test("the garage file carries what the player BUILT, and nothing else in the nam
   assert.ok(!/SECRET|career|season|ttlb|ghost|daily|spotify|nostr|wss:|crashStrikes/.test(text), "a garage file leaks nothing else");
   // And the settings file still does not carry the garage.
   const { collect } = boot({ disk: GARAGE });
-  assert.ok(!/parts|livery|setup\.|customTeam/.test(JSON.stringify(collect("all")).replace(/"excluded":"[^"]*"/, "")));
+  assert.ok(!/parts|"livery(?:\.[^"]*)?":|setup\.|customTeam/.test(JSON.stringify(collect("all")).replace(/"excluded":"[^"]*"/, "")));
 });
 
 test("an empty or blocked store still produces a valid garage file", () => {
@@ -1677,4 +1700,17 @@ test("SAVE/LOAD SETTINGS carries a calibrated stick rest map to a fresh device (
   const legacy = boot();
   legacy.loadSettings({ format: file.format, settings: { driving: { padRest: 0.08 } } });
   assert.equal(JSON.parse(legacy.disk.get("apex26.padRest")), 0.08, "a legacy scalar still loads");
+});
+
+// The value "livery" is a camera preference, not a garage storage key.
+test("cockpit finish choices round-trip as camera preferences without exporting liveries", () => {
+  const src = boot({ disk: { "apex26.cockpitWheelFinish": "suede", "apex26.cockpitBodyFinish": "chrome", "apex26.cockpitHaloFinish": "livery", "apex26.livery.custom.ferrari": "SECRET" } });
+  const file = src.collect("all"), dst = boot();
+  assert.equal(file.settings.camera.cockpitWheelFinish, "suede");
+  assert.equal(file.settings.camera.cockpitBodyFinish, "chrome");
+  assert.equal(file.settings.camera.cockpitHaloFinish, "livery");
+  assert.ok(!JSON.stringify(file).includes("SECRET"));
+  dst.loadSettings(file);
+  for (const [key, value] of Object.entries({ cockpitWheelFinish: "suede", cockpitBodyFinish: "chrome", cockpitHaloFinish: "livery" }))
+    assert.equal(dst.disk.get("apex26." + key), value);
 });

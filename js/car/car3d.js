@@ -1363,15 +1363,14 @@ const Car3D = (function () {
       }
     });
     if (!exHalo && opts && opts.halo) {
+      const cockpitHaloFrom = out.pos.length / 3;
       const faired = opts.halo === 4;
       const hk = faired || opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];
       const path = haloHoopPath(0.30,0.765,-0.80,0.28,0.18,faired?1.10:1.045,0.62,faired?24:10);
-      const hc = haloTint || (faired ? CARBON : HALO);
+      const hc = opts.cockpitHalo && _ckAcc(opts.cockpitHalo.color) || haloTint || (faired ? CARBON : HALO);
       if (faired) {
         const start=out.pos.length/3;
-        // Broad carbon roof; underside curves smoothly into the central Y.
-        // Swept crown rises toward the nose so its upper edge reads level
-        // from the seat, instead of projecting as a deep U over the road.
+        // Broad carbon roof; swept crown reads level from the seat, not a deep U over the road.
         for (const p of path) p[1] = Math.max(0.765,0.82 + 0.39*(p[2]+0.20) - 0.028);
         const rings = path.map((p,i) => {
           const a=path[Math.max(0,i-1)], b=path[Math.min(path.length-1,i+1)];
@@ -1404,6 +1403,7 @@ const Car3D = (function () {
         for (let j=0;j<4;j++) addQuad(out,a[j],b[j],b[(j+1)%4],a[(j+1)%4],hc,SURFACES.carbon);
       }
       CarMaterials.smoothSkin(out,stemStart);
+      if (opts.cockpitHalo) out._cockpitHaloMat = [cockpitHaloFrom, out.pos.length / 3];
     }
     // Shared exterior centreline for the fairing and part("halo") below.
     const haloSty = Math.max(0, Math.min(2, Math.round(cockpitStyle.halo || 0)));
@@ -2844,6 +2844,7 @@ const Car3D = (function () {
     shadeFlags.round = false;
     shadeFlags.coverHi = true;
     finishPass(out, liv, fin);
+    if (ckpt && opts.cockpitHalo && out._cockpitHaloMat) for (let i = out._cockpitHaloMat[0]; i < out._cockpitHaloMat[1]; i++) out.mat[i] = opts.cockpitHalo.surface;
     // Measure each closed section from the vertices it emitted.
     if (sil) out._releaseCpuMirror = true;   // TLX: car shadow casters only (plan M-2)
     if (opts && opts.measure) out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {
@@ -2871,9 +2872,8 @@ const Car3D = (function () {
     const info = out.flapInfo;
     if (!info) return out;
     for (const el of aeroFlapsGeom(info.aLvl, info.style)) {
-      // The livery finish rides flapInfo: build()'s own paint->finish remap
-      // runs before these flaps are appended, so without it a satin/chrome
-      // car got gloss top flaps from this path.
+      // flapInfo carries finish: build()'s paint→finish remap runs before append;
+      // without it satin/chrome cars got gloss top flaps here.
       const g = buildFlapGeom(el, info.col, info.finish, info.surface);
       const base = out.pos.length / 3;
       for (let i = 0; i < g.pos.length; i += 3) {

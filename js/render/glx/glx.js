@@ -43,6 +43,19 @@ const GLXBackend = (function () {
   // bailed, leaving a restored context with _ctxLost still set — a silent
   // dead canvas. In-memory only, so a real new visit still gets two attempts.
   let _sessLostN = 0; const _fallbackLossCount = () => { try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { return 0; } };
+  // Past the ctx-loss reload budget: record for __apex.diag() without painting
+  // the full-screen error overlay — RendererPicker.showUnavailable already shows
+  // the Graphics unavailable panel and a second tap should not dismiss a card.
+  const recordGfxBudgetExhausted = (where, err) => {
+    const msg = (err && (err.message || err)) || "unknown";
+    try {
+      const ring = window.__apexErrors || (window.__apexErrors = []);
+      ring.push({ t: Date.now(), kind: "caught", msg: "Caught @ " + where + ": " + String(msg).slice(0, 400),
+                  detail: String((err && err.stack) || "").slice(0, 800) });
+      if (ring.length > 40) ring.shift();
+    } catch (_) { /* never let reporting throw */ }
+    try { Log.error("gfx", "Caught @ " + where + ":", msg); } catch (_) { /* Log absent in harness */ }
+  };
   // GPU error counter — WebGL has no onuncapturederror, so drain getError() once
   // per present. Exists because the real-GPU gate read null here and passed
   // vacuously: docs/PERF-FINDINGS.md 2e.
@@ -700,7 +713,7 @@ const GLXBackend = (function () {
         try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ }
       }, 1200);
       else {
-        if (typeof window.__apexReportError === "function") window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + _n + " times) — reload to try again, or pick another RENDERER in settings."));
+        recordGfxBudgetExhausted("gfx", new Error("The graphics device keeps getting lost (" + _n + " times) — reload to try again, or pick another RENDERER in settings."));
         // Same recovery panel boot uses when GLX.init fails — not only the
         // JS error card — so a CPU-limited box past the reload budget gets
         // RETRY / USE WEBGL2 instead of a silent dead canvas + stuck handoff.

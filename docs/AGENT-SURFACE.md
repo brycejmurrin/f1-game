@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Forty `apex_*` tools (`apex_help {tool}`, the full text `tools/list` shortens, plus `apex_viewer` and five bounded UI/diagnostics tools) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Forty-two `apex_*` tools (`apex_help {tool}`, the full text `tools/list` shortens, plus `apex_viewer` and five bounded UI/diagnostics tools) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -256,7 +256,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Forty tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Forty-two tools today (`apex_catalog` lists them; the wrap-map table below is the one row per tool; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -305,6 +305,7 @@ scenario preparation), `apex_garage_plan` (browser-free camera/design matrix) an
 `apex_diagnostics` (capabilities, background memory/GPU/renderer/VM probes, and
 saved report queries). Browser diagnostics use the existing job lock; planning
 and report comparison do not launch Chromium.
+40 → 42 by 2026-10-22 for `apex_cursor_agents` (2026-10-20, Cursor cloud-agent launch/status over `cursor-agents.mjs`) and `apex_who_is_on_it` (the claims/branches board); the table below is the count's source.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
