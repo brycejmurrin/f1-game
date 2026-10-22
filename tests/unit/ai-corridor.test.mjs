@@ -137,3 +137,20 @@ test('subject acceleration is reused within each lane, refreshed between decisio
   assert.equal(A.choose(context,car,blocker,[car,blocker,following],1000,2.8).side,1,
     'new braking observation must close the lane to arriving traffic');
 });
+
+// D·DP7: far-gap reject must not change the side vs evaluating every rival.
+test('a field of far rivals keeps the same side as a sparse field', () => {
+  const far = Array.from({ length: 40 }, (_, i) => ({ prog: 300 + i * 15, x: (i % 2 ? 3 : -3), speed: 50, corridorAccel: 0 }));
+  const sparse = scenario();
+  const crowded = scenario(far);
+  assert.equal(crowded.side, sparse.side);
+  assert.equal(crowded.left.reason, sparse.left.reason);
+  assert.equal(crowded.right.reason, sparse.right.reason);
+});
+
+test('corridor candidate walk is indexed (no for-of over cars)', () => {
+  const src = readFileSync(new URL('../../js/physics/ai-corridor.js', import.meta.url), 'utf8');
+  const body = src.slice(src.indexOf('function candidate'), src.indexOf('function choose'));
+  assert.equal(/for\s*\(\s*const\s+\w+\s+of\s+cars\s*\)/.test(body), false);
+  assert.equal(/for\s*\(\s*let\s+\w+\s*=\s*0/.test(body), true);
+});

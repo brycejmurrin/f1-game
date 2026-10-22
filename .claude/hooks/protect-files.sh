@@ -1,6 +1,6 @@
 #!/bin/bash
 # PreToolUse guard for Write/Edit/MultiEdit/NotebookEdit AND Bash (the files a
-# command writes, read by shellparse.py — 2026-10-04). Four rules from
+# command writes, read by shellparse.py — 2026-10-04). Five rules from
 # AGENTS.md that prose could only request, made deterministic:
 #
 #  1. §Verification 11 — a GENERATED file is never hand-edited, in any
@@ -21,6 +21,12 @@
 #     artifacts/ (2026-10-14; no escape hatch). Via Bash, removals (rm, mv
 #     sources) count as writes and whole-tree git verbs (stash, reset --hard,
 #     clean, switch, checkout <branch>) are refused (round 2).
+#  5. Shared safety bans 1-2 (Fleet A + D, Bryce 2026-10-22), no escape hatch:
+#     nothing typed by hand RAISES a ceiling in tests/data/ratchets.json or a
+#     tests/data/ratchets.d fragment, and a fragment is edited only on its own
+#     branch (lowering or reverting this branch's file is fine). A removal or
+#     move (rm, git rm, mv, find -delete, a directory) counts. Cursor reaches
+#     this file through .cursor/hooks/edit-guard.sh and shell-guard.sh.
 # Every target is resolved with realpath first, so a symlink is judged as the
 # file it points at (round 2, 2026-10-14).
 #

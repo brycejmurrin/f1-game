@@ -180,3 +180,48 @@ test("the positions control offers refresh while WATCH stays available", async (
   assert.equal(requests, before + 3, "the refresh control downloads the field again");
   assert.equal(tab.traces().complete, true);
 });
+
+// H3-10 (2026-10-22): WATCH STOP DUEL set seatCode to the first duellist even
+// with no roster seat, and RealRace.stage() refuses an unseated code.
+test("WATCH STOP DUEL follows a SEATED duellist, never an unseated one", async () => {
+  const records = new Map(), launched = [];
+  const driver = (num, offset) => ({ num, code: "D" + num, name: "Driver " + num, team: "T", grid: num, pos: num,
+    laps: [10, 10, 10, 10, 10], lapStart: [0, 10, 20, 30, 40].map((t) => t + offset), lapsDone: 5, pits: [2],
+    stints: [{ c: "SOFT", from: 1, to: 2 }, { c: "HARD", from: 3, to: 5 }] });
+  const script = { sessionKey: 3101, t0: 1_000_000, complete: true, laps: 5, name: "Duel Grand Prix", session: "Race",
+    weather: "dry", circuit: "Monza", country: "Italy", trackId: "monza", year: 2026, v: 6,
+    cautions: [], rain: [false, false, false], drivers: [driver(1, 2), driver(2, 0)] };
+  const store = new Map();
+  const { D } = load({
+    indexedDB: idb(records),
+    localStorage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, v),
+      removeItem: (k) => store.delete(k), key: () => null, length: 0 },
+    Tracks: { LIST: [{ id: "monza", name: "MONZA" }] },
+    RealRace: { replay() {}, mapField: () => [{ num: 2 }], launch: (_s, o) => { launched.push(o.seat); return true; } },
+    F1API: { locationData: async (_k, num) => rows(num, true), cancelAll() {} },
+  });
+  await D.fetchTraces(script);
+  D.remember(script);
+  const ui = dom();
+  const tab = D.create({
+    el: ui.el, clear: ui.clear, emptyMsg: (t) => ui.el("div", null, t), spinner: () => ui.el("div"),
+    sel: { meta: { sessionKey: script.sessionKey, name: "Race", type: "Race" } },
+    ensureSession: () => Promise.resolve(), buildPicker: () => ui.el("div"),
+    teamChip: (c) => ui.el("span", null, c), fmtDateTime: (v) => String(v),
+    isOpen: () => true, close() {},
+  });
+  const tree = await tab.loadRealRace();
+  for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+  const nodes = ui.walk(tree);
+  const picks = nodes.filter((n) => n.tag === "select" && /driver and stop/.test(n["aria-label"] || ""));
+  assert.equal(picks.length, 2);
+  picks[0].value = "1:2"; picks[1].value = "2:2";            // D1 has no roster seat, D2 has one
+  picks[0].fire("change");
+  const action = nodes.find((n) => n.tag === "button" && n.textContent === "WATCH STOP DUEL");
+  assert.equal(action.disabled, false, "the duel is available");
+  action.fire("click");
+  for (let i = 0; i < 40 && !launched.length; i++) await new Promise((r) => setImmediate(r));
+  await tab.positionsSettled();
+  for (let i = 0; i < 20 && !launched.length; i++) await new Promise((r) => setImmediate(r));
+  assert.deepEqual(launched, ["D2"], "the replay follows the seated duellist");
+});

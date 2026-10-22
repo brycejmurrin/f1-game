@@ -3439,6 +3439,7 @@ wxArc = WeatherArc.create(G, { isTimeTrial, isQuali });
 // (js/physics/tyre-model.js). Created before the first gridUp fits a compound.
 tyres = TyreModel.create(G);
 if (typeof SoakRun !== "undefined") SoakRun.create(G);   // AUTO SOAK (js/perf/soak-run.js): idle until PhoneRecorder's button calls start()
+if (typeof BenchRun !== "undefined") BenchRun.create(G);   // BENCHMARK (js/perf/bench-run.js): resumes its own multi-reload run, else idle
 const playerForces = PlayerForces.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.
@@ -3483,7 +3484,7 @@ const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
 if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
-const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice } = Menus.create(G);
+const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice, restoreMenuAfterGraphicsReset } = Menus.create(G);
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's
 // wheel spec, decal queue, cockpit rig, planted wheels, warm-ups, GLB body.
 // resolveLivery lives in CustomLiveries; partsVisualKey / drawAeroFlaps / damp
@@ -3842,6 +3843,9 @@ function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
   if (!(idx >= 0)) return false;   // reduce-motion still builds then plays the garage-out before the card and the flyby
+  // JOIN the menu's in-flight build of this world (tile → SETTINGS → RACE!); claim owner before
+  // generation++ so the stepped build does not abort. When join is false (buildKey / PerfGov.tier
+  // mismatch), still await that abort — two loadTrackStepped calls race on `track` (Pages DAILY).
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
   const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = live;
@@ -4258,6 +4262,20 @@ function quitToMenuAfterCtxLost() {
   stashCtxLostNotice();
   loadingScreen.stop();
   quitToMenu();
+  try {
+    resetSetupCam();
+    spMeshBust();
+    garagePre.release();
+    _menuGate.warm = 0;
+    _menuGate.garageWarm = 0;
+    _menuGate.garageReady = false;
+    _carWarm.busy = false;
+    if (gfx && gfx.invalidateSoftPresent) gfx.invalidateSoftPresent();
+    if (canvas) canvas.style.visibility = "";
+    if (!_softEl && gfx && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
+    if (_softEl) _softEl.style.visibility = "";
+  } catch (_) { /* harness: recovery must not throw over teardown */ }
+  if (typeof restoreMenuAfterGraphicsReset === "function") restoreMenuAfterGraphicsReset();
   if (typeof showCtxLostNotice === "function") showCtxLostNotice();
   else if (typeof announce === "function") announce(CTX_LOST_NOTICE_MSG, 5, "info");
 }
@@ -8529,17 +8547,13 @@ function paintThrottleMode() {
   }[mode];
 }
 
-// STEERING INPUT row (js/ui/setting-row.js) and the one-line note under it.
-// The note is ALWAYS present — its text changes, it is never hidden — so a
-// mode change cannot reflow the page under a finger; same rule that keeps
-// RECALIBRATE and GEARS disabled rather than hidden.
+// STEERING INPUT row (js/ui/setting-row.js): note always present (never hidden) so a mode
+// change cannot reflow under a finger — same rule as disabled RECALIBRATE / GEARS.
 function paintSteer() {
   SettingRow.paint($("pm-steer"), steerMode);
   const note = $("pm-steer-note");
   if (!note) return;
-  // Only warn when the gyro is genuinely unavailable/denied — not in the brief
-  // window before the first sensor reading arrives (which would falsely say
-  // "no gyro" on phones that have a working gyro).
+  // Warn only for genuine deny/unavailable — not the brief pre-first-reading window.
   note.textContent = Input.gyroDenied
     ? "Motion access is denied on this device, so TILT cannot steer here — pick BUTTONS or TOUCH."
     : "TILT leans the phone. BUTTONS adds on-screen arrows. TOUCH drags a finger on the track.";
@@ -8940,7 +8954,7 @@ let garageReturn = "select";
 // The one way in. Everything that opens the garage goes through here so the
 // return path can never be left stale — including js/career/career-ui.js, via G.openGarage.
 function openGarage(from) {
-  garagePre.markOpen(from);
+  loadingScreen.stop(); garagePre.markOpen(from);   // stale busy/prep plate (z 36) must not cover #carsetup
   if (from === "menu" && soundOn) ensureAudio().then(() => GameAudio.init());
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
@@ -9035,7 +9049,7 @@ function garageBack() {
   if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
   else if (garageReturn === "career") careerUi.openHub();
   else if (garageReturn === "select") { buildSelect(); $("select").hidden = false; }
-  else { buildSelect(); els.overlay.hidden = false; }   // no vt: snapshot after hiding #carsetup is a black hold
+  else { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); }   // no vt: snapshot after hiding #carsetup is a black hold
   if (garageReturn !== "menu") loadingScreen.stop();
 }
 $("cs-back").onclick = garageBack;
@@ -9052,7 +9066,7 @@ $("cs-done").onclick = () => {
   // settings' own BACK still returns to #select, so the circuit stays two taps
   // away if you change your mind.
   else if (garageReturn === "select") raceSettings.openRaceSettings("select");
-  else { buildSelect(); els.overlay.hidden = false; }   // no vt: snapshot after hiding #carsetup is a black hold
+  else { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); }   // no vt: snapshot after hiding #carsetup is a black hold
   if (garageReturn !== "menu") loadingScreen.stop();
 };
 $("cs-unlimited").onclick = () => {

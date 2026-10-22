@@ -200,10 +200,9 @@ test("a quiet 22-car sweep does not repeat each car's movement check for every p
   calls=0;G.raceT=1/60;
   collision.resolveCollisions(cars,1/60);
   assert.deepEqual(cars.map(c=>[c.prog,c.s,c.x,c.speed]),expected,"a separated moving field is untouched");
-  // Relative-motion hypot tests remain pairwise (231). Checking every car's
-  // own motion once needs only 22 more, whereas repeated target checks take
-  // this workload to 484. Leave room for equivalent faster implementations.
-  assert.ok(calls<=300,`quiet sweep repeated movement work: ${calls} hypot calls`);
+  // D·DP7: sweep motion/relative-travel gates use squared compares, so a quiet
+  // field pays zero Math.hypot. The old pairwise hypot path was 231+22.
+  assert.equal(calls,0,`quiet sweep still called Math.hypot: ${calls}`);
 });
 
 test("SAT reuses body trigonometry without changing axis construction",()=>{
@@ -232,11 +231,30 @@ test("pair extents share trig while preserving nonfinite yaw semantics",()=>{
   calls=0;
   const contact=collision.pairContact(a,b);
   assert.ok(contact);assert.equal(contact.penLong,4.8-1);assert.equal(contact.penLat,2-.5);
-  assert.ok(calls<=4,`pair repeated extent trigonometry: ${calls}`);
+  // D·DP7: unyawed pairs take the LCAR/WCAR closed form — zero trig, same pens.
+  assert.equal(calls,0,`unyawed pair still paid extent trigonometry: ${calls}`);
   // Extents intentionally use yawVis || 0; bodyAngle separately rejects
   // infinity. Reusing bodyAngle here would silently change this contract.
   a.yawVis=Infinity;
   const nonfinite=collision.pairContact(a,b);
   assert.ok(nonfinite);assert.ok(Number.isNaN(nonfinite.penLong));assert.ok(Number.isNaN(nonfinite.penLat));
   assert.equal(nonfinite.oriented,false);
+});
+
+test("unyawed pairContact matches the trig extents Object.is for a grid of poses",()=>{
+  const {collision}=setup();
+  collision.resolveCollisions([],1/60);
+  const a=car(0,40),b=car(0,40);
+  for(let dProg=0;dProg<=5;dProg+=0.5){
+    for(let dX=0;dX<=2.5;dX+=0.5){
+      a.prog=0;a.x=0;a.speed=40;b.prog=dProg;b.x=dX;b.speed=35;
+      const ct=collision.pairContact(a,b);
+      const eLong=4.8,eLat=2;
+      const penLong=eLong-Math.abs(dProg),penLat=eLat-Math.abs(dX);
+      if(penLong<=0||penLat<=0){assert.equal(ct,null);continue;}
+      assert.ok(ct);
+      assert.ok(Object.is(ct.penLong,penLong),`penLong ${ct.penLong} vs ${penLong} at dProg=${dProg}`);
+      assert.ok(Object.is(ct.penLat,penLat),`penLat ${ct.penLat} vs ${penLat} at dX=${dX}`);
+    }
+  }
 });

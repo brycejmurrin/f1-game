@@ -449,14 +449,16 @@ test("GLX restores even when sessionStorage is blocked", () => {
 });
 
 test("GLX's third visible context loss says so instead of leaving a silent dead canvas", () => {
-  // Two counted reloads per tab, then GLX (nothing beneath it) stopped with
-  // no exception, so the error overlay never painted. TLX reports the same
-  // cap through __apexReportError; GLX now matches it. Past the budget also
-  // opens the Graphics unavailable panel (RETRY / USE WEBGL2).
+  // Two counted reloads per tab, then GLX (nothing beneath it) stops with the
+  // Graphics unavailable panel (RETRY / USE WEBGL2). Past the budget the
+  // failure is written to __apexErrors for __apex.diag() only — not the
+  // full-screen error overlay, which would sit on top of #nogl and steal the
+  // first tap (e.g. Close Garage).
   for (const prior of ["0", "2"]) {
     const h = bootGlx();
     const reports = [];
     const panels = [];
+    h.sandbox.__apexErrors = [];
     h.sandbox.__apexReportError = (where, err) => reports.push([where, err && err.message]);
     h.sandbox.RendererPicker = { showUnavailable: (opts) => panels.push(opts && opts.panel && opts.panel.id) };
     h.sandbox.document.getElementById = (id) => ({ id });
@@ -465,16 +467,89 @@ test("GLX's third visible context loss says so instead of leaving a silent dead 
     h.loseContext();
     if (prior === "0") {
       assert.equal(reports.length, 0, "a first loss is a quiet counted reload");
+      assert.equal(h.sandbox.__apexErrors.length, 0, "under the budget: nothing on the error ring");
       assert.equal(h.sandbox.__timers.length, 1, "the self-heal reload timer");
       assert.equal(panels.length, 0, "under the budget: no unavailable panel yet");
     } else {
       assert.equal(h.sandbox.__timers.length, 0, "past the cap: no reload loop");
-      assert.equal(reports.length, 1, "past the cap the player is told");
-      assert.equal(reports[0][0], "gfx");
-      assert.match(reports[0][1], /keeps getting lost \(3 times\)/);
+      assert.equal(reports.length, 0, "past the cap: no full-screen error overlay");
+      assert.equal(h.sandbox.__apexErrors.length, 1, "past the cap: recorded on the error ring");
+      assert.equal(h.sandbox.__apexErrors[0].kind, "caught");
+      assert.match(h.sandbox.__apexErrors[0].msg, /Caught @ gfx:.*keeps getting lost \(3 times\)/);
       assert.deepEqual(panels, ["nogl"], "past the cap: Graphics unavailable panel");
     }
   }
+});
+
+test("TLX past ctx-loss budget records ring only, not the full-screen error overlay", () => {
+  const tlxSrc = read("js/render/three/tlx.js");
+  const mkBudgetVm = (store, out) => {
+    const ring = [];
+    const overlays = [];
+    const recordGfxBudgetExhausted = (where, err) => {
+      const msg = (err && (err.message || err)) || "unknown";
+      ring.push({ t: Date.now(), kind: "caught", msg: "Caught @ " + where + ": " + String(msg).slice(0, 400),
+                  detail: String((err && err.stack) || "").slice(0, 800) });
+    };
+    const ss = {
+      getItem: (k) => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = String(v); },
+    };
+    const ctx = vm.createContext({
+      initOwner: { active: true },
+      _threeOnLost: null,
+      _deviceLost: false,
+      _warmRequested: true,
+      _warmPending: {},
+      _warmDone: false,
+      document: { hidden: false, addEventListener() {}, removeEventListener() {} },
+      _nowMs: () => 1e6,
+      _shownAt: 0,
+      localStorage: { setItem() {}, removeItem() {} },
+      sessionStorage: ss,
+      _sessLostN: 0,
+      _fallbackLossCount: () => 0,
+      _rememberFallbackLoss: () => {},
+      _glPin: "1",
+      forceWebGL: true,
+      _autoStayGL: false,
+      setTimeout() {},
+      location: { reload() { out.reloads++; } },
+      recordGfxBudgetExhausted,
+      RendererPicker: { showUnavailable: (opts) => out.panels.push(opts && opts.panel && opts.panel.id) },
+      window: {
+        __apexErrors: ring,
+        __apexReportError: (where, err) => overlays.push([where, err && err.message]),
+        name: "",
+      },
+    });
+    ctx.document.getElementById = (id) => ({ id });
+    return { ctx, ring, overlays };
+  };
+
+  const refuseStore = { "apex26.ctxLostReloads": "2" };
+  const refuseOut = { reloads: 0, panels: [] };
+  const refuseVm = mkBudgetVm(refuseStore, refuseOut);
+  const refuseBody = fnSource(tlxSrc, "const refuseTab = () => {") + ";";
+  vm.runInContext(refuseBody + "\n refuseTab();", refuseVm.ctx);
+  assert.equal(refuseOut.reloads, 0, "refuseTab past the cap does not reload");
+  assert.equal(refuseVm.overlays.length, 0, "refuseTab: no full-screen overlay hook");
+  assert.equal(refuseVm.ring.length, 1, "refuseTab: error ring");
+  assert.ok(/cannot draw on this device/.test(refuseVm.ring[0].msg), "refuseTab: message on ring");
+  assert.deepEqual(refuseOut.panels, [], "refuseTab: present-fail path records only (no picker panel here)");
+
+  const lossStore = { "apex26.ctxLostReloads": "3" };
+  const lossOut = { reloads: 0, panels: [] };
+  const lossVm = mkBudgetVm(lossStore, lossOut);
+  lossVm.ctx.renderer = {};
+  const lossBody = fnSource(tlxSrc, "renderer.onDeviceLost = function (info) {");
+  const onLost = vm.runInContext(lossBody + "\n renderer.onDeviceLost", lossVm.ctx);
+  onLost({});
+  assert.equal(lossOut.reloads, 0, "fourth device loss does not reload");
+  assert.equal(lossVm.overlays.length, 0, "onDeviceLost: no full-screen overlay hook");
+  assert.equal(lossVm.ring.length, 1, "onDeviceLost: error ring");
+  assert.ok(/keeps getting lost \(4 times\)/.test(lossVm.ring[0].msg), "onDeviceLost: message on ring");
+  assert.deepEqual(lossOut.panels, ["nogl"], "onDeviceLost: Graphics unavailable panel");
 });
 
 test("TLX aborts program warm on device loss so race-start cannot hang on warming()", () => {
@@ -890,7 +965,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.wgxCapture",
   ]);
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
-    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice",
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
     // Why this tab's WGX/TLX pick bound WebGL2 (renderer-boot.js, #2285); a
     // RESET must not leave diag() quoting a reason from before it.
@@ -1004,7 +1079,7 @@ test("applyBackend clears session renderer latches before reload", () => {
   // Switching WEBGL2 ↔ THREE ↔ WEBGPU must not inherit wgxHoldPresent /
   // tlxAutoGL from the previous path; RESET already wiped them, a pick did not.
   const latchSeed = Object.fromEntries([
-    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice",
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
     "apex26.gfxFallbackWhy",
   ].map((k) => [k, "1"]));
@@ -1023,7 +1098,7 @@ test("applyBackend clears session renderer latches before reload", () => {
 
 test("THREE PATH and SCREENSHOTS clear session renderer latches on reload", () => {
   const latchSeed = Object.fromEntries([
-    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice",
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
     "apex26.gfxFallbackWhy",
   ].map((k) => [k, "1"]));

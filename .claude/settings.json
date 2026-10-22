@@ -74,6 +74,7 @@
       "Bash(node --test *)",
       "Bash(node --check *)",
       "Bash(node -e *)",
+      "Bash(node tools/ci/agent-msg.mjs send *)",
       "Bash(node tools/ci/verify-change.mjs *)",
       "Bash(node tools/ci/pick-tests.mjs *)",
       "Bash(node tools/ci/select-specs.mjs *)",

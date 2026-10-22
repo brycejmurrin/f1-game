@@ -202,6 +202,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
+        "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
@@ -1221,6 +1222,9 @@
         "tests/unit/service-worker.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
+      "raceLoadGate": [
+        "tests/unit/voice-pack.test.mjs"
+      ],
       "releaseExcept": [
         "tests/unit/voice-pack.test.mjs"
       ],
@@ -1351,12 +1355,30 @@
         "tests/unit/cockpit-preview.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
+      "setVisor": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "setVisorColor": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "setVisorIntensity": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
       "setWheel": [
         "tests/unit/cockpit-preview.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "turnChaseLead": [
         "tests/unit/camera-defaults.test.mjs"
+      ],
+      "visor": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "visorColor": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "visorIntensity": [
+        "tests/unit/cockpit-wheels.test.mjs"
       ],
       "wheel": [
         "tests/unit/cockpit-wheels.test.mjs"
@@ -4561,6 +4583,7 @@
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/reliability.test.mjs",
+        "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/stage-minify.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
@@ -8720,6 +8743,7 @@
       "close": [
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs",
@@ -8914,9 +8938,6 @@
       ],
       "qualiReporters": [
         "tests/unit/net-authority.test.mjs"
-      ],
-      "rejoin": [
-        "tests/unit/netplay-resilience.test.mjs"
       ],
       "reportCaution": [
         "tests/unit/net-authority.test.mjs"
@@ -9240,6 +9261,26 @@
       ],
       "text": [
         "tests/unit/overlay-feed.test.mjs"
+      ]
+    },
+    "js/perf/bench-run.js": {
+      "load": [
+        "tests/unit/bench-run.test.mjs"
+      ],
+      "median": [
+        "tests/unit/bench-run.test.mjs"
+      ],
+      "newPlan": [
+        "tests/unit/bench-run.test.mjs"
+      ],
+      "pathPrefs": [
+        "tests/unit/bench-run.test.mjs"
+      ],
+      "scenes": [
+        "tests/unit/bench-run.test.mjs"
+      ],
+      "summarize": [
+        "tests/unit/bench-run.test.mjs"
       ]
     },
     "js/perf/gfx-debug-overlay.js": {
@@ -9732,6 +9773,11 @@
       ],
       "normalize": [
         "tests/unit/ai-band.test.mjs"
+      ]
+    },
+    "js/physics/ai-corridor.js": {
+      "choose": [
+        "tests/unit/ai-corridor.test.mjs"
       ]
     },
     "js/physics/ai-drive.js": {
@@ -11359,6 +11405,7 @@
         "tests/unit/pit-lane.test.mjs"
       ],
       "think": [
+        "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs"
       ],
       "throughM": [
@@ -11826,6 +11873,9 @@
       ]
     },
     "js/race/radio-lines.js": {
+      "commit": [
+        "tests/unit/radio-lines.test.mjs"
+      ],
       "create": [
         "tests/unit/battle-earcon.test.mjs",
         "tests/unit/event-journal.test.mjs",
@@ -14247,6 +14297,7 @@
         "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/load-order.test.mjs",
+        "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/three-inspector.test.mjs"
       ]
     },
@@ -14260,9 +14311,7 @@
     },
     "js/share/share-card-layout.js": {
       "layout": [
-        "tests/unit/share-card-layout.test.mjs"
-      ],
-      "*": [
+        "tests/unit/share-card-layout.test.mjs",
         "tests/unit/share-card.test.mjs"
       ]
     },
@@ -16107,6 +16156,7 @@
       ],
       "*": [
         "tests/unit/aero-zone-tables.test.mjs",
+        "tests/unit/ctx-lost-menu-restore.test.mjs",
         "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
@@ -16497,6 +16547,9 @@
       ],
       "refresh": [
         "tests/unit/career-cross-tab.test.mjs"
+      ],
+      "repairDestinations": [
+        "tests/unit/ctx-lost-menu-restore.test.mjs"
       ],
       "*": [
         "tests/unit/share-code.test.mjs"

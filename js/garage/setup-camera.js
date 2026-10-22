@@ -27,7 +27,8 @@ function panelCover(pr, cr, cw, ch, camTop) {
 //   exposure  = base * LT.exposureMul
 //   bloom     = base * LT.bloomMul   (off on a phone, and shed at autoTier 4)
 //   threshold = clamp(base + LT.threshOff, 0.4, 1.2) * baseExposure
-//   tune.sunShaftMul is FORCED OFF. The bay's "sun" is a soft roof fill
+//   tune.sunShaftMul and opts.flareMul are FORCED OFF. The bay's "sun" is a
+//   soft roof fill
 //   (GarageScene.SKYLIGHT, dir Y≈0.86) — PostCommon.sunScreen still arms a
 //   ~0.35 screen-shaft from that fill, and the composite then marches bloom
 //   toward the skylight UV. After #1025 restored glossy dry-day paint, those
@@ -52,7 +53,7 @@ function _tuneNum(T, id, fallback) {
 // Reused every garage frame — gfx.present / begin consume opts synchronously.
 const _presentOpts = {
   exposure: 0, bloom: 0, threshold: 0, contact: 0, reflect: 0, carReflect: 0,
-  ssao: 0, godray: 0, bloomLevels: 0, tune: null,
+  ssao: 0, godray: 0, bloomLevels: 0, flareMul: 0, tune: null,
 };
 const _presentTune = { sunShaftMul: 0 };
 // A phone boots GRAPHICS MEDIUM, and the governor never ticks in the bay, so
@@ -80,6 +81,9 @@ function presentOpts(tune) {
   // Prototype chain carries the rest of the image-grade knobs (no Object.create).
   Object.setPrototypeOf(_presentTune, T && typeof T === "object" ? T : null);
   _presentTune.sunShaftMul = 0;
+  // Lens flare stays armed from the roof fill unless zeroed — the TYRES side
+  // framing pegged peak luma at 255 while sunShaftMul was already off.
+  _presentOpts.flareMul = 0;
   // The garage lighting mood (identity when shipped). Inline, not moodDef():
   // tests run this function sliced out of the file.
   const md = (typeof GarageScene !== "undefined" && GarageScene.moodDef && GarageScene.moodDef()) || { exposure: 1, bloom: 1 };
