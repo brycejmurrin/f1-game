@@ -9,23 +9,54 @@
       const { lapBounds, out, MAT, n, ds, px, pz, pyMin, place, every, onTrack, hash, pal,
               indexSolid,
               grandstandEx, building, motorhome, hedge: hedgeApi, billboard, mountain, anchor, vadd, addBox,
-              pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism,
+              pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum,
               forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
               bleacher, broadleafFall, plane,
               groundedSegments, recordBarrier, circuitKit,
               signBoard, seat, bankedKerbStrip,
               spectatorHill, cameraTower, sponsorHoarding, bakedModel, along, terrainYAt,
               bush, drapeRun } = api;
-      // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
-      // Ask the same question first, so a hill that overlaps a parallel stretch
-      // is skipped instead of staged and dropped (64 per build here,
-      // every build, visible in verify-track's guard-drop report). Same node,
-      // side and XZ as the engine's own test; the props that survive are the
-      // props that always did (graph-parity).
-      const backdrop = (k, side, dist, sz, col) => {
-        const a = anchor(k, side, dist);
+      // backdrop() seats green hills on groundYAt (road-extrapolated floor at
+      // large dist). Silverstone's mountain rings raise real terrain well above
+      // that floor, so engine backdrop tops buried up to 6.8 m (ground-audit
+      // #3362). Keep a deep skirt at the engine floor (campsites lean on that
+      // AABB support chain) but grow the silhouette until the TOP clears the
+      // drawn terrain — buried only flags a wholly submerged top.
+      const backdrop = (kk, side, dist, sz, col) => {
+        const a = anchor(kk, side, dist);
         if (onTrack(a.c[0], a.c[2], sz[0] / 2 + 6)) return;
-        api.backdrop(k, side, dist, sz, col);
+        const greenDom = col[1] > col[0] && col[1] > col[2] * 1.05;
+        if (greenDom) {
+          const R = Math.max(sz[0], sz[2]) * 0.5 * (0.92 + hash(kk * 2.3 + side) * 0.2);
+          const H = sz[1] * (0.9 + hash(kk * 3.7 + side * 1.3) * 0.35);
+          const floor = a.c[1] - 2;                       // engine groundYAt skirt
+          let crest = floor + 2 + H;                      // default top (= gy≈floor)
+          const gy = terrainYAt(a.c[0], a.c[2]);
+          if (gy != null) crest = Math.max(crest, gy + H);
+          for (let q = 0; q < 4; q++) {
+            const sy = terrainYAt(a.c[0] + Math.cos(q * 1.5708) * R * 0.55,
+                                  a.c[2] + Math.sin(q * 1.5708) * R * 0.55);
+            if (sy != null) crest = Math.max(crest, sy + H * 0.85);
+          }
+          const hh = Math.max(H + 2, crest - floor);
+          const c1 = col, c3 = [col[0] * 0.92, col[1] * 0.94, col[2] * 0.92];
+          out._mat = MAT.FOLIAGE;
+          addFrustum(out, [a.c[0], floor, a.c[2]], R, R * 0.5, hh * 0.5, c1, 7);
+          addCone(out, [a.c[0], floor + hh * 0.5, a.c[2]], R * 0.5, hh * 0.5, c3, 7);
+          out._mat = 0;
+          return;
+        }
+        api.backdrop(kk, side, dist, sz, col);
+      };
+      // place() always sinks 0.8 m — fine for solid props, but a thin pad's TOP
+      // ends under the terrain (ground-audit buried). Seat flash strips on the
+      // drawn ground so their tops stay visible.
+      const flash = (kk, side, dist, sz, col) => {
+        const a = anchor(kk, side, dist);
+        if (onTrack(a.c[0], a.c[2], sz[0] / 2 + 1.5)) return;
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const lift = (gy != null ? gy - a.c[1] : 0) + sz[1] / 2 + 0.03;
+        addBox(out, vadd(a.c, a.u, lift), sz, col, [a.r, a.u, a.t]);
       };
 
       const k = (s) => Math.round(s * n) % n;
@@ -61,9 +92,13 @@
           id: "kit:silverstone:wing-hospitality", frac: 0.465,
           side: 1, gap: 76, size: [20, 9, 58], modules: 6,
         });
+        // Was gap 92 / frac 0.935: kit seats on groundHeight (road-extrapolated),
+        // but the National-straight outer verge rises under the mountain ring and
+        // buried seven vehicle boxes up to 5.0 m (ground-audit #3362 / emitBox).
+        // Push the yard further out onto flatter airfield apron.
         circuitKit.serviceCompound({
-          id: "kit:silverstone:paddock-service", frac: 0.935,
-          side: 1, gap: 92, size: [30, 5, 54], vehicles: 10,
+          id: "kit:silverstone:paddock-service", frac: 0.948,
+          side: 1, gap: 128, size: [30, 5, 54], vehicles: 10,
         });
         circuitKit.cameraCrane({
           id: "kit:silverstone:camera-crane", frac: 0.30,
@@ -240,8 +275,10 @@
         [0.145,  1, 30, 46, 7], // Becketts exit
         [0.285,  1, 32, 46, 9], // Stowe entry
         [0.325, -1, 26, 46, 7], // Vale
-        [0.815, -1, 28, 46, 8], // Brooklands approach
-        [0.875, -1, 26, 46, 7], // Luffield/Woodcote
+        // +2 m gap: front tread tops were 0.29–0.37 m under the rising
+        // Brooklands verge (ground-audit buried 2 @ #3362).
+        [0.815, -1, 30, 46, 8], // Brooklands approach
+        [0.875, -1, 28, 46, 7], // Luffield/Woodcote
       ]) bleacher(s - len * M / 2, s + len * M / 2, side, gap, {
         rows, rise: 0.70, setback: 0.92, density: 0.66, step: 12,
         frameCol: [0.58, 0.60, 0.64], plankCol: [0.64, 0.65, 0.68],
@@ -733,12 +770,12 @@
       }
 
       for (const [s, side] of [[0.04, 1], [0.12, -1], [0.12, 1], [0.30, 1], [0.40, 1], [0.55, 1], [0.66, -1], [0.85, -1]]) {
-        place(k(s), side, 2, [0.5, 0.3, 8], side > 0 ? RED : WHITE);
-        place(k(s), side, 9, [12, 0.1, 14], CONC);
+        flash(k(s), side, 2, [0.5, 0.3, 8], side > 0 ? RED : WHITE);
+        flash(k(s), side, 9, [12, 0.1, 14], CONC);
       }
       // Extra kerb at The Wing area
-      place(k(0.45), 1, 2, [0.4, 0.28, 6], RED);
-      place(k(0.45), 1, 8, [11, 0.1, 10], CONC);
+      flash(k(0.45), 1, 2, [0.4, 0.28, 6], RED);
+      flash(k(0.45), 1, 8, [11, 0.1, 10], CONC);
 
       // ── Wave-3 identity kerbs — Copse + Maggotts–Becketts punctuation ─────
       // Red/white rumble strips at the two signature high-speed corners; safer
@@ -858,8 +895,10 @@
         out._mat = MAT.RUST;
         addCyl(out, vadd(vadd(a.c, a.u, bodyH), a.t, -ln / 2 - 0.2), w / 2, ln,
                [0.58, 0.60, 0.65], 8, [a.r, a.t, a.u]);                                   // original barrel roof, repainted
+        // Lift the fascia 0.12 m so it no longer shares a plane with the barrel
+        // roof (flatCoplanar 1280 m² heritageMuseum pair, #3362).
         out._mat = MAT.METAL;
-        addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.94), a.t, 0), [w + 0.4, 1.1, ln + 0.8], [0.10, 0.20, 0.44], b);
+        addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.94 + 0.12), a.t, 0), [w + 0.4, 1.1, ln + 0.8], [0.10, 0.20, 0.44], b);
         // Glazed entrance gable + canopy at the trackside end.
         const gable = vadd(vadd(a.c, a.u, bodyH * 0.42), a.t, -(ln / 2 + 0.05));
         out._mat = MAT.GLASS;
@@ -934,7 +973,7 @@
         id: "silverstone-heritage-runway", samples: 8,
       });
       for (const d of [69, 75, 81, 87]) {
-        place(k(0.235), 1, d, [1.4, 0.12, 14], [0.84, 0.84, 0.80]);
+        flash(k(0.235), 1, d, [1.4, 0.12, 14], [0.84, 0.84, 0.80]);
       }
 
       for (const [id, s, side, gap, len] of [
@@ -1161,9 +1200,11 @@
         });
         const a = anchor(k(s), side, 46), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 16)) {
+          // Lift the H markings just clear of the pad (was 0.22 — tops buried
+          // 0.03–0.04 m under rising helipad ground-audit samples).
           for (const [dr, dt, sz] of [[0, -2.6, [7, 0.06, 1.2]], [0, 2.6, [7, 0.06, 1.2]],
                                       [0, 0, [1.2, 0.06, 6]]])
-            addBox(out, vadd(vadd(a.c, a.u, 0.22), a.t, dt), sz, [0.92, 0.92, 0.90], b), void dr;
+            addBox(out, vadd(vadd(a.c, a.u, 0.32), a.t, dt), sz, [0.92, 0.92, 0.90], b), void dr;
           out._mat = MAT.METAL;
           seat.cyl(out, a.c, 0.14, 1.1, [0.30, 0.31, 0.34], 5, b);                       // skid strut
           addBox(out, vadd(a.c, a.u, 1.6), [1.8, 1.5, 6.4], [0.18, 0.30, 0.52], b);      // cabin
