@@ -1,0 +1,1 @@
+Fixed: A game that stays frozen on a weak or software graphics device — every frame completing but taking seconds — now reports the glacial-frame stall through the on-screen error card instead of sitting silent forever.
