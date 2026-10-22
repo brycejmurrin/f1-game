@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01LCwqz3kpiVuXkjy8YyJprp DONE #3519 f9b8f5af (A·F2 car aero; merged by Bryce 09:12Z) — 2 parents. TRAIN f9b8f5af queued since 09:12Z (replaced 1003be69); FREEZE stays; 7 game PRs unshipped. Runners: 70 jobs / 40 slots, oldest queued 26m.
+HANDOFF to:D from:cursor:bc-60c4b7d6-a646-5058-8d21-9c41393a84d1 #3564 cursor/w18-input-84d1 @01e876d34 D·W18d input duplicate listeners fixed; MERGE-HOLD for DAD; tip CI running (run-ci)
