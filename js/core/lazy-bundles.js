@@ -494,13 +494,16 @@ async function loadAudioSerial(skipLeadingYield) {
   }
   return true;
 }
-/** Routes LAZY_AUDIO through serial chunk loads while Settings is open. */
+/** LAZY_AUDIO: one eval at a time when Settings is open or the bundle is multi-file. */
 async function loadBackendScripts(files, edges, opts) {
-  if (files === AUDIO_FILES && settingsUiHot()) {
-    audioMark("apex:settings:audio-deferred");
-    await audioYieldToMain("paint");
-    await audioYieldToMain("task");
-    return loadAudioSerial(true);
+  if (files === AUDIO_FILES) {
+    if (settingsUiHot()) {
+      audioMark("apex:settings:audio-deferred");
+      await audioYieldToMain("paint");
+      await audioYieldToMain("task");
+      return loadAudioSerial(true);
+    }
+    if (AUDIO_FILES.length > 1) return loadAudioSerial(true);
   }
   return loadScripts(files, edges, opts);
 }
