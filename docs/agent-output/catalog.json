@@ -993,6 +993,7 @@
     {
       "path": "tools/ci/merge-attribution.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--format",
