@@ -1,17 +1,17 @@
 # Fleet A queue — OrchA 23 (session_01LCwqz3kpiVuXkjy8YyJprp)
 
 Live state, branch `cursor/orcha23-queue-a23q` (never merged). Times UTC (Pacific = UTC−7).
-Updated: 2026-10-22 08:02Z. Predecessor: OrchA 22 session_012Rf9fHiy2exPfFWA5Vfwrg (brief: cursor/orcha22-queue-a22q).
+Updated: 2026-10-22 08:09Z. Predecessor: OrchA 22 session_012Rf9fHiy2exPfFWA5Vfwrg (brief: cursor/orcha22-queue-a22q).
 
 ## Timers
 - tick: send_later 3 min chain; safety net trig_01DZhVpFMeeF2EaLD6vDciVV (hourly :59)
 
 ## Deploy / Pages
-- tip 77f180fc (#3496). Pages 39739654224 (9f9db7fc) queued; 39744173795 (77f180fc) pending. Game merges hold until green.
+- tip 2f6fd1f0 (#3502). Bryce merged #3488 f2600f83 (garage close one-click, overlaps #3517) and #3522 c4fe72a6. Pages 39744721797 (f2600f83) pending, 9f9db7fc queued. Game merges hold until green.
 
 ## Merge queue
 - Game, one per green Pages + GAME-SLOT: #3497 → #3517 → #3503 → #3504 → #3519(draft) → #3523(draft)
-- Non-game: #3502 (READY, full tier not started), #3522 (READY, guards queued), #3521 (draft)
+- Non-game: #3502 MERGED 2f6fd1f0 (me, 2 parents); #3522 MERGED (Bryce); #3521 draft; #3525 mine (agent-msg allow rule, draft, run-ci)
 
 ## Lanes
 | slot | session | state |
@@ -25,6 +25,10 @@ Updated: 2026-10-22 08:02Z. Predecessor: OrchA 22 session_012Rf9fHiy2exPfFWA5Vfw
 | A·F4 | session_01SUfcaUf6YLdWDdGJ3qQ54R | #3517 READY after #3497 |
 | A·R1 | session_01WSv4hNAfbp9ENjjTAjseVd | FINAL; #3502 |
 
+## Done 08:09Z
+- Webhook: Bryce chose repo rule + this box → #3525 + ~/.claude autoMode.environment; POST HTTP 200.
+- Closed #3404 (completed, F2 verifier CONFIRMED). #3413 stays open (no repro).
+- #3503 full tier green (33/0) → game slot 3.
+
 ## Asks for Bryce
-- Webhook POST to DAD refused by auto mode (Data Exfiltration). Allow, or keep A→D on the bus only.
 - Carried: which ideas to build; xAI spend limit; GROK_API_KEY as a repo secret.
