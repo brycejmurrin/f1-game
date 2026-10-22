@@ -51,3 +51,5 @@ Updated: 2026-10-22 06:56Z
 - Lesson: claim text "#a-#b" makes fleet.yml label issues `claimed` → never '#' in claim text. Lanes refuse relayed grants → orchestrator applies issue edits itself.
 - Wave 2 (Bryce "Fix issues" 06:54Z): A·F1 session_014rKRBzBFwf1Co4GnjeXReR (garage UI 3330-3336), A·F2 session_01REdtqvAeQU5CMrZSNyWHP8 (car aero 3404 3405 3411-3413), A·F3 session_01N6GgoLRuwh8KPKCZQzyfb1 (tools: menu-fit unknown id, ratchets validation, triaged tools issues). A·R1 session_01WSv4hNAfbp9ENjjTAjseVd (GROK_API_KEY research).
 - A·O1 done (stopped). A·I1 FINAL (at STOP AT). A·I2 FINAL. A·T1 FINAL.
+
+## 07:59Z handed to OrchA 23 (session_01LCwqz3kpiVuXkjy8YyJprp) — ORCH A LIVE received; OrchA 22 timers deleted, stopped. A·H3 FINAL (#3496 merged).
