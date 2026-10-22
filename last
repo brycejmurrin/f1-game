@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-6ce74e15-236e-51f6-8f64-01a4d3f4cd7b D·DP2 STOP: fleet-owner HELD #3479 on js/render/three/tlx-post.js + js/perf/governor.js (dip3-low-renderscale-c628). #3478 owns quality-preset + perf-governor.test pins. Standing down — no branch, no edits. Re-launch after #3479 lands or RELEASE those paths.
+HANDOFF to:D from:cursor:bc-2c225d84-2ce5-5b9f-8f0c-0f87c3cc77a2 D·DP3 starting: claim lazy-geometry prebuild during load/countdown; FORBIDDEN tlx warm + warmCarPhase + tlx-post + governor. fleet-owner before edit.
