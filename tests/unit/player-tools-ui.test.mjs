@@ -333,3 +333,18 @@ test("garage contour borrows the current decal mesh adapter for procedural and l
   assert.equal(calls[1][0], 2); assert.equal(calls[1][1], parts);
   delete h.sb.deps.previewDecalMesh; draw(); assert.equal(draws.length, 2, "no independent hardcoded mesh fallback");
 });
+
+test("a double-tapped SAVE keeps the success message: the name clears and SAVE disables", () => {
+  const h = presets(), container = h.el("section", "preset-save-fixture");
+  const ui = h.api.mount(container, { teamId: "mercedes", store: h.store });
+  const name = ui.section.querySelector('input[aria-label="Setup name"]'), status = ui.section.querySelector('[role="status"]');
+  const save = ui.section.querySelector(".player-tool-row").querySelectorAll("button").find((b) => b.textContent === "SAVE CURRENT SETUP");
+  assert.equal(save.disabled, true, "nothing to save without a name");
+  name.value = "Monza low"; name.oninput();
+  assert.equal(save.disabled, false);
+  save.onclick();
+  assert.equal(status.textContent, "Setup saved");
+  assert.equal(name.value, "");
+  assert.equal(save.disabled, true, "the second tap of a double-tap lands on a disabled button");
+  assert.equal(h.api.list(h.store, "mercedes").length, 1);
+});
