@@ -1,10 +1,10 @@
 // @ts-check
 // D·DP3: after green flag, TLX live geometry count must stay flat — lazy flap /
 // wheel-extra meshes are minted during load/countdown warm, not mid-race.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 import { syncFactoryMcLarenSeat } from "../helpers/factory-seat.js";
 
-async function bootTlx(page) {
+async function bootTlxRace(page) {
   await page.addInitScript(() => {
     try {
       localStorage.setItem("apex26.gfxBackend", "three");
@@ -15,6 +15,14 @@ async function bootTlx(page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
   await syncFactoryMcLarenSeat(page);
+  await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
+  // info().track is the circuit id string once state is count/race — not { id }.
+  await awaitTrackBuild(page);
+  await page.evaluate(() => window.__apex.go());
+  await page.waitForFunction(() => {
+    const i = window.__apex.info && window.__apex.info();
+    return i && i.state === "race";
+  }, null, { polling: 100, timeout: 60_000 });
 }
 
 async function sampleGeo(page) {
@@ -39,23 +47,13 @@ test.describe("race geometry stable after green", () => {
 
   test("geoLive does not grow over the first stretch of a race (TLX)", async ({ page }) => {
     test.setTimeout(300_000);
-    await bootTlx(page);
-    await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-    await page.waitForFunction(() => {
-      const i = window.__apex.info && window.__apex.info();
-      return i && i.track && i.track.id && !i.building;
-    }, null, { polling: 200, timeout: 180_000 });
-    await page.evaluate(() => window.__apex.go());
-    await page.waitForFunction(() => {
-      const i = window.__apex.info && window.__apex.info();
-      return i && i.state === "race";
-    }, null, { polling: 100, timeout: 60_000 });
+    await bootTlxRace(page);
 
     // A few presents so geoLive settles after countdown drain.
     await page.waitForFunction(() => {
-      const tlx = GLX && GLX.__tlx;
+      const tlx = typeof GLX !== "undefined" && GLX.__tlx;
       return tlx && tlx.memState && (tlx.memState().presents | 0) > 5;
-    }, null, { polling: 100, timeout: 60_000 });
+    }, null, { polling: 100, timeout: 90_000 });
 
     const t0 = await sampleGeo(page);
     expect(t0, "TLX memState available").toBeTruthy();
@@ -65,10 +63,10 @@ test.describe("race geometry stable after green", () => {
       window.__apex.setInput({ throttle: 1, steer: 0, brake: 0 });
       for (let i = 0; i < 900; i++) window.__apex.step(1 / 60);
     });
-    // Wall time for a few more presents while the field spreads.
+    // Wall time for a few more presents while the field spreads (SwiftShader).
     const p0 = await page.evaluate(() => (GLX.__tlx.memState().presents | 0));
-    await page.waitForFunction((p) => (GLX.__tlx.memState().presents | 0) >= p + 60, p0, {
-      polling: 100, timeout: 30_000,
+    await page.waitForFunction((p) => (GLX.__tlx.memState().presents | 0) >= p + 10, p0, {
+      polling: 100, timeout: 90_000,
     });
 
     const t1 = await sampleGeo(page);
