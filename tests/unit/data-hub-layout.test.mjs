@@ -96,12 +96,12 @@ test(".dh-content.sf-b paints a bottom more-below cue (CSS only)", () => {
 test("modal Data Hub over #nogl uses opaque scrim/card and stacks above recovery", () => {
   const noglZ = decl(overlayRules, "#nogl", "z-index");
   assert.equal(noglZ, "99", "#nogl recovery layer");
-  const hubOverNogl = ruleFor(rules, /body:has\(#nogl:not\(\[hidden\]\)\) #datahub:modal/);
+  const hubOverNogl = ruleFor(rules, /body:has\(> #nogl:not\(\[hidden\]\)\) #datahub:modal/);
   assert.ok(hubOverNogl, "graphics-unavailable hub stack rule");
   assert.equal(hubOverNogl.decls.get("z-index"), "100");
   assert.equal(hubOverNogl.decls.get("background"), "var(--scrim-heavy)");
-  const card = ruleFor(rules, /body:has\(#nogl:not\(\[hidden\]\)\) #datahub:modal \.dh-card/);
+  const card = ruleFor(rules, /body:has\(> #nogl:not\(\[hidden\]\)\) #datahub:modal \.dh-card/);
   assert.ok(card, "opaque hub card over nogl");
   assert.equal(card.decls.get("background"), "var(--bg)", "opaque hub card over nogl");
-  assert.equal(decl(rules, "body:has(#datahub:modal) #nogl:not([hidden])", "pointer-events"), "none");
+  assert.equal(decl(rules, "body:has(> #datahub:modal) #nogl:not([hidden])", "pointer-events"), "none");
 });
