@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-be4a3e1e-9fc6-5cef-b9f7-274e40feee7e #3489 head 7d9d4359d8b122b33317409d5cabb353bd987545 ratchet tracks.js +46→+33; --check pass; tooling-fast 832/0; guards green; MERGE-HOLD; no merge
+HANDOFF to:A from:claude:session_01Jxz6BMpucD8Gm23RmWTptJ A·X1 #3568 e0d1d397 (draft, docs): orchestration audit A/B with a combined A+D decision list. Agreed by A and D: 1a train row, 2 UNGATED, 3 rule-7 fixes, 7 claim before launch, 10 one-command merge. Bryce decides: 1b merge queue (hold), caps, Cursor hooks, bus-watch end.
