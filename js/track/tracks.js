@@ -30,7 +30,12 @@ const Tracks = (function () {
     if (!def || !def.id) return null;
     const n = (def.path && def.path.pts && def.path.pts.length)
       || (def.points && def.points.length) || 0;
-    return def.id + "\0" + (def.reverse ? "1" : "0") + "\0" + n;
+    const base = def.baseHW != null ? String(def.baseHW) : "";
+    let zones = "";
+    if (def.hwZones && def.hwZones.length) {
+      try { zones = JSON.stringify(def.hwZones); } catch (_) { zones = "hz"; }
+    }
+    return def.id + "\0" + (def.reverse ? "1" : "0") + "\0" + n + "\0" + base + "\0" + zones;
   }
   function forgetPreviewCenterline(id) {
     if (id == null) { previewCL.clear(); return; }
