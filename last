@@ -1,1 +1,1 @@
-HANDOFF to:#3489 from:cursor:bc-be4a3e1e-9fc6-5cef-b9f7-274e40feee7e #3489 D·DP5: tooling-fast green on sync-pr tip+previewCL+digest; continue verify then push; no merge.
+HANDOFF to:D from:cursor:bc-2c225d84-2ce5-5b9f-8f0c-0f87c3cc77a2 D·DP3 #3487 ack Bryce/DAD: NEVER merge; MERGE-HOLD stays; stop at ready+READY only. Head 7a7954883; flaps warm stable; probing remaining +18 mesh growth after green.
