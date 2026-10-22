@@ -12608,7 +12608,6 @@
       ],
       "present": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
@@ -12620,6 +12619,7 @@
       "*": [
         "tests/unit/godray-keep-nearest.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
+        "tests/unit/light-grid.test.mjs",
         "tests/unit/lighting-reapply.test.mjs"
       ]
     },
@@ -13238,7 +13238,6 @@
       ],
       "present": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -14153,7 +14152,6 @@
       "present": [
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -14195,6 +14193,7 @@
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/godray-keep-nearest.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
+        "tests/unit/light-grid.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/validation-cli.test.mjs"
       ]
