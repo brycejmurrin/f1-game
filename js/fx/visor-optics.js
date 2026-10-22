@@ -24,9 +24,9 @@ const VisorOptics = (function () {
   const HZ = 15;                     // repaint rate; the compositor blends the last frame in between
   const HZ_REDUCED = 8;              // prefers-reduced-motion: the glints still follow the heading, more slowly
   const MAX_GLINTS = 8;              // the brightest lamps in view
-  const LAMP_GAIN = 1.0;             // glint = GAIN·√(energy/d²)·beam: a Bahrain flood (12 000) at 50 m ≈ 1.4 (clamped), a Monaco soffit (40) at 10 m ≈ 0.6
+  const LAMP_GAIN = 1.5;             // glint = GAIN·√(energy/d²)·beam: a Bahrain flood (12 000) at 50 m saturates, a Monaco soffit (40) at 10 m ≈ 0.9
   const LIGHT_STRIDE = 15;           // gfx.js §frame: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner,cosOuter, bleed, volW, glareW]
-  const LEVEL = { off: 0, light: 0.65, medium: 1, strong: 1.5 };      // VISOR REFLECTIONS
+  const LEVEL = { off: 0, light: 0.6, medium: 1, strong: 1.6 };       // VISOR REFLECTIONS
   const FRINGE = { off: 0, light: 0.35, medium: 0.6, strong: 1 };    // VISOR REFRACTION → chromatic fringe
   const BEND = { light: 14, medium: 32, strong: 56 };                // feDisplacementMap scale per level (rim only)
   const TINT = { neutral: [12, 12, 20], amber: [80, 61, 32], ice: [35, 59, 80], rose: [76, 45, 60] };   // css/tokens.css --visor-*
@@ -172,28 +172,28 @@ const VisorOptics = (function () {
         const over = Math.max(Math.abs(Math.atan2(p.sx, p.z)) - halfX, Math.abs(Math.atan2(p.sy, p.z)) - halfY, 0);
         const fade = 1 - clamp(over / (45 * Math.PI / 180), 0, 1);
         if (fade > 0.01) {
-          const k = clamp(1.4 * key * sunUp * gain * fade, 0, 1.4);
+          const k = clamp(2.0 * key * sunUp * gain * fade, 0, 1.4);
           const x = clamp(p.x, -0.08 * w, 1.08 * w), y = clamp(p.y, -0.08 * h, 1.08 * h);
-          out.sun = { x, y, k, r: base * 0.16 * (1 + 0.9 * (1 - fade)), rgb };
+          out.sun = { x, y, k, r: base * 0.22 * (1 + 0.9 * (1 - fade)), rgb };
           // The double-reflection ghost: mirrored through the centre, larger and fainter (lens-flare geometry).
-          if (over === 0) out.ghost = { x: w - x, y: h - y, k: k * 0.3, r: base * 0.26, rgb };
+          if (over === 0) out.ghost = { x: w - x, y: h - y, k: k * 0.4, r: base * 0.3, rgb };
           // God rays: a sun in the frame streaks across the shield's micro-scratches and the tear-off film —
           // radial, longest when the sun sits low in the frame (a low sun ahead is what blinds a driver).
-          if (over === 0) out.rays = { x, y, k: k * 0.55, len: Math.hypot(w, h) * 0.55, rgb };
+          if (over === 0) out.rays = { x, y, k: k * 0.8, len: Math.hypot(w, h) * 0.6, rgb };
         }
       }
       // Fresnel rim sheen: the inner rim is seen at grazing angles, where reflectance climbs, and it is lit on
       // the sun's side of the view — brightest when the sun is beside or behind the eye (its light rakes the rim).
       const side = Math.hypot(p.sx, p.sy);
       const rake = 0.35 + 0.65 * clamp(-p.z, 0, 1) + 0.3 * side;
-      const rk = clamp(0.6 * key * sunUp * rake * gain, 0, 0.9);
+      const rk = clamp(1.0 * key * sunUp * rake * gain, 0, 1);
       if (rk > 0.004) out.rim = { k: rk, dx: side > 1e-3 ? p.sx / side : 0, dy: side > 1e-3 ? -p.sy / side : -1, rgb };
       sceneLight += key * sunUp;
     }
 
     // Sky haze on the brow: the sky reflected in the top of the shield; only a daylight sky is bright enough.
     const amb = clamp(lum(scene.ambientSky) * exp, 0, 2);
-    out.haze = clamp(0.2 * amb * gain, 0, 0.26);
+    out.haze = clamp(0.3 * amb * gain, 0, 0.32);
     sceneLight += amb * 0.5;
 
     // Lamp glints: each light in this frame's culled list, projected; the brightest MAX_GLINTS kept.
@@ -236,8 +236,8 @@ const VisorOptics = (function () {
         const g = _glintBuf[i];
         const k = clamp(g.k * gain * (0.7 + 0.3 * clamp(glare / 0.12, 0, 2.5)), 0, 1.2);   // LENS GLARE lifts the cores
         // Nearer fixtures smear wider across the curved shield; far ones stay small.
-        const r = base * clamp(0.1 + 6 / Math.max(8, g.d), 0.1, 0.3) * (0.8 + 0.2 * out.bloom);
-        out.glints.push({ x: g.x, y: g.y, k, r, rgb: g.rgb, beam: k > 0.25 ? { dx: g.bx, dy: g.by, len: base * (0.25 + 0.35 * g.beam) * clamp(k, 0, 1), k: k * 0.22 } : null });
+        const r = base * clamp(0.14 + 8 / Math.max(8, g.d), 0.14, 0.36) * (0.8 + 0.2 * out.bloom);
+        out.glints.push({ x: g.x, y: g.y, k, r, rgb: g.rgb, beam: k > 0.25 ? { dx: g.bx, dy: g.by, len: base * (0.3 + 0.4 * g.beam) * clamp(k, 0, 1), k: k * 0.35 } : null });
         sceneLight += g.k * 0.6;
       }
     }
@@ -477,7 +477,7 @@ const VisorOptics = (function () {
       grad.addColorStop(0, "rgba(" + c + "," + Math.min(1, m.rim.k).toFixed(3) + ")");
       grad.addColorStop(0.55, "rgba(" + c + "," + (m.rim.k * 0.25).toFixed(3) + ")");
       grad.addColorStop(1, "rgba(" + c + "," + (m.rim.k * 0.06).toFixed(3) + ")");
-      g.strokeStyle = grad; g.lineWidth = base * 0.05; g.stroke(_paths.rim);
+      g.strokeStyle = grad; g.lineWidth = base * 0.07; g.stroke(_paths.rim);
     }
     // The sun and its ghost, then the lamps (drawn wider than tall: the shield curves most horizontally).
     if (m.rays) _rays(g, m.rays);

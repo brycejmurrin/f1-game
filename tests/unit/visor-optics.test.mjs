@@ -138,13 +138,13 @@ test("visor mapping: a bright flood leaves a beam along its aim; BLOOM AMOUNT an
   const soft = new Float32Array(lamp(0, -40, [3000, 3000, 3000]));   // under the clamp, so the knob shows
   const glare = V.lightMap({ ...NIGHT, lights: soft }, 844, 390, { level: 1, glare: 0.3 });
   assert.ok(glare.glints[0].k > V.lightMap({ ...NIGHT, lights: soft }, 844, 390, { level: 1 }).glints[0].k, "more lens glare: brighter cores");
-  const dim = V.lightMap({ ...NIGHT, lights: new Float32Array(lamp(0, -40, [300, 300, 300])) }, 844, 390, { level: 1 });
+  const dim = V.lightMap({ ...NIGHT, lights: new Float32Array(lamp(0, -40, [150, 150, 150])) }, 844, 390, { level: 1 });
   assert.ok(dim.glints.length === 0 || !dim.glints[0].beam, "a weak glint carries no beam");
 });
 
 test("visor mapping: lamps glint where they project, the brightest first, capped and with tail-lights in their colour", () => {
   const { V } = load();
-  const L = new Float32Array([...lamp(-6, -40), ...lamp(6, -40), ...lamp(0, 30), ...lamp(0, -120, [900, 900, 900]), ...lamp(0, -25, [9000, 600, 600])]);
+  const L = new Float32Array([...lamp(-6, -40), ...lamp(6, -40), ...lamp(0, 30), ...lamp(0, -120, [400, 400, 400]), ...lamp(0, -25, [9000, 600, 600])]);
   const m = V.lightMap({ ...NIGHT, lights: L }, 844, 390, { level: 1 });
   assert.ok(m.glints.length >= 3 && m.glints.length <= V.MAX_GLINTS, `glints: ${m.glints.length}`);
   assert.ok(m.glints.every((g) => g.x > -130 && g.x < 974), "every glint is on or just off the frame");
@@ -155,7 +155,7 @@ test("visor mapping: lamps glint where they project, the brightest first, capped
   assert.ok(red, "a tail-light glints red");
   assert.ok(!m.glints.some((g) => g.y > 390), "a lamp behind the eye never glints (nothing projects below the frame)");
   assert.ok(m.glints[0].k > 0.3 && m.glints[0].k <= 1.2, `a flood 40 m out is a clear glint (${m.glints[0].k.toFixed(2)})`);
-  const dim = V.lightMap({ ...NIGHT, lights: new Float32Array(lamp(0, -120, [900, 900, 900])) }, 844, 390, { level: 1 });
+  const dim = V.lightMap({ ...NIGHT, lights: new Float32Array(lamp(0, -120, [400, 400, 400])) }, 844, 390, { level: 1 });
   assert.equal(dim.glints.length, 0, "a weak fixture 120 m out adds nothing");
   // The nearer lamp smears wider; a far dim one is dropped or a pinprick.
   assert.ok(red.r >= m.glints[m.glints.length - 1].r, "near lamps smear wider than far ones");
