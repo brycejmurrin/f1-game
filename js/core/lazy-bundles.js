@@ -592,18 +592,20 @@ async function bootAgentSurface() {
   await loadAgentSurface();
 }
 
-// THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited, on
+// THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited at boot, on
 // purpose: awaiting it here would put the 338 KB straight back on the
 // critical path. Nothing in a menu resolves lighting — applyRaceSettings()
 // first runs inside startRace() — so the fetch has the entire time a player
-// spends picking a circuit to land.
+// spends picking a circuit to land, and startRace() awaits it (like the race
+// session and audio bundles) before that first apply.
 //
-// No gate is needed because an ABSENT file is already a legal state:
-// light-store reads window.LightPresets at call time (`|| null`), so until it
-// arrives every knob resolves to its TUNE_DEFS default, and when it does
-// arrive applyLightTune() re-walks TUNE_DEFS and fires liveEffects only for
-// knobs that moved. Worst case is a frame of default lighting, not a wrong
-// scene that stays wrong.
+// An ABSENT file is still a legal state (a failed fetch): light-store reads
+// window.LightPresets at call time (`|| null`), so every knob resolves to its
+// TUNE_DEFS default, and a later landing makes applyLightTune() re-walk
+// TUNE_DEFS and fire liveEffects for knobs that moved. That late landing is why
+// startRace waits: a race started inside the idle window lit itself from the
+// defaults and then jumped (sun, lamps, grade) seconds in — photo-studio-
+// conditions saw Bahrain's day sun move 12 degrees between two reads (#3441).
 //
 // Split (2026-10-06): scenery/circuit leave the boot turn via queueMicrotask
 // (not requestIdleCallback — game-vm stubs rIC as a no-op, and a bare first
@@ -724,7 +726,7 @@ function bootDesktopAudio() {
   else scheduleIdle(bind, 400);
 }
 
-return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   return { create };
 })();
