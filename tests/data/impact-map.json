@@ -9734,6 +9734,11 @@
         "tests/unit/ai-band.test.mjs"
       ]
     },
+    "js/physics/ai-corridor.js": {
+      "choose": [
+        "tests/unit/ai-corridor.test.mjs"
+      ]
+    },
     "js/physics/ai-drive.js": {
       "adaptLane": [
         "tests/unit/ai-drive.test.mjs"
