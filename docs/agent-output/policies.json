@@ -641,6 +641,11 @@
       "presentation": "native",
       "preserve": "Observation window/max-runs and API errors; no cancellation mutation"
     },
+    "tools/ci/merge-attribution.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Each merge's ATTRIBUTED/UNATTRIBUTED verdict, sha and PR; the posted/exists/dry-run outcome per channel; the final = merge-attribution count line"
+    },
     "tools/ci/merge-gate.mjs": {
       "action": "keep-native",
       "presentation": "native",

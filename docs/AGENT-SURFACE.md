@@ -40,6 +40,7 @@ surface without hand-wiring:
 | Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the five catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
 | Cloud VM | `.cursor/environment.json` | `install` + shared runtime Chromium discovery + allowlist of the five catalog commands. |
 | Cursor entry | `.cursor/rules/apex-shared.mdc` | Always-on pointer at AGENTS / skills / MCP. |
+| Guard hooks | `.claude/settings.json` hooks; `.cursor/hooks.json`; `.codex/hooks.json` | Yes. One rule set, two doors: Claude runs `.claude/hooks/bash-guard.sh` and `protect-files.sh`; Cursor reaches the same scripts through `.cursor/hooks/shell-guard.sh` (`beforeShellExecution`), `edit-guard.sh` (`preToolUse` with no matcher: the script picks the file writes and deletes, since Cursor's edit tool names are undocumented) and `mcp-guard.sh`, each answering in Cursor's `permission` JSON ([hooks](https://cursor.com/docs/agent/hooks), [tool map](https://cursor.com/docs/reference/third-party-hooks)). The shared safety bans (2026-10-22): no hand ratchet raise, no edit to another branch's `tests/data/ratchets.d` fragment, no push over a foreign pusher, no `pkill -f` (`tests/unit/safety-bans-hook.test.mjs`). |
 
 **Codex collaboration adapter.** When the Codex host exposes collaboration
 agents, read the named `.claude/agents/<persona>.md` and its skill, then launch
@@ -155,7 +156,7 @@ auto-load them — then use the Fallback column.
 |---|---|---|
 | **playwright** (the wrapper under its old name) | Its 2026-09 `run` combined `--isolated` with `--user-data-dir` and failed to connect; the bare package replaced it, then failed to launch in the container (above). Since 2026-10-05 the fixed `run` IS **playwright-official**. | `tools/mcp/playwright-mcp.sh status\|play\|dom` (css-play) |
 | **chrome-devtools-official** | Duplicate of **chrome-devtools** minus the WebGPU flags; two Chrome MCPs fought over one box. | `npx -y chrome-devtools-mcp@1.7.0` by hand |
-| **tinyfish** (`127.0.0.1:3711`) and the `tinyfish_*` half of **probe** | Container egress blocks `agent.tinyfish.ai`, so the in-repo proxy can never answer here. The hosted TinyFish connector in the main session and the host fetch tool can. | `tools/mcp/tinyfish-mcp.sh` on a box with egress; key from shell / gitignored `.env` only (no tracked fallback) |
+| **tinyfish** (`127.0.0.1:3711`) and the `tinyfish_*` half of **probe** | Container egress blocks `agent.tinyfish.ai`, so the in-repo proxy can never answer here. The hosted TinyFish connector in the main session and the host fetch tool can. The non-attachment is pinned by `tests/unit/agent-config.test.mjs` (the lockstep guard), not prose alone — re-attaching starts there, with fresh egress evidence. | `tools/mcp/tinyfish-mcp.sh` on a box with egress; key from shell / gitignored `.env` only (no tracked fallback) |
 | **probe** (`chrome_*` + `tinyfish_*` bridge) | Its `chrome_*` half duplicates **chrome-devtools**; its `tinyfish_*` half is dead in-container. | `python3 tools/mcp/probe-mcp.py chrome-start` / `call` — the persistent-daemon flow has no MCP equivalent and stays |
 
 **Cloud / desktop global catalog.** Cloud Agents do **not** read

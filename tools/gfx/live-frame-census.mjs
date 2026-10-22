@@ -52,7 +52,7 @@ export function parseArgs(argv) {
 let TRACKS, CAM, WARM, WIN, TRACE, PROF, EXTRA, report, save;
 const log = (m) => console.log("[live-frame] " + m);
 
-function recorder() {
+export function recorder() {
   // Wrap rAF: every callback's wall into __lf.cb (summed per frame), every frame's timestamp into __lf.ts.
   const r = window.requestAnimationFrame.bind(window);
   const H = window.__lf = { on: false, ts: [], cb: [], acc: 0, lastT: -1, raw: r };
@@ -62,7 +62,7 @@ function recorder() {
     try { return f(t); } finally { if (H.on) H.acc += performance.now() - a; }
   });
 }
-function driver() {
+export function driver() {
   // gpu-game-check.mjs's closed-loop law (braking envelope over scan(), pure pursuit on probe()), on the raw rAF.
   const raw = window.requestAnimationFrame.bind(window);
   const DISTS = []; for (let d = 5; d <= 160; d += 6) DISTS.push(d);

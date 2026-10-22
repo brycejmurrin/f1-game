@@ -615,6 +615,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/inputs-hash.mjs** | Per-job inputs hash for the CI verdict cache (#1712); sha256 of a declared path set + node version. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
+| **ci/merge-attribution.mjs** | Merged-by trailer and a detector flagging deploy-branch merges that lack it (bus + PR comment). |
 | **ci/merge-gate.mjs** | Gate before a PR merge: ready-gate, CI, no hold, gen:check + ratchets on a local merge, pacing; writes the receipt. |
 | **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| no (sync only when you must). |
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |

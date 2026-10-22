@@ -1,6 +1,6 @@
-/* Rejoin and spectate contracts for the race connection layer.
+/* Drop and spectate contracts for the race connection layer.
  *
- * A rejoining driver reclaims the same wire/car after a hard transport close;
+ * A dropped driver's car goes to AI while the host race keeps running;
  * spectators share the host's connection fan-out but never consume a car seat
  * or publish authoritative state.
  */
@@ -76,7 +76,7 @@ function fakeSession() {
 
 const pose = (s) => ({ s, x: 0, head: 0, speed: 60, gear: 5, lap: 1 });
 
-test("a dropped driver rejoins the live host over a fresh loopback and resyncs state", () => {
+test("a dropped driver hands its car to AI while the host race stays live", () => {
   const hostG = stubG(3, 0), guestG = stubG(3, 1);
   const host = NetPlay.create(hostG), guest = NetPlay.create(guestG);
   const firstWire = NetTransport.loopback({ latencyMs: 0 });
@@ -96,23 +96,12 @@ test("a dropped driver rejoins the live host over a fresh loopback and resyncs s
 
   firstGuest.close();
   for (let i = 0; i < 5; i++) { t += 25; host.tick(t); guest.tick(t); }
-  assert.equal(host.active(), true, "the host race stays reconnectable when its last driver drops");
+  assert.equal(host.active(), true, "the host race keeps running when its last driver drops");
   assert.equal(guest.active(), false, "the dropped side leaves its old session");
   assert.equal(car.human, false, "AI covers the disconnected car");
-
-  const secondWire = NetTransport.loopback({ latencyMs: 0 });
-  const secondHost = NetSession.create({ transport: secondWire[0] });
-  const secondGuest = NetSession.create({ transport: secondWire[1] });
-  const joined = host.rejoin({ id: "driver-a", session: secondHost });
-  assert.deepEqual(joined, { ok: true, wire });
-  assert.equal(guest.start({ role: "guest", session: secondGuest }).ok, true);
-  assert.equal(car.human, true);
-  assert.equal(host.owns(car), true);
-  for (let i = 0; i < 20; i++) { t += 25; host.tick(t); guest.tick(t); }
-  guestG.player.s = 777;
-  for (let i = 0; i < 12; i++) { t += 25; guest.tick(t); host.tick(t); }
-  assert.ok(Math.abs(car.s - 777) < 1,
-    "the returning owner's fresh snapshot replaces fallback AI state: " + car.s);
+  // H3-9 (2026-10-22): rejoin() had no production caller (the lobby never
+  // re-adopts a race connection), so it and its REJOIN event were removed.
+  assert.equal(host.rejoin, undefined, "NetPlay exposes no dead rejoin()");
 });
 
 test("a spectator consumes no grid seat, receives field state, and cannot publish inputs", () => {
