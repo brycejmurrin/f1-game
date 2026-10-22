@@ -1152,11 +1152,13 @@ const CarDraw = (function () {
     const cockpitBodyOrder = [];
     // The last key's inputs, so the per-frame call (default camera) builds no
     // string and no closure on a hit — the hoisted factory reads _cb*.
+    let _cbFinish = -1;
     let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "";
     function buildPendingCockpitBody() {
-      const team = _cbTeam, liv = deps.resolveLivery(team);
+      const team = _cbTeam, source = deps.resolveLivery(team);
+      const view = typeof CockpitFinishes !== "undefined" ? CockpitFinishes.view(source) : null, liv = view ? view.livery : source;
       return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-        { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: _cbHalo, num: _cbNum,
+        { livery: liv, cockpitHalo: view && view.halo, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: _cbHalo, num: _cbNum,
           parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
     }
     // The first-person SHADOW caster: the WHOLE exterior car (wheels, engine
@@ -1181,8 +1183,10 @@ const CarDraw = (function () {
       const rawBs = deps.resolveLivery(team).bodyStyle;
       const bk = Car3D.bodyStyleKey ? Car3D.bodyStyleKey(team.id, rawBs) : rawBs, bs = bk && bk !== team.id ? bk : "";
       const body = CockpitOpts.body() + (bs ? ":S" + bs : "");
-      if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || num !== _cbNum) {
+      const finish = typeof CockpitFinishes !== "undefined" ? CockpitFinishes.stamp() : 0;
+      if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || num !== _cbNum || finish !== _cbFinish) {
         _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + (bs ? ":S" + bs : "") + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
+        _cbKey += ":F" + finish; _cbFinish = finish;
         _cbShKey = _cbKey + ":FP";   // the first-person caster: same cache (and wipes), its own key
         _cbId = team.id; _cbVk = visualKey; _cbHalo = haloSz; _cbBody = body; _cbNum = num;
       }
@@ -1325,7 +1329,8 @@ const CarDraw = (function () {
       // this build at all, hence "front" only.
       if (!carModelBuf) {
         const aSt = teamDecalState(c.team, c.isPlayer);
-        deps.drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, base, paint, aSt.aero, "front");
+        const liv = typeof CockpitFinishes !== "undefined" ? CockpitFinishes.view(deps.resolveLivery(c.team)).livery : undefined;
+        deps.drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, base, paint, aSt.aero, "front", false, liv);
       }
       // Forward decal: the driver number on the nose plate ahead of the driver (the
       // nose is identical to the chase build, so this lands exactly on the plate).
@@ -1355,6 +1360,7 @@ const CarDraw = (function () {
       _rigR[0] = ca; _rigR[1] = sa; _rigR[4] = -sa; _rigR[5] = ca;
       M4.mulTo(_rigA, base, _rigT);
       M4.mulTo(_rigB, _rigA, _rigR);
+      if (typeof CockpitFinishes !== "undefined") CarMesh.wheelFinish(CockpitFinishes.get("wheel"));
       G.gfx.draw(getCockpitWheel(deps.resolveLivery(c.team), wheelStyle), _rigB, CarMesh.cockpitWheelOpts(opt));   // style + livery keyed: team grips/marker/gloves; finish opts (B·H33)
       // No forearm sleeves (CarMesh.drawForearms): the tubes from the cuffs to
       // the bottom of the frame read as pipes on the wheel (user, 2026-10-04).

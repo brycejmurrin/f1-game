@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "3dd70a554785eae9138d9d0db8db1d1a5cef42037c1fbfc474355c4d1bd2970c",
+  "sourceDigest": "4725e0132a713319c36756e0828aab5d91bcf7cacb95431c40efa6216f285939",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -3294,15 +3294,15 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.942662,
       "target": [
-        186.58,
-        4.73,
-        509.56
+        174.82,
+        7.19,
+        507.15
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/spa.js timingTower K(0.985)",
       "projectedFrac": 0.942429,
-      "nearestRoadDistanceM": 38,
-      "viewDistanceM": 38,
+      "nearestRoadDistanceM": 26,
+      "viewDistanceM": 26,
       "source": "tests/data/landmarks/spa.json; js/circuits/scenery/spa.js"
     },
     {
