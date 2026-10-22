@@ -179,8 +179,10 @@ const WheelState = (function () {
     // all of it while torque-limited, the sliding force once it ran away.
     o.ach = demandOver ? Math.min(Math.abs(aReq), Math.abs(fx)) : Math.abs(aReq);
     const knAbs = Math.abs(kappa) / KAPPA_PEAK;
-    o.locked = kappa < 0 ? clamp((knAbs - LOCK_KAPPA) / LOCK_SPAN, 0, 1) : 0;
-    o.spinning = kappa > 0 ? clamp((knAbs - SPIN_KAPPA) / LOCK_SPAN, 0, 1) : 0;
+    // Lock/spin follow the travel direction: in reverse a rim slower than the body has κ > 0.
+    const kDir = vx < 0 ? -kappa : kappa;
+    o.locked = kDir < 0 ? clamp((knAbs - LOCK_KAPPA) / LOCK_SPAN, 0, 1) : 0;
+    o.spinning = kDir > 0 ? clamp((knAbs - SPIN_KAPPA) / LOCK_SPAN, 0, 1) : 0;
     // Lateral share of the combined force: the tyre makes F(ρ) along its slip
     // direction, so its lateral part is F(ρ)·|αN|/ρ, against the pure-lateral
     // F(|αN|) the Fy path already computes. Free roll is 1; a locked or

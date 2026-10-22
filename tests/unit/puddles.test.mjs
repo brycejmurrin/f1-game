@@ -26,6 +26,35 @@ const K = P.K;
 // GLSL/WGSL spell a float with a decimal point; "1.0" not "1".
 const fl = (x) => (Number.isInteger(x) ? x.toFixed(1) : String(x));
 
+test("SSR receivers: porous ground keeps damp shading without borrowing the road mirror", () => {
+  const glx = read("js/render/glx/shaders/glsl-lit.js");
+  const post = read("js/render/glx/shaders/glsl-post.js");
+  // Evaluate the shader's actual scalar expressions, not a second tag encoder.
+  const porousExpr = glx.match(/float porous = ([^;]+);/)[1];
+  const receiverExpr = glx.match(/float receiverTag = ([^;]+);/)[1];
+  const carExpr = glx.match(/outColor = vec4\(color, (carPaint[^;]+)\);/)[1];
+  const porous = new Function("wmid", `return ${porousExpr};`);
+  const receiver = new Function("porous", "uAlpha", `return ${receiverExpr};`);
+  const tag = (id, alpha = 1, carPaint = 0) => new Function("carPaint", "uAlpha", "receiverTag", `return ${carExpr};`)
+    (carPaint, alpha, receiver(porous(id), alpha));
+  const smoothstep = (lo, hi, x) => { const t = Math.max(0, Math.min(1, (x - lo) / (hi - lo))); return t * t * (3 - 2 * t); };
+  const roadExpr = post.match(/float roadPx = ([^;]+);/)[1].replace(/scn\.a/g, "tag");
+  const road = new Function("tag", "smoothstep", `return ${roadExpr};`);
+  for (let id = 0; id <= 16; id++) {
+    const excluded = [6, 8, 9, 10, 11].includes(id);
+    assert.equal(tag(id), excluded ? 0.75 : 1, `material ${id} opaque tag`);
+    assert.equal(road(tag(id), smoothstep), excluded ? 0 : 1, `material ${id} road receiver`);
+    assert.equal(tag(id, 0.4), 0.4, "fractional alpha is not replaced by receiver metadata");
+  }
+  assert.equal(tag(20, 1, 1), 0.35, "car-paint metadata is unchanged");
+  assert.equal(road(tag(20, 1, 1), smoothstep), 0, "car paint uses the CAR slider, not the road term");
+  assert.equal(road(0.8125, smoothstep), 0, "one eligible MSAA sample among three porous samples cannot polish the edge");
+  assert.equal(road(0.75, smoothstep), 0, "fully porous pixels remain excluded after filtering");
+
+  // TLX attachment/opacity behavior is exercised with real material objects in
+  // tlx-hunt3.test.mjs. Backend compilation and actual captures cover shader wiring.
+});
+
 test("reference: no puddles below road wetness 0.6, and none with the knob at 0", () => {
   for (let i = 0; i < 400; i++) {
     const x = i * 3.7 - 600, z = i * -2.3 + 140;

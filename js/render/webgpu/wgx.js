@@ -2750,7 +2750,12 @@ const WGX = (function () {
         i16[h + 7] = VertexPack.snorm16(nrm[i*3+1]);
         i16[h + 8] = VertexPack.snorm16(nrm[i*3+2]);
         const carId = mat && Number.isInteger(mat[i]) && mat[i] >= 20 && mat[i] <= 85 ? mat[i] : 0;
-        i16[h + 9] = carId * 256;                 // existing padding: classified car id, no stride growth
+        // Existing car codes stay byte-identical. Prefix world ids by one so
+        // explicit MAT.FLAT (0) differs from missing data; retain FLAG/foliage
+        // fractions at 1/256 precision without another attribute or buffer.
+        const worldCode = mat && Number.isFinite(mat[i]) && mat[i] >= 0 && mat[i] < 17
+          ? Math.round((mat[i] + 1) * 256) : 0;
+        i16[h + 9] = carId ? carId * 256 : worldCode;
         // Half float, and still RAW RGB — the quantisation changes the WIDTH of
         // the colour lane, never what is in it.
         // Raw RGB. Packing MAT into col.x interpolates 16→0 and sawtooths.

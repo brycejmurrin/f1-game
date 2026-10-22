@@ -27,12 +27,14 @@ const TUNE_DEFS = LightTune.TUNE_DEFS || [];
 
 const CLEAR_FOG_SCALE = 0.45;
 // FOG-weather EFFECTIVE density band (frame.fogDensity x LT.fogDensityMul, what the shaders
-// and the chunk cull use) at the default FOG BOOST: the floor is 80 % at 300 m / 99 % at
-// 500 m; the ceiling keeps ~40 % visibility at 150 m. Both scale with the boost knob.
-// #2256: every shipped <track>|<tod>|fog row pins fogDensityMul ~2, so a pre-multiplier
-// floor x3 boost ran 0.011-0.026 effective — the frame went white within ~150 m.
-const FOG_WX_MIN_DENSITY = 0.0042;
-const FOG_WX_MAX_DENSITY = 0.0065;
+// and the chunk cull use) at the default FOG BOOST: the floor hazes 30 % at 100 m, 55 % at
+// 150 m and 96 % at 300 m; the ceiling keeps ~36 % visibility at 150 m. Both scale with the
+// boost knob. #2256: every shipped <track>|<tod>|fog row pins fogDensityMul ~2, so a
+// pre-multiplier floor x3 boost ran 0.011-0.026 effective — the frame went white within
+// ~150 m. The old 0.0042 floor (16 % at 100 m) read as overcast on Bryce's 2026-10-21
+// matrices: day fog and day overcast were the same picture.
+const FOG_WX_MIN_DENSITY = 0.006;
+const FOG_WX_MAX_DENSITY = 0.0067;
 const FOG_WX_DEF_BOOST = 1.5;
 
 // ── Blended weather ──────────────────────────────────────────────────────────
@@ -421,7 +423,7 @@ function _applyRaceBody() {
       const _ov = _smooth(0.5, 1.0, clamp(G.frameSky.cloud + (LT.cloudCover || 0), 0, 1)) * 0.60;   // + the CLOUD COVER offset applied below
       const _gH = isNightSession && G.frameSky.zenith && G.frameSky.horizon
         ? G.frameSky.zenith.map((v, i) => (v + G.frameSky.horizon[i]) * 1.25)
-        : [0.58, 0.58, 0.60];
+        : [0.58, 0.58, 0.60].map((v) => v * _weatherDaylightScale());
       G.frame.fogColor = G.frame.fogColor.map((v, i) => v + (_gH[i] - v) * _ov);
     }
     // Wet + overcast: lift exposure to keep the scene moody but readable — BUT a
@@ -480,7 +482,8 @@ function _applyRaceBody() {
     // circuits run "default" too, and the 0.74 daylight grey under the sky's
     // night lid painted a ~0.85 grey band round a night race.
     if (G.raceTimeOfDay === "default") {
-      G.frameSky.horizon = isNightSession ? [0.05, 0.05, 0.07] : [0.74, 0.73, 0.74];
+      G.frameSky.horizon = isNightSession ? [0.05, 0.05, 0.07]
+        : [0.74, 0.73, 0.74].map((v) => v * _weatherDaylightScale());
       G.frame.skyHorizon = G.frameSky.horizon;
     }
     // A night session must stay dark under overcast too — same guard the wet/fog
@@ -531,7 +534,7 @@ function _applyRaceBody() {
     const _hz = G.frameSky.horizon;
     const fc = isNightSession ? [0.09, 0.10, 0.13]
       : _twl && _hz ? _twilightFog(_hz)
-      : [0.74, 0.76, 0.78];
+      : [0.74, 0.76, 0.78].map((v) => v * _weatherDaylightScale());
     G.frame.fogColor = fc;
     if (G.raceTimeOfDay === "default") { G.frameSky.horizon = fc.slice(); G.frame.skyHorizon = G.frameSky.horizon; }
     G.frame.sunColor = G.frame.sunColor.map((v) => v * _mute(0.6));
@@ -569,10 +572,14 @@ function _applyRaceBody() {
     else if (isNightSession) gm = 0.16;
     if (wxWet()) gm = Math.max(gm, wxStorm() ? 0.30 : wxRain() ? 0.18 : 0.12);
     else if (G.raceWeather === "overcast") gm = Math.max(gm, 0.34);
-    else if (G.raceWeather === "fog") gm = Math.max(gm, 0.58);
+    // Fog sits above the shaders' heavy-mist fill gate (1.1-1.5 x MIST DENSITY), so
+    // fog reads close in on every circuit (Bryce 2026-10-21: "thicker close in").
+    // A NIGHT fog keeps round 1's lighter mist (0.58): the heavy fill caught the
+    // lamp glow and lifted night fog again (Monaco 50 -> 57); Bryce pulled it back.
+    else if (G.raceWeather === "fog") gm = Math.max(gm, isNightSession ? 0.58 : 0.9);
     const _mb = G.track && G.track.def ? _trackAtmoBias(G.track.def) : 0;   // +overcast/humid, -arid
     gm *= 1.0 + clamp(_mb, -0.6, 0.6) * 0.5;
-    G.frame.groundMist = clamp(gm, 0, 0.7);
+    G.frame.groundMist = clamp(gm, 0, G.raceWeather === "fog" && !isNightSession ? 0.9 : 0.7);
   }
   // Live lighting-tuner overrides on the CONDITION-derived values
   // Re-derived fresh from the branch values every call (applyRaceSettings re-runs
@@ -665,11 +672,23 @@ function floodEmit(sunY) {
 const DAY_PAL_BLEND = 0.5;
 // Day-storm deck/haze brightness vs rain's (1 = same as rain).
 const STORM_DECK_DARK = 0.86;
+// Match the sky shaders' non-night available-light factor. Weather resolves
+// before the tuner rotates sunDir, so evaluate that same final elevation here
+// without mutating the direction (and without applying the offset twice).
+// The 0.35 floor is an authored twilight radiance, not a physical sky model;
+// ordinary high-sun day stays at 1. Night uses its separate lid throughout.
+function _weatherDaylightScale() {
+  const d = G.frame.sunDir || G.frameSky.sunDir;
+  const el = clamp(Math.asin(clamp(d ? d[1] : 1, -1, 1)) + (LT.sunElev || 0) * Math.PI / 180, -1.54, 1.54);
+  const sunE = clamp(Math.sin(el) * 1.4, 0, 1);
+  return 0.35 + 0.65 * _smooth(0.35, 0.60, sunE);
+}
 function _dayWetGreyDeck(G, mix) {
   if (!G.frameSky.zenith || !G.frameSky.horizon || mix <= 0) return;
   const w = clamp(mix, 0, 1);
-  const deckZ = [0.58, 0.60, 0.64];
-  const deckH = [0.74, 0.73, 0.74];
+  const light = _weatherDaylightScale();
+  const deckZ = [0.58, 0.60, 0.64].map((v) => v * light);
+  const deckH = [0.74, 0.73, 0.74].map((v) => v * light);
   G.frameSky.zenith = G.frameSky.zenith.map((v, i) => v + (deckZ[i] - v) * w);
   G.frameSky.horizon = G.frameSky.horizon.map((v, i) => v + (deckH[i] - v) * w);
   G.frame.skyZenith = G.frameSky.zenith;

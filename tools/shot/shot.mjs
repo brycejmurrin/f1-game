@@ -37,7 +37,7 @@ import {
 } from "../lib/harness.mjs";
 import sharp from "sharp";
 import { pixelEvidence, rendererEvidence } from "./capture-contract.mjs";
-import { awaitCaptureReady, mutateCaptureScene, installProbeInit, screenshotPresentedCanvas } from "./probe-page.mjs";
+import { awaitCaptureReady, mutateCaptureScene, installProbeInit, screenshotPresentedCanvas, requireHardwareWebGpu } from "./probe-page.mjs";
 import {
   SHOT_USAGE,
   parseShotArgv,
@@ -99,11 +99,30 @@ async function raceTrack(page, trackId, waitMs) {
 
 async function frameCamera(page, job) {
   return mutateCaptureScene(page,
-    ({ frac, cam, az, el, dist, side, tod, weather, showHud, clear }) => {
+    ({ frac, cam, az, el, dist, side, tod, weather, showHud, clear, traffic, noLine }) => {
       const a = window.__apex;
       a.headless(false);
       a.go();
-      a.park(frac);
+      let lineMode = null, sceneFrac = frac, trafficCars = [];
+      if (traffic) {
+        // Keep the AI field near the grid for traffic photography. park()
+        // deliberately shifts every AI car back 600 m.
+        a.jump(frac, 0, 0);
+        if (noLine && a.drivingLine) {
+          const line = a.drivingLine("off");
+          lineMode = line?.mode ?? null;
+          if (lineMode !== "off") throw new Error(`could not disable the driving line: ${JSON.stringify(line)}`);
+        }
+        if (a.step) a.step(1 / 60, 240);
+        trafficCars = a.cars ? a.cars().filter((car) => !car.p) : [];
+        if (trafficCars.length < 2) throw new Error(`traffic capture needs at least two AI cars; found ${trafficCars.length}`);
+        const total = a.info?.().total;
+        if (trafficCars.length && Number.isFinite(total) && total > 0) {
+          const meanProg = trafficCars.reduce((sum, car) => sum + car.prog, 0) / trafficCars.length;
+          sceneFrac = ((meanProg % total) + total) % total / total;
+        }
+        a.freeze(true);
+      } else a.park(frac);
       a.freeze(true);
       if (a.setTimeOfDay && a.setTimeOfDay() !== tod) a.setTimeOfDay(tod);
       // After the tod reload, so the reload cannot reset it; every job pins one (default dry).
@@ -111,11 +130,11 @@ async function frameCamera(page, job) {
       if (a.hud) a.hud(!!showHud);
 
       let placed = null;
-      if (cam === "eye") a.eyeAt(frac, 0, 2.5);
-      else if (cam === "orbit") placed = a.orbit(frac, az, el, dist, 1.5, { clear });
-      else if (cam === "cinematic") placed = a.cinematic(frac, { dist, el, clear });
+      if (cam === "eye") a.eyeAt(sceneFrac, 0, 2.5);
+      else if (cam === "orbit") placed = a.orbit(sceneFrac, az, el, dist, 1.5, { clear });
+      else if (cam === "cinematic") placed = a.cinematic(sceneFrac, { dist, el, clear });
       else if (cam === "trackside")
-        placed = a.view({ s: frac, side, dist, height: Math.max(3, el * 0.35), look: "in", clear });
+        placed = a.view({ s: sceneFrac, side, dist, height: Math.max(3, el * 0.35), look: "in", clear });
       else a.snapCam();
 
       a.step && a.step(1 / 60, 4);
@@ -130,6 +149,10 @@ async function frameCamera(page, job) {
       const raster = a.render ? a.render({ what: "view", cols: 48, rows: 18 }) : null;
       return {
         camera,
+        sceneFrac,
+        lineMode,
+        trafficCars,
+        trafficCount: trafficCars.length,
         dbgCamActive,
         models: typeof Assets !== "undefined" && Assets.models ? Assets.models().length : 0,
         camState: cs,
@@ -179,8 +202,20 @@ async function captureJob(page, job, waitMs, modelInfo, diagnostics) {
       seed: a.seed(), renderClock: a.renderClock(), render: a.renderScale(), camera: a.cameraState(), info: a.info() };
   });
   const renderer = rendererEvidence(state.diag, pixels, job.backend);
+  if (job.capture.gpu === "hardware" && (job.backend === "webgpu" || job.capture.tlxWebgpu)) {
+    const gpu = state.diag.env?.backendState;
+    const threeWebgpu = job.capture.tlxWebgpu;
+    const invalidAdapter = threeWebgpu
+      ? gpu?.softAdapter !== false || gpu?.liteGpu !== false || gpu?.softBlit !== false
+      : gpu?.lite !== false || gpu?.minimal !== false || gpu?.softGpu !== false;
+    if (gpu?.api !== "webgpu" || invalidAdapter || gpu?.gpuErrors !== 0) {
+      throw new Error(`shot: hardware WebGPU renderer gate failed: ${JSON.stringify(gpu)}`);
+    }
+  }
   writeFileSync(`${job.out}.capture.json`, JSON.stringify({ version: 1, source: SOURCE,
-    viewport: page.viewportSize(), frame: { camera: frame.camera, clear: frame.clear, dbgCamActive: frame.dbgCamActive },
+    viewport: page.viewportSize(), frame: { camera: frame.camera, clear: frame.clear, dbgCamActive: frame.dbgCamActive,
+      traffic: job.traffic ? { count: frame.trafficCount, cars: frame.trafficCars } : null,
+      drivingLine: frame.lineMode ?? undefined },
     job, browser: diagnostics, state, renderer, readiness, pixels,
     image: { path: job.out, bytes: shot.bytes, via: shot.via, scope: pageScope ? "page" : "scene" } }, null, 2) + "\n");
   if (!renderer.positive) throw new Error(`capture requested ${job.backend} but renderer evidence is not healthy: ${JSON.stringify(renderer)}`);
@@ -207,6 +242,9 @@ try {
     if (job.capture.gpu !== plan.capture.gpu || job.capture.browser !== plan.capture.browser) {
       throw new Error("batch GPU/browser profiles must match the command's --gpu/--browser flags");
     }
+    if (plan.capture.tlxWebgpu && (plan.capture.gpu !== "hardware" || job.backend !== "three")) {
+      throw new Error("--tlx-webgpu requires --backend three --gpu hardware for this capture path");
+    }
     if (job.team && !teamIdsFromSource().includes(job.team)) throw new Error(`unknown team "${job.team}"`);
   }
   const browser = await launchChromium(captureLaunchOptions(plan.capture, { backend: plan.jobs.some((job) => job.backend === "webgpu") ? "webgpu" : "three" }));
@@ -230,12 +268,16 @@ try {
       context = await browser.newContext(captureContextOptions(first.capture, { width: 1280, height: 720 }));
       page = await context.newPage();
       sessionKey = group.sessionKey; currentTrack = null;
-      await installProbeInit(page, { backend: first.backend, tlxForceGL: plan.capture.gpu === "llvmpipe" });
+      await installProbeInit(page, { backend: first.backend, tlxForceGL: plan.capture.gpu === "llvmpipe",
+        ultra: plan.capture.ultra, hardware: plan.capture.gpu === "hardware", tlxWebgpu: plan.capture.tlxWebgpu });
       await pinTeam(page, first.team);
       const url = new URL(srv.snapshotUrl || srv.url);
       if (first.capture.seed != null) url.searchParams.set("seed", first.capture.seed);
       await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: plan.waitMs });
       await page.waitForFunction(() => window.__apex != null, null, { timeout: plan.waitMs, polling: 100 });
+      if (plan.capture.gpu === "hardware" && (first.backend === "webgpu" || plan.capture.tlxWebgpu)) {
+        diagnostics.webgpuAdapter = await requireHardwareWebGpu(page);
+      }
       await applyCaptureProfile(page, first.capture);
       modelInfo = await page.evaluate(async () => {
         if (typeof Assets === "undefined" || !Assets.loadModels) return { n: 0 };
