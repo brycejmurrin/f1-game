@@ -1,1 +1,2 @@
 Fixed: Garage on phones — finish tags no longer overrun livery swatches, touch chips keep a 44px painted target below 100% UI, the sheet no longer cuts the parts list under CLOSE GARAGE on short portrait phones, and rail subtitles take two lines (#3330 #3331 #3334 #3335).
+Fixed: Garage CAMERA and ACTIVE AERO chips are now a 44px touch target (#3333).

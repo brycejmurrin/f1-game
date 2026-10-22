@@ -1272,9 +1272,10 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
      on the screen you sit on longest outside a race. Same call hud.css and
      overlays.css already make over the race canvas; the tinted bg, raised
      a little to compensate, carries the look. */
-  /* --chip-h: same rung as the touch override below. MEASURED readability
-     survey: desktop #cs-cam/#cs-aero sat at 31px under a 40px chip floor. */
-  min-height: var(--chip-h);
+  /* 44px painted (Apple HIG 44 pt; Bryce chose it for #3333 on 2026-10-22).
+     It was --chip-h alone: 31px on desktop in the readability survey, then a
+     40px chip floor. The /--ui-scale term keeps 44 PAINTED below 100% UI. */
+  min-height: max(var(--chip-h), calc(44px / var(--ui-scale)));
 }
 /* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
 @media (hover: hover) and (pointer: fine) {
@@ -1437,7 +1438,7 @@ body:has(> .screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
      on the screen you sit on longest outside a race. Same call hud.css and
      overlays.css already make over the race canvas; the tinted bg, raised
      a little to compensate, carries the look. */
-  min-height: var(--chip-h);
+  min-height: max(var(--chip-h), calc(44px / var(--ui-scale)));  /* 44 painted, see #cs-cam (#3333) */
 }
 @media (hover: hover) and (pointer: fine) {
   #cs-aero:hover { border-color: rgba(255,255,255,0.3); }
