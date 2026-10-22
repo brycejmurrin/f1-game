@@ -286,15 +286,16 @@ test("a straight reverse crawl with the wheel centred has no lateral response", 
 test("the AI look-ahead bank is |bank|, like the player's bankRoll", async () => {
   await startRace();
   const a = g.apex, T = g.sandbox.Tracks, AD = g.sandbox.AiDrive;
-  const keepBank = T.bankAngle, keepPush = AD.pushLook;
+  const keepBank = T.bankAngle, keepGrip = AD.bankGrip;
   const seen = [];
   try {
     T.bankAngle = () => -0.35;                     // an adverse (signed) bank everywhere
-    AD.pushLook = (d, k, bank) => { seen.push(bank); return keepPush(d, k, bank); };
+    // The direct look window skips pushLook; bankGrip(|bank|) runs once per fresh node on either path.
+    AD.bankGrip = (b) => { seen.push(b); return keepGrip(b); };
     a.jump(0.0, 50, 0);
     a.step(1 / 60, 1);
   } finally {
-    T.bankAngle = keepBank; AD.pushLook = keepPush;
+    T.bankAngle = keepBank; AD.bankGrip = keepGrip;
   }
   assert.ok(seen.length > 0, "the AI look-ahead sampled the bank");
   assert.ok(seen.every((b) => b === 0.35), `every sample is |bank| (min ${Math.min(...seen)})`);

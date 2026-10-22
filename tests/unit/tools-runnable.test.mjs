@@ -21,6 +21,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse } from "espree";
 import { makeClosedDbFaults, makeStorageFaults } from "../helpers/storage-faults.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -849,7 +850,28 @@ test("profile-gameloop.mjs: page-ready waits come from APEX_PROFILE_WAIT_MS, nev
 
 test("profile.mjs: page-ready waits (spans/hitch/trace/step) honour APEX_PROFILE_WAIT_MS, never below 30 s", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/perf/profile.mjs"), "utf8");
-  assert.match(src, /APEX_PROFILE_WAIT_MS/);
-  assert.doesNotMatch(src, /timeout:\s*30000/, "a literal 30 s wait would ignore the env override");
-  assert.equal((src.match(/timeout:\s*WAIT_MS/g) || []).length, 6, "every waitForFunction uses WAIT_MS");
+  const ast = parse(src, { ecmaVersion: "latest", sourceType: "module", range: true });
+  const waits = [];
+  let budget;
+  function visit(node) {
+    if (!node || typeof node !== "object") return;
+    if (node.type === "VariableDeclarator" && node.id.name === "WAIT_MS") budget = node.init;
+    if (node.type === "CallExpression" && node.callee.type === "MemberExpression" && node.callee.property.name === "waitForFunction") waits.push(node);
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === "object") visit(value);
+    }
+  }
+  visit(ast);
+  assert.ok(budget && waits.length, "the shared readiness path must have a configured wait");
+  const timeoutFor = new Function("process", `return ${src.slice(...budget.range)};`);
+  for (const [value, expected] of [[undefined, 30000], ["bad", 30000], ["0", 30000], ["1000", 30000], ["60000", 60000]]) {
+    assert.equal(timeoutFor({ env: { APEX_PROFILE_WAIT_MS: value } }), expected, `wait budget for ${value}`);
+  }
+  for (const wait of waits) {
+    const options = wait.arguments.at(-1);
+    const timeout = options.type === "ObjectExpression" && options.properties.find(p => p.key.name === "timeout");
+    assert.equal(timeout?.value.type, "Identifier", "each page/track wait reads the configured budget");
+    assert.equal(timeout.value.name, "WAIT_MS", "shared helpers must retain the same timeout contract");
+  }
 });

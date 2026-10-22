@@ -141,6 +141,33 @@ test("a truncated packet decodes to nothing rather than a garbage car", () => {
 
 const TOTAL = 5000;   // a 5 km circuit
 
+test("interpolation and prediction keep exact arc/lap wrapping with scratch output and packet extensions", () => {
+  const split = (raw) => { const laps = Math.floor(raw / TOTAL); return { s: raw - laps * TOTAL, laps }; };
+  for (const [a, b] of [[4990, 10], [10, 4990], [0, 0], [2500, 0]]) {
+    const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
+    buf.push(1000, car({ s: a, lap: 3, extension: "first" }));
+    buf.push(1100, car({ s: b, lap: 4, extension: "second" }));
+    const out = {};
+    for (const u of [0.01, 0.25, 0.5, 0.75, 0.99]) {
+      const expected = split(a + M4.wrapDelta(b - a, TOTAL) * u);
+      assert.equal(buf.sample(1000 + 100 * u, out), out);
+      assert.equal(out.s, expected.s);
+      assert.equal(out.lap, 3 + expected.laps);
+      assert.equal(out.extension, u < 0.5 ? "first" : "second");
+    }
+  }
+  for (const s of [0, 2, 4998]) for (const speed of [-100, 0, 100]) for (const lap of [3, undefined]) {
+    const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0, maxExtrapMs: 250 });
+    buf.push(1000, car({ s, speed, lap, extension: "retained" }));
+    const out = {}, expected = split(s + speed * 0.25);
+    assert.equal(buf.predict(1500, out), out);
+    assert.equal(out.s, expected.s);
+    assert.equal(out.lap, Number.isFinite(lap) ? lap + expected.laps : lap);
+    assert.equal(out.extension, "retained");
+    assert.equal(out.extrapolated, true);
+  }
+});
+
 test("a car is drawn between the two packets bracketing the delayed present", () => {
   const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 100 });
   buf.push(1000, car({ s: 100, x: 0, speed: 50 }));

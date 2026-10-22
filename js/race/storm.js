@@ -56,11 +56,15 @@ const Storm = (function () {
 
   /** The strike in window `k`, or null: { t, delay, near }. `rate` is the
    *  LIGHTNING FREQ knob (0 = off); `w` the weather (storm or rain). */
-  function strikeAt(seed, k, rate, w) {
+  function strikeAt(seed, k, rate, w, t0, t1) {
     const p = Math.min(0.95, (is(w) ? P_STORM : w === "rain" ? P_RAIN : 0) * (rate > 0 ? rate : 0));
     if (!(p > 0) || h01(seed, k, 1) >= p) return null;
+    const t = (k + 0.05 + 0.9 * h01(seed, k, 2)) * SLOT;
+    // strikeIn visits the same slot every frame. Reject outside its window
+    // before constructing a record (or hashing a thunder delay) nobody uses.
+    if (t0 !== undefined && !(t > t0 && t <= t1)) return null;
     const delay = THUNDER_MIN + h01(seed, k, 3) * (THUNDER_MAX - THUNDER_MIN);
-    return { t: (k + 0.05 + 0.9 * h01(seed, k, 2)) * SLOT, delay, near: 1 - (delay - THUNDER_MIN) / (THUNDER_MAX - THUNDER_MIN) };
+    return { t, delay, near: 1 - (delay - THUNDER_MIN) / (THUNDER_MAX - THUNDER_MIN) };
   }
 
   /** The first strike with t in (t0, t1], or null. A window that runs
@@ -69,8 +73,8 @@ const Storm = (function () {
   function strikeIn(seed, t0, t1, rate, w) {
     if (!(t1 > t0) || t1 - t0 > 1) return null;
     for (let k = Math.floor(t0 / SLOT); k <= Math.floor(t1 / SLOT); k++) {
-      const s = strikeAt(seed, k, rate, w);
-      if (s && s.t > t0 && s.t <= t1) return s;
+      const s = strikeAt(seed, k, rate, w, t0, t1);
+      if (s) return s;
     }
     return null;
   }
