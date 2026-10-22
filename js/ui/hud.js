@@ -1925,12 +1925,12 @@ function speedUnitEl() {
   return _speedUnitEl;
 }
 function paintInstruments(player) {
-  const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
   // HYSTERESIS: a single 0.92 threshold flickered the class (and restarted its
   // pulse animation) every tick the needle hovered on the line, which is
   // exactly where a driver holding a gear sits. Enter at 92%, leave at 89%.
   _redline = player.rpm > MAX_RPM * (_redline ? 0.89 : 0.92);
-  if (!document.body.classList.contains("cockpit-cam")) {
+  if ((typeof HudElements === "undefined" || HudElements.isOn("gear")) && !document.body.classList.contains("cockpit-cam")) {
+    const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     hText(els.gear, "" + player.gear);
     const pct = Math.round(rpmFrac * 100);
     // --rpm (0..1, 1 % steps), not width: the fill spans the whole tach and is
@@ -1938,6 +1938,7 @@ function paintInstruments(player) {
     if (pct !== _rpmPct || !(pct >= 0)) { _rpmPct = pct; hStyle(els.rpmFill, "--rpm", (pct / 100).toFixed(2)); }
     hToggle(els.tach, "redline", _redline);
   }
+  if (typeof HudElements !== "undefined" && !HudElements.isOn("speed")) return;
   const kph = Math.max(0, G.dashKph(player.speed));   // SPEED UNITS is display-only (js/ui/appearance-opts.js); >= 0 like the wheel LCD (reverse read "-26")
   // One SPD plate (HudReadouts.spdPlate): same n + MPH|KPH as the wheel LCD.
   if (_ro && typeof _ro.spdPlate === "function") {
@@ -2108,6 +2109,7 @@ function updateHud(force, dtMs) {
   const tyres = G.tyres;
   const tyreOn = !!(tyres && tyres.on());
   hHidden(els.tyre, !tyreOn);
+  let pitReadouts;   // synchronous HUD tick only; never retained on a car
   if (tyreOn) {
     const spent = tyres.spent(player);
     hText(els.tyreCode, (player.tyre && player.tyre.code) || "-");
@@ -2117,6 +2119,7 @@ function updateHud(force, dtMs) {
     // a percentage says how worn, only laps say whether it reaches the flag.
     // An attribute read by the bar's ::after (css/hud.css), not a new node.
     const left = tyres.lapsLeft ? tyres.lapsLeft(player) : null;
+    if (typeof HudStrategy !== "undefined" && (typeof HudElements === "undefined" || HudElements.isOn("strat"))) pitReadouts = { player, spent, left };
     const bar = els.tyreFill && els.tyreFill.parentNode;
     if (bar && bar.dataset) {
       const txt = left == null || spent >= 1 ? "" : left < 0.5 ? "<1L" : "~" + Math.min(99, Math.round(left)) + "L";
@@ -2167,7 +2170,8 @@ function updateHud(force, dtMs) {
     // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.
     // Practice / TT / quali: hide the race strategy line.
     const practice = sessionOf(timeTrial) !== "race";
-    const pl = (!practice && pit && pit.planInfo) ? pit.planInfo(player) : null;
+    const pl = (!practice && pit && pit.planInfo) ? pit.planInfo(player, pitReadouts) : null;
+    if (pitReadouts) pitReadouts.plan = pl;
     if (els.plan) hText(els.plan, pl ? pl.text : "");
     hData(els.tyre, "plan", pl && pl.state || null);
     // TYRE TEMPERATURE (js/ui/hud-tyres.js): the compound letter turns blue
@@ -2331,7 +2335,7 @@ function updateHud(force, dtMs) {
   radioPaintedCollapseTick(document.documentElement, force);
   paintHudDelta(player, timeTrial);
   if (typeof HudRelative !== "undefined") HudRelative.tick(G, player);   // opt-in RELATIVE box (js/ui/hud-relative.js)
-  if (typeof HudStrategy !== "undefined") HudStrategy.tick(G, player);   // opt-in STRATEGY panel (js/ui/hud-strategy.js)
+  if (typeof HudStrategy !== "undefined") HudStrategy.tick(G, player, pitReadouts);   // opt-in STRATEGY panel (js/ui/hud-strategy.js)
   // Sector split display (top-right) — cached span nodes, textContent per tick
   if (els.hudSectors) {
     if (!_secRows) buildSecRows();

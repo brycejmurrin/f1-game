@@ -8431,7 +8431,8 @@ function tickBody(now) {
     // the pause menu, and its placements publish one zero-dt frame. Resuming tears
     // it down (setPaused -> exitPhotoMode -> FreeCam.onPhotoExit), so no unpaused
     // state in which it should still be flying.
-    // SETTINGS open (SAVE SCREENSHOT / GFX toggles) also needs a live present — headed GLX has no preserved buffer.
+    // SETTINGS still needs selected live frames: the sky animates and SAVE SCREENSHOT
+    // waits for a fresh present (headed GLX has no preserved buffer).
     if (setupPreviewOn || replayBuf.isScrubbing() || ((state === "race" || state === "count") &&
         (!paused || !els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode || !els.pmsettings.hidden))) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
@@ -8439,7 +8440,13 @@ function tickBody(now) {
       // render-target reallocation. The scale simply stays where the race left it
       // (and photo mode pins its own — see enterPhotoMode).
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
-      render(Math.min(dt, setupPreviewOn ? 0.1 : 1 / 20));   // garage's 100 ms stall limit preserves motion below 20 fps
+      const settingsOnly = paused && !setupPreviewOn && !replayBuf.isScrubbing() && !photoMode &&
+        els.lighting.hidden && els.camtune.hidden && els.flyby.hidden && !els.pmsettings.hidden;
+      // Honor the selected render cadence for ordinary Settings, retaining the skipped
+      // dt for camera/sky motion. Tuners, photo, scrub, garage and resume previews stay live.
+      if (settingsOnly) RenderRate.observe(_dtMs);
+      if (settingsOnly ? RenderRate.gate(dt, _dtMs, XrBoot.comfort(), true) : RenderRate.force(dt, _dtMs))
+        render(Math.min(RenderRate.dt(), setupPreviewOn ? 0.1 : 1 / 20));   // garage's 100 ms stall limit preserves motion below 20 fps
     }
     GameAudio.feedReplayScrub(soundOn && player, replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop); return;   // instant-replay engine/rivals while scrubbing; silence on scrub exit
   }

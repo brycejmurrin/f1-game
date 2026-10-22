@@ -451,6 +451,39 @@ test("release at race start frees the garage and re-arms the next title prebuild
   assert.match(game, /  clearMenuScreens\(\); garagePre\.release\(\);/, "startRaceBody releases it once the garage screen is down");
 });
 
+test("a released frameless title rebuilds its actual room before reporting ready", async () => {
+  const h = page({ kind: "track" });
+  const { GarageScene: room } = sceneHarness();
+  const setupCtx = { track: { id: "monza" }, weather: "dry", tod: "default", night: false };
+  const build = h.cam.prebuild, release = h.cam.release;
+  h.cam.prebuild = (part) => {
+    const ok = build(part);
+    return part === "room" ? room.prepare(TEAM, LIV, null, 0, setupCtx) : ok;
+  };
+  h.cam.roomReady = () => room.prepared(TEAM, LIV, null, 0, setupCtx);
+  h.cam.release = () => { if (!release()) return false; room.release(); return true; };
+  const go = async () => { const pending = h.pre.run(owned(h), "title"); await h.flush(2); return pending; };
+  assert.equal(await go(), true);
+  assert.equal(h.pre.state().room, true);
+  h.G.setupPreviewOn = true;
+  assert.equal(h.pre.release(), false, "a visible garage retains its caches");
+  assert.equal(h.pre.state().prepped, true);
+  assert.equal(h.pre.state().room, true);
+  h.G.setupPreviewOn = false;
+  h.G.state = "count";
+  assert.equal(h.pre.release(), true);
+  assert.equal(h.pre.state().room, false);
+  assert.equal(await h.pre.run(owned(h), "title"), false, "race entry never rebuilds the room");
+  h.G.state = "menu";
+  assert.equal(await go(), true);
+  assert.deepEqual(h.built, ["car", "room"], "same-key return prepares the released car and room");
+  assert.equal(h.pre.state().room, true, "ready means the actual room exists");
+  assert.equal(h.pre.state().ready, true);
+  assert.equal(h.warms(), 0, "the track Home never requests hidden program frames");
+  assert.equal(await go(), false, "a live prepared room is retained on repeated polls");
+  assert.deepEqual(h.built, ["car", "room"]);
+});
+
 test("GarageScene.release frees every garage handle; the next draw rebuilds the room", () => {
   const { GarageScene, live } = sceneHarness();
   const setupCtx = { track: { id: "monza" }, weather: "dry", tod: "default", night: false };
