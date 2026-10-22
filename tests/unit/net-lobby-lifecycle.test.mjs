@@ -2615,6 +2615,6 @@ test("removing the last guest of a CODE room rotates it, and its expiry reads in
     await until(() => rooms.some((r) => r.code === "XYZ789"), "the code rotated after the remove");
     rooms[rooms.length - 1].onFail({ error: "expired", message: "Check the six characters and try again." });
     assert.doesNotMatch(h.status.textContent, /six characters/, "the host never sees the guest's copy");
-    assert.match(h.status.textContent, /expired/);
+    assert.ok(h.status.textContent.includes("INVITE ANOTHER"), "the host's own copy: " + h.status.textContent);
   } finally { h.lobby.cancel(); }
 });
