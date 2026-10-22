@@ -185,7 +185,7 @@ const GarageArrival = (function () {
       label: delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm);
   }
   function create($, reducedMotion, readSettings = () => DEFAULT) {
-    let state = null, time = 0, config = DEFAULT;
+    let state = null, time = 0, config = DEFAULT, lastStamp = null;
     const root = $("carsetup"), panel = $("cs-inner"), controls = $("cs-stack");
     const overlay = $("cs-arrival"), skip = $("cs-arrival-skip"), label = $("cs-arrival-label");
     function chrome(on) {
@@ -200,24 +200,41 @@ const GarageArrival = (function () {
       chrome(false);
       $("cs-done").focus({ preventScroll: true });
     }
+    // The render loop hands step() a dt already capped at 0.1 s (js/game.js:
+    // garage frames render at min(dt, 0.1)), so dt alone can never report a
+    // slow frame's real length — at 5 s a frame the old Math.min(0.1, dt)
+    // advance stretched this ~9 s arrival, and its inert sheet, to minutes.
+    // The pose therefore runs on the WALL clock (performance.now, the same
+    // source stepDriveOut uses in setup-camera.js); dt is only the fallback
+    // where no wall clock exists (the unit-test VM).
+    const nowMs = () => typeof performance !== "undefined" && performance && typeof performance.now === "function"
+      ? performance.now() : null;
     function start() {
       config = settings(readSettings());
-      time = 0; state = pose(0, config);
+      time = 0; lastStamp = nowMs(); state = pose(0, config);
       if (!config.enabled || reducedMotion()) { finish(); return; }
       label.textContent = state.label;
       chrome(true); skip.focus({ preventScroll: true });
     }
     function step(dt) {
       if (state && state.active) {
-        // Background-tab gaps must not swallow the whole arrival.
-        time += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * config.speed;
+        const stamp = nowMs();
+        let gap = Math.max(0, Number.isFinite(dt) ? dt : 0);
+        if (stamp !== null) { gap = lastStamp === null ? 0 : Math.max(0, (stamp - lastStamp) / 1000); lastStamp = stamp; }
+        // A single gap longer than the whole arrival is a suspension (a
+        // hidden tab), not a frame of the show: it keeps the legacy 100 ms
+        // stall bound, so background gaps still cannot swallow the arrival.
+        // Every shorter gap advances by its real length, so the pose — and
+        // the inert sheet over the controls — ends within one frame of the
+        // authored wall duration (duration()/speed) at any frame rate.
+        time += (gap > duration(config) / config.speed ? 0.1 : gap) * config.speed;
         state = pose(time, config);
         if (label.textContent !== state.label) label.textContent = state.label;
         if (!state.active) finish();
       }
       return state;
     }
-    function cancel() { state = null; time = 0; chrome(false); }
+    function cancel() { state = null; time = 0; lastStamp = null; chrome(false); }
     skip.onclick = finish;
     return { start, step, cancel, finish, get state() { return state; } };
   }

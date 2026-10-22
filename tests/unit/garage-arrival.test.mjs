@@ -80,6 +80,93 @@ test('reduced motion bypasses camera movement; tab gaps and invalid dt cannot sk
   assert.equal(arrival.state.door, 0);
   arrival.step(60); assert.equal(arrival.state.active, true); assert.equal(arrival.state.z, 13);
 });
+// ── THE WALL-CLOCK BOUND: the arrival (and its inert sheet) must end within
+// one frame of the authored wall duration at ANY frame rate. The production
+// caller hands step() a dt already capped at 0.1 s, so these drive step(0.1)
+// exactly as js/game.js does while a fake performance.now carries the real
+// frame times — the clock arrival.js now reads.
+function clockHarness(readSettings) {
+  let now = 1000;
+  context.performance = { now: () => now };
+  const elements = new Map();
+  const $ = id => {
+    if (!elements.has(id)) elements.set(id, { hidden: true, inert: false, textContent: '',
+      classList: { toggle() {} }, setAttribute(k, v) { this[k] = v; }, focus() { this.focused = true; } });
+    return elements.get(id);
+  };
+  const arrival = Arrival.create($, () => false, readSettings);
+  return { $, arrival,
+    // One rendered frame `ms` of wall time later; returns the wall total since start.
+    frame(ms) { now += ms; arrival.step(0.1); return (now - 1000) / 1000; },
+    release() { delete context.performance; } };
+}
+function driveUntilDone(h, frameMs, maxFrames = 10000) {
+  let wall = 0, frames = 0;
+  while (h.arrival.state.active && frames < maxFrames) { wall = h.frame(frameMs); frames++; }
+  return { wall, frames };
+}
+test('slow frames cannot stretch the arrival (or its inert sheet) past the authored wall duration', () => {
+  // 5 s frames (a stalled software GPU) and 10 fps alike: inert lifts no later
+  // than the nominal duration plus the one frame that crosses it.
+  for (const frameMs of [5000, 100]) {
+    const h = clockHarness();
+    try {
+      h.arrival.start();
+      assert.equal(h.$('cs-inner').inert, true);
+      const { wall } = driveUntilDone(h, frameMs);
+      assert.ok(wall >= Arrival.DURATION - 1e-9, `${frameMs} ms frames: not cut short (${wall}s)`);
+      assert.ok(wall <= Arrival.DURATION + frameMs / 1000 + 1e-9,
+        `${frameMs} ms frames: inert lifted at ${wall}s, within one frame of the ${Arrival.DURATION}s arrival`);
+      assert.equal(h.$('cs-inner').inert, false, 'controls are live again');
+      assert.equal(h.$('cs-stack').inert, false);
+    } finally { h.release(); }
+  }
+});
+test('at 60 fps the wall-clock arrival takes its nominal duration: no speed-up regression', () => {
+  const h = clockHarness();
+  try {
+    h.arrival.start();
+    const frameMs = 1000 / 60;
+    let wall = 0;
+    while (wall < Arrival.DURATION - 0.5) wall = h.frame(frameMs);
+    assert.equal(h.arrival.state.active, true, 'still playing half a second before its authored end');
+    const done = driveUntilDone(h, frameMs);
+    assert.ok(Math.abs(done.wall - Arrival.DURATION) <= frameMs / 1000 + 1e-9,
+      `finished at ${done.wall}s against the ${Arrival.DURATION}s nominal`);
+    assert.equal(h.$('cs-inner').inert, false);
+  } finally { h.release(); }
+});
+test('a single hidden-tab gap is a suspension, not a frame: it cannot skip the arrival, which then plays out', () => {
+  const h = clockHarness();
+  try {
+    h.arrival.start();
+    h.frame(60000);   // the tab was hidden for a minute; rAF fires once on return
+    assert.equal(h.arrival.state.active, true, 'the whole cinematic is not swallowed by one gap');
+    assert.ok(h.arrival.state.seconds <= 0.1 + 1e-9,
+      `the gap advanced only the 100 ms stall bound, not ${h.arrival.state.seconds}s`);
+    assert.equal(h.$('cs-inner').inert, true, 'still arriving');
+    const { wall } = driveUntilDone(h, 1000 / 60);
+    assert.ok(wall <= 60 + Arrival.DURATION + 1 / 60 + 1e-9, 'and it still completes at its pace afterwards');
+    assert.equal(h.$('cs-inner').inert, false);
+  } finally { h.release(); }
+});
+test('the crew-service arrival keeps its own longer bound under slow frames', () => {
+  const cfg = Arrival.settings({ enterCrew: 'service' });
+  const service = Arrival.duration(cfg);
+  assert.ok(service > Arrival.DURATION, 'the service variant is the long one');
+  const h = clockHarness(() => cfg);
+  try {
+    h.arrival.start();
+    let wall = 0;
+    while (wall < Arrival.DURATION) wall = h.frame(5000);
+    assert.equal(h.arrival.state.active, true, 'not cut down to the plain duration');
+    assert.equal(h.$('cs-inner').inert, true);
+    const done = driveUntilDone(h, 5000);
+    assert.ok(done.wall <= service + 5 + 1e-9,
+      `service inert lifted at ${done.wall}s, within one frame of its ${service}s duration`);
+    assert.equal(h.$('cs-inner').inert, false);
+  } finally { h.release(); }
+});
 test('saved tuner settings control arrival speed, angle, lens and disabled playback', () => {
   const { $ } = harness();
   let saved = null;
