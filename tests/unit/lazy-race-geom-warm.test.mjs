@@ -1,5 +1,5 @@
 /* lazy-race-geom-warm.test.mjs — D·DP3: warmFlaps mints the flap meshes the
- * race draw hits, not only the hinge solve. Behaviour only (no assert.match).
+ * race draw hits, not only the hinge solve. Behaviour pins via VM counters.
  *
  * Run: node --test tests/unit/lazy-race-geom-warm.test.mjs
  */
