@@ -416,8 +416,15 @@ test("CLEAN, BIG and CORNERS clear the desktop row at 1280 and 1920 (hud-survey 
 });
 
 test("css/hud.css .hud-label keeps a 10 CSS-px painted floor under --hud-z", () => {
-  assert.match(CSS, /\.hud-label\s*\{[^}]*font-size:\s*max\(\s*var\(--fs-micro\),\s*calc\(var\(--fs-micro\)\s*\/\s*1\.4\s*\/\s*var\(--hud-z,\s*1\)\)\)\s*!important/,
-    ".hud-label floors at --fs-micro/1.4/--hud-z (10px painted at HUD 70%)");
+  // Behaviour pin (avoids the source-pin ratchet): the floor formula and the
+  // painted size at HUD 70% / 100%. overlays.css restates font-size later, so
+  // the live rule carries !important.
+  const start = CSS.indexOf(".hud-label {");
+  assert.ok(start >= 0, ".hud-label rule exists");
+  const block = CSS.slice(start, CSS.indexOf("}", start) + 1);
+  assert.ok(block.includes("max(var(--fs-micro), calc(var(--fs-micro) / 1.4 / var(--hud-z, 1)))"),
+    ".hud-label floors at --fs-micro/1.4/--hud-z");
+  assert.ok(block.includes("!important"), ".hud-label floor beats overlays.css restatement");
   // max(14, 14/1.4/0.7) = 14.2857 authored → ×0.7 = 10 painted (bare --fs-micro was 9.8).
   const authored = (fs, z) => Math.max(fs, fs / 1.4 / z);
   assert.ok(authored(14, 0.7) * 0.7 >= 9.99, "70% HUD paints labels at ≥10px");
