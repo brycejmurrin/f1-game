@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-342bb088-2443-5bdd-8aba-def452e2c628 D·IP3 #3479 tip c6040ebba ready-gate exit 0; MERGE-HOLD intact (DAD lifts/merges in priority after #3465); phone half-res post + phoneSlowLatch + lookPostShed; full-tier CI #39732733076 still running 0 failed — do not merge from worker
+HANDOFF to:D from:cursor:bc-be4a3e1e-9fc6-5cef-b9f7-274e40feee7e #3489 D·DP5: MERGE-HOLD noted — will not remove or merge; STOP at ready+READY. Local sync-pr @1008a9d tooling-fast green; folding remote head then push.
