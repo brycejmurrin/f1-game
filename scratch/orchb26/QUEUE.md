@@ -223,3 +223,7 @@ All are game PRs (js/) → one GAME-SLOT per green Pages.
 - #3454 merged a82a2f9c (H33 cockpit/helmet finishes + wheel A). Pages watcher by2oxrdtr. H33 FINAL 02:15Z (archive ~03:15Z). Leads: F6 visor cockpit body not pre-warmed (perf); TLX first-person black under SwiftShader blocks local stills (tlxForceHw=1 does not lift).
 - #3468 2d60f5de tlx-warm-post merged by Bryce outside the bus. H27 archived 01:52Z.
 - Fleet B game queue EMPTY. Waiting on Bryce: L1 AskUserQuestion; H31 "go".
+
+## 02:47Z wave 27 (Bryce: "get all sessions working or hunting or spawn new ones")
+- Archived O-B, O-C. Launched: B·W15 phone UI #3330-3339 (session_01VkFyZ73SH9wW5UM8sMswwf), B·W16 car aero #3404 #3405 #3411-3413 (session_01ASKCykh3GKa4g889o3JdKd), B·W17 audit boot/render/PWA #3282 #3283 #3284 #3290-3293 #3295 #3296 #3257 (session_01UZoDs7zxo6T7eD8r7FRttR), B·W18 audit race/sim/audio/net #3280 #3281 #3285-3289 #3294 #3297-3299 (session_013BpMEjeLA3HjyVfQCPKB7p), B·H34 phone perf G12 G13 F6 race-entry (session_01JjWkn29vRR6N4v6zYfDMm7), B·W19 docs/tests #3318-3320 #1682 (session_01HRkkfuHJNWvaF51QuJdvPw).
+- Live: H33 DAILY flake fix, L1 photo-reset fix (cursor/photo-reset-sun-l1c4). H31 blocked on Bryce "go". D-fleet keeps scenery (W13) issues.
