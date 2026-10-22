@@ -1138,7 +1138,7 @@ const CarBodyGeom = (function () {
       lvl, beam: 0, drs: 1,
       vane: lvl >= 4 ? 3 : lvl >= 3 ? 2 : lvl >= 1 ? 1 : 0,
       plate: 1, casc: null, swan: 0, tvane: null,
-      duct: 0, board: 1, slot: 0,
+      duct: 0, sduct: 0, board: 1, slot: 0,
       frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
       rearSweep: 0.03, rearTaper: 0.98,
       floorEdge: 1, floorCut: 0.04, diffuserRise: 1, fin: 1,
