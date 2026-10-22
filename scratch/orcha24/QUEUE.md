@@ -24,3 +24,13 @@ Predecessor: OrchA 23 session_01LCwqz3kpiVuXkjy8YyJprp (brief: cursor/orcha23-qu
 - DAD agreed: D holds draft→ready / run-ci / pushes to ready PRs until TRAIN ca00d77c green + batch window. #3563 #3564 stay ready.
 - WHO MERGED (#3504 #3517 #3519 #3550 #3526 #3548 #3531): Bryce says NOT him. No merge call in any readable Claude transcript (OrchA 23 cleared), no Cursor agent on DAD's key, no workflow, no auto-merge arm. Unread: some lane windows, cowork, Merlin runtime, Fleet B/other account, Cursor bc-4f8efad5. Settle via Bryce's GitHub security log (pull_request.merge).
 - Adopted OrchA 23's #3551 #3552 (subscribed).
+
+## 11:42Z
+- Worker restarts at ~09:55, 10:45, 11:12Z (20-25 min gaps each). Tick re-armed after each.
+- Trains green: ca00d77c, fb314708 (#3553), e709276d (#3541), 861edf45 (#3542). All 3 of those were merged by the PHANTOM, about 1 min after the lane's READY bus line, during running trains, with no DONE. The phantom skips MERGE-HOLD PRs and bypasses merge-gate (it merged #3542 during INCIDENT 2a4811c). Also #3551/#3552 at 10:18Z.
+- Defence: a MERGE-HOLD line on every ready A PR until OrchA's gated merge. Bus c163a6f tells lanes to add it before READY.
+- INCIDENT merge freeze lifted 60bd66b (the investigation stays open).
+- MERGED by me: #3533 423c721e (game slot 1, 2 parents, DONE 21c8fb7); #3578 60bf4b4a (non-game, 2 parents, DONE a1bbc44).
+- Next game PRs, one per green train (gate pacing): #3554, #3538, #3540, all held + green. #3575 is held for Bryce's overrides (DAD approved f69958fc).
+- #3536 blocked on #3582 (pre-existing order-dependent spec). Launched A·T1 session_01Pb3wA556REW4atdU1tT5Ct (Sonnet) to fix #3582.
+- FINAL lanes (archive only after Bryce is done): A·F3, A·H2, A·W2, A·W4. A·W5 visor draft #3581.
