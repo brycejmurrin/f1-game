@@ -88,6 +88,14 @@ The top three changes:
 3. Type the bus and cut orchestrator wake cost (real context caps, no
    per-PR events into orchestrators). Each is a change to one or two named files.
 
+## Combined A+D decision list
+
+| status | items |
+|---|---|
+| **Agreed by A and D** (DAD, 09:37Z) | 1a train row in merge-gate · 2 UNGATED detector (trailer, then DONE, 10 min, flag only) · 3 rule 7 corrections · 7 claim before launch · 10 one-command merge |
+| **Proposed by A, D not yet asked** | 4 typed bus verbs (D3 asks for the same) · 5 acknowledgement-only wake cuts (DAD scoped it) · 8 READY to the fleet letter · 9 one writer per branch (D5) · 11 grant classes · 12 succession doc fix · 14 timeouts · 16 workers never merge (D4) · 17 auditor-page hygiene (D) |
+| **Bryce decides** | 1b merge queue (on hold; probably needs an org-owned repo) · 6 cap values · 13 hourly bus-watch end condition · 15 Cursor hooks · open questions 2 and 5 |
+
 ## Ranked improvements
 
 Ranked by impact × effort. **Both** = applies to Claude and Cursor fleets;
