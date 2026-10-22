@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "pairs": [
+    {
+      "id": "bahrain-rain-optics",
+      "title": "Bahrain · rainy night · visor optics",
+      "width": 1920,
+      "height": 1080,
+      "a": {
+        "file": "comparison-images/5b519c4286c3e5f538d565d3e1a5830d8451728c738aa6eaa71a51af862bf507.webp",
+        "sha256": "5b519c4286c3e5f538d565d3e1a5830d8451728c738aa6eaa71a51af862bf507",
+        "label": "Original"
+      },
+      "b": {
+        "file": "comparison-images/801b7a52b6be052feba0405fea086a42094a2e268009bc29f03c99a36138e487.webp",
+        "sha256": "801b7a52b6be052feba0405fea086a42094a2e268009bc29f03c99a36138e487",
+        "label": "Clear · strong optics"
+      },
+      "provenance": {
+        "sha": "20afd2751d7c2f41679ee32adf6b6d7792dc77a5",
+        "dirty": true,
+        "scene": {
+          "track": "bahrain",
+          "tod": "night",
+          "weather": "rain",
+          "camera": "helmet",
+          "frac": 0.18
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "rain",
+          "tod": "night",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 8.7,
+            "floorMs": 36.4,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 3,
+              "maxMs": 1449.8,
+              "slow": 3
+            },
+            "frameTimes": {
+              "frames": 3,
+              "p50": 250.10000000000036,
+              "p95": 1449.800000000001,
+              "p99": 1449.800000000001,
+              "maxMs": 1449.800000000001,
+              "droppedSimS": 0.18333333333333332,
+              "physicsSteps": 10,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 1,
+            "rain": 0.04000000000000001
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": false,
+              "softPresent": true,
+              "softBlitGen": 1
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "off",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "strong",
+            "visorReflections": "strong",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true
+      }
+    },
+    {
+      "id": "wet-surface",
+      "title": "Wet-surface capture timing · earlier vs verified wet",
+      "width": 1920,
+      "height": 1080,
+      "a": {
+        "file": "comparison-images/c521a62c41b5f9ca29b3ee50caaf45c0e86e851103a806f78faddc68870125ba.webp",
+        "sha256": "c521a62c41b5f9ca29b3ee50caaf45c0e86e851103a806f78faddc68870125ba",
+        "label": "Earlier capture"
+      },
+      "b": {
+        "file": "comparison-images/e0251427e868b94db192676b296fcd25287daf6a25b84180cc5674d7ff7317a5.webp",
+        "sha256": "e0251427e868b94db192676b296fcd25287daf6a25b84180cc5674d7ff7317a5",
+        "label": "Verified wet surface"
+      },
+      "provenance": null
+    }
+  ],
+  "visorLab": true
+}

@@ -166,3 +166,38 @@ test("--weather parses, validates, and splits batch groups", () => {
   assert.equal(shotSessionKey(jobs[0]), shotSessionKey(jobs[1])); // weather changes in place, like tod
   assert.match(SHOT_USAGE, /--weather dry\|wet\|rain\|overcast\|fog/);
 });
+
+// A/B imports must preserve existing pairs and refuse misleading image geometry.
+import sharp from 'sharp';
+import os from 'node:os';
+import {addPair, recipePairs} from '../../tools/shot/ab-gallery.mjs';
+test('A/B gallery validates capture recipes before launching a browser',()=>{
+ const pair={id:'test',scene:{weather:'storm'},b:{visor:'clear',visorRefraction:'strong'}};
+ assert.equal(recipePairs({pairs:[pair]})[0].scene.weather,'storm');
+ for(const invalid of [{...pair,id:'../bad'},{...pair,scene:{frac:1}},{...pair,b:{unknown:'x'}}])assert.throws(()=>recipePairs({pairs:[invalid]}));
+ assert.throws(()=>recipePairs({pairs:[pair,pair]}),/duplicate/);
+});
+test('A/B append, replace and failed imports preserve valid comparisons',async()=>{
+ const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'apex-ab-'));
+ try{
+  const gallery=path.join(tmp,'gallery'),a=path.join(tmp,'a.png'),b=path.join(tmp,'b.png'),wrong=path.join(tmp,'wrong.png');
+  await sharp({create:{width:32,height:18,channels:3,background:'#123456'}}).png().toFile(a);
+  await sharp({create:{width:32,height:18,channels:3,background:'#abcdef'}}).png().toFile(b);
+  await sharp({create:{width:16,height:9,channels:3,background:'#000'}}).png().toFile(wrong);
+  const add=extra=>addPair({gallery,id:'first',a,b,...extra});
+  await add({title:'First'});await add({id:'second',title:'Second'});await add({title:'Updated'});
+  const read=()=>JSON.parse(fs.readFileSync(path.join(gallery,'comparisons.json'),'utf8'));
+  assert.equal(read().pairs.length,2);assert.equal(read().pairs.find(p=>p.id==='first').title,'Updated');
+  assert.match(read().pairs[0].a.file,/^comparison-images\/[a-f0-9]{64}\.webp$/);
+  for(const file of ['comparisons.html','comparisons.js','comparisons.css'])assert.ok(fs.existsSync(path.join(gallery,file)));
+  const before=fs.readFileSync(path.join(gallery,'comparisons.json'),'utf8');
+  await assert.rejects(add({b:wrong}),/dimensions/);await assert.rejects(add({id:'../escape'}),/slug/);
+  fs.writeFileSync(path.join(gallery,'.comparisons.lock'),'');await assert.rejects(add(),/EEXIST/);fs.unlinkSync(path.join(gallery,'.comparisons.lock'));
+  assert.equal(fs.readFileSync(path.join(gallery,'comparisons.json'),'utf8'),before);
+  const {execFileSync}=await import('node:child_process');
+  execFileSync(process.execPath,[path.join(ROOT,'tools/shot/visor-lab-export.mjs'),gallery],{cwd:ROOT});
+  assert.ok(read().pairs.some(p=>p.id==='first'));assert.ok(read().pairs.some(p=>p.id==='second'));
+  assert.ok(read().pairs.some(p=>p.id==='bahrain-rain-optics'));
+
+ }finally{fs.rmSync(tmp,{recursive:true,force:true})}
+});

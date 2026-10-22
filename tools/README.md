@@ -248,6 +248,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **shot/ab-gallery.mjs** | Capture matched game views or import image pairs into an appendable, portable A/B comparison gallery. | — |
 | **shot/agent.mjs** | Agent toolbelt CLI — boots headless and calls one agent-view surface (`world`/`track`/`scene`/`rollout`/`help`). | agent-view |
 | **shot/apex-capture.mjs** | Parallel headless screenshot sweep across cameras/tracks/modes → `scratch/captures/apex-capture/<purpose>/`. | playwright-probe |
 | **shot/apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON: `apex-eval.mjs monza '__apex.corners()'`. | playwright-probe |

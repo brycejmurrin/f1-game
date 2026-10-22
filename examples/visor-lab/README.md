@@ -36,3 +36,36 @@ Visor reflections are procedural shield highlights, and refraction is a radial
 screen-space approximation. They do not sample reflected track geometry or
 simulate refraction through each individual bead. The settings deliberately
 separate these effects from the game's actual wet-road reflections.
+
+## Capture or import any A/B pair
+
+`ab-gallery.mjs` produces `comparisons.html`, `comparisons.json`, its JS/CSS and
+immutable lossless WebP images. It appends pairs; reusing an ID replaces that pair
+without removing others. Imports require equal pixel dimensions so the divider
+never compares stretched images. A lock rejects simultaneous writers. Failed
+imports leave the existing index intact. Serve the output over HTTP.
+
+Capture a real matched game view (one browser, one frozen camera for A and B):
+
+```sh
+node tools/shot/ab-gallery.mjs --capture examples/visor-lab/capture-example.json --gallery /absolute/path/to/site/dist
+```
+
+Copy the recipe and add pairs for any track, native camera, lap fraction,
+weather or time of day. Each pair shares its scene; its `a` and `b` objects
+select labels and visor settings. Settings reset independently for each side.
+The example compares Original with Strong refraction/reflections. Helmet rain
+is seeded as stationary water for stills; these captures do not measure motion.
+Capture reports and PNG originals are retained in `artifacts/ab-capture-*`.
+
+Import screenshots from different code revisions or any other experiment:
+
+```sh
+node tools/shot/ab-gallery.mjs --add --a /path/before.png --b /path/after.png --id wet-road --title "Wet-road reflections" --a-label Before --b-label After --gallery /absolute/path/to/site/dist
+```
+
+The input may be PNG, JPEG or WebP. No browser is launched for imports. The
+viewer offers a shot selector, hide/show controls, full-resolution downloads,
+keyboard and touch wipe, atomic image loading and per-pair capture details.
+`--help` lists the recipe schema. Tools work locally without Site credentials;
+publication is a separate step. Existing Site galleries retain all prior assets.
