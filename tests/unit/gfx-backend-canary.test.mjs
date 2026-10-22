@@ -2283,7 +2283,7 @@ test("terminal graphics failure hides interactive game UI and offers recovery co
 
 test("terminal graphics recovery works before the late menu wiring", async () => {
   const src = read("js/game.js");
-  const from = src.indexOf("function showGraphicsUnavailable()");
+  const from = src.indexOf("function graphicsUnavailableOpts()");
   const to = src.indexOf("async function start()", from);
   assert.ok(from >= 0 && to > from, "early graphics-recovery block found");
 

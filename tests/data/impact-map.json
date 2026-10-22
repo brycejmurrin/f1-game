@@ -9595,8 +9595,12 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/mobile-native-download.test.mjs"
       ],
+      "setUnavailableDefaults": [
+        "tests/unit/renderer-picker-unavailable.test.mjs"
+      ],
       "showUnavailable": [
         "tests/unit/renderer-boot-timeout.test.mjs",
+        "tests/unit/renderer-picker-unavailable.test.mjs",
         "tests/unit/survey-hud.test.mjs"
       ],
       "threePathLabel": [
@@ -12731,6 +12735,9 @@
       ],
       "gpuAdapterAvailable": [
         "tests/unit/boot-idle-prefetch.test.mjs"
+      ],
+      "graphicsUnavailableOpts": [
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "guessBackend": [
         "tests/unit/script-loader-preload.test.mjs"
