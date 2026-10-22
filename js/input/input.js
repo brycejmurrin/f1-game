@@ -2114,6 +2114,11 @@ const Input = (function () {
     Log.info("input", "Input.init");
     onPauseCb = (opts && opts.onPause) || null;
     onPadLostCb = (opts && opts.onPadLost) || null;
+    // One page load, one wire-up. A second init (hot reload, a harness that
+    // boots twice, a future re-entry) must not stack keydown/blur/gamepad
+    // listeners: a toggle GAS key would flip twice per press, and blur would
+    // reset twice. Callbacks above still refresh so a re-init can rebind them.
+    if (ready) return;
 
     loadLayoutMap();
     window.addEventListener("keydown", function (e) { onKey(e, true); });
@@ -2283,6 +2288,7 @@ const Input = (function () {
       padDpadVal = 0; padDpadT = 0;
       padDpadLeftHeld = padDpadRightHeld = false;
       padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
+      if (!still) padIsWheel = false;
       // Only the ACTIVE pad's edge baseline: a spare pad leaving must not turn
       // every button still held on the driving pad into a fresh press.
       if (e.gamepad && padPrevByIndex.get(e.gamepad.index) === padPrevButtons) padPrevButtons.length = 0;
