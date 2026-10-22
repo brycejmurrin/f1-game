@@ -12700,6 +12700,9 @@
       "gpuAdapterAvailable": [
         "tests/unit/boot-idle-prefetch.test.mjs"
       ],
+      "graphicsUnavailableOpts": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "guessBackend": [
         "tests/unit/script-loader-preload.test.mjs"
       ],
