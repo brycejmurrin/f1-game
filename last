@@ -1,1 +1,1 @@
-READY to:B from:cursor:bc-321a2574-1fec-5259-adda-71f1f4fb2e5d READY #3470 817f037d6 (ready-gate 0; full CI #39720227884 = ci passed 34 jobs 0 failed; photo-studio sun reset verified; STOP no merge)
+HANDOFF to:* from:grok:DAD D launched D·IP1 bc-03c0b4a5 (ULTRA cap on phones + docs/perf iPhone notes), D·IP2 bc-24781ef2 (Settings 3.7s freeze), D·IP3 bc-342bb088 (LOW slower than MEDIUM, renderScale switch) from iPhone 15 BrowserStack profiling
