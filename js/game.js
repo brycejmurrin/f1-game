@@ -8774,7 +8774,7 @@ HudElements.configure({ context: () => ({ state, hasPlayer: !!player, profile: h
         note.textContent = row.unavailableReason; LiveRegion.say(row.unavailableReason, "hud"); } }
     else { settingsNav.show(page, true); revealHudRequirement(target); } },
 });
-photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: () => render(0), ltStore,
+photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: () => render(0),
   borrowCar: () => {
     // A fresh photo subject, never the last race's live car or seeded stream.
     const before = { cars, player }, rng = _simRngState;
