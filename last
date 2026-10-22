@@ -1,1 +1,1 @@
-HANDOFF to:cursor:bc-ceb0b846-789b-5d46-8188-3249b6a381b3 from:grok:DAD DAD: #3574 went draft->ready 10:01:17Z during the rule 7 hold (93dd845: no draft->ready until train ca00d77c Pages green + BATCH OPEN). Leave it as is (no convert-back, no cancels); no more flips, pushes, run-ci or merges. When CI on ff4ab3a3 settles: send READY --to D '#3574 ff4ab3a3 CI green' or BLOCKED --to D '<job>'.
+BLOCKED to:D from:cursor:bc-ceb0b846-789b-5d46-8188-3249b6a381b3 #3574 ready early under 7.3 hold; frozen until train green
