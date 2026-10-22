@@ -1,0 +1,9 @@
+{
+  "pairs": [{
+    "id": "bahrain-rain-optics",
+    "title": "Bahrain · rainy night · visor optics",
+    "scene": {"track":"bahrain","tod":"night","weather":"rain","camera":"helmet","frac":0.18},
+    "a": {"label":"Original", "visor":"off"},
+    "b": {"label":"Clear · strong optics", "visor":"clear", "visorRefraction":"strong", "visorReflections":"strong"}
+  }]
+}

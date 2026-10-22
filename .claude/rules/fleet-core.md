@@ -10,7 +10,7 @@
   A game PR takes the bus `GAME-SLOT` first and waits for green Pages on the
   last game merge; non-game PRs batch. `DONE` after each merge; READY, GREEN,
   BLOCKED, HANDOFF and INCIDENT go on the bus (`fleet-bus.mjs send`); read it
-  once per tick, never in a loop.
+  once per tick (orchestrator: ~3 min, running.md §Bus routine), never in a loop.
 - READY goes to your own fleet's orchestrator; no Merge Desk exists unless
   Bryce designates one. Archive by rule (`node tools/ci/fleet-archive.mjs <saved list_sessions page>`):
   agent-created, role-tagged, idle an hour, PR merged or closed; never a

@@ -21,9 +21,10 @@ const NetNostr = (function () {
   const MAX_SEEN_CHARS = MAX_CONTENT_CHARS * 2;
   const MAX_HEARD_ACTIVE = 4;
   // REQ strips `since` (device clock skew). Without a local floor a relay that
-  // replays an earlier host session's offer would be answered. ~30 s slack
-  // covers modest skew between hostStartedAt and the offer's created_at.
-  const OFFER_CREATED_SLACK_S = 30;
+  // replays an earlier host session's offer would be answered. The sender signs
+  // created_at with ITS clock and the floor is this device's, so the slack must
+  // cover phone-to-phone skew: at 30 s a host 45 s behind was never heard.
+  const OFFER_CREATED_SLACK_S = 300;
 
   let modPromise = null;
 
@@ -531,7 +532,7 @@ const NetNostr = (function () {
 
   return { JOIN_TIMEOUT_MS, HOST_TIMEOUT_MS, RELAY_CHECK_MS, available, exchange, directExchange, load,
     RELAYS, relayUrls, validRelay,
-    MAX_CONTENT_CHARS, MAX_FRAME_CHARS, MAX_SEEN, MAX_SEEN_CHARS, MAX_HEARD_ACTIVE,
+    MAX_CONTENT_CHARS, MAX_FRAME_CHARS, MAX_SEEN, MAX_SEEN_CHARS, MAX_HEARD_ACTIVE, OFFER_CREATED_SLACK_S,
     readRelayFrame, createBoundedInbox };
 })();
 Object.freeze(NetNostr);

@@ -28,8 +28,8 @@ const DataSchedule = (function () {
 
   // NEXT is the first race that has not finished. With a start instant that is
   // decided against the clock (a race stays NEXT for RACE_MS after lights out,
-  // i.e. while it is running); a date-only entry falls back to the UTC day.
-  const RACE_MS = 2 * 3600 * 1000;
+  // i.e. while it is running, red-flag stoppages included); a date-only entry falls back to the UTC day.
+  const RACE_MS = 4 * 3600 * 1000;   // live.js sessionStatus allows the same 4 h
   function isUpcoming(r, now) {
     if (!r || !r.date) return false;
     const at = raceInstant(r);

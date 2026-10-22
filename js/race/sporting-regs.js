@@ -157,7 +157,10 @@ const SportingRegs = (function () {
       }
       if (level < CAUTION_MIN) lostTo.length = 0;
       if (owed.length) {
-        if (!p.finished) for (let i = owed.length - 1; i >= 0; i--) if (now.has(owed[i]) || exempt(owed[i])) owed.splice(i, 1);
+        // A passed car that pits, retires, finishes or is then STRICKEN (beached,
+        // mid-incident, being rescued) can no longer be given its place back:
+        // the debt drops, the same test that made passing it legal.
+        if (!p.finished) for (let i = owed.length - 1; i >= 0; i--) if (now.has(owed[i]) || fair(owed[i])) owed.splice(i, 1);
         if (gained) {
           if (!(t > 0)) t = WIN;
           ev = { type: "warn", n: owed.length };
