@@ -168,7 +168,7 @@ export const BROWSER_ONLY = {
   // adapter (artifacts/logs/vmpage/*.log): these fail for a reason no static
   // scan sees, and the reason is structural, not a flake.
   "tests/specs/new-hooks.spec.js": "tests/unit/new-hooks-vm.test.mjs replays 55 of 56 against the virgin boot (the VM boots without racing, so the first-load assertions hold); the Madrid foundation test needs a real Chromium, so the spec stays the browser reference rather than a TWINNED pair",
-  "tests/specs/car-effects.spec.js": "every test reads the shell DOM inside evaluate (querySelector on a node the VM's document does not build): 0/9",
+  "tests/specs/car-effects.spec.js": "every test reads the shell DOM inside evaluate (querySelector on a node the VM's document does not build): 0/9; D·DP3 geo-stable pin needs TLX memState().geoLive + real presents after green (browser-only)",
   "tests/specs/multiplayer-npeer.spec.js": "reads the lobby DOM inside evaluate (querySelector → null): 0/4",
   "tests/specs/multiplayer-roles.spec.js": "reads the lobby DOM inside evaluate (querySelector → null): 0/5",
   "tests/specs/parts-ers.spec.js": "reads the setup screen's DOM inside evaluate (querySelector → null): 0/4",
@@ -187,7 +187,6 @@ export const BROWSER_ONLY = {
   "tests/specs/qatar-foundation.spec.js": "APEX_VM_PAGE=1 times out at BOOT_MS on waitForFunction (track never settles in the VM — measured 45 s, 2026-09-30); structural boot, not a flake",
   "tests/specs/suzuka-foundation.spec.js": "APEX_VM_PAGE=1 times out at BOOT_MS on waitForFunction (track never settles in the VM — measured 45 s, 2026-09-30); structural boot, not a flake",
   "tests/specs/touch-steer.spec.js": "8/9 in 1.7 s, and the ninth is structural: the release ramp advances by min(0.1, elapsed) of WALL CLOCK, and waitForTimeout advances no clock in the VM, so `lifting off ramps back to centre` reads ~0.99 where a browser reads 0. Proved rather than guessed: raising the poll gap from 20 ms to 120 ms changes the browser ladder completely (0.53 -> 1.00 over the same ticks) and moves the VM reading 0.9835 -> 0.9874 — it is not polling too fast, time is not passing",
-  "tests/specs/race-geo-stable.spec.js": "needs TLX memState().geoLive + real presents after green; APEX_VM_PAGE has no three.js geo registry, so the post-green stability pin is browser-only (D·DP3)",
 };
 
 export const isTwinned = (file) => Object.hasOwn(TWINNED, file) || Object.hasOwn(ADAPTED, file);
