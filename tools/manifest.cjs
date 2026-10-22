@@ -374,6 +374,7 @@ const FULL = [
   "js/perf/render-rate.js",   // RenderRate: phones draw every 2nd rAF on a 100 Hz+ display (physics unchanged)
   "js/perf/spans.js",
   "js/perf/race-entry-profile.js",
+  "js/perf/gfx-escalation.js",
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
   "js/render/shared/compatibility-recovery.js",

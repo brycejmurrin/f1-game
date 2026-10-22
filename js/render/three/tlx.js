@@ -1024,6 +1024,7 @@ const TLX = (function () {
       } catch (_) { /* no document events (harness) */ }
       renderer.onDeviceLost = function (info) {
         if (initOwner && !initOwner.active) return;
+        if (_deviceLost) return;   // one incident, one budget spend
         try { if (_threeOnLost) _threeOnLost(info); } catch (_) { /* three's own bookkeeping; ours must run regardless */ }
         // Abort program warm first: compileAsync after a loss often never
         // settles, and warming()===true makes game.js skip present/afterPresent
@@ -1095,12 +1096,35 @@ const TLX = (function () {
             // reloaded again, forever, on a device whose WebGL2 also dies on
             // use (iOS 18.7.2 RC lost every context — model-viewer#5100):
             // from the fourth, stop and say so instead.
-            if (n === 3) setTimeout(function () { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ } try { location.reload(); } catch (_) { /* harness */ } }, 1200);
-            else {
-              recordGfxBudgetExhausted("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
+            if (n === 3 && !(typeof GfxEscalation !== "undefined" && GfxEscalation.raceEntryActive && GfxEscalation.raceEntryActive())) {
+              setTimeout(function () { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ } try { location.reload(); } catch (_) { /* harness */ } }, 1200);
+            } else if (n === 3) {
               try {
-                if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
-                  RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
+                if (typeof GfxEscalation !== "undefined" && GfxEscalation.onReloadBudgetExceeded) {
+                  GfxEscalation.onReloadBudgetExceeded(n, {
+                    recordGfxBudgetExhausted,
+                    showUnavailable: (opts) => {
+                      if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) RendererPicker.showUnavailable(opts);
+                    },
+                    panel: document.getElementById("nogl"),
+                  });
+                }
+              } catch (_) { /* harness */ }
+            } else {
+              try {
+                if (typeof GfxEscalation !== "undefined" && GfxEscalation.onReloadBudgetExceeded) {
+                  GfxEscalation.onReloadBudgetExceeded(n, {
+                    recordGfxBudgetExhausted,
+                    showUnavailable: (opts) => {
+                      if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) RendererPicker.showUnavailable(opts);
+                    },
+                    panel: document.getElementById("nogl"),
+                  });
+                } else {
+                  recordGfxBudgetExhausted("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
+                  if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
+                    RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
+                  }
                 }
               } catch (_) { /* picker absent in harness */ }
             }
