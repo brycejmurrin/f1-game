@@ -42,6 +42,9 @@ const GLXBackend = (function () {
   // private / quota). Without it, both the loss timer and the restore reload
   // bailed, leaving a restored context with _ctxLost still set — a silent
   // dead canvas. In-memory only, so a real new visit still gets two attempts.
+  // A COUNTED loss (not a hidden-tab one) owes the menu its "Graphics reset" notice on
+  // whichever reload wins: the 1.2 s timer or webglcontextrestored (#3513).
+  let _lossCounted = false;
   let _sessLostN = 0; const _fallbackLossCount = () => { try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { return 0; } };
   // Past the ctx-loss reload budget: record for __apex.diag() without painting
   // the full-screen error overlay — RendererPicker.showUnavailable already shows
@@ -708,6 +711,7 @@ const GLXBackend = (function () {
         _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
         sessionStorage.setItem(_rk, String(_n));
       } catch (_) { _n = Math.max(++_sessLostN, _fallbackLossCount() + 1); try { window.name = "apex26.ctxLostReloads=" + _n; } catch (_) { /* best effort */ } }
+      _lossCounted = true;
       if (_n <= 2) setTimeout(function () {
         try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: menu still loads; the player just gets no explanation */ }
         try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ }
@@ -732,6 +736,7 @@ const GLXBackend = (function () {
       var n = 0;
       try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
       if (n > 2) return;
+      if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ }
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);
 

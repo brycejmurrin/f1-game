@@ -90,10 +90,11 @@ function bootRig({ local = {}, session = {}, gpu = false, throws = false } = {})
     localStorage: store(local), sessionStorage: store(session),
     navigator: gpu ? { gpu: {} } : {},
     ApexRoster: { DEFERRED: { webgl2: ["glx.js"], three: ["tlx.js"], webgpu: ["wgx.js"] } },
-    ScriptLoader: { preload: (files) => { preloaded.push(...files); return files.length; } },
+    ScriptLoader: { preload: (files, o) => { preloaded.push(...files); low = !!(o && o.low); return files.length; } },
   });
+  let low = null;
   vm.runInContext(boot + "\nthis.RendererBoot = RendererBoot;", ctx, { filename: absSrc("js/render/renderer-boot.js") });
-  return { guess: ctx.RendererBoot.guessBackend(), preloaded };
+  return { guess: ctx.RendererBoot.guessBackend(), preloaded, low };
 }
 
 test("renderer boot preloads the backend start() will most likely pick", () => {
@@ -120,6 +121,24 @@ test("renderer boot preloads the backend start() will most likely pick", () => {
   }
 });
 
+test("a guess read off navigator.gpu alone is a hunch: its preload asks for fetchPriority low (#3515)", () => {
+  const cases = [
+    [{ gpu: true }, true, "first boot, unset pick, navigator.gpu: the adapter probe can still land GLX"],
+    [{ local: { "apex26.gfxBackend": "webgpu", "apex26.gfxBootBound": "three" }, gpu: true }, true, "the boot after a switch to WEBGPU"],
+    [{}, false, "no navigator.gpu: the unset default is GLX for certain"],
+    [{ local: { "apex26.gfxBootBound": "three" }, gpu: true }, false, "the last boot bound this pick"],
+    [{ local: { "apex26.gfxBackend": "three" } }, false, "an explicit THREE pick always fetches TLX"],
+    [{ local: { "apex26.gfxBackend": "webgl2" }, gpu: true }, false, "an explicit WebGL2 pick"],
+    [{ local: { "apex26.gfxBackendProbe": "three" }, gpu: true }, false, "an armed canary boots GLX"],
+  ];
+  for (const [opts, low, why] of cases) assert.equal(bootRig(opts).low, low, why);
+  const sl = rig();
+  assert.equal(sl.ctx.ScriptLoader.preload(["a.js"], { low: true }), 1);
+  assert.equal(sl.links()[0].fetchPriority, "low", "the loader carries the hint onto the link");
+  sl.ctx.ScriptLoader.preload(["b.js"]);
+  assert.equal(sl.links()[1].fetchPriority, undefined, "a sure preload keeps the default priority");
+});
+
 test("a TLX guess modulepreloads the whole three vendor island at eval, three.core included", () => {
   // three.webgpu imports three.core statically and modulepreload fetches no dependencies, so a hint list without
   // core found it only after webgpu had downloaded and parsed. And start() runs after every deferred script and the
@@ -134,8 +153,9 @@ test("a TLX guess modulepreloads the whole three vendor island at eval, three.co
       document: { querySelector: () => null, createElement: () => ({}), head: { appendChild: (el) => links.push(el) } },
     });
     vm.runInContext(boot + "\nthis.RendererBoot = RendererBoot;", ctx, { filename: absSrc("js/render/renderer-boot.js") });
-    return links.filter((l) => l.rel === "modulepreload").map((l) => l.href);
+    return links.filter((l) => l.rel === "modulepreload").map((l) => l.href + (l.fetchPriority ? "#" + l.fetchPriority : ""));
   };
-  assert.deepEqual(run(true), ["vendor/three-0.186.1/three.webgpu.min.js", "vendor/three-0.186.1/three.core.min.js", "vendor/three-0.186.1/three.tsl.min.js"]);
+  assert.deepEqual(run(true), ["vendor/three-0.186.1/three.webgpu.min.js#low", "vendor/three-0.186.1/three.core.min.js#low", "vendor/three-0.186.1/three.tsl.min.js#low"],
+    "an unset pick read off navigator.gpu is a hunch: the ~735 KB island goes out at low priority (#3515)");
   assert.deepEqual(run(false), [], "a GLX guess fetches no three vendor bytes");
 });

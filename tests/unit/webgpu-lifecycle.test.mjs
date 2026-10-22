@@ -1905,6 +1905,19 @@ test("device.lost climbs the ladder: full -> lite (level 1 persisted, reload)", 
   assert.equal(reloads, 1, "the rung retry is a reload, not a GLX surrender");
 });
 
+test("WGX escalation reloads (rung retry, then GLX skip) arm the Graphics reset notice (#3513)", async () => {
+  for (const level of [null, "2"]) {
+    const storage = new Map(level ? [["apex26.gfxWgxLevel", level]] : []);
+    const session = new Map();
+    const atReload = [];
+    const h = makeGpuHarness({ storage, session, onReload: () => { atReload.push(session.get("apex26.ctxLostNotice") || null); } });
+    await h.create();
+    h.loseDevice({ reason: "unknown" });
+    await new Promise((r) => setTimeout(r, 0));
+    assert.deepEqual(atReload, ["1"], (level ? "GLX skip" : "rung retry") + ": the notice is stashed before the reload");
+  }
+});
+
 // SETTINGS ▸ DISPLAY ▸ SCREENSHOTS NATIVE ("0") / 2D BLIT ("1") set _outProbeOff,
 // which mutes the black-output probe and its escalation. It must not mute a
 // dead device: the visible device.lost branch escalates through _wgxEscalate

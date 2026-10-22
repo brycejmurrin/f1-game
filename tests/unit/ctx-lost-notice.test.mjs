@@ -3,7 +3,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import vm from "node:vm";
 import { bootGlx } from "../helpers/glx-mock.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
+
+const TLX_FILE = { filename: absSrc("js/render/three/tlx.js") };
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const read = (rel) => readFileSync(join(ROOT, rel), "utf8");
@@ -15,6 +20,64 @@ test("GLX arms apex26.ctxLostNotice before an automatic reload", () => {
   assert.equal(h.sandbox.sessionStorage.getItem("apex26.ctxLostReloads"), "1");
   for (const timer of h.sandbox.__timers.splice(0)) timer();
   assert.equal(h.sandbox.sessionStorage.getItem("apex26.ctxLostNotice"), "1");
+});
+
+// #3513: the notice is the contract for EVERY automatic loss reload, not just GLX's timer.
+test("GLX: webglcontextrestored winning the race against the timer still arms the notice", () => {
+  const h = bootGlx();
+  h.sandbox.sessionStorage.removeItem("apex26.ctxLostReloads");
+  h.sandbox.sessionStorage.removeItem("apex26.ctxLostNotice");
+  h.loseContext();
+  h.restoreContext();   // before the 1.2 s timer runs
+  assert.equal(h.sandbox.sessionStorage.getItem("apex26.ctxLostNotice"), "1");
+});
+
+function tlxLossVm(store, out) {
+  const ss = { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: (k) => { delete store[k]; } };
+  const timers = [];
+  const ctx = vm.createContext({
+    initOwner: { active: true }, _threeOnLost: null, _deviceLost: false, _warmRequested: true, _warmPending: {}, _warmDone: false,
+    document: { hidden: false, addEventListener() {}, removeEventListener() {}, getElementById: (id) => ({ id }) },
+    _nowMs: () => 1e6, _shownAt: 0, _lossCounted: false,
+    localStorage: { setItem() {}, removeItem() {} }, sessionStorage: ss,
+    _sessLostN: 0, _fallbackLossCount: () => 0, _rememberFallbackLoss: () => {},
+    _glPin: "1", forceWebGL: true, _autoStayGL: false,
+    setTimeout: (fn) => { timers.push(fn); }, location: { reload() { out.reloads.push(store["apex26.ctxLostNotice"] || null); } },
+    recordGfxBudgetExhausted() {}, RendererPicker: { showUnavailable() {} }, window: { name: "" }, renderer: {},
+    Log: { warn() {} },
+  });
+  return { ctx, timers };
+}
+
+test("TLX: device-loss reloads (first, second, third) and refuseTab all arm the notice first", () => {
+  const tlxSrc = read("js/render/three/tlx.js");
+  const lossBody = fnSource(tlxSrc, "renderer.onDeviceLost = function (info) {");
+  for (const prior of ["0", "1", "2"]) {
+    const store = { "apex26.ctxLostReloads": prior }, out = { reloads: [] };
+    const v = tlxLossVm(store, out);
+    vm.runInContext(lossBody + "\n renderer.onDeviceLost", v.ctx, TLX_FILE)({});
+    for (const t of v.timers.splice(0)) t();
+    assert.deepEqual(out.reloads, ["1"], "loss after " + prior + " reloads: the notice is stashed before the reload");
+  }
+  const store = { "apex26.ctxLostReloads": "0" }, out = { reloads: [] };
+  const v = tlxLossVm(store, out);
+  vm.runInContext(fnSource(tlxSrc, "const refuseTab = () => {") + ";\n refuseTab();", v.ctx, TLX_FILE);
+  assert.deepEqual(out.reloads, ["1"], "refuseTab's reload explains itself");
+});
+
+test("TLX: a webglcontextrestored reload after a counted loss arms the notice; a bare one does not", () => {
+  const src = read("js/render/three/tlx.js");
+  const i = src.indexOf('canvas.addEventListener("webglcontextrestored", onRestored = function () {');
+  assert.ok(i > 0, "the TLX restore handler moved — check this test, not the code");
+  const from = src.indexOf("function () {", i);
+  const body = src.slice(from, src.indexOf("}, false);", from) + 1);
+  for (const counted of [true, false]) {
+    const store = { "apex26.ctxLostReloads": "1" }, out = { reloads: [] };
+    const v = tlxLossVm(store, out);
+    v.ctx._lossCounted = counted;
+    vm.runInContext("(" + body + ")()", v.ctx, TLX_FILE);
+    assert.deepEqual(out.reloads, [counted ? "1" : null]);
+  }
 });
 
 test("select-screen consumes apex26.ctxLostNotice and wires RETRY to startRace", () => {

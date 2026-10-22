@@ -4082,10 +4082,10 @@ test("a GLX fallback boot that proves itself does not erase the pick's crash str
   let rb = rendererBootRun(ls);
   let boot = await rb.start();
   assert.equal(boot.bound, false, "first strike: this boot runs GLX");
-  assert.equal(ls.get("apex26.gfxProbeStrikes"), "1");
+  assert.equal(ls.get("apex26.gfxProbeStrikes"), "three:1", "the strike names the backend that died");
   assert.equal(ls.get("apex26.gfxBackend"), "three", "one strike keeps the pick");
   assert.equal(rb.proved(), false, "GLX presenting 300 frames proves nothing about THREE");
-  assert.equal(ls.get("apex26.gfxProbeStrikes"), "1", "the strike must survive the GLX fallback boot");
+  assert.equal(ls.get("apex26.gfxProbeStrikes"), "three:1", "the strike must survive the GLX fallback boot");
   // Next cold boot: THREE binds, game.js re-arms the probe at the first world
   // present, and the tab is killed again before the run of frames completes.
   rb = rendererBootRun(ls);
@@ -4097,6 +4097,24 @@ test("a GLX fallback boot that proves itself does not erase the pick's crash str
   assert.equal(boot.bound, false);
   assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "the second consecutive strike retires the pick");
   assert.equal(ls.has("apex26.gfxProbeStrikes"), false, "retiring resets the ledger");
+});
+
+test("the strike ledger is per backend: one death each on two backends retires neither (#3514)", async () => {
+  // TLX banked one strike; the player hand-picks WEBGPU, which dies once. The old global
+  // ledger read that as strike two and rewrote the pick to webgl2.
+  const ls = new Map([["apex26.gfxBackend", "webgpu"], ["apex26.gfxProbeStrikes", "three:1"], ["apex26.gfxBackendProbe", "webgpu"]]);
+  assert.equal((await rendererBootRun(ls).start()).bound, false, "the dead pick reverts this boot only");
+  assert.equal(ls.get("apex26.gfxBackend"), "webgpu", "a first WGX death does not retire the pick");
+  assert.equal(ls.get("apex26.gfxProbeStrikes"), "webgpu:1", "the count restarts for the backend that died");
+  // Two deaths of the SAME backend still retire it.
+  ls.set("apex26.gfxBackendProbe", "webgpu");
+  await rendererBootRun(ls).start();
+  assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "a second WGX death retires the pick");
+  assert.equal(ls.has("apex26.gfxProbeStrikes"), false);
+  // A legacy bare count names no backend: it still counts, as before.
+  const legacy = new Map([["apex26.gfxBackend", "three"], ["apex26.gfxProbeStrikes", "1"], ["apex26.gfxBackendProbe", "three"]]);
+  await rendererBootRun(legacy).start();
+  assert.equal(legacy.get("apex26.gfxBackend"), "webgl2");
 });
 
 test("a pick that proves itself still pays off an older strike", async () => {

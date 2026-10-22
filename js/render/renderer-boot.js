@@ -5,8 +5,9 @@ const RendererBoot = (function () {
 // Warm the vendored three island for the default or a stored THREE pick, so TLX is not
 // waiting on a cold module fetch after the roster injects it. Idle-scheduled so the
 // ~735 KB modulepreload hints do not fight the last FULL scripts / title CSS for
-// bandwidth on the same turn as start().
-function preloadThreeVendor() {
+// bandwidth on the same turn as start(). `low`: a speculative guess (#3515) asks for
+// fetchPriority low, so a wrong guess never competes with the bytes the real pick needs.
+function preloadThreeVendor(low) {
   const kick = () => {
     try {
       // three.core too: three.webgpu imports it statically and modulepreload does not fetch dependencies,
@@ -18,6 +19,7 @@ function preloadThreeVendor() {
         el.rel = "modulepreload";
         el.href = href;
         el.crossOrigin = "anonymous";
+        if (low) el.fetchPriority = "low";
         document.head.appendChild(el);
       }
     } catch (_) { /* preload is best-effort; TLX still fetches on inject */ }
@@ -33,6 +35,12 @@ const BACKEND_FILES = ApexRoster.DEFERRED;
 // whether a DEFERRED backend actually took the canvas on THIS load.
 const STRIKE_KEY = "apex26.gfxProbeStrikes";
 let _backendBound = false;
+function strikesFor(raw, backend) {
+  if (raw == null) return 0;
+  const m = /^([a-z0-9]+):(\d+)$/.exec(raw);
+  if (!m) return +raw || 0;
+  return m[1] === backend ? +m[2] : 0;
+}
 function storedBackendPreference() {
   try {
     if (typeof ApexXR !== "undefined" && ApexXR.bootPick) {
@@ -193,8 +201,11 @@ try {
   if (armed && !skipClaim) {
     why = "boot canary: " + armed + " never presented a frame last load";
     pref = "webgl2";
+    // THE LEDGER IS PER BACKEND (#3514): "<backend>:<n>". A strike TLX earned is no
+    // verdict on a WGX the player picked by hand afterwards; a global count retired that
+    // pick on its first death. A bare legacy number names no backend and still counts.
     let strikes = 2;   // unreadable storage cannot count strikes: treat as final
-    try { strikes = (+localStorage.getItem(STRIKE_KEY) || 0) + 1; } catch (_) { /* blocked storage */ }
+    try { strikes = strikesFor(localStorage.getItem(STRIKE_KEY), armed) + 1; } catch (_) { /* blocked storage */ }
     const retire = strikes >= 2;
     Log.warn("gfx", "backend", armed, retire
       ? "never presented a frame twice — WebGL2 is now the pick"
@@ -204,7 +215,7 @@ try {
       if (retire) {
         localStorage.setItem("apex26.gfxBackend", "webgl2");
         localStorage.removeItem(STRIKE_KEY);
-      } else localStorage.setItem(STRIKE_KEY, String(strikes));
+      } else localStorage.setItem(STRIKE_KEY, armed + ":" + strikes);
     } catch (_) { /* the in-memory revert above still holds for this load */ }
   }
   // "webgpu" -> WGX (needs a resolved adapter); "three" -> TLX (three.js/TSL,
@@ -365,29 +376,37 @@ return { start, backendPreference, storedBackendPreference, gpuAdapterAvailable,
 // navigator.gpu hint while the pick is unchanged: navigator.gpu with a null
 // adapter (desktop Chromium without a GPU, measured here) binds GLX, and the
 // first guess preloaded TLX's ten files for nothing.
-function guessBackend() {
+// A guess is SURE when start() cannot pick otherwise: an armed canary or claim skip (GLX), an
+// explicit WebGL2 or THREE pick, or the backend the last boot bound for this same pick. One
+// read off navigator.gpu alone (a first boot, the boot after a switch to WEBGPU) is a hunch:
+// the adapter probe can still land GLX, and those ~0.7–1.1 MB went out at high priority
+// against the assets the real pick needed (#3515). A hunch preloads at fetchPriority low.
+function guess() {
   try {
-    if (localStorage.getItem("apex26.gfxBackendProbe") || sessionStorage.getItem("apex26.gfxClaimFail") === "1") return "webgl2";
+    if (localStorage.getItem("apex26.gfxBackendProbe") || sessionStorage.getItem("apex26.gfxClaimFail") === "1") return { pick: "webgl2", sure: true };
     const pref = localStorage.getItem("apex26.gfxBackend");
     const last = localStorage.getItem("apex26.gfxBootBound");
-    if ((pref == null || pref === "three") && (last === "three" || last === "webgl2")) return last;
-    if (pref === "webgpu" && (last === "webgpu" || last === "webgl2")) return last;
+    if ((pref == null || pref === "three") && (last === "three" || last === "webgl2")) return { pick: last, sure: true };
+    if (pref === "webgpu" && (last === "webgpu" || last === "webgl2")) return { pick: last, sure: true };
     const gpu = typeof navigator !== "undefined" && !!navigator.gpu;
-    if (pref === "webgl2") return "webgl2";
-    if (pref === "webgpu") return gpu ? "webgpu" : "webgl2";
-    if (pref == null || pref === "three") return gpu || pref === "three" ? "three" : "webgl2";
+    if (pref === "webgl2") return { pick: "webgl2", sure: true };
+    if (pref === "webgpu") return { pick: gpu ? "webgpu" : "webgl2", sure: !gpu };
+    if (pref === "three") return { pick: "three", sure: true };
+    if (pref == null) return { pick: gpu ? "three" : "webgl2", sure: !gpu };
   } catch (_) { /* blocked storage: start() picks without it; fetch nothing early */ }
-  return "";
+  return { pick: "", sure: false };
 }
+function guessBackend() { return guess().pick; }
 function preloadLikelyBackend() {
   try {
     if (typeof ScriptLoader === "undefined" || !ScriptLoader.preload || typeof ApexRoster === "undefined") return 0;
-    const guess = guessBackend();
+    const g = guess();
+    const low = !g.sure;
     // The vendor island too, from here rather than only inside start(): start() runs after every deferred
     // script and the adapter probe, so its hint reached the network seconds after this one could.
-    if (guess === "three") preloadThreeVendor();
-    const files = ApexRoster.DEFERRED && ApexRoster.DEFERRED[guess];
-    return files ? ScriptLoader.preload(files) : 0;
+    if (g.pick === "three") preloadThreeVendor(low);
+    const files = ApexRoster.DEFERRED && ApexRoster.DEFERRED[g.pick];
+    return files ? ScriptLoader.preload(files, { low }) : 0;
   } catch (_) { return 0; /* an optimisation only */ }
 }
 preloadLikelyBackend();
