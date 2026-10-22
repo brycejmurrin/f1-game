@@ -748,11 +748,11 @@ def push_issues(text, branch_of=_current_branch, dests=None):
             if dst == DEPLOY_BRANCH:
                 why.append(f"the destination is the deploy branch {DEPLOY_BRANCH}")
             if dests is not None and dst and not (colon and not src):
-                dests.append((where, pos[0], dst))
+                dests.append((where, pos[0], dst, _env))
         if not refspecs:
             cur = branch_of(where)
             if dests is not None and cur and cur != "HEAD":
-                dests.append((where, pos[0] if pos else None, cur))
+                dests.append((where, pos[0] if pos else None, cur, _env))
             if cur == DEPLOY_BRANCH:
                 why.append(f"a bare push from the deploy branch {DEPLOY_BRANCH} pushes it")
             if not any(_cfg_why(*kv.partition("=")[::2]) for kv in cfg):
@@ -773,6 +773,8 @@ def push_issues(text, branch_of=_current_branch, dests=None):
 # `--fold`, `--json` and `--base` never raise. APEX_RATCHET_RAISE_OK=1 when Bryce
 # typed the raise in this session.
 RATCHET_RAISING = ("--update", "--fragment", "--absolute")
+RATCHET_RUNNERS = ("node", "nodejs", "bun", "deno", "npx", "xargs")
+AUTO_RAISE_MAX = 40   # the commit hook's absorb (AGENTS.md §Critical conventions)
 
 
 def ratchet_issues(text):
@@ -780,17 +782,30 @@ def ratchet_issues(text):
     Raises ParseError on untokenisable text."""
     found = []
     for env, argv, _redir, _cwd in commands(text, os.getcwd(), strict=True):
+        if not argv or (env or {}).get("APEX_RATCHET_RAISE_OK") == "1":
+            continue
+        cmd = " ".join(argv)
+        # `node -e "import('./tools/check/ratchets.mjs')…"` runs it with no visible flags
+        if os.path.basename(argv[0]) in RATCHET_RUNNERS and any(
+                a in ("-e", "--eval", "-p", "--print") and k + 1 < len(argv) and "ratchets" in argv[k + 1]
+                for k, a in enumerate(argv)):
+            found.append(cmd)
+            continue
         at = next((k for k, a in enumerate(argv) if os.path.basename(a) == "ratchets.mjs"), None)
-        # the script must be what RUNS: `node [flags] …/ratchets.mjs` or `./…/ratchets.mjs`, not `echo ratchets.mjs`
-        runs = at == 0 or (at is not None and os.path.basename(argv[0]) in ("node", "nodejs", "bun")
-                           and all(a.startswith("-") for a in argv[1:at]))
-        if not runs or (env or {}).get("APEX_RATCHET_RAISE_OK") == "1":
+        # the script must be what RUNS (`node …/ratchets.mjs`, `./…/ratchets.mjs`), not `echo ratchets.mjs`
+        if at is None or not (at == 0 or os.path.basename(argv[0]) in RATCHET_RUNNERS):
             continue
         args = argv[at + 1:]
+        if any("$" in a or "`" in a for a in args):
+            found.append(cmd)          # $(…) arguments are unknown until the shell runs them
+            continue
         if "--lower-only" in args or "--preview" in args:
             continue
-        if any(a == f or a.startswith(f + "=") for a in args for f in RATCHET_RAISING):
-            found.append(" ".join(argv))
+        auto = [a.split("=", 1)[1] for a in args if a.startswith("--auto-raise=")]
+        if any(not v.isdigit() or int(v) > AUTO_RAISE_MAX for v in auto):
+            found.append(cmd)          # --auto-raise=N lifts the hook's 40-line cap
+        elif any(a == f or a.startswith(f + "=") for a in args for f in RATCHET_RAISING):
+            found.append(cmd)
     return found
 
 
@@ -1131,9 +1146,11 @@ def guard(payload, root):
                          "`ratchets.mjs --update --lower-only`, or ask Bryce; APEX_RATCHET_RAISE_OK=1 only when he typed "
                          "the raise in this session.\n")
         return 2
-    if dests and os.environ.get("APEX_FOREIGN_PUSH_OK") != "1" and "APEX_FOREIGN_PUSH_OK=1" not in cmd:
+    if dests and os.environ.get("APEX_FOREIGN_PUSH_OK") != "1":
         import foreign_push
-        for where, remote, branch in dests:
+        for where, remote, branch, penv in dests:
+            if (penv or {}).get("APEX_FOREIGN_PUSH_OK") == "1":   # the push's own prefix, not any text
+                continue
             msg = foreign_push.check(where, remote, branch)
             if msg:
                 sys.stderr.write(msg)

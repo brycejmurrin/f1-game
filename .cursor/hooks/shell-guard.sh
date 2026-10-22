@@ -19,7 +19,12 @@ import json,sys
 d=json.load(sys.stdin)
 if not isinstance(d.get("tool_input"), dict):
     d={"tool_name":"Bash","tool_input":{"command":d.get("command","")},"cwd":d.get("cwd",""),"_cursor":1}
-print(json.dumps(d))')
+print(json.dumps(d))') || NORM=""
+if [ -z "$NORM" ]; then   # an unreadable payload is a deny in both shapes, never a silent pass
+  echo "shell-guard: could not read the hook payload; the Bash guards did NOT run." >&2
+  echo '{"permission": "deny", "user_message": "shell-guard: could not read the hook payload; the Bash guards did NOT run.", "agent_message": "shell-guard: could not read the hook payload; the Bash guards did NOT run."}'
+  exit 2
+fi
 CURSOR=$(printf '%s' "$NORM" | grep -q '"_cursor": 1' && echo 1)
 # The command runs in the payload's cwd; git reads (the push and commit rules) must too.
 CWD=$(printf '%s' "$NORM" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("cwd") or "")')

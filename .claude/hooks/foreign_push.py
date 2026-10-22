@@ -11,14 +11,17 @@ oldest entry (the first fetch or the clone: history before a checkout began
 following the branch is not news). The remote tip is read fresh (ls-remote,
 fetched into a private ref when its objects are missing), and every
 first-parent commit in baseline..tip whose author email is not this
-checkout's `user.email` is a foreign commit. A branch with no tracking ref
-(a first push) and a remote that cannot be read pass; the latter says so on
-stderr. A fetch, pull or merge does not clear the refusal: the next push after
+checkout's `user.email`, or whose Claude-Session trailer names another session
+than CLAUDE_CODE_REMOTE_SESSION_ID (every Claude session shares one email), is
+a foreign commit. A branch with no tracking ref
+(a first push) passes; a remote that cannot be read or matched to a configured
+remote passes with a WARNING on stderr. A fetch, pull or merge does not clear the refusal: the next push after
 the owner confirmed the branch, with APEX_FOREIGN_PUSH_OK=1, moves the baseline.
 
     python3 foreign_push.py <repo dir> <remote|-> <branch>   # prints the refusal, exit 2; else exit 0
 """
 import os
+import re
 import subprocess
 import sys
 
@@ -40,6 +43,20 @@ def _baseline(where, ref):
     return out if rc == 0 and out else None
 
 
+def _norm_url(u):
+    u = (u or "").strip().rstrip("/")
+    if u.endswith(".git"):
+        u = u[:-4]
+    return os.path.realpath(u) if u and "://" not in u and not re.match(r"^[\w.-]+@[\w.-]+:", u) else u
+
+
+def _sid(text):
+    """The session id in a Claude-Session trailer value or a CLAUDE_CODE_REMOTE_SESSION_ID
+    (`…/session_01AB…`, `cse_01AB…` → `01AB…`)."""
+    m = re.search(r"(?:session|cse)_([A-Za-z0-9]+)", text or "")
+    return m.group(1) if m else ""
+
+
 def foreign_commits(where, remote, branch):
     """[(sha, email, name, subject)] the remote branch gained from other authors
     since this checkout last pushed it; [] when there is nothing to judge.
@@ -49,8 +66,13 @@ def foreign_commits(where, remote, branch):
         merge = _git(where, "config", f"branch.{branch}.merge")[1]
         if merge.startswith("refs/heads/"):
             branch = merge[len("refs/heads/"):]
-    if remote not in _git(where, "remote")[1].split():
-        return []                                   # a URL: no tracking ref to read
+    names = _git(where, "remote")[1].split()
+    if remote not in names:
+        # A URL or path naming a configured remote is that remote (`git push ../origin.git`).
+        want = _norm_url(remote)
+        remote = next((n for n in names if _norm_url(_git(where, "remote", "get-url", n)[1]) == want), None)
+        if remote is None:
+            raise RuntimeError(f"{want or 'the remote'} is not a configured remote, so there is no last push to compare")
     ref = f"refs/remotes/{remote}/{branch}"
     base = _baseline(where, ref)
     if not base:
@@ -76,13 +98,20 @@ def foreign_commits(where, remote, branch):
             raise RuntimeError(f"fetch {remote} {branch} failed")
         fetched = True
     try:
-        rc, out = _git(where, "log", "--first-parent", "--format=%H%x09%ae%x09%an%x09%s", tip, "^" + base)
+        rc, out = _git(where, "log", "--first-parent",
+                       "--format=%H%x09%ae%x09%an%x09%s%x09%(trailers:key=Claude-Session,valueonly,separator=%x20)",
+                       tip, "^" + base)
     finally:
         if fetched:
             _git(where, "update-ref", "-d", private)
     me = (_git(where, "config", "user.email")[1] or _git(where, "log", "-1", "--format=%ae")[1]).lower()
-    rows = [ln.split("\t", 3) for ln in out.splitlines() if ln.count("\t") >= 3] if rc == 0 else []
-    return [tuple(r) for r in rows if r[1].lower() != me]
+    # Every Claude session commits as the same email, so a Claude-Session trailer naming
+    # another session is foreign too (this session: CLAUDE_CODE_REMOTE_SESSION_ID).
+    mine = _sid(os.environ.get("CLAUDE_CODE_REMOTE_SESSION_ID"))
+    # _git strips the output, so the last row can lose its empty trailer field: pad it back.
+    rows = [(ln.split("\t", 4) + [""])[:5] for ln in out.splitlines() if ln.count("\t") >= 3] if rc == 0 else []
+    return [tuple(r[:4]) for r in rows
+            if r[1].lower() != me or (mine and _sid(r[4]) and _sid(r[4]) != mine)]
 
 
 def check(where, remote, branch):

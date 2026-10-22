@@ -133,6 +133,56 @@ def _leaves(node, at=()):
     return out
 
 
+RATCHET_FILES = ("tests/data/ratchets.json", "tests/data/ratchets.d/")
+REMOVERS = {"rm", "unlink", "mv", "shred", "rmdir", "find"}
+
+
+def ratchet_removals(cmd, cwd):
+    """[(path, how)] ratchet files a command removes or moves away (rm, unlink, mv
+    and git mv sources, git rm, find … -delete/-exec, shred), each file under a
+    directory it names included. shellparse.write_targets reads only writes."""
+    import shellparse
+    out = []
+    try:
+        cmds = list(shellparse.commands(cmd, cwd, strict=True))
+    except Exception:
+        return out
+    for _env, argv, _redir, c in cmds:
+        if not argv:
+            continue
+        verb = os.path.basename(argv[0])
+        args = argv[1:]
+        if verb == "git":
+            k = next((i for i, a in enumerate(args) if not a.startswith("-")), None)
+            if k is None or args[k] not in ("rm", "mv"):
+                continue
+            verb, args = "git " + args[k], args[k + 1:]
+        elif verb not in REMOVERS:
+            continue
+        if verb in ("mv", "git mv"):
+            paths = [a for a in args if not a.startswith("-")][:-1]   # sources; the last is the destination
+        elif verb == "find":
+            if not any(a in ("-delete", "-exec", "-execdir", "-ok") for a in args):
+                continue
+            paths = [a for a in args[:next((i for i, a in enumerate(args) if a.startswith("-")), len(args))]]
+        else:
+            paths = [a for a in args if not a.startswith("-")]
+        for a in paths:
+            p = os.path.realpath(os.path.join(c or cwd, os.path.expanduser(a)))
+            root = git("rev-parse", "--show-toplevel", cwd=p if os.path.isdir(p) else (os.path.dirname(p) or "."))
+            if not root:
+                continue
+            rel = os.path.relpath(p, root).replace(os.sep, "/")
+            if os.path.isdir(p):           # `rm -rf tests/data/ratchets.d`, `find tests -delete`
+                fd = os.path.join(root, RATCHET_FILES[1])
+                every = [os.path.join(root, RATCHET_FILES[0])] + (
+                    [os.path.join(fd, f) for f in os.listdir(fd) if f.endswith(".json")] if os.path.isdir(fd) else [])
+                out += [(h, verb) for h in every if os.path.exists(h) and (h + os.sep).startswith(p.rstrip(os.sep) + os.sep)]
+            elif rel == RATCHET_FILES[0] or rel.startswith(RATCHET_FILES[1]):
+                out.append((p, verb))
+    return out
+
+
 def ratchet_raise(file, tool, ti, proposed, frag):
     """Why this write raises a ceiling, or None. A fragment holds deltas (a
     missing key is 0); ratchets.json holds ceilings and slacks (a dropped one
@@ -142,7 +192,9 @@ def ratchet_raise(file, tool, ti, proposed, frag):
         cur = open(file, encoding="utf8").read()
     except Exception:
         cur = "{}"
-    if tool in ("Edit", "MultiEdit"):
+    if tool == "Remove":
+        new = "{}"                      # a removed fragment is all-zero deltas; a removed ratchets.json drops every ceiling
+    elif tool in ("Edit", "MultiEdit"):
         new = cur
         for e in ti.get("edits") or [ti]:
             old = e.get("old_string") or ""
@@ -232,7 +284,7 @@ def check(file, tool, ti, proposed=None, how=""):
     allow = os.path.exists(os.path.join(root, ".claude", "allow-protected"))
     rel = os.path.relpath(file, root)
     base = os.path.basename(file)
-    via = f" (via Bash: {how})" if tool == "Bash" else ""
+    via = f" (via Bash: {how})" if tool in ("Bash", "Remove") else ""
 
     # 4. track-surveyor writes only circuit defs and their scenery closures
     # (js/circuits/<id>.js, js/circuits/scenery/<id>.js) plus scratch/ and
@@ -265,8 +317,11 @@ def check(file, tool, ti, proposed=None, how=""):
     frag = rel_.startswith("tests/data/ratchets.d/") and rel_.endswith(".json")
     if frag or rel_ == "tests/data/ratchets.json":
         if frag:
-            own = fragment_name(git("rev-parse", "--abbrev-ref", "HEAD", cwd=d_))
-            if os.path.basename(rel_) != own:
+            branch = git("rev-parse", "--abbrev-ref", "HEAD", cwd=d_)
+            own = fragment_name(branch)
+            # sync-pr.mjs leaves the session on sync-pr-<branch>, which merges back into <branch>
+            mine = {own, fragment_name(branch[len("sync-pr-"):]) if branch.startswith("sync-pr-") else None} - {None}
+            if os.path.basename(rel_) not in mine:
                 block(f"{rel}{via} is another branch's ratchet fragment (this branch's is "
                       f"{('tests/data/ratchets.d/' + own) if own else 'none: detached HEAD or the deploy branch'}). "
                       "A fragment belongs to the branch that wrote it (shared safety ban 2); a merge brings it, "
@@ -357,7 +412,10 @@ if tool == "Bash":
         sys.stderr.write(f"protect-files: WARNING shellparse failed ({type(e).__name__}: {e}); "
                          "this command's file writes were NOT checked.\n")
         sys.exit(0)
+    removed = {p_ for p_, _h in ratchet_removals(cmd, d.get("cwd") or os.getcwd())}
     for t in targets:
+        if t["kind"] in ("rm", "unlink") and os.path.realpath(t["path"]) in removed:
+            continue   # a ratchet file removed: judged once below as a removal, not as a blind rewrite
         proposed = None
         if os.path.basename(t["path"]) in ("index.html", "sw.js", "package.json"):
             # Compute what the call would leave in the file when that is safe
@@ -376,6 +434,8 @@ if tool == "Bash":
                 except Exception:
                     proposed = None
         check(t["path"], "Bash", {}, proposed, t["kind"])
+    for path_ in sorted(removed):
+        check(path_, "Remove", {}, None, "a removal")
     if REPORTER:
         for t in shellparse.surveyor_targets(cmd, d.get("cwd") or os.getcwd()):
             if t["path"] is None:

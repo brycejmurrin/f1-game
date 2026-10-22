@@ -43,7 +43,11 @@ const gitAs = (cwd, who) => (...a) => execFileSync("git", a, { cwd, encoding: "u
 test("ban 1: a ratchets.mjs run that can raise is refused in both doors; the non-raising forms pass", () => {
   for (const cmd of ["node tools/check/ratchets.mjs --update", "node tools/check/ratchets.mjs --update --absolute",
     "node tools/check/ratchets.mjs --update --fragment --reason=headroom", "cd tools && node ./check/ratchets.mjs --update",
-    "bash -c 'node tools/check/ratchets.mjs --update'"]) {
+    "bash -c 'node tools/check/ratchets.mjs --update'",
+    // review of c2589f2a: the cap lifted by hand, and spellings the first parse missed
+    "node tools/check/ratchets.mjs --auto-raise=9999", "node --import ./x.mjs tools/check/ratchets.mjs --update",
+    "npx node tools/check/ratchets.mjs --update", "node tools/check/ratchets.mjs $(echo --update)",
+    "node -e \"import('./tools/check/ratchets.mjs').then((m) => m.autoRaise({ maxRaise: 1e9 }))\""]) {
     assert.equal(claudeBash(cmd).status, 2, `claude: ${cmd}`);
     const c = cursorShell(cmd);
     assert.equal(c.status, 2, `cursor: ${cmd}`);
@@ -53,7 +57,8 @@ test("ban 1: a ratchets.mjs run that can raise is refused in both doors; the non
   for (const cmd of ["node tools/check/ratchets.mjs", "node tools/check/ratchets.mjs --json", "node tools/check/ratchets.mjs --fold",
     "node tools/check/ratchets.mjs --update --lower-only", "node tools/check/ratchets.mjs --update --preview",
     "node tools/check/ratchets.mjs --base origin/claude/f1-game-project-26h3ng --advisory",
-    "node tools/check/ratchets.mjs --auto-raise", "echo 'node tools/check/ratchets.mjs --update'",
+    "node tools/check/ratchets.mjs --auto-raise", "node tools/check/ratchets.mjs --auto-raise=40",
+    "echo 'node tools/check/ratchets.mjs --update'", "echo 'echo --update | xargs node tools/check/ratchets.mjs'",
     "APEX_RATCHET_RAISE_OK=1 node tools/check/ratchets.mjs --update --fragment --reason=bryce-typed"]) {
     assert.equal(claudeBash(cmd).status, 0, `claude: ${cmd}`);
     assert.deepEqual(cursorShell(cmd).out, { permission: "allow" }, `cursor: ${cmd}`);
@@ -108,6 +113,19 @@ test("bans 1 and 2: ratchets.json raises and other branches' fragments are refus
     both(rj, { content: "{ not json" }, 2, "unparseable");
     fs.rmSync(path.join(dir, ".claude/allow-protected"));
     both(rj, with_((o) => { o.files["js/game.js"].lines = 90; }), 2, "ratchets.json without the hatch stays tool-written");
+    // Removals and moves are writes (review of c2589f2a): a deleted fragment with a negative delta
+    // is a raise, and ratchets.json or another branch's fragment is never removed by hand.
+    const bash = (command) => { const r = run(PROTECT, { tool_name: "Bash", tool_input: { command }, cwd: dir }, dir); bash.err = r.stderr; return r.status; };
+    for (const cmd of [`git rm -q ${other}`, `mv ${other} artifacts/x.json`, "rm -rf tests/data/ratchets.d",
+      "find tests/data/ratchets.d -name '*.json' -delete", "git mv tests/data/ratchets.json x.json", `rm ${own}`, `unlink ${own}`])
+      assert.equal(bash(cmd), 2, cmd);
+    assert.equal(bash("rm -rf artifacts/x && find . -name '*.log' -print"), 0, "ordinary removals pass");
+    fs.writeFileSync(own, JSON.stringify({ files: { "js/game.js": { lines: 6 } } }));
+    assert.equal(bash(`rm ${own}`), 0, "removing the own fragment that only raised is a lowering: " + bash.err);
+    // On sync-pr.mjs's sync-pr-<branch>, the PR branch's fragment is still this branch's.
+    git("checkout", "-q", "-b", "sync-pr-cursor/t-1");
+    both(own, json({ files: { "js/game.js": { lines: 2 } } }), 0, "own fragment lowered from sync-pr-<branch>");
+    both(other, json({}), 2, "another branch's fragment from sync-pr-<branch>");
     // A detached HEAD has no own fragment.
     git("checkout", "-q", "--detach");
     both(own, json({ tree: { bareCatches: -1 } }), 2, "no own fragment on a detached HEAD");
@@ -149,6 +167,23 @@ test("ban 3: a push over another author's commits is refused until the owner ack
     ga("commit", "-q", "--allow-empty", "-m", "a4");
     assert.equal(claudeBash("git push origin cursor/t-1", a).status, 0, "the acknowledged push moved the baseline");
     assert.deepEqual(cursorShell("git push origin cursor/t-1", a).out, { permission: "allow" });
+    // The override is the push's own env prefix, never text elsewhere in the command.
+    gb("pull", "-q", "--no-rebase", "--no-edit", "origin", "cursor/t-1");
+    gb("commit", "-q", "--allow-empty", "-m", "bob again"); gb("push", "-q", "origin", "cursor/t-1");
+    assert.equal(claudeBash("echo APEX_FOREIGN_PUSH_OK=1; git push origin cursor/t-1", a).status, 2, "override text in an echo");
+    // A push by URL or path is the configured remote it names.
+    assert.equal(claudeBash(`git push ${origin} HEAD:cursor/t-1`, a).status, 2, "push by path");
+    ga("fetch", "-q", "origin"); ga("merge", "-q", "--no-edit", "origin/cursor/t-1");
+    assert.equal(claudeBash("APEX_FOREIGN_PUSH_OK=1 git push origin cursor/t-1", a).status, 0);
+    ga("push", "-q", "origin", "cursor/t-1");
+    // Same email, another session: every Claude session commits as one address, so the
+    // Claude-Session trailer decides (this session's id: CLAUDE_CODE_REMOTE_SESSION_ID).
+    gb("pull", "-q", "--no-rebase", "--no-edit", "origin", "cursor/t-1");
+    execFileSync("git", ["commit", "-q", "--allow-empty", "-m", "twin\n\nClaude-Session: https://claude.ai/code/session_01OTHER"],
+      { cwd: b, env: { ...process.env, GIT_AUTHOR_EMAIL: "alice@t", GIT_COMMITTER_EMAIL: "alice@t", GIT_AUTHOR_NAME: "alice", GIT_COMMITTER_NAME: "alice" } });
+    gb("push", "-q", "origin", "cursor/t-1");
+    assert.equal(claudeBash("git push origin cursor/t-1", a, { CLAUDE_CODE_REMOTE_SESSION_ID: "cse_01MINE" }).status, 2, "same email, another Claude session");
+    assert.equal(claudeBash("git push origin cursor/t-1", a, { CLAUDE_CODE_REMOTE_SESSION_ID: "cse_01OTHER" }).status, 0, "same email, same session");
     // An unreadable remote fails open, loudly.
     ga("remote", "set-url", "origin", path.join(dir, "gone.git"));
     const gone = claudeBash("git push origin cursor/t-1", a);
@@ -177,5 +212,19 @@ test("Cursor's hooks.json wires the edit guard on preToolUse Write, failing clos
   assert.ok(fs.statSync(EDIT_GUARD).mode & 0o111, "edit-guard.sh is executable");
   const noPath = run(EDIT_GUARD, { tool_name: "Write", tool_input: {} });
   assert.equal(noPath.out.permission, "allow");
-  assert.ok(noPath.out.agent_message.includes("did NOT run"), "an unreadable payload passes loudly, never silently");
+  assert.ok(noPath.out.agent_message.includes("did NOT run"), "a payload with no path passes loudly, never silently");
+  // Unreadable payloads are denied (failClosed), in both adapters.
+  for (const hook of [EDIT_GUARD, SHELL_GUARD]) {
+    const r = spawnSync("bash", [hook], { cwd: ROOT, input: "not json", encoding: "utf8", env: ENV });
+    assert.equal(r.status, 2, hook);
+    assert.equal(JSON.parse(r.stdout).permission, "deny", hook);
+  }
+  // Content shapes the adapter cannot read never read as an empty Write (review of c2589f2a):
+  // index.html and package.json edits pass, an outright generated file and a ratchet file do not.
+  const cursorEdit = (ti) => run(EDIT_GUARD, { tool_name: "Write", tool_input: ti }).out.permission;
+  assert.equal(cursorEdit({ target_file: "index.html", code_edit: "<p>x</p>" }), "allow");
+  assert.equal(cursorEdit({ target_file: "package.json", code_edit: "{}" }), "allow");
+  assert.equal(cursorEdit({ file_path: "index.html", old_str: "<title>", new_str: "<title>" }), "allow");
+  assert.equal(cursorEdit({ target_file: "version.json", code_edit: "{}" }), "deny");
+  assert.equal(cursorEdit({ target_file: "tests/data/ratchets.json", code_edit: "{}" }), "deny");
 });

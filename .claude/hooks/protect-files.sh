@@ -24,7 +24,8 @@
 #  5. Shared safety bans 1-2 (Fleet A + D, Bryce 2026-10-22), no escape hatch:
 #     nothing typed by hand RAISES a ceiling in tests/data/ratchets.json or a
 #     tests/data/ratchets.d fragment, and a fragment is edited only on its own
-#     branch (lowering or reverting this branch's file is fine). Cursor reaches
+#     branch (lowering or reverting this branch's file is fine). A removal or
+#     move (rm, git rm, mv, find -delete, a directory) counts. Cursor reaches
 #     this file through .cursor/hooks/edit-guard.sh and shell-guard.sh.
 # Every target is resolved with realpath first, so a symlink is judged as the
 # file it points at (round 2, 2026-10-14).
