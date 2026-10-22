@@ -1454,6 +1454,135 @@ test("the broken-install repair sweeps apex26- caches and reloads once a network
   assert.equal(r.calls.reload, 1);
 });
 
+// ── The error catcher's reason serializer (same inline shell, other half) ──
+// (r && (r.message || r)) || "unknown" rendered a plain-object rejection as
+// "[object Object]" in BOTH the overlay and the __apexErrors ring, destroying
+// the one detail a field report needs. No game code rejects with a plain
+// object, so the shape that lands here is a platform object: its name and
+// shape must survive.
+async function runErrorCatcher() {
+  const html = await readFile(new URL("../../index.html", import.meta.url), "utf8");
+  const script = html.split("<script>").map((c) => c.split("</script>")[0])
+    .find((c) => c.includes("ON-SCREEN ERROR CATCHER"));
+  assert.ok(script, "the error catcher script is found");
+  const listeners = {};
+  let overlay = null;
+  const win = { addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); } };
+  const ctx = vm.createContext({
+    window: win,
+    document: {
+      querySelector: () => ({ content: "123" }),
+      getElementById: () => overlay,
+      createElement: () => ({ style: {}, textContent: "", onclick: null }),
+      body: { appendChild: (d) => { overlay = d; } },
+      documentElement: { appendChild: (d) => { overlay = d; } },
+    },
+    navigator: { onLine: true },
+    location: { origin: "https://x.test" },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    fetch: () => new Promise(() => {}),
+  });
+  vm.runInContext(script, ctx);
+  return {
+    win,
+    fire: (type, ev) => { for (const fn of listeners[type] || []) fn(ev); },
+    text: () => (overlay ? overlay.textContent : ""),
+    last: () => win.__apexErrors[win.__apexErrors.length - 1],
+  };
+}
+
+test("the error catcher serializes a plain-object rejection instead of [object Object]", async () => {
+  const h = await runErrorCatcher();
+  h.fire("unhandledrejection", { reason: { code: "E_GL_LOST", detail: "context gone", status: 42 } });
+  assert.ok(h.text().includes("Promise rejection"), h.text());
+  assert.ok(h.text().includes('"code":"E_GL_LOST"'), h.text());
+  assert.ok(h.text().includes('"detail":"context gone"'), h.text());
+  assert.ok(!h.text().includes("[object Object]"), h.text());
+  const rec = h.last();
+  assert.equal(rec.kind, "rejection");
+  assert.ok(rec.msg.includes('"code":"E_GL_LOST"'), rec.msg);
+  assert.ok(!rec.msg.includes("[object Object]"), rec.msg);
+});
+
+test("the error catcher survives circular and BigInt reasons via the key-listing fallback", async () => {
+  const h = await runErrorCatcher();
+  const circ = { stage: "shader-compile" };
+  circ.self = circ;
+  h.fire("unhandledrejection", { reason: circ });
+  assert.ok(h.text().includes("stage") && h.text().includes("self"), h.text());
+  assert.ok(!h.text().includes("[object Object]"), h.text());
+  assert.ok(h.last().msg.includes("self"), h.last().msg);
+  h.fire("unhandledrejection", { reason: { n: 10n } });
+  assert.ok(h.text().includes("(keys: n)"), h.text());
+});
+
+test("the error catcher keeps a platform object's name and message (DOMException shape)", async () => {
+  const h = await runErrorCatcher();
+  h.fire("unhandledrejection", { reason: new DOMException("GPU is not supported here", "NotSupportedError") });
+  assert.ok(h.text().includes("NotSupportedError"), h.text());
+  assert.ok(h.text().includes("GPU is not supported here"), h.text());
+  assert.ok(!h.text().includes("[object Object]"), h.text());
+  assert.ok(h.last().msg.includes("NotSupportedError"), h.last().msg);
+});
+
+test("the error catcher leaves Errors, strings, numbers and empty reasons as they were", async () => {
+  const h = await runErrorCatcher();
+  const err = new Error("kaboom");
+  h.fire("unhandledrejection", { reason: err });
+  assert.equal(h.last().msg, "kaboom", "an Error reason records its message exactly");
+  assert.equal(h.last().detail, String(err.stack).slice(0, 800), "the stack still rides as the detail");
+  assert.ok(h.text().includes("kaboom"), h.text());
+  h.fire("unhandledrejection", { reason: "a plain string reason" });
+  assert.equal(h.last().msg, "a plain string reason");
+  h.fire("unhandledrejection", { reason: 42 });
+  assert.equal(h.last().msg, "42");
+  h.fire("unhandledrejection", {});
+  assert.equal(h.last().msg, "unknown");
+});
+
+test("an empty-message Error surfaces its name instead of [object Object]", async () => {
+  const h = await runErrorCatcher();
+  const err = new TypeError("");
+  err.stack = "STACKMARK";
+  h.fire("unhandledrejection", { reason: err });
+  assert.equal(h.last().msg, "TypeError");
+  assert.ok(h.text().includes("STACKMARK"), h.text());
+});
+
+test("the error catcher caps an oversized object reason", async () => {
+  const h = await runErrorCatcher();
+  h.fire("unhandledrejection", { reason: { blob: "x".repeat(2000) } });
+  assert.ok(h.text().includes('"blob":"' + "x".repeat(100)), h.text());
+  assert.ok(!h.text().includes("x".repeat(600)), "the serialized reason is truncated, not dumped whole");
+  assert.ok(h.text().includes("..."), h.text());
+});
+
+test("__apexReportError records the serialized shape of a non-Error value", async () => {
+  const h = await runErrorCatcher();
+  h.win.__apexReportError("gpu init", { code: 7, why: "no webgpu" });
+  const rec = h.last();
+  assert.equal(rec.kind, "caught");
+  assert.ok(rec.msg.startsWith("Caught @ gpu init: "), rec.msg);
+  assert.ok(rec.msg.includes('"why":"no webgpu"'), rec.msg);
+  assert.ok(!rec.msg.includes("[object Object]"), rec.msg);
+  assert.ok(h.text().includes('"why":"no webgpu"'), h.text());
+  h.win.__apexReportError("loop", new Error("tick failed"));
+  assert.equal(h.last().msg, "Caught @ loop: tick failed");
+});
+
+test("the window error handler serializes a non-Error e.error instead of String(e)", async () => {
+  const h = await runErrorCatcher();
+  h.fire("error", { message: "", error: { code: "X1", info: "bad thing" }, filename: "js/game.js", lineno: 1, colno: 2 });
+  const rec = h.last();
+  assert.equal(rec.kind, "error");
+  assert.ok(rec.msg.includes('"code":"X1"'), rec.msg);
+  assert.ok(!h.text().includes("[object Object]") && !h.text().includes("[object ErrorEvent]"), h.text());
+  const err = new Error("script blew up");
+  h.fire("error", { message: "script blew up", error: err, filename: "a.js", lineno: 3, colno: 4 });
+  assert.equal(h.last().msg, "script blew up", "a messaged JS error is unchanged");
+  assert.equal(h.last().detail, String(err.stack).slice(0, 800));
+});
+
 // R3-ASYNC-1: the generation query is a LOCAL fact. Answered from a no-store
 // version.json read with no timeout, it left every lazy load() on lie-fi (a
 // request that hangs while navigator.onLine is true) to the page's 1.5 s timer.
