@@ -5743,19 +5743,24 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   } };
   const lit = { setSsrMrt: v => { tag = v; } }, fx = null;
   const pinSkyMaterial = () => {}, _ssrMrtNode = () => "tag", softOutRT = () => null, Log = { warn() {} };
+  const stageBody = fnBody(code("js/render/three/tlx.js"), "runProgramWarmStages");
   const body = fnBody(code("js/render/three/tlx.js"), "startProgramWarm");
   // B-F3.1: the sky show and the mirror stage are helpers the deferred mirror warm shares — evaluated from source too.
   const warmShowSky = eval("(function(){" + fnBody(code("js/render/three/tlx.js"), "warmShowSky") + "})");
   const warmMirrorStage = eval("(async function(usePost, useTag){" + fnBody(code("js/render/three/tlx.js"), "warmMirrorStage") + "})");
-  // Source pins for the same order: exactly one setMRT(null), between the post
+  const drawWarmStage = () => ({}), _gpuSettled = async () => {};
+  // Source pins for the same order: exactly one setMRT(null) in the full warm path, between the post
   // warm and the caster warm, and the caster warm still guarded on the module.
-  const iPost = body.indexOf("await post.warm(opts, _postF)"), iNull = body.indexOf("renderer.setMRT(null)"),
-    iShadow = body.indexOf("shadowSys.warm()");
+  const iPost = stageBody.indexOf("await post.warm(opts, _postF)");
+  const iNull = stageBody.indexOf("renderer.setMRT(null)", iPost);
+  const iShadow = stageBody.indexOf("shadowSys.warm()", iNull);
   assert.ok(iPost > 0 && iNull > iPost && iShadow > iNull, "setMRT(null) must sit between the post warm and the caster warm");
-  assert.equal(body.indexOf("renderer.setMRT(null)", iNull + 1), -1, "startProgramWarm nulls the MRT exactly once");
-  assert.match(body, /if \(warmPlusOn\(\) && shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none or apex26.tlxWarmPlus is not 1");
-  assert.match(body, /post\.warm && \(warmPlusOn\(\) \|\| performance\.now\(\) - _warmAt < 3000\)/, "without tlxWarmPlus=1 the post warm keeps its 3 s gate");
-  const warm = eval("(function(opts){" + body + "})");
+  assert.equal(stageBody.indexOf("renderer.setMRT(null)", iNull + 1), -1,
+    "runProgramWarmStages nulls the MRT exactly once in the full path (the garage-only branch has its own null)");
+  assert.match(stageBody, /if \(warmPlusOn\(\) && shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none or apex26.tlxWarmPlus is not 1");
+  assert.match(stageBody, /post\.warm && \(warmPlusOn\(\) \|\| performance\.now\(\) - _warmAt < 3000\)/, "without tlxWarmPlus=1 the post warm keeps its 3 s gate");
+  const warm = eval("(function(opts){ async function runProgramWarmStages(usePost, useTag, opts, garageSceneOnly){" + stageBody
+    + "} " + body + "})");
   warm({}); await Promise.resolve();
   assert.equal(target, "HDR"); assert.equal(mrt, "tag"); assert.equal(postCalls, 0);
   rejectMain(new Error("transient")); await _warmPending;
@@ -6245,7 +6250,7 @@ test("TLX FX: double-sided FX draw in ONE pass and their programs warm on the st
   for (const pair of [/\[skidStream, fx\.skidMat\]/, /\[partStreams\[0\], fx\.particleMats/, /\[partStreams\[1\], fx\.particleMats/])
     assert.match(body, pair, "the FX warm compiles " + pair + " on its real stream geometry");
   assert.match(body, /ensureStream\(stream, 1\)/, "the stream geometry (its vertex layout) exists before the compile");
-  assert.match(fnBody(tlx, "startProgramWarm"), /await warmFxPrograms\(\);\s*await warmLateLit\(\);/, "startProgramWarm runs the FX warm, then the late lit variants");
+  assert.match(fnBody(tlx, "runProgramWarmStages"), /await warmFxPrograms\(\);\s*await warmLateLit\(\);/, "runProgramWarmStages runs the FX warm, then the late lit variants");
   assert.match(tlx, /const _LATE_LIT = \[\{ roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 0\.5 \}\]/,
     "the brake-ring transparent variant (census 245 minted t,0.9,0,0,0,0,0,1|na) is pre-minted during the lights");
 });

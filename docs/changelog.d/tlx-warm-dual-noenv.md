@@ -1,0 +1,1 @@
+Improved: TLX program warm on noEnv garage frames runs the full post warm first, then compiles the scene for present()'s softOutRT path so SwiftShader WebGPU keeps ~pre-#3436 warm time without Apple GPU re-links (B·H16 follow-up).

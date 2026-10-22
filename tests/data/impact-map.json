@@ -13572,6 +13572,9 @@
       "retireTexture": [
         "tests/unit/tlx-texture-release.test.mjs"
       ],
+      "runProgramWarmStages": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "setInstanceRange": [
         "tests/unit/tlx-hunt4.test.mjs"
       ],
