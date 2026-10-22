@@ -113,6 +113,63 @@ def test_scripts(text):
         return None
 
 
+# --- ratchet ceilings: bans 1 and 2 ------------------------------------------------
+def fragment_name(branch):
+    """tools/check/ratchets.mjs fragmentName(): the branch's ratchets.d file, or
+    None on a detached HEAD or the deploy branch."""
+    if not branch or branch in ("HEAD", "claude/f1-game-project-26h3ng"):
+        return None
+    return re.sub(r"[^A-Za-z0-9._-]+", "--", branch) + ".json"
+
+
+def _leaves(node, at=()):
+    """{path: number} of every numeric leaf ("_doc" and other text skipped)."""
+    out = {}
+    if isinstance(node, dict):
+        for k, v in node.items():
+            out.update(_leaves(v, at + (k,)))
+    elif isinstance(node, (int, float)) and not isinstance(node, bool):
+        out[at] = node
+    return out
+
+
+def ratchet_raise(file, tool, ti, proposed, frag):
+    """Why this write raises a ceiling, or None. A fragment holds deltas (a
+    missing key is 0); ratchets.json holds ceilings and slacks (a dropped one
+    is unbounded, a new entry only adds a guard). Content the hook cannot
+    compute (a redirect, an append) counts as a raise: write it with Edit."""
+    try:
+        cur = open(file, encoding="utf8").read()
+    except Exception:
+        cur = "{}"
+    if tool in ("Edit", "MultiEdit"):
+        new = cur
+        for e in ti.get("edits") or [ti]:
+            old = e.get("old_string") or ""
+            if old and old in new:
+                new = new.replace(old, e.get("new_string") or "", -1 if e.get("replace_all") else 1)
+    elif tool == "Write" or proposed is not None:
+        new = proposed if proposed is not None else (ti.get("content") or "")
+    else:
+        return "is rewritten blind (a redirect, tee or append the hook cannot read), which may raise a ceiling"
+    try:
+        before, after = _leaves(json.loads(cur or "{}")), _leaves(json.loads(new))
+    except Exception:
+        return "would not parse as JSON after this edit"
+    for key in sorted(set(before) | set(after), key=str):
+        if frag:
+            b, a = before.get(key, 0), after.get(key, 0)
+        elif key in before and key not in after:
+            return f"drops the {'/'.join(map(str, key))} ceiling"
+        elif key not in before:
+            continue
+        else:
+            b, a = before[key], after[key]
+        if a > b:
+            return f"raises {'/'.join(map(str, key))} from {b} to {a}"
+    return None
+
+
 # --- no source edits during a live browser run --------------------------------
 def live_playwright_in(root):
     """A `playwright test` / run-playwright.mjs process whose cwd is under THIS
@@ -199,11 +256,30 @@ def check(file, tool, ti, proposed=None, how=""):
     if how == "git-resolve":
         return
 
-    # The per-branch ratchet raise fragments are tool-written like ratchets.json
-    # (tools/check/ratchets.mjs --auto-raise; #2291).
-    if not allow and rel.replace(os.sep, "/").startswith("tests/data/ratchets.d/") and rel.endswith(".json"):
-        block(f"{rel}{via} is GENERATED — the commit hook's ratchets.mjs --auto-raise writes it (a delta for this "
-              "branch); --fold / --update sum it into tests/data/ratchets.json. Edit the source and re-commit.", root)
+    # Shared safety bans 1 and 2 (Fleet A + D, Bryce 2026-10-22), no escape hatch:
+    # a ceiling rises only through the commit hook's --auto-raise, and a
+    # ratchets.d fragment belongs to its branch. This branch's own fragment may
+    # be lowered or reverted by hand (a headroom-only raise backed out); a
+    # foreign one is never touched, and nothing here may RAISE a ceiling.
+    rel_ = rel.replace(os.sep, "/")
+    frag = rel_.startswith("tests/data/ratchets.d/") and rel_.endswith(".json")
+    if frag or rel_ == "tests/data/ratchets.json":
+        if frag:
+            own = fragment_name(git("rev-parse", "--abbrev-ref", "HEAD", cwd=d_))
+            if os.path.basename(rel_) != own:
+                block(f"{rel}{via} is another branch's ratchet fragment (this branch's is "
+                      f"{('tests/data/ratchets.d/' + own) if own else 'none: detached HEAD or the deploy branch'}). "
+                      "A fragment belongs to the branch that wrote it (shared safety ban 2); a merge brings it, "
+                      "--fold sums it.", root, hatch=False)
+        # ratchets.json without the hatch is refused below as GENERATED; the
+        # hatch lifts that rule, never this one.
+        why = ratchet_raise(file, tool, ti, proposed, frag) if frag or allow else None
+        if why:
+            block(f"{rel}{via} {why} (shared safety ban 1). A ceiling rises only through the commit hook's "
+                  "ratchets.mjs --auto-raise (<= 40 lines of real growth); extract code to fit, or ask Bryce.",
+                  root, hatch=False)
+        if frag:
+            return   # this branch's own fragment, lowered or reverted by hand (#2291)
 
     if rel in GENERATED and not allow:
         block(f"{rel}{via} is GENERATED — {GENERATED[rel]}. Edit the source and run the generator.", root)

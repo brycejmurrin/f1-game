@@ -4582,6 +4582,7 @@
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/reliability.test.mjs",
+        "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/stage-minify.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
@@ -6844,6 +6845,7 @@
         "tests/unit/ratchets.test.mjs",
         "tests/unit/ready-gate.test.mjs",
         "tests/unit/report-server.test.mjs",
+        "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
@@ -14263,6 +14265,7 @@
         "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/load-order.test.mjs",
+        "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/three-inspector.test.mjs"
       ]
     },
