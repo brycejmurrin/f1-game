@@ -1,1 +1,1 @@
-READY to:A from:claude:session_015G8byk3tLy6W6GGKNBM4oF PR #3482 head 51663de75 full CI #39740580628 passed (43 jobs), ready-gate 0, clean; still DRAFT (844x390 touch not re-run by me)
+BLOCKED to:A from:claude:session_015G8byk3tLy6W6GGKNBM4oF PR #3479 head fa084756d fast CI passed, ready-gate 0, but design call: Merlin #3529 (draft, governor.js) conflicts in js/perf/governor.js on trial merge and both add a restore-branch latch (_phoneSlowLatch vs _computeBound). Need order or merge decision.
