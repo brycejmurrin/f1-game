@@ -29,6 +29,11 @@ None of these was re-reported.
 | C2 | career hub `cr-facility` | n/a | REFUTED | No defect found; see below |
 | C3 | career slot DELETE | n/a | REFUTED | No defect found; see below |
 | C4 | career → GARAGE → Escape | n/a | REFUTED | No defect found; see below |
+| P1 | js/garage/setup-presets.js `mount` SAVE | low-med | CONFIRMED-LIVE, FIXED in #3504 | See below |
+| R2 | season setup: calendar, chips, drop scores | n/a | REFUTED | No defect found; see below |
+| R3 | MY TEAM start, armed DELETE then Escape | n/a | REFUTED | No defect found; see below |
+| R4 | tune experiments, GO RACING double tap, race settings Escape | n/a | REFUTED | No defect found; see below |
+| R5 | career garage research double tap | n/a | REFUTED | No defect found; see below |
 | H1 | js/career/career-ui.js:1490 `careerTotals().starts` | low | CODE-TRACED, not fixed | See below |
 | H2 | js/career/custom-team.js:352 | low | BY-DESIGN?, not fixed | See below |
 
@@ -75,6 +80,39 @@ the armed button.
 
 Escape from the GARAGE opened through the career hub returns to the hub, not the title screen.
 
+### P1: a double-tapped SAVE CURRENT SETUP reported a failure (fixed in #3504)
+
+**Repro.** GARAGE → TUNE → SAVED SETUPS, name "Monza low", then a double tap on SAVE CURRENT SETUP. The
+preset was saved: the list held "Monza low · bahrain". But the second tap used the same name, so the note
+read "That name is already used. Choose a new name.", a success reported as a failure.
+
+**Fix.** The name clears on success, and SAVE is disabled without a name.
+
+**Test.** `tests/unit/player-tools-ui.test.mjs` fails before the fix and passes after.
+
+### R2: season setup, no defect
+
+Removing circuits stops at the last one: its Remove button is disabled. DROP WORST 3 on a one-round
+calendar keeps at least one round (`netPts` uses `keep >= 1`). BACK discards the setup draft, which is by
+design (season-ui.js keeps "a COPY").
+
+### R3: MY TEAM start and slot delete, no defect
+
+Starting a MY TEAM career with a hire, with a double tap on START, saved one slot. An armed DELETE followed
+by Escape kept the save.
+
+### R4: experiments, GO RACING and race settings, no defect
+
+A double tap on BEGIN COMPARISON started one comparison. A double tap on GO RACING opened race settings once
+with one track build. Escape from race settings returned to the career hub.
+
+### R5: career garage research, no defect
+
+A double tap on a locked engine part researched it once (7000 → 6880 cr, owned +1) and fitted it to
+`career.fitted`. An earlier probe looked as if the career garage edited the free-play
+`apex26.parts.custom`, but that came from my own synthetic Escape, which returned to the title and set
+`flow = "gp"` before a scripted click on the hidden `#cr-garage`. Not a bug.
+
 ### H1: race starts recounted from the current calendar (not fixed)
 
 `careerTotals().starts` multiplies every archived season by the current calendar's length. It only drifts
@@ -85,6 +123,11 @@ key plus a migration.
 
 A logo upload in the customize screen saves at once, so BACK does not undo it. The control is labelled BACK,
 not CANCEL. This needs a decision, not a code fix.
+
+## Rounds
+
+Round 1 found G1. Round 2 was dry. Round 3 found P1. Rounds 4 and 5 were dry, so the hunt stops (two
+consecutive dry rounds). Screenshots taken: 0; all evidence is DOM, a11y and store reads from hooks.
 
 ## Follow-ups (not owned here)
 
