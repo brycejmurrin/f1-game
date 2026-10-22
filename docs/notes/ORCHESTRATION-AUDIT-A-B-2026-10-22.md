@@ -569,6 +569,8 @@ Sources (fetched 2026-10-22):
 
 ## Open questions for Bryce
 
+As of 09:50Z, Bryce has answered 1, 3, 4, 5 and 6 (see §Combined A+D decision list). Only 2 is still open.
+
 1. **Merge queue trial (#1b): your decision, on hold.** It probably needs
    the repo moved to an organization first, because a user-owned repo may
    not offer the setting. DAD's terms are: only after the freeze, groups of
