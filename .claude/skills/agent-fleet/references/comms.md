@@ -17,7 +17,8 @@ restated. Tools are the `claude-code-remote` MCP: `send_message`,
 - PR subscription
 - Quota park
 - Claims
-- Fleet bus (cross-host)
+- Agent msg (instant cross-host)
+- Fleet bus (cross-host record)
 
 ## Authority (the rule everything else hangs on)
 
