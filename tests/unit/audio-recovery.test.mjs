@@ -709,3 +709,22 @@ test("resetContext aborts a pending soundtrack and its late cleanup cannot erase
   assert.equal(started.length, 1);
   music.stopMusic();
 });
+
+test("AudioContext constructor throw leaves GameAudio without a context (no overlay throw)", () => {
+  const warns = [];
+  const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date, Error, parseFloat, parseInt, isFinite, Float32Array,
+    Log: { info() {}, warn(...a) { warns.push(a.join(" ")); }, debug() {}, error() {} },
+    document: { addEventListener() {}, hidden: false }, addEventListener() {}, removeEventListener() {},
+    setTimeout: (fn) => { if (typeof fn === "function") fn(); return 0; }, clearTimeout() {},
+    navigator: {},
+    AudioContext: function () { throw new Error("The number of hardware contexts allowed is exhausted"); },
+  };
+  sb.window = sb;
+  const v = vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), v, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(SRC, v);
+  const A = vm.runInContext("GameAudio", v);
+  assert.doesNotThrow(() => A.init());
+  assert.equal(A.context(), null);
+  assert.ok(warns.some((w) => /AudioContext unavailable/.test(w)), "warn names the refusal");
+});

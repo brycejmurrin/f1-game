@@ -24,6 +24,22 @@
  */
 var RivalAudio = (() => {
   const SLOTS = 4;
+  // Engine voices are 2 on mobile / 4 on desktop (GameAudio.RIVAL_VOICES_*).
+  // Binding cars to slots 0..3 on a phone made setRivals fall back to rank and
+  // swap voices when two out-of-range cars traded places (BUGS M32). Cap the
+  // car→slot map to the live engine count; pass-by whoosh still uses SLOTS.
+  function engineVoiceCap() {
+    try {
+      if (typeof GameAudio !== "undefined" && GameAudio && typeof GameAudio.rivalVoiceCount === "function") {
+        const n = GameAudio.rivalVoiceCount() | 0;
+        if (n > 0) return Math.min(SLOTS, n);
+      }
+    } catch (e) { /* stub / mid-teardown */ }
+    try {
+      if (typeof GLX !== "undefined" && GLX && (GLX.isMobile || GLX.mobileTier)) return 2;
+    } catch (e) { /* absent in unit harness */ }
+    return SLOTS;
+  }
   // Never TIGHTER than engine.js's RIVAL_RANGE, or a car winks off at the
   // collector's edge instead of fading out. Kept equal to it.
   const RANGE = 150;             // metres; past this a rival is inaudible anyway
@@ -254,22 +270,34 @@ var RivalAudio = (() => {
         // episode-transients.test.mjs expects that field absent after reset().
         slot.key = ci;
       }
-      // Bind voices. A car already bound keeps its voice; a voice whose car left
-      // the set is freed; a newcomer takes the lowest free voice.
-      for (let v = 0; v < SLOTS; v++) taken[v] = false;
-      for (let i = 0; i < n; i++) {
-        const v = bound.indexOf(slots[i].car);
+      // Bind voices for the ENGINE note count only. Pass-by still aims all SLOTS;
+      // cars past the engine cap keep a high slot index so setRivals ignores them
+      // without remapping onto a rank voice (BUGS M32).
+      const cap = engineVoiceCap();
+      for (let v = 0; v < cap; v++) taken[v] = false;
+      for (let i = 0; i < n && i < cap; i++) {
+        let v = -1;
+        for (let b = 0; b < cap; b++) if (bound[b] === slots[i].car) { v = b; break; }
         slots[i].slot = v;
         if (v >= 0) taken[v] = true;
       }
-      for (let v = 0; v < SLOTS; v++) if (!taken[v]) bound[v] = null;
-      for (let i = 0; i < n; i++) {
+      for (let v = 0; v < cap; v++) if (!taken[v]) bound[v] = null;
+      for (let v = cap; v < SLOTS; v++) bound[v] = null;
+      for (let i = 0; i < n && i < cap; i++) {
         const row = slots[i];
         if (row.slot < 0) {
-          const v = bound.indexOf(null);
-          bound[v] = row.car; row.slot = v;
+          let v = 0;
+          while (v < cap && bound[v] != null) v++;
+          if (v < cap) { bound[v] = row.car; row.slot = v; }
+          else row.slot = i;
         }
         row.car = null;   // the row is a frame-local view; the binding lives in `bound`
+        out.push(row);
+      }
+      for (let i = cap; i < n; i++) {
+        const row = slots[i];
+        row.slot = i;     // >= engine voice count: whoosh only
+        row.car = null;
         out.push(row);
       }
       applyPassBy(out);
