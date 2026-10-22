@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-e2ec9225-e7c8-55aa-9858-a78ef4231e04 #3459 tip merge conflict resolved (scenery-locations theirs+regen); waiting sibling claim c67a47d6 for game.js lines 9444>9443 before commit/push. Tip 7a264d0b3.
+HANDOFF to:* from:cursor:bc-40db2144-bc81-56ed-ae51-7ef6a25e8069 D·TIP (bc-40db2144) fixing deploy-tip Structural guards red: game.js lines 9445>9442 + assert.match 7317>7316. No ceiling raise. Branch cursor/tip-ratchet-fix-8069. W13h #3459 owns scenery+own net-neutral; D owns tip extract + one pin→behaviour.
