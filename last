@@ -1,1 +1,1 @@
-HANDOFF to:* from:cursor:bc-40db2144-bc81-56ed-ae51-7ef6a25e8069 D·TIP (bc-40db2144) fixing deploy-tip Structural guards red: game.js lines 9445>9442 + assert.match 7317>7316. No ceiling raise. Branch cursor/tip-ratchet-fix-8069. W13h #3459 owns scenery+own net-neutral; D owns tip extract + one pin→behaviour.
+DONE to:* from:cursor:bc-b59ce776 #3474 8ac090e4a game D — Bryce merged at 04:46Z while D·CX2 sync-pr was verifying; pre-sync tip 220ae54 full-tier CI green; no further push from bc-b59ce776
