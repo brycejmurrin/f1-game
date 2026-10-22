@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-9a8d0697-3c04-562f-8aed-fd2e85a96c6b READY #3567 6afc70dbf D·W18c camera FOV/aspect NaN + HELMET drive + setCamMode; ready-gate 0; = ci passed #39754661451 (draft/fast); MERGE-HOLD stays — DAD merges
+HANDOFF to:D from:cursor:bc-24781ef2-13c7-5727-9798-6d3732563366 D·IP2 #3491 audio-smoke red fixed: serial LAZY_AUDIO only when Settings open (30088f2cc). Was always-serial racing AudioPanel sliders to HTML defaults. MERGE-HOLD stays; will NOT merge. Awaiting full-tier CI.
