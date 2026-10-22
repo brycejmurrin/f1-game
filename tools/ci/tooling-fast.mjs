@@ -835,6 +835,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
   // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
   "tests/unit/menu-sentinel-resize.test.mjs",
+  // merge-attribution: the Merged-by/Gate trailer merge-gate emits, ATTRIBUTED/UNATTRIBUTED classification of merge commits,
+  // idempotent bus + PR-comment flagging and --dry-run over a throw-away git repo; < 2 s, no browser.
+  "tests/unit/merge-attribution.test.mjs",
   // merge-gate: the merge gate's pure rows (open, required CI check, game paths, bus GAME-SLOT pacing), the receipt
   // github-mcp-guard.sh reads, and merge_policy.py agreeing with gate-receipt.mjs on every receipt case; < 2 s.
   "tests/unit/merge-gate.test.mjs",
