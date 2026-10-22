@@ -1371,9 +1371,7 @@ const Car3D = (function () {
       const hc = opts.cockpitHalo && _ckAcc(opts.cockpitHalo.color) || haloTint || (faired ? CARBON : HALO);
       if (faired) {
         const start=out.pos.length/3;
-        // Broad carbon roof; underside curves smoothly into the central Y.
-        // Swept crown rises toward the nose so its upper edge reads level
-        // from the seat, instead of projecting as a deep U over the road.
+        // Broad carbon roof; swept crown reads level from the seat, not a deep U over the road.
         for (const p of path) p[1] = Math.max(0.765,0.82 + 0.39*(p[2]+0.20) - 0.028);
         const rings = path.map((p,i) => {
           const a=path[Math.max(0,i-1)], b=path[Math.min(path.length-1,i+1)];
@@ -2875,9 +2873,8 @@ const Car3D = (function () {
     const info = out.flapInfo;
     if (!info) return out;
     for (const el of aeroFlapsGeom(info.aLvl, info.style)) {
-      // The livery finish rides flapInfo: build()'s own paint->finish remap
-      // runs before these flaps are appended, so without it a satin/chrome
-      // car got gloss top flaps from this path.
+      // flapInfo carries finish: build()'s paint→finish remap runs before append;
+      // without it satin/chrome cars got gloss top flaps here.
       const g = buildFlapGeom(el, info.col, info.finish, info.surface);
       const base = out.pos.length / 3;
       for (let i = 0; i < g.pos.length; i += 3) {

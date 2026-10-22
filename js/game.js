@@ -3842,6 +3842,9 @@ function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
   if (!(idx >= 0)) return false;   // reduce-motion still builds then plays the garage-out before the card and the flyby
+  // JOIN the menu's in-flight build of this world (tile → SETTINGS → RACE!); claim owner before
+  // generation++ so the stepped build does not abort. When join is false (buildKey / PerfGov.tier
+  // mismatch), still await that abort — two loadTrackStepped calls race on `track` (Pages DAILY).
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
   const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = live;
@@ -8445,8 +8448,7 @@ function tickBody(now) {
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
       const settingsOnly = paused && !setupPreviewOn && !replayBuf.isScrubbing() && !photoMode &&
         els.lighting.hidden && els.camtune.hidden && els.flyby.hidden && !els.pmsettings.hidden;
-      // Honor the selected render cadence for ordinary Settings, retaining the skipped
-      // dt for camera/sky motion. Tuners, photo, scrub, garage and resume previews stay live.
+      // Settings cadence gate: retain skipped dt for sky motion; tuners/photo/scrub/garage stay live.
       if (settingsOnly) RenderRate.observe(_dtMs);
       if (settingsOnly ? RenderRate.gate(dt, _dtMs, XrBoot.comfort(), true) : RenderRate.force(dt, _dtMs))
         render(Math.min(RenderRate.dt(), setupPreviewOn ? 0.1 : 1 / 20));   // garage's 100 ms stall limit preserves motion below 20 fps
@@ -8531,17 +8533,13 @@ function paintThrottleMode() {
   }[mode];
 }
 
-// STEERING INPUT row (js/ui/setting-row.js) and the one-line note under it.
-// The note is ALWAYS present — its text changes, it is never hidden — so a
-// mode change cannot reflow the page under a finger; same rule that keeps
-// RECALIBRATE and GEARS disabled rather than hidden.
+// STEERING INPUT row (js/ui/setting-row.js): note always present (never hidden) so a mode
+// change cannot reflow under a finger — same rule as disabled RECALIBRATE / GEARS.
 function paintSteer() {
   SettingRow.paint($("pm-steer"), steerMode);
   const note = $("pm-steer-note");
   if (!note) return;
-  // Only warn when the gyro is genuinely unavailable/denied — not in the brief
-  // window before the first sensor reading arrives (which would falsely say
-  // "no gyro" on phones that have a working gyro).
+  // Warn only for genuine deny/unavailable — not the brief pre-first-reading window.
   note.textContent = Input.gyroDenied
     ? "Motion access is denied on this device, so TILT cannot steer here — pick BUTTONS or TOUCH."
     : "TILT leans the phone. BUTTONS adds on-screen arrows. TOUCH drags a finger on the track.";

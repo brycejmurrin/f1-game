@@ -583,7 +583,8 @@ var RadioVoice = (function () {
     function clearPending() { if (pending != null) { clearTimeout(pending); pending = null; } }
     /** Start fetching the pack of every channel that will speak, so the first
      *  line of each is not lost to the download. Idempotent and cheap: ensure()
-     *  is a state check once a voice is loading or ready. */
+     *  is a state check once a voice is loading or ready. Announcer (~6 MB
+     *  fable.bin) stays gated off until race/count (D·DP8). */
     function packsInUse() {
       const ann = !!(G.announcer && G.announcer.enabled && G.announcer.enabled());
       const lap1 = [];
@@ -594,6 +595,22 @@ var RadioVoice = (function () {
         (sp === "radio" ? lap1 : rest).push(recordedPack(sp));
       }
       return [lap1, rest];
+    }
+    let gatePoll = null;
+    function clearRaceLoadGate() {
+      if (gatePoll != null) { clearTimeout(gatePoll); gatePoll = null; }
+      if (pack && pack.raceLoadGate) pack.raceLoadGate(false);
+    }
+    function armRaceLoadGate() {
+      if (!pack || !pack.raceLoadGate) return;
+      pack.raceLoadGate(true);
+      if (gatePoll != null) clearTimeout(gatePoll);
+      const poll = () => {
+        gatePoll = null;
+        if (G.state === "race" || G.state === "count") { pack.raceLoadGate(false); return; }
+        gatePoll = setTimeout(poll, 400);
+      };
+      gatePoll = setTimeout(poll, 800);
     }
     function ensureVoices() {
       if (!pack) return;
@@ -945,8 +962,10 @@ var RadioVoice = (function () {
         packOn = !!b; G.store.set("radioPack", packOn); ensureVoices();
         if (!packOn) releaseUnused();
       },
-      /** Fetch the recorded voices now (a race is about to start). */
-      prepare: ensureVoices,
+      /** Fetch lap-1 recorded voices for race entry; announcer waits until race/count. */
+      prepare() { armRaceLoadGate(); ensureVoices(); },
+      /** Open the announcer gate early (tests / idle prefetch after lights-out). */
+      releaseRaceLoadGate: clearRaceLoadGate,
       packOn: () => !!(pack && packOn),
       /** Is the radio talking, or about to (a line waiting out its cue)? The spotter asks before it keys up. */
       busy: () => !!(current || pending != null),
