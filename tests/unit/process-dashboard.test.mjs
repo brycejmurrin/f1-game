@@ -21,6 +21,10 @@ import {
   METRICS_BRANCH,
   DEPLOY_BRANCH,
   TIME_RATCHETS,
+  JOBS_PAGE,
+  attachJobs,
+  ghJson,
+  setProcessDashboardTestHooks,
 } from "../../tools/ci/process-dashboard.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -231,4 +235,70 @@ test("the scheduled workflow publishes to metrics and checks ratchets only there
   assert.doesNotMatch(yml, /git push[^\n]*claude\/f1-game-project-26h3ng/);
   assert.match(yml, new RegExp(DEPLOY_BRANCH.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(yml, /unsafe metrics branch/);
+});
+
+test("#2233 / W18f: attachJobs pages 30 at a time (per_page=100 502'd the nightly)", async () => {
+  const calls = [];
+  const job = (id) => ({
+    id, name: `j${id}`, started_at: "t0", completed_at: "t1", conclusion: "success",
+    steps: [{ name: "s", started_at: "t0", completed_at: "t1", conclusion: "success" }],
+  });
+  const serve = async (url) => {
+    calls.push(url);
+    const page = Number(/[?&]page=(\d+)/.exec(url)?.[1]);
+    const all = Array.from({ length: 70 }, (_, i) => job(i + 1));
+    const slice = all.slice((page - 1) * JOBS_PAGE, page * JOBS_PAGE);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ total_count: 70, jobs: slice }),
+      text: async () => "",
+    };
+  };
+  try {
+    setProcessDashboardTestHooks({ fetch: serve, delay: async () => {} });
+    const runs = [{ id: 99 }];
+    await attachJobs("t", runs);
+    assert.equal(runs[0].jobs.length, 70);
+    assert.equal(calls.length, 3, "30 + 30 + 10");
+    assert.ok(calls.every((u) => /jobs\?per_page=30&page=\d+/.test(u)), calls.join("\n"));
+    assert.ok(!calls.some((u) => /per_page=100/.test(u)));
+    assert.equal(JOBS_PAGE, 30);
+  } finally {
+    setProcessDashboardTestHooks();
+  }
+});
+
+test("ghJson retries a transient 502 then returns JSON (process-dashboard run 39578940130)", async () => {
+  let n = 0;
+  const fetch = async () => {
+    n += 1;
+    if (n === 1) {
+      return { ok: false, status: 502, text: async () => "Server Error", json: async () => ({}) };
+    }
+    return { ok: true, status: 200, text: async () => "", json: async () => ({ ok: true, n }) };
+  };
+  try {
+    setProcessDashboardTestHooks({ fetch, delay: async () => {} });
+    const body = await ghJson("https://api.github.com/repos/x/actions/runs/1/jobs?per_page=30&page=1", "t");
+    assert.deepEqual(body, { ok: true, n: 2 });
+    assert.equal(n, 2);
+  } finally {
+    setProcessDashboardTestHooks();
+  }
+});
+
+test("ghJson does not retry a permanent 404", async () => {
+  let n = 0;
+  const fetch = async () => {
+    n += 1;
+    return { ok: false, status: 404, text: async () => "missing", json: async () => ({}) };
+  };
+  try {
+    setProcessDashboardTestHooks({ fetch, delay: async () => {} });
+    await assert.rejects(() => ghJson("https://example.test/missing", "t"), /404/);
+    assert.equal(n, 1, "a 404 is not a GitHub hiccup");
+  } finally {
+    setProcessDashboardTestHooks();
+  }
 });
