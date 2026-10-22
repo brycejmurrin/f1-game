@@ -1,4 +1,6 @@
 import test from "node:test";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
@@ -297,4 +299,45 @@ test("the mirror / PiP inset takes the composite's colour grade and dither on al
   const tmir = TSL_POST.slice(TSL_POST.indexOf("const mirror = {"));
   assert.match(tmir, /colourGradeT\(t\);\s*ditherT\(t, vec2\(screenCoordinate\.xy\)\);/);
   assert.match(TSL_POST, /colourGradeT\(c\);/, "the composite calls the same builder");
+});
+
+// CPU execution of the actual TSL snippets; GPU shader/image validation remains separate.
+test("post identity gates skip only exact-neutral work and preserve active sample arithmetic", () => {
+class N {
+ constructor(v){this.v=Array.isArray(v)?v.slice():[v];}
+ op(b,f){b=b instanceof N?b:new N(b);const n=Math.max(this.v.length,b.v.length);return new N(Array.from({length:n},(_,i)=>f(this.v[i%this.v.length],b.v[i%b.v.length])));}
+ get x(){return new N(this.v[0]);}get y(){return new N(this.v[1]);}get z(){return new N(this.v[2]);}get r(){return this.x;}get g(){return this.y;}get b(){return this.z;}get rgb(){return new N(this.v.slice(0,3));}
+ add(b){return this.op(b,(a,b)=>a+b);}sub(b){return this.op(b,(a,b)=>a-b);}mul(b){return this.op(b,(a,b)=>a*b);}div(b){return this.op(b,(a,b)=>a/b);}negate(){return this.mul(-1);}oneMinus(){return new N(1).sub(this);}equal(b){return this.op(b,(a,b)=>a===b);}notEqual(b){return this.op(b,(a,b)=>a!==b);}lessThan(b){return this.op(b,(a,b)=>a<b);}and(b){return this.op(b,(a,b)=>a&&b);}or(b){return this.op(b,(a,b)=>a||b);}toVar(){return new N(this.v);}assign(b){this.v=b.v.slice();}
+}
+const vector=(...args)=>new N(args.flatMap(x=>x instanceof N?x.v:[x]));
+const support={vec2:vector,vec3:vector,dot:(a,b)=>new N(a.mul(b).v.reduce((a,b)=>a+b)),max:(a,b)=>a.op(b,Math.max),clamp:(a,lo,hi)=>a.op(lo,Math.max).op(hi,Math.min),exp2:a=>new N(a.v.map(x=>2**x)),select:(cond,a,b)=>cond.v[0]?a:b,If:(cond,yes)=>{if(cond.v[0])yes();return{Else(no){if(!cond.v[0])no();}};}};
+const src=readFileSync(new URL("../../js/render/three/tsl-post.js", import.meta.url), "utf8");
+const ca=src.slice(src.indexOf('    const caScene ='),src.indexOf('\n\n    // The post-ACES'));
+for(const strength of [0,1e-8,.001,.2])for(const uv of [[0,0],[.5,.5],[.97,.33]]){
+ let taps=0;const sample=u=>{taps++;return new N([u.v[0],u.v[1],u.v[0]+u.v[1]]);};
+ const scope={...support,C:{chromAb:new N(strength)},TL:u=>new N([u.v[0],1-u.v[1]]),sceneT:{sample},uv:new N(uv)};
+ const out=vm.runInNewContext(ca+';caScene(uv).v',scope,{filename:absSrc('js/render/three/tsl-post.js')});
+ const dd=uv.map(x=>x-.5),a=strength*.004*dd.reduce((a,b)=>a+b*b,0);
+ const expected=[uv[0]+dd[0]*a,1-uv[1],(uv[0]-dd[0]*a)+(1-(uv[1]-dd[1]*a))];
+ assert.deepEqual(Array.from(out),expected);assert.equal(taps,strength===0?1:3);
+}
+let powers=0;const pow=(a,b)=>{powers+=a.v.length;return a.op(b,Math.pow);};
+const grade=src.slice(src.indexOf('          const lift ='),src.indexOf('          // five overlapping'));
+for(const gamma of [[1,1,1],[1,1,1.000001],[.5,1,2],[0,1,1]])for(const rgb of [[-1,0,1e-8],[.01,.18,4],[16,8,2]]){
+ powers=0;const lift=[.1,-.1,0],gain=[.9,1.1,.0001],c=new N(rgb);
+ vm.runInNewContext(grade,{...support,pow,c,C:{lift:new N(lift),gain:new N(gain),gamma:new N(gamma)}},{filename:absSrc('js/render/three/tsl-post.js')});
+ assert.deepEqual(c.v,rgb.map((x,i)=>lift[i]+(Math.max(gain[i],.001)-lift[i])*Math.max(x,0)**(1/Math.max(gamma[i],.001))));
+ assert.equal(powers,gamma.every(x=>x===1)?0:3);
+}
+const toeStart=src.indexOf('          If(C.tone1.y.notEqual');
+const toe=src.slice(toeStart,src.indexOf('\n        });',toeStart));
+for(const controls of [[0,0],[1e-8,0],[0,1e-8],[-1,1]])for(const rgb of [[0,0,0],[1e-8,2e-8,0],[.01,.18,4],[16,8,2]]){
+ powers=0;const c=new N(rgb);vm.runInNewContext(toe,{...support,pow,c,C:{tone1:new N([0,...controls])}},{filename:absSrc('js/render/three/tsl-post.js')});
+ assert.equal(powers,controls.every(x=>x===0)?0:1);
+ assert.ok(c.v.every(Number.isFinite));
+ const expected=applyToeShoulder(rgb,...controls);
+ c.v.forEach((v,i)=>assert.ok(Math.abs(v-expected[i]) <= 1e-12*Math.max(1,Math.abs(expected[i]))));
+}
+
+
 });

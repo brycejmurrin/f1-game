@@ -121,7 +121,7 @@ const HudStrategy = (function () {
   function set(k, v) { if (last[k] !== v) { last[k] = v; nodes[k].textContent = v; return true; } return false; }
 
   /** js/ui/hud.js, once per HUD tick. Reads G; never writes a car. */
-  function tick(G, player) {
+  function tick(G, player, readouts) {
     if (!doc || !player) return;
     if (!root && !build()) return;
     const tyres = G.tyres, pit = G.pits;
@@ -130,15 +130,18 @@ const HudStrategy = (function () {
     const b = doc.body;
     if (b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on"))) return;
     if (root.hidden) root.hidden = false;
-    const spent = tyres.spent(player);
-    const left = tyres.lapsLeft ? tyres.lapsLeft(player) : null;
+    // A caller may share reads from this same synchronous HUD tick.
+    const shared = readouts && readouts.player === player ? readouts : { player };
+    const spent = shared.spent !== undefined ? shared.spent : tyres.spent(player);
+    const left = shared.left !== undefined ? shared.left : tyres.lapsLeft ? tyres.lapsLeft(player) : null;
     const code = (player.tyre && player.tyre.code) || "";
     let dirty = set("tyre", (code ? code + " " : "") + fmtLaps(left, spent));
-    const est = pit && pit.estimate ? pit.estimate(player) : null;
+    if (shared.estimate === undefined) shared.estimate = pit && pit.estimate ? pit.estimate(player) : null;
+    const est = shared.estimate;
     const lossS = est && est.lossS > 0 ? est.lossS : pit && pit.lossS ? pit.lossS() : NaN;
     const window = fmtWindow(est);
     dirty = set("loss", fmtLoss(lossS) + (window ? " · " + window : "")) || dirty;
-    const pl = pit && pit.planInfo ? pit.planInfo(player) : null;
+    const pl = shared.plan !== undefined ? shared.plan : pit && pit.planInfo ? pit.planInfo(player, shared) : null;
     if (player !== shortPlayer || (pl && pl.next) !== shortNext) short = false;
     shortPlayer = player; shortNext = pl && pl.next;
     short = tyresShort(left, pl, short);
