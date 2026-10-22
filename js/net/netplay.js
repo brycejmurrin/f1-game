@@ -980,6 +980,7 @@ const NetPlay = (function () {
       armedSentAt = -Infinity;
       startSeen = false;
       named = null;
+      heldStart = null;
       holdUntil = 0;
       G.netNow = null;
       active = true;
@@ -1057,6 +1058,7 @@ const NetPlay = (function () {
     // ORIGINAL green.
     let startSeen = false;
     let named = null;                     // host: the START already sent ({at, hold}), for late ARMEDs
+    let heldStart = null;                 // guest: a START heard before the clock synced ({at: peer ms, hold}) (#3516)
     const armedPeers = new Set();
     const closeWhy = new Map();   // peer id -> why, for a close WE start on its behalf (close() itself reports "local")
     const leftWires = new Map();          // host: wire id -> reason, for every rival that left this race
@@ -1073,6 +1075,13 @@ const NetPlay = (function () {
     function armStart(atPeerMs, hold) {
       const peerAt = Number(atPeerMs);
       if (!Number.isFinite(peerAt)) return;
+      // Pre-sync, offset() is 0 and peerToLocal the identity: converting now
+      // reads the host's instant on our clock, off by the page-epoch skew, and
+      // the accept is terminal. Hold the raw instant; tick() arms it once the
+      // clock syncs. Sync never landing leaves netStart null, so the
+      // HOLD_MAX_MS backstop still starts us alone (#3516).
+      if (session && !session.synced()) { heldStart = { at: peerAt, hold }; return; }
+      heldStart = null;
       const at = session ? session.peerToLocal(peerAt) : peerAt;
       // Generous both ways: the host's own lead is a countdown plus SETTLE_MS,
       // and a late ARMED is told a moment already up to ARM_WAIT_MS past.
@@ -1195,6 +1204,7 @@ const NetPlay = (function () {
       G.netStart = null;
       armedPeers.clear(); leftWires.clear();
       startSeen = false;
+      heldStart = null;
       runOnStop(reason);
       return true;
     }
@@ -1224,6 +1234,7 @@ const NetPlay = (function () {
       // Only pump() needs the snapshot above — the reads below don't deliver
       // events, so they iterate the live map (this ran 3 copies per frame).
       session = sessions.values().next().value;
+      if (heldStart && !startSeen && session.synced()) armStart(heldStart.at, heldStart.hold);
 
       if (armDeadline && now >= armDeadline) nameTheMoment();
       else if (armDeadline && now - armSince >= ARM_SAY_AFTER_MS && now - armSaidAt >= ARM_SAY_EVERY_MS && G.announce) {
