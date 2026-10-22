@@ -11,11 +11,9 @@ test("a mirror draw on a warmed field builds nothing: body-only mesh + the field
   // The player at the front; the 21 rivals strung out behind it, 9 m apart.
   v.field((c, i) => (c.isPlayer ? 1000 : 1000 - 9 * i));
   v.carDraw.warmCarAssets();
-  const warmKinds = v.rec.builds.map((b) => b.kind);
-  // Race warm: per-team body-only meshes plus the shared FieldLod silhouette (D·DP3).
-  assert.ok(v.rec.builds.length > 0, `race entry warms car meshes (got ${warmKinds.length}: ${warmKinds.slice(0, 8).join(",")}…)`);
-  assert.ok(v.rec.builds.every((b) => b.kind === "body" || (b.kind === "sh" && b.team == null)),
-    "no whole-car warm (bodies + team-less shared silhouette only)");
+  // Bodies for the field, plus the team-less shared LOD silhouette (D·DP3) — never a whole car.
+  assert.ok(v.rec.builds.length > 0 && v.rec.builds.every(b => b.kind === "body" || (b.kind === "sh" && b.team == null)),
+    "race entry warms bodies (no whole car)");
   const warmBuilds = v.rec.builds.length, warmWheels = v.rec.wheels;
   const mp = v.mirror();
   v.rec.draws.length = 0;
