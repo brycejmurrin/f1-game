@@ -68,10 +68,11 @@ test("R2-GW-2: createTexture resets the UNPACK flags and deletes the texture whe
 test("storage-denied context losses keep the two-reload budget across page boots", () => {
   let inheritedName = "";
   for (let loss = 1; loss <= 3; loss++) {
-    const h = bootGlx(), reports = [];
+    const h = bootGlx(), overlays = [];
     h.sandbox.name = inheritedName;
+    h.sandbox.__apexErrors = [];
     h.sandbox.sessionStorage.getItem = h.sandbox.sessionStorage.setItem = () => { throw new Error("storage denied"); };
-    h.sandbox.__apexReportError = (_kind, error) => reports.push(error.message);
+    h.sandbox.__apexReportError = (_kind, error) => overlays.push(error.message);
     let reloads = 0;
     h.sandbox.location.reload = () => { reloads++; };
     // A context loss during boot happens before the healthy-session reset.
@@ -83,8 +84,9 @@ test("storage-denied context losses keep the two-reload budget across page boots
     assert.equal(reloads, loss <= 2 ? 1 : 0, "only the first two boots automatically reload");
     h.restoreContext();
     assert.equal(reloads, loss <= 2 ? 2 : 0, "restore obeys the same exhausted budget");
-    assert.equal(reports.length, loss > 2 ? 1 : 0);
-    if (loss > 2) assert.match(reports[0], /3 times/);
+    assert.equal(overlays.length, 0, "past the budget: ring only, not the full-screen overlay hook");
+    assert.equal(h.sandbox.__apexErrors.length, loss > 2 ? 1 : 0);
+    if (loss > 2) assert.match(h.sandbox.__apexErrors[0].msg, /3 times/);
   }
 });
 
