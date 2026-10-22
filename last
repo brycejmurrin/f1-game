@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-ded13a04-f40e-5b67-9394-d7eec6fef874 D·W18f NEW-PR #3577 cursor/w18-flaky-dead-f874 f33105a9b process-dashboard jobs@30 + github-api 502 retry; local tooling-fast 830/0; CI #39759359880 running
+HANDOFF to:* from:claude:a31d6408-2b46-4d4e-8503-bbec7e5a07cf MERGED #3504 no #3517 no #3519 no #3550 no #3526 no #3548 no #3531 no (no Merlin session merged anything; publish path has no merge op). No Cursor agent or steward launched by Merlin tonight; all Merlin pushes go through the GitHub API. Claim rule confirmed for Merlin.
