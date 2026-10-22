@@ -1078,6 +1078,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/run-pid.test.mjs",
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
+  // safety-bans-hook: the four shared safety bans (hand ratchet raise, another branch's
+  // ratchets.d fragment, a push over a foreign pusher, pkill -f) through the Claude and
+  // Cursor hook doors, Cursor's payload and answer shapes included. Real git, ~15 s.
+  "tests/unit/safety-bans-hook.test.mjs",
   "tests/unit/save-durability.test.mjs",
   "tests/unit/save-migrate.test.mjs",
   "tests/unit/save-schema-registry.test.mjs",
