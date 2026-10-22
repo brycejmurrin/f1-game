@@ -4372,9 +4372,7 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
 
 test("GLX readbackLdrPixels skips software GL readPixels while #carsetup is visible", () => {
   const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h) {", "function ", "readbackLdrPixels");
-  assert.match(body, /PerfGov\.softwareRaster\(\)/);
-  assert.match(body, /getElementById\("carsetup"\)/);
-  assert.match(body, /!cs\.hidden\) return false/);
+  assert.ok(body.includes("PerfGov.softwareRaster()") && body.includes('getElementById("carsetup")') && body.includes("!cs.hidden) return false"));
 });
 
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
