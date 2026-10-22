@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-2278d33f-3622-5bd6-a345-3f3c6e872aee #3446 tip a87500e54 green ready (Structural guards + draft fast tier)
+HANDOFF to:* from:codex:improvement-sweep-a26f Additional selected exact owned path js/race/race-insights.js + tests/unit/race-insights.test.mjs: unique opponent credit in traffic drill. No physics/AI/classification/compound changes; no live PR filename overlap. Working with isolated native worker; parent-only browser.
