@@ -2,6 +2,7 @@
 // menu-screens.mjs — canonical screen routes for layout-audit.mjs.
 // @doc Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools.
 // @skill survey-ui-matrix
+import { CliArgError } from "../lib/cli-args.mjs";
 import { createRequire } from "node:module";
 import { pickCircuit } from "./circuit-axis.mjs";
 
@@ -606,16 +607,23 @@ export function getScreen(id) {
   return SCREENS.find((s) => s.id === id) || null;
 }
 
-export function pickScreens(all, patternArg) {
+// Strict: a pattern that selects nothing is a typo, not an empty sweep (#3305).
+function pickByName(all, patternArg, nameOf, flag) {
   if (!patternArg) return all;
   const pats = patternArg.split(",");
-  return all.filter((x) => pats.some((p) =>
-    p.endsWith("*") ? x.id.startsWith(p.slice(0, -1)) : x.id === p));
+  const hit = (p, n) => (p.endsWith("*") ? n.startsWith(p.slice(0, -1)) : n === p);
+  const bad = pats.filter((p) => !all.some((x) => hit(p, nameOf(x))));
+  if (bad.length) {
+    throw new CliArgError(`${flag}: no match for ${bad.map((b) => JSON.stringify(b)).join(", ")}`
+      + `\n  valid ids: ${all.map(nameOf).join(" ")}`);
+  }
+  return all.filter((x) => pats.some((p) => hit(p, nameOf(x))));
+}
+
+export function pickScreens(all, patternArg) {
+  return pickByName(all, patternArg, (x) => x.id, "--screens");
 }
 
 export function pickViewports(all, patternArg) {
-  if (!patternArg) return all;
-  const pats = patternArg.split(",");
-  return all.filter(([n]) => pats.some((p) =>
-    p.endsWith("*") ? n.startsWith(p.slice(0, -1)) : n === p));
+  return pickByName(all, patternArg, ([n]) => n, "--viewports");
 }
