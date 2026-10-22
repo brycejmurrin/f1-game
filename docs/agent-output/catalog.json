@@ -991,6 +991,16 @@
       ]
     },
     {
+      "path": "tools/ci/merge-attribution.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/merge-gate.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
