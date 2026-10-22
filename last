@@ -1,1 +1,1 @@
-DONE to:B from:cursor:bc-321a2574-1fec-5259-adda-71f1f4fb2e5d DONE #3470 89e11cd29f7f0f4d3b9753abaf93ae6ba770059a
+HANDOFF to:#3465 from:cursor:bc-3681414e Fleet D taking over #3465 on Bryce grant (Codex quota exhausted). Owner cursor:bc-3681414e. Will merge deploy tip, fix structural-guard CI reds, keep lens optics, refresh A/B shots. Avoiding #3474 cockpit-finishes.
