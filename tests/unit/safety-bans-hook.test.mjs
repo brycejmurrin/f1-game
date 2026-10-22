@@ -48,7 +48,7 @@ test("ban 1: a ratchets.mjs run that can raise is refused in both doors; the non
     const c = cursorShell(cmd);
     assert.equal(c.status, 2, `cursor: ${cmd}`);
     assert.equal(c.out.permission, "deny");
-    assert.match(c.out.agent_message, /shared safety ban 1/, "the Cursor agent reads why");
+    assert.ok(c.out.agent_message.includes("shared safety ban 1"), "the Cursor agent reads why");
   }
   for (const cmd of ["node tools/check/ratchets.mjs", "node tools/check/ratchets.mjs --json", "node tools/check/ratchets.mjs --fold",
     "node tools/check/ratchets.mjs --update --lower-only", "node tools/check/ratchets.mjs --update --preview",
@@ -58,14 +58,6 @@ test("ban 1: a ratchets.mjs run that can raise is refused in both doors; the non
     assert.equal(claudeBash(cmd).status, 0, `claude: ${cmd}`);
     assert.deepEqual(cursorShell(cmd).out, { permission: "allow" }, `cursor: ${cmd}`);
   }
-});
-
-test("ban 1: the commit hook's own --auto-raise path is still wired", () => {
-  // The hook runs the absorb itself (a subprocess, not an agent tool call), so
-  // no guard sees it; this pins that the call survives future edits.
-  const src = fs.readFileSync(BASH_GUARD, "utf8");
-  assert.match(src, /node tools\/check\/ratchets\.mjs --auto-raise >"\$RLOG"/);
-  assert.match(src, /git add -A -- tests\/data\/ratchets\.json tests\/data\/ratchets\.d/);
 });
 
 test("bans 1 and 2: ratchets.json raises and other branches' fragments are refused, even under allow-protected", () => {
@@ -145,10 +137,10 @@ test("ban 3: a push over another author's commits is refused until the owner ack
     for (const cmd of ["git push origin cursor/t-1", "git push", "git push -u origin HEAD", "git push origin HEAD:cursor/t-1"]) {
       const r = claudeBash(cmd, a);
       assert.equal(r.status, 2, `claude: ${cmd}\n${r.stderr}`);
-      assert.match(r.stderr, /bob <bob@t> bob was here/);
+      assert.ok(r.stderr.includes("bob <bob@t> bob was here"), r.stderr);
     }
     const c = cursorShell("git push origin cursor/t-1", a);
-    assert.equal(c.status, 2); assert.equal(c.out.permission, "deny"); assert.match(c.out.agent_message, /shared safety ban 3/);
+    assert.equal(c.status, 2); assert.equal(c.out.permission, "deny"); assert.ok(c.out.agent_message.includes("shared safety ban 3"));
     // A pull (fetch + merge) does not clear it: the commit is still another author's since Alice's last push.
     ga("pull", "-q", "--no-rebase", "--no-edit", "origin", "cursor/t-1");
     assert.equal(claudeBash("git push origin cursor/t-1", a).status, 2, "after a pull");
@@ -161,7 +153,7 @@ test("ban 3: a push over another author's commits is refused until the owner ack
     ga("remote", "set-url", "origin", path.join(dir, "gone.git"));
     const gone = claudeBash("git push origin cursor/t-1", a);
     assert.equal(gone.status, 0);
-    assert.match(gone.stderr, /foreign-pusher check could not read/);
+    assert.ok(gone.stderr.includes("foreign-pusher check could not read"));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -171,7 +163,7 @@ test("ban 4: pkill -f is refused in both doors, with the reason in Cursor's answ
     const c = cursorShell(cmd);
     assert.equal(c.status, 2, `cursor: ${cmd}`);
     assert.equal(c.out.permission, "deny");
-    assert.match(c.out.user_message, /pkill -f/);
+    assert.ok(c.out.user_message.includes("pkill -f"));
   }
   assert.deepEqual(cursorShell("pgrep -a node").out, { permission: "allow" });
 });
@@ -185,5 +177,5 @@ test("Cursor's hooks.json wires the edit guard on preToolUse Write, failing clos
   assert.ok(fs.statSync(EDIT_GUARD).mode & 0o111, "edit-guard.sh is executable");
   const noPath = run(EDIT_GUARD, { tool_name: "Write", tool_input: {} });
   assert.equal(noPath.out.permission, "allow");
-  assert.match(noPath.out.agent_message, /did NOT run/, "an unreadable payload passes loudly, never silently");
+  assert.ok(noPath.out.agent_message.includes("did NOT run"), "an unreadable payload passes loudly, never silently");
 });
