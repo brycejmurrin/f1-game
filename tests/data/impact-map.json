@@ -1354,12 +1354,30 @@
         "tests/unit/cockpit-preview.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
+      "setVisor": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "setVisorColor": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "setVisorIntensity": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
       "setWheel": [
         "tests/unit/cockpit-preview.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "turnChaseLead": [
         "tests/unit/camera-defaults.test.mjs"
+      ],
+      "visor": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "visorColor": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "visorIntensity": [
+        "tests/unit/cockpit-wheels.test.mjs"
       ],
       "wheel": [
         "tests/unit/cockpit-wheels.test.mjs"

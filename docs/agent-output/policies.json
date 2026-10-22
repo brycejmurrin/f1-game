@@ -1876,6 +1876,11 @@
       "presentation": "native",
       "preserve": "@c8"
     },
+    "tools/shot/ab-gallery.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c5"
+    },
     "tools/shot/agent.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
@@ -2115,6 +2120,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "@c5"
+    },
+    "tools/shot/visor-lab-export.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c4"
     },
     "tools/shot/webgpu-urban-gallery.mjs": {
       "action": "artifact-first",
