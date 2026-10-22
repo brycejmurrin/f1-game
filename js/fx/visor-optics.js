@@ -39,7 +39,7 @@ const VisorOptics = (function () {
   const _tmpSun = [0, 0, 0], _glintBuf = [];
   const _basis = { fwd: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0] };
 
-  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const clampTo = (v, a, b) => (v < a ? a : v > b ? b : v);
   const lum = (c) => (c ? 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] : 0);
   const r2 = (v) => Math.round(v * 100) / 100;
 
@@ -146,7 +146,7 @@ const VisorOptics = (function () {
    *  (its inner reflections read stronger against the darker transmitted scene). Every intensity is 0..~1.5 and
    *  proportional to light actually reaching the shield: a dark scene returns zeros. */
   function lightMap(scene, w, h, { level = 1, fringe = 0, smoke = false, tint = null, bloom = 1, glare = 0.12 } = {}) {
-    const out = { sun: null, ghost: null, rays: null, rim: null, glints: [], fringe: 0, haze: 0, bloom: clamp(bloom, 0, 2.5) };
+    const out = { sun: null, ghost: null, rays: null, rim: null, glints: [], fringe: 0, haze: 0, bloom: clampTo(bloom, 0, 2.5) };
     if (!scene || !scene.eye || !scene.tgt || !(level > 0)) return out;
     const basis = camBasis(scene.eye, scene.tgt, _basis);
     const exp = scene.exposure > 0 ? scene.exposure : 1;
@@ -154,26 +154,26 @@ const VisorOptics = (function () {
     const base = Math.max(1, Math.min(w, h));
 
     // The key light: the sun (or the night's moon key — tiny). Brightness in exposed units.
-    const key = clamp(lum(scene.sunColor) * exp, 0, 4);
+    const key = clampTo(lum(scene.sunColor) * exp, 0, 4);
     const sd = scene.sunDir;
-    const sunUp = sd ? clamp(sd[1], 0, 1) : 0;         // below the horizon: no sun on the shield
+    const sunUp = sd ? clampTo(sd[1], 0, 1) : 0;         // below the horizon: no sun on the shield
     let sceneLight = 0;
     if (sd && key > 0.02 && sunUp > 0.01) {
       const p = projectDir(sd, basis, scene.fov, w, h, _tmpSun);
       const warm = scene.sunColor;
-      const rgb = [clamp(warm[0] / Math.max(1e-3, Math.max(warm[0], warm[1], warm[2])), 0, 1) * 255,
-                   clamp(warm[1] / Math.max(1e-3, Math.max(warm[0], warm[1], warm[2])), 0, 1) * 255,
-                   clamp(warm[2] / Math.max(1e-3, Math.max(warm[0], warm[1], warm[2])), 0, 1) * 255];
+      const rgb = [clampTo(warm[0] / Math.max(1e-3, Math.max(warm[0], warm[1], warm[2])), 0, 1) * 255,
+                   clampTo(warm[1] / Math.max(1e-3, Math.max(warm[0], warm[1], warm[2])), 0, 1) * 255,
+                   clampTo(warm[2] / Math.max(1e-3, Math.max(warm[0], warm[1], warm[2])), 0, 1) * 255];
       // The glint: the sun's own reflection, seen near its direction. The shield wraps past the frame, so a sun
       // just outside the view (the usual high sun) still lights the rim nearest it: the glint clamps to that
       // edge and spreads into a broad glow, fading out once the sun is ~45° past the frame.
       if (p.z > 0.02) {
         const halfY = (scene.fov || 62) * Math.PI / 360, halfX = Math.atan(Math.tan(halfY) * w / h);
         const over = Math.max(Math.abs(Math.atan2(p.sx, p.z)) - halfX, Math.abs(Math.atan2(p.sy, p.z)) - halfY, 0);
-        const fade = 1 - clamp(over / (45 * Math.PI / 180), 0, 1);
+        const fade = 1 - clampTo(over / (45 * Math.PI / 180), 0, 1);
         if (fade > 0.01) {
-          const k = clamp(2.0 * key * sunUp * gain * fade, 0, 1.4);
-          const x = clamp(p.x, -0.08 * w, 1.08 * w), y = clamp(p.y, -0.08 * h, 1.08 * h);
+          const k = clampTo(2.0 * key * sunUp * gain * fade, 0, 1.4);
+          const x = clampTo(p.x, -0.08 * w, 1.08 * w), y = clampTo(p.y, -0.08 * h, 1.08 * h);
           out.sun = { x, y, k, r: base * 0.22 * (1 + 0.9 * (1 - fade)), rgb };
           // The double-reflection ghost: mirrored through the centre, larger and fainter (lens-flare geometry).
           if (over === 0) out.ghost = { x: w - x, y: h - y, k: k * 0.4, r: base * 0.3, rgb };
@@ -185,15 +185,15 @@ const VisorOptics = (function () {
       // Fresnel rim sheen: the inner rim is seen at grazing angles, where reflectance climbs, and it is lit on
       // the sun's side of the view — brightest when the sun is beside or behind the eye (its light rakes the rim).
       const side = Math.hypot(p.sx, p.sy);
-      const rake = 0.35 + 0.65 * clamp(-p.z, 0, 1) + 0.3 * side;
-      const rk = clamp(1.0 * key * sunUp * rake * gain, 0, 1);
+      const rake = 0.35 + 0.65 * clampTo(-p.z, 0, 1) + 0.3 * side;
+      const rk = clampTo(1.0 * key * sunUp * rake * gain, 0, 1);
       if (rk > 0.004) out.rim = { k: rk, dx: side > 1e-3 ? p.sx / side : 0, dy: side > 1e-3 ? -p.sy / side : -1, rgb };
       sceneLight += key * sunUp;
     }
 
     // Sky haze on the brow: the sky reflected in the top of the shield; only a daylight sky is bright enough.
-    const amb = clamp(lum(scene.ambientSky) * exp, 0, 2);
-    out.haze = clamp(0.3 * amb * gain, 0, 0.32);
+    const amb = clampTo(lum(scene.ambientSky) * exp, 0, 2);
+    out.haze = clampTo(0.3 * amb * gain, 0, 0.32);
     sceneLight += amb * 0.5;
 
     // Lamp glints: each light in this frame's culled list, projected; the brightest MAX_GLINTS kept.
@@ -212,14 +212,14 @@ const VisorOptics = (function () {
         const over = Math.max(-x / w, (x - w) / w, -y / h, (y - h) / h, 0);
         if (over > 0.35) continue;
         const edgeFade = 1 - over / 0.35;
-        x = clamp(x, -0.08 * w, 1.08 * w); y = clamp(y, -0.08 * h, 1.08 * h);
+        x = clampTo(x, -0.08 * w, 1.08 * w); y = clampTo(y, -0.08 * h, 1.08 * h);
         const d2 = Math.max(100, dx * dx + dy * dy + dz * dz);
         // A cone's lens is bright inside its beam and still glows outside it (the fixture itself). The record's
         // colour is the fixture's ENERGY (track-lights.js ePhys: a flood mast in the thousands, a tunnel soffit
         // in the tens, each sized so its pool on the road reads right), so what reaches the eye is energy / d²,
         // the law the road obeys; the square root compresses a 100× energy range into glints of one family.
         const dl = Math.sqrt(d2), cosT = -(dx * L[i + 7] + dy * L[i + 8] + dz * L[i + 9]) / dl;
-        const beam = clamp((cosT - L[i + 11]) / Math.max(1e-3, L[i + 10] - L[i + 11]), 0, 1);
+        const beam = clampTo((cosT - L[i + 11]) / Math.max(1e-3, L[i + 10] - L[i + 11]), 0, 1);
         const kl = LAMP_GAIN * Math.sqrt(Math.max(0, lum([L[i + 3], L[i + 4], L[i + 5]]) * exp) / d2) * (0.5 + 0.5 * beam) * edgeFade;
         if (kl < 0.15) continue;                                // below this a glint would not read; the road gets little from it either
         const m = Math.max(1e-3, L[i + 3], L[i + 4], L[i + 5]);
@@ -234,16 +234,16 @@ const VisorOptics = (function () {
       const n = Math.min(MAX_GLINTS, _glintBuf.length);
       for (let i = 0; i < n; i++) {
         const g = _glintBuf[i];
-        const k = clamp(g.k * gain * (0.7 + 0.3 * clamp(glare / 0.12, 0, 2.5)), 0, 1.2);   // LENS GLARE lifts the cores
+        const k = clampTo(g.k * gain * (0.7 + 0.3 * clampTo(glare / 0.12, 0, 2.5)), 0, 1.2);   // LENS GLARE lifts the cores
         // Nearer fixtures smear wider across the curved shield; far ones stay small.
-        const r = base * clamp(0.14 + 8 / Math.max(8, g.d), 0.14, 0.36) * (0.8 + 0.2 * out.bloom);
-        out.glints.push({ x: g.x, y: g.y, k, r, rgb: g.rgb, beam: k > 0.25 ? { dx: g.bx, dy: g.by, len: base * (0.3 + 0.4 * g.beam) * clamp(k, 0, 1), k: k * 0.35 } : null });
+        const r = base * clampTo(0.14 + 8 / Math.max(8, g.d), 0.14, 0.36) * (0.8 + 0.2 * out.bloom);
+        out.glints.push({ x: g.x, y: g.y, k, r, rgb: g.rgb, beam: k > 0.25 ? { dx: g.bx, dy: g.by, len: base * (0.3 + 0.4 * g.beam) * clampTo(k, 0, 1), k: k * 0.35 } : null });
         sceneLight += g.k * 0.6;
       }
     }
 
     // Chromatic fringe: a lens property, but ADDED colour, so it needs light in the scene to show.
-    out.fringe = clamp(fringe * clamp(sceneLight, 0, 1) * 0.55 * level, 0, 0.6);
+    out.fringe = clampTo(fringe * clampTo(sceneLight, 0, 1) * 0.55 * level, 0, 0.6);
     if (tint && out.sun) { const t = tint; out.sun.rgb = [(out.sun.rgb[0] * 2 + t[0]) / 3, (out.sun.rgb[1] * 2 + t[1]) / 3, (out.sun.rgb[2] * 2 + t[2]) / 3]; }
     return out;
   }
@@ -356,10 +356,10 @@ const VisorOptics = (function () {
       for (let line = 0; line < N; line++) {
         const base = line * stepOut;
         let s = 0;
-        for (let k = -R; k <= R; k++) s += src[base + clamp(k, 0, N - 1) * stepIn];
+        for (let k = -R; k <= R; k++) s += src[base + clampTo(k, 0, N - 1) * stepIn];
         for (let x = 0; x < N; x++) {
           dst[base + x * stepIn] = s / (2 * R + 1);
-          s += src[base + clamp(x + R + 1, 0, N - 1) * stepIn] - src[base + clamp(x - R, 0, N - 1) * stepIn];
+          s += src[base + clampTo(x + R + 1, 0, N - 1) * stepIn] - src[base + clampTo(x - R, 0, N - 1) * stepIn];
         }
       }
     };
@@ -370,9 +370,9 @@ const VisorOptics = (function () {
       const gx = (F[y * N + Math.min(N - 1, x + 1)] - F[y * N + Math.max(0, x - 1)]) * 0.5;
       const gy = (F[Math.min(N - 1, y + 1) * N + x] - F[Math.max(0, y - 1) * N + x]) * 0.5;
       const gl = Math.hypot(gx, gy) || 1, edge = 4 * F[i] * (1 - F[i]);      // 0 in the clear centre and deep bezel, 1 at the rim
-      const amt = clamp(edge * 1.35, 0, 1);
-      px.data[i * 4] = Math.round(clamp(128 + (gx / gl) * amt * 110, 0, 255));       // +R = sample toward +x: along the inward gradient
-      px.data[i * 4 + 1] = Math.round(clamp(128 + (gy / gl) * amt * 110, 0, 255));
+      const amt = clampTo(edge * 1.35, 0, 1);
+      px.data[i * 4] = Math.round(clampTo(128 + (gx / gl) * amt * 110, 0, 255));       // +R = sample toward +x: along the inward gradient
+      px.data[i * 4 + 1] = Math.round(clampTo(128 + (gy / gl) * amt * 110, 0, 255));
       px.data[i * 4 + 2] = 128; px.data[i * 4 + 3] = 255;
     }
     g.putImageData(px, 0, 0);

@@ -75,7 +75,8 @@ test("visor port: a wide aperture with a clear centre on the phone, the desktop 
     if (w >= h) assert.ok(b.y0 < h * 0.2 && b.y1 > h * 0.78, `${w}x${h}: the centre column is clear (${b.y0.toFixed(0)}..${b.y1.toFixed(0)} of ${h})`);
     else assert.ok(b.y0 < h * 0.4 && b.y1 > h * 0.6, `${w}x${h}: a slot across the middle (${b.y0.toFixed(0)}..${b.y1.toFixed(0)} of ${h})`);
     const d = V.portPath(w, h);
-    assert.match(d, /^M[\d.]+,[\d.]+C[-\d., ]+C[-\d., ]+L[\d., ]+C[-\d., ]+L[\d., ]+C[-\d., ]+L[\d., ]+C[-\d., ]+Z$/, "a brow, four rounded corners and three straight edges, closed");
+    const legs = d.replace(/[-\d., ]+/g, "").split("");   // the command letters only: M, then the brow + corners + straight edges, then Z
+    assert.deepEqual(legs, ["M", "C", "C", "L", "C", "L", "C", "L", "C", "Z"], "a brow, four rounded corners and three straight edges, closed");
     // The brow is near-straight: its two corner points sit within 8 % of the port height of each other and the apex.
     const nums = d.match(/-?[\d.]+/g).map(Number);
     assert.ok(Math.abs(nums[1] - nums[7]) < 1 && (nums[1] - nums[3]) < b.ph * 0.08, "the brow is a shallow arch, not a dome");
