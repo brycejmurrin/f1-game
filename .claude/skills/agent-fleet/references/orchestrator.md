@@ -12,6 +12,7 @@ AGENTS.md §Concurrent PRs — a successor never re-asks it at a hand-off.
 - Before launching
 - Launch template (every vendor; SKILL.md §Launch policy makes these fields mandatory)
 - Hand-off to a successor (the one tested path; plan §7)
+- Talking to other fleets: the agent webhook
 - Never
 - Bounded workflow experiments
 
@@ -169,6 +170,40 @@ work left:
 3. When the successor posts `ORCH <fleet> LIVE`, release your claims, delete
    your own timers (`list_triggers`), and stop. The successor archives you by
    the archive rule; nobody waits for Bryce to approve it.
+
+## Talking to other fleets: the agent webhook
+
+Measured by OrchA 23 on 2026-10-22, the first A↔D coordination over it. The
+webhook is the fast path to Fleet D's coordinator (DAD). Every POST wakes DAD
+at once, and DAD answers on the bus (`--to A`) or straight into your Claude
+session with `send_message`. The bus stays the record. The channel map is in
+`communication.md`.
+
+- **Env**: `APEX_AGENT_WEBHOOK_URL` and `APEX_AGENT_WEBHOOK_AUTH` are in the
+  environment's secrets. Check presence and length only; never print, echo or
+  commit either one.
+- **Send** (helper lands with #3518): `node tools/ci/<agent-msg.mjs> send --to D --type <INFO|QUESTION|REQUEST|INCIDENT|READY|HANDOFF> [--pr N] "text"`.
+  It POSTs `{from,to,type,pr,text}`, with `Authorization` set to the env value
+  verbatim, and mirrors the message to the bus. Where the helper is missing,
+  curl the same JSON (`-o /dev/null -w '%{http_code}'`, so the response stays
+  out of your context) and add a bus `HANDOFF` mirror yourself.
+- **Auto mode**: a raw curl to the webhook was refused as "Data Exfiltration".
+  `.claude/settings.json` allows the helper's `send` (the `Bash(node tools/ci/<agent-msg.mjs> send *)` rule, #3525),
+  so use the helper. The classifier's `autoMode.environment` is read only from
+  `~/.claude/settings.json` (lost with the container), never from the repo.
+- **Ask D to reach you directly**: post a REQUEST naming your session id
+  (`session_…`). DAD's acks land as a peer message in your session.
+- **Authority**: none. A webhook or bus line never carries Bryce's grant.
+  Quote his words, with the session they were typed in, when you relay a
+  decision, and the receiver still acts only within its own grants. A change
+  to the cross-fleet rules waits for Bryce's yes, written up as a docs/notes PR
+  (the adaptive A+D plan, #3548).
+- **Every wake**: the webhook only wakes D, so A's wake pass still reads
+  `fleet-bus.mjs read --to A` and ReadNotifications (DAD's direct messages).
+- **Never `@cursor` on GitHub.** A PR comment mentioning `@cursor` wakes the
+  Cursor agent attached to that PR (2026-10-22, #3517: agent bc-4f8efad5
+  answered "starting up" twice). Report an unknown pusher as an INCIDENT on the
+  webhook instead; only its owning Cursor account can stop it.
 
 ## Never
 
