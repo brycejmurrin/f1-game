@@ -459,7 +459,24 @@ function clusterFloatingPrimitives(floatingPrims, { n, px, pz }) {
   return { report, floating };
 }
 
-module.exports = { clusterFloatingPrimitives };
+// The circuit target from argv, wherever the flags sit: "--all", the first
+// token that is neither a flag nor `--top`'s value, or null. Reading args[0]
+// made `--json monaco` audit a circuit called "--json".
+function targetFrom(args) {
+  if (args.includes("--all")) return "--all";
+  return args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--top") || null;
+}
+
+// `--top N`: a positive integer. `+"abc"` was NaN and `slice(0, NaN)` printed no rows.
+function topFrom(args, dflt = 6) {
+  const i = args.indexOf("--top");
+  if (i < 0) return dflt;
+  const n = Number(args[i + 1]);
+  if (!Number.isInteger(n) || n < 1) throw new Error(`--top needs a positive integer, got ${args[i + 1] === undefined ? "nothing" : JSON.stringify(args[i + 1])}`);
+  return n;
+}
+
+module.exports = { clusterFloatingPrimitives, targetFrom, topFrom };
 
 // ---------------------------------------------------------------------------
 
@@ -471,7 +488,10 @@ if (args.includes("--help") || args.includes("-h")) {
 }
 const asJson = args.includes("--json");
 const allClusters = args.includes("--all-clusters");
-const topN = (() => { const i = args.indexOf("--top"); return i >= 0 ? +args[i + 1] : 6; })();
+const topN = (() => {
+  try { return topFrom(args); } catch (e) { console.error(e.message); process.exit(2); }
+})();
+const target = targetFrom(args);
 
 function printOne(res, top) {
   const list = allClusters ? res.all : res.floating;
@@ -629,7 +649,7 @@ function foliageAudit(id) {
 
 if (args.includes("--foliage")) {
   const why = args.includes("--why");
-  const ids = args[0] === "--all" ? require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id)) : [args[0]];
+  const ids = target === "--all" ? require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id)) : [target];
   for (const id of ids) {
     const r = foliageAudit(id);
     console.log(`\n${r.id.padEnd(13)} ${String(r.hits.length).padStart(4)} prim-pair hit(s) ` +
@@ -691,7 +711,7 @@ function emitJson(obj) {
 }
 
 if (args.includes("--clip")) {
-  const ids = args[0] === "--all" ? require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id)) : [args[0]];
+  const ids = target === "--all" ? require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id)) : [target];
   let total = 0;
   for (const id of ids) {
     const r = clipAudit(id);
@@ -711,7 +731,7 @@ this ranked list as a lead at most.`);
   process.exit(0);
 }
 
-if (args[0] === "--all") {
+if (target === "--all") {
   const { Tracks } = buildContext();
   const ids = require("../lib/circuit-scope.cjs").scope(Tracks.LIST.map((d) => d.id));   // APEX_CIRCUITS narrows --all
   // THE SAME CAPS AS THE GATE. tests/unit/scenery-grounding.test.mjs holds each
@@ -747,7 +767,7 @@ if (args[0] === "--all") {
   }
   process.exit(bad ? 1 : 0);
 } else if (args.includes("--why")) {
-  const id = args[0];
+  const id = target;
   const res = audit(id);
   printOne(res, 12);
   const { Tracks, prims } = buildContext({ stackFor: res.flagKeys });
@@ -764,7 +784,7 @@ if (args[0] === "--all") {
     console.log(`   x${String(e.n).padStart(4)}  ${e.name.padEnd(10)} ${site}`);
   process.exit(res.floating.length ? 1 : 0);
 } else {
-  const id = args[0];
+  const id = target;
   if (!id) { console.error("usage: float-audit.cjs <trackId> | --all"); process.exit(2); }
   const res = audit(id);
   if (asJson) emitJson(res);

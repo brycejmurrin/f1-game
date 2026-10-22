@@ -1006,6 +1006,10 @@ const TLX = (function () {
       // background loss, not a crash — same rule as GLX webglcontextlost.
       const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
       let _shownAt = -1e9;
+      // Every AUTOMATIC loss reload stashes apex26.ctxLostNotice first, as GLX does, so the menu
+      // says "Graphics reset" instead of a silent restart (#3513). Hidden-tab reloads stay quiet,
+      // and so does the early-frame GPU-error heal: it fires on the title, before any race.
+      let _lossCounted = false;
       let _sessLostN = 0;   // two-reload budget when sessionStorage throws (GLX _sessLostN)
       const _fallbackLossCount = () => {
         try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; }
@@ -1020,6 +1024,7 @@ const TLX = (function () {
       } catch (_) { /* no document events (harness) */ }
       renderer.onDeviceLost = function (info) {
         if (initOwner && !initOwner.active) return;
+        if (_deviceLost) return;   // one incident, one budget spend
         try { if (_threeOnLost) _threeOnLost(info); } catch (_) { /* three's own bookkeeping; ours must run regardless */ }
         // Abort program warm first: compileAsync after a loss often never
         // settles, and warming()===true makes game.js skip present/afterPresent
@@ -1057,7 +1062,8 @@ const TLX = (function () {
             n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
             sessionStorage.setItem(rk, String(n));
           } catch (_) { n = Math.max(++_sessLostN, _fallbackLossCount() + 1); _rememberFallbackLoss(n); }
-          if (n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
+          _lossCounted = true;
+          if (n <= 2) setTimeout(function () { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: nothing to explain on the menu; the menu just cannot explain it */ } try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
           else {
             // Third loss in one tab. GLX's identical 2-cap ends in a frozen
             // frame because GLX has nothing beneath it. AUTO stays on TLX
@@ -1090,12 +1096,35 @@ const TLX = (function () {
             // reloaded again, forever, on a device whose WebGL2 also dies on
             // use (iOS 18.7.2 RC lost every context — model-viewer#5100):
             // from the fourth, stop and say so instead.
-            if (n === 3) setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
-            else {
-              recordGfxBudgetExhausted("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
+            if (n === 3 && !(typeof GfxEscalation !== "undefined" && GfxEscalation.raceEntryActive && GfxEscalation.raceEntryActive())) {
+              setTimeout(function () { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ } try { location.reload(); } catch (_) { /* harness */ } }, 1200);
+            } else if (n === 3) {
               try {
-                if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
-                  RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
+                if (typeof GfxEscalation !== "undefined" && GfxEscalation.onReloadBudgetExceeded) {
+                  GfxEscalation.onReloadBudgetExceeded(n, {
+                    recordGfxBudgetExhausted,
+                    showUnavailable: (opts) => {
+                      if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) RendererPicker.showUnavailable(opts);
+                    },
+                    panel: document.getElementById("nogl"),
+                  });
+                }
+              } catch (_) { /* harness */ }
+            } else {
+              try {
+                if (typeof GfxEscalation !== "undefined" && GfxEscalation.onReloadBudgetExceeded) {
+                  GfxEscalation.onReloadBudgetExceeded(n, {
+                    recordGfxBudgetExhausted,
+                    showUnavailable: (opts) => {
+                      if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) RendererPicker.showUnavailable(opts);
+                    },
+                    panel: document.getElementById("nogl"),
+                  });
+                } else {
+                  recordGfxBudgetExhausted("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
+                  if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
+                    RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
+                  }
                 }
               } catch (_) { /* picker absent in harness */ }
             }
@@ -1111,6 +1140,7 @@ const TLX = (function () {
           var n = 0;
           try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
           if (n > 2) return;
+          if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ }
           try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
         }, false);
         _createUndo.push(function () { canvas.removeEventListener("webglcontextrestored", onRestored, false); });
@@ -4410,7 +4440,7 @@ const TLX = (function () {
           n = Math.max(++_sessLostN, prior + 1);
           try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ }
         }
-        if (n <= 2) { try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
+        if (n <= 2) { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ } try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
         try {
           recordGfxBudgetExhausted("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
         } catch (_) { /* shell card absent */ }

@@ -676,3 +676,33 @@ test("an AI that still owes its second dry compound keeps its armed stop on the 
   g.G.pits.update(c, 1 / 60);
   assert.equal(c.pitArmed, false, "a compliant car's final-lap stop pays nothing and is cleared");
 });
+
+test("a LAPPED AI that still owes its second dry compound keeps its armed stop once the leader has the flag (A·H1 P1)", async () => {
+  await g.race(ID, "day", "dry", { laps: 10 });
+  const a = g.apex; a.tyres({ level: "real" }); a.go(); a.rivals([]);
+  const c = g.G.cars.find((x) => !x.human && !x.retired);
+  const lead = g.G.cars.find((x) => x !== c && !x.retired);
+  assert.ok(g.G.pits.twoCompoundApplies(), "precondition: under the two-compound rule");
+  assert.ok((c.tyreLog || []).length <= 1, "precondition: only the grid set run");
+  c.lap = g.G.lapsTarget - 1; c.pitArmed = true; c.pitState = "none";
+  lead.finished = true; lead.lap = g.G.lapsTarget + 1;
+  g.G.pits.update(c, 1 / 60);
+  assert.equal(c.pitArmed, true, "the owed stop stays armed: clearing it is a DSQ at the flag");
+  c.tyreLog = [{ code: "M", wet: false }, { code: "H", wet: false }];
+  g.G.pits.update(c, 1 / 60);
+  lead.finished = false;
+  assert.equal(c.pitArmed, false, "a compliant lapped car's stop is cleared at the flag, as before");
+});
+
+test("an AI in its box before the fit re-picks THIS stop's planned class when the tread flips back (A·H1 P2)", async () => {
+  await g.race(ID, "day", "dry", { laps: 10 });
+  const a = g.apex; a.tyres({ level: "real" }); a.go(); a.rivals([]);
+  const c = g.G.cars.find((x) => !x.human && !x.retired);
+  c.pitPlan.seq = ["soft", "hard", "medium"];   // seq[2] defined: the off-by-one reads "medium"
+  c.tyre = g.G.tyres.classRecord("soft");
+  c.pitState = "box"; c.pitFitted = false; c.pitStops = 1;   // latched: the stop is counted, the set not yet on
+  c.pitNext = { tread: 1 };                                  // armed for inters; the track has dried back
+  g.G.pits.think(c);
+  assert.equal(c.pitNext && c.pitNext.code, "H", "the plan's second set (seq[1]), not seq[2]'s fallback");
+  c.pitState = "none"; c.pitStops = 0; c.pitNext = null;
+});

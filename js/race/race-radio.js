@@ -204,7 +204,7 @@ var RaceRadio = (function () {
 
     function speak(c, kind) {
       if (c.id === "last" && c.ch === "eng") refreshLastLap(c, f2());
-      const text = lines.pick(c.key, c.vars);
+      const text = lines.pick(c.key, c.vars, true);   // peek: only a line that is shown counts as heard
       if (!text) { queue[c.ch].delete(c.id); return false; }
       // Accepted cards may wait across a seek or the start of another race.
       const gen = timeline, field = G.cars, watching = watch, cg = commentaryGeneration, eg = engineerGeneration, still = c.still;
@@ -222,6 +222,7 @@ var RaceRadio = (function () {
         return false;
       }
       queue[c.ch].delete(c.id);
+      lines.commit();
       m.said.set(c.cdKey, t);
       if (c.once) m.once.add(c.once);
       m[c.ch] = t;

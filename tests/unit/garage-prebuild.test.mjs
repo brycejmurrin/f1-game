@@ -335,7 +335,7 @@ test("GaragePrebuild.instance() is the page's one instance (for __apex.garagePre
   assert.match(apex, /garagePrebuild: \(\) => \(typeof GaragePrebuild !== "undefined" && GaragePrebuild\.instance\(\) \? GaragePrebuild\.instance\(\)\.state\(\) : null\)/);
   const game = read("js/game.js");
   assert.match(game, /const renderSetupPreview = garagePre\.timed\(setupCam\.renderSetupPreview\);/, "every garage frame render() draws is measured");
-  assert.match(game, /function openGarage\(from\) \{\n  garagePre\.markOpen\(from\);/, "the clock starts at the tap");
+  assert.match(game, /function openGarage\(from\) \{\n  loadingScreen\.stop\(\); garagePre\.markOpen\(from\);/, "the clock starts at the tap");
   assert.match(game, /garagePre\.start\(\);/, "the title poll is armed at boot");
   const openAt = game.indexOf("function openGarage(from)");
   const open = game.slice(openAt, game.indexOf("$(\"mb-garage\").onclick", openAt));

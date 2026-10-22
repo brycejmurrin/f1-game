@@ -641,6 +641,11 @@
       "presentation": "native",
       "preserve": "Observation window/max-runs and API errors; no cancellation mutation"
     },
+    "tools/ci/merge-attribution.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Each merge's ATTRIBUTED/UNATTRIBUTED verdict, sha and PR; the posted/exists/dry-run outcome per channel; the final = merge-attribution count line"
+    },
     "tools/ci/merge-gate.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1871,6 +1876,11 @@
       "presentation": "native",
       "preserve": "@c8"
     },
+    "tools/shot/ab-gallery.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c5"
+    },
     "tools/shot/agent.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
@@ -2110,6 +2120,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "@c5"
+    },
+    "tools/shot/visor-lab-export.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c4"
     },
     "tools/shot/webgpu-urban-gallery.mjs": {
       "action": "artifact-first",
