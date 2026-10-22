@@ -2723,15 +2723,11 @@ function startRace() {
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
   if (document.fullscreenElement) Input.lockLandscape();
   const key = entrySettings(), idx = trackIdx;
-  // A DIRECT start (Daily, Data Hub, season, agent) stands the menu's build down as RACE! does (introBuild),
-  // JOINING one of this same world in flight: left live, it ran beside this race's own build (two buildPaced
-  // for one world, measured 2026-10-21), and a loadTrackStepped that finishes behind the other returns false.
-  // Owner before generation++ (and await a mismatched-tier abort): same race as introBuild — see there.
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
-  const prior = (mp && mp.step) ? mp.step : null;
+  const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = () => key === entrySettings();
   clearTimeout(flybyBuildTimer); _menuGate.generation++;
-  _menuGate.join = join ? mp.step : (prior ? prior.catch(() => false) : null);   // startRaceBody awaits it before its own load
+  _menuGate.join = join ? mp.step : (prior ? prior.catch(() => false) : null);
   const request = RaceEntryProfile.runSession(sessionEntry, key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
     (current) => startRaceBody(current), () => key === entrySettings(),
     (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); if (e) announce("COULD NOT LOAD CIRCUIT — CHECK CONNECTION", 3, "info"); });
@@ -3691,11 +3687,8 @@ function afterGarageOut(n, key, go, prepared, live) {
   if (n !== _introRun) return;
   if (!prepared || !live()) {
     loadingScreen.stop();
-    // A canceled intro bumps _introRun (live false). A still-live failure used to
-    // sheetRelease silently — START re-enabled, no garage, no banner (Pages DAILY flake).
     if (!prepared && live()) announce("PREPARATION FAILED — please retry", 5, "info");
-    titleIfBare();
-    return;
+    titleIfBare(); return;
   }
   try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
 }
@@ -3853,9 +3846,9 @@ function introBuild(go) {
   // generation++ so the stepped build does not abort. When join is false (buildKey / PerfGov.tier
   // mismatch), still await that abort — two loadTrackStepped calls race on `track` (Pages DAILY).
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
-  const prior = (mp && mp.step) ? mp.step : null;
+  const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = live;
-  clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own current() stands down
+  clearTimeout(flybyBuildTimer); _menuGate.generation++;
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
   introCover(info0, n);
   let prepared = false;
