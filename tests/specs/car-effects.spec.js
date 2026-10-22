@@ -7,7 +7,7 @@
 // the shared page back to the title and pin the default car (McLaren, nothing
 // fitted) before racing — the ERS and exhaust contracts below are about THAT
 // car, and the shared page carries whatever the previous test fitted.
-import { sharedTest as test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
+import { sharedTest as test, test as freshTest, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 import { syncFactoryMcLarenSeat } from "../helpers/factory-seat.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
@@ -225,13 +225,6 @@ test.describe("Car runtime effects", () => {
 
 // D·DP3: lazy flap / wheel-extra meshes must warm during load/countdown, not after green.
 async function bootTlxRace(page) {
-  await page.addInitScript(() => {
-    try {
-      localStorage.setItem("apex26.gfxBackend", "three");
-      localStorage.setItem("apex26.tlxForceGL", "1");
-      localStorage.setItem("apex26.gfxPreset", JSON.stringify("medium"));
-    } catch (_) { /* */ }
-  });
   await page.goto("/");
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
   await syncFactoryMcLarenSeat(page);
@@ -263,17 +256,29 @@ async function sampleGeo(page) {
   });
 }
 
-test.describe("race geometry stable after green", () => {
-  test.use({ viewport: { width: 844, height: 390 } });
+// freshTest page — TLX init must not stick on the sharedTest worker (GLXShaders, assets-api).
+freshTest.describe("race geometry stable after green", () => {
+  freshTest.use({ viewport: { width: 844, height: 390 } });
 
-  test("geoLive does not grow over the first stretch of a race (TLX)", async ({ page }) => {
+  freshTest.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem("apex26.gfxBackend", "three");
+        localStorage.setItem("apex26.tlxForceGL", "1");
+        localStorage.setItem("apex26.gfxPreset", JSON.stringify("medium"));
+      } catch (_) { /* */ }
+    });
+  });
+
+  freshTest("geoLive does not grow over the first stretch of a race (TLX)", async ({ page }) => {
     test.setTimeout(300_000);
     await bootTlxRace(page);
-
-    await page.waitForFunction(() => {
-      const tlx = typeof GLX !== "undefined" && GLX.__tlx;
-      return tlx && tlx.memState && (tlx.memState().presents | 0) > 5;
-    }, null, { polling: 100, timeout: 90_000 });
+    await page.evaluate(() => window.__apex.headless(false));
+    // Step the sim instead of waiting on TLX presents — SwiftShader can stall
+    // rAF while the loading cover is down, so memState().presents may not move.
+    await page.evaluate(() => {
+      for (let i = 0; i < 90; i++) window.__apex.step(1 / 60, 1);
+    });
 
     const t0 = await sampleGeo(page);
     expect(t0, "TLX memState available").toBeTruthy();
@@ -284,10 +289,6 @@ test.describe("race geometry stable after green", () => {
       for (let i = 0; i < 900; i++) window.__apex.step(1 / 60, 1);
       window.__apex.clearInput();
     });
-    const p0 = await page.evaluate(() => (GLX.__tlx.memState().presents | 0));
-    await page.waitForFunction((p) => (GLX.__tlx.memState().presents | 0) >= p + 10, p0, {
-      polling: 100, timeout: 90_000,
-    });
 
     const t1 = await sampleGeo(page);
     expect(t1.prog - t0.prog, `sim advanced: prog ${t0.prog} -> ${t1.prog}`).toBeGreaterThan(50);
@@ -295,5 +296,6 @@ test.describe("race geometry stable after green", () => {
       .toBeLessThanOrEqual(t0.geoLive + 2);
     expect(t1.flaps.sets, "flap set cache must not grow after green").toBeLessThanOrEqual(t0.flaps.sets);
     expect(t1.flaps.elements, "flap element cache must not grow after green").toBeLessThanOrEqual(t0.flaps.elements);
+    await page.evaluate(() => window.__apex.headless(true));
   });
 });

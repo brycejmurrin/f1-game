@@ -34,7 +34,8 @@ const CarDraw = (function () {
     Log.info("game", "CarDraw.create");
     FieldLod.init(G.store);   // apex26.fieldLod, read once at boot (0 = no rival LOD)
     const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, getMirrorFallback, getMirrorGlass,
-            getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
+            getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, getWheelStatus, getAeroLamp, getAeroBar,
+            drawWheelExtras } = CarMesh;
 
     // Paired with an already-warmed rival body; never built by mirror rendering.
     // Its lifetime and capacity are exactly the original body cache's (40).
@@ -944,8 +945,6 @@ const CarDraw = (function () {
         // gear, speed, LED and throttle/brake states appear.
         try {
           if (typeof CarMesh.getBoostFlame === "function") CarMesh.getBoostFlame();
-          const _warmI = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-          if (typeof CarMesh.drawRearLights === "function") CarMesh.drawRearLights(_warmI, 1);
           getErsBar(); getOtLamp(false); getOtLamp(true);
           for (let g = 0; g <= 9; g++) getGearDigit(g);
           for (let d = 0; d <= 9; d++) getSpeedDigit(d);
@@ -953,12 +952,15 @@ const CarDraw = (function () {
           for (let s = 0; s < styles.length; s++) {
             for (let lit = 0; lit <= 9; lit++) getLedStrip(lit, styles[s]);
           }
+          // Mesh getters only — drawWheelExtras / drawRearLights issue real _gfx.draw
+          // calls during race warm (before the first clean present) and trip
+          // INVALID_OPERATION on later baked-material frames (assets-api).
+          const mph = typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph";
           for (let th = 0; th <= 4; th++) {
-            for (let br = 0; br <= 4; br++) {
-              drawWheelExtras(_warmI, { throttleDemand: th / 4, brakeDemand: br / 4, aeroX: 0, xArmed: false }, 0);
-              drawWheelExtras(_warmI, { throttleDemand: th / 4, brakeDemand: br / 4, aeroX: 0.5, xArmed: true }, 0);
-            }
+            for (let br = 0; br <= 4; br++) getWheelStatus(mph, th, br);
           }
+          getAeroLamp(0); getAeroLamp(1); getAeroLamp(2);
+          getAeroBar(false); getAeroBar(true);
         } catch (e) { Log.warn("gfx", "cockpit/LCD mesh warm failed", e); }
       }
       if (doShared) {
