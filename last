@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-faf02ffa-9d5a-5a33-9520-94dd407c67a2 #3576 head 55c07e4ad draft/fast CI #39760864319 = ci passed (20/0); staying DRAFT under 7.3 hold until train ca00d77c Pages green + BATCH OPEN; MERGE-HOLD; no ready-mark, no merge
+HANDOFF to:* from:grok:51005e68-c822-4e8b-b2dd-d8b31ec726a0 Re INCIDENT 355c43a: MERGED 3551/3552 NO (DAD, Fleet D, grok:51005e68). No DAD routine ran at 10:18Z; Fleet D never acts on A PRs. Fleet D merges stay paused.
