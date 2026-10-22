@@ -19,24 +19,26 @@ test("GLX arms apex26.ctxLostNotice before an automatic reload", () => {
 
 test("select-screen consumes apex26.ctxLostNotice and wires RETRY to startRace", () => {
   const menus = read("js/ui/select-screen.js");
-  assert.match(menus, /sessionStorage\.getItem\(CTX_LOST_NOTICE_KEY\) === "1"/);
-  assert.match(menus, /sessionStorage\.removeItem\(CTX_LOST_NOTICE_KEY\)/);
-  assert.match(menus, /if \(G\.startRace\) G\.startRace\(\)/);
+  assert.ok(menus.includes('sessionStorage.getItem(CTX_LOST_NOTICE_KEY) === "1"'));
+  assert.ok(menus.includes("sessionStorage.removeItem(CTX_LOST_NOTICE_KEY)"));
+  assert.ok(menus.includes("if (G.startRace) G.startRace()"));
   const game = read("js/game.js");
-  assert.match(game, /function quitToMenuAfterCtxLost\(\)/);
-  assert.match(game, /stashCtxLostNotice\(\)/);
-  assert.match(game, /Graphics reset — retrying with lighter settings/);
+  assert.ok(game.includes("function quitToMenuAfterCtxLost()"));
+  assert.ok(game.includes("stashCtxLostNotice()"));
+  assert.ok(game.includes("Graphics reset — retrying with lighter settings"));
 });
 
 test("lights-out and goRolling clear apex26.ctxLostReloads", () => {
   const game = read("js/game.js");
   const lights = game.indexOf('setState("race", feel.restartPending ? "restart-green" : "lights-out")');
   assert.ok(lights > 0);
-  assert.match(game.slice(lights, lights + 220), /sessionStorage\.removeItem\("apex26\.ctxLostReloads"\)/);
-  assert.match(game, /goRolling: \(\) => \{ if \(state !== "count"\) return false; try \{ sessionStorage\.removeItem\("apex26\.ctxLostReloads"\)/);
+  assert.ok(game.slice(lights, lights + 220).includes('sessionStorage.removeItem("apex26.ctxLostReloads")'));
+  assert.ok(game.includes('goRolling: () => { if (state !== "count") return false; try { sessionStorage.removeItem("apex26.ctxLostReloads")'));
 });
 
 test("endRace still clears apex26.ctxLostReloads (radio-voice pin)", () => {
   const game = read("js/game.js");
-  assert.match(game, /function endRace\(forcedOrder\) \{[\s\S]{0,200}sessionStorage\.removeItem\("apex26\.ctxLostReloads"\)/);
+  const i = game.indexOf("function endRace(forcedOrder)");
+  assert.ok(i >= 0);
+  assert.ok(game.slice(i, i + 200).includes('sessionStorage.removeItem("apex26.ctxLostReloads")'));
 });

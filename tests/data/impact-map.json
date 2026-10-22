@@ -6279,6 +6279,7 @@
       ],
       "endRace": [
         "tests/specs/wake-lock.spec.js",
+        "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/radio-voice.test.mjs",
@@ -6457,6 +6458,9 @@
         "tests/unit/start-race-latch.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs"
       ],
+      "quitToMenuAfterCtxLost": [
+        "tests/unit/ctx-lost-notice.test.mjs"
+      ],
       "raceIntro": [
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
@@ -6571,6 +6575,7 @@
         "tests/specs/scenery-kits.spec.js",
         "tests/specs/smoke.spec.js",
         "tests/unit/assets-pack.test.mjs",
+        "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -6592,6 +6597,9 @@
       ],
       "startRaceCovered": [
         "tests/unit/garage-arrival.test.mjs"
+      ],
+      "stashCtxLostNotice": [
+        "tests/unit/ctx-lost-notice.test.mjs"
       ],
       "studioClose": [
         "tests/unit/flyby-intro.test.mjs",
