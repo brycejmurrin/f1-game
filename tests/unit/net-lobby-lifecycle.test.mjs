@@ -2170,34 +2170,6 @@ async function guestInQuali(extra = {}, sheetUp) {
   return ctx;
 }
 
-// H3-8: the host BACKed out of friend quali to the waiting room (qend).
-for (const done of [false, true]) {
-  test(`a guest on a${done ? " finished" : "n unfinished"} quali sheet hears the host left (qend)`, async () => {
-    const { h, made } = await guestInQuali();
-    let backs = 0;
-    const notes = [];
-    h.elements.set("quali", { id: "quali", hidden: false, classList: { contains: (c) => done && c === "q-done" } });
-    h.elements.set("q-back", { id: "q-back", click() { backs++; } });
-    h.G.announce = (msg) => { notes.push(msg); return true; };
-    try {
-      made[0].deliver("qend", null);
-      assert.equal(backs, done ? 0 : 1, done ? "a finished sheet keeps its result" : "the sheet leaves through its own BACK, to the waiting room");
-      assert.ok(notes.some((n) => /HOST LEFT QUALIFYING/.test(n)), "and the guest is told: " + notes.join(" | "));
-      if (done) assert.equal(h.lobby.qualifying(), false, "a finished guest no longer holds the quali gate");
-    } finally { h.lobby.cancel(); }
-  });
-}
-
-test("a qend outside friend quali does nothing", async () => {
-  const { h, s } = await connectedGuest();
-  let backs = 0;
-  h.elements.set("q-back", { id: "q-back", click() { backs++; } });
-  try {
-    s.deliver("qend", null);
-    assert.equal(backs, 0);
-  } finally { h.lobby.cancel(); }
-});
-
 for (const outcome of ["success", "false", "canceled", "rejection"]) {
   test(`a stale ${outcome} race build cannot consume or close a replacement room`, async () => {
     const { h, made } = await guestInQuali();
@@ -2626,5 +2598,23 @@ test("removing one of two code-room guests rotates the room code (the removed pl
     for (const fn of ts[0].closers) fn();   // the fake transport closes only when the test says so
     await until(() => rooms.length > before, "a room was hosted after the removal");
     assert.equal(rooms[rooms.length - 1].code, "NEW567", "the old code is not advertised again");
+  } finally { h.lobby.cancel(); }
+});
+
+// H3-7 code-room half (A·W4, #3535): a CODE room whose last guest is removed
+// still rotates quietly, and that quiet code's expiry must read in host copy.
+test("removing the last guest of a CODE room rotates it, and its expiry reads in host copy", async () => {
+  const { h, rooms, ts, until, withGuest, codes } = codeRoomHarness();
+  try {
+    await withGuest();
+    codes.next = "XYZ789";
+    assert.equal(h.lobby.removeGuest("g1"), true, "the host can remove its guest");
+    ts[0].status = "closed";
+    for (const fn of ts[0].closers) fn("peer");      // the guest's close is the evict ack
+    assert.equal(h.lobby.status().guests, 0);
+    await until(() => rooms.some((r) => r.code === "XYZ789"), "the code rotated after the remove");
+    rooms[rooms.length - 1].onFail({ error: "expired", message: "Check the six characters and try again." });
+    assert.doesNotMatch(h.status.textContent, /six characters/, "the host never sees the guest's copy");
+    assert.match(h.status.textContent, /expired/);
   } finally { h.lobby.cancel(); }
 });

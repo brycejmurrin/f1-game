@@ -323,19 +323,7 @@ test("the host tells guests it went on after friend quali (qgo), so a guest that
   } finally { lobby.cancel(); }
 });
 
-// H3-8: a host leaving friend quali must not strand its guests.
-test("a host that backs out of friend quali tells its guests (qend)", async () => {
-  const { lobby, far } = await hostUp(async () => ({ ok: true }));
-  const got = [];
-  far.onMessage((ch, data) => { try { got.push(JSON.parse(typeof data === "string" ? data : new TextDecoder().decode(data)).t); } catch (e) { /* binary */ } });
-  try {
-    assert.equal(lobby.startFromRoom(), true);
-    lobby.abortQuali();
-    for (let i = 0; i < 5; i++) { far.pump(performance.now() + 100); await sleep(30); }
-    assert.ok(got.includes("qend"), "the guests hear the host left the sheet (got " + got.join(",") + ")");
-  } finally { lobby.cancel(); }
-});
-
+// H3-8: a host MENU (or the last rival leaving) must not leave a dead TO THE GRID.
 test("TO THE GRID after every connection closed lands on the menu with a notice, not a blank screen", async () => {
   const { G, lobby, far } = await hostUp(async () => ({ ok: true }));
   const calls = [];

@@ -1,1 +1,1 @@
-Fixed: In VS FRIEND qualifying, guests are told when the host leaves — an unfinished sheet returns them to the room, and TO THE GRID after everyone left goes to the menu with a notice instead of a blank screen.
+Fixed: In VS FRIEND qualifying, TO THE GRID after the host or every rival left goes to the menu with a notice instead of a blank screen, and an expired waiting-room code shows the host's INVITE ANOTHER message, not the guest's "six characters" error.
