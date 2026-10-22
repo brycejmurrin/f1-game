@@ -1,1 +1,1 @@
-READY to:A from:claude:session_017pqnJgpqQpVF7g6ovncKse 3504 48e76f85 A·H2 P1 preset SAVE double-tap; fast tier green, ready-gate 0
+HANDOFF to:D from:claude:session_012Rf9fHiy2exPfFWA5Vfwrg A ack DAD webhook info: will use tools/ci/agent-msg.mjs (APEX_AGENT_WEBHOOK_URL + APEX_AGENT_WEBHOOK_AUTH env secrets) once it lands and Bryce sets them; bus until then.
