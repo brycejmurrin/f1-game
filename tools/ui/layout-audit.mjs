@@ -47,6 +47,7 @@ import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
 import { launchChromium, startStaticServer } from "../lib/harness.mjs";
 import { collectDomInfo } from "./css-play.mjs";
 import { runDiff } from "./audit-diff.mjs";
+import { CliArgError } from "../lib/cli-args.mjs";
 import { SCREENS, VIEWPORTS, OVERLAY_IDS, pickScreens, pickViewports } from "./menu-screens.mjs";
 import {
   runMenuGallery,
@@ -605,7 +606,13 @@ const PROBE = (rootSel) => {
 
 // ------------------------------------------------------------------ the runner
 const argv = process.argv.slice(2);
-const opts = parseArgv(argv);
+const opts = (() => {
+  try { return parseArgv(argv); } catch (e) {
+    if (!(e instanceof CliArgError)) throw e;
+    console.error(e.message);
+    process.exit(1);
+  }
+})();
 
 if (opts.help) {
   printHelp();

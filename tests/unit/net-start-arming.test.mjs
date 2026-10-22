@@ -114,6 +114,41 @@ test("the named moment lands at the SAME instant on a guest whose clock is 5 s o
   assert.equal(Gg.netStart.hold, Gh.netStart.hold, "one hold for both");
 });
 
+// #3516: events flow with no sync gate, and pre-sync peerToLocal is the
+// identity. A guest whose PING/PONG never landed accepted EV.START converted
+// with offset 0 — the host's instant read on the guest's clock, off by the
+// whole page-epoch skew — and the accept was terminal (startSeen), so the
+// correct offset arriving later changed nothing. The guest's STATE sends are
+// dropped here until `lossy` lifts: its pings and PONGs die, events pass.
+test("a START heard before the guest clock syncs is held, then armed on the synced clock (#3516)", () => {
+  const SKEW = 5000;
+  const [ta, tb] = NetTransport.loopback({ latencyMs: 20 });
+  let lossy = true;
+  const send = tb.send.bind(tb);
+  tb.send = (ch, data) => (lossy && ch === NetTransport.STATE ? true : send(ch, data));
+  const hs = NetSession.create({ transport: ta }), gs = NetSession.create({ transport: tb });
+  let t = 1000;
+  const pump = () => { t += 25; hs.pump(t); gs.pump(t + SKEW); };
+  for (let i = 0; i < 40; i++) pump();
+  assert.equal(gs.synced(), false, "the guest's clock has not synced");
+  const Gh = stubG(2), nh = NetPlay.create(Gh);
+  const Gg = stubG(2), ng = NetPlay.create(Gg);
+  assert.equal(ng.start({ role: "guest", session: gs }).ok, true);
+  nh.start({ role: "host", session: hs, sessions: [{ id: 1, session: hs }], peers: [{ id: 1, profile: null }] });
+  const step = () => { pump(); Gh.netNow = t; Gg.netNow = t + SKEW; nh.tick(t); ng.tick(t + SKEW); };
+  Gh.netNow = t; Gg.netNow = t + SKEW;
+  nh.hostStart();
+  for (let i = 0; i < 200 && !Gh.netStart; i++) step();
+  assert.ok(Gh.netStart, "the host named the moment");
+  for (let i = 0; i < 20; i++) step();             // START has reached the unsynced guest
+  assert.equal(Gg.netStart, null, "no start armed on an unsynced clock (the HOLD_MAX backstop still owns it)");
+  lossy = false;
+  for (let i = 0; i < 40 && !Gg.netStart; i++) step();
+  assert.ok(gs.synced() && Gg.netStart, "sync landed and the held START armed");
+  const err = Gg.netStart.at - (Gh.netStart.at + SKEW);
+  assert.ok(Math.abs(err) < 40, `guest at − (host at + skew) = ${err} ms (was −${SKEW}: converted with offset 0, then sticky)`);
+});
+
 // #2199: netOrder() returned the guest's own order as soon as the session was
 // inactive, so a host that sent RESULT and quit to menu a moment later handed
 // the guest a different classification on exactly the close finish the

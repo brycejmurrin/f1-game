@@ -15,12 +15,16 @@
  * FULL-TIER STRICTNESS (#2664): `REQUIRE_SUCCESS=a,b,c` names jobs that must be `success`, not skipped. The workflow sets
  * it only for a non-draft PR run, where a job skipped by `if:` would read as success and a hollow run would look green.
  *
+ * LEGIBILITY (#3507): a green `CI` carries the FAILURES of its needed jobs, not their execution. `summary(needs, v)` renders
+ * which jobs ran and passed vs which were skipped, and main() appends it to $GITHUB_STEP_SUMMARY.
+ *
  * It also fails when it was handed nothing: NEEDS unset / empty / `{}` exits 2,
  * and a payload with no `success` at all (everything skipped) fails with exit 1.
  *
  *   node tools/ci/ci-verdict.mjs                 # reads NEEDS env (toJSON(needs))
  *   node tools/ci/ci-verdict.mjs --json          # print {ok,bad} instead of exit
  */
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -78,6 +82,26 @@ export function verdict(needs, opts = {}) {
   return { ok: bad.length === 0, bad, skipped, passed };
 }
 
+/**
+ * Markdown for the job summary: executed-and-passed jobs vs skipped ones, so a reader of a green `CI` can tell what ran.
+ * @param {{ ok: boolean, bad: string[], skipped: string[], passed: string[] }} v
+ * @param {string[]} [require]
+ */
+export function summary(v, require = []) {
+  const list = (a) => (a.length ? a.map((x) => `\`${x}\``).join(", ") : "none");
+  return [
+    `### CI verdict: ${v.ok ? "PASS" : "FAIL"}`,
+    "",
+    `- **Executed and passed (${v.passed.length}):** ${list(v.passed)}`,
+    `- **Skipped by \`if:\` or advisory (${v.skipped.length}) — NOT verified by this run:** ${list(v.skipped)}`,
+    `- **Required to have run (${require.length}):** ${list(require)}`,
+    ...(v.bad.length ? ["", "**Failures:**", ...v.bad.map((b) => `- ${b}`)] : []),
+    "",
+    "A green `CI` means no needed job failed; a skipped job did not execute, and only the required set above must have succeeded.",
+    "",
+  ].join("\n");
+}
+
 function main(argv = process.argv.slice(2)) {
   let needs;
   if (!process.env.NEEDS || !process.env.NEEDS.trim()) {
@@ -96,6 +120,9 @@ function main(argv = process.argv.slice(2)) {
   }
   const require = String(process.env.REQUIRE_SUCCESS || "").split(",").map((x) => x.trim()).filter(Boolean);
   const v = verdict(needs, { require });
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary(v, require)); } catch { /* the summary is advisory */ }
+  }
   if (argv.includes("--json")) {
     console.log(JSON.stringify(v, null, 2));
     process.exit(v.ok ? 0 : 1);

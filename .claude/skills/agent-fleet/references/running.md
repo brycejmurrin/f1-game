@@ -42,6 +42,19 @@ the acting session.
      so the few-minute cadence is the `send_later` chain, not the cron.
   Cursor hosts use `subscribe_timer` for both. At hand-off, `delete_trigger` your
   own safety net (it fires into your session only) and let the successor arm its own.
+  3. a FLEET BUS WATCH that survives the orchestrator (Bryce 2026-10-22: "setup
+     up a webhook or routine to track the bus"). This is one account-wide
+     `create_trigger` with `create_new_session_on_fire: true`, hourly, Sonnet (OrchA 23 created `trig_01JY5wYatqkrVwPXPsMD1ryZ`, "Fleet bus watch (A+D liveness)").
+     Each fire gets a fresh, short-lived session that reads the bus once and
+     works out each fleet orchestrator's last line, from `read --last N --json`
+     filtered by `from`. Do not use `who`'s age: `who` dates the `ORCH LIVE` line,
+     not the latest activity. An orchestrator silent for 30 min or more is
+     ABSENT (the adaptive A+D plan, #3548). The watch then posts a bus INCIDENT,
+     wakes the other fleet (webhook to D, `send_message` to A's live session),
+     and ends. It never merges, pushes or edits a PR. An orchestrator keeps it
+     across hand-offs: list it with `list_triggers` and never create a second.
+  The webhook wakes D only. A's wake pass also reads DAD's direct messages
+  through ReadNotifications (orchestrator.md §Talking to other fleets).
 - Each wake also lists every open PR with no live owner session (Bryce requires
   one per PR); start an owner (role-pr-owner.md) or say why not. `pr-board`
   does not print this yet: check `get_session` per owner.

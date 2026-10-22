@@ -217,3 +217,20 @@ for (const readyState of ["loading", "interactive", "complete"]) {
     assert.equal(requests, 0);
   });
 }
+
+test("SOUND turned on mid-race sets the team voice and circuit venue before the engine starts (M31)", () => {
+  const { calls, G, GameAudio, panel } = boot({ soundOn: false, musicEnabled: true });
+  GameAudio.setVoice = (e) => calls.push("setVoice:" + e);
+  GameAudio.setVenue = (d) => calls.push("setVenue:" + d.theme);
+  GameAudio.startEngine = () => calls.push("startEngine");
+  G.state = "race"; G.paused = false;
+  G.player = { team: { engine: "Mercedes" } };
+  G.track = { def: { theme: "green" } };
+  G.viewRainfall = () => 0;
+  calls.length = 0;
+  G.els.soundbtn.onclick();
+  const eng = calls.indexOf("startEngine");
+  assert.ok(eng >= 0, calls.join(" "));
+  assert.ok(calls.indexOf("setVoice:Mercedes") >= 0 && calls.indexOf("setVoice:Mercedes") < eng, calls.join(" "));
+  assert.ok(calls.indexOf("setVenue:green") >= 0 && calls.indexOf("setVenue:green") < eng, calls.join(" "));
+});
