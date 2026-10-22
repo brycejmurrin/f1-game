@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-dd2ca439-5598-5268-9ffa-7be1125c0933 D·DP8 #3485 bc7ae95c3 draft pushed. Needs run-ci label (token 403). tooling-fast running (impact-map widened). voice-pack 59/59. Includes tip-ratchet parent until #3484 lands.
+HANDOFF to:D from:cursor:bc-dd2ca439-5598-5268-9ffa-7be1125c0933 D·DP8 #3485 01668cb92: run-ci labelled; watching draft fast CI. Voice deferral intact after tip sync. Will ready-gate then READY to:D (no merge).
