@@ -32,3 +32,4 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Orchestrator saves queue](orchestrator-saves-queue.md) — persist tasks + merge order to a pushed state branch every tick (Bryce 2026-10-21)
 - [Idle lanes do parallel work](idle-lanes-parallel-work.md) — 2026-10-22: idle hunters/workers use worktrees, MCPs, subagents, web research while waiting
 - [Discuss decisions with fleets](discuss-decisions-with-fleets.md) — 2026-10-22: cross-fleet decisions go to bus + webhook (DAD, Merlin) before acting
+- [Bryce iPhone uses TLX WebGPU](bryce-iphone-tlx-webgpu.md) — plays THREE PATH: WEBGPU on iPhone and it works; measure that path first

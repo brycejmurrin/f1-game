@@ -413,6 +413,7 @@ const FULL = [
   "js/perf/soak-run.js",       // SoakRun: AUTO SOAK, the hands-free soak (drives the player INPUT only; soak-gated; before game.js binds it)
   "js/perf/gpu-test-run.js",   // GpuTestRun: PHONE TEST > GPU TEST, one-tap phase run over SoakRun (scale sweep, mirror off, GPU timer, link counts)
   "js/perf/phone-recorder.js", // PhoneRecorder: SETTINGS > METRICS > PHONE TEST (RECORD / SHARE soak JSON, #1633); reads PerfGov/GLX, writes neither
+  "js/perf/bench-run.js",      // BenchRun: SETTINGS > GRAPHICS > BENCHMARK (#bench): GPU TEST per three.js path across reloads, results file
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
   "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
   "js/camera/vantage.js",
