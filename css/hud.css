@@ -100,7 +100,12 @@
 }
 .hud-label {
   font-family: var(--font-hud);
-  font-size: var(--fs-micro);
+  /* Painted floor ~10px at HUD SIZE 70% (AppearanceStudio / scale.js floor:
+     14×0.7 = 9.8 without this). Same convention as .hud-gaps and the portrait
+     tower floor: authored size grows as --fs-micro/1.4/--hud-z so zoom cannot
+     shrink labels under 10 CSS px. !important: overlays.css (later layer)
+     restates font-size: var(--fs-micro) at ≥1200px and would undo the floor. */
+  font-size: max(var(--fs-micro), calc(var(--fs-micro) / 1.4 / var(--hud-z, 1))) !important;
   font-weight: 600;
   /* Barlow's own normal line (16 px at 14 px), pinned: `normal` follows the face, so a tower laid out
      before the faces landed (or with one missing) was 53 px tall, not 48, and fitHud's sector-row cap

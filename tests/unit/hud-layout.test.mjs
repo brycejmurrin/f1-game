@@ -347,10 +347,11 @@ test("presets are pure data laid over the set's shipped layout", () => {
   for (const [, , els] of H.PRESETS) for (const id in els) assert.ok(ids.includes(id), id);
   const c = H.presetLayout("clean", "cockpit");
   assert.equal(c.tower.s, 85);
-  assert.equal(c.ot.s, 90);
+  assert.equal(c.ot.s, 100, "CLEAN does not size OT (size-only would stack at the centre home)");
+  assert.equal(c.aero.s, 100, "CLEAN does not size AERO");
   assert.equal(c.ot.x, H.SHIPPED.standard.cockpit.ot.x, "CLEAN keeps the cockpit strip beside the wheel");
   assert.equal(H.presetLayout("clean", "other").ot.x, 0);
-  assert.equal(H.presetLayout("big", "other").gearbox.s, 125);
+  assert.equal(H.presetLayout("big", "other").gearbox.s, 115);
   assert.equal(H.presetLayout("nope", "other"), null);
 });
 
@@ -358,7 +359,9 @@ test("presets are pure data laid over the set's shipped layout", () => {
 // hud-survey at 1280x720 (bottom and top zoom as shipped): [left, top, w, h]
 // in screen px. At 1920x1080 the centred pieces sit +320 / +360 (the bottom
 // band is bottom-anchored, the map and gap strip are left-anchored, the tower
-// is centred). Each preset must leave every piece it moves clear of every
+// is centred). A bottom chip a preset writes detaches to the data-hl-bottom
+// home (screen centre, bottom 12px) — offsets are from THAT home, not the
+// flex slot. Each preset must leave every piece it moves clear of every
 // piece it keeps, on screen, at both widths — hud-survey Y2 / Y3.
 const DESK = {
   tower: [459, 8, 362, 51], map: [10, 8, 160, 160], gaps: [178, 8, 78, 18],
@@ -366,7 +369,8 @@ const DESK = {
   tyre: [291, 648, 130, 42], ot: [824, 595, 89, 41], aero: [933, 595, 121, 41], bb: [520, 662, 62, 27],
 };
 const ANCHOR = { tower: "centre", map: "left", gaps: "left" };
-function deskRect(id, e, W, H, orig) {
+const BOTTOM_IDS = new Set(["gearbox", "speed", "energy", "tyre", "ot", "aero", "bb"]);
+function deskRect(id, e, W, H, orig, detached) {
   let [x, y, w, h] = DESK[id];
   const a = ANCHOR[id] || "centre";
   if (a === "centre") x += (W - 1280) / 2;
@@ -376,20 +380,30 @@ function deskRect(id, e, W, H, orig) {
   if (id === "tower") { x -= w * (s - 1) / 2; }
   else if (/bottom center/.test(o)) { x -= w * (s - 1) / 2; y -= h * (s - 1); }
   w *= s; h *= s;
+  // v4: a written bottom chip re-homes to centre / bottom:12px before --hl-x/-y.
+  // css/hud.css forces energy/tyre to 130px under data-hl-v4.
+  if (detached && BOTTOM_IDS.has(id)) {
+    if (id === "energy" || id === "tyre") w = 130 * s;
+    x = W / 2 - w / 2;
+    y = H - 12 - h;
+  }
   return [x + e.x * W / 100, y + e.y * H / 100, w, h];
 }
 const hit = (a, b) => Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0]) > 0.5 && Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]) > 0.5;
 
-test("BIG and CORNERS clear the desktop row at 1280 and 1920 (hud-survey Y2 / Y3)", () => {
+test("CLEAN, BIG and CORNERS clear the desktop row at 1280 and 1920 (hud-survey Y2 / Y3)", () => {
   const { H } = load();
   const orig = Object.fromEntries(H.ELEMENTS.map((e) => [e[0], e[3]]));
-  for (const pid of ["big", "corners"]) {
+  for (const pid of ["clean", "big", "corners"]) {
     const lay = H.presetLayout(pid, "other");
-    const moved = Object.keys(H.PRESETS.find((p) => p[0] === pid)[2]);
+    const moved = new Set(Object.keys(H.PRESETS.find((p) => p[0] === pid)[2]));
     for (const [W, Ht] of [[1280, 720], [1920, 1080]]) {
       const box = {};
-      for (const id of Object.keys(DESK)) box[id] = deskRect(id, lay[id] || { x: 0, y: 0, s: 100 }, W, Ht, orig);   // SPEED is not a MOVE & SIZE element
+      for (const id of Object.keys(DESK)) {
+        box[id] = deskRect(id, lay[id] || { x: 0, y: 0, s: 100 }, W, Ht, orig, moved.has(id));
+      }
       for (const id of moved) {
+        if (!DESK[id]) continue; // sectors/limits live off the measured bottom/top row
         const r = box[id];
         assert.ok(r[0] >= 4 && r[1] >= 4 && r[0] + r[2] <= W - 4 && r[1] + r[3] <= Ht - 4, `${pid} ${id} on screen at ${W}: ${r.map(Math.round)}`);
         for (const other of Object.keys(DESK)) {
@@ -401,6 +415,15 @@ test("BIG and CORNERS clear the desktop row at 1280 and 1920 (hud-survey Y2 / Y3
   }
 });
 
+test("css/hud.css .hud-label keeps a 10 CSS-px painted floor under --hud-z", () => {
+  assert.match(CSS, /\.hud-label\s*\{[^}]*font-size:\s*max\(\s*var\(--fs-micro\),\s*calc\(var\(--fs-micro\)\s*\/\s*1\.4\s*\/\s*var\(--hud-z,\s*1\)\)\)\s*!important/,
+    ".hud-label floors at --fs-micro/1.4/--hud-z (10px painted at HUD 70%)");
+  // max(14, 14/1.4/0.7) = 14.2857 authored → ×0.7 = 10 painted (bare --fs-micro was 9.8).
+  const authored = (fs, z) => Math.max(fs, fs / 1.4 / z);
+  assert.ok(authored(14, 0.7) * 0.7 >= 9.99, "70% HUD paints labels at ≥10px");
+  assert.equal(authored(14, 1), 14, "at 100% the floor does not enlarge past --fs-micro");
+});
+
 test("apply a preset to the edited set, tweak it, CUSTOM detection", () => {
   const { H, written } = load();
   assert.equal(H.presetOf("other"), "shipped");
@@ -409,12 +432,12 @@ test("apply a preset to the edited set, tweak it, CUSTOM detection", () => {
   assert.equal(H.presetOf("other"), "big");
   assert.equal(H.presetOf("cockpit"), "shipped", "only the edited set changes");
   assert.deepEqual(plain(written.hudLayout.standard.cockpit), {});
-  assert.equal(H.get("tower", "other").s, 125);
+  assert.equal(H.get("tower", "other").s, 115);
   H.set("tower", { s: 130 }, "other");
   assert.equal(H.presetOf("other"), "custom");
   H.applyPreset("corners", "cockpit");
   assert.equal(H.presetOf("cockpit"), "corners");
-  assert.equal(H.get("energy", "cockpit").x, -34);
+  assert.equal(H.get("energy", "cockpit").x, -32);
   assert.equal(H.get("ot", "cockpit").x, H.SHIPPED.standard.cockpit.ot.x);
   H.applyPreset("shipped", "cockpit");
   H.applyPreset("shipped", "other");
@@ -439,8 +462,8 @@ test("CORNERS on a touch cockpit does not pull ENERGY or TYRES onto the steer co
   assert.deepEqual(plain(helm.energy), plain(T.H.TOUCH_SHIPPED.helmet.energy));
   assert.deepEqual(plain(helm.gearbox), { x: 0, y: 0, s: 100 });
   const D = load3({ classes: ["desktop"], live: false });
-  assert.equal(D.H.presetLayout("corners", "cockpit").energy.x, -34, "desktop corners still moves ENERGY");
-  assert.equal(D.H.presetLayout("corners", "other").energy.x, -34);
+  assert.equal(D.H.presetLayout("corners", "cockpit").energy.x, -32, "desktop corners still moves ENERGY");
+  assert.equal(D.H.presetLayout("corners", "other").energy.x, -32);
 });
 
 test("css/track-detail.css: cockpit hides only speed/gear, not the OT/AERO/ENERGY strip", () => {
