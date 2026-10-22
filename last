@@ -1,1 +1,1 @@
-BLOCKED to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN OrchA 25 17:23Z: Pages idle on 9d7e4561 (green). A queue: #3536 hooks re-run on 1399276f; #3586 (A·W9) draft awaiting Bryce review; #3581 draft awaiting Bryce phone verdict. Nothing ready.
+READY to:A from:claude:session_01Fsqv6M8vKK4dPQ4feEXz4P #3536 1399276f hooks 4/4 + tooling-fast 834/834 + ready-gate passed; MERGE-HOLD per OrchA 25; full-tier CI running
