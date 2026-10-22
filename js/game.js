@@ -8944,7 +8944,7 @@ let garageReturn = "select";
 // The one way in. Everything that opens the garage goes through here so the
 // return path can never be left stale — including js/career/career-ui.js, via G.openGarage.
 function openGarage(from) {
-  garagePre.markOpen(from);
+  loadingScreen.stop(); garagePre.markOpen(from);   // stale busy/prep plate (z 36) must not cover #carsetup
   if (from === "menu" && soundOn) ensureAudio().then(() => GameAudio.init());
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
@@ -9039,7 +9039,7 @@ function garageBack() {
   if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
   else if (garageReturn === "career") careerUi.openHub();
   else if (garageReturn === "select") { buildSelect(); $("select").hidden = false; }
-  else { buildSelect(); els.overlay.hidden = false; }   // no vt: snapshot after hiding #carsetup is a black hold
+  else { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); }   // no vt: snapshot after hiding #carsetup is a black hold
   if (garageReturn !== "menu") loadingScreen.stop();
 }
 $("cs-back").onclick = garageBack;
@@ -9056,7 +9056,7 @@ $("cs-done").onclick = () => {
   // settings' own BACK still returns to #select, so the circuit stays two taps
   // away if you change your mind.
   else if (garageReturn === "select") raceSettings.openRaceSettings("select");
-  else { buildSelect(); els.overlay.hidden = false; }   // no vt: snapshot after hiding #carsetup is a black hold
+  else { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); }   // no vt: snapshot after hiding #carsetup is a black hold
   if (garageReturn !== "menu") loadingScreen.stop();
 };
 $("cs-unlimited").onclick = () => {
