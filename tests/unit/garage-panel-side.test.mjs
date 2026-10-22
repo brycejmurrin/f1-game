@@ -232,6 +232,8 @@ test("garage present routes through Lighting Tuner multipliers", () => {
   // liveries after orbit / team switch. Force off even when the race slider is hot.
   assert.equal(def.tune.sunShaftMul, 0,
     `garage sunShaftMul must stay 0 (got ${def.tune.sunShaftMul})`);
+  assert.equal(def.flareMul, 0,
+    `garage flareMul must stay 0 (got ${def.flareMul})`);
   const hot = presentOpts({
     exposureMul: 1.5, bloomMul: 2, threshOff: 0, sunShaftMul: 2.5, glareStr: 0.24,
   });
@@ -239,6 +241,8 @@ test("garage present routes through Lighting Tuner multipliers", () => {
   assert.ok(Math.abs(hot.bloom - defBloom * 2) < 1e-9);
   assert.equal(hot.tune.sunShaftMul, 0,
     "hot race sunShaftMul must not reopen garage shafts");
+  assert.equal(hot.flareMul, 0,
+    "hot race flareMul must not reopen garage lens flare");
   assert.equal(glareScale({ glareStr: 0.12 }), 1);
   assert.equal(glareScale({ glareStr: 0 }), 0);
   assert.ok(Math.abs(glareScale({ glareStr: 0.24 }) - 2) < 1e-9);
@@ -261,6 +265,7 @@ test("the garage frame calls presentOpts and glareScale; the race path still own
   // The bay sky fill is not a sun disc — presentOpts must zero screen shafts
   // (a scale factor left enough energy to wash Ferrari/RBR/AM after orbit).
   assert.match(cam, /_presentTune\.sunShaftMul\s*=\s*0/);
+  assert.match(cam, /_presentOpts\.flareMul\s*=\s*0/);
   assert.match(cam, /_presentOpts\.carReflect = 0/);
   assert.match(cam, /pinGarageRes\(\)/);
   assert.doesNotMatch(cam, /SP_SHAFT_SCALE/);
