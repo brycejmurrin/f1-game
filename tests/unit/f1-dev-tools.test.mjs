@@ -208,7 +208,7 @@ test('comparison detects mismatches, rejects non-rendering and non-finite traces
 test('plugin advertises the checkout MCP catalog without owning server startup', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'plugins/f1-dev-tools/plugin.json'), 'utf8'));
   const advertised = manifest.extensions?.['com.openai']?.interface?.capabilities;
-  assert.deepEqual(advertised, ['apex-tools', 'playwright-official', 'chrome-devtools', 'js-debugger', 'apex-lsp']);
+  assert.deepEqual(advertised, ['apex-tools', 'playwright-official', 'chrome-devtools', 'js-debugger', 'apex-lsp', 'browserstack']);
   assert.match(manifest.version, /^\d+\.\d+\.\d+$/, 'plugin manifest carries a semver version');
 
   const checkout = JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8'));

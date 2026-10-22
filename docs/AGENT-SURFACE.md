@@ -37,8 +37,8 @@ surface without hand-wiring:
 | Personas / subagents | `.claude/agents/*.md` | Claude and Cursor load these directly. Codex hosts may expose collaboration agents; when they do not, use the same persona contracts through launch prompts and `AGENTS.md`. Never create a second Codex persona tree. |
 | MCP catalog | `.mcp.json` + `.cursor/mcp.json` | Lockstep (unit-tested). Desktop Cursor loads them; Cloud often does not. |
 | Codex MCP | `.codex/config.toml` | Project `[mcp_servers.*]` lockstepped to `.mcp.json`. Loads only when the project is **trusted**; user overrides may live in `~/.codex/config.toml`. |
-| Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the five catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
-| Cloud VM | `.cursor/environment.json` | `install` + shared runtime Chromium discovery + allowlist of the five catalog commands. |
+| Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the six catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
+| Cloud VM | `.cursor/environment.json` | `install` + shared runtime Chromium discovery + allowlist of the six catalog commands. |
 | Cursor entry | `.cursor/rules/apex-shared.mdc` | Always-on pointer at AGENTS / skills / MCP. |
 | Guard hooks | `.claude/settings.json` hooks; `.cursor/hooks.json`; `.codex/hooks.json` | Yes. One rule set, two doors: Claude runs `.claude/hooks/bash-guard.sh` and `protect-files.sh`; Cursor reaches the same scripts through `.cursor/hooks/shell-guard.sh` (`beforeShellExecution`), `edit-guard.sh` (`preToolUse` with no matcher: the script picks the file writes and deletes, since Cursor's edit tool names are undocumented) and `mcp-guard.sh`, each answering in Cursor's `permission` JSON ([hooks](https://cursor.com/docs/agent/hooks), [tool map](https://cursor.com/docs/reference/third-party-hooks)). The shared safety bans (2026-10-22): no hand ratchet raise, no edit to another branch's `tests/data/ratchets.d` fragment, no push over a foreign pusher, no `pkill -f` (`tests/unit/safety-bans-hook.test.mjs`). |
 
@@ -78,7 +78,7 @@ does not discover, install or validate hosted tools.
 3. **MCP (required for `apex_*` / `browser_*` / `chrome_*` / `debugger_*` in Cloud):** the host
    does **not** attach project `.mcp.json` by itself ([capabilities](https://cursor.com/docs/cloud-agent/capabilities)).
    In [Cloud Agents → Integrations & MCP](https://cursor.com/agents) (team-shared:
-   Dashboard → Plugins & MCPs) register these five **stdio** servers — copy
+   Dashboard → Plugins & MCPs) register these six **stdio** servers — copy
    **`mcpServers` from root `.mcp.json`** (lockstep with `.cursor/mcp.json`) so
    compact output runs through `output-level-mcp.sh`. The environment allowlist
    glob also admits a shorter dashboard line (`bash tools/mcp/<wrapper>.sh …`);
@@ -95,7 +95,7 @@ does not discover, install or validate hosted tools.
    ([enterprise MCP allowlist](https://cursor.com/docs/enterprise/model-and-integration-management);
    `tests/unit/environment-json.test.mjs`). A stale save shows three nameless
    `{ "command": "bash" }` rows in `environment-info` (or bare `npx` for
-   playwright) and host attach fails. **Enable all five** in the launch MCP
+   playwright) and host attach fails. **Enable all six** in the launch MCP
    dropdown (catalog often ships only two until toggled — measured 2026-09-03;
    re-checked 2026-10-06).
 4. Put secrets in Cursor Secrets — never commit them into `mcp.json` `env`.
@@ -106,8 +106,8 @@ does not discover, install or validate hosted tools.
 | Signal | Good | Broken (this session 2026-10-06) |
 |---|---|---|
 | `environment-info` → `source` / `build.resolution` | `Repository` / `resolved` | (VM OK even when MCP empty) |
-| `environment-info` → `mcpServerAllowlist` | five named rows with distinct `*bash tools/mcp/…` patterns | nameless `{command:"bash"}` ×3 |
-| Dynamic MCP namespaces | `apex-tools`, `chrome-devtools`, `playwright-official`, `js-debugger`, `apex-lsp` plus `cursor*` | only `cursor`, `cursor-cloud`, `cursor-subscriptions` |
+| `environment-info` → `mcpServerAllowlist` | six named rows with distinct `*bash tools/mcp/…` patterns | nameless `{command:"bash"}` ×3 |
+| Dynamic MCP namespaces | `apex-tools`, `chrome-devtools`, `playwright-official`, `js-debugger`, `apex-lsp`, `browserstack` plus `cursor*` | only `cursor`, `cursor-cloud`, `cursor-subscriptions` |
 | VM wrappers | `bash tools/env/ensure-mcp-ready.sh` / `mcp-smoke` OK | n/a (VM ≠ host attach) |
 | `mcpPluginServerAllowlist` | optional **browser-use** row when the plugin is enabled at launch | missing when Integrations plugin off |
 
@@ -119,11 +119,11 @@ end (Playwright chrome-channel symlink, chrome-devtools clone when egress allows
 `PLAYWRIGHT_BROWSERS_PATH`, then `mcp-smoke.mjs` including js-debugger and
 apex-lsp list-tools) — that validates the VM, not host MCP attachment. If `environment-info` shows an allowlist without
 **`name`** on each row, re-**Save** the environment from git’s
-`.cursor/environment.json`, then start a **new** agent with all five MCPs enabled.
+`.cursor/environment.json`, then start a **new** agent with all six MCPs enabled.
 
 When the host catalog is empty, use the Fallback column below (and
 `./tools/mcp/apex-tools-mcp.sh call …`). Repo `mcpServerAllowlist` rows name only
-the five `.mcp.json` servers. Optional Cursor **plugin** MCPs (e.g. **browser-use**
+the six `.mcp.json` servers. Optional Cursor **plugin** MCPs (e.g. **browser-use**
 for `browser_exec` / `browser_screenshot` on the shared `debug-chrome` CDP browser)
 live in `mcpPluginServerAllowlist` — enable the plugin in Integrations and tick it
 at agent launch; **js-debugger** remains the in-repo source debugger.
@@ -131,7 +131,7 @@ at agent launch; **js-debugger** remains the in-repo source debugger.
 ## MCP servers
 
 **Repo catalog** (root `.mcp.json` for Claude Code, `.cursor/mcp.json` for
-Cursor, `.codex/config.toml` for Codex — the same five servers, lockstepped by
+Cursor, `.codex/config.toml` for Codex — the same six servers, lockstepped by
 `tests/unit/agent-config.test.mjs`; the debugger joins the three retained after the 2026-09 trim). Stdio wrappers use `command: bash` +
 `args: ["tools/…", …]` because Cursor looks up `command` on `PATH`. The
 `playwright-official` row launches the shell wrapper's `run`, which pins
@@ -149,6 +149,7 @@ auto-load them — then use the Fallback column.
 | **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
 | **js-debugger** | `debugger_*` | Parent-owned source debugging of an existing local Chrome page: breakpoints, pause/step, stack/locals and resume; non-pausing logpoints, exception log, incident screenshot, listener and instance counts. Does not launch a browser (`node tools/mcp/debug-chrome.mjs start` does, as a CLI). Setup: [Agent JS debugger](research/AGENT-JS-DEBUGGER-MCP.md). | `tools/mcp/js-debugger-mcp.sh serve-http`, then `call <debugger_tool> '{…}'` against that persistent session |
 | **apex-lsp** | `lsp_*` | Code intelligence over TypeScript 7's native `tsc --lsp` (jsconfig.json: js/ as one script project), by `Name` / `Head.member` / `G.x` or file:line: `lsp_definition` (`body: true` returns the source), `lsp_references` (rows tagged `[def|export|alias|use]` with the enclosing function; `files`, `offset`, `format: concise`), `lsp_callers` (uses grouped by calling function), `lsp_outline` (a module's exports), `lsp_symbols`, `lsp_hover`, `lsp_diagnostics` (errors an edit introduced vs HEAD). `window.X`, CommonJS-flagged and `G` façade symbols fall back to labelled text matches. Hook `lsp-hint.py` names the call when a grep pattern is a bare symbol. Measured: [LSP-MCP](notes/LSP-MCP-2026-10-18.md); `node tools/mcp/lsp-eval.mjs` re-scores it against grep. | `tools/mcp/lsp-mcp.sh def Liveries.forTeam --body` (`refs`, `callers`, `outline`, `sym`, `hover`, `diag`) |
+| **browserstack** | (upstream names) | Official BrowserStack MCP (`@browserstack/mcp-server`, pinned in the wrapper — never `@latest`): real browsers/devices for Live / Automate / App Automate, accessibility and test management against the live site and builds a local software renderer cannot judge. Outward and metered: sessions spend the account's parallels. The wrapper reads `BROWSERSTACK_USERNAME` / `BROWSERSTACK_ACCESS_KEY` from the environment **only** — no credential lives in any tracked file (Bootstrap §4: secrets in the host secret store). BrowserStack's hosted remote server (`https://mcp.browserstack.com/mcp`, OAuth) is a separate attachment — it is what the claude.ai connector named `mcp.browserstack.com` (`mcp__mcp_browserstack_com__*`) used, not this repo server. | `bash tools/mcp/browserstack-mcp.sh run` (stdio); `bash tools/mcp/browserstack-mcp.sh status` (pin + credential presence, never values) |
 
 **Removed 2026-09 (CLI only now, not MCP-attached):**
 
