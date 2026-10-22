@@ -3131,6 +3131,7 @@
     {
       "path": "tools/shot/webgpu-urban-gallery.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
       "interpreter": "node"
     },
     {
