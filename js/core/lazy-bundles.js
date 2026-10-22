@@ -3,7 +3,7 @@
 const LazyBundles = (function () {
 "use strict";
 function create(deps) {
-const { els, loadBackendScripts } = deps;
+const { els, loadBackendScripts: loadScripts } = deps;
 // LAZY_AGENT. Not SW-optional (V8 full-compiles install puts). Players on
 // github.io skip this; tests and localhost inject.
 const AGENT_FILES = ApexRoster.LAZY_AGENT;
@@ -469,7 +469,7 @@ function audioMark(name) {
 }
 /** Load LAZY_AUDIO one file at a time with a main-thread yield between each
  *  eval. Parallel inject left 19 scripts competing in one LOAF on phones. */
-async function loadAudioSerial() {
+async function loadAudioSerial(skipLeadingYield) {
   const preds = new Map(AUDIO_FILES.map((f) => [f, []]));
   for (const [a, b] of (AUDIO_EDGES || [])) {
     if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
@@ -481,17 +481,28 @@ async function loadAudioSerial() {
     const ready = [...pending].filter((f) => preds.get(f).every((p) => audioScriptsLoaded.has(p)));
     if (!ready.length) {
       // Cycle or missing edge: fall back to the bulk loader for what remains.
-      return loadBackendScripts([...pending], AUDIO_EDGES, { loaded: audioScriptsLoaded, ready: readyFn });
+      return loadScripts([...pending], AUDIO_EDGES, { loaded: audioScriptsLoaded, ready: readyFn });
     }
-    // Extra paint yield while Settings is open so hub taps stay above eval.
-    await audioYieldToMain(hot() ? "paint" : "task");
+    // ensureAudio already paint-yielded; only yield between later chunks (Settings hub).
+    if (!skipLeadingYield) await audioYieldToMain(hot() ? "paint" : "task");
+    skipLeadingYield = false;
     audioMark("apex:audio:chunk");
     const src = ready[0];
     pending.delete(src);
-    const ok = await loadBackendScripts([src], [], { loaded: audioScriptsLoaded, ready: readyFn });
+    const ok = await loadScripts([src], [], { loaded: audioScriptsLoaded, ready: readyFn });
     if (!ok) return false;
   }
   return true;
+}
+/** Routes LAZY_AUDIO through serial chunk loads while Settings is open. */
+async function loadBackendScripts(files, edges, opts) {
+  if (files === AUDIO_FILES && settingsUiHot()) {
+    audioMark("apex:settings:audio-deferred");
+    await audioYieldToMain("paint");
+    await audioYieldToMain("task");
+    return loadAudioSerial(true);
+  }
+  return loadScripts(files, edges, opts);
 }
 function prefetchAudio() {
   // HTTP-cache only — do not evaluate. Evaluating at idle would create no
@@ -566,12 +577,10 @@ function ensureAudio() {
   // paint yields keep the Settings hub interactive instead of one 3–4 s LOAF.
   audioLoad = (async () => {
     await audioYieldToMain("paint");
-    if (settingsUiHot()) {
-      audioMark("apex:settings:audio-deferred");
-      await audioYieldToMain("paint");
-      await audioYieldToMain("task");
-    }
-    const ok = await loadAudioSerial();
+    const ok = await loadBackendScripts(AUDIO_FILES, AUDIO_EDGES, {
+      loaded: audioScriptsLoaded,
+      ready: (src) => { restoreOnEngine(); return audioFileLanded(src); },
+    });
     if (!ok || AUDIO_FILES.some((f) => !audioScriptsLoaded.has(f)) || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
       Log.warn("audio", "the audio bundle did not load — sound stays silent");
       audioLoad = null;
@@ -582,13 +591,6 @@ function ensureAudio() {
     // panel / voice / announcer instances) clears the memo so the next call
     // retries it, instead of latching a rejection.
     await audioYieldToMain("task");
-    // AudioPanel.create mutates #audioset while Settings may be open — yield so
-    // the hub's MutationObservers / ScrollFade settle are not in the same LOAF.
-    if (settingsUiHot()) {
-      audioMark("apex:settings:audio-ready-yield");
-      await audioYieldToMain("paint");
-      await audioYieldToMain("task");
-    }
     if (typeof deps.onAudioReady === "function") try {
       deps.onAudioReady();
     } catch (e) {

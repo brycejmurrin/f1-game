@@ -4513,6 +4513,9 @@
       "loadAgentSurface": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
+      "loadBackendScripts": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "raceAssets": [
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
