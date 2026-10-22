@@ -24,16 +24,17 @@ function ctx2d(calls) {
     globalAlpha: 1, fillStyle: "",
     clearRect: () => { calls.clear++; }, drawImage: () => { calls.draw++; },
     save() {}, restore() {}, translate() {}, rotate: () => { calls.rotate++; },
-    beginPath() {}, arc() {}, fill() {},
+    beginPath() {}, arc() {}, fill() {}, moveTo() {}, bezierCurveTo() {}, closePath() {}, stroke() {},
     createRadialGradient: () => grad, createLinearGradient: () => grad,
   };
 }
 
-function makeDroplets({ mobile = false, preset = "high", staticEl = true } = {}) {
+function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet = false, rainAmount = "normal", runoff = "normal" } = {}) {
   const calls = { clear: 0, draw: 0, rotate: 0 };
   const el = { id: "fx-droplets", hidden: true, width: 0, height: 0, getContext: () => ctx2d(calls), setAttribute() {} };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } } };
   const document = {
+    body: { hasAttribute: () => helmet },
     getElementById: (id) => (id === "fx-droplets" ? (staticEl ? el : null) : id === "game" ? game : null),
     createElement: () => ({ width: 0, height: 0, hidden: false, setAttribute() {}, getContext: () => ctx2d(calls) }),
   };
@@ -41,6 +42,7 @@ function makeDroplets({ mobile = false, preset = "high", staticEl = true } = {})
   const ctx = vm.createContext({
     Math: Object.assign(Object.create(Math), { random: () => rng.unit() }), Float32Array, Object,
     document, window: { innerWidth: 844, innerHeight: 390, devicePixelRatio: 3 },
+    CockpitOpts: { visor: () => "clear", visorRain: () => rainAmount, visorRunoff: () => runoff, visorRefraction: () => "off", visorReflections: () => "light" },
     GLX: { isMobile: mobile }, GfxQuality: { current: () => preset },
   });
   seedLog(ctx);
@@ -126,6 +128,47 @@ test("droplets: DPR capped (phones 1, desktop 1.5) and the canvas tracks the vie
   const dk = makeDroplets();
   dk.D.tick(1 / 60, true, 1, false, 0, false);
   assert.deepEqual([dk.el.width, dk.el.height], [1266, 585], "desktop: DPR capped at 1.5");
+});
+
+test("helmet rain: amount scales accumulation and OFF clears only the optional shield", () => {
+  const light = makeDroplets({helmet:true,rainAmount:"light"}), heavy = makeDroplets({helmet:true,rainAmount:"heavy"});
+  run(light.D, 2, true, 1, false, 0, false); run(heavy.D, 2, true, 1, false, 0, false);
+  assert.ok(heavy.D.stats().n > light.D.stats().n * 2);
+  const off = makeDroplets({helmet:true,rainAmount:"off"}); run(off.D, 2, true, 1, true, 0, false);
+  assert.equal(off.D.stats().n, 0);
+  const other = makeDroplets({rainAmount:"off"}); run(other.D, 2, true, 1, false, 0, false);
+  assert.ok(other.D.stats().n > 0, "other onboard cameras retain their rain");
+});
+
+test("helmet rain: a stopped shower drains gradually; runoff controls retention", () => {
+  const slow = makeDroplets({helmet:true,runoff:"slow"}), fast = makeDroplets({helmet:true,runoff:"fast"});
+  for (const {D} of [slow,fast]) run(D, 1, true, 1, false, 0, false);
+  slow.D.tick(1/60,true,0,false,0,false);
+  assert.ok(slow.D.stats().n > 0, "ending rain does not erase collected water");
+  run(slow.D, 3, true, 0, false, 0, false); run(fast.D, 3, true, 0, false, 0, false);
+  assert.ok(slow.D.stats().n > fast.D.stats().n, "fast runoff clears sooner");
+  run(slow.D, 55, true, 0, false, 0, false);
+  assert.equal(slow.D.stats().n, 0); assert.equal(slow.el.hidden, true);
+});
+
+test("helmet rain: stopped water falls vertically; speed bends it into sideways streaks", () => {
+  let previousSideways = 0;
+  for (const speed of [0, 30, 80]) {
+    const {D} = makeDroplets({helmet:true}); run(D, 0.2, true, 1, false, speed, false);
+    const start = D.stats().first;
+    D.tick(0,true,1,false,speed,false); assert.deepEqual(D.stats().first, start);
+    run(D, 0.2, true, 0, false, speed, false); const end = D.stats().first;
+    if (!speed) { assert.equal(end.x,start.x); assert.ok(end.y>start.y); }
+    else {
+      assert.ok(Math.abs(end.vx)>previousSideways, "lateral airflow increases with speed");
+      if (speed===80) assert.ok(Math.abs(end.vx)>Math.abs(end.vy)*3, "fast streaks are predominantly sideways");
+    }
+    previousSideways=Math.abs(end.vx);
+  }
+  const {D,calls} = makeDroplets({helmet:true,runoff:"fast"});
+  run(D, 0.5, true, 1, false, 80, true); const start = D.stats().first;
+  run(D, 0.2, true, 0, false, 80, true); const end = D.stats().first;
+  assert.equal(end.x,start.x); assert.equal(end.y,start.y); assert.equal(calls.rotate,0);
 });
 
 // ── spray ────────────────────────────────────────────────────────────────────

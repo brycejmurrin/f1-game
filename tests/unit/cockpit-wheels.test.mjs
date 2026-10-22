@@ -88,6 +88,33 @@ test("visor colors and strengths persist independently and preserve legacy smoke
   const shot = loadOpts({}, "?helmetvisor=smoke&visorcolor=amber&visorintensity=strong").opts;
   assert.deepEqual([shot.visor(), shot.visorColor(), shot.visorIntensity()], ["smoke", "amber", "strong"]);
 });
+
+test("visor optics and water choices keep legacy defaults, validate and survive reload", () => {
+  const { opts, store } = loadOpts({ "apex26.helmetVisor": "smoke" });
+  const controls = [
+    ["Refraction", "off", ["off", "light", "medium", "strong"]],
+    ["Reflections", "light", ["light", "off", "medium", "strong"]],
+    ["Rain", "normal", ["normal", "off", "light", "heavy"]],
+    ["Runoff", "normal", ["normal", "slow", "fast"]],
+  ];
+  for (const [suffix, defaultValue, values] of controls) {
+    const get = "visor" + suffix, set = "setVisor" + suffix, key = "apex26.helmetVisor" + suffix;
+    assert.equal(opts[get](), defaultValue);
+    for (const value of values) {
+      opts[set](value);
+      assert.equal(store.get(key), value);
+      assert.equal(loadOpts(Object.fromEntries(store)).opts[get](), value);
+      assert.equal(loadOpts({}, "?visor" + suffix.toLowerCase() + "=" + value).opts[get](), value);
+    }
+    opts.setVisor("off"); opts.setVisor("smoke");
+    assert.equal(opts[get](), values[values.length - 1], "disabling the shield preserves its choices");
+    opts[set]("invalid");
+    assert.equal(opts[get](), defaultValue);
+    assert.equal(loadOpts({ [key]: "invalid" }).opts[get](), defaultValue);
+    assert.equal(loadOpts({ [key]: values[values.length - 1] }, "?visor" + suffix.toLowerCase() + "=" + defaultValue).opts[get](), defaultValue,
+      "a capture query overrides a saved preference without rewriting it");
+  }
+});
 const LIV = { c1: [0.8, 0.1, 0.1], c2: [0.9, 0.9, 0.9], accent: [1, 0.8, 0] };
 
 function bounds(d) {

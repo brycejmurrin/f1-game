@@ -3,37 +3,74 @@
  * #game-soft (z-index 2, css/overlays.css) and below the HUD, so GLX, TLX and WGX all get the same water and
  * no backend pays a pass for it. game.js calls tick() once per rendered frame; everything else is here.
  *
- * Look, after the MotoGP lens drops (Shawn Hargreaves, "raindrops keep falling on my lens",
- * https://www.shawnhargreaves.com/blog/motogp-raindrops-keep-falling-on-my-lens.html): each drop is a
- * tiny lens that shows a flipped, blurred copy of the scene behind it. That game sampled a downscaled
- * copy of the frame; a 2D overlay cannot read a WebGL back buffer cheaply, so the refraction is FAKED
- * the way the SDF rain-on-glass shaders shade it (https://godotshaders.com/shader/rain-on-glass/): a
- * darker centre, a bright rim, a sky-bright lower half (the flipped sky) and one specular glint. One
- * sprite is painted once and stamped per drop with drawImage (no per-drop gradients: phones stay cheap).
+ * Water uses a cached atlas of three asymmetric, translucent menisci rather than bright rings.
+ * This is illustrative water shading, not scene-sampled droplet refraction. Shield edge bending
+ * uses the separate SVG displacement map below. No per-drop gradients or WebGL back-buffer reads.
  *
- * Motion: at speed the airflow pushes drops UP and OUT from the screen centre, bigger drops first
- * (they stick less), and stretches them into short streaks; parked, they sag slowly down. Under
- * REDUCED MOTION drops never move or stretch — fewer of them fade in and out where they landed.
- * Off: GRAPHICS LOW, any non-onboard camera, photo mode, and anything below falling rain (the
- * drizzle tier only wets the road). Visual only — Math.random is fine, nothing here touches the sim. */
+ * Helmet motion balances gravity, adhesion and speed-squared airflow: stationary beads fall straight
+ * down; air flowing around the curved visor carries them sideways as speed rises. Large beads release
+ * more readily. Reduced motion keeps fewer stationary beads with fading only. GRAPHICS LOW, non-onboard
+ * cameras and photo mode disable water; collected helmet water drains after the rain stops.
+ * Visual only — nothing here changes the racing simulation. */
 const Droplets = (function () {
   "use strict";
 
   const CAP_PHONE = 40, CAP_DESK = 90;   // live drops
   const RAIN_MIN = 0.5;                  // frame.rain: 1 raining, 0.35 drizzle tier, 0 dry (game.js ramp)
   const RATE_RAIN = 18, RATE_STORM = 34; // drops/s at full rain (storm is the heavier tier)
-  const STRETCH_MAX = 3.2;               // streak length / width at full airflow
+  const STRETCH_MAX = 7;               // maximum length multiplier under strong airflow
   const DPR_MAX_DESK = 1.5, DPR_MAX_PHONE = 1;
 
   let _cv = null, _ctx = null, _sprite = null, _looked = false;
   let _w = 0, _h = 0, _dpr = 1, _shown = false, _mobile = null;
-  let _n = 0, _acc = 0;
+  let _n = 0, _acc = 0, _opticsReady = false, _spriteReflection = 1;
   // Struct-of-arrays, sized for the desktop cap once.
   const _x = new Float32Array(CAP_DESK), _y = new Float32Array(CAP_DESK);    // 0..1 of the viewport
   const _r = new Float32Array(CAP_DESK);                                       // radius, fraction of min(w, h)
   const _age = new Float32Array(CAP_DESK), _life = new Float32Array(CAP_DESK);
   const _vx = new Float32Array(CAP_DESK), _vy = new Float32Array(CAP_DESK);    // viewport fractions / s
-  const _a = new Float32Array(CAP_DESK);
+  const _a = new Float32Array(CAP_DESK), _variant = new Uint8Array(CAP_DESK);
+
+  // A fixed displacement map bends the live scene at the shield edges. No HUD
+  // filtering or per-frame back-buffer read. SVG displacement uses sRGB channels:
+  // https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Element/feDisplacementMap
+  function _optics() {
+    if (_opticsReady || typeof document === "undefined" || !document.createElementNS) return;
+    const map = document.createElement("canvas"); map.width = map.height = 128;
+    const g = map.getContext("2d");
+    if (!g || !g.createImageData) return;
+    const pixels = g.createImageData(128, 128);
+    for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+      const dx = (x - 63.5) / 64, dy = (y - 63.5) / 64;
+      const edge = Math.min(1, Math.pow(Math.hypot(dx, dy) / 1.4, 3));
+      const i = (y * 128 + x) * 4;
+      pixels.data[i] = 128 + dx * edge * 90;
+      pixels.data[i + 1] = 128 + dy * edge * 90;
+      pixels.data[i + 2] = 128; pixels.data[i + 3] = 255;
+    }
+    g.putImageData(pixels, 0, 0);
+    const uri = map.toDataURL(), ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("width", "0"); svg.setAttribute("height", "0");
+    svg.setAttribute("aria-hidden", "true"); svg.style.position = "absolute";
+    for (const [level, scale] of [["light", 12], ["medium", 26], ["strong", 46]]) {
+      const filter = document.createElementNS(ns, "filter");
+      filter.id = "visor-bend-" + level;
+      for (const [key, value] of Object.entries({x:0,y:0,width:1,height:1,"color-interpolation-filters":"sRGB"})) filter.setAttribute(key, value);
+      const image = document.createElementNS(ns, "feImage");
+      image.setAttribute("href", uri); image.setAttribute("width", "100%"); image.setAttribute("height", "100%");
+      image.setAttribute("preserveAspectRatio", "none"); image.setAttribute("result", "lens");
+      const bend = document.createElementNS(ns, "feDisplacementMap");
+      for (const [key, value] of Object.entries({in:"SourceGraphic",in2:"lens",scale,xChannelSelector:"R",yChannelSelector:"G"})) bend.setAttribute(key, value);
+      filter.appendChild(image); filter.appendChild(bend); svg.appendChild(filter);
+    }
+    document.body.appendChild(svg); _opticsReady = true;
+  }
+
+  function _helmet() {
+    return typeof CockpitOpts !== "undefined" && typeof document !== "undefined"
+      && document.body && document.body.hasAttribute("data-helmet-cam") && CockpitOpts.visor() !== "off";
+  }
 
   function _mob() {
     if (_mobile === null) {
@@ -75,30 +112,40 @@ const Droplets = (function () {
     }
     _ctx = _cv && _cv.getContext ? _cv.getContext("2d") : null;
     if (!_ctx) { _cv = null; return null; }
-    _sprite = _paintSprite();
+    _sprite = _paintSprite(_spriteReflection);
     Log.info("game", "Droplets: lens overlay ready" + (_sprite ? "" : " (no sprite: arc fallback)"));
     return _cv;
   }
 
-  // The one drop: 64 px, painted once. Dark core, bright rim, light lower half, glint up-left.
-  function _paintSprite() {
+  // Three noncircular menisci. The interior stays transparent; only a thin,
+  // incomplete edge catches light. The atlas is rebuilt only on a settings change.
+  function _paintSprite(reflection = 1) {
     if (typeof document === "undefined" || !document.createElement) return null;
     const s = document.createElement("canvas");
     if (!s || !s.getContext) return null;
-    s.width = s.height = 64;
+    s.width = 192; s.height = 64;
     const g = s.getContext("2d");
-    if (!g || !g.createRadialGradient) return null;
-    const body = g.createRadialGradient(32, 30, 4, 32, 32, 31);
-    body.addColorStop(0, "rgba(20,26,34,0.30)");      // the darker centre: the refracted road
-    body.addColorStop(0.62, "rgba(70,82,96,0.22)");
-    body.addColorStop(0.86, "rgba(235,242,250,0.55)"); // the bright rim
-    body.addColorStop(1, "rgba(235,242,250,0)");       // soft edge
-    g.fillStyle = body; g.beginPath(); g.arc(32, 32, 31, 0, Math.PI * 2); g.fill();
-    const sky = g.createLinearGradient(0, 30, 0, 60);   // the flipped sky in the lower half
-    sky.addColorStop(0, "rgba(200,215,230,0)"); sky.addColorStop(1, "rgba(200,215,230,0.28)");
-    g.fillStyle = sky; g.beginPath(); g.arc(32, 32, 24, 0, Math.PI); g.fill();
-    g.fillStyle = "rgba(255,255,255,0.75)";            // specular glint
-    g.beginPath(); g.arc(24, 22, 4.5, 0, Math.PI * 2); g.fill();
+    if (!g || !g.createLinearGradient) return null;
+    for (let v = 0; v < 3; v++) {
+      g.save(); g.translate(v * 64, 0);
+      const edge = g.createLinearGradient(10, 8, 48, 58);
+      edge.addColorStop(0, "rgba(210,222,232," + 0.28 * reflection + ")");
+      edge.addColorStop(0.28, "rgba(160,180,198,0)");
+      edge.addColorStop(0.72, "rgba(8,15,23,0.32)");
+      edge.addColorStop(1, "rgba(196,211,224," + 0.16 * reflection + ")");
+      g.beginPath(); g.moveTo(29, 9 + v * 2);
+      g.bezierCurveTo(13 - v, 10, 12, 29, 16 + v, 42);
+      g.bezierCurveTo(20, 58, 44, 59 - v, 48, 43);
+      g.bezierCurveTo(55, 25, 44 - v * 2, 7, 29, 9 + v * 2);
+      g.closePath();
+      g.fillStyle = "rgba(10,18,26,0.045)"; g.fill();
+      g.strokeStyle = edge; g.lineWidth = 3.5; g.stroke();
+      // A narrow, soft crescent, not a white circular specular dot.
+      g.beginPath(); g.moveTo(21, 16 + v);
+      g.bezierCurveTo(17, 21, 16, 25, 17, 30);
+      g.strokeStyle = "rgba(222,232,240," + 0.25 * reflection + ")";
+      g.lineWidth = 2.5; g.stroke(); g.restore();
+    }
     return s;
   }
 
@@ -109,6 +156,7 @@ const Droplets = (function () {
     if (w === _w && h === _h && dpr === _dpr) return;
     _w = w; _h = h; _dpr = dpr;
     _cv.width = w; _cv.height = h;
+    return true;
   }
 
   function _show(on) {
@@ -118,40 +166,46 @@ const Droplets = (function () {
     if (!on) { _n = 0; _acc = 0; if (_ctx && _w) _ctx.clearRect(0, 0, _w, _h); }
   }
 
-  function _spawn(reduced) {
+  function _spawn(reduced, helmet) {
     const i = _n++;
     _x[i] = 0.04 + Math.random() * 0.92;
     _y[i] = 0.04 + Math.random() * 0.80;   // not the very bottom: the cockpit/HUD sits there
-    _r[i] = 0.006 + Math.random() * Math.random() * 0.020;
+    _r[i] = 0.0025 + Math.random() * Math.random() * 0.009;
+    _variant[i] = Math.floor(Math.random() * 3);
     _age[i] = 0;
-    _life[i] = reduced ? 1.8 + Math.random() * 1.6 : 2.5 + Math.random() * 3.5;
+    _life[i] = reduced ? 1.8 + Math.random() * 1.6 : helmet ? 12 + Math.random() * 10 : 2.5 + Math.random() * 3.5;
     _vx[i] = _vy[i] = 0;
-    _a[i] = 0.55 + Math.random() * 0.45;
+    _a[i] = 0.55 + Math.random() * 0.35;
   }
 
   function _kill(i) {
     const l = --_n;
     if (i === l) return;
     _x[i] = _x[l]; _y[i] = _y[l]; _r[i] = _r[l]; _age[i] = _age[l]; _life[i] = _life[l];
-    _vx[i] = _vx[l]; _vy[i] = _vy[l]; _a[i] = _a[l];
+    _vx[i] = _vx[l]; _vy[i] = _vy[l]; _a[i] = _a[l]; _variant[i] = _variant[l];
   }
 
-  // Airflow at standard speed vs (m/s, vStd): 0 parked → 1 by ~70 m/s.
-  function _air(vs) { return Math.max(0, Math.min(1, (vs - 8) / 62)); }
+  // Relative aerodynamic pressure at standard speed vs (m/s, vStd): proportional to v², capped at 75 m/s.
+  function _air(vs) { const v = Math.max(0, Math.min(1, vs / 75)); return v * v; }
 
-  function _step(dt, vs, reduced) {
+  function _step(dt, vs, reduced, runoff, helmet, rain) {
     const air = reduced ? 0 : _air(vs);
     for (let i = 0; i < _n; ) {
-      _age[i] += dt;
+      _age[i] += dt * runoff;
       // Blown off faster at speed: a drop's life burns 1 + 2·air times as fast.
-      if (!reduced) _age[i] += dt * 2 * air;
+      if (!reduced) _age[i] += dt * 2 * air * runoff;
       if (_age[i] >= _life[i]) { _kill(i); continue; }
       if (!reduced) {
-        // Bigger drops break away first; the flow fans out from the screen centre, up and sideways.
-        const stick = Math.min(1, _r[i] / 0.02);
-        const push = air * (0.25 + 0.75 * stick);
-        const tx = (_x[i] - 0.5) * 1.4 * push, ty = -0.9 * push + (1 - air) * 0.015 * stick;   // parked: a slow sag
-        const k = Math.min(1, dt * 6);
+        // Surface tension pins small beads more strongly than large beads.
+        // Gravity and aerodynamic pressure compete; pressure scales with v².
+        const release = Math.min(1, _r[i] / 0.010);
+        if (helmet && rain >= RAIN_MIN) _r[i] = Math.min(0.016, _r[i] + dt * rain * 0.00035);
+        const push = air * (0.18 + 0.82 * release) * runoff;
+        const tx = (_x[i] - 0.5) * 2.8 * push;
+        const ty = helmet ? ((0.025 + 0.085 * release) * (1 - 0.8 * air) - 0.035 * air) * runoff
+          : -0.9 * push + (1 - air) * 0.015 * release;
+        // Exponential damping keeps the motion stable across frame rates.
+        const k = 1 - Math.exp(-dt * 7);
         _vx[i] += (tx - _vx[i]) * k; _vy[i] += (ty - _vy[i]) * k;
         _x[i] += _vx[i] * dt; _y[i] += _vy[i] * dt;
         if (_x[i] < -0.05 || _x[i] > 1.05 || _y[i] < -0.05 || _y[i] > 1.05) { _kill(i); continue; }
@@ -167,21 +221,23 @@ const Droplets = (function () {
     for (let i = 0; i < _n; i++) {
       const t = _age[i] / _life[i];
       // Fade in fast, out slow (the reduced path's whole motion is this envelope).
-      const env = Math.min(1, t * (reduced ? 4 : 12)) * Math.min(1, (1 - t) * (reduced ? 3 : 4));
+      const env = reduced ? Math.min(1, t * 4) * Math.min(1, (1 - t) * 3)
+        : Math.min(1, _age[i] / 0.07) * Math.min(1, (_life[i] - _age[i]) / 0.7);
       const a = _a[i] * env;
       if (a <= 0.01) continue;
       const rad = _r[i] * m, cx = _x[i] * _w, cy = _y[i] * _h;
       const sp = Math.hypot(_vx[i], _vy[i]);
-      const st = reduced ? 1 : Math.min(STRETCH_MAX, 1 + sp * 4);
+      const st = reduced ? 1 : Math.min(STRETCH_MAX, 1 + sp * 11);
+      const narrow = rad / Math.sqrt(st);
       g.globalAlpha = a;
       if (_sprite) {
         if (st > 1.05) {
-          g.save(); g.translate(cx, cy); g.rotate(Math.atan2(_vy[i], _vx[i]) + Math.PI / 2);
-          g.drawImage(_sprite, -rad, -rad * st, rad * 2, rad * 2 * st);
+          g.save(); g.translate(cx, cy); g.rotate(Math.atan2(_vy[i] * _h, _vx[i] * _w) - Math.PI / 2);
+          g.drawImage(_sprite, _variant[i] * 64, 0, 64, 64, -narrow, -rad * st, narrow * 2, rad * 2 * st);
           g.restore();
-        } else g.drawImage(_sprite, cx - rad, cy - rad, rad * 2, rad * 2);
+        } else g.drawImage(_sprite, _variant[i] * 64, 0, 64, 64, cx - rad, cy - rad, rad * 2, rad * 2);
       } else {
-        g.fillStyle = "rgba(220,230,240,0.35)";
+        g.fillStyle = "rgba(160,178,194,0.09)";
         g.beginPath(); g.arc(cx, cy, rad, 0, Math.PI * 2); g.fill();
       }
     }
@@ -192,23 +248,32 @@ const Droplets = (function () {
    *  storm: the heavier tier. vs: the viewed car's vStd speed (m/s). reduced: prefers-reduced-motion.
    *  dt 0 (paused) freezes the drops in place. */
   function tick(dt, on, rain, storm, vs, reduced) {
-    if (!(on && !_low() && rain >= RAIN_MIN * 0.5)) { _show(false); return; }   // a fading shower keeps its drops
+    const helmet = _helmet();
+    if (helmet && CockpitOpts.visorRefraction() !== "off") _optics();
+    const amount = helmet ? CockpitOpts.visorRain() : "normal";
+    const runoff = helmet ? (CockpitOpts.visorRunoff() === "slow" ? 0.45 : CockpitOpts.visorRunoff() === "fast" ? 2.1 : 1) : 1;
+    if (!(on && !_low() && amount !== "off" && (rain >= RAIN_MIN * 0.5 || (helmet && _n > 0)))) { _show(false); return; }
     if (!_lookup()) return;
     _show(true);
-    _resize();
-    if (!(dt > 0)) return;   // paused: the last frame stays on the glass
+    const resized = _resize();
+    const reflection = helmet ? CockpitOpts.visorReflections() : "light";
+    const strength = reflection === "off" ? 0 : reflection === "medium" ? 1.4 : reflection === "strong" ? 1.8 : 1;
+    const changed = strength !== _spriteReflection;
+    if (changed) { _spriteReflection = strength; _sprite = _paintSprite(strength); }
+    if (!(dt > 0)) { if (resized || changed) _draw(!!reduced); return; }   // paused: the last frame stays on the glass
     if (dt > 0.1) dt = 0.1;
-    _step(dt, vs || 0, !!reduced);
+    _step(dt, vs || 0, !!reduced, runoff, helmet, rain);
     const c = cap(_mob(), !!reduced);
-    _acc += rate(rain, storm, !!reduced) * dt;
-    while (_acc >= 1) { _acc -= 1; if (_n < c) _spawn(!!reduced); }
+    _acc += rate(rain, storm, !!reduced) * dt * (amount === "light" ? 0.4 : amount === "heavy" ? 1.8 : 1);
+    while (_acc >= 1) { _acc -= 1; if (_n < c) _spawn(!!reduced, helmet); }
     _draw(!!reduced);
+    if (!_n && rain < RAIN_MIN * 0.5) _show(false);
   }
 
   function clear() { _show(false); }
-  function stats() { return { n: _n, shown: _shown, cap: cap(_mob(), false), w: _w, h: _h }; }
+  function stats() { return { n: _n, shown: _shown, cap: cap(_mob(), false), w: _w, h: _h, first: _n ? { x: _x[0], y: _y[0], radius: _r[0], age: _age[0], vx: _vx[0], vy: _vy[0] } : null }; }
   /** Tests: forget the cached canvas / device class (a new stub DOM). */
-  function _reset() { _looked = false; _cv = _ctx = _sprite = null; _mobile = null; _n = 0; _acc = 0; _shown = false; _w = _h = 0; }
+  function _reset() { _looked = false; _opticsReady = false; _spriteReflection = 1; _cv = _ctx = _sprite = null; _mobile = null; _n = 0; _acc = 0; _shown = false; _w = _h = 0; }
 
   return { tick, clear, stats, rate, cap, RAIN_MIN, _reset };
 })();

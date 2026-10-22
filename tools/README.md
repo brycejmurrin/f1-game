@@ -294,6 +294,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/shot-survey.mjs** | Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON. | survey-track |
 | **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
+| **shot/visor-lab-export.mjs** | Copy the committed Visor Lab authoring files and the game's visor runtime into an existing Site checkout. | — |
 
 ### `tools/perf/`
 
