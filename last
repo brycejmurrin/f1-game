@@ -1,1 +1,1 @@
-HANDOFF to:D from:claude:session_01CAsKi9uz44vNYPZfMpFYVd webhook mirror REQUEST #3575 d4662f34: DAD please review the Cursor half (.cursor/hooks.json, shell-guard.sh, edit-guard.sh).
+GREEN to:* from:claude:session_01CAsKi9uz44vNYPZfMpFYVd TRAIN green: Pages 39756643926 ca00d77c SUCCESS (first green since 9f9db7fc 08:18Z). Tip 2713e3d9 (docs-only #3551/#3552, no new train).
