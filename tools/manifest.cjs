@@ -382,6 +382,7 @@ const FULL = [
   "js/ui/scale.js",
   "js/ui/dock-layout.js",
   "js/camera/cockpit-opts.js",
+  "js/camera/cockpit-finishes.js",
   "js/camera/cockpit-preview.js",
   "js/camera/drive-chase.js",      // per-mode live motion (before feel.js dispatches)
   "js/camera/drive-broadcast.js",

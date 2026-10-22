@@ -1590,7 +1590,7 @@ var PitLane = (function () {
 
     /** The player's plan, read for the HUD: the stops, the next box lap and
      *  how the race stands against it. Pure of the DOM; hud.js paints it. */
-    function planInfo(c) {
+    function planInfo(c, readouts) {
       const plan = c && c.pitPlan;
       if (!plan || !enabled()) return null;
       const done = c.pitStops || 0, lap = c.lap || 0, stops = plan.stops || 0;
@@ -1600,7 +1600,14 @@ var PitLane = (function () {
       if (next == null) return { text: "PLAN " + label + (stops ? " · DONE" : ""), state: "", stops, next: null, lapsToStop: null, code };
       const lapsToStop = next - lap;
       const caution = G.cautionInfo ? G.cautionInfo() : null;
-      const est = caution && caution.level >= 2 && caution.level < 4 ? estimate(c) : null;
+      let est = null;
+      if (caution && caution.level >= 2 && caution.level < 4) {
+        // Optional synchronous HUD-tick reads; null is a computed result.
+        if (readouts && readouts.player === c) {
+          if (readouts.estimate === undefined) readouts.estimate = estimate(c);
+          est = readouts.estimate;
+        } else est = estimate(c);
+      }
       const busy = !!c.pitArmed || (c.pitState && c.pitState !== "none");
       let state = "", text = "PLAN " + label + " · BOX L" + next + (code ? " " + code : "");
       if (busy) state = "";

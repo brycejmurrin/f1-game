@@ -103,7 +103,8 @@ const CSP_DIRECTIVES = (scriptHashes) => [
   //   room-code Worker on http://localhost.
   "connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*",
   "worker-src 'self' blob:",
-  "frame-src https://sdk.scdn.co",
+  // The isolated cockpit preview is a same-site frame.
+  "frame-src 'self' https://sdk.scdn.co",
   "manifest-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",

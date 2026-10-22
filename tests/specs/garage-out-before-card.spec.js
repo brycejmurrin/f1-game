@@ -111,6 +111,22 @@ async function startRaceFromSettings(page) {
   });
   await armTimeline(page);
   await clickId(page, "rs-go");
+  // Regression (Pages 39710316089 oversize-garage-out-before-card-2of2 DAILY): introBuild
+  // used to sheetRelease without garage when a picker buildKey (tier chunk bit) mismatched —
+  // START re-enabled on the open sheet, timeline never left menu. Fail fast on that signature.
+  const gate = await page.waitForFunction(() => {
+    const go = document.getElementById("rs-go");
+    const L = document.getElementById("loading");
+    const phase = (L && L.dataset.phase) || "";
+    const cam = window.__apex && window.__apex.garageCam && window.__apex.garageCam();
+    const text = (go && go.textContent) || "";
+    if (go && go.disabled && text.startsWith("PREPARING")) return "prep";
+    if (phase === "garage" || (cam && cam.on)) return "garage";
+    if (["run", "card", "build", "busy", "handoff"].includes(phase) && L && !L.hidden) return "card";
+    if (go && !go.disabled && /START/i.test(text) && !text.startsWith("PREPARING")) return "silent-release";
+    return false;
+  }, null, { polling: 50, timeout: 60_000 });
+  expect(await gate.jsonValue(), "rs-go must enter PREPARING/garage, not silent sheetRelease").not.toBe("silent-release");
   return awaitGarageThenCard(page);
 }
 

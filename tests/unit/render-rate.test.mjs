@@ -120,9 +120,15 @@ test("physics is untouched: the fixed-step loop runs before the gate and the gat
   const g = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const body = g.slice(g.indexOf("function tickBody("));
   const step = body.indexOf("update(PHYS_DT)");
-  const gate = body.indexOf("RenderRate.gate(");
-  assert.ok(step > 0 && gate > step, "update(PHYS_DT) precedes RenderRate.gate in tickBody");
-  assert.equal(g.split("RenderRate.gate(").length - 1, 1, "exactly one gate site");
+  const paused = body.indexOf("if ((paused || UiExperience.resumeHolding(dt)) && !netPlay.active())");
+  const pausedEnd = body.indexOf("  replayBuf.onTick(", paused);
+  const pausedGate = body.indexOf("RenderRate.gate(");
+  const gate = body.indexOf("RenderRate.gate(", pausedGate + 1);
+  assert.ok(paused >= 0 && pausedGate > paused && pausedGate < pausedEnd && pausedEnd < step,
+    "the early gate is isolated inside the solo paused branch, which returns before physics");
+  assert.match(body.slice(pausedGate, pausedEnd), /return;[^\n]*\n  }/);
+  assert.ok(step > 0 && gate > step, "update(PHYS_DT) precedes the racing render gate");
+  assert.equal(g.split("RenderRate.gate(").length - 1, 2, "only paused Settings and racing render gates");
   const block = body.slice(gate, body.indexOf("\n}\n", gate));
   assert.ok(!/update\(|physAcc|stepPhys/.test(block), "gated block holds no physics");
   assert.match(block, /render\(/);
@@ -137,4 +143,20 @@ test("drew() reports the last gate verdict (PerfGov.tick judges only intervals t
   assert.ok(seen.every(Boolean));
   const off = load({ mobile: true, store: { "apex26.renderRate": "off" } });
   for (let i = 0; i < 20; i++) { off.observe(8.33); off.gate(0.00833, 8.33, false, true); assert.equal(off.drew(), true); }
+});
+
+
+test("force draws a live preview, flushes skipped time and restarts half-frame phase", () => {
+  const R = load({ mobile: true, store: { "apex26.renderRate": "half" } });
+  assert.equal(R.gate(1 / 60, 1000 / 60, false, true), false);
+  assert.equal(R.drew(), false);
+  assert.equal(R.force(1 / 60, 1000 / 60), true);
+  assert.equal(R.drew(), true);
+  assert.equal(R.dt(), 2 / 60); assert.equal(R.ms(), 2000 / 60);
+  R.force(1 / 60, 1000 / 60);
+  assert.equal(R.dt(), 1 / 60); assert.equal(R.ms(), 1000 / 60);
+  assert.equal(R.gate(1 / 60, 1000 / 60, false, true), false, "preview reset the half-frame phase");
+  assert.equal(R.gate(1 / 60, 1000 / 60, false, true), true);
+  assert.equal(R.dt(), 2 / 60); assert.equal(R.ms(), 2000 / 60);
+  assert.equal(R.state().drawn, 3); assert.equal(R.state().skipped, 2);
 });

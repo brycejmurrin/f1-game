@@ -1285,6 +1285,20 @@
         "tests/unit/load-order.test.mjs"
       ]
     },
+    "js/camera/cockpit-finishes.js": {
+      "onChange": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
+      ],
+      "stamp": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
+      ],
+      "view": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
+      ],
+      "*": [
+        "tests/unit/cockpit-preview.test.mjs"
+      ]
+    },
     "js/camera/cockpit-opts.js": {
       "body": [
         "tests/unit/cockpit-wheels.test.mjs"
@@ -2289,6 +2303,9 @@
         "tests/unit/car-draw-decal-sweep.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
+      "freeBodyPair": [
+        "tests/unit/car-presentation-vm.test.mjs"
+      ],
       "getCarDecalTexture": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-draw-decal-sweep.test.mjs"
@@ -2307,6 +2324,9 @@
         "tests/unit/car-draw-decal-budget.test.mjs"
       ],
       "menuStepYield": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "mirrorWarmPolicy": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "planPhotoAtlases": [
@@ -2360,7 +2380,8 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
-        "tests/unit/livery-wheels.test.mjs"
+        "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/car/car-geometry.js": {
@@ -2412,6 +2433,8 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/cockpit-preview.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
@@ -4455,6 +4478,9 @@
       "ensureDataHub": [
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs"
+      ],
+      "ensureLightPresets": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "ensureNet": [
@@ -6606,6 +6632,7 @@
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/start-race-latch.test.mjs"
       ],
@@ -6651,6 +6678,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -9502,6 +9530,9 @@
       "active": [
         "tests/unit/render-rate.test.mjs"
       ],
+      "force": [
+        "tests/unit/render-rate.test.mjs"
+      ],
       "gate": [
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/render-rate.test.mjs",
@@ -9511,6 +9542,7 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/render-rate.test.mjs",
+        "tests/unit/results-cam.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "observe": [
@@ -10140,12 +10172,18 @@
       "body": [
         "tests/unit/contact-geometry.test.mjs"
       ],
+      "bodyAngle": [
+        "tests/unit/collision-contact-vm.test.mjs"
+      ],
       "create": [
         "tests/specs/physics-hotpath.spec.js",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
+      ],
+      "extentAngle": [
+        "tests/unit/collision-contact-vm.test.mjs"
       ],
       "fillArcBuckets": [
         "tests/specs/physics-hotpath.spec.js",
@@ -10161,6 +10199,7 @@
       ],
       "pairContact": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ],
@@ -12144,6 +12183,7 @@
         "tests/unit/sporting-regs.test.mjs"
       ],
       "tick": [
+        "tests/unit/pit-lane.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ]
     },
@@ -12825,10 +12865,12 @@
       ],
       "state": [
         "tests/unit/assets-pack.test.mjs",
+        "tests/unit/pack-png-bytes.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
       "unload": [
-        "tests/unit/assets-pack.test.mjs"
+        "tests/unit/assets-pack.test.mjs",
+        "tests/unit/pack-png-bytes.test.mjs"
       ],
       "*": [
         "tests/unit/baked-model-road-guard.test.mjs",
@@ -13019,6 +13061,9 @@
       "pose": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "prepareRace": [
+        "tests/unit/mirror-pass.test.mjs"
+      ],
       "render": [
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13029,6 +13074,9 @@
       ],
       "softGpu": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "standDown": [
+        "tests/unit/mirror-pass.test.mjs"
       ],
       "toggle": [
         "tests/unit/field-lod.test.mjs"
@@ -15236,7 +15284,8 @@
       ],
       "push": [
         "tests/unit/hud-readouts.test.mjs",
-        "tests/unit/hud-relative.test.mjs"
+        "tests/unit/hud-relative.test.mjs",
+        "tests/unit/hud-speed-parity.test.mjs"
       ],
       "reset": [
         "tests/unit/hud-readouts.test.mjs"
@@ -15313,6 +15362,9 @@
       "behindThreat": [
         "tests/unit/hud-strategy.test.mjs"
       ],
+      "build": [
+        "tests/unit/pit-lane.test.mjs"
+      ],
       "fmtLaps": [
         "tests/unit/hud-strategy.test.mjs"
       ],
@@ -15326,7 +15378,8 @@
         "tests/unit/hud-strategy.test.mjs"
       ],
       "tick": [
-        "tests/unit/hud-strategy.test.mjs"
+        "tests/unit/hud-strategy.test.mjs",
+        "tests/unit/pit-lane.test.mjs"
       ],
       "tyresShort": [
         "tests/unit/hud-strategy.test.mjs"
@@ -15411,7 +15464,8 @@
         "tests/unit/hud-feel.test.mjs"
       ],
       "paintInstruments": [
-        "tests/unit/hud-metrics-layout.test.mjs"
+        "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/hud-speed-parity.test.mjs"
       ],
       "phoneFitStampSync": [
         "tests/unit/hud-control-clearance.test.mjs",
@@ -15452,7 +15506,6 @@
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
-        "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/node-plan.test.mjs",

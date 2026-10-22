@@ -205,3 +205,38 @@ test("a quiet 22-car sweep does not repeat each car's movement check for every p
   // this workload to 484. Leave room for equivalent faster implementations.
   assert.ok(calls<=300,`quiet sweep repeated movement work: ${calls} hypot calls`);
 });
+
+test("SAT reuses body trigonometry without changing axis construction",()=>{
+  let calls=0;
+  const math=Object.create(Math);
+  for(const name of ["sin","cos"])math[name]=x=>{calls++;return Math[name](x);};
+  const {geometry}=setup({math});
+  calls=0;
+  const overlap=geometry.overlap(0,0,.3,-.4);
+  assert.ok(overlap&&overlap.depth>0);
+  assert.ok(calls<=12,`four SAT axes repeated body trigonometry: ${calls}`);
+  calls=0;
+  const swept=geometry.sweep(-9,0,9,0,0,0);
+  assert.ok(swept);close(swept.time,(9-4.8)/18);
+  assert.ok(calls<=12,`four swept axes repeated body trigonometry: ${calls}`);
+});
+
+test("pair extents share trig while preserving nonfinite yaw semantics",()=>{
+  let calls=0;
+  const math=Object.create(Math);
+  for(const name of ["sin","cos"])math[name]=x=>{calls++;return Math[name](x);};
+  const {collision}=setup({math});
+  collision.resolveCollisions([],1/60);
+  const a=car(0,30),b=car(1,20,.5);
+  a.human=true;a.yawVis=-0;
+  calls=0;
+  const contact=collision.pairContact(a,b);
+  assert.ok(contact);assert.equal(contact.penLong,4.8-1);assert.equal(contact.penLat,2-.5);
+  assert.ok(calls<=4,`pair repeated extent trigonometry: ${calls}`);
+  // Extents intentionally use yawVis || 0; bodyAngle separately rejects
+  // infinity. Reusing bodyAngle here would silently change this contract.
+  a.yawVis=Infinity;
+  const nonfinite=collision.pairContact(a,b);
+  assert.ok(nonfinite);assert.ok(Number.isNaN(nonfinite.penLong));assert.ok(Number.isNaN(nonfinite.penLat));
+  assert.equal(nonfinite.oriented,false);
+});

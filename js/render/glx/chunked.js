@@ -329,78 +329,89 @@ const GLXChunked = (function () {
       const buckets = ChunkBins.bin(pos, srcIdx, cell);   // centroid cells keyed by ChunkBins.key: the cross-backend chunk identity
       pos = null;
       if (!data._keepPositions) { data.pos = null; data.idx = null; }
-      const vao = gl.createVertexArray();
-      gl.bindVertexArray(vao);
-      const vbo = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-      gl.bufferData(gl.ARRAY_BUFFER, interleaved, gl.STATIC_DRAW);
-      interleaved = null;   // uploaded to the VBO — drop the CPU copy
-      VertexPack.bindAttribs(gl, hasTrk);
-      const IndexArray = big ? Uint32Array : Uint16Array;
-      const indexType = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
-      const BPI = big ? 4 : 2;                 // bytes per index
-      // ONE index buffer for the whole mesh. A chunk is a (byteOffset, count)
-      // RANGE into it rather than a buffer of its own, which is what lets the
-      // draw loops below merge adjacent visible chunks into a single
-      // drawElements — the chunked scenery is otherwise the largest draw-call
-      // block in the frame (measured over 12 stations a lap against the real
-      // camera frustum: 146.9 visible chunks on spa, 100.9 on vegas, 79.3 on
-      // monza, plus 36.8 for vegas glass, each one its own draw AND its own
-      // ELEMENT_ARRAY_BUFFER bind).
-      //
-      // Nothing has to be rebased: bucket indices are already ABSOLUTE into the
-      // shared VBO (ChunkBins.bin pushes raw srcIdx values) and the
-      // index TYPE is uniform per mesh, so concatenating in bucket order is a
-      // byte-for-byte copy. Buckets keep Map insertion order, which is the
-      // order triangles were emitted — along the arc — so the ranges are
-      // already spatially coherent and no reorder is needed or wanted.
-      //
-      // Allocated by SIZE then filled with bufferSubData per bucket, rather
-      // than concatenating on the CPU first: that keeps the transient peak at
-      // one bucket's index array, exactly as before. On a ~5 M-vert street
-      // circuit the whole-mesh array would be tens of MB held at once.
-      // C-P7 (hunt 4): half of the Uint16 chunk ranges start at a byte offset
-      // that is not a multiple of 4. ANGLE-Metal's kIndexBufferOffsetAlignment
-      // is 4, so convertIndexBuffer copies the WHOLE buffer once per (buffer,
-      // modulo) and draws those chunks from the copy (+232/+235 KB on montreal,
-      // plus a first-draw GPU compute conversion while a pass is open). After
-      // any chunk that would leave the next start on an odd index, append one
-      // degenerate triangle (0,0,0) to THIS range so every byteOffset is
-      // 4-byte aligned AND neighbours stay contiguous. The plain drawElements
-      // merge sums counts from the first offset (no gap check); a pad sitting
-      // BETWEEN ranges made that path submit different indices than multi-draw.
-      // A zero-area triangle draws no pixels. Uint32 is already 4-byte.
-      // Default ON; apex26.glxChunkAlign="0" restores the old unaligned ranges.
-      let align = true;
-      try { if (localStorage.getItem("apex26.glxChunkAlign") === "0") align = false; } catch (_) { /* no storage: align */ }
-      const needAlign = !big && align;
-      let total = 0;
-      buckets.forEach((bk) => {
-        total += bk.idx.length;
-        if (needAlign && (total % 2 !== 0)) total += 3;   // pad after this chunk
-      });
-      const ibo = gl.createBuffer();
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, total * BPI, gl.STATIC_DRAW);
-      const chunks = [];
-      let off = 0;                             // running offset, in INDICES
-      const pad = needAlign ? new Uint16Array([0, 0, 0]) : null;
-      buckets.forEach((bk) => {
-        const start = off;
-        const arr = new IndexArray(bk.idx);
-        bk.idx = null;   // uploaded below — drop the growable JS array now so buckets
-                         // don't all stay resident while the rest are converted
-        gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, arr);
-        off += arr.length;
-        if (needAlign && (off % 2 !== 0)) {
-          gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, pad);
-          off += 3;
-        }
-        chunks.push({ byteOffset: start * BPI, count: off - start, indexType, min: bk.mn, max: bk.mx });
-      });
-      gl.bindVertexArray(null);
-      core.invalidateVAO();   // keep glx.js's VAO bind cache in sync with the direct bind above
-      return { vao, vbo, ib: ibo, count: total, indexType, chunks, cellSize: cell };
+      let vao = null, vbo = null, ibo = null;
+      try {
+        vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+        vbo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, interleaved, gl.STATIC_DRAW);
+        interleaved = null;   // uploaded to the VBO — drop the CPU copy
+        VertexPack.bindAttribs(gl, hasTrk);
+        const IndexArray = big ? Uint32Array : Uint16Array;
+        const indexType = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+        const BPI = big ? 4 : 2;                 // bytes per index
+        // ONE index buffer for the whole mesh. A chunk is a (byteOffset, count)
+        // RANGE into it rather than a buffer of its own, which is what lets the
+        // draw loops below merge adjacent visible chunks into a single
+        // drawElements — the chunked scenery is otherwise the largest draw-call
+        // block in the frame (measured over 12 stations a lap against the real
+        // camera frustum: 146.9 visible chunks on spa, 100.9 on vegas, 79.3 on
+        // monza, plus 36.8 for vegas glass, each one its own draw AND its own
+        // ELEMENT_ARRAY_BUFFER bind).
+        //
+        // Nothing has to be rebased: bucket indices are already ABSOLUTE into the
+        // shared VBO (ChunkBins.bin pushes raw srcIdx values) and the
+        // index TYPE is uniform per mesh, so concatenating in bucket order is a
+        // byte-for-byte copy. Buckets keep Map insertion order, which is the
+        // order triangles were emitted — along the arc — so the ranges are
+        // already spatially coherent and no reorder is needed or wanted.
+        //
+        // Allocated by SIZE then filled with bufferSubData per bucket, rather
+        // than concatenating on the CPU first: that keeps the transient peak at
+        // one bucket's index array, exactly as before. On a ~5 M-vert street
+        // circuit the whole-mesh array would be tens of MB held at once.
+        // C-P7 (hunt 4): half of the Uint16 chunk ranges start at a byte offset
+        // that is not a multiple of 4. ANGLE-Metal's kIndexBufferOffsetAlignment
+        // is 4, so convertIndexBuffer copies the WHOLE buffer once per (buffer,
+        // modulo) and draws those chunks from the copy (+232/+235 KB on montreal,
+        // plus a first-draw GPU compute conversion while a pass is open). After
+        // any chunk that would leave the next start on an odd index, append one
+        // degenerate triangle (0,0,0) to THIS range so every byteOffset is
+        // 4-byte aligned AND neighbours stay contiguous. The plain drawElements
+        // merge sums counts from the first offset (no gap check); a pad sitting
+        // BETWEEN ranges made that path submit different indices than multi-draw.
+        // A zero-area triangle draws no pixels. Uint32 is already 4-byte.
+        // Default ON; apex26.glxChunkAlign="0" restores the old unaligned ranges.
+        let align = true;
+        try { if (localStorage.getItem("apex26.glxChunkAlign") === "0") align = false; } catch (_) { /* no storage: align */ }
+        const needAlign = !big && align;
+        let total = 0;
+        buckets.forEach((bk) => {
+          total += bk.idx.length;
+          if (needAlign && (total % 2 !== 0)) total += 3;   // pad after this chunk
+        });
+        ibo = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, total * BPI, gl.STATIC_DRAW);
+        const chunks = [];
+        let off = 0;                             // running offset, in INDICES
+        const pad = needAlign ? new Uint16Array([0, 0, 0]) : null;
+        buckets.forEach((bk) => {
+          const start = off;
+          const arr = new IndexArray(bk.idx);
+          bk.idx = null;   // uploaded below — drop the growable JS array now so buckets
+                           // don't all stay resident while the rest are converted
+          gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, arr);
+          off += arr.length;
+          if (needAlign && (off % 2 !== 0)) {
+            gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, pad);
+            off += 3;
+          }
+          chunks.push({ byteOffset: start * BPI, count: off - start, indexType, min: bk.mn, max: bk.mx });
+        });
+        return { vao, vbo, ib: ibo, count: total, indexType, chunks, cellSize: cell };
+      } catch (e) {
+        // The track/worker ledger receives only a completed mesh. A later
+        // bucket's typed-array allocation can throw after all GPU handles exist.
+        try { if (ibo) gl.deleteBuffer(ibo); } catch (_) { /* preserve the allocation error */ }
+        try { if (vbo) gl.deleteBuffer(vbo); } catch (_) { /* preserve the allocation error */ }
+        try { if (vao) gl.deleteVertexArray(vao); } catch (_) { /* preserve the allocation error */ }
+        throw e;
+      } finally {
+        gl.bindVertexArray(null);
+        core.invalidateVAO();   // the direct bind, including a failed upload, invalidates glx.js's cache
+      }
     }
 
     // Draw a chunked mesh, frustum-culling each chunk against the camera. Material
