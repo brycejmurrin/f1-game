@@ -31,7 +31,7 @@ test("api() does not retry a permanent 404", () => {
   const slept = [];
   const run = () => { n += 1; return { status: 0, stdout: "missing\n404", stderr: "" }; };
   const r = api("nope", { run, env: { GH_TOKEN: "t" }, sleepSync: (ms) => slept.push(ms) });
-  assert.match(r.error, /HTTP 404/);
+  assert.equal(r.error, "HTTP 404");
   assert.equal(n, 1);
   assert.deepEqual(slept, []);
 });
