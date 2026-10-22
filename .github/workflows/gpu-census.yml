@@ -692,6 +692,48 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  webgpu_weather_matrix:
+    name: Capture 4K Ultra WebGPU weather matrix
+    needs: plan
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.track == 'weather-matrix-pilot' || inputs.track == 'weather-matrix') }}
+    runs-on: macos-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-apex
+      - name: Check out the pinned game source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 147dadd9eea4a0cc3f91e4160e64333cc8ed9d3a
+          path: source-baseline
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Install full Chromium
+        run: npx playwright install chromium
+      - name: Require a real WebGPU adapter
+        run: |
+          mkdir -p artifacts/webgpu-weather-matrix
+          node tools/gfx/gpu-census.mjs --json artifacts/webgpu-weather-matrix/gpu-census.json
+          node -e 'const c=require("./artifacts/webgpu-weather-matrix/gpu-census.json"); if(c.anyHardware!==true) throw new Error("GPU census did not identify hardware WebGPU: "+JSON.stringify(c.runs.map(x=>({verdict:x.verdict,adapter:x.adapter}))));'
+      - name: Capture pinned-source weather matrix
+        env:
+          APEX_GAME_ROOT: ${{ github.workspace }}/source-baseline
+          CAPTURE_MODE: ${{ inputs.track == 'weather-matrix-pilot' && 'pilot' || 'matrix' }}
+        run: node tools/shot/webgpu-weather-matrix.mjs --mode="$CAPTURE_MODE"
+      - name: Upload original images, panels and evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: webgpu-weather-matrix-${{ inputs.track }}-${{ github.sha }}
+          path: artifacts/webgpu-weather-matrix/
+          if-no-files-found: warn
+          retention-days: 14
+
   garage_reanalysis:
     name: Revalidate preserved native garage captures
     needs: plan

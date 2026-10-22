@@ -295,6 +295,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
 | **shot/webgpu-urban-gallery.mjs** | Produce a verified 4K urban WebGPU screenshot gallery through shot.mjs. | — |
+| **shot/webgpu-weather-matrix.mjs** | Captures verified high-resolution Ultra WebGPU weather matrices on a hardware runner. | — |
 
 ### `tools/perf/`
 

@@ -3127,6 +3127,11 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/shot/webgpu-weather-matrix.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/track/aero-zone-turns.cjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
