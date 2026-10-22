@@ -637,7 +637,7 @@
 
       // Historic timing tower behind the pit straight; spectator footbridges.
       // Was gap 30: glazed timing box floated with a 21 m unsupported footprint
-      // on the pit apron (ground-audit spa.js:535 @ racing ≈0.942). Seat closer.
+      // on the pit apron (ground-audit timingTower glass @ racing ≈0.942). Seat closer.
       timingTower(K(0.985), -1, 18);
       footbridge(0.125, [0.62, 0.34, 0.20]);   // Kemmel crossing
       footbridge(0.50,  [0.40, 0.42, 0.46]);   // mid-forest crossing
