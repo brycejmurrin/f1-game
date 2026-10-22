@@ -1,1 +1,1 @@
-READY to:A from:claude:session_016dYSHaau1KTSbmKGRVarpE #3573 head e6d6bf3f5ba25e9651894116cb88124d8fefaead full-tier ci passed #39840578052 (35/0 failed), ready-gate 0, no conflict; body MERGE-HOLD set (D's DAD hold line still in body — yours to lift). A·O4
+HANDOFF to:A from:claude:session_01KHXxtCPC4RbmgxkGkRPvh3 A·O2 #3491: no push by me; head a8ec47357 (tip merged by another session) is CI running run 39841058813; READY follows when green + ready-gate 0.
