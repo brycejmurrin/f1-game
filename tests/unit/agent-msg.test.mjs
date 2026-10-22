@@ -6,14 +6,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  MSG_TYPES, buildPayload, resolveBusTo, redactSecrets, parseArgs, postWebhook, main,
+  MSG_TYPES, busTypeFor, busTextFor, buildPayload, resolveBusTo, redactSecrets, parseArgs, postWebhook, main,
 } from "../../tools/ci/agent-msg.mjs";
 import { TYPES, formatLine, parseLine } from "../../tools/ci/fleet-bus.mjs";
 
 const ME = "cursor:bc-agent-msg-test-0ff0";
 
-test("MSG_TYPES are a subset of fleet-bus TYPES so the bus mirror keeps the type", () => {
-  for (const t of MSG_TYPES) assert.ok(TYPES.includes(t), t);
+test("busTypeFor: INFO/QUESTION/REQUEST → HANDOFF; READY/HANDOFF/INCIDENT keep type", () => {
+  assert.equal(busTypeFor("INFO"), "HANDOFF");
+  assert.equal(busTypeFor("QUESTION"), "HANDOFF");
+  assert.equal(busTypeFor("REQUEST"), "HANDOFF");
+  assert.equal(busTypeFor("READY"), "READY");
+  assert.equal(busTypeFor("HANDOFF"), "HANDOFF");
+  assert.equal(busTypeFor("INCIDENT"), "INCIDENT");
+  for (const t of ["READY", "HANDOFF", "INCIDENT"]) assert.ok(TYPES.includes(t), t);
+  assert.ok(TYPES.includes(busTypeFor("INFO")));
+});
+
+test("busTextFor prefixes mapped types and optional #pr", () => {
+  assert.equal(busTextFor("INFO", "hello"), "[INFO] hello");
+  assert.equal(busTextFor("QUESTION", "need sync?", 12), "#12 [QUESTION] need sync?");
+  assert.equal(busTextFor("READY", "abc ready-gate 0", 3499), "#3499 abc ready-gate 0");
 });
 
 test("buildPayload: shape, pr null vs number, whitespace collapsed in text", () => {
@@ -36,6 +49,8 @@ test("resolveBusTo: all→*, DAD→D, Apex Merge Queue→merge-desk; letters pas
   assert.equal(resolveBusTo("DAD"), "D");
   assert.equal(resolveBusTo("dad"), "D");
   assert.equal(resolveBusTo("Apex Merge Queue"), "merge-desk");
+  assert.equal(resolveBusTo("Tools Explorer"), "tools");
+  assert.equal(resolveBusTo("Profiler"), "tools");
   assert.equal(resolveBusTo("A"), "A");
   assert.equal(resolveBusTo("B·O3"), "B·O3");
   assert.equal(resolveBusTo("orchestrator"), "orchestrator");
@@ -134,7 +149,7 @@ test("main: missing webhook env warns, still mirrors to bus, exits 0", async () 
   );
   assert.equal(code, 0);
   assert.equal(bus.length, 1);
-  assert.deepEqual(bus[0], { type: "INFO", to: "*", from: ME, text: "hello fleets" });
+  assert.deepEqual(bus[0], { type: "HANDOFF", to: "*", from: ME, text: "[INFO] hello fleets" });
   assert.ok(errs.join("\n").includes("APEX_AGENT_WEBHOOK"), "warns about missing env");
   assert.equal(errs.join("\n").includes("Bearer"), false);
 });

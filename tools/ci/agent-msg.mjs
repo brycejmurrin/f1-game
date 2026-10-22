@@ -23,8 +23,15 @@ import { whoAmI, sendBusLine, addressProblem, ADDRESS_FORMS } from "./fleet-bus.
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
-/** Peer-message types (webhook + bus). Protocol lines DONE/GREEN/BLOCKED/GAME-SLOT stay on fleet-bus.mjs. */
+/** Peer-message types (webhook). Protocol lines DONE/GREEN/BLOCKED/GAME-SLOT stay on fleet-bus.mjs. */
 export const MSG_TYPES = ["INFO", "QUESTION", "READY", "HANDOFF", "INCIDENT", "REQUEST"];
+
+/** INFO/QUESTION/REQUEST → bus HANDOFF; READY/HANDOFF/INCIDENT keep their type. Pure. */
+export function busTypeFor(msgType) {
+  const t = String(msgType || "").toUpperCase();
+  if (t === "INFO" || t === "QUESTION" || t === "REQUEST") return "HANDOFF";
+  return t;
+}
 
 /**
  * Map a friendly --to alias to a deliverable fleet-bus address. Webhook `to` keeps the raw alias.
@@ -37,7 +44,17 @@ export function resolveBusTo(to) {
   if (lower === "all" || raw === "*") return "*";
   if (raw === "DAD" || lower === "dad") return "D";
   if (lower === "apex merge queue") return "merge-desk";
+  if (lower === "tools explorer") return "tools";
+  if (lower === "profiler" || lower === "profiler bots") return "tools";
   return raw;
+}
+
+/** Bus text: optional `#pr` prefix, plus `[INFO]`/`[QUESTION]`/`[REQUEST]` when mapped. Pure. */
+export function busTextFor(msgType, text, pr = null) {
+  const t = String(msgType || "").toUpperCase();
+  const mapped = (t === "INFO" || t === "QUESTION" || t === "REQUEST") ? `[${t}] ` : "";
+  const body = `${mapped}${String(text ?? "").replace(/\s+/g, " ").trim()}`.trim();
+  return pr != null && pr !== "" ? `#${pr} ${body}`.trim() : body;
 }
 
 /** Build the webhook/bus payload. Pure. `pr` is a number or null; `sha`/`ts` are strings. */
@@ -195,9 +212,10 @@ export async function main(argv, {
 
   let busOk = opts.noBus;
   if (!opts.noBus) {
-    const busText = opts.pr != null ? `#${opts.pr} ${payload.text}`.trim() : payload.text;
+    const bType = busTypeFor(opts.type);
+    const bText = busTextFor(opts.type, payload.text, opts.pr);
     try {
-      const r = sendBus(opts.type, busTo, me, busText, { cwd, log });
+      const r = sendBus(bType, busTo, me, bText, { cwd, log });
       busOk = !!r.ok;
       if (!r.ok) err(`agent-msg: bus mirror FAILED: ${redactSecrets(r.reason || "unknown", env)}`);
     } catch (e) {

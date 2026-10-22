@@ -46,9 +46,8 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const BUS_BRANCH = "claude/fleet-bus";
 /** GAME-SLOT (2026-10-19): the claim a session pushes before a game merge — `#<PR> <head sha>`; the earlier line wins the
  *  push race, and merge-gate.mjs requires the newest live one to name the PR and come from the merging session. */
-/** Bus line types. INFO/QUESTION/REQUEST are peer-message types from agent-msg.mjs (2026-10-22). */
-export const TYPES = ["READY", "GREEN", "BLOCKED", "HANDOFF", "DONE", "INCIDENT", "LEASE", "GAME-SLOT",
-  "INFO", "QUESTION", "REQUEST"];
+export const TYPES = ["READY", "GREEN", "BLOCKED", "HANDOFF", "DONE", "INCIDENT", "LEASE", "GAME-SLOT"];
+/** agent-msg INFO/QUESTION/REQUEST map to bus HANDOFF (see agent-fleet references/communication.md). */
 export const DEFAULT_TTL_MIN = 60;
 /** A lease longer than this outlives the Pages p90 (73 min) three times over: a dead holder would block for hours. */
 export const MAX_TTL_MIN = 240;

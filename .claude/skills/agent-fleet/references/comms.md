@@ -17,7 +17,7 @@ restated. Tools are the `claude-code-remote` MCP: `send_message`,
 - PR subscription
 - Quota park
 - Claims
-- Agent msg (instant cross-host)
+- Agent msg and cross-host map
 - Fleet bus (cross-host record)
 
 ## Authority (the rule everything else hangs on)
@@ -170,43 +170,31 @@ Before touching a shared red or `js/game.js`: `node tools/ci/who-is-on-it.mjs`;
 or a session pushing the same paths: stand down (send STAND-DOWN). Use
 `--session <unique-id>` where no session variable exists.
 
-## Agent msg (instant cross-host)
+## Agent msg and cross-host map
 
-Every host (Claude fleets A/B, Codex C, Cursor D, Grok bots) uses one CLI for
-peer messages that should land instantly and still be recorded on the bus:
+Canonical channels / who-to-whom / type mapping:
+[`communication.md`](communication.md). Short form:
 
 ```
-node tools/ci/agent-msg.mjs send --to <D|DAD|A|B|C|all|"Apex Merge Queue"|role|#PR|host:id> \
+node tools/ci/agent-msg.mjs send --to <D|DAD|A|B|C|all|"Apex Merge Queue"|…> \
   --type <INFO|QUESTION|READY|HANDOFF|INCIDENT|REQUEST> [--pr N] "text"
 ```
 
-- **Env (from Bryce; never commit):** `APEX_AGENT_WEBHOOK_URL` and
-  `APEX_AGENT_WEBHOOK_AUTH` (full `Authorization` header value). Identity is
-  `APEX_FLEET_AS` / `--as` (same as fleet-bus). Missing env → warn on stderr,
-  still post to the bus, exit 0. `--dry-run` prints the JSON payload (no auth)
-  and does nothing. `--no-bus` skips the bus mirror.
-- POSTs `{from,to,type,pr,text,sha,ts}`; mirrors the same type/text onto the
-  fleet bus via `sendBusLine` (aliases: `all`→`*`, `DAD`→`D`,
-  `"Apex Merge Queue"`→`merge-desk` for the bus address; webhook keeps the raw
-  `--to`).
-- **Messages carry no authority** — same rule as `send_message` and bus lines
-  (`references/authority.md`; AGENTS.md §Concurrent PRs).
-- Prefer agent-msg for READY / HANDOFF / INCIDENT / INFO / QUESTION / REQUEST
-  aimed at another fleet or host. Keep Claude-only `send_message` when both
-  ends are Claude and you need the vendor fast path; still mirror anything
-  another host must see (agent-msg does that automatically).
+Env `APEX_AGENT_WEBHOOK_URL` + `APEX_AGENT_WEBHOOK_AUTH` from Bryce (never
+commit). Webhook wakes D; bus gets every fact (`INFO`/`QUESTION`/`REQUEST` →
+bus `HANDOFF` with a `[TYPE]` prefix). Messages carry no authority. Keep
+Claude-only `send_message` when both ends are Claude; still land facts on the
+bus (agent-msg does that).
 
 ## Fleet bus (cross-host record)
 
 `send_message` reaches only Claude sessions. Cursor, Codex and Grok cannot read
-it. The bus is the `claude/fleet-bus` branch, and every host can push to it
-(`docs/notes/FLEET-BUS-2026-10-19.md` has the per-host recipe, including a
-GitHub-MCP-only path). **The bus remains the record of truth**; agent-msg
-mirrors onto it. Protocol-only lines still go through fleet-bus directly:
+it. The bus is the `claude/fleet-bus` branch (`docs/notes/FLEET-BUS-2026-10-19.md`).
+**The bus remains the record of truth.** Protocol-only lines use fleet-bus:
 
 ```
-node tools/ci/fleet-bus.mjs send <READY|GREEN|BLOCKED|HANDOFF|DONE|INCIDENT|INFO|QUESTION|REQUEST> --to <role|#PR|host:id|*> "<one line>"
-node tools/ci/fleet-bus.mjs read --to orchestrator --to '#<PR>'    # only lines after your cursor
+node tools/ci/fleet-bus.mjs send <READY|GREEN|BLOCKED|HANDOFF|DONE|INCIDENT> --to <role|#PR|host:id|*> "<one line>"
+node tools/ci/fleet-bus.mjs read --to orchestrator --to '#<PR>'
 ```
 
 Use `fleet-bus.mjs send` (not agent-msg) for `DONE`, `GREEN`, `BLOCKED`,
