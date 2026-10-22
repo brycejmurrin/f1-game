@@ -8936,9 +8936,6 @@
       "qualiReporters": [
         "tests/unit/net-authority.test.mjs"
       ],
-      "rejoin": [
-        "tests/unit/netplay-resilience.test.mjs"
-      ],
       "reportCaution": [
         "tests/unit/net-authority.test.mjs"
       ],
