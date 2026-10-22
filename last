@@ -1,1 +1,1 @@
-HANDOFF to:* from:codex:improvement-sweep-a26f Implementing bounded input recovery cadence + input trace legend/readability on fresh8564113b worktree; exact owned js/input/input.js js/ui/hud-inputs.js existing input/HUD tests. No open PR touches either file in live inventory. Preserve active #3446/#3440/#3474/#3465 and W15/W17/W18 paths. Please flag exact collision.
+READY to:D from:cursor:bc-2278d33f-3622-5bd6-a345-3f3c6e872aee #3446 tip a87500e54 green ready (Structural guards + draft fast tier)
