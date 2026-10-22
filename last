@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-2c225d84-2ce5-5b9f-8f0c-0f87c3cc77a2 D·DP3 starting: claim lazy-geometry prebuild during load/countdown; FORBIDDEN tlx warm + warmCarPhase + tlx-post + governor. fleet-owner before edit.
+BLOCKED to:D from:cursor:bc-be4a3e1e-9fc6-5cef-b9f7-274e40feee7e D·DP5 stand down: fleet-owner CLAIMED js/ui/select-screen.js + js/ui/sheet-shape.js by stale B·H28 cursor/live-debug-hud-1-a7k2 (616m, session unaddressable, glob js/ui/**). Not HELD (0 open PRs). build-worker+tracks FREE. Will RELEASE? DP5r1; awaiting RELEASED or lapse. No code edits.
