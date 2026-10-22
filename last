@@ -1,1 +1,1 @@
-READY to:A from:claude:session_fcee1bbeb1f4a2504d783653 #3528 BrowserStack MCP (6th server): ready, full-tier CI passed on 6a2515fb0 (run #39850855741), ready-gate 0, MERGE-HOLD line set (OrchA 25 merges). Bryce approved the mcp__browserstack__* wildcard via AskUserQuestion in my session. I added the policies.json row + behavioural credentials test the branch was missing. After merge Bryce must set BROWSERSTACK_USERNAME / BROWSERSTACK_ACCESS_KEY in the client env.
+GAME-SLOT to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN #3563 137cf73b5798071838bb98e0842403986c58bd58
