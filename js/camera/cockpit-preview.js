@@ -10,7 +10,8 @@ const CockpitPreview = (function () {
     const team = Teams.LIST[GameStore.store.get("team", 2)] || Teams.LIST[2];
     const car = readCar ? readCar() : { teamId: team.id, livery: Liveries.forTeam(team)[0],
       units: typeof AppearanceOpts !== "undefined" ? AppearanceOpts.units() : "kmh" };
-    return Object.assign({}, car, { angle, body: CockpitOpts.body(), interior: CockpitOpts.interior(),
+    const finish = typeof CockpitFinishes !== "undefined" ? CockpitFinishes.view(car.livery) : null;
+    return Object.assign({}, car, { cockpitLivery: finish ? finish.livery : car.livery, cockpitHalo: finish && finish.halo, wheelFinish: finish ? finish.wheel : "carbon", angle, body: CockpitOpts.body(), interior: CockpitOpts.interior(),
       wheel: CockpitOpts.wheel(), seat: CockpitOpts.seat(), halo: CockpitOpts.haloSize(),
       layout: CockpitOpts.layout() });
   }
@@ -82,6 +83,7 @@ const CockpitPreview = (function () {
     });
     for (let el = host; el; el = el.parentElement) observer.observe(el, { attributes: true, attributeFilter: ["hidden", "open"] });
     CockpitOpts.onWheel(update);
+    if (typeof CockpitFinishes !== "undefined") CockpitFinishes.onChange(update);
     section.appendChild(toggle); view.appendChild(toolbar); view.appendChild(status); section.appendChild(view); host.appendChild(section);
     return { open, close, update };
   }
@@ -101,12 +103,13 @@ const CockpitPreview = (function () {
     function draw() {
       if (!state || disposed) return;
       GLX.resize(); const s = state, lay = s.layout;
-      const key = JSON.stringify([s.body,s.halo,s.teamId,s.livery,s.parts]);
+      const liv = s.cockpitLivery || s.livery;
+      const key = JSON.stringify([s.body,s.halo,s.teamId,liv,s.parts,s.cockpitHalo]);
       if (key !== bodyKey) {
         if (body) GLX.freeMesh(body);
         for (const mesh of tyres) GLX.freeMesh(mesh);
-        body = GLX.createMesh(Car3D.build(s.livery.c1,s.livery.c2,{ cockpit:true,noDriver:true,noWheels:true,
-          cockpitBody:s.body,halo:s.halo,teamId:s.teamId,livery:s.livery,parts:s.parts })); bodyKey = key;
+        body = GLX.createMesh(Car3D.build(liv.c1,liv.c2,{ cockpitHalo:s.cockpitHalo,cockpit:true,noDriver:true,noWheels:true,
+          cockpitBody:s.body,halo:s.halo,teamId:s.teamId,livery:liv,parts:s.parts })); bodyKey = key;
         const p=s.parts || {}, visual=p._visual || {}, tyre=visual.tyres, brake=visual.brakes;
         const wt=CarWheels.tints(s.livery);
         const layers=Car3D.buildWheelLayers(.32,tyre && tyre.band || Car3D.TYRE_BAND[p.tyres || 1],
@@ -130,7 +133,8 @@ const CockpitPreview = (function () {
       }
       if (s.interior === "classic") GLX.draw(CarMesh.getCockpitGlass(s.interior),base,{doubleSided:true,alpha:.25});
       rig[0]=rig[5]=rig[10]=lay.wheelS; rig[13]=lay.wheelY; rig[14]=lay.wheelZ; M4.mulTo(worldRig,base,rig);
-      GLX.draw(s.wheel === "none" ? CarMesh.getCockpitDash() : CarMesh.getCockpitWheel(s.livery,s.wheel),worldRig,paint);
+      CarMesh.wheelFinish(s.wheelFinish || "carbon");
+      GLX.draw(s.wheel === "none" ? CarMesh.getCockpitDash() : CarMesh.getCockpitWheel(s.livery,s.wheel),worldRig,s.wheel === "none" ? paint : CarMesh.cockpitWheelOpts(paint));
       const c = {gear:1,speed:0,energy:1,rpm:PhysicsConsts.IDLE_RPM};
       if (s.wheel === "retro") CarMesh.drawRetroTelemetry(worldRig,c,0,0);
       else if (s.wheel !== "round" && s.wheel !== "none") {
