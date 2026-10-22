@@ -631,6 +631,7 @@ void gradeZoneWeights(float y, out vec4 w0, out float wWhite) {
 // the luminance ratio, preserving hue and making zero on both controls identity.
 vec3 applyToeShoulder(vec3 c, float toe, float shoulder) {
   c = max(c, vec3(0.0));
+  if (toe == 0.0 && shoulder == 0.0) return c;
   float oldY = max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-6);
   float exponent = oldY < 0.18
     ? exp2(clamp(toe, -1.0, 1.0))
@@ -642,8 +643,12 @@ vec3 applyToeShoulder(vec3 c, float toe, float shoulder) {
 vec3 applyHdrGrade(vec3 c) {
   vec3 lift = uLift;
   vec3 gain = max(uGain, vec3(1e-3));
-  vec3 invGamma = 1.0 / max(uGamma, vec3(1e-3));
-  c = lift + (gain - lift) * pow(max(c, vec3(0.0)), invGamma);
+  if (all(equal(uGamma, vec3(1.0)))) {
+    c = lift + (gain - lift) * max(c, vec3(0.0));
+  } else {
+    vec3 invGamma = 1.0 / max(uGamma, vec3(1e-3));
+    c = lift + (gain - lift) * pow(max(c, vec3(0.0)), invGamma);
+  }
 
   float y = max(dot(max(c, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722)), 1e-6);
   vec4 w0; float wWhite;
