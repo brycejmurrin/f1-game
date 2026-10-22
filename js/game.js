@@ -1232,12 +1232,12 @@ const _flapWorld = new Float32Array(16);
 // `only` limits the draw to one wing ("front"/"rear") — the COCKPIT body build
 // skips the rear assembly entirely, so drawing the rear plane there would hang
 // it in mid-air behind a car that has no rear wing.
-function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
+function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still, viewLivery) {
   const col = wingColorOf(team), b = clamp(blend, 0, 1);
   // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
-  const livery = resolveLivery(team), finish = CarMaterials.finishOf(livery, "wingFinish");
+  const livery = viewLivery || resolveLivery(team), finish = CarMaterials.finishOf(livery, "wingFinish");
   const surface = livery.wingCarbon === "carbon" ? "carbon" : "paint";
   // The flown drs plane (paint "rearWing") keeps the livery's REAR WING colour, as Car3D.build painted it baked.
   const rearCol = surface === "carbon" ? col : (livery.rearWing || livery.c2 || team.color2);
