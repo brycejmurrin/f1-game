@@ -22,9 +22,12 @@ const Tracks = (function () {
 
   /** Centreline only, no meshes. `opts.line === false` skips ONLY the racing-line bake (~75 %
    *  of the time): tr.line = null, lineW/lineCorners/… absent — the designer's preview build. */
-  // Preview ({line:false}) results are cached by id: the race-select hero and
-  // TrackMaps.compute share this path, and a cold open used to rebuild the same
-  // centreline on every tile / ResizeObserver pass. Hydrate forgets the entry.
+  // Race-select preview cache (D·DP5): worker adoptPreviewCenterline (or an
+  // explicit {line:false, preview:true} build) primes typed arrays so the next
+  // TrackMaps.compute / buildCenterline({line:false}) is a hit. Do NOT auto-store
+  // every {line:false} build — editors and unit tests mutate hwZones / splineAlpha
+  // on a same-id clone and must get a fresh centreline. Key still includes
+  // hwZones/baseHW as defence-in-depth for adopt. Hydrate forgets the entry.
   const previewCL = new Map();
   function previewKey(def) {
     if (!def || !def.id) return null;
@@ -58,8 +61,11 @@ const Tracks = (function () {
       return Object.assign({}, hit, { meshes: hit.meshes || {} });
     }
     const track = buildCenterlineFresh(def, opts);
-    if (key) previewCL.set(key, track);
-    return Object.assign({}, track, { meshes: track.meshes || {} });
+    // Only an explicit preview build stores; adoptPreviewCenterline is the
+    // worker path. Auto-caching every line:false poisoned track-def-factory /
+    // spline-fold / scenery-digest (same id, mutated zones / alpha).
+    if (key && opts && opts.preview === true) previewCL.set(key, track);
+    return track;
   }
   function buildCenterlineFresh(def, opts) {
     ensurePoints(def);

@@ -1,5 +1,6 @@
-/* tracks-preview-cache.test.mjs — {line:false} buildCenterline is cached by
- * circuit id so race-select / TrackMaps.compute do not rebuild on every pass.
+/* tracks-preview-cache.test.mjs — race-select preview cache: adopt / explicit
+ * {preview:true} primes typed arrays; plain {line:false} must NOT auto-store
+ * (editors and factory tests mutate same-id defs).
  *
  * Run: node --test tests/unit/tracks-preview-cache.test.mjs
  */
@@ -39,12 +40,12 @@ function loadTracks() {
   return ctx;
 }
 
-test("buildCenterline({line:false}) reuses typed arrays across calls", () => {
+test("buildCenterline({line:false, preview:true}) reuses typed arrays across calls", () => {
   const { Tracks } = loadTracks();
   const def = Tracks.LIST.find((t) => t && t.id === "monza");
   assert.ok(def, "monza must be in LIST");
   if (Tracks.forgetPreviewCenterline) Tracks.forgetPreviewCenterline("monza");
-  const a = Tracks.buildCenterline(def, { line: false });
+  const a = Tracks.buildCenterline(def, { line: false, preview: true });
   const b = Tracks.buildCenterline(def, { line: false });
   assert.notEqual(a, b, "shallow clone so callers can null bankP safely");
   assert.equal(a.px, b.px, "typed arrays stay shared (the cache win)");
@@ -52,12 +53,22 @@ test("buildCenterline({line:false}) reuses typed arrays across calls", () => {
   assert.ok(a.map && a.map.length > 2);
 });
 
+test("plain {line:false} does not auto-store into the preview cache", () => {
+  const { Tracks } = loadTracks();
+  const def = Tracks.LIST.find((t) => t && t.id === "spa");
+  assert.ok(def, "spa must be in LIST");
+  Tracks.forgetPreviewCenterline("spa");
+  const a = Tracks.buildCenterline(def, { line: false });
+  const b = Tracks.buildCenterline(def, { line: false });
+  assert.notEqual(a.px, b.px, "second plain line:false rebuilds (no silent cache)");
+});
+
 test("forgetPreviewCenterline drops the cache entry", () => {
   const { Tracks } = loadTracks();
   const def = Tracks.LIST.find((t) => t && t.id === "monza");
-  const a = Tracks.buildCenterline(def, { line: false });
+  const a = Tracks.buildCenterline(def, { line: false, preview: true });
   Tracks.forgetPreviewCenterline("monza");
-  const b = Tracks.buildCenterline(def, { line: false });
+  const b = Tracks.buildCenterline(def, { line: false, preview: true });
   assert.notEqual(a.px, b.px, "after forget, a fresh centreline is built");
 });
 

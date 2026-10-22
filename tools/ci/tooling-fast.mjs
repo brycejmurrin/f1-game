@@ -1339,7 +1339,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-randomise.test.mjs",
   "tests/unit/track-retained-state.test.mjs",
   "tests/unit/track-shot-survey.test.mjs",
-  // D·DP5: {line:false} buildCenterline preview cache + adopt/forget for worker handoff.
+  // D·DP5: previewCL only via adopt/{preview:true}; plain {line:false} must rebuild.
   "tests/unit/tracks-preview-cache.test.mjs",
   "tests/unit/trackside.test.mjs",
   // Wrap-aware arc buckets vs the O(n) updateCar traffic / slipstream / OT-ahead
