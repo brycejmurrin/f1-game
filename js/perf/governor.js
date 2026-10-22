@@ -678,7 +678,7 @@ function tick(dtMs, drawn) {
   if (!(dtMs > 0)) return;
   const stepMs = Number.isFinite(dtMs) ? Math.min(dtMs, COOL_STEP_MAX_MS) : 16.7;
   if (drawn === false) { _ageClocks(stepMs); return; }   // see _ageClocks
-  if (_drift && dtMs < SPIKE_MS && _drift.feed(dtMs) && driftStep()) _drift.stepped();
+  if (_drift && dtMs < SPIKE_MS && _drift.feed(dtMs) && (driftRenderRate() || driftStep())) _drift.stepped();
   // Before any smoothing: the opening window wants the raw frame, spikes and
   // all, because a spike in the first seconds IS the thing being reported.
   if (_openN < OPEN_FRAMES) {
@@ -959,6 +959,26 @@ function tick(dtMs, drawn) {
 let _drift = null;
 function setThermalDrift(on) {
   _drift = on && typeof ThermalDrift !== "undefined" ? ThermalDrift.drift() : null;
+}
+// Thermal drift, first resort on a phone: cap the PRESENTED rate before
+// trading quality. RenderRate's 45 tier draws 3 of every 4 vsyncs at
+// 60 Hz — a quarter less work per second to sustain — while every drawn
+// frame keeps full quality; the governor rungs (driftStep) trade pixels
+// and features instead. Only an UNDECIDED player is moved: mode "auto"
+// means no explicit DISPLAY choice, and setMode is session-only
+// (js/perf/render-rate.js: persisting is the caller's job) — a hot
+// afternoon must not rewrite the stored preference, so the next boot
+// re-reads the store and starts at "auto" again. An explicit mode
+// (off / half / 45 / 30) is the player's word and is never overridden,
+// and desktops keep the governor rung: render-rate tiers are a mobile
+// facility (state().mobile). Once this engages, the mode is no longer
+// "auto", so a later drift step in the same session falls through to
+// driftStep — the response still escalates, one mechanism per step.
+function driftRenderRate() {
+  if (typeof RenderRate === "undefined") return false;
+  const st = RenderRate.state();
+  if (!st.mobile || st.mode !== "auto") return false;
+  return RenderRate.setMode("45");
 }
 function driftStep() {
   if (_pendingVerify || _govCoolMs > 0 || _govCool > 0) return false;   // mid-verify or cooling: ask again next window

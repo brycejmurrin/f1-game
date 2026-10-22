@@ -1462,3 +1462,75 @@ test("replay Eq3/LPM: when the bigger probe buys nothing too, the lever is futil
     assert.ok(Math.abs(r.floor - 33.3) < 0.5);
   }
 });
+
+// ---------------------------------------------------------------------------
+// THERMAL DRIFT → RENDER RATE: the real governor.js + thermal-drift.js +
+// render-rate.js, driven through tick(). ThermalDrift (opt-in via
+// apex26.thermalDrift) only SAYS a step is due; the governor's response is
+// what these pin: on a phone whose player never chose a render rate
+// (mode "auto"), the first step caps the presented rate at 45 — a quarter
+// less work per second, no quality traded — instead of a governor rung.
+// An explicit player mode is never overridden, and without RenderRate the
+// response is the governor rung exactly as before. Drift timing: 10 s
+// windows of accumulated frame time, 1 warm + 6 baseline windows, then a
+// windowed-p50 EMA that must clear baseline*1.12 (+1 ms) — so ~4300 ticks
+// at 16.7 ms to baseline, then a sustained 20 ms until a step lands.
+const TD_SRC = fs.readFileSync(path.join(ROOT, "js/perf/thermal-drift.js"), "utf8");
+function makeThermalGov(rateMode, { withRate = true } = {}) {
+  const mem = { "apex26.thermalDrift": "1" };
+  if (rateMode) mem["apex26.renderRate"] = rateMode;
+  globalThis.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
+  globalThis.window = { __APEX_BUILD: 1 };
+  globalThis.ThermalDrift = eval(TD_SRC + ";ThermalDrift");
+  // NOT a local named RenderRate: direct eval would hand the governor that
+  // local (null on the withRate:false path) instead of the global binding a
+  // classic script sees in production — the governor must resolve the real
+  // globalThis.RenderRate, present or absent, exactly as shipped.
+  let rr = null;
+  if (withRate) {
+    rr = eval(RR_SRC + ";RenderRate");
+    globalThis.RenderRate = rr;
+    rr.init({ isMobile: true });
+  } else {
+    delete globalThis.RenderRate;
+  }
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = 1;
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale,
+    setRenderScale: (s) => { s = Math.max(0.5, Math.min(1, s)); if (Math.abs(s - scale) < SCALE_EPS) return false; scale = s; return true; } });
+  return { PerfGov, RenderRate: rr, scale: () => scale, mem };
+}
+function feedUntilDriftStep(PerfGov, slowMs, maxTicks) {
+  feed(PerfGov, () => 16.7, 4300);   // warm window + baseline windows
+  let i = 0;
+  while (i < maxTicks && !(PerfGov.thermalDrift() && PerfGov.thermalDrift().steps > 0)) { PerfGov.tick(slowMs); i++; }
+  return i;
+}
+
+test("thermal drift on an undecided phone caps the presented rate at 45 before touching quality", () => {
+  const { PerfGov, RenderRate, scale, mem } = makeThermalGov(null);
+  const used = feedUntilDriftStep(PerfGov, 20, 6000);
+  assert.ok(PerfGov.thermalDrift().steps > 0, `a drift step must land (ticks used: ${used})`);
+  assert.equal(RenderRate.state().mode, "45", "the first response is the render-rate cap, not a quality rung");
+  assert.equal(scale(), 1, "no resolution was traded for a thermal step the rate cap answers");
+  assert.equal(PerfGov.tier(), 0, "no feature tier was shed either");
+  assert.equal(mem["apex26.renderRate"], undefined, "the engagement is session-only: the stored preference is untouched");
+  delete globalThis.RenderRate; delete globalThis.ThermalDrift;
+});
+
+test("an explicit render-rate choice is never overridden by thermal drift", () => {
+  const { PerfGov, RenderRate, scale } = makeThermalGov("30");
+  const used = feedUntilDriftStep(PerfGov, 20, 6000);
+  assert.ok(PerfGov.thermalDrift().steps > 0, `a drift step must land (ticks used: ${used})`);
+  assert.equal(RenderRate.state().mode, "30", "the player's explicit 30 stays exactly as chosen");
+  assert.ok(scale() < 1 || PerfGov.autoShed() > 0, "the governor rung answers instead, as it did before the wiring");
+  delete globalThis.RenderRate; delete globalThis.ThermalDrift;
+});
+
+test("without RenderRate the drift response is the governor rung, unchanged", () => {
+  const { PerfGov, scale } = makeThermalGov(null, { withRate: false });
+  const used = feedUntilDriftStep(PerfGov, 20, 6000);
+  assert.ok(PerfGov.thermalDrift().steps > 0, `a drift step must land (ticks used: ${used})`);
+  assert.ok(scale() < 1 || PerfGov.autoShed() > 0, "driftStep's rung moved, exactly the pre-wiring behaviour");
+  delete globalThis.RenderRate; delete globalThis.ThermalDrift;
+});
