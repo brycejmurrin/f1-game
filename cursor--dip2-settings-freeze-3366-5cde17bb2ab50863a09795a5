@@ -1,1 +1,1 @@
-1792643582	Cursor Agent	D·IP2 Settings 3.7s freeze + title hitch: js/ui/settings-tabs.js title-menu/flow/layout setting-row settings-search pause-opts + matching tests; FORBIDDEN quality-preset/render-scale  [cursor/dip2-settings-freeze-3366; session 5cde17bb2ab50863a09795a5]
+1792649131	Cursor Agent	D·IP2 #3491 defer menuPrep/garage prebuild while settings sheet opens (js/garage/prebuild.js + menu idle gate; NOT tlx/game.js growth)  [cursor/dip2-settings-freeze-3366; session 5cde17bb2ab50863a09795a5]
