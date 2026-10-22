@@ -12,12 +12,21 @@ const GfxQuality = (function () {
 // decide". They differ only in the MOBILE boot tier, which is fixed at renderer
 // init and cannot be a live knob. A separate AUTO stop would be
 // indistinguishable from ULTRA and is omitted rather than shipped as a lie.
+//
+// PHONE CAP (D·IP1, BrowserStack 2026-10-21): ULTRA on a real iPhone 15 averaged
+// 24.5 fps / 14.1 1% low with no recovery at renderScale 1.0. Phones therefore
+// never offer ULTRA — the row shows it disabled with a note, set()/init clamp
+// it to HIGH (same tier floor, memory-safe boot), and a weak phone (no WebGPU /
+// low deviceMemory; iPhone 13 idle ~25 fps on MEDIUM) defaults to LOW.
 const PRESETS = [
   { id: "low",    label: "LOW",    tier: 4, mobileHigh: false },
   { id: "medium", label: "MEDIUM", tier: 2, mobileHigh: false },
   { id: "high",   label: "HIGH",   tier: 0, mobileHigh: false },
   { id: "ultra",  label: "ULTRA",  tier: 0, mobileHigh: true  },
 ];
+const PHONE_MAX_ID = "high";
+const PHONE_ULTRA_NOTE = " — NOT ON PHONES";
+const PHONE_CAP_TITLE = "ULTRA is capped on phones (BrowserStack 2026-10-21: ~24 fps avg on iPhone 15). HIGH is the phone ceiling.";
 const RELOAD_DELAY_MS = 260;
 
 let curId = "high";
@@ -42,17 +51,56 @@ function presetById(id) { return PRESETS.find((p) => p.id === id) || null; }
 
 function current() { return presetById(curId) || PRESETS[2]; }
 
+// Phone-class devices (GLX.isMobile / touch UA) never boot the ULTRA memory
+// tier. HIGH shares the tier-0 floor without flipping apex26.gfxHigh.
+function maxId(mobile) { return mobile ? PHONE_MAX_ID : "ultra"; }
+
+function capId(id, mobile) {
+  const p = presetById(id);
+  if (!p) return mobile ? "medium" : "high";
+  if (!mobile) return p.id;
+  const max = presetById(PHONE_MAX_ID);
+  const maxIdx = PRESETS.indexOf(max);
+  const idx = PRESETS.indexOf(p);
+  return idx > maxIdx ? PHONE_MAX_ID : p.id;
+}
+
+// Older / weaker phones: iPhone 13 (iOS 18, WebGL) idled ~25 fps on MEDIUM in
+// the 2026-10-21 BrowserStack suite. Capable phones (iPhone 15 + iOS 26 Safari
+// with navigator.gpu) hold MEDIUM racing. deviceMemory < 4 catches low-RAM
+// Androids. A Node harness with no Navigator.prototype.gpu stays "capable" so
+// the existing MEDIUM default tests keep their meaning; pass hint.weak to force.
+function isWeakPhone(nav) {
+  // `null` is an explicit "no navigator" (tests); only fall back to the
+  // global when the argument is omitted.
+  if (arguments.length === 0) {
+    nav = typeof navigator !== "undefined" ? navigator : null;
+  }
+  if (!nav) return false;
+  if (typeof nav.deviceMemory === "number" && nav.deviceMemory > 0 && nav.deviceMemory < 4) return true;
+  // Own `gpu` key (test stubs, older Safari) wins. Otherwise only treat a
+  // navigator with a userAgent as a real browser — a bare Node stub stays
+  // "capable" so defaultId(true) keeps MEDIUM in harnesses.
+  if (Object.prototype.hasOwnProperty.call(nav, "gpu")) return !nav.gpu;
+  let ua = "";
+  try { ua = String(nav.userAgent || ""); } catch (_) { return false; }
+  if (!ua) return false;
+  try { return !nav.gpu; } catch (_) { return true; }
+}
+
 // The shipped default matches each device's picture without this control:
-// desktop runs the full stack (HIGH); a phone the memory-safe STANDARD tier
-// unless it has opted into apex26.gfxHigh (the legacy mobile-only toggle,
-// authoritative as ULTRA). A fresh phone stays MEDIUM: HIGH removes the tier-2
-// floor and enables the env probe plus lamp shadows/SSR before the governor
-// has measured the device
-function defaultId(isMobile) {
-  if (!isMobile) return "high";
+// desktop runs the full stack (HIGH); a capable phone the memory-safe MEDIUM
+// tier; a weak phone LOW. The legacy apex26.gfxHigh opt-in used to mean ULTRA;
+// on phones that is capped to HIGH (see maxId / capId). A fresh capable phone
+// stays MEDIUM: HIGH removes the tier-2 floor and enables the env probe plus
+// lamp shadows/SSR before the governor has measured the device
+function defaultId(mobile, hint) {
+  if (!mobile) return "high";
   const s = gstore();
   const legacy = !!s && s.raw("apex26.gfxHigh") === "1";
-  return legacy ? "ultra" : "medium";
+  if (legacy) return PHONE_MAX_ID;
+  const weak = hint && typeof hint.weak === "boolean" ? hint.weak : isWeakPhone();
+  return weak ? "low" : "medium";
 }
 
 // The preset's live half: the tier floor is the only part that can change
@@ -80,9 +128,17 @@ function syncBootTier() {
 function label() { return `GRAPHICS: ${current().label}`; }
 
 // `note` is appended to the CURRENT preset's label (" — RELOADING…" while a
-// tier change reloads; " — FULLY APPLIES AFTER A RELOAD" mid-race)
+// tier change reloads; " — FULLY APPLIES AFTER A RELOAD" mid-race). On phones
+// ULTRA stays in the list but disabled, with PHONE_ULTRA_NOTE so the cap is
+// visible in the row (SettingRow's third tuple slot).
 function gfxValues(note) {
-  return PRESETS.map((p) => [p.id, p.label + (note && p.id === curId ? note : "")]);
+  return PRESETS.map((p) => {
+    let text = p.label;
+    const phoneBlocked = isMobile && p.id === "ultra";
+    if (phoneBlocked) text += PHONE_ULTRA_NOTE;
+    if (note && p.id === curId) text += note;
+    return phoneBlocked ? [p.id, text, true] : [p.id, text];
+  });
 }
 
 function paintGfx(note) {
@@ -107,11 +163,13 @@ function reloadSoon() {
 }
 
 function set(id, opts = {}) {
-  const p = presetById(id);
+  const raw = presetById(id);
+  if (!raw) return false;
+  const p = presetById(capId(raw.id, isMobile));
   if (!p) return false;
   const prev = presetById(curId);
   curId = p.id;
-  Log.info("game", `GfxQuality.set ${curId}`);
+  Log.info("game", `GfxQuality.set ${curId}` + (raw.id !== curId ? ` (capped from ${raw.id})` : ""));
   const st = gstore();
   if (st) st.set("gfxPreset", curId);
   applyLive();
@@ -134,8 +192,10 @@ function set(id, opts = {}) {
 }
 
 function cycle() {
-  const i = PRESETS.findIndex((p) => p.id === curId);
-  return set(PRESETS[(i + 1) % PRESETS.length].id);
+  // Skip phone-blocked ULTRA so the one-button fallback matches SettingRow.
+  const live = PRESETS.filter((p) => !(isMobile && p.id === "ultra"));
+  const i = live.findIndex((p) => p.id === curId);
+  return set(live[(i + 1) % live.length].id);
 }
 
 function mountControl() {
@@ -144,7 +204,7 @@ function mountControl() {
   const host = btn.parentNode;
   if (typeof SettingRow !== "undefined" && host && typeof host.replaceChild === "function" && !row) {
     const built = SettingRow.build("pm-gfx", "GRAPHICS", gfxValues(""));
-    built.row.title = btn.title || "";
+    built.row.title = isMobile ? PHONE_CAP_TITLE : (btn.title || "");
     host.replaceChild(built.row, btn);
     row = built.row;
     SettingRow.wire(row, { values: gfxValues(""), read: () => curId, write: (v) => { set(v); uiSelect(); } });
@@ -153,6 +213,7 @@ function mountControl() {
   }
   btn.hidden = false;
   btn.textContent = label();
+  if (isMobile) btn.title = PHONE_CAP_TITLE;
   btn.onclick = () => { cycle(); uiSelect(); };
 }
 
@@ -164,15 +225,18 @@ function init() {
   // setting. The typeof guard is the standalone-harness fallback
   isMobile = typeof GLX !== "undefined" && !!GLX.isMobile;
   const st = gstore();
-  curId = (st && st.get("gfxPreset", null)) || defaultId(isMobile);
-  if (!presetById(curId)) curId = defaultId(isMobile);
+  const rawId = (st && st.get("gfxPreset", null)) || defaultId(isMobile);
+  curId = capId(presetById(rawId) ? rawId : defaultId(isMobile), isMobile);
+  // Persist the cap so a stored "ultra" on a phone does not keep reappearing
+  // as the unresolved preference on the next boot
+  if (st && rawId !== curId) st.set("gfxPreset", curId);
   // RECONCILE THE BOOT TIER WITH THE PRESET. `apex26.gfxHigh` is read at BOOT
   // by glx.js, post.js and the audio engine, and was written ONLY by set() —
   // so any path that lands a gfxPreset without set() (a settings-file import)
   // left the two disagreeing, and a phone whose UI said MEDIUM booted on the
   // DESKTOP tier with nothing ever re-syncing it. Stable, not circular:
-  // defaultId reads gfxHigh only for the legacy ULTRA opt-in, and ULTRA is the
-  // one preset with mobileHigh true, so it writes back the value it read.
+  // defaultId no longer returns ULTRA on phones (capped to HIGH), and HIGH
+  // has mobileHigh false, so a leftover gfxHigh=1 is cleared here.
   // Takes effect on the next load, when those boot reads happen
   syncBootTier();
   applyLive();
@@ -185,6 +249,9 @@ if (typeof document !== "undefined") {
   else init();
 }
 
-return { PRESETS, init, set, cycle, current: () => current().id, label, defaultId };
+return {
+  PRESETS, init, set, cycle, current: () => current().id, label, defaultId,
+  maxId, capId, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE,
+};
 })();
 Object.freeze(GfxQuality);

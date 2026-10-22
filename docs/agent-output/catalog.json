@@ -2789,6 +2789,12 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/shot/ab-gallery.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/shot/agent.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
@@ -3127,6 +3133,12 @@
       "nativeOutputFlagMentions": [
         "--out"
       ]
+    },
+    {
+      "path": "tools/shot/visor-lab-export.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
     },
     {
       "path": "tools/shot/webgpu-urban-gallery.mjs",
@@ -3651,7 +3663,7 @@
     },
     {
       "name": "test:car",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/car-effects.spec.js tests/specs/carview-parts.spec.js tests/specs/custom-team.spec.js tests/specs/garage-aero.spec.js tests/specs/garage-first-frame.spec.js tests/specs/garage-livery-churn.spec.js tests/specs/garage-livery-fit.spec.js tests/specs/garage-out-before-card.spec.js tests/specs/garage-pick-cost.spec.js tests/specs/garage-prebuild.spec.js tests/specs/livery-sidewall.spec.js tests/specs/livery-wheels.spec.js tests/specs/parts-*.spec.js tests/specs/race-geo-stable.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/car-effects.spec.js tests/specs/carview-parts.spec.js tests/specs/custom-team.spec.js tests/specs/garage-aero.spec.js tests/specs/garage-close-one-click.spec.js tests/specs/garage-first-frame.spec.js tests/specs/garage-livery-churn.spec.js tests/specs/garage-livery-fit.spec.js tests/specs/garage-out-before-card.spec.js tests/specs/garage-pick-cost.spec.js tests/specs/garage-prebuild.spec.js tests/specs/livery-sidewall.spec.js tests/specs/livery-wheels.spec.js tests/specs/parts-*.spec.js tests/specs/race-geo-stable.spec.js"
     },
     {
       "name": "test:circuits",

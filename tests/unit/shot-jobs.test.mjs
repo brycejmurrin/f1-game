@@ -60,7 +60,7 @@ test("parseShotArgv single + batch + raster", () => {
 
   const raster = parseShotArgv(["monza", "0.1", "--raster"], ROOT);
   assert.equal(raster.jobs[0].raster, true);
-  assert.match(SHOT_USAGE, /--batch/);
+  assert.ok(SHOT_USAGE.includes("--batch"), "usage documents --batch");
 });
 
 test("--clear is opt-in: off by default, on from the flag or a batch field (#2253)", () => {
@@ -69,7 +69,7 @@ test("--clear is opt-in: off by default, on from the flag or a batch field (#225
   assert.equal(flagged.clear, true);
   assert.equal(flagged.cam, "cinematic", "--clear takes no value, so the next positional is still the cam");
   assert.equal(normalizeJob({ track: "vegas", cam: "orbit", clear: true }, { ROOT }).clear, true);
-  assert.match(SHOT_USAGE, /--clear/);
+  assert.ok(SHOT_USAGE.includes("--clear"), "usage documents --clear");
 });
 
 test("traffic and racing-line shot flags preserve AI cars and hide the suggested line", () => {
@@ -165,4 +165,54 @@ test("--weather parses, validates, and splits batch groups", () => {
   assert.deepEqual(groups.map((g) => g.jobs.map((j) => j.weather)), [["fog", "fog"], ["dry", "dry"]]);
   assert.equal(shotSessionKey(jobs[0]), shotSessionKey(jobs[1])); // weather changes in place, like tod
   assert.match(SHOT_USAGE, /--weather dry\|wet\|rain\|overcast\|fog/);
+});
+
+// A/B imports must preserve existing pairs and refuse misleading image geometry.
+import sharp from 'sharp';
+import os from 'node:os';
+import {addPair, recipePairs, selectionFields} from '../../tools/shot/ab-gallery.mjs';
+test('A/B gallery validates capture recipes before launching a browser',()=>{
+ const pair={id:'test',scene:{weather:'storm'},b:{visor:'clear',visorRefraction:'strong'}};
+ assert.equal(recipePairs({pairs:[pair]})[0].scene.weather,'storm');
+ for(const invalid of [{...pair,id:'../bad'},{...pair,scene:{frac:1}},{...pair,b:{unknown:'x'}}])assert.throws(()=>recipePairs({pairs:[invalid]}));
+ assert.throws(()=>recipePairs({pairs:[pair,pair]}),/duplicate/);
+});
+test('A/B append, replace and failed imports preserve valid comparisons',async()=>{
+ const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'apex-ab-'));
+ try{
+  const gallery=path.join(tmp,'gallery'),a=path.join(tmp,'a.png'),b=path.join(tmp,'b.png'),wrong=path.join(tmp,'wrong.png');
+  await sharp({create:{width:32,height:18,channels:3,background:'#123456'}}).png().toFile(a);
+  await sharp({create:{width:32,height:18,channels:3,background:'#abcdef'}}).png().toFile(b);
+  await sharp({create:{width:16,height:9,channels:3,background:'#000'}}).png().toFile(wrong);
+  const add=extra=>addPair({gallery,id:'first',a,b,...extra});
+  await add({title:'First'});await add({id:'second',title:'Second'});await add({title:'Updated'});
+  const read=()=>JSON.parse(fs.readFileSync(path.join(gallery,'comparisons.json'),'utf8'));
+  assert.equal(read().pairs.length,2);assert.equal(read().pairs.find(p=>p.id==='first').title,'Updated');
+  {
+    const file = read().pairs[0].a.file;
+    const prefix = 'comparison-images/', suffix = '.webp';
+    assert.ok(file.startsWith(prefix) && file.endsWith(suffix), 'stored under comparison-images/*.webp');
+    const hash = file.slice(prefix.length, -suffix.length);
+    assert.equal(hash.length, 64);
+    assert.equal([...hash].every((c) => '0123456789abcdef'.includes(c)), true, 'content-addressed sha256 hex');
+  }
+  for(const file of ['comparisons.html','comparisons.js','comparisons.css'])assert.ok(fs.existsSync(path.join(gallery,file)));
+  const before=fs.readFileSync(path.join(gallery,'comparisons.json'),'utf8');
+  await assert.rejects(add({b:wrong}),/dimensions/);await assert.rejects(add({id:'../escape'}),/slug/);
+  fs.writeFileSync(path.join(gallery,'.comparisons.lock'),'');await assert.rejects(add(),/EEXIST/);fs.unlinkSync(path.join(gallery,'.comparisons.lock'));
+  assert.equal(fs.readFileSync(path.join(gallery,'comparisons.json'),'utf8'),before);
+  const {execFileSync}=await import('node:child_process');
+  execFileSync(process.execPath,[path.join(ROOT,'tools/shot/visor-lab-export.mjs'),gallery],{cwd:ROOT});
+  assert.ok(read().pairs.some(p=>p.id==='first'));assert.ok(read().pairs.some(p=>p.id==='second'));
+  assert.ok(read().pairs.some(p=>p.id==='bahrain-rain-optics'));
+
+ }finally{fs.rmSync(tmp,{recursive:true,force:true})}
+});
+
+test('A/B selectors derive scene metadata and isolate individual lens effects',()=>{
+ const pairs=recipePairs({pairs:[{id:'reflection',scene:{track:'monza',tod:'day',weather:'dry',frac:.2},a:{visor:'clear'},b:{visor:'clear',visorReflections:'strong'}},{id:'refraction',a:{visor:'clear'},b:{visor:'clear',visorRefraction:'strong'}}]});
+ assert.deepEqual(pairs[0].selection,{race:'monza',timing:'day',weather:'dry',camera:'helmet',effect:'reflections',position:'0.2'});
+ assert.equal(pairs[1].selection.effect,'refraction');
+ assert.equal(selectionFields({race:'Monza GP',position:'0.18'}).position,'0.18');
+ for(const invalid of [{timing:'tomorrow'},{weather:'hail'},{position:1},{position:'bad'},{effect:{}}])assert.throws(()=>selectionFields(invalid));
 });

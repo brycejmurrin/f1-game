@@ -483,7 +483,7 @@ const CSS = [
   "css/appearance-studio.css", "css/watch-transport.css", "css/career-experience.css",
   "css/garage-experience.css", "css/photo-studio.css", "css/experience.css",
   "css/editor.css",         // the TRACK DESIGNER screen (td-*); deferred like data.css
-  "css/cockpit-preview.css", "css/player-tools.css",
+  "css/cockpit-preview.css", "css/player-tools.css", "css/helmet-visor.css",
 ];
 // Title-critical sheets are also <link rel="preload">ed above the stylesheet
 // block. Dialogs/settings load print→all without a competing high-priority
@@ -505,7 +505,7 @@ const CSS_DEFERRED = [
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
   "css/appearance-studio.css", "css/watch-transport.css",
   "css/career-experience.css", "css/garage-experience.css",
-  "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css", "css/player-tools.css",
+  "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css", "css/player-tools.css", "css/helmet-visor.css",
   "css/dialogs.css", "css/settings.css", "css/settings-controls.css",
   "css/dialog-platform.css", "css/save-health.css", "css/select.css", "css/race-setup.css",
 ];

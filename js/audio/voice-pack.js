@@ -108,6 +108,14 @@ var VoicePack = (() => {
     return seq.length ? seq : null;
   }
 
+  /** Announcer packs are ~6 MB (fable.bin): never ride the race-load network.
+   *  Bare id of an announcer voice, or any `*-announcer` cross-channel pack. */
+  function isAnnouncerPack(id) {
+    if (!id) return false;
+    if (/-announcer$/.test(id)) return true;
+    return !!(VOICES[id] && VOICES[id].speaker === "announcer");
+  }
+
   function create(G, opts) {
     const base = (opts && opts.base) || "assets/voice/";
     const voices = {};   // id -> { state, man, bin, cache: Map, gen, failedAt }
@@ -118,9 +126,21 @@ var VoicePack = (() => {
     // busy() first).
     const live = {};     // channel -> { stop, end }
     let spoke = 0, missed = 0, lastSeq = null;
+    // D·DP8: while race entry is downloading track/audio, announcer ensure()s
+    // queue instead of fetching. Cleared when the race/count session begins.
+    let raceLoad = false;
+    const deferred = new Set();
 
     function voice(id) {
       return voices[id] || (voices[id] = { id, state: "idle", man: null, bin: null, cache: new Map(), secs: 0 });
+    }
+    /** Gate announcer fetches off the race-load path. Opening flushes the queue. */
+    function raceLoadGate(on) {
+      raceLoad = !!on;
+      if (raceLoad || !deferred.size) return;
+      const ids = [...deferred];
+      deferred.clear();
+      for (const id of ids) if (wanted.has(id)) ensure(id);
     }
     /** Start fetching a voice. Idempotent; never throws; boot never waits on it. */
     function ensure(id) {
@@ -128,6 +148,8 @@ var VoicePack = (() => {
       const v = voice(id);
       if (v.state === "failed" && Date.now() - v.failedAt > RETRY_MS) v.state = "idle";
       if (v.state !== "idle" || typeof fetch !== "function") return v.state;
+      // Graceful no-voice until the gate opens or an explicit post-load ensure.
+      if (raceLoad && isAnnouncerPack(id)) { deferred.add(id); return v.state; }
       v.state = "loading";
       const controller = typeof AbortController === "function" ? new AbortController() : null;
       let timer;
@@ -167,8 +189,9 @@ var VoicePack = (() => {
       return v.state;
     }
     /** Lap-1 radio: the engineer and spotter share one pack; it must win bandwidth
-     *  over the coach and announcer on a cold cache. Each tier's fetches start only
-     *  after the previous tier's loads settle (ready, failed, or already cached).
+     *  over the coach on a cold cache. Announcer packs (~6 MB) are remembered but
+     *  not fetched here — raceLoadGate / ensure() after lights-out (or first use
+     *  once the gate is open). Each tier starts only after the previous settles.
      *  Idempotent; never throws; callers do not await it. */
     function ensureStaged(tiers) {
       if (!tiers || !tiers.length || typeof fetch !== "function") return;
@@ -180,6 +203,9 @@ var VoicePack = (() => {
           if (!id || seen.has(id)) continue;
           seen.add(id);
           wanted.add(id);
+          // Never stage-fetch announcer (~6 MB). Under the race-load gate, queue
+          // for flush; otherwise first ensure()/load() after the gate opens.
+          if (isAnnouncerPack(id)) { if (raceLoad) deferred.add(id); continue; }
           ids.push(id);
         }
         if (ids.length) uniq.push(ids);
@@ -189,7 +215,7 @@ var VoicePack = (() => {
         for (const tier of uniq) {
           // A selection change can retire a queued tier before its predecessor
           // settles. Only a later explicit ensure/ensureStaged may revive it.
-          const ids = tier.filter((id) => wanted.has(id));
+          const ids = tier.filter((id) => wanted.has(id) && !isAnnouncerPack(id));
           for (const id of ids) ensure(id);
           await Promise.all(ids.map((id) => (voice(id).loading || Promise.resolve())));
         }
@@ -319,13 +345,14 @@ var VoicePack = (() => {
     }
 
     return {
-      ensure, ensureStaged, ready, plan, speak, stop, remaining, releaseExcept,
+      ensure, ensureStaged, raceLoadGate, ready, plan, speak, stop, remaining, releaseExcept,
       load(id) { ensure(id); return (voice(id).loading || Promise.resolve()).then(() => ready(id)); },
       busy: (channel) => (channel ? !!live[channel] : Object.keys(live).length > 0),
       debug: () => ({ voices: Object.fromEntries(Object.values(voices).map((v) => [v.id, v.state])), spoke, missed, last: lastSeq,
+        raceLoad, deferred: [...deferred],
         cache: Object.fromEntries(Object.values(voices).map((v) => [v.id, { clips: v.cache.size, secs: +v.secs.toFixed(2) }])), cacheS: CACHE_S }),
     };
   }
 
-  return Object.freeze({ create, norm, compose, keyOf, lineKey, choices, packFor, VOICES, PAUSE, MAX_WORDS, SLACK_S });
+  return Object.freeze({ create, norm, compose, keyOf, lineKey, choices, packFor, isAnnouncerPack, VOICES, PAUSE, MAX_WORDS, SLACK_S });
 })();
