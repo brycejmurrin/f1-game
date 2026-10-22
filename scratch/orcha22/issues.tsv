@@ -1,0 +1,204 @@
+3477	2026-10-22	base-red	Base red suspects (auto)
+3418	2026-10-21		[D·car] body-shapes: style_engine_zeropod garage silhouette overshoot 
+3417	2026-10-21		[D·car] body-shapes: pod-sculpt quartet adds ~+9–10% player body tris 
+3416	2026-10-21		[D·car] body-shapes: Playwright garage capture gallery aborted (no sho
+3414	2026-10-21	ready,claimed	[D·car] wheels: STYLE Arc Script and Raised Letters sidewalls barely v
+3413	2026-10-21	ready	[D·car] aero: outwash_max rear wing horizontal z-fight on wing preset
+3412	2026-10-21	ready	[D·car] aero: garage TLX shows oversized orange emissive block at tail
+3411	2026-10-21	ready	[D·car] aero: S-Duct option has no nose duct geometry (floor vanes onl
+3405	2026-10-21	ready	[D·car] aero: Haas signature kit barely distinct from Low DF at garage
+3404	2026-10-21	ready	[D·car] aero: 2026 packages lack active front-wing mode silhouette
+3375	2026-10-21		[D·scenery] mugello: weak cypress/Arrabbiata identity; mid-lap orbit i
+3374	2026-10-21		[D·scenery] monza: coplanar 5 + clip severe 7 saturate baselines (z-fi
+3373	2026-10-21		[D·scenery] nurburgring: bare sand-pyramid horizon; Burg Nürburg / Eif
+3372	2026-10-21		[D·scenery] portimao: verges read green/tan — missing Algarve red cut-
+3371	2026-10-21		[D·scenery] miami: docs brief says clockwise but FIA and geometry are 
+3369	2026-10-21		[D·scenery] miami: day S/F orbit/trackside cameras sit inside Hard Roc
+3368	2026-10-21		[D·scenery] monaco: mid-lap orbit camera buried in Fairmont cliff (day
+3366	2026-10-21	ready	[D·scenery] suzuka: Ferris wheel landmark not readable in full-lap day
+3365	2026-10-21	ready	[D·scenery] qatar: day S/F orbit buried in sand; pit / Lusail Hill ide
+3364	2026-10-21	ready	[D·scenery] redbull: orbit survey camera clips inside props at multipl
+3363	2026-10-21	ready	[D·scenery] vegas: day Strip reads as desert blocks + balloon; Sphere/
+3361	2026-10-21	ready,claimed	[D·scenery] singapore: city modelGroups float 150–218 m; backdrop copl
+3360	2026-10-21	ready	[D·scenery] shanghai: Pudong skyline floats (70–148 m gaps) and sits ~
+3355	2026-10-21	ready	[D·review] skills-b data-hub: test-solo.mjs missing tools/ci/ prefix
+3354	2026-10-21	ready	[D·review] skills-b multiplayer-debug: nostr-probe needs ws install no
+3353	2026-10-21	ready	[D·review] skills-b pages-red-triage: use tools/ci/pages-live-sha.sh p
+3352	2026-10-21	ready	[D·review] skills-b data-hub: minor line-anchor nits (standings.js, sh
+3351	2026-10-21	ready	[D·review] skills-b gen-regen: npm run gen --silent runs full gen desp
+3350	2026-10-21	ready	[D·scenery] buenos_aires: mass-concrete terrace density too thin for G
+3349	2026-10-21	ready	[D·scenery] albert_park: cityFront voided — CBD skyline is abstract to
+3348	2026-10-21	ready	[D·scenery] dijon: four severe clips and five flatCoplanar ground advi
+3347	2026-10-21	ready	[D·scenery] bahrain: main tribuna reads dark grey by day (not cream Gu
+3346	2026-10-21	ready	[D·scenery] abudhabi: Yas hotel gridshell reads as rainbow skeleton vs
+3345	2026-10-21	ready	[D·scenery] estoril: scenery too sparse (1 grandstandEx, lightest prop
+3344	2026-10-21	ready	[D·scenery] catalunya: five severe clip spots on pit/stand corridor
+3343	2026-10-21	ready	[D·scenery] catalunya: Stadium-section grandstands missing (only Main 
+3342	2026-10-21	ready	[D·scenery] bahrain: ground-audit buried 19 props and 1 unsupported (b
+3340	2026-10-21	ready	[D·scenery] baku: night orbit at frac 0.83 captures black-scene-with-e
+3339	2026-10-21	ready	[D·survey] Garage livery grid extreme scroll depth on phone
+3338	2026-10-21	ready	[D·survey] Photo Studio #ps-body minor clip on iPad portrait
+3337	2026-10-21	ready	[D·survey] Photo Studio settings steppers under touch target on deskto
+3336	2026-10-21	ready	[D·survey] MY TEAM sheet (#customize) bottom clip on phone portrait
+3335	2026-10-21	ready	[D·survey] Garage tab subtitles ellipsize long fitted part names on de
+3334	2026-10-21	ready	[D·survey] Garage TEAM driver chips and FREE BUILD under touch target 
+3333	2026-10-21	ready	[D·survey] Garage Active Aero and Camera footer controls under touch t
+3332	2026-10-21	ready	[D·survey] Garage #cs-options horizontal overflow at 75% UI scale
+3331	2026-10-21	ready	[D·survey] Garage #cs-body clips sheet on 320×568 and 360×640 at 100% 
+3330	2026-10-21	ready	[D·survey] Livery finish tags clip outside swatch cards (CHAMELEON/GOL
+3329	2026-10-21	ready	[D·review] skills-a: stand-down push window 10 min (ci-watch) vs 15 mi
+3328	2026-10-21	ready	[D·review] ci-watch SKILL tells users merge desk will merge; role says
+3326	2026-10-21	ready	[D·review] audio-debug SKILL.md stale line anchors for GameAudio.shift
+3325	2026-10-21	ready	[D·review] playwright-probe: flicker-gate.mjs missing tools/shot/ path
+3323	2026-10-21	ready	[D·review] pwa-cache-service-worker sw.js line anchors stale in SKILL.
+3322	2026-10-21	ready	[D·review] skills-c low: ui-menu-a11y path label + phone-browser viewp
+3321	2026-10-21	ready	[D·review] pwa-cache-service-worker SKILL omits pages-live-sha.sh URL 
+3320	2026-10-20	ready,claimed	[D·review] AGENT-SURFACE.md says forty apex_* tools; tools/list has 41
+3319	2026-10-20	ready,claimed	[D·review] AGENTS.md hooks paragraph stale vs settings.json and protec
+3318	2026-10-20	ready,claimed	[D·review] AGENTS.md sync cites missing origin/ship; sync-pr merges de
+3317	2026-10-20	ready	[D·scenery] hungaroring: pit-straight firs fight dusty amphitheatre; 2
+3316	2026-10-20	ready	[D·scenery] kyalami: start orbit/trackside look into/under main grands
+3315	2026-10-20	ready	[D·scenery] jeddah: night start orbit occluded by near-field building 
+3314	2026-10-20	ready	[D·scenery] fuji: Mount Fuji snow cap unreadable from pit-straight day
+3313	2026-10-20	ready	[D·scenery] batch2: start/finish trackside cam buried in pit/stand wal
+3311	2026-10-20	ready	[D·survey] Phone rotation rebuilds post targets and sheds the quality 
+3308	2026-10-20		[D·scenery] test-permission-check (delete me)
+3307	2026-10-20		[D·survey] Settings Appearance steppers undersized at UI scale 75%
+3306	2026-10-20		[D·survey] VS Friend sheet header clips at UI scale 200% (desktop)
+3305	2026-10-20		[D·survey] Title mode grid clips when UI scale is 200% on phone landsc
+3304	2026-10-20		[D·survey] Title USE AS CONTROLLER label overflows button (tablet land
+3303	2026-10-20		[D·survey] Season setup calendar chips clip at UI scale 200% (portrait
+3302	2026-10-20		[D·survey] INSTALL APP chip stacks on PAUSE BACKGROUND (title landscap
+3299	2026-10-20	ready	[D·audit] DevFlags hash channel is dead because every flag sets noHash
+3298	2026-10-20	ready	[D·audit] KIT_DEF theme rows are unused copies of the green fallback
+3297	2026-10-20	ready	[D·audit] Retro shift lights go fully dark at the limiter
+3296	2026-10-20	ready	[D·audit] Asset verify skips material PNG hashes when the manifest has
+3295	2026-10-20	ready	[D·audit] ScriptLoader retry re-executes a classic script that already
+3294	2026-10-20	ready	[D·audit] Paying down a crash strike leaves autoTier at the old floor
+3293	2026-10-20	ready	[D·audit] Service worker caches a 200 page that has no apex-build meta
+3292	2026-10-20	ready	[D·audit] Mirror stand-down freezes the previous rear-view prop pack
+3291	2026-10-20	ready	[D·audit] GLX lamp-shadow slot bypasses the uniform cache
+3290	2026-10-20	ready	[D·audit] A day track keeps the previous night's tail-light car refs
+3289	2026-10-20	ready	[D·audit] Crowd bed stays on a closed AudioContext after rebuild
+3288	2026-10-20	ready	[D·audit] Net interpolation lerps a car across a multi-second dropout
+3287	2026-10-20	ready	[D·audit] Driven real race classifies a DSQ finisher as a normal resul
+3286	2026-10-20	ready	[D·audit] Chequered flag disarms an AI that still owes a dry compound
+3284	2026-10-20	ready	[D·audit] Service worker ?b= bust ignores a newer unsettled shell
+3283	2026-10-20	ready	[D·audit] In-race restart drops the loading plate and still ticks the 
+3282	2026-10-20	ready	[D·audit] Context-loss window.name regex never matches, so the reload 
+3281	2026-10-20	ready	[D·audit] Local water sheets sit at the lap's lowest road height
+3280	2026-10-20	ready	[D·audit] Cantilever gantries grow a second pair of legs
+3279	2026-10-20		Epic: real-GPU evidence runs
+3278	2026-10-20		Epic: process and CI hygiene
+3276	2026-10-20		[D·survey] Race settings stepper chips 40×40 on desktop
+3275	2026-10-20		[D·survey] Pause music transport buttons 40×40 on desktop
+3274	2026-10-20		[D·survey] Pause menu controls undersized at UI scale 75%
+3273	2026-10-20		[D·survey] MOVE & SIZE sliders inert for hidden minimal HUD elements
+3272	2026-10-20		[D·survey] Chase HUD aero readout overlaps right steer at HUD 70%
+3271	2026-10-20		[D·survey] Portrait cockpit gaps strip overlaps rear-view mirror frame
+3270	2026-10-20		[D·survey] Gearbox MOVE & SIZE s200 clears --hud-z-bot fit cap
+3269	2026-10-20		[D·survey] MOVE & SIZE extremes stack HUD readouts over touch targets
+3268	2026-10-20		[D·survey] Timing tower missing on short landscape at high HUD/button 
+3267	2026-10-20		[D·survey] Live BROADCAST camera switch leaves timing tower off-screen
+3266	2026-10-20		[D·survey] CLEAN HUD preset stacks OT and aero readouts
+3265	2026-10-20		[D·survey] BIG HUD preset overlaps tower, gaps, speed, and gearbox
+3264	2026-10-20		[D·survey] HUD SIZE 70% paints timing tower labels below 10px
+3263	2026-10-20		[D·survey] CORNERS HUD preset pushes gearbox off-screen on desktop
+3261	2026-10-20	ready	[D·audit] HUD, shell, and garage CSS are past a comfortable edit size
+3257	2026-10-20	ready	[D·audit] Title CSS preloads have no SRI, so Chrome drops them
+3254	2026-10-20		[D·survey] Settings at UI 200%: overflow/clip/scroll cluster (#3251-#3
+3250	2026-10-20		[D·survey] One Escape from Settings › Accessibility leaves dialog open
+3249	2026-10-20		[D·survey] Settings dialog opens with keyboard focus on BACK, not nav
+3248	2026-10-20		[D·survey] Opening Settings forces layout reflow in UiLayers.shownLaye
+3158	2026-10-20	area:render	#2572 follow-up: TLX rows 1,3,4,5 and the post-reload draw check need 
+3156	2026-10-20		Concept body styles: car-fit-audit rows on the six BODY_STYLES (#3118 
+3117	2026-10-19	ready,perf	Perf hunt H8: tests, tools, CI wall time (2026-10-19)
+3115	2026-10-19	ready,perf	Perf hunt H3: render backends (2026-10-19)
+3110	2026-10-19	ready	Perf hunt H6: boot, load, memory, PWA (2026-10-19)
+3109	2026-10-19	ready	Perf hunt H5: physics, race, AI, game loop (2026-10-19)
+3108	2026-10-19	ready	Perf hunt H7: UI, HUD, garage, career, editor, CSS (2026-10-19)
+3104	2026-10-19		perf(tlx/webgpu): unfixed render-path findings from B·H1 (#3099)
+3100	2026-10-19		perf: per-car step garbage (boxed doubles), Math.hypot in physics, dea
+3043	2026-10-19		L22 leftovers: tooling test splits, test-bg start() coverage, report-s
+3040	2026-10-19		L13 follow-ups: html-sink-lint sink list (T3-19), stream-position hook
+3039	2026-10-19		L27 follow-up: roster-derived elevation twin, parametrised foundation 
+3025	2026-10-19		test-review T1-15: needs a CI measurement before the test can be fixed
+3014	2026-10-19	test-review	test-review T4-30: move the game.js raw-read ceiling out of source-pin
+2994	2026-10-19	ready	track-surveyor: try `memory: local` for per-circuit quirks
+2977	2026-10-19	bug	HUD: announce lane not re-published after docks return; fit-collapsed 
+2952	2026-10-19	ready,tracking	Test suite review 2026-10-19: every test file, 22 batches
+2945	2026-10-19	documentation,blocked	Deferred: plan repository history cleanup while development continues
+2906	2026-10-18		UI explorer follow-ups: offline proof summary, missing evidence warnin
+2881	2026-10-18		mcp-browser-guard does not match the browser-use plugin MCP server
+2788	2026-10-17	bug	TLX: livery finishes (chrome, matte, tinted, chameleon) barely or not 
+2657	2026-10-17	ready,area:render,area:perf	Perf: index-only LOD for distant chunks and the mirror pass (count tri
+2656	2026-10-17	blocked,area:render,area:perf	Perf: render-object diet (collapse instanced prop variants, wheels as 
+2650	2026-10-17	blocked,area:perf	Perf: allocation diet round 2 (game.js per-car temporaries, three _bin
+2649	2026-10-17	blocked,area:render,area:perf	Perf: tile-GPU bandwidth trims on the phone tier (sky cache 512, godra
+2631	2026-10-17	ready	Draft plan: measure TLX road culling and mesh efficiency improvements
+2572	2026-10-16	ready,area:render	Render live-debug gaps: TLX/GLX resize, hidden/visible, context loss, 
+2501	2026-10-16		Tool survey: remaining correctness and performance follow-ups
+2394	2026-10-16	flaky	Flaky tests (daily tally)
+2194	2026-10-15	area:net	Plan: offline install resilience — the shell repair wipes caches while
+2177	2026-10-15	blocked,area:physics	Plan: brake cue should use the player's real grip (weather/tread, down
+1825	2026-10-14	blocked,area:render	Garage drive-out: outside follow shot (needs the bay's exterior fronta
+1780	2026-10-14	fleet-board	Fleet board
+1745	2026-10-14	epic	Complete verified module follow-ups from the F1 game survey
+1710	2026-10-14	epic,area:tooling	Process research 2026-09-16: open ergonomics, CI and measurement items
+1682	2026-10-14	ready,area:tooling	Convert single-file source-text pins to behaviour assertions
+1677	2026-10-14	epic,area:tooling	Process speed-up: remaining items from the 'next fifteen' plan
+1676	2026-10-14	blocked,area:physics	Decide held physics rows H15 (ERS drain under braking) and 7.7 (queue 
+1675	2026-10-14	epic,area:physics,area:net	Fix-all (hunts 1+2 and launch sequence): held decisions
+1653	2026-10-14	epic,area:tooling	Carve ratchet headroom out of saturated files
+1652	2026-10-14	blocked,area:render	Run the SGSR1 spatial-upscaler real-GPU A/B and decide default-ON
+1651	2026-10-14	ready,area:tooling	Record real-GPU race-entry longtask before/after for the warm handoff
+1650	2026-10-14	epic,area:perf	Load time: real-GPU race-entry numbers and the upscaler decision
+1640	2026-10-14	epic,area:perf	Perf and memory: phone-resident memory and per-frame garbage
+1639	2026-10-14	blocked,area:render	Explain why three Float16BufferAttribute colour renders darker on WebG
+1638	2026-10-14	blocked,area:render	Find an instrument for TLX WebGL2-leg vertex colour quantisation loss
+1635	2026-10-14	epic,area:render,area:perf	Texture memory: finish the negative results and the open TLX/KTX2 ques
+1633	2026-10-14	blocked,area:render	Run sustained 10-min graphics benchmark on real devices
+1629	2026-10-14	blocked,area:ai	Add ERS energy forecast and sector deployment plan
+1628	2026-10-14	ready,area:physics	Add torque-balanced wheel state for real lockup/wheelspin
+1627	2026-10-14	ready,area:physics	Extend global wetness to a spatial sector/drying-line field
+1626	2026-10-14	epic,area:physics,area:ai	Mechanics coherence: remaining opportunity register
+1620	2026-10-14	blocked,area:render	Add per-vertex Crysis-style foliage wind on all backends
+1619	2026-10-14	ready,area:track	Decide tree budget, then bake ez-tree species to AX26 v3 with sway
+1618	2026-10-14	blocked,area:track	Spread kit paddock furniture to the other circuits
+1616	2026-10-14	epic,area:render,area:track	Models & life: Kenney kit rollout, baked trees, wind, crowds
+1615	2026-10-14	ready,area:render	Hand-trim the 8 donor-copied lighting grids per circuit
+1613	2026-10-14	epic,area:render,area:track	Wetness contract + lighting grids: visual sign-off
+1610	2026-10-14	blocked,area:ui	Add client-side .ics race-weekend/season export
+1608	2026-10-14	epic,area:career,area:net	PWA: Next GP tile, .ics calendar export, install extras
+1607	2026-10-14	blocked,area:ui	Ship first locales (es, pt-BR, it, de) as beta
+1606	2026-10-14	area:audio	Localise radio/engineer/spotter lines + spoken-language setting
+1605	2026-10-14	ready,area:career	Migrate Garage/parts and Career/Season/Data Hub chrome
+1604	2026-10-14	ready,area:ui	Migrate HUD labels, results/quali sheets and number formatting
+1603	2026-10-14	ready,area:ui	Migrate title, SETTINGS, pause and race setup to I18n
+1599	2026-10-14	epic,area:ui,area:track	Localisation (i18n) layer and incremental migration
+1595	2026-10-14	area:ui	Route all hard-coded colour sources through CvdPalette
+1593	2026-10-14	epic,area:ui,area:audio	Colour-blind-safe palette system + complete captions
+1589	2026-10-14	ready,area:physics	Measure cross-browser physics determinism for ghost leaderboards
+1584	2026-10-14	blocked,area:ui	Plan and build a cooldown lap, parc ferme and podium flow
+1583	2026-10-14	epic,area:physics,area:track	Feature roadmap (2026-10-04) tier 2-3 follow-ups
+1580	2026-10-14	ready,area:physics	Add a manual sector energy deployment plan
+1578	2026-10-14	ready,area:physics	Make damage affect handling as an optional mode
+1577	2026-10-14	blocked,area:physics	Model brake temperature and fade
+1576	2026-10-14	epic,area:physics,area:track	Racing depth: remaining mechanics
+1566	2026-10-14	ready,area:ai	Add the deferred personality traits: composure, tyre care, energy and 
+1565	2026-10-14	ready,area:ai	Decide and, if wanted, build the Melder-style catchup band
+1563	2026-10-14	epic,area:ai	AI personality
+1560	2026-10-14	blocked,area:ui	Share or download exported reel clips
+1559	2026-10-14	blocked,area:render	Export the reel as video via WebCodecs with MediaRecorder fallback
+1558	2026-10-14	blocked,area:ui	Add REEL button and in-game reel player on the results screen
+1557	2026-10-14	area:race	Score events and plan a 30-60 s reel from a clip vault
+1554	2026-10-14	epic,area:render,area:ui	Highlight reel and clip export
+1553	2026-10-14	area:ui	Polish overlay: captions-only mode, contrast, reduced motion, streamer
+1552	2026-10-14	blocked,area:ui	Add spectator overlay link over WebRTC/Nostr and a STREAM OVERLAY sett
+1551	2026-10-14	area:ui	Publish live race frames to the overlay over BroadcastChannel
+1549	2026-10-14	epic,area:ui,area:race	Stream overlay page for OBS
+1548	2026-10-14	ready,area:ui	Polish share cards: preview sheet, size choice, byte budget, docs
+1547	2026-10-14	ready,area:ui	Add lap-vs-ghost card with speed/delta chart and a staging card link
+1546	2026-10-14	ready,area:ui	Add race podium, season standings and career-year share cards
+1543	2026-10-14	ready,epic,area:render,area:ui	Shareable result cards (PNG)
+1518	2026-10-14	blocked,area:tooling	Backlog check-in: issue volume and native blocked-by writes (two weeks
