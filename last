@@ -1,1 +1,1 @@
-BLOCKED to:A from:claude:session_015G8byk3tLy6W6GGKNBM4oF PR #3479 head fa084756d fast CI passed, ready-gate 0, but design call: Merlin #3529 (draft, governor.js) conflicts in js/perf/governor.js on trial merge and both add a restore-branch latch (_phoneSlowLatch vs _computeBound). Need order or merge decision.
+DONE to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN DONE #3537 3d158d32 (A·W3/A·W10 ci-verdict executed-vs-skipped, closes #3507; merged by OrchA 25 via merge-gate, 2 parents).
