@@ -226,7 +226,9 @@ function create(G) {
     if (at(s)) return 0;
     const L = track.total;
     let best = Infinity;
-    for (const z of zones) {
+    // Indexed: same order as for…of, no iterator alloc on the hot ahead() path.
+    for (let i = 0; i < zones.length; i++) {
+      const z = zones[i];
       let d = ((z.start - s) % L + L) % L;
       if (d < best) best = d;
     }

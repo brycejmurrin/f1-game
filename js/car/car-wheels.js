@@ -331,6 +331,13 @@ const CarWheels = (function () {
         const xb = bs[0] + bs[1] * 0.004;
         // Split band: closed arc slabs 2.5 mm proud (a sheet at 4 mm floated); full ring unchanged.
         const xF = bs[0] + bs[1] * 0.0025, xB = bs[0] - bs[1] * 0.002;
+        // W13d (#3414): lettering shared the band's 2.5 mm slab and a ~60 mm
+        // radial glyph height — ΔHaus 18 / 8 mm vs medium / soft (under the 20 mm
+        // garage-readable floor). The shoulder delta already owns ~18 mm, so
+        // glyphs must stand proud past that (22–24 mm) and taller radially to
+        // move the Hausdorff; same glyph count keeps the tris budget.
+        const letterXF = bs[0] + bs[1] * (letters === 2 ? 0.024 : 0.022);
+        const letterXB = bs[0] - bs[1] * 0.002;
         const segIn = (i) => !inGap(((i + 0.5) / SEG) * Math.PI * 2);
         for (let i = 0; i < SEG; i++) {
           const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
@@ -343,13 +350,14 @@ const CarWheels = (function () {
           addQuad(out, A, B, C, D, BAND, SURFACES.rubber);   // single face (wheel drawn cull-off → shows both sides, no z-fight)
         }
         if (letters === 1 && bandArcs) {
+          const mid = (outerB + innerB) / 2;
           for (let k = 0; k < bandArcs; k++) {
-            glyphRow(xF, xB, Math.PI / 2 + k * (Math.PI * 2) / bandArcs, gapHalf * 1.5,
-                     (outerB + innerB) / 2 - 0.03, (outerB + innerB) / 2 + 0.03, 5);
+            glyphRow(letterXF, letterXB, Math.PI / 2 + k * (Math.PI * 2) / bandArcs, gapHalf * 1.5,
+                     mid - 0.055, mid + 0.055, 5);
           }
         } else if (letters === 2) {
           for (let k = 0; k < 4; k++) {
-            glyphRow(xF, xB, k * Math.PI / 2 + Math.PI / 4, 0.95, innerB - 0.085, innerB - 0.015, 7);
+            glyphRow(letterXF, letterXB, k * Math.PI / 2 + Math.PI / 4, 1.05, innerB - 0.130, innerB - 0.010, 7);
           }
         }
       }
