@@ -170,7 +170,7 @@ test("--weather parses, validates, and splits batch groups", () => {
 // A/B imports must preserve existing pairs and refuse misleading image geometry.
 import sharp from 'sharp';
 import os from 'node:os';
-import {addPair, recipePairs} from '../../tools/shot/ab-gallery.mjs';
+import {addPair, recipePairs, selectionFields} from '../../tools/shot/ab-gallery.mjs';
 test('A/B gallery validates capture recipes before launching a browser',()=>{
  const pair={id:'test',scene:{weather:'storm'},b:{visor:'clear',visorRefraction:'strong'}};
  assert.equal(recipePairs({pairs:[pair]})[0].scene.weather,'storm');
@@ -200,4 +200,12 @@ test('A/B append, replace and failed imports preserve valid comparisons',async()
   assert.ok(read().pairs.some(p=>p.id==='bahrain-rain-optics'));
 
  }finally{fs.rmSync(tmp,{recursive:true,force:true})}
+});
+
+test('A/B selectors derive scene metadata and isolate individual lens effects',()=>{
+ const pairs=recipePairs({pairs:[{id:'reflection',scene:{track:'monza',tod:'day',weather:'dry',frac:.2},a:{visor:'clear'},b:{visor:'clear',visorReflections:'strong'}},{id:'refraction',a:{visor:'clear'},b:{visor:'clear',visorRefraction:'strong'}}]});
+ assert.deepEqual(pairs[0].selection,{race:'monza',timing:'day',weather:'dry',camera:'helmet',effect:'reflections',position:'0.2'});
+ assert.equal(pairs[1].selection.effect,'refraction');
+ assert.equal(selectionFields({race:'Monza GP',position:'0.18'}).position,'0.18');
+ for(const invalid of [{timing:'tomorrow'},{weather:'hail'},{position:1},{position:'bad'},{effect:{}}])assert.throws(()=>selectionFields(invalid));
 });

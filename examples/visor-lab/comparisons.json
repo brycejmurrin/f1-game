@@ -3,7 +3,7 @@
   "pairs": [
     {
       "id": "bahrain-rain-optics",
-      "title": "Bahrain · rainy night · visor optics",
+      "title": "Bahrain \u00b7 rainy night \u00b7 visor optics",
       "width": 1920,
       "height": 1080,
       "a": {
@@ -14,7 +14,7 @@
       "b": {
         "file": "comparison-images/801b7a52b6be052feba0405fea086a42094a2e268009bc29f03c99a36138e487.webp",
         "sha256": "801b7a52b6be052feba0405fea086a42094a2e268009bc29f03c99a36138e487",
-        "label": "Clear · strong optics"
+        "label": "Clear \u00b7 strong optics"
       },
       "provenance": {
         "sha": "20afd2751d7c2f41679ee32adf6b6d7792dc77a5",
@@ -138,7 +138,7 @@
     },
     {
       "id": "wet-surface",
-      "title": "Wet-surface capture timing · earlier vs verified wet",
+      "title": "Wet-surface capture timing \u00b7 earlier vs verified wet",
       "width": 1920,
       "height": 1080,
       "a": {
@@ -152,6 +152,1446 @@
         "label": "Verified wet surface"
       },
       "provenance": null
+    },
+    {
+      "id": "lens-bahrain-night-dry-reflections-strong",
+      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens reflections strong",
+      "width": 1920,
+      "height": 1080,
+      "a": {
+        "file": "comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
+        "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee",
+        "label": "Reflections Off"
+      },
+      "b": {
+        "file": "comparison-images/55a3f0dd1c54e56b2ec6cf0f606577f206ec93e0f9b49913633cecdbca71885a.webp",
+        "sha256": "55a3f0dd1c54e56b2ec6cf0f606577f206ec93e0f9b49913633cecdbca71885a",
+        "label": "Reflections Strong"
+      },
+      "provenance": {
+        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "dirty": true,
+        "scene": {
+          "track": "bahrain",
+          "tod": "night",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.18
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "dry",
+          "tod": "night",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 4.9,
+            "floorMs": 55.6,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 4,
+              "maxMs": 39931.7,
+              "slow": 4
+            },
+            "frameTimes": {
+              "frames": 4,
+              "p50": 1183.3000000000002,
+              "p95": 39931.700000000004,
+              "p99": 39931.700000000004,
+              "maxMs": 39931.700000000004,
+              "droppedSimS": 0.18333333333333332,
+              "physicsSteps": 10,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": false,
+              "softPresent": true,
+              "softBlitGen": 1
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "strong",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true
+      },
+      "selection": {
+        "race": "bahrain",
+        "timing": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "reflections",
+        "position": "0.18"
+      },
+      "note": "Only the visor reflection setting changes: Off \u2192 Strong. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
+    },
+    {
+      "id": "lens-bahrain-night-dry-reflections-medium",
+      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens reflections medium",
+      "width": 1920,
+      "height": 1080,
+      "a": {
+        "file": "comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
+        "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee",
+        "label": "Reflections Off"
+      },
+      "b": {
+        "file": "comparison-images/22052f856a114e4042f42a639e7fc8279cb92d59adaaaf3f050ca198837f2810.webp",
+        "sha256": "22052f856a114e4042f42a639e7fc8279cb92d59adaaaf3f050ca198837f2810",
+        "label": "Reflections Medium"
+      },
+      "provenance": {
+        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "dirty": true,
+        "scene": {
+          "track": "bahrain",
+          "tod": "night",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.18
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "dry",
+          "tod": "night",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 4.9,
+            "floorMs": 55.6,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 4,
+              "maxMs": 39931.7,
+              "slow": 4
+            },
+            "frameTimes": {
+              "frames": 4,
+              "p50": 1183.3000000000002,
+              "p95": 39931.700000000004,
+              "p99": 39931.700000000004,
+              "maxMs": 39931.700000000004,
+              "droppedSimS": 0.18333333333333332,
+              "physicsSteps": 10,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": false,
+              "softPresent": true,
+              "softBlitGen": 1
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "medium",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true
+      },
+      "selection": {
+        "race": "bahrain",
+        "timing": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "reflections",
+        "position": "0.18"
+      },
+      "note": "Only the visor reflection setting changes: Off \u2192 Medium. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
+    },
+    {
+      "id": "lens-bahrain-night-dry-reflections-light",
+      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens reflections light",
+      "width": 1920,
+      "height": 1080,
+      "a": {
+        "file": "comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
+        "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee",
+        "label": "Reflections Off"
+      },
+      "b": {
+        "file": "comparison-images/34266d03e7ad9e6247058aa645b8571528dd40ee3e6c8c151216d6964128e0e9.webp",
+        "sha256": "34266d03e7ad9e6247058aa645b8571528dd40ee3e6c8c151216d6964128e0e9",
+        "label": "Reflections Light"
+      },
+      "provenance": {
+        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "dirty": true,
+        "scene": {
+          "track": "bahrain",
+          "tod": "night",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.18
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "dry",
+          "tod": "night",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 4.9,
+            "floorMs": 55.6,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 4,
+              "maxMs": 39931.7,
+              "slow": 4
+            },
+            "frameTimes": {
+              "frames": 4,
+              "p50": 1183.3000000000002,
+              "p95": 39931.700000000004,
+              "p99": 39931.700000000004,
+              "maxMs": 39931.700000000004,
+              "droppedSimS": 0.18333333333333332,
+              "physicsSteps": 10,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": false,
+              "softPresent": true,
+              "softBlitGen": 1
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "light",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true
+      },
+      "selection": {
+        "race": "bahrain",
+        "timing": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "reflections",
+        "position": "0.18"
+      },
+      "note": "Only the visor reflection setting changes: Off \u2192 Light. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
+    },
+    {
+      "id": "lens-bahrain-night-dry-refraction-strong",
+      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens refraction strong",
+      "width": 1920,
+      "height": 1080,
+      "a": {
+        "file": "comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
+        "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee",
+        "label": "Refraction Off"
+      },
+      "b": {
+        "file": "comparison-images/8a2db153c82224131692f7d8c6a104b59ff880d356ed2704168f3dc229ac1328.webp",
+        "sha256": "8a2db153c82224131692f7d8c6a104b59ff880d356ed2704168f3dc229ac1328",
+        "label": "Refraction Strong"
+      },
+      "provenance": {
+        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "dirty": true,
+        "scene": {
+          "track": "bahrain",
+          "tod": "night",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.18
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "dry",
+          "tod": "night",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 4.9,
+            "floorMs": 55.6,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 4,
+              "maxMs": 39931.7,
+              "slow": 4
+            },
+            "frameTimes": {
+              "frames": 4,
+              "p50": 1183.3000000000002,
+              "p95": 39931.700000000004,
+              "p99": 39931.700000000004,
+              "maxMs": 39931.700000000004,
+              "droppedSimS": 0.18333333333333332,
+              "physicsSteps": 10,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": false,
+              "softPresent": true,
+              "softBlitGen": 1
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "strong",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true
+      },
+      "selection": {
+        "race": "bahrain",
+        "timing": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "refraction",
+        "position": "0.18"
+      },
+      "note": "Only visor refraction changes: Off \u2192 Strong. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
+    },
+    {
+      "id": "lens-bahrain-night-dry-refraction-medium",
+      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens refraction medium",
+      "width": 1920,
+      "height": 1080,
+      "a": {
+        "file": "comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
+        "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee",
+        "label": "Refraction Off"
+      },
+      "b": {
+        "file": "comparison-images/7d1d6b0ac416d3ca28bedb57561b6f4739064b3cabe043d418a2ccde0cf43804.webp",
+        "sha256": "7d1d6b0ac416d3ca28bedb57561b6f4739064b3cabe043d418a2ccde0cf43804",
+        "label": "Refraction Medium"
+      },
+      "provenance": {
+        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "dirty": true,
+        "scene": {
+          "track": "bahrain",
+          "tod": "night",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.18
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "dry",
+          "tod": "night",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 4.9,
+            "floorMs": 55.6,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 4,
+              "maxMs": 39931.7,
+              "slow": 4
+            },
+            "frameTimes": {
+              "frames": 4,
+              "p50": 1183.3000000000002,
+              "p95": 39931.700000000004,
+              "p99": 39931.700000000004,
+              "maxMs": 39931.700000000004,
+              "droppedSimS": 0.18333333333333332,
+              "physicsSteps": 10,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": false,
+              "softPresent": true,
+              "softBlitGen": 1
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "medium",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true
+      },
+      "selection": {
+        "race": "bahrain",
+        "timing": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "refraction",
+        "position": "0.18"
+      },
+      "note": "Only visor refraction changes: Off \u2192 Medium. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
+    },
+    {
+      "id": "lens-bahrain-night-dry-refraction-light",
+      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens refraction light",
+      "width": 1920,
+      "height": 1080,
+      "a": {
+        "file": "comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
+        "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee",
+        "label": "Refraction Off"
+      },
+      "b": {
+        "file": "comparison-images/5fb0a2617269a7838e19eb3c3b49f241195c92585ad44bf83ce394cd4de717e8.webp",
+        "sha256": "5fb0a2617269a7838e19eb3c3b49f241195c92585ad44bf83ce394cd4de717e8",
+        "label": "Refraction Light"
+      },
+      "provenance": {
+        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "dirty": true,
+        "scene": {
+          "track": "bahrain",
+          "tod": "night",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.18
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "dry",
+          "tod": "night",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 4.9,
+            "floorMs": 55.6,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 4,
+              "maxMs": 39931.7,
+              "slow": 4
+            },
+            "frameTimes": {
+              "frames": 4,
+              "p50": 1183.3000000000002,
+              "p95": 39931.700000000004,
+              "p99": 39931.700000000004,
+              "maxMs": 39931.700000000004,
+              "droppedSimS": 0.18333333333333332,
+              "physicsSteps": 10,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": false,
+              "softPresent": true,
+              "softBlitGen": 1
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "light",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true
+      },
+      "selection": {
+        "race": "bahrain",
+        "timing": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "refraction",
+        "position": "0.18"
+      },
+      "note": "Only visor refraction changes: Off \u2192 Light. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
+    },
+    {
+      "id": "lens-monza-day-dry-reflections-strong",
+      "title": "Monza \u00b7 day \u00b7 dry \u00b7 lens reflections strong",
+      "width": 1920,
+      "height": 1080,
+      "a": {
+        "file": "comparison-images/09dd38050caa15763fc9277ae8ce2ad2bdf3bbf20e936d07d15108f0e9630ec7.webp",
+        "sha256": "09dd38050caa15763fc9277ae8ce2ad2bdf3bbf20e936d07d15108f0e9630ec7",
+        "label": "Reflections Off"
+      },
+      "b": {
+        "file": "comparison-images/d5c19201225fb48ca5d23487870c95b8c281c23fe513b54834a737ff3ded289f.webp",
+        "sha256": "d5c19201225fb48ca5d23487870c95b8c281c23fe513b54834a737ff3ded289f",
+        "label": "Reflections Strong"
+      },
+      "provenance": {
+        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "dirty": true,
+        "scene": {
+          "track": "monza",
+          "tod": "day",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.02
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "monza",
+            "n": 1444,
+            "total": 5777.579011126656,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.26536876,
+              0.58048447
+            ],
+            "turns": 11
+          },
+          "weather": "dry",
+          "tod": "day",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 48.5,
+            "floorMs": 17.2,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 5,
+              "maxMs": 21115.8,
+              "slow": 3
+            },
+            "frameTimes": {
+              "frames": 5,
+              "p50": 33.40000000000873,
+              "p95": 21115.800000000003,
+              "p99": 21115.800000000003,
+              "maxMs": 21115.800000000003,
+              "droppedSimS": 0,
+              "physicsSteps": 5,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 2
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "strong",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true
+      },
+      "selection": {
+        "race": "monza",
+        "timing": "day",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "reflections",
+        "position": "0.02"
+      },
+      "note": "Only the visor reflection setting changes: Off \u2192 Strong. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
+    },
+    {
+      "id": "lens-monza-day-dry-refraction-strong",
+      "title": "Monza \u00b7 day \u00b7 dry \u00b7 lens refraction strong",
+      "width": 1920,
+      "height": 1080,
+      "a": {
+        "file": "comparison-images/09dd38050caa15763fc9277ae8ce2ad2bdf3bbf20e936d07d15108f0e9630ec7.webp",
+        "sha256": "09dd38050caa15763fc9277ae8ce2ad2bdf3bbf20e936d07d15108f0e9630ec7",
+        "label": "Refraction Off"
+      },
+      "b": {
+        "file": "comparison-images/89c335ad5ad39e9b5565603a158ac05d4102f98f96215971eeda97191f0ccc00.webp",
+        "sha256": "89c335ad5ad39e9b5565603a158ac05d4102f98f96215971eeda97191f0ccc00",
+        "label": "Refraction Strong"
+      },
+      "provenance": {
+        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "dirty": true,
+        "scene": {
+          "track": "monza",
+          "tod": "day",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.02
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "monza",
+            "n": 1444,
+            "total": 5777.579011126656,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.26536876,
+              0.58048447
+            ],
+            "turns": 11
+          },
+          "weather": "dry",
+          "tod": "day",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 48.5,
+            "floorMs": 17.2,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 5,
+              "maxMs": 21115.8,
+              "slow": 3
+            },
+            "frameTimes": {
+              "frames": 5,
+              "p50": 33.40000000000873,
+              "p95": 21115.800000000003,
+              "p99": 21115.800000000003,
+              "maxMs": 21115.800000000003,
+              "droppedSimS": 0,
+              "physicsSteps": 5,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 2
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "strong",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true
+      },
+      "selection": {
+        "race": "monza",
+        "timing": "day",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "refraction",
+        "position": "0.02"
+      },
+      "note": "Only visor refraction changes: Off \u2192 Strong. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
+    },
+    {
+      "id": "lens-bahrain-dawn-fog-reflections-strong",
+      "title": "Bahrain \u00b7 dawn \u00b7 fog \u00b7 lens reflections strong",
+      "width": 1920,
+      "height": 1080,
+      "a": {
+        "file": "comparison-images/a5734efdb6403002a60403e85c160277b7ce6910c5cda3e99fb24ca163febc69.webp",
+        "sha256": "a5734efdb6403002a60403e85c160277b7ce6910c5cda3e99fb24ca163febc69",
+        "label": "Reflections Off"
+      },
+      "b": {
+        "file": "comparison-images/c26f0a4f67f06b4a98bda732b0a6724efda2cf3eaebe5922946dc4e68e8cd6b8.webp",
+        "sha256": "c26f0a4f67f06b4a98bda732b0a6724efda2cf3eaebe5922946dc4e68e8cd6b8",
+        "label": "Reflections Strong"
+      },
+      "provenance": {
+        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "dirty": true,
+        "scene": {
+          "track": "bahrain",
+          "tod": "dawn",
+          "weather": "fog",
+          "camera": "helmet",
+          "frac": 0.18
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "fog",
+          "tod": "dawn",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 59.9,
+            "floorMs": 16.7,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 5,
+              "maxMs": 35732,
+              "slow": 3
+            },
+            "frameTimes": {
+              "frames": 5,
+              "p50": 116.60000000000582,
+              "p95": 35732,
+              "p99": 35732,
+              "maxMs": 35732,
+              "droppedSimS": 0.03333333333333333,
+              "physicsSteps": 7,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 3
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "strong",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true
+      },
+      "selection": {
+        "race": "bahrain",
+        "timing": "dawn",
+        "weather": "fog",
+        "camera": "helmet",
+        "effect": "reflections",
+        "position": "0.18"
+      },
+      "note": "Only the visor reflection setting changes: Off \u2192 Strong. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
+    },
+    {
+      "id": "lens-bahrain-dawn-fog-refraction-strong",
+      "title": "Bahrain \u00b7 dawn \u00b7 fog \u00b7 lens refraction strong",
+      "width": 1920,
+      "height": 1080,
+      "a": {
+        "file": "comparison-images/a5734efdb6403002a60403e85c160277b7ce6910c5cda3e99fb24ca163febc69.webp",
+        "sha256": "a5734efdb6403002a60403e85c160277b7ce6910c5cda3e99fb24ca163febc69",
+        "label": "Refraction Off"
+      },
+      "b": {
+        "file": "comparison-images/1eef78564c811851e56eba723771b51523c4f95d677508fc0507feabf2bf2c87.webp",
+        "sha256": "1eef78564c811851e56eba723771b51523c4f95d677508fc0507feabf2bf2c87",
+        "label": "Refraction Strong"
+      },
+      "provenance": {
+        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "dirty": true,
+        "scene": {
+          "track": "bahrain",
+          "tod": "dawn",
+          "weather": "fog",
+          "camera": "helmet",
+          "frac": 0.18
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "fog",
+          "tod": "dawn",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 59.9,
+            "floorMs": 16.7,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 5,
+              "maxMs": 35732,
+              "slow": 3
+            },
+            "frameTimes": {
+              "frames": 5,
+              "p50": 116.60000000000582,
+              "p95": 35732,
+              "p99": 35732,
+              "maxMs": 35732,
+              "droppedSimS": 0.03333333333333333,
+              "physicsSteps": 7,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 3
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "strong",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true
+      },
+      "selection": {
+        "race": "bahrain",
+        "timing": "dawn",
+        "weather": "fog",
+        "camera": "helmet",
+        "effect": "refraction",
+        "position": "0.18"
+      },
+      "note": "Only visor refraction changes: Off \u2192 Strong. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
     }
   ],
   "visorLab": true

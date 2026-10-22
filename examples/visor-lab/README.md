@@ -69,3 +69,26 @@ viewer offers a shot selector, hide/show controls, full-resolution downloads,
 keyboard and touch wipe, atomic image loading and per-pair capture details.
 `--help` lists the recipe schema. Tools work locally without Site credentials;
 publication is a separate step. Existing Site galleries retain all prior assets.
+
+## Selector metadata and lens studies
+
+Every captured pair automatically adds race/circuit, time of day, weather,
+camera, track position and lens-effect choices to the viewer. For imported
+images, supply `--race monza --timing night --weather dry --camera helmet
+--effect reflections --position 0.18 --note "Only lens reflections change"`.
+Existing captures derive scene fields from their provenance; untagged imports
+appear as Unspecified. The dependent selectors offer only available captures.
+
+Use `capture-lens-study.json` for controlled lens comparisons across dry night,
+dry daylight and dawn fog. Both sides use Clear, with tint and visor rain off;
+only reflection strength OR refraction changes. Night shots cover Light,
+Medium and Strong. The viewer's Inspect selector crops the left, right or
+upper lens edge at 4×, identically on A and B. Reflections here are the shield's
+procedural coating highlights; they do not claim reflected scene geometry.
+
+```sh
+node tools/shot/ab-gallery.mjs --capture examples/visor-lab/capture-lens-study.json --gallery /absolute/path/to/site/dist
+```
+
+Consecutive recipes sharing a scene reuse the same frozen render, so optics
+levels are compared against identical lighting and camera pixels.
