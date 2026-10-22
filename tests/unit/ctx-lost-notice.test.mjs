@@ -32,6 +32,13 @@ test("GLX: webglcontextrestored winning the race against the timer still arms th
   assert.equal(h.sandbox.sessionStorage.getItem("apex26.ctxLostNotice"), "1");
 });
 
+test("GLX restore past the reload budget does not reload or arm the notice", () => {
+  const h = bootGlx();
+  h.sandbox.sessionStorage.setItem("apex26.ctxLostReloads", "3");
+  h.restoreContext();
+  assert.equal(h.sandbox.sessionStorage.getItem("apex26.ctxLostNotice"), null);
+});
+
 function tlxLossVm(store, out) {
   const ss = { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: (k) => { delete store[k]; } };
   const timers = [];
@@ -63,6 +70,19 @@ test("TLX: device-loss reloads (first, second, third) and refuseTab all arm the 
   const v = tlxLossVm(store, out);
   vm.runInContext(fnSource(tlxSrc, "const refuseTab = () => {") + ";\n refuseTab();", v.ctx, TLX_FILE);
   assert.deepEqual(out.reloads, ["1"], "refuseTab's reload explains itself");
+});
+
+test("TLX device loss past the budget reloads nothing and arms no notice", () => {
+  const tlxSrc = read("js/render/three/tlx.js");
+  const lossBody = fnSource(tlxSrc, "renderer.onDeviceLost = function (info) {");
+  const store = { "apex26.ctxLostReloads": "3" }, out = { reloads: [], errors: 0 };
+  const v = tlxLossVm(store, out);
+  v.ctx.recordGfxBudgetExhausted = () => { out.errors++; };
+  vm.runInContext(lossBody + "\n renderer.onDeviceLost", v.ctx, TLX_FILE)({});
+  for (const t of v.timers.splice(0)) t();
+  assert.equal(out.reloads.length, 0);
+  assert.equal(store["apex26.ctxLostNotice"], undefined);
+  assert.equal(out.errors, 1, "the exhausted budget is still reported");
 });
 
 test("TLX: a webglcontextrestored reload after a counted loss arms the notice; a bare one does not", () => {

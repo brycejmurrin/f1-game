@@ -37,14 +37,11 @@ const GLXBackend = (function () {
   // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
   const MOBILE_TIER = GLX.mobileTier;
-  let _ctxLost = false;   // true between webglcontextlost and the reload on restore
+  let _ctxLost = false, _lossCounted = false;   // lost→restore; counted loss arms ctxLostNotice (#3513)
   // Fallback for the two-reload budget when sessionStorage throws (Safari
   // private / quota). Without it, both the loss timer and the restore reload
   // bailed, leaving a restored context with _ctxLost still set — a silent
   // dead canvas. In-memory only, so a real new visit still gets two attempts.
-  // A COUNTED loss (not a hidden-tab one) owes the menu its "Graphics reset" notice on
-  // whichever reload wins: the 1.2 s timer or webglcontextrestored (#3513).
-  let _lossCounted = false;
   let _sessLostN = 0; const _fallbackLossCount = () => { try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { return 0; } };
   // Past the ctx-loss reload budget: record for __apex.diag() without painting
   // the full-screen error overlay — RendererPicker.showUnavailable already shows
@@ -728,15 +725,12 @@ const GLXBackend = (function () {
         } catch (_) { /* picker absent in harness */ }
       }
     }, false);
-    // The restore obeys the same two-reload budget as the loss: a device that
-    // loses the context every boot and gets it back reloaded without limit.
-    // Storage failure must NOT skip the reload — that was a dead canvas after
-    // webglcontextrestored (the loss handler also failed to arm its timer).
+    // Restore obeys the same two-reload budget; storage failure must not skip reload.
     canvas.addEventListener("webglcontextrestored", function () {
       var n = 0;
       try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
       if (n > 2) return;
-      if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ }
+      if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage */ }
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);
 
