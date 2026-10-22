@@ -202,11 +202,15 @@ test("tinyfish stays CLI-only: the lockstep guard owns its deliberate non-attach
   assert.ok(exists("tools/mcp/tinyfish-mcp.sh"),
     "the tinyfish CLI wrapper is gone — if that is deliberate, update this pin and AGENT-SURFACE together");
   assert.ok(exists("tools/mcp/tinyfish-rpc.py"), "the tinyfish RPC helper is gone — see the wrapper pin above");
-  assert.match(read("tools/mcp/tinyfish-mcp.sh"), /CLI ONLY — NOT MCP-ATTACHED/,
-    "the wrapper no longer declares itself CLI-only — a changed interface re-opens the attachment decision here, not by drift");
+  assert.ok(
+    /CLI ONLY — NOT MCP-ATTACHED/.test(read("tools/mcp/tinyfish-mcp.sh")),
+    "the wrapper no longer declares itself CLI-only — a changed interface re-opens the attachment decision here, not by drift",
+  );
   // The doc side of the decision stays in the surface map.
-  assert.match(read("docs/AGENT-SURFACE.md"), /Removed 2026-09 \(CLI only now, not MCP-attached\)/,
-    "AGENT-SURFACE lost the Removed-2026-09 section that explains tinyfish");
+  assert.ok(
+    /Removed 2026-09 \(CLI only now, not MCP-attached\)/.test(read("docs/AGENT-SURFACE.md")),
+    "AGENT-SURFACE lost the Removed-2026-09 section that explains tinyfish",
+  );
 });
 
 test("Claude rules generate Cursor .mdc twins (gen-cursor-rules owns the mirror)", () => {
