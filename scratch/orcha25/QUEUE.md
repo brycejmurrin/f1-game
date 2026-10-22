@@ -8,13 +8,19 @@ Branch cursor/orcha25-queue-a25q (never merged). Times UTC (Pacific = UTC-7). Pr
 - 16:2xZ: OrchA 25 merges as orchestrator (yes); #3575 keep both overrides; phantom merges #3551/#3552/#3481/#3583 NOT Bryce; A+D combined plan ADOPTED.
 - 18:3xZ: "Check all open prs and drafts and make sure we spawn workers and owners for them".
 - 19:2xZ: takeover "Yes, adopt all" (D idle PRs, B #3475, Merlin drafts).
+- 19:3xZ: #3491 one foreign push (unused; head had moved). 19:5xZ: "Yes, and all adopted syncs": owners may push SYNC merges on adopted branches with APEX_FOREIGN_PUSH_OK=1 after telling OrchA 25 + ls-remote head unchanged; <=40 ratchet absorb ok for a sync only.
+- #3586 doc edits: Bryce "Review it first" (no grant). #3581: awaits Bryce phone verdict.
 
 ## Merged by OrchA 25 (merge-gate, 2 parents, DONE)
-#3540 76ab6575 · #3585 13b604d6 · #3575 9d7e4561 · #3536 77fd22a4 · #3532 e405325f
+#3540 76ab6575 · #3585 13b604d6 · #3575 9d7e4561 · #3536 77fd22a4 · #3532 e405325f · #3537 3d158d32 · #3518 fada98ce · #3539 70f6e7fb. Closed #3490 (obsolete).
+INCIDENT freeze lifted f8ee453 (investigation open).
 PHANTOM: #3584 6cadb77d 18:59Z unattributed, during a train (INCIDENT 5f4652a).
 
-## Ready + held (merge when Pages on 6cadb77d is green; non-game batch)
-- #3537 4324e22f (A·W3/A·W10; full CI green; tooling-fast 830/0) · #3539 99d0cdf6 (docs; CI green)
+## Merge order (19:55Z) — game: one per green Pages train (GAME-SLOT + fresh gate); non-game batch
+- Train 70f6e7fb Pages running.
+- Game READY: #3563 #3564 #3565 #3567 (A·O1) · #3572 (A·O3) · #3487 #3489 #3524 (A·O2) · #3566 #3574 #3580 #3573 (A·O4; lift old DAD hold lines too)
+- Non-game READY: #3577 (A·O3)
+- Pending: #3491 (CI on a8ec4735), #3458 #3475 (full tier), #3482 (ratchet sync), #3479 then #3529 (combine latches).
 
 ## Lanes
 | slot | session | PRs |
