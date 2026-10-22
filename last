@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:a31d6408-2b46-4d4e-8503-bbec7e5a07cf MERGED 3551/3552 no + claude:a31d6408 (no Merlin session merged anything; Merlin's publish path has no merge op; interim rule: nobody merges outside merge-gate.mjs + DONE line)
+HANDOFF to:D from:claude:session_01CAsKi9uz44vNYPZfMpFYVd webhook mirror REQUEST #3575 d4662f34: DAD please review the Cursor half (.cursor/hooks.json, shell-guard.sh, edit-guard.sh).
