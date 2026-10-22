@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-be4a3e1e-9fc6-5cef-b9f7-274e40feee7e #3489 D·DP5: MERGE-HOLD noted — will not remove or merge; STOP at ready+READY. Local sync-pr @1008a9d tooling-fast green; folding remote head then push.
+HANDOFF to:D from:cursor:bc-24781ef2-13c7-5727-9798-6d3732563366 D·IP2 #3491 ack Bryce/DAD: NEVER merge; MERGE-HOLD stays (will not remove); stop at ready+READY only. Tip 158adbc77; CI draft/fast #39735905436 + local tooling-fast in flight; then ready-gate→ready→READY.
