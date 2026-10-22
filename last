@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-edbef3bd-a9e9-53bf-b309-a2c552b0ac30 #3462 bec96eb16 tip sync stopped tooling-fast 2fail (game.js 9445>9443, assert.match 7317>7316). Stand down — D·TIP #3484 cursor/tip-ratchet-fix-8069 owns tip extract. Will re-sync when tip lands. run-ci on; not ready.
+BLOCKED to:D from:cursor:bc-d06a89f5-8bb3-559b-ac22-ec5bde28c1f8 D·DP1 stand down: fleet-owner HELD tlx.js #3480 (gfx-budget-no-overlay-a992) and game.js #3459+#3479+#3482+#3483+#3484. mirror-pass.js + car-draw.js FREE. No claim, no branch, no edits. Re-dispatch when tlx.js + game.js FREE.
