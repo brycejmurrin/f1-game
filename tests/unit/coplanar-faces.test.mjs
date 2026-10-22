@@ -178,3 +178,15 @@ test("two crossing diagonal bars report their crossing, not their bounding boxes
   assert.ok(boxProduct > 30, "the in-plane bounding box really is that much bigger");
   assert.ok(real < boxProduct / 100, "the old metric over-reported this by two orders of magnitude");
 });
+
+test("CLI: a boolean flag never swallows the circuit id after it; bad numeric overrides throw", () => {
+  const { idsFrom, optsFrom } = createRequire(import.meta.url)("../../tools/track/coplanar-audit.cjs");
+  assert.deepEqual(idsFrom(["--gate", "monaco"]), ["monaco"]);
+  assert.deepEqual(idsFrom(["--json", "--overhead", "spa", "monza"]), ["spa", "monza"]);
+  assert.deepEqual(idsFrom(["--gap", "0.02", "monaco"]), ["monaco"]);
+  assert.deepEqual(idsFrom(["--site", "a.js:3", "monaco"]), ["monaco"]);
+  assert.equal(optsFrom(["--gap", "0.02"], false).gap, 0.02);
+  for (const bad of [["--gap"], ["--gap", "abc"], ["--area", "0"], ["--fight", "-1"], ["--maxdim", "--json"]]) {
+    assert.throws(() => optsFrom(bad, false), /needs a positive number/, bad.join(" "));
+  }
+});

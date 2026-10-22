@@ -738,7 +738,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `chromAb` | CHROMATIC AB. | 0 … 15 | 0 | `uChromAb` |   | — |
 | `grain` | FILM GRAIN | 0 … 0.3 | 0 | `uGrain` |   | race-insights.js×6 |
 | `lensDirt` | LENS DIRT | 0 … 1 | 0.15 | `uLensDirt` | ✓ | — |
-| `flareMul` | LENS FLARE | 0 … 2.5 | 1 | — | ✓ | game.js×2, post.js×2 |
+| `flareMul` | LENS FLARE | 0 … 2.5 | 1 | — | ✓ | game.js×2, setup-camera.js×2, post.js×2 |
 | `flareStreak` | FLARE STREAK | 2 … 10 | 7 | `uFlareStreak` | ✓ | — |
 | `flareStreak2` | FLARE CORE STREAK | 0 … 1.25 | 0.5 | `uFlareStreak2` | ✓ | — |
 | `sharpen` | SHARPEN | 0 … 2.5 | 0 | `uSharpen` | ✓ | — |

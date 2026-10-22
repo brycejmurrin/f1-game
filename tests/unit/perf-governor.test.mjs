@@ -208,12 +208,12 @@ test("the two futility latches are inspectable, and start clear", () => {
   assert.equal(PerfGov.tierFutile(), false);
 });
 
-test("a sustained-slow device now sheds past the first rung (§2u discriminator)", () => {
-  // docs/notes/PERF-FINDINGS.md §2u, from a live iPhone capture: Suzuka,
+test("a sustained-slow device now sheds past the first rung (§2au discriminator)", () => {
+  // docs/notes/PERF-FINDINGS.md §2au, from a live iPhone capture: Suzuka,
   // 32.2 fps, scale already at the 0.5 mobile floor, tier 0 — nothing optional
   // shed on a device missing half its frames.
   //
-  // THIS TEST WAS DELIBERATELY REWRITTEN (2026-10-21, the §2u fix;
+  // THIS TEST WAS DELIBERATELY REWRITTEN (2026-10-21, the §2au fix;
   // docs/notes/PERF-IPHONE-AUDIT-2026-10-21.md §3). It used to pin the defect
   // itself — "a sustained-slow device still stops after a successful first
   // rung", peak autoShed <= 1 — under a header that said IT PINS THE
@@ -269,7 +269,7 @@ test("a sustained-slow device now sheds past the first rung (§2u discriminator)
 });
 
 test("the adapted floor is what closes the ladder, not a latched-off lever", () => {
-  // The distinction that the first diagnosis of §2u got wrong. _tierFutile does
+  // The distinction that the first diagnosis of §2au got wrong. _tierFutile does
   // latch on a shed that buys nothing, but it is CLEARED again by the restore
   // branch — so a latch is never the durable reason a device stops shedding.
   // The durable reason is floorMs having become the device's own frame time,

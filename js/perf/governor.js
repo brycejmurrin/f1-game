@@ -176,7 +176,7 @@ let _scaleFutile = false;
 // player changes preset (either changes what a step means).
 let _tierFutile = false;
 
-// THE §2u DISCRIMINATOR (docs/notes/PERF-FINDINGS.md §2u). The floor below does
+// THE §2au DISCRIMINATOR (docs/notes/PERF-FINDINGS.md §2au). The floor below does
 // what it was built to do — and that is the defect: on a genuinely slow phone
 // it converges on the sustained frame time within ~2.7 s, `degradeAt` becomes
 // unreachable, and only the ladder's FIRST rung is ever taken (live capture:
@@ -205,14 +205,14 @@ let _tierFutile = false;
 // is weaker evidence than the margin over a live floor, so it is asked for
 // twice — the same conservatism DEGRADE_CONFIRM applies in time, applied in
 // magnitude. A lap's heavy section, ~1 ms over the held threshold after two
-// cuts, is absorbed; a §2u device, several ms over it at every rung, is not.
+// cuts, is absorbed; a §2au device, several ms over it at every rung, is not.
 let _computeBound = false;
 let _floorMinMs = 16.7;
 let _floorShadowMs = 16.7;
 // Set by any frame below `_floorMinMs` (see tick): this episode has shown a
 // cheap moment, so its steps' verify evidence is scene variance as much as
 // device cost and the latch must not engage. Cleared when the episode ends —
-// the restore branch, or race start. A §2u episode never sets it.
+// the restore branch, or race start. A §2au episode never sets it.
 let _cheapSeen = false;
 
 // THE BUDGET IS DERIVED, NOT HARDCODED. "> 19 ms" only ever meant "slower than
@@ -236,7 +236,7 @@ let _cheapSeen = false;
 let _floorMs = 16.7;
 const FLOOR_DOWN_A = 0.3;
 const FLOOR_UP_A = 0.02;
-const FLOOR_UP_A_BOUND = 0.002;   // §2u: the creep rate while _computeBound holds (see below)
+const FLOOR_UP_A_BOUND = 0.002;   // §2au: the creep rate while _computeBound holds (see below)
 // DEGRADE_OVER sits ABOVE the floor; RESTORE_WITHIN also sits above it, just
 // barely. That asymmetry is what lets the governor go both ways: a restore
 // threshold 4.2 ms BELOW the floor, `_frameEMA < _floorMs - 4.2`, is
@@ -423,7 +423,7 @@ function _floorTier() { return Math.max(_perfTierFloor, _userTier); }
 
 // One derived-floor adaptation, shared by the fast path and the slow-run path
 // in tick(): pulled toward a faster sample at FLOOR_DOWN_A, crept toward a
-// slower one at FLOOR_UP_A — or at FLOOR_UP_A_BOUND while §2u evidence holds,
+// slower one at FLOOR_UP_A — or at FLOOR_UP_A_BOUND while §2au evidence holds,
 // so a compute-bound device's budget cannot converge on its own slowness and
 // close the ladder. `_floorMinMs` tracks the race's lowest observed floor.
 function _floorStep(x) {
@@ -431,7 +431,7 @@ function _floorStep(x) {
   _floorMs += (x - _floorMs) * (x < _floorMs ? FLOOR_DOWN_A : (_computeBound ? FLOOR_UP_A_BOUND : FLOOR_UP_A));
   if (_floorMs < _floorMinMs) _floorMinMs = _floorMs;
 }
-// §2u evidence arrived: judge the rest of this episode against the budget the
+// §2au evidence arrived: judge the rest of this episode against the budget the
 // device had when it began, not the one its slowness has since negotiated.
 function _latchBound() {
   if (_computeBound || _cheapSeen) return;
@@ -537,7 +537,7 @@ function sentinelArm(on) {
             _scaleMoves = 0; _degradeArm = 0;
             // A futile ladder measured in a DRY race must not block the next (wet) race's shed.
             _tierFutile = false; _scaleFutile = false;
-            _computeBound = false; _cheapSeen = false; _floorMinMs = 16.7; _floorShadowMs = 16.7; } else _live = false;   // §2u verdicts are race-local too
+            _computeBound = false; _cheapSeen = false; _floorMinMs = 16.7; _floorShadowMs = 16.7; } else _live = false;   // §2au verdicts are race-local too
   if (!_gfx || !_gfx.isMobile) return;
   if (on) {
     _raceTicked = false;
@@ -617,7 +617,7 @@ function _ageClocks(stepMs) {
   // restore threshold restarts the two minutes, so a device that is merely
   // between heavy sections never probes its way back up.
   if (_scaleCap <= 1) {
-    // §2u: headroom is judged against the SUSTAINED floor (the shadow, which
+    // §2au: headroom is judged against the SUSTAINED floor (the shadow, which
     // never rewinds) — against the held floor a plateaued EMA would read as
     // "still missing" forever and the ceiling could never age out.
     if (_frameEMA < Math.max(_floorMs, _floorShadowMs) + RESTORE_WITHIN) {
@@ -686,9 +686,9 @@ function tick(dtMs, drawn) {
     if (dtMs > _openMax) _openMax = dtMs;
     if (dtMs > _floorMs * 2) _openSlow++;
   }
-  // §2u release: a frame below the race's best cadence (`_floorMinMs`) is a
+  // §2au release: a frame below the race's best cadence (`_floorMinMs`) is a
   // cheap moment — the device just demonstrated its budget is intact, so any
-  // compute-bound verdict from earlier steps is spent. A §2u device never
+  // compute-bound verdict from earlier steps is spent. A §2au device never
   // shows one; a device whose slowness comes with scene-variance cheap
   // frames clears the latch with them and is governed exactly as before.
   if (dtMs < _floorMinMs) { _computeBound = false; _cheapSeen = true; }
@@ -765,14 +765,14 @@ function tick(dtMs, drawn) {
       // render-target reallocation each time. Back off: each refused climb
       // doubles the wait before the next try (10 s, 20 s, 40 s, … 2 min).
       if (v.up) { _sinceUp = -1; _downHold = _upBackoff; _upBackoff = Math.min(_upBackoff * 2, UP_BACKOFF_MAX); }
-      // §2u, the failure half: a refused CLIMB is scale-response evidence too
+      // §2au, the failure half: a refused CLIMB is scale-response evidence too
       // (cost rose when resolution did), so it latches; a refused DOWN step
       // that reaches here is final — the continuations above returned — and
       // final indifference clears the latch. See _computeBound.
       if (v.up) _latchBound(); else _computeBound = false;
       return;
     }
-    // §2u, the success half: a DOWN step the EMA felt is the compute-bound
+    // §2au, the success half: a DOWN step the EMA felt is the compute-bound
     // proof; an UP step it accepted means the headroom was real and the
     // episode, if any, is over.
     if (v.up) _computeBound = false; else _latchBound();
@@ -781,7 +781,7 @@ function tick(dtMs, drawn) {
   }
 
   const degradeAt = _floorMs + DEGRADE_OVER, restoreAt = _floorMs + RESTORE_WITHIN;
-  // §2u guard (see _computeBound): a latched degrade step must clear the held
+  // §2au guard (see _computeBound): a latched degrade step must clear the held
   // threshold by the margin twice.
   const boundOver = _computeBound ? DEGRADE_OVER : 0;
   const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
@@ -876,7 +876,7 @@ function tick(dtMs, drawn) {
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
     _scaleFutile = false;   // headroom is back — nothing about the old verdict still applies
     _tierFutile = false;
-    _computeBound = false;   // §2u: the EMA is back within RESTORE_WITHIN of the (rewound) floor — the episode is over
+    _computeBound = false;   // §2au: the EMA is back within RESTORE_WITHIN of the (rewound) floor — the episode is over
     _cheapSeen = false;
     // The up-step is VERIFIED like the down-step. Restoring is a guess that the
     // headroom is real, and the same _pendingVerify machinery that reverts a
@@ -1091,7 +1091,7 @@ return {
   // THE TWO LATCHES THAT CAN DISABLE A LEVER FOR THE REST OF THE SESSION,
   // exported rather than left private so "why did this device shed nothing?"
   // is answerable from a hook, not by re-deriving this file's state by hand
-  // against a diagnostic payload (docs/notes/PERF-FINDINGS.md §2u). A latch is
+  // against a diagnostic payload (docs/notes/PERF-FINDINGS.md §2au). A latch is
   // not a fault on its own: the restore branch clears both the moment headroom
   // returns, so reading them TRUE means a lever is currently parked, not that
   // it is broken. Read them
@@ -1101,7 +1101,7 @@ return {
   // evidence.
   scaleFutile: () => _scaleFutile,
   tierFutile: () => _tierFutile,
-  // §2u's latch, inspectable for the same reason as the two above: true means
+  // §2au's latch, inspectable for the same reason as the two above: true means
   // a step's verify proved this device compute-bound and the floor is being
   // held at the race's observed minimum while the ladder finishes its work.
   computeBound: () => _computeBound,

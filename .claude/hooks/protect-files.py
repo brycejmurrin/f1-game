@@ -113,6 +113,115 @@ def test_scripts(text):
         return None
 
 
+# --- ratchet ceilings: bans 1 and 2 ------------------------------------------------
+def fragment_name(branch):
+    """tools/check/ratchets.mjs fragmentName(): the branch's ratchets.d file, or
+    None on a detached HEAD or the deploy branch."""
+    if not branch or branch in ("HEAD", "claude/f1-game-project-26h3ng"):
+        return None
+    return re.sub(r"[^A-Za-z0-9._-]+", "--", branch) + ".json"
+
+
+def _leaves(node, at=()):
+    """{path: number} of every numeric leaf ("_doc" and other text skipped)."""
+    out = {}
+    if isinstance(node, dict):
+        for k, v in node.items():
+            out.update(_leaves(v, at + (k,)))
+    elif isinstance(node, (int, float)) and not isinstance(node, bool):
+        out[at] = node
+    return out
+
+
+RATCHET_FILES = ("tests/data/ratchets.json", "tests/data/ratchets.d/")
+REMOVERS = {"rm", "unlink", "mv", "shred", "rmdir", "find"}
+
+
+def ratchet_removals(cmd, cwd):
+    """[(path, how)] ratchet files a command removes or moves away (rm, unlink, mv
+    and git mv sources, git rm, find … -delete/-exec, shred), each file under a
+    directory it names included. shellparse.write_targets reads only writes."""
+    import shellparse
+    out = []
+    try:
+        cmds = list(shellparse.commands(cmd, cwd, strict=True))
+    except Exception:
+        return out
+    for _env, argv, _redir, c in cmds:
+        if not argv:
+            continue
+        verb = os.path.basename(argv[0])
+        args = argv[1:]
+        if verb == "git":
+            k = next((i for i, a in enumerate(args) if not a.startswith("-")), None)
+            if k is None or args[k] not in ("rm", "mv"):
+                continue
+            verb, args = "git " + args[k], args[k + 1:]
+        elif verb not in REMOVERS:
+            continue
+        if verb in ("mv", "git mv"):
+            paths = [a for a in args if not a.startswith("-")][:-1]   # sources; the last is the destination
+        elif verb == "find":
+            if not any(a in ("-delete", "-exec", "-execdir", "-ok") for a in args):
+                continue
+            paths = [a for a in args[:next((i for i, a in enumerate(args) if a.startswith("-")), len(args))]]
+        else:
+            paths = [a for a in args if not a.startswith("-")]
+        for a in paths:
+            p = os.path.realpath(os.path.join(c or cwd, os.path.expanduser(a)))
+            root = git("rev-parse", "--show-toplevel", cwd=p if os.path.isdir(p) else (os.path.dirname(p) or "."))
+            if not root:
+                continue
+            rel = os.path.relpath(p, root).replace(os.sep, "/")
+            if os.path.isdir(p):           # `rm -rf tests/data/ratchets.d`, `find tests -delete`
+                fd = os.path.join(root, RATCHET_FILES[1])
+                every = [os.path.join(root, RATCHET_FILES[0])] + (
+                    [os.path.join(fd, f) for f in os.listdir(fd) if f.endswith(".json")] if os.path.isdir(fd) else [])
+                out += [(h, verb) for h in every if os.path.exists(h) and (h + os.sep).startswith(p.rstrip(os.sep) + os.sep)]
+            elif rel == RATCHET_FILES[0] or rel.startswith(RATCHET_FILES[1]):
+                out.append((p, verb))
+    return out
+
+
+def ratchet_raise(file, tool, ti, proposed, frag):
+    """Why this write raises a ceiling, or None. A fragment holds deltas (a
+    missing key is 0); ratchets.json holds ceilings and slacks (a dropped one
+    is unbounded, a new entry only adds a guard). Content the hook cannot
+    compute (a redirect, an append) counts as a raise: write it with Edit."""
+    try:
+        cur = open(file, encoding="utf8").read()
+    except Exception:
+        cur = "{}"
+    if tool == "Remove":
+        new = "{}"                      # a removed fragment is all-zero deltas; a removed ratchets.json drops every ceiling
+    elif tool in ("Edit", "MultiEdit"):
+        new = cur
+        for e in ti.get("edits") or [ti]:
+            old = e.get("old_string") or ""
+            if old and old in new:
+                new = new.replace(old, e.get("new_string") or "", -1 if e.get("replace_all") else 1)
+    elif tool == "Write" or proposed is not None:
+        new = proposed if proposed is not None else (ti.get("content") or "")
+    else:
+        return "is rewritten blind (a redirect, tee or append the hook cannot read), which may raise a ceiling"
+    try:
+        before, after = _leaves(json.loads(cur or "{}")), _leaves(json.loads(new))
+    except Exception:
+        return "would not parse as JSON after this edit"
+    for key in sorted(set(before) | set(after), key=str):
+        if frag:
+            b, a = before.get(key, 0), after.get(key, 0)
+        elif key in before and key not in after:
+            return f"drops the {'/'.join(map(str, key))} ceiling"
+        elif key not in before:
+            continue
+        else:
+            b, a = before[key], after[key]
+        if a > b:
+            return f"raises {'/'.join(map(str, key))} from {b} to {a}"
+    return None
+
+
 # --- no source edits during a live browser run --------------------------------
 def live_playwright_in(root):
     """A `playwright test` / run-playwright.mjs process whose cwd is under THIS
@@ -175,7 +284,7 @@ def check(file, tool, ti, proposed=None, how=""):
     allow = os.path.exists(os.path.join(root, ".claude", "allow-protected"))
     rel = os.path.relpath(file, root)
     base = os.path.basename(file)
-    via = f" (via Bash: {how})" if tool == "Bash" else ""
+    via = f" (via Bash: {how})" if tool in ("Bash", "Remove") else ""
 
     # 4. track-surveyor writes only circuit defs and their scenery closures
     # (js/circuits/<id>.js, js/circuits/scenery/<id>.js) plus scratch/ and
@@ -199,11 +308,33 @@ def check(file, tool, ti, proposed=None, how=""):
     if how == "git-resolve":
         return
 
-    # The per-branch ratchet raise fragments are tool-written like ratchets.json
-    # (tools/check/ratchets.mjs --auto-raise; #2291).
-    if not allow and rel.replace(os.sep, "/").startswith("tests/data/ratchets.d/") and rel.endswith(".json"):
-        block(f"{rel}{via} is GENERATED — the commit hook's ratchets.mjs --auto-raise writes it (a delta for this "
-              "branch); --fold / --update sum it into tests/data/ratchets.json. Edit the source and re-commit.", root)
+    # Shared safety bans 1 and 2 (Fleet A + D, Bryce 2026-10-22), no escape hatch:
+    # a ceiling rises only through the commit hook's --auto-raise, and a
+    # ratchets.d fragment belongs to its branch. This branch's own fragment may
+    # be lowered or reverted by hand (a headroom-only raise backed out); a
+    # foreign one is never touched, and nothing here may RAISE a ceiling.
+    rel_ = rel.replace(os.sep, "/")
+    frag = rel_.startswith("tests/data/ratchets.d/") and rel_.endswith(".json")
+    if frag or rel_ == "tests/data/ratchets.json":
+        if frag:
+            branch = git("rev-parse", "--abbrev-ref", "HEAD", cwd=d_)
+            own = fragment_name(branch)
+            # sync-pr.mjs leaves the session on sync-pr-<branch>, which merges back into <branch>
+            mine = {own, fragment_name(branch[len("sync-pr-"):]) if branch.startswith("sync-pr-") else None} - {None}
+            if os.path.basename(rel_) not in mine:
+                block(f"{rel}{via} is another branch's ratchet fragment (this branch's is "
+                      f"{('tests/data/ratchets.d/' + own) if own else 'none: detached HEAD or the deploy branch'}). "
+                      "A fragment belongs to the branch that wrote it (shared safety ban 2); a merge brings it, "
+                      "--fold sums it.", root, hatch=False)
+        # ratchets.json without the hatch is refused below as GENERATED; the
+        # hatch lifts that rule, never this one.
+        why = ratchet_raise(file, tool, ti, proposed, frag) if frag or allow else None
+        if why:
+            block(f"{rel}{via} {why} (shared safety ban 1). A ceiling rises only through the commit hook's "
+                  "ratchets.mjs --auto-raise (<= 40 lines of real growth); extract code to fit, or ask Bryce.",
+                  root, hatch=False)
+        if frag:
+            return   # this branch's own fragment, lowered or reverted by hand (#2291)
 
     if rel in GENERATED and not allow:
         block(f"{rel}{via} is GENERATED — {GENERATED[rel]}. Edit the source and run the generator.", root)
@@ -281,7 +412,10 @@ if tool == "Bash":
         sys.stderr.write(f"protect-files: WARNING shellparse failed ({type(e).__name__}: {e}); "
                          "this command's file writes were NOT checked.\n")
         sys.exit(0)
+    removed = {p_ for p_, _h in ratchet_removals(cmd, d.get("cwd") or os.getcwd())}
     for t in targets:
+        if t["kind"] in ("rm", "unlink") and os.path.realpath(t["path"]) in removed:
+            continue   # a ratchet file removed: judged once below as a removal, not as a blind rewrite
         proposed = None
         if os.path.basename(t["path"]) in ("index.html", "sw.js", "package.json"):
             # Compute what the call would leave in the file when that is safe
@@ -300,6 +434,8 @@ if tool == "Bash":
                 except Exception:
                     proposed = None
         check(t["path"], "Bash", {}, proposed, t["kind"])
+    for path_ in sorted(removed):
+        check(path_, "Remove", {}, None, "a removal")
     if REPORTER:
         for t in shellparse.surveyor_targets(cmd, d.get("cwd") or os.getcwd()):
             if t["path"] is None:

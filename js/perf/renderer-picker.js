@@ -222,7 +222,7 @@ const RENDERER_LS_KEYS = [
 // belongs in one of these two lists. applyBackend clears the session lane
 // too: switching backends must not inherit the previous path's hold/auto-GL
 // latches across the reload (RESET already wiped them; a pick did not).
-const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent", "apex26.gfxFallbackWhy"];
+const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent", "apex26.gfxFallbackWhy"];
 
 function clearRendererStorage() {
   const removed = [];
@@ -396,6 +396,13 @@ function applyBackend(next, rb) {
   if (next === "webgpu") {
     for (const k of ["apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail"]) GameStore.store.rawDel(k);
   }
+  // Landing on a backend by hand is the retry signal for the boot canary
+  // too: clear its strike ledger (renderer-boot.js) so the fresh pick does
+  // not inherit a strike. The ledger names the backend it belongs to, but
+  // the name cannot acquit a SAME-backend re-pick — the player just vouched
+  // for it — and a strike another backend earned must never follow the
+  // player onto this one (#3547 / Merlin).
+  GameStore.store.rawDel("apex26.gfxProbeStrikes");
   markReloading(rb, next);
   reloadSoon();
   return true;

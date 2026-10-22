@@ -30,8 +30,8 @@ thing**, which is how this project has lost the most time.
 | Does an element overlap another? | Playwright capture, **never** an MCP screenshot | see CHROME-DEVTOOLS-MCP.md trap 6 |
 | Does the renderer keep BUILDING things after warm-up? | `tools/gfx/frame-hitch.mjs <track> --backend three` | **Yes** — it counts `linkProgram`/`createRenderPipeline`/`createTexture` calls, and counts are exact on a software adapter even where the milliseconds are not. |
 | Does it lag every few seconds? | `__apex.perf().frameTimes` (p99 vs p50) on the device that has it | **No** — 16 rAF frames in 40 s here. The ring is valid; this box's frame CADENCE is not. |
-| Did a change move the FRAME RATE? | `gpu-census.yml` `fps` / `frames` / `tier` / `scale` | **No — ±54 % run to run on IDENTICAL code.** §2w. Two runs of the same commit gave 26.9 and 41.4. Never read it against a single before/after. |
-| Did a change move the LOOK? | `gpu-census.yml` `meanLuma` | **Yes** — 72.0 across three runs, two commits and two runners in §2w. The stable channel of the same instrument. |
+| Did a change move the FRAME RATE? | `gpu-census.yml` `fps` / `frames` / `tier` / `scale` | **No — ±54 % run to run on IDENTICAL code.** §2aw. Two runs of the same commit gave 26.9 and 41.4. Never read it against a single before/after. |
+| Did a change move the LOOK? | `gpu-census.yml` `meanLuma` | **Yes** — 72.0 across three runs, two commits and two runners in §2aw. The stable channel of the same instrument. |
 
 ### The three instruments that lie here, and how
 
@@ -3263,7 +3263,7 @@ Any boot A/B still needs a quiet box (`loadavg < 2`), a do-nothing control arm,
 rotated arm order, and the MINIMUM reported beside the median — the ledger
 records how the first attempt was VOID without those.
 
-## 2y. Two things a 2026-09-03 audit found, and one it got wrong
+## 2an. Two things a 2026-09-03 audit found, and one it got wrong
 
 ### The frame loop is clean EXCEPT the shadow path
 
@@ -4077,7 +4077,7 @@ invisible from the ladder's own source, and anyone adding a rung above
 Verified by reading the vendored bytes. NOT reproduced at runtime — making a
 paint fail on demand is not something this container can do.
 
-## 2t. The governor was blind below 10 fps — it reported 59.9 on a device doing 0.11 (2026-09-02)
+## 2ao. The governor was blind below 10 fps — it reported 59.9 on a device doing 0.11 (2026-09-02)
 
 Found by looking, not by reasoning: Chrome DevTools MCP against the working
 tree on `127.0.0.1:3456`, GLX, bahrain, a race started through `__apex.race()`.
@@ -4143,7 +4143,7 @@ frame rate. What reproduces is the INSTRUMENT failure: whatever makes a real
 device slow, the governor stops being able to see it at 10 fps and then does
 nothing. That is the defect; the container merely made it visible.
 
-## 2u. 539 backdrops were being dropped where nothing could see it (2026-09-02)
+## 2ap. 539 backdrops were being dropped where nothing could see it (2026-09-02)
 
 Found while chasing a single line in a live browser console —
 `[scenery] bahrain: suppressed building=1` — and asking what else that circuit
@@ -4232,7 +4232,7 @@ asked — a software rasterizer's queue drain is not a player's GPU. The real
 instrument for it is `bench.html` on the reporting device and the
 `gpu-census.yml` dispatch on `macos-latest`.
 
-## 2y. The garage part pick: one frame of everything (2026-09-05)
+## 2aq. The garage part pick: one frame of everything (2026-09-05)
 
 Reported: "selecting a part (or any change) in the GARAGE makes the screen
 lag, as if the turntable stops". Measured in `page.evaluate` with
@@ -4355,7 +4355,7 @@ the cost is spread — but that is a conclusion the old output could not support
 either way. Anything hunting a hot spot from a profile taken before this fix
 was reading the rasteriser, not the code.
 
-## 2r. A NEW decay reported on the phone: three-WebGPU 60 → 30 (2026-09-10)
+## 2ar. A NEW decay reported on the phone: three-WebGPU 60 → 30 (2026-09-10)
 
 Owner report: on the handset, TLX-WebGPU **starts at 60 and settles at 30**.
 That exact halving is the vsync signature — a frame crossing 16.7 ms lands on
@@ -4390,9 +4390,9 @@ is the instrument §2o and §2p were both settled with — it wants a soak on th
 handset (`apex26.tlxMobile=1`), sampling every 15 s while racing, and the
 acceptance criterion is the slope against a GLX control on the same phone.
 
-## 2s. The decay is NOT a JS-heap leak — measured, on Apple hardware and on a soak (2026-09-10)
+## 2as. The decay is NOT a JS-heap leak — measured, on Apple hardware and on a soak (2026-09-10)
 
-Following §2r's report (three-WebGPU 60 → 30 on the handset). Two instruments,
+Following §2ar's report (three-WebGPU 60 → 30 on the handset). Two instruments,
 one negative result each, and a negative result here is worth more than another
 hypothesis: it says where NOT to spend the next round.
 
@@ -4451,9 +4451,9 @@ handset it produces exactly a sustained halving.
    measured a slope (§2o's closing lesson); this entry exists so a third is not
    spent on a slope that is already flat.
 
-## 2t. The GPU-side slope is flat too — and the persisted backend is the likelier answer (2026-09-10)
+## 2at. The GPU-side slope is flat too — and the persisted backend is the likelier answer (2026-09-10)
 
-§2s closed by naming the blind spot: the JS heap cannot see textures, buffers or
+§2as closed by naming the blind spot: the JS heap cannot see textures, buffers or
 pipelines, and iOS jetsam charges the tab for exactly those. `heap-stages.mjs`
 now samples `GLX.__tlx.memState()` on a Node-side clock through the soak. 90 s,
 montreal, TLX leg:
@@ -4476,7 +4476,7 @@ which is §2n's keyed pool tracking the working set exactly as designed; `rTex`
 is non-monotonic (41 → 28 → 52), so textures are being freed and remade rather
 than accumulated. **No unbounded GPU-side growth over 90 s.**
 
-That is the SECOND negative. Neither the JS heap (§2s) nor three's own retained
+That is the SECOND negative. Neither the JS heap (§2as) nor three's own retained
 counts reproduce a decay on this box.
 
 ### Two gaps in the instrument, stated rather than glossed
@@ -4512,7 +4512,7 @@ SETTINGS and a stored `"three"` the player chose deliberately are the same three
 bytes; a migration that cleared it would silently override a real choice. The
 answer is the RENDERER row in SETTINGS, and knowing to look at it.
 
-## 2u. Only ONE of the ladder's four rungs is reachable on a slow phone (2026-09-10)
+## 2au. Only ONE of the ladder's four rungs is reachable on a slow phone (2026-09-10)
 
 A fourth live iPhone capture, this one on **Suzuka** — which answers the
 question three earlier notes asked and could not: the circuit the owner
@@ -4615,7 +4615,7 @@ the payload. `tier` alone was never enough: it folds in the crash floor and the
 player's GRAPHICS preset, so only `autoShed` says what the governor shed on its
 own evidence.
 
-## 2v. The biggest texture in the game is the car livery, and it was never measured (2026-09-14)
+## 2av. The biggest texture in the game is the car livery, and it was never measured (2026-09-14)
 
 The vertex-format packing this session (40 → 28 B on GLX, 36 → 28 on WGX,
 40 → 36 on the TLX WebGPU leg) took the fleet's world VBO from 784.8 MB to
@@ -4664,9 +4664,9 @@ exact sum and asserts the rule-of-thumb answer is NOT what the census returns.
 Plan and remaining tasks: `docs/plans/2026-09-14-texture-memory-plan.md`.
 
 
-## 2w. The census reports fps and it varies 54 % on identical code (2026-09-14)
+## 2aw. The census reports fps and it varies 54 % on identical code (2026-09-14)
 
-The livery-tier change (§2v, 147 MB of atlases → 42) came back from
+The livery-tier change (§2av, 147 MB of atlases → 42) came back from
 `gpu-census.yml` on `macos-latest` with GLX at **26.9 fps against 37.1** on the
 run before it. A 27 % drop, on the real-GPU gate, from a change that only ever
 REMOVES texture bytes. It reads like a regression and it is not one.
@@ -4711,9 +4711,9 @@ change that could not have caused one, and the honest next step was a control
 run rather than an explanation.
 
 
-## 2x. The AI livery downshift is invisible, and the proof is texel density (2026-09-14)
+## 2ax. The AI livery downshift is invisible, and the proof is texel density (2026-09-14)
 
-§2v halved the AI livery atlases (147 MB of VRAM → 42). The open question was
+§2av halved the AI livery atlases (147 MB of VRAM → 42). The open question was
 APPEARANCE: `meanLuma` cannot see a softer texture, and the plan shipped the
 change with "no AI close-up A/B" written down as the unverified part.
 
@@ -4751,7 +4751,7 @@ pixel — is at **1.2 m** (1080p) or 1.5 m (1440p). That is inside the car.
 
 So the downshift cannot add softness at any distance a car is raced at, and the
 one context that does get closer, photo mode, takes the full tier by an explicit
-exemption. This closes the appearance question §2v left open.
+exemption. This closes the appearance question §2av left open.
 
 **It also says the tier could go further.** The mobile step (÷4, 388 texels/m)
 would still be 7.4 texels/px at 17 m and would free roughly another 27 MB. Not
@@ -4814,7 +4814,7 @@ force innocent. Then `force: "1"` plus `ls: apex26.envProbeOff=1` — if 2.9
 survives with the probe already never starting, the cube is exonerated for this
 mode and the cause is something else on the forced path.
 
-## 2y. TLX's frame block was one uniform buffer PER DRAW, not per program (2026-09-22)
+## 2ay. TLX's frame block was one uniform buffer PER DRAW, not per program (2026-09-22)
 
 **The defect, in three's own terms.** Every uniform in `js/render/three/tsl-lit.js`'s
 frame block — the ~60 lighting/fog/shadow scalars, vectors and matrices, the four
@@ -4864,8 +4864,8 @@ one software timing worth quoting, because it is minutes, not milliseconds.
 
 **What this does not show.** Real-GPU frame time. The census request committed with
 this entry runs `macos-latest` on both arms (`ls: apex26.tlxSharedUniforms=0` is the
-control); read its `ubo` beats for the counts and treat `gms`/fps per §2w — never
-single-shot. The 48 MB iPhone TLX-vs-GLX memory gap (§2r) is a separate question; 5 MB
+control); read its `ubo` beats for the counts and treat `gms`/fps per §2aw — never
+single-shot. The 48 MB iPhone TLX-vs-GLX memory gap (§2ar) is a separate question; 5 MB
 of uniform buffers on a 1200-draw desktop frame is a bound on what this can have been
 worth there, not an answer.
 
@@ -4888,7 +4888,7 @@ WebGPU: 5.6x fewer uniform buffers, 14.6x fewer uniform bytes, and the JS time i
 `setBindGroup`/`writeBuffer` walk three.js issue #30560 describes, gone. WebGL2: 4.6x and
 9.4x on the counts; the JS EMA did not move outside noise on this single sample (the
 WebGL2 backend's per-object cost was the `bufferData` itself, which lands in the driver,
-not in JS — the counts are the evidence there). fps is reported, not read: §2w (54 %
+not in JS — the counts are the evidence there). fps is reported, not read: §2aw (54 %
 swing on identical code), and the WebGL2 control's governor line says "fps UNFED".
 
 † The control arm's headless-WebGPU frame read 3.3 mean luma with the occlusion A/B
@@ -4900,7 +4900,7 @@ the same runner, and the in-container Lavapipe pair above read 46.5 / 46.9.
 **Verdict.** Shipped ON. Revert criteria (gpuErrors, luma divergence, frozen groupVer,
 < 5x buffer drop) all clear on software and on Metal. Next measurement that would add
 information: a HEADED Metal run (the census is headless and soft-blits on WebGPU), and a
-phone — the 48 MB TLX-vs-GLX gap (§2r) has a 2.4 MB bound from this, no more.
+phone — the 48 MB TLX-vs-GLX gap (§2ar) has a 2.4 MB bound from this, no more.
 
 **Addendum, the decal block (2026-09-22, same day).** `tsl-fx.js`'s frame block
 (`U`: sunDir/sunColor/ambSky/ambGround, four vec3) was the same defect one file over:
@@ -4918,7 +4918,7 @@ Real GPU, census run 184 on the shipped commit 209af188 (macos-latest, montreal,
 night, clock pinned): all four legs `phase=done ok=true gpuErrors=0`, no FAILED
 section — WebGPU meanLuma 51.4, WebGL2 (Metal ANGLE) 51.1, GLX 45.7, WGX 58.9.
 That is the revert criteria clear on hardware for the decal block as well; the
-fps and JS-ms columns are single samples and are not read (§2w).
+fps and JS-ms columns are single samples and are not read (§2aw).
 
 ## 2aa. "It lags every few seconds" was the governor chasing the track layout (2026-09-22)
 
@@ -5324,7 +5324,7 @@ present (`tsl-fx.js`, now built once) keying a fresh render context — the same
 neither the ungated post warm nor the caster warm bought anything the census can see,
 and together they held the lights ~2.2 s longer. `tlxWarmPlus` is therefore OPT-IN
 (`=1`); the default is the census-244 configuration. Hitch counts between single
-driven windows are noisy (§2w), so "5 vs 2" is not a finding; "same compiles,
+driven windows are noisy (§2aw), so "5 vs 2" is not a finding; "same compiles,
 shorter lights" is.
 
 ## 2ah. The plan, revised after step 1 (2026-09-24)

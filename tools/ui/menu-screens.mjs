@@ -2,6 +2,7 @@
 // menu-screens.mjs — canonical screen routes for layout-audit.mjs.
 // @doc Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools.
 // @skill survey-ui-matrix
+import { CliArgError } from "../lib/cli-args.mjs";
 import { createRequire } from "node:module";
 import { pickCircuit } from "./circuit-axis.mjs";
 
@@ -321,6 +322,12 @@ export const SCREENS = [
           || b.find((e) => e.id && e.id.startsWith("cr-guide")))?.click(); });
       await p.waitForSelector("#career-guide:not([hidden])", { timeout: 15000 }); } },
 
+  { id: "bench", name: "Benchmark", root: "#bench", open: async (p) => {
+      // SETTINGS > GRAPHICS > BENCHMARK... (js/perf/bench-run.js mounts the button at the top of the GRAPHICS page).
+      await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
+      await p.click("#pm-open-graphics"); await p.waitForSelector("#pm-bench-open", { state: "visible", timeout: 15000 });
+      await p.click("#pm-bench-open"); await p.waitForSelector("#bench:not([hidden])", { timeout: 15000 }); } },
+
   { id: "careerhub", name: "Career hub (season)", root: "#career", open: async (p) => {
       // #career shows the NEW-CAREER SETUP on a fresh profile and the SEASON HUB
       // once one exists — two different layouts behind one root. The default
@@ -578,7 +585,7 @@ export const SCREENS = [
 export const OVERLAY_IDS = [
   "select", "carsetup", "career", "career-offers", "career-history",
   "career-guide", "teampicker", "race-settings", "quali", "standings", "results", "customize",
-  "season-setup", "howtoplay", "advanced", "pmsettings", "pausemenu", "datahub", "trackdesigner", "track-detail", "vsfriend",
+  "season-setup", "howtoplay", "advanced", "pmsettings", "bench", "pausemenu", "datahub", "trackdesigner", "track-detail", "vsfriend",
   "audioset", "spotifypanel", "lighting", "camtune", "flyby", "photo-controls",
   // Photo Studio is its own full-screen layer (not under photo-controls). Leaving it
   // open after a photostudio cell made every later menu-mock click time out on a
@@ -600,16 +607,23 @@ export function getScreen(id) {
   return SCREENS.find((s) => s.id === id) || null;
 }
 
-export function pickScreens(all, patternArg) {
+// Strict: a pattern that selects nothing is a typo, not an empty sweep (#3305).
+function pickByName(all, patternArg, nameOf, flag) {
   if (!patternArg) return all;
   const pats = patternArg.split(",");
-  return all.filter((x) => pats.some((p) =>
-    p.endsWith("*") ? x.id.startsWith(p.slice(0, -1)) : x.id === p));
+  const hit = (p, n) => (p.endsWith("*") ? n.startsWith(p.slice(0, -1)) : n === p);
+  const bad = pats.filter((p) => !all.some((x) => hit(p, nameOf(x))));
+  if (bad.length) {
+    throw new CliArgError(`${flag}: no match for ${bad.map((b) => JSON.stringify(b)).join(", ")}`
+      + `\n  valid ids: ${all.map(nameOf).join(" ")}`);
+  }
+  return all.filter((x) => pats.some((p) => hit(p, nameOf(x))));
+}
+
+export function pickScreens(all, patternArg) {
+  return pickByName(all, patternArg, (x) => x.id, "--screens");
 }
 
 export function pickViewports(all, patternArg) {
-  if (!patternArg) return all;
-  const pats = patternArg.split(",");
-  return all.filter(([n]) => pats.some((p) =>
-    p.endsWith("*") ? n.startsWith(p.slice(0, -1)) : n === p));
+  return pickByName(all, patternArg, ([n]) => n, "--viewports");
 }
