@@ -51,7 +51,8 @@ body[data-density="compact"] #ps-panel button[data-step] {
   display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 3);
   margin: calc(var(--gap) / 6) 0 calc(var(--gap) * 0.5);
 }
-#ps-lt-tabs .lt-tab {
+/* PHOTO LIGHTING tabs/panels: ID-scoped (no new class family — component-inventory). */
+#ps-lt-tabs > button {
   min-height: var(--tap-paint);
   display: inline-flex; align-items: center; justify-content: center;
   width: auto; margin: 0; min-width: 0;
@@ -59,13 +60,13 @@ body[data-density="compact"] #ps-panel button[data-step] {
   border-radius: var(--r-pill); color: var(--text);
   white-space: normal; text-align: center; line-height: 1.15;
 }
-#ps-lt-tabs .lt-tab.active {
+#ps-lt-tabs > button.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
 }
-#ps-lt-rows .lt-group { display: none; }
-#ps-lt-rows .lt-group.active { display: block; }
-#ps-lt-rows .lt-group .adv-sec { display: none; }
-#ps-lt-rows .lt-section {
+#ps-lt-rows > div { display: none; }
+#ps-lt-rows > div.active { display: block; }
+#ps-lt-rows > div > .adv-sec { display: none; }
+#ps-lt-rows > div > h4 {
   margin: calc(var(--gap) * 1.5) 0 calc(var(--gap) * 0.5); padding: 0 0 calc(var(--gap) / 3);
   color: var(--steel); background: var(--grad-rule) bottom left / 100% 1px no-repeat;
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
@@ -75,10 +76,6 @@ body[data-density="compact"] #ps-panel button[data-step] {
   #ps-panel #ps-lt-reset { min-height: var(--tap-paint); }
 }
 #ps-panel #ps-lt-rows input[type="range"] { min-height: var(--tap-min); width: 100%; }
-/* Joystick / altitude buttons: match lighting-tuner photo-mode stick sizing. */
-body.photo-mode.photo-studio-open .pc-stick {
-  width: 118px; height: 118px;
-}
 #ps-panel input[type="file"] { min-width: 0; max-width: 100%; min-height: var(--tap); padding: calc(var(--gap) * .5); font-family: var(--font-ui); font-size: var(--fs-2); color: var(--text); background: var(--surf-3); border: 1px solid var(--plate-line); border-radius: var(--r-sm); }
 #ps-panel :is(select, input, summary):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #ps-panel summary { min-height: var(--tap); padding-block: calc(var(--gap) * .5); cursor: pointer; font-weight: 700; font-size: var(--fs-micro); }

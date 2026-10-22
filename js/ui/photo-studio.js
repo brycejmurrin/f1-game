@@ -248,14 +248,14 @@ function create(G, deps) {
       if (d.group !== cur) {
         cur = d.group; groups.push(cur); section = null;
         const slug = ltSlug(cur);
-        wrap = mk("div", { className: "lt-group", id: "ps-lt-panel-" + slug,
+        wrap = mk("div", { id: "ps-lt-panel-" + slug,
           attrs: { "data-group": cur, role: "tabpanel", "aria-labelledby": "ps-lt-tab-" + slug } });
         wrap.appendChild(mk("h3", { className: "adv-sec", textContent: cur }));
         wrap.hidden = true; ltRows.appendChild(wrap);
       }
       if (d.section && d.section !== section) {
         section = d.section;
-        wrap.appendChild(mk("h4", { className: "lt-section", textContent: section }));
+        wrap.appendChild(mk("h4", { textContent: section }));
       }
       const out = mk("b", { id: "ps-lt-v-" + d.id });
       const lab = mk("span", { className: "tune-label", textContent: d.label + " " });
@@ -279,7 +279,7 @@ function create(G, deps) {
     }
     for (let i = 0; i < groups.length; i++) {
       const g = groups[i], slug = ltSlug(g);
-      const t = mk("button", { type: "button", className: "lt-tab", id: "ps-lt-tab-" + slug, textContent: g,
+      const t = mk("button", { type: "button", id: "ps-lt-tab-" + slug, textContent: g,
         attrs: { role: "tab", "data-group": g, "aria-controls": "ps-lt-panel-" + slug } });
       t.addEventListener("click", () => setLtTab(g));
       t.addEventListener("keydown", (e) => {
