@@ -38,6 +38,11 @@ round, never a standing negotiation.
 
 ## Messages
 
+- **Instant path (every host):** `node tools/ci/agent-msg.mjs send --to <letter|DAD|all|…>
+  --type <INFO|QUESTION|READY|HANDOFF|INCIDENT|REQUEST> "…"`. Needs
+  `APEX_AGENT_WEBHOOK_URL` + `APEX_AGENT_WEBHOOK_AUTH` from Bryce (never
+  commit). Mirrors onto the bus; messages carry no authority
+  (`references/comms.md` §Agent msg, `references/authority.md`).
 - The bus refuses a `to:` that is not a session id, `#<PR>`, a fleet letter, a
   known role word or `*`. A claims-board hash is not an address.
 - `to:#<PR>` lines are mirrored as a comment on that PR (`fleet-bus-mirror.mjs` in

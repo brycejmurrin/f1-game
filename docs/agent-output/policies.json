@@ -566,6 +566,11 @@
       "presentation": "shared-levels",
       "preserve": "Dry-run versus posted; each posted, skipped (with reason) and FAILED PR comment by bus sha; exit 1 on any failed post"
     },
+    "tools/ci/agent-msg.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "Dry-run JSON payload (no auth); webhook ok/FAILED (auth redacted); missing APEX_AGENT_WEBHOOK_* warn + bus still posted exit 0; bus mirror sha/line; never print APEX_AGENT_WEBHOOK_AUTH"
+    },
     "tools/ci/fleet-bus.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",

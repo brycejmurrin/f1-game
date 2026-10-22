@@ -25,6 +25,7 @@
 //   node tools/ci/fleet-bus.mjs lease check                            # exit 0 only if YOU hold a live lease
 //   node tools/ci/fleet-bus.mjs lease break --grant "<the user's words>"   # take a live lease on a user grant
 //   node tools/ci/fleet-bus.mjs send READY --to orchestrator "#2990 abc1234 ready-gate 0"
+//   Prefer agent-msg.mjs for READY/HANDOFF/INCIDENT/INFO/QUESTION/REQUEST (webhook + bus mirror).
 //   node tools/ci/fleet-bus.mjs send GAME-SLOT --to '*' "#2990 <head sha>"   # before a game merge (merge-gate.mjs reads it)
 //   node tools/ci/fleet-bus.mjs read [--to merge-holder --to '#2990'] [--since <sha>] [--last 20] [--json]
 //   node tools/ci/fleet-bus.mjs who A [--last 500] [--json]   # fleet A's live orchestrator: `A <host:id> <sha7> <age>`; exit 1 none
@@ -45,7 +46,9 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const BUS_BRANCH = "claude/fleet-bus";
 /** GAME-SLOT (2026-10-19): the claim a session pushes before a game merge — `#<PR> <head sha>`; the earlier line wins the
  *  push race, and merge-gate.mjs requires the newest live one to name the PR and come from the merging session. */
-export const TYPES = ["READY", "GREEN", "BLOCKED", "HANDOFF", "DONE", "INCIDENT", "LEASE", "GAME-SLOT"];
+/** Bus line types. INFO/QUESTION/REQUEST are peer-message types from agent-msg.mjs (2026-10-22). */
+export const TYPES = ["READY", "GREEN", "BLOCKED", "HANDOFF", "DONE", "INCIDENT", "LEASE", "GAME-SLOT",
+  "INFO", "QUESTION", "REQUEST"];
 export const DEFAULT_TTL_MIN = 60;
 /** A lease longer than this outlives the Pages p90 (73 min) three times over: a dead holder would block for hours. */
 export const MAX_TTL_MIN = 240;
@@ -216,6 +219,28 @@ export function ageOf(at, now) {
 /** The `who` output line: `<letter> <host:id> <sha7> <age>`. Pure. */
 export const whoLine = (w, now) => `${w.letter} ${w.id} ${String(w.sha).slice(0, 7)} ${ageOf(w.at, now)}`;
 
+/**
+ * Write one typed bus line (shared with agent-msg.mjs). Does not shell out.
+ * Returns { ok, sha, line, reason, refused }. `log` defaults to a no-op so
+ * callers that already print their own status stay quiet; the CLI passes console.log.
+ */
+export function sendBusLine(type, to, from, text = "", {
+  cwd = ROOT, dispatch = pokeFleetBoard, log = () => {},
+} = {}) {
+  if (type === "LEASE") throw new Error("LEASE lines are written by `lease …`, never sent by hand");
+  const line = formatLine(type, to, from, text);
+  const r = writeBus(() => ({ ok: true, line, lease: undefined }), { cwd });
+  if (r.ok) log(`= sent ${r.sha}: ${line}`);
+  else log(`= send FAILED: ${r.reason}`);
+  // A `to:#<PR>` line reaches the PR's owner as a comment (fleet-bus-mirror.mjs in fleet.yml).
+  if (r.ok && /^#\d+$/.test(to)) {
+    let how;
+    try { how = dispatch(); } catch (e) { how = `not dispatched (${e.message})`; }
+    log(`= mirror ${how}`);
+  }
+  return { ...r, line };
+}
+
 // ---- git -------------------------------------------------------------------
 
 const gitIn = (cwd) => (args, input) => spawnSync("git", args, { cwd, encoding: "utf8", input, env: identityEnv(cwd), timeout: 60_000 });
@@ -358,16 +383,7 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
       if (!sub) return usage("send needs a TYPE");
       if (sub === "LEASE") return usage("LEASE lines are written by `lease …`, never sent by hand");
       if (multi.to.length !== 1) return usage("send needs exactly one --to");
-      const line = formatLine(sub, multi.to[0], me, pos.slice(2).join(" "));
-      const r = writeBus(() => ({ ok: true, line, lease: undefined }), { cwd });
-      log(r.ok ? `= sent ${r.sha}: ${line}` : `= send FAILED: ${r.reason}`);
-      // A `to:#<PR>` line reaches the PR's owner as a comment (fleet-bus-mirror.mjs in fleet.yml): ask for that run
-      // now instead of at the next :23/:53. Best effort — a failed dispatch never fails the send.
-      if (r.ok && /^#\d+$/.test(multi.to[0])) {
-        let how;
-        try { how = dispatch(); } catch (e) { how = `not dispatched (${e.message})`; }
-        log(`= mirror ${how}`);
-      }
+      const r = sendBusLine(sub, multi.to[0], me, pos.slice(2).join(" "), { cwd, dispatch, log });
       return r.ok ? 0 : 1;
     }
     if (cmd === "who") {
