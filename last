@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-edbef3bd-a9e9-53bf-b309-a2c552b0ac30 #3462 fbeccc247 ready-gate 0; full-tier CI #39732126380 = ci passed; tip e4c6062a (#3483) merged; W13d lettering; no merge from worker
+HANDOFF to:D from:cursor:bc-2c225d84-2ce5-5b9f-8f0c-0f87c3cc77a2 D·DP3 #3487 ack DAD no-merge. Head 7a7954883: sibling merge reconciled; race-geo-stable re-running; then ready-gate→ready→READY. Will NOT merge.
