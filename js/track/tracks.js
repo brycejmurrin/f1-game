@@ -22,28 +22,20 @@ const Tracks = (function () {
 
   /** Centreline only, no meshes. `opts.line === false` skips ONLY the racing-line bake (~75 %
    *  of the time): tr.line = null, lineW/lineCorners/… absent — the designer's preview build. */
-  // Race-select preview cache (D·DP5): worker adoptPreviewCenterline (or an
-  // explicit {line:false, preview:true} build) primes typed arrays so the next
-  // TrackMaps.compute / buildCenterline({line:false}) is a hit. Do NOT auto-store
-  // every {line:false} build — editors and unit tests mutate hwZones / splineAlpha
-  // on a same-id clone and must get a fresh centreline. Key still includes
-  // hwZones/baseHW as defence-in-depth for adopt. Hydrate forgets the entry.
+  // D·DP5 preview cache: adoptPreviewCenterline or {line:false,preview:true} only; key
+  // includes hwZones/baseHW; hydrate forgets. Plain line:false must not auto-store.
   const previewCL = new Map();
   function previewKey(def) {
     if (!def || !def.id) return null;
-    const n = (def.path && def.path.pts && def.path.pts.length)
-      || (def.points && def.points.length) || 0;
-    const base = def.baseHW != null ? String(def.baseHW) : "";
+    const n = (def.path && def.path.pts && def.path.pts.length) || (def.points && def.points.length) || 0;
     let zones = "";
-    if (def.hwZones && def.hwZones.length) {
-      try { zones = JSON.stringify(def.hwZones); } catch (_) { zones = "hz"; }
-    }
-    return def.id + "\0" + (def.reverse ? "1" : "0") + "\0" + n + "\0" + base + "\0" + zones;
+    if (def.hwZones && def.hwZones.length) try { zones = JSON.stringify(def.hwZones); } catch (_) { zones = "hz"; }
+    return def.id + "\0" + (def.reverse ? "1" : "0") + "\0" + n + "\0"
+      + (def.baseHW != null ? String(def.baseHW) : "") + "\0" + zones;
   }
   function forgetPreviewCenterline(id) {
     if (id == null) { previewCL.clear(); return; }
-    const prefix = id + "\0";
-    for (const k of previewCL.keys()) if (k.startsWith(prefix)) previewCL.delete(k);
+    for (const k of previewCL.keys()) if (k.startsWith(id + "\0")) previewCL.delete(k);
   }
   function adoptPreviewCenterline(def, track) {
     const key = previewKey(def);
@@ -55,15 +47,10 @@ const Tracks = (function () {
   function buildCenterline(def, opts) {
     const key = opts && opts.line === false ? previewKey(def) : null;
     if (key && previewCL.has(key)) {
-      // Shallow clone: terrain-normals (and similar) build twice and null bankP
-      // on one copy — returning the cached object identity poisoned the other.
-      const hit = previewCL.get(key);
+      const hit = previewCL.get(key); // shallow clone — callers null bankP on one copy
       return Object.assign({}, hit, { meshes: hit.meshes || {} });
     }
     const track = buildCenterlineFresh(def, opts);
-    // Only an explicit preview build stores; adoptPreviewCenterline is the
-    // worker path. Auto-caching every line:false poisoned track-def-factory /
-    // spline-fold / scenery-digest (same id, mutated zones / alpha).
     if (key && opts && opts.preview === true) previewCL.set(key, track);
     return track;
   }
