@@ -211,11 +211,12 @@ test("GRAPHICS: LOW sheds look-defining post via lookPostShed (bloom/SSAO/god-ra
   const gfx = read("js/perf/quality-preset.js");
   assert.ok(/id:\s*"low"[\s\S]*?tier:\s*4/.test(gfx),
     "LOW must stay a cost-floor of 4 (env/SSR/shadows still shed)");
-  assert.ok(game.includes("PerfGov.lookPostShed"), "present path must call lookPostShed");
-  assert.ok(game.includes("const _lookOff = PerfGov.lookPostShed"), "_lookOff latch");
+  const pfx = read("js/ui/post-fx-opts.js");
+  assert.ok(pfx.includes("PerfGov.lookPostShed"), "applyLookShed must read lookPostShed");
+  assert.ok(game.includes("PostFxOpts.applyLookShed(po,"), "present path must call applyLookShed");
   for (const id of ["bloom", "ssao", "godray", "contact", "lampVol"]) {
-    assert.ok(game.includes(`po.${id} = _lookOff ? 0`),
-      `po.${id} must follow lookPostShed (_lookOff)`);
+    assert.ok(pfx.includes(`po.${id} = off ? 0 : v.${id}`),
+      `po.${id} must follow lookPostShed via applyLookShed`);
     assert.equal(new RegExp(`po\\.${id} = PerfGov\\.tier\\(\\) >= 4`).test(game), false,
       `po.${id} must not hard-zero on tier() alone`);
   }

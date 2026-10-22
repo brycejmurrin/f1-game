@@ -104,6 +104,32 @@ test("gate() zeroes EVERY strength a switched-off pass is gated on, and nothing 
   assert.deepEqual({ ...M.gate(full()) }, { ssao: 0.8, contact: 0.5, godray: 0, lampVol: 0, bloom: 1 });
   M.set("ssao", false);
   assert.deepEqual({ ...M.gate(full()) }, { ssao: 0, contact: 0, godray: 0, lampVol: 0, bloom: 1 });
-  // game.js routes the present opts through it once all four strengths are set (after the tier-4 shed).
-  assert.match(GAME, /po\.lampVol = _lookOff \? 0 : _lampVol;[^\n]*\n\s*PostFxOpts\.gate\(po\);/);
+  // game.js routes look-post shed then the GRAPHICS AO/god-ray switches.
+  assert.ok(GAME.includes("PostFxOpts.applyLookShed(po,"));
+  assert.ok(GAME.includes("PostFxOpts.gate(po);"));
+});
+
+test("applyLookShed zeros look-defining strengths when lookPostShed is true", () => {
+  const stored = {};
+  const rows = new Map();
+  const sb = {
+    Math, console, Object, Array, JSON, String, Number,
+    GameStore: { store: {
+      raw: (k) => (k in stored ? stored[k] : DEFAULTS.has(k.replace(/^apex26\./, "")) ? DEFAULTS.get(k.replace(/^apex26\./, "")) : null),
+      rawSet: (k, v) => { stored[k] = String(v); return true; },
+    } },
+    SettingRow: { wire: (id, spec) => rows.set(id, spec), labels: (vals) => vals.map((v) => [v, v.toUpperCase()]) },
+    document: { readyState: "complete", addEventListener() {} },
+    PerfGov: {
+      lookPostShed: () => true,
+      autoTier: () => 0,
+    },
+  };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
+  const M = vm.runInContext("PostFxOpts", ctx);
+  const po = { bloom: 1, ssao: 0.8, godray: 0.5, contact: 0.3, lampVol: 0.2 };
+  M.applyLookShed(po, { bloom: 1, ssao: 0.8, godray: 0.5, contact: 0.3, lampVol: 0.2 });
+  assert.deepEqual(po, { bloom: 0, ssao: 0, godray: 0, contact: 0, lampVol: 0 });
 });

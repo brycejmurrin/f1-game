@@ -15894,11 +15894,21 @@
       ]
     },
     "js/ui/post-fx-opts.js": {
+      "applyLookShed": [
+        "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/light-grid.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs"
+      ],
       "gate": [
         "tests/unit/post-fx-opts.test.mjs"
       ],
       "read": [
+        "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/light-grid.test.mjs",
         "tests/unit/post-fx-opts.test.mjs"
+      ],
+      "*": [
+        "tests/unit/light-store-perchunk-pin.test.mjs"
       ]
     },
     "js/ui/quali-sheet.js": {
