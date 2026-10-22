@@ -4772,6 +4772,7 @@
         "tests/unit/settings-open-perf.test.mjs"
       ],
       "open": [
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/settings-open-perf.test.mjs"
       ],
       "parkedWarm": [
@@ -4784,6 +4785,7 @@
         "tests/unit/settings-open-perf.test.mjs"
       ],
       "slice": [
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/settings-open-perf.test.mjs"
       ]
     },
@@ -6472,6 +6474,10 @@
       "menuFinish": [
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
+      ],
+      "menuIdle": [
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "menuLampBake": [
         "tests/unit/flyby-intro.test.mjs",

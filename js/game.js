@@ -2153,7 +2153,9 @@ for (const ev of ["pointerdown", "keydown"])
 // MenuSheetGate: yield while Settings is open so warmPrograms / garage prep
 // do not overlap the sheet (D·IP2). slice/idle live there — keeps game.js flat.
 const menuSlice = () => MenuSheetGate.slice();
-const menuIdle = (c) => MenuSheetGate.idle(c, MENU_IDLE_MS, () => _menuInputAt, menuSlice);
+async function menuIdle(current) {
+  return MenuSheetGate.idle(current, MENU_IDLE_MS, () => _menuInputAt, menuSlice);
+}
 // Dark sessions: bake the lamp pools in 8 ms slices now, so RACE!'s sync bake hits the cache (lamp-bake.js prebake).
 async function menuLampBake(current) {
   const step = current() && _atmo.prebakeLamps();

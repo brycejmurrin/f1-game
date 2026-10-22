@@ -6077,9 +6077,13 @@ test("selector preparation waits for the player's hands before the build and the
     "the warm frames follow the paced car assets, on an idle menu, with the program warm requested first");
   assert.ok(fin.indexOf("_menuGate.warm = 2") < fin.indexOf("menuLampBake(current)"),
     "…and come BEFORE the lamp pre-bake: a RACE! tap mid-bake met cold shaders");
+  const gateSrc = read("js/core/menu-sheet-gate.js");
   const idle = eval("(function(){ let _menuInputAt = 0; const MENU_IDLE_MS = 1200; let now = 0;" +
     " const performance = { now: () => now }; const waits = [];" +
     " const setTimeout = (fn, ms) => { waits.push(ms); now += ms; fn(); };" +
+    " const document = { getElementById: () => null, activeElement: null }; const Object = globalThis.Object, Promise = globalThis.Promise, WeakMap = globalThis.WeakMap;" +
+    gateSrc +
+    " const menuSlice = () => new Promise((r) => setTimeout(r, 32));" +
     src.match(/async function menuIdle\(current\) \{[\s\S]*?\n\}/)[0] +
     " return { menuIdle, waits, tap: (t) => { _menuInputAt = t; now = t; } }; })()");
   idle.tap(5000);
