@@ -942,7 +942,7 @@ decoration: render targets are created straight against `gl` in `shadow.js` /
 picture. A lost context reports nothing resident (plus `contextLost:true`)
 rather than the last number it held.
 
-Analysis and the plan built on it: `notes/PERF-FINDINGS.md` §2v,
+Analysis and the plan built on it: `notes/PERF-FINDINGS.md` §2av,
 `plans/2026-09-14-texture-memory-plan.md`.
 
 ### `assetLoad(tier?) → Promise<state>`

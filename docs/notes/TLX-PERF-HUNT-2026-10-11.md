@@ -77,7 +77,7 @@ several costs below are that doubling.
 | A3 | `tlx.js:4373-4378`; `tsl-lit.js:492-500`; `frame-lights.js:312-335, 619-622` | At night, lamp flicker / warm-up changes lamp colours every frame; each change re-uploads the whole 64 KB lamp texture when ~3.7 KB moved (~235 lamps, montreal) | CONFIRMED | 64 KB texture upload per night frame | S-M: size the texture to the baked lamp count, or split colours into their own texture |
 | A4 | `tlx.js:1640-1646, 1756-1773` | Every instance pack is copied twice, the second by a JS element loop (247 µs vs 27 µs for `TypedArray.set` on 160k floats in node) | CONFIRMED | ~0.25 ms per 10k instances per copy; 2–3 copies/frame with A1 | S: pack straight into the instance attribute array; `set` where a copy remains |
 | A5 | `tlx.js:1583-1587, 3574/3716/3754/4037`; `tlx-chunked.js:383` | `drawList.length = 0`, `_visList.length = 0`, `_instAlive.clear()` discard their storage so every pass regrows from empty (node: 137 vs 0 scavenges per 20k resets) | CONFIRMED | ~10–20 KB garbage/frame | S: draw-count cursor, drop the `_visList` reset, per-frame stamp instead of the Set |
-| A6 | `tlx.js:4161-4165`; `shadow-pass.js:202-205` | Blob shadows are ~22 separate render objects per frame; worst on three's WebGL2 path (Safari/iOS) where §2y measured ~10 ms JS per frame inside render | count CONFIRMED, ms estimated | ~0.3–0.8 ms on WebGL2 | M: one instanced blob mesh |
+| A6 | `tlx.js:4161-4165`; `shadow-pass.js:202-205` | Blob shadows are ~22 separate render objects per frame; worst on three's WebGL2 path (Safari/iOS) where §2ay measured ~10 ms JS per frame inside render | count CONFIRMED, ms estimated | ~0.3–0.8 ms on WebGL2 | M: one instanced blob mesh |
 | A7 | `tlx.js:4447, 4495, 4601, 1956-1959` | Small per-frame allocations: the `refuseTab` closure (despite its "hoisted" comment), the `setMirror` array literal, the mirror-gate string concat, one range object per stream upload | SUSPECTED (V8 may elide) | < 1 KB/frame | S |
 
 Verify: A1 by summing `instanceMatrix.version` over the prop batches across 120 frames
@@ -122,7 +122,7 @@ lamp loop is a plain `for` with a `Break` that already stops at the live count.
 
 Parity: B1–B6, B8, B9, B13 leave the picture unchanged and touch no other backend; B10,
 B11, B12 change the look. Not new: the per-object uniform question is settled by
-PERF-FINDINGS §2y (`U` lives in `renderGroup`); the three remaining per-draw uniforms
+PERF-FINDINGS §2ay (`U` lives in `renderGroup`); the three remaining per-draw uniforms
 are legitimately per-object, only the textures (B14) are left.
 
 Correctness side note (renderer-debug, not perf): on Firefox three omits the uniformity
