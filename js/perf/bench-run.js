@@ -236,11 +236,11 @@ const BenchRun = (function () {
   function finishPlan(plan, state) {
     plan.state = state; plan.finishedAt = new Date().toISOString(); plan.show = true;
     plan.summary = summarize(plan.legs); plan.scenes = scenes(plan.legs);
-    let changed = JSON.stringify(readPrefs()) !== JSON.stringify(plan.prefs);
-    if (plan.restore) { restore(plan.restore); plan.restoreAfter = plan.restore; delete plan.restore; changed = true; }
+    if (plan.restore) { restore(plan.restore); plan.restoreAfter = plan.restore; delete plan.restore; }
     writePrefs(plan.prefs); save(plan);
     log("done " + state);
-    if (changed) reload(); else open();
+    // Always reload: the results open over a fresh title screen, never over the paused race the last leg left.
+    reload();
   }
   async function resume() {
     const plan = load();
@@ -331,12 +331,6 @@ const BenchRun = (function () {
       body.appendChild(btn("STOP BENCHMARK", "bigbtn alt", () => { stop(); paint(); }));
       return;
     }
-    const pick = el("div", "balanced-row"); pick.setAttribute("role", "group"); pick.setAttribute("aria-label", "Test");
-    TESTS.forEach((t) => { const b = btn(t.label, "sel-chip", () => { _pick = t.id; paint(); }); b.setAttribute("aria-pressed", t.id === _pick ? "true" : "false"); pick.appendChild(b); });
-    body.appendChild(pick);
-    body.appendChild(el("p", "adv-help", (TESTS.find((t) => t.id === _pick) || TESTS[0]).help));
-    body.appendChild(el("p", "adv-help", "Before RUN: Low Power Mode off, phone cool, Auto-Lock set to Never (Settings › Display & Brightness). Keep the game in front until the results show."));
-    body.appendChild(btn("RUN", "bigbtn", () => { if (run(_pick)) say("starting…"); }));
     const hasSum = !!(plan && plan.summary && Object.keys(plan.summary).length), hasScenes = !!(plan && plan.scenes && plan.scenes.length);
     if (hasSum || hasScenes) {
       body.appendChild(el("p", "adv-help", "Last run: " + plan.test + " · " + plan.state + " · " + String(plan.finishedAt || "").slice(0, 16).replace("T", " ") + " UTC"));
@@ -351,23 +345,36 @@ const BenchRun = (function () {
       row.appendChild(btn("CLEAR", "bigbtn alt", () => { clear(); paint(); }));
       body.appendChild(row);
     }
+    const pick = el("div", "balanced-row"); pick.setAttribute("role", "group"); pick.setAttribute("aria-label", "Test");
+    TESTS.forEach((t) => { const on = t.id === _pick; const b = btn(t.label, "sel-chip" + (on ? " active" : ""), () => { _pick = t.id; paint(); }); b.setAttribute("aria-pressed", on ? "true" : "false"); pick.appendChild(b); });
+    body.appendChild(pick);
+    body.appendChild(el("p", "adv-help", (TESTS.find((t) => t.id === _pick) || TESTS[0]).help));
+    body.appendChild(btn("RUN " + (TESTS.find((t) => t.id === _pick) || TESTS[0]).label, "bigbtn", () => { if (run(_pick)) say("starting…"); }));
+    body.appendChild(el("p", "adv-help", "Before RUN: Low Power Mode off, phone cool, Auto-Lock set to Never (Settings › Display & Brightness). Keep the game in front until the results show."));
   }
+  // BENCHMARK covers the screen it opened from (SETTINGS, or the title after a run) and gives it back on BACK —
+  // race-settings.js's openSettingSearch does the same with #pmsettings.
+  let _covered = [];
   function open() {
     const d = (doc() && doc().getElementById("bench")); if (!d) return false;
+    const p = load(); if (p && p.test && p.state !== "running") _pick = p.test;
+    _covered = Array.from(doc().querySelectorAll("#pmsettings:not([hidden]),#overlay:not([hidden])"));
+    _covered.forEach((n) => { n.hidden = true; });
     if (!_ui) { const body = doc().getElementById("bench-body"); _ui = { body, status: el("p", "adv-help") }; _ui.status.setAttribute("role", "status"); }
     d.hidden = false; paint();
     return true;
   }
-  function close() { const d = (doc() && doc().getElementById("bench")); if (d) d.hidden = true; const b = (doc() && doc().getElementById("pm-bench-open")); if (b && b.focus) b.focus(); }
+  function close() { const d = (doc() && doc().getElementById("bench")); if (d) d.hidden = true; _covered.forEach((n) => { n.hidden = false; }); _covered = []; const b = (doc() && doc().getElementById("pm-bench-open")); if (b && b.focus) b.focus(); }
   function mount() {
     if (typeof document === "undefined") return false;
     const back = (doc() && doc().getElementById("bench-back")); if (back && !back.__bench) { back.__bench = true; back.addEventListener("click", close); }
     if ((doc() && doc().getElementById("pm-bench-open"))) return true;
     const host = doc().getElementById("pm-panel-graphics");   // GRAPHICS: "Renderer, resolution & effects"
     if (!host) return false;
+    const nav = el("nav", "pm-doors"); nav.setAttribute("aria-label", "Benchmark");   // the SETTINGS hub's door tile look
     const b = btn("BENCHMARK…", null, open); b.id = "pm-bench-open";
-    const sm = el("small", null, "Time this phone: renderer paths, weather, tracks, garage"); b.appendChild(sm);
-    host.insertBefore(b, host.firstChild);
+    b.appendChild(el("small", null, "Time this phone: renderer paths, weather, tracks, garage"));
+    nav.appendChild(b); host.insertBefore(nav, host.firstChild);
     return true;
   }
 
