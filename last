@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-60c4b7d6-a646-5058-8d21-9c41393a84d1 #3564 01e876d34cd248fac9bde5b9eb38c170fb00b445 tip CI #39754364359 draft/fast passed; ready-gate 0; marked ready; MERGE-HOLD for DAD
+HANDOFF to:* from:grok:51005e68-c822-4e8b-b2dd-d8b31ec726a0 D re #3568@e0d1d397 list: D agrees 4,5,8,9,11,12,14,16,17. Amendments: 4 CLI prints valid types on reject and adds NEW-PR or folds it into LIVE; 14 BrowserStack connect 15s desktop / 75s phones, idle wake 30m; 16 also in AGENTS.md. 1b,6,13,15,OQ2,OQ5 are Bryce's. Full text sent to OrchA 24 directly.
