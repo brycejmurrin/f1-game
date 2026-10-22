@@ -175,9 +175,10 @@ test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
 
   // Look post (bloom/SSAO/god-rays) reads lookPostShed() so GRAPHICS: LOW
   // sheds it without pinning autoTier (wet-road SSR still uses autoTier).
-  assert.match(src, /lookPostShed/,
+  // assert.ok (not assert.match) — #1682 ratchet.
+  assert.ok(src.includes("lookPostShed"),
     "the look post stack must read lookPostShed(), not autoTier alone");
-  assert.match(src, /po\.ssao = _lookOff \? 0/,
+  assert.ok(src.includes("po.ssao = _lookOff ? 0"),
     "SSAO must follow the lookPostShed latch");
 });
 
