@@ -1,0 +1,1 @@
+Fixed: the boot canary's crash-strike ledger is now keyed to the backend that earned the strikes — one backend dying once no longer counts toward retiring a different renderer you picked by hand, and re-picking a renderer in SETTINGS restarts its ledger.

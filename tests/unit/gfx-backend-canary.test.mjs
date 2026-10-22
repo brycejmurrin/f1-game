@@ -4082,10 +4082,10 @@ test("a GLX fallback boot that proves itself does not erase the pick's crash str
   let rb = rendererBootRun(ls);
   let boot = await rb.start();
   assert.equal(boot.bound, false, "first strike: this boot runs GLX");
-  assert.equal(ls.get("apex26.gfxProbeStrikes"), "1");
+  assert.equal(ls.get("apex26.gfxProbeStrikes"), "three:1", "the ledger names the backend that earned the strike");
   assert.equal(ls.get("apex26.gfxBackend"), "three", "one strike keeps the pick");
   assert.equal(rb.proved(), false, "GLX presenting 300 frames proves nothing about THREE");
-  assert.equal(ls.get("apex26.gfxProbeStrikes"), "1", "the strike must survive the GLX fallback boot");
+  assert.equal(ls.get("apex26.gfxProbeStrikes"), "three:1", "the strike must survive the GLX fallback boot");
   // Next cold boot: THREE binds, game.js re-arms the probe at the first world
   // present, and the tab is killed again before the run of frames completes.
   rb = rendererBootRun(ls);
@@ -4119,6 +4119,70 @@ test("a pick that proves itself still pays off an older strike", async () => {
   assert.ok(at > 0, "the PROVE_FRAMES block moved — check this test, not the code");
   assert.match(game.slice(at, at + 400), /rendererBoot\.proved\(\);/,
     "the PROVE_FRAMES block hands the strike clear to rendererBoot.proved()");
+});
+
+test("a strike earned by one backend does not retire a different pick", async () => {
+  // TLX jetsams once (strike banked against THREE), the player hand re-picks
+  // WEBGPU, and WGX dies once. The ledger names THREE, so WEBGPU's death is
+  // a FIRST strike — the old global count hit 2 here and rewrote the pick
+  // to webgl2 over a backend that had only ever failed once.
+  const ls = new Map([
+    ["apex26.gfxBackend", "webgpu"],
+    ["apex26.gfxProbeStrikes", "three:1"],
+    ["apex26.gfxBackendProbe", "webgpu"],
+  ]);
+  let rb = rendererBootRun(ls);
+  let boot = await rb.start();
+  assert.equal(boot.bound, false, "first strike for WEBGPU: this boot runs GLX");
+  assert.equal(ls.get("apex26.gfxBackend"), "webgpu", "one WEBGPU death must not retire the pick on THREE's strike");
+  assert.equal(ls.get("apex26.gfxProbeStrikes"), "webgpu:1", "the ledger now names the backend that just died");
+  // A SECOND death of the SAME backend still retires it — the canary's
+  // purpose is untouched.
+  ls.set("apex26.gfxBackendProbe", "webgpu");   // the next WGX boot armed the probe and died again
+  rb = rendererBootRun(ls);
+  boot = await rb.start();
+  assert.equal(boot.bound, false);
+  assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "two deaths of the same backend retire it");
+  assert.equal(ls.has("apex26.gfxProbeStrikes"), false, "retiring resets the ledger");
+});
+
+test("a legacy bare strike count names no backend and retires nothing", async () => {
+  // Players updating from the global-count build carry apex26.gfxProbeStrikes
+  // as a bare "1". It cannot be attributed to the armed backend, so the
+  // armed backend's first post-update death is a first strike, and the
+  // ledger is rewritten in the named shape.
+  const ls = new Map([
+    ["apex26.gfxBackend", "three"],
+    ["apex26.gfxProbeStrikes", "1"],
+    ["apex26.gfxBackendProbe", "three"],
+  ]);
+  const rb = rendererBootRun(ls);
+  assert.equal((await rb.start()).bound, false, "the armed probe still reverts this boot to GLX");
+  assert.equal(ls.get("apex26.gfxBackend"), "three", "an unattributable legacy strike must not retire the pick");
+  assert.equal(ls.get("apex26.gfxProbeStrikes"), "three:1");
+});
+
+test("applyBackend clears the canary strike ledger on a hand re-pick", () => {
+  // Cross-backend: THREE's banked strike must not follow the player onto
+  // WEBGPU (the WGX loss ladder is reset on a hand WEBGPU pick for the same
+  // reason; the canary ledger now gets the same treatment for every pick).
+  const a = bootPicker({
+    ls: { "apex26.gfxBackend": "three", "apex26.gfxProbeStrikes": "three:1" },
+    gpu: {},
+  });
+  assert.equal(a.G.applyBackend("webgpu", a.byId["pm-renderer"]), true);
+  assert.equal(a.ls.getItem("apex26.gfxBackend"), "webgpu");
+  assert.equal(a.ls.getItem("apex26.gfxProbeStrikes"), null,
+    "a hand re-pick starts the picked backend with a clean ledger");
+  // Same-backend: re-picking THREE by hand vouches for it — its own banked
+  // strike goes too, or the re-pick would retire on its first real failure.
+  const b = bootPicker({
+    ls: { "apex26.gfxBackend": "webgl2", "apex26.gfxProbeStrikes": "three:1" },
+    gpu: {},
+  });
+  assert.equal(b.G.applyBackend("three", b.byId["pm-renderer"]), true);
+  assert.equal(b.ls.getItem("apex26.gfxProbeStrikes"), null,
+    "a same-backend hand re-pick restarts that backend's ledger too");
 });
 
 // The canary must describe what BOUND, not what was picked.

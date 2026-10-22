@@ -29,9 +29,25 @@ function preloadThreeVendor() {
 function create(deps) {
 const { $, els, canvas, ensureDataHub, loadBackendScripts } = deps;
 const BACKEND_FILES = ApexRoster.DEFERRED;
-// The boot canary's strike count (start() writes it, proved() clears it) and
-// whether a DEFERRED backend actually took the canvas on THIS load.
+// The boot canary's strike ledger (start() writes it, proved() clears it) and
+// whether a DEFERRED backend actually took the canvas on THIS load. The
+// ledger is ONE slot NAMING the backend its strikes belong to ("three:1"):
+// strikes one backend earned must never retire another — TLX jetsams once,
+// the player hand re-picks WEBGPU, WGX dies once, and a global count rewrote
+// the pick to webgl2 over a backend that had only ever failed once (the WGX
+// loss ladder in renderer-picker.js was reset on a hand re-pick for exactly
+// this leak; the canary ledger was not). A stored value naming a DIFFERENT
+// backend reads as zero strikes for the armed one and is overwritten by its
+// first strike; so does the pre-ledger bare count ("1"), which names no
+// backend at all — unattributable strikes retire nothing.
 const STRIKE_KEY = "apex26.gfxProbeStrikes";
+function strikeCountFor(raw, backend) {
+  if (typeof raw !== "string") return 0;
+  const cut = raw.lastIndexOf(":");
+  if (cut < 0 || raw.slice(0, cut) !== backend) return 0;
+  const n = +raw.slice(cut + 1);
+  return n > 0 ? Math.floor(n) : 0;
+}
 let _backendBound = false;
 function storedBackendPreference() {
   try {
@@ -194,7 +210,7 @@ try {
     why = "boot canary: " + armed + " never presented a frame last load";
     pref = "webgl2";
     let strikes = 2;   // unreadable storage cannot count strikes: treat as final
-    try { strikes = (+localStorage.getItem(STRIKE_KEY) || 0) + 1; } catch (_) { /* blocked storage */ }
+    try { strikes = strikeCountFor(localStorage.getItem(STRIKE_KEY), armed) + 1; } catch (_) { /* blocked storage */ }
     const retire = strikes >= 2;
     Log.warn("gfx", "backend", armed, retire
       ? "never presented a frame twice — WebGL2 is now the pick"
@@ -204,7 +220,7 @@ try {
       if (retire) {
         localStorage.setItem("apex26.gfxBackend", "webgl2");
         localStorage.removeItem(STRIKE_KEY);
-      } else localStorage.setItem(STRIKE_KEY, String(strikes));
+      } else localStorage.setItem(STRIKE_KEY, armed + ":" + strikes);
     } catch (_) { /* the in-memory revert above still holds for this load */ }
   }
   // "webgpu" -> WGX (needs a resolved adapter); "three" -> TLX (three.js/TSL,
