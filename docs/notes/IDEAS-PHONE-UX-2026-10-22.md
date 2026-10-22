@@ -16,7 +16,16 @@ ideas"** (link in the PR body). `publish-evidence.mjs --publish` was refused
 (HTTP 403: this session type cannot create releases), so the images live only
 in the artifact and in `artifacts/ideas-ux/` locally. Rebuild them with the two
 commands above. The headless captures use a `jump()` fixture, so lap-1 numbers
-(gear 8, 257 km/h at 0:00.10) are staged, not a bug.
+(gear 8, 257 km/h at 0:00.10) are staged, not a bug. The HUD-survey cell turns
+on every HUD element (`presetProf: shown` in its `report.json`). A fresh install
+ships STRATEGY and RELATIVE off (`js/ui/hud-elements.js:36`), so the B1 and B4
+rows below only reach players who turned those readouts on.
+
+**Re-checked on tip `204030ef`** (2026-10-22 ~06:35Z). Nothing in `js/ui/`,
+`js/data/`, `css/` or `index.html` changed between the capture commit and that
+tip, so every row below still stands. Two open PRs are adjacent but do not fix
+any row: #3489 (race-select preview off the main thread; touches the same
+screen as #12) and #3488 (busy `#loading` plate).
 
 **Prior art checked, not re-proposed.** Shipped already: the coach marks
 (`js/ui/onboard.js`), the 20 s instant-replay ring (`js/camera/replay-buf.js`),
@@ -89,10 +98,10 @@ its capture (the file stem in the artifact) and was seen at 844×390.
 
 | # | What | Capture | Anchor | Confidence |
 |---|---|---|---|---|
-| B1 | **Two strategy panels say the same thing.** The top-left plate (`S ~5L · PLAN NO STOP`) and the left TYRES card (`S ~5L / PIT LOSS ~23 s / NEXT NO STOP`) are both on screen | `phoneL-chase-steer-buttons` | `js/ui/hud-strategy.js`, `js/ui/hud-tyres.js` | high |
+| B1 | **Two strategy panels say the same thing (once STRATEGY is on).** The top-left plate (`S ~5L · PLAN NO STOP`) and the left TYRES card (`S ~5L / PIT LOSS ~23 s / NEXT NO STOP`) are both on screen | `phoneL-chase-steer-buttons` | `js/ui/hud-strategy.js`, `js/ui/hud-tyres.js` | high (opt-in readout) |
 | B2 | **Coach radio card clips its own sentence**: `"ENERGY FULL — LIFT OR DEPLOY ON STRAIGHTS` loses its last line | `phoneL-chase-steer-buttons` | `#announce` lane, `js/ui/captions.js` | high |
 | B3 | **Gap chip with no name**: `▲ 75.9` under the map has no driver code and no unit, because the shorten rung drops the code first (`js/ui/hud.js:370`, `gapText` at `:2310`) | both HUD captures | `js/ui/hud.js` | high |
-| B4 | **Order box reads oddly**: `P22 VER` sits above `P1 RUS +17.6 S +1L` / `P2 BOT +17.7 S +1L`, which shows a lapped gap on lap 1. It may be fixture-driven (`jump()`), so it needs a real-start check | both HUD captures | `js/ui/hud-relative.js` / tower | medium (verify) |
+| B4 | **Order box reads oddly**: `P22 VER` sits above `P1 RUS +17.6 S +1L` / `P2 BOT +17.7 S +1L`, which shows a lapped gap on lap 1. It may be fixture-driven (`jump()`), so it needs a real-start check. RELATIVE ships off | both HUD captures | `js/ui/hud-relative.js` | medium (verify) |
 | B5 | **Data Hub shows "▸ Developer tools"** (GPS TRACE EXPORT) to every player, as the first line under the tabs | `datahub__…` | `js/data/hub.js:190` (`developer: true` tab at `:47`) | high |
 | B6 | **Results sheet fits only 2.5 drivers**: every row carries its own `▸ TYRE STINTS` disclosure line | `results__…` | `js/ui/results-sheet.js:165` `stintStrip` | high |
 | B7 | **Circuit strip is unnamed flags**: Monaco and Indonesia-style red/white flags look identical, and the two USA flags sit side by side (Miami/COTA/Vegas) with no name, outline or date | `select__…` | `js/ui/select-screen.js` | high |
@@ -181,7 +190,9 @@ means it works at 844×390 with thumbs.
 - Files: `js/ui/hud-strategy.js`, `js/ui/hud-tyres.js`,
   `js/ui/hud-elements.js` (shipped flags).
 - Effort S · risk: HUD layout specs (`tests/specs/hud-layout.spec.js`) ·
-  **score 4×4/1 = 16**
+  **score 3×4/1 = 12**. Impact is 3, not 4, because STRATEGY ships off
+  (`js/ui/hud-elements.js:36`), so only players who turned it on see the
+  duplicate.
 
 **7. Gap chip keeps its name (fixes B3).**
 - Pitch: drop the decimal before dropping the driver code: `▲ RUS 76s` before
@@ -231,6 +242,13 @@ means it works at 844×390 with thumbs.
   track outline from the minimap path. Long-press a chip for the date and
   length.
 - Why: identical flags, and 52 circuits found by flag alone.
+- Feasibility (read from code): `js/ui/select-screen.js:691` says "the strip has
+  no room for a second line of text under each flag" and puts the country in a
+  hover tooltip (`title` / `data-tip`). Touch has no hover, so on a phone the
+  name cannot be reached at all. Circuit defs carry `name` / `gp` / `country`
+  but no short code, so a code needs a new def field or a derived one.
+  `js/track/circuit-meta.js` is generated, so edit the source and run
+  `npm run gen`.
 - Files: `js/ui/select-screen.js`, `js/ui/hud-minimap.js` (outline painter),
   `css/` select sheet.
 - Effort S · **score 4×5/1 = 20**
@@ -273,6 +291,11 @@ means it works at 844×390 with thumbs.
   `STINTS ▸` toggle in the header. The sheet opens scrolled to the player row,
   and that row stays sticky.
 - Why: 2.5 rows visible now, about 7 after.
+- Feasibility (read from code): the coloured strip is already inline. The row
+  cost is the per-row `<details data-stint-details>` that `stintStrip()`
+  returns, and the strip's `role="img"` `aria-label` already carries the same
+  text. So the change is to drop the per-row `details`, or render it once in
+  the header, with no data work.
 - Files: `js/ui/results-sheet.js` (`stintStrip` `:165`, row build `:403`),
   `css/overlays.css`.
 - Effort S · **score 4×5/1 = 20**
@@ -354,11 +377,11 @@ means it works at 844×390 with thumbs.
 |---|---|---|---|
 | 1 | #17 Results that fit a phone | 20 | S |
 | 2 | #12 Circuit strip with names and outlines | 20 | S |
-| 3 | #6 One strategy readout, not two | 16 | S |
-| 4 | #16 Hide Developer tools from players | 15 | S |
-| 5 | #2 Press glow past the thumb | 12 | S |
-| 6 | #7 Gap chip keeps its name | 12 | S |
-| 7 | #8 Radio card never clips | 12 | S |
+| 3 | #16 Hide Developer tools from players | 15 | S |
+| 4 | #2 Press glow past the thumb | 12 | S |
+| 5 | #7 Gap chip keeps its name | 12 | S |
+| 6 | #8 Radio card never clips | 12 | S |
+| 7 | #6 One strategy readout, not two | 12 | S |
 | 8 | #25 Title icon pass | 10 | S |
 | 9 | #24 Tell the player when the phone throttles | 9 | S |
 | 10 | #19 Auto replay chip | 8 | M |
@@ -386,34 +409,34 @@ outline to each chip, and a long-press for date and length
 (`js/ui/select-screen.js`).
 Acceptance: every chip has a visible code and an accessible name; chips ≥ 44×44 CSS px; layout-audit `select` clean at 844×390 and 667×375.
 
-### 3. HUD: merge the duplicate strategy plate into the TYRES card
-Body: Two HUD panels show the same compound, laps and plan (top-left plate and
-TYRES card, chase cam, shipped preset). Keep one, collapsed to a single line
-outside the pit window, and expand it when the window opens
-(`js/ui/hud-strategy.js`, `js/ui/hud-tyres.js`).
-Acceptance: shipped preset at `phone-landscape-844x390` shows one strategy readout; `apex_hud_shot` 0 findings; `hud-layout.spec.js` green.
-
-### 4. Data Hub: hide "Developer tools" from players
+### 3. Data Hub: hide "Developer tools" from players
 Body: `js/data/hub.js:190` renders a `Developer tools` disclosure (GPS TRACE
 EXPORT) as the first line of the hub for everyone. Gate it behind the dev flag.
 Acceptance: no developer disclosure without the flag; still reachable with it; data-hub specs green.
 
-### 5. Touch buttons: press glow visible around the thumb
+### 4. Touch buttons: press glow visible around the thumb
 Body: The HIG game-controls page asks for a press state visible "even when
 their finger is covering the control". Add an outer ring glow on held
 buttons, and optionally a click tick.
 Acceptance: held state paints ≥ 8 px outside the disc edge; no layout shift; reduced-motion respected.
 
-### 6. Gap chip: keep the driver code when space is short
+### 5. Gap chip: keep the driver code when space is short
 Body: On a phone the gap chip renders `▲ 75.9` with no driver. Shorten the
 number before dropping the code (`js/ui/hud.js` shorten rung near `:370`).
 Acceptance: at 844×390 the chip always shows a 3-letter code; lapped cars read `+1L`.
 
-### 7. Radio/coach card: no clipped sentences on a phone
+### 6. Radio/coach card: no clipped sentences on a phone
 Body: The coach line `ENERGY FULL — LIFT OR DEPLOY ON STRAIGHTS` is cut
 mid-word at 844×390. Add a short form for phones, keep the full text in the
 message history, and grow by one line rather than clip.
 Acceptance: no radio card has `scrollHeight > clientHeight` in the HUD survey quick matrix.
+
+### 7. HUD: merge the duplicate strategy plate into the TYRES card
+Body: With STRATEGY on (it ships off), two HUD panels show the same compound,
+laps and plan (top-left plate and TYRES card, chase cam). Keep one, collapsed to a single line
+outside the pit window, and expand it when the window opens
+(`js/ui/hud-strategy.js`, `js/ui/hud-tyres.js`).
+Acceptance: shipped preset at `phone-landscape-844x390` shows one strategy readout; `apex_hud_shot` 0 findings; `hud-layout.spec.js` green.
 
 ### 8. Title: icons on every door
 Body: VISUAL STUDIO, SETTINGS, USE AS CONTROLLER, HOW TO PLAY and SAVES & DATA
