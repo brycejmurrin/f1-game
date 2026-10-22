@@ -139,6 +139,87 @@ if ($("save-retry")) $("save-retry").onclick = retrySave;
 if ($("save-export")) $("save-export").onclick = exportRecovery;
 if (typeof SaveHealth !== "undefined" && saveWarning) SaveHealth.mount(saveWarning, { store });
 
+// Graphics context loss: GLX may reload with lighter settings, or game.js may
+// quit to the menu mid-start. Stash apex26.ctxLostNotice before either path;
+// consume it once here so the title explains the hitch instead of looking like
+// a silent kick to the menu.
+const CTX_LOST_NOTICE_KEY = "apex26.ctxLostNotice";
+const CTX_LOST_NOTICE_MSG = "Graphics reset — retrying with lighter settings";
+let ctxLostNotice = $("ctx-lost-notice");
+if (!ctxLostNotice) {
+  ctxLostNotice = document.createElement("aside");
+  ctxLostNotice.id = "ctx-lost-notice";
+  ctxLostNotice.hidden = true;
+  ctxLostNotice.setAttribute("role", "status");
+  ctxLostNotice.setAttribute("aria-labelledby", "ctx-lost-notice-title");
+  const title = document.createElement("strong");
+  title.id = "ctx-lost-notice-title";
+  title.textContent = "GRAPHICS RESET";
+  const detail = document.createElement("span");
+  detail.id = "ctx-lost-notice-detail";
+  detail.textContent = CTX_LOST_NOTICE_MSG;
+  const retry = document.createElement("button");
+  retry.id = "ctx-lost-retry";
+  retry.type = "button";
+  retry.textContent = "RETRY";
+  const dismiss = document.createElement("button");
+  dismiss.id = "ctx-lost-dismiss";
+  dismiss.type = "button";
+  dismiss.textContent = "DISMISS";
+  dismiss.setAttribute("aria-expanded", "true");
+  ctxLostNotice.append(title, detail, retry, dismiss);
+  document.body.appendChild(ctxLostNotice);
+  // Match #save-warning placement when overlays.css has no dedicated rule yet.
+  Object.assign(ctxLostNotice.style, {
+    position: "fixed", zIndex: "8500", top: "max(8px, env(safe-area-inset-top, 0px))", left: "50%",
+    transform: "translateX(-50%)", width: "min(48rem, calc(100vw - 16px))", display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "8px", padding: "8px",
+    border: "1px solid rgba(255, 209, 128, 0.72)", borderRadius: "8px",
+    background: "rgba(25, 18, 8, 0.96)", color: "#fff3d6", fontSize: "12px",
+  });
+  for (const btn of ctxLostNotice.querySelectorAll("button")) {
+    Object.assign(btn.style, {
+      minHeight: "44px", padding: "0 8px", border: "1px solid rgba(255,255,255,.2)",
+      borderRadius: "999px", background: "rgba(255,255,255,.08)", color: "#fff", fontWeight: "800",
+    });
+  }
+}
+let ctxLostSpoken = false;
+const hideCtxLostNotice = () => {
+  if (!ctxLostNotice) return;
+  ctxLostNotice.hidden = true;
+  delete ctxLostNotice.dataset.collapsed;
+  if ($("ctx-lost-dismiss")) {
+    $("ctx-lost-dismiss").setAttribute("aria-expanded", "true");
+    $("ctx-lost-dismiss").textContent = "DISMISS";
+  }
+  ctxLostSpoken = false;
+};
+const showCtxLostNotice = () => {
+  let pending = false;
+  try {
+    pending = sessionStorage.getItem(CTX_LOST_NOTICE_KEY) === "1";
+    if (pending) sessionStorage.removeItem(CTX_LOST_NOTICE_KEY);
+  } catch (_) { /* blocked storage: still show the card once if we were called */ pending = true; }
+  if (!pending || !ctxLostNotice || G.state !== "menu") return;
+  ctxLostNotice.hidden = false;
+  const detail = $("ctx-lost-notice-detail");
+  if (detail) detail.textContent = CTX_LOST_NOTICE_MSG;
+  if (!ctxLostSpoken) {
+    ctxLostSpoken = true;
+    const said = CTX_LOST_NOTICE_MSG + ". Press Retry to start again.";
+    if (typeof LiveRegion !== "undefined") LiveRegion.say(said, "save");
+    else if ($("announce-live")) $("announce-live").textContent = said;
+  }
+  if (G.announce) G.announce(CTX_LOST_NOTICE_MSG, 5, "info");
+};
+if ($("ctx-lost-dismiss")) $("ctx-lost-dismiss").onclick = () => hideCtxLostNotice();
+if ($("ctx-lost-retry")) $("ctx-lost-retry").onclick = () => {
+  hideCtxLostNotice();
+  if (G.startRace) G.startRace();
+};
+showCtxLostNotice();
+
 // Progressive-enhancement screen swap: run a DOM change inside a native
 // same-document View Transition when the browser supports it (Baseline 2025)
 // for a free crossfade, else run it plainly. Zero dependency, purely visual —
@@ -1342,7 +1423,7 @@ function closeTrackDetail() {
 }
 return {
   buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt,
-  drsZoneWraps, drsZoneLapMetre, drsZoneRangeHtml,
+  drsZoneWraps, drsZoneLapMetre, drsZoneRangeHtml, showCtxLostNotice,
 };
 }
 
