@@ -9640,6 +9640,9 @@
       "boundIsGlx": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "clearGfxBootRecovery": [
+        "tests/unit/renderer-picker-unavailable.test.mjs"
+      ],
       "clearRendererStorage": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],

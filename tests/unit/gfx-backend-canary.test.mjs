@@ -4118,6 +4118,28 @@ test("the strike ledger is per backend: one death each on two backends retires n
   assert.equal(legacy.get("apex26.gfxProbeStrikes"), "three:1");
 });
 
+test("eval-time preload skips TLX on unset navigator.gpu hunch (#3536 Graphics unavailable)", () => {
+  const src = code("js/render/renderer-boot.js");
+  assert.ok(src.includes('unsetPick && !g.sure && g.pick === "three") return 0'),
+    "first boot must not prefetch TLX before the adapter probe commits");
+});
+
+test("GLX boot waits on progress, not one fixed wall clock (#3587)", () => {
+  const src = code("js/render/renderer-boot.js");
+  assert.ok(src.includes("withIdleProgressTimeout"));
+  assert.ok(src.includes("loadDeferredScripts"));
+  assert.ok(src.includes("onSettled"));
+  assert.ok(src.includes("GLX boot"));
+});
+
+test("Graphics unavailable RETRY and USE WEBGL2 scrub canary state (#3587)", () => {
+  const src = code("js/perf/renderer-picker.js");
+  assert.ok(src.includes("function clearGfxBootRecovery"));
+  assert.ok(/retry\.onclick[\s\S]*clearGfxBootRecovery\(\)/.test(src));
+  assert.ok(/webgl\.onclick[\s\S]*clearGfxBootRecovery\(\{ webgl2Pick: true \}\)/.test(src));
+  assert.ok(src.includes("gfxProbeStrikes"));
+});
+
 test("a pick that proves itself still pays off an older strike", async () => {
   const ls = new Map([["apex26.gfxBackend", "three"], ["apex26.gfxProbeStrikes", "1"]]);
   const rb = rendererBootRun(ls);
