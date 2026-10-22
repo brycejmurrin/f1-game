@@ -3026,6 +3026,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/shot/lib/wx-grid.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/shot/loading-probe.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -3126,8 +3131,16 @@
     {
       "path": "tools/shot/webgpu-urban-gallery.mjs",
       "classification": "entrypoint-candidate",
-      "outputPolicy": "artifact-first",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/shot/wx-grid.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
     },
     {
       "path": "tools/track/aero-zone-turns.cjs",

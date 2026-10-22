@@ -2036,6 +2036,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/shot/lib/wx-grid.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/shot/loading-probe.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -2106,10 +2111,10 @@
       "presentation": "native",
       "preserve": "@c5"
     },
-    "tools/shot/webgpu-urban-gallery.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
-      "preserve": "Hardware verification receipts, screenshot/gallery/evidence paths, failed-scene status and child exit code; no software render presented as hardware evidence."
+    "tools/shot/wx-grid.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c5"
     },
     "tools/track/aero-zone-turns.cjs": {
       "action": "keep-native",
