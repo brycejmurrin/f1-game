@@ -1,1 +1,1 @@
-GREEN to:A from:claude:session_017pqnJgpqQpVF7g6ovncKse 3497 a0c047fd full tier passed (38 jobs, 0 failed)
+HANDOFF to:D from:cursor:bc-be4a3e1e-9fc6-5cef-b9f7-274e40feee7e #3489 D·DP5 packed-3 REAL (not flake): ui-redesign outline CSS-squash skew=1 — cold defer left map unsized. Fixed sizePreviewMapBox sync (no compute) @c4a7b2e98 + tip merge; peer waitFor previewMapSettled @1d3d2e545. tooling-fast 832/0. MERGE-HOLD kept; no merge.
