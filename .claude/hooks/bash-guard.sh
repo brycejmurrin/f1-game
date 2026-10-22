@@ -31,6 +31,14 @@
 #    ask, silent under APEX_MERGE_DESK=1 (merge_policy.py, shared with github-mcp-guard.sh); the queue-depth
 #    push hold is retired (2026-10-16, see below), and an Actions run cancel (`gh run cancel`,
 #    …/actions/runs/<id>/cancel) is refused (APEX_RUN_CANCEL_OK=1 overrides).
+#  Shared safety bans (Fleet A + D, Bryce 2026-10-22; Cursor reaches this file
+#    through .cursor/hooks/shell-guard.sh): a `ratchets.mjs` run that can RAISE
+#    a ceiling (--update / --fragment / --absolute without --lower-only or
+#    --preview; the commit hook's own --auto-raise below is not a tool call and
+#    stays; APEX_RATCHET_RAISE_OK=1 when Bryce typed the raise), and a push over
+#    a FOREIGN pusher: the branch gained another author's commits on the remote
+#    since this checkout last pushed it (foreign_push.py; APEX_FOREIGN_PUSH_OK=1
+#    once the branch is confirmed yours). Both in shellparse.py guard().
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
 #    .claude/agents, survey images/reports under artifacts/shots/{tracks,gallery}
 #    and artifacts/track-survey; never a generated doc) runs only
