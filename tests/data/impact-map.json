@@ -9426,17 +9426,35 @@
       "applyLive": [
         "tests/unit/perf-governor.test.mjs"
       ],
+      "capId": [
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
       "current": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/perf-try.test.mjs"
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/perf-try.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
+      "cycle": [
+        "tests/unit/quality-preset-phone.test.mjs"
       ],
       "defaultId": [
-        "tests/unit/perf-governor.test.mjs"
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
       ],
       "init": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
+      ],
+      "isWeakPhone": [
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
+      "maxId": [
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",

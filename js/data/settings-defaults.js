@@ -46,7 +46,11 @@
    in SPEC. Device-adaptive defaults (uiScale, resMode, gfxPreset — the ones
    SPEC declares as null or as a function of the device) are refused on
    purpose: pinning one device's number here makes every other device wrong.
-   Subsystem keys (sound, unlimitedBudget, steering) need an explicit --include. */
+   gfxPreset in particular lives in js/perf/quality-preset.js defaultId /
+   capId: desktop HIGH, capable phone MEDIUM, weak phone (no WebGPU / low
+   deviceMemory) LOW, and ULTRA is capped to HIGH on every phone-class device
+   (docs/perf/iphone-browserstack-2026-10-21.md). Subsystem keys (sound,
+   unlimitedBudget, steering) need an explicit --include. */
 const SettingsDefaults = (function () {
   "use strict";
 
