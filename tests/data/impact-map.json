@@ -1221,6 +1221,9 @@
         "tests/unit/service-worker.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
+      "raceLoadGate": [
+        "tests/unit/voice-pack.test.mjs"
+      ],
       "releaseExcept": [
         "tests/unit/voice-pack.test.mjs"
       ],
@@ -9732,6 +9735,11 @@
       ],
       "normalize": [
         "tests/unit/ai-band.test.mjs"
+      ]
+    },
+    "js/physics/ai-corridor.js": {
+      "choose": [
+        "tests/unit/ai-corridor.test.mjs"
       ]
     },
     "js/physics/ai-drive.js": {
