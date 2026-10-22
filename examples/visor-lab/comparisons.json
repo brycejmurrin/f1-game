@@ -3,7 +3,7 @@
   "pairs": [
     {
       "id": "bahrain-rain-optics",
-      "title": "Bahrain \u00b7 rainy night \u00b7 visor optics",
+      "title": "Bahrain · rainy night · visor optics",
       "width": 1920,
       "height": 1080,
       "a": {
@@ -14,7 +14,7 @@
       "b": {
         "file": "comparison-images/801b7a52b6be052feba0405fea086a42094a2e268009bc29f03c99a36138e487.webp",
         "sha256": "801b7a52b6be052feba0405fea086a42094a2e268009bc29f03c99a36138e487",
-        "label": "Clear \u00b7 strong optics"
+        "label": "Clear · strong optics"
       },
       "provenance": {
         "sha": "20afd2751d7c2f41679ee32adf6b6d7792dc77a5",
@@ -138,7 +138,7 @@
     },
     {
       "id": "wet-surface",
-      "title": "Wet-surface capture timing \u00b7 earlier vs verified wet",
+      "title": "Wet-surface capture timing · earlier vs verified wet",
       "width": 1920,
       "height": 1080,
       "a": {
@@ -155,21 +155,21 @@
     },
     {
       "id": "lens-bahrain-night-dry-reflections-strong",
-      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens reflections strong",
+      "title": "Bahrain · night · dry · lens reflections strong",
       "width": 1920,
       "height": 1080,
       "a": {
-        "file": "comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
-        "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee",
+        "file": "comparison-images/4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed.webp",
+        "sha256": "4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed",
         "label": "Reflections Off"
       },
       "b": {
-        "file": "comparison-images/55a3f0dd1c54e56b2ec6cf0f606577f206ec93e0f9b49913633cecdbca71885a.webp",
-        "sha256": "55a3f0dd1c54e56b2ec6cf0f606577f206ec93e0f9b49913633cecdbca71885a",
+        "file": "comparison-images/c6aaab69be7eb869620358411dfe7bb48fdacc5f32fdf956113ecc7f505779a2.webp",
+        "sha256": "c6aaab69be7eb869620358411dfe7bb48fdacc5f32fdf956113ecc7f505779a2",
         "label": "Reflections Strong"
       },
       "provenance": {
-        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "sha": "f1cc77b32aeacb45deb193f6760058ee17792c1c",
         "dirty": true,
         "scene": {
           "track": "bahrain",
@@ -213,16 +213,16 @@
             "autoShed": 0,
             "open": {
               "frames": 4,
-              "maxMs": 39931.7,
+              "maxMs": 27549,
               "slow": 4
             },
             "frameTimes": {
               "frames": 4,
-              "p50": 1183.3000000000002,
-              "p95": 39931.700000000004,
-              "p99": 39931.700000000004,
-              "maxMs": 39931.700000000004,
-              "droppedSimS": 0.18333333333333332,
+              "p50": 1149.9000000000005,
+              "p95": 27549,
+              "p99": 27549,
+              "maxMs": 27549,
+              "droppedSimS": 0.15,
               "physicsSteps": 10,
               "windowFrames": 2048
             },
@@ -238,7 +238,7 @@
             "rain": 0
           },
           "backend": {
-            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
             "dpr": 1,
             "viewport": [
               1920,
@@ -259,7 +259,7 @@
               "gpuErrors": 0,
               "gpuFirstError": null,
               "ctxLost": false,
-              "packLive": false,
+              "packLive": true,
               "softPresent": true,
               "softBlitGen": 1
             }
@@ -295,25 +295,25 @@
         "effect": "reflections",
         "position": "0.18"
       },
-      "note": "Only the visor reflection setting changes: Off \u2192 Strong. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
+      "note": "Only the visor reflection setting changes: Off → Strong. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
     },
     {
       "id": "lens-bahrain-night-dry-reflections-medium",
-      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens reflections medium",
+      "title": "Bahrain · night · dry · lens reflections medium",
       "width": 1920,
       "height": 1080,
       "a": {
-        "file": "comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
-        "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee",
+        "file": "comparison-images/4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed.webp",
+        "sha256": "4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed",
         "label": "Reflections Off"
       },
       "b": {
-        "file": "comparison-images/22052f856a114e4042f42a639e7fc8279cb92d59adaaaf3f050ca198837f2810.webp",
-        "sha256": "22052f856a114e4042f42a639e7fc8279cb92d59adaaaf3f050ca198837f2810",
+        "file": "comparison-images/5247505ee012c8a7aab1d48d55391132b73c666d06180cc0707cb204efb85cc8.webp",
+        "sha256": "5247505ee012c8a7aab1d48d55391132b73c666d06180cc0707cb204efb85cc8",
         "label": "Reflections Medium"
       },
       "provenance": {
-        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "sha": "f1cc77b32aeacb45deb193f6760058ee17792c1c",
         "dirty": true,
         "scene": {
           "track": "bahrain",
@@ -357,16 +357,16 @@
             "autoShed": 0,
             "open": {
               "frames": 4,
-              "maxMs": 39931.7,
+              "maxMs": 27549,
               "slow": 4
             },
             "frameTimes": {
               "frames": 4,
-              "p50": 1183.3000000000002,
-              "p95": 39931.700000000004,
-              "p99": 39931.700000000004,
-              "maxMs": 39931.700000000004,
-              "droppedSimS": 0.18333333333333332,
+              "p50": 1149.9000000000005,
+              "p95": 27549,
+              "p99": 27549,
+              "maxMs": 27549,
+              "droppedSimS": 0.15,
               "physicsSteps": 10,
               "windowFrames": 2048
             },
@@ -382,7 +382,7 @@
             "rain": 0
           },
           "backend": {
-            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
             "dpr": 1,
             "viewport": [
               1920,
@@ -403,7 +403,7 @@
               "gpuErrors": 0,
               "gpuFirstError": null,
               "ctxLost": false,
-              "packLive": false,
+              "packLive": true,
               "softPresent": true,
               "softBlitGen": 1
             }
@@ -439,25 +439,25 @@
         "effect": "reflections",
         "position": "0.18"
       },
-      "note": "Only the visor reflection setting changes: Off \u2192 Medium. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
+      "note": "Only the visor reflection setting changes: Off → Medium. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
     },
     {
       "id": "lens-bahrain-night-dry-reflections-light",
-      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens reflections light",
+      "title": "Bahrain · night · dry · lens reflections light",
       "width": 1920,
       "height": 1080,
       "a": {
-        "file": "comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
-        "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee",
+        "file": "comparison-images/4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed.webp",
+        "sha256": "4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed",
         "label": "Reflections Off"
       },
       "b": {
-        "file": "comparison-images/34266d03e7ad9e6247058aa645b8571528dd40ee3e6c8c151216d6964128e0e9.webp",
-        "sha256": "34266d03e7ad9e6247058aa645b8571528dd40ee3e6c8c151216d6964128e0e9",
+        "file": "comparison-images/127931b1befc899c4bd1e11d0d829e6dabb4a65efb80d2de1ffee08acda0f82a.webp",
+        "sha256": "127931b1befc899c4bd1e11d0d829e6dabb4a65efb80d2de1ffee08acda0f82a",
         "label": "Reflections Light"
       },
       "provenance": {
-        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "sha": "f1cc77b32aeacb45deb193f6760058ee17792c1c",
         "dirty": true,
         "scene": {
           "track": "bahrain",
@@ -501,16 +501,16 @@
             "autoShed": 0,
             "open": {
               "frames": 4,
-              "maxMs": 39931.7,
+              "maxMs": 27549,
               "slow": 4
             },
             "frameTimes": {
               "frames": 4,
-              "p50": 1183.3000000000002,
-              "p95": 39931.700000000004,
-              "p99": 39931.700000000004,
-              "maxMs": 39931.700000000004,
-              "droppedSimS": 0.18333333333333332,
+              "p50": 1149.9000000000005,
+              "p95": 27549,
+              "p99": 27549,
+              "maxMs": 27549,
+              "droppedSimS": 0.15,
               "physicsSteps": 10,
               "windowFrames": 2048
             },
@@ -526,7 +526,7 @@
             "rain": 0
           },
           "backend": {
-            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
             "dpr": 1,
             "viewport": [
               1920,
@@ -547,7 +547,7 @@
               "gpuErrors": 0,
               "gpuFirstError": null,
               "ctxLost": false,
-              "packLive": false,
+              "packLive": true,
               "softPresent": true,
               "softBlitGen": 1
             }
@@ -583,25 +583,25 @@
         "effect": "reflections",
         "position": "0.18"
       },
-      "note": "Only the visor reflection setting changes: Off \u2192 Light. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
+      "note": "Only the visor reflection setting changes: Off → Light. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
     },
     {
       "id": "lens-bahrain-night-dry-refraction-strong",
-      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens refraction strong",
+      "title": "Bahrain · night · dry · lens refraction strong",
       "width": 1920,
       "height": 1080,
       "a": {
-        "file": "comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
-        "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee",
+        "file": "comparison-images/4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed.webp",
+        "sha256": "4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed",
         "label": "Refraction Off"
       },
       "b": {
-        "file": "comparison-images/8a2db153c82224131692f7d8c6a104b59ff880d356ed2704168f3dc229ac1328.webp",
-        "sha256": "8a2db153c82224131692f7d8c6a104b59ff880d356ed2704168f3dc229ac1328",
+        "file": "comparison-images/76e87c2e218152184952c9a741a16dee0816b972a8737ccc9cc8937fa267d465.webp",
+        "sha256": "76e87c2e218152184952c9a741a16dee0816b972a8737ccc9cc8937fa267d465",
         "label": "Refraction Strong"
       },
       "provenance": {
-        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "sha": "f1cc77b32aeacb45deb193f6760058ee17792c1c",
         "dirty": true,
         "scene": {
           "track": "bahrain",
@@ -645,16 +645,16 @@
             "autoShed": 0,
             "open": {
               "frames": 4,
-              "maxMs": 39931.7,
+              "maxMs": 27549,
               "slow": 4
             },
             "frameTimes": {
               "frames": 4,
-              "p50": 1183.3000000000002,
-              "p95": 39931.700000000004,
-              "p99": 39931.700000000004,
-              "maxMs": 39931.700000000004,
-              "droppedSimS": 0.18333333333333332,
+              "p50": 1149.9000000000005,
+              "p95": 27549,
+              "p99": 27549,
+              "maxMs": 27549,
+              "droppedSimS": 0.15,
               "physicsSteps": 10,
               "windowFrames": 2048
             },
@@ -670,7 +670,7 @@
             "rain": 0
           },
           "backend": {
-            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
             "dpr": 1,
             "viewport": [
               1920,
@@ -691,7 +691,7 @@
               "gpuErrors": 0,
               "gpuFirstError": null,
               "ctxLost": false,
-              "packLive": false,
+              "packLive": true,
               "softPresent": true,
               "softBlitGen": 1
             }
@@ -727,25 +727,25 @@
         "effect": "refraction",
         "position": "0.18"
       },
-      "note": "Only visor refraction changes: Off \u2192 Strong. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
+      "note": "Only visor refraction changes: Off → Strong. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
     },
     {
       "id": "lens-bahrain-night-dry-refraction-medium",
-      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens refraction medium",
+      "title": "Bahrain · night · dry · lens refraction medium",
       "width": 1920,
       "height": 1080,
       "a": {
-        "file": "comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
-        "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee",
+        "file": "comparison-images/4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed.webp",
+        "sha256": "4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed",
         "label": "Refraction Off"
       },
       "b": {
-        "file": "comparison-images/7d1d6b0ac416d3ca28bedb57561b6f4739064b3cabe043d418a2ccde0cf43804.webp",
-        "sha256": "7d1d6b0ac416d3ca28bedb57561b6f4739064b3cabe043d418a2ccde0cf43804",
+        "file": "comparison-images/49ee5beffa433cd173b4227a58a887f856532f295600f0fc930dbfe6ac27498a.webp",
+        "sha256": "49ee5beffa433cd173b4227a58a887f856532f295600f0fc930dbfe6ac27498a",
         "label": "Refraction Medium"
       },
       "provenance": {
-        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "sha": "f1cc77b32aeacb45deb193f6760058ee17792c1c",
         "dirty": true,
         "scene": {
           "track": "bahrain",
@@ -789,16 +789,16 @@
             "autoShed": 0,
             "open": {
               "frames": 4,
-              "maxMs": 39931.7,
+              "maxMs": 27549,
               "slow": 4
             },
             "frameTimes": {
               "frames": 4,
-              "p50": 1183.3000000000002,
-              "p95": 39931.700000000004,
-              "p99": 39931.700000000004,
-              "maxMs": 39931.700000000004,
-              "droppedSimS": 0.18333333333333332,
+              "p50": 1149.9000000000005,
+              "p95": 27549,
+              "p99": 27549,
+              "maxMs": 27549,
+              "droppedSimS": 0.15,
               "physicsSteps": 10,
               "windowFrames": 2048
             },
@@ -814,7 +814,7 @@
             "rain": 0
           },
           "backend": {
-            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
             "dpr": 1,
             "viewport": [
               1920,
@@ -835,7 +835,7 @@
               "gpuErrors": 0,
               "gpuFirstError": null,
               "ctxLost": false,
-              "packLive": false,
+              "packLive": true,
               "softPresent": true,
               "softBlitGen": 1
             }
@@ -871,25 +871,25 @@
         "effect": "refraction",
         "position": "0.18"
       },
-      "note": "Only visor refraction changes: Off \u2192 Medium. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
+      "note": "Only visor refraction changes: Off → Medium. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
     },
     {
       "id": "lens-bahrain-night-dry-refraction-light",
-      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens refraction light",
+      "title": "Bahrain · night · dry · lens refraction light",
       "width": 1920,
       "height": 1080,
       "a": {
-        "file": "comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
-        "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee",
+        "file": "comparison-images/4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed.webp",
+        "sha256": "4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed",
         "label": "Refraction Off"
       },
       "b": {
-        "file": "comparison-images/5fb0a2617269a7838e19eb3c3b49f241195c92585ad44bf83ce394cd4de717e8.webp",
-        "sha256": "5fb0a2617269a7838e19eb3c3b49f241195c92585ad44bf83ce394cd4de717e8",
+        "file": "comparison-images/70b35eda55405ff3c1f9cbcacde877c09d022e2b65a0e8e67b6abd4894764c96.webp",
+        "sha256": "70b35eda55405ff3c1f9cbcacde877c09d022e2b65a0e8e67b6abd4894764c96",
         "label": "Refraction Light"
       },
       "provenance": {
-        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "sha": "f1cc77b32aeacb45deb193f6760058ee17792c1c",
         "dirty": true,
         "scene": {
           "track": "bahrain",
@@ -933,16 +933,16 @@
             "autoShed": 0,
             "open": {
               "frames": 4,
-              "maxMs": 39931.7,
+              "maxMs": 27549,
               "slow": 4
             },
             "frameTimes": {
               "frames": 4,
-              "p50": 1183.3000000000002,
-              "p95": 39931.700000000004,
-              "p99": 39931.700000000004,
-              "maxMs": 39931.700000000004,
-              "droppedSimS": 0.18333333333333332,
+              "p50": 1149.9000000000005,
+              "p95": 27549,
+              "p99": 27549,
+              "maxMs": 27549,
+              "droppedSimS": 0.15,
               "physicsSteps": 10,
               "windowFrames": 2048
             },
@@ -958,7 +958,7 @@
             "rain": 0
           },
           "backend": {
-            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
             "dpr": 1,
             "viewport": [
               1920,
@@ -979,7 +979,7 @@
               "gpuErrors": 0,
               "gpuFirstError": null,
               "ctxLost": false,
-              "packLive": false,
+              "packLive": true,
               "softPresent": true,
               "softBlitGen": 1
             }
@@ -1015,25 +1015,25 @@
         "effect": "refraction",
         "position": "0.18"
       },
-      "note": "Only visor refraction changes: Off \u2192 Light. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
+      "note": "Only visor refraction changes: Off → Light. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
     },
     {
       "id": "lens-monza-day-dry-reflections-strong",
-      "title": "Monza \u00b7 day \u00b7 dry \u00b7 lens reflections strong",
+      "title": "Monza · day · dry · lens reflections strong",
       "width": 1920,
       "height": 1080,
       "a": {
-        "file": "comparison-images/09dd38050caa15763fc9277ae8ce2ad2bdf3bbf20e936d07d15108f0e9630ec7.webp",
-        "sha256": "09dd38050caa15763fc9277ae8ce2ad2bdf3bbf20e936d07d15108f0e9630ec7",
+        "file": "comparison-images/ec7324fe5dbf02a9953cc212ec692006be41278bb972bcb73c7838f325f6005e.webp",
+        "sha256": "ec7324fe5dbf02a9953cc212ec692006be41278bb972bcb73c7838f325f6005e",
         "label": "Reflections Off"
       },
       "b": {
-        "file": "comparison-images/d5c19201225fb48ca5d23487870c95b8c281c23fe513b54834a737ff3ded289f.webp",
-        "sha256": "d5c19201225fb48ca5d23487870c95b8c281c23fe513b54834a737ff3ded289f",
+        "file": "comparison-images/1793a26553afcfecc1711999f7a32d17ead48242a5cd3cdb0ae8f01b9a4fef18.webp",
+        "sha256": "1793a26553afcfecc1711999f7a32d17ead48242a5cd3cdb0ae8f01b9a4fef18",
         "label": "Reflections Strong"
       },
       "provenance": {
-        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "sha": "f1cc77b32aeacb45deb193f6760058ee17792c1c",
         "dirty": true,
         "scene": {
           "track": "monza",
@@ -1069,25 +1069,25 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 48.5,
+            "fps": 51.2,
             "floorMs": 17.2,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
-              "frames": 5,
-              "maxMs": 21115.8,
-              "slow": 3
+              "frames": 4,
+              "maxMs": 15916,
+              "slow": 1
             },
             "frameTimes": {
-              "frames": 5,
-              "p50": 33.40000000000873,
-              "p95": 21115.800000000003,
-              "p99": 21115.800000000003,
-              "maxMs": 21115.800000000003,
+              "frames": 4,
+              "p50": 33.30000000000291,
+              "p95": 15916.000000000007,
+              "p99": 15916.000000000007,
+              "maxMs": 15916.000000000007,
               "droppedSimS": 0,
-              "physicsSteps": 5,
+              "physicsSteps": 4,
               "windowFrames": 2048
             },
             "userTier": 0,
@@ -1102,7 +1102,7 @@
             "rain": 0
           },
           "backend": {
-            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
             "dpr": 1,
             "viewport": [
               1920,
@@ -1159,25 +1159,25 @@
         "effect": "reflections",
         "position": "0.02"
       },
-      "note": "Only the visor reflection setting changes: Off \u2192 Strong. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
+      "note": "Only the visor reflection setting changes: Off → Strong. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
     },
     {
       "id": "lens-monza-day-dry-refraction-strong",
-      "title": "Monza \u00b7 day \u00b7 dry \u00b7 lens refraction strong",
+      "title": "Monza · day · dry · lens refraction strong",
       "width": 1920,
       "height": 1080,
       "a": {
-        "file": "comparison-images/09dd38050caa15763fc9277ae8ce2ad2bdf3bbf20e936d07d15108f0e9630ec7.webp",
-        "sha256": "09dd38050caa15763fc9277ae8ce2ad2bdf3bbf20e936d07d15108f0e9630ec7",
+        "file": "comparison-images/ec7324fe5dbf02a9953cc212ec692006be41278bb972bcb73c7838f325f6005e.webp",
+        "sha256": "ec7324fe5dbf02a9953cc212ec692006be41278bb972bcb73c7838f325f6005e",
         "label": "Refraction Off"
       },
       "b": {
-        "file": "comparison-images/89c335ad5ad39e9b5565603a158ac05d4102f98f96215971eeda97191f0ccc00.webp",
-        "sha256": "89c335ad5ad39e9b5565603a158ac05d4102f98f96215971eeda97191f0ccc00",
+        "file": "comparison-images/b94f7c7147355e32ddd6faee309c761eeccbb5ceb55265e16c8567394020b925.webp",
+        "sha256": "b94f7c7147355e32ddd6faee309c761eeccbb5ceb55265e16c8567394020b925",
         "label": "Refraction Strong"
       },
       "provenance": {
-        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "sha": "f1cc77b32aeacb45deb193f6760058ee17792c1c",
         "dirty": true,
         "scene": {
           "track": "monza",
@@ -1213,25 +1213,25 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 48.5,
+            "fps": 51.2,
             "floorMs": 17.2,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
-              "frames": 5,
-              "maxMs": 21115.8,
-              "slow": 3
+              "frames": 4,
+              "maxMs": 15916,
+              "slow": 1
             },
             "frameTimes": {
-              "frames": 5,
-              "p50": 33.40000000000873,
-              "p95": 21115.800000000003,
-              "p99": 21115.800000000003,
-              "maxMs": 21115.800000000003,
+              "frames": 4,
+              "p50": 33.30000000000291,
+              "p95": 15916.000000000007,
+              "p99": 15916.000000000007,
+              "maxMs": 15916.000000000007,
               "droppedSimS": 0,
-              "physicsSteps": 5,
+              "physicsSteps": 4,
               "windowFrames": 2048
             },
             "userTier": 0,
@@ -1246,7 +1246,7 @@
             "rain": 0
           },
           "backend": {
-            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
             "dpr": 1,
             "viewport": [
               1920,
@@ -1303,25 +1303,25 @@
         "effect": "refraction",
         "position": "0.02"
       },
-      "note": "Only visor refraction changes: Off \u2192 Strong. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
+      "note": "Only visor refraction changes: Off → Strong. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
     },
     {
       "id": "lens-bahrain-dawn-fog-reflections-strong",
-      "title": "Bahrain \u00b7 dawn \u00b7 fog \u00b7 lens reflections strong",
+      "title": "Bahrain · dawn · fog · lens reflections strong",
       "width": 1920,
       "height": 1080,
       "a": {
-        "file": "comparison-images/a5734efdb6403002a60403e85c160277b7ce6910c5cda3e99fb24ca163febc69.webp",
-        "sha256": "a5734efdb6403002a60403e85c160277b7ce6910c5cda3e99fb24ca163febc69",
+        "file": "comparison-images/6780e96d07fd0b462ec8003913f5484e074fe2b9bf4351aabe41772aac92c194.webp",
+        "sha256": "6780e96d07fd0b462ec8003913f5484e074fe2b9bf4351aabe41772aac92c194",
         "label": "Reflections Off"
       },
       "b": {
-        "file": "comparison-images/c26f0a4f67f06b4a98bda732b0a6724efda2cf3eaebe5922946dc4e68e8cd6b8.webp",
-        "sha256": "c26f0a4f67f06b4a98bda732b0a6724efda2cf3eaebe5922946dc4e68e8cd6b8",
+        "file": "comparison-images/3a1b90b8c423b4b9a95b3bc8a2597b4114410e6df9d21cad3f5ffc0d82860965.webp",
+        "sha256": "3a1b90b8c423b4b9a95b3bc8a2597b4114410e6df9d21cad3f5ffc0d82860965",
         "label": "Reflections Strong"
       },
       "provenance": {
-        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "sha": "f1cc77b32aeacb45deb193f6760058ee17792c1c",
         "dirty": true,
         "scene": {
           "track": "bahrain",
@@ -1357,25 +1357,25 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 59.9,
-            "floorMs": 16.7,
+            "fps": 55,
+            "floorMs": 16.9,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
               "frames": 5,
-              "maxMs": 35732,
+              "maxMs": 22999.1,
               "slow": 3
             },
             "frameTimes": {
               "frames": 5,
-              "p50": 116.60000000000582,
-              "p95": 35732,
-              "p99": 35732,
-              "maxMs": 35732,
-              "droppedSimS": 0.03333333333333333,
-              "physicsSteps": 7,
+              "p50": 33.39999999999418,
+              "p95": 22999.100000000006,
+              "p99": 22999.100000000006,
+              "maxMs": 22999.100000000006,
+              "droppedSimS": 0,
+              "physicsSteps": 4,
               "windowFrames": 2048
             },
             "userTier": 0,
@@ -1390,7 +1390,7 @@
             "rain": 0
           },
           "backend": {
-            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
             "dpr": 1,
             "viewport": [
               1920,
@@ -1447,25 +1447,25 @@
         "effect": "reflections",
         "position": "0.18"
       },
-      "note": "Only the visor reflection setting changes: Off \u2192 Strong. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
+      "note": "Only the visor reflection setting changes: Off → Strong. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges."
     },
     {
       "id": "lens-bahrain-dawn-fog-refraction-strong",
-      "title": "Bahrain \u00b7 dawn \u00b7 fog \u00b7 lens refraction strong",
+      "title": "Bahrain · dawn · fog · lens refraction strong",
       "width": 1920,
       "height": 1080,
       "a": {
-        "file": "comparison-images/a5734efdb6403002a60403e85c160277b7ce6910c5cda3e99fb24ca163febc69.webp",
-        "sha256": "a5734efdb6403002a60403e85c160277b7ce6910c5cda3e99fb24ca163febc69",
+        "file": "comparison-images/6780e96d07fd0b462ec8003913f5484e074fe2b9bf4351aabe41772aac92c194.webp",
+        "sha256": "6780e96d07fd0b462ec8003913f5484e074fe2b9bf4351aabe41772aac92c194",
         "label": "Refraction Off"
       },
       "b": {
-        "file": "comparison-images/1eef78564c811851e56eba723771b51523c4f95d677508fc0507feabf2bf2c87.webp",
-        "sha256": "1eef78564c811851e56eba723771b51523c4f95d677508fc0507feabf2bf2c87",
+        "file": "comparison-images/19447223e69704b5c4256b5453e2cfcc860bea6de4b037000464f61d559a006c.webp",
+        "sha256": "19447223e69704b5c4256b5453e2cfcc860bea6de4b037000464f61d559a006c",
         "label": "Refraction Strong"
       },
       "provenance": {
-        "sha": "1040f0ecf14fc6719df4a8ae73b1d7b8fb22debf",
+        "sha": "f1cc77b32aeacb45deb193f6760058ee17792c1c",
         "dirty": true,
         "scene": {
           "track": "bahrain",
@@ -1501,25 +1501,25 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 59.9,
-            "floorMs": 16.7,
+            "fps": 55,
+            "floorMs": 16.9,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
               "frames": 5,
-              "maxMs": 35732,
+              "maxMs": 22999.1,
               "slow": 3
             },
             "frameTimes": {
               "frames": 5,
-              "p50": 116.60000000000582,
-              "p95": 35732,
-              "p99": 35732,
-              "maxMs": 35732,
-              "droppedSimS": 0.03333333333333333,
-              "physicsSteps": 7,
+              "p50": 33.39999999999418,
+              "p95": 22999.100000000006,
+              "p99": 22999.100000000006,
+              "maxMs": 22999.100000000006,
+              "droppedSimS": 0,
+              "physicsSteps": 4,
               "windowFrames": 2048
             },
             "userTier": 0,
@@ -1534,7 +1534,7 @@
             "rain": 0
           },
           "backend": {
-            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
             "dpr": 1,
             "viewport": [
               1920,
@@ -1591,7 +1591,7 @@
         "effect": "refraction",
         "position": "0.18"
       },
-      "note": "Only visor refraction changes: Off \u2192 Strong. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
+      "note": "Only visor refraction changes: Off → Strong. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor."
     }
   ],
   "visorLab": true
