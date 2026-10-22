@@ -119,6 +119,15 @@ const BOOT_STEP_MS = (() => {
   try { const v = Number(localStorage.getItem("apex26.gfxBootStepMs")); if (v > ms) ms = Math.min(v, 60000); } catch (_) { /* blocked storage: default cap */ }
   return ms;
 })();
+// Software-GL boots (SwiftShader / llvmpipe) can spend the whole idle window
+// on one GLX deferred wave while the next file is still in flight — a fixed
+// wall-clock cap on the whole fetch treats that as failure every reload (#3587).
+// Idle: no progress for BOOT_STEP_MS. Max: BOOT_STEP_MAX_MS hard stop.
+const BOOT_STEP_MAX_MS = (() => {
+  let ms = 60000;
+  try { const v = Number(localStorage.getItem("apex26.gfxBootStepMs")); if (v > ms) ms = Math.min(v, 120000); } catch (_) { /* blocked storage */ }
+  return ms;
+})();
 const TIMED_OUT = { timedOut: true };
 function withTimeout(promise, ms, label, onTimeout) {
   if (typeof setTimeout !== "function") return Promise.resolve(promise);   // some VM harnesses: await it alone
@@ -131,6 +140,49 @@ function withTimeout(promise, ms, label, onTimeout) {
     }, ms);
   });
   return Promise.race([Promise.resolve(promise), cap]).finally(() => clearTimeout(timer));
+}
+// Progress-aware boot wait: each touch() resets the idle timer (a script
+// evaluated, GLX.init ran, …). Fails only after idleMs with no touch, or
+// maxMs wall since the first touch.
+function withIdleProgressTimeout(run, idleMs, maxMs, label, onTimeout) {
+  if (typeof setTimeout !== "function") return Promise.resolve(run(() => {}));
+  let idleTimer = null;
+  let maxTimer = null;
+  let aborted = false;
+  let resolveWatch;
+  const watchdog = new Promise((resolve) => { resolveWatch = resolve; });
+  const stopWatch = () => {
+    aborted = true;
+    if (idleTimer != null) clearTimeout(idleTimer);
+    if (maxTimer != null) clearTimeout(maxTimer);
+    idleTimer = maxTimer = null;
+  };
+  const timeOut = (suffix) => {
+    if (aborted) return;
+    stopWatch();
+    if (onTimeout) onTimeout();
+    Log.warn("gfx", label + suffix);
+    resolveWatch(TIMED_OUT);
+  };
+  const armIdle = () => {
+    if (aborted) return;
+    if (idleTimer != null) clearTimeout(idleTimer);
+    idleTimer = setTimeout(
+      () => timeOut(" made no progress for " + idleMs / 1000 + " s — treating the backend as unavailable"),
+      idleMs,
+    );
+  };
+  const touch = () => { armIdle(); };
+  maxTimer = setTimeout(
+    () => timeOut(" exceeded " + maxMs / 1000 + " s — treating the backend as unavailable"),
+    maxMs,
+  );
+  armIdle();
+  const work = Promise.resolve(run(touch)).then((v) => { stopWatch(); return v; }, (e) => { stopWatch(); throw e; });
+  return Promise.race([work, watchdog]).then((v) => { stopWatch(); return v; });
+}
+function loadDeferredScripts(files, touch) {
+  return loadBackendScripts(files, undefined, touch ? { onSettled: () => touch() } : undefined);
 }
 function graphicsUnavailableOpts() {
   return {
@@ -153,6 +205,8 @@ let _initOwner = null;
 let _createHung = false;     // the backend's create() never answered: leave its canary armed
 let pref = "webgl2", pick = "", why = "";   // the resolved pick, the explicit one, and why it did not bind (#2285: never silent)
 try {
+  const stored = storedBackendPreference();
+  pref = stored.pref; pick = stored.unset ? "" : stored.pref;
   // Refresh apex26.xrCaps before sync bootPick (ms). ApexXR is LAZY_XR and is only
   // fetched by XrBoot.mountUi, after this runs, so on a real boot it is undefined
   // here and both ApexXR guards (this and storedBackendPreference) fall through to
@@ -161,11 +215,11 @@ try {
   // to GLX, which has no attachXrSession, so an armed boot would land on a
   // renderer ENTER VR cannot use (the legacy XrBoot.ensureXrBackend TLX pin is
   // what works today). Fix the plan's backend first.
-  if (typeof ApexXR !== "undefined" && ApexXR.detect) {
+  // An explicit WEBGL2 recovery pick should not spend a boot step on XR before
+  // GLX — measured on a slow SwiftShader box stuck in Graphics unavailable (#3587).
+  if (pref !== "webgl2" && typeof ApexXR !== "undefined" && ApexXR.detect) {
     try { await withTimeout(ApexXR.detect(), BOOT_STEP_MS, "XR capability probe"); } catch (_) { /* caps stay cached */ }
   }
-  const stored = storedBackendPreference();
-  pref = stored.pref; pick = stored.unset ? "" : stored.pref;
   // Unset default is THREE when a GPU adapter resolves; with no adapter, stay
   // on GLX so title never modulepreloads three.webgpu/core (~1.1 MB encoded).
   // Explicit three/webgpu picks are unchanged. The boot canary below still
@@ -250,7 +304,9 @@ try {
     // needed beyond this: a failed fetch leaves the backend global absent,
     // which Gfx.create treats as unavailable and falls through to GLX.
     if (pref === "three") preloadThreeVendor();
-    const fetched = await withTimeout(loadBackendScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu), BOOT_STEP_MS, "backend script fetch");
+    const fetched = await withIdleProgressTimeout(
+      (touch) => loadDeferredScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu, touch),
+      BOOT_STEP_MS, BOOT_STEP_MAX_MS, "backend script fetch");
     // A slow fetch is the network's verdict, not the device's: GLX for this boot,
     // canary state untouched. A hung create() IS the device's (see _createHung).
     if (fetched !== TIMED_OUT && Gfx.createInitOwner) _initOwner = Gfx.createInitOwner(canvas);
@@ -287,16 +343,31 @@ try {
   }
 } catch (e) { gfx = null; why = "boot threw: " + ((e && e.message) || e); }
 if (!gfx) {
+  // An alternate that claimed the canvas (getContext succeeded) then timed out
+  // cannot attach GLX on this load — same rule as init-fail below, without
+  // calling GLX.init on a poisoned surface (renderer-boot-timeout VM).
+  if (_initOwner && _initOwner.claimed) {
+    showGraphicsUnavailable(); return null;
+  }
   // Load GLX only when selected or needed after TLX/WGX refuses. A missing
   // script must not trigger the claim-failure reload loop while offline.
-  if (typeof GLX.init !== "function") {
-    try {
-      const fetched = await withTimeout(loadBackendScripts(BACKEND_FILES.webgl2), BOOT_STEP_MS, "GLX script fetch");
-      if (fetched === TIMED_OUT) { showGraphicsUnavailable(); return null; }
-    } catch (_) { showGraphicsUnavailable(); return null; }
+  let glxVerdict = "throw";
+  try {
+    glxVerdict = await withIdleProgressTimeout(async (touch) => {
+      touch();
+      if (typeof GLX.init !== "function") {
+        const ok = await loadDeferredScripts(BACKEND_FILES.webgl2, touch);
+        if (ok === false) return "fetch-fail";
+      }
+      if (typeof GLX.init !== "function") return "no-init";
+      touch();
+      return GLX.init(canvas) ? "ok" : "init-fail";
+    }, BOOT_STEP_MS, BOOT_STEP_MAX_MS, "GLX boot");
+  } catch (_) { glxVerdict = "throw"; }
+  if (glxVerdict === TIMED_OUT || glxVerdict === "fetch-fail" || glxVerdict === "no-init") {
+    showGraphicsUnavailable(); return null;
   }
-  if (typeof GLX.init !== "function") { showGraphicsUnavailable(); return null; }
-  if ((_initOwner && !_initOwner.active && _initOwner.claimed) || !GLX.init(canvas)) {
+  if (glxVerdict !== "ok") {
     // A failed backend opt-in (WGX or TLX) may have already claimed the
     // canvas (getContext "webgpu"/"webgl2" succeeded before init died), so
     // getContext("webgl2") can never attach on this load. Reload once with a
@@ -403,6 +474,16 @@ function preloadLikelyBackend() {
     if (typeof ScriptLoader === "undefined" || !ScriptLoader.preload || typeof ApexRoster === "undefined") return 0;
     const g = guess();
     const low = !g.sure;
+    let unsetPick = false;
+    try { unsetPick = localStorage.getItem("apex26.gfxBackend") == null; } catch (_) { /* blocked storage: treat like unset */ unsetPick = true; }
+    // The UNSET default read off navigator.gpu is not a pick: start() may still bind
+    // GLX after a null or slow requestAdapter() (SwiftShader often needs the full
+    // 4 s cap). The eval-time TLX prefetch plus the ~735 KB three vendor island
+    // contended with the GLX roster fetch and could push the fallback past
+    // BOOT_STEP_MS into Graphics unavailable — measured after clearing site data
+    // with an installed SW (#3536). Explicit THREE/WGX picks still prefetch;
+    // start() also preloads TLX once the adapter probe commits to THREE.
+    if (unsetPick && !g.sure && g.pick === "three") return 0;
     // The vendor island too, from here rather than only inside start(): start() runs after every deferred
     // script and the adapter probe, so its hint reached the network seconds after this one could.
     if (g.pick === "three") preloadThreeVendor(low);

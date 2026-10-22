@@ -1943,6 +1943,12 @@
       ]
     },
     {
+      "path": "tools/gfx/readback-garage-oracle.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/gfx/res-scale-ab.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2408,6 +2414,11 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/mcp/browserstack-mcp.sh",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
     },
     {
       "path": "tools/mcp/catalog-discovery.mjs",
@@ -3921,6 +3932,21 @@
       ],
       "gatewayConfigured": true,
       "timeout": 900000
+    },
+    {
+      "name": "browserstack",
+      "type": "stdio",
+      "command": "bash",
+      "args": [
+        "tools/mcp/output-level-mcp.sh",
+        "--server",
+        "browserstack",
+        "--",
+        "bash",
+        "tools/mcp/browserstack-mcp.sh",
+        "run"
+      ],
+      "gatewayConfigured": true
     },
     {
       "name": "chrome-devtools",

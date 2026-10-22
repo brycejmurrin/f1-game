@@ -9365,6 +9365,9 @@
       ]
     },
     "js/perf/loop-health.js": {
+      "reload": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "*": [
         "tests/unit/loop-health.test.mjs"
       ]
@@ -9578,6 +9581,9 @@
       "snapshot": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
+      "softwareRaster": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "span": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
@@ -9639,6 +9645,9 @@
       ],
       "boundIsGlx": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "clearGfxBootRecovery": [
+        "tests/unit/renderer-picker-unavailable.test.mjs"
       ],
       "clearRendererStorage": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -9746,6 +9755,9 @@
     "js/perf/thermal-drift.js": {
       "drift": [
         "tests/unit/thermal-drift.test.mjs"
+      ],
+      "*": [
+        "tests/unit/perf-governor.test.mjs"
       ]
     },
     "js/perf/three-inspector.js": {
@@ -12897,6 +12909,7 @@
       "init": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs"
       ],
       "load": [
@@ -12904,6 +12917,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/build-worker.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],

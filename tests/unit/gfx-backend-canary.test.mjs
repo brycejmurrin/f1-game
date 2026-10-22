@@ -4118,6 +4118,47 @@ test("the strike ledger is per backend: one death each on two backends retires n
   assert.equal(legacy.get("apex26.gfxProbeStrikes"), "three:1");
 });
 
+test("eval-time preload skips TLX on unset navigator.gpu hunch (#3536 Graphics unavailable)", () => {
+  const src = code("js/render/renderer-boot.js");
+  assert.ok(src.includes('unsetPick && !g.sure && g.pick === "three") return 0'),
+    "first boot must not prefetch TLX before the adapter probe commits");
+});
+
+test("GLX backendState and race entry defer pack retry on software GL (#3584)", () => {
+  const glx = code("js/render/glx/glx.js");
+  assert.ok(glx.includes("detectSoftwareGl") && glx.includes("softwareGL: _softwareGl"));
+  const game = readFile("js/game.js");
+  assert.ok(game.includes("Assets.retry && !PerfGov.softwareRaster()"));
+  assert.ok(game.includes("requestIdleCallback(run, { timeout: 120000 })"));
+});
+
+test("software GL garage path gates readback and stall reload (#3589)", () => {
+  const loop = readFile("js/perf/loop-health.js");
+  assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"'));
+  const soft = readFile("js/render/glx/soft.js");
+  assert.ok(soft.includes("PerfGov.softwareRaster()") && soft.includes('"carsetup"'));
+  const assets = readFile("js/render/shared/assets.js");
+  assert.ok(assets.includes("deferScratchReadback"));
+  const game = gameSource();
+  assert.ok(game.includes("openGarage") && game.includes("PerfGov.softwareRaster()") && game.includes("invalidateSoftPresent"));
+});
+
+test("GLX boot waits on progress, not one fixed wall clock (#3587)", () => {
+  const src = code("js/render/renderer-boot.js");
+  assert.ok(src.includes("withIdleProgressTimeout"));
+  assert.ok(src.includes("loadDeferredScripts"));
+  assert.ok(src.includes("onSettled"));
+  assert.ok(src.includes("GLX boot"));
+});
+
+test("Graphics unavailable RETRY and USE WEBGL2 scrub canary state (#3587)", () => {
+  const src = code("js/perf/renderer-picker.js");
+  assert.ok(src.includes("function clearGfxBootRecovery"));
+  assert.ok(/retry\.onclick[\s\S]*clearGfxBootRecovery\(\)/.test(src));
+  assert.ok(/webgl\.onclick[\s\S]*clearGfxBootRecovery\(\{ webgl2Pick: true \}\)/.test(src));
+  assert.ok(src.includes("gfxProbeStrikes"));
+});
+
 test("a pick that proves itself still pays off an older strike", async () => {
   const ls = new Map([["apex26.gfxBackend", "three"], ["apex26.gfxProbeStrikes", "1"]]);
   const rb = rendererBootRun(ls);

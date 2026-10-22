@@ -176,9 +176,16 @@
     // Desktop WebGL2: textureLoad the R32F color attachment the sun pass
     // writes TSL.depth into. Guarded: any construction failure leaves the
     // fixed-R look.
+    // Phones never build it, on EITHER leg: colorPcss above already
+    // excludes them, but the WebGPU leg did not — a WebGPU phone
+    // (Safari 26, where WebGPU is default-on) took the 512² R32F target,
+    // the extra pass and PCSS sampling that GLX withholds from every
+    // phone, against the fixed-R phone rule at colorPcss and §2q's
+    // accounting (the shadow pass is already 40.4 MB of TLX's phone
+    // excess, and jetsam headroom is the phone constraint).
     const BLOCKER_SIZE = 512;
     let blockerRT = null, blockerQuad = null;
-    if (sunRT && (isWebGPU || colorPcss)) {
+    if (sunRT && !isMobile && (isWebGPU || colorPcss)) {
       try {
         blockerRT = new THREE.RenderTarget(BLOCKER_SIZE, BLOCKER_SIZE, {
           format: THREE.RedFormat, type: THREE.FloatType,

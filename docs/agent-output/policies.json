@@ -1201,6 +1201,11 @@
       "presentation": "native",
       "preserve": "Real/stubbed link qualification, frame denominator and native JSON mode."
     },
+    "tools/gfx/readback-garage-oracle.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "readPixels hook phases, stall watchdog state and before/after JSON report paths."
+    },
     "tools/gfx/res-scale-ab.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1585,6 +1590,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "JSON-RPC ids/errors, image MIME/data, token auth"
+    },
+    "tools/mcp/browserstack-mcp.sh": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Pinned native launch and JSON-RPC stdout; configured gateway controls tool-result presentation. Credentials come from the environment only and are never echoed; `status` prints set/NOT set, never values."
     },
     "tools/mcp/catalog-discovery.mjs": {
       "action": "page-results",

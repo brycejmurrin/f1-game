@@ -341,6 +341,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/live-frame-census.mjs** | Phone-shaped driven race per backend x track: frame/JS percentiles, GC, slow GL/WebGPU calls, mid-race pipelines. | perf-memory-census |
 | **gfx/mem-census.mjs** | Memory census: heap after GC, live tracks, three render objects and decoded audio per track load (picker or race path). | mcp-probe / check-changes |
 | **gfx/pass-census.mjs** | Draw calls and triangles per render pass (main, mirror, sun/lamp shadow, post) per frame: the exact count behind #2657. | renderer-debug / playwright-probe |
+| **gfx/readback-garage-oracle.mjs** | Measures readPixels during menu→garage→close; optional race-entry path. | — |
 | **gfx/res-scale-ab.mjs** | Pixel A/B of TLX fixed render targets (tlxFixedTargets) vs legacy resize: noise floor, identity at 1.0, edge bleed. | renderer-debug |
 | **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
@@ -481,6 +482,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/apex-tools-mcp.sh** | Cursor / Cloud stdio entry for the `apex_*` MCP (`.mcp.json` → `serve`); `help`/`call`/`smoke` from a shell. | check-changes |
 | **mcp/browser-http-up.mjs** | Keep the phone browser MCP and its public tunnel up. Reuse a live address; start one only when it is dead. | phone-browser |
 | **mcp/browser-http.mjs** | Phone-sized Chromium over streamable HTTP on 127.0.0.1. Not a .mcp.json server. | phone-browser |
+| **mcp/browserstack-mcp.sh** | Official @browserstack/mcp-server wrapper (help/status/run): `browserstack` stdio server, env credentials only. | mcp-probe |
 | **mcp/catalog-discovery.mjs** | Bounded browser-free canonical parts, livery and garage camera discovery; validated audit filters. | garage-parts-livery |
 | **mcp/cdmcp-bg.mjs** | Detach/status/wait/stop twin of `test-bg.mjs` for `cdmcp-measure.py`: `cdmcp-bg.mjs boot --port 3462`. | mcp-probe |
 | **mcp/cdmcp-cli.py** | Stdio JSON-RPC client for chrome-devtools MCP: `list-tools`, `call`, `survey-title`, `apex-shot`, `slider-ab`. | mcp-probe |
@@ -488,7 +490,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/cdmcp-lamps.py** | Night lamp screenshot suite via chrome-devtools MCP (Qatar, Singapore, Bahrain, Monza); `--port`, `--only`, `--limit`. | mcp-probe |
 | **mcp/cdmcp-measure.py** | Background-friendly Chromium MCP measure suite: boot (network/console/LCP), ui floors, full(+heap); `= run` verdict. | mcp-probe |
 | **mcp/chrome-devtools-mcp.sh** | Wrapper for the local `scratch/chrome-devtools-mcp` clone: `clone`/`build`/`run`/`verify`/`status`/`help`. | mcp-probe |
-| **mcp/chrome-devtools-runtime.mjs** | Materialize the two Apex-reviewed chrome-devtools-mcp 1.7.0 fixes without mutating npm or clone sources. | — |
+| **mcp/chrome-devtools-runtime.mjs** | Version gate for chrome-devtools-mcp: materialize the Apex 1.7.0 fixes; 1.11.0 passes unpatched; else fail closed. | — |
 | **mcp/debug-chrome.mjs** | CLI + apex_debug_chrome: start/status/stop the shared headless Chromium (CDP 9222) that debug MCPs attach to. | — |
 | **mcp/diagnostics-tools.mjs** | Typed background diagnostics and bounded report queries for Apex MCP. | renderer-debug / mcp-probe |
 | **mcp/garage-plan.mjs** | Browser-free bounded garage matrix planning over canonical cameras and livery fields. | garage-parts-livery |
