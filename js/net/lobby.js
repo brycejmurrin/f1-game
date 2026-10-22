@@ -264,11 +264,9 @@ const NetLobby = (function () {
             selfReady = false;
             _verify.delete(id);
             if (G.setNetRoom) G.setNetRoom(true);
-            // Rotate only a CODE room, as the not-last branch below does. A
-            // link/QR room has no code to retire: rotating minted a public
-            // code room the host never opened, whose quiet expiry later showed
-            // the host the guest's "six characters" copy (H3-7).
-            const hadCode = !!(codeRoom || codeReopenTimer || codeReopen);
+            // Only a CODE room rotates: a link/QR room never advertised one, and
+            // minting it here left a public code up to expire later (H3-7).
+            const hadCode = !!(codeRoom || codeReopenTimer);
             stopCodeWait();
             dropPending();
             codeReopen = null;
@@ -1744,7 +1742,9 @@ const NetLobby = (function () {
             dropPending();
             // onConnected() reopens the code for the next arrival; its expiry
             // (HOST_TIMEOUT_MS ≈ 120 s) later is not a failure of a room that is already full.
-            if (r.error === "expired" && (sessions.size || watcherArmed)) {
+            // A quiet room is the waiting room (rotate after a remove): the
+            // host's copy, never nostr's guest "Check the six characters…" (H3-7).
+            if (r.error === "expired" && (sessions.size || watcherArmed || opts.quiet)) {
               const msg = "The room code has expired — INVITE ANOTHER makes a new one.";
               tagFailReason("expired", msg);
               say(msg);

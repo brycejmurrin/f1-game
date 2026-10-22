@@ -1498,24 +1498,6 @@ test("host remove: evicting the last guest keeps the host in the waiting room", 
   } finally { h.lobby.cancel(); }
 });
 
-test("evicting the last guest of a LINK room opens no code room (H3-7)", async () => {
-  // rotateRoomAfterEvict() retires an evicted player's code; a link/QR room has
-  // none, and rotating minted a public code room whose quiet expiry showed the
-  // host the guest's "check the six characters" copy.
-  const rooms = [];
-  const { h } = await connectedHost({ rendezvous: {
-    usingPrivateRelay: () => false, makeCode: () => "XYZ789",
-    hostRoom: async (o) => { rooms.push(o); return { ok: true, stop() {}, rotate() {} }; },
-  } });
-  try {
-    assert.equal(h.lobby.removeGuest("g1"), true);
-    await new Promise((r) => setTimeout(r, 1700));   // the grace close
-    assert.equal(h.lobby.status().guests, 0);
-    assert.equal(h.elements.get("vs-room").hidden, false, "still in the waiting room");
-    assert.equal(rooms.length, 0, "no code room was opened for a link room");
-  } finally { h.lobby.cancel(); }
-});
-
 test("a guest cannot remove anybody, and a transport with no pc shows no code", async () => {
   const { h } = await connectedGuest();
   try {
@@ -2626,5 +2608,45 @@ test("removing one of two code-room guests rotates the room code (the removed pl
     for (const fn of ts[0].closers) fn();   // the fake transport closes only when the test says so
     await until(() => rooms.length > before, "a room was hosted after the removal");
     assert.equal(rooms[rooms.length - 1].code, "NEW567", "the old code is not advertised again");
+  } finally { h.lobby.cancel(); }
+});
+
+// ── H3-7 (2026-10-22): removing the LAST guest rotates only a CODE room ──────
+// Ported from closed PR #3535 (cursor/net-lobby-evict-rotate-h3a7): quiet rotate
+// expiry must use host copy, not nostr's guest "six characters" line.
+async function evictOnly(h, ts) {
+  assert.equal(h.lobby.removeGuest("g1"), true, "the host can remove its guest");
+  const t = ts[0];
+  t.status = "closed";
+  for (const fn of t.closers) fn("peer");          // the guest's close is the evict ack
+  assert.equal(h.lobby.status().guests, 0);
+}
+
+test("removing the last guest of a LINK room mints no room code", async () => {
+  const { h, made, rooms, ts, until } = codeRoomHarness();
+  try {
+    assert.equal((await h.lobby.host()).ok, true);
+    h.lobby.watchForOpen();
+    ts[0].status = "open";
+    await until(() => made.length === 1, "the link guest's session was bound");
+    await evictOnly(h, ts);
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal(rooms.length, 0, "a link/QR room never opens a public code room on a remove");
+    assert.equal(h.elements.get("vs-room").hidden, false, "the host stays in the waiting room");
+  } finally { h.lobby.cancel(); }
+});
+
+test("removing the last guest of a CODE room rotates it, and its expiry reads in host copy", async () => {
+  const { h, rooms, ts, until, withGuest, codes } = codeRoomHarness();
+  try {
+    await withGuest();
+    codes.next = "XYZ789";
+    await evictOnly(h, ts);
+    await until(() => rooms.some((r) => r.code === "XYZ789"), "the code rotated after the remove");
+    const fresh = rooms[rooms.length - 1];
+    fresh.onFail({ error: "expired", message: "Check the six characters and try again." });
+    const said = h.status.textContent;
+    assert.doesNotMatch(said, /six characters/, "the host never sees the guest's copy");
+    assert.ok(/expired/i.test(said), "the host sees the INVITE ANOTHER expiry copy");
   } finally { h.lobby.cancel(); }
 });
