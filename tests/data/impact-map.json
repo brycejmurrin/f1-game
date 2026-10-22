@@ -4769,7 +4769,11 @@
     },
     "js/core/menu-sheet-gate.js": {
       "idle": [
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/settings-open-perf.test.mjs"
+      ],
+      "mark": [
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "open": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -9526,6 +9530,7 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "mark": [
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "notePresent": [
