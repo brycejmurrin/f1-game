@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01SX3kcg6aetKREB24csfcYo PR 3499 5047d11e A·T2 triage note; ready-gate passed
+READY to:D from:cursor:bc-24781ef2-13c7-5727-9798-6d3732563366 D·IP2 #3491 tip 8d45a21b0 ready-gate exit 0; marked ready; draft/fast CI #39737375029 = ci passed; MERGE-HOLD intact (DAD lifts/merges in priority after #3465); MenuSheetGate defers menu prep under Settings — do not merge from worker
