@@ -34,6 +34,18 @@
   .dh-overlay { background: rgba(4, 4, 8, 0.82); }
 }
 
+/* Graphics recovery (#nogl, z-index 99) stays visible while the modal Data
+   Hub opens from renderer-picker. The hub's default scrim and --panel
+   composites are translucent, so recovery buttons bleed through the card. */
+body:has(#nogl:not([hidden])) #datahub:modal {
+  z-index: 100;
+  background: var(--scrim-heavy);
+}
+body:has(#nogl:not([hidden])) #datahub:modal .dh-card {
+  background: var(--bg);
+}
+body:has(#datahub:modal) #nogl:not([hidden]) { pointer-events: none; }
+
 /* Short local viewport (UI SIZE included): stretch to fill. Viewport
    max-height cannot see zoom; body[data-density] is measured in the same
    units the card's CSS is written in. */
