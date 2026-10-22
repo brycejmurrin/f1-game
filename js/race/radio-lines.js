@@ -218,7 +218,9 @@ var RadioLines = (function () {
 
     /** The next line for `key` with `vars` filled, or "". A variant that cannot
      *  be filled (a slot missing) is skipped for one that can. */
-    function pick(key, vars) {
+    let pending = null;
+    function pick(key, vars, peek) {
+      pending = null;
       const pool = P[key];
       if (!pool || !pool.length) return "";
       const tried = new Set();
@@ -228,13 +230,16 @@ var RadioLines = (function () {
         tried.add(i);
         const line = fill(pool[i], vars);
         if (line) {
-          remember(key, i, pool.length);
+          if (peek) pending = { key, i, n: pool.length };
+          else remember(key, i, pool.length);
           return line;
         }
       }
       return "";
     }
-    return { pick, reset() { recent.clear(); } };
+    /** After `pick(key, vars, true)`: the line was actually shown, so count it as heard. */
+    function commit() { if (pending) remember(pending.key, pending.i, pending.n); pending = null; }
+    return { pick, commit, reset() { recent.clear(); pending = null; } };
   }
 
   return Object.freeze({ POOLS, WHY, create, fill, gapText, timeText, surname });

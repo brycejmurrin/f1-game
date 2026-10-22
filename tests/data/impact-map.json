@@ -11854,6 +11854,9 @@
       ]
     },
     "js/race/radio-lines.js": {
+      "commit": [
+        "tests/unit/radio-lines.test.mjs"
+      ],
       "create": [
         "tests/unit/battle-earcon.test.mjs",
         "tests/unit/event-journal.test.mjs",
