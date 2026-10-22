@@ -449,6 +449,178 @@ It is cheap authenticity that fits the existing `FlyingStart` and `StartLights`.
 *Effort:* S. *Risk:* it touches the launch, so run the start specs.
 *Score:* 2 × 4 ÷ 1 = **8**.
 
+### E. Weather, lighting and the helmet lens (round 2)
+
+This section was added on Bryce's ask (2026-10-22 ~06:23Z, relayed by orchestrator
+A) to "look at weather and lighting and pull the new helmet lens code and tools".
+
+**What the tools show today.**
+
+- **The visor.** Fleet D's PR #3465 (`cursor/helmet-visor-7e9c` @ `bf61ba48`) was
+  pulled read-only into a worktree and its A/B lab run there:
+  #3465's `ab-gallery.mjs --capture` with 5 pairs (Bahrain dawn dry, Bahrain
+  night dry, Monza day rain, Bahrain dusk storm, Monza dawn fog), helmet camera,
+  visor off against on. In #3465 the lens is a *cosmetic* layer: `CHOICES.visor`
+  `off/clear/smoke`, tint `neutral/amber/ice/rose`, intensity, refraction and
+  reflections (`js/camera/cockpit-opts.js`, #3465's `helmet-visor.css`), and
+  gravity-plus-airflow rain beads (`js/fx/droplets.js`, "Visual only — nothing here
+  changes the racing simulation").
+- **Visor inputs.** Rain on the lens reads one global `frame.rain` ramp, not the
+  car's local wetness. There are no tear-offs, no fogging, and no sun glare tied to
+  the visor.
+- **Weather on the tip.** `WeatherArc` walks `LADDER = ["dry","wet","rain","storm"]`
+  and also accepts `overcast` and `fog`. `RainCells` gives localised showers that
+  drift along the lap, `Wind` gives gusts, `Forecast` gives timed knowledge,
+  `Storm`/`StormFlash` give lightning, and `js/fx/particles.js` gives spray
+  (`sprayCars`, `sprayRate`). `TyreModel` reads `trackTempAt()`.
+- **Lighting on the tip.** `LightPresets` (per circuit × `day/dawn/dusk/night`),
+  the light tuner, and a LENS FLARE knob (`js/lighting/knobs.js`,
+  `js/render/shared/post-common.js`).
+- **What is missing.** No dynamic time of day within a race (no ToD progression
+  found), and no track evolution (no rubbering-in found).
+
+**Web context.**
+
+- Real drivers stack 4–8 tear-offs, more in the wet, and use them for rain, oil and
+  fog. Throwing one on track can draw a reprimand
+  ([GPFans: tear-offs](https://www.gpfans.com/en/f1-news/1010626/f1-tear-offs/),
+  [F1-fansite glossary](https://www.f1-fansite.com/glossary/tear-off/),
+  [Motorsport.com: tear-off rule](https://www.motorsport.com/f1/news/f1-drivers-prohibited-from-throwing-visor-tear-off-strips-on-track-680760/)).
+- The 2010 Singapore fan discussion describes smoked visors with clear-under-tinted
+  tear-off tricks for glare ([F1Technical forum](https://f1technical.net/forum/viewtopic.php?p=199987)).
+  This is a fan source, not team-confirmed.
+- F1 25 players complain that spray is "essentially absent", that rain falls as a
+  uniform blanket, and that weather visuals did not match grip until patch 1.03
+  ([EA forums: weather needs to improve](https://forums.ea.com/discussions/f1-25-general-discussion-en/weather-needs-to-improve/12131173),
+  [EA forums: visuals not matching](https://forums.ea.com/idea/f1-25-bug-reports-en/weather-effects-not-matching-track-conditions/13130744),
+  [F1 25 v1.03 notes](https://www.ea.com/games/f1/f1-25/news/f1-25-patch-notes-v103)).
+  Apex 26's local `RainCells` already beat the blanket. The ideas below make the
+  lens and the spray tell the truth too.
+
+**E1. What you see is what you grip.** *(depends on #3465)*
+*Pitch:* visor water follows the wetness the tyres actually feel at the car's arc
+`s` (from `RainCells`/spatial wetness), not a global ramp. You drive into the
+shower and the lens fills; you leave it and the lens clears.
+*Why:* the top F1 25 weather complaint is visuals that do not match grip (links
+above).
+*Today:* #3465 `Droplets` reads `frame.rain` (global). `RainCells` already gives
+local wetness.
+*Change:* pass the car's local wetness into the droplet tick next to `frame.rain`,
+spawning by local value.
+*Files:* `js/fx/droplets.js`, the frame object `js/game.js` builds.
+*Effort:* S. *Risk:* none. Visual-only, and it reads surface state, which is the
+legitimate "surface" column.
+*Phone fit:* respects `CAP_PHONE = 40`.
+*Score:* 3 × 4 ÷ 1 = **12**.
+
+**E2. Tear-offs: a limited stack you pull with a swipe.** *(depends on #3465)*
+*Pitch:* grime, rubber, bugs and a wet film build up on the visor. A swipe down
+across the top of the screen pulls a tear-off for an instant clear view. You get
+4 in the dry and 8 in the wet, and running out means racing with a dirty lens.
+*Why:* this is a real racecraft ritual (GPFans, F1-fansite). It is a one-gesture
+phone mechanic, and the visor lab makes it look right.
+*Today:* #3465 visor plus beads, with no build-up layer and no tear-off.
+*Change:* a slowly accumulating film (a CSS layer over `#hud::before`, driven by
+laps, off-track excursions and spray exposure), a tear-off counter, a swipe
+gesture on helmet and cockpit cameras, and a radio line when one is left.
+*Files:* #3465's `helmet-visor.css`, `js/fx/droplets.js`, `js/input/` (gesture).
+*Effort:* M. *Risk:* visual only. The swipe zone must not collide with the steer
+zones (input-controls).
+*Score:* 4 × 4 ÷ 2 = **8**.
+
+**E3. Spray that matters.** *(on the tip, and stronger with #3465)*
+*Pitch:* in the wet, following within about 30 m puts you in the car ahead's
+rooster tail. Spray hides it, your lens floods, and pulling out of line clears
+both. AI drivers in spray lose some awareness too (AI-only).
+*Why:* the "spray absent" complaint is F1 25's most specific weather gap (EA
+forum). Wet racecraft is about this decision.
+*Today:* `particles.js` `sprayCars`/`sprayRate` render spray. `AiDrive` has an
+awareness axis. Droplets do not react to a car ahead.
+*Change:* scale droplet spawn (#3465) and spray density by the gap and lateral
+offset to the car ahead (`TOW_RANGE`/`TOW_HALF_W` box), and lower AI awareness in
+another car's spray.
+*Files:* `js/fx/particles.js`, `js/fx/droplets.js`, `js/physics/ai-drive.js`.
+*Effort:* M. *Risk:* the player side is visual only. The AI side is the AI-only
+column.
+*Score:* 4 × 4 ÷ 2 = **8**.
+
+**E4. Twilight races: the sun sets during the race.** *(on the tip)*
+*Pitch:* Bahrain, Abu Dhabi and Singapore start at dusk and finish under
+floodlights, with the light preset easing dusk to night over the race and lamps
+coming up.
+*Why:* real F1 twilight races are a signature look, and the game already has both
+end states.
+*Today:* fixed `day/dawn/dusk/night` presets (`LightPresets`) and the floodlight
+dusk/night gate. No ToD progression was found.
+*Change:* a race-clock-driven blend between two presets, plus the lamp gate on the
+blended sun height.
+*Files:* `js/lighting/presets.js` consumers (`js/lighting/atmosphere.js`),
+`js/race/weather-arc.js` (the clock owner).
+*Effort:* M. *Risk:* lighting per-frame cost on the phone. Measure with
+`tools/lighting/ab-lighting.mjs`.
+*Score:* 4 × 3 ÷ 2 = **6**.
+
+**E5. Visor choice as a pre-race call.** *(depends on #3465)*
+*Pitch:* pick CLEAR or SMOKE, or "smoke tear-off over clear", in race setup. Smoke
+cuts low-sun glare (E6) but darkens night; the combo lets you strip to clear when
+the light goes (pairs with E4).
+*Why:* the drivers' real tinted-over-clear trick (F1Technical thread, a fan
+source).
+*Today:* #3465 visor options live in cockpit settings, not in race setup.
+*Change:* a race-setup row, plus one "smoke" tear-off in the E2 stack.
+*Effort:* S, after E2. *Score:* 2 × 3 ÷ 1 = **6**.
+
+**E6. Low-sun glare corners.** *(on the tip, and stronger with #3465)*
+*Pitch:* at dawn and dusk, the corners where you drive into the sun bloom and
+flare. You learn those braking points, and a smoke visor softens it.
+*Why:* it gives dawn and dusk races a reason to exist. Lens flare and bloom
+already ship.
+*Today:* the LENS FLARE knob and per-ToD presets. Glare is not keyed to the heading
+against the sun.
+*Change:* modulate flare and exposure by the dot product of camera forward and sun
+direction, scaled by visor tint (#3465 `--visor-opacity`).
+*Files:* `js/render/shared/post-common.js`, `js/lighting/knobs.js`.
+*Effort:* M. *Risk:* visual only. It must stay readable for accessibility
+(reduced flare under `prefers-reduced-motion`/high contrast).
+*Score:* 3 × 3 ÷ 2 = **4.5**.
+
+**E7. Track evolution: grip rubbers in.** *(on the tip)*
+*Pitch:* a dry session starts green and gains grip as laps are run, so Q3 is
+faster than Q1. Rain washes the rubber off.
+*Why:* real F1 track evolution, and it gives knockout qualifying (idea 15) its
+"go out late" tension.
+*Today:* no rubbering-in found. Surface grip comes from wetness and tyres.
+*Change:* a session-level grip scalar on dry surface μ, ramped by total laps
+driven and reset by the wetness from `WeatherArc`.
+*Files:* `js/physics/tyre-model.js` or surface μ, `js/race/weather-arc.js`.
+*Effort:* M. *Risk:* this is a physics change under the characterization gate. It
+is a surface column, not curvature.
+*Score:* 3 × 3 ÷ 2 = **4.5**.
+
+**E8. Fog that changes driving.** *(on the tip)*
+*Pitch:* fog shortens sight distance, so marshal light panels and the brake boards
+become your references. An optional, assist-gated spotter call names the next
+brake board.
+*Today:* `fog` is a valid weather (`WeatherArc.VALID`) and `js/race/marshal-panels.js`
+exists.
+*Change:* tie fog density to the sight distance in metres, make the panels emissive
+in fog, and add an assist-gated brake-board audio cue.
+*Effort:* S. *Risk:* the cue is derived from track geometry, so it MUST sit in the
+assist-gated column.
+*Score:* 2 × 3 ÷ 1 = **6**.
+
+**E9. Visor misting at low speed.** *(depends on #3465)*
+*Pitch:* in cold, wet conditions the lens mists while slow (pit lane, safety car)
+and clears with airflow above about 120 km/h.
+*Effort:* M. *Score:* 2 × 3 ÷ 2 = **3**. This is cosmetic only and stays low on the
+list.
+
+**Ranking in this section:** E1 (12), then E2/E3 (8), then E4/E5/E8 (6). Neither
+E1 nor E2 *beats* the current top 10 under the tie rule. E1 ties the 3-impact
+items at 12, and E2 ties pit-wall calls at 8 with the same impact. So they take
+the next two places (P11, P12) with their own issue drafts below. If Bryce wants
+the lens work first, E1 is the S-sized way in: it lands the day #3465 merges.
+
 **Not proposed, with the reason:**
 
 - **Reverse grid:** already shipped as the `rev10`/`revchamp` grid rules.
@@ -479,8 +651,12 @@ weekend.
 | 9 | Knockout qualifying (15) | 5 | 4 | M | 10 | `js/race/quali-model.js`, `js/ui/quali-sheet.js` |
 | 10 | Pit-wall calls (16) | 4 | 4 | M | 8 | `js/race/engineer.js`, `pit-lane.js` |
 
+| 11 | Lens shows local wetness (E1, needs #3465) | 3 | 4 | S | 12 | `js/fx/droplets.js` |
+| 12 | Tear-offs (E2, needs #3465) | 4 | 4 | M | 8 | #3465's `helmet-visor.css`, `js/fx/droplets.js`, `js/input/` |
+
 Next in line, all at score 8 or 12: Rivals and nemesis (19), mid-season
-regulations (21), Make History (8), pass-and-play (7) and practice programmes (20).
+regulations (21), Make History (8), pass-and-play (7), practice programmes (20)
+and spray that matters (E3).
 
 ## Ready-to-file issue drafts (top 10)
 
@@ -606,6 +782,32 @@ decision is executed. Source §16.
 - [ ] Both choices and the timeout behave as specified. Netplay is per-client.
 - [ ] A spec forces an SC through `__apex` and asserts the prompt and the BOX
       outcome.
+
+### 11. Helmet lens water follows the local wetness at the car (needs #3465)
+**Body.** After #3465 merges, `Droplets` should spawn from the wetness at the car's
+`s` (`RainCells`/spatial wetness), not only the global `frame.rain` ramp. Driving
+into a localised shower fills the lens, and leaving it lets the lens drain. This
+is visual only. Source §E1.
+**Acceptance.**
+- [ ] With a rain cell covering only part of the lap, the droplet spawn rate follows
+      the car's position (unit test on the spawn-rate function with a stub
+      wetness).
+- [ ] No change to grip or physics, and the phone cap holds.
+- [ ] An A/B pair captured with #3465's `ab-gallery.mjs`, inside and outside the
+      cell.
+
+### 12. Visor tear-offs: a limited stack, pulled with a swipe (needs #3465)
+**Body.** A film builds on the helmet visor over laps, off-track excursions and
+spray. A swipe down across the top band pulls a tear-off and clears it. The stack
+holds 4 in the dry and 8 in the wet, and the engineer calls the last one. Applies
+to helmet and cockpit cameras only. Source §E2.
+**Acceptance.**
+- [ ] The film's opacity is a pure function of exposure (unit test). A tear-off
+      resets it and decrements the stack.
+- [ ] The swipe works at 844×390 touch without stealing steer, throttle or brake
+      touches.
+- [ ] Reduced motion and GRAPHICS LOW keep a static, lighter film.
+- [ ] Visual only, with no physics read.
 
 ## Sources
 
