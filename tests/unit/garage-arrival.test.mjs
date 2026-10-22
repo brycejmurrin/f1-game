@@ -1250,7 +1250,9 @@ test('slow GPU: arrival and the inert sheet end on wall time, not frame count (#
     while (arrival.state.active && frames < 10000) { clock.t += frameS; arrival.step(0.1); frames++; }
     const wall = frames * frameS, want = Arrival.duration(cfg);
     assert.equal($('cs-inner').inert, false, `inert released at ${frameS}s frames`);
-    assert.ok(wall <= want + frameS + 1e-9, `${frameS}s frames: sheet inert ${wall.toFixed(1)}s of wall time, authored ${want.toFixed(1)}s`);
+    // one frame seeds the clock, and a frame credits at most 2.5 s (MAX_GAP_S)
+    const bound = (Math.ceil(want / Math.min(frameS, 2.5)) + 1) * frameS;
+    assert.ok(wall <= bound + 1e-9, `${frameS}s frames: sheet inert ${wall.toFixed(1)}s of wall time, authored ${want.toFixed(1)}s`);
   }
 });
 test('slow GPU clock: a suspended-tab gap still cannot swallow the arrival (#3511)', () => {
@@ -1259,4 +1261,13 @@ test('slow GPU clock: a suspended-tab gap still cannot swallow the arrival (#351
   arrival.start(); clock.t += 600; arrival.step(0.1);
   assert.equal(arrival.state.active, true); assert.equal($('cs-inner').inert, true);
   clock.t += 2; arrival.step(0.1); assert.equal(arrival.state.active, true);
+});
+test('a slow entry frame or a short hitch cannot skip the arrival (#3511 review)', () => {
+  const { $ } = harness(), clock = { t: 0 };
+  const arrival = Arrival.create($, () => false, () => Arrival.DEFAULT, () => clock.t);
+  arrival.start(); clock.t += 6; arrival.step(0.1);   // the entry frame took 6 s (pack upload)
+  assert.ok(arrival.state.seconds <= 0.1 + 1e-9, `entry frame credited ${arrival.state.seconds}s`);
+  clock.t += 5; arrival.step(0.1);                     // a 5 s app switch mid-arrival
+  assert.ok(arrival.state.seconds <= 0.1 + 2.5 + 1e-9, `hitch credited ${arrival.state.seconds}s`);
+  assert.equal(arrival.state.active, true);
 });

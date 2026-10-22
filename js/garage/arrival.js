@@ -184,6 +184,9 @@ const GarageArrival = (function () {
     return shot({ active: t < end, serviceTime: t, seconds: t, direction: "out", calm, crewClear: ease((t - (DOOR_S + OUT_HOLD + delay - .3)) / .3), crew: config.leaveCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
       label: delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm);
   }
+  // The most one frame gap may credit: a slow GPU's 1–2 s frames play in real
+  // time, while one hitch (a pack upload, a short app switch) cannot skip the show
+  const MAX_GAP_S = 2.5;
   function wallNow() { try { return performance.now() / 1000; } catch (_) { return 0; } }
   function create($, reducedMotion, readSettings = () => DEFAULT, clock = wallNow) {
     let state = null, time = 0, config = DEFAULT, last = 0;
@@ -203,7 +206,7 @@ const GarageArrival = (function () {
     }
     function start() {
       config = settings(readSettings());
-      time = 0; last = clock(); state = pose(0, config);
+      time = 0; last = 0; state = pose(0, config);   // seeded at the first step: the entry frame's own cost is not show time
       if (!config.enabled || reducedMotion()) { finish(); return; }
       label.textContent = state.label;
       chrome(true); skip.focus({ preventScroll: true });
@@ -216,11 +219,12 @@ const GarageArrival = (function () {
         // drive-out's slow-motion bug (setup-camera.js stepDriveOut) again.
         // One gap longer than the whole arrival is a suspended or hidden tab,
         // not a frame of the show (bound after Merlin's #3546): it keeps the
-        // 0.1 s bound, so a background tab still cannot swallow the arrival.
+        // 0.1 s bound, so a background tab still cannot swallow the arrival;
+        // a shorter one credits at most MAX_GAP_S.
         const now = clock(), gap = last ? now - last : 0;
         last = now;
         const capped = Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0));
-        time += Math.max(capped, gap > 0 && gap <= duration(config) / config.speed ? gap : 0) * config.speed;
+        time += Math.max(capped, gap > 0 && gap <= duration(config) / config.speed ? Math.min(gap, MAX_GAP_S) : 0) * config.speed;
         state = pose(time, config);
         if (label.textContent !== state.label) label.textContent = state.label;
         if (!state.active) finish();
