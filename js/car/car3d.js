@@ -2874,9 +2874,8 @@ const Car3D = (function () {
     const info = out.flapInfo;
     if (!info) return out;
     for (const el of aeroFlapsGeom(info.aLvl, info.style)) {
-      // The livery finish rides flapInfo: build()'s own paint->finish remap
-      // runs before these flaps are appended, so without it a satin/chrome
-      // car got gloss top flaps from this path.
+      // flapInfo carries finish: build()'s paint→finish remap runs before append;
+      // without it satin/chrome cars got gloss top flaps here.
       const g = buildFlapGeom(el, info.col, info.finish, info.surface);
       const base = out.pos.length / 3;
       for (let i = 0; i < g.pos.length; i += 3) {
