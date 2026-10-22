@@ -42,7 +42,7 @@ const GLXBackend = (function () {
   // private / quota). Without it, both the loss timer and the restore reload
   // bailed, leaving a restored context with _ctxLost still set — a silent
   // dead canvas. In-memory only, so a real new visit still gets two attempts.
-  let _sessLostN = 0; const _fallbackLossCount = () => { try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { return 0; } };
+  let _sessLostN = 0; const _fallbackLossCount = () => { try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { return 0; } };
   // GPU error counter — WebGL has no onuncapturederror, so drain getError() once
   // per present. Exists because the real-GPU gate read null here and passed
   // vacuously: docs/PERF-FINDINGS.md 2e.
@@ -571,7 +571,7 @@ const GLXBackend = (function () {
       // xrCompatible only when navigator.xr (task 20); omit otherwise (Safari/SwiftShader).
       ...(typeof navigator !== "undefined" && navigator.xr ? { xrCompatible: true } : {}),
     });
-    if (!gl) return false; try { setTimeout(function () { if (/^apex26\\.ctxLostReloads=\\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
+    if (!gl) return false; try { setTimeout(function () { if (/^apex26\.ctxLostReloads=\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
     if (Soft.isEnabled()) Soft.ensureSoftDisplay();
 
     // Parallel shader compile (Chrome 76+, Safari 14.1+; not Firefox): see link().
@@ -695,7 +695,10 @@ const GLXBackend = (function () {
         _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
         sessionStorage.setItem(_rk, String(_n));
       } catch (_) { _n = Math.max(++_sessLostN, _fallbackLossCount() + 1); try { window.name = "apex26.ctxLostReloads=" + _n; } catch (_) { /* best effort */ } }
-      if (_n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ } }, 1200);
+      if (_n <= 2) setTimeout(function () {
+        try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: menu still loads; the player just gets no explanation */ }
+        try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ }
+      }, 1200);
       else {
         if (typeof window.__apexReportError === "function") window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + _n + " times) — reload to try again, or pick another RENDERER in settings."));
         // Same recovery panel boot uses when GLX.init fails — not only the

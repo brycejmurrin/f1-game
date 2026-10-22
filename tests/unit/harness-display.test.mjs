@@ -75,6 +75,64 @@ test("chromiumArgsForBackend pins unsafe SwiftShader for GLX/TLX", () => {
     "boot timeout must name WebGL / DISPLAY, not a bare waitForFunction");
 });
 
+test("hardware WebGPU launch explicitly selects full Chromium and rejects software or unknown adapters", async () => {
+  const { chromiumLaunchOptionsForBackend, classifyWebGpuAdapter, requireHardwareWebGpu } =
+    await import(pathToFileURL(join(ROOT, "tools/shot/probe-page.mjs")).href);
+  const launch = chromiumLaunchOptionsForBackend("three", { gpu: "hardware" });
+  assert.equal(launch.browserFlavor, "full", "headless-shell builds can lack navigator.gpu");
+  assert.ok(launch.args.includes("--enable-gpu"), "headless Chromium must not force software rendering");
+  assert.ok(launch.args.includes("--enable-unsafe-webgpu"));
+  assert.ok(!launch.args.some((arg) => /swiftshader|lavapipe|use-vulkan=|use-webgpu-adapter=/i.test(arg)),
+    "hardware mode must not pin a software adapter");
+  if (process.platform === "linux") {
+    assert.ok(launch.args.includes("--use-angle=vulkan"), "headless Linux uses Chromium's documented Vulkan setup");
+  } else {
+    assert.ok(!launch.args.some((arg) => /^--use-angle=/.test(arg)), "macOS uses Metal; do not force ANGLE onto Vulkan");
+  }
+  assert.deepEqual(chromiumLaunchOptionsForBackend("three").args,
+    ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"],
+    "existing software default remains unchanged");
+
+  assert.equal(classifyWebGpuAdapter({ info: { vendor: "Apple", architecture: "apple", device: "M4", description: "Apple GPU" }, isFallbackAdapter: false }), "hardware");
+  assert.equal(classifyWebGpuAdapter({ info: { description: "SwiftShader Device (Subzero)" }, isFallbackAdapter: false }), "software");
+  assert.equal(classifyWebGpuAdapter({ info: {}, isFallbackAdapter: false }), "unknown");
+  assert.equal(classifyWebGpuAdapter({ info: { vendor: "NVIDIA", device: "RTX" }, isFallbackAdapter: true }), "software");
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  try {
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: { gpu: { requestAdapter: async () => ({
+      info: { vendor: "Apple", architecture: "apple", device: "M4", description: "Apple GPU" }, isFallbackAdapter: false,
+    }) } } });
+    const page = { evaluate: (fn) => fn() };
+    assert.equal((await requireHardwareWebGpu(page)).verdict, "hardware");
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: { gpu: { requestAdapter: async () => ({
+      info: { description: "SwiftShader Device (Subzero)" }, isFallbackAdapter: false,
+    }) } } });
+    await assert.rejects(async () => requireHardwareWebGpu(page), /hardware WebGPU required; adapter verdict=software/);
+  } finally {
+    if (navigatorDescriptor) Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+    else delete globalThis.navigator;
+  }
+  await assert.rejects(async () => chromiumLaunchOptionsForBackend("three", { gpu: "turbo" }), /gpu must be software or hardware/);
+});
+
+test("Three.js hardware screenshot init selects TLX WebGPU, native presentation and Ultra preset", async () => {
+  const { installProbeInit } = await import(pathToFileURL(join(ROOT, "tools/shot/probe-page.mjs")).href);
+  let init;
+  await installProbeInit({ addInitScript: (fn, args) => { init = { fn, args }; } },
+    { backend: "three", tlxWebgpu: true, hardware: true, ultra: true, motion: true });
+  const local = new Map(), session = new Map();
+  const storage = (map) => ({ setItem: (key, value) => map.set(key, value), removeItem: (key) => map.delete(key), getItem: (key) => map.get(key) ?? null });
+  const window = { addEventListener() {} };
+  const vm = await import("node:vm");
+  vm.runInNewContext(`(${init.fn.toString()})(args)`, { args: init.args, window,
+    localStorage: storage(local), sessionStorage: storage(session) });
+  assert.equal(local.get("apex26.gfxBackend"), "three");
+  assert.equal(local.get("apex26.tlxForceGL"), "0");
+  assert.equal(local.get("apex26.gfxPreset"), '"ultra"');
+  assert.equal(local.get("apex26.gfxWgxLevel"), "0");
+  assert.equal(session.get("apex26.wgxCapture"), "0");
+});
+
 function fakeChromium({ hang = false, connectFails = false } = {}) {
   const calls = [], browser = new EventEmitter();
   const child = { pid: 12345, exitCode: null, signalCode: null,

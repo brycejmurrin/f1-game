@@ -1355,7 +1355,7 @@ const CarDraw = (function () {
       _rigR[0] = ca; _rigR[1] = sa; _rigR[4] = -sa; _rigR[5] = ca;
       M4.mulTo(_rigA, base, _rigT);
       M4.mulTo(_rigB, _rigA, _rigR);
-      G.gfx.draw(getCockpitWheel(deps.resolveLivery(c.team), wheelStyle), _rigB, opt);   // style + livery keyed: team grips/marker/gloves
+      G.gfx.draw(getCockpitWheel(deps.resolveLivery(c.team), wheelStyle), _rigB, CarMesh.cockpitWheelOpts(opt));   // style + livery keyed: team grips/marker/gloves; finish opts (B·H33)
       // No forearm sleeves (CarMesh.drawForearms): the tubes from the cuffs to
       // the bottom of the frame read as pipes on the wheel (user, 2026-10-04).
       // A wheel with no screen (CLASSIC) has nowhere to show the readouts: the

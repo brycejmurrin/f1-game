@@ -57,6 +57,9 @@ const Collide = (() => {
     return t * t * (3 - 2 * t);                // smoothstep, C1 at both ends
   }
   // Support half-widths of one car along the tangent / across it.
+  // Deploy tip added k===0 early returns on extLong/extLat; this PR replaced
+  // those AABB helpers with oriented extentAngle — yawMix==0 still yields
+  // ea=0 → cos=1/sin=0 → HL/WL pair extents (same bit-identical unyawed field).
   function extentAngle(c) {
     const psi = c.human ? (c.yawVis || 0) : 0;
     return psi * yawMix(psi);

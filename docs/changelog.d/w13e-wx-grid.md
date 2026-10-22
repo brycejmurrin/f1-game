@@ -1,0 +1,1 @@
+New: Agents can measure weather×time lighting with `tools/shot/wx-grid.mjs` — a 24-cell grid (dry/wet/rain/storm/overcast/fog × dawn/day/dusk/night) plus `luminance.json` for the lighting lane baseline.

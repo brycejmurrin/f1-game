@@ -67,6 +67,39 @@ test("WATCH director buttons include their visible labels in their accessible na
   t.ui.stop();
 });
 
+test("WATCH event availability writes only on change and updates at both seek boundaries", () => {
+  const t = setup({ raf: false, events: [
+    { t: 18, lap: 1, text: "First event" }, { t: 50, lap: 2, text: "Last event" },
+  ] });
+  const prev = t.find("prev"), next = t.find("next"), writes = [];
+  for (const [key, el] of [["prev", prev], ["next", next]]) {
+    let value = el.disabled;
+    Object.defineProperty(el, "disabled", {
+      get: () => value,
+      set(v) { writes.push([key, v]); value = v; },
+    });
+  }
+  assert.equal(prev.disabled, true); assert.equal(next.disabled, false);
+  for (let i = 0; i < 100; i++) t.ui.tick(0.1);
+  assert.deepEqual(writes, [], "a paused replay must not mutate unchanged disabled attributes");
+  t.state.T = 11; t.ui.paint();
+  assert.deepEqual(writes, [], "the previous event is unavailable at the exact one-second margin");
+  t.state.T = 11.01; t.ui.paint();
+  assert.deepEqual(writes, [["prev", false]], "crossing the previous-event boundary enables it immediately");
+  t.state.T = 41; t.ui.paint();
+  assert.deepEqual(writes, [["prev", false], ["next", true]], "the final event disables NEXT at the exact margin");
+  t.state.T = 40.99; t.ui.paint();
+  assert.deepEqual(writes.at(-1), ["next", false], "a rewind re-enables NEXT immediately");
+  t.state.T = 0; t.ui.paint();
+  assert.deepEqual(writes.at(-1), ["prev", true], "a rewind before the first event disables PREVIOUS");
+  writes.length = 0;
+  t.state.follow = "OTHER"; t.state.reel = 2; t.state.reelIdx = 1;
+  t.state.broadcast.locked = true; t.state.paused = false;
+  for (let i = 0; i < 50; i++) t.ui.tick(0.1);
+  assert.deepEqual(writes, [], "follow, reel, director and play-state changes preserve unchanged availability");
+  t.ui.stop();
+});
+
 test("50 scrub `input` events cost at most one seek (one paint) before the next frame", () => {
   const t = setup({ raf: true });
   assert.equal(t.find("event").textContent, "RACE IN PROGRESS", "a replay without highlight events has not finished");

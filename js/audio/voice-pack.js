@@ -111,6 +111,7 @@ var VoicePack = (() => {
   function create(G, opts) {
     const base = (opts && opts.base) || "assets/voice/";
     const voices = {};   // id -> { state, man, bin, cache: Map, gen, failedAt }
+    const wanted = new Set(); // latest keep/ensure intent, including queued tiers
     // The transmissions playing, ONE PER CHANNEL: the engineer preempting the
     // engineer is a replacement, but an engineer line must never cut a spotter
     // call mid-word (and the spotter never speaks over the engineer — it asks
@@ -123,6 +124,7 @@ var VoicePack = (() => {
     }
     /** Start fetching a voice. Idempotent; never throws; boot never waits on it. */
     function ensure(id) {
+      wanted.add(id);
       const v = voice(id);
       if (v.state === "failed" && Date.now() - v.failedAt > RETRY_MS) v.state = "idle";
       if (v.state !== "idle" || typeof fetch !== "function") return v.state;
@@ -158,7 +160,10 @@ var VoicePack = (() => {
           Log.info("audio", "VoicePack " + id + " ready: " + Object.keys(man.clips).length + " clips");
         })
         .catch((e) => { v.state = "failed"; v.failedAt = Date.now(); Log.info("audio", "VoicePack " + id + " unavailable: " + (e && e.message)); })
-        .finally(() => clearTimeout(timer));
+        .finally(() => {
+          clearTimeout(timer);
+          if (!wanted.has(id) && voices[id] === v) delete voices[id];
+        });
       return v.state;
     }
     /** Lap-1 radio: the engineer and spotter share one pack; it must win bandwidth
@@ -174,6 +179,7 @@ var VoicePack = (() => {
         for (const id of tier || []) {
           if (!id || seen.has(id)) continue;
           seen.add(id);
+          wanted.add(id);
           ids.push(id);
         }
         if (ids.length) uniq.push(ids);
@@ -181,8 +187,11 @@ var VoicePack = (() => {
       if (!uniq.length) return;
       const run = async () => {
         for (const tier of uniq) {
-          for (const id of tier) ensure(id);
-          await Promise.all(tier.map((id) => (voice(id).loading || Promise.resolve())));
+          // A selection change can retire a queued tier before its predecessor
+          // settles. Only a later explicit ensure/ensureStaged may revive it.
+          const ids = tier.filter((id) => wanted.has(id));
+          for (const id of ids) ensure(id);
+          await Promise.all(ids.map((id) => (voice(id).loading || Promise.resolve())));
         }
       };
       run();
@@ -297,12 +306,15 @@ var VoicePack = (() => {
     }
 
     /** Drop every pack not named in `keep` (its .bin and decoded clips), so a
-     *  voice tried once does not stay resident all session (#3110). A pack still
-     *  loading is kept; a dropped one is fetched again by the next ensure(). */
+     *  voice tried once does not stay resident all session (#3110). An unwanted
+     *  pending pack drops when it settles unless kept or requested again; queued
+     *  tiers check the same intent before starting their fetches. */
     function releaseExcept(keep) {
-      const k = new Set(keep || []);
+      wanted.clear();
+      for (const id of keep || []) wanted.add(id);
       for (const id of Object.keys(voices)) {
-        if (!k.has(id) && voices[id].state !== "loading") delete voices[id];
+        const v = voices[id];
+        if (!wanted.has(id) && v.state !== "loading") delete voices[id];
       }
     }
 

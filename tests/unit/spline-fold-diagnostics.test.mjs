@@ -48,6 +48,21 @@ const digest = (tr) => {
 };
 const centre = (def) => T.buildCenterline(def, { line: false });
 
+test("sampleXZ is exact on the Frenet channels and leaves unused channels untouched", () => {
+  const tr = { n: 7, total: 29.3 };
+  for (const [j, key] of ["px", "py", "pz", "tx", "ty", "tz", "rx", "ry", "rz", "hw"].entries())
+    tr[key] = Float64Array.from({ length: tr.n }, (_, i) => Math.sin(i * 0.81 + j) * (j + 1));
+  const out = { p: [0, 123, 0], r: [0, 456, 0], t: [7, 8, 9], hw: 789 };
+  const full = { p: [0, 0, 0], r: [0, 0, 0], t: [0, 0, 0], hw: 0 };
+  for (const s of [-1e8, -tr.total, -0.0001, -0, 0, 1e-8, 8.7, tr.total, 1e8]) {
+    S.sample(tr, s, full);
+    assert.equal(S.sampleXZ(tr, s, out), out);
+    for (const key of ["p", "r"]) for (const k of [0, 2]) assert.ok(Object.is(out[key][k], full[key][k]));
+    assert.equal(out.p[1], 123); assert.equal(out.r[1], 456);
+    assert.deepEqual(out.t, [7, 8, 9]); assert.equal(out.hw, 789);
+  }
+});
+
 // A synthetic ring of n nodes, radius R, half-width hw: the exact fold/radius case.
 function ring(R, hw, n = 90) {
   const t = { n, px: new Float32Array(n), pz: new Float32Array(n), rx: new Float32Array(n), rz: new Float32Array(n), hw: new Float32Array(n).fill(hw) };

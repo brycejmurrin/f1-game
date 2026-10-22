@@ -119,6 +119,7 @@ const WatchTransport = (function () {
     const setText = (el, v) => { if (el.textContent !== v) el.textContent = v; };
     const setAttr = (el, k, v) => { if (el.getAttribute(k) !== v) el.setAttribute(k, v); };
     const setVal = (el, v) => { if (el.value !== v) el.value = v; };
+    const setDisabled = (el, v) => { if (el.disabled !== v) el.disabled = v; };
     function paint() {
       if (!root) return;
       const s = replay.status(); if (!s) { stop(); return; }
@@ -152,8 +153,8 @@ const WatchTransport = (function () {
       const current = desc.events.find((e) => e.t >= s.T - 5);
       setText(refs.event, current ? (current.t > s.T ? "NEXT · " : "") + "L" + current.lap + " · " + current.text : s.finished ? "CHEQUERED FLAG" : "RACE IN PROGRESS");
       const lead = typeof RealReplay !== "undefined" ? RealReplay.LEAD_S : 8;
-      refs.prev.disabled = !desc.events.some((e) => Math.max(desc.startT || 0, e.t - lead) < s.T - 1);
-      refs.next.disabled = !desc.events.some((e) => Math.max(desc.startT || 0, e.t - lead) > s.T + 1);
+      setDisabled(refs.prev, !desc.events.some((e) => Math.max(desc.startT || 0, e.t - lead) < s.T - 1));
+      setDisabled(refs.next, !desc.events.some((e) => Math.max(desc.startT || 0, e.t - lead) > s.T + 1));
     }
     function stop() {
       if (root) root.remove(); root = null; refs = {}; desc = null; scrubbing = false; tickAt = 0; pendingSeek = null;

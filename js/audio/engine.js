@@ -209,6 +209,15 @@ var GameAudio = (function () {
     p.setTargetAtTime(target, t, tau);
     p._apexAimTgt = target;
   }
+  // Keep pitch/cutoff moving through the mute ramp. After ten time constants
+  // its tail is below -86 dB relative; a disabled layer needs no more writes.
+  // The deadline starts on its first muted frame, not at the UI click, and
+  // lives on the graph so rapid toggles and fresh engines cannot reuse it.
+  function layerMoving(node, on, t, tau) {
+    if (on) { node._apexMuteUntil = undefined; return true; }
+    if (node._apexMuteUntil === undefined) node._apexMuteUntil = t + 10 * tau;
+    return t < node._apexMuteUntil;
+  }
   let engineOn = false;
   let engineActionGeneration = 0;   // every explicit start/stop transfers engine ownership
   // Node batches from stopEngine() that still sit on sfxBus until their
@@ -1860,7 +1869,7 @@ var GameAudio = (function () {
     // and both swings share the one param: base - limDepth is what is left.
     if (gravOsc && gravGain) {
       const gravF = Math.max(18, Math.min(140, f0 / 3));
-      if (Math.abs((gravOsc.frequency._apexHz ?? -1) - gravF) > 0.5) {
+      if (layerMoving(gravGain, layers.gravel, t, 0.05) && Math.abs((gravOsc.frequency._apexHz ?? -1) - gravF) > 0.5) {
         gravOsc.frequency.setTargetAtTime(gravF, t, 0.05);
         gravOsc.frequency._apexHz = gravF;
       }
@@ -1873,7 +1882,8 @@ var GameAudio = (function () {
     // speed lift the 2026 electric layer so BOOST reads as half the power unit.
     const deploy01 = clamp01(ph.deploy != null ? ph.deploy : b);
     const lowGearFactor = g01 < 0.35 ? 0.85 + g01 * 0.43 : 1;   // compressed range in low gears
-    aimParam(whineOsc.frequency, (voice.whineHz + rev * 2000 + deploy01 * 700 + s * deploy01 * 900) * lowGearFactor, t, 0.05, 1e-4);
+    if (layerMoving(whineGain, layers.whine, t, 0.08))
+      aimParam(whineOsc.frequency, (voice.whineHz + rev * 2000 + deploy01 * 700 + s * deploy01 * 900) * lowGearFactor, t, 0.05, 1e-4);
     aimGain(whineGain,
       layers.whine ? (0.004 + rev * 0.013 + deploy01 * 0.011 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.50 : 1)
         * voice.whineLvl * tune.whine * (1 + 0.55 * deploy01 * (0.3 + 0.7 * s)) : 0, t, 0.08);
@@ -1890,7 +1900,7 @@ var GameAudio = (function () {
     if (subOctGain && subOctOsc) {
       const f0 = enginePeriod > 1 ? (ctx.sampleRate * lastRate) / enginePeriod : 0;
       const subF = Math.max(25, Math.min(240, f0 * 0.5));
-      if (subOctOsc._apexSubF !== subF) { subOctOsc.frequency.setTargetAtTime(subF, t, 0.05); subOctOsc._apexSubF = subF; }
+      if (layerMoving(subOctGain, layers.sub, t, 0.08) && subOctOsc._apexSubF !== subF) { subOctOsc.frequency.setTargetAtTime(subF, t, 0.05); subOctOsc._apexSubF = subF; }
       aimGain(subOctGain, layers.sub
         ? (0.012 + rev * 0.016 + b * 0.006) * (s > 0.04 ? 1 : 0) * voice.subLvl * tune.sub
         : 0, t, 0.08);
@@ -1948,14 +1958,16 @@ var GameAudio = (function () {
     const harvGainScale = usingSamples ? 0.035 : 0.06;
     const coastMix = harvLevel > 1e-6 ? (harvCoastLevel * coastW) / harvLevel : 0;
     // MGU-K harvest: braking decel stays loud; lift-and-coast is softer and brighter.
-    aimGain(harvGain, layers.harvest ? harvLevel * harvGainScale * tune.harvest : 0, t, 0.06);
-    aimParam(harvFilter.frequency, 680 + s * 1500 + coastMix * 420, t, 0.08, 1e-4);
-    if (harvFilter._apexQ == null) harvFilter._apexQ = harvFilter.Q.value;
-    const harvQ = 6 - coastMix * 2.4;
-    if (Math.abs((harvFilter._apexHarvQ ?? -1) - harvQ) > 0.08) {
-      aimParam(harvFilter.Q, harvQ, t, 0.12, 0.05);
-      harvFilter._apexHarvQ = harvQ;
+    if (layerMoving(harvGain, layers.harvest, t, 0.06)) {
+      aimParam(harvFilter.frequency, 680 + s * 1500 + coastMix * 420, t, 0.08, 1e-4);
+      if (harvFilter._apexQ == null) harvFilter._apexQ = harvFilter.Q.value;
+      const harvQ = 6 - coastMix * 2.4;
+      if (Math.abs((harvFilter._apexHarvQ ?? -1) - harvQ) > 0.08) {
+        aimParam(harvFilter.Q, harvQ, t, 0.12, 0.05);
+        harvFilter._apexHarvQ = harvQ;
+      }
     }
+    aimGain(harvGain, layers.harvest ? harvLevel * harvGainScale * tune.harvest : 0, t, 0.06);
 
     // ERS deploy whine: only while the battery is actually deploying (game.js
     // passes deploy/energy through the physics arg). Level scales with charge —
@@ -1990,12 +2002,12 @@ var GameAudio = (function () {
         ? (0.005 + 0.010 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias * tune.boost
           * (0.42 + 0.58 * Math.max(s, 0.04))
         : 0;
+      if (layerMoving(ersGain, layers.ers, t, 0.10) && deploy > 0)
+        aimParam(ersOsc.frequency, (720 + deploy * 600) * (0.88 + 0.12 * low), t, 0.06, 1e-4);
       if (ersGain._apexErsTgt !== ersLvl) {
         ersGain.gain.setTargetAtTime(ersLvl, t, deploy > 0 ? 0.05 : 0.10);
         ersGain._apexErsTgt = ersLvl;
       }
-      if (deploy > 0)
-        aimParam(ersOsc.frequency, (720 + deploy * 600) * (0.88 + 0.12 * low), t, 0.06, 1e-4);
     }
 
     // Part-throttle ICE harvest and full-pack regen clip: a shallow ignition cut.
@@ -2018,10 +2030,11 @@ var GameAudio = (function () {
     const gust = harvLevel;
     const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
     const tow = clamp01(ph.tow || 0);
+    if (layerMoving(windGain, layers.wind, t, 0.10))
+      aimParam(windFilter.frequency, wf.hz + rough * 260, t, 0.12, 1e-4);
     aimGain(windGain,
       layers.wind ? wf.gain * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen * tune.wind * camMix.wind : 0,
       t, 0.10);
-    aimParam(windFilter.frequency, wf.hz + rough * 260, t, 0.12, 1e-4);
 
     // BRAKES (see startEngine). Level follows how hard the car is stopping
     // (brakeFrac: PhysicsConsts.BRAKE is the full pedal) and how fast it is going — the
@@ -2945,7 +2958,7 @@ var GameAudio = (function () {
   // while the player is on the pace — the overrun crackle above learned that
   // the hard way (`if (t > overrunT) overrunT = t`).
   function assistPlaybackQuiet() {
-    return typeof RealRace !== "undefined" && RealRace.status && !!RealRace.status().watch;
+    return typeof RealRace !== "undefined" && RealRace.isWatch && RealRace.isWatch();
   }
   function brakeCue(urgency) {
     cueU = urgency > 0 ? Math.min(urgency, 1) : 0;

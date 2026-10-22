@@ -14,6 +14,8 @@
    detail.devtools (a track-entry: trackGroup "Apex 26", one named track per phase), so the
    Chrome Performance panel's Timings lane shows physics / audio / render / hud on their own
    tracks (developer.chrome.com/docs/devtools/performance/extension); other consumers ignore it.
+   The browser's apex:<span> timeline entries are cleared in batches of RING and on
+   stop/reset: trace recordings and active observers keep their own copies.
 
    LoAF: PerformanceObserver "long-animation-frame" (Chrome 123+), feature-
    detected, the last LOAF_CAP entries with their top scripts. Software-GL
@@ -33,7 +35,14 @@ const PerfSpans = (() => {
     let loafObs = null, loafSupported = null, loaf = [];
 
     function slot(name) {
-      return spans[name] || (spans[name] = { buf: new Float64Array(RING), n: 0, head: 0, max: 0, sum: 0, count: 0, t0: -1 });
+      return spans[name] || (spans[name] = { buf: new Float64Array(RING), n: 0, head: 0, max: 0, sum: 0, count: 0, t0: -1, measures: 0 });
+    }
+    function clearMeasures(name, s) {
+      if (!s.measures || typeof performance === "undefined" || typeof performance.clearMeasures !== "function") return;
+      try { performance.clearMeasures("apex:" + name); s.measures = 0; } catch (_) { /* timeline unavailable */ }
+    }
+    function clearMeasured() {
+      for (const name of Object.keys(spans)) clearMeasures(name, spans[name]);
     }
     function begin(name) {
       if (!on) return;
@@ -45,7 +54,10 @@ const PerfSpans = (() => {
       if (!s || s.t0 < 0) return;
       const t1 = now(), d = t1 - s.t0;
       if (measure && typeof performance !== "undefined" && performance.measure) {
-        try { performance.measure("apex:" + name, { start: s.t0, end: t1, detail: { devtools: { dataType: "track-entry", track: name, trackGroup: "Apex 26", color: TRACK_COLOR[name] || "primary" } } }); } catch (_) { /* a stub clock is not a timeline */ }
+        try {
+          performance.measure("apex:" + name, { start: s.t0, end: t1, detail: { devtools: { dataType: "track-entry", track: name, trackGroup: "Apex 26", color: TRACK_COLOR[name] || "primary" } } });
+          if (++s.measures >= RING) clearMeasures(name, s);
+        } catch (_) { /* a stub clock is not a timeline */ }
       }
       s.t0 = -1;
       s.buf[s.head] = d; s.head = (s.head + 1) % RING;
@@ -90,13 +102,17 @@ const PerfSpans = (() => {
       return out;
     }
     function reset() {
+      clearMeasured();
       for (const name of Object.keys(spans)) delete spans[name];
       loaf = [];
     }
     function setOn(v) {
       on = !!v;
       if (on) observeLoaf();
-      else if (loafObs) { try { loafObs.disconnect(); } catch (_) { /* gone */ } loafObs = null; }
+      else {
+        clearMeasured();
+        if (loafObs) { try { loafObs.disconnect(); } catch (_) { /* gone */ } loafObs = null; }
+      }
       return on;
     }
     return {
@@ -104,7 +120,7 @@ const PerfSpans = (() => {
       begin, end, reset, stats,
       isOn: () => on,
       on: setOn,
-      measure: (v) => { if (v !== undefined) measure = !!v; return measure; },
+      measure: (v) => { if (v !== undefined) { measure = !!v; if (!measure) clearMeasured(); } return measure; },
       loaf: () => ({ supported: loafSupported, entries: loaf.slice() }),
       report: () => ({ on, measure, unit: "ms", ring: RING, spans: stats(), loaf: { supported: loafSupported, entries: loaf.slice() } }),
     };

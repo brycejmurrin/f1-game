@@ -890,7 +890,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.wgxCapture",
   ]);
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
-    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
     // Why this tab's WGX/TLX pick bound WebGL2 (renderer-boot.js, #2285); a
     // RESET must not leave diag() quoting a reason from before it.
@@ -1004,7 +1004,7 @@ test("applyBackend clears session renderer latches before reload", () => {
   // Switching WEBGL2 ↔ THREE ↔ WEBGPU must not inherit wgxHoldPresent /
   // tlxAutoGL from the previous path; RESET already wiped them, a pick did not.
   const latchSeed = Object.fromEntries([
-    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
     "apex26.gfxFallbackWhy",
   ].map((k) => [k, "1"]));
@@ -1023,7 +1023,7 @@ test("applyBackend clears session renderer latches before reload", () => {
 
 test("THREE PATH and SCREENSHOTS clear session renderer latches on reload", () => {
   const latchSeed = Object.fromEntries([
-    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
     "apex26.gfxFallbackWhy",
   ].map((k) => [k, "1"]));
@@ -3226,12 +3226,23 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
   assert.notEqual(drawSky, -1, "drawSky moved");
   assert.match(src.slice(drawSky, drawSky + 1100), /frameSky\.zenith\s*\|\|\s*frameSky\.skyZenith/,
     "drawSky must keep the Color fallback in lockstep with the sky node");
-  // softContent("sky") IS (softwareGL || softGpu()), with the apex26.tlxForceHw
-  // escape folded in — the fallback stays the software default for players.
+  // softContent("sky") IS softwareGL && !_forceHw.has("sky") (softGpu() is out
+  // on purpose: headless on a real GPU keeps the full sky) — the fallback is
+  // the software default only; apex26.tlxForceHw=sky lifts it.
   assert.match(src.slice(drawSky, drawSky + 1100), /softContent\("sky"\) && sky\.fallbackNode/,
     "software GL and software WebGPU must arm the zenith-only fallback, not the full SKY_FS node");
   assert.match(read("js/render/three/tsl-sky.js"), /fallbackNode/,
     "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
+});
+
+test("B·H26-R2: TLX skyState() tells the zenith-only software fallback from the full sky", () => {
+  // skyState().on is true for both materials, so a software-GL still with no clouds or stars read as a phone gap.
+  const src = read("js/render/three/tlx.js");
+  const at = src.indexOf("skyState() {");
+  assert.notEqual(at, -1, "skyState moved");
+  assert.match(src.slice(at, at + 900),
+    /fallback: !!\(skyMesh && skyMatFallback && skyMatFallback !== skyMatFull && skyMesh\.material === skyMatFallback\)/,
+    "skyState must report whether the armed sky material is the fallback");
 });
 
 test("TLX late sky depth-tests less-equal and does not write depth", () => {
@@ -4754,6 +4765,92 @@ test("WGX SSR consume/march/sinT match GLX (no wetness remul, dry sheen lives)",
     "a merge leftover applied the dry damp twice (and squared the sheen)");
 });
 
+test("LOW SSR retains a bounded, matching march budget across renderers", () => {
+  const glx = read("js/render/glx/shaders/glsl-post.js");
+  const tsl = read("js/render/three/tsl-post.js");
+  const wgx = read("js/render/webgpu/wgsl-post.js");
+  const number = (source, pattern) => { const m = source.match(pattern); assert.ok(m, "LOW shader budget is explicit"); return Number(m[1]); };
+  const budgets = [
+    [number(glx, /int marchSteps = ssrQ > 1\.5 \? (\d+)/), number(glx, /int refineSteps = ssrQ > 1\.5 \? (\d+)/), number(glx, /float stepLen = ssrQ > 1\.5 \? ([\d.]+)/), number(glx, /float stepGrowth = ssrQ > 1\.5 \? ([\d.]+)/)],
+    [number(tsl, /const marchSteps = select\(quality\.greaterThan\(1\.5\), int\((\d+)\)/), number(tsl, /const refineSteps = select\(quality\.greaterThan\(1\.5\), int\((\d+)\)/), number(tsl, /const stepLen = select\(quality\.greaterThan\(1\.5\), float\(([\d.]+)\)/), number(tsl, /const stepGrowth = select\(quality\.greaterThan\(1\.5\), float\(([\d.]+)\)/)],
+    [number(wgx, /let marchSteps = select\(select\(24, 16, roadReduced\), (\d+), roadLow\)/), number(wgx, /let refineSteps = select\(select\(4, 2, roadReduced\), (\d+), roadLow\)/), number(wgx, /if \(roadLow\) \{ stepLen = ([\d.]+); \}/), number(wgx, /if \(roadLow\) \{ stepLen = stepLen \* ([\d.]+); \}/)]
+  ];
+  assert.deepEqual(budgets[1], budgets[0]); assert.deepEqual(budgets[2], budgets[0]);
+  const [march, refine, first, growth] = budgets[0];
+  assert.equal(march, 8); assert.equal(march + refine, 9, "coverage must not quietly restore the expensive HIGH budget");
+  const reach = Array.from({length: march}, (_, i) => first * growth ** i).reduce((a,b) => a+b, 0);
+  assert.ok(reach >= 60 && reach <= 75, "reach the checked distant reflectors with the same bounded march");
+});
+
+test("SSR mask expressions have portable bounds and preserve near/far fades", () => {
+  // Execute production expressions, including their quality-dependent ranges.
+  // The scalar adapter implements only the TSL operations those expressions use.
+  class Scalar {
+    constructor(value) { this.value = Number(value); }
+    valueOf() { return this.value; }
+    mul(other) { return scalar(this.value * other); }
+    oneMinus() { return scalar(1 - this.value); }
+    greaterThan(other) { return this.value > other; }
+    toVar() { return this; }
+  }
+  const scalar = value => new Scalar(value);
+  const vec2 = (x, y) => ({ x: scalar(x), y: scalar(y), toVar() { return this; } });
+  const smoothstep = (edge0, edge1, value) => {
+    assert.ok(Number(edge0) < Number(edge1), `undefined smoothstep bounds: ${edge0}, ${edge1}`);
+    const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+    return scalar(t * t * (3 - 2 * t));
+  };
+  const expression = (source, name) => {
+    const declaration = source.match(new RegExp(`\\b(?:const|let|var|float|vec2)\\s+${name}\\s*=\\s*([^;]+);`));
+    assert.ok(declaration, `missing production expression: ${name}`);
+    return declaration[1];
+  };
+  const backends = [
+    ["GLX", "js/render/glx/shaders/glsl-post.js"],
+    ["TLX", "js/render/three/tsl-post.js"],
+    ["WGX", "js/render/webgpu/wgsl-post.js"]
+  ];
+  for (const [backend, file] of backends) {
+    const source = code(file);
+    const road = expression(source, "roadMask"), car = expression(source, "carMask");
+    for (const near of [-1.0, -2.5]) for (const quality of [0, 1, 2]) {
+      const scope = {
+        smoothstep, vec2, float: scalar,
+        select: backend === "TLX" ? (condition, yes, no) => condition ? yes : no
+          : (no, yes, condition) => condition ? yes : no,
+        uSsrNear: near, ssrNear: near, uSsrQuality: quality, roadQuality: quality,
+        C: { ssrNear: scalar(near), ssrQuality: scalar(quality) },
+        upDot: scalar(1), carPx: scalar(1), roadPx: scalar(1), P: { z: scalar(0) }
+      };
+      const context = vm.createContext(scope);
+      const evaluate = expr => vm.runInContext(expr, context, { timeout: 1000, filename: absSrc(file) });
+      if (backend === "WGX") {
+        scope.roadFadeStart = evaluate(expression(source, "roadFadeStart"));
+        scope.roadFadeEnd = evaluate(expression(source, "roadFadeEnd"));
+      } else scope.roadFar = evaluate(expression(source, "roadFar"));
+      const [start, end] = [[-22, -78], [-18, -60], [-12, -42]][quality];
+      const check = (expr, z, expected) => {
+        scope.P.z = scalar(z);
+        const actual = Number(evaluate(expr));
+        assert.ok(Math.abs(actual - expected) < 1e-12,
+          `${backend}, quality ${quality}, near ${near}, z ${z}: ${actual} != ${expected}`);
+      };
+      for (const [z, expected] of [
+        [near + 1, 0], [near, 0], [near * 1.9, 0.5], [near * 2.8, 1],
+        [start, 1], [(start + end) / 2, 0.5], [end, 0], [end - 1, 0]
+      ]) check(road, z, expected);
+      for (const [z, expected] of [[0, 0], [-1, 0], [-2, 0.5], [-3, 1],
+        [-22, 1], [-38.5, 0.5], [-55, 0], [-56, 0]]) check(car, z, expected);
+      // #3387: porous ground (receiver tag below the road band) never mirrors.
+      scope.roadPx = scalar(0); check(road, -10, 0); scope.roadPx = scalar(1);
+      scope.upDot = scalar(0);
+      check(road, -10, 0); check(car, -10, 0);
+      scope.upDot = scalar(1); scope.carPx = scalar(0);
+      check(car, -10, 0);
+    }
+  }
+});
+
 test("WGX SAA widens roughness before wet like GLX", () => {
   const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const saa = chunks.indexOf("let saaVar = mix(saaVarGeo, saaVarPeel");
@@ -4919,7 +5016,7 @@ test("GLX and TLX road-marking mip use the raw footprint, like WGX", () => {
 
 test("WGX's canvas is opaque too — it writes the same tag with NO gate", () => {
   // The tag is not a TLX idea: WGX writes it from the same GLX lineage —
-  //   return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));
+  //   return vec4<f32>(color, select(worldTag, 0.35, carPaint > 0.001));
   // — and unlike TLX's, that line has no ssrTag gate at all, so EVERY WGX frame
   // carries 0.35 over car paint whether or not anything reads it. What makes
   // that safe is one word in the context configure, and nothing was checking
@@ -4930,7 +5027,9 @@ test("WGX's canvas is opaque too — it writes the same tag with NO gate", () =>
     "WGX must configure an OPAQUE canvas — it tags alpha on every frame");
 
   const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(chunks, /select\(alpha,\s*0\.35,\s*carPaint\s*>\s*0\.001\)/,
+  assert.match(chunks, /let worldTag\s*=\s*select\(alpha,\s*0\.75,\s*porousSurface\s*&&\s*alpha\s*>=\s*1\.0\)/,
+    "opaque porous world surfaces must carry the SSR exclusion tag without changing fractional opacity");
+  assert.match(chunks, /select\(worldTag,\s*0\.35,\s*carPaint\s*>\s*0\.001\)/,
     "the ungated WGX car-paint tag moved — recheck what its canvas opacity is carrying");
 });
 
@@ -4986,11 +5085,10 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
     "lit mrtNode must write packed.a (the 0.35 tag) to the ssrTag attachment");
   assert.match(lit, /function setSsrMrt\(on\)/,
     "env / canvas paths must be able to drop mrtNode");
-  assert.match(lit, /mrtNode \? "-mrt"/,
-    "program key must fork when MRT is armed — one program cannot target both RTs");
+  // Real material/cache-key transitions are exercised in tlx-hunt3.test.mjs.
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   // Re-pointed by perf hunt 3 R3: the attachment is dropped only where tlx.js's _wantTag() says nothing
-  // can read it (phone MEDIUM/LOW); tests/unit/tlx-hunt3.test.mjs builds both shapes.
+  // can read it (eligible phone LOW); tests/unit/tlx-hunt3.test.mjs builds both shapes.
   assert.match(post, /count:\s*tagOn \? 2 : 1/,
     "HDR scene target must allocate the ssrTag colour attachment whenever the tag can be read");
   assert.match(post, /textures\[1\]\.name\s*=\s*"ssrTag"/,
@@ -5648,19 +5746,24 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   } };
   const lit = { setSsrMrt: v => { tag = v; } }, fx = null;
   const pinSkyMaterial = () => {}, _ssrMrtNode = () => "tag", softOutRT = () => null, Log = { warn() {} };
+  const stageBody = fnBody(code("js/render/three/tlx.js"), "runProgramWarmStages");
   const body = fnBody(code("js/render/three/tlx.js"), "startProgramWarm");
   // B-F3.1: the sky show and the mirror stage are helpers the deferred mirror warm shares — evaluated from source too.
   const warmShowSky = eval("(function(){" + fnBody(code("js/render/three/tlx.js"), "warmShowSky") + "})");
   const warmMirrorStage = eval("(async function(usePost, useTag){" + fnBody(code("js/render/three/tlx.js"), "warmMirrorStage") + "})");
-  // Source pins for the same order: exactly one setMRT(null), between the post
+  const drawWarmStage = () => ({}), _gpuSettled = async () => {};
+  // Source pins for the same order: exactly one setMRT(null) in the full warm path, between the post
   // warm and the caster warm, and the caster warm still guarded on the module.
-  const iPost = body.indexOf("await post.warm(opts, _postF)"), iNull = body.indexOf("renderer.setMRT(null)"),
-    iShadow = body.indexOf("shadowSys.warm()");
+  const iPost = stageBody.indexOf("await post.warm(opts, _postF)");
+  const iNull = stageBody.indexOf("renderer.setMRT(null)", iPost);
+  const iShadow = stageBody.indexOf("shadowSys.warm()", iNull);
   assert.ok(iPost > 0 && iNull > iPost && iShadow > iNull, "setMRT(null) must sit between the post warm and the caster warm");
-  assert.equal(body.indexOf("renderer.setMRT(null)", iNull + 1), -1, "startProgramWarm nulls the MRT exactly once");
-  assert.match(body, /if \(warmPlusOn\(\) && shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none or apex26.tlxWarmPlus is not 1");
-  assert.match(body, /post\.warm && \(warmPlusOn\(\) \|\| performance\.now\(\) - _warmAt < 3000\)/, "without tlxWarmPlus=1 the post warm keeps its 3 s gate");
-  const warm = eval("(function(opts){" + body + "})");
+  assert.equal(stageBody.indexOf("renderer.setMRT(null)", iNull + 1), -1,
+    "runProgramWarmStages nulls the MRT exactly once in the full path (the garage-only branch has its own null)");
+  assert.match(stageBody, /if \(warmPlusOn\(\) && shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none or apex26.tlxWarmPlus is not 1");
+  assert.match(stageBody, /post\.warm && \(warmPlusOn\(\) \|\| performance\.now\(\) - _warmAt < 3000\)/, "without tlxWarmPlus=1 the post warm keeps its 3 s gate");
+  const warm = eval("(function(opts){ async function runProgramWarmStages(usePost, useTag, opts, garageSceneOnly){" + stageBody
+    + "} " + body + "})");
   warm({}); await Promise.resolve();
   assert.equal(target, "HDR"); assert.equal(mrt, "tag"); assert.equal(postCalls, 0);
   rejectMain(new Error("transient")); await _warmPending;
@@ -6153,7 +6256,7 @@ test("TLX FX: double-sided FX draw in ONE pass and their programs warm on the st
   for (const pair of [/\[skidStream, fx\.skidMat\]/, /\[partStreams\[0\], fx\.particleMats/, /\[partStreams\[1\], fx\.particleMats/])
     assert.match(body, pair, "the FX warm compiles " + pair + " on its real stream geometry");
   assert.match(body, /ensureStream\(stream, 1\)/, "the stream geometry (its vertex layout) exists before the compile");
-  assert.match(fnBody(tlx, "startProgramWarm"), /await warmFxPrograms\(\);\s*await warmLateLit\(\);/, "startProgramWarm runs the FX warm, then the late lit variants");
+  assert.match(fnBody(tlx, "runProgramWarmStages"), /await warmFxPrograms\(\);\s*await warmLateLit\(\);/, "runProgramWarmStages runs the FX warm, then the late lit variants");
   assert.match(tlx, /const _LATE_LIT = \[\{ roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 0\.5 \}\]/,
     "the brake-ring transparent variant (census 245 minted t,0.9,0,0,0,0,0,1|na) is pre-minted during the lights");
 });

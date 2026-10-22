@@ -248,11 +248,6 @@ const NetSnapshot = (function () {
       return true;
     }
 
-    function splitS(raw) {
-      const laps = Math.floor(raw / total);
-      return { s: raw - laps * total, laps };
-    }
-
     // Extrapolation cannot exceed this share of the car's speed, however hard
     // the last two packets say it was braking. Two samples a jitter apart can
     // imply an absurd rate; at a real 22 m/s^2 a car at 70 m/s sheds 8 % over a
@@ -284,19 +279,19 @@ const NetSnapshot = (function () {
       } else {
         ds = v * dt;
       }
-      const w = splitS(st.s + ds);
+      const raw = st.s + ds, laps = Math.floor(raw / total);
       // Spread the source rather than re-listing its fields: a packet that
       // grows a field would otherwise silently lose it HERE ONLY, i.e. only
       // while extrapolating — invisible to any test that never stalls the
       // buffer. Only s moves; x is deliberately not extrapolated.
       const o = Object.assign(out || {}, st);
-      o.s = w.s;
+      o.s = raw - laps * total;
       // Speed follows s, because they are one claim about the same car: the
       // contact solver reads this as _nSpd to decide who is closing on whom,
       // and a pose that slowed with a speed that did not is a pair of
       // predictions that disagree.
       o.speed = v;
-      o.lap = Number.isFinite(st.lap) ? st.lap + w.laps : st.lap;
+      o.lap = Number.isFinite(st.lap) ? st.lap + laps : st.lap;
       o.extrapolated = true;
       return o;
     }
@@ -308,9 +303,9 @@ const NetSnapshot = (function () {
       o.speed = a.speed + (b.speed - a.speed) * u;
       o.extrapolated = false;
       const d = M4.wrapDelta(b.s - a.s, total);   // shortest way round (js/core/mat4.js)
-      const w = splitS(a.s + d * u);
-      o.s = w.s;
-      if (Number.isFinite(a.lap)) o.lap = a.lap + w.laps;
+      const raw = a.s + d * u, laps = Math.floor(raw / total);
+      o.s = raw - laps * total;
+      if (Number.isFinite(a.lap)) o.lap = a.lap + laps;
       return o;
     }
 

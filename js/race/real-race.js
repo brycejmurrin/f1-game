@@ -922,8 +922,9 @@ const RealRace = (function () {
   // Call-time delegates for code with no G (js/data/real-race-tab.js, page probes).
   const launch = (script, opts) => (live ? live.launch(script, opts) : null);
   const status = () => (live ? live.status() : { active: false });
+  const isWatch = () => !!live && live.isWatch();   // hot audio guards need no formatted field snapshot
   const replay = () => (live ? live.replay : null);   // the replay's controls (follow / setSpeed / seek / skip) for page probes
 
-  return { create, launch, status, replay, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, situation, properName, paceMul, dropSpeed, seatOnRoad, COMPOUND, KP, MUL_MIN, MUL_MAX };
+  return { create, launch, status, isWatch, replay, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, situation, properName, paceMul, dropSpeed, seatOnRoad, COMPOUND, KP, MUL_MIN, MUL_MAX };
 })();
 Object.freeze(RealRace);

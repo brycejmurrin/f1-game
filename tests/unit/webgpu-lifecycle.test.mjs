@@ -174,7 +174,8 @@ function makeGpuHarness(opts = {}) {
     // bare {}, so create()'s "check every shader module's compilation info" step
     // hit its own "a check that cannot be RUN is skipped, never fatal" rule and
     // was inert in every test — the guard that matters most on Safari.
-    createShaderModule: () => ({
+    createShaderModule: (desc) => ({
+      code: desc.code,
       getCompilationInfo: async () => {
         if (opts.beforeCompilationInfo) await opts.beforeCompilationInfo();
         return { messages: opts.shaderError
@@ -445,6 +446,50 @@ function makeGpuHarness(opts = {}) {
     vm: context,
   };
 }
+
+test("WGX builds SSR only on the full tier and keeps the phone post chain", async () => {
+  const cases = [
+    { name: "desktop", opts: {}, ssr: true, post: true },
+    { name: "iPhone", opts: { ua: "iPhone AppleWebKit/605.1.15 Version/26.0 Safari/604.1" }, ssr: false, post: true },
+    { name: "Mac Safari", opts: { ua: "Macintosh AppleWebKit/605.1.15 Version/26.0 Safari/605.1.15" }, ssr: false, post: true },
+    { name: "forced lite", opts: { storage: new Map([["apex26.gfxWgxLevel", "1"]]) }, ssr: false, post: true },
+    { name: "minimal", opts: { storage: new Map([["apex26.gfxWgxLevel", "2"]]) }, ssr: false, post: false },
+  ];
+  for (const c of cases) {
+    const h = makeGpuHarness({ ...c.opts, recordPass: true });
+    const modules = [];
+    const createShader = h.device.createShaderModule;
+    h.device.createShaderModule = (desc) => { modules.push(desc.code); return createShader(desc); };
+    const gfx = await h.create();
+    assert.ok(gfx, c.name + " must initialise");
+    const post = h.vm.window.WGSLPost;
+    assert.equal(modules.filter((code) => code === post.SSR).length, +c.ssr, c.name + " SSR shader");
+    assert.equal(h.pipelineDescs.filter((p) => p.fragment?.module.code === post.SSR).length, +c.ssr, c.name + " SSR pipeline");
+    assert.equal(h.pipelineDescs.filter((p) => p.fragment?.module.code === post.COMPOSITE).length, +c.post, c.name + " composite pipeline");
+    const I = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    gfx.resize();
+    assert.equal(gfx.begin({ viewProj: I, proj: I, invProj: I, invViewProj: I }), true);
+    const start = h.writes.length;
+    gfx.present({ reflect: 1, carReflect: 1 });
+    assert.equal(h.writes.slice(start).some((w) => w.values.length === post.SSR_UNIFORM_BYTES / 4), c.ssr,
+      c.name + " must only upload SSR uniforms when the pass is available");
+  }
+});
+
+test("WGX post construction omits the unused lite SSR uniform buffer", () => {
+  for (const lite of [false, true]) {
+    const h = makeGpuHarness();
+    const core = { device: h.device, Post: h.vm.window.WGSLPost, WGX_LITE: lite,
+      POST_HDR_FORMAT: "rgba16float", SCENE_FORMAT: "rgba16float", SSAO_FORMAT: "r8unorm",
+      LDR_FORMAT: "rgba8unorm", presentFormat: "rgba8unorm", UCD: 3,
+      fsPipe: () => ({ getBindGroupLayout: () => ({}) }) };
+    h.vm.window.WGXPost.init(core).buildPost();
+    assert.ok(core.pComposite, "post construction must complete");
+    assert.equal(!!core.ssrUBO, !lite);
+    assert.equal(!!core.pSSR, !lite);
+    assert.ok(core.ssaoUBO && core.godrayUBO && core.compositeUBO && core.fxaaUBO);
+  }
+});
 
 test("WebGPU caches canvas layout reads until a resize invalidates them", async () => {
   const h = makeGpuHarness({ watchCss: true });
@@ -1410,11 +1455,17 @@ test("WGX R8 perf changes hold (SSR depth stride, pooled merge-run, lamp-mask ca
   assert.match(WGX_SOURCE, /DOCTRINE \(F7, deferred\)/);
 });
 
-test("WGX ground mist matches GLX band/strength", () => {
+test("WGX ground mist matches GLX band/strength", async () => {
   // lit.js: exp(-lowH * (0.09 / mh)), no *0.5, clamp 0.45 — not exp(-lowH/(mh*20)).
   assert.match(CHUNKS_SOURCE, /exp\(-lowH \* \(0\.09 \/ mh\)\)/);
   assert.doesNotMatch(CHUNKS_SOURCE, /mh \* 20\.0/);
-  assert.match(CHUNKS_SOURCE, /clamp\(mistAmt, 0\.0, 0\.45\)/);
+  // Heavy-mist fill (fog weather, 2026-10-21): the 0.45 ceiling lifts by 0.2 x the
+  // same smoothstep(1.1, 1.5) gate GLX uses, so light mist keeps exactly 0.45.
+  assert.match(CHUNKS_SOURCE, /clamp\(mistAmt, 0\.0, 0\.45 \+ 0\.2 \* mistFill\)/);
+  assert.match(CHUNKS_SOURCE, /let mistFill = smoothstep\(1\.1, 1\.5, mistK\);/);
+  const glx = await readFile(new URL("js/render/glx/shaders/glsl-lit.js", ROOT), "utf8");
+  assert.match(glx, /float mistFill = smoothstep\(1\.1, 1\.5, uGroundMist\);/);
+  assert.match(glx, /clamp\(mist, 0\.0, 0\.45 \+ 0\.2 \* mistFill\)/);
 });
 
 

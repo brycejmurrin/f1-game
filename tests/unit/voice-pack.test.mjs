@@ -1004,7 +1004,7 @@ test("the pit garage halts every radio channel the way the pause card does", () 
   assert.match(body, /GameAudio\.stopRain\(\)/,
     "openPitWork stops rain with the engine — the garage is a pause without the card");
   const close = game.slice(game.indexOf("function closePitWork() {"), game.indexOf("function leaveGarage() {"));
-  assert.match(close, /if \(isRaining\(\)\) GameAudio\.startRain\(\)/,
+  assert.match(close, /if \(wxArc\.viewRainfall\(\) > 0\.01\) GameAudio\.startRain\(\)/,
     "leaving the pit garage restarts rain the way RESUME does");
 });
 
@@ -1090,4 +1090,111 @@ test("a voice picked over, or the recorded radio switched off, frees the packs n
   assert.deepEqual(Object.keys(J(P.debug().voices)), ["heart"]);
   assert.equal(await P.load("george"), true, "a released pack loads again on demand");
   assert.equal(calls.filter((u) => u.includes("george")).length, 4);
+});
+
+test("a voice deselected during fetch releases its pack when the load settles", async () => {
+  for (const fail of [false, true]) {
+    const pending = [];
+    const sb = sandbox(["js/audio/voice-pack.js"], {
+      fetch: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+    });
+    const P = sb.VoicePack.create({});
+    const loaded = P.load("george");
+    assert.equal(pending.length, 2, "one manifest and one binary request");
+    P.releaseExcept([]);
+    assert.equal(P.debug().voices.george, "loading", "the shared request can finish");
+    for (const request of pending) {
+      if (fail) request.reject(new Error("offline"));
+      else request.resolve({ ok: true,
+        json: async () => ({ binary: integrity(4), clips: { hello: [0, 4, 1] } }),
+        arrayBuffer: async () => new ArrayBuffer(4) });
+    }
+    assert.equal(await loaded, false, fail ? "failed deselected pack stays unavailable" : "deselected pack is not retained ready");
+    assert.deepEqual(J(P.debug().voices), {}, "settlement releases ready and failed deselected entries");
+    assert.deepEqual(J(P.debug().cache), {}, "the removed entry owns no clip cache");
+  }
+});
+
+test("keeping or requesting a pending voice again supersedes its deselection without refetching", async () => {
+  for (const requestAgain of [false, true]) {
+    const pending = [];
+    const sb = sandbox(["js/audio/voice-pack.js"], {
+      fetch: () => new Promise((resolve) => pending.push(resolve)),
+    });
+    const P = sb.VoicePack.create({});
+    const loaded = P.load("george");
+    P.releaseExcept([]);
+    if (requestAgain) assert.equal(P.ensure("george"), "loading");
+    else P.releaseExcept(["george"]);
+    assert.equal(pending.length, 2, "reselection reuses the in-flight manifest and binary");
+    for (const resolve of pending) resolve({ ok: true,
+      json: async () => ({ binary: integrity(4), clips: { hello: [0, 4, 1] } }),
+      arrayBuffer: async () => new ArrayBuffer(4) });
+    assert.equal(await loaded, true, "the latest request keeps the settled pack");
+    assert.equal(P.ready("george"), true);
+    assert.ok(P.plan("george", "hello"), "the kept pack remains playable");
+    assert.deepEqual(J(P.debug().voices), { george: "ready" });
+    P.releaseExcept([]);
+    assert.deepEqual(J(P.debug().voices), {}, "a subsequent deselection still frees it");
+  }
+});
+
+test("deselected staged voices never start when the preceding pack settles", async () => {
+  for (const fail of [false, true]) {
+    const pending = [];
+    const sb = sandbox(["js/audio/voice-pack.js"], {
+      fetch: (url) => new Promise((resolve, reject) => pending.push({ url, resolve, reject })),
+    });
+    const P = sb.VoicePack.create({});
+    P.ensureStaged([["george"], ["heart", "fable"]]);
+    const first = P.load("george");
+    assert.equal(pending.length, 2, "only the first tier has fetched");
+    P.releaseExcept([]);
+    for (const request of pending) {
+      if (fail) request.reject(new Error("offline"));
+      else request.resolve({ ok: true,
+        json: async () => ({ binary: integrity(4), clips: { hello: [0, 4, 1] } }),
+        arrayBuffer: async () => new ArrayBuffer(4) });
+    }
+    assert.equal(await first, false);
+    await new Promise(setImmediate);
+    assert.equal(pending.length, 2, "stale lower tiers issue neither manifest nor binary fetches");
+    assert.deepEqual(J(P.debug().voices), {}, "no deselected tier becomes resident");
+  }
+});
+
+test("a later keep, ensure, or staged request can reselect a queued voice", async () => {
+  for (const select of ["keep", "ensure", "staged"]) {
+    const pending = new Map(), calls = [];
+    const sb = sandbox(["js/audio/voice-pack.js"], {
+      fetch: (url) => { calls.push(url); return new Promise((resolve) => pending.set(url, resolve)); },
+    });
+    const P = sb.VoicePack.create({});
+    const finish = (id) => {
+      for (const ext of ["json", "bin"]) {
+        const url = `assets/voice/${id}.${ext}`, resolve = pending.get(url);
+        assert.ok(resolve, "expected pending request: " + url);
+        pending.delete(url);
+        resolve({ ok: true,
+          json: async () => ({ binary: integrity(4), clips: { hello: [0, 4, 1] } }),
+          arrayBuffer: async () => new ArrayBuffer(4) });
+      }
+    };
+    P.ensureStaged([["george"], ["heart", "fable"]]);
+    const first = P.load("george");
+    P.releaseExcept([]);
+    if (select === "keep") P.releaseExcept(["heart"]);
+    else if (select === "ensure") P.ensure("heart");
+    else P.ensureStaged([["heart"]]);
+    finish("george");
+    assert.equal(await first, false, "the deselected predecessor still releases");
+    await new Promise(setImmediate);
+    assert.equal(calls.filter((url) => url.includes("heart.")).length, 2, select + " reuses or starts exactly one pack load");
+    assert.equal(calls.some((url) => url.includes("fable.")), false, "the other stale queued voice stays deselected");
+    const selected = P.load("heart");
+    finish("heart");
+    assert.equal(await selected, true);
+    assert.deepEqual(J(P.debug().voices), { heart: "ready" }, "only the selected voice remains");
+    assert.equal(calls.length, 4, "old and new queues share the reselected pack request");
+  }
 });

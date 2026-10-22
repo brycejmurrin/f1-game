@@ -47,7 +47,8 @@ var CarSfx = (() => {
       // so crossing a stop boundary in the jump does not replay the guns.
       if (Number.isFinite(rt) && Number.isFinite(lastRaceT) && rt + 0.02 < lastRaceT) {
         lastCar = c; lastPit = ps;
-      } else if (Number.isFinite(rt)) lastRaceT = rt;
+      }
+      if (Number.isFinite(rt)) lastRaceT = rt;
       if (c !== lastCar) { lastCar = c; lastPit = ps; }
       if (ps !== lastPit) {
         if (ps === "box") GameAudio.pitGun(false);

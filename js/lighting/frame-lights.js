@@ -210,7 +210,26 @@ const _flSteady = [1, 1, 1, 1, 1, 1];   // identity when flicker+warmup would le
 // Flicker/warmup factors — closed over by hoisted `_flLive` so setFrameLights
 // does not allocate a fresh closure every frame on night tracks.
 let _flFlick = 0, _flWarmK = 1, _flTNow = 0;
+let _flW = 1, _flT0 = 1, _flT1 = 1, _flT2 = 1;
 function _flSteadyFn() { return _flSteady; }
+function _flSettled(o) {
+  const flick = _flFlick, tNow = _flTNow;
+  const hsh = _hshOf(o);
+  const amp = flick * (hsh > 0.90 ? 1 : 0.2);
+  const f = 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40)
+            + flick * 0.15 * Math.sin(tNow * (0.35 + hsh * 0.5) + hsh * 20);
+  _flScr[0] = f; _flScr[1] = f; _flScr[2] = f;
+  _flScr[3] = 1; _flScr[4] = 1; _flScr[5] = 1;
+  return _flScr;
+}
+function _flSettledWarm(o) {
+  // Rare non-neutral dim/tint arithmetic (including non-finite tuner input)
+  // keeps the exact original multiply order rather than assuming identity.
+  const f = _flSettled(o)[0] * _flW;
+  _flScr[0] = f * _flT0; _flScr[1] = f * _flT1; _flScr[2] = f * _flT2;
+  _flScr[3] = _flW * _flT0; _flScr[4] = _flW * _flT1; _flScr[5] = _flW * _flT2;
+  return _flScr;
+}
 function _flLive(o) {
   const flick = _flFlick, tNow = _flTNow, warmK = _flWarmK;
   const hsh = _hshOf(o);
@@ -694,7 +713,17 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   const warmDone = !(warmK > 0) || (tNow - _lampWarmT0) >= 8 * warmK;
   const skipFl = !(flick > 0) && warmDone;
   _flFlick = flick; _flWarmK = warmK; _flTNow = tNow;
-  const fl = skipFl ? _flSteadyFn : _flLive;
+  if (warmDone && !skipFl) {
+    // Every lamp now has wu=1. Resolve the shared warm-up factors once per
+    // frame, preserving the original operations even for unusual live knobs
+    // ((1-dip)+dip need not round to exactly 1). Flicker remains per lamp.
+    const dip = LT.lampWarmupDim != null ? LT.lampWarmupDim : 0.30;
+    _flW = (1 - dip) + dip;
+    const cold = 0 * (LT.lampWarmupWarm != null ? LT.lampWarmupWarm : 1);
+    _flT0 = 1 + cold * 0.22; _flT1 = 1 - cold * 0.10; _flT2 = 1 - cold * 0.38;
+  }
+  const settledFl = _flW === 1 && _flT0 === 1 && _flT1 === 1 && _flT2 === 1 ? _flSettled : _flSettledWarm;
+  const fl = skipFl ? _flSteadyFn : warmDone ? settledFl : _flLive;
   // Cheap unsorted copy ONLY when every lamp fits with the full 5-slot tail-light
   // reserve to spare. Running it for any count ≤ 32 breaks two promises
   // downstream: appendCarTailLights evicts overflow from the array TAIL on the

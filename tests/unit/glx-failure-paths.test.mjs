@@ -64,3 +64,36 @@ test("R2-GW-2: createTexture resets the UNPACK flags and deletes the texture whe
   assert.equal(last(h.enums.UNPACK_PREMULTIPLY_ALPHA_WEBGL)[1][1], false, "PREMULTIPLY must end false");
   assert.equal(h.count("deleteTexture"), h.count("createTexture") || 1, "the texture is deleted");
 });
+
+test("storage-denied context losses keep the two-reload budget across page boots", () => {
+  let inheritedName = "";
+  for (let loss = 1; loss <= 3; loss++) {
+    const h = bootGlx(), reports = [];
+    h.sandbox.name = inheritedName;
+    h.sandbox.sessionStorage.getItem = h.sandbox.sessionStorage.setItem = () => { throw new Error("storage denied"); };
+    h.sandbox.__apexReportError = (_kind, error) => reports.push(error.message);
+    let reloads = 0;
+    h.sandbox.location.reload = () => { reloads++; };
+    // A context loss during boot happens before the healthy-session reset.
+    h.sandbox.__timers.length = 0;
+    h.loseContext();
+    inheritedName = h.sandbox.name;
+    assert.equal(inheritedName, "apex26.ctxLostReloads=" + loss);
+    for (const timer of h.sandbox.__timers.splice(0)) timer();
+    assert.equal(reloads, loss <= 2 ? 1 : 0, "only the first two boots automatically reload");
+    h.restoreContext();
+    assert.equal(reloads, loss <= 2 ? 2 : 0, "restore obeys the same exhausted budget");
+    assert.equal(reports.length, loss > 2 ? 1 : 0);
+    if (loss > 2) assert.match(reports[0], /3 times/);
+  }
+});
+
+test("a healthy GLX boot clears only its own fallback retry marker", () => {
+  for (const [before, after] of [["apex26.ctxLostReloads=2", ""], ["race-window", "race-window"],
+    ["apex26XctxLostReloads=2", "apex26XctxLostReloads=2"], ["apex26.ctxLostReloads=x", "apex26.ctxLostReloads=x"]]) {
+    const h = bootGlx();
+    h.sandbox.name = before;
+    for (const timer of h.sandbox.__timers.splice(0)) timer();
+    assert.equal(h.sandbox.name, after);
+  }
+});

@@ -68,7 +68,8 @@ window.AriaState = (function () {
     if (!btns.length || (!anyOn && !known)) return;
     for (const b of btns) {
       labelled.add(b);
-      b.setAttribute("aria-pressed", isOn(b) ? "true" : "false");
+      const next = isOn(b) ? "true" : "false";
+      if (b.getAttribute("aria-pressed") !== next) b.setAttribute("aria-pressed", next);   // write on change: each write is a mutation record that re-wakes this observer and ScrollFade
     }
   }
 
@@ -120,7 +121,7 @@ window.AriaState = (function () {
     navs.forEach((nav) => {
       nav.querySelectorAll("a").forEach((a) => {
         const href = a.getAttribute("href") || "";
-        if (href.charAt(0) === "#" && hash === href) a.setAttribute("aria-current", "true");
+        if (href.charAt(0) === "#" && hash === href) { if (a.getAttribute("aria-current") !== "true") a.setAttribute("aria-current", "true"); }
         else a.removeAttribute("aria-current");
       });
     });
@@ -164,13 +165,29 @@ window.AriaState = (function () {
   // the data hub and never the car-setup tabs. Nothing here is visual, so there
   // is no reason to wait for a frame.
   //
-  // ONLY THE ROOT THAT CHANGED. Every root has its own observer, and a batch
-  // re-syncs the roots whose records arrived — a slider dragged in SETTINGS
-  // used to re-walk every button, fold and range in the career, garage, data
-  // hub and every other observed screen at the input rate.
+  // Known local changes only need their semantic group: all sibling option
+  // buttons, a fold's summary, or a slider and its formatted readout. Unknown
+  // structure changes still scan the whole observed root to discover new UI.
+  function scopeOf(root, record) {
+    const target = record.target;
+    const el = target && (target.nodeType === 3 ? target.parentElement : target);
+    if (!el || !el.closest || !root.contains(el)) return root;
+    const button = el.closest("button"), summary = el.closest("summary");
+    const label = el.closest("label");
+    let scope = button ? button.parentElement : summary ? summary.parentElement : label;
+    if (!scope && el.id && el.id.endsWith("-v")) {
+      const input = document.getElementById(el.id.slice(0, -2));
+      if (input && input.tagName === "INPUT" && input.type === "range") scope = input.parentElement;
+    }
+    return scope && root.contains(scope) ? scope : root;
+  }
   let pending = 0;
   const dirty = new Set();
   const schedule = (root) => {
+    for (const r of dirty) {
+      if (r === root || r.contains(root)) return;
+      if (root.contains(r)) dirty.delete(r);
+    }
     dirty.add(root);
     if (pending) return;
     pending = setTimeout(() => {
@@ -187,7 +204,7 @@ window.AriaState = (function () {
       const obs = new MutationObserver((records) => {
         for (const r of records) {
           if (r.type === "childList" || r.type === "attributes" || r.type === "characterData") {
-            schedule(root); return;
+            schedule(scopeOf(root, r));
           }
         }
       });

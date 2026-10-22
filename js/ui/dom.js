@@ -19,10 +19,17 @@ const Dom = (function () {
   // <span data-fold="key">label</span>, separated by " · ". The labels are the
   // callers' own constants (never user text), which is why innerHTML is
   // acceptable here.
+  const foldHtml = new WeakMap();
   function paintFold(target, bits) {
     if (!target) return;
-    target.innerHTML = bits.map((p, i) =>
+    const html = bits.map((p, i) =>
       `${i ? '<span data-fold="sep"> · </span>' : ""}<span data-fold="${p[0]}">${p[1]}</span>`).join("");
+    const last = foldHtml.get(target);
+    // innerHTML serializes entities, so remember the rendered spelling too.
+    // Read it back before skipping: another owner may have changed the fold.
+    if (last && last.html === html && target.innerHTML === last.rendered) return;
+    target.innerHTML = html;
+    foldHtml.set(target, { html, rendered: target.innerHTML });
   }
 
   // A lap time in seconds as 1:21.163 (58.402 under the minute). Anything that
