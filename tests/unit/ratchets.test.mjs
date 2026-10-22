@@ -34,7 +34,7 @@ test("no ceiling is left far above the value it guards (one slack rule)", async 
   const v = verdict(await measure(), { looseAdvisory: advisory });
   const loose = v.loose.map(looseLine);
   if (advisory) {
-    for (const l of loose) t.diagnostic(`LOOSE (advisory on ${process.env.GITHUB_EVENT_NAME}) ${l} — lower it with node tools/check/ratchets.mjs --update`);
+    for (const l of loose) t.diagnostic(`LOOSE (advisory on ${process.env.GITHUB_EVENT_NAME}) ${l} — lower it with node tools/check/ratchets.mjs --update --lower-only`);
     assert.equal(v.ok, v.over.length === 0, "advisory: a LOOSE row never decides the verdict, an OVER row still does");
     return;
   }

@@ -211,6 +211,10 @@ test("Cursor's hooks.json runs the edit guard on every preToolUse, failing close
   // so there is no matcher and edit-guard.sh decides what is a write.
   assert.equal(pre.matcher, undefined, "no matcher: every tool reaches the script");
   assert.equal(pre.failClosed, true);
+  // https://cursor.com/docs/agent/hooks: crashes, timeouts and non-zero exits other than 2 fail OPEN
+  // for beforeShellExecution / beforeMCPExecution unless failClosed is true.
+  for (const ev of ["beforeShellExecution", "beforeMCPExecution"])
+    assert.ok(cfg.hooks[ev].every((h) => h.failClosed === true), `${ev} fails closed`);
   assert.ok(fs.statSync(EDIT_GUARD).mode & 0o111, "edit-guard.sh is executable");
   // A write with no readable path is denied (failClosed), not waved through with a warning.
   const noPath = run(EDIT_GUARD, { tool_name: "Write", tool_input: { content: "{}" } });
@@ -243,4 +247,22 @@ test("Cursor's hooks.json runs the edit guard on every preToolUse, failing close
   assert.equal(cursorEdit({ file_path: "index.html", old_str: "<title>", new_str: "<title>" }), "allow");
   assert.equal(cursorEdit({ target_file: "version.json", code_edit: "{}" }), "deny");
   assert.equal(cursorEdit({ target_file: "tests/data/ratchets.json", code_edit: "{}" }), "deny");
+});
+
+test("edit-guard judges a path key beyond file_path/path/target_file/filePath, and write shapes with no path", () => {
+  const frag = path.join(ROOT, "tests/data/ratchets.d", "cursor--not-this-branch-0000.json");
+  const perm = (tool_name, tool_input) => run(EDIT_GUARD, { tool_name, tool_input }).out.permission;
+  // The path is read from any key naming a path, file or target; the generated-file rule then applies.
+  for (const key of ["targetFile", "target_path", "filepath", "relative_workspace_path", "notebook_path", "filename", "file"]) {
+    assert.equal(perm("Whatever", { [key]: "version.json", code_edit: "{}" }), "deny", `${key}: generated file`);
+    assert.equal(perm("Whatever", { [key]: frag, old_string: "6", new_string: "1" }), "deny", `${key}: other branch's fragment`);
+    assert.equal(perm("Whatever", { [key]: "artifacts/nothing-here.md", old_string: "a", new_string: "b" }), "allow", `${key}: a doc`);
+  }
+  // A write shape with no readable path is denied, not waved through as read-only.
+  for (const shape of [{ diff: "--- a" }, { patch: "x" }, { code_edit: "x" }, { replacement: "x" }, { edits: [{ old_string: "a", new_string: "b" }] }])
+    assert.equal(perm("SomethingNew", { description: "x", ...shape }), "deny", Object.keys(shape)[0]);
+  // A body key is never mistaken for a path, and read-only tools still pass whatever keys they carry.
+  assert.equal(perm("SomethingNew", { file_text: "hi" }), "deny");
+  assert.equal(perm("Read", { targetFile: "version.json" }), "allow");
+  assert.equal(perm("SomethingNew", { query: "x" }), "allow");
 });
