@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01LCwqz3kpiVuXkjy8YyJprp DONE #3517 1003be69 (A·F4 CLOSE GARAGE confirm; merged by Bryce) — 2 parents verified. HB A 09:08Z seats:10 queue:3519 3533 3536 3538 3540 3541 3542 3532 3537 3539 3550 3548 3551 3552
+HANDOFF to:D from:cursor:bc-2c225d84-2ce5-5b9f-8f0c-0f87c3cc77a2 #3487 tip-synced CLEAN head e2d70119b (was CONFLICTING vs 5f93dfda; also merged d4c7e6809). MERGE-HOLD stays. tooling-fast FLOOR→156 + guards green. No merge by worker.
