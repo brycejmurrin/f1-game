@@ -1,0 +1,1 @@
+Fixed: Opening Settings on a phone no longer freezes for seconds after the sheet paints — LAZY_AUDIO evaluates one file per main-thread yield, ScrollFade skips the title column under the open sheet, SettingDeps coalesces disabled refreshes, and coarse-pointer devices skip view-transition snapshots when returning to the title.

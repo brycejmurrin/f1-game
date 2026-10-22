@@ -447,6 +447,50 @@ function audioYieldToMain(kind) {
   }
   return macrotask();
 }
+/** Settings hub visible (or the Settings door still focused): keep the sheet
+ *  interactive by yielding between LAZY_AUDIO chunks instead of one multi-second
+ *  eval (D·IP2 iPhone 15: 3.7 s freeze after Settings painted in 299 ms). */
+function settingsUiHot() {
+  try {
+    if (typeof document === "undefined") return false;
+    const pm = document.getElementById("pmsettings");
+    if (pm && !pm.hidden) return true;
+    const a = document.activeElement;
+    if (a && (a.id === "mb-settings" || a.id === "pm-settings")) return true;
+  } catch (_) { /* detached */ }
+  return false;
+}
+function audioMark(name) {
+  try {
+    if (typeof performance !== "undefined" && performance.mark) performance.mark(name);
+  } catch (_) { /* User Timing optional */ }
+}
+/** Load LAZY_AUDIO one file at a time with a main-thread yield between each
+ *  eval. Parallel inject left 19 scripts competing in one LOAF on phones. */
+async function loadAudioSerial() {
+  const preds = new Map(AUDIO_FILES.map((f) => [f, []]));
+  for (const [a, b] of (AUDIO_EDGES || [])) {
+    if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
+  }
+  const pending = new Set(AUDIO_FILES.filter((f) => !audioScriptsLoaded.has(f)));
+  const readyFn = (src) => { restoreOnEngine(); return audioFileLanded(src); };
+  const hot = () => settingsUiHot();
+  while (pending.size) {
+    const ready = [...pending].filter((f) => preds.get(f).every((p) => audioScriptsLoaded.has(p)));
+    if (!ready.length) {
+      // Cycle or missing edge: fall back to the bulk loader for what remains.
+      return loadBackendScripts([...pending], AUDIO_EDGES, { loaded: audioScriptsLoaded, ready: readyFn });
+    }
+    // Extra paint yield while Settings is open so hub taps stay above eval.
+    await audioYieldToMain(hot() ? "paint" : "task");
+    audioMark("apex:audio:chunk");
+    const src = ready[0];
+    pending.delete(src);
+    const ok = await loadBackendScripts([src], [], { loaded: audioScriptsLoaded, ready: readyFn });
+    if (!ok) return false;
+  }
+  return true;
+}
 function prefetchAudio() {
   // HTTP-cache only — do not evaluate. Evaluating at idle would create no
   // AudioContext (restoreOnEngine still gates on userActivation) but would
@@ -516,12 +560,16 @@ function ensureAudio() {
   // script's onload (ready:) under sticky userActivation — AudioContext is
   // created/resumed the same way as before; awaiting callers still get a
   // fully ready engine when this promise resolves.
+  // D·IP2: openSettings / mb-settings kick ensureAudio; serial chunks + extra
+  // paint yields keep the Settings hub interactive instead of one 3–4 s LOAF.
   audioLoad = (async () => {
     await audioYieldToMain("paint");
-    const ok = await loadBackendScripts(AUDIO_FILES, AUDIO_EDGES, {
-      loaded: audioScriptsLoaded,
-      ready: (src) => { restoreOnEngine(); return audioFileLanded(src); },
-    });
+    if (settingsUiHot()) {
+      audioMark("apex:settings:audio-deferred");
+      await audioYieldToMain("paint");
+      await audioYieldToMain("task");
+    }
+    const ok = await loadAudioSerial();
     if (!ok || AUDIO_FILES.some((f) => !audioScriptsLoaded.has(f)) || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
       Log.warn("audio", "the audio bundle did not load — sound stays silent");
       audioLoad = null;
@@ -532,6 +580,13 @@ function ensureAudio() {
     // panel / voice / announcer instances) clears the memo so the next call
     // retries it, instead of latching a rejection.
     await audioYieldToMain("task");
+    // AudioPanel.create mutates #audioset while Settings may be open — yield so
+    // the hub's MutationObservers / ScrollFade settle are not in the same LOAF.
+    if (settingsUiHot()) {
+      audioMark("apex:settings:audio-ready-yield");
+      await audioYieldToMain("paint");
+      await audioYieldToMain("task");
+    }
     if (typeof deps.onAudioReady === "function") try {
       deps.onAudioReady();
     } catch (e) {
@@ -546,6 +601,7 @@ function ensureAudio() {
       }
     } catch (e) { Log.warn("audio", "CrowdAudio.bind failed: " + (e && e.message)); }
     audioHooked = true;
+    audioMark("apex:audio:ready");
     return true;
   })();
   return audioLoad;

@@ -442,6 +442,7 @@
         "tests/unit/rival-attach-init.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/soundtrack-cache.test.mjs",
         "tests/unit/tyre-squeal-slip.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs",
@@ -485,7 +486,8 @@
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
-        "tests/unit/rival-contact-sfx.test.mjs"
+        "tests/unit/rival-contact-sfx.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs"
       ],
       "setEngine": [
         "tests/unit/audio-recovery.test.mjs",
@@ -545,7 +547,8 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
-        "tests/unit/mix-duck-radio.test.mjs"
+        "tests/unit/mix-duck-radio.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs"
       ],
       "setSkid": [
         "tests/unit/audio-tune.test.mjs",
@@ -586,6 +589,7 @@
         "tests/unit/engine-note-quality.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/soundtrack-cache.test.mjs"
       ],
       "squealFromSlip": [
@@ -740,6 +744,7 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
@@ -751,6 +756,7 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
@@ -4450,11 +4456,13 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/three-inspector.test.mjs"
       ],
       "ensureAudio": [
         "tests/unit/global-registry.test.mjs",
-        "tests/unit/lazy-bundles-prefetch.test.mjs"
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs"
       ],
       "ensureCircuit": [
         "tests/unit/data-lazy-loader.test.mjs"
@@ -4803,7 +4811,8 @@
         "tests/unit/script-loader-preload.test.mjs",
         "tests/unit/script-loader-starved.test.mjs",
         "tests/unit/script-loader-throw.test.mjs",
-        "tests/unit/service-worker.test.mjs"
+        "tests/unit/service-worker.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs"
       ],
       "*": [
         "tests/unit/build-client-drop.test.mjs",
@@ -16008,6 +16017,7 @@
     },
     "js/ui/scroll-fade.js": {
       "init": [
+        "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "settle": [
@@ -16030,6 +16040,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/select-screen-fixes.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "drsZoneRangeHtml": [
@@ -16225,6 +16236,7 @@
       "create": [
         "tests/unit/perf-try.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/settings-search.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -16235,6 +16247,7 @@
       ],
       "show": [
         "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],

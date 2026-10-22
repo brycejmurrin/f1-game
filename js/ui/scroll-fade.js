@@ -152,6 +152,18 @@ window.ScrollFade = (function () {
 
   function paint(el) { write(measure(el)); }
 
+  /** Settings / pause sheets sit over the title: measuring #overlay and
+   *  #menu-buttons while #pmsettings is open forces layout on the title column
+   *  nobody can scroll (D·IP2 Settings open + title-return hitches). */
+  function skipUnderOpenSettings(el) {
+    if (!document.getElementById) return false;
+    const pm = document.getElementById("pmsettings");
+    if (!pm || pm.hidden) return false;
+    if (el.closest && el.closest("#pmsettings")) return false;
+    const id = el.id;
+    return id === "overlay" || id === "menu-buttons" || !!(el.closest && el.closest("#overlay"));
+  }
+
   function paintAll() {
     timer = 0;
     // A tab or picker rebuild detaches its old subtree with no resize or
@@ -165,6 +177,7 @@ window.ScrollFade = (function () {
     const measured = [];
     els.forEach((el) => {
       if (el.closest && el.closest("[hidden]")) return;
+      if (skipUnderOpenSettings(el)) return;
       watch(el);
       measured.push(measure(el));
     });
@@ -177,9 +190,13 @@ window.ScrollFade = (function () {
   // set and the repaint never lands (that bug is why the first version of this
   // module appeared to do nothing). A timer is unaffected by rendering
   // suspension.
+  // 48 ms (was 0): Settings open flips [hidden] and then mutates dozens of
+  // disabled attrs / audio panel nodes; a 0-delay paintAll per storm stacked
+  // ForcedReflow with LAZY_AUDIO eval on phones (D·IP2).
+  const SCHEDULE_MS = 48;
   function schedule() {
     if (timer) return;
-    timer = setTimeout(paintAll, 0);
+    timer = setTimeout(paintAll, SCHEDULE_MS);
   }
   // Layout after a screen opens settles over several frames (web fonts, the
   // view transition, canvas sizing), so re-measure once things stop moving.

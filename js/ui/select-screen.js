@@ -243,9 +243,17 @@ showCtxLostNotice();
 // swap goes direct. The test suite pins reducedMotion:"reduce" and rides this.
 // So does MOTION: REDUCED (html[data-motion], js/ui/title-fx.js).
 const vtReduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
+// Touch / coarse pointer: startViewTransition snapshots the title WebGL layer
+// and blocks the main thread on return (D·IP2 BrowserStack iPhone: 1.2 s worst
+// frame title←select). Same direct-apply path as reduced motion — the crossfade
+// is not worth a hitch on the phone Bryce plays on.
+const vtPhone = window.matchMedia
+  ? (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(hover: none)").matches)
+  : false;
 const vt = (fn) => {
   if (!document.startViewTransition || vtReduce.matches
-    || document.documentElement.dataset.motion === "reduce") { fn(); return; }
+    || document.documentElement.dataset.motion === "reduce"
+    || vtPhone) { fn(); return; }
   let applied = false;
   const run = () => { if (applied) return; applied = true; fn(); };
   try {
