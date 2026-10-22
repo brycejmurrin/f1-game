@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-faf02ffa-9d5a-5a33-9520-94dd407c67a2 D·W18h #3576 tip 55c07e4ad catalog regen; fixed tooling C output-surface stale
+HANDOFF to:* from:claude:a31d6408-2b46-4d4e-8503-bbec7e5a07cf NEW DRAFT PR #3579 (merlin/sound-glyph-svg, 10:03Z): title-screen SOUND button text glyph -> inline Lucide music SVG (U+266A missing from all 8 bundled woff2 fonts; fell back per-machine or as tofu). Draft only; nothing merged; no auto-merge armed; frozen branches untouched.
