@@ -255,7 +255,7 @@ const TLX = (function () {
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
       const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
-        mirrorDeferred: false, mirrorLazy: null, rig: null };   // rig: warmDraws' { ms, pairs, mirror, ok } (hunt 6). B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
+        garageScene: null, mirrorDeferred: false, mirrorLazy: null, rig: null };   // garageScene: noEnv supplemental compile (B·H16 SwiftShader). rig: warmDraws' { ms, pairs, mirror, ok } (hunt 6). B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
       // EVERY warm's stages, newest last (cap 6): the menu prep runs a world warm then the garage's, and
       // _warmStages keeps only the last, so the census read the garage's 3.7 s as "the warm" while the
       // world's ran 11-15 s on Metal (B·H8 prep timeline, gpu-census 39499541077).
@@ -3272,90 +3272,115 @@ const TLX = (function () {
         }
         if (post.warmMirror) await post.warmMirror(mirRT.texture);
       }
+      // garageSceneOnly: stamp present()'s noEnv target (softOutRT, MRT null) after a full post warm — B·H16 on SwiftShader WebGPU.
+      async function runProgramWarmStages(usePost, useTag, opts, garageSceneOnly) {
+        if (garageSceneOnly) {
+          if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
+          if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+          renderer.setMRT(null);
+          renderer.setRenderTarget(softOutRT());
+          _gpuLastOperation = "compile-garage-scene";
+          warmShowSky();
+          await renderer.compileAsync(scene, camera);
+          return;
+        }
+        pinSkyMaterial();
+        mintLateLit();
+        if (lit && lit.setSsrMrt) lit.setSsrMrt(useTag);
+        if (fx && fx.setSsrMrt) fx.setSsrMrt(useTag);
+        renderer.setMRT(useTag ? _ssrMrtNode() : null);
+        renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+        let _tStage = performance.now();
+        _gpuLastOperation = "compile-scene";
+        warmShowSky();   // the late sky mesh, shown for the compiles (the note there)
+        await renderer.compileAsync(scene, camera);
+        _warmStages.scene = Math.round(performance.now() - _tStage); _tStage = performance.now();
+        _gpuLastOperation = "compile-fx";
+        await warmFxPrograms();
+        await warmLateLit();
+        _warmStages.fx = Math.round(performance.now() - _tStage); _tStage = performance.now();
+        // MRT STAYS SET THROUGH THE POST WARM. present() sets the ssrTag MRT
+        // node for the scene pass and calls post.present() BEFORE restoring
+        // it, so every live post quad compiles with that node in its render
+        // context — a different fragment-output struct, a different program.
+        // Nulling the MRT here would warm the sixteen no-MRT variants and
+        // the race would rebuild all sixteen on its first visible present
+        // (gpu-census 206: 56 warm-tagged modules, and x2 lazy at each of
+        // the eight runPass sites). The casters render
+        // BEFORE present(), with the MRT restored to null, so their warm
+        // runs after the null below.
+        // THE POST CHAIN IS WARMED UNGATED. The 3 s gate
+        // is measured against the scene warm's own elapsed time,
+        // which on macos-latest Metal consumes it: gpu-census 203 attributed
+        // 16 of the race window's 50 shader modules to tlx-post.js runPass —
+        // eight quad materials, two stages each — compiled synchronously on
+        // the first visible present after the lights instead of during them.
+        // post.warm() keeps its own deadline, so the lights hold at most a
+        // few seconds longer in the worst case, which is the trade this
+        // makes — so it is ON only where it measured a win (three's WebGL2
+        // backend, see _warmPlus), as is the caster warm below; elsewhere
+        // the 3 s gate stands. apex26.tlxWarmPlus=1/0 forces it.
+        if (usePost && post.warm && (warmPlusOn() || performance.now() - _warmAt < 3000)) {
+          _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
+        }
+        _warmStages.post = Math.round(performance.now() - _tStage); _tStage = performance.now();
+        renderer.setMRT(null);
+        // The casters live in their own Scene (tlx-shadow.js castScene), so
+        // compileAsync(scene) never sees them and the first sun pass of the
+        // race built 9 programs — 7 for the caster render, 2 for the PCSS
+        // blocker — on the main thread (gpu-census 203/205 stacks, via
+        // endPass). sunPass runs before present() on the same frame, so by
+        // now castScene holds the grid's casters and the warm compiles the
+        // real ones.
+        if (warmPlusOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
+        _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
+        // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
+        if (typeof sky !== "undefined" && sky && sky.cacheWarm) { _gpuLastOperation = "compile-sky-cache"; await sky.cacheWarm(renderer); }
+        _warmStages.mirror = null;
+        if (wantMirrorWarm()) {
+          await warmMirrorStage(usePost, useTag);
+          _warmStages.mirror = Math.round(performance.now() - _tStage);
+        }
+        _tStage = performance.now();
+        _warmStages.draw = null; _warmStages.drawn = null;
+        if (drawWarmOn()) {
+          // Its own guard: a draw that throws costs the draw warm, never a re-run of the compiles above.
+          try {
+            _gpuLastOperation = "warm-draw";
+            _warmStages.drawn = drawWarmStage(usePost, useTag, opts, _warmStages.mirror !== null);
+            await _gpuSettled(5000);   // the driver's first-draw work is GPU-process side: wait it out here
+          } catch (e) {
+            _warmStages.drawn = { error: String((e && e.message) || e) };
+            try { Log.warn("gfx", "TLX draw warm failed", String(e)); } catch (_) { /* logging is optional */ }
+          }
+          _warmStages.draw = Math.round(performance.now() - _tStage);
+        }
+      }
       function startProgramWarm(opts) {
         _warmRequested = false;
         if (typeof renderer.compileAsync !== "function") return;
         _warmAt = performance.now(); _warmAttempts++;
         _warmStages.at = Math.round(_warmAt); _warmStages.attempts = _warmAttempts;
+        _warmStages.garageScene = null;
         const target = renderer.getRenderTarget(), mrt = renderer.getMRT();
-        // present()'s post rule, noEnv included: a garage/menu frame keeps proj (SSAO) but paints without post,
-        // and a warm compiled into the post target left that frame to re-link every program synchronously (B·H16).
-        const usePost = !!(post && post.enabled() && _postF.proj && !_postF.noEnv && !vizMat);
+        const postCapable = !!(post && post.enabled() && _postF.proj && !vizMat);
+        // present()'s post rule: a noEnv garage/menu frame keeps proj (SSAO) but paints without post (B·H16).
+        // A post-only warm is fast on SwiftShader WebGPU; a softOutRT-only warm is not — run both when noEnv.
+        const noEnvGarage = postCapable && !!_postF.noEnv;
+        const usePost = postCapable && !noEnvGarage;
         const useTag = usePost && (!post.tagOn || post.tagOn());   // R3: present()'s MRT rule
         // r185 reads renderer target/MRT again AFTER awaits while building nodes.
         // Keep all render state owned by this task until compilation settles.
         _warmPending = (async () => {
           try {
-            pinSkyMaterial();
-            mintLateLit();
-            if (lit && lit.setSsrMrt) lit.setSsrMrt(useTag);
-            if (fx && fx.setSsrMrt) fx.setSsrMrt(useTag);
-            renderer.setMRT(useTag ? _ssrMrtNode() : null);
-            renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
-            let _tStage = performance.now();
-            _gpuLastOperation = "compile-scene";
-            warmShowSky();   // the late sky mesh, shown for the compiles (the note there)
-            await renderer.compileAsync(scene, camera);
-            _warmStages.scene = Math.round(performance.now() - _tStage); _tStage = performance.now();
-            _gpuLastOperation = "compile-fx";
-            await warmFxPrograms();
-            await warmLateLit();
-            _warmStages.fx = Math.round(performance.now() - _tStage); _tStage = performance.now();
-            // MRT STAYS SET THROUGH THE POST WARM. present() sets the ssrTag MRT
-            // node for the scene pass and calls post.present() BEFORE restoring
-            // it, so every live post quad compiles with that node in its render
-            // context — a different fragment-output struct, a different program.
-            // Nulling the MRT here would warm the sixteen no-MRT variants and
-            // the race would rebuild all sixteen on its first visible present
-            // (gpu-census 206: 56 warm-tagged modules, and x2 lazy at each of
-            // the eight runPass sites). The casters render
-            // BEFORE present(), with the MRT restored to null, so their warm
-            // runs after the null below.
-            // THE POST CHAIN IS WARMED UNGATED. The 3 s gate
-            // is measured against the scene warm's own elapsed time,
-            // which on macos-latest Metal consumes it: gpu-census 203 attributed
-            // 16 of the race window's 50 shader modules to tlx-post.js runPass —
-            // eight quad materials, two stages each — compiled synchronously on
-            // the first visible present after the lights instead of during them.
-            // post.warm() keeps its own deadline, so the lights hold at most a
-            // few seconds longer in the worst case, which is the trade this
-            // makes — so it is ON only where it measured a win (three's WebGL2
-            // backend, see _warmPlus), as is the caster warm below; elsewhere
-            // the 3 s gate stands. apex26.tlxWarmPlus=1/0 forces it.
-            if (usePost && post.warm && (warmPlusOn() || performance.now() - _warmAt < 3000)) {
-              _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
-            }
-            _warmStages.post = Math.round(performance.now() - _tStage); _tStage = performance.now();
-            renderer.setMRT(null);
-            // The casters live in their own Scene (tlx-shadow.js castScene), so
-            // compileAsync(scene) never sees them and the first sun pass of the
-            // race built 9 programs — 7 for the caster render, 2 for the PCSS
-            // blocker — on the main thread (gpu-census 203/205 stacks, via
-            // endPass). sunPass runs before present() on the same frame, so by
-            // now castScene holds the grid's casters and the warm compiles the
-            // real ones.
-            if (warmPlusOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
-            _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
-            // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
-            if (typeof sky !== "undefined" && sky && sky.cacheWarm) { _gpuLastOperation = "compile-sky-cache"; await sky.cacheWarm(renderer); }
-            _warmStages.mirror = null;
-            if (wantMirrorWarm()) {
-              await warmMirrorStage(usePost, useTag);
-              _warmStages.mirror = Math.round(performance.now() - _tStage);
-            }
-            _tStage = performance.now();
-            _warmStages.draw = null; _warmStages.drawn = null;
-            if (drawWarmOn()) {
-              // Its own guard: a draw that throws costs the draw warm, never a re-run of the compiles above.
-              try {
-                _gpuLastOperation = "warm-draw";
-                _warmStages.drawn = drawWarmStage(usePost, useTag, opts, _warmStages.mirror !== null);
-                await _gpuSettled(5000);   // the driver's first-draw work is GPU-process side: wait it out here
-              } catch (e) {
-                _warmStages.drawn = { error: String((e && e.message) || e) };
-                try { Log.warn("gfx", "TLX draw warm failed", String(e)); } catch (_) { /* logging is optional */ }
-              }
-              _warmStages.draw = Math.round(performance.now() - _tStage);
+            if (noEnvGarage) {
+              const useTagPost = postCapable && (!post.tagOn || post.tagOn());
+              await runProgramWarmStages(true, useTagPost, opts, false);
+              const tGarage = performance.now();
+              await runProgramWarmStages(false, false, opts, true);
+              _warmStages.garageScene = Math.round(performance.now() - tGarage);
+            } else {
+              await runProgramWarmStages(usePost, useTag, opts, false);
             }
           } catch (e) {
             _warmStages.failed++;
@@ -3364,7 +3389,7 @@ const TLX = (function () {
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
             _warmHistory.push({ at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
-              mirror: _warmStages.mirror, draw: _warmStages.draw, total: _warmStages.total, failed: _warmStages.failed });
+              mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed });
             if (_warmHistory.length > 6) _warmHistory.shift();
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
@@ -6402,7 +6427,7 @@ const TLX = (function () {
             // The warm timeline: how long the lights held on THIS GPU, by stage;
             // pending/done say whether a census beat is inside it (207 was, all 15).
             o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
-                       draw: _warmStages.draw, drawn: _warmStages.drawn,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
+                       draw: _warmStages.draw, drawn: _warmStages.drawn, garageScene: _warmStages.garageScene,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
                        pending: !!_warmPending, done: _warmDone, history: _warmHistory.slice() };

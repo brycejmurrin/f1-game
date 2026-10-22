@@ -460,7 +460,7 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
     const I = new THREE.Matrix4().toArray();
     const _postF = { proj: I, invProj: I, invVP: I, viewProj: I, upVS: [0, 1, 0], time: 0, sunVS: [0, 0, -1], noEnv: NOENV };
     const _warmHistory = [];   // tlx.js keeps every warm's stages (B·H8 prep timeline)
-    const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0 };
+    const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, garageScene: null, total: null, attempts: 0, failed: 0 };
     let _warmAt = 0, _warmAttempts = 0, _warmPending = null, _warmRequested = false, _warmDone = false, _gpuLastOperation = "";
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
     ${tslice("      function _mirWarmSwap() {", "      function _showInstanced(rec, order) {")}
@@ -537,8 +537,9 @@ test("A-W1: off on a software adapter (unset knob), forced on by apex26.tlxDrawW
 // B·H16 (2026-10-21): a garage/menu frame sets noEnv and keeps proj (SSAO), and present() then paints WITHOUT post
 // (`post && _postF.proj && !_postF.noEnv`). The warm took post for it anyway, so it compiled every program into the
 // tagged scene target and the title prebuild's hidden garage frame re-linked them all on the main thread (3.8–5.8 s
-// long task at 4x CPU, getProgramParameter LINK_STATUS). The warm must compile the frame present() will paint.
-test("garage warm: a noEnv frame compiles into present()'s own target — no post target, no MRT, no draw stage", async (t) => {
+// long task at 4x CPU, getProgramParameter LINK_STATUS). SwiftShader WebGPU then paid ~3× for a post-only warm that
+// skipped the garage target — run the full post warm first, then stamp softOutRT (MRT null) for the garage frame.
+test("garage warm: noEnv runs post warm then a garage-scene compile on softOutRT (MRT null), no draw stage", async (t) => {
   const spy = (rig) => {
     const seen = [], base = rig.renderer.compileAsync.bind(rig.renderer);
     rig.renderer.compileAsync = (sc, cam, ...rest) => { seen.push({ tg: rig.renderer.getRenderTarget(), mrt: rig.renderer.getMRT() }); return base(sc, cam, ...rest); };
@@ -548,16 +549,20 @@ test("garage warm: a noEnv frame compiles into present()'s own target — no pos
   const compiles = spy(h);
   await h.warm();
   assert.equal(h.W1.stages.failed, 0, "the warm did not throw");
-  assert.ok(compiles.length >= 1, "the scene compiled");
-  for (const c of compiles) {
-    assert.notEqual(c.tg, h.post.sceneTarget(), "never the post scene target: present() paints a noEnv frame without post");
-    assert.equal(c.mrt, null, "no ssrTag MRT: a different fragment output is a different program");
-  }
-  assert.equal(h.calls.length, 0, "no draw stage: it draws only into the post scene target");
+  assert.ok(compiles.length >= 2, "post warm and garage-scene compile both ran");
+  assert.equal(compiles[0].tg, h.post.sceneTarget(), "first pass warms the race post path");
+  const garageCompile = compiles[compiles.length - 1];
+  assert.notEqual(garageCompile.tg, h.post.sceneTarget(), "garage pass never the post scene target");
+  assert.equal(garageCompile.mrt, null, "garage pass: no ssrTag MRT");
+  assert.ok(Number.isFinite(h.W1.stages.garageScene) && h.W1.stages.garageScene >= 0, "garageScene stage timed");
+  const sceneRT = h.post.sceneTarget();
+  assert.ok(h.calls.some((c) => c.tg === sceneRT), "the post pass may run the draw warm into the scene target");
+  assert.equal(h.calls.filter((c) => !c.tg).length, 0, "draw warm never targets softOutRT — the garage pass is compile-only");
   const race = await warmRig(t);
   const raceCompiles = spy(race);
   await race.warm();
   assert.equal(raceCompiles[0].tg, race.post.sceneTarget(), "a race frame (noEnv unset) still warms through post");
+  assert.equal(raceCompiles[0].tg, race.post.sceneTarget(), "race warm compiles the scene into the post target");
 });
 
 function cloudCacheHarness() {
