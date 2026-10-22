@@ -322,3 +322,32 @@ test("the host tells guests it went on after friend quali (qgo), so a guest that
     assert.ok(got.includes("qgo"), "the aborted guest is told the host went on (got " + got.join(",") + ")");
   } finally { lobby.cancel(); }
 });
+
+// H3-8: a host leaving friend quali must not strand its guests.
+test("a host that backs out of friend quali tells its guests (qend)", async () => {
+  const { lobby, far } = await hostUp(async () => ({ ok: true }));
+  const got = [];
+  far.onMessage((ch, data) => { try { got.push(JSON.parse(typeof data === "string" ? data : new TextDecoder().decode(data)).t); } catch (e) { /* binary */ } });
+  try {
+    assert.equal(lobby.startFromRoom(), true);
+    lobby.abortQuali();
+    for (let i = 0; i < 5; i++) { far.pump(performance.now() + 100); await sleep(30); }
+    assert.ok(got.includes("qend"), "the guests hear the host left the sheet (got " + got.join(",") + ")");
+  } finally { lobby.cancel(); }
+});
+
+test("TO THE GRID after every connection closed lands on the menu with a notice, not a blank screen", async () => {
+  const { G, lobby, far } = await hostUp(async () => ({ ok: true }));
+  const calls = [];
+  G.quitToMenu = () => calls.push("quit");
+  G.announce = (msg) => { calls.push("announce:" + msg); return true; };
+  try {
+    assert.equal(lobby.startFromRoom(), true);
+    far.close();                                 // the only rival's connection goes
+    for (let i = 0; i < 20 && lobby.status().guests; i++) await sleep(50);
+    await G._done();                             // TO THE GRID: q-go already closed the sheet for this press
+    assert.ok(calls.includes("quit"), "the player is taken to the menu");
+    assert.ok(calls.some((c) => /EVERYONE LEFT/.test(c)), "and told why: " + calls.join(" | "));
+    assert.equal(lobby.qualifying(), false);
+  } finally { lobby.cancel(); }
+});

@@ -1,0 +1,1 @@
+Fixed: In VS FRIEND qualifying, guests are told when the host leaves — an unfinished sheet returns them to the room, and TO THE GRID after everyone left goes to the menu with a notice instead of a blank screen.
