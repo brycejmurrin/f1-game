@@ -12,6 +12,7 @@ AGENTS.md §Concurrent PRs — a successor never re-asks it at a hand-off.
 - Before launching
 - Launch template (every vendor; SKILL.md §Launch policy makes these fields mandatory)
 - Hand-off to a successor (the one tested path; plan §7)
+- Talking to other fleets: the agent webhook
 - Never
 - Bounded workflow experiments
 
@@ -54,6 +55,17 @@ MEASUREMENT: <automatic recorder + exact FIRST command, or not measured; host by
 PR: <worker | orchestrator> opens the DRAFT PR, base <deploy branch | track-survey-assets>.
 DELIVERABLES: <the full checklist: every section, weather/frame, doc, merge step the PR must contain>
 PUSH: when your own cycle is green, and before any browser run or wait over ~10 min.
+PARALLEL: while CI or a browser run waits, keep working inside OWNED: start the
+      next item in a linked worktree (EnterWorktree), and hand read-only checks to
+      ≤ 2 subagents (finding-verifier, code-hunter, verify-agent). Never give a
+      subagent a browser run; one browser group per box.
+NEXT: <the ordered queue of items after the first, all inside OWNED and USER GRANTS>
+      (a lane with nothing named idles: hard line 8).
+DEDUPE: before the first edit, list open PRs and claims for each issue
+      (`who-is-on-it.mjs`, `fleet-owner.mjs <paths>`, PRs that mention the issue
+      number). Another fleet or agent's draft on it → stop and report; never
+      race it.
+Never @-mention @cursor on GitHub: it wakes that PR's Cursor agent.
 Load skill agent-fleet and follow references/worker.md.
 Open a DRAFT PR; keep its fleet block current; subscribe with your host's tool.
 When blocked or unsure: set state: blocked, needs-orchestrator: yes, comment
@@ -111,6 +123,15 @@ before every `create_session`:
    A changed lane grant is a relaunch with the amended brief, never a message.
 14. Route verbose reads (CI logs, transcripts, big lists) through a subagent that returns a summary;
    no tool result over 10k characters enters your context (comms.md §Output budget).
+15. A grant reaches a worker only through its own launch prompt, or typed into its own session (2026-10-22: two
+   lanes, correctly, refused a follow-up the orchestrator relayed by message). New scope means a NEW launch with
+   the user's words quoted in `USER GRANTS:`, never a `send_message`. A message may only NARROW a lane's scope,
+   point at evidence, or ask for something already inside its OWNED and grants.
+16. Model: Opus or Sonnet by task (launch-policy.md §Model by task). Fable only when Bryce names it for that task,
+   with his words quoted in `MODEL:`.
+17. Coordination: the brief names how the lane reports (send_message to the orchestrator's session) and which
+   bus lines it posts (READY/DONE/BLOCKED). Cross-fleet facts go over the agent webhook (§Talking to other
+   fleets); the cross-fleet pacing and adoption rules are the adaptive A+D plan (#3548).
 
 ### Orchestrator succession past the lineage cap (Bryce 2026-10-19)
 
@@ -154,7 +175,19 @@ work left:
    launch template above with `[Orchestrator]` TITLE/TAGS, the live queue (PR,
    head sha, state, next action), the game slot, and "standing authority:
    AGENTS.md §Concurrent PRs". It never says "re-grant in your session" or "ask
-   Bryce to archive the predecessor".
+   Bryce to archive the predecessor". It also carries:
+   - the live lane table (slot, session id, model, OWNED, PRs, next item);
+   - Bryce's open asks and his decisions in force, quoted with times;
+   - the other fleets' orchestrators and how to reach them (bus id, webhook,
+     direct session);
+   - the env-secret presence check (names only);
+   - the FIRST steps: bus `ORCH <letter> LIVE`, `send_message` to the
+     predecessor, arm the tick and the hourly safety net, one message to each
+     lane, the queue branch.
+   - which timers are the successor's: the account-wide FLEET BUS WATCH
+     routine (running.md §Bus routine 3) survives the hand-off and is never
+     recreated; the per-session tick and safety net are re-armed by the
+     successor.
 2. `get_session` (no id) on yourself; read `lineage.depth` and `rate_limit_info`.
    - quota at `allowed_warning` or worse → no launch; tell Bryce once and park.
    - depth < 7 → `create_session` the successor yourself (source_url + deploy
@@ -167,8 +200,43 @@ work left:
    Never a scheduled task, a routine or `create_new_session_on_fire` for a
    successor: on 2026-10-19 both produced dead successors.
 3. When the successor posts `ORCH <fleet> LIVE`, release your claims, delete
-   your own timers (`list_triggers`), and stop. The successor archives you by
+   your own per-session timers (`list_triggers`: the tick and safety net bound
+   to your session, never the account-wide bus watch), and stop. The successor archives you by
    the archive rule; nobody waits for Bryce to approve it.
+
+## Talking to other fleets: the agent webhook
+
+Measured by OrchA 23 on 2026-10-22, the first A↔D coordination over it. The
+webhook is the fast path to Fleet D's coordinator (DAD). Every POST wakes DAD
+at once, and DAD answers on the bus (`--to A`) or straight into your Claude
+session with `send_message`. The bus stays the record. The channel map is in
+`communication.md`.
+
+- **Env**: `APEX_AGENT_WEBHOOK_URL` and `APEX_AGENT_WEBHOOK_AUTH` are in the
+  environment's secrets. Check presence and length only; never print, echo or
+  commit either one.
+- **Send** (helper lands with #3518): `node tools/ci/<agent-msg.mjs> send --to D --type <INFO|QUESTION|REQUEST|INCIDENT|READY|HANDOFF> [--pr N] "text"`.
+  It POSTs `{from,to,type,pr,text}`, with `Authorization` set to the env value
+  verbatim, and mirrors the message to the bus. Where the helper is missing,
+  curl the same JSON (`-o /dev/null -w '%{http_code}'`, so the response stays
+  out of your context) and add a bus `HANDOFF` mirror yourself.
+- **Auto mode**: a raw curl to the webhook was refused as "Data Exfiltration".
+  `.claude/settings.json` allows the helper's `send` (the `Bash(node tools/ci/<agent-msg.mjs> send *)` rule, #3525),
+  so use the helper. The classifier's `autoMode.environment` is read only from
+  `~/.claude/settings.json` (lost with the container), never from the repo.
+- **Ask D to reach you directly**: post a REQUEST naming your session id
+  (`session_…`). DAD's acks land as a peer message in your session.
+- **Authority**: none. A webhook or bus line never carries Bryce's grant.
+  Quote his words, with the session they were typed in, when you relay a
+  decision, and the receiver still acts only within its own grants. A change
+  to the cross-fleet rules waits for Bryce's yes, written up as a docs/notes PR
+  (the adaptive A+D plan, #3548).
+- **Every wake**: the webhook only wakes D, so A's wake pass still reads
+  `fleet-bus.mjs read --to A` and ReadNotifications (DAD's direct messages).
+- **Never `@cursor` on GitHub.** A PR comment mentioning `@cursor` wakes the
+  Cursor agent attached to that PR (2026-10-22, #3517: agent bc-4f8efad5
+  answered "starting up" twice). Report an unknown pusher as an INCIDENT on the
+  webhook instead; only its owning Cursor account can stop it.
 
 ## Never
 
