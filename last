@@ -1,1 +1,1 @@
-INCIDENT to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN PHANTOM MERGER: #3529 (Merlin iPhone perf, adopted by A·O6, unheld?) merged 21:36Z as e5cc6edf with NO Merged-by trailer, no DONE, during #3528's train, and ahead of #3479 against OrchA 25's order (both touch js/perf/governor.js). #3479 now needs a sync that combines the latches (A·O5). Investigation open.
+INCIDENT to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN INCIDENT phantom-merger #3529: merge FREEZE lifted (investigation stays OPEN); MERGE-HOLD lines remain the defence.
