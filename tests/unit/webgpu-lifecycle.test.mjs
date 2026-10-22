@@ -1905,6 +1905,19 @@ test("device.lost climbs the ladder: full -> lite (level 1 persisted, reload)", 
   assert.equal(reloads, 1, "the rung retry is a reload, not a GLX surrender");
 });
 
+test("WGX escalation reloads (rung retry, then GLX skip) arm the Graphics reset notice (#3513)", async () => {
+  for (const level of [null, "2"]) {
+    const storage = new Map(level ? [["apex26.gfxWgxLevel", level]] : []);
+    const session = new Map();
+    const atReload = [];
+    const h = makeGpuHarness({ storage, session, onReload: () => { atReload.push(session.get("apex26.ctxLostNotice") || null); } });
+    await h.create();
+    h.loseDevice({ reason: "unknown" });
+    await new Promise((r) => setTimeout(r, 0));
+    assert.deepEqual(atReload, ["1"], (level ? "GLX skip" : "rung retry") + ": the notice is stashed before the reload");
+  }
+});
+
 // SETTINGS ▸ DISPLAY ▸ SCREENSHOTS NATIVE ("0") / 2D BLIT ("1") set _outProbeOff,
 // which mutes the black-output probe and its escalation. It must not mute a
 // dead device: the visible device.lost branch escalates through _wgxEscalate
@@ -2004,8 +2017,8 @@ test("minimal rung: no post targets, no env probe, and a loss there exits to GLX
 test("a JS throw in begin() strikes out to GLX only at the cap, not on frame one", async () => {
   const storage = new Map();
   const session = new Map();
-  let reloads = 0;
-  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  let reloads = 0, notice = null;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; notice = session.get("apex26.ctxLostNotice") || null; } });
   const gfx = await h.create();
   gfx.resize();
   assert.equal(gfx.begin({}), true, "healthy begin");
@@ -2019,6 +2032,7 @@ test("a JS throw in begin() strikes out to GLX only at the cap, not on frame one
   assert.equal(session.get("apex26.gfxBound"), "webgl2", "the RENDERER label must say (WEBGL2)");
   assert.match(storage.get("apex26.gfxWgxFail") || "", /begin threw/, "reason recorded");
   assert.equal(reloads, 1);
+  assert.equal(notice, "1", "the strike-out reload explains itself on the menu (#3513)");
   h.setEncoderFail(false);
   assert.equal(gfx.begin({}), false, "after the cap the backend stays down for this tab");
 });
