@@ -2723,15 +2723,11 @@ function startRace() {
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
   if (document.fullscreenElement) Input.lockLandscape();
   const key = entrySettings(), idx = trackIdx;
-  // A DIRECT start (Daily, Data Hub, season, agent) stands the menu's build down as RACE! does (introBuild),
-  // JOINING one of this same world in flight: left live, it ran beside this race's own build (two buildPaced
-  // for one world, measured 2026-10-21), and a loadTrackStepped that finishes behind the other returns false.
-  // Owner before generation++ (and await a mismatched-tier abort): same race as introBuild — see there.
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
-  const prior = (mp && mp.step) ? mp.step : null;
+  const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = () => key === entrySettings();
   clearTimeout(flybyBuildTimer); _menuGate.generation++;
-  _menuGate.join = join ? mp.step : (prior ? prior.catch(() => false) : null);   // startRaceBody awaits it before its own load
+  _menuGate.join = join ? mp.step : (prior ? prior.catch(() => false) : null);
   const request = RaceEntryProfile.runSession(sessionEntry, key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
     (current) => startRaceBody(current), () => key === entrySettings(),
     (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); if (e) announce("COULD NOT LOAD CIRCUIT — CHECK CONNECTION", 3, "info"); });
@@ -3691,11 +3687,8 @@ function afterGarageOut(n, key, go, prepared, live) {
   if (n !== _introRun) return;
   if (!prepared || !live()) {
     loadingScreen.stop();
-    // A canceled intro bumps _introRun (live false). A still-live failure used to
-    // sheetRelease silently — START re-enabled, no garage, no banner (Pages DAILY flake).
     if (!prepared && live()) announce("PREPARATION FAILED — please retry", 5, "info");
-    titleIfBare();
-    return;
+    titleIfBare(); return;
   }
   try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
 }
@@ -3849,13 +3842,10 @@ function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
   if (!(idx >= 0)) return false;   // reduce-motion still builds then plays the garage-out before the card and the flyby
-  // JOIN the menu's in-flight build of this world (tile → SETTINGS → RACE!); claim owner before
-  // generation++ so the stepped build does not abort. When join is false (buildKey / PerfGov.tier
-  // mismatch), still await that abort — two loadTrackStepped calls race on `track` (Pages DAILY).
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
-  const prior = (mp && mp.step) ? mp.step : null;
+  const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = live;
-  clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own current() stands down
+  clearTimeout(flybyBuildTimer); _menuGate.generation++;
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
   introCover(info0, n);
   let prepared = false;
@@ -8455,8 +8445,7 @@ function tickBody(now) {
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
       const settingsOnly = paused && !setupPreviewOn && !replayBuf.isScrubbing() && !photoMode &&
         els.lighting.hidden && els.camtune.hidden && els.flyby.hidden && !els.pmsettings.hidden;
-      // Honor the selected render cadence for ordinary Settings, retaining the skipped
-      // dt for camera/sky motion. Tuners, photo, scrub, garage and resume previews stay live.
+      // Settings cadence gate: retain skipped dt for sky motion; tuners/photo/scrub/garage stay live.
       if (settingsOnly) RenderRate.observe(_dtMs);
       if (settingsOnly ? RenderRate.gate(dt, _dtMs, XrBoot.comfort(), true) : RenderRate.force(dt, _dtMs))
         render(Math.min(RenderRate.dt(), setupPreviewOn ? 0.1 : 1 / 20));   // garage's 100 ms stall limit preserves motion below 20 fps
@@ -8541,13 +8530,17 @@ function paintThrottleMode() {
   }[mode];
 }
 
-// STEERING INPUT row (js/ui/setting-row.js): note always present (never hidden) so a mode
-// change cannot reflow under a finger — same rule as disabled RECALIBRATE / GEARS.
+// STEERING INPUT row (js/ui/setting-row.js) and the one-line note under it.
+// The note is ALWAYS present — its text changes, it is never hidden — so a
+// mode change cannot reflow the page under a finger; same rule that keeps
+// RECALIBRATE and GEARS disabled rather than hidden.
 function paintSteer() {
   SettingRow.paint($("pm-steer"), steerMode);
   const note = $("pm-steer-note");
   if (!note) return;
-  // Warn only for genuine deny/unavailable — not the brief pre-first-reading window.
+  // Only warn when the gyro is genuinely unavailable/denied — not in the brief
+  // window before the first sensor reading arrives (which would falsely say
+  // "no gyro" on phones that have a working gyro).
   note.textContent = Input.gyroDenied
     ? "Motion access is denied on this device, so TILT cannot steer here — pick BUTTONS or TOUCH."
     : "TILT leans the phone. BUTTONS adds on-screen arrows. TOUCH drags a finger on the track.";
