@@ -2152,34 +2152,6 @@ async function guestInQuali(extra = {}, sheetUp) {
   return ctx;
 }
 
-// H3-8: the host BACKed out of friend quali to the waiting room (qend).
-for (const done of [false, true]) {
-  test(`a guest on a${done ? " finished" : "n unfinished"} quali sheet hears the host left (qend)`, async () => {
-    const { h, made } = await guestInQuali();
-    let backs = 0;
-    const notes = [];
-    h.elements.set("quali", { id: "quali", hidden: false, classList: { contains: (c) => done && c === "q-done" } });
-    h.elements.set("q-back", { id: "q-back", click() { backs++; } });
-    h.G.announce = (msg) => { notes.push(msg); return true; };
-    try {
-      made[0].deliver("qend", null);
-      assert.equal(backs, done ? 0 : 1, done ? "a finished sheet keeps its result" : "the sheet leaves through its own BACK, to the waiting room");
-      assert.ok(notes.some((n) => /HOST LEFT QUALIFYING/.test(n)), "and the guest is told: " + notes.join(" | "));
-      if (done) assert.equal(h.lobby.qualifying(), false, "a finished guest no longer holds the quali gate");
-    } finally { h.lobby.cancel(); }
-  });
-}
-
-test("a qend outside friend quali does nothing", async () => {
-  const { h, s } = await connectedGuest();
-  let backs = 0;
-  h.elements.set("q-back", { id: "q-back", click() { backs++; } });
-  try {
-    s.deliver("qend", null);
-    assert.equal(backs, 0);
-  } finally { h.lobby.cancel(); }
-});
-
 for (const outcome of ["success", "false", "canceled", "rejection"]) {
   test(`a stale ${outcome} race build cannot consume or close a replacement room`, async () => {
     const { h, made } = await guestInQuali();
@@ -2612,8 +2584,8 @@ test("removing one of two code-room guests rotates the room code (the removed pl
 });
 
 // ── H3-7 (2026-10-22): removing the LAST guest rotates only a CODE room ──────
-// Ported from closed PR #3535 (cursor/net-lobby-evict-rotate-h3a7): quiet rotate
-// expiry must use host copy, not nostr's guest "six characters" line.
+// Closed PR #3535 (cursor/net-lobby-evict-rotate-h3a7): quiet rotate expiry
+// must use host copy, not nostr's guest "six characters" line.
 async function evictOnly(h, ts) {
   assert.equal(h.lobby.removeGuest("g1"), true, "the host can remove its guest");
   const t = ts[0];
@@ -2643,10 +2615,8 @@ test("removing the last guest of a CODE room rotates it, and its expiry reads in
     codes.next = "XYZ789";
     await evictOnly(h, ts);
     await until(() => rooms.some((r) => r.code === "XYZ789"), "the code rotated after the remove");
-    const fresh = rooms[rooms.length - 1];
-    fresh.onFail({ error: "expired", message: "Check the six characters and try again." });
-    const said = h.status.textContent;
-    assert.doesNotMatch(said, /six characters/, "the host never sees the guest's copy");
-    assert.ok(/expired/i.test(said), "the host sees the INVITE ANOTHER expiry copy");
+    rooms[rooms.length - 1].onFail({ error: "expired", message: "Check the six characters and try again." });
+    assert.doesNotMatch(h.status.textContent, /six characters/, "the host never sees the guest's copy");
+    assert.ok(h.status.textContent.includes("INVITE ANOTHER"), "the host's own copy: " + h.status.textContent);
   } finally { h.lobby.cancel(); }
 });

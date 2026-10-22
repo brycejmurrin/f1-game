@@ -679,17 +679,6 @@ const NetLobby = (function () {
         close();
         finishStart();
       });
-      // Host BACKed out of friend quali (H3-8): an unfinished sheet leaves by its own BACK (→ abortQuali,
-      // the waiting room); a finished one keeps its result — the host's next start or MENU moves it on.
-      made.onEvent(QEND, () => {
-        if (role !== "guest" || !friendQualifying) return;
-        const sheet = $("quali"), back = $("q-back");
-        const done = !!(sheet && sheet.classList && sheet.classList.contains("q-done"));
-        if (back && !done) back.click();
-        else { friendQualifying = false; qualiAborted = true; }
-        say("The host left qualifying.", true);
-        if (G.announce) G.announce("THE HOST LEFT QUALIFYING", 3, "info");
-      });
       // Lobby-phase LEFT (the race phase's carries `wire`, handled by NetPlay):
       // the host saying another guest's connection closed. Only the host may
       // say it, and only about a relayed profile — never this connection's own.
@@ -786,7 +775,6 @@ const NetLobby = (function () {
     const QUALI_RATE = NetPlay.QUALI_RATE;          // QUALI + QLIVE together, per connection
     const QABORT = "qabort";   // guest→host "left quali sheet" (lobby-local until netplay owns it)
     const QGO = "qgo";         // host→guest "quali is over, I am starting the race" (additive: old clients ignore the type)
-    const QEND = "qend";       // host→guest "I left the quali sheet for the waiting room" (additive, H3-8)
     let qualiAborted = false;  // this guest backed out of friend quali and is waiting in the room for the host
     const _peers = new Map();
     const _ready = new Map();
@@ -1742,8 +1730,8 @@ const NetLobby = (function () {
             dropPending();
             // onConnected() reopens the code for the next arrival; its expiry
             // (HOST_TIMEOUT_MS ≈ 120 s) later is not a failure of a room that is already full.
-            // A quiet room is the waiting room (rotate after a remove): the
-            // host's copy, never nostr's guest "Check the six characters…" (H3-7).
+            // A quiet room is the waiting room (rotated after a remove): host copy,
+            // never nostr's guest "Check the six characters…" (H3-7; closed PR #3535).
             if (r.error === "expired" && (sessions.size || watcherArmed || opts.quiet)) {
               const msg = "The room code has expired — INVITE ANOTHER makes a new one.";
               tagFailReason("expired", msg);
@@ -2074,10 +2062,8 @@ const NetLobby = (function () {
     // Just put the waiting room back on screen and mark netRoom so garage /
     // race-settings return here instead of starting a solo GP.
     function abortQuali() {
-      const wasQualifying = friendQualifying;
       friendQualifying = false;
       if (role === "guest") { qualiAborted = true; broadcast(QABORT, null); }   // host waits on every rival
-      else if (role === "host" && wasQualifying) broadcast(QEND, null);         // …and every rival waits on the host
       if (G.setNetRoom) G.setNetRoom(true);
       const e = els();
       if (e.screen) e.screen.hidden = false;

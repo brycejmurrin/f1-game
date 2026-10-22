@@ -8719,7 +8719,6 @@
     "js/net/lobby.js": {
       "abortQuali": [
         "tests/unit/net-authority.test.mjs",
-        "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
       "acceptAnswer": [
