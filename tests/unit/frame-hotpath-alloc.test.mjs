@@ -84,10 +84,11 @@ test("race present sheds look post via lookPostShed (LOW or measured tier 4)", (
   // Behaviour pins live in perf-governor.test.mjs (lookPostShed); this is the
   // game.js wiring check without growing the assert.match ratchet (#1682).
   const g = gameSource();
-  assert.ok(g.includes("PerfGov.lookPostShed"), "present path must call lookPostShed");
-  assert.ok(g.includes("const _lookOff = PerfGov.lookPostShed"), "_lookOff latch");
+  assert.ok(g.includes("PostFxOpts.applyLookShed(po,"), "present path must apply lookPostShed strengths");
+  const pfx = read("js/ui/post-fx-opts.js");
+  assert.ok(pfx.includes("PerfGov.lookPostShed"), "applyLookShed must read lookPostShed");
   for (const key of ["bloom", "ssao", "godray", "contact", "lampVol"]) {
-    assert.ok(g.includes(`po.${key} = _lookOff ? 0`), `${key} must follow _lookOff`);
+    assert.ok(pfx.includes(`po.${key} = off ? 0 : v.${key}`), `${key} must zero when look post is shed`);
   }
   // Wet-road SSR still keys off autoTier (5th arg).
   const rr = g.indexOf("PostCommon.roadReflection(");

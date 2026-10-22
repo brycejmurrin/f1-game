@@ -467,17 +467,22 @@ test("TLX capDpr only ever lowers the cap and re-sizes (#1641)", () => {
 // interaction rule — a manual choice sets the FLOOR of degradation, never the
 // ceiling — so these tests pin the rule, not the plumbing.
 
-test("a fresh phone defaults to GRAPHICS MEDIUM while legacy HIGH remains ULTRA", () => {
+test("a fresh phone defaults to GRAPHICS MEDIUM; legacy HIGH is phone-capped to HIGH", () => {
   const qsrc = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
   const GfxQuality = eval(qsrc + ";GfxQuality");
   GameStore.store.rawSet("apex26.gfxHigh", null);
-  assert.equal(GfxQuality.defaultId(true), "medium",
-    "a fresh phone must shed env probe + lamp shadow/SSR until the player opts up");
+  assert.equal(GfxQuality.defaultId(true, { weak: false }), "medium",
+    "a fresh capable phone must shed env probe + lamp shadow/SSR until the player opts up");
+  assert.equal(GfxQuality.defaultId(true, { weak: true }), "low",
+    "a weak phone (iPhone 13-class) defaults to LOW");
   GameStore.store.rawSet("apex26.gfxHigh", "1");
-  assert.equal(GfxQuality.defaultId(true), "ultra",
-    "the legacy explicit high-memory opt-in still maps to ULTRA");
+  assert.equal(GfxQuality.defaultId(true), "high",
+    "the legacy high-memory opt-in is capped to HIGH on phones (ULTRA is unavailable)");
   GameStore.store.rawSet("apex26.gfxHigh", null);
   assert.equal(GfxQuality.defaultId(false), "high", "desktop default stays HIGH");
+  assert.equal(GfxQuality.maxId(true), "high", "phone ceiling is HIGH");
+  assert.equal(GfxQuality.capId("ultra", true), "high", "ULTRA clamps to HIGH on phones");
+  assert.equal(GfxQuality.capId("ultra", false), "ultra", "desktop keeps ULTRA");
 });
 
 test("a user tier sheds at least that much, live, without touching the render path", () => {
@@ -1095,14 +1100,25 @@ test("init() reconciles the boot tier with the resolved preset", () => {
   assert.equal(GameStore.store.raw("apex26.gfxHigh"), "0",
     "a MEDIUM preset must not leave a phone booting on the desktop tier");
 
-  // Stable, not circular: defaultId reads gfxHigh only for the legacy ULTRA
-  // opt-in, and ULTRA is the one preset with mobileHigh true, so the value
-  // survives a round trip rather than oscillating.
+  // Phone ULTRA cap: a leftover gfxHigh=1 (legacy opt-in) with no stored
+  // preset resolves to HIGH, which clears the boot bit rather than keeping
+  // the desktop memory tier that ULTRA alone used to pin.
   GameStore.store.set("gfxPreset", null);
   GameStore.store.rawSet("apex26.gfxHigh", "1");
   GfxQuality.init();
-  assert.equal(GameStore.store.raw("apex26.gfxHigh"), "1",
-    "the legacy ULTRA opt-in must survive its own reconciliation");
+  assert.equal(GfxQuality.current(), "high",
+    "legacy gfxHigh on a phone lands on HIGH, not ULTRA");
+  assert.equal(GameStore.store.raw("apex26.gfxHigh"), "0",
+    "HIGH has mobileHigh false, so reconciliation clears the leftover boot bit");
+
+  // A stored ULTRA preference is rewritten to HIGH on a phone.
+  GameStore.store.set("gfxPreset", "ultra");
+  GameStore.store.rawSet("apex26.gfxHigh", "1");
+  GfxQuality.init();
+  assert.equal(GfxQuality.current(), "high");
+  assert.equal(GameStore.store.get("gfxPreset", null), "high",
+    "the capped id must persist so ULTRA does not reappear next boot");
+  assert.equal(GameStore.store.raw("apex26.gfxHigh"), "0");
   delete globalThis.GLX;
   delete globalThis.localStorage;
 });

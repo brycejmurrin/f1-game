@@ -1285,6 +1285,20 @@
         "tests/unit/load-order.test.mjs"
       ]
     },
+    "js/camera/cockpit-finishes.js": {
+      "onChange": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
+      ],
+      "stamp": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
+      ],
+      "view": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
+      ],
+      "*": [
+        "tests/unit/cockpit-preview.test.mjs"
+      ]
+    },
     "js/camera/cockpit-opts.js": {
       "body": [
         "tests/unit/cockpit-wheels.test.mjs"
@@ -2419,6 +2433,8 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/cockpit-preview.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
@@ -4462,6 +4478,9 @@
       "ensureDataHub": [
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs"
+      ],
+      "ensureLightPresets": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "ensureNet": [
@@ -6613,6 +6632,7 @@
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/start-race-latch.test.mjs"
       ],
@@ -6658,6 +6678,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -9426,17 +9447,35 @@
       "applyLive": [
         "tests/unit/perf-governor.test.mjs"
       ],
+      "capId": [
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
       "current": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/perf-try.test.mjs"
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/perf-try.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
+      "cycle": [
+        "tests/unit/quality-preset-phone.test.mjs"
       ],
       "defaultId": [
-        "tests/unit/perf-governor.test.mjs"
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
       ],
       "init": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
+      ],
+      "isWeakPhone": [
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
+      "maxId": [
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",
@@ -15860,11 +15899,21 @@
       ]
     },
     "js/ui/post-fx-opts.js": {
+      "applyLookShed": [
+        "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/light-grid.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs"
+      ],
       "gate": [
         "tests/unit/post-fx-opts.test.mjs"
       ],
       "read": [
+        "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/light-grid.test.mjs",
         "tests/unit/post-fx-opts.test.mjs"
+      ],
+      "*": [
+        "tests/unit/light-store-perchunk-pin.test.mjs"
       ]
     },
     "js/ui/quali-sheet.js": {

@@ -6,8 +6,8 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (file) => fs.readFileSync(new URL("../../" + file, import.meta.url), "utf8");
-function setup() {
-  const disk = new Map(), dom = makeDom(), mutations = [], delivered = [], disposed = [];
+function setup(disk = new Map()) {
+  const dom = makeDom(), mutations = [], delivered = [], disposed = [];
   const race = { paused: true, clock: 122.5, camera: "chase", input: "tilt" };
   const store = { raw: (key) => disk.get(key), rawSet: (key,val) => disk.set(key,val), get: (_,val) => val };
   const ctx = vm.createContext({ GameStore: {store}, location: {search:""}, Log: {info(){},warn(){}},
@@ -21,6 +21,8 @@ function setup() {
     Liveries: {forTeam: (team) => [{c1:team.color,c2:team.color2}]}, AppearanceOpts: {units:()=>"mph"},
     MutationObserver: class { constructor(fn){mutations.push(fn);} observe(){} }, race });
   vm.runInContext(read("js/camera/cockpit-opts.js") + ";this.opts=CockpitOpts",ctx, { filename: absSrc("js/camera/cockpit-opts.js") });
+  vm.runInContext(read("js/car/car-materials.js") + ";this.materials=CarMaterials",ctx, { filename: absSrc("js/car/car-materials.js") });
+  vm.runInContext(read("js/camera/cockpit-finishes.js") + ";this.finishes=CockpitFinishes",ctx, { filename: absSrc("js/camera/cockpit-finishes.js") });
   ctx.document = dom.document; ctx.window = ctx;
   const create = dom.document.createElement;
   dom.document.createElement = (tag) => {
@@ -76,4 +78,45 @@ test("bound player car reader supplies exact paint and parts without a settings 
   s.ctx.preview.bind(()=>car); const state=s.ctx.preview.snapshot("rear");
   assert.equal(state.livery,car.livery); assert.equal(state.parts,car.parts); assert.equal(state.teamId,"ferrari");
   assert.equal(state.angle,"rear"); assert.equal(s.disk.size,0);
+});
+
+test("finish changes repaint the existing preview with independent resolved body, halo and wheel choices", () => {
+  const s = setup(), f = s.ctx.finishes, m = s.ctx.materials;
+  const liv = Object.freeze({ c1: [0.8, 0.1, 0.1], c2: [0.1, 0.1, 0.1], finish: "satin", noseFinish: "brushed", haloFinish: "carbon" });
+  const car = { teamId: "ferrari", livery: liv, parts: { aero: 4 }, units: "kmh" }, original = JSON.stringify(car), beforeRace = { ...s.race };
+  s.ctx.preview.bind(() => car);
+  s.api.open(); const frame = s.host.querySelector("iframe"); frame.onload();
+  const first = s.delivered.at(-1);
+  assert.equal(first.livery, liv); assert.equal(first.cockpitLivery, liv);
+  assert.equal(first.cockpitHalo.surface, m.FINISH_SURFACE.carbon);
+  assert.equal(first.wheelFinish, "carbon");
+  const count = s.delivered.length;
+  f.set("body", "matte");
+  let state = s.delivered.at(-1);
+  assert.equal(s.delivered.length, count + 1, "a finish change triggers the subscribed preview update");
+  assert.equal(s.host.querySelector("iframe"), frame);
+  assert.equal(state.cockpitLivery.finish, "matte");
+  assert.equal(state.cockpitLivery.noseFinish, "matte");
+  assert.equal(state.cockpitHalo.surface, m.FINISH_SURFACE.carbon, "body override does not replace inherited halo finish");
+  assert.equal(state.livery, liv, "original livery remains available for independent wheel paint");
+  f.set("halo", "chrome"); f.set("wheel", "livery");
+  state = s.delivered.at(-1);
+  assert.equal(state.cockpitLivery.finish, "matte");
+  assert.equal(state.cockpitHalo.surface, m.FINISH_SURFACE.chrome);
+  assert.equal(state.wheelFinish, "livery");
+  assert.equal(state.parts, car.parts);
+  assert.equal(JSON.stringify(car), original);
+  assert.deepEqual(s.race, beforeRace);
+  const persisted = [...s.disk];
+  s.api.close(); s.api.open(); s.host.querySelector("iframe").onload();
+  assert.equal(s.delivered.at(-1).wheelFinish, "livery");
+  assert.equal(s.delivered.at(-1).cockpitHalo.surface, m.FINISH_SURFACE.chrome);
+  assert.deepEqual([...s.disk], persisted, "opening and closing do not write settings");
+  const reloaded = setup(s.disk);
+  reloaded.ctx.preview.bind(() => car);
+  const restored = reloaded.ctx.preview.snapshot("front");
+  assert.equal(restored.wheelFinish, "livery");
+  assert.equal(restored.cockpitLivery.finish, "matte");
+  assert.equal(restored.cockpitHalo.surface, m.FINISH_SURFACE.chrome);
+  assert.deepEqual(reloaded.race, beforeRace);
 });

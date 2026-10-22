@@ -126,6 +126,8 @@ test("the shell's Content-Security-Policy is generated, first, and strict where 
   // Every absolute script URL the game injects is allowed by script-src.
   const spotify = readFileSync(join(ROOT, "js/audio/spotify.js"), "utf8");
   for (const u of spotify.match(/https:\/\/[a-z.]+\/[\w./-]+\.js/g) || []) assert.ok(origins.includes(new URL(u).origin), u);
+  assert.deepEqual(dir["frame-src"], ["'self'", "https://sdk.scdn.co"],
+    "cockpit-view.html may embed without allowing arbitrary frame origins");
   // The Nostr relays are wss:, the data APIs https: — both inside connect-src.
   assert.ok(dir["connect-src"].includes("https:") && dir["connect-src"].includes("wss:"));
 });

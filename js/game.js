@@ -104,7 +104,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -1232,12 +1232,12 @@ const _flapWorld = new Float32Array(16);
 // `only` limits the draw to one wing ("front"/"rear") — the COCKPIT body build
 // skips the rear assembly entirely, so drawing the rear plane there would hang
 // it in mid-air behind a car that has no rear wing.
-function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
+function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still, viewLivery) {
   const col = wingColorOf(team), b = clamp(blend, 0, 1);
   // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
-  const livery = resolveLivery(team), finish = CarMaterials.finishOf(livery, "wingFinish");
+  const livery = viewLivery || resolveLivery(team), finish = CarMaterials.finishOf(livery, "wingFinish");
   const surface = livery.wingCarbon === "carbon" ? "carbon" : "paint";
   // The flown drs plane (paint "rearWing") keeps the livery's REAR WING colour, as Car3D.build painted it baked.
   const rearCol = surface === "carbon" ? col : (livery.rearWing || livery.c2 || team.color2);
@@ -2471,6 +2471,7 @@ async function startRaceBody() {
   let sessionOk = await ensureRaceSession(); while (!sessionOk && !stale() && await LoadingScreen.failed() === "retry") sessionOk = await ensureRaceSession(); if (stale()) return false;   // #2625 RETRY re-runs the load, BACK falls through; LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
   if (!sessionOk) { loadingScreen.stop(); quitToMenu(); announce("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"); return false; }   // the stubs have no retirements or pit stops, and TT data would be lost silently
   await ensureAudio(); if (stale()) return false;   // LAZY_AUDIO — stub until first race/gesture; real engine before startEngine (false = silent race; the loader logged it)
+  if (!window.LightPresets) { await ensureLightPresets(); if (stale()) return false; }   // LAZY_RACE presets before the first applyRaceSettings: a late landing re-lit the race mid-session (false = default lighting; logged)
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
   const careerSaveConflict = isCareer() && Career.conflicted();
@@ -2722,15 +2723,11 @@ function startRace() {
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
   if (document.fullscreenElement) Input.lockLandscape();
   const key = entrySettings(), idx = trackIdx;
-  // A DIRECT start (Daily, Data Hub, season, agent) stands the menu's build down as RACE! does (introBuild),
-  // JOINING one of this same world in flight: left live, it ran beside this race's own build (two buildPaced
-  // for one world, measured 2026-10-21), and a loadTrackStepped that finishes behind the other returns false.
-  // Owner before generation++ (and await a mismatched-tier abort): same race as introBuild — see there.
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
-  const prior = (mp && mp.step) ? mp.step : null;
+  const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = () => key === entrySettings();
   clearTimeout(flybyBuildTimer); _menuGate.generation++;
-  _menuGate.join = join ? mp.step : (prior ? prior.catch(() => false) : null);   // startRaceBody awaits it before its own load
+  _menuGate.join = join ? mp.step : (prior ? prior.catch(() => false) : null);
   const request = RaceEntryProfile.runSession(sessionEntry, key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
     (current) => startRaceBody(current), () => key === entrySettings(),
     (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); if (e) announce("COULD NOT LOAD CIRCUIT — CHECK CONNECTION", 3, "info"); });
@@ -3690,11 +3687,8 @@ function afterGarageOut(n, key, go, prepared, live) {
   if (n !== _introRun) return;
   if (!prepared || !live()) {
     loadingScreen.stop();
-    // A canceled intro bumps _introRun (live false). A still-live failure used to
-    // sheetRelease silently — START re-enabled, no garage, no banner (Pages DAILY flake).
     if (!prepared && live()) announce("PREPARATION FAILED — please retry", 5, "info");
-    titleIfBare();
-    return;
+    titleIfBare(); return;
   }
   try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
 }
@@ -3848,17 +3842,10 @@ function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
   if (!(idx >= 0)) return false;   // reduce-motion still builds then plays the garage-out before the card and the flyby
-  // JOIN the menu's build of this same world in flight (tile -> SETTINGS -> RACE!) rather than
-  // abandon it and start over; loadTrackStepped below then finds that world built and reuses it.
-  // Claim owner BEFORE generation++: otherwise the in-flight stepped build observes owner=null +
-  // a bumped generation and aborts between slices. When join is false (buildKey / PerfGov.tier
-  // chunk bit mismatch vs the picker's bkey), still await that abort before starting our own
-  // load — two concurrent loadTrackStepped calls race on `track` (the later sees track!==null
-  // and returns false → silent sheetRelease after rs-go; Pages 39710316089 DAILY shard).
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
-  const prior = (mp && mp.step) ? mp.step : null;
+  const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = live;
-  clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own current() stands down
+  clearTimeout(flybyBuildTimer); _menuGate.generation++;
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
   introCover(info0, n);
   let prepared = false;
@@ -8303,24 +8290,22 @@ function render(dt) {
   // smear only appears at speed (zero when parked; ramps in above ~40% of vTop()).
   const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp((((player && player.speed) || 0) / vTop() - 0.4) / 0.5, 0, 1) : 0;
   const po = _presentOpts;
-  // Bloom / SSAO / god-rays / contact / lampVol: lookPostShed() (measured OR
-  // GRAPHICS: LOW). autoTier alone left LOW with the full post stack on a
-  // healthy phone — slower than MEDIUM on iPhone WebGPU. bloomAmt 0 skips the
-  // ~9-pass bright+mip chain.
-  const _lookOff = PerfGov.lookPostShed ? PerfGov.lookPostShed() : PerfGov.autoTier() >= 4;
-  po.exposure = frame.exposure * LT.exposureMul; po.bloom = _lookOff ? 0 : _bloom * LT.bloomMul;
+  // Bloom joins the last MEASURED shed (lookPostShed / autoTier fallback): bloomAmt
+  // 0 skips the ~9-pass bright+mip chain — the biggest post-chain saving left
+  // after env/SSR/shadows. GRAPHICS: LOW sheds look post via lookPostShed (not autoTier alone).
+  po.exposure = frame.exposure * LT.exposureMul;
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2) * frame.exposure; po.grade = _grade;   // exposed units (BRIGHT_FS): x the TOD exposure keeps the shipped bloom; EXPOSURE now moves it
+  PostFxOpts.applyLookShed(po, { bloom: _bloom * LT.bloomMul, ssao: _ao, godray: _gr, contact: _cs, lampVol: _lampVol });
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
   // slow at the scale floor sheds those instead. Tier 2 drops dry + car-paint SSR; wet roads use a reduced budget.
   // lookPostShed drops SSAO (+2 blurs) and god-ray (measured tier 4 or GRAPHICS: LOW).
-  po.ssao = _lookOff ? 0 : _ao;
-  po.godray = _lookOff ? 0 : _gr;
-  // lampVol sheds with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set keeps the whole march alive past po.godray = 0.
+  // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set keeps the whole march alive past po.godray = 0.
   // contact is the SSAO half of the same trap: haveAO is `aoStr > 0 || contactStr > 0`,
-  // so a shed DAYTIME frame (_cs is non-zero whenever the key is bright) would
-  // still run the SSAO pass and both of its blurs after po.ssao went to 0.
-  // Wet-road SSR keeps a reduced budget on LOW via autoTier (not lookPostShed).
+  // so a tier-4 DAYTIME frame (_cs is non-zero whenever the key is bright) would
+  // still run the SSAO pass and both of its blurs after po.ssao went to 0. Shedding contact shadows is what
+  // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
+  // Wet-road SSR keeps a reduced budget even at user LOW (tier 4); wet budget uses autoTier, not lookPostShed.
   // Measured overload/crash tier 4 still falls back to material sky/lamp reflections. Dry sheen still sheds at 2.
   if (_roadReflectionTransition.gfx !== gfx) {
     _roadReflectionTransition.value = NaN;
@@ -8328,7 +8313,7 @@ function render(dt) {
   }
   PostCommon.roadReflection(po, frame.wetness || 0, _ssrPo, PerfGov.tier(), PerfGov.autoTier(),
     _roadReflectionTransition, performance.now(), PerfGov.tierFloor() >= 4);
-  po.contact = _lookOff ? 0 : _cs; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = _lookOff ? 0 : _lampVol; po.mist = _mist;
+  po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.mist = _mist;
   PostFxOpts.gate(po);   // GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS: the tier-4 exit, taken by choice
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
@@ -8459,8 +8444,7 @@ function tickBody(now) {
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
       const settingsOnly = paused && !setupPreviewOn && !replayBuf.isScrubbing() && !photoMode &&
         els.lighting.hidden && els.camtune.hidden && els.flyby.hidden && !els.pmsettings.hidden;
-      // Honor the selected render cadence for ordinary Settings, retaining the skipped
-      // dt for camera/sky motion. Tuners, photo, scrub, garage and resume previews stay live.
+      // Settings cadence gate: retain skipped dt for sky motion; tuners/photo/scrub/garage stay live.
       if (settingsOnly) RenderRate.observe(_dtMs);
       if (settingsOnly ? RenderRate.gate(dt, _dtMs, XrBoot.comfort(), true) : RenderRate.force(dt, _dtMs))
         render(Math.min(RenderRate.dt(), setupPreviewOn ? 0.1 : 1 / 20));   // garage's 100 ms stall limit preserves motion below 20 fps

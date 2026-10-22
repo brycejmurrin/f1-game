@@ -540,6 +540,32 @@ test("moving and resting flap draws use the regional wing finish over the body f
   }
 });
 
+test("cockpit flap finish overrides reach moving and static front wings without changing exterior livery", () => {
+  const r = flapRig(); r.st.finish = "satin"; r.st.wingFinish = "chrome";
+  const source = JSON.stringify(r.st), viewLivery = Object.freeze({ finish: "gloss", wingFinish: "matte" });
+  const matte = r.M.CarMaterials.FINISH_SURFACE.matte, chrome = r.M.CarMaterials.FINISH_SURFACE.chrome;
+  for (const [blend, still] of [[0, false], [0.4, false], [1, false], [0.4, true]]) {
+    r.draws.length = 0;
+    r.draw(FLAP_TEAM, FLAP_LVL, blend, FLAP_MAT, FLAP_PAINT, null, "front", still, viewLivery);
+    const cockpit = flapDraws(r);
+    assert.ok(cockpit.length > 0, "front-wing override produces actual meshes");
+    assert.equal(cockpit.length, still || blend === 0 || blend === 1 ? 1 : r.M.Car3D.aeroFlaps(FLAP_LVL, null).filter(e => e.wing === "front").length);
+    for (const { mesh, opts } of cockpit) {
+      assert.ok(mesh.d.mat.includes(matte), `blend ${blend}, still ${still}: cockpit-selected finish reaches the mesh`);
+      assert.ok(!mesh.d.mat.includes(chrome), "the original wing finish does not leak into the cockpit override");
+      assert.equal(opts, FLAP_PAINT, "view-specific finish retains the normal draw options");
+    }
+    assert.equal(JSON.stringify(r.st), source, "the fitted exterior livery was not rewritten");
+    r.draws.length = 0;
+    r.draw(FLAP_TEAM, FLAP_LVL, blend, FLAP_MAT, FLAP_PAINT, null, "front", still);
+    assert.ok(flapDraws(r).length > 0);
+    for (const { mesh } of flapDraws(r)) {
+      assert.ok(mesh.d.mat.includes(chrome), "an ordinary draw still uses the fitted exterior finish");
+      assert.ok(!mesh.d.mat.includes(matte), "a prior cockpit override does not leak into another draw");
+    }
+  }
+});
+
 test("farBody: the decimated silhouette body past FAR_BODY_M, sticky, never when the LOD is off", () => {
   const { FieldLod: L } = loadLod();
   assert.equal(L.T.FAR_BODY_M, 250);
