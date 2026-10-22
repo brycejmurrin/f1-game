@@ -52,8 +52,8 @@ test("redactSecrets never leaves the auth value or URL userinfo in output", () =
   assert.equal(out.includes("super-secret-token-xyz"), false);
   assert.equal(out.includes("passw0rd"), false);
   assert.equal(out.includes("Bearer super-secret"), false);
-  assert.match(out, /\[REDACTED\]/);
-  assert.match(out, /\[WEBHOOK_URL\]/);
+  assert.ok(out.includes("[REDACTED]"), "auth scrubbed");
+  assert.ok(out.includes("[WEBHOOK_URL]"), "url scrubbed");
 });
 
 test("parseArgs: send flags, type uppercased, --pr, --no-bus, --dry-run; refuses junk", () => {
@@ -135,7 +135,7 @@ test("main: missing webhook env warns, still mirrors to bus, exits 0", async () 
   assert.equal(code, 0);
   assert.equal(bus.length, 1);
   assert.deepEqual(bus[0], { type: "INFO", to: "*", from: ME, text: "hello fleets" });
-  assert.match(errs.join("\n"), /APEX_AGENT_WEBHOOK/);
+  assert.ok(errs.join("\n").includes("APEX_AGENT_WEBHOOK"), "warns about missing env");
   assert.equal(errs.join("\n").includes("Bearer"), false);
 });
 
@@ -218,5 +218,5 @@ test("main: webhook error redacts auth; bus line round-trips through fleet-bus p
   );
   assert.equal(code, 1);
   assert.equal(errs.join("\n").includes("leak-me-now"), false);
-  assert.match(errs.join("\n"), /\[REDACTED\]/);
+  assert.ok(errs.join("\n").includes("[REDACTED]"), "auth redacted in webhook error");
 });
