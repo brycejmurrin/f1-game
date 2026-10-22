@@ -146,10 +146,10 @@ test("ci.yml wiring (#2664): REQUIRE_SUCCESS only on a non-draft PR run, naming 
 test("summary lists executed vs skipped jobs and names the required set", () => {
   const needs = { guards: { result: "success" }, smoke: { result: "success" }, "node-suites": { result: "skipped" }, sweeps: { result: "skipped" } };
   const md = summary(verdict(needs, { require: ["guards", "smoke"] }), ["guards", "smoke"]);
-  assert.match(md, /Executed and passed \(2\):\*\* `guards`, `smoke`/);
-  assert.match(md, /NOT verified by this run:\*\* `node-suites`, `sweeps`/);
-  assert.match(md, /Required to have run \(2\)/);
+  assert.ok(/Executed and passed \(2\):\*\* `guards`, `smoke`/.test(md));
+  assert.ok(/NOT verified by this run:\*\* `node-suites`, `sweeps`/.test(md));
+  assert.ok(/Required to have run \(2\)/.test(md));
   const red = summary(verdict({ ...needs, smoke: { result: "skipped" } }, { require: ["guards", "smoke"] }), ["guards", "smoke"]);
-  assert.match(red, /FAIL/);
-  assert.match(red, /smoke: required to succeed/);
+  assert.ok(/FAIL/.test(red));
+  assert.ok(/smoke: required to succeed/.test(red));
 });
