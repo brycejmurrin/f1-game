@@ -31,7 +31,12 @@ CWD=$(printf '%s' "$NORM" | python3 -c 'import json,sys; print(json.load(sys.std
 [ -n "$CWD" ] && [ -d "$CWD" ] && cd "$CWD"
 ERR=$(mktemp); trap 'rm -f "$ERR"' EXIT
 OUT=$(printf '%s' "$NORM" | CLAUDE_PROJECT_DIR="$DIR" bash "$DIR/.claude/hooks/bash-guard.sh" 2>"$ERR"); RC=$?
-[ "$RC" = 2 ] || { printf '%s' "$NORM" | CLAUDE_PROJECT_DIR="$DIR" bash "$DIR/.claude/hooks/protect-files.sh" 2>>"$ERR"; RC2=$?; [ "$RC2" = 2 ] && RC=2; }
+[ "$RC" = 2 ] || { printf '%s' "$NORM" | CLAUDE_PROJECT_DIR="$DIR" bash "$DIR/.claude/hooks/protect-files.sh" 2>>"$ERR"; RC2=$?; [ "$RC2" = 0 ] || RC=2; }
+# A guard that crashed (any exit but 0 or 2) is a deny, never a pass (DAD's review of #3575).
+if [ "$RC" != 0 ] && [ "$RC" != 2 ]; then
+  echo "shell-guard: bash-guard.sh failed (exit $RC); the Bash guards did not finish, so this command is refused." >>"$ERR"
+  RC=2
+fi
 if [ "$CURSOR" != 1 ]; then
   cat "$ERR" >&2
   [ -n "$OUT" ] && printf '%s\n' "$OUT"

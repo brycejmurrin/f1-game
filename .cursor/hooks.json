@@ -5,7 +5,7 @@
       { "command": "bash .cursor/hooks/shell-guard.sh", "timeout": 200 }
     ],
     "preToolUse": [
-      { "command": "bash .cursor/hooks/edit-guard.sh", "matcher": "Write", "timeout": 30, "failClosed": true }
+      { "command": "bash .cursor/hooks/edit-guard.sh", "timeout": 30, "failClosed": true }
     ],
     "beforeMCPExecution": [
       { "command": "bash .cursor/hooks/mcp-guard.sh", "timeout": 10, "failClosed": true }

@@ -203,16 +203,32 @@ test("ban 4: pkill -f is refused in both doors, with the reason in Cursor's answ
   assert.deepEqual(cursorShell("pgrep -a node").out, { permission: "allow" });
 });
 
-test("Cursor's hooks.json wires the edit guard on preToolUse Write, failing closed", () => {
+test("Cursor's hooks.json runs the edit guard on every preToolUse, failing closed; the script picks the writes", () => {
   const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/hooks.json"), "utf8"));
   const pre = cfg.hooks.preToolUse.find((h) => h.command.includes(".cursor/hooks/edit-guard.sh"));
   assert.ok(pre, "preToolUse runs edit-guard.sh");
-  assert.ok(new RegExp(pre.matcher).test("Write"), "Cursor maps Claude's Write and Edit onto its Write tool");
+  // DAD's review of #3575: which tool a Cursor string-replace or multi-edit is named is undocumented,
+  // so there is no matcher and edit-guard.sh decides what is a write.
+  assert.equal(pre.matcher, undefined, "no matcher: every tool reaches the script");
   assert.equal(pre.failClosed, true);
   assert.ok(fs.statSync(EDIT_GUARD).mode & 0o111, "edit-guard.sh is executable");
-  const noPath = run(EDIT_GUARD, { tool_name: "Write", tool_input: {} });
-  assert.equal(noPath.out.permission, "allow");
-  assert.ok(noPath.out.agent_message.includes("did NOT run"), "a payload with no path passes loudly, never silently");
+  // A write with no readable path is denied (failClosed), not waved through with a warning.
+  const noPath = run(EDIT_GUARD, { tool_name: "Write", tool_input: { content: "{}" } });
+  assert.equal(noPath.status, 2);
+  assert.equal(noPath.out.permission, "deny");
+  assert.equal(run(EDIT_GUARD, { tool_name: "StrReplace", tool_input: { old_string: "a", new_string: "b" } }).out.permission, "deny");
+  // Read-only tools, Shell and MCP calls pass untouched, path or not.
+  for (const [tool_name, tool_input] of [["Read", { file_path: "tests/data/ratchets.json" }], ["Grep", { pattern: "x" }],
+    ["Shell", { command: "ls" }], ["MCP:github_get_me", {}], ["Task", { prompt: "x" }], ["SomethingNew", { query: "x" }]])
+    assert.deepEqual(run(EDIT_GUARD, { tool_name, tool_input }).out, { permission: "allow" }, tool_name);
+  // Any other tool carrying a path is judged as a write, whatever Cursor names it.
+  const frag = path.join(ROOT, "tests/data/ratchets.d", "cursor--not-this-branch-0000" + ".json");
+  for (const tool_name of ["Write", "StrReplace", "MultiEdit", "search_replace"])
+    assert.equal(run(EDIT_GUARD, { tool_name, tool_input: { file_path: frag, old_string: "6", new_string: "1" } }).out.permission, "deny", tool_name);
+  // Delete is a removal: another branch's fragment or a generated file is refused, a doc is not.
+  assert.equal(run(EDIT_GUARD, { tool_name: "Delete", tool_input: { path: frag } }).out.permission, "deny");
+  assert.equal(run(EDIT_GUARD, { tool_name: "Delete", tool_input: { path: "version.json" } }).out.permission, "deny");
+  assert.equal(run(EDIT_GUARD, { tool_name: "Delete", tool_input: { path: "artifacts/nothing-here.md" } }).out.permission, "allow");
   // Unreadable payloads are denied (failClosed), in both adapters.
   for (const hook of [EDIT_GUARD, SHELL_GUARD]) {
     const r = spawnSync("bash", [hook], { cwd: ROOT, input: "not json", encoding: "utf8", env: ENV });
