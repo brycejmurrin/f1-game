@@ -210,7 +210,7 @@ const Car3D = (function () {
     mirrorLightAnchors, cockpitMirrorGlass,
     buildPartRecipes, aeroLevelOf, aeroStyleOf,
     buildSharedChassis, sidepodStations, bodyAnchors, buildBodyAnchors, fitBodyDetails, addInletMouth,
-    buildSidepodBodywork, buildEngineCoverBodywork,
+    buildSidepodBodywork, buildEngineCoverBodywork, addNoseSDuct,
     REAR_TYRE_CROWN, REAR_WING_TOP, FW_SPAN, CAR_HALF,
   } = body;
 
@@ -1123,23 +1123,7 @@ const Car3D = (function () {
         }
       }
     }
-    // sduct (#3411): the S-DUCT exit on the nose crown: a carbon ramp rising rearward with a dark
-    // throat and exit slot between two lips (the inlet under the nose is not drawn: no camera sees it).
-    if (!ckpt && aeroStyle && aeroStyle.sduct) {
-      const a = anchors.noseAt(1.56), b = anchors.noseAt(1.26);
-      const ramp = (z, n, rise, w, col, surf) =>
-        ({ z, x: 0, y: n.top + rise / 2, w, h: rise, t: 0.92, col, surf });
-      const fr = ramp(1.56, a, 0.010, 0.15), rr = ramp(1.26, b, 0.048, 0.18);
-      addSpan(out, fr, rr, CARBON, null, SURFACES.carbon);
-      // throat: 4 mm proud of the ramp's top skin, so it never shares its plane
-      const top = (r, w) => ({ z: r.z, x: 0, y: r.y + r.h / 2 + 0.003, w, h: 0.006 });
-      addSpan(out, top(ramp(1.50, anchors.noseAt(1.50), 0.010 + 0.038 * 0.2, 0.15), 0.07),
-                   top(rr, 0.11), INTAKE, null, SURFACES.carbon);
-      addBox(out, 0, rr.y + 0.004, 1.256, 0.13, 0.030, 0.008, INTAKE);   // the exit mouth
-      for (const s of [-1, 1]) addSpan(out,
-        { z: 1.52, x: s * 0.080, y: a.top + 0.006, w: 0.010, h: 0.012 },
-        { z: 1.25, x: s * 0.098, y: b.top + 0.035, w: 0.012, h: 0.070 }, c1);
-    }
+    if (!ckpt && aeroStyle && aeroStyle.sduct) addNoseSDuct(out, anchors, c1);   // #3411
 
     // BIG CAP (STYLE): a wide painted filler plate on the cover crown, so a fuel option reads from above.
     if (!ckpt && fuelStyle && fuelStyle.capBig) {
@@ -2397,10 +2381,7 @@ const Car3D = (function () {
         addBox(out, 0, (0.56 + 0.79) / 2, -2.10, 0.030, 0.23, 0.10, DARK);
         for (const s of [-1, 1]) addBox(out, s * 0.255, 0.835, -2.14, 0.014, 0.16, 0.31, endplateC || DARK);
       }
-      if (aDrs) {
-        // Active-aero DRS: an extra open slot flap proud of the top flap.
-        // Not baked: it is part of the FIA RW Flap, so rearFlap() (car-body-geom.js) flies it as "rearDrs" in rearC.
-      }
+      // aDrs (active-aero DRS slot flap) is not baked: rearFlap() (car-body-geom.js) flies it as "rearDrs" in rearC.
       const drsSX = aLvl >= 3 ? 0.16 : 0.13;
       // DRS actuator pod + the slot-gap rail it sits on. The pod used to be a
       // 5 cm brick lost on the crown; a taller raked housing and a carbon
@@ -2426,11 +2407,8 @@ const Car3D = (function () {
       const lampW = Math.min(0.042, tipR * 0.70), lampH = Math.min(0.052, tipR * 0.85);
       addSpan(out, { z: -2.47, x: 0, y: lampY, w: 0.14, h: 0.16, t: 0.78 },
                    { z: -2.57, x: 0, y: lampY, w: 0.115, h: 0.13, t: 0.62 }, DARK);
-      // Housing-dark body, only a 4 mm rear lens glows (#3412: a 34 mm emissive cube read as a lit
-      // block from above the tail). The lens clears the tip face (-2.582) and megaphone mouth (-2.588).
-      addBox(out, 0, lampY, -2.579, lampW * 1.15, lampH * 1.10, 0.018, DARK);
-      addBox(out, 0, lampY, -2.590, lampW * 1.15, lampH * 1.10, 0.004,
-             [1.55, 0.16, 0.11], SURFACES.emissive);
+      addBox(out, 0, lampY, -2.579, lampW * 1.15, lampH * 1.10, 0.018, DARK);   // #3412: dark body, only a 4 mm lens glows (clears tip -2.582, megaphone -2.588)
+      addBox(out, 0, lampY, -2.590, lampW * 1.15, lampH * 1.10, 0.004, [1.55, 0.16, 0.11], SURFACES.emissive);
       addBox(out, 0, lampY, -2.5935, lampW * 0.38, lampH * 0.36, 0.003,
              [1.85, 0.18, 0.10], SURFACES.emissive);   // rain-light core (bloom-capped)
 
