@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // gfx-probe.mjs — WEBGPU (WGX) and THREE (TLX) screenshot probe with logging.
-// @doc WEBGPU + THREE screenshot probe with the right Chromium flags: `--backend`, `--tlx-webgpu`, `--lavapipe`, `--lite`.
+// @doc WEBGPU + THREE screenshot probe with software, Lavapipe or verified hardware Chromium paths.
 // @skill renderer-debug / mcp-probe
 //
 // Software adapters (WGX + TLX WebGPU): primary gate is visible #game /
@@ -30,6 +30,7 @@ import {
   startStaticServer, launchChromium, shutdown, sleep,
   WEBGPU_CHROMIUM_ARGS, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV,
 } from "../lib/harness.mjs";
+import { chromiumLaunchOptionsForBackend, requireHardwareWebGpu } from "../shot/probe-page.mjs";
 
 import { presentationDeadline, presentationDiagnostics, acquirePresentationResource } from "../lib/presentation.mjs";
 
@@ -51,6 +52,7 @@ function parseArgs(argv) {
     tune: [],        // --tune cloudCover=0.9 (repeatable): __apex.lightTune after the race starts
     tlxWebgpu: false,
     lavapipe: false,
+    hardware: false,
     outDir: null,
     retries: 2,
     retryDelayMs: 3000,
@@ -73,6 +75,7 @@ function parseArgs(argv) {
     else if (a === "--iphone") o.iphone = true;
     else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
     else if (a === "--lavapipe") o.lavapipe = true;
+    else if (a === "--hardware") o.hardware = true;
     else if (a === "--ls") { const kv = next(); skip.add(kv); if (kv) o.ls.push(kv); }
     else if (a === "--present-timeout") { const v = next(); skip.add(v); o.presentMs = Math.max(1000, parseInt(v, 10) || 60000); }
     else if (a === "--no-stale-check") o.noStaleCheck = true;
@@ -82,12 +85,13 @@ function parseArgs(argv) {
   node tools/gfx/gfx-probe.mjs [--backend webgpu|three] [--lite] [--iphone]
                            [--tod day|dusk|dawn|night] [--weather dry|wet|rain|overcast|fog]
                            [--tune knob=value]…  (lighting knob after the race starts)
-                           [--tlx-webgpu] [--lavapipe]
+                           [--tlx-webgpu] [--lavapipe] [--hardware]
                            [--retries N] [--retry-delay MS]
                            [track] [--cam orbit|eye|park] [--out DIR]
 
   --tlx-webgpu  with --backend three, unpin tlxForceGL (three's WebGPU path)
   --lavapipe    Dawn via Mesa Lavapipe ICD (pair with --tlx-webgpu on Cloud)
+  --hardware    use full Chromium with platform-native GPU flags; require identifiable, non-fallback WebGPU hardware
   --ls k=v      set a localStorage key before boot (repeatable)
   --present-timeout MS   total attempt page-operation wall budget (default 60000)
   --no-stale-check       skip the second capture (a soft-present frame that does not
@@ -125,6 +129,14 @@ if (opts.backend !== "webgpu" && opts.backend !== "three") {
 if (opts.lavapipe && opts.backend === "three" && !opts.tlxWebgpu) {
   console.error("gfx-probe: --lavapipe needs --tlx-webgpu (it is a WebGPU stack); " +
     "for the WebGL2 pin run: --backend three  [no --lavapipe]");
+  process.exit(2);
+}
+if (opts.hardware && opts.lavapipe) {
+  console.error("gfx-probe: --hardware and --lavapipe are mutually exclusive");
+  process.exit(2);
+}
+if (opts.hardware && opts.backend === "three" && !opts.tlxWebgpu) {
+  console.error("gfx-probe: --hardware with --backend three requires --tlx-webgpu");
   process.exit(2);
 }
 
@@ -198,24 +210,28 @@ async function runProbeAttempt(attemptNum) {
       (lateServer) => lateServer.close());
     log("attempt", `${attemptNum}/${opts.retries} — server ${srv.url}`);
 
-    let launchArgs;
+    let launchOptions;
     let launchEnv;
-    if (opts.lavapipe) {
-      launchArgs = [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"];
+    if (opts.hardware) {
+      const renderer = opts.backend === "three" ? "three" : "webgpu";
+      launchOptions = chromiumLaunchOptionsForBackend(renderer, { gpu: "hardware" });
+    } else if (opts.lavapipe) {
+      launchOptions = { args: [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"] };
       launchEnv = { ...process.env, ...WEBGPU_LAVAPE_ENV };
     } else if (opts.backend === "webgpu" || opts.tlxWebgpu) {
-      launchArgs = [...WEBGPU_CHROMIUM_ARGS];
+      launchOptions = { args: [...WEBGPU_CHROMIUM_ARGS] };
     } else {
-      launchArgs = ["--headless=new", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
+      launchOptions = { args: ["--headless=new", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"] };
     }
     log("browser", "launch", {
-      args: launchArgs.length,
+      args: launchOptions.args.length,
       lavapipe: opts.lavapipe,
+      hardware: opts.hardware,
       tlxWebgpu: opts.tlxWebgpu,
     });
 
     browser = await acquirePresentationResource(bounded, "browser launch", () => launchChromium({
-      args: launchArgs,
+      ...launchOptions,
       ...(launchEnv ? { env: launchEnv } : {}),
     }), (lateBrowser) => lateBrowser.close());
     const viewport = opts.iphone
@@ -286,6 +302,11 @@ async function runProbeAttempt(attemptNum) {
       () => window.__apex,
       null, { polling: 100, timeout: 90000 },
     ));
+
+    const hardwareAdapter = opts.hardware
+      ? await retryStep("hardware-adapter", () => requireHardwareWebGpu(page), { attempts: 1 })
+      : null;
+    if (hardwareAdapter) log("hardware-adapter", "verified identifiable non-fallback adapter", hardwareAdapter);
 
     log("assets", "loadModels start");
     await page.evaluate(async () => {
@@ -536,6 +557,7 @@ async function runProbeAttempt(attemptNum) {
         : ((typeof GLX !== "undefined" && GLX.roadLutReady) ? GLX : null);
       return {
         backend: env.backend,
+        backendState: env.backendState || null,
         pick: (() => { try { return localStorage.getItem("apex26.gfxBackend"); } catch { return null; } })(),
         bound: (() => { try { return sessionStorage.getItem("apex26.gfxBound"); } catch { return null; } })(),
         fail: (() => { try { return localStorage.getItem("apex26.gfxWgxFail"); } catch { return null; } })(),
@@ -605,6 +627,20 @@ async function runProbeAttempt(attemptNum) {
         (payload.bound ? ` (gfxBound=${payload.bound})` : "") +
         (payload.fail ? ` (gfxWgxFail=${payload.fail})` : ""));
     }
+    if (opts.hardware) {
+      const state = payload.backendState || {};
+      const problems = [];
+      if (state.api !== "webgpu") problems.push(`renderer API=${state.api || "unknown"}`);
+      if (opts.backend === "three") {
+        if (state.softAdapter !== false) problems.push(`softAdapter=${String(state.softAdapter)}`);
+        if (state.liteGpu !== false) problems.push(`liteGpu=${String(state.liteGpu)}`);
+      } else {
+        if (state.lite !== false) problems.push(`lite=${String(state.lite)}`);
+        if (state.minimal !== false) problems.push(`minimal=${String(state.minimal)}`);
+      }
+      if (payload.gpuErrors !== 0) problems.push(`gpuErrors=${String(payload.gpuErrors)}`);
+      if (problems.length) throw new Error(`hardware WebGPU did not stay on the full adapter path: ${problems.join(", ")}`);
+    }
 
     if (consoleLines.length) {
       writeFileSync(join(opts.outDir, "console.txt"), consoleLines.join("\n") + "\n", "utf8");
@@ -615,7 +651,7 @@ async function runProbeAttempt(attemptNum) {
     const presentation = { ok: true, diagnostics: latestDiagnostics,
       boundary: "renderer display completion; not physical scanout" };
     writeFileSync(join(opts.outDir, "presentation.json"), JSON.stringify(presentation, null, 2));
-    return { ...payload, frame: frameStats, presentation };
+    return { ...payload, hardwareAdapter, frame: frameStats, presentation };
   } catch (error) {
     // A blocked page cannot supply a timeout snapshot; retain the last milestone.
     try { latestDiagnostics = await presentationDeadline(1000)("failure diagnostics", () => browser?.contexts()[0]?.pages()[0]?.evaluate(presentationDiagnostics)); } catch (_) { /* retain milestone */ }
@@ -637,7 +673,7 @@ let lastError = null;
 
 log("start", JSON.stringify({
   backend: opts.backend, track: opts.track, lite: opts.lite, iphone: opts.iphone,
-  tlxWebgpu: opts.tlxWebgpu, lavapipe: opts.lavapipe,
+  tlxWebgpu: opts.tlxWebgpu, lavapipe: opts.lavapipe, hardware: opts.hardware,
   cam: opts.cam, outDir: opts.outDir, retries: opts.retries,
 }));
 
@@ -655,6 +691,7 @@ for (let attempt = 1; attempt <= opts.retries; attempt++) {
       iphone: opts.iphone,
       tlxWebgpu: opts.tlxWebgpu,
       lavapipe: opts.lavapipe,
+      hardware: opts.hardware,
       cam: opts.cam,
       logPath,
       ...payload,
@@ -683,6 +720,7 @@ for (let attempt = 1; attempt <= opts.retries; attempt++) {
       iphone: opts.iphone,
       tlxWebgpu: opts.tlxWebgpu,
       lavapipe: opts.lavapipe,
+      hardware: opts.hardware,
       cam: opts.cam,
       logPath,
       error: String(e.message || e),

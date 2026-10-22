@@ -60,6 +60,20 @@ function loadStore(weather, saved = null, defs = DEFS) {
   return { LS, store, st, stored, writes, ctx, G, LT: vm.runInContext("LightTune.LT", ctx) };
 }
 
+test("rain knobs re-seed an arriving shower on a dry road, and leave a cleared wet road alone", () => {
+  const b = loadStore("dry", null, [...DEFS, { id: "rainCount", def: 360, min: 0, max: 1000, reinitRain: true }]);
+  let calls = 0, rainfall = 0.2;
+  b.G.viewRainfall = () => rainfall;
+  b.G.isWetRoad = () => false;
+  b.G.initRainDrops = () => { calls++; };
+  b.store.set("rainCount", 400);
+  assert.equal(calls, 1, "rain is arriving before the road is wet");
+  rainfall = 0;
+  b.G.isWetRoad = () => true;
+  b.store.set("rainCount", 450);
+  assert.equal(calls, 1, "standing water does not re-seed falling rain");
+});
+
 function bootTuner(weather = "wet", saved = null) {
   const defs = [...DEFS, { id: "perChunkLights", def: 0, min: 0, max: 1 },
     { id: "roadChunkLamps", def: 1, min: 0, max: 1 }]

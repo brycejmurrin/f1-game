@@ -51,6 +51,41 @@ function stubStore() {
   return { get: (k, d) => (m.has(k) ? m.get(k) : d), set: (k, v) => m.set(k, v), subscribe: () => () => {}, _map: m };
 }
 
+test("fold summaries preserve identical DOM, including normalized entities, and repaint changed content", () => {
+  const ctx = vm.createContext({}); seedDom(ctx);
+  const { paintFold } = vm.runInContext("Dom", ctx);
+  let html = "", writes = 0;
+  const target = {
+    get innerHTML() { return html; },
+    set innerHTML(v) {
+      writes++;
+      // The browser serializes parsed ampersands/entities rather than retaining
+      // the input spelling. This fixture deliberately returns different bytes.
+      html = v.replace(/&#38;/g, "&amp;").replace(/ &(?!amp;)/g, " &amp;");
+    },
+  };
+  const bits = [["k", "MUSIC & SOUND"], ["on", "ON"], ["val", "&#38; MY TRACKS"]];
+  paintFold(target, bits);
+  assert.equal(writes, 1, "the first render replaces the summary once");
+  assert.equal(html, '<span data-fold="k">MUSIC &amp; SOUND</span><span data-fold="sep"> · </span><span data-fold="on">ON</span><span data-fold="sep"> · </span><span data-fold="val">&amp; MY TRACKS</span>');
+  for (let i = 0; i < 100; i++) paintFold(target, bits.map((p) => p.slice()));
+  assert.equal(writes, 1, "equivalent newly allocated inputs preserve the rendered nodes");
+  bits[1] = ["off", "OFF"]; bits[2][1] = "2 TRACKS";
+  paintFold(target, bits);
+  assert.equal(writes, 2, "mutated dynamic fold state repaints immediately");
+  assert.equal(html.includes('<span data-fold="off">OFF</span>'), true);
+  assert.equal(html.includes('<span data-fold="val">2 TRACKS</span>'), true);
+  html = "External summary replacement";
+  paintFold(target, bits);
+  assert.equal(writes, 3, "an outside DOM change cannot be hidden by the cache");
+  paintFold(target, bits);
+  assert.equal(writes, 3);
+  paintFold(target, []);
+  assert.equal(html, ""); assert.equal(writes, 4, "empty content clears the previous summary");
+  paintFold(target, []); paintFold(null, bits);
+  assert.equal(writes, 4, "empty and missing targets remain safe");
+});
+
 /* ── RESULTS / STANDINGS on the real SeasonCal ─────────────────────────── */
 function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true, globals = null }) {
   const dom = makeDom();
@@ -484,7 +519,7 @@ test("THREE PATH and SCREENSHOTS confirms expire back to their real labels", () 
 });
 
 /* ── MUSIC & SOUND readout ────────────────────────────────────────────── */
-function bootAudio({ soundOn, musicEnabled }) {
+function bootAudio({ soundOn, musicEnabled, followPause = false }) {
   const dom = makeDom();
   // Every volume slider the panel syncs, each inside its own .tune-row the way
   // index.html has them — the panel toggles "tune-off" on that ancestor.
@@ -493,6 +528,12 @@ function bootAudio({ soundOn, musicEnabled }) {
     row.appendChild(dom.byId(id)); dom.body.appendChild(row);
   }
   const calls = [];
+  const track = { name: "Song A", source: "builtin" };
+  const counts = { tuneReads: 0 };
+  const tone = Object.fromEntries(["pitch", "detune", "revRange", "brightness", "whine", "sub", "limiter", "harvest", "ers", "wind", "screech", "brakes", "shift", "rivals", "reverb", "overrun"].map((k) => [k, 1]));
+  const layers = { whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true };
+  const observers = [], timers = new Map();
+  let timerId = 0;
   // The ENGINE TONE section reads its state back from the engine on every
   // sync, so the catch-all arm (which returns undefined) is not enough for it:
   // `GameAudio.profiles().includes(...)` needs a real array. These mirror the
@@ -500,8 +541,10 @@ function bootAudio({ soundOn, musicEnabled }) {
   // holds the two in step.
   const TONE_STUB = {
     profiles: () => ["team", "broadcast", "trackside", "cockpit", "v10"],
-    tune: () => ({ pitch: 1, detune: 1, revRange: 1, brightness: 1, whine: 1, sub: 1, limiter: 1 }),
-    layers: () => ({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true }),
+    tune: () => { counts.tuneReads++; return { ...tone }; },
+    setTune: (patch) => Object.assign(tone, patch),
+    layers: () => ({ ...layers }),
+    setLayer: (k, on) => { layers[k] = on; },
     setProfile: (v) => v,
     granular: () => ({ on: true, ready: true, active: true, period: 80 }),
     setGranular: (v) => v,
@@ -514,11 +557,16 @@ function bootAudio({ soundOn, musicEnabled }) {
     radioFxLevel: () => 1,
     setRadioFx: (v) => v,
   };
-  const GameAudio = new Proxy({}, { get: (_, k) => (k === "trackName" ? () => "Song A" : k === "musicSource" ? () => "builtin"
+  const GameAudio = new Proxy({}, { get: (_, k) => (k === "trackName" ? () => track.name : k === "musicSource" ? () => track.source
     : k === "sourceCounts" ? () => ({ builtin: 4, user: 0 }) : k === "setMusicSource" ? (v) => v
     : TONE_STUB[k] ? TONE_STUB[k]
     : k === "setMusicVolume" || k === "setSfxVolume" ? (v) => v : (...a) => { calls.push([k, ...a]); }) });
   const sb = { Math, JSON, Object, Array, String, Number, console, document: dom.document, GameAudio };
+  if (followPause) Object.assign(sb, {
+    MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(root) { this.root = root; } },
+    setInterval: (fn) => { const id = ++timerId; timers.set(id, fn); return id; },
+    clearInterval: (id) => timers.delete(id),
+  });
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
@@ -533,11 +581,10 @@ function bootAudio({ soundOn, musicEnabled }) {
   vm.runInContext(src("js/audio/panel.js"), ctx, { filename: absSrc("js/audio/panel.js") });
   const store = stubStore();
   store.set("musicSource", "builtin");
-  // isRaining — SOUND ON mid-race restarts rain from live weather (panel.js),
-  // not raceWeather. The stub must expose the same hook game.js puts on G.
-  const G = { $: (id) => dom.byId(id), els: { soundbtn: dom.byId("soundbtn") }, store, soundOn, musicEnabled, state: "race", trackIdx: 0, isRaining: () => false };
+  // SOUND ON reads falling rain. Match the live game.js facade in this fixture.
+  const G = { $: (id) => dom.byId(id), els: { soundbtn: dom.byId("soundbtn") }, store, soundOn, musicEnabled, state: "race", trackIdx: 0, viewRainfall: () => 0 };
   const api = vm.runInContext("AudioPanel", ctx).create(G);
-  return { dom, G, api, calls };
+  return { dom, G, api, calls, track, tone, layers, counts, observers, timers };
 }
 
 test("MUSIC & SOUND names the gate that is shut and captions DEFAULT as DEFAULT", () => {
@@ -562,6 +609,67 @@ test("MUSIC & SOUND names the gate that is shut and captions DEFAULT as DEFAULT"
   off.api.init();
   off.dom.dispatch(off.dom.byId("pm-audio"), { type: "click" });
   assert.equal(off.dom.byId("as-now").textContent, "Music off", "music itself off: the old word still applies");
+});
+
+test("pause music timer updates the visible card without syncing hidden audio settings", () => {
+  const h = bootAudio({ soundOn: true, musicEnabled: true, followPause: true });
+  h.api.init();
+  const pause = h.dom.byId("pausemenu"), card = h.dom.byId("pm-now-card");
+  const observer = h.observers.find((o) => o.root === pause);
+  pause.hidden = false; observer.fn();
+  assert.equal(h.timers.size, 1);
+  h.counts.tuneReads = 0;
+  const note = h.dom.byId("as-p-note");
+  let noteText = note.textContent, hiddenWrites = 0;
+  Object.defineProperty(note, "textContent", { get: () => noteText, set: (v) => { noteText = v; hiddenWrites++; } });
+  const now = h.dom.byId("pm-now"), text = { nodeType: 3, data: now.textContent, nextSibling: null };
+  let replacements = 0;
+  Object.defineProperty(now, "firstChild", { get: () => text });
+  Object.defineProperty(now, "textContent", { get: () => text.data, set: (v) => { text.data = v; replacements++; } });
+  const next = h.dom.byId("pm-skip"), play = h.dom.byId("pm-play");
+  let nextDisabled = next.disabled, disabledWrites = 0, ariaWrites = 0;
+  Object.defineProperty(next, "disabled", { get: () => nextDisabled, set: (v) => { nextDisabled = v; disabledWrites++; } });
+  const attr = play.setAttribute;
+  play.setAttribute = (k, v) => { ariaWrites++; attr(k, v); };
+  for (let i = 0; i < 5; i++) [...h.timers.values()].forEach((fn) => fn());
+  assert.equal(h.counts.tuneReads, 0, "the pause timer never reads the hidden engine tone panel");
+  assert.equal(hiddenWrites + disabledWrites + ariaWrites + replacements, 0, "unchanged ticks produce no readout/transport writes");
+  h.track.name = "Song B"; h.track.source = "user";
+  [...h.timers.values()].forEach((fn) => fn());
+  assert.equal(now.textContent, "Song B");
+  assert.equal(h.dom.byId("pm-now-src").textContent, "My tracks");
+  assert.equal(replacements, 0, "track changes retain the existing text node");
+  assert.equal(h.dom.byId("as-now").textContent, "Song A", "hidden card waits for its real page entry");
+  h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
+  assert.equal(h.dom.byId("as-now").textContent, "Song B", "opening MUSIC performs a full sync");
+  assert.ok(h.counts.tuneReads > 0);
+  h.G.musicEnabled = false; [...h.timers.values()].forEach((fn) => fn());
+  assert.equal(now.textContent, "Music off"); assert.equal(card.hidden, true); assert.equal(next.disabled, true);
+  h.G.musicEnabled = true; h.G.soundOn = false; [...h.timers.values()].forEach((fn) => fn());
+  assert.equal(now.textContent, "Sound off"); assert.equal(play.disabled, true);
+  h.G.soundOn = true; [...h.timers.values()].forEach((fn) => fn());
+  assert.equal(card.hidden, false); assert.equal(next.disabled, false); assert.equal(play.disabled, false);
+  pause.hidden = true; observer.fn();
+  assert.equal(h.timers.size, 0, "closing pause stops polling");
+});
+
+test("engine tone sync skips unchanged readouts and layer ARIA while retaining immediate edits", () => {
+  const h = bootAudio({ soundOn: true, musicEnabled: true });
+  h.api.init();
+  const slider = h.dom.byId("as-t-pitch"), out = h.dom.byId("as-t-pitch-v"), layer = h.dom.byId("as-l-whine");
+  let value = out.textContent, textWrites = 0, ariaWrites = 0;
+  Object.defineProperty(out, "textContent", { get: () => value, set: (v) => { value = v; textWrites++; } });
+  const attr = layer.setAttribute;
+  layer.setAttribute = (k, v) => { if (k === "aria-pressed") ariaWrites++; attr(k, v); };
+  for (let i = 0; i < 5; i++) h.dom.dispatch(slider, { type: "input" });
+  assert.equal(textWrites + ariaWrites, 0, "repeated input at the same value makes no presentation writes");
+  slider.value = String(+slider.value + 1);
+  h.dom.dispatch(slider, { type: "input" });
+  assert.equal(out.textContent, String(Math.round(h.tone.pitch * 100)));
+  assert.equal(textWrites, 1, "a real tone change updates its readout once");
+  h.dom.dispatch(layer, { type: "click" });
+  assert.equal(layer.getAttribute("aria-pressed"), "false");
+  assert.equal(ariaWrites, 1, "a real layer change is announced immediately");
 });
 
 /* ── Escape ladder and short-viewport scroll, pinned from the shell ───── */

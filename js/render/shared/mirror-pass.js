@@ -753,6 +753,7 @@ const MirrorPass = (function () {
     // the car. Hides the frame, the chip and the PiP and clears the rect.
     function standDown() {
       cancelPreparation();
+      _run = 0;   // no render() slot during the interruption: the next full pass must refresh its instance pack
       if (_shown) { _shown = false; const e = el(); if (e) e.hidden = true; document.body.classList.toggle("hud-mirror-on", false); document.body.classList.toggle("hud-mirror-side", false); _sideFits = false; }
       if (_chipShown) { _chipShown = false; const c = chip(); if (c) c.hidden = true; }
       if (_pipShown) { _pipShown = false; const e = pipEl(); if (e) e.hidden = true; }

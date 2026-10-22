@@ -13,7 +13,7 @@ const TrackModels = (function () {
 
   // Growable typed accumulators for the props/glass/water fuse (PERF-FINDINGS).
   // Named-arity push — a rest/arguments shim measured slower than Array.push.
-  // seal() copies to an exact-length TypedArray so createMesh/toF32 does not
+  // seal() exposes an exact-length TypedArray so createMesh/toF32 does not
   // upload spare capacity. Stages from emptyBuffer() stay plain arrays.
   function makeAccum(Type, est) {
     let data = new Type(est > 0 ? est : 256);
@@ -42,6 +42,15 @@ const TrackModels = (function () {
         if (add > 3) data[n++] = d;
         if (add > 4) data[n++] = e;
         if (add > 5) data[n++] = f;
+      },
+      append(source) {
+        grow(source.length);
+        data.set(source, n);
+        n += source.length;
+      },
+      appendIndices(source, base) {
+        grow(source.length);
+        for (let i = 0; i < source.length; i++) data[n++] = base + source[i];
       },
       // A view, not a copy: slice() of the fleet's biggest accumulator (vegas,
       // ~150 MB of f64) was ~20 % of the build and doubled the peak for a moment.
@@ -88,10 +97,12 @@ const TrackModels = (function () {
     appendAll(target.nrm, source.nrm);
     appendAll(target.col, source.col);
     if (target.mat && source.mat) appendAll(target.mat, source.mat);
-    for (const i of source.idx) target.idx.push(base + i);
+    if (typeof target.idx.appendIndices === "function") target.idx.appendIndices(source.idx, base);
+    else for (const i of source.idx) target.idx.push(base + i);
   }
 
   function appendAll(target, source) {
+    if (typeof target.append === "function") { target.append(source); return; }
     for (let i = 0; i < source.length; i++) target.push(source[i]);
   }
 

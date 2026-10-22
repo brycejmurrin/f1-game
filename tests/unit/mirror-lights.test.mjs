@@ -23,15 +23,49 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
-function load() {
+function load(knobs = {}, forceLive = false) {
   const clock = { now: 0 };
   const ctx = { performance: { now: () => clock.now }, Math, Float32Array, Uint32Array, Array, Object,
-    LightKnobs: { LT: { lampWarmup: 0, lampFlicker: 0 } }, PerfGov: { tier: () => 0 } };
+    LightKnobs: { LT: { lampWarmup: 0, lampFlicker: 0, ...knobs } }, PerfGov: { tier: () => 0 } };
   vm.createContext(ctx);
   vm.runInContext(read("js/render/shared/light-budget.js") + "\n;globalThis.LightBudget = LightBudget;", ctx, { filename: absSrc("js/render/shared/light-budget.js") });
-  vm.runInContext(read("js/lighting/frame-lights.js") + "\n;globalThis.FrameLights = FrameLights;", ctx, { filename: absSrc("js/lighting/frame-lights.js") });
-  return { FL: ctx.FrameLights, clock };
+  const source = read("js/lighting/frame-lights.js");
+  // The retained warm-up formula is the oracle: force it for settled lamps as
+  // well, then compare every public output with the optimized dispatch.
+  vm.runInContext((forceLive ? source.replace("warmDone ? settledFl : _flLive", "_flLive") : source) + "\n;globalThis.FrameLights = FrameLights;", ctx, { filename: absSrc("js/lighting/frame-lights.js") });
+  return { FL: ctx.FrameLights, clock, knobs: ctx.LightKnobs.LT };
 }
+
+test("settled flicker is exact through warm-up, knob edits, mirrors and full-set refreshes", () => {
+  for (const spacing of [12, 1000]) {
+    const a = load({ lampWarmup: 1, lampFlicker: 0.3 }), b = load({ lampWarmup: 1, lampFlicker: 0.3 }, true);
+    const track = { _lights: street(spacing) }, cars = new Array(10).fill({});
+    const fa = { perChunkLights: 1 }, fb = { perChunkLights: 1 };
+    for (let f = 0; f < 180; f++) {
+      // Keep each wall-clock step <1 s so this exercises the 8 s transition,
+      // followed by instant/long/re-settled warm-up and live tint/dim changes.
+      a.clock.now = b.clock.now = f * 100;
+      if (f === 90) a.knobs.lampWarmup = b.knobs.lampWarmup = 4;
+      if (f === 100) a.knobs.lampWarmup = b.knobs.lampWarmup = 0;
+      if (f === 110) a.knobs.lampWarmupDim = b.knobs.lampWarmupDim = 0.0000000000000002;
+      if (f === 120) a.knobs.lampWarmupWarm = b.knobs.lampWarmupWarm = Infinity;
+      if (f === 130) a.knobs.lampWarmupWarm = b.knobs.lampWarmupWarm = -3;
+      if (f === 140) a.knobs.lampWarmupDim = b.knobs.lampWarmupDim = 1e20;
+      if (f === 150) a.knobs.lampFlicker = b.knobs.lampFlicker = 0;
+      if (f === 160) a.knobs.lampFlicker = b.knobs.lampFlicker = 0.7;
+      const eye = [0, 1.2, 500 + f * 0.5];
+      for (const [r, frame] of [[a, fa], [b, fb]]) {
+        frame.time = f / 10;
+        r.FL.setFrameLights(frame, track, cars, eye, [1, 0.9, 0.8], [0, 0, 1], 1);
+        frame.tailCount = 0; frame.tailStart = frame.lights.length / 15;
+      }
+      for (const key of ["lights", "lampLum", "allLights"])
+        assert.deepEqual(Array.from(fa[key]), Array.from(fb[key]), `${spacing} m, frame ${f}: ${key}`);
+      const ma = a.FL.viewLights(fa, eye, [0, 0, -1]), mb = b.FL.viewLights(fb, eye, [0, 0, -1]);
+      assert.deepEqual(ma && Array.from(ma.lights), mb && Array.from(mb.lights), `mirror frame ${f}`);
+    }
+  }
+});
 
 function street(spacing) {
   const L = [];

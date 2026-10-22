@@ -18,6 +18,7 @@ import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -370,6 +371,25 @@ test("A-P1: no SSAO / contact / godray / SSR / flare input -> the depth is not n
   assert.equal(post.needsDepth({ ...OFF, ssao: 0.5 }, { ...NIGHT, invProj: null }), false, "no invProj: SSAO cannot run");
 });
 
+// B·H26-R1 (GLX twin of B-H15): GLX's present() kept the scene depth (MSAA blit, or no invalidate on the direct
+// phone path) for ANY daytime sun, behind the camera included, though its composite taps texture(uDepth, uSunUV)
+// only under the same three terms as TLX. Both now ask the one shared predicate.
+test("B·H26-R1: PostCommon.flareTapsDepth is the composite's flare-tap guard; GLX keeps depth for the flare only through it", () => {
+  const sun = (F) => PostCommon.sunScreen(F.sunDir, F.viewProj, F.sunColor, {});
+  assert.equal(PostCommon.flareTapsDepth(sun(DAY)), true, "a day sun on screen: the flare taps depth");
+  assert.equal(PostCommon.flareTapsDepth(sun(DAY), 0), false, "LENS FLARE 0: uFlareStr is 0, no tap");
+  assert.equal(PostCommon.flareTapsDepth(sun(DAY_OFF)), false, "in front, bright, off screen: no tap");
+  assert.equal(PostCommon.flareTapsDepth(sun({ ...DAY, sunDir: [0, 0.3, 0.95] })), false, "behind the camera: no tap");
+  assert.equal(PostCommon.flareTapsDepth(sun(NIGHT)), false, "night: the brightness gate zeroes the flare");
+  const glx = read("js/render/glx/post.js");
+  assert.match(glx, /const flareMaybe = PostCommon\.flareTapsDepth\(sun, flareMul\);/);
+  assert.doesNotMatch(glx, /F\.sunDir\[1\] > -0\.02/, "the any-daytime-sun gate kept depth with the sun off screen");
+  assert.match(glx, /gl\.uniform1f\(compU\.uFlareStr, flareStr \* flareMul\)/, "the uniform uses the same flareMul");
+  // The predicate is exact only while the GLSL tap keeps these terms (glsl-post.js composite).
+  assert.match(read("js/render/glx/shaders/glsl-post.js"),
+    /float sunVis = \(uFlareStr > 0\.0 && uSunUV\.x >= 0\.0 && uSunUV\.x <= 1\.0 && uSunUV\.y >= 0\.0 && uSunUV\.y <= 1\.0\)\s*\? smoothstep\(0\.9990, 0\.9999, texture\(uDepth, uSunUV\)\.r\) : 0\.0;/);
+});
+
 test("A-P1: WebGL2 invalidates the scene FBO's depth after the scene pass only on frames that read none of it", async (t) => {
   const h = await postRig(t);
   const off = h.scenePass(OFF, NIGHT);
@@ -441,7 +461,7 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
     const I = new THREE.Matrix4().toArray();
     const _postF = { proj: I, invProj: I, invVP: I, viewProj: I, upVS: [0, 1, 0], time: 0, sunVS: [0, 0, -1], noEnv: NOENV };
     const _warmHistory = [];   // tlx.js keeps every warm's stages (B·H8 prep timeline)
-    const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0 };
+    const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, garageScene: null, total: null, attempts: 0, failed: 0 };
     let _warmAt = 0, _warmAttempts = 0, _warmPending = null, _warmRequested = false, _warmDone = false, _gpuLastOperation = "";
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
     ${tslice("      function _mirWarmSwap() {", "      function _showInstanced(rec, order) {")}
@@ -515,11 +535,64 @@ test("A-W1: off on a software adapter (unset knob), forced on by apex26.tlxDrawW
   assert.equal(off.W1.stages.drawn, null);
 });
 
+// Execute the production uniform derivation with its real uniform defaults;
+// this tests CPU illumination inputs, not the shader's per-ray If branches.
+function skyDeriveHarness() {
+  const source = read("js/render/three/tsl-sky.js");
+  const uniforms = source.slice(source.indexOf("    const U = {"), source.indexOf("    const C = ctx"));
+  const helpers = source.slice(source.indexOf("    const sstep ="), source.indexOf("    function derive()"));
+  const context = vm.createContext({ THREE, uniform: (value) => ({ value }), C: null });
+  vm.runInContext(uniforms + helpers + fnSource(source, "function derive()") +
+    "\n;globalThis.api = { U, D, derive };", context, { filename: absSrc("js/render/three/tsl-sky.js") });
+  return (stars, y) => {
+    const { U, D, derive } = context.api;
+    U.stars.value = stars;
+    U.sunDir.value.set(Math.sqrt(1 - y * y), y, 0);
+    U.cloud.value = 1;
+    // The same cool authored sky isolates the phase treatment from palettes.
+    U.zenith.value.set(0.01, 0.02, 0.05);
+    U.horizon.value.set(0.04, 0.03, 0.06);
+    derive();
+    return { mie: D.mieK.value, horizonGlow: D.hGlowCol.value.toArray(),
+      zenith: D.zenithO.value.toArray(), horizon: D.horizonO.value.toArray(),
+      daytime: D.daytime.value };
+  };
+}
+
+test("sky derivation suppresses solar scattering for low and high night moon keys", () => {
+  const derive = skyDeriveHarness();
+  const low = derive(1, 0.214), high = derive(1, 0.8);
+  for (const night of [low, high]) {
+    assert.equal(night.mie, 0, "solar Mie must not follow the moon key");
+    assert.deepEqual(night.horizonGlow, [0, 0, 0], "solar horizon glow must not follow the moon key");
+  }
+  assert.deepEqual(low.zenith, high.zenith, "night lid is independent of moon elevation");
+  assert.deepEqual(low.horizon, high.horizon);
+  const solar = derive(0, 0.214);
+  assert.ok(solar.mie > 0, "low solar elevation still scatters by day");
+  assert.ok(solar.horizonGlow.some((v) => v > 0));
+});
+
+test("overcast sky targets grow continuously from twilight illumination to daylight", () => {
+  const derive = skyDeriveHarness();
+  const phases = [0.08, 0.28, 0.34, 0.40, 0.8].map((y) => derive(0, y));
+  const lum = (c) => c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
+  for (let i = 1; i < phases.length; i++) {
+    assert.ok(lum(phases[i].zenith) >= lum(phases[i - 1].zenith), "cloudy zenith must not dim as daylight grows");
+    assert.ok(lum(phases[i].horizon) >= lum(phases[i - 1].horizon), "cloudy horizon must not dim as daylight grows");
+  }
+  assert.ok(lum(phases[0].zenith) < 0.6 * lum(phases.at(-1).zenith), "twilight must not inherit the midday grey target");
+  assert.ok(lum(phases[0].horizon) < 0.6 * lum(phases.at(-1).horizon));
+  assert.equal(phases.at(-1).daytime, 1);
+  assert.ok(phases.some((p) => p.daytime > 0 && p.daytime < 1), "fixture exercises the smooth transition");
+});
+
 // B·H16 (2026-10-21): a garage/menu frame sets noEnv and keeps proj (SSAO), and present() then paints WITHOUT post
 // (`post && _postF.proj && !_postF.noEnv`). The warm took post for it anyway, so it compiled every program into the
 // tagged scene target and the title prebuild's hidden garage frame re-linked them all on the main thread (3.8–5.8 s
-// long task at 4x CPU, getProgramParameter LINK_STATUS). The warm must compile the frame present() will paint.
-test("garage warm: a noEnv frame compiles into present()'s own target — no post target, no MRT, no draw stage", async (t) => {
+// long task at 4x CPU, getProgramParameter LINK_STATUS). SwiftShader WebGPU then paid ~3× for a post-only warm that
+// skipped the garage target — run the full post warm first, then stamp softOutRT (MRT null) for the garage frame.
+test("garage warm: noEnv runs post warm then a garage-scene compile on softOutRT (MRT null), no draw stage", async (t) => {
   const spy = (rig) => {
     const seen = [], base = rig.renderer.compileAsync.bind(rig.renderer);
     rig.renderer.compileAsync = (sc, cam, ...rest) => { seen.push({ tg: rig.renderer.getRenderTarget(), mrt: rig.renderer.getMRT() }); return base(sc, cam, ...rest); };
@@ -529,16 +602,20 @@ test("garage warm: a noEnv frame compiles into present()'s own target — no pos
   const compiles = spy(h);
   await h.warm();
   assert.equal(h.W1.stages.failed, 0, "the warm did not throw");
-  assert.ok(compiles.length >= 1, "the scene compiled");
-  for (const c of compiles) {
-    assert.notEqual(c.tg, h.post.sceneTarget(), "never the post scene target: present() paints a noEnv frame without post");
-    assert.equal(c.mrt, null, "no ssrTag MRT: a different fragment output is a different program");
-  }
-  assert.equal(h.calls.length, 0, "no draw stage: it draws only into the post scene target");
+  assert.ok(compiles.length >= 2, "post warm and garage-scene compile both ran");
+  assert.equal(compiles[0].tg, h.post.sceneTarget(), "first pass warms the race post path");
+  const garageCompile = compiles[compiles.length - 1];
+  assert.notEqual(garageCompile.tg, h.post.sceneTarget(), "garage pass never the post scene target");
+  assert.equal(garageCompile.mrt, null, "garage pass: no ssrTag MRT");
+  assert.ok(Number.isFinite(h.W1.stages.garageScene) && h.W1.stages.garageScene >= 0, "garageScene stage timed");
+  const sceneRT = h.post.sceneTarget();
+  assert.ok(h.calls.some((c) => c.tg === sceneRT), "the post pass may run the draw warm into the scene target");
+  assert.equal(h.calls.filter((c) => !c.tg).length, 0, "draw warm never targets softOutRT — the garage pass is compile-only");
   const race = await warmRig(t);
   const raceCompiles = spy(race);
   await race.warm();
   assert.equal(raceCompiles[0].tg, race.post.sceneTarget(), "a race frame (noEnv unset) still warms through post");
+  assert.equal(raceCompiles[0].tg, race.post.sceneTarget(), "race warm compiles the scene into the post target");
 });
 
 function cloudCacheHarness() {

@@ -215,6 +215,25 @@ test("spray: only the nearest N cars emit (desktop 6, phone 3)", () => {
   }
 });
 
+test("spray: shuffled Float32 distances preserve the capped nearest-N threshold and hysteresis", () => {
+  let seed = 0x73509;
+  const rnd = () => { seed = Math.imul(seed ^ seed >>> 15, 0x85ebca6b) >>> 0; return seed / 4294967296; };
+  for (const mobile of [false, true]) {
+    const P = makeParticles(mobile), N = P.sprayCars();
+    for (let run = 0; run < 150; run++) {
+      const distances = Array.from({ length: run % 41 }, (_, i) => i % 7 ? rnd() * 40000 : i % 2 ? Infinity : 0);
+      P.clear();
+      distances.forEach(d => P.sprayAdmit(d));
+      P.update(0);   // pause must not consume the current candidate set
+      P.update(1 / 60);
+      const stored = distances.slice(0, 32).map(Math.fround).sort((a, b) => a - b);
+      const threshold = stored.length <= N ? Infinity : stored[N - 1] * 1.05;
+      for (const d of distances.concat([0, 1, 40000, Infinity, threshold, threshold + .001]))
+        assert.equal(P.sprayAdmit(d), d <= threshold, `mobile=${mobile}, run=${run}, d=${d}`);
+    }
+  }
+});
+
 test("game.js wires the nearest-N gate, sprayStr/sprayRate and the Droplets tick", () => {
   const g = gameSource();
   assert.match(g, /Particles\.sprayAdmit\(_sdx \* _sdx \+ _sdz \* _sdz\)/);

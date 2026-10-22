@@ -70,7 +70,7 @@ const WeatherArc = (function () {
       } else {
         Particles.rainShow(false);
       }
-      if (G.soundOn) { if (v.raining) GameAudio.startRain(); else GameAudio.stopRain(); }
+      if (G.soundOn) { if (v.wet) GameAudio.startRain(); else GameAudio.stopRain(); }
       // Re-apply the frame lighting NOW: without this a live weather change only
       // moved the wetness ramp / rain overlay — the cloud cover, muted sun,
       // ambient lift, fog density and exposure branches in applyRaceSettings
@@ -229,17 +229,34 @@ const WeatherArc = (function () {
     // arc stays armed past `dur` until the road has settled on its target.
     const TAU_WET = 8, TAU_DRY = 36;   // s: the lag wetting / drying (4.5x slower)
     const SETTLE = 0.005;              // |wetness - target| that ends an arc
-    const WET_ROAD = 0.25, RAINING = 0.72;   // game.js isWetRoad / isRaining (TyreModel.treadFor's ladder)
-    // game.js initRainDrops picks the tier off the LAP's wetness; under a local
-    // shower the tier is the view's (drizzle between the two lines).
-    const reseedRain = (vw) => { if (local(arc) && typeof Particles !== "undefined" && Particles.rainSeed) Particles.rainSeed(vw >= WET_ROAD && vw < RAINING); else G.initRainDrops(); };
-    // Rain shown / rain loop: G's lap-wide predicates, or the VIEW's road under a local shower.
+    const RAINING = 0.72;   // the full-rain particle tier
+    const reseedRain = (vw) => { if (typeof Particles !== "undefined" && Particles.rainSeed) Particles.rainSeed(!arc && vw < RAINING); else G.initRainDrops(); };
+    // Precipitation is independent of grip: rain can arrive on a dry road or
+    // stop above standing water. Never infer falling drops from the road.
     const _vr = { w: 0, wet: false, raining: false };
     function viewRain() {
-      if (local(arc) && hasRC()) { const w = viewWetness(); _vr.w = w; _vr.wet = w >= WET_ROAD; _vr.raining = w >= RAINING; }
-      else { _vr.w = -1; _vr.wet = !!G.isWetRoad(); _vr.raining = !!G.isRaining(); }
+      const w = viewRainfall(); _vr.w = w; _vr.wet = w > 0.01; _vr.raining = w >= RAINING;
       return _vr;
     }
+
+    /** Atmospheric intensity, 0..1.5 (storm), at a car's position in metres.
+     *  Read only the shared arc clock, including soft local shower fringes. */
+    function rainfallAt(s) {
+      const a = arc;
+      if (!a) return intOf(G.raceWeather);
+      const f = Math.min(1, Math.max(0, a.t / a.dur)), peak = intAt(a, f);
+      if (a.r0s && hasRC()) {
+        const len = G.track && G.track.total;
+        const start = Number.isFinite(s) && len > 0 ? RainCells.sample(a.r0s, s / len) : a.i0;
+        return start + (intOf(a.to) - start) * f;
+      }
+      if (!a.cell || !hasRC()) return peak;
+      const len = G.track && G.track.total;
+      const baseRain = typeof a.i0 === "number" ? a.i0 : intOf(a.from);
+      const frac = Number.isFinite(s) && len > 0 ? s / len : a.cell.c0 + a.cell.v * a.t / a.cell.total;
+      return baseRain + (peak - baseRain) * RainCells.strength(a.cell, frac, a.t);
+    }
+    function viewRainfall() { return rainfallAt(G.player && G.player.s); }
     /** The largest |segment − target| of a local arc (the scalar's own gap otherwise). */
     function maxDev(a, target) {
       if (!(local(a) && hasRC())) return Math.abs(wetness() - target);
@@ -410,8 +427,12 @@ const WeatherArc = (function () {
       }
       const t0 = (typeof G.raceT === "number" && G.state !== "race") ? 0 : now();
       const w0s = live && local(arc) && hasRC() ? Float64Array.from(segs(arc)) : null;
+      // Keep a bounded snapshot of the cloud as well as the surface on a local
+      // re-target, so rain does not suddenly appear over the dry sectors.
+      const r0s = w0s && G.track ? Float64Array.from({ length: 128 }, (_, i) => rainfallAt(RainCells.segFrac(i, 128) * G.track.total)) : null;
       arc = { from, to, t: 0, dur: Math.max(1, dur || 60), seq: arcSeq(from, to), w0, i0, t0, _tt: 0 };
       if (w0s) arc.w0s = w0s;
+      if (r0s) arc.r0s = r0s;
       arc.wetIn = wetInOf(arc);
       if (!live && G.raceWeather !== from) setWeatherLive(from);
       return arc;
@@ -434,24 +455,20 @@ const WeatherArc = (function () {
       const w = loc ? wetMax(arc) : wetness();   // a local shower: the sky shows its wettest segment
       const want = stageFor(arc, w, f);
       if (G.raceWeather !== want) { setWeatherLive(want, true); G.announce("WEATHER: " + want.toUpperCase(), 2, "info"); }
-      // The rain follows WETNESS (isWetRoad ≥ 0.25 shows the field, isRaining
-      // ≥ 0.72 picks the storm tier and the rain loop). The stage now reads the
-      // same wetness, but an overcast/fog walk still flips by time, so show,
-      // tier and loop are re-decided on each crossing (until 2026-10-04 a
-      // drying race left a frozen box of streaks for the rest of it).
-      const vr = viewRain(), vw = vr.w, wet = vr.wet, raining = vr.raining;   // isWetRoad/isRaining, off the VIEW's road under a shower
+      // Drops and audio follow the cloud; the wet road and spray persist.
+      const vr = viewRain(), vw = vr.w, wet = vr.wet, raining = vr.raining;
       // A local shower's sector picture, published ON THE ARC (G.weatherArc.sectors / .where) for the engineer
       // and the forecast — refreshed every 0.5 s of arc time, not per step.
       if (loc && !(Math.abs(arc.t - (arc._secT == null ? -1 : arc._secT)) < 0.5)) {
         arc._secT = arc.t; arc.sectors = rainSectors();
         arc.where = arc.sectors ? arc.sectors.filter((o) => o.raining).map((o) => o.sector) : null;
       }
-      if (arc.wet !== undefined && (wet !== arc.wet || (wet && raining !== arc.raining))) {
-        if (wet) reseedRain(vw);   // reseed: drizzle below 0.72, storm above
+      if (wet !== arc.wet) {
+        if (wet) reseedRain(vw);
         Particles.rainShow(wet);
       }
-      if (raining !== arc.raining) {
-        if (arc.raining !== undefined && G.soundOn) { if (raining) GameAudio.startRain(); else GameAudio.stopRain(); }
+      if (wet !== arc.wet) {
+        if (G.soundOn) { if (wet) GameAudio.startRain(); else GameAudio.stopRain(); }
       }
       arc.wet = wet; arc.raining = raining;
       if (arc.cell) {
@@ -488,8 +505,8 @@ const WeatherArc = (function () {
 
     return {
       setWeatherLive, setTimeOfDay, weather,
-      startArc, tick, syncWetness, wetness, wetnessAt, viewWetness, rainSectors, planFor, previewPlan, startChangeable, endChangeable, restoreBase, endSession,
-      get arc() { return arc; }, set arc(v) { arc = v; },
+      startArc, tick, syncWetness, wetness, wetnessAt, viewWetness, rainfallAt, viewRainfall, rainSectors, planFor, previewPlan, startChangeable, endChangeable, restoreBase, endSession,
+      get arc() { return arc; }, set arc(v) { arc = v; if (!arc) setWeatherLive(G.raceWeather); },
       get changeable() { return changeable; }, set changeable(v) { changeable = v; },
       get plan() { return plan; }, set plan(v) { plan = v; },
     };

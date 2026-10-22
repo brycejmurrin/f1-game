@@ -124,13 +124,19 @@ function withTimeout(promise, ms, label, onTimeout) {
   });
   return Promise.race([Promise.resolve(promise), cap]).finally(() => clearTimeout(timer));
 }
-function showGraphicsUnavailable() {
-  RendererPicker.showUnavailable({
+function graphicsUnavailableOpts() {
+  return {
     panel: $("nogl"), hud: els.hud, overlay: els.overlay,
     helpDialog: els.howtoplay, helpClose: $("htp-close"),
     dataDialog: els.datahub, dataClose: $("dh-close-btn"),
     ensureDataHub, openDataHub: () => DataHub.open(),
-  });
+  };
+}
+function showGraphicsUnavailable() {
+  RendererPicker.showUnavailable(graphicsUnavailableOpts());
+}
+if (typeof RendererPicker !== "undefined" && RendererPicker.setUnavailableDefaults) {
+  RendererPicker.setUnavailableDefaults(graphicsUnavailableOpts());
 }
 async function start() {
 let gfx = null;

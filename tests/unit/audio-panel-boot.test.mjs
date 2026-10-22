@@ -60,6 +60,18 @@ test("init sets the music switch before setSound can start the menu track", () =
   assert.ok(start < 0 || sw < start, "setSound started the menu track before the MUSIC OFF switch reached the soundtrack: " + calls.join(" "));
 });
 
+test("enabling SOUND follows falling rain rather than standing water", () => {
+  for (const rainfall of [0, 0.2, 1]) {
+    const { G, GameAudio, dom } = boot({ soundOn: false, musicEnabled: false });
+    let starts = 0;
+    Object.assign(G, { state: "race", paused: false, trackIdx: 0, isRaining: () => true, viewRainfall: () => rainfall });
+    GameAudio.startEngine = () => {};
+    GameAudio.startRain = () => { starts++; };
+    dom.byId("soundbtn").onclick();
+    assert.equal(starts, rainfall > 0 ? 1 : 0, `rainfall ${rainfall}, even though the road is wet`);
+  }
+});
+
 test("init with music on still starts the menu track (after the switch)", () => {
   const { calls } = boot({ soundOn: true, musicEnabled: true });
   assert.ok(calls.indexOf("setMusicEnabled:true") < calls.indexOf("startMusic"), calls.join(" "));

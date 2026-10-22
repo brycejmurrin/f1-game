@@ -292,7 +292,7 @@ test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume 
   const sp = g.slice(g.indexOf("function setPaused(p, why) {"), g.indexOf("els.pausebtn.onclick = () => setPaused(true);"));
   assert.match(sp, /if \(p\) \{ GameAudio\.stopEngine\(\); GameAudio\.setSkid\(0\); GameAudio\.stopRain\(\); radioVoice\.halt\(\);/,
     "pause stops rain with the engine — rain rides the SFX bus and must not hiss over a frozen race");
-  assert.match(sp, /else if \(soundOn\) \{[^\n]*GameAudio\.startEngine\(\); GameAudio\.startMusic\(trackIdx\); if \(isRaining\(\)\) GameAudio\.startRain\(\); \}/,
+  assert.match(sp, /else if \(soundOn\) \{[^\n]*GameAudio\.startEngine\(\); GameAudio\.startMusic\(trackIdx\); if \(wxArc\.viewRainfall\(\) > 0\.01\) GameAudio\.startRain\(\); \}/,
     "SOUND turned on under the pause card (js/audio/panel.js defers) gets music and rain back on RESUME");
   assert.match(g, /go\.addEventListener\("animationend", qGoShakeEnd, \{ once: true \}\)/, "one named handler, not a closure per rejected press");
   assert.match(g, /function tiltSay\(msg\) \{ els\.audiostate\.textContent = msg; if \(msg\) announce\(/, "tilt fallbacks reach the banner, not only the title line");
@@ -460,9 +460,9 @@ test("the SOUND toggle restarts rain from the live weather, not the grid's raceW
   const block = on.slice(0, on.indexOf("syncAudioPanel();"));
   assert.match(block, /GameAudio\.startEngine\(\);/, "precondition: found the mid-race SOUND ON block");
   assert.doesNotMatch(block, /raceWeather/, "the grid's weather does not describe a race the arc has turned");
-  assert.match(block, /if \(G\.isRaining\(\)\) GameAudio\.startRain\(\);/);
+  assert.match(block, /if \(G\.viewRainfall\(\) > 0\.01\) GameAudio\.startRain\(\);/);
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(game, /\bisRaining: \(\) => isRaining\(\),/, "G.isRaining is exported to the panel");
+  assert.match(game, /\bviewRainfall: \(\) => wxArc \? wxArc\.viewRainfall\(\) : 0,/, "G.viewRainfall is exported to the panel");
 });
 
 // ── round-2 audio fixes (F2, F3, F8-adjacent plumbing, F10, F13, F14) ──────────

@@ -547,6 +547,47 @@ test("readLayerBytes reads layers straight through a scratch WebGL2 context, nev
   assert.equal(data2[page], 11); assert.equal(data2[3 * page], 22);
 });
 
+for (const failure of ["none", "upload", "read", "incomplete", "throw", "lost"]) {
+  test(`synchronous layer readback validates GL flags and keeps valid siblings (${failure})`, () => {
+    let current = null, error = 1282, lost = false;
+    const uploaded = [];
+    const gl = {
+      UNPACK_FLIP_Y_WEBGL: 1, UNPACK_PREMULTIPLY_ALPHA_WEBGL: 2, UNPACK_COLORSPACE_CONVERSION_WEBGL: 3,
+      NONE: 0, TEXTURE_2D: 10, FRAMEBUFFER: 11, COLOR_ATTACHMENT0: 12, FRAMEBUFFER_COMPLETE: 13, RGBA: 14, UNSIGNED_BYTE: 15,
+      pixelStorei() {}, createTexture: () => ({}), createFramebuffer: () => ({}),
+      bindTexture() {}, bindFramebuffer() {}, framebufferTexture2D() {},
+      getError() { const e = error; error = 0; return e; }, isContextLost: () => lost,
+      texImage2D(...args) {
+        const image = args.at(-1); uploaded.push(image.id);
+        if (image.id === 2 && failure === "upload") { error = 1282; return; }
+        current = image;
+        if (image.id === 2 && failure === "throw") { error = 1282; throw Error("upload refused"); }
+      },
+      checkFramebufferStatus() {
+        if (current.id === 2 && failure === "incomplete") { error = 1282; return 0; }
+        return 13;
+      },
+      readPixels(_x, _y, _w, _h, _f, _t, dst) {
+        if (current.id === 2 && failure === "read") { error = 1282; return; }
+        if (current.id === 2 && failure === "lost") { error = 37442; lost = true; return; }
+        dst.fill(current.fill);
+      },
+    };
+    const assets = assetLoader({ OffscreenCanvas: class { getContext() { return gl; } } });
+    const page = 16, images = [new Uint8Array(page).fill(7), { id: 1, fill: 41 }, { id: 2, fill: 99 }, { id: 3, fill: 121 }];
+    const data = new Uint8Array(page * images.length).fill(173);
+    const done = [...assets.readLayerBytes(2, images, images.length, data)];
+    assert.deepEqual(done, failure === "none" ? [0, 1, 2, 3] : failure === "lost" ? [0, 1] : [0, 1, 3]);
+    assert.deepEqual([...data.subarray(0, page)], Array(page).fill(7), "raw bytes bypass GL flags");
+    assert.deepEqual([...data.subarray(page, 2 * page)], Array(page).fill(41), "the completed prefix survives a failed suffix");
+    if (failure !== "lost") assert.deepEqual([...data.subarray(3 * page)], Array(page).fill(121), "a bad layer cannot poison the next one");
+    if (failure === "none") assert.deepEqual([...data.subarray(2 * page, 3 * page)], Array(page).fill(99));
+    else assert.ok(!done.includes(2), "failed bytes must go through the caller's existing fallback");
+    assert.deepEqual(uploaded, failure === "lost" ? [1, 2] : [1, 2, 3]);
+    assert.equal(error, 0, "operation flags are drained, including throws and incomplete FBOs");
+  });
+}
+
 // P4 (perf hunt 4, lane WGX): readLayerBytesAsync must hand back the SAME bytes readLayerBytes does, through a
 // PIXEL_PACK_BUFFER + fenceSync readback instead of a blocking readPixels per layer (MDN's readPixelsAsync).
 // One mock WebGL2 serves both paths from the same uploaded pixels — every pixel of every layer distinct, so a

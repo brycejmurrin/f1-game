@@ -280,6 +280,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/lib/design-matrix.mjs** | Design-review matrix core: PART_BOXES, ANGLES, COLOURS, LIGHTS, expandMatrix, frameForPart, labelDiff, manifest. | garage-parts-livery |
 | **shot/lib/garage-camera-catalog.mjs** | Named garage targets, camera aliases, stations and livery field mappings. | garage-parts-livery |
 | **shot/lib/survey-runner.mjs** | Shared shot-survey runner: identical plans, failure state and gallery rows for CLI and MCP. | survey-track |
+| **shot/lib/wx-grid.mjs** | Weather×time grid maths: TODS×WEATHERS layout, Rec.709 luminance, cell ratios. | playwright-probe |
 | **shot/loading-probe.mjs** | Tap RACE! headless; record preparation, garage, flyby and first presented race frame. `--settle ms --invalidate`. | — |
 | **shot/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | playwright-probe |
 | **shot/pit-shots.mjs** | Pit-lane shot set, one boot per circuit: entry, exit, lane overview and each team's box, from the resolved geometry. | playwright-probe |
@@ -295,6 +296,8 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
 | **shot/visor-lab-export.mjs** | Copy the committed Visor Lab authoring files and the game's visor runtime into an existing Site checkout. | — |
+| **shot/webgpu-urban-gallery.mjs** | Produce a verified 4K urban WebGPU screenshot gallery through shot.mjs. | — |
+| **shot/wx-grid.mjs** | Weather×time 24-cell grid + luminance.json (6 weathers incl. storm × 4 TOD). One Chrome boot; --track --turn. | playwright-probe |
 
 ### `tools/perf/`
 
@@ -326,7 +329,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/chunk-share-census.mjs** | Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run. | renderer-debug / lighting-tuner |
 | **gfx/decal-bake-probe.mjs** | Compare production decal bake pixels on WebGL2: five cases, baseline ref and JSON artifact. | — |
 | **gfx/frame-hitch.mjs** | Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation). | playwright-probe / renderer-debug |
-| **gfx/gfx-probe.mjs** | WEBGPU + THREE screenshot probe with the right Chromium flags: `--backend`, `--tlx-webgpu`, `--lavapipe`, `--lite`. | renderer-debug / mcp-probe |
+| **gfx/gfx-probe.mjs** | WEBGPU + THREE screenshot probe with software, Lavapipe or verified hardware Chromium paths. | renderer-debug / mcp-probe |
 | **gfx/gl-object-census.mjs** | GL object census: WebGL2 create/delete counts (VAO, program, shader, buffer, texture, FBO, RBO) per circuit visit. | renderer-debug / mcp-probe |
 | **gfx/gltf-selftest.mjs** | Self-test for the `js/render/shared/gltf.js` GLB loader (Node ESM, no deps). | renderer-debug |
 | **gfx/glx-call-census.mjs** | What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages. | renderer-debug |

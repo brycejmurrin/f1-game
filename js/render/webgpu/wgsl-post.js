@@ -1242,18 +1242,19 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let dC = ssrDepth(in.uv);
   if (dC >= 0.9999) { return vec4<f32>(0.0); }
 
-  var carPx = 0.0;
-  if (carReflect > 0.001) {
-    let scnA = textureSampleLevel(sceneTex, sceneSamp, in.uv, 0.0).a;
-    carPx = 1.0 - smoothstep(0.42, 0.55, scnA);
-  }
+  // The early-out above guarantees road or car SSR is on, so one scene-alpha
+  // fetch feeds both masks: .75 porous world rejects road SSR; .35 car paint
+  // retains its own mask.
+  let scnA = textureSampleLevel(sceneTex, sceneSamp, in.uv, 0.0).a;
+  let carPx = 1.0 - smoothstep(0.42, 0.55, scnA);
+  let roadPx = smoothstep(0.85, 0.95, scnA);
   let P = ssrViewPosFromDepth(in.uv, dC);
   let ssrNear = U.reflSkyHi.w;
   let roadQuality = clamp(U.gloss.w, 0.0, 2.0);
   let roadFadeStart = select(-22.0, select(-18.0, -12.0, roadQuality > 1.5), roadQuality > 0.5);
   let roadFadeEnd = select(-78.0, select(-60.0, -42.0, roadQuality > 1.5), roadQuality > 0.5);
   // Only reject where both existing masks cannot contribute. Keep fade math below unchanged.
-  let roadOut = strength <= 0.001 || P.z >= ssrNear || P.z <= roadFadeEnd;
+  let roadOut = roadPx * strength <= 0.001 || P.z >= ssrNear || P.z <= roadFadeEnd;
   let carOut = carReflect <= 0.001 || carPx <= 0.0 || P.z >= -1.0 || P.z <= -55.0;
   if (roadOut && carOut) { return vec4<f32>(0.0); }
   // View-space normal from depth finite differences (cheap; the road mask +
@@ -1294,12 +1295,13 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // a cockpit camera sits close enough to the road that a -2.5 start fades out
   // the whole visible mirror, so the literal made the knob's onboard case dead.
   let roadMask = smoothstep(0.25, 0.55, upDot)
-               * smoothstep(ssrNear, ssrNear * 2.8, P.z)
-               * (1.0 - smoothstep(roadFadeStart, roadFadeEnd, P.z));
+               * roadPx
+               * (1.0 - smoothstep(ssrNear * 2.8, ssrNear, P.z))
+               * smoothstep(roadFadeEnd, roadFadeStart, P.z);
   // Car bodywork: up-facing-ish panels, nearer than the road (chase sits ~5–8 m back).
   var carMask = carPx * smoothstep(0.30, 0.65, upDot)
-              * smoothstep(-1.0, -3.0, P.z)
-              * (1.0 - smoothstep(-22.0, -55.0, P.z));
+              * (1.0 - smoothstep(-3.0, -1.0, P.z))
+              * smoothstep(-55.0, -22.0, P.z);
   let edgeGrad = (length(dpx) + length(dpy)) * (1.0 / 3.0);
   carMask = carMask * (1.0 - smoothstep(0.35, 0.9, edgeGrad));
   let roadTerm = roadMask * strength;
@@ -1340,7 +1342,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     if (i >= marchSteps) { break; }
     prevPos = pos;
     pos = pos + R * stepLen;
-    if (roadLow) { stepLen = stepLen * 1.4; }
+    if (roadLow) { stepLen = stepLen * 1.5; }
     else if (roadReduced) { stepLen = stepLen * 1.22; }
     else { stepLen = stepLen * 1.16; }
     let sp = ssrProjUV(pos);

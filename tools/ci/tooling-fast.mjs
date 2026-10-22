@@ -304,6 +304,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // stays in the edit loop where a cockpit geometry change is actually made.
   "tests/unit/cockpit-crest-stripe.test.mjs",
   "tests/unit/cockpit-preview.test.mjs",
+  "tests/unit/cockpit-wheel-finish.test.mjs",
   // The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.
   "tests/unit/cockpit-wheels.test.mjs",
   "tests/unit/comment-citations.test.mjs",
@@ -333,6 +334,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-prefers-cascade.test.mjs",
   "tests/unit/css-token-adoption.test.mjs",
   "tests/unit/css-tokens.test.mjs",
+  // Context-loss menu notice + reload budget cleared at lights-out.
+  "tests/unit/ctx-lost-notice.test.mjs",
   "tests/unit/cursor-agents.test.mjs",
   "tests/unit/curvature-channels.test.mjs",
   // The track designer's registry (js/editor/custom-tracks.js + track-themes.js):
@@ -747,6 +750,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // live-frame-census.mjs pure helpers (args, percentiles, trace/profile reducers). ~0.2 s.
   "tests/unit/live-frame-census.test.mjs",
   "tests/unit/live-run-check.test.mjs",
+  // Spine lightning / twoTone / keylineSplit clear the 2.0:1 large-area floor (#3425, #3426). ~3 s.
+  "tests/unit/livery-contrast-w13b.test.mjs",
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
   "tests/unit/livery-design.test.mjs",
@@ -880,6 +885,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pad-haptics.test.mjs",
   // particles.js dirty latch: parked rain skips expand/upload until eye cell moves.
   "tests/unit/particles-dirty.test.mjs",
+  // W13c: wheels/tyres catalog copy vs cover:1 and 2026 Pirelli role colours.
+  // ~0.1 s Node; catches picker lies that parts-distinct-mesh cannot see.
+  "tests/unit/parts-copy-w13c.test.mjs",
   // ~29 s of pure geometry (measured 2026-09-24): builds every catalog option ONCE and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
@@ -1033,6 +1041,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // RenderRate (#2652): a phone halves the draw rate on a 100 Hz+ rAF; desktop and XR never; no time lost. VM, ~0.1 s.
   "tests/unit/render-rate.test.mjs",
   "tests/unit/renderer-boot-timeout.test.mjs",
+  "tests/unit/renderer-picker-unavailable.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
   // Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.
   "tests/unit/replay-buf.test.mjs",
@@ -1052,6 +1061,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",
   "tests/unit/road-position-checks.test.mjs",
+  "tests/unit/road-reflection-transition.test.mjs",
   "tests/unit/run-pid.test.mjs",
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
@@ -1265,6 +1275,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.
   "tests/unit/tools-a12-guards.test.mjs",
   "tests/unit/tools-runnable.test.mjs",
+  // W13a tooling batch: helmet-sheet nested --out mkdir, agent help collisions,
+  // quick-validate --help/port, probe-page shot-timeout + tiled CDP fallback. No browser.
+  "tests/unit/tools-w13a-agent-help.test.mjs",
+  "tests/unit/tools-w13a-helmet-sheet.test.mjs",
+  "tests/unit/tools-w13a-probe-page.test.mjs",
+  "tests/unit/tools-w13a-quick-validate.test.mjs",
   "tests/unit/touch-drag-anchor.test.mjs",
   // Drag range widens with speed by the same fraction digitalRateIn sheds.
   // Low / mid / high, the OFF knob, and the same finger travel. VM, < 0.2 s.
@@ -1409,9 +1425,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/wait-polling.test.mjs",
   "tests/unit/wall-clamp.test.mjs",
   "tests/unit/wall-end-face-vm.test.mjs",
-  // The falling rain follows WETNESS through a weather arc: shown at 0.25, the
-  // storm tier and rain loop at 0.72, hidden again when a drying arc drops below
-  // 0.25 — six arcs sampled at 10 points each. VM-executed weather-arc.js, ~1 s.
+  // Falling rain follows atmospheric intensity independently of surface water;
+  // local shower fringes, dissipation, rain audio, particle density and wind.
+  // Six arcs plus surface-water persistence. VM-executed weather-arc.js.
   // Round-2: WATCH scrub `input` events coalesce to one seek per rAF; `change` seeks at once; stop() drops a pending seek.
   "tests/unit/watch-transport-scrub.test.mjs",
   "tests/unit/weather-arc-plan.test.mjs",
@@ -1445,6 +1461,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/check/workflow-lint.mjs: actionlint + zizmor (offline) over .github/workflows; fails a planted bad workflow, passes the tree.
   // Skips loudly when a binary is absent; the CI `lints` job fails a SKIP. ~3 s.
   "tests/unit/workflow-lint.test.mjs",
+  // Weather×time grid (tools/shot/lib/wx-grid.mjs): 6×4 layout incl. storm, Rec.709 luminance, lighting ratios. Pure, no browser.
+  "tests/unit/wx-grid.test.mjs",
   "tests/unit/xr-backend-pin.test.mjs",
   "tests/unit/xr-cull-union.test.mjs",
   "tests/unit/xr-opts.test.mjs",

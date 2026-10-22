@@ -20,6 +20,11 @@ paths:
   queues, a third replaces it; dispatch A/B arms sequentially. Dispatch
   `ci.yml` with `renderer_macos: true` when a gfx spec or its launch config
   changed.
+- For a hardware screenshot, run `node tools/gfx/gfx-probe.mjs --backend three
+  --tlx-webgpu --hardware <track>`. This selects full Chromium, avoids
+  software-adapter pins and refuses to proceed unless WebGPU reports an
+  identifiable, non-fallback hardware adapter. It still needs a host/runner
+  that exposes a physical GPU. The default software probe remains unchanged.
 - Never compare the census's two TLX legs on frames, FPS or luma without
   reading the `path:` row. The WebGPU leg pins `tlxForceGL=0` and `tlx.js`
   soft-blits (GPU readback + `putImageData` every frame) whenever

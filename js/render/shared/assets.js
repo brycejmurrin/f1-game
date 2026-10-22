@@ -125,23 +125,29 @@ const Assets = (function () {
   // arrayBuffer), and the caller decodes ImageBitmaps as before.
   //   https://www.w3.org/TR/png-3/#9Filters
   //   https://developer.mozilla.org/en-US/docs/Web/API/DecompressionStream
-  async function _inflate(parts) {
+  async function _inflate(parts, needed) {
+    // Keep only the scanlines the caller will unfilter. Retaining every stream
+    // chunk until concatenation doubled this raw buffer's live backing stores.
+    // Chunk sizes are implementation-defined (Compression Streams §2), so copy
+    // into one bounded destination as they arrive, then release each chunk.
+    // Allocate before starting the writer, so allocation failure leaves no stream.
+    const out = new Uint8Array(needed);
     const ds = new DecompressionStream("deflate");   // zlib-wrapped, as PNG IDAT is
     const w = ds.writable.getWriter();
     const wrote = (async () => { for (const p of parts) await w.write(p); await w.close(); })();
     wrote.catch(() => {});   // a corrupt stream errors both ends: the read below reports it, once
-    const chunks = [];
     let n = 0;
     const r = ds.readable.getReader();
     for (;;) {
       const { done, value } = await r.read();
       if (done) break;
-      chunks.push(value); n += value.length;
+      const take = Math.min(value.length, needed - n);
+      if (take > 0) { out.set(value.subarray(0, take), n); n += take; }
     }
+    // Drain the whole stream even after the prefix fills: a late deflate error
+    // must still take the browser decoder fallback, as before.
     await wrote;
-    const out = new Uint8Array(n);
-    for (let i = 0, o = 0; i < chunks.length; o += chunks[i].length, i++) out.set(chunks[i], o);
-    return out;
+    return n === needed ? out : out.subarray(0, n);
   }
   // Undo the filters of rows [r0, r1): raw is the inflated stream (a filter
   // byte + stride bytes per row), out the unfiltered image, 4 bytes a pixel.
@@ -194,7 +200,7 @@ const Assets = (function () {
     let last = -1;
     for (let i = 0; i < MAT_LAYERS; i++) if (present[i]) last = i;
     if (!ok || w !== size || !idat.length || last < 0 || h < (last + 1) * size) return null;
-    const raw = await _inflate(idat);
+    const raw = await _inflate(idat, (last + 1) * size * (w * 4 + 1));
     check();
     const stride = w * 4, rows = (last + 1) * size;
     if (raw.length < rows * (stride + 1)) return null;
@@ -322,17 +328,33 @@ const Assets = (function () {
     // One operation-local view, not one per layer. The session scratch context
     // must not retain the destination buffer after upload/unload.
     const view = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    const scratchErrors = () => {
+      let failed = false;
+      if (typeof gl.getError === "function") {
+        for (let i = 0; i < 16 && gl.getError(); i++) failed = true;
+      }
+      return failed;
+    };
+    scratchErrors();   // this context is private: stale flags are not this copy's errors
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     for (const i of pending) {
+      if (gl.isContextLost()) break;
+      let copied = false;
       try {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[i]);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) continue;
-        gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE,
-          view.subarray(i * page, i * page + page));
-        done.push(i);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE) {
+          gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE,
+            view.subarray(i * page, i * page + page));
+          copied = true;
+        }
       } catch (_) { /* one bad layer must not sink the pack (GLX parity) */ }
+      // GL failures usually set flags rather than throw. Publish only a valid
+      // copy, or consumers skip their fallback and upload stale/unchanged bytes.
+      // Drain after throws/incomplete FBOs too, so the next layer can recover.
+      const failed = scratchErrors() || gl.isContextLost();
+      if (copied && !failed) done.push(i);
     }
     return done.sort((a, b) => a - b);
   }

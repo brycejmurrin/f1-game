@@ -1,0 +1,1 @@
+Fixed: Magny-Cours race-control stack and Adelaide/Estoril/Lycée `vaultStand` roofs seat on terrain — ground-audit unsupported dropped from 36 to 0 (legs used centre-style `addCyl`; glazed deck had a 0.15 m air gap).

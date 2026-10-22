@@ -148,6 +148,25 @@ test("lightning: the schedule is a pure function of the seed and clock, and fram
   assert.equal(S.strikeIn(1234, 50, 10, 1, "storm"), null, "a clock that went back resyncs");
 });
 
+test("lightning: interval filtering preserves exact strike records and endpoint ownership", () => {
+  const { S } = bootArc();
+  const plain = x => x && JSON.parse(JSON.stringify(x));
+  for (const seed of [1, 99, 1234]) for (const w of ["dry", "rain", "storm"]) for (const rate of [0, .4, 1, 3]) {
+    for (let k = 0; k < 24; k++) {
+      const strike = S.strikeAt(seed, k, rate, w);
+      if (!strike) continue;
+      assert.deepEqual(plain(S.strikeIn(seed, strike.t - .01, strike.t, rate, w)), plain(strike));
+      assert.equal(S.strikeIn(seed, strike.t, strike.t + .01, rate, w), null, "left endpoint belongs to the previous frame");
+      assert.equal(S.strikeIn(seed, strike.t - .02, strike.t - .01, rate, w), null);
+      const next = S.strikeAt(seed, k, rate, w);
+      assert.notEqual(next, strike, "public strikeAt retains fresh result ownership");
+      assert.deepEqual(plain(next), plain(strike));
+    }
+  }
+  for (const [t0, t1] of [[8, 8], [9, 8], [0, 1.01], [NaN, 1], [0, NaN]])
+    assert.equal(S.strikeIn(1, t0, t1, 1, "storm"), null);
+});
+
 test("lightning never flashes under reduced motion (source guard on renderLightingPrep strike)", () => {
   const { S } = bootArc();
   assert.equal(S.flashOk(true), false);
