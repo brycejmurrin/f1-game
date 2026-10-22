@@ -330,8 +330,17 @@ test("only a car with a REAL heading is ever yawed", () => {
   // LOOKS tilted would be the renderer entering the physics, and a genuine spin
   // is Rapier-owned and skipped by pairContact's callers entirely.
   const src = readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8");
-  const hits = src.match(/const psi = c\.human \? \(c\.yawVis \|\| 0\) : 0;/g) || [];
-  assert.equal(hits.length, 2, "both extent functions must gate psi on c.human");
+  const helpers = src.slice(src.indexOf("  const YAW_LO ="), src.indexOf("  // Both cars can be human"));
+  const { extentAngle, bodyAngle } = vm.runInNewContext(
+    helpers + "\n({ extentAngle, bodyAngle });", {}, { filename: absSrc("js/physics/collide.js") });
+  for (const yawVis of [-Math.PI, -Math.PI / 2, 0, Math.PI / 2, Math.PI, NaN, Infinity]) {
+    assert.equal(extentAngle({ human: false, yawVis }), 0, "AI cosmetic yaw must not widen broadphase extents");
+    assert.equal(bodyAngle({ human: false, yawVis }), 0, "AI cosmetic yaw must not rotate narrowphase bodies");
+  }
+  assert.equal(extentAngle({ human: true, yawVis: Math.PI / 2 }), Math.PI / 2);
+  assert.equal(bodyAngle({ human: true, yawVis: Math.PI / 2 }), Math.PI / 2);
+  assert.match(src, /const ea = extentAngle\(a\), eb = extentAngle\(b\);/,
+    "both cars must use the gated extent angle");
 });
 
 // ---------------------------------------------------------------------------

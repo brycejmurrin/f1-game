@@ -640,3 +640,81 @@ test("a second highlights() while one is playing is refused and does not rewind 
   assert.equal(api.status().phase, "highlights");
   assert.equal(api.status().clip, clip, "playback was not rewound to clip 0");
 });
+
+// Ordinary paused Settings still animates the world, but honors RenderRate's
+// selected cadence. Run the real gate so skipped dt and capture waits matter.
+function pausedSettingsRig({ mode = "30", hz = 60, preview = "" } = {}) {
+  const calls = { render: 0, poll: 0, audio: 0, dt: 0, deltas: [] };
+  const noop = () => {};
+  const ctx = vm.createContext({
+    Math, performance: { now: () => 0 }, localStorage: { getItem: () => mode },
+    PerfSpans: { begin: noop, end: noop }, lastFrame: 0, _poseAt: null, paused: true, state: "race",
+    gfx: { warming: () => false }, Input: { poll: () => calls.poll++, clearEdges: noop },
+    BrakeCue: { tick: noop }, onboard: { tick: noop }, netPlay: { tick: noop, active: () => false },
+    UiExperience: { resumeHolding: () => false }, director: { tick: noop }, mirrorPass: { preparing: () => false },
+    replayBuf: { isScrubbing: () => preview === "scrub", tickScrub: noop },
+    els: { lighting: { hidden: preview !== "lighting" }, camtune: { hidden: preview !== "camera" },
+      flyby: { hidden: preview !== "flyby" }, pmsettings: { hidden: false } },
+    setupPreviewOn: preview === "garage", photoMode: preview === "photo", updatePhotoCam: noop,
+    GameAudio: { feedReplayScrub: () => calls.audio++ }, soundOn: false, player: {}, cars: [],
+    naturalGear: noop, rpmFor: noop, rivalAudio: {}, isWetRoad: noop, vTop: noop,
+    XrBoot: { comfort: () => false }, render: (dt) => { calls.render++; calls.dt += dt; calls.deltas.push(dt); },
+  });
+  vm.runInContext(src("js/perf/render-rate.js"), ctx, { filename: absSrc("js/perf/render-rate.js") });
+  ctx.RenderRate.init({ isMobile: true });
+  vm.runInContext(TICK, ctx, { filename: absSrc("js/game.js#tickBody") });
+  let now = 0;
+  const frame = (n) => { for (let i = 0; i < n; i++) { now += 1000 / hz; ctx.tickBody(now); } };
+  frame(hz * 2);   // initial tier frames always present; auto cadence detection settles
+  calls.render = calls.poll = calls.audio = calls.dt = 0; calls.deltas.length = 0;
+  return { ctx, frame, calls };
+}
+
+for (const [mode, hz, renders] of [["30", 60, 300], ["45", 60, 450], ["half", 120, 600],
+  ["auto", 120, 600], ["off", 120, 1200], ["auto", 60, 600]]) {
+  test(`ordinary paused Settings: ${mode} at ${hz} Hz keeps input/audio live and carries render time`, () => {
+    const { frame, calls } = pausedSettingsRig({ mode, hz });
+    frame(hz * 10);
+    assert.equal(calls.render, renders);
+    assert.equal(calls.poll, hz * 10);
+    assert.equal(calls.audio, hz * 10);
+    assert.ok(Math.abs(calls.dt - 10) < 0.051, "camera/sky receive elapsed time across skipped frames");
+  });
+}
+
+for (const preview of ["lighting", "camera", "flyby", "photo", "garage", "scrub"]) {
+  test(`paused ${preview} preview keeps its existing full render cadence`, () => {
+    const { frame, calls } = pausedSettingsRig({ mode: "30", preview });
+    frame(120);
+    assert.equal(calls.render, 120);
+    assert.equal(calls.poll, 120);
+    assert.equal(calls.audio, 120);
+  });
+}
+
+
+test("Settings skip then live photo flushes pending time and marks every preview present", () => {
+  const { ctx, frame, calls } = pausedSettingsRig({ mode: "half" });
+  frame(1); assert.equal(ctx.RenderRate.drew(), false);
+  ctx.photoMode = true;
+  frame(1); assert.equal(ctx.RenderRate.drew(), true);
+  frame(1); assert.equal(ctx.RenderRate.drew(), true);
+  ctx.photoMode = false;
+  frame(1); assert.equal(ctx.RenderRate.drew(), false);
+  frame(1); assert.equal(ctx.RenderRate.drew(), true);
+  assert.deepEqual(calls.deltas.map(dt => Math.round(dt * 6000)), [200, 100, 200]);
+});
+
+test("resuming after a forced preview judges the actual preceding draw", () => {
+  const { ctx, frame } = pausedSettingsRig({ mode: "half" });
+  frame(1); assert.equal(ctx.RenderRate.drew(), false);
+  ctx.photoMode = true; frame(1);
+  const judged = [], noop = () => {};
+  Object.assign(ctx, { paused: false, photoMode: false, frozen: true, track: null, raceT: 0,
+    PerfGov: { tick: (_ms, drew) => judged.push(drew) },
+    banner: { tick: noop }, feel: { hitStop: 0 }, physAcc: 0, PHYS_DT: 1 / 60,
+    clamp: (n, lo, hi) => Math.max(lo, Math.min(n, hi)), renderAlpha: 0, updateHud: noop });
+  ctx.Input.setTimeScale = noop; ctx.replayBuf.onTick = noop;
+  frame(1);
+  assert.deepEqual(judged, [true], "governor sees the preview that actually drew");
+});

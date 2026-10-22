@@ -31,6 +31,7 @@ const PREFIX_WRITES = [
  *  (store-registry.test.mjs WRITERLESS) and one latch whose writer lives in another file. */
 const READ_EXEMPT = new Map([
   ["js/camera/cockpit-opts.js", new Set(["cockpitTurnChase"])],   // hand-set reload-only camera A/B flag
+  ["js/car/car-draw.js", new Set(["mirrorBodyLod"])],   // hand-set reload-only mirror body LOD experiment; see docs/DEBUG-HOOKS.md
   ["js/car/car-mesh.js", new Set(["aeroEdge"])],   // hand-set aero-edge mesh toggle, default off
   ["js/game.js", new Set(["tlxWarmBeforePack"])],   // hunt 5 A kill switch, set by hand
   ["js/render/renderer-boot.js", new Set(["gfxBootStepMs"])],   // slow-CI boot step cap, set by specs

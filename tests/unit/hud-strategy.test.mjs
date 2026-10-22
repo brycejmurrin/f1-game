@@ -158,3 +158,36 @@ test("strategy tick updates honest window and clears tyre warning on changed or 
   assert.equal(val("next"), "L18");
   pl = { next: null, stops: 0 }; left = 1; S.tick(G, p); assert.equal(val("next"), "NO STOP");
 });
+
+test("tick shares synchronous player reads, including computed null, and preserves standalone fallback", () => {
+  const { root, doc } = fakeDom();
+  let enabled = true;
+  const S = load({ document: doc, HudElements: { isOn: () => enabled } });
+  const p = { rank: 1, prog: 100, speed: 50, tyre: { code: "M" } };
+  const calls = { spent: 0, left: 0, estimate: 0, plan: 0 };
+  const plan = { next: 14, code: "H", stops: 1, lapsToStop: 2 };
+  const G = { state: "race", session: "race", cars: [p], ranked: [p],
+    tyres: { on: () => true, spent: () => { calls.spent++; return .4; }, lapsLeft: () => { calls.left++; return 10; } },
+    pits: { estimate: () => { calls.estimate++; return { lossS: 21 }; }, planInfo: () => { calls.plan++; return plan; }, lossS: () => 21 } };
+  const val = k => root.children.find(r => r.attrs["data-k"] === k).children[1].textContent;
+  S.tick(G, p);
+  const expected = [val("tyre"), val("loss"), val("next"), root.attrs["aria-label"]];
+  assert.deepEqual(calls, { spent: 1, left: 1, estimate: 1, plan: 1 });
+  S.tick(G, p, { player: p, spent: .4, left: 10, estimate: { lossS: 21 }, plan });
+  assert.deepEqual([val("tyre"), val("loss"), val("next"), root.attrs["aria-label"]], expected);
+  assert.deepEqual(calls, { spent: 1, left: 1, estimate: 1, plan: 1 }, "shared values cause no repeat reads");
+  S.tick(G, p, { player: p, spent: .4, left: null, estimate: null, plan: null });
+  assert.equal(val("next"), "--"); assert.equal(val("tyre"), "M --");
+  assert.deepEqual(calls, { spent: 1, left: 1, estimate: 1, plan: 1 }, "null is computed, never a fallback request");
+  S.tick(G, p, { player: {}, spent: 0, left: 99, estimate: null, plan: null });
+  assert.deepEqual(calls, { spent: 2, left: 2, estimate: 2, plan: 2 }, "another player's snapshot is ignored");
+  enabled = false; S.tick(G, p);
+  assert.deepEqual(calls, { spent: 2, left: 2, estimate: 2, plan: 2 }, "disabled Strategy derives nothing");
+  enabled = true;
+  doc.body.classList.contains = k => k === "hud-prof-minimal";
+  S.tick(G, p);
+  assert.deepEqual(calls, { spent: 2, left: 2, estimate: 2, plan: 2 }, "profile-hidden Strategy derives nothing");
+  doc.body.classList.contains = () => false;
+  S.tick(G, p, { player: p, spent: .8, left: 2, estimate: { lossS: 30 }, plan: { next: 16, lapsToStop: 4 } });
+  assert.equal(val("tyre"), "M ~2 L"); assert.match(val("loss"), /30/); assert.match(val("next"), /L16/);
+});

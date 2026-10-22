@@ -266,3 +266,166 @@ test("a frozen mirror frame replays the MIRROR pass's pack, never the main camer
   run(mainFrame(), gfx, { meshes: { propBatches: [solo] } }, [], {}, false);
   assert.equal(solo._mirMats, undefined, "the main pass does not copy into _mirMats");
 });
+
+// Experimental mirror-body projected LOD: real geometry through covered warm.
+import {loadCar} from '../../tools/car/tri-census.mjs';
+const mirrorLodCar=loadCar(), mirrorLodTeam=mirrorLodCar.Teams.LIST[0];
+const mirrorLodSource=mirrorLodCar.Car3D.build(mirrorLodTeam.color,mirrorLodTeam.color2,{field:true,noWheels:true,teamId:mirrorLodTeam.id,num:mirrorLodTeam.drivers[0].num,livery:{c1:mirrorLodTeam.color,c2:mirrorLodTeam.color2},parts:mirrorLodCar.Parts.getVisualTiers(mirrorLodCar.Parts.getFactorySetup(mirrorLodTeam),mirrorLodTeam)});
+function mirrorLodRig(optIn = true){
+ const v=carDrawVm();const build=v.ctx.Car3D.build;
+ v.ctx.Car3D.build=(a,b,o)=>Object.assign({},mirrorLodSource,build(a,b,o));
+ const created=[],freed=[];
+ v.G.gfx.createMesh=d=>{const m={...d};created.push(m);return m;};
+ v.G.gfx.freeMesh=m=>freed.push(m);
+ v.field((c,i)=>c.isPlayer?1000:800-i);
+ if(optIn)v.G.store.set("mirrorBodyLod",1);v.mirror({drawWorldMeshes:f=>{v.G.frame=f;}});return {v,created,freed};
+}
+const mirrorLodMat=(z)=>new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,z,1]);
+const mirrorLodContext={pixelScale:200,view:new Float32Array([1,0,0,0,0,1,0,0,0,0,-1,0,0,0,0,1]),vp:new Float32Array([1,0,0,0,0,1,0,0,0,0,0,-1,0,0,0,0])};
+function mirrorLodBody(v,c,z,context=mirrorLodContext){
+ v.carDraw.advanceWheelPhases(0);
+ const instance=v.ctx.MirrorPass.instance;
+ const snapshot={shown:true,rect:[0,0,400/1280,114/720],pip:{shown:false}};
+ v.ctx.MirrorPass.instance=()=>({drawing:()=>!!context,state:()=>snapshot});
+ const proj=new Float32Array(16);proj[0]=proj[5]=context?context.pixelScale/200:1;
+ v.G.frame=context?{view:context.view,viewProj:context.vp,proj,mirrorLite:false}:null;
+ v.rec.draws.length=0;
+ try {v.carDraw.drawMirrorCar(c,mirrorLodMat(-z),{},false);return v.rec.draws[0];}
+ finally {v.ctx.MirrorPass.instance=instance;}
+}
+function mirrorLodFrame(v,mp){v.carDraw.advanceWheelPhases(0);v.draw(mp);}
+test('warm-only partners keep source colors, bounds and index validity; render never builds',()=>{
+ const {v,created}=mirrorLodRig();v.carDraw.warmCarAssets();const c=v.G.cars[1],full=v.carDraw.teamBodyMesh(c.team,c),low=mirrorLodBody(v,c,100);
+ assert.notEqual(low,full);assert.ok(low.idx.length<full.idx.length*.8);
+ const palette=new Set(Array.from({length:full.col.length/3},(_,i)=>full.col.slice(i*3,i*3+3).join(',')));
+ for(let i=0;i<low.col.length;i+=3)assert.ok(palette.has(low.col.slice(i,i+3).join(',')));
+ for(let d=0;d<3;d++)for(const f of [Math.min,Math.max])assert.equal(f(...low.idx.map(i=>low.pos[i*3+d])),f(...full.idx.map(i=>full.pos[i*3+d])));
+ for(const i of low.idx)assert.ok(i>=0&&i<low.pos.length/3);
+ mirrorLodBody(v,v.G.player,100);const before=created.length;v.G.gfx.createMesh=()=>assert.fail('render mesh creation');
+ assert.equal(mirrorLodBody(v,c,100),low);assert.equal(created.length,before);
+ assert.equal(mirrorLodBody(v,c,100,null),full,'PiP always exact detailed body');
+ assert.equal(mirrorLodBody(v,v.G.player,100),v.carDraw.playerBodyMesh(v.G.player.team,v.G.player),'player always detailed');
+ v.ctx.FieldLod.setEnabled(false);assert.equal(mirrorLodBody(v,c,100),full,'LOD off');
+});
+test('screen sensitivity has hysteresis, handles near plane and absent partner safely',()=>{
+ const {v}=mirrorLodRig();v.carDraw.warmCarAssets();const c=v.G.cars[1],full=v.carDraw.teamBodyMesh(c.team,c);
+ assert.equal(mirrorLodBody(v,c,20),full);
+ const low=mirrorLodBody(v,c,100);assert.notEqual(low,full);
+ // Broad near/far checks and then explicitly solve distances around the two transitions.
+ let lastLow=100;
+ for(let z=100;z>20;z-=.25){if(mirrorLodBody(v,c,z)===full){lastLow=z+.25;break;}}
+ mirrorLodBody(v,c,100);assert.notEqual(mirrorLodBody(v,c,lastLow),full,'exit holds until high threshold');
+ mirrorLodBody(v,c,20);
+ assert.equal(mirrorLodBody(v,c,lastLow),full,'same size stays detailed after re-entry: hysteresis');
+ assert.equal(mirrorLodBody(v,c,1),full,'sphere crosses near plane');
+ const w=mirrorLodRig().v, cold=w.G.cars[1];const existing=w.carDraw.teamBodyMesh(cold.team,cold);mirrorLodBody(w,cold,200);w.G.gfx.createMesh=()=>assert.fail('cold LOD creation');
+ assert.equal(mirrorLodBody(w,cold,200),existing,'body built outside warm never makes partner on render');
+});
+test('custom invalidation, factory invalidation and bounded eviction free every pair once',async()=>{
+ for(const mode of ['custom','factory','eviction','model']){
+  const {v,created,freed}=mirrorLodRig();v.carDraw.warmCarAssets();const full=v.carDraw.teamBodyMesh(v.G.cars[1].team,v.G.cars[1]);const low=mirrorLodBody(v,v.G.cars[1],100);assert.notEqual(low,full);
+  if(mode==='model'){v.ctx.fetch=async()=>({ok:true,arrayBuffer:async()=>new ArrayBuffer(1)});v.ctx.GLTF={toMesh:()=>mirrorLodSource};assert.equal(await v.carDraw.loadCarModel('fixture.glb'),true);}
+  if(mode==='custom')v.carDraw.invalidateCustomMeshCaches(v.G.cars[1].team.id);
+  if(mode==='factory')v.carDraw.invalidateFactoryMeshCaches();
+  if(mode==='eviction'){for(let i=0;i<45;i++)v.carDraw.teamBodyMesh(v.G.cars[1].team,{...v.G.cars[1],num:100+i},true);}
+  assert.equal(freed.filter(m=>m===full).length,1,mode+' full');assert.equal(freed.filter(m=>m===low).length,1,mode+' partner');
+  assert.equal(new Set(freed).size,freed.length,mode+' no duplicate frees');
+ }
+});
+
+test('mirror OFF, initial AUTO and broadcast warm no partner',()=>{
+ for(const mode of ['off','software','chase','broadcast','phone']){
+  const {v,created}=mirrorLodRig();const mp=v.ctx.MirrorPass.instance();
+  mp.setMode(mode==='off'?'off':'auto');
+  v.G.camMode=mode==='chase'?0:1;
+  if(mode==='software')v.G.gfx.softPresent=()=>true;
+  if(mode==='broadcast')v.classes.add('bc-on');
+  if(mode==='phone')Object.assign(v.G.gfx,{isMobile:true,mobileTier:true});
+  v.carDraw.warmCarAssets();
+  const partners=created.filter(m=>!m.kind&&!m.carMesh);
+  assert.equal(partners.length,0,mode);
+ }
+});
+
+test('real rear-view passes projected context, while PiP always passes detailed context',()=>{
+ const {v}=mirrorLodRig();v.carDraw.warmCarAssets();
+ const mp=v.ctx.MirrorPass.instance();
+ mirrorLodFrame(v,mp);
+ const rearLow=v.rec.draws.filter(m=>m.idx&&!m.kind);
+ assert.ok(rearLow.length>0,'far mirror rivals select prepared partners');
+ v.classes.add('bc-on');mp.setSubject(v.G.cars[7],'tcam');v.rec.draws.length=0;
+ mirrorLodFrame(v,mp);
+ assert.ok(v.rec.draws.some(m=>m.kind==='body'));
+ assert.equal(v.rec.draws.filter(m=>m.idx&&!m.kind).length,0,'PiP neighbours and subject remain detailed');
+});
+
+test('an extremum cannot become unreferenced when its other triangle corners share one cluster',()=>{
+ const {v}=mirrorLodRig();
+ const geo={pos:[-1,0,0,-.99,.01,0,-.98,0,.01,1,1,1,.99,.99,1,.98,1,.99],idx:[0,1,2,3,4,5],nrm:[],col:[],mat:[]};
+ for(let t=0;t<30;t++){
+  const n=geo.pos.length/3;
+  geo.pos.push(.001,.001,.001,.002,.001,.001,.001,.002,.001);geo.idx.push(n,n+1,n+2);
+ }
+ for(let i=0;i<geo.pos.length/3;i++){geo.nrm.push(0,1,0);geo.col.push(1,0,0);geo.mat.push(60);}
+ const build=v.ctx.Car3D.build;v.ctx.Car3D.build=(a,b,o)=>Object.assign({},build(a,b,o),geo);
+ v.carDraw.warmCarAssets();const c=v.G.cars[1],low=mirrorLodBody(v,c,100);
+ assert.ok(low.idx.length<geo.idx.length*.8,'fixture actually simplified');
+ for(let d=0;d<3;d++)for(const f of [Math.min,Math.max])assert.equal(f(...low.idx.map(i=>low.pos[3*i+d])),f(...geo.idx.map(i=>geo.pos[3*i+d])),'indexed bounds axis'+d);
+});
+
+test('default hardware phone AUTO has no extra meshes or geometry work',()=>{
+ const {v,created}=mirrorLodRig(false);v.G.camMode=1;Object.assign(v.G.gfx,{isMobile:true,mobileTier:true});
+ v.ctx.MirrorPass.instance().setMode('auto');
+ let reads=0;const get=v.G.store.get;v.G.store.get=(k,d)=>{if(k==='mirrorBodyLod')reads++;return get(k,d);};
+ v.carDraw.warmCarAssets();assert.equal(created.filter(m=>m.idx&&!m.kind).length,0);
+ assert.equal(reads,1,'flag read once across all warm bodies');
+ const count=created.length;for(let i=0;i<3;i++)mirrorLodFrame(v,v.ctx.MirrorPass.instance());
+ assert.equal(reads,1,'no live-frame flag reads');assert.equal(created.length,count,'no live frame mesh creation');
+});
+test('car-only context uses display rect/DPR and reads state/layout once per actual render',()=>{
+ const {v}=mirrorLodRig();v.carDraw.warmCarAssets();const mp=v.ctx.MirrorPass.instance();
+ v.G.cars.forEach((c,i)=>{c.s=c.isPlayer?1000:900-i;});
+ let states=0,boxes=0;const state=mp.state,canvas=v.ctx.document.getElementById('game'),box=canvas.getBoundingClientRect;
+ mp.state=()=>{states++;return state();};canvas.getBoundingClientRect=()=>{boxes++;return box();};
+ v.ctx.devicePixelRatio=1;mirrorLodFrame(v,mp);
+ assert.equal(states,1,'snapshot once for six cars');
+ // MirrorPass itself measures canvas once on first frame; the experiment reads once more.
+ assert.ok(boxes<=2,'one additional experimental canvas measurement');
+ assert.ok(v.rec.draws.some(m=>m.idx&&!m.kind),'display400px projection permits far rivals at DPR1');
+ states=boxes=0;v.rec.draws.length=0;v.ctx.devicePixelRatio=3;mirrorLodFrame(v,mp);
+ assert.equal(states,1);assert.equal(boxes,1);
+ assert.equal(v.rec.draws.filter(m=>m.idx&&!m.kind).length,0,'physicalDPR3 restores detailed bodies even though target DPR caps at2');
+});
+
+
+test("failed mirror partner uploads retain the detailed body; missing full bodies never allocate partners", () => {
+  for (const failure of ["null", "throw", "full-null"]) {
+    const { v, freed } = mirrorLodRig();
+    const create = v.G.gfx.createMesh;
+    let partnerAttempts = 0;
+    v.G.gfx.createMesh = (data) => {
+      if (failure === "full-null" && data.kind === "body" &&
+          (data.team !== v.G.player.team.id || data.num !== v.G.player.num)) return null;
+      if (data.idx && !data.kind) {
+        partnerAttempts++;
+        if (failure === "throw") throw new Error("fixture partner upload failed");
+        return null;
+      }
+      return create(data);
+    };
+    v.carDraw.warmCarAssets();
+    const c = v.G.cars[1];
+    if (failure === "full-null") {
+      assert.equal(partnerAttempts, 0, "no partner work without a full mesh key");
+    } else {
+      assert.ok(partnerAttempts > 0, "fixture reached partner upload");
+      const full = v.carDraw.teamBodyMesh(c.team, c);
+      assert.ok(full && full.kind === "body");
+      assert.equal(mirrorLodBody(v, c, 100), full, failure + " upload keeps the detailed body");
+      assert.ok(v.rec.draws.every(mesh => !!mesh), "no null draw handle");
+    }
+    v.carDraw.invalidateFactoryMeshCaches();
+    assert.ok(freed.every(mesh => !!mesh && !!mesh.kind), "only successfully created original handles are freed");
+    assert.equal(new Set(freed).size, freed.length, "no duplicate/orphan partner free");
+  }
+});

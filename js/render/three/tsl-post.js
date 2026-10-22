@@ -537,12 +537,19 @@
     // Reconstruct view-space position from depth (COMPOSITE ssrViewPos).
     const ssrViewPos = (uvGl) => viewPosNdc(C, uvGl, depthAt(uvGl).mul(2.0).sub(1.0));
     const caScene = (uvGl) => {
-      const dd = uvGl.sub(0.5);
-      const a = C.chromAb.mul(0.004).mul(dot(dd, dd));
-      return vec3(
-        sceneT.sample(TL(uvGl.add(dd.mul(a)))).r,
-        sceneT.sample(TL(uvGl)).g,
-        sceneT.sample(TL(uvGl.sub(dd.mul(a)))).b);
+      const sampled = vec3(0.0).toVar();
+      // A uniform exact-zero gate keeps tiny nonzero CA in its original domain.
+      If(C.chromAb.equal(0.0), () => {
+        sampled.assign(sceneT.sample(TL(uvGl)).rgb);
+      }).Else(() => {
+        const dd = uvGl.sub(0.5);
+        const a = C.chromAb.mul(0.004).mul(dot(dd, dd));
+        sampled.assign(vec3(
+          sceneT.sample(TL(uvGl.add(dd.mul(a)))).r,
+          sceneT.sample(TL(uvGl)).g,
+          sceneT.sample(TL(uvGl.sub(dd.mul(a)))).b));
+      });
+      return sampled;
     };
 
     // The post-ACES COLOUR GRADE and the output DITHER (glsl-post.js COLOUR_GRADE
@@ -900,8 +907,12 @@
         If(C.hdrGradeOn.greaterThan(0.5).and(C.sceneHdr.greaterThan(0.5)), () => {
           const lift = vec3(C.lift).toVar();
           const gain = max(C.gain, vec3(1e-3)).toVar();
-          const invGamma = vec3(1.0).div(max(C.gamma, vec3(1e-3))).toVar();
-          c.assign(lift.add(gain.sub(lift).mul(pow(max(c, vec3(0.0)), invGamma))));
+          If(C.gamma.x.equal(1.0).and(C.gamma.y.equal(1.0)).and(C.gamma.z.equal(1.0)), () => {
+            c.assign(lift.add(gain.sub(lift).mul(max(c, vec3(0.0)))));
+          }).Else(() => {
+            const invGamma = vec3(1.0).div(max(C.gamma, vec3(1e-3))).toVar();
+            c.assign(lift.add(gain.sub(lift).mul(pow(max(c, vec3(0.0)), invGamma))));
+          });
           // five overlapping exposure masks in log2 stops around 18% grey
           const y = max(dot(max(c, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722)), 1e-6).toVar();
           const z = log2(y.div(0.18)).toVar();
@@ -919,12 +930,14 @@
           c.addAssign(w0x.mul(C.tone0.x).mul(0.05).add(w0y.mul(C.tone0.y).mul(0.025)));
           c.assign(max(c, vec3(0.0)));
           // toe/shoulder: monotonic power pivoted at middle grey (applyToeShoulder)
-          const oldY = max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-6).toVar();
-          const exponent = select(oldY.lessThan(0.18),
-            exp2(clamp(C.tone1.y, -1.0, 1.0)),
-            exp2(clamp(C.tone1.z.negate(), -1.0, 1.0)));
-          const newY = pow(oldY.div(0.18), exponent).mul(0.18);
-          c.assign(max(c.mul(newY.div(max(oldY, 1e-6))), vec3(0.0)));
+          If(C.tone1.y.notEqual(0.0).or(C.tone1.z.notEqual(0.0)), () => {
+            const oldY = max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-6).toVar();
+            const exponent = select(oldY.lessThan(0.18),
+              exp2(clamp(C.tone1.y, -1.0, 1.0)),
+              exp2(clamp(C.tone1.z.negate(), -1.0, 1.0)));
+            const newY = pow(oldY.div(0.18), exponent).mul(0.18);
+            c.assign(max(c.mul(newY.div(max(oldY, 1e-6))), vec3(0.0)));
+          });
         });
 
         // Filmic tone-map on the HDR scene only. An 8-bit scene target has

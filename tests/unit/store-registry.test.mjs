@@ -179,12 +179,14 @@ function inventory(files = jsFiles()) {
 // Measured at 78cb4831b. Remove a name when its key gains a writer or goes away.
 const WRITERLESS = new Set(`analogSpeedSteer backgroundMotion breakBarriers c1Pileup career debris debrisCap devApi
   digitalRate dragSmooth fieldLod forceMobileTier gfxBootStepMs gfxDebug glErrDrain glxInstPerPass glxPerspScalar grLite haptics homeCamera homeScene iceRelayOnly
-  inputDebug instCellCache marbleGrip mirrorInstEvery modelInst moonShadowCadence motion multiDraw musicStream nostrRelays padCurve
-  padDeadzone padSaturation propsUnchunked r2Airborne r3Contact spatialUpscaleGather tiltCurve tlxArrayNearest
+  inputDebug instCellCache marbleGrip mirrorBodyLod mirrorInstEvery modelInst moonShadowCadence motion multiDraw musicStream nostrRelays padCurve
+  padSaturation propsUnchunked r2Airborne r3Contact spatialUpscaleGather tiltCurve tlxArrayNearest
   tlxChunkMerge tlxChunkRelease tlxForceBatches tlxForceHw tlxInstPad tlxLampStatic tlxMirLampCap tlxMirrorSweep tlxMobile tlxPack
   tlxAoFold tlxBloom11 tlxMirFold tlxPostFixedMats tlxRoadNormalV2 tlxShadowOff tlxSharedUniforms tlxSkipBatches tlxSkyCache tlxTagLess tlxViz ssrDayGate tlxPartWrap tlxPoolRoot tlxSkyCache512 tlxCoalesce tlxSharedTex tlxAttrInst tlxDynUsage liveryAsync tlxCasterAttr tlxMirWarmLazy tlxPad4 tlxMirMips tlxDepthDiscard tlxDrawWarm tlxWarmFx tlxWarmPlus glxChunkAlign touchCurve touchDragSpeed touchRange gfxBootStepMs tlxMaterialDetail tlxSharpenLimit tlxFixedTargets
   turn turnApi wgxInsetInPass wgxPackAsync wgxTransient carWarmSlice tlxWarmBeforePack tlxPackAsync`.split(/\s+/).filter(Boolean));
 // tlxSharpenLimit is a manual default-off TLX post-chain prototype; see docs/DEBUG-HOOKS.md.
+// mirrorBodyLod is a manual reload-only experiment, disabled by default; see docs/DEBUG-HOOKS.md.
+// padDeadzone needs no exception: wireTune forwards its literal key to store.set (steer-tuning.js).
 // tlxMaterialDetail is a manual reload-only material-array anisotropy setting (4 default, 8 opt-in).
 // carWarmSlice is the manual race-car warm slicing kill switch (PERF-HUNT-4 F3.3).
 // tlxWarmBeforePack is hunt 5 A kill switch: "0" restores the pack gate on the TLX race-entry warm.
