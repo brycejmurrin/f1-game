@@ -76,9 +76,9 @@ try {
           a.go();
           a.park(parkFrac); // Once per time row: repeated calls teleport every AI car.
           const rivals = a.rivals([
-            { dProg: 35, dx: -1.4, speed: 31 },
-            { dProg: 70, dx: 1.3, speed: 29 },
-            { dProg: 105, dx: -0.3, speed: 30 },
+            { dProg: 8, dx: -1.4, speed: 31 },
+            { dProg: 18, dx: 1.3, speed: 29 },
+            { dProg: 30, dx: -0.3, speed: 30 },
           ]);
           a.step(1 / 60);
           a.drivingLine('off');
@@ -94,7 +94,7 @@ try {
           a.headless(false); a.govHold(true); a.renderScale(1); a.seed(42);
           const race = await a.race(track, time, 'dry');
           a.go(); a.park(parkFrac);
-          const rivals = a.rivals([{ dProg: 35, dx: -1.4, speed: 31 }, { dProg: 70, dx: 1.3, speed: 29 }, { dProg: 105, dx: -0.3, speed: 30 }]);
+          const rivals = a.rivals([{ dProg: 8, dx: -1.4, speed: 31 }, { dProg: 18, dx: 1.3, speed: 29 }, { dProg: 30, dx: -0.3, speed: 30 }]);
           a.step(1 / 60); a.drivingLine('off'); a.freeze(true); a.hud(false); a.renderClock(0, true); a.view(camera);
           document.getElementById('btn-cam')?.style.setProperty('display', 'none', 'important');
           return { race, parkCalls: 1, clockHoldRequested: true, rivals, cars: a.cars(), line: a.drivingLine(), camera: a.camState(), beganAt: Date.now() };
@@ -154,7 +154,7 @@ try {
         fullResolution: width === WIDTH && height === HEIGHT,
         viewportAndInput: runtime.viewport.innerWidth === WIDTH && runtime.viewport.innerHeight === HEIGHT
           && runtime.viewport.devicePixelRatio === 1 && await page.evaluate(() => navigator.maxTouchPoints > 0 && !matchMedia('(prefers-reduced-motion: reduce)').matches),
-        stagedCars: (raceRow.rivals?.length ?? 0) === 3,
+        stagedCars: (raceRow.rivals?.length ?? 0) === 3 && runtime.cars.filter(c => !c.p).length >= 3,
         meaningfulPixels: pixels.meaningful === true,
         webgpu: runtime.backend?.api === 'webgpu',
         hardwareAdapter: adapter.verdict === 'hardware' && runtime.backend?.softAdapter === false && runtime.backend?.liteGpu === false && runtime.backend?.softBlit === false,
