@@ -2236,10 +2236,13 @@ The visual-suspension springs (`js/physics/body-attitude.js`). `true|false` togg
 `{car:idx}` reads `cars[idx]`'s offsets (radians for pitch/roll, metres for
 heave). Render-only — it never touches `px/pz/head` or `(s, x)`.
 
-### `weatherArc(from?, to?, seconds?) → {from, to, t, dur, weather, wetness?} | null`
+### `weatherArc(from?, to?, seconds?) → {from, to, t, dur, weather, wetness?, rainfall?} | null`
 Read or start a timed weather transition. No args → the running arc (or
 `null`); `weatherArc(null)` cancels; `weatherArc("dry", "rain", 60)` starts a
 60 s dry→rain arc and returns it.
+`wetness` is the lagged road state; `rainfall` is atmospheric intensity at the
+followed car (0 dry, 0.5 drizzle, 1 rain, up to 1.5 storm). A clearing cloud can
+leave a wet road while rainfall is zero.
 
 ### `renderClock(t?, hold?) → number`
 Read or set the sky/animation clock (`G.skyT`) the sky, flags and other

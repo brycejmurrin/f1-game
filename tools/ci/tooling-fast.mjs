@@ -1422,9 +1422,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/wait-polling.test.mjs",
   "tests/unit/wall-clamp.test.mjs",
   "tests/unit/wall-end-face-vm.test.mjs",
-  // The falling rain follows WETNESS through a weather arc: shown at 0.25, the
-  // storm tier and rain loop at 0.72, hidden again when a drying arc drops below
-  // 0.25 — six arcs sampled at 10 points each. VM-executed weather-arc.js, ~1 s.
+  // Falling rain follows atmospheric intensity independently of surface water;
+  // local shower fringes, dissipation, rain audio, particle density and wind.
+  // Six arcs plus surface-water persistence. VM-executed weather-arc.js.
   // Round-2: WATCH scrub `input` events coalesce to one seek per rAF; `change` seeks at once; stop() drops a pending seek.
   "tests/unit/watch-transport-scrub.test.mjs",
   "tests/unit/weather-arc-plan.test.mjs",

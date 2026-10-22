@@ -939,6 +939,8 @@ const TrackMesh = (function () {
     // SNOW (the designer's desert / alpine themes; no shipped def does, so the
     // 52 keep their bytes — tests/unit/track-foundation* and verify-track).
     const groundMat = groundMatOf(track.def);
+    // Explicit pavement stays paved through the inner band; natural terrain keeps gravel runoff.
+    const runoffMat = groundMat === MAT.CONCRETE ? groundMat : MAT.ROCK;
     const outerW = surface.outerW;
     const latsL = surface.rails.map((d) => -d);
     const latsR = surface.rails.slice();
@@ -1063,7 +1065,7 @@ const TrackMesh = (function () {
           const gt = NTV <= 1 ? 1 : v / (NTV - 1);          // 0 inner edge → 1 far (same 1-rail guard as the position path)
           const tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
           col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
-          mat.push(gt < 0.22 ? MAT.ROCK : groundMat);
+          mat.push(gt < 0.22 ? runoffMat : groundMat);
         }
         if ((k + 1) % 32 === 0 || k + 1 === n) yield;
       }
@@ -1165,10 +1167,14 @@ const TrackMesh = (function () {
     const pos = [x0, y, z0,  x1, y, z0,  x1, y, z1,  x0, y, z1];
     const nrm = [0, 1, 0,  0, 1, 0,  0, 1, 0,  0, 1, 0];
     const col = [c[0], c[1], c[2],  c[0], c[1], c[2],  c[0], c[1], c[2],  c[0], c[1], c[2]];
+    // The distant ground shares the terrain's material, not a sealed MAT.FLAT
+    // water film underneath porous grass/sand/snow.
+    const groundMat = groundMatOf(track.def);
+    const mat = [groundMat, groundMat, groundMat, groundMat];
     // Double-sided (both windings) so the up-facing ground is never back-face
     // culled regardless of the renderer's winding convention.
     const idx = [0, 1, 2,  0, 2, 3,   0, 2, 1,  0, 3, 2];
-    return { pos, nrm, col, idx };
+    return { pos, nrm, col, mat, idx };
   }
 
   // ---- STARTING GRID ----------------------------------------------------

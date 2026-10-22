@@ -18,6 +18,7 @@ import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -532,6 +533,58 @@ test("A-W1: off on a software adapter (unset knob), forced on by apex26.tlxDrawW
   await off.warm();
   assert.equal(off.calls.length, 0, "=0: no draw stage");
   assert.equal(off.W1.stages.drawn, null);
+});
+
+// Execute the production uniform derivation with its real uniform defaults;
+// this tests CPU illumination inputs, not the shader's per-ray If branches.
+function skyDeriveHarness() {
+  const source = read("js/render/three/tsl-sky.js");
+  const uniforms = source.slice(source.indexOf("    const U = {"), source.indexOf("    const C = ctx"));
+  const helpers = source.slice(source.indexOf("    const sstep ="), source.indexOf("    function derive()"));
+  const context = vm.createContext({ THREE, uniform: (value) => ({ value }), C: null });
+  vm.runInContext(uniforms + helpers + fnSource(source, "function derive()") +
+    "\n;globalThis.api = { U, D, derive };", context, { filename: absSrc("js/render/three/tsl-sky.js") });
+  return (stars, y) => {
+    const { U, D, derive } = context.api;
+    U.stars.value = stars;
+    U.sunDir.value.set(Math.sqrt(1 - y * y), y, 0);
+    U.cloud.value = 1;
+    // The same cool authored sky isolates the phase treatment from palettes.
+    U.zenith.value.set(0.01, 0.02, 0.05);
+    U.horizon.value.set(0.04, 0.03, 0.06);
+    derive();
+    return { mie: D.mieK.value, horizonGlow: D.hGlowCol.value.toArray(),
+      zenith: D.zenithO.value.toArray(), horizon: D.horizonO.value.toArray(),
+      daytime: D.daytime.value };
+  };
+}
+
+test("sky derivation suppresses solar scattering for low and high night moon keys", () => {
+  const derive = skyDeriveHarness();
+  const low = derive(1, 0.214), high = derive(1, 0.8);
+  for (const night of [low, high]) {
+    assert.equal(night.mie, 0, "solar Mie must not follow the moon key");
+    assert.deepEqual(night.horizonGlow, [0, 0, 0], "solar horizon glow must not follow the moon key");
+  }
+  assert.deepEqual(low.zenith, high.zenith, "night lid is independent of moon elevation");
+  assert.deepEqual(low.horizon, high.horizon);
+  const solar = derive(0, 0.214);
+  assert.ok(solar.mie > 0, "low solar elevation still scatters by day");
+  assert.ok(solar.horizonGlow.some((v) => v > 0));
+});
+
+test("overcast sky targets grow continuously from twilight illumination to daylight", () => {
+  const derive = skyDeriveHarness();
+  const phases = [0.08, 0.28, 0.34, 0.40, 0.8].map((y) => derive(0, y));
+  const lum = (c) => c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
+  for (let i = 1; i < phases.length; i++) {
+    assert.ok(lum(phases[i].zenith) >= lum(phases[i - 1].zenith), "cloudy zenith must not dim as daylight grows");
+    assert.ok(lum(phases[i].horizon) >= lum(phases[i - 1].horizon), "cloudy horizon must not dim as daylight grows");
+  }
+  assert.ok(lum(phases[0].zenith) < 0.6 * lum(phases.at(-1).zenith), "twilight must not inherit the midday grey target");
+  assert.ok(lum(phases[0].horizon) < 0.6 * lum(phases.at(-1).horizon));
+  assert.equal(phases.at(-1).daytime, 1);
+  assert.ok(phases.some((p) => p.daytime > 0 && p.daytime < 1), "fixture exercises the smooth transition");
 });
 
 // B·H16 (2026-10-21): a garage/menu frame sets noEnv and keeps proj (SSAO), and present() then paints WITHOUT post

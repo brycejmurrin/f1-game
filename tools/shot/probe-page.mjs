@@ -4,7 +4,25 @@ import { writeFileSync } from "node:fs";
 import { WEBGPU_CHROMIUM_ARGS } from "../lib/harness.mjs";
 
 /** Chromium flags per renderer backend (must match backend-compare / gfx-probe / carshot). */
-export function chromiumArgsForBackend(backend) {
+export function chromiumArgsForBackend(backend, { gpu = "software" } = {}) {
+  if (!["three", "webgpu", "webgl2"].includes(backend)) throw new Error(`unknown renderer backend: ${backend}`);
+  if (!["software", "hardware"].includes(gpu)) throw new Error(`gpu must be software or hardware, not ${gpu}`);
+  if (gpu === "hardware") {
+    const args = ["--enable-gpu", ...(process.platform === "linux" ? ["--no-sandbox"] : [])];
+    if (backend === "webgl2") return args;
+    // Linux headless Chromium's documented Vulkan setup. This selects the
+    // Vulkan API, not a software adapter: there is deliberately no
+    // --use-vulkan=swiftshader / --use-webgpu-adapter=swiftshader pin, and the
+    // strict adapter check below rejects SwiftShader if the OS falls back.
+    // macOS uses Metal and must not receive --use-angle=vulkan (see the
+    // hardware Playwright config and gpu-census measurements). The unsafe flag
+    // exposes WebGPU on gated configs; it does not select or create hardware.
+    if (process.platform === "linux") args.push(
+      "--enable-unsafe-webgpu", "--enable-features=Vulkan", "--use-angle=vulkan", "--disable-vulkan-surface",
+    );
+    else if (process.platform === "darwin") args.push("--enable-unsafe-webgpu"); // measured to preserve Metal in this repo's full-Chromium CI
+    return args;
+  }
   // --enable-unsafe-swiftshader: Chromium 1xx blocks automatic SwiftShader
   // WebGL without it (carshot / gfx-probe already pin this; probe helpers did not).
   if (backend === "webgpu") return [...WEBGPU_CHROMIUM_ARGS];
@@ -14,6 +32,51 @@ export function chromiumArgsForBackend(backend) {
   return ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
 }
 
+/** Launch settings for software probes or an explicit full-browser hardware attempt. */
+export function chromiumLaunchOptionsForBackend(backend, { gpu = "software" } = {}) {
+  return {
+    ...(gpu === "hardware" ? { browserFlavor: "full" } : {}),
+    args: chromiumArgsForBackend(backend, { gpu }),
+  };
+}
+
+const SOFTWARE_ADAPTER_RE = /swiftshader|llvmpipe|lavapipe|softpipe|warp|basic render|gdi generic|software/i;
+
+/** Conservative adapter classification: empty/redacted identity is unknown, never hardware. */
+export function classifyWebGpuAdapter({ info = {}, isFallbackAdapter = null } = {}) {
+  const identity = [info.vendor, info.architecture, info.device, info.description]
+    .filter((value) => typeof value === "string" && value.trim())
+    .join(" ");
+  if (isFallbackAdapter === true || SOFTWARE_ADAPTER_RE.test(identity)) return "software";
+  if (!identity) return "unknown";
+  return "hardware";
+}
+
+/** Require an identifiable, non-fallback WebGPU adapter before a hardware capture. */
+export async function requireHardwareWebGpu(page) {
+  const adapter = await page.evaluate(async () => {
+    if (!navigator.gpu) return { error: "navigator.gpu is unavailable", info: {}, isFallbackAdapter: null };
+    try {
+      const a = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+      if (!a) return { error: "requestAdapter returned null", info: {}, isFallbackAdapter: null };
+      const i = a.info || {};
+      return {
+        error: null,
+        info: { vendor: i.vendor || "", architecture: i.architecture || "", device: i.device || "", description: i.description || "" },
+        isFallbackAdapter: typeof a.isFallbackAdapter === "boolean" ? a.isFallbackAdapter : null,
+      };
+    } catch (e) {
+      return { error: String(e && e.message || e), info: {}, isFallbackAdapter: null };
+    }
+  });
+  const verdict = classifyWebGpuAdapter(adapter);
+  const result = { ...adapter, verdict };
+  if (verdict !== "hardware") {
+    throw new Error(`hardware WebGPU required; adapter verdict=${verdict}${adapter.error ? ` (${adapter.error})` : ""}${Object.values(adapter.info || {}).some(Boolean) ? `; identity=${Object.values(adapter.info).filter(Boolean).join(" / ")}` : ""}`);
+  }
+  return result;
+}
+
 /**
  * Runs before any page script. Pins backend/team and disables view transitions
  * (headless compositing rejects them → index.html error overlay blocks shots).
@@ -21,18 +84,27 @@ export function chromiumArgsForBackend(backend) {
  * pre-race FLYBY (js/ui/loading-screen.js has no flyby under it). Pass
  * `motion: true` to probe the loading screen / flyby.
  */
-export function installProbeInit(page, { backend = "webgl2", team = null, tlxForceGL = true, motion = false } = {}) {
-  return page.addInitScript(({ be, teamIdx, forceGl, keepMotion }) => {
+export function installProbeInit(page, { backend = "webgl2", team = null, tlxForceGL = true, motion = false, ultra = false, hardware = false, tlxWebgpu = false } = {}) {
+  return page.addInitScript(({ be, teamIdx, forceGl, keepMotion, highQuality, nativeCapture, useTlxWebgpu }) => {
     try {
       // Pin webgl2 explicitly. Clearing the key means the shipped TLX/Three
       // default on every device, which is not the native GLX path this probe's
       // default requests.
       if (be === "webgl2") localStorage.setItem("apex26.gfxBackend", "webgl2");
       else localStorage.setItem("apex26.gfxBackend", be);
-      if (be === "three" && forceGl) localStorage.setItem("apex26.tlxForceGL", "1");
+      if (be === "three" && useTlxWebgpu) localStorage.setItem("apex26.tlxForceGL", "0");
+      else if (be === "three" && forceGl) localStorage.setItem("apex26.tlxForceGL", "1");
       if (be === "webgpu") {
         localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
-        try { sessionStorage.setItem("apex26.wgxCapture", "1"); } catch (_) {}
+        try { sessionStorage.setItem("apex26.wgxCapture", nativeCapture ? "0" : "1"); } catch (_) {}
+      }
+      if (be === "three" && useTlxWebgpu && nativeCapture) {
+        try { sessionStorage.setItem("apex26.wgxCapture", "0"); } catch (_) {}
+      }
+      if (highQuality) {
+        localStorage.setItem("apex26.gfxPreset", JSON.stringify("ultra"));
+        localStorage.removeItem("apex26.gfxWgxLite");
+        localStorage.setItem("apex26.gfxWgxLevel", "0");
       }
       if (teamIdx != null) localStorage.setItem("apex26.team", JSON.stringify(+teamIdx));
     } catch (_) {}
@@ -58,7 +130,8 @@ export function installProbeInit(page, { backend = "webgl2", team = null, tlxFor
       const msg = (r && (r.message || r)) || "";
       if (String(msg).includes("Transition was skipped")) e.preventDefault();
     }, true);
-  }, { be: backend, teamIdx: team, forceGl: tlxForceGL, keepMotion: !!motion });
+  }, { be: backend, teamIdx: team, forceGl: tlxForceGL, keepMotion: !!motion,
+    highQuality: !!ultra, nativeCapture: !!hardware, useTlxWebgpu: !!tlxWebgpu });
 }
 
 /** Snapshot why boot stalled — bare waitForFunction timeouts never name WebGL. */
