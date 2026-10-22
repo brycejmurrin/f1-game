@@ -1,6 +1,7 @@
 // @doc Validated shared screenshot profiles, scope, rendering stack, and session options.
 import { WEBGPU_CHROMIUM_ARGS } from "../lib/harness.mjs";
 import { captureGpuOptions, glStack } from "../lib/browser-workers.mjs";
+import { chromiumArgsForBackend } from "./probe-page.mjs";
 
 export const CAPTURE_PROFILES = Object.freeze({
   custom: Object.freeze({ width: null, height: null, type: null, quality: null }),
@@ -8,7 +9,7 @@ export const CAPTURE_PROFILES = Object.freeze({
   comparison: Object.freeze({ width: 1280, height: 720, type: "png", quality: null }),
 });
 const VALUES = new Set(["profile", "width", "height", "dpr", "scope", "gpu", "browser", "type", "quality", "seed"]);
-const FLAGS = new Set(["trace", "cache-assets", "reuse", "isolated"]);
+const FLAGS = new Set(["trace", "cache-assets", "reuse", "isolated", "ultra", "tlx-webgpu"]);
 const range = (name, raw, low, high, integer = true) => {
   const value = Number(raw);
   if (raw === "" || !Number.isFinite(value) || value < low || value > high || (integer && !Number.isInteger(value))) {
@@ -57,6 +58,8 @@ export function parseCaptureOptions(argv = [], env = process.env) {
     gpuExplicit: raw.gpu != null || !!(env.APEX_GPU || env.APEX_GL), browser, trace: !!raw.trace,
     tracePath: typeof raw.trace === "string" ? raw.trace : null,
     cacheAssets: !!raw["cache-assets"], reuse: !raw.isolated, isolated: !!raw.isolated,
+    ultra: !!raw.ultra,
+    tlxWebgpu: !!raw["tlx-webgpu"],
     seed: raw.seed == null ? (profile === "comparison" ? 1 : null) : range("seed", raw.seed, 0, 4294967295), positionals };
   if (options.viewport) captureViewport(options, options.viewport);
   return options;
@@ -79,7 +82,12 @@ export function captureLaunchOptions(options, runtime = {}) {
   if (runtime.backend === "webgpu") {
     if (options.gpu === "swiftshader") launch.args = [...new Set([...launch.args, ...WEBGPU_CHROMIUM_ARGS.filter((arg) => arg !== "--headless=new")])];
   }
-  return { ...launch, browserFlavor: options.browser };
+  if (options.gpu === "hardware") {
+    // Hardware captures must use full Chromium and leave adapter selection to
+    // the OS. Match the strict renderer probe's platform-native flags.
+    launch.args = chromiumArgsForBackend(runtime.backend || "three", { gpu: "hardware" });
+  }
+  return { ...launch, browserFlavor: options.gpu === "hardware" ? "chromium" : options.browser };
 }
 export function captureScreenshotOptions(options, fallbackType = "png") {
   const type = options.type || fallbackType;

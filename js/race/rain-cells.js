@@ -61,6 +61,21 @@ const RainCells = (function () {
     return Math.abs(d) <= cell.h;
   }
 
+  /** Falling rain has a soft fringe and eases away as the cloud dissipates.
+   *  Surface water still uses covered()/segWet(): it remains after the cloud. */
+  function strength(cell, frac, t) {
+    if (!cell) return 1;
+    if (t >= cell.life) return 0;
+    const smooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+    let edge = 1;
+    if (cell.h < 0.5) {
+      let d = frac - (cell.c0 + cell.v * t / cell.total);
+      d -= Math.round(d);
+      edge = smooth((cell.h - Math.abs(d)) / Math.max(0.001, Math.min(0.02, cell.h * 0.2)));
+    }
+    return edge * smooth((cell.life - t) / Math.max(1, Math.min(10, cell.life * 0.1)));
+  }
+
   /** The instants in (0, min(T, life)) at which `frac` enters or leaves the cell, ascending. The window's
    *  edges move linearly, so q(t) = frac − c0 + h − r·t is covered iff frac(q) < 2h; the flips are where q
    *  crosses an integer or an integer + 2h. */
@@ -139,6 +154,6 @@ const RainCells = (function () {
     return out;
   }
 
-  return { SEGS, LOCAL_ODDS, forPlan, covered, flips, segWet, segFrac, sample, sectors, h01 };
+  return { SEGS, LOCAL_ODDS, forPlan, covered, strength, flips, segWet, segFrac, sample, sectors, h01 };
 })();
 Object.freeze(RainCells);

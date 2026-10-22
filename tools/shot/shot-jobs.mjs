@@ -58,6 +58,8 @@ export function normalizeJob(raw, defaults = {}) {
   const weather = String(raw.weather ?? defaults.weather ?? "dry");
   if (!WEATHERS.includes(weather)) throw new Error(`unknown weather "${weather}" — ${WEATHERS.join("|")}`);
   const showHud = !!(raw.hud ?? raw.showHud ?? defaults.showHud);
+  const traffic = !!(raw.traffic ?? defaults.traffic);
+  const noLine = !!(raw.noLine ?? defaults.noLine);
   const team = raw.team ?? defaults.team ?? null;
   const baseCapture = defaults.capture || parseCaptureOptions([]);
   const captureArgs = ["--profile", String(raw.profile ?? baseCapture.profile)];
@@ -86,7 +88,7 @@ export function normalizeJob(raw, defaults = {}) {
     raster: !!(raw.raster ?? defaults.raster),
     // orbit / cinematic / trackside re-site the eye out of scenery (__apex opts.clear, #2253); opt-in so
     // existing shots and survey baselines keep their framing.
-    clear: !!(raw.clear ?? defaults.clear),
+    clear: !!(raw.clear ?? defaults.clear), traffic, noLine,
   };
 }
 
@@ -116,7 +118,7 @@ export function parseShotArgv(argv, ROOT) {
   argv = capture.positionals;
   // An unknown bare flag used to be skipped as a "value-taking" flag and the shot ran on defaults.
   makeFlags(argv, ["--batch", "--raster", "--jpeg", "--team", "--wait", "--backend", "--az", "--el", "--dist",
-    "--side", "--tod", "--weather", "--hud", "--clear"]);
+    "--side", "--tod", "--weather", "--hud", "--clear", "--traffic", "--no-line"]);
   const batchPath = flag(argv, "--batch", null);
   const raster = has(argv, "--raster");
   const jpeg = has(argv, "--jpeg");
@@ -135,6 +137,8 @@ export function parseShotArgv(argv, ROOT) {
     jpeg,
     raster,
     clear: has(argv, "--clear"),
+    traffic: has(argv, "--traffic"),
+    noLine: has(argv, "--no-line"),
   };
 
   if (batchPath) {
@@ -147,6 +151,7 @@ export function parseShotArgv(argv, ROOT) {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith("--")) {
       if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster" && argv[i] !== "--clear"
+        && argv[i] !== "--traffic" && argv[i] !== "--no-line"
         && i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++;
       continue;
     }
@@ -186,7 +191,8 @@ export const SHOT_USAGE = `usage: node tools/shot/shot.mjs <trackId> <frac> [cam
   --tod day|dusk|dawn|night --weather dry|wet|rain|overcast|fog (batch fields tod/weather)
   --profile preview|comparison --width N --height N --dpr N --scope scene|page
   --gpu swiftshader|llvmpipe|hardware|lavapipe --browser auto|chromium|shell
-  --backend three|webgl2|webgpu --trace[=path] --cache-assets --isolated --seed N
+  --backend three|webgl2|webgpu --tlx-webgpu (hardware Three.js/WebGPU) --trace[=path] --cache-assets --isolated --seed N
+  --ultra pins the game's Ultra preset; --traffic stages nearby AI cars; --no-line hides the suggested driving line.
   cam: park | eye | orbit | cinematic | trackside.
   --clear: orbit/cinematic/trackside re-site the eye out of scenery (batch field clear).
   --jpeg / .jpg → JPEG q85 (human review). --raster → __apex.render view only (no PNG).

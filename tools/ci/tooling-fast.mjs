@@ -304,6 +304,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // stays in the edit loop where a cockpit geometry change is actually made.
   "tests/unit/cockpit-crest-stripe.test.mjs",
   "tests/unit/cockpit-preview.test.mjs",
+  "tests/unit/cockpit-wheel-finish.test.mjs",
   // The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.
   "tests/unit/cockpit-wheels.test.mjs",
   "tests/unit/comment-citations.test.mjs",
@@ -333,6 +334,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-prefers-cascade.test.mjs",
   "tests/unit/css-token-adoption.test.mjs",
   "tests/unit/css-tokens.test.mjs",
+  // Context-loss menu notice + reload budget cleared at lights-out.
+  "tests/unit/ctx-lost-notice.test.mjs",
   "tests/unit/cursor-agents.test.mjs",
   "tests/unit/curvature-channels.test.mjs",
   // The track designer's registry (js/editor/custom-tracks.js + track-themes.js):
@@ -1422,9 +1425,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/wait-polling.test.mjs",
   "tests/unit/wall-clamp.test.mjs",
   "tests/unit/wall-end-face-vm.test.mjs",
-  // The falling rain follows WETNESS through a weather arc: shown at 0.25, the
-  // storm tier and rain loop at 0.72, hidden again when a drying arc drops below
-  // 0.25 — six arcs sampled at 10 points each. VM-executed weather-arc.js, ~1 s.
+  // Falling rain follows atmospheric intensity independently of surface water;
+  // local shower fringes, dissipation, rain audio, particle density and wind.
+  // Six arcs plus surface-water persistence. VM-executed weather-arc.js.
   // Round-2: WATCH scrub `input` events coalesce to one seek per rAF; `change` seeks at once; stop() drops a pending seek.
   "tests/unit/watch-transport-scrub.test.mjs",
   "tests/unit/weather-arc-plan.test.mjs",
