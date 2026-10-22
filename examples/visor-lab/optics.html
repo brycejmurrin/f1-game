@@ -1,0 +1,53 @@
+<!doctype html>
+<!-- @doc Animated visor A/B comparison over matching captured race views. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Apex / Animated Visor Lab</title><link rel="stylesheet" href="visor-optics.css"><style>
+body{margin:0;background:#080c11;--hud-ink-light:#fff;--hud-ink-dark:#000;--visor-neutral:#19202b;--visor-amber:#a66420;--visor-ice:#256d98;--visor-rose:#9f3756;--gap:24px;font:14px system-ui;color:#fff}#game,#fx-droplets,#hud{position:fixed;inset:0;width:100%;height:100%}#game{z-index:1}#fx-droplets{z-index:2;pointer-events:none}#hud{z-index:10;pointer-events:none}#hud::before{content:"";position:absolute;inset:0}aside{position:fixed;z-index:11;bottom:12px;left:12px;padding:10px 14px;background:#091019e8;border-radius:8px;max-width:80%;font-size:12px}button{font:inherit}aside{top:12px;left:12px;bottom:auto;max-width:340px;max-height:85vh;overflow:auto;border:1px solid #52657a;color:#dce6f0}summary{font-weight:700;font-size:18px;cursor:pointer;margin-top:12px}aside a{color:#f6c358}aside p{line-height:1.5}label{display:block;margin:10px 0}select{display:block;width:100%;padding:8px;border:1px solid #52657a;border-radius:5px;background:#151f2c;color:#fff;font:inherit;margin-top:5px}input[type=range]{width:70%}a:focus-visible,summary:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #f6c358;outline-offset:3px}@media(max-width:900px){aside{max-width:260px}details:not([open]){max-height:80px}}
+
+body{--wipe:50%;overflow:hidden}#baseline{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+#game,#fx-droplets,#hud{clip-path:inset(0 0 0 var(--wipe))}
+aside{z-index:30;box-sizing:border-box;max-width:min(340px,calc(100vw - 24px));max-height:calc(100dvh - 135px);top:46px}
+#divider{position:fixed;z-index:22;left:var(--wipe);top:0;bottom:0;width:2px;background:#ffffffa0;transform:translateX(-50%);touch-action:none;cursor:ew-resize}
+#divider span{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border:1px solid #ffffffa0;border-radius:50%;background:#091019e8;padding:10px 7px;white-space:nowrap;user-select:none}
+.view-label{position:fixed;top:10px;z-index:23;padding:5px 8px;font-size:10px;background:#091019e8;border:1px solid #52657a;border-radius:4px;pointer-events:none}.label-a{left:12px}.label-b{right:12px}
+#comparison{position:fixed;z-index:31;bottom:max(12px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);box-sizing:border-box;width:min(540px,calc(100vw - 24px));padding:7px 12px;background:#091019ed;border:1px solid #52657a;border-radius:7px;font-size:11px}
+#comparison label{margin:0;display:flex;justify-content:space-between;gap:12px}#wipe{width:100%;height:32px;margin:0;accent-color:#f6c358;cursor:ew-resize}#comparison output{font-variant-numeric:tabular-nums}
+@media(max-width:900px){aside{width:260px}summary{font-size:16px}}@media(max-width:450px){aside{max-width:calc(100vw - 24px)}}
+
+#toggle-controls{position:fixed;z-index:40;top:46px;left:12px;min-height:44px;padding:9px 14px;border:1px solid #52657a;border-radius:7px;background:#091019ed;color:#f6c358;font:600 12px system-ui;cursor:pointer;touch-action:manipulation}
+#toggle-controls:focus-visible{outline:2px solid #f6c358;outline-offset:3px}
+aside{top:100px;max-height:calc(100dvh - 190px)}aside[hidden]{display:none}
+</style></head><body data-helmet-cam><canvas id="baseline" aria-hidden="true"></canvas><canvas id="game"></canvas><canvas id="fx-droplets" hidden></canvas><div id="hud"></div><div id="divider" aria-hidden="true"><span>‹ ›</span></div><div class="view-label label-a">A · ORIGINAL</div><div class="view-label label-b">B · SELECTED VISOR</div><div id="comparison"><label for="wipe"><span>Original ← Compare → Visor</span><output id="wipe-value" for="wipe">50% original</output></label><input id="wipe" type="range" min="0" max="100" value="50" aria-label="Comparison divider: original on left, selected visor on right" aria-valuetext="50% original on left, 50% visor on right"></div><button id="toggle-controls" type="button" aria-controls="visor-selector" aria-expanded="true">Hide controls</button><aside id="visor-selector" aria-label="Visor settings"><a href="index.html">← Screenshot comparisons</a><details open><summary>Adjust the visor</summary><p>The same game capture on both sides. A stays untouched; B adds your selected visor and water. The road stays still while water animates.</p><div id="controls"></div><label>Airflow <input id="speed" type="range" min="0" max="300" value="0"> <output id="speed-value">0 km/h</output></label><label><input id="motion" type="checkbox"> Play water animation</label><p>Rain amount follows the selected weather. Slow runoff retains water longer; racing airflow carries it sideways across the curved shield.</p></details><p id="scene-status" role="status">Loading the matching view…</p></aside><script>
+const GameStore={store:{raw:k=>localStorage.getItem(k),rawSet:(k,v)=>localStorage.setItem(k,v)}};const Log={info(){}};let rain=1,storm=false,speed=0,reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;const GfxQuality={current:()=>"high"};
+</script><script src="visor-options.js"></script><script src="visor-droplets.js"></script><script>
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),baseline=document.getElementById('baseline'),baselineCtx=baseline.getContext('2d');let image,sceneGeneration=0,sceneLoading=false;
+// Both canvases share a decoded frame and an aspect-preserving full-viewport crop.
+// The divider clips pixels rather than resizing either side to half the viewport.
+window.scene=async name=>{
+ const request=++sceneGeneration,next=new Image(),status=document.getElementById('scene-status');sceneLoading=true;status.textContent='Loading the matching view…';next.src='images/'+name+'--off.webp';
+ try{await next.decode()}catch(error){if(request!==sceneGeneration)return false;sceneLoading=false;status.textContent='This scene could not load. The previous comparison is preserved.';return false}
+ if(request!==sceneGeneration)return false;
+ image=next;storm=name.includes('storm');rain=name.includes('rain')||storm?1:0;Droplets.clear();resize();window.advance(1.1);sceneLoading=false;status.textContent='A: original capture. B: selected visor and water.';return true;
+};
+function resize(){for(const c of [canvas,baseline]){c.width=innerWidth;c.height=innerHeight}if(image){const scale=Math.max(innerWidth/image.naturalWidth,innerHeight/image.naturalHeight),w=image.naturalWidth*scale,h=image.naturalHeight*scale;for(const g of [ctx,baselineCtx])g.drawImage(image,(innerWidth-w)/2,(innerHeight-h)/2,w,h);Droplets.tick(0,true,rain,storm,speed,reduced)}}addEventListener('resize',resize);
+window.configure=values=>{for(const [name,value] of Object.entries(values))CockpitOpts['set'+name[0].toUpperCase()+name.slice(1)](value)};
+window.advance=(seconds)=>{for(let i=0;i<seconds*60;i++)Droplets.tick(1/60,true,rain,storm,speed,reduced)};
+let last=0;window.animate=false;function frame(t){if(window.animate&&!sceneLoading&&image)Droplets.tick(last?Math.min(.1,(t-last)/1000):0,true,rain,storm,speed,reduced);last=t;requestAnimationFrame(frame)}requestAnimationFrame(frame);
+configure({visor:'clear',visorRefraction:'medium',visorReflections:'light',visorRain:'normal',visorRunoff:'normal'});
+const host=document.getElementById('controls');
+function select(label, values, selected, change){const row=document.createElement('label');row.textContent=label;const sel=document.createElement('select');sel.setAttribute('aria-label',label);for(const [value,text] of values){const option=new Option(text,value);sel.appendChild(option)}sel.value=selected;sel.addEventListener('change',()=>change(sel.value));row.appendChild(sel);host.appendChild(row);return sel}
+select('Light & weather',[['bahrain-day-dry','Bright desert day'],['bahrain-dawn-fog','Morning mist'],['bahrain-dusk-overcast','Overcast dusk'],['bahrain-day-wet','Wet daylight'],['bahrain-night-rain','Rain under floodlights'],['bahrain-day-storm','Storm front'],['bahrain-night-dry','Clear floodlit night'],['monza-night-rain','Woodland night rain']],'bahrain-night-rain',v=>{scene(v)});
+for(const [key,label] of [['visor','Visor'],['visorColor','Lens color'],['visorIntensity','Tint intensity'],['visorRefraction','Refraction'],['visorReflections','Reflections'],['visorRain','Rain amount'],['visorRunoff','Water runoff']]){const c=CockpitOpts.CHOICES[key];select(label,c.values.map(v=>[v,c.labels[v]]),CockpitOpts[key](),v=>{configure({[key]:v});Droplets.tick(0,true,rain,storm,speed,reduced)})}
+document.getElementById('speed').addEventListener('input',e=>{speed=+e.target.value/3.6;document.getElementById('speed-value').textContent=e.target.value+' km/h'});
+const motion=document.getElementById('motion');motion.checked=!reduced;window.animate=!reduced;motion.addEventListener('change',()=>{window.animate=motion.checked;reduced=!motion.checked});
+const controlsButton=document.getElementById('toggle-controls'),selectorPanel=document.getElementById('visor-selector');
+function showControls(show){selectorPanel.hidden=!show;document.querySelector('details').open=show;controlsButton.textContent=show?'Hide controls':'Show controls';controlsButton.setAttribute('aria-expanded',String(show))}
+controlsButton.addEventListener('click',()=>showControls(selectorPanel.hidden));
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!selectorPanel.hidden){showControls(false);controlsButton.focus()}});
+showControls(innerWidth>=900);
+const wipe=document.getElementById('wipe'),divider=document.getElementById('divider');
+function setWipe(value){const n=Math.max(0,Math.min(100,Number(value)));wipe.value=n;document.body.style.setProperty('--wipe',n+'%');document.getElementById('wipe-value').textContent=n+'% original';wipe.setAttribute('aria-valuetext',n+'% original on left, '+(100-n)+'% visor on right')}
+wipe.addEventListener('input',()=>setWipe(wipe.value));
+divider.addEventListener('pointerdown',e=>{divider.setPointerCapture(e.pointerId);setWipe(Math.round(e.clientX/innerWidth*100))});
+divider.addEventListener('pointermove',e=>{if(divider.hasPointerCapture(e.pointerId))setWipe(Math.round(e.clientX/innerWidth*100))});
+scene('bahrain-night-rain');
+</script></body></html>

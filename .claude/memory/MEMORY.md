@@ -30,4 +30,5 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Design lanes: one living artifact](design-lanes-living-artifact.md) — each design session republishes ONE gallery to the same URL per round; Bryce iterates on it
 - [Short PR check-ins](short-pr-check-ins.md) — PR safety-net check-ins every ~15 min, never hours (Bryce 2026-10-19)
 - [Orchestrator saves queue](orchestrator-saves-queue.md) — persist tasks + merge order to a pushed state branch every tick (Bryce 2026-10-21)
+- [Idle lanes do parallel work](idle-lanes-parallel-work.md) — 2026-10-22: idle hunters/workers use worktrees, MCPs, subagents, web research while waiting
 - [Bryce iPhone uses TLX WebGPU](bryce-iphone-tlx-webgpu.md) — plays THREE PATH: WEBGPU on iPhone and it works; measure that path first

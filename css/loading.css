@@ -107,6 +107,13 @@
    the scrim would hide the scene the card is being framed against, and the
    full-screen click-swallow would eat every click meant for the panel. */
 #loading[data-phase="hold"] { background: none; pointer-events: none; }
+/* BUSY and PREP are wait plates only (garage return, shader warm, track build):
+   they must not sit above #carsetup (z-index 35) with pointer-events: auto and
+   eat the first CLOSE GARAGE / menu tap on a slow SwiftShader frame before
+   render() clears the phase. Run/garage keep capture for skip; handoff/build
+   still show the card but do not need to swallow clicks. */
+#loading[data-phase="busy"],
+#loading[data-phase="prep"] { pointer-events: none; }
 /* GARAGE is the car driving out of the setup screen's garage before the flyby
    (LoadingScreen.garage): the shot is the car's, so no scrim over it, and the
    card (hidden by default above) waits for the flyby. */

@@ -183,6 +183,25 @@ test("a roster peer with no string team is not a rival to wait for (bug-hunt 8.5
   assert.equal(q.waiting(), false, "…and once they have posted, nothing malformed keeps it locked");
 });
 
+test("a rival's lap arriving after ours was deleted keeps us at NO TIME, not a model lap (A·H1 Q1)", () => {
+  const QualiNet = eval(src("js/race/quali-net.js") + ";QualiNet");
+  let mine = null;
+  const me = { driverId: "alpha:0", lastLap: 0, best: Infinity, qualiCut: true };
+  const q = QualiNet.create({
+    $: () => null, fmtTime: String, isQuali: () => true, getPlayer: () => me, getCars: () => [],
+    openQuali: () => {}, applyPeerQuali: (t) => { mine = t; },
+    getNetPlay: () => ({ rivalDriverIds: () => [] }),
+    getNetLobby: () => ({ roomState: () => ({ peers: [] }) }),
+  });
+  q.onPeerQuali({ driverId: "bravo:1", t: 85.2 });
+  const m = q.driven(mine);
+  assert.equal(m.get("alpha:0"), Infinity, "every lap deleted: NO TIME, as endRace and q-sim set it");
+  assert.equal(m.get("bravo:1"), 85.2);
+  me.qualiCut = false;                       // never drove: the model still drives for us
+  q.onPeerQuali({ driverId: "bravo:1", t: 85.2 });
+  assert.equal(q.driven(mine).has("alpha:0"), false);
+});
+
 // bug-hunt 2 follow-ups: a guest's BACK from the quali sheet, and the host-side relay cap.
 test("a guest that backs out of friend quali releases the host's wait on its lap", async () => {
   const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));

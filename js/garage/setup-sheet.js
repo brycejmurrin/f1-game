@@ -1431,7 +1431,9 @@ function buildLiveryCreator(container, team) {
     (fitted || container.querySelector(".cs-liv-create"))?.focus();
   };
   const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "cs-liv-ed-cancel"; cancel.textContent = "CANCEL";
-  cancel.onclick = () => { csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team); if (G.soundOn) GameAudio.uiTick(); buildSetup(); focusFitted(); };
+  const discard = () => { csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team); if (G.soundOn) GameAudio.uiTick(); buildSetup(); focusFitted(); };
+  // An edited design is never one press from gone: CANCEL (and Escape, below) arms first.
+  cancel.onclick = () => { if (designTools && designTools.dirty()) G.armConfirm(cancel, "DISCARD EDITS?", discard); else discard(); };
   const save = document.createElement("button"); save.type = "button"; save.className = "cs-liv-ed-save"; save.textContent = "SAVE & FIT";
   save.onclick = () => {
     const now = Teams.LIST[G.teamIdx];
@@ -1610,6 +1612,20 @@ if (typeof MutationObserver === "function") {
   if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); tuneExperiments.close(); } })
     .observe(cs, { attributes: true, attributeFilter: ["hidden"] });
 }
+// ESCAPE IS ONE LEVEL. With the paint editor open, Escape pressed the garage's
+// door (data-esc-close="cs-back"): the GARAGE closed and discardLivDraft() threw
+// the unsaved design away. The editor claims the key first, as the camera panel
+// does (setup-camera.js, registered earlier, so an open panel still shuts first):
+// Escape is the editor's CANCEL, which arms before discarding edits.
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !csLivCreating || !G.setupPreviewOn
+      || document.querySelector("dialog[open], dialog.screen:not([hidden])")) return;
+  const cancel = document.querySelector("#carsetup .cs-liv-ed-cancel");
+  if (!cancel) return;
+  e.preventDefault();
+  e.stopPropagation();
+  cancel.click();
+}, true);
 // lookRowSpecs: Photo Studio's garage visit offers the same rows (js/ui/photo-studio.js deps.garage.looks).
 return { buildSetup, openSetup, lookRowSpecs };
 }

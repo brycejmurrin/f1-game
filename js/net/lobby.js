@@ -306,6 +306,8 @@ const NetLobby = (function () {
               try { sess.sendEvent(NetPlay.EV.LEFT, { from: id }); } catch (e) { /* a dead session is its own close */ }
             }
           }
+          // A removed player must not walk back in on the code onConnected reopened.
+          if (wasHostEvict && role === "host" && !friendQualifying && !(typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace()) && (codeRoom || codeReopenTimer)) rotateRoomAfterEvict();
         }
         renderRoom(); if (G.refreshQualiGate) G.refreshQualiGate();
       });
