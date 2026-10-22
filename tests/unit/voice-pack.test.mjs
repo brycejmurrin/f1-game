@@ -760,7 +760,7 @@ test("recorded engineer and spotter packs do not depend on speechSynthesis exist
   assert.equal(calls.length, 2);
 });
 
-test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announcer on a cold cache", async () => {
+test("ensureStaged fetches lap-1 engineer before coach; announcer is not stage-fetched (D·DP8)", async () => {
   const order = [];
   const pending = new Map();
   const man = { binary: integrity(4), clips: { hello: [0, 4, 0.5] } };
@@ -796,23 +796,76 @@ test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announc
   resolveFetch("assets/voice/george.bin");
   await P.load("george");
   await drain();
-  assert.equal(order.length, 6, "every pack fetch started once engineer tier settled");
+  assert.equal(order.length, 4, "coach tier starts; announcer stays off the wire");
   const idx = (id, ext) => order.findIndex((u) => u.endsWith(`${id}.${ext}`));
   assert.ok(idx("george", "json") >= 0 && idx("george", "bin") >= 0, "engineer pack started");
   const coachStart = Math.min(idx("heart", "json"), idx("heart", "bin"));
-  const annStart = Math.min(idx("fable", "json"), idx("fable", "bin"));
   assert.ok(coachStart > idx("george", "bin"), "coach waits until engineer tier finishes");
-  assert.ok(annStart > idx("george", "bin"), "announcer waits until engineer tier finishes");
-  assert.equal(P.ready("george"), true, "engineer ready while lower tiers were still fetching");
+  assert.equal(idx("fable", "bin"), -1, "fable.bin is not requested by ensureStaged");
+  assert.equal(idx("fable", "json"), -1, "fable.json is not requested by ensureStaged");
+  assert.equal(P.ready("george"), true, "engineer ready while coach was still fetching");
   assert.equal(P.ready("heart"), false, "coach still pending when engineer is ready");
-  assert.equal(P.ready("fable"), false, "announcer still pending when engineer is ready");
-  assert.equal(pending.size, 4, "tier-1 fetches still in flight");
+  assert.equal(P.ready("fable"), false, "announcer never stage-fetched");
+  assert.equal(pending.size, 2, "only coach fetches in flight");
   for (const url of [...pending.keys()]) resolveFetch(url);
-  await Promise.all([P.load("heart"), P.load("fable")]);
+  await P.load("heart");
   assert.equal(P.ready("heart"), true, "coach ready after tier 1 settles");
-  assert.equal(P.ready("fable"), true, "announcer ready after tier 1 settles");
+  const fableP = P.load("fable");
+  await drain();
+  assert.equal(pending.size, 2, "explicit load starts the announcer pair");
+  for (const url of [...pending.keys()]) resolveFetch(url);
+  assert.equal(await fableP, true, "announcer loads on explicit ensure/load after stage");
+  assert.equal(P.ready("fable"), true);
   assert.deepEqual([...new Set(order)].sort(), ["assets/voice/fable.bin", "assets/voice/fable.json",
     "assets/voice/george.bin", "assets/voice/george.json", "assets/voice/heart.bin", "assets/voice/heart.json"]);
+});
+
+test("race-load gate does not request fable.bin until the gate opens (D·DP8)", async () => {
+  const requested = [];
+  const man = { binary: integrity(4), clips: { hello: [0, 4, 0.5] } };
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    GameAudio: { now: () => 0 },
+    fetch: (url) => {
+      requested.push(url);
+      return Promise.resolve({ ok: true, json: async () => man, arrayBuffer: async () => new ArrayBuffer(4) });
+    },
+  });
+  const P = sb.VoicePack.create({});
+  P.raceLoadGate(true);
+  P.ensureStaged([["george"], ["heart", "fable"]]);
+  P.ensure("fable");
+  assert.equal(await P.load("fable"), false, "graceful no-voice while gated");
+  await new Promise(setImmediate);
+  assert.equal(requested.some((u) => u.includes("fable.")), false, "fable.bin not requested during race load");
+  assert.ok(requested.some((u) => u.includes("george.")), "engineer still prefetches under the gate");
+  assert.deepEqual(J(P.debug().deferred).sort(), ["fable"], "announcer queued for after lights-out");
+  P.raceLoadGate(false);
+  assert.ok(await until(() => P.ready("fable")), "flush after gate opens");
+  assert.ok(requested.some((u) => u.endsWith("fable.bin")), "fable.bin fetched only after the gate opens");
+});
+
+test("RadioVoice.prepare does not request fable.bin during race load (D·DP8)", async () => {
+  const requested = [];
+  const man = { binary: integrity(4), clips: { hello: [0, 4, 0.5] } };
+  const sb = sandbox(["js/core/mat4.js", "js/audio/voice-pack.js", "js/audio/radio-voice.js"], {
+    window: { speechSynthesis: { speak() {}, cancel() {}, resume() {}, getVoices: () => [] }, SpeechSynthesisUtterance: function (t) { this.text = t; } },
+    GameAudio: { setRadioDuck() {}, radioStingStop() {} },
+    fetch: (url) => {
+      requested.push(url);
+      return Promise.resolve({ ok: true, json: async () => man, arrayBuffer: async () => new ArrayBuffer(4) });
+    },
+  });
+  const G = { soundOn: true, state: "menu", announcer: { enabled: () => true }, store: { get: (k, d) => d, set() {} } };
+  const v = sb.RadioVoice.create(G);
+  v.setEnabled(true);
+  v.prepare();
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(requested.some((u) => u.includes("fable.")), false, "prepare must not pull fable.bin on the load path");
+  assert.ok(requested.some((u) => u.includes("george.")), "prepare still warms the engineer pack");
+  G.state = "race";
+  v.releaseRaceLoadGate();
+  assert.ok(await until(() => requested.some((u) => u.endsWith("fable.bin"))), "announcer pack starts once the race-load gate opens");
+  v.releaseRaceLoadGate();
 });
 
 // #2319: `ready()` awaits a real async SubtleCrypto SHA-256 since #2271, so a

@@ -1221,6 +1221,9 @@
         "tests/unit/service-worker.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
+      "raceLoadGate": [
+        "tests/unit/voice-pack.test.mjs"
+      ],
       "releaseExcept": [
         "tests/unit/voice-pack.test.mjs"
       ],
@@ -1351,12 +1354,30 @@
         "tests/unit/cockpit-preview.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
+      "setVisor": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "setVisorColor": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "setVisorIntensity": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
       "setWheel": [
         "tests/unit/cockpit-preview.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "turnChaseLead": [
         "tests/unit/camera-defaults.test.mjs"
+      ],
+      "visor": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "visorColor": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "visorIntensity": [
+        "tests/unit/cockpit-wheels.test.mjs"
       ],
       "wheel": [
         "tests/unit/cockpit-wheels.test.mjs"
@@ -9449,17 +9470,35 @@
       "applyLive": [
         "tests/unit/perf-governor.test.mjs"
       ],
+      "capId": [
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
       "current": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/perf-try.test.mjs"
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/perf-try.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
+      "cycle": [
+        "tests/unit/quality-preset-phone.test.mjs"
       ],
       "defaultId": [
-        "tests/unit/perf-governor.test.mjs"
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
       ],
       "init": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
+      ],
+      "isWeakPhone": [
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
+      "maxId": [
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/quality-preset-phone.test.mjs"
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",
@@ -9716,6 +9755,11 @@
       ],
       "normalize": [
         "tests/unit/ai-band.test.mjs"
+      ]
+    },
+    "js/physics/ai-corridor.js": {
+      "choose": [
+        "tests/unit/ai-corridor.test.mjs"
       ]
     },
     "js/physics/ai-drive.js": {

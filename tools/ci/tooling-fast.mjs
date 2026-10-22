@@ -226,6 +226,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-presentation-vm.test.mjs",
   "tests/unit/car-shade.test.mjs",
+  // W13d (#3414): STYLE Arc Script / Raised Letters sidewall lettering ΔHaus ≥ 20 mm vs medium/soft. ~2 s.
+  "tests/unit/car-wheels-w13d.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
@@ -973,6 +975,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/publish-shots.test.mjs",
   // STANDING-WATER PUDDLES: js/render/shared/puddles.js reference mask (sample pins, growth/drying, edge bias) + every constant mirrored in GLX/TLX/WGX + the PUDDLES knob plumbing. Pure, < 1 s.
   "tests/unit/puddles.test.mjs",
+  // D·IP1 phone GRAPHICS cap: ULTRA → HIGH, weak-phone LOW default, SettingRow note (docs/perf/iphone-browserstack-2026-10-21.md).
+  "tests/unit/quality-preset-phone.test.mjs",
   // Push hold: queued + running Actions JOBS by OS vs the 40 Linux / 5 macOS slots, never runs. Fixtures.
   "tests/unit/queue-depth.test.mjs",
   "tests/unit/quick-validate.test.mjs",
