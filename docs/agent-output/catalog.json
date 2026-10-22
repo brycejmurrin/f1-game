@@ -2395,8 +2395,8 @@
     },
     {
       "path": "tools/mcp/browserstack-mcp.sh",
-      "classification": "entrypoint-candidate",
-      "interpreter": "bash"
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
     },
     {
       "path": "tools/mcp/catalog-discovery.mjs",

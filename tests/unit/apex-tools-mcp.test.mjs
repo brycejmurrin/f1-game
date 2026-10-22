@@ -137,8 +137,16 @@ test("browserstack pin matches the wrapper's audited package and never @latest; 
   // No credential material in the catalogs, and the wrapper resolves the two
   // env vars without ever assigning them a value.
   assert.equal(cfg.mcpServers["browserstack"].env, undefined);
-  assert.match(wrapper, /BROWSERSTACK_USERNAME/);
-  assert.match(wrapper, /BROWSERSTACK_ACCESS_KEY/);
+  // Behaviour, not a source pin: with both env vars absent `run` refuses to
+  // start (exit 1) and names each missing variable; `status` never prints values.
+  const env = { PATH: process.env.PATH, HOME: process.env.HOME };
+  const run = spawnSync("bash", [path.join(ROOT, "tools/mcp/browserstack-mcp.sh"), "run"], { encoding: "utf8", env });
+  assert.equal(run.status, 1);
+  assert.ok(run.stderr.includes("BROWSERSTACK_USERNAME") && run.stderr.includes("BROWSERSTACK_ACCESS_KEY"), run.stderr);
+  const secret = "sentinel-not-a-real-key";
+  const status = spawnSync("bash", [path.join(ROOT, "tools/mcp/browserstack-mcp.sh"), "status"], { encoding: "utf8", env: { ...env, BROWSERSTACK_USERNAME: secret, BROWSERSTACK_ACCESS_KEY: secret } });
+  assert.equal(status.status, 0);
+  assert.ok(!status.stdout.includes(secret), "status must never print credential values");
   assert.doesNotMatch(wrapper, /BROWSERSTACK_(USERNAME|ACCESS_KEY)=["']?[A-Za-z0-9]/);
 });
 
