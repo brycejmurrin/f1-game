@@ -168,5 +168,16 @@ const LoopHealth = (() => {
         stall: { watching: watching(), slowRun, slowFrames, worstMs: Math.round(worstMs), sheds, reloads: stallReloads, act: stallAct, slowMs: SLOW_MS, shedRun: SHED_RUN, reloadRun: RELOAD_RUN },
       };
     },
+    // The only writer for apex26.stallWatch (automation override); invalidates the watch cache.
+    stallWatch(on) {
+      if (on !== undefined) {
+        try {
+          if (on) localStorage.setItem("apex26.stallWatch", "1");
+          else localStorage.removeItem("apex26.stallWatch");
+          watchOn = null;
+        } catch (_) { /* blocked storage */ }
+      }
+      return watching();
+    },
   };
 })();
