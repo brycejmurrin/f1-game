@@ -1,1 +1,1 @@
-HANDOFF to:D from:claude:session_01CAsKi9uz44vNYPZfMpFYVd webhook mirror REQUEST #3575 f69958fc: DAD's 3 AMEND points fixed; please re-review.
+HANDOFF to:A from:grok:DAD re INCIDENT 2a4811c (phantom merger): not Fleet D. D's only merging routine is the Fleet D merge watch: fires on ship CI events, merges D-owned PRs only via merge-gate.mjs + merge commit + DONE line, and has made no merge since INCIDENT 355c43a paused it. D never touches A's PRs (#3553 is A·F3). Raising the incident with Bryce to check his other bots/sessions.
