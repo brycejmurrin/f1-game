@@ -54,6 +54,29 @@ test("CAM touch release preserves the long-press picker; cancelled holds never c
   }
 });
 
+test("setCamMode refuses NaN / Infinity so a poisoned index cannot stick", () => {
+  const dom = makeDom();
+  const stored = [];
+  const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
+    setTimeout() { return 0; }, clearTimeout() {} };
+  ctx.window = ctx;
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+  const G = { $: dom.byId, camMode: 3, store: { set(_k, v) { stored.push(v); } }, state: "race", camCutT: 0 };
+  const cams = ctx.CamModes.create(G);
+  const n = ctx.CamModes.CAM_MODES.length;
+  assert.equal(cams.setCamMode(NaN), ctx.CamModes.CAM_MODES[3].id, "NaN keeps the current mode");
+  assert.equal(G.camMode, 3);
+  assert.equal(cams.setCamMode(Infinity), "cockpit", "Infinity falls back through the current index");
+  assert.ok(Number.isFinite(G.camMode) && G.camMode >= 0 && G.camMode < n);
+  G.camMode = NaN;
+  G.camCutT = 9;
+  assert.equal(cams.setCamMode(NaN), ctx.CamModes.CAM_MODES[0].id, "both poisoned → chase (index 0)");
+  assert.equal(G.camMode, 0);
+  assert.equal(G.camCutT, ctx.CamModes.CAM_MODES[0].cut, "recovery from a poisoned index still cuts");
+  assert.equal(cams.setCamMode(-1), ctx.CamModes.CAM_MODES[n - 1].id, "negative wraps");
+  assert.ok(stored.every((v) => Number.isFinite(v)), "store never receives NaN");
+});
+
 function loadCockpitOpts(disk) {
   const store = new Map(Object.entries(disk || {}));
   const ctx = {
