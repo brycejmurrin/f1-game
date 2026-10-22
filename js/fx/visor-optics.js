@@ -29,7 +29,9 @@ const VisorOptics = (function () {
   const LEVEL = { off: 0, light: 0.6, medium: 1, strong: 1.6 };       // VISOR REFLECTIONS
   const FRINGE = { off: 0, light: 0.35, medium: 0.6, strong: 1 };    // VISOR REFRACTION → chromatic fringe
   const BEND = { light: 14, medium: 32, strong: 56 };                // feDisplacementMap scale per level (rim only)
-  const TINT = { neutral: [12, 12, 20], amber: [80, 61, 32], ice: [35, 59, 80], rose: [76, 45, 60] };   // css/tokens.css --visor-*
+  // Lens colours: css/tokens.css --visor-{neutral,amber,ice,rose}, selected into --visor-lens by css/helmet-visor.css from
+  // body[data-helmet-visor-color] and read here at port-build time; this table is the fallback for a stub DOM.
+  const TINT = { neutral: [12, 12, 20], amber: [80, 61, 32], ice: [35, 59, 80], rose: [76, 45, 60] };
   const TINT_ALPHA = { light: 0.12, medium: 0.18, strong: 0.24 };
 
   let _cv = null, _ctx = null, _looked = false;
@@ -318,6 +320,22 @@ const VisorOptics = (function () {
     return true;
   }
 
+  /** The TINT colour for a lens choice: body's computed --visor-lens (`#rrggbb` or `rgb(…)`, var() resolved), else the table. */
+  function tintRGB(color) {
+    const fallback = TINT[color] || TINT.neutral;
+    try {
+      if (typeof getComputedStyle !== "function" || typeof document === "undefined" || !document.body) return fallback;
+      const raw = String(getComputedStyle(document.body).getPropertyValue("--visor-lens") || "").trim();
+      let m = /^#([0-9a-f]{6})$/i.exec(raw);
+      if (m) return [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16)];
+      m = /^#([0-9a-f]{3})$/i.exec(raw);
+      if (m) return [parseInt(m[1][0] + m[1][0], 16), parseInt(m[1][1] + m[1][1], 16), parseInt(m[1][2] + m[1][2], 16)];
+      m = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(raw);
+      if (m) return [+m[1], +m[2], +m[3]];
+    } catch (_) { /* no computed style here */ }
+    return fallback;
+  }
+
   /** The port image on body (--visor-port) for the current size and tint; rebuilt only when either changes. */
   function _port() {
     if (!_helmet() || typeof document === "undefined" || !document.body || !document.body.style) return;
@@ -326,7 +344,7 @@ const VisorOptics = (function () {
     if (key === _portKey) return;
     _portKey = key;
     const tinted = visor === "smoke";
-    document.body.style.setProperty("--visor-port", portImage(_w, _h, { tint: tinted ? TINT[color] || TINT.neutral : null, tintAlpha: tinted ? TINT_ALPHA[strength] || TINT_ALPHA.light : 0 }));
+    document.body.style.setProperty("--visor-port", portImage(_w, _h, { tint: tinted ? tintRGB(color) : null, tintAlpha: tinted ? TINT_ALPHA[strength] || TINT_ALPHA.light : 0 }));
     document.body.setAttribute("data-visor-port", "1");
   }
 
@@ -523,7 +541,7 @@ const VisorOptics = (function () {
     const kn = readKnobs(t0 || 0);
     let m;
     try {
-      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? TINT[_opt("visorColor", "neutral")] : null, bloom: kn.bloom, glare: kn.glare });
+      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? tintRGB(_opt("visorColor", "neutral")) : null, bloom: kn.bloom, glare: kn.glare });
       _paint(m);
     } catch (e) {
       // Cosmetic layer: a bad frame (a non-finite gradient, a hook mid-rebuild) must never take the render loop
@@ -548,6 +566,6 @@ const VisorOptics = (function () {
   /** Tests: forget the cached canvas and keys (a new stub DOM). */
   function _reset() { _looked = false; _cv = _ctx = _paths = _svg = null; _w = _h = 0; _shown = false; _acc = 1; _portKey = _bendKey = _bendLevelBuilt = ""; for (const k of Object.keys(_stats)) _stats[k] = 0; }
 
-  return { tick, clear, stats, lightMap, portPath, portBox, portImage, camBasis, projectDir, LEVEL, FRINGE, MAX_GLINTS, _reset };
+  return { tick, clear, stats, lightMap, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, FRINGE, MAX_GLINTS, _reset };
 })();
 Object.freeze(VisorOptics);

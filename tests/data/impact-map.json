@@ -6258,6 +6258,9 @@
       ],
       "tick": [
         "tests/unit/visor-optics.test.mjs"
+      ],
+      "tintRGB": [
+        "tests/unit/visor-optics.test.mjs"
       ]
     },
     "js/game.js": {

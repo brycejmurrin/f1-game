@@ -46,8 +46,10 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
   };
   class Path2D { constructor(d) { this.d = d; } }
   const listeners = [];
+  const lens = { amber: "#503d20", neutral: "rgb(12, 12, 20)", ice: " #233b50 " }[color] || "";   // what css/helmet-visor.css resolves --visor-lens to
   const ctx = vm.createContext({
     Math, Float32Array, Uint8ClampedArray, Object, Path2D, performance: { now: () => 0 },
+    getComputedStyle: () => ({ getPropertyValue: (k) => (k === "--visor-lens" ? lens : "") }),
     document, window: { ...win, __apex: apex },
     CockpitOpts: { visor: () => visor, visorReflections: () => reflections, visorRefraction: () => refraction, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
     GfxQuality: { current: () => "high" },
@@ -217,6 +219,13 @@ test("visor tick: a bad knob or a throwing canvas never reaches the render loop"
   assert.ok(V.stats().paints === 1 && V.stats().errors === 0, "a non-numeric knob falls back to the shipped default");
   const boom = load({ apex: { visorScene: () => ({ ...DAY, sunColor: [NaN, NaN, NaN] }) } });
   assert.doesNotThrow(() => boom.V.tick(1 / 60, true, 0, false), "a NaN scene paints nothing and throws nothing");
+});
+
+test("visor tint: the lens colour is the resolved --visor-lens token (css/tokens.css), the table only as a fallback", () => {
+  assert.deepEqual([...load({ color: "amber" }).V.tintRGB("amber")], [80, 61, 32], "#rrggbb");
+  assert.deepEqual([...load({ color: "neutral" }).V.tintRGB("neutral")], [12, 12, 20], "rgb()");
+  assert.deepEqual([...load({ color: "ice" }).V.tintRGB("ice")], [35, 59, 80], "whitespace around the token");
+  assert.deepEqual([...load({ color: "rose" }).V.tintRGB("rose")], [76, 45, 60], "an unresolved token falls back to the table");
 });
 
 test("visor refraction: the rim bend map and its three filters are built once per size when refraction is on", () => {

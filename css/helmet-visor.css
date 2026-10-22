@@ -15,6 +15,13 @@ body[data-helmet-cam][data-visor-port] #hud::before {
   box-shadow: none;
 }
 
+/* The TINTED lens colour: one of css/tokens.css's --visor-* tokens, picked by the stored choice; VisorOptics reads
+   the resolved --visor-lens when it builds the port image. */
+body[data-helmet-cam] { --visor-lens: var(--visor-neutral); }
+body[data-helmet-visor-color="amber"] { --visor-lens: var(--visor-amber); }
+body[data-helmet-visor-color="ice"] { --visor-lens: var(--visor-ice); }
+body[data-helmet-visor-color="rose"] { --visor-lens: var(--visor-rose); }
+
 #fx-visor { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; mix-blend-mode: screen; }
 @supports (mix-blend-mode: plus-lighter) { #fx-visor { mix-blend-mode: plus-lighter; } }
 #fx-visor[hidden] { display: none; }
