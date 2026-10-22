@@ -1604,13 +1604,13 @@
         "label": "Visor Off"
       },
       "b": {
-        "file": "comparison-images/e7d58f51a173667fd33ba9d611913e3c7a2af79f5ebfca0e83afcd163283b8bc.webp",
-        "sha256": "e7d58f51a173667fd33ba9d611913e3c7a2af79f5ebfca0e83afcd163283b8bc",
+        "file": "comparison-images/bc470c7c7169f94051990e6e5a24700a6231d79f0e323b26a61921ac5c751288.webp",
+        "sha256": "bc470c7c7169f94051990e6e5a24700a6231d79f0e323b26a61921ac5c751288",
         "label": "Clear · reflections medium · refraction light"
       },
       "provenance": {
-        "sha": "4eb1eff3e85f0539117427f203fa9b07a1517f5e",
-        "dirty": true,
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
         "scene": {
           "track": "bahrain",
           "tod": "night",
@@ -1653,16 +1653,16 @@
             "autoShed": 0,
             "open": {
               "frames": 5,
-              "maxMs": 10582.9,
+              "maxMs": 14649.3,
               "slow": 5
             },
             "frameTimes": {
               "frames": 5,
-              "p50": 1483.2999999999993,
-              "p95": 10582.9,
-              "p99": 10582.9,
-              "maxMs": 10582.9,
-              "droppedSimS": 0.18333333333333332,
+              "p50": 3816.5,
+              "p95": 14649.300000000001,
+              "p99": 14649.300000000001,
+              "maxMs": 14649.300000000001,
+              "droppedSimS": 0.19999999999999998,
               "physicsSteps": 10,
               "windowFrames": 2048
             },
@@ -1753,13 +1753,13 @@
         "label": "Visor Off"
       },
       "b": {
-        "file": "comparison-images/1b14979c16332386e92a17b13ff3a7e8910c13aab2f2f59fc8d2673bbff4dd4a.webp",
-        "sha256": "1b14979c16332386e92a17b13ff3a7e8910c13aab2f2f59fc8d2673bbff4dd4a",
+        "file": "comparison-images/765cd180998486c1cb538beb774b358ab15be428523e34afc314dd1f11067042.webp",
+        "sha256": "765cd180998486c1cb538beb774b358ab15be428523e34afc314dd1f11067042",
         "label": "Clear · reflections medium · refraction light"
       },
       "provenance": {
-        "sha": "4eb1eff3e85f0539117427f203fa9b07a1517f5e",
-        "dirty": true,
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
         "scene": {
           "track": "monza",
           "tod": "day",
@@ -1794,25 +1794,25 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 50.8,
-            "floorMs": 17.1,
+            "fps": 44.7,
+            "floorMs": 17.6,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
               "frames": 4,
-              "maxMs": 4733.1,
-              "slow": 2
+              "maxMs": 6299.7,
+              "slow": 3
             },
             "frameTimes": {
               "frames": 4,
-              "p50": 50,
-              "p95": 4733.0999999999985,
-              "p99": 4733.0999999999985,
-              "maxMs": 4733.0999999999985,
+              "p50": 50.099999999998545,
+              "p95": 6299.700000000004,
+              "p99": 6299.700000000004,
+              "maxMs": 6299.700000000004,
               "droppedSimS": 0,
-              "physicsSteps": 4,
+              "physicsSteps": 6,
               "windowFrames": 2048
             },
             "userTier": 0,
@@ -1897,18 +1897,18 @@
       "width": 844,
       "height": 390,
       "a": {
-        "file": "comparison-images/02add9edc997fcf67059ec311427003caaf92e21886c79cdbe6cb7076146187b.webp",
-        "sha256": "02add9edc997fcf67059ec311427003caaf92e21886c79cdbe6cb7076146187b",
+        "file": "comparison-images/979489c9c4884216766144036fc7b57864ae76ab7a090f6c0ea1d37bf7703ca9.webp",
+        "sha256": "979489c9c4884216766144036fc7b57864ae76ab7a090f6c0ea1d37bf7703ca9",
         "label": "Visor Off"
       },
       "b": {
-        "file": "comparison-images/09526f85509851d64d2b82eefdb08e11610f40dcc9b6235ca785f74952c54f46.webp",
-        "sha256": "09526f85509851d64d2b82eefdb08e11610f40dcc9b6235ca785f74952c54f46",
+        "file": "comparison-images/a7739814d49fc971e876902d2691306a98efdbd54c2a427e7a599975337cba9b.webp",
+        "sha256": "a7739814d49fc971e876902d2691306a98efdbd54c2a427e7a599975337cba9b",
         "label": "Clear · reflections medium · refraction light"
       },
       "provenance": {
-        "sha": "4eb1eff3e85f0539117427f203fa9b07a1517f5e",
-        "dirty": true,
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
         "scene": {
           "track": "bahrain",
           "tod": "dawn",
@@ -1943,25 +1943,25 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 47.2,
-            "floorMs": 17.4,
+            "fps": 44.4,
+            "floorMs": 17.6,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
               "frames": 5,
-              "maxMs": 6516.5,
+              "maxMs": 7833.1,
               "slow": 3
             },
             "frameTimes": {
               "frames": 5,
-              "p50": 66.69999999999709,
-              "p95": 6516.5,
-              "p99": 6516.5,
-              "maxMs": 6516.5,
+              "p50": 66.70000000000437,
+              "p95": 7833.100000000006,
+              "p99": 7833.100000000006,
+              "maxMs": 7833.100000000006,
               "droppedSimS": 0,
-              "physicsSteps": 6,
+              "physicsSteps": 7,
               "windowFrames": 2048
             },
             "userTier": 0,
@@ -2051,13 +2051,13 @@
         "label": "Visor Off"
       },
       "b": {
-        "file": "comparison-images/39e35121d231ad85954a8bf15563ee1de2b2a6e99ec388e991270350b1a31b4d.webp",
-        "sha256": "39e35121d231ad85954a8bf15563ee1de2b2a6e99ec388e991270350b1a31b4d",
+        "file": "comparison-images/a6ef1e6b1f8389fd3525ee47c5c443feea1997ab6c6b3d6332f26b5e3c825407.webp",
+        "sha256": "a6ef1e6b1f8389fd3525ee47c5c443feea1997ab6c6b3d6332f26b5e3c825407",
         "label": "Clear · reflections medium · refraction light"
       },
       "provenance": {
-        "sha": "4eb1eff3e85f0539117427f203fa9b07a1517f5e",
-        "dirty": true,
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
         "scene": {
           "track": "monaco",
           "tod": "night",
@@ -2092,25 +2092,25 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 47.2,
-            "floorMs": 17.3,
+            "fps": 55,
+            "floorMs": 16.9,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
               "frames": 5,
-              "maxMs": 8416.4,
+              "maxMs": 11932.8,
               "slow": 3
             },
             "frameTimes": {
               "frames": 5,
-              "p50": 66.70000000000437,
-              "p95": 8416.399999999994,
-              "p99": 8416.399999999994,
-              "maxMs": 8416.399999999994,
-              "droppedSimS": 0,
-              "physicsSteps": 6,
+              "p50": 116.59999999999854,
+              "p95": 11932.800000000003,
+              "p99": 11932.800000000003,
+              "maxMs": 11932.800000000003,
+              "droppedSimS": 0.016666666666666666,
+              "physicsSteps": 8,
               "windowFrames": 2048
             },
             "userTier": 0,
@@ -2195,18 +2195,18 @@
       "width": 844,
       "height": 390,
       "a": {
-        "file": "comparison-images/3822d0c24a935dff960f9b4a892eec45b6e2800b20ded925cf7c953607ba5f0d.webp",
-        "sha256": "3822d0c24a935dff960f9b4a892eec45b6e2800b20ded925cf7c953607ba5f0d",
+        "file": "comparison-images/086e45817797ca5ea28c30d52932180af93b431ed9021b2709c7a4a14ed58007.webp",
+        "sha256": "086e45817797ca5ea28c30d52932180af93b431ed9021b2709c7a4a14ed58007",
         "label": "Visor Off"
       },
       "b": {
-        "file": "comparison-images/31dbeb3fb944d60fb13a1ebe70e5b8887f1848f931b333e940c53e965ed44e00.webp",
-        "sha256": "31dbeb3fb944d60fb13a1ebe70e5b8887f1848f931b333e940c53e965ed44e00",
+        "file": "comparison-images/e2ce4ee9e8b67d7cfb1469c00573d4663eeeb6c9b4a85829a3027f3f55053083.webp",
+        "sha256": "e2ce4ee9e8b67d7cfb1469c00573d4663eeeb6c9b4a85829a3027f3f55053083",
         "label": "Clear · reflections medium · refraction light"
       },
       "provenance": {
-        "sha": "4eb1eff3e85f0539117427f203fa9b07a1517f5e",
-        "dirty": true,
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
         "scene": {
           "track": "singapore",
           "tod": "night",
@@ -2241,25 +2241,25 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 50.8,
-            "floorMs": 17.1,
+            "fps": 45.3,
+            "floorMs": 17.4,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
-              "frames": 4,
-              "maxMs": 7949.7,
-              "slow": 2
+              "frames": 6,
+              "maxMs": 10099.6,
+              "slow": 3
             },
             "frameTimes": {
-              "frames": 4,
-              "p50": 50,
-              "p95": 7949.700000000004,
-              "p99": 7949.700000000004,
-              "maxMs": 7949.700000000004,
+              "frames": 6,
+              "p50": 83.29999999998836,
+              "p95": 10099.599999999991,
+              "p99": 10099.599999999991,
+              "maxMs": 10099.599999999991,
               "droppedSimS": 0,
-              "physicsSteps": 4,
+              "physicsSteps": 8,
               "windowFrames": 2048
             },
             "userTier": 0,
@@ -2344,18 +2344,18 @@
       "width": 844,
       "height": 390,
       "a": {
-        "file": "comparison-images/93a8c105aea11c5f61907109783247f45ce7cb27e5898ee6ffd33038bb5d4d0d.webp",
-        "sha256": "93a8c105aea11c5f61907109783247f45ce7cb27e5898ee6ffd33038bb5d4d0d",
+        "file": "comparison-images/8aaec5474ccfb261d50e2b44eb1f6b66e1e170b3d470a15e0f48a89d0b9851a5.webp",
+        "sha256": "8aaec5474ccfb261d50e2b44eb1f6b66e1e170b3d470a15e0f48a89d0b9851a5",
         "label": "Visor Off"
       },
       "b": {
-        "file": "comparison-images/2d86d89ecd50f5fb1548e66692f4968df473291c709653bce5df9355b7585f41.webp",
-        "sha256": "2d86d89ecd50f5fb1548e66692f4968df473291c709653bce5df9355b7585f41",
+        "file": "comparison-images/f6c428bc69e9869856e4c194095f3b54c379ef0f29fbee2abf20956af5ac3f64.webp",
+        "sha256": "f6c428bc69e9869856e4c194095f3b54c379ef0f29fbee2abf20956af5ac3f64",
         "label": "Clear · reflections medium · refraction light"
       },
       "provenance": {
-        "sha": "4eb1eff3e85f0539117427f203fa9b07a1517f5e",
-        "dirty": true,
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
         "scene": {
           "track": "monza",
           "tod": "dusk",
@@ -2390,23 +2390,23 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 48.2,
-            "floorMs": 17.2,
+            "fps": 44.4,
+            "floorMs": 17.6,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
-              "frames": 5,
-              "maxMs": 7616.5,
-              "slow": 2
+              "frames": 4,
+              "maxMs": 9766.3,
+              "slow": 3
             },
             "frameTimes": {
-              "frames": 5,
-              "p50": 16.69999999999709,
-              "p95": 7616.5,
-              "p99": 7616.5,
-              "maxMs": 7616.5,
+              "frames": 4,
+              "p50": 66.69999999999709,
+              "p95": 9766.300000000003,
+              "p99": 9766.300000000003,
+              "maxMs": 9766.300000000003,
               "droppedSimS": 0,
               "physicsSteps": 6,
               "windowFrames": 2048
@@ -2493,18 +2493,18 @@
       "width": 844,
       "height": 390,
       "a": {
-        "file": "comparison-images/cbc1f59b986fdc232fa7e84e12c85d12d897c11dfa620b2b447485c28f3557a7.webp",
-        "sha256": "cbc1f59b986fdc232fa7e84e12c85d12d897c11dfa620b2b447485c28f3557a7",
+        "file": "comparison-images/ac24957a36d51aa8712f23c3691fb57bad77d1c774ba69939cdca19217b9f409.webp",
+        "sha256": "ac24957a36d51aa8712f23c3691fb57bad77d1c774ba69939cdca19217b9f409",
         "label": "Visor Off"
       },
       "b": {
-        "file": "comparison-images/f11d1ca28523f93100daf7758630ee9f0437952faeda06698629f6090dc2d788.webp",
-        "sha256": "f11d1ca28523f93100daf7758630ee9f0437952faeda06698629f6090dc2d788",
+        "file": "comparison-images/25f39040b6608807c2b50110b2164c6e22ffba42322cdc7b103587b8dd7ba9fe.webp",
+        "sha256": "25f39040b6608807c2b50110b2164c6e22ffba42322cdc7b103587b8dd7ba9fe",
         "label": "Clear · reflections medium · refraction light"
       },
       "provenance": {
-        "sha": "4eb1eff3e85f0539117427f203fa9b07a1517f5e",
-        "dirty": true,
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
         "scene": {
           "track": "spa",
           "tod": "day",
@@ -2539,24 +2539,24 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 46.8,
-            "floorMs": 17.7,
+            "fps": 8.7,
+            "floorMs": 36.3,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
-              "frames": 5,
-              "maxMs": 4433.1,
+              "frames": 4,
+              "maxMs": 5616.4,
               "slow": 3
             },
             "frameTimes": {
-              "frames": 5,
-              "p50": 49.89999999999418,
-              "p95": 4433.100000000006,
-              "p99": 4433.100000000006,
-              "maxMs": 4433.100000000006,
-              "droppedSimS": 0,
+              "frames": 4,
+              "p50": 516.6000000000058,
+              "p95": 5616.399999999994,
+              "p99": 5616.399999999994,
+              "maxMs": 5616.399999999994,
+              "droppedSimS": 0.03333333333333333,
               "physicsSteps": 6,
               "windowFrames": 2048
             },
@@ -2642,18 +2642,18 @@
       "width": 844,
       "height": 390,
       "a": {
-        "file": "comparison-images/986d9ec2e9a46509b3fa7d47d7c897bf5838da60005d3eb9c02043b582e3fab4.webp",
-        "sha256": "986d9ec2e9a46509b3fa7d47d7c897bf5838da60005d3eb9c02043b582e3fab4",
+        "file": "comparison-images/a68cf72b2c4d409a84790a69b575729be0964b6fd6e0f0427db9b104ff8df4ce.webp",
+        "sha256": "a68cf72b2c4d409a84790a69b575729be0964b6fd6e0f0427db9b104ff8df4ce",
         "label": "Visor Off"
       },
       "b": {
-        "file": "comparison-images/0d7a8718d265d2116dfeac99bca38952c81cd9db6f6d3073b58d16d8c1504878.webp",
-        "sha256": "0d7a8718d265d2116dfeac99bca38952c81cd9db6f6d3073b58d16d8c1504878",
+        "file": "comparison-images/49d718e297704621f31fa712c024f405541a55f7696311982ce7e75558ba737b.webp",
+        "sha256": "49d718e297704621f31fa712c024f405541a55f7696311982ce7e75558ba737b",
         "label": "Clear · reflections medium · refraction light"
       },
       "provenance": {
-        "sha": "4eb1eff3e85f0539117427f203fa9b07a1517f5e",
-        "dirty": true,
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
         "scene": {
           "track": "bahrain",
           "tod": "night",
@@ -2688,23 +2688,23 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 46.8,
-            "floorMs": 17.7,
+            "fps": 41.1,
+            "floorMs": 18.3,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
-              "frames": 5,
-              "maxMs": 6366.4,
-              "slow": 3
+              "frames": 4,
+              "maxMs": 8149.6,
+              "slow": 2
             },
             "frameTimes": {
-              "frames": 5,
-              "p50": 50,
-              "p95": 6366.399999999994,
-              "p99": 6366.399999999994,
-              "maxMs": 6366.399999999994,
+              "frames": 4,
+              "p50": 83.19999999999709,
+              "p95": 8149.600000000006,
+              "p99": 8149.600000000006,
+              "maxMs": 8149.600000000006,
               "droppedSimS": 0,
               "physicsSteps": 6,
               "windowFrames": 2048
@@ -2718,7 +2718,7 @@
           },
           "frame": {
             "wetness": 1,
-            "rain": 0.04000000000000001
+            "rain": 0.026719999999995345
           },
           "backend": {
             "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
@@ -2791,18 +2791,18 @@
       "width": 844,
       "height": 390,
       "a": {
-        "file": "comparison-images/1a8945d7c9731fafa9cec224445bb9432f3a55e1b35e583c7314333a65c3febb.webp",
-        "sha256": "1a8945d7c9731fafa9cec224445bb9432f3a55e1b35e583c7314333a65c3febb",
+        "file": "comparison-images/5b9c752c0e92b9e894cdb8d5a2e44e3affd5d1f434c40e289fc9b891aff50b01.webp",
+        "sha256": "5b9c752c0e92b9e894cdb8d5a2e44e3affd5d1f434c40e289fc9b891aff50b01",
         "label": "Visor Off"
       },
       "b": {
-        "file": "comparison-images/877276d9f83433d2e76a6179f6a1f12369661a2814ebbb25bf4413dad01e1996.webp",
-        "sha256": "877276d9f83433d2e76a6179f6a1f12369661a2814ebbb25bf4413dad01e1996",
+        "file": "comparison-images/766a85dc9e002002be9762058bc419ad33923a0de3d5a6bd7f745aefa7714ca8.webp",
+        "sha256": "766a85dc9e002002be9762058bc419ad33923a0de3d5a6bd7f745aefa7714ca8",
         "label": "Clear · reflections medium · refraction light"
       },
       "provenance": {
-        "sha": "4eb1eff3e85f0539117427f203fa9b07a1517f5e",
-        "dirty": true,
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
         "scene": {
           "track": "vegas",
           "tod": "night",
@@ -2837,23 +2837,23 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 50.8,
-            "floorMs": 17.2,
+            "fps": 48.2,
+            "floorMs": 17.1,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
               "frames": 5,
-              "maxMs": 8599.6,
-              "slow": 3
+              "maxMs": 9533,
+              "slow": 2
             },
             "frameTimes": {
               "frames": 5,
-              "p50": 50,
-              "p95": 8599.600000000006,
-              "p99": 8599.600000000006,
-              "maxMs": 8599.600000000006,
+              "p50": 16.69999999999709,
+              "p95": 9533.000000000015,
+              "p99": 9533.000000000015,
+              "maxMs": 9533.000000000015,
               "droppedSimS": 0,
               "physicsSteps": 5,
               "windowFrames": 2048
@@ -2940,18 +2940,18 @@
       "width": 844,
       "height": 390,
       "a": {
-        "file": "comparison-images/e57a0d5ede49b4bc4517ddc46cc555675cb33ca6f0e76b0a70597c2bf50909b2.webp",
-        "sha256": "e57a0d5ede49b4bc4517ddc46cc555675cb33ca6f0e76b0a70597c2bf50909b2",
+        "file": "comparison-images/2fca03600c90d243dd0646d4818e61a658a59e4267025b09a10c07e49166dac6.webp",
+        "sha256": "2fca03600c90d243dd0646d4818e61a658a59e4267025b09a10c07e49166dac6",
         "label": "Visor Off"
       },
       "b": {
-        "file": "comparison-images/686c487d7092fc745a99864c3b5a293628b869f26b038dc24fc26e4ed0c197f3.webp",
-        "sha256": "686c487d7092fc745a99864c3b5a293628b869f26b038dc24fc26e4ed0c197f3",
+        "file": "comparison-images/86cc82ee23841da9e22c1f224a415298210052083aabc4bfe83343943352eed0.webp",
+        "sha256": "86cc82ee23841da9e22c1f224a415298210052083aabc4bfe83343943352eed0",
         "label": "Clear · reflections medium · refraction light"
       },
       "provenance": {
-        "sha": "4eb1eff3e85f0539117427f203fa9b07a1517f5e",
-        "dirty": true,
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
         "scene": {
           "track": "silverstone",
           "tod": "day",
@@ -2994,15 +2994,15 @@
             "autoShed": 0,
             "open": {
               "frames": 5,
-              "maxMs": 5333.2,
+              "maxMs": 6233,
               "slow": 3
             },
             "frameTimes": {
               "frames": 5,
-              "p50": 66.69999999999709,
-              "p95": 5333.199999999997,
-              "p99": 5333.199999999997,
-              "maxMs": 5333.199999999997,
+              "p50": 66.60000000000582,
+              "p95": 6233,
+              "p99": 6233,
+              "maxMs": 6233,
               "droppedSimS": 0,
               "physicsSteps": 6,
               "windowFrames": 2048
@@ -3089,18 +3089,18 @@
       "width": 844,
       "height": 390,
       "a": {
-        "file": "comparison-images/83098b8ce46659db2c7f48eb47341c324acd083192abfb6ad0e3b9a98b12e264.webp",
-        "sha256": "83098b8ce46659db2c7f48eb47341c324acd083192abfb6ad0e3b9a98b12e264",
+        "file": "comparison-images/589031a76e1c22df29b703a455ab8f07d71130bc808de3d3d82c1a1008bab525.webp",
+        "sha256": "589031a76e1c22df29b703a455ab8f07d71130bc808de3d3d82c1a1008bab525",
         "label": "Visor Off"
       },
       "b": {
-        "file": "comparison-images/2f3596c3e3ddffa2c034b9649ffdd8b0e685369948de3f8db78379d31e926393.webp",
-        "sha256": "2f3596c3e3ddffa2c034b9649ffdd8b0e685369948de3f8db78379d31e926393",
+        "file": "comparison-images/ad17db7327f3c33c756a6af9444a69281f621658617f8e92f93cb8c9063e9491.webp",
+        "sha256": "ad17db7327f3c33c756a6af9444a69281f621658617f8e92f93cb8c9063e9491",
         "label": "Tinted amber strong · reflections strong · refraction strong"
       },
       "provenance": {
-        "sha": "4eb1eff3e85f0539117427f203fa9b07a1517f5e",
-        "dirty": true,
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
         "scene": {
           "track": "bahrain",
           "tod": "night",
@@ -3135,25 +3135,25 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 47.5,
-            "floorMs": 17.4,
+            "fps": 54.5,
+            "floorMs": 17,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
-              "frames": 5,
-              "maxMs": 6099.8,
-              "slow": 4
+              "frames": 4,
+              "maxMs": 6949.7,
+              "slow": 2
             },
             "frameTimes": {
-              "frames": 5,
-              "p50": 50,
-              "p95": 6099.800000000003,
-              "p99": 6099.800000000003,
-              "maxMs": 6099.800000000003,
+              "frames": 4,
+              "p50": 383.4000000000233,
+              "p95": 6949.6999999999825,
+              "p99": 6949.6999999999825,
+              "maxMs": 6949.6999999999825,
               "droppedSimS": 0,
-              "physicsSteps": 7,
+              "physicsSteps": 3,
               "windowFrames": 2048
             },
             "userTier": 0,
@@ -3238,18 +3238,18 @@
       "width": 844,
       "height": 390,
       "a": {
-        "file": "comparison-images/f35dea722bbe2f0ede6f9e14197850c39e303ef2cb9f82cb23fc7b943c4ac244.webp",
-        "sha256": "f35dea722bbe2f0ede6f9e14197850c39e303ef2cb9f82cb23fc7b943c4ac244",
+        "file": "comparison-images/ae782ab9aa361a27b4d9a83caddd896676d1872d9e994a2d349043f73824142c.webp",
+        "sha256": "ae782ab9aa361a27b4d9a83caddd896676d1872d9e994a2d349043f73824142c",
         "label": "Visor Off"
       },
       "b": {
-        "file": "comparison-images/21b0172cad0a0983c9fb276888cab364a9ca89886a25d6c869d2daa8dda96e56.webp",
-        "sha256": "21b0172cad0a0983c9fb276888cab364a9ca89886a25d6c869d2daa8dda96e56",
+        "file": "comparison-images/cf77c55a082d78e32dd05f8f011416fab620e5c8c13a71cd74f0db307340efd5.webp",
+        "sha256": "cf77c55a082d78e32dd05f8f011416fab620e5c8c13a71cd74f0db307340efd5",
         "label": "Clear · reflections light"
       },
       "provenance": {
-        "sha": "4eb1eff3e85f0539117427f203fa9b07a1517f5e",
-        "dirty": true,
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
         "scene": {
           "track": "monza",
           "tod": "day",
@@ -3284,25 +3284,25 @@
           "camera": "helmet",
           "perf": {
             "scale": 1,
-            "fps": 59.9,
-            "floorMs": 16.7,
+            "fps": 51.9,
+            "floorMs": 17,
             "auto": false,
             "tier": 0,
             "autoTier": 0,
             "autoShed": 0,
             "open": {
-              "frames": 4,
-              "maxMs": 4666.5,
-              "slow": 1
+              "frames": 5,
+              "maxMs": 4866.5,
+              "slow": 2
             },
             "frameTimes": {
-              "frames": 4,
-              "p50": 16.70000000001164,
-              "p95": 4666.5,
-              "p99": 4666.5,
-              "maxMs": 4666.5,
+              "frames": 5,
+              "p50": 33.29999999998836,
+              "p95": 4866.5,
+              "p99": 4866.5,
+              "maxMs": 4866.5,
               "droppedSimS": 0,
-              "physicsSteps": 2,
+              "physicsSteps": 4,
               "windowFrames": 2048
             },
             "userTier": 0,
@@ -3382,6 +3382,900 @@
       "note": "The quietest on-setting: CLEAR with LIGHT reflections and no refraction."
     },
     {
+      "id": "optics-spa-dusk-sun-ahead-phone",
+      "title": "Spa · dusk · the sun dead ahead · phone",
+      "width": 844,
+      "height": 390,
+      "a": {
+        "file": "comparison-images/00b85be58c9362174f1c3efa92121686c213e1f821be75979fd9ec952776464b.webp",
+        "sha256": "00b85be58c9362174f1c3efa92121686c213e1f821be75979fd9ec952776464b",
+        "label": "Visor Off"
+      },
+      "b": {
+        "file": "comparison-images/b0794f4cf2f64ad5047cd251c0daf10836353693339c28920aa687987ac4a194.webp",
+        "sha256": "b0794f4cf2f64ad5047cd251c0daf10836353693339c28920aa687987ac4a194",
+        "label": "Clear · reflections medium · refraction light"
+      },
+      "provenance": {
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
+        "scene": {
+          "track": "spa",
+          "tod": "dusk",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.55
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "spa",
+            "n": 1737,
+            "total": 6947.38532089921,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.68
+            ],
+            "turns": 19
+          },
+          "weather": "dry",
+          "tod": "dusk",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 50.8,
+            "floorMs": 17.2,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 5,
+              "maxMs": 10432.9,
+              "slow": 3
+            },
+            "frameTimes": {
+              "frames": 5,
+              "p50": 50,
+              "p95": 10432.899999999994,
+              "p99": 10432.899999999994,
+              "maxMs": 10432.899999999994,
+              "droppedSimS": 0,
+              "physicsSteps": 5,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              844,
+              390
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 14
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "off",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "light",
+            "visorReflections": "medium",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true,
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "touch": true
+      },
+      "selection": {
+        "race": "spa",
+        "timing": "dusk",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "combined",
+        "position": "0.55"
+      },
+      "note": "Low dusk sun in the frame: the glint, its mirrored ghost, god rays across the shield and the rim sheen on the sun's side, with bloom under all of it. This is the blinding-low-sun case."
+    },
+    {
+      "id": "optics-bahrain-dawn-sun-centre-phone",
+      "title": "Bahrain · dawn · the sun centred · phone",
+      "width": 844,
+      "height": 390,
+      "a": {
+        "file": "comparison-images/07571e1386d9582bea63e74226de4c4fe379ca2558046549cfe310f07bff94b9.webp",
+        "sha256": "07571e1386d9582bea63e74226de4c4fe379ca2558046549cfe310f07bff94b9",
+        "label": "Visor Off"
+      },
+      "b": {
+        "file": "comparison-images/a357572939f46ebc7a27b25b9150bd6e3c675ec2e567eb0cd1bc4d18ee9a7e2d.webp",
+        "sha256": "a357572939f46ebc7a27b25b9150bd6e3c675ec2e567eb0cd1bc4d18ee9a7e2d",
+        "label": "Clear · reflections medium · refraction light"
+      },
+      "provenance": {
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
+        "scene": {
+          "track": "bahrain",
+          "tod": "dawn",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.325
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "dry",
+          "tod": "dawn",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 44.7,
+            "floorMs": 17.6,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 4,
+              "maxMs": 9066.2,
+              "slow": 3
+            },
+            "frameTimes": {
+              "frames": 4,
+              "p50": 50,
+              "p95": 9066.200000000012,
+              "p99": 9066.200000000012,
+              "maxMs": 9066.200000000012,
+              "droppedSimS": 0,
+              "physicsSteps": 6,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              844,
+              390
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 15
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "off",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "light",
+            "visorReflections": "medium",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true,
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "touch": true
+      },
+      "selection": {
+        "race": "bahrain",
+        "timing": "dawn",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "combined",
+        "position": "0.325"
+      },
+      "note": "Dawn sun centred in the frame on the main straight: rays and ghost symmetric about the nose."
+    },
+    {
+      "id": "optics-monza-dusk-sun-centre-phone",
+      "title": "Monza · dusk · the sun centred · phone",
+      "width": 844,
+      "height": 390,
+      "a": {
+        "file": "comparison-images/9d78fdf4d500bce4fc0f0c1eca58e658827d79cbf83b2b20fbc9bcb5c4c8ae3b.webp",
+        "sha256": "9d78fdf4d500bce4fc0f0c1eca58e658827d79cbf83b2b20fbc9bcb5c4c8ae3b",
+        "label": "Visor Off"
+      },
+      "b": {
+        "file": "comparison-images/0ff989d1c95655cf8e890a332d677120bafa125c89b9d32202b0ba7e9a6272bc.webp",
+        "sha256": "0ff989d1c95655cf8e890a332d677120bafa125c89b9d32202b0ba7e9a6272bc",
+        "label": "Clear · reflections medium · refraction light"
+      },
+      "provenance": {
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
+        "scene": {
+          "track": "monza",
+          "tod": "dusk",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.85
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "monza",
+            "n": 1444,
+            "total": 5777.579011126656,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.26536876,
+              0.58048447
+            ],
+            "turns": 11
+          },
+          "weather": "dry",
+          "tod": "dusk",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 47.2,
+            "floorMs": 17.4,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 4,
+              "maxMs": 7049.8,
+              "slow": 2
+            },
+            "frameTimes": {
+              "frames": 4,
+              "p50": 66.69999999998254,
+              "p95": 7049.799999999988,
+              "p99": 7049.799999999988,
+              "maxMs": 7049.799999999988,
+              "droppedSimS": 0,
+              "physicsSteps": 5,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              844,
+              390
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 16
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "off",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "light",
+            "visorReflections": "medium",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true,
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "touch": true
+      },
+      "selection": {
+        "race": "monza",
+        "timing": "dusk",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "combined",
+        "position": "0.85"
+      },
+      "note": "Dusk sun ahead through the Parabolica exit."
+    },
+    {
+      "id": "optics-silverstone-dusk-sun-left-phone",
+      "title": "Silverstone · dusk · the sun left of the nose · phone",
+      "width": 844,
+      "height": 390,
+      "a": {
+        "file": "comparison-images/4a2d3ecbfe1b3683113a9289feeabb07a3448cb8814147097fdfaf04cca9f0b9.webp",
+        "sha256": "4a2d3ecbfe1b3683113a9289feeabb07a3448cb8814147097fdfaf04cca9f0b9",
+        "label": "Visor Off"
+      },
+      "b": {
+        "file": "comparison-images/62ee3fb87c187b4d55fd8ed0ef21b4562a5f7330f86df62727b4f509fc87f859.webp",
+        "sha256": "62ee3fb87c187b4d55fd8ed0ef21b4562a5f7330f86df62727b4f509fc87f859",
+        "label": "Clear · reflections medium · refraction light"
+      },
+      "provenance": {
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
+        "scene": {
+          "track": "silverstone",
+          "tod": "dusk",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.25
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "silverstone",
+            "n": 1461,
+            "total": 5845.701579299741,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.3,
+              0.62
+            ],
+            "turns": 18
+          },
+          "weather": "dry",
+          "tod": "dusk",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 51.2,
+            "floorMs": 17.2,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 5,
+              "maxMs": 8099.7,
+              "slow": 3
+            },
+            "frameTimes": {
+              "frames": 5,
+              "p50": 33.40000000002328,
+              "p95": 8099.700000000012,
+              "p99": 8099.700000000012,
+              "maxMs": 8099.700000000012,
+              "droppedSimS": 0,
+              "physicsSteps": 6,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              844,
+              390
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 17
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "off",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "light",
+            "visorReflections": "medium",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true,
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "touch": true
+      },
+      "selection": {
+        "race": "silverstone",
+        "timing": "dusk",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "combined",
+        "position": "0.25"
+      },
+      "note": "Dusk sun left of centre: the glint, rays and sheen all lean left; the right rim stays dark."
+    },
+    {
+      "id": "optics-suzuka-dawn-sun-phone",
+      "title": "Suzuka · dawn · the sun in frame · phone",
+      "width": 844,
+      "height": 390,
+      "a": {
+        "file": "comparison-images/3d3e2ea226d391db2d27fcc594b66546fbe970555be6397bf46fe5407c6454cf.webp",
+        "sha256": "3d3e2ea226d391db2d27fcc594b66546fbe970555be6397bf46fe5407c6454cf",
+        "label": "Visor Off"
+      },
+      "b": {
+        "file": "comparison-images/65f2ad2a8827c7e435d5f0e81b8f6a168399072f6f8986bf59a81281f3b3af7d.webp",
+        "sha256": "65f2ad2a8827c7e435d5f0e81b8f6a168399072f6f8986bf59a81281f3b3af7d",
+        "label": "Clear · reflections medium · refraction light"
+      },
+      "provenance": {
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
+        "scene": {
+          "track": "suzuka",
+          "tod": "dawn",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.5
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "suzuka",
+            "n": 1447,
+            "total": 5786.539719934656,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.32,
+              0.703
+            ],
+            "turns": 18
+          },
+          "weather": "dry",
+          "tod": "dawn",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 47.5,
+            "floorMs": 17.4,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 4,
+              "maxMs": 7632.9,
+              "slow": 2
+            },
+            "frameTimes": {
+              "frames": 4,
+              "p50": 50,
+              "p95": 7632.899999999994,
+              "p99": 7632.899999999994,
+              "maxMs": 7632.899999999994,
+              "droppedSimS": 0,
+              "physicsSteps": 5,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              844,
+              390
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 18
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "off",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "light",
+            "visorReflections": "medium",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true,
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "touch": true
+      },
+      "selection": {
+        "race": "suzuka",
+        "timing": "dawn",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "combined",
+        "position": "0.5"
+      },
+      "note": "Dawn sun in the frame through the esses."
+    },
+    {
+      "id": "optics-cota-dawn-sun-right-phone",
+      "title": "COTA · dawn · the sun right of the nose · phone",
+      "width": 844,
+      "height": 390,
+      "a": {
+        "file": "comparison-images/e4da77cd83008b4e5a1fa4b361a47335593847745d093d8d9aa80d1d95fdd416.webp",
+        "sha256": "e4da77cd83008b4e5a1fa4b361a47335593847745d093d8d9aa80d1d95fdd416",
+        "label": "Visor Off"
+      },
+      "b": {
+        "file": "comparison-images/587c4e9e10c3a9e3f918868605b03e1a0b1bd9d1cad0ed98b4874d39013ed010.webp",
+        "sha256": "587c4e9e10c3a9e3f918868605b03e1a0b1bd9d1cad0ed98b4874d39013ed010",
+        "label": "Clear · reflections medium · refraction light"
+      },
+      "provenance": {
+        "sha": "8fd6feda385100da3b9e6b3b8286f19e79568314",
+        "dirty": false,
+        "scene": {
+          "track": "cota",
+          "tod": "dawn",
+          "weather": "dry",
+          "camera": "helmet",
+          "frac": 0.5
+        },
+        "identity": {
+          "info": {
+            "state": "race",
+            "track": "cota",
+            "n": 1376,
+            "total": 5505.792164663429,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.314,
+              0.62
+            ],
+            "turns": 20
+          },
+          "weather": "dry",
+          "tod": "dawn",
+          "camera": "helmet",
+          "perf": {
+            "scale": 1,
+            "fps": 47.2,
+            "floorMs": 17.4,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 5,
+              "maxMs": 8282.9,
+              "slow": 3
+            },
+            "frameTimes": {
+              "frames": 5,
+              "p50": 66.69999999998254,
+              "p95": 8282.899999999994,
+              "p99": 8282.899999999994,
+              "maxMs": 8282.899999999994,
+              "droppedSimS": 0,
+              "physicsSteps": 6,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "frame": {
+            "wetness": 0,
+            "rain": 0
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              844,
+              390
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 19
+            }
+          }
+        },
+        "settings": {
+          "a": {
+            "visor": "off",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "off",
+            "visorReflections": "off",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          },
+          "b": {
+            "visor": "clear",
+            "visorColor": "neutral",
+            "visorIntensity": "light",
+            "visorRefraction": "light",
+            "visorReflections": "medium",
+            "visorRain": "off",
+            "visorRunoff": "normal"
+          }
+        },
+        "reducedMotion": true,
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "touch": true
+      },
+      "selection": {
+        "race": "cota",
+        "timing": "dawn",
+        "weather": "dry",
+        "camera": "helmet",
+        "effect": "combined",
+        "position": "0.5"
+      },
+      "note": "Dawn sun right of centre."
+    },
+    {
       "id": "optics-bahrain-night-dry-before-after-phone",
       "title": "bahrain-night-dry · phone · OLD visor vs NEW visor (same settings: clear, reflections medium, refraction light)",
       "width": 844,
@@ -3392,8 +4286,8 @@
         "label": "Old visor (deploy tip)"
       },
       "b": {
-        "file": "comparison-images/e7d58f51a173667fd33ba9d611913e3c7a2af79f5ebfca0e83afcd163283b8bc.webp",
-        "sha256": "e7d58f51a173667fd33ba9d611913e3c7a2af79f5ebfca0e83afcd163283b8bc",
+        "file": "comparison-images/bc470c7c7169f94051990e6e5a24700a6231d79f0e323b26a61921ac5c751288.webp",
+        "sha256": "bc470c7c7169f94051990e6e5a24700a6231d79f0e323b26a61921ac5c751288",
         "label": "New visor (this PR)"
       },
       "provenance": null,
@@ -3402,7 +4296,7 @@
         "camera": "helmet",
         "effect": "combined"
       },
-      "note": "Same scene, same settings, before and after this PR: the ellipse vignette with grey gradients vs the letterbox eye-port with added, lighting-driven reflections."
+      "note": "Same scene, same settings, before and after this PR: the ellipse vignette with grey gradients vs the letterbox eye-port with added, lighting-driven reflections, beams, star flares and bloom."
     },
     {
       "id": "optics-monza-day-dry-before-after-phone",
@@ -3415,8 +4309,8 @@
         "label": "Old visor (deploy tip)"
       },
       "b": {
-        "file": "comparison-images/1b14979c16332386e92a17b13ff3a7e8910c13aab2f2f59fc8d2673bbff4dd4a.webp",
-        "sha256": "1b14979c16332386e92a17b13ff3a7e8910c13aab2f2f59fc8d2673bbff4dd4a",
+        "file": "comparison-images/765cd180998486c1cb538beb774b358ab15be428523e34afc314dd1f11067042.webp",
+        "sha256": "765cd180998486c1cb538beb774b358ab15be428523e34afc314dd1f11067042",
         "label": "New visor (this PR)"
       },
       "provenance": null,
@@ -3425,7 +4319,7 @@
         "camera": "helmet",
         "effect": "combined"
       },
-      "note": "Same scene, same settings, before and after this PR: the ellipse vignette with grey gradients vs the letterbox eye-port with added, lighting-driven reflections."
+      "note": "Same scene, same settings, before and after this PR: the ellipse vignette with grey gradients vs the letterbox eye-port with added, lighting-driven reflections, beams, star flares and bloom."
     },
     {
       "id": "optics-bahrain-dawn-fog-before-after-phone",
@@ -3438,8 +4332,8 @@
         "label": "Old visor (deploy tip)"
       },
       "b": {
-        "file": "comparison-images/09526f85509851d64d2b82eefdb08e11610f40dcc9b6235ca785f74952c54f46.webp",
-        "sha256": "09526f85509851d64d2b82eefdb08e11610f40dcc9b6235ca785f74952c54f46",
+        "file": "comparison-images/a7739814d49fc971e876902d2691306a98efdbd54c2a427e7a599975337cba9b.webp",
+        "sha256": "a7739814d49fc971e876902d2691306a98efdbd54c2a427e7a599975337cba9b",
         "label": "New visor (this PR)"
       },
       "provenance": null,
@@ -3448,7 +4342,7 @@
         "camera": "helmet",
         "effect": "combined"
       },
-      "note": "Same scene, same settings, before and after this PR: the ellipse vignette with grey gradients vs the letterbox eye-port with added, lighting-driven reflections."
+      "note": "Same scene, same settings, before and after this PR: the ellipse vignette with grey gradients vs the letterbox eye-port with added, lighting-driven reflections, beams, star flares and bloom."
     },
     {
       "id": "optics-monaco-night-tunnel-before-after-phone",
@@ -3461,8 +4355,8 @@
         "label": "Old visor (deploy tip)"
       },
       "b": {
-        "file": "comparison-images/39e35121d231ad85954a8bf15563ee1de2b2a6e99ec388e991270350b1a31b4d.webp",
-        "sha256": "39e35121d231ad85954a8bf15563ee1de2b2a6e99ec388e991270350b1a31b4d",
+        "file": "comparison-images/a6ef1e6b1f8389fd3525ee47c5c443feea1997ab6c6b3d6332f26b5e3c825407.webp",
+        "sha256": "a6ef1e6b1f8389fd3525ee47c5c443feea1997ab6c6b3d6332f26b5e3c825407",
         "label": "New visor (this PR)"
       },
       "provenance": null,
@@ -3471,7 +4365,7 @@
         "camera": "helmet",
         "effect": "combined"
       },
-      "note": "Same scene, same settings, before and after this PR: the ellipse vignette with grey gradients vs the letterbox eye-port with added, lighting-driven reflections."
+      "note": "Same scene, same settings, before and after this PR: the ellipse vignette with grey gradients vs the letterbox eye-port with added, lighting-driven reflections, beams, star flares and bloom."
     }
   ],
   "visorLab": true
