@@ -1094,6 +1094,37 @@ function fillPreviewMeta(t, crns, dir, elev, dz) {
     els.selPreviewMeta.appendChild(pair);
   }
 }
+// Size #sel-preview-map to the hero slot WITHOUT TrackMaps.compute. Cold open
+// used to leave the canvas at its HTML attrs / zero CSS box until idle paint —
+// ui-redesign then saw buffer/CSS skew === 1 ("outline canvas is not
+// CSS-squashed"). Default 520/300 matches the designer attribute aspect; a
+// cache hit may use TrackMaps.aspect (cheap — compute already memoised).
+function sizePreviewMapBox(t) {
+  if (!els.selPreviewMap || !t) return;
+  const hero = document.getElementById("sel-hero");
+  const sheet = hero && hero.closest(".sheet");
+  if (!hero || hero.clientWidth <= 0 || hero.clientHeight <= 0) return;
+  const map = els.selPreviewMap;
+  const compact = !!(sheet && sheet.dataset.density === "compact");
+  const slotW = hero.clientWidth * 0.62, slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  let a = 520 / 300;
+  if (previewMapsCached(t) && typeof TrackMaps !== "undefined" && TrackMaps.aspect) {
+    try { a = TrackMaps.aspect(t) || a; } catch (_) { /* keep default */ }
+  }
+  a = Math.max(0.5, Math.min(2.5, a));
+  let boxW = Math.max(40, Math.floor(slotW || 1));
+  let boxH = Math.max(40, Math.floor(slotH || 1));
+  let w = boxW, h = Math.round(w / a);
+  if (h > boxH) { h = boxH; w = Math.round(h * a); }
+  w = Math.max(1, w); h = Math.max(1, h);
+  map.width = w;
+  map.height = h;
+  map.style.aspectRatio = String(a);
+  map.style.width = w + "px";
+  map.style.height = h + "px";
+  map.style.maxWidth = "";
+  map.style.maxHeight = "";
+}
 function paintTrackPreviewMaps(t) {
   if (!els.selPreviewMap || Tracks.LIST[G.trackIdx] !== t) return;
   const crns = TrackMaps.corners(t);
@@ -1229,8 +1260,11 @@ function updateTrackPreview() {
     paintTrackPreviewMaps(t);
     return;
   }
-  // Placeholders now; maps after idle / worker (avoids the open hitch).
+  // Size the canvas box now (no compute); draw after idle / worker so the
+  // open's long task stays off the main thread (D·DP5) without leaving a
+  // zero-width / attr-sized bitmap that CSS-squashes (ui-redesign skew).
   fillPreviewMeta(t, null, null, null, null);
+  sizePreviewMapBox(t);
   scheduleTrackPreviewMaps(t);
 }
 

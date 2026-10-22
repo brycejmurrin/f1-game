@@ -112,6 +112,10 @@ test("cold updateTrackPreview does not sync-call TrackMaps.corners or draw", () 
   assert.equal(s.cornersCalls, 0, "corners must wait for idle/worker on a cold cache");
   assert.equal(s.drawCalls, 0, "draw must wait for idle/worker on a cold cache");
   assert.ok(String(G.els.selPreviewName.textContent).includes("Monza"));
+  const map = G.els.selPreviewMap;
+  assert.ok(map.width > 1 && map.height > 1, "cold open still sizes the outline bitmap");
+  const bufferAspect = map.width / map.height;
+  assert.ok(Math.abs(bufferAspect - 520 / 300) < 0.05, "placeholder uses the designer aspect until paint refits");
 });
 
 test("cached TrackMaps paints maps synchronously", () => {
