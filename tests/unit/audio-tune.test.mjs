@@ -1835,6 +1835,25 @@ test("a rewind that jumps the race clock across a pit edge re-seeds wheel guns s
   assert.deepEqual(guns, [false, false, true, true], "new race pit edges resume immediately");
 });
 
+test("after a rewind the clock baseline follows the rewound raceT, so replayed stop edges fire again", () => {
+  const sb = { Math, Number, Object, GameAudio: {} };
+  const vctx = vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/car-sfx.js") });
+  const guns = [];
+  sb.GameAudio.setCarSfx = () => {};
+  sb.GameAudio.pitGun = (t) => guns.push(t);
+  const G = { vTop: () => 100, isWetRoad: () => false, raceT: 50 };
+  const S = vm.runInContext("CarSfx", vctx).create(G);
+  const car = { speed: 10, pitState: "none" };
+  S.update(car);
+  G.raceT = 52; car.pitState = "box"; S.update(car);
+  assert.deepEqual(guns, [false]);
+  G.raceT = 40; car.pitState = "none"; S.update(car);            // rewind 12 s
+  G.raceT = 41; car.pitState = "lane"; S.update(car);
+  G.raceT = 42; car.pitState = "box"; S.update(car);             // still before the old 52 s high-water mark
+  assert.deepEqual(guns, [false, false], "the replayed stop loosens the wheel guns again");
+});
+
 test("setCarSfx and pitGun are safe with the engine off, and drive their layers with it on", async () => {
   const { GameAudio } = boot();
   GameAudio.init();
