@@ -86,14 +86,24 @@ function create(G, deps) {
   deps = deps || {};
   const root = G.$("photo-studio");
   if (!root) return null;
+  // Prefer deps.ltSet (ltStore.set) so Photo Studio never trips setLightTune's
+  // renderer-recovery latch clears; fall back only when the dep is absent.
+  const ltWrite = (id, v) => {
+    if (typeof deps.ltSet === "function") return deps.ltSet(id, v);
+    if (typeof G.setLightTune === "function") return G.setLightTune(id, v);
+    return false;
+  };
+  const ltApply = () => {
+    if (typeof deps.ltApply === "function") deps.ltApply();
+    else if (typeof LightStore !== "undefined" && LightStore.reapply) LightStore.reapply();
+  };
   // Photo looks belong to the free-camera visit, not to the lighting profile.
-  // setLightTune is live-only; the observer restores the exact pre-visit
-  // values whenever FreeCam hides its panel, including Escape and teardown.
-  if (typeof PhotoKit !== "undefined" && typeof LightTune !== "undefined" &&
-      LightTune.LT && typeof G.setLightTune === "function") {
+  // Writes stay live-only; the observer restores the exact pre-visit values
+  // whenever FreeCam hides its panel, including Escape and teardown.
+  if (typeof PhotoKit !== "undefined" && typeof LightTune !== "undefined" && LightTune.LT) {
     const freeRows = G.$("fc-rows"), freeRoot = G.$("freecam");
     if (freeRows && freeRoot && !G.$("fc-looks")) {
-      const lookSession = PhotoKit.createLookSession((id) => LightTune.LT[id], (id, value) => G.setLightTune(id, value));
+      const lookSession = PhotoKit.createLookSession((id) => LightTune.LT[id], ltWrite);
       const lookControls = PhotoKit.mountLookControls(freeRows, lookSession, document);
       if (lookControls && typeof MutationObserver !== "undefined") {
         new MutationObserver(() => {
@@ -196,6 +206,149 @@ function create(G, deps) {
     }
     looksGroup.hidden = !specs.length;
   }
+  // PHOTO LIGHTING: lazy controls from LightTune.TUNE_DEFS (~191 knobs). Open clones
+  // G._ltStore into an isolated map; close restores the exact original reference
+  // (never persist). Circuit / race shoots only — the garage uses GARAGE & LIGHTING.
+  const lightSess = { saved: null, clone: null, snap: null, active: false, built: false, tab: null };
+  const fmtPsTune = (d, v) => {
+    if (d.fmt === "auto" && v < 0) return "AUTO";
+    const dec = (String(d.step).split(".")[1] || "").length;
+    const s = (+v).toFixed(Math.min(dec, 5));
+    return (d.fmt === "signed" && v > 0 ? "+" + s : s);
+  };
+  const ltSlug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const ltTabs = mk("div", { id: "ps-lt-tabs", attrs: { role: "tablist", "aria-label": "Lighting groups" } });
+  const ltRows = mk("div", { id: "ps-lt-rows" });
+  const ltReset = button("RESET LIGHTING", () => resetLight(), "ps-lt-reset");
+  const lightGroup = group("PHOTO LIGHTING", [
+    mk("p", { className: "adv-help", textContent: "Full lighting knobs for this photo only. Closing restores the race lighting exactly." }),
+    ltTabs, ltRows, ltReset,
+  ]);
+  lightGroup.hidden = true;
+  function setLtTab(name, focus) {
+    lightSess.tab = name;
+    for (const g of ltRows.children) {
+      const on = g.getAttribute("data-group") === name;
+      g.classList.toggle("active", on); g.hidden = !on;
+    }
+    for (const t of ltTabs.children) {
+      const on = t.getAttribute("data-group") === name;
+      t.classList.toggle("active", on);
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      t.tabIndex = on ? 0 : -1;
+      if (on && focus) t.focus();
+    }
+  }
+  function buildLight() {
+    if (lightSess.built || typeof LightTune === "undefined" || !LightTune.TUNE_DEFS || !LightTune.LT) return false;
+    lightSess.built = true;
+    const defs = LightTune.TUNE_DEFS, LT = LightTune.LT, groups = [];
+    let cur = null, section = null, wrap = null;
+    for (const d of defs) {
+      if (d.group !== cur) {
+        cur = d.group; groups.push(cur); section = null;
+        const slug = ltSlug(cur);
+        wrap = mk("div", { className: "lt-group", id: "ps-lt-panel-" + slug,
+          attrs: { "data-group": cur, role: "tabpanel", "aria-labelledby": "ps-lt-tab-" + slug } });
+        wrap.appendChild(mk("h3", { className: "adv-sec", textContent: cur }));
+        wrap.hidden = true; ltRows.appendChild(wrap);
+      }
+      if (d.section && d.section !== section) {
+        section = d.section;
+        wrap.appendChild(mk("h4", { className: "lt-section", textContent: section }));
+      }
+      const out = mk("b", { id: "ps-lt-v-" + d.id });
+      const lab = mk("span", { className: "tune-label", textContent: d.label + " " });
+      lab.appendChild(out);
+      const inp = mk("input", { id: "ps-lt-in-" + d.id, type: "range", min: String(d.min), max: String(d.max),
+        step: String(d.step), value: String(LT[d.id]), attrs: { "aria-label": d.label } });
+      if (d.desktopOnly && typeof GLX !== "undefined" && GLX.isMobile) {
+        inp.disabled = true;
+        lab.appendChild(mk("span", { textContent: " (DESKTOP ONLY)" }));
+        inp.setAttribute("aria-label", d.label + " (desktop only)");
+      }
+      inp.addEventListener("input", () => {
+        if (st.busy || st.closing || !lightSess.active) return;
+        if (!ltWrite(d.id, parseFloat(inp.value))) return;
+        out.textContent = fmtPsTune(d, LightTune.LT[d.id]);
+        paintLtReset();
+      });
+      const item = mk("div", { className: "adv-item" }, [mk("label", { className: "tune-row" }, [lab, inp])]);
+      if (d.help) item.appendChild(mk("p", { className: "adv-help", textContent: d.help }));
+      wrap.appendChild(item);
+    }
+    for (let i = 0; i < groups.length; i++) {
+      const g = groups[i], slug = ltSlug(g);
+      const t = mk("button", { type: "button", className: "lt-tab", id: "ps-lt-tab-" + slug, textContent: g,
+        attrs: { role: "tab", "data-group": g, "aria-controls": "ps-lt-panel-" + slug } });
+      t.addEventListener("click", () => setLtTab(g));
+      t.addEventListener("keydown", (e) => {
+        let next = null;
+        if (e.key === "ArrowRight") next = (i + 1) % groups.length;
+        else if (e.key === "ArrowLeft") next = (i - 1 + groups.length) % groups.length;
+        else if (e.key === "Home") next = 0;
+        else if (e.key === "End") next = groups.length - 1;
+        if (next == null) return;
+        e.preventDefault(); setLtTab(groups[next], true);
+      });
+      ltTabs.appendChild(t);
+    }
+    setLtTab(groups[0] || null);
+    return true;
+  }
+  function paintLight() {
+    if (!lightSess.built || typeof LightTune === "undefined" || !LightTune.TUNE_DEFS) return;
+    for (const d of LightTune.TUNE_DEFS) {
+      const inp = E["ps-lt-in-" + d.id] || G.$("ps-lt-in-" + d.id);
+      const out = E["ps-lt-v-" + d.id] || G.$("ps-lt-v-" + d.id);
+      if (inp) inp.value = String(LightTune.LT[d.id]);
+      if (out) out.textContent = fmtPsTune(d, LightTune.LT[d.id]);
+    }
+    paintLtReset();
+  }
+  function paintLtReset() {
+    if (!E["ps-lt-reset"]) return;
+    let dirty = false;
+    if (lightSess.active && lightSess.clone && lightSess.snap) {
+      dirty = JSON.stringify(lightSess.clone) !== JSON.stringify(lightSess.snap);
+    }
+    E["ps-lt-reset"].disabled = st.busy || !dirty;
+  }
+  function beginLight() {
+    if (lightSess.active) endLight();
+    if (!buildLight()) { lightGroup.hidden = true; return; }
+    let saved;
+    try { saved = G._ltStore; } catch (_) { saved = null; }
+    if (saved == null || typeof saved !== "object") { lightGroup.hidden = true; return; }
+    try {
+      lightSess.saved = saved;
+      lightSess.snap = JSON.parse(JSON.stringify(saved));
+      lightSess.clone = JSON.parse(JSON.stringify(saved));
+      G._ltStore = lightSess.clone;
+      lightSess.active = true;
+      lightGroup.hidden = false;
+      setLtTab(lightSess.tab || (LightTune.TUNE_DEFS[0] && LightTune.TUNE_DEFS[0].group));
+      paintLight();
+    } catch (_) {
+      lightSess.saved = lightSess.clone = lightSess.snap = null;
+      lightSess.active = false; lightGroup.hidden = true;
+    }
+  }
+  function resetLight() {
+    if (!lightSess.active || !lightSess.clone || !lightSess.snap) return;
+    for (const k of Object.keys(lightSess.clone)) delete lightSess.clone[k];
+    Object.assign(lightSess.clone, JSON.parse(JSON.stringify(lightSess.snap)));
+    ltApply();
+    paintLight();
+  }
+  function endLight() {
+    if (!lightSess.active) { lightGroup.hidden = true; return; }
+    G._ltStore = lightSess.saved;
+    lightSess.active = false;
+    lightSess.saved = lightSess.clone = lightSess.snap = null;
+    ltApply();
+    lightGroup.hidden = true;
+  }
   const placement = (label, id, min, max, step, unit) => {
     const out = mk("output", { id: id + "-value", textContent: "0" + unit });
     const input = mk("input", { id, type: "range", min: String(min), max: String(max), step: String(step), value: "0" });
@@ -215,6 +368,7 @@ function create(G, deps) {
       subjectGroup,
       carGroup,
       condGroup,
+      lightGroup,
       looksGroup,
       group("COMPOSITION", [
         select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); if (!st.busy) recompose(); }, "ps-aspect"),
@@ -319,7 +473,10 @@ function create(G, deps) {
     placeCar();
     condGroup.hidden = isGarage();
     looksChanged = false; paintLooks();
-    if (!isGarage()) { cond.tod = G.setTimeOfDay(); cond.wx = G.weather(); cond.arc = G.weatherArc; cond.touched = false; paintCond(); }
+    if (!isGarage()) {
+      cond.tod = G.setTimeOfDay(); cond.wx = G.weather(); cond.arc = G.weatherArc; cond.touched = false; paintCond();
+      beginLight();
+    } else { endLight(); }
     subjectGroup.hidden = !st.subject;
     if (st.subject) SettingRow.paint(subjectRow, subjectValue());
     document.body.classList.add("photo-studio-open");
@@ -351,6 +508,7 @@ function create(G, deps) {
   function finishClose(back) {
     if (!st.open && !st.closing) return;
     if (!isGarage() && cond.tod != null) { resetCond(); cond.tod = null; }
+    endLight();
     const returnTo = st.back; st.generation++; st.open = false; st.back = null; st.closing = false;
     if (releaseCar) { releaseCar(); releaseCar = null; }
     if (isGarage()) { if (deps.garage && deps.garage.restore && st.snapshot) deps.garage.restore(st.snapshot); st.snapshot = null; }
