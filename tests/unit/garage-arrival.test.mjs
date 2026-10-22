@@ -455,7 +455,8 @@ test('the car out, the garage HOLDS until the flyby where the backend warms (TLX
   assert.deepEqual(glx.calls, ['stop', 'card'], 'the card covers the rest, as before');
   const skipped = await run({ warm() {} }, { skip: true });
   assert.equal(skipped.ctx._studio, null, 'a skip closes too');
-  const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 5000);
+  const renderStart = game.indexOf('function render(dt) {');
+  const render = game.slice(renderStart, renderStart + 5200);
   assert.match(render, /const heldWarm = !!\(_studio && _studio\.held && track && _menuGate\.warm > 0\);/, 'a held warm frame takes the world path with the canvas left visible (TLX paints nothing while it kicks the warm)');
   assert.match(game, /FlybySeq\.reset\(\); warmPrograms\(\); _menuGate\.warm = 2;/, 'cold world frames run under the preparation card before motion');
   assert.match(game, /prepared = true;   \/\/ afterGarageOut closes the held garage, then the race\/session card/, 'introWarm hands off through afterGarageOut');
