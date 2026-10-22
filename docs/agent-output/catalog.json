@@ -2791,6 +2791,7 @@
     {
       "path": "tools/shot/ab-gallery.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
       "interpreter": "node"
     },
     {
@@ -3136,6 +3137,7 @@
     {
       "path": "tools/shot/visor-lab-export.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
       "interpreter": "node"
     },
     {
