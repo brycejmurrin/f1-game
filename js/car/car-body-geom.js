@@ -1128,6 +1128,23 @@ const CarBodyGeom = (function () {
       scoopLip: 0,
     }, recipe);
   }
+  // sduct (#3411): the S-DUCT exit on the nose crown: a carbon ramp rising rearward with a dark
+  // throat and exit slot between two lips (the inlet under the nose is not drawn: no camera sees it).
+  function addNoseSDuct(out, anchors, c1) {
+    const a = anchors.noseAt(1.56), b = anchors.noseAt(1.26);
+    const ramp = (z, n, rise, w) => ({ z, x: 0, y: n.top + rise / 2, w, h: rise, t: 0.92 });
+    const rr = ramp(1.26, b, 0.048, 0.18);
+    addSpan(out, ramp(1.56, a, 0.010, 0.15), rr, CARBON, null, SURFACES.carbon);
+    // throat: 3 mm proud of the ramp's top skin, so it never shares its plane
+    const top = (r, w) => ({ z: r.z, x: 0, y: r.y + r.h / 2 + 0.003, w, h: 0.006 });
+    addSpan(out, top(ramp(1.50, anchors.noseAt(1.50), 0.010 + 0.038 * 0.2, 0.15), 0.07),
+                 top(rr, 0.11), INTAKE, null, SURFACES.carbon);
+    addBox(out, 0, rr.y + 0.004, 1.256, 0.13, 0.030, 0.008, INTAKE);   // the exit mouth
+    for (const s of [-1, 1]) addSpan(out,
+      { z: 1.52, x: s * 0.080, y: a.top + 0.006, w: 0.010, h: 0.012 },
+      { z: 1.25, x: s * 0.098, y: b.top + 0.035, w: 0.012, h: 0.070 }, c1);
+  }
+
   function buildAeroParts(recipe, tier) {
     const lvl = tier === 0 ? 0 : tier === 2 ? 4 : 2;
     // 2026 regulation defaults (factory signatures already stamp these in
@@ -1138,7 +1155,7 @@ const CarBodyGeom = (function () {
       lvl, beam: 0, drs: 1,
       vane: lvl >= 4 ? 3 : lvl >= 3 ? 2 : lvl >= 1 ? 1 : 0,
       plate: 1, casc: null, swan: 0, tvane: null,
-      duct: 0, board: 1, slot: 0,
+      duct: 0, sduct: 0, board: 1, slot: 0,
       frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
       rearSweep: 0.03, rearTaper: 0.98,
       floorEdge: 1, floorCut: 0.04, diffuserRise: 1, fin: 1,
@@ -2193,7 +2210,7 @@ const CarBodyGeom = (function () {
       buildPartRecipes, aeroLevelOf, aeroStyleOf,
       buildSharedChassis, sidepodStation, sampleStations, sidepodStations,
       bodyAnchors, buildBodyAnchors, fitBodyDetails, addInletMouth,
-      buildSidepodBodywork, buildEngineCoverBodywork,
+      buildSidepodBodywork, buildEngineCoverBodywork, addNoseSDuct,
       REAR_TYRE_CROWN, REAR_WING_TOP, FW_MOVEABLE, FW_SPAN, WING_BAND,
       CAR_HALF, COVER_CROWN, COVER_SHOULDER, COVER_DROP,
     };

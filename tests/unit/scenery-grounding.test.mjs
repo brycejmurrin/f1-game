@@ -232,3 +232,18 @@ test("a low unsupported neighbor cannot hide a genuinely floating primitive", ()
     "display rounding cannot erase a gap above the unchanged 1.2 m threshold");
   assert.equal(clusterFloatingPrimitives([], track).floating.length, 0);
 });
+
+test("float-audit CLI: the circuit is found wherever the flags sit; a bad --top is an error", async () => {
+  const { createRequire } = await import("node:module");
+  const { targetFrom, topFrom } = createRequire(import.meta.url)("../../tools/track/float-audit.cjs");
+  assert.equal(targetFrom(["monaco", "--json"]), "monaco");
+  assert.equal(targetFrom(["--json", "monaco"]), "monaco");
+  assert.equal(targetFrom(["--top", "3", "spa"]), "spa");
+  assert.equal(targetFrom(["--foliage", "--all"]), "--all");
+  assert.equal(targetFrom(["--json"]), null);
+  assert.equal(topFrom([]), 6);
+  assert.equal(topFrom(["monaco", "--top", "12"]), 12);
+  for (const bad of [["--top"], ["--top", "abc"], ["--top", "0"], ["--top", "1.5"]]) {
+    assert.throws(() => topFrom(bad), /--top needs a positive integer/, bad.join(" "));
+  }
+});

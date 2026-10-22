@@ -8936,9 +8936,6 @@
       "qualiReporters": [
         "tests/unit/net-authority.test.mjs"
       ],
-      "rejoin": [
-        "tests/unit/netplay-resilience.test.mjs"
-      ],
       "reportCaution": [
         "tests/unit/net-authority.test.mjs"
       ],
@@ -14296,9 +14293,7 @@
     },
     "js/share/share-card-layout.js": {
       "layout": [
-        "tests/unit/share-card-layout.test.mjs"
-      ],
-      "*": [
+        "tests/unit/share-card-layout.test.mjs",
         "tests/unit/share-card.test.mjs"
       ]
     },

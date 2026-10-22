@@ -54,7 +54,9 @@ const ShareCardLayout = (function () {
     if (model.link) {
       const qrSize = Math.min(Math.round(h * 0.16), Math.round(w * 0.18));
       ops.push({ op: "qr", id: "qr", x: w - pad - qrSize, y: h - footerH - pad * 0.45 - qrSize,
-        width: qrSize, height: qrSize, text: model.link, color: PALETTE.text, background: PALETTE.bg });
+        // Dark modules on a light tile (its 4-module quiet zone included): many
+        // Android scanners never try an inverted code (H3-11, jsQR measured).
+        width: qrSize, height: qrSize, text: model.link, color: PALETTE.bg, background: PALETTE.text });
     }
     ops.push(
       { op: "rect", id: "footer-band", x: 0, y: h - footerH, width: w, height: footerH, color: "#05060a" },

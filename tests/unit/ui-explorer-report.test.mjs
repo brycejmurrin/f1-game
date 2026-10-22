@@ -155,3 +155,24 @@ test('writeReport creates portable HTML and faithful JSON together', async () =>
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('missingEvidence names linked evidence files absent from the output directory', async () => {
+  const { missingEvidence } = await import('../../tools/ui/explorer/report.mjs');
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const dir = await mkdtemp(join(tmpdir(), 'apex-report-'));
+  try {
+    const bundle = fixture();
+    // JSON alone: all three linked files (screenshot, aria, repro) are missing.
+    assert.deepEqual(missingEvidence(bundle, dir).map((m) => m.kind), ['screenshot', 'aria', 'repro']);
+    assert.equal(missingEvidence(bundle, dir)[0].path, 'shots/garage wide.png');
+    mkdirSync(join(dir, 'shots'), { recursive: true });
+    mkdirSync(join(dir, 'aria'), { recursive: true });
+    writeFileSync(join(dir, 'shots', 'garage wide.png'), 'x');
+    writeFileSync(join(dir, 'aria', 'garage.txt'), 'x');
+    assert.deepEqual(missingEvidence(bundle, dir).map((m) => m.kind), ['repro']);
+    // An unsafe path is never linked, so it is not reported as missing either.
+    bundle.capabilities[0].records[0].artifacts.bad = '../escape.txt';
+    assert.deepEqual(missingEvidence(bundle, dir).map((m) => m.kind), ['repro']);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

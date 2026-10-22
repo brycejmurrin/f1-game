@@ -156,7 +156,7 @@ test("an alias of something that is NOT a test function is not a test", () => {
 });
 
 // ── tests/unit joins the vacuity ratchet (round 6) ───────────────────────────
-// audit() defaulted to tests/specs for the tool's whole life, so the 130+ unit
+// audit() defaulted to tests/specs for the tool's whole life, so the 960+ unit
 // suites were never vacuity-scanned — a blind spot in the repo's own
 // truth-instrument. Measured on joining: 1,376 unit tests, ALL asserting,
 // zero swallows. This test keeps it that way.
