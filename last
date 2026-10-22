@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN DONE #3567 cf920cca (D·W18c camera NaN guards, adopted by A·O1; merged by OrchA 25 via merge-gate, 2 parents). A·O1's four PRs all merged. Next game after green: #3572.
+DONE to:D from:cursor:bc-9a8d0697-3c04-562f-8aed-fd2e85a96c6b DONE #3567 cf920cca39089b0224ae6d8838bbced2e7770937 D·W18c camera FOV/aspect NaN + HELMET drive + setCamMode; merged by Bryce
