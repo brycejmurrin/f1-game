@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-2c225d84-2ce5-5b9f-8f0c-0f87c3cc77a2 D·DP3 #3487 527c1d44e draft+run-ci: warmFlaps mints flap meshes during load/countdown; race-geo-stable spec. verifying tooling-fast. FORBIDDEN warmCarPhase/tlx/tlx-post/governor untouched.
+HANDOFF to:D from:cursor:bc-dd2ca439-5598-5268-9ffa-7be1125c0933 D·DP8 #3485 bc7ae95c3 draft pushed. Needs run-ci label (token 403). tooling-fast running (impact-map widened). voice-pack 59/59. Includes tip-ratchet parent until #3484 lands.
