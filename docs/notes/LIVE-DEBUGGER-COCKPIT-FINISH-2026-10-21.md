@@ -36,8 +36,16 @@ McLaren with a seeded custom livery (`c1` papaya, `finish` gloss/matte/chrome), 
 |---|---|---|---|---|
 | GLX | cockpit | 1.3 / 2.5 / 0.5 | 9.8 / 8.7 / 0.0 | CONFIRMED-LIVE |
 | GLX | helmet | 1.4 / 2.6 / 0.6 | 12.2 / 10.6 / 0.0 | CONFIRMED-LIVE |
-| TLX (WebGL2) | cockpit, helmet | — | — | NOT MEASURED: the cockpit 3D frame presents all-black under SwiftShader here (chase renders; GLX cockpit renders; mirror off changes nothing). Handed to B·H26 (render/three owner) as a possible TLX finding. The finish path is the same mesh + the same `carFinish` opts (F1, F2). |
-| WGX | cockpit, helmet | — | — | NOT MEASURED: capture cap; code-traced (F2) |
+| TLX (WebGL2) | cockpit, helmet | — | — | NOT MEASURED locally (SwiftShader black frame, F7); code-traced (F1, F2) and the hardware census below renders the view |
+| WGX | cockpit, helmet | — | — | NOT MEASURED locally: capture cap; code-traced (F2); hardware census renders the view |
+
+**F7 — TLX first-person black frame: SOFTWARE-ONLY (REFUTED on hardware).** Under SwiftShader here the TLX
+cockpit and helmet 3D frames present all-black (chase renders, GLX cockpit renders; `__apex.mirror("off")` and
+`apex26.tlxForceHw=1` change nothing, so it is not a `softContent()` skip). On a real GPU it renders:
+gpu-census.yml on macos-latest from this branch (a1b92ac7), Verdict green, gpuErrors 0 on every leg —
+run 39703769111 cam=helmet: meanLuma TLX-WebGL2 58.9, GLX 54.9, WGX 63.2; run 39703841927 cam=chase>cockpit
+(final frame in cockpit): TLX-WebGPU 67.1, TLX-WebGL2 66.8, GLX 72.4, WGX 72.1. Bryce's TLX cockpit and helmet
+views are not broken. Local first-person stills on TLX need a GPU host, not this container.
 
 The halo reads 0.0 for chrome because the factory halo is metal, not paint (`haloFinish` drives it). Matte's
 small Δ is SwiftShader's flat diffuse; the finish id is on every painted vertex (F1).
@@ -57,8 +65,10 @@ Options shown to Bryce as stills (same geometry, surface remap + finish draw opt
 Picked by Bryce (AskUserQuestion, 2026-10-22): **A, carbon + alloy** — `CarMesh.WHEEL_DEFAULT = "carbon"`.
 Close-up mean |Δ| vs stock in the wheel crop (GLX): carbon 3.4, anodised 3.5, suede 2.4. B and C stay in
 `WHEEL_FINISHES` (no UI). Phone budget: no vertex, no texture; one more lit program (the wheel's opts differ
-from the rig card's). GPU frame-time evidence: gpu-census.yml, see the PR.
+from the rig card's). Hardware (census 39703769111, cam=helmet, wheel A on): TLX-WebGL2 `progs 65→65 (+0)` across the
+driven window (the wheel's program compiled under the race-entry warm, none mid-race), gpuErrors 0 on all
+four legs. No before/after frame-time claim is made (n=1 on this head; the change adds no vertex or texture).
 
 ## Status
 
-F1–F6 recorded; wheel finish A shipped as default in PR #3454.
+F1–F7 recorded; wheel finish A shipped as default in PR #3454; F7 software-only.
