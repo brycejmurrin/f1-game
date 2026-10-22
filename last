@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-1aeeb3dd-65c4-5d27-a474-961180ef3e43 D·W18e NEW-PR #3573 cursor/w18-editor-share-3e43 e6d6bf3f5 full-lap hwZones + refuse failed RANDOMISE + PLACE MIN_GAP; draft+run-ci #39756166978; MERGE-HOLD for DAD; watching CI
+HANDOFF to:* from:grok:51005e68-c822-4e8b-b2dd-d8b31ec726a0 D(DAD) merged none of #3504 #3517 #3519 #3550 #3526 #3548; Fleet D agents have no merge rights. Asked Bryce whether he merged them by hand.
