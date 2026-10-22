@@ -113,6 +113,77 @@ test("cloud bootstrap cannot accept partial dependencies through its browser fal
   assert.ok(r.stdout.includes("npm ready, browsers deferred"), r.stdout);
 });
 
+/** D·W14a: Cursor Cloud PATH puts /exec-daemon before nvm; npm's env-node shebang
+ *  then defaults prefix to /. Guard the cure lives in cloud-agent-install.sh. */
+test("cloud-agent-install cures npm prefix=/ before any npm use (D·W14a)", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/env/cloud-agent-install.sh"), "utf8");
+  assert.match(src, /ensure_npm_prefix/);
+  assert.match(src, /nvm\.sh/);
+  assert.match(src, /nvm use/);
+  assert.match(src, /\/usr\/local\/cargo\/bin/);
+  assert.match(src, /npm config get prefix/);
+  assert.match(src, /prefix is '\$\{prefix/);
+  assert.match(src, /--check-npm-prefix/);
+  // Never pin prefix= into ~/.npmrc — nvm rejects it.
+  assert.doesNotMatch(src, /printf 'prefix=/);
+  assert.doesNotMatch(src, /echo "prefix=/);
+  // Cure must run on the install path before the install-browsers invocation.
+  const installCall = src.search(/\nif ! bash "\$ROOT\/tools\/env\/install-browsers\.sh"/);
+  const ensureCall = src.lastIndexOf("\nensure_npm_prefix\n", installCall);
+  assert.ok(installCall > 0 && ensureCall > 0 && ensureCall < installCall,
+    "ensure_npm_prefix must run on the install path before install-browsers.sh");
+});
+
+test("cloud-agent-install --check-npm-prefix leaves npm prefix off /", () => {
+  const script = path.join(ROOT, "tools/env/cloud-agent-install.sh");
+  const rest = (process.env.PATH || "").split(path.delimiter)
+    .filter((p) => p && p !== "/usr/local/cargo/bin" && p !== "/exec-daemon");
+  // Pre-cure Cloud bug: /exec-daemon before nvm, no cargo node link on PATH.
+  const brokenPath = ["/exec-daemon", ...rest].join(path.delimiter);
+  // Post-cure Cloud PATH: cargo bin stays first (where the install links nvm's node).
+  const cloudPath = ["/usr/local/cargo/bin", "/exec-daemon", ...rest].join(path.delimiter);
+  const scrub = { npm_config_prefix: undefined, npm_config_global_prefix: undefined };
+  // Drop a prior cure link so this host can reproduce the bug when /exec-daemon exists.
+  const cargoNode = "/usr/local/cargo/bin/node";
+  const hadLink = fs.existsSync(cargoNode);
+  let savedLink = null;
+  if (hadLink) {
+    savedLink = fs.readlinkSync(cargoNode);
+    fs.unlinkSync(cargoNode);
+  }
+  try {
+    const before = spawnSync("npm", ["config", "get", "prefix"], {
+      encoding: "utf8", env: { ...process.env, PATH: brokenPath, ...scrub },
+    });
+    const r = spawnSync("bash", [script, "--check-npm-prefix"], {
+      cwd: ROOT, encoding: "utf8", timeout: 30000,
+      env: { ...process.env, PATH: brokenPath, ...scrub },
+    });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const okLine = r.stdout.split("\n").find((line) => line.startsWith("npm prefix ok:"));
+    assert.ok(okLine, r.stdout + r.stderr);
+    const reported = okLine.replace(/^npm prefix ok:\s*/, "").split(/\s/)[0];
+    assert.notEqual(reported, "/", `cure reported prefix=/:\n${r.stdout}`);
+    assert.ok(reported.length > 1 && reported.startsWith("/"), `expected an absolute nvm prefix, got ${reported}`);
+    // Durable check: with Cloud's PATH (cargo bin first) the linked node keeps prefix off /.
+    const after = spawnSync("npm", ["config", "get", "prefix"], {
+      encoding: "utf8", env: { ...process.env, PATH: cloudPath, ...scrub },
+    });
+    assert.equal(after.status, 0, after.stderr);
+    assert.notEqual(after.stdout.trim(), "/",
+      `prefix still / after cure (before=${before.stdout.trim()})`);
+    if (fs.existsSync("/exec-daemon/node")) {
+      assert.equal(before.stdout.trim(), "/", "precondition: exec-daemon shadow yields prefix=/");
+      assert.ok(fs.existsSync(cargoNode), "cure must leave /usr/local/cargo/bin/node");
+    }
+  } finally {
+    if (savedLink) {
+      try { fs.unlinkSync(cargoNode); } catch { /* cure may not have recreated it */ }
+      fs.symlinkSync(savedLink, cargoNode);
+    }
+  }
+});
+
 test("browser bootstrap plan does not install even with missing dependencies", (t) => {
   const f = installFixture(t);
   fs.rmSync(path.join(f.dir, "node_modules"), { recursive: true });
