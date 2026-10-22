@@ -85,6 +85,7 @@ test(".mcp.json registers apex-tools alongside the separate debugger server", ()
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-lsp",
     "apex-tools",
+    "browserstack",
     "chrome-devtools",
     "js-debugger",
     "playwright-official",
@@ -119,6 +120,26 @@ test("playwright-official pin matches the wrapper's audited package and never @l
     /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.7\.0"/);
   assert.doesNotMatch(JSON.stringify(cfg), /@latest/);
   assert.doesNotMatch(JSON.stringify(cursorCfg), /@latest/);
+});
+
+test("browserstack pin matches the wrapper's audited package and never @latest; credentials stay env-only", () => {
+  const cfg = nativeMcpConfig(JSON.parse(fs.readFileSync(MCP_JSON, "utf8")));
+  const cursorCfg = nativeMcpConfig(JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/mcp.json"), "utf8")));
+  const wrapper = fs.readFileSync(path.join(ROOT, "tools/mcp/browserstack-mcp.sh"), "utf8");
+  const pin = wrapper.match(/MCP_NPM_PACKAGE="([^"]+)"/)[1];
+  // Official setup is `npx -y @browserstack/mcp-server@latest` with env
+  // BROWSERSTACK_USERNAME / BROWSERSTACK_ACCESS_KEY; the catalog launches the
+  // wrapper's `run` and the wrapper pins the audited package (playwright rule).
+  assert.equal(cfg.mcpServers["browserstack"].command, "bash");
+  assert.deepEqual(cfg.mcpServers["browserstack"].args, ["tools/mcp/browserstack-mcp.sh", "run"]);
+  assert.equal(pin, "@browserstack/mcp-server@2.2.4");
+  assert.deepEqual(cursorCfg.mcpServers["browserstack"], cfg.mcpServers["browserstack"]);
+  // No credential material in the catalogs, and the wrapper resolves the two
+  // env vars without ever assigning them a value.
+  assert.equal(cfg.mcpServers["browserstack"].env, undefined);
+  assert.match(wrapper, /BROWSERSTACK_USERNAME/);
+  assert.match(wrapper, /BROWSERSTACK_ACCESS_KEY/);
+  assert.doesNotMatch(wrapper, /BROWSERSTACK_(USERNAME|ACCESS_KEY)=["']?[A-Za-z0-9]/);
 });
 
 test(".cursor/mcp.json locksteps the root catalog (Cloud/Claude load .mcp.json)", () => {

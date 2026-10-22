@@ -2394,6 +2394,11 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/mcp/browserstack-mcp.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash"
+    },
+    {
       "path": "tools/mcp/catalog-discovery.mjs",
       "classification": "ambiguous",
       "outputPolicy": "page-results"
@@ -3905,6 +3910,21 @@
       ],
       "gatewayConfigured": true,
       "timeout": 900000
+    },
+    {
+      "name": "browserstack",
+      "type": "stdio",
+      "command": "bash",
+      "args": [
+        "tools/mcp/output-level-mcp.sh",
+        "--server",
+        "browserstack",
+        "--",
+        "bash",
+        "tools/mcp/browserstack-mcp.sh",
+        "run"
+      ],
+      "gatewayConfigured": true
     },
     {
       "name": "chrome-devtools",

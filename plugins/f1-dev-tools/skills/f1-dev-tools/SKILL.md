@@ -5,7 +5,7 @@ description: "Use for brycejmurrin/f1-game (Apex 26) UI inspection and diffs, CP
 
 # F1 Dev Tools
 
-Use the game's existing Apex tools and camera tuner. This plugin supplies a workflow and executable helpers, not a hosted game or a new renderer. The camera/replay helpers remain in [workflows.md](references/workflows.md). Focused routes are in [UI inspection](references/ui-inspection.md), [profiling, memory, graphics and debugging](references/profiling.md), and [garage angles and parts](references/garage-parts.md). The plugin advertises the checkout's five configured MCP servers; their names and commands remain owned by `.mcp.json`, `.cursor/mcp.json` and `.codex/config.toml`.
+Use the game's existing Apex tools and camera tuner. This plugin supplies a workflow and executable helpers, not a hosted game or a new renderer. The camera/replay helpers remain in [workflows.md](references/workflows.md). Focused routes are in [UI inspection](references/ui-inspection.md), [profiling, memory, graphics and debugging](references/profiling.md), and [garage angles and parts](references/garage-parts.md). The plugin advertises the checkout's six configured MCP servers (including `browserstack`, the official BrowserStack MCP, which reads its credentials from the environment only); their names and commands remain owned by `.mcp.json`, `.cursor/mcp.json` and `.codex/config.toml`.
 
 ## Start
 
