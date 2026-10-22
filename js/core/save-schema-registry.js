@@ -46,6 +46,7 @@ const SaveSchemaRegistry = (function () {
     { re: /^ghost\./, owner: "js/car/ghost.js", lane: "json", v: 1, validate: validators.json },
     { re: /^pitPlan\./, owner: "js/race/pit-lane.js", lane: "json", v: 1, validate: validators.json },
     { re: /^spotify\./, owner: "js/audio/spotify.js", lane: "raw", v: 1, validate: validators.rawScalar },
+    { re: /^cockpit(?:Wheel|Body|Halo)Finish$/, owner: "js/camera/cockpit-finishes.js", lane: "raw", v: 1, validate: validators.rawScalar },
   ];
 
   const EXACT = {

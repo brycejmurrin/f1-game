@@ -1132,6 +1132,7 @@ function _wheelRimRound(out, GRIP, acc, grip) {
 // the button bezels, the LCD glass. Gloves and legends keep their surfaces.
 const WHEEL_FINISHES = Object.freeze({
   stock: null,
+  livery: Object.freeze({ grip: 22, structure: 20, hardware: 29, bezel: 29, screen: 24, metal: Object.freeze([0.62, 0.63, 0.66]) }),
   carbon:   Object.freeze({ grip: 22, structure: 21, hardware: 29, bezel: 29, screen: 24, metal: Object.freeze([0.62, 0.63, 0.66]) }),
   anodised: Object.freeze({ grip: 22, structure: 21, hardware: 44, bezel: 44, screen: 24, accent: true }),
   suede:    Object.freeze({ grip: 42, structure: 28, hardware: 39, bezel: 39, screen: 24, teamGrip: true }),
@@ -1141,21 +1142,26 @@ let _wheelFinish = WHEEL_DEFAULT;
 const _near = (c, r, i) => Math.abs(c[i] - r[0]) < 0.004 && Math.abs(c[i + 1] - r[1]) < 0.004 && Math.abs(c[i + 2] - r[2]) < 0.004;
 const _W_GLOVE = [[0.14,0.155,0.175],[0.34,0.36,0.38]], _W_SCREEN = [0.022,0.028,0.036], _W_BEZEL = [0.12,0.13,0.15];
 // acc: the wheel's accent tint (anodised bezels); team: its c1 tint (suede grips).
-function wheelFinishPass(out, name, acc, team) {
+function wheelFinishPass(out, name, acc, team, livery) {
   const f = WHEEL_FINISHES[name];
   if (!f) return out;
   const M = out.mat, C = out.col;
   for (let v = 0, i = 0; v < M.length; v++, i += 3) {
     const s = M[v], hi = Math.max(C[i], C[i+1], C[i+2]), lo = Math.min(C[i], C[i+1], C[i+2]);
+    let structure = s === 21;
     if (s === 22) { if (!_W_GLOVE.some((g) => _near(C, g, i))) M[v] = f.grip; }
     else if (s === 21) M[v] = f.structure;
     else if (s !== 26) continue;
     else if (_near(C, _W_SCREEN, i)) M[v] = f.screen;
     else if (_near(C, _W_BEZEL, i)) M[v] = f.bezel;
     else if (hi > 0.2 && hi < 0.5 && hi - lo < 0.05) M[v] = f.hardware;   // fasteners, pivots, rotary pointers
-    else if (hi < 0.21 && hi - lo < 0.04 && lo > 0.1) M[v] = f.structure;   // paddles and clutch blades
+    else if (hi < 0.21 && hi - lo < 0.04 && lo > 0.1) { M[v] = f.structure; structure = true; }   // paddles and clutch blades
     else continue;
-    const ink = M[v] === f.bezel || M[v] === f.hardware ? (f.accent ? acc : f.metal) : M[v] === f.grip && f.teamGrip ? team : null;
+    if (name === "livery" && structure) {
+      M[v] = livery && typeof CarMaterials !== "undefined" ? CarMaterials.FINISH_SURFACE[livery.finish] || 20 : 20;
+      if (team) { C[i] = team[0]; C[i+1] = team[1]; C[i+2] = team[2]; }
+    }
+    const ink = name === "livery" && structure ? null : M[v] === f.bezel || M[v] === f.hardware ? (f.accent ? acc : f.metal) : M[v] === f.grip && f.teamGrip ? team : null;
     if (ink) { C[i] = ink[0]; C[i+1] = ink[1]; C[i+2] = ink[2]; }
   }
   return out;
@@ -1188,7 +1194,7 @@ function getCockpitWheel(liv, style) {
   // same ~55% the accent lands at. Unset = today's black rubber, and the key gains nothing.
   const gt = _wheelTint(liv && typeof CarMaterials !== "undefined" && CarMaterials.zoneColour(liv.gripTint), 0.55);
   const kc = (c) => c ? c.map((v) => v.toFixed(2)).join(",") : "-";
-  const wantKey = st + "|" + kc(c1) + "|" + kc(acc) + "|" + kc(c2) + (gt ? "|g" + kc(gt) : "") + "|" + _wheelFinish;
+  const wantKey = st + "|" + kc(c1) + "|" + kc(acc) + "|" + kc(c2) + (gt ? "|g" + kc(gt) : "") + "|" + _wheelFinish + (_wheelFinish === "livery" ? "|" + (liv && liv.finish || "gloss") : "");
   if (cockpitWheelMesh && _cockpitWheelKey !== wantKey) {
     if (_gfx.freeMesh) _gfx.freeMesh(cockpitWheelMesh);
     cockpitWheelMesh = null;
@@ -1215,7 +1221,7 @@ function getCockpitWheel(liv, style) {
     }
   }
   _wheelHands(out, acc, c1);
-  cockpitWheelMesh = _gfx.createMesh(wheelFinishPass(_rigMaterials(out), _wheelFinish, acc, c1));
+  cockpitWheelMesh = _gfx.createMesh(wheelFinishPass(_rigMaterials(out), _wheelFinish, acc, c1, liv));
   return cockpitWheelMesh;
 }
 // STEERING LOCK. The wheel used to roll a fixed 0.80 rad (±46 deg) at full
