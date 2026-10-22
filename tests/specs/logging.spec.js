@@ -73,7 +73,8 @@ test.describe("Log", () => {
     // goes to the build Worker and can be quit out from under the start. Under
     // SwiftShader that stalled the ring or ended in "did not reach the grid"
     // (#3582). toMenu is the shared page's own way back to a cold start.
-    await toMenu(racePage);
+    // (The VM-page adapter has no pause menu to click and no earlier spec's race.)
+    if (process.env.APEX_VM_PAGE !== "1") await toMenu(racePage);
     await loadTrack("monaco");
     const r = await racePage.evaluate(() => {
       const all = window.__apex.logs();
