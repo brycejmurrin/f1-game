@@ -1539,12 +1539,13 @@ test("private room entry accepts a full shared token and public entry still asks
 // transport's status and close handler are the test's to drive.
 function codeRoomHarness() {
   const made = [], rooms = [], ts = [], flags = [];
+  const codes = { next: "ABC234" };
   const h = harness({
     scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
     netSession: fakeNetSession(made),
     handshake: { acceptAnswer: async () => ({ ok: true, peer: null }) },
     rendezvous: {
-      usingPrivateRelay: () => false, makeCode: () => "ABC234",
+      usingPrivateRelay: () => false, makeCode: () => codes.next,
       hostRoom: async (o) => {
         const room = { code: o.code, onJoiner: o.onJoiner, onFail: o.onFail, stopped: 0, stop() { room.stopped++; }, rotate() {} };
         rooms.push(room);
@@ -1573,7 +1574,7 @@ function codeRoomHarness() {
     await until(() => rooms.length === 2, "onConnected reopened the code for the next guest");
     assert.equal(rooms[1].code, "ABC234");
   }
-  return { h, made, rooms, ts, flags, until, withGuest };
+  return { h, made, rooms, ts, flags, until, withGuest, codes };
 }
 
 test("a joiner whose ICE fails while a guest is in the room reopens the SAME code", async () => {
@@ -2562,5 +2563,22 @@ test("an expired room after a failed connect is taken down with host copy, not r
     assert.match(h.status.textContent, /expired.*NEW CODE/i);
     assert.equal(h.elements.get("vs-code-value").textContent, "", "the dead code is no longer shown");
     assert.equal(h.elements.get("vs-code-share").disabled, true, "SHARE is off for a dead code");
+  } finally { h.lobby.cancel(); }
+});
+
+test("removing one of two code-room guests rotates the room code (the removed player cannot walk back in)", async () => {
+  const { h, rooms, ts, made, until, withGuest, codes } = codeRoomHarness();
+  await withGuest();
+  try {
+    await rooms[1].onJoiner("g2", "answer-2");
+    ts[1].status = "open";
+    await until(() => made.length === 2, "guest 2's session was bound");
+    await until(() => rooms.length >= 3, "the code reopened for a third seat");
+    const before = rooms.length;
+    codes.next = "NEW567";
+    assert.equal(h.lobby.removeGuest("g1"), true);
+    for (const fn of ts[0].closers) fn();   // the fake transport closes only when the test says so
+    await until(() => rooms.length > before, "a room was hosted after the removal");
+    assert.equal(rooms[rooms.length - 1].code, "NEW567", "the old code is not advertised again");
   } finally { h.lobby.cancel(); }
 });

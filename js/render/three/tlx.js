@@ -27,6 +27,19 @@ const TLX = (function () {
     try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window */ }
     return null;
   }
+  // Past the ctx-loss reload budget: record for __apex.diag() without painting
+  // the full-screen error overlay — RendererPicker.showUnavailable already shows
+  // the Graphics unavailable panel and a second tap should not dismiss a card.
+  function recordGfxBudgetExhausted(where, err) {
+    const msg = (err && (err.message || err)) || "unknown";
+    try {
+      const ring = window.__apexErrors || (window.__apexErrors = []);
+      ring.push({ t: Date.now(), kind: "caught", msg: "Caught @ " + where + ": " + String(msg).slice(0, 400),
+                  detail: String((err && err.stack) || "").slice(0, 800) });
+      if (ring.length > 40) ring.shift();
+    } catch (_) { /* never let reporting throw */ }
+    try { Log.error("gfx", "Caught @ " + where + ":", msg); } catch (_) { /* Log absent in harness */ }
+  }
 
   // RELEASE A createTexture() SOURCE AFTER UPLOAD. three keeps texture.image
   // for the texture's life and Texture.dispose() frees only the GPU copy
@@ -1079,8 +1092,7 @@ const TLX = (function () {
             // from the fourth, stop and say so instead.
             if (n === 3) setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
             else {
-              if (typeof window.__apexReportError === "function")
-                window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
+              recordGfxBudgetExhausted("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
               try {
                 if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
                   RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
@@ -4400,8 +4412,7 @@ const TLX = (function () {
         }
         if (n <= 2) { try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
         try {
-          if (typeof window.__apexReportError === "function")
-            window.__apexReportError("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
+          recordGfxBudgetExhausted("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
         } catch (_) { /* shell card absent */ }
       };
       const persistFail = (e, postOnly) => {

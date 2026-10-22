@@ -248,6 +248,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **shot/ab-gallery.mjs** | Capture matched game views or import image pairs into an appendable, portable A/B comparison gallery. | — |
 | **shot/agent.mjs** | Agent toolbelt CLI — boots headless and calls one agent-view surface (`world`/`track`/`scene`/`rollout`/`help`). | agent-view |
 | **shot/apex-capture.mjs** | Parallel headless screenshot sweep across cameras/tracks/modes → `scratch/captures/apex-capture/<purpose>/`. | playwright-probe |
 | **shot/apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON: `apex-eval.mjs monza '__apex.corners()'`. | playwright-probe |
@@ -295,6 +296,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/shot-survey.mjs** | Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON. | survey-track |
 | **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
+| **shot/visor-lab-export.mjs** | Copy the committed Visor Lab authoring files and the game's visor runtime into an existing Site checkout. | — |
 | **shot/webgpu-urban-gallery.mjs** | Produce a verified 4K urban WebGPU screenshot gallery through shot.mjs. | — |
 | **shot/wx-grid.mjs** | Weather×time 24-cell grid + luminance.json (6 weathers incl. storm × 4 TOD). One Chrome boot; --track --turn. | playwright-probe |
 

@@ -121,6 +121,29 @@ function bootImportUI(opts = {}) {
   };
 }
 
+test("visor optics and water settings survive both backup modes and reject invalid choices", () => {
+  const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorRain: "heavy", helmetVisorRunoff: "fast" };
+  const disk = Object.fromEntries(Object.entries(values).map(([key, value]) => ["apex26." + key, value]));
+  for (const mode of ["all", "changes"]) {
+    const saved = boot({ disk }).collect(mode);
+    const restored = boot();
+    restored.loadSettings(saved);
+    for (const [key, value] of Object.entries(values)) {
+      assert.equal(saved.settings.camera[key], value);
+      assert.equal(restored.disk.get("apex26." + key), value);
+    }
+  }
+  const defaults = boot().collect("all").settings.camera;
+  assert.deepEqual(Object.fromEntries(Object.keys(values).map(key => [key, defaults[key]])), {
+    helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorRain: "normal", helmetVisorRunoff: "normal",
+  });
+  const invalid = boot({ disk }).collect("changes");
+  for (const key of Object.keys(values)) invalid.settings.camera[key] = "invalid";
+  const target = boot();
+  target.loadSettings(invalid);
+  for (const key of Object.keys(values)) assert.equal(target.disk.has("apex26." + key), false);
+});
+
 test("backup controls mount once in their own settings page, outside renderer options", () => {
   const b = bootImportUI();
   for (const id of ["pm-settings-changed", "pm-settings-all", "pm-settings-load"]) {

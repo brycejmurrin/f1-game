@@ -1205,8 +1205,10 @@ var PitLane = (function () {
       // still armed past it: the stop paid nothing and was taken anyway.
       // …EXCEPT a car that still owes its second dry compound: a stop re-cut late (or a missed pass at a
       // pre-line box) lands in the final lap, and clearing it there ends in applyCompoundRule's DSQ.
-      if (!c.human && c.pitArmed && st === "none" &&
-          ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget && !owesCompound(c)) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars)))) clearArm(c);
+      // The leader's flag is the same last lap for a lapped car still owing it: same exemption, and the
+      // per-step flagNow() memo rather than a field scan per armed AI per tick.
+      if (!c.human && c.pitArmed && st === "none" && !owesCompound(c) &&
+          ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || flagNow())) clearArm(c);
       const zz = z(), L = zoneFor.total;   // zoneFor IS G.track here: enabled() above saw z() non-null (one façade read, PERF-HUNT-2 S7)
       if (st === "out" && c.pitOutT > 0) c.pitOutT = Math.max(0, c.pitOutT - dt);   // the GO chip's clock
       // Every plan is re-cut once per lap (replan): the player's reference, and
@@ -1438,7 +1440,8 @@ var PitLane = (function () {
       const wetCls = TyreModel.classForTread(wantTread);
       const lifeLaps = (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
       const lapsLeft = Math.max(1, lapsToFlag(c));
-      const plan = c.pitPlan, planned = plan && plan.seq ? plan.seq[(c.pitStops || 0) + 1] : null;
+      // In the box before the fit pitStops already counts THIS stop (pickFor / nextCode's own slot).
+      const plan = c.pitPlan, planned = plan && plan.seq ? plan.seq[(c.pitStops || 0) + (c.pitState === "box" && !c.pitFitted ? 0 : 1)] : null;
       // …and in a wet race EVERY stop fits the wet tread: the plan's classes are
       // dry, so a planned stop on inters bolted on a slick, which was then the
       // wrong tread, and the car pitted again a lap later.

@@ -211,17 +211,19 @@ file changes a screen owned by another.
   count from `--balance-basis` / `--balance-min` instead of `repeat(N, ...)`.
 - `.bigbtn` — `components` + `menus` + `overlays` + `responsive` + `tokens`
 - `.hud-box` / `.hud-label` / `.hud-value` / `.hud-gaps` / `.hud-top` — `hud` + `responsive` (+ `tokens`)
-- `.hud-hidden` — `touch-controls` + `hud`. Hides the driving HUD, including manually positioned instruments detached from the bottom cluster.
+- `.hud-hidden` — `touch-controls` + `hud` (+ `helmet-visor`). Hides the driving HUD, including manually positioned instruments detached from the bottom cluster; the visor refraction filter also steps aside so a clean frame stays unbent.
 - `.hud-bottom` / `.hud-unit` / `.touchbtn` — `hud` + `overlays`
 - `.pc-stickwrap` / `.pc-move-wrap` / `.pc-look-wrap` / `.pc-altcol` / `.pc-btn` —
   `hud` + `photo-studio`. Photo Studio borrows the camera controls, then fits
   their zoom and anchors around its side or bottom dock while it is open.
+- `.pc-uihidden` — `hud` + `helmet-visor`. Photo-mode HIDE HUD: `hud` clears the driving chrome for an unobstructed frame; `helmet-visor` drops the refraction filter with it.
 - `.mirror-controls` — `touch-controls` + `hud`. LEFT-HANDED body class (`js/game.js`): `touch-controls` reverses
   `#hud-dock`, so `#dock-right` paints on the left; `hud` re-points TYRES's `--apex-dock-left` anchor to it, and
   `js/ui/hud.js` `pickDocks()` hands the fit the docks by painted side.
-- `.bc-on` — `hud` + `touch-controls` (+ `watch-transport`). Body class for the broadcast HUD: `touch-controls`
+- `.bc-on` — `hud` + `touch-controls` (+ `watch-transport`, `helmet-visor`). Body class for the broadcast HUD: `touch-controls`
   keeps CAM / PAUSE on the `--tap-hud` band under it (`#bc-pip` hangs under PAUSE), so `--tap-btn`
-  (PAUSE past 150 % BUTTON SIZE) is `body:not(.desktop):not(.bc-on)` only.
+  (PAUSE past 150 % BUTTON SIZE) is `body:not(.desktop):not(.bc-on)` only; `helmet-visor` skips refraction while broadcast is up.
+- `.watch-controls-on` — `watch-transport` + `helmet-visor`. Body class for the WATCH transport strip: `watch-transport` hides the driving HUD chrome and the helmet `::before` shield; `helmet-visor` also drops the world refraction filter so the replay view is not bent.
 - `.dock` — `hud` + `overlays`. The touch-controls dock: defined in `overlays`,
   hidden by a `hud` rule when the pause card is up.
 - `.hud-hide-map` — `hud` + `overlays`. Body class for MAP OFF: `hud` parks the

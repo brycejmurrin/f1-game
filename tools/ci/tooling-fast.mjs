@@ -226,6 +226,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-presentation-vm.test.mjs",
   "tests/unit/car-shade.test.mjs",
+  // W13d (#3414): STYLE Arc Script / Raised Letters sidewall lettering ΔHaus ≥ 20 mm vs medium/soft. ~2 s.
+  "tests/unit/car-wheels-w13d.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
