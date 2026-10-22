@@ -1057,7 +1057,7 @@ const TLX = (function () {
             n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
             sessionStorage.setItem(rk, String(n));
           } catch (_) { n = Math.max(++_sessLostN, _fallbackLossCount() + 1); _rememberFallbackLoss(n); }
-          if (n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
+          if (n <= 2) setTimeout(function () { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: menu still loads; the player just gets no explanation */ } try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
           else {
             // Third loss in one tab. GLX's identical 2-cap ends in a frozen
             // frame because GLX has nothing beneath it. AUTO stays on TLX
@@ -1090,7 +1090,7 @@ const TLX = (function () {
             // reloaded again, forever, on a device whose WebGL2 also dies on
             // use (iOS 18.7.2 RC lost every context — model-viewer#5100):
             // from the fourth, stop and say so instead.
-            if (n === 3) setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
+            if (n === 3) setTimeout(function () { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: menu still loads; the player just gets no explanation */ } try { location.reload(); } catch (_) { /* harness */ } }, 1200);
             else {
               recordGfxBudgetExhausted("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
               try {
@@ -1111,6 +1111,9 @@ const TLX = (function () {
           var n = 0;
           try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
           if (n > 2) return;
+          // Same restore race as GLX: a restore can beat the loss timer, so
+          // stash the notice here too or this reload explains nothing.
+          try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: menu still loads; the player just gets no explanation */ }
           try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
         }, false);
         _createUndo.push(function () { canvas.removeEventListener("webglcontextrestored", onRestored, false); });
@@ -4410,7 +4413,7 @@ const TLX = (function () {
           n = Math.max(++_sessLostN, prior + 1);
           try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ }
         }
-        if (n <= 2) { try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
+        if (n <= 2) { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: menu still loads; the player just gets no explanation */ } try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
         try {
           recordGfxBudgetExhausted("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
         } catch (_) { /* shell card absent */ }

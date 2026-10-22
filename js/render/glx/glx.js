@@ -732,6 +732,9 @@ const GLXBackend = (function () {
       var n = 0;
       try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
       if (n > 2) return;
+      // The restore can win the race against the loss handler's 1.2 s timer:
+      // stash the notice here too, or this reload lands with no explanation.
+      try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: menu still loads; the player just gets no explanation */ }
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);
 

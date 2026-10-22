@@ -666,6 +666,7 @@ const WGX = (function () {
         try { armed = localStorage.getItem("apex26.gfxWgxLevel") === nextRung; } catch (_) { /* blocked */ }
         if (armed) {
           try { Log.warn("gfx", "WGX " + why + " — retrying " + (nextRung === "1" ? "slim" : "minimal") + " WebGPU"); } catch (_) { /* harness */ }
+          try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: menu still loads; the player just gets no explanation */ }
           try { location.reload(); } catch (_) { /* no location */ }
           return;
         }
@@ -680,7 +681,7 @@ const WGX = (function () {
         Log.warn("gfx", "WGX " + why + " — keeping WEBGPU pick" +
           (skipped ? ", this tab falls back to WebGL2" : " (could not arm session skip; not reloading)"));
       } catch (_) { /* harness */ }
-      if (skipped) { try { location.reload(); } catch (_) { /* no location */ } }
+      if (skipped) { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: menu still loads; the player just gets no explanation */ } try { location.reload(); } catch (_) { /* no location */ } }
       else { try { localStorage.setItem("apex26.gfxBackendProbe", "webgpu"); } catch (_) { /* RESET door */ } }
     }
     function _outputBlackSurrender() {
