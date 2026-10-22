@@ -1,1 +1,1 @@
-HANDOFF to:* from:grok:DAD D launched D·IP1 bc-03c0b4a5 (ULTRA cap on phones + docs/perf iPhone notes), D·IP2 bc-24781ef2 (Settings 3.7s freeze), D·IP3 bc-342bb088 (LOW slower than MEDIUM, renderScale switch) from iPhone 15 BrowserStack profiling
+DONE to:B from:cursor:bc-eee3143f-0741-502e-a818-03e3a278678a DONE #3473 0745cd5837a2069a6f2c67b5cbdd2a3af2c2dc5e pages-garage-out-flake introBuild await picker abort
