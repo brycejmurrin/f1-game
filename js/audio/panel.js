@@ -3,7 +3,8 @@
    The mixer is a SettingsNav page (same sheet as DISPLAY), not its own dialog.
    Levels persist.
 
-   Owns: the ♪ master button, MUSIC/SFX switches, both volume sliders, the
+   Owns: the SOUND master button (Lucide music-note icon), MUSIC/SFX
+   switches, both volume sliders, the
    music-source row (ALL / DEFAULT / MY TRACKS / SPOTIFY) and the transport.
    game.js keeps the race start/end soundbtn writes and the first-gesture
    audio unlock — those belong to race flow, not to this panel.
@@ -32,6 +33,20 @@ var AudioPanel = (() => {
     function setDisabled(el, off) { if (el && el.disabled !== !!off) el.disabled = !!off; }
     function setValue(el, value) { if (el && el.value !== value) el.value = value; }
 
+    // The note before SOUND is an inline Lucide SVG in index.html, not the
+    // ♪ character: U+266A is in none of the bundled fonts, so the text glyph
+    // rendered from a host fallback font and the title baseline flaked on
+    // it. Rewrite only the label and put the icon node back, so a toggle
+    // never eats it; js/ui/aria-state.js re-paints the ON/OFF fold span.
+    // The stub panel (js/audio/stub.js) carries the twin of this writer.
+    function setSoundLabel(b) {
+      const btn = els.soundbtn;
+      if (!btn) return;
+      const icon = btn.querySelector ? btn.querySelector("svg.btn-ico") : null;
+      btn.textContent = b ? "SOUND ON" : "SOUND OFF";
+      if (icon && btn.insertBefore) btn.insertBefore(icon, btn.firstChild);
+    }
+
     function setSound(b, fromGesture) {
       G.soundOn = b; store.set("sound", b);
       GameAudio.setEnabled(b);
@@ -46,11 +61,11 @@ var AudioPanel = (() => {
       // iOS/Safari may leave it suspended. Setting the master first also makes
       // createCtx() build the gain graph at the right level immediately.
       if (b && fromGesture) GameAudio.init();
-      // "♪ ON" read as ambiguous — the state of what? The word makes it a
-      // labelled state (this is the MASTER gate: engine and SFX too, so
+      // "SOUND ON" — the word matters: "ON" alone read as ambiguous, the
+      // state of what? This is the MASTER gate (engine and SFX too, so
       // SOUND, not MUSIC). index.html's static markup is the other writer
-      // and must carry the same strings.
-      els.soundbtn.textContent = b ? "♪ SOUND ON" : "♪ SOUND OFF";
+      // and must carry the same label.
+      setSoundLabel(b);
       els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
       if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }
       else if (G.state === "menu") GameAudio.startMusic(-1);
