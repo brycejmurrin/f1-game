@@ -38,7 +38,7 @@ let _backendBound = false;
 function strikesFor(raw, backend) {
   if (raw == null) return 0;
   const m = /^([a-z0-9]+):(\d+)$/.exec(raw);
-  if (!m) return +raw || 0;
+  if (!m) return 0;
   return m[1] === backend ? +m[2] : 0;
 }
 function storedBackendPreference() {
@@ -203,7 +203,8 @@ try {
     pref = "webgl2";
     // THE LEDGER IS PER BACKEND (#3514): "<backend>:<n>". A strike TLX earned is no
     // verdict on a WGX the player picked by hand afterwards; a global count retired that
-    // pick on its first death. A bare legacy number names no backend and still counts.
+    // pick on its first death. A bare legacy number names no backend: unattributable,
+    // it retires nothing (Merlin's #3547 call — it may be exactly the leaked strike).
     let strikes = 2;   // unreadable storage cannot count strikes: treat as final
     try { strikes = strikesFor(localStorage.getItem(STRIKE_KEY), armed) + 1; } catch (_) { /* blocked storage */ }
     const retire = strikes >= 2;
