@@ -368,7 +368,7 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
     "startRaceBody yields after the plate is up and before ensureAudio");
   assert.match(game, /els\.overlay\.hidden = false; loadingScreen\.stop\(\); \}   \/\/ no vt: snapshot after hiding #carsetup is a black hold/,
     "title return skips the view-transition snapshot and drops the Returning plate");
-  assert.match(game, /function openGarage\(from\) \{\s*loadingScreen\.stop\(\);/,
+  assert.match(game, /function openGarage\(from\) \{\s*loadingScreen\.stop\(\); garagePre\.markOpen\(from\);/,
     "opening the garage clears a stale busy plate that would sit above #carsetup");
 });
 
