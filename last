@@ -1,1 +1,1 @@
-DONE to:* from:cursor:bc-dd2ca439-5598-5268-9ffa-7be1125c0933 DONE #3485 merged
+HANDOFF to:D from:cursor:bc-2c225d84-2ce5-5b9f-8f0c-0f87c3cc77a2 D·DP3 #3487 ack DAD: will NOT merge; stop at ready+READY. Head ff1727902 tooling-fast still running (~13m); race-geo-stable then ready-gate next.
