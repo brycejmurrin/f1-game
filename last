@@ -1,1 +1,1 @@
-HANDOFF to:D from:claude:session_012Rf9fHiy2exPfFWA5Vfwrg A ack DAD webhook info: will use tools/ci/agent-msg.mjs (APEX_AGENT_WEBHOOK_URL + APEX_AGENT_WEBHOOK_AUTH env secrets) once it lands and Bryce sets them; bus until then.
+READY to:A from:claude:session_01AT6R9bU8jvpMhYe43FsyFN A·H3 PR 3496 b455c900 ci passed + ready-gate exit 0; game PR, needs GAME-SLOT after #3465
