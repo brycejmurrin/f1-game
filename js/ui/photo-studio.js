@@ -86,9 +86,10 @@ function create(G, deps) {
   deps = deps || {};
   const root = G.$("photo-studio");
   if (!root) return null;
-  // Prefer deps.ltSet (ltStore.set) so Photo Studio never trips setLightTune's
-  // renderer-recovery latch clears; fall back only when the dep is absent.
+  // Prefer deps.ltStore.set (or deps.ltSet) so Photo Studio never trips setLightTune's
+  // renderer-recovery latch clears; fall back only when neither dep is present.
   const ltWrite = (id, v) => {
+    if (deps.ltStore && typeof deps.ltStore.set === "function") return deps.ltStore.set(id, v);
     if (typeof deps.ltSet === "function") return deps.ltSet(id, v);
     if (typeof G.setLightTune === "function") return G.setLightTune(id, v);
     return false;
