@@ -8,7 +8,7 @@ The browser helper is under `skills/f1-dev-tools/scripts/browser.js`; the Node c
 
 ## Existing MCPs
 
-The plugin consumes the five MCP servers already configured by the game checkout; it does not start a second copy or add a hosted service. See [`docs/AGENT-SURFACE.md`](../../docs/AGENT-SURFACE.md) for the checkout-wide MCP catalog and concurrency rules.
+The plugin consumes the six MCP servers already configured by the game checkout; it does not start a second copy or add a hosted service. See [`docs/AGENT-SURFACE.md`](../../docs/AGENT-SURFACE.md) for the checkout-wide MCP catalog and concurrency rules.
 
 | Server | Use | Fallback when the MCP is unavailable |
 |---|---|---|
@@ -17,6 +17,7 @@ The plugin consumes the five MCP servers already configured by the game checkout
 | `chrome-devtools` | Serialized live-page console, network, heap and performance inspection | The repository Chrome/Playwright harness documented by the checkout |
 | `js-debugger` | Parent-owned source breakpoints, stepping and paused scopes on an existing local Chrome page | Persistent `bash tools/mcp/js-debugger-mcp.sh serve-http`, then separate `call debugger_*` clients; see [debugger setup](../../docs/research/AGENT-JS-DEBUGGER-MCP.md) |
 | `apex-lsp` | Definition (with body), references with enclosing functions, callers, module outlines, hover and new-since-HEAD diagnostics over `js/` via TypeScript 7 `tsc --lsp` | `bash tools/mcp/lsp-mcp.sh def <Name|Head.member> --body` (`refs`, `callers`, `outline`, `sym`, `hover`, `diag`); see [LSP-MCP](../../docs/notes/LSP-MCP-2026-10-18.md) |
+| `browserstack` | Official BrowserStack MCP (real devices/browsers, Live/Automate, test management) via the pinned `@browserstack/mcp-server`; reads `BROWSERSTACK_USERNAME` / `BROWSERSTACK_ACCESS_KEY` from the environment only | `bash tools/mcp/browserstack-mcp.sh run` (stdio); `bash tools/mcp/browserstack-mcp.sh status` needs no credentials |
 
 Use one browser server and one browser process at a time. The repository MCP configuration is the source of truth; the plugin advertises these names for routing and does not install or launch them.
 The debugger attaches to that same parent-owned local page. A pause stops its

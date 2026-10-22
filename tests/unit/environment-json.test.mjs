@@ -218,6 +218,7 @@ test(".cursor/environment.json exists and bootstraps chrome MCP", () => {
   assert.deepEqual(names, [
     "apex-lsp",
     "apex-tools",
+    "browserstack",
     "chrome-devtools",
     "js-debugger",
     "playwright-official",
@@ -298,7 +299,7 @@ test(".cursor/environment.json allowlist covers every stdio MCP command in .mcp.
   }
   assert.deepEqual(
     [...allowByName.keys()].sort(),
-    ["apex-lsp", "apex-tools", "chrome-devtools", "js-debugger", "playwright-official"],
+    ["apex-lsp", "apex-tools", "browserstack", "chrome-devtools", "js-debugger", "playwright-official"],
   );
 });
 

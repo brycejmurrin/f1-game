@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// @doc Materialize the two Apex-reviewed chrome-devtools-mcp 1.7.0 fixes without mutating npm or clone sources.
-// Upstream source (v1.7.0):
+// @doc Version gate for chrome-devtools-mcp: materialize the Apex 1.7.0 fixes; 1.11.0 passes unpatched; else fail closed.
+// Upstream source (v1.7.0, the patched pin):
 // https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/v1.7.0/src/tools/input.ts
 // https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/v1.7.0/src/McpContext.ts
 // Tool contract: https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/v1.7.0/docs/tool-reference.md
@@ -13,6 +13,19 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const PATCH_ID = 'apex-dialog-close-v1';
 export const EXPECTED_VERSION = '1.7.0';
+// Versions audited to carry BOTH patched fixes upstream, served unpatched —
+// any other version fails closed in prepareSource below. 1.11.0 evidence
+// (re-audit 2026-10-21): dialog-blocked input actions are handled upstream
+// since 1.10.0 (ChromeDevTools/chrome-devtools-mcp#2794: the click handler
+// catches the locator failure and reports "opened a dialog" when one is
+// open), and close_page refreshes the pages snapshot at response time —
+// McpResponse calls createPagesSnapshot() whenever the response includes
+// pages, so the selected-page fallback runs before the response is built
+// (plus the close_page guard-order fix, upstream #3042). Verified live
+// against the unpatched 1.11.0 package: a click that opens alert()
+// completes and reports the dialog, and closing the selected page answers
+// with the surviving page selected.
+export const UNPATCHED_VERSIONS = Object.freeze(['1.11.0']);
 export const DEFAULT_GUARDS = Object.freeze({
   'build/src/tools/input.js': 'a6fbc87b0f1d3dde17cd7f721610a1a06df980de0409d873422bebbed0fcdb4a',
   'build/src/McpContext.js': '61b457a04cf654f7370d453b68a23a3ce5969951714efbd9ff1aa884afe10c5c',
@@ -139,6 +152,15 @@ function tryAcquireLock(lock, cacheKey) {
 export function materializeRuntime({ sourceRoot, cacheRoot = path.join(ROOT, 'scratch/chrome-devtools-runtime'), guards = DEFAULT_GUARDS, lockWaitMs = 10_000, lockPollMs = 100 } = {}) {
   assert.ok(sourceRoot, 'sourceRoot is required');
   sourceRoot = fs.realpathSync(sourceRoot);
+  const pkg = JSON.parse(fs.readFileSync(path.join(sourceRoot, 'package.json'), 'utf8'));
+  assert.equal(pkg.name, 'chrome-devtools-mcp', `unexpected package: ${pkg.name}`);
+  if (UNPATCHED_VERSIONS.includes(pkg.version)) {
+    // Audited upstream-fixed release: no copy, no transform — serve the
+    // package's own built bin exactly as published.
+    const bin = path.join(sourceRoot, 'build/src/bin/chrome-devtools-mcp.js');
+    assert.ok(fs.existsSync(bin), `chrome-devtools-mcp ${pkg.version} is audited unpatched but has no built bin at ${bin}`);
+    return bin;
+  }
   const { sourceHashes, patchedFiles, patchedHashes, transformDigest } = prepareSource(sourceRoot, guards);
   const dependencies = fs.realpathSync(dependencyRoot(sourceRoot));
   const identity = { package: `chrome-devtools-mcp@${EXPECTED_VERSION}`, patchId: PATCH_ID, transformDigest, sourceRoot, dependencyRoot: dependencies, sourceHashes };
@@ -184,7 +206,7 @@ export function materializeRuntime({ sourceRoot, cacheRoot = path.join(ROOT, 'sc
 function cli() {
   const args = process.argv.slice(2);
   if (args.includes('--help')) {
-    process.stdout.write('usage: chrome-devtools-runtime.mjs --source-root PATH [--cache-root PATH]\nMaterialize the version-checked Chrome MCP runtime; prints its CLI path.\n');
+    process.stdout.write('usage: chrome-devtools-runtime.mjs --source-root PATH [--cache-root PATH]\nVersion-gate the Chrome MCP runtime (patched 1.7.0 materialized, audited 1.11.0 passed through, anything else fails closed); prints its CLI path.\n');
     return;
   }
   const sourceIndex = args.indexOf('--source-root');

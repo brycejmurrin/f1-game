@@ -9297,6 +9297,14 @@
         "tests/unit/gfx-debug-overlay.test.mjs"
       ]
     },
+    "js/perf/gfx-escalation.js": {
+      "onReloadBudgetExceeded": [
+        "tests/unit/gfx-escalation.test.mjs"
+      ],
+      "registerMenuRecover": [
+        "tests/unit/gfx-escalation.test.mjs"
+      ]
+    },
     "js/perf/governor.js": {
       "_floorTier": [
         "tests/unit/light-store-perchunk-pin.test.mjs",
@@ -9747,6 +9755,9 @@
     "js/perf/thermal-drift.js": {
       "drift": [
         "tests/unit/thermal-drift.test.mjs"
+      ],
+      "*": [
+        "tests/unit/perf-governor.test.mjs"
       ]
     },
     "js/perf/three-inspector.js": {
@@ -12660,6 +12671,7 @@
       ],
       "setRenderScale": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/gfx-escalation.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],

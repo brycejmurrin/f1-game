@@ -35,7 +35,7 @@ const LiveryTex = (function () {
   // The livery atlases are the biggest thing on the GPU, and that is MEASURED
   // rather than assumed: __apex.texCensus() on a full montreal grid reported
   // 146.67 MB of them against 11.33 MB of baked material arrays and 13.8 MB for
-  // the whole packed world VBO of a mean circuit (notes/PERF-FINDINGS.md §2v).
+  // the whole packed world VBO of a mean circuit (notes/PERF-FINDINGS.md §2av).
   // Ten times the geometry. One authored atlas with its mip chain is ~26.7 MB.
   //
   //   tier                 player   AI     upload px        notes

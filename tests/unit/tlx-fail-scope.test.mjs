@@ -71,6 +71,36 @@ test("a throw in the SUN depth pass still disables the sun (M14)", () => {
   assert.equal(S.carEnabled, true);
 });
 
+function bootWgpu(isMobile) {
+  const renderer = { backend: { isWebGPUBackend: true }, getRenderTarget: () => null, setRenderTarget() {},
+    render() {}, autoClear: true };
+  const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} },
+    Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
+  vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
+  const sys = ctx.window.TLXShaders.shadowSys(mk(), mk(), { renderer, isMobile, softwareGL: false });
+  return { sys, S: sys.S };
+}
+
+test("a WebGPU phone does not build the PCSS blocker (fixed-R phone rule, §2q)", () => {
+  // §2q: the shadow pass is 40.4 MB of TLX's phone excess and jetsam
+  // headroom is the phone constraint. colorPcss always excluded phones;
+  // the WebGPU leg of the blocker gate did not, so the one phone class
+  // that runs WebGPU (Safari 26) allocated the 512² R32F blocker target
+  // and PCSS sampling GLX withholds from every phone.
+  const { S } = bootWgpu(true);
+  assert.equal(S.enabled, true, "the sun map itself still builds on a phone");
+  assert.equal(S.pcssEnabled, false, "no blocker pass and no PCSS sampling — the fixed-R look GLX gives every phone");
+  assert.equal(S.carEnabled, false, "the car map stays unbuilt on phones");
+  assert.equal(S.lampEnabled, false, "the lamp map stays unbuilt on phones");
+});
+
+test("a WebGPU desktop still builds the PCSS blocker", () => {
+  const { S } = bootWgpu(false);
+  assert.equal(S.pcssEnabled, true, "desktop WebGPU keeps PCSS — the gate is phones only");
+  assert.equal(S.carEnabled, true);
+  assert.equal(S.lampEnabled, true);
+});
+
 test("TLX post chain: re-callable factory, rebuilt at the next realloc, bound label kept (M13)", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /function buildPost\(\) \{/, "the post chain is built by a function that can run again");

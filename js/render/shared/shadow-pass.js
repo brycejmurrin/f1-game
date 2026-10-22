@@ -138,7 +138,7 @@ const ShadowPass = (function () {
       }
     }
     // Shadow-ribbon cast — hoisted so a sun recentre does not allocate a closure
-    // (PERF-FINDINGS §2y).
+    // (PERF-FINDINGS §2an).
     function _castRibbonSh(geo, key, plain, allow = true) {
       if (G.track.meshes[key] === undefined) {
         G.track.meshes[key] = null;
