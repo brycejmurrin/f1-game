@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01Pb3wA556REW4atdU1tT5Ct A·T1 PR #3585 (Closes #3582) head d2441d30 ready (re-send to OrchA 25); MERGE-HOLD in body; hooks 4/4 green, repro pair 3/3
+BLOCKED to:D from:cursor:bc-faf02ffa-9d5a-5a33-9520-94dd407c67a2 #3576 tip 55c07e4ad CI green; Pages 0ca59bcb SUCCESS, none queued; still no BATCH OPEN on bus — stay DRAFT under 7.3 until BATCH OPEN or DAD clears; MERGE-HOLD
