@@ -6,6 +6,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -55,20 +56,20 @@ test("GLX dedupes repeated webglcontextlost before spending reload budget", () =
 });
 
 test("game.js wires GfxEscalation to quitToMenuAfterCtxLost", () => {
-  const game = read("js/game.js");
-  assert.ok(game.includes("GfxEscalation.registerMenuRecover(quitToMenuAfterCtxLost)"));
-  assert.ok(game.includes("installRaceEntrySoften"));
+  const union = gameSource();
+  assert.ok(union.includes("GfxEscalation.registerMenuRecover(quitToMenuAfterCtxLost)"));
+  assert.ok(union.includes("installRaceEntrySoften"));
   assert.ok(!read("js/perf/gfx-escalation.js").includes("localStorage.setItem(\"apex26.envProbeOff\""));
 });
 
 test("race-entry soften does not persist envProbeOff to storage", () => {
-  const game = read("js/game.js");
-  assert.ok(game.includes("_raceEntryEnvProbeSession"));
-  assert.ok(game.includes("clearRaceEntrySoften"));
-  const soften = game.slice(game.indexOf("function installRaceEntrySoften()"), game.indexOf("// Same latch for PER-CHUNK LAMPS"));
+  const union = gameSource();
+  const soften = symbolSource("function installRaceEntrySoften()");
+  assert.ok(union.includes("_raceEntryEnvProbeSession"));
+  assert.ok(union.includes("clearRaceEntrySoften"));
   assert.ok(!soften.includes("localStorage.setItem"));
   assert.ok(soften.includes("envProbeOptOut"));
   assert.ok(soften.includes("softwareRaster"));
   assert.ok(soften.includes("setRenderScale(0.72)"));
-  assert.ok(game.includes("!_raceEntryEnvProbeSession"));
+  assert.ok(union.includes("!_raceEntryEnvProbeSession"));
 });

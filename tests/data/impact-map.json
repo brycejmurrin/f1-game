@@ -6393,9 +6393,6 @@
       "initRainDrops": [
         "tests/unit/light-presets.test.mjs"
       ],
-      "installRaceEntrySoften": [
-        "tests/unit/gfx-escalation.test.mjs"
-      ],
       "introBuild": [
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
