@@ -543,5 +543,8 @@ test("FOG ground mist out-thickens every other weather and clears the shaders' f
       assert.ok(fog > m, `${id} day fog mist ${fog} must exceed ${wx} ${m}`);
     }
     assert.ok(fog >= 0.6, `${id} day fog mist ${fog} too thin for the fill gate`);
+    // Bryce 2026-10-22: a night fog keeps round 1's lighter mist (lamp glow stays down).
+    const { G, atmo } = boot(id); G.raceTimeOfDay = "night"; G.raceWeather = "fog"; atmo.applyRaceSettings();
+    assert.ok(G.frame.groundMist <= 0.7, `${id} night fog mist ${G.frame.groundMist} must stay under the non-fog cap`);
   }
 });

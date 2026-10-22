@@ -574,10 +574,12 @@ function _applyRaceBody() {
     else if (G.raceWeather === "overcast") gm = Math.max(gm, 0.34);
     // Fog sits above the shaders' heavy-mist fill gate (1.1-1.5 x MIST DENSITY), so
     // fog reads close in on every circuit (Bryce 2026-10-21: "thicker close in").
-    else if (G.raceWeather === "fog") gm = Math.max(gm, 0.9);
+    // A NIGHT fog keeps round 1's lighter mist (0.58): the heavy fill caught the
+    // lamp glow and lifted night fog again (Monaco 50 -> 57); Bryce pulled it back.
+    else if (G.raceWeather === "fog") gm = Math.max(gm, isNightSession ? 0.58 : 0.9);
     const _mb = G.track && G.track.def ? _trackAtmoBias(G.track.def) : 0;   // +overcast/humid, -arid
     gm *= 1.0 + clamp(_mb, -0.6, 0.6) * 0.5;
-    G.frame.groundMist = clamp(gm, 0, G.raceWeather === "fog" ? 0.9 : 0.7);
+    G.frame.groundMist = clamp(gm, 0, G.raceWeather === "fog" && !isNightSession ? 0.9 : 0.7);
   }
   // Live lighting-tuner overrides on the CONDITION-derived values
   // Re-derived fresh from the branch values every call (applyRaceSettings re-runs
