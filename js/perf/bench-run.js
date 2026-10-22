@@ -215,7 +215,7 @@ const BenchRun = (function () {
     if (skip && skip.offsetParent) skip.click();
     const steps = [Object.assign({ id: "idle" }, await measure(5000, 2000))];
     const tabs = () => Array.from(D.querySelectorAll('#cs-tabs [role="tab"]')).filter((b) => !b.disabled && b.offsetParent);
-    const name = (b) => String(b.textContent || "").trim().split(/\s+/)[0].toLowerCase();
+    const name = (b) => String(b.id || "").replace(/^cs-tab-/, "") || String(b.textContent || "").trim().toLowerCase();   // setup-sheet.js csTabId
     for (const id of tabs().map(name)) {
       const b = tabs().find((x) => name(x) === id); if (!b) continue;
       b.click(); steps.push(Object.assign({ id: "tab " + id }, await measure(2500, 800)));
