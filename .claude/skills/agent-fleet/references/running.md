@@ -30,8 +30,18 @@ the acting session.
 - A worker is **stalled** when its state has not changed and its branch has
   not moved for ~90 min, or it passed its caps. Ask once, then interrupt and
   relaunch with NEW evidence or a narrower OWNED, never the same prompt.
-- Keep one safety-net timer (`send_later` / `subscribe_timer`, ~50 min, later
-  ~4 h) while workers run; drop it when every PR is merged or closed.
+- **Bus routine (Bryce 2026-10-22: "set routine to check the bus every few mins").**
+  From the `ORCH <letter> LIVE` line until no fleet work is live, keep two timers:
+  1. a TICK every ~3 min: one `send_later` at a time whose message runs the wake
+     pass (ReadNotifications, `fleet-bus.mjs read --to <letter>`, `pr-board.mjs`,
+     READY → `merge-gate.mjs`) and re-arms itself; report changes only;
+  2. a recurring SAFETY NET, `create_trigger` `cron_expression: "0 * * * *"`,
+     `initiation: human_request`, bound to this session: it re-arms the tick
+     chain if it broke, then runs the same pass. Recurring schedules under 1 h
+     are refused (`*/5` measured 2026-10-22: "the minimum interval is 1 hour"),
+     so the few-minute cadence is the `send_later` chain, not the cron.
+  Cursor hosts use `subscribe_timer` for both. At hand-off, `delete_trigger` your
+  own safety net (it fires into your session only) and let the successor arm its own.
 - Each wake also lists every open PR with no live owner session (Bryce requires
   one per PR); start an owner (role-pr-owner.md) or say why not. `pr-board`
   does not print this yet: check `get_session` per owner.
