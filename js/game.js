@@ -2723,9 +2723,7 @@ function startRace() {
   practiceMode = false;   // before loadingInfo() reads it: the body clears it only after several awaits
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
-  // Pack retry uses a scratch GL readback on some backends; on SwiftShader that
-  // stall mid race-entry can lose the main context (#3584). Hardware keeps the
-  // idle prefetch; software defers to after the grid is up (startRaceBody).
+  // Software GL defers pack retry until after grid (#3584); hardware keeps idle prefetch here.
   if (typeof Assets !== "undefined" && Assets.retry && !PerfGov.softwareRaster()) Assets.retry();
   // Launches that bypass RACE! (Data Hub, Daily) never ran its gesture work: the gyro was never attached, and
   // quitToMenu dropped the landscape lock while the page stayed fullscreen (no fullscreenchange to re-apply it).
