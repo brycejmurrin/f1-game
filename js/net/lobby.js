@@ -2006,7 +2006,7 @@ const NetLobby = (function () {
       "#howtoplay,#career,#career-offers,#career-history,#career-guide,#select," +
       "#teampicker,#carsetup,#photo-studio,#season-setup,#track-detail," +
       "#race-settings,#customize,#trackdesigner,#standings,#quali,#spotifypanel," +
-      "#lighting,#camtune,#flyby,#freecam,#garrival,#duel-picker,#datahub"
+      "#lighting,#camtune,#flyby,#freecam,#garrival,#duel-picker,#datahub,#bench"
     );
     function blockingTitleSheet() {
       if (typeof document.querySelectorAll !== "function") return null;

@@ -1,0 +1,1 @@
+New: SETTINGS › METRICS › BENCHMARK… opens a test page: pick WEBGPU vs WEBGL2 (four legs, alternating, reloads between them) or THIS PATH, tap RUN and leave the phone; it races a seeded dry Monza through the GPU TEST phases, times cold and warm race entry, restores your renderer and reopens on a results summary with SAVE FILE and COPY.

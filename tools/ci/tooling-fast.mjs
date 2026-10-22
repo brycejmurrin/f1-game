@@ -164,6 +164,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/bash-guard-hardening.test.mjs",
   "tests/unit/battle-earcon.test.mjs",
   "tests/unit/behind-ship.test.mjs",
+  // BENCHMARK (js/perf/bench-run.js): the leg order, path prefs and the per-path summary of the results file. VM, ~0.1 s.
+  "tests/unit/bench-run.test.mjs",
   // BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.
   "tests/unit/bitmap-decode-worker.test.mjs",
   "tests/unit/blip-voice-pool.test.mjs",
