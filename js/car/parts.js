@@ -754,7 +754,7 @@ const Parts = (function () {
         "podWidth", "shoulderHeight", "undercut", "coke", "tailWidth", "coverHeight",
         "servicePanel", "heatShield", "chimney", "scoopLip"]),
       aero: Object.freeze(["lvl", "beam", "drs", "vane", "plate", "casc", "swan", "tvane",
-        "arch", "gill", "duct", "board", "slot",
+        "arch", "gill", "duct", "sduct", "board", "slot",
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
         "floorEdge", "floorCut", "diffuserRise", "fin",
         // B·D3 period aero opt-in fields: absent = shipped mesh.
