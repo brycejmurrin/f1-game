@@ -189,7 +189,7 @@ const BenchRun = (function () {
     leg.state = "done";
     return true;
   }
-  // Every apex26.* key but the plan: the garage run clicks real controls (a livery pick saves), so it puts them all back.
+  // Every apex26.* key but the plan (run() takes it, finishPlan puts it back).
   function snapshot() {
     const o = {};
     try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf("apex26.") === 0 && k !== KEY) o[k] = localStorage.getItem(k); } } catch (_) { /* blocked storage */ }
@@ -216,7 +216,6 @@ const BenchRun = (function () {
   }
   async function garageLeg(plan, leg) {
     const D = document;
-    plan.restore = snapshot(); save(plan);
     const t0 = now(), open = D.getElementById("mb-garage");
     if (!open) { leg.state = "failed"; leg.reason = "no GARAGE button"; return false; }
     open.click();
@@ -268,7 +267,6 @@ const BenchRun = (function () {
     }
     if (_busy) return; _busy = true;
     const leg = plan.legs[plan.i];
-    if (plan.restore && !(leg && leg.state === "booting")) { await restore(plan.restore); delete plan.restore; }
     if (leg && leg.state === "running") { leg.state = "reloaded"; leg.reason = "the page reloaded during this leg"; plan.i++; save(plan); }
     else if (leg && leg.state === "booting") {
       const ok = await runLeg(plan);
@@ -283,6 +281,9 @@ const BenchRun = (function () {
   function run(testId) {
     if (load() && load().state === "running") return false;
     const plan = newPlan(testId, readPrefs());
+    // Every apex26.* key as it was, put back by finishPlan: a race starts the PHONE TEST recorder (apex26.phoneRec)
+    // and counts toward onboarding, a garage leg saves livery picks. A benchmark leaves no trace.
+    plan.restore = snapshot();
     save(plan); log("start " + plan.test + " " + plan.legs.length + " legs");
     startLeg(plan);
     return true;
