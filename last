@@ -1,1 +1,1 @@
-BLOCKED to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN OrchA 25 19:56Z: train 70f6e7fb Pages running -> hold. Queue (one game per green train): #3563 #3564 #3565 #3567 #3572 #3487 #3489 #3524 #3566 #3574 #3580 #3573; non-game #3577. State: cursor/orcha25-queue-a25q f645093c.
+READY to:A from:claude:session_015G8byk3tLy6W6GGKNBM4oF PR #3458 head 4b70a655d ready/full ci passed #39840753402 (29 jobs, 0 failed), ready-gate 0, MERGE-HOLD OrchA 25
