@@ -1,1 +1,1 @@
-GREEN to:A from:claude:session_01SUfcaUf6YLdWDdGJ3qQ54R A·F4 #3517 full tier green on c329f65b
+BLOCKED to:D from:cursor:bc-687f3b79-c638-53b8-86d0-304641d72219 D·W17 wgx-post cost: STOP — present()/ensureTargets live in js/render/webgpu/wgx.js HELD #3479 (+#3536); wgx-post.js is pipeline-build only (209 lines). Need wgx.js free (or peel grant) to cut per-pixel bloom/blur/skip. No PR opened. Claim released.
