@@ -21,11 +21,11 @@ const DataTelemetryModel = (function () {
     }
     return { t: t, d: d };
   }
-  function interp(xs, ys, x) {
-    if (!xs.length || !isFinite(x)) return NaN;
+  function interp(xs, ys, x, end = xs.length) {
+    if (!end || !isFinite(x)) return NaN;
     if (x <= xs[0]) return ys[0];
-    if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
-    let lo = 0, hi = xs.length - 1;
+    if (x >= xs[end - 1]) return ys[end - 1];
+    let lo = 0, hi = end - 1;
     while (lo < hi) { const m = (lo + hi) >> 1; if (xs[m] < x) lo = m + 1; else hi = m; }
     if (xs[lo] === x) return ys[lo];
     const x0 = xs[lo - 1], x1 = xs[lo], f = (x - x0) / ((x1 - x0) || 1);
@@ -33,13 +33,18 @@ const DataTelemetryModel = (function () {
   }
   function distAtT(cum, t) { return interp(cum.t, cum.d, t); }
   function timeAtDist(cum, dist) {
-    // Only the prefix before the first unknown interval can be inverted.
-    const end = cum.d.findIndex(function (d) { return !isFinite(d); });
-    if (end !== -1) {
-      if (!end || dist > cum.d[end - 1]) return NaN;
-      return interp(cum.d.slice(0, end), cum.t.slice(0, end), dist);
+    const d = cum.d;
+    let end = d.length;
+    // cumDist's accumulation never becomes finite again after an unknown
+    // interval: d is a finite prefix followed by a nonfinite suffix. Find
+    // that boundary without rescanning/copying the whole lap per delta query.
+    if (end && !isFinite(d[end - 1])) {
+      let lo = 0, hi = end;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (isFinite(d[m])) lo = m + 1; else hi = m; }
+      end = lo;
+      if (!end || dist > d[end - 1]) return NaN;
     }
-    return interp(cum.d, cum.t, dist);
+    return interp(d, cum.t, dist, end);
   }
 
   // Bounded 128-step distance grid. Brake arms at <=10%, fires at >=20%;

@@ -1148,10 +1148,15 @@ function frametimeBenchReset() {
   try {
     const types = PerformanceObserver.supportedEntryTypes;
     if (!types || types.indexOf("longtask") < 0) return;
-    _ftObs = new PerformanceObserver((list) => {
-      for (const e of list.getEntries()) _ftLt++;
+    const start = performance.now();
+    const observer = new PerformanceObserver((list) => {
+      if (_ftObs !== observer) return;
+      // Entries use the same performance time origin as now(). A task that
+      // began before reset belongs to the previous window, even if delivered late.
+      for (const e of list.getEntries()) if (e.startTime >= start) _ftLt++;
     });
-    _ftObs.observe({ type: "longtask", buffered: true });
+    _ftObs = observer;
+    observer.observe({ type: "longtask" });
   } catch (_) {
     _ftObs = null;
   }

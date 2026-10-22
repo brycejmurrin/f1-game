@@ -75,6 +75,13 @@ var ErsLayer = (function () {
     param.setTargetAtTime(target, t, tau);
     param._ersAim = target;
   }
+  // Ten mute-ramp time constants retain the audible tail. Oscillators keep
+  // running; the first live update aims their current pitch before the gain.
+  function moving(node, on, t, tau) {
+    if (on) { node._ersMuteUntil = undefined; return true; }
+    if (node._ersMuteUntil === undefined) node._ersMuteUntil = t + 10 * tau;
+    return t < node._ersMuteUntil;
+  }
 
   let ctx = null, dest = null;
   let deployOsc = null, deployHp = null, deployG = null;
@@ -197,13 +204,15 @@ var ErsLayer = (function () {
     if ((!on || s.boostTune === 0) && wasBoost) silence(t);
     wasBoost = boostActive;
     const sGain = sustainGain(boostActive, energy, s);
+    if (moving(deployG, on, t, 0.10) && deployOsc) aim(deployOsc.frequency, deployHz(deploy, energy), t, 0.06, 1e-4);
+    if (moving(harvestG, on, t, 0.08)) {
+      if (harvestOsc) aim(harvestOsc.frequency, harvestHz(brake), t, 0.08, 1e-4);
+      if (harvestBp) aim(harvestBp.frequency, harvestHz(brake), t, 0.08, 1e-4);
+    }
+    if (moving(sustainG, on, t, 0.07) && sustainOsc) aim(sustainOsc.frequency, SUSTAIN_HZ, t, 0.10, 1e-4);
     aim(deployG.gain, dGain, t, deploy > 0 ? 0.05 : 0.10);
     aim(harvestG.gain, hGain, t, 0.08);
     aim(sustainG.gain, sGain, t, 0.07);
-    if (deployOsc) aim(deployOsc.frequency, deployHz(deploy, energy), t, 0.06, 1e-4);
-    if (harvestOsc) aim(harvestOsc.frequency, harvestHz(brake), t, 0.08, 1e-4);
-    if (harvestBp) aim(harvestBp.frequency, harvestHz(brake), t, 0.08, 1e-4);
-    if (sustainOsc) aim(sustainOsc.frequency, SUSTAIN_HZ, t, 0.10, 1e-4);
   }
 
   function attached() { return !!(ctx && deployOsc); }

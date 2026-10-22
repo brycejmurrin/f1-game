@@ -1,0 +1,30 @@
+# Live debugger — HUD / menus / input (B·H28, 2026-10-21)
+
+Lane: phone HUD, menus and input at 844x390 touch. Branch `cursor/live-debug-hud-1-a7k2`.
+
+| id | file:line | severity | verdict | evidence |
+|---|---|---|---|---|
+| H28-1 | tests/specs/menu-traversal.spec.js:350 ("pause menu + DISPLAY page") | low | BY-DESIGN (box budget, not a product bug) | Local SwiftShader, `--repeat-each=3`: 3/3 hit the 120 s test timeout (twice parked in `openPause` at :371, once in `walk`'s rAF settle at :156). A rerun with a 20 s cap on that wait never fired its catch: the 120 s budget was already spent before :371, so the race boot + track build dominates here (spec-timings: ~25–52 s on llvmpipe). A bare boot, `race("bahrain")`, `park`, `headless(true)`, Escape opens the pause menu in under 0.1 s (`hidden:false`, top `pausemenu`). No 5 s wait reproduced; `waitWhereChanged`'s 5 s default (:175) is the only 5 s wait in the spec and its `where` key changes on every Escape/B. |
+
+Not yet hunted: angles 1–4 (HUD clipping at 844x390/932x430, tap-target floor vs title fit, one-step title BACK, settings persistence). Angles 2 and 3 need Bryce's call before shipping.
+
+| H28-2 | js/ui/setting-deps.js:273,298-299,310,398-401 and `describe` (:277) | medium (garage livery-drag lag, from B·H30 G3) | CONFIRMED-LIVE by B·H30 (MutationObserver, 844x390 touch, 20 drag steps); CODE-TRACED + unit-tested here | `SettingDeps.refresh()` runs after every `input`/`change`/`click` anywhere (capture listener) and rewrote unchanged DOM each pass: reason `textContent` (childList -/+), `data-dep-off`, reason `hidden`, `aria-describedby`. Each is a mutation record that wakes AriaState and ScrollFade (layout read); B·H30's CPU x4 profile: scroll-fade ~2.5 s, aria-state ~2.9 s, setting-deps ~0.6 s per 150 steps. Fix: write on change. Test `a refresh that changes nothing writes nothing to the DOM` fails before (every rule wrote 2–5 times on an idempotent pass), passes after. Not measured: post-fix profile (needs the garage drag probe, `scratch/h30/drag-probe.mjs` on B·H30's branch). The second suggestion (skip refresh for inputs outside the settings roots) is not taken: it would change when deps refresh. |
+
+| H28-3 | js/ui/aria-state.js:71 (`syncGroup`), :123 (`syncHashNav`) | low | CONFIRMED-LIVE by B·H30 (15 no-op `aria-pressed` writes on #cs-unlimited per 20-step livery drag, after #3442 took SettingDeps from ~1,000+ records to 0) | `setAttribute("aria-pressed", …)` ran on every pass; `aria-pressed` is not in AriaState's own observer filter, so no loop, only a no-op mutation record that re-wakes ScrollFade. Same shape for the active `aria-current` link. Fixed in #3443 (write on change); test `AriaState sync writes aria-pressed / aria-current only when the value changes` fails before, passes after. |
+| H28-4 | js/ui/hud-layout.js `PRESETS` (BIG, CORNERS) | medium (high-severity overlaps) | CONFIRMED-LIVE (`hud-survey --cam chase --device phone-landscape-844x390 --preset <p>`, touch, monza) | SHIPPED: 0 findings. CORNERS: 5 (gearbox 791..897 crosses the 844 edge; ENERGY and TYRES over both steer buttons, 3 high). BIG: 19 (tower under the CHASE button, gearbox over SPEED/ERS, 2 high). The presets are laid out for the 1280/1920 desktop row. Bryce chose (AskUserQuestion, 2026-10-21): hide BIG/CORNERS on touch. Fixed in #3445 (`presetFits`; `applyPreset` refuses; picker options disabled); test fails before, passes after. Stills (local): `artifacts/hud-survey/h28-still-{default,corners,big}/`. |
+| H28-5 | js/ui/hud-layout.js `PRESETS` (CLEAN) | low–medium | CONFIRMED-LIVE, FIXED in #3445 (Bryce: hide on touch) | CLEAN on the same phone chase cell: 10 medium overlaps (tower × gap chips by ≤ 10 px; map × tyre 109x45 px; gearbox × OT / AERO; energy × OT / AERO). SHIPPED is clean, so the overlaps come from the 85–90 % scales. Bryce chose (AskUserQuestion, 2026-10-21): hide it on touch like BIG/CORNERS; folded into #3445 (`TOUCH_UNFIT` now lists big, corners, clean; test `BIG, CORNERS and CLEAN are not offered on a touch phone`). |
+
+## Angles not pursued, and the dry one
+
+- **Angle 2 (landscape tap-target floor that still fits the title in 343 px)** and **angle 3 (one-step title BACK, ~8 spec updates, navigation contract)**: Bryce answered "Neither, stop here" (AskUserQuestion, 2026-10-21). Not pursued. Standing decision "Fit wins, drop bigger taps" stays.
+- **Angle 4 (settings persistence edges)**: DRY. A scratch VM probe over the shipped `SettingsExport.SPEC` (not committed): ALL export → load into a fresh store → ALL export is a fixed point (175 applied, 0 skipped, desktop and mobile); 104 of 105 scalar rows (oneOf alternative / flipped boolean / default + 1) survive CHANGES export → import; the one miss, `padRest`, was the probe's out-of-range value (`|v| <= 0.5`), refused correctly.
+- **Angle 5 (menu-traversal wait)**: see H28-1, BY-DESIGN (box budget).
+
+## Round summary
+
+| PR | finding | state at FINAL |
+|---|---|---|
+| #3442 | H28-2 SettingDeps write-on-change | merged (519bb11d); B·H30 measured ~1,000+ → 0 mutation records on a 20-step livery drag with #3441 |
+| #3443 | H28-3 AriaState write-on-change | merged |
+| #3445 | H28-4 / H28-5 BIG, CORNERS, CLEAN not offered on touch | merged (b9e50d25) |
+| #3449 | note rows | merged |

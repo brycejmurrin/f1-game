@@ -686,6 +686,12 @@
           .and(vUV.y.lessThan(C.ssrTopUV))            // sky/horizon seam gate
           .and(depthAt(vUV).lessThan(0.9999)), () => {
           const P = vec3(ssrViewPos(vUV)).toVar();
+          // A shorter road range bounds low-tier work; paint keeps its own mask.
+          const roadFar = select(C.ssrQuality.greaterThan(1.5), vec2(-12.0, -42.0),
+            select(C.ssrQuality.greaterThan(0.5), vec2(-18.0, -60.0), vec2(-22.0, -78.0))).toVar();
+          // Both masks below are zero outside these ranges: skip their normal depth taps.
+          If(C.reflect.greaterThan(0.001).and(P.z.greaterThan(roadFar.y))
+            .or(C.carReflect.greaterThan(0.001).and(P.z.greaterThan(-55.0))), () => {
           const nT = C.reflTexel.mul(3.0).toVar();
           const dpx = ssrViewPos(vUV.add(vec2(nT.x, 0.0))).sub(P).toVar();
           const dpy = ssrViewPos(vUV.add(vec2(0.0, nT.y))).sub(P).toVar();
@@ -705,15 +711,12 @@
           If(Nv.z.lessThan(0.0), () => { Nv.assign(Nv.negate()); });
           If(dot(Nv, upVSn).lessThan(-0.25), () => { Nv.assign(Nv.negate()); });
           const upDot = dot(Nv, upVSn).toVar();
-          // A shorter road range bounds low-tier work; paint keeps its own mask.
-          const roadFar = select(C.ssrQuality.greaterThan(1.5), vec2(-12.0, -42.0),
-            select(C.ssrQuality.greaterThan(0.5), vec2(-18.0, -60.0), vec2(-22.0, -78.0))).toVar();
           const roadMask = smoothstep(0.25, 0.55, upDot)
-            .mul(smoothstep(C.ssrNear, C.ssrNear.mul(2.8), P.z))
-            .mul(smoothstep(roadFar.x, roadFar.y, P.z).oneMinus()).toVar();
+            .mul(smoothstep(C.ssrNear.mul(2.8), C.ssrNear, P.z).oneMinus())
+            .mul(smoothstep(roadFar.y, roadFar.x, P.z)).toVar();
           const carMask = carPx.mul(smoothstep(0.30, 0.65, upDot))
-            .mul(smoothstep(-1.0, -3.0, P.z))
-            .mul(smoothstep(-22.0, -55.0, P.z).oneMinus()).toVar();
+            .mul(smoothstep(-3.0, -1.0, P.z).oneMinus())
+            .mul(smoothstep(-55.0, -22.0, P.z)).toVar();
           // /3 keeps the per-texel meaning under the wider baseline.
           const edgeGrad = length(dpx).add(length(dpy)).div(3.0);
           carMask.mulAssign(smoothstep(0.35, 0.9, edgeGrad).oneMinus());
@@ -729,7 +732,7 @@
             const quality = select(carDomEarly, float(0.0), C.ssrQuality).toVar();
             const marchSteps = select(quality.greaterThan(1.5), int(8), select(quality.greaterThan(0.5), int(16), int(24)));
             const refineSteps = select(quality.greaterThan(1.5), int(1), select(quality.greaterThan(0.5), int(2), int(4)));
-            const stepGrowth = select(quality.greaterThan(1.5), float(1.4), select(quality.greaterThan(0.5), float(1.22), float(1.16)));
+            const stepGrowth = select(quality.greaterThan(1.5), float(1.5), select(quality.greaterThan(0.5), float(1.22), float(1.16)));
             // Jittered fine march js/render/glx/shaders/glsl-post.js.
             const ign = ignoise(fragXY).toVar();
             const pos = vec3(P).toVar();
@@ -835,6 +838,7 @@
               c.mul(0.10).add(reflCol.mul(0.92)));
             c.assign(mix(c, mirrored, mixAmt));
           });
+          }); // receiver range
         });
 
         // Exposure before tone-mapping js/render/glx/shaders/glsl-post.js.

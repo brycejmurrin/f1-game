@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "66f7b125b255f94d5c1957364d96e6de8c9bbbb397127d8c41d1e8ea17335130",
+  "sourceDigest": "7099c0f367871329b73c552bc3e3a84337188f062a1fa8201ef352e3274e43ca",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -729,15 +729,15 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.737258,
       "target": [
-        -162.63,
-        103.07,
-        525.11
+        -161.72,
+        -25.12,
+        525.1
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/donington.js sAir",
       "projectedFrac": 0.61747,
-      "nearestRoadDistanceM": 340.5,
-      "viewDistanceM": 486.6,
+      "nearestRoadDistanceM": 339.9,
+      "viewDistanceM": 487,
       "source": "tests/data/landmarks/donington.json; js/circuits/scenery/donington.js"
     },
     {
@@ -1766,10 +1766,10 @@
       "track": "magny_cours",
       "name": "Control Block",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.996502,
+      "frac": 0.996503,
       "target": [
-        183.58,
-        9.23,
+        183.57,
+        8.99,
         -126.93
       ],
       "stationMethod": "nearest-road-projection",

@@ -3226,12 +3226,23 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
   assert.notEqual(drawSky, -1, "drawSky moved");
   assert.match(src.slice(drawSky, drawSky + 1100), /frameSky\.zenith\s*\|\|\s*frameSky\.skyZenith/,
     "drawSky must keep the Color fallback in lockstep with the sky node");
-  // softContent("sky") IS (softwareGL || softGpu()), with the apex26.tlxForceHw
-  // escape folded in — the fallback stays the software default for players.
+  // softContent("sky") IS softwareGL && !_forceHw.has("sky") (softGpu() is out
+  // on purpose: headless on a real GPU keeps the full sky) — the fallback is
+  // the software default only; apex26.tlxForceHw=sky lifts it.
   assert.match(src.slice(drawSky, drawSky + 1100), /softContent\("sky"\) && sky\.fallbackNode/,
     "software GL and software WebGPU must arm the zenith-only fallback, not the full SKY_FS node");
   assert.match(read("js/render/three/tsl-sky.js"), /fallbackNode/,
     "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
+});
+
+test("B·H26-R2: TLX skyState() tells the zenith-only software fallback from the full sky", () => {
+  // skyState().on is true for both materials, so a software-GL still with no clouds or stars read as a phone gap.
+  const src = read("js/render/three/tlx.js");
+  const at = src.indexOf("skyState() {");
+  assert.notEqual(at, -1, "skyState moved");
+  assert.match(src.slice(at, at + 900),
+    /fallback: !!\(skyMesh && skyMatFallback && skyMatFallback !== skyMatFull && skyMesh\.material === skyMatFallback\)/,
+    "skyState must report whether the armed sky material is the fallback");
 });
 
 test("TLX late sky depth-tests less-equal and does not write depth", () => {
@@ -4752,6 +4763,90 @@ test("WGX SSR consume/march/sinT match GLX (no wetness remul, dry sheen lives)",
     "do not redeclare gateSrc — Dawn refuses SSR and sheds the whole post chain");
   assert.equal((post.match(/min\(gateSrc \/ 0\.20, 1\.0\)/g) || []).length, 1,
     "a merge leftover applied the dry damp twice (and squared the sheen)");
+});
+
+test("LOW SSR retains a bounded, matching march budget across renderers", () => {
+  const glx = read("js/render/glx/shaders/glsl-post.js");
+  const tsl = read("js/render/three/tsl-post.js");
+  const wgx = read("js/render/webgpu/wgsl-post.js");
+  const number = (source, pattern) => { const m = source.match(pattern); assert.ok(m, "LOW shader budget is explicit"); return Number(m[1]); };
+  const budgets = [
+    [number(glx, /int marchSteps = ssrQ > 1\.5 \? (\d+)/), number(glx, /int refineSteps = ssrQ > 1\.5 \? (\d+)/), number(glx, /float stepLen = ssrQ > 1\.5 \? ([\d.]+)/), number(glx, /float stepGrowth = ssrQ > 1\.5 \? ([\d.]+)/)],
+    [number(tsl, /const marchSteps = select\(quality\.greaterThan\(1\.5\), int\((\d+)\)/), number(tsl, /const refineSteps = select\(quality\.greaterThan\(1\.5\), int\((\d+)\)/), number(tsl, /const stepLen = select\(quality\.greaterThan\(1\.5\), float\(([\d.]+)\)/), number(tsl, /const stepGrowth = select\(quality\.greaterThan\(1\.5\), float\(([\d.]+)\)/)],
+    [number(wgx, /let marchSteps = select\(select\(24, 16, roadReduced\), (\d+), roadLow\)/), number(wgx, /let refineSteps = select\(select\(4, 2, roadReduced\), (\d+), roadLow\)/), number(wgx, /if \(roadLow\) \{ stepLen = ([\d.]+); \}/), number(wgx, /if \(roadLow\) \{ stepLen = stepLen \* ([\d.]+); \}/)]
+  ];
+  assert.deepEqual(budgets[1], budgets[0]); assert.deepEqual(budgets[2], budgets[0]);
+  const [march, refine, first, growth] = budgets[0];
+  assert.equal(march, 8); assert.equal(march + refine, 9, "coverage must not quietly restore the expensive HIGH budget");
+  const reach = Array.from({length: march}, (_, i) => first * growth ** i).reduce((a,b) => a+b, 0);
+  assert.ok(reach >= 60 && reach <= 75, "reach the checked distant reflectors with the same bounded march");
+});
+
+test("SSR mask expressions have portable bounds and preserve near/far fades", () => {
+  // Execute production expressions, including their quality-dependent ranges.
+  // The scalar adapter implements only the TSL operations those expressions use.
+  class Scalar {
+    constructor(value) { this.value = Number(value); }
+    valueOf() { return this.value; }
+    mul(other) { return scalar(this.value * other); }
+    oneMinus() { return scalar(1 - this.value); }
+    greaterThan(other) { return this.value > other; }
+    toVar() { return this; }
+  }
+  const scalar = value => new Scalar(value);
+  const vec2 = (x, y) => ({ x: scalar(x), y: scalar(y), toVar() { return this; } });
+  const smoothstep = (edge0, edge1, value) => {
+    assert.ok(Number(edge0) < Number(edge1), `undefined smoothstep bounds: ${edge0}, ${edge1}`);
+    const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+    return scalar(t * t * (3 - 2 * t));
+  };
+  const expression = (source, name) => {
+    const declaration = source.match(new RegExp(`\\b(?:const|let|var|float|vec2)\\s+${name}\\s*=\\s*([^;]+);`));
+    assert.ok(declaration, `missing production expression: ${name}`);
+    return declaration[1];
+  };
+  const backends = [
+    ["GLX", "js/render/glx/shaders/glsl-post.js"],
+    ["TLX", "js/render/three/tsl-post.js"],
+    ["WGX", "js/render/webgpu/wgsl-post.js"]
+  ];
+  for (const [backend, file] of backends) {
+    const source = code(file);
+    const road = expression(source, "roadMask"), car = expression(source, "carMask");
+    for (const near of [-1.0, -2.5]) for (const quality of [0, 1, 2]) {
+      const scope = {
+        smoothstep, vec2, float: scalar,
+        select: backend === "TLX" ? (condition, yes, no) => condition ? yes : no
+          : (no, yes, condition) => condition ? yes : no,
+        uSsrNear: near, ssrNear: near, uSsrQuality: quality, roadQuality: quality,
+        C: { ssrNear: scalar(near), ssrQuality: scalar(quality) },
+        upDot: scalar(1), carPx: scalar(1), P: { z: scalar(0) }
+      };
+      const context = vm.createContext(scope);
+      const evaluate = expr => vm.runInContext(expr, context, { timeout: 1000, filename: absSrc(file) });
+      if (backend === "WGX") {
+        scope.roadFadeStart = evaluate(expression(source, "roadFadeStart"));
+        scope.roadFadeEnd = evaluate(expression(source, "roadFadeEnd"));
+      } else scope.roadFar = evaluate(expression(source, "roadFar"));
+      const [start, end] = [[-22, -78], [-18, -60], [-12, -42]][quality];
+      const check = (expr, z, expected) => {
+        scope.P.z = scalar(z);
+        const actual = Number(evaluate(expr));
+        assert.ok(Math.abs(actual - expected) < 1e-12,
+          `${backend}, quality ${quality}, near ${near}, z ${z}: ${actual} != ${expected}`);
+      };
+      for (const [z, expected] of [
+        [near + 1, 0], [near, 0], [near * 1.9, 0.5], [near * 2.8, 1],
+        [start, 1], [(start + end) / 2, 0.5], [end, 0], [end - 1, 0]
+      ]) check(road, z, expected);
+      for (const [z, expected] of [[0, 0], [-1, 0], [-2, 0.5], [-3, 1],
+        [-22, 1], [-38.5, 0.5], [-55, 0], [-56, 0]]) check(car, z, expected);
+      scope.upDot = scalar(0);
+      check(road, -10, 0); check(car, -10, 0);
+      scope.upDot = scalar(1); scope.carPx = scalar(0);
+      check(car, -10, 0);
+    }
+  }
 });
 
 test("WGX SAA widens roughness before wet like GLX", () => {

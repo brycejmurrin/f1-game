@@ -218,7 +218,7 @@ test("GRAPHICS: LOW must not zero look-defining post (bloom/SSAO/god-rays)", () 
     assert.doesNotMatch(game, new RegExp(`po\\.${id} = PerfGov\\.tier\\(\\) >= 4`),
       `po.${id} must not hard-zero on GRAPHICS: LOW`);
   }
-  assert.match(game, /PostCommon\.roadReflection\(po, frame\.wetness \|\| 0, _ssrPo, PerfGov\.tier\(\), PerfGov\.autoTier\(\)\)/,
+  assert.match(game, /PostCommon\.roadReflection\(po, frame\.wetness \|\| 0, _ssrPo, PerfGov\.tier\(\), PerfGov\.autoTier\(\),\s*_roadReflectionTransition,/,
     "road reflections distinguish the user quality budget from measured overload");
   assert.match(game, /po\.carReflect = PerfGov\.tier\(\) >= 2 \? 0 : undefined/,
     "car-paint SSR stays on the user cost floor");

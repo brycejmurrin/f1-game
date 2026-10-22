@@ -269,6 +269,54 @@ test("compare gaps stay at the reference finish while a slower lap keeps playing
   assert.equal(view.g.board[2].dl.textContent, "—");
 });
 
+test("telemetry gauges preserve stable text, update rounded/null values and repair external edits", () => {
+  const player = vm.runInContext("DataTelemetryPlayer", ctx).create({}, { paintFrame() {} });
+  let writes = 0;
+  const cell = () => {
+    let text = "";
+    const classes = new Set();
+    return { get textContent() { return text; }, set textContent(v) { text = String(v); writes++; },
+      style: {}, classList: { toggle(k, on) { if (on) classes.add(k); else classes.delete(k); }, contains: (k) => classes.has(k) } };
+  };
+  const lane = (finish) => ({
+    car: [0, finish].map((t) => ({ t, speed: 180.1, gear: 6, throttle: 100, brake: 0, rpm: 10000, drs: 12 })),
+    cum: { t: [0, finish], d: [0, 1000] },
+  });
+  const laps = [lane(80), lane(60), lane(84), lane(88)];
+  const view = { cursorT: 40, primary: laps[0], compare: laps[1], laps, rpmMax: 12000,
+    g: { speed: [cell(), cell()], gear: [cell(), cell()], thr: [cell(), cell()], brk: [cell(), cell()],
+      rpm: [cell(), cell()], drs: [cell(), cell()], delta: cell(),
+      board: laps.map((_, i) => ({ spd: cell(), dl: cell(), ref: i === 0 })) } };
+  player.paintFrame(view);
+  assert.equal(view.g.delta.textContent, "-10.00s");
+  assert.equal(view.g.delta.classList.contains("dh-neg"), true);
+  assert.equal(view.g.board[1].dl.textContent, "-10.00");
+  const stableWrites = writes;
+  for (let i = 0; i < 60; i++) player.paintFrame(view);
+  assert.equal(writes, stableWrites, "unchanged four-lane frames never replace gauge text nodes");
+  for (const sample of laps[0].car) sample.speed = 180.4;
+  player.paintFrame(view);
+  assert.equal(writes, stableWrites, "a changed sample with the same rounded display needs no text write");
+  for (const sample of laps[0].car) Object.assign(sample, { speed: 180.6, gear: 0, drs: 0 });
+  player.paintFrame(view);
+  assert.equal(view.g.speed[0].textContent, "181");
+  assert.equal(view.g.board[0].spd.textContent, "181");
+  assert.equal(view.g.gear[0].textContent, "N");
+  assert.equal(view.g.drs[0].textContent, "—");
+  assert.equal(view.g.drs[0].classList.contains("dh-on"), false);
+  for (const sample of laps[0].car) Object.assign(sample, { speed: null, gear: null, drs: null });
+  player.paintFrame(view);
+  assert.equal(view.g.speed[0].textContent, "—");
+  assert.equal(view.g.board[0].spd.textContent, "—");
+  assert.equal(view.g.gear[0].textContent, "—");
+  view.g.speed[1].textContent = "external edit";
+  player.paintFrame(view);
+  assert.equal(view.g.speed[1].textContent, "180", "DOM equality repairs outside edits on the next frame");
+  view.cursorT = 0; player.paintFrame(view);
+  assert.equal(view.g.delta.textContent, "+0.00s", "rewinding updates the gap");
+  assert.equal(view.g.delta.classList.contains("dh-neg"), false);
+});
+
 test("integrated distance retains unknown intervals and legitimate stops", () => {
   const model = vm.runInContext("DataTelemetryModel", ctx);
   for (const speed of [null, undefined, NaN, Infinity]) {
@@ -284,6 +332,49 @@ test("integrated distance retains unknown intervals and legitimate stops", () =>
   const stopped = model.cumDist([{ t: 0, speed: 180 }, { t: 1, speed: 0 }, { t: 2, speed: 180 }]);
   assert.equal(model.distAtT(stopped, 1), 0);
   assert.equal(model.distAtT(stopped, 2), 50);
+});
+
+test("distance inversion respects every finite-prefix boundary and complete-lap clamping", () => {
+  const model = vm.runInContext("DataTelemetryModel", ctx);
+  for (const n of [0, 1, 2, 3, 4, 7, 8, 9, 63, 64, 65]) {
+    for (const missing of [-1, 0, 1, Math.floor(n / 2), n - 1]) {
+      const car = Array.from({ length: n }, (_, t) => ({ t, speed: t === missing ? null : 180 }));
+      const cum = model.cumDist(car);
+      const end = missing < 0 ? n : Math.min(n, Math.max(1, missing));
+      const label = `${n} samples, missing speed at ${missing}`;
+      if (!n) { assert.ok(Number.isNaN(model.timeAtDist(cum, 0)), label); continue; }
+      assert.equal(model.timeAtDist(cum, -1), 0, label);
+      assert.equal(model.timeAtDist(cum, 0), 0, label);
+      assert.equal(model.timeAtDist(cum, (end - 1) * 25), (end - 1) / 2, label);
+      assert.equal(model.timeAtDist(cum, (end - 1) * 50), end - 1, label);
+      if (end < n) assert.ok(Number.isNaN(model.timeAtDist(cum, (end - 1) * 50 + .01)), label);
+      else assert.equal(model.timeAtDist(cum, n * 50), n - 1, label);
+      for (const invalid of [NaN, Infinity, -Infinity]) assert.ok(Number.isNaN(model.timeAtDist(cum, invalid)), label);
+    }
+  }
+  const stopped = model.cumDist([{ t: 0, speed: 180 }, { t: 1, speed: 0 },
+    { t: 2, speed: 0 }, { t: 3, speed: 180 }, { t: 4, speed: null }]);
+  assert.equal(model.timeAtDist(stopped, 0), 0, "the first timestamp owns a stationary plateau");
+  assert.equal(model.timeAtDist(stopped, 25), 2.5);
+  assert.equal(model.timeAtDist(stopped, 50), 3);
+  assert.ok(Number.isNaN(model.timeAtDist(stopped, 51)));
+});
+
+test("distance inversion reads current arrays when a finite prefix is replaced or extended", () => {
+  const model = vm.runInContext("DataTelemetryModel", ctx);
+  const cum = model.cumDist([{ t: 0, speed: 180 }, { t: 1, speed: 180 },
+    { t: 2, speed: null }, { t: 3, speed: 180 }]);
+  assert.ok(Number.isNaN(model.timeAtDist(cum, 75)));
+  cum.d[2] = 100; cum.d[3] = 150;
+  assert.equal(model.timeAtDist(cum, 75), 1.5, "repairing the suffix cannot reuse a stale prefix boundary");
+  cum.d.push(200); cum.t.push(4);
+  assert.equal(model.timeAtDist(cum, 175), 3.5, "appending a sample is visible without rebuilding the object");
+  cum.d.splice(1, 4, NaN, NaN, NaN, NaN);
+  assert.ok(Number.isNaN(model.timeAtDist(cum, 25)), "a newly unknown suffix invalidates the old domain");
+  cum.d = [0, 100, 200]; cum.t = [0, 2, 4];
+  assert.equal(model.timeAtDist(cum, 50), 1, "replacing both channels changes the interpolation clock");
+  cum.d.length = cum.t.length = 0;
+  assert.ok(Number.isNaN(model.timeAtDist(cum, 0)));
 });
 
 // Exercise the real controller -> view -> player -> renderer wiring with a
@@ -402,7 +493,7 @@ for (const sampleCount of [8, 9, 801]) test(`telemetry clipping, lane colors and
     frames.delete(id); fn(ts);
   };
   tick(100); tick(1100);
-  assert.equal(popup.querySelector(".dh-gspeed").querySelector(".dh-gval").textContent, 200);
+  assert.equal(popup.querySelector(".dh-gspeed").querySelector(".dh-gval").textContent, "200");
   dom.dispatch(chart, { type: "pointerdown", pointerId: 1, clientX: 160 });
   assert.equal(frames.size, 0, "scrubbing cancels playback");
   dom.dispatch(chart, { type: "pointercancel", pointerId: 1 });

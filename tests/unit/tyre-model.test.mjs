@@ -277,10 +277,24 @@ test("the player's top speed pays for worn rubber, as the AI's does", () => {
   // The AI's vmax took tractionMul; the player's took none, and perfMul only
   // slows the climb to vmax (ACCEL·perfMul·(1 − v/vmax)), never the cap.
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  // updateCar reads tractionMul ONCE per car step into `trMul` (PERF-HUNT-2 S4); either spelling carries it.
+  // updateCar shares this car's tread grip after tyre/pit updates. Its traction
+  // still uses the model's exact long-share equation, and still caps the player.
   assert.match(src, /else if \(c\.human\) vmax \*= (?:tyres\.tractionMul\(c\)|trMul)/,
     "the human branch of the speed target must carry the tyre's traction");
-  if (/vmax \*= trMul/.test(src)) assert.match(src, /\btrMul = tyres\.tractionMul\(c\)/, "trMul is the car's own tractionMul");
+  if (/vmax \*= trMul/.test(src)) {
+    const init = src.match(/\btyreGrip = ([^,;]+), trMul = ([^,;]+)/);
+    assert.ok(init, "the production traction initializer is available");
+    const traction = new Function("tyres", "TyreModel", "c", `const tyreGrip = ${init[1]}; return ${init[2]};`);
+    const model = ctxFor(), car = freshCar(model, 0.74);
+    for (const level of ["off", "real"]) {
+      model.setLevel(level);
+      for (const wear of [0, 0.15, 0.6, 1, 1.5]) for (const temp of [20, T.T_BLANKET, T.optTemp(0.74), 150])
+        for (const grain of [0, 0.4]) for (const blister of [0, 0.7]) {
+          Object.assign(car, { tyreWear: wear, tyreTs: temp, tyreGrain: grain, tyreBlister: blister });
+          assert.equal(traction(model, T, car), model.tractionMul(car), `${level}: wear ${wear}, temperature ${temp}, grain ${grain}, blister ${blister}`);
+        }
+    }
+  }
 });
 
 test("ambient temperature follows a weather arc, not the flip of raceWeather", () => {

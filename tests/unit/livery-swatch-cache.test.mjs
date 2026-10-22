@@ -42,3 +42,28 @@ test("a logo change drops every cached card", () => {
   LT.setTeamLogo("ferrari", null);   // markChanged()
   assert.notEqual(grab(), before, "repainted after markChanged");
 });
+
+// A pick's rebuilt sheet adopts each card's painted canvas (B·H32, 2026-10-21): 113 new canvases, each a
+// getContext + a blit, were ~74 ms of a phone-throttled pick even with the swatch cache above.
+test("swatchCanvas hands the same painted canvas to the next build's card", () => {
+  assert.equal(typeof LT.swatchCanvas, "function", "LiveryTex.swatchCanvas is the card's canvas source");
+  const s0 = LT.swatchStats();
+  const a = LT.swatchCanvas("ferrari", liv, 112, 80, 1);
+  const b = LT.swatchCanvas("ferrari", JSON.parse(JSON.stringify(liv)), 112, 80, 2);
+  assert.equal(b, a, "build 2 adopts build 1's canvas: no new canvas, no blit");
+  assert.equal(LT.swatchStats().reused - s0.reused, 1);
+  assert.equal(a.width, 112); assert.equal(a.height, 80);
+});
+
+test("two cards with one look in the same build get two canvases", () => {
+  const a = LT.swatchCanvas("mclaren", liv, 112, 80, 7);
+  const b = LT.swatchCanvas("mclaren", liv, 112, 80, 7);
+  assert.notEqual(b, a, "one DOM node cannot sit in two cards");
+  assert.equal(LT.swatchCanvas("mclaren", liv, 112, 80, 8), a, "the kept one is still adopted next build");
+});
+
+test("a logo change drops the kept card canvases too", () => {
+  const before = LT.swatchCanvas("ferrari", { ...liv, c1: [0, 1, 0] }, 112, 80, 20);
+  LT.setTeamLogo("ferrari", null);   // markChanged()
+  assert.notEqual(LT.swatchCanvas("ferrari", { ...liv, c1: [0, 1, 0] }, 112, 80, 21), before, "repainted after markChanged");
+});

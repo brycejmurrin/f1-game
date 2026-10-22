@@ -716,6 +716,7 @@ const PhonePad = (function () {
         ids.clear(); anchors.clear(); levels.clear(); el.classList.remove("on"); if (travel) paintLevel(); else off();
       });
       const down = (e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
         ids.add(e.pointerId);
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* not a pointer target */ }
         el.classList.add("on");
@@ -795,7 +796,7 @@ const PhonePad = (function () {
       const steeringKeys = new Set();
       const release = (e) => { if (e && e.pointerId !== steeringPointer) return; steeringPointer = null; if (!e) steeringKeys.clear(); steer = steeringKeys.size ? (Array.from(steeringKeys).pop() === "ArrowLeft" ? -1 : 1) : 0; push(); };
       releases.push((pointersOnly) => release(pointersOnly ? { pointerId: steeringPointer } : undefined)); pointerReleases.push(release);
-      dom.steer.addEventListener("pointerdown", (e) => { if (steeringMode !== "touch" || steeringPointer !== null) return; steeringPointer = e.pointerId; anchorX = e.clientX; steer = 0; try { dom.steer.setPointerCapture(e.pointerId); } catch (_) { /* document release fanout still centers steering when capture is refused */ } e.preventDefault(); push(); });
+      dom.steer.addEventListener("pointerdown", (e) => { if ((e.pointerType === "mouse" && e.button !== 0) || steeringMode !== "touch" || steeringPointer !== null) return; steeringPointer = e.pointerId; anchorX = e.clientX; steer = 0; try { dom.steer.setPointerCapture(e.pointerId); } catch (_) { /* document release fanout still centers steering when capture is refused */ } e.preventDefault(); push(); });
       dom.steer.addEventListener("pointermove", (e) => { if (steeringPointer !== e.pointerId) return; steer = num((e.clientX - anchorX) / Math.max(40, dom.steer.getBoundingClientRect().width * 0.4), -1, 1); push(); });
       dom.steer.addEventListener("pointerup", release); dom.steer.addEventListener("pointercancel", release);
       dom.steer.addEventListener("keydown", (e) => { if (steeringMode !== "touch" || !["ArrowLeft", "ArrowRight"].includes(e.key)) return; e.preventDefault(); if (steeringKeys.has(e.key)) return; steeringKeys.add(e.key); steer = e.key === "ArrowLeft" ? -1 : 1; push(); });
@@ -846,6 +847,7 @@ const PhonePad = (function () {
       const fire = () => { buzz(); if (session) session.event(k); };
       el.addEventListener("click", (e) => { if (!e.detail) { e.preventDefault(); fire(); } });
       el.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
         e.preventDefault();
         el.classList.add("on");
         fire();
@@ -898,7 +900,7 @@ const PhonePad = (function () {
         aim(horiz ? (dx < 0 ? "navLeft" : "navRight") : (dy < 0 ? "navUp" : "navDown"));
       };
       base.addEventListener("pointerdown", (e) => {
-        if (id !== null) return;
+        if ((e.pointerType === "mouse" && e.button !== 0) || id !== null) return;
         id = e.pointerId;
         try { base.setPointerCapture(e.pointerId); } catch (err) { /* not a pointer target */ }
         const b = base.getBoundingClientRect();
@@ -918,6 +920,7 @@ const PhonePad = (function () {
       // In the release nets too: a lost lift otherwise repeats forever and
       // `id` stays set, so the stick refuses every later press.
       releases.push(() => { if (id !== null) up({ pointerId: id }); });
+      pointerReleases.push(up);   // an outside lift must work even when capture was refused
       base.addEventListener("pointerup", up);
       base.addEventListener("pointercancel", up);
       base.addEventListener("lostpointercapture", up);
