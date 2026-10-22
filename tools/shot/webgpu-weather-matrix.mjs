@@ -51,7 +51,7 @@ try {
     localStorage.setItem('apex26.gfxHigh', '1');
     localStorage.setItem('apex26.gfxBootStepMs', '60000');
   });
-  await gotoGame(page, server.url, 180000);
+  await gotoGame(page, `${server.url}?three-devtools=1`, 180000);
   const adapter = await requireHardwareWebGpu(page);
   await page.evaluate(() => window.__apex.agentHelp());
   const launch = chromiumLaunchInfo(browser);
@@ -178,7 +178,7 @@ try {
         schema: 1, commit: COMMIT, captureSourceCommit: process.env.GITHUB_SHA ?? null,
         branch: process.env.GITHUB_REF_NAME ?? null, track, time, weather, label: LABELS[WEATHERS.indexOf(weather)] ?? 'Dry',
         camera, settings: { width: WIDTH, height: HEIGHT, viewport: `${WIDTH}x${HEIGHT}`, dpr: 1, hasTouch: true, reducedMotion: 'no-preference', userAgentOverride: false, seed: 42, renderScale: 1, governor: 'held', physics: 'frozen', renderClock: 0, hud: 'hidden', graphics: 'Ultra' },
-        raceRow: { parkCalls: raceRow.parkCalls, clockHoldRequested: raceRow.clockHoldRequested, parkFrac: CAMERA_FRACS[track], stagedRivals: raceRow.rivals, carCount: raceRow.cars?.length, beganAt: raceRow.beganAt },
+        raceRow: { parkCalls: raceRow.parkCalls, clockHoldRequested: raceRow.clockHoldRequested, parkFrac: CAMERA_FRACS[track], stagedRivals: raceRow.rivals, carCount: raceRow.cars?.length, cars: raceRow.cars?.slice(0, 5), beganAt: raceRow.beganAt },
         lighting: runtime.lighting, lampBake: { required: cut.requiredBake, generationBeforeReset: cut.previousGen, generationAfterReset: cut.afterResetGen, generationAtCapture: runtime.bakeGen, warmupMs: cut.warmupMs, bakeCompletedAt, elapsedMs: Date.now() - settleAt },
         renderer: { adapter, api: runtime.backend?.api, state: runtime.backend, result: renderer },
         readiness: ready, image, pixels, runtime, errors: [...errors], messages: [...messages], launch,
