@@ -1,7 +1,7 @@
 # Fleet A queue — OrchA 23 (session_01LCwqz3kpiVuXkjy8YyJprp)
 
 Live state, branch `cursor/orcha23-queue-a23q` (never merged). Times UTC (Pacific = UTC−7).
-Updated: 2026-10-22 08:09Z. Predecessor: OrchA 22 session_012Rf9fHiy2exPfFWA5Vfwrg (brief: cursor/orcha22-queue-a22q).
+Updated: 2026-10-22 08:32Z. Predecessor: OrchA 22 session_012Rf9fHiy2exPfFWA5Vfwrg (brief: cursor/orcha22-queue-a22q).
 
 ## Timers
 - tick: send_later 3 min chain; safety net trig_01DZhVpFMeeF2EaLD6vDciVV (hourly :59)
@@ -32,3 +32,10 @@ Updated: 2026-10-22 08:09Z. Predecessor: OrchA 22 session_012Rf9fHiy2exPfFWA5Vfw
 
 ## Asks for Bryce
 - Carried: which ideas to build; xAI spend limit; GROK_API_KEY as a repo secret.
+
+## 08:32Z
+- Bryce merged #3497 fd99f297, #3503 d5725d7c. I merged #3521 5f93dfda (2 parents). #3525 READY (full tier).
+- Archived A·H1 A·H3 A·R1 (Bryce: "archive or have them work in parallel").
+- Parallel follow-ups: A·H2 H3-7/H3-8 (js/net/lobby.js, quali-net.js); A·F4 H3-10/H3-9 (real-race-tab.js, netplay.js rejoin); A·F1 H3-11 (js/share QR polarity).
+- Wave 2 (Bryce "launch new sessions"): A·W1 session_01Fsqv6M8vKK4dPQ4feEXz4P Opus boot 3515/3514/3513/3512 (+js/game.js); A·W2 session_01JiMURvzGUNueuJd6GB5Qj2 Opus slow-GPU 3510/3511 (js/perf, garage/arrival.js); A·W3 session_01Wnxkrd19h9eKZkUW6XQfEk Sonnet tools 3505 (expires 10-23)/3507/3506.
+- Lesson: an @cursor mention in a PR comment wakes that PR's Cursor agent (bc-4f8efad5 on #3517, not on D's account). Never @cursor. Only Bryce can stop it from the owning Cursor account.
