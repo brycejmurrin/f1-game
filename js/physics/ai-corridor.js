@@ -43,6 +43,7 @@ const AiCorridor = (function () {
     const reach = Math.max(car.speed, 10) * 1.5;
     const blockerSpeed = snap(blocker, "_snapSpeed", blocker.speed);
     const passT = Math.min(8, ((ctx.blockerGap || 0) + 6.3) / Math.max((ctx.freeSpeed || car.speed) - (ctx.blockerVmax || blockerSpeed), (ctx.vTop || 72) / 72));
+    const ownAccel = acceleration(car);
     for (const other of cars) {
       if (other === car || other.retired || other.finished) continue;
       const oProg = snap(other, "_snapProg", other.prog), oX = snap(other, "_snapX", other.x), oSpeed = snap(other, "_snapSpeed", other.speed);
@@ -50,7 +51,7 @@ const AiCorridor = (function () {
       const gap = ((raw + total / 2) % total + total) % total - total / 2;
       const closing = oSpeed - car.speed;
       // Observed motion only: no privileged knowledge of another driver's input.
-      const accel = acceleration(other) - acceleration(car);
+      const accel = acceleration(other) - ownAccel;
       if (crosses(gap, oX - car.x, closing, -lateral / seconds, seconds, accel)
         || crosses(gap + closing * seconds + .5 * accel * seconds * seconds,
           oX - out.target, closing + accel * seconds, 0, .5, accel)) {

@@ -2774,6 +2774,17 @@ __apex.race("redbull"); __apex.go(); __apex.mirror("on");
 //                 cam: "cockpit", backend: { ready: true, dead: false, w: 173, h: 49, renders: 12, composites: 12, … } }
 ```
 
+Experimental mirror rival-body LOD is disabled by default. Set
+`localStorage.setItem("apex26.mirrorBodyLod", "1")`, select MIRROR ON, then
+reload before the menu prepares the cars. Remove that key and reload to restore
+the default. Field LOD must also remain enabled. Only already-prepared procedural
+rival bodies can simplify; the player, PiP subjects, GLB models and cold cache
+misses retain detailed bodies. Preparation adds bounded mesh memory and loading
+work. Paint/material identity is preserved, but clustered normals can change
+lighting; compare day/night images and physical-device timings before enabling
+this experiment more broadly. Initial AUTO preparation conservatively retains
+detailed bodies because its private camera/software policy is not duplicated.
+
 ### `damage(carIdx?, hit?) → {fwL, fwR, rw, floor, knock, hits, worst, shown} | null`
 
 The DISPLAY-ONLY damage readout of `js/race/damage.js` for car `carIdx`
