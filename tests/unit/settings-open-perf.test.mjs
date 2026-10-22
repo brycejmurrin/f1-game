@@ -41,12 +41,14 @@ test("SettingsNav.show marks apex:settings:show and apex:settings:shown", () => 
   ]);
 });
 
-test("ensureAudio loads LAZY_AUDIO one file at a time (serial chunks)", async () => {
+test("ensureAudio loads LAZY_AUDIO one file at a time while Settings is open", async () => {
   const loaderSrc = read("js/core/script-loader.js");
   const bundlesSrc = read("js/core/lazy-bundles.js");
   const files = ["js/audio/engine.js", "js/audio/panel.js"];
   const injected = [];
   const marks = [];
+  // Settings hub open → settingsUiHot → loadAudioSerial (cold boot stays bulk).
+  const pmsettings = { hidden: false };
   const ctx = vm.createContext({
     console, Promise, setTimeout, clearTimeout, queueMicrotask,
     ApexRoster: {
@@ -71,7 +73,8 @@ test("ensureAudio loads LAZY_AUDIO one file at a time (serial chunks)", async ()
   ctx.window = ctx;
   let inflight = 0, maxInflight = 0;
   ctx.document = {
-    getElementById: () => null,
+    getElementById: (id) => (id === "pmsettings" ? pmsettings : null),
+    activeElement: null,
     createElement() { return { dataset: {}, remove() {} }; },
     head: {
       appendChild(el) {
@@ -103,8 +106,9 @@ test("ensureAudio loads LAZY_AUDIO one file at a time (serial chunks)", async ()
   assert.equal(await lb.ensureAudio(), true);
   assert.equal(readyHooks, 1);
   assert.deepEqual(injected, files, "both audio files inject");
-  assert.equal(maxInflight, 1, "never two audio scripts evaluating at once");
+  assert.equal(maxInflight, 1, "never two audio scripts evaluating at once under open Settings");
   assert.ok(marks.filter((m) => m === "apex:audio:chunk").length >= 2, "a mark per chunk");
+  assert.ok(marks.includes("apex:settings:audio-deferred"));
   assert.ok(marks.includes("apex:audio:ready"));
 });
 
