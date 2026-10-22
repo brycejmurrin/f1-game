@@ -149,11 +149,27 @@ test('patched click action handles dialog and all locator settlements without le
   assert.equal(success.page.listenerCount('dialog'), 0);
 });
 
-test('Chrome wrapper applies the guarded runtime to local and pinned npm backends', () => {
+test('audited 1.11.0 runtime passes through unpatched, untouched and uncached', t => {
+  const f = fixture(); t.after(() => fs.rmSync(f.root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(f.source, 'package.json'), JSON.stringify({ name: 'chrome-devtools-mcp', version: '1.11.0' }));
+  const inputBefore = fs.readFileSync(path.join(f.source, 'build/src/tools/input.js'), 'utf8');
+  const bin = materializeRuntime({ sourceRoot: f.source, cacheRoot: f.cache, guards: f.guards });
+  assert.equal(bin, path.join(f.source, 'build/src/bin/chrome-devtools-mcp.js'), 'the package\'s own built bin is served');
+  assert.equal(fs.readFileSync(path.join(f.source, 'build/src/tools/input.js'), 'utf8'), inputBefore, 'source is not transformed');
+  assert.equal(fs.existsSync(f.cache), false, 'no patched copy is materialized for an unpatched version');
+});
+
+test('materializer still fails closed on an unaudited version', t => {
+  const f = fixture(); t.after(() => fs.rmSync(f.root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(f.source, 'package.json'), JSON.stringify({ name: 'chrome-devtools-mcp', version: '1.12.0' }));
+  assert.throws(() => materializeRuntime({ sourceRoot: f.source, cacheRoot: f.cache, guards: f.guards }), /1\.7\.0 required; found 1\.12\.0/);
+});
+
+test('Chrome wrapper routes local and pinned npm backends through the version gate', () => {
   const wrapper = fs.readFileSync(new URL('../../tools/mcp/chrome-devtools-mcp.sh', import.meta.url), 'utf8');
-  assert.match(wrapper, /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.7\.0"/);
+  assert.match(wrapper, /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.11\.0"/);
   assert.match(wrapper, /npm exec --yes --package="\$MCP_NPM_PACKAGE"/);
-  assert.match(wrapper, /patched_bin="\$\(node "\$PATCHER"/);
-  assert.match(wrapper, /exec node "\$patched_bin"/);
+  assert.match(wrapper, /runtime_bin="\$\(node "\$PATCHER"/);
+  assert.match(wrapper, /exec node "\$runtime_bin"/);
   assert.doesNotMatch(wrapper, /exec npx -y "\$MCP_NPM_PACKAGE"/);
 });

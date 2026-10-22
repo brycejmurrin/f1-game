@@ -157,7 +157,7 @@ ensure_mcp_clones() {
     else
       echo "Cloning chrome-devtools MCP (best-effort; npx pin remains if this fails)…"
       if ! bash "$ROOT/tools/mcp/chrome-devtools-mcp.sh" clone; then
-        echo "WARN: chrome-devtools clone failed; verify uses npx chrome-devtools-mcp@1.7.0" >&2
+        echo "WARN: chrome-devtools clone failed; verify uses npx chrome-devtools-mcp@1.11.0" >&2
       fi
     fi
   fi

@@ -116,7 +116,7 @@ test("playwright-official pin matches the wrapper's audited package and never @l
   // the wrapper server keeps the same pinned package as its network fallback.
   assert.equal(cfg.mcpServers["chrome-devtools-official"], undefined);
   assert.match(fs.readFileSync(path.join(ROOT, "tools/mcp/chrome-devtools-mcp.sh"), "utf8"),
-    /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.7\.0"/);
+    /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.11\.0"/);
   assert.doesNotMatch(JSON.stringify(cfg), /@latest/);
   assert.doesNotMatch(JSON.stringify(cursorCfg), /@latest/);
 });
