@@ -494,16 +494,16 @@ async function loadAudioSerial(skipLeadingYield) {
   }
   return true;
 }
-/** LAZY_AUDIO: one eval at a time when Settings is open or the bundle is multi-file. */
+/** Routes LAZY_AUDIO through serial chunk loads while Settings is open.
+ *  Cold title/boot keeps the bulk loader (audio-smoke: panel create must sync
+ *  sliders from store before the MUSIC page is read). Always-serial for every
+ *  multi-file ensureAudio raced AudioPanel.create and left HTML defaults 5/10. */
 async function loadBackendScripts(files, edges, opts) {
-  if (files === AUDIO_FILES) {
-    if (settingsUiHot()) {
-      audioMark("apex:settings:audio-deferred");
-      await audioYieldToMain("paint");
-      await audioYieldToMain("task");
-      return loadAudioSerial(true);
-    }
-    if (AUDIO_FILES.length > 1) return loadAudioSerial(true);
+  if (files === AUDIO_FILES && settingsUiHot()) {
+    audioMark("apex:settings:audio-deferred");
+    await audioYieldToMain("paint");
+    await audioYieldToMain("task");
+    return loadAudioSerial(true);
   }
   return loadScripts(files, edges, opts);
 }
