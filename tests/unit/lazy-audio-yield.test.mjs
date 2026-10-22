@@ -91,9 +91,9 @@ test("ensureAudio source yields before load and before onAudioReady; skips under
   assert.match(bundles, /setTimeout\(r, 16\)/, "paint yield waits one frame of wall time, not rAF");
   assert.doesNotMatch(bundles, /audioYieldToMain[\s\S]{0,400}requestAnimationFrame/,
     "paint yield must not wait on rAF (garage WebGL stalls frames)");
-  assert.match(bundles, /await audioYieldToMain\("paint"\);\s*const ok = await loadBackendScripts\(AUDIO_FILES/,
-    "paint yield before LAZY_AUDIO script eval");
-  assert.match(bundles, /await audioYieldToMain\("task"\);\s*if \(typeof deps\.onAudioReady/,
+  assert.match(bundles, /await loadAudioSerial\(\)/, "serial per-file load after initial paint yield");
+  assert.match(bundles, /async function loadAudioSerial/, "one script eval per chunk (D·IP2)");
+  assert.match(bundles, /await audioYieldToMain\("task"\);[\s\S]{0,400}typeof deps\.onAudioReady/,
     "task yield before onAudioReady / panel init");
   assert.match(bundles, /Do NOT evaluate LAZY_AUDIO here/, "raceAssets still does not eval audio on title idle (#1135)");
   assert.match(bundles, /el\.rel = "prefetch"/, "late idle HTTP prefetch only");
@@ -115,8 +115,8 @@ test("await ensureAudio resolves after onAudioReady; yields once on real UA", as
   assert.equal(bag.ready, 1, "onAudioReady ran before resolve");
   assert.ok(!ctx.GameAudio._stub, "real engine bound");
   assert.ok(bag.inits >= 1, "restoreOnEngine called GameAudio.init under hasBeenActive");
-  assert.deepEqual(bag.yields, ["sched", "timer", "sched"],
-    "paint = yield+16ms timer; task = yield before onAudioReady");
+  assert.deepEqual(bag.yields, ["sched", "timer", "sched", "sched"],
+    "paint = yield+16ms; serial chunk task yield; task yield before onAudioReady");
 });
 
 test("game-vm UA skips yields but still completes ensureAudio", async () => {
