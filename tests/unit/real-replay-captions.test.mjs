@@ -4,11 +4,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
+let ctx0 = null;
 function fixture({ rate = 1, commentary = false, reel = false, radio = false, sound = false, volume = 0.8 } = {}) {
   const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
     Log: { info() {}, warn() {}, debug() {} },
     Audio: class { constructor() { this.paused = true; } play() { this.paused = false; return Promise.resolve(); } pause() { this.paused = true; } },
+    window: { addEventListener(t, f) { ctx0.keyHandler = f; }, removeEventListener() {} },
     Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
+  ctx0 = ctx;
   vm.runInContext(fs.readFileSync(new URL("../../js/race/real-replay.js", import.meta.url), "utf8"), ctx);
   const drivers = [{ code: "AAA", num: 1, pos: 1 }, { code: "BBB", num: 2, pos: 2 }];
   const cars = drivers.map((d) => ({ code: d.code }));
@@ -29,7 +32,7 @@ function fixture({ rate = 1, commentary = false, reel = false, radio = false, so
   assert.equal(replay.start(options), true);
   // game.js drains accepted cards only when `still` is absent or still true.
   const drain = () => pending.splice(0).filter((card) => !card.still || card.still()).map((card) => card.text);
-  return { replay, options, pending, drain, commentaryCalls };
+  return { replay, options, pending, drain, commentaryCalls, ctx };
 }
 
 test("fallback replay captions cannot drain across seeks, stop, restart or finish", () => {
@@ -90,4 +93,13 @@ test("fallback replay radio captions share timeline ownership whether audio is p
     replay.seek(2); replay.tick(1); replay.stop();
     assert.deepEqual(drain(), [], "radio text is also invalidated by exit");
   }
+});
+
+test("the speed caption names the seat's real driver, not the roster car it sits in", () => {
+  const { replay, options, pending, ctx } = fixture();
+  [...options.seats.values()][0].code = "SAR";   // roster car "AAA" wears Sargeant
+  replay.follow("AAA");
+  pending.length = 0;
+  ctx.keyHandler({ code: "Equal", preventDefault() {}, stopPropagation() {} });
+  assert.match(pending[pending.length - 1].text, /^SAR · /);
 });
