@@ -3484,7 +3484,7 @@ const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
 if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
-const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice } = Menus.create(G);
+const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice, restoreMenuAfterGraphicsReset } = Menus.create(G);
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's
 // wheel spec, decal queue, cockpit rig, planted wheels, warm-ups, GLB body.
 // resolveLivery lives in CustomLiveries; partsVisualKey / drawAeroFlaps / damp
@@ -4262,6 +4262,20 @@ function quitToMenuAfterCtxLost() {
   stashCtxLostNotice();
   loadingScreen.stop();
   quitToMenu();
+  try {
+    resetSetupCam();
+    spMeshBust();
+    garagePre.release();
+    _menuGate.warm = 0;
+    _menuGate.garageWarm = 0;
+    _menuGate.garageReady = false;
+    _carWarm.busy = false;
+    if (gfx && gfx.invalidateSoftPresent) gfx.invalidateSoftPresent();
+    if (canvas) canvas.style.visibility = "";
+    if (!_softEl && gfx && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
+    if (_softEl) _softEl.style.visibility = "";
+  } catch (_) { /* harness: recovery must not throw over teardown */ }
+  if (typeof restoreMenuAfterGraphicsReset === "function") restoreMenuAfterGraphicsReset();
   if (typeof showCtxLostNotice === "function") showCtxLostNotice();
   else if (typeof announce === "function") announce(CTX_LOST_NOTICE_MSG, 5, "info");
 }
