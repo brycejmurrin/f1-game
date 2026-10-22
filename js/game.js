@@ -2637,6 +2637,11 @@ async function startRaceBody() {
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   RaceEntryProfile.mark("gridCountdown:end");
+  if (typeof Assets !== "undefined" && Assets.retry && PerfGov.softwareRaster()) {
+    const run = () => { try { Assets.retry(); } catch (_) { /* optional pack */ } };
+    if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 120000 });
+    else setTimeout(run, 0);
+  }
   // TLX links programs on first draw — warm during LIGHTS only when the pack is
   // already settled (or unsupported/off), else createTextureArray owns the thread.
   // EXCEPT TLX itself (apex26.tlxWarmBeforePack, default on; "0" = the pack gate): its programs never read the pack
@@ -2719,7 +2724,9 @@ function startRace() {
   }
   practiceMode = false;   // before loadingInfo() reads it: the body clears it only after several awaits
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
-  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome(); if (typeof Assets !== "undefined") Assets.retry();
+  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
+  // Software GL defers pack retry until after grid (#3584); hardware keeps idle prefetch here.
+  if (typeof Assets !== "undefined" && Assets.retry && !PerfGov.softwareRaster()) Assets.retry();
   // Launches that bypass RACE! (Data Hub, Daily) never ran its gesture work: the gyro was never attached, and
   // quitToMenu dropped the landscape lock while the page stayed fullscreen (no fullscreenchange to re-apply it).
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
@@ -9015,7 +9022,7 @@ function openGarage(from) {
     if (canvas) canvas.style.visibility = "";
     if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
     if (_softEl) _softEl.style.visibility = "";
-    try { if (gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
+    try { if (gfx.invalidateSoftPresent && !(typeof PerfGov !== "undefined" && PerfGov.softwareRaster())) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
     try { renderSetupPreview(0); } catch (_) { /* mesh/warm may still be settling */ }
   };
   if (from === "pit") { enterGarage(); setupCam.startArrival(); }
