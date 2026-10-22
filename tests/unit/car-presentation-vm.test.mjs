@@ -242,7 +242,8 @@ test("warmCarAssetsAsync builds exactly warmCarAssets' set, one heavy piece per 
   assert.deepEqual(b.got.atlases, a.got.atlases, "the same livery atlases");
   assert.equal(b.v.rec.wheels, a.v.rec.wheels, "the same planted field wheels");
   assert.equal(b.got.solves, a.got.solves, "the same flap solves");
-  assert.equal(b.got.solves, 21, "one per rival (Car3D memoises per recipe; the warm asks once a car)");
+  // 21 rivals (lodWarm) + the player (warmLazyRaceMeshes, D·DP3 flap-mesh mint).
+  assert.equal(b.got.solves, 22, "one per rival plus the player (Car3D memoises per recipe; the warm asks once a car)");
   assert.equal(b.got.uploads, 22, "every atlas pushed to the GPU now (TLX's deferred upload), as the menu prep does");
   assert.equal(a.got.uploads, 22, "the sync warm too, with the knob on");
   assert.equal(b.got.maxSlice, 1, "no task holds more than one heavy piece");
@@ -306,7 +307,7 @@ test("the menu prep solves the rivals' flaps and builds their planted wheels (ca
     const r = warmRig();
     r.v.G.teamIdx = 3; r.v.G.driverIdx = 0;
     await r.v.carDraw.prepareMenuCarAssets(() => true);
-    assert.equal(r.got.solves, 21, "a flap solve per rival, in the menu");
+    assert.equal(r.got.solves, 22, "a flap solve per rival plus the player, in the menu (D·DP3)");
     const wheels = r.v.rec.wheels;
     assert.ok(wheels > 0, "the field wheel pair, in the menu");
     assert.ok(r.got.maxSlice <= 2, "a prep step is at most body + atlas, as before (" + r.got.maxSlice + ")");
