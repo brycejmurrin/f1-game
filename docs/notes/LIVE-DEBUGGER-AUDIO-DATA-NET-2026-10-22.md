@@ -11,3 +11,16 @@ Method: prior-art scout (DEFECT-LEDGER, BUGS.md, notes), code-hunter on js/data 
 | M32 | js/audio/rivals.js:20 | low | NOT RE-VERIFIED | Four rival voice slots vs two on mobile engine; left open. |
 
 Not covered: telemetry*.js, export.js, most of lobby.js reconnect paths, netplay.js, snapshot.js, share/*, real-replay.js, radio-voice voice switch.
+
+## Round 2 (subagent hunts, code-traced)
+
+| id | file:line | sev | verdict | note |
+|---|---|---|---|---|
+| H3-4 | js/race/real-replay.js onKey caption | low | CONFIRMED (VM test) | Speed/follow caption used the roster car's code, not the seated real driver's. Fixed via `followCode()`; `real-replay-captions.test.mjs`. |
+| H3-5 | js/race/race-radio.js speak / radio-lines.js pick | low | CONFIRMED (unit) | A refused card still recorded its variant in the anti-repeat window on every retry. `pick(key, vars, true)` peeks; `commit()` after the card is accepted. `radio-lines.test.mjs`. |
+| H3-6 | js/net/lobby.js:294-308 | med | CONFIRMED (VM test) | Removing one of several guests left the old room code open (no `rotateRoomAfterEvict`). Fixed; `net-lobby-lifecycle.test.mjs`. |
+| H3-7 | js/net/lobby.js:515-533,1723 | low | CODE-TRACED | Last-guest removal on a link/QR room opens a public code room and later shows the guest's "six characters" error to the host. Not fixed. |
+| H3-8 | js/net/lobby.js:2052, quali-net.js | med | PLAUSIBLE | Host backing out of friend quali strands guests. Not fixed. |
+| H3-9 | js/net/netplay.js:996 | low | DEAD-CODE | `NetPlay.rejoin()` has no production caller. |
+| H3-10 | js/data/real-race-tab.js:957 | med | CODE-TRACED | WATCH STOP DUEL can set `seatCode` to an unseated driver; `RealRace.stage()` refuses. Not fixed. |
+| H3-11 | js/share/share-card-layout.js:56 | med | PLAUSIBLE | Share-card QR is light-on-dark; inverted codes fail on many Android scanners. Not measured. |
