@@ -918,26 +918,62 @@ const CarDraw = (function () {
     }
     // Wheel extras and compound rings the per-car draw mints on first sight —
     // one-shot after the field warm so green flag does not grow geoLive (D·DP3).
-    // Shared rival body stays lazy: its Car3D.build is silhouette-keyed like a
-    // caster and would inflate the menu/race warm build census. Not inside
-    // warmCarPhase (D·DP1 owns that).
+    // Not inside warmCarPhase (D·DP1 owns that).
     // `cars`: the menu prep's local field (G.cars is empty until race entry).
-    function warmLazyRaceMeshes(cars) {
-      // Player flaps are not in warmCarPhase's lodWarm (rivals only); mint them here.
-      try {
-        const list = cars || G.cars;
-        const me = list && list.find((c) => c.isPlayer);
-        if (me) warmFlaps(me);
-      } catch (e) { Log.warn("gfx", "player flap mesh warm failed", e); }
-      try {
-        getBrakeRing(); getSpinDisc();
-        if (typeof TyreModel !== "undefined" && TyreModel.AI_CLASS) {
-          for (const k of Object.keys(TyreModel.AI_CLASS)) {
-            const rec = TyreModel.AI_CLASS[k];
-            if (rec && rec.colour) getCompoundRing(rec.colour);
+    // `phase`: "flaps" | "shared" | omit (both). Async warm yields between phases.
+    function warmLazyRaceMeshes(cars, phase) {
+      const doFlaps = !phase || phase === "flaps";
+      const doShared = !phase || phase === "shared";
+      if (doFlaps) {
+        // Player flaps are not in warmCarPhase's lodWarm (rivals only); mint them here.
+        try {
+          const list = cars || G.cars;
+          const me = list && list.find((c) => c.isPlayer);
+          if (me) warmFlaps(me);
+        } catch (e) { Log.warn("gfx", "player flap mesh warm failed", e); }
+        try {
+          getBrakeRing(); getSpinDisc();
+          if (typeof TyreModel !== "undefined" && TyreModel.AI_CLASS) {
+            for (const k of Object.keys(TyreModel.AI_CLASS)) {
+              const rec = TyreModel.AI_CLASS[k];
+              if (rec && rec.colour) getCompoundRing(rec.colour);
+            }
           }
-        }
-      } catch (e) { Log.warn("gfx", "wheel-extra mesh warm failed", e); }
+        } catch (e) { Log.warn("gfx", "wheel-extra mesh warm failed", e); }
+        // Finite cockpit / rear-light LCDs the opening stretch otherwise mints as
+        // gear, speed, LED and throttle/brake states appear.
+        try {
+          if (typeof CarMesh.getBoostFlame === "function") CarMesh.getBoostFlame();
+          const _warmI = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+          if (typeof CarMesh.drawRearLights === "function") CarMesh.drawRearLights(_warmI, 1);
+          getErsBar(); getOtLamp(false); getOtLamp(true);
+          for (let g = 0; g <= 9; g++) getGearDigit(g);
+          for (let d = 0; d <= 9; d++) getSpeedDigit(d);
+          const styles = (CarMesh.LED_ROWS && Object.keys(CarMesh.LED_ROWS)) || ["std"];
+          for (let s = 0; s < styles.length; s++) {
+            for (let lit = 0; lit <= 9; lit++) getLedStrip(lit, styles[s]);
+          }
+          for (let th = 0; th <= 4; th++) {
+            for (let br = 0; br <= 4; br++) {
+              drawWheelExtras(_warmI, { throttleDemand: th / 4, brakeDemand: br / 4, aeroX: 0, xArmed: false }, 0);
+              drawWheelExtras(_warmI, { throttleDemand: th / 4, brakeDemand: br / 4, aeroX: 0.5, xArmed: true }, 0);
+            }
+          }
+        } catch (e) { Log.warn("gfx", "cockpit/LCD mesh warm failed", e); }
+      }
+      if (doShared) {
+        // Shared LOD silhouette + far decimate: otherwise minted when the first rival
+        // crosses flapsM / farBody after green. Team-less ":sh" in the warm census.
+        try {
+          sharedRivalBodyMesh(false);
+          if (!_farRivalBody && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
+            _farRivalKick = true;
+            try { _farRivalBody = G.gfx.createMesh(CarGeometry.decimate(_sharedRivalGeom, FAR_BODY_TRIS)); }
+            catch (e2) { Log.warn("gfx", "far rival body warm failed", e2); }
+            _sharedRivalGeom = null;
+          }
+        } catch (e) { Log.warn("gfx", "shared rival body warm failed", e); }
+      }
     }
     // apex26.carWarmSlice (perf hunt 4 F3.3), default ON: the menu prep also solves the
     // rivals' flaps and builds their planted wheels, the race warm uploads TLX atlases,
@@ -987,18 +1023,20 @@ const CarDraw = (function () {
         }
       }
       if (lodWarm) {
-        if (performance.now() - sliceAt >= budget) {
+        // Two yielded steps: (1) flaps/LCD/wheels (2) shared LOD silhouette build.
+        // Each step is one heavy piece so maxSlice stays 1 (D·DP3).
+        for (const phase of ["flaps", "shared"]) {
           await yieldWarm(); yields++;
           sliceAt = performance.now();
           if (current && !current()) {
-            Log.info("gfx", "race car warm abandoned", { at: cars.length, of: cars.length, yields });
+            Log.info("gfx", "race car warm abandoned", { at: cars.length, of: cars.length, yields, phase });
             return false;
           }
+          const t = performance.now();
+          try { warmLazyRaceMeshes(null, phase); }
+          catch (e) { Log.warn("gfx", "lazy race mesh warm failed", e); }
+          const ms = performance.now() - t; cpuMs += ms; if (ms > maxStepMs) maxStepMs = ms;
         }
-        const t = performance.now();
-        try { warmLazyRaceMeshes(); }
-        catch (e) { Log.warn("gfx", "lazy race mesh warm failed", e); }
-        const ms = performance.now() - t; cpuMs += ms; if (ms > maxStepMs) maxStepMs = ms;
       }
       Log.info("gfx", "race car assets ready", { cars: cars.length, casters, lodWarm, cpuMs: Math.round(cpuMs),
         maxStepMs: Math.round(maxStepMs), yields, wallMs: Math.round(performance.now() - at), deferred: _deferredCarWarm.length });
@@ -1102,7 +1140,16 @@ const CarDraw = (function () {
         } catch (e) { Log.warn("gfx", "selector car asset preparation failed", e); }
         const elapsed = performance.now() - at; cpuMs += elapsed; maxCpuMs = Math.max(maxCpuMs, elapsed);
       }
-      if (lodPrep) warmLazyRaceMeshes(field);
+      if (lodPrep) {
+        // Fresh slice: shared-silhouette build + player flap solve must not stack
+        // on the last rival's lod step (maxSlice ≤ 2 pin).
+        await menuStepYield(); yields++;
+        if (!valid() || (G.gfx.warming && G.gfx.warming())) return;
+        const atLazy = performance.now();
+        try { warmLazyRaceMeshes(field); }
+        catch (e) { Log.warn("gfx", "selector lazy race mesh warm failed", e); }
+        const elapsed = performance.now() - atLazy; cpuMs += elapsed; maxCpuMs = Math.max(maxCpuMs, elapsed);
+      }
       // Resolves to its record only when it ran to its end (the export keeps the last: menuCarAssets).
       const done = { cars: field.length, steps: plan.length, casters, lod: lodPrep, cpuMs: Math.round(cpuMs), maxCpuMs: Math.round(maxCpuMs), yields, wallMs: Math.round(performance.now() - t0), at: Math.round(performance.now()) };
       Log.info("gfx", "selector car assets ready", done);

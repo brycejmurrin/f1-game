@@ -178,8 +178,8 @@ test("a career field and MY TEAM's hire: after the menu prep, race entry builds 
     v.G.teamIdx = 3; v.G.driverIdx = 0;
     await v.carDraw.prepareMenuCarAssets(() => true);
     const bodies = count(v, "body") - 1, casters = count(v, "sh");
-    assert.deepEqual([count(v, "whole"), bodies, casters], [0, 21, 12],
-      "21 rival bodies (2 upgraded teams on their own keys); a :sh per team (an upgrade's own) + the player's build");
+    assert.deepEqual([count(v, "whole"), bodies, casters], [0, 21, 13],
+      "21 rival bodies (2 upgraded teams on their own keys); a :sh per team (an upgrade's own) + the player's build + shared LOD silhouette (D·DP3)");
     assert.ok(bodies <= cap && casters <= cap);
     raceEntry(v, v.rec.builds.length, "career");
   }
@@ -345,7 +345,7 @@ test("the bounded team caches hold the menu prep, the race warm and the mirror w
       // grids one seat (game.js seatsFor): 21 + the picked legend's key = 22.
       const teamBodies = count("body") - 1, casters = count("sh");
       assert.deepEqual([pick, count("whole"), teamBodies, casters],
-        pick === "legends" ? [pick, 0, 22, 12] : [pick, 0, 21, 12],
+        pick === "legends" ? [pick, 0, 22, 13] : [pick, 0, 21, 13],
         "menu: no whole car; the rivals' bodies; a :sh per team (+ the picked team's) + the player's own build");
       assert.ok(teamBodies <= cap && casters <= cap, `teamBodies ${teamBodies} / teamMeshes ${casters} within ${cap}`);
       const menu = v.rec.builds.length;
@@ -691,9 +691,11 @@ test("warmCarAssets builds casters only where a shadow pass will fetch them", ()
     if (setup) setup(v);
     v.field((c, i) => 3000 - 9 * i);
     v.carDraw.warmCarAssets();
-    return v.rec.builds.filter((x) => x.kind === "sh").length;
+    // Team-less ":sh" is the shared FieldLod silhouette (D·DP3), not a shadow caster.
+    return v.rec.builds.filter((x) => x.kind === "sh" && x.team != null).length;
   };
-  // One ":sh" per team, plus the player's: it races its saved build (own stamp).
+  // One ":sh" per team, plus the player's. Shared LOD silhouette (D·DP3) is also
+  // kind "sh" but team-less — exclude it so this pin stays about shadow casters.
   const teams = carDrawVm().teams.length + 1;
   assert.equal(casters({ casters: true }), teams, "a casting device: one caster per team + the player's build");
   assert.equal(casters({ casters: false }), 0, "no shadow pass on this backend: no caster");
