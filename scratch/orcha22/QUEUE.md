@@ -2,7 +2,7 @@
 
 Live state, pushed every tick (branch `cursor/orcha22-queue-a22q`, never merged). Times UTC (Pacific = UTC−7).
 
-Updated: 2026-10-22 06:11Z
+Updated: 2026-10-22 06:56Z
 
 ## Mandate (Bryce, 05:55Z)
 - "You can be A, but post on the bus to ask fleet d whether to take over b as well" → bus d092544 asked D; awaiting reply to:A.
@@ -43,3 +43,11 @@ Updated: 2026-10-22 06:11Z
 
 ## Asks for Bryce
 (none open)
+
+## 06:56Z
+- MERGED #3471 → 05206735 (docs, 2 parents). Game PRs #3496 #3497 #3498 wait behind Fleet D's lens #3465 (Bryce priority) + green Pages.
+- Docs PRs READY (full tier): #3492 (T1) #3494 (I2) #3495 (I1); drafts #3493 (T3) #3499 (T2); mine #3500 (memory) #3501 (bus routine skill).
+- Issues closed (verified): 3249 3257 3292 (completed); 1745 3282 3308 3416 3250 (not_planned; 3250 = Bryce "keep hub"). 3305 closed then REOPENED (menu-fit --only=title printed nothing). Edited: 2572 2177 1627 2501 1549 (rewrites), 1551 1553 1595 1603 (stale Blocked-by).
+- Lesson: claim text "#a-#b" makes fleet.yml label issues `claimed` → never '#' in claim text. Lanes refuse relayed grants → orchestrator applies issue edits itself.
+- Wave 2 (Bryce "Fix issues" 06:54Z): A·F1 session_014rKRBzBFwf1Co4GnjeXReR (garage UI 3330-3336), A·F2 session_01REdtqvAeQU5CMrZSNyWHP8 (car aero 3404 3405 3411-3413), A·F3 session_01N6GgoLRuwh8KPKCZQzyfb1 (tools: menu-fit unknown id, ratchets validation, triaged tools issues). A·R1 session_01WSv4hNAfbp9ENjjTAjseVd (GROK_API_KEY research).
+- A·O1 done (stopped). A·I1 FINAL (at STOP AT). A·I2 FINAL. A·T1 FINAL.
