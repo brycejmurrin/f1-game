@@ -4370,6 +4370,11 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
     "desktop GLX MSAA starts from min(4, cMax, dMax); the preset cap (ULTRA 4×, else 2×) is applied AFTER, see the gfxPreset test");
 });
 
+test("GLX readbackLdrPixels skips software GL readPixels while #carsetup is visible", () => {
+  const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h) {", "function ", "readbackLdrPixels");
+  assert.ok(body.includes("PerfGov.softwareRaster()") && body.includes('getElementById("carsetup")') && body.includes("!cs.hidden) return false"));
+});
+
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
   // GameStore JSON-encodes every value: the key holds "\"ultra\"" WITH the
   // quotes. 0a31155 compared the raw string to "ultra", so every desktop that

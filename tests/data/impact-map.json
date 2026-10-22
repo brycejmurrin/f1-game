@@ -12727,6 +12727,9 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
+      "readbackLdrPixels": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "setup": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],

@@ -1047,6 +1047,12 @@ const GLXPost = (function () {
     function readbackLdrPixels(buf, w, h) {
       if (!gl || !buf || w < 1 || h < 1) return false;
       try {
+        if (typeof PerfGov !== "undefined" && PerfGov.softwareRaster()) {
+          const cs = typeof document !== "undefined" && document.getElementById && document.getElementById("carsetup");
+          if (cs && !cs.hidden) return false;
+        }
+      } catch (_) { /* harness */ }
+      try {
         gl.finish();
         gl.bindFramebuffer(gl.FRAMEBUFFER, _softReadFB);
         gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
