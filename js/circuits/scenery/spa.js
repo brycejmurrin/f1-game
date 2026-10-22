@@ -65,6 +65,52 @@
         }
       });
 
+      // Dressing OPEN windows (authored fracs [s0, s1, dMin, dMax] m beyond the
+      // edge). Hoisted above the front pine ranks so trackside emitters and the
+      // deep Ardennes forest mass share one exclusion map — early every() pines
+      // used to ignore it and drove the severe pine×motorhome / pine×crowd clips
+      // (clip-audit --why: spa.js motorhomes + spectatorHill vs pine).
+      // Frame: authored = racing + 0.0423 (measured from the built centreline).
+      const OPEN = {
+        "1": [
+          [0.975, 1.001, 0, 200], [0.0, 0.045, 0, 200],   // pit straight / La Source stands
+          [0.060, 0.116, 0, 80],    // La Source exit stand 0.068, camp
+          [0.127, 0.143, 30, 76],   // camp K(0.135)
+          [0.136, 0.174, 0, 80],    // Gold-3 row, grass bank, jumbotron, catch fence
+          [0.168, 0.214, 0, 72],    // old Eau Rouge road + its own trees
+          [0.200, 0.220, 52, 92],   // chalets
+          [0.294, 0.306, 50, 82],   // chalet
+          [0.555, 0.595, 0, 52],    // Pouhon outside spectator bank
+          [0.714, 0.726, 54, 86],   // chalet
+          [0.765, 0.800, 0, 26],    // Stavelot run-off
+          [0.812, 0.829, 30, 68],   // camp
+          [0.838, 0.862, 0, 52],    // concrete stand 0.848, Blanchimont shelter
+          [0.886, 0.900, 0, 20],    // Blanchimont camera tower
+          [0.897, 0.936, 0, 50],    // Blanchimont terrace, Bus Stop stand
+        ],
+        "-1": [
+          [0.975, 1.001, 0, 200], [0.0, 0.118, 0, 200],   // paddock, old pits, village, brook
+          [0.123, 0.147, 0, 76],    // Kemmel terrace, chalet
+          [0.170, 0.196, 0, 30],    // Eau Rouge brook, bridge, base wall
+          [0.186, 0.218, 0, 36],    // Raidillon terrace (inside bank)
+          [0.345, 0.358, 0, 20],    // Les Combes camera tower
+          [0.474, 0.488, 34, 72],   // camp
+          [0.518, 0.566, 0, 34],    // Pouhon inside bank
+          [0.544, 0.556, 48, 78],   // chalet
+          [0.558, 0.573, 0, 42],    // recovery bay
+          [0.594, 0.607, 0, 42],    // Fagnes terrace
+          [0.654, 0.676, 0, 28],    // Fagnes bank
+          [0.700, 0.712, 50, 82],   // chalet
+          [0.740, 0.782, 30, 86],   // broadcast compound + pads
+        ],
+      };
+      const isOpen = (side, f, dist) => {
+        for (const w of OPEN[String(side)]) {
+          if (f >= w[0] && f <= w[1] && dist + 4 >= w[2] && dist - 4 <= w[3]) return true;
+        }
+        return false;
+      };
+
       // Crown clearance for the pine ranks below. pine() guards the tree at
       // h*0.225 from the road edge, but its lowest tier is ~h*0.26 wide (2.7 m
       // at H=12, x1.15 jitter) and the engine's per-primitive road guard
@@ -89,14 +135,19 @@
         }
         return !(hi - lo > 2 + r * 0.6);   // a real slope (≲30 %) passes; a cliff does not
       };
+      const plantPine = (k, side, dist, h, col, opts) => {
+        if (isOpen(side, k / n, dist)) return;
+        if (!crownClear(k, side, dist, h)) return;
+        pine(k, side, dist, h, col, opts);
+      };
       every(44, (k) => {
         for (const side of [-1, 1]) {
           const s = hash(k * 41 + side);
           if (s < 0.26) continue;
           const dist = 8 + s * 20, h = 9 + s * 9;
-          if (crownClear(k, side, dist, h)) pine(k, side, dist, h, [0.09 + s * 0.05, 0.30, 0.14]);
-          if (s > 0.70 && crownClear(k, side, dist + 12 + s * 16, h + 3))
-            pine(k, side, dist + 12 + s * 16, h + 3, [0.11 + s * 0.05, 0.28, 0.13]);
+          plantPine(k, side, dist, h, [0.09 + s * 0.05, 0.30, 0.14]);
+          if (s > 0.70)
+            plantPine(k, side, dist + 12 + s * 16, h + 3, [0.11 + s * 0.05, 0.28, 0.13]);
         }
       });
       // Fill the sparse stretches: a staggered front-line rank offset from the above.
@@ -105,7 +156,7 @@
           const s = hash(k * 67 + side * 5 + 3);
           if (s < 0.58) continue;
           const dist = 6 + s * 10, h = 8 + s * 7;
-          if (crownClear(k, side, dist, h)) pine(k, side, dist, h, [0.10 + s * 0.04, 0.31, 0.15]);
+          plantPine(k, side, dist, h, [0.10 + s * 0.04, 0.31, 0.15]);
         }
       });
       // La Source and the beginning of its descent: the scenery shift maps
@@ -116,8 +167,7 @@
         if (s < 0.045 || s > 0.12) return;
         const side = -1, r = hash(k * 53 + side);
         const dist = 26 + r * 12, h = 8 + r * 8;
-        if (crownClear(k, side, dist, h))
-          pine(k, side, dist, h, [0.08 + r * 0.05, 0.29, 0.15], { sparse: true, tiers: 3 });
+        plantPine(k, side, dist, h, [0.08 + r * 0.05, 0.29, 0.15], { sparse: true, tiers: 3 });
       });
 
       if (circuitKit) {
@@ -125,14 +175,19 @@
           id: "kit:spa:pit-building", frac: 0.006, side: -1, gap: 9,
           size: [14, 11, 64], garages: 16, required: true,
         });
+        // Was gap 45: lattice tower sat on the steep pit apron with 19–23 m
+        // unsupported footprints (ground-audit landmark-kit @ racing ≈0.972).
         circuitKit.raceControl({ style: "lattice",
-          id: "kit:spa:race-control", frac: 0.014, side: -1, gap: 45,
+          id: "kit:spa:race-control", frac: 0.014, side: -1, gap: 28,
           size: [12, 24, 14], required: true,
         });
       }
-      motorhome(Math.round(n * 0.001) % n, -1, 24, 16, 8, 20, { wall: [0.88, 0.89, 0.91], window: [0.30, 0.38, 0.46] });
-      motorhome(Math.round(n * 0.006) % n, -1, 24, 15, 7, 18, { wall: [0.82, 0.84, 0.88], window: [0.32, 0.40, 0.48] });
-      motorhome(Math.round(n * 0.994) % n, -1, 24, 15, 7, 18, { wall: [0.86, 0.87, 0.90], window: [0.30, 0.38, 0.46] });
+      // Paddock motorhomes: was gap 24, which planted them inside the front
+      // pine rank (clip-audit 2.13 m pine×motorhome @ racing 0.957). Seat them
+      // on the open apron behind the OPEN paddock window.
+      motorhome(Math.round(n * 0.001) % n, -1, 38, 16, 8, 20, { wall: [0.88, 0.89, 0.91], window: [0.30, 0.38, 0.46] });
+      motorhome(Math.round(n * 0.006) % n, -1, 38, 15, 7, 18, { wall: [0.82, 0.84, 0.88], window: [0.32, 0.40, 0.48] });
+      motorhome(Math.round(n * 0.994) % n, -1, 38, 15, 7, 18, { wall: [0.86, 0.87, 0.90], window: [0.30, 0.38, 0.46] });
       // Lone weathered old pit building on the original Kemmel straight (s≈0.10, far left).
       building(Math.round(n * 0.10) % n, -1, 40, 14, 9, 44,
         { kind: "chevron", wall: [0.78, 0.76, 0.70], window: [0.36, 0.36, 0.34], floor: 4 });
@@ -309,6 +364,10 @@
 
       every(120, (k) => {
         const side = hash(k * 33) < 0.5 ? -1 : 1;
+        const f = k / n;
+        // Eau Rouge valley wall (authored 0.172–0.192, gap 3.6) shares the
+        // ribbon with these 4 m posts — clip-audit 1.20 m marshal×wall @ 0.130.
+        if (side === -1 && f >= 0.168 && f <= 0.198) return;
         marshalPost(k, side, 4);
       });
       // Extra marshal posts flanking pit entry (s≈0.97).
@@ -577,7 +636,9 @@
       rvCamp(K(0.82),  1, 44, 6);
 
       // Historic timing tower behind the pit straight; spectator footbridges.
-      timingTower(K(0.985), -1, 30);
+      // Was gap 30: glazed timing box floated with a 21 m unsupported footprint
+      // on the pit apron (ground-audit timingTower glass @ racing ≈0.942). Seat closer.
+      timingTower(K(0.985), -1, 18);
       footbridge(0.125, [0.62, 0.34, 0.20]);   // Kemmel crossing
       footbridge(0.50,  [0.40, 0.42, 0.46]);   // mid-forest crossing
 
@@ -666,50 +727,9 @@
       // mountain ring, so Eau Rouge, Kemmel, Les Combes and Pouhon read as
       // isolated pines on lawn. Real Spa sits in spruce/beech forest that
       // closes in right behind the run-off. Deeper staggered ranks of
-      // instanced pine fill that, except where the dressing keeps ground open.
-      // OPEN windows are AUTHORED fracs [s0, s1, dMin, dMax] (m beyond the
-      // edge). This file's frame: authored = racing + 0.0423 (measured from
-      // the built centreline), e.g. Eau Rouge racing 0.143 = authored 0.185.
+      // instanced pine fill that, except where the dressing keeps ground open
+      // (OPEN / isOpen / plantPine defined above the front pine ranks).
       {
-        const OPEN = {
-          "1": [
-            [0.975, 1.001, 0, 200], [0.0, 0.045, 0, 200],   // pit straight / La Source stands
-            [0.060, 0.116, 0, 80],    // La Source exit stand 0.068, camp
-            [0.127, 0.143, 30, 76],   // camp K(0.135)
-            [0.136, 0.174, 0, 80],    // Gold-3 row, grass bank, jumbotron, catch fence
-            [0.168, 0.214, 0, 72],    // old Eau Rouge road + its own trees
-            [0.200, 0.220, 52, 92],   // chalets
-            [0.294, 0.306, 50, 82],   // chalet
-            [0.555, 0.595, 0, 52],    // Pouhon outside spectator bank
-            [0.714, 0.726, 54, 86],   // chalet
-            [0.765, 0.800, 0, 26],    // Stavelot run-off
-            [0.812, 0.829, 30, 68],   // camp
-            [0.838, 0.862, 0, 52],    // concrete stand 0.848, Blanchimont shelter
-            [0.886, 0.900, 0, 20],    // Blanchimont camera tower
-            [0.897, 0.936, 0, 50],    // Blanchimont terrace, Bus Stop stand
-          ],
-          "-1": [
-            [0.975, 1.001, 0, 200], [0.0, 0.118, 0, 200],   // paddock, old pits, village, brook
-            [0.123, 0.147, 0, 76],    // Kemmel terrace, chalet
-            [0.170, 0.196, 0, 30],    // Eau Rouge brook, bridge, base wall
-            [0.186, 0.218, 0, 36],    // Raidillon terrace (inside bank)
-            [0.345, 0.358, 0, 20],    // Les Combes camera tower
-            [0.474, 0.488, 34, 72],   // camp
-            [0.518, 0.566, 0, 34],    // Pouhon inside bank
-            [0.544, 0.556, 48, 78],   // chalet
-            [0.558, 0.573, 0, 42],    // recovery bay
-            [0.594, 0.607, 0, 42],    // Fagnes terrace
-            [0.654, 0.676, 0, 28],    // Fagnes bank
-            [0.700, 0.712, 50, 82],   // chalet
-            [0.740, 0.782, 30, 86],   // broadcast compound + pads
-          ],
-        };
-        const isOpen = (side, f, dist) => {
-          for (const w of OPEN[side]) {
-            if (f >= w[0] && f <= w[1] && dist + 4 >= w[2] && dist - 4 <= w[3]) return true;
-          }
-          return false;
-        };
         const forestRank = (s0, s1, gap, stepM, hMin, hMax, seed) => {
           for (const side of [-1, 1]) {
             along(s0, s1, stepM, (k) => {
@@ -717,10 +737,8 @@
               const r2 = hash(k * 31.7 + side * 2.3 + seed * 3.7);
               if (r1 < 0.08) return;                        // natural clearing
               const dist = gap + (r2 - 0.5) * stepM * 0.8;  // stagger off the rank line
-              if (isOpen(side, k / n, dist)) return;
-              const h = hMin + r1 * (hMax - hMin);
-              if (!crownClear(k, side, dist, h)) return;
-              pine(k, side, dist, h, [0.07 + r2 * 0.05, 0.22 + r1 * 0.09, 0.10 + r2 * 0.05]);
+              plantPine(k, side, dist, hMin + r1 * (hMax - hMin),
+                        [0.07 + r2 * 0.05, 0.22 + r1 * 0.09, 0.10 + r2 * 0.05]);
             });
           }
         };
@@ -750,11 +768,13 @@
       }
 
       // Sparse fir accents on pit / Les Combes verges (not broadleaf oaks).
-      for (const [s, side] of [[0.01, 1], [0.16, 1], [0.30, -1], [0.62, 1], [0.78, -1]]) {
+      // Dropped [0.16, 1]: those three pines sat inside the Gold-3 spectator
+      // hill (clip-audit 2.00 m pine×hill tread @ racing 0.119).
+      for (const [s, side] of [[0.01, 1], [0.30, -1], [0.62, 1], [0.78, -1]]) {
         for (let j = 0; j < 3; j++) {
           const kk = (K(s) + j) % n;
           const hv = hash(kk * 5 + j);
-          pine(kk, side, 18 + hv * 14, 10 + hv * 5, [0.09 + hv * 0.04, 0.30, 0.14]);
+          plantPine(kk, side, 18 + hv * 14, 10 + hv * 5, [0.09 + hv * 0.04, 0.30, 0.14]);
         }
       }
 
@@ -883,17 +903,19 @@
               center: vadd(a.c, a.u, 11), size: [14, 30, 24], basis: b,
             }, (stage) => {
               stage._mat = MAT.STONE;
-              addBox(stage, vadd(a.c, a.u, 4.6), [10, 9.2, 20], STONE_W, b);
-              addBox(stage, vadd(vadd(a.c, a.t, -11), a.u, 8.0), [7, 16, 7], STONE_W, b);
+              // Nave ±9 m in t; tower centre -13.5 (half-width 3.5) leaves a
+              // ~1 m gap so the join is not a shared side plane (flatCoplanar).
+              addBox(stage, vadd(a.c, a.u, 4.6), [10, 9.2, 18], STONE_W, b);
+              addBox(stage, vadd(vadd(a.c, a.t, -13.5), a.u, 8.0), [7, 16, 7], STONE_W, b);
               stage._mat = 0;
-              addPrism(stage, vadd(a.c, a.u, 12.4), [10.6, 5.4, 20.4], SLATE_D, b);
-              addPyramid(stage, vadd(vadd(a.c, a.t, -11), a.u, 15.8), [7.4, 9.5, 7.4],
+              addPrism(stage, vadd(a.c, a.u, 12.4), [10.6, 5.4, 18.4], SLATE_D, b);
+              addPyramid(stage, vadd(vadd(a.c, a.t, -13.5), a.u, 15.8), [7.4, 9.5, 7.4],
                          SLATE, b);
               // Clock face and the cross above the spire.
-              addBox(stage, vadd(vadd(vadd(a.c, a.t, -11), a.r, -3.6), a.u, 13.5),
+              addBox(stage, vadd(vadd(vadd(a.c, a.t, -13.5), a.r, -3.6), a.u, 13.5),
                      [0.3, 1.9, 1.9], TRIM, b);
               stage._mat = MAT.METAL;
-              addCyl(stage, vadd(vadd(a.c, a.t, -11), a.u, 25.1), 0.09, 2.2,
+              addCyl(stage, vadd(vadd(a.c, a.t, -13.5), a.u, 25.1), 0.09, 2.2,
                      [0.60, 0.58, 0.52], 4, b);
               stage._mat = 0;
             });
