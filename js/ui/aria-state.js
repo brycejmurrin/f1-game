@@ -18,8 +18,8 @@
 // surface with no option groups.
 //
 // Colour words are READOUTS, not controls: gold/red is enablement (ON/OFF) on
-// a button whose whole text is a status ("SOUND ON", the title sound button)
-// and on the closed fold summaries. An `.opt-btn` chip is never painted — its ring is the selection.
+// a button whose whole text is a status ("♪ SOUND ON") and on the closed fold
+// summaries. An `.opt-btn` chip is never painted — its ring is the selection.
 // Settings rows are inline-flex, so a wrap after ":" uses NBSP or the space
 // collapses.
 //
@@ -104,23 +104,13 @@ window.AriaState = (function () {
       if (el.closest("#hud, #game-metrics")) continue;
       if (el.classList.contains("opt-btn")) continue;   // a chip's ring is its mark
       let foreign = false;
-      let icon = null;
       for (const c of el.children) {
-        if (c.hasAttribute("data-fold")) continue;
-        // The title sound button's note is an inline Lucide SVG, not the ♪
-        // character (U+266A is in no bundled font). A single leading
-        // .btn-ico is part of this button's own label, not foreign content:
-        // keep the node and paint the fold around the text beside it.
-        if (!icon && c === el.children[0] && String(c.tagName).toLowerCase() === "svg" && c.classList.contains("btn-ico")) { icon = c; continue; }
-        foreign = true; break;
+        if (!c.hasAttribute("data-fold")) { foreign = true; break; }
       }
       if (foreign) continue;
       if (el.querySelector("[data-fold]")) continue;
       const html = wrapOnOff(el.textContent);
-      if (html) {
-        el.innerHTML = html;
-        if (icon) el.insertBefore(icon, el.firstChild);
-      }
+      if (html) el.innerHTML = html;
     }
   }
 

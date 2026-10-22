@@ -106,20 +106,10 @@ var Announcer = (function () {
 var AudioPanel = {
   create: function (G) {
     const { els, store } = G;
-    // The note before SOUND is an inline Lucide SVG in index.html, not the
-    // ♪ character: U+266A is in none of the bundled fonts, so the text glyph
-    // rendered from a host fallback font and the title baseline flaked on
-    // it. Rewrite only the label and put the icon node back, so a toggle
-    // never eats it. Twin of the writer in js/audio/panel.js.
-    function setSoundLabel(btn, b) {
-      const icon = btn.querySelector ? btn.querySelector("svg.btn-ico") : null;
-      btn.textContent = b ? "SOUND ON" : "SOUND OFF";
-      if (icon && btn.insertBefore) btn.insertBefore(icon, btn.firstChild);
-    }
     function setSound(b) {
       G.soundOn = b; store.set("sound", b);
       if (els.soundbtn) {
-        setSoundLabel(els.soundbtn, b);
+        els.soundbtn.textContent = b ? "SOUND ON" : "SOUND OFF";
         els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
       }
       if (typeof GameAudio !== "undefined" && GameAudio.setEnabled) GameAudio.setEnabled(b);
@@ -144,7 +134,7 @@ var AudioPanel = {
       // index.html's static label is SOUND ON; a saved SOUND OFF must show before the first gesture
       // loads the real panel, or the button claims the opposite and its tap turns the sound ON.
       if (G.soundOn === false) {
-        setSoundLabel(els.soundbtn, false);
+        els.soundbtn.textContent = "SOUND OFF";
         els.soundbtn.setAttribute("aria-pressed", "false");
       }
     }

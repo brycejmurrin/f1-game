@@ -2182,14 +2182,11 @@
            are in SETTINGS > MUSIC & SOUND), so it belongs on the title screen,
            where it hides and shows with #overlay for free. -->
       <p id="audiostate"></p>
-      <!-- The note is an inline Lucide music SVG (same pattern as the menu
-           doors below), NOT the &#9834; character: U+266A is in none of the
-           bundled fonts, so the text glyph fell back to a host font and the
-           phone title baseline flaked on its rendering (quarantine row,
-           tests/data/flaky-quarantine.json). The JS writers in
-           js/audio/panel.js and js/audio/stub.js preserve this icon and
-           rewrite only the SOUND ON/OFF label text. -->
-      <button id="soundbtn" class="minibtn" aria-pressed="true"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>SOUND ON</button>
+      <!-- The note is drawn by #soundbtn::before (a CSS mask, css/menus.css), NOT
+           the &#9834; character: U+266A is in none of the bundled fonts, so the
+           text glyph fell back to a host font and the phone title baseline
+           flaked on it (tests/data/flaky-quarantine.json). No extra shell node. -->
+      <button id="soundbtn" class="minibtn" aria-pressed="true">SOUND ON</button>
       <p id="disclaimer">Unofficial fan project &mdash; not affiliated with FIA or Formula 1</p>
     </div>
   </div>

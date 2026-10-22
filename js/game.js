@@ -4156,7 +4156,7 @@ let netLobby = {
 // C2 visual suspension (js/physics/body-attitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
-// MUSIC & SOUND panel (js/audio/panel.js) — the mixer screen, the SOUND
+// MUSIC & SOUND panel (js/audio/panel.js) — the mixer screen, the ♪
 // master button and the audio-settings persistence. create() wires the DOM;
 // init() runs at the boot-restore position near the end of this file.
 let audioPanel = AudioPanel.create(G);   // stub at boot; real panel after ensureAudio
