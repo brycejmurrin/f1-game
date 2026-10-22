@@ -39,8 +39,8 @@ test("NEXT compares the race instant with now, not today's UTC date", () => {
   const at = Date.parse("2026-11-22T04:00:00Z");
   assert.equal(S.isUpcoming(VEGAS, at - 60e3), true, "a minute before lights out");
   assert.equal(S.isUpcoming(VEGAS, at + 60 * 60e3), true, "an hour in: still running");
-  assert.equal(S.isUpcoming(VEGAS, at + 3 * 3600e3), false,
-    "three hours after the start it is over, even though the UTC date is still the 22nd");
+  assert.equal(S.isUpcoming(VEGAS, at + 5 * 3600e3), false,
+    "five hours after the start it is over, even though the UTC date is still the 22nd");
   // Date-only entries keep the day comparison.
   assert.equal(S.isUpcoming({ date: "2026-11-22" }, Date.parse("2026-11-22T20:00:00Z")), true);
   assert.equal(S.isUpcoming({ date: "2026-11-22" }, Date.parse("2026-11-23T01:00:00Z")), false);
@@ -91,23 +91,23 @@ test("schedule venue lines do not stamp a native title (scroll leaves it hung)",
 
 // #2190 (3): the Schedule node is reused for hours, so NEXT must say when it
 // moves on; hub.js drops a reused node whose `nextFlipAt` has passed.
-test("nextFlipAt: NEXT moves on at race start + 2 h (or the next UTC day for a date-only entry)", () => {
+test("nextFlipAt: NEXT moves on at race start + 4 h (or the next UTC day for a date-only entry)", () => {
   const at = Date.parse("2026-11-22T04:00:00Z");
   const items = [{ date: "2026-11-08", time: "18:00:00Z" }, VEGAS, { date: "2026-12-06", time: "13:00:00Z" }];
-  assert.equal(S.nextFlipAt(items, at - 3600e3), at + 2 * 3600e3);
-  assert.equal(S.nextFlipAt(items, at + 2 * 3600e3), Date.parse("2026-12-06T15:00:00Z"));
+  assert.equal(S.nextFlipAt(items, at - 3600e3), at + 4 * 3600e3);
+  assert.equal(S.nextFlipAt(items, at + 4 * 3600e3), Date.parse("2026-12-06T17:00:00Z"));
   assert.equal(S.nextFlipAt([{ date: "2026-11-22" }], Date.parse("2026-11-22T10:00:00Z")), Date.parse("2026-11-23T00:00:00Z"));
   assert.equal(S.nextFlipAt(items, Date.parse("2027-01-01T00:00:00Z")), Infinity);
 });
 
 test("nextRace uses instants across DST and keeps a date-only fallback", () => {
   const springForward = [
-    { name: "Finished", date: "2026-03-08", time: "07:30:00Z" },
+    { name: "Finished", date: "2026-03-08", time: "05:30:00Z" },
     { name: "DST edge", date: "2026-03-08", time: "10:30:00Z" },
     { name: "Later", date: "2026-03-15" }
   ];
   assert.equal(S.nextRace(springForward, Date.parse("2026-03-08T10:00:00Z")).name, "DST edge");
-  assert.equal(S.nextRace(springForward, Date.parse("2026-03-08T13:00:01Z")).name, "Later");
+  assert.equal(S.nextRace(springForward, Date.parse("2026-03-08T14:30:01Z")).name, "Later");
   assert.equal(S.nextRace([{ name: "Calendar only", date: "2026-11-01" }],
     Date.parse("2026-11-01T23:59:59Z")).name, "Calendar only");
   assert.equal(S.nextRace([{ date: "2026-11-01" }], Date.parse("2026-11-02T00:00:00Z")), null);
@@ -256,4 +256,9 @@ test("countdown watches child lists inside the hub only, and `hidden` anywhere",
   assert.equal(onHub[0].opts.childList, true);
   assert.equal(onHub[0].opts.subtree, true);
   wrap.dispose();
+});
+
+test("a red-flagged race stays NEXT past two hours after lights out", () => {
+  assert.equal(S.isUpcoming(VEGAS, Date.parse("2026-11-22T06:30:00Z")), true);
+  assert.equal(S.isUpcoming(VEGAS, Date.parse("2026-11-22T08:30:00Z")), false, "finished by 4 h");
 });
