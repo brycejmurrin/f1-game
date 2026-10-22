@@ -36,19 +36,25 @@ const LoopHealth = (() => {
   // hidden tab gets no frames and resets the run, and a gap past SUSPEND_MS is
   // a sleep or a debugger pause, not a frame. A run of SLOW_MS frames, counted
   // in FRAMES so a single build/shader-compile hitch never trips it:
-  //   SHED_RUN   — drop to the lowest quality rung for this session and latch
-  //                the same lighter-renderer keys a context loss writes;
-  //   RELOAD_RUN — still glacial after the shed: reload once per tab session
-  //                (apex26.stallReloads, the ctxLostReloads shape), which hands
-  //                the player back a working menu with the "Graphics reset"
-  //                notice. With the budget spent it only records and logs.
-  // Off under automation (navigator.webdriver): software-GL CI presents
-  // multi-second frames on purpose and a reload there would kill the spec.
-  // ?stallwatch=1 or apex26.stallWatch=1 forces it on (the reproduction).
+  //   SHED_RUN   — drop to the lowest quality rung for this session;
+  //   RELOAD_RUN — still glacial after the shed: latch the same lighter-
+  //                renderer keys a context loss writes (read at boot) and
+  //                reload once per tab session (apex26.stallReloads, the
+  //                ctxLostReloads shape), which hands the player back a working
+  //                menu with the "Graphics reset" notice. With the budget spent
+  //                it only records and logs.
+  // A race entry on a weak phone is a few multi-second tasks between frames, so
+  // while the loading cover (#loading) is up the shed waits and the reload needs
+  // LOAD_RELOAD_RUN frames: a cover stuck over a glacial build still recovers.
+  // Off under automation (navigator.webdriver) and in the node game VM
+  // (tools/lib/game-vm.cjs, which reports webdriver false): software-GL CI
+  // presents multi-second frames on purpose and a shed or reload there would
+  // change the spec. ?stallwatch=1 or apex26.stallWatch=1 forces it on.
   const SLOW_MS = 1000;
   const SUSPEND_MS = 60000;
   const SHED_RUN = 4;
   const RELOAD_RUN = 10;
+  const LOAD_RELOAD_RUN = 30;
   const RELOAD_KEY = "apex26.stallReloads";
   const RELOAD_BUDGET = 1;
   const NOTICE_KEY = "apex26.ctxLostNotice";
@@ -68,6 +74,8 @@ const LoopHealth = (() => {
   let stallAct = "";
   let prevCleanAt = 0;
   let watchOn = null;
+  let shedRun = false;     // this run already shed / reloaded: once each per run
+  let reloadRun = false;
 
   function now() {
     try { return performance.now(); } catch (_) { return Date.now(); }
@@ -79,30 +87,34 @@ const LoopHealth = (() => {
     if (watchOn !== null) return watchOn;
     let forced = false, auto = true;
     try { forced = /[?&]stallwatch=1\b/.test(location.search) || localStorage.getItem("apex26.stallWatch") === "1"; } catch (_) { /* no location/storage */ }
-    try { auto = !(typeof navigator !== "undefined" && navigator.webdriver); } catch (_) { /* no navigator */ }
+    try { auto = !(typeof navigator !== "undefined" && (navigator.webdriver || /apex-game-vm/.test(navigator.userAgent || ""))); } catch (_) { /* no navigator */ }
     return (watchOn = forced || auto);
   }
   try {
     if (typeof document !== "undefined" && document.addEventListener) {
-      document.addEventListener("visibilitychange", () => { prevCleanAt = 0; slowRun = 0; });
+      document.addEventListener("visibilitychange", () => { prevCleanAt = 0; slowRun = 0; shedRun = reloadRun = false; });
     }
   } catch (_) { /* no document in a harness */ }
 
+  function loading() {
+    try { const el = typeof document !== "undefined" && document.getElementById && document.getElementById("loading"); return !!(el && !el.hidden); } catch (_) { return false; }
+  }
   function shed() {
-    sheds++; stallAct = "shed";
+    sheds++; stallAct = "shed"; shedRun = true;
     Log.warn("game", `stall watchdog: ${slowRun} frames over ${SLOW_MS} ms (worst ${Math.round(worstMs)} ms) — shedding to the lowest quality rung`);
     try { if (typeof PerfGov !== "undefined" && PerfGov.setUserTier) PerfGov.setUserTier(4); } catch (_) { /* no governor in a harness */ }
-    try { localStorage.setItem("apex26.envProbeOff", "1"); localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* blocked storage: the session shed stands */ }
   }
   function reload() {
     let spent = 0;
     try { spent = parseInt(sessionStorage.getItem(RELOAD_KEY), 10) || 0; } catch (_) { spent = RELOAD_BUDGET; }
+    reloadRun = true;
     if (spent >= RELOAD_BUDGET) {
       stallAct = "budget";
       Log.warn("game", `stall watchdog: still ${slowRun} frames over ${SLOW_MS} ms after the shed; reload budget spent`);
       return;
     }
     stallReloads++; stallAct = "reload";
+    try { localStorage.setItem("apex26.envProbeOff", "1"); localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* blocked storage: the reload still lands on the menu */ }
     Log.warn("game", `stall watchdog: still glacial after the shed (worst ${Math.round(worstMs)} ms) — reloading to the menu`);
     try { sessionStorage.setItem(RELOAD_KEY, String(spent + 1)); sessionStorage.setItem(NOTICE_KEY, "1"); } catch (_) { /* see the budget read */ }
     try { location.reload(); } catch (_) { /* file:// / test host */ }
@@ -115,9 +127,10 @@ const LoopHealth = (() => {
     if (gap > SLOW_MS && gap < SUSPEND_MS && visible()) {
       slowRun++; slowFrames++;
       if (gap > worstMs) worstMs = gap;
-      if (slowRun === SHED_RUN) shed();
-      else if (slowRun === RELOAD_RUN) reload();
-    } else slowRun = 0;
+      const cover = loading();
+      if (!cover && !shedRun && slowRun >= SHED_RUN) shed();
+      else if (!reloadRun && slowRun >= (cover ? LOAD_RELOAD_RUN : RELOAD_RUN)) reload();
+    } else { slowRun = 0; shedRun = reloadRun = false; }
   }
 
   return {
