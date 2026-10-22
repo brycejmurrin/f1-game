@@ -766,7 +766,7 @@ const WGX = (function () {
         sessionStorage.setItem("apex26.gfxClaimFail", "1");
         skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
       } catch (_) { /* no sessionStorage: re-arm the canary below */ }
-      if (skipped) { try { location.reload(); } catch (_) { /* harness */ } }
+      if (skipped) { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage */ } try { location.reload(); } catch (_) { /* harness */ } }
       else {
         try { localStorage.setItem("apex26.gfxBackendProbe", "webgpu"); } catch (_) { /* next boot has no canary; RESET is the way back */ }
       }

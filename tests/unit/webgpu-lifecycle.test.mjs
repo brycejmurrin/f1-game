@@ -2017,8 +2017,8 @@ test("minimal rung: no post targets, no env probe, and a loss there exits to GLX
 test("a JS throw in begin() strikes out to GLX only at the cap, not on frame one", async () => {
   const storage = new Map();
   const session = new Map();
-  let reloads = 0;
-  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  let reloads = 0, notice = null;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; notice = session.get("apex26.ctxLostNotice") || null; } });
   const gfx = await h.create();
   gfx.resize();
   assert.equal(gfx.begin({}), true, "healthy begin");
@@ -2032,6 +2032,7 @@ test("a JS throw in begin() strikes out to GLX only at the cap, not on frame one
   assert.equal(session.get("apex26.gfxBound"), "webgl2", "the RENDERER label must say (WEBGL2)");
   assert.match(storage.get("apex26.gfxWgxFail") || "", /begin threw/, "reason recorded");
   assert.equal(reloads, 1);
+  assert.equal(notice, "1", "the strike-out reload explains itself on the menu (#3513)");
   h.setEncoderFail(false);
   assert.equal(gfx.begin({}), false, "after the cap the backend stays down for this tab");
 });

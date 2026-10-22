@@ -1007,7 +1007,8 @@ const TLX = (function () {
       const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
       let _shownAt = -1e9;
       // Every AUTOMATIC loss reload stashes apex26.ctxLostNotice first, as GLX does, so the menu
-      // says "Graphics reset" instead of a silent restart (#3513). Hidden-tab reloads stay quiet.
+      // says "Graphics reset" instead of a silent restart (#3513). Hidden-tab reloads stay quiet,
+      // and so does the early-frame GPU-error heal: it fires on the title, before any race.
       let _lossCounted = false;
       let _sessLostN = 0;   // two-reload budget when sessionStorage throws (GLX _sessLostN)
       const _fallbackLossCount = () => {
