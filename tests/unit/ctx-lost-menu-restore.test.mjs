@@ -13,10 +13,10 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 test("quitToMenuAfterCtxLost runs menu + preview recovery before the notice", () => {
   const game = gameSource();
   const fn = game.slice(game.indexOf("function quitToMenuAfterCtxLost()"), game.indexOf("function quitToMenu()"));
-  assert.match(fn, /restoreMenuAfterGraphicsReset\(\)/);
-  assert.match(fn, /resetSetupCam\(\)/);
-  assert.match(fn, /spMeshBust\(\)/);
-  assert.match(fn, /showCtxLostNotice\(\)/);
+  assert.ok(fn.includes("restoreMenuAfterGraphicsReset()"));
+  assert.ok(fn.includes("resetSetupCam()"));
+  assert.ok(fn.includes("spMeshBust()"));
+  assert.ok(fn.includes("showCtxLostNotice()"));
   assert.ok(fn.indexOf("restoreMenuAfterGraphicsReset()") < fn.indexOf("showCtxLostNotice()"));
 });
 
@@ -36,7 +36,6 @@ test("TitleMenu.repairDestinations remounts orphaned play doors", () => {
   const walk = (node, id) => node.id === id ? node : node.children.map((n) => walk(n, id)).find(Boolean);
   const roots = [menu, orphan];
   const doc = { documentElement: { dataset: {} }, getElementById: (id) => roots.map((r) => walk(r, id)).find(Boolean), createElement: (tag) => new Node(tag), body: { appendChild() {} } };
-  doc._byId = {};
   doc.getElementById = (id) => { if (id === "menu-buttons") return menu; return roots.map((r) => walk(r, id)).find(Boolean); };
   for (const id of ["mb-race", "mb-tt", "mb-watch", "mb-data", "mb-vs", "mb-season", "mb-practice", "mb-garage", "mb-photo", "mb-designer", "mb-standings", "mb-settings", "mb-phonepad", "mb-help", "menu-explore", "menu-garage", "menu-create", "menu-secondary", "menu-hero"]) {
     const n = new Node("button"); n.id = id; if (["mb-race", "mb-tt", "mb-watch", "mb-data"].includes(id)) orphan.appendChild(n);
@@ -55,9 +54,10 @@ test("TitleMenu.repairDestinations remounts orphaned play doors", () => {
   }
 });
 
-test("select-screen exports restoreMenuAfterGraphicsReset", () => {
+test("Menus.create returns restoreMenuAfterGraphicsReset for game.js wiring", () => {
   const src = read("js/ui/select-screen.js");
-  assert.match(src, /restoreMenuAfterGraphicsReset/);
-  assert.match(src, /TitleMenu\.repairDestinations/);
-  assert.match(src, /TopModal\.syncMenuIsolation/);
+  assert.ok(src.includes("restoreMenuAfterGraphicsReset"));
+  assert.ok(src.includes("TitleMenu.repairDestinations"));
+  assert.ok(src.includes("TopModal.syncMenuIsolation"));
+  assert.ok(src.includes("restoreMenuAfterGraphicsReset,"));
 });
