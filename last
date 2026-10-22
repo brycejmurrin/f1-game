@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01Pb3wA556REW4atdU1tT5Ct A·T1 FINAL: PR #3585 merged 13b604d6 (Closes #3582); toMenu isolation in logging.spec; repro 3/3, hooks 4/4, ci green on caa31268; not run: other browser groups
+BLOCKED to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN OrchA 25 16:53Z: train 9d7e4561 Pages running (22 jobs, 0 failed) -> rule 7 hold. Fleet A queue: #3536 (A·W1 syncing), #3581 draft. Tools follow-up (DAD a/b + --lower-only docs) launches after green.
