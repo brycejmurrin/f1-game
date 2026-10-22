@@ -209,8 +209,8 @@ test("a multi-vertex buffer decodes every vertex at its own stride (T5-20)", () 
 });
 
 // ── the half-float encoder, which WGX and TLX both depend on ───────────────
-// Node has no Math.f16round on this runtime and three exports no converter, so
-// this is ours and has to be tested as arithmetic, not assumed.
+// The shared encoder's midpoint-up contract differs from IEEE ties-even, so
+// round trips and boundaries are checked directly rather than via f16round.
 function decodeHalf(h) {
   const s = (h & 0x8000) ? -1 : 1, e = (h >> 10) & 0x1f, m = h & 0x3ff;
   if (e === 0) return s * m * 5.960464477539063e-8;      // sub-normal
@@ -255,9 +255,48 @@ test("toHalf handles the edges rather than wrapping them", () => {
   assert.ok(decodeHalf(P.toHalf(1e-6)) > 0);
 });
 
+test("toHalf preserves every half value, signed zero, infinity and canonical NaN", () => {
+  for (let h = 0; h <= 0xffff; h++) {
+    const value = decodeHalf(h);
+    const expected = Number.isNaN(value) ? 0x7e00 : h;
+    assert.equal(P.toHalf(value), expected, `half 0x${h.toString(16)}`);
+  }
+  assert.equal(P.toHalf(Number.MIN_VALUE), 0);
+  assert.equal(P.toHalf(-Number.MIN_VALUE), 0x8000);
+});
+
+// Adjacent DOUBLE values, without an intermediate f32 rounding. Explicit
+// byte order makes this independent of the encoder's native-word view.
+const halfBoundary = new DataView(new ArrayBuffer(8));
+function adjacentPositiveDouble(value, direction) {
+  halfBoundary.setFloat64(0, value);
+  const hi = halfBoundary.getUint32(0), lo = halfBoundary.getUint32(4);
+  halfBoundary.setUint32(4, lo + direction);
+  if (direction > 0 && lo === 0xffffffff) halfBoundary.setUint32(0, hi + 1);
+  if (direction < 0 && lo === 0) halfBoundary.setUint32(0, hi - 1);
+  return halfBoundary.getFloat64(0);
+}
+
+test("toHalf keeps magnitude-up midpoints and adjacent doubles without double rounding", () => {
+  // Every finite half interval: subnormals, the normal boundary, exponent
+  // carries, and the 65520 overflow midpoint. 65536 is the next power of two.
+  for (let h = 0; h < 0x7c00; h++) {
+    const lower = decodeHalf(h), upper = h === 0x7bff ? 65536 : decodeHalf(h + 1);
+    const midpoint = (lower + upper) / 2;
+    const below = adjacentPositiveDouble(midpoint, -1);
+    const above = adjacentPositiveDouble(midpoint, 1);
+    for (const sign of [1, -1]) {
+      const bits = sign < 0 ? 0x8000 : 0;
+      assert.equal(P.toHalf(sign * below), bits | h, `below half midpoint ${h}, sign ${sign}`);
+      assert.equal(P.toHalf(sign * midpoint), bits | (h + 1), `at half midpoint ${h}, sign ${sign}`);
+      assert.equal(P.toHalf(sign * above), bits | (h + 1), `above half midpoint ${h}, sign ${sign}`);
+    }
+  }
+});
+
 test("TLX's own half-float encoder agrees with this one, and rounds", () => {
   // js/render/three/tlx-chunked.js carries a second _toHalf — it is a bit
-  // twiddler over a Float32Array view where this one is arithmetic, and TLX is
+  // twiddler over a Float32Array view where this one preserves doubles, and TLX is
   // DEFERRED so it cannot simply call this module at eval time. Two encoders is
   // a standing invitation to drift, so they are compared here rather than
   // trusted. The TLX copy USED to truncate its mantissa, which is

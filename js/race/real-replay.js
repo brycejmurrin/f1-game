@@ -57,7 +57,10 @@ const RealReplay = (function () {
     }
     const near = (x, y) => { nearest = 0; nearestD2 = Infinity; visit(root, x, y); return nearest; };
     const cs = centroid(S), ct = centroid(C);
-    const mapper = (refl, th, tx, ty) => (p) => { const x = p[0], y = refl * p[1], cos = Math.cos(th), sin = Math.sin(th); return [cos * x - sin * y + tx, sin * x + cos * y + ty]; };
+    const mapper = (refl, th, tx, ty) => {
+      const cos = Math.cos(th), sin = Math.sin(th);
+      return (p) => { const x = p[0], y = refl * p[1]; return [cos * x - sin * y + tx, sin * x + cos * y + ty]; };
+    };
     let best = null;
     for (const refl of [1, -1]) for (let k = 0; k < 8; k++) {
       let th = k * Math.PI / 4;
@@ -107,11 +110,11 @@ const RealReplay = (function () {
   function trackTrace(track, fit, raw) {
     const n = raw.length / 3 | 0, total = track.total;
     const t = new Float32Array(n), prog = new Float32Array(n), x = new Float32Array(n);
-    const w = [0, 0];
+    const cos = Math.cos(fit.th), sin = Math.sin(fit.th);
     let hint = null, p = 0;
     for (let i = 0; i < n; i++) {
-      mapPoint(fit, raw[i * 3 + 1], raw[i * 3 + 2], w);
-      const pr = Tracks.project(track, w[0], w[1], hint);
+      const xx = raw[i * 3 + 1], yy = fit.refl * raw[i * 3 + 2];
+      const pr = Tracks.project(track, cos * xx - sin * yy + fit.tx, sin * xx + cos * yy + fit.ty, hint);
       if (i === 0) p = pr.s > total / 2 ? pr.s - total : pr.s;
       else { let d = pr.s - hint; if (d > total / 2) d -= total; else if (d < -total / 2) d += total; p += d; }
       hint = pr.s;
@@ -188,6 +191,13 @@ const RealReplay = (function () {
       reel.push(h);
     }
     return reel;
+  }
+  // Sorted highlights keep their original equal-time order. A discontinuity
+  // restarts at the caption window; forward ticks only visit newly crossed events.
+  function eventCursor(list, T) {
+    let lo = 0, hi = list.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (list[mid].t < T - CAPTION_S) lo = mid + 1; else hi = mid; }
+    return lo;
   }
   function fmtLap(t) { if (!(t > 0)) return "—"; const ms = Math.round(t * 1000), m = Math.floor(ms / 60000), s = (ms - m * 60000) / 1000; return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3); }   // round first: never "1:60.000"
 
@@ -272,7 +282,7 @@ const RealReplay = (function () {
       if (o.startLap > 1 && lead && Array.isArray(lead.lapStart) && lead.lapStart[o.startLap - 1] != null) T = lead.lapStart[o.startLap - 1];
       if (reel && reel.length) T = reel[0].t - LEAD_S;
       T = clamp(T, startT, duration);
-      run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, paused: false, follow: null, reel, reelIdx: 0, list, fired: new Set(), fit: built.fit, finished: false, onKey: null, audio: null };
+      run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, paused: false, follow: null, reel, reelIdx: 0, list, eventCursor: eventCursor(list, T), fit: built.fit, finished: false, onKey: null, audio: null };
       run.startT = startT; run.duration = duration; run.events = events; run.onTimeline = o.onTimeline;
       run.savedCamera = G.camMode;
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
@@ -372,7 +382,7 @@ const RealReplay = (function () {
     // history, pose the new subject, then reset the camera and repaint once.
     function reposition(t, highlight, paint = false) {
       captionGeneration++;
-      run.T = t; run.fired.clear();
+      run.T = t; run.eventCursor = eventCursor(run.list, t);
       // A discontinuity must release the prior audio and all broadcast history.
       stopRadioClip();
       pose(true);
@@ -507,11 +517,10 @@ const RealReplay = (function () {
 
     function fire() {
       const list = run.list;
-      for (let i = 0; i < list.length; i++) {
-        const h = list[i];
+      while (run.eventCursor < list.length) {
+        const h = list[run.eventCursor];
         if (h.t > run.T) break;
-        if (run.fired.has(i)) continue;
-        run.fired.add(i);
+        run.eventCursor++;
         if (h.t < run.T - CAPTION_S) continue;   // seeked past: not news any more
         if (h.kind === "radio") { if (run.speed === 1) playRadio(h); continue; }
         // SPOKEN when the commentator can keep up (<= 2x): the commentary card

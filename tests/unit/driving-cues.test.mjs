@@ -305,7 +305,7 @@ test("audio driving cues stay silent during a real-race WATCH (same gate as the 
     Log: { info() {}, warn() {}, debug() {}, enabled() { return false; } },
     M4: { clamp: (v, a, b) => (v < a ? a : v > b ? b : v) },
     PhysicsConsts: { FIXED_DT: 1 / 60, LAT_MAX: 22, BRAKE: 22, VMAX: 72 },
-    RealRace: { status: () => ({ watch: true }) },
+    RealRace: { isWatch: () => true, status: () => { throw new Error("WATCH guard must not build a status snapshot"); } },
     Tracks: {
       curvature(track, s) {
         curvatureCalls.push(s);

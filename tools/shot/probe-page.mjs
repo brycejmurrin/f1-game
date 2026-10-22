@@ -4,7 +4,25 @@ import { writeFileSync } from "node:fs";
 import { WEBGPU_CHROMIUM_ARGS } from "../lib/harness.mjs";
 
 /** Chromium flags per renderer backend (must match backend-compare / gfx-probe / carshot). */
-export function chromiumArgsForBackend(backend) {
+export function chromiumArgsForBackend(backend, { gpu = "software" } = {}) {
+  if (!["three", "webgpu", "webgl2"].includes(backend)) throw new Error(`unknown renderer backend: ${backend}`);
+  if (!["software", "hardware"].includes(gpu)) throw new Error(`gpu must be software or hardware, not ${gpu}`);
+  if (gpu === "hardware") {
+    const args = ["--enable-gpu", ...(process.platform === "linux" ? ["--no-sandbox"] : [])];
+    if (backend === "webgl2") return args;
+    // Linux headless Chromium's documented Vulkan setup. This selects the
+    // Vulkan API, not a software adapter: there is deliberately no
+    // --use-vulkan=swiftshader / --use-webgpu-adapter=swiftshader pin, and the
+    // strict adapter check below rejects SwiftShader if the OS falls back.
+    // macOS uses Metal and must not receive --use-angle=vulkan (see the
+    // hardware Playwright config and gpu-census measurements). The unsafe flag
+    // exposes WebGPU on gated configs; it does not select or create hardware.
+    if (process.platform === "linux") args.push(
+      "--enable-unsafe-webgpu", "--enable-features=Vulkan", "--use-angle=vulkan", "--disable-vulkan-surface",
+    );
+    else if (process.platform === "darwin") args.push("--enable-unsafe-webgpu"); // measured to preserve Metal in this repo's full-Chromium CI
+    return args;
+  }
   // --enable-unsafe-swiftshader: Chromium 1xx blocks automatic SwiftShader
   // WebGL without it (carshot / gfx-probe already pin this; probe helpers did not).
   if (backend === "webgpu") return [...WEBGPU_CHROMIUM_ARGS];
@@ -14,6 +32,51 @@ export function chromiumArgsForBackend(backend) {
   return ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
 }
 
+/** Launch settings for software probes or an explicit full-browser hardware attempt. */
+export function chromiumLaunchOptionsForBackend(backend, { gpu = "software" } = {}) {
+  return {
+    ...(gpu === "hardware" ? { browserFlavor: "full" } : {}),
+    args: chromiumArgsForBackend(backend, { gpu }),
+  };
+}
+
+const SOFTWARE_ADAPTER_RE = /swiftshader|llvmpipe|lavapipe|softpipe|warp|basic render|gdi generic|software/i;
+
+/** Conservative adapter classification: empty/redacted identity is unknown, never hardware. */
+export function classifyWebGpuAdapter({ info = {}, isFallbackAdapter = null } = {}) {
+  const identity = [info.vendor, info.architecture, info.device, info.description]
+    .filter((value) => typeof value === "string" && value.trim())
+    .join(" ");
+  if (isFallbackAdapter === true || SOFTWARE_ADAPTER_RE.test(identity)) return "software";
+  if (!identity) return "unknown";
+  return "hardware";
+}
+
+/** Require an identifiable, non-fallback WebGPU adapter before a hardware capture. */
+export async function requireHardwareWebGpu(page) {
+  const adapter = await page.evaluate(async () => {
+    if (!navigator.gpu) return { error: "navigator.gpu is unavailable", info: {}, isFallbackAdapter: null };
+    try {
+      const a = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+      if (!a) return { error: "requestAdapter returned null", info: {}, isFallbackAdapter: null };
+      const i = a.info || {};
+      return {
+        error: null,
+        info: { vendor: i.vendor || "", architecture: i.architecture || "", device: i.device || "", description: i.description || "" },
+        isFallbackAdapter: typeof a.isFallbackAdapter === "boolean" ? a.isFallbackAdapter : null,
+      };
+    } catch (e) {
+      return { error: String(e && e.message || e), info: {}, isFallbackAdapter: null };
+    }
+  });
+  const verdict = classifyWebGpuAdapter(adapter);
+  const result = { ...adapter, verdict };
+  if (verdict !== "hardware") {
+    throw new Error(`hardware WebGPU required; adapter verdict=${verdict}${adapter.error ? ` (${adapter.error})` : ""}${Object.values(adapter.info || {}).some(Boolean) ? `; identity=${Object.values(adapter.info).filter(Boolean).join(" / ")}` : ""}`);
+  }
+  return result;
+}
+
 /**
  * Runs before any page script. Pins backend/team and disables view transitions
  * (headless compositing rejects them → index.html error overlay blocks shots).
@@ -21,18 +84,27 @@ export function chromiumArgsForBackend(backend) {
  * pre-race FLYBY (js/ui/loading-screen.js has no flyby under it). Pass
  * `motion: true` to probe the loading screen / flyby.
  */
-export function installProbeInit(page, { backend = "webgl2", team = null, tlxForceGL = true, motion = false } = {}) {
-  return page.addInitScript(({ be, teamIdx, forceGl, keepMotion }) => {
+export function installProbeInit(page, { backend = "webgl2", team = null, tlxForceGL = true, motion = false, ultra = false, hardware = false, tlxWebgpu = false } = {}) {
+  return page.addInitScript(({ be, teamIdx, forceGl, keepMotion, highQuality, nativeCapture, useTlxWebgpu }) => {
     try {
       // Pin webgl2 explicitly. Clearing the key means the shipped TLX/Three
       // default on every device, which is not the native GLX path this probe's
       // default requests.
       if (be === "webgl2") localStorage.setItem("apex26.gfxBackend", "webgl2");
       else localStorage.setItem("apex26.gfxBackend", be);
-      if (be === "three" && forceGl) localStorage.setItem("apex26.tlxForceGL", "1");
+      if (be === "three" && useTlxWebgpu) localStorage.setItem("apex26.tlxForceGL", "0");
+      else if (be === "three" && forceGl) localStorage.setItem("apex26.tlxForceGL", "1");
       if (be === "webgpu") {
         localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
-        try { sessionStorage.setItem("apex26.wgxCapture", "1"); } catch (_) {}
+        try { sessionStorage.setItem("apex26.wgxCapture", nativeCapture ? "0" : "1"); } catch (_) {}
+      }
+      if (be === "three" && useTlxWebgpu && nativeCapture) {
+        try { sessionStorage.setItem("apex26.wgxCapture", "0"); } catch (_) {}
+      }
+      if (highQuality) {
+        localStorage.setItem("apex26.gfxPreset", JSON.stringify("ultra"));
+        localStorage.removeItem("apex26.gfxWgxLite");
+        localStorage.setItem("apex26.gfxWgxLevel", "0");
       }
       if (teamIdx != null) localStorage.setItem("apex26.team", JSON.stringify(+teamIdx));
     } catch (_) {}
@@ -58,7 +130,8 @@ export function installProbeInit(page, { backend = "webgl2", team = null, tlxFor
       const msg = (r && (r.message || r)) || "";
       if (String(msg).includes("Transition was skipped")) e.preventDefault();
     }, true);
-  }, { be: backend, teamIdx: team, forceGl: tlxForceGL, keepMotion: !!motion });
+  }, { be: backend, teamIdx: team, forceGl: tlxForceGL, keepMotion: !!motion,
+    highQuality: !!ultra, nativeCapture: !!hardware, useTlxWebgpu: !!tlxWebgpu });
 }
 
 /** Snapshot why boot stalled — bare waitForFunction timeouts never name WebGL. */
@@ -583,6 +656,134 @@ export async function readSoftCanvasBytes(page, {
 }
 
 /**
+ * CDP capture budget by viewport area. SwiftShader paints a 1920×1080 frame
+ * several times slower than a phone frame — a flat 60 s cap killed W12d's
+ * garage matrix sheet. Same scale as hud-survey.mjs `shotTimeoutMs`.
+ */
+export function shotTimeoutMs(w, h) {
+  const ww = Number(w) || 0, hh = Number(h) || 0;
+  return ww * hh > 1.5e6 ? 180000 : 60000;
+}
+
+/**
+ * Parse `--shot-timeout <ms>` / `--shot-timeout=<ms>` from a CLI argv list.
+ * Returns null when absent; throws on a non-positive value.
+ */
+export function parseShotTimeout(argv = []) {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith("--shot-timeout=")) {
+      const v = Number(a.slice("--shot-timeout=".length));
+      if (!(Number.isFinite(v) && v > 0)) throw new Error("--shot-timeout must be a positive ms number");
+      return v;
+    }
+    if (a === "--shot-timeout") {
+      const v = Number(argv[++i]);
+      if (!(Number.isFinite(v) && v > 0)) throw new Error("--shot-timeout must be a positive ms number");
+      return v;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve the CDP/screenshot budget: explicit `opts.timeout` /
+ * `opts.shotTimeout`, else area-scaled from the viewport, else 60 s.
+ */
+export function resolveShotTimeoutMs(opts = {}, viewport = null) {
+  const explicit = opts.timeout ?? opts.shotTimeout;
+  if (explicit != null) {
+    const t = Number(explicit);
+    if (!(Number.isFinite(t) && t > 0)) throw new Error("shot timeout must be a positive ms number");
+    return t;
+  }
+  const vp = viewport || opts.viewport || null;
+  if (vp && Number(vp.width) > 0 && Number(vp.height) > 0) return shotTimeoutMs(vp.width, vp.height);
+  return 60000;
+}
+
+/** Race a CDP send promise against an optional ms budget. */
+async function raceCdpBudget(capture, budgetMs) {
+  if (budgetMs == null) return capture;
+  let timeoutHandle;
+  try {
+    return await Promise.race([
+      capture,
+      new Promise((_, rej) => {
+        timeoutHandle = setTimeout(() => rej(new Error(
+          `probe: CDP captureScreenshot timed out after ${budgetMs}ms`)), budgetMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+  }
+}
+
+/** Split a CSS clip box into a row×col grid of tile clips. */
+export function tileClips(box, cols = 2, rows = 2) {
+  const tiles = [];
+  const w = Math.max(1, box.width), h = Math.max(1, box.height);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x0 = box.x + (w * c) / cols;
+      const y0 = box.y + (h * r) / rows;
+      const x1 = box.x + (w * (c + 1)) / cols;
+      const y1 = box.y + (h * (r + 1)) / rows;
+      tiles.push({
+        x: x0, y: y0,
+        width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0),
+        col: c, row: r,
+      });
+    }
+  }
+  return tiles;
+}
+
+/** Stitch PNG tile buffers into one PNG covering `box` (CSS pixels). */
+async function stitchPngTiles(box, tiles, buffers) {
+  const sharp = (await import("sharp")).default;
+  const composites = buffers.map((buf, i) => ({
+    input: buf,
+    left: Math.round(tiles[i].x - box.x),
+    top: Math.round(tiles[i].y - box.y),
+  }));
+  return sharp({
+    create: {
+      width: Math.max(1, Math.round(box.width)),
+      height: Math.max(1, Math.round(box.height)),
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  }).composite(composites).png().toBuffer();
+}
+
+/**
+ * Capture `clip` via CDP in 2×2 tiles when a full-frame shot times out.
+ * Each tile gets `budgetMs / tiles.length` (min 15 s).
+ */
+async function cdpCaptureTiled(page, baseParams, box, budgetMs) {
+  const tiles = tileClips(box, 2, 2);
+  const per = Math.max(15000, Math.floor((budgetMs || 60000) / tiles.length));
+  const session = await page.context().newCDPSession(page);
+  const buffers = [];
+  try {
+    for (const tile of tiles) {
+      const params = {
+        ...baseParams,
+        clip: { x: tile.x, y: tile.y, width: tile.width, height: tile.height, scale: 1 },
+      };
+      buffers.push(await raceCdpBudget(
+        session.send("Page.captureScreenshot", params).then(({ data }) => Buffer.from(data, "base64")),
+        per,
+      ));
+    }
+  } finally {
+    try { await session.detach(); } catch (_) { /* already closed */ }
+  }
+  return stitchPngTiles(box, tiles, buffers);
+}
+
+/**
  * Compositor bytes of the presented canvas. Awaits a fresh blit first unless
  * `skipAwait` — pass that when the caller already froze after awaitPresentedFrame
  * (a second wait after headless(true) hangs on GLX).
@@ -591,10 +792,12 @@ export async function readSoftCanvasBytes(page, {
  * Never Playwright's screenshot API — it waits on document.fonts.ready and that
  * hung GHA smoke shards 2/3 after freeze.
  *
- * `opts.timeout` (ms) is OPTIONAL. When set, it bounds the CDP leg (and soft
- * await when `awaitMs` omitted). Default CDP is unbounded — smoke under GHA
- * Desktop Chrome often needs >60s for CDP when soft is unarmed; a hard 60s
- * race turned a 339s green into a false red.
+ * `opts.timeout` / `opts.shotTimeout` (ms) bounds the CDP leg (and soft await
+ * when `awaitMs` omitted). Default CDP is unbounded — smoke under GHA Desktop
+ * Chrome often needs >60s for CDP when soft is unarmed; a hard 60s race turned
+ * a 339s green into a false red. Callers that DO set a timeout (garage matrix
+ * sheets) can raise it via `--shot-timeout` / `resolveShotTimeoutMs`, and on
+ * timeout a 2×2 tiled CDP fallback runs unless `opts.tileFallback === false`.
  * `opts.clip` overrides the presented-canvas box (CSS viewport pixels).
  * `opts.preferView` prefers carview `#view` for soft capture.
  * `opts.forceCdp` skips the soft path (tests / known-bad soft).
@@ -603,8 +806,11 @@ export async function readSoftCanvasBytes(page, {
  */
 export async function screenshotPresentedCanvas(page, opts = {}) {
   const started = Date.now();
+  const timeoutMs = opts.timeout != null || opts.shotTimeout != null
+    ? resolveShotTimeoutMs(opts, page.viewportSize?.() || null)
+    : null;
   const awaitMs = opts.awaitMs != null ? opts.awaitMs
-    : (opts.timeout != null ? Math.min(opts.timeout, 30000) : 30000);
+    : (timeoutMs != null ? Math.min(timeoutMs, 30000) : 30000);
   if (!opts.skipAwait) await awaitCaptureReady(page, { timeoutMs: awaitMs });
   const presented = Date.now();
 
@@ -637,40 +843,45 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
   };
   const session = await page.context().newCDPSession(page);
   let buf;
-  let timeoutHandle;
+  let via = "cdp";
   let headlessBefore;
+  const baseParams = { format, captureBeyondViewport: false };
+  if (format === "png") baseParams.optimizeForSpeed = opts.optimizeForSpeed !== false;
+  if (format === "jpeg" && opts.quality != null) baseParams.quality = opts.quality;
   try {
     if (opts.pauseRender) headlessBefore = await page.evaluate(() => {
       const a = window.__apex;
       if (!a?.headless) return null;
       const previous = a.headless(); a.headless(true); return previous;
     });
-    const params = { format, clip, captureBeyondViewport: false };
-    // Chromium's low-compression PNG encoder is lossless. Larger files, less
-    // browser-thread encoding work; no Playwright/Chromium fork needed.
-    if (format === "png") params.optimizeForSpeed = opts.optimizeForSpeed !== false;
-    if (format === "jpeg" && opts.quality != null) params.quality = opts.quality;
-    const capture = session.send("Page.captureScreenshot", params)
-      .then(({ data }) => Buffer.from(data, "base64"));
-    // Bound CDP only when the caller asked — smoke omits timeout on purpose.
-    if (opts.timeout != null) {
-      const budget = opts.timeout;
-      buf = await Promise.race([
-        capture,
-        new Promise((_, rej) => { timeoutHandle = setTimeout(() => rej(new Error(
-          `probe: CDP captureScreenshot timed out after ${budget}ms`)), budget); }),
-      ]);
-    } else {
-      buf = await capture;
+    const params = { ...baseParams, clip };
+    try {
+      // Bound CDP only when the caller asked — smoke omits timeout on purpose.
+      // Literal Page.captureScreenshot stays in this function (car-multi-shot pin).
+      buf = await raceCdpBudget(
+        session.send("Page.captureScreenshot", params).then(({ data }) => Buffer.from(data, "base64")),
+        timeoutMs,
+      );
+    } catch (err) {
+      const timedOut = /timed out/i.test(String(err && err.message || err));
+      const wantTiles = opts.tileFallback !== false && timedOut && timeoutMs != null
+        && format === "png" && box.width * box.height > 4e5;
+      if (!wantTiles) throw err;
+      try { await session.detach(); } catch (_) { /* closed before tile pass */ }
+      buf = await cdpCaptureTiled(page, baseParams, box, timeoutMs);
+      via = "cdp-tiled";
     }
   } finally {
-    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
     try { await session.detach(); } catch (_) { /* already closed */ }
     if (headlessBefore != null) await page.evaluate((previous) => {
       window.__apex.headless(previous);
     }, headlessBefore).catch(() => {}); // page may have closed on failure
   }
   if (opts.path) writeFileSync(opts.path, buf);
+  if (via === "cdp-tiled") {
+    return { buf, bytes: buf.length, clip: box, id: box.id, via: "cdp-tiled",
+      timings: { presentMs: presented - started, captureMs: Date.now() - presented } };
+  }
   return { buf, bytes: buf.length, clip: box, id: box.id, via: "cdp",
     timings: { presentMs: presented - started, captureMs: Date.now() - presented } };
 }
@@ -678,14 +889,17 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
 /** Fade the setup panel and capture the presented canvas for a clean garage shot.
  * Prefer #game-soft toDataURL while the loop still runs (fast multi-angle path).
  * Fall back to freeze + CDP Page.captureScreenshot — never the Playwright
- * screenshot API (document.fonts.ready hung GHA smoke shards 2/3). */
+ * screenshot API (document.fonts.ready hung GHA smoke shards 2/3).
+ * CDP budget: `opts.timeout` / `opts.shotTimeout`, else area-scaled via
+ * `resolveShotTimeoutMs` (1920×1080 → 180 s). */
 export async function screenshotGameCanvas(page, outPath, opts = {}) {
   await page.evaluate(() => {
     const c = document.getElementById("carsetup");
     if (c) c.style.opacity = "0";
   });
   if (!opts.skipVisible) await waitGameVisible(page);
-  if (!opts.skipAwait) await awaitCaptureReady(page, { timeoutMs: opts.awaitMs ?? Math.min(opts.timeout ?? 30000, 30000) });
+  const timeout = resolveShotTimeoutMs(opts, page.viewportSize?.() || null);
+  if (!opts.skipAwait) await awaitCaptureReady(page, { timeoutMs: opts.awaitMs ?? Math.min(timeout, 30000) });
   const soft = await readSoftCanvasBytes(page, { type: "png" });
   if (soft) {
     const buf = Buffer.from(soft.b64, "base64");
@@ -696,7 +910,8 @@ export async function screenshotGameCanvas(page, outPath, opts = {}) {
   // Playwright's screenshot path starved on fonts. The shared CDP path restores
   // the previous pause state, including callers that were already frozen.
   const shot = await screenshotPresentedCanvas(page, {
-    path: outPath, skipAwait: true, forceCdp: true, pauseRender: true, timeout: opts.timeout ?? 60000,
+    path: outPath, skipAwait: true, forceCdp: true, pauseRender: true,
+    timeout, tileFallback: opts.tileFallback,
   });
   return { bytes: shot.bytes, clip: shot.clip, via: shot.via || shot.id || "cdp" };
 }

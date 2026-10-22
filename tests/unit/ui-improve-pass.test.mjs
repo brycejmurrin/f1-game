@@ -1476,6 +1476,49 @@ test("AriaState re-syncs only the root a mutation landed in", () => {
   assert.equal(c2.getAttribute("aria-pressed"), "true");
 });
 
+test("AriaState scopes slider and option changes while discovering rebuilt groups", () => {
+  const dom = makeDom({ readyState: "complete" }), root = dom.byId("pmsettings");
+  const label = dom.makeElement("label"), slider = dom.makeElement("input", "local-volume"), out = dom.makeElement("b", "local-volume-v");
+  slider.type = "range"; slider.setAttribute("type", "range"); slider.value = "8"; out.textContent = "80%";
+  label.append(slider, out); root.appendChild(label);
+  const group = dom.makeElement("div"), a = dom.makeElement("button"), b = dom.makeElement("button");
+  a.classList.add("active"); group.append(a, b); root.appendChild(group);
+  const observers = [];
+  const sb = uiSandbox(dom, { MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(r) { this.root = r; } } });
+  vm.runInNewContext(src("js/ui/aria-state.js"), sb, { filename: absSrc("js/ui/aria-state.js") });
+  const observer = observers.find((o) => o.root === root);
+  const flush = () => { while (sb.__timers.length) sb.__timers.shift()(); };
+  let rootQueries = 0, labelQueries = 0, ariaWrites = 0;
+  const queryRoot = root.querySelectorAll, queryLabel = label.querySelectorAll, set = a.setAttribute;
+  root.querySelectorAll = (s) => { rootQueries++; return queryRoot(s); };
+  label.querySelectorAll = (s) => { labelQueries++; return queryLabel(s); };
+  a.setAttribute = (k, v) => { if (k === "aria-pressed") ariaWrites++; set(k, v); };
+  a.classList.remove("active"); b.classList.add("active");
+  out.textContent = "90%";
+  observer.fn([{ type: "characterData", target: { nodeType: 3, parentElement: out } }]); flush();
+  assert.equal(slider.getAttribute("aria-valuetext"), "90%");
+  assert.equal(rootQueries, 0, "a slider readout does not scan its whole settings root");
+  assert.equal(b.getAttribute("aria-pressed"), "false", "unrelated option groups wait for their own records");
+  observer.fn([{ type: "attributes", target: b, attributeName: "class" }]); flush();
+  assert.equal(a.getAttribute("aria-pressed"), "false"); assert.equal(b.getAttribute("aria-pressed"), "true");
+  ariaWrites = 0;
+  observer.fn([{ type: "attributes", target: b, attributeName: "class" }]); flush();
+  assert.equal(ariaWrites, 0, "an unchanged selection makes no redundant ARIA writes");
+  const before = labelQueries;
+  out.textContent = "100%"; a.classList.add("active"); b.classList.remove("active");
+  observer.fn([
+    { type: "childList", target: out }, { type: "characterData", target: { nodeType: 3, parentElement: out } },
+    { type: "attributes", target: a, attributeName: "class" },
+  ]); flush();
+  assert.equal(slider.getAttribute("aria-valuetext"), "100%"); assert.equal(a.getAttribute("aria-pressed"), "true");
+  assert.equal(labelQueries - before, 4, "one coalesced semantic pass handles both readout records");
+  const added = dom.makeElement("div"), c = dom.makeElement("button"), d = dom.makeElement("button");
+  c.classList.add("active"); added.append(c, d); root.appendChild(added);
+  observer.fn([{ type: "childList", target: root }, { type: "childList", target: out }]); flush();
+  assert.equal(c.getAttribute("aria-pressed"), "true"); assert.equal(d.getAttribute("aria-pressed"), "false");
+  assert.equal(rootQueries, 4, "unknown structural changes retain one full discovery pass");
+});
+
 test("dense sheets preserve a functional content height at extreme UI size", () => {
   // SheetShape BEHAVIOUR: a sheet that declares --fit-at is capped to what its
   // host can hold — written as --sheet-scale on the sheet and mirrored as
@@ -2474,4 +2517,35 @@ test("the camera preset a part fit triggers is silent — click() must not repla
     "…with sound muted across the synthetic click");
   assert.ok(/finally\s*\{\s*G\.soundOn\s*=/.test(body),
     "…and restored in a finally, so a throwing handler cannot leave the game mute");
+});
+
+test("AriaState sync writes aria-pressed / aria-current only when the value changes", () => {
+  // Every write is a mutation record that wakes AriaState and ScrollFade again
+  // (B·H30: 15 no-op aria-pressed writes on #cs-unlimited per livery drag).
+  const dom = makeDom({ readyState: "loading" });
+  const group = dom.document.createElement("div");
+  const one = dom.document.createElement("button"), two = dom.document.createElement("button");
+  one.classList.add("active"); group.append(one, two); dom.byId("overlay").appendChild(group);
+  const nav = dom.document.createElement("nav");
+  nav.id = "htp-contents";
+  const link = dom.document.createElement("a");
+  link.setAttribute("href", "#htp-racing");
+  nav.appendChild(link);
+  dom.byId("howtoplay").appendChild(nav);
+  const sb = uiSandbox(dom, { location: { hash: "#htp-racing" } });
+  vm.runInNewContext(src("js/ui/aria-state.js"), sb, { filename: absSrc("js/ui/aria-state.js") });
+  sb.AriaState.sync();
+  assert.equal(one.getAttribute("aria-pressed"), "true");
+  assert.equal(two.getAttribute("aria-pressed"), "false");
+  assert.equal(link.getAttribute("aria-current"), "true");
+  const writes = [];
+  for (const el of [one, two, link]) {
+    const set = el.setAttribute;
+    el.setAttribute = (k, v) => { writes.push(k); return set(k, v); };
+  }
+  sb.AriaState.sync();
+  assert.deepEqual(writes, [], "an unchanged second pass writes nothing");
+  two.classList.add("active");
+  sb.AriaState.sync();
+  assert.deepEqual(writes, ["aria-pressed"], "only the button whose state changed is written");
 });

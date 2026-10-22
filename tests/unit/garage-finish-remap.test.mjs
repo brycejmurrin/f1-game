@@ -54,3 +54,32 @@ test("no stand-in surface id escapes a build", () => {
   assert.ok(out.mat.every((m) => m < 200 || m > 203), "a PH_* stand-in reached the mesh");
 });
 
+
+// A colour-only livery change keeps the geometry, so the garage hands the last build's smoothing prep to the next
+// (Car3D.build shadeKeep; B·H32 2026-10-21: CarShade.smooth was ~83 of a ~130 ms build, ~7.5 ms warm). Only correct
+// while the output equals a fresh build byte for byte and the shared prep is never written to.
+test("a build handed a same-geometry build's shadeKeep reuses it and equals a fresh build", () => {
+  const liv0 = Object.assign({ c1: team.color, c2: team.color2 }, team.livery || {});
+  const A = build(liv0, { refinish: true }), keep = A._refinish.keep;
+  assert.ok(keep && keep.vt, "a shaded build keeps its smoothing prep");
+  const before = { runs: keep.runs.slice(), nrm: keep.nrm.slice(), mat: keep.mat.slice() };
+  for (const liv of [Object.assign({}, liv0, { c1: [0.1, 0.8, 0.3] }), Object.assign({}, liv0, { c2: [0.9, 0.9, 0.1], finish: "matte" }),
+    Object.assign({}, liv0, { finish: "chrome", haloFinish: "matte" })]) {
+    const fresh = build(liv, { refinish: true }), warm = build(liv, { refinish: true, shadeKeep: keep });
+    assert.equal(warm._refinish.keep, keep, "the handed prep is the one used");
+    for (const k of ["pos", "nrm", "col", "mat", "idx"]) assert.ok(same(fresh[k], warm[k]), `${JSON.stringify(liv.c1)}: ${k} differs from a fresh build`);
+    const r = C.refinish(warm, Object.assign({}, liv, { finish: "satin" })), rf = C.refinish(fresh, Object.assign({}, liv, { finish: "satin" }));
+    assert.ok(same(r.nrm, rf.nrm), "a refinish over the shared prep matches one over its own");
+  }
+  assert.ok(same(keep.runs, before.runs) && same(keep.nrm, before.nrm) && same(keep.mat, before.mat), "the shared prep is never written to");
+});
+
+test("a shadeKeep from different geometry is ignored, not trusted", () => {
+  const liv0 = Object.assign({ c1: team.color, c2: team.color2 }, team.livery || {});
+  const striped = Object.assign({}, liv0, { stripe: [1, 1, 1], noseStripe: [0, 0, 0] }), plain = Object.assign({}, liv0);
+  delete plain.stripe; delete plain.noseStripe;
+  const A = build(striped, { refinish: true }), fresh = build(plain, { refinish: true }), warm = build(plain, { refinish: true, shadeKeep: A._refinish.keep });
+  assert.notEqual(A.pos.length, fresh.pos.length, "the stripe really adds geometry (else this test proves nothing)");
+  assert.notEqual(warm._refinish.keep, A._refinish.keep, "a count mismatch starts a fresh prep");
+  for (const k of ["pos", "nrm", "col", "mat", "idx"]) assert.ok(same(fresh[k], warm[k]), `${k} differs from a fresh build`);
+});

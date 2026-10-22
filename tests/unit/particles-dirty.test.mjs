@@ -13,23 +13,65 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function make(uploads) {
+function make(uploads, wind, opts = {}) {
   const rng = makeRng(0xd117);
   const seededMath = Object.assign(Object.create(Math), { random: () => rng.unit() });
   const ctx = vm.createContext({
     Float32Array, Uint8Array, Array, Math: seededMath, Object,
-    LightTune: { LT: { rainCount: 8, rainStreak: 1, rainWind: 0, windDir: 0, rainSpeed: 1, rainOpacity: 1 } },
+    LightTune: { LT: { rainCount: opts.count || 8, drizzleCount: opts.drizzleCount ?? 0.3, rainStreak: 1, rainWind: wind ? 0.18 : 0, windDir: 0, rainSpeed: 1, rainOpacity: 1 } },
     PerfGov: { autoShed: () => 0 },
+    Wind: { state: () => wind },
   });
   seedLog(ctx);
   const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx, { filename: absSrc("js/fx/particles.js") });
   P.init({
+    mobileTier: !!opts.mobile,
     drawParticles: (data, floats, additive, dirty) => {
       uploads.push({ floats, additive: !!additive, dirty: dirty !== false, data: data || null });
     },
   });
   return P;
 }
+
+test("continuous rainfall scales the bounded particle field and clears stale geometry at zero", () => {
+  const uploads = [], P = make(uploads), eye = [100, 5, -30];
+  P.rainSeed(false); P.rainShow(true);
+  P.rainUpdate(0.016, eye, 1); P.draw();
+  const full = uploads.at(-1).floats;
+  P.rainUpdate(0.016, eye, 0.5); P.draw();
+  assert.ok(uploads.at(-1).floats > 0 && uploads.at(-1).floats < full);
+  uploads.length = 0;
+  P.rainUpdate(0.016, eye, 0); P.draw();
+  assert.equal(uploads.length, 0, "no previous field is submitted");
+  P.rainUpdate(0.016, eye, 1); P.draw();
+  assert.equal(uploads.at(-1).floats, full, "the field recovers within its original cap");
+});
+
+test("rain streaks drift with the actual race wind vector", () => {
+  const centreX = (wx) => {
+    const uploads = [], P = make(uploads, { on: true, wx, wz: 0 });
+    P.rainSeed(false); P.rainShow(true);
+    P.rainUpdate(0.05, [100, 5, -30], true); P.draw();
+    const data = uploads[0].data;
+    let x = 0;
+    for (let v = 0; v < 6; v++) x += data[v * 10 + 2];
+    return x / 6;
+  };
+  assert.ok(centreX(8) > centreX(-8), "opposite winds move the same seeded drop in opposite directions");
+});
+
+test("arc and static drizzle have the same density with phone caps and custom drizzle settings", () => {
+  for (const mobile of [false, true]) for (const drizzleCount of [0.1, 0.3, 0.8]) {
+    const draw = (drizzle) => {
+      const uploads = [], P = make(uploads, null, { mobile, count: 650, drizzleCount });
+      P.rainSeed(drizzle); P.rainShow(true);
+      P.rainUpdate(0, [100, 5, -30], 0.5); P.draw();
+      const u = uploads.at(-1);
+      return { floats: u?.floats || 0, first: u ? Array.from(u.data.slice(0, 60)) : [] };
+    };
+    assert.deepEqual(draw(false), draw(true), `same density, alpha and streak shape: mobile ${mobile}, drizzle ${drizzleCount}`);
+  }
+});
 
 test("parked rain expands at most ~30x/s (not every frame, not frozen) until the eye leaves the cell", () => {
   const uploads = [];

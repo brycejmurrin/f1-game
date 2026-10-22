@@ -66,7 +66,7 @@ function idleSampleSrc() {
 const live = new Set();
 function node(kind, counts) {
   if (counts) counts[kind] = (counts[kind] || 0) + 1;
-  const self = { kind, connect: (t) => t, disconnect() { live.delete(self); }, start(t) { self.startAt = t; }, stop(t) { self.stopAt = t; }, type: "", loop: false,
+  const self = { kind, connections: [], connect(t) { self.connections.push(t); return t; }, disconnect() { live.delete(self); }, start(t) { self.startAt = t; }, stop(t) { self.stopAt = t; }, type: "", loop: false,
            loopStart: 0, loopEnd: 0, buffer: null, onended: null, fftSize: 0, frequencyBinCount: 0,
            getFloatFrequencyData() {}, gain: param(1), frequency: param(440), detune: param(0),
            Q: param(1), playbackRate: param(1) };
@@ -117,7 +117,7 @@ function boot(opts) {
     AudioContext: function () { return ctx; },
     fetch: () => new Promise((res) => held.push(() => res({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),   // ok: engine.js now rejects a !ok response before decoding
   };
-  if (opts && opts.realWatch) sb.RealRace = { status: () => ({ watch: true }) };
+  if (opts && opts.realWatch) sb.RealRace = { isWatch: () => true, status: () => { throw new Error("WATCH guard must not build a status snapshot"); } };
   if (opts && opts.Audio) sb.Audio = opts.Audio;
   sb.window = sb;
   const vctx = vm.createContext(sb);
@@ -389,6 +389,55 @@ test("a muted layer goes silent and then costs nothing per frame", async () => {
   A.setLayer("wind", true);
   loud();
   assert.ok(A.windLevel() > 0, "switching it back on restores it");
+});
+
+test("moving muted layers retain fade-tail pitch, then stop scheduling and re-aim before gain on re-enable", async () => {
+  for (const samples of [false, true]) {
+    const { GameAudio: A, release, ctxTime } = boot();
+    A.init(); if (samples) await release(); A.startEngine();
+    const keys = ["wind", "whine", "sub", "gravel", "harvest", "ers"];
+    const frame = (u) => A.setEngine(u, 0, false, u, 4, { slip: 1, ax: 0, brake: 0.8, throttle: 1, deploy: u, energy: 1 });
+    ctxTime(0.05); frame(0.2);
+    for (const key of keys) A.setLayer(key, false);
+    ctxTime(0.05); frame(0.3);
+    const gains = [...live].filter((n) => n._apexMuteUntil !== undefined);
+    assert.equal(gains.length, samples ? 6 : 5, "the sample sub-layer is absent on the synth core");
+    const rows = gains.map((gain) => {
+      const direct = [...live].find((n) => n.connections.includes(gain) && n.kind !== "gain");
+      const source = [...live].find((n) => n.kind === "osc" && n.connections.includes(direct)) || direct;
+      assert.ok(source, "each layer retains its connected source/filter");
+      return { gain, source, pitch: source.frequency };
+    });
+    const beforeTail = rows.map((r) => r.pitch.sets);
+    ctxTime(0.2); frame(0.4);
+    assert.ok(rows.filter((r, i) => r.pitch.sets > beforeTail[i]).length >= rows.length - 1, "moving inputs still retune the audible fade tails");
+    ctxTime(1.2); frame(0.45);
+    const settled = rows.map((r) => r.pitch.sets);
+    for (let i = 0; i < 120; i++) { ctxTime(1 / 60); frame(0.1 + i * 0.5 / 119); }
+    assert.deepEqual(rows.map((r) => r.pitch.sets), settled, "120 moving muted frames add no pitch/cutoff events");
+    assert.ok(rows.every((r) => r.gain.gain.value === 0), "zero gain targets remain unchanged");
+    const order = [];
+    for (const [i, r] of rows.entries()) for (const [kind, p] of [["pitch", r.pitch], ["gain", r.gain.gain]]) {
+      const set = p.setTargetAtTime;
+      p.setTargetAtTime = (...args) => { order.push(i + ":" + kind); return set(...args); };
+    }
+    for (const key of keys) A.setLayer(key, true);
+    frame(0.7);
+    for (const [i, r] of rows.entries()) {
+      assert.equal(r.gain._apexMuteUntil, undefined, "live update clears the old deadline");
+      const pitch = order.indexOf(i + ":pitch"), gain = order.indexOf(i + ":gain");
+      if (pitch >= 0 && gain >= 0) assert.ok(pitch < gain, "current pitch precedes the gain fade-in");
+    }
+    for (const key of keys) A.setLayer(key, false);
+    frame(0.25);
+    const rapid = rows.map((r) => r.pitch.sets);
+    ctxTime(0.05); frame(0.35);
+    assert.ok(rows.some((r, i) => r.pitch.sets > rapid[i]), "rapid re-mute gets a fresh tail window");
+    A.stopEngine(); A.startEngine(); frame(0.2);
+    const fresh = [...live].filter((n) => n._apexMuteUntil !== undefined);
+    assert.equal(fresh.length, samples ? 6 : 5);
+    assert.ok(fresh.every((n) => !gains.includes(n)), "restart creates fresh graph-owned deadlines");
+  }
 });
 
 test("the rev-limiter chop is switchable and its depth is a knob", async () => {
@@ -1784,6 +1833,25 @@ test("a rewind that jumps the race clock across a pit edge re-seeds wheel guns s
   assert.equal(guns.length, 3, "a new race's initial pit state stays silent");
   G.raceT = 1; nextCar.pitState = "out"; S.update(nextCar);
   assert.deepEqual(guns, [false, false, true, true], "new race pit edges resume immediately");
+});
+
+test("after a rewind the clock baseline follows the rewound raceT, so replayed stop edges fire again", () => {
+  const sb = { Math, Number, Object, GameAudio: {} };
+  const vctx = vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/car-sfx.js") });
+  const guns = [];
+  sb.GameAudio.setCarSfx = () => {};
+  sb.GameAudio.pitGun = (t) => guns.push(t);
+  const G = { vTop: () => 100, isWetRoad: () => false, raceT: 50 };
+  const S = vm.runInContext("CarSfx", vctx).create(G);
+  const car = { speed: 10, pitState: "none" };
+  S.update(car);
+  G.raceT = 52; car.pitState = "box"; S.update(car);
+  assert.deepEqual(guns, [false]);
+  G.raceT = 40; car.pitState = "none"; S.update(car);            // rewind 12 s
+  G.raceT = 41; car.pitState = "lane"; S.update(car);
+  G.raceT = 42; car.pitState = "box"; S.update(car);             // still before the old 52 s high-water mark
+  assert.deepEqual(guns, [false, false], "the replayed stop loosens the wheel guns again");
 });
 
 test("setCarSfx and pitGun are safe with the engine off, and drive their layers with it on", async () => {

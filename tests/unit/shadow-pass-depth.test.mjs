@@ -164,14 +164,20 @@ test("reset() stops the cadence keep re-arming the previous session's car map", 
 // map. Drive the real producer: these paths must not resolve a silhouette or cull
 // prop batches just to feed a renderer no-op. Capability getters remain live so a
 // backend/target change is observed immediately, without debug-snapshot allocations.
-function dynamicShadowFixture() {
+function dynamicShadowFixture(matrixProbe = false) {
   const ctx = vm.createContext({ Math, Float32Array, Array, Object, Number, Infinity });
   seedLog(ctx);
   vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(`var LightTune = { LT: { shadowRange: 80, shadowStr: 1, carShadow: 1, moonShadow: 0, lampShadow: 1 } };
     var PerfGov = { tier: () => 1 };`, ctx);
   vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/shadow-pass.js") });
-  const calls = { sun: 0, car: 0, lamp: 0, keep: 0, mesh: 0, cull: 0 };
+  const calls = { sun: 0, car: 0, lamp: 0, keep: 0, mesh: 0, cull: 0, cockpit: 0, view: 0, projection: 0, multiply: 0 };
+  const realM4 = ctx.M4, vps = [];
+  if (matrixProbe) ctx.M4 = { ...realM4,
+    lookAtTo: (...a) => { calls.view++; return realM4.lookAtTo(...a); },
+    perspectiveTo: (...a) => { calls.projection++; return realM4.perspectiveTo(...a); },
+    mulTo: (...a) => { calls.multiply++; return realM4.mulTo(...a); },
+  };
   const enabled = { car: false, lamp: false };
   const noop = () => {};
   const G = {
@@ -181,16 +187,93 @@ function dynamicShadowFixture() {
       get carShadowEnabled() { return enabled.car; }, get lampShadowEnabled() { return enabled.lamp; },
       shadowBegin: () => calls.sun++, shadowEnd: noop, castShadow: noop, castShadowChunked: noop,
       carShadowBegin: () => calls.car++, carShadowEnd: noop, carShadowKeep: () => calls.keep++,
-      lampShadowBegin: () => calls.lamp++, lampShadowEnd: noop, lampShadowKeep: noop,
+      lampShadowBegin: m => { calls.lamp++; if (matrixProbe) vps.push(Float32Array.from(m)); }, lampShadowEnd: noop, lampShadowKeep: noop,
       makeFrustumPlanes: () => [], shadowCullVP: [],
       cullInstances: () => { calls.cull++; return 0; }, castShadowInstanced: noop,
     },
   };
-  const sp = ctx.ShadowPass.create(G, { vStd: v => v, teamMesh: () => { calls.mesh++; return {}; } });
+  const sp = ctx.ShadowPass.create(G, { vStd: v => v, teamMesh: () => { calls.mesh++; return {}; },
+    cockpitCaster: () => { calls.cockpit++; return {}; } });
   const lights = [0, 10, 0, 10, 10, 10, 50, 0, -1, 0, 0.9, 0.7, 0, 0, 0];
   const frame = (night = false) => ({ sunDir: [0, 0.8, 0.6], sunColor: night ? [0.1, 0.1, 0.1] : [1, 1, 1], lights, lampLum: [10], tailCount: 0 });
-  return { sp, calls, enabled, frame, G, LT: ctx.LightTune.LT };
+  return { sp, calls, enabled, frame, G, LT: ctx.LightTune.LT, gov: ctx.PerfGov, M4: ctx.M4, realM4, vps };
 }
+
+test("cockpit casters follow live knobs, governor tiers, capabilities and consumer hooks", () => {
+  const { sp, calls, enabled, G, LT, gov } = dynamicShadowFixture();
+  enabled.car = enabled.lamp = true;
+  const resolve = () => sp.resolvePlayer({}, 0);
+  resolve(); assert.equal(calls.cockpit, 1);
+  LT.carShadow = LT.lampShadow = 0;
+  for (let f = 0; f < 60; f++) resolve();
+  assert.equal(calls.cockpit, 1, "no pass consumes a caster with both knobs off");
+  LT.lampShadow = 1;
+  gov.tier = () => 2;
+  resolve(); assert.equal(calls.cockpit, 1, "lamp shed begins at tier 2");
+  LT.carShadow = 1;
+  resolve(); assert.equal(calls.cockpit, 2, "car shadows still consume at tier 2");
+  gov.tier = () => 3;
+  resolve(); assert.equal(calls.cockpit, 2, "all dynamic maps shed at tier 3");
+  gov.tier = () => 1;
+  enabled.car = false; enabled.lamp = false;
+  resolve(); assert.equal(calls.cockpit, 2);
+  enabled.lamp = true;
+  G._studioRig = {};
+  resolve(); assert.equal(calls.cockpit, 2, "studio suppresses lamp shadows");
+  G._studioRig = null;
+  resolve(); assert.equal(calls.cockpit, 3, "live restoration resolves immediately");
+  LT.lampShadow = 0; enabled.car = true; LT.shadowStr = 0;
+  resolve(); assert.equal(calls.cockpit, 3, "zero directional strength suppresses car shadows");
+  LT.shadowStr = 1;
+  const begin = G.gfx.carShadowBegin;
+  G.gfx.carShadowBegin = null;
+  resolve(); assert.equal(calls.cockpit, 3, "a missing consumer hook cannot use a silhouette");
+  G.gfx.carShadowBegin = begin;
+  resolve(); assert.equal(calls.cockpit, 4);
+  G.state = "menu";
+  resolve(); assert.equal(calls.cockpit, 4);
+});
+
+test("moving casters reuse byte-identical lamp VP until any camera input changes or reset", () => {
+  const { sp, calls, enabled, frame, realM4, vps } = dynamicShadowFixture(true);
+  enabled.lamp = true;
+  const f = frame(true);
+  const expectedVP = () => {
+    const L = f.lights, view = new Float32Array(16), proj = new Float32Array(16), vp = new Float32Array(16);
+    const fov = Math.min(2.6, 2 * Math.acos(realM4.clamp(L[11], -0.999, 0.999)) * 1.1 + 0.15);
+    realM4.lookAtTo(view, L.slice(0, 3), [L[0] + L[7], L[1] + L[8], L[2] + L[9]], Math.abs(L[8]) > 0.95 ? [1, 0, 0] : [0, 1, 0]);
+    realM4.perspectiveTo(proj, fov, 1, 2.5, Math.max(L[6], 10));
+    realM4.mulTo(vp, proj, view);
+    return Buffer.from(vp.buffer);
+  };
+  for (let n = 0; n < 60; n++) {
+    sp.livePlayerMat[12] = (n % 20) * 0.5;
+    sp.lampPass(f, n * 2, true);
+    assert.deepEqual(Buffer.from(vps.at(-1).buffer), expectedVP());
+  }
+  assert.equal(calls.lamp, 60, "the changing car key still refreshes depth every eligible frame");
+  assert.deepEqual([calls.view, calls.projection, calls.multiply], [1, 1, 1]);
+  for (const lane of [0, 1, 2, 6, 7, 8, 9, 11]) {
+    f.lights[lane] += 0.01;
+    sp.lampPass(f, 120, true);
+    assert.deepEqual(Buffer.from(vps.at(-1).buffer), expectedVP(), `camera lane ${lane}`);
+  }
+  assert.deepEqual([calls.view, calls.projection, calls.multiply], [9, 9, 9]);
+  sp.reset(); sp.lampPass(f, 122, true);
+  assert.deepEqual([calls.view, calls.projection, calls.multiply], [10, 10, 10]);
+});
+
+test("a failed lamp camera build does not publish a reusable matrix key", () => {
+  const { sp, calls, enabled, frame, M4 } = dynamicShadowFixture(true);
+  enabled.lamp = true;
+  const realView = M4.lookAtTo;
+  M4.lookAtTo = () => { throw new Error("camera build failed"); };
+  assert.throws(() => sp.lampPass(frame(true), 0, true), /camera build failed/);
+  M4.lookAtTo = realView;
+  sp.lampPass(frame(true), 2, true);
+  assert.equal(calls.lamp, 1);
+  assert.equal(calls.view, 1, "the same lamp retries the camera build");
+});
 
 test("disabled car maps do not resolve casters; live capability restoration and legacy hooks work", () => {
   const { sp, calls, enabled, frame, G } = dynamicShadowFixture();
