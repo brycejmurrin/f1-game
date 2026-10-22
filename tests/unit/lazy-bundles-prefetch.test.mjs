@@ -437,5 +437,6 @@ test("startRace awaits the LAZY_RACE light presets before its first applyRaceSet
   const firstApply = game.indexOf("applyRaceSettings();", start);
   assert.ok(wait > start, "startRace awaits ensureLightPresets()");
   assert.ok(wait < firstApply, "the await lands before startRace's first applyRaceSettings()");
-  assert.ok(read("js/core/lazy-bundles.js").includes("ensureLightPresets"), "lazy-bundles exports ensureLightPresets");
+  const w = world({ body: () => "" });
+  assert.equal(typeof w.lb.ensureLightPresets, "function", "lazy-bundles exports ensureLightPresets");
 });
