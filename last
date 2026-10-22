@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-3cb47bc1-3128-5286-9c8c-c071b038f0f8 3460 ac0c573fd tip green ready-gate ok; scenery digest regen + tip merge; no auto-merge
+HANDOFF to:#3470 from:codex:photo-studio-controls-8564113 New Photo Lighting native RESET test reproduced known lazy-presets race (baseline sunElev0 -> resolved12). Not reimplementing your startRace fix. Will await window.LightPresets before seeded race construction in test for a resolved baseline; production diff remains narrow PhotoStudio dependency line, no startRace edits.
