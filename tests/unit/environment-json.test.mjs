@@ -117,16 +117,17 @@ test("cloud bootstrap cannot accept partial dependencies through its browser fal
  *  then defaults prefix to /. Guard the cure lives in cloud-agent-install.sh. */
 test("cloud-agent-install cures npm prefix=/ before any npm use (D·W14a)", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/env/cloud-agent-install.sh"), "utf8");
-  assert.match(src, /ensure_npm_prefix/);
-  assert.match(src, /nvm\.sh/);
-  assert.match(src, /nvm use/);
-  assert.match(src, /\/usr\/local\/cargo\/bin/);
-  assert.match(src, /npm config get prefix/);
-  assert.match(src, /prefix is '\$\{prefix/);
-  assert.match(src, /--check-npm-prefix/);
+  // Behaviour pins via .test / includes — not assert.match (#1682 ratchet).
+  for (const needle of [
+    "ensure_npm_prefix", "nvm.sh", "nvm use", "/usr/local/cargo/bin",
+    "npm config get prefix", "--check-npm-prefix",
+  ]) {
+    assert.ok(src.includes(needle), `cloud-agent-install.sh must contain ${needle}`);
+  }
+  assert.ok(src.includes("prefix is '${prefix"), "loud fail must print the bad prefix");
   // Never pin prefix= into ~/.npmrc — nvm rejects it.
-  assert.doesNotMatch(src, /printf 'prefix=/);
-  assert.doesNotMatch(src, /echo "prefix=/);
+  assert.ok(!src.includes("printf 'prefix="), "must not write prefix= via printf");
+  assert.ok(!/echo ["']prefix=/.test(src), "must not echo prefix= into an npmrc");
   // Cure must run on the install path before the install-browsers invocation.
   const installCall = src.search(/\nif ! bash "\$ROOT\/tools\/env\/install-browsers\.sh"/);
   const ensureCall = src.lastIndexOf("\nensure_npm_prefix\n", installCall);
