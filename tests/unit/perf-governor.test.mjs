@@ -531,19 +531,25 @@ test("a bad preset cannot invent a tier above the ladder", () => {
   assert.equal(PerfGov.userTier(), 0, "clamped at the bottom");
 });
 
-test("autoTier ignores the GRAPHICS user floor so look post stays live on LOW", () => {
+test("autoTier ignores the GRAPHICS user floor; lookPostShed pins look post on LOW", () => {
   // GRAPHICS: LOW pins userTier at 4. That must still shed env/SSR/shadows via
-  // tier(), but bloom/SSAO/god-rays/contact/lampVol read autoTier() so the
-  // lighting tuner stays live unless the governor or crash floor measured it.
+  // tier(). autoTier() stays free of the user floor (wet-road SSR + tuner notes),
+  // but lookPostShed() is true on LOW so bloom/SSAO/god-rays/contact/lampVol
+  // actually go — otherwise a healthy LOW keeps the full post stack and loses
+  // to MEDIUM on tile GPUs (iPhone WebGPU BrowserStack 2026-10-21).
   const { PerfGov } = makeGov();
   assert.equal(typeof PerfGov.autoTier, "function", "PerfGov.autoTier must exist");
+  assert.equal(typeof PerfGov.lookPostShed, "function", "PerfGov.lookPostShed must exist");
   assert.equal(PerfGov.autoTier(), 0, "healthy device, no user floor: autoTier is 0");
+  assert.equal(PerfGov.lookPostShed(), false, "healthy device: look post live");
   PerfGov.setUserTier(4);
   assert.equal(PerfGov.tier(), 4, "GRAPHICS: LOW still floors the cost ladder");
-  assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: LOW must not pin look-defining post");
+  assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: LOW must not pin autoTier (wet SSR / tuner)");
+  assert.equal(PerfGov.lookPostShed(), true, "GRAPHICS: LOW must shed look-defining post");
   PerfGov.setUserTier(2);
   assert.equal(PerfGov.tier(), 2);
-  assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: MEDIUM must not pin look post either");
+  assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: MEDIUM must not pin autoTier either");
+  assert.equal(PerfGov.lookPostShed(), false, "GRAPHICS: MEDIUM leaves look post to the governor");
 });
 
 test("a recovered device gets its per-chunk lamps back on GRAPHICS: MEDIUM", () => {
@@ -616,7 +622,8 @@ test("LOW releases measured post shedding after recovery without raising the pre
   feed(gov, () => 8, 40000);
   assert.equal(gov.tier(), 4, "LOW still disables its preset features");
   assert.equal(gov.autoShed(), 0, "measured lamp shedding recovers");
-  assert.equal(gov.autoTier(), 0, "post effects return to the healthy LOW state");
+  assert.equal(gov.autoTier(), 0, "autoTier returns to the healthy LOW state (wet SSR)");
+  assert.equal(gov.lookPostShed(), true, "look post stays shed on LOW after recovery");
 });
 
 test("LOW recovery rolls back when restoring post makes frames slow again", () => {
@@ -684,8 +691,10 @@ test("autoTier still honours the crash-sentinel floor and a measured shed", () =
   let scale = 1;
   PerfGov.init({ isMobile: true, getRenderScale: () => scale, setRenderScale: (s) => { scale = s; return true; } });
   assert.equal(PerfGov.autoTier(), 4, "two crash strikes must still shed look post");
+  assert.equal(PerfGov.lookPostShed(), true, "crash floor sheds via lookPostShed too");
   PerfGov.setUserTier(0);
   assert.equal(PerfGov.autoTier(), 4, "ULTRA must not defeat the crash floor via autoTier either");
+  assert.equal(PerfGov.lookPostShed(), true, "ULTRA must not defeat the crash floor via lookPostShed either");
 });
 
 test("wet-road reflections survive every user tier while overload and dry shedding remain independent", () => {

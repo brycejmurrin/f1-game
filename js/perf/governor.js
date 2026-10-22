@@ -908,22 +908,22 @@ function clearStrikes() {
 return {
   init, tick, setThermalDrift, thermalDrift: () => _drift && _drift.state(), frameStats, recordSimulation, resetFrameStats, sentinelArm, sentinelResume, cleanRace, clearStrikes,
   tier: () => Math.max(_perfTierFloor, _userTier, _perfTier),
-  // Crash + measured only — no GRAPHICS user floor. Look-defining post
-  // (bloom / SSAO / god-rays / contact / lamp volumetrics) reads this so
-  // GRAPHICS: LOW still sheds env/dry-SSR/shadows via tier() but the lighting
-  // tuner stays live unless the device proved it cannot afford the pass.
-  // READS _perfTier ON PURPOSE, and a draft of the preset-release fix below got
-  // this wrong in a way worth recording. That draft derived the governor tier as
-  // (floor + its own shed count) so the two could be separated cleanly — but the
-  // degrade branch stops once _floorTier() + sheds reaches 4, and _floorTier()
-  // folds in _userTier while this accessor does not. The shed count was therefore
-  // capped at 4 - _userTier, and this returned at most that: measured 2 on
-  // GRAPHICS: MEDIUM (every phone's default) and 0 on LOW, so bloom, SSAO,
-  // god-rays, contact shadows and lamp volumetrics became UNSHEDABLE however
-  // badly the device was missing frames — the opposite of what a low preset is
-  // for. _perfTier is the effective tier and can always climb to 4, so the
-  // tier-4 consumers stay reachable on every preset.
+  // Crash + measured only — no GRAPHICS user floor. Wet-road SSR and the
+  // lighting-tuner "why off" path still read this: a healthy LOW must keep a
+  // reduced wet-reflection budget (post-common.roadReflection) without the
+  // crash floor, and raising the preset must not need a reload to undo a
+  // measured shed. READS _perfTier ON PURPOSE — see the degrade-branch note
+  // above autoShed(). Do NOT gate bloom/SSAO/god-rays/contact/lampVol on this
+  // alone: that left GRAPHICS: LOW with the full look-post stack on a healthy
+  // phone (autoTier 0 while tier() is already 4), which measured slower than
+  // MEDIUM on iPhone WebGPU (BrowserStack 2026-10-21). Those passes read
+  // lookPostShed() instead.
   autoTier: () => Math.max(_perfTierFloor, _perfTier),
+  // Look-defining post (bloom / SSAO / god-rays / contact / lamp volumetrics).
+  // True when the crash/measured ladder is at 4 OR the player chose GRAPHICS:
+  // LOW (userTier 4). Keeps autoTier() free for wet-SSR / tuner notes while
+  // making LOW actually cheaper than MEDIUM on tile GPUs.
+  lookPostShed: () => Math.max(_perfTierFloor, _perfTier) >= 4 || _userTier >= 4,
   // What the GOVERNOR shed on its own measurements, plus the crash floor, and
   // nothing the player asked for. The gate for anything held off "because this
   // device is actually missing frames" — see _autoShed for why this is a second

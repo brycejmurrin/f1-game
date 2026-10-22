@@ -78,6 +78,21 @@ test("race present sheds bloom mips + godray blur pair at MEDIUM/LOW", () => {
   assert.match(g, /autoShed\(\)\s*>\s*0/);
 });
 
+test("race present sheds look post via lookPostShed (LOW or measured tier 4)", () => {
+  // GRAPHICS: LOW must not keep bloom/SSAO/god-rays on a healthy phone
+  // (autoTier alone left that stack live while tier() was already 4).
+  const g = gameSource();
+  assert.match(g, /lookPostShed/);
+  assert.match(g, /const _lookOff = PerfGov\.lookPostShed/);
+  assert.match(g, /po\.bloom = _lookOff \? 0/);
+  assert.match(g, /po\.ssao = _lookOff \? 0/);
+  assert.match(g, /po\.godray = _lookOff \? 0/);
+  assert.match(g, /po\.contact = _lookOff \? 0/);
+  assert.match(g, /po\.lampVol = _lookOff \? 0/);
+  // Wet-road SSR still keys off autoTier (5th arg), not lookPostShed.
+  assert.match(g, /PostCommon\.roadReflection\(\s*po,\s*frame\.wetness[^,]*,\s*_ssrPo,\s*PerfGov\.tier\(\),\s*PerfGov\.autoTier\(\)/);
+});
+
 test("TLX/GLX/WGX honour opts.bloomLevels truncation", () => {
   const tlx = read("js/render/three/tlx-post.js");
   const glx = read("js/render/glx/post.js");
@@ -88,6 +103,27 @@ test("TLX/GLX/WGX honour opts.bloomLevels truncation", () => {
   assert.match(tlx, /useLv/);
   assert.match(glx, /useLv/);
   assert.match(wgx, /useLv/);
+});
+
+test("TLX rtSetSize does not dispose RT textures after setSize (r186)", () => {
+  // setSize already calls RenderTarget.dispose(); disposing the Texture
+  // objects afterwards orphans them while the RT still holds them.
+  const tlx = read("js/render/three/tlx-post.js");
+  const body = tlx.slice(tlx.indexOf("function rtSetSize"), tlx.indexOf("function place("));
+  assert.match(body, /rt\.setSize\(w, h\)/);
+  assert.doesNotMatch(body, /\.dispose\(\)/,
+    "rtSetSize must not dispose textures after setSize on r185+");
+});
+
+test("WGX frees the larger target set before allocating a shrink", () => {
+  const wgx = read("js/render/webgpu/wgx.js");
+  const body = wgx.slice(wgx.indexOf("function ensureTargets()"), wgx.indexOf("function _swapTargets("));
+  assert.match(body, /_texW \* _texH > width \* height/);
+  assert.match(body, /_destroyTargetSet\(old\)/);
+  // Destroy must precede the next createTexture in this function.
+  const freeAt = body.indexOf("_destroyTargetSet(old)");
+  const allocAt = body.indexOf("next.sceneTex = device.createTexture");
+  assert.ok(freeAt >= 0 && allocAt > freeAt, "shrink free must run before the new sceneTex alloc");
 });
 
 test("GLX setPolyOffset caches bias and draw() passes depthBias without a literal", () => {

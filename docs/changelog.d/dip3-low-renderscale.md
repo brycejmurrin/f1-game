@@ -1,0 +1,1 @@
+Fixed: GRAPHICS: LOW sheds bloom/SSAO/god-rays (lookPostShed) so it no longer costs more than MEDIUM on phone WebGPU; renderScale shrinks free the larger post targets before reallocating so a mid-race scale switch cannot pin full-res cost.

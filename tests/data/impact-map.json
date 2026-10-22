@@ -13207,6 +13207,7 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "dispose": [
+        "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
@@ -13959,6 +13960,9 @@
       "_configureCanvas": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
+      "_destroyTargetSet": [
+        "tests/unit/frame-hotpath-alloc.test.mjs"
+      ],
       "_ensureSpatial": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
@@ -13994,6 +13998,9 @@
       ],
       "_softDisplayFinish": [
         "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
+      "_swapTargets": [
+        "tests/unit/frame-hotpath-alloc.test.mjs"
       ],
       "_writeDraw": [
         "tests/unit/surface-id-parity.test.mjs"
@@ -14086,6 +14093,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
+      "ensureTargets": [
+        "tests/unit/frame-hotpath-alloc.test.mjs"
       ],
       "envFaceBegin": [
         "tests/unit/gfx-backend-canary.test.mjs",

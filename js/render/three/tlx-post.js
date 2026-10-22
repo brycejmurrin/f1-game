@@ -304,19 +304,18 @@
       }
       return nLv > 0;
     }
-    // three r184 leaked RT textures on setSize(); r185 (#33511) disposes them.
-    // Keep the explicit texture disposals so a stale vendor cannot regress the
-    // "black frame after resize" report; double-dispose is safe.
+    // three r185+ (#33511): RenderTarget.setSize updates image dims then calls
+    // this.dispose(), which frees GPU memory via the renderer while keeping the
+    // Texture objects on the RT. The r184 workaround disposed those Texture
+    // objects AFTER setSize; on r186 that destroys the textures the RT still
+    // holds, so the next draw mints replacements while the disposed ones can
+    // linger in three's caches — a permanent cost after every renderScale step
+    // (BrowserStack iPhone 2026-10-21: return to 0.5 never recovered).
     let _rtResizes = 0;   // state().rtResizes: target reallocations (#2655 evidence)
     function rtSetSize(rt, w, h) {
       if (rt.width === w && rt.height === h) return;
       _rtResizes++;
       rt.setSize(w, h);
-      try {
-        const ts = rt.textures || (rt.texture ? [rt.texture] : []);
-        for (let i = 0; i < ts.length; i++) ts[i].dispose();
-        if (rt.depthTexture) rt.depthTexture.dispose();
-      } catch (_) { /* best-effort; the worst case is r184's own leak */ }
     }
     // Give rt its logical size lw x lh inside the physical pw x ph. Off: a plain
     // resize. On: the allocation only changes when the physical size does; the

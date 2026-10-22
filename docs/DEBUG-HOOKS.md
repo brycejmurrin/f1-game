@@ -2998,7 +2998,7 @@ while racing (physics stays 60 Hz). An unknown mode returns `{ok:false, modes}`.
 The opt-in slow-drift governor step (js/perf/thermal-drift.js, #2652). No arg reports the detector (null when off); `true`/`false` sets it and persists
 `apex26.thermalDrift`. On, a minutes-long rise of the frame-time p50 over the first-minute baseline takes ONE existing governor rung early.
 
-### `renderScale(v?) → {scale, fps, floorMs, auto, tier, autoTier, autoShed, userTier, tierFloor, crashStrikes, open, frameTimes}`
+### `renderScale(v?) → {scale, fps, floorMs, auto, tier, autoTier, lookPostShed, autoShed, userTier, tierFloor, crashStrikes, open, frameTimes}`
 Adaptive-resolution control. No arg: report the current state. A number in
 `0.5–1` (a FRACTION — the opposite unit to `uiScale`) pins the 3D render scale
 and disables the auto-governor; anything else (`60`, `"auto"`, `false`) returns
@@ -3017,9 +3017,10 @@ split the governor's measured ladder from the GRAPHICS preset floor.
 shed leaves `autoTier` pinned at 2 for the session (the restore path stops at
 that same floor). `autoShed` counts only rungs the governor shed on its own
 measurements, net of what it restored, so `autoShed === 0` on a device that has
-recovered. PER-CHUNK LAMPS gate on `autoShed >= 1`; bloom / SSAO / god rays /
-contact / lamp volumetrics stay on `autoTier >= 4`, which must still be able to
-reach 4 on a low preset. See `js/perf/governor.js` `_autoShed`.
+recovered. PER-CHUNK LAMPS gate on `autoShed >= 1`. bloom / SSAO / god rays /
+contact / lamp volumetrics read `lookPostShed` (measured/crash tier 4 OR
+GRAPHICS: LOW) so a healthy LOW actually drops that stack; `autoTier` stays
+free of the user floor for wet-road SSR. See `js/perf/governor.js` `_autoShed`.
 
 `open` is `{frames, maxMs, slow}` for the first 600 frames of the CURRENT race
 (re-armed at every race start): the worst single frame and how many ran over

@@ -105,5 +105,5 @@ test("gate() zeroes EVERY strength a switched-off pass is gated on, and nothing 
   M.set("ssao", false);
   assert.deepEqual({ ...M.gate(full()) }, { ssao: 0, contact: 0, godray: 0, lampVol: 0, bloom: 1 });
   // game.js routes the present opts through it once all four strengths are set (after the tier-4 shed).
-  assert.match(GAME, /po\.lampVol = PerfGov\.autoTier\(\) >= 4 \? 0 : _lampVol;[^\n]*\n\s*PostFxOpts\.gate\(po\);/);
+  assert.match(GAME, /po\.lampVol = _lookOff \? 0 : _lampVol;[^\n]*\n\s*PostFxOpts\.gate\(po\);/);
 });
