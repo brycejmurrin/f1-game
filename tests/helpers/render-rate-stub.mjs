@@ -3,7 +3,7 @@
 export function renderRateStubs() {
   let d = 0, m = 0;
   return {
-    RenderRate: { observe() {}, gate(dt, ms) { d = dt; m = ms; return true; }, dt: () => d, ms: () => m, drew: () => true },
+    RenderRate: { observe() {}, gate(dt, ms) { d = dt; m = ms; return true; }, force(dt, ms) { d = dt; m = ms; return true; }, dt: () => d, ms: () => m, drew: () => true },
     XrBoot: { comfort: () => false },
   };
 }

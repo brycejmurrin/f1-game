@@ -104,7 +104,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -2471,6 +2471,7 @@ async function startRaceBody() {
   let sessionOk = await ensureRaceSession(); while (!sessionOk && !stale() && await LoadingScreen.failed() === "retry") sessionOk = await ensureRaceSession(); if (stale()) return false;   // #2625 RETRY re-runs the load, BACK falls through; LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
   if (!sessionOk) { loadingScreen.stop(); quitToMenu(); announce("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"); return false; }   // the stubs have no retirements or pit stops, and TT data would be lost silently
   await ensureAudio(); if (stale()) return false;   // LAZY_AUDIO — stub until first race/gesture; real engine before startEngine (false = silent race; the loader logged it)
+  if (!window.LightPresets) { await ensureLightPresets(); if (stale()) return false; }   // LAZY_RACE presets before the first applyRaceSettings: a late landing re-lit the race mid-session (false = default lighting; logged)
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
   const careerSaveConflict = isCareer() && Career.conflicted();
@@ -2726,9 +2727,10 @@ function startRace() {
   // JOINING one of this same world in flight: left live, it ran beside this race's own build (two buildPaced
   // for one world, measured 2026-10-21), and a loadTrackStepped that finishes behind the other returns false.
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
-  clearTimeout(flybyBuildTimer); _menuGate.generation++;
+  const prior = (mp && mp.step) ? mp.step : null;
   if (join) mp.owner = () => key === entrySettings();
-  _menuGate.join = join ? mp.step : null;   // startRaceBody awaits it before its own load, which then reuses the world
+  clearTimeout(flybyBuildTimer); _menuGate.generation++;
+  _menuGate.join = join ? mp.step : (prior ? prior.catch(() => false) : null);   // startRaceBody awaits it before its own load
   const request = RaceEntryProfile.runSession(sessionEntry, key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
     (current) => startRaceBody(current), () => key === entrySettings(),
     (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); if (e) announce("COULD NOT LOAD CIRCUIT — CHECK CONNECTION", 3, "info"); });
@@ -3686,7 +3688,13 @@ function introCover(info, n) { if (!_introSheet) loadingScreen.prep(info, () => 
 function afterGarageOut(n, key, go, prepared, live) {
   studioClose(n);
   if (n !== _introRun) return;
-  if (!prepared || !live()) { loadingScreen.stop(); titleIfBare(); return; }
+  if (!prepared || !live()) {
+    loadingScreen.stop();
+    // Canceled intro: live false; still-live prep failure used to sheetRelease silently (Pages DAILY flake).
+    if (!prepared && live()) announce("PREPARATION FAILED — please retry", 5, "info");
+    titleIfBare();
+    return;
+  }
   try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
 }
 function studioOpen(n, info) {
@@ -3841,9 +3849,15 @@ function introBuild(go) {
   if (!(idx >= 0)) return false;   // reduce-motion still builds then plays the garage-out before the card and the flyby
   // JOIN the menu's build of this same world in flight (tile -> SETTINGS -> RACE!) rather than
   // abandon it and start over; loadTrackStepped below then finds that world built and reuses it.
+  // Claim owner BEFORE generation++: otherwise the in-flight stepped build observes owner=null +
+  // a bumped generation and aborts between slices. When join is false (buildKey / PerfGov.tier
+  // chunk bit mismatch vs the picker's bkey), still await that abort before starting our own
+  // load — two concurrent loadTrackStepped calls race on `track` (the later sees track!==null
+  // and returns false → silent sheetRelease after rs-go; Pages 39710316089 DAILY shard).
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
-  clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
+  const prior = (mp && mp.step) ? mp.step : null;
   if (join) mp.owner = live;
+  clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own current() stands down
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
   introCover(info0, n);
   let prepared = false;
@@ -3855,6 +3869,7 @@ function introBuild(go) {
         if (!(await awaitIntroWarm(live)) || !live()) return;   // compilation retains ownership of its scene
         // In steps, a few ms per frame: the preparation card and skip remain responsive.
         if (join) await mp.step;
+        else if (prior) await prior.catch(() => false);
         if (!(await RaceEntryProfile.spanAsync("loadTrackStepped", () => loadTrackStepped(idx, live))) || !live()) return;
         _menuGate.ready = key; _menuGate.track = track;
         // Assets, plans and shader warm all settle before the outgoing animation.
@@ -8431,7 +8446,8 @@ function tickBody(now) {
     // the pause menu, and its placements publish one zero-dt frame. Resuming tears
     // it down (setPaused -> exitPhotoMode -> FreeCam.onPhotoExit), so no unpaused
     // state in which it should still be flying.
-    // SETTINGS open (SAVE SCREENSHOT / GFX toggles) also needs a live present — headed GLX has no preserved buffer.
+    // SETTINGS still needs selected live frames: the sky animates and SAVE SCREENSHOT
+    // waits for a fresh present (headed GLX has no preserved buffer).
     if (setupPreviewOn || replayBuf.isScrubbing() || ((state === "race" || state === "count") &&
         (!paused || !els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode || !els.pmsettings.hidden))) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
@@ -8439,7 +8455,12 @@ function tickBody(now) {
       // render-target reallocation. The scale simply stays where the race left it
       // (and photo mode pins its own — see enterPhotoMode).
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
-      render(Math.min(dt, setupPreviewOn ? 0.1 : 1 / 20));   // garage's 100 ms stall limit preserves motion below 20 fps
+      const settingsOnly = paused && !setupPreviewOn && !replayBuf.isScrubbing() && !photoMode &&
+        els.lighting.hidden && els.camtune.hidden && els.flyby.hidden && !els.pmsettings.hidden;
+      // Settings cadence gate: retain skipped dt for sky motion; tuners/photo/scrub/garage stay live.
+      if (settingsOnly) RenderRate.observe(_dtMs);
+      if (settingsOnly ? RenderRate.gate(dt, _dtMs, XrBoot.comfort(), true) : RenderRate.force(dt, _dtMs))
+        render(Math.min(RenderRate.dt(), setupPreviewOn ? 0.1 : 1 / 20));   // garage's 100 ms stall limit preserves motion below 20 fps
     }
     GameAudio.feedReplayScrub(soundOn && player, replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop); return;   // instant-replay engine/rivals while scrubbing; silence on scrub exit
   }
