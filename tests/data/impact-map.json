@@ -4464,6 +4464,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
+      "ensureLightPresets": [
+        "tests/unit/lazy-bundles-prefetch.test.mjs"
+      ],
       "ensureNet": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
@@ -6613,6 +6616,7 @@
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/start-race-latch.test.mjs"
       ],
@@ -6658,6 +6662,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
