@@ -184,9 +184,6 @@ const GarageArrival = (function () {
     return shot({ active: t < end, serviceTime: t, seconds: t, direction: "out", calm, crewClear: ease((t - (DOOR_S + OUT_HOLD + delay - .3)) / .3), crew: config.leaveCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
       label: delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm);
   }
-  // A real frame gap up to this long counts in full; a longer one is a suspended
-  // or hidden tab and still advances only the 0.1 s render-dt bound.
-  const STALL_S = 5;
   function wallNow() { try { return performance.now() / 1000; } catch (_) { return 0; } }
   function create($, reducedMotion, readSettings = () => DEFAULT, clock = wallNow) {
     let state = null, time = 0, config = DEFAULT, last = 0;
@@ -217,11 +214,13 @@ const GarageArrival = (function () {
         // GPU drawing a frame every 2 s that cap played the arrival — and kept
         // the setup sheet inert — at a twentieth of real time (#3511), the
         // drive-out's slow-motion bug (setup-camera.js stepDriveOut) again.
-        // Background-tab gaps (> STALL_S) still must not swallow the arrival.
+        // One gap longer than the whole arrival is a suspended or hidden tab,
+        // not a frame of the show (bound after Merlin's #3546): it keeps the
+        // 0.1 s bound, so a background tab still cannot swallow the arrival.
         const now = clock(), gap = last ? now - last : 0;
         last = now;
         const capped = Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0));
-        time += Math.max(capped, gap > 0 && gap <= STALL_S ? gap : 0) * config.speed;
+        time += Math.max(capped, gap > 0 && gap <= duration(config) / config.speed ? gap : 0) * config.speed;
         state = pose(time, config);
         if (label.textContent !== state.label) label.textContent = state.label;
         if (!state.active) finish();
