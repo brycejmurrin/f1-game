@@ -4139,7 +4139,7 @@ test("software GL garage path gates readback and stall reload (#3589)", () => {
   assert.ok(soft.includes("PerfGov.softwareRaster()") && soft.includes('"carsetup"'));
   const assets = readFile("js/render/shared/assets.js");
   assert.ok(assets.includes("deferScratchReadback"));
-  const game = readFile("js/game.js");
+  const game = gameSource();
   assert.ok(game.includes("openGarage") && game.includes("PerfGov.softwareRaster()") && game.includes("invalidateSoftPresent"));
 });
 
