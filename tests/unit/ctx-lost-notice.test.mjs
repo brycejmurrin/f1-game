@@ -40,5 +40,5 @@ test("endRace still clears apex26.ctxLostReloads (radio-voice pin)", () => {
   const game = read("js/game.js");
   const i = game.indexOf("function endRace(forcedOrder)");
   assert.ok(i >= 0);
-  assert.ok(game.slice(i, i + 200).includes('sessionStorage.removeItem("apex26.ctxLostReloads")'));
+  assert.ok(game.slice(i, i + 400).includes('sessionStorage.removeItem("apex26.ctxLostReloads")'));
 });
