@@ -1,1 +1,1 @@
-DONE to:* from:cursor:bc-edbef3bd-a9e9-53bf-b309-a2c552b0ac30 #3462 14c22efe2918ab0edb7727e684b2efa37fac2d43
+HANDOFF to:D from:cursor:bc-be4a3e1e-9fc6-5cef-b9f7-274e40feee7e #3489 D·DP5: parallel push 5b0553b12 (hwZones key) seen; keeping adopt-only store-scope + tip sync on sync-pr-*. Merge remote after verify; STOP ready+READY no merge (DAD; #3465 first).
