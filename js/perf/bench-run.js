@@ -195,12 +195,24 @@ const BenchRun = (function () {
     try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf("apex26.") === 0 && k !== KEY) o[k] = localStorage.getItem(k); } } catch (_) { /* blocked storage */ }
     return o;
   }
-  function restore(snap) {
+  // Through GameStore.write, not localStorage: livery / parts / setup keys are mirrored to IndexedDB (store.js
+  // AUTHORED_KEY) and a key localStorage lacks is written back from that mirror at boot, so a bare removeItem came
+  // back on the next load. write() queues the mirror delete too; mirrorFlush() commits it before the reload.
+  async function restore(snap) {
+    const S = store(), short = (k) => k.slice("apex26.".length);
     try {
       const keys = []; for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
-      for (const k of keys) if (k && k.indexOf("apex26.") === 0 && k !== KEY && !(k in snap)) localStorage.removeItem(k);
-      for (const k of Object.keys(snap)) localStorage.setItem(k, snap[k]);
+      for (const k of keys) {
+        if (!k || k.indexOf("apex26.") !== 0 || k === KEY || k in snap) continue;
+        if (S) S.write(short(k), undefined); else localStorage.removeItem(k);
+      }
+      for (const k of Object.keys(snap)) {
+        if (localStorage.getItem(k) === snap[k]) continue;
+        let v, json = false; try { v = JSON.parse(snap[k]); json = JSON.stringify(v) === snap[k]; } catch (_) { json = false; }
+        if (S && json) S.write(short(k), v); else localStorage.setItem(k, snap[k]);
+      }
     } catch (_) { /* blocked storage */ }
+    try { if (S && S.mirrorFlush) await S.mirrorFlush(); } catch (_) { /* no mirror: localStorage is the whole store */ }
   }
   async function garageLeg(plan, leg) {
     const D = document;
@@ -233,10 +245,10 @@ const BenchRun = (function () {
     leg.steps = steps; leg.state = "done";
     return true;
   }
-  function finishPlan(plan, state) {
+  async function finishPlan(plan, state) {
     plan.state = state; plan.finishedAt = new Date().toISOString(); plan.show = true;
     plan.summary = summarize(plan.legs); plan.scenes = scenes(plan.legs);
-    if (plan.restore) { restore(plan.restore); plan.restoreAfter = plan.restore; delete plan.restore; }
+    if (plan.restore) { await restore(plan.restore); plan.restoreAfter = plan.restore; delete plan.restore; }
     writePrefs(plan.prefs); save(plan);
     log("done " + state);
     // Always reload: the results open over a fresh title screen, never over the paused race the last leg left.
@@ -249,23 +261,23 @@ const BenchRun = (function () {
       // A page that saved the garage on its way out could have written the run's picks back: check once, after the reload.
       if (plan.restoreAfter) {
         const snap = plan.restoreAfter; delete plan.restoreAfter; save(plan);
-        if (JSON.stringify(snapshot()) !== JSON.stringify(snap)) { restore(snap); reload(); return; }
+        if (JSON.stringify(snapshot()) !== JSON.stringify(snap)) { await restore(snap); reload(); return; }
       }
       if (plan.show) { plan.show = false; save(plan); if (await waitReady()) open(); }
       return;
     }
     if (_busy) return; _busy = true;
     const leg = plan.legs[plan.i];
-    if (plan.restore && !(leg && leg.state === "booting")) { restore(plan.restore); delete plan.restore; }
+    if (plan.restore && !(leg && leg.state === "booting")) { await restore(plan.restore); delete plan.restore; }
     if (leg && leg.state === "running") { leg.state = "reloaded"; leg.reason = "the page reloaded during this leg"; plan.i++; save(plan); }
     else if (leg && leg.state === "booting") {
       const ok = await runLeg(plan);
       if (ok === "aborted" || !stillRunning()) { _busy = false; return; }
       save(plan);
-      if (!ok && leg.state === "failed" && leg.reason !== "the page reloaded during this leg") { finishPlan(plan, "stopped"); return; }
+      if (!ok && leg.state === "failed" && leg.reason !== "the page reloaded during this leg") { await finishPlan(plan, "stopped"); return; }
       plan.i++; save(plan);
     }
-    if (plan.i >= plan.legs.length) { finishPlan(plan, "complete"); return; }
+    if (plan.i >= plan.legs.length) { await finishPlan(plan, "complete"); return; }
     startLeg(plan);
   }
   function run(testId) {
