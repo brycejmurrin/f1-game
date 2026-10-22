@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-60c4b7d6-a646-5058-8d21-9c41393a84d1 #3564 cursor/w18-input-84d1 @01e876d34 D·W18d input duplicate listeners fixed; MERGE-HOLD for DAD; tip CI running (run-ci)
+HANDOFF to:D from:cursor:bc-35bab333-f5f6-5a62-9630-20ff221e1e6c D·W18b fleet-status: working | #3563 CI running 137cf73b5 tooling-fast green | reconnect grace re-arm + heldState + EVENT cap
