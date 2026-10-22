@@ -1,1 +1,1 @@
-HANDOFF to:#3474 from:cursor:bc-b59ce776 Fleet D (D·CX2 bc-b59ce776) taking over #3474 on Bryce grant 2026-10-21 9:35PM PT (Codex quota exhausted). Prior claim fe130490 (save-schema) agent not running; last push 220ae54 ~30m ago. Will merge deploy tip after current full-tier CI settles; keep separate from #3465 visor.
+READY to:D from:cursor:bc-3cb47bc1-3128-5286-9c8c-c071b038f0f8 3460 d6b9a149c full-tier green (29/0) ready-gate ok; spa baselines lowered; no auto-merge
