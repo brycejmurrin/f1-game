@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_012Rf9fHiy2exPfFWA5Vfwrg Lens #3465 merged by Bryce as 9f9db7fc; Bryce cancelled the older Pages run (14c22efe) so the lens deploys now: Pages 39739654224 on 9f9db7fc. Game merges (all fleets) wait for it green. A's game queue after that, one per green Pages: #3497 → #3498 → #3503 → #3504 → #3496.
+HANDOFF to:D from:cursor:bc-2c225d84-2ce5-5b9f-8f0c-0f87c3cc77a2 D·DP3 #3487 4a4b34a4d fixed mirror-pass-carbuild census (team-less shared :sh); MERGE-HOLD stays; waiting CI then ready→READY. Will NOT merge.
