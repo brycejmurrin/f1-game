@@ -2521,6 +2521,7 @@ async function startRaceBody() {
   // live() stays true: this session owns the build (menu prep uses a generation gate).
   // live() also drops on ctxLost so a CONTEXT_LOST mid-step does not wait forever.
   if (_menuGate.join) { const step = _menuGate.join; _menuGate.join = null; await step.catch(() => false); if (stale()) return false; }   // startRace joined the menu's build
+  if (typeof GfxEscalation !== "undefined" && GfxEscalation.softenRaceEntry) GfxEscalation.softenRaceEntry(gfx);
   if (vmNoFramePump) loadTrack(trackIdx);
   else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost())) && !stale()) { quitToMenuAfterCtxLost(); return false; }
   if (stale()) return false; rlap("loadTrack");
@@ -4279,6 +4280,7 @@ function quitToMenuAfterCtxLost() {
   if (typeof showCtxLostNotice === "function") showCtxLostNotice();
   else if (typeof announce === "function") announce(CTX_LOST_NOTICE_MSG, 5, "info");
 }
+if (typeof GfxEscalation !== "undefined" && GfxEscalation.registerMenuRecover) GfxEscalation.registerMenuRecover(quitToMenuAfterCtxLost);
 // A quit from under the pit garage (WORK ON CAR, then any path to quitToMenu) takes the garage down
 // with the race: left open, the title showed RETURN TO RACE, whose closePitWork charged a dead race.
 function quitToMenu() {
@@ -7167,6 +7169,7 @@ function render(dt) {
   if (gfxContextLost()) {
     try { mirrorPass.cancelPreparation(); } catch (_) { /* harness */ }
     if (loadingScreen.phase() === "handoff") loadingScreen.stop();
+    if (typeof GfxEscalation !== "undefined" && GfxEscalation.maybeRecoverRaceEntry) GfxEscalation.maybeRecoverRaceEntry(gfxContextLost, quitToMenuAfterCtxLost);
     return;
   }
   // Warming used to return before the visibility pass. openGarage's Home→bay

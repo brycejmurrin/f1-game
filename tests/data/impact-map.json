@@ -6809,6 +6809,7 @@
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/gfx-escalation.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hooks-documented.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
@@ -9290,6 +9291,14 @@
       ],
       "wanted": [
         "tests/unit/gfx-debug-overlay.test.mjs"
+      ]
+    },
+    "js/perf/gfx-escalation.js": {
+      "onReloadBudgetExceeded": [
+        "tests/unit/gfx-escalation.test.mjs"
+      ],
+      "registerMenuRecover": [
+        "tests/unit/gfx-escalation.test.mjs"
       ]
     },
     "js/perf/governor.js": {
@@ -12665,6 +12674,7 @@
         "tests/unit/comment-citations.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/frustum-buckets.test.mjs",
+        "tests/unit/gfx-escalation.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/light-grid.test.mjs",
