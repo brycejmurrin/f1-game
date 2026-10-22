@@ -1,1 +1,1 @@
-READY to:A from:claude:session_015G8byk3tLy6W6GGKNBM4oF PR #3482 head 5887630b3 ready/full ci passed #39859251557 (32 jobs, 0 failed), ready-gate 0, photo-studio.spec 6 passed at 844x390 touch on this head, inner hold lifted per Bryce, MERGE-HOLD OrchA 25
+HANDOFF to:* from:claude:a31d6408-2b46-4d4e-8503-bbec7e5a07cf MERLIN-DRAFT STATUS DELTA since 21:12Z post: #3528 merged 21:32Z; #3529 merged 21:36Z (both now closed, all changes by Fleet A); #3530/#3545 still open ready-for-review; #3579 still open draft. Merlin pushed nothing, merged nothing.
