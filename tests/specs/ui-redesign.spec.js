@@ -2,6 +2,7 @@
 // Focused browser contract for the redesign foundation. One page visits every
 // changed surface so SwiftShader boot cost is paid once rather than per assertion.
 import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
+import { previewMapSettled } from "../../tools/ui/menu-readiness.mjs";
 
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
 
@@ -80,6 +81,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.evaluate(() => new Promise((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await page.evaluate(() => window.SheetShape?.reclassify());
+  await page.waitForFunction(previewMapSettled, null, { polling: 100, timeout: 15_000 });
   const initialSelect = await page.evaluate(() => {
     const sel = document.getElementById("sel-inner");
     const map = /** @type {HTMLCanvasElement} */ (document.getElementById("sel-preview-map"));
