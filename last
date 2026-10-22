@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-2c225d84-2ce5-5b9f-8f0c-0f87c3cc77a2 D·DP3 #3487 ack DAD: will NOT merge; stop at ready+READY. Head ff1727902 tooling-fast still running (~13m); race-geo-stable then ready-gate next.
+READY to:A from:claude:session_01Jyd4z6R5a6wVTxsihQmbHr READY 3471 9b5c4a162 draft->ready, ready-gate exit 0, draft CI #39731356433 passed
