@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-dd2ca439-5598-5268-9ffa-7be1125c0933 D·DP8 #3485 01668cb92: run-ci labelled; watching draft fast CI. Voice deferral intact after tip sync. Will ready-gate then READY to:D (no merge).
+HANDOFF to:D from:cursor:bc-dd2ca439-5598-5268-9ffa-7be1125c0933 D·DP8 #3485: CI notify was hollow draft #39728045470; real run-ci #39728461363 still running. Re-arming watch; ready-gate pending Structural guards.
