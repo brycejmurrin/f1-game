@@ -92,9 +92,8 @@ The top three changes:
 
 | status | items |
 |---|---|
-| **Agreed by A and D** (DAD, 09:37Z) | 1a train row in merge-gate · 2 UNGATED detector (trailer, then DONE, 10 min, flag only) · 3 rule 7 corrections · 7 claim before launch · 10 one-command merge |
-| **Proposed by A, D not yet asked** | 4 typed bus verbs (D3 asks for the same) · 5 acknowledgement-only wake cuts (DAD scoped it) · 8 READY to the fleet letter · 9 one writer per branch (D5) · 11 grant classes · 12 succession doc fix · 14 timeouts · 16 workers never merge (D4) · 17 auditor-page hygiene (D) |
-| **Bryce decides** | 1b merge queue (on hold; probably needs an org-owned repo) · 6 cap values · 13 hourly bus-watch end condition · 15 Cursor hooks · open questions 2 and 5 |
+| **Agreed by A and D** (DAD, 09:37Z and bus e3bb177 09:44Z) | 1a train row in merge-gate · 2 UNGATED detector (trailer, then DONE, 10 min, flag only) · 3 rule 7 corrections · 4 typed bus verbs (CLI prints valid types on reject; NEW-PR as a verb or folded into LIVE) · 5 acknowledgement-only wake cuts · 7 claim before launch · 8 READY to the fleet letter · 9 one writer per branch · 10 one-command merge · 11 grant classes · 12 succession doc fix · 14 timeouts (BrowserStack connect 15 s desktop / 75 s phones; idle wake 30 min) · 16 workers never merge (also stated in AGENTS.md) · 17 auditor-page hygiene |
+| **Bryce decides** (A and D agree these are his) | 1b merge queue (on hold; probably needs an org-owned repo) · 6 cap values · 13 hourly bus-watch end condition · 15 Cursor hooks · open questions 2 and 5 |
 
 ## Ranked improvements
 
@@ -250,6 +249,8 @@ that does not cancel (open question 2).
 - Add the verbs TRAIN, HB, ADOPT, CLAIM and INFO (LIVE already exists as an
   `ORCH <x> LIVE` text convention; make it a verb).
 - Give `fleet-bus.mjs read` a `--type` filter.
+- On a rejected send, print the valid types. Add NEW-PR as a verb, or fold
+  it into LIVE (DAD's amendment).
 - Have workers post progress on their own PR, not the bus. The bus carries
   READY, BLOCKED and DONE only.
 
@@ -461,6 +462,9 @@ Bryce decides.
   gate.
 - `deploy.mjs --gate-only` refuses a second concurrent run, as
   `test-bg.mjs` already does.
+- BrowserStack sessions get explicit connect timeouts: 15 s for desktop,
+  75 s for phones. The idle safety-net wake stays at 30 min (DAD's
+  amendment).
 
 ### 15. Cursor-side hooks (D; Bryce's decision)
 
@@ -484,7 +488,9 @@ merge authority" fourth (D4).
 
 **Change.** AGENTS.md §Concurrent PRs gets one standalone line: "Workers,
 owners and hunters never merge, arm auto-merge or post DONE; only the PR's
-fleet orchestrator does, through `merge-gate.mjs`." `github-mcp-guard.sh`
+fleet orchestrator does, through `merge-gate.mjs`." The same line goes in
+the Cursor-facing rules, which also load AGENTS.md (DAD's amendment).
+`github-mcp-guard.sh`
 can already tell the roles apart by the receipt's `--as`.
 
 ### 17. Owner and brief hygiene, from DAD's auditor page (Both)
