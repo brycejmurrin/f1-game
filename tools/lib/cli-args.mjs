@@ -107,6 +107,27 @@ export function wearArg(argv, dflt = "off") {
   return v;
 }
 
+/** Resolve a `--only=a,b` style id filter against the ids that exist.
+ *  `raw` null (flag absent) means "no filter" and returns null. Otherwise each
+ *  token must select at least one id (`match: "substring"` or exact, a trailing
+ *  `*` meaning prefix), else throw a CliArgError naming the valid ids.
+ *
+ *  WHY. `menu-fit --only=title` matched no screen (the id is `menu`), ran zero
+ *  cells, printed nothing and exited 0, so a clipped screen looked clean
+ *  (#3305). A filter that selects nothing is the caller's typo, never a pass. */
+export function pickIds(raw, ids, { flag = "--only", match = "substring" } = {}) {
+  if (raw == null) return null;
+  const toks = String(raw).split(",").map((s) => s.trim()).filter(Boolean);
+  const hit = (tok, id) => (tok.endsWith("*") ? id.startsWith(tok.slice(0, -1))
+    : match === "substring" ? id.includes(tok) : id === tok);
+  const bad = toks.filter((t) => !ids.some((id) => hit(t, id)));
+  if (!toks.length || bad.length) {
+    throw new CliArgError(`${flag}: ${toks.length ? `no match for ${bad.map((b) => JSON.stringify(b)).join(", ")}` : "needs at least one id"}`
+      + `\n  valid ids: ${ids.join(" ")}`);
+  }
+  return toks;
+}
+
 /** Print usage and exit 0 when argv asks for help. Browser/shot tools that
  *  parse positionals first used to treat `--help` as a track id or ignore it
  *  and launch Chromium (skilltest probe-debug, 2026-10-01). Call this BEFORE

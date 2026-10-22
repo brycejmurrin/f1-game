@@ -366,8 +366,10 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
     "race settings covers prep with the sheet — race card waits until after the garage leave (else prep scrim, card hidden)");
   assert.match(game, /body:yield/,
     "startRaceBody yields after the plate is up and before ensureAudio");
-  assert.match(game, /els\.overlay\.hidden = false; \}   \/\/ no vt: snapshot after hiding #carsetup is a black hold/,
-    "title return skips the view-transition snapshot that held a blank page");
+  assert.match(game, /els\.overlay\.hidden = false; loadingScreen\.stop\(\); \}   \/\/ no vt: snapshot after hiding #carsetup is a black hold/,
+    "title return skips the view-transition snapshot and drops the Returning plate");
+  assert.ok(/function openGarage\(from\) \{\s*loadingScreen\.stop\(\); garagePre\.markOpen\(from\);/.test(game),
+    "opening the garage clears a stale busy plate that would sit above #carsetup");
 });
 
 test("building(): the card over the scrim, no timer, no skip, not active — then run() takes over", () => {
@@ -1064,6 +1066,11 @@ test("the garage phase (the drive-out before the flyby): no card, no timer, and 
   const css = readCssSource("css/overlays.css");
   assert.equal(ruleDecls(css, '#loading[data-phase="garage"]').get("background"), "none", "no scrim over the car");
   assert.equal(phaseCard("garage").get("visibility"), "hidden", "the card is out of the accessibility tree, not just transparent");
+  const loadingCss = readCssSource("css/loading.css");
+  assert.equal(ruleDecls(loadingCss, '#loading[data-phase="busy"]').get("pointer-events"), "none",
+    "a Returning / Starting plate must not steal the first garage dismiss click");
+  assert.equal(ruleDecls(loadingCss, '#loading[data-phase="prep"]').get("pointer-events"), "none",
+    "a shader-warm plate must not sit above race settings or the garage sheet");
 });
 
 test("a HIDDEN tab at run() gets the card, not the flyby: no announcer read starts unseen (bug-hunt 3, 2026-10-10)", () => {

@@ -11385,6 +11385,7 @@
         "tests/unit/pit-lane.test.mjs"
       ],
       "think": [
+        "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs"
       ],
       "throughM": [
