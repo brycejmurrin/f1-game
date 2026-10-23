@@ -8,6 +8,7 @@
 //   node tools/perf/devicefarm-iphone.mjs run --scenario cache|races [--pins webgpu,webgl2]   (adds ?apex=1)
 //     cache: cold race entry per path — first, after two reloads, after force-quitting Safari (shader-cache lifetime)
 //     races: BENCHMARK "WEATHER & TRACKS" pinned per path
+//     tracks: --tracks monza:night,singapore:night,vegas:night — entry + 20 s steady frames per circuit
 //     warmplus: WebGPU entry + first-race frames, default vs apex26.tlxWarmPlus=1, each after a Safari data clear
 //   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
@@ -118,12 +119,13 @@ const READY = `
   let st = null, api = null; try { st = __apex.info().state; } catch (_) {}
   try { api = RendererPicker.liveThreeApi(); } catch (_) {}
   return { ready: st === "menu" && !!api, state: st, api };`;
-const KICK = `
+const KICK_FOR = (track = "monza", tod = "default") => `
   window.__dfRace = undefined; window.__dfT0 = performance.now();
   let prev = null; try { prev = RaceEntryProfile.snapshot().winT0; } catch (_) {}
-  Promise.resolve(__apex.race("monza", "default", "dry")).then((v) => { window.__dfRace = { ok: !!v, ms: performance.now() - window.__dfT0 }; },
+  Promise.resolve(__apex.race(${JSON.stringify(track)}, ${JSON.stringify(tod)}, "dry")).then((v) => { window.__dfRace = { ok: !!v, ms: performance.now() - window.__dfT0 }; },
     (e) => { window.__dfRace = { err: String(e) }; });
   return prev;`;
+const KICK = KICK_FOR();
 const ENTRY = `
   let s = null, t = null, warm = null, st = null;
   try { s = RaceEntryProfile.snapshot(); t = RaceEntryProfile.stageTable(s); } catch (_) {}
@@ -146,8 +148,8 @@ async function waitReady(ctx, ms = 120000) {
   }
 }
 // One timed race entry: kick __apex.race, poll until the RaceEntryProfile window that opened after the kick closes.
-async function timedEntry(ctx, label) {
-  const prev = await exec(ctx.base, ctx.sid, KICK);
+async function timedEntry(ctx, label, kick = KICK) {
+  const prev = await exec(ctx.base, ctx.sid, kick);
   const t0 = Date.now();
   for (;;) {
     await sleep(2000);
@@ -246,6 +248,35 @@ async function warmplusScenario(ctx, url, report, out) {
     pullLogs(ctx.base, ctx.sid, out);
   }
 }
+// tracks: steady-state race frames on chosen circuits (skyline-heavy night tracks vs Monza): per track a fresh
+// reload, one timed entry, 5 s settle, then 20 s of rAF intervals.
+const SAMPLE = `
+  window.__dfSample = null;
+  const d = []; let last = 0, t0 = 0;
+  const tick = (t) => {
+    let st = null; try { st = __apex.info().state; } catch (_) {}
+    if (st === "race") { if (!t0) t0 = t; if (t - t0 > 5000) { if (last) d.push(t - last); last = t; } }
+    if (t0 && t - t0 > 25000) { d.sort((a, b) => a - b); const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(d.length * f))] * 10) / 10;
+      window.__dfSample = { n: d.length, fps: Math.round(d.length / 20 * 10) / 10, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
+        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length }; return; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick); return true;`;
+async function tracksScenario(ctx, tracks, report, out) {
+  report.tracks = [];
+  for (const spec of tracks) {
+    const [track, tod = "default"] = spec.split(":");
+    const r = await reloadPage(ctx);
+    await exec(ctx.base, ctx.sid, SAMPLE);
+    const entry = await timedEntry(ctx, `${track} ${tod}`, KICK_FOR(track, tod));
+    let sample = null;
+    for (let i = 0; i < 20 && !sample; i++) { await sleep(2000); try { sample = await exec(ctx.base, ctx.sid, "return window.__dfSample;", 1); } catch (_) { /* busy */ } }
+    report.tracks.push({ track, tod, api: r.api, entry, sample });
+    log(`${track} ${tod}: api=${r.api} entry ${entry.windowMs} ms; ${JSON.stringify(sample)}`);
+    try { shot(ctx.base, ctx.sid, path.join(out, `track-${track}-${tod}.png`)); } catch (_) { /* no shot */ }
+  }
+  pullLogs(ctx.base, ctx.sid, out);
+}
 // races: BENCHMARK "WEATHER & TRACKS" (six races, each reloads and starts cold) on each pinned path.
 async function racesScenario(ctx, pins, report, out) {
   report.races = {};
@@ -314,7 +345,8 @@ async function run() {
       const ctx = { base, sid, caps, out };
       log(`live view: AWS console > Device Farm > Mobile Device Testing > Projects > ${PROJECT} > Remote access > ${ses.name}`);
       try { if (scenario === "cache") await cacheScenario(ctx, url, pins, report, out); else if (scenario === "races") await racesScenario(ctx, pins, report, out);
-        else if (scenario === "warmplus") await warmplusScenario(ctx, url, report, out); }
+        else if (scenario === "warmplus") await warmplusScenario(ctx, url, report, out);
+        else if (scenario === "tracks") await tracksScenario(ctx, opt("tracks", "monza:night,singapore:night,vegas:night").split(","), report, out); }
       finally { sid = ctx.sid; }
     }
     if (legs) {
