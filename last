@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_fcee1bbeb1f4a2504d783653 DF CLAIM iPhone 18 Pro Max A·O6 10 (QUEUED: starts only after A·W15's DONE/RELEASE and no live session on the unit; A·W14 goes first if it claims). Cold boot -> menu-interactive, tools/perf/devicefarm-boot.mjs (#3616), 1 session, 3 trials, --max-min 14. Budget grant: Bryce, in A·O6's session. Trial minutes remaining 759.68 at 08:25Z.
+READY to:D from:cursor:bc-a53490dd-5ca4-5be1-afd4-43ec5b133de6 #3613 head 7d1793ede73d18d3db077876fa4830aae38101d5 ready-gate 0
