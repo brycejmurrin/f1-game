@@ -5,8 +5,9 @@
  *           aperture with rounded lower corners, cheek pads in the periphery and a chin bar below — not a centred
  *           ellipse. Built per viewport aspect (resize only) and per tint setting; nothing per frame.
  *   LIGHT   a <canvas id="fx-visor"> composited with mix-blend-mode: plus-lighter (screen where unsupported), so
- *           reflections are ADDED light and can never grey the scene. Repainted at ~15 Hz from the scene lighting
- *           the game already publishes through window.__apex (visorScene(), else camState() + lightState()):
+ *           reflections are ADDED light and can never grey the scene — on WebGPU. On the WebGL2 path (TLX's WebGL2
+ *           backend, GLX) the layer composites as plain "over" instead (blendMode(), #3657). Repainted at ~15 Hz
+ *           from the scene lighting the game already publishes through window.__apex (visorScene(), else camState() + lightState()):
  *           the sun's glint and its double-reflection ghost, a Fresnel rim sheen on the sun's side, one glint per
  *           flood / street lamp / tail-light in view (projected through the camera, so they slide with heading),
  *           and a chromatic fringe along the rim that scales with VISOR REFRACTION. Every term is proportional to
@@ -35,7 +36,10 @@ const VisorOptics = (function () {
   const TINT = { neutral: [12, 12, 20], amber: [80, 61, 32], ice: [35, 59, 80], rose: [76, 45, 60] };
   const TINT_ALPHA = { light: 0.12, medium: 0.18, strong: 0.24 };
 
+  const BLEND_RECHECK_MS = 1000;     // the live backend is re-read this often (it settles once after boot or a fallback)
+
   let _cv = null, _ctx = null, _looked = false;
+  let _blend = "", _blendParam, _blendT = -Infinity;
   let _w = 0, _h = 0, _shown = false, _acc = 1, _bendLevelBuilt = "";
   let _portKey = "", _bendKey = "", _paths = null, _svg = null;
   const _stats = { ticks: 0, paints: 0, msLast: 0, msMax: 0, msSum: 0, glints: 0, sun: 0, rim: 0, lamp: 0, msBend: 0, msLookup: 0, errors: 0 };
@@ -285,6 +289,43 @@ const VisorOptics = (function () {
       return { eye: c.eye, tgt: c.tgt, fov: c.fov, sunDir: l.skySunDir, sunColor: l.sunColor, exposure: l.exposure,
                ambientSky: l.ambientSky, lights: null, tailStart: 0, floodEmit: l.floodEmit };
     } catch (_) { return null; }   // a hook that throws mid-build: paint nothing this tick
+  }
+
+  // ---------- BLEND gate (#3657) ----------
+
+  /** How #fx-visor composites over the world: "add" (mix-blend-mode: plus-lighter) or "over" (plain alpha).
+   *  plus-lighter costs nothing on WebGPU, but on a real iPhone 14 on WebGL2 it tripped the perf governor
+   *  (Bahrain night, HELMET cam: autoTier 0 with the visor off, 4 with it on and refraction off; JS paint 0.2 ms —
+   *  ledger row 18 of docs/notes/DEVICE-FARM-LEDGER-2026-10-23.md). So WebGPU keeps "add" and everything else
+   *  takes "over". The canvas is painted with near-white and lamp-coloured light only, so over a darker scene
+   *  "over" still brightens; it differs from "add" only where the scene under a glint is already brighter than
+   *  the glint. `?visorblend=add|over` forces either arm for a device A/B. */
+  function blendMode(api, param) {
+    if (param === "add" || param === "over") return param;
+    return api === "webgpu" ? "add" : "over";
+  }
+  function _api() {
+    if (typeof RendererPicker === "undefined") return null;
+    try {
+      const three = RendererPicker.liveThreeApi && RendererPicker.liveThreeApi();
+      if (three) return three;
+      return RendererPicker.liveBackend && RendererPicker.liveBackend() === "webgpu" ? "webgpu" : "webgl2";
+    } catch (_) { return null; }
+  }
+  function _param() {
+    if (_blendParam !== undefined) return _blendParam;
+    _blendParam = null;
+    try { _blendParam = new URLSearchParams(window.location.search).get("visorblend"); } catch (_) { /* no URL here */ }
+    return _blendParam;
+  }
+  /** Sets body[data-visor-blend] (css/helmet-visor.css reads it) when the mode changes; re-reads at most once a second. */
+  function _syncBlend(now) {
+    if (now - _blendT < BLEND_RECHECK_MS) return;
+    _blendT = now;
+    const mode = blendMode(_api(), _param());
+    if (mode === _blend) return;
+    _blend = mode;
+    if (typeof document !== "undefined" && document.body) document.body.setAttribute("data-visor-blend", mode);
   }
 
   // ---------- DOM: canvas, port image, displacement map ----------
@@ -577,6 +618,7 @@ const VisorOptics = (function () {
     const t2 = t1 ? performance.now() : 0;
     _bend();
     if (t2 && _bendKey && !_stats.msBend) _stats.msBend = r2(performance.now() - t2);
+    _syncBlend(t1 || Date.now());
     _show(true);
     const hz = reduced ? HZ_REDUCED : HZ;
     _acc += dt > 0 ? dt : 0;
@@ -610,11 +652,11 @@ const VisorOptics = (function () {
   function stats() {
     return { shown: _shown, w: _w, h: _h, ticks: _stats.ticks, paints: _stats.paints, msLast: r2(_stats.msLast), msMax: r2(_stats.msMax),
              msAvg: _stats.paints ? r2(_stats.msSum / _stats.paints) : 0, glints: _stats.glints, sun: _stats.sun, rim: _stats.rim, lamp: _stats.lamp,
-             port: !!_portKey, bend: _bendLevelBuilt, msBend: _stats.msBend, msLookup: _stats.msLookup, errors: _stats.errors };
+             port: !!_portKey, bend: _bendLevelBuilt, blend: _blend, msBend: _stats.msBend, msLookup: _stats.msLookup, errors: _stats.errors };
   }
   function clear() { _show(false); }
   /** Tests: forget the cached canvas and keys (a new stub DOM). */
-  function _reset() { _looked = false; _cv = _ctx = _paths = _svg = null; _w = _h = 0; _shown = false; _acc = 1; _portKey = _bendKey = _bendLevelBuilt = ""; for (const k of Object.keys(_stats)) _stats[k] = 0; }
+  function _reset() { _looked = false; _cv = _ctx = _paths = _svg = null; _w = _h = 0; _shown = false; _acc = 1; _portKey = _bendKey = _bendLevelBuilt = _blend = ""; _blendParam = undefined; _blendT = -Infinity; for (const k of Object.keys(_stats)) _stats[k] = 0; }
 
   /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
   function sceneFromG(G) {
@@ -625,6 +667,6 @@ const VisorOptics = (function () {
     };
   }
 
-  return { tick, clear, stats, lightMap, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, BEAMS, FRINGE, MAX_GLINTS, sceneFromG, _reset };
+  return { tick, clear, stats, blendMode, lightMap, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, BEAMS, FRINGE, MAX_GLINTS, sceneFromG, _reset };
 })();
 Object.freeze(VisorOptics);
