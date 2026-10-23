@@ -2282,6 +2282,9 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "coOpt": [
+        "tests/unit/car-presentation-vm.test.mjs"
+      ],
       "cockpitBodyMesh": [
         "tests/unit/car-presentation-vm.test.mjs"
       ],
@@ -2289,9 +2292,6 @@
         "tests/unit/car-presentation-vm.test.mjs"
       ],
       "cockpitShadowMesh": [
-        "tests/unit/car-presentation-vm.test.mjs"
-      ],
-      "coOpt": [
         "tests/unit/car-presentation-vm.test.mjs"
       ],
       "create": [
@@ -2620,13 +2620,13 @@
       "block": [
         "tests/unit/car-shade.test.mjs"
       ],
+      "cTub": [
+        "tests/unit/car-shade.test.mjs"
+      ],
       "capLoft": [
         "tests/unit/car-shade.test.mjs"
       ],
       "coverLoft": [
-        "tests/unit/car-shade.test.mjs"
-      ],
-      "cTub": [
         "tests/unit/car-shade.test.mjs"
       ],
       "earcut": [
@@ -4815,10 +4815,10 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/settings-open-perf.test.mjs"
       ],
-      "parkedWarm": [
+      "parkWarm": [
         "tests/unit/settings-open-perf.test.mjs"
       ],
-      "parkWarm": [
+      "parkedWarm": [
         "tests/unit/settings-open-perf.test.mjs"
       ],
       "resumeWarm": [
@@ -5009,11 +5009,11 @@
       "sessionResult": [
         "tests/unit/data-api-status.test.mjs"
       ],
-      "sessionsForMeeting": [
-        "tests/specs/data-lifecycle.spec.js",
+      "sessionTtl": [
         "tests/unit/data-api-status.test.mjs"
       ],
-      "sessionTtl": [
+      "sessionsForMeeting": [
+        "tests/specs/data-lifecycle.spec.js",
         "tests/unit/data-api-status.test.mjs"
       ],
       "weather": [
@@ -6326,6 +6326,9 @@
       "_nightAmbientBand": [
         "tests/unit/light-presets.test.mjs"
       ],
+      "aTop": [
+        "tests/unit/game-vm.test.mjs"
+      ],
       "afterGarageOut": [
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
@@ -6353,9 +6356,6 @@
       "armBackendProbe": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/source-integrity.test.mjs"
-      ],
-      "aTop": [
-        "tests/unit/game-vm.test.mjs"
       ],
       "autoThrottle": [
         "tests/unit/physics-rows-vm.test.mjs"
@@ -6514,10 +6514,6 @@
       "leaveGarage": [
         "tests/unit/voice-pack.test.mjs"
       ],
-      "loadingInfo": [
-        "tests/unit/announcer.test.mjs",
-        "tests/unit/loading-card.test.mjs"
-      ],
       "loadTrack": [
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/physics-characterization.spec.js",
@@ -6533,6 +6529,10 @@
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/ghost.test.mjs"
+      ],
+      "loadingInfo": [
+        "tests/unit/announcer.test.mjs",
+        "tests/unit/loading-card.test.mjs"
       ],
       "makeCars": [
         "tests/unit/car-fields-vm.test.mjs",
@@ -7951,17 +7951,17 @@
       "lockLandscape": [
         "tests/unit/a11y-pwa-pass.test.mjs"
       ],
-      "lookingBack": [
-        "tests/unit/digital-steer.test.mjs",
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/phone-pad.test.mjs",
-        "tests/unit/throttle-latch.test.mjs"
-      ],
       "lookStick": [
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/key-binds-pad-menu.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs"
+      ],
+      "lookingBack": [
+        "tests/unit/digital-steer.test.mjs",
+        "tests/unit/input-bindings.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/throttle-latch.test.mjs"
       ],
       "moveToward": [
         "tests/unit/digital-steer.test.mjs"
@@ -9941,10 +9941,10 @@
       "adaptLane": [
         "tests/unit/ai-drive.test.mjs"
       ],
-      "aimIntrudes": [
+      "aiRescueDelay": [
         "tests/unit/ai-drive.test.mjs"
       ],
-      "aiRescueDelay": [
+      "aimIntrudes": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "attackOK": [
@@ -10817,13 +10817,13 @@
       "longFor": [
         "tests/unit/tyre-model.test.mjs"
       ],
-      "optionRecord": [
-        "tests/unit/tyre-model.test.mjs"
-      ],
       "optTemp": [
         "tests/unit/engineer.test.mjs",
         "tests/unit/forecast.test.mjs",
         "tests/unit/race-radio.test.mjs",
+        "tests/unit/tyre-model.test.mjs"
+      ],
+      "optionRecord": [
         "tests/unit/tyre-model.test.mjs"
       ],
       "planLaps": [
@@ -11371,10 +11371,10 @@
       ]
     },
     "js/race/pace-math.js": {
-      "aeroDfMult": [
+      "aStd": [
         "tests/unit/pace-math.test.mjs"
       ],
-      "aStd": [
+      "aeroDfMult": [
         "tests/unit/pace-math.test.mjs"
       ],
       "create": [
@@ -11465,16 +11465,6 @@
       "inBoxLat": [
         "tests/unit/pit-lane.test.mjs"
       ],
-      "info": [
-        "tests/specs/pit-lane.spec.js",
-        "tests/unit/lazy-bundles-prefetch.test.mjs",
-        "tests/unit/pit-lane-vm.test.mjs",
-        "tests/unit/pit-lane.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs",
-        "tests/unit/race-settings-vm.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs",
-        "tests/unit/service-worker.test.mjs"
-      ],
       "inLane": [
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/race-session-lazy.test.mjs"
@@ -11484,6 +11474,16 @@
       ],
       "inWindow": [
         "tests/unit/pit-lane.test.mjs"
+      ],
+      "info": [
+        "tests/specs/pit-lane.spec.js",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/pit-lane.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/race-settings-vm.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/service-worker.test.mjs"
       ],
       "laneCentre": [
         "tests/unit/pit-lane-vm.test.mjs",
@@ -12375,10 +12375,10 @@
       "compoundShort": [
         "tests/unit/sporting-regs.test.mjs"
       ],
-      "compoundsRun": [
+      "compoundVerdict": [
         "tests/unit/sporting-regs.test.mjs"
       ],
-      "compoundVerdict": [
+      "compoundsRun": [
         "tests/unit/sporting-regs.test.mjs"
       ],
       "createBlueFlagWatch": [
@@ -12515,10 +12515,10 @@
       "previewPlan": [
         "tests/unit/weather-arc-plan.test.mjs"
       ],
-      "rainfallAt": [
+      "rainSectors": [
         "tests/unit/rain-cells.test.mjs"
       ],
-      "rainSectors": [
+      "rainfallAt": [
         "tests/unit/rain-cells.test.mjs"
       ],
       "setWeatherLive": [
@@ -12784,6 +12784,11 @@
       "mirrorEnd": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "narrow": [
+        "tests/specs/garage-livery-churn.spec.js",
+        "tests/specs/parts-livery-designs.spec.js",
+        "tests/specs/parts-livery-zones.spec.js"
+      ],
       "resize": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
@@ -12837,11 +12842,6 @@
         "tests/unit/service-worker.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/xr-plan.test.mjs"
-      ],
-      "narrow": [
-        "tests/specs/garage-livery-churn.spec.js",
-        "tests/specs/parts-livery-designs.spec.js",
-        "tests/specs/parts-livery-zones.spec.js"
       ]
     },
     "js/render/glx/post.js": {
@@ -12983,6 +12983,11 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
+      "narrow": [
+        "tests/specs/garage-livery-churn.spec.js",
+        "tests/specs/parts-livery-designs.spec.js",
+        "tests/specs/parts-livery-zones.spec.js"
+      ],
       "push": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
@@ -13001,11 +13006,6 @@
       ],
       "*": [
         "tests/unit/agent-indexes.test.mjs"
-      ],
-      "narrow": [
-        "tests/specs/garage-livery-churn.spec.js",
-        "tests/specs/parts-livery-designs.spec.js",
-        "tests/specs/parts-livery-zones.spec.js"
       ]
     },
     "js/render/renderer-boot.js": {
@@ -13088,6 +13088,10 @@
       "modelIds": [
         "tests/unit/build-worker.test.mjs"
       ],
+      "modelSync": [
+        "tests/unit/assets-pack.test.mjs",
+        "tests/unit/build-worker.test.mjs"
+      ],
       "models": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/build-worker.test.mjs"
@@ -13096,9 +13100,10 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/build-worker.test.mjs"
       ],
-      "modelSync": [
-        "tests/unit/assets-pack.test.mjs",
-        "tests/unit/build-worker.test.mjs"
+      "narrow": [
+        "tests/specs/garage-livery-churn.spec.js",
+        "tests/specs/parts-livery-designs.spec.js",
+        "tests/specs/parts-livery-zones.spec.js"
       ],
       "readLayerBytes": [
         "tests/unit/assets-pack.test.mjs",
@@ -13126,11 +13131,6 @@
         "tests/unit/import-models.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/stage-minify.test.mjs"
-      ],
-      "narrow": [
-        "tests/specs/garage-livery-churn.spec.js",
-        "tests/specs/parts-livery-designs.spec.js",
-        "tests/specs/parts-livery-zones.spec.js"
       ]
     },
     "js/render/shared/canvas-css-size.js": {
@@ -13825,6 +13825,9 @@
       "lruVictim": [
         "tests/unit/tlx-round2.test.mjs"
       ],
+      "matKeyFor": [
+        "tests/unit/tlx-mat-key-memo.test.mjs"
+      ],
       "materialArrayAnisotropy": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13833,9 +13836,6 @@
       "materialFor": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
-        "tests/unit/tlx-mat-key-memo.test.mjs"
-      ],
-      "matKeyFor": [
         "tests/unit/tlx-mat-key-memo.test.mjs"
       ],
       "mirrorWarmGate": [
@@ -13889,24 +13889,24 @@
         "tests/unit/tools-a12-guards.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
+      "readGlCapture": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
       "readbackTextureLayers": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
-      "readGlCapture": [
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
-      ],
       "recordGfxBudgetExhausted": [
         "tests/unit/ctx-lost-notice.test.mjs"
+      ],
+      "releaseGeoMirrors": [
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-car-shadow-cpu.test.mjs"
       ],
       "releaseGeometry": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
-      ],
-      "releaseGeoMirrors": [
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/tlx-car-shadow-cpu.test.mjs"
       ],
       "releaseTexSource": [
         "tests/unit/tlx-texture-release.test.mjs"
@@ -15545,12 +15545,12 @@
       "lapGapText": [
         "tests/unit/hud-readouts.test.mjs"
       ],
+      "lapTrace": [
+        "tests/unit/hud-readouts.test.mjs"
+      ],
       "lapsApart": [
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs"
-      ],
-      "lapTrace": [
-        "tests/unit/hud-readouts.test.mjs"
       ],
       "paintFlag": [
         "tests/unit/hud-readouts.test.mjs"
