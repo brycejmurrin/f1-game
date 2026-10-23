@@ -1,0 +1,192 @@
+// BenchRun (js/perf/bench-run.js): the BENCHMARK plan and its pure summary. The run itself reloads a real page
+// across renderer paths; what a test can pin is the leg order, the path prefs and the arithmetic the file is read by.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const SRC = readFileSync(join(ROOT, "js/perf/bench-run.js"), "utf8");
+const load = () => vm.runInNewContext(SRC + "\n;BenchRun", { performance: { now: () => 0 } }, { filename: absSrc("js/perf/bench-run.js") });
+const J = (x) => JSON.parse(JSON.stringify(x));   // the VM's arrays and objects carry its realm's prototypes
+
+const leg = (api, p50s, extra) => Object.assign({ path: api, api, state: "done",
+  entry: { cold: { buildMs: 4000, goMs: 24000 }, warm: { buildMs: 900, goMs: 7000 } },   // entry = buildMs: goMs adds the start lights
+  gpuTest: { reason: "complete", gpuTimer: { supported: false }, fill: { msPerFullFrame: 6 }, mirrorMs: 2,
+    phases: [{ id: "default", p50: p50s[0], p95: p50s[0] + 4, fps: 60, links: 0, pipes: 0 }, { id: "s100", p50: p50s[1], p95: p50s[1] + 4, fps: 40, links: 1, pipes: 0 }] } }, extra);
+
+test("bench-run: the path test alternates WebGPU, WebGL2, WebGL2, WebGPU and seeds 42; nothing runs at load", () => {
+  const B = load();
+  const paths = B.TESTS.find((t) => t.id === "paths");
+  assert.deepEqual(J(paths.legs.map((l) => l.path)), ["webgpu", "webgl2", "webgl2", "webgpu"]);
+  assert.ok(paths.legs.every((l) => l.kind === "gpu"));
+  assert.equal(B.SEED, 42);
+  const plan = B.newPlan("paths", { backend: null, threePath: null });
+  assert.equal(plan.state, "running");
+  assert.equal(plan.i, 0);
+  assert.deepEqual(J(plan.legs.map((l) => l.state)), ["pending", "pending", "pending", "pending"]);
+  assert.deepEqual(J(plan.prefs), { backend: null, threePath: null });
+  assert.equal(B.newPlan("nope", {}).test, "paths");
+});
+
+test("bench-run: WEATHER & TRACKS and GARAGE run on the player's own renderer (no path switch)", () => {
+  const B = load();
+  const races = B.TESTS.find((t) => t.id === "races"), garage = B.TESTS.find((t) => t.id === "garage");
+  assert.ok(races.legs.length >= 4 && races.legs.every((l) => l.kind === "race" && l.path === null && l.track && l.weather && l.tod));
+  assert.ok(races.legs.some((l) => l.weather === "rain") && races.legs.some((l) => l.tod === "night"));
+  assert.deepEqual(J(garage.legs.map((l) => [l.kind, l.path])), [["garage", null]]);
+  const plan = B.newPlan("races", {});
+  assert.equal(plan.legs[0].track, races.legs[0].track);
+  assert.notEqual(plan.legs[0], races.legs[0]);   // a copy: running a plan never edits the test table
+});
+
+test("bench-run scenes: one row per race and per garage step; an unfinished leg keeps a row with its state", () => {
+  const B = load();
+  const st = (id, p50) => ({ id, p50, p95: p50 + 5, p99: p50 + 9, fps: 50, links: 0, pipes: 1 });
+  const rows = J(B.scenes([
+    { kind: "gpu", state: "done", gpuTest: { phases: [] } },
+    { kind: "race", label: "Monza rain", state: "done", entry: { cold: { buildMs: 5000, goMs: 25000 } }, steps: [st("race", 22)] },
+    { kind: "race", label: "Spa rain", state: "failed", reason: "race ended early: hidden" },
+    { kind: "garage", label: "Garage", state: "done", entry: { cold: { goMs: 1200 } }, steps: [st("idle", 16.7), st("livery 1", 18)] },
+  ]));
+  assert.deepEqual(rows.map((r) => r.label), ["Monza rain", "Spa rain", "Garage · idle", "Garage · livery 1"]);
+  assert.equal(rows[0].p99, 31);
+  assert.equal(rows[0].coldMs, 5000);
+  assert.deepEqual([rows[1].state, rows[1].reason], ["failed", "race ended early: hidden"]);
+  assert.equal(rows[3].coldMs, 1200);
+});
+
+test("bench-run pathPrefs: three.js plus THREE PATH (tlxForceGL 0 = WebGPU, 1 = WebGL2); null keeps the player's", () => {
+  const B = load();
+  assert.deepEqual(J(B.pathPrefs("webgpu", null)), { backend: "three", threePath: "0" });
+  assert.deepEqual(J(B.pathPrefs("webgl2", null)), { backend: "three", threePath: "1" });
+  const mine = { backend: "webgl2", threePath: null };
+  assert.equal(B.pathPrefs(null, mine), mine);
+});
+
+test("bench-run median: odd, even, empty, and nulls skipped", () => {
+  const B = load();
+  assert.equal(B.median([3, 1, 2]), 2);
+  assert.equal(B.median([4, 1, 2, 3]), 2.5);
+  assert.equal(B.median([]), null);
+  assert.equal(B.median([null, 5, undefined]), 5);
+});
+
+test("bench-run summarize: per bound api, medians over finished legs only; failed and reloaded legs do not count", () => {
+  const B = load();
+  const s = J(B.summarize([
+    leg("webgpu", [17, 30]), leg("webgl2", [20, 40]), leg("webgl2", [22, 44]), leg("webgpu", [19, 34]),
+    { path: "webgpu", state: "reloaded", reason: "the page reloaded during this leg" },
+    leg("webgpu", [99, 99], { state: "failed" }),
+  ]));
+  assert.deepEqual(Object.keys(s).sort(), ["webgl2", "webgpu"]);
+  assert.equal(s.webgpu.legs, 2);
+  assert.equal(s.webgpu.phases.default.p50, 18);
+  assert.equal(s.webgpu.phases.s100.p50, 32);
+  assert.equal(s.webgl2.phases.default.p95, 25);
+  assert.equal(s.webgl2.fill, 6);
+  assert.equal(s.webgl2.coldMs, 4000);
+  assert.equal(s.webgl2.warmMs, 900);
+  assert.equal(s.webgl2.links, 2);
+  assert.equal(s.webgpu.gpuTimer, false);
+});
+
+test("bench-run summarize: a leg that fell back is filed under the api that actually drew", () => {
+  const B = load();
+  const s = J(B.summarize([leg("webgl2", [20, 40], { path: "webgpu" })]));
+  assert.deepEqual(Object.keys(s), ["webgl2"]);
+});
+
+test("bench-run: ONE LAP, QUICK PATHS and LIVERY EDIT plans; QUICK PATHS is one Monza lap per three.js path", () => {
+  const B = load();
+  const one = B.TESTS.find((t) => t.id === "lap"), quick = B.TESTS.find((t) => t.id === "quick"), liv = B.TESTS.find((t) => t.id === "livery");
+  assert.deepEqual(J(one.legs.map((l) => [l.kind, l.path, l.track, l.weather])), [["lap", null, "monza", "dry"]]);
+  assert.deepEqual(J(quick.legs.map((l) => [l.kind, l.path])), [["lap", "webgpu"], ["lap", "webgl2"]]);
+  assert.deepEqual(J(liv.legs.map((l) => [l.kind, l.path])), [["livery", null]]);
+  const plan = B.newPlan("quick", { backend: null, threePath: null });
+  assert.deepEqual(J(plan.legs.map((l) => [l.state, l.label])), [["pending", "Lap WEBGPU"], ["pending", "Lap WEBGL2"]]);
+  assert.deepEqual(J(B.pathPrefs(plan.legs[1].path, null)), { backend: "three", threePath: "1" });
+});
+
+test("bench-run: every test names its duration in its help line and keeps a short chip label", () => {
+  const B = load();
+  for (const t of B.TESTS) {
+    assert.ok(/About \d+ min\.$/.test(t.help), t.id + " help names its duration: " + t.help);
+    assert.ok(t.label.length <= 16, t.id + " label " + t.label);
+  }
+  assert.equal(new Set(B.TESTS.map((t) => t.id)).size, B.TESTS.length);
+});
+
+test("bench-run overs / growth: frames past 33 and 50 ms; counter growth only where both samples hold a number", () => {
+  const B = load();
+  assert.deepEqual(J(B.overs([16, 17, 34, 40, 51, 16, 16, 16, 16, 16])), { n33: 3, n50: 1, over33: 30 });
+  assert.deepEqual(J(B.overs([])), { n33: 0, n50: 0, over33: null });
+  assert.deepEqual(J(B.growth({ textures: 40, geometries: 70, texMB: 12.5, flapSets: null }, { textures: 40, geometries: 72, texMB: 12.25, flapSets: 2 })),
+    { textures: 0, geometries: 2, texMB: -0.25 });
+});
+
+test("bench-run scenes: a lap row carries its lap time; livery edits carry edit ms and a GPU growth row", () => {
+  const B = load();
+  const st = (id, extra) => Object.assign({ id, p50: 16.7, p95: 20, p99: 33, fps: 59, n33: 1, n50: 0, links: 0, pipes: 0 }, extra);
+  const rows = J(B.scenes([
+    { kind: "lap", label: "Lap WEBGPU", state: "done", entry: { cold: { buildMs: 3000, goMs: 20000 } }, steps: [st("lap", { lapS: 92.4 })] },
+    { kind: "lap", label: "Lap WEBGL2", state: "failed", reason: "no timed lap in 4 min" },
+    { kind: "livery", label: "Livery", state: "done", entry: { cold: { goMs: 250 } }, steps: [st("finish", { editMs: 41 }), { id: "sponsors (none)", editMs: null }],
+      mem: { growth: { textures: 0, geometries: 3, texMB: 0.5 } } },
+  ]));
+  assert.deepEqual(rows.map((r) => r.label), ["Lap WEBGPU", "Lap WEBGL2", "Livery · finish", "Livery · sponsors (none)", "Livery · GPU growth"]);
+  assert.deepEqual([rows[0].time, rows[0].n33, rows[0].coldMs], ["92.4 s", 1, 3000]);
+  assert.equal(rows[1].state, "failed");
+  assert.deepEqual([rows[2].time, rows[2].coldMs], ["41 ms", 250]);
+  assert.equal(rows[3].time, null);
+  assert.deepEqual([rows[4].state, rows[4].reason], ["growth", "textures 0 · geometries +3 · texture MB +0.5"]);
+  assert.equal(J(B.scenes([{ kind: "livery", label: "Livery", state: "done", steps: [], mem: { growth: {} } }]))[0].reason, "no counters on this renderer");
+});
+
+test("bench-run: wake lock is held while a plan runs, re-acquired on visible, released on stop, silent without the API", async () => {
+  const mk = (wakeLock, vis = "visible") => {
+    const store = {}; const handlers = {}; const calls = [];
+    const ctx = { performance: { now: () => 0 }, navigator: { wakeLock }, setTimeout: () => 0, Log: { info: (_c, m) => calls.push(m) },
+      localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } },
+      location: { reload() {} }, document: { visibilityState: vis, addEventListener: (n, f) => { handlers[n] = f; }, getElementById: () => null, querySelectorAll: () => [] } };
+    const B = vm.runInNewContext(SRC + "\n;BenchRun", ctx, { filename: absSrc("js/perf/bench-run.js") });
+    return { B, ctx, handlers, calls };
+  };
+  const lockApi = () => { const s = { n: 0, released: 0, sentinels: [] };
+    s.request = async (t) => { assert.equal(t, "screen"); s.n++; const x = { released: false, release: async () => { x.released = true; s.released++; } }; s.sentinels.push(x); return x; };
+    return s; };
+  const api = lockApi();
+  const { B, ctx, handlers } = mk(api);
+  B.create({});
+  assert.equal(typeof handlers.visibilitychange, "function");
+  B.run("current");
+  await new Promise((r) => setTimeout(r, 0));
+  await B.wake.acquire();   // run() already asked; the held lock is not requested twice
+  assert.equal(api.n, 1);
+  api.sentinels[0].released = true;   // the browser dropped it when the page hid
+  handlers.visibilitychange();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(api.n, 2);
+  B.stop();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(api.sentinels[1].released, true);
+  void ctx;
+});
+
+test("bench-run: no wake lock API is silent; a refused request is logged and does not throw", async () => {
+  const mk = (navigator) => { const logs = []; const store = {};
+    const B = vm.runInNewContext(SRC + "\n;BenchRun", { performance: { now: () => 0 }, navigator, Log: { info: (_c, m) => logs.push(m) },
+      localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem() {} } }, { filename: absSrc("js/perf/bench-run.js") });
+    return { B, logs }; };
+  const none = mk({});
+  await none.B.wake.acquire(); none.B.wake.release();
+  assert.deepEqual(none.logs, []);   // unsupported: nothing logged, nothing shown
+  let asked = 0;
+  const refuse = mk({ wakeLock: { request: async () => { asked++; throw Object.assign(new Error("x"), { name: "NotAllowedError" }); } } });
+  await refuse.B.wake.acquire(); refuse.B.wake.release();
+  assert.equal(asked, 1);
+  assert.ok(refuse.logs.some((m) => /wake lock refused NotAllowedError/.test(m)));
+});

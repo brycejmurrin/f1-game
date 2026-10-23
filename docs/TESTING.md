@@ -1187,8 +1187,9 @@ Two always-judged checks give the gate fixed names:
   queueing behind the ~6 min guards shards; `selected-verdict`, `ci-verdict`
   still need `guards`, so a guards red still fails the gate. A needed job skipped by its `if:` is a pass; a needed failure or
   cancel fails the aggregator. Advisory jobs (`baseline-trial`) never fail it.
-  It is the only check that also carries smoke, the sweeps, renderer-macos and
-  xr, and since 2026-10-15 it is the deploy branch's ONE required check (an
+  It carries the FAILURES of smoke, the sweeps, renderer-macos and xr, not their
+  execution: only the `REQUIRE_SUCCESS` set (full-tier PR runs) must have run, and
+  the job summary lists which jobs executed vs were skipped (#3507). Since 2026-10-15 it is the deploy branch's ONE required check (an
   owner setting; the twelve-name list before it is in
   `docs/notes/CI-CLOG-SURVEY-2026-10-15.md` §4 C, the settings record in its §8).
 - **`Selected specs (verdict)`** (`selected-verdict` job, #507): one fixed

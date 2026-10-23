@@ -398,6 +398,50 @@ test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive 
   }
 });
 
+test("EVENT critical backlog is capped; a late BYE displaces the oldest", () => {
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    close() {}
+  }
+  const channel = (label, buffered) => ({
+    label, readyState: "open", bufferedAmount: buffered, sent: [],
+    bufferedAmountLowThreshold: 0,
+    onbufferedamountlow: null,
+    send(d) { this.sent.push(d); }, close() {},
+  });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    const ep = fresh.rtc({ role: "guest" });
+    const state = channel("state", 0), event = channel("event", 999999);
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: event });
+    state.onopen(); event.onopen();
+
+    const lap = (i) => JSON.stringify({ t: "lap", d: { lap: i } });
+    const bye = JSON.stringify({ t: "bye", d: null });
+    let queued = 0;
+    for (let i = 0; i < 300; i++) {
+      if (ep.send(fresh.EVENT, lap(i))) queued++;
+    }
+    assert.equal(queued, 256, "critical backlog stops at EVENT_OUT_CAP");
+    assert.equal(ep.send(fresh.EVENT, lap(999)), false, "another LAP is refused when full");
+    assert.equal(ep.send(fresh.EVENT, bye), true, "BYE displaces the oldest critical");
+    event.bufferedAmount = 0;
+    event.onbufferedamountlow();
+    assert.equal(event.sent[event.sent.length - 1], bye, "BYE is the last frame drained");
+    assert.equal(event.sent.length, 256, "cap size preserved after displace");
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.localStorage;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // ICE configuration
 // ---------------------------------------------------------------------------
@@ -842,6 +886,216 @@ test("a race session's timeout sets the rtc disconnect grace: 6 s stays open, 26
     assert.equal(long.closed, 1);
     assert.equal(run(6000, 0).status, "closed", "the lobby keeps its 5 s grace");
   } finally { global.setTimeout = realSet; global.clearTimeout = realClear; }
+});
+
+test("raising disconnect grace re-arms a live lobby timer (lobby→race)", () => {
+  // Lobby arms 5 s on a Wi-Fi blip; race start then setTimeoutMs(25000). Without
+  // re-arming, the original handle still fired at 5 s and dropped the rival.
+  const realSet = global.setTimeout, realClear = global.clearTimeout;
+  let now = 0;
+  const timers = new Map();
+  let nextId = 1;
+  global.setTimeout = (fn, ms) => { const id = nextId++; timers.set(id, { at: now + ms, fn }); return id; };
+  global.clearTimeout = (id) => { timers.delete(id); };
+  const advance = (ms) => {
+    now += ms;
+    for (const [id, t] of [...timers]) if (t.at <= now) { timers.delete(id); t.fn(); }
+  };
+  const h = pcHarness();
+  try {
+    h.ep.pc.connectionState = "disconnected";
+    h.ep.pc.onconnectionstatechange();
+    assert.equal(timers.size, 1, "lobby grace armed");
+    advance(1000);
+    h.ep.setDisconnectGrace(25000);
+    advance(5000);   // past the original 5 s deadline
+    assert.equal(h.ep.status, "open", "the raised grace must outlive the lobby timer");
+    advance(20000);  // full 25 s from the re-arm at t=1000
+    assert.equal(h.ep.status, "closed", "the new grace still ends a real outage");
+    assert.equal(h.pcClosed(), 1);
+  } finally {
+    global.setTimeout = realSet; global.clearTimeout = realClear;
+    h.done();
+  }
+});
+
+// #3556: an ICE "failed" once connected killed the peer on the spot, under
+// the 25 s race grace, and nothing ever tried restartIce(). A pair of fake PCs
+// that model the offer/answer state machine, plus an in-process courier,
+// stand in for two browsers and the Nostr bus.
+function restartPair(courier) {
+  const realSet = global.setTimeout, realClear = global.clearTimeout;
+  let now = 0, nextId = 1;
+  const timers = new Map();
+  global.setTimeout = (fn, ms) => { const id = nextId++; timers.set(id, { at: now + (ms || 0), fn }); return id; };
+  global.clearTimeout = (id) => { timers.delete(id); };
+  const advance = (ms) => {
+    now += ms;
+    for (const [id, t] of [...timers]) if (t.at <= now) { timers.delete(id); t.fn(); }
+  };
+  // crypto.subtle.digest settles on the thread pool, not as a microtask.
+  // A fixed number of turns raced the digest on a loaded CI runner, so a
+  // positive expectation waits for its condition (bounded, real clock).
+  const flush = async () => { for (let i = 0; i < 60; i++) await new Promise((r) => setImmediate(r)); };
+  const until = async (cond, ms = 5000) => {
+    const end = Date.now() + ms;
+    while (!cond() && Date.now() < end) await new Promise((r) => setImmediate(r));
+    return cond();
+  };
+  let n = 0;
+  class FakePC {
+    constructor() {
+      this.name = "p" + (n++);
+      this.gen = 0;
+      this.calls = [];
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "complete";
+      this.signalingState = "stable";
+      this.localDescription = this.remoteDescription = null;
+      this.currentLocalDescription = this.currentRemoteDescription = null;
+    }
+    sdp(type) { this.gen++; return { type, sdp: "v=0\r\na=ice-ufrag:" + this.name + this.gen + "\r\na=ice-pwd:" + this.name + "pwd" + this.gen + "\r\n" }; }
+    addEventListener() {}
+    removeEventListener() {}
+    restartIce() { this.calls.push("restartIce"); }
+    async createOffer() { this.calls.push("createOffer"); return this.sdp("offer"); }
+    async createAnswer() { this.calls.push("createAnswer"); return this.sdp("answer"); }
+    async setLocalDescription(d) {
+      if (d.type === "rollback") { this.calls.push("rollback"); this.signalingState = "stable"; this.localDescription = this.currentLocalDescription; return; }
+      this.localDescription = d;
+      if (d.type === "offer") { this.signalingState = "have-local-offer"; return; }
+      this.signalingState = "stable";
+      this.currentLocalDescription = d; this.currentRemoteDescription = this.remoteDescription;
+    }
+    async setRemoteDescription(d) {
+      this.remoteDescription = d;
+      if (d.type === "offer") { this.signalingState = "have-remote-offer"; return; }
+      this.signalingState = "stable";
+      this.currentRemoteDescription = d; this.currentLocalDescription = this.localDescription;
+    }
+    close() { this.calls.push("close"); }
+  }
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  const fresh = load("js/net/transport.js", "NetTransport");
+  const make = () => {
+    const ep = fresh.rtc({ role: "guest", restartCourier: courier });
+    const state = { label: "state", readyState: "open", close() {} };
+    const event = { label: "event", readyState: "open", close() {} };
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: event });
+    state.onopen(); event.onopen();
+    return ep;
+  };
+  const a = make(), b = make();
+  const set = (ep, s) => { ep.pc.connectionState = s; ep.pc.onconnectionstatechange(); };
+  const connect = async () => {
+    await a.pc.setLocalDescription(await a.pc.createOffer());
+    await b.pc.setRemoteDescription(a.pc.localDescription);
+    await b.pc.setLocalDescription(await b.pc.createAnswer());
+    await a.pc.setRemoteDescription(b.pc.localDescription);
+    a.pc.calls.length = b.pc.calls.length = 0;
+    set(a, "connected"); set(b, "connected");
+  };
+  const done = () => {
+    timers.clear();
+    global.setTimeout = realSet; global.clearTimeout = realClear;
+    delete global.RTCPeerConnection; delete global.localStorage;
+  };
+  return { a, b, set, connect, advance, flush, until, done };
+}
+
+function boardCourier() {
+  const slots = new Map();
+  const slot = (code) => { if (!slots.has(code)) slots.set(code, {}); return slots.get(code); };
+  return {
+    codes: () => [...slots.keys()],
+    offer: (code, sdp) => new Promise((resolve) => {
+      const s = slot(code);
+      s.offer = sdp;
+      s.onAnswer = (out) => resolve({ ok: true, payload: out });
+      if (s.wake) s.wake();
+    }),
+    answer: (code, reply) => new Promise((resolve) => {
+      const s = slot(code);
+      const go = async () => { const out = await reply(s.offer); s.onAnswer(out); resolve({ ok: true, payload: s.offer }); };
+      if (s.offer) go(); else s.wake = go;
+    }),
+  };
+}
+
+test("ICE failed after connecting rides the grace and restarts ICE through the courier (#3556)", async () => {
+  const courier = boardCourier();
+  const h = restartPair(courier);
+  try {
+    await h.connect();
+    h.a.setDisconnectGrace(25000);
+    h.b.setDisconnectGrace(25000);
+    h.set(h.a, "failed"); h.set(h.b, "failed");
+    assert.equal(h.a.status, "open", "failed must not close a connected peer at once");
+    h.advance(0);
+    await h.until(() => h.a.stats().iceRestarts === 1 && h.a.pc.signalingState === "stable" &&
+      !!h.a.pc.currentRemoteDescription && /pwd2/.test(h.a.pc.currentRemoteDescription.sdp));
+    await h.flush();
+    assert.ok(h.a.pc.calls.includes("restartIce"), "the original offerer calls restartIce()");
+    assert.ok(!h.b.pc.calls.includes("restartIce") && !h.b.pc.calls.includes("createOffer"),
+      "the answerer never offers — no glare");
+    const codes = courier.codes();
+    assert.equal(codes[0].length, 66, "a SHA-256 hex code plus the attempt tag");
+    assert.equal(codes[0].slice(-2), "R0", "both sides met on one derived courier code");
+    assert.deepEqual(codes.slice(1), [codes[0].slice(0, -1) + "1"],
+      "the answerer then listens for a retry offer, on the next attempt's code");
+    assert.equal(h.b.pc.currentRemoteDescription.sdp, h.a.pc.currentLocalDescription.sdp, "B applied A's restart offer");
+    assert.equal(h.a.pc.currentRemoteDescription.sdp, h.b.pc.currentLocalDescription.sdp, "A applied B's restart answer");
+    assert.ok(h.a.pc.currentLocalDescription.sdp.includes("a=ice-pwd:p0pwd2"), "the restart offer carries new credentials");
+    assert.equal(h.a.pc.signalingState, "stable");
+    assert.equal(h.a.stats().iceRestarts, 1);
+    assert.equal(h.b.stats().iceRestarts, 1);
+    h.set(h.a, "connected"); h.set(h.b, "connected");
+    h.advance(30000);
+    await h.flush();
+    assert.equal(h.a.status, "open", "a recovered connection outlives the grace");
+    assert.equal(h.b.status, "open");
+    assert.ok(!h.a.pc.calls.includes("close"));
+  } finally { h.done(); }
+});
+
+test("with no courier, ICE failed after connecting closes at the grace end, not at once", async () => {
+  const h = restartPair(null);
+  try {
+    await h.connect();
+    const reasons = [];
+    h.a.onClose((r) => reasons.push(r));
+    h.a.setDisconnectGrace(25000);
+    h.set(h.a, "failed");
+    h.advance(24000);
+    assert.equal(h.a.status, "open", "the race's 25 s grace covers a failed pair too");
+    h.advance(1000);
+    assert.equal(h.a.status, "closed");
+    assert.deepEqual(reasons, ["failed"]);
+    assert.ok(!h.a.pc.calls.includes("restartIce"));
+  } finally { h.done(); }
+});
+
+test("a disconnect that heals before the restart answer rolls the pending offer back", async () => {
+  const pending = { offer: () => new Promise(() => {}), answer: () => new Promise(() => {}) };
+  const h = restartPair(pending);
+  try {
+    await h.connect();
+    h.set(h.a, "disconnected");
+    h.advance(2999);
+    await h.flush();
+    assert.ok(!h.a.pc.calls.includes("restartIce"), "a short blip starts no restart");
+    h.advance(1);
+    await h.until(() => h.a.pc.signalingState === "have-local-offer");
+    assert.equal(h.a.pc.signalingState, "have-local-offer", "restart offer out after 3 s disconnected");
+    h.set(h.a, "connected");
+    await h.until(() => h.a.pc.signalingState === "stable");
+    assert.ok(h.a.pc.calls.includes("rollback"));
+    assert.equal(h.a.pc.signalingState, "stable", "the next outage starts from stable");
+    assert.equal(h.a.status, "open");
+  } finally { h.done(); }
 });
 
 test("rtc stamps message ARRIVAL and hands it to onMessage; loopback stays unstamped", () => {

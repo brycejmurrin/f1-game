@@ -3,7 +3,7 @@
 const LazyBundles = (function () {
 "use strict";
 function create(deps) {
-const { els, loadBackendScripts } = deps;
+const { els, loadBackendScripts: loadScripts } = deps;
 // LAZY_AGENT. Not SW-optional (V8 full-compiles install puts). Players on
 // github.io skip this; tests and localhost inject.
 const AGENT_FILES = ApexRoster.LAZY_AGENT;
@@ -94,7 +94,7 @@ function ensureCircuit(idx) {
   if (!def || circuitResident(def) || def.custom) return Promise.resolve();
   let p = _circuitLoads.get(def.id);
   if (!p) {
-    p = loadBackendScripts([CIRCUITS_DIR + "/" + def.id + ".js"], []).then((ok) => {
+    p = loadBackendScripts([CIRCUITS_DIR + "/" + def.id + ".js"], [], { transientRetry: false }).then((ok) => {
       _circuitLoads.delete(def.id);
       if (!ok) {
         Log.warn("track", "circuit payload failed to load: " + def.id);
@@ -160,7 +160,7 @@ function sceneryModels(def) {
 function fetchScenery(id) {
   let p = _sceneryLoads.get(id);
   if (!p) {
-    p = loadBackendScripts([SCENERY_DIR + "/" + id + ".js"], [])
+    p = loadBackendScripts([SCENERY_DIR + "/" + id + ".js"], [], { transientRetry: false })
       .catch((e) => { Log.warn("track", "scenery fetch threw: " + id + ": " + (e && e.message)); })
       .then(() => { _sceneryLoads.delete(id); });
     _sceneryLoads.set(id, p);
@@ -213,8 +213,8 @@ function ensureTrackBuild() {
 }
 // Resolves true once the closure is resident, false when it is not: the caller
 // can tell, because Tracks.build() of a circuit whose closure never landed is a
-// bare world that the rebuild guard (id, night, grid) then keeps for the
-// session. It does not throw — a bare world is playable, a rejection at the
+// bare world; game.js marks it (builtTrackBare) and the next load rebuilds it
+// once a later ask lands the closure (#3570). It does not throw — a bare world is playable, a rejection at the
 // title is the red overlay. ONE fetch per ask, no in-call retry: a failed
 // script is a completed request (the track has fallback scenery, and
 // session-entry-vm holds the request to prove a start survives it); the next
@@ -280,33 +280,39 @@ const DATA_READY = {
 // inject the bundle twice, and the second tap has to await the first load
 // rather than call DataHub.open() while hub.js is still in flight.
 let dataHubLoad = null;
+const DATA_HUB_RETRY_MS = [400, 1200];
+function dataHubRetryDelay(attempt) {
+  const ms = DATA_HUB_RETRY_MS[attempt - 1];
+  if (!ms) return Promise.resolve();
+  return new Promise((r) => setTimeout(r, ms));
+}
 function ensureDataHub() {
   if (dataHubLoad) return dataHubLoad;
-  dataHubLoad = loadBackendScripts(DATA_FILES, DATA_EDGES, {
-    strict: true, loaded: dataScriptsLoaded,
-    ready: (src) => DATA_READY[src] && DATA_READY[src](),
-  }).then((complete) => {
-    // Bare global, not window.DataHub: hub.js is a script-level `const`, a
-    // lexical binding that is never a window property. Null the memo on an
-    // incomplete group so a later tap retries instead of latching failure.
-    // A failed sibling must not even START hub.js. The binding can be in its
-    // temporal dead zone after a script exception, so do not probe it on an
-    // incomplete load (even typeof throws in that case).
-    if (!complete) {
-      Log.warn("data", "the data hub bundle did not load — DATA stays closed");
-      dataHubLoad = null;
-      return false;
+  dataHubLoad = (async () => {
+    const maxAttempts = DATA_HUB_RETRY_MS.length + 1;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0) await dataHubRetryDelay(attempt);
+      const complete = await loadBackendScripts(DATA_FILES, DATA_EDGES, {
+        strict: true, loaded: dataScriptsLoaded,
+        ready: (src) => DATA_READY[src] && DATA_READY[src](),
+        cacheBust: attempt > 0 ? attempt : 0,
+      });
+      if (!complete) {
+        if (attempt < maxAttempts - 1) continue;
+        Log.warn("data", "the data hub bundle did not load — DATA stays closed");
+        dataHubLoad = null;
+        return false;
+      }
+      try { DataHub.init(els.datahub); }
+      catch (e) {
+        Log.error("data", "the data hub failed to start: " + (e && e.message));
+        dataHubLoad = null;
+        return false;
+      }
+      return true;
     }
-    try { DataHub.init(els.datahub); }
-    catch (e) {
-      // Post-load app code must not latch a rejected memo: DATA would stay dead
-      // until reload. Null it so the next tap retries.
-      Log.error("data", "the data hub failed to start: " + (e && e.message));
-      dataHubLoad = null;
-      return false;
-    }
-    return true;
-  });
+    return false;
+  })();
   return dataHubLoad;
 }
 
@@ -447,6 +453,66 @@ function audioYieldToMain(kind) {
   }
   return macrotask();
 }
+/** Settings hub visible (or the Settings door still focused): keep the sheet
+ *  interactive by yielding between LAZY_AUDIO chunks instead of one multi-second
+ *  eval (D·IP2 iPhone 15: 3.7 s freeze after Settings painted in 299 ms).
+ *  MenuSheetGate owns the detector when the shell has loaded it. */
+function settingsUiHot() {
+  if (typeof MenuSheetGate !== "undefined" && MenuSheetGate.open) return MenuSheetGate.open();
+  try {
+    if (typeof document === "undefined") return false;
+    const pm = document.getElementById("pmsettings");
+    if (pm && !pm.hidden) return true;
+    const a = document.activeElement;
+    if (a && (a.id === "mb-settings" || a.id === "pm-settings")) return true;
+  } catch (_) { /* detached */ }
+  return false;
+}
+function audioMark(name) {
+  try {
+    if (typeof performance !== "undefined" && performance.mark) performance.mark(name);
+  } catch (_) { /* User Timing optional */ }
+}
+/** Load LAZY_AUDIO one file at a time with a main-thread yield between each
+ *  eval. Parallel inject left 19 scripts competing in one LOAF on phones. */
+async function loadAudioSerial(skipLeadingYield) {
+  const preds = new Map(AUDIO_FILES.map((f) => [f, []]));
+  for (const [a, b] of (AUDIO_EDGES || [])) {
+    if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
+  }
+  const pending = new Set(AUDIO_FILES.filter((f) => !audioScriptsLoaded.has(f)));
+  const readyFn = (src) => { restoreOnEngine(); return audioFileLanded(src); };
+  const hot = () => settingsUiHot();
+  while (pending.size) {
+    const ready = [...pending].filter((f) => preds.get(f).every((p) => audioScriptsLoaded.has(p)));
+    if (!ready.length) {
+      // Cycle or missing edge: fall back to the bulk loader for what remains.
+      return loadScripts([...pending], AUDIO_EDGES, { loaded: audioScriptsLoaded, ready: readyFn });
+    }
+    // ensureAudio already paint-yielded; only yield between later chunks (Settings hub).
+    if (!skipLeadingYield) await audioYieldToMain(hot() ? "paint" : "task");
+    skipLeadingYield = false;
+    audioMark("apex:audio:chunk");
+    const src = ready[0];
+    pending.delete(src);
+    const ok = await loadScripts([src], [], { loaded: audioScriptsLoaded, ready: readyFn });
+    if (!ok) return false;
+  }
+  return true;
+}
+/** Routes LAZY_AUDIO through serial chunk loads while Settings is open.
+ *  Cold title/boot keeps the bulk loader (audio-smoke: panel create must sync
+ *  sliders from store before the MUSIC page is read). Always-serial for every
+ *  multi-file ensureAudio raced AudioPanel.create and left HTML defaults 5/10. */
+async function loadBackendScripts(files, edges, opts) {
+  if (files === AUDIO_FILES && settingsUiHot()) {
+    audioMark("apex:settings:audio-deferred");
+    await audioYieldToMain("paint");
+    await audioYieldToMain("task");
+    return loadAudioSerial(true);
+  }
+  return loadScripts(files, edges, opts);
+}
 function prefetchAudio() {
   // HTTP-cache only — do not evaluate. Evaluating at idle would create no
   // AudioContext (restoreOnEngine still gates on userActivation) but would
@@ -516,10 +582,12 @@ function ensureAudio() {
   // script's onload (ready:) under sticky userActivation — AudioContext is
   // created/resumed the same way as before; awaiting callers still get a
   // fully ready engine when this promise resolves.
+  // D·IP2: openSettings / mb-settings kick ensureAudio; serial chunks + extra
+  // paint yields keep the Settings hub interactive instead of one 3–4 s LOAF.
   audioLoad = (async () => {
     await audioYieldToMain("paint");
     const ok = await loadBackendScripts(AUDIO_FILES, AUDIO_EDGES, {
-      loaded: audioScriptsLoaded,
+      strict: true, loaded: audioScriptsLoaded,
       ready: (src) => { restoreOnEngine(); return audioFileLanded(src); },
     });
     if (!ok || AUDIO_FILES.some((f) => !audioScriptsLoaded.has(f)) || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
@@ -546,6 +614,7 @@ function ensureAudio() {
       }
     } catch (e) { Log.warn("audio", "CrowdAudio.bind failed: " + (e && e.message)); }
     audioHooked = true;
+    audioMark("apex:audio:ready");
     return true;
   })();
   return audioLoad;
@@ -623,7 +692,7 @@ let lightLoad = null, lightFailed = false;
 function ensureLightPresets() {
   if (window.LightPresets) return Promise.resolve(true);
   if (lightLoad) return lightLoad;
-  lightLoad = loadBackendScripts(RACE_FILES, []).catch(() => false).then(() => {
+  lightLoad = loadBackendScripts(RACE_FILES, [], { transientRetry: false }).catch(() => false).then(() => {
     lightLoad = null;
     lightFailed = !window.LightPresets;
     if (lightFailed) { Log.warn("game", "the lighting presets did not load — the next race start asks again"); return false; }

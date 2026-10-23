@@ -1,5 +1,7 @@
 // weather-blend — a weather-arc step cross-fades the session lighting; a chip
-// or __apex.weather() still cuts.
+// or __apex.weather() still cuts. Also pins blended TOD cityGlow clear
+// (night→day/dusk/dawn must not leak the light-pollution dome; day→night fades
+// it in) — the cut path already cleared it, the fade path did not.
 //
 // applyRaceSettings(blendS) snapshots what the frame showed, computes the new
 // weather, and tick(dt) walks sun colour, cloud cover, ambient, fog and
@@ -458,6 +460,62 @@ test("applyRaceSettings resolves floodEmit with the session, not on the next fra
   G.raceTimeOfDay = "default"; G.track.def.night = true;   // a night circuit's default session is night
   atmo.applyRaceSettings();
   assert.ok(G._lastFloodEmit > 0);
+});
+
+// Blended TOD used to LEAK night cityGlow into day/dusk/dawn: _mixv(b==null)
+// returned the FROM array for the whole fade (including s=1), and _writeWx
+// skipped null writes — so the light-pollution dome never cleared. Cut path
+// was fine (stars already snap; this is the skyglow twin of that qatar bug).
+test("a blended night→day/dusk/dawn clears city skyglow instead of leaking it", () => {
+  const glowLum = (g) => (g ? g[0] + g[1] + g[2] : 0);
+  for (const to of ["day", "dusk", "dawn"]) {
+    const { G, atmo } = boot("singapore");
+    G.track.def.theme = "street_night";
+    G.raceTimeOfDay = "night";
+    atmo.applyRaceSettings();
+    const nightGlow = glowLum(G.frameSky.cityGlow);
+    assert.ok(nightGlow > 0.01, `${to}: night must author a cityGlow dome`);
+
+    G.raceTimeOfDay = to;
+    atmo.applyRaceSettings(true);
+    assert.ok(Math.abs(glowLum(G.frameSky.cityGlow) - nightGlow) < 1e-6, `${to}: fade starts on the night dome`);
+    atmo.tick(atmo.WX_BLEND_S / 2);
+    const mid = glowLum(G.frameSky.cityGlow);
+    assert.ok(mid > 0 && mid < nightGlow - 1e-6, `${to}: mid-fade skyglow ${mid} did not ease toward clear`);
+    atmo.tick(atmo.WX_BLEND_S);
+    assert.equal(G.frameSky.cityGlow, null, `${to}: blended land must clear cityGlow like a cut`);
+    assert.equal(atmo.wxBlend(), null);
+
+    const cut = boot("singapore");
+    cut.G.track.def.theme = "street_night";
+    cut.G.raceTimeOfDay = to;
+    cut.atmo.applyRaceSettings();
+    assert.equal(cut.G.frameSky.cityGlow, null, `${to}: cut path still clears`);
+  }
+});
+
+test("a blended day→night fades city skyglow in from clear", () => {
+  const { G, atmo } = boot("singapore");
+  G.track.def.theme = "street_night";
+  G.raceTimeOfDay = "day";
+  atmo.applyRaceSettings();
+  assert.equal(G.frameSky.cityGlow, null);
+  const night = boot("singapore");
+  night.G.track.def.theme = "street_night";
+  night.G.raceTimeOfDay = "night";
+  night.atmo.applyRaceSettings();
+  const nightGlow = night.G.frameSky.cityGlow[0] + night.G.frameSky.cityGlow[1] + night.G.frameSky.cityGlow[2];
+
+  G.raceTimeOfDay = "night";
+  atmo.applyRaceSettings(true);
+  assert.equal(G.frameSky.cityGlow, null, "fade starts clear (no snap-on dome)");
+  atmo.tick(atmo.WX_BLEND_S / 2);
+  const mid = G.frameSky.cityGlow;
+  assert.ok(mid && mid[0] + mid[1] + mid[2] > 0, "mid-fade has a partial dome");
+  assert.ok(mid[0] + mid[1] + mid[2] < nightGlow - 1e-6, "mid-fade is below the night end");
+  atmo.tick(atmo.WX_BLEND_S);
+  assert.ok(Math.abs((G.frameSky.cityGlow[0] + G.frameSky.cityGlow[1] + G.frameSky.cityGlow[2]) - nightGlow) < 1e-6,
+    "lands on the night dome");
 });
 
 test("day FOG weather is opaque by ~500 m and its horizon IS the fog colour (survey: 'fog hazes ground only')", () => {

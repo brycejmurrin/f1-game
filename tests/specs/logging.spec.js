@@ -8,6 +8,7 @@
  * of those throw, so nothing else in the suite would notice.
  */
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { toMenu } from "../helpers/shared-page.js";
 
 test.describe("Log", () => {
   test("is live before any game module evaluates", async ({ racePage }) => {
@@ -65,6 +66,15 @@ test.describe("Log", () => {
   });
 
   test("a track build reports through it, so the ring explains a build", async ({ loadTrack, racePage }) => {
+    // Start from the title screen with no race up, as when this spec runs alone.
+    // The shared page arrives with whatever an earlier spec on this worker left
+    // running (headless-api ends on a live monza race), and a build over a live
+    // race is a different path: an in-session SWITCH that drops the old world,
+    // goes to the build Worker and can be quit out from under the start. Under
+    // SwiftShader that stalled the ring or ended in "did not reach the grid"
+    // (#3582). toMenu is the shared page's own way back to a cold start.
+    // (The VM-page adapter has no pause menu to click and no earlier spec's race.)
+    if (process.env.APEX_VM_PAGE !== "1") await toMenu(racePage);
     await loadTrack("monaco");
     const r = await racePage.evaluate(() => {
       const all = window.__apex.logs();

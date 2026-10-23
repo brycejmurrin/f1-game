@@ -514,7 +514,14 @@ test.describe("UI scale", () => {
           const anims = ["menu-brand", "menu-buttons"].flatMap((id) => {
             const el = document.getElementById(id);
             if (!el) return [id + ":missing"];
+            // Mask transitions are PAINT-ONLY (#3606): reduced motion gives every #overlay
+            // descendant a 0.01ms `transition: all`, so each ScrollFade sf-* class flip on
+            // #menu-buttons (its 48 ms mutation timer or a ResizeObserver frame, either of
+            // which can land in any frame of the count) starts a fresh -webkit-mask-* /
+            // mask-size transition. They change no box, so they are not part of the zoom
+            // settle this counts, and the geometry asserted below cannot see them.
             return el.getAnimations().filter((a) => a.pending || a.playState === "running")
+              .filter((a) => !/mask/.test(a.transitionProperty || ""))
               .map((a) => id + ":" + (a.transitionProperty || a.animationName || "?"));
           });
           const brand = document.getElementById("menu-brand");
@@ -617,6 +624,7 @@ test.describe("UI scale", () => {
             const el = document.getElementById(id);
             if (!el) return [id + ":missing"];
             return el.getAnimations().filter((a) => a.pending || a.playState === "running")
+              .filter((a) => !/mask/.test(a.transitionProperty || ""))   // paint-only (#3606, see the phone test)
               .map((a) => id + ":" + (a.transitionProperty || a.animationName || "?"));
           });
           const zoom = +getComputedStyle(document.getElementById("menu-buttons")).zoom;

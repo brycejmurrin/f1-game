@@ -619,10 +619,10 @@ test("the quota purge evicts telemetry bodies largest-first before any small sch
   }
   const big = "x".repeat(40_000);
   const telemKeys = [
-    "apex26.api.https://api.openf1.org/v1/car_data?session_key=1&driver_number=1&date>=a&date<=b",
-    "apex26.api.https://api.openf1.org/v1/location?session_key=1&driver_number=1&date>=a&date<=b",
-    "apex26.api.https://api.openf1.org/v1/car_data?session_key=2&driver_number=4&date>=a&date<=b",
-    "apex26.api.https://api.openf1.org/v1/location?session_key=2&driver_number=4&date>=a&date<=b",
+    "apex26.api.https://api.openf1.org/v1/car_data?session_key=1&driver_number=1&date%3E=a&date%3C=b",
+    "apex26.api.https://api.openf1.org/v1/location?session_key=1&driver_number=1&date%3E=a&date%3C=b",
+    "apex26.api.https://api.openf1.org/v1/car_data?session_key=2&driver_number=4&date%3E=a&date%3C=b",
+    "apex26.api.https://api.openf1.org/v1/location?session_key=2&driver_number=4&date%3E=a&date%3C=b",
   ];
   telemKeys.forEach((k, i) => store.set(k, entry(now - 60_000 * (i + 1), big + i)));
   let quotaThrows = 1;
@@ -761,6 +761,13 @@ test("carData drops rows with unparseable dates (same rule as locationData)", as
   seedLog(context);
   vm.runInContext(apiSource + ";globalThis.api=F1API", context);
   const car = await context.api.carData(1, 44, "2026-07-26T14:00:00.000Z", "2026-07-26T14:00:02.000Z");
+  // Behaviour pin (avoid source-text match pins): windowed filters must use the
+  // same percent-encoding as deltaUrl so proxies cannot truncate the range.
+  assert.ok(path.includes("date%3E=" + encodeURIComponent("2026-07-26T14:00:00.000Z")),
+    "windowed start filter matches deltaUrl encoding: " + path);
+  assert.ok(path.includes("date%3C=" + encodeURIComponent("2026-07-26T14:00:02.000Z")),
+    "windowed end filter is percent-encoded too: " + path);
+  assert.equal(/date>=|date<=/.test(path), false, "bare >/< must not appear in the OpenF1 URL");
   const loc = await context.api.locationData(1, 44, "2026-07-26T14:00:00.000Z", "2026-07-26T14:00:02.000Z");
   assert.equal(car.length, 2, "bad date row must be dropped");
   assert.equal(car[0].t, 0);

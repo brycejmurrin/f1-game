@@ -53,6 +53,16 @@ test("place / removeLast / canPlace respect caps and UNDO-shaped lists", () => {
   assert.equal(list.length, before - 2);
 });
 
+test("place floors gap at MIN_GAP like placeBatch (COPY must not store a sub-min clearance)", () => {
+  const { P } = bootEditor();
+  const trees = P.place([], "trees", { s: 0.2, side: 1, gap: 0 });
+  assert.equal(trees[0].gap, P.MIN_GAP.trees);
+  const batch = P.placeBatch([], "hedge", { start: 0.3, count: 1, gap: 1 });
+  assert.equal(batch[0].gap, P.MIN_GAP.hedge);
+  const gantry = P.place([], "gantry", { s: 0.1, gap: 99 });
+  assert.equal(gantry[0].gap, 0, "gantry stays on the road centreline");
+});
+
 test("pointFrac walks the control polygon arc", () => {
   const { P } = bootEditor();
   const pts = ellipse(40, 800, 500);

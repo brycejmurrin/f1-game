@@ -195,6 +195,10 @@ const CamFeel = (function () {
     pitwall:   { sp: 2.2, yaw: 2.2, brake: 7, slip: 2 },
     trackside: { sp: 2.0, yaw: 1.6, brake: 2, slip: 2 },
     cockpit:   { sp: 3.5, yaw: 3, brake: 8, slip: 3 },
+    // HELMET is the cockpit from inside the lid — same lens rates, or a cut onto
+    // it eases FOV/aim on the generic {sp:3…} defaults and feels like a second
+    // onboard camera (mode-switch jitter).
+    helmet:    { sp: 3.5, yaw: 3, brake: 8, slip: 3 },
     hood:      { sp: 4.5, yaw: 4, brake: 9, slip: 4 },
     visor:     { sp: 3.0, yaw: 3, brake: 3, slip: 3 },
     tcam:      { sp: 5.0, yaw: 4, brake: 8, slip: 4 },

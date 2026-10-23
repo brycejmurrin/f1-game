@@ -69,7 +69,7 @@ test("every wrap row has a real CLI (or built-in) and a real skill", () => {
 
 test("server table names the attached servers and the four that left", () => {
   const doc = read("docs/AGENT-SURFACE.md");
-  for (const name of ["apex-lsp", "apex-tools", "chrome-devtools", "js-debugger", "playwright-official"]) {
+  for (const name of ["apex-lsp", "apex-tools", "browserstack", "chrome-devtools", "js-debugger", "playwright-official"]) {
     assert.match(doc, new RegExp(`\\*\\*${name}\\*\\*`), `AGENT-SURFACE.md must name **${name}**`);
   }
   // Removed 2026-09 — still documented as CLI-only so nobody re-adds them blind.
@@ -84,6 +84,7 @@ test("server table names the attached servers and the four that left", () => {
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-lsp",
     "apex-tools",
+    "browserstack",
     "chrome-devtools",
     "js-debugger",
     "playwright-official",
@@ -152,7 +153,7 @@ test("bootstrap contract is documented for Cloud + desktop", () => {
   const settings = JSON.parse(read(".claude/settings.json"));
   assert.deepEqual(
     [...(settings.enabledMcpjsonServers || [])].sort(),
-    ["apex-lsp", "apex-tools", "chrome-devtools", "js-debugger", "playwright-official"],
+    ["apex-lsp", "apex-tools", "browserstack", "chrome-devtools", "js-debugger", "playwright-official"],
     ".claude/settings.json must approve the catalog servers",
   );
   assert.match(doc, /enabledMcpjsonServers/);
@@ -198,7 +199,7 @@ test("Codex .codex/config.toml MCP servers lockstep .mcp.json", () => {
   const toml = read(".codex/config.toml");
   assert.match(toml, /trusted/i);
   const names = Object.keys(cfg.mcpServers).sort();
-  assert.deepEqual(names, ["apex-lsp", "apex-tools", "chrome-devtools", "js-debugger", "playwright-official"]);
+  assert.deepEqual(names, ["apex-lsp", "apex-tools", "browserstack", "chrome-devtools", "js-debugger", "playwright-official"]);
   for (const name of names) {
     assert.match(toml, new RegExp(`\\[mcp_servers\\.${name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\]`),
       `.codex/config.toml missing [mcp_servers.${name}]`);

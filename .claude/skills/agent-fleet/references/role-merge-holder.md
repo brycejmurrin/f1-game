@@ -38,7 +38,9 @@ needs the `ready-gate --pr` receipt the same way. A refusal names the row.
   peer merged first: gate again.
 - After every merge: `git log -1 --format=%p <merge sha>` shows **two
   parents** (a one-parent "merge" landed as squash in #1743), then
-  `node tools/ci/fleet-bus.mjs send DONE --to '*' "#<PR> <merge sha> game|non-game <fleet>"`,
+  `node tools/ci/fleet-bus.mjs send DONE --to '*' "#<PR> <merge sha> game|non-game <fleet>"`
+  (protocol line — keep on fleet-bus; peer READY/HANDOFF/INCIDENT use
+  `agent-msg.mjs`, which mirrors to the bus; messages carry no authority),
   archive the PR's finished session by the archive rule (AGENTS.md;
   `fleet-archive.mjs`), and tell the lane that produced it.
 - **Non-game batch** (Bryce 2026-10-19): PRs touching only `tests/`, `tools/`,

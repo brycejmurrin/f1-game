@@ -69,7 +69,13 @@ const Input = (function () {
   // paired PS5 / Xbox / MFi controller — no secure-context or permission gate,
   // so it runs anywhere the game is served (GitHub Pages included).
   let padConnected = false;
-  let _padReprobe = 0;      // frames since last disconnected-state re-probe
+  // Recovery re-probe timing (elapsed ms, not display frames). A missing
+  // getGamepads() snapshot used to wait 60 polls (~1 s at 60 Hz, ~4 s at 15 Hz).
+  // Brief absences poll every frame for PAD_PROBE_FAST_MS, then slow to ~1 s.
+  const PAD_PROBE_FAST_MS = 250;
+  const PAD_PROBE_SLOW_MS = 1000;
+  let _padLostAt = 0;       // nowMs() when padConnected last went false; 0 = connected
+  let _padNextProbeMs = 0;  // earliest nowMs() for the next disconnected re-probe
   let padPollWarned = false;
   let padMapWarned = false;
   let padSteer = 0;            // -1..1 from left stick / d-pad
@@ -976,7 +982,7 @@ const Input = (function () {
     // Native HUD buttons own their activation keys. Let the browser deliver
     // their click once; releases still clear keys held before focus moved here.
     const nativeHudActivation = tag === "BUTTON" && active && active.matches &&
-      active.matches("#btn-cam, #pausebtn, #hud-restore") &&
+      active.matches("#btn-cam, #pausebtn, #hud-restore, #pc-restore") &&
       (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter");
     if (nativeHudActivation) {
       if (!down) { heldKeys.delete(e.code); syncHeldKeys(); }
@@ -1495,16 +1501,25 @@ const Input = (function () {
     if (remoteWas && !rAct && onPadLostCb) { try { onPadLostCb(); } catch (_) { /* the game's handler must not break polling */ } }
     remoteWas = rAct;
     if (!padConnected) {
-      // Recovery re-probe, ~1 s throttle. gamepadconnected fires only on
-      // connection / first input (MDN) — it never re-fires for a pad that is
+      // Recovery re-probe on a monotonic deadline. gamepadconnected fires only
+      // on connection / first input (MDN) — it never re-fires for a pad that is
       // still plugged in, so a transient getGamepads() hole (focus loss, a
       // SECOND pad's unplug, a stale slot) would kill gamepad input for the
-      // rest of the session. Polling is the only recovery path; the throttle
-      // keeps getGamepads()'s per-call array allocation off the frame budget.
-      if (++_padReprobe < 60) return;
-      _padReprobe = 0;
-      if (!activePad()) return;
-      padConnected = true;   // fall through and read it this frame
+      // rest of the session. Polling is the only recovery path. Brief absences
+      // re-probe every frame; long absences keep the ~1 s throttle so
+      // getGamepads()'s per-call array allocation stays off the frame budget.
+      const t = nowMs();
+      if (t < _padNextProbeMs) return;
+      if (!_padLostAt) _padLostAt = t;
+      if (!activePad()) {
+        const age = t - _padLostAt;
+        _padNextProbeMs = t + (age < PAD_PROBE_FAST_MS ? 0 : PAD_PROBE_SLOW_MS);
+        return;
+      }
+      padConnected = true;
+      _padLostAt = 0;
+      _padNextProbeMs = 0;
+      // fall through and read it this frame
     }
     const pads = readPads();
     notePadUse(pads, nowMs());
@@ -1514,7 +1529,10 @@ const Input = (function () {
       padPrevButtons = padPrevByIndex.get(pad.index);
     }
     if (!pad) {
+      const lostNow = nowMs();
+      if (padConnected || !_padLostAt) _padLostAt = lostNow;
       padConnected = false;
+      _padNextProbeMs = 0;   // next poll may re-probe immediately (fast window)
       padSteer = 0; padThrottle = false; padBrake = false;
       padThrottleVal = 0; padBrakeVal = 0;
       padSteerAnalog = false; padLookBack = false;
@@ -2114,6 +2132,11 @@ const Input = (function () {
     Log.info("input", "Input.init");
     onPauseCb = (opts && opts.onPause) || null;
     onPadLostCb = (opts && opts.onPadLost) || null;
+    // One page load, one wire-up. A second init (hot reload, a harness that
+    // boots twice, a future re-entry) must not stack keydown/blur/gamepad
+    // listeners: a toggle GAS key would flip twice per press, and blur would
+    // reset twice. Callbacks above still refresh so a re-init can rebind them.
+    if (ready) return;
 
     loadLayoutMap();
     window.addEventListener("keydown", function (e) { onKey(e, true); });
@@ -2267,6 +2290,8 @@ const Input = (function () {
 
     window.addEventListener("gamepadconnected", function (e) {
       padConnected = true;
+      _padLostAt = 0;
+      _padNextProbeMs = 0;
       padPedalSeen.throttle = padPedalSeen.brake = false;   // a new connection re-reads its pedals from rest
       try { Log.info("input", `gamepad connected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
@@ -2276,6 +2301,7 @@ const Input = (function () {
       // there: read the live list instead of assuming the last one just left.
       let still = false;
       try { const gps = navigator.getGamepads ? navigator.getGamepads() : []; for (let i = 0; i < gps.length; i++) if (gps[i] && gps[i].connected && gps[i].index !== (e.gamepad && e.gamepad.index)) still = true; } catch (_) { /* no API */ }
+      if (!still) { _padLostAt = nowMs(); _padNextProbeMs = 0; } else { _padLostAt = 0; _padNextProbeMs = 0; }
       padConnected = still; padSteer = 0; padThrottle = padBrake = false;
       padThrottleVal = padBrakeVal = 0;
       padSteerAnalog = false; padLookBack = false;
@@ -2283,6 +2309,7 @@ const Input = (function () {
       padDpadVal = 0; padDpadT = 0;
       padDpadLeftHeld = padDpadRightHeld = false;
       padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
+      if (!still) padIsWheel = false;
       // Only the ACTIVE pad's edge baseline: a spare pad leaving must not turn
       // every button still held on the driving pad into a fresh press.
       if (e.gamepad && padPrevByIndex.get(e.gamepad.index) === padPrevButtons) padPrevButtons.length = 0;

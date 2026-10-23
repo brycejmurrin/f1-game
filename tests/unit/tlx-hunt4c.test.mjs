@@ -292,7 +292,7 @@ async function mirrorWarmRig(t, { ls = {}, store = {}, soft = false } = {}) {
     const _instPerPass = true, skipBatches = () => false, _instRegistry = [], _mirOf = () => null;
     const fx = null, vizMat = null, softGpu = () => SOFT, softwareGL = SOFT, softContent = () => false, _warmFx = true;
     const pinSkyMaterial = () => {}, mintLateLit = () => {}, warmFxPrograms = async () => {}, warmLateLit = async () => {};
-    const warmPlusOn = () => true, softOutRT = () => null;
+    const warmPlusOn = () => true, casterWarmOn = warmPlusOn, softOutRT = () => null;
     const I = new THREE.Matrix4().toArray();
     const _postF = { proj: I, invProj: I, invVP: I, viewProj: I, upVS: [0, 1, 0], time: 0, sunVS: [0, 0, -1] };
     const _warmHistory = [];   // tlx.js keeps every warm's stages (B·H8 prep timeline)
@@ -331,7 +331,7 @@ async function mirrorWarmRig(t, { ls = {}, store = {}, soft = false } = {}) {
   const entry = async () => { R.request(); R.present(OPTS); await R.pending(); };
   const mirrorCompiles = () => compiles.filter((tg) => tg && tg === R.mirRT()).length;
   const mirrorDraws = () => draws.filter((d) => d.size && d.size[0] === 4 && d.size[1] === 4).length;
-  return { renderer, R, compiles, draws, entry, OPTS, mirrorCompiles, mirrorDraws };
+  return { renderer, R, compiles, draws, entry, OPTS, mirrorCompiles, mirrorDraws, fg };
 }
 
 // Pass root: three's projectObject visits every child of castScene, hidden or not, so each pass must hand it only
@@ -430,6 +430,47 @@ test("B-F3.1: the default (unset), apex26.tlxMirWarmLazy=0, an explicit ON, a Pi
   }
 });
 
+// A·W14: the mirror target takes the scene target's attachment list and the mirror draws under the scene's MRT, so
+// the eager mirror stage reuses the scene stage's programs instead of linking the world a second time.
+test("A·W14: the mirror shares the scene pass's render context — the eager warm's mirror stage links (almost) nothing new", async (t) => {
+  const run = async (ls) => {
+    const h = await mirrorWarmRig(t, { ls: { "apex26.tlxMirWarmLazy": "0", ...ls } });
+    await h.entry();
+    assert.equal(h.R.stages.failed, 0);
+    assert.equal(typeof h.R.stages.mirror, "number", "the mirror stage ran at the lights");
+    assert.equal(h.mirrorDraws(), 1, "W1's 4x4 mirror draw");
+    return { h, links: h.fg.counts.linkProgram || 0, rt: h.R.mirRT() };
+  };
+  const on = await run({});
+  // ?tlxMirMrt=0 is a URL-only DevFlags lever (no storage key); the rig's tlx.js reads the global.
+  globalThis.DevFlags = { get: (n) => (n === "mirMrt" ? false : undefined) };
+  let off;
+  try { off = await run({}); } finally { delete globalThis.DevFlags; }
+  assert.equal(on.rt.textures.length, 2, "default: the mirror target is shaped like the scene target");
+  assert.deepEqual(on.rt.textures.map((x) => x.name), ["output", "ssrTag"], "the MRT node maps its outputs by these names");
+  assert.equal(on.rt.textures[1].generateMipmaps, false, "the tag attachment keeps no mip chain");
+  assert.equal(on.rt.texture.generateMipmaps, true, "the colour attachment keeps its (capped) chain");
+  assert.equal(off.rt.textures.length, 1, "?tlxMirMrt=0: the one-attachment target (the old way)");
+  t.diagnostic(`entry warm program links: mirror MRT ${on.links}, old target ${off.links}`);
+  assert.ok(on.links < off.links, `fewer links with the shared context (${on.links} vs ${off.links})`);
+  for (const r of [on, off]) {
+    assert.equal(r.h.renderer.getMRT(), null, "the warm leaves the MRT as it found it");
+  }
+});
+
+test("A·W14: tlx.js wiring — mirrorEnd and the mirror warm arm the scene MRT only for a mirror-shaped target, the knob read once", () => {
+  const me = TLX.slice(TLX.indexOf("        mirrorEnd() {"), TLX.indexOf("        mirrorRect(r, flip)"));
+  const arm = me.indexOf("if (mrt) _mirMrtArm(true);"), draw = me.indexOf("try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); }");
+  assert.ok(me.includes("const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;") && arm > 0 && draw > arm,
+    "mirrorEnd arms the MRT for a mirror-shaped target and restores the previous one after the draw, even on a throw");
+  const ws = TLX.slice(TLX.indexOf("      async function warmMirrorStage("), TLX.indexOf("      // garageSceneOnly:"));
+  assert.ok(ws.indexOf("_mirMrtArm(_mirMrt());") < ws.indexOf("await renderer.compileAsync(scene, camera);"), "the world compiles under the mirror's MRT");
+  assert.ok(ws.indexOf("_mirMrtArm(false);") > ws.indexOf("await renderer.compileAsync(scene, camera);")
+    && ws.indexOf("_mirMrtArm(false);") < ws.indexOf("mirrorGlassMaterial"), "the glass and composite compile as before");
+  assert.equal(TLX.split('DevFlags.get("mirMrt")').length - 1, 1, "read once, through DevFlags (URL only: no apex26.* key)");
+  assert.ok(!TLX.includes("apex26.tlxMirMrt"), "no storage key");
+});
+
 test("B-F3.1: every entry warm re-decides — a race after one that used the mirror defers it again", async (t) => {
   const h = await mirrorWarmRig(t);
   await h.entry();
@@ -476,4 +517,66 @@ test("TLX ambient fill preserves zero and proportional positive multipliers", ()
     assert.deepEqual(lit.uniforms.ambGround.value.toArray(), ground.map((v) => v * expected), `ground multiplier ${multiplier}`);
     assert.deepEqual(lit.uniforms.sunColor.value.toArray(), [1, 1, 1], "unscaled vector uniforms keep their default multiplier");
   }
+});
+
+// A·W14: decals read their glow per material (materialReference -> object uniform block), so every glow a race uses
+// shares ONE program. The night glows (car tails 0.35, signs 0.5, lamps 1.6) used to be one program and one WebGPU
+// pipeline each, built at their first night draw. Real three r186 + the real fx factory over the fake WebGL2.
+test("A·W14: decal glows share one program; each material keeps its own glow", async (t) => {
+  if (!globalThis.TLXShaders.fx) vm.runInThisContext(read("js/render/three/tsl-fx.js"), { filename: absSrc("js/render/three/tsl-fx.js") });
+  const fg = makeFakeGL(64, 64);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+    ssrTag: true, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+  const fx = globalThis.TLXShaders.fx(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), sharedUniforms: true, lit });
+  const tex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); tex.needsUpdate = true;
+  const glows = [0, 0.35, 0.5, 1.6];
+  const mats = glows.map((g) => fx.decalMaterialFor(tex, g));
+  assert.equal(new Set(mats).size, glows.length, "a material per glow (the cache key is texture|glow)");
+  assert.deepEqual(mats.map((m) => m.tlxGlow), glows, "each material carries its own glow");
+  assert.equal(new Set(mats.map((m) => m.customProgramCacheKey())).size, 1, "one program key for every glow");
+  assert.equal(fx.decalMaterialFor(tex, 0.35), mats[1], "cached per texture and glow");
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(); camera.position.z = 3;
+  const g = new THREE.PlaneGeometry(1, 1);
+  for (const m of mats) { const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false; scene.add(mesh); }
+  fg.reset();
+  await renderer.compileAsync(scene, camera);
+  assert.equal(fg.counts.linkProgram || 0, 1, `four glows link ONE program (was one per glow): ${fg.counts.linkProgram}`);
+});
+
+// A·W14: the caster warm with NO caster in any pool (a night grid: no sun pass, no lamp reached yet) compiled
+// nothing, so the first lamp pass built its depth pipelines mid-race. Probe casters in the scene's layouts
+// compile them in the warm, one pair (both winding signs) per layout, a fresh set each warm, never in castScene after.
+test("A·W14: probe casters compile the depth programs with empty pools; one pair per layout, outside castScene after", async (t) => {
+  const h = await shadowRig(t);
+  const geoA = buildTri();
+  const geoB = new THREE.BufferGeometry();
+  for (const [n, k] of [["position", 3], ["normal", 3], ["color", 3], ["mat", 1]])
+    geoB.setAttribute(n, new THREE.BufferAttribute(new Float32Array(k * 3).fill(0.5), k));
+  h.fg.reset();
+  await h.sys.warm();
+  assert.ok((h.fg.counts.linkProgram || 0) <= 1, "empty pools and no sources: no caster program (the night gap), at most the PCSS blocker quad");
+  h.fg.reset();
+  await h.sys.warm([geoA, geoB, geoA]);
+  assert.ok((h.fg.counts.linkProgram || 0) >= 1, `probe casters linked the depth program(s): ${h.fg.counts.linkProgram}`);
+  assert.equal(h.sys.S.probeLayouts, 2, "one probe pair per distinct layout");
+  assert.ok(h.castScene.children.every((m) => !m.geometry || m.geometry.attributes.position.count !== 3 || m.geometry === geoA),
+    "the probes left castScene after the warm");
+  h.fg.reset();
+  await h.sys.warm([geoA, geoB]);
+  assert.equal(h.sys.S.probeLayouts, 2, "a fresh probe set, one pair per layout again");
+  assert.equal(h.fg.counts.linkProgram || 0, 0, "and link nothing new: the previous set held the programs until this one had them");
+});
+
+test("A·W14: the lamp-bake placeholders carry their real textures' filters (one WGSL for day- and night-booted pages)", () => {
+  // TSL writes textureLoad for a NEAREST float texture and textureSampleLevel for a LINEAR one. The bake atlas is
+  // LINEAR (setLampBake _halfData), so a NEAREST placeholder made a day-booted page's lit WGSL differ from a
+  // night-booted page's, and the first night race on WebGPU recompiled every lit pipeline (Safari cache miss).
+  const src = read("js/render/three/tsl-lit.js");
+  assert.ok(src.includes("_bakeBlank.minFilter = _bakeBlank.magFilter = THREE.LinearFilter;"), "the atlas placeholder is LINEAR");
+  assert.ok(src.includes("_halfData(b.data, b.atlasW, b.atlasH * 2, THREE.LinearFilter)"), "the real atlas is LINEAR");
+  assert.ok(src.includes("_bakeIdxBlank.minFilter = _bakeIdxBlank.magFilter = THREE.NearestFilter;"), "the indirection placeholder is NEAREST");
+  assert.ok(src.includes("_halfData(b.indir, b.tilesX, b.tilesY, THREE.NearestFilter)"), "the real indirection is NEAREST");
 });

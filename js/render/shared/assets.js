@@ -307,6 +307,12 @@ const Assets = (function () {
     _scratchGl = { cv, gl, tex, fbo, size };
     return _scratchGl;
   }
+  function deferScratchReadback() {
+    try {
+      if (typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer) return PerfGov.softwareGlUiReadbackDefer();
+    } catch (_) { /* harness */ }
+    return false;
+  }
   function readLayerBytes(size, images, n, data) {
     const page = size * size * 4;
     const done = [];
@@ -322,6 +328,7 @@ const Assets = (function () {
       } else pending.push(i);
     }
     if (!pending.length) return done;
+    if (deferScratchReadback()) return done;
     const scratch = _ensureScratchGl(size);
     if (!scratch) return done;
     const { gl, tex, fbo } = scratch;
@@ -389,6 +396,7 @@ const Assets = (function () {
   // Otherwise resolves to the sorted layer indices that landed — the list
   // readLayerBytes returns — and never rejects.
   function readLayerBytesAsync(size, images, n, data, onLayer) {
+    if (deferScratchReadback()) return null;
     const page = size * size * 4;
     const raws = [];
     const pending = [];

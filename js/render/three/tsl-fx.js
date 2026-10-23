@@ -265,17 +265,22 @@
 
     const decalCache = new Map();      // "texture.id|glow" -> material
     const DECAL_CACHE_CAP = 24;
-    // Keyed on the GLOW VALUE, not on "is it lit": the graph body closes over
-    // `glow` as a JS constant, so one bucket per truthiness handed every later
-    // non-zero glow the first one's lift (garage 0.62 leaking onto the night
-    // car's 0.35). The callers use a fixed handful of values, and
-    // decalMaterialFor / fxMaterial already key on the same number.
-    const _decalGraph = new Map();
+    // ONE GRAPH, THE GLOW A PER-MATERIAL UNIFORM (A·W14). The graph used to close
+    // over `glow` as a JS constant, one graph and one program per value, so a
+    // night race (car tails 0.35, floodlit signs 0.5, lamps 1.6) built three
+    // decal pipelines no day race had, two of them synchronously at their first
+    // draw on WebGPU. Each material now carries its own tlxGlow, read through
+    // materialReference into the object uniform block (one more property read per
+    // decal draw, beside the `map` one it already pays): one program for
+    // every glow, and no value can leak from one material onto another (the
+    // garage 0.62 onto the night car's 0.35 was the bucket-by-truthiness bug).
+    let _decalGraph = null;
     const DL = (opts && opts.lit && opts.lit.decalLight) || null;
-    function sharedDecal(glow) {
-      let packed = _decalGraph.get(glow);
+    function sharedDecal() {
+      let packed = _decalGraph;
       if (!packed) {
         packed = Fn(() => {
+          const glow = materialReference("tlxGlow", "float");
           // The atlas is PREMULTIPLIED (tlx.js createTexture premultiplyAlpha,
           // ONE / ONE_MINUS_SRC_ALPHA below): t.rgb x light stays premultiplied.
           const t = materialReference("map", "texture").toVar();
@@ -288,7 +293,7 @@
           const rgb = t.rgb.mul(amb.add(vec3(U.sunColor).mul(ndl.mul(sh))).add(pool)).add(t.rgb.mul(glow));
           return vec4(rgb, t.a);
         })();
-        _decalGraph.set(glow, packed);
+        _decalGraph = packed;
       }
       return packed;
     }
@@ -338,11 +343,12 @@
             break;
           }
         }
-        m = fxMaterial({ doubleSided: true, key: "tlx-fx-decal-" + glow });   // GLX: cull off, depth write off
+        m = fxMaterial({ doubleSided: true, key: "tlx-fx-decal" });   // GLX: cull off, depth write off
         m.blendSrc = THREE.OneFactor;            // premultiplied atlas (GLX drawDecal ONE / ONE_MINUS_SRC_ALPHA)
         m.alphaTest = 0.02;                      // DECAL_FS: if (t.a < 0.02) discard
         m.map = tex;
-        const packed = sharedDecal(glow);
+        m.tlxGlow = glow;                        // the graph's per-material uniform (sharedDecal): one-level, the cheapest reference walk
+        const packed = sharedDecal();
         m.colorNode = packed.rgb;
         m.opacityNode = packed.a;
         trackFx(m);

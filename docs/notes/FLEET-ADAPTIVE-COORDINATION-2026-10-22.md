@@ -143,3 +143,39 @@ the `agent-msg.mjs` helper once #3518 lands; it mirrors each message to the bus.
 Until then, use curl with the same JSON shape plus a bus HANDOFF mirror. The
 webhook carries no authority: a grant must be typed by Bryce in the acting
 session.
+
+## 8. Merge attribution
+
+Every agent and Bryce merge as `brycejmurrin`, so on 2026-10-22 six PRs (#3504
+#3517 #3519 #3550 #3526 #3548) merged during a train freeze and nobody could say
+who. Bryce's choice (typed in OrchA 23): label the merge itself, and flag the
+unlabelled ones on the bus **and** the PR.
+
+- **Trailer.** `merge-gate.mjs` prints the exact merge call on a pass, and
+  `--json` carries it in `merge` (`merge_method`, `expectedHeadSha`,
+  `commit_title`, `commit_message`). Pass `commit_title` and `commit_message`
+  verbatim to `merge_pull_request`; nobody types the trailer. The message is the
+  PR title, then `Merged-by: <host>:<session or agent id> (<fleet>/<role>)` and
+  `Gate: merge-gate <head sha, 12>`. Identity is `--as`, `APEX_FLEET_AS` or the
+  session env (`fleet-bus.mjs whoAmI`; none resolves to `unknown:unidentified`).
+  Fleet comes from the PR's fleet block (`--fleet` / `APEX_FLEET` override), role
+  from `--role` / `APEX_FLEET_ROLE` (default `orchestrator`).
+  GitHub's `commit_message` field is the extra detail of the merge commit
+  (https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request).
+- **Detector.** `node tools/ci/merge-attribution.mjs [--range A..B] [--dry-run]`
+  reads first-parent merge commits and prints `ATTRIBUTED` (has `Merged-by:`) or
+  `UNATTRIBUTED`. An unattributed merge is presumed to be a Bryce UI merge unless
+  he says otherwise. Each gets one `HANDOFF` bus line (never `INCIDENT`) and one
+  PR comment, "merged without attribution: Bryce UI merge, or an agent? reply
+  here if it was you". It never pauses or freezes anything. Idempotent: the
+  comment carries a `merge-attribution:<sha12>` marker and the bus line names the
+  sha, so a second run posts neither. Without `--range` it reads from a cursor in
+  `artifacts/merge-attribution/cursor`, else the last 20 merges.
+- **Wiring.** `.github/workflows/merge-attribution.yml` runs it on every push to
+  the deploy branch with `pull-requests: write` only, so it posts the PR comment
+  (`--no-bus`): a bus line needs a push to `claude/fleet-bus`, i.e.
+  `contents: write`, which this job should not hold. A session that runs the tool
+  by hand (or in the bus watch tick) posts the bus line too. Chosen over the
+  hourly bus-watch prompt because it reacts within seconds of the merge, costs no
+  session tokens and needs no live session.
+

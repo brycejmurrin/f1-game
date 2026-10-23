@@ -682,6 +682,12 @@ const PhonePad = (function () {
     }
     // iOS needs the permission prompt INSIDE the tap; everywhere else the
     // listener alone is enough. Resolves whether data can be expected.
+    // Attach once: SCAN arms the sensor inside its gesture, then CONNECT (or a
+    // second armSensor / demo tap) would otherwise stack another
+    // deviceorientation listener — each event then sample()s and paints N times
+    // until the tab is closed. sensorOn only flips on the first reading, so it
+    // cannot gate the attach; a dedicated flag matches input.js attachGyro.
+    let sensorAttached = false;
     async function requestSensor() {
       if (typeof DeviceOrientationEvent === "undefined") return false;
       try {
@@ -690,7 +696,10 @@ const PhonePad = (function () {
           if (r !== "granted") return false;
         }
       } catch (e) { return false; }
-      window.addEventListener("deviceorientation", onOrient);
+      if (!sensorAttached) {
+        sensorAttached = true;
+        window.addEventListener("deviceorientation", onOrient);
+      }
       return true;
     }
     // A held control: pointer down = on, up/cancel/leave = off. Pedals carry a

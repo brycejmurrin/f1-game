@@ -290,6 +290,26 @@ test("keyboard GAS toggle: tap on, tap off; rebind clears", () => {
   assert.equal(Input.throttle(), false, "rebind clears a latched toggle");
 });
 
+test("Input.init is idempotent: a second call refreshes callbacks without stacking key listeners (D·W18d)", () => {
+  const { Input, fire, listeners } = bootInput({ throttle: "toggle" });
+  const keydowns = listeners.keydown.length;
+  const blurs = (listeners.blur || []).length;
+  let paused = 0;
+  Input.init({
+    addEventListener() {}, removeEventListener() {}, style: {}, dataset: {},
+    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+    setAttribute() {}, getAttribute: () => null, removeAttribute() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 300 }),
+    setPointerCapture() {}, releasePointerCapture() {}, hasPointerCapture: () => false,
+  }, { onPause: () => { paused++; } });
+  assert.equal(listeners.keydown.length, keydowns, "no second keydown listener");
+  assert.equal((listeners.blur || []).length, blurs, "no second blur listener");
+  fire("keydown", "KeyW");
+  assert.equal(Input.throttle(), true, "one toggle flip, not on-then-off from stacked handlers");
+  fire("keydown", "KeyP");
+  assert.equal(paused, 1, "re-init still rebinds onPause");
+});
+
 test("keyboard LOOK BACK toggle mirrors GAS semantics", () => {
   const { Input, fire } = bootInput({ lookBack: "toggle" });
   fire("keydown", "KeyB");
