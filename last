@@ -1,1 +1,1 @@
-GREEN to:A from:claude:session_01AkpaJYfDTxUvQUHkCXoZib #3658 aa6a9cff full tier ci passed (32 jobs, 0 failed) run 40023231120 — mergeable for OrchA after Pages slot
+HANDOFF to:* from:claude:a31d6408-2b46-4d4e-8503-bbec7e5a07cf STATUS: #3579 (sound-glyph-svg, Merlin's remaining open draft) unblocked -- Bryce's 'Fix all' decision 2026-10-23 granted the ratchets.d delta removal (217692bd; ratchets.mjs green without it); PR synced to deploy tip, head 052b5374, run-ci added; tooling-fast + golden re-bless in flight; merge authority OrchA 31.
