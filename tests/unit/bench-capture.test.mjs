@@ -80,6 +80,7 @@ test("bench-capture: a page with none of the optional APIs captures a leg withou
   assert.equal(c.gpu.timer, "unsupported");
   assert.equal(c.gpu.passes, "unsupported");
   assert.equal(c.entry, "unsupported");
+  assert.equal(c.warm, "unsupported");
   assert.equal(c.device.thermal, "unavailable");
   assert.equal(c.device.battery, "unsupported");
   assert.ok(String(c.uaMemory).startsWith("unsupported"));

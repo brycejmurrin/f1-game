@@ -29,6 +29,13 @@ three r186 keeps resolved timestamps in `renderer.backend.timestampQueryPool.ren
 because three does not name its passes. The GPU timer is switched on for the length of each leg where `gpuTimer().supported` is true,
 then put back. This is read-only: it never calls `resolveTimestampsAsync`.
 
+## Compile timing caveat
+On WebGL, `linkProgram` returns almost at once: the driver defers the real compile until the first status query or draw.
+Only the link COUNT is meaningful there. The local probe measured 24 links in 0.3 ms on TLX webgl2.
+On WebGPU, `createRenderPipelineAsync` is timed until its promise settles, so its ms is the real pipeline-compile wait.
+`capture.warm` is TLX's entry warm by stage (`memState().warm`). It is there because RaceEntryProfile's mirror span
+waits on the whole warm (A·W14).
+
 ## Not personal data
 The capture stores no storage values or input, and no URL query strings or hashes (`clean()`). Messages are capped at 200 characters.
 

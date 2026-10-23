@@ -292,6 +292,9 @@ const BenchCapture = (function () {
     c.rafGaps = gapStats(L.gaps);
     c.entry = safe(() => { const s = RaceEntryProfile.snapshot(); return { entry: s.entry, windowMs: s.windowMs, blockMs: s.blockMs, maxBlockMs: s.maxBlockMs,
       supported: s.supported, legs: (s.legs || []).slice(-CAP.marks), marks: (s.marks || []).slice(-CAP.marks), longTasks: (s.longTasks || []).slice(0, CAP.longTasks) }; }, "unsupported");
+    // TLX's entry warm by stage (scene/fx/post/shadow/mirror/draw ms): RaceEntryProfile's "Mirror" span waits on the whole warm.
+    c.warm = safe(() => { const w = call("memState").warm; const o = {}; for (const k of Object.keys(w)) if (k !== "history") o[k] = w[k];
+      o.history = (w.history || []).slice(-4); return o; }, "unsupported");
     c.errors = L.errors.slice(-CAP.errors); c.errorCount = L.errors.length;
     c.events = L.events.slice(-CAP.events);
     c.logs = L.logs.slice(-CAP.logs);
