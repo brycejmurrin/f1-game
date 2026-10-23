@@ -4208,6 +4208,7 @@
       ],
       "*": [
         "tests/specs/boot-guard.spec.js",
+        "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/store-registry.test.mjs"
       ]
     },
