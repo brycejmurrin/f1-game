@@ -2744,6 +2744,15 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/perf/devicefarm-boot.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/perf/devicefarm-host.mjs",
       "classification": "ambiguous",
       "outputPolicy": "keep-native"
