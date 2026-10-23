@@ -1,6 +1,6 @@
 /* storm-vm.test.mjs — the STORM weather in the real game (tools/lib/game-vm.cjs
- * runs js/game.js on an inert DOM): a storm race starts behind the safety car
- * on rain's grip; the render frame's lightning strikes off the seeded schedule
+ * runs js/game.js on an inert DOM): a storm race runs on rain's grip and,
+ * with CAUTIONS on, starts behind the safety car (CAUTIONS off: green); the render frame's lightning strikes off the seeded schedule
  * and never flashes under REDUCED MOTION; a friend room may keep a storm
  * staged (js/net/lobby.js refuses the word and drops the whole SETTINGS).
  * The pure halves are tests/unit/storm-weather.test.mjs.
@@ -24,7 +24,7 @@ async function race(wx) {
   g.apex.headless(true);
 }
 
-test("a storm race: rain's wetness and grip, and the start behind the safety car", async () => {
+test("a storm race: rain's wetness and grip; the start behind the safety car only with CAUTIONS on", async () => {
   await race("rain");
   g.apex.step(1 / 60, 60);
   const rain = { w: g.G.trackWetness(), grip: g.G.gripMult({ tread: 0 }), wet: g.G.gripMult({ tread: 2 }) };
@@ -34,10 +34,18 @@ test("a storm race: rain's wetness and grip, and the start behind the safety car
   assert.equal(g.G.trackWetness(), rain.w, "storm wetness = rain");
   assert.equal(g.G.gripMult({ tread: 0 }), rain.grip, "slick grip = rain");
   assert.equal(g.G.gripMult({ tread: 2 }), rain.wet, "full-wet grip = rain");
-  const c = g.apex.caution();
-  assert.equal(c.label, "SAFETY CAR", JSON.stringify(c));
-  assert.equal(c.cause, "STORM");
-  assert.equal(c.lowGrip, true, "and Overtake is off for low grip, as in rain");
+  const off = g.apex.caution();
+  assert.equal(off.enabled, false, "CAUTIONS ships OFF");
+  assert.equal(off.label, "GREEN", "CAUTIONS off: no storm safety car " + JSON.stringify(off));
+  assert.equal(off.lowGrip, true, "and Overtake is off for low grip, as in rain");
+  g.apex.caution(true);
+  try {
+    await race("storm");
+    g.apex.step(1 / 60, 60);
+    const c = g.apex.caution();
+    assert.equal(c.label, "SAFETY CAR", JSON.stringify(c));
+    assert.equal(c.cause, "STORM");
+  } finally { g.apex.caution(false); }
 });
 
 /** Max flash seen over `secs` of race, rendering a frame every half second. */

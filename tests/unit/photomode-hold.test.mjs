@@ -147,6 +147,22 @@ test("Photo Studio buttons keep activation and arrows while WASD still flies and
   const escape = event("Escape"); key(escape); assert.equal(escape.prevented, false, "Escape reaches the canonical layer close door");
 });
 
+test("#pc-restore and Studio buttons keep Space activation on keydown AND keyup (#3562)", () => {
+  for (const host of ["pc-restore", "ps-panel"]) {
+    const { dom, G, api, key } = boot();
+    api.enterPhotoMode();
+    let button = dom.byId(host);
+    if (host === "ps-panel") { button = dom.document.createElement("button"); dom.byId(host).appendChild(button); }
+    button.focus();
+    for (const type of ["keydown", "keyup"]) {
+      const e = { code: "Space", type, prevented: false, preventDefault() { this.prevented = true; }, stopPropagation() {} };
+      key(e);
+      assert.equal(e.prevented, false, host + ": Space " + type + " keeps its default (buttons activate on keyup)");
+    }
+    assert.equal(G.photoKeys.up, false, host + ": the activation press does not fly the camera up");
+  }
+});
+
 test("either UP key can be released while its other physical alias keeps flying upward", () => {
   for (const first of ["KeyR", "Space"]) {
     const { G, api, key } = boot(), second = first === "KeyR" ? "Space" : "KeyR";

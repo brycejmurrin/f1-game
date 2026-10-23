@@ -4,8 +4,9 @@
  * no backend pays a pass for it. game.js calls tick() once per rendered frame; everything else is here.
  *
  * Water uses a cached atlas of three asymmetric, translucent menisci rather than bright rings.
- * This is illustrative water shading, not scene-sampled droplet refraction. Shield edge bending
- * uses the separate SVG displacement map below. No per-drop gradients or WebGL back-buffer reads.
+ * This is illustrative water shading, not scene-sampled droplet refraction. The shield itself — its eye-port,
+ * the light it adds and its rim bend — is js/fx/visor-optics.js, ticked from here. No per-drop gradients or
+ * WebGL back-buffer reads.
  *
  * Helmet motion balances gravity, adhesion and speed-squared airflow: stationary beads fall straight
  * down; air flowing around the curved visor carries them sideways as speed rises. Large beads release
@@ -23,50 +24,13 @@ const Droplets = (function () {
 
   let _cv = null, _ctx = null, _sprite = null, _looked = false;
   let _w = 0, _h = 0, _dpr = 1, _shown = false, _mobile = null;
-  let _n = 0, _acc = 0, _opticsReady = false, _spriteReflection = 1;
+  let _n = 0, _acc = 0, _spriteReflection = 1;
   // Struct-of-arrays, sized for the desktop cap once.
   const _x = new Float32Array(CAP_DESK), _y = new Float32Array(CAP_DESK);    // 0..1 of the viewport
   const _r = new Float32Array(CAP_DESK);                                       // radius, fraction of min(w, h)
   const _age = new Float32Array(CAP_DESK), _life = new Float32Array(CAP_DESK);
   const _vx = new Float32Array(CAP_DESK), _vy = new Float32Array(CAP_DESK);    // viewport fractions / s
   const _a = new Float32Array(CAP_DESK), _variant = new Uint8Array(CAP_DESK);
-
-  // A fixed displacement map bends the live scene at the shield edges. No HUD
-  // filtering or per-frame back-buffer read. SVG displacement uses sRGB channels:
-  // https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Element/feDisplacementMap
-  function _optics() {
-    if (_opticsReady || typeof document === "undefined" || !document.createElementNS) return;
-    const map = document.createElement("canvas"); map.width = map.height = 128;
-    const g = map.getContext("2d");
-    if (!g || !g.createImageData) return;
-    const pixels = g.createImageData(128, 128);
-    for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
-      const dx = (x - 63.5) / 64, dy = (y - 63.5) / 64;
-      const edge = Math.pow(Math.max(0, Math.min(1, (Math.hypot(dx, dy) - 0.18) / 0.95)), 1.4);
-      const i = (y * 128 + x) * 4;
-      // Sample inward so the curved edge never exposes pixels outside the scene.
-      pixels.data[i] = 128 - dx * edge * 110;
-      pixels.data[i + 1] = 128 - dy * edge * 110;
-      pixels.data[i + 2] = 128; pixels.data[i + 3] = 255;
-    }
-    g.putImageData(pixels, 0, 0);
-    const uri = map.toDataURL(), ns = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(ns, "svg");
-    svg.setAttribute("width", "0"); svg.setAttribute("height", "0");
-    svg.setAttribute("aria-hidden", "true"); svg.style.position = "absolute";
-    for (const [level, scale] of [["light", 24], ["medium", 56], ["strong", 96]]) {
-      const filter = document.createElementNS(ns, "filter");
-      filter.id = "visor-bend-" + level;
-      for (const [key, value] of Object.entries({x:0,y:0,width:1,height:1,"color-interpolation-filters":"sRGB"})) filter.setAttribute(key, value);
-      const image = document.createElementNS(ns, "feImage");
-      image.setAttribute("href", uri); image.setAttribute("width", "100%"); image.setAttribute("height", "100%");
-      image.setAttribute("preserveAspectRatio", "none"); image.setAttribute("result", "lens");
-      const bend = document.createElementNS(ns, "feDisplacementMap");
-      for (const [key, value] of Object.entries({in:"SourceGraphic",in2:"lens",scale,xChannelSelector:"R",yChannelSelector:"G"})) bend.setAttribute(key, value);
-      filter.appendChild(image); filter.appendChild(bend); svg.appendChild(filter);
-    }
-    document.body.appendChild(svg); _opticsReady = true;
-  }
 
   function _helmet() {
     return typeof CockpitOpts !== "undefined" && typeof document !== "undefined"
@@ -249,8 +213,9 @@ const Droplets = (function () {
    *  storm: the heavier tier. vs: the viewed car's vStd speed (m/s). reduced: prefers-reduced-motion.
    *  dt 0 (paused) freezes the drops in place. */
   function tick(dt, on, rain, storm, vs, reduced) {
+    // The shield's own optics ride this heartbeat: the eye-port, the added light and the rim bend (js/fx/visor-optics.js).
+    if (typeof VisorOptics !== "undefined") VisorOptics.tick(dt, on, vs, reduced);
     const helmet = _helmet();
-    if (helmet && CockpitOpts.visorRefraction() !== "off") _optics();
     const amount = helmet ? CockpitOpts.visorRain() : "normal";
     const runoff = helmet ? (CockpitOpts.visorRunoff() === "slow" ? 0.45 : CockpitOpts.visorRunoff() === "fast" ? 2.1 : 1) : 1;
     if (!(on && !_low() && amount !== "off" && (rain >= RAIN_MIN * 0.5 || (helmet && _n > 0)))) { _show(false); return; }
@@ -274,7 +239,7 @@ const Droplets = (function () {
   function clear() { _show(false); }
   function stats() { return { n: _n, shown: _shown, cap: cap(_mob(), false), w: _w, h: _h, first: _n ? { x: _x[0], y: _y[0], radius: _r[0], age: _age[0], vx: _vx[0], vy: _vy[0] } : null }; }
   /** Tests: forget the cached canvas / device class (a new stub DOM). */
-  function _reset() { _looked = false; _opticsReady = false; _spriteReflection = 1; _cv = _ctx = _sprite = null; _mobile = null; _n = 0; _acc = 0; _shown = false; _w = _h = 0; }
+  function _reset() { _looked = false; _spriteReflection = 1; _cv = _ctx = _sprite = null; _mobile = null; _n = 0; _acc = 0; _shown = false; _w = _h = 0; }
 
   return { tick, clear, stats, rate, cap, RAIN_MIN, _reset };
 })();

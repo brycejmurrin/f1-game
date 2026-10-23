@@ -895,6 +895,12 @@ const r = __apex.lightCopy();     // → { ok:true, mode:"edits", tracks:39, cha
 __apex.lightCopy({ undo: r.undo });        // …never mind
 ```
 
+### `visorScene() → {eye, tgt, fov, sunDir, sunColor, exposure, ambientSky, lights, tailStart, floodEmit}`
+The per-frame facts the HELMET visor overlay (`js/fx/visor-optics.js`) reads at ~15 Hz, as LIVE REFERENCES into the
+frame (no copies — read, never write): the camera basis, the sun, the exposure, the sky ambient and this frame's culled
+stride-15 lamp list (`lights`, null by day; `tailStart` is where the car tail-lights begin inside it). `VisorOptics.lightMap(visorScene(), w, h)`
+is the pure mapping behind the glints; `VisorOptics.stats()` reports paint counts and ms.
+
 ## Baked asset pack
 
 The pack (`assets/pack/`, built by `node tools/gen/assets.mjs`) supplies PBR
@@ -3009,7 +3015,7 @@ The opt-in slow-drift governor step (js/perf/thermal-drift.js, #2652). No arg re
 ### `stallWatch` (localStorage / query)
 `LoopHealth.stallWatch(true)`, `apex26.stallWatch=1`, or `?stallwatch=1` forces the stall watchdog on when `navigator.webdriver` is set (Playwright and software-GL CI). Players get it by default; automation skips it so multi-second present frames do not reload the tab mid-spec.
 
-### `renderScale(v?) → {scale, fps, floorMs, auto, tier, autoTier, autoShed, userTier, tierFloor, crashStrikes, open, frameTimes}`
+### `renderScale(v?) → {scale, fps, floorMs, auto, tier, autoTier, lookPostShed, autoShed, userTier, tierFloor, crashStrikes, open, frameTimes}`
 Adaptive-resolution control. No arg: report the current state. A number in
 `0.5–1` (a FRACTION — the opposite unit to `uiScale`) pins the 3D render scale
 and disables the auto-governor; anything else (`60`, `"auto"`, `false`) returns
@@ -3028,9 +3034,10 @@ split the governor's measured ladder from the GRAPHICS preset floor.
 shed leaves `autoTier` pinned at 2 for the session (the restore path stops at
 that same floor). `autoShed` counts only rungs the governor shed on its own
 measurements, net of what it restored, so `autoShed === 0` on a device that has
-recovered. PER-CHUNK LAMPS gate on `autoShed >= 1`; bloom / SSAO / god rays /
-contact / lamp volumetrics stay on `autoTier >= 4`, which must still be able to
-reach 4 on a low preset. See `js/perf/governor.js` `_autoShed`.
+recovered. PER-CHUNK LAMPS gate on `autoShed >= 1`. bloom / SSAO / god rays /
+contact / lamp volumetrics read `lookPostShed` (measured/crash tier 4 OR
+GRAPHICS: LOW) so a healthy LOW actually drops that stack; `autoTier` stays
+free of the user floor for wet-road SSR. See `js/perf/governor.js` `_autoShed`.
 
 `open` is `{frames, maxMs, slow}` for the first 600 frames of the CURRENT race
 (re-armed at every race start): the worst single frame and how many ran over
