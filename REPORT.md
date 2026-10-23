@@ -2,6 +2,9 @@
 
 **Agent:** cursor:bc-0d0ebf9b-9264-5a48-87c8-38380cdf3e10  
 **Branch:** `cursor/w22h-livery-tex-leak-3e10`  
+**PR:** https://github.com/brycejmurrin/f1-game/pull/3643 (#3643)  
+**head:** `7b20d2ede`  
+**CI:** run https://github.com/brycejmurrin/f1-game/actions/runs/39934696112 (draft/fast; needs run-ci for full green)  
 **fleet:** D / orchestrator: D  
 **NEVER MERGE** — MERGE-HOLD: DAD merges
 
