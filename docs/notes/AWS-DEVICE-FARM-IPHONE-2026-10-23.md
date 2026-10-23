@@ -13,7 +13,9 @@ so this note tests AWS Device Farm as the device source. Grant: Bryce, in OrchA 
 | `sts get-caller-identity` | works: IAM user `apex-devicefarm-agent` |
 | `devicefarm list-projects` (us-west-2) | works: one project, `apex-profiler` |
 | `list-devices` (iOS phones) | works: **three iPhones, all on iOS 27.0, all HIGHLY_AVAILABLE with remote access**: iPhone 14, iPhone 14 Pro, iPhone 18 Pro Max. No iOS 26 or iOS 18 device, so neither the iOS 26 path Bryce plays nor the no-WebGPU fallback is covered here |
-| one-device proof, A/B profile | not run. Device minutes used so far: **0** |
+| one-device proof | **works** (iPhone 18 Pro Max, iOS 27.0, 01:39Z): Safari opened the live site in landscape; screenshot taken; `navigator.gpu` true, `gpuAdapterOk`/`gpuCanvasOk` true; AUTO boots `api=webgl2` (`forceWebGL` from `isWebKit`, pin null) |
+| A/B profile | **done** (same device, 01:44–01:55Z), §5 |
+| device minutes | wall time about 4.5 min (proof) + 11 min (A/B), about 16 min. `deviceMinutes` still read 0 while the sessions sat in STOPPING; re-read it once they reach COMPLETED |
 
 ## 2. What the docs say (read 2026-10-23)
 
@@ -110,3 +112,35 @@ Sources: <https://docs.aws.amazon.com/devicefarm/latest/developerguide/test-type
 <https://docs.aws.amazon.com/devicefarm/latest/developerguide/appium-endpoint-interaction.html>,
 <https://appium.github.io/appium-xcuitest-driver/latest/reference/capabilities/>,
 <https://appium.github.io/appium-xcuitest-driver/latest/reference/execute-methods/>.
+
+## 5. Result: WebGPU vs WebGL2 on iPhone 18 Pro Max (iOS 27.0, Safari 27)
+
+`devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --legs 2`: BENCHMARK "paths" trimmed to two legs, WEBGPU then
+WEBGL2. Each leg reloaded onto its pin, and `api` was recorded per leg (`webgpu` / `webgl2`, engine "three.js r185",
+`fallbackWhy` null). GPU TEST: dry Monza, helmet cam, 6 phases × (5 s settle + 20 s measure).
+
+| | WEBGPU | WEBGL2 |
+|---|---|---|
+| rAF p50 / p95, all 6 phases | 17 / 17 ms (59.4–60.0 fps) | 17 / 17–18 ms (59.4–59.8 fps) |
+| rAF p99 / max | 17–22 / 38–62 ms | 20–23 / 51–67 ms |
+| race entry COLD (build) | **29 318 ms** (go 35 154) | **6 472 ms** (go 12 341) |
+| race entry WARM (build) | 821 ms | 237 ms |
+| GPU timer | supported (`timestamp-query`) | unsupported |
+| GPU ms p50 at scale 0.5 / 0.75 / 1.0 | 14.9 / 21.3 / 45.6 | — |
+| new program links / pipelines mid-race | 0 / 1 | 1 / 0 |
+
+Reading:
+- **Frame rate does not separate the paths here.** Both sit on Safari's 60 Hz rAF cap in every phase, including
+  full resolution, so the fill slope reads 0 and `mirrorMs` 0. The 18 Pro Max has headroom on this scene. The
+  per-frame comparison needs either a heavier scene (BENCHMARK "races": rain, night, Singapore, Spa) or a cheaper
+  device (iPhone 14 is offered), or a CPU-side frame-work number instead of the rAF interval.
+- **Cold race entry is the clear gap: WebGPU takes 4.5× as long (29.3 s vs 6.5 s), and warm entry 3.5× as long.**
+  This matches G2's iOS 26 cold-entry finding (13 s) and is worse on iOS 27 with the pinned WebGPU path. The
+  likely suspect is first-use pipeline/shader compilation (WebGPU pipelines are created at first draw). That needs
+  the entry stage breakdown (`RaceEntryProfile` / `Spans`) on the next run before anyone acts on it.
+- **The WebGPU GPU-timer values are not trustworthy as absolute ms.** At scale 1.0 they read 45.6 ms p50 while
+  frames still arrive every 16.7 ms, which is impossible for serial GPU work. The timer probably spans overlapping
+  frames or is quantized. They do scale with pixel count (14.9 → 21.3 → 45.6), so they are usable as a relative
+  fill signal only.
+- Single run, single device, one leg per path: treat this as a first sample, not a verdict. The full 4-leg
+  alternating test (`--legs 4`, about 14 min) controls for order and heat.
