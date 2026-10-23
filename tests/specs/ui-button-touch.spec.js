@@ -491,6 +491,25 @@ test.describe("Lighting tuner — free camera touch controls", () => {
     expect(after.replace(/\s|px/g, "")).toBe("translate(0,0)");
   });
 
+  /* THE RESTORE EYE (#3562). With the photo UI hidden, #pc-restore is the only
+     control on screen. Buttons activate on Space KEYUP, and photo mode's Space
+     = camera-up alias preventDefault'ed it on both edges, so a keyboard user
+     could hide the controls and never get them back. Tap and Space both work. */
+  test("#pc-restore brings the hidden photo UI back on a tap and on Space", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openLightingPhotoMode(page);
+    const hidden = () => page.evaluate(() => document.body.classList.contains("pc-uihidden"));
+    await page.tap("#pc-hud");
+    expect(await hidden(), "HIDE HUD hides the photo UI").toBe(true);
+    await page.tap("#pc-restore");
+    expect(await hidden(), "a tap on the eye restores it").toBe(false);
+    await page.tap("#pc-hud");
+    await page.focus("#pc-restore");
+    await page.keyboard.press("Space");
+    expect(await hidden(), "Space on the focused eye restores it").toBe(false);
+  });
+
   /* THE CANCELLED DRAG. iOS fires pointercancel with no pointerup whenever the
      system claims a touch. photoMouse.drag latched true, and because the window
      pointermove handler accepted ANY pointer, the finger working a thumbstick

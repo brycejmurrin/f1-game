@@ -135,9 +135,10 @@ function photoKeyHandler(e) {
   const down = e.type === "keydown";
   // Typing in a slider — but a key-UP always releases: W held while a click
   // moved focus into a slider (or COPY VIEW's textarea) stayed down forever.
-  // The Studio's buttons own Space/Enter and menu arrows. Key-up must still
-  // release camera input held before focus moved into the dock.
-  const studioControl = focused && focused.closest && focused.closest("#ps-panel");
+  // The Studio's buttons, and the #pc-restore eye that is the only control left
+  // while the photo UI is hidden, own Space/Enter and menu arrows. Key-up must
+  // still release camera input held before focus moved into the dock.
+  const studioControl = focused && focused.closest && focused.closest("#ps-panel, #pc-restore");
   const studioKey = e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter" || /^Arrow/.test(e.code);
   if (down && e.code !== "Escape" && ((studioControl && studioKey) || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;
   const fc = freeCam ? freeCam.key(e.code, down, document.activeElement) : 0;
@@ -161,7 +162,9 @@ function photoKeyHandler(e) {
     default: hit = false;
   }
   // A key-UP still reaches Input: W held from driving, released in here, stayed held after RESUME.
-  if (hit) { e.preventDefault(); if (down) e.stopPropagation(); }
+  // A focused control's own key-up keeps its default: buttons activate on Space
+  // keyup, so preventDefault there swallowed the press (#3562).
+  if (hit && !(studioControl && studioKey)) { e.preventDefault(); if (down) e.stopPropagation(); }
 }
 // Virtual thumbstick: pointer offset from centre → normalised (−1..1) vector.
 function wirePhotoStick(id, vec) {
