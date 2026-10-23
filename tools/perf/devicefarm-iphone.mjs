@@ -8,6 +8,7 @@
 //   node tools/perf/devicefarm-iphone.mjs run --scenario cache|races [--pins webgpu,webgl2]   (adds ?apex=1)
 //     cache: cold race entry per path — first, after two reloads, after force-quitting Safari (shader-cache lifetime)
 //     races: BENCHMARK "WEATHER & TRACKS" pinned per path
+//     warmplus: WebGPU entry + first-race frames, default vs apex26.tlxWarmPlus=1, each after a Safari data clear
 //   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
 // `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
@@ -178,6 +179,70 @@ async function cacheScenario(ctx, url, pins, report, out) {
     pullLogs(ctx.base, ctx.sid, out);
   }
 }
+// ---- warmplus: does warming the post chain / casters in the lights remove the first WebGPU race's hitch? ----------
+// tlx.js warms post and casters only when warmPlusOn() (default: three WebGL backend only) or, for post, when the
+// scene compile took < 3 s. apex26.tlxWarmPlus=1 forces both. Each arm starts from a cleared Safari (the pipeline
+// cache survives sessions on a unit, note §8), pins WebGPU, times one entry and the race's first 15 s of frames.
+const HITCH_ARM = `
+  window.__dfFrames = null;
+  const t0 = performance.now(); let last = 0, started = 0; const d = [];
+  const tick = (t) => {
+    let st = null; try { st = __apex.info().state; } catch (_) {}
+    if (st === "race") { if (!started) started = t; else d.push(t - last); last = t; }
+    if (started && t - started > 15000) { d.sort((a, b) => a - b);
+      window.__dfFrames = { n: d.length, max: Math.round(d[d.length - 1] || 0), p99: Math.round(d[Math.floor(d.length * 0.99)] || 0),
+        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length, n100: d.filter((x) => x > 100).length }; return; }
+    if (performance.now() - t0 < 240000) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick); return true;`;
+// Best effort: Settings > Apps > Safari > Clear History and Website Data. Returns the steps it managed.
+async function clearSafari(ctx) {
+  const steps = [];
+  const find = (pred) => { try { return wd(ctx.base, "POST", `/session/${ctx.sid}/element`, { using: "-ios predicate string", value: pred }); } catch (_) { return null; } };
+  const tap = async (pred, scrolls = 6) => {
+    for (let i = 0; i <= scrolls; i++) {
+      const el = find(pred);
+      if (el) { const id = el["element-6066-11e4-a52e-4f735466cecf"] || el.ELEMENT; wd(ctx.base, "POST", `/session/${ctx.sid}/element/${id}/click`, {}); await sleep(1200); return true; }
+      try { wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: swipe", args: [{ direction: "up" }] }); } catch (_) { /* no swipe */ }
+      await sleep(600);
+    }
+    return false;
+  };
+  try {
+    wd(ctx.base, "POST", `/session/${ctx.sid}/context`, { name: "NATIVE_APP" });
+    wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: terminateApp", args: [{ bundleId: "com.apple.mobilesafari" }] });
+    wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: activateApp", args: [{ bundleId: "com.apple.Preferences" }] });
+    await sleep(2000);
+    for (const [name, pred] of [["Apps", "label == 'Apps' AND type == 'XCUIElementTypeCell'"], ["Safari", "label == 'Safari' AND type == 'XCUIElementTypeCell'"],
+      ["Clear", "label BEGINSWITH 'Clear History and Website Data'"], ["Confirm", "label BEGINSWITH 'Clear History' AND type == 'XCUIElementTypeButton'"]]) {
+      const ok = await tap(pred, name === "Clear" ? 10 : 6); steps.push(`${name}:${ok ? "ok" : "miss"}`); if (!ok && name !== "Apps") break;
+    }
+    try { shot(ctx.base, ctx.sid, path.join(ctx.out, `clear-${Date.now()}.png`)); } catch (_) { /* no shot */ }
+    wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: terminateApp", args: [{ bundleId: "com.apple.Preferences" }] });
+  } catch (e) { steps.push("error:" + e.message.slice(0, 80)); }
+  log("safari clear: " + steps.join(" "));
+  return steps;
+}
+async function warmplusScenario(ctx, url, report, out) {
+  report.warmplus = {};
+  for (const arm of ["default", "warmplus"]) {
+    const row = report.warmplus[arm] = {};
+    row.clear = await clearSafari(ctx);
+    try { wd(ctx.base, "DELETE", `/session/${ctx.sid}`); } catch (_) { /* gone */ }
+    ctx.sid = wd(ctx.base, "POST", "/session", { capabilities: { alwaysMatch: ctx.caps, firstMatch: [{}] } }).sessionId;
+    try { wd(ctx.base, "POST", `/session/${ctx.sid}/orientation`, { orientation: "LANDSCAPE" }); } catch (_) { /* keep portrait */ }
+    wd(ctx.base, "POST", `/session/${ctx.sid}/url`, { url });
+    await waitReady(ctx);
+    await exec(ctx.base, ctx.sid, PIN("webgpu") + "");
+    await exec(ctx.base, ctx.sid, arm === "warmplus" ? `localStorage.setItem("apex26.tlxWarmPlus", "1"); return 1;` : `localStorage.removeItem("apex26.tlxWarmPlus"); return 1;`);
+    const r = await reloadPage(ctx); row.bootApi = r.api;
+    await exec(ctx.base, ctx.sid, HITCH_ARM);
+    row.entry = await timedEntry(ctx, `warmplus ${arm}`);
+    for (let i = 0; i < 12 && !row.frames; i++) { await sleep(2000); try { row.frames = await exec(ctx.base, ctx.sid, "return window.__dfFrames;", 1); } catch (_) { /* reload */ } }
+    log(`warmplus ${arm}: programWarm post=${row.entry.warm && row.entry.warm.post} shadow=${row.entry.warm && row.entry.warm.shadow} frames=${JSON.stringify(row.frames)}`);
+    pullLogs(ctx.base, ctx.sid, out);
+  }
+}
 // races: BENCHMARK "WEATHER & TRACKS" (six races, each reloads and starts cold) on each pinned path.
 async function racesScenario(ctx, pins, report, out) {
   report.races = {};
@@ -243,9 +308,10 @@ async function run() {
     log(`boot: gpu=${report.boot.gpu} live=${JSON.stringify(report.boot.live)} title=${report.boot.title}`);
     shot(base, sid, path.join(out, "boot.png"));
     if (scenario !== "bench") {
-      const ctx = { base, sid, caps };
+      const ctx = { base, sid, caps, out };
       log(`live view: AWS console > Device Farm > Mobile Device Testing > Projects > ${PROJECT} > Remote access > ${ses.name}`);
-      try { if (scenario === "cache") await cacheScenario(ctx, url, pins, report, out); else if (scenario === "races") await racesScenario(ctx, pins, report, out); }
+      try { if (scenario === "cache") await cacheScenario(ctx, url, pins, report, out); else if (scenario === "races") await racesScenario(ctx, pins, report, out);
+        else if (scenario === "warmplus") await warmplusScenario(ctx, url, report, out); }
       finally { sid = ctx.sid; }
     }
     if (legs) {
