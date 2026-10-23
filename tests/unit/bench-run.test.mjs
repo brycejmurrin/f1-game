@@ -99,3 +99,49 @@ test("bench-run summarize: a leg that fell back is filed under the api that actu
   const s = J(B.summarize([leg("webgl2", [20, 40], { path: "webgpu" })]));
   assert.deepEqual(Object.keys(s), ["webgl2"]);
 });
+
+test("bench-run: ONE LAP, QUICK PATHS and LIVERY EDIT plans; QUICK PATHS is one Monza lap per three.js path", () => {
+  const B = load();
+  const one = B.TESTS.find((t) => t.id === "lap"), quick = B.TESTS.find((t) => t.id === "quick"), liv = B.TESTS.find((t) => t.id === "livery");
+  assert.deepEqual(J(one.legs.map((l) => [l.kind, l.path, l.track, l.weather])), [["lap", null, "monza", "dry"]]);
+  assert.deepEqual(J(quick.legs.map((l) => [l.kind, l.path])), [["lap", "webgpu"], ["lap", "webgl2"]]);
+  assert.deepEqual(J(liv.legs.map((l) => [l.kind, l.path])), [["livery", null]]);
+  const plan = B.newPlan("quick", { backend: null, threePath: null });
+  assert.deepEqual(J(plan.legs.map((l) => [l.state, l.label])), [["pending", "Lap WEBGPU"], ["pending", "Lap WEBGL2"]]);
+  assert.deepEqual(J(B.pathPrefs(plan.legs[1].path, null)), { backend: "three", threePath: "1" });
+});
+
+test("bench-run: every test names its duration in its help line and keeps a short chip label", () => {
+  const B = load();
+  for (const t of B.TESTS) {
+    assert.match(t.help, /About \d+ min\.$/, t.id);
+    assert.ok(t.label.length <= 16, t.id + " label " + t.label);
+  }
+  assert.equal(new Set(B.TESTS.map((t) => t.id)).size, B.TESTS.length);
+});
+
+test("bench-run overs / growth: frames past 33 and 50 ms; counter growth only where both samples hold a number", () => {
+  const B = load();
+  assert.deepEqual(J(B.overs([16, 17, 34, 40, 51, 16, 16, 16, 16, 16])), { n33: 3, n50: 1, over33: 30 });
+  assert.deepEqual(J(B.overs([])), { n33: 0, n50: 0, over33: null });
+  assert.deepEqual(J(B.growth({ textures: 40, geometries: 70, texMB: 12.5, flapSets: null }, { textures: 40, geometries: 72, texMB: 12.25, flapSets: 2 })),
+    { textures: 0, geometries: 2, texMB: -0.25 });
+});
+
+test("bench-run scenes: a lap row carries its lap time; livery edits carry edit ms and a GPU growth row", () => {
+  const B = load();
+  const st = (id, extra) => Object.assign({ id, p50: 16.7, p95: 20, p99: 33, fps: 59, n33: 1, n50: 0, links: 0, pipes: 0 }, extra);
+  const rows = J(B.scenes([
+    { kind: "lap", label: "Lap WEBGPU", state: "done", entry: { cold: { buildMs: 3000, goMs: 20000 } }, steps: [st("lap", { lapS: 92.4 })] },
+    { kind: "lap", label: "Lap WEBGL2", state: "failed", reason: "no timed lap in 4 min" },
+    { kind: "livery", label: "Livery", state: "done", entry: { cold: { goMs: 250 } }, steps: [st("finish", { editMs: 41 }), { id: "sponsors (none)", editMs: null }],
+      mem: { growth: { textures: 0, geometries: 3, texMB: 0.5 } } },
+  ]));
+  assert.deepEqual(rows.map((r) => r.label), ["Lap WEBGPU", "Lap WEBGL2", "Livery · finish", "Livery · sponsors (none)", "Livery · GPU growth"]);
+  assert.deepEqual([rows[0].time, rows[0].n33, rows[0].coldMs], ["92.4 s", 1, 3000]);
+  assert.equal(rows[1].state, "failed");
+  assert.deepEqual([rows[2].time, rows[2].coldMs], ["41 ms", 250]);
+  assert.equal(rows[3].time, null);
+  assert.deepEqual([rows[4].state, rows[4].reason], ["growth", "textures 0 · geometries +3 · texture MB +0.5"]);
+  assert.equal(J(B.scenes([{ kind: "livery", label: "Livery", state: "done", steps: [], mem: { growth: {} } }]))[0].reason, "no counters on this renderer");
+});
