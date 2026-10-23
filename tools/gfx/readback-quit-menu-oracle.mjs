@@ -73,8 +73,9 @@ async function setPhase(page, phase) {
 
 async function startBahrainRace(page) {
   await setPhase(page, "menu");
-  await page.evaluate(() => {
-    window.__quitRace = Promise.resolve(window.__apex.race("bahrain", "day", "dry"));
+  await page.evaluate(async () => {
+    await window.__apex.race("bahrain", "day", "dry");
+    if (window.__apex.go) window.__apex.go();
   });
   await setPhase(page, "race-entry");
   await page.waitForFunction(
@@ -85,12 +86,13 @@ async function startBahrainRace(page) {
   await page.waitForFunction(
     () => {
       const s = window.__apex.info().state;
-      return s === "race" || s === "count";
+      return s === "race" || s === "count" || s === "grid";
     },
     null,
     { timeout: WAIT_MS, polling: 200 },
   );
-  await sleep(1500);
+  await page.waitForSelector("#pausebtn", { timeout: WAIT_MS, state: "visible" }).catch(() => {});
+  await sleep(2000);
 }
 
 async function quitToMenu(page) {
@@ -139,7 +141,7 @@ try {
   await sleep(2000);
   await setPhase(page, "post-quit");
 
-  const slice = await page.evaluate(() => {
+  const slice = await page.evaluate((quitTtiMs) => {
     const stall = typeof LoopHealth !== "undefined" ? LoopHealth.state().stall : null;
     const soft = typeof GLX !== "undefined" && GLX.softBlitGen ? GLX.softBlitGen() : null;
     const sw = typeof PerfGov !== "undefined" && PerfGov.softwareRaster ? PerfGov.softwareRaster() : null;
@@ -151,11 +153,11 @@ try {
       softBlitGen: soft,
       softwareRaster: sw,
       stallReloads: reloads,
-      ttiMs,
+      ttiMs: quitTtiMs,
       teardown,
     };
-  });
-  report.quit = slice;
+  }, ttiMs);
+  report.quit = { ...slice, ttiMs };
 
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, JSON.stringify(report, null, 2) + "\n");
