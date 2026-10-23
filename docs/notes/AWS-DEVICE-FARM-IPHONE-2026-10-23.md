@@ -202,3 +202,47 @@ run**, so the differences below are not throttling.
 Wall time per session: proof about 4.5 min, 2-leg A/B about 11 min, 4-leg runs about 16.5 min each. **About 48
 device-minutes in total** (about $8 at $0.17 metered unless the free trial covers it). AWS still reported every
 session as STOPPING with `deviceMinutes` 0 at 02:21Z, so the billed figure must be read later.
+
+## 7. Automated (server-side) runs: what they add, what broke
+
+`devicefarm-iphone.mjs auto` (Bryce: "Also try using aws automated tests"). It packages
+`tools/perf/devicefarm-host.mjs` (a zip of the `npm pack` tarball, upload type `APPIUM_WEB_NODE_TEST_PACKAGE`),
+generates a `macos_tahoe` test spec (`APPIUM_WEB_NODE_TEST_SPEC`), creates a static one-device pool (a static pool
+rejects `--max-devices`), runs `schedule-run`, waits, and downloads every artifact. Two runs: iPhone 14 (02:26Z, before
+the fleet device split) and iPhone 18 Pro Max (02:53Z), each 2 legs plus an Instruments Activity Monitor attempt.
+
+**What works.** The host has Node 24, Appium 3 with XCUITest and the prebuilt WDA, and `xctrace version 27.0`. Appium
+was up 2 s after launch, and Safari opened the live site 10 s into the test. On the 18 Pro Max both legs completed
+and reproduced the remote-access numbers: first WEBGPU cold entry 31.6 s (`mirrorPrepare` 29.4 s), WEBGL2 7.2 s,
+warm 228 / 247 ms, 60 fps on both paths in every phase, thermal 0 throughout.
+
+**What it adds over remote access** (all fetched by `list-artifacts` on the run ARN):
+
+| artifact | 18 Pro Max run | use |
+|---|---|---|
+| Video | 54 MB mp4 | frame-accurate replay of every hitch and freeze |
+| Syslog | 290 MB (+ 27 / 2.8 MB) | full iOS device log: WebContent/GPU process messages, jetsam, thermal |
+| TCP dump log | 3.9 MB | packet-level asset timing |
+| Customer Artifacts | our `report.json`, `safariConsole.jsonl`, `appium.log`, the trace | everything the host script wrote to `$DEVICEFARM_LOG_DIR` |
+| Screenshots | `boot`, `bench` | from `$DEVICEFARM_SCREENSHOT_PATH` |
+
+**Instruments does not work on Device Farm (yet).** `mobile: startPerfRecord` starts xctrace, but on both phones
+xctrace logged **"Device got disconnected, ending recording"** 2.7 s later, so the saved trace (659 KB) covers about
+3 s. On the iPhone 14 the Safari remote debugger also stopped answering after the first leg's reload: every
+`execute/sync` timed out for 20 min until I stopped the run. That run cost 33.7 device-minutes for no result. On the
+18 Pro Max the debugger survived. The host script therefore defaults to `--perf none`, puts a 90 s timeout on every
+WebDriver call, and after two failed polls deletes the session and attaches a fresh one to the open tab
+(`appium:safariInitialUrl: ""`).
+
+**Reading Device Farm status.** During a custom-environment run, `list-suites` shows Setup/Tests/Teardown as PENDING
+and `list-jobs` shows no `started` time even while the test is executing. I misread a running job as queued because
+of this. The truth is in the `Test spec timestamped output` artifact once the run completes. Device minutes include
+host setup and teardown: the 18 Pro Max test body took 7 min, but the run billed 18.5 device-minutes (7.5 metered)
+and finalised 13 min after the test ended.
+
+**Remote access or automated?** For the A/B and entry timing, remote access (`run`) is cheaper (minutes about equal
+to test time), gives live feedback and has never wedged. Use `auto` when the evidence needed is the video, the full
+device syslog or the packet capture, or for unattended runs across several devices at once.
+
+**Trial budget.** The account has a 1,000-minute free trial: 844.83 minutes were left at 03:14Z (both fleets
+combined), so nothing has been billed.
