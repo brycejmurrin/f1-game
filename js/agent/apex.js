@@ -2241,7 +2241,7 @@ const api = {
     return Log.level();
   },
 
-  // flags() — every DevFlags registry entry and its resolved value (query → hash → storage).
+  // flags() — every DevFlags registry entry and its resolved value (query → storage; the URL hash is not read).
   flags() {
     if (typeof DevFlags === "undefined") return {};
     return DevFlags.flags();

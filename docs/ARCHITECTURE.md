@@ -85,7 +85,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `log.js` | `Log` | tag | levelled namespaced logging (global Log). |
-| `dev-flags.js` | `DevFlags` | tag | DevFlags: one registry for boot-time URL / hash / localStorage toggles. |
+| `dev-flags.js` | `DevFlags` | tag | DevFlags: one registry for boot-time URL / localStorage toggles. |
 | `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the three SCALAR helpers modules share (M4.clamp / M4.lerp / M4.wrapDelta). ident() allocates; every *To variant… |
 | `hash32.js` | `Hash32` | tag | stateless FNV-1a + murmur-style mix for career, daily challenge, and driver ratings. |
 | `clipboard.js` | `ApexClipboard` | tag | one clipboard write/read home. navigator.clipboard + textarea execCommand fallback for plain http / older WebKit. |
@@ -1045,7 +1045,7 @@ the on-track rejection guard (`RAW`).
 ## js/track/scenery/data.js — `TrackSceneryData`
 
 The GENERIC dressing tables hoisted out of buildProps: the theme fallbacks
-`FURN_DEF` (trees + lamps), `KIT_DEF` (barrier/signage/marshal families),
+`FURN_DEF` (trees + lamps),
 `THEME_DEF` (city style) and `STAND_SET_DEF`, plus `STAND_LIVERIES`,
 `CROWD_DAY`, `WINTINTS`, `HOUSE_*`, `MOTORHOME_BODY`, `SIGN_SEG`/`SIGN_DIGIT`,
 the colour packs `NC`/`DC`/`ATM`/`COL`, `BLD`, and `resolveCityStyle()` (turns
