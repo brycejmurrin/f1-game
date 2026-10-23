@@ -97,7 +97,11 @@ test("ensureAudio loads LAZY_AUDIO one file at a time while Settings is open", a
     },
   };
   let readyHooks = 0;
-  vm.runInContext(loaderSrc + "\n" + bundlesSrc + "\nthis.ScriptLoader = ScriptLoader; this.LazyBundles = LazyBundles;", ctx, { filename: absSrc("js/core/script-loader.js") });
+  vm.runInContext(
+    `${loaderSrc}\n${bundlesSrc}\nthis.ScriptLoader = ScriptLoader; this.LazyBundles = LazyBundles;`,
+    ctx,
+    { filename: absSrc("js/core/lazy-bundles.js") },
+  );
   const sl = ctx.ScriptLoader.create();
   const lb = ctx.LazyBundles.create({
     els: {}, loadBackendScripts: sl.load, getContext: () => ({}),

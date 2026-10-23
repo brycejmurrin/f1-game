@@ -319,6 +319,9 @@ export const RULES = [
   // garage panel, the global type and colour tokens, the picker, the shared
   // .screen/.sheet/.pane primitives every menu is built from), so they ride along.
   [/^css\/(menus|carsetup|tokens|select|components)\.css/, ["ui", "baseline"], "the menu chrome: only the blessed PNGs in menu-baseline.spec.js see it"],
+  // career.css owns #cr-left / #cr-right; phone overflow is pinned in career-hub
+  // (modes), not only the generic ui screenshot group.
+  [/^css\/career\.css$/, ["modes", "ui"], "career sheet: #cr-left phone overflow + hub still fit"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
   [/^js\/race\/setup-trial-session\.js$/, ["garage-unit"], "fresh solo setup-trial ownership and starting conditions"],
   [/^js\/ui\/settings-search\.js$/, ["steering-unit"], "settings search ownership and focus regressions"],
