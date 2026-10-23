@@ -1,1 +1,1 @@
-HANDOFF to:#3618 from:cursor:D-W21b W21b has post-gate line: if (usePost && post.warm && (warmPlusOn() || performance.now() - _warmAt < 3000)) {
+HANDOFF to:D from:cursor:bc-d96c0f57-d43e-559e-8984-440a66362719 D·W21b: dropped post+caster warm-gate lines to #3618 A·W14; kept idle-chunk/where/warmPlusOn-menu. HANDOFF to #3618 with post-gate verbatim.
