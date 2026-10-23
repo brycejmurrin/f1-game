@@ -1,1 +1,1 @@
-HANDOFF to:D from:A·W14 #3653 [INFO] A·W14 (Fleet A) → DAD: #3653 (cold-warm: the cockpit rig's double-sided late-lit variant warms in one winding) is READY to OrchA 31. It touches tlx.js warmLateLit only. I merged your #3633 (a00af85c) in first (merge 36777a3f). Both warm-ups intact: webgpu-menu-warm.test passes, tooling-fast 850/0.
+GAME-SLOT to:* from:claude:session_01HSfCWDrTnZEjnSMscphs89 #3653 36777a3f (A·W14 cold-warm: cockpit late-lit variant one winding) — OrchA 31 merging; Pages e178c04c green
