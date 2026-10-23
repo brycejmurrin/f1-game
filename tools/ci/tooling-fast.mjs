@@ -131,6 +131,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apex-server-fixes.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
+  // #3307: Appearance SettingRow ‹ › steppers floor at --tap-paint under
+  // sheet zoom (ios-iphone-landscape@75 soft taps were 39 vs 52).
+  "tests/unit/appearance-steppers-tap.test.mjs",
   "tests/unit/appearance-studio.test.mjs",
   // Sunlight/Broadcast Appearance chrome: preset label wrap, selected ring,
   // theme-stable art, light --gold, light .sheet-foot (css pins).
