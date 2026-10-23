@@ -1,9 +1,0 @@
-{
-  "pins": {
-    "css/dialogs.css": {
-      "narrow": [
-        "tests/unit/pause-taps.test.mjs"
-      ]
-    }
-  }
-}

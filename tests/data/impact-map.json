@@ -17029,11 +17029,6 @@
       "unmount": [
         "tests/unit/xr-phase0.test.mjs"
       ]
-    },
-    "css/dialogs.css": {
-      "narrow": [
-        "tests/unit/pause-taps.test.mjs"
-      ]
     }
   }
 }

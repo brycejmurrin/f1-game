@@ -21,7 +21,7 @@ function baseMinHeight(rules, sel) {
 test("pause primary doors floor at painted tapSoft (44/s + --tap-paint) for UI SIZE 75%", () => {
   const rules = cssRules(readCssSource("css/dialogs.css"));
   // One combined check: stack doors, RESUME, and compact density all carry a
-  // painted floor (decl equal — no assert.match budget).
+  // painted floor (decl equal — no source-text match budget).
   assert.equal(
     baseMinHeight(rules, "#pausemenu .sheet-body.stack > button:not(.as-tbtn)"),
     FLOOR,
