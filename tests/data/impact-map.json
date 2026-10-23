@@ -6746,6 +6746,7 @@
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
@@ -7082,6 +7083,9 @@
       "packSettled": [
         "tests/unit/garage-prebuild.test.mjs"
       ],
+      "phoneHold": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
       "plan": [
         "tests/unit/garage-prebuild.test.mjs"
       ],
@@ -7101,7 +7105,8 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "start": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "state": [
         "tests/unit/garage-prebuild.test.mjs"
@@ -7110,7 +7115,8 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "tick": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "timed": [
         "tests/unit/garage-prebuild.test.mjs"
