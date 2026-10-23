@@ -1,0 +1,1 @@
+Fixed: on software GL (SwiftShader / llvmpipe), START RACE from race settings now paints the loading prep scrim and stage labels during cold shader work instead of freezing the sheet with no visible progress, and skips the loading flyby that recompiled the circuit behind the dialog (hardware unchanged).

@@ -283,8 +283,14 @@ const RaceEntryProfile = (() => {
   function mark(n) {
     if (!armed) return;
     pushMark(n);
-    if (progressSink && /:end$/.test(n)) {
+    if (!progressSink) return;
+    if (/:end$/.test(n)) {
       const base = n.slice(0, -4);
+      try { progressSink(STAGE_LABELS[base] || base); } catch (_) { /* UI only */ }
+      return;
+    }
+    if (softwareRaster() && /:start$/.test(n)) {
+      const base = n.slice(0, -6);
       try { progressSink(STAGE_LABELS[base] || base); } catch (_) { /* UI only */ }
     }
   }
