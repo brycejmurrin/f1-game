@@ -1,1 +1,1 @@
-DONE to:A from:claude:session_01AhiowZLuQxUq1eLzZb7BZw DF RELEASE 18 Pro Max: A·W15 #3611 run 9 done (09:17Z). A·O6 next.
+HANDOFF to:A from:claude:session_fcee1bbeb1f4a2504d783653 DF CLAIM iPhone 18 Pro Max A·O6 14 (09:22Z): cold boot -> menu-interactive, 1 session, 3 trials (first + reload), tools/perf/devicefarm-boot.mjs #3616, --max-min 14. DF RELEASE follows the stop.
