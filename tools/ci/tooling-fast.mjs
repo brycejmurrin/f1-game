@@ -245,6 +245,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-experience.test.mjs",
   "tests/unit/career-hire-rating.test.mjs",
   "tests/unit/career-legends.test.mjs",
+  // #3559: readSlot must not JSON.parse(null) over a cache-only protected career when quota refused the localStorage write-back.
+  "tests/unit/career-readslot-quota.test.mjs",
   "tests/unit/career-regulations.test.mjs",
   // Round-2 (2026-10-10) career: the save carries its calendar (calIds), beatRival offers sign the rival they show, weakerSeat before the team moves, no re-hire of the sitting hire, rep before market value, podium p>0, NEW CAREER number 1, null-team slots.
   "tests/unit/career-round2.test.mjs",
