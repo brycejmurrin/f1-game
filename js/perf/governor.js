@@ -176,6 +176,14 @@ let _scaleFutile = false;
 // player changes preset (either changes what a step means).
 let _tierFutile = false;
 
+// PHONE SLOW LATCH (BrowserStack iPhone 15 deep profile 2026-10-22): JS was
+// only 3.8–6.4 ms of 17–28 ms frames (GPU/fill-bound), yet the governor still
+// restored to autoTier 0 once EMA looked calm at the shed quality — and the
+// full look-post stack came back. A verified feature shed on a phone therefore
+// latches for the rest of the session: the restore branch must not promote
+// effects back. Cleared by clearStrikes / safeMode(false), or when the player
+// RAISES GRAPHICS (setUserTier to a lower rung) to opt back in.
+let _phoneSlowLatch = false;
 // THE §2au DISCRIMINATOR (docs/notes/PERF-FINDINGS.md §2au). The floor below does
 // what it was built to do — and that is the defect: on a genuinely slow phone
 // it converges on the sustained frame time within ~2.7 s, `degradeAt` becomes
@@ -488,6 +496,7 @@ function init(gfx) {
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
   _perfTier = _perfTierFloor;
   _autoShed = 0;
+  _phoneSlowLatch = false;
   // Two strikes: the phone was killed twice, so boot with the smallest backing store too (TLX reads this after create; GLX has no capDpr).
   if (_crashStrikes >= 2 && gfx && gfx.isMobile && typeof gfx.capDpr === "function") gfx.capDpr(1);
 }
@@ -772,6 +781,10 @@ function tick(dtMs, drawn) {
       if (v.up) _latchBound(); else _computeBound = false;
       return;
     }
+    // Verified feature shed on a phone: latch so headroom cannot restore full
+    // effects (tile-GPU fill cost comes back with autoTier 0). A futile probe
+    // that rolls every rung back never reaches here.
+    if (v.kind === "tier" && !v.up && _gfx && _gfx.isMobile) _phoneSlowLatch = true;
     // §2au, the success half: a DOWN step the EMA felt is the compute-bound
     // proof; an UP step it accepted means the headroom was real and the
     // episode, if any, is over.
@@ -875,7 +888,10 @@ function tick(dtMs, drawn) {
     }
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
     _scaleFutile = false;   // headroom is back — nothing about the old verdict still applies
-    _tierFutile = false;
+    // Futility may clear (a later wet race can use a rung that was useless dry),
+    // but a phone that already measured a helpful shed stays latched — calm EMA
+    // at the shed quality is not evidence the full stack fits again.
+    if (!_phoneSlowLatch) _tierFutile = false;
     _computeBound = false;   // §2au: the EMA is back within RESTORE_WITHIN of the (rewound) floor — the episode is over
     _cheapSeen = false;
     // The up-step is VERIFIED like the down-step. Restoring is a guess that the
@@ -935,7 +951,8 @@ function tick(dtMs, drawn) {
     // Features come back only at full res under the same sustained headroom,
     // one per ~4 s. tier() retains both floors even when a measured post cut
     // taken AT the user's floor is released; the crash floor is never lifted.
-    if (!stepped && !_tierHold && (_perfTier > _floorTier() || (_autoShed > 0 && _perfTier > _perfTierFloor))) {
+    // Phone slow latch: never promote effects back after a verified shed.
+    if (!stepped && !_tierHold && !_phoneSlowLatch && (_perfTier > _floorTier() || (_autoShed > 0 && _perfTier > _perfTierFloor))) {
       _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: _frameEMA, up: true };
       // LOW starts at its preset floor: its measured post/lamp cut still
       // needs recovery. tier() keeps the preset and crash floors intact.
@@ -1003,6 +1020,7 @@ function clearStrikes() {
   // after __apex.safeMode(false) until a reload. Drop to the new floor so the device
   // can prove itself again (governor may re-shed if frames still miss).
   if (_perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
+  _phoneSlowLatch = false;   // safeMode(false) / clearStrikes: prove the device again
   GameStore.store.rawSet(SENT_STRIKES, "0"); GameStore.store.rawDel(SENT_ACTIVE);
   GameStore.store.rawDel(SENT_TICKED);
 }
@@ -1010,22 +1028,25 @@ function clearStrikes() {
 return {
   init, tick, setThermalDrift, thermalDrift: () => _drift && _drift.state(), frameStats, recordSimulation, resetFrameStats, sentinelArm, sentinelResume, cleanRace, clearStrikes,
   tier: () => Math.max(_perfTierFloor, _userTier, _perfTier),
-  // Crash + measured only — no GRAPHICS user floor. Look-defining post
-  // (bloom / SSAO / god-rays / contact / lamp volumetrics) reads this so
-  // GRAPHICS: LOW still sheds env/dry-SSR/shadows via tier() but the lighting
-  // tuner stays live unless the device proved it cannot afford the pass.
-  // READS _perfTier ON PURPOSE, and a draft of the preset-release fix below got
-  // this wrong in a way worth recording. That draft derived the governor tier as
-  // (floor + its own shed count) so the two could be separated cleanly — but the
-  // degrade branch stops once _floorTier() + sheds reaches 4, and _floorTier()
-  // folds in _userTier while this accessor does not. The shed count was therefore
-  // capped at 4 - _userTier, and this returned at most that: measured 2 on
-  // GRAPHICS: MEDIUM (every phone's default) and 0 on LOW, so bloom, SSAO,
-  // god-rays, contact shadows and lamp volumetrics became UNSHEDABLE however
-  // badly the device was missing frames — the opposite of what a low preset is
-  // for. _perfTier is the effective tier and can always climb to 4, so the
-  // tier-4 consumers stay reachable on every preset.
+  // Crash + measured only — no GRAPHICS user floor. Wet-road SSR and the
+  // lighting-tuner "why off" path still read this: a healthy LOW must keep a
+  // reduced wet-reflection budget (post-common.roadReflection) without the
+  // crash floor, and raising the preset must not need a reload to undo a
+  // measured shed. READS _perfTier ON PURPOSE — see the degrade-branch note
+  // above autoShed(). Do NOT gate bloom/SSAO/god-rays/contact/lampVol on this
+  // alone: that left GRAPHICS: LOW with the full look-post stack on a healthy
+  // phone (autoTier 0 while tier() is already 4), which measured slower than
+  // MEDIUM on iPhone WebGPU (BrowserStack 2026-10-21). Those passes read
+  // lookPostShed() instead.
   autoTier: () => Math.max(_perfTierFloor, _perfTier),
+  // Look-defining post (bloom / SSAO / god-rays / contact / lamp volumetrics).
+  // True when the crash/measured ladder is at 4 OR the player chose GRAPHICS:
+  // LOW (userTier 4). Keeps autoTier() free for wet-SSR / tuner notes while
+  // making LOW actually cheaper than MEDIUM on tile GPUs.
+  lookPostShed: () => Math.max(_perfTierFloor, _perfTier) >= 4 || _userTier >= 4,
+  // True after a verified feature shed on a phone — restore must not promote
+  // effects back (see _phoneSlowLatch). Exposed for __apex.renderScale() / tests.
+  phoneSlowLatch: () => _phoneSlowLatch,
   // What the GOVERNOR shed on its own measurements, plus the crash floor, and
   // nothing the player asked for. The gate for anything held off "because this
   // device is actually missing frames" — see _autoShed for why this is a second
@@ -1056,8 +1077,12 @@ return {
     // flips the mobileHigh bit and forces one). Dropping to the new floor on a
     // RAISE gives the device a clean chance to prove itself; if it still cannot
     // hold the budget the governor re-sheds within a couple of evaluations, on
-    // its own measurements.
-    if (t < prev && _perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
+    // its own measurements. Also clears the phone slow latch: the player opted
+    // back into more effects.
+    if (t < prev) {
+      _phoneSlowLatch = false;
+      if (_perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
+    }
     // _perfTier is deliberately NOT touched here. It is the governor's OWN
     // evidence-based tier; the floors are applied at READ time in tier(). An
     // earlier draft pulled _perfTier up to the new floor, which conflated "shed

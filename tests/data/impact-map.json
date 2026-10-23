@@ -12831,7 +12831,6 @@
       ],
       "present": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
@@ -12846,6 +12845,7 @@
       "*": [
         "tests/unit/godray-keep-nearest.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
+        "tests/unit/light-grid.test.mjs",
         "tests/unit/lighting-reapply.test.mjs"
       ]
     },
@@ -13451,6 +13451,7 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "dispose": [
+        "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
@@ -13471,7 +13472,8 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
+        "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "postChain": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -13481,7 +13483,6 @@
       ],
       "present": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -13495,13 +13496,17 @@
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "runPass": [
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "trackMaterial": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "vset": [
+        "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "warm": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -14212,6 +14217,9 @@
       "_configureCanvas": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
+      "_destroyTargetSet": [
+        "tests/unit/frame-hotpath-alloc.test.mjs"
+      ],
       "_ensureSpatial": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
@@ -14247,6 +14255,9 @@
       ],
       "_softDisplayFinish": [
         "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
+      "_swapTargets": [
+        "tests/unit/frame-hotpath-alloc.test.mjs"
       ],
       "_writeDraw": [
         "tests/unit/surface-id-parity.test.mjs"
@@ -14340,6 +14351,9 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
+      "ensureTargets": [
+        "tests/unit/frame-hotpath-alloc.test.mjs"
+      ],
       "envFaceBegin": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-try.test.mjs",
@@ -14396,7 +14410,6 @@
       "present": [
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -14438,6 +14451,7 @@
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/godray-keep-nearest.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
+        "tests/unit/light-grid.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/validation-cli.test.mjs"
       ]
@@ -16098,11 +16112,21 @@
       ]
     },
     "js/ui/post-fx-opts.js": {
+      "applyLookShed": [
+        "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/light-grid.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs"
+      ],
       "gate": [
         "tests/unit/post-fx-opts.test.mjs"
       ],
       "read": [
+        "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/light-grid.test.mjs",
         "tests/unit/post-fx-opts.test.mjs"
+      ],
+      "*": [
+        "tests/unit/light-store-perchunk-pin.test.mjs"
       ]
     },
     "js/ui/quali-sheet.js": {
