@@ -5890,6 +5890,9 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   // B-F3.1: the sky show and the mirror stage are helpers the deferred mirror warm shares — evaluated from source too.
   const warmShowSky = eval("(function(){" + fnBody(code("js/render/three/tlx.js"), "warmShowSky") + "})");
   const warmMirrorStage = eval("(async function(usePost, useTag){" + fnBody(code("js/render/three/tlx.js"), "warmMirrorStage") + "})");
+  // A·W14: the stage arms the scene MRT only for a mirror-shaped target; this mirRT has one attachment (MRT off).
+  const _mirMrt = () => !!(mirRT.textures && mirRT.textures.length > 1);
+  const _mirMrtArm = eval("(function(on, prev){" + fnBody(code("js/render/three/tlx.js"), "_mirMrtArm") + "})");
   const drawWarmStage = () => ({}), _gpuSettled = async () => {};
   // Source pins for the same order: exactly one setMRT(null) in the full warm path, between the post
   // warm and the caster warm, and the caster warm still guarded on the module.
