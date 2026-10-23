@@ -456,7 +456,9 @@ test("A·W14: the mirror shares the scene pass's render context — the eager wa
 
 test("A·W14: tlx.js wiring — mirrorEnd and the mirror warm arm the scene MRT only for a mirror-shaped target, the knob read once", () => {
   const me = TLX.slice(TLX.indexOf("        mirrorEnd() {"), TLX.indexOf("        mirrorRect(r, flip)"));
-  assert.match(me, /const mrt = _mirMrt\(\), prevMrt = mrt \? renderer\.getMRT\(\) : null;\n\s*if \(mrt\) _mirMrtArm\(true\);\n\s*try \{ renderer\.render\(scene, mirCam\); \} finally \{ if \(mrt\) _mirMrtArm\(false, prevMrt\); \}/);
+  const arm = me.indexOf("if (mrt) _mirMrtArm(true);"), draw = me.indexOf("try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); }");
+  assert.ok(me.includes("const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;") && arm > 0 && draw > arm,
+    "mirrorEnd arms the MRT for a mirror-shaped target and restores the previous one after the draw, even on a throw");
   const ws = TLX.slice(TLX.indexOf("      async function warmMirrorStage("), TLX.indexOf("      // garageSceneOnly:"));
   assert.ok(ws.indexOf("_mirMrtArm(_mirMrt());") < ws.indexOf("await renderer.compileAsync(scene, camera);"), "the world compiles under the mirror's MRT");
   assert.ok(ws.indexOf("_mirMrtArm(false);") > ws.indexOf("await renderer.compileAsync(scene, camera);")
