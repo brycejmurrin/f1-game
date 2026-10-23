@@ -116,9 +116,20 @@ const CustomTracks = (function () {
   // `ease` is ALWAYS stored (the engine's 0.025 default when absent): the share
   // code always carries one, so an absent ease gave the receiver another id. A
   // zero ease is a step in the road edge, so it floors above 0.
+  // Codec decode of u16 65535 (authored s1=1) lands a quarter-step below 1.
+  const HWZ_FULL_END = (65535 - 0.25) / 65535;
   const HWZ = (z) => {
-    const s0 = frac(z.s0), s1 = frac(z.s1), hw = num(z.hw, LIMITS.hwMin, LIMITS.hwMax, null);
-    if (s0 == null || s1 == null || hw == null) return null;
+    const hw = num(z.hw, LIMITS.hwMin, LIMITS.hwMax, null);
+    if (hw == null || !Number.isFinite(+z.s0) || !Number.isFinite(+z.s1)) return null;
+    let s0 = +z.s0, s1 = +z.s1;
+    // Full-lap window: applyHwZones / TrackSpace treat 0→1 as the whole road.
+    // frac() maps 1→0 (closed loop), which collapsed that to a zero-width notch
+    // at the start — a share/import of {s0:0,s1:1} silently did almost nothing.
+    if ((s0 === 0 && s1 === 1) || (s0 === 1 && s1 === 0) || (s0 === 0 && s1 >= HWZ_FULL_END)) {
+      return { s0: 0, s1: 1, hw: dm(hw), ease: mil(num(z.ease, 0.005, 0.2, 0.025)) };
+    }
+    s0 = frac(s0); s1 = frac(s1);
+    if (s0 == null || s1 == null || s0 === s1) return null;
     return { s0, s1, hw: dm(hw), ease: mil(num(z.ease, 0.005, 0.2, 0.025)) };
   };
   // mesh.js reads `(angleDeg || 18)` and takes the camber SIDE from curvature:

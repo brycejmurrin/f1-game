@@ -2634,6 +2634,11 @@ async function startRaceBody() {
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   RaceEntryProfile.mark("gridCountdown:end");
+  if (typeof Assets !== "undefined" && Assets.retry && PerfGov.softwareRaster()) {
+    const run = () => { try { Assets.retry(); } catch (_) { /* optional pack */ } };
+    if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 120000 });
+    else setTimeout(run, 0);
+  }
   // TLX links programs on first draw — warm during LIGHTS only when the pack is
   // already settled (or unsupported/off), else createTextureArray owns the thread.
   // EXCEPT TLX itself (apex26.tlxWarmBeforePack, default on; "0" = the pack gate): its programs never read the pack
@@ -2716,7 +2721,9 @@ function startRace() {
   }
   practiceMode = false;   // before loadingInfo() reads it: the body clears it only after several awaits
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
-  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome(); if (typeof Assets !== "undefined") Assets.retry();
+  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
+  // Software GL defers pack retry until after grid (#3584); hardware keeps idle prefetch here.
+  if (typeof Assets !== "undefined" && Assets.retry && !PerfGov.softwareRaster()) Assets.retry();
   // Launches that bypass RACE! (Data Hub, Daily) never ran its gesture work: the gyro was never attached, and
   // quitToMenu dropped the landscape lock while the page stayed fullscreen (no fullscreenchange to re-apply it).
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
@@ -9236,7 +9243,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false); $("pm-quick-doors").insertBefore(Object.assign(document.createElement("button"), { id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: () => { setPaused(false); Input.requestRecover(); } }), $("pm-checkpoint"));   // RECOVER CAR = the R key; touch had none. Built here like REPLAY: shellNodes holds
-$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; startRace().then(() => { if (state === "race") frozen = false; }, () => {}); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it with its own paused = false, and a start that was cancelled (settings changed) hands the old race back
+$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; startRace().then(() => { if (state === "race") frozen = false; }, () => {}); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it on a committed start, and a start cancelled for changed settings (or failed) ends on the title via quitToMenu — the old race is not handed back
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 

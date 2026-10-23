@@ -340,6 +340,26 @@ const ZONES = {
 function openGreen(b, seed = 7) { b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open(); b.D.randomise(seed); b.D.preview(); return plain(b.D.state().design); }
 const msgText = (b) => b.root.querySelector(".td-msg").textContent;
 
+test("RANDOMISE that finds no green loop leaves the current design alone", () => {
+  const b = bootScreen();
+  openGreen(b, 7);
+  const before = plain(b.D.state().design);
+  const undo = b.D.state().undo;
+  // TrackRandom is frozen; swap the global the designer resolves at call time.
+  const real = b.ctx.TrackRandom;
+  b.ctx.TrackRandom = Object.assign({}, real, {
+    generateValid: () => ({ ok: false, pts: before.pts, seed: 99 }),
+  });
+  try {
+    assert.equal(b.D.randomise(99), false);
+    assert.deepEqual(plain(b.D.state().design), before, "failed RANDOMISE must not commit a RED candidate");
+    assert.equal(b.D.state().undo, undo, "no history entry on refusal");
+    assert.ok(String(msgText(b)).includes("No clean loop"), msgText(b));
+  } finally {
+    b.ctx.TrackRandom = real;
+  }
+});
+
 test("REVERSE and START HERE carry every zone type to the same place on the loop; a bank keeps its angle (sign included)", () => {
   const b = bootScreen();
   const d0 = Object.assign(openGreen(b), plain(ZONES));

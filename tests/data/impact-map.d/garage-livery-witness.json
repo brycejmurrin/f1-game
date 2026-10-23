@@ -1,0 +1,25 @@
+{
+  "pins": {
+    "js/render/glx/soft.js": {
+      "narrow": [
+        "tests/specs/garage-livery-churn.spec.js",
+        "tests/specs/parts-livery-zones.spec.js",
+        "tests/specs/parts-livery-designs.spec.js"
+      ]
+    },
+    "js/render/glx/glx.js": {
+      "narrow": [
+        "tests/specs/garage-livery-churn.spec.js",
+        "tests/specs/parts-livery-zones.spec.js",
+        "tests/specs/parts-livery-designs.spec.js"
+      ]
+    },
+    "js/render/shared/assets.js": {
+      "narrow": [
+        "tests/specs/garage-livery-churn.spec.js",
+        "tests/specs/parts-livery-zones.spec.js",
+        "tests/specs/parts-livery-designs.spec.js"
+      ]
+    }
+  }
+}
