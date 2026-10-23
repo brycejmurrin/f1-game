@@ -9,9 +9,6 @@
     },
     "js/net/lobby.js": {
       "lines": -14
-    },
-    "js/render/glx/glx.js": {
-      "lines": -1
     }
   }
 }
