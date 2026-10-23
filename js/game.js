@@ -3693,9 +3693,7 @@ function afterGarageOut(n, key, go, prepared, live, stage) {
   studioClose(n);
   if (n !== _introRun) return;
   if (!prepared || !live()) {
-    // Both branches re-enable START with the sheet still up and log nothing else (#3591): name why.
-    Log.warn("game", "intro released without a garage-out", { stage: stage || "", prepared, state, keyMoved: key !== menuKey(trackIdx), track: !!track });
-    loadingScreen.stop();
+    Log.warn("game", "intro released without a garage-out", { stage: stage || "", prepared, state, keyMoved: key !== menuKey(trackIdx), track: !!track }); loadingScreen.stop();   // START comes back silently otherwise (#3591)
     if (!prepared && live()) announce("PREPARATION FAILED — please retry", 5, "info");
     titleIfBare(); return;
   }
@@ -3863,16 +3861,12 @@ function introBuild(go) {
       await RaceEntryProfile.spanAsync("introBuild", async () => {
         await RaceEntryProfile.spanAsync("ensureScenery", () => ensureScenery(idx));
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the preparation card paints first
-        stage = "build:warm";
-        if (!(await awaitIntroWarm(live)) || !live()) return;   // compilation retains ownership of its scene
+        stage = "build:warm"; if (!(await awaitIntroWarm(live)) || !live()) return;   // compilation retains ownership of its scene
         // In steps, a few ms per frame: the preparation card and skip remain responsive.
-        stage = join ? "build:join" : "build:prior";
-        if (join) await mp.step;
+        stage = join ? "build:join" : "build:prior"; if (join) await mp.step;
         else if (prior) await prior.catch(() => false);
-        stage = "build:load";
-        if (!(await RaceEntryProfile.spanAsync("loadTrackStepped", () => loadTrackStepped(idx, live))) || !live()) return;
-        stage = "build:prepare";
-        _menuGate.ready = key; _menuGate.track = track;
+        stage = "build:load"; if (!(await RaceEntryProfile.spanAsync("loadTrackStepped", () => loadTrackStepped(idx, live))) || !live()) return;
+        stage = "build:prepare"; _menuGate.ready = key; _menuGate.track = track;
         // Assets, plans and shader warm all settle before the outgoing animation.
         const t1 = performance.now();
         await RaceEntryProfile.spanAsync("prepareMenuCarAssets", () => prepareMenuCarAssets(() => live() && performance.now() - t1 < 1500));
