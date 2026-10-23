@@ -3143,11 +3143,16 @@ const TLX = (function () {
       // (car-draw.js _ringOpts) is queued only once a disc is hot, so its first
       // draw is the first braking zone, at alpha ~0.3 — the TRANSPARENT ("t,")
       // variant of a key the grid never draws. Census 245 caught it as the one
-      // material minted mid-race and its one lazy pipeline. The cockpit ERS /
-      // overtake / aero-flap pulses share that key. Mint it during the lights and
-      // compile it once per vertex layout already in the pool: the pipeline also
-      // keys on the layout, and tlx-chunked's pack makes layouts differ by mesh.
-      const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
+      // material minted mid-race and its one lazy pipeline. The cockpit dash ERS
+      // bar and armed overtake lamp (car-draw.js _rigFxA) pulse the same opts
+      // DOUBLE-SIDED, a key of their own ("t,0.9,…|ds|na") first drawn on the
+      // first ERS deploy: the first BOOST tap on WebGPU waited 734–934 ms for its
+      // pipeline (A·W15, iPhone 18 Pro Max, cockpit cam). Mint both during the
+      // lights and compile each once per vertex layout already in the pool: the
+      // pipeline also keys on the layout, and tlx-chunked's pack makes layouts
+      // differ by mesh.
+      const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 },
+        { doubleSided: true, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
       // THE LAUNCH'S FX VARIANTS (FieldLod warm, js/car/field-lod.js): the
       // throttle-lift exhaust flame (car-draw.js _flameOpts, alpha < 1) and the
       // ERS strip's two phases (_ersLightOpts, alpha 1 / 0.6) are first drawn when
