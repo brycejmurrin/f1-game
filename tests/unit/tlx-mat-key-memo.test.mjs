@@ -35,7 +35,7 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
 function liftMemo() {
   const start = SRC.indexOf("const _matKeyMemo = new WeakMap();");
   assert.notEqual(start, -1, "the memo declaration moved — update this test, do not delete it");
-  const marker = "\n      function materialFor(opts, chunked, instanced) {";
+  const marker = "\n      function materialFor(opts, chunked, instanced, fx) {";
   const end = SRC.indexOf(marker, start);
   assert.notEqual(end, -1, "materialFor no longer follows the memo — update this test");
   const body = SRC.slice(start, end);

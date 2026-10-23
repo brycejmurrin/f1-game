@@ -1967,13 +1967,13 @@ const TLX = (function () {
         c.key = buildMatKey(o, chunked, instanced);
         return c.key;
       }
-      function materialFor(opts, chunked, instanced) {
+      function materialFor(opts, chunked, instanced, fx) {
         if (_drawMatMode || !lit) return fallbackMat(instanced);
         if (vizMat) return instanced === 2 ? _aiOf(vizMat) : vizMat;
         if (!opts) return chunked ? defaultMatChunked : instanced === 2
           ? (_aiDefault || (_aiDefault = _attrInst(lit.makeMaterial({ instanced: true })))) : (instanced ? defaultMatInstanced : defaultMat);
         const o = opts;
-        const key = matKeyFor(o, chunked, instanced);
+        const key = fx ? matKeyFor(o, chunked, instanced) + "|fx" : matKeyFor(o, chunked, instanced);
         let m = matCache.get(key);
         if (m) _matHit++; else {
           _matMiss++;
@@ -2003,7 +2003,7 @@ const TLX = (function () {
           }
           m = lit.makeMaterial(chunked
             ? Object.assign({ chunked: true }, o)
-            : (instanced ? Object.assign({ instanced: true }, o) : o));
+            : (instanced ? Object.assign({ instanced: true }, o, fx ? { finishX: true } : null) : (fx ? Object.assign({ finishX: true }, o) : o)));
           if (instanced === 2 && m) _attrInst(m);
           matCache.set(key, m);
         }
@@ -2800,7 +2800,7 @@ const TLX = (function () {
         return (pair[s] = { __tlx: true, imesh: m, ib, instances: CO_CAP, visible: 0, rec: -1 });
       }
       function _coAppend(geo, w, opts) {
-        if (!_coOn || !w || _drawMatMode || vizMat || !lit || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches()) return false;
+        if (!_coOn || !w || _drawMatMode || vizMat || !lit || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches() || fxFor(geo, opts)) return false;
         const neg = w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
         const b = _coRun(geo, neg), mat = materialFor(opts, false, 2), em = drawEm(opts);
         // This pass's run is live while its record is (resetRecs nulls it) — A6's sentinel.
@@ -3624,7 +3624,7 @@ const TLX = (function () {
         if (!mesh || !mesh.geo || (opts && opts.coalesce)) return;
         const w = model;
         const neg = !!w && w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
-        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false), sx: neg ? -1 : 1 });
+        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1 });
       }
       function startRigWarm() {
         const job = _rigWarm;
@@ -4161,8 +4161,13 @@ const TLX = (function () {
             ? TLXShaders.packIndex(THREE, data.idx, verts)
             : new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
         }
+        // FINISHES ON DEMAND: a car geometry wearing a 60-85 finish id draws its carFinish material through the
+        // `fx` lit graph (materialFor), the only one that carries those tints. Scanned once, here.
+        const ids = data.mat;
+        if (ids) for (let i = 0; i < ids.length; i++) { const v = Math.round(ids[i]); if (v >= 60 && v <= 85) { g.userData.tlxFx = true; break; } }
         return _regGeo(g, "mesh");
       }
+      const fxFor = (geo, opts) => !!(opts && opts.carFinish && geo && geo.userData.tlxFx);
 
       /** Read the raw (un-colour-managed, un-premultiplied) pixels of each
        * pack layer into `data` through Assets.readLayerBytes (one scratch
@@ -5777,7 +5782,7 @@ const TLX = (function () {
         draw(mesh, model, opts) {
           if (opts && opts.coalesce && mesh && mesh.geo && _coAppend(mesh.geo, model, opts)) return;   // R1
           if (_capture) { _captureRec(mesh, model, opts); return; }   // warmDraws: compile, never paint
-          if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false), drawEm(opts), drawAl(opts),
+          if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false, undefined, fxFor(mesh.geo, opts)), drawEm(opts), drawAl(opts),
             opts && opts.surfaceId === 16 ? 1 : 0, null, null);
         },
         drawChunked(mesh, model, opts) {

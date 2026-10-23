@@ -13797,7 +13797,8 @@
       "buildGeometry": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
-        "tests/unit/tlx-hunt4.test.mjs"
+        "tests/unit/tlx-hunt4.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "buildMatKey": [
         "tests/unit/tlx-hunt3.test.mjs",
@@ -13897,7 +13898,8 @@
         "tests/unit/tlx-round2.test.mjs"
       ],
       "matKeyFor": [
-        "tests/unit/tlx-mat-key-memo.test.mjs"
+        "tests/unit/tlx-mat-key-memo.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "materialArrayAnisotropy": [
         "tests/unit/assets-pack.test.mjs",
@@ -13907,7 +13909,8 @@
       "materialFor": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
-        "tests/unit/tlx-mat-key-memo.test.mjs"
+        "tests/unit/tlx-mat-key-memo.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "mirrorWarmGate": [
         "tests/unit/tlx-hunt4c.test.mjs"
@@ -14019,7 +14022,8 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "skipBatches": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "softContent": [
         "tests/unit/gfx-backend-canary.test.mjs"
