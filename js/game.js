@@ -4066,7 +4066,9 @@ function raceIntro(go) {
   // Hardware keeps the cinematic; software GL hands off straight to startRace().
   let forceSoftwareFlyby = false;
   try { forceSoftwareFlyby = typeof DevFlags !== "undefined" && !!DevFlags.get("swFlyby"); } catch (_) { /* bench A/B */ }
-  if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.softwareRaster && RaceEntryProfile.softwareRaster() && !forceSoftwareFlyby) {
+  const autoHarness = typeof loadingScreen !== "undefined" && loadingScreen.isAutomation && loadingScreen.isAutomation();
+  // Players on software GL skip the flyby; harnesses keep loadingScreen.run()'s card path (#1290, real-race.spec).
+  if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.softwareRaster && RaceEntryProfile.softwareRaster() && !forceSoftwareFlyby && !autoHarness) {
     sheetRelease(true);
     loadingScreen.stop();
     go();

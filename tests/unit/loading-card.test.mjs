@@ -285,6 +285,14 @@ test("SETTINGS › MOTION: REDUCED still runs the card, the flyby and the announ
   assert.equal(on.els.loading.dataset.phase, "run", "motion ON keeps the flyby");
 });
 
+test("the loading screen instance exposes isAutomation — game.js reads it for the software flyby skip", () => {
+  const bot = harness({}, null, null, { webdriver: true });
+  assert.equal(typeof bot.screen.isAutomation, "function");
+  assert.equal(bot.screen.isAutomation(), true);
+  const player = harness({}, null, null, { webdriver: false });
+  assert.equal(player.screen.isAutomation(), false);
+});
+
 test("a harness-driven launch (navigator.webdriver) keeps the 700 ms card and hands off to the grid promptly; a player's reduced motion still flies", () => {
   const bot = harness({}, null, { dataset: { motion: "reduce" } }, { webdriver: true });
   bot.run();
