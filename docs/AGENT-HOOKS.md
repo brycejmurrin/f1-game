@@ -82,8 +82,8 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 | `teams` | `teams()` | tracks() teams() info() |
 | `timing` | `timing()` | timing() sectorState() lapHistory() fieldState() |
 | `trackProfile` | `trackProfile()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
-| `tracks` | `tracks()` | tracks() teams() info() |
 | `trackShape` | `trackShape()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
+| `tracks` | `tracks()` | tracks() teams() info() |
 | `viewState` | `viewState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) |
 | `wallStats` | `wallStats()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 ## control

@@ -457,6 +457,7 @@ const GLXChunked = (function () {
       _mdStats.allLightsLen = F.allLights ? F.allLights.length : -1;
       if (perChunk) _mdStats.lampFrames++; else _mdStats.plainFrames++;
       if (perChunk) {
+      try {
         // uLampShadowIdx is a SLOT in the bound set, chosen against the global
         // frame.lights ordering — a per-chunk set reorders lamps, so without a
         // retarget the PCF lands on whatever lamp occupies that slot number in
@@ -471,6 +472,8 @@ const GLXChunked = (function () {
         // place, so resolve() invalidates on the lamp positions/radii it bakes
         // from, not on array identity; this loop only binds each visible chunk's
         // pre-baked list. Resolved first: the shadow-slot lookup keys on it.
+        // Restore (below) is in finally so a mid-draw throw cannot leave the
+        // chunk slot armed while begin()'s ufI cache still holds the global (#3291).
         const _tbl = LampChunks.resolve(F.allLights, chunks, F.perChunkLights);
         const SH = core.shadow;
         let shadowAllIdx = -1;
@@ -608,6 +611,17 @@ const GLXChunked = (function () {
           flush();
           _mdStats.setGroups += nUsed;
         }
+      } finally {
+        // Restore the global set and slot even when a per-chunk upload throws.
+        // Nested finally: the slot restore must run if the light-set restore
+        // itself throws (same class of cache/GL mismatch #3291 describes).
+        try {
+          core.uploadLightSet(F.lights, null, F.lights ? (F.lights.length / 15) | 0 : 0);
+        } finally {
+          // Safe when the lamp map is disarmed: uLampShadowOn gates the branch.
+          core.setLampShadowSlot(core.shadow ? core.shadow.lampIdx : -1);
+        }
+      }
       } else if (_mdOn && _mdExt) {
         // Contiguous chunks still merge into one RANGE — a shorter list is
         // still less for the driver to walk — but a break no longer costs a
@@ -644,12 +658,6 @@ const GLXChunked = (function () {
           }
         }
         if (runOff >= 0) gl.drawElements(gl.TRIANGLES, runCount, mesh.indexType, runOff);
-      }
-      if (perChunk) {
-        core.uploadLightSet(F.lights, null, F.lights ? (F.lights.length / 15) | 0 : 0);
-        // Restore the global slot with the global set. Safe when the lamp map
-        // is disarmed: uLampShadowOn gates the shader branch.
-        core.setLampShadowSlot(core.shadow ? core.shadow.lampIdx : -1);
       }
     }
 

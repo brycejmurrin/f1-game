@@ -137,6 +137,35 @@ test("quit invalidates a race whose scenery script has not arrived", async () =>
   } finally { h.restore(); }
 });
 
+test("a world built bare after a failed scenery fetch is rebuilt once a later start lands the closure (#3570)", async () => {
+  g.G.quitToMenu(); select("suzuka");
+  const previous = g.sandbox.TrackScenery.suzuka;
+  const failedStart = async () => {
+    const h = holdScenery("suzuka");
+    try {
+      const p = g.G.startRace();
+      await tick(); assert.ok(h.held, "each start asks for the closure again (nothing negatively cached)");
+      h.fail();
+      await p;
+    } finally { h.restore(); }
+  };
+  try {
+    await failedStart();
+    const bare = g.G.track;
+    assert.ok(bare && bare.def.id === "suzuka", "the failed fetch still races, on a bare world");
+    assert.equal(g.sandbox.TrackScenery.suzuka, undefined);
+    g.G.quitToMenu();
+    await failedStart();
+    assert.strictEqual(g.G.track, bare, "still no closure: the bare world is kept, not rebuilt every start");
+    g.G.quitToMenu();
+    g.sandbox.TrackScenery.suzuka = previous;   // the closure lands (a later fetch succeeded)
+    await g.G.startRace();
+    assert.equal(g.G.state === "menu", false, "the race started");
+    assert.notStrictEqual(g.G.track, bare, "the resident closure rebuilds the bare world");
+    assert.equal(g.G.track.def.id, "suzuka");
+  } finally { g.sandbox.TrackScenery.suzuka = previous; g.G.quitToMenu(); }
+});
+
 test("quit invalidates a qualifying sheet whose scenery script is pending", async () => {
   g.G.quitToMenu(); select("bahrain"); g.G.session = "race";
   g.sandbox.document.getElementById("quali").hidden = true;
@@ -353,7 +382,7 @@ test("paced track completion abandons canceled and superseded worlds before adop
     const built = { owned: mode };
     const ctx = vm.createContext({ ensureCircuit: async () => {}, ensureTrackBuild: async () => {},
       Tracks: { LIST: [{ id: "test" }], buildPaced: () => new Promise(r => { finish = r; }) },
-      sessionDarkFor: () => false, fieldSize: () => 1, trackBuildOpts: () => ({}),
+      sessionDarkFor: () => false, fieldSize: () => 1, trackBuildOpts: () => ({}), builtWorldFits: () => false,
       builtTrackId: null, builtTrackNight: null, builtGridSlots: 0,
       raceArmedSentinel: () => false, PerfGov: { sentinelArm() {} },
       track: null, state: "menu", dropTrackWorld() {}, gfx: {},
