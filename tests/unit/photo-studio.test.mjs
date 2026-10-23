@@ -244,6 +244,24 @@ test("closing and reopening during a photo export stays usable and ignores stale
   await b.api.exportPhoto();
   assert.equal(calls, 2);
 });
+test("#3656: a live view below native resolution captures at renderScale 1, then restores the live scale", async () => {
+  const b = boot(), scales = [];
+  let scale = 0.5;   // the governor / a phone's title scene runs the backing store at half size
+  const backing = () => ({ width: Math.round(1600 * scale), height: Math.round(900 * scale) });
+  b.G.gfx.getRenderScale = () => scale;
+  b.G.gfx.setRenderScale = (s) => { if (Math.abs(s - scale) < 0.02) return false; scale = s; scales.push(s); return true; };
+  b.G.gfx.capturePixels = () => { const { width, height } = backing(); b.order.push("read@" + scale); return Promise.resolve({ width, height, data: new Uint8ClampedArray(width * height * 4) }); };
+  b.api.open({ source: "race" }); assert.equal(await b.api.capture(), true);
+  assert.deepEqual(b.order.slice(-2), ["draw", "read@1"], "the shot is drawn and read at full scale");
+  const st = b.api.state();
+  assert.deepEqual([st.width, st.height], [1600, 900], "photo = the full backing size, not the 800 x 450 live store");
+  assert.deepEqual(scales, [1, 0.5]); assert.equal(scale, 0.5, "the live view keeps its scale");
+  // A failed read still restores the live scale.
+  b.G.gfx.capturePixels = () => Promise.reject(new Error("lost"));
+  b.G.canvas.width = 0; scales.length = 0;
+  assert.equal(await b.api.capture(), false);
+  assert.deepEqual(scales, [1, 0.5]); assert.equal(scale, 0.5);
+});
 test("software presentation is awaited while raw pixels are captured before compositing", async () => {
   const b = boot(); let present;
   b.G.gfx.softPresent = () => true;
