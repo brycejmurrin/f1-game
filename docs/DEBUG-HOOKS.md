@@ -3006,6 +3006,9 @@ while racing (physics stays 60 Hz). An unknown mode returns `{ok:false, modes}`.
 The opt-in slow-drift governor step (js/perf/thermal-drift.js, #2652). No arg reports the detector (null when off); `true`/`false` sets it and persists
 `apex26.thermalDrift`. On, a minutes-long rise of the frame-time p50 over the first-minute baseline takes ONE existing governor rung early.
 
+### `softwareFlyby` (localStorage)
+`apex26.softwareFlyby=1` forces the loading-screen flyby during race entry on software GL (SwiftShader / llvmpipe). Shipped default skips that flyby on software raster so START → grid stays responsive; set by hand for bench A/B or to compare the old path. Hardware GPUs are unchanged.
+
 ### `stallWatch` (localStorage / query)
 `LoopHealth.stallWatch(true)`, `apex26.stallWatch=1`, or `?stallwatch=1` forces the stall watchdog on when `navigator.webdriver` is set (Playwright and software-GL CI). Players get it by default; automation skips it so multi-second present frames do not reload the tab mid-spec.
 
