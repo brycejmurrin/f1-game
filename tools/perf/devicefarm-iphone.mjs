@@ -15,7 +15,7 @@
 //     warmplus: WebGPU entry + first-race frames, default vs apex26.tlxWarmPlus=1, each after a Safari data clear
 //     visor,soak,photo (chainable in one session): HELMET-cam visor arms --arms off,on,refr,off at --track bahrain:night
 //       (--visor-pins); GRAPHICS --presets medium,low,medium at renderScale 0.5, a 1/0.75/0.5 ladder and a --soak-s
-//       governor soak (--soak-pins); Photo Studio by native taps with the 44 px floor read
+//       governor soak (--soak-pins); Photo Studio by native taps with the 44 px floor read (--photo-scales auto,1)
 //   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
 // `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
@@ -569,24 +569,35 @@ const PHOTO_READ = `const ps = document.getElementById("photo-studio"); const op
   const msg = document.getElementById("ps-message");
   return { open, w: innerWidth, h: innerHeight, controls: ctl.length, under44: ctl.filter((c) => Math.min(c.w, c.h) < 44), offscreen: ctl.filter((c) => c.off && (c.id === "ps-capture" || c.id === "ps-close")).map((c) => c.id),
     message: msg ? msg.textContent.trim().slice(0, 120) : null, errors: (window.__dfErr || []).slice(0, 20) };`;
+// --photo-scales auto,1: one fresh page per entry, the 3D render scale pinned before Photo opens ("auto" = the
+// governor's own), so a small capture can be pinned on the scale (#3482: 217 x 122 px at the title scene).
+const CANVAS_READ = `(() => { const c = document.getElementById("game"), s = document.getElementById("game-soft");
+    let rs = null; try { const r = __apex.renderScale(); rs = { scale: r.scale, auto: r.auto }; } catch (_) {}
+    return { game: c ? [c.width, c.height] : null, soft: s ? [s.width, s.height] : null, css: [innerWidth, innerHeight], dpr: devicePixelRatio, rs }; })()`;
 async function photoScenario(ctx, url, report, out) {
-  const R = report.photo = { steps: [] };
-  await openUrl(ctx, withApex(url));
-  await exec(ctx.base, ctx.sid, PHOTO_ERRS);
-  await sleep(4000);   // the title scene's car settles before the first tap
-  const step = async (name, sel, wait = 3000) => {
-    const tap = sel ? await nativeTap(ctx, sel) : null; await sleep(wait);
-    const read = await exec(ctx.base, ctx.sid, PHOTO_READ); R.steps.push({ name, tap, read });
-    log(`photo ${name}: tap=${tap && tap.tapped} open=${read.open} controls=${read.controls} under44=${read.under44.length} off=${read.offscreen.length} msg=${read.message} errors=${read.errors.length}`);
-    try { shot(ctx.base, ctx.sid, path.join(out, `photo-${R.steps.length}-${name}.png`)); } catch (_) { /* no shot */ }
-    return read;
-  };
-  await step("menu", null, 0);
-  const opened = await step("open", "#mb-photo", 5000);
-  if (opened.open) {
-    await step("shot-preset", "#ps-shots button");
-    await step("capture", "#ps-capture", 6000);
-    await step("close", "#ps-close");
+  const R = report.photo = { runs: [] };
+  for (const scale of opt("photo-scales", "auto").split(",")) {
+    const run = { scale, steps: [] }; R.runs.push(run);
+    await openUrl(ctx, withApex(url));
+    await exec(ctx.base, ctx.sid, PHOTO_ERRS);
+    if (scale !== "auto") await exec(ctx.base, ctx.sid, `return __apex.renderScale(${Number(scale)});`);
+    await sleep(4000);   // the title scene's car settles (and a pinned scale resizes) before the first tap
+    const step = async (name, sel, wait = 3000) => {
+      const tap = sel ? await nativeTap(ctx, sel) : null; await sleep(wait);
+      const read = await exec(ctx.base, ctx.sid, PHOTO_READ), canvas = await exec(ctx.base, ctx.sid, "return " + CANVAS_READ);
+      run.steps.push({ name, tap, read, canvas });
+      log(`photo@${scale} ${name}: tap=${tap && tap.tapped} open=${read.open} controls=${read.controls} under44=${read.under44.length} off=${read.offscreen.length} msg=${read.message} errors=${read.errors.length} canvas=${JSON.stringify(canvas)}`);
+      try { shot(ctx.base, ctx.sid, path.join(out, `photo-${scale}-${run.steps.length}-${name}.png`)); } catch (_) { /* no shot */ }
+      return read;
+    };
+    await step("menu", null, 0);
+    const opened = await step("open", "#mb-photo", 5000);
+    if (opened.open) {
+      await step("shot-preset", "#ps-shots button");
+      await step("capture", "#ps-capture", 6000);
+      await step("close", "#ps-close");
+    }
+    if (scale !== "auto") await exec(ctx.base, ctx.sid, "return __apex.renderScale(true);");
   }
   pullLogs(ctx.base, ctx.sid, out);
 }
