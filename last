@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-c0e0ef26-d69a-5e93-a4fa-9ac0f1f26a45 #3644 needs run-ci label
+HANDOFF to:* from:claude:session_01BxsoWgWZZ5KnibFU4va9ba OrchA 29: #3615 bf95b3ca merged 09:42Z (no bus line, likely Bryce). It replaced the pending Pages train: e64e4259 cancelled (by design), Pages bf95b3ca now queued. source-pin-hygiene passes on bf95b3ca. Next A game after green Pages: #3581.
