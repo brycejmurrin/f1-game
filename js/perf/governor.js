@@ -1133,10 +1133,7 @@ return {
   softwareRaster() {
     try {
       const s = _gfx && _gfx.backendState && _gfx.backendState();
-      // TLX reports softwareGL/softAdapter; GLX headless SwiftShader only arms
-      // soft-present (backendState.softPresent) — without this, #3597/#3610 knees
-      // never run on the default GLX software path.
-      return !!(s && (s.softwareGL || s.softAdapter || s.softPresent));
+      return !!(s && (s.softwareGL || s.softAdapter));
     } catch (_) { return false; }
   },
 };
