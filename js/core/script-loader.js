@@ -147,15 +147,27 @@ function loadBackendScripts(files, edges, opts) {
     document.head.appendChild(el);
   });
   };
+  // Strict bundles with a `loaded` set (ensureDataHub / ensureNet / …) keep one inject
+  // per file per load attempt so a miss leaves siblings resident and the next ensure*
+  // call retries only what is missing. `transientRetry: false` opts out (idle
+  // lighting prefetch re-asks at race start). Otherwise inject retries 503s in place
+  // (grip-steer, results-sheet, …).
+  const deferInjectRetry = (strict && loaded) || (opts && opts.transientRetry === false);
   const inject = async (src) => {
     if (typeof UpdateCheck !== "undefined" && UpdateCheck.prepareLazyLoad && !(await UpdateCheck.prepareLazyLoad(generationScope))) return false;
+    const optBust = opts && opts.cacheBust;
+    if (deferInjectRetry) {
+      const r = await injectOnce(src, optBust || 0);
+      return r.ok;
+    }
     const W = typeof window !== "undefined" ? window : null;
     const maxAttempts = TRANSIENT_RETRY_MS.length + 1;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0 && W && typeof W.setTimeout === "function") {
         await new Promise((r) => W.setTimeout(r, TRANSIENT_RETRY_MS[attempt - 1]));
       }
-      const r = await injectOnce(src, attempt > 0 ? attempt : 0);
+      const bust = attempt > 0 ? attempt : (optBust || 0);
+      const r = await injectOnce(src, bust);
       if (r.ok) return true;
       if (!r.retry) return false;
     }

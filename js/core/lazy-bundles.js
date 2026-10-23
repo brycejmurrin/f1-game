@@ -280,33 +280,39 @@ const DATA_READY = {
 // inject the bundle twice, and the second tap has to await the first load
 // rather than call DataHub.open() while hub.js is still in flight.
 let dataHubLoad = null;
+const DATA_HUB_RETRY_MS = [400, 1200];
+function dataHubRetryDelay(attempt) {
+  const ms = DATA_HUB_RETRY_MS[attempt - 1];
+  if (!ms) return Promise.resolve();
+  return new Promise((r) => setTimeout(r, ms));
+}
 function ensureDataHub() {
   if (dataHubLoad) return dataHubLoad;
-  dataHubLoad = loadBackendScripts(DATA_FILES, DATA_EDGES, {
-    strict: true, loaded: dataScriptsLoaded,
-    ready: (src) => DATA_READY[src] && DATA_READY[src](),
-  }).then((complete) => {
-    // Bare global, not window.DataHub: hub.js is a script-level `const`, a
-    // lexical binding that is never a window property. Null the memo on an
-    // incomplete group so a later tap retries instead of latching failure.
-    // A failed sibling must not even START hub.js. The binding can be in its
-    // temporal dead zone after a script exception, so do not probe it on an
-    // incomplete load (even typeof throws in that case).
-    if (!complete) {
-      Log.warn("data", "the data hub bundle did not load — DATA stays closed");
-      dataHubLoad = null;
-      return false;
+  dataHubLoad = (async () => {
+    const maxAttempts = DATA_HUB_RETRY_MS.length + 1;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0) await dataHubRetryDelay(attempt);
+      const complete = await loadBackendScripts(DATA_FILES, DATA_EDGES, {
+        strict: true, loaded: dataScriptsLoaded,
+        ready: (src) => DATA_READY[src] && DATA_READY[src](),
+        cacheBust: attempt > 0 ? attempt : 0,
+      });
+      if (!complete) {
+        if (attempt < maxAttempts - 1) continue;
+        Log.warn("data", "the data hub bundle did not load — DATA stays closed");
+        dataHubLoad = null;
+        return false;
+      }
+      try { DataHub.init(els.datahub); }
+      catch (e) {
+        Log.error("data", "the data hub failed to start: " + (e && e.message));
+        dataHubLoad = null;
+        return false;
+      }
+      return true;
     }
-    try { DataHub.init(els.datahub); }
-    catch (e) {
-      // Post-load app code must not latch a rejected memo: DATA would stay dead
-      // until reload. Null it so the next tap retries.
-      Log.error("data", "the data hub failed to start: " + (e && e.message));
-      dataHubLoad = null;
-      return false;
-    }
-    return true;
-  });
+    return false;
+  })();
   return dataHubLoad;
 }
 
@@ -581,7 +587,7 @@ function ensureAudio() {
   audioLoad = (async () => {
     await audioYieldToMain("paint");
     const ok = await loadBackendScripts(AUDIO_FILES, AUDIO_EDGES, {
-      loaded: audioScriptsLoaded,
+      strict: true, loaded: audioScriptsLoaded,
       ready: (src) => { restoreOnEngine(); return audioFileLanded(src); },
     });
     if (!ok || AUDIO_FILES.some((f) => !audioScriptsLoaded.has(f)) || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
@@ -686,7 +692,7 @@ let lightLoad = null, lightFailed = false;
 function ensureLightPresets() {
   if (window.LightPresets) return Promise.resolve(true);
   if (lightLoad) return lightLoad;
-  lightLoad = loadBackendScripts(RACE_FILES, []).catch(() => false).then(() => {
+  lightLoad = loadBackendScripts(RACE_FILES, [], { transientRetry: false }).catch(() => false).then(() => {
     lightLoad = null;
     lightFailed = !window.LightPresets;
     if (lightFailed) { Log.warn("game", "the lighting presets did not load — the next race start asks again"); return false; }
