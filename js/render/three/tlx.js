@@ -3214,16 +3214,36 @@ const TLX = (function () {
         }
         _warmStages.lateFx = _LATE_FX.length;
       }
-      // AUTO (unset) = ON for three's WebGL2 backend only. There compileAsync
-      // links with KHR_parallel_shader_compile and polls COMPLETION_STATUS, but
-      // the render path links synchronously (WebGLBackend createRenderPipeline,
-      // promises === null -> getProgramParameter(LINK_STATUS)), so the 8 post
-      // programs the gated warm skipped each blocked the thread mid-race —
-      // census 245's WebGL2 leg: 8 lazy links and a 4.25 s callback. On WebGPU
-      // the post chain does not compile lazily (census 244), so it stays off.
+      // AUTO (unset) = ON for three's WebGL2 backend, and for WebGPU when the
+      // warm is from the menu path (#3279). WebGL2: compileAsync polls
+      // COMPLETION_STATUS but the render path links synchronously, so the 8
+      // post programs a gated warm skipped each blocked mid-race (census 245:
+      // 4.25 s). WebGPU race/loading keep the 3 s gate (census 244); menu
+      // enables post+shadow so they do not land in race frames (iPhone 14:
+      // 616 ms post / 115 ms shadow stalls). apex26.tlxWarmPlus=1/0 forces.
       let _warmPlus = null;
+      let _warmWhere = "menu";   // menu | loading | race — set by warm(opts) / auto
       try { const v = localStorage.getItem("apex26.tlxWarmPlus"); _warmPlus = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
-      const warmPlusOn = () => _warmPlus !== null ? _warmPlus : !!(renderer && renderer.backend && renderer.backend.isWebGLBackend);
+      function _resolveWarmWhere(opts) {
+        if (opts && typeof opts.where === "string" && (opts.where === "menu" || opts.where === "loading" || opts.where === "race")) return opts.where;
+        try {
+          if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.armed && RaceEntryProfile.armed()) {
+            if (RaceEntryProfile.menuEntrySession && RaceEntryProfile.menuEntrySession()) return "loading";
+            return "race";
+          }
+        } catch (_) { /* profile optional */ }
+        return "menu";
+      }
+      const warmPlusOn = () => {
+        if (_warmPlus !== null) return _warmPlus;
+        if (renderer && renderer.backend && renderer.backend.isWebGLBackend) return true;
+        return _warmWhere === "menu";   // WebGPU menu path only
+      };
+      // Menu warm: yield between post / shadow / cockpit so the title stays responsive.
+      const warmIdleChunks = () => _warmWhere === "menu";
+      const _idleYield = (ms) => (typeof TLXShaders !== "undefined" && TLXShaders.idleYield)
+        ? TLXShaders.idleYield(ms)
+        : new Promise((r) => { if (typeof requestIdleCallback === "function") requestIdleCallback(r, { timeout: ms || 48 }); else setTimeout(r, 0); });
       // A-W1 (perf hunt 4): THE DRAW WARM. The race's opening frames were rAF
       // gaps of 1.1-4.1 s with the main thread idle (census 452-454): the
       // DRIVER's first-draw work, which compileAsync cannot reach — ANGLE-Metal
@@ -3406,6 +3426,9 @@ const TLX = (function () {
         // makes — so it is ON only where it measured a win (three's WebGL2
         // backend, see _warmPlus), as is the caster warm below; elsewhere
         // the 3 s gate stands. apex26.tlxWarmPlus=1/0 forces it.
+        // Gate lines owned by A·W14 #3618 — do not edit. Menu idle yield (#3279) sits above.
+        // typeof: canary sandboxes eval this body without the outer helpers.
+        if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
         if (usePost && post.warm && (warmPlusOn() || performance.now() - _warmAt < 3000)) {
           _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
         }
@@ -3418,6 +3441,7 @@ const TLX = (function () {
         // endPass). sunPass runs before present() on the same frame, so by
         // now castScene holds the grid's casters and the warm compiles the
         // real ones.
+        if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
         if (warmPlusOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
         _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
         // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
@@ -3474,9 +3498,11 @@ const TLX = (function () {
             try { Log.warn("gfx", "TLX program warm failed", String(e), (e && e.stack) || ""); } catch (_) { /* logging is optional */ }
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
-            _warmHistory.push({ at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
-              mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed });
+            const _warmRec = { where: (typeof _warmWhere !== "undefined" ? _warmWhere : "menu"), at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
+              mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed };
+            _warmHistory.push(_warmRec);
             if (_warmHistory.length > 6) _warmHistory.shift();
+            try { if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.noteWarm) RaceEntryProfile.noteWarm(_warmRec); } catch (_) { /* optional */ }
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
@@ -3585,13 +3611,19 @@ const TLX = (function () {
             renderer.setMRT(useTag ? _ssrMrtNode() : null);
             renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
             _gpuLastOperation = "compile-rig";
-            for (const r of job.recs) {
+            for (let i = 0; i < job.recs.length; i++) {
+              // Menu path: yield every other cockpit pair so the title stays live (#3279).
+              if (i && typeof warmIdleChunks === "function" && warmIdleChunks() && (i & 1) === 0) await _idleYield(32);
+              const r = job.recs[i];
               await compileWarmProbe(r.geo, r.mat, r.sx);
               let s = _rigDone.get(r.geo);
               if (!s) _rigDone.set(r.geo, s = new Set());
               s.add(_rigKey(r));
             }
-            if (job.mirror) { _gpuLastOperation = "compile-rig-mirror"; await warmMirrorStage(usePost, useTag); _rigMirrorKey = job.mirror; }
+            if (job.mirror) {
+              if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
+              _gpuLastOperation = "compile-rig-mirror"; await warmMirrorStage(usePost, useTag); _rigMirrorKey = job.mirror;
+            }
             await _gpuSettled(3000);   // the driver's own compile is GPU-process side, as the draw warm's is
             ok = true;
           } catch (e) {
@@ -5477,9 +5509,10 @@ const TLX = (function () {
         castShadowInstanced,
         // Request after race setup; present() compiles the prepared race frame,
         // not the previous menu scene. Each race gets another warm opportunity.
-        warm() {
+        // opts.where: "menu" | "loading" | "race" (auto when omitted — see _resolveWarmWhere).
+        warm(opts) {
           if (_deviceLost) return;
-          if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
+          if (!_warmPending) { _warmWhere = _resolveWarmWhere(opts); _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !_deviceLost && !!_warmPending; },
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
@@ -6515,7 +6548,7 @@ const TLX = (function () {
             o.presentMs = +_presentMs.toFixed(3);
             // The warm timeline: how long the lights held on THIS GPU, by stage;
             // pending/done say whether a census beat is inside it (207 was, all 15).
-            o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
+            o.warm = { where: _warmWhere, at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
                        draw: _warmStages.draw, drawn: _warmStages.drawn, garageScene: _warmStages.garageScene,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
