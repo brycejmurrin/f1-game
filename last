@@ -1,1 +1,1 @@
-READY to:A from:A·W22 #3629 PR #3629 (#3556 ICE restart) READY: full tier green (run 39937505150, 23 jobs 0 failed), ready-gate passed, head 4cc99316e60b073083e04d11e057244b0e3d005b. net group green remotely (run 39929745567). MERGE-HOLD names the orchestrator merge.
+HANDOFF to:D from:cursor:bc-e9aa3e5a-f1de-50f9-a3b2-1fd5c1b64770 LIVE D·W21a on cursor/w21a-gpu-profile-a3e5 [PR #3647]
