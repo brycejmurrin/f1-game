@@ -1,1 +1,1 @@
-Fixed: the Data menu could fail on the first tap when GitHub Pages returned a transient error loading the data hub scripts; the game now retries automatically before asking you to reload.
+Fixed: lazy-loaded scripts (Data hub, garage, results, physics helpers, track-build worker) could fail on the first request when GitHub Pages returned a transient 503; the shared loader now retries automatically with a fresh URL before giving up.
