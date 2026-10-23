@@ -93,7 +93,7 @@ test("raceAssets: a circuit payload that cannot load never reaches the unhandled
   } finally { process.off("unhandledRejection", onRej); }
 });
 
-test("ensureRaceSession: a partial failure is repaired by the next call, and the hook runs once", async () => {
+test("ensureRaceSession: a partial failure is repaired by ScriptLoader retry, and the hook runs once", async () => {
   let hooks = 0;
   const w = world({
     roster: { LAZY_RACE_SESSION: manifest.LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES: manifest.LAZY_RACE_SESSION_EDGES },
@@ -104,10 +104,7 @@ test("ensureRaceSession: a partial failure is repaired by the next call, and the
   vm.runInContext(read("js/core/mat4.js") + "\nthis.M4 = M4;", w.ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(read("js/race/session-stub.js"), w.ctx, { filename: absSrc("js/race/session-stub.js") });
   const stub = (g) => vm.runInContext(`${g}._stub`, w.ctx);
-  assert.equal(await w.lb.ensureRaceSession(), false, "engineer.js failed once");
-  assert.equal(hooks, 0, "no hook on an incomplete group");
-  assert.equal(stub("RaceEngineer"), true);
-  assert.equal(await w.lb.ensureRaceSession(), true, "the retry loads what is missing");
+  assert.equal(await w.lb.ensureRaceSession(), true, "ScriptLoader retries a one-shot network miss");
   assert.equal(hooks, 1);
   assert.equal(stub("RaceEngineer"), undefined, "engineer is now the real module");
   assert.equal(await w.lb.ensureRaceSession(), true);
@@ -128,7 +125,7 @@ for (const failing of ["js/net/lobby.js", "js/net/qr.js"]) {
       deps: { createNetwork: () => ({ wire() {} }) },
     });
     vm.runInContext(read("js/core/mat4.js") + "\nthis.M4 = M4;", w.ctx, { filename: absSrc("js/core/mat4.js") });
-    assert.equal(await w.lb.ensureNet(), false);
+    assert.equal(await w.lb.ensureNet(), true, "ScriptLoader retries a one-shot network miss");
     assert.equal(await w.lb.ensureNet(), true);
     assert.deepEqual(w.evalErrors, [], "no 'Identifier has already been declared'");
     for (const f of manifest.LAZY_NET) assert.equal(w.injected.get(f), f === failing ? 2 : 1, f);
@@ -151,9 +148,7 @@ test("ensureAudio: a panel.js that failed after engine.js went real is loaded by
     },
     deps: { onAudioReady() { hooks++; } },
   });
-  assert.equal(await w.lb.ensureAudio(), false);
-  assert.equal(hooks, 0);
-  assert.equal(await w.lb.ensureAudio(), true, "GameAudio was already real, panel.js was not");
+  assert.equal(await w.lb.ensureAudio(), true, "panel.js is retried inside the first ensureAudio");
   assert.equal(hooks, 1);
   assert.equal(await w.lb.ensureAudio(), true);
   assert.equal(hooks, 1, "onAudioReady runs once");
