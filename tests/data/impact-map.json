@@ -9281,7 +9281,13 @@
       "pathPrefs": [
         "tests/unit/bench-run.test.mjs"
       ],
+      "reload": [
+        "tests/unit/bench-run.test.mjs"
+      ],
       "scenes": [
+        "tests/unit/bench-run.test.mjs"
+      ],
+      "stop": [
         "tests/unit/bench-run.test.mjs"
       ],
       "summarize": [

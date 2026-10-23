@@ -99,3 +99,40 @@ test("bench-run summarize: a leg that fell back is filed under the api that actu
   const s = J(B.summarize([leg("webgl2", [20, 40], { path: "webgpu" })]));
   assert.deepEqual(Object.keys(s), ["webgl2"]);
 });
+
+test("bench-run: wake lock is held while a plan runs, re-acquired on visible, released on stop, silent without the API", async () => {
+  const mk = (wakeLock, vis = "visible") => {
+    const store = {}; const handlers = {}; const calls = [];
+    const ctx = { performance: { now: () => 0 }, navigator: { wakeLock }, setTimeout: () => 0, Log: { info: (_c, m) => calls.push(m) },
+      localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } },
+      location: { reload() {} }, document: { visibilityState: vis, addEventListener: (n, f) => { handlers[n] = f; }, getElementById: () => null, querySelectorAll: () => [] } };
+    const B = vm.runInNewContext(SRC + "\n;BenchRun", ctx, { filename: absSrc("js/perf/bench-run.js") });
+    return { B, ctx, handlers, calls };
+  };
+  const lockApi = () => { const s = { n: 0, released: 0, sentinels: [] };
+    s.request = async (t) => { assert.equal(t, "screen"); s.n++; const x = { released: false, release: async () => { x.released = true; s.released++; } }; s.sentinels.push(x); return x; };
+    return s; };
+  const api = lockApi();
+  const { B, ctx, handlers } = mk(api);
+  B.create({});
+  assert.equal(typeof handlers.visibilitychange, "function");
+  B.run("current");
+  await new Promise((r) => setTimeout(r, 0));
+  await B.wake.acquire();   // run() already asked; the held lock is not requested twice
+  assert.equal(api.n, 1);
+  api.sentinels[0].released = true;   // the browser dropped it when the page hid
+  handlers.visibilitychange();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(api.n, 2);
+  B.stop();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(api.sentinels[1].released, true);
+  void ctx;
+});
+
+test("bench-run: no wake lock API is silent; a refused request does not throw", async () => {
+  const none = (() => { const store = {}; return vm.runInNewContext(SRC + "\n;BenchRun", { performance: { now: () => 0 }, navigator: {}, localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem() {} } }, { filename: absSrc("js/perf/bench-run.js") }); })();
+  await none.wake.acquire(); none.wake.release();
+  const refuse = vm.runInNewContext(SRC + "\n;BenchRun", { performance: { now: () => 0 }, navigator: { wakeLock: { request: async () => { throw Object.assign(new Error("x"), { name: "NotAllowedError" }); } } } }, { filename: absSrc("js/perf/bench-run.js") });
+  await refuse.wake.acquire(); refuse.wake.release();
+});
