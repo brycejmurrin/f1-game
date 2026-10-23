@@ -9440,7 +9440,8 @@
     "js/perf/governor.js": {
       "_floorTier": [
         "tests/unit/light-store-perchunk-pin.test.mjs",
-        "tests/unit/perf-governor.test.mjs"
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/perf-sentinel.test.mjs"
       ],
       "cleanRace": [
         "tests/unit/perf-governor.test.mjs"
