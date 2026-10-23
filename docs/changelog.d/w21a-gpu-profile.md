@@ -1,0 +1,1 @@
+New: With `?apex`, `gfx.gpuProfile()` reports pipeline/shader compile counts by phase (menu-warm / loading / race, flagging race-frame creates as missed warm), per-pass scene/shadow/post/mirror wall times, live GPU buffer bytes, and the real mirrorPrepare elapsed when the 30 s safety timer fires — zero cost without the flag (Refs #3279).

@@ -9457,6 +9457,50 @@
         "tests/unit/global-registry.test.mjs"
       ]
     },
+    "js/perf/gpu-profile.js": {
+      "enabled": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "noteBufferCreate": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "noteBufferFail": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "noteCompile": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "noteMirrorPrepare": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "passBegin": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "passEnd": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "reset": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "setEnabled": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "setPhase": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "snapshot": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "wrapDevice": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "wrapGl": [
+        "tests/unit/gpu-profile.test.mjs"
+      ],
+      "narrow": [
+        "tests/unit/gpu-profile.test.mjs"
+      ]
+    },
     "js/perf/gpu-test-run.js": {
       "fillSlope": [
         "tests/unit/gpu-test-run.test.mjs"
@@ -13306,6 +13350,9 @@
       "*": [
         "tests/unit/key-binds.test.mjs",
         "tests/unit/mirror-lights.test.mjs"
+      ],
+      "narrow": [
+        "tests/unit/gpu-profile.test.mjs"
       ]
     },
     "js/render/shared/post-common.js": {
@@ -13974,6 +14021,9 @@
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
+      ],
+      "narrow": [
+        "tests/unit/gpu-profile.test.mjs"
       ]
     },
     "js/render/three/tsl-chunks.js": {

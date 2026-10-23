@@ -1,0 +1,19 @@
+{
+  "pins": {
+    "js/perf/gpu-profile.js": {
+      "narrow": [
+        "tests/unit/gpu-profile.test.mjs"
+      ]
+    },
+    "js/render/shared/mirror-pass.js": {
+      "narrow": [
+        "tests/unit/gpu-profile.test.mjs"
+      ]
+    },
+    "js/render/three/tlx.js": {
+      "narrow": [
+        "tests/unit/gpu-profile.test.mjs"
+      ]
+    }
+  }
+}

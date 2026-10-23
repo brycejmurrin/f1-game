@@ -484,6 +484,15 @@ const MirrorPass = (function () {
       if (_preparation !== job) return;
       if (job.warmWait === "start") warmWaitMark(job, "end");
       clearTimeout(job.timer);
+      // Report real elapsed (not the 30 s clamp) when ?apex GpuProfile is on.
+      try {
+        if (typeof GpuProfile !== "undefined" && GpuProfile.enabled && GpuProfile.enabled()
+            && GpuProfile.noteMirrorPrepare) {
+          const t0 = job.t0 != null ? job.t0 : 0;
+          const elapsed = (typeof performance !== "undefined" ? performance.now() : Date.now()) - t0;
+          GpuProfile.noteMirrorPrepare({ elapsedMs: elapsed, timedOut: !!job.timedOut });
+        }
+      } catch (_) { /* profile optional */ }
       _preparation = null; _prepared = ready;
       _lastW = 0;   // preparation never spends the first visible frame's draw
       job.resolve(ready);
@@ -504,11 +513,14 @@ const MirrorPass = (function () {
         if (G.state !== "count" || _collapsed || !wanted(true)) return Promise.resolve(false);
       } catch (_) { cancelPreparation(); _prepared = false; return Promise.resolve(false); }
       const job = { player: G.player, track: G.track, gfx: G.gfx,
-        begin: G.gfx.mirrorBegin, end: G.gfx.mirrorEnd, primed: false, timer: null, resolve: null, promise: null, warmWait: null };
+        begin: G.gfx.mirrorBegin, end: G.gfx.mirrorEnd, primed: false, timer: null, resolve: null, promise: null, warmWait: null,
+        // Real elapsed for GpuProfile (?apex): the 30 s safety timer is a floor
+        // on iPhone 14 WebGPU (OrchA cf37910); do not change the 30 s value.
+        t0: (typeof performance !== "undefined" ? performance.now() : Date.now()), timedOut: false };
       job.promise = new Promise(resolve => { job.resolve = resolve; });
       _preparation = job; _prepared = null;
       warmWaitMark(job, "start");
-      job.timer = setTimeout(() => finishPreparation(job, false), 30000);
+      job.timer = setTimeout(() => { job.timedOut = true; finishPreparation(job, false); }, 30000);
       return job.promise;
     }
     function prepareFrame(frame, frameSky, night, wet, floodEmit) {
