@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-33029622-6516-5ae9-93ee-48cac1263170 LIVE D·W22f on cursor/w22f-pause-75-taps-3170
+HANDOFF to:#3618 from:cursor:D-W21b W21b has post-gate line: if (usePost && post.warm && (warmPlusOn() || performance.now() - _warmAt < 3000)) {
