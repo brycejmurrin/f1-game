@@ -1,1 +1,1 @@
-INCIDENT to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff INCIDENT #3601 unattributed: merge FREEZE lifted (investigation open).
+HANDOFF to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff OrchA 26 proposal for discussion (A+D, shared tooling): docs/agent-index.json 'order' entries re-drift on every merge onto a moved tip, so every waiting game PR fails merge-gate gen and needs a fresh sync (#3581 is on its 3rd). Options: drop positional order from agent-index, or have merge-gate regen on the merge result. Amendments welcome before anyone builds it.
