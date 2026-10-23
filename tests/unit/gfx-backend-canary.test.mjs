@@ -579,7 +579,7 @@ test("race-start render fail-fasts on backendState.ctxLost (drops handoff)", () 
   assert.match(src, /gfxContextLost\(\)[\s\S]{0,250}?loadingScreen\.phase\(\) === "handoff"/);
   assert.match(code("js/perf/race-entry-profile.js"), /handoff:lower-lost/);
   const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("const sessionEntry = SessionEntry.create();"));
-  assert.match(body, /await raceTrackStepped\(trackIdx, stale\)/, "the paced load goes through raceTrackStepped (#3571)");
+  assert.ok(body.includes("await raceTrackStepped(trackIdx, stale)"), "the paced load goes through raceTrackStepped (#3571)");
   const paced = src.slice(src.indexOf("async function raceTrackStepped("), src.indexOf("function loadTrack(idx)"));
   assert.match(paced, /loadTrackStepped\(idx, \(\) => !stale\(\) && !gfxContextLost\(\)\)/,
     "paced load aborts mid-step when its entry is stale or its context is lost");
