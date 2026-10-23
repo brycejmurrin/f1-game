@@ -740,13 +740,18 @@ var GameAudio = (function () {
     const t = Date.now();
     deviceRebuildStamps = deviceRebuildStamps.filter((s) => t - s < DEVICE_REBUILD_WINDOW_MS);
     if (deviceRebuildStamps.length >= DEVICE_REBUILD_MAX) {
-      Log.warn("audio", "output-device rebuild after " + why + " skipped: " + DEVICE_REBUILD_MAX + " rebuilds in " + (DEVICE_REBUILD_WINDOW_MS / 1000) + " s already");
-      return;
+      // Capped, not dropped (#3561): a context still running on a dead output
+      // never fails a resume, so nothing else would ask again. The next gesture
+      // or show past the window serves it.
+      deviceRebuildPending = why;
+      Log.warn("audio", "output-device rebuild after " + why + " deferred: " + DEVICE_REBUILD_MAX + " rebuilds in " + (DEVICE_REBUILD_WINDOW_MS / 1000) + " s already");
+      return false;
     }
     deviceRebuildStamps.push(t);
     deviceRebuildBusy = true;
     Log.info("audio", "rebuilding AudioContext after " + why);
     try { rebuildCtx(); } finally { deviceRebuildBusy = false; }
+    return true;
   }
 
   function onMediaDeviceChange() {
@@ -835,8 +840,7 @@ var GameAudio = (function () {
     if (!ctx) return;
     const isGesture = !!gestureEv;
     if (isGesture && deviceRebuildPending && !staleStateRebuild(deviceRebuildPending)) {
-      performOutputDeviceRebuild(String(deviceRebuildPending).startsWith("state-") ? deviceRebuildPending : "deferred-gesture");
-      return;
+      if (performOutputDeviceRebuild(String(deviceRebuildPending).startsWith("state-") ? deviceRebuildPending : "deferred-gesture")) return;
     }
     if (ctx.state === "running") {
       rebuildTries = 0;

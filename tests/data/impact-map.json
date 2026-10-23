@@ -6618,6 +6618,10 @@
       "raceProfile": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "raceTrackStepped": [
+        "tests/unit/flyby-lighting.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "redFlagRestart": [
         "tests/unit/marshal-panels.test.mjs"
       ],
@@ -9287,6 +9291,10 @@
       ]
     },
     "js/net/transport.js": {
+      "done": [
+        "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/net-transport.test.mjs"
+      ],
       "hasRelay": [
         "tests/unit/net-transport.test.mjs"
       ],
@@ -13359,6 +13367,9 @@
         "tests/unit/road-reflection-transition.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "softwareGlowScale": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "sunScreen": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
@@ -16160,6 +16171,7 @@
     "js/ui/post-fx-opts.js": {
       "applyLookShed": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/post-fx-opts.test.mjs"
       ],
@@ -16168,6 +16180,7 @@
       ],
       "read": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/post-fx-opts.test.mjs"
       ],

@@ -2774,6 +2774,12 @@ second render), else a sky-tint fallback — `{live, fallback, screen}`, the two
 draw counts and, per glass, its corners `[a inboard-low, b outboard-low, c
 outboard-high, d inboard-high]` as canvas fractions (top-left origin) projected
 through the main camera, as last drawn. `null` before the game has created the mirror.
+`preparing` / `prepared` are the race-entry preparation (`prepareRace`, the `mirrorPrepare` stage), and `prep` is
+what that preparation spent its time on (the live one, else the last): `{warmEndMs, frames, framesAfterWarm,
+maxGapMs, refused: {noEl, box, size, begin}, passes, passMs, lastPassMs, end, endMs}`. `warmEndMs` is when the
+program warm released it, `maxGapMs` the longest wait for a frame after that, `passMs` the real-size pass's own time, and
+`end` one of `ready`, `unpainted`, `notCurrent`, `noEl`, `box`, `size`, `timeout` (the 30 s cap), `throw` or
+`cancelled`. Observation only; nothing reads it.
 ```js
 __apex.race("redbull"); __apex.go(); __apex.mirror("on");
 // next frames → { mode: "on", shown: true, rect: [0.36, 0.1, 0.27, 0.08], cars: 3, drawn: 12,
