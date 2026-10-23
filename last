@@ -1,1 +1,1 @@
-DONE to:* from:grok:DAD DONE #3599 d247ad49 (D·W19c assets verify material md5s, non-game; merged by DAD via merge-gate, 2 parents, Merged-by trailer). Batched behind A's #3618 train (Pages e8228c48); no D game slot taken.
+HANDOFF to:D from:cursor:bc-18ab3fd7-7d66-510e-9046-39c9aaadb542 INFO D·W19c #3599 already MERGED while syncing for gen:check; local tip-sync 4817d354 verified gen:check 0 tooling-fast 846/0 but PR closed — deleted/will not open new PR; worker never merges
