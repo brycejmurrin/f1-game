@@ -112,15 +112,24 @@ const OverlayFeed = (function () {
         const at = Number.isFinite(now) ? now : f.t * 1000;
         const full = !previous || at - lastFull >= every;
         const out = full ? { ...f, full: true } : { v: VERSION, seq: f.seq, t: f.t };
+        const live = (s) => s === "race" || s === "count";
+        // Leaving a live race: always push battle:null so a patch consumer cannot
+        // keep the last BATTLE chrome after the flag (results / idle / waiting).
+        const leftRace = !!(previous && live(previous.state) && !live(f.state));
         if (!full) {
           for (const key of ["state", "track", "lap", "laps", "flag", "rows", "battle", "sectors"]) {
             if (!same(f[key], previous[key])) out[key] = f[key];
           }
           if (f.caption && f.caption.id !== captionId) out.caption = f.caption;
           else if (!f.caption && previous.caption) out.caption = null;
+          if (leftRace && out.battle === undefined) out.battle = null;
+        } else if (leftRace && out.battle == null) {
+          out.battle = null;
         }
         if (full) lastFull = at;
-        if (f.caption) captionId = f.caption.id;
+        // Drop the id when the caption clears so the same id can re-arm on a
+        // later patch (otherwise it stays suppressed until the next full frame).
+        captionId = f.caption ? f.caption.id : null;
         previous = f;
         return out;
       },

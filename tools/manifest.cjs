@@ -134,6 +134,7 @@ const FULL = [
   // LAZY_*) as one frozen global, ApexRoster, read by js/game.js at eval.
   "js/roster.js",
   "js/core/script-loader.js", // ScriptLoader: dependency-aware runtime script injection
+  "js/core/menu-sheet-gate.js", // MenuSheetGate: defer menu prep / warm frames while Settings is open (D·IP2)
   "js/core/lazy-bundles.js", // LazyBundles: data, scenery, network and agent payload lifecycles
   "js/core/wake-lock.js", // RaceWakeLock: race wake-lock acquisition and release
   "js/render/shared/glx-facade.js", // stable GLX identity and eval-time mobile tier; no WebGL/GLSL parsed yet
@@ -374,6 +375,7 @@ const FULL = [
   "js/perf/render-rate.js",   // RenderRate: phones draw every 2nd rAF on a 100 Hz+ display (physics unchanged)
   "js/perf/spans.js",
   "js/perf/race-entry-profile.js",
+  "js/perf/gfx-escalation.js",
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
   "js/render/shared/compatibility-recovery.js",
@@ -413,6 +415,8 @@ const FULL = [
   "js/perf/soak-run.js",       // SoakRun: AUTO SOAK, the hands-free soak (drives the player INPUT only; soak-gated; before game.js binds it)
   "js/perf/gpu-test-run.js",   // GpuTestRun: PHONE TEST > GPU TEST, one-tap phase run over SoakRun (scale sweep, mirror off, GPU timer, link counts)
   "js/perf/phone-recorder.js", // PhoneRecorder: SETTINGS > METRICS > PHONE TEST (RECORD / SHARE soak JSON, #1633); reads PerfGov/GLX, writes neither
+  "js/perf/bench-capture.js",  // BenchCapture: BENCHMARK's per-leg profiling record (memory, logs, GPU, timing, device); bench-run.js hooks it
+  "js/perf/bench-run.js",      // BenchRun: SETTINGS > GRAPHICS > BENCHMARK (#bench): GPU TEST per three.js path across reloads, results file
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
   "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
   "js/camera/vantage.js",
@@ -483,7 +487,7 @@ const CSS = [
   "css/appearance-studio.css", "css/watch-transport.css", "css/career-experience.css",
   "css/garage-experience.css", "css/photo-studio.css", "css/experience.css",
   "css/editor.css",         // the TRACK DESIGNER screen (td-*); deferred like data.css
-  "css/cockpit-preview.css", "css/player-tools.css",
+  "css/cockpit-preview.css", "css/player-tools.css", "css/helmet-visor.css",
 ];
 // Title-critical sheets are also <link rel="preload">ed above the stylesheet
 // block. Dialogs/settings load print→all without a competing high-priority
@@ -505,7 +509,7 @@ const CSS_DEFERRED = [
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
   "css/appearance-studio.css", "css/watch-transport.css",
   "css/career-experience.css", "css/garage-experience.css",
-  "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css", "css/player-tools.css",
+  "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css", "css/player-tools.css", "css/helmet-visor.css",
   "css/dialogs.css", "css/settings.css", "css/settings-controls.css",
   "css/dialog-platform.css", "css/save-health.css", "css/select.css", "css/race-setup.css",
 ];
@@ -640,6 +644,9 @@ const HARD_EDGES = [
   ["js/career/restore-points.js", "js/ui/save-health.js"],
   ["js/ui/save-health.js", "js/ui/select-screen.js"],
   ["js/core/script-loader.js", "js/game.js"],
+  ["js/core/menu-sheet-gate.js", "js/game.js"],
+  ["js/core/menu-sheet-gate.js", "js/garage/prebuild.js"],
+  ["js/core/menu-sheet-gate.js", "js/core/lazy-bundles.js"],
   ["js/core/lazy-bundles.js", "js/game.js"],
   ["js/core/wake-lock.js", "js/game.js"],
   ["js/race/session-stub.js", "js/game.js"], // stub globals before game.js create() wires

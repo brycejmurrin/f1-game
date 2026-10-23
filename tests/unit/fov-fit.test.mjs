@@ -116,3 +116,21 @@ test("game.js calls CamFovFit.fitFovY; no inline HFOV_MAX block remains", () => 
   assert.match(g, /CamFovFit\.fitFovY\(/);
   assert.doesNotMatch(g, /const HFOV_MAX\s*=\s*86/);
 });
+
+test("bad aspect / FOV never yields 0 or NaN (resize / orientation edge)", () => {
+  const F = load();
+  const inY = 64 * DEG;
+  for (const aspect of [NaN, Infinity, -Infinity, 0, -1, undefined, null]) {
+    const got = F.fitFovY(inY, /** @type {number} */ (aspect), { cine: false });
+    assert.ok(Number.isFinite(got) && got > 0,
+      `aspect=${String(aspect)} must stay a positive finite VFOV, got ${got}`);
+  }
+  // Infinite aspect used to collapse HFOV_MAX into fovYCap 0 → Inf perspective.
+  assert.equal(F.fitFovY(inY, Infinity, {}), F.fitFovY(inY, 1, {}));
+  for (const bad of [NaN, Infinity, -Infinity, 0, -0.5, undefined]) {
+    const got = F.fitFovY(/** @type {number} */ (bad), 16 / 9, {});
+    assert.ok(Number.isFinite(got) && got > 0, `fovY=${String(bad)} must fall back, got ${got}`);
+  }
+  // cine still refuses a poisoned authored FOV (projection safety).
+  assert.ok(F.fitFovY(NaN, 16 / 9, { cine: true }) > 0);
+});

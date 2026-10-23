@@ -220,6 +220,33 @@ if ($("ctx-lost-retry")) $("ctx-lost-retry").onclick = () => {
 };
 showCtxLostNotice();
 
+/** Title menu after quitToMenuAfterCtxLost: screens, inert, doors, home preview latch. */
+const restoreMenuAfterGraphicsReset = () => {
+  const closeDialog = (el) => {
+    if (!el) return;
+    el.hidden = true;
+    try { if (el.open && typeof el.close === "function") el.close(); } catch (_) { /* already closed */ }
+  };
+  closeDialog($("race-settings"));
+  closeDialog($("loading"));
+  if (els.select) els.select.hidden = true;
+  if (els.overlay) {
+    els.overlay.hidden = false;
+    if ("inert" in els.overlay) els.overlay.inert = false;
+    els.overlay.removeAttribute("aria-hidden");
+    delete els.overlay.dataset.homeReady;
+  }
+  if (typeof TopModal !== "undefined" && TopModal.syncMenuIsolation) TopModal.syncMenuIsolation();
+  if (typeof TitleMenu !== "undefined" && TitleMenu.repairDestinations) TitleMenu.repairDestinations(document);
+  if (typeof document !== "undefined" && document.documentElement) {
+    delete document.documentElement.dataset.homeLive;
+    document.documentElement.dataset.homeScene = "static";
+  }
+  if (els.overlay) els.overlay.dataset.homeScene = "static";
+  try { if (G.gfx && G.gfx.invalidateSoftPresent) G.gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot harness */ }
+  if (G.scheduleFlybyTrack) G.scheduleFlybyTrack(true);
+};
+
 // Progressive-enhancement screen swap: run a DOM change inside a native
 // same-document View Transition when the browser supports it (Baseline 2025)
 // for a free crossfade, else run it plainly. Zero dependency, purely visual —
@@ -243,9 +270,17 @@ showCtxLostNotice();
 // swap goes direct. The test suite pins reducedMotion:"reduce" and rides this.
 // So does MOTION: REDUCED (html[data-motion], js/ui/title-fx.js).
 const vtReduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
+// Touch / coarse pointer: startViewTransition snapshots the title WebGL layer
+// and blocks the main thread on return (D·IP2 BrowserStack iPhone: 1.2 s worst
+// frame title←select). Same direct-apply path as reduced motion — the crossfade
+// is not worth a hitch on the phone Bryce plays on.
+const vtPhone = window.matchMedia
+  ? (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(hover: none)").matches)
+  : false;
 const vt = (fn) => {
   if (!document.startViewTransition || vtReduce.matches
-    || document.documentElement.dataset.motion === "reduce") { fn(); return; }
+    || document.documentElement.dataset.motion === "reduce"
+    || vtPhone) { fn(); return; }
   let applied = false;
   const run = () => { if (applied) return; applied = true; fn(); };
   try {
@@ -1423,7 +1458,7 @@ function closeTrackDetail() {
 }
 return {
   buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt,
-  drsZoneWraps, drsZoneLapMetre, drsZoneRangeHtml, showCtxLostNotice,
+  drsZoneWraps, drsZoneLapMetre, drsZoneRangeHtml, showCtxLostNotice, restoreMenuAfterGraphicsReset,
 };
 }
 

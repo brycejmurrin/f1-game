@@ -58,6 +58,10 @@ var AudioPanel = (() => {
       // the loop keeps driving an engine started here, audibly.
       else if ((G.state === "race" || G.state === "count") && !G.paused) {   // the countdown is the race's first seconds
         GameAudio.startMusic(G.trackIdx);
+        // A race that began with SOUND OFF skipped game.js's setVoice/setVenue, so
+        // lifting the master mid-race would otherwise run the default voice and venue.
+        if (G.player && G.player.team && GameAudio.setVoice) GameAudio.setVoice(G.player.team.engine);
+        if (G.track && G.track.def && GameAudio.setVenue) GameAudio.setVenue(G.track.def);
         GameAudio.startEngine();
         // The cloud can clear while the road remains wet.
         if (G.viewRainfall() > 0.01) GameAudio.startRain();

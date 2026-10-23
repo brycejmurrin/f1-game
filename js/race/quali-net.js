@@ -174,8 +174,10 @@ const QualiNet = (function () {
       }
       if (!isQuali()) return;
       const player = getPlayer();
+      // Every lap deleted is NO TIME (Infinity), as endRace and q-sim read it:
+      // a 0 here handed the player back a MODEL lap — a deleted lap on pole.
       const mine = player && player.lastLap > 0 ? player.lastLap
-        : (player && player.best < Infinity ? player.best : 0);
+        : (player && player.best < Infinity ? player.best : (player && player.qualiCut ? Infinity : 0));
       applyPeerQuali(mine);
       refreshQualiGate();
     }

@@ -32,6 +32,12 @@
 // merge sha has a green pages.yml run). Identity: `--as`, APEX_FLEET_AS or the
 // session env, as fleet-bus.mjs resolves it.
 //
+// Attribution (docs/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md §8): a pass prints the exact merge call with
+// commit_title and a commit_message ending in `Merged-by: <host>:<id> (<fleet>/<role>)` + `Gate: merge-gate <head12>`;
+// --json carries the same in `merge` (merge_method, expectedHeadSha, commit_title, commit_message) so the MCP call
+// passes them verbatim. Fleet comes from the PR's ```fleet block (--fleet / APEX_FLEET override), role from --role /
+// APEX_FLEET_ROLE (default orchestrator). tools/ci/merge-attribution.mjs flags merges that lack the trailer.
+//
 // Exit: 0 passed (receipt ok:true), 1 refused (receipt ok:false), 3 API or git
 // error (no receipt written). Prints one `= merge-gate <passed|refused|unknown> …` line.
 import { spawnSync } from "node:child_process";
@@ -42,6 +48,7 @@ import { api, evaluate, resolveSha, withPlan, withMemory } from "./ready-gate.mj
 import { hasMergeHold } from "./pr-board.mjs";
 import { readBus, whoAmI } from "./fleet-bus.mjs";
 import { DEPLOY_BRANCH } from "./deploy.mjs";
+import { mergeTrailers } from "./merge-attribution.mjs";
 import { writeReceipt } from "../lib/gate-receipt.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
@@ -240,6 +247,26 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, deploy = DEP
   return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check 0`, tip, ratchets: rat };
 }
 
+/** The fleet letter from a PR body's ```fleet block (`fleet: A`, optional `slot:` ignored); "" when absent. Pure. */
+export const fleetOf = (body) => {
+  const block = /```fleet\s*\n([\s\S]*?)```/.exec(String(body || ""));
+  const m = block && /^fleet:[ \t]*([A-Za-z][\w·-]*)/m.exec(block[1]);
+  return m ? m[1] : "";
+};
+
+/** The merge call a passing gate prints / --json exposes: GitHub's own merge-commit title plus the attribution trailers. Pure. */
+export function mergeCall({ pull, pr, head, by, fleet, role }) {
+  const label = String(pull?.head?.label || "").replace(":", "/");
+  const ref = pull?.head?.ref || "";
+  const from = label && label.endsWith(ref) ? label : `${(pull?.head?.repo?.full_name || "").split("/")[0] || "origin"}/${ref}`;
+  return {
+    merge_method: "merge",
+    expectedHeadSha: head,
+    commit_title: `Merge pull request #${pr} from ${from}`,
+    commit_message: mergeTrailers({ by, fleet: fleet || fleetOf(pull?.body), role, head, title: pull?.title || "" }),
+  };
+}
+
 // ---- CLI -------------------------------------------------------------------
 
 export function verdictLine(v) {
@@ -248,7 +275,7 @@ export function verdictLine(v) {
   return `= merge-gate ${v.state} — ${rows}${bad ? " | " + bad : ""} sha=${v.head || ""} tip=${v.tip || ""}`;
 }
 
-const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--skip-local-merge] [--as <host>:<id>] [--json]
+const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--skip-local-merge] [--as <host>:<id>] [--fleet <letter>] [--role <role>] [--json]
   Exit 0 only when the PR is open and ready, ready-gate exits 0, the required CI check is green on the head,
   the body carries no MERGE-HOLD: line, the head merges clean onto the CURRENT deploy tip with gen:check 0 and
   the ratchets (tools/check/ratchets.mjs, the assert.match ceiling) holding on that merge result,
@@ -307,12 +334,13 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
 
   const ok = Object.values(rows).every((r) => r.ok);
   const v = { state: ok ? "passed" : "refused", pr, head, tip, game: game.length, rows, by: me || "" };
+  if (ok) v.merge = mergeCall({ pull, pr, head, by: me, fleet: opt("--fleet") || env.APEX_FLEET || "", role: opt("--role") || env.APEX_FLEET_ROLE || "orchestrator" });
   const evidence = Object.entries(rows).filter(([, r]) => !r.ok).map(([k, r]) => `${k}: ${r.evidence}`).join("; ");
   writeReceipt(root, "merge", { pr, head, tip, ok, by: me || "", game: game.length, evidence, rows, at: new Date(now()).toISOString() });
   if (asJson) log(JSON.stringify(v, null, 2));
   else {
     log(`[merge-gate] ${verdictLine(v)}`);
-    if (ok) log(`[merge-gate] merge now: merge_pull_request pullNumber=${pr} merge_method=merge expectedHeadSha=${head}; then \`git log -1 --format=%p <merge sha>\` shows two parents and \`fleet-bus.mjs send DONE\`.`);
+    if (ok) log(`[merge-gate] merge now: merge_pull_request pullNumber=${pr} merge_method=merge expectedHeadSha=${head} commit_title=${JSON.stringify(v.merge.commit_title)} commit_message=${JSON.stringify(v.merge.commit_message)} (pass them verbatim: the Merged-by trailer is how the merge is attributed); then \`git log -1 --format=%p <merge sha>\` shows two parents and \`fleet-bus.mjs send DONE\`.`);
   }
   return ok ? 0 : 1;
 }

@@ -249,3 +249,14 @@ test("finish() reclaims every timer the exchange armed, the reply re-publish inc
     assert.match(body, new RegExp(`clearInterval\\(${t}\\)`), `finish() does not clear ${t}`);
   assert.doesNotMatch(oursCode, /const again = setInterval/, "`again` must live where finish() can reach it");
 });
+
+test("an offer signed by a host clock 45 s behind this device is still heard", async () => {
+  const NetNostr = eval(fs.readFileSync(path.join(ROOT, "js/net/nostr.js"), "utf8") + ";NetNostr");
+  const now = 1_800_000_000;
+  const heard = [];
+  const inbox = NetNostr.createBoundedInbox(async (c) => { heard.push(c); }, now - NetNostr.OFFER_CREATED_SLACK_S);
+  assert.equal(inbox.accept("skewed-offer", now - 45), true);
+  assert.equal(inbox.accept("replayed-old-session", now - 3600), true);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(heard, ["skewed-offer"], "skew is heard; an hour-old replay is still dropped");
+});

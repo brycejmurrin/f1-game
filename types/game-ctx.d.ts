@@ -860,6 +860,7 @@ declare const BrakeCue: GameModuleFactory;
 declare const DrivingCues: GameModuleFactory;
 declare const TyreModel: GameModuleFactory;
 declare const SoakRun: GameModuleFactory;
+declare const BenchRun: GameModuleFactory;
 declare const PitLane: GameModuleFactory;
 declare const RaceEngineer: GameModuleFactory;
 declare const EventJournal: GameModuleFactory;

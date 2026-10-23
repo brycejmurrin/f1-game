@@ -244,6 +244,19 @@ test("a passed car that then pits or takes the flag drops the standing debt: no 
   }
 });
 
+test("a passed car that is then stricken (beached, rescued) drops the debt: the give-back is impossible", () => {
+  const stuck = new Set();
+  const w = R.createPassWatch(5, (o) => stuck.has(o)), f = field(1);
+  w.tick(f.p, f.all, 3, DT);
+  f.p.prog = 115;                                 // past a HEALTHY r0 under the SC: owed
+  assert.equal(w.tick(f.p, f.all, 3, DT).type, "warn");
+  run(w, f, 3, 1);
+  stuck.add(f.rivals[0]);                         // r0 then beaches itself behind the player
+  const evs = run(w, f, 3, 10);
+  assert.ok(!evs.some((x) => x.type === "penalty"), JSON.stringify(evs));
+  assert.equal(w.info().owed, 0);
+});
+
 test("the player in the pit lane, or already flagged, gains nothing it must give back", () => {
   const w = R.createPassWatch(5), f = field(1);
   w.tick(f.p, f.all, 3, DT);

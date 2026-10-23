@@ -71,6 +71,36 @@ test("a throw in the SUN depth pass still disables the sun (M14)", () => {
   assert.equal(S.carEnabled, true);
 });
 
+function bootWgpu(isMobile) {
+  const renderer = { backend: { isWebGPUBackend: true }, getRenderTarget: () => null, setRenderTarget() {},
+    render() {}, autoClear: true };
+  const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} },
+    Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
+  vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
+  const sys = ctx.window.TLXShaders.shadowSys(mk(), mk(), { renderer, isMobile, softwareGL: false });
+  return { sys, S: sys.S };
+}
+
+test("a WebGPU phone does not build the PCSS blocker (fixed-R phone rule, §2q)", () => {
+  // §2q: the shadow pass is 40.4 MB of TLX's phone excess and jetsam
+  // headroom is the phone constraint. colorPcss always excluded phones;
+  // the WebGPU leg of the blocker gate did not, so the one phone class
+  // that runs WebGPU (Safari 26) allocated the 512² R32F blocker target
+  // and PCSS sampling GLX withholds from every phone.
+  const { S } = bootWgpu(true);
+  assert.equal(S.enabled, true, "the sun map itself still builds on a phone");
+  assert.equal(S.pcssEnabled, false, "no blocker pass and no PCSS sampling — the fixed-R look GLX gives every phone");
+  assert.equal(S.carEnabled, false, "the car map stays unbuilt on phones");
+  assert.equal(S.lampEnabled, false, "the lamp map stays unbuilt on phones");
+});
+
+test("a WebGPU desktop still builds the PCSS blocker", () => {
+  const { S } = bootWgpu(false);
+  assert.equal(S.pcssEnabled, true, "desktop WebGPU keeps PCSS — the gate is phones only");
+  assert.equal(S.carEnabled, true);
+  assert.equal(S.lampEnabled, true);
+});
+
 test("TLX post chain: re-callable factory, rebuilt at the next realloc, bound label kept (M13)", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /function buildPost\(\) \{/, "the post chain is built by a function that can run again");
@@ -98,6 +128,7 @@ test("mirrorEnd: only four CONSECUTIVE failed mirror renders retire the mirror (
     _hideUndrawnInstanced() {}, scene: { backgroundNode: null }, pinSkyMaterial() {}, mirRT: {}, mirCam: {}, _gpuLastOperation: "",
     _mirRenders: 0, _mirFails: 0, _mirDead: false, _mirErr: null, softOutRT: () => null, resetRecs() {},
     _dMatUsed: 0, _fxMatUsed: 0, _instAlive: new Set(), _kidsBegin() {}, _kidsMir: [], _poolShow() {},   // R6 pool root (hunt 3)
+    _mirMrt: () => false, _mirMrtArm() {},   // A·W14: a one-attachment mirror target draws with no MRT
     renderer: { setRenderTarget() {}, render() { if (st.boom) throw new Error("stale geometry"); } },
   });
   const obj = vm.runInContext("({" + body.replace(/,\s*$/, "") + "})", ctx);
@@ -114,16 +145,25 @@ test("mirrorEnd: only four CONSECUTIVE failed mirror renders retire the mirror (
 // three WebGL2 reloaded into the identical configuration, uncounted, for ever. The real function body runs here.
 function refuse(o = {}) {
   const store = Object.assign({}, o.ss || {});
-  const out = { reloads: 0, errors: [], store, local: Object.assign({ "apex26.gfxBackendProbe": "1" }, o.ls || {}) };
+  const out = { reloads: 0, errors: [], latched: [], store, local: Object.assign({ "apex26.gfxBackendProbe": "1" }, o.ls || {}) };
   const ss = o.ssThrows
     ? { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } }
     : { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
+  const ring = [];
+  const recordGfxBudgetExhausted = (where, err) => {
+    const msg = (err && (err.message || err)) || "unknown";
+    ring.push({ t: Date.now(), kind: "caught", msg: "Caught @ " + where + ": " + String(msg).slice(0, 400),
+                detail: String((err && err.stack) || "").slice(0, 800) });
+    out.errors.push([where, msg]);
+  };
   const ctx = vm.createContext({
     _glPin: o.pin ?? null, forceWebGL: !!o.forceWebGL, _autoStayGL: !!o.autoStayGL, _sessLostN: 0,
+    _latchWebKitGL: (why) => out.latched.push(why),
     sessionStorage: ss,
     localStorage: { removeItem: (k) => { delete out.local[k]; } },
     location: { reload() { out.reloads++; } },
-    window: { __apexReportError: (w, e) => out.errors.push([w, e.message]) },
+    recordGfxBudgetExhausted,
+    window: { __apexErrors: ring, __apexReportError: (w, e) => out.errors.push([w, e.message]) },
   });
   const src = read("js/render/three/tlx.js");
   // Hoisted beside persistFail by perf hunt 3 R13 (one closure per renderer, not one per present()): read
@@ -142,6 +182,7 @@ test("refuseTab: AUTO on WebGPU takes three WebGL2, counted against the shared r
   assert.equal(r.store["apex26.ctxLostReloads"], "1", "the reload spends a ctxLostReloads credit");
   assert.equal(r.reloads, 1);
   assert.equal(r.local["apex26.gfxBackendProbe"], undefined, "the canary probe is cleared as before");
+  assert.deepEqual(r.latched, ["first render refused"], "AUTO's refusal also latches the WebKit device kill switch");
 });
 
 test("refuseTab: a boot already on three WebGL2 binds GLX instead of reloading into itself (08-F1)", () => {
@@ -149,6 +190,7 @@ test("refuseTab: a boot already on three WebGL2 binds GLX instead of reloading i
     const r = refuse(o);
     r.call();
     assert.equal(r.store["apex26.gfxClaimFail"], "1", JSON.stringify(o));
+    assert.deepEqual(r.latched, [], "a GLX hand-off is not a WebGPU verdict: " + JSON.stringify(o));
     assert.equal(r.store["apex26.tlxAutoGL"], undefined, JSON.stringify(o));
     assert.equal(r.reloads, 1, JSON.stringify(o));
   }
@@ -158,7 +200,7 @@ test("refuseTab: bounded at two reloads per tab; past the cap the latch is kept 
   const r = refuse({ forceWebGL: true });
   for (let i = 0; i < 6; i++) r.call();
   assert.equal(r.reloads, 2, "a tab that fails every boot cannot loop");
-  assert.equal(r.errors.length, 4, "every refused reload says so on the error card");
+  assert.equal(r.errors.length, 4, "every refused reload is recorded on the error ring");
   assert.equal(r.store["apex26.gfxClaimFail"], "1", "the player's own reload still lands on GLX");
   const spent = refuse({ ss: { "apex26.ctxLostReloads": "2" } });
   spent.call();
@@ -183,5 +225,43 @@ test("ctxLost window.name fallback: every reader regex parses the marker the wri
     assert.ok(m, `${lit} does not match the stored marker`);
     if (m[1] !== undefined) assert.equal(m[1], "2", `${lit} captures the count`);
     assert.equal(re.test("apex26xctxLostReloads=2"), false, `${lit} must escape the dot`);
+  }
+});
+
+// 2026-10-23: AUTO on WebKit tries WebGPU; the per-DEVICE kill switch (localStorage apex26.tlxWebKitGL) sends that
+// device back to three WebGL2 after a detected failure. The REAL declarations run here, sliced from isWebKit's
+// declaration to the end of _latchWebKitGL.
+function webkitSwitch({ ua, pin = null, ls = {} }) {
+  const local = Object.assign({}, ls);
+  const src = read("js/render/three/tlx.js");
+  const from = src.indexOf("      const isWebKit = ");
+  const end = src.indexOf("      };\n", src.indexOf("const _latchWebKitGL = ")) + 9;
+  assert.ok(from > 0 && end > from && end - from < 2500, "the WebKit kill-switch needles moved — check this test, not the code");
+  const ctx = vm.createContext({ ua, _glPin: pin,
+    localStorage: { getItem: (k) => (k in local ? local[k] : null), setItem: (k, v) => { local[k] = String(v); } } });
+  vm.runInContext(src.slice(from, end) + "\n globalThis.r = { isWebKit, _webkitStayGL, _latchWebKitGL };", ctx, { filename: absSrc("js/render/three/tlx.js") });
+  return { local, ...ctx.r };
+}
+const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1";
+const CHROME = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+
+test("WebKit kill switch: unset → AUTO may try WebGPU; a latched failure keeps the device on WebGL2", () => {
+  const fresh = webkitSwitch({ ua: IPHONE });
+  assert.equal(fresh.isWebKit, true);
+  assert.equal(fresh._webkitStayGL, false, "a fresh iPhone tries WebGPU on AUTO");
+  fresh._latchWebKitGL("WebGPU init failed: x".padEnd(400, "!"));
+  assert.equal(fresh.local["apex26.tlxWebKitGL"].length, 200, "the reason is stored, capped");
+  assert.equal(webkitSwitch({ ua: IPHONE, ls: fresh.local })._webkitStayGL, true, "the next boot on this device stays on WebGL2");
+});
+
+test("WebKit kill switch: never on Chromium, never written under a pin", () => {
+  const chrome = webkitSwitch({ ua: CHROME, ls: { "apex26.tlxWebKitGL": "stale" } });
+  assert.equal(chrome._webkitStayGL, false, "a desktop Chrome ignores the marker");
+  chrome._latchWebKitGL("x");
+  assert.equal(chrome.local["apex26.tlxWebKitGL"], "stale", "and never writes it");
+  for (const pin of ["0", "1"]) {
+    const p = webkitSwitch({ ua: IPHONE, pin });
+    p._latchWebKitGL("x");
+    assert.equal(p.local["apex26.tlxWebKitGL"], undefined, `pin ${pin} is a user override, not a verdict`);
   }
 });

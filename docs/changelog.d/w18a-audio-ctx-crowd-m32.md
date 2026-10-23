@@ -1,0 +1,1 @@
+Fixed: Crowd bed rebuilds onto a new AudioContext after an output-device or resume rebuild (no silent stands / leaked nodes); AudioContext constructor failures warn instead of throwing; mobile rival engine slots stay with their car across a rank swap.

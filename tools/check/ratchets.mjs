@@ -108,8 +108,14 @@ export const TREE_METRICS = {
 
 /** A ceiling entry is a bare number, or {ceiling, slack} when its guard is tighter. */
 function entry(raw, label) {
-  const ceiling = typeof raw === "number" ? raw : raw.ceiling;
+  const ceiling = typeof raw === "number" ? raw : raw?.ceiling;
   if (typeof ceiling !== "number") throw new Error(`${label}: no ceiling`);
+  // NaN / Infinity compare false against everything, so such a ceiling would
+  // never trip (and `value > NaN` reads as "under"): reject it by name.
+  if (!Number.isFinite(ceiling)) throw new Error(`${label}: ceiling ${ceiling} is not a finite number`);
+  if (typeof raw !== "number" && raw.slack !== undefined && !(Number.isFinite(raw.slack) && raw.slack >= 0)) {
+    throw new Error(`${label}: slack ${raw.slack} is not a finite number >= 0`);
+  }
   const dflt = Math.max(SLACK_MIN, Math.round(ceiling * SLACK_PCT));
   // slackRule names the rule this entry is held to, for the LOOSE message: an
   // explicit `slack` is its own rule, never the default it tightens.
@@ -163,13 +169,22 @@ export const EXCLUDED_FILES = new Set(["js/lighting/presets.js"]);
  *  it) has nothing to move and is ignored. */
 export function applyFragments(base, frags) {
   const out = JSON.parse(JSON.stringify(base));
+  let label = "";
   const bump = (bag, metric, d) => {
-    if (!bag || !(metric in bag) || typeof d !== "number") return;
+    // Own keys only: `"constructor" in bag` is true on any object, and a
+    // delta for a metric ratchets.json no longer carries is ignored by design.
+    if (!bag || !Object.hasOwn(bag, metric)) return;
+    if (typeof d !== "number" || !Number.isFinite(d)) throw new Error(`ratchets.d delta for ${label}${metric} must be a finite number, got ${JSON.stringify(d)}`);
     const raw = bag[metric];
     bag[metric] = typeof raw === "number" ? raw + d : { ...raw, ceiling: raw.ceiling + d };
   };
   for (const { data } of frags) {
-    for (const [file, metrics] of Object.entries(data.files || {})) for (const [m, d] of Object.entries(metrics)) bump(out.files?.[file], m, d);
+    for (const [file, metrics] of Object.entries(data.files || {})) {
+      label = `${file} `;
+      const bag = out.files && Object.hasOwn(out.files, file) ? out.files[file] : null;
+      for (const [m, d] of Object.entries(metrics)) bump(bag, m, d);
+    }
+    label = "tree ";
     for (const [m, d] of Object.entries(data.tree || {})) bump(out.tree, m, d);
   }
   for (const f of EXCLUDED_FILES) delete out.files?.[f];
@@ -283,7 +298,7 @@ export async function measure(data = load()) {
     if (!fs.existsSync(abs)) { rows.push({ file, metric: "exists", value: 0, ceiling: 1, over: 1, slack: 0, missing: true }); continue; }
     const text = fs.readFileSync(abs, "utf8");
     for (const [metric, raw] of Object.entries(metrics)) {
-      const fn = METRICS[metric];
+      const fn = Object.hasOwn(METRICS, metric) ? METRICS[metric] : null;
       if (!fn) throw new Error(`${file}: unknown metric "${metric}" (known: ${Object.keys(METRICS).join(", ")})`);
       const value = await fn(file, text);
       const { ceiling, slackMax, slackRule } = entry(raw, `${file} ${metric}`);
@@ -291,7 +306,7 @@ export async function measure(data = load()) {
     }
   }
   for (const [metric, raw] of Object.entries(data.tree || {})) {
-    const fn = TREE_METRICS[metric];
+    const fn = Object.hasOwn(TREE_METRICS, metric) ? TREE_METRICS[metric] : null;
     if (!fn) throw new Error(`tree: unknown metric "${metric}" (known: ${Object.keys(TREE_METRICS).join(", ")})`);
     const value = await fn();
     const { ceiling, slackMax, slackRule } = entry(raw, `tree ${metric}`);

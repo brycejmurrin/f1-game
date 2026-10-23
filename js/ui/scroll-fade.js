@@ -51,7 +51,7 @@ window.ScrollFade = (function () {
   // Overlays whose [hidden] flip is what first gives their regions a box. The
   // data hub (#datahub) and track detail (#track-detail) are toggled by the
   // hidden attribute like the rest.
-  const SCREENS = "#select,#season-setup,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#pmsettings," +
+  const SCREENS = "#select,#season-setup,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#pmsettings,#bench," +
     "#lighting,#camtune,#flyby,#freecam,#garrival,#tl-editor,#results,#quali,#standings,#race-settings,#duel-picker,#customize,#pausemenu," +
     "#datahub,#track-detail,#vsfriend,#spotifypanel,#trackdesigner," +
     // The title screen hides for a race and returns with it; its #menu-buttons
@@ -152,6 +152,18 @@ window.ScrollFade = (function () {
 
   function paint(el) { write(measure(el)); }
 
+  /** Settings / pause sheets sit over the title: measuring #overlay and
+   *  #menu-buttons while #pmsettings is open forces layout on the title column
+   *  nobody can scroll (D·IP2 Settings open + title-return hitches). */
+  function skipUnderOpenSettings(el) {
+    if (!document.getElementById) return false;
+    const pm = document.getElementById("pmsettings");
+    if (!pm || pm.hidden) return false;
+    if (el.closest && el.closest("#pmsettings")) return false;
+    const id = el.id;
+    return id === "overlay" || id === "menu-buttons" || !!(el.closest && el.closest("#overlay"));
+  }
+
   function paintAll() {
     timer = 0;
     // A tab or picker rebuild detaches its old subtree with no resize or
@@ -165,6 +177,7 @@ window.ScrollFade = (function () {
     const measured = [];
     els.forEach((el) => {
       if (el.closest && el.closest("[hidden]")) return;
+      if (skipUnderOpenSettings(el)) return;
       watch(el);
       measured.push(measure(el));
     });
@@ -177,9 +190,27 @@ window.ScrollFade = (function () {
   // set and the repaint never lands (that bug is why the first version of this
   // module appeared to do nothing). A timer is unaffected by rendering
   // suspension.
+  // 48 ms (was 0): Settings open flips [hidden] and then mutates dozens of
+  // disabled attrs / audio panel nodes; a 0-delay paintAll per storm stacked
+  // ForcedReflow with LAZY_AUDIO eval on phones (D·IP2).
+  const SCHEDULE_MS = 48;
   function schedule() {
     if (timer) return;
-    timer = setTimeout(paintAll, 0);
+    timer = setTimeout(paintAll, SCHEDULE_MS);
+  }
+  // Resize-driven repaints share the viewport budget (ui-scale zoom + sf mask).
+  // rAF coalesces RO storms; a timer is still used for mutation coalescing (D·IP2).
+  const scheduleFrame = typeof requestAnimationFrame === "function"
+    ? (fn) => requestAnimationFrame(fn)
+    : (fn) => setTimeout(fn, 0);
+  let viewportRaf = 0;
+  function scheduleViewport() {
+    if (viewportRaf) return;
+    viewportRaf = scheduleFrame(() => {
+      viewportRaf = 0;
+      if (timer) { clearTimeout(timer); timer = 0; }
+      paintAll();
+    });
   }
   // Layout after a screen opens settles over several frames (web fonts, the
   // view transition, canvas sizing), so re-measure once things stop moving.
@@ -201,16 +232,24 @@ window.ScrollFade = (function () {
   }
   let settleSoon = 0;
   let settleLate = 0;
-  function settle() {
+  // Viewport / scale / explicit refresh must land in the same frame budget as
+  // layout (ui-scale.spec counts zoom + sf-* mask within six frames). Screen
+  // [hidden] flips and mutation storms keep SCHEDULE_MS coalescing (D·IP2).
+  function settle(immediate) {
     pruneWatched();
-    schedule();
+    if (immediate) {
+      if (timer) { clearTimeout(timer); timer = 0; }
+      paintAll();
+    } else {
+      schedule();
+    }
     if (settleSoon) clearTimeout(settleSoon);
     if (settleLate) clearTimeout(settleLate);
     settleSoon = setTimeout(() => { settleSoon = 0; paintAll(); }, 120);
     settleLate = setTimeout(() => { settleLate = 0; paintAll(); }, 400);
   }
 
-  const ro = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+  const ro = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleViewport) : null;
   // Deliberately NOT one observer over document.body: the HUD rewrites classes
   // every frame during a race, and every callback would force a layout read.
   const contentMo = typeof MutationObserver === "function" ? new MutationObserver(schedule) : null;
@@ -240,8 +279,8 @@ window.ScrollFade = (function () {
       const t = e.target;
       if (t && t.tagName === "DETAILS") schedule();
     }, true);
-    window.addEventListener("resize", settle, { passive: true });
-    window.addEventListener("orientationchange", settle, { passive: true });
+    window.addEventListener("resize", () => settle(true), { passive: true });
+    window.addEventListener("orientationchange", () => settle(true), { passive: true });
     if (screenMo) {
       document.querySelectorAll(SCREENS).forEach((s) =>
         screenMo.observe(s, { attributes: true, attributeFilter: ["hidden"] }));
@@ -253,5 +292,5 @@ window.ScrollFade = (function () {
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { refresh: settle, paint };
+  return { refresh: () => settle(true), paint };
 })();

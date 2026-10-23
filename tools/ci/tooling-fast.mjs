@@ -93,6 +93,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/agent-experiment.test.mjs",
   // Generated agent index, hook page, coverage page and per-hook help. No browser.
   "tests/unit/agent-indexes.test.mjs",
+  // agent-msg: webhook payload shape, --to aliases, auth redaction, missing-env→bus fallback, --dry-run, mock fetch; < 0.2 s.
+  "tests/unit/agent-msg.test.mjs",
   "tests/unit/agent-output-config.test.mjs",
   "tests/unit/agent-output.test.mjs",
   "tests/unit/agent-surface.test.mjs",
@@ -164,6 +166,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/bash-guard-hardening.test.mjs",
   "tests/unit/battle-earcon.test.mjs",
   "tests/unit/behind-ship.test.mjs",
+  // BenchCapture (js/perf/bench-capture.js): the profiling record's caps, sampling, size budget and unsupported-API shape; bench-run /1 back-compat. VM, ~0.1 s.
+  "tests/unit/bench-capture.test.mjs",
+  // BENCHMARK (js/perf/bench-run.js): the leg order, path prefs and the per-path summary of the results file. VM, ~0.1 s.
+  "tests/unit/bench-run.test.mjs",
   // BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.
   "tests/unit/bitmap-decode-worker.test.mjs",
   "tests/unit/blip-voice-pool.test.mjs",
@@ -226,6 +232,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-presentation-vm.test.mjs",
   "tests/unit/car-shade.test.mjs",
+  // W13d (#3414): STYLE Arc Script / Raised Letters sidewall lettering ΔHaus ≥ 20 mm vs medium/soft. ~2 s.
+  "tests/unit/car-wheels-w13d.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
@@ -292,6 +300,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/claude-usage.test.mjs",
   // tools/lib/cli-args.mjs: unknown flag is an error with the near miss, =/space forms agree, --help (#1697).
   "tests/unit/cli-args.test.mjs",
+  // --only/--screens ids: an unknown id exits non-zero with the valid ids instead of running zero cells (#3305).
+  "tests/unit/cli-only-ids.test.mjs",
   // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,
   // well under a second; must run where the helper or a call-site is edited.
   "tests/unit/clipboard.test.mjs",
@@ -334,6 +344,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-prefers-cascade.test.mjs",
   "tests/unit/css-token-adoption.test.mjs",
   "tests/unit/css-tokens.test.mjs",
+  "tests/unit/ctx-lost-menu-restore.test.mjs",
   // Context-loss menu notice + reload budget cleared at lights-out.
   "tests/unit/ctx-lost-notice.test.mjs",
   "tests/unit/cursor-agents.test.mjs",
@@ -608,6 +619,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/geometry-paths-baseline.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
+  "tests/unit/gfx-escalation.test.mjs",
   "tests/unit/ghost-share.test.mjs",
   "tests/unit/ghost.test.mjs",
   // #1807: a git hook's GIT_DIR / GIT_INDEX_FILE must not reach fixture git (a decoy
@@ -717,6 +729,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/layers-nav-memo.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
   "tests/unit/lazy-bundles-prefetch.test.mjs",
+  // D·DP3: warmFlaps mints flap set/element meshes during race/menu warm (not solve-only).
+  "tests/unit/lazy-race-geom-warm.test.mjs",
   "tests/unit/lazy-track-build.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
@@ -829,6 +843,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
   // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
   "tests/unit/menu-sentinel-resize.test.mjs",
+  // merge-attribution: the Merged-by/Gate trailer merge-gate emits, ATTRIBUTED/UNATTRIBUTED classification of merge commits,
+  // idempotent bus + PR-comment flagging and --dry-run over a throw-away git repo; < 2 s, no browser.
+  "tests/unit/merge-attribution.test.mjs",
   // merge-gate: the merge gate's pure rows (open, required CI check, game paths, bus GAME-SLOT pacing), the receipt
   // github-mcp-guard.sh reads, and merge_policy.py agreeing with gate-receipt.mjs on every receipt case; < 2 s.
   "tests/unit/merge-gate.test.mjs",
@@ -957,7 +974,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
   // Nightly process dashboard reducer (tools/ci/process-dashboard.mjs): fixture
-  // percentiles, tier walls, push-to-live, time-ratchet skip. No network, < 0.2 s.
+  // percentiles, tier walls, push-to-live, time-ratchet skip; jobs page at 30 +
+  // 502 retry (#2233 / W18f). No network, < 0.2 s.
   "tests/unit/process-dashboard.test.mjs",
   "tests/unit/profile-lib.test.mjs",
   "tests/unit/profile-mcp.test.mjs",
@@ -1067,6 +1085,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/run-pid.test.mjs",
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
+  // safety-bans-hook: the four shared safety bans (hand ratchet raise, another branch's
+  // ratchets.d fragment, a push over a foreign pusher, pkill -f) through the Claude and
+  // Cursor hook doors, Cursor's payload and answer shapes included. Real git, ~15 s.
+  "tests/unit/safety-bans-hook.test.mjs",
   "tests/unit/save-durability.test.mjs",
   "tests/unit/save-migrate.test.mjs",
   "tests/unit/save-schema-registry.test.mjs",
@@ -1099,6 +1121,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
   "tests/unit/settings-one-home.test.mjs",
+  // D·IP2: Settings open / title hitch — MenuSheetGate defers menu prep, serial LAZY_AUDIO, ScrollFade skip, phone VT skip.
+  "tests/unit/settings-open-perf.test.mjs",
   "tests/unit/settings-search.test.mjs",
   // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
   "tests/unit/settings-tabs.test.mjs",

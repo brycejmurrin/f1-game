@@ -225,3 +225,92 @@ test("aborted page decode disposes its completed bitmap", async () => {
   controller.abort(); finish({ close() { closed++; } });
   await assert.rejects(pending, { name: "AbortError" }); assert.equal(closed, 1);
 });
+
+test("bitmap worker swallows a failed error postMessage (no unhandled rejection)", async () => {
+  const bmp = { width: 2, height: 2, closed: 0, close() { this.closed++; } };
+  const ctx = vm.createContext({
+    createImageBitmap: async () => bmp,
+    postMessage: (m) => {
+      if (m.type === "decoded") throw Object.assign(new Error("DataCloneError"), { name: "DataCloneError" });
+      throw Object.assign(new Error("InvalidStateError"), { name: "InvalidStateError" });
+    },
+  });
+  ctx.self = ctx;
+  vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx, { filename: absSrc("js/workers/bitmap-decode-worker.js") });
+  // Before the fix, the second postMessage throw rejected this async handler.
+  await ctx.onmessage({ data: { type: "decode", seq: 9, blob: { size: 1 } } });
+  assert.equal(bmp.closed, 1);
+});
+
+test("BitmapDecode clears a terminated corpse so the next decode can respawn", async () => {
+  let workers = 0, last;
+  const bmp = { width: 1, height: 1, close() {} };
+  const ctx = vm.createContext({
+    URL, location: { href: "http://x/" }, window: {},
+    setTimeout: () => 1, clearTimeout() {},
+    createImageBitmap: async () => bmp,
+    Worker: class {
+      constructor() {
+        workers++;
+        last = this;
+        this.dead = false;
+        this.onmessage = null;
+        this.onerror = null;
+        this.onmessageerror = null;
+      }
+      postMessage(m) {
+        if (this.dead) throw Object.assign(new Error("InvalidStateError"), { name: "InvalidStateError" });
+        this.request = m;
+      }
+      terminate() { this.dead = true; }
+    },
+  });
+  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/workers/bitmap-decode-client.js") });
+  // Attach a worker, then terminate it WITHOUT drop() (onerror did not fire) so `_w`
+  // still points at the corpse.
+  ctx.BitmapDecode.decode({ size: 1 });
+  assert.equal(workers, 1);
+  last.terminate();
+  // This postMessage throws → drop() clears `_w` → main-thread fallback.
+  assert.equal(await ctx.BitmapDecode.decode({ size: 1 }), bmp);
+  assert.equal(workers, 1, "fallback does not spawn; corpse must be cleared");
+  // Next decode must spawn a fresh Worker instead of posting at the corpse forever.
+  const revived = ctx.BitmapDecode.decode({ size: 1 });
+  assert.equal(workers, 2, "respawn after corpse postMessage failure");
+  last.onmessage({ data: { type: "decoded", seq: last.request.seq, bmp } });
+  assert.equal(await revived, bmp);
+});
+
+test("stale worker replies after drop+respawn close their bitmap and do not settle", async () => {
+  let workers = [];
+  const ctx = vm.createContext({
+    URL, location: { href: "http://x/" }, window: {},
+    setTimeout: () => 1, clearTimeout() {},
+    createImageBitmap: async () => { throw new Error("must use worker"); },
+    Worker: class {
+      constructor() {
+        workers.push(this);
+        this.onmessage = null;
+        this.onerror = null;
+        this.onmessageerror = null;
+      }
+      postMessage(m) { this.request = m; }
+      terminate() {}
+    },
+  });
+  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/workers/bitmap-decode-client.js") });
+  const pending = ctx.BitmapDecode.decode({ size: 1 });
+  const old = workers[0];
+  const seq = old.request.seq;
+  ctx.BitmapDecode.drop(); // rejects pending → fallback would run, but createImageBitmap throws
+  await assert.rejects(pending, /must use worker|bitmap worker dropped/);
+  // New decode on a fresh worker.
+  const bmp = { width: 2, height: 2, close() {} };
+  const next = ctx.BitmapDecode.decode({ size: 1 });
+  assert.equal(workers.length, 2);
+  let closed = 0;
+  old.onmessage({ data: { type: "decoded", seq, bmp: { width: 1, height: 1, close() { closed++; } } } });
+  assert.equal(closed, 1, "orphan bitmap from the terminated worker is closed");
+  workers[1].onmessage({ data: { type: "decoded", seq: workers[1].request.seq, bmp } });
+  assert.equal(await next, bmp);
+});

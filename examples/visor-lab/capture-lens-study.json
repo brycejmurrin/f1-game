@@ -1,0 +1,214 @@
+{
+  "pairs": [
+    {
+      "id": "lens-bahrain-night-dry-reflections-strong",
+      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens reflections strong",
+      "scene": {
+        "track": "bahrain",
+        "tod": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.18
+      },
+      "note": "Only the visor reflection setting changes: Off \u2192 Strong. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges.",
+      "a": {
+        "label": "Reflections Off",
+        "visor": "clear"
+      },
+      "b": {
+        "label": "Reflections Strong",
+        "visor": "clear",
+        "visorReflections": "strong"
+      }
+    },
+    {
+      "id": "lens-bahrain-night-dry-reflections-medium",
+      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens reflections medium",
+      "scene": {
+        "track": "bahrain",
+        "tod": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.18
+      },
+      "note": "Only the visor reflection setting changes: Off \u2192 Medium. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges.",
+      "a": {
+        "label": "Reflections Off",
+        "visor": "clear"
+      },
+      "b": {
+        "label": "Reflections Medium",
+        "visor": "clear",
+        "visorReflections": "medium"
+      }
+    },
+    {
+      "id": "lens-bahrain-night-dry-reflections-light",
+      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens reflections light",
+      "scene": {
+        "track": "bahrain",
+        "tod": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.18
+      },
+      "note": "Only the visor reflection setting changes: Off \u2192 Light. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges.",
+      "a": {
+        "label": "Reflections Off",
+        "visor": "clear"
+      },
+      "b": {
+        "label": "Reflections Light",
+        "visor": "clear",
+        "visorReflections": "light"
+      }
+    },
+    {
+      "id": "lens-bahrain-night-dry-refraction-strong",
+      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens refraction strong",
+      "scene": {
+        "track": "bahrain",
+        "tod": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.18
+      },
+      "note": "Only visor refraction changes: Off \u2192 Strong. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor.",
+      "a": {
+        "label": "Refraction Off",
+        "visor": "clear"
+      },
+      "b": {
+        "label": "Refraction Strong",
+        "visor": "clear",
+        "visorRefraction": "strong"
+      }
+    },
+    {
+      "id": "lens-bahrain-night-dry-refraction-medium",
+      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens refraction medium",
+      "scene": {
+        "track": "bahrain",
+        "tod": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.18
+      },
+      "note": "Only visor refraction changes: Off \u2192 Medium. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor.",
+      "a": {
+        "label": "Refraction Off",
+        "visor": "clear"
+      },
+      "b": {
+        "label": "Refraction Medium",
+        "visor": "clear",
+        "visorRefraction": "medium"
+      }
+    },
+    {
+      "id": "lens-bahrain-night-dry-refraction-light",
+      "title": "Bahrain \u00b7 night \u00b7 dry \u00b7 lens refraction light",
+      "scene": {
+        "track": "bahrain",
+        "tod": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.18
+      },
+      "note": "Only visor refraction changes: Off \u2192 Light. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor.",
+      "a": {
+        "label": "Refraction Off",
+        "visor": "clear"
+      },
+      "b": {
+        "label": "Refraction Light",
+        "visor": "clear",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "lens-monza-day-dry-reflections-strong",
+      "title": "Monza \u00b7 day \u00b7 dry \u00b7 lens reflections strong",
+      "scene": {
+        "track": "monza",
+        "tod": "day",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.02
+      },
+      "note": "Only the visor reflection setting changes: Off \u2192 Strong. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges.",
+      "a": {
+        "label": "Reflections Off",
+        "visor": "clear"
+      },
+      "b": {
+        "label": "Reflections Strong",
+        "visor": "clear",
+        "visorReflections": "strong"
+      }
+    },
+    {
+      "id": "lens-monza-day-dry-refraction-strong",
+      "title": "Monza \u00b7 day \u00b7 dry \u00b7 lens refraction strong",
+      "scene": {
+        "track": "monza",
+        "tod": "day",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.02
+      },
+      "note": "Only visor refraction changes: Off \u2192 Strong. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor.",
+      "a": {
+        "label": "Refraction Off",
+        "visor": "clear"
+      },
+      "b": {
+        "label": "Refraction Strong",
+        "visor": "clear",
+        "visorRefraction": "strong"
+      }
+    },
+    {
+      "id": "lens-bahrain-dawn-fog-reflections-strong",
+      "title": "Bahrain \u00b7 dawn \u00b7 fog \u00b7 lens reflections strong",
+      "scene": {
+        "track": "bahrain",
+        "tod": "dawn",
+        "weather": "fog",
+        "camera": "helmet",
+        "frac": 0.18
+      },
+      "note": "Only the visor reflection setting changes: Off \u2192 Strong. Both sides use Clear, with refraction, tint and visor rain Off. Inspect the lens edges.",
+      "a": {
+        "label": "Reflections Off",
+        "visor": "clear"
+      },
+      "b": {
+        "label": "Reflections Strong",
+        "visor": "clear",
+        "visorReflections": "strong"
+      }
+    },
+    {
+      "id": "lens-bahrain-dawn-fog-refraction-strong",
+      "title": "Bahrain \u00b7 dawn \u00b7 fog \u00b7 lens refraction strong",
+      "scene": {
+        "track": "bahrain",
+        "tod": "dawn",
+        "weather": "fog",
+        "camera": "helmet",
+        "frac": 0.18
+      },
+      "note": "Only visor refraction changes: Off \u2192 Strong. Reflections, tint and visor rain are Off. Compare poles and building edges through the same Clear visor.",
+      "a": {
+        "label": "Refraction Off",
+        "visor": "clear"
+      },
+      "b": {
+        "label": "Refraction Strong",
+        "visor": "clear",
+        "visorRefraction": "strong"
+      }
+    }
+  ]
+}

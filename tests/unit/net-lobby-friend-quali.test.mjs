@@ -183,6 +183,25 @@ test("a roster peer with no string team is not a rival to wait for (bug-hunt 8.5
   assert.equal(q.waiting(), false, "…and once they have posted, nothing malformed keeps it locked");
 });
 
+test("a rival's lap arriving after ours was deleted keeps us at NO TIME, not a model lap (A·H1 Q1)", () => {
+  const QualiNet = eval(src("js/race/quali-net.js") + ";QualiNet");
+  let mine = null;
+  const me = { driverId: "alpha:0", lastLap: 0, best: Infinity, qualiCut: true };
+  const q = QualiNet.create({
+    $: () => null, fmtTime: String, isQuali: () => true, getPlayer: () => me, getCars: () => [],
+    openQuali: () => {}, applyPeerQuali: (t) => { mine = t; },
+    getNetPlay: () => ({ rivalDriverIds: () => [] }),
+    getNetLobby: () => ({ roomState: () => ({ peers: [] }) }),
+  });
+  q.onPeerQuali({ driverId: "bravo:1", t: 85.2 });
+  const m = q.driven(mine);
+  assert.equal(m.get("alpha:0"), Infinity, "every lap deleted: NO TIME, as endRace and q-sim set it");
+  assert.equal(m.get("bravo:1"), 85.2);
+  me.qualiCut = false;                       // never drove: the model still drives for us
+  q.onPeerQuali({ driverId: "bravo:1", t: 85.2 });
+  assert.equal(q.driven(mine).has("alpha:0"), false);
+});
+
 // bug-hunt 2 follow-ups: a guest's BACK from the quali sheet, and the host-side relay cap.
 test("a guest that backs out of friend quali releases the host's wait on its lap", async () => {
   const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
@@ -301,5 +320,22 @@ test("the host tells guests it went on after friend quali (qgo), so a guest that
     await G._done();
     for (let i = 0; i < 5; i++) { far.pump(performance.now() + 100); await sleep(30); }
     assert.ok(got.includes("qgo"), "the aborted guest is told the host went on (got " + got.join(",") + ")");
+  } finally { lobby.cancel(); }
+});
+
+// H3-8: a host MENU (or the last rival leaving) must not leave a dead TO THE GRID.
+test("TO THE GRID after every connection closed lands on the menu with a notice, not a blank screen", async () => {
+  const { G, lobby, far } = await hostUp(async () => ({ ok: true }));
+  const calls = [];
+  G.quitToMenu = () => calls.push("quit");
+  G.announce = (msg) => { calls.push("announce:" + msg); return true; };
+  try {
+    assert.equal(lobby.startFromRoom(), true);
+    far.close();                                 // the only rival's connection goes
+    for (let i = 0; i < 20 && lobby.status().guests; i++) await sleep(50);
+    await G._done();                             // TO THE GRID: q-go already closed the sheet for this press
+    assert.ok(calls.includes("quit"), "the player is taken to the menu");
+    assert.ok(calls.some((c) => /EVERYONE LEFT/.test(c)), "and told why: " + calls.join(" | "));
+    assert.equal(lobby.qualifying(), false);
   } finally { lobby.cancel(); }
 });

@@ -455,8 +455,8 @@ test('the car out, the garage HOLDS until the flyby where the backend warms (TLX
   assert.deepEqual(glx.calls, ['stop', 'card'], 'the card covers the rest, as before');
   const skipped = await run({ warm() {} }, { skip: true });
   assert.equal(skipped.ctx._studio, null, 'a skip closes too');
-  const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 5000);
-  assert.match(render, /const heldWarm = !!\(_studio && _studio\.held && track && _menuGate\.warm > 0\);/, 'a held warm frame takes the world path with the canvas left visible (TLX paints nothing while it kicks the warm)');
+  assert.match(game, /const heldWarm = !!\(_studio && _studio\.held && track && _menuGate\.warm > 0\); if \(heldWarm\) _menuGate\.warm--;[\s\S]{0,48}if \(setupPreviewOn && !heldWarm\)/,
+    'a held warm frame takes the world path with the canvas left visible (TLX paints nothing while it kicks the warm)');
   assert.match(game, /FlybySeq\.reset\(\); warmPrograms\(\); _menuGate\.warm = 2;/, 'cold world frames run under the preparation card before motion');
   assert.match(game, /prepared = true;   \/\/ afterGarageOut closes the held garage, then the race\/session card/, 'introWarm hands off through afterGarageOut');
 });
@@ -1235,4 +1235,39 @@ test('service entry completion uses the extended duration and skips to a finishe
   arrival.start();for(let i=0;i<88;i++)arrival.step(.1);
   assert.equal(arrival.state.active,true);assert.equal(arrival.state.z,0);assert.equal($('cs-inner').inert,true);
   $('cs-arrival-skip').onclick();assert.equal(arrival.state.active,false);assert.equal(arrival.state.seconds,Arrival.duration(cfg));assert.equal($('cs-inner').inert,false);
+});
+// #3511: on a GPU drawing one frame every 2 s the render dt reaching step() is
+// capped at 0.1 s, so the arrival — and the inert setup sheet — ran at 1/20 of
+// wall time (≈ 3 min for the 8.7 s cinematic). It now ends on the wall clock;
+// the 6 s and crew-service (14.7 s) cases follow Merlin's #3546 tests.
+test('slow GPU: arrival and the inert sheet end on wall time, not frame count (#3511)', () => {
+  const service = Arrival.settings({ enterCrew: 'service' });
+  for (const [frameS, cfg] of [[6, Arrival.DEFAULT], [2, Arrival.DEFAULT], [1, Arrival.DEFAULT], [0.5, Arrival.DEFAULT], [0.25, Arrival.DEFAULT], [2, service]]) {
+    const { $ } = harness(), clock = { t: 100 };
+    const arrival = Arrival.create($, () => false, () => cfg, () => clock.t);
+    arrival.start(); assert.equal($('cs-inner').inert, true);
+    let frames = 0;
+    while (arrival.state.active && frames < 10000) { clock.t += frameS; arrival.step(0.1); frames++; }
+    const wall = frames * frameS, want = Arrival.duration(cfg);
+    assert.equal($('cs-inner').inert, false, `inert released at ${frameS}s frames`);
+    // one frame seeds the clock, and a frame credits at most 2.5 s (MAX_GAP_S)
+    const bound = (Math.ceil(want / Math.min(frameS, 2.5)) + 1) * frameS;
+    assert.ok(wall <= bound + 1e-9, `${frameS}s frames: sheet inert ${wall.toFixed(1)}s of wall time, authored ${want.toFixed(1)}s`);
+  }
+});
+test('slow GPU clock: a suspended-tab gap still cannot swallow the arrival (#3511)', () => {
+  const { $ } = harness(), clock = { t: 0 };
+  const arrival = Arrival.create($, () => false, () => Arrival.DEFAULT, () => clock.t);
+  arrival.start(); clock.t += 600; arrival.step(0.1);
+  assert.equal(arrival.state.active, true); assert.equal($('cs-inner').inert, true);
+  clock.t += 2; arrival.step(0.1); assert.equal(arrival.state.active, true);
+});
+test('a slow entry frame or a short hitch cannot skip the arrival (#3511 review)', () => {
+  const { $ } = harness(), clock = { t: 0 };
+  const arrival = Arrival.create($, () => false, () => Arrival.DEFAULT, () => clock.t);
+  arrival.start(); clock.t += 6; arrival.step(0.1);   // the entry frame took 6 s (pack upload)
+  assert.ok(arrival.state.seconds <= 0.1 + 1e-9, `entry frame credited ${arrival.state.seconds}s`);
+  clock.t += 5; arrival.step(0.1);                     // a 5 s app switch mid-arrival
+  assert.ok(arrival.state.seconds <= 0.1 + 2.5 + 1e-9, `hitch credited ${arrival.state.seconds}s`);
+  assert.equal(arrival.state.active, true);
 });

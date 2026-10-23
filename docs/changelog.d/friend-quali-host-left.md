@@ -1,0 +1,1 @@
+Fixed: In VS FRIEND qualifying, TO THE GRID after the host or every rival left goes to the menu with a notice instead of a blank screen, and an expired waiting-room code shows the host's INVITE ANOTHER message, not the guest's "six characters" error.

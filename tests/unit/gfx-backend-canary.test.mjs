@@ -296,13 +296,15 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   // the caller-supplied opaque context it is keyed on. The canvas came up
   // alpha-composited and the cars rendered see-through. The gate is now the
   // obtainable WebGPU CONTEXT; renderer-soft-lifecycle.test.mjs holds the rest.
-  // 2026-09-03: `|| isWebKit` joined the clause. Two consecutive deploys
-  // rendered three-WebGPU wrongly on the owner's iPhone (bodywork missing,
-  // then sky-only at c6d8fd3) with ZERO reported GPU/WGSL errors, while
-  // three's WebGL2 backend on the same phone is known-good (ed8f41f). AUTO on
-  // WebKit takes WebGL2; THREE PATH: WEBGPU (pin "0") still forces WebGPU.
-  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_gpuCanvasOk\s*\|\|\s*_autoStayGL\s*\|\|\s*isWebKit\s*\)\s*\)/,
-    "AUTO stays on WebGL2 when no WebGPU context is obtainable, after an init failure, or on WebKit; a pin of 1/0 overrides");
+  // 2026-09-03: `|| isWebKit` joined the clause (three-WebGPU rendered wrongly
+  // on the owner's iPhone with zero GPU errors). 2026-10-23 it left again:
+  // Device Farm on iOS 27.0 holds 60 fps on WebGPU, 42 on WebGL2, no errors
+  // (PR #3598, its Device Farm note §6). AUTO on WebKit now
+  // tries WebGPU, and a detected failure latches the per-DEVICE kill switch
+  // `_webkitStayGL` (localStorage apex26.tlxWebKitGL) back to WebGL2.
+  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_gpuCanvasOk\s*\|\|\s*_autoStayGL\s*\|\|\s*_webkitStayGL\s*\)\s*\)/,
+    "AUTO stays on WebGL2 when no WebGPU context is obtainable, after a tab failure, or on a WebKit device that failed WebGPU; a pin of 1/0 overrides");
+  // The kill switch's read/write behaviour: tlx-fail-scope.test.mjs; RESET: the frozen RENDERER_LS_KEYS below.
   assert.match(src, /async\s+function\s+bootRenderer\b/);
   assert.match(src, /AUTO WebGPU init failed/);
   assert.match(src, /await renderer\.init\(\)[\s\S]{0,200}?disposeKeepingContext\(renderer\)/,
@@ -449,14 +451,16 @@ test("GLX restores even when sessionStorage is blocked", () => {
 });
 
 test("GLX's third visible context loss says so instead of leaving a silent dead canvas", () => {
-  // Two counted reloads per tab, then GLX (nothing beneath it) stopped with
-  // no exception, so the error overlay never painted. TLX reports the same
-  // cap through __apexReportError; GLX now matches it. Past the budget also
-  // opens the Graphics unavailable panel (RETRY / USE WEBGL2).
+  // Two counted reloads per tab, then GLX (nothing beneath it) stops with the
+  // Graphics unavailable panel (RETRY / USE WEBGL2). Past the budget the
+  // failure is written to __apexErrors for __apex.diag() only — not the
+  // full-screen error overlay, which would sit on top of #nogl and steal the
+  // first tap (e.g. Close Garage).
   for (const prior of ["0", "2"]) {
     const h = bootGlx();
     const reports = [];
     const panels = [];
+    h.sandbox.__apexErrors = [];
     h.sandbox.__apexReportError = (where, err) => reports.push([where, err && err.message]);
     h.sandbox.RendererPicker = { showUnavailable: (opts) => panels.push(opts && opts.panel && opts.panel.id) };
     h.sandbox.document.getElementById = (id) => ({ id });
@@ -465,16 +469,89 @@ test("GLX's third visible context loss says so instead of leaving a silent dead 
     h.loseContext();
     if (prior === "0") {
       assert.equal(reports.length, 0, "a first loss is a quiet counted reload");
+      assert.equal(h.sandbox.__apexErrors.length, 0, "under the budget: nothing on the error ring");
       assert.equal(h.sandbox.__timers.length, 1, "the self-heal reload timer");
       assert.equal(panels.length, 0, "under the budget: no unavailable panel yet");
     } else {
       assert.equal(h.sandbox.__timers.length, 0, "past the cap: no reload loop");
-      assert.equal(reports.length, 1, "past the cap the player is told");
-      assert.equal(reports[0][0], "gfx");
-      assert.match(reports[0][1], /keeps getting lost \(3 times\)/);
+      assert.equal(reports.length, 0, "past the cap: no full-screen error overlay");
+      assert.equal(h.sandbox.__apexErrors.length, 1, "past the cap: recorded on the error ring");
+      assert.equal(h.sandbox.__apexErrors[0].kind, "caught");
+      assert.match(h.sandbox.__apexErrors[0].msg, /Caught @ gfx:.*keeps getting lost \(3 times\)/);
       assert.deepEqual(panels, ["nogl"], "past the cap: Graphics unavailable panel");
     }
   }
+});
+
+test("TLX past ctx-loss budget records ring only, not the full-screen error overlay", () => {
+  const tlxSrc = read("js/render/three/tlx.js");
+  const mkBudgetVm = (store, out) => {
+    const ring = [];
+    const overlays = [];
+    const recordGfxBudgetExhausted = (where, err) => {
+      const msg = (err && (err.message || err)) || "unknown";
+      ring.push({ t: Date.now(), kind: "caught", msg: "Caught @ " + where + ": " + String(msg).slice(0, 400),
+                  detail: String((err && err.stack) || "").slice(0, 800) });
+    };
+    const ss = {
+      getItem: (k) => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = String(v); },
+    };
+    const ctx = vm.createContext({
+      initOwner: { active: true },
+      _threeOnLost: null,
+      _deviceLost: false,
+      _warmRequested: true,
+      _warmPending: {},
+      _warmDone: false,
+      document: { hidden: false, addEventListener() {}, removeEventListener() {} },
+      _nowMs: () => 1e6,
+      _shownAt: 0,
+      localStorage: { setItem() {}, removeItem() {} },
+      sessionStorage: ss,
+      _sessLostN: 0,
+      _fallbackLossCount: () => 0,
+      _rememberFallbackLoss: () => {},
+      _glPin: "1",
+      forceWebGL: true,
+      _autoStayGL: false,
+      setTimeout() {},
+      location: { reload() { out.reloads++; } },
+      recordGfxBudgetExhausted,
+      RendererPicker: { showUnavailable: (opts) => out.panels.push(opts && opts.panel && opts.panel.id) },
+      window: {
+        __apexErrors: ring,
+        __apexReportError: (where, err) => overlays.push([where, err && err.message]),
+        name: "",
+      },
+    });
+    ctx.document.getElementById = (id) => ({ id });
+    return { ctx, ring, overlays };
+  };
+
+  const refuseStore = { "apex26.ctxLostReloads": "2" };
+  const refuseOut = { reloads: 0, panels: [] };
+  const refuseVm = mkBudgetVm(refuseStore, refuseOut);
+  const refuseBody = fnSource(tlxSrc, "const refuseTab = () => {") + ";";
+  vm.runInContext(refuseBody + "\n refuseTab();", refuseVm.ctx);
+  assert.equal(refuseOut.reloads, 0, "refuseTab past the cap does not reload");
+  assert.equal(refuseVm.overlays.length, 0, "refuseTab: no full-screen overlay hook");
+  assert.equal(refuseVm.ring.length, 1, "refuseTab: error ring");
+  assert.ok(/cannot draw on this device/.test(refuseVm.ring[0].msg), "refuseTab: message on ring");
+  assert.deepEqual(refuseOut.panels, [], "refuseTab: present-fail path records only (no picker panel here)");
+
+  const lossStore = { "apex26.ctxLostReloads": "3" };
+  const lossOut = { reloads: 0, panels: [] };
+  const lossVm = mkBudgetVm(lossStore, lossOut);
+  lossVm.ctx.renderer = {};
+  const lossBody = fnSource(tlxSrc, "renderer.onDeviceLost = function (info) {");
+  const onLost = vm.runInContext(lossBody + "\n renderer.onDeviceLost", lossVm.ctx);
+  onLost({});
+  assert.equal(lossOut.reloads, 0, "fourth device loss does not reload");
+  assert.equal(lossVm.overlays.length, 0, "onDeviceLost: no full-screen overlay hook");
+  assert.equal(lossVm.ring.length, 1, "onDeviceLost: error ring");
+  assert.ok(/keeps getting lost \(4 times\)/.test(lossVm.ring[0].msg), "onDeviceLost: message on ring");
+  assert.deepEqual(lossOut.panels, ["nogl"], "onDeviceLost: Graphics unavailable panel");
 });
 
 test("TLX aborts program warm on device loss so race-start cannot hang on warming()", () => {
@@ -846,6 +923,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.tlxForceGL": "0",
     "apex26.tlxEnvProbe": "1",
     "apex26.tlxViz": "lit",
+    "apex26.tlxWebKitGL": "WebGPU init failed",
     "apex26.wgxCapture": "1",
     "apex26.gfxHigh": "1",
     "apex26.uiScale": "110",
@@ -885,12 +963,14 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBootBound",
     "apex26.envProbeOff", "apex26.perChunkOff",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
+    // tlx.js's per-DEVICE WebKit kill switch (the failure reason): while set, AUTO on WebKit binds three WebGL2.
+    "apex26.tlxWebKitGL",
     // The road-split A/B arm: __tlx.roadSplit(false) writes "0" (tlx.js); RESET restores the split.
     "apex26.tlxRoadSplit",
     "apex26.wgxCapture",
   ]);
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
-    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice",
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
     // Why this tab's WGX/TLX pick bound WebGL2 (renderer-boot.js, #2285); a
     // RESET must not leave diag() quoting a reason from before it.
@@ -1004,7 +1084,7 @@ test("applyBackend clears session renderer latches before reload", () => {
   // Switching WEBGL2 ↔ THREE ↔ WEBGPU must not inherit wgxHoldPresent /
   // tlxAutoGL from the previous path; RESET already wiped them, a pick did not.
   const latchSeed = Object.fromEntries([
-    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice",
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
     "apex26.gfxFallbackWhy",
   ].map((k) => [k, "1"]));
@@ -1023,7 +1103,7 @@ test("applyBackend clears session renderer latches before reload", () => {
 
 test("THREE PATH and SCREENSHOTS clear session renderer latches on reload", () => {
   const latchSeed = Object.fromEntries([
-    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice",
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
     "apex26.gfxFallbackWhy",
   ].map((k) => [k, "1"]));
@@ -4007,10 +4087,10 @@ test("a GLX fallback boot that proves itself does not erase the pick's crash str
   let rb = rendererBootRun(ls);
   let boot = await rb.start();
   assert.equal(boot.bound, false, "first strike: this boot runs GLX");
-  assert.equal(ls.get("apex26.gfxProbeStrikes"), "1");
+  assert.equal(ls.get("apex26.gfxProbeStrikes"), "three:1", "the strike names the backend that died");
   assert.equal(ls.get("apex26.gfxBackend"), "three", "one strike keeps the pick");
   assert.equal(rb.proved(), false, "GLX presenting 300 frames proves nothing about THREE");
-  assert.equal(ls.get("apex26.gfxProbeStrikes"), "1", "the strike must survive the GLX fallback boot");
+  assert.equal(ls.get("apex26.gfxProbeStrikes"), "three:1", "the strike must survive the GLX fallback boot");
   // Next cold boot: THREE binds, game.js re-arms the probe at the first world
   // present, and the tab is killed again before the run of frames completes.
   rb = rendererBootRun(ls);
@@ -4022,6 +4102,47 @@ test("a GLX fallback boot that proves itself does not erase the pick's crash str
   assert.equal(boot.bound, false);
   assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "the second consecutive strike retires the pick");
   assert.equal(ls.has("apex26.gfxProbeStrikes"), false, "retiring resets the ledger");
+});
+
+test("the strike ledger is per backend: one death each on two backends retires neither (#3514)", async () => {
+  // TLX banked one strike; the player hand-picks WEBGPU, which dies once. The old global
+  // ledger read that as strike two and rewrote the pick to webgl2.
+  const ls = new Map([["apex26.gfxBackend", "webgpu"], ["apex26.gfxProbeStrikes", "three:1"], ["apex26.gfxBackendProbe", "webgpu"]]);
+  assert.equal((await rendererBootRun(ls).start()).bound, false, "the dead pick reverts this boot only");
+  assert.equal(ls.get("apex26.gfxBackend"), "webgpu", "a first WGX death does not retire the pick");
+  assert.equal(ls.get("apex26.gfxProbeStrikes"), "webgpu:1", "the count restarts for the backend that died");
+  // Two deaths of the SAME backend still retire it.
+  ls.set("apex26.gfxBackendProbe", "webgpu");
+  await rendererBootRun(ls).start();
+  assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "a second WGX death retires the pick");
+  assert.equal(ls.has("apex26.gfxProbeStrikes"), false);
+  // A legacy bare count names no backend: unattributable, it retires nothing (from Merlin's #3547).
+  const legacy = new Map([["apex26.gfxBackend", "three"], ["apex26.gfxProbeStrikes", "1"], ["apex26.gfxBackendProbe", "three"]]);
+  assert.equal((await rendererBootRun(legacy).start()).bound, false, "the armed probe still reverts this boot to GLX");
+  assert.equal(legacy.get("apex26.gfxBackend"), "three", "an unattributable legacy strike must not retire the pick");
+  assert.equal(legacy.get("apex26.gfxProbeStrikes"), "three:1");
+});
+
+test("eval-time preload skips TLX on unset navigator.gpu hunch (#3536 Graphics unavailable)", () => {
+  const src = code("js/render/renderer-boot.js");
+  assert.ok(src.includes('unsetPick && !g.sure && g.pick === "three") return 0'),
+    "first boot must not prefetch TLX before the adapter probe commits");
+});
+
+test("GLX boot waits on progress, not one fixed wall clock (#3587)", () => {
+  const src = code("js/render/renderer-boot.js");
+  assert.ok(src.includes("withIdleProgressTimeout"));
+  assert.ok(src.includes("loadDeferredScripts"));
+  assert.ok(src.includes("onSettled"));
+  assert.ok(src.includes("GLX boot"));
+});
+
+test("Graphics unavailable RETRY and USE WEBGL2 scrub canary state (#3587)", () => {
+  const src = code("js/perf/renderer-picker.js");
+  assert.ok(src.includes("function clearGfxBootRecovery"));
+  assert.ok(/retry\.onclick[\s\S]*clearGfxBootRecovery\(\)/.test(src));
+  assert.ok(/webgl\.onclick[\s\S]*clearGfxBootRecovery\(\{ webgl2Pick: true \}\)/.test(src));
+  assert.ok(src.includes("gfxProbeStrikes"));
 });
 
 test("a pick that proves itself still pays off an older strike", async () => {
@@ -4044,6 +4165,24 @@ test("a pick that proves itself still pays off an older strike", async () => {
   assert.ok(at > 0, "the PROVE_FRAMES block moved — check this test, not the code");
   assert.match(game.slice(at, at + 400), /rendererBoot\.proved\(\);/,
     "the PROVE_FRAMES block hands the strike clear to rendererBoot.proved()");
+});
+
+test("applyBackend clears the canary strike ledger on a hand re-pick (#3547)", () => {
+  const a = bootPicker({
+    ls: { "apex26.gfxBackend": "three", "apex26.gfxProbeStrikes": "three:1" },
+    gpu: {},
+  });
+  assert.equal(a.G.applyBackend("webgpu", a.byId["pm-renderer"]), true);
+  assert.equal(a.ls.getItem("apex26.gfxBackend"), "webgpu");
+  assert.equal(a.ls.getItem("apex26.gfxProbeStrikes"), null,
+    "a hand re-pick starts the picked backend with a clean ledger");
+  const b = bootPicker({
+    ls: { "apex26.gfxBackend": "webgl2", "apex26.gfxProbeStrikes": "three:1" },
+    gpu: {},
+  });
+  assert.equal(b.G.applyBackend("three", b.byId["pm-renderer"]), true);
+  assert.equal(b.ls.getItem("apex26.gfxProbeStrikes"), null,
+    "a same-backend hand re-pick restarts that backend's ledger too");
 });
 
 // The canary must describe what BOUND, not what was picked.
@@ -4215,6 +4354,16 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
     "TLX SAA must differentiate the pre-material snapshot");
   assert.match(post, /Math\.min\(4, cMax, dMax\)/,
     "desktop GLX MSAA starts from min(4, cMax, dMax); the preset cap (ULTRA 4×, else 2×) is applied AFTER, see the gfxPreset test");
+});
+
+test("GLX readbackLdrPixels skips software GL readPixels while #carsetup is visible", () => {
+  const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h) {", "function ", "readbackLdrPixels");
+  assert.ok(body.includes("PerfGov.softwareRaster()") && body.includes('getElementById("carsetup")') && body.includes("!cs.hidden) return false"));
+});
+
+test("GLX present() reins in bloom on software GL when the scene target is LDR", () => {
+  const body = span(read("js/render/glx/post.js"), "function present(opts) {", "function ", "present");
+  assert.ok(body.includes("PerfGov.softwareRaster()") && body.includes("colorType !== gl.HALF_FLOAT") && body.includes("bloomAmt *="));
 });
 
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
@@ -5751,6 +5900,9 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   // B-F3.1: the sky show and the mirror stage are helpers the deferred mirror warm shares — evaluated from source too.
   const warmShowSky = eval("(function(){" + fnBody(code("js/render/three/tlx.js"), "warmShowSky") + "})");
   const warmMirrorStage = eval("(async function(usePost, useTag){" + fnBody(code("js/render/three/tlx.js"), "warmMirrorStage") + "})");
+  // A·W14: the stage arms the scene MRT only for a mirror-shaped target; this mirRT has one attachment (MRT off).
+  const _mirMrt = () => !!(mirRT.textures && mirRT.textures.length > 1);
+  const _mirMrtArm = eval("(function(on, prev){" + fnBody(code("js/render/three/tlx.js"), "_mirMrtArm") + "})");
   const drawWarmStage = () => ({}), _gpuSettled = async () => {};
   // Source pins for the same order: exactly one setMRT(null) in the full warm path, between the post
   // warm and the caster warm, and the caster warm still guarded on the module.
@@ -6077,15 +6229,25 @@ test("selector preparation waits for the player's hands before the build and the
     "the warm frames follow the paced car assets, on an idle menu, with the program warm requested first");
   assert.ok(fin.indexOf("_menuGate.warm = 2") < fin.indexOf("menuLampBake(current)"),
     "…and come BEFORE the lamp pre-bake: a RACE! tap mid-bake met cold shaders");
-  const idle = eval("(function(){ let _menuInputAt = 0; const MENU_IDLE_MS = 1200; let now = 0;" +
-    " const performance = { now: () => now }; const waits = [];" +
-    " const setTimeout = (fn, ms) => { waits.push(ms); now += ms; fn(); };" +
-    src.match(/async function menuIdle\(current\) \{[\s\S]*?\n\}/)[0] +
-    " return { menuIdle, waits, tap: (t) => { _menuInputAt = t; now = t; } }; })()");
-  idle.tap(5000);
-  assert.equal(await idle.menuIdle(() => true), true);
-  assert.deepEqual(idle.waits, [1200], "a tap pushes the build a full idle window out");
-  assert.equal(await idle.menuIdle(() => false), false, "a stale selection never builds");
+  // D·IP2: idle clock lives in MenuSheetGate; game.js keeps a thin menuIdle wrapper.
+  assert.ok(/MenuSheetGate\.idle\(/.test(src) && /async function menuIdle\(current\)/.test(src),
+    "menuIdle delegates through MenuSheetGate.idle");
+  const waits = [];
+  let now = 0, inputAt = 0;
+  const ctx = vm.createContext({
+    performance: { now: () => now, mark() {} },
+    setTimeout: (fn, ms) => { waits.push(ms); now += ms; fn(); return 1; },
+    document: { getElementById: () => null, activeElement: null },
+    Object, Promise, WeakMap,
+  });
+  vm.runInContext(read("js/core/menu-sheet-gate.js"), ctx, { filename: absSrc("js/core/menu-sheet-gate.js") });
+  const Gate = vm.runInContext("MenuSheetGate", ctx);
+  const menuIdle = (c) => Gate.idle(c, 1200, () => inputAt, () => new Promise((r) => { waits.push(32); now += 32; r(); }));
+  inputAt = 5000; now = 5000;
+  assert.equal(await menuIdle(() => true), true);
+  assert.deepEqual(waits, [1200], "a tap pushes the build a full idle window out");
+  waits.length = 0;
+  assert.equal(await menuIdle(() => false), false, "a stale selection never builds");
 });
 
 test("selector preparation rejects stale requests, reuses the world, and waits for compilation", async () => {

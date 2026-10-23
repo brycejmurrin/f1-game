@@ -873,7 +873,9 @@ test("hunt fixes: an 'interrupted' resume() never counts as recovered; TLX stops
   const eng = readFileSync(join(ROOT, "js/audio/engine.js"), "utf8");
   assert.match(eng, /if \(!ctx \|\| ctx\.state !== "running"\) return;\s*rebuildTries = 0;/);
   const tlx = readFileSync(join(ROOT, "js/render/three/tlx.js"), "utf8");
-  assert.match(tlx, /if \(n === 3\) setTimeout\(function \(\) \{ try \{ location\.reload\(\); \}/);
+  assert.match(tlx, /if \(n === 3 && !\(typeof GfxEscalation !== "undefined" && GfxEscalation\.raceEntryActive && GfxEscalation\.raceEntryActive\(\)\)\) \{\s*setTimeout\(function \(\) \{ try \{ sessionStorage\.setItem\("apex26\.ctxLostNotice", "1"\); \} catch \(_\) \{[^}]*\} try \{ location\.reload\(\); \}/,
+    "third TLX loss outside race entry stashes ctx-lost notice then reloads (#3536)");
+  assert.ok(tlx.includes("GfxEscalation.onReloadBudgetExceeded(n,"), "third loss during race entry routes through GfxEscalation instead of another reload");
   const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
   assert.match(game, /function endRace\(forcedOrder\) \{[\s\S]{0,200}sessionStorage\.removeItem\("apex26\.ctxLostReloads"\)/);
   const cam = readFileSync(join(ROOT, "js/garage/setup-camera.js"), "utf8");

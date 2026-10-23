@@ -475,7 +475,14 @@ const RealReplay = (function () {
       else if (e.code === KEY_SKIP && run.reel) skip();
       else if (e.code === "Space") setPaused(!run.paused);
       else used = false;
-      if (used) { e.preventDefault(); e.stopPropagation(); if (G.announce && e.code !== KEY_SKIP) G.announce((run.follow ? run.follow.code : "") + " · " + run.speed + "×", 1.2, "info"); }
+      if (used) { e.preventDefault(); e.stopPropagation(); if (G.announce && e.code !== KEY_SKIP) G.announce(followCode() + " · " + run.speed + "×", 1.2, "info"); }
+    }
+
+    // The code the viewer knows the followed car by: a seat car can wear another driver
+    // (mapField), so the seat's real driver wins over the roster car's own code.
+    function followCode() {
+      const f = run.follow && run.cars.get(run.follow);
+      return f && f.d && f.d.code ? f.d.code : (run.follow ? run.follow.code : "");
     }
 
     // A standing puppet for the audio feeds. game.js voices the engine and rivals from c.speed × c.replayRate -> c.rpm, but a
