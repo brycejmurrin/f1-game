@@ -4444,6 +4444,9 @@
     "js/core/dev-flags.js": {
       "flags": [
         "tests/unit/dev-flags.test.mjs"
+      ],
+      "names": [
+        "tests/unit/dev-flags.test.mjs"
       ]
     },
     "js/core/dom-apply.js": {
