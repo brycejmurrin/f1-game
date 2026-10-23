@@ -9312,6 +9312,9 @@
       ]
     },
     "js/perf/bench-run.js": {
+      "growth": [
+        "tests/unit/bench-run.test.mjs"
+      ],
       "load": [
         "tests/unit/bench-run.test.mjs"
       ],
@@ -9321,10 +9324,19 @@
       "newPlan": [
         "tests/unit/bench-run.test.mjs"
       ],
+      "overs": [
+        "tests/unit/bench-run.test.mjs"
+      ],
       "pathPrefs": [
         "tests/unit/bench-run.test.mjs"
       ],
+      "reload": [
+        "tests/unit/bench-run.test.mjs"
+      ],
       "scenes": [
+        "tests/unit/bench-run.test.mjs"
+      ],
+      "stop": [
         "tests/unit/bench-run.test.mjs"
       ],
       "summarize": [

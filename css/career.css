@@ -80,8 +80,17 @@
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; scrollbar-gutter: stable; touch-action: pan-y;
 }
+/* min-width:0 + max-width:100%: a stacked .pane is `flex: 0 0 auto` inside
+   #cr-body, and an unconstrained replaced child (the next-race still is an
+   800px WebP) or a long nowrap CTA can size the column to its min-content —
+   measured ~370px past the sheet on portrait phones in DAD's live review.
+   Overflow stays visible so #cr-body remains the only vertical scroller. */
 #cr-inner:not([data-pair="on"]) #cr-left,
-#cr-inner:not([data-pair="on"]) #cr-right { overflow: visible; flex: 0 0 auto; }
+#cr-inner:not([data-pair="on"]) #cr-right {
+  overflow: visible; flex: 0 0 auto;
+  min-width: 0; max-width: 100%; width: 100%;
+  box-sizing: border-box;
+}
 /* Two columns once there is room — and the FOOT belongs to the LEFT column only,
    exactly as #select does it (css/menus.css). Without that, a full-width action
    bar sits on top of the right column and clips the calendar mid-row: the first
@@ -111,6 +120,7 @@
    exactly that way. Only what is true WHEN THE PANES SPLIT lives here. */
 #cr-inner[data-pair="on"] #cr-left {
   overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
+  min-width: 0; max-width: 100%; box-sizing: border-box;
   border-right: 1px solid var(--card-line);
   padding: calc(var(--pad) * 0.25) calc(var(--pad) * 0.6) 0 var(--pad);
 }
@@ -274,7 +284,10 @@
    heading and the block above it is career-specific. */
 #cr-left .sel-label, #cr-right .sel-label { margin-top: var(--gap); }
 #cr-left > .sel-label:first-child, #cr-right > .sel-label:first-child { margin-top: 0; }
-.cr-note { font-size: var(--fs-2); line-height: 1.45; color: var(--dim); margin-bottom: 8px; }
+.cr-note {
+  font-size: var(--fs-2); line-height: 1.45; color: var(--dim); margin-bottom: 8px;
+  min-width: 0; max-width: 100%; overflow-wrap: anywhere;
+}
 
 /* ---------- cards ---------- */
 /* THE PRESSABLE-CARD CORE, once. Five card classes wrote the same surface
@@ -334,7 +347,15 @@
 .cr-obj-pick:active:not(.on) { color: var(--text); }
 .cr-obj-pick:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
 
-.cr-nextrace { align-items: flex-start; gap: 2px; }
+/* stretch (not flex-start): an <img> flex item with align-items:flex-start and
+   no max-width takes its intrinsic width (stills are 800px) and paints past
+   #cr-left on WebKit phones. width/max-width 100% keeps the still inside the
+   card on every engine; height:auto holds the aspect. */
+.cr-nextrace { align-items: stretch; gap: 2px; }
+#cr-nextrace img,
+.cr-nextrace img {
+  display: block; width: 100%; max-width: 100%; height: auto;
+}
 .cr-nr-round { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--red); font-weight: 800; }
 .cr-nr-name { font-size: 18px; font-weight: 800; font-style: italic; }
 .cr-nr-country { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); }
@@ -525,12 +546,16 @@
    be a button: the surface rides the card class, the button-undo quintet rides
    the shared pressable rule above, and its hover/focus pair is merged onto
    .co-offer's — the two are the same gesture (a card you press). */
-.cr-record { width: 100%; gap: 4px; }
-.cr-record-line { font-size: var(--fs-2); font-weight: 700; font-variant-numeric: tabular-nums; }
+.cr-record { width: 100%; max-width: 100%; gap: 4px; min-width: 0; box-sizing: border-box; }
+.cr-record-line {
+  font-size: var(--fs-2); font-weight: 700; font-variant-numeric: tabular-nums;
+  min-width: 0; max-width: 100%; overflow-wrap: anywhere;
+}
 /* The affordance line: dim, tracked-out and red, so the card reads as a door
    rather than one more read-only summary in a column full of them. */
 .cr-record-cta {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5); color: var(--red);
+  min-width: 0; max-width: 100%; overflow-wrap: anywhere;
 }
 
 /* The position column carries a "P" here, unlike the championship block on the
