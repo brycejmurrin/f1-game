@@ -1201,6 +1201,11 @@
       "presentation": "native",
       "preserve": "Real/stubbed link qualification, frame denominator and native JSON mode."
     },
+    "tools/gfx/readback-garage-oracle.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "readPixels hook phases, stall watchdog state and before/after JSON report paths."
+    },
     "tools/gfx/res-scale-ab.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1362,6 +1367,11 @@
       "preserve": "@c3"
     },
     "tools/lib/hud-survey-matrix.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/impact-map.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
@@ -1835,6 +1845,16 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c1"
+    },
+    "tools/perf/devicefarm-host.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Runs on the Device Farm test host, not locally: its stdout is the run's test spec output and its files land in $DEVICEFARM_LOG_DIR."
+    },
+    "tools/perf/devicefarm-iphone.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Timestamped progress lines (device, session state, boot probe, bench leg states, session minutes) and the report.json path; the endpoint URL is never printed."
     },
     "tools/perf/live-render-matrix.mjs": {
       "action": "keep-native",

@@ -122,6 +122,27 @@ test("pool update dirties so moving smoke keeps uploading", () => {
   assert.ok(uploads.every((u) => u.dirty === true));
 });
 
+test("clear() disposes the pool and flare latch so draw cannot resurrect them", () => {
+  const uploads = [];
+  const P = make(uploads);
+  P.tyreSmoke(0, 0, 0, 1, 0, 1, 8);
+  P.flare(0, 1, 0, 1, 1, 0, 0, 1, true);
+  P.update(0.016);
+  P.draw();
+  assert.ok(P.count() > 0);
+  assert.ok(uploads.length > 0);
+  uploads.length = 0;
+  P.clear();
+  assert.equal(P.count(), 0);
+  assert.equal(P.flareCount(), 0);
+  P.draw();
+  assert.equal(uploads.length, 0, "cleared pool must not re-issue the previous batch");
+  // Rain stays under rainShow/rainSeed — clear must not hide a wet field.
+  P.rainSeed(false); P.rainShow(true);
+  P.rainUpdate(0.016, [0, 5, 0], true); P.draw();
+  assert.ok(uploads.length > 0, "rain still draws after a pool clear");
+});
+
 
 test("one-frame flares refresh additive data while clean rain reuses alpha", () => {
   const uploads = [], P = make(uploads), eye = [100, 5, -30];

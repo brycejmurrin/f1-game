@@ -42,7 +42,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx, recordingOverlay } from "../helpers/glx-mock.mjs";
-import { gameSource } from "../helpers/game-source.mjs";
+import { gameSource, GAME_REL } from "../helpers/game-source.mjs";
 import { bootRendererBoot } from "../helpers/renderer-boot-vm.mjs";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -50,7 +50,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readFile = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 // These guards span boot and frame-loop ownership; load the extracted owners explicitly.
-const read = (p) => p === "js/game.js"
+const read = (p) => p === GAME_REL
   ? ["js/render/renderer-boot.js", "js/core/lazy-bundles.js", "js/ui/platform-session.js", p].map(readFile).join("\n")
   : readFile(p);
 // Comment-stripped source: a pin can only match code, and a comment can
@@ -299,13 +299,15 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   // the caller-supplied opaque context it is keyed on. The canvas came up
   // alpha-composited and the cars rendered see-through. The gate is now the
   // obtainable WebGPU CONTEXT; renderer-soft-lifecycle.test.mjs holds the rest.
-  // 2026-09-03: `|| isWebKit` joined the clause. Two consecutive deploys
-  // rendered three-WebGPU wrongly on the owner's iPhone (bodywork missing,
-  // then sky-only at c6d8fd3) with ZERO reported GPU/WGSL errors, while
-  // three's WebGL2 backend on the same phone is known-good (ed8f41f). AUTO on
-  // WebKit takes WebGL2; THREE PATH: WEBGPU (pin "0") still forces WebGPU.
-  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_gpuCanvasOk\s*\|\|\s*_autoStayGL\s*\|\|\s*isWebKit\s*\)\s*\)/,
-    "AUTO stays on WebGL2 when no WebGPU context is obtainable, after an init failure, or on WebKit; a pin of 1/0 overrides");
+  // 2026-09-03: `|| isWebKit` joined the clause (three-WebGPU rendered wrongly
+  // on the owner's iPhone with zero GPU errors). 2026-10-23 it left again:
+  // Device Farm on iOS 27.0 holds 60 fps on WebGPU, 42 on WebGL2, no errors
+  // (PR #3598, its Device Farm note §6). AUTO on WebKit now
+  // tries WebGPU, and a detected failure latches the per-DEVICE kill switch
+  // `_webkitStayGL` (localStorage apex26.tlxWebKitGL) back to WebGL2.
+  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_gpuCanvasOk\s*\|\|\s*_autoStayGL\s*\|\|\s*_webkitStayGL\s*\)\s*\)/,
+    "AUTO stays on WebGL2 when no WebGPU context is obtainable, after a tab failure, or on a WebKit device that failed WebGPU; a pin of 1/0 overrides");
+  // The kill switch's read/write behaviour: tlx-fail-scope.test.mjs; RESET: the frozen RENDERER_LS_KEYS below.
   assert.match(src, /async\s+function\s+bootRenderer\b/);
   assert.match(src, /AUTO WebGPU init failed/);
   assert.match(src, /await renderer\.init\(\)[\s\S]{0,200}?disposeKeepingContext\(renderer\)/,
@@ -924,6 +926,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.tlxForceGL": "0",
     "apex26.tlxEnvProbe": "1",
     "apex26.tlxViz": "lit",
+    "apex26.tlxWebKitGL": "WebGPU init failed",
     "apex26.wgxCapture": "1",
     "apex26.gfxHigh": "1",
     "apex26.uiScale": "110",
@@ -963,6 +966,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBootBound",
     "apex26.envProbeOff", "apex26.perChunkOff",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
+    // tlx.js's per-DEVICE WebKit kill switch (the failure reason): while set, AUTO on WebKit binds three WebGL2.
+    "apex26.tlxWebKitGL",
     // The road-split A/B arm: __tlx.roadSplit(false) writes "0" (tlx.js); RESET restores the split.
     "apex26.tlxRoadSplit",
     "apex26.wgxCapture",
@@ -2744,9 +2749,12 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
   // MDN: one context type per canvas for life. three r185.1 configure() is
   // lazy on first present(); sniffing WebGL2 on #game after init() made
   // getContext("webgpu") return null (mcp-probe 2026-08-18).
-  assert.match(tlx, /softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(\s*\)\s*:\s*!!\s*_softAdapter\b/);
+  assert.ok(tlx.includes("const softwareGL = !!_softAdapter")
+    && tlx.includes("renderer.backend && renderer.backend.isWebGLBackend")
+    && tlx.includes("detectSoftwareGL()"),
+    "WebGL2 backend classifies from renderer string, not adapter sniff alone (#3601)");
   const initAt = tlx.search(/await\s+renderer\.init\(\s*\)/);
-  const sniffAt = tlx.search(/softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(/);
+  const sniffAt = tlx.search(/const softwareGL = !!_softAdapter/);
   assert.ok(initAt > 0 && sniffAt > initAt, "software sniff stays after init");
   assert.match(tlx, /getContext\("webgpu"\)===null/);
 });
@@ -3522,8 +3530,9 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // the same value, so this narrows nothing that was ever correct.
   assert.match(fnBody(src, "softContent"), /^\s*return\s+softwareGL\s*&&\s*!_forceHw\.has\(\s*part\s*\)/,
     "content skips ask softwareGL, which already answers for the BOUND backend");
-  assert.match(src, /softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(\s*\)\s*:\s*!!\s*_softAdapter\b/,
-    "…and softwareGL stays the backend-aware constant the line above relies on");
+  assert.ok(src.includes("const softwareGL = !!_softAdapter")
+    && src.includes("isWebGLBackend") && src.includes("detectSoftwareGL()"),
+    "softwareGL stays backend-aware: adapter OR live WebGL renderer string (#3601)");
   assert.doesNotMatch(src, /softContent\(\)/,
     "softContent() must never be called without a part name");
   for (const part of ["sky", "env", "chunked", "shadow"]) {
@@ -4127,6 +4136,25 @@ test("eval-time preload skips TLX on unset navigator.gpu hunch (#3536 Graphics u
     "first boot must not prefetch TLX before the adapter probe commits");
 });
 
+test("GLX backendState and race entry defer pack retry on software GL (#3584)", () => {
+  const glx = code("js/render/glx/glx.js");
+  assert.ok(glx.includes("detectSoftwareGl") && glx.includes("softwareGL: _softwareGl"));
+  const game = gameSource();
+  assert.ok(game.includes("Assets.retry && !PerfGov.softwareRaster()"));
+  assert.ok(game.includes("requestIdleCallback(run, { timeout: 120000 })"));
+});
+
+test("software GL garage path gates readback and stall reload (#3589)", () => {
+  const loop = readFile("js/perf/loop-health.js");
+  assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"'));
+  const soft = readFile("js/render/glx/soft.js");
+  assert.ok(soft.includes("PerfGov.softwareGlUiReadbackDefer"));
+  const assets = readFile("js/render/shared/assets.js");
+  assert.ok(assets.includes("deferScratchReadback") && assets.includes("softwareGlUiReadbackDefer"));
+  const game = gameSource();
+  assert.ok(game.includes("openGarage") && game.includes("PerfGov.softwareRaster()") && game.includes("invalidateSoftPresent"));
+});
+
 test("GLX boot waits on progress, not one fixed wall clock (#3587)", () => {
   const src = code("js/render/renderer-boot.js");
   assert.ok(src.includes("withIdleProgressTimeout"));
@@ -4354,9 +4382,11 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
     "desktop GLX MSAA starts from min(4, cMax, dMax); the preset cap (ULTRA 4×, else 2×) is applied AFTER, see the gfxPreset test");
 });
 
-test("GLX readbackLdrPixels skips software GL readPixels while #carsetup is visible", () => {
+test("GLX readbackLdrPixels skips software GL readPixels while menu/race-entry sheets are up", () => {
   const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h) {", "function ", "readbackLdrPixels");
-  assert.ok(body.includes("PerfGov.softwareRaster()") && body.includes('getElementById("carsetup")') && body.includes("!cs.hidden) return false"));
+  assert.ok(body.includes("PerfGov.softwareGlUiReadbackDefer") && body.includes("softwareGlUiReadbackDefer()"));
+  const gov = read("js/perf/governor.js");
+  assert.ok(gov.includes("softwareGlUiReadbackDefer") && gov.includes('"race-settings"') && gov.includes('"loading"'));
 });
 
 test("GLX present() reins in bloom on software GL when the scene target is LDR", () => {
@@ -5911,6 +5941,9 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   // B-F3.1: the sky show and the mirror stage are helpers the deferred mirror warm shares — evaluated from source too.
   const warmShowSky = eval("(function(){" + fnBody(code("js/render/three/tlx.js"), "warmShowSky") + "})");
   const warmMirrorStage = eval("(async function(usePost, useTag){" + fnBody(code("js/render/three/tlx.js"), "warmMirrorStage") + "})");
+  // A·W14: the stage arms the scene MRT only for a mirror-shaped target; this mirRT has one attachment (MRT off).
+  const _mirMrt = () => !!(mirRT.textures && mirRT.textures.length > 1);
+  const _mirMrtArm = eval("(function(on, prev){" + fnBody(code("js/render/three/tlx.js"), "_mirMrtArm") + "})");
   const drawWarmStage = () => ({}), _gpuSettled = async () => {};
   // Source pins for the same order: exactly one setMRT(null) in the full warm path, between the post
   // warm and the caster warm, and the caster warm still guarded on the module.
@@ -6405,7 +6438,7 @@ test("the startline mesh beats the unbiased road without burying the cars", () =
   // small negative bias that still beats it.
   const src = read("js/game.js");
   const start = src.match(/const _startBias = \[(-?[\d.]+), (-?[\d.]+)\]/);
-  assert.ok(start, "_startBias not found in js/game.js");
+  assert.ok(start, "_startBias not found in game source union");
   const roads = [...src.matchAll(/const _wmRoad\w+ = \{[^}]*\}/g)];
   assert.ok(roads.length >= 4, `expected the four _wmRoad* materials, found ${roads.length}`);
   for (const r of roads) assert.doesNotMatch(r[0], /depthBias/, `road material must not carry a depth bias: ${r[0]}`);

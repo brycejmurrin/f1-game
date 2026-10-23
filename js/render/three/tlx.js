@@ -218,6 +218,9 @@ const TLX = (function () {
       //   AUTO + no navigator.gpu         → three WebGL2
       //   AUTO + session tlxAutoGL="1"    → three WebGL2 (this tab already
       //                                     lost WebGPU; stay on TLX)
+      //   AUTO + WebKit + local tlxWebKitGL → three WebGL2 (this DEVICE
+      //                                     already failed WebGPU; RESET
+      //                                     RENDERER clears it)
       //   AUTO + gpu present              → try WebGPU (lite caps on phone /
       //                                     WebKit / software). If init()
       //                                     throws before #game is claimed,
@@ -235,6 +238,19 @@ const TLX = (function () {
       const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
       const isWebKit = /CriOS|FxiOS|EdgiOS/.test(ua) ||
         (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
+      // The per-DEVICE kill switch for WebKit AUTO. tlxAutoGL above is per TAB
+      // (sessionStorage), so an iPhone whose WebGPU fails would retry it on
+      // every new tab; this localStorage marker sends AUTO on WebKit straight
+      // to three WebGL2 once any detected WebGPU failure (init throw, device
+      // lost x3, early GPU errors, a refused tab) has happened here. The value
+      // is the reason; RESET RENDERER (renderer-picker.js) removes it.
+      const _webkitStayGL = isWebKit && (function () {
+        try { return !!localStorage.getItem("apex26.tlxWebKitGL"); } catch (_) { return false; }
+      })();
+      const _latchWebKitGL = (why) => {
+        if (!isWebKit || _glPin === "0" || _glPin === "1") return;
+        try { localStorage.setItem("apex26.tlxWebKitGL", String(why).slice(0, 200)); } catch (_) { /* the tab latch still holds */ }
+      };
       // Software WebGPU never composites a visible swapchain — AUTO keeps
       // three's WebGPU backend and 2D-blits the LDR target (same as WGX)
       // until this tab proves WebGPU cannot stay up. mappedAtCreation
@@ -407,13 +423,16 @@ const TLX = (function () {
       // An explicit WebGPU pin (`_glPin === "0"`) is still honoured — the clause
       // already excludes it, and a pin is a user override. backendState()
       // reports canvasAlpha so that case is diagnosable rather than silent.
-      // WEBKIT (Safari, every iOS browser) TAKES three's WebGL2 BACKEND ON AUTO:
-      // three-WebGPU rendered wrongly on an iPhone (missing bodywork, then sky
-      // only) with ZERO reported GPU or WGSL errors, while three's WebGL2 backend
-      // on the same phone is known-good. A pin of "0" (THREE PATH: WEBGPU) still
-      // forces WebGPU; backendState().pin/forceWebGL say which one bound.
+      // WEBKIT (Safari, every iOS browser) TRIES three's WebGPU BACKEND ON AUTO
+      // (2026-10-23, Bryce's call). 2026-09-03 it was forced to WebGL2: two
+      // deploys rendered three-WebGPU wrongly on an iPhone (missing bodywork,
+      // then sky only) with zero GPU or WGSL errors. Device Farm on iOS 27.0
+      // (PR #3598, its Device Farm note §6): WebGPU holds 60
+      // fps on an iPhone 14 where WebGL2 drops to 42, no WebGPU errors. Every
+      // fallback stays: no navigator.gpu (iOS <= 18) or no WebGPU context →
+      // WebGL2, and a detected failure latches _webkitStayGL for the device.
       let forceWebGL = _glPin === "1"
-        || (_glPin !== "0" && (!_gpuCanvasOk || _autoStayGL || isWebKit));
+        || (_glPin !== "0" && (!_gpuCanvasOk || _autoStayGL || _webkitStayGL));
       const _liteGpu = !!(isMobile || isWebKit || _softAdapter);
 
       // SCREENSHOTS (`apex26.wgxCapture`, same key as WGX): session then local.
@@ -690,6 +709,7 @@ const TLX = (function () {
         // present() — so #game is still unbound and AUTO can retry WebGL2.
         if (_glPin !== "0" && _glPin !== "1" && !forceWebGL) {
           try { Log.warn("gfx", "[TLX] AUTO WebGPU init failed — three WebGL2", e); } catch (_) { /* Log optional */ }
+          _latchWebKitGL("WebGPU init failed: " + ((e && e.message) || e));
           forceWebGL = true;
           const boot = await bootRenderer(true);
           renderer = boot.renderer;
@@ -954,15 +974,20 @@ const TLX = (function () {
       // forceWebGL path already owns #game as WebGL2 (ownGL above).
       function detectSoftwareGL() {
         try {
-          const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+          const gl = (renderer.backend && renderer.backend.gl)
+            || canvas.getContext("webgl2") || canvas.getContext("webgl");
           if (!gl) return false;
           const ext = gl.getExtension("WEBGL_debug_renderer_info");
           const name = ((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || "")
             + " " + (gl.getParameter(gl.RENDERER) || "");
-          return /swiftshader|llvmpipe|softpipe|microsoft basic render|gdi generic/i.test(name);
+          return /swiftshader|llvmpipe|lavapipe|softpipe|microsoft basic render|gdi generic|subzero/i.test(name);
         } catch (_) { return false; }
       }
-      const softwareGL = forceWebGL ? detectSoftwareGL() : !!_softAdapter;
+      // Adapter sniff alone misses AUTO→WebGL2 when requestAdapter() is null or
+      // reports trimmed info (production SwiftShader). Classify from the LIVE
+      // WebGL renderer string — never from softPresent/headless UA (#3601).
+      const softwareGL = !!_softAdapter
+        || (!!(renderer.backend && renderer.backend.isWebGLBackend) && detectSoftwareGL());
       try {
         if (canvas && typeof canvas.setAttribute === "function") {
           const api = (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2";
@@ -1074,6 +1099,7 @@ const TLX = (function () {
             const autoPath = _glPin !== "0" && _glPin !== "1";
             if (autoPath) {
               try { sessionStorage.setItem("apex26.tlxAutoGL", "1"); } catch (_) { /* next boot still tries WebGPU */ }
+              _latchWebKitGL("context lost x" + n);
               try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — AUTO stayed on three WebGL2"); } catch (_) { /* backendState still names the path */ }
             } else {
               try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — tab fell back to WebGL2"); } catch (_) { /* blocked storage: the label still flips via gfxBound */ }
@@ -1445,17 +1471,48 @@ const TLX = (function () {
         if (forWarm && _instPerPass && !skipBatches()) _mirWarmSwap();
         const lv = _mirLevels(w, h);
         if (!mirRT) {
-          mirRT = new THREE.RenderTarget(w, h, {
-            type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
-            format: THREE.RGBAFormat, depthBuffer: true,
-            generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
-          });
-          mirRT.texture.colorSpace = THREE.NoColorSpace;
+          mirRT = _mirTarget(post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType, w, h, _mirMrtWant());
           _mirSetLevels(lv, w, h);
           mirCam = new THREE.PerspectiveCamera();
           mirCam.matrixAutoUpdate = false; mirCam.matrixWorldAutoUpdate = false;
         } else if (mirRT.width !== w || mirRT.height !== h) { _mirSetLevels(lv, w, h); mirRT.setSize(w, h); }   // setSize re-allocates
         else if (lv > _mirLevelsNow(w, h)) { _mirSetLevels(lv, w, h); mirRT.dispose(); }   // grow only: the next render re-allocates
+      }
+      // A·W14: THE MIRROR SHARES THE SCENE PASS'S RENDER CONTEXT. With no MRT, every scene material built a
+      // second program (WebGL2: a different fragment-output block) or pipeline (WebGPU: a different attachment
+      // list) for the mirror alone, so the warm's mirror stage compiled the whole world again and the mirror's
+      // draw warm built its pipelines again. With the mirror target shaped like post.sceneTarget() (attachments
+      // "output" + "ssrTag", the tag's format chosen by the same rule as tlx-post.js) and drawn under the same
+      // MRT node, the mirror reuses the scene's programs. The tag attachment is never sampled and keeps no mips;
+      // the colour attachment, and so the mirror's pixels, are unchanged. Latched with the target, so a mirror
+      // pass and its warm always agree with the target they draw into. ?tlxMirMrt=0 (DevFlags mirMrt, URL only):
+      // the one-attachment target (the old way, the A/B lever).
+      let _mirMrtKnob = true;
+      try { _mirMrtKnob = typeof DevFlags === "undefined" || DevFlags.get("mirMrt") !== false; } catch (_) { /* no flags: on */ }
+      const _mirMrt = () => !!(mirRT && mirRT.textures && mirRT.textures.length > 1);
+      const _mirMrtWant = () => _mirMrtKnob && !!(post && post.tagOn && post.tagOn() && TSL.mrt && renderer.setMRT);
+      function _mirTarget(type, w, h, mrt) {
+        const rt = new THREE.RenderTarget(w, h, {
+          type, format: THREE.RGBAFormat, depthBuffer: true, count: mrt ? 2 : 1,
+          generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
+        });
+        rt.texture.colorSpace = THREE.NoColorSpace;
+        if (mrt && rt.textures && rt.textures[1]) {
+          const bk = renderer.backend || {};
+          rt.texture.name = "output";
+          if (bk.isWebGPUBackend || bk.drawBuffersIndexedExt) rt.textures[1].format = THREE.RedFormat;
+          rt.textures[1].name = "ssrTag";
+          rt.textures[1].generateMipmaps = false;
+          rt.textures[1].minFilter = THREE.NearestFilter; rt.textures[1].magFilter = THREE.NearestFilter;
+          rt.textures[1].colorSpace = THREE.NoColorSpace;
+        }
+        return rt;
+      }
+      // Arm (true) / disarm (false) the scene pass's MRT for a draw into a mirror-shaped target.
+      function _mirMrtArm(on, prev) {
+        if (lit && lit.setSsrMrt) lit.setSsrMrt(on);
+        if (fx && fx.setSsrMrt) fx.setSsrMrt(on);
+        renderer.setMRT(on ? _ssrMrtNode() : (prev || null));
       }
       // A-H5 (perf hunt 4): THE MIRROR'S MIP CHAIN, CAPPED. three builds the
       // full chain on a mipmapped target — 9 levels for a 461 px mirror — and
@@ -3205,13 +3262,13 @@ const TLX = (function () {
           renderer.autoClear = false;   // a clear ignores the scissor (WebGPU loadOp)
           renderer.setScissorTest(true);
           if (mirrorWarmed && mirRT) {
-            // The mirror stage left the mirror's own instanced meshes shown and the MRT off.
-            tmp = new THREE.RenderTarget(4, 4, { type: mirRT.texture.type, format: THREE.RGBAFormat, depthBuffer: true,
-              generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter });
-            tmp.texture.colorSpace = THREE.NoColorSpace;
-            renderer.setMRT(null);
+            // The mirror stage left the mirror's own instanced meshes shown. The scratch target takes mirRT's
+            // attachment list, and the draw its MRT (on only for a mirror-shaped mirRT), as mirrorEnd draws.
+            const mrt = _mirMrt();
+            tmp = _mirTarget(mirRT.texture.type, 4, 4, mrt);
+            _mirMrtArm(mrt);
             renderer.setRenderTarget(tmp);
-            renderer.render(scene, camera); drawn.mirror++;
+            try { renderer.render(scene, camera); drawn.mirror++; } finally { _mirMrtArm(false); }
           }
           _mirWarmUnswap();
           if (mirrorOnly) return drawn;   // the rest was drawn by the entry warm (the finally restores the state)
@@ -3277,12 +3334,13 @@ const TLX = (function () {
       async function warmMirrorStage(usePost, useTag) {
         prepareMirrorTarget(16, 8, true);   // true: also show the mirror's own instanced meshes (A1)
         _mirUsed = true;   // future mirror compiles still need CPU attributes
-        if (lit.setSsrMrt) lit.setSsrMrt(false);
-        if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
-        renderer.setMRT(null);   // the entry warm's caster stage left it null; the deferred warm sets it the same
+        // The entry warm's caster stage left the MRT null; the deferred warm sets it the same. A mirror-shaped
+        // target (_mirMrt) compiles under the scene's MRT instead: the scene stage's programs, mostly cache hits.
+        _mirMrtArm(_mirMrt());
         renderer.setRenderTarget(mirRT);
         _gpuLastOperation = "compile-mirror";
         await renderer.compileAsync(scene, camera);
+        _mirMrtArm(false);   // the glass and composite below compile exactly as before
         // The composite, like all post quads, draws under the main MRT.
         renderer.setMRT(useTag ? _ssrMrtNode() : null);
         // So does the cockpit's live glass (drawMirrorGlass), in the scene
@@ -4429,6 +4487,7 @@ const TLX = (function () {
       const refuseTab = () => {
         const toGlx = _glPin === "0" || _glPin === "1" || forceWebGL || _autoStayGL;
         try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
+        if (!toGlx) _latchWebKitGL("first render refused");
         try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
         let n;
         try {
@@ -5261,7 +5320,9 @@ const TLX = (function () {
             if (scene.backgroundNode) pinSkyMaterial();
             renderer.setRenderTarget(mirRT);
             _gpuLastOperation = "render-mirror";
-            renderer.render(scene, mirCam);
+            const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
+            if (mrt) _mirMrtArm(true);
+            try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); }
             _mirRenders++;
             _mirFails = 0;   // the cap means FOUR CONSECUTIVE failures: unrelated one-frame throws must not retire the mirror
           } catch (e) {
@@ -6083,6 +6144,7 @@ const TLX = (function () {
               if (n <= 2) {
                 sessionStorage.setItem(rk, String(n));
                 sessionStorage.setItem("apex26.tlxAutoGL", "1");
+                _latchWebKitGL("GPU errors in the first " + _presentN + " frames");
                 try { localStorage.setItem("apex26.gfxTlxFail", "WebGPU rejected work in the first " + _presentN + " frames (" + String(_gpuFirstError || "gpu error").slice(0, 160) + ") — AUTO takes three WebGL2"); } catch (_) { /* backendState still carries the reason */ }
                 try { Log.warn("gfx", "TLX: " + _gpuErrors + " GPU error(s) in the first " + _presentN + " frames — reloading on three WebGL2:", _gpuFirstError); } catch (_) { /* no Log in the node VM harness */ }
                 setTimeout(function () { try { location.reload(); } catch (_) { /* harness: the session key still steers the next real boot */ } }, 300);
@@ -6349,7 +6411,7 @@ const TLX = (function () {
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
-              forceWebGL, pin: _glPin, autoStayGL: _autoStayGL, hasGpu: _hasGpu,
+              forceWebGL, pin: _glPin, autoStayGL: _autoStayGL, webkitStayGL: _webkitStayGL, hasGpu: _hasGpu,
               gpuAdapterOk: _gpuAdapterOk, gpuCanvasOk: _gpuCanvasOk,
               // Read back off the LIVE context, not inferred from what we
               // passed: `true` IS the see-through-car defect, and the paths

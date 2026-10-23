@@ -173,13 +173,16 @@ test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
   assert.match(apex, /PerfGov\.autoShed\(\) >= 2\) return "tier"/,
     "__apex.perChunkHeld() must name the same gate the render path runs");
 
-  // The tier-4 post stack keeps autoTier(): the degrade branch stops at an
-  // EFFECTIVE tier of 4, so a shed COUNT saturates at 4 - _userTier and would
-  // make bloom / SSAO / god rays unsheddable on exactly the low presets that
-  // need them shed. Both accessors exist for that reason; neither replaces the
-  // other.
-  assert.match(src, /po\.ssao = PerfGov\.autoTier\(\) >= 4/,
-    "the look post stack must stay on autoTier(), which can still reach 4");
+  // Look post (bloom/SSAO/god-rays) reads lookPostShed() so GRAPHICS: LOW
+  // sheds it without pinning autoTier (wet-road SSR still uses autoTier).
+  // assert.ok (not assert.match) — #1682 ratchet.
+  const pfx = readFileSync(join(ROOT, "js/ui/post-fx-opts.js"), "utf8");
+  assert.ok(pfx.includes("lookPostShed"),
+    "the look post stack must read lookPostShed(), not autoTier alone");
+  assert.ok(src.includes("PostFxOpts.applyLookShed"),
+    "race present must route look post through applyLookShed");
+  assert.ok(pfx.includes("po.ssao = off ? 0 : v.ssao"),
+    "SSAO must follow the lookPostShed latch");
 });
 
 test("the display-reset latch clears from EITHER chunk slider, as the tuner promises", () => {

@@ -165,11 +165,13 @@ test("inactive early features do not prevent a later post reduction from helping
     assert.equal(gov.autoTier(), helpfulTier);
     assert.equal(gov.autoShed(), helpfulTier);
     assert.equal(gov.tierFutile(), false);
-    // Pass the 600-frame hold armed at the first decision (frame 44),
-    // plus the next 45-frame evaluation, but not a second restore cooldown.
+    assert.equal(gov.phoneSlowLatch(), true, "a verified phone shed latches");
+    // Headroom used to restore one rung; on phones the slow latch keeps the
+    // verified shed (BrowserStack 2026-10-22: restore to autoTier 0 re-lit the
+    // GPU-bound look-post stack).
     feed(gov, () => 16.7, 120);
-    assert.equal(gov.autoTier(), helpfulTier - 1, "recovery restores one tier at a time");
-    assert.equal(gov.autoShed(), helpfulTier - 1, "remaining cuts retain their accounting");
+    assert.equal(gov.autoTier(), helpfulTier, "phone slow latch blocks feature restore");
+    assert.equal(gov.autoShed(), helpfulTier, "measured cuts stay while latched");
   }
 });
 
@@ -554,56 +556,59 @@ test("a bad preset cannot invent a tier above the ladder", () => {
   assert.equal(PerfGov.userTier(), 0, "clamped at the bottom");
 });
 
-test("autoTier ignores the GRAPHICS user floor so look post stays live on LOW", () => {
+test("autoTier ignores the GRAPHICS user floor; lookPostShed pins look post on LOW", () => {
   // GRAPHICS: LOW pins userTier at 4. That must still shed env/SSR/shadows via
-  // tier(), but bloom/SSAO/god-rays/contact/lampVol read autoTier() so the
-  // lighting tuner stays live unless the governor or crash floor measured it.
+  // tier(). autoTier() stays free of the user floor (wet-road SSR + tuner notes),
+  // but lookPostShed() is true on LOW so bloom/SSAO/god-rays/contact/lampVol
+  // actually go — otherwise a healthy LOW keeps the full post stack and loses
+  // to MEDIUM on tile GPUs (iPhone WebGPU BrowserStack 2026-10-21).
   const { PerfGov } = makeGov();
   assert.equal(typeof PerfGov.autoTier, "function", "PerfGov.autoTier must exist");
+  assert.equal(typeof PerfGov.lookPostShed, "function", "PerfGov.lookPostShed must exist");
   assert.equal(PerfGov.autoTier(), 0, "healthy device, no user floor: autoTier is 0");
+  assert.equal(PerfGov.lookPostShed(), false, "healthy device: look post live");
   PerfGov.setUserTier(4);
   assert.equal(PerfGov.tier(), 4, "GRAPHICS: LOW still floors the cost ladder");
-  assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: LOW must not pin look-defining post");
+  assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: LOW must not pin autoTier (wet SSR / tuner)");
+  assert.equal(PerfGov.lookPostShed(), true, "GRAPHICS: LOW must shed look-defining post");
   PerfGov.setUserTier(2);
   assert.equal(PerfGov.tier(), 2);
-  assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: MEDIUM must not pin look post either");
+  assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: MEDIUM must not pin autoTier either");
+  assert.equal(PerfGov.lookPostShed(), false, "GRAPHICS: MEDIUM leaves look post to the governor");
 });
 
-test("a recovered device gets its per-chunk lamps back on GRAPHICS: MEDIUM", () => {
-  // THE ONE-WAY DOOR THIS CLOSES. The degrade branch writes
-  // `_perfTier = max(_perfTier, _floorTier()) + 1`, and _floorTier() folds in
-  // the GRAPHICS preset — so on MEDIUM (_userTier 2, every phone's default) the
-  // governor's first measured shed put _perfTier at 3, adopting the preset as
-  // its own evidence. The restore branch walks back down only as far as
-  // _floorTier(), i.e. 2. autoTier() reads _perfTier, so it stayed >= 2 for the
-  // rest of the session however completely the device recovered — and PER-CHUNK
-  // LAMPS, gated `>= 1`, went off and never came back. Reported from a MEDIUM
-  // preset as "chunk lights isn't working even with the slider", against a
-  // tuner note promising the feature "returns on its own when frames recover".
-  //
-  // autoShed() answers the question the gate actually asks: how many rungs has
-  // the GOVERNOR shed on its own measurements, net of what it restored.
-  const PerfGov = makeGovAtFloor();          // scale lever exhausted: the ladder is the only lever
+test("a phone that measured slow keeps its shed on GRAPHICS: MEDIUM (slow latch)", () => {
+  // Pre-latch, restore walked autoShed back to 0 once EMA looked calm — and on
+  // a fill-bound iPhone that re-lit the full look-post stack (BrowserStack
+  // 2026-10-22). After a verified shed the phone slow latch must hold.
+  // Raising GRAPHICS (setUserTier to a lower rung) clears the latch so the
+  // player can opt back in; that path is covered below.
+  const PerfGov = makeGovAtFloor();
   PerfGov.setUserTier(2);                    // GRAPHICS: MEDIUM
   assert.equal(PerfGov.autoShed(), 0, "a preset alone is not a measured shed");
+  assert.equal(PerfGov.phoneSlowLatch(), false);
 
-  // Frames genuinely too slow, and genuinely cheaper for each rung shed — so
-  // every step VERIFIES and sticks, which is what makes the door close.
   feed(PerfGov, () => 34 - PerfGov.autoShed() * 6, 3000);
   assert.ok(PerfGov.autoShed() >= 1, "a device missing frames must still shed by evidence");
   assert.ok(PerfGov.autoTier() >= 3,
     `the ladder must still climb ABOVE the preset floor on a struggling device (got ${PerfGov.autoTier()})`);
+  assert.equal(PerfGov.phoneSlowLatch(), true, "verified shed latches on a phone");
+  // Settle the EMA under the restore gate before snapshotting — early headroom
+  // ticks can still shed while the old EMA is high; the latch only blocks restore.
+  feed(PerfGov, () => 8, 500);
+  const latchedTier = PerfGov.autoTier();
+  const latchedShed = PerfGov.autoShed();
+  assert.ok(latchedShed >= 1, "shed still held after EMA settles");
 
-  // Now the device recovers completely and stays recovered.
   feed(PerfGov, () => 8, 40000);
-  assert.equal(PerfGov.autoShed(), 0,
-    "the governor has restored everything it shed, so per-chunk lamps must come back");
-  assert.equal(PerfGov.tier(), 2, "the player's MEDIUM preset still floors the cost ladder");
-  // The two accessors deliberately disagree here, and that disagreement IS the
-  // fix: autoTier() cannot fall below the preset floor, which is why the gate
-  // for a governor-shed feature must not read it.
-  assert.equal(PerfGov.autoTier(), 2,
-    "autoTier() still reports where the ladder stands — that is what it is for");
+  assert.equal(PerfGov.phoneSlowLatch(), true, "headroom does not clear the phone slow latch");
+  assert.equal(PerfGov.autoShed(), latchedShed, "measured cuts are not restored while latched");
+  assert.equal(PerfGov.autoTier(), latchedTier, "effects are not promoted back");
+  assert.equal(PerfGov.tier(), Math.max(2, latchedTier), "MEDIUM floor still applies");
+
+  // Player raises to HIGH: latch clears, device may prove itself again.
+  PerfGov.setUserTier(1);
+  assert.equal(PerfGov.phoneSlowLatch(), false, "raising GRAPHICS clears the phone slow latch");
 });
 
 test("GRAPHICS: LOW can still shed by evidence — the ladder is not short-circuited by its own floor", () => {
@@ -630,51 +635,46 @@ test("GRAPHICS: LOW can still shed by evidence — the ladder is not short-circu
   assert.ok(PerfGov.tier() <= 4, "the ladder never invents a rung above 4");
 });
 
-test("LOW releases measured post shedding after recovery without raising the preset", () => {
+test("LOW keeps measured sheds under the phone slow latch (look post stays off)", () => {
   const gov = makeGovAtFloor();
   gov.setUserTier(4);
   feed(gov, () => 34 - gov.autoShed() * 6, 3000);
   assert.equal(gov.autoTier(), 4);
   assert.ok(gov.autoShed() > 0);
+  assert.equal(gov.phoneSlowLatch(), true);
   feed(gov, () => 8, 40000);
   assert.equal(gov.tier(), 4, "LOW still disables its preset features");
-  assert.equal(gov.autoShed(), 0, "measured lamp shedding recovers");
-  assert.equal(gov.autoTier(), 0, "post effects return to the healthy LOW state");
+  assert.ok(gov.autoShed() > 0, "phone slow latch blocks measured-shed recovery");
+  assert.equal(gov.autoTier(), 4, "autoTier stays at the verified shed");
+  assert.equal(gov.lookPostShed(), true, "look post stays shed on LOW");
 });
 
-test("LOW recovery rolls back when restoring post makes frames slow again", () => {
+test("phone slow latch blocks LOW restore; raising GRAPHICS clears it", () => {
   const gov = makeGovAtFloor();
   gov.setUserTier(4);
   feed(gov, () => 34 - gov.autoShed() * 6, 3000);
-  let attempted = false;
-  for (let i = 0; i < 2000; i++) {
-    gov.tick(8);
-    if (gov.autoShed() === 0) { attempted = true; break; }
-  }
-  assert.ok(attempted, "recovery was actually attempted");
-  feed(gov, () => 34, 350);
-  assert.equal(gov.autoTier(), 4, "the expensive post stack is shed again");
-  assert.equal(gov.autoShed(), 1, "rollback restores the original measured cut");
-  assert.equal(gov.tier(), 4);
+  assert.equal(gov.phoneSlowLatch(), true);
+  const shed = gov.autoShed();
+  for (let i = 0; i < 2000; i++) gov.tick(8);
+  assert.equal(gov.autoShed(), shed, "headroom never clears a latched phone shed");
+  // Raise to HIGH: latch clears so the device can prove the higher preset.
+  gov.setUserTier(1);
+  assert.equal(gov.phoneSlowLatch(), false, "raising GRAPHICS clears the latch");
 });
 
-test("switching to LOW after several measured cuts recovers the whole shed counter", () => {
+test("switching to LOW after several measured cuts keeps the phone slow latch", () => {
   const gov = makeGovAtFloor();
   feed(gov, i => i % 20 === 0 ? 12 : 30 - gov.tier() * 4, 2000);
   assert.equal(gov.autoTier(), 4);
   const shed = gov.autoShed();
   assert.ok(shed > 1, "several measured cuts preceded the preset switch");
-  gov.setUserTier(4);
-  for (let i = 0; i < 2000 && gov.autoShed() > 0; i++) gov.tick(8);
-  assert.equal(gov.autoShed(), 0);
-  assert.equal(gov.autoTier(), 0);
+  assert.equal(gov.phoneSlowLatch(), true);
+  gov.setUserTier(4);   // same or lower quality: latch stays
+  assert.equal(gov.phoneSlowLatch(), true, "dropping to LOW does not clear the latch");
+  for (let i = 0; i < 2000; i++) gov.tick(8);
+  assert.equal(gov.autoShed(), shed, "latched cuts are not released by headroom");
+  assert.equal(gov.autoTier(), 4);
   assert.equal(gov.tier(), 4, "the user's LOW floor remains");
-  feed(gov, () => 34, 350);
-  assert.equal(gov.autoShed(), shed, "a failed recovery restores every measured cut");
-  feed(gov, () => 8, 40000);
-  assert.equal(gov.autoShed(), 0, "a later healthy recovery clears all cuts");
-  assert.equal(gov.autoTier(), 0);
-  assert.equal(gov.tier(), 4);
 });
 
 test("the opening window keeps the frames every EMA in this file forgets", () => {
@@ -707,8 +707,10 @@ test("autoTier still honours the crash-sentinel floor and a measured shed", () =
   let scale = 1;
   PerfGov.init({ isMobile: true, getRenderScale: () => scale, setRenderScale: (s) => { scale = s; return true; } });
   assert.equal(PerfGov.autoTier(), 4, "two crash strikes must still shed look post");
+  assert.equal(PerfGov.lookPostShed(), true, "crash floor sheds via lookPostShed too");
   PerfGov.setUserTier(0);
   assert.equal(PerfGov.autoTier(), 4, "ULTRA must not defeat the crash floor via autoTier either");
+  assert.equal(PerfGov.lookPostShed(), true, "ULTRA must not defeat the crash floor via lookPostShed either");
 });
 
 test("wet-road reflections survive every user tier while overload and dry shedding remain independent", () => {

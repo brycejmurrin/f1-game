@@ -2634,6 +2634,11 @@ async function startRaceBody() {
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   RaceEntryProfile.mark("gridCountdown:end");
+  if (typeof Assets !== "undefined" && Assets.retry && PerfGov.softwareRaster()) {
+    const run = () => { try { Assets.retry(); } catch (_) { /* optional pack */ } };
+    if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 120000 });
+    else setTimeout(run, 0);
+  }
   // TLX links programs on first draw — warm during LIGHTS only when the pack is
   // already settled (or unsupported/off), else createTextureArray owns the thread.
   // EXCEPT TLX itself (apex26.tlxWarmBeforePack, default on; "0" = the pack gate): its programs never read the pack
@@ -2716,7 +2721,9 @@ function startRace() {
   }
   practiceMode = false;   // before loadingInfo() reads it: the body clears it only after several awaits
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
-  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome(); if (typeof Assets !== "undefined") Assets.retry();
+  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
+  // Software GL defers pack retry until after grid (#3584); hardware keeps idle prefetch here.
+  if (typeof Assets !== "undefined" && Assets.retry && !PerfGov.softwareRaster()) Assets.retry();
   // Launches that bypass RACE! (Data Hub, Daily) never ran its gesture work: the gyro was never attached, and
   // quitToMenu dropped the landscape lock while the page stayed fullscreen (no fullscreenchange to re-apply it).
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
@@ -8333,23 +8340,22 @@ function render(dt) {
   // smear only appears at speed (zero when parked; ramps in above ~40% of vTop()).
   const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp((((player && player.speed) || 0) / vTop() - 0.4) / 0.5, 0, 1) : 0;
   const po = _presentOpts;
-  // Bloom joins the last MEASURED shed (autoTier, not GRAPHICS: LOW): bloomAmt
+  // Bloom joins the last MEASURED shed (lookPostShed / autoTier fallback): bloomAmt
   // 0 skips the ~9-pass bright+mip chain — the biggest post-chain saving left
-  // after env/SSR/shadows. Look post stays live for the lighting tuner.
-  po.exposure = frame.exposure * LT.exposureMul; po.bloom = PerfGov.autoTier() >= 4 ? 0 : _bloom * LT.bloomMul;
+  // after env/SSR/shadows. GRAPHICS: LOW sheds look post via lookPostShed (not autoTier alone).
+  po.exposure = frame.exposure * LT.exposureMul;
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2) * frame.exposure; po.grade = _grade;   // exposed units (BRIGHT_FS): x the TOD exposure keeps the shipped bloom; EXPOSURE now moves it
+  PostFxOpts.applyLookShed(po, { bloom: _bloom * LT.bloomMul, ssao: _ao, godray: _gr, contact: _cs, lampVol: _lampVol });
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
   // slow at the scale floor sheds those instead. Tier 2 drops dry + car-paint SSR; wet roads use a reduced budget.
-  // autoTier 4 drops SSAO (+2 blurs) and god-ray — not GRAPHICS: LOW alone.
-  po.ssao = PerfGov.autoTier() >= 4 ? 0 : _ao;
-  po.godray = PerfGov.autoTier() >= 4 ? 0 : _gr;
+  // lookPostShed drops SSAO (+2 blurs) and god-ray (measured tier 4 or GRAPHICS: LOW).
   // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set keeps the whole march alive past po.godray = 0.
   // contact is the SSAO half of the same trap: haveAO is `aoStr > 0 || contactStr > 0`,
   // so a tier-4 DAYTIME frame (_cs is non-zero whenever the key is bright) would
   // still run the SSAO pass and both of its blurs after po.ssao went to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  // Wet-road SSR keeps a reduced budget even at user LOW (tier 4).
+  // Wet-road SSR keeps a reduced budget even at user LOW (tier 4); wet budget uses autoTier, not lookPostShed.
   // Measured overload/crash tier 4 still falls back to material sky/lamp reflections. Dry sheen still sheds at 2.
   if (_roadReflectionTransition.gfx !== gfx) {
     _roadReflectionTransition.value = NaN;
@@ -8357,7 +8363,7 @@ function render(dt) {
   }
   PostCommon.roadReflection(po, frame.wetness || 0, _ssrPo, PerfGov.tier(), PerfGov.autoTier(),
     _roadReflectionTransition, performance.now(), PerfGov.tierFloor() >= 4);
-  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.mist = _mist;
   PostFxOpts.gate(po);   // GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS: the tier-4 exit, taken by choice
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
@@ -9236,7 +9242,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false); $("pm-quick-doors").insertBefore(Object.assign(document.createElement("button"), { id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: () => { setPaused(false); Input.requestRecover(); } }), $("pm-checkpoint"));   // RECOVER CAR = the R key; touch had none. Built here like REPLAY: shellNodes holds
-$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; startRace().then(() => { if (state === "race") frozen = false; }, () => {}); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it with its own paused = false, and a start that was cancelled (settings changed) hands the old race back
+$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; startRace().then(() => { if (state === "race") frozen = false; }, () => {}); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it on a committed start, and a start cancelled for changed settings (or failed) ends on the title via quitToMenu — the old race is not handed back
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 

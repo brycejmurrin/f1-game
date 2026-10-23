@@ -1,0 +1,1 @@
+New: BENCHMARK results files (apex26.bench/2) now carry a profiling capture per leg and step: memory and renderer counters, warnings and errors, GPU adapter and per-pass GPU time, compile counts, long tasks, frame gaps and device facts.
