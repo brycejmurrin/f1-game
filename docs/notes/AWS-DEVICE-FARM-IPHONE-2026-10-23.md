@@ -274,8 +274,13 @@ Website Data via XCUITest) before the first entry.
   Still unmeasured: a reboot, low-storage eviction, and a deploy that changes shader source.
 - **WebGPU needs two loads to finish warming** (7.3 → 2.3 → 0.24 s); WebGL2 needs one (2.3 → 0.37 s). The second
   WebGPU warm is mostly `post` (1.9 s): pipelines the first warm deferred.
-- **#3604 worked:** the first WebGPU warm on this phone is 7.3 s against 29.4 s (`mirrorPrepare`) before it (§6,
-  §7). The first-session entry window is 9.1 s, down from about 30 s.
+- **#3604's gain is not cleanly measured here.** The first WebGPU warm in this session was 7.3 s, against 29.4 s
+  (`mirrorPrepare`) in §6/§7. Per the caveat above, this unit may already have held WebGPU pipelines, so 7.3 s is
+  only an upper bound on a possibly warm phone. OrchA 27's read of all runs agrees: on the branch the gain was
+  10.5 s, but 16.3 s at the merged tip, where the phones also had WebGPU history. A clean before/after needs a
+  known-cold unit or a Safari data clear before each first entry. `run` now records the unit's identifier
+  (`mobile: deviceInfo` uuid, first 8 characters) in `report.unit`, so sessions on the same physical phone can be
+  told apart.
 - **The entry floor is not the renderer.** With a warm cache, both paths enter in 1.7–2.9 s, made of `loadTrack`
   (0.36–0.41 s), `gridCountdown` (0.73–0.86 s) and `warmCarAssets` (0.69–0.82 s), plus about 1 s of `scenery` when
   it is not cached. Any further entry win is there, not in shaders.

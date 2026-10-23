@@ -232,6 +232,10 @@ async function run() {
       "appium:showSafariConsoleLog": true, "appium:showSafariNetworkLog": true };
     const created = wd(base, "POST", "/session", { capabilities: { alwaysMatch: caps, firstMatch: [{}] } });
     sid = created.sessionId; log("WebDriver session up");
+    // Which physical phone: Device Farm has several units per model and Safari's cache survives between sessions
+    // on one unit (note §8), so a "first entry" is only cold if this unit has not run the game before.
+    try { const d = wd(base, "POST", `/session/${sid}/execute/sync`, { script: "mobile: deviceInfo", args: [] });
+      report.unit = String((d && d.uuid) || "").slice(0, 8) || null; log(`unit ${report.unit}`); } catch (_) { report.unit = null; }
     try { wd(base, "POST", `/session/${sid}/orientation`, { orientation: "LANDSCAPE" }); } catch (e) { log("orientation: " + e.message.slice(0, 120)); }
     wd(base, "POST", `/session/${sid}/url`, { url });
     await sleep(20000);
