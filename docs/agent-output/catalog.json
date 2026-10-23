@@ -1943,12 +1943,6 @@
       ]
     },
     {
-      "path": "tools/gfx/readback-garage-oracle.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node"
-    },
-    {
       "path": "tools/gfx/res-scale-ab.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

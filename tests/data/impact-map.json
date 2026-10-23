@@ -9367,9 +9367,6 @@
       ]
     },
     "js/perf/loop-health.js": {
-      "reload": [
-        "tests/unit/gfx-backend-canary.test.mjs"
-      ],
       "*": [
         "tests/unit/loop-health.test.mjs"
       ]
@@ -12911,7 +12908,6 @@
       "init": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs"
       ],
       "load": [
@@ -12919,7 +12915,6 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/build-worker.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
