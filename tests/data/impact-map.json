@@ -9312,6 +9312,9 @@
       ]
     },
     "js/perf/bench-run.js": {
+      "growth": [
+        "tests/unit/bench-run.test.mjs"
+      ],
       "load": [
         "tests/unit/bench-run.test.mjs"
       ],
@@ -9319,6 +9322,9 @@
         "tests/unit/bench-run.test.mjs"
       ],
       "newPlan": [
+        "tests/unit/bench-run.test.mjs"
+      ],
+      "overs": [
         "tests/unit/bench-run.test.mjs"
       ],
       "pathPrefs": [
