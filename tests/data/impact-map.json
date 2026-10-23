@@ -5131,6 +5131,7 @@
       "open": [
         "tests/unit/data-hub-offline.test.mjs",
         "tests/unit/data-hub-picker.test.mjs",
+        "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -5375,6 +5376,7 @@
     "js/data/tab-utils.js": {
       "*": [
         "tests/unit/data-hub-picker.test.mjs",
+        "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/telemetry-trace.test.mjs",
         "tests/unit/telemetry-view-resize.test.mjs"
       ]
@@ -8906,6 +8908,7 @@
         "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
       "open": [
+        "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/quali-persist.test.mjs"
       ],

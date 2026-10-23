@@ -114,7 +114,11 @@ function loadBackendScripts(files, edges, opts) {
     if (sri === false) { resolve(false); return; }
     const el = document.createElement("script");
     if (sri) el.integrity = sri;
-    el.src = url(src);
+    let href = url(src);
+    // A transient CDN 5xx can poison the HTTP cache for one URL; lazy-bundle
+    // retries pass cacheBust so the <script> asks for a fresh key (same bytes, new query).
+    if (opts && opts.cacheBust) href += (href.indexOf("?") >= 0 ? "&" : "?") + "retry=" + opts.cacheBust;
+    el.src = href;
     el.crossOrigin = "anonymous";
     // MARKED so index.html's broken-install repair (sweeps every SW cache and
     // reloads) leaves it alone: that repair is right for a shell tag the CDN
