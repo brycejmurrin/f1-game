@@ -14,7 +14,7 @@ so this note tests AWS Device Farm as the device source. Grant: Bryce, in OrchA 
 | `devicefarm list-projects` (us-west-2) | works: one project, `apex-profiler` |
 | `list-devices` (iOS phones) | works: **three iPhones, all on iOS 27.0, all HIGHLY_AVAILABLE with remote access**: iPhone 14, iPhone 14 Pro, iPhone 18 Pro Max. No iOS 26 or iOS 18 device, so neither the iOS 26 path Bryce plays nor the no-WebGPU fallback is covered here |
 | one-device proof | **works** (iPhone 18 Pro Max, iOS 27.0, 01:39Z): Safari opened the live site in landscape; screenshot taken; `navigator.gpu` true, `gpuAdapterOk`/`gpuCanvasOk` true; AUTO boots `api=webgl2` (`forceWebGL` from `isWebKit`, pin null) |
-| A/B profile | **done** (same device, 01:44–01:55Z), §5 |
+| A/B profile | **done**: 2-leg on iPhone 18 Pro Max (§5), then the 4-leg alternating test on iPhone 18 Pro Max and iPhone 14 with entry stages, thermal and Safari logs (§6) |
 | device minutes | wall time about 4.5 min (proof) + 11 min (A/B), about 16 min. `deviceMinutes` still read 0 while the sessions sat in STOPPING; re-read it once they reach COMPLETED |
 
 ## 2. What the docs say (read 2026-10-23)
@@ -144,3 +144,58 @@ Reading:
   fill signal only.
 - Single run, single device, one leg per path: treat this as a first sample, not a verdict. The full 4-leg
   alternating test (`--legs 4`, about 14 min) controls for order and heat.
+
+## 6. Result: the 4-leg alternating test on two iPhones (iOS 27.0), with entry stages and thermal
+
+`devicefarm-iphone.mjs run --device <name> --legs 4`: BENCHMARK "paths" in full (WEBGPU, WEBGL2, WEBGL2, WEBGPU), run on
+both phones in parallel at 02:03–02:20Z. Each poll also read `RaceEntryProfile.stageTable()`, `mobile: deviceInfo`
+(thermal) and the Safari console/network buffers. **Thermal state stayed 0 (nominal) on both phones for the whole
+run**, so the differences below are not throttling.
+
+### Frame time (median over the two legs per path; rAF p50 / p95 ms, fps)
+
+| phase | 18 Pro Max WEBGPU | 18 Pro Max WEBGL2 | **iPhone 14 WEBGPU** | **iPhone 14 WEBGL2** |
+|---|---|---|---|---|
+| default | 17/17 (59.9) | 17/17 (59.9) | **17/17 (59.7)** | **17/24.5 (55.7)** |
+| s50 | 17/17 (59.6) | 17/17 (59.6) | 17/17 (59.6) | 17/22 (57.1) |
+| s75 | 17/17 (59.5) | 17/17 (59.4) | **17/17 (59.4)** | **19/27 (51.0)** |
+| s100 | 17/17 (59.9) | 17/17.5 (59.6) | **17/17 (59.6)** | **23/34 (41.8)** |
+| mirrorOff | 17/17 (59.7) | 17/17 (59.6) | 17/17 (59.5) | 17/21.5 (57.4) |
+| fill slope | 0 | 0 | 0 | 8.07 ms per full frame |
+
+- **On iPhone 14, three.js WebGPU holds 60 fps at every scale; WebGL2 falls to 51 fps at 0.75 and 42 fps at full
+  resolution** (p95 34 ms), and loses about 4 fps even at the player's default. Both WebGL2 legs agree (p99 52 / 61
+  ms at s100), and both WebGPU legs agree. This is the first real-device evidence that the WebGPU path is the faster
+  renderer on a mid-range iPhone. AUTO currently picks WebGL2 on every WebKit device (`tlx.js` `isWebKit`).
+- iPhone 18 Pro Max: both paths stay on Safari's 60 Hz rAF cap in every phase, as in §5.
+- The WebGPU `timestamp-query` GPU timer reads 81–97 ms p50 on iPhone 14 while frames arrive at 16.7 ms, so it is
+  not usable as an absolute GPU time on iOS (see §5).
+
+### Race entry (BenchRun cold `buildMs`, ms) and the stage that costs it
+
+| leg (order) | 18 Pro Max cold | of which `mirrorPrepare` | iPhone 14 cold | of which `mirrorPrepare` |
+|---|---|---|---|---|
+| 1 WEBGPU (first in session) | 30 394 | 28 197 | 33 913 (window 55 410) | 30 005 |
+| 2 WEBGL2 | 6 439 | 4 659 | 11 834 | 8 483 |
+| 3 WEBGL2 | 3 244 | 1 580 | 5 710 | 2 574 |
+| 4 WEBGPU | 5 758 | 4 132 | 9 364 | 6 285 |
+| warm (all legs) | 221–234 | 70–88 | 384–454 (WEBGPU leg 1: 2 945) | 123–2 642 |
+
+- **The "29 s WebGPU cold entry" in §5 was mostly order, not path.** The first leg of a session pays a one-time
+  cost. Later legs: WebGPU 5.8 s vs WebGL2 3.2 s (18 Pro Max), 9.4 s vs 5.7 s (iPhone 14). WebGPU is still about
+  1.6–1.8× slower to enter cold, but not 4.5×.
+- **`mirrorPrepare` is 70–93 % of every cold entry, on both paths.** Every other stage (`loadTrack` 0.3–0.8 s,
+  `gridCountdown` 0.8–1.6 s, `warmCarAssets` 0.8–1.5 s) is small and path-independent. This is the same stage G2
+  found on iOS 26 (9.96 s). Its first-in-session cost (28–30 s) is consistent with shader/pipeline compilation that
+  Safari then caches across the reload. To separate "first WebGPU" from "first in session", the next run should
+  start with WEBGL2.
+- No WebGPU validation errors, device-lost events or error-level console lines on either phone. The console has
+  only known warnings (`TLX on a phone: ~54 MB CPU geometry copies`, `unregistered save key apex26.phoneRec`,
+  music `NotAllowedError` without a user gesture). The network log captured about 8.5k rows per phone (not analysed
+  here).
+
+### Cost
+
+Wall time per session: proof about 4.5 min, 2-leg A/B about 11 min, 4-leg runs about 16.5 min each. **About 48
+device-minutes in total** (about $8 at $0.17 metered unless the free trial covers it). AWS still reported every
+session as STOPPING with `deviceMinutes` 0 at 02:21Z, so the billed figure must be read later.
