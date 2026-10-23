@@ -12496,13 +12496,18 @@
       "createChunkedMesh": [
         "tests/unit/chunked-index-ranges.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/glx-lamp-shadow-slot.test.mjs",
         "tests/unit/glx-multidraw.test.mjs",
         "tests/unit/glx-occlusion.test.mjs"
       ],
       "drawChunked": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/glx-lamp-shadow-slot.test.mjs",
         "tests/unit/glx-multidraw.test.mjs",
         "tests/unit/glx-occlusion.test.mjs"
+      ],
+      "drawChunkedBody": [
+        "tests/unit/glx-lamp-shadow-slot.test.mjs"
       ],
       "freeChunkedMesh": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -12511,6 +12516,7 @@
       "init": [
         "tests/unit/chunked-index-ranges.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/glx-lamp-shadow-slot.test.mjs",
         "tests/unit/glx-multidraw.test.mjs",
         "tests/unit/glx-occlusion.test.mjs"
       ],
@@ -12541,6 +12547,7 @@
       "begin": [
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/glx-lamp-shadow-slot.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/surface-id-parity.test.mjs"
@@ -12635,6 +12642,7 @@
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/glx-lamp-shadow-slot.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
@@ -13118,6 +13126,7 @@
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "*": [
+        "tests/unit/glx-lamp-shadow-slot.test.mjs",
         "tests/unit/glx-multidraw.test.mjs"
       ]
     },
@@ -13132,6 +13141,7 @@
       "*": [
         "tests/unit/always-lamp-floor.test.mjs",
         "tests/unit/frame-lights-rank-cache.test.mjs",
+        "tests/unit/glx-lamp-shadow-slot.test.mjs",
         "tests/unit/glx-multidraw.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/lamp-density.test.mjs",
@@ -13278,6 +13288,7 @@
       ],
       "*": [
         "tests/unit/chunked-index-ranges.test.mjs",
+        "tests/unit/glx-lamp-shadow-slot.test.mjs",
         "tests/unit/glx-multidraw.test.mjs",
         "tests/unit/glx-occlusion.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
