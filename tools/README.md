@@ -320,6 +320,7 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/query.mjs** | Summarise a saved profile (spans JSON or .cpuprofile: top-N self/total, fn/file filter) or compare two spans JSONs. | playwright-probe |
 | **perf/race-entry-timer.mjs** | Time one race entry: boot, race() → track flip, settle, stages, Log records; APEX_PIN / APEX_PROFILE knobs. | — |
 | **perf/runtime-memory.mjs** | Nonintrusive, feature-detected CDP heap/DOM/performance counters on a parent-owned browser session. | mcp-probe / js-debugger |
+| **perf/touch-boost-probe.mjs** | BUTTONS-mode pedal → BOOST tap hitch probe: CDP touch sequence at 844x390, frame gaps + traced main-thread work. | — |
 
 ### `tools/gfx/`
 

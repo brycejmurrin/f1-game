@@ -2836,6 +2836,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/perf/touch-boost-probe.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/shot/ab-gallery.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
