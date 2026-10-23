@@ -25,3 +25,6 @@ Launched A·W15 session_01AhiowZLuQxUq1eLzZb7BZw (Opus) — Bryce bug: buttons-s
 
 ## 07:03Z
 MERGED #3489 ad7d7434. Next #3530 after Pages on ad7d7434.
+
+## 07:35Z
+Pages on ad7d7434 startup_failure → re-dispatched 39918566155. #3458 head now 89a8cef5 (A·O5 re-sync, CI running). A·W15 PR #3611 (granted up to 5 DF runs). A·D1 session_01Wj2vjHSTC5X7jPwXkJEuJD PR #3612 draft (DF deeper). DF analysis: artifacts/devicefarm-analysis on this box; findings sent to D + A·D1.
