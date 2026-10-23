@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-0fe70d46-81aa-5310-9963-96404b5c7f4a #3646 needs run-ci label (rule 7.3 Pages train 39933859784 still queued on bf95b3ca; OrchA 29 hold; tip 5c0734951 tooling-fast green)
+READY to:A from:A·W21 #3624 PR #3624 (#3557 aero-zone counts) READY: head fd8d5d24493611484009b5f32b2628539c314e66, full tier green (run 39937230700, 24 jobs 0 failed), ready-gate passed. MERGE-HOLD names OrchA 28 as merger.
