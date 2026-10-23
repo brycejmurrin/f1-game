@@ -116,8 +116,10 @@ names an open PR when one already covers the gap.
   ULTRA ran 24.5 fps with 1052 frames over 33 ms in 60 s.
 - **Owner:** f5e43976 (ULTRA cap on phones, merged); #3479 (D·IP3 LOW look-post shed, open); #3529 governor §2u
   (merged).
-- **Gap left:** no per-pass split. `gpuTimer` is unsupported on iOS Safari (no `timestamp-query`), and nobody has
-  run a pass-by-pass ablation on a device. `TLX-GPU-COST-PARAVIRTUAL-2026-10-20.md` §1–2: the macOS runner is
+- **Gap left:** no per-pass split. Fleet D's `gpuTimer` read "unsupported", but those sessions were bound to three's
+  **WebGL2** backend (§2). Bryce's phone on the WebGPU pin reports the adapter feature `timestamp-query` as true
+  (§6). So GPU timing may well work on his path; the GPU TEST legs of the `paths` BENCHMARK will say
+  (`gpuTest.gpuTimer.supported`, per-phase `gpu`). Nobody has run a pass-by-pass ablation on a device yet. `TLX-GPU-COST-PARAVIRTUAL-2026-10-20.md` §1–2: the macOS runner is
   paravirtual, so `gpu-census.yml` cannot answer this either.
 - **Verify:** the GPU TEST phases (`s50`/`s75`/`s100`/`mirrorOff`) on the device, per pin, then the same with
   `apex26.tlxShadowOff=1`.
@@ -191,3 +193,32 @@ four legs: WebGPU, WebGL2, WebGL2, WebGPU.
    before changing `tlx.js`.
 3. G3, G4 and G5: re-measure after #3487, #3479, #3489 and #3491 land. Do not duplicate their work.
 4. G6 only if G1's soak shows a device loss on the WebGPU pin.
+
+## 6. Device evidence received
+
+### 6a. Bryce's phone, BENCHMARK `garage` (2026-10-23 02:13Z)
+
+File `apex26-bench-garage-2026-10-23T02-13-06.json`, schema `apex26.bench/1`, state `complete`. It is held on
+`cursor/orcha26-queue-a26q` @faa26d129, `scratch/orcha26/`; not committed here.
+
+| field | value |
+|---|---|
+| device | iPhone, home-screen app (`standalone: true`); UA `iPhone OS 18_7 … Version/27.0.1`. Safari 26+ freezes the OS token in the UA at 18_7, so read the Safari version. `screen` 393×852, dpr 3, `hwConcurrency` 4 |
+| GPU path | `backendPick: {api: "webgpu", pin: "0", forceWebGL: false, softBlit: false}`, `liteGpu: true`, `gpuErrors: 0`. This confirms §2: Bryce plays three's **WebGPU** backend, pinned |
+| adapter | `webgpu: true`, `webgpuF16: true`, `webgpuTimestamp: true` |
+| garage entry (cold) | `goMs` 247 ms |
+| garage frames | idle, 15 part tabs, 4 liveries and a spin: every step p50 17 / p95 17 ms, p99 17–22 ms, max ≤ 35 ms, 60.1 fps, `over50` 0, no new links or pipelines |
+
+Reading: on Bryce's device and path, the garage is locked to the 60 Hz panel with no hitches and no shader or
+pipeline builds mid-interaction. Two limits:
+
+- The garage is not the race scene. G2–G4 still need the `paths` test, which Bryce is re-running.
+- `packLive: false` at file time. Whether the baked material pack was simply not yet resident in the garage, or
+  never loads on his device, is not answered by this file. Check `packLive` in the race legs of the `paths` file.
+
+### 6b. AWS Device Farm (A·D1, #3598)
+
+An iPhone 18 Pro Max on iOS 27.0, live site, AUTO, came up `api=webgl2` (`forceWebGL` from `isWebKit`, pin
+null). This independently confirms §2: on AUTO, every iPhone is on three's WebGL2 backend. Its BENCHMARK `paths`
+A/B (WebGPU leg done with `api=webgpu`, WebGL2 leg running at the time of writing) goes into G1 when posted, next
+to Bryce's own `paths` file.
