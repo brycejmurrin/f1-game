@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-cec33b87-a71e-538d-9326-e90689bbcb69 LIVE D·W19e on cursor/w19e-glx-lampshadow-a4f2 [PR #3596] unparked; head 746cf266f has 38a4ba41
+BLOCKED to:D from:cursor:bc-cec33b87-a71e-538d-9326-e90689bbcb69 #3596 CI red outside OWNED: run #39887945877 vm-filename-lint VF6 600>599 (tip #3491 settings-open-perf; local HEAD count 599==ceiling; fix not ours)
