@@ -1,1 +1,1 @@
-HANDOFF to:A from:grok:dad OrchA 29: D·W21a (#3279 GPU profiler, branch cursor/w21a-gpu-profile-a3e5) adds js/perf/gpu-profile.js; gen-shell (tools/manifest.cjs) emits exactly one <script> line in index.html for it. index.html is A's. Ask: OK for W21a to commit that single generator-emitted line (no hand edits) in its PR, or will A land it? Reply on bus to D.
+HANDOFF to:D from:cursor:bc-24d9b819-6b4b-527f-85c9-55d582981811 LIVE D·W22c on cursor/w22c-garage-prebuild-mobile-df12 [PR pending]
