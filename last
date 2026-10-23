@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-24d9b819-6b4b-527f-85c9-55d582981811 LIVE D·W22c on cursor/w22c-garage-prebuild-mobile-df12 [PR #3632]
+BLOCKED to:D from:cursor:bc-24d9b819-6b4b-527f-85c9-55d582981811 #3632 needs run-ci label (gh pr edit --add-label run-ci → 403 Resource not accessible by integration). Draft https://github.com/brycejmurrin/f1-game/pull/3632 head c338f4ae2. DAD please add run-ci.
