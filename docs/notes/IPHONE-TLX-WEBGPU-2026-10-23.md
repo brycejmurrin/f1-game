@@ -82,11 +82,23 @@ names an open PR when one already covers the gap.
   attributed it to WebGPU, which §2 corrects. Why iOS 26 is about 3× slower than iOS 17/18 is not known:
   different devices, OS shader caches, or the `navigator.gpu` / `getContext("webgpu")` probe at `tlx.js:381-387`.
 - **Owner:** none. D·DP1 stood down on file holds (bus `6e040a20`). B·H26 also left it as "lead not taken".
-- **Fix (proposed):** start the race-track warm when the circuit is picked on race select, not after the tap;
-  slice `compileAsync` per material group with yields; run it alongside `warmCarAssets` (1.6–2.0 s, serial
-  today).
-- **Verify:** `__apex.raceEntryProfile()` stages on a cold device, before and after: `entryMs` and the largest
-  rAF gap. Run it on both pins, because the WebGPU leg's pipeline compile is a different cost.
+- **Correction (A·I1, after the Phase 2 GO):** the 13 s is the **api entry path**, not a player tap. Fleet D's
+  harness entered with `__apex.race()` (`deep.mjs:58`), which skips the menu warm.
+  `LIVE-DEBUGGER-BOOT-2026-10-21.md` §B1 already rules that path by design. A player's race select already
+  builds the circuit and runs the program warm after 1.2 s of idle (`js/game.js` `scheduleFlybyTrack` →
+  `menuFinish` → `warmPrograms`). `startRaceBody` then skips the warm, and census `entry=menu` legs enter in
+  0.9–3.5 s. So "warm on race select" is already the design.
+- **What is left for the player:** that menu warm is long (`menu.prepWaitMs` 14–35 s on TLX against 3–4 s on GLX,
+  §B2 of that note, macOS census). A player who taps RACE! before it finishes waits behind the card for what is
+  left. Its device cost is unmeasured.
+- **Slicing is mostly already done:** in r186, `compileAsync` → `getForRenderAsync` → `buildAsync` yields to the
+  main thread (`yieldToMain`: `scheduler.yield`, or a MessageChannel on Safari) after every node-build stage. So
+  the 5.3 s single gap has to come from something that does not yield. Candidates are a synchronous WebGL program
+  link (`getProgramParameter(LINK_STATUS)` when `KHR_parallel_shader_compile` is missing), or the `_projectObject`
+  / `_renderObjects` pass. That needs on-device attribution before any code change.
+- **Verify / next measurement:** BENCHMARK and GPU TEST enter through `SoakRun.start` → `G.startRace()` with no
+  menu warm (`js/perf/soak-run.js:127-145`). So Bryce's BENCHMARK file (G1) times this same cold warm on his
+  phone on both paths (`leg.entry.cold` / `.warm`). Decide the fix from that file, not from the api-path numbers.
 
 ### G3. First about 2 minutes of every race at 36–44 fps, then 57 fps
 - **Symptom (Fleet D, 5 min Monza soak, iPhone 15):** 30 s windows of 36.4 / 38.5 / 42.0 / 43.6, then 55.6–58.7.
@@ -139,8 +151,8 @@ names an open PR when one already covers the gap.
 
 1. G1: get one same-device A/B (BENCHMARK file from Bryce, or restored Automate minutes). Every WebGPU-specific
    fix below waits on it.
-2. G2: race-entry warm on race select, sliced. It has no owner and is the biggest player-visible cost (about 13 s
-   on iOS 26). This touches `js/game.js`, `js/render/three/tlx.js` and `js/render/shared/mirror-pass.js`.
-   Check `who-is-on-it.mjs` for holds first.
+2. G2: warming on race select is already the design (see the correction in G2). Size the remaining menu-warm
+   cost from Bryce's BENCHMARK `entry.cold` vs `entry.warm` on both paths, then attribute the non-yielding block
+   before changing `tlx.js`.
 3. G3, G4 and G5: re-measure after #3487, #3479, #3489 and #3491 land. Do not duplicate their work.
 4. G6 only if G1's soak shows a device loss on the WebGPU pin.
