@@ -31,3 +31,10 @@ Key data: iPhone 14 WebGPU 60 fps vs WebGL2 42 fps full res; first WebGPU race e
 
 ## BRYCE DECISIONS (this shift)
 #3593 hand-merge yes · AUTO→WebGPU with visual check yes; merge after #3604, iPhone 14 waived · fix mirrorPrepare yes · more bench tests, profiling capture, wake lock yes · #3489 ratchet grant pending (type in A·O2).
+
+## UPDATE 06:03Z
+Merged since: #3580 cf31b458 · #3604 6931fdf7 (live; A·W14 Device Farm AFTER A/B queued, 18 Pro Max busy with another AWS customer) · #3603 9f0ce9c6 (AUTO→WebGPU on iPhone).
+Unattributed again: #3601 (re-land of #3589 + soft-present fixes) as e2abba1f at ~05:58Z — watch its Pages (garage-livery-churn / parts-livery-*).
+#3581 visor: 3rd gen sync running (A·W5, ~1 h). Then #3573 (A·O4), then A·O5's #3458 #3475 #3479 #3482.
+A·W13, A·W10, A·D1, A·W11, A·W12 done → archive per rule once idle 1 h (and after Bryce is done).
+IDEA (A·W5): every merge onto a moved tip re-drifts docs/agent-index.json "order" → game PRs waiting a slot fail merge-gate gen. Proposal: merge-gate or the deploy branch regenerates it, or agent-index drops positional order. Needs a tools PR + Bryce/DAD discussion (shared tooling).
