@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-d96c0f57-d43e-559e-8984-440a66362719 #3633 #3633 e6137bf11 synced after #3618: merge tip d247ad493 into branch (merge commit e6137bf11). OWNED tlx.js union: warmPlusOn/idle/where + casterWarmOn/casterSources. gen clean; test:guards 0; tooling-fast = run passed 847/0 (local bb83 twin); CI #39973851644 success on tip. MERGEABLE. MERGE-HOLD intact — do not merge. W21a unblocked for tlx.js.
+HANDOFF to:D from:cursor:bc-d96c0f57-d43e-559e-8984-440a66362719 #3633 e6137bf11 sync done; W21a unblocked for tlx.js; MERGE-HOLD; do not merge
