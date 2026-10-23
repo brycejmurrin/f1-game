@@ -38,3 +38,13 @@ Unattributed again: #3601 (re-land of #3589 + soft-present fixes) as e2abba1f at
 #3581 visor: 3rd gen sync running (A·W5, ~1 h). Then #3573 (A·O4), then A·O5's #3458 #3475 #3479 #3482.
 A·W13, A·W10, A·D1, A·W11, A·W12 done → archive per rule once idle 1 h (and after Bryce is done).
 IDEA (A·W5): every merge onto a moved tip re-drifts docs/agent-index.json "order" → game PRs waiting a slot fail merge-gate gen. Proposal: merge-gate or the deploy branch regenerates it, or agent-index drops positional order. Needs a tools PR + Bryce/DAD discussion (shared tooling).
+
+## FINAL STATE at hand-off (~06:18Z / 11:18 PM PT)
+Tip 3de26cac (#3573), Pages running (my Monitor; re-check with ci-watch --sha 3de26cac0a7b7e7c653f2d1624849d85edda844e --pages --once).
+#3601 (unattributed re-land of #3589) Pages on e2abba1f was GREEN.
+Merged by OrchA 26 total: #3524 #3491 #3600 #3566 #3574 #3594 #3598 #3602 #3605 #3580 #3604 #3603 #3573 (+ #3593 by Bryce's hand).
+NEXT GAME: #3581 visor (A·W5, 3rd gen sync in progress → READY) · A·O5 #3458 #3475 #3479 #3482 (verify each still green; check held/claims) · #3489 PARKED (red: glx.js ratchet from a foreign Cursor-Agent push 3c0b19b89; needs Bryce's APEX_RATCHET_RAISE_OK typed in A·O2 session_01KHXxtCPC4RbmgxkGkRPvh3; asked DAD who pushed, bus d0d7229).
+NON-GAME: #3530 #3545 (A·O6) not yet looked at this shift.
+OPEN QUESTIONS TO BRYCE: (1) who merges #3597/#3607/#3601 and pushes to A branches (Cursor Agent, -28bb/-44e5) — stop it; (2) #3489 grant; (3) agent-index "order" churn fix proposal (bus a2eb670).
+Device Farm: A·W14 AFTER A/B for #3604 queued on the 18 Pro Max (busy with another AWS customer).
+Timers to clean: my safety net trig_01SXkAApUvezSCoNZJ3StKuP (delete it), last tick trig_01TeTJdLjDuHZqyhS99ZK2s9 fires 06:23Z into OrchA 26 (harmless).
