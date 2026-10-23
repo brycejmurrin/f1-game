@@ -1,0 +1,401 @@
+{
+  "pairs": [
+    {
+      "id": "optics-bahrain-night-dry",
+      "title": "Bahrain · night · dry · floodlights",
+      "scene": {
+        "track": "bahrain",
+        "tod": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.18
+      },
+      "note": "Floodlit night. Lamp glints sit on the floods with a beam along each fixture's aim; the rim stays dark where no light reaches it.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-monza-day-dry",
+      "title": "Monza · day · dry · sun",
+      "scene": {
+        "track": "monza",
+        "tod": "day",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.02
+      },
+      "note": "Daylight. The sun glint, its rays and the warm rim sheen follow the sun's side of the view; the centre stays clear.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-bahrain-dawn-fog",
+      "title": "Bahrain · dawn · fog",
+      "scene": {
+        "track": "bahrain",
+        "tod": "dawn",
+        "weather": "fog",
+        "camera": "helmet",
+        "frac": 0.18
+      },
+      "note": "Low sun in fog: soft, dim reflections, not a grey band.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-monaco-night-tunnel",
+      "title": "Monaco · night · tunnel",
+      "scene": {
+        "track": "monaco",
+        "tod": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.48
+      },
+      "note": "Inside the tunnel under its soffit lamps: glints and beams from overhead, sliding as they pass.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-singapore-night-street",
+      "title": "Singapore · night · street lamps",
+      "scene": {
+        "track": "singapore",
+        "tod": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.3
+      },
+      "note": "Street-circuit night: a string of lamp glints along the shield.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-monza-dusk-low-sun",
+      "title": "Monza · dusk · low sun",
+      "scene": {
+        "track": "monza",
+        "tod": "dusk",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.55
+      },
+      "note": "Dusk: a low sun — the glint, ghost and rays at their strongest when it sits in the frame.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-spa-day-rain",
+      "title": "Spa · day · rain · Eau Rouge",
+      "scene": {
+        "track": "spa",
+        "tod": "day",
+        "weather": "rain",
+        "camera": "helmet",
+        "frac": 0.075
+      },
+      "note": "Wet daylight with visor rain: beads over the shield, the sun's sheen damped by cloud.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-bahrain-night-rain",
+      "title": "Bahrain · night · rain · floodlights",
+      "scene": {
+        "track": "bahrain",
+        "tod": "night",
+        "weather": "rain",
+        "camera": "helmet",
+        "frac": 0.18
+      },
+      "note": "Floodlit rain: glints through the beads.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-vegas-night-strip",
+      "title": "Las Vegas · night · strip",
+      "scene": {
+        "track": "vegas",
+        "tod": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.2
+      },
+      "note": "Neon-lit night street circuit.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-silverstone-day-overcast",
+      "title": "Silverstone · day · overcast",
+      "scene": {
+        "track": "silverstone",
+        "tod": "day",
+        "weather": "overcast",
+        "camera": "helmet",
+        "frac": 0.12
+      },
+      "note": "Flat overcast daylight: haze on the brow only; no hard glint.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-bahrain-night-tinted-max",
+      "title": "Bahrain · night · TINTED amber strong · reflections strong · refraction strong",
+      "scene": {
+        "track": "bahrain",
+        "tod": "night",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.18
+      },
+      "note": "The loudest setting: an amber tinted lens at STRONG, STRONG reflections and STRONG refraction. Everything at its ceiling.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Tinted amber strong · reflections strong · refraction strong",
+        "visor": "smoke",
+        "visorColor": "amber",
+        "visorIntensity": "strong",
+        "visorReflections": "strong",
+        "visorRefraction": "strong"
+      }
+    },
+    {
+      "id": "optics-monza-day-clear-light",
+      "title": "Monza · day · clear · reflections light · refraction off",
+      "scene": {
+        "track": "monza",
+        "tod": "day",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.02
+      },
+      "note": "The quietest on-setting: CLEAR with LIGHT reflections and no refraction.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections light",
+        "visor": "clear",
+        "visorReflections": "light"
+      }
+    },
+    {
+      "id": "optics-spa-dusk-sun-ahead",
+      "title": "Spa · dusk · the sun dead ahead",
+      "scene": {
+        "track": "spa",
+        "tod": "dusk",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.55
+      },
+      "note": "Low dusk sun in the frame: the glint, its mirrored ghost, god rays across the shield and the rim sheen on the sun's side, with bloom under all of it. This is the blinding-low-sun case.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-bahrain-dawn-sun-centre",
+      "title": "Bahrain · dawn · the sun centred",
+      "scene": {
+        "track": "bahrain",
+        "tod": "dawn",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.325
+      },
+      "note": "Dawn sun centred in the frame on the main straight: rays and ghost symmetric about the nose.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-monza-dusk-sun-centre",
+      "title": "Monza · dusk · the sun centred",
+      "scene": {
+        "track": "monza",
+        "tod": "dusk",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.85
+      },
+      "note": "Dusk sun ahead through the Parabolica exit.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-silverstone-dusk-sun-left",
+      "title": "Silverstone · dusk · the sun left of the nose",
+      "scene": {
+        "track": "silverstone",
+        "tod": "dusk",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.25
+      },
+      "note": "Dusk sun left of centre: the glint, rays and sheen all lean left; the right rim stays dark.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-suzuka-dawn-sun",
+      "title": "Suzuka · dawn · the sun in frame",
+      "scene": {
+        "track": "suzuka",
+        "tod": "dawn",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.5
+      },
+      "note": "Dawn sun in the frame through the esses.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    },
+    {
+      "id": "optics-cota-dawn-sun-right",
+      "title": "COTA · dawn · the sun right of the nose",
+      "scene": {
+        "track": "cota",
+        "tod": "dawn",
+        "weather": "dry",
+        "camera": "helmet",
+        "frac": 0.5
+      },
+      "note": "Dawn sun right of centre.",
+      "a": {
+        "label": "Visor Off",
+        "visor": "off"
+      },
+      "b": {
+        "label": "Clear · reflections medium · refraction light",
+        "visor": "clear",
+        "visorReflections": "medium",
+        "visorRefraction": "light"
+      }
+    }
+  ]
+}

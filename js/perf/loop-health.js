@@ -105,8 +105,15 @@ const LoopHealth = (() => {
   function slowPathCover() {
     if (loading()) return true;
     try {
-      const cs = typeof document !== "undefined" && document.getElementById && document.getElementById("carsetup");
-      return !!(cs && !cs.hidden);
+      const g = typeof document !== "undefined" && document.getElementById;
+      if (!g) return false;
+      const cs = g("carsetup");
+      if (cs && !cs.hidden) return true;
+      // Race settings stays up with PREPARING… through shader warm / garage-out
+      // (game.js raceIntroFromSheet). PerfGov.softwareGlUiReadbackDefer() already
+      // treats this sheet like #loading — the stall watchdog must match (#3510).
+      const rs = g("race-settings");
+      return !!(rs && !rs.hidden);
     } catch (_) { return false; }
   }
   function shed() {

@@ -71,11 +71,30 @@ test("countdown setGridIdle reuses a pooled opts bag", () => {
 
 test("race present sheds bloom mips + godray blur pair at MEDIUM/LOW", () => {
   const g = gameSource();
-  assert.match(g, /po\.bloomLevels\s*=/);
+  assert.ok(g.includes("po.bloomLevels ="), "bloomLevels truncation wiring");
   assert.match(g, /po\.grLite\s*=/);
   assert.match(g, /userTier\(\)/);
   // Env probe cadence also reacts to autoShed (not only renderScale).
   assert.match(g, /autoShed\(\)\s*>\s*0/);
+});
+
+test("race present sheds look post via lookPostShed (LOW or measured tier 4)", () => {
+  // GRAPHICS: LOW must not keep bloom/SSAO/god-rays on a healthy phone
+  // (autoTier alone left that stack live while tier() was already 4).
+  // Behaviour pins live in perf-governor.test.mjs (lookPostShed); this is the
+  // game.js wiring check without growing the assert.match ratchet (#1682).
+  const g = gameSource();
+  assert.ok(g.includes("PostFxOpts.applyLookShed(po,"), "present path must apply lookPostShed strengths");
+  const pfx = read("js/ui/post-fx-opts.js");
+  assert.ok(pfx.includes("PerfGov.lookPostShed"), "applyLookShed must read lookPostShed");
+  for (const key of ["bloom", "ssao", "godray", "contact", "lampVol"]) {
+    assert.ok(pfx.includes(`po.${key} = off ? 0 : v.${key}`), `${key} must zero when look post is shed`);
+  }
+  // Wet-road SSR still keys off autoTier (5th arg).
+  const rr = g.indexOf("PostCommon.roadReflection(");
+  assert.ok(rr >= 0);
+  assert.ok(g.slice(rr, rr + 220).includes("PerfGov.autoTier()"),
+    "roadReflection 5th arg stays autoTier");
 });
 
 test("TLX/GLX/WGX honour opts.bloomLevels truncation", () => {
@@ -88,6 +107,26 @@ test("TLX/GLX/WGX honour opts.bloomLevels truncation", () => {
   assert.match(tlx, /useLv/);
   assert.match(glx, /useLv/);
   assert.match(wgx, /useLv/);
+});
+
+test("TLX rtSetSize does not dispose RT textures after setSize (r186)", () => {
+  // setSize already calls RenderTarget.dispose(); disposing the Texture
+  // objects afterwards orphans them while the RT still holds them.
+  const tlx = read("js/render/three/tlx-post.js");
+  const body = tlx.slice(tlx.indexOf("function rtSetSize"), tlx.indexOf("function place("));
+  assert.ok(body.includes("rt.setSize(w, h)"), "rtSetSize must call setSize");
+  assert.equal(body.includes(".dispose()"), false,
+    "rtSetSize must not dispose textures after setSize on r185+");
+});
+
+test("WGX frees the larger target set before allocating a shrink", () => {
+  const wgx = read("js/render/webgpu/wgx.js");
+  const body = wgx.slice(wgx.indexOf("function ensureTargets()"), wgx.indexOf("function _swapTargets("));
+  assert.ok(body.includes("_texW * _texH > width * height"), "shrink detects larger prior set");
+  // Destroy must precede the next createTexture in this function.
+  const freeAt = body.indexOf("_destroyTargetSet(old)");
+  const allocAt = body.indexOf("next.sceneTex = device.createTexture");
+  assert.ok(freeAt >= 0 && allocAt > freeAt, "shrink free must run before the new sceneTex alloc");
 });
 
 test("GLX setPolyOffset caches bias and draw() passes depthBias without a literal", () => {

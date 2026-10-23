@@ -520,7 +520,7 @@ test('BACKMARKERS counts cars cleared and scores the TIME, not the racecraft', (
   assert.ok(d, 'three cleared ends the drill');
   assert.equal(d.clean, true);
   assert.ok(d.score > 0, 'time is scored straight — less is better, no negation');
-  assert.match(d.text, /cleared 3 of 3 in [\d.]+s/);
+  assert.ok(d.text.startsWith('cleared 3 of 3 in ') && d.text.endsWith('s'), d.text);
 });
 
 test('BACKMARKERS never scores a FASTER car that merely crosses the half-lap wrap', () => {
@@ -550,7 +550,43 @@ test('BACKMARKERS refuses when nothing ahead is actually slower', () => {
   f.c.prog = 0; f.c._vmaxNow = 70; f.c.x = 0;
   f.api.update(f.c);
   assert.equal(f.api.startDrill('backmarkers'), false);
-  assert.match(f.announcements.at(-1)[0], /NO SLOWER TRAFFIC/);
+  assert.ok(f.announcements.at(-1)[0].includes('NO SLOWER TRAFFIC'), f.announcements.at(-1)[0]);
+});
+
+test('BACKMARKERS credits each distinct opponent once — re-passing one car is not three-car mastery', () => {
+  const f = fixture();
+  const only = { prog: 10, x: 0, retired: false, _vmaxNow: 60, code: 'ONE' };
+  f.G.cars = [only, f.c];
+  f.c.prog = 0; f.c._vmaxNow = 70; f.c.x = 0;
+  f.api.update(f.c);
+  assert.equal(f.api.startDrill('backmarkers'), true);
+  // Pass the same slower car three times (ahead → behind → ahead → …).
+  for (let pass = 0; pass < 3; pass++) {
+    only.prog = f.c.prog + 10;
+    f.tick({}, 0.4);
+    only.prog = f.c.prog - 10;
+    f.tick({}, 0.4);
+  }
+  const s = f.api.summary();
+  assert.equal(s.lastDrill, null, 'one car cleared thrice is not a finished drill');
+  assert.ok(s.drill && !s.drill.done, 'still running — needs three distinct opponents');
+});
+
+test('BACKMARKERS still finishes when three distinct slower cars are cleared', () => {
+  const f = fixture();
+  const t1 = { prog: 10, x: 0, retired: false, _vmaxNow: 60, code: 'A' };
+  const t2 = { prog: 20, x: 0, retired: false, _vmaxNow: 60, code: 'B' };
+  const t3 = { prog: 30, x: 0, retired: false, _vmaxNow: 60, code: 'C' };
+  f.G.cars = [t1, t2, t3, f.c];
+  f.c.prog = 0; f.c._vmaxNow = 70; f.c.x = 0;
+  f.api.update(f.c);
+  assert.equal(f.api.startDrill('backmarkers'), true);
+  for (let p = 2; p <= 40; p += 2) f.tick({ prog: p }, 0.4);
+  const d = f.api.summary().lastDrill;
+  assert.ok(d, 'three distinct clears ends the drill');
+  assert.equal(d.clean, true);
+  assert.ok(d.text.startsWith('cleared 3 of 3 in '), d.text);
+  assert.ok(d.text.endsWith('s'), d.text);
 });
 test('incident timeline: penalty, invalid lap and contact persist in order with reasons, and re-settling never duplicates', () => {
   const { api, tick, saves } = fixture();

@@ -77,10 +77,10 @@ test("startRace still re-applies after its rebuild", () => {
   // game-vm's (vmNoFramePump) branch. Anchor on the one players run, and on
   // both, so the ordering holds on either side of that `if`.
   const loadSync = body.indexOf("loadTrack(trackIdx)");
-  const loadStepped = body.indexOf("loadTrackStepped(trackIdx");
+  const loadStepped = body.indexOf("raceTrackStepped(trackIdx");   // its loadTrackStepped wrapper (#3571)
   const apply = body.indexOf("applyRaceSettings()");
   assert.ok(loadSync > 0 && loadStepped > 0 && apply > 0,
-    "startRace must still loadTrackStepped (the player's rebuild), loadTrack (the vm's) and applyRaceSettings");
+    "startRace must still raceTrackStepped (the player's loadTrackStepped rebuild), loadTrack (the vm's) and applyRaceSettings");
   assert.ok(apply > loadStepped && apply > loadSync,
     "startRace must apply the race settings AFTER loadTrackStepped (and the vm's loadTrack) rebuild the world, or the rebuild ships unlit");
 });

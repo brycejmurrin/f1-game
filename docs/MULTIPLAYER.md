@@ -243,6 +243,18 @@ The silence that ends a session is 6 s in the lobby; NetPlay raises it to 25 s
 for a race (`setTimeoutMs`), and a rival quiet for more than 2 s is driven by
 the LOCAL AI meanwhile — never parked on the line — until its packets return
 
+The transport forwards that grace to the RTCPeerConnection: `disconnected`,
+and `failed` once the pair has connected, close only when the grace ends
+(#3556). Inside it the original offerer runs an ICE restart (`restartIce()`,
+a fresh gather, one offer/answer) — W3C webrtc-pc recommends a restart when
+ICE reaches `failed`, and MDN documents that the data channels survive it.
+The dead data channel cannot carry that exchange, so it crosses the Nostr
+bus (`NetNostr.directExchange`) sealed under a code hashed from the last
+negotiation's two `ice-pwd` values, which only the peers hold. It starts 3 s
+into `disconnected` or at once on `failed`, re-offers at most twice, and a
+heal before the answer rolls the pending offer back. `stats().iceRestarts`
+counts them. A pc that never connected still closes on `failed` at once.
+
 ### `js/net/netplay.js` — `NetPlay`
 
 the game side (NetPlay.create(G)). AUTHORITY: each peer fully owns its own

@@ -480,15 +480,26 @@ const MirrorPass = (function () {
       job.warmWait = edge;
       try { if (typeof RaceEntryProfile !== "undefined") RaceEntryProfile.mark("programWarm:" + edge); } catch (_) { /* profiling is optional */ }
     }
-    function finishPreparation(job, ready) {
+    // __apex.mirror().prep (A·W14): what the preparation spent its time on AFTER the program warm. On the iPhone 14
+    // mirrorPrepare ran 16-21 s with programWarm only 2.6-5.8 s of it (Device Farm, #3612 note §10); these counters
+    // say whether the rest is frames that never came, passes the backend refused, or the real-size pass itself.
+    // Observation only: no decision reads them.
+    let _lastPrep = null;
+    const _now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+    function prepDiag() {
+      return { t0: _now(), warmEndMs: null, frames: 0, framesAfterWarm: 0, maxGapMs: 0, lastFrameAt: 0,
+        refused: { noEl: 0, box: 0, size: 0, begin: 0 }, passes: 0, passMs: 0, lastPassMs: 0, end: null, endMs: null };
+    }
+    function finishPreparation(job, ready, why) {
       if (_preparation !== job) return;
+      if (job.diag) { job.diag.end = why || (ready ? "ready" : "unpainted"); job.diag.endMs = Math.round(_now() - job.diag.t0); _lastPrep = job.diag; }
       if (job.warmWait === "start") warmWaitMark(job, "end");
       clearTimeout(job.timer);
       _preparation = null; _prepared = ready;
       _lastW = 0;   // preparation never spends the first visible frame's draw
       job.resolve(ready);
     }
-    function cancelPreparation() { if (_preparation) finishPreparation(_preparation, false); }
+    function cancelPreparation() { if (_preparation) finishPreparation(_preparation, false, "cancelled"); }
     function currentPreparation(job) {
       return G.state === "count" && G.player === job.player && G.track === job.track && G.gfx === job.gfx
         && G.gfx.mirrorBegin === job.begin && G.gfx.mirrorEnd === job.end && !_collapsed && wanted(true);
@@ -504,18 +515,19 @@ const MirrorPass = (function () {
         if (G.state !== "count" || _collapsed || !wanted(true)) return Promise.resolve(false);
       } catch (_) { cancelPreparation(); _prepared = false; return Promise.resolve(false); }
       const job = { player: G.player, track: G.track, gfx: G.gfx,
-        begin: G.gfx.mirrorBegin, end: G.gfx.mirrorEnd, primed: false, timer: null, resolve: null, promise: null, warmWait: null };
+        begin: G.gfx.mirrorBegin, end: G.gfx.mirrorEnd, primed: false, timer: null, resolve: null, promise: null, warmWait: null, diag: prepDiag() };
       job.promise = new Promise(resolve => { job.resolve = resolve; });
       _preparation = job; _prepared = null;
       warmWaitMark(job, "start");
-      job.timer = setTimeout(() => finishPreparation(job, false), 30000);
+      job.timer = setTimeout(() => finishPreparation(job, false, "timeout"), 30000);
       return job.promise;
     }
     function prepareFrame(frame, frameSky, night, wet, floodEmit) {
-      const job = _preparation;
+      const job = _preparation, d = job.diag, tf = _now();
+      d.frames++;
       try {
         checkDead();
-        if (!currentPreparation(job)) { finishPreparation(job, false); return; }
+        if (!currentPreparation(job)) { finishPreparation(job, false, "notCurrent"); return; }
         const g = job.gfx;
         if (g.mirrorRect) g.mirrorRect(null);
         // The main present services any queued gfx.warm() first. Its mirror
@@ -523,8 +535,11 @@ const MirrorPass = (function () {
         if (!job.primed) { job.primed = true; return; }
         if (g.warming && g.warming()) return;
         warmWaitMark(job, "end");
+        if (d.warmEndMs === null) d.warmEndMs = Math.round(tf - d.t0);
+        else d.maxGapMs = Math.max(d.maxGapMs, Math.round(tf - d.lastFrameAt));
+        d.framesAfterWarm++;
         const e = el();
-        if (!e || !e.style) { finishPreparation(job, false); return; }
+        if (!e || !e.style) { d.refused.noEl++; finishPreparation(job, false, "noEl"); return; }
         const hidden = e.hidden, visibility = e.style.getPropertyValue("visibility"), priority = e.style.getPropertyPriority("visibility");
         let box;
         try {
@@ -535,12 +550,15 @@ const MirrorPass = (function () {
           if (visibility) e.style.setProperty("visibility", visibility, priority);
           else e.style.removeProperty("visibility");
         }
-        if (!(box.width > 4 && box.height > 4)) { finishPreparation(job, false); return; }
+        if (!(box.width > 4 && box.height > 4)) { d.refused.box++; finishPreparation(job, false, "box"); return; }
         quality(g);
         const sz = targetSize(box.width, box.height, _q.res), w = sz[0], h = sz[1];
-        if (w < 16 || h < 8) { finishPreparation(job, false); return; }
+        if (w < 16 || h < 8) { d.refused.size++; finishPreparation(job, false, "size"); return; }
         const before = g.mirrorState ? g.mirrorState() : null;
-        if (rearPass(frame, frameSky, night, wet, floodEmit, w, h)) {
+        const tp = _now(), drew = rearPass(frame, frameSky, night, wet, floodEmit, w, h);
+        d.passes++; d.lastPassMs = Math.round(_now() - tp); d.passMs += d.lastPassMs; d.lastFrameAt = _now();
+        if (!drew) d.refused.begin++;
+        if (drew) {
           const after = g.mirrorState ? g.mirrorState() : null;
           // Backends can catch their own render failure. A successful begin
           // alone must not report a prepared target that was never written.
@@ -548,7 +566,7 @@ const MirrorPass = (function () {
             && (!before || typeof before.renders !== "number" || after.renders > before.renders));
           finishPreparation(job, currentPreparation(job) && painted);
         }
-      } catch (_) { finishPreparation(job, false); }   // an optimisation cannot strand race entry
+      } catch (_) { finishPreparation(job, false, "throw"); }   // an optimisation cannot strand race entry
     }
     // A PHONE picks its rung from what the governor MEASURED (autoTier: crash
     // floor + evidence), floored at lite. tier() folds in the GRAPHICS preset,
@@ -797,7 +815,7 @@ const MirrorPass = (function () {
       state: () => ({ mode, shown: _shown, collapsed: _collapsed, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
         instEvery: _q.instEvery || 1, instFreezeSkips: _instFreezeSkips, instRefresh: _instRefresh,
         lampCap: _lampCap, lampRanks: _vlRanks, lampHeld: _vlHeld,
-        preparing: !!_preparation, prepared: _prepared,
+        preparing: !!_preparation, prepared: _prepared, prep: _preparation ? _preparation.diag : _lastPrep,
         pip: { mode: pipMode, shown: _pipShown, code: _sub ? _sub.code : null, cam: _subMode, rect: _pipRect },
         backend: G.gfx && G.gfx.mirrorState ? G.gfx.mirrorState() : null,
         glass: typeof CarDraw !== "undefined" && CarDraw.instance && CarDraw.instance() ? CarDraw.instance().glassState() : null }),

@@ -61,6 +61,45 @@ let lead = null;
 const picked = {};
 const listeners = [];
 
+// VISOR BEAMS: a 0..2 factor (the slider shows 0–200 %) on the streaks the HELMET shield adds — each lamp's beam
+// along its aim, a low sun's god rays, the star flares (js/fx/visor-optics.js). 1 is the shipped look; 0 keeps
+// the glints alone. Stored as a percent string; the URL takes `visorbeams=<percent>` or a legacy level word.
+const BEAMS_KEY = "apex26.helmetVisorBeams";
+const BEAMS_DEFAULT = 1;
+const BEAMS_MAX = 2;
+const BEAMS_LEVELS = { off: 0, light: 0.6, medium: 1, strong: 1.6 };
+let beams = null;
+
+function clampBeams(raw) {
+  if (typeof raw === "string" && BEAMS_LEVELS[raw.toLowerCase()] != null) return BEAMS_LEVELS[raw.toLowerCase()];
+  let n = +raw;
+  if (!isFinite(n)) return BEAMS_DEFAULT;
+  if (n > BEAMS_MAX) n = n / 100;                       // "160" is a percent; 1.6 is the factor
+  return Math.max(0, Math.min(BEAMS_MAX, n));
+}
+
+function readBeams() {
+  try {
+    const q = /[?&]visorbeams=([^&]*)/i.exec(location.search);
+    if (q && q[1] !== "") return clampBeams(decodeURIComponent(q[1]));
+  } catch (_) { /* no location in a headless VM: the stored value stands */ }
+  const stored = GameStore.store.raw(BEAMS_KEY);
+  return stored == null || stored === "" ? BEAMS_DEFAULT : clampBeams(stored);
+}
+
+function visorBeams() {
+  if (beams === null) beams = readBeams();
+  return beams;
+}
+
+function setVisorBeams(v) {
+  beams = clampBeams(v);
+  GameStore.store.rawSet(BEAMS_KEY, String(Math.round(beams * 100)));
+  paintVisor();
+  for (const fn of listeners) fn("visorBeams", beams);
+  return beams;
+}
+
 function clampLead(raw) {
   let n = +raw;
   if (!isFinite(n)) return LEAD_DEFAULT;
@@ -175,6 +214,7 @@ function paintVisor() {
   document.body.setAttribute("data-helmet-visor-intensity", visorIntensity());
   document.body.setAttribute("data-helmet-visor-refraction", visorRefraction());
   document.body.setAttribute("data-helmet-visor-reflections", visorReflections());
+  document.body.setAttribute("data-helmet-visor-beams", String(Math.round(visorBeams() * 100)));
   document.body.setAttribute("data-helmet-visor-rain", visorRain());
   document.body.setAttribute("data-helmet-visor-runoff", visorRunoff());
 }
@@ -228,12 +268,6 @@ function setPreset(id) {
   const p=PRESETS[id];if(!p)return preset();
   for(const [k,v] of Object.entries(p))if(k==='halo')setHalo(v);else setChoice(k,v);
   return preset();
-}
-
-function paintLead(inp, out) {
-  const pct = Math.round(turnChaseLead() * 100);
-  if (inp) inp.value = String(pct);
-  if (out) out.textContent = `${pct}%`;
 }
 
 function initUI() {
@@ -304,6 +338,36 @@ function initUI() {
     "Distortion through the shield in HELMET camera with CLEAR or TINTED visor. OFF keeps the road undistorted.", visorRefraction, setVisorRefraction);
   row("pm-visor-reflections", "VISOR REFLECTIONS", C.visorReflections.values, C.visorReflections.labels,
     "Shield reflections in HELMET camera with CLEAR or TINTED visor. LIGHT is subtle; OFF removes the highlights.", visorReflections, setVisorReflections);
+  // A percent slider (the TURN CHASING pattern): label, live value, then the range; the help line under it.
+  function slider(id, label, aria, title, max, step, read, write) {
+    const lab = document.createElement("label");
+    lab.className = "tune-row";
+    lab.title = title;
+    const span = document.createElement("span");
+    span.className = "tune-label";
+    span.appendChild(document.createTextNode(label + " "));
+    const out = document.createElement("b");
+    out.id = id + "-v";
+    span.appendChild(out);
+    const inp = document.createElement("input");
+    inp.type = "range";
+    inp.min = "0";
+    inp.max = String(max);
+    inp.step = String(step);
+    inp.id = id;
+    inp.setAttribute("aria-label", aria);
+    const paint = () => { const pct = Math.round(read() * 100); inp.value = String(pct); out.textContent = `${pct}%`; };
+    inp.oninput = () => { write(parseFloat(inp.value) / 100); paint(); };
+    lab.appendChild(span);
+    lab.appendChild(inp);
+    place(lab);
+    help(title);
+    paint();
+    onWheel(paint);
+  }
+  slider("pm-visor-beams", "VISOR BEAMS", "Visor beams",
+    "Light beams on the shield in HELMET camera: the streak each floodlight and street lamp throws along its aim, the rays of a low sun in the frame and the star flares on the brightest lights. 100% is the standard look; 200% doubles their length and brightness; 0% keeps only the glints. Needs VISOR REFLECTIONS on.",
+    200, 10, visorBeams, setVisorBeams);
   row("pm-visor-rain", "VISOR RAIN", C.visorRain.values, C.visorRain.labels,
     "Water accumulating on the shield in HELMET camera with CLEAR or TINTED visor. Actual rain controls new drops; OFF clears the water. LOW graphics disables droplets.", visorRain, setVisorRain);
   row("pm-visor-runoff", "WATER RUNOFF", C.visorRunoff.values, C.visorRunoff.labels,
@@ -319,31 +383,9 @@ function initUI() {
   row("pm-ckint", "INTERIOR", C.interior.values, C.interior.labels,
     "The cockpit trim: carbon, team padding, suede, ribbed pads, or a 1960s cockpit with an aeroscreen and round gauges.", interior, setInterior);
 
-  const lab = document.createElement("label");
-  lab.className = "tune-row";
-  lab.title = "How far the cockpit view glances into the corner ahead. 0% stays locked to the car's nose; 100% aims 30 m down the road.";
-  const span = document.createElement("span");
-  span.className = "tune-label";
-  span.appendChild(document.createTextNode("TURN CHASING "));
-  const out = document.createElement("b");
-  out.id = "pm-turnchase-v";
-  span.appendChild(out);
-  const inp = document.createElement("input");
-  inp.type = "range";
-  inp.min = "0";
-  inp.max = "100";
-  inp.step = "5";
-  inp.id = "pm-turnchase";
-  inp.setAttribute("aria-label", "Turn chasing");
-  inp.oninput = () => {
-    setTurnChaseLead(parseFloat(inp.value) / 100);
-    paintLead(inp, out);
-  };
-  lab.appendChild(span);
-  lab.appendChild(inp);
-  place(lab);
-  help(lab.title);
-  paintLead(inp, out);
+  slider("pm-turnchase", "TURN CHASING", "Turn chasing",
+    "How far the cockpit view glances into the corner ahead. 0% stays locked to the car's nose; 100% aims 30 m down the road.",
+    100, 5, turnChaseLead, setTurnChaseLead);
   if (typeof CockpitPreview !== "undefined") CockpitPreview.mount(content);
 }
 
@@ -353,9 +395,9 @@ if (typeof document !== "undefined") {
 }
 
 return {
-  KEY, KEY_TC, KEY_LEAD, KEY_WHEEL, LEAD_DEFAULT, WHEELS, CHOICES, HALO_VALUES,
+  KEY, KEY_TC, KEY_LEAD, KEY_WHEEL, LEAD_DEFAULT, BEAMS_KEY, BEAMS_DEFAULT, BEAMS_MAX, WHEELS, CHOICES, HALO_VALUES,
   PRESETS, preset, setPreset, halo, haloSize, setHalo, wheel, setWheel, body, setBody, seat, setSeat, interior, setInterior, visor, setVisor, visorColor, setVisorColor, visorIntensity, setVisorIntensity,
-  visorRefraction, setVisorRefraction, visorReflections, setVisorReflections, visorRain, setVisorRain, visorRunoff, setVisorRunoff,
+  visorRefraction, setVisorRefraction, visorReflections, setVisorReflections, visorBeams, setVisorBeams, visorRain, setVisorRain, visorRunoff, setVisorRunoff,
   wheelHasScreen, onWheel, layout, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
 };
 })();

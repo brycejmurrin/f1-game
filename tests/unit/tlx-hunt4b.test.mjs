@@ -457,7 +457,7 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
     const _instPerPass = true, skipBatches = () => false, _instRegistry = [], _mirOf = () => null;
     const fx = null, vizMat = null, softGpu = () => SOFT, softwareGL = SOFT, softContent = () => false;
     const pinSkyMaterial = () => {}, mintLateLit = () => {}, warmFxPrograms = async () => {}, warmLateLit = async () => {};
-    const warmPlusOn = () => true, wantMirrorWarm = () => true, softOutRT = () => null;
+    const warmPlusOn = () => true, casterWarmOn = warmPlusOn, wantMirrorWarm = () => true, softOutRT = () => null;
     const I = new THREE.Matrix4().toArray();
     const _postF = { proj: I, invProj: I, invVP: I, viewProj: I, upVS: [0, 1, 0], time: 0, sunVS: [0, 0, -1], noEnv: NOENV };
     const _warmHistory = [];   // tlx.js keeps every warm's stages (B·H8 prep timeline)
