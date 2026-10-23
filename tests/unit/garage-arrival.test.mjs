@@ -168,7 +168,8 @@ test('cold preparation settles before the drive-out; a warm world opens on the g
   const build = game.slice(game.indexOf('function introBuild(go)'), game.indexOf('function introWarm(go)'));
   assert.match(build, /introCover\(info0, n\);/, 'cold preparation is covered: by the race-settings sheet, else the prep scrim');
   assert.match(game, /function introCover\(info, n\) \{[\s\S]*?if \(!_introSheet \|\| sheetPrep\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/);
-  assert.match(game, /RaceEntryProfile\.softwareRaster && RaceEntryProfile\.softwareRaster\(\)\)[\s\S]*?loadingScreen\.stop\(\);\s*go\(\);\s*return;/, 'software GL skips the loading flyby and hands off to startRace');
+  assert.match(game, /RaceEntryProfile\.softwareRaster && RaceEntryProfile\.softwareRaster\(\) && !forceSoftwareFlyby\)[\s\S]*?loadingScreen\.stop\(\);\s*go\(\);\s*return;/, 'software GL skips the loading flyby and hands off to startRace (?swFlyby=1 forces it)');
+  assert.match(game, /DevFlags\.get\("swFlyby"\)/, 'flyby bench override is URL-only DevFlags, not storage');
   assert.ok(build.indexOf('await introPrepare(') >= 0 && build.indexOf('await introPrepare(') < build.indexOf('studioOpen(n, info0)'), 'preparation finishes before outgoing motion');
   const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
   assert.match(warm, /if \(cold\) introCover\(info, n\); else studioOpen\(n, info\);/);
