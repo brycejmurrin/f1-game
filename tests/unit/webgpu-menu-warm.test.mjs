@@ -82,7 +82,7 @@ test("warmPlusOn is on for WebGPU only when where===menu (source behaviour)", ()
 
   const stages = TLX.slice(TLX.indexOf("async function runProgramWarmStages"), TLX.indexOf("function startProgramWarm"));
   assert.ok(stages.includes("warmIdleChunks()") && stages.includes("_idleYield(48)"), "post/shadow idle yield");
-  assert.ok(stages.includes("if (warmPlusOn() && shadowSys && shadowSys.warm)"), "canary shadow guard intact");
+  assert.ok(stages.includes("casterWarmOn()") && stages.includes("shadowSys.warm(casterSources())"), "A·W14 caster warm + probe layouts");
   assert.ok(stages.includes("post.warm && (warmPlusOn() || performance.now() - _warmAt < 3000)"), "canary post gate intact");
 
   const histAt = TLX.indexOf("const _warmRec = { where:");

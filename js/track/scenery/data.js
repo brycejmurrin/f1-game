@@ -76,30 +76,16 @@ const TrackSceneryData = (function () {
     modern:       { tree: "broad", fol: [0.26, 0.42, 0.20], lamp: "post",  lc: [0.95, 0.95, 1.0] },
   };
 
-  // `furniture` keys a circuit's planting and lighting; `kit` keys its barriers,
-  // signage and marshal kit. Same rule, same fallback shape (api.kitOf):
-  //   def.kit || KIT_DEF[theme] || KIT_DEF.green
-  // and every field is optional — an absent field falls back to that emitter's
-  // own default, which is its pre-existing geometry.
-  //
-  // Why this table exists: marshalPost, billboard, fence, guardrail, tyreWall,
-  // gantry, cameraTower and sponsorHoarding were ~870 calls of geometry that
-  // was byte-identical on all 40 circuits, differing only in tint. They line
-  // the whole lap and are in frame constantly, so they were the single largest
-  // reason different circuits read as the same place — far more than the
-  // grandstands, which are already well parameterised.
+  // `kit` keys a circuit's barriers, signage and marshal kit (api.kitOf):
+  //   (def.kit || {})[family] || <the emitter's own default>
+  // Every field is optional; an absent one keeps that emitter's pre-existing
+  // geometry. There is no theme table: the per-theme rows were identical copies
+  // of the emitter defaults and never selected (#3298).
   //
   // BUDGET: tyre "double"/"pyramid" multiply the tyre count and fence
   // "hoarding"/"palisade" are heavier than mesh. They appear only on circuits
-  // with measured headroom, never in KIT_DEF. Families: marshal, rail, fence,
-  // tyre, board, gantry, camera, hoarding (each circuit's `kit` row lists them).
-  const KIT_DEF = {
-    green:        { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
-    desert:       { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
-    street_night: { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
-    street_day:   { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
-    modern:       { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
-  };
+  // with measured headroom. Families: marshal, rail, fence, tyre, board,
+  // gantry, camera, hoarding (each circuit's `kit` row lists them).
 
   // City generator style. Each street/modern circuit authors `cityStyle` in
   // js/circuits/<id>.js with neon / dayPal as NAMES into NC / DC (circuit files
@@ -205,6 +191,6 @@ const TrackSceneryData = (function () {
   // the circuit(s) listed by id. tracks.js derives every def's gpLaps from it.
   const GP_DISTANCE_KM = { default: 305, monaco: 260 };
 
-  return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, FURN_DEF, THEME_DEF, resolveCityStyle, ATM, COL, STAND_LIVERIES, STAND_SET_DEF, KIT_DEF, GP_DISTANCE_KM };
+  return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, FURN_DEF, THEME_DEF, resolveCityStyle, ATM, COL, STAND_LIVERIES, STAND_SET_DEF, GP_DISTANCE_KM };
 })();
 Object.freeze(TrackSceneryData);
