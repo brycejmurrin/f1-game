@@ -1,0 +1,1 @@
+Fixed: The first night race on the three.js WebGPU path no longer recompiles every lit shader. Lamp pools after a day race in the same session are now smoothly filtered, as they already were on WebGL2.
