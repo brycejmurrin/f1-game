@@ -40,6 +40,20 @@ const PostFxOpts = (function () {
     if (!state.godrays) { po.godray = 0; po.lampVol = 0; }
     return po;
   }
+  // lookPostShed (GRAPHICS: LOW or measured/crash tier 4): zero look-defining strengths
+  // before present(). autoTier alone left LOW with full bloom/SSAO/god-rays on tile GPUs.
+  function lookPostOff() {
+    return PerfGov.lookPostShed ? PerfGov.lookPostShed() : PerfGov.autoTier() >= 4;
+  }
+  function applyLookShed(po, v) {
+    const off = lookPostOff();
+    po.bloom = off ? 0 : v.bloom;
+    po.ssao = off ? 0 : v.ssao;
+    po.godray = off ? 0 : v.godray;
+    po.contact = off ? 0 : v.contact;
+    po.lampVol = off ? 0 : v.lampVol;
+    return po;
+  }
 
   function initUI() {
     if (typeof SettingRow === "undefined") return;
@@ -61,6 +75,6 @@ const PostFxOpts = (function () {
     else initUI();
   }
 
-  return { KEYS, set, ssaoOn, godraysOn, gate, initUI };
+  return { KEYS, set, ssaoOn, godraysOn, gate, lookPostOff, applyLookShed, initUI };
 })();
 Object.freeze(PostFxOpts);

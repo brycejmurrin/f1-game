@@ -5,9 +5,11 @@ const GfxQuality = (function () {
 // userTier is a FLOOR on the COST shedding ladder in js/perf/governor.js:
 //   0 nothing pinned off · 1 env probe · 2 +lamp shadow/dry SSR · 3 +car shadow; wet SSR uses a smaller budget
 // Look-defining post (bloom / SSAO / god rays / contact / lamp volumetrics)
-// reads PerfGov.autoTier() instead — GRAPHICS: LOW must not mute the lighting
-// tuner; the governor and crash-sentinel floor can still shed that stack when
-// the device proves it cannot afford it.
+// reads PerfGov.lookPostShed() — true at measured/crash tier 4 OR on GRAPHICS:
+// LOW (userTier 4). autoTier() stays free of the user floor so wet-road SSR
+// can keep a reduced budget on LOW and the lighting-tuner "why off" note can
+// still name a measured shed; pinning look post via autoTier alone left LOW
+// slower than MEDIUM on iPhone WebGPU (BrowserStack 2026-10-21).
 // ULTRA and HIGH share tier 0 deliberately: both mean "let the governor
 // decide". They differ only in the MOBILE boot tier, which is fixed at renderer
 // init and cannot be a live knob. A separate AUTO stop would be
