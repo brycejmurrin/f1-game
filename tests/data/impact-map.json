@@ -2368,6 +2368,9 @@
       "mirrorWarmPolicy": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "narrow": [
+        "tests/unit/livery-tex-dispose.test.mjs"
+      ],
       "planPhotoAtlases": [
         "tests/unit/livery-tier.test.mjs"
       ],
@@ -2422,9 +2425,6 @@
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
-      ],
-      "narrow": [
-        "tests/unit/livery-tex-dispose.test.mjs"
       ]
     },
     "js/car/car-geometry.js": {
