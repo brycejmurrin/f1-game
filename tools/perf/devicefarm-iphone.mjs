@@ -63,6 +63,7 @@ const TOUCH_RACE = `
   Promise.resolve(__apex.race("monza", "day", "dry")).then(() => { window.__tbpRace = "ok"; }, (e) => { window.__tbpRace = "err:" + e; });
   return { ok: true };`;
 const TOUCH_GO = `
+  if (!window.__apex) return { ready: false, why: "no __apex (Pages needs ?apex)" };
   const i = __apex.info();
   if (window.__tbpRace !== "ok" || i.track == null) return { ready: false, race: window.__tbpRace, state: i.state };
   const went = __apex.go();
@@ -185,7 +186,8 @@ async function touchRun(base, sid, out, n) {
 }
 
 async function run() {
-  const want = opt("device", "iPhone 18 Pro Max"), legs = Number(opt("legs", "0")), url = opt("url", SITE);
+  // --touch drives __apex, which a Pages build loads only on ?apex (js/core/lazy-bundles.js wantAgentSurface).
+  const want = opt("device", "iPhone 18 Pro Max"), legs = Number(opt("legs", "0")), url = opt("url", Number(opt("touch", "0")) ? SITE + "?apex" : SITE);
   const out = opt("out", path.join("artifacts", "devicefarm", new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)));
   fs.mkdirSync(out, { recursive: true });
   const dev = iosPhones().find((d) => d.name === want || d.name.endsWith(" " + want) || d.arn.endsWith(want));
