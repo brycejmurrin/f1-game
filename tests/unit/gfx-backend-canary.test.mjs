@@ -2746,9 +2746,12 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
   // MDN: one context type per canvas for life. three r185.1 configure() is
   // lazy on first present(); sniffing WebGL2 on #game after init() made
   // getContext("webgpu") return null (mcp-probe 2026-08-18).
-  assert.match(tlx, /softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(\s*\)\s*:\s*!!\s*_softAdapter\b/);
+  assert.ok(tlx.includes("const softwareGL = !!_softAdapter")
+    && tlx.includes("renderer.backend && renderer.backend.isWebGLBackend")
+    && tlx.includes("detectSoftwareGL()"),
+    "WebGL2 backend classifies from renderer string, not adapter sniff alone (#3601)");
   const initAt = tlx.search(/await\s+renderer\.init\(\s*\)/);
-  const sniffAt = tlx.search(/softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(/);
+  const sniffAt = tlx.search(/const softwareGL = !!_softAdapter/);
   assert.ok(initAt > 0 && sniffAt > initAt, "software sniff stays after init");
   assert.match(tlx, /getContext\("webgpu"\)===null/);
 });
@@ -3524,8 +3527,9 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // the same value, so this narrows nothing that was ever correct.
   assert.match(fnBody(src, "softContent"), /^\s*return\s+softwareGL\s*&&\s*!_forceHw\.has\(\s*part\s*\)/,
     "content skips ask softwareGL, which already answers for the BOUND backend");
-  assert.match(src, /softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(\s*\)\s*:\s*!!\s*_softAdapter\b/,
-    "…and softwareGL stays the backend-aware constant the line above relies on");
+  assert.ok(src.includes("const softwareGL = !!_softAdapter")
+    && src.includes("isWebGLBackend") && src.includes("detectSoftwareGL()"),
+    "softwareGL stays backend-aware: adapter OR live WebGL renderer string (#3601)");
   assert.doesNotMatch(src, /softContent\(\)/,
     "softContent() must never be called without a part name");
   for (const part of ["sky", "env", "chunked", "shadow"]) {
@@ -4135,13 +4139,6 @@ test("GLX backendState and race entry defer pack retry on software GL (#3584)", 
   const game = gameSource();
   assert.ok(game.includes("Assets.retry && !PerfGov.softwareRaster()"));
   assert.ok(game.includes("requestIdleCallback(run, { timeout: 120000 })"));
-});
-
-test("TLX WebGL2 software raster uses renderer string, not adapter-only (#3601)", () => {
-  const tlx = code("js/render/three/tlx.js");
-  assert.match(tlx, /const softwareGL = !!_softAdapter/);
-  assert.match(tlx, /renderer\.backend && renderer\.backend\.isWebGLBackend[\s\S]*detectSoftwareGL\(\)/);
-  assert.doesNotMatch(tlx, /const softwareGL = forceWebGL \? detectSoftwareGL\(\) : !!_softAdapter;/);
 });
 
 test("software GL garage path gates readback and stall reload (#3589)", () => {
