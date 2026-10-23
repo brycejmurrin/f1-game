@@ -316,3 +316,34 @@ reloaded and started cold (BenchRun), then timed for 20 s: rAF p50/p95/p99, fram
   variants on the menu, or during the first race's countdown, would hide it. Bryce has assigned that to A·W14
   (via OrchA 27).
 - Cost: the account's trial showed 779.87 of 1,000 minutes left at 07:35Z (both fleets combined).
+
+## 10. iPhone 14 on the post-fix build: the warmPlus A/B and a non-shader entry cost (08:26–08:43Z)
+
+One iPhone 14 window (Bryce's yes via DAD, relayed by OrchA 28; bus 718a173/6410282, claim c5c962e), live build
+20919, three's WebGPU pinned (the boot is already `api=webgpu` unpinned since #3603).
+`run --scenario warmplus`: each arm times one `__apex.race("monza")` entry and the race's first 15 s of rAF
+frames. Arm "warmplus" sets `apex26.tlxWarmPlus=1`, which forces the post-chain and caster warms (§9 ledger
+item 3). Session 2 cleared Safari (Settings › Apps › Safari › Clear History and Website Data) before each arm and
+ran the arms in reverse order.
+
+| session / unit | order | arm | entry window | `mirrorPrepare` | `programWarm` | warm post / shadow | worst frame | p99 | >33 / >50 / >100 ms |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 / B86EBFDD (no clear) | 1st | default | 20.2 s | 16.1 s | 2.6 s | 1.7 s / 0 | **243 ms** | 30 | 6 / 3 / **2** |
+| 1 / B86EBFDD | 2nd | warmPlus | 11.9 s | 8.1 s | 8.1 s | 3.1 s / 2 ms | 89 ms | 27 | 7 / 3 / 0 |
+| 2 / F0544D0A (cleared) | 1st | warmPlus | 24.5 s | 20.7 s | 5.8 s | 1.9 s / 1 ms | **266 ms** | 32 | 8 / 4 / **2** |
+| 2 / F0544D0A (cleared) | 2nd | default | 8.2 s | 5.2 s | 5.1 s | 0 / 0 | 86 ms | 31 | 6 / 3 / 0 |
+
+- **warmPlus does not remove the first-race hitch.** Whichever arm runs first on a unit gets two frames over
+  100 ms (243 / 266 ms); whichever runs second gets none, with or without warmPlus. The first-race long frames come
+  from work that neither the post-chain warm nor the caster warm covers, and warmPlus only adds 1.9–3.1 s of
+  post warm. A·W14 (#3618, owner of both gates) was advised to leave the post gate as is on WebGPU.
+- **"Clear History and Website Data" does not clear WebGPU's pipeline cache.** Both clears in session 2 succeeded
+  (the button greys out), yet the second arm entered in 8.2 s. A player who clears Safari data does not re-pay
+  the warm, and a test cannot get a cold cache this way: only a fresh unit (`report.unit`) is cold.
+- **New on the iPhone 14: 13–15 s of `mirrorPrepare` is not shader compile.** On the first arm of each session,
+  `mirrorPrepare` took 16.1 / 20.7 s while `programWarm` inside it took 2.6 / 5.8 s. On the 18 Pro Max the two
+  match (7.3 / 7.3 s, §8). This is the stage OrchA 27 saw hit the 30 s safety timer on the iPhone 14 before
+  #3604. Candidates inside that window: the GPU-settle waits (`_gpuSettled(5000)`), warm retries (`attempts`), or
+  memory pressure on a 6 GB phone. Next step for the warm owner: log `warm.attempts`, `failed` and each settle
+  wait on an iPhone 14 first entry. This is now the largest single piece of first-race entry on the mid-range
+  phone.
