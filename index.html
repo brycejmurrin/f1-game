@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-VDaDzxpzc09TF8sKjwiLLWzS7+JfGHej+ezVU2djJKc=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-HJASHiXDOPUCZKpXOanLgmcK92itSe6nVGp1XeRuQXY=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -313,16 +313,77 @@
   // handler already holds the error object; kept to 40 and stringified on the
   // way in so the ring cannot retain a live DOM node or a whole scope.
   window.__apexErrors = window.__apexErrors || [];
+  // SERIALIZE A REASON WITHOUT DESTROYING IT. The old formatting,
+  // (r && (r.message || r)) || "unknown", renders a plain-object reason as
+  // "[object Object]" and an empty-message Error as the same — the detail is
+  // gone at display time AND in the ring below, so a field report cannot name
+  // what actually rejected (live: ~1 in 6 fresh loads showed a bare
+  // "[object Object]" toast whose source this very loss made unfindable).
+  // No game code rejects with a plain object, so the shape that lands here is
+  // a PLATFORM object (browser/library) — its name + shape are the only clue
+  // there will ever be, so both survive: name/constructor first, then the
+  // JSON, or the own-key list when JSON cannot be had (cycles, BigInt).
+  // Strings/numbers pass through untouched; a real Error WITH a message
+  // keeps the old behaviour exactly (message here, stack carried separately
+  // by the caller); null/undefined stay "unknown". Every step is guarded —
+  // a hostile getter or Proxy must not make the reporter the thing that throws.
+  var REASON_CAP = 500;
+  function capReason(s) {
+    return s.length > REASON_CAP ? s.slice(0, REASON_CAP - 3) + "..." : s;
+  }
+  function serializeReason(r) {
+    if (r === null || r === undefined) return "unknown";
+    var t = typeof r;
+    if (t === "string") return r;
+    if (t === "number" || t === "boolean") return String(r);
+    if (t !== "object" && t !== "function") {
+      try { return String(r); } catch (e) { return "unknown"; }   // bigint / symbol
+    }
+    var msg = "", name = "";
+    try { if (typeof r.message === "string") msg = r.message; } catch (e) {}
+    try { if (typeof r.name === "string") name = r.name; } catch (e) {}
+    var isError = false;
+    try { isError = (r instanceof Error) || Object.prototype.toString.call(r) === "[object Error]"; } catch (e) {}
+    if (isError && msg) return msg;
+    if (t === "function") {
+      try { return capReason(String(r)); } catch (e) { return "unknown"; }
+    }
+    // Non-Error object, or an Error whose message is empty: name + shape.
+    var keys = [];
+    try { keys = Object.keys(r); } catch (e) {}
+    var json = null;
+    try { json = JSON.stringify(r); } catch (e) { json = null; }
+    var shape = "";
+    if (typeof json === "string" && json !== "{}") shape = json;
+    else if (keys.length) shape = "(keys: " + keys.join(", ") + ")";
+    else if (typeof json === "string") {
+      // "{}" says nothing; a readable String() (a RegExp, a Date already
+      // handled above) beats it, a "[object …]" one does not.
+      var str = "";
+      try { str = String(r); } catch (e) {}
+      shape = (str && str.indexOf("[object") !== 0) ? str : json;
+    }
+    var head = "", ctor = "";
+    try { if (r.constructor && typeof r.constructor.name === "string") ctor = r.constructor.name; } catch (e) {}
+    if (ctor && ctor !== "Object") head = ctor;
+    if (name && keys.indexOf("name") === -1 && name !== head) head = head ? head + " " + name : name;
+    if (msg && keys.indexOf("message") === -1) head = head ? head + ": " + msg : msg;
+    var out = head ? (shape && shape !== "{}" && shape !== head ? head + " " + shape : head) : shape;
+    return capReason(out || "(unserializable object)");
+  }
   function recordError(kind, msg, detail) {
     try {
+      if (typeof msg !== "string") msg = serializeReason(msg);
+      if (detail !== null && detail !== undefined && typeof detail !== "string") detail = serializeReason(detail);
       window.__apexErrors.push({ t: Date.now(), kind: kind, msg: String(msg || "").slice(0, 400),
                                  detail: String(detail || "").slice(0, 800) });
       if (window.__apexErrors.length > 40) window.__apexErrors.shift();
     } catch (_) { /* never let reporting be the thing that throws */ }
   }
   window.__apexReportError = function (where, err) {
-    recordError("caught", "Caught @ " + where + ": " + ((err && (err.message || err)) || "unknown"), err && err.stack);
-    show("Caught @ " + where, (err && (err.message || err)) || "unknown", err && err.stack);
+    var text = serializeReason(err);
+    recordError("caught", "Caught @ " + where + ": " + text, err && err.stack);
+    show("Caught @ " + where, text, err && err.stack);
   };
   window.addEventListener("error", function (e) {
     // "ResizeObserver loop completed with undelivered notifications" (and the
@@ -339,13 +400,19 @@
       window.__apexROLoops = (window.__apexROLoops || 0) + 1;
       return;
     }
-    recordError("error", m || String(e), (e && e.error && e.error.stack) || (e && e.filename + ":" + e.lineno + ":" + e.colno));
-    show("JS error", m || String(e), (e && e.error && e.error.stack) || (e && e.filename + ":" + e.lineno + ":" + e.colno));
+    // No message (the cross-origin censorship case, or a non-Error throw):
+    // String(e) here was "[object ErrorEvent]" — serialize the error object
+    // the event carries instead, through the same helper as rejections.
+    var em = m || (e && e.error ? serializeReason(e.error) : serializeReason(e));
+    var ed = (e && e.error && e.error.stack) || (e && (e.filename + ":" + e.lineno + ":" + e.colno));
+    recordError("error", em, ed);
+    show("JS error", em, ed);
   });
   window.addEventListener("unhandledrejection", function (e) {
     var r = e && e.reason;
-    recordError("rejection", (r && (r.message || r)) || "unknown", r && r.stack);
-    show("Promise rejection", (r && (r.message || r)) || "unknown", r && r.stack);
+    var text = serializeReason(r);
+    recordError("rejection", text, r && r.stack);
+    show("Promise rejection", text, r && r.stack);
   });
 
   // ── A SCRIPT TAG THAT NEVER LOADED IS NOT A JS ERROR: IT IS A BROKEN INSTALL ─
