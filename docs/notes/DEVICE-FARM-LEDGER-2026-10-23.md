@@ -34,6 +34,8 @@ unit. Rows marked † ran on a unit with unknown history. From e23476eb, `run` r
 | 14 | 08:43 | iPhone 14 B6CBB218 | post | A·D1 `run --legs 4` | paths, GPU-WGL-WGL-GPU | **59.5 fps all scales**; cold 18.5 / 9.2 s | **38.4 fps at full res**, 52.8 default; cold 16.5 / 5.7 s | §10b |
 | 15 | 09:00 | iPhone 14 6AC4D1A1 | post | A·D1 `--scenario tracks` | Monza / Singapore / Vegas night | 59.7 / 60.0 / 59.7 fps; entry 23.4 (1st) / 7.5 / 5.2 s; `mirrorPrepare` ends 15.5 s after `programWarm` | — | §10b |
 
+| 16 | ~10:00 | 18 Pro Max 034D496E / B2620BE8 | live (10:10Z) | A·O6 `devicefarm-boot.mjs` (#3616) | cold boot to menu | first visit: FCP 1.15 s, load 1.75 s, title wired 1.52 s, 250 requests / 1.04 MB (240 JS, 2.4 MB decoded); after a Safari kill (warm cache) wired 0.26–0.30 s, FCP ~0.1 s; reload wired 1.1–1.2 s (revalidates 250 files); `?apex=1` adds ~0.86 s | — | #3616 |
+
 Not in this table: Fleet D's own iPhone 14 / 14 Pro sessions (`apex-iPhone14`, 01:27Z onward, Grok lane). Their
 numbers live with Fleet D. Ask DAD on the bus.
 
@@ -93,5 +95,11 @@ Also seen, not yet reproduced (OrchA 27's read of the raw artifacts):
   `node tools/ci/fleet-bus.mjs send HANDOFF --to A "DF CLAIM <device> <lane> <min>"`.
   Fleet A uses the iPhone 18 Pro Max; Fleet D uses the iPhone 14 and 14 Pro. Sessions sit in STOPPING for minutes
   after they end and count against account concurrency (`PENDING_CONCURRENCY`).
-- **Budget:** the account's 1,000-minute free trial had 779.87 minutes left at 07:35Z (both fleets combined).
+- **Budget:** the account's 1,000-minute free trial had 703.73 minutes left at 09:08Z (both fleets combined).
   `aws devicefarm get-account-settings --query accountSettings.trialMinutes` reads the current balance.
+- **Billing lesson (A·O6, measured):** a remote access session bills while it sits in STOPPING, about **13
+  device-minutes per session however short** (A·O6's sessions billed 26.9 / 13.5 / 13.3 / 13.0 / ~13 min). Wall
+  time under-counts, so this note's earlier "about 16 / 48 device-minutes" figures are low. Budget per session,
+  not per minute of test: batch several measurements into one session (as `--scenario cache` and `tracks` do).
+- **Flaky session start:** one unit failed `POST /session` straight after PREPARING ("remote debugger did not
+  return any connected web applications"). A retry fixes it.
