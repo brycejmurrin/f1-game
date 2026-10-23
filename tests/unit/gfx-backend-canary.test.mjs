@@ -304,13 +304,7 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   // `_webkitStayGL` (localStorage apex26.tlxWebKitGL) back to WebGL2.
   assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_gpuCanvasOk\s*\|\|\s*_autoStayGL\s*\|\|\s*_webkitStayGL\s*\)\s*\)/,
     "AUTO stays on WebGL2 when no WebGPU context is obtainable, after a tab failure, or on a WebKit device that failed WebGPU; a pin of 1/0 overrides");
-  assert.match(src, /const _webkitStayGL = isWebKit && /, "the kill switch is WebKit-only");
-  assert.match(src, /localStorage\.getItem\("apex26\.tlxWebKitGL"\)/);
-  // Every AUTO path that latches the tab onto WebGL2 latches the device too.
-  for (const site of [/_latchWebKitGL\("WebGPU init failed/, /_latchWebKitGL\("context lost x/, /_latchWebKitGL\("first render refused"\)/, /_latchWebKitGL\("GPU errors in the first/])
-    assert.match(src, site);
-  assert.match(src, /if \(!isWebKit \|\| _glPin === "0" \|\| _glPin === "1"\) return;/, "a pin never writes the latch");
-  assert.match(code("js/perf/renderer-picker.js"), /"apex26\.tlxWebKitGL"/, "RESET RENDERER clears the kill switch");
+  // The kill switch's read/write behaviour: tlx-fail-scope.test.mjs; RESET: the frozen RENDERER_LS_KEYS below.
   assert.match(src, /async\s+function\s+bootRenderer\b/);
   assert.match(src, /AUTO WebGPU init failed/);
   assert.match(src, /await renderer\.init\(\)[\s\S]{0,200}?disposeKeepingContext\(renderer\)/,

@@ -226,3 +226,41 @@ test("ctxLost window.name fallback: every reader regex parses the marker the wri
     assert.equal(re.test("apex26xctxLostReloads=2"), false, `${lit} must escape the dot`);
   }
 });
+
+// 2026-10-23: AUTO on WebKit tries WebGPU; the per-DEVICE kill switch (localStorage apex26.tlxWebKitGL) sends that
+// device back to three WebGL2 after a detected failure. The REAL declarations run here, sliced from isWebKit's
+// declaration to the end of _latchWebKitGL.
+function webkitSwitch({ ua, pin = null, ls = {} }) {
+  const local = Object.assign({}, ls);
+  const src = read("js/render/three/tlx.js");
+  const from = src.indexOf("      const isWebKit = ");
+  const end = src.indexOf("      };\n", src.indexOf("const _latchWebKitGL = ")) + 9;
+  assert.ok(from > 0 && end > from && end - from < 2500, "the WebKit kill-switch needles moved — check this test, not the code");
+  const ctx = vm.createContext({ ua, _glPin: pin,
+    localStorage: { getItem: (k) => (k in local ? local[k] : null), setItem: (k, v) => { local[k] = String(v); } } });
+  vm.runInContext(src.slice(from, end) + "\n globalThis.r = { isWebKit, _webkitStayGL, _latchWebKitGL };", ctx, { filename: absSrc("js/render/three/tlx.js") });
+  return { local, ...ctx.r };
+}
+const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1";
+const CHROME = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+
+test("WebKit kill switch: unset → AUTO may try WebGPU; a latched failure keeps the device on WebGL2", () => {
+  const fresh = webkitSwitch({ ua: IPHONE });
+  assert.equal(fresh.isWebKit, true);
+  assert.equal(fresh._webkitStayGL, false, "a fresh iPhone tries WebGPU on AUTO");
+  fresh._latchWebKitGL("WebGPU init failed: x".padEnd(400, "!"));
+  assert.equal(fresh.local["apex26.tlxWebKitGL"].length, 200, "the reason is stored, capped");
+  assert.equal(webkitSwitch({ ua: IPHONE, ls: fresh.local })._webkitStayGL, true, "the next boot on this device stays on WebGL2");
+});
+
+test("WebKit kill switch: never on Chromium, never written under a pin", () => {
+  const chrome = webkitSwitch({ ua: CHROME, ls: { "apex26.tlxWebKitGL": "stale" } });
+  assert.equal(chrome._webkitStayGL, false, "a desktop Chrome ignores the marker");
+  chrome._latchWebKitGL("x");
+  assert.equal(chrome.local["apex26.tlxWebKitGL"], "stale", "and never writes it");
+  for (const pin of ["0", "1"]) {
+    const p = webkitSwitch({ ua: IPHONE, pin });
+    p._latchWebKitGL("x");
+    assert.equal(p.local["apex26.tlxWebKitGL"], undefined, `pin ${pin} is a user override, not a verdict`);
+  }
+});
