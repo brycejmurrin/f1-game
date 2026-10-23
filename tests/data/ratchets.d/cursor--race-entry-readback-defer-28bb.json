@@ -1,0 +1,11 @@
+{
+  "files": {
+    "js/game.js": {
+      "codeLines": 6,
+      "lines": 7
+    },
+    "js/render/glx/glx.js": {
+      "lines": 11
+    }
+  }
+}

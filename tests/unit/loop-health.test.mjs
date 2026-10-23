@@ -141,7 +141,12 @@ function loadStall({ webdriver = false, search = "", reloadsSpent = null, ua = "
   const store = (m) => ({ getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) });
   const listeners = {};
   const cover = { hidden: true };
-  const doc = { visibilityState: "visible", addEventListener: (n, f) => { listeners[n] = f; }, getElementById: (id) => (id === "loading" ? cover : null) };
+  const carsetup = { hidden: true };
+  const doc = {
+    visibilityState: "visible",
+    addEventListener: (n, f) => { listeners[n] = f; },
+    getElementById: (id) => (id === "loading" ? cover : id === "carsetup" ? carsetup : null),
+  };
   const ctx = {
     performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,
     navigator: { webdriver, userAgent: ua }, document: doc, location: { search, reload: () => { calls.reload++; } },
@@ -153,7 +158,7 @@ function loadStall({ webdriver = false, search = "", reloadsSpent = null, ua = "
   vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/perf/loop-health.js") });
   const frames = (n, ms) => { for (let i = 0; i < n; i++) { clock.t += ms; ctx.LoopHealth.clean(); } };
   const hide = (hidden) => { doc.visibilityState = hidden ? "hidden" : "visible"; listeners.visibilitychange && listeners.visibilitychange(); };
-  return { LoopHealth: ctx.LoopHealth, frames, hide, calls, ls, ss, cover };
+  return { LoopHealth: ctx.LoopHealth, frames, hide, calls, ls, ss, cover, carsetup };
 }
 
 test("stall: a glacial loop sheds at SHED_RUN, then reloads once to the menu notice", () => {
@@ -217,6 +222,17 @@ test("stall: under the loading cover the shed waits and the reload needs a 30-fr
   assert.equal(h.ls.get("apex26.envProbeOff"), undefined, "a slow load persists nothing");
   h.frames(18, 1500);   // the cover stuck over a glacial build
   assert.equal(h.calls.reload, 1, "30 glacial frames under the cover still recover");
+});
+
+test("stall: #carsetup (garage) uses the same relaxed cover as #loading", () => {
+  const h = loadStall();
+  h.carsetup.hidden = false;
+  h.frames(1, 16);
+  h.frames(12, 1500);
+  assert.deepEqual(h.calls.tier, [], "no shed while the garage sheet is up");
+  assert.equal(h.calls.reload, 0);
+  h.frames(18, 1500);
+  assert.equal(h.calls.reload, 1, "30 glacial frames during garage still recover once, not at 10");
 });
 
 test("stall: off in the node game VM (webdriver false, apex-game-vm UA)", () => {

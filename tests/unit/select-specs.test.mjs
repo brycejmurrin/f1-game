@@ -19,6 +19,7 @@ import { cssSpecs, specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise,
   DEFAULT_BUDGET_MIN,
   SELECTED_GATE, FIXED_GATE_SPECS, MANUAL_OPT_IN_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
   scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource, specsRacing, circuitsOf, select } from "../../tools/ci/select-specs.mjs";
+import { specsAffectedByImpact } from "../../tools/lib/impact-map.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
@@ -1341,6 +1342,17 @@ test("mega solos spread across shards longest-first, each on exactly one shard (
   assert.match(runner, /for \(const spec of megaHere\)/);
 });
 
+test("impact-map narrow pins elevate garage livery witness specs for GLX/pack edits (#3601)", () => {
+  const witness = [
+    "tests/specs/garage-livery-churn.spec.js",
+    "tests/specs/parts-livery-zones.spec.js",
+    "tests/specs/parts-livery-designs.spec.js",
+  ];
+  for (const file of ["js/render/glx/soft.js", "js/render/glx/glx.js", "js/render/shared/assets.js"]) {
+    assert.deepEqual(specsAffectedByImpact([file]).sort(), witness.sort(), file);
+  }
+});
+
 test("SOURCE_AFFECTED elevates career.spec.js when career-ui or career-backup changes", () => {
   // PR #611: modes-group routing alone left career.spec.js in overBudgetSpecs
   // (declares 540 s), so EXPORT/IMPORT reusing .cr-slot-del shipped green.
@@ -1619,7 +1631,7 @@ test("a circuit's own foundation spec is affected, and other circuits' are not c
   assert.ok(fs.existsSync(path.join(ROOT, foundationSpec("imola"))));
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
   // ownFoundations share rank 2 with imports and SOURCE_AFFECTED pins.
-  assert.match(src, /ownFoundations\.includes\(f\).*sourceAffected\.includes\(f\)\) \? 2 : 3/,
+  assert.match(src, /ownFoundations\.includes\(f\).*sourceAffected\.includes\(f\).*impactAffected\.includes\(f\)\) \? 2 : 3/,
     "own foundation specs rank as affected (2)");
   assert.match(src, /\.filter\(\(f\) => !otherCircuit\(f\)\)/, "other circuits' foundations leave the candidates");
 });
