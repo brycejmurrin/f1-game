@@ -47,8 +47,21 @@ Also seen, not yet reproduced (OrchA 27's read of the raw artifacts):
 2. **Per-variant WebGPU pipeline builds (row 11).** The first night race costs 14.1 s against 3.6 s on WebGL2,
    and the first rain race 5.1 s against 2.9 s. Fix: pre-warm the night and rain variants on the menu or during
    the countdown. Owner: A·W14 (assigned by Bryce via OrchA 27).
-3. **The deferred `post` pipelines on the second load (row 10):** 1.9 s of the 2.4 s WebGPU warm after the first
-   reload. Compile them in the first warm or in idle time after it, so the second race is also instant.
+3. **On WebGPU, the first load skips the post-chain and shadow-caster warms (row 10).** Cause, from
+   `js/render/three/tlx.js` `runProgramWarmStages`:
+   - The post warm runs only when `warmPlusOn() || performance.now() - _warmAt < 3000`.
+   - The caster warm runs only when `warmPlusOn()`.
+   - `warmPlusOn()` defaults to true only on three's WebGL backend.
+
+   On the 18 Pro Max's first WebGPU load the scene compile took 4.4 s, so the gate tripped: `post 0`, `shadow 0`.
+   On the reload (scene 0.2 s) the post warm ran and cost 1.9 s; later loads, 0.05 s. WebGL2 warms post in the
+   lights on every load (1.15 s first). Per the code's own comments, skipped post quads and casters compile on the
+   first visible present and the first sun pass, i.e. mid-race. So the first WebGPU race on a phone probably
+   carries that work as a hitch, and the "1.9 s on the 2nd load" is the post warm finally running. Untested fix:
+   make `warmPlusOn()` default on for WebGPU too (moves the work into the lights). It can be A/B'd with no code via
+   `localStorage apex26.tlxWarmPlus=1`. A clean A/B needs a cold pipeline cache per arm (a Safari data clear or a
+   known-unused unit) and a first-race frame-hitch probe. `tlx.js` changes also need the render-tlx gate
+   (`gfx-probe` + `gpu-census.yml`).
 4. **Path-independent entry floor of about 2 s (rows 10, 11):** `gridCountdown` 0.73–0.86 s, `warmCarAssets`
    0.69–0.82 s, `loadTrack` 0.36–0.41 s, and about 1 s of `scenery` when uncached. With shaders warm, this is now
    most of every race entry on every phone and renderer.
