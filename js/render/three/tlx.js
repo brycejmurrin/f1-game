@@ -974,15 +974,20 @@ const TLX = (function () {
       // forceWebGL path already owns #game as WebGL2 (ownGL above).
       function detectSoftwareGL() {
         try {
-          const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+          const gl = (renderer.backend && renderer.backend.gl)
+            || canvas.getContext("webgl2") || canvas.getContext("webgl");
           if (!gl) return false;
           const ext = gl.getExtension("WEBGL_debug_renderer_info");
           const name = ((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || "")
             + " " + (gl.getParameter(gl.RENDERER) || "");
-          return /swiftshader|llvmpipe|softpipe|microsoft basic render|gdi generic/i.test(name);
+          return /swiftshader|llvmpipe|lavapipe|softpipe|microsoft basic render|gdi generic|subzero/i.test(name);
         } catch (_) { return false; }
       }
-      const softwareGL = forceWebGL ? detectSoftwareGL() : !!_softAdapter;
+      // Adapter sniff alone misses AUTO→WebGL2 when requestAdapter() is null or
+      // reports trimmed info (production SwiftShader). Classify from the LIVE
+      // WebGL renderer string — never from softPresent/headless UA (#3601).
+      const softwareGL = !!_softAdapter
+        || (!!(renderer.backend && renderer.backend.isWebGLBackend) && detectSoftwareGL());
       try {
         if (canvas && typeof canvas.setAttribute === "function") {
           const api = (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2";
