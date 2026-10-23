@@ -34,7 +34,8 @@ function loadIdleYield() {
   assert.ok(a > 0 && b > a, "idleYield still in tlx-chunked.js");
   const sandbox = { setTimeout, requestIdleCallback: undefined, Promise };
   sandbox.globalThis = sandbox;
-  vm.runInNewContext(CHUNKED.slice(a, b) + "\nthis.idleYield = idleYield;", sandbox);
+  vm.runInNewContext(CHUNKED.slice(a, b) + "\nthis.idleYield = idleYield;", sandbox,
+    { filename: absSrc("js/render/three/tlx-chunked.js") });
   return sandbox.idleYield;
 }
 
