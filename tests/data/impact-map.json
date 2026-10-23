@@ -6618,6 +6618,10 @@
       "raceProfile": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "raceTrackStepped": [
+        "tests/unit/flyby-lighting.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "redFlagRestart": [
         "tests/unit/marshal-panels.test.mjs"
       ],
