@@ -21,6 +21,9 @@
  * identifier and shape, never by exact whitespace, argument order or comment
  * text. Remaining pin count: see tests/unit/assert-match-ratchet.test.mjs.
  *
+ * Tier-4 / stall-watchdog shed (bloom off, doBloom false): software GL composite
+ * flare, exposure and drawGlow knees in post.js / glx.js — pinned in one test.
+ *
  * Run: node --test tests/unit/gfx-backend-canary.test.mjs
  */
 import { readCssSource } from "../helpers/css-source.mjs";
@@ -579,7 +582,9 @@ test("race-start render fail-fasts on backendState.ctxLost (drops handoff)", () 
   assert.match(src, /gfxContextLost\(\)[\s\S]{0,250}?loadingScreen\.phase\(\) === "handoff"/);
   assert.match(code("js/perf/race-entry-profile.js"), /handoff:lower-lost/);
   const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("const sessionEntry = SessionEntry.create();"));
-  assert.match(body, /loadTrackStepped\(trackIdx, \(\) => !stale\(\) && !gfxContextLost\(\)\)/,
+  assert.ok(body.includes("await raceTrackStepped(trackIdx, stale)"), "the paced load goes through raceTrackStepped (#3571)");
+  const paced = src.slice(src.indexOf("async function raceTrackStepped("), src.indexOf("function loadTrack(idx)"));
+  assert.match(paced, /loadTrackStepped\(idx, \(\) => !stale\(\) && !gfxContextLost\(\)\)/,
     "paced load aborts mid-step when its entry is stale or its context is lost");
   assert.match(body, /await yieldMain\(\);[\s\S]{0,80}?if \(gfxContextLost\(\)\)/,
     "fail-closed covers the scheduler.yield gaps between paced startRaceBody legs");
@@ -4393,6 +4398,22 @@ test("GLX present() reins in bloom on software GL when the scene target is LDR",
   assert.ok(body.includes("PerfGov.softwareRaster()") && body.includes("colorType !== gl.HALF_FLOAT") && body.includes("bloomAmt *="));
 });
 
+test("GLX software GL knees when lowest rung sheds bloom (tier 4 stall watchdog)", () => {
+  const body = span(read("js/render/glx/post.js"), "function present(opts) {", "function ", "present");
+  assert.ok(body.includes("swFlareK") && body.includes("swSoft") && body.includes("doBloom ? 0.42 : 0"));
+  assert.ok(body.includes("swExposureK") && body.includes("doBloom ? 1 : 0.72"));
+  const race = gameUnionCode();
+  assert.ok(race.includes("PostFxOpts.applyLookShed(po,") && race.includes("bloom: _bloom * LT.bloomMul"));
+  const shed = read("js/ui/post-fx-opts.js");
+  assert.ok(shed.includes("po.bloom = off ? 0 : v.bloom"));
+  assert.ok(shed.includes("PerfGov.autoTier() >= 4") || shed.includes("lookPostShed"));
+  const gar = read("js/garage/setup-camera.js");
+  assert.ok(gar.includes("PerfGov.autoTier() >= 4") && gar.includes("_presentOpts.bloom = shed ? 0 :"));
+  const glow = read("js/render/shared/post-common.js");
+  assert.ok(glow.includes("softwareGlowScale") && glow.includes("PerfGov.softwareRaster()") && glow.includes("0.22 : 0.55") && glow.includes("autoTier() >= 4"));
+  assert.ok(gameUnionCode().includes("PostCommon.softwareGlowScale(LT.glareStr)"));
+});
+
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
   // GameStore JSON-encodes every value: the key holds "\"ultra\"" WITH the
   // quotes. 0a31155 compared the raw string to "ultra", so every desktop that
@@ -4716,7 +4737,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
     "ResultsCam.live() keeps redrawing chequered/orbit/highlights");
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
     "the visibility gate precedes the no-track return");
-  assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
+  assert.match(game, /const builtWorldFits = \(def\) => builtTrackId === def\.id && builtTrackNight === sessionDarkFor\(def\)/,
     "loadTrack's memo still makes a repeat build free");
 });
 
@@ -6304,6 +6325,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const menuIdle = async (current) => current(), menuSlice = async () => {};
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; builtTrackId = id; };
+  const bareStale = () => false;   // a dressed world (#3570: session-entry-vm covers the bare one)
   const loadTrackStepped = async (id, cur) => { if (!cur()) return false; loadTrack(id); return true; };   // the real one: tracks.js buildPaced + build-steps.test.mjs
   const garagePrewarm = async () => {};   // garage-arrival.test.mjs pins it
   const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
@@ -6341,7 +6363,8 @@ test("selector retains a different circuit during compilation, then releases it 
   const gfx = { warming: () => compiling }, els = { select: { hidden: false } }, $ = () => ({ hidden: true });
   const menuKey = idx => [idx, raceTimeOfDay, raceWeather, 22].join("|"), fieldSize = () => 22;
   const buildKey = idx => [idx, false, 22].join("|");
-  const sessionDarkFor = () => false, trackBuildOpts = () => ({}), sceneryResident = () => false;
+  const sessionDarkFor = () => false, trackBuildOpts = () => ({}), sceneryResident = () => false, bareStale = () => false;
+  const builtWorldFits = def => builtTrackId === def.id && builtTrackNight === sessionDarkFor(def) && builtGridSlots === fieldSize() && !bareStale();
   const PerfGov = { sentinelArm() {} }, Log = { warn() {} };
   const freeTrackMeshes = t => { assert.equal(compiling, false, "compileAsync still owns the old geometries"); freed.push(t); };
   const shadowPass = { reset() { assert.equal(compiling, false, "shadow programs also retain ownership until compile settles"); } };

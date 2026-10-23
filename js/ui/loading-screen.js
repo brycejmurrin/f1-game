@@ -953,6 +953,7 @@ const LoadingScreen = (function () {
        *  drawn for exactly this window and blanks every other menu. */
       active() { return phase === "run" || phase === "card"; },
       phase() { return phase; },
+      isAutomation,
     };
   }
 

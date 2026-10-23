@@ -569,3 +569,14 @@ test("A·W14: probe casters compile the depth programs with empty pools; one pai
   assert.equal(h.sys.S.probeLayouts, 2, "a fresh probe set, one pair per layout again");
   assert.equal(h.fg.counts.linkProgram || 0, 0, "and link nothing new: the previous set held the programs until this one had them");
 });
+
+test("A·W14: the lamp-bake placeholders carry their real textures' filters (one WGSL for day- and night-booted pages)", () => {
+  // TSL writes textureLoad for a NEAREST float texture and textureSampleLevel for a LINEAR one. The bake atlas is
+  // LINEAR (setLampBake _halfData), so a NEAREST placeholder made a day-booted page's lit WGSL differ from a
+  // night-booted page's, and the first night race on WebGPU recompiled every lit pipeline (Safari cache miss).
+  const src = read("js/render/three/tsl-lit.js");
+  assert.ok(src.includes("_bakeBlank.minFilter = _bakeBlank.magFilter = THREE.LinearFilter;"), "the atlas placeholder is LINEAR");
+  assert.ok(src.includes("_halfData(b.data, b.atlasW, b.atlasH * 2, THREE.LinearFilter)"), "the real atlas is LINEAR");
+  assert.ok(src.includes("_bakeIdxBlank.minFilter = _bakeIdxBlank.magFilter = THREE.NearestFilter;"), "the indirection placeholder is NEAREST");
+  assert.ok(src.includes("_halfData(b.indir, b.tilesX, b.tilesY, THREE.NearestFilter)"), "the real indirection is NEAREST");
+});

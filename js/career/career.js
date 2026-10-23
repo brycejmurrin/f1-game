@@ -173,7 +173,8 @@ const unsupportedSlot = (f, i) => {
   const raw = store.get(slotKey(f, i), null);
   return !!(raw && Number(raw.v) > GameStore.CAREER_V);
 };
-const readSlot = (f, i) => { const key = slotKey(f, i); let c = store.get(key, null); if (protectedRaw.has(key) && store.raw && store.raw(key) === protectedRaw.get(key)) c = JSON.parse(protectedRaw.get(key)); return migrateCareer(c && JSON.parse(JSON.stringify(c))); };
+// #3559: only trust a string captured raw — null means cache-only (quota write-back failed).
+const readSlot = (f, i) => { const key = slotKey(f, i); let c = store.get(key, null); const pr = protectedRaw.get(key); if (typeof pr === "string" && store.raw && store.raw(key) === pr) c = JSON.parse(pr); return migrateCareer(c && JSON.parse(JSON.stringify(c))); };
 
 if (store.subscribe) store.subscribe((change) => {
   if (!change.foreign) return;

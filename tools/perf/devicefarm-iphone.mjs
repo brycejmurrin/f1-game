@@ -13,6 +13,9 @@
 //     races: BENCHMARK "WEATHER & TRACKS" pinned per path
 //     tracks: --tracks monza:night,singapore:night,vegas:night — entry + 20 s steady frames per circuit
 //     warmplus: WebGPU entry + first-race frames, default vs apex26.tlxWarmPlus=1, each after a Safari data clear
+//     visor,soak,photo (chainable in one session): HELMET-cam visor arms --arms off,on,refr,off at --track bahrain:night
+//       (--visor-pins); GRAPHICS --presets medium,low,medium at renderScale 0.5, a 1/0.75/0.5 ladder and a --soak-s
+//       governor soak (--soak-pins); Photo Studio by native taps with the 44 px floor read
 //   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
 // `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
@@ -443,6 +446,147 @@ async function racesScenario(ctx, pins, report, out) {
   }
 }
 
+// ---- follow-ups for merged PRs (OrchA 31, 2026-10-23): visor A/B (#3581), LOW/renderScale soak (#3479), Photo (#3482)
+// A window of rAF intervals that starts when called: `ms` long after `delay` ms, read back from window.__dfWin.
+const WIN_FOR = (ms, delay = 3000) => `
+  window.__dfWin = null; const d = []; let last = 0, t0 = 0;
+  const tick = (t) => { if (!t0) t0 = t; if (t - t0 > ${delay}) { if (last) d.push(t - last); last = t; }
+    if (t - t0 > ${delay + ms}) { d.sort((a, b) => a - b); const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(d.length * f))] * 10) / 10;
+      window.__dfWin = { n: d.length, fps: Math.round(d.length / ${ms / 1000} * 10) / 10, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
+        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length }; return; }
+    requestAnimationFrame(tick); };
+  requestAnimationFrame(tick); return true;`;
+async function sampleWin(ctx, ms, delay = 3000, extra = "") {
+  await exec(ctx.base, ctx.sid, WIN_FOR(ms, delay));
+  await sleep(ms + delay);
+  for (let i = 0; i < 15; i++) {
+    try { const r = await exec(ctx.base, ctx.sid, `return window.__dfWin ? { win: window.__dfWin${extra ? ", " + extra : ""} } : null;`, 1); if (r) return r; } catch (_) { /* busy */ }
+    await sleep(2000);
+  }
+  return { win: null };
+}
+async function openUrl(ctx, u) {
+  wd(ctx.base, "POST", `/session/${ctx.sid}/url`, { url: u + (u.includes("?") ? "&" : "?") + "df=" + Date.now() });
+  await sleep(8000); return waitReady(ctx);
+}
+const GO = `try { return __apex.go(); } catch (e) { return String(e); }`;
+// visor (#3581): the HELMET cam at a night circuit, one fresh page per arm (the visor settings are read from the URL
+// at boot, js/camera/cockpit-opts.js choice()), the field released, 20 s of frames. Arms repeat (off … off) so a
+// thermal drift shows as a gap between the two "off" rows instead of hiding inside a visor delta.
+const VISOR_ARMS = { off: "helmetvisor=off", on: "helmetvisor=clear&visorreflections=medium&visorrefraction=off",
+  refr: "helmetvisor=clear&visorreflections=medium&visorrefraction=medium" };
+const VISOR_READ = `(() => { let v = null; try { v = typeof VisorOptics !== "undefined" ? VisorOptics.stats() : null; } catch (e) { v = String(e); }
+    let cam = null; try { cam = __apex.camera().mode; } catch (_) {}
+    return { cam, optics: v, perf: (() => { try { const r = __apex.renderScale(); return { scale: r.scale, tier: r.tier, autoTier: r.autoTier }; } catch (_) { return null; } })() }; })()`;
+async function visorScenario(ctx, url, pins, report, out) {
+  const [track, tod = "night"] = opt("track", "bahrain:night").split(":");
+  const arms = opt("arms", "off,on,refr,off").split(",");
+  report.visor = {};
+  for (const p of pins) {
+    const rows = report.visor[p] = [];
+    await exec(ctx.base, ctx.sid, PIN(p));
+    for (const [i, arm] of arms.entries()) {
+      const r = await openUrl(ctx, withApex(url) + "&" + VISOR_ARMS[arm]);
+      const entry = await timedEntry(ctx, `visor ${p} ${arm}`, KICK_FOR(track, tod));
+      await exec(ctx.base, ctx.sid, `__apex.camera("helmet"); ${GO}`);
+      const s = await sampleWin(ctx, 20000, 4000, "read: " + VISOR_READ);
+      rows.push({ arm, params: VISOR_ARMS[arm], api: r.api, entryMs: entry.windowMs, ...s });
+      log(`visor ${p} ${arm}: api=${r.api} ${JSON.stringify(s)}`);
+      try { shot(ctx.base, ctx.sid, path.join(out, `visor-${p}-${i}-${arm}.png`)); } catch (_) { /* no shot */ }
+    }
+    pullLogs(ctx.base, ctx.sid, out);
+  }
+}
+// soak (#3479): GRAPHICS LOW vs MEDIUM at renderScale 0.5 (the iPhone 15 before-numbers: LOW 51.2 < MEDIUM 57.6),
+// then one race walked 1.0 → 0.75 → 0.5 (the "never recovered" linger), then the governor back on for a soak.
+const PRESET = (id) => `GameStore.store.set("gfxPreset", ${JSON.stringify(id)}); return GameStore.store.get("gfxPreset");`;
+const RS = `(() => { try { const r = __apex.renderScale(); return { scale: r.scale, auto: r.auto, tier: r.tier, autoTier: r.autoTier,
+    lookPostShed: r.lookPostShed, autoShed: r.autoShed, userTier: r.userTier, frameTimes: r.frameTimes }; } catch (e) { return String(e); } })()`;
+async function soakScenario(ctx, url, pins, report, out) {
+  const [track, tod = "day"] = opt("track", "monza:day").split(":");
+  const presets = opt("presets", "medium,low,medium").split(","), soakS = Number(opt("soak-s", "60"));
+  report.soak = {};
+  for (const p of pins) {
+    const R = report.soak[p] = { presets: [], ladder: null };
+    await exec(ctx.base, ctx.sid, PIN(p));
+    for (const [i, id] of presets.entries()) {
+      await exec(ctx.base, ctx.sid, PRESET(id));
+      const r = await openUrl(ctx, withApex(url));
+      const entry = await timedEntry(ctx, `soak ${p} ${id}`, KICK_FOR(track, tod));
+      await exec(ctx.base, ctx.sid, `try { __apex.go(); } catch (_) {} return __apex.renderScale(0.5);`);
+      const s = await sampleWin(ctx, 20000, 4000, "rs: " + RS + ", preset: GfxQuality.current()");
+      R.presets.push({ preset: id, api: r.api, entryMs: entry.windowMs, ...s });
+      log(`soak ${p} ${id}@0.5: ${JSON.stringify(s.win)} shed=${s.rs && s.rs.lookPostShed}`);
+      try { shot(ctx.base, ctx.sid, path.join(out, `soak-${p}-${i}-${id}.png`)); } catch (_) { /* no shot */ }
+    }
+    // The ladder runs on the last preset's race, still live.
+    const steps = R.ladder = [];
+    for (const v of [1, 0.75, 0.5]) {
+      await exec(ctx.base, ctx.sid, `return __apex.renderScale(${v});`);
+      const s = await sampleWin(ctx, 12000, 3000, "rs: " + RS); steps.push({ scale: v, ...s });
+      log(`soak ${p} scale ${v}: ${JSON.stringify(s.win)}`);
+    }
+    await exec(ctx.base, ctx.sid, `return __apex.renderScale(true);`);
+    const s = await sampleWin(ctx, soakS * 1000, 2000, "rs: " + RS); steps.push({ scale: "auto", soakS, ...s });
+    log(`soak ${p} auto ${soakS}s: ${JSON.stringify(s.win)} rs=${JSON.stringify(s.rs && { scale: s.rs.scale, tier: s.rs.tier, autoShed: s.rs.autoShed })}`);
+    pullLogs(ctx.base, ctx.sid, out);
+  }
+  await exec(ctx.base, ctx.sid, PRESET(opt("restore-preset", "medium")));
+}
+// photo (#3482): Photo Studio driven by native finger taps from the title screen, every visible control's painted
+// size against the 44 px floor, one shot preset, CAPTURE, CLOSE — and every page error on the way.
+const RECT = (sel) => `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; el.scrollIntoView({ block: "center" }); const r = el.getBoundingClientRect();
+    return r.width && r.height ? { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height } : null; })()`;
+async function nativeTap(ctx, sel) {
+  const g = await exec(ctx.base, ctx.sid, `return { p: ${RECT(sel)}, w: innerWidth, h: innerHeight };`);
+  if (!g.p) return { sel, tapped: false, why: "not on screen" };
+  const web = wd(ctx.base, "GET", `/session/${ctx.sid}/context`);
+  wd(ctx.base, "POST", `/session/${ctx.sid}/context`, { name: "NATIVE_APP" });
+  try {
+    const win = wd(ctx.base, "GET", `/session/${ctx.sid}/window/rect`);
+    const k = win.width / g.w, oy = win.height - g.h * k, x = Math.round(g.p.x * k), y = Math.round(oy + g.p.y * k);
+    wd(ctx.base, "POST", `/session/${ctx.sid}/actions`, { actions: [{ type: "pointer", id: "finger", parameters: { pointerType: "touch" }, actions: [
+      { type: "pointerMove", duration: 0, x, y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 80 }, { type: "pointerUp", button: 0 }] }] });
+    try { wd(ctx.base, "DELETE", `/session/${ctx.sid}/actions`); } catch (_) { /* nothing held */ }
+    return { sel, tapped: true, at: [x, y], css: [Math.round(g.p.x), Math.round(g.p.y)] };
+  } finally {
+    const ctxs = wd(ctx.base, "GET", `/session/${ctx.sid}/contexts`);
+    const back = (typeof web === "string" && web !== "NATIVE_APP") ? web : (ctxs || []).find((c) => (c.id || c) !== "NATIVE_APP");
+    wd(ctx.base, "POST", `/session/${ctx.sid}/context`, { name: back && back.id ? back.id : back });
+  }
+}
+const PHOTO_ERRS = `window.__dfErr = window.__dfErr || []; if (!window.__dfErrOn) { window.__dfErrOn = 1;
+  addEventListener("error", (e) => window.__dfErr.push(String(e.message).slice(0, 160)));
+  addEventListener("unhandledrejection", (e) => window.__dfErr.push("rej " + String(e.reason).slice(0, 160))); } return true;`;
+const PHOTO_READ = `const ps = document.getElementById("photo-studio"); const open = !!ps && !ps.hidden && getComputedStyle(ps).display !== "none";
+  const ctl = open ? [...ps.querySelectorAll("button, select, input, [role=slider]")].filter((el) => { const r = el.getBoundingClientRect(); return r.width && r.height && getComputedStyle(el).visibility !== "hidden"; })
+    .map((el) => { const r = el.getBoundingClientRect(); return { id: el.id || el.textContent.trim().slice(0, 16), w: Math.round(r.width), h: Math.round(r.height), off: r.bottom > innerHeight + 0.5 || r.top < -0.5 }; }) : [];
+  // The panel body scrolls by design (#ps-body); CAPTURE and CLOSE are the two that must stay on screen.
+  const msg = document.getElementById("ps-message");
+  return { open, w: innerWidth, h: innerHeight, controls: ctl.length, under44: ctl.filter((c) => Math.min(c.w, c.h) < 44), offscreen: ctl.filter((c) => c.off && (c.id === "ps-capture" || c.id === "ps-close")).map((c) => c.id),
+    message: msg ? msg.textContent.trim().slice(0, 120) : null, errors: (window.__dfErr || []).slice(0, 20) };`;
+async function photoScenario(ctx, url, report, out) {
+  const R = report.photo = { steps: [] };
+  await openUrl(ctx, withApex(url));
+  await exec(ctx.base, ctx.sid, PHOTO_ERRS);
+  await sleep(4000);   // the title scene's car settles before the first tap
+  const step = async (name, sel, wait = 3000) => {
+    const tap = sel ? await nativeTap(ctx, sel) : null; await sleep(wait);
+    const read = await exec(ctx.base, ctx.sid, PHOTO_READ); R.steps.push({ name, tap, read });
+    log(`photo ${name}: tap=${tap && tap.tapped} open=${read.open} controls=${read.controls} under44=${read.under44.length} off=${read.offscreen.length} msg=${read.message} errors=${read.errors.length}`);
+    try { shot(ctx.base, ctx.sid, path.join(out, `photo-${R.steps.length}-${name}.png`)); } catch (_) { /* no shot */ }
+    return read;
+  };
+  await step("menu", null, 0);
+  const opened = await step("open", "#mb-photo", 5000);
+  if (opened.open) {
+    await step("shot-preset", "#ps-shots button");
+    await step("capture", "#ps-capture", 6000);
+    await step("close", "#ps-close");
+  }
+  pullLogs(ctx.base, ctx.sid, out);
+}
+
 async function run() {
   const want = opt("device", "iPhone 18 Pro Max"), legs = Number(opt("legs", "0")), scenario = opt("scenario", "bench");
   const pins = opt("pins", "webgpu,webgl2").split(",");
@@ -499,7 +643,19 @@ async function run() {
       log(`live view: AWS console > Device Farm > Mobile Device Testing > Projects > ${PROJECT} > Remote access > ${ses.name}`);
       try { if (scenario === "cache") await cacheScenario(ctx, url, pins, report, out); else if (scenario === "races") await racesScenario(ctx, pins, report, out);
         else if (scenario === "warmplus") await warmplusScenario(ctx, url, report, out);
-        else if (scenario === "tracks") await tracksScenario(ctx, opt("tracks", "monza:night,singapore:night,vegas:night").split(","), report, out); }
+        else if (scenario === "tracks") await tracksScenario(ctx, opt("tracks", "monza:night,singapore:night,vegas:night").split(","), report, out);
+        else {
+          // --scenario visor,soak,photo chains the follow-ups in ONE session (a session bills ~13 device-minutes minimum).
+          for (const sc of scenario.split(",")) {
+            // --visor-pins / --soak-pins: the visor delta shows only where frames are not pinned at 60 Hz (iPhone 14
+            // WebGL2, ledger rows 1-4); #3479's before-numbers are WebGPU.
+            try { if (sc === "visor") await visorScenario(ctx, opt("url", SITE), opt("visor-pins", "webgl2,webgpu").split(","), report, out);
+              else if (sc === "soak") await soakScenario(ctx, opt("url", SITE), opt("soak-pins", "webgpu").split(","), report, out);
+              else if (sc === "photo") await photoScenario(ctx, opt("url", SITE), report, out);
+              else throw new Error("unknown scenario " + sc); }
+            catch (e) { (report.scenarioErrors = report.scenarioErrors || {})[sc] = e.message; log(`${sc}: ERROR ${e.message.slice(0, 160)}`); }
+          }
+        } }
       finally { sid = ctx.sid; }
     }
     const touchN = Number(opt("touch", "0"));

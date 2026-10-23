@@ -539,6 +539,24 @@ test("device-driven context rebuilds are capped (three per 30 s)", async () => {
   assert.equal(contexts.length, 1 + 3, "three rebuilds in the window, then the cap holds");
 });
 
+// #3561: the capped request must stay pending, not be dropped — a context
+// still running on a dead output never fails a resume, so nothing re-asks.
+test("a rate-capped device rebuild stays pending and a gesture after the window serves it", async () => {
+  let now = 1000;
+  const { A, contexts, fireDeviceChange } = boot({ userActivation: sticky, clock: () => now });
+  A.init(); await flush();
+  for (let i = 0; i < 4; i++) { fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 40); now += 1000; }
+  await flush();
+  assert.equal(contexts.length, 1 + 3, "precondition: the fourth swap hit the cap");
+  A.init(); await flush();
+  assert.equal(contexts.length, 1 + 3, "a gesture inside the window still respects the cap");
+  now += 30000;
+  A.init(); await flush();
+  assert.equal(contexts.length, 1 + 4, "the capped swap is rebuilt for once the window has passed");
+  A.init(); await flush();
+  assert.equal(contexts.length, 1 + 4, "served once, then forgotten");
+});
+
 test("a rebuild forgets the old clock: revFlare and the limiter hold clock restart", async () => {
   const { A, contexts, fireDeviceChange } = boot({ userActivation: sticky });
   A.init(); await flush(); A.startEngine();

@@ -247,6 +247,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-experience.test.mjs",
   "tests/unit/career-hire-rating.test.mjs",
   "tests/unit/career-legends.test.mjs",
+  // #3559: readSlot must not JSON.parse(null) over a cache-only protected career when quota refused the localStorage write-back.
+  "tests/unit/career-readslot-quota.test.mjs",
   "tests/unit/career-regulations.test.mjs",
   // Round-2 (2026-10-10) career: the save carries its calendar (calIds), beatRival offers sign the rival they show, weakerSeat before the team moves, no re-hire of the sitting hire, rep before market value, podium p>0, NEW CAREER number 1, null-team slots.
   "tests/unit/career-round2.test.mjs",
@@ -634,6 +636,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/global-registry.test.mjs",
   // Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).
   "tests/unit/glx-failure-paths.test.mjs",
+  // #3291: GLX setLampShadowSlot shares begin()'s ufI cache; drawChunkedBody restores the slot in finally.
+  "tests/unit/glx-lamp-shadow-slot.test.mjs",
   "tests/unit/glx-multidraw.test.mjs",
   "tests/unit/glx-occlusion.test.mjs",
   // GLX output-target (VR task 30): source-scan of bindFramebuffer(null) plus a recording-mock proof that setOutputTarget routes the final pass.
@@ -1106,6 +1110,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/screen-looks.test.mjs",
   // Lazy bundles preload every gated wave and still evaluate in edge order; the boot preloads its likely backend (B·H8 load hunt).
   "tests/unit/script-loader-preload.test.mjs",
+  // #3295: a strict retry after a sibling failure must not re-append a classic script that already evaluated.
+  "tests/unit/script-loader-retry-eval.test.mjs",
   "tests/unit/script-loader-starved.test.mjs",
   "tests/unit/script-loader-throw.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
@@ -1478,6 +1484,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a chip or __apex.weather() still cuts. VM-executed atmosphere.js, ~0.1 s.
   "tests/unit/weather-blend.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
+  // D·W21b / #3279: WebGPU menu warm enables warmPlus + idle-chunks post/shadow/cockpit; records where.
+  "tests/unit/webgpu-menu-warm.test.mjs",
   // WET_GRIP orders the treads as treadFor picks them: inter owns the damp, full wet the storm. VM, < 0.2 s.
   "tests/unit/wet-grip-ladder.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
