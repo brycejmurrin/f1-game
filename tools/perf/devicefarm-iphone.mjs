@@ -225,11 +225,22 @@ async function run() {
       await sleep(5000);
     }
     log("session RUNNING; endpoint ready (not printed)");
+    // The physical phone: Safari's shader cache survives between sessions on one instance (A·D1), so a BEFORE/AFTER
+    // pair is only comparable on the same instanceArn.
+    try { const s = aws("devicefarm", "get-remote-access-session", "--arn", ses.arn).remoteAccessSession;
+      report.instanceArn = s.instanceArn || (s.device && s.device.instances && s.device.instances.map((i) => i.arn)) || null;
+      report.deviceUdid = s.deviceUdid || null;
+      log("instance " + String(report.instanceArn).split("/").pop() + (report.deviceUdid ? " udid " + report.deviceUdid : "")); } catch (e) { log("instance: " + e.message.slice(0, 120)); }
     report.status = wd(base, "GET", "/status");
     const caps = { platformName: "iOS", browserName: "Safari", "appium:automationName": "XCUITest", "appium:newCommandTimeout": 300,
       "appium:showSafariConsoleLog": true, "appium:showSafariNetworkLog": true };
     const created = wd(base, "POST", "/session", { capabilities: { alwaysMatch: caps, firstMatch: [{}] } });
     sid = created.sessionId; log("WebDriver session up");
+    // Instance identity from the phone itself (get-remote-access-session returns no instanceArn/udid): compare
+    // BEFORE/AFTER only on the same one — Safari's shader cache outlives the session.
+    try { const d = wd(base, "POST", `/session/${sid}/execute/sync`, { script: "mobile: deviceInfo", args: [] });
+      report.deviceInfo = d; log("deviceInfo " + JSON.stringify({ uuid: d && (d.uuid || d.udid), name: d && d.name, model: d && d.model })); }
+    catch (e) { log("deviceInfo: " + e.message.slice(0, 120)); }
     try { wd(base, "POST", `/session/${sid}/orientation`, { orientation: "LANDSCAPE" }); } catch (e) { log("orientation: " + e.message.slice(0, 120)); }
     wd(base, "POST", `/session/${sid}/url`, { url });
     await sleep(20000);
