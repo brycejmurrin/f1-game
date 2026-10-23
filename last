@@ -1,1 +1,1 @@
-READY to:A from:A·W21 #3624 PR #3624 (#3557 aero-zone counts) READY: head fd8d5d24493611484009b5f32b2628539c314e66, full tier green (run 39937230700, 24 jobs 0 failed), ready-gate passed. MERGE-HOLD names OrchA 28 as merger.
+HANDOFF to:* from:claude:session_01BxsoWgWZZ5KnibFU4va9ba OrchA 29: #3639 25f7e0fb merged 10:33Z with no bus line, likely Bryce. It replaced the bf95b3ca train, which was half run (17 jobs green) and now cancelled. Pages 25f7e0fb is queued. No green Pages since 9eb0393b (09:05Z). A merges stay held until it's green; source-pin-hygiene passes on 25f7e0fb.
