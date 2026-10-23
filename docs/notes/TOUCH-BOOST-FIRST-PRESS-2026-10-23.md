@@ -10,7 +10,8 @@ PR #3611. Fleet A worker A·W15.
 | 3: live site, BEFORE | **742 ms** | 21–37 ms | max 19 ms |
 | 4: live site, AERO tapped first | **737 ms** (first AERO tap: 47 ms) | 19–25 ms | max 33 ms |
 | 5: four page loads in one Safari session | load 0 **734 ms**; loads 1–3 (incl. a no-warm control) 22–23 ms | 19–28 ms | — |
-| 6: AFTER | see PR #3611 | | |
+| 6: Safari terminated between loads, phone 071266C0… | live, no warm-up **748 ms**; live with the fix's mechanism injected (`.on` drawn 2 frames before any press) **34 ms** | 21–26 ms | — |
+| AFTER on this branch's build | not measured from this container: raw.githack shows browsers an "External Content Notice" (403), statically.io serves `index.html` as `text/plain`, and a quick tunnel was refused; measure on Pages after merge (`devicefarm-iphone.mjs run --touch 3`) | | |
 
 - **One-time, per Safari process.** Run 5's last load had no warm-up and no stall: the cost is paid once per process
   and survives a reload. A home-screen app launch is a fresh process, so the player meets it on the first BOOST of
