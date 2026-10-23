@@ -915,8 +915,14 @@
      * plus its tile indirection (NEAREST), each swapped into ONE texture node —
      * the node, not the texture, is what the graph holds, so a new track never
      * mints a program. 1x1 black placeholders until the first bake; bakeOn
-     * gates the term either way. */
+     * gates the term either way. Each placeholder carries its real texture's
+     * FILTER: TSL emits textureLoad for a NEAREST float texture and
+     * textureSampleLevel for a LINEAR one, so a page that builds its programs
+     * before the first bake (a day race) and one that builds them after (a
+     * night race) otherwise write different WGSL for the same graph — every
+     * lit pipeline missed Safari's pipeline cache on the first night race. */
     const _bakeBlank = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType);
+    _bakeBlank.minFilter = _bakeBlank.magFilter = THREE.LinearFilter;
     _bakeBlank.needsUpdate = true;
     const _bakeIdxBlank = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType);
     _bakeIdxBlank.minFilter = _bakeIdxBlank.magFilter = THREE.NearestFilter;

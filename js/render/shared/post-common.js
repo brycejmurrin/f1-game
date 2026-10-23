@@ -179,6 +179,13 @@ const PostCommon = (function () {
   // User LOW retains wet-road mirrors. Optional caller-owned state softens
   // measured cuts, then reaches exact zero so every backend can skip SSR.
   // Crash safety and explicit off/dry policy remain immediate. No allocation.
+  // Lamp halo billboards: software GL blows out additive glow when the ladder
+  // sheds bloom (#3610). Callers scale str before gfx.drawGlow().
+  function softwareGlowScale(str) {
+    if (!(str > 0) || typeof PerfGov === "undefined" || !PerfGov.softwareRaster()) return str;
+    return str * (PerfGov.lookPostShed && PerfGov.lookPostShed() ? 0.22 : 0.55);
+  }
+
   function roadReflection(opts, wetness, strength, tier, autoTier, transition, nowMs, emergency) {
     const wet = wetness > 0.01, target = autoTier >= 4 ? 0 : 1;
     let available = target;
@@ -203,6 +210,6 @@ const PostCommon = (function () {
     opts.ssrQuality = tier >= 3 ? 2 : (tier >= 2 ? 1 : 0);
   }
 
-  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, flareTapsDepth, knob, roadReflection };
+  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, flareTapsDepth, knob, roadReflection, softwareGlowScale };
 })();
 Object.freeze(PostCommon);

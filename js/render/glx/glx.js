@@ -817,8 +817,8 @@ const GLXBackend = (function () {
       // in the CURRENTLY BOUND set. A per-chunk set reorders lamps, so the
       // caller must point the slot at the mapped lamp's position in ITS set
       // (or -1) per draw, then restore the global slot. The lit program is
-      // already bound on every chunked draw path.
-      setLampShadowSlot: (i) => { gl.uniform1i(litU.uLampShadowIdx, i | 0); },
+      // already bound on every chunked draw path. Through ufI (#3291), not raw uniform1i.
+      setLampShadowSlot: (i) => { ufI(litU.uLampShadowIdx, _litUf, "lampShadowIdx", i | 0); },
       getSize: () => ({ width, height }),
       getPresentSize: () => ({ width: presentW || width, height: presentH || height }),
       outputFBO, outputViewport, setOutput, clearOutput,

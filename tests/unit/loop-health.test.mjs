@@ -235,6 +235,39 @@ test("stall: #carsetup (garage) uses the same relaxed cover as #loading", () => 
   assert.equal(h.calls.reload, 1, "30 glacial frames during garage still recover once, not at 10");
 });
 
+test("stall: #race-settings (PREPARING…) uses the same relaxed cover as #loading", () => {
+  const raceSettings = { hidden: true };
+  const clock = { t: 0 };
+  const calls = { tier: [], reload: 0 };
+  const ls = new Map();
+  const ss = new Map();
+  const store = (m) => ({ getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) });
+  const listeners = {};
+  const cover = { hidden: true };
+  const doc = {
+    visibilityState: "visible",
+    addEventListener: (n, f) => { listeners[n] = f; },
+    getElementById: (id) => (id === "loading" ? cover : id === "carsetup" ? { hidden: true } : id === "race-settings" ? raceSettings : null),
+  };
+  const ctx = {
+    performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,
+    navigator: { webdriver: false, userAgent: "Mozilla/5.0" }, document: doc, location: { search: "", reload: () => { calls.reload++; } },
+    localStorage: store(ls), sessionStorage: store(ss),
+    PerfGov: { setUserTier: (n) => calls.tier.push(n) },
+  };
+  vm.createContext(ctx);
+  seedLog(ctx);
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/perf/loop-health.js") });
+  const frames = (n, ms) => { for (let i = 0; i < n; i++) { clock.t += ms; ctx.LoopHealth.clean(); } };
+  raceSettings.hidden = false;
+  frames(1, 16);
+  frames(12, 1500);
+  assert.deepEqual(calls.tier, [], "no shed while race settings shows PREPARING");
+  assert.equal(calls.reload, 0, "reload needs 30 frames under cover, not 10");
+  frames(18, 1500);
+  assert.equal(calls.reload, 1, "30 glacial frames during race-settings prep still recover once");
+});
+
 test("stall: off in the node game VM (webdriver false, apex-game-vm UA)", () => {
   const h = loadStall({ ua: "Mozilla/5.0 Chrome/128.0 Safari/537.36 apex-game-vm" });
   h.frames(20, 3000);

@@ -1,0 +1,1 @@
+Fixed: lazy-loaded scripts (Data hub, garage, results, physics helpers, track-build worker) could fail on the first request when GitHub Pages returned a transient 503; the shared loader now retries automatically with a fresh URL before giving up.

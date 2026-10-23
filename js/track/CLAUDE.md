@@ -12,7 +12,7 @@ the registry — `LIST`, `resolve`, `build`, palettes.
 - **The def is the single home of a circuit's data.** `path` (real
   centreline), `sectors`/`turns` (curated markings), `barrier`, `furniture`,
   `kit`, `standSet`, `cityStyle` are all keys of `js/circuits/<id>.js`; this
-  directory holds only the GENERIC fallbacks (`FURN_DEF`, `KIT_DEF`,
+  directory holds only the GENERIC fallbacks (`FURN_DEF`,
   `THEME_DEF`, `STAND_SET_DEF` in scenery/data.js). Never add an id-keyed
   table here — read the key off the BUILT def (copied in tracks.js `LIST`;
   `tests/unit/circuit-def-fields.test.mjs` pins the copy).

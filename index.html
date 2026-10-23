@@ -2258,7 +2258,11 @@
            are in SETTINGS > MUSIC & SOUND), so it belongs on the title screen,
            where it hides and shows with #overlay for free. -->
       <p id="audiostate"></p>
-      <button id="soundbtn" class="minibtn" aria-pressed="true">&#9834; SOUND ON</button>
+      <!-- The note is drawn by #soundbtn::before (a CSS mask, css/menus.css), NOT
+           the &#9834; character: U+266A is in none of the bundled fonts, so the
+           text glyph fell back to a host font and the phone title baseline
+           flaked on it (tests/data/flaky-quarantine.json). No extra shell node. -->
+      <button id="soundbtn" class="minibtn" aria-pressed="true">SOUND ON</button>
       <p id="disclaimer">Unofficial fan project &mdash; not affiliated with FIA or Formula 1</p>
     </div>
   </div>
@@ -3769,6 +3773,7 @@
 <script defer crossorigin="anonymous" src="js/garage/pit-signs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/body-attitude.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/particles.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/fx/visor-optics.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/droplets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/atmosphere.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/regulations.js?v=dev"></script>

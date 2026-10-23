@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const loader = readFileSync(new URL("../../js/core/script-loader.js", import.meta.url), "utf8");
 const bundles = readFileSync(new URL("../../js/core/lazy-bundles.js", import.meta.url), "utf8");
@@ -14,6 +15,9 @@ const names = data.map((file) => {
   assert.ok(name, `${file} must have a declared global for the retry fixture`);
   return name;
 });
+function vmFile(ctx, file, code) {
+  return vm.runInContext(code, ctx, { filename: absSrc(file) });
+}
 
 for (const failedFile of ["js/data/schedule.js", "js/data/api-transport.js", "js/data/telemetry-player.js"]) {
 test(`a failed ${failedFile} never evaluates hub; retry reuses evaluated siblings`, async () => {
@@ -28,6 +32,7 @@ test(`a failed ${failedFile} never evaluates hub; retry reuses evaluated sibling
     window: { __APEX_BUILD: "test" },
     els: { datahub: {} },
     Log: { warn() {} },
+    setTimeout, clearTimeout,
     document: {
       createElement() { return { dataset: {}, remove() {} }; },
       head: { appendChild(node) {
@@ -35,32 +40,32 @@ test(`a failed ${failedFile} never evaluates hub; retry reuses evaluated sibling
         const file = node.src.split("?")[0];
         attempts.set(file, (attempts.get(file) || 0) + 1);
         queueMicrotask(() => {
-          if (file === failedFile && attempts.get(file) === 1) {
+          if (file === failedFile && attempts.get(file) <= 3) {
             node.onerror(); return;
           }
           for (const [before, after] of manifest.LAZY_DATA_EDGES) {
             if (after !== file) continue;
-            assert.ok(vm.runInContext(`typeof ${names[data.indexOf(before)]} !== 'undefined'`, ctx),
+            assert.ok(vmFile(ctx, before, `typeof ${names[data.indexOf(before)]} !== 'undefined'`),
               `${file} must see its evaluated predecessor ${before}`);
           }
           const name = names[data.indexOf(file)];
           if (name === "DataHub") {
-            assert.ok(vm.runInContext("typeof DataSchedule !== 'undefined'", ctx),
+            assert.ok(vmFile(ctx, "js/data/schedule.js", "typeof DataSchedule !== 'undefined'"),
               "hub must see a fully evaluated schedule predecessor");
-            vm.runInContext("const DataHub = { init() { globalThis.__initialized(); } };", ctx);
-          } else vm.runInContext(`const ${name} = {};`, ctx);
+            vmFile(ctx, file, "const DataHub = { init() { globalThis.__initialized(); } };");
+          } else vmFile(ctx, file, `const ${name} = {};`);
           node.onload();
         });
       } },
     },
     __initialized: () => { initialized++; },
   });
-  vm.runInContext(loader + "\n" + bundles + "\nglobalThis.__ensureDataHub = LazyBundles.create({ els, loadBackendScripts: ScriptLoader.create().load }).ensureDataHub;", ctx);
-  assert.equal(await ctx.__ensureDataHub(), false);
+  vm.runInContext(loader + "\n" + bundles + "\nglobalThis.__ensureDataHub = LazyBundles.create({ els, loadBackendScripts: ScriptLoader.create().load }).ensureDataHub;", ctx, { filename: absSrc("js/core/lazy-bundles.js") });
+  assert.equal(await ctx.__ensureDataHub(), false, "three in-call attempts exhaust before DATA opens");
   assert.equal(attempts.has("js/data/hub.js"), false, "a failed sibling cannot poison hub's lexical binding");
   assert.equal(await ctx.__ensureDataHub(), true);
   assert.equal(initialized, 1);
-  assert.equal(attempts.get(failedFile), 2);
+  assert.equal(attempts.get(failedFile), 4, "fourth inject succeeds after automatic retries");
   assert.equal(attempts.get("js/data/hub.js"), 1);
   for (const sibling of data.filter((f) => f !== failedFile && f !== "js/data/hub.js")) {
     assert.equal(attempts.get(sibling), 1, `${sibling} must not be redeclared on retry`);
@@ -85,7 +90,7 @@ test("the script loader injects nothing while UpdateCheck reports a newer active
       head: { appendChild(node) { if (node.rel === "preload") return; appended++; assert.match(node.src, /\?v=100$/, "the booted build, always"); queueMicrotask(() => node.onload()); } },
     },
   });
-  vm.runInContext(loader + "\nglobalThis.__load = ScriptLoader.create().load;", ctx);
+  vm.runInContext(loader + "\nglobalThis.__load = ScriptLoader.create().load;", ctx, { filename: absSrc("js/core/script-loader.js") });
   assert.equal(await ctx.__load(["js/net/lobby.js"], []), false, "refused, resolved — never hung");
   assert.equal(appended, 0, "no <script> for the old build's URL");
   blocked = false;
@@ -124,7 +129,7 @@ test("a failed lighting-presets fetch is retried at the next race start, then no
       } },
     },
   });
-  vm.runInContext(loader + "\n" + bundles + "\nglobalThis.__lb = LazyBundles.create({ els, loadBackendScripts: ScriptLoader.create().load, getContext: () => ({ trackIdx: 0 }), applyLightTuneIfReady: () => globalThis.__applied() });", ctx);
+  vm.runInContext(loader + "\n" + bundles + "\nglobalThis.__lb = LazyBundles.create({ els, loadBackendScripts: ScriptLoader.create().load, getContext: () => ({ trackIdx: 0 }), applyLightTuneIfReady: () => globalThis.__applied() });", ctx, { filename: absSrc("js/core/lazy-bundles.js") });
   ctx.__applied = () => { applied++; };
   const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
   ctx.__lb.raceAssets();
@@ -145,4 +150,87 @@ test("a failed lighting-presets fetch is retried at the next race start, then no
   await ctx.__lb.ensureCircuit(0);
   await flush();
   assert.equal(attempts.length, 2, "resident: nothing more to fetch");
+});
+
+test("ensureDataHub: one transient script failure retries with cache-bust and then opens", async () => {
+  const urls = [];
+  let tabUtilsLoads = 0;
+  const ctx = vm.createContext({
+    ApexRoster: {
+      DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
+      LAZY_RACE: [], SCENERY_DIR: "", LAZY_DATA: data,
+      LAZY_DATA_EDGES: manifest.LAZY_DATA_EDGES,
+    },
+    window: { __APEX_BUILD: "test" },
+    els: { datahub: {} },
+    Log: { warn() {} },
+    setTimeout, clearTimeout,
+    document: {
+      createElement() { return { dataset: {}, remove() {} }; },
+      head: { appendChild(node) {
+        if (node.rel === "preload") return;
+        urls.push(node.src);
+        const file = node.src.split("?")[0];
+        queueMicrotask(() => {
+          if (file === "js/data/tab-utils.js") {
+            tabUtilsLoads++;
+            if (tabUtilsLoads === 1) { node.onerror(); return; }
+          }
+          for (const [before, after] of manifest.LAZY_DATA_EDGES) {
+            if (after !== file) continue;
+            assert.ok(vmFile(ctx, before, `typeof ${names[data.indexOf(before)]} !== 'undefined'`),
+              `${file} must see its evaluated predecessor ${before}`);
+          }
+          const name = names[data.indexOf(file)];
+          if (name === "DataHub") vmFile(ctx, file, "const DataHub = { init() {}, open() {} };");
+          else vmFile(ctx, file, `const ${name} = {};`);
+          node.onload();
+        });
+      } },
+    },
+  });
+  vm.runInContext(loader + "\n" + bundles + "\nglobalThis.__ensureDataHub = LazyBundles.create({ els, loadBackendScripts: ScriptLoader.create().load }).ensureDataHub;", ctx, { filename: absSrc("js/core/lazy-bundles.js") });
+  const t0 = Date.now();
+  assert.equal(await ctx.__ensureDataHub(), true);
+  assert.ok(Date.now() - t0 >= 350, "waits ~400 ms before the second attempt");
+  assert.equal(tabUtilsLoads, 2);
+  assert.ok(urls.some((u) => /tab-utils\.js\?.*retry=1/.test(u)), "retry uses a fresh URL key");
+  assert.ok(urls.filter((u) => u.includes("tab-utils.js")).every((u, i, all) => i === 0 || /retry=/.test(u)), "first tab-utils URL is uncached");
+});
+
+test("ensureDataHub: three failed load rounds log the final warning and stay closed", async () => {
+  const logged = [];
+  const ctx = vm.createContext({
+    ApexRoster: {
+      DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
+      LAZY_RACE: [], SCENERY_DIR: "", LAZY_DATA: data,
+      LAZY_DATA_EDGES: manifest.LAZY_DATA_EDGES,
+    },
+    window: { __APEX_BUILD: "test" },
+    els: { datahub: {} },
+    Log: { warn(_ns, m) { logged.push(m); } },
+    setTimeout, clearTimeout,
+    document: {
+      createElement() { return { dataset: {}, remove() {} }; },
+      head: { appendChild(node) {
+        if (node.rel === "preload") return;
+        const file = node.src.split("?")[0];
+        queueMicrotask(() => {
+          if (file === "js/data/tab-utils.js") { node.onerror(); return; }
+          for (const [before, after] of manifest.LAZY_DATA_EDGES) {
+            if (after !== file) continue;
+            assert.ok(vmFile(ctx, before, `typeof ${names[data.indexOf(before)]} !== 'undefined'`),
+              `${file} must see its evaluated predecessor ${before}`);
+          }
+          const name = names[data.indexOf(file)];
+          if (name === "DataHub") vmFile(ctx, file, "const DataHub = { init() {}, open() {} };");
+          else vmFile(ctx, file, `const ${name} = {};`);
+          node.onload();
+        });
+      } },
+    },
+  });
+  vm.runInContext(loader + "\n" + bundles + "\nglobalThis.__ensureDataHub = LazyBundles.create({ els, loadBackendScripts: ScriptLoader.create().load }).ensureDataHub;", ctx, { filename: absSrc("js/core/lazy-bundles.js") });
+  assert.equal(await ctx.__ensureDataHub(), false);
+  assert.ok(logged.some((m) => /DATA stays closed/.test(m)));
 });

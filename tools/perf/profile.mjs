@@ -16,6 +16,7 @@
 //        is coarse); prints ms/step p50/p95/p99 and checks the rounded field digest across --base arms.
 //        The spans "physics" row is NOT one step: a slow SwiftShader frame catches up
 //        to five, and the Node VM (game-vm.cjs) over-weights global lookups ~6x (docs/notes/PERF-SCENE-CPU-2026-10-20.md).
+//        --cpu-throttle N: CDP Emulation.setCPUThrottlingRate(N) for the whole page (phone-class CPU, e.g. 4 or 6).
 // trace  CDP Tracing → artifacts/profiles/*.json, open in ui.perfetto.dev or the Chrome Performance panel (spans: User Timing "apex:*", one DevTools track per phase in group "Apex 26").
 // --repeat N    N fresh pages; reports the median of each stat and the spread (max-min) across repeats.
 // --base <ref>  same scenario on an ephemeral git worktree at <ref>; prints a delta table. A delta inside the
@@ -39,7 +40,7 @@ exitIfHelp(argv, `profile — spans | cpu | hitch | trace, with --repeat and --b
   node tools/perf/profile.mjs <track> [--mode spans|cpu|hitch|trace|step] [--frames N] [--steps N] [--warm N] [--repeat N] [--base <ref>] [--json] [--capture]
 
 Default track vegas, mode spans, frames 40, repeat 1. Output: artifacts/profiles/.`);
-parseFlags(argv, ["--mode", "--frames", "--steps", "--warm", "--repeat", "--base", "--json", "--capture", "--help"]);
+parseFlags(argv, ["--mode", "--frames", "--steps", "--warm", "--repeat", "--base", "--json", "--capture", "--cpu-throttle", "--help"]);
 
 function flag(name, dflt) {
   for (let i = 0; i < argv.length; i++) {
@@ -48,7 +49,7 @@ function flag(name, dflt) {
   }
   return dflt;
 }
-const VALUED = new Set(["--mode", "--frames", "--steps", "--warm", "--repeat", "--base"]);
+const VALUED = new Set(["--mode", "--frames", "--steps", "--warm", "--repeat", "--base", "--cpu-throttle"]);
 const positional = argv.filter((a, i) => !a.startsWith("--") && !VALUED.has(argv[i - 1]));
 const track = positional[0] || "vegas";
 const mode = flag("--mode", "spans");
@@ -56,6 +57,7 @@ const frames = Math.max(10, +flag("--frames", 40) || 40);
 const repeat = Math.max(1, +flag("--repeat", 1) || 1);
 const steps = Math.max(100, +flag("--steps", 3000) || 3000), warm = Math.max(0, +flag("--warm", 3000) || 0);
 const baseRef = flag("--base", null);
+const cpuThrottle = Math.max(1, +flag("--cpu-throttle", 1) || 1);
 const asJson = argv.includes("--json");
 // Headless TLX blits every frame to #game-soft (a readback: ~8 s a frame on SwiftShader). Timing wants it OFF, as
 // frame-hitch.mjs does; --capture puts it back. The backend itself stays the default (TLX).
@@ -186,6 +188,7 @@ async function runStep(root, label) {
   try {
     for (let r = 0; r < repeat; r++) {
       const [context, page] = await newPage(browser);
+      if (cpuThrottle > 1) await (await context.newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: cpuThrottle });
       await page.goto(srv.url);
       await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS, polling: 100 });
       await prepareRace(page);

@@ -150,6 +150,7 @@ const SPEC = [
   { k: "helmetVisorIntensity", lane: "raw", group: "camera", def: "light", src: "js/camera/cockpit-opts.js CHOICES.visorIntensity", oneOf: ["light", "medium", "strong"] },
   { k: "helmetVisorRefraction", lane: "raw", group: "camera", def: "off", src: "js/camera/cockpit-opts.js CHOICES.visorRefraction", oneOf: ["off", "light", "medium", "strong"] },
   { k: "helmetVisorReflections", lane: "raw", group: "camera", def: "light", src: "js/camera/cockpit-opts.js CHOICES.visorReflections", oneOf: ["light", "off", "medium", "strong"] },
+  { k: "helmetVisorBeams", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js BEAMS_DEFAULT (percent, 0–200)" },
   { k: "helmetVisorRain", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.visorRain", oneOf: ["normal", "off", "light", "heavy"] },
   { k: "helmetVisorRunoff", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.visorRunoff", oneOf: ["normal", "slow", "fast"] },
   { k: "camMode", lane: "json", group: "camera", def: 19, src: "js/camera/mode-switch.js (index into CAM_MODES)" },

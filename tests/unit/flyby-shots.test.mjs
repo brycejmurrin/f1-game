@@ -972,9 +972,10 @@ test("a duel never leaks into a championship round, a time trial or a quali lap"
 test("the loading screen flies only the world built for THIS selection", () => {
   // A fast tap to RACE! before the menu's idle build ran left the previous
   // circuit in `track`: the flyby filmed it under the new circuit's card, and a
-  // dark session baked its lamps twice. menuWorld() also checks the build's key.
+  // dark session baked its lamps twice. menuWorld() also checks the build's key, and that it is not a
+  // bare world whose scenery closure has since landed (#3570).
   const game = gameSource();
-  assert.match(game, /const menuWorld = \(\) => !!track && _menuGate\.track === track && _menuGate\.ready === menuKey\(trackIdx\);/);
+  assert.match(game, /const menuWorld = \(\) => !!track && _menuGate\.track === track && _menuGate\.ready === menuKey\(trackIdx\) && !bareStale\(\);/);
   assert.match(game, /hasWorld: menuWorld\(\),/);
   const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
   for (const call of ["menuGridCars()", "applyRaceSettings()", "FlybySeq.warm(track, flybyShots)"])

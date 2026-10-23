@@ -285,6 +285,17 @@ test("SETTINGS › MOTION: REDUCED still runs the card, the flyby and the announ
   assert.equal(on.els.loading.dataset.phase, "run", "motion ON keeps the flyby");
 });
 
+test("software GL, a PLAYER (no automation): raceIntro's hasWorld:false still shows the race card, then starts the race", () => {
+  const player = harness({}, null, null, { webdriver: false });
+  player.run({ hasWorld: false });
+  assert.equal(player.els.loading.dataset.phase, "card", "the card naming the event, not a skipped screen");
+  assert.equal(player.els.loading.hidden, false, "the screen is up");
+  assert.equal(player.plays.length, 0, "no announcer read over the short card");
+  assert.equal(player.races.length, 0, "the race waits for the card");
+  player.tick(LS.CARD_MS);
+  assert.equal(player.races.length, 1, "the race starts after the card");
+});
+
 test("a harness-driven launch (navigator.webdriver) keeps the 700 ms card and hands off to the grid promptly; a player's reduced motion still flies", () => {
   const bot = harness({}, null, { dataset: { motion: "reduce" } }, { webdriver: true });
   bot.run();
@@ -362,8 +373,8 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
     "startRace sync-closes :modal (TopModal MutationObserver is a later task)");
   assert.match(game, /if \(garageReturn !== "pit" && !loadingScreen\.phase\(\)\) loadingScreen\.busy\("Returning"\)/,
     "CLOSE GARAGE / BACK raise the plate before hiding #carsetup");
-  assert.match(game, /if \(!_introSheet\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/,
-    "race settings covers prep with the sheet — race card waits until after the garage leave (else prep scrim, card hidden)");
+  assert.match(game, /if \(!_introSheet \|\| sheetPrep\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/,
+    "race settings covers prep with the sheet on hardware; software GL still gets the prep scrim (sheetPrep) so progress is visible");
   assert.match(game, /body:yield/,
     "startRaceBody yields after the plate is up and before ensureAudio");
   assert.match(game, /els\.overlay\.hidden = false; loadingScreen\.stop\(\); \}   \/\/ no vt: snapshot after hiding #carsetup is a black hold/,

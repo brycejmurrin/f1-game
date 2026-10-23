@@ -1,0 +1,1 @@
+Fixed: on the WebGL2 path, per-chunk lamp draws no longer leave the lamp-shadow slot stuck after a throw — `setLampShadowSlot` now updates the same uniform cache `begin()` reads, and the chunked restore runs in `finally`.
