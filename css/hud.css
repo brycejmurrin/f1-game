@@ -100,7 +100,7 @@
 }
 .hud-label {
   font-family: var(--font-hud);
-  font-size: var(--fs-micro);
+  font-size: max(var(--fs-micro), calc(var(--fs-micro) / 1.4 / var(--hud-z, 1))) !important;
   font-weight: 600;
   /* Barlow's own normal line (16 px at 14 px), pinned: `normal` follows the face, so a tower laid out
      before the faces landed (or with one missing) was 53 px tall, not 48, and fitHud's sector-row cap

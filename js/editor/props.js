@@ -145,7 +145,10 @@ const TrackDesignerProps = (function () {
     const s = frac(opts.s != null ? opts.s : 0);
     if (s == null) return null;
     const next = Array.isArray(list) ? list.slice() : [];
-    next.push({ kind, s, side: sideOf(opts.side), gap: gapOf(kind, opts.gap) });
+    // Same floor as placeBatch / updateAt: COPY and a single PLACE must not store
+    // a gap below MIN_GAP (dress clamps later, but content id / share codes would differ).
+    const gap = effectiveGap(kind, opts.gap);
+    next.push({ kind, s, side: sideOf(opts.side), gap: gap == null ? gapOf(kind, opts.gap) : gap });
     return sanitize(next) || next;
   }
 

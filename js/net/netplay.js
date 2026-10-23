@@ -44,7 +44,6 @@ const NetPlay = (function () {
     CAUTION: "caution",                   // host -> guest race control (flags)
     BYE: "bye",                           // clean leave
     LEFT: "left",                         // host -> guests: this wire id went back to AI
-    REJOIN: "rejoin",                     // host -> guests: this wire id is human-owned again
   };
 
   // WIRE CLAMPS AND THE QUALI SEAM — module-level, shared with the lobby.
@@ -259,7 +258,7 @@ const NetPlay = (function () {
   function create(G) {
     G_lapsTarget = () => G.lapsTarget;
     const sessions = new Map(), peerEpochs = new Map();
-    const sessionKinds = new Map(), peerInfo = new Map(), departedPeers = new Map();
+    const sessionKinds = new Map(), peerInfo = new Map();
     const peerKind = (peer) => SpectatePolicy.kind(peer);
     let epoch = null;
     function broadcastStrategy(data) {
@@ -584,9 +583,6 @@ const NetPlay = (function () {
         if (closeWhy.has(id)) { why = closeWhy.get(id); closeWhy.delete(id); }
         sessions.delete(id);
         const carFor = remoteFor(id);
-        const remote = carFor != null ? remotes.get(carFor) : null;
-        const kind = sessionKinds.get(id);
-        const info = peerInfo.get(id);
         armedPeers.delete(id);
         peerCar.delete(id);
         peerEpochs.delete(id);
@@ -611,13 +607,7 @@ const NetPlay = (function () {
            Whether we keep running is a question about the HOST still having
            peers; what we do about a car is a separate question inside it. */
         if (role === "host") {
-          if (carFor != null) {
-            if (kind !== SpectatePolicy.SPECTATOR && remote) {
-              departedPeers.set(id, { wire: carFor, car: remote.car, profile: info && info.profile,
-                mods: info && info.mods });
-            }
-            handBackToAI(why, carFor);
-          }
+          if (carFor != null) handBackToAI(why, carFor);
           // Star, not mesh: the other guests only ever learned this rival
           // existed through the host's relay, and the relay simply stops
           // naming a dropped wire id. Nothing told them it was gone, so their
@@ -812,14 +802,6 @@ const NetPlay = (function () {
               if (G.announce) G.announce("RIVAL DISCONNECTED", 2);
             } else handBackToAI(d.why || "peer_closed", d.wire);
           }
-          if (name === EV.REJOIN && role === "guest" && d && Number.isFinite(d.wire) && aiRemotes.has(d.wire)) {
-            const r = aiRemotes.get(d.wire);
-            aiRemotes.delete(d.wire);
-            r.hostAi = false; r.stale = false;
-            r.car._nHuman = true; r.car._nFallback = false;
-            G.setCarRole(r.car, true, false);
-            remotes.set(d.wire, r);
-          }
           if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
         });
       }
@@ -876,7 +858,7 @@ const NetPlay = (function () {
       raceOpts = opts;
       onStop = typeof opts.onStop === "function" ? opts.onStop : null;
       peerProfile = opts.peerProfile || null;
-      sessions.clear(); peerEpochs.clear(); sessionKinds.clear(); peerInfo.clear(); departedPeers.clear();
+      sessions.clear(); peerEpochs.clear(); sessionKinds.clear(); peerInfo.clear();
       epoch = Date.now().toString(36) + "-" + (++epochSerial);
       const incoming = opts.sessions
         || (opts.session ? [{ id: PEER_ONE, session: opts.session }] : null)
@@ -980,6 +962,7 @@ const NetPlay = (function () {
       armedSentAt = -Infinity;
       startSeen = false;
       named = null;
+      heldStart = null;
       holdUntil = 0;
       G.netNow = null;
       active = true;
@@ -988,35 +971,6 @@ const NetPlay = (function () {
       Log.info("net", "play start " + role + " n=" + remotes.size);
       const ids = remoteList().map((r) => G.cars.indexOf(r.car));
       return { ok: true, role, localId: G.cars.indexOf(localCar), remoteId: ids[0], remoteIds: ids };
-    }
-
-    // Adopt a replacement race connection for a driver that this host already
-    // seated. The stable peer id is the reconnect credential at this layer:
-    // NetPlay never lets a new id choose a wire, and never changes MAX_GUESTS.
-    function rejoin(opts) {
-      opts = opts || {};
-      if (!active || role !== "host") return { ok: false, error: "not_host" };
-      const id = opts.id, s = opts.session;
-      const gone = departedPeers.get(id);
-      if (!gone || !s || sessions.has(id)) return { ok: false, error: "unknown_peer" };
-      const wire = gone.wire, car = gone.car;
-      const info = { id, profile: gone.profile || null, mods: gone.mods || null, kind: SpectatePolicy.DRIVER };
-      peerCar.set(id, wire);
-      peerInfo.set(id, info);
-      sessionKinds.set(id, SpectatePolicy.DRIVER);
-      sessions.set(id, s);
-      G.setCarRole(car, true, false);
-      car._nHuman = true; car._nFallback = false;
-      remotes.set(wire, makeRemote(car, raceOpts || {}, { profile: gone.profile || null }));
-      bindSession(id, s);
-      if (typeof s.setTimeoutMs === "function") s.setTimeoutMs(RACE_GRACE_MS);
-      try { s.sendEvent(EV.MODEL, { physics: modelRevision(), strategy: STRATEGY_VERSION, epoch }); } catch (e) { /* replacement already closed */ }
-      leftWires.delete(wire);
-      departedPeers.delete(id);
-      broadcast(EV.REJOIN, { wire });
-      session = sessionList()[0] || null;
-      lastReason = null; lastStrategy = -Infinity;
-      return { ok: true, wire };
     }
 
     const SETTLE_MS = 600;
@@ -1057,6 +1011,7 @@ const NetPlay = (function () {
     // ORIGINAL green.
     let startSeen = false;
     let named = null;                     // host: the START already sent ({at, hold}), for late ARMEDs
+    let heldStart = null;                 // guest: a START heard before the clock synced ({at: peer ms, hold}) (#3516)
     const armedPeers = new Set();
     const closeWhy = new Map();   // peer id -> why, for a close WE start on its behalf (close() itself reports "local")
     const leftWires = new Map();          // host: wire id -> reason, for every rival that left this race
@@ -1073,6 +1028,13 @@ const NetPlay = (function () {
     function armStart(atPeerMs, hold) {
       const peerAt = Number(atPeerMs);
       if (!Number.isFinite(peerAt)) return;
+      // Pre-sync, offset() is 0 and peerToLocal the identity: converting now
+      // reads the host's instant on our clock, off by the page-epoch skew, and
+      // the accept is terminal. Hold the raw instant; tick() arms it once the
+      // clock syncs. Sync never landing leaves netStart null, so the
+      // HOLD_MAX_MS backstop still starts us alone (#3516).
+      if (session && !session.synced()) { heldStart = { at: peerAt, hold }; return; }
+      heldStart = null;
       const at = session ? session.peerToLocal(peerAt) : peerAt;
       // Generous both ways: the host's own lead is a countdown plus SETTLE_MS,
       // and a late ARMED is told a moment already up to ARM_WAIT_MS past.
@@ -1181,7 +1143,7 @@ const NetPlay = (function () {
       // Every connection, not just the first — a host leaving must not strand
       // two guests holding open sockets to a race that has ended.
       for (const s of sessionList()) { try { s.close(); } catch (e) { /* already gone */ } }
-      sessions.clear(); peerEpochs.clear(); sessionKinds.clear(); peerInfo.clear(); departedPeers.clear();
+      sessions.clear(); peerEpochs.clear(); sessionKinds.clear(); peerInfo.clear();
       peerCar.clear();
       session = null;
       armDeadline = 0;
@@ -1195,6 +1157,7 @@ const NetPlay = (function () {
       G.netStart = null;
       armedPeers.clear(); leftWires.clear();
       startSeen = false;
+      heldStart = null;
       runOnStop(reason);
       return true;
     }
@@ -1224,6 +1187,7 @@ const NetPlay = (function () {
       // Only pump() needs the snapshot above — the reads below don't deliver
       // events, so they iterate the live map (this ran 3 copies per frame).
       session = sessions.values().next().value;
+      if (heldStart && !startSeen && session.synced()) armStart(heldStart.at, heldStart.hold);
 
       if (armDeadline && now >= armDeadline) nameTheMoment();
       else if (armDeadline && now - armSince >= ARM_SAY_AFTER_MS && now - armSaidAt >= ARM_SAY_EVERY_MS && G.announce) {
@@ -1385,7 +1349,7 @@ const NetPlay = (function () {
     function ownsClassification() { return !active || role === "host"; }
 
     return {
-      start, rejoin, stop, tick,
+      start, stop, tick,
       ownsRaceControl, ownsClassification,
       hostStart, reportLap, reportResult, reportCaution, awaitingResult, reportQuali, reportQualiLive,
       awaitingStart: () =>

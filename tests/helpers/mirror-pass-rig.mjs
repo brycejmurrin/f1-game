@@ -52,6 +52,8 @@ export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier
     },
   });
   seedLog(ctx);
+  const profileMarks = [];   // RaceEntryProfile.mark() names, in order (the programWarm sub-span)
+  ctx.RaceEntryProfile = { mark: (n) => profileMarks.push(n) };
   vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(read("js/render/shared/mirror-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/mirror-pass.js") });
   const calls = [];
@@ -94,6 +96,6 @@ export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier
   const frame = { viewProj: mainVP, proj: "P", invProj: "IP", invViewProj: mainInv, eye: [0, 5, 90], cullDist: 0, tune };
   const frameSky = { invViewProj: mainInv };
   const render = () => mp.render(frame, frameSky, false, false, 0);
-  return { mp, G, gfx, calls, stored, classes, props, writes, clock, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render, timers,
+  return { mp, G, gfx, calls, profileMarks, stored, classes, props, writes, clock, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render, timers,
     press: () => { mirrorPressed = true; }, setTier: (t) => { tier = t; } };
 }

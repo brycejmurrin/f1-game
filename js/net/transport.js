@@ -460,6 +460,12 @@ const NetTransport = (function () {
     let queuedBytes = 0;
     let openCount = 0;
     const opened = {};   // kind -> its channel has opened
+    // Bound the critical backlog: under sustained pressure (a peer whose SCTP
+    // buffer never drains) an unbounded push retained every GO/LAP/BYE forever.
+    // Cap matches the inbound EVENT inbox; terminal race-flow types may displace
+    // the oldest queued critical so a late BYE/GO still leaves.
+    const EVENT_OUT_CAP = 256;
+    const EVENT_TERMINAL = { bye: 1, go: 1, qgo: 1, start: 1, result: 1 };
     let eventOut = [];   // critical EVENT payloads waiting for bufferedAmount to drain
 
     function messageBytes(data) {
@@ -599,9 +605,24 @@ const NetTransport = (function () {
     // The lobby keeps 5 s; NetSession.setTimeoutMs forwards a race's longer
     // grace here, or a 6–25 s outage the race promises to ride out closed the
     // wire at 5 s and the rival never came back (#2195).
+    // Raising the grace MUST re-arm a live timer: lobby→race calls
+    // setTimeoutMs(RACE_GRACE_MS) while a Wi-Fi blip may already have armed the
+    // 5 s lobby timer, and leaving that handle in place closed the wire at 5 s
+    // even though the race had asked for 25 s.
     let disconnectGraceMs = 5000;
+    function armDisconnectGrace() {
+      if (discTimer) { clearTimeout(discTimer); discTimer = null; }
+      discTimer = setTimeout(() => {
+        discTimer = null;
+        if (ep.status !== "closed" && pc.connectionState === "disconnected") {
+          Log.info("net", "connection closed (disconnected " + disconnectGraceMs + " ms)");
+          shutdown("disconnected");
+        }
+      }, disconnectGraceMs);
+    }
     ep.setDisconnectGrace = function (ms) {
       if (Number.isFinite(ms) && ms > 0) disconnectGraceMs = ms;
+      if (discTimer) armDisconnectGrace();
       return disconnectGraceMs;
     };
     pc.onconnectionstatechange = () => {
@@ -613,13 +634,7 @@ const NetTransport = (function () {
         Log.info("net", "connection closed (" + s + ")");
         shutdown(s);   // releases the pc — see ch.onclose
       } else if (s === "disconnected" && !discTimer) {
-        discTimer = setTimeout(() => {
-          discTimer = null;
-          if (ep.status !== "closed" && pc.connectionState === "disconnected") {
-            Log.info("net", "connection closed (disconnected " + disconnectGraceMs + " ms)");
-            shutdown("disconnected");
-          }
-        }, disconnectGraceMs);
+        armDisconnectGrace();
       }
     };
 
@@ -642,6 +657,10 @@ const NetTransport = (function () {
         if (backed) {
           const t = peekEventType(data);
           if (!EVENT_CRITICAL[t]) return false;   // drop non-critical under pressure
+          if (eventOut.length >= EVENT_OUT_CAP) {
+            if (!EVENT_TERMINAL[t]) return false; // backlog full: shed non-terminal criticals
+            eventOut.shift();                    // terminal: displace the oldest queued critical
+          }
           eventOut.push(data);                    // critical: keep order, deliver on drain
           return true;
         }

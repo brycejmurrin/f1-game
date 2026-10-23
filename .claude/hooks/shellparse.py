@@ -678,7 +678,7 @@ def _ref_name(r):
     return r
 
 
-def push_issues(text, branch_of=_current_branch):
+def push_issues(text, branch_of=_current_branch, dests=None):
     """Why each `git … push …` in the command is refused (2026-10-14): a force
     (-f, --force, --force-with-lease, a +refspec), --mirror, --delete / -d / a
     `:dst` refspec, --all/--branches, --prune, a glob refspec, any push whose
@@ -688,7 +688,8 @@ def push_issues(text, branch_of=_current_branch):
     `-c remote.*.mirror`, or the same settings in git config for a bare push).
     Long options are read by git's unambiguous-prefix rule, and an alias to
     push is expanded first (git_commands). [] = fine. Raises ParseError on
-    untokenisable text."""
+    untokenisable text. `dests`, when a list, collects (where, remote, branch)
+    for every branch a push sends (the foreign-pusher check, foreign_push.py)."""
     found = []
     start = os.getcwd()
     for _env, argv, cwd, i, gitdir, cfg in git_commands(text, start):
@@ -746,8 +747,12 @@ def push_issues(text, branch_of=_current_branch):
                 dst = cur
             if dst == DEPLOY_BRANCH:
                 why.append(f"the destination is the deploy branch {DEPLOY_BRANCH}")
+            if dests is not None and dst and not (colon and not src):
+                dests.append((where, pos[0], dst, _env))
         if not refspecs:
             cur = branch_of(where)
+            if dests is not None and cur and cur != "HEAD":
+                dests.append((where, pos[0] if pos else None, cur, _env))
             if cur == DEPLOY_BRANCH:
                 why.append(f"a bare push from the deploy branch {DEPLOY_BRANCH} pushes it")
             if not any(_cfg_why(*kv.partition("=")[::2]) for kv in cfg):
@@ -757,6 +762,50 @@ def push_issues(text, branch_of=_current_branch):
                         why.append(w + " (git config)")
         if why:
             found.append({"cmd": " ".join(argv), "why": sorted(set(why))})
+    return found
+
+
+# ---- hand ratchet raises ----------------------------------------------------------
+# Shared safety ban 1 (Fleet A + D, Bryce 2026-10-22): a ceiling rises only through
+# the commit hook's `ratchets.mjs --auto-raise` (<= 40 lines of real growth into
+# tests/data/ratchets.d/<branch>.json). `--update` snaps every ceiling to its value,
+# raises included, so it is a hand raise; `--lower-only`, `--preview`, `--check`,
+# `--fold`, `--json` and `--base` never raise. APEX_RATCHET_RAISE_OK=1 when Bryce
+# typed the raise in this session.
+RATCHET_RAISING = ("--update", "--fragment", "--absolute")
+RATCHET_RUNNERS = ("node", "nodejs", "bun", "deno", "npx", "xargs")
+AUTO_RAISE_MAX = 40   # the commit hook's absorb (AGENTS.md §Critical conventions)
+
+
+def ratchet_issues(text):
+    """Every `ratchets.mjs` run that can raise a ceiling: [cmd]. [] = fine.
+    Raises ParseError on untokenisable text."""
+    found = []
+    for env, argv, _redir, _cwd in commands(text, os.getcwd(), strict=True):
+        if not argv or (env or {}).get("APEX_RATCHET_RAISE_OK") == "1":
+            continue
+        cmd = " ".join(argv)
+        # `node -e "import('./tools/check/ratchets.mjs')…"` runs it with no visible flags
+        if os.path.basename(argv[0]) in RATCHET_RUNNERS and any(
+                a in ("-e", "--eval", "-p", "--print") and k + 1 < len(argv) and "ratchets" in argv[k + 1]
+                for k, a in enumerate(argv)):
+            found.append(cmd)
+            continue
+        at = next((k for k, a in enumerate(argv) if os.path.basename(a) == "ratchets.mjs"), None)
+        # the script must be what RUNS (`node …/ratchets.mjs`, `./…/ratchets.mjs`), not `echo ratchets.mjs`
+        if at is None or not (at == 0 or os.path.basename(argv[0]) in RATCHET_RUNNERS):
+            continue
+        args = argv[at + 1:]
+        if any("$" in a or "`" in a for a in args):
+            found.append(cmd)          # $(…) arguments are unknown until the shell runs them
+            continue
+        if "--lower-only" in args or "--preview" in args:
+            continue
+        auto = [a.split("=", 1)[1] for a in args if a.startswith("--auto-raise=")]
+        if any(not v.isdigit() or int(v) > AUTO_RAISE_MAX for v in auto):
+            found.append(cmd)          # --auto-raise=N lifts the hook's 40-line cap
+        elif any(a == f or a.startswith(f + "=") for a in args for f in RATCHET_RAISING):
+            found.append(cmd)
     return found
 
 
@@ -1073,8 +1122,10 @@ def guard(payload, root):
         print(len(allc), "1" if c else "0", "1" if any(x.get("all") for x in c) else "0", gd, " ".join(paths))
     except ParseError:
         print("NULL")
+    dests = []
     try:
-        pushes = push_issues(cmd)
+        pushes = push_issues(cmd, dests=dests)
+        raises = ratchet_issues(cmd)
         gh = gh_issues(cmd)
         browser = browser_starts(cmd, browser_groups(root)) if sub else []
     except ParseError:
@@ -1088,6 +1139,22 @@ def guard(payload, root):
                          "deploy). The deploy branch takes work only through a PR (node tools/ci/deploy.mjs --pr); a "
                          "diverged branch is caught up by merging (node tools/ci/sync-pr.mjs), never a force push.\n")
         return 2
+    if raises and os.environ.get("APEX_RATCHET_RAISE_OK") != "1":
+        sys.stderr.write("BLOCKED: `" + raises[0] + "` can RAISE a size ceiling by hand (shared safety ban 1). A ceiling "
+                         "rises only through the commit hook's --auto-raise (<= 40 lines of real growth, written to this "
+                         "branch's tests/data/ratchets.d/<branch>.json). Extract code to fit, lower with "
+                         "`ratchets.mjs --update --lower-only`, or ask Bryce; APEX_RATCHET_RAISE_OK=1 only when he typed "
+                         "the raise in this session.\n")
+        return 2
+    if dests and os.environ.get("APEX_FOREIGN_PUSH_OK") != "1":
+        import foreign_push
+        for where, remote, branch, penv in dests:
+            if (penv or {}).get("APEX_FOREIGN_PUSH_OK") == "1":   # the push's own prefix, not any text
+                continue
+            msg = foreign_push.check(where, remote, branch)
+            if msg:
+                sys.stderr.write(msg)
+                return 2
     if browser:
         sys.stderr.write("BLOCKED: a subagent never starts a browser run (AGENTS.md §Verification 10) — "
                          + ", ".join(sorted(set(browser))) + ": one group saturates this box and the parent owns the "

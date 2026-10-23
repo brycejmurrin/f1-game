@@ -398,6 +398,50 @@ test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive 
   }
 });
 
+test("EVENT critical backlog is capped; a late BYE displaces the oldest", () => {
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    close() {}
+  }
+  const channel = (label, buffered) => ({
+    label, readyState: "open", bufferedAmount: buffered, sent: [],
+    bufferedAmountLowThreshold: 0,
+    onbufferedamountlow: null,
+    send(d) { this.sent.push(d); }, close() {},
+  });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    const ep = fresh.rtc({ role: "guest" });
+    const state = channel("state", 0), event = channel("event", 999999);
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: event });
+    state.onopen(); event.onopen();
+
+    const lap = (i) => JSON.stringify({ t: "lap", d: { lap: i } });
+    const bye = JSON.stringify({ t: "bye", d: null });
+    let queued = 0;
+    for (let i = 0; i < 300; i++) {
+      if (ep.send(fresh.EVENT, lap(i))) queued++;
+    }
+    assert.equal(queued, 256, "critical backlog stops at EVENT_OUT_CAP");
+    assert.equal(ep.send(fresh.EVENT, lap(999)), false, "another LAP is refused when full");
+    assert.equal(ep.send(fresh.EVENT, bye), true, "BYE displaces the oldest critical");
+    event.bufferedAmount = 0;
+    event.onbufferedamountlow();
+    assert.equal(event.sent[event.sent.length - 1], bye, "BYE is the last frame drained");
+    assert.equal(event.sent.length, 256, "cap size preserved after displace");
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.localStorage;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // ICE configuration
 // ---------------------------------------------------------------------------
@@ -842,6 +886,37 @@ test("a race session's timeout sets the rtc disconnect grace: 6 s stays open, 26
     assert.equal(long.closed, 1);
     assert.equal(run(6000, 0).status, "closed", "the lobby keeps its 5 s grace");
   } finally { global.setTimeout = realSet; global.clearTimeout = realClear; }
+});
+
+test("raising disconnect grace re-arms a live lobby timer (lobby→race)", () => {
+  // Lobby arms 5 s on a Wi-Fi blip; race start then setTimeoutMs(25000). Without
+  // re-arming, the original handle still fired at 5 s and dropped the rival.
+  const realSet = global.setTimeout, realClear = global.clearTimeout;
+  let now = 0;
+  const timers = new Map();
+  let nextId = 1;
+  global.setTimeout = (fn, ms) => { const id = nextId++; timers.set(id, { at: now + ms, fn }); return id; };
+  global.clearTimeout = (id) => { timers.delete(id); };
+  const advance = (ms) => {
+    now += ms;
+    for (const [id, t] of [...timers]) if (t.at <= now) { timers.delete(id); t.fn(); }
+  };
+  const h = pcHarness();
+  try {
+    h.ep.pc.connectionState = "disconnected";
+    h.ep.pc.onconnectionstatechange();
+    assert.equal(timers.size, 1, "lobby grace armed");
+    advance(1000);
+    h.ep.setDisconnectGrace(25000);
+    advance(5000);   // past the original 5 s deadline
+    assert.equal(h.ep.status, "open", "the raised grace must outlive the lobby timer");
+    advance(20000);  // full 25 s from the re-arm at t=1000
+    assert.equal(h.ep.status, "closed", "the new grace still ends a real outage");
+    assert.equal(h.pcClosed(), 1);
+  } finally {
+    global.setTimeout = realSet; global.clearTimeout = realClear;
+    h.done();
+  }
 });
 
 test("rtc stamps message ARRIVAL and hands it to onMessage; loopback stays unstamped", () => {

@@ -669,6 +669,12 @@
       ]
     },
     {
+      "path": "tools/ci/agent-msg.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/assert-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -987,6 +993,16 @@
       "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/merge-attribution.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
         "--json"
       ]
     },
@@ -1927,6 +1943,12 @@
       ]
     },
     {
+      "path": "tools/gfx/readback-garage-oracle.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/gfx/res-scale-ab.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2121,6 +2143,11 @@
     },
     {
       "path": "tools/lib/hud-survey-matrix.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/impact-map.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
@@ -2392,6 +2419,11 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/mcp/browserstack-mcp.sh",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
     },
     {
       "path": "tools/mcp/catalog-discovery.mjs",
@@ -2710,6 +2742,21 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/perf/devicefarm-host.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
+      "path": "tools/perf/devicefarm-iphone.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
     },
     {
       "path": "tools/perf/diagnostics.mjs",
@@ -3803,7 +3850,7 @@
     },
     {
       "name": "test:steering-unit",
-      "command": "node --test --test-timeout=900000 tests/unit/brake-cue.test.mjs tests/unit/controller-profiles.test.mjs tests/unit/digital-steer.test.mjs tests/unit/dock-layout.test.mjs tests/unit/driving-cues.test.mjs tests/unit/editor-workspace.test.mjs tests/unit/garage-defaults.test.mjs tests/unit/grip-steer.test.mjs tests/unit/hud-arrange.test.mjs tests/unit/input-bindings.test.mjs tests/unit/input-clock-rotate.test.mjs tests/unit/input-hud-properties.test.mjs tests/unit/key-binds-calibration.test.mjs tests/unit/key-binds-hunt.test.mjs tests/unit/key-binds-pad-menu.test.mjs tests/unit/key-binds-ui.test.mjs tests/unit/key-binds.test.mjs tests/unit/low-speed-lock.test.mjs tests/unit/onboard.test.mjs tests/unit/pad-haptics.test.mjs tests/unit/phone-input-improvements.test.mjs tests/unit/phone-pad.test.mjs tests/unit/player-tools-backup.test.mjs tests/unit/player-tools-ui.test.mjs tests/unit/setting-deps.test.mjs tests/unit/settings-defaults.test.mjs tests/unit/settings-export.test.mjs tests/unit/settings-one-home.test.mjs tests/unit/settings-search.test.mjs tests/unit/settings-tabs.test.mjs tests/unit/share-code.test.mjs tests/unit/steer-lock-taper.test.mjs tests/unit/steer-tuning-lock.test.mjs tests/unit/throttle-latch.test.mjs tests/unit/touch-drag-anchor.test.mjs tests/unit/touch-drag-speed.test.mjs tests/unit/xr-opts.test.mjs tests/unit/xr-phase0.test.mjs tests/unit/xr-plan.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/brake-cue.test.mjs tests/unit/controller-profiles.test.mjs tests/unit/digital-steer.test.mjs tests/unit/dock-layout.test.mjs tests/unit/driving-cues.test.mjs tests/unit/editor-workspace.test.mjs tests/unit/garage-defaults.test.mjs tests/unit/grip-steer.test.mjs tests/unit/hud-arrange.test.mjs tests/unit/input-bindings.test.mjs tests/unit/input-clock-rotate.test.mjs tests/unit/input-hud-properties.test.mjs tests/unit/key-binds-calibration.test.mjs tests/unit/key-binds-hunt.test.mjs tests/unit/key-binds-pad-menu.test.mjs tests/unit/key-binds-ui.test.mjs tests/unit/key-binds.test.mjs tests/unit/low-speed-lock.test.mjs tests/unit/onboard.test.mjs tests/unit/pad-haptics.test.mjs tests/unit/phone-input-improvements.test.mjs tests/unit/phone-pad.test.mjs tests/unit/player-tools-backup.test.mjs tests/unit/player-tools-ui.test.mjs tests/unit/setting-deps.test.mjs tests/unit/settings-defaults.test.mjs tests/unit/settings-export.test.mjs tests/unit/settings-one-home.test.mjs tests/unit/settings-open-perf.test.mjs tests/unit/settings-search.test.mjs tests/unit/settings-tabs.test.mjs tests/unit/share-code.test.mjs tests/unit/steer-lock-taper.test.mjs tests/unit/steer-tuning-lock.test.mjs tests/unit/throttle-latch.test.mjs tests/unit/touch-drag-anchor.test.mjs tests/unit/touch-drag-speed.test.mjs tests/unit/xr-opts.test.mjs tests/unit/xr-phase0.test.mjs tests/unit/xr-plan.test.mjs"
     },
     {
       "name": "test:sweeps",
@@ -3905,6 +3952,21 @@
       ],
       "gatewayConfigured": true,
       "timeout": 900000
+    },
+    {
+      "name": "browserstack",
+      "type": "stdio",
+      "command": "bash",
+      "args": [
+        "tools/mcp/output-level-mcp.sh",
+        "--server",
+        "browserstack",
+        "--",
+        "bash",
+        "tools/mcp/browserstack-mcp.sh",
+        "run"
+      ],
+      "gatewayConfigured": true
     },
     {
       "name": "chrome-devtools",

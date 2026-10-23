@@ -116,6 +116,17 @@ var CrowdAudio = (function () {
     actx = bus = null;
   }
 
+  // rebuildCtx() / hide-show restart the engine via startEngineGraph(), which
+  // bypasses the startEngine wrapper below — so a bed built on the old context
+  // would keep aiming dead nodes (silent crowd, leaked BufferSources on the
+  // closed ctx). Re-bind whenever the live context or SFX bus moved.
+  function ensureAttached() {
+    const c = context(), d = sfxBus();
+    if (!c || !d) return false;
+    if (bedSrc && actx === c && bus === d) return true;
+    return attach(c, d);
+  }
+
   function attach(ac, dest) {
     const c = ac || context();
     const d = dest || sfxBus();
@@ -310,9 +321,7 @@ var CrowdAudio = (function () {
   }
 
   function update() {
-    if (!bedGain) {
-      if (!attach()) return;
-    }
+    if (!ensureAttached()) return;
     const t = now();
     if (G && G.track !== standTrack) cacheStands();
 
@@ -362,7 +371,7 @@ var CrowdAudio = (function () {
     };
     GameAudio.setEngine = function () {
       const r = _orig.setEngine.apply(this, arguments);
-      try { update(); } catch (e) { /* bed must not break the engine */ }
+      try { ensureAttached(); update(); } catch (e) { /* bed must not break the engine */ }
       return r;
     };
     GameAudio.stopEngine = function () {
@@ -390,7 +399,7 @@ var CrowdAudio = (function () {
     };
     GameAudio.startEngine = function () {
       const r = _orig.startEngine.apply(this, arguments);
-      try { attach(); } catch (e) { /* */ }
+      try { ensureAttached(); } catch (e) { /* */ }
       return r;
     };
     GameAudio._crowdWrapped = true;

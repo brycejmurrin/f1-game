@@ -45,7 +45,7 @@ test("mcp-cli.mjs drives chrome via chrome-devtools-mcp.sh, not a hard-coded pw 
 
 test("Chrome MCP network fallback is pinned to the audited release", () => {
   const src = fs.readFileSync(CD_SH, "utf8");
-  assert.match(src, /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.7\.0"/);
+  assert.match(src, /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.11\.0"/);
   assert.doesNotMatch(src, /chrome-devtools-mcp@latest/);
 });
 

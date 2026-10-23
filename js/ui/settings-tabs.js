@@ -134,6 +134,25 @@ const SettingsNav = (function () {
       return quietFocus(firstIn(pages[id]));
     }
 
+    // User Timing for phone hitch budgets (D·IP2). Safe no-op when performance
+    // is missing (mini-DOM unit tests).
+    function mark(name) {
+      try {
+        if (typeof performance !== "undefined" && performance.mark) performance.mark(name);
+      } catch (_) { /* optional */ }
+    }
+    let scrollFadeTimer = 0;
+    function scheduleScrollFade() {
+      // Sync ScrollFade.refresh() during show() forced layout in the same turn
+      // as showModal + panel [hidden] flips; screenMo already settles on the
+      // #pmsettings hidden flip, so this only covers in-sheet page changes.
+      if (typeof window === "undefined" || !window.ScrollFade) return;
+      if (scrollFadeTimer) clearTimeout(scrollFadeTimer);
+      scrollFadeTimer = setTimeout(() => {
+        scrollFadeTimer = 0;
+        try { window.ScrollFade.refresh(); } catch (_) { /* detached */ }
+      }, 48);
+    }
     // audioTried: undefined = not yet, "ok" / "failed" = the lazy bundle already
     // answered once for this open. Never gate twice: a failed ensureAudio leaves
     // the stub resident, so re-gating would retry forever. (Ship #1320 used a
@@ -142,6 +161,7 @@ const SettingsNav = (function () {
       stopRestore();
       const request = ++generation;
       const id = Object.hasOwn(routes, want) ? want : "home";
+      mark("apex:settings:show");
       // LAZY_AUDIO: same gate as the audio door — SettingRow must wire before
       // #audioset is revealed (programmatic show("audio") included). The door
       // click goes through here too, so it asks the bundle exactly once.
@@ -205,7 +225,8 @@ const SettingsNav = (function () {
       // so run it before resolving the page's focus target.
       const placed = typeof after === "function" && after() === true;
       if (focus && !placed) focusPage(id);
-      if (window.ScrollFade) ScrollFade.refresh();
+      scheduleScrollFade();
+      mark("apex:settings:shown");
     }
 
     // The audio bundle could not load (offline / UPDATE READY): the page still

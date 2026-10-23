@@ -408,8 +408,12 @@ const F1API = (function () {
   function windowed(path, sessionKey, driverNumber, startISO, endISO, options) {
     let url = OPENF1 + path + "?session_key=" + encodeURIComponent(sessionKey) +
       "&driver_number=" + encodeURIComponent(driverNumber);
-    if (startISO) url += "&date>=" + encodeURIComponent(startISO);
-    if (endISO) url += "&date<=" + encodeURIComponent(endISO);
+    // Same encoding as deltaUrl: bare `>` / `<` are not URL-safe (RFC 3986) and
+    // some fetch / proxy stacks truncate or rewrite the filter. OpenF1 accepts
+    // the percent-encoded form; keeping both paths identical also keeps the
+    // localStorage cache key stable across live vs windowed callers.
+    if (startISO) url += "&date%3E=" + encodeURIComponent(startISO);
+    if (endISO) url += "&date%3C=" + encodeURIComponent(endISO);
     return request(url, sessionTtl(sessionKey), options);
   }
 

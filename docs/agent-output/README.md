@@ -116,9 +116,9 @@ the row limit or use byte pages for larger evidence. No individual row is clippe
 
 ## MCP tools
 
-All five project-configured stdio servers run through the same presentation
-gateway: `apex-tools`, `apex-lsp`, `js-debugger`, `chrome-devtools` and
-`playwright-official`. Their existing pinned upstream launchers remain intact.
+All six project-configured stdio servers run through the same presentation
+gateway: `apex-tools`, `apex-lsp`, `js-debugger`, `chrome-devtools`,
+`playwright-official` and `browserstack`. Their existing pinned upstream launchers remain intact.
 The gateway adds a selectable parameter to discovered tools:
 
 ```json

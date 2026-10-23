@@ -21,6 +21,10 @@
     {
       "name": "apex-lsp",
       "command": "*bash*tools/mcp/lsp-mcp.sh serve"
+    },
+    {
+      "name": "browserstack",
+      "command": "*bash*tools/mcp/browserstack-mcp.sh run"
     }
   ],
   "mcpPluginServerAllowlist": [

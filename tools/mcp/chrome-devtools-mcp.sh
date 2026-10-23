@@ -9,9 +9,14 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 REPO="$ROOT/scratch/chrome-devtools-mcp"
 BIN="$REPO/build/src/bin/chrome-devtools-mcp.js"
 REPO_URL="https://github.com/ChromeDevTools/chrome-devtools-mcp.git"
-# Audited live in this repository on 2026-08-17. Pin the network fallback so a
-# fresh machine cannot silently run a different MCP release than CI/tests saw.
-MCP_NPM_PACKAGE="chrome-devtools-mcp@1.7.0"
+# Audited live in this repository on 2026-08-17 (1.7.0) and re-audited
+# 2026-10-21 (1.11.0). Pin the network fallback so a fresh machine cannot
+# silently run a different MCP release than CI/tests saw. The 1.7.0 pin needed
+# the apex-dialog-close-v1 runtime patch; both of its fixes are upstream in
+# 1.11.0 (dialog-blocked input actions since 1.10.0, close_page snapshot
+# refresh), so this pin runs unpatched and the runtime gate in
+# chrome-devtools-runtime.mjs fails closed on any unaudited version.
+MCP_NPM_PACKAGE="chrome-devtools-mcp@1.11.0"
 MCP_PIN_VERSION="${MCP_NPM_PACKAGE#*@}"
 MCP_PIN_TAG="v${MCP_PIN_VERSION}"
 PATCHER="$ROOT/tools/mcp/chrome-devtools-runtime.mjs"
@@ -114,7 +119,10 @@ clone_version() {
     "$REPO/package.json" 2>/dev/null
 }
 
-# The runtime patch (apex-dialog-close-v1) is guarded for MCP_PIN_VERSION only.
+# The runtime gate is audited per version: the archived 1.7.0 pin is patched
+# (apex-dialog-close-v1, SHA256-guarded), MCP_PIN_VERSION passes through
+# unpatched, and any other version fails closed — so local_ok alone is never
+# enough; the clone must match the pin exactly.
 local_pinned_ok() {
   local_ok || return 1
   [[ "$(clone_version)" == "$MCP_PIN_VERSION" ]]
@@ -127,7 +135,7 @@ run_mcp() {
   . "$ROOT/tools/mcp/mcp-preflight.sh"
   if local_pinned_ok; then mcp_preflight; else mcp_preflight "${MCP_NPM_PACKAGE%@*}"; fi
   build_mcp_args "$chrome"
-  local source_root patched_bin npx_bin
+  local source_root runtime_bin npx_bin
   if local_pinned_ok; then
     source_root="$REPO"
   elif local_ok; then
@@ -145,10 +153,10 @@ run_mcp() {
     npx_bin="$(node -e 'process.stdout.write(require("fs").realpathSync(process.argv[1]))' "$npx_bin")"
     source_root="$(cd "$(dirname "$npx_bin")/../../.." && pwd)"
   fi
-  # Both the optional clone and pinned npm fallback take the same guarded path;
-  # an incompatible clone fails closed instead of silently bypassing the fixes.
-  patched_bin="$(node "$PATCHER" --source-root "$source_root" --cache-root "$PATCH_CACHE_ROOT")"
-  exec node "$patched_bin" "${MCP_ARGS[@]}" "$@"
+  # Both the optional clone and pinned npm fallback take the same gated path;
+  # an incompatible clone fails closed instead of silently bypassing the gate.
+  runtime_bin="$(node "$PATCHER" --source-root "$source_root" --cache-root "$PATCH_CACHE_ROOT")"
+  exec node "$runtime_bin" "${MCP_ARGS[@]}" "$@"
 }
 
 cmd_build() {
@@ -221,7 +229,7 @@ cmd_status() {
   local chrome
   chrome="$(find_chrome || true)"
   echo "Chrome: ${chrome:-"(not found)"}"
-  echo "Runtime patch: $MCP_NPM_PACKAGE + apex-dialog-close-v1 (version/SHA256 guarded)"
+  echo "Runtime gate: $MCP_NPM_PACKAGE audited unpatched (archived 1.7.0 keeps apex-dialog-close-v1; unaudited versions fail closed)"
   echo "MCP config: $ROOT/.mcp.json → $0 run"
 }
 
@@ -284,8 +292,10 @@ For the deployed site use the deploy-research subagent (host fetch / WebFetch),
 not this browser — github.io is blocked from this container's Chromium.
 
 Falls back to pinned npx $MCP_NPM_PACKAGE when the local clone is missing.
-Both backends are copied into scratch/chrome-devtools-runtime and receive the
-version/SHA256-guarded #2902 dialog-click and #2903 selected-close fixes.
+Both backends run through the version gate in tools/mcp/chrome-devtools-runtime.mjs:
+the archived 1.7.0 pin is copied into scratch/chrome-devtools-runtime and receives
+the version/SHA256-guarded #2902 dialog-click and #2903 selected-close fixes;
+1.11.0 carries both fixes upstream and runs unpatched; any other version fails closed.
 EOF
     ;;
   *)
