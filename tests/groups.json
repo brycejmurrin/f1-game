@@ -108,6 +108,8 @@
     "tests/unit/bash-guard-hardening.test.mjs",
     "tests/unit/battle-earcon.test.mjs",
     "tests/unit/behind-ship.test.mjs",
+    "// BenchCapture (js/perf/bench-capture.js): the profiling record's caps, sampling, size budget and unsupported-API shape; bench-run /1 back-compat. VM, ~0.1 s.",
+    "tests/unit/bench-capture.test.mjs",
     "// BENCHMARK (js/perf/bench-run.js): the leg order, path prefs and the per-path summary of the results file. VM, ~0.1 s.",
     "tests/unit/bench-run.test.mjs",
     "// BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.",

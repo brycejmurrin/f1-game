@@ -9311,11 +9311,44 @@
         "tests/unit/overlay-feed.test.mjs"
       ]
     },
+    "js/perf/bench-capture.js": {
+      "budget": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "compileStats": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "gapStats": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "legEnd": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "legStart": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "passTimes": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "push": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "recover": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "sampleLogs": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "step": [
+        "tests/unit/bench-capture.test.mjs"
+      ]
+    },
     "js/perf/bench-run.js": {
       "growth": [
         "tests/unit/bench-run.test.mjs"
       ],
       "load": [
+        "tests/unit/bench-capture.test.mjs",
         "tests/unit/bench-run.test.mjs"
       ],
       "median": [
@@ -9333,13 +9366,18 @@
       "reload": [
         "tests/unit/bench-run.test.mjs"
       ],
+      "resume": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
       "scenes": [
+        "tests/unit/bench-capture.test.mjs",
         "tests/unit/bench-run.test.mjs"
       ],
       "stop": [
         "tests/unit/bench-run.test.mjs"
       ],
       "summarize": [
+        "tests/unit/bench-capture.test.mjs",
         "tests/unit/bench-run.test.mjs"
       ]
     },

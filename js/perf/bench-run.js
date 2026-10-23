@@ -20,7 +20,8 @@ const BenchRun = (function () {
   "use strict";
 
   const KEY = "apex26.benchRun";
-  const SCHEMA = "apex26.bench/1";
+  const SCHEMA = "apex26.bench/2";   // /2 adds leg.capture, steps[].cap and plan.capture (js/perf/bench-capture.js); /1 plans still resume
+  const SCHEMAS = ["apex26.bench/1", SCHEMA];
   const SEED = 42;
   const gpu = (path) => ({ kind: "gpu", path, label: path ? "GPU TEST " + path.toUpperCase() : "GPU TEST" });
   const race = (track, weather, tod, label) => ({ kind: "race", path: null, track, weather, tod, label });
@@ -50,6 +51,8 @@ const BenchRun = (function () {
   const r2 = (n) => (n != null && Number.isFinite(+n) ? Math.round(+n * 100) / 100 : null);
   const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
   const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+  // BenchCapture (js/perf/bench-capture.js): per-leg profiling; absent, the run is the /1 run.
+  const BC = () => (typeof BenchCapture !== "undefined" ? BenchCapture : null);
   function log(msg) { try { Log.info("game", "BenchRun " + msg); } catch (_) { /* Log not loaded */ } }
   function store() { return typeof GameStore !== "undefined" && GameStore.store ? GameStore.store : null; }
   function load() { try { const s = store(); const t = s ? s.raw(KEY) : localStorage.getItem(KEY); return t ? JSON.parse(t) : null; } catch (_) { return null; } }
@@ -194,6 +197,10 @@ const BenchRun = (function () {
     try { leg.fallbackWhy = sessionStorage.getItem("apex26.gfxFallbackWhy"); } catch (_) { leg.fallbackWhy = null; }
     if (!plan.facts) try { plan.facts = PhoneRecorder.liveEnv().facts(); } catch (_) { plan.facts = null; }
     leg.state = "running"; save(plan);
+    if (BC()) BC().legStart(leg, _G);
+    try { return await legBody(plan, leg); } finally { if (BC()) leg.capture = BC().legEnd(); }
+  }
+  async function legBody(plan, leg) {
     if (leg.kind === "race") return raceLeg(plan, leg);
     if (leg.kind === "garage") return garageLeg(plan, leg);
     if (leg.kind === "lap") return lapLeg(plan, leg);
@@ -227,7 +234,12 @@ const BenchRun = (function () {
     let prev = 0, on = true;
     const tick = (ts) => { if (!on) return; if (prev) d.push(ts - prev); prev = ts; requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
-    return () => { on = false; unhook(); return Object.assign(GpuTestRun.phaseStats(d, [], counts), overs(d)); };
+    return () => {
+      on = false; unhook();
+      const st = Object.assign(GpuTestRun.phaseStats(d, [], counts), overs(d)), cap = BC() && BC().step();
+      if (cap) st.cap = cap;
+      return st;
+    };
   }
   async function measure(ms, settleMs) {
     await sleep(settleMs);
@@ -414,6 +426,7 @@ const BenchRun = (function () {
     wakeRelease();
     plan.state = state; plan.finishedAt = new Date().toISOString(); plan.show = true;
     plan.summary = summarize(plan.legs); plan.scenes = scenes(plan.legs);
+    if (BC()) plan.capture = BC().budget(plan);
     if (plan.restore) { await restore(plan.restore); plan.restoreAfter = plan.restore; delete plan.restore; }
     writePrefs(plan.prefs); save(plan);
     log("done " + state);
@@ -422,7 +435,7 @@ const BenchRun = (function () {
   }
   async function resume() {
     const plan = load();
-    if (!plan || plan.schema !== SCHEMA) return;
+    if (!plan || SCHEMAS.indexOf(plan.schema) < 0) return;
     if (plan.state !== "running") {
       // A page that saved the garage on its way out could have written the run's picks back: check once, after the reload.
       if (plan.restoreAfter) {
@@ -435,7 +448,7 @@ const BenchRun = (function () {
     wakeAcquire();
     if (_busy) return; _busy = true;
     const leg = plan.legs[plan.i];
-    if (leg && leg.state === "running") { leg.state = "reloaded"; leg.reason = "the page reloaded during this leg"; plan.i++; save(plan); }
+    if (leg && leg.state === "running") { leg.state = "reloaded"; leg.reason = "the page reloaded during this leg"; if (BC()) leg.crumb = BC().recover(); plan.i++; save(plan); }
     else if (leg && leg.state === "booting") {
       const ok = await runLeg(plan);
       if (ok === "aborted" || !stillRunning()) { _busy = false; return; }
@@ -564,7 +577,7 @@ const BenchRun = (function () {
   }
 
   return {
-    KEY, SCHEMA, SEED, TESTS, median, overs, growth, summarize, scenes, newPlan, pathPrefs,
+    KEY, SCHEMA, SCHEMAS, SEED, TESTS, median, overs, growth, summarize, scenes, newPlan, pathPrefs,
     create(G) {
       _G = G;
       try { document.addEventListener("visibilitychange", onVisible); } catch (_) { /* no document */ }
