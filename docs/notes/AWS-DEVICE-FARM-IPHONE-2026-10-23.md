@@ -9,9 +9,10 @@ so this note tests AWS Device Farm as the device source. Grant: Bryce, in OrchA 
 | step | state |
 |---|---|
 | credentials in env | present: `AWS_ACCESS_KEY_ID` (20 chars), `AWS_SECRET_ACCESS_KEY` (40), `AWS_DEFAULT_REGION=us-west-2`, no session token |
-| AWS CLI / SDK | neither installed here (no `aws` binary, no `@aws-sdk/*` in `node_modules`) |
-| `sts get-caller-identity`, `devicefarm list-projects` | **not run.** This session's auto-mode classifier refused the AWS CLI v2 install (reason: "Credential Exploration"). Unblocked only by an approval typed in the acting session, or a Bash allow rule for the `aws` CLI. |
-| `list-devices` (iOS phones, OS versions) | not run (same blocker) |
+| AWS CLI | v2.38.5 installed into the session scratchpad after Bryce's "Try again" (the first install was refused by the auto-mode classifier) |
+| `sts get-caller-identity` | works: IAM user `apex-devicefarm-agent` |
+| `devicefarm list-projects` (us-west-2) | works: one project, `apex-profiler` |
+| `list-devices` (iOS phones) | works: **three iPhones, all on iOS 27.0, all HIGHLY_AVAILABLE with remote access**: iPhone 14, iPhone 14 Pro, iPhone 18 Pro Max. No iOS 26 or iOS 18 device, so neither the iOS 26 path Bryce plays nor the no-WebGPU fallback is covered here |
 | one-device proof, A/B profile | not run. Device minutes used so far: **0** |
 
 ## 2. What the docs say (read 2026-10-23)
@@ -51,4 +52,8 @@ so this note tests AWS Device Farm as the device source. Grant: Bryce, in OrchA 
 3. A/B, about 8 minutes per leg: the same pins that `js/perf/bench-run.js` writes (`apex26.gfxBackend=three`,
    `apex26.tlxForceGL` `"0"` for WebGPU and `"1"` for WebGL2), then reload and run `GpuTestRun.start()`. Read the
    phase fps p50/p95 and `leg.entry.cold/warm` from `__apex.perf()`, and record `backendState().api` for each leg.
-4. Write a script under `tools/perf/` that takes credentials only from env and prints minutes used.
+4. Script: `tools/perf/devicefarm-iphone.mjs` (`devices`, `run --device NAME --legs 0|2|4`). It reads credentials only
+   from env through the `aws` CLI (`APEX_AWS_CLI` overrides the path), drives WebDriver with `curl` (the proxy applies),
+   never prints the endpoint URL, always stops the session in `finally`, and writes `report.json` with
+   `deviceMinutes`. `--legs 2` starts BENCHMARK "paths" and trims it to WEBGPU then WEBGL2 (about 8 min); `--legs 4` runs
+   the full alternating test (about 14 min).

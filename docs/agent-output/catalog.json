@@ -2739,6 +2739,14 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/perf/devicefarm-iphone.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/perf/diagnostics.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
