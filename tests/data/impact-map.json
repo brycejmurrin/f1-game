@@ -1895,31 +1895,37 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "decodeShare": [
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "encodeShare": [
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "exportEdits": [
         "tests/unit/camera-defaults.test.mjs"
       ],
       "exportPack": [
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "fovBias": [
         "tests/unit/camera-defaults.test.mjs"
       ],
       "getGlobal": [
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "getModeOnly": [
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "importPack": [
         "tests/unit/camera-defaults.test.mjs"
       ],
       "importText": [
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "load": [
         "tests/unit/camera-defaults.test.mjs",
@@ -1942,7 +1948,8 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "setGlobal": [
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "shakeOffset": [
         "tests/unit/camera-defaults.test.mjs"
@@ -16527,6 +16534,7 @@
         "tests/unit/share-code.test.mjs"
       ],
       "*": [
+        "tests/unit/import-hardening-apxc1.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
