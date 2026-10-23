@@ -1534,3 +1534,15 @@ test("without RenderRate the drift response is the governor rung, unchanged", ()
   assert.ok(scale() < 1 || PerfGov.autoShed() > 0, "driftStep's rung moved, exactly the pre-wiring behaviour");
   delete globalThis.RenderRate; delete globalThis.ThermalDrift;
 });
+
+test("softwareRaster is true when the bound backend reports GLX soft-present", () => {
+  const { PerfGov } = makeGov();
+  const gfx = { isMobile: false, getRenderScale: () => 1, setRenderScale: () => false,
+    backendState: () => ({ api: "webgl2", softPresent: true }) };
+  PerfGov.init(gfx);
+  assert.equal(PerfGov.softwareRaster(), true);
+  PerfGov.init({ ...gfx, backendState: () => ({ api: "webgl2", softwareGL: true }) });
+  assert.equal(PerfGov.softwareRaster(), true);
+  PerfGov.init({ ...gfx, backendState: () => ({ api: "webgl2", softPresent: false }) });
+  assert.equal(PerfGov.softwareRaster(), false);
+});
