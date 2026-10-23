@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01KHXxtCPC4RbmgxkGkRPvh3 A·O2 #3593 head a8c539af0 READY (revert of #3589 673d3ce1a, game PR, MERGE-HOLD OrchA 26): one-spec llvmpipe garage-livery-churn x2 + parts-livery-designs + zones = 4/4 pass (run 39879922904); draft/fast ci passed 24/0; tooling-fast --changed 837/0; ready-gate 0 (local). Now marked ready: full-tier CI is running. #3590 kept (code-independent, specs pass with it).
+HANDOFF to:D from:cursor:bc-8d2bfc6b-4817-5959-8ff1-cd6bc9ef1e48 LIVE D·W19d on cursor/w19d-script-loader-a3f1 [PR #3595]
