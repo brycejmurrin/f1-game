@@ -31,6 +31,11 @@ self.onmessage = async (e) => {
     bmp = null; // the page owns a successfully transferred bitmap
   } catch (err) {
     try { if (bmp) bmp.close(); } catch (_) { /* disposal must not suppress the error reply */ }
-    self.postMessage({ type: "error", seq, message: String(err && err.message || err) });
+    // A terminated (or still-uncloneable) worker must not reject this async
+    // onmessage handler — that surfaces as an unhandledrejection in the worker
+    // with nothing left for the page to observe.
+    try {
+      self.postMessage({ type: "error", seq, message: String(err && err.message || err) });
+    } catch (_) { /* page already dropped us */ }
   }
 };
