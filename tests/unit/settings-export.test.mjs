@@ -137,6 +137,9 @@ test("visor optics and water settings survive both backup modes and reject inval
   assert.deepEqual(Object.fromEntries(Object.keys(values).map(key => [key, defaults[key]])), {
     helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorRain: "normal", helmetVisorRunoff: "normal",
   });
+  assert.equal(defaults.helmetVisorBeams, "100", "the VISOR BEAMS slider exports as a percent, 100 by default");
+  const beams = boot({ disk: { "apex26.helmetVisorBeams": "160" } }).collect("changes");
+  assert.equal(beams.settings.camera.helmetVisorBeams, "160");
   const invalid = boot({ disk }).collect("changes");
   for (const key of Object.keys(values)) invalid.settings.camera[key] = "invalid";
   const target = boot();

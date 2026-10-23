@@ -1006,15 +1006,20 @@ const TLX = (function () {
       // forceWebGL path already owns #game as WebGL2 (ownGL above).
       function detectSoftwareGL() {
         try {
-          const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+          const gl = (renderer.backend && renderer.backend.gl)
+            || canvas.getContext("webgl2") || canvas.getContext("webgl");
           if (!gl) return false;
           const ext = gl.getExtension("WEBGL_debug_renderer_info");
           const name = ((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || "")
             + " " + (gl.getParameter(gl.RENDERER) || "");
-          return /swiftshader|llvmpipe|softpipe|microsoft basic render|gdi generic/i.test(name);
+          return /swiftshader|llvmpipe|lavapipe|softpipe|microsoft basic render|gdi generic|subzero/i.test(name);
         } catch (_) { return false; }
       }
-      const softwareGL = forceWebGL ? detectSoftwareGL() : !!_softAdapter;
+      // Adapter sniff alone misses AUTO→WebGL2 when requestAdapter() is null or
+      // reports trimmed info (production SwiftShader). Classify from the LIVE
+      // WebGL renderer string — never from softPresent/headless UA (#3601).
+      const softwareGL = !!_softAdapter
+        || (!!(renderer.backend && renderer.backend.isWebGLBackend) && detectSoftwareGL());
       try {
         if (canvas && typeof canvas.setAttribute === "function") {
           const api = (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2";
@@ -3195,11 +3200,16 @@ const TLX = (function () {
       // (car-draw.js _ringOpts) is queued only once a disc is hot, so its first
       // draw is the first braking zone, at alpha ~0.3 — the TRANSPARENT ("t,")
       // variant of a key the grid never draws. Census 245 caught it as the one
-      // material minted mid-race and its one lazy pipeline. The cockpit ERS /
-      // overtake / aero-flap pulses share that key. Mint it during the lights and
-      // compile it once per vertex layout already in the pool: the pipeline also
-      // keys on the layout, and tlx-chunked's pack makes layouts differ by mesh.
-      const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
+      // material minted mid-race and its one lazy pipeline. The cockpit dash ERS
+      // bar and armed overtake lamp (car-draw.js _rigFxA) pulse the same opts
+      // DOUBLE-SIDED, a key of their own ("t,0.9,…|ds|na") first drawn on the
+      // first ERS deploy: the first BOOST tap on WebGPU waited 734–934 ms for its
+      // pipeline (A·W15, iPhone 18 Pro Max, cockpit cam). Mint both during the
+      // lights and compile each once per vertex layout already in the pool: the
+      // pipeline also keys on the layout, and tlx-chunked's pack makes layouts
+      // differ by mesh.
+      const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 },
+        { doubleSided: true, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
       // THE LAUNCH'S FX VARIANTS (FieldLod warm, js/car/field-lod.js): the
       // throttle-lift exhaust flame (car-draw.js _flameOpts, alpha < 1) and the
       // ERS strip's two phases (_ersLightOpts, alpha 1 / 0.6) are first drawn when
@@ -3276,6 +3286,9 @@ const TLX = (function () {
       let _warmPlus = null;
       try { const v = localStorage.getItem("apex26.tlxWarmPlus"); _warmPlus = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
       const warmPlusOn = () => _warmPlus !== null ? _warmPlus : !!(renderer && renderer.backend && renderer.backend.isWebGLBackend);
+      // The caster warm alone is cheap depth programs and saves a mid-race build on BOTH backends (A·W14), so AUTO
+      // is on everywhere; an explicit apex26.tlxWarmPlus still forces it either way.
+      const casterWarmOn = () => _warmPlus !== null ? _warmPlus : true;
       // A-W1 (perf hunt 4): THE DRAW WARM. The race's opening frames were rAF
       // gaps of 1.1-4.1 s with the main thread idle (census 452-454): the
       // DRIVER's first-draw work, which compileAsync cannot reach — ANGLE-Metal
@@ -3299,6 +3312,19 @@ const TLX = (function () {
       let _drawWarmKnob = null;
       try { const v = localStorage.getItem("apex26.tlxDrawWarm"); _drawWarmKnob = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
       const drawWarmOn = () => (_drawWarmKnob !== null ? _drawWarmKnob : !(softGpu() || softwareGL));
+      // One geometry per vertex layout among the scene's lit meshes: the layouts the casters draw (tlx-shadow probes).
+      function casterSources() {
+        const seen = new Set(), out = [];
+        scene.traverse((o) => {
+          const g = o.isMesh && o.geometry, m = o.material;
+          if (!g || !g.attributes || !g.attributes.position || !m || typeof m.customProgramCacheKey !== "function") return;
+          if (String(m.customProgramCacheKey()).indexOf("tlx-lit") !== 0) return;
+          const sig = Object.keys(g.attributes).sort().join(",") + (g.index ? "|i" : "");
+          if (seen.has(sig) || out.length >= 8) return;
+          seen.add(sig); out.push(g);
+        });
+        return out;
+      }
       function drawWarmStage(usePost, useTag, opts, mirrorWarmed, mirrorOnly) {   // mirrorOnly: startMirrorWarm (B-F3.1)
         const drawn = { mirror: 0, scene: 0, post: 0, casts: 0 };
         if (!usePost || !post || !post.sceneTarget) { _mirWarmUnswap(); return drawn; }
@@ -3469,8 +3495,10 @@ const TLX = (function () {
         // blocker — on the main thread (gpu-census 203/205 stacks, via
         // endPass). sunPass runs before present() on the same frame, so by
         // now castScene holds the grid's casters and the warm compiles the
-        // real ones.
-        if (warmPlusOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
+        // real ones. A·W14: plus probe casters in the scene's lit layouts, for the targets no caster has reached
+        // yet (night lamp and car maps), and on WebGPU too: there the lamp-pass pipelines were built synchronously
+        // mid-race, and only depth programs move into the covered warm (casterWarmOn, apex26.tlxWarmPlus=0 off).
+        if (casterWarmOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(casterSources()); }
         _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
         // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
         if (typeof sky !== "undefined" && sky && sky.cacheWarm) { _gpuLastOperation = "compile-sky-cache"; await sky.cacheWarm(renderer); }
