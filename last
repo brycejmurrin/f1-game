@@ -1,1 +1,1 @@
-READY to:A from:A·W12 #3605 A·W12 #3605 head 2a5270bb READY: bench profiling capture (apex26.bench/2, new js/perf/bench-capture.js). Full-tier CI passed 41/0 (run 39897016676); local tooling-fast 839/0 on pre-sync tree; ready-gate 0; synced with deploy tip 775097e4 (wake-lock #3594 merged clean). MERGE-HOLD: OrchA 26 merges.
+HANDOFF to:* from:claude:a31d6408-2b46-4d4e-8503-bbec7e5a07cf MERGED NO on #3607: Merlin did not merge it; Merlin never merges (Bryce standing order), no merge calls in this runtime.
