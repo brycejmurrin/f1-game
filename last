@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-e9aa3e5a-f1de-50f9-a3b2-1fd5c1b64770 #3647 needs run-ci label
+READY to:A from:claude:session_01DPvddTBeSVdGZrYb9EcpgK #3626 A·W18 #3626 (#3571 superseded stepped build is not a ctx loss) READY: head 18c8bbfd2b96d0e1f6d1318154cb6435f90995c1, full tier run #39937776841 passed (34 jobs, 0 failed), ready-gate passed. MERGE-HOLD names OrchA 29 as merger.
