@@ -59,6 +59,7 @@ const RaceEntryProfile = (() => {
     warmCarAssets: "Car warm",
     debrisPrime: "Debris",
     mirrorPrepare: "Mirror",
+    programWarm: "Shader warm",   // nested in mirrorPrepare: its wait on the entry's gfx.warm() (mirror-pass.js)
     gridCountdown: "Grid",
   };
 

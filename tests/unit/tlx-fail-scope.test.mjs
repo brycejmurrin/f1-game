@@ -128,6 +128,7 @@ test("mirrorEnd: only four CONSECUTIVE failed mirror renders retire the mirror (
     _hideUndrawnInstanced() {}, scene: { backgroundNode: null }, pinSkyMaterial() {}, mirRT: {}, mirCam: {}, _gpuLastOperation: "",
     _mirRenders: 0, _mirFails: 0, _mirDead: false, _mirErr: null, softOutRT: () => null, resetRecs() {},
     _dMatUsed: 0, _fxMatUsed: 0, _instAlive: new Set(), _kidsBegin() {}, _kidsMir: [], _poolShow() {},   // R6 pool root (hunt 3)
+    _mirMrt: () => false, _mirMrtArm() {},   // A·W14: a one-attachment mirror target draws with no MRT
     renderer: { setRenderTarget() {}, render() { if (st.boom) throw new Error("stale geometry"); } },
   });
   const obj = vm.runInContext("({" + body.replace(/,\s*$/, "") + "})", ctx);

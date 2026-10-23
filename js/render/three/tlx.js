@@ -1445,17 +1445,48 @@ const TLX = (function () {
         if (forWarm && _instPerPass && !skipBatches()) _mirWarmSwap();
         const lv = _mirLevels(w, h);
         if (!mirRT) {
-          mirRT = new THREE.RenderTarget(w, h, {
-            type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
-            format: THREE.RGBAFormat, depthBuffer: true,
-            generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
-          });
-          mirRT.texture.colorSpace = THREE.NoColorSpace;
+          mirRT = _mirTarget(post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType, w, h, _mirMrtWant());
           _mirSetLevels(lv, w, h);
           mirCam = new THREE.PerspectiveCamera();
           mirCam.matrixAutoUpdate = false; mirCam.matrixWorldAutoUpdate = false;
         } else if (mirRT.width !== w || mirRT.height !== h) { _mirSetLevels(lv, w, h); mirRT.setSize(w, h); }   // setSize re-allocates
         else if (lv > _mirLevelsNow(w, h)) { _mirSetLevels(lv, w, h); mirRT.dispose(); }   // grow only: the next render re-allocates
+      }
+      // A·W14: THE MIRROR SHARES THE SCENE PASS'S RENDER CONTEXT. With no MRT, every scene material built a
+      // second program (WebGL2: a different fragment-output block) or pipeline (WebGPU: a different attachment
+      // list) for the mirror alone, so the warm's mirror stage compiled the whole world again and the mirror's
+      // draw warm built its pipelines again. With the mirror target shaped like post.sceneTarget() (attachments
+      // "output" + "ssrTag", the tag's format chosen by the same rule as tlx-post.js) and drawn under the same
+      // MRT node, the mirror reuses the scene's programs. The tag attachment is never sampled and keeps no mips;
+      // the colour attachment, and so the mirror's pixels, are unchanged. Latched with the target, so a mirror
+      // pass and its warm always agree with the target they draw into. ?tlxMirMrt=0 (DevFlags mirMrt, URL only):
+      // the one-attachment target (the old way, the A/B lever).
+      let _mirMrtKnob = true;
+      try { _mirMrtKnob = typeof DevFlags === "undefined" || DevFlags.get("mirMrt") !== false; } catch (_) { /* no flags: on */ }
+      const _mirMrt = () => !!(mirRT && mirRT.textures && mirRT.textures.length > 1);
+      const _mirMrtWant = () => _mirMrtKnob && !!(post && post.tagOn && post.tagOn() && TSL.mrt && renderer.setMRT);
+      function _mirTarget(type, w, h, mrt) {
+        const rt = new THREE.RenderTarget(w, h, {
+          type, format: THREE.RGBAFormat, depthBuffer: true, count: mrt ? 2 : 1,
+          generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
+        });
+        rt.texture.colorSpace = THREE.NoColorSpace;
+        if (mrt && rt.textures && rt.textures[1]) {
+          const bk = renderer.backend || {};
+          rt.texture.name = "output";
+          if (bk.isWebGPUBackend || bk.drawBuffersIndexedExt) rt.textures[1].format = THREE.RedFormat;
+          rt.textures[1].name = "ssrTag";
+          rt.textures[1].generateMipmaps = false;
+          rt.textures[1].minFilter = THREE.NearestFilter; rt.textures[1].magFilter = THREE.NearestFilter;
+          rt.textures[1].colorSpace = THREE.NoColorSpace;
+        }
+        return rt;
+      }
+      // Arm (true) / disarm (false) the scene pass's MRT for a draw into a mirror-shaped target.
+      function _mirMrtArm(on, prev) {
+        if (lit && lit.setSsrMrt) lit.setSsrMrt(on);
+        if (fx && fx.setSsrMrt) fx.setSsrMrt(on);
+        renderer.setMRT(on ? _ssrMrtNode() : (prev || null));
       }
       // A-H5 (perf hunt 4): THE MIRROR'S MIP CHAIN, CAPPED. three builds the
       // full chain on a mipmapped target — 9 levels for a 461 px mirror — and
@@ -3205,13 +3236,13 @@ const TLX = (function () {
           renderer.autoClear = false;   // a clear ignores the scissor (WebGPU loadOp)
           renderer.setScissorTest(true);
           if (mirrorWarmed && mirRT) {
-            // The mirror stage left the mirror's own instanced meshes shown and the MRT off.
-            tmp = new THREE.RenderTarget(4, 4, { type: mirRT.texture.type, format: THREE.RGBAFormat, depthBuffer: true,
-              generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter });
-            tmp.texture.colorSpace = THREE.NoColorSpace;
-            renderer.setMRT(null);
+            // The mirror stage left the mirror's own instanced meshes shown. The scratch target takes mirRT's
+            // attachment list, and the draw its MRT (on only for a mirror-shaped mirRT), as mirrorEnd draws.
+            const mrt = _mirMrt();
+            tmp = _mirTarget(mirRT.texture.type, 4, 4, mrt);
+            _mirMrtArm(mrt);
             renderer.setRenderTarget(tmp);
-            renderer.render(scene, camera); drawn.mirror++;
+            try { renderer.render(scene, camera); drawn.mirror++; } finally { _mirMrtArm(false); }
           }
           _mirWarmUnswap();
           if (mirrorOnly) return drawn;   // the rest was drawn by the entry warm (the finally restores the state)
@@ -3277,12 +3308,13 @@ const TLX = (function () {
       async function warmMirrorStage(usePost, useTag) {
         prepareMirrorTarget(16, 8, true);   // true: also show the mirror's own instanced meshes (A1)
         _mirUsed = true;   // future mirror compiles still need CPU attributes
-        if (lit.setSsrMrt) lit.setSsrMrt(false);
-        if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
-        renderer.setMRT(null);   // the entry warm's caster stage left it null; the deferred warm sets it the same
+        // The entry warm's caster stage left the MRT null; the deferred warm sets it the same. A mirror-shaped
+        // target (_mirMrt) compiles under the scene's MRT instead: the scene stage's programs, mostly cache hits.
+        _mirMrtArm(_mirMrt());
         renderer.setRenderTarget(mirRT);
         _gpuLastOperation = "compile-mirror";
         await renderer.compileAsync(scene, camera);
+        _mirMrtArm(false);   // the glass and composite below compile exactly as before
         // The composite, like all post quads, draws under the main MRT.
         renderer.setMRT(useTag ? _ssrMrtNode() : null);
         // So does the cockpit's live glass (drawMirrorGlass), in the scene
@@ -5261,7 +5293,9 @@ const TLX = (function () {
             if (scene.backgroundNode) pinSkyMaterial();
             renderer.setRenderTarget(mirRT);
             _gpuLastOperation = "render-mirror";
-            renderer.render(scene, mirCam);
+            const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
+            if (mrt) _mirMrtArm(true);
+            try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); }
             _mirRenders++;
             _mirFails = 0;   // the cap means FOUR CONSECUTIVE failures: unrelated one-frame throws must not retire the mirror
           } catch (e) {
