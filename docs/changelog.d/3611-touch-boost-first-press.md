@@ -1,1 +1,0 @@
-Fixed: the first BOOST press of a session no longer freezes the race for about 0.7 s on iPhone (buttons steering, lift GAS then tap BOOST); the button's lit state is drawn once when the race appears (#3611).

@@ -1,4 +1,4 @@
-# First BOOST press freezes ~0.74 s on iPhone (A·W15, 2026-10-23)
+# First BOOST press freezes ~0.74–0.93 s on iPhone: the first ERS-strip draw (A·W15, 2026-10-23)
 
 Bryce: "whenever I am in buttons steering mode and I take my finger off of throttle to hit boost the game lags".
 PR #3611. Fleet A worker A·W15.
@@ -7,29 +7,48 @@ PR #3611. Fleet A worker A·W15.
 
 | run (AWS Device Farm, iPhone 18 Pro Max, iOS 27.0, three.js WebGPU) | first BOOST tap, worst rAF gap in the 400 ms after it | later BOOST taps | control window (GAS held) |
 |---|---|---|---|
-| 3: live site, BEFORE | **742 ms** | 21–37 ms | max 19 ms |
+| 3: live site | **742 ms** | 21–37 ms | max 19 ms |
 | 4: live site, AERO tapped first | **737 ms** (first AERO tap: 47 ms) | 19–25 ms | max 33 ms |
-| 5: four page loads in one Safari session | load 0 **734 ms**; loads 1–3 (incl. a no-warm control) 22–23 ms | 19–28 ms | — |
-| 6: Safari terminated between loads, phone 071266C0… | live, no warm-up **748 ms**; live with the fix's mechanism injected (`.on` drawn 2 frames before any press) **34 ms** | 21–26 ms | — |
-| AFTER on this branch's build | not measured from this container: raw.githack shows browsers an "External Content Notice" (403), statically.io serves `index.html` as `text/plain`, and a quick tunnel was refused; measure on Pages after merge (`devicefarm-iphone.mjs run --touch 3`) | | |
+| 5: four page loads in one Safari session | load 0 **734 ms**; loads 1–3 22–23 ms | 19–28 ms | — |
+| 6: Safari terminated between loads | load 0 **748 ms**; later loads 34 / — ms | 21–26 ms | — |
+| 7: Safari terminated between loads | load 0 **853 ms**; load 1, no warm-up, 33 ms | 21–28 ms | — |
+| 8: fresh session, `#btn-boost.on` drawn 2 frames before any press | **756 ms** | 22–31 ms | — |
+| 9: fresh session, Event Timing + queue probes | **934 ms** | 23–28 ms | — |
 
-- **One-time, per Safari process.** Run 5's last load had no warm-up and no stall: the cost is paid once per process
-  and survives a reload. A home-screen app launch is a fresh process, so the player meets it on the first BOOST of
-  every session.
-- **Outside the game tick.** `PerfSpans` during the 737 ms gap: frame max 24 ms (physics 20, render 5, hud 4,
-  audio 2). The page also saw no event for 735 ms after BOOST's `pointerdown`. The time is WebKit's
-  (style/paint/compositing of the HUD change), not `js/render/` and not the input handlers, which only set a flag.
-- **BOOST-specific.** AERO's first tap (its own lit state, same glow family) cost 47 ms. Energy never deployed in
-  these runs (ERS stayed 4.0 MJ with the thumb off GAS), so the energy-bar pulse animation was not involved.
-- **Not throttle-specific.** The lift only matters because one right thumb works GAS and BOOST; the stall follows the
-  first `#btn-boost.on`, whatever came before it.
+- **Once per device, not per page.** Every new Device Farm session stalled on its first BOOST tap (742–934 ms).
+  Later page loads in the same session did not, even after `mobile: terminateApp` killed Safari (run 7), so the cache
+  is system-level, not per page or per process.
+- **Outside the game tick.** `PerfSpans` frame max ≤ 27 ms in every run.
+- **Not the HUD.** Drawing `#btn-boost.on` for two frames before any press (run 8) left the stall at 756 ms. AERO's
+  first tap (its own lit state, `:active`) costs 47 ms.
 
-## 2. Fix
+## 2. Root cause (run 9)
 
-`js/ui/hud.js` `boostWarmFrame`: the first time `#btn-boost` is on screen, the HUD draws `.on` for two frames and
-clears it, so WebKit's one-time cost lands at race reveal instead of under the player's thumb. Paint only: the car's
-`boostOn` is untouched, and the class goes through `hToggle` so its cache stays true. Pinned by
-`tests/specs/touch-boost-warm.spec.js` (group `input`). Chromium does not show the stall; the device run is the proof.
+Times relative to the first BOOST pointerdown:
+
+| ms | what happened |
+|---|---|
+| 0 | BOOST pointerdown handled; the game frame runs 0→6 (render 1→6 ms) with `boostOn` true |
+| 59 | the GAS `pointerup`/`touchend` and BOOST's touch events are queued (Event Timing `startTime`) |
+| 6 → ~742 | main thread blocked: no tick, no listener, no timer (`setTimeout(0)` ran at 945); every queued event has `processingStart` 749 |
+| 934 | the next game frame starts (rAF gap 934 ms) |
+
+The frame at 0 ran with BOOST on **and GAS still held**, because the lift had not been processed yet. That frame is
+the car's first ERS deploy. `c.deploying` makes `js/game.js` call `carDraw.drawExhaustFx(c, …, isErsDeploying(c), …)`,
+which draws the player's ERS status strip for the first time (`CarMesh.getErsLight()`, a `_flatQuadData` quad,
+opts `{emissive: 1, roughness: 1, specular: 0, noAlphaWrite: true, alpha 1 | 0.6}`). The block comes after that
+frame's JavaScript, so the WebGPU frame waits on a first-use pipeline compile in the GPU process. That fits every run:
+the stall survives killing Safari (Metal's shader cache is system-wide), a fresh device pays it again, and ERS still
+reads 4.0 MJ after one deploy frame. A normal race shows it too: the first BOOST with GAS held is the first deploy.
+
+The throttle lift in Bryce's report is how the deploy starts: BOOST lands before the lift is processed.
+
+**Owner: renderer.** `js/render/three/tlx.js` `_LATE_FX` is meant to warm these opts on a probe quad. The material
+key matches (`buildMatKey` ignores `emissive` and `alpha`), so the likely miss is the vertex layout of
+`car-mesh.js _flatQuadData` against the probe geometry (`_layoutKey`), or the `_warmFx` / `_lateFxOn()` gate on
+WebGPU. A cheap device confirmation: hold GAS plus `__apex.setBoost(true)` for about 1 s during the lights. The stall
+should move there, and the first BOOST tap should be clean. A first attempt in PR #3611 (drawing the HUD button's
+lit state early) was measured not to help (run 8) and was reverted.
 
 ## 3. Method
 
@@ -44,5 +63,6 @@ clears it, so WebKit's one-time cost lands at race reveal instead of under the p
   `--variants a@live,b@fix --fix-url URL --cold` loads one page per entry, with a fresh Safari process between entries.
 - Instance: AWS returns no `instanceArn`/`deviceUdid` for remote sessions; `mobile: deviceInfo` gives a per-phone
   uuid (run 4 `034D496E…`, run 5 `32CFAFDB…`), recorded per run. Safari's caches outlive a session on one phone
-  (OrchA27 / A·D1), which is why run 6 compares BEFORE and AFTER inside one session with cold processes.
+  (OrchA27 / A·D1); run 7 showed even `mobile: terminateApp` does not reset it, so only the FIRST load of a new
+  Device Farm session is a cold measurement.
 - Device minutes: runs 1–2 were tooling failures (about 2–3 metered minutes each); trial balance ~800 min at start.

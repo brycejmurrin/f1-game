@@ -1992,21 +1992,6 @@ function speakHud(player, cars, timeTrial) {
   return { cn, caution, blueCar, txt };
 }
 
-/* THE FIRST BOOST PRESS FROZE THE GAME FOR ~0.74 s on an iPhone (A·W15, Device Farm iPhone 18 Pro Max,
-   three.js WebGPU; docs/notes/TOUCH-BOOST-FIRST-PRESS-2026-10-23.md). Lifting GAS and tapping BOOST is the
-   first time the page ever draws #btn-boost.on, and WebKit paid a one-time cost OUTSIDE the game tick
-   (PerfSpans frame max 24 ms during a 737 ms rAF gap); every later press, and every press after a reload
-   in the same Safari process, was 19-25 ms. So the on-state is drawn once, for BOOST_WARM_FRAMES HUD frames,
-   the first time the button is on screen: the cost lands at race reveal instead of under the player's thumb. */
-const BOOST_WARM_FRAMES = 2;
-let _boostWarmLeft = BOOST_WARM_FRAMES, _boostWarmDone = false;
-function boostWarmFrame(el) {
-  if (_boostWarmDone || !el || el.hidden) return false;
-  if (_boostWarmLeft-- > 0) return true;
-  _boostWarmDone = true;
-  Log.info("ui", "boost on-state warmed state=" + G.state);
-  return false;
-}
 function updateHud(force, dtMs) {
   if (!(Number.isFinite(dtMs) && dtMs > 0)) dtMs = 16.7;   // forced refreshes and the first frame: one nominal frame
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
@@ -2203,7 +2188,7 @@ function updateHud(force, dtMs) {
     hHidden(els.workBtn, true);
   }
   // toggle-button states
-  hToggle(els.btnBoost, "on", player.boostOn || boostWarmFrame(els.btnBoost));
+  hToggle(els.btnBoost, "on", player.boostOn);
   hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
   hToggle(els.btnOT, "on", player.otT > 0);
   hToggle(els.btnOT, "armed", player.otArmed && player.otT <= 0);

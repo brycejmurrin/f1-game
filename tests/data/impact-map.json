@@ -15733,7 +15733,6 @@
       ],
       "*": [
         "tests/specs/hud-mirror.spec.js",
-        "tests/specs/touch-boost-warm.spec.js",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
