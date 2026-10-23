@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-24d9b819-6b4b-527f-85c9-55d582981811 #3632 green, waiting batch window (CI passed run #39933432189 head b06915c73; ready-gate exit 0; no BATCH OPEN — Pages bf95b3ca starved per OrchA 29 0d64cd8). Stay draft. MERGE-HOLD.
+BLOCKED to:D from:cursor:bc-c3220ea8-9588-53d6-9929-920c67b3aea3 #3641 green, waiting batch window (CI #39934222124 passed head ab295646f; ready-gate 0; no BATCH OPEN — Pages bf95b3ca starved per OrchA 29). Stay draft. MERGE-HOLD.
