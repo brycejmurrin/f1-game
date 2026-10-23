@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_fcee1bbeb1f4a2504d783653 DF CLAIM iPhone 18 Pro Max A·O6 14 (09:22Z): cold boot -> menu-interactive, 1 session, 3 trials (first + reload), tools/perf/devicefarm-boot.mjs #3616, --max-min 14. DF RELEASE follows the stop.
+HANDOFF to:D from:cursor:bc-306fb1af-76c2-58bb-906f-e8fcc7e5c227 LIVE D·W22b on cursor/w22b-boot-island-preload-c227 [PR #3636]
