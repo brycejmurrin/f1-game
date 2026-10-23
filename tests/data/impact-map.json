@@ -9714,10 +9714,12 @@
       ],
       "begin": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/race-entry-profile.test.mjs"
+        "tests/unit/race-entry-profile.test.mjs",
+        "tests/unit/webgpu-menu-warm.test.mjs"
       ],
       "beginUi": [
-        "tests/unit/race-entry-profile.test.mjs"
+        "tests/unit/race-entry-profile.test.mjs",
+        "tests/unit/webgpu-menu-warm.test.mjs"
       ],
       "continueWindow": [
         "tests/unit/race-entry-profile.test.mjs"
@@ -9735,18 +9737,23 @@
       "notePresent": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
+      "noteWarm": [
+        "tests/unit/webgpu-menu-warm.test.mjs"
+      ],
       "raiseHandoff": [
         "tests/unit/loading-card.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "requestWarm": [
-        "tests/unit/race-entry-profile.test.mjs"
+        "tests/unit/race-entry-profile.test.mjs",
+        "tests/unit/webgpu-menu-warm.test.mjs"
       ],
       "runSession": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "snapshot": [
-        "tests/unit/race-entry-profile.test.mjs"
+        "tests/unit/race-entry-profile.test.mjs",
+        "tests/unit/webgpu-menu-warm.test.mjs"
       ],
       "softwareRaster": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -13502,6 +13509,9 @@
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "idleYield": [
+        "tests/unit/webgpu-menu-warm.test.mjs"
+      ],
       "mergeRuns": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
@@ -13739,6 +13749,9 @@
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "_resolveWarmWhere": [
+        "tests/unit/webgpu-menu-warm.test.mjs"
+      ],
       "_showInstanced": [
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
@@ -13792,7 +13805,8 @@
         "tests/unit/tlx-cull-shadow-pack.test.mjs"
       ],
       "casterSources": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/webgpu-menu-warm.test.mjs"
       ],
       "compileWarmProbe": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -13938,6 +13952,7 @@
         "tests/unit/tlx-round2.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs",
+        "tests/unit/webgpu-menu-warm.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
       "readGlCapture": [

@@ -11,8 +11,10 @@
 #   - read-only tools (Read, Grep, Glob, LS, Task, Web*, MCP:*) and Shell
 #     (beforeShellExecution → shell-guard.sh) pass untouched;
 #   - Delete is a removal of its path;
-#   - any other tool whose input carries a path or a body is a write. Its path is
-#     read from file_path / path / target_file / filePath, its body from content /
+#   - any other tool whose input carries a path, a body or a write shape (code_edit,
+#     diff, patch, replacement...) is a write. Its path is read from file_path / path /
+#     target_file / filePath, else the first string under any key naming a path, file or
+#     target (targetFile, relative_workspace_path, notebook_path...); its body from content /
 #     contents / file_text; old_string/new_string, old_str/new_str or edits make it
 #     an Edit. A write with no readable path is DENIED (failClosed, not a warning);
 #     with no readable body only the path rules run, and a ratchet file is refused
@@ -32,11 +34,17 @@ if not isinstance(ti, dict): ti = {}
 READ_ONLY = {"Read", "Grep", "Glob", "LS", "Task", "WebFetch", "WebSearch", "Shell", "TodoWrite", "ReadLints"}
 if tool in READ_ONLY or tool.startswith("MCP:"):
     print(json.dumps({"skip": 1})); sys.exit()
+BODY = ("content", "contents", "file_text")
 path = next((ti.get(k) for k in ("file_path", "path", "target_file", "filePath") if isinstance(ti.get(k), str) and ti.get(k)), "")
+if not path:   # a key Cursor names differently (targetFile, target_path, relative_workspace_path, notebook_path, filename...)
+    path = next((v for k, v in ti.items() if isinstance(v, str) and v and k not in BODY
+                 and any(w in k.lower().replace("_", "") for w in ("path", "file", "target"))), "")
 old = next((k for k in ("old_string", "old_str") if k in ti), None)
 new = next((k for k in ("new_string", "new_str") if k in ti), None)
-body = next((k for k in ("content", "contents", "file_text") if isinstance(ti.get(k), str)), None)
-writes = tool in ("Write", "Edit", "MultiEdit", "StrReplace", "Delete") or path or old or new or body or ti.get("edits")
+body = next((k for k in BODY if isinstance(ti.get(k), str)), None)
+SHAPE = ("code_edit", "codeedit", "diff", "patch", "new_content", "newcontent", "replacement", "edit", "edits", "instructions")
+shaped = any(k.lower() in SHAPE for k in ti)
+writes = tool in ("Write", "Edit", "MultiEdit", "StrReplace", "Delete") or path or old or new or body or shaped
 if not writes:
     print(json.dumps({"skip": 1})); sys.exit()
 out = {"tool_input": {"file_path": path}, "cwd": d.get("cwd") or "", "_tool": tool}

@@ -1482,6 +1482,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a chip or __apex.weather() still cuts. VM-executed atmosphere.js, ~0.1 s.
   "tests/unit/weather-blend.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
+  // D·W21b / #3279: WebGPU menu warm enables warmPlus + idle-chunks post/shadow/cockpit; records where.
+  "tests/unit/webgpu-menu-warm.test.mjs",
   // WET_GRIP orders the treads as treadFor picks them: inter owns the damp, full wet the storm. VM, < 0.2 s.
   "tests/unit/wet-grip-ladder.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
