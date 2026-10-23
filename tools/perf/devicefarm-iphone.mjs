@@ -225,7 +225,7 @@ async function clearSafari(ctx) {
 }
 async function warmplusScenario(ctx, url, report, out) {
   report.warmplus = {};
-  for (const arm of ["default", "warmplus"]) {
+  for (const arm of (process.env.APEX_ARMS || "default,warmplus").split(",")) {   // APEX_ARMS reverses the order to expose cache bias
     const row = report.warmplus[arm] = {};
     row.clear = await clearSafari(ctx);
     try { wd(ctx.base, "DELETE", `/session/${ctx.sid}`); } catch (_) { /* gone */ }
