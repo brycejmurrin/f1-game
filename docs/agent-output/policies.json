@@ -1841,6 +1841,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/perf/devicefarm-iphone.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Timestamped progress lines (device, session state, boot probe, bench leg states, session minutes) and the report.json path; the endpoint URL is never printed."
+    },
     "tools/perf/live-render-matrix.mjs": {
       "action": "keep-native",
       "presentation": "native",

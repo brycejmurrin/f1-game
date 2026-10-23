@@ -2741,6 +2741,7 @@
     {
       "path": "tools/perf/devicefarm-iphone.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--out"
