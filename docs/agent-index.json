@@ -3485,6 +3485,12 @@
       "roster": "tag"
     },
     {
+      "path": "js/perf/bench-capture.js",
+      "global": "BenchCapture",
+      "order": 254,
+      "roster": "tag"
+    },
+    {
       "path": "js/perf/bench-run.js",
       "global": "BenchRun",
       "order": 255,

@@ -166,6 +166,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/bash-guard-hardening.test.mjs",
   "tests/unit/battle-earcon.test.mjs",
   "tests/unit/behind-ship.test.mjs",
+  // BenchCapture (js/perf/bench-capture.js): the profiling record's caps, sampling, size budget and unsupported-API shape; bench-run /1 back-compat. VM, ~0.1 s.
+  "tests/unit/bench-capture.test.mjs",
   // BENCHMARK (js/perf/bench-run.js): the leg order, path prefs and the per-path summary of the results file. VM, ~0.1 s.
   "tests/unit/bench-run.test.mjs",
   // BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.
@@ -1105,6 +1107,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
   "tests/unit/select-budget.test.mjs",
+  // D·DP5: cold race-select preview defers TrackMaps.corners/draw off the open's sync turn.
+  "tests/unit/select-preview-defer.test.mjs",
   // Round-2: re-tapping the active team tile keeps the seat (Legends keeps its build); unstarring the active circuit under FAVOURITES keeps the selection.
   "tests/unit/select-screen-fixes.test.mjs",
   "tests/unit/select-specs.test.mjs",
@@ -1145,6 +1149,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/share-code.test.mjs",
   "tests/unit/shared-math.test.mjs",
   "tests/unit/sheet-per-screen.test.mjs",
+  // D·DP5: SheetShape watchVisibility/reclassify batch getBoundingClientRect before classify writes.
+  "tests/unit/sheetshape-batch-measure.test.mjs",
   "tests/unit/sheetshape-density-scale.test.mjs",
   "tests/unit/sheetshape-keyboard.test.mjs",
   "tests/unit/sheetshape-registry.test.mjs",
@@ -1355,6 +1361,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-randomise.test.mjs",
   "tests/unit/track-retained-state.test.mjs",
   "tests/unit/track-shot-survey.test.mjs",
+  // D·DP5: previewCL only via adopt/{preview:true}; plain {line:false} must rebuild.
+  "tests/unit/tracks-preview-cache.test.mjs",
   "tests/unit/trackside.test.mjs",
   // Wrap-aware arc buckets vs the O(n) updateCar traffic / slipstream / OT-ahead
   // walks (collide.js helper). Seeded 22-car old-vs-new characterization, no browser.

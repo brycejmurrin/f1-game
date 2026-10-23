@@ -8,8 +8,9 @@
  * in js/agent/agentview.js (string literals evaluated in place). Groups come
  * from tests/groups.json, circuits and modules from tools/manifest.cjs. The
  * impact map is the narrow static slice: a test that names a `js/…` path and
- * calls a function that file declares. Nightly V8 coverage and select-specs
- * consumption stay follow-ups (those files are outside this change).
+ * calls a function that file declares. Manual `narrow` pins live in
+ * `tests/data/impact-map.d/*.json` (select-specs reads them via tools/lib/impact-map.mjs).
+ * Nightly V8 coverage is still a follow-up.
  * No per-group test counts: any PR that adds a test would stale every other
  * one on merge (#2808); readers count with declaredTests() in select-budget.
  *
@@ -305,9 +306,28 @@ export function buildImpactMap() {
     generatedBy: "tools/docs/gen-agent-index.mjs",
     kind: "static-reference",
     narrowOnly: true,
-    note: "A test is listed under a function when it names that js path and spells name(. Nightly V8 ranges and select-specs narrowing are follow-ups.",
-    map: out,
+    note: "A test is listed under a function when it names that js path and spells name(. The `narrow` key is hand-pinned in tests/data/impact-map.d/ for select-specs.",
+    map: mergeImpactPinFiles(out),
   };
+}
+
+/** Merge hand-pinned `narrow` rows from tests/data/impact-map.d/*.json into the generated map. */
+export function mergeImpactPinFiles(map) {
+  const dir = path.join(ROOT, "tests/data/impact-map.d");
+  if (!fs.existsSync(dir)) return map;
+  for (const name of fs.readdirSync(dir).filter((n) => n.endsWith(".json")).sort()) {
+    let frag;
+    try { frag = JSON.parse(fs.readFileSync(path.join(dir, name), "utf8")); }
+    catch { continue; }
+    const pins = frag.pins || frag;
+    for (const [file, fnMap] of Object.entries(pins)) {
+      if (!map[file]) map[file] = {};
+      for (const [fn, specs] of Object.entries(fnMap)) {
+        map[file][fn] = [...new Set([...(map[file][fn] || []), ...specs])].sort();
+      }
+    }
+  }
+  return map;
 }
 
 export function renderImpact(map = buildImpactMap()) {

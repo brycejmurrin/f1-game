@@ -2,7 +2,7 @@
   "generatedBy": "tools/docs/gen-agent-index.mjs",
   "kind": "static-reference",
   "narrowOnly": true,
-  "note": "A test is listed under a function when it names that js path and spells name(. Nightly V8 ranges and select-specs narrowing are follow-ups.",
+  "note": "A test is listed under a function when it names that js path and spells name(. The `narrow` key is hand-pinned in tests/data/impact-map.d/ for select-specs.",
   "map": {
     "js/agent/agentview-corners.js": {
       "create": [
@@ -6160,12 +6160,14 @@
       ],
       "clear": [
         "tests/unit/car-fx.test.mjs",
-        "tests/unit/droplets-spray.test.mjs"
+        "tests/unit/droplets-spray.test.mjs",
+        "tests/unit/particles-dirty.test.mjs"
       ],
       "count": [
         "tests/unit/car-fx.test.mjs",
         "tests/unit/droplets-spray.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
+        "tests/unit/particles-dirty.test.mjs",
         "tests/unit/skidmarks-cadence.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
@@ -6186,6 +6188,7 @@
       ],
       "flareCount": [
         "tests/unit/car-fx.test.mjs",
+        "tests/unit/particles-dirty.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
       "init": [
@@ -9328,6 +9331,9 @@
       ]
     },
     "js/overlay/render.js": {
+      "clear": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
       "create": [
         "tests/unit/overlay-feed.test.mjs"
       ],
@@ -9341,8 +9347,44 @@
         "tests/unit/overlay-feed.test.mjs"
       ]
     },
+    "js/perf/bench-capture.js": {
+      "budget": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "compileStats": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "gapStats": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "legEnd": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "legStart": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "passTimes": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "push": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "recover": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "sampleLogs": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
+      "step": [
+        "tests/unit/bench-capture.test.mjs"
+      ]
+    },
     "js/perf/bench-run.js": {
+      "growth": [
+        "tests/unit/bench-run.test.mjs"
+      ],
       "load": [
+        "tests/unit/bench-capture.test.mjs",
         "tests/unit/bench-run.test.mjs"
       ],
       "median": [
@@ -9351,13 +9393,27 @@
       "newPlan": [
         "tests/unit/bench-run.test.mjs"
       ],
+      "overs": [
+        "tests/unit/bench-run.test.mjs"
+      ],
       "pathPrefs": [
         "tests/unit/bench-run.test.mjs"
       ],
+      "reload": [
+        "tests/unit/bench-run.test.mjs"
+      ],
+      "resume": [
+        "tests/unit/bench-capture.test.mjs"
+      ],
       "scenes": [
+        "tests/unit/bench-capture.test.mjs",
+        "tests/unit/bench-run.test.mjs"
+      ],
+      "stop": [
         "tests/unit/bench-run.test.mjs"
       ],
       "summarize": [
+        "tests/unit/bench-capture.test.mjs",
         "tests/unit/bench-run.test.mjs"
       ]
     },
@@ -9440,6 +9496,9 @@
       ]
     },
     "js/perf/loop-health.js": {
+      "reload": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "*": [
         "tests/unit/loop-health.test.mjs"
       ]
@@ -12759,6 +12818,7 @@
         "tests/unit/render-final-contracts.test.mjs"
       ],
       "*": [
+        "tests/unit/agent-indexes.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/comment-citations.test.mjs",
@@ -12771,9 +12831,15 @@
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/puddles.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/xr-plan.test.mjs"
+      ],
+      "narrow": [
+        "tests/specs/garage-livery-churn.spec.js",
+        "tests/specs/parts-livery-designs.spec.js",
+        "tests/specs/parts-livery-zones.spec.js"
       ]
     },
     "js/render/glx/post.js": {
@@ -12919,7 +12985,8 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
+        "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ],
       "softBlit": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"
@@ -12929,6 +12996,14 @@
       ],
       "softPresentState": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "*": [
+        "tests/unit/agent-indexes.test.mjs"
+      ],
+      "narrow": [
+        "tests/specs/garage-livery-churn.spec.js",
+        "tests/specs/parts-livery-designs.spec.js",
+        "tests/specs/parts-livery-zones.spec.js"
       ]
     },
     "js/render/renderer-boot.js": {
@@ -12982,6 +13057,7 @@
       "init": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs"
       ],
       "load": [
@@ -12989,6 +13065,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/build-worker.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
@@ -13041,10 +13118,17 @@
         "tests/unit/pack-png-bytes.test.mjs"
       ],
       "*": [
+        "tests/unit/agent-indexes.test.mjs",
         "tests/unit/baked-model-road-guard.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/import-models.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/stage-minify.test.mjs"
+      ],
+      "narrow": [
+        "tests/specs/garage-livery-churn.spec.js",
+        "tests/specs/parts-livery-designs.spec.js",
+        "tests/specs/parts-livery-zones.spec.js"
       ]
     },
     "js/render/shared/canvas-css-size.js": {
@@ -13578,6 +13662,10 @@
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "_mirMrtArm": [
+        "tests/unit/tlx-fail-scope.test.mjs",
+        "tests/unit/tlx-hunt4c.test.mjs"
+      ],
       "_mirOf": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
@@ -13896,6 +13984,7 @@
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "warmMirrorStage": [
+        "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "wrapStream": [
@@ -16217,6 +16306,7 @@
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/select-preview-defer.test.mjs",
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -16235,6 +16325,9 @@
       "setTeamPicker": [
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ],
+      "updateTrackPreview": [
+        "tests/unit/select-preview-defer.test.mjs"
       ],
       "*": [
         "tests/unit/aero-zone-tables.test.mjs",

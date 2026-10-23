@@ -1136,6 +1136,24 @@ return {
       return !!(s && (s.softwareGL || s.softAdapter));
     } catch (_) { return false; }
   },
+  // Full-frame GLX soft readback + pack scratch readPixels stall SwiftShader for
+  // seconds while these menu/race-entry sheets are up (#3589 garage; live
+  // race-settings flyby + #loading entry on tip 775097e). Matches loop-health
+  // slowPathCover plus the race-settings sheet (flyby stays live behind it).
+  softwareGlUiReadbackDefer() {
+    if (!PerfGov.softwareRaster()) return false;
+    try {
+      const g = typeof document !== "undefined" && document.getElementById;
+      if (!g) return false;
+      const ld = g("loading");
+      if (ld && !ld.hidden) return true;
+      const cs = g("carsetup");
+      if (cs && !cs.hidden) return true;
+      const rs = g("race-settings");
+      if (rs && !rs.hidden) return true;
+    } catch (_) { /* harness */ }
+    return false;
+  },
 };
 })();
 Object.freeze(PerfGov);

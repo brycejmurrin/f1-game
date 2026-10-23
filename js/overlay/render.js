@@ -43,10 +43,41 @@ const OverlayRender = (function () {
     const battleWho = battle.querySelector("strong"), battleGap = battle.querySelector("span");
     const sec = sectors.querySelectorAll("span");
     const capWho = caption.querySelector("strong"), capText = caption.querySelector("span");
+    // Last fully-merged frame. createDiffer patches omit unchanged keys; painting
+    // a patch with `rows || []` used to wipe the tower, and omitting `battle`
+    // left the BATTLE chrome stuck after the race ended.
+    let current = null;
+
+    function merge(frame) {
+      if (frame.full || !current) {
+        current = {
+          v: frame.v, seq: frame.seq, t: frame.t,
+          state: frame.state, track: frame.track, lap: frame.lap, laps: frame.laps,
+          flag: frame.flag, rows: frame.rows || [], battle: frame.battle || null,
+          sectors: frame.sectors || null, caption: frame.caption || null,
+        };
+        return current;
+      }
+      current = {
+        v: frame.v, seq: frame.seq, t: frame.t,
+        state: frame.state !== undefined ? frame.state : current.state,
+        track: frame.track !== undefined ? frame.track : current.track,
+        lap: frame.lap !== undefined ? frame.lap : current.lap,
+        laps: frame.laps !== undefined ? frame.laps : current.laps,
+        flag: frame.flag !== undefined ? frame.flag : current.flag,
+        rows: frame.rows !== undefined ? frame.rows : current.rows,
+        battle: frame.battle !== undefined ? frame.battle : current.battle,
+        sectors: frame.sectors !== undefined ? frame.sectors : current.sectors,
+        caption: frame.caption !== undefined ? frame.caption : current.caption,
+      };
+      return current;
+    }
 
     function paint(frame) {
       if (!frame || frame.v !== 1) return false;
-      const list = frame.rows || [];
+      const view = merge(frame);
+      const live = view.state === "race" || view.state === "count";
+      const list = view.rows || [];
       for (let i = 0; i < rows.length; i++) {
         const out = rows[i], row = list[i];
         out.el.hidden = i >= limit || !row;
@@ -62,32 +93,53 @@ const OverlayRender = (function () {
         out.team.style.background = row.team || "";
         out.el.dataset.you = row.you ? "1" : "";
       }
-      if (frame.battle !== undefined) {
-        battle.hidden = !frame.battle;
-        if (frame.battle) {
-          text(battleWho, frame.battle.ahead + "  ·  " + frame.battle.behind);
-          text(battleGap, Number(frame.battle.gapS).toFixed(2) + "s");
+      // Battles are race/count only — hide once the session leaves those states
+      // even if a stale patch omitted the battle key (stuck after the flag).
+      if (!live) {
+        battle.hidden = true;
+        if (current) current.battle = null;
+      } else {
+        battle.hidden = !view.battle;
+        if (view.battle) {
+          text(battleWho, view.battle.ahead + "  ·  " + view.battle.behind);
+          text(battleGap, Number(view.battle.gapS).toFixed(2) + "s");
         }
       }
-      if (frame.sectors && frame.sectors.last) {
+      if (view.sectors && view.sectors.last) {
         for (let i = 0; i < sec.length; i++) {
-          const s = frame.sectors.last[i] || {};
+          const s = view.sectors.last[i] || {};
           text(sec[i], s.value == null ? "S" + (i + 1) : s.glyph + Number(s.value).toFixed(3));
           sec[i].dataset.tone = s.tone || "";
         }
       }
-      if (frame.caption !== undefined) {
-        caption.hidden = !frame.caption;
-        if (frame.caption) {
-          text(capWho, frame.caption.n ? frame.caption.n + "  " + frame.caption.who : frame.caption.who);
-          text(capText, frame.caption.text);
-          caption.dataset.kind = frame.caption.kind || "";
+      if (view.caption !== undefined) {
+        caption.hidden = !view.caption;
+        if (view.caption) {
+          text(capWho, view.caption.n ? view.caption.n + "  " + view.caption.who : view.caption.who);
+          text(capText, view.caption.text);
+          caption.dataset.kind = view.caption.kind || "";
         }
       }
       return true;
     }
 
-    return { paint, rows };
+    // Dispose the painted chrome (feed stopped, race quit). Mirrors createDiffer.reset.
+    function clear() {
+      current = null;
+      for (let i = 0; i < rows.length; i++) {
+        rows[i].el.hidden = true;
+        rows[i].key = "";
+      }
+      battle.hidden = true;
+      caption.hidden = true;
+      caption.dataset.kind = "";
+      for (let i = 0; i < sec.length; i++) {
+        text(sec[i], "S" + (i + 1));
+        sec[i].dataset.tone = "";
+      }
+    }
+
+    return { paint, clear, rows };
   }
 
   function demoFrame(elapsed) {

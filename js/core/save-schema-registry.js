@@ -157,6 +157,8 @@ const SaveSchemaRegistry = (function () {
     "tlxViz": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxWarmFx": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxWarmPlus": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    // Written by tlx.js itself: WebKit's per-device kill switch (the failure reason); RESET RENDERER clears it.
+    "tlxWebKitGL": entry("js/render/three/tlx.js", "raw", 1, "rawScalar"),
     "track": entry("js/game.js", "json", 1, "json"),
     "trackFilter": entry("js/ui/select-screen.js", "json", 1, "json"),
     "trackId": entry("js/game.js", "json", 1, "string"),
@@ -179,6 +181,7 @@ const SaveSchemaRegistry = (function () {
     crashSeen: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
     crashSeenBuild: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
     benchRun: entry("js/perf/bench-run.js", "raw", 1, "string"),   // BENCHMARK plan + last results (JSON text), across its reloads
+    benchCapture: entry("js/perf/bench-capture.js", "raw", 1, "string"),   // BENCHMARK leg breadcrumb (JSON text): what led up to a reload that killed the leg
     customLogo: entry("js/career/custom-team.js", "json", 1, "json"),
     carSmooth: entry("js/car/car-shade.js", "raw", 1, "rawScalar"),
     freecamMarks: entry("js/camera/photo-kit.js", "json", 1, "json"),
