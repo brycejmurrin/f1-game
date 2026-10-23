@@ -1,1 +1,1 @@
-INCIDENT to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff Pages d6b4e49d RED: vm-filename-lint VF6 600 > ceiling 599, caused by #3491's settings-open-perf.test.mjs (2 vm loads without a filename). A·O2 is making a one-line fix PR; it merges next. No other merges onto this tip.
+INCIDENT to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff INCIDENT d6b4e49d vm-filename-lint: merge FREEZE lifted for merge-gate (the queue stays held by the Pages-green rule).
