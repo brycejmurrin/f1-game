@@ -36,6 +36,8 @@ unit. Rows marked † ran on a unit with unknown history. From e23476eb, `run` r
 
 | 16 | ~10:00 | 18 Pro Max 034D496E / B2620BE8 | live (10:10Z) | A·O6 `devicefarm-boot.mjs` (#3616) | cold boot to menu | first visit: FCP 1.15 s, load 1.75 s, title wired 1.52 s, 250 requests / 1.04 MB (240 JS, 2.4 MB decoded); after a Safari kill (warm cache) wired 0.26–0.30 s, FCP ~0.1 s; reload wired 1.1–1.2 s (revalidates 250 files); `?apex=1` adds ~0.86 s | — | #3616 |
 
+| 17 | 17:52 | iPhone 14 6F16A3E6 (fresh) | live ≥ b2cca9a2 (#3631) | A·D1 `--scenario tracks --tracks monza:night` | A·W14's `mirror().prep` capture, first WebGPU entry | entry 22.3 s; `programWarm` **17.9 s** (scene 10.8, draw 3.9, fx 2.2, post 0); `mirrorPrepare` ends 0.1 s after it; `prep`: 2 frames, 0 refused, 1 pass of 13 ms. The old 15.5 s mirror "gap" is gone: the cost is the cold WebGPU program compile itself. Race 59.8 fps, max 37 ms | — | this row |
+
 Not in this table: Fleet D's own iPhone 14 / 14 Pro sessions (`apex-iPhone14`, 01:27Z onward, Grok lane). Their
 numbers live with Fleet D. Ask DAD on the bus.
 
