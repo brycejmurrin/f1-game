@@ -187,7 +187,7 @@ test('cold preparation settles before the drive-out; a warm world opens on the g
   assert.match(cam, /if \(!cfg\.enabled\) return 0;/, 'the arrival tuner can disable drive-out');
   assert.ok(!/OUT_REDUCE_SPEED/.test(cam), 'reduce-motion plays the drive-out at the tuned pace, never a sped-up cut');
   assert.match(game, /function studioClose\(n\) \{\n  if \(!_studio \|\| _studio\.n !== n\) return;/, 'only the intro run that opened it closes it');
-  assert.match(game, /function afterGarageOut\(n, key, go, prepared, live\)/, 'every intro path awaits garage-out then shows the card through one handoff');
+  assert.match(game, /function afterGarageOut\(n, key, go, prepared, live, stage\)/, 'every intro path awaits garage-out then shows the card through one handoff');
 });
 
 test('a preparation that rejects during the drive-out is the PREPARATION FAILED banner, never an unhandled rejection (1a-F1)', async () => {
