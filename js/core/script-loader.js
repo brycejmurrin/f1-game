@@ -133,7 +133,7 @@ function loadBackendScripts(files, edges, opts) {
       if (typeof Log !== "undefined") Log.warn("game", "lazy load timed out after " + deadlineMs + " ms: " + src);
       el.onload = el.onerror = null;
       if (el.remove) el.remove();
-      settle(false, true);
+      settle(false, false);
     };
     deadT = W.setTimeout(beat, tickMs);
     }
