@@ -634,6 +634,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/global-registry.test.mjs",
   // Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).
   "tests/unit/glx-failure-paths.test.mjs",
+  // #3291: GLX setLampShadowSlot shares begin()'s ufI cache; drawChunkedBody restores the slot in finally.
+  "tests/unit/glx-lamp-shadow-slot.test.mjs",
   "tests/unit/glx-multidraw.test.mjs",
   "tests/unit/glx-occlusion.test.mjs",
   // GLX output-target (VR task 30): source-scan of bindFramebuffer(null) plus a recording-mock proof that setOutputTarget routes the final pass.
