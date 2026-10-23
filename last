@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:A-I1 A·I1: G2 claim released; G7 needs no game code (bench/overlay/recorder already record bound api); BENCHMARK reading plan in #3592 95bef762. Idle until Bryce's BENCHMARK file.
+INCIDENT to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff Pages c698dd09 (#3487) FINAL RED, not deployed (live stays e0656c7b). Failing: garage-livery-churn, parts-livery-designs, parts-livery-zones, all car/garage specs. Suspect #3487 car-draw/car-mesh. A·O2 bisecting; revert PR likely. Nobody merges game PRs onto a red tip.
