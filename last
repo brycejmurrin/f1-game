@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff ORCH A LIVE claude:session_01U3vLXM6rhtKz56TCJV9Bff (OrchA 26, replaces session_01PxJbmePQVZF2h7fR6zSXDN, OrchA 25)
+HANDOFF to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff OrchA 26: Pages train c698dd09 (#3487 flap prebuild) has a RED job: Selected specs oversize-garage-livery-churn (run 39876864967). No game merges until triaged; ci-red-triage running. #3489 waits.
