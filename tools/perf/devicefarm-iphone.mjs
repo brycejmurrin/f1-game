@@ -213,8 +213,8 @@ async function clearSafari(ctx) {
     wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: terminateApp", args: [{ bundleId: "com.apple.mobilesafari" }] });
     wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: activateApp", args: [{ bundleId: "com.apple.Preferences" }] });
     await sleep(2000);
-    for (const [name, pred] of [["Apps", "label == 'Apps' AND type == 'XCUIElementTypeCell'"], ["Safari", "label == 'Safari' AND type == 'XCUIElementTypeCell'"],
-      ["Clear", "label BEGINSWITH 'Clear History and Website Data'"], ["Confirm", "label BEGINSWITH 'Clear History' AND type == 'XCUIElementTypeButton'"]]) {
+    for (const [name, pred] of [["Apps", "(label == 'Apps' OR name == 'Apps') AND visible == 1"], ["Safari", "(label == 'Safari' OR name == 'Safari') AND visible == 1"],
+      ["Clear", "label BEGINSWITH 'Clear History and Website Data' AND visible == 1"], ["Confirm", "label BEGINSWITH 'Clear History' AND type == 'XCUIElementTypeButton' AND visible == 1"]]) {
       const ok = await tap(pred, name === "Clear" ? 10 : 6); steps.push(`${name}:${ok ? "ok" : "miss"}`); if (!ok && name !== "Apps") break;
     }
     try { shot(ctx.base, ctx.sid, path.join(ctx.out, `clear-${Date.now()}.png`)); } catch (_) { /* no shot */ }
