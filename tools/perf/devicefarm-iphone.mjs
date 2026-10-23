@@ -5,7 +5,7 @@
 //
 //   node tools/perf/devicefarm-iphone.mjs devices
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" [--legs 2|4|0] [--url URL] [--out DIR]
-//   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 14" [--legs 2] [--perf "Activity Monitor"|none] [--out DIR]
+//   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
 // `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
 // tools/perf/devicefarm-host.mjs (npm pack → zip), generates a test spec for the macos_tahoe host, uploads both,
@@ -233,7 +233,7 @@ async function uploaded(arn) {
 }
 
 async function auto() {
-  const want = opt("device", "iPhone 14"), legs = Number(opt("legs", "2")), perf = opt("perf", "Activity Monitor"), url = opt("url", SITE);
+  const want = opt("device", "iPhone 18 Pro Max"), legs = Number(opt("legs", "2")), perf = opt("perf", "none"), url = opt("url", SITE);
   const out = opt("out", path.join("artifacts", "devicefarm", "auto-" + new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)));
   const pkg = path.join(out, "pkg");
   fs.mkdirSync(pkg, { recursive: true });
