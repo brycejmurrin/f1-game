@@ -2744,6 +2744,15 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/perf/devicefarm-boot.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/perf/devicefarm-host.mjs",
       "classification": "ambiguous",
       "outputPolicy": "keep-native"
@@ -2767,6 +2776,15 @@
         "--json",
         "--out",
         "--quiet"
+      ]
+    },
+    {
+      "path": "tools/perf/ers-deploy-census.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
       ]
     },
     {
@@ -2834,6 +2852,12 @@
       "path": "tools/perf/runtime-memory.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/perf/touch-boost-probe.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
     },
     {
       "path": "tools/shot/ab-gallery.mjs",
