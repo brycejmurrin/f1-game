@@ -1,0 +1,79 @@
+# Device Farm ledger — every iPhone run so far (2026-10-23)
+
+One table of every AWS Device Farm run on Apex 26, so lanes stop re-deriving it. Method, tools and the full
+write-ups are in `AWS-DEVICE-FARM-IPHONE-2026-10-23.md` (§ references below) and in the PRs named in each row.
+Asked for by OrchA 28 (Bryce in OrchA 28's session, about 01:12 PT: "Any sessions that are idle or waiting review
+the aws runs and burn for more perf improvements"). Append new runs at the end of §1; do not rewrite old rows.
+
+All devices are iOS 27.0, Safari 27, three.js r185/r186 (TLX). "Build" is the live site at run time:
+- **pre** = before #3603/#3604; AUTO picks WebGL2 on WebKit.
+- **post** = live build 20919, after #3603 (AUTO picks WebGPU) and #3604 (warm-up fix; the stage is renamed
+  `mirrorPrepare` → `programWarm`).
+
+Device Farm keeps Safari's cache between sessions on a unit (§8), so a "first" entry is cold only on a known-unused
+unit. Rows marked † ran on a unit with unknown history. From e23476eb, `run` records the unit in `report.unit`.
+
+## 1. Runs
+
+| # | when (Z) | device | build | lane / tool | what | WebGPU result | WebGL2 result | where |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 01:39 | 18 Pro Max | pre | A·D1 `run --legs 0` | proof: AUTO boot | — | AUTO boots `api=webgl2` (`isWebKit`), `navigator.gpu` true | note §1 |
+| 2 | 01:44 | 18 Pro Max | pre | A·D1 `run --legs 2` | BENCHMARK paths, 1 leg/path | 60 fps all phases; cold 29.3 s (first leg); warm 821 ms | 60 fps; cold 6.5 s; warm 237 ms | §5 |
+| 3 | 02:03 | 18 Pro Max | pre | A·D1 `run --legs 4` | paths, GPU-WGL-WGL-GPU | 60 fps; cold 30.4 / 5.8 s (`mirrorPrepare` 28.2 / 4.1 s); warm 221–234 ms | 60 fps; cold 6.4 / 3.2 s (`mirrorPrepare` 4.7 / 1.6 s) | §6 |
+| 4 | 02:03 | iPhone 14 | pre | A·D1 `run --legs 4` | paths, GPU-WGL-WGL-GPU | **60 fps at every scale**; cold 33.9 / 9.4 s (`mirrorPrepare` 30.0 s = safety timer, window 55.4 s); warm 2.9 s / 412 ms | **42 fps at full res** (p95 34 ms), 51 at 0.75, 55.7 default; fill 8.07 ms/full frame; cold 11.8 / 5.7 s | §6 |
+| 5 | 02:26 | iPhone 14 | pre | A·D1 `auto` + Instruments | automated, 2 legs | leg 1 started; Safari debugger wedged after xctrace "Device got disconnected"; 33.7 device-min, no result | — | §7 |
+| 6 | ~02:30 | iPhone 14 | pre | A·W14 (#3604 BEFORE) | paths, WGL first | first WebGPU leg warm 42.9 s (scene 16.6, mirror 16.9, draw 5.2, fx 4.2) | first WebGL2 leg 9.4 s | #3604, §6 correction |
+| 7 | 02:53 | 18 Pro Max | pre | A·D1 `auto` + Instruments | automated, 2 legs | cold 31.6 s (`mirrorPrepare` 29.4 s); warm 228 ms; 60 fps; Instruments trace only 3 s | cold 7.2 s; warm 247 ms; 60 fps | §7 |
+| 8 | ~03:0x | 18 Pro Max † | #3603 branch + #3604 | A·W13 (raw.githack) | AUTO visual check, storage cleared | `api=webgpu`, `gpuErrors 0`; bodywork, sky and helmet cam render; entry first 10.5 s (`mirrorPrepare` 7.2 s), after reload 3.8 s (2.4 s) | — | #3603 Plan |
+| 9 | 06:59–07:17 | 18 Pro Max † | 6931fdf7 (#3604) | A·W14 AFTER on/off | paths ×4, WGL first, `?tlxMirMrt=0` off arm | first WebGPU cold build on 16.1 s / off 11.5 s ⚠ (off ran second, warm cache); mirror stage on 536 / off 1 475 ms | first WebGL2 cold on 9.3 / off 13.2 s; mirror 299 / 2 432 ms | #3604 comment 6359610979 |
+| 10 | 07:07 | 18 Pro Max † | post | A·D1 `run --scenario cache` | entry: first / reload / reload / Safari kill | `programWarm` 7.3 / 2.3 / 0.24 / **0.24 s**; window 9.1 / 3.8 / 1.7 / 2.8 s | `programWarm` 2.3 / 0.37 / 0.37 / 0.24 s; window 5.3 / 1.9 / 2.9 / 1.9 s | §8 |
+| 11 | 07:23 | 18 Pro Max † | post | A·D1 `run --scenario races` | 6 races per path | 60 fps all; p99 17–22 ms; cold Monza dry 10.2, rain 5.1, **night 14.1**, Singapore night 3.0, Spa rain 2.8, Monaco 2.5 s | 60 fps all; p99 21–25 ms; cold 5.3 / 2.9 / 3.6 / 2.8 / 3.5 / 2.8 s | §9 |
+
+Not in this table: Fleet D's own iPhone 14 / 14 Pro sessions (`apex-iPhone14`, 01:27Z onward, Grok lane). Their
+numbers live with Fleet D. Ask DAD on the bus.
+
+Also seen, not yet reproduced (OrchA 27's read of the raw artifacts):
+- An iPhone 14 WebGPU session logged `TLX: present failed — GPUDevice.createBuffer: Unable to create buffer`:
+  memory pressure on a 6 GB phone.
+- Every phone logs `TLX on a phone: three keeps ~54 MB of CPU geometry copies`.
+
+## 2. Ranked opportunities (from §1)
+
+1. **First-run WebGPU warm-up on mid-range phones (iPhone 14).** Pre-fix, the first WebGPU entry ran 34–55 s
+   there, and `mirrorPrepare` hit the 30 s safety timer twice (row 4). #3604 cut the mirror stage 3–25× on the
+   18 Pro Max (row 9), and AUTO now sends every iOS 26+ phone down this path (#3603). **The post-fix build has
+   never been measured on an iPhone 14.** That is the highest-value missing run, because it is the device class
+   where WebGPU wins on frame rate (row 4) and loses most on entry. It needs Fleet D's device or a cross-fleet ask.
+2. **Per-variant WebGPU pipeline builds (row 11).** The first night race costs 14.1 s against 3.6 s on WebGL2,
+   and the first rain race 5.1 s against 2.9 s. Fix: pre-warm the night and rain variants on the menu or during
+   the countdown. Owner: A·W14 (assigned by Bryce via OrchA 27).
+3. **The deferred `post` pipelines on the second load (row 10):** 1.9 s of the 2.4 s WebGPU warm after the first
+   reload. Compile them in the first warm or in idle time after it, so the second race is also instant.
+4. **Path-independent entry floor of about 2 s (rows 10, 11):** `gridCountdown` 0.73–0.86 s, `warmCarAssets`
+   0.69–0.82 s, `loadTrack` 0.36–0.41 s, and about 1 s of `scenery` when uncached. With shaders warm, this is now
+   most of every race entry on every phone and renderer.
+5. **WebGPU memory headroom on 6 GB phones.** The iPhone 14 `createBuffer` failure (OrchA 27's read) and the
+   54 MB CPU geometry copies. A device loss there now flips the phone to WebGL2 permanently through #3603's
+   kill switch (`apex26.tlxWebKitGL`), which silently costs those players the 7–43 % frame-rate win from row 4 (default to full resolution).
+6. **Instrumentation gaps.**
+   - WebGPU `timestamp-query` reads 45–97 ms per frame on iOS while frames arrive every 16.7 ms, so it is unusable
+     as absolute GPU time (§5, §6).
+   - On the 18 Pro Max both paths sit at Safari's 60 Hz rAF cap, so frame time cannot rank them there.
+   - Use a GPU-bound phone (iPhone 14), or a CPU frame-work metric, for render A/Bs.
+
+## 3. How to run Device Farm (for other lanes)
+
+- **Tool:** `node tools/perf/devicefarm-iphone.mjs`:
+  - `devices`
+  - `run --device "<name>" [--legs 0|2|4] [--scenario cache|races --pins webgpu,webgl2] [--url <public https>]`
+  - `auto` (server-side; adds video, syslog and a tcpdump; Instruments is unusable)
+- **Setup:** unzip AWS CLI v2 (https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip) into your scratchpad,
+  then set `APEX_AWS_CLI=<dir>/bin/aws` and `AWS_CA_BUNDLE=/root/.ccr/ca-bundle.crt`. Credentials come from env;
+  never print them. Expect your auto-mode classifier to ask Bryce before the CLI install and before the first
+  metered session.
+- **Before a run:** claim the device on the bus:
+  `node tools/ci/fleet-bus.mjs send HANDOFF --to A "DF CLAIM <device> <lane> <min>"`.
+  Fleet A uses the iPhone 18 Pro Max; Fleet D uses the iPhone 14 and 14 Pro. Sessions sit in STOPPING for minutes
+  after they end and count against account concurrency (`PENDING_CONCURRENCY`).
+- **Budget:** the account's 1,000-minute free trial had 779.87 minutes left at 07:35Z (both fleets combined).
+  `aws devicefarm get-account-settings --query accountSettings.trialMinutes` reads the current balance.
