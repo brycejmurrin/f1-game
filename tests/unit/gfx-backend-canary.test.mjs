@@ -6444,8 +6444,11 @@ test("TLX FX: double-sided FX draw in ONE pass and their programs warm on the st
     assert.match(body, pair, "the FX warm compiles " + pair + " on its real stream geometry");
   assert.match(body, /ensureStream\(stream, 1\)/, "the stream geometry (its vertex layout) exists before the compile");
   assert.match(fnBody(tlx, "runProgramWarmStages"), /await warmFxPrograms\(\);\s*await warmLateLit\(\);/, "runProgramWarmStages runs the FX warm, then the late lit variants");
-  assert.match(tlx, /const _LATE_LIT = \[\{ roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 0\.5 \}\]/,
-    "the brake-ring transparent variant (census 245 minted t,0.9,0,0,0,0,0,1|na) is pre-minted during the lights");
+  assert.match(tlx, /const _LATE_LIT = \[\{ roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 0\.5 \},\s*\{ doubleSided: true, roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 0\.5 \}\]/,
+    "the brake-ring transparent variant (census 245 minted t,0.9,0,0,0,0,0,1|na) and the cockpit ERS bar's double-sided one (…|ds|na, the first-BOOST stall) are pre-minted during the lights");
+  // The ds variant must stay the cockpit rig's key: drift in either table re-opens the first-BOOST stall.
+  assert.match(code("js/car/car-draw.js"), /_rigFxA = \{ doubleSided: true, emissive: 1\.0, roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 1 \}/,
+    "car-draw's _rigFxA (dash ERS bar, OT lamp) matches the double-sided _LATE_LIT variant");
 });
 
 test("lamp shadow: the player takes the AI cars' lamp-radius bound in BOTH the key and the cast (TLX-PERF-PLAN L0)", () => {
