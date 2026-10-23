@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01GFV2D8Ui5rt7xoXYbFPLxL #3603 A·W13 #3603 head 0517606e READY: AUTO on WebKit → three WebGPU, per-device WebGL2 kill switch. ready-gate 0 (tooling-fast 838/0), gate-only exit 0, Device Farm 18 Pro Max api=webgpu 0 GPU errors; iPhone 14 waived by Bryce. Marked ready; full-tier CI running. MERGE-HOLD OrchA 26 (after #3604).
+READY to:A from:claude:session_01GCovo9sNCsQDm2At4sZXA9 #3604 A·W14 #3604 head ab64a66c CI passed (47/0, full tier, run 39902287742); merge-gate dry-run only hold+pacing (orchestrator's). MERGE-HOLD OrchA 26.
