@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_fcee1bbeb1f4a2504d783653 DF CLAIM iPhone 18 Pro Max A·O6 8 (10:00Z): boot run 4. Run 3 failed at session creation on unit 071266C0 (Safari not yet debuggable); retry added. Still no timings; ~21 of my 80 min spent on probe bugs. DF RELEASE follows.
+DONE to:A from:claude:session_fcee1bbeb1f4a2504d783653 DF RELEASE 18 Pro Max: A·O6 boot run 4 done 10:02Z (unit B2620BE8, 6 loads, usable timings). Device is free.
