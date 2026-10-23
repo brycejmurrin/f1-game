@@ -1,0 +1,20 @@
+{
+  "pairs": [
+    { "id": "beams-bahrain-night-off-medium", "title": "Bahrain night · VISOR BEAMS 0 % → 100 %", "note": "The flood masts' beams, star flares and halos appear at 100 % (the shipped default); 0 % keeps the glints alone.",
+      "scene": { "track": "bahrain", "tod": "night", "weather": "dry", "camera": "helmet", "frac": 0.18 },
+      "a": { "label": "Beams 0 %", "visor": "clear", "visorReflections": "medium", "visorRefraction": "light", "visorBeams": "0" },
+      "b": { "label": "Beams 100 %", "visor": "clear", "visorReflections": "medium", "visorRefraction": "light", "visorBeams": "100" } },
+    { "id": "beams-bahrain-night-medium-strong", "title": "Bahrain night · VISOR BEAMS 100 % → 160 %", "note": "160 % lengthens and brightens every beam and star flare; the glints themselves do not change.",
+      "scene": { "track": "bahrain", "tod": "night", "weather": "dry", "camera": "helmet", "frac": 0.18 },
+      "a": { "label": "Beams 100 %", "visor": "clear", "visorReflections": "medium", "visorRefraction": "light", "visorBeams": "100" },
+      "b": { "label": "Beams 160 %", "visor": "clear", "visorReflections": "medium", "visorRefraction": "light", "visorBeams": "160" } },
+    { "id": "beams-spa-dusk-sun-off-strong", "title": "Spa dusk into the sun · VISOR BEAMS 0 % → 160 %", "note": "The low sun's god rays are part of BEAMS: none at 0 %, longest at 160 %; the sun's glint stays either way.",
+      "scene": { "track": "spa", "tod": "dusk", "weather": "dry", "camera": "helmet", "frac": 0.55 },
+      "a": { "label": "Beams 0 %", "visor": "clear", "visorReflections": "medium", "visorRefraction": "light", "visorBeams": "0" },
+      "b": { "label": "Beams 160 %", "visor": "clear", "visorReflections": "medium", "visorRefraction": "light", "visorBeams": "160" } },
+    { "id": "beams-monaco-tunnel-light-strong", "title": "Monaco tunnel · VISOR BEAMS 60 % → 160 %", "note": "The soffit lamps' short downward beams at 60 % against 160 %.",
+      "scene": { "track": "monaco", "tod": "night", "weather": "dry", "camera": "helmet", "frac": 0.46 },
+      "a": { "label": "Beams 60 %", "visor": "clear", "visorReflections": "medium", "visorRefraction": "light", "visorBeams": "60" },
+      "b": { "label": "Beams 160 %", "visor": "clear", "visorReflections": "medium", "visorRefraction": "light", "visorBeams": "160" } }
+  ]
+}

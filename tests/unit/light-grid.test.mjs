@@ -202,44 +202,48 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
     `lampReach max ${get("lampReach").max} is past the measured saturate at 4`);
 });
 
-test("GRAPHICS: LOW must not zero look-defining post (bloom/SSAO/god-rays)", () => {
-  // GRAPHICS: LOW sets userTier 4, and present() used to hard-zero po.bloom
-  // (and the rest of the last post stack) on PerfGov.tier() >= 4. That made
-  // BLOOM AMOUNT and every sibling look slider a no-op on LOW even on a
-  // healthy desktop. Look post reads autoTier() (crash + measured only);
-  // cost rungs (env/SSR/shadows) still read tier() so LOW stays cheaper.
+test("GRAPHICS: LOW sheds look-defining post via lookPostShed (bloom/SSAO/god-rays)", () => {
+  // GRAPHICS: LOW sets userTier 4. autoTier alone left bloom/SSAO/god-rays
+  // ON on a healthy phone (slower than MEDIUM on iPhone WebGPU). lookPostShed
+  // is true on LOW (and at measured/crash tier 4); autoTier stays free for
+  // wet-road SSR. Cost rungs (env/SSR/shadows) still read tier().
   const game = read("js/game.js");
   const gfx = read("js/perf/quality-preset.js");
-  assert.match(gfx, /id:\s*"low"[\s\S]*?tier:\s*4/,
+  assert.ok(/id:\s*"low"[\s\S]*?tier:\s*4/.test(gfx),
     "LOW must stay a cost-floor of 4 (env/SSR/shadows still shed)");
+  const pfx = read("js/ui/post-fx-opts.js");
+  assert.ok(pfx.includes("PerfGov.lookPostShed"), "applyLookShed must read lookPostShed");
+  assert.ok(game.includes("PostFxOpts.applyLookShed(po,"), "present path must call applyLookShed");
   for (const id of ["bloom", "ssao", "godray", "contact", "lampVol"]) {
-    assert.match(game, new RegExp(`po\\.${id} = PerfGov\\.autoTier\\(\\) >= 4`),
-      `po.${id} must shed on autoTier (governor/crash), not the GRAPHICS user floor`);
-    assert.doesNotMatch(game, new RegExp(`po\\.${id} = PerfGov\\.tier\\(\\) >= 4`),
-      `po.${id} must not hard-zero on GRAPHICS: LOW`);
+    assert.ok(pfx.includes(`po.${id} = off ? 0 : v.${id}`),
+      `po.${id} must follow lookPostShed via applyLookShed`);
+    assert.equal(new RegExp(`po\\.${id} = PerfGov\\.tier\\(\\) >= 4`).test(game), false,
+      `po.${id} must not hard-zero on tier() alone`);
   }
-  assert.match(game, /PostCommon\.roadReflection\(po, frame\.wetness \|\| 0, _ssrPo, PerfGov\.tier\(\), PerfGov\.autoTier\(\),\s*_roadReflectionTransition,/,
+  assert.ok(/PostCommon\.roadReflection\(po, frame\.wetness \|\| 0, _ssrPo, PerfGov\.tier\(\), PerfGov\.autoTier\(\),\s*_roadReflectionTransition,/.test(game),
     "road reflections distinguish the user quality budget from measured overload");
-  assert.match(game, /po\.carReflect = PerfGov\.tier\(\) >= 2 \? 0 : undefined/,
+  assert.ok(game.includes("po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined"),
     "car-paint SSR stays on the user cost floor");
   const byId = new Map(defs().map((d) => [d.id, d]));
   for (const id of ["bloomMul", "bloomSpread", "threshOff", "bloomKnee",
                     "grMul", "aoStr", "contactStr"]) {
     const d = byId.get(id);
     assert.ok(d, `${id} missing from TUNE_DEFS`);
-    assert.match(d.help || "", /GRAPHICS: LOW/,
-      `${id} help must say the slider stays live on GRAPHICS: LOW`);
+    assert.ok(/GRAPHICS: LOW/.test(d.help || ""),
+      `${id} help must name GRAPHICS: LOW (look-post shed)`);
+    assert.ok(/Off on GRAPHICS: LOW/.test(d.help || ""),
+      `${id} help must say the pass is off on LOW`);
   }
   for (const id of ["ssrWetMul", "ssrDryNight", "ssrDryDay", "ssrThick",
                     "carReflect", "lampShadow"]) {
     const d = byId.get(id);
     assert.ok(d, `${id} missing from TUNE_DEFS`);
-    assert.match(d.help || "", /GRAPHICS/,
+    assert.ok(/GRAPHICS/.test(d.help || ""),
       `${id} help must name the GRAPHICS cost shed so a dead LOW/MEDIUM slider is not a mystery`);
   }
   const carSh = byId.get("carShadow");
   assert.ok(carSh, "carShadow missing from TUNE_DEFS");
-  assert.match(carSh.help || "", /GRAPHICS: LOW/,
+  assert.ok(/GRAPHICS: LOW/.test(carSh.help || ""),
     "carShadow help must name GRAPHICS: LOW (tier-3 cost shed)");
 });
 

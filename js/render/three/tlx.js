@@ -974,15 +974,20 @@ const TLX = (function () {
       // forceWebGL path already owns #game as WebGL2 (ownGL above).
       function detectSoftwareGL() {
         try {
-          const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+          const gl = (renderer.backend && renderer.backend.gl)
+            || canvas.getContext("webgl2") || canvas.getContext("webgl");
           if (!gl) return false;
           const ext = gl.getExtension("WEBGL_debug_renderer_info");
           const name = ((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || "")
             + " " + (gl.getParameter(gl.RENDERER) || "");
-          return /swiftshader|llvmpipe|softpipe|microsoft basic render|gdi generic/i.test(name);
+          return /swiftshader|llvmpipe|lavapipe|softpipe|microsoft basic render|gdi generic|subzero/i.test(name);
         } catch (_) { return false; }
       }
-      const softwareGL = forceWebGL ? detectSoftwareGL() : !!_softAdapter;
+      // Adapter sniff alone misses AUTO→WebGL2 when requestAdapter() is null or
+      // reports trimmed info (production SwiftShader). Classify from the LIVE
+      // WebGL renderer string — never from softPresent/headless UA (#3601).
+      const softwareGL = !!_softAdapter
+        || (!!(renderer.backend && renderer.backend.isWebGLBackend) && detectSoftwareGL());
       try {
         if (canvas && typeof canvas.setAttribute === "function") {
           const api = (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2";
@@ -3143,11 +3148,16 @@ const TLX = (function () {
       // (car-draw.js _ringOpts) is queued only once a disc is hot, so its first
       // draw is the first braking zone, at alpha ~0.3 — the TRANSPARENT ("t,")
       // variant of a key the grid never draws. Census 245 caught it as the one
-      // material minted mid-race and its one lazy pipeline. The cockpit ERS /
-      // overtake / aero-flap pulses share that key. Mint it during the lights and
-      // compile it once per vertex layout already in the pool: the pipeline also
-      // keys on the layout, and tlx-chunked's pack makes layouts differ by mesh.
-      const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
+      // material minted mid-race and its one lazy pipeline. The cockpit dash ERS
+      // bar and armed overtake lamp (car-draw.js _rigFxA) pulse the same opts
+      // DOUBLE-SIDED, a key of their own ("t,0.9,…|ds|na") first drawn on the
+      // first ERS deploy: the first BOOST tap on WebGPU waited 734–934 ms for its
+      // pipeline (A·W15, iPhone 18 Pro Max, cockpit cam). Mint both during the
+      // lights and compile each once per vertex layout already in the pool: the
+      // pipeline also keys on the layout, and tlx-chunked's pack makes layouts
+      // differ by mesh.
+      const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 },
+        { doubleSided: true, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
       // THE LAUNCH'S FX VARIANTS (FieldLod warm, js/car/field-lod.js): the
       // throttle-lift exhaust flame (car-draw.js _flameOpts, alpha < 1) and the
       // ERS strip's two phases (_ersLightOpts, alpha 1 / 0.6) are first drawn when

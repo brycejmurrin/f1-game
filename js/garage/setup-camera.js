@@ -72,7 +72,9 @@ function presentOpts(tune) {
   const bloomMul = _tuneNum(T, "bloomMul", 1);
   const threshOff = _tuneNum(T, "threshOff", 0);
   const phone = garagePhone();
-  const shed = phone || (typeof PerfGov !== "undefined" && PerfGov.autoTier && PerfGov.autoTier() >= 4);
+  const shed = phone || (typeof PerfGov !== "undefined" && (
+    (PerfGov.lookPostShed && PerfGov.lookPostShed())
+    || (PerfGov.autoTier && PerfGov.autoTier() >= 4)));
   const t = SP_THRESH + threshOff;
   const threshold = (t < 0.4 ? 0.4 : t > 1.2 ? 1.2 : t) * SP_EXPOSURE;
   // Kill screen sun-shafts regardless of the race slider / track preset.

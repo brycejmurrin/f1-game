@@ -18,12 +18,15 @@ Selector metadata: --race monza --timing night --weather dry --camera helmet --e
 Writes comparisons.html + comparisons.json + content-addressed images; retains existing pairs.
 Recipe: {"pairs":[{"id":"rain-visor","title":"Rain visor","scene":{"track":"bahrain","tod":"night","weather":"rain","camera":"helmet","frac":0.18},"a":{"label":"Original","visor":"off"},"b":{"label":"Clear shield","visor":"clear","visorRefraction":"strong","visorReflections":"strong"}}]}
 Captures use one disposable WebGL2 browser, Ultra, 1920x1080, reduced motion and a frozen shared scene.
+  --viewport 844x390 --touch   phone landscape with a touch HUD (the owner's profile); --tag phone suffixes every pair id
 Wetness is pinned to the weather target for comparison; rainfall may still be ramping.
 Import equal-size images to compare different code revisions or any other captured settings.
 Serve the gallery over HTTP; publish separately. No credentials or hosting identity are needed.
 `;
-const optics={visor:['off','clear','smoke'],visorColor:['neutral','amber','ice','rose'],visorIntensity:['light','medium','strong'],visorRefraction:['off','light','medium','strong'],visorReflections:['off','light','medium','strong'],visorRain:['off','light','normal','heavy'],visorRunoff:['slow','normal','fast']};
-const defaults={visor:'off',visorColor:'neutral',visorIntensity:'light',visorRefraction:'off',visorReflections:'off',visorRain:'off',visorRunoff:'normal'};
+const optics={visor:['off','clear','smoke'],visorColor:['neutral','amber','ice','rose'],visorIntensity:['light','medium','strong'],visorRefraction:['off','light','medium','strong'],visorReflections:['off','light','medium','strong'],visorBeams:[],visorRain:['off','light','normal','heavy'],visorRunoff:['slow','normal','fast']};
+const defaults={visor:'off',visorColor:'neutral',visorIntensity:'light',visorRefraction:'off',visorReflections:'off',visorBeams:'100',visorRain:'off',visorRunoff:'normal'};
+// visorBeams is the cockpit SLIDER: a percent 0..200 (CockpitOpts.setVisorBeams takes the percent), not a level word.
+function beamsPercent(v){const n=Number(v);if(!Number.isFinite(n)||n<0||n>200)throw new Error('invalid visor setting: visorBeams='+v+' (0..200 percent)');return String(Math.round(n));}
 function id(value){if(typeof value!=='string'||!/^[a-z0-9][a-z0-9_-]{0,79}$/.test(value))throw new Error('id must be a lowercase slug (1..80 characters)');return value;}
 export function selectionFields(raw={}){
  const selected={};
@@ -40,7 +43,7 @@ export function recipePairs(data){
   const key=id(p.id);if(seen.has(key))throw new Error('duplicate recipe id: '+key);seen.add(key);
   const scene={track:'bahrain',tod:'night',weather:'rain',camera:'helmet',frac:.18,...p.scene};
   if(!/^[a-z0-9_-]+$/.test(scene.track)||!['day','dawn','dusk','night'].includes(scene.tod)||!['dry','wet','rain','storm','fog','overcast'].includes(scene.weather)||!Number.isFinite(scene.frac)||scene.frac<0||scene.frac>=1||!/^\w+$/.test(scene.camera))throw new Error('invalid scene: '+key);
-  const side=(raw={},fallback)=>{const settings={...defaults};for(const [k,v] of Object.entries(raw)){if(k==='label')continue;if(!optics[k]?.includes(v))throw new Error('invalid visor setting: '+k+'='+v);settings[k]=v;}return {label:String(raw.label||fallback),settings};};
+  const side=(raw={},fallback)=>{const settings={...defaults};for(const [k,v] of Object.entries(raw)){if(k==='label')continue;if(k==='visorBeams'){settings[k]=beamsPercent(v);continue;}if(!optics[k]?.includes(v))throw new Error('invalid visor setting: '+k+'='+v);settings[k]=v;}return {label:String(raw.label||fallback),settings};};
   const a=side(p.a,'Original'),b=side(p.b,'Candidate');
   const changed=Object.keys(optics).filter(k=>a.settings[k]!==b.settings[k]);
   const effect=p.effect||(changed.length===1&&changed[0]==='visorReflections'?'reflections':changed.length===1&&changed[0]==='visorRefraction'?'refraction':'combined');
@@ -73,7 +76,16 @@ export async function addPair({gallery,id:pairId,title,a,b,aLabel='Original',bLa
  return pair;
  }finally{await lock.close();await fs.unlink(lockPath);}
 }
-export async function capturePairs(pairs,gallery){
+export function parseViewport(raw){
+ if(raw==null||raw==='')return {width:1920,height:1080};
+ const m=/^(\d{3,4})x(\d{3,4})$/.exec(String(raw));
+ if(!m)throw new Error('--viewport takes WxH, e.g. 844x390');
+ return {width:+m[1],height:+m[2]};
+}
+export async function capturePairs(pairs,gallery,{viewport=null,touch=false,tag=''}={}){
+ viewport=viewport||{width:1920,height:1080};
+ if(tag&&!/^[a-z0-9][a-z0-9_-]{0,19}$/.test(tag))throw new Error('--tag must be a short lowercase slug');
+ if(tag)pairs=pairs.map(p=>({...p,id:p.id+'-'+tag,title:p.title+' · '+tag}));
  const {launchChromium,startStaticServer,shutdown}=await import('../lib/harness.mjs');
  const {installProbeInit,gotoGame,mutateCaptureScene,awaitCaptureReady,screenshotPresentedCanvas,chromiumArgsForBackend}=await import('./probe-page.mjs');
  const {pixelEvidence}=await import('./capture-contract.mjs');
@@ -81,10 +93,10 @@ export async function capturePairs(pairs,gallery){
  const source={sha:execFileSync('git',['rev-parse','HEAD'],{cwd:ROOT,encoding:'utf8'}).trim(),dirty:!!execFileSync('git',['status','--porcelain'],{cwd:ROOT,encoding:'utf8'}).trim()};
  await fs.mkdir(path.join(ROOT,'artifacts'),{recursive:true});
  const captureDir=await fs.mkdtemp(path.join(ROOT,'artifacts/ab-capture-'));
- const report={source,viewport:{width:1920,height:1080},reducedMotion:true,pairs:[],verdict:'RUNNING'};
+ const report={source,viewport,touch,tag,reducedMotion:true,pairs:[],verdict:'RUNNING'};
  try{await runBoundedCapture(async()=>{
   const server=await startStaticServer(ROOT),browser=await launchChromium({args:chromiumArgsForBackend('webgl2')});
-  const context=await browser.newContext({viewport:report.viewport,deviceScaleFactor:1,reducedMotion:'reduce'}),page=await context.newPage();
+  const context=await browser.newContext({viewport,deviceScaleFactor:1,reducedMotion:'reduce',hasTouch:!!touch}),page=await context.newPage();
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await installProbeInit(page,{backend:'webgl2'});await page.addInitScript(()=>{localStorage.setItem('apex26.gfxPreset',JSON.stringify('ultra'));localStorage.setItem('apex26.gfxHigh','1');});
   await gotoGame(page,server.url);await page.evaluate(()=>__apex.agentHelp());let currentScene=null,identity=null;
@@ -109,7 +121,7 @@ export async function capturePairs(pairs,gallery){
     if(!(await pixelEvidence(shot.buf)).meaningful)throw Error('blank screenshot');
    }
    if(errors.length)throw Error(errors.join('\n'));
-   await addPair({gallery,id:pair.id,title:pair.title,...paths,aLabel:pair.a.label,bLabel:pair.b.label,selection:pair.selection,note:pair.note,provenance:{...source,scene:pair.scene,identity,settings:{a:pair.a.settings,b:pair.b.settings},reducedMotion:true}});
+   await addPair({gallery,id:pair.id,title:pair.title,...paths,aLabel:pair.a.label,bLabel:pair.b.label,selection:pair.selection,note:pair.note,provenance:{...source,scene:pair.scene,identity,settings:{a:pair.a.settings,b:pair.b.settings},reducedMotion:true,viewport,touch:!!touch}});
    report.pairs.push({id:pair.id,identity});console.log('ADDED',pair.id);
   }
   await page.evaluate(()=>__apex.lightTune({wetness:-.05}));
@@ -118,11 +130,11 @@ export async function capturePairs(pairs,gallery){
  finally{await fs.writeFile(path.join(captureDir,'report.json'),JSON.stringify(report,null,2));await shutdown();console.log('REPORT',captureDir);}
 }
 async function main(){
- const {values:v}=parseArgs({options:{help:{type:'boolean'},capture:{type:'string'},add:{type:'boolean'},a:{type:'string'},b:{type:'string'},id:{type:'string'},title:{type:'string'},'a-label':{type:'string'},'b-label':{type:'string'},race:{type:'string'},timing:{type:'string'},weather:{type:'string'},camera:{type:'string'},effect:{type:'string'},position:{type:'string'},note:{type:'string'},gallery:{type:'string',default:'artifacts/ab-gallery'}},strict:true});
+ const {values:v}=parseArgs({options:{help:{type:'boolean'},capture:{type:'string'},add:{type:'boolean'},a:{type:'string'},b:{type:'string'},id:{type:'string'},title:{type:'string'},'a-label':{type:'string'},'b-label':{type:'string'},race:{type:'string'},timing:{type:'string'},weather:{type:'string'},camera:{type:'string'},effect:{type:'string'},position:{type:'string'},note:{type:'string'},gallery:{type:'string',default:'artifacts/ab-gallery'},viewport:{type:'string'},touch:{type:'boolean'},tag:{type:'string',default:''}},strict:true});
  if(v.help){console.log(HELP);return;}
  if(!!v.capture===!!v.add)throw Error('choose --capture recipe.json OR --add (see --help)');
  const gallery=path.resolve(v.gallery);
- if(v.capture)await capturePairs(recipePairs(JSON.parse(await fs.readFile(v.capture,'utf8'))),gallery);
+ if(v.capture)await capturePairs(recipePairs(JSON.parse(await fs.readFile(v.capture,'utf8'))),gallery,{viewport:parseViewport(v.viewport),touch:!!v.touch,tag:v.tag});
  else{if(!v.a||!v.b||!v.id)throw Error('--add requires --a, --b and --id');await addPair({gallery,id:v.id,title:v.title,a:v.a,b:v.b,aLabel:v['a-label'],bLabel:v['b-label'],selection:selectionFields(v),note:v.note});}
  console.log('A/B gallery:',path.join(gallery,'comparisons.html'));
 }

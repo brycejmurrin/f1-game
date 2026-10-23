@@ -96,6 +96,20 @@ test("clearStrikes() is the manual way out", () => {
   assert.equal(store["apex26.crashStrikes"], "0", "and it survives the next boot");
 });
 
+test("paying a strike down on GRAPHICS: MEDIUM releases autoTier to the new crash floor (#3294)", () => {
+  // init seeds _perfTier at the crash floor; the release used to compare
+  // against _floorTier(), which folds in the preset, so 2 > 2 kept it at 2.
+  for (const pay of ["cleanRace", "clearStrikes"]) {
+    const g = boot({ "apex26.crashStrikesBuild": "900", "apex26.crashStrikes": "1" }, 900);
+    g.setUserTier(2);
+    assert.equal(g.autoTier(), 2, "one strike floors autoTier at 2");
+    g[pay]();
+    assert.equal(g.tierFloor(), 0, `${pay} lifts the crash floor`);
+    assert.equal(g.autoTier(), 0, `${pay} releases autoTier with it: bloom, SSAO, god rays come back`);
+    assert.equal(g.tier(), 2, "the GRAPHICS preset still floors tier() at read time");
+  }
+});
+
 test("a menu world build that never raced is not a crash", () => {
   // js/game.js loadTrackStepped arms SENT_ACTIVE for Home/flyby prep. A reload
   // during post-Quali SCENE LOADING left that flag set with no race frame.
