@@ -199,6 +199,10 @@ test("the folded per-circuit data reaches the built def", () => {
   assert.equal(typeof ctx.CircuitMarkings, "undefined", "CircuitMarkings must not exist any more");
   for (const k of ["BARRIER", "FURN", "KIT", "STYLES", "STAND_SETS"])
     assert.equal(ctx.TrackSceneryData[k], undefined, `TrackSceneryData.${k} must not exist any more`);
+  // #3298: KIT_DEF's per-theme rows were identical copies of each emitter's
+  // own default and never selected (every circuit ships `kit`); api.kitOf now
+  // falls straight from def.kit to the emitter default.
+  assert.equal(ctx.TrackSceneryData.KIT_DEF, undefined, "TrackSceneryData.KIT_DEF must not exist any more");
   // The SHIPPED roster. A `custom` entry is one the track designer registered
   // from the player's own storage (js/editor/custom-tracks.js); it is appended
   // after the shipped roster and never counts here. The roster is the manifest's

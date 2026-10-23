@@ -143,6 +143,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // #1682: repo-wide assert.match under tests/unit only goes down (source-pin → behaviour).
   "tests/unit/assert-match-ratchet.test.mjs",
   "tests/unit/assets-pack.test.mjs",
+  // #3296: material filmstrip PNGs require albedoMd5/normalMd5 (same as model md5).
+  "tests/unit/assets-verify-material-md5.test.mjs",
   "tests/unit/audio-mix-improvements.test.mjs",
   // Round-2: MUSIC OFF never decodes the menu track (setMusic before setSound) and rows changed before the race bundle lands reach the store, not the stub.
   "tests/unit/audio-panel-boot.test.mjs",
@@ -1104,6 +1106,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/screen-looks.test.mjs",
   // Lazy bundles preload every gated wave and still evaluate in edge order; the boot preloads its likely backend (B·H8 load hunt).
   "tests/unit/script-loader-preload.test.mjs",
+  // #3295: a strict retry after a sibling failure must not re-append a classic script that already evaluated.
+  "tests/unit/script-loader-retry-eval.test.mjs",
   "tests/unit/script-loader-starved.test.mjs",
   "tests/unit/script-loader-throw.test.mjs",
   "tests/unit/scroll-strips.test.mjs",

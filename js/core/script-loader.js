@@ -88,6 +88,13 @@ const SLOW_MS = 10000, DEADLINE_MS = 25000;
 // Transient github.io 5xx on a lazy <script>: retry the SAME file with a fresh
 // query key before the bundle gives up (Data Hub, grip-steer, results-sheet, …).
 const TRANSIENT_RETRY_MS = [400, 1200];
+// PAGE-LEVEL: classic scripts that have already evaluated in this tab (#3295).
+// A fresh ScriptLoader (career UI retry clears its memo and calls create()
+// again) has an empty opts.loaded; re-appending a const IIFE redeclares and the
+// door stays on could-not-load until a full reload. Only STRICT loads skip the
+// second insert — non-strict callers (scenery / circuit payloads) intentionally
+// re-fetch when their registry entry was cleared ("next ask fetches again").
+const evaluated = new Set();
 function create() {
 const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
 function loadBackendScripts(files, edges, opts) {
@@ -114,7 +121,12 @@ function loadBackendScripts(files, edges, opts) {
     if (cacheBust) href += (href.indexOf("?") >= 0 ? "&" : "?") + "retry=" + cacheBust;
     el.src = href;
     el.crossOrigin = "anonymous";
-    if (el.dataset) el.dataset.apexLazy = "1";
+    // MARKED so index.html's broken-install repair (sweeps every SW cache and
+    // reloads) leaves it alone: that repair is right for a shell tag the CDN
+    // has not published yet, but a load error here already RESOLVES (a missing
+    // global IS the fallback), so a reload would throw away a working
+    // degradation path — and loop, since the one-shot guard already cleared.
+    if (el.dataset) el.dataset.apexLazy = "1";   // guarded: a stubbed element has none
     const slowMs = (opts && opts.slowMs) || SLOW_MS, deadlineMs = (opts && opts.deadlineMs) || DEADLINE_MS;
     let slowT = null, deadT = null;
     const W = typeof window !== "undefined" ? window : null, timed = !!(W && typeof W.setTimeout === "function");
@@ -123,6 +135,13 @@ function loadBackendScripts(files, edges, opts) {
     slowT = W.setTimeout(() => {
       try { if (opts && opts.onSlow) opts.onSlow(src); } catch (_) { /* UI hook only */ }
     }, slowMs);
+    // THE DEADLINE COUNTS RESPONSIVE TIME, NOT WALL CLOCK (#3157). One 25 s
+    // timer fires on a starved main thread (TLX right after a race on a slow
+    // GPU, minutes of long tasks) in the same stall in which the fetched
+    // script's load event is still queued, so a file that ARRIVED was counted
+    // failed. A heartbeat adds at most two ticks per beat: a stall that
+    // swallowed many beats buys the file its load task, a real hang still
+    // reaches deadlineMs of live beats.
     const tickMs = Math.max(10, Math.min(1000, Math.floor(deadlineMs / 10)));
     let budget = 0, last = Date.now();
     const beat = () => {
@@ -141,6 +160,7 @@ function loadBackendScripts(files, edges, opts) {
       let ready = true;
       try { if (opts && opts.ready) ready = !!opts.ready(src); }
       catch (e) { ready = false; }
+      if (ready) evaluated.add(src);
       settle(ready, false);
     };
     el.onerror = () => { if (el.remove) el.remove(); settle(false, true); };
@@ -152,9 +172,11 @@ function loadBackendScripts(files, edges, opts) {
   // call retries only what is missing. `transientRetry: false` opts out (idle
   // lighting prefetch re-asks at race start). Otherwise inject retries 503s in place
   // (grip-steer, results-sheet, …).
-  const deferInjectRetry = (strict && loaded) || (opts && opts.transientRetry === false);
+  const deferInjectRetry = (strict && (loaded || files.length > 1)) || (opts && opts.transientRetry === false);
   const inject = async (src) => {
     if (typeof UpdateCheck !== "undefined" && UpdateCheck.prepareLazyLoad && !(await UpdateCheck.prepareLazyLoad(generationScope))) return false;
+    // Strict retry: already evaluated in this tab — no second <script>.
+    if (strict && evaluated.has(src)) return true;
     const optBust = opts && opts.cacheBust;
     if (deferInjectRetry) {
       const r = await injectOnce(src, optBust || 0);

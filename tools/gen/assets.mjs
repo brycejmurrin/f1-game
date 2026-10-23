@@ -507,16 +507,32 @@ function bakeOneSize(size, ids) {
 
   fs.mkdirSync(PACK, { recursive: true });
   const aFile = `mat-albedo-${size}.png`, nFile = `mat-normal-${size}.png`;
-  fs.writeFileSync(path.join(PACK, aFile), encodePNG(size, stripH, albedo));
-  fs.writeFileSync(path.join(PACK, nFile), encodePNG(size, stripH, normal));
+  const aBuf = encodePNG(size, stripH, albedo);
+  const nBuf = encodePNG(size, stripH, normal);
+  fs.writeFileSync(path.join(PACK, aFile), aBuf);
+  fs.writeFileSync(path.join(PACK, nFile), nBuf);
   return {
     size, albedo: aFile, normal: nFile,
+    albedoMd5: crypto.createHash("md5").update(aBuf).digest("hex"),
+    normalMd5: crypto.createHash("md5").update(nBuf).digest("hex"),
     layers: ids.map((mid) => ({
       mat: mid, id: MAT_NAME[mid].toLowerCase(), scale: SCALES[mid],
       source: "procedural:tools/gen/assets.mjs", licence: "Apex26-Procedural",
       author: "Apex 26",
     })),
   };
+}
+
+/** Record albedoMd5/normalMd5 on a materials tier from the strip files on disk. */
+function stampMaterialHashes(tier) {
+  if (!tier || typeof tier !== "object") return;
+  for (const which of ["albedo", "normal"]) {
+    const f = tier[which];
+    if (typeof f !== "string" || !f) continue;
+    const p = path.join(PACK, f);
+    if (!fs.existsSync(p)) continue;
+    tier[`${which}Md5`] = crypto.createHash("md5").update(fs.readFileSync(p)).digest("hex");
+  }
 }
 
 function bakeSynthetic(args) {
@@ -543,10 +559,14 @@ function bakeSynthetic(args) {
     size: high.size,
     albedo: high.albedo,
     normal: high.normal,
+    albedoMd5: high.albedoMd5,
+    normalMd5: high.normalMd5,
     layers: high.layers,
   };
   if (low) m.materials.low = low;
   else delete m.materials.low;
+  stampMaterialHashes(m.materials);
+  if (m.materials.low) stampMaterialHashes(m.materials.low);
   m.credits = buildCredits(m);
   writeManifest(m);
   credits();
@@ -759,6 +779,8 @@ function importPack(args) {
       console.log(`removed stale ${f}`);
     }
   }
+  stampMaterialHashes(out.materials);
+  if (out.materials.low) stampMaterialHashes(out.materials.low);
   out.credits = buildCredits(out);
   writeManifest(out);
   console.log(`pack: ${(bytes / 1024).toFixed(0)} KB / ${(BUDGET_BYTES / 1048576).toFixed(0)} MB budget` +
@@ -1358,6 +1380,8 @@ async function bakeMaterial(args) {
   layers.sort((a, b) => a.mat - b.mat);
   out.materials.layers = layers;
   if (out.materials.low) out.materials.low.layers = layers;
+  stampMaterialHashes(out.materials);
+  if (out.materials.low) stampMaterialHashes(out.materials.low);
   out.models = out.models || {};
   out.env = out.env || {};
   out.credits = buildCredits(out);
@@ -1505,6 +1529,8 @@ function bakeAtlas(args) {
   layersOut.sort((a, b) => a.mat - b.mat);
   out.materials.layers = layersOut;
   if (out.materials.low) out.materials.low.layers = layersOut;
+  stampMaterialHashes(out.materials);
+  if (out.materials.low) stampMaterialHashes(out.materials.low);
   out.models = out.models || {};
   out.env = out.env || {};
   out.credits = buildCredits(out);
@@ -1582,8 +1608,14 @@ function verify() {
           const png = decodePNG(buf);
           if (png.w !== tier.size || png.h !== tier.size * MAT_LAYERS)
             problems.push(`${name}: ${f} shape ${png.w}x${png.h} != ${tier.size}x${tier.size * MAT_LAYERS}`);
+          // Same contract as models: a strip with no recorded hash used to pass
+          // after a same-size PNG rewrite (#3296). Require 32-hex and compare.
           const hash = tier[`${which}Md5`];
-          if (hash && crypto.createHash("md5").update(buf).digest("hex") !== hash) problems.push(`${name}: ${f} md5 mismatch`);
+          const digest = crypto.createHash("md5").update(buf).digest("hex");
+          if (typeof hash !== "string" || !/^[0-9a-f]{32}$/.test(hash))
+            problems.push(`${name}: ${f} md5 missing — every baked strip is hashed`);
+          else if (digest !== hash)
+            problems.push(`${name}: ${f} md5 mismatch`);
         } catch (e) { problems.push(`${name}: ${f}: ${e.message}`); }
       }
       const seen = new Set(), ids = new Set();

@@ -4215,6 +4215,7 @@
       ],
       "*": [
         "tests/specs/boot-guard.spec.js",
+        "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/store-registry.test.mjs"
       ]
     },
@@ -4442,6 +4443,9 @@
     },
     "js/core/dev-flags.js": {
       "flags": [
+        "tests/unit/dev-flags.test.mjs"
+      ],
+      "names": [
         "tests/unit/dev-flags.test.mjs"
       ]
     },
@@ -4887,6 +4891,7 @@
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/script-loader-preload.test.mjs",
+        "tests/unit/script-loader-retry-eval.test.mjs",
         "tests/unit/script-loader-starved.test.mjs",
         "tests/unit/script-loader-throw.test.mjs",
         "tests/unit/service-worker.test.mjs",
@@ -6614,6 +6619,10 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "raceProfile": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "raceTrackStepped": [
+        "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "redFlagRestart": [
@@ -9286,6 +9295,10 @@
       ]
     },
     "js/net/transport.js": {
+      "done": [
+        "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/net-transport.test.mjs"
+      ],
       "hasRelay": [
         "tests/unit/net-transport.test.mjs"
       ],
@@ -13355,6 +13368,9 @@
         "tests/unit/road-reflection-transition.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "softwareGlowScale": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "sunScreen": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
@@ -13545,7 +13561,8 @@
       "warm": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "*": [
         "tests/unit/godray-keep-nearest.test.mjs"
@@ -13745,6 +13762,9 @@
       "castShadowInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs"
+      ],
+      "casterSources": [
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "compileWarmProbe": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -14031,6 +14051,7 @@
     },
     "js/render/three/tsl-fx.js": {
       "decalMaterialFor": [
+        "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ],
       "fxMaterial": [
@@ -14039,12 +14060,18 @@
       "releaseTexture": [
         "tests/unit/tlx-texture-release.test.mjs"
       ],
+      "updateFrame": [
+        "tests/unit/tlx-hunt4c.test.mjs"
+      ],
       "*": [
         "tests/unit/light-grid.test.mjs",
         "tests/unit/surface-id-parity.test.mjs"
       ]
     },
     "js/render/three/tsl-lit.js": {
+      "_halfData": [
+        "tests/unit/tlx-hunt4c.test.mjs"
+      ],
       "makeMaterial": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
@@ -16148,6 +16175,7 @@
     "js/ui/post-fx-opts.js": {
       "applyLookShed": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/post-fx-opts.test.mjs"
       ],
@@ -16156,6 +16184,7 @@
       ],
       "read": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/post-fx-opts.test.mjs"
       ],
