@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-24d9b819-6b4b-527f-85c9-55d582981811 #3632 needs run-ci label (gh pr edit --add-label run-ci → 403 Resource not accessible by integration). Draft https://github.com/brycejmurrin/f1-game/pull/3632 head c338f4ae2. DAD please add run-ci.
+HANDOFF to:D from:cursor:bc-d96c0f57-d43e-559e-8984-440a66362719 LIVE D·W21b on cursor/w21b-webgpu-menu-warm-a7f2 [PR #3633]
