@@ -6475,6 +6475,9 @@ test("TLX FX: double-sided FX draw in ONE pass and their programs warm on the st
   // The ds variant must stay the cockpit rig's key: drift in either table re-opens the first-BOOST stall.
   assert.match(code("js/car/car-draw.js"), /_rigFxA = \{ doubleSided: true, emissive: 1\.0, roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 1 \}/,
     "car-draw's _rigFxA (dash ERS bar, OT lamp) matches the double-sided _LATE_LIT variant");
+  // Its cw twin compiled a whole lit pipeline no race draws (the rig is never mirrored): one winding for it only.
+  assert.ok(fnBody(tlx, "warmLateLit").includes("for (const sx of (o.doubleSided ? [1] : [1, -1]))"),
+    "warmLateLit compiles the double-sided (cockpit rig) variant in one winding, the brake ring in both");
 });
 
 test("lamp shadow: the player takes the AI cars' lamp-radius bound in BOTH the key and the cast (TLX-PERF-PLAN L0)", () => {

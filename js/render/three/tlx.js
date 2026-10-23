@@ -3209,7 +3209,11 @@ const TLX = (function () {
           // matrixWorld.determinantAffine() < 0, and the car draws one side's
           // parts (the brake ring among them) through a mirrored matrix — the
           // one field the lap's pipeline key differed in (probe, field 27).
-          for (const g of geos.values()) for (const sx of [1, -1]) {
+          // The double-sided variant is the cockpit dash ERS bar / OT lamp
+          // (_rigFxA), never drawn mirrored: its cw twin was a whole lit
+          // pipeline (~1.2 s cold on an iPhone 14) no race used —
+          // ers-deploy-census tlx-gpu helmet, first deploy: lazy=0 without it.
+          for (const g of geos.values()) for (const sx of (o.doubleSided ? [1] : [1, -1])) {
             await compileWarmProbe(g, mat, sx);
           }
         }
