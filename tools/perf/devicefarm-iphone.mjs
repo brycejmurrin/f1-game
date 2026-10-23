@@ -78,6 +78,24 @@ const TOUCH_GO = `
 const TOUCH_ARM = `
   const P = window.__tbp = { raf: [], long: [], ev: [], t0: performance.now() };
   try { PerfSpans.on(true); PerfSpans.reset(); } catch (_) {}
+  // ATTRIBUTION (run 9): where does the ~0.74 s after the first BOOST pointerdown go? Event Timing gives each
+  // event's processingStart/End (a long listener) against its duration (incl. the next paint); capture/bubble
+  // stamps bracket the target-phase handlers; microtask / timeout / rAF probes after each pointerdown show which
+  // queue waited; the PerfSpans frame/render begin+end stamps show whether the game tick ran inside the gap.
+  P.et = []; P.pd = []; P.spans = [];
+  try { new PerformanceObserver((l) => { for (const e of l.getEntries()) P.et.push([e.name, Math.round(e.startTime), Math.round(e.processingStart), Math.round(e.processingEnd), Math.round(e.duration), (e.target && e.target.id) || ""]); })
+    .observe({ type: "event", durationThreshold: 16, buffered: false }); P.etOn = true; } catch (e) { P.etOn = String(e); }
+  window.addEventListener("pointerdown", (e) => {
+    const t = e.target, r = { id: (t && t.id) || "", cap: performance.now() }; P.pd.push(r);
+    queueMicrotask(() => { r.micro = performance.now(); });
+    setTimeout(() => { r.timeout = performance.now(); }, 0);
+    requestAnimationFrame((ts) => { r.raf = performance.now(); r.rafTs = ts; });
+  }, true);
+  window.addEventListener("pointerdown", () => { const r = P.pd[P.pd.length - 1]; if (r) r.bub = performance.now(); }, false);
+  try { const b0 = PerfSpans.begin, e0 = PerfSpans.end;
+    PerfSpans.begin = function (n) { if (n === "frame" || n === "render" || n === "hud" || n === "audio") P.spans.push([n, 0, performance.now()]); return b0.apply(this, arguments); };
+    PerfSpans.end = function (n) { const r = e0.apply(this, arguments); if (n === "frame" || n === "render" || n === "hud" || n === "audio") P.spans.push([n, 1, performance.now()]); return r; };
+    P.spansWrapped = true; } catch (e) { P.spansWrapped = String(e); }
   let last = performance.now();
   (function tick(t) { P.raf.push([t, t - last]); last = t; requestAnimationFrame(tick); })(last);
   try { new PerformanceObserver((l) => { for (const e of l.getEntries()) P.long.push([e.startTime, e.duration]); }).observe({ type: "longtask" }); } catch (_) {}
@@ -104,6 +122,14 @@ const TOUCH_READ = (win, from, to) => `
     spans: (() => { try { const r = PerfSpans.stats(); const o = {}; for (const k in r) o[k] = { max: +(+r[k].max).toFixed(1), p95: r[k].p95 != null ? +(+r[k].p95).toFixed(1) : null }; return o; } catch (e) { return String(e); } })(),
     logs: (() => { try { return (__apex.logs() || []).filter((x) => x && x.t >= P.t0).slice(0, 60).map((x) => Math.round(x.t - P.t0) + " " + x.ns + " " + String(x.msg).slice(0, 120)); } catch (_) { return null; } })(),
     tapsAt: tapRows.map(([id, m]) => id + "@" + Math.round(m - P.t0)),
+    // Attribution around the FIRST tap of the target control: everything from 50 ms before it to 1.5 s after.
+    attr: (() => { const m = taps[0]; if (m == null) return null; const lo = m - 50, hi = m + 1500, rel = (t) => Math.round(t - m);
+      return { etOn: P.etOn, spansWrapped: P.spansWrapped,
+        et: P.et.filter((e) => e[1] >= lo && e[1] <= hi).map((e) => [e[0], rel(e[1]), rel(e[2]), rel(e[3]), e[4], e[5]]),
+        pd: P.pd.filter((r) => r.cap >= lo && r.cap <= hi).map((r) => ({ id: r.id, cap: rel(r.cap), bub: r.bub != null ? rel(r.bub) : null,
+          micro: r.micro != null ? rel(r.micro) : null, timeout: r.timeout != null ? rel(r.timeout) : null, raf: r.raf != null ? rel(r.raf) : null })),
+        spans: P.spans.filter((x) => x[2] >= lo && x[2] <= hi).map((x) => x[0] + (x[1] ? ">" : "<") + rel(x[2])).slice(0, 120),
+        raf: P.raf.filter(([t]) => t >= lo && t <= hi).map(([t, d]) => rel(t) + ":" + Math.round(d)).slice(0, 80) }; })(),
     load: (() => { const E = window.__tbp0; if (!E) return null; const pre = E.big.filter((b) => b[0] < P.t0 - E.t0);
       return { n: pre.length, top: [...pre].sort((a, b) => b[1] - a[1]).slice(0, 5) }; })(),
     warmLog: (() => { try { return (__apex.logs() || []).filter((x) => x && /warmed/.test(String(x.msg))).map((x) => String(x.msg)); } catch (_) { return null; } })(),
