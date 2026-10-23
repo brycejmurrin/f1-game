@@ -22,7 +22,39 @@ const Tracks = (function () {
 
   /** Centreline only, no meshes. `opts.line === false` skips ONLY the racing-line bake (~75 %
    *  of the time): tr.line = null, lineW/lineCorners/… absent — the designer's preview build. */
+  // D·DP5 preview cache: adoptPreviewCenterline or {line:false,preview:true} only; key
+  // includes hwZones/baseHW; hydrate forgets. Plain line:false must not auto-store.
+  const previewCL = new Map();
+  function previewKey(def) {
+    if (!def || !def.id) return null;
+    const n = (def.path && def.path.pts && def.path.pts.length) || (def.points && def.points.length) || 0;
+    let zones = "";
+    if (def.hwZones && def.hwZones.length) try { zones = JSON.stringify(def.hwZones); } catch (_) { zones = "hz"; }
+    return def.id + "\0" + (def.reverse ? "1" : "0") + "\0" + n + "\0"
+      + (def.baseHW != null ? String(def.baseHW) : "") + "\0" + zones;
+  }
+  function forgetPreviewCenterline(id) {
+    if (id == null) { previewCL.clear(); return; }
+    for (const k of previewCL.keys()) if (k.startsWith(id + "\0")) previewCL.delete(k);
+  }
+  function adoptPreviewCenterline(def, track) {
+    const key = previewKey(def);
+    if (!key || !track) return false;
+    track.def = def;
+    previewCL.set(key, track);
+    return true;
+  }
   function buildCenterline(def, opts) {
+    const key = opts && opts.line === false ? previewKey(def) : null;
+    if (key && previewCL.has(key)) {
+      const hit = previewCL.get(key); // shallow clone — callers null bankP on one copy
+      return Object.assign({}, hit, { meshes: hit.meshes || {} });
+    }
+    const track = buildCenterlineFresh(def, opts);
+    if (key && opts && opts.preview === true) previewCL.set(key, track);
+    return track;
+  }
+  function buildCenterlineFresh(def, opts) {
     ensurePoints(def);
     const P = def.points, N = P.length;
     const idx = (i) => ((i % N) + N) % N;
@@ -638,6 +670,7 @@ const Tracks = (function () {
       delete dst._metaOnly;
     }
     if (typeof TrackMaps !== "undefined" && TrackMaps.invalidate) TrackMaps.invalidate(raw.id);
+    forgetPreviewCenterline(raw.id);
     return true;
   }
 
@@ -825,5 +858,5 @@ const Tracks = (function () {
     track._ribbonCpuDropped = true;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, keepGeometry: getKeepGeometry, setCompactProps, diagnosticBuild, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident, dropRibbonCpuIfReady };
+  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, adoptPreviewCenterline, forgetPreviewCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, keepGeometry: getKeepGeometry, setCompactProps, diagnosticBuild, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident, dropRibbonCpuIfReady };
 })();

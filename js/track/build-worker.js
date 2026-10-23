@@ -151,6 +151,28 @@ self.onmessage = async (e) => {
       const job = { cancelled: false, permit: null };
       _jobs.set(m.seq, job);
       try { await build(m, job); } finally { _jobs.delete(m.seq); }
+    } else if (m.type === "preview") {
+      // Race-select hero: centreline-only, no meshes / GPU. The page adopts the
+      // typed arrays into Tracks.previewCL so TrackMaps.compute stays off the
+      // open's long task (D·DP5 / iPhone 15 hitch).
+      const def = Tracks.LIST[m.idx];
+      if (!def || def.id !== m.id) throw new Error("worker track list differs at " + m.idx + " (" + (def && def.id) + " != " + m.id + ")");
+      if (def._metaOnly || !(def.path && def.path.pts && def.path.pts.length)) {
+        self.postMessage({ type: "preview", seq: m.seq, id: m.id, track: null });
+        return;
+      }
+      const tr = Tracks.buildCenterline(def, { line: false });
+      const track = {
+        total: tr.total, n: tr.n, map: tr.map, street: !!tr.street, line: null,
+        px: tr.px, py: tr.py, pz: tr.pz, tx: tr.tx, ty: tr.ty, tz: tr.tz,
+        rx: tr.rx, ry: tr.ry, rz: tr.rz, hw: tr.hw, bank: tr.bank, curv: tr.curv,
+        bankP: tr.bankP, meshes: {},
+      };
+      const msg = { type: "preview", seq: m.seq, id: def.id, track };
+      // Transfer detaches the typed arrays — drop the worker-side preview cache
+      // so a later preview of the same id rebuilds instead of returning neutered buffers.
+      if (Tracks.forgetPreviewCenterline) Tracks.forgetPreviewCenterline(def.id);
+      self.postMessage(msg, transferables(msg));
     }
   } catch (err) {
     self.postMessage({ type: "error", seq: m.seq, message: String((err && err.message) || err) });

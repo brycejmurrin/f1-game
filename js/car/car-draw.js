@@ -34,7 +34,8 @@ const CarDraw = (function () {
     Log.info("game", "CarDraw.create");
     FieldLod.init(G.store);   // apex26.fieldLod, read once at boot (0 = no rival LOD)
     const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, getMirrorFallback, getMirrorGlass,
-            getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
+            getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, getWheelStatus, getAeroLamp, getAeroBar,
+            drawWheelExtras } = CarMesh;
 
     // Paired with an already-warmed rival body; never built by mirror rendering.
     // Its lifetime and capacity are exactly the original body cache's (40).
@@ -825,6 +826,7 @@ const CarDraw = (function () {
           for (let ph = 0; ph < WARM_PHASES; ph++) warmCarPhase(c, ph, casters, lodWarm, sliced);
         } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
       }
+      if (lodWarm) warmLazyRaceMeshes();
       Log.info("gfx", "race car assets ready", { cars: G.cars.length, casters, lodWarm, cpuMs: Math.round(performance.now() - at) });
     }
     // ONE CAR'S WARM, IN FOUR PHASES — each one heavy piece, so the stepped
@@ -889,8 +891,92 @@ const CarDraw = (function () {
         if (c.isPlayer) CarMesh.getErsLight();
       }
     }
-    // The flap set a rival draws (teamDecalState's own key): a memo hit after the first car of a recipe.
-    function warmFlaps(c) { const aSt = teamDecalState(c.team, false, c.visualSetup, c.visStamp); Car3D.aeroFlaps(aSt.val, aSt.aero); }
+    // The flap MESHES a rival draws (teamDecalState's own key): solve + mint the
+    // rest poses and per-element meshes the race draw / mirror will hit. The hinge
+    // solve alone used to warm; getAeroFlapSet / getAeroFlap then ran on first draw
+    // as cars entered FieldLod.flapsM() — geometry count climbed ~60 over the first
+    // minutes on phone (D·DP3). Same keys drawAeroFlaps uses (game.js).
+    function warmFlaps(c) {
+      const aSt = teamDecalState(c.team, false, c.visualSetup, c.visStamp);
+      const flaps = Car3D.aeroFlaps(aSt.val, aSt.aero);
+      if (!flaps || !flaps.length || typeof CarMesh.getAeroFlapSet !== "function") return;
+      const team = c.team, liv = deps.resolveLivery(team);
+      const col = liv.wingCarbon === "carbon" && typeof CarMaterials !== "undefined" && CarMaterials.CARBON
+        ? CarMaterials.CARBON : (liv.wing || liv.c2 || team.color2);
+      const finish = (typeof CarMaterials !== "undefined" && CarMaterials.finishOf)
+        ? CarMaterials.finishOf(liv, "wingFinish") : null;
+      const surface = liv.wingCarbon === "carbon" ? "carbon" : "paint";
+      const rearCol = surface === "carbon" ? col : (liv.rearWing || liv.c2 || team.color2);
+      // Mirror / far rivals: one baked set per rest pose. Near cars mid-blend: each element.
+      CarMesh.getAeroFlapSet(aSt.val, col, aSt.aero, finish, false, null, surface, rearCol);
+      CarMesh.getAeroFlapSet(aSt.val, col, aSt.aero, finish, true, null, surface, rearCol);
+      if (typeof CarMesh.getAeroFlap === "function") {
+        for (let i = 0; i < flaps.length; i++) {
+          const fg = flaps[i];
+          CarMesh.getAeroFlap(aSt.val, fg.paint ? rearCol : col, i, aSt.aero, fg, finish, surface);
+        }
+      }
+    }
+    // Wheel extras and compound rings the per-car draw mints on first sight —
+    // one-shot after the field warm so green flag does not grow geoLive (D·DP3).
+    // Not inside warmCarPhase (D·DP1 owns that).
+    // `cars`: the menu prep's local field (G.cars is empty until race entry).
+    // `phase`: "flaps" | "shared" | omit (both). Async warm yields between phases.
+    function warmLazyRaceMeshes(cars, phase) {
+      const doFlaps = !phase || phase === "flaps";
+      const doShared = !phase || phase === "shared";
+      if (doFlaps) {
+        // Player flaps are not in warmCarPhase's lodWarm (rivals only); mint them here.
+        try {
+          const list = cars || G.cars;
+          const me = list && list.find((c) => c.isPlayer);
+          if (me) warmFlaps(me);
+        } catch (e) { Log.warn("gfx", "player flap mesh warm failed", e); }
+        try {
+          getBrakeRing(); getSpinDisc();
+          if (typeof TyreModel !== "undefined" && TyreModel.AI_CLASS) {
+            for (const k of Object.keys(TyreModel.AI_CLASS)) {
+              const rec = TyreModel.AI_CLASS[k];
+              if (rec && rec.colour) getCompoundRing(rec.colour);
+            }
+          }
+        } catch (e) { Log.warn("gfx", "wheel-extra mesh warm failed", e); }
+        // Finite cockpit / rear-light LCDs the opening stretch otherwise mints as
+        // gear, speed, LED and throttle/brake states appear.
+        try {
+          if (typeof CarMesh.getBoostFlame === "function") CarMesh.getBoostFlame();
+          getErsBar(); getOtLamp(false); getOtLamp(true);
+          for (let g = 0; g <= 9; g++) getGearDigit(g);
+          for (let d = 0; d <= 9; d++) getSpeedDigit(d);
+          const styles = (CarMesh.LED_ROWS && Object.keys(CarMesh.LED_ROWS)) || ["std"];
+          for (let s = 0; s < styles.length; s++) {
+            for (let lit = 0; lit <= 9; lit++) getLedStrip(lit, styles[s]);
+          }
+          // Mesh getters only — drawWheelExtras / drawRearLights issue real _gfx.draw
+          // calls during race warm (before the first clean present) and trip
+          // INVALID_OPERATION on later baked-material frames (assets-api).
+          const mph = typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph";
+          for (let th = 0; th <= 4; th++) {
+            for (let br = 0; br <= 4; br++) getWheelStatus(mph, th, br);
+          }
+          getAeroLamp(0); getAeroLamp(1); getAeroLamp(2);
+          getAeroBar(false); getAeroBar(true);
+        } catch (e) { Log.warn("gfx", "cockpit/LCD mesh warm failed", e); }
+      }
+      if (doShared) {
+        // Shared LOD silhouette + far decimate: otherwise minted when the first rival
+        // crosses flapsM / farBody after green. Team-less ":sh" in the warm census.
+        try {
+          sharedRivalBodyMesh(false);
+          if (!_farRivalBody && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
+            _farRivalKick = true;
+            try { _farRivalBody = G.gfx.createMesh(CarGeometry.decimate(_sharedRivalGeom, FAR_BODY_TRIS)); }
+            catch (e2) { Log.warn("gfx", "far rival body warm failed", e2); }
+            _sharedRivalGeom = null;
+          }
+        } catch (e) { Log.warn("gfx", "shared rival body warm failed", e); }
+      }
+    }
     // apex26.carWarmSlice (perf hunt 4 F3.3), default ON: the menu prep also solves the
     // rivals' flaps and builds their planted wheels, the race warm uploads TLX atlases,
     // and warmCarAssetsAsync yields between phases. 0 restores the single-task warm.
@@ -935,6 +1021,22 @@ const CarDraw = (function () {
           const t = performance.now();
           try { warmCarPhase(c, ph, casters, lodWarm, true, defer); }
           catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
+          const ms = performance.now() - t; cpuMs += ms; if (ms > maxStepMs) maxStepMs = ms;
+        }
+      }
+      if (lodWarm) {
+        // Two yielded steps: (1) flaps/LCD/wheels (2) shared LOD silhouette build.
+        // Each step is one heavy piece so maxSlice stays 1 (D·DP3).
+        for (const phase of ["flaps", "shared"]) {
+          await yieldWarm(); yields++;
+          sliceAt = performance.now();
+          if (current && !current()) {
+            Log.info("gfx", "race car warm abandoned", { at: cars.length, of: cars.length, yields, phase });
+            return false;
+          }
+          const t = performance.now();
+          try { warmLazyRaceMeshes(null, phase); }
+          catch (e) { Log.warn("gfx", "lazy race mesh warm failed", e); }
           const ms = performance.now() - t; cpuMs += ms; if (ms > maxStepMs) maxStepMs = ms;
         }
       }
@@ -1039,6 +1141,16 @@ const CarDraw = (function () {
           }
         } catch (e) { Log.warn("gfx", "selector car asset preparation failed", e); }
         const elapsed = performance.now() - at; cpuMs += elapsed; maxCpuMs = Math.max(maxCpuMs, elapsed);
+      }
+      if (lodPrep) {
+        // Fresh slice: shared-silhouette build + player flap solve must not stack
+        // on the last rival's lod step (maxSlice ≤ 2 pin).
+        await menuStepYield(); yields++;
+        if (!valid() || (G.gfx.warming && G.gfx.warming())) return;
+        const atLazy = performance.now();
+        try { warmLazyRaceMeshes(field); }
+        catch (e) { Log.warn("gfx", "selector lazy race mesh warm failed", e); }
+        const elapsed = performance.now() - atLazy; cpuMs += elapsed; maxCpuMs = Math.max(maxCpuMs, elapsed);
       }
       // Resolves to its record only when it ran to its end (the export keeps the last: menuCarAssets).
       const done = { cars: field.length, steps: plan.length, casters, lod: lodPrep, cpuMs: Math.round(cpuMs), maxCpuMs: Math.round(maxCpuMs), yields, wallMs: Math.round(performance.now() - t0), at: Math.round(performance.now()) };

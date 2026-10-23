@@ -99,3 +99,94 @@ test("bench-run summarize: a leg that fell back is filed under the api that actu
   const s = J(B.summarize([leg("webgl2", [20, 40], { path: "webgpu" })]));
   assert.deepEqual(Object.keys(s), ["webgl2"]);
 });
+
+test("bench-run: ONE LAP, QUICK PATHS and LIVERY EDIT plans; QUICK PATHS is one Monza lap per three.js path", () => {
+  const B = load();
+  const one = B.TESTS.find((t) => t.id === "lap"), quick = B.TESTS.find((t) => t.id === "quick"), liv = B.TESTS.find((t) => t.id === "livery");
+  assert.deepEqual(J(one.legs.map((l) => [l.kind, l.path, l.track, l.weather])), [["lap", null, "monza", "dry"]]);
+  assert.deepEqual(J(quick.legs.map((l) => [l.kind, l.path])), [["lap", "webgpu"], ["lap", "webgl2"]]);
+  assert.deepEqual(J(liv.legs.map((l) => [l.kind, l.path])), [["livery", null]]);
+  const plan = B.newPlan("quick", { backend: null, threePath: null });
+  assert.deepEqual(J(plan.legs.map((l) => [l.state, l.label])), [["pending", "Lap WEBGPU"], ["pending", "Lap WEBGL2"]]);
+  assert.deepEqual(J(B.pathPrefs(plan.legs[1].path, null)), { backend: "three", threePath: "1" });
+});
+
+test("bench-run: every test names its duration in its help line and keeps a short chip label", () => {
+  const B = load();
+  for (const t of B.TESTS) {
+    assert.ok(/About \d+ min\.$/.test(t.help), t.id + " help names its duration: " + t.help);
+    assert.ok(t.label.length <= 16, t.id + " label " + t.label);
+  }
+  assert.equal(new Set(B.TESTS.map((t) => t.id)).size, B.TESTS.length);
+});
+
+test("bench-run overs / growth: frames past 33 and 50 ms; counter growth only where both samples hold a number", () => {
+  const B = load();
+  assert.deepEqual(J(B.overs([16, 17, 34, 40, 51, 16, 16, 16, 16, 16])), { n33: 3, n50: 1, over33: 30 });
+  assert.deepEqual(J(B.overs([])), { n33: 0, n50: 0, over33: null });
+  assert.deepEqual(J(B.growth({ textures: 40, geometries: 70, texMB: 12.5, flapSets: null }, { textures: 40, geometries: 72, texMB: 12.25, flapSets: 2 })),
+    { textures: 0, geometries: 2, texMB: -0.25 });
+});
+
+test("bench-run scenes: a lap row carries its lap time; livery edits carry edit ms and a GPU growth row", () => {
+  const B = load();
+  const st = (id, extra) => Object.assign({ id, p50: 16.7, p95: 20, p99: 33, fps: 59, n33: 1, n50: 0, links: 0, pipes: 0 }, extra);
+  const rows = J(B.scenes([
+    { kind: "lap", label: "Lap WEBGPU", state: "done", entry: { cold: { buildMs: 3000, goMs: 20000 } }, steps: [st("lap", { lapS: 92.4 })] },
+    { kind: "lap", label: "Lap WEBGL2", state: "failed", reason: "no timed lap in 4 min" },
+    { kind: "livery", label: "Livery", state: "done", entry: { cold: { goMs: 250 } }, steps: [st("finish", { editMs: 41 }), { id: "sponsors (none)", editMs: null }],
+      mem: { growth: { textures: 0, geometries: 3, texMB: 0.5 } } },
+  ]));
+  assert.deepEqual(rows.map((r) => r.label), ["Lap WEBGPU", "Lap WEBGL2", "Livery · finish", "Livery · sponsors (none)", "Livery · GPU growth"]);
+  assert.deepEqual([rows[0].time, rows[0].n33, rows[0].coldMs], ["92.4 s", 1, 3000]);
+  assert.equal(rows[1].state, "failed");
+  assert.deepEqual([rows[2].time, rows[2].coldMs], ["41 ms", 250]);
+  assert.equal(rows[3].time, null);
+  assert.deepEqual([rows[4].state, rows[4].reason], ["growth", "textures 0 · geometries +3 · texture MB +0.5"]);
+  assert.equal(J(B.scenes([{ kind: "livery", label: "Livery", state: "done", steps: [], mem: { growth: {} } }]))[0].reason, "no counters on this renderer");
+});
+
+test("bench-run: wake lock is held while a plan runs, re-acquired on visible, released on stop, silent without the API", async () => {
+  const mk = (wakeLock, vis = "visible") => {
+    const store = {}; const handlers = {}; const calls = [];
+    const ctx = { performance: { now: () => 0 }, navigator: { wakeLock }, setTimeout: () => 0, Log: { info: (_c, m) => calls.push(m) },
+      localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } },
+      location: { reload() {} }, document: { visibilityState: vis, addEventListener: (n, f) => { handlers[n] = f; }, getElementById: () => null, querySelectorAll: () => [] } };
+    const B = vm.runInNewContext(SRC + "\n;BenchRun", ctx, { filename: absSrc("js/perf/bench-run.js") });
+    return { B, ctx, handlers, calls };
+  };
+  const lockApi = () => { const s = { n: 0, released: 0, sentinels: [] };
+    s.request = async (t) => { assert.equal(t, "screen"); s.n++; const x = { released: false, release: async () => { x.released = true; s.released++; } }; s.sentinels.push(x); return x; };
+    return s; };
+  const api = lockApi();
+  const { B, ctx, handlers } = mk(api);
+  B.create({});
+  assert.equal(typeof handlers.visibilitychange, "function");
+  B.run("current");
+  await new Promise((r) => setTimeout(r, 0));
+  await B.wake.acquire();   // run() already asked; the held lock is not requested twice
+  assert.equal(api.n, 1);
+  api.sentinels[0].released = true;   // the browser dropped it when the page hid
+  handlers.visibilitychange();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(api.n, 2);
+  B.stop();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(api.sentinels[1].released, true);
+  void ctx;
+});
+
+test("bench-run: no wake lock API is silent; a refused request is logged and does not throw", async () => {
+  const mk = (navigator) => { const logs = []; const store = {};
+    const B = vm.runInNewContext(SRC + "\n;BenchRun", { performance: { now: () => 0 }, navigator, Log: { info: (_c, m) => logs.push(m) },
+      localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem() {} } }, { filename: absSrc("js/perf/bench-run.js") });
+    return { B, logs }; };
+  const none = mk({});
+  await none.B.wake.acquire(); none.B.wake.release();
+  assert.deepEqual(none.logs, []);   // unsupported: nothing logged, nothing shown
+  let asked = 0;
+  const refuse = mk({ wakeLock: { request: async () => { asked++; throw Object.assign(new Error("x"), { name: "NotAllowedError" }); } } });
+  await refuse.B.wake.acquire(); refuse.B.wake.release();
+  assert.equal(asked, 1);
+  assert.ok(refuse.logs.some((m) => /wake lock refused NotAllowedError/.test(m)));
+});

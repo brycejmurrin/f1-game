@@ -31,6 +31,7 @@ import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./se
 import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
 import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs";
 import { changedPaths } from "../lib/changed-files.mjs";
+import { specsAffectedByImpact } from "../lib/impact-map.mjs";
 import { changeKind } from "./change-kind.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import { loadQuarantine } from "../../tests/helpers/flaky-policy.mjs";
@@ -1223,6 +1224,8 @@ export const SOURCE_AFFECTED = [
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career.spec.js"],
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career-season.spec.js"],
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career-hub.spec.js"],
+  [/^css\/career\.css$/, "tests/specs/career-hub.spec.js"],
+  [/^css\/career\.css$/, "tests/specs/career.spec.js"],
   // THE START RACE INTRO (garage drive-out + card): quali.spec and steering.spec
   // launch races through it (#mb-race → rs-go) and wait BOOT_MS for the grid.
   // A ui/car route never picked them, so #1290 shipped red there (Browser group
@@ -1395,13 +1398,14 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // Source modules whose browser gate is over-budget when merely routed (see
   // SOURCE_AFFECTED) — same rank-2 elevation as an import / own foundation.
   const sourceAffected = specsAffectedBySource(changed);
+  const impactAffected = specsAffectedByImpact(changed);
   const otherCircuit = (f) => {
     const m = FOUNDATION.exec(f);
     return circ.scoped && m && !ownFoundations.includes(f) && !changedSpecs.includes(f);
   };
   // Specs that race a touched circuit (specsRacing, T2): routed, budgeted.
   const racing = specsRacing(racingCircuitIds(changed));
-  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...specs, ...racing])]
+  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...impactAffected, ...specs, ...racing])]
     .filter((f) => !otherCircuit(f));
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, lightDiff ? [] : routed);
   // Docs-only PRs skip the selected matrix at the plan (required check
@@ -1413,7 +1417,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
     : tracked.length ? "infra"
     : (g.size || candidates.length ? "matched" : "unmatched");
   const rank = (f) => changedSpecs.includes(f) ? 0 : failedInScope.includes(f) ? 1
-    : (imported.includes(f) || ownFoundations.includes(f) || sourceAffected.includes(f)) ? 2 : 3;
+    : (imported.includes(f) || ownFoundations.includes(f) || sourceAffected.includes(f) || impactAffected.includes(f)) ? 2 : 3;
   const cut = fit(candidates, budgetMin, { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS, staleFirst: !!opts.staleFirst });
   // "infra" no longer EMPTIES the selection. A tracked-path change (the shell,
   // a fixture every spec imports, this selector) can affect any spec, which is

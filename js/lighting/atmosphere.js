@@ -78,15 +78,45 @@ function _snapWx() {
   if (b) { f.ambientSky = b.ambientSky.slice(); f.ambientGround = b.ambientGround.slice(); f.exposure = b.exposure; }
   return { frame: f, sky: _pick(G.frameSky, WX_SKY), lt: _snapLt() };
 }
+// Null endpoints are real for cityGlow (night dome → day/dusk/dawn clear). The
+// old `b == null ? a` kept the FROM value for the whole fade AND at s=1, so a
+// blended night→day left the light-pollution dome on forever; `_writeWx` also
+// skipped null writes (`if (v != null)`), so even a corrected mix could not
+// clear it. Fade RGB/scalars toward 0, then land on null when the target is
+// absent — matches the cut path and the sky shaders' >0.001 gate.
 const _mixv = (a, b, s) => {
-  if (b == null) return a; if (a == null) return b;
-  if (Array.isArray(b)) return b.map((v, i) => a[i] + (v - a[i]) * s);
+  if (b == null) {
+    if (a == null || s >= 1) return null;
+    if (Array.isArray(a)) return a.map((v) => v * (1 - s));
+    return typeof a === "number" ? a * (1 - s) : a;
+  }
+  if (a == null) {
+    if (s <= 0) return null;
+    if (Array.isArray(b)) return b.map((v) => v * s);
+    return typeof b === "number" ? b * s : b;
+  }
+  if (Array.isArray(b)) {
+    if (!Array.isArray(a)) {
+      const a0 = typeof a === "number" && isFinite(a) ? a : 0;
+      return b.map((v) => a0 + (v - a0) * s);
+    }
+    return b.map((v, i) => {
+      const ai = a[i];
+      const a0 = typeof ai === "number" && isFinite(ai) ? ai : 0;
+      return a0 + (v - a0) * s;
+    });
+  }
   return a + (b - a) * s;
 };
 function _writeWx(s) {
   const { from, to } = _wx;
   for (const k of WX_FRAME) { const v = _mixv(from.frame[k], to.frame[k], s); if (v != null) G.frame[k] = v; }
-  for (const k of WX_SKY) { const v = _mixv(from.sky[k], to.sky[k], s); if (v != null) G.frameSky[k] = v; }
+  for (const k of WX_SKY) {
+    const v = _mixv(from.sky[k], to.sky[k], s);
+    // cityGlow is the only sky field that is legitimately null (day/twilight);
+    // other keys skip a null mix so a missing snap never blanks zenith/sun.
+    if (v != null || k === "cityGlow") G.frameSky[k] = v;
+  }
   G.frame.skyZenith = G.frameSky.zenith; G.frame.skyHorizon = G.frameSky.horizon;
   _writeLt(s);
   if (G._ltBase) G._ltBase = { ambientSky: G.frame.ambientSky.slice(), ambientGround: G.frame.ambientGround.slice(),

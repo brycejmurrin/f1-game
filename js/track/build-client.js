@@ -147,10 +147,14 @@ const TrackBuildClient = (function () {
       // stuck true). null = the caller builds in steps.
       let answer = null;
       try {
-        const lack = m.type === "built" ? missingModels(p.def, m.models) : [];
-        if (lack.length) Log.warn("track", `build worker: ${m.id} built without ${lack.length} of its baked models the page holds (${lack.join(", ")}) — building in steps instead`);
-        else if (m.type === "built" && (isLive(p.live))) answer = m;
-        else Log.warn("track", "build worker failed: " + m.message);
+        if (m.type === "preview") {
+          answer = m;
+        } else {
+          const lack = m.type === "built" ? missingModels(p.def, m.models) : [];
+          if (lack.length) Log.warn("track", `build worker: ${m.id} built without ${lack.length} of its baked models the page holds (${lack.join(", ")}) — building in steps instead`);
+          else if (m.type === "built" && (isLive(p.live))) answer = m;
+          else Log.warn("track", "build worker failed: " + m.message);
+        }
       } catch (err) { Log.warn("track", "build worker: reply unusable (" + (err && err.message) + ") — building in steps instead"); }
       p.resolve(answer);
     };
@@ -356,6 +360,45 @@ const TrackBuildClient = (function () {
   // nothing may fill it with a synchronous build meanwhile (__apex's lazy ensure).
   const busy = () => _inflight > 0;
 
-  return { enabled, set, spawn, idleWarm, build, replay, busy, KEY, defaultOn };
+  // Race-select outline: centreline on the worker, adopted into Tracks so the
+  // next TrackMaps.compute is a cache hit (no main-thread buildCenterline).
+  // Resolves true when the preview cache was primed; false → caller computes.
+  async function previewMap(def) {
+    if (!def || !def.id || def.custom) return false;
+    if (def._metaOnly || !(def.path && def.path.pts && def.path.pts.length)) return false;
+    if (!enabled() || typeof Worker === "undefined") return false;
+    if (typeof Tracks === "undefined" || !Tracks.LIST || !Tracks.adoptPreviewCenterline) return false;
+    const idx = Tracks.LIST.indexOf(def);
+    if (idx < 0) return false;
+    const r = spawn();
+    if (!r) return false;
+    let initTimer = null, timedOut = false;
+    const up = await Promise.race([r, new Promise((res) => {
+      if (typeof setTimeout === "function") initTimer = setTimeout(() => { timedOut = true; res(false); }, ANSWER_MS);
+    })]);
+    if (initTimer != null) clearTimeout(initTimer);
+    if (timedOut && _ready === r) drop("worker init gave no answer in " + ANSWER_MS / 1000 + " s");
+    if (!up || !_w || _ready !== r) return false;
+    const seq = ++_seq, worker = _w;
+    const msg = await new Promise((resolve) => {
+      let timer = null;
+      if (typeof setTimeout === "function") timer = setTimeout(() => {
+        if (!_pending.delete(seq)) return;
+        resolve(null);
+      }, Math.min(ANSWER_MS, 8000));
+      _pending.set(seq, { resolve: (m) => { if (timer != null) clearTimeout(timer); resolve(m); }, def, live: null });
+      try { worker.postMessage({ type: "preview", seq, idx, id: def.id }); }
+      catch (e) {
+        _pending.delete(seq);
+        if (timer != null) clearTimeout(timer);
+        if (_w === worker) drop("preview send " + ((e && e.message) || "failed"));
+        resolve(null);
+      }
+    });
+    if (!msg || msg.type !== "preview" || !msg.track) return false;
+    return !!Tracks.adoptPreviewCenterline(def, msg.track);
+  }
+
+  return { enabled, set, spawn, idleWarm, build, previewMap, replay, busy, KEY, defaultOn };
 })();
 if (typeof window !== "undefined") window.TrackBuildClient = TrackBuildClient;
