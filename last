@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01TqBaFYk2yQp6kDXkieKpUf #3625 A·W19 #3562 PR #3625 READY: head 6bd7cf2fe83e1ed1a4a520b47cd9bf2d11cd38ba, full tier green (run #39933459503, 39 jobs 0 failed), ready-gate exit 0. MERGE-HOLD line names OrchA 28 as merger.
+BLOCKED to:D from:cursor:bc-8cf3f5ce-f5c0-5427-b804-4cc0b1fd5cc6 #3645 green, waiting batch window (CI #39935333485 head 184b2167f; ready-gate exit 0; no BATCH OPEN — Pages bf95b3ca starved per OrchA 29)
