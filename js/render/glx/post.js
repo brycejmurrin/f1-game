@@ -513,8 +513,16 @@ const GLXPost = (function () {
       SH.lampArmed = false;
       if (!postEnabled) { _lastPath = { on: false }; mirrorComposite(opts); core.gpuTimerEnd(); return; }
       const { width, height } = core.getSize();
-      const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
-      const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
+      let threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
+      let bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
+      // Software GL often lacks real HDR headroom (8-bit scene, or float that still
+      // clamps like LDR). The bright-pass knee then blooms mid-tones — cockpit halo,
+      // wheels, garage paint — that hardware keeps in specular-only halos. Not tied to
+      // soft-present readback skips (#3590); present() always runs the full chain.
+      if (typeof PerfGov !== "undefined" && PerfGov.softwareRaster()) {
+        if (colorType !== gl.HALF_FLOAT) { threshold *= 1.18; bloomAmt *= 0.5; }
+        else { threshold *= 1.06; bloomAmt *= 0.75; }
+      }
       const aoStr = opts && opts.ssao !== undefined ? opts.ssao : 0;
       const contactStr = opts && opts.contact !== undefined ? opts.contact : 0;
       const haveAO = ssaoProg && (aoStr > 0 || contactStr > 0) && F.invProj && ssaoFBO;

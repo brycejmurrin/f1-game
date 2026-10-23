@@ -92,6 +92,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `native.js` | `Native` | tag | native-shell detect (Electron preload + Capacitor). |
 | `native-download.js` | `NativeDownload` | tag | blob:<a download> → Capacitor Filesystem + Share (no bundler). |
 | `script-loader.js` | `ScriptLoader` | tag | ScriptLoader: extracted runtime orchestration. |
+| `menu-sheet-gate.js` | `MenuSheetGate` | tag | defer menu prep while an interactive menu sheet is open. |
 | `lazy-bundles.js` | `LazyBundles` | tag | LazyBundles: extracted runtime orchestration. |
 | `wake-lock.js` | `RaceWakeLock` | tag | RaceWakeLock: asynchronous screen wake-lock ownership. |
 | `save-schema-registry.js` | `SaveSchemaRegistry` | tag | SaveSchemaRegistry: manifest of every apex26.* persistence key. |

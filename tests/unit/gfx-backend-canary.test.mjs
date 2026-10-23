@@ -4373,6 +4373,11 @@ test("GLX readbackLdrPixels skips software GL readPixels while #carsetup is visi
   assert.ok(body.includes("PerfGov.softwareRaster()") && body.includes('getElementById("carsetup")') && body.includes("!cs.hidden) return false"));
 });
 
+test("GLX present() reins in bloom on software GL when the scene target is LDR", () => {
+  const body = span(read("js/render/glx/post.js"), "function present(opts) {", "function ", "present");
+  assert.ok(body.includes("PerfGov.softwareRaster()") && body.includes("colorType !== gl.HALF_FLOAT") && body.includes("bloomAmt *="));
+});
+
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
   // GameStore JSON-encodes every value: the key holds "\"ultra\"" WITH the
   // quotes. 0a31155 compared the raw string to "ultra", so every desktop that
@@ -6233,15 +6238,25 @@ test("selector preparation waits for the player's hands before the build and the
     "the warm frames follow the paced car assets, on an idle menu, with the program warm requested first");
   assert.ok(fin.indexOf("_menuGate.warm = 2") < fin.indexOf("menuLampBake(current)"),
     "…and come BEFORE the lamp pre-bake: a RACE! tap mid-bake met cold shaders");
-  const idle = eval("(function(){ let _menuInputAt = 0; const MENU_IDLE_MS = 1200; let now = 0;" +
-    " const performance = { now: () => now }; const waits = [];" +
-    " const setTimeout = (fn, ms) => { waits.push(ms); now += ms; fn(); };" +
-    src.match(/async function menuIdle\(current\) \{[\s\S]*?\n\}/)[0] +
-    " return { menuIdle, waits, tap: (t) => { _menuInputAt = t; now = t; } }; })()");
-  idle.tap(5000);
-  assert.equal(await idle.menuIdle(() => true), true);
-  assert.deepEqual(idle.waits, [1200], "a tap pushes the build a full idle window out");
-  assert.equal(await idle.menuIdle(() => false), false, "a stale selection never builds");
+  // D·IP2: idle clock lives in MenuSheetGate; game.js keeps a thin menuIdle wrapper.
+  assert.ok(/MenuSheetGate\.idle\(/.test(src) && /async function menuIdle\(current\)/.test(src),
+    "menuIdle delegates through MenuSheetGate.idle");
+  const waits = [];
+  let now = 0, inputAt = 0;
+  const ctx = vm.createContext({
+    performance: { now: () => now, mark() {} },
+    setTimeout: (fn, ms) => { waits.push(ms); now += ms; fn(); return 1; },
+    document: { getElementById: () => null, activeElement: null },
+    Object, Promise, WeakMap,
+  });
+  vm.runInContext(read("js/core/menu-sheet-gate.js"), ctx, { filename: absSrc("js/core/menu-sheet-gate.js") });
+  const Gate = vm.runInContext("MenuSheetGate", ctx);
+  const menuIdle = (c) => Gate.idle(c, 1200, () => inputAt, () => new Promise((r) => { waits.push(32); now += 32; r(); }));
+  inputAt = 5000; now = 5000;
+  assert.equal(await menuIdle(() => true), true);
+  assert.deepEqual(waits, [1200], "a tap pushes the build a full idle window out");
+  waits.length = 0;
+  assert.equal(await menuIdle(() => false), false, "a stale selection never builds");
 });
 
 test("selector preparation rejects stale requests, reuses the world, and waits for compilation", async () => {

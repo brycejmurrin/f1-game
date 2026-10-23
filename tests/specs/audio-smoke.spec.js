@@ -25,8 +25,11 @@ async function bootWithStore(page, entries) {
   await page.evaluate(() => {
     window.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
   });
+  // engine.js lands mid-bundle; serial LAZY_AUDIO keeps loading — wait for the
+  // ensureAudio completion mark, not merely !GameAudio._stub.
   await page.waitForFunction(
-    () => typeof GameAudio !== "undefined" && !GameAudio._stub && typeof GameAudio.volumes === "function",
+    () => typeof performance !== "undefined" && performance.getEntriesByName
+      && performance.getEntriesByName("apex:audio:ready").length > 0,
     null, { polling: 100, timeout: BOOT_MS }
   );
 }
