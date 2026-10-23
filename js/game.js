@@ -711,7 +711,11 @@ let gridPreOrdered = false;   // set by gridUp(); read by js/net/netplay.js — 
 // id and night because the box paint is baked into the start-line decal:
 // racing the same circuit again with MY TEAM selected changes the field
 // without changing either of the other two, and the paint would be stale.
-let builtGridSlots = null;
+// builtTrackBare: built without its lazy scenery closure (a failed fetch builds
+// bare). Not in the guard's identity, so bareStale() makes the next load rebuild
+// once the closure is resident — every ensureScenery asks again (#3570).
+let builtGridSlots = null, builtTrackBare = false;
+const bareStale = () => builtTrackBare && !!builtTrackId && sceneryResident(builtTrackId);
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0, netGreen = null;
 const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (solo race only)
@@ -1935,6 +1939,8 @@ function currentCarGroundMat(c, out) {
 // ---------- track loading ----------
 const sessionDarkFor = (def) => raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
   raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && !!def.night);
+const builtWorldFits = (def) => builtTrackId === def.id && builtTrackNight === sessionDarkFor(def) &&
+  builtGridSlots === fieldSize() && !bareStale();
 const trackBuildOpts = (night, gridSlots) => ({ night, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots, retainGraph: wantAgentSurface() });
 // The world freed: the old one before a stepped rebuild, or one the player picked away from (scheduleFlybyTrack).
 function dropTrackWorld() {
@@ -1961,7 +1967,7 @@ async function loadTrackStepped(idx, live) {
   await Promise.all([ensureCircuit(idx), ensureTrackBuild()]);
   if (!live()) return false;
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
-  if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
+  if (builtWorldFits(def)) { loadTrack(idx); return true; }
   const prevId = builtTrackId;
   try { if (raceArmedSentinel()) PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
   let built = null;
@@ -2033,7 +2039,7 @@ function _loadTrackBody(idx, def, built, builtPrevId) {
   const sessionDark = sessionDarkFor(def);
   const wantSlots = fieldSize();
   // `built`: a track loadTrackStepped already built (it freed the old world first).
-  if (built || builtTrackId !== def.id || builtTrackNight !== sessionDark || builtGridSlots !== wantSlots) {
+  if (built || !builtWorldFits(def)) {
     freeTrackMeshes(track);
     // Drop the old track object BEFORE building the new one: the build's
     // transient peak (plain-JS geometry arrays for up to ~5 M verts) is the
@@ -2057,6 +2063,7 @@ function _loadTrackBody(idx, def, built, builtPrevId) {
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
     builtGridSlots = wantSlots;
+    builtTrackBare = !def.scenery && !sceneryResident(def.id);
     aeroZ.build();              // fixed ACTIVATION ZONES for this circuit
     // Env probe still holds the previous circuit — fall back to the analytic
     // sky until a fresh 6-face cycle has captured the new one.
@@ -2141,7 +2148,7 @@ const menuKey = (idx) => [idx, raceTimeOfDay, raceWeather, fieldSize()].join("|"
 // What the BUILD reads (loadTrackStepped/trackBuildOpts): weather is not an input, time of day
 // only through sessionDarkFor. A menu build in flight for an equal key is kept (hunt 3 K5/X6).
 const buildKey = (idx) => { const d = Tracks.LIST[idx]; return d ? [idx, sessionDarkFor(d), fieldSize(), PerfGov.tier() < 3].join("|") : ""; };
-const menuWorld = () => !!track && _menuGate.track === track && _menuGate.ready === menuKey(trackIdx);
+const menuWorld = () => !!track && _menuGate.track === track && _menuGate.ready === menuKey(trackIdx) && !bareStale();
 let flybyBuildTimer = 0;
 const MENU_IDLE_MS = 1200;
 let _menuInputAt = 0;
@@ -2261,7 +2268,7 @@ function scheduleFlybyTrack(settle) {
       // Car assets BEFORE the warm frames: prepareMenuCarAssets slices the
       // mesh/livery work; a warm frame drawn first
       // minted and uploaded all ~22 atlases in one 3-4 s task.
-      if (_menuGate.ready === prep.key && _menuGate.track === track) {
+      if (_menuGate.ready === prep.key && _menuGate.track === track && !bareStale()) {
         await menuFinish(current, prep.key); await garagePrewarm(current); return;
       }
       // AT ONCE, NOT AFTER MENU_IDLE_MS: the build is stepped (~8 ms a frame), so a
@@ -3947,7 +3954,7 @@ function startRaceFromSheet() {
     resultsCam.reset(); els.results.hidden = true; clearTimeout(flybyBuildTimer); _menuGate.generation++;
     setState("menu", "sheet-start");
     const def = Tracks.LIST[trackIdx];
-    if (track && def && builtTrackId === def.id && builtTrackNight === sessionDarkFor(def) && builtGridSlots === fieldSize()) { _menuGate.track = track; _menuGate.ready = menuKey(trackIdx); }
+    if (track && def && builtWorldFits(def)) { _menuGate.track = track; _menuGate.ready = menuKey(trackIdx); }
     raceIntro(startRace);
   } catch (e) { Log.warn("game", "pre-race screen failed — starting straight away", e); cancelIntro(); loadingScreen.stop(); return startRaceCovered(); }
 }
