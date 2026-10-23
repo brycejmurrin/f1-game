@@ -700,6 +700,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/i18n-lint.test.mjs",
   "tests/unit/i18n.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
+  // #3560 F1: CamTune.decodeShare bounds paste/decode before JSON.parse (APXC1).
+  "tests/unit/import-hardening-apxc1.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
