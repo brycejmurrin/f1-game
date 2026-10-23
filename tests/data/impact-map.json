@@ -16094,6 +16094,7 @@
       ],
       "*": [
         "tests/unit/followup-platform.test.mjs",
+        "tests/unit/install-chip-overlap.test.mjs",
         "tests/unit/pause-key-tools.test.mjs"
       ]
     },
