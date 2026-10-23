@@ -2770,6 +2770,15 @@
       ]
     },
     {
+      "path": "tools/perf/ers-deploy-census.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/perf/garage-census.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

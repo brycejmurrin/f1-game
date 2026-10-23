@@ -311,6 +311,7 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/devicefarm-host.mjs** | Device Farm automated-run body: on the AWS Mac host, Safari bench legs + Instruments trace into $DEVICEFARM_LOG_DIR. | — |
 | **perf/devicefarm-iphone.mjs** | AWS Device Farm: Safari on a real iPhone (remote access + Appium); renderer probe, BENCHMARK WEBGPU vs WEBGL2. | — |
 | **perf/diagnostics.mjs** | Bounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses. | renderer-debug / mcp-probe |
+| **perf/ers-deploy-census.mjs** | First-ERS-deploy pipeline census: every three createRenderPipeline across the first BOOST deploy, named | — |
 | **perf/garage-census.mjs** | Garage perf census (#B·L24): frame CPU, draws/tris/programs, heap, DOM, Car3D.build ms per body style. | perf-memory-census |
 | **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
 | **perf/live-render-matrix.mjs** | #2572 render matrix: rebuild A/B, context loss, quality tiers, visibility/resize, night/mirror per backend. | renderer-debug |

@@ -43,12 +43,25 @@ reads 4.0 MJ after one deploy frame. A normal race shows it too: the first BOOST
 
 The throttle lift in Bryce's report is how the deploy starts: BOOST lands before the lift is processed.
 
-**Owner: renderer.** `js/render/three/tlx.js` `_LATE_FX` is meant to warm these opts on a probe quad. The material
-key matches (`buildMatKey` ignores `emissive` and `alpha`), so the likely miss is the vertex layout of
-`car-mesh.js _flatQuadData` against the probe geometry (`_layoutKey`), or the `_warmFx` / `_lateFxOn()` gate on
-WebGPU. A cheap device confirmation: hold GAS plus `__apex.setBoost(true)` for about 1 s during the lights. The stall
-should move there, and the first BOOST tap should be clean. A first attempt in PR #3611 (drawing the HUD button's
-lit state early) was measured not to help (run 8) and was reverted.
+**The miss, named by `tools/perf/ers-deploy-census.mjs`.** The census holds GAS, then turns BOOST on (the first deploy) and
+logs every three `createRenderPipeline` and the TLX `memState().matMissKeys` delta:
+
+| run (local, three WebGL2 backend, Monza, mirror on) | deployed | new material on the first deploy |
+|---|---|---|
+| `--cam helmet` (the game's default camera; the wheel is on screen) | yes | **1: `t,0.9,0,0,0,0,0,1\|ds\|na`** |
+| `--cam chase` | yes | 0 |
+
+`t,0.9,…|ds|na` is `js/car/car-draw.js` `_rigFxA` (`doubleSided: true, emissive: 1, roughness: 0.9, specular: 0,
+noAlphaWrite: true`, alpha `0.75 + 0.25·sin`). At `car-draw.js:1516` it draws the cockpit dash ERS bar only while
+`c.deploying`; the armed OT lamp at `:1521` shares it. TLX's `_LATE_LIT` warm (`js/render/three/tlx.js`) has the same
+entry **without `doubleSided`**, so it warms `t,0.9,…|na`, not `…|ds|na`. The first deploy mints the material, and on
+WebGPU it compiles the pipeline mid-race. Three's WebGL2 backend reuses the program (no lazy pipeline logged), which
+is why the stall is a WebGPU one. Run 9 on the iPhone used the cockpit camera, matching this.
+
+**Owner: renderer (A·W14).** Suggested fix: warm the `doubleSided` variant of `_LATE_LIT` (on the rig meshes' layouts,
+both winding signs), or warm `_rigFxA` itself. Proof: `node tools/perf/ers-deploy-census.mjs --cam helmet` prints
+`misses=0`, and on the device the first BOOST tap drops from 734–934 ms to the 20–40 ms of a later tap. A first
+attempt in PR #3611 (drawing the HUD button's lit state early) was measured not to help (run 8) and was reverted.
 
 ## 3. Method
 

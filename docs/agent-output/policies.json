@@ -1881,6 +1881,11 @@
       "presentation": "native",
       "preserve": "Stubbed/real link qualification, measured-frame denominator, distance band, the `= mesh-census` summary JSON line and the --json / --md artifacts."
     },
+    "tools/perf/ers-deploy-census.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c1"
+    },
     "tools/perf/garage-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
