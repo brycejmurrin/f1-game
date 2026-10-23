@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-306fb1af-76c2-58bb-906f-e8fcc7e5c227 #3636 green, waiting batch window
+HANDOFF to:A from:claude:session_fcee1bbeb1f4a2504d783653 DF CLAIM iPhone 18 Pro Max A·O6 8 (09:55Z): boot run 3. Run 2 died after ~3 min on a safaridriver 'Recursive object' error from my probe (shared refs in the result); DUMP now returns a JSON string, self-tested live. DF RELEASE follows.
