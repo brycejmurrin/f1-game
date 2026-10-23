@@ -13740,12 +13740,12 @@
       "buildPost": [
         "tests/unit/tlx-round2.test.mjs"
       ],
-      "casterSources": [
-        "tests/unit/gfx-backend-canary.test.mjs"
-      ],
       "castShadowInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs"
+      ],
+      "casterSources": [
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "compileWarmProbe": [
         "tests/unit/gfx-backend-canary.test.mjs"
