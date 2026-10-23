@@ -4063,17 +4063,12 @@ function raceIntro(go) {
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
   // SwiftShader / llvmpipe: the loading flyby compiles and draws the whole circuit again
   // behind the race-settings sheet (18-30 s of frozen UI with no visible progress).
-  // Hardware keeps the cinematic; software GL hands off straight to startRace().
+  // Hardware keeps the cinematic; software GL takes the screen's no-world path: the
+  // short race card (it names the event), no flyby, no read — then startRace().
+  // Players and harnesses alike: a harness-only card would test a path no player sees.
   let forceSoftwareFlyby = false;
   try { forceSoftwareFlyby = typeof DevFlags !== "undefined" && !!DevFlags.get("swFlyby"); } catch (_) { /* bench A/B */ }
-  const autoHarness = typeof loadingScreen !== "undefined" && loadingScreen.isAutomation && loadingScreen.isAutomation();
-  // Players on software GL skip the flyby; harnesses keep loadingScreen.run()'s card path (#1290, real-race.spec).
-  if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.softwareRaster && RaceEntryProfile.softwareRaster() && !forceSoftwareFlyby && !autoHarness) {
-    sheetRelease(true);
-    loadingScreen.stop();
-    go();
-    return;
-  }
+  if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.softwareRaster && RaceEntryProfile.softwareRaster() && !forceSoftwareFlyby) info.hasWorld = false;
   (async () => {
     try {
       await RaceEntryProfile.spanAsync("flyby", async () => {
