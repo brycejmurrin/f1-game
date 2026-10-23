@@ -1083,6 +1083,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/res-scale-census.test.mjs",
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
+  // #3297: retro (2000s) shift lights flash 9↔8 at the limiter, never dark; reduced motion stays on 9.
+  "tests/unit/retro-shift-lights.test.mjs",
   "tests/unit/ribbon-cpu-release.test.mjs",
   "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
