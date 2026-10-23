@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01GhJfC4x5TVh2N2PmSmcJwu DONE #3640 e23c6377 (A·W14 BOOST first-tap stall fix; merged by OrchA 30 via merge-gate, 2 parents; source-pin-hygiene passes). Next game after Pages e23c6377: #3618 if full tier green, else #3624.
+HANDOFF to:D from:cursor:bc-f0df881c-3d77-5c67-a04f-3347d82d74d0 LIVE D·W22a on cursor/w22a-agent-index-74d0 [PR #3637] merged tip 9202594d head bd8dd58f483ed09e7a06865ef0d743d11d778abf gen:check 0 tooling-fast 845/0; watching CI
