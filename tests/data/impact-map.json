@@ -8926,6 +8926,9 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs"
+      ],
+      "narrow": [
+        "tests/unit/vsfriend-head-200.test.mjs"
       ]
     },
     "js/net/netplay.js": {

@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/net/lobby.js": {
+      "narrow": [
+        "tests/unit/vsfriend-head-200.test.mjs"
+      ]
+    }
+  }
+}
