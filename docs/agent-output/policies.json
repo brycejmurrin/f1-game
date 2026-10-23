@@ -1906,6 +1906,11 @@
       "presentation": "native",
       "preserve": "@c8"
     },
+    "tools/perf/touch-boost-probe.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c1"
+    },
     "tools/shot/ab-gallery.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",

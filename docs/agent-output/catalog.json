@@ -2838,6 +2838,7 @@
     {
       "path": "tools/perf/touch-boost-probe.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
       "interpreter": "node"
     },
     {
