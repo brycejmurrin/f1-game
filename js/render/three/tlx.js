@@ -1459,10 +1459,10 @@ const TLX = (function () {
       // "output" + "ssrTag", the tag's format chosen by the same rule as tlx-post.js) and drawn under the same
       // MRT node, the mirror reuses the scene's programs. The tag attachment is never sampled and keeps no mips;
       // the colour attachment, and so the mirror's pixels, are unchanged. Latched with the target, so a mirror
-      // pass and its warm always agree with the target they draw into. apex26.tlxMirMrt=0: the one-attachment
-      // target (the old way, the A/B lever).
+      // pass and its warm always agree with the target they draw into. ?tlxMirMrt=0 (DevFlags mirMrt, URL only):
+      // the one-attachment target (the old way, the A/B lever).
       let _mirMrtKnob = true;
-      try { _mirMrtKnob = localStorage.getItem("apex26.tlxMirMrt") !== "0"; } catch (_) { /* no storage: on */ }
+      try { _mirMrtKnob = typeof DevFlags === "undefined" || DevFlags.get("mirMrt") !== false; } catch (_) { /* no flags: on */ }
       const _mirMrt = () => !!(mirRT && mirRT.textures && mirRT.textures.length > 1);
       const _mirMrtWant = () => _mirMrtKnob && !!(post && post.tagOn && post.tagOn() && TSL.mrt && renderer.setMRT);
       function _mirTarget(type, w, h, mrt) {
