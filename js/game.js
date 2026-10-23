@@ -1991,6 +1991,17 @@ async function loadTrackStepped(idx, live) {
   _loadTrackBody(idx, def, built, prevId);
   return true;
 }
+// startRaceBody's build. A false is a context loss only when gfxContextLost() says so: a newer paced build
+// supersedes this one with the context intact (an intro's live() still reads "menu" until clearMenuScreens,
+// #3571), so it builds once more; a second such false fails the start (runSession's onFail), not "graphics reset".
+async function raceTrackStepped(idx, stale) {
+  for (let tries = 0; tries < 2; tries++) {
+    if (await loadTrackStepped(idx, () => !stale() && !gfxContextLost())) return true;
+    if (stale()) return false;
+    if (gfxContextLost()) { quitToMenuAfterCtxLost(); return false; }
+  }
+  throw new Error("track build superseded twice");
+}
 function loadTrack(idx) {
   // Every loader releases selector ownership before replacing the world.
   _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
@@ -2520,7 +2531,7 @@ async function startRaceBody() {
   if (_menuGate.join) { const step = _menuGate.join; _menuGate.join = null; await step.catch(() => false); if (stale()) return false; }   // startRace joined the menu's build
   if (typeof GfxEscalation !== "undefined" && GfxEscalation.softenRaceEntry) GfxEscalation.softenRaceEntry(gfx);
   if (vmNoFramePump) loadTrack(trackIdx);
-  else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost())) && !stale()) { quitToMenuAfterCtxLost(); return false; }
+  else if (!(await raceTrackStepped(trackIdx, stale))) return false;
   if (stale()) return false; rlap("loadTrack");
   // Break the remaining sync legs (settings → car meshes) into separate tasks.
   // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().

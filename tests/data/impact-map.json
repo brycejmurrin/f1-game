@@ -6412,6 +6412,7 @@
         "tests/unit/garage-defaults.test.mjs"
       ],
       "gfxContextLost": [
+        "tests/unit/ctx-lost-menu-restore.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -6493,6 +6494,7 @@
         "tests/specs/smoke.spec.js",
         "tests/specs/tlx-probes.spec.js",
         "tests/specs/touch-pedals.spec.js",
+        "tests/unit/ctx-lost-menu-restore.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/ghost.test.mjs"
@@ -6558,6 +6560,7 @@
       ],
       "quitToMenu": [
         "tests/specs/wake-lock.spec.js",
+        "tests/unit/ctx-lost-menu-restore.test.mjs",
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
@@ -6569,6 +6572,7 @@
         "tests/unit/wake-lock-vm.test.mjs"
       ],
       "quitToMenuAfterCtxLost": [
+        "tests/unit/ctx-lost-menu-restore.test.mjs",
         "tests/unit/ctx-lost-notice.test.mjs"
       ],
       "raceIntro": [
@@ -6582,6 +6586,9 @@
       ],
       "raceProfile": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "raceTrackStepped": [
+        "tests/unit/ctx-lost-menu-restore.test.mjs"
       ],
       "redFlagRestart": [
         "tests/unit/marshal-panels.test.mjs"
@@ -6700,6 +6707,7 @@
       ],
       "startRaceBody": [
         "tests/unit/audio-recovery.test.mjs",
+        "tests/unit/ctx-lost-menu-restore.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",

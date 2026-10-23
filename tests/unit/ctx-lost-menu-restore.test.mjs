@@ -62,3 +62,54 @@ test("Menus.create returns restoreMenuAfterGraphicsReset for game.js wiring", ()
   assert.ok(src.includes("TopModal.syncMenuIsolation"));
   assert.ok(src.includes("restoreMenuAfterGraphicsReset,"));
 });
+
+// #3571: a superseded paced build returns false with the context intact; only gfxContextLost() is a ctx loss.
+function raceTrackSteppedHarness(results, { lost = () => false, stale = () => false } = {}) {
+  const game = gameSource();
+  const at = game.indexOf("async function raceTrackStepped(");
+  const fn = game.slice(at, game.indexOf("\nfunction loadTrack(", at));
+  const calls = { builds: 0, ctxQuits: 0 };
+  const ctx = vm.createContext({
+    calls,
+    loadTrackStepped: async (_idx, live) => { calls.builds++; calls.liveAtCall = live(); return results.shift(); },
+    gfxContextLost: lost,
+    quitToMenuAfterCtxLost: () => { calls.ctxQuits++; },
+  });
+  vm.runInContext(fn + "\nthis.run = raceTrackStepped;", ctx, { filename: absSrc("js/game.js") });
+  return { run: () => ctx.run(3, stale), calls };
+}
+
+test("startRaceBody builds through raceTrackStepped, not a bare ctx-lost branch", () => {
+  const game = gameSource();
+  const body = game.slice(game.indexOf("async function startRaceBody("), game.indexOf("async function startRaceBody(") + 12000);
+  assert.ok(body.includes("await raceTrackStepped(trackIdx, stale)"));
+  assert.ok(!/loadTrackStepped\([^)]*\)\)\s*&&\s*!stale\(\)\)\s*\{\s*quitToMenuAfterCtxLost/.test(body));
+});
+
+test("raceTrackStepped: a superseded build with the context intact retries, no graphics-reset quit", async () => {
+  const h = raceTrackSteppedHarness([false, true]);
+  assert.equal(await h.run(), true);
+  assert.equal(h.calls.builds, 2);
+  assert.equal(h.calls.ctxQuits, 0);
+  assert.equal(h.calls.liveAtCall, true);
+});
+
+test("raceTrackStepped: a real context loss still takes the ctx-lost quit", async () => {
+  const h = raceTrackSteppedHarness([false], { lost: () => true });
+  assert.equal(await h.run(), false);
+  assert.equal(h.calls.ctxQuits, 1);
+  assert.equal(h.calls.builds, 1);
+});
+
+test("raceTrackStepped: a stale session returns false without any quit", async () => {
+  const h = raceTrackSteppedHarness([false], { stale: () => true });
+  assert.equal(await h.run(), false);
+  assert.equal(h.calls.ctxQuits, 0);
+});
+
+test("raceTrackStepped: superseded twice fails the start (onFail), not a graphics reset", async () => {
+  const h = raceTrackSteppedHarness([false, false]);
+  await assert.rejects(h.run(), /superseded twice/);
+  assert.equal(h.calls.ctxQuits, 0);
+  assert.equal(h.calls.builds, 2);
+});
