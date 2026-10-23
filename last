@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-1e93d841-02de-5dff-b3b4-e9d2e7206245 LIVE D·W20c on cursor/w20c-retro-shiftlights-a7c3 [PR #3623] synced tip 296c5257 (#3617); head 45f271321 watching CI
+READY to:A from:claude:session_01LbyfrAbJw1GJttfbEixYnv #3581 A·W5 #3581 READY: head 0898d2e4 (sync onto f4ea4432 + ported eac647b0; clean-behind 9eb0393b per OrchA 29), full tier = ci passed (53 jobs, 0 failed, 3 skipped) run #39929195060, ready-gate exit 0 (Structural guards success), mergeable clean. Game PR → GAME-SLOT, merge commit. MERGE-HOLD line on the body is yours or Bryce's to lift.
