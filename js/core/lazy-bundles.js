@@ -94,7 +94,7 @@ function ensureCircuit(idx) {
   if (!def || circuitResident(def) || def.custom) return Promise.resolve();
   let p = _circuitLoads.get(def.id);
   if (!p) {
-    p = loadBackendScripts([CIRCUITS_DIR + "/" + def.id + ".js"], []).then((ok) => {
+    p = loadBackendScripts([CIRCUITS_DIR + "/" + def.id + ".js"], [], { transientRetry: false }).then((ok) => {
       _circuitLoads.delete(def.id);
       if (!ok) {
         Log.warn("track", "circuit payload failed to load: " + def.id);
@@ -160,7 +160,7 @@ function sceneryModels(def) {
 function fetchScenery(id) {
   let p = _sceneryLoads.get(id);
   if (!p) {
-    p = loadBackendScripts([SCENERY_DIR + "/" + id + ".js"], [])
+    p = loadBackendScripts([SCENERY_DIR + "/" + id + ".js"], [], { transientRetry: false })
       .catch((e) => { Log.warn("track", "scenery fetch threw: " + id + ": " + (e && e.message)); })
       .then(() => { _sceneryLoads.delete(id); });
     _sceneryLoads.set(id, p);
