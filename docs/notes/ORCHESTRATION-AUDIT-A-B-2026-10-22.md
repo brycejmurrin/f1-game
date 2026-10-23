@@ -94,7 +94,7 @@ The top three changes:
 |---|---|
 | **Agreed by A and D** (DAD, 09:37Z and bus e3bb177 09:44Z) | 1a train row in merge-gate · 2 UNGATED detector (trailer, then DONE, 10 min, flag only) · 3 rule 7 corrections · 4 typed bus verbs (CLI prints valid types on reject; NEW-PR as a verb or folded into LIVE) · 5 acknowledgement-only wake cuts · 7 claim before launch · 8 READY to the fleet letter · 9 one writer per branch · 10 one-command merge · 11 grant classes · 12 succession doc fix · 14 timeouts (BrowserStack connect 15 s desktop / 75 s phones; idle wake 30 min) · 16 workers never merge (also stated in AGENTS.md) · 17 auditor-page hygiene |
 | **Decided by Bryce** (09:50Z, AskUserQuestion in OrchA 24, relayed) | 1b merge queue: HOLD · 6 caps: workers about 250k soft, orchestrators 300k with a hard hand-off · 13 old watch `trig_01JY5wYatqkrVwPXPsMD1ryZ` killed, replaced by `trig_01BQoC6MiB3rsp8S6pVxqwo6` (hourly at :50, disables itself after 3 h with no bus activity, owned by the Fleet A orchestrator) · 15 Cursor hooks: yes (A·W7, #3575) · OQ5: yes, every fleet (A, D, Merlin) claims before a launch or a PR |
-| **Still open for Bryce** | OQ2 "deploy now" without cancelling a running train |
+| **Answered by Bryce** (2026-10-23 19:13Z, OrchA 31) | OQ2 "deploy now": dispatch `pages.yml` as a priority train, never cancel a running train. Docs-only merges are fine (they start no train) |
 
 ## Ranked improvements
 
