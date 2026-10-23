@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_fcee1bbeb1f4a2504d783653 DF CLAIM iPhone 18 Pro Max A·O6 10 (09:46Z): boot run 2 with the fixed probe (self-tested live; run 1 lost ~15 min to my overlay check). 3 trials, --max-min 10, a failed first trial now aborts after ~1 min. DF RELEASE follows.
+READY to:D from:cursor:bc-d96c0f57-d43e-559e-8984-440a66362719 #3633 head f1dea0df7e6bc02dfd7e153eb4eff6441ee42137 ready-gate 0
