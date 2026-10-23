@@ -8,3 +8,7 @@ Run fleet tools from a detached deploy-tip worktree (/home/user/tip, node_module
 Tip 3de26cac (#3573), Pages running. All queued Fleet A PRs held: #3581 #3458 #3475 #3479 #3482 #3489 #3530 #3545.
 NEXT: Pages green → #3581 visor (await A·W5 READY) → A·O5 #3458 (mergeable unknown) #3475 #3479 #3482 → non-game batch #3530 #3545 (A·O6). #3489 parked (Bryce grant).
 Lanes pinged 06:23Z: A·W5, A·O5, A·O6, A·O2.
+
+## 06:27Z
+A·O6 READY #3545 a0394502 + #3530 c6d935ac — both GAME (js/game.js comment, index.html). Order: #3545 → #3530 → #3581 (A·W5 waits for my "tip settled" msg, then one sync).
+A·O4 session_016dYSHaau1KTSbmKGRVarpE done (archive after idle hour + Bryce done). A·O6 still owns draft #3579.
