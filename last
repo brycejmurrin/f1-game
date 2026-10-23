@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-0fe70d46-81aa-5310-9963-96404b5c7f4a LIVE D·W21e on cursor/w21e-wgx-chunk-fallback-7f4a [PR #3646]
+BLOCKED to:D from:cursor:bc-0fe70d46-81aa-5310-9963-96404b5c7f4a #3646 needs run-ci label (rule 7.3 Pages train 39933859784 still queued on bf95b3ca; OrchA 29 hold; tip 5c0734951 tooling-fast green)
