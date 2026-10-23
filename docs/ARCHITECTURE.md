@@ -575,6 +575,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `soak-run.js` | `SoakRun` | tag | SoakRun: the hands-free half of PhoneRecorder (AUTO SOAK). |
 | `gpu-test-run.js` | `GpuTestRun` | tag | GpuTestRun: the one-tap GPU TEST on a real phone (SETTINGS > METRICS > PHONE TEST > GPU TEST). |
 | `phone-recorder.js` | `PhoneRecorder` | tag | PhoneRecorder: a phone-only soak recorder (issue #1633). |
+| `bench-capture.js` | `BenchCapture` | tag | BenchCapture: the profiling record BENCHMARK (js/perf/bench-run.js) writes beside its frame stats. |
 | `bench-run.js` | `BenchRun` | tag | BenchRun: SETTINGS > GRAPHICS > BENCHMARK, a hands-free device benchmark with a results file. |
 
 **`js/xr/`**

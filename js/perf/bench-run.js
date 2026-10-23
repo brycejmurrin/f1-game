@@ -7,6 +7,11 @@
    localStorage under KEY so it survives every reload; when the last leg ends the player's own renderer settings come
    back, the page reloads once more if they changed, and this page reopens on the results with SAVE FILE and COPY.
 
+   Other leg kinds run on the same reload and restore: "race" (one track and weather, timed 25 s), "lap" (ONE LAP /
+   QUICK PATHS: the first timed lap of Monza, every frame of it), "garage" (tabs, liveries, spin) and "livery" (LIVERY
+   EDIT: a new livery edited through the controls a player taps, each edit timed to its presented frame, with the GPU
+   counters after a three-edit warm-up and at the end).
+
    A leg the page never finished (iOS killed the tab, a WebGPU device loss reloaded it) reads as state "running" on
    the next boot: it is recorded as "reloaded" and the run moves on, so a crash is a result, not a loop. A leg that
    ends early (page hidden, soak refused, a race that never started) is recorded with its reason and the run goes on. Nothing here runs until RUN: idle, the
@@ -15,10 +20,13 @@ const BenchRun = (function () {
   "use strict";
 
   const KEY = "apex26.benchRun";
-  const SCHEMA = "apex26.bench/1";
+  const SCHEMA = "apex26.bench/2";   // /2 adds leg.capture, steps[].cap and plan.capture (js/perf/bench-capture.js); /1 plans still resume
+  const SCHEMAS = ["apex26.bench/1", SCHEMA];
   const SEED = 42;
   const gpu = (path) => ({ kind: "gpu", path, label: path ? "GPU TEST " + path.toUpperCase() : "GPU TEST" });
   const race = (track, weather, tod, label) => ({ kind: "race", path: null, track, weather, tod, label });
+  // ONE LAP / QUICK PATHS: Monza dry on the helmet camera, GPU TEST's own scene, so a lap reads against its phases.
+  const lap = (path) => ({ kind: "lap", path, track: "monza", weather: "dry", tod: "default", label: path ? "Lap " + path.toUpperCase() : "Lap" });
   const TESTS = [
     { id: "paths", label: "WEBGPU vs WEBGL2", legs: [gpu("webgpu"), gpu("webgl2"), gpu("webgl2"), gpu("webgpu")],
       help: "three.js on both paths, alternating: WebGPU, WebGL2, WebGL2, WebGPU. The game reloads between legs. About 14 min." },
@@ -30,13 +38,21 @@ const BenchRun = (function () {
       help: "Six races on the renderer you have now: Monza dry, rain and night, Singapore night, Spa rain, Monaco. Each one reloads, starts cold and is timed for 25 s. About 8 min." },
     { id: "garage", label: "GARAGE", legs: [{ kind: "garage", path: null, label: "Garage" }],
       help: "Opens the GARAGE, steps through every tab, tries four liveries and spins the car, timing each step. Your garage choices are put back afterwards. About 3 min." },
+    { id: "lap", label: "ONE LAP", legs: [lap(null)],
+      help: "One timed lap of Monza, dry, helmet camera, on the renderer you have now: race entry, then every frame of the lap. About 2 min." },
+    { id: "quick", label: "QUICK PATHS", legs: [lap("webgpu"), lap("webgl2")],
+      help: "One timed lap of Monza on WebGPU, then one on WebGL2. The game reloads between them. About 5 min." },
+    { id: "livery", label: "LIVERY EDIT", legs: [{ kind: "livery", path: null, label: "Livery" }],
+      help: "Paints a new livery in the GARAGE (colours, palette, finish, pattern, number font, sponsors, styles), saves it and fits two parts, timing every edit and counting GPU memory. Your garage is put back afterwards. About 2 min." },
   ];
-  const READY_MS = 60000, COLD_MS = 300000, WARM_MS = 60000, RACE_MS = 20000, SETTLE_MS = 5000;
+  const READY_MS = 60000, COLD_MS = 300000, WARM_MS = 60000, RACE_MS = 20000, SETTLE_MS = 5000, LAP_MS = 240000;
 
   let _G = null, _ui = null, _pick = "paths", _busy = false;
   const r2 = (n) => (n != null && Number.isFinite(+n) ? Math.round(+n * 100) / 100 : null);
   const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
   const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+  // BenchCapture (js/perf/bench-capture.js): per-leg profiling; absent, the run is the /1 run.
+  const BC = () => (typeof BenchCapture !== "undefined" ? BenchCapture : null);
   function log(msg) { try { Log.info("game", "BenchRun " + msg); } catch (_) { /* Log not loaded */ } }
   function store() { return typeof GameStore !== "undefined" && GameStore.store ? GameStore.store : null; }
   function load() { try { const s = store(); const t = s ? s.raw(KEY) : localStorage.getItem(KEY); return t ? JSON.parse(t) : null; } catch (_) { return null; } }
@@ -49,6 +65,17 @@ const BenchRun = (function () {
     if (!v.length) return null;
     const m = v.length >> 1;
     return r2(v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2);
+  }
+  // Frames over the 30 fps and 20 fps budgets: what a player sees as a hitch. Pure.
+  function overs(d) {
+    const n33 = d.filter((x) => x > 33.4).length, n50 = d.filter((x) => x > 50).length;
+    return { n33, n50, over33: d.length ? r2(100 * n33 / d.length) : null };
+  }
+  // b - a for every number both samples hold: what the edits left behind on the GPU. Pure.
+  function growth(a, b) {
+    const o = {};
+    for (const k of Object.keys(b || {})) if (a && Number.isFinite(a[k]) && Number.isFinite(b[k])) o[k] = r2(b[k] - a[k]);
+    return o;
   }
   // Per path: the median over its finished legs of every phase's p50/p95, the fill slope, mirror cost and entry times.
   function summarize(legs) {
@@ -76,16 +103,25 @@ const BenchRun = (function () {
     }
     return out;
   }
-  // Race and garage legs as flat rows: one per race, one per garage step. Unfinished legs keep a row with their state.
+  // Race, lap, garage and livery legs as flat rows: one per race or lap, one per garage step or livery edit, plus
+  // the livery leg's GPU growth. Unfinished legs keep a row with their state. `time` is the lap (s) or the edit (ms).
+  const SCENE_KINDS = ["race", "lap", "garage", "livery"];
   function scenes(legs) {
     const rows = [];
     for (const leg of legs || []) {
-      if (!leg || (leg.kind !== "race" && leg.kind !== "garage")) continue;
+      if (!leg || !SCENE_KINDS.includes(leg.kind)) continue;
       if (leg.state !== "done") { rows.push({ label: leg.label, state: leg.state, reason: leg.reason || null }); continue; }
       const coldMs = leg.entry && leg.entry.cold ? (leg.entry.cold.buildMs != null ? leg.entry.cold.buildMs : leg.entry.cold.goMs) : null;
+      const many = leg.kind === "garage" || leg.kind === "livery";
       for (const st of leg.steps || []) {
-        rows.push({ label: leg.kind === "garage" ? leg.label + " · " + st.id : leg.label, state: "done",
-          p50: st.p50, p95: st.p95, p99: st.p99, fps: st.fps, links: st.links, pipes: st.pipes, coldMs });
+        rows.push({ label: many ? leg.label + " · " + st.id : leg.label, state: "done",
+          p50: st.p50, p95: st.p95, p99: st.p99, fps: st.fps, n33: st.n33, n50: st.n50, links: st.links, pipes: st.pipes, coldMs,
+          time: st.lapS != null ? st.lapS + " s" : st.editMs != null ? st.editMs + " ms" : null });
+      }
+      if (leg.kind === "livery" && leg.mem) {
+        const g = leg.mem.growth || {}, f = (k, name) => (g[k] != null ? name + " " + (g[k] > 0 ? "+" : "") + g[k] : null);
+        rows.push({ label: leg.label + " · GPU growth", state: "growth",
+          reason: [f("textures", "textures"), f("geometries", "geometries"), f("sticky", "sticky geo"), f("texMB", "texture MB"), f("flapSets", "flap sets")].filter(Boolean).join(" · ") || "no counters on this renderer" });
       }
     }
     return rows;
@@ -113,6 +149,21 @@ const BenchRun = (function () {
 
   // ---- the run --------------------------------------------------------------------------------------------------
   function stillRunning() { const p = load(); return !!(p && p.state === "running"); }
+  // Screen Wake Lock: a hands-free run must not let the phone sleep. The browser drops the lock whenever the page hides,
+  // so it is asked for again on visible and on every post-reload resume. Unsupported = silent; refused = one hint.
+  let _wl = null, _wlHint = false;
+  async function wakeAcquire() {
+    try {
+      const w = typeof navigator !== "undefined" ? navigator.wakeLock : null;
+      if (!w || typeof w.request !== "function" || (_wl && !_wl.released)) return;
+      _wl = await w.request("screen"); _wlHint = false; log("wake lock held");
+    } catch (e) { _wl = null; _wlHint = true; log("wake lock refused " + (e && e.name)); if (_ui) say("Screen may sleep: set Auto-Lock to Never"); }
+  }
+  function wakeRelease() {
+    const l = _wl; _wl = null; _wlHint = false;
+    try { if (l && !l.released) { const r = l.release(); if (r && r.catch) r.catch(() => {}); } } catch (_) { /* already released */ }
+  }
+  function onVisible() { try { if (document.visibilityState === "visible" && stillRunning()) wakeAcquire(); } catch (_) { /* no document */ } }
   function reload() { log("reload"); try { location.reload(); } catch (_) { /* no location */ } }
   function startLeg(plan) {
     const leg = plan.legs[plan.i];
@@ -146,8 +197,14 @@ const BenchRun = (function () {
     try { leg.fallbackWhy = sessionStorage.getItem("apex26.gfxFallbackWhy"); } catch (_) { leg.fallbackWhy = null; }
     if (!plan.facts) try { plan.facts = PhoneRecorder.liveEnv().facts(); } catch (_) { plan.facts = null; }
     leg.state = "running"; save(plan);
+    if (BC()) BC().legStart(leg, _G);
+    try { return await legBody(plan, leg); } finally { if (BC()) leg.capture = BC().legEnd(); }
+  }
+  async function legBody(plan, leg) {
     if (leg.kind === "race") return raceLeg(plan, leg);
     if (leg.kind === "garage") return garageLeg(plan, leg);
+    if (leg.kind === "lap") return lapLeg(plan, leg);
+    if (leg.kind === "livery") return liveryLeg(plan, leg);
     let result = null;
     const done = new Promise((res) => { leg._res = res; });
     _G.seed = plan.seed;
@@ -171,15 +228,24 @@ const BenchRun = (function () {
     return leg.state === "done";
   }
   // rAF intervals over `ms` after `settleMs`, with program links / pipelines counted inside the window (GPU TEST's stats).
-  async function measure(ms, settleMs) {
-    await sleep(settleMs);
+  // record() starts counting; the function it returns stops and gives the stats, frames over 33 / 50 ms included.
+  function record() {
     const counts = { links: 0, pipes: 0 }, unhook = GpuTestRun.hookCounts(counts), d = [];
     let prev = 0, on = true;
     const tick = (ts) => { if (!on) return; if (prev) d.push(ts - prev); prev = ts; requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
+    return () => {
+      on = false; unhook();
+      const st = Object.assign(GpuTestRun.phaseStats(d, [], counts), overs(d)), cap = BC() && BC().step();
+      if (cap) st.cap = cap;
+      return st;
+    };
+  }
+  async function measure(ms, settleMs) {
+    await sleep(settleMs);
+    const end = record();
     await sleep(ms);
-    on = false; unhook();
-    return GpuTestRun.phaseStats(d, [], counts);
+    return end();
   }
   async function until(f, ms) { const t0 = now(); while (now() - t0 < ms) { try { if (f()) return true; } catch (_) { /* not yet */ } await sleep(100); } return false; }
   async function raceLeg(plan, leg) {
@@ -193,6 +259,22 @@ const BenchRun = (function () {
     if (!stillRunning()) return "aborted";
     if (!alive) { leg.state = "failed"; leg.reason = "race ended early: " + why; return false; }
     leg.steps = [Object.assign({ id: "race" }, st)];
+    leg.state = "done";
+    return true;
+  }
+  // ONE LAP: every frame from the lights to the first timed lap (the run-up to the line, then lap 1 standing).
+  async function lapLeg(plan, leg) {
+    _G.seed = plan.seed;
+    const cold = await timedEntry(() => SoakRun.start({ track: leg.track, weather: leg.weather, tod: leg.tod, minutes: LAP_MS / 60000 + 1, cam: "helmet" }), COLD_MS);   // the soak outlives the cap, so a slow lap reads as one
+    leg.entry = { cold };
+    if (!cold.ok) { leg.state = "failed"; leg.reason = "race could not start"; return false; }
+    const end = record(), timed = () => { const P = _G.player; return P && P.lastLap > 0 ? P.lastLap : 0; };
+    await until(() => timed() || !SoakRun.active() || !stillRunning(), LAP_MS);
+    const st = end(), lapS = timed(), alive = SoakRun.active(), why = alive ? null : (SoakRun.status() || {}).reason;
+    try { if (alive) SoakRun.stop("bench"); } catch (_) { /* soak gone */ }
+    if (!stillRunning()) return "aborted";
+    if (!lapS) { leg.state = "failed"; leg.reason = alive ? "no timed lap in " + LAP_MS / 60000 + " min" : "race ended early: " + why; return false; }
+    leg.steps = [Object.assign({ id: "lap", lapS: r2(lapS) }, st)];
     leg.state = "done";
     return true;
   }
@@ -221,7 +303,8 @@ const BenchRun = (function () {
     } catch (_) { /* blocked storage */ }
     try { if (S && S.mirrorFlush) await S.mirrorFlush(); } catch (_) { /* no mirror: localStorage is the whole store */ }
   }
-  async function garageLeg(plan, leg) {
+  // The title's GARAGE button, timed to a sheet with tabs; the arrival animation is skipped as a player would.
+  async function openGarage(leg) {
     const D = document;
     const t0 = now(), open = D.getElementById("mb-garage");
     if (!open) { leg.state = "failed"; leg.reason = "no GARAGE button"; return false; }
@@ -231,6 +314,11 @@ const BenchRun = (function () {
     if (!ok) { leg.state = "failed"; leg.reason = "the garage did not open"; return false; }
     const skip = D.getElementById("cs-arrival-skip");
     if (skip && skip.offsetParent) skip.click();
+    return true;
+  }
+  async function garageLeg(plan, leg) {
+    const D = document;
+    if (!(await openGarage(leg))) return false;
     const steps = [Object.assign({ id: "idle" }, await measure(5000, 2000))];
     const tabs = () => Array.from(D.querySelectorAll('#cs-tabs [role="tab"]')).filter((b) => !b.disabled && b.offsetParent);
     const name = (b) => String(b.id || "").replace(/^cs-tab-/, "") || String(b.textContent || "").trim().toLowerCase();   // setup-sheet.js csTabId
@@ -251,9 +339,94 @@ const BenchRun = (function () {
     leg.steps = steps; leg.state = "done";
     return true;
   }
+  // The counters tests/specs/garage-livery-churn.spec.js reads (TLX only; another renderer reports nulls).
+  function memSample() {
+    const o = { textures: null, geometries: null, texMB: null, geoLive: null, sticky: null, flapRuns: null, flapSets: null };
+    const T = (_G && _G.gfx && _G.gfx.__tlx) || (typeof GLX !== "undefined" ? GLX.__tlx : null);   // the bound TLX, as experience.js reads it
+    try {
+      const m = T.memState(), k = m.geoKinds || {};
+      Object.assign(o, { textures: m.rTex, geometries: m.rGeo, geoLive: m.geoLive, sticky: (k.chunk || 0) + (k.carSh || 0) + (k.tex || 0),
+        texMB: m.resources && m.resources.texturesSize != null ? r2(m.resources.texturesSize / 1048576) : null });
+    } catch (_) { /* not TLX */ }
+    try { o.flapRuns = T.coState().runs; } catch (_) { /* not TLX */ }
+    try { o.flapSets = CarMesh.flapState().sets; } catch (_) { /* no flap cache */ }
+    return o;
+  }
+  // Input to the frame that shows it: the rAF after the input's own work draws the edit, the next one has presented it.
+  async function timedTap(fn) {
+    const t0 = now();
+    if (!fn()) return null;
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    return r2(now() - t0);
+  }
+  // LIVERY EDIT: CREATE a livery and edit it through the controls a player taps, SAVE & FIT, then fit two parts.
+  // Each edit is the DOM event the control listens for (click, or a colour/slider input + change), never a draft write.
+  async function liveryLeg(plan, leg) {
+    const D = document, q = (sel) => D.querySelector(sel), qa = (sel) => Array.from(D.querySelectorAll(sel)).filter((b) => !b.disabled);
+    if (!(await openGarage(leg))) return false;
+    const tab = (id) => { const b = D.getElementById("cs-tab-" + id); if (!b || b.disabled) return false; b.click(); return true; };
+    if (!tab("livery") || !(await until(() => q(".cs-liv-create"), 5000))) { leg.state = "failed"; leg.reason = "no livery CREATE"; return false; }
+    await sleep(1500);
+    const open = memSample();
+    q(".cs-liv-create").click();
+    if (!(await until(() => q('input[data-liv-field="c1"]'), 5000))) { leg.state = "failed"; leg.reason = "the livery editor did not open"; return false; }
+    await sleep(1000);
+    const set = (field, v) => () => {
+      const inp = q('input[data-liv-field="' + field + '"]'); if (!inp || inp.disabled) return false;
+      inp.value = String(v); inp.dispatchEvent(new Event("input", { bubbles: true })); inp.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    };
+    const tap = (sel, i) => () => { const b = qa(sel).filter((x) => !x.classList.contains("active"))[i || 0]; if (!b) return false; b.click(); return true; };
+    const rowBtn = (label, i) => () => {
+      const r = Array.from(D.querySelectorAll(".cs-liv-ed-row")).find((x) => (x.querySelector(".cs-liv-ed-lbl") || {}).textContent === label);
+      const b = r && Array.from(r.querySelectorAll("button")).filter((x) => !x.disabled)[i]; if (!b) return false; b.click(); return true;
+    };
+    // An adjustable SPINE TOP design (LiveryDesign.PATTERNS), so DESIGN WIDTH below is live.
+    const pattern = () => {
+      const ids = (typeof LiveryDesign !== "undefined" && LiveryDesign.PATTERNS) || [];
+      const b = qa('[data-cs-pill^="spineLogo:"]').find((x) => !x.classList.contains("active") && ids.includes(x.dataset.csPill.slice(10)));
+      if (!b) return false; b.click(); return true;
+    };
+    // A part STYLE row starts on FITTED: its next pill is a style.
+    const style = () => { const f = q('[data-cs-pill$=":fitted"]'); const b = f && f.nextElementSibling; if (!b || b.disabled) return false; b.click(); return true; };
+    const edits = [["primary colour", set("c1", "#1a6bd8")], ["accent colour", set("c2", "#f2c014")], ["colour chip", tap("[data-cs-colour]", 1)],
+      ["palette", rowBtn("PALETTE", 1)], ["finish", tap("[data-cs-finish]", 1)], ["pattern", pattern],
+      ["pattern width", set("patternWidth", 70)], ["number font", tap('[data-cs-pill^="numFont:"]', 0)], ["sponsors", tap('[data-cs-pill^="sponsors:"]', 0)],
+      ["body style", tap('[data-cs-pill^="bodyStyle:"]', 0)], ["part style", style]];
+    // Then the accent dragged through colours never seen before: the churn tests/specs/garage-livery-churn.spec.js pins.
+    for (let i = 1; i <= 4; i++) edits.push(["accent " + i, set("c2", "#" + (0x204060 + i * 0x0b0503).toString(16).slice(-6))]);
+    const steps = [], all = record();
+    const step = async (id, fn) => {
+      const editMs = await timedTap(fn);
+      if (editMs == null) { steps.push({ id: id + " (none)", editMs: null }); return; }
+      steps.push(Object.assign({ id, editMs }, await measure(1500, 0)));
+    };
+    // The baseline is taken after a warm-up of three edits, as the churn spec takes it: the garage builds its bay,
+    // atlas and first flap set lazily, and that first build is not an edit's cost.
+    let warm = null;
+    for (const [id, fn] of edits) {
+      await step(id, fn);
+      if (!stillRunning()) { all(); return "aborted"; }
+      if (steps.length === 3) { await sleep(1500); warm = memSample(); }
+    }
+    await step("save & fit", () => { const b = q(".cs-liv-ed-save"); if (!b) return false; b.click(); return true; });
+    // Two fitted parts in the first part tab that has a free, unlocked option (a locked row would spend on research).
+    const part = () => qa('#cs-options .cs-opt[data-cs-opt]:not(.active):not(.locked):not(.over-budget)')[0];
+    const cat = Array.from(D.querySelectorAll('#cs-tabs [role="tab"]')).map((b) => b.dataset.csCat).find((c) => c && !["team", "livery", "tune"].includes(c) && tab(c) && part());
+    for (let i = 1; cat && i <= 2; i++) await step("fit " + cat + " " + i, () => { const b = part(); if (!b) return false; b.click(); return true; });
+    steps.push(Object.assign({ id: "all edits" }, all()));
+    await sleep(3000);   // the paint jobs an edit queues (atlas, flaps, hi-res swap) land before the second count
+    const after = memSample();
+    leg.mem = { open, before: warm, after, growth: growth(warm, after) };
+    const back = D.getElementById("cs-back"); if (back) back.click();
+    leg.steps = steps; leg.state = "done";
+    return true;
+  }
   async function finishPlan(plan, state) {
+    wakeRelease();
     plan.state = state; plan.finishedAt = new Date().toISOString(); plan.show = true;
     plan.summary = summarize(plan.legs); plan.scenes = scenes(plan.legs);
+    if (BC()) plan.capture = BC().budget(plan);
     if (plan.restore) { await restore(plan.restore); plan.restoreAfter = plan.restore; delete plan.restore; }
     writePrefs(plan.prefs); save(plan);
     log("done " + state);
@@ -262,7 +435,7 @@ const BenchRun = (function () {
   }
   async function resume() {
     const plan = load();
-    if (!plan || plan.schema !== SCHEMA) return;
+    if (!plan || SCHEMAS.indexOf(plan.schema) < 0) return;
     if (plan.state !== "running") {
       // A page that saved the garage on its way out could have written the run's picks back: check once, after the reload.
       if (plan.restoreAfter) {
@@ -272,9 +445,10 @@ const BenchRun = (function () {
       if (plan.show) { plan.show = false; save(plan); if (await waitReady()) open(); }
       return;
     }
+    wakeAcquire();
     if (_busy) return; _busy = true;
     const leg = plan.legs[plan.i];
-    if (leg && leg.state === "running") { leg.state = "reloaded"; leg.reason = "the page reloaded during this leg"; plan.i++; save(plan); }
+    if (leg && leg.state === "running") { leg.state = "reloaded"; leg.reason = "the page reloaded during this leg"; if (BC()) leg.crumb = BC().recover(); plan.i++; save(plan); }
     else if (leg && leg.state === "booting") {
       const ok = await runLeg(plan);
       if (ok === "aborted" || !stillRunning()) { _busy = false; return; }
@@ -292,6 +466,7 @@ const BenchRun = (function () {
     // and counts toward onboarding, a garage leg saves livery picks. A benchmark leaves no trace.
     plan.restore = snapshot();
     save(plan); log("start " + plan.test + " " + plan.legs.length + " legs");
+    wakeAcquire();
     startLeg(plan);
     return true;
   }
@@ -330,12 +505,14 @@ const BenchRun = (function () {
     return t;
   }
   function scenesTable(rows) {
-    const t = el("table"); t.setAttribute("aria-label", "Benchmark results per race and garage step");
-    const head = el("tr"); ["SCENE", "p50 / p95 / p99 ms", "fps", "links / pipelines", "entry ms"].forEach((h) => head.appendChild(el("th", null, h))); t.appendChild(head);
+    const t = el("table"); t.setAttribute("aria-label", "Benchmark results per race, lap, garage step and livery edit");
+    const head = el("tr"); ["SCENE", "TIME", "p50 / p95 / p99 ms", "fps", "> 33 / 50 ms", "links / pipelines", "entry ms"].forEach((h) => head.appendChild(el("th", null, h))); t.appendChild(head);
+    const v = (x) => (x == null ? "–" : String(x));
     rows.forEach((r) => {
       const tr = el("tr"); tr.appendChild(el("td", null, r.label));
-      if (r.state !== "done") { const td = el("td", null, r.state + (r.reason ? " (" + r.reason + ")" : "")); td.colSpan = 4; tr.appendChild(td); }
-      else [r.p50 + " / " + r.p95 + " / " + r.p99, String(r.fps), r.links + " / " + r.pipes, String(r.coldMs)].forEach((v) => tr.appendChild(el("td", null, v)));
+      if (r.state === "growth") { const td = el("td", null, r.reason); td.colSpan = 6; tr.appendChild(td); }
+      else if (r.state !== "done") { const td = el("td", null, r.state + (r.reason ? " (" + r.reason + ")" : "")); td.colSpan = 6; tr.appendChild(td); }
+      else [v(r.time), v(r.p50) + " / " + v(r.p95) + " / " + v(r.p99), v(r.fps), v(r.n33) + " / " + v(r.n50), v(r.links) + " / " + v(r.pipes), v(r.coldMs)].forEach((x) => tr.appendChild(el("td", null, x)));
       t.appendChild(tr);
     });
     return t;
@@ -346,6 +523,7 @@ const BenchRun = (function () {
     body.textContent = "";
     body.appendChild(_ui.status);
     if (plan && plan.state === "running") {
+      if (_wlHint) say("Screen may sleep: set Auto-Lock to Never");
       const leg = plan.legs[plan.i] || {};
       body.appendChild(el("p", "adv-help", "Running " + plan.test + ": leg " + (plan.i + 1) + " of " + plan.legs.length + (leg.label ? " (" + leg.label + ")" : "") + ". Leave the phone alone; this page comes back with the results."));
       body.appendChild(btn("STOP BENCHMARK", "bigbtn alt", () => { stop(); paint(); }));
@@ -393,20 +571,21 @@ const BenchRun = (function () {
     if (!host) return false;
     const nav = el("nav", "pm-doors"); nav.setAttribute("aria-label", "Benchmark");   // the SETTINGS hub's door tile look
     const b = btn("BENCHMARK…", null, open); b.id = "pm-bench-open";
-    b.appendChild(el("small", null, "Time this phone: renderer paths, weather, tracks, garage"));
+    b.appendChild(el("small", null, "Time this phone: one lap, renderer paths, weather, tracks, garage, livery edits"));
     nav.appendChild(b); host.insertBefore(nav, host.firstChild);
     return true;
   }
 
   return {
-    KEY, SCHEMA, SEED, TESTS, median, summarize, scenes, newPlan, pathPrefs,
+    KEY, SCHEMA, SCHEMAS, SEED, TESTS, median, overs, growth, summarize, scenes, newPlan, pathPrefs,
     create(G) {
       _G = G;
+      try { document.addEventListener("visibilitychange", onVisible); } catch (_) { /* no document */ }
       if (typeof setTimeout === "function") [400, 1200, 2500, 5000].forEach((ms) => setTimeout(mount, ms));
       if (typeof setTimeout === "function") setTimeout(() => { resume().catch((e) => log("resume failed " + (e && e.message))); }, 0);
       return this;
     },
-    run, stop, open, close, active: stillRunning, result: resultText,
+    run, stop, open, close, active: stillRunning, result: resultText, wake: { acquire: wakeAcquire, release: wakeRelease, onVisible },
   };
 })();
 

@@ -78,7 +78,15 @@ const Particles = (function () {
     _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0;
   }
 
-  function clear() { _sprK = 0; _sprThr = Infinity; _n = 0; _flN = 0; _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0; }
+  // Drop the live pool and one-frame flares. Does NOT hide or unseed rain
+  // (rainShow / rainSeed own that): startRace clears smoke without killing a
+  // wet field the weather path just armed. Also drops the dirty-latch caches
+  // so a re-issue cannot resurrect the previous frame's geometry after quit.
+  function clear() {
+    _sprK = 0; _sprThr = Infinity; _n = 0; _flN = 0;
+    _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0;
+    _rainFed = false; _lastRainLive = false; _rainAcc = 0;
+  }
   function count() { return _n; }
   function capacity() { return MAX; }
   function stats() { return { uploadFloats: _statUpload, expands: _statExpand, alphaExpands: _statAlphaExpand, additiveExpands: _statAddExpand, skips: _statSkip }; }

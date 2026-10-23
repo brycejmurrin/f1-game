@@ -198,6 +198,20 @@ window.ScrollFade = (function () {
     if (timer) return;
     timer = setTimeout(paintAll, SCHEDULE_MS);
   }
+  // Resize-driven repaints share the viewport budget (ui-scale zoom + sf mask).
+  // rAF coalesces RO storms; a timer is still used for mutation coalescing (D·IP2).
+  const scheduleFrame = typeof requestAnimationFrame === "function"
+    ? (fn) => requestAnimationFrame(fn)
+    : (fn) => setTimeout(fn, 0);
+  let viewportRaf = 0;
+  function scheduleViewport() {
+    if (viewportRaf) return;
+    viewportRaf = scheduleFrame(() => {
+      viewportRaf = 0;
+      if (timer) { clearTimeout(timer); timer = 0; }
+      paintAll();
+    });
+  }
   // Layout after a screen opens settles over several frames (web fonts, the
   // view transition, canvas sizing), so re-measure once things stop moving.
   // Drop watchers whose element left the DOM. ResizeObserver can unobserve one
@@ -218,16 +232,24 @@ window.ScrollFade = (function () {
   }
   let settleSoon = 0;
   let settleLate = 0;
-  function settle() {
+  // Viewport / scale / explicit refresh must land in the same frame budget as
+  // layout (ui-scale.spec counts zoom + sf-* mask within six frames). Screen
+  // [hidden] flips and mutation storms keep SCHEDULE_MS coalescing (D·IP2).
+  function settle(immediate) {
     pruneWatched();
-    schedule();
+    if (immediate) {
+      if (timer) { clearTimeout(timer); timer = 0; }
+      paintAll();
+    } else {
+      schedule();
+    }
     if (settleSoon) clearTimeout(settleSoon);
     if (settleLate) clearTimeout(settleLate);
     settleSoon = setTimeout(() => { settleSoon = 0; paintAll(); }, 120);
     settleLate = setTimeout(() => { settleLate = 0; paintAll(); }, 400);
   }
 
-  const ro = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+  const ro = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleViewport) : null;
   // Deliberately NOT one observer over document.body: the HUD rewrites classes
   // every frame during a race, and every callback would force a layout read.
   const contentMo = typeof MutationObserver === "function" ? new MutationObserver(schedule) : null;
@@ -257,8 +279,8 @@ window.ScrollFade = (function () {
       const t = e.target;
       if (t && t.tagName === "DETAILS") schedule();
     }, true);
-    window.addEventListener("resize", settle, { passive: true });
-    window.addEventListener("orientationchange", settle, { passive: true });
+    window.addEventListener("resize", () => settle(true), { passive: true });
+    window.addEventListener("orientationchange", () => settle(true), { passive: true });
     if (screenMo) {
       document.querySelectorAll(SCREENS).forEach((s) =>
         screenMo.observe(s, { attributes: true, attributeFilter: ["hidden"] }));
@@ -270,5 +292,5 @@ window.ScrollFade = (function () {
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { refresh: settle, paint };
+  return { refresh: () => settle(true), paint };
 })();
