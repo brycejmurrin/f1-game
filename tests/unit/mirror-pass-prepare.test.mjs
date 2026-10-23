@@ -159,3 +159,33 @@ test("caught backend failures and stale ready targets do not claim preparation s
 // mirrorPrepare and one frame spike per rival new to the 6 nearest, mid-race.
 // Here the REAL CarDraw warms a full field (warmCarAssets, as race entry does)
 // and the REAL MirrorPass draws through its drawMirrorCar: no build, ever.
+
+// A·W14: __apex.mirror().prep says where a preparation's time went after the program warm (iPhone 14: mirrorPrepare
+// 16-21 s, programWarm 2.6-5.8 s of it): frames after the warm, the longest gap between them, refusals by kind, the
+// real-size pass's own time, and how it ended. Observation only.
+test("race preparation reports frames, gaps, refusals and pass time after the warm (__apex.mirror().prep)", async () => {
+  const h = boot({ state: "count" });
+  let warming = true;
+  h.gfx.warming = () => warming;
+  const begin = h.gfx.mirrorBegin;
+  let refuse = 1;
+  h.gfx.mirrorBegin = (...a) => { h.clock.t += 40; if (refuse > 0) { refuse--; return false; } return begin(...a); };
+  h.clock.t = 1000;
+  const ready = h.mp.prepareRace();
+  h.render();                                     // primes
+  h.clock.t = 2000; h.render();                   // still warming
+  h.clock.t = 4000; warming = false; h.render();  // warm over at +3000; first pass refused (40 ms)
+  assert.equal(h.mp.state().prep.end, null, "still preparing");
+  h.clock.t = 6500; h.render();                   // a 2.46 s gap, then the pass draws
+  assert.equal(await ready, true);
+  const p = h.mp.state().prep;
+  assert.equal(p.end, "ready");
+  assert.equal(p.warmEndMs, 3000, "the warm released the preparation 3 s in");
+  assert.equal(p.frames, 4, "every render() the preparation saw");
+  assert.equal(p.framesAfterWarm, 2);
+  assert.equal(p.maxGapMs, 2460, "the longest wait for a frame after the warm (6500 - 4040)");
+  assert.deepEqual(JSON.parse(JSON.stringify(p.refused)), { noEl: 0, box: 0, size: 0, begin: 1 }, "one refused begin");
+  assert.equal(p.passes, 2);
+  assert.ok(p.passMs >= 80 && p.lastPassMs >= 40, `the passes' own time: ${p.passMs} / ${p.lastPassMs}`);
+  assert.equal(p.endMs, Math.round(h.clock.t - 1000), "ended when the drawn pass finished");
+});
