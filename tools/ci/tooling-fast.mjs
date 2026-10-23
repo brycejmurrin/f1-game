@@ -143,6 +143,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // #1682: repo-wide assert.match under tests/unit only goes down (source-pin → behaviour).
   "tests/unit/assert-match-ratchet.test.mjs",
   "tests/unit/assets-pack.test.mjs",
+  // #3296: material filmstrip PNGs require albedoMd5/normalMd5 (same as model md5).
+  "tests/unit/assets-verify-material-md5.test.mjs",
   "tests/unit/audio-mix-improvements.test.mjs",
   // Round-2: MUSIC OFF never decodes the menu track (setMusic before setSound) and rows changed before the race bundle lands reach the store, not the stub.
   "tests/unit/audio-panel-boot.test.mjs",
