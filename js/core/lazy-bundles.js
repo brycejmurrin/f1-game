@@ -213,8 +213,8 @@ function ensureTrackBuild() {
 }
 // Resolves true once the closure is resident, false when it is not: the caller
 // can tell, because Tracks.build() of a circuit whose closure never landed is a
-// bare world that the rebuild guard (id, night, grid) then keeps for the
-// session. It does not throw — a bare world is playable, a rejection at the
+// bare world; game.js marks it (builtTrackBare) and the next load rebuilds it
+// once a later ask lands the closure (#3570). It does not throw — a bare world is playable, a rejection at the
 // title is the red overlay. ONE fetch per ask, no in-call retry: a failed
 // script is a completed request (the track has fallback scenery, and
 // session-entry-vm holds the request to prove a start survives it); the next
