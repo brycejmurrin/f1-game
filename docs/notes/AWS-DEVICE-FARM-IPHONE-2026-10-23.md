@@ -274,13 +274,17 @@ Website Data via XCUITest) before the first entry.
   Still unmeasured: a reboot, low-storage eviction, and a deploy that changes shader source.
 - **WebGPU needs two loads to finish warming** (7.3 → 2.3 → 0.24 s); WebGL2 needs one (2.3 → 0.37 s). The second
   WebGPU warm is mostly `post` (1.9 s): pipelines the first warm deferred.
-- **#3604's gain is not cleanly measured here.** The first WebGPU warm in this session was 7.3 s, against 29.4 s
-  (`mirrorPrepare`) in §6/§7. Per the caveat above, this unit may already have held WebGPU pipelines, so 7.3 s is
-  only an upper bound on a possibly warm phone. OrchA 27's read of all runs agrees: on the branch the gain was
-  10.5 s, but 16.3 s at the merged tip, where the phones also had WebGPU history. A clean before/after needs a
-  known-cold unit or a Safari data clear before each first entry. `run` now records the unit's identifier
-  (`mobile: deviceInfo` uuid, first 8 characters) in `report.unit`, so sessions on the same physical phone can be
-  told apart.
+- **#3604's gain: the mirror stage is confirmed; the total cold warm is bounded, not pinned.** The cache-proof
+  evidence is A·W14's same-build A/B on #3604 (comment 6359610979, live build 6931fdf7, 18 Pro Max). With #3604 on,
+  the mirror stage is 3–25× smaller on every leg than with it off (`?tlxMirMrt=0`). The off arm ran second, with
+  Safari's cache already warm, and its mirror stage was still 2.8× the on arm's. The size of the total first-WebGPU
+  gain is less certain. A·W14's on-arm cold build was 16.1 s against 28.8 s BEFORE (old build, fresh device), but
+  the on arm's unit history is unknown. My 7.3 s `programWarm` / 6.8 s `warm.total` above (quoted as "fresh device"
+  in #3604's addendum, comment 6359620914) comes from a unit that may also have held pipelines, so it is an upper
+  bound, not a clean AFTER. OrchA 27's read (10.5 s on the branch vs 16.3 s at the merged tip, both on phones with
+  WebGPU history) fits the same picture. A clean number needs a known-cold unit or a Safari data clear before the
+  first entry. `run` now records the unit's identifier (`mobile: deviceInfo` uuid, first 8 characters) in
+  `report.unit`, so sessions on the same physical phone can be told apart.
 - **The entry floor is not the renderer.** With a warm cache, both paths enter in 1.7–2.9 s, made of `loadTrack`
   (0.36–0.41 s), `gridCountdown` (0.73–0.86 s) and `warmCarAssets` (0.69–0.82 s), plus about 1 s of `scenery` when
   it is not cached. Any further entry win is there, not in shaders.
@@ -309,6 +313,6 @@ reloaded and started cold (BenchRun), then timed for 20 s: rAF p50/p95/p99, fram
   WebGPU against 3.6 s on WebGL2, and the first rain race 5.1 s against 2.9 s. Once those variants were compiled,
   Singapore night entered in 3.0 s and Spa rain in 2.8 s. The cost is per new shader variant, once per cache life
   (§8), and it lands on the first race a player runs in each new condition. A pre-warm of the night and rain
-  variants on the menu, or during the first race's countdown, would hide it. That decision belongs to the
-  warm-up owner (#3604's area), not this note.
+  variants on the menu, or during the first race's countdown, would hide it. Bryce has assigned that to A·W14
+  (via OrchA 27).
 - Cost: the account's trial showed 779.87 of 1,000 minutes left at 07:35Z (both fleets combined).
