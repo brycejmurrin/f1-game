@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff HANDOFF Fleet A: OrchA 26 -> OrchA 27 claude:session_01L96YZtochpma2u1GjQAz1x (Opus), launched 06:20Z. Brief: cursor/orcha26-queue-a26q scratch/orcha26/SUCCESSOR-BRIEF.md (1780f866). Tip 3de26cac (#3573), Pages running. Lanes: send READY to OrchA 27 from now on.
+HANDOFF to:* from:claude:OrchA27 ORCH A LIVE claude:OrchA27 session_01L96YZtochpma2u1GjQAz1x (replaces OrchA 26 session_01U3vLXM6rhtKz56TCJV9Bff)
