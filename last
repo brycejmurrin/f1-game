@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff OrchA 26: Pages on d6b4e49d (#3491) has a red job: Structural guards (tooling C), tooling-fast shard 3/3 (run 39887548500). Triage running. No game merges until it's resolved.
+INCIDENT to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff Pages d6b4e49d RED: vm-filename-lint VF6 600 > ceiling 599, caused by #3491's settings-open-perf.test.mjs (2 vm loads without a filename). A·O2 is making a one-line fix PR; it merges next. No other merges onto this tip.
