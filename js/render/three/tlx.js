@@ -301,10 +301,14 @@ const TLX = (function () {
       let _presentAcc = 0, _presentMs = 0;
       let _sceneRenders = 0;   // completed scene renders: _dropLater's "drawn since" clock
       const _renderTimed = (sc, cam) => {
+        // ?apex: per-pass scene wall time into GpuProfile (zero cost otherwise).
+        const _gp = typeof GpuProfile !== "undefined" && GpuProfile.enabled && GpuProfile.enabled();
+        if (_gp) try { GpuProfile.passBegin("scene"); } catch (_) { /* profile optional */ }
         const t0 = performance.now();
         renderer.render(sc, cam);
         _sceneRenders++;
         _presentAcc += performance.now() - t0;
+        if (_gp) try { GpuProfile.passEnd("scene"); } catch (_) { /* profile optional */ }
       };
       // Headless is a fact about PRESENTATION, not about silicon: headless
       // Chromium on a real GPU IS hardware. It belongs to _softBlit (which
@@ -582,36 +586,50 @@ const TLX = (function () {
             const _origCreate = _dev.createBuffer.bind(_dev);
             const COPY_DST = (typeof GPUBufferUsage !== "undefined" && GPUBufferUsage.COPY_DST)
               ? GPUBufferUsage.COPY_DST : 0x0008;
+            // When ?apex: count live buffer bytes and record the failing
+            // descriptor size on throw (iPhone 14 "Unable to create buffer").
+            // GpuProfile is a no-op without ?apex — one boolean gate.
             _dev.createBuffer = function (desc) {
-              if (!desc || !desc.mappedAtCreation) return _origCreate(desc);
-              const size = desc.size | 0;
-              const buf = _origCreate({
-                size,
-                usage: (desc.usage | COPY_DST),
-                label: desc.label,
-              });
-              let staging = new ArrayBuffer(size);
-              const parts = [];
-              buf.getMappedRange = function (offset, mapSize) {
-                const o = offset | 0;
-                const n = mapSize == null ? (size - o) : (mapSize | 0);
-                if (o === 0 && n === size) return staging;
-                const part = new ArrayBuffer(n);
-                parts.push({ o, part });
-                return part;
-              };
-              buf.unmap = function () {
-                try {
-                  for (let i = 0; i < parts.length; i++) {
-                    const p = parts[i];
-                    new Uint8Array(staging, p.o, p.part.byteLength).set(new Uint8Array(p.part));
-                  }
-                  if (staging && size) _dev.queue.writeBuffer(buf, 0, staging);
-                } catch (_) { /* one failed upload must not take down present() */ }
-                staging = null;
-                parts.length = 0;
-              };
-              return buf;
+              const track = typeof GpuProfile !== "undefined" && GpuProfile.enabled && GpuProfile.enabled();
+              try {
+                let buf;
+                if (!desc || !desc.mappedAtCreation) {
+                  buf = _origCreate(desc);
+                } else {
+                  const size = desc.size | 0;
+                  buf = _origCreate({
+                    size,
+                    usage: (desc.usage | COPY_DST),
+                    label: desc.label,
+                  });
+                  let staging = new ArrayBuffer(size);
+                  const parts = [];
+                  buf.getMappedRange = function (offset, mapSize) {
+                    const o = offset | 0;
+                    const n = mapSize == null ? (size - o) : (mapSize | 0);
+                    if (o === 0 && n === size) return staging;
+                    const part = new ArrayBuffer(n);
+                    parts.push({ o, part });
+                    return part;
+                  };
+                  buf.unmap = function () {
+                    try {
+                      for (let i = 0; i < parts.length; i++) {
+                        const p = parts[i];
+                        new Uint8Array(staging, p.o, p.part.byteLength).set(new Uint8Array(p.part));
+                      }
+                      if (staging && size) _dev.queue.writeBuffer(buf, 0, staging);
+                    } catch (_) { /* one failed upload must not take down present() */ }
+                    staging = null;
+                    parts.length = 0;
+                  };
+                }
+                if (track && desc) try { GpuProfile.noteBufferCreate(desc.size | 0); } catch (_) { /* profile optional */ }
+                return buf;
+              } catch (e) {
+                if (track) try { GpuProfile.noteBufferFail(desc); } catch (_) { /* profile optional */ }
+                throw e;
+              }
             };
             _dev.__apexWriteBuf = true;
           }
@@ -692,6 +710,13 @@ const TLX = (function () {
               _dev.__apexShaderHook = true;
             } catch (_) { /* optional hook */ }
           }
+          // ?apex GpuProfile: wrap createRenderPipeline / createComputePipeline /
+          // createShaderModule on the live GPUDevice (three r186 minified
+          // vendor/three-0.186.1/three.webgpu.min.js — never edit vendor/**;
+          // runtime wrap only). Installed AFTER __apexShaderHook so both chain.
+          try {
+            if (typeof GpuProfile !== "undefined" && GpuProfile.wrapDevice) GpuProfile.wrapDevice(_dev);
+          } catch (_) { /* profile optional */ }
           if (_liteGpu) {
             try { renderer.samples = 1; } catch (_) { /* samples is a three setter; ignore a frozen build */ }
           }
@@ -720,6 +745,13 @@ const TLX = (function () {
       }
       _abortRenderer = renderer;
       try { setTimeout(function () { if (/^apex26\.ctxLostReloads=\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
+      // ?apex GpuProfile: GL createProgram counter (three WebGL2 backend / ownGL).
+      try {
+        if (typeof GpuProfile !== "undefined" && GpuProfile.wrapGl) {
+          const _glProf = ownGL || (renderer.backend && renderer.backend.gl) || null;
+          if (_glProf) GpuProfile.wrapGl(_glProf);
+        }
+      } catch (_) { /* profile optional */ }
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
@@ -1212,8 +1244,28 @@ const TLX = (function () {
       // feature name and times per outermost render() (a nested render is
       // skipped, not double-counted). Software GL (SwiftShader/CI) stays
       // {supported:false}: it exposes the extension, but its time means nothing.
+      // Per-pass scene/shadow/post/mirror wall times (when ?apex) live in
+      // GpuProfile — see passBegin/passEnd at the draw sites and gpuProfile().
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
       let _inspectorHold = false;   // dev Inspector owns timestamp resolution (inspectorHost below)
+      // Wrap post.present once so hunt4b / render-final-contracts keep their
+      // verbatim `post.present(opts, _postF);` adjacency while ?apex still
+      // times the post pass.
+      function _apexTimePost(p) {
+        if (!p || p.__apexPassTimed) return p;
+        try {
+          if (typeof GpuProfile === "undefined" || !GpuProfile.enabled || !GpuProfile.enabled()) return p;
+          if (typeof p.present !== "function") return p;
+          const orig = p.present.bind(p);
+          p.present = function (o, F) {
+            try { GpuProfile.passBegin("post"); } catch (_) { /* profile optional */ }
+            try { return orig(o, F); }
+            finally { try { GpuProfile.passEnd("post"); } catch (_) { /* profile optional */ } }
+          };
+          p.__apexPassTimed = true;
+        } catch (_) { /* profile optional */ }
+        return p;
+      }
       function resolveGpuTimer() {
         if (!_gpuTimerOn) return;
         const epoch = _gpuTimerEpoch;
@@ -4728,6 +4780,14 @@ const TLX = (function () {
           return { supported: sup, on: _gpuTimerOn };
         },
         gpuMs() { return _gpuMs; },
+        // ?apex GpuProfile snapshot (js/perf/gpu-profile.js). Read-only; no-op
+        // shape when ?apex is absent. __apex.gpuProfile() waits on #3479.
+        gpuProfile() {
+          try {
+            if (typeof GpuProfile !== "undefined" && GpuProfile.snapshot) return GpuProfile.snapshot();
+          } catch (_) { /* profile optional */ }
+          return { on: false };
+        },
         // Dev Inspector hand-off (js/perf/three-inspector.js): the renderer plus the gpuTimer interlock — while held,
         // gpuTimer stays off so only the Inspector's own pass resolves timestamp queries.
         inspectorHost() {
@@ -5071,9 +5131,19 @@ const TLX = (function () {
         carShadowBegin(vp, boxScale) {
           if (!shadowSys) return;
           if (_softBlit && _softReadPending) { shadowSys.carShadowKeep(); return; }
+          try {
+            if (typeof GpuProfile !== "undefined" && GpuProfile.enabled && GpuProfile.enabled())
+              GpuProfile.passBegin("shadow");
+          } catch (_) { /* profile optional */ }
           shadowSys.carShadowBegin(vp, boxScale);
         },
-        carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
+        carShadowEnd() {
+          if (shadowSys) shadowSys.carShadowEnd();
+          try {
+            if (typeof GpuProfile !== "undefined" && GpuProfile.enabled && GpuProfile.enabled())
+              GpuProfile.passEnd("shadow");
+          } catch (_) { /* profile optional */ }
+        },
         lampShadowBegin(vp, idx) { if (shadowSys) shadowSys.lampShadowBegin(vp, idx); },
         lampShadowEnd() { if (shadowSys) shadowSys.lampShadowEnd(); },
         // TLX-PERF-PLAN L1 (tlx-shadow.js LAMP STATIC MAP): the static-props half
@@ -5381,7 +5451,15 @@ const TLX = (function () {
             _gpuLastOperation = "render-mirror";
             const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
             if (mrt) _mirMrtArm(true);
+            try {
+              if (typeof GpuProfile !== "undefined" && GpuProfile.enabled && GpuProfile.enabled())
+                GpuProfile.passBegin("mirror");
+            } catch (_) { /* profile optional */ }
             try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); }
+            try {
+              if (typeof GpuProfile !== "undefined" && GpuProfile.enabled && GpuProfile.enabled())
+                GpuProfile.passEnd("mirror");
+            } catch (_) { /* profile optional */ }
             _mirRenders++;
             _mirFails = 0;   // the cap means FOUR CONSECUTIVE failures: unrelated one-frame throws must not retire the mirror
           } catch (e) {
@@ -5922,6 +6000,12 @@ const TLX = (function () {
         decalRuns: true,   // CarMesh queues its tail glows into one run (F3)
         get coalesce() { return _coOn && !skipBatches(); },   // R1: car-draw.js flags its opaque wheel bags
         present(opts) {
+          // ?apex GpuProfile phase: warm frames = menu-warm; otherwise race
+          // (missedWarm flags compiles that land here).
+          try {
+            if (typeof GpuProfile !== "undefined" && GpuProfile.enabled && GpuProfile.enabled() && GpuProfile.setPhase)
+              GpuProfile.setPhase(_warmPending ? "menu-warm" : "race");
+          } catch (_) { /* profile optional */ }
           _poolBatch++;
           _kidsBegin(_kidsMain);
           _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -6132,6 +6216,7 @@ const TLX = (function () {
                 post.setMirror(ok ? mirRT.texture : null, ok ? _mirPx(up ? presentW : W, up ? presentH : H) : null, ok && mirRT.texture.type === THREE.HalfFloatType, _mirFlip);
               }
               try {
+                _apexTimePost(post);
                 renderer.setRenderTarget(post.sceneTarget());
                 _gpuLastOperation = "render-scene";
                 if (post.depthBegin) post.depthBegin(opts, _postF);   // A-P1: does this frame's post read the depth?
