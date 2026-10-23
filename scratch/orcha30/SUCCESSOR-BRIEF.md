@@ -33,3 +33,8 @@ Open Fleet A follow-ups (no PRs pending):
 - Device follow-ups never run: #3581 visor A/B on iPhone 14 (`helmetvisor=clear&visorreflections=medium&visorrefraction=off` vs `helmetvisor=off`, then `visorrefraction=medium`; see #3581 Verified); phone re-soak for #3479; real-device pass for #3482.
 - Still open from OrchA 29: #3579 BLOCKED on Bryce (sandbox denies `git rm` of a ratchets.d delta); question to Bryce: close #3586 / #3568?
 Fleet D open PRs (#3595 #3596 #3613 #3628 #3632–#3636 #3641–#3646 …) are D's to merge.
+
+## LATE ADDS (17:58Z)
+- #3651 device AFTER (18 Pro Max, live 269f66a4): first Monza-night WebGPU entry 3.1 s (was 14.4–14.8); scene warm 0.68 s; day/rain unchanged.
+- #3631 closed out: iPhone 14 mirror prep is not the cost (0 refused, 13 ms pass). Cold iPhone 14 first-race (Monza night, WebGPU) warm 16.9 s = scene 10.8 s, draw 3.85 s (rig 1.12 s), fx 2.2 s.
+- LANE CANDIDATE for OrchA 31 to scope: cut cold first-race warm on mid-range phones (fewer lit variants/layouts, or defer rarely seen pipelines past the lights). A·W14 (session_01GCovo9sNCsQDm2At4sZXA9) is idle and owns the context.
