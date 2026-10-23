@@ -4139,7 +4139,7 @@ test("GLX backendState and race entry defer pack retry on software GL (#3584)", 
 
 test("software GL garage path gates readback and stall reload (#3589)", () => {
   const loop = readFile("js/perf/loop-health.js");
-  assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"'));
+  assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"') && loop.includes('"race-settings"'));
   const soft = readFile("js/render/glx/soft.js");
   assert.ok(soft.includes("PerfGov.softwareGlUiReadbackDefer"));
   const assets = readFile("js/render/shared/assets.js");
