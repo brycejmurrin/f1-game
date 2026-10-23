@@ -13548,6 +13548,10 @@
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "_mirMrtArm": [
+        "tests/unit/tlx-fail-scope.test.mjs",
+        "tests/unit/tlx-hunt4c.test.mjs"
+      ],
       "_mirOf": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
@@ -13866,6 +13870,7 @@
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "warmMirrorStage": [
+        "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "wrapStream": [

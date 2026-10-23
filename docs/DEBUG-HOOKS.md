@@ -5408,3 +5408,8 @@ The manual TLX material-array detail setting uses `apex26.tlxMaterialDetail`: se
 `localStorage.setItem("apex26.tlxMaterialDetail", "8")` and reload to opt in;
 `"4"` is the default. The renderer clamps anisotropy to device capability and applies
 it only to material arrays. Settings export/import and garage reset include this key.
+
+The TLX mirror shares the scene pass's render context (A·W14): its target takes the scene target's
+`output` + `ssrTag` attachments and draws under the same MRT, so the race-entry warm reuses the scene's
+programs instead of compiling the world again for the mirror. `localStorage.setItem("apex26.tlxMirMrt", "0")`
+and reload restores the one-attachment mirror target (the A/B lever); unset is on.
