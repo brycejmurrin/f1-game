@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = new URL("../../", import.meta.url);
 const WGX_CHUNKED_SOURCE = fs.readFileSync(
@@ -55,7 +56,8 @@ function loadApi(core) {
   seedLog(ctx);
   vm.runInContext(
     `${WGX_CHUNKED_SOURCE.replace(/^const\b/gm, "var")}\nthis.WGXChunked = WGXChunked;`,
-    ctx);
+    ctx,
+    { filename: absSrc("js/render/webgpu/wgx-chunked.js") });
   return vm.runInContext("WGXChunked", ctx).init(core);
 }
 
