@@ -4136,9 +4136,9 @@ test("software GL garage path gates readback and stall reload (#3589)", () => {
   const loop = readFile("js/perf/loop-health.js");
   assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"'));
   const soft = readFile("js/render/glx/soft.js");
-  assert.ok(soft.includes("PerfGov.softwareRaster()") && soft.includes('"carsetup"'));
+  assert.ok(soft.includes("PerfGov.softwareGlUiReadbackDefer"));
   const assets = readFile("js/render/shared/assets.js");
-  assert.ok(assets.includes("deferScratchReadback"));
+  assert.ok(assets.includes("deferScratchReadback") && assets.includes("softwareGlUiReadbackDefer"));
   const game = gameSource();
   assert.ok(game.includes("openGarage") && game.includes("PerfGov.softwareRaster()") && game.includes("invalidateSoftPresent"));
 });
@@ -4370,9 +4370,11 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
     "desktop GLX MSAA starts from min(4, cMax, dMax); the preset cap (ULTRA 4×, else 2×) is applied AFTER, see the gfxPreset test");
 });
 
-test("GLX readbackLdrPixels skips software GL readPixels while #carsetup is visible", () => {
+test("GLX readbackLdrPixels skips software GL readPixels while menu/race-entry sheets are up", () => {
   const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h) {", "function ", "readbackLdrPixels");
-  assert.ok(body.includes("PerfGov.softwareRaster()") && body.includes('getElementById("carsetup")') && body.includes("!cs.hidden) return false"));
+  assert.ok(body.includes("PerfGov.softwareGlUiReadbackDefer") && body.includes("softwareGlUiReadbackDefer()"));
+  const gov = read("js/perf/governor.js");
+  assert.ok(gov.includes("softwareGlUiReadbackDefer") && gov.includes('"race-settings"') && gov.includes('"loading"'));
 });
 
 test("GLX present() reins in bloom on software GL when the scene target is LDR", () => {
