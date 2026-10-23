@@ -368,9 +368,12 @@ const RaceControl = (function () {
         if (lowGripNoted) Log.info("race", "Overtake disabled why=low-grip raceT=" + (+G.raceT || 0).toFixed(1));
       }
       if (!G.netPlay.ownsRaceControl()) return;
-      stormTick();
-      // A held flag flies whether or not the hazard loop is switched on: the
-      // player's CAUTIONS setting governs debris, not a race replayed by script.
+      // CAUTIONS off means no flag the local sim raises, the storm's included
+      // (Bryce 2026-10-23: a storm SC flew with the row OFF). setEnabled(false)
+      // resets wxHeld; this keeps a storm from raising it again.
+      if (enabled) stormTick();
+      // A SCRIPTED held flag flies whether or not the hazard loop is switched
+      // on: the player's CAUTIONS setting governs the sim, not a race replayed by script.
       if (held > caution.level && caution.level !== 4) {
         const prev = caution.level;
         caution.level = held; caution.sector = -1; caution.frac = 0;
@@ -541,9 +544,9 @@ const RaceControl = (function () {
     // (Storm.SC_START_S / SC_ROLL_S) so a race that STAYS a storm still races.
     // Read off raceWeather — on the shared clock in a friend race — and only on
     // the race-control owner, so it is deterministic and a guest mirrors it.
-    // The existing hold machinery flies it: exempt from the SC cap, raised
-    // regardless of CAUTIONS (weather is not debris), the AI queue and the
-    // Overtake rule (B7.2.2c) follow the level as for any safety car.
+    // The existing hold machinery flies it: exempt from the SC cap; the AI
+    // queue and the Overtake rule (B7.2.2c) follow the level as for any safety
+    // car. Only with CAUTIONS on (update() gates the call): OFF raises no flag.
     function stormTick() {
       const S = typeof Storm !== "undefined" ? Storm : null;
       const t = typeof G.raceT === "number" && Number.isFinite(G.raceT) ? G.raceT : 0;
