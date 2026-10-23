@@ -6856,7 +6856,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
   // (Skipped for the studio rig — its lamps have no fixtures, and floating
   // glow-cone billboards ringing the car read as artifacts. Skipped in the env
   // probe too: 64px additive halos just smear the reflection.)
-  if (withGlow && frame.lights && !_studioRig) gfx.drawGlow(frame.glowLights || frame.lights, LT.glareStr);
+  if (withGlow && frame.lights && !_studioRig) gfx.drawGlow(frame.glowLights || frame.lights, PostCommon.softwareGlowScale(LT.glareStr));
   if (!hideMeshes.props) {
     let m;
     // Lit windows / signage / neon glow whenever the session is dark enough to
@@ -8195,7 +8195,7 @@ function render(dt) {
 
   // Rapier debris shards (render-only side-world; poses stepped in update()).
   const _glowF = FrameLights.glowFade();   // held-tier fade, not a tier-3 cut (frame-lights.js)
-  if (frame.lights && !_studioRig && _glowF > 0) gfx.drawGlow(frame.glowLights || frame.lights, LT.glareStr * _glowF);   // AFTER the cars: depth-tested, no depth write — before them a halo in front of a body was overwritten
+  if (frame.lights && !_studioRig && _glowF > 0) gfx.drawGlow(frame.glowLights || frame.lights, PostCommon.softwareGlowScale(LT.glareStr * _glowF));   // AFTER the cars: depth-tested, no depth write — before them a halo in front of a body was overwritten
   if (DebrisWorld.active()) DebrisWorld.draw();
 
   // Transient FX particles (tyre smoke / sparks / kickup / spray): advanced

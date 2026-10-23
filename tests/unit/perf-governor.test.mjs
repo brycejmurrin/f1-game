@@ -1536,3 +1536,4 @@ test("without RenderRate the drift response is the governor rung, unchanged", ()
   assert.ok(scale() < 1 || PerfGov.autoShed() > 0, "driftStep's rung moved, exactly the pre-wiring behaviour");
   delete globalThis.RenderRate; delete globalThis.ThermalDrift;
 });
+
