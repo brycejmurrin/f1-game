@@ -7,6 +7,7 @@
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" [--legs 2|4|0] [--url URL] [--out DIR]
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --touch 5 [--from btn-throttle] [--to btn-boost]
 //     [--variants none,dom,state,none]   one fresh page load per entry, warm-up before the first tap (see WARM)
+//     [--variants none@live,dom@live,none@fix --fix-url URL --cold]   a fresh Safari PROCESS per entry
 //   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
 // `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
@@ -61,6 +62,11 @@ function iosPhones() {
 const TOUCH_RACE = `
   if (!window.__apex || !__apex.race) return { ok: false, why: "no __apex" };
   window.__tbpRace = "pending";
+  // Whole-load recorder: every rAF gap over 80 ms from race() on, with the game state, so a warm-up's one-time
+  // cost shows where it landed (loading, lights, race) and a BEFORE run shows the load is otherwise the same.
+  const E = window.__tbp0 = { big: [], t0: performance.now() };
+  let l0 = E.t0;
+  (function tick(t) { const d = t - l0; l0 = t; if (d > 80) { let st = null; try { st = __apex.info().state; } catch (_) {} E.big.push([Math.round(t - E.t0), Math.round(d), st]); } requestAnimationFrame(tick); })(l0);
   Promise.resolve(__apex.race("monza", "day", "dry")).then(() => { window.__tbpRace = "ok"; }, (e) => { window.__tbpRace = "err:" + e; });
   return { ok: true };`;
 const TOUCH_GO = `
@@ -98,6 +104,9 @@ const TOUCH_READ = (win, from, to) => `
     spans: (() => { try { const r = PerfSpans.stats(); const o = {}; for (const k in r) o[k] = { max: +(+r[k].max).toFixed(1), p95: r[k].p95 != null ? +(+r[k].p95).toFixed(1) : null }; return o; } catch (e) { return String(e); } })(),
     logs: (() => { try { return (__apex.logs() || []).filter((x) => x && x.t >= P.t0).slice(0, 60).map((x) => Math.round(x.t - P.t0) + " " + x.ns + " " + String(x.msg).slice(0, 120)); } catch (_) { return null; } })(),
     tapsAt: tapRows.map(([id, m]) => id + "@" + Math.round(m - P.t0)),
+    load: (() => { const E = window.__tbp0; if (!E) return null; const pre = E.big.filter((b) => b[0] < P.t0 - E.t0);
+      return { n: pre.length, top: [...pre].sort((a, b) => b[1] - a[1]).slice(0, 5) }; })(),
+    warmLog: (() => { try { return (__apex.logs() || []).filter((x) => x && /warmed/.test(String(x.msg))).map((x) => String(x.msg)); } catch (_) { return null; } })(),
     ev: P.ev.length, evHead: P.ev.slice(0, 6).map((e) => [e[0], e[1], e[3], e[4]]) };`;
 
 // Page-side probes. Each is a function body for WebDriver execute/sync (returns JSON-able data).
@@ -264,10 +273,26 @@ async function run() {
     const variants = opt("variants", "");
     if (touchN && variants) {
       report.variants = [];
-      for (const [i, v] of variants.split(",").entries()) {
-        if (i) { wd(base, "POST", `/session/${sid}/url`, { url: url + (url.includes("?") ? "&" : "?") + "v" + i + "=" + Date.now() }); await sleep(20000); }
-        try { const t = await touchRun(base, sid, out, touchN, v); report.variants.push(t); log(`variant ${i} ${v}: first=${t.read && t.read.perTap && t.read.perTap[0]} perTap=${JSON.stringify(t.read && t.read.perTap)} spansFrameMax=${t.read && t.read.spans && t.read.spans.frame && t.read.spans.frame.max}`); }
-        catch (e) { report.variants.push({ warm: v, error: e.message }); log(`variant ${i} ${v}: ERROR ${e.message.slice(0, 160)}`); }
+      // Entry = warm[@live|@fix]; --fix-url names the @fix page. --cold kills Safari between entries (a fresh
+      // process: run 5 showed the stall is paid once per Safari PROCESS, so a reload alone hides it).
+      const fixUrl = opt("fix-url", ""), cold = args.includes("--cold");
+      for (const [i, spec] of variants.split(",").entries()) {
+        const [v, target] = spec.split("@");
+        const base0 = target === "fix" ? fixUrl : url;
+        if (target === "fix" && !fixUrl) throw new Error("@fix needs --fix-url");
+        const u = base0 + (base0.includes("?") ? "&" : "?") + "v" + i + "=" + Date.now();
+        if (i && cold) {
+          try { wd(base, "POST", `/session/${sid}/context`, { name: "NATIVE_APP" });
+            wd(base, "POST", `/session/${sid}/execute/sync`, { script: "mobile: terminateApp", args: [{ bundleId: "com.apple.mobilesafari" }] }); }
+          catch (e) { log("terminate: " + e.message.slice(0, 120)); }
+          try { wd(base, "DELETE", `/session/${sid}`); } catch (_) { /* gone with Safari */ }
+          sid = wd(base, "POST", "/session", { capabilities: { alwaysMatch: caps, firstMatch: [{}] } }).sessionId;
+          try { wd(base, "POST", `/session/${sid}/orientation`, { orientation: "LANDSCAPE" }); } catch (_) { /* already */ }
+          log(`variant ${i}: cold Safari`);
+        }
+        if (i || target === "fix") { wd(base, "POST", `/session/${sid}/url`, { url: u }); await sleep(20000); }
+        try { const t = await touchRun(base, sid, out, touchN, v); t.target = target || "live"; t.url = u.replace(/[?&]v\d+=\d+$/, ""); report.variants.push(t); log(`variant ${i} ${spec}: first=${t.read && t.read.perTap && t.read.perTap[0]} load=${JSON.stringify(t.read && t.read.load)} warm=${JSON.stringify(t.read && t.read.warmLog)} perTap=${JSON.stringify(t.read && t.read.perTap)} spansFrameMax=${t.read && t.read.spans && t.read.spans.frame && t.read.spans.frame.max}`); }
+        catch (e) { report.variants.push({ warm: spec, error: e.message }); log(`variant ${i} ${spec}: ERROR ${e.message.slice(0, 160)}`); }
       }
     } else if (touchN) report.touch = await touchRun(base, sid, out, touchN);
     if (legs) {

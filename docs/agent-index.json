@@ -1145,6 +1145,7 @@
         "tests/specs/steer-migration.spec.js",
         "tests/specs/steering.spec.js",
         "tests/specs/tilt-pipeline.spec.js",
+        "tests/specs/touch-boost-warm.spec.js",
         "tests/specs/touch-buttons.spec.js",
         "tests/specs/touch-pedals.spec.js",
         "tests/specs/touch-steer.spec.js"
