@@ -75,9 +75,12 @@ export const DUMP = `
   let log = null; try { log = Log.records().slice(0, 160).map((x) => [x.t, x.ns, String(x.msg).slice(0, 90)]); } catch (_) {}
   const ov = document.getElementById("overlay"), oc = ov && getComputedStyle(ov), orc = ov && ov.getBoundingClientRect();
   const overlay = ov ? { hidden: ov.hidden, display: oc.display, vis: oc.visibility, pos: oc.position, w: Math.round(orc.width), h: Math.round(orc.height) } : null;
-  return { nowMs: r(performance.now()), overlay, log, nav: navOut, paint, counts: { res: res.length, cached, xfer: sum(() => true) }, byType, lastEnd,
+  const out = { nowMs: r(performance.now()), overlay, log, nav: navOut, paint, counts: { res: res.length, cached, xfer: sum(() => true) }, byType, lastEnd,
     slowest, latest, marks, api, build, errors, sw: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
-    mem: (performance.memory && performance.memory.usedJSHeapSize) || null };`;
+    mem: (performance.memory && performance.memory.usedJSHeapSize) || null };
+  // safaridriver rejected the object result ("Recursive object cannot be transferred"; slowest and latest share entries),
+  // so return a JSON string, which always transfers, and let the caller parse it.
+  return JSON.stringify(out);`;
 
 // ---- Appium ----------------------------------------------------------------------------------------------------------
 const CAPS = { platformName: "iOS", browserName: "Safari", "appium:automationName": "XCUITest", "appium:newCommandTimeout": 300 };
@@ -113,11 +116,12 @@ async function timedBoot(ctx, label, go, capMs = 60000) {
     if (Date.now() - t0 > capMs) break;
     await sleep(250);
   }
-  const dump = menu ? await exec(ctx, DUMP) : null;
+  let dump = null, dumpError = null;
+  if (menu) { try { dump = JSON.parse(await exec(ctx, DUMP)); } catch (e) { dumpError = e.message.slice(0, 200); log(`${label}: dump failed: ${dumpError}`); } }
   let thermal = null;
   try { const d = wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: deviceInfo", args: [] }); thermal = d && d.thermalState; } catch (_) { /* optional */ }
-  log(`${label}: ${menu ? `menu at page ${menu.pageMs} ms (wall ${menu.wallMs}); fcp ${dump.paint["first-contentful-paint"]}; load ${dump.nav && dump.nav.loadEnd}; res ${dump.counts.res} (cached ${dump.counts.cached}); thermal ${thermal}` : "NO MENU within cap"}`);
-  return { label, menu, thermal, dump, samples: samples.length > 60 ? samples.filter((_, i) => i % 3 === 0) : samples };
+  log(`${label}: ${menu && dump ? `menu at page ${menu.pageMs} ms (wall ${menu.wallMs}); fcp ${dump.paint["first-contentful-paint"]}; load ${dump.nav && dump.nav.loadEnd}; res ${dump.counts.res} (cached ${dump.counts.cached}); thermal ${thermal}` : menu ? `menu at page ${menu.pageMs} ms (dump failed)` : "NO MENU within cap"}`);
+  return { label, menu, thermal, dump, dumpError, samples: samples.length > 60 ? samples.filter((_, i) => i % 3 === 0) : samples };
 }
 
 async function main() {
@@ -191,7 +195,9 @@ async function selfTestLive(url) {
       await p.waitForTimeout(250);
     }
     if (!menu) throw new Error("self-test: menu never detected by POLL");
-    const d = await p.evaluate(new Function(DUMP));
+    const raw = await p.evaluate(new Function(DUMP));
+    if (typeof raw !== "string") throw new Error("self-test: DUMP must return a JSON string");
+    const d = JSON.parse(raw);
     if (!d.nav || !d.counts.res || !d.log || !d.log.length) throw new Error("self-test: DUMP incomplete " + JSON.stringify({ nav: !!d.nav, res: d.counts.res, log: d.log && d.log.length }));
     process.stdout.write(`self-test-live OK: menu at page ${Math.round(menu.t)} ms; overlay ${JSON.stringify(d.overlay)}; res ${d.counts.res}; log ${d.log.length} lines\n`);
   } finally { await b.close(); }
