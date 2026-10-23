@@ -1,0 +1,1 @@
+Fixed: Night and wet races on the three.js WebGPU path stall less after the start. Shadow shaders for every kind of track mesh are prepared during loading, and rain-lit decals share one shader instead of one per brightness.

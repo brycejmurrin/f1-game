@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import vm from "node:vm";
@@ -345,15 +346,26 @@ test("material PNG decoder rejects damaged signature, CRC and truncated image da
 test("asset verifier checks material bytes, shape and low-tier licensing/identity", (t) => {
   const pack = fixture(t);
   const layer = { id: "concrete", mat: 1, scale: 5, licence: "CC0", source: "fixture" };
-  const manifest = { version: 1, materials: { size: 2, albedo: "a.png", normal: "n.png", layers: [layer],
-    low: { size: 1, albedo: "la.png", normal: "ln.png", layers: [{ ...layer }] } }, models: {}, env: {} };
   const png = encodePNG(2, 34, Buffer.alloc(2 * 34 * 4));
+  const lowPng = encodePNG(1, 17, Buffer.alloc(17 * 4));
+  const md5 = (b) => crypto.createHash("md5").update(b).digest("hex");
+  const manifest = { version: 1, materials: {
+    size: 2, albedo: "a.png", normal: "n.png", layers: [layer],
+    albedoMd5: md5(png), normalMd5: md5(png),
+    low: { size: 1, albedo: "la.png", normal: "ln.png", layers: [{ ...layer }],
+      albedoMd5: md5(lowPng), normalMd5: md5(lowPng) },
+  }, models: {}, env: {} };
   for (const f of ["a.png", "n.png"]) fs.writeFileSync(path.join(pack, f), png);
-  for (const f of ["la.png", "ln.png"]) fs.writeFileSync(path.join(pack, f), encodePNG(1, 17, Buffer.alloc(17 * 4)));
+  for (const f of ["la.png", "ln.png"]) fs.writeFileSync(path.join(pack, f), lowPng);
   const verify = () => { fs.writeFileSync(path.join(pack, "manifest.json"), JSON.stringify(manifest)); return cli("tools/gen/assets.mjs", ["verify"], { APEX_PACK_DIR: pack }); };
   assert.equal(verify().status, 0);
+  const savedAlb = manifest.materials.albedoMd5;
+  delete manifest.materials.albedoMd5;
+  let bad = verify(); assert.equal(bad.status, 1);
+  assert.ok(/md5 missing/.test(bad.stderr + bad.stdout), bad.stderr + bad.stdout);
+  manifest.materials.albedoMd5 = savedAlb;
   manifest.materials.low.layers[0].licence = "CC-BY";
-  let bad = verify(); assert.equal(bad.status, 1); assert.match(bad.stderr, /materials.low.*licence/);
+  bad = verify(); assert.equal(bad.status, 1); assert.match(bad.stderr, /materials.low.*licence/);
   manifest.materials.low.layers[0].licence = "CC0";
   fs.writeFileSync(path.join(pack, "a.png"), Buffer.from("broken"));
   bad = verify(); assert.equal(bad.status, 1); assert.match(bad.stderr, /PNG/);

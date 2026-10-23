@@ -653,6 +653,7 @@
         "tests/unit/agent-surface.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
         "tests/unit/assets-pack.test.mjs",
+        "tests/unit/assets-verify-material-md5.test.mjs",
         "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/bootstrap-doctor.test.mjs",
         "tests/unit/catalog-discovery.test.mjs",
