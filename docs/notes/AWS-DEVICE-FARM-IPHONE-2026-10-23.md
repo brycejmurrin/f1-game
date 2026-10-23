@@ -246,3 +246,32 @@ device syslog or the packet capture, or for unattended runs across several devic
 
 **Trial budget.** The account has a 1,000-minute free trial: 844.83 minutes were left at 03:14Z (both fleets
 combined), so nothing has been billed.
+
+## 8. Shader-cache lifetime on the post-fix build (iPhone 18 Pro Max, 07:07–07:14Z)
+
+Bryce: "go deeper do more runs and live connections". The live site at this point (`version.json` build 20919)
+carries both follow-ups: #3603 (AUTO picks three.js WebGPU on WebKit; the unpinned boot now reports `api=webgpu`)
+and #3604 (the warm-up/mirrorPrepare fix; the stage is now reported as `programWarm`). Run:
+`devicefarm-iphone.mjs run --scenario cache --pins webgpu,webgl2` (remote access, `?apex=1`). Each step is one
+`__apex.race("monza")` entry timed by `RaceEntryProfile` plus `GLX.__tlx.memState().warm`. The device starts each
+Device Farm session with an empty cache (the earlier sessions all paid the first-entry cost).
+
+| step | WEBGPU entry window | WEBGPU `programWarm` (warm.total) | WEBGL2 entry window | WEBGL2 `programWarm` (warm.total) |
+|---|---|---|---|---|
+| first entry of the session | 9.1 s | **7.3 s** (6.8) | 5.3 s | 2.3 s (2.3) |
+| after a page reload | 3.8 s | 2.3 s (2.4) | 1.9 s | 0.37 s (0.43) |
+| after a second reload | 1.7 s | 0.24 s (0.30) | 2.9 s | 0.37 s (0.42) |
+| after force-quitting Safari (`mobile: terminateApp`) | **2.8 s** | **0.24 s** (0.29) | 1.9 s | 0.24 s (0.30) |
+
+- **Safari's compiled-shader cache survives a force-quit.** After the first two loads a WebGPU race warms in
+  0.24 s, the same as WebGL2. A player pays the warm-up about once per device (per cache life), not per launch.
+  Still unmeasured: a reboot, low-storage eviction, and a deploy that changes shader source.
+- **WebGPU needs two loads to finish warming** (7.3 → 2.3 → 0.24 s); WebGL2 needs one (2.3 → 0.37 s). The second
+  WebGPU warm is mostly `post` (1.9 s): pipelines the first warm deferred.
+- **#3604 worked:** the first WebGPU warm on this phone is 7.3 s against 29.4 s (`mirrorPrepare`) before it (§6,
+  §7). The first-session entry window is 9.1 s, down from about 30 s.
+- **The entry floor is not the renderer.** With a warm cache, both paths enter in 1.7–2.9 s, made of `loadTrack`
+  (0.36–0.41 s), `gridCountdown` (0.73–0.86 s) and `warmCarAssets` (0.69–0.82 s), plus about 1 s of `scenery` when
+  it is not cached. Any further entry win is there, not in shaders.
+- Live view: each run logs `live view: AWS console > Device Farm > … > Remote access > <session>`; the stream and
+  the recorded video are in the console while the script drives the phone.
