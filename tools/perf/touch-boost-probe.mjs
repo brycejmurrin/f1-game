@@ -36,9 +36,11 @@ const page = await ctx.newPage();
 if (process.env.APEX_PIN) await page.addInitScript((p) => { try { localStorage.setItem("apex26.gfxBackend", p); } catch (_) { /* no storage */ } }, process.env.APEX_PIN);
 await page.goto(URL_);
 await page.waitForFunction(() => window.__apex?.race, null, { polling: 200, timeout: 60000 });
-await page.evaluate((tr) => window.__apex.race(tr, "day", "dry"), TRACK);
-await page.waitForFunction(() => window.__apex.info().state === "race" || window.__apex.info().state === "count", null, { polling: 200, timeout: 120000 });
-await page.evaluate(() => window.__apex.go && window.__apex.go());
+// race() returns a thenable that settles at session:committed (after rigWarm); go() before it finds no grid.
+await page.evaluate((tr) => Promise.resolve(window.__apex.race(tr, "day", "dry")), TRACK);
+await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 200, timeout: 120000 });
+const went = await page.evaluate(() => window.__apex.go());
+if (process.env.APEX_PROBE_DEBUG) console.log("go=" + went + " info=" + JSON.stringify(await page.evaluate(() => window.__apex.info())).slice(0, 600));
 await page.waitForFunction((ids) => ids.every((id) => { const el = document.getElementById(id); if (!el || el.hidden) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }),
   [FROM, TO].filter((i) => i !== "none"), { polling: 200, timeout: 30000 });
 const centre = (id) => page.evaluate((i) => { const r = document.getElementById(i).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; }, id);

@@ -5,6 +5,7 @@
 //
 //   node tools/perf/devicefarm-iphone.mjs devices
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" [--legs 2|4|0] [--url URL] [--out DIR]
+//   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --touch 5 [--from btn-throttle] [--to btn-boost]
 //   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
 // `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
@@ -50,6 +51,46 @@ function iosPhones() {
     "attribute=PLATFORM,operator=EQUALS,values=IOS", "attribute=FORM_FACTOR,operator=EQUALS,values=PHONE");
   return r.devices.map((d) => ({ name: d.name, os: d.os, availability: d.availability, remoteAccess: d.remoteAccessEnabled, arn: d.arn }));
 }
+
+// --touch N: BUTTONS-mode "lift GAS, tap BOOST" hitch (A·W15). The page starts a race, then records every rAF interval,
+// every longtask and the touch/pointer stream (capture listeners, so it timestamps what WebKit delivered); the taps
+// themselves are NATIVE W3C touch actions (NATIVE_APP context) mapped through the Safari webview's rect, so the
+// device sees real fingers. Windows: "tap" = 0..WIN ms after the page saw BOOST's pointerdown, "ctrl" = the same span
+// 600 ms into the GAS hold.
+const TOUCH_RACE = `
+  if (!window.__apex || !__apex.race) return { ok: false, why: "no __apex" };
+  window.__tbpRace = "pending";
+  Promise.resolve(__apex.race("monza", "day", "dry")).then(() => { window.__tbpRace = "ok"; }, (e) => { window.__tbpRace = "err:" + e; });
+  return { ok: true };`;
+const TOUCH_GO = `
+  const i = __apex.info();
+  if (window.__tbpRace !== "ok" || i.track == null) return { ready: false, race: window.__tbpRace, state: i.state };
+  const went = __apex.go();
+  return { ready: true, went, state: __apex.info().state };`;
+const TOUCH_ARM = `
+  const P = window.__tbp = { raf: [], long: [], ev: [] };
+  let last = performance.now();
+  (function tick(t) { P.raf.push([t, t - last]); last = t; requestAnimationFrame(tick); })(last);
+  try { new PerformanceObserver((l) => { for (const e of l.getEntries()) P.long.push([e.startTime, e.duration]); }).observe({ type: "longtask" }); } catch (_) {}
+  for (const type of ["pointerdown", "pointerup", "touchstart", "touchend"])
+    window.addEventListener(type, (e) => { const t = e.target; P.ev.push([type, (t && t.id) || (t && t.tagName) || "?", performance.now()]); }, { capture: true, passive: true });
+  const rect = (id) => { const el = document.getElementById(id); if (!el || el.hidden) return null; const r = el.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; };
+  return { from: rect(window.__tbpFrom || "btn-throttle"), to: rect(window.__tbpTo || "btn-boost"), w: innerWidth, h: innerHeight, dpr: devicePixelRatio,
+    body: document.body.className, api: (() => { try { return RendererPicker.liveThreeApi(); } catch (_) { return null; } })() };`;
+const TOUCH_READ = (win, from, to) => `
+  const P = window.__tbp, WIN = ${win};
+  const downs = (id) => P.ev.filter((e) => e[0] === "pointerdown" && e[1] === id).map((e) => e[2]);
+  const taps = downs(${JSON.stringify(to)}), ctrls = downs(${JSON.stringify(from)}).map((t) => t + 600);
+  const pct = (a, q) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(q * (s.length - 1) + 0.5))]; };
+  const stat = (starts) => { const f = P.raf.filter(([t]) => starts.some((m) => t >= m && t < m + WIN)).map(([, d]) => d);
+    const lt = P.long.filter(([t]) => starts.some((m) => t >= m && t < m + WIN));
+    return { n: f.length, p50: +pct(f, 0.5).toFixed(1), p95: +pct(f, 0.95).toFixed(1), max: +(f.length ? Math.max(...f) : 0).toFixed(1),
+      over50: f.filter((d) => d > 50).length, longTasks: lt.length, longMs: Math.round(lt.reduce((a, l) => a + l[1], 0)) }; };
+  // Lift → BOOST pointerdown delivery latency as the page saw it (touchend of GAS to pointerdown of BOOST).
+  let ps = null; try { ps = __apex.physState(); } catch (_) {}
+  return { taps: taps.length, ctrls: ctrls.length, tap: stat(taps), ctrl: stat(ctrls), speed: ps && ps.speed, boostOn: ps && ps.boostOn,
+    perTap: taps.map((m) => { const f = P.raf.filter(([t]) => t >= m && t < m + WIN).map(([, d]) => d); return +(f.length ? Math.max(...f) : 0).toFixed(1); }),
+    ev: P.ev.length };`;
 
 // Page-side probes. Each is a function body for WebDriver execute/sync (returns JSON-able data).
 const PROBE = `
@@ -102,6 +143,47 @@ function shot(base, sid, file) {
   fs.writeFileSync(file, Buffer.from(b64, "base64")); log(`screenshot ${file}`);
 }
 
+// Real-finger sequence on the device: hold GAS, lift, tap BOOST (or --from/--to ids), N cycles, as native W3C touch
+// actions. CSS px → native points through the WebView element's rect (Safari draws the page 1:1 in points at zoom 1).
+async function touchRun(base, sid, out, n) {
+  const WIN = 400, from = opt("from", "btn-throttle"), to = opt("to", "btn-boost");
+  const r = {}; r.race = await exec(base, sid, TOUCH_RACE);
+  for (let t = 0; t < 45; t++) { await sleep(4000); r.go = await exec(base, sid, TOUCH_GO); if (r.go.ready) break; }
+  if (!r.go || !r.go.ready) throw new Error("race never reached the grid: " + JSON.stringify(r.go));
+  await sleep(6000);   // lights out, the car rolling, the first-frame spikes gone
+  await exec(base, sid, `window.__tbpFrom = ${JSON.stringify(from)}; window.__tbpTo = ${JSON.stringify(to)}; return true;`);
+  r.arm = await exec(base, sid, TOUCH_ARM);
+  log("touch arm " + JSON.stringify(r.arm));
+  if (!r.arm.from || !r.arm.to) throw new Error("touch controls not on screen: " + JSON.stringify(r.arm));
+  const web = wd(base, "GET", `/session/${sid}/context`);
+  wd(base, "POST", `/session/${sid}/context`, { name: "NATIVE_APP" });
+  try {
+    const el = wd(base, "POST", `/session/${sid}/element`, { using: "class name", value: "XCUIElementTypeWebView" });
+    const id = el["element-6066-11e4-a6c6-4b7c-ad3b-6c3b7e9d1c0b"] || el.ELEMENT || Object.values(el)[0];
+    const wr = wd(base, "GET", `/session/${sid}/element/${id}/rect`);
+    const k = wr.width / r.arm.w;
+    const pt = (p) => ({ x: Math.round(wr.x + p.x * k), y: Math.round(wr.y + p.y * k) });
+    r.map = { webview: wr, k };
+    const a = pt(r.arm.from), b = pt(r.arm.to);
+    for (let c = 0; c < n; c++) {
+      wd(base, "POST", `/session/${sid}/actions`, { actions: [{ type: "pointer", id: "finger", parameters: { pointerType: "touch" }, actions: [
+        { type: "pointerMove", duration: 0, x: a.x, y: a.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 1500 },
+        { type: "pointerUp", button: 0 }, { type: "pause", duration: 60 },
+        { type: "pointerMove", duration: 0, x: b.x, y: b.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 70 },
+        { type: "pointerUp", button: 0 }, { type: "pause", duration: 1200 }] }] });
+    }
+    try { wd(base, "DELETE", `/session/${sid}/actions`); } catch (_) { /* nothing held */ }
+  } finally {
+    const ctxs = wd(base, "GET", `/session/${sid}/contexts`);
+    const back = (typeof web === "string" && web !== "NATIVE_APP") ? web : (ctxs || []).find((c) => (c.id || c) !== "NATIVE_APP");
+    wd(base, "POST", `/session/${sid}/context`, { name: back && back.id ? back.id : back });
+  }
+  r.read = await exec(base, sid, TOUCH_READ(WIN, from, to));
+  log("touch " + JSON.stringify(r.read));
+  try { shot(base, sid, path.join(out, "touch.png")); } catch (e) { log("shot: " + e.message.slice(0, 120)); }
+  return r;
+}
+
 async function run() {
   const want = opt("device", "iPhone 18 Pro Max"), legs = Number(opt("legs", "0")), url = opt("url", SITE);
   const out = opt("out", path.join("artifacts", "devicefarm", new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)));
@@ -136,6 +218,8 @@ async function run() {
     report.boot = await exec(base, sid, PROBE);
     log(`boot: gpu=${report.boot.gpu} live=${JSON.stringify(report.boot.live)} title=${report.boot.title}`);
     shot(base, sid, path.join(out, "boot.png"));
+    const touchN = Number(opt("touch", "0"));
+    if (touchN) report.touch = await touchRun(base, sid, out, touchN);
     if (legs) {
       report.benchStart = await exec(base, sid, BENCH(legs));
       log("bench " + JSON.stringify(report.benchStart));
@@ -290,4 +374,4 @@ const cmd = args[0];
 if (cmd === "devices") { for (const d of iosPhones()) console.log(`${d.name}\tiOS ${d.os}\t${d.availability}\tremoteAccess=${d.remoteAccess}`); }
 else if (cmd === "run") run().catch((e) => { console.error(e.message); process.exit(1); });
 else if (cmd === "auto") auto().catch((e) => { console.error(e.message); process.exit(1); });
-else { console.error("usage: devicefarm-iphone.mjs devices | run --device NAME [--legs 0|2|4] | auto --device NAME [--legs N] [--perf NAME|none]"); process.exit(2); }
+else { console.error("usage: devicefarm-iphone.mjs devices | run --device NAME [--legs 0|2|4] [--touch N] | auto --device NAME [--legs N] [--perf NAME|none]"); process.exit(2); }
