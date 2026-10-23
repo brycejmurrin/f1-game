@@ -1346,7 +1346,8 @@
       "script": "test:service-worker",
       "kind": "node",
       "files": [
-        "tests/unit/service-worker.test.mjs"
+        "tests/unit/service-worker.test.mjs",
+        "tests/unit/sw-build-meta.test.mjs"
       ],
       "twinned": false
     },

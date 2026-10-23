@@ -3834,7 +3834,7 @@
     },
     {
       "name": "test:service-worker",
-      "command": "node --test --test-timeout=900000 tests/unit/service-worker.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/service-worker.test.mjs tests/unit/sw-build-meta.test.mjs"
     },
     {
       "name": "test:shimmer",
@@ -3851,6 +3851,10 @@
     {
       "name": "test:steering-unit",
       "command": "node --test --test-timeout=900000 tests/unit/brake-cue.test.mjs tests/unit/controller-profiles.test.mjs tests/unit/digital-steer.test.mjs tests/unit/dock-layout.test.mjs tests/unit/driving-cues.test.mjs tests/unit/editor-workspace.test.mjs tests/unit/garage-defaults.test.mjs tests/unit/grip-steer.test.mjs tests/unit/hud-arrange.test.mjs tests/unit/input-bindings.test.mjs tests/unit/input-clock-rotate.test.mjs tests/unit/input-hud-properties.test.mjs tests/unit/key-binds-calibration.test.mjs tests/unit/key-binds-hunt.test.mjs tests/unit/key-binds-pad-menu.test.mjs tests/unit/key-binds-ui.test.mjs tests/unit/key-binds.test.mjs tests/unit/low-speed-lock.test.mjs tests/unit/onboard.test.mjs tests/unit/pad-haptics.test.mjs tests/unit/phone-input-improvements.test.mjs tests/unit/phone-pad.test.mjs tests/unit/player-tools-backup.test.mjs tests/unit/player-tools-ui.test.mjs tests/unit/setting-deps.test.mjs tests/unit/settings-defaults.test.mjs tests/unit/settings-export.test.mjs tests/unit/settings-one-home.test.mjs tests/unit/settings-open-perf.test.mjs tests/unit/settings-search.test.mjs tests/unit/settings-tabs.test.mjs tests/unit/share-code.test.mjs tests/unit/steer-lock-taper.test.mjs tests/unit/steer-tuning-lock.test.mjs tests/unit/throttle-latch.test.mjs tests/unit/touch-drag-anchor.test.mjs tests/unit/touch-drag-speed.test.mjs tests/unit/xr-opts.test.mjs tests/unit/xr-phase0.test.mjs tests/unit/xr-plan.test.mjs"
+    },
+    {
+      "name": "test:sw-build-meta",
+      "command": "node --test --test-timeout=900000 tests/unit/sw-build-meta.test.mjs"
     },
     {
       "name": "test:sweeps",
