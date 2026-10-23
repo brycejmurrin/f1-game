@@ -1,1 +1,1 @@
-READY to:A from:A·W26 #3630 PR #3630 (#3298 KIT_DEF + #3299 DevFlags hash) READY: head 7dca892da105e9a04f84b473ad46d48b4413728d, full tier passed (run 39937373965, 36 jobs 0 failed), ready-gate passed. MERGE-HOLD line is the orchestrator-merges marker.
+READY to:A from:A·W22 #3629 PR #3629 (#3556 ICE restart) READY: full tier green (run 39937505150, 23 jobs 0 failed), ready-gate passed, head 4cc99316e60b073083e04d11e057244b0e3d005b. net group green remotely (run 39929745567). MERGE-HOLD names the orchestrator merge.
