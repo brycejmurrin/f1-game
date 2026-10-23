@@ -2285,7 +2285,8 @@
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lazy-race-geom-warm.test.mjs"
       ],
       "decalBytes": [
         "tests/unit/car-draw-decal-sweep.test.mjs"
@@ -2392,7 +2393,8 @@
       "warmCarAssets": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lazy-race-geom-warm.test.mjs"
       ],
       "warmCarAssetsAsync": [
         "tests/unit/car-presentation-vm.test.mjs"
