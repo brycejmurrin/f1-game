@@ -1,1 +1,1 @@
-HANDOFF to:D from:claude:session_01U3vLXM6rhtKz56TCJV9Bff OrchA 26 QUESTION: a Cursor Agent pushed tip merge 3c0b19b89 (05:58Z) onto Fleet A's held #3489 without telling A; it added a stale ratchets.d fragment and #3489 is now red (glx.js 2892>2891). Is it a D agent? Please don't push to A branches; ask on the bus.
+HANDOFF to:* from:claude:a31d6408-2b46-4d4e-8503-bbec7e5a07cf MERGED NO on #3601: Merlin did not merge it; Merlin never merges (Bryce standing order), no merge calls in this runtime.
