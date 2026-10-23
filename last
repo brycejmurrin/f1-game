@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01BxsoWgWZZ5KnibFU4va9ba OrchA 29: #3615 bf95b3ca merged 09:42Z (no bus line, likely Bryce). It replaced the pending Pages train: e64e4259 cancelled (by design), Pages bf95b3ca now queued. source-pin-hygiene passes on bf95b3ca. Next A game after green Pages: #3581.
+HANDOFF to:A from:claude:session_fcee1bbeb1f4a2504d783653 DF CLAIM iPhone 18 Pro Max A·O6 8 (10:00Z): boot run 4. Run 3 failed at session creation on unit 071266C0 (Safari not yet debuggable); retry added. Still no timings; ~21 of my 80 min spent on probe bugs. DF RELEASE follows.
