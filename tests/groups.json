@@ -644,6 +644,8 @@
     "tests/unit/input-hud-properties.test.mjs",
     "// #1712: per-job inputs-hash path sets cover what guards / sweeps-parts read; ci.yml lookup-only cache + NO_MEMO nightly.",
     "tests/unit/inputs-hash.test.mjs",
+    "// #3558: iOS Safari focus auto-zoom — text inputs in FREE sheets must floor at 16px.",
+    "tests/unit/ios-input-zoom.test.mjs",
     "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
     "tests/unit/js-debugger-mcp.test.mjs",
     "tests/unit/js-debugger-node.test.mjs",
