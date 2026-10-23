@@ -15883,12 +15883,14 @@
       "anyOpen": [
         "tests/unit/layers-anyopen-memo.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/ui-layers-reflow.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ],
       "navOpen": [
         "tests/unit/layers-anyopen-memo.test.mjs",
         "tests/unit/layers-nav-memo.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/ui-layers-reflow.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ],
       "shown": [
@@ -15904,6 +15906,9 @@
       "*": [
         "tests/specs/ui-button-touch.spec.js",
         "tests/unit/global-registry.test.mjs"
+      ],
+      "narrow": [
+        "tests/unit/ui-layers-reflow.test.mjs"
       ]
     },
     "js/ui/live-region.js": {
