@@ -474,10 +474,14 @@ const GO = `try { return __apex.go(); } catch (e) { return String(e); }`;
 // at boot, js/camera/cockpit-opts.js choice()), the field released, 20 s of frames. Arms repeat (off … off) so a
 // thermal drift shows as a gap between the two "off" rows instead of hiding inside a visor delta.
 const VISOR_ARMS = { off: "helmetvisor=off", on: "helmetvisor=clear&visorreflections=medium&visorrefraction=off",
-  refr: "helmetvisor=clear&visorreflections=medium&visorrefraction=medium" };
+  refr: "helmetvisor=clear&visorreflections=medium&visorrefraction=medium",
+  // #3659's A/B on one build: "over" is its WebGL2 default, `visorblend=add` forces the old plus-lighter.
+  "on-over": "helmetvisor=clear&visorreflections=medium&visorrefraction=off&visorblend=over",
+  "on-add": "helmetvisor=clear&visorreflections=medium&visorrefraction=off&visorblend=add",
+  "refr-over": "helmetvisor=clear&visorreflections=medium&visorrefraction=medium&visorblend=over" };
 const VISOR_READ = `(() => { let v = null; try { v = typeof VisorOptics !== "undefined" ? VisorOptics.stats() : null; } catch (e) { v = String(e); }
     let cam = null; try { cam = __apex.camera().mode; } catch (_) {}
-    return { cam, optics: v, perf: (() => { try { const r = __apex.renderScale(); return { scale: r.scale, tier: r.tier, autoTier: r.autoTier }; } catch (_) { return null; } })() }; })()`;
+    return { cam, optics: v, blend: document.body.dataset.visorBlend || null, perf: (() => { try { const r = __apex.renderScale(); return { scale: r.scale, tier: r.tier, autoTier: r.autoTier }; } catch (_) { return null; } })() }; })()`;
 async function visorScenario(ctx, url, pins, report, out) {
   const [track, tod = "night"] = opt("track", "bahrain:night").split(":");
   const arms = opt("arms", "off,on,refr,off").split(",");
