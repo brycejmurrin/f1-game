@@ -16276,6 +16276,7 @@
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/select-preview-defer.test.mjs",
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -16294,6 +16295,9 @@
       "setTeamPicker": [
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ],
+      "updateTrackPreview": [
+        "tests/unit/select-preview-defer.test.mjs"
       ],
       "*": [
         "tests/unit/aero-zone-tables.test.mjs",
