@@ -76,7 +76,7 @@ const lazyBundles = LazyBundles.create({
   els, loadBackendScripts, getContext: () => G,
   applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
   createNetwork: () => { netPlay = NetPlay.create(G); netLobby = NetLobby.create(G); return netLobby; },
-  bindAgent: () => { if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G); },
+  bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G); if (typeof VisorOptics !== "undefined") window.__apex.visorScene = () => VisorOptics.sceneFromG(G); } },
   // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals.
   onAudioReady: () => {
     radioVoice = RadioVoice.create(G);

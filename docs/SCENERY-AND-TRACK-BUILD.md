@@ -140,7 +140,7 @@ closure.
 | `scenery/structures.js` | `SceneryStructures` | **`along`**, `wall`/`fence`/`guardrail`/`tyreWall`, `gantry`, bleachers/terraces, signs |
 | `scenery/city.js` | `SceneryCity` | `building`, `tower`, `billboard`, `neonTower`, houses / motorhomes |
 | `scenery/identity.js` | `SceneryIdentity` | Portals, flood masts, canopies, runoff aprons, kerb strips, broadcast compounds |
-| `scenery/data.js` | `TrackSceneryData` | `FURN_DEF`, `KIT_DEF`, `STAND_*`, `THEME_DEF`, colour packs |
+| `scenery/data.js` | `TrackSceneryData` | `FURN_DEF`, `STAND_*`, `THEME_DEF`, colour packs |
 | `scenery/themes.js` | `SceneryThemes` | Theme palette / spacing / budgets |
 | `scenery/landmark-kit.js` / `circuit-kit.js` | kits | Bound as `landmarkKit` / `circuitKit` — circuits must **call** them |
 | `scenery/graph.js` | `TrackGraph` | Engine-internal instancing — **not** part of the 114-member contract |
