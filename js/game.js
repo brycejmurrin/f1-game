@@ -3687,7 +3687,10 @@ function sheetRelease(hide) {
   if (hide) h.sheet.hidden = true;
 }
 /** Cold preparation's cover: prep scrim (card hidden), unless race settings already covers it. */
-function introCover(info, n) { if (!_introSheet) loadingScreen.prep(info, () => studioSkip(n)); }
+function introCover(info, n) {
+  const sheetPrep = _introSheet && typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.softwareRaster && RaceEntryProfile.softwareRaster();
+  if (!_introSheet || sheetPrep) loadingScreen.prep(info, () => studioSkip(n));
+}
 /** Garage-out finished → race/session card. Every intro path ends here (strict sequence). */
 function afterGarageOut(n, key, go, prepared, live) {
   studioClose(n);
@@ -3858,6 +3861,7 @@ function introBuild(go) {
   let prepared = false;
   (async () => {
     try {
+      if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.afterPaint) await RaceEntryProfile.afterPaint();
       await RaceEntryProfile.spanAsync("introBuild", async () => {
         await RaceEntryProfile.spanAsync("ensureScenery", () => ensureScenery(idx));
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the preparation card paints first
@@ -3982,6 +3986,7 @@ function raceIntroFromSheet(go, sheet, btn) {
   const n = ++_introRun, settings = entrySettings();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings();
   (async () => { try {
+    if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.afterPaint) await RaceEntryProfile.afterPaint();
     if (await awaitIntroWarm(live)) intro(); else if (_introSheet === owner) sheetRelease(false);
   } catch (e) { failed(e); } })();
 }
@@ -4036,6 +4041,15 @@ function raceIntro(go) {
   FlybySeq.setDuration(flyMs);   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
+  // SwiftShader / llvmpipe: the loading flyby compiles and draws the whole circuit again
+  // behind the race-settings sheet (18-30 s of frozen UI with no visible progress).
+  // Hardware keeps the cinematic; software GL hands off straight to startRace().
+  if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.softwareRaster && RaceEntryProfile.softwareRaster()) {
+    sheetRelease(true);
+    loadingScreen.stop();
+    go();
+    return;
+  }
   (async () => {
     try {
       await RaceEntryProfile.spanAsync("flyby", async () => {

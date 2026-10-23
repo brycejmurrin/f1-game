@@ -17,6 +17,7 @@ function raceEntryProfileStub({ budgetMs = 30000, now = () => 0 } = {}) {
     lap: noop,
     beginUi() { t0 = now(); },
     setProgressSink: noop,
+    afterPaint: () => Promise.resolve(),
     introBudgetExpired: () => now() - t0 >= budgetMs,
     introBudgetLeft: () => Math.max(0, budgetMs - (now() - t0)),
   };
@@ -166,7 +167,8 @@ test('cold preparation settles before the drive-out; a warm world opens on the g
   const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
   const build = game.slice(game.indexOf('function introBuild(go)'), game.indexOf('function introWarm(go)'));
   assert.match(build, /introCover\(info0, n\);/, 'cold preparation is covered: by the race-settings sheet, else the prep scrim');
-  assert.match(game, /function introCover\(info, n\) \{ if \(!_introSheet\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\); \}/);
+  assert.match(game, /function introCover\(info, n\) \{[\s\S]*?if \(!_introSheet \|\| sheetPrep\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/);
+  assert.match(game, /RaceEntryProfile\.softwareRaster && RaceEntryProfile\.softwareRaster\(\)\)[\s\S]*?loadingScreen\.stop\(\);\s*go\(\);\s*return;/, 'software GL skips the loading flyby and hands off to startRace');
   assert.ok(build.indexOf('await introPrepare(') >= 0 && build.indexOf('await introPrepare(') < build.indexOf('studioOpen(n, info0)'), 'preparation finishes before outgoing motion');
   const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
   assert.match(warm, /if \(cold\) introCover\(info, n\); else studioOpen\(n, info\);/);
@@ -586,7 +588,7 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
   const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
   assert.match(build, /\n  introCover\(info0, n\);\n/, 'a cold build is covered by the sheet or prep scrim');
   assert.match(warm, /if \(cold\) introCover\(info, n\); else studioOpen\(n, info\);/, 'so is a cold warm');
-  assert.match(game, /if \(!_introSheet\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/, 'prep hides the race card until garage-out ends');
+  assert.match(game, /if \(!_introSheet \|\| sheetPrep\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/, 'prep hides the race card until garage-out ends (software GL uses prep behind the race-settings sheet too)');
   const rs = readFileSync(new URL('../../js/race/race-settings.js', import.meta.url), 'utf8');
   const go = rs.slice(rs.indexOf('$("rs-go").onclick = () => {'), rs.indexOf('    }\n\n    return {'));
   assert.match(go, /raceIntro\(startRace, sheet, \$\("rs-go"\)\)/, 'race settings hands its sheet and button to the intro');
