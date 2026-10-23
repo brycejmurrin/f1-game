@@ -238,7 +238,7 @@ const BenchRun = (function () {
   // ONE LAP: every frame from the lights to the first timed lap (the run-up to the line, then lap 1 standing).
   async function lapLeg(plan, leg) {
     _G.seed = plan.seed;
-    const cold = await timedEntry(() => SoakRun.start({ track: leg.track, weather: leg.weather, tod: leg.tod, minutes: LAP_MS / 60000, cam: "helmet" }), COLD_MS);
+    const cold = await timedEntry(() => SoakRun.start({ track: leg.track, weather: leg.weather, tod: leg.tod, minutes: LAP_MS / 60000 + 1, cam: "helmet" }), COLD_MS);   // the soak outlives the cap, so a slow lap reads as one
     leg.entry = { cold };
     if (!cold.ok) { leg.state = "failed"; leg.reason = "race could not start"; return false; }
     const end = record(), timed = () => { const P = _G.player; return P && P.lastLap > 0 ? P.lastLap : 0; };
