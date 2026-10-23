@@ -130,9 +130,17 @@ test("bench-run: wake lock is held while a plan runs, re-acquired on visible, re
   void ctx;
 });
 
-test("bench-run: no wake lock API is silent; a refused request does not throw", async () => {
-  const none = (() => { const store = {}; return vm.runInNewContext(SRC + "\n;BenchRun", { performance: { now: () => 0 }, navigator: {}, localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem() {} } }, { filename: absSrc("js/perf/bench-run.js") }); })();
-  await none.wake.acquire(); none.wake.release();
-  const refuse = vm.runInNewContext(SRC + "\n;BenchRun", { performance: { now: () => 0 }, navigator: { wakeLock: { request: async () => { throw Object.assign(new Error("x"), { name: "NotAllowedError" }); } } } }, { filename: absSrc("js/perf/bench-run.js") });
-  await refuse.wake.acquire(); refuse.wake.release();
+test("bench-run: no wake lock API is silent; a refused request is logged and does not throw", async () => {
+  const mk = (navigator) => { const logs = []; const store = {};
+    const B = vm.runInNewContext(SRC + "\n;BenchRun", { performance: { now: () => 0 }, navigator, Log: { info: (_c, m) => logs.push(m) },
+      localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem() {} } }, { filename: absSrc("js/perf/bench-run.js") });
+    return { B, logs }; };
+  const none = mk({});
+  await none.B.wake.acquire(); none.B.wake.release();
+  assert.deepEqual(none.logs, []);   // unsupported: nothing logged, nothing shown
+  let asked = 0;
+  const refuse = mk({ wakeLock: { request: async () => { asked++; throw Object.assign(new Error("x"), { name: "NotAllowedError" }); } } });
+  await refuse.B.wake.acquire(); refuse.B.wake.release();
+  assert.equal(asked, 1);
+  assert.ok(refuse.logs.some((m) => /wake lock refused NotAllowedError/.test(m)));
 });
