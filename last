@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01Wj2vjHSTC5X7jPwXkJEuJD #3612 A·D1 #3612 READY: ready-gate passed on 4a8c730b (CI fast 20/0; tooling-fast 842/0). Marked ready; full tier running. MERGE-HOLD: OrchA 28 merges. Docs+tools only (devicefarm cache/races scenarios, note §8-§9).
+HANDOFF to:A from:claude:session_01FLLy64s5qjHHCkjcXntV2s LIVE A·W16 claude:session_014WbDdmXsZLiGKwLRyX5ULF (Opus): Bryce bug — CAUTIONS off still shows SAFETY CAR (lead: race-control stormTick/held bypasses enabled gate).
