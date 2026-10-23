@@ -39,7 +39,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx, recordingOverlay } from "../helpers/glx-mock.mjs";
-import { gameSource } from "../helpers/game-source.mjs";
+import { gameSource, GAME_REL } from "../helpers/game-source.mjs";
 import { bootRendererBoot } from "../helpers/renderer-boot-vm.mjs";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -47,7 +47,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readFile = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 // These guards span boot and frame-loop ownership; load the extracted owners explicitly.
-const read = (p) => p === "js/game.js"
+const read = (p) => p === GAME_REL
   ? ["js/render/renderer-boot.js", "js/core/lazy-bundles.js", "js/ui/platform-session.js", p].map(readFile).join("\n")
   : readFile(p);
 // Comment-stripped source: a pin can only match code, and a comment can
@@ -2746,9 +2746,12 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
   // MDN: one context type per canvas for life. three r185.1 configure() is
   // lazy on first present(); sniffing WebGL2 on #game after init() made
   // getContext("webgpu") return null (mcp-probe 2026-08-18).
-  assert.match(tlx, /softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(\s*\)\s*:\s*!!\s*_softAdapter\b/);
+  assert.ok(tlx.includes("const softwareGL = !!_softAdapter")
+    && tlx.includes("renderer.backend && renderer.backend.isWebGLBackend")
+    && tlx.includes("detectSoftwareGL()"),
+    "WebGL2 backend classifies from renderer string, not adapter sniff alone (#3601)");
   const initAt = tlx.search(/await\s+renderer\.init\(\s*\)/);
-  const sniffAt = tlx.search(/softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(/);
+  const sniffAt = tlx.search(/const softwareGL = !!_softAdapter/);
   assert.ok(initAt > 0 && sniffAt > initAt, "software sniff stays after init");
   assert.match(tlx, /getContext\("webgpu"\)===null/);
 });
@@ -3524,8 +3527,9 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // the same value, so this narrows nothing that was ever correct.
   assert.match(fnBody(src, "softContent"), /^\s*return\s+softwareGL\s*&&\s*!_forceHw\.has\(\s*part\s*\)/,
     "content skips ask softwareGL, which already answers for the BOUND backend");
-  assert.match(src, /softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(\s*\)\s*:\s*!!\s*_softAdapter\b/,
-    "…and softwareGL stays the backend-aware constant the line above relies on");
+  assert.ok(src.includes("const softwareGL = !!_softAdapter")
+    && src.includes("isWebGLBackend") && src.includes("detectSoftwareGL()"),
+    "softwareGL stays backend-aware: adapter OR live WebGL renderer string (#3601)");
   assert.doesNotMatch(src, /softContent\(\)/,
     "softContent() must never be called without a part name");
   for (const part of ["sky", "env", "chunked", "shadow"]) {
@@ -6418,7 +6422,7 @@ test("the startline mesh beats the unbiased road without burying the cars", () =
   // small negative bias that still beats it.
   const src = read("js/game.js");
   const start = src.match(/const _startBias = \[(-?[\d.]+), (-?[\d.]+)\]/);
-  assert.ok(start, "_startBias not found in js/game.js");
+  assert.ok(start, "_startBias not found in game source union");
   const roads = [...src.matchAll(/const _wmRoad\w+ = \{[^}]*\}/g)];
   assert.ok(roads.length >= 4, `expected the four _wmRoad* materials, found ${roads.length}`);
   for (const r of roads) assert.doesNotMatch(r[0], /depthBias/, `road material must not carry a depth bias: ${r[0]}`);
