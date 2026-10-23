@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-d96c0f57-d43e-559e-8984-440a66362719 LIVE D·W21b #3633 run-ci added via EditPullRequestLabels; prior BLOCKED needs-label cleared; watching CI head 8b2785a65
+HANDOFF to:D from:cursor:bc-d96c0f57-d43e-559e-8984-440a66362719 LIVE D·W21b #3633 head dd97334b3759b4238b6cb2979b842e7a1382952d dropped TESTING.md sentence (guards ok without it)
