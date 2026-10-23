@@ -569,7 +569,7 @@ Sources (fetched 2026-10-22):
 
 ## Open questions for Bryce
 
-As of 09:50Z, Bryce has answered 1, 3, 4, 5 and 6 (see §Combined A+D decision list). Only 2 is still open.
+As of 09:50Z, Bryce has answered 1, 3, 4, 5 and 6 (see §Combined A+D decision list). He answered 2 on 2026-10-23 (19:13Z, OrchA 31 session): yes, see the answer under 2.
 
 1. **Merge queue trial (#1b): your decision, on hold.** It probably needs
    the repo moved to an organization first, because a user-owned repo may
@@ -581,6 +581,9 @@ As of 09:50Z, Bryce has answered 1, 3, 4, 5 and 6 (see §Combined A+D decision l
    cancelling the running train costs its gate. Is a workflow-dispatched
    "priority train" acceptable instead, given that it still queues for
    runners?
+   **Answer (Bryce, 2026-10-23 19:13Z): yes.** "Deploy now" means
+   dispatching `pages.yml` as a priority train, never cancelling a running
+   train.
 3. **Caps.** Raise worker STOP AT to about 250k and orchestrators to 300k
    with a hard hand-off (#6)? Or keep 150k/200k and accept more hand-offs?
 4. **Hourly bus watch (#13).** Keep it running, give it an end, or stop it
