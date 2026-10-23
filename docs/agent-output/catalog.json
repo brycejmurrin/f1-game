@@ -2779,6 +2779,15 @@
       ]
     },
     {
+      "path": "tools/perf/ers-deploy-census.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/perf/garage-census.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2843,6 +2852,12 @@
       "path": "tools/perf/runtime-memory.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/perf/touch-boost-probe.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
     },
     {
       "path": "tools/shot/ab-gallery.mjs",
