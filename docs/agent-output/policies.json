@@ -1841,6 +1841,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/perf/devicefarm-host.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Runs on the Device Farm test host, not locally: its stdout is the run's test spec output and its files land in $DEVICEFARM_LOG_DIR."
+    },
     "tools/perf/devicefarm-iphone.mjs": {
       "action": "keep-native",
       "presentation": "native",

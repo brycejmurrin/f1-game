@@ -5,6 +5,12 @@
 //
 //   node tools/perf/devicefarm-iphone.mjs devices
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" [--legs 2|4|0] [--url URL] [--out DIR]
+//   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 14" [--legs 2] [--perf "Activity Monitor"|none] [--out DIR]
+//
+// `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
+// tools/perf/devicefarm-host.mjs (npm pack → zip), generates a test spec for the macos_tahoe host, uploads both,
+// schedules an APPIUM_WEB_NODE run on a one-device pool, waits, and downloads every artifact (video, Appium log,
+// device log, Customer Artifacts = the host script's report.json, Safari console and Instruments trace).
 //
 // Credentials come only from the environment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION), read by
 // the aws CLI (APEX_AWS_CLI, else `aws` on PATH). Nothing here prints them. WebDriver goes through curl so the
@@ -13,6 +19,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const AWS = process.env.APEX_AWS_CLI || "aws";
 const REGION = process.env.AWS_DEFAULT_REGION || "us-west-2";
@@ -24,7 +31,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (m) => process.stdout.write(`[${new Date().toISOString().slice(11, 19)}] ${m}\n`);
 
 function aws(...a) {
-  const out = execFileSync(AWS, [...a, "--region", REGION, "--output", "json"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  let out;
+  try { out = execFileSync(AWS, [...a, "--region", REGION, "--output", "json"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); }
+  catch (e) { throw new Error(`aws ${a.slice(0, 2).join(" ")}: ${String(e.stderr || e.message).trim().split("\n").pop().slice(0, 300)}`); }
   return out.trim() ? JSON.parse(out) : null;
 }
 function wd(base, method, p, body) {
@@ -168,7 +177,117 @@ async function run() {
   }
 }
 
+// ---- automated run (server-side) ------------------------------------------------------------------------------
+const SPEC = ({ legs, perf, url }) => `version: 0.1
+ios_test_host: macos_tahoe
+phases:
+  install:
+    commands:
+      - devicefarm-cli use node 24
+      - devicefarm-cli use appium 3
+      - export APPIUM_BASE_PATH=
+  pre_test:
+    commands:
+      - |-
+        APPIUM_DRIVER_VERSION=$(appium driver list --installed --json | jq -r ".xcuitest.version" | cut -d "." -f 1);
+        CORRESPONDING_APPIUM_WDA=$(env | grep "DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V\${APPIUM_DRIVER_VERSION}")
+        if [[ ! -z "$APPIUM_DRIVER_VERSION" ]] && [[ ! -z "$CORRESPONDING_APPIUM_WDA" ]]; then
+          DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$(echo $CORRESPONDING_APPIUM_WDA | cut -d "=" -f2)
+        else
+          DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$(env | grep "DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V" | sort -V -r | head -n 1 | cut -d "=" -f2)
+        fi;
+      - |-
+        appium --base-path=$APPIUM_BASE_PATH --log-timestamp --log-no-colors --relaxed-security --default-capabilities \\
+          "{\\"appium:deviceName\\": \\"$DEVICEFARM_DEVICE_NAME\\", \\"platformName\\": \\"iOS\\", \\"browserName\\": \\"Safari\\", \\
+          \\"appium:udid\\": \\"$DEVICEFARM_DEVICE_UDID\\", \\"appium:platformVersion\\": \\"$DEVICEFARM_DEVICE_OS_VERSION\\", \\
+          \\"appium:derivedDataPath\\": \\"$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH\\", \\"appium:usePrebuiltWDA\\": true, \\
+          \\"appium:automationName\\": \\"XCUITest\\"}" >> $DEVICEFARM_LOG_DIR/appium.log 2>&1 &
+      - |-
+        n=0; until curl --silent --fail "http://127.0.0.1:4723\${APPIUM_BASE_PATH}/status" >/dev/null; do
+          n=$((n + 1)); if [[ $n -gt 60 ]]; then echo "Appium did not start"; exit 1; fi; sleep 1; done
+  test:
+    commands:
+      - cd $DEVICEFARM_TEST_PACKAGE_PATH && tar xzf *.tgz
+      - xcrun xctrace version || true
+      - APEX_LEGS=${legs} APEX_PERF="${perf}" APEX_URL="${url}" node $DEVICEFARM_TEST_PACKAGE_PATH/package/devicefarm-host.mjs
+  post_test:
+    commands:
+      - ls -la $DEVICEFARM_LOG_DIR
+artifacts:
+  - $DEVICEFARM_LOG_DIR
+`;
+
+function upload(projArn, file, type) {
+  const u = aws("devicefarm", "create-upload", "--project-arn", projArn, "--name", path.basename(file), "--type", type).upload;
+  execFileSync("curl", ["-sS", "--fail", "-T", file, u.url], { stdio: ["ignore", "ignore", "pipe"] });
+  return u.arn;
+}
+async function uploaded(arn) {
+  for (let t = 0; t < 60; t++) {
+    const u = aws("devicefarm", "get-upload", "--arn", arn).upload;
+    if (u.status === "SUCCEEDED") return u;
+    if (u.status === "FAILED") throw new Error(`upload ${u.name} FAILED: ${u.metadata || u.message || ""}`.slice(0, 400));
+    await sleep(3000);
+  }
+  throw new Error("upload processing timed out");
+}
+
+async function auto() {
+  const want = opt("device", "iPhone 14"), legs = Number(opt("legs", "2")), perf = opt("perf", "Activity Monitor"), url = opt("url", SITE);
+  const out = opt("out", path.join("artifacts", "devicefarm", "auto-" + new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)));
+  const pkg = path.join(out, "pkg");
+  fs.mkdirSync(pkg, { recursive: true });
+  const dev = iosPhones().find((d) => d.name === want || d.name.endsWith(" " + want) || d.arn.endsWith(want));
+  if (!dev) throw new Error(`no iOS phone named ${want}`);
+  const proj = aws("devicefarm", "list-projects").projects.find((p) => p.name === PROJECT);
+  if (!proj) throw new Error(`no Device Farm project ${PROJECT}`);
+  // Test package: a zip holding the `npm pack` tarball of a dependency-free package (test-types-appium-integrate).
+  fs.copyFileSync(fileURLToPath(new URL("./devicefarm-host.mjs", import.meta.url)), path.join(pkg, "devicefarm-host.mjs"));
+  fs.writeFileSync(path.join(pkg, "package.json"), JSON.stringify({ name: "apex-devicefarm-host", version: "1.0.0", private: true, type: "module", files: ["devicefarm-host.mjs"] }, null, 2));
+  const tgz = execFileSync("npm", ["pack", "--silent"], { cwd: pkg, encoding: "utf8" }).trim().split("\n").pop();
+  const zip = path.resolve(out, "apex-host-tests.zip");
+  execFileSync("zip", ["-q", "-j", zip, path.join(pkg, tgz)]);
+  const specFile = path.resolve(out, "apex-testspec.yml");
+  fs.writeFileSync(specFile, SPEC({ legs, perf, url }));
+  log(`device ${dev.name} iOS ${dev.os}; legs ${legs}; perf ${perf}`);
+  const pkgArn = upload(proj.arn, zip, "APPIUM_WEB_NODE_TEST_PACKAGE"), specArn = upload(proj.arn, specFile, "APPIUM_WEB_NODE_TEST_SPEC");
+  await uploaded(pkgArn); await uploaded(specArn); log("uploads processed");
+  const poolName = "apex-" + dev.arn.split(":device:")[1].slice(0, 12);
+  let pool = (aws("devicefarm", "list-device-pools", "--arn", proj.arn, "--type", "PRIVATE").devicePools || []).find((p) => p.name === poolName);
+  if (!pool) pool = aws("devicefarm", "create-device-pool", "--project-arn", proj.arn, "--name", poolName,
+    "--rules", JSON.stringify([{ attribute: "ARN", operator: "IN", value: JSON.stringify([dev.arn]) }])).devicePool;
+  const runArn = aws("devicefarm", "schedule-run", "--project-arn", proj.arn, "--device-pool-arn", pool.arn, "--name", "apex-auto-" + Date.now(),
+    "--test", JSON.stringify({ type: "APPIUM_WEB_NODE", testPackageArn: pkgArn, testSpecArn: specArn }),
+    "--execution-configuration", JSON.stringify({ jobTimeoutMinutes: Math.ceil(legs * 5 + 15), videoCapture: true })).run.arn;
+  const report = { device: dev.name, os: dev.os, legs, perf, runArn };
+  let r, last = "";
+  for (;;) {
+    r = aws("devicefarm", "get-run", "--arn", runArn).run;
+    const line = `${r.status} ${r.result || ""}`;
+    if (line !== last) { log("run " + line); last = line; }
+    if (r.status === "COMPLETED") break;
+    await sleep(15000);
+  }
+  report.run = { status: r.status, result: r.result, deviceMinutes: r.deviceMinutes, counters: r.counters, message: r.message };
+  log("run " + JSON.stringify(report.run));
+  // Every artifact of every job: video, Appium/device logs, and the Customer Artifacts zip (our $DEVICEFARM_LOG_DIR).
+  const dl = path.join(out, "artifacts");
+  fs.mkdirSync(dl, { recursive: true });
+  report.artifacts = [];
+  for (const type of ["FILE", "LOG", "SCREENSHOT"]) {
+    for (const a of aws("devicefarm", "list-artifacts", "--arn", runArn, "--type", type).artifacts || []) {
+      const f = path.join(dl, `${a.name.replace(/[^\w.-]+/g, "_")}.${a.extension}`);
+      try { execFileSync("curl", ["-sS", "--fail", "-o", f, a.url]); report.artifacts.push({ type, name: a.name, file: f, bytes: fs.statSync(f).size }); }
+      catch (e) { report.artifacts.push({ type, name: a.name, error: e.message.slice(0, 120) }); }
+    }
+  }
+  for (const a of report.artifacts) log(`artifact ${a.type} ${a.name} ${a.bytes ?? a.error}`);
+  fs.writeFileSync(path.join(out, "auto-report.json"), JSON.stringify(report, null, 2));
+  log(`report ${path.join(out, "auto-report.json")}`);
+}
+
 const cmd = args[0];
 if (cmd === "devices") { for (const d of iosPhones()) console.log(`${d.name}\tiOS ${d.os}\t${d.availability}\tremoteAccess=${d.remoteAccess}`); }
 else if (cmd === "run") run().catch((e) => { console.error(e.message); process.exit(1); });
-else { console.error("usage: devicefarm-iphone.mjs devices | run --device NAME [--legs 0|2|4] [--url URL] [--out DIR]"); process.exit(2); }
+else if (cmd === "auto") auto().catch((e) => { console.error(e.message); process.exit(1); });
+else { console.error("usage: devicefarm-iphone.mjs devices | run --device NAME [--legs 0|2|4] | auto --device NAME [--legs N] [--perf NAME|none]"); process.exit(2); }
