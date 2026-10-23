@@ -362,8 +362,8 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
     "startRace sync-closes :modal (TopModal MutationObserver is a later task)");
   assert.match(game, /if \(garageReturn !== "pit" && !loadingScreen\.phase\(\)\) loadingScreen\.busy\("Returning"\)/,
     "CLOSE GARAGE / BACK raise the plate before hiding #carsetup");
-  assert.match(game, /if \(!_introSheet\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/,
-    "race settings covers prep with the sheet — race card waits until after the garage leave (else prep scrim, card hidden)");
+  assert.match(game, /if \(!_introSheet \|\| sheetPrep\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/,
+    "race settings covers prep with the sheet on hardware; software GL still gets the prep scrim (sheetPrep) so progress is visible");
   assert.match(game, /body:yield/,
     "startRaceBody yields after the plate is up and before ensureAudio");
   assert.match(game, /els\.overlay\.hidden = false; loadingScreen\.stop\(\); \}   \/\/ no vt: snapshot after hiding #carsetup is a black hold/,
