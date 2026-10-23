@@ -347,3 +347,43 @@ ran the arms in reverse order.
   memory pressure on a 6 GB phone. Next step for the warm owner: log `warm.attempts`, `failed` and each settle
   wait on an iPhone 14 first entry. This is now the largest single piece of first-race entry on the mid-range
   phone.
+
+### 10b. Same window: the post-fix paths A/B and the night circuits on the iPhone 14 (08:43–09:06Z)
+
+**`run --legs 4`** (BENCHMARK paths, WEBGPU-WEBGL2-WEBGL2-WEBGPU; unit B6CBB218):
+
+| | WEBGPU | WEBGL2 |
+|---|---|---|
+| fps default / 0.75 / full res | **59.5 / 59.4 / 59.5** (p95 17 ms everywhere) | 52.8 / 46.2 / **38.4** (p95 26.5 / 31 / 35 ms) |
+| fill slope | 0 | 9.87 ms per full frame |
+| cold build, leg 1 / later leg | **18.5 s** / 9.2 s | 16.5 s / 5.7 s |
+| warm build | 1.86 s / 0.45 s | 0.42 s |
+
+- WebGPU still holds 60 fps at every scale on the iPhone 14. WebGL2 is slightly worse than pre-fix (38.4 vs 41.8 fps
+  at full res), so #3603's switch to WebGPU is worth up to 21 fps on this phone.
+- The first WebGPU entry of a session is 18.5 s, against 33.9 s pre-fix (§6). Different units; both were leg 1 of
+  their session.
+
+**`run --scenario tracks`** (unit 6AC4D1A1, three's WebGPU, 20 s of steady race frames after a 5 s settle):
+
+| circuit | entry window | fps | p95 / p99 | worst | >33 / >50 ms |
+|---|---|---|---|---|---|
+| Monza night (1st entry on unit) | 23.4 s | 59.7 | 17 / 22 | 44 ms | 6 / 0 |
+| Singapore night | 7.5 s | 60.0 | 17 / 17 | 32 ms | 0 / 0 |
+| Vegas night | 5.2 s | 59.7 | 17 / 21 | 46 ms | 6 / 0 |
+
+- The skyline-heavy night circuits are not a frame-rate cost on the iPhone 14. This matches A·O5's corrected vertex
+  counts (Vegas 239k, Singapore 278k, Monza 331k): no far-skyline cull is needed on this evidence.
+
+**The `mirrorPrepare` gap, captured (A·W14's fields, the Monza night first entry):**
+- `warmCarAssets` 1.36 → 2.80 s
+- `mirrorPrepare:start` = `programWarm:start` at 3.16 s
+- `present:warming` at 5.35 s
+- `programWarm:end` at 7.75 s
+- `mirrorPrepare:end` at **23.28 s**
+
+So 15.5 s of the stage comes after the program warm ends. `memState().warm`: attempts 1, failed 0, total 11.7 s,
+post 1.84 s. `__apex.mirror()` at entry end: lite quality, 288×82 HDR target, `renders 1`, `prepared true`. It is
+neither warm retries nor a failed warm: the wait is in the mirror pass's own frame-driven prepare (A·W14: render()
+frames, the `#hud-mirror` measure, the real-size rear pass, a 30 s timer). A·W14 has a diagnostic PR proposed
+for the counters inside it.

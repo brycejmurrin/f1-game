@@ -29,6 +29,11 @@ unit. Rows marked † ran on a unit with unknown history. From e23476eb, `run` r
 | 10 | 07:07 | 18 Pro Max † | post | A·D1 `run --scenario cache` | entry: first / reload / reload / Safari kill | `programWarm` 7.3 / 2.3 / 0.24 / **0.24 s**; window 9.1 / 3.8 / 1.7 / 2.8 s | `programWarm` 2.3 / 0.37 / 0.37 / 0.24 s; window 5.3 / 1.9 / 2.9 / 1.9 s | §8 |
 | 11 | 07:23 | 18 Pro Max † | post | A·D1 `run --scenario races` | 6 races per path | 60 fps all; p99 17–22 ms; cold Monza dry 10.2, rain 5.1, **night 14.1**, Singapore night 3.0, Spa rain 2.8, Monaco 2.5 s | 60 fps all; p99 21–25 ms; cold 5.3 / 2.9 / 3.6 / 2.8 / 3.5 / 2.8 s | §9 |
 
+| 12 | 08:27 | iPhone 14 B86EBFDD | post | A·D1 `--scenario warmplus` | default 1st, warmPlus 2nd (no clear) | default: entry 20.2 s, max frame 243 ms, 2 >100 ms; warmPlus: 11.9 s, max 89 ms, 0 >100 ms | — | §10 |
+| 13 | 08:35 | iPhone 14 F0544D0A | post | A·D1 `--scenario warmplus` | warmPlus 1st, default 2nd, Safari cleared | warmPlus: 24.5 s, max 266 ms, 2 >100 ms; default: 8.2 s, max 86 ms, 0 >100 ms. warmPlus does not fix the first-race hitch; a Safari clear keeps the pipeline cache | — | §10 |
+| 14 | 08:43 | iPhone 14 B6CBB218 | post | A·D1 `run --legs 4` | paths, GPU-WGL-WGL-GPU | **59.5 fps all scales**; cold 18.5 / 9.2 s | **38.4 fps at full res**, 52.8 default; cold 16.5 / 5.7 s | §10b |
+| 15 | 09:00 | iPhone 14 6AC4D1A1 | post | A·D1 `--scenario tracks` | Monza / Singapore / Vegas night | 59.7 / 60.0 / 59.7 fps; entry 23.4 (1st) / 7.5 / 5.2 s; `mirrorPrepare` ends 15.5 s after `programWarm` | — | §10b |
+
 Not in this table: Fleet D's own iPhone 14 / 14 Pro sessions (`apex-iPhone14`, 01:27Z onward, Grok lane). Their
 numbers live with Fleet D. Ask DAD on the bus.
 
