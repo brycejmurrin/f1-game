@@ -10,7 +10,7 @@
    Other leg kinds run on the same reload and restore: "race" (one track and weather, timed 25 s), "lap" (ONE LAP /
    QUICK PATHS: the first timed lap of Monza, every frame of it), "garage" (tabs, liveries, spin) and "livery" (LIVERY
    EDIT: a new livery edited through the controls a player taps, each edit timed to its presented frame, with the GPU
-   counters before and after).
+   counters after a three-edit warm-up and at the end).
 
    A leg the page never finished (iOS killed the tab, a WebGPU device loss reloaded it) reads as state "running" on
    the next boot: it is recorded as "reloaded" and the run moves on, so a crash is a result, not a loop. A leg that
@@ -340,7 +340,7 @@ const BenchRun = (function () {
     const tab = (id) => { const b = D.getElementById("cs-tab-" + id); if (!b || b.disabled) return false; b.click(); return true; };
     if (!tab("livery") || !(await until(() => q(".cs-liv-create"), 5000))) { leg.state = "failed"; leg.reason = "no livery CREATE"; return false; }
     await sleep(1500);
-    const before = memSample();
+    const open = memSample();
     q(".cs-liv-create").click();
     if (!(await until(() => q('input[data-liv-field="c1"]'), 5000))) { leg.state = "failed"; leg.reason = "the livery editor did not open"; return false; }
     await sleep(1000);
@@ -374,7 +374,14 @@ const BenchRun = (function () {
       if (editMs == null) { steps.push({ id: id + " (none)", editMs: null }); return; }
       steps.push(Object.assign({ id, editMs }, await measure(1500, 0)));
     };
-    for (const [id, fn] of edits) { await step(id, fn); if (!stillRunning()) { all(); return "aborted"; } }
+    // The baseline is taken after a warm-up of three edits, as the churn spec takes it: the garage builds its bay,
+    // atlas and first flap set lazily, and that first build is not an edit's cost.
+    let warm = null;
+    for (const [id, fn] of edits) {
+      await step(id, fn);
+      if (!stillRunning()) { all(); return "aborted"; }
+      if (steps.length === 3) { await sleep(1500); warm = memSample(); }
+    }
     await step("save & fit", () => { const b = q(".cs-liv-ed-save"); if (!b) return false; b.click(); return true; });
     // Two fitted parts in the first part tab that has a free, unlocked option (a locked row would spend on research).
     const part = () => qa('#cs-options .cs-opt[data-cs-opt]:not(.active):not(.locked):not(.over-budget)')[0];
@@ -383,7 +390,7 @@ const BenchRun = (function () {
     steps.push(Object.assign({ id: "all edits" }, all()));
     await sleep(3000);   // the paint jobs an edit queues (atlas, flaps, hi-res swap) land before the second count
     const after = memSample();
-    leg.mem = { before, after, growth: growth(before, after) };
+    leg.mem = { open, before: warm, after, growth: growth(warm, after) };
     const back = D.getElementById("cs-back"); if (back) back.click();
     leg.steps = steps; leg.state = "done";
     return true;
