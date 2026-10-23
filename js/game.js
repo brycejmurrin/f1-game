@@ -3852,9 +3852,6 @@ function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
   if (!(idx >= 0)) return false;   // reduce-motion still builds then plays the garage-out before the card and the flyby
-  // JOIN the menu's in-flight build of this world (tile → SETTINGS → RACE!); claim owner before
-  // generation++ so the stepped build does not abort. When join is false (buildKey / PerfGov.tier
-  // mismatch), still await that abort — two loadTrackStepped calls race on `track` (Pages DAILY).
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
   const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = live;

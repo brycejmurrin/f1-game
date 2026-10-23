@@ -729,6 +729,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/layers-nav-memo.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
   "tests/unit/lazy-bundles-prefetch.test.mjs",
+  // D·DP3: warmFlaps mints flap set/element meshes during race/menu warm (not solve-only).
+  "tests/unit/lazy-race-geom-warm.test.mjs",
   "tests/unit/lazy-track-build.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
