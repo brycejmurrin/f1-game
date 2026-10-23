@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-00dc2f32-d4cb-52c1-9b8a-6dec5f04d0c5 #none needs tools/shot/scenery-locations.json (HELD #3458 also #3489 #3576): #3299 DevFlags hash fix ready on cursor/w19a-dev-flags-d0c5 (OWNED committed, not pushed); TRACK_VM includes js/core/dev-flags.js so digest must regen
+HANDOFF to:D from:cursor:bc-cec33b87-a71e-538d-9326-e90689bbcb69 LIVE D·W19e on cursor/w19e-glx-lampshadow-a4f2 [PR #3596]
