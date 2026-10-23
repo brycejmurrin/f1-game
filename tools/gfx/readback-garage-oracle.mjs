@@ -89,7 +89,10 @@ async function runGarage(page) {
 async function runRaceEntry(page) {
   await setPhase(page, "menu");
   await page.click("#mb-race", { timeout: WAIT_MS });
-  await setPhase(page, "race-setup");
+  await setPhase(page, "track-select");
+  await page.waitForSelector("#select:not([hidden])", { timeout: WAIT_MS });
+  await page.click("#sel-go", { timeout: WAIT_MS });
+  await setPhase(page, "race-settings");
   await page.waitForSelector("#race-settings:not([hidden])", { timeout: WAIT_MS });
   await page.click("#rs-go", { timeout: WAIT_MS });
   await setPhase(page, "race-entry");

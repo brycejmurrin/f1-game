@@ -309,11 +309,7 @@ const Assets = (function () {
   }
   function deferScratchReadback() {
     try {
-      if (typeof PerfGov === "undefined" || !PerfGov.softwareRaster()) return false;
-      const ld = typeof document !== "undefined" && document.getElementById && document.getElementById("loading");
-      if (ld && !ld.hidden) return true;
-      const cs = typeof document !== "undefined" && document.getElementById && document.getElementById("carsetup");
-      if (cs && !cs.hidden) return true;
+      if (typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer) return PerfGov.softwareGlUiReadbackDefer();
     } catch (_) { /* harness */ }
     return false;
   }
@@ -400,6 +396,7 @@ const Assets = (function () {
   // Otherwise resolves to the sorted layer indices that landed — the list
   // readLayerBytes returns — and never rejects.
   function readLayerBytesAsync(size, images, n, data, onLayer) {
+    if (deferScratchReadback()) return null;
     const page = size * size * 4;
     const raws = [];
     const pending = [];

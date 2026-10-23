@@ -6,6 +6,7 @@ import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -42,7 +43,7 @@ test("TitleMenu.repairDestinations remounts orphaned play doors", () => {
     else menu.appendChild(n);
   }
   const ctx = vm.createContext({ document: doc, Log: { info() {} }, SettingsNav: null });
-  vm.runInContext(read("js/ui/title-menu.js"), ctx);
+  vm.runInContext(read("js/ui/title-menu.js"), ctx, { filename: absSrc("js/ui/title-menu.js") });
   assert.equal(vm.runInContext("TitleMenu.repairDestinations(document)", ctx), true);
   for (const id of vm.runInContext("TitleMenu.CORE_PLAY_DOORS", ctx)) {
     const btn = doc.getElementById(id);

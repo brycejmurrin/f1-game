@@ -1,0 +1,1 @@
+Fixed: SwiftShader/llvmpipe GLX post no longer blooms mid-tones on cockpit and garage — software raster raises the bright-pass knee and scales bloom down when the scene target lacks real HDR headroom (#3590 readback skip unchanged).

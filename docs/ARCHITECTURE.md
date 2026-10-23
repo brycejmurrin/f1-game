@@ -92,6 +92,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `native.js` | `Native` | tag | native-shell detect (Electron preload + Capacitor). |
 | `native-download.js` | `NativeDownload` | tag | blob:<a download> → Capacitor Filesystem + Share (no bundler). |
 | `script-loader.js` | `ScriptLoader` | tag | ScriptLoader: extracted runtime orchestration. |
+| `menu-sheet-gate.js` | `MenuSheetGate` | tag | defer menu prep while an interactive menu sheet is open. |
 | `lazy-bundles.js` | `LazyBundles` | tag | LazyBundles: extracted runtime orchestration. |
 | `wake-lock.js` | `RaceWakeLock` | tag | RaceWakeLock: asynchronous screen wake-lock ownership. |
 | `save-schema-registry.js` | `SaveSchemaRegistry` | tag | SaveSchemaRegistry: manifest of every apex26.* persistence key. |
@@ -574,6 +575,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `soak-run.js` | `SoakRun` | tag | SoakRun: the hands-free half of PhoneRecorder (AUTO SOAK). |
 | `gpu-test-run.js` | `GpuTestRun` | tag | GpuTestRun: the one-tap GPU TEST on a real phone (SETTINGS > METRICS > PHONE TEST > GPU TEST). |
 | `phone-recorder.js` | `PhoneRecorder` | tag | PhoneRecorder: a phone-only soak recorder (issue #1633). |
+| `bench-capture.js` | `BenchCapture` | tag | BenchCapture: the profiling record BENCHMARK (js/perf/bench-run.js) writes beside its frame stats. |
 | `bench-run.js` | `BenchRun` | tag | BenchRun: SETTINGS > GRAPHICS > BENCHMARK, a hands-free device benchmark with a results file. |
 
 **`js/xr/`**
@@ -1631,7 +1633,7 @@ would keep GLX’s dead closure).
 |---|---|---|---|
 | **GLX** | Explicit/fallback WebGL2 (DEFERRED like the others) | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/glx/shaders/` |
 | **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `js/render/webgpu/wgsl-{chunks,post,fx}.js` |
-| **TLX** | Default Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.186.1/` |
+| **TLX** | Default Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) took three WebGL2 on AUTO 2026-09-03 → 2026-10-23 and now tries WebGPU, with the per-device kill switch `apex26.tlxWebKitGL`; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.186.1/` |
 
 **Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/shared/gltf.js`,
 `js/render/shared/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in
@@ -1711,9 +1713,14 @@ variable that way and the lit fragment had 1,597 (the sky's 174 fit). Fix:
 layouted noise helpers in `tsl-chunks.js` (compile once, not inlined ~50×)
 plus vendor PATCHES.md §4 (node variables declared inside `main()`). None
 of the ranked mechanisms above was it; they stay as the bisect list for the
-NEXT silent drop. AUTO on WebKit stays on three's WebGL2 backend until the
-WebGPU path has a lap of phone evidence (`docs/research/WEBGPU-PARITY.md`
-§5a rule 5).
+NEXT silent drop. AUTO on WebKit stayed on three's WebGL2 backend until the
+WebGPU path had phone evidence (`docs/research/WEBGPU-PARITY.md` §5a rule 5);
+that evidence is the Device Farm A/B on iOS 27.0
+(PR #3598, its Device Farm note §6), and since 2026-10-23
+AUTO on WebKit tries WebGPU. A detected WebGPU failure on WebKit (init throw,
+third device loss, early GPU errors, a refused first render) writes
+`localStorage apex26.tlxWebKitGL` (the reason), and AUTO on that device binds
+three WebGL2 until RESET RENDERER; `backendState().webkitStayGL` reports it.
 
 ### Screenshots — why WebGPU can look black
 
@@ -1738,7 +1745,7 @@ whole device.
 |---|---|---|
 | **WEBGL2** | Native canvas. Screenshots just work. | `canvas.toDataURL` |
 | **WEBGPU** | Soft-present: final pass → `COPY_SRC` texture → ephemeral readback → `putImageData` on `#game`. Forced by SCREENSHOTS: 2D BLIT or a software adapter. SCREENSHOTS: NATIVE leaves the swapchain black. | `GLX.awaitSoftPresent()` then `#game`; optional `GLX.capturePixels()` |
-| **THREE.JS** | AUTO can be **WebGPU or three WebGL2**. SETTINGS shows `AUTO (WEBGPU)` / `AUTO (WEBGL2)` from the live backend. It tries WebGPU wherever `navigator.gpu` exists (phones/Safari: lite stack, same as WGX_LITE; since 2026-09-02 a phone that picks THREE.JS BINDS it despite the §2m memory risk — `apex26.tlxMobile=0` declines back to GLX, and the boot canary reverts a load that never presented). It lands on three WebGL2 when GPU is missing, `apex26.tlxAutoGL=1` after this tab lost WebGPU, `init()` threw before `#game` was claimed, **or the browser is WebKit (Safari, every iOS browser) — since 2026-09-03: two deploys drew three-WebGPU wrongly on an iPhone with zero reported errors (bodywork missing, then sky-only at `c6d8fd3`); THREE PATH: WEBGPU still pins it for the investigation, with `apex26.tlxArrayNearest=1` as the on-device A/B switch and SETTINGS ▸ COPY DIAG as the report** — still TLX, not game WEBGL2 (`gfxClaimFail` is what binds GLX). Software WebGPU 2D-blits the LDR target. `mappedAtCreation` uploads go through `queue.writeBuffer`. THREE PATH: WEBGL2 / WEBGPU pins one path. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
+| **THREE.JS** | AUTO can be **WebGPU or three WebGL2**. SETTINGS shows `AUTO (WEBGPU)` / `AUTO (WEBGL2)` from the live backend. It tries WebGPU wherever `navigator.gpu` exists (phones/Safari: lite stack, same as WGX_LITE; since 2026-09-02 a phone that picks THREE.JS BINDS it despite the §2m memory risk — `apex26.tlxMobile=0` declines back to GLX, and the boot canary reverts a load that never presented). It lands on three WebGL2 when GPU is missing, `apex26.tlxAutoGL=1` after this tab lost WebGPU, `init()` threw before `#game` was claimed, **or the browser is WebKit and `apex26.tlxWebKitGL` is set (that device already failed WebGPU). WebKit was forced to WebGL2 2026-09-03 → 2026-10-23 (two deploys drew three-WebGPU wrongly on an iPhone with zero reported errors); Device Farm on iOS 27.0 cleared it, and `apex26.tlxArrayNearest=1` stays the on-device A/B switch, SETTINGS ▸ COPY DIAG the report** — still TLX, not game WEBGL2 (`gfxClaimFail` is what binds GLX). Software WebGPU 2D-blits the LDR target. `mappedAtCreation` uploads go through `queue.writeBuffer`. THREE PATH: WEBGL2 / WEBGPU pins one path. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
 
 Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
 
@@ -1982,7 +1989,7 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   WebGL2 path: `skipBatches()` (a DAWN encoder workaround, and there is no
   encoder on WebGL2) now also asks `isWebGPU()`, and `softContent(part)` asks
   `softwareGL` alone, which is already `forceWebGL ? detectSoftwareGL() :
-  _softAdapter`. WebKit takes three's WebGL2 backend on AUTO by construction,
+  _softAdapter`. WebKit took three's WebGL2 backend on AUTO by construction then (2026-09-03 → 2026-10-23),
   so before this desktop Safari lost the whole instanced prop set AND took the
   fallback sky, a cleared env probe and shrunk shadow maps on hardware that
   renders them fine. The sniff's `named` test is `soft(ware|pipe)`, never bare

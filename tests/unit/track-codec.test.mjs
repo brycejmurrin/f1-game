@@ -94,6 +94,18 @@ test("every bad code is refused with a reason, never an exception", async () => 
   assert.equal(CD.decodeBytes(null).reason, "bounds");
 });
 
+test("full-lap hw zone 0→1 survives share encode/decode with the same content id", async () => {
+  const { CD, C } = bootEditor();
+  const d = design({ baseHW: 7, hwZones: [{ s0: 0, s1: 1, hw: 5.5, ease: 0.01 }] });
+  const it = C.sanitize(d);
+  assert.deepEqual(plain(it.hwZones[0]), { s0: 0, s1: 1, hw: 5.5, ease: 0.01 });
+  const code = await CD.encode(d);
+  const back = await CD.decode(code);
+  assert.equal(back.ok, true, back.reason);
+  assert.equal(back.id, it.id);
+  assert.deepEqual(plain(back.design.hwZones[0]), { s0: 0, s1: 1, hw: 5.5, ease: 0.01 });
+});
+
 test("URL fragment and file envelope helpers", () => {
   const { CD, ctx } = bootEditor();
   assert.equal(CD.shareUrl("APXT1.p.AAA", "https://x.test/f1/"), "https://x.test/f1/#track=APXT1.p.AAA");

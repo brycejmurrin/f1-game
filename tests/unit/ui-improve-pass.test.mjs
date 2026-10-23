@@ -1934,6 +1934,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "armed OVERWRITE copy fits the reserved LOAD height");
   assert.equal(decl(css("css/career.css"), ".cr-slot-main", "grid-column"), "1 / -1",
     "SLOT 1 copy keeps the full card; EXPORT / IMPORT / DELETE sit underneath");
+  assert.equal(decl(css("css/career.css"), /#cr-inner:not\(\[data-pair="on"\]\) #cr-left,/, "max-width"), "100%",
+    "stacked #cr-left cannot grow past the sheet (phone overflow ~370px)");
+  assert.equal(decl(css("css/career.css"), /#cr-nextrace img,/, "max-width"), "100%",
+    "next-race still is capped; align-items:flex-start used to take the 800px intrinsic width");
+  assert.equal(decl(css("css/career.css"), /^\.cr-nextrace$/, "align-items"), "stretch",
+    "nextrace card stretches so the still fills the column width");
   assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left$/, "overflow-x"), "hidden",
     "paired career panes do not grow a second horizontal gutter");
   assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\]:has\(#cr-left \.cr-slot\):has\(#cr-right \.cr-slot\) > \.sheet-foot$/, "grid-column"), "1 / -1",

@@ -2150,14 +2150,11 @@ for (const ev of ["pointerdown", "keydown"])
 // Resolves true once the menu has had MENU_IDLE_MS without a tap or key (false
 // if the selection moved on meanwhile): the build and the warm frames each hold
 // the main thread for seconds, so they wait for the player's hands to stop.
-const menuSlice = () => new Promise((r) => setTimeout(r, 32));
+// MenuSheetGate: yield while Settings is open so warmPrograms / garage prep
+// do not overlap the sheet (D·IP2). slice/idle live there — keeps game.js flat.
+const menuSlice = () => MenuSheetGate.slice();
 async function menuIdle(current) {
-  for (;;) {
-    const wait = MENU_IDLE_MS - (performance.now() - _menuInputAt);
-    if (wait <= 0) return current();
-    await new Promise((r) => setTimeout(r, wait));
-    if (!current()) return false;
-  }
+  return MenuSheetGate.idle(current, MENU_IDLE_MS, () => _menuInputAt, menuSlice);
 }
 // Dark sessions: bake the lamp pools in 8 ms slices now, so RACE!'s sync bake hits the cache (lamp-bake.js prebake).
 async function menuLampBake(current) {
@@ -9019,7 +9016,7 @@ function openGarage(from) {
     if (canvas) canvas.style.visibility = "";
     if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
     if (_softEl) _softEl.style.visibility = "";
-    try { if (gfx.invalidateSoftPresent && !(typeof PerfGov !== "undefined" && PerfGov.softwareRaster())) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
+    try { if (gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
     try { renderSetupPreview(0); } catch (_) { /* mesh/warm may still be settling */ }
   };
   if (from === "pit") { enterGarage(); setupCam.startArrival(); }
@@ -9246,7 +9243,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false); $("pm-quick-doors").insertBefore(Object.assign(document.createElement("button"), { id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: () => { setPaused(false); Input.requestRecover(); } }), $("pm-checkpoint"));   // RECOVER CAR = the R key; touch had none. Built here like REPLAY: shellNodes holds
-$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; startRace().then(() => { if (state === "race") frozen = false; }, () => {}); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it with its own paused = false, and a start that was cancelled (settings changed) hands the old race back
+$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; startRace().then(() => { if (state === "race") frozen = false; }, () => {}); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it on a committed start, and a start cancelled for changed settings (or failed) ends on the title via quitToMenu — the old race is not handed back
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 

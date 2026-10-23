@@ -472,8 +472,17 @@ const MirrorPass = (function () {
       }
     }
 
+    // mirrorPrepare waits on the whole gfx.warm() the race entry queued just before it (scene, post, shadow, mirror
+    // and draw stages) before its own pass. The stage table names that wait "programWarm" inside the span, or the
+    // entry's shader warm reads as the mirror's cost (A·W14; Device Farm 2026-10-23: "mirrorPrepare" 70-93 %).
+    function warmWaitMark(job, edge) {
+      if (job.warmWait === edge) return;
+      job.warmWait = edge;
+      try { if (typeof RaceEntryProfile !== "undefined") RaceEntryProfile.mark("programWarm:" + edge); } catch (_) { /* profiling is optional */ }
+    }
     function finishPreparation(job, ready) {
       if (_preparation !== job) return;
+      if (job.warmWait === "start") warmWaitMark(job, "end");
       clearTimeout(job.timer);
       _preparation = null; _prepared = ready;
       _lastW = 0;   // preparation never spends the first visible frame's draw
@@ -495,9 +504,10 @@ const MirrorPass = (function () {
         if (G.state !== "count" || _collapsed || !wanted(true)) return Promise.resolve(false);
       } catch (_) { cancelPreparation(); _prepared = false; return Promise.resolve(false); }
       const job = { player: G.player, track: G.track, gfx: G.gfx,
-        begin: G.gfx.mirrorBegin, end: G.gfx.mirrorEnd, primed: false, timer: null, resolve: null, promise: null };
+        begin: G.gfx.mirrorBegin, end: G.gfx.mirrorEnd, primed: false, timer: null, resolve: null, promise: null, warmWait: null };
       job.promise = new Promise(resolve => { job.resolve = resolve; });
       _preparation = job; _prepared = null;
+      warmWaitMark(job, "start");
       job.timer = setTimeout(() => finishPreparation(job, false), 30000);
       return job.promise;
     }
@@ -512,6 +522,7 @@ const MirrorPass = (function () {
         // shader warm uses a tiny target; our actual-size pass must follow it.
         if (!job.primed) { job.primed = true; return; }
         if (g.warming && g.warming()) return;
+        warmWaitMark(job, "end");
         const e = el();
         if (!e || !e.style) { finishPreparation(job, false); return; }
         const hidden = e.hidden, visibility = e.style.getPropertyValue("visibility"), priority = e.style.getPropertyPriority("visibility");

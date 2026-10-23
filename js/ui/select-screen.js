@@ -270,9 +270,17 @@ const restoreMenuAfterGraphicsReset = () => {
 // swap goes direct. The test suite pins reducedMotion:"reduce" and rides this.
 // So does MOTION: REDUCED (html[data-motion], js/ui/title-fx.js).
 const vtReduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
+// Touch / coarse pointer: startViewTransition snapshots the title WebGL layer
+// and blocks the main thread on return (D·IP2 BrowserStack iPhone: 1.2 s worst
+// frame title←select). Same direct-apply path as reduced motion — the crossfade
+// is not worth a hitch on the phone Bryce plays on.
+const vtPhone = window.matchMedia
+  ? (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(hover: none)").matches)
+  : false;
 const vt = (fn) => {
   if (!document.startViewTransition || vtReduce.matches
-    || document.documentElement.dataset.motion === "reduce") { fn(); return; }
+    || document.documentElement.dataset.motion === "reduce"
+    || vtPhone) { fn(); return; }
   let applied = false;
   const run = () => { if (applied) return; applied = true; fn(); };
   try {
@@ -1079,6 +1087,137 @@ function showStill(t) {
   img.src = src;
 }
 
+// TrackMaps.compute (via corners/draw) runs Tracks.buildCenterline on the main
+// thread. On an iPhone 15 that was 1.5–1.9 s of hitches on race-select open
+// (D·DP5). Chrome paints still+captions sync; maps wait on a cache hit, the
+// build worker's preview, or requestIdleCallback — never a sync cold compute
+// on the open's long task.
+let previewMapsTok = 0, previewMapsIdle = 0;
+function previewMapsCached(t) {
+  if (!t || !t.id || typeof TrackMaps === "undefined" || !TrackMaps.cachedIds) return false;
+  try { return TrackMaps.cachedIds().indexOf(t.id) >= 0; } catch (_) { return false; }
+}
+function previewPathReady(t) {
+  return !!(t && !t._metaOnly && t.path && t.path.pts && t.path.pts.length);
+}
+function fillPreviewMeta(t, crns, dir, elev, dz) {
+  const turns = crns && crns.length;
+  const km = t.lengthKm || 0;
+  const selInner = document.getElementById("sel-inner") || {};
+  const narrowLen = ((selInner.dataset || {}).density === "compact") || ((selInner.clientWidth || 0) > 0 && selInner.clientWidth <= 520);
+  const rows = [
+    ["LOCATION", t.country || "—"],
+    ["TURNS", turns ? String(turns) : "—"],
+    ["CIRCUIT LENGTH", !km ? "—"
+      : narrowLen
+        ? km.toFixed(3) + " km"
+        : km.toFixed(3) + " km / " + (km * 0.621371).toFixed(3) + " mi"],
+    ["DIRECTION", dir ? (dir === "CW" ? "Clockwise" : "Anti-clockwise") : "—"],
+    ["ELEVATION", elev > 2 ? "+" + elev + " m" : (elev == null ? "—" : "Flat")],
+    ["AERO ZONES", dz ? (dz.length ? String(dz.length) : "None") : "—"],
+  ];
+  if (crns && crns.length) {
+    const slowest = crns.reduce(function (a, b) { return b.v > a.v ? b : a; });
+    rows.push(["SLOWEST CORNER", "T" + slowest.n]);
+  }
+  els.selPreviewMeta.textContent = "";
+  for (const [k, v] of rows) {
+    const pair = document.createElement("div");
+    const dt = document.createElement("dt"); dt.textContent = k;
+    const dd = document.createElement("dd"); dd.textContent = v;
+    pair.append(dt, dd);
+    els.selPreviewMeta.appendChild(pair);
+  }
+}
+// Size #sel-preview-map to the hero slot WITHOUT TrackMaps.compute. Cold open
+// used to leave the canvas at its HTML attrs / zero CSS box until idle paint —
+// ui-redesign then saw buffer/CSS skew === 1 ("outline canvas is not
+// CSS-squashed"). Default 520/300 matches the designer attribute aspect; a
+// cache hit may use TrackMaps.aspect (cheap — compute already memoised).
+function sizePreviewMapBox(t) {
+  if (!els.selPreviewMap || !t) return;
+  const hero = document.getElementById("sel-hero");
+  const sheet = hero && hero.closest(".sheet");
+  if (!hero || hero.clientWidth <= 0 || hero.clientHeight <= 0) return;
+  const map = els.selPreviewMap;
+  const compact = !!(sheet && sheet.dataset.density === "compact");
+  const slotW = hero.clientWidth * 0.62, slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  let a = 520 / 300;
+  if (previewMapsCached(t) && typeof TrackMaps !== "undefined" && TrackMaps.aspect) {
+    try { a = TrackMaps.aspect(t) || a; } catch (_) { /* keep default */ }
+  }
+  a = Math.max(0.5, Math.min(2.5, a));
+  let boxW = Math.max(40, Math.floor(slotW || 1));
+  let boxH = Math.max(40, Math.floor(slotH || 1));
+  let w = boxW, h = Math.round(w / a);
+  if (h > boxH) { h = boxH; w = Math.round(h * a); }
+  w = Math.max(1, w); h = Math.max(1, h);
+  map.width = w;
+  map.height = h;
+  map.style.aspectRatio = String(a);
+  map.style.width = w + "px";
+  map.style.height = h + "px";
+  map.style.maxWidth = "";
+  map.style.maxHeight = "";
+}
+function paintTrackPreviewMaps(t) {
+  if (!els.selPreviewMap || Tracks.LIST[G.trackIdx] !== t) return;
+  const crns = TrackMaps.corners(t);
+  const dir = TrackMaps.direction(t);
+  const elev = TrackMaps.elevRange(t);
+  const dz = TrackMaps.drsZones(t);
+  fillPreviewMeta(t, crns, dir, elev, dz);
+  const hero = document.getElementById("sel-hero");
+  const sheet = hero && hero.closest(".sheet");
+  if (!hero || hero.clientWidth <= 0 || hero.clientHeight <= 0) return;
+  drawElevProfile(document.getElementById("sel-preview-elev"), t);
+  const map = els.selPreviewMap;
+  const compact = !!(sheet && sheet.dataset.density === "compact");
+  const slotW = hero.clientWidth * 0.62, slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  const fit = TrackMaps.fitCanvas(map, slotW, slotH, t, true);
+  const ratio = Math.min(3, Math.max(1, (map.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+  if (ratio > 1.01) {
+    map.width = Math.round(fit.w * ratio);
+    map.height = Math.round(fit.h * ratio);
+  }
+  const br = fit.w ? (map.width / fit.w) : 1;
+  const lw = Math.max(2, Math.round(Math.min(fit.w, fit.h) / 42));
+  TrackMaps.draw(map, t, {
+    color: "#ffffff", casing: "rgba(0,0,0,0.55)", startColor: "#e10600",
+    width: lw * br, pad: Math.round(lw * 1.5) * br,
+    corners: false, sectors: false, drs: false
+  });
+  map.dataset.drawn = "";
+}
+function scheduleTrackPreviewMaps(t) {
+  const tok = ++previewMapsTok;
+  // Stale idle/timer callbacks no-op via previewMapsTok; no cancelIdleCallback
+  // (undeclared global — global-registry). clearTimeout is harmless on an idle id.
+  if (previewMapsIdle) {
+    try { clearTimeout(previewMapsIdle); } catch (_) { /* ignore */ }
+    previewMapsIdle = 0;
+  }
+  const run = () => {
+    previewMapsIdle = 0;
+    if (tok !== previewMapsTok || Tracks.LIST[G.trackIdx] !== t) return;
+    const finish = () => {
+      if (tok !== previewMapsTok || Tracks.LIST[G.trackIdx] !== t) return;
+      paintTrackPreviewMaps(t);
+    };
+    const client = typeof TrackBuildClient !== "undefined" ? TrackBuildClient : null;
+    if (client && typeof client.previewMap === "function" && client.enabled && client.enabled() && !t.custom) {
+      Promise.resolve(client.previewMap(t)).then(finish, finish);
+    } else {
+      finish();
+    }
+  };
+  if (typeof requestIdleCallback === "function") {
+    previewMapsIdle = requestIdleCallback(run, { timeout: 180 });
+  } else {
+    previewMapsIdle = setTimeout(run, 0);
+  }
+}
+
 function updateTrackPreview() {
   if (!els.selPreviewMap) return;
   const t = Tracks.LIST[G.trackIdx];
@@ -1094,12 +1233,7 @@ function updateTrackPreview() {
       }).catch((e) => Log.warn("track", "preview could not load circuit " + idx + ": " + ((e && e.message) || e)));
     }
   }
-  const crns = TrackMaps.corners(t);
-  const turns = crns.length;
-  const dir = TrackMaps.direction(t);
-  const elev = TrackMaps.elevRange(t);
-  const dz = TrackMaps.drsZones(t);
-  // Caption ON the still: flag, name, grand prix.
+  // Caption ON the still: flag, name, grand prix. No TrackMaps — never hitch.
   const flagEl = document.getElementById("sel-preview-flag");
   if (flagEl) {
     flagEl.innerHTML = Flags.svg(t.country);
@@ -1116,7 +1250,6 @@ function updateTrackPreview() {
   }
   els.selPreviewName.textContent = t.name + (t.night ? " ☾" : "");
   els.selPreviewGp.textContent = t.gp || "";
-  // The type badges under the name — the same .trb chips the tiles carry.
   const factsEl = document.getElementById("sel-preview-facts");
   if (factsEl) {
     const kinds = [];
@@ -1130,9 +1263,6 @@ function updateTrackPreview() {
       const b = document.createElement("span"); b.className = cls; b.textContent = label; factsEl.appendChild(b);
     }
   }
-  // EDIT sits beside CIRCUIT DETAIL (the facts row is hidden at compact density,
-  // where the phone lives). Straight from the picker into the designer with THIS
-  // design; the LAZY_EDITOR bundle loads on the first click (CustomTracks.ensureEditor).
   const detail = document.getElementById("sel-detail-chip");
   let edit = document.getElementById("sel-edit-chip");
   if (detail && t.custom) {
@@ -1146,36 +1276,6 @@ function updateTrackPreview() {
       CustomTracks.ensureEditor().then((ok) => { if (ok && typeof TrackDesigner !== "undefined") TrackDesigner.open({ design: CustomTracks.get(t.id), originId: t.id }); });
     };
   } else if (edit) edit.remove();
-  // The numbers beside the still, as a definition list (label over value).
-  const km = t.lengthKm || 0;
-  const selInner = document.getElementById("sel-inner") || {};
-  const narrowLen = ((selInner.dataset || {}).density === "compact") || ((selInner.clientWidth || 0) > 0 && selInner.clientWidth <= 520);
-  const rows = [
-    ["LOCATION", t.country || "—"],
-    ["TURNS", turns ? String(turns) : "—"],
-    ["CIRCUIT LENGTH", !km ? "—"
-      : narrowLen
-        ? km.toFixed(3) + " km"
-        : km.toFixed(3) + " km / " + (km * 0.621371).toFixed(3) + " mi"],
-    ["DIRECTION", dir ? (dir === "CW" ? "Clockwise" : "Anti-clockwise") : "—"],
-    ["ELEVATION", elev > 2 ? "+" + elev + " m" : "Flat"],
-    ["AERO ZONES", dz && dz.length ? String(dz.length) : "None"],
-  ];
-  if (crns.length) {
-    const slowest = crns.reduce(function (a, b) { return b.v > a.v ? b : a; });
-    rows.push(["SLOWEST CORNER", "T" + slowest.n]);
-  }
-  els.selPreviewMeta.textContent = "";
-  for (const [k, v] of rows) {
-    // <div> groups inside a <dl> are valid HTML and are what lets the grid
-    // stack each label over its value instead of interleaving dt/dd cells.
-    const pair = document.createElement("div");
-    const dt = document.createElement("dt"); dt.textContent = k;
-    const dd = document.createElement("dd"); dd.textContent = v;
-    pair.append(dt, dd);
-    els.selPreviewMeta.appendChild(pair);
-  }
-  // The record line: the season's round, or the player's own lap record.
   if (G.seasonMode) {
     els.selPreviewRec.textContent = G.season && !SeasonCal.canRace(G.season)
       ? "Final standings · " + SeasonCal.rounds() + " rounds"
@@ -1187,42 +1287,20 @@ function updateTrackPreview() {
       : ttChrome() ? "No time set" : "";
   }
   showStill(t);
-  // While #select is hidden (buildSelect's synchronous pass) the hero measures
-  // 0×0 — every open is followed by the double-rAF / ResizeObserver refit
-  // anyway. The captions above are written; the raster below is skipped.
-  const hero = document.getElementById("sel-hero");
-  const sheet = hero && hero.closest(".sheet");
-  if (!hero || hero.clientWidth <= 0 || hero.clientHeight <= 0) return;
-  drawElevProfile(document.getElementById("sel-preview-elev"), t);
-
-  // THE OUTLINE OVER THE STILL: a plain white lap line with a dark casing —
-  // sectors, corner numbers and DRS belong to CIRCUIT DETAIL, one tap away.
-  // Fit the canvas to ~2/3 of the hero in the circuit's own aspect; it is
-  // absolutely centred by the stylesheet, so pinning its box moves nothing.
-  const map = els.selPreviewMap;
-  // A compact hero is short and its caption sits along the bottom edge; the
-  // outline is top-aligned there (css) and keeps clear of the caption.
-  const compact = !!(sheet && sheet.dataset.density === "compact");
-  const slotW = hero.clientWidth * 0.62, slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
-  const fit = TrackMaps.fitCanvas(map, slotW, slotH, t, true);
-  // CRISP AT UI SIZE > 100% AND ON HiDPI: the buffer is the fitted CSS box times
-  // the effective zoom x dpr (capped at 3 like the minimap); the draw params
-  // are scaled by the same ratio so the line stays the same visual weight.
-  const ratio = Math.min(3, Math.max(1, (map.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
-  if (ratio > 1.01) {
-    map.width = Math.round(fit.w * ratio);
-    map.height = Math.round(fit.h * ratio);
+  if (!previewPathReady(t)) {
+    fillPreviewMeta(t, null, null, null, null);
+    return;
   }
-  const br = fit.w ? (map.width / fit.w) : 1;
-  const lw = Math.max(2, Math.round(Math.min(fit.w, fit.h) / 42));
-  TrackMaps.draw(map, t, {
-    color: "#ffffff", casing: "rgba(0,0,0,0.55)", startColor: "#e10600",
-    width: lw * br, pad: Math.round(lw * 1.5) * br,
-    corners: false, sectors: false, drs: false
-  });
-  // Shown from the first draw on (css/select.css hides the shell's 520x300
-  // default box until now, so the first open never flashes an empty canvas).
-  map.dataset.drawn = "";
+  if (previewMapsCached(t)) {
+    paintTrackPreviewMaps(t);
+    return;
+  }
+  // Size the canvas box now (no compute); draw after idle / worker so the
+  // open's long task stays off the main thread (D·DP5) without leaving a
+  // zero-width / attr-sized bitmap that CSS-squashes (ui-redesign skew).
+  fillPreviewMeta(t, null, null, null, null);
+  sizePreviewMapBox(t);
+  scheduleTrackPreviewMaps(t);
 }
 
 // Track-detail DRS metre labels — shared so unit tests can pin wrap semantics.
