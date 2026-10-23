@@ -3689,10 +3689,12 @@ function sheetRelease(hide) {
 /** Cold preparation's cover: prep scrim (card hidden), unless race settings already covers it. */
 function introCover(info, n) { if (!_introSheet) loadingScreen.prep(info, () => studioSkip(n)); }
 /** Garage-out finished → race/session card. Every intro path ends here (strict sequence). */
-function afterGarageOut(n, key, go, prepared, live) {
+function afterGarageOut(n, key, go, prepared, live, stage) {
   studioClose(n);
   if (n !== _introRun) return;
   if (!prepared || !live()) {
+    // Both branches re-enable START with the sheet still up and log nothing else (#3591): name why.
+    Log.warn("game", "intro released without a garage-out", { stage: stage || "", prepared, state, keyMoved: key !== menuKey(trackIdx), track: !!track });
     loadingScreen.stop();
     if (!prepared && live()) announce("PREPARATION FAILED — please retry", 5, "info");
     titleIfBare(); return;
@@ -3841,7 +3843,7 @@ function introGarage(go) {
       });
     }
     catch (e) { if (live()) { Log.warn("gfx", "intro garage failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } }
-    finally { afterGarageOut(n, key, go, prepared, live); }
+    finally { afterGarageOut(n, key, go, prepared, live, "garage"); }
   })();
   return true;
 }
@@ -3855,17 +3857,21 @@ function introBuild(go) {
   clearTimeout(flybyBuildTimer); _menuGate.generation++;
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
   introCover(info0, n);
-  let prepared = false;
+  let prepared = false, stage = "build:scenery";   // where a release stopped (afterGarageOut logs it)
   (async () => {
     try {
       await RaceEntryProfile.spanAsync("introBuild", async () => {
         await RaceEntryProfile.spanAsync("ensureScenery", () => ensureScenery(idx));
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the preparation card paints first
+        stage = "build:warm";
         if (!(await awaitIntroWarm(live)) || !live()) return;   // compilation retains ownership of its scene
         // In steps, a few ms per frame: the preparation card and skip remain responsive.
+        stage = join ? "build:join" : "build:prior";
         if (join) await mp.step;
         else if (prior) await prior.catch(() => false);
+        stage = "build:load";
         if (!(await RaceEntryProfile.spanAsync("loadTrackStepped", () => loadTrackStepped(idx, live))) || !live()) return;
+        stage = "build:prepare";
         _menuGate.ready = key; _menuGate.track = track;
         // Assets, plans and shader warm all settle before the outgoing animation.
         const t1 = performance.now();
@@ -3882,7 +3888,7 @@ function introBuild(go) {
     } catch (e) {
       if (live()) { Log.warn("gfx", "intro build failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); }
     }
-    finally { afterGarageOut(n, key, go, prepared, live); }
+    finally { afterGarageOut(n, key, go, prepared, live, stage); }
   })();
   return true;
 }
@@ -3924,7 +3930,7 @@ function introWarm(go) {
         prepared = true;   // afterGarageOut closes the held garage, then the race/session card
       });
     } catch (e) { if (live()) { Log.warn("gfx", "intro warm failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } else if (n === _introRun) loadingScreen.stop(); }
-    finally { afterGarageOut(n, key, go, prepared, live); }
+    finally { afterGarageOut(n, key, go, prepared, live, "warm"); }
   })();
   return true;
 }
@@ -3982,7 +3988,7 @@ function raceIntroFromSheet(go, sheet, btn) {
   const n = ++_introRun, settings = entrySettings();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings();
   (async () => { try {
-    if (await awaitIntroWarm(live)) intro(); else if (_introSheet === owner) sheetRelease(false);
+    if (await awaitIntroWarm(live)) intro(); else if (_introSheet === owner) { Log.warn("game", "intro released without a garage-out", { stage: "sheet:warm", state }); sheetRelease(false); }
   } catch (e) { failed(e); } })();
 }
 function raceIntro(go) {
