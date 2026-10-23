@@ -114,7 +114,7 @@ test("bench-run: ONE LAP, QUICK PATHS and LIVERY EDIT plans; QUICK PATHS is one 
 test("bench-run: every test names its duration in its help line and keeps a short chip label", () => {
   const B = load();
   for (const t of B.TESTS) {
-    assert.match(t.help, /About \d+ min\.$/, t.id);
+    assert.ok(/About \d+ min\.$/.test(t.help), t.id + " help names its duration: " + t.help);
     assert.ok(t.label.length <= 16, t.id + " label " + t.label);
   }
   assert.equal(new Set(B.TESTS.map((t) => t.id)).size, B.TESTS.length);
