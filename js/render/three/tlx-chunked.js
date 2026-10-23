@@ -700,11 +700,25 @@
     return r;
   }
 
+  // Idle yield for menu-path warm stages (#3279): requestIdleCallback when the
+  // browser has it, else a 0-ms timer. Kept here (not in tlx.js) so the warm
+  // region stays lean and unit tests can call the same helper.
+  function idleYield(timeoutMs) {
+    const ms = timeoutMs == null ? 48 : timeoutMs;
+    return new Promise((resolve) => {
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(() => resolve(), { timeout: ms });
+      } else {
+        setTimeout(resolve, 0);
+      }
+    });
+  }
+
   // The cull helpers ride alongside the factory, NOT on its instance: tlx.js
   // must be able to re-export them in GLX's shape even when the factory itself
   // failed and chunkedSys is null. See the note at their definition.
   window.TLXShaders = Object.assign(window.TLXShaders || {},
-    { chunked,
+    { chunked, idleYield,
       makeFrustumPlanes: Frustum.makeFrustumPlanes,
       aabbInFrustum: Frustum.aabbInFrustum, aabbDist2: Frustum.aabbDist2,
       packAttr, packIndex, packStats, splitRanges, mergeRuns });

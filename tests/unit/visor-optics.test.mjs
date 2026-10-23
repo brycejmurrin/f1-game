@@ -29,7 +29,7 @@ function ctx2d(calls) {
   };
 }
 
-function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 } } = {}) {
+function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "" } = {}) {
   const calls = { clear: 0, stroke: 0, arc: 0, inserted: null, props: {}, attrs: {} };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } }, nextSibling: null };
   const body = {
@@ -50,9 +50,10 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
   const ctx = vm.createContext({
     Math, Float32Array, Uint8ClampedArray, Object, Path2D, performance: { now: () => 0 },
     getComputedStyle: () => ({ getPropertyValue: (k) => (k === "--visor-lens" ? lens : "") }),
-    document, window: { ...win, __apex: apex },
+    document, window: { ...win, __apex: apex, location: { search } }, URLSearchParams, Date,
     CockpitOpts: { visor: () => visor, visorReflections: () => reflections, visorRefraction: () => refraction, visorBeams: () => beams, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
     GfxQuality: { current: () => "high" },
+    ...(picker ? { RendererPicker: picker } : {}),
   });
   seedLog(ctx);
   const V = vm.runInContext(read("js/fx/visor-optics.js") + ";VisorOptics", ctx, { filename: absSrc("js/fx/visor-optics.js") });
@@ -274,4 +275,28 @@ test("visor refraction: the rim bend map and its three filters are built once pe
   const { V: off } = load({ apex, refraction: "off" });
   off.tick(1 / 60, true, 0, false);
   assert.equal(off.stats().bend, "", "refraction OFF builds no map");
+});
+
+test("visor blend (#3657): plus-lighter on WebGPU only; WebGL2, GLX and an unknown backend composite as plain over", () => {
+  const apex = { visorScene: () => DAY };
+  const arm = (picker, search) => { const r = load({ apex, picker, search }); r.V.tick(1 / 60, true, 0, false); return r; };
+  const gpu = arm({ liveThreeApi: () => "webgpu", liveBackend: () => "three" });
+  assert.equal(gpu.calls.attrs["data-visor-blend"], "add", "TLX on WebGPU keeps the additive blend");
+  assert.equal(gpu.V.stats().blend, "add");
+  assert.equal(arm({ liveThreeApi: () => null, liveBackend: () => "webgpu" }).calls.attrs["data-visor-blend"], "add", "WGX is WebGPU too");
+  assert.equal(arm({ liveThreeApi: () => "webgl2", liveBackend: () => "three" }).calls.attrs["data-visor-blend"], "over", "TLX on WebGL2: over");
+  assert.equal(arm({ liveThreeApi: () => null, liveBackend: () => "webgl2" }).calls.attrs["data-visor-blend"], "over", "GLX: over");
+  assert.equal(arm(undefined).calls.attrs["data-visor-blend"], "over", "no picker loaded: over");
+  assert.equal(arm({ liveThreeApi: () => { throw new Error("mid-boot"); } }).calls.attrs["data-visor-blend"], "over", "a throwing picker: over");
+  assert.equal(arm({ liveThreeApi: () => "webgl2" }, "?visorblend=add").calls.attrs["data-visor-blend"], "add", "?visorblend=add forces the old arm on WebGL2");
+  assert.equal(arm({ liveThreeApi: () => "webgpu" }, "?apex=1&visorblend=over").calls.attrs["data-visor-blend"], "over", "?visorblend=over forces it on WebGPU");
+  assert.equal(arm({ liveThreeApi: () => "webgl2" }, "?visorblend=bogus").calls.attrs["data-visor-blend"], "over", "an unknown value is ignored");
+  const off = load({ apex, visor: "off", picker: { liveThreeApi: () => "webgl2" } });
+  off.V.tick(1 / 60, true, 0, false);
+  assert.equal(off.calls.attrs["data-visor-blend"], undefined, "visor OFF never touches the blend");
+  for (const [api, param, want] of [["webgpu", null, "add"], ["webgl2", null, "over"], [null, null, "over"], ["webgl2", "add", "add"]]) {
+    assert.equal(gpu.V.blendMode(api, param), want, `blendMode(${api}, ${param})`);
+  }
+  const css = read("css/helmet-visor.css");
+  assert.match(css, /body\[data-visor-blend="over"\] #fx-visor \{ mix-blend-mode: normal; \}/, "the stylesheet drops the blend on the over arm");
 });

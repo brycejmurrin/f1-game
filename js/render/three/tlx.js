@@ -1967,13 +1967,13 @@ const TLX = (function () {
         c.key = buildMatKey(o, chunked, instanced);
         return c.key;
       }
-      function materialFor(opts, chunked, instanced) {
+      function materialFor(opts, chunked, instanced, fx) {
         if (_drawMatMode || !lit) return fallbackMat(instanced);
         if (vizMat) return instanced === 2 ? _aiOf(vizMat) : vizMat;
         if (!opts) return chunked ? defaultMatChunked : instanced === 2
           ? (_aiDefault || (_aiDefault = _attrInst(lit.makeMaterial({ instanced: true })))) : (instanced ? defaultMatInstanced : defaultMat);
         const o = opts;
-        const key = matKeyFor(o, chunked, instanced);
+        const key = fx ? matKeyFor(o, chunked, instanced) + "|fx" : matKeyFor(o, chunked, instanced);
         let m = matCache.get(key);
         if (m) _matHit++; else {
           _matMiss++;
@@ -2003,7 +2003,7 @@ const TLX = (function () {
           }
           m = lit.makeMaterial(chunked
             ? Object.assign({ chunked: true }, o)
-            : (instanced ? Object.assign({ instanced: true }, o) : o));
+            : (instanced ? Object.assign({ instanced: true }, o, fx ? { finishX: true } : null) : (fx ? Object.assign({ finishX: true }, o) : o)));
           if (instanced === 2 && m) _attrInst(m);
           matCache.set(key, m);
         }
@@ -2800,7 +2800,7 @@ const TLX = (function () {
         return (pair[s] = { __tlx: true, imesh: m, ib, instances: CO_CAP, visible: 0, rec: -1 });
       }
       function _coAppend(geo, w, opts) {
-        if (!_coOn || !w || _drawMatMode || vizMat || !lit || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches()) return false;
+        if (!_coOn || !w || _drawMatMode || vizMat || !lit || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches() || fxFor(geo, opts)) return false;
         const neg = w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
         const b = _coRun(geo, neg), mat = materialFor(opts, false, 2), em = drawEm(opts);
         // This pass's run is live while its record is (resetRecs nulls it) — A6's sentinel.
@@ -3209,7 +3209,11 @@ const TLX = (function () {
           // matrixWorld.determinantAffine() < 0, and the car draws one side's
           // parts (the brake ring among them) through a mirrored matrix — the
           // one field the lap's pipeline key differed in (probe, field 27).
-          for (const g of geos.values()) for (const sx of [1, -1]) {
+          // The double-sided variant is the cockpit dash ERS bar / OT lamp
+          // (_rigFxA), never drawn mirrored: its cw twin was a whole lit
+          // pipeline (~1.2 s cold on an iPhone 14) no race used —
+          // ers-deploy-census tlx-gpu helmet, first deploy: lazy=0 without it.
+          for (const g of geos.values()) for (const sx of (o.doubleSided ? [1] : [1, -1])) {
             await compileWarmProbe(g, mat, sx);
           }
         }
@@ -3224,16 +3228,36 @@ const TLX = (function () {
         }
         _warmStages.lateFx = _LATE_FX.length;
       }
-      // AUTO (unset) = ON for three's WebGL2 backend only. There compileAsync
-      // links with KHR_parallel_shader_compile and polls COMPLETION_STATUS, but
-      // the render path links synchronously (WebGLBackend createRenderPipeline,
-      // promises === null -> getProgramParameter(LINK_STATUS)), so the 8 post
-      // programs the gated warm skipped each blocked the thread mid-race —
-      // census 245's WebGL2 leg: 8 lazy links and a 4.25 s callback. On WebGPU
-      // the post chain does not compile lazily (census 244), so it stays off.
+      // AUTO (unset) = ON for three's WebGL2 backend, and for WebGPU when the
+      // warm is from the menu path (#3279). WebGL2: compileAsync polls
+      // COMPLETION_STATUS but the render path links synchronously, so the 8
+      // post programs a gated warm skipped each blocked mid-race (census 245:
+      // 4.25 s). WebGPU race/loading keep the 3 s gate (census 244); menu
+      // enables post+shadow so they do not land in race frames (iPhone 14:
+      // 616 ms post / 115 ms shadow stalls). apex26.tlxWarmPlus=1/0 forces.
       let _warmPlus = null;
+      let _warmWhere = "menu";   // menu | loading | race — set by warm(opts) / auto
       try { const v = localStorage.getItem("apex26.tlxWarmPlus"); _warmPlus = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
-      const warmPlusOn = () => _warmPlus !== null ? _warmPlus : !!(renderer && renderer.backend && renderer.backend.isWebGLBackend);
+      function _resolveWarmWhere(opts) {
+        if (opts && typeof opts.where === "string" && (opts.where === "menu" || opts.where === "loading" || opts.where === "race")) return opts.where;
+        try {
+          if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.armed && RaceEntryProfile.armed()) {
+            if (RaceEntryProfile.menuEntrySession && RaceEntryProfile.menuEntrySession()) return "loading";
+            return "race";
+          }
+        } catch (_) { /* profile optional */ }
+        return "menu";
+      }
+      const warmPlusOn = () => {
+        if (_warmPlus !== null) return _warmPlus;
+        if (renderer && renderer.backend && renderer.backend.isWebGLBackend) return true;
+        return _warmWhere === "menu";   // WebGPU menu path only
+      };
+      // Menu warm: yield between post / shadow / cockpit so the title stays responsive.
+      const warmIdleChunks = () => _warmWhere === "menu";
+      const _idleYield = (ms) => (typeof TLXShaders !== "undefined" && TLXShaders.idleYield)
+        ? TLXShaders.idleYield(ms)
+        : new Promise((r) => { if (typeof requestIdleCallback === "function") requestIdleCallback(r, { timeout: ms || 48 }); else setTimeout(r, 0); });
       // The caster warm alone is cheap depth programs and saves a mid-race build on BOTH backends (A·W14), so AUTO
       // is on everywhere; an explicit apex26.tlxWarmPlus still forces it either way.
       const casterWarmOn = () => _warmPlus !== null ? _warmPlus : true;
@@ -3432,6 +3456,9 @@ const TLX = (function () {
         // makes — so it is ON only where it measured a win (three's WebGL2
         // backend, see _warmPlus), as is the caster warm below; elsewhere
         // the 3 s gate stands. apex26.tlxWarmPlus=1/0 forces it.
+        // Gate lines owned by A·W14 #3618 — do not edit. Menu idle yield (#3279) sits above.
+        // typeof: canary sandboxes eval this body without the outer helpers.
+        if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
         if (usePost && post.warm && (warmPlusOn() || performance.now() - _warmAt < 3000)) {
           _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
         }
@@ -3446,6 +3473,7 @@ const TLX = (function () {
         // real ones. A·W14: plus probe casters in the scene's lit layouts, for the targets no caster has reached
         // yet (night lamp and car maps), and on WebGPU too: there the lamp-pass pipelines were built synchronously
         // mid-race, and only depth programs move into the covered warm (casterWarmOn, apex26.tlxWarmPlus=0 off).
+        if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
         if (casterWarmOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(casterSources()); }
         _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
         // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
@@ -3502,9 +3530,11 @@ const TLX = (function () {
             try { Log.warn("gfx", "TLX program warm failed", String(e), (e && e.stack) || ""); } catch (_) { /* logging is optional */ }
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
-            _warmHistory.push({ at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
-              mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed });
+            const _warmRec = { where: (typeof _warmWhere !== "undefined" ? _warmWhere : "menu"), at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
+              mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed };
+            _warmHistory.push(_warmRec);
             if (_warmHistory.length > 6) _warmHistory.shift();
+            try { if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.noteWarm) RaceEntryProfile.noteWarm(_warmRec); } catch (_) { /* optional */ }
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
@@ -3594,7 +3624,7 @@ const TLX = (function () {
         if (!mesh || !mesh.geo || (opts && opts.coalesce)) return;
         const w = model;
         const neg = !!w && w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
-        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false), sx: neg ? -1 : 1 });
+        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1 });
       }
       function startRigWarm() {
         const job = _rigWarm;
@@ -3613,13 +3643,19 @@ const TLX = (function () {
             renderer.setMRT(useTag ? _ssrMrtNode() : null);
             renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
             _gpuLastOperation = "compile-rig";
-            for (const r of job.recs) {
+            for (let i = 0; i < job.recs.length; i++) {
+              // Menu path: yield every other cockpit pair so the title stays live (#3279).
+              if (i && typeof warmIdleChunks === "function" && warmIdleChunks() && (i & 1) === 0) await _idleYield(32);
+              const r = job.recs[i];
               await compileWarmProbe(r.geo, r.mat, r.sx);
               let s = _rigDone.get(r.geo);
               if (!s) _rigDone.set(r.geo, s = new Set());
               s.add(_rigKey(r));
             }
-            if (job.mirror) { _gpuLastOperation = "compile-rig-mirror"; await warmMirrorStage(usePost, useTag); _rigMirrorKey = job.mirror; }
+            if (job.mirror) {
+              if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
+              _gpuLastOperation = "compile-rig-mirror"; await warmMirrorStage(usePost, useTag); _rigMirrorKey = job.mirror;
+            }
             await _gpuSettled(3000);   // the driver's own compile is GPU-process side, as the draw warm's is
             ok = true;
           } catch (e) {
@@ -4125,8 +4161,13 @@ const TLX = (function () {
             ? TLXShaders.packIndex(THREE, data.idx, verts)
             : new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
         }
+        // FINISHES ON DEMAND: a car geometry wearing a 60-85 finish id draws its carFinish material through the
+        // `fx` lit graph (materialFor), the only one that carries those tints. Scanned once, here.
+        const ids = data.mat;
+        if (ids) for (let i = 0; i < ids.length; i++) { const v = Math.round(ids[i]); if (v >= 60 && v <= 85) { g.userData.tlxFx = true; break; } }
         return _regGeo(g, "mesh");
       }
+      const fxFor = (geo, opts) => !!(opts && opts.carFinish && geo && geo.userData.tlxFx);
 
       /** Read the raw (un-colour-managed, un-premultiplied) pixels of each
        * pack layer into `data` through Assets.readLayerBytes (one scratch
@@ -5505,9 +5546,10 @@ const TLX = (function () {
         castShadowInstanced,
         // Request after race setup; present() compiles the prepared race frame,
         // not the previous menu scene. Each race gets another warm opportunity.
-        warm() {
+        // opts.where: "menu" | "loading" | "race" (auto when omitted — see _resolveWarmWhere).
+        warm(opts) {
           if (_deviceLost) return;
-          if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
+          if (!_warmPending) { _warmWhere = _resolveWarmWhere(opts); _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !_deviceLost && !!_warmPending; },
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
@@ -5740,7 +5782,7 @@ const TLX = (function () {
         draw(mesh, model, opts) {
           if (opts && opts.coalesce && mesh && mesh.geo && _coAppend(mesh.geo, model, opts)) return;   // R1
           if (_capture) { _captureRec(mesh, model, opts); return; }   // warmDraws: compile, never paint
-          if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false), drawEm(opts), drawAl(opts),
+          if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false, undefined, fxFor(mesh.geo, opts)), drawEm(opts), drawAl(opts),
             opts && opts.surfaceId === 16 ? 1 : 0, null, null);
         },
         drawChunked(mesh, model, opts) {
@@ -6543,7 +6585,7 @@ const TLX = (function () {
             o.presentMs = +_presentMs.toFixed(3);
             // The warm timeline: how long the lights held on THIS GPU, by stage;
             // pending/done say whether a census beat is inside it (207 was, all 15).
-            o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
+            o.warm = { where: _warmWhere, at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
                        draw: _warmStages.draw, drawn: _warmStages.drawn, garageScene: _warmStages.garageScene,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,

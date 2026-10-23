@@ -57,6 +57,6 @@ reject a named methodology, take rules 8 and 10 only.
 1. Find it: `docs/COMPONENTS.md` "Defined in more than one file"; precedent `.cs-view-btn` -> `--vb-fs`/`--vb-pad` (same file, "shrink" example).
 2. Record before-numbers (above); `css-play --screen <id>` for the before shot.
 3. Edit, then the css-play hot-swap loop for the after shot.
-4. `node tools/check/tree-counts.mjs`, then `node tools/check/ratchets.mjs --update` (lowers).
+4. `node tools/check/tree-counts.mjs`, then `node tools/check/ratchets.mjs --update --lower-only` (lowers).
 5. Remove or update the family entry in `docs/COMPONENTS.md` (`component-inventory.test.mjs`).
 6. Type metrics moved? SKILL.md hard don't 6: run `menu-baseline` yourself.

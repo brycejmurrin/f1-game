@@ -4406,12 +4406,27 @@ test("GLX software GL knees when lowest rung sheds bloom (tier 4 stall watchdog)
   assert.ok(race.includes("PostFxOpts.applyLookShed(po,") && race.includes("bloom: _bloom * LT.bloomMul"));
   const shed = read("js/ui/post-fx-opts.js");
   assert.ok(shed.includes("po.bloom = off ? 0 : v.bloom"));
-  assert.ok(shed.includes("PerfGov.autoTier() >= 4") || shed.includes("lookPostShed"));
+  assert.ok(shed.includes("lookPostShed"));
   const gar = read("js/garage/setup-camera.js");
-  assert.ok(gar.includes("PerfGov.autoTier() >= 4") && gar.includes("_presentOpts.bloom = shed ? 0 :"));
+  assert.ok(gar.includes("PerfGov.lookPostShed") && gar.includes("_presentOpts.bloom = shed ? 0 :"));
   const glow = read("js/render/shared/post-common.js");
-  assert.ok(glow.includes("softwareGlowScale") && glow.includes("PerfGov.softwareRaster()") && glow.includes("0.22 : 0.55") && glow.includes("autoTier() >= 4"));
+  assert.ok(glow.includes("softwareGlowScale") && glow.includes("PerfGov.softwareRaster()") && glow.includes("0.22 : 0.55") && glow.includes("lookPostShed"));
   assert.ok(gameUnionCode().includes("PostCommon.softwareGlowScale(LT.glareStr)"));
+});
+
+test("softwareGlowScale tier-4 knee follows lookPostShed on software GL (watchdog userTier shed)", () => {
+  const ctx = vm.createContext({
+    PerfGov: {
+      softwareRaster: () => true,
+      autoTier: () => 0,
+      lookPostShed: () => true,
+    },
+  });
+  vm.runInContext(read("js/render/shared/post-common.js"), ctx, { filename: absSrc("js/render/shared/post-common.js") });
+  const { softwareGlowScale } = vm.runInContext("PostCommon", ctx);
+  assert.equal(softwareGlowScale(1), 0.22, "userTier 4 shed with autoTier 0 must use the ×0.22 knee");
+  ctx.PerfGov.lookPostShed = () => false;
+  assert.equal(softwareGlowScale(1), 0.55, "healthy look post keeps the softer ×0.55 knee");
 });
 
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
@@ -4737,7 +4752,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
     "ResultsCam.live() keeps redrawing chequered/orbit/highlights");
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
     "the visibility gate precedes the no-track return");
-  assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
+  assert.match(game, /const builtWorldFits = \(def\) => builtTrackId === def\.id && builtTrackNight === sessionDarkFor\(def\)/,
     "loadTrack's memo still makes a repeat build free");
 });
 
@@ -6325,6 +6340,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const menuIdle = async (current) => current(), menuSlice = async () => {};
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; builtTrackId = id; };
+  const bareStale = () => false;   // a dressed world (#3570: session-entry-vm covers the bare one)
   const loadTrackStepped = async (id, cur) => { if (!cur()) return false; loadTrack(id); return true; };   // the real one: tracks.js buildPaced + build-steps.test.mjs
   const garagePrewarm = async () => {};   // garage-arrival.test.mjs pins it
   const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
@@ -6362,7 +6378,8 @@ test("selector retains a different circuit during compilation, then releases it 
   const gfx = { warming: () => compiling }, els = { select: { hidden: false } }, $ = () => ({ hidden: true });
   const menuKey = idx => [idx, raceTimeOfDay, raceWeather, 22].join("|"), fieldSize = () => 22;
   const buildKey = idx => [idx, false, 22].join("|");
-  const sessionDarkFor = () => false, trackBuildOpts = () => ({}), sceneryResident = () => false;
+  const sessionDarkFor = () => false, trackBuildOpts = () => ({}), sceneryResident = () => false, bareStale = () => false;
+  const builtWorldFits = def => builtTrackId === def.id && builtTrackNight === sessionDarkFor(def) && builtGridSlots === fieldSize() && !bareStale();
   const PerfGov = { sentinelArm() {} }, Log = { warn() {} };
   const freeTrackMeshes = t => { assert.equal(compiling, false, "compileAsync still owns the old geometries"); freed.push(t); };
   const shadowPass = { reset() { assert.equal(compiling, false, "shadow programs also retain ownership until compile settles"); } };
@@ -6473,6 +6490,9 @@ test("TLX FX: double-sided FX draw in ONE pass and their programs warm on the st
   // The ds variant must stay the cockpit rig's key: drift in either table re-opens the first-BOOST stall.
   assert.match(code("js/car/car-draw.js"), /_rigFxA = \{ doubleSided: true, emissive: 1\.0, roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 1 \}/,
     "car-draw's _rigFxA (dash ERS bar, OT lamp) matches the double-sided _LATE_LIT variant");
+  // Its cw twin compiled a whole lit pipeline no race draws (the rig is never mirrored): one winding for it only.
+  assert.ok(fnBody(tlx, "warmLateLit").includes("for (const sx of (o.doubleSided ? [1] : [1, -1]))"),
+    "warmLateLit compiles the double-sided (cockpit rig) variant in one winding, the brake ring in both");
 });
 
 test("lamp shadow: the player takes the AI cars' lamp-radius bound in BOTH the key and the cast (TLX-PERF-PLAN L0)", () => {
