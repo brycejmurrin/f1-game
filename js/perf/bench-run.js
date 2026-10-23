@@ -116,6 +116,21 @@ const BenchRun = (function () {
 
   // ---- the run --------------------------------------------------------------------------------------------------
   function stillRunning() { const p = load(); return !!(p && p.state === "running"); }
+  // Screen Wake Lock: a hands-free run must not let the phone sleep. The browser drops the lock whenever the page hides,
+  // so it is asked for again on visible and on every post-reload resume. Unsupported = silent; refused = one hint.
+  let _wl = null, _wlHint = false;
+  async function wakeAcquire() {
+    try {
+      const w = typeof navigator !== "undefined" ? navigator.wakeLock : null;
+      if (!w || typeof w.request !== "function" || (_wl && !_wl.released)) return;
+      _wl = await w.request("screen"); _wlHint = false; log("wake lock held");
+    } catch (e) { _wl = null; _wlHint = true; log("wake lock refused " + (e && e.name)); if (_ui) say("Screen may sleep: set Auto-Lock to Never"); }
+  }
+  function wakeRelease() {
+    const l = _wl; _wl = null; _wlHint = false;
+    try { if (l && !l.released) { const r = l.release(); if (r && r.catch) r.catch(() => {}); } } catch (_) { /* already released */ }
+  }
+  function onVisible() { try { if (document.visibilityState === "visible" && stillRunning()) wakeAcquire(); } catch (_) { /* no document */ } }
   function reload() { log("reload"); try { location.reload(); } catch (_) { /* no location */ } }
   function startLeg(plan) {
     const leg = plan.legs[plan.i];
@@ -261,6 +276,7 @@ const BenchRun = (function () {
     return true;
   }
   async function finishPlan(plan, state) {
+    wakeRelease();
     plan.state = state; plan.finishedAt = new Date().toISOString(); plan.show = true;
     plan.summary = summarize(plan.legs); plan.scenes = scenes(plan.legs);
     if (BC()) plan.capture = BC().budget(plan);
@@ -282,6 +298,7 @@ const BenchRun = (function () {
       if (plan.show) { plan.show = false; save(plan); if (await waitReady()) open(); }
       return;
     }
+    wakeAcquire();
     if (_busy) return; _busy = true;
     const leg = plan.legs[plan.i];
     if (leg && leg.state === "running") { leg.state = "reloaded"; leg.reason = "the page reloaded during this leg"; if (BC()) leg.crumb = BC().recover(); plan.i++; save(plan); }
@@ -302,6 +319,7 @@ const BenchRun = (function () {
     // and counts toward onboarding, a garage leg saves livery picks. A benchmark leaves no trace.
     plan.restore = snapshot();
     save(plan); log("start " + plan.test + " " + plan.legs.length + " legs");
+    wakeAcquire();
     startLeg(plan);
     return true;
   }
@@ -356,6 +374,7 @@ const BenchRun = (function () {
     body.textContent = "";
     body.appendChild(_ui.status);
     if (plan && plan.state === "running") {
+      if (_wlHint) say("Screen may sleep: set Auto-Lock to Never");
       const leg = plan.legs[plan.i] || {};
       body.appendChild(el("p", "adv-help", "Running " + plan.test + ": leg " + (plan.i + 1) + " of " + plan.legs.length + (leg.label ? " (" + leg.label + ")" : "") + ". Leave the phone alone; this page comes back with the results."));
       body.appendChild(btn("STOP BENCHMARK", "bigbtn alt", () => { stop(); paint(); }));
@@ -412,11 +431,12 @@ const BenchRun = (function () {
     KEY, SCHEMA, SCHEMAS, SEED, TESTS, median, summarize, scenes, newPlan, pathPrefs,
     create(G) {
       _G = G;
+      try { document.addEventListener("visibilitychange", onVisible); } catch (_) { /* no document */ }
       if (typeof setTimeout === "function") [400, 1200, 2500, 5000].forEach((ms) => setTimeout(mount, ms));
       if (typeof setTimeout === "function") setTimeout(() => { resume().catch((e) => log("resume failed " + (e && e.message))); }, 0);
       return this;
     },
-    run, stop, open, close, active: stillRunning, result: resultText,
+    run, stop, open, close, active: stillRunning, result: resultText, wake: { acquire: wakeAcquire, release: wakeRelease, onVisible },
   };
 })();
 
