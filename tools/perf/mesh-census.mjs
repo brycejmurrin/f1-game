@@ -11,7 +11,13 @@
 //
 //   node tools/perf/mesh-census.mjs [track=monaco] [--backend tlx|glx|both]
 //        [--frames 40] [--warm 30] [--tracks monaco,monza,spa] [--all]
-//        [--real-link] [--mobile] [--json PATH] [--md PATH]
+//        [--real-link] [--mobile] [--viewport WxH] [--preset low|medium|high|ultra]
+//        [--json PATH] [--md PATH]
+//
+// Phone shape (#2631 / #2657, 2026-10-23): --mobile --viewport 844x390
+// --preset medium. Every render target is also tabled on its own (sun shadow,
+// car shadow, mirror RT, post), and the shadow pass gets its own source/band
+// table, so no pass is folded into the main scene.
 //
 // Output: per-circuit tables on stdout, `= mesh-census {…}` summary JSON, and
 // optional --json / --md artifacts. Aggregation helpers: mesh-census-lib.mjs.
@@ -22,14 +28,16 @@ import { createRequire } from "node:module";
 import { startStaticServer, launchChromium, shutdown } from "../lib/harness.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import {
-  aggregateRows, tableRows, formatBandTable, recommend,
+  aggregateRows, tableRows, formatBandTable, recommend, passKeyTotals, passTotalsFromKeys,
+  groupTotals, formatGroups,
 } from "./mesh-census-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
 const argv = process.argv.slice(2);
 exitIfHelp(argv, `usage: node tools/perf/mesh-census.mjs [track] [--backend tlx|glx|both] [--frames N] [--warm N]
-                    [--tracks a,b,c] [--all] [--real-link] [--mobile] [--json PATH] [--md PATH]
+                    [--tracks a,b,c] [--all] [--real-link] [--mobile] [--viewport WxH]
+                    [--preset low|medium|high|ultra] [--json PATH] [--md PATH]
   Triangles submitted per pass (main/mirror), by distance band (<150 m / ≥150 m) and
   source (ribbon vs props), at the chase camera. TLX also records draw calls,
   renderer.info and culled/total chunk split. No renderer source edits.`);
@@ -41,7 +49,7 @@ function flag(name, dflt) {
   }
   return dflt;
 }
-const VALUED = new Set(["--backend", "--frames", "--warm", "--tracks", "--json", "--md"]);
+const VALUED = new Set(["--backend", "--frames", "--warm", "--tracks", "--json", "--md", "--viewport", "--preset"]);
 const positional = argv.filter((a, i) => !a.startsWith("--") && !VALUED.has(argv[i - 1]));
 const FRAMES = Math.max(8, +flag("--frames", 40) || 40);
 const WARM = Math.max(0, +flag("--warm", 30) || 30);
@@ -50,6 +58,16 @@ const MOBILE = argv.includes("--mobile");
 const BACKEND = (flag("--backend", "both") || "both").toLowerCase();
 const JSON_OUT = flag("--json", null);
 const MD_OUT = flag("--md", null);
+const VIEWPORT = (() => {
+  const m = String(flag("--viewport", "640x360")).match(/^(\d+)x(\d+)$/);
+  if (!m) { console.error("--viewport must be WxH"); process.exit(2); }
+  return { width: +m[1], height: +m[2] };
+})();
+const PRESET = flag("--preset", null);
+if (PRESET && !["low", "medium", "high", "ultra"].includes(PRESET)) {
+  console.error("--preset must be low, medium, high or ultra");
+  process.exit(2);
+}
 const WAIT_MS = Math.max(90000, +process.env.APEX_PROFILE_WAIT_MS || 90000);
 const BAND_M = 150;
 
@@ -74,9 +92,10 @@ if (!backends.every((b) => b === "tlx" || b === "glx")) {
 }
 
 /** Init script: pick backend, stub TLX program links (SwiftShader speed). */
-function initScript({ backend, stub, mobile }) {
+function initScript({ backend, stub, mobile, preset }) {
   try {
     if (mobile) localStorage.setItem("apex26.forceMobileTier", "1");
+    if (preset) localStorage.setItem("apex26.gfxPreset", JSON.stringify(preset));
     if (backend === "tlx") {
       localStorage.setItem("apex26.gfxBackend", "three");
       localStorage.setItem("apex26.tlxForceGL", "1");
@@ -160,7 +179,7 @@ function installTlxWrap(bandM) {
     r.renderObject = function (object) {
       if (!state.on) return origRO.apply(this, arguments);
       const pass = state.curPass;
-      if (pass === "shadow" || pass === "aux") return origRO.apply(this, arguments);
+      if (pass === "aux") return origRO.apply(this, arguments);
       const i = r.info.render, c0 = i.drawCalls | 0, t0 = i.triangles | 0;
       const out = origRO.apply(this, arguments);
       const c1 = i.drawCalls | 0, t1 = i.triangles | 0;
@@ -170,7 +189,8 @@ function installTlxWrap(bandM) {
       const lab = labelOf(object) + (object.isInstancedMesh ? ",inst" : "");
       let dist = NaN;
       try {
-        const cam = state.cam || r.__meshCensusCam;
+        // Shadow rows band by distance to the PLAYER camera, not the light's.
+        const cam = (pass === "shadow" ? state.mainCam : state.cam) || r.__meshCensusCam;
         if (cam && object.getWorldPosition && _wp) {
           object.getWorldPosition(_wp);
           dist = cam.position.distanceTo(_wp);
@@ -185,8 +205,15 @@ function installTlxWrap(bandM) {
       // BufferGeometry draws without instancing are the ribbon path.
       if (source === "other" && object.geometry && object.geometry.index
           && !object.isInstancedMesh && (tris | 0) >= 500) source = "ribbon";
-      rows.push({ pass, source, band, draws: 1, tris, calls, dist, group: lab });
+      // Group by the SHARED vertex buffer: every chunk of one chunked mesh shares
+      // its position attribute, so `v<count>` names the source mesh (road, terrain,
+      // props) without a renderer edit; the material type separates the passes.
+      const g = object.geometry, pa = g && g.attributes && g.attributes.position;
+      const mt = object.material && (object.material.name || object.material.type);
+      const group = lab + (pa ? " v" + pa.count : "") + (g && g.__tlxSplit ? " split" : "") + (mt ? " " + mt : "");
+      rows.push({ pass, source, band, draws: 1, tris, calls, dist, group });
       if (pass === "main" && (isChunk(object) || source === "ribbon")) {
+        state._drawnChunkIds = state._drawnChunkIds || new Set();
         state._drawnChunkIds.add(object.uuid || object.id);
       }
       return out;
@@ -198,25 +225,41 @@ function installTlxWrap(bandM) {
     const key = t
       ? ((t.texture && t.texture.name) || t.name || "rt") + " " + t.width + "x" + t.height
       : "canvas";
-    state.curPass = passOf(key);
+    // A shadow map can render NESTED inside the main render (three's
+    // ShadowNode): keep a stack so the outer pass is restored afterwards and
+    // the inner target's calls/tris are not counted twice.
+    const stack = state.stack || (state.stack = []);
+    const parent = stack[stack.length - 1] || null;
+    const pass = passOf(key);
+    const frame = { pass, cam: camera, childCalls: 0, childTris: 0 };
+    stack.push(frame);
+    state.curPass = pass;
     state.passKeys[key] = (state.passKeys[key] || 0) + 1;
     state.cam = camera || state.cam;
+    if (pass === "main" && camera) state.mainCam = camera;
     r.__meshCensusCam = state.cam;
     const i = r.info.render, c0 = i.drawCalls | 0, t0 = i.triangles | 0;
-    if (state.on && state.curPass === "main") {
+    if (state.on && pass === "main") {
       state._drawnChunkIds = state._drawnChunkIds || new Set();
     }
-    const out = orig(scene, camera);
+    let out;
+    try { out = orig(scene, camera); } finally {
+      stack.pop();
+      if (parent) { state.curPass = parent.pass; state.cam = parent.cam || state.cam; r.__meshCensusCam = state.cam; }
+    }
     if (state.on) {
       const c1 = i.drawCalls | 0, t1 = i.triangles | 0;
-      const calls = c1 >= c0 ? c1 - c0 : c1;
-      const tris = t1 >= t0 ? t1 - t0 : t1;
+      const dCalls = c1 >= c0 ? c1 - c0 : c1;
+      const dTris = t1 >= t0 ? t1 - t0 : t1;
+      if (parent) { parent.childCalls += dCalls; parent.childTris += dTris; }
+      const calls = Math.max(0, dCalls - frame.childCalls);
+      const tris = Math.max(0, dTris - frame.childTris);
       state.infoSamples.push({
-        pass: state.curPass, passKey: key,
+        pass, passKey: key,
         calls, tris,
         memory: r.info.memory ? { geometries: r.info.memory.geometries, textures: r.info.memory.textures } : null,
       });
-      if (state.curPass === "main" && scene && typeof scene.traverse === "function") {
+      if (pass === "main" && !parent && scene && typeof scene.traverse === "function") {
         let total = 0;
         scene.traverse((o) => {
           if (!o.isMesh && !o.isInstancedMesh) return;
@@ -414,6 +457,8 @@ async function runOne(page, track, backend) {
     const frames = Math.max(1, state.frames || n);
     let mirrorState = null;
     try { mirrorState = A.mirror ? A.mirror() : null; } catch (_) { /* */ }
+    let perf = null;
+    try { perf = A.perf ? A.perf() : null; } catch (_) { /* */ }
     return {
       rows: state.rows.slice(),
       infoSamples: state.infoSamples.slice(),
@@ -426,12 +471,17 @@ async function runOne(page, track, backend) {
       occlusion,
       oracle,
       mirrorState,
+      perf,
       backendLive: (A.info && A.info().gfx) || null,
     };
   }, { n: FRAMES, backend, bandM: BAND_M });
 
   const agg = aggregateRows(captured.rows, { threshold: BAND_M });
   const bandTable = tableRows(agg, FRAMES);
+  const shadowTable = tableRows(aggregateRows(captured.rows, { threshold: BAND_M, shadow: true }), FRAMES, ["shadow"]);
+  const targets = passKeyTotals(captured.infoSamples, FRAMES);
+  const passes = passTotalsFromKeys(targets);
+  const groups = groupTotals(captured.rows, FRAMES);
   // Pass-level means from infoSamples (TLX renderer.info deltas / GLX draw wrap).
   const passInfo = { main: { calls: 0, tris: 0, n: 0 }, mirror: { calls: 0, tris: 0, n: 0 } };
   for (const s of captured.infoSamples) {
@@ -471,7 +521,14 @@ async function runOne(page, track, backend) {
     track, backend, frames: FRAMES, warm: WARM, bandM: BAND_M,
     stubbedLinks: backend === "tlx" && !REAL_LINK,
     mobileTier: MOBILE,
+    viewport: VIEWPORT,
+    preset: PRESET,
+    perf: captured.perf,
     bandTable,
+    shadowTable,
+    targets,
+    passes,
+    groups,
     passInfo: {
       main: { callsPerFrame: +mainCalls.toFixed(1), trisPerFrame: mainTris },
       mirror: { callsPerFrame: +mirrorCalls.toFixed(1), trisPerFrame: mirrorTris },
@@ -501,8 +558,8 @@ async function main() {
     for (const backend of backends) {
       for (const track of tracks) {
         process.stderr.write(`mesh-census ${backend} ${track}…\n`);
-        const ctx = await browser.newContext({ viewport: { width: 640, height: 360 } });
-        await ctx.addInitScript(initScript, { backend, stub: !REAL_LINK, mobile: MOBILE });
+        const ctx = await browser.newContext({ viewport: VIEWPORT });
+        await ctx.addInitScript(initScript, { backend, stub: !REAL_LINK, mobile: MOBILE, preset: PRESET });
         const page = await ctx.newPage();
         page.on("pageerror", (e) => errors.push(`${backend}/${track}: ${String(e).slice(0, 180)}`));
         const q = backend === "tlx" ? "three-devtools=1" : "gfx=glx";
@@ -517,7 +574,9 @@ async function main() {
           console.log(formatBandTable(one.bandTable));
           console.log(`pass totals: main ${one.passInfo.main.callsPerFrame} calls / ${one.passInfo.main.trisPerFrame} tris; ` +
             `mirror ${one.passInfo.mirror.callsPerFrame} calls / ${one.passInfo.mirror.trisPerFrame} tris`);
-          if (one.passKeys) console.log("passKeys:", JSON.stringify(one.passKeys));
+          if (one.shadowTable.length) console.log(formatBandTable(one.shadowTable));
+          console.log(formatTargets(one.targets));
+          console.log(formatGroups(one.groups));
           if (one.chunks) {
             console.log(`chunks (main): visible ${one.chunks.visiblePerFrame} / total ${one.chunks.totalPerFrame} (culled ${one.chunks.culledPerFrame})`);
           }
@@ -540,9 +599,10 @@ async function main() {
 
   const summary = {
     tracks, backends, frames: FRAMES, bandM: BAND_M,
+    viewport: VIEWPORT, preset: PRESET, mobile: MOBILE,
     results: results.map((r) => ({
       track: r.track, backend: r.backend,
-      passInfo: r.passInfo, chunks: r.chunks,
+      passInfo: r.passInfo, passes: r.passes, chunks: r.chunks,
       recommendation: r.recommendation.summary,
       passFirst: r.recommendation.passFirst,
       lodPays: r.recommendation.lodPays,
@@ -562,18 +622,29 @@ async function main() {
   if (!results.length) process.exitCode = 1;
 }
 
+/** Markdown table: one row per render target, per-frame means. */
+function formatTargets(rows) {
+  const lines = ["| target | pass | renders/frame | calls/frame | tris/frame |", "|---|---|---:|---:|---:|"];
+  for (const r of rows) lines.push(`| ${r.passKey} | ${r.pass} | ${r.renders} | ${r.calls} | ${r.tris} |`);
+  return lines.join("\n");
+}
+
 function buildMarkdown(results, summary) {
   const lines = [
     "# Mesh census (main vs mirror × distance × source)",
     "",
     `Generated by \`tools/perf/mesh-census.mjs\` on ${new Date().toISOString().slice(0, 10)}.`,
-    `Chase camera, ${summary.frames} measured frames, distance band ${summary.bandM} m.`,
-    "Shadow/env/post passes excluded from the band tables (#2631: first-scene must not be a shadow scene).",
+    `Chase camera, ${summary.frames} measured frames, distance band ${summary.bandM} m, viewport ${summary.viewport.width}x${summary.viewport.height}` +
+      `${summary.preset ? `, preset ${summary.preset}` : ""}${summary.mobile ? ", forced mobile tier" : ""}.`,
+    "Shadow pass tabled on its own; env/post excluded from the band tables (#2631: first-scene must not be a shadow scene).",
     "TLX forced onto three's WebGL2 path with stubbed program links under SwiftShader (same method as `tools/gfx/pass-census.mjs`).",
     "",
   ];
   for (const r of results) {
     lines.push(formatBandTable(r.bandTable, { title: `${r.backend.toUpperCase()} — ${r.track}` }), "");
+    if (r.shadowTable.length) lines.push(formatBandTable(r.shadowTable), "");
+    lines.push(formatTargets(r.targets), "");
+    lines.push(formatGroups(r.groups), "");
     lines.push(`- Pass totals: main **${r.passInfo.main.callsPerFrame}** calls / **${r.passInfo.main.trisPerFrame}** tris; mirror **${r.passInfo.mirror.callsPerFrame}** / **${r.passInfo.mirror.trisPerFrame}**.`);
     if (r.chunks) {
       lines.push(`- Chunks (main, TLX): visible **${r.chunks.visiblePerFrame}** / total **${r.chunks.totalPerFrame}** (culled **${r.chunks.culledPerFrame}**).`);
