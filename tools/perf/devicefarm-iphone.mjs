@@ -74,7 +74,8 @@ const TOUCH_ARM = `
   (function tick(t) { P.raf.push([t, t - last]); last = t; requestAnimationFrame(tick); })(last);
   try { new PerformanceObserver((l) => { for (const e of l.getEntries()) P.long.push([e.startTime, e.duration]); }).observe({ type: "longtask" }); } catch (_) {}
   for (const type of ["pointerdown", "pointerup", "touchstart", "touchend"])
-    window.addEventListener(type, (e) => { const t = e.target; P.ev.push([type, (t && t.id) || (t && t.tagName) || "?", performance.now()]); }, { capture: true, passive: true });
+    window.addEventListener(type, (e) => { const t = e.target, p = e.changedTouches ? e.changedTouches[0] : e;
+      P.ev.push([type, (t && t.id) || (t && t.tagName) || "?", performance.now(), p ? Math.round(p.clientX) : null, p ? Math.round(p.clientY) : null]); }, { capture: true, passive: true });
   const rect = (id) => { const el = document.getElementById(id); if (!el || el.hidden) return null; const r = el.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; };
   return { from: rect(window.__tbpFrom || "btn-throttle"), to: rect(window.__tbpTo || "btn-boost"), w: innerWidth, h: innerHeight, dpr: devicePixelRatio,
     body: document.body.className, api: (() => { try { return RendererPicker.liveThreeApi(); } catch (_) { return null; } })() };`;
@@ -91,7 +92,7 @@ const TOUCH_READ = (win, from, to) => `
   let ps = null; try { ps = __apex.physState(); } catch (_) {}
   return { taps: taps.length, ctrls: ctrls.length, tap: stat(taps), ctrl: stat(ctrls), speed: ps && ps.speed, boostOn: ps && ps.boostOn,
     perTap: taps.map((m) => { const f = P.raf.filter(([t]) => t >= m && t < m + WIN).map(([, d]) => d); return +(f.length ? Math.max(...f) : 0).toFixed(1); }),
-    ev: P.ev.length };`;
+    ev: P.ev.length, evHead: P.ev.slice(0, 6).map((e) => [e[0], e[1], e[3], e[4]]) };`;
 
 // Page-side probes. Each is a function body for WebDriver execute/sync (returns JSON-able data).
 const PROBE = `
@@ -159,12 +160,20 @@ async function touchRun(base, sid, out, n) {
   const web = wd(base, "GET", `/session/${sid}/context`);
   wd(base, "POST", `/session/${sid}/context`, { name: "NATIVE_APP" });
   try {
-    const el = wd(base, "POST", `/session/${sid}/element`, { using: "class name", value: "XCUIElementTypeWebView" });
-    const id = el["element-6066-11e4-a6c6-4b7c-ad3b-6c3b7e9d1c0b"] || el.ELEMENT || Object.values(el)[0];
-    const wr = wd(base, "GET", `/session/${sid}/element/${id}/rect`);
-    const k = wr.width / r.arm.w;
-    const pt = (p) => ({ x: Math.round(wr.x + p.x * k), y: Math.round(wr.y + p.y * k) });
-    r.map = { webview: wr, k };
+    // Screen size in points (W3C window rect in NATIVE_APP); the page fills the width and sits under Safari's top
+    // bar, so the CSS viewport's origin is (0, screenH - innerHeight) in points. The WebView element's rect is
+    // recorded for the report but not trusted: run 2 (2026-10-23) landed every tap off GAS/BOOST with it.
+    const win = wd(base, "GET", `/session/${sid}/window/rect`);
+    let wr = null;
+    try {
+      const el = wd(base, "POST", `/session/${sid}/element`, { using: "class name", value: "XCUIElementTypeWebView" });
+      const id = el["element-6066-11e4-a6c6-4b7c-ad3b-6c3b7e9d1c0b"] || el.ELEMENT || Object.values(el)[0];
+      wr = wd(base, "GET", `/session/${sid}/element/${id}/rect`);
+    } catch (e) { log("webview rect: " + e.message.slice(0, 120)); }
+    const k = win.width / r.arm.w, oy = win.height - r.arm.h * k;
+    const pt = (p) => ({ x: Math.round(p.x * k), y: Math.round(oy + p.y * k) });
+    r.map = { window: win, webview: wr, k, oy };
+    log("touch map " + JSON.stringify(r.map));
     const a = pt(r.arm.from), b = pt(r.arm.to);
     for (let c = 0; c < n; c++) {
       wd(base, "POST", `/session/${sid}/actions`, { actions: [{ type: "pointer", id: "finger", parameters: { pointerType: "touch" }, actions: [
