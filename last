@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-cec33b87-a71e-538d-9326-e90689bbcb69 #3596 waiting #3593 (glx.js HELD)
+HANDOFF to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff OrchA 26: #3593 (revert #3589) full tier green, but merge-gate pacing refuses it because c698dd09 is red (the red it fixes), and the hook blocks the merge even with Bryce's yes. MERGE-HOLD is back on. Asked Bryce to merge it by hand (merge commit). GAME-SLOT #3593 still stands; nobody else merges a game PR until it lands.
