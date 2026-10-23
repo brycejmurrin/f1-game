@@ -6,6 +6,7 @@
 //   node tools/perf/devicefarm-iphone.mjs devices
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" [--legs 2|4|0] [--url URL] [--out DIR]
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --touch 5 [--from btn-throttle] [--to btn-boost]
+//     [--variants none,dom,state,none]   one fresh page load per entry, warm-up before the first tap (see WARM)
 //   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
 // `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
@@ -152,12 +153,22 @@ function shot(base, sid, file) {
 
 // Real-finger sequence on the device: hold GAS, lift, tap BOOST (or --from/--to ids), N cycles, as native W3C touch
 // actions. CSS px → native points through the WebView element's rect (Safari draws the page 1:1 in points at zoom 1).
-async function touchRun(base, sid, out, n) {
+// --warm: what is pre-applied after go() and before the first tap. "dom" toggles #btn-boost.on for two frames
+// (style/paint/compositing only); "state" turns the game's BOOST on and off through __apex.setBoost (HUD, audio,
+// physics); "none" nothing. Used by --variants to attribute a first-use stall on one phone in one session.
+const WARM = {
+  none: "return 'none';",
+  dom: `const b = document.getElementById("btn-boost"); if (!b) return "no button"; b.classList.add("on");
+    requestAnimationFrame(() => requestAnimationFrame(() => b.classList.remove("on"))); return "dom";`,
+  state: `if (!__apex.setBoost) return "no setBoost"; __apex.setBoost(true); setTimeout(() => __apex.setBoost(false), 1000); return "state";`,
+};
+async function touchRun(base, sid, out, n, warm) {
   const WIN = 400, from = opt("from", "btn-throttle"), to = opt("to", "btn-boost");
-  const r = {}; r.race = await exec(base, sid, TOUCH_RACE);
+  const r = { warm: warm || "none" }; r.race = await exec(base, sid, TOUCH_RACE);
   for (let t = 0; t < 45; t++) { await sleep(4000); r.go = await exec(base, sid, TOUCH_GO); if (r.go.ready) break; }
   if (!r.go || !r.go.ready) throw new Error("race never reached the grid: " + JSON.stringify(r.go));
   await sleep(6000);   // lights out, the car rolling, the first-frame spikes gone
+  if (warm && warm !== "none") { r.warmed = await exec(base, sid, WARM[warm] || WARM.none); await sleep(2500); }
   await exec(base, sid, `window.__tbpFrom = ${JSON.stringify(from)}; window.__tbpTo = ${JSON.stringify(to)}; return true;`);
   r.arm = await exec(base, sid, TOUCH_ARM);
   log("touch arm " + JSON.stringify(r.arm));
@@ -248,7 +259,17 @@ async function run() {
     log(`boot: gpu=${report.boot.gpu} live=${JSON.stringify(report.boot.live)} title=${report.boot.title}`);
     shot(base, sid, path.join(out, "boot.png"));
     const touchN = Number(opt("touch", "0"));
-    if (touchN) report.touch = await touchRun(base, sid, out, touchN);
+    // --variants none,dom,state,none: one fresh page load per entry in the SAME Safari session (same phone, same
+    // process caches), so a warm-up's effect is read against a no-warm load before AND after it.
+    const variants = opt("variants", "");
+    if (touchN && variants) {
+      report.variants = [];
+      for (const [i, v] of variants.split(",").entries()) {
+        if (i) { wd(base, "POST", `/session/${sid}/url`, { url: url + (url.includes("?") ? "&" : "?") + "v" + i + "=" + Date.now() }); await sleep(20000); }
+        try { const t = await touchRun(base, sid, out, touchN, v); report.variants.push(t); log(`variant ${i} ${v}: first=${t.read && t.read.perTap && t.read.perTap[0]} perTap=${JSON.stringify(t.read && t.read.perTap)} spansFrameMax=${t.read && t.read.spans && t.read.spans.frame && t.read.spans.frame.max}`); }
+        catch (e) { report.variants.push({ warm: v, error: e.message }); log(`variant ${i} ${v}: ERROR ${e.message.slice(0, 160)}`); }
+      }
+    } else if (touchN) report.touch = await touchRun(base, sid, out, touchN);
     if (legs) {
       report.benchStart = await exec(base, sid, BENCH(legs));
       log("bench " + JSON.stringify(report.benchStart));
