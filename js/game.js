@@ -4289,7 +4289,6 @@ function quitToMenu() {
   clearRaceEntrySoften();
   if (typeof MenuTeardown !== "undefined") MenuTeardown.beginQuit();
   els.pausemenu.hidden = true;
-  if (typeof PauseOpts !== "undefined" && PauseOpts.disarm) PauseOpts.disarm();
   _menuGate.warm = 0; _menuGate.garageWarm = 0;
   Ghost.flush(); resultsCam.reset(); replayBuf.clear(); cancelIntro();
   if (raceMessageHistory) raceMessageHistory.clear();

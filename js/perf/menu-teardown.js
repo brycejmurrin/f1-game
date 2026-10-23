@@ -67,7 +67,10 @@ const MenuTeardown = (function () {
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(run, 0));
     else setTimeout(run, 0);
   }
-  function beginQuit() { arm(QUIT); }
+  function beginQuit() {
+    try { if (typeof PauseOpts !== "undefined" && PauseOpts.disarm) PauseOpts.disarm(); } catch (_) { /* harness */ }
+    arm(QUIT);
+  }
   function endQuit() {
     if (!software()) { release(QUIT); return; }
     clearTimer();

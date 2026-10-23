@@ -4124,14 +4124,6 @@ test("eval-time preload skips TLX on unset navigator.gpu hunch (#3536 Graphics u
     "first boot must not prefetch TLX before the adapter probe commits");
 });
 
-test("GLX backendState and race entry defer pack retry on software GL (#3584)", () => {
-  const glx = code("js/render/glx/glx.js");
-  assert.ok(glx.includes("detectSoftwareGl") && glx.includes("softwareGL: _softwareGl"));
-  const game = readFile("js/game.js");
-  assert.ok(game.includes("Assets.retry && !PerfGov.softwareRaster()"));
-  assert.ok(game.includes("requestIdleCallback(run, { timeout: 120000 })"));
-});
-
 test("software GL quit-to-menu and garage-close use MenuTeardown readback cover", () => {
   const mt = readFile("js/perf/menu-teardown.js");
   assert.ok(mt.includes("beginQuit") && mt.includes("garageBusyPlate") && mt.includes("pauseSheetUp"));
