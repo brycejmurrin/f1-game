@@ -1572,7 +1572,7 @@ test("__apexReportError records the serialized shape of a non-Error value", asyn
 
 test("the window error handler serializes a non-Error e.error instead of String(e)", async () => {
   const h = await runErrorCatcher();
-  h.fire("error", { message: "", error: { code: "X1", info: "bad thing" }, filename: "js/game.js", lineno: 1, colno: 2 });
+  h.fire("error", { message: "", error: { code: "X1", info: "bad thing" }, filename: "js/core/log.js", lineno: 1, colno: 2 });
   const rec = h.last();
   assert.equal(rec.kind, "error");
   assert.ok(rec.msg.includes('"code":"X1"'), rec.msg);
