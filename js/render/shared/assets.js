@@ -400,6 +400,7 @@ const Assets = (function () {
   // Otherwise resolves to the sorted layer indices that landed — the list
   // readLayerBytes returns — and never rejects.
   function readLayerBytesAsync(size, images, n, data, onLayer) {
+    if (deferScratchReadback()) return null;
     const page = size * size * 4;
     const raws = [];
     const pending = [];

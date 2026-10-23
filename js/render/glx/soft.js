@@ -75,10 +75,18 @@ const GLXSoft = (function () {
       if (!_softPresentWaiters.length && !_softCaptureDue) return;
       // Software GL + garage: skip a full-frame readback (post.js readPixels) while
       // #carsetup is up — measured as multi-second GPU stalls and ctx loss on close.
+      // Tests and __apex.awaitPresent() still need a generation bump: satisfy
+      // waiters without touching the GPU (same contract as a successful blit).
       try {
         if (typeof PerfGov !== "undefined" && PerfGov.softwareRaster()) {
           const cs = typeof document !== "undefined" && document.getElementById && document.getElementById("carsetup");
-          if (cs && !cs.hidden) return;
+          if (cs && !cs.hidden) {
+            if (_softPresentWaiters.length || _softCaptureDue) {
+              _softCaptureDue = false;
+              softBlitNotify();
+            }
+            return;
+          }
         }
       } catch (_) { /* harness */ }
       // Drawing-buffer size, not render width/height: with spatial upscale the

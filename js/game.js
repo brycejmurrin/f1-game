@@ -9019,7 +9019,7 @@ function openGarage(from) {
     if (canvas) canvas.style.visibility = "";
     if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
     if (_softEl) _softEl.style.visibility = "";
-    try { if (gfx.invalidateSoftPresent && !(typeof PerfGov !== "undefined" && PerfGov.softwareRaster())) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
+    try { if (gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
     try { renderSetupPreview(0); } catch (_) { /* mesh/warm may still be settling */ }
   };
   if (from === "pit") { enterGarage(); setupCam.startArrival(); }
