@@ -30,7 +30,7 @@ test("SettingsNav.show marks apex:settings:show and apex:settings:shown", () => 
     Log: { info() {}, warn() {} },
     GameAudio: { _stub: false },
   });
-  vm.runInContext(source, ctx);
+  vm.runInContext(source, ctx, { filename: absSrc("js/ui/settings-tabs.js") });
   ctx.SettingsNav.create(null, () => {});
   assert.ok(marks.includes("apex:settings:show"), "initial home show marks start");
   assert.ok(marks.includes("apex:settings:shown"), "initial home show marks end");
@@ -97,7 +97,7 @@ test("ensureAudio loads LAZY_AUDIO one file at a time while Settings is open", a
     },
   };
   let readyHooks = 0;
-  vm.runInContext(loaderSrc + "\n" + bundlesSrc + "\nthis.ScriptLoader = ScriptLoader; this.LazyBundles = LazyBundles;", ctx);
+  vm.runInContext(loaderSrc + "\n" + bundlesSrc + "\nthis.ScriptLoader = ScriptLoader; this.LazyBundles = LazyBundles;", ctx, { filename: absSrc("js/core/script-loader.js") });
   const sl = ctx.ScriptLoader.create();
   const lb = ctx.LazyBundles.create({
     els: {}, loadBackendScripts: sl.load, getContext: () => ({}),
