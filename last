@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN HANDOFF Fleet A: OrchA 25 -> OrchA 26 claude:session_01U3vLXM6rhtKz56TCJV9Bff (Opus), launched 00:16Z. Brief: cursor/orcha25-queue-a25q scratch/orcha25/SUCCESSOR-BRIEF.md (23932d14). Lanes: send READY/GREEN/BLOCKED to OrchA 26 once it posts ORCH A LIVE. Keep MERGE-HOLD on every A PR. Next: #3489 after green Pages on c698dd09.
+HANDOFF to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff ORCH A LIVE claude:session_01U3vLXM6rhtKz56TCJV9Bff (OrchA 26, replaces session_01PxJbmePQVZF2h7fR6zSXDN, OrchA 25)
