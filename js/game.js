@@ -3717,6 +3717,7 @@ function studioOpen(n, info) {
     // openAt is never reset: absolute hang ceiling = prep + 3× drive from studioOpen.
     _studio = { at, openAt: at, ms: Math.max(1, ms), n, info, cardUp: true };
     setupPreviewOn = true;
+    if (typeof PerfGov !== "undefined" && PerfGov.softwareGaragePreviewBegin) PerfGov.softwareGaragePreviewBegin(gfx);
   }
   if (_studio && gfx.softPresent && gfx.softPresent() && gfx.awaitSoftPresent) {
     const studio = _studio; studio.softReady = false;
@@ -3744,6 +3745,7 @@ function studioClose(n) {
   if (!_studio || _studio.n !== n) return;
   const info = _studio.info;
   setupCam.stopDriveOut(); setupPreviewOn = false; _studio = null;
+  if (typeof PerfGov !== "undefined" && PerfGov.softwareGaragePreviewEnd) PerfGov.softwareGaragePreviewEnd(gfx);
   if (loadingScreen.phase() === "garage") loadingScreen.building(info);   // the car is out and the build is not: the card covers the rest
 }
 async function studioDone(live, n) {
@@ -4044,7 +4046,9 @@ function raceIntro(go) {
   // SwiftShader / llvmpipe: the loading flyby compiles and draws the whole circuit again
   // behind the race-settings sheet (18-30 s of frozen UI with no visible progress).
   // Hardware keeps the cinematic; software GL hands off straight to startRace().
-  if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.softwareRaster && RaceEntryProfile.softwareRaster()) {
+  let forceSoftwareFlyby = false;
+  try { forceSoftwareFlyby = localStorage.getItem("apex26.softwareFlyby") === "1"; } catch (_) { /* bench A/B */ }
+  if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.softwareRaster && RaceEntryProfile.softwareRaster() && !forceSoftwareFlyby) {
     sheetRelease(true);
     loadingScreen.stop();
     go();
@@ -6701,6 +6705,7 @@ let _raceEntryEnvProbeSession = false;
 let _raceEntryRenderScaleSaved = null;
 function clearRaceEntrySoften() {
   _raceEntryEnvProbeSession = false;
+  if (typeof PerfGov !== "undefined" && PerfGov.softwareGaragePreviewEnd) PerfGov.softwareGaragePreviewEnd(gfx);
   if (_raceEntryRenderScaleSaved != null && gfx && gfx.setRenderScale) {
     gfx.setRenderScale(_raceEntryRenderScaleSaved);
     _raceEntryRenderScaleSaved = null;

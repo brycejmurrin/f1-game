@@ -393,6 +393,7 @@ let _autoShed = 0;
 // tier at 0; this is the missing pin. Held: no shed, no restore; the scale
 // lever and every accessor keep working. Never set by the game itself.
 let _tierHold = false;
+let _swGarageScaleSaved = null;
 // THE OPENING WINDOW, recorded so a player's own device can answer a question
 // this repo's containers cannot. "WebGPU lags for the first few seconds and
 // then runs fine" is a report about frames that have already gone by the time
@@ -1165,6 +1166,20 @@ return {
   // seconds while these menu/race-entry sheets are up (#3589 garage; live
   // race-settings flyby + #loading entry on tip 775097e). Matches loop-health
   // slowPathCover plus the race-settings sheet (flyby stays live behind it).
+  // Garage drive-out preview on SwiftShader: shed fill rate for the intro bay only.
+  softwareGaragePreviewBegin(gfx) {
+    if (!PerfGov.softwareRaster() || !gfx || !gfx.setRenderScale || !gfx.getRenderScale) return;
+    if (_swGarageScaleSaved != null) return;
+    const cur = gfx.getRenderScale();
+    if (cur > 0.55) { _swGarageScaleSaved = cur; gfx.setRenderScale(0.55); }
+    try { if (gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = true; } catch (_) { /* harness */ }
+  },
+  softwareGaragePreviewEnd(gfx) {
+    if (_swGarageScaleSaved == null) return;
+    if (gfx && gfx.setRenderScale) gfx.setRenderScale(_swGarageScaleSaved);
+    _swGarageScaleSaved = null;
+    try { if (gfx && gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = false; } catch (_) { /* harness */ }
+  },
   softwareGlUiReadbackDefer() {
     if (!PerfGov.softwareRaster()) return false;
     try {

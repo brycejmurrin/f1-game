@@ -1536,3 +1536,9 @@ test("without RenderRate the drift response is the governor rung, unchanged", ()
   assert.ok(scale() < 1 || PerfGov.autoShed() > 0, "driftStep's rung moved, exactly the pre-wiring behaviour");
   delete globalThis.RenderRate; delete globalThis.ThermalDrift;
 });
+
+test("software garage preview sheds render scale on SwiftShader and restores", () => {
+  assert.match(SRC, /softwareGaragePreviewBegin\(gfx\)/);
+  assert.match(SRC, /softwareGaragePreviewEnd\(gfx\)/);
+  assert.match(SRC, /if \(cur > 0\.55\) \{ _swGarageScaleSaved = cur; gfx\.setRenderScale\(0\.55\); \}/);
+});
