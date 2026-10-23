@@ -215,11 +215,14 @@ async function run() {
     "--name", "apex-" + Date.now(), "--configuration", cfg).remoteAccessSession;
   const report = { device: dev.name, os: dev.os, url, legs, scenario, pins, startedAt: new Date().toISOString(), sessionArn: ses.arn };
   let sid = null, base = null;
+  const tq = Date.now(), WAIT_MIN = Number(process.env.APEX_DF_WAIT_MIN || 30);
   try {
     for (let t = 0; ; t++) {
       const s = aws("devicefarm", "get-remote-access-session", "--arn", ses.arn).remoteAccessSession;
       if (s.status === "RUNNING" && s.endpoints && s.endpoints.remoteDriverEndpoint) { base = s.endpoints.remoteDriverEndpoint.replace(/\/$/, ""); break; }
-      if (/COMPLETED|STOPPING|ERRORED|FAILED/.test(s.status) || t > 90) throw new Error(`session ${s.status} ${s.result || ""} ${s.message || ""}`);
+      // PENDING_DEVICE / PENDING_CONCURRENCY cost nothing: wait up to APEX_DF_WAIT_MIN (sessions still STOPPING hold
+      // concurrency for minutes after they end, and public devices are shared with other AWS customers).
+      if (/COMPLETED|STOPPING|ERRORED|FAILED/.test(s.status) || Date.now() - tq > WAIT_MIN * 60000) throw new Error(`session ${s.status} ${s.result || ""} ${s.message || ""}`);
       if (t % 6 === 0) log(`session ${s.status}`);
       await sleep(5000);
     }
