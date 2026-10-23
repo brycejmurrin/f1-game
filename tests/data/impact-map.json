@@ -6153,12 +6153,14 @@
       ],
       "clear": [
         "tests/unit/car-fx.test.mjs",
-        "tests/unit/droplets-spray.test.mjs"
+        "tests/unit/droplets-spray.test.mjs",
+        "tests/unit/particles-dirty.test.mjs"
       ],
       "count": [
         "tests/unit/car-fx.test.mjs",
         "tests/unit/droplets-spray.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
+        "tests/unit/particles-dirty.test.mjs",
         "tests/unit/skidmarks-cadence.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
@@ -6179,6 +6181,7 @@
       ],
       "flareCount": [
         "tests/unit/car-fx.test.mjs",
+        "tests/unit/particles-dirty.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
       "init": [
@@ -9298,6 +9301,9 @@
       ]
     },
     "js/overlay/render.js": {
+      "clear": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
       "create": [
         "tests/unit/overlay-feed.test.mjs"
       ],
