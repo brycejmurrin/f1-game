@@ -116,7 +116,6 @@ const SaveSchemaRegistry = (function () {
     "saveProbe": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "season": entry("js/career/season-cal.js", "json", 1, "season"),
     "spatialUpscaleGather": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
-    "softwareFlyby": entry("docs/DEBUG-HOOKS.md (bench A/B: force loading flyby on software GL)", "raw", 1, "rawScalar"),
     "ssrDayGate": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "stallWatch": entry("js/perf/loop-health.js (?stallwatch=1 forces the stall watchdog under automation)", "raw", 1, "rawScalar"),
     "team": entry("js/garage/setup-sheet.js", "json", 1, "json"),

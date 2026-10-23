@@ -4047,7 +4047,7 @@ function raceIntro(go) {
   // behind the race-settings sheet (18-30 s of frozen UI with no visible progress).
   // Hardware keeps the cinematic; software GL hands off straight to startRace().
   let forceSoftwareFlyby = false;
-  try { forceSoftwareFlyby = localStorage.getItem("apex26.softwareFlyby") === "1"; } catch (_) { /* bench A/B */ }
+  try { forceSoftwareFlyby = typeof DevFlags !== "undefined" && !!DevFlags.get("swFlyby"); } catch (_) { /* bench A/B */ }
   if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.softwareRaster && RaceEntryProfile.softwareRaster() && !forceSoftwareFlyby) {
     sheetRelease(true);
     loadingScreen.stop();

@@ -27,6 +27,8 @@ const DevFlags = (function () {
     viz: { param: "viz", storage: "tlxViz", kind: "string", noHash: true, default: null },
     // URL-only A/B lever: ?tlxMirMrt=0 restores TLX's one-attachment mirror target (tlx.js, A·W14). No storage key.
     mirMrt: { param: "tlxMirMrt", noHash: true, default: true },
+    // URL-only bench lever: ?swFlyby=1 runs the loading flyby on software GL (game.js race entry; default skips).
+    swFlyby: { param: "swFlyby", legacyQueryOne: true, noHash: true, default: false },
   };
 
   function parseBoolish(raw) {

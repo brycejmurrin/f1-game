@@ -83,6 +83,13 @@ test("flags() lists every registry key", () => {
   assert.equal(all.gfxdebug, true);
 });
 
+test("swFlyby: URL-only legacy =1 forces loading flyby bench path on software GL", () => {
+  assert.equal(boot().get("swFlyby"), false);
+  assert.equal(boot({ search: "?swFlyby=1" }).get("swFlyby"), true);
+  assert.equal(boot({ search: "?swFlyby=on" }).get("swFlyby"), false);
+  assert.equal(boot({ hash: "#swFlyby=1" }).get("swFlyby"), false);
+});
+
 test("gen-flags-table --check stays in sync", async () => {
   const { spawnSync } = await import("node:child_process");
   const r = spawnSync(process.execPath, [path.join(ROOT, "tools/gen/gen-flags-table.mjs"), "--check"], {
