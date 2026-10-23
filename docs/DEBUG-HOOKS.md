@@ -895,6 +895,12 @@ const r = __apex.lightCopy();     // → { ok:true, mode:"edits", tracks:39, cha
 __apex.lightCopy({ undo: r.undo });        // …never mind
 ```
 
+### `visorScene() → {eye, tgt, fov, sunDir, sunColor, exposure, ambientSky, lights, tailStart, floodEmit}`
+The per-frame facts the HELMET visor overlay (`js/fx/visor-optics.js`) reads at ~15 Hz, as LIVE REFERENCES into the
+frame (no copies — read, never write): the camera basis, the sun, the exposure, the sky ambient and this frame's culled
+stride-15 lamp list (`lights`, null by day; `tailStart` is where the car tail-lights begin inside it). `VisorOptics.lightMap(visorScene(), w, h)`
+is the pure mapping behind the glints; `VisorOptics.stats()` reports paint counts and ms.
+
 ## Baked asset pack
 
 The pack (`assets/pack/`, built by `node tools/gen/assets.mjs`) supplies PBR

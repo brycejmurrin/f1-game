@@ -32,6 +32,8 @@ import { fnSource } from "./fn-source.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MANIFEST = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
 const GAME = "js/game.js";
+/** Repo-relative game.js path for pins that must not quote the literal (source-pin-hygiene). */
+export const GAME_REL = GAME;
 
 // Rosters are arrays or {group: [files]} objects; take every js/ string either way.
 const flat = (v) => Array.isArray(v) ? v.flatMap(flat)
