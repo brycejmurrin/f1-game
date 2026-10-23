@@ -307,6 +307,8 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | Tool | Does | Paired skill |
 |---|---|---|
 | **perf/cpuprofile-summary.mjs** | Summarise a .cpuprofile: self ms by file, top-N self and inclusive ms by function url:line. | — |
+| **perf/devicefarm-host.mjs** | Device Farm automated-run body: on the AWS Mac host, Safari bench legs + Instruments trace into $DEVICEFARM_LOG_DIR. | — |
+| **perf/devicefarm-iphone.mjs** | AWS Device Farm: Safari on a real iPhone (remote access + Appium); renderer probe, BENCHMARK WEBGPU vs WEBGL2. | — |
 | **perf/diagnostics.mjs** | Bounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses. | renderer-debug / mcp-probe |
 | **perf/garage-census.mjs** | Garage perf census (#B·L24): frame CPU, draws/tris/programs, heap, DOM, Car3D.build ms per body style. | perf-memory-census |
 | **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
@@ -342,7 +344,8 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/mem-census.mjs** | Memory census: heap after GC, live tracks, three render objects and decoded audio per track load (picker or race path). | mcp-probe / check-changes |
 | **gfx/pass-census.mjs** | Draw calls and triangles per render pass (main, mirror, sun/lamp shadow, post) per frame: the exact count behind #2657. | renderer-debug / playwright-probe |
 | **gfx/readback-garage-oracle.mjs** | Measures readPixels during menu→garage→close; optional race-entry path. | — |
-| **gfx/readback-quit-menu-oracle.mjs** | Measures readPixels and stall watchdog after Bahrain race start → pause → QUIT. | — |
+| **gfx/readback-quit-menu-oracle-repeat.mjs** | Aggregates N quit-menu oracle runs into median/worst TTI, stall, and garage-close metrics. | — |
+| **gfx/readback-quit-menu-oracle.mjs** | Garage close → UI Start Race (Bahrain) → grid + ~20s throttle → pause → 2-tap quit. | — |
 | **gfx/res-scale-ab.mjs** | Pixel A/B of TLX fixed render targets (tlxFixedTargets) vs legacy resize: noise floor, identity at 1.0, edge bleed. | renderer-debug |
 | **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |

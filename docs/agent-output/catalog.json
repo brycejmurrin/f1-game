@@ -2743,6 +2743,21 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/perf/devicefarm-host.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
+      "path": "tools/perf/devicefarm-iphone.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
+    },
+    {
       "path": "tools/perf/diagnostics.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",

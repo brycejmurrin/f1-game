@@ -4,13 +4,13 @@
 //   node tools/gfx/readback-quit-menu-oracle.mjs
 // Env: APEX_PROFILE_WAIT_MS (default 600000), APEX_CPU_RATE (default 10), APEX_DRIVE_MS (default 20000)
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = process.env.APEX_ORACLE_ROOT
-  ? fileURLToPath(new URL(process.env.APEX_ORACLE_ROOT))
+  ? resolve(process.env.APEX_ORACLE_ROOT)
   : fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const argv = process.argv.slice(2);
 exitIfHelp(argv, `readback-quit-menu-oracle — GLX SwiftShader live-shaped quit TTI
@@ -18,7 +18,7 @@ exitIfHelp(argv, `readback-quit-menu-oracle — GLX SwiftShader live-shaped quit
   node tools/gfx/readback-quit-menu-oracle.mjs
 
 Writes artifacts/logs/readback-quit-menu-oracle.json (override APEX_ORACLE_OUT).`);
-const WAIT_MS = Math.max(120000, +process.env.APEX_PROFILE_WAIT_MS || 600000);
+const WAIT_MS = Math.max(120000, +process.env.APEX_PROFILE_WAIT_MS || 900000);
 const CPU_RATE = Math.max(1, +process.env.APEX_CPU_RATE || 10);
 const DRIVE_MS = Math.max(5000, +process.env.APEX_DRIVE_MS || 20000);
 const OUT = process.env.APEX_ORACLE_OUT || join(ROOT, "artifacts/logs/readback-quit-menu-oracle.json");
@@ -113,46 +113,51 @@ async function runGarageClose(page) {
   await page.locator("#cs-done").click({ timeout: 120000, force: true });
   await page.waitForSelector("#carsetup[hidden]", { timeout: WAIT_MS }).catch(() => {});
   const closeClicks = await page.evaluate(() => window.__garageCloseClicks || 1);
-  const closeMs = Date.now() - tClose;
-  await sleep(2000);
-  return { closeClicks, closeMs };
-}
-
-async function startBahrainRaceUi(page) {
-  await setPhase(page, "menu");
-  await page.click("#mb-race", { timeout: WAIT_MS });
-  await page.waitForSelector("#select:not([hidden])", { timeout: WAIT_MS });
-  await page.evaluate(() => {
-    const i = Tracks.LIST.findIndex((t) => t.id === "bahrain");
-    if (i < 0) throw new Error("no bahrain");
-    const row = document.querySelector('.track-row[data-track-idx="' + i + '"]');
-    if (!row) throw new Error("bahrain row missing");
-    row.click();
-  });
-  await page.click("#sel-go", { timeout: WAIT_MS });
-  await page.waitForSelector("#race-settings:not([hidden])", { timeout: WAIT_MS });
-  await page.click("#rs-go", { timeout: WAIT_MS });
-  await setPhase(page, "race-entry");
-  await page.waitForSelector("#loading[hidden]", { timeout: WAIT_MS }).catch(() => {});
-  await page.waitForFunction(
-    () => window.__apex && window.__apex.info && window.__apex.info().track === "bahrain",
-    null,
-    { timeout: WAIT_MS, polling: 200 },
-  );
+  await page.waitForSelector("#carsetup[hidden]", { timeout: WAIT_MS });
+  await page.waitForSelector("#loading[hidden]", { timeout: WAIT_MS });
   await page.waitForFunction(
     () => {
-      const s = window.__apex.info().state;
-      return s === "race" || s === "count" || s === "grid";
+      const o = document.getElementById("overlay");
+      const sel = document.getElementById("select");
+      return o && !o.hidden && sel && !sel.hidden;
     },
     null,
     { timeout: WAIT_MS, polling: 200 },
   );
+  const closeMs = Date.now() - tClose;
+  return { closeClicks, closeMs };
+}
+
+async function startBahrainRaceUi(page, fromMenuGarage) {
+  await setPhase(page, "race-ui");
+  // Menu GARAGE → CLOSE lands on #select (buildSelect), not the title — skip #mb-race.
+  if (!fromMenuGarage) {
+    await page.click("#mb-race", { timeout: WAIT_MS });
+    await page.waitForSelector("#select:not([hidden])", { timeout: WAIT_MS });
+  }
+  const bahrainIdx = await page.evaluate(() => Tracks.LIST.findIndex((t) => t.id === "bahrain"));
+  if (bahrainIdx < 0) throw new Error("no bahrain in Tracks.LIST");
+  await page.locator(`.track-row[data-track-idx="${bahrainIdx}"]`).scrollIntoViewIfNeeded();
+  await page.locator(`.track-row[data-track-idx="${bahrainIdx}"]`).click({ timeout: WAIT_MS });
+  await page.click("#sel-go", { timeout: WAIT_MS });
+  await page.waitForSelector("#race-settings:not([hidden])", { timeout: WAIT_MS });
+  await page.click("#rs-go", { timeout: WAIT_MS });
+  await setPhase(page, "race-entry");
+  await page.evaluate(() => { if (window.__apex && window.__apex.headless) window.__apex.headless(false); });
+  await page.waitForSelector("#loading[hidden]", { timeout: WAIT_MS }).catch(() => {});
+  const trackWait = Math.max(WAIT_MS, 480000);
+  await page.waitForFunction(
+    () => window.__apex && window.__apex.info && window.__apex.info().track === "bahrain",
+    null,
+    { timeout: trackWait, polling: 100 },
+  );
+  await page.evaluate(() => { if (window.__apex && window.__apex.go) window.__apex.go(); });
   await page.waitForFunction(
     () => window.__apex.info().state === "race",
     null,
-    { timeout: WAIT_MS, polling: 200 },
+    { timeout: trackWait, polling: 100 },
   );
-  await page.waitForSelector("#pausebtn", { timeout: WAIT_MS, state: "visible" });
+  await page.waitForSelector("#pausebtn", { timeout: trackWait, state: "visible" });
 }
 
 async function driveRace(page, ms) {
@@ -222,7 +227,7 @@ try {
   await page.evaluate(() => { window.__readbackOracle.log.length = 0; });
   const garageClose = await runGarageClose(page);
   await assertSoftwareRaster(page, "post-garage");
-  await startBahrainRaceUi(page);
+  await startBahrainRaceUi(page, true);
   await assertSoftwareRaster(page, "post-race-start");
   await driveRace(page, DRIVE_MS);
   const ttiMs = await quitToMenu(page);
@@ -232,26 +237,40 @@ try {
 
   const slice = await page.evaluate((quitTtiMs) => {
     const stall = typeof LoopHealth !== "undefined" ? LoopHealth.state().stall : null;
-    const soft = typeof GLX !== "undefined" && GLX.softBlitGen ? GLX.softBlitGen() : null;
-    const sw = typeof PerfGov !== "undefined" && PerfGov.softwareRaster ? PerfGov.softwareRaster() : null;
+    const st = typeof GLX !== "undefined" && GLX.backendState ? GLX.backendState() : null;
+    const soft = st && st.softBlitGen != null ? st.softBlitGen : null;
+    let renderer = "";
+    try {
+      const c = document.getElementById("game");
+      const gl = c && c.getContext && (c.getContext("webgl2") || c.getContext("webgl"));
+      const ext = gl && gl.getExtension("WEBGL_debug_renderer_info");
+      if (ext && gl) renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "";
+    } catch (_) { /* harness */ }
+    const softwareRaster = !!(st && st.softPresent) && /swiftshader/i.test(renderer);
     const reloads = (() => { try { return parseInt(sessionStorage.getItem("apex26.stallReloads"), 10) || 0; } catch (_) { return 0; } })();
     const teardown = typeof MenuTeardown !== "undefined" && MenuTeardown.report ? MenuTeardown.report() : null;
     return {
       summary: window.__readbackOracle.summary(),
       stall,
       softBlitGen: soft,
-      softwareRaster: sw,
+      softwareRaster,
+      renderer,
+      softPresent: !!(st && st.softPresent),
       stallReloads: reloads,
       ttiMs: quitTtiMs,
       teardown,
     };
   }, ttiMs);
+  if (slice.softwareRaster !== true) {
+    throw new Error(`softwareRaster:not true (softPresent=${slice.softPresent} renderer=${slice.renderer})`);
+  }
   report.garageClose = garageClose;
   report.quit = { ...slice, ttiMs };
+  report.softwareRaster = true;
 
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, JSON.stringify(report, null, 2) + "\n");
-  console.log("= oracle", JSON.stringify({ garageClose, quit: { ttiMs, stall: slice.stall, stallReloads: slice.stallReloads, softwareRaster: slice.softwareRaster } }));
+  console.log("= oracle", JSON.stringify({ softwareRaster: true, garageClose, quit: { ttiMs, stall: slice.stall, stallReloads: slice.stallReloads } }));
 } finally {
   await shutdown();
 }

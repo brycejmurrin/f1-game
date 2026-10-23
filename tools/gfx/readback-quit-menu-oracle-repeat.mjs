@@ -1,4 +1,5 @@
 // Run readback-quit-menu-oracle.mjs N times; print median/worst summary.
+// @doc Aggregates N quit-menu oracle runs into median/worst TTI, stall, and garage-close metrics.
 // Usage: APEX_ORACLE_RUNS=3 node tools/gfx/readback-quit-menu-oracle-repeat.mjs
 // Env: APEX_ORACLE_LABEL (base|branch), APEX_ORACLE_OUT_DIR
 import { execFileSync } from "node:child_process";
@@ -34,9 +35,13 @@ for (let i = 1; i <= RUNS; i++) {
       stdio: "inherit",
       timeout: Math.max(600000, (+process.env.APEX_PROFILE_WAIT_MS || 600000) * 2),
     });
-    runs.push(JSON.parse(readFileSync(out, "utf8")));
+    const row = JSON.parse(readFileSync(out, "utf8"));
+    if (row.softwareRaster !== true || row.quit?.softwareRaster !== true) {
+      throw new Error(`run ${i}: softwareRaster not true`);
+    }
+    runs.push(row);
   } catch (e) {
-    runs.push({ error: String(e.message || e).slice(0, 200) });
+    runs.push({ error: String(e.message || e).slice(0, 400) });
   }
 }
 
