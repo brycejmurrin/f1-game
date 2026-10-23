@@ -97,6 +97,28 @@ test("caption ids dedupe and unsupported schema versions are rejected", () => {
   assert.equal(Feed.accept({ v: 1, seq: 4 }).seq, 4);
 });
 
+test("cleared caption id can re-arm on a later patch (dispose the latch)", () => {
+  const Feed = load();
+  const diff = Feed.createDiffer(2000);
+  const cap = { id: "radio-1", who: "NOR", text: "Box", kind: "radio" };
+  diff.next(Feed.frame({ seq: 1, t: 0, ranked: [], caption: cap }), 0);
+  const cleared = diff.next(Feed.frame({ seq: 2, t: .25, ranked: [] }), 250);
+  assert.equal(cleared.caption, null, "clearing a caption publishes null");
+  const again = diff.next(Feed.frame({ seq: 3, t: .5, ranked: [], caption: cap }), 500);
+  assert.deepEqual(JSON.parse(JSON.stringify(again.caption)), {
+    n: null, who: "NOR", text: "Box", kind: "radio", id: "radio-1",
+  }, "same id must reappear after a clear — captionId must not stick");
+});
+
+test("leaving race forces battle:null on the differ so overlays cannot stick", () => {
+  const Feed = load();
+  const diff = Feed.createDiffer(2000);
+  diff.next(Feed.frame({ seq: 1, t: 0, state: "race", ranked: cars(.4) }), 0);
+  const ended = diff.next(Feed.frame({ seq: 2, t: .25, state: "results", ranked: cars(.4) }), 250);
+  assert.equal(ended.state, "results");
+  assert.equal(ended.battle, null, "battle must clear when the session leaves race/count");
+});
+
 test("overlay source is display-only", () => {
   for (const rel of ["js/overlay/feed.js", "js/overlay/render.js"]) {
     const src = source(rel);
@@ -141,6 +163,44 @@ test("painter builds fixed rows once, moves by transform and skips unchanged tex
   painter.paint(frame);
   assert.equal(painter.rows[1].el.style.transform, "translate3d(0,0px,0)");
   assert.equal(original, "NOR");
+});
+
+test("painter merges differ patches and hides battle after the race ends", () => {
+  const dom = makeDom();
+  const root = dom.document.createElement("section");
+  const tower = dom.document.createElement("div"); tower.className = "ov-tower";
+  const battle = dom.document.createElement("div"); battle.className = "ov-battle";
+  battle.append(dom.document.createElement("strong"), dom.document.createElement("span"));
+  const sectors = dom.document.createElement("div"); sectors.className = "ov-sectors";
+  sectors.append(dom.document.createElement("span"), dom.document.createElement("span"), dom.document.createElement("span"));
+  const caption = dom.document.createElement("div"); caption.className = "ov-caption";
+  caption.append(dom.document.createElement("strong"), dom.document.createElement("span"));
+  root.append(tower, battle, sectors, caption);
+
+  const Feed = load();
+  const ctx = { console, document: dom.document, URLSearchParams, OverlayFeed: Feed };
+  vm.createContext(ctx);
+  vm.runInContext(source("js/overlay/render.js") + ";this.OverlayRender=OverlayRender;", ctx, { filename: absSrc("js/overlay/render.js") });
+  const painter = ctx.OverlayRender.create(root, { rows: 4 });
+  const full = Feed.frame({ seq: 1, t: 0, state: "race", ranked: cars(.4) });
+  painter.paint(full);
+  assert.equal(painter.rows[0].el.hidden, false);
+  assert.equal(battle.hidden, false, "battle shows while racing");
+
+  // A createDiffer-style patch omits unchanged rows — must NOT wipe the tower.
+  painter.paint({ v: 1, seq: 2, t: 0.25 });
+  assert.equal(painter.rows[0].el.hidden, false, "omitted rows keep the last tower");
+  assert.equal(battle.hidden, false, "omitted battle keeps the last fight while still racing");
+
+  // Race ends without an explicit battle:null — BATTLE must still dispose.
+  painter.paint({ v: 1, seq: 3, t: 1, state: "results" });
+  assert.equal(battle.hidden, true, "battle cannot stick after results");
+  assert.equal(painter.rows[0].el.hidden, false, "classification tower may remain");
+
+  painter.clear();
+  assert.equal(painter.rows[0].el.hidden, true);
+  assert.equal(battle.hidden, true);
+  assert.equal(caption.hidden, true);
 });
 
 function loadTv(document) {

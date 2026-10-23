@@ -2,7 +2,7 @@
 /**
  * @doc Pokes repo MCP wrappers (apex_status, chrome-devtools status, js-debugger/apex-lsp list-tools, probe help). No Chromium.
  * @skill check-changes
- * mcp-smoke — poke the repo shell wrappers (all five .mcp.json servers; host attach optional).
+ * mcp-smoke — poke the repo shell wrappers (all six .mcp.json servers; host attach optional).
  *
  * No Chromium. Missing TinyFish key / chrome-devtools clone = warning, not fail.
  * Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json
@@ -86,6 +86,11 @@ export function smokePlan() {
       server: "apex-lsp",
       argv: ["node", path.join(ROOT, "tools/mcp/lsp-mcp.mjs"), "--list-tools"],
       note: "catalog only — no tsc spawn",
+    },
+    {
+      server: "browserstack",
+      argv: ["bash", path.join(ROOT, "tools/mcp/browserstack-mcp.sh"), "status"],
+      note: "status only — run needs BROWSERSTACK_USERNAME / BROWSERSTACK_ACCESS_KEY in the env (never tracked)",
     },
     {
       server: "tinyfish",

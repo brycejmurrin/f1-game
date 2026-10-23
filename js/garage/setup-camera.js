@@ -72,7 +72,9 @@ function presentOpts(tune) {
   const bloomMul = _tuneNum(T, "bloomMul", 1);
   const threshOff = _tuneNum(T, "threshOff", 0);
   const phone = garagePhone();
-  const shed = phone || (typeof PerfGov !== "undefined" && PerfGov.autoTier && PerfGov.autoTier() >= 4);
+  const shed = phone || (typeof PerfGov !== "undefined" && (
+    (PerfGov.lookPostShed && PerfGov.lookPostShed())
+    || (PerfGov.autoTier && PerfGov.autoTier() >= 4)));
   const t = SP_THRESH + threshOff;
   const threshold = (t < 0.4 ? 0.4 : t > 1.2 ? 1.2 : t) * SP_EXPOSURE;
   // Kill screen sun-shafts regardless of the race slider / track preset.
@@ -893,7 +895,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
-  gfx.drawGlow(lightsRig, GarageScene.glareStr() * glareScale() * moodDef().glare);
+  gfx.drawGlow(lightsRig, PostCommon.softwareGlowScale(GarageScene.glareStr() * glareScale() * moodDef().glare));
   gfx.present(presentOpts());
   return !(gfx.warming && gfx.warming());
 }

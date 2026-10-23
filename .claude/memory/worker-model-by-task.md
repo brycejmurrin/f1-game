@@ -1,11 +1,11 @@
 ---
 name: worker-model-by-task
-description: "Bryce 2026-10-19 — the orchestrator picks Opus or Sonnet per worker by the task (standard); replaces sessions-run-sonnet"
+description: "Bryce 2026-10-19 — orchestrator picks Opus or Sonnet per worker by the task; Fable only when Bryce names it (2026-10-22 visor)"
 metadata:
   node_type: memory
   type: feedback
   originSessionId: ef12c769-9941-5fd4-8a7f-d488dee68ee2
-  modified: 2026-10-19T04:43:00Z
+  modified: 2026-10-22T09:02:50.303Z
 ---
 
 Bryce, 2026-10-19: "decide which workers should be opus or subnet based on the issue. Make this standard."
@@ -16,7 +16,7 @@ This replaces the 2026-10-16 all-Sonnet memory (`sessions-run-sonnet`). That ear
 **How to apply:** every `create_session`, and every fresh-session scheduled task, names its model, and the launch prompt says why in one line (`MODEL: <id> — <reason>`). The table is `.claude/skills/agent-fleet/references/launch-policy.md` §Model by task:
 - `claude-opus-5-5` for a design or look call, a rework of a rejected approach, a red with no known cause, or a change in physics, renderer or `js/game.js`.
 - `claude-sonnet-5-5` for everything else: port a known fix, sync, one screen's CSS, tests, docs, babysitting a PR. A Sonnet worker that finds the task is really Opus-shaped escalates instead of grinding.
-- Never Fable for workers. Orchestrator sessions Bryce opens himself keep the model he chose.
+- Never Fable for workers by default. Exception: Bryce names Fable for a task himself. On 2026-10-22 he asked for the helmet-visor rework "with fable", which became lane A·W5. Use Fable only when he names it, and quote his words in `MODEL:`. Orchestrator sessions Bryce opens himself keep the model he chose.
 - Use model identifiers the current host supports; a cloud launch selector of `default` does not prove the served model. When the host exposes the resolved model, verify it and report a mismatch or inability to verify. Do not silently treat another model as satisfying the named pick.
 
 See [[orchestrator-may-spawn-sessions]].

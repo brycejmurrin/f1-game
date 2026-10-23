@@ -45,7 +45,7 @@ object counts per circuit.
 | Render-path JS CPU | profile-gameloop `render` | **No** (99.9 % idle) | **I-4**: real-GPU census CPU profile |
 | Does the renderer keep building after warm-up? | `tools/gfx/frame-hitch.mjs` | **Yes** (exact counts) | — |
 | GPU frame time / fill | `__apex.gpuTimer()`, census `gms` | **Only on real hardware** (`gpu-census.yml`, macos-latest) | — |
-| Frame rate moved? | census `fps` | **No — ±54 % run to run** (§2w) | read `gms` and counts, never fps |
+| Frame rate moved? | census `fps` | **No — ±54 % run to run** (§2aw) | read `gms` and counts, never fps |
 | Look changed? | census `meanLuma` | **Yes** (stable) | — |
 | Memory on the player's GPU/browser | nothing today | — | **I-3**: census reports heap + three memory; **I-5**: `?gfxdebug=1` overlay prints a memory line players can paste |
 
@@ -149,7 +149,7 @@ ON by default (`game.js:197`), so its step runs in every normal Grand Prix.
   sweep, M-2 beyond car casters) ships only after an I-3 census A/B shows
   `gpuErrors=0`, an unchanged `meanLuma`, and the memory delta on macos-latest.
 - Tier knobs that change GPU allocations (shadow map sizes, post targets, dpr)
-  are judged by census counts and `gms`, never by fps (§2w).
+  are judged by census counts and `gms`, never by fps (§2aw).
 
 ## 6. Order of work
 

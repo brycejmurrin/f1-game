@@ -154,3 +154,35 @@ test("render waits on both card fonts, paints the layout with a real QR, encodes
   await card.render(model, "square", { document: doc });
   assert.equal(fontsAsked.length, 2);
 });
+
+// H3-11 (2026-10-22): the card painted a light-on-dark QR, and a decoder that
+// never tries inversion (many Android camera scanners) could not read it.
+// Paint every spec's whole card into pixels and decode it non-inverted.
+test("the painted share-card QR decodes without inversion on every spec", async () => {
+  const { default: jsQR } = await import("jsqr");
+  const sb = vm.createContext({ Object, Array, String, Number, Math, Promise, Uint8Array, TextEncoder });
+  for (const f of ["js/net/qr.js", "js/share/share-card-layout.js", "js/share/share-card.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: absSrc(f) });
+  const card = vm.runInContext("ShareCard", sb), L = vm.runInContext("ShareCardLayout", sb);
+  const link = "https://brycejmurrin.github.io/f1-game/#ghost=" + "Ab3_x".repeat(30);
+  for (const spec of Object.keys(L.SPECS)) {
+    const { width: W, height: H } = L.SPECS[spec];
+    const px = new Uint8ClampedArray(W * H * 4);
+    let fill = [0, 0, 0];
+    const ctx = {
+      save() {}, restore() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fillText() {},
+      measureText: (t) => ({ width: String(t).length * 10 }),
+      set fillStyle(c) { fill = [1, 3, 5].map((i) => parseInt(String(c).slice(i, i + 2), 16)); },
+      set strokeStyle(_) {}, set lineWidth(_) {}, set font(_) {}, set textAlign(_) {}, set textBaseline(_) {},
+      fillRect(x, y, w, h) {
+        for (let j = Math.max(0, Math.floor(y)); j < Math.min(H, Math.floor(y + h)); j++)
+          for (let i = Math.max(0, Math.floor(x)); i < Math.min(W, Math.floor(x + w)); i++) {
+            const k = (j * W + i) * 4; px[k] = fill[0]; px[k + 1] = fill[1]; px[k + 2] = fill[2]; px[k + 3] = 255;
+          }
+      },
+    };
+    card.paint(ctx, L.layout({ title: "DAILY", trackName: "Spa", hero: { label: "BEST", value: "1:21.345" }, link }, spec));
+    const read = jsQR(px, W, H, { inversionAttempts: "dontInvert" });
+    assert.equal(read && read.data, link, spec + ": a scanner that never inverts reads the card's QR");
+  }
+});

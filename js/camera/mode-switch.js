@@ -80,15 +80,29 @@ window.CamModes = (function () {
       }
     }
     function setCamMode(m, opts) {
-      const prev = G.camMode;
-      G.camMode = ((m % CAM_MODES.length) + CAM_MODES.length) % CAM_MODES.length;
+      const n = CAM_MODES.length;
+      // NaN / Infinity from a bad store, __apex.camera, or XR hand-off must not
+      // land in G.camMode: CAM_MODES[NaN] is undefined and the next refresh /
+      // vantage throw, and a NaN cut leaves the damper on a poisoned path.
+      let idx = Number(m);
+      if (!Number.isFinite(idx)) {
+        idx = Number(G.camMode);
+        if (!Number.isFinite(idx)) idx = 0;
+      }
+      idx = ((idx % n) + n) % n;
+      // -1 when the stored index was already poisoned: recovering must cut /
+      // resetFollow, not compare equal to the freshly sanitised idx.
+      const prevRaw = Number(G.camMode);
+      const prev = Number.isFinite(prevRaw) ? ((prevRaw % n) + n) % n : -1;
+      G.camMode = idx;
       // opts.persist === false: ephemeral override (WebXR cockpit) — do not
       // write apex26.camMode so EXIT VR restores the player's saved choice.
       const replay = typeof RealRace !== "undefined" && RealRace.replay ? RealRace.replay() : null;
       if (!(opts && opts.persist === false) && !(replay && replay.isRunning())) G.store.set("camMode", G.camMode);
       if (G.camMode !== prev) {
         G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut ?? 0.35;   // cut: 0 is an instant cut, not missing
-        Log.info("game", `CamModes.setCamMode ${CAM_MODES[prev].id} -> ${CAM_MODES[G.camMode].id}`);
+        const from = (prev >= 0 && CAM_MODES[prev]) ? CAM_MODES[prev].id : "?";
+        Log.info("game", `CamModes.setCamMode ${from} -> ${CAM_MODES[G.camMode].id}`);
         if (typeof ExtraRigs !== "undefined") ExtraRigs.reset(CAM_MODES[G.camMode].id);
         // A cut: the new rig's eased bend sides start from its own target,
         // not from wherever that rig was the last time it was on air.

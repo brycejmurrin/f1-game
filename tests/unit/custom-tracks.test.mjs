@@ -259,6 +259,22 @@ test("sanitize: bank angle in [1, 30], hwZone width ≥ the 5 m floor, ease alwa
   assert.equal(C.sanitize(design({ hwZones: [{ s0: 0.2, s1: 0.3, hw: 6 }] })).id, C.sanitize(design({ hwZones: [{ s0: 0.2, s1: 0.3, hw: 6, ease: 0.025 }] })).id);
 });
 
+test("sanitize keeps a full-lap hw zone as 0→1 (frac must not collapse it to a zero-width notch)", () => {
+  const { C, Tracks } = boot();
+  const full = C.sanitize(design({ baseHW: 7, hwZones: [{ s0: 0, s1: 1, hw: 5, ease: 0.01 }] }));
+  assert.ok(full && full.hwZones && full.hwZones.length === 1);
+  assert.deepEqual(plain(full.hwZones[0]), { s0: 0, s1: 1, hw: 5, ease: 0.01 });
+  // Zero-width after the lattice is dropped, not stored as a start-line notch.
+  assert.equal(C.sanitize(design({ hwZones: [{ s0: 0.4, s1: 0.4, hw: 5 }] })).hwZones, null);
+  // Built road is narrowed for the whole lap (TrackDef.applyHwZones 0→1 contract).
+  C.upsert(full);
+  const def = Tracks.LIST.find((t) => t.id === full.id);
+  assert.ok(def);
+  const tr = Tracks.buildCenterline(def, { line: false });
+  const mid = tr.hw[Math.floor(tr.n / 2)], nearStart = tr.hw[0];
+  assert.ok(mid < 6 && nearStart < 6, "full-lap zone narrows mid-lap and start: mid=" + mid + " start=" + nearStart);
+});
+
 test("sanitize refuses a loop the engine cannot build: coincident / sub-8 m points, a polygon under 1 km", () => {
   const { C, Tracks } = boot({ customTracks: { v: 1, items: [{ name: "dot", pts: Array.from({ length: 8 }, () => [5, 5]) }, design()] } });
   assert.equal(Tracks.LIST.length, 53, "8 coincident points never register as a raceable circuit");

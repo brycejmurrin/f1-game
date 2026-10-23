@@ -252,3 +252,46 @@ test("silence() cuts a sounding cheer's envelope, then aims it at 0 (also after 
   assert.equal(cheer.targets.length, before + 1, "then the sounding cheer is aimed at silence");
   assert.equal(cheer.targets[cheer.targets.length - 1], 0);
 });
+
+test("crowd reattaches after an AudioContext rebuild (startEngineGraph bypass)", () => {
+  // rebuildCtx() restarts the engine via startEngineGraph(), which does not hit
+  // the startEngine wrapper — without ensureAttached the bed kept aiming the
+  // closed context's nodes (silent crowd + leaked BufferSources).
+  const a = countingContext(), b = countingContext();
+  let liveCtx = a.ctx, liveBus = a.ctx.createGain();
+  const results = { hidden: true };
+  const G = { state: "race", paused: false, photoMode: false, track: { total: 5000, props: [] },
+    player: { s: 50, pos: 5, finished: false } };
+  const GameAudio = {
+    _stub: false, enabled: () => true,
+    context: () => liveCtx, sfxBus: () => liveBus,
+    setEngine() {}, stopEngine() {}, setGridIdle() {}, setSfxEnabled() {}, finish() {}, startEngine() {},
+  };
+  const sb = { Math, console, Object, Array, Number, String, isFinite, Float32Array, GameAudio,
+    document: { getElementById: (id) => (id === "results" ? results : null) } };
+  sb.window = sb;
+  const vctx = vm.createContext(sb);
+  vm.runInContext(SIGNAL, vctx, { filename: absSrc("js/audio/signal.js") });
+  vm.runInContext(SRC, vctx, { filename: absSrc("js/audio/crowd.js") });
+  const CrowdAudio = vm.runInContext("CrowdAudio", vctx);
+  const host = {
+    context: () => liveCtx, bus: () => liveBus, sfxOk: () => true, now: () => liveCtx.currentTime,
+  };
+  CrowdAudio.bindHost(host);
+  CrowdAudio.bind(G);
+  assert.equal(CrowdAudio.attach(), true);
+  assert.equal(CrowdAudio.inspect().attached, true);
+  const oldSrc = a.nodes.find((n) => n.kind === "src");
+  assert.ok(oldSrc, "bed source on the first context");
+  let oldDisc = 0;
+  const prevDisc = oldSrc.disconnect;
+  oldSrc.disconnect = function () { oldDisc++; return prevDisc.apply(this, arguments); };
+
+  liveCtx = b.ctx;
+  liveBus = b.ctx.createGain();
+  b.resetCreated();
+  GameAudio.setEngine();   // wrapped: ensureAttached + update
+  assert.equal(CrowdAudio.inspect().attached, true);
+  assert.ok(oldDisc > 0, "old bed source was disconnected");
+  assert.ok(b.created() > 0, "a new bed was built on the rebuilt context");
+});

@@ -1,7 +1,8 @@
 // @ts-check
-// Photo Studio TIME & WEATHER: the on-track studio changes the session's time of day and weather through the
-// lighting tuner's own seam (G.setTimeOfDay / G.weather), live; it is a preview that every close and RESET put
-// back, so physics and the race are untouched (js/ui/photo-studio.js).
+// Photo Studio TIME & WEATHER + PHOTO LIGHTING: the on-track studio changes the session's time of day and weather
+// through the lighting tuner's own seam (G.setTimeOfDay / G.weather), live; PHOTO LIGHTING exposes TUNE_DEFS knobs
+// on a temporary profile clone. Every close and RESET put conditions/knobs back, so physics and the race are
+// untouched (js/ui/photo-studio.js).
 import { test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 852, height: 393 };
@@ -27,6 +28,8 @@ const phys = (page) => page.evaluate(() => {
 test("Paused race photo changes time of day and weather live, resets, and leaves the race untouched", async ({ page, pageErrors }) => {
   test.setTimeout(240000);
   await boot(page);
+  // Await shipped presets before seeding so RESET baselines resolve (sunElev etc.).
+  await page.waitForFunction(() => window.LightPresets, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(async () => {
     __apex.headless(true);
     await __apex.race("bahrain", "day", "dry");
@@ -36,8 +39,20 @@ test("Paused race photo changes time of day and weather live, resets, and leaves
   await clickLive(page, "pausebtn");
   await clickLive(page, "pm-photo");
   await expect(page.locator("#ps-tod")).toBeVisible();
+  await expect(page.locator("#ps-lt-tabs")).toBeVisible();
   expect(await page.evaluate(() => [__apex.setTimeOfDay(), __apex.weather()])).toEqual(["day", "dry"]);
   await expect(page.locator("#ps-cond-reset")).toBeDisabled();
+  // PHOTO LIGHTING: a knob write is temporary; RESET returns open-time values.
+  const beforeSun = await page.evaluate(() => LightTune.LT.sunElev);
+  await page.locator("#ps-lt-tab-sun-moon").click();
+  await page.locator("#ps-lt-in-sunElev").evaluate((el) => {
+    el.value = String(Math.min(+el.max, +el.value + 5));
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(await page.evaluate(() => LightTune.LT.sunElev)).not.toBe(beforeSun);
+  await expect(page.locator("#ps-lt-reset")).toBeEnabled();
+  await clickLive(page, "ps-lt-reset");
+  expect(await page.evaluate(() => LightTune.LT.sunElev)).toBe(beforeSun);
 
   // Every time of day: the hook follows the row and the resolved scene changes.
   let seen = await light(page);

@@ -222,15 +222,30 @@ test("a storm rolling in mid-race deploys the SC until it eases back to rain", (
   assert.ok(notes.some((m) => /STORM EASING/.test(m)));
 });
 
-test("storm SC flies with CAUTIONS off, is bounded, and coexists with a scripted hold", () => {
-  const off = bootRC({ raceWeather: "rain" });
-  off.rc.setEnabled(false);
-  off.adv(30);
-  off.G.raceWeather = "storm";
-  off.adv(1);
-  assert.equal(off.rc.level, 3, "weather is not debris: the switch does not stop it");
-  off.adv(off.S.SC_ROLL_S + 1);
-  assert.equal(off.rc.level, 0, "a storm that settles in is capped at SC_ROLL_S");
+test("CAUTIONS off: a storm raises no SC and no storm call; a scripted hold still flies", () => {
+  for (const weather of ["storm", "rain"]) {
+    const off = bootRC({ raceWeather: weather });
+    off.rc.setEnabled(false);
+    off.adv(30);
+    off.G.raceWeather = "storm";
+    off.adv(5);
+    assert.equal(off.rc.level, 0, "CAUTIONS off: no storm safety car (" + weather + " start)");
+    assert.ok(!off.notes.some((m) => /SAFETY CAR|STORM/.test(m)), off.notes.join("|"));
+    assert.equal(off.rc.hold(3, "SCRIPT"), 3);
+    off.adv(1);
+    assert.equal(off.rc.level, 3, "a scripted (real-race) hold is not the local sim: it still flies");
+  }
+  const saved = bootRC({ raceWeather: "storm" });
+  saved.rc.setEnabled(false);
+  saved.adv(1);
+  assert.equal(saved.rc.level, 0, "a storm START with CAUTIONS off is green");
+  const on = bootRC({ raceWeather: "rain" });
+  on.adv(30);
+  on.G.raceWeather = "storm";
+  on.adv(1);
+  assert.equal(on.rc.level, 3, "CAUTIONS on: the storm SC still deploys");
+  on.adv(on.S.SC_ROLL_S + 1);
+  assert.equal(on.rc.level, 0, "a storm that settles in is capped at SC_ROLL_S");
   const both = bootRC({ raceWeather: "rain" });
   both.adv(30);
   assert.equal(both.rc.hold(1, "SCRIPT"), 1);

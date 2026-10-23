@@ -666,6 +666,8 @@ const WGX = (function () {
         try { armed = localStorage.getItem("apex26.gfxWgxLevel") === nextRung; } catch (_) { /* blocked */ }
         if (armed) {
           try { Log.warn("gfx", "WGX " + why + " — retrying " + (nextRung === "1" ? "slim" : "minimal") + " WebGPU"); } catch (_) { /* harness */ }
+          // The menu explains both escalation reloads, as GLX and TLX do (#3513).
+          try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ }
           try { location.reload(); } catch (_) { /* no location */ }
           return;
         }
@@ -680,7 +682,7 @@ const WGX = (function () {
         Log.warn("gfx", "WGX " + why + " — keeping WEBGPU pick" +
           (skipped ? ", this tab falls back to WebGL2" : " (could not arm session skip; not reloading)"));
       } catch (_) { /* harness */ }
-      if (skipped) { try { location.reload(); } catch (_) { /* no location */ } }
+      if (skipped) { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ } try { location.reload(); } catch (_) { /* no location */ } }
       else { try { localStorage.setItem("apex26.gfxBackendProbe", "webgpu"); } catch (_) { /* RESET door */ } }
     }
     function _outputBlackSurrender() {
@@ -764,7 +766,7 @@ const WGX = (function () {
         sessionStorage.setItem("apex26.gfxClaimFail", "1");
         skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
       } catch (_) { /* no sessionStorage: re-arm the canary below */ }
-      if (skipped) { try { location.reload(); } catch (_) { /* harness */ } }
+      if (skipped) { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage */ } try { location.reload(); } catch (_) { /* harness */ } }
       else {
         try { localStorage.setItem("apex26.gfxBackendProbe", "webgpu"); } catch (_) { /* next boot has no canary; RESET is the way back */ }
       }
@@ -2350,6 +2352,30 @@ const WGX = (function () {
       // A new size retries immediately; the same size retries after a short
       // cooldown so a transient memory-pressure failure can still recover.
       if (_targetRetryW === width && _targetRetryH === height && Date.now() < _targetRetryAt) return;
+      // SHRINK FREES FIRST. Allocating the smaller set while the larger one is
+      // still alive peaks at old+new; on a phone that OOM'd the shrink,
+      // TARGET_RETRY_MAX then pinned the large set while renderScale read 0.5
+      // (BrowserStack iPhone 2026-10-21: 0.75 slower than 1.0, return to 0.5
+      // never recovered to the pre-switch fps). Growing still keeps the old
+      // set until the new one pops clean (scoped path below).
+      if (sceneTex && _texW > 0 && _texH > 0 && (_texW * _texH > width * height)) {
+        const old = { sceneTex, depthTex, ssaoTex, godrayTex, ldrTex, ssrTex,
+          ssaoBlurTex, godrayBlurTex, bloomLv, bloomDownUBO, bloomUpUBO, sceneMSTex, depthMSTex };
+        sceneTex = null; depthTex = null; sceneMSTex = null; depthMSTex = null;
+        sceneMSView = null; depthMSView = null; depthResolveBG = null;
+        sceneView = null; depthView = null; depthSampleView = null; blitBindGroup = null;
+        ssaoTex = null; godrayTex = null; ssaoBlurTex = null; godrayBlurTex = null;
+        ldrTex = null; ssrTex = null;
+        ssaoView = null; godrayView = null; ssaoBlurView = null; godrayBlurView = null;
+        ldrView = null;
+        bloomLv = []; bloomDownUBO = []; bloomUpUBO = [];
+        bloomDownBG = []; bloomUpBG = [];
+        ssaoBG = null; ssaoBlurSrcBG = null; ssaoBlurDstBG = null;
+        godrayBlurSrcBG = null; godrayBlurDstBG = null;
+        godrayBG = null; compositeBG = null; fxaaBG = null; ssrBG = null;
+        _postReady = false; _ssrReady = false; _texW = 0; _texH = 0;
+        _destroyTargetSet(old);
+      }
       const halfW = Math.max(1, width >> 1), halfH = Math.max(1, height >> 1);
       const next = { bloomLv: [], bloomDownUBO: [], bloomUpUBO: [],
         bloomDownBG: [], bloomUpBG: [], postReady: false, ssrReady: false };

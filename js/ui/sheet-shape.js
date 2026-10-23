@@ -256,6 +256,26 @@ window.SheetShape = (function () {
     }
   }
 
+  /* READ ALL, THEN WRITE ALL. Interleaving getBoundingClientRect with classify()
+     (dataset / CSS vars / zoom) forces a style+layout flush per sheet — on the
+     iPhone race-select open that was a measurable hitch beside the track
+     preview. Measure the batch first; classify second. */
+  function measureAll(els) {
+    const out = [];
+    for (let i = 0; i < els.length; i++) {
+      const el = els[i];
+      const r = el.getBoundingClientRect();
+      out.push({ el: el, w: r.width, h: r.height });
+    }
+    return out;
+  }
+  function classifyAll(measured) {
+    for (let i = 0; i < measured.length; i++) {
+      const m = measured[i];
+      classify(m.el, m.w, m.h);
+    }
+  }
+
   function classify(el, w, h) {
     if (!w || !h) return; // display:none — keep the last answer rather than guess
     classifyFit(el);
@@ -336,10 +356,10 @@ window.SheetShape = (function () {
     new MutationObserver((muts) => {
       for (const m of muts) {
         if (m.attributeName !== "hidden" || m.target.hidden) continue;
-        m.target.querySelectorAll(MANAGED).forEach((el) => {
-          const r = el.getBoundingClientRect();
-          classify(el, r.width, r.height);
-        });
+        const nodes = m.target.querySelectorAll(MANAGED);
+        const els = [];
+        for (let i = 0; i < nodes.length; i++) els.push(nodes[i]);
+        classifyAll(measureAll(els));
       }
     }).observe(document.documentElement,
       { attributes: true, attributeFilter: ["hidden"], subtree: true });
@@ -448,13 +468,14 @@ window.SheetShape = (function () {
   function reclassify() {
     /* Free: this walk is already happening, so the prune costs one isConnected
        read per entry and keeps the set to what is actually on screen. */
+    const els = [];
     seen.forEach((el) => {
       if (!el.isConnected) {
         if (wasLive.has(el)) { drop(el); return; }
       } else wasLive.add(el);
-      const r = el.getBoundingClientRect();
-      classify(el, r.width, r.height);
+      els.push(el);
     });
+    classifyAll(measureAll(els));
     classifyBody();
   }
 
@@ -666,13 +687,16 @@ window.SheetShape = (function () {
       // Rounded to whole px: sub-pixel jitter from a zoom step is exactly the
       // noise this must not chase.
       ro = new ResizeObserver((entries) => {
-        for (const e of entries) {
+        const measured = [];
+        for (let i = 0; i < entries.length; i++) {
+          const e = entries[i];
           const r = e.target.getBoundingClientRect();
           const key = `${Math.round(r.width)}x${Math.round(r.height)}`;
           if (e.target._apexBox === key) continue;
           e.target._apexBox = key;
-          classify(e.target, r.width, r.height);
+          measured.push({ el: e.target, w: r.width, h: r.height });
         }
+        if (measured.length) classifyAll(measured);
       });
     }
     scan();

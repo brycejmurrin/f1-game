@@ -566,6 +566,11 @@
       "presentation": "shared-levels",
       "preserve": "Dry-run versus posted; each posted, skipped (with reason) and FAILED PR comment by bus sha; exit 1 on any failed post"
     },
+    "tools/ci/agent-msg.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "Dry-run JSON payload (no auth); webhook ok/FAILED (auth redacted); missing APEX_AGENT_WEBHOOK_* warn + bus still posted exit 0; bus mirror sha/line; never print APEX_AGENT_WEBHOOK_AUTH"
+    },
     "tools/ci/fleet-bus.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
@@ -640,6 +645,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Observation window/max-runs and API errors; no cancellation mutation"
+    },
+    "tools/ci/merge-attribution.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Each merge's ATTRIBUTED/UNATTRIBUTED verdict, sha and PR; the posted/exists/dry-run outcome per channel; the final = merge-attribution count line"
     },
     "tools/ci/merge-gate.mjs": {
       "action": "keep-native",
@@ -1191,6 +1201,11 @@
       "presentation": "native",
       "preserve": "Real/stubbed link qualification, frame denominator and native JSON mode."
     },
+    "tools/gfx/readback-garage-oracle.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "readPixels hook phases, stall watchdog state and before/after JSON report paths."
+    },
     "tools/gfx/res-scale-ab.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1352,6 +1367,11 @@
       "preserve": "@c3"
     },
     "tools/lib/hud-survey-matrix.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/impact-map.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
@@ -1575,6 +1595,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "JSON-RPC ids/errors, image MIME/data, token auth"
+    },
+    "tools/mcp/browserstack-mcp.sh": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Pinned native launch and JSON-RPC stdout; configured gateway controls tool-result presentation. Credentials come from the environment only and are never echoed; `status` prints set/NOT set, never values."
     },
     "tools/mcp/catalog-discovery.mjs": {
       "action": "page-results",
@@ -1821,6 +1846,21 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/perf/devicefarm-host.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Runs on the Device Farm test host, not locally: its stdout is the run's test spec output and its files land in $DEVICEFARM_LOG_DIR."
+    },
+    "tools/perf/devicefarm-boot.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Timestamped progress lines (device, session state, one line per timed boot with menu time, first contentful paint, load end, resource and cached counts, thermal state, session minutes) and the boot.json path; the endpoint URL is never printed."
+    },
+    "tools/perf/devicefarm-iphone.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Timestamped progress lines (device, session state, boot probe, bench leg states, session minutes) and the report.json path; the endpoint URL is never printed."
+    },
     "tools/perf/live-render-matrix.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1846,6 +1886,11 @@
       "presentation": "native",
       "preserve": "Stubbed/real link qualification, measured-frame denominator, distance band, the `= mesh-census` summary JSON line and the --json / --md artifacts."
     },
+    "tools/perf/ers-deploy-census.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c1"
+    },
     "tools/perf/garage-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1870,6 +1915,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"
+    },
+    "tools/perf/touch-boost-probe.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c1"
     },
     "tools/shot/ab-gallery.mjs": {
       "action": "artifact-first",

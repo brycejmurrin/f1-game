@@ -8,8 +8,9 @@
  * in js/agent/agentview.js (string literals evaluated in place). Groups come
  * from tests/groups.json, circuits and modules from tools/manifest.cjs. The
  * impact map is the narrow static slice: a test that names a `js/…` path and
- * calls a function that file declares. Nightly V8 coverage and select-specs
- * consumption stay follow-ups (those files are outside this change).
+ * calls a function that file declares. Manual `narrow` pins live in
+ * `tests/data/impact-map.d/*.json` (select-specs reads them via tools/lib/impact-map.mjs).
+ * Nightly V8 coverage is still a follow-up.
  * No per-group test counts: any PR that adds a test would stale every other
  * one on merge (#2808); readers count with declaredTests() in select-budget.
  *
@@ -35,6 +36,23 @@ export const TARGETS = [INDEX_TARGET, HOOKS_TARGET, IMPACT_TARGET];
 
 const HOOK_GROUPS = ["perceive", "detail", "know", "act", "fields", "read", "control", "model"];
 const CALL_GROUPS = new Set(["read", "control"]);
+
+/** Plain string compare — locale-free so gen output matches across hosts (no localeCompare). */
+export function cmpStr(a, b) {
+  a = String(a ?? "");
+  b = String(b ?? "");
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** Stable id order; ties break on source path. */
+export function cmpIdThenPath(aId, bId, aPath = "", bPath = "") {
+  return cmpStr(aId, bId) || cmpStr(aPath, bPath);
+}
+
+/** Sort a copy by id ascending, ties by source path. */
+export function sortById(items, idOf, pathOf = () => "") {
+  return items.slice().sort((a, b) => cmpIdThenPath(idOf(a), idOf(b), pathOf(a), pathOf(b)));
+}
 
 function walk(node, fn) {
   if (!node || typeof node !== "object") return;
@@ -157,16 +175,22 @@ export function flattenHooks(manifest) {
       push(name, group, key, text);
     }
   }
-  hooks.sort((a, b) => HOOK_GROUPS.indexOf(a.group) - HOOK_GROUPS.indexOf(b.group)
-    || a.name.localeCompare(b.name) || a.signature.localeCompare(b.signature));
-  return hooks;
+  // Group order fixed; within a group sort by name id, ties by signature (source key).
+  return sortById(
+    hooks,
+    (h) => `${String(HOOK_GROUPS.indexOf(h.group)).padStart(2, "0")}\0${h.name}`,
+    (h) => h.signature,
+  );
 }
 
 function groupsTable() {
   const groups = JSON.parse(readRepo("tests/groups.json")).groups || {};
-  return Object.keys(groups).sort().map((script) => {
+  const rows = Object.keys(groups).map((script) => {
     const def = groups[script] || {};
-    const files = (def.files || []).filter((f) => typeof f === "string" && !f.startsWith("//")).sort();
+    const files = (def.files || [])
+      .filter((f) => typeof f === "string" && !f.startsWith("//"))
+      .slice()
+      .sort(cmpStr);
     return {
       id: script.replace(/^test:/, ""),
       script,
@@ -175,14 +199,16 @@ function groupsTable() {
       twinned: files.some((f) => isTwinned(f)),
     };
   });
+  return sortById(rows, (r) => r.id, (r) => r.script);
 }
 
 function circuitsTable() {
-  return MANIFEST.CIRCUITS.map((id, order) => {
+  const rows = MANIFEST.CIRCUITS.map((id, order) => {
     const file = MANIFEST.circuitPath(id);
     const head = readRepo(file).slice(0, 5000);
     return { id, file, order, classic: /classic:\s*true/.test(head) };
   });
+  return sortById(rows, (r) => r.id, (r) => r.file);
 }
 
 function modulesTable() {
@@ -196,7 +222,7 @@ function modulesTable() {
     out.push(row);
     order += 1;
   }
-  return out;
+  return sortById(out, (r) => r.path, (r) => r.roster || "");
 }
 
 export function buildIndex(manifest = agentHelpFromSource()) {
@@ -255,14 +281,27 @@ function functionsIn(src) {
 function testFiles() {
   const out = [];
   for (const [dir, re] of [["tests/specs", /\.spec\.js$/], ["tests/unit", /\.test\.(mjs|cjs)$/]]) {
-    for (const name of fs.readdirSync(path.join(ROOT, dir)).filter((n) => re.test(n)).sort())
+    for (const name of fs.readdirSync(path.join(ROOT, dir)).filter((n) => re.test(n)).sort(cmpStr))
       out.push(`${dir}/${name}`);
   }
   return out;
 }
 
+/** Re-key a `{ file: { fn: [specs] } }` map in deterministic id order. */
+export function sortImpactMap(map) {
+  const sorted = {};
+  for (const file of Object.keys(map).sort(cmpStr)) {
+    const row = map[file] || {};
+    const sortedRow = {};
+    const fns = Object.keys(row).sort((a, b) => (a === "*") - (b === "*") || cmpStr(a, b));
+    for (const fn of fns) sortedRow[fn] = [...new Set(row[fn] || [])].sort(cmpStr);
+    sorted[file] = sortedRow;
+  }
+  return sorted;
+}
+
 /** `{ file: { fn: [specs] } }` from tests that both name the path and call the function. */
-export function buildImpactMap() {
+export function buildImpactMap(specList = testFiles()) {
   const fnCache = new Map();
   const map = new Map();
   const funcs = (rel) => {
@@ -278,36 +317,56 @@ export function buildImpactMap() {
     if (!row.has(fn)) row.set(fn, []);
     row.get(fn).push(spec);
   };
-  for (const spec of testFiles()) {
+  for (const spec of specList) {
     const text = readRepo(spec);
     const paths = new Set();
     for (const m of text.matchAll(/\b(js\/[A-Za-z0-9_./-]+\.js)\b/g)) {
       if (fs.existsSync(path.join(ROOT, m[1]))) paths.add(m[1]);
     }
-    for (const file of [...paths].sort()) {
+    for (const file of [...paths].sort(cmpStr)) {
       const hits = [];
       for (const name of funcs(file)) {
         if (text.includes(name + "(")) hits.push(name);
       }
-      hits.sort();
+      hits.sort(cmpStr);
       if (!hits.length) add(file, "*", spec);
       else for (const name of hits) add(file, name, spec);
     }
   }
   const out = {};
-  for (const file of [...map.keys()].sort()) {
+  for (const file of [...map.keys()].sort(cmpStr)) {
     const row = {};
-    const fns = [...map.get(file).keys()].sort((a, b) => (a === "*") - (b === "*") || a.localeCompare(b));
-    for (const fn of fns) row[fn] = [...new Set(map.get(file).get(fn))].sort();
+    const fns = [...map.get(file).keys()].sort((a, b) => (a === "*") - (b === "*") || cmpStr(a, b));
+    for (const fn of fns) row[fn] = [...new Set(map.get(file).get(fn))].sort(cmpStr);
     out[file] = row;
   }
   return {
     generatedBy: "tools/docs/gen-agent-index.mjs",
     kind: "static-reference",
     narrowOnly: true,
-    note: "A test is listed under a function when it names that js path and spells name(. Nightly V8 ranges and select-specs narrowing are follow-ups.",
-    map: out,
+    note: "A test is listed under a function when it names that js path and spells name(. The `narrow` key is hand-pinned in tests/data/impact-map.d/ for select-specs.",
+    map: mergeImpactPinFiles(out),
   };
+}
+
+/** Merge hand-pinned `narrow` rows from tests/data/impact-map.d/*.json into the generated map. */
+export function mergeImpactPinFiles(map) {
+  const dir = path.join(ROOT, "tests/data/impact-map.d");
+  if (!fs.existsSync(dir)) return sortImpactMap(map);
+  for (const name of fs.readdirSync(dir).filter((n) => n.endsWith(".json")).sort(cmpStr)) {
+    let frag;
+    try { frag = JSON.parse(fs.readFileSync(path.join(dir, name), "utf8")); }
+    catch { continue; }
+    const pins = frag.pins || frag;
+    for (const [file, fnMap] of Object.entries(pins)) {
+      if (!map[file]) map[file] = {};
+      for (const [fn, specs] of Object.entries(fnMap)) {
+        map[file][fn] = [...new Set([...(map[file][fn] || []), ...specs])].sort(cmpStr);
+      }
+    }
+  }
+  // Pin files can insert new keys after the sorted pass — re-sort by id.
+  return sortImpactMap(map);
 }
 
 export function renderImpact(map = buildImpactMap()) {

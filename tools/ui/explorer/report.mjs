@@ -1,5 +1,6 @@
 // @doc Offline UI explorer evidence report with native navigation, linked state graph and safe local artifacts.
 import { styles as galleryStyles } from '../../lib/screenshot-gallery.cjs';
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
 
@@ -116,6 +117,25 @@ ${history.length ? `<nav class="quick" aria-label="Run history"><strong>Run hist
 <section class="overview" id="graph"><h2>Reachable states</h2><p class="muted">Observed navigation paths; this graph does not prove every screen is reachable.</p><div class="graph">${graphHTML || '<p class="empty">No navigation states recorded.</p>'}</div></section>
 <footer>Portable report · opens directly from disk · screenshots, traces and replay files remain separate local artifacts.</footer>
 </main></body></html>`;
+}
+
+/** Evidence files the report links to that are not under `outDir`. A report.json
+ *  copied alone into a new directory still rebuilds, but every screenshot/DOM/
+ *  ARIA/repro link is dead; this names them so the caller can say so (#2906).
+ *  Returns [{ record, kind, path }] — paths as recorded, in record order. */
+export function missingEvidence(bundle, outDir) {
+  const missing = [];
+  for (const capability of bundle.capabilities ?? []) {
+    for (const record of capability.records ?? []) {
+      const files = [['screenshot', record.screenshot], ...Object.entries(record.artifacts ?? {})];
+      for (const [kind, value] of files) {
+        const href = artifactPath(value);
+        if (!href || existsSync(join(outDir, decodeURIComponent(href)))) continue;
+        missing.push({ record: record.id ?? record.label ?? '?', kind, path: value });
+      }
+    }
+  }
+  return missing;
 }
 
 /** Write generated output only; callers choose an artifacts/ destination. */

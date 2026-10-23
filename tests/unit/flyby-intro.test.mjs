@@ -60,7 +60,7 @@ test("RACE! before the menu's build: prepare under the card, then drive out and 
   const j = game.indexOf("function introBuild(go)"), ib = game.slice(j, game.indexOf("\n}\n", j));
   const handoff = game.slice(game.indexOf("function afterGarageOut("), game.indexOf("function studioOpen("));
   const b = ib.indexOf("studioOpen(n, info0)"), l = ib.indexOf("loadTrackStepped(idx, live)"), p = ib.indexOf("introPrepare(live, key, info0, n, true)");
-  const h = ib.indexOf("afterGarageOut(n, key, go, prepared, live)");
+  const h = ib.indexOf("afterGarageOut(n, key, go, prepared, live, stage)");
   assert.ok(l > 0 && p > l && b > p && h > b, "build and plans precede the outgoing animation and afterGarageOut handoff");
   assert.match(ib, /_menuGate\.ready = key; _menuGate\.track = track;/, "the build is keyed like the menu's, so menuWorld() sees it");
   assert.match(handoff, /_introKey = key; raceIntro\(go\)/, "the hand-over marks itself, so a failed build falls back to the card instead of looping");
@@ -197,7 +197,9 @@ test("intro builds cancel at async boundaries and never fly over pending compila
     }
   }
   for (const name of ["quitToMenu", "clearMenuScreens"]) {
-    assert.match(game.slice(game.indexOf("function " + name + "()"), game.indexOf("function " + name + "()") + 100), /cancelIntro\(\)/);
+    const start = game.indexOf("function " + name + "()");
+    const span = name === "quitToMenu" ? 240 : 100;
+    assert.match(game.slice(start, start + span), /cancelIntro\(\)/);
   }
 });
 

@@ -34,6 +34,7 @@ window.UiLayers = (function () {
     { id: "loading" },
     { id: "pausemenu" },
     { id: "pmsettings" },
+    { id: "bench" },
     { id: "select" },
     { id: "season-setup" },
     { id: "career" },

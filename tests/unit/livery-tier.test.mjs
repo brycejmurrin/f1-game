@@ -6,7 +6,7 @@
  * But the TIER DECISION is arithmetic, and it is the part carrying the memory:
  * __apex.texCensus() on a full montreal grid measured 146.67 MB of livery
  * atlases against 11.33 MB of baked material arrays and 13.8 MB for the whole
- * packed world VBO of a mean circuit (notes/PERF-FINDINGS.md §2v). Ten times
+ * packed world VBO of a mean circuit (notes/PERF-FINDINGS.md §2av). Ten times
  * the geometry, in the one thing nobody had measured.
  *
  * So atlasDiv() is pure and pinned here, headlessly, and the rasterised result

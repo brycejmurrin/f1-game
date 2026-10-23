@@ -438,11 +438,17 @@ const TrackDesigner = (function () {
     const s = Number.isFinite(seed) ? (seed >>> 0) : ((Math.imul(design.seed ^ (design.seed >>> 16), 0x45d9f3b) + 0x9e3779b9) >>> 0);
     const base = cleanBase(design);
     const r = TrackRandom.generateValid(s, (pts) => TrackValidate.check(Object.assign({}, base, { pts })).ok, 12);
+    if (!r.ok) {
+      // generateValid returns the last attempt either way — do not commit a known-RED
+      // loop over a design the player already had (UNDO would be the only recovery).
+      message("No clean loop in 12 tries — RANDOMISE again or tune the points", true);
+      return false;
+    }
     sel = -1; span = -1;
     commit(freshLoop(design, r.pts, r.seed), "randomise");   // a new circuit, as DRAW
     if (cv) cv.fit();
-    message(r.ok ? "Randomised — seed " + r.seed : "No clean loop in 12 tries — RANDOMISE again or tune the points", !r.ok);
-    return !!r.ok;
+    message("Randomised — seed " + r.seed);
+    return true;
   }
   function reverse() {
     const pts = design.pts;

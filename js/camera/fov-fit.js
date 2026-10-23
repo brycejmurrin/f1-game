@@ -38,6 +38,11 @@ const CamFovFit = (function () {
     return 2 * Math.atan(Math.tan(fovY / 2) * Math.max(aspect, ASPECT_EPS));
   }
 
+  // Safe fallback when a resize/orientation frame hands us a non-finite aspect
+  // or FOV: M4.perspective with fovY 0/NaN writes Infinity/NaN into the
+  // projection and poisons the damper until the next snap.
+  const FOVY_FALLBACK = 60 * Math.PI / 180;
+
   /**
    * @param {number} fovYRad  authored / damped vertical FOV (radians)
    * @param {number} aspect   width/height (gfx.aspect)
@@ -45,19 +50,25 @@ const CamFovFit = (function () {
    * @returns {number} fitted vertical FOV (radians)
    */
   function fitFovY(fovYRad, aspect, opts) {
-    if (opts && opts.cine) return fovYRad;
-    let fovY = fovYRad;
+    const authored = (typeof fovYRad === "number" && isFinite(fovYRad) && fovYRad > 0)
+      ? fovYRad : FOVY_FALLBACK;
+    if (opts && opts.cine) return authored;
+    // Non-finite / non-positive aspect (0-height canvas mid-rotate, a soft blit
+    // before the first resize, Inf from rw/rh) must not collapse HFOV_MAX into
+    // fovYCap 0 or feed NaN through Math.min.
+    const a = (typeof aspect === "number" && isFinite(aspect) && aspect > 0) ? aspect : 1;
+    let fovY = authored;
     // Cap: landscape — same formula as the former game.js inline block.
-    const fovYCap = vfovForHfov(HFOV_MAX, aspect);
+    const fovYCap = vfovForHfov(HFOV_MAX, a);
     fovY = Math.min(fovY, fovYCap);
     // Floor and ceiling belong to portrait only; preserve authored long lenses
     // on square/landscape screens, including normal TRACKSIDE cameras.
-    if (aspect < 1) {
-      const fovYFloor = vfovForHfov(HFOV_MIN, aspect);
+    if (a < 1) {
+      const fovYFloor = vfovForHfov(HFOV_MIN, a);
       fovY = Math.max(fovY, fovYFloor);
       if (fovY > FOVY_MAX) fovY = FOVY_MAX;
     }
-    return fovY;
+    return (fovY > 0 && isFinite(fovY)) ? fovY : FOVY_FALLBACK;
   }
 
   return {

@@ -118,10 +118,13 @@ const HudInputs = (function () {
       line(c, trace.thr, n, x0, dx, h, pad, C_THR, false);
       line(c, trace.str, n, x0, dx, h, pad, C_STR, true);
     }
-    // LEGEND: T / B / S beside where each trace ends — the glyph, not the hue, names it.
-    c.fillStyle = C_THR; c.fillText("T", lx, Math.max(6, Math.min(h - 6, levelY(thrNow, h, pad))));
-    c.fillStyle = C_BRK; c.fillText("B", lx, Math.max(6, Math.min(h - 6, levelY(brkNow, h, pad) + (Math.abs(brkNow - thrNow) < 0.15 ? 8 : 0))));
-    c.fillStyle = C_STR; c.fillText("S", lx, Math.max(6, Math.min(h - 6, steerY(strNow, h, pad))));
+    // LEGEND: fixed rows at the right — endpoint-following clamped T/B/S onto
+    // the same pixel when pedals were released and steering was centred.
+    const legendY0 = Math.max(6, Math.min(h - 18, 8));
+    const legendGap = Math.min(12, Math.max(8, Math.floor((h - legendY0 - 6) / 2)));
+    c.fillStyle = C_THR; c.fillText("T", lx, legendY0);
+    c.fillStyle = C_BRK; c.fillText("B", lx, legendY0 + legendGap);
+    c.fillStyle = C_STR; c.fillText("S", lx, legendY0 + 2 * legendGap);
   }
   function line(c, arr, n, x0, dx, h, pad, col, steer) {
     c.strokeStyle = col; c.lineWidth = 1.5;

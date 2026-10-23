@@ -7,7 +7,8 @@
 // the shared page back to the title and pin the default car (McLaren, nothing
 // fitted) before racing — the ERS and exhaust contracts below are about THAT
 // car, and the shared page carries whatever the previous test fitted.
-import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { sharedTest as test, test as freshTest, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
+import { syncFactoryMcLarenSeat } from "../helpers/factory-seat.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 async function startCar(page, speed = 30) {
@@ -219,5 +220,84 @@ test.describe("Car runtime effects", () => {
     await page.evaluate(() => window.__apex.go());
     const state = await effects(page);
     expect(state).toEqual(expect.objectContaining({ gridLights: false, gridStrobe: false }));
+  });
+});
+
+// D·DP3: lazy flap / wheel-extra meshes must warm during load/countdown, not after green.
+async function bootTlxRace(page) {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  await syncFactoryMcLarenSeat(page);
+  await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
+  await awaitTrackBuild(page);
+  await page.evaluate(() => window.__apex.go());
+  await page.waitForFunction(() => {
+    const i = window.__apex.info && window.__apex.info();
+    return i && i.state === "race";
+  }, null, { polling: 100, timeout: 60_000 });
+}
+
+async function sampleGeo(page) {
+  return page.evaluate(() => {
+    const tlx = typeof GLX !== "undefined" && GLX.__tlx;
+    if (!tlx || typeof tlx.memState !== "function") return null;
+    const ms = tlx.memState();
+    const flaps = (typeof CarMesh !== "undefined" && CarMesh.flapState) ? CarMesh.flapState() : null;
+    const info = window.__apex.info ? window.__apex.info() : {};
+    const ps = window.__apex.physState && window.__apex.physState();
+    return {
+      geoLive: ms.geoLive | 0,
+      geoKinds: ms.geoKinds || {},
+      flaps,
+      state: info.state,
+      raceT: ps && ps.raceT != null ? ps.raceT : 0,
+      prog: ps && ps.prog != null ? ps.prog : 0,
+    };
+  });
+}
+
+// freshTest: bootTlxRace goto()s a TLX page. On sharedTest that would leave the
+// worker on three.js and red later GLX-only specs in the same shard (parts-physics
+// environment-surface gate → GLXShaders is not defined, selected-2 #3487).
+freshTest.describe("race geometry stable after green", () => {
+  freshTest.use({ viewport: { width: 844, height: 390 } });
+
+  freshTest.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem("apex26.gfxBackend", "three");
+        localStorage.setItem("apex26.tlxForceGL", "1");
+        localStorage.setItem("apex26.gfxPreset", JSON.stringify("medium"));
+      } catch (_) { /* */ }
+    });
+  });
+
+  freshTest("geoLive does not grow over the first stretch of a race (TLX)", async ({ page }) => {
+    freshTest.setTimeout(300_000);
+    await bootTlxRace(page);
+    await page.evaluate(() => window.__apex.headless(false));
+    // Step the sim instead of waiting on TLX presents — SwiftShader can stall
+    // rAF while the loading cover is down, so memState().presents may not move.
+    await page.evaluate(() => {
+      for (let i = 0; i < 90; i++) window.__apex.step(1 / 60, 1);
+    });
+
+    const t0 = await sampleGeo(page);
+    expect(t0, "TLX memState available").toBeTruthy();
+    expect(t0.flaps && t0.flaps.sets, `flap sets should be warm before green: ${JSON.stringify(t0)}`).toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      window.__apex.setInput({ throttle: 1, steer: 0, brake: 0 });
+      for (let i = 0; i < 900; i++) window.__apex.step(1 / 60, 1);
+      window.__apex.clearInput();
+    });
+
+    const t1 = await sampleGeo(page);
+    expect(t1.prog - t0.prog, `sim advanced: prog ${t0.prog} -> ${t1.prog}`).toBeGreaterThan(50);
+    expect(t1.geoLive, `geoLive grew after green: ${t0.geoLive} -> ${t1.geoLive} kinds0=${JSON.stringify(t0.geoKinds)} kinds1=${JSON.stringify(t1.geoKinds)} flaps0=${JSON.stringify(t0.flaps)} flaps1=${JSON.stringify(t1.flaps)}`)
+      .toBeLessThanOrEqual(t0.geoLive + 2);
+    expect(t1.flaps.sets, "flap set cache must not grow after green").toBeLessThanOrEqual(t0.flaps.sets);
+    expect(t1.flaps.elements, "flap element cache must not grow after green").toBeLessThanOrEqual(t0.flaps.elements);
+    await page.evaluate(() => window.__apex.headless(true));
   });
 });

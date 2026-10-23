@@ -37,7 +37,7 @@ const GLXBackend = (function () {
   // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
   const MOBILE_TIER = GLX.mobileTier;
-  let _ctxLost = false;   // true between webglcontextlost and the reload on restore
+  let _ctxLost = false, _lossCounted = false;   // lost→restore; counted loss arms ctxLostNotice (#3513)
   // Fallback for the two-reload budget when sessionStorage throws (Safari
   // private / quota). Without it, both the loss timer and the restore reload
   // bailed, leaving a restored context with _ctxLost still set — a silent
@@ -60,6 +60,16 @@ const GLXBackend = (function () {
   // per present. Exists because the real-GPU gate read null here and passed
   // vacuously: docs/PERF-FINDINGS.md 2e.
   let _glErrors = 0, _glFirstError = "";
+  let _softwareGl = false;
+  function detectSoftwareGl() {
+    if (!gl) return false;
+    try {
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      if (!ext) return false;
+      const ren = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "").toLowerCase();
+      return /swiftshader|llvmpipe|lavapipe|software|subzero|softpipe/.test(ren);
+    } catch (_) { return false; }
+  }
   const GL_ERR_NAMES = { 1280: "INVALID_ENUM", 1281: "INVALID_VALUE", 1282: "INVALID_OPERATION",
                          1285: "OUT_OF_MEMORY", 1286: "INVALID_FRAMEBUFFER_OPERATION", 37442: "CONTEXT_LOST" };
   // gl.getError() is a synchronous command-buffer flush + a blocking IPC to
@@ -585,6 +595,7 @@ const GLXBackend = (function () {
       ...(typeof navigator !== "undefined" && navigator.xr ? { xrCompatible: true } : {}),
     });
     if (!gl) return false; try { setTimeout(function () { if (/^apex26\.ctxLostReloads=\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
+    _softwareGl = detectSoftwareGl();
     if (Soft.isEnabled()) Soft.ensureSoftDisplay();
 
     // Parallel shader compile (Chrome 76+, Safari 14.1+; not Firefox): see link().
@@ -637,7 +648,9 @@ const GLXBackend = (function () {
     } catch (_) { /* no document events (harness) */ }
     var _bgLoss = function () { return document.hidden || _nowMs() - _shownAt < 3000; };
     canvas.addEventListener("webglcontextlost", function (e) {
-      e.preventDefault(); _ctxLost = true;
+      e.preventDefault();
+      if (_ctxLost) return;   // one incident, one budget spend (SwiftShader can fire twice)
+      _ctxLost = true;
       // Only downgrade quality on a loss that happened while VISIBLE — that's the
       // memory-pressure signal. iOS also drops the context on backgrounding
       // (document.hidden), a benign transient loss that shouldn't permanently
@@ -708,30 +721,36 @@ const GLXBackend = (function () {
         _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
         sessionStorage.setItem(_rk, String(_n));
       } catch (_) { _n = Math.max(++_sessLostN, _fallbackLossCount() + 1); try { window.name = "apex26.ctxLostReloads=" + _n; } catch (_) { /* best effort */ } }
+      _lossCounted = true;
       if (_n <= 2) setTimeout(function () {
         try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: menu still loads; the player just gets no explanation */ }
         try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ }
       }, 1200);
       else {
-        recordGfxBudgetExhausted("gfx", new Error("The graphics device keeps getting lost (" + _n + " times) — reload to try again, or pick another RENDERER in settings."));
-        // Same recovery panel boot uses when GLX.init fails — not only the
-        // JS error card — so a CPU-limited box past the reload budget gets
-        // RETRY / USE WEBGL2 instead of a silent dead canvas + stuck handoff.
         try {
-          if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
-            RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
+          if (typeof GfxEscalation !== "undefined" && GfxEscalation.onReloadBudgetExceeded) {
+            GfxEscalation.onReloadBudgetExceeded(_n, {
+              recordGfxBudgetExhausted,
+              showUnavailable: (opts) => {
+                if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) RendererPicker.showUnavailable(opts);
+              },
+              panel: document.getElementById("nogl"),
+            });
+          } else {
+            recordGfxBudgetExhausted("gfx", new Error("The graphics device keeps getting lost (" + _n + " times) — reload to try again, or pick another RENDERER in settings."));
+            if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
+              RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
+            }
           }
         } catch (_) { /* picker absent in harness */ }
       }
     }, false);
-    // The restore obeys the same two-reload budget as the loss: a device that
-    // loses the context every boot and gets it back reloaded without limit.
-    // Storage failure must NOT skip the reload — that was a dead canvas after
-    // webglcontextrestored (the loss handler also failed to arm its timer).
+    // Restore obeys the same two-reload budget; storage failure must not skip reload.
     canvas.addEventListener("webglcontextrestored", function () {
       var n = 0;
       try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
       if (n > 2) return;
+      if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage */ }
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);
 
@@ -798,8 +817,8 @@ const GLXBackend = (function () {
       // in the CURRENTLY BOUND set. A per-chunk set reorders lamps, so the
       // caller must point the slot at the mapped lamp's position in ITS set
       // (or -1) per draw, then restore the global slot. The lit program is
-      // already bound on every chunked draw path.
-      setLampShadowSlot: (i) => { gl.uniform1i(litU.uLampShadowIdx, i | 0); },
+      // already bound on every chunked draw path. Through ufI (#3291), not raw uniform1i.
+      setLampShadowSlot: (i) => { ufI(litU.uLampShadowIdx, _litUf, "lampShadowIdx", i | 0); },
       getSize: () => ({ width, height }),
       getPresentSize: () => ({ width: presentW || width, height: presentH || height }),
       outputFBO, outputViewport, setOutput, clearOutput,
@@ -2801,6 +2820,7 @@ const GLXBackend = (function () {
       gpuErrors: _glErrors, gpuFirstError: _glFirstError || null,
       ctxLost: _ctxLost, packLive: !!matAlbedoTex,
       softPresent: Soft.isEnabled(), softBlitGen: Soft.gen(),
+      softwareGL: _softwareGl, softAdapter: _softwareGl,
     }),
     envFaceBegin,
     envFaceEnd,

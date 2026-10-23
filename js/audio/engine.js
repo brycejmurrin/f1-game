@@ -513,7 +513,13 @@ var GameAudio = (function () {
       const ch = o.channels || 1;
       const len = Math.max(1, Math.floor(sr * sec));
       applySessionType();
-      ctx = new OfflineAudioContext(ch, len, sr);
+      try {
+        ctx = new OfflineAudioContext(ch, len, sr);
+      } catch (e) {
+        ctx = null;
+        Log.warn("audio", "OfflineAudioContext unavailable: " + ((e && e.message) || e));
+        return false;
+      }
       signal.resetContext();
       ctxGen++;
       ctxSampleRate = ctx.sampleRate;
@@ -527,7 +533,16 @@ var GameAudio = (function () {
 
     applySessionType();
 
-    ctx = new AC();
+    // Hardware / policy refusals (Safari private mode, exhausted contexts) throw
+    // from the constructor — an uncaught throw on the gesture that unlocks sound
+    // paints the boot overlay and leaves G.soundOn true over silence.
+    try {
+      ctx = new AC();
+    } catch (e) {
+      ctx = null;
+      Log.warn("audio", "AudioContext unavailable: " + ((e && e.message) || e));
+      return false;
+    }
     signal.resetContext();
     ctxGen++;   // buffers decoded on the old context are stale (js/audio/voice-pack.js)
     // iOS drops a VISIBLE page to "interrupted" for an alarm or Siri; a gamepad
@@ -725,13 +740,18 @@ var GameAudio = (function () {
     const t = Date.now();
     deviceRebuildStamps = deviceRebuildStamps.filter((s) => t - s < DEVICE_REBUILD_WINDOW_MS);
     if (deviceRebuildStamps.length >= DEVICE_REBUILD_MAX) {
-      Log.warn("audio", "output-device rebuild after " + why + " skipped: " + DEVICE_REBUILD_MAX + " rebuilds in " + (DEVICE_REBUILD_WINDOW_MS / 1000) + " s already");
-      return;
+      // Capped, not dropped (#3561): a context still running on a dead output
+      // never fails a resume, so nothing else would ask again. The next gesture
+      // or show past the window serves it.
+      deviceRebuildPending = why;
+      Log.warn("audio", "output-device rebuild after " + why + " deferred: " + DEVICE_REBUILD_MAX + " rebuilds in " + (DEVICE_REBUILD_WINDOW_MS / 1000) + " s already");
+      return false;
     }
     deviceRebuildStamps.push(t);
     deviceRebuildBusy = true;
     Log.info("audio", "rebuilding AudioContext after " + why);
     try { rebuildCtx(); } finally { deviceRebuildBusy = false; }
+    return true;
   }
 
   function onMediaDeviceChange() {
@@ -820,8 +840,7 @@ var GameAudio = (function () {
     if (!ctx) return;
     const isGesture = !!gestureEv;
     if (isGesture && deviceRebuildPending && !staleStateRebuild(deviceRebuildPending)) {
-      performOutputDeviceRebuild(String(deviceRebuildPending).startsWith("state-") ? deviceRebuildPending : "deferred-gesture");
-      return;
+      if (performOutputDeviceRebuild(String(deviceRebuildPending).startsWith("state-") ? deviceRebuildPending : "deferred-gesture")) return;
     }
     if (ctx.state === "running") {
       rebuildTries = 0;
@@ -2574,11 +2593,12 @@ var GameAudio = (function () {
    * Safe to call every frame, and safe to call with [] — an empty list is how
    * the field goes quiet when you drive away from it.
    */
-  // Which rival row each voice plays this call (-1 = none). A row's `slot` is
+    // Which rival row each voice plays this call (-1 = none). A row's `slot` is
   // the voice RivalAudio bound to that CAR, so a rank swap moves no voice;
   // a row without one (an older caller) falls back to its rank. A row whose
-  // slot AND rank voice are both taken gets the first free voice: on a phone's
-  // two voices a car bound to slot 3 would otherwise go mute beside an idle one.
+  // slot is out of range (RivalAudio still collects 4; mobile only builds 2
+  // engine voices) or already taken gets the first free voice — never the
+  // rank index `k`, which reintroduced the voice-swap BUGS M32 was about.
   const _rivalRow = [];
   // VS FRIEND net snapshots step speed/gear ~10 Hz; solo AI revs every physics tick.
   // Two cascaded poles (~48 ms each) on net-owned rows only — peak frame jump < 25 Hz
@@ -2633,12 +2653,19 @@ var GameAudio = (function () {
     let unvoiced = 0;
     for (let k = 0; k < n; k++) {
       const sl = list[k].slot;
-      const vi = Number.isInteger(sl) && sl >= 0 && sl < rivalVoices.length && _rivalRow[sl] < 0 ? sl : k;
-      if (_rivalRow[vi] < 0) _rivalRow[vi] = k; else unvoiced |= 1 << k;
+      if (Number.isInteger(sl) && sl >= 0 && sl < rivalVoices.length && _rivalRow[sl] < 0) {
+        _rivalRow[sl] = k;
+      } else if (!Number.isInteger(sl) || sl < 0) {
+        // Legacy caller with no slot: keep the old rank fallback.
+        if (_rivalRow[k] < 0) _rivalRow[k] = k; else unvoiced |= 1 << k;
+      } else {
+        unvoiced |= 1 << k;
+      }
     }
     for (let k = 0, free = 0; unvoiced && k < n; k++) {
       if (!(unvoiced & (1 << k))) continue;
-      while (_rivalRow[free] >= 0) free++;   // n <= voices, so one is free
+      while (free < rivalVoices.length && _rivalRow[free] >= 0) free++;
+      if (free >= rivalVoices.length) break;
       _rivalRow[free] = k;
     }
     for (let i = 0; i < rivalVoices.length; i++) {
@@ -3124,6 +3151,10 @@ var GameAudio = (function () {
     venue() { return { name: venueName, level: revReturn ? +revReturn.gain.value.toFixed(4) : 0, decay: venue.decay }; },
     // Test hooks: each rival voice's live pan/level/pitch. They sit behind their
     // own panners on sfxBus, so nothing downstream of the engine can see them.
+    /** How many rival ENGINE voices this context builds (2 on mobile, 4 else).
+     *  RivalAudio caps its car→slot binding to this so a phone never assigns
+     *  slot 2/3 that setRivals cannot honour without swapping on rank changes. */
+    rivalVoiceCount() { return RIVAL_VOICES; },
     rivalState() {
       return rivalVoices.map((v) => ({
         gain: +v.gain.gain.value.toFixed(5),

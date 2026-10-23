@@ -120,6 +120,37 @@ test("a car alongside on your LEFT reads negative lateral, and on your right pos
   for (const r of got) assert.equal(r.arc, 0, "side by side is zero arc gap");
 });
 
+test("mobile engine voice cap keeps car→slot stable across a rank swap (BUGS M32)", () => {
+  // RivalAudio collected 4 slots; the mobile engine only builds 2. Binding the
+  // nearest cars to slots 2/3 made setRivals fall back to rank and swap voices.
+  const sb = { Math, Array, Object, Number, console, GLX: { isMobile: true, mobileTier: true },
+    GameAudio: { rivalVoiceCount: () => 2 } };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: absSrc("js/physics/consts.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8"), ctx, { filename: absSrc("js/audio/rivals.js") });
+  const RivalAudio = vm.runInContext("RivalAudio", ctx);
+  const me = car({ s: 100, x: 0 });
+  const near = car({ s: 108, x: -2 });
+  const mid = car({ s: 116, x: 2 });
+  const far = car({ s: 130, x: 0 });
+  const farther = car({ s: 140, x: 1 });
+  const G = { track: { total: LAP }, cars: [me, near, mid, far, farther] };
+  const R = RivalAudio.create(G);
+  const first = [...R.collect(me)];
+  assert.equal(first.length, 4, "pass-by still hears four rivals");
+  assert.ok(first[0].slot <= 1 && first[1].slot <= 1, "nearest two bind into the engine voice cap");
+  assert.ok(first[2].slot >= 2 && first[3].slot >= 2, "farther cars keep high slots for whoosh only");
+  const slotNear = first.find((r) => Math.abs(r.arc - 8) < 0.5).slot;
+  const slotMid = first.find((r) => Math.abs(r.arc - 16) < 0.5).slot;
+  // Swap distances so mid becomes nearest — slots must stay with the cars.
+  near.s = 116; mid.s = 108;
+  const second = [...R.collect(me)];
+  assert.equal(second.find((r) => Math.abs(r.arc - 8) < 0.5).slot, slotMid, "ex-mid keeps its voice after becoming nearest");
+  assert.equal(second.find((r) => Math.abs(r.arc - 16) < 0.5).slot, slotNear, "ex-near keeps its voice after dropping back");
+});
+
 test("ahead is positive arc, behind is negative — across the start/finish wrap", () => {
   // The wrap is where an arc-frame bug hides: a car 10 m up the road from you
   // at s=995 is at s=5, and a naive subtraction calls that 990 m BEHIND.
