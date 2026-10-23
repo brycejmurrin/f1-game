@@ -143,7 +143,42 @@ names an open PR when one already covers the gap.
 - `__apex.diag()` with no argument starts a download on iOS Safari. The navigation aborts in-flight fetches
   (`circuit payload not resident`). Harnesses must pass `{download:false}` (Fleet D lost 3 sessions to this).
 - Fleet D's probe recorded no bound backend. Any future device harness must log `__tlx.backendState()` fields
-  `api`, `pin` and `forceWebGL` per session, or results get mislabeled the way §2 describes.
+  `api`, `pin` and `forceWebGL` per session, or results get mislabeled the way §2 describes. **No game code is
+  needed for this.** The in-game instruments already record the bound api:
+  - the GFX debug overlay prints `three api=… pin=…` (`js/perf/gfx-debug-overlay.js:74`);
+  - BENCHMARK stores `leg.api = liveApi()` per leg (`js/perf/bench-run.js:144`) and keys its per-path summary on
+    it (`:58`);
+  - PhoneRecorder's file carries `path.api` / `path.pin` (`js/perf/phone-recorder.js:166-168`).
+
+  Only external harnesses need the rule.
+
+## 5. Reading Bryce's BENCHMARK file (plan, written before it arrives)
+
+The file is `apex26-bench-paths-<time>.json`, schema `apex26.bench/1` (`js/perf/bench-run.js`), test `paths`, with
+four legs: WebGPU, WebGL2, WebGL2, WebGPU.
+
+1. **Check the file is valid first.**
+   - `schema` is `apex26.bench/1` and `state` is not `running`.
+   - Every leg has `state: "done"`. Otherwise record its `reason`: a `reloaded` leg means iOS killed the tab or the
+     WebGPU device was lost, and that is a G6 result in its own right.
+   - Each leg's `api` matches its `path`. If a `webgpu` leg has `api: "webgl2"`, the pin did not take, and G1
+     stays open.
+   - `facts` names the device and OS.
+2. **G1 (WebGPU vs WebGL2, same phone).** Per path, take the median across its two legs:
+   - `gpuTest.phases[]` p50/p95/p99 frame ms for `default`, `s50`, `s75` and `s100`;
+   - `gpuTest.fill.msPerFullFrame`, the per-pixel cost (G4);
+   - `gpuTest.mirrorMs`, the mirror cost;
+   - `gpuTest.driftMs` (`default` vs `again`), the thermal drift.
+
+   Read the two legs of each path against each other first. If they disagree by more than about 15 %, the phone
+   was heating up, and the order (WebGPU, WebGL2, WebGL2, WebGPU) cancels the trend only when you take the median.
+3. **G2 (cold race-entry warm).** Per path, compare `entry.cold.buildMs` with `entry.warm.buildMs`. The cold
+   number is the full program warm on this phone with no menu pre-warm (the SoakRun path). The gap between cold
+   and warm is what a player who taps RACE! early can wait for. If WebGPU's cold time is far below WebGL2's, the
+   5.3 s block is WebGL program linking, and the fix belongs on the WebGL2 leg.
+4. **Write-up.** Put a table in §3 G1/G2 here: path × {p50, p95, fill ms/frame, mirror ms, cold/warm entry}.
+   Then state whether the WebKit AUTO clause (`tlx.js:415-416`) should keep picking WebGL2. That is Bryce's call,
+   so it goes to him through the orchestrator.
 - Safari has no longtask or LoAF entries, so on-device attribution has to come from `RaceEntryProfile` stages, TLX
   warm stages and rAF gaps.
 
