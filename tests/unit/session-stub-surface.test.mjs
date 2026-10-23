@@ -179,14 +179,17 @@ test("the stub AudioPanel paints a saved SOUND OFF on the title button before th
   // Until the first gesture loads LAZY_AUDIO, index.html's static "SOUND ON" is all the player sees: a
   // muted player reloaded to a button that claimed the opposite, and tapping it turned the sound ON.
   const mk = (soundOn) => {
-    const btn = { textContent: "♪ SOUND ON", attrs: { "aria-pressed": "true" }, setAttribute(k, v) { this.attrs[k] = v; } };
+    // The label carries no ♪ text glyph any more: the note is a CSS mask on
+    // #soundbtn::before (U+266A is in no bundled font). This mock is the bare
+    // button contract the stub writer has always assumed.
+    const btn = { textContent: "SOUND ON", attrs: { "aria-pressed": "true" }, setAttribute(k, v) { this.attrs[k] = v; } };
     stubGlobal("AudioPanel").create({ els: { soundbtn: btn }, store: G0.store, soundOn });
     return btn;
   };
   const off = mk(false);
-  assert.equal(off.textContent, "♪ SOUND OFF");
+  assert.equal(off.textContent, "SOUND OFF");
   assert.equal(off.attrs["aria-pressed"], "false");
   const on = mk(true);
-  assert.equal(on.textContent, "♪ SOUND ON");
+  assert.equal(on.textContent, "SOUND ON");
   assert.equal(on.attrs["aria-pressed"], "true");
 });
