@@ -597,3 +597,105 @@ test.describe.parallel("Career — sponsors", () => {
     expect(out.y2Paid).toBeGreaterThan(0);         // …and actually pays
   });
 });
+
+// ── #cr-left phone overflow (DAD live review: ~370px past the sheet) ─────────
+// Portrait phones + landscape: the left column must fit its container with no
+// horizontal overflow and without clipping its content (stills scale; copy wraps).
+
+const CR_LEFT_VIEWPORTS = [
+  { name: "375x667", width: 375, height: 667 },
+  { name: "390x844", width: 390, height: 844 },
+  { name: "430x932", width: 430, height: 932 },
+  { name: "844x390", width: 844, height: 390 },
+  { name: "667x375", width: 667, height: 375 },
+];
+
+/** @param {import("@playwright/test").Page} page */
+async function measureCrLeftFit(page) {
+  return page.evaluate(() => {
+    const left = document.getElementById("cr-left");
+    const body = document.getElementById("cr-body");
+    const inner = document.getElementById("cr-inner");
+    if (!left || !body || !inner) return { ok: false, reason: "missing" };
+    const lr = left.getBoundingClientRect();
+    const br = body.getBoundingClientRect();
+    const ir = inner.getBoundingClientRect();
+    const past = [];
+    for (const el of left.querySelectorAll("*")) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) continue;
+      const rightPast = r.right - lr.right;
+      if (rightPast > 1) {
+        past.push({
+          el: (el.id || el.className || el.tagName).toString().slice(0, 48),
+          rightPast: Math.round(rightPast),
+        });
+      }
+    }
+    const img = left.querySelector("#cr-nextrace img, .cr-nextrace img");
+    const imgCs = img ? getComputedStyle(img) : null;
+    return {
+      ok: true,
+      pair: inner.dataset.pair,
+      shape: inner.dataset.shape,
+      leftOx: left.scrollWidth - left.clientWidth,
+      bodyOx: body.scrollWidth - body.clientWidth,
+      docOx: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      pastInner: Math.round(lr.right - ir.right),
+      pastBody: Math.round(lr.right - br.right),
+      pastChildren: past.slice(0, 8),
+      img: img ? {
+        w: Math.round(img.getBoundingClientRect().width),
+        cardW: Math.round((img.closest(".cr-nextrace") || left).getBoundingClientRect().width),
+        maxWidth: imgCs.maxWidth,
+        naturalWidth: img.naturalWidth,
+      } : null,
+    };
+  });
+}
+
+test.describe.parallel("Career — #cr-left fits phone viewports", () => {
+  for (const vp of CR_LEFT_VIEWPORTS) {
+    test(`modes: no horizontal overflow at ${vp.name}`, async ({ page }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await boot(page);
+      await page.locator("#mb-career").click();
+      await expect(page.locator("#career")).toBeVisible();
+      await expect(page.locator("#cr-left")).toContainText("DRIVER CAREER");
+      const m = await measureCrLeftFit(page);
+      expect(m.ok, "career DOM present").toBe(true);
+      expect(m.leftOx, `${vp.name} modes: #cr-left scrollWidth`).toBeLessThanOrEqual(1);
+      expect(m.pastInner, `${vp.name} modes: #cr-left past #cr-inner`).toBeLessThanOrEqual(1);
+      expect(m.pastBody, `${vp.name} modes: #cr-left past #cr-body`).toBeLessThanOrEqual(1);
+      expect(m.pastChildren, `${vp.name} modes: children past #cr-left`).toEqual([]);
+      expect(m.docOx, `${vp.name} modes: document`).toBeLessThanOrEqual(1);
+      // Content still on screen — not clipped away by a hard overflow:hidden carve.
+      await expect(page.locator("#cr-guide-driver")).toBeVisible();
+      await expect(page.locator("#cr-left .cr-slot").first()).toBeVisible();
+    });
+
+    test(`hub: no horizontal overflow at ${vp.name}`, async ({ page }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await boot(page);
+      await startCareer(page, { teamId: "haas", seat: 1, seed: 4242 });
+      await expect(page.locator("#career")).toBeVisible();
+      await expect(page.locator("#cr-nextrace")).toBeVisible({ timeout: BOOT_MS });
+      // Still visible = decode started; an unconstrained 800px WebP would already
+      // paint past #cr-left. Avoid waitForFunction (waitNoPolling ratchet).
+      await expect(page.locator("#cr-nextrace img")).toBeVisible({ timeout: BOOT_MS });
+      const m = await measureCrLeftFit(page);
+      expect(m.ok, "career DOM present").toBe(true);
+      expect(m.leftOx, `${vp.name} hub: #cr-left scrollWidth`).toBeLessThanOrEqual(1);
+      expect(m.pastInner, `${vp.name} hub: #cr-left past #cr-inner`).toBeLessThanOrEqual(1);
+      expect(m.pastBody, `${vp.name} hub: #cr-left past #cr-body`).toBeLessThanOrEqual(1);
+      expect(m.pastChildren, `${vp.name} hub: children past #cr-left`).toEqual([]);
+      expect(m.docOx, `${vp.name} hub: document`).toBeLessThanOrEqual(1);
+      if (m.img) {
+        expect(m.img.maxWidth, `${vp.name} hub: still max-width`).toMatch(/100%/);
+        expect(m.img.w, `${vp.name} hub: still inside card`).toBeLessThanOrEqual(m.img.cardW + 1);
+      }
+      await expect(page.locator("#cr-nextrace .cr-nr-name")).toBeVisible();
+      await expect(page.locator("#cr-left")).toContainText("NEXT RACE");
+    });
+  }
+});
