@@ -6321,6 +6321,9 @@
       ]
     },
     "js/fx/visor-optics.js": {
+      "blendMode": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
       "lightMap": [
         "tests/unit/visor-optics.test.mjs"
       ],
