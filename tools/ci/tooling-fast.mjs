@@ -1436,6 +1436,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ui-journey-career.test.mjs",
   "tests/unit/ui-journey-race.test.mjs",
   "tests/unit/ui-journey-session.test.mjs",
+  // UiLayers.shownLayer must not force layout after a style write (survey #3248 / ForcedReflow).
+  "tests/unit/ui-layers-reflow.test.mjs",
   "tests/unit/ui-sheets-audit.test.mjs",
   "tests/unit/uilayers-modal-order.test.mjs",
   "tests/unit/validation-cli.test.mjs",
