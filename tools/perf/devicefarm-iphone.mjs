@@ -5,6 +5,17 @@
 //
 //   node tools/perf/devicefarm-iphone.mjs devices
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" [--legs 2|4|0] [--url URL] [--out DIR]
+//   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --touch 5 [--from btn-throttle] [--to btn-boost]
+//     [--variants none,dom,state,none]   one fresh page load per entry, warm-up before the first tap (see WARM)
+//     [--variants none@live,dom@live,none@fix --fix-url URL --cold]   a fresh Safari PROCESS per entry
+//   node tools/perf/devicefarm-iphone.mjs run --scenario cache|races [--pins webgpu,webgl2]   (adds ?apex=1)
+//     cache: cold race entry per path — first, after two reloads, after force-quitting Safari (shader-cache lifetime)
+//     races: BENCHMARK "WEATHER & TRACKS" pinned per path
+//     tracks: --tracks monza:night,singapore:night,vegas:night — entry + 20 s steady frames per circuit
+//     warmplus: WebGPU entry + first-race frames, default vs apex26.tlxWarmPlus=1, each after a Safari data clear
+//     visor,soak,photo (chainable in one session): HELMET-cam visor arms --arms off,on,refr,off at --track bahrain:night
+//       (--visor-pins); GRAPHICS --presets medium,low,medium at renderScale 0.5, a 1/0.75/0.5 ladder and a --soak-s
+//       governor soak (--soak-pins); Photo Studio by native taps with the 44 px floor read
 //   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
 // `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
@@ -50,6 +61,87 @@ function iosPhones() {
     "attribute=PLATFORM,operator=EQUALS,values=IOS", "attribute=FORM_FACTOR,operator=EQUALS,values=PHONE");
   return r.devices.map((d) => ({ name: d.name, os: d.os, availability: d.availability, remoteAccess: d.remoteAccessEnabled, arn: d.arn }));
 }
+
+// --touch N: BUTTONS-mode "lift GAS, tap BOOST" hitch (A·W15). The page starts a race, then records every rAF interval,
+// every longtask and the touch/pointer stream (capture listeners, so it timestamps what WebKit delivered); the taps
+// themselves are NATIVE W3C touch actions (NATIVE_APP context) mapped through the Safari webview's rect, so the
+// device sees real fingers. Windows: "tap" = 0..WIN ms after the page saw BOOST's pointerdown, "ctrl" = the same span
+// 600 ms into the GAS hold.
+const TOUCH_RACE = `
+  if (!window.__apex || !__apex.race) return { ok: false, why: "no __apex" };
+  window.__tbpRace = "pending";
+  // Whole-load recorder: every rAF gap over 80 ms from race() on, with the game state, so a warm-up's one-time
+  // cost shows where it landed (loading, lights, race) and a BEFORE run shows the load is otherwise the same.
+  const E = window.__tbp0 = { big: [], t0: performance.now() };
+  let l0 = E.t0;
+  (function tick(t) { const d = t - l0; l0 = t; if (d > 80) { let st = null; try { st = __apex.info().state; } catch (_) {} E.big.push([Math.round(t - E.t0), Math.round(d), st]); } requestAnimationFrame(tick); })(l0);
+  Promise.resolve(__apex.race("monza", "day", "dry")).then(() => { window.__tbpRace = "ok"; }, (e) => { window.__tbpRace = "err:" + e; });
+  return { ok: true };`;
+const TOUCH_GO = `
+  if (!window.__apex) return { ready: false, why: "no __apex (Pages needs ?apex)" };
+  const i = __apex.info();
+  if (window.__tbpRace !== "ok" || i.track == null) return { ready: false, race: window.__tbpRace, state: i.state };
+  const went = __apex.go();
+  return { ready: true, went, state: __apex.info().state };`;
+const TOUCH_ARM = `
+  const P = window.__tbp = { raf: [], long: [], ev: [], t0: performance.now() };
+  try { PerfSpans.on(true); PerfSpans.reset(); } catch (_) {}
+  // ATTRIBUTION (run 9): where does the ~0.74 s after the first BOOST pointerdown go? Event Timing gives each
+  // event's processingStart/End (a long listener) against its duration (incl. the next paint); capture/bubble
+  // stamps bracket the target-phase handlers; microtask / timeout / rAF probes after each pointerdown show which
+  // queue waited; the PerfSpans frame/render begin+end stamps show whether the game tick ran inside the gap.
+  P.et = []; P.pd = []; P.spans = [];
+  try { new PerformanceObserver((l) => { for (const e of l.getEntries()) P.et.push([e.name, Math.round(e.startTime), Math.round(e.processingStart), Math.round(e.processingEnd), Math.round(e.duration), (e.target && e.target.id) || ""]); })
+    .observe({ type: "event", durationThreshold: 16, buffered: false }); P.etOn = true; } catch (e) { P.etOn = String(e); }
+  window.addEventListener("pointerdown", (e) => {
+    const t = e.target, r = { id: (t && t.id) || "", cap: performance.now() }; P.pd.push(r);
+    queueMicrotask(() => { r.micro = performance.now(); });
+    setTimeout(() => { r.timeout = performance.now(); }, 0);
+    requestAnimationFrame((ts) => { r.raf = performance.now(); r.rafTs = ts; });
+  }, true);
+  window.addEventListener("pointerdown", () => { const r = P.pd[P.pd.length - 1]; if (r) r.bub = performance.now(); }, false);
+  try { const b0 = PerfSpans.begin, e0 = PerfSpans.end;
+    PerfSpans.begin = function (n) { if (n === "frame" || n === "render" || n === "hud" || n === "audio") P.spans.push([n, 0, performance.now()]); return b0.apply(this, arguments); };
+    PerfSpans.end = function (n) { const r = e0.apply(this, arguments); if (n === "frame" || n === "render" || n === "hud" || n === "audio") P.spans.push([n, 1, performance.now()]); return r; };
+    P.spansWrapped = true; } catch (e) { P.spansWrapped = String(e); }
+  let last = performance.now();
+  (function tick(t) { P.raf.push([t, t - last]); last = t; requestAnimationFrame(tick); })(last);
+  try { new PerformanceObserver((l) => { for (const e of l.getEntries()) P.long.push([e.startTime, e.duration]); }).observe({ type: "longtask" }); } catch (_) {}
+  for (const type of ["pointerdown", "pointerup", "touchstart", "touchend"])
+    window.addEventListener(type, (e) => { const t = e.target, p = e.changedTouches ? e.changedTouches[0] : e;
+      P.ev.push([type, (t && t.id) || (t && t.tagName) || "?", performance.now(), p ? Math.round(p.clientX) : null, p ? Math.round(p.clientY) : null]); }, { capture: true, passive: true });
+  const rect = (id) => { const el = document.getElementById(id); if (!el || el.hidden) return null; const r = el.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; };
+  return { from: rect(window.__tbpFrom || "btn-throttle"), to: String(window.__tbpTo || "btn-boost").split(",").map(rect), w: innerWidth, h: innerHeight, dpr: devicePixelRatio,
+    body: document.body.className, api: (() => { try { return RendererPicker.liveThreeApi(); } catch (_) { return null; } })() };`;
+const TOUCH_READ = (win, from, to) => `
+  const P = window.__tbp, WIN = ${win};
+  // One pointerdown per tap: WebKit has delivered two within a few ms for one native tap (run 3).
+  const downs = (ids) => { const out = []; for (const e of P.ev) if (e[0] === "pointerdown" && ids.includes(e[1]) && !(out.length && e[2] - out[out.length - 1][1] < 50)) out.push([e[1], e[2]]); return out; };
+  const tapRows = downs(${JSON.stringify(to.split(","))}), taps = tapRows.map((r) => r[1]), ctrls = downs([${JSON.stringify(from)}]).map((r) => r[1] + 600);
+  const pct = (a, q) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(q * (s.length - 1) + 0.5))]; };
+  const stat = (starts) => { const f = P.raf.filter(([t]) => starts.some((m) => t >= m && t < m + WIN)).map(([, d]) => d);
+    const lt = P.long.filter(([t]) => starts.some((m) => t >= m && t < m + WIN));
+    return { n: f.length, p50: +pct(f, 0.5).toFixed(1), p95: +pct(f, 0.95).toFixed(1), max: +(f.length ? Math.max(...f) : 0).toFixed(1),
+      over50: f.filter((d) => d > 50).length, longTasks: lt.length, longMs: Math.round(lt.reduce((a, l) => a + l[1], 0)) }; };
+  // Lift → BOOST pointerdown delivery latency as the page saw it (touchend of GAS to pointerdown of BOOST).
+  let ps = null; try { ps = __apex.physState(); } catch (_) {}
+  return { taps: taps.length, ctrls: ctrls.length, tap: stat(taps), ctrl: stat(ctrls), speed: ps && ps.speed, boostOn: ps && ps.boostOn,
+    perTap: tapRows.map(([id, m]) => { const f = P.raf.filter(([t]) => t >= m && t < m + WIN).map(([, d]) => d); return id + ":" + (f.length ? Math.max(...f) : 0).toFixed(0); }),
+    spans: (() => { try { const r = PerfSpans.stats(); const o = {}; for (const k in r) o[k] = { max: +(+r[k].max).toFixed(1), p95: r[k].p95 != null ? +(+r[k].p95).toFixed(1) : null }; return o; } catch (e) { return String(e); } })(),
+    logs: (() => { try { return (__apex.logs() || []).filter((x) => x && x.t >= P.t0).slice(0, 60).map((x) => Math.round(x.t - P.t0) + " " + x.ns + " " + String(x.msg).slice(0, 120)); } catch (_) { return null; } })(),
+    tapsAt: tapRows.map(([id, m]) => id + "@" + Math.round(m - P.t0)),
+    // Attribution around the FIRST tap of the target control: everything from 50 ms before it to 1.5 s after.
+    attr: (() => { const m = taps[0]; if (m == null) return null; const lo = m - 50, hi = m + 1500, rel = (t) => Math.round(t - m);
+      return { etOn: P.etOn, spansWrapped: P.spansWrapped,
+        et: P.et.filter((e) => e[1] >= lo && e[1] <= hi).map((e) => [e[0], rel(e[1]), rel(e[2]), rel(e[3]), e[4], e[5]]),
+        pd: P.pd.filter((r) => r.cap >= lo && r.cap <= hi).map((r) => ({ id: r.id, cap: rel(r.cap), bub: r.bub != null ? rel(r.bub) : null,
+          micro: r.micro != null ? rel(r.micro) : null, timeout: r.timeout != null ? rel(r.timeout) : null, raf: r.raf != null ? rel(r.raf) : null })),
+        spans: P.spans.filter((x) => x[2] >= lo && x[2] <= hi).map((x) => x[0] + (x[1] ? ">" : "<") + rel(x[2])).slice(0, 120),
+        raf: P.raf.filter(([t]) => t >= lo && t <= hi).map(([t, d]) => rel(t) + ":" + Math.round(d)).slice(0, 80) }; })(),
+    load: (() => { const E = window.__tbp0; if (!E) return null; const pre = E.big.filter((b) => b[0] < P.t0 - E.t0);
+      return { n: pre.length, top: [...pre].sort((a, b) => b[1] - a[1]).slice(0, 5) }; })(),
+    warmLog: (() => { try { return (__apex.logs() || []).filter((x) => x && /warmed/.test(String(x.msg))).map((x) => String(x.msg)); } catch (_) { return null; } })(),
+    ev: P.ev.length, evHead: P.ev.slice(0, 6).map((e) => [e[0], e[1], e[3], e[4]]) };`;
 
 // Page-side probes. Each is a function body for WebDriver execute/sync (returns JSON-able data).
 const PROBE = `
@@ -102,8 +194,408 @@ function shot(base, sid, file) {
   fs.writeFileSync(file, Buffer.from(b64, "base64")); log(`screenshot ${file}`);
 }
 
+// Real-finger sequence on the device: hold GAS, lift, tap BOOST (or --from/--to ids), N cycles, as native W3C touch
+// actions. CSS px → native points through the WebView element's rect (Safari draws the page 1:1 in points at zoom 1).
+// --warm: what is pre-applied after go() and before the first tap. "dom" toggles #btn-boost.on for two frames
+// (style/paint/compositing only); "state" turns the game's BOOST on and off through __apex.setBoost (HUD, audio,
+// physics); "none" nothing. Used by --variants to attribute a first-use stall on one phone in one session.
+const WARM = {
+  none: "return 'none';",
+  dom: `const b = document.getElementById("btn-boost"); if (!b) return "no button"; b.classList.add("on");
+    requestAnimationFrame(() => requestAnimationFrame(() => b.classList.remove("on"))); return "dom";`,
+  state: `if (!__apex.setBoost) return "no setBoost"; __apex.setBoost(true); setTimeout(() => __apex.setBoost(false), 1000); return "state";`,
+};
+async function touchRun(base, sid, out, n, warm) {
+  const WIN = 400, from = opt("from", "btn-throttle"), to = opt("to", "btn-boost");
+  const r = { warm: warm || "none" }; r.race = await exec(base, sid, TOUCH_RACE);
+  for (let t = 0; t < 45; t++) { await sleep(4000); r.go = await exec(base, sid, TOUCH_GO); if (r.go.ready) break; }
+  if (!r.go || !r.go.ready) throw new Error("race never reached the grid: " + JSON.stringify(r.go));
+  await sleep(6000);   // lights out, the car rolling, the first-frame spikes gone
+  if (warm && warm !== "none") { r.warmed = await exec(base, sid, WARM[warm] || WARM.none); await sleep(2500); }
+  await exec(base, sid, `window.__tbpFrom = ${JSON.stringify(from)}; window.__tbpTo = ${JSON.stringify(to)}; return true;`);
+  r.arm = await exec(base, sid, TOUCH_ARM);
+  log("touch arm " + JSON.stringify(r.arm));
+  if (!r.arm.from || !r.arm.to.length || r.arm.to.some((p) => !p)) throw new Error("touch controls not on screen: " + JSON.stringify(r.arm));
+  const web = wd(base, "GET", `/session/${sid}/context`);
+  wd(base, "POST", `/session/${sid}/context`, { name: "NATIVE_APP" });
+  try {
+    // Screen size in points (W3C window rect in NATIVE_APP); the page fills the width and sits under Safari's top
+    // bar, so the CSS viewport's origin is (0, screenH - innerHeight) in points. The WebView element's rect is
+    // recorded for the report but not trusted: run 2 (2026-10-23) landed every tap off GAS/BOOST with it.
+    const win = wd(base, "GET", `/session/${sid}/window/rect`);
+    let wr = null;
+    try {
+      const el = wd(base, "POST", `/session/${sid}/element`, { using: "class name", value: "XCUIElementTypeWebView" });
+      const id = el["element-6066-11e4-a6c6-4b7c-ad3b-6c3b7e9d1c0b"] || el.ELEMENT || Object.values(el)[0];
+      wr = wd(base, "GET", `/session/${sid}/element/${id}/rect`);
+    } catch (e) { log("webview rect: " + e.message.slice(0, 120)); }
+    const k = win.width / r.arm.w, oy = win.height - r.arm.h * k;
+    const pt = (p) => ({ x: Math.round(p.x * k), y: Math.round(oy + p.y * k) });
+    r.map = { window: win, webview: wr, k, oy };
+    log("touch map " + JSON.stringify(r.map));
+    // --to a,b,c: cycle c taps the c-th id (the last repeats), so a first tap on AERO can precede the first BOOST.
+    const a = pt(r.arm.from), bs = r.arm.to.map(pt);
+    for (let c = 0; c < n; c++) {
+      const b = bs[Math.min(c, bs.length - 1)];
+      wd(base, "POST", `/session/${sid}/actions`, { actions: [{ type: "pointer", id: "finger", parameters: { pointerType: "touch" }, actions: [
+        { type: "pointerMove", duration: 0, x: a.x, y: a.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 1500 },
+        { type: "pointerUp", button: 0 }, { type: "pause", duration: 60 },
+        { type: "pointerMove", duration: 0, x: b.x, y: b.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 70 },
+        { type: "pointerUp", button: 0 }, { type: "pause", duration: 1200 }] }] });
+    }
+    try { wd(base, "DELETE", `/session/${sid}/actions`); } catch (_) { /* nothing held */ }
+  } finally {
+    const ctxs = wd(base, "GET", `/session/${sid}/contexts`);
+    const back = (typeof web === "string" && web !== "NATIVE_APP") ? web : (ctxs || []).find((c) => (c.id || c) !== "NATIVE_APP");
+    wd(base, "POST", `/session/${sid}/context`, { name: back && back.id ? back.id : back });
+  }
+  r.read = await exec(base, sid, TOUCH_READ(WIN, from, to));
+  log("touch " + JSON.stringify(r.read));
+  try { shot(base, sid, path.join(out, "touch.png")); } catch (e) { log("shot: " + e.message.slice(0, 120)); }
+  return r;
+}
+
+// ---- scenarios (run --scenario cache|races) ---------------------------------------------------------------------
+// The page needs the `__apex` surface (`?apex=1` loads it on the live site, js/core/lazy-bundles.js bindAgent).
+const withApex = (u) => (/[?&]apex=1/.test(u) ? u : u + (u.includes("?") ? "&" : "?") + "apex=1");
+// Pin the THREE PATH the way BenchRun.pathPrefs/writePrefs do; it takes effect at the next boot.
+const PIN = (p) => `
+  const s = GameStore.store; s.rawSet("apex26.gfxBackend", "three"); s.rawSet("apex26.tlxForceGL", ${JSON.stringify(p === "webgl2" ? "1" : "0")});
+  try { for (const k of RendererPicker.RENDERER_SS_KEYS || []) sessionStorage.removeItem(k); } catch (_) {}
+  return true;`;
+const READY = `
+  let st = null, api = null; try { st = __apex.info().state; } catch (_) {}
+  try { api = RendererPicker.liveThreeApi(); } catch (_) {}
+  return { ready: st === "menu" && !!api, state: st, api };`;
+const KICK_FOR = (track = "monza", tod = "default") => `
+  window.__dfRace = undefined; window.__dfT0 = performance.now();
+  let prev = null; try { prev = RaceEntryProfile.snapshot().winT0; } catch (_) {}
+  Promise.resolve(__apex.race(${JSON.stringify(track)}, ${JSON.stringify(tod)}, "dry")).then((v) => { window.__dfRace = { ok: !!v, ms: performance.now() - window.__dfT0 }; },
+    (e) => { window.__dfRace = { err: String(e) }; });
+  return prev;`;
+const KICK = KICK_FOR();
+const ENTRY = `
+  let s = null, t = null, warm = null, st = null;
+  try { s = RaceEntryProfile.snapshot(); t = RaceEntryProfile.stageTable(s); } catch (_) {}
+  try { warm = GLX.__tlx.memState().warm; } catch (_) {}
+  try { st = __apex.info().state; } catch (_) {}
+  return { state: st, race: window.__dfRace || null, sinceKickMs: Math.round(performance.now() - (window.__dfT0 || 0)),
+    winT0: s && s.winT0, armed: s && s.armed, windowMs: t && t.windowMs, blockMs: t && t.blockMs, maxBlockMs: t && t.maxBlockMs,
+    stages: t ? t.stages.filter((r) => r.ms == null || r.ms >= 50).map((r) => [r.n, r.ms]) : null, warm,
+    // A·W14's ask for the iPhone 14 mirrorPrepare gap: the mirror pass's own state and every mark inside the stage.
+    mirror: (() => { try { return __apex.mirror ? __apex.mirror() : null; } catch (e) { return { error: String(e) }; } })(),
+    marks: s ? (s.marks || []).filter((m) => m && /mirror|warm|program|prepare/i.test(m.n)).map((m) => [m.n, Math.round(m.t)]) : null,
+    api: (() => { try { return RendererPicker.liveThreeApi(); } catch (_) { return null; } })() };`;
+
+async function waitReady(ctx, ms = 120000) {
+  const t0 = Date.now();
+  for (;;) {
+    await sleep(3000);
+    try { const r = await exec(ctx.base, ctx.sid, READY, 1); if (r.ready) return r; } catch (_) { /* page loading */ }
+    if (Date.now() - t0 > ms) throw new Error("page never reached the menu");
+  }
+}
+// One timed race entry: kick __apex.race, poll until the RaceEntryProfile window that opened after the kick closes.
+async function timedEntry(ctx, label, kick = KICK) {
+  const prev = await exec(ctx.base, ctx.sid, kick);
+  const t0 = Date.now();
+  for (;;) {
+    await sleep(2000);
+    let e; try { e = await exec(ctx.base, ctx.sid, ENTRY, 1); } catch (err) { log(`${label}: poll ${err.message.slice(0, 100)}`); continue; }
+    if (e.race && e.winT0 !== prev && e.armed === false && e.windowMs > 0) { log(`${label}: api=${e.api} window ${e.windowMs} ms`); return e; }
+    if (Date.now() - t0 > 180000) { log(`${label}: timed out`); return { ...e, timedOut: true }; }
+  }
+}
+async function reloadPage(ctx) { await exec(ctx.base, ctx.sid, "setTimeout(() => location.reload(), 50); return true;"); await sleep(8000); return waitReady(ctx); }
+// Force-quit Safari: the WebDriver session dies with it, so open a fresh one and navigate again.
+async function killSafari(ctx, url) {
+  try { wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: terminateApp", args: [{ bundleId: "com.apple.mobilesafari" }] }); } catch (e) { log("terminate: " + e.message.slice(0, 100)); }
+  try { wd(ctx.base, "DELETE", `/session/${ctx.sid}`); } catch (_) { /* gone */ }
+  ctx.sid = wd(ctx.base, "POST", "/session", { capabilities: { alwaysMatch: ctx.caps, firstMatch: [{}] } }).sessionId;
+  try { wd(ctx.base, "POST", `/session/${ctx.sid}/orientation`, { orientation: "LANDSCAPE" }); } catch (_) { /* keep portrait */ }
+  wd(ctx.base, "POST", `/session/${ctx.sid}/url`, { url });
+  await sleep(8000);
+  return waitReady(ctx);
+}
+
+// cache: how long does a path's first-race shader warm stay paid for? Cold entry first, after reloads, after a Safari kill.
+async function cacheScenario(ctx, url, pins, report, out) {
+  report.cache = {};
+  for (const p of pins) {
+    const rows = report.cache[p] = [];
+    await exec(ctx.base, ctx.sid, PIN(p));
+    let r = await reloadPage(ctx); log(`cache ${p}: booted api=${r.api}`);
+    rows.push({ step: "first", ...(await timedEntry(ctx, `${p} first`)) });
+    for (const step of ["reload", "reload2"]) { r = await reloadPage(ctx); rows.push({ step, bootApi: r.api, ...(await timedEntry(ctx, `${p} ${step}`)) }); }
+    r = await killSafari(ctx, url); rows.push({ step: "safariKill", bootApi: r.api, ...(await timedEntry(ctx, `${p} safariKill`)) });
+    try { shot(ctx.base, ctx.sid, path.join(out, `cache-${p}.png`)); } catch (_) { /* no shot */ }
+    pullLogs(ctx.base, ctx.sid, out);
+  }
+}
+// ---- warmplus: does warming the post chain / casters in the lights remove the first WebGPU race's hitch? ----------
+// tlx.js warms post and casters only when warmPlusOn() (default: three WebGL backend only) or, for post, when the
+// scene compile took < 3 s. apex26.tlxWarmPlus=1 forces both. Each arm starts from a cleared Safari (the pipeline
+// cache survives sessions on a unit, note §8), pins WebGPU, times one entry and the race's first 15 s of frames.
+const HITCH_ARM = `
+  window.__dfFrames = null;
+  const t0 = performance.now(); let last = 0, started = 0; const d = [];
+  const tick = (t) => {
+    let st = null; try { st = __apex.info().state; } catch (_) {}
+    if (st === "race") { if (!started) started = t; else d.push(t - last); last = t; }
+    if (started && t - started > 15000) { d.sort((a, b) => a - b);
+      window.__dfFrames = { n: d.length, max: Math.round(d[d.length - 1] || 0), p99: Math.round(d[Math.floor(d.length * 0.99)] || 0),
+        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length, n100: d.filter((x) => x > 100).length }; return; }
+    if (performance.now() - t0 < 240000) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick); return true;`;
+// Best effort: Settings > Apps > Safari > Clear History and Website Data. Returns the steps it managed.
+async function clearSafari(ctx) {
+  const steps = [];
+  const find = (pred) => { try { return wd(ctx.base, "POST", `/session/${ctx.sid}/element`, { using: "-ios predicate string", value: pred }); } catch (_) { return null; } };
+  const tap = async (pred, scrolls = 6) => {
+    for (let i = 0; i <= scrolls; i++) {
+      const el = find(pred);
+      if (el) { const id = el["element-6066-11e4-a52e-4f735466cecf"] || el.ELEMENT; wd(ctx.base, "POST", `/session/${ctx.sid}/element/${id}/click`, {}); await sleep(1200); return true; }
+      try { wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: swipe", args: [{ direction: "up" }] }); } catch (_) { /* no swipe */ }
+      await sleep(600);
+    }
+    return false;
+  };
+  try {
+    wd(ctx.base, "POST", `/session/${ctx.sid}/context`, { name: "NATIVE_APP" });
+    wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: terminateApp", args: [{ bundleId: "com.apple.mobilesafari" }] });
+    wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: activateApp", args: [{ bundleId: "com.apple.Preferences" }] });
+    await sleep(2000);
+    for (const [name, pred] of [["Apps", "(label == 'Apps' OR name == 'Apps') AND visible == 1"], ["Safari", "(label == 'Safari' OR name == 'Safari') AND visible == 1"],
+      ["Clear", "label BEGINSWITH 'Clear History and Website Data' AND visible == 1"], ["Confirm", "label BEGINSWITH 'Clear History' AND type == 'XCUIElementTypeButton' AND visible == 1"]]) {
+      const ok = await tap(pred, name === "Clear" ? 10 : 6); steps.push(`${name}:${ok ? "ok" : "miss"}`); if (!ok && name !== "Apps") break;
+    }
+    try { shot(ctx.base, ctx.sid, path.join(ctx.out, `clear-${Date.now()}.png`)); } catch (_) { /* no shot */ }
+    wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: terminateApp", args: [{ bundleId: "com.apple.Preferences" }] });
+  } catch (e) { steps.push("error:" + e.message.slice(0, 80)); }
+  log("safari clear: " + steps.join(" "));
+  return steps;
+}
+async function warmplusScenario(ctx, url, report, out) {
+  report.warmplus = {};
+  for (const arm of (process.env.APEX_ARMS || "default,warmplus").split(",")) {   // APEX_ARMS reverses the order to expose cache bias
+    const row = report.warmplus[arm] = {};
+    row.clear = await clearSafari(ctx);
+    try { wd(ctx.base, "DELETE", `/session/${ctx.sid}`); } catch (_) { /* gone */ }
+    ctx.sid = wd(ctx.base, "POST", "/session", { capabilities: { alwaysMatch: ctx.caps, firstMatch: [{}] } }).sessionId;
+    try { wd(ctx.base, "POST", `/session/${ctx.sid}/orientation`, { orientation: "LANDSCAPE" }); } catch (_) { /* keep portrait */ }
+    wd(ctx.base, "POST", `/session/${ctx.sid}/url`, { url });
+    await waitReady(ctx);
+    await exec(ctx.base, ctx.sid, PIN("webgpu") + "");
+    await exec(ctx.base, ctx.sid, arm === "warmplus" ? `localStorage.setItem("apex26.tlxWarmPlus", "1"); return 1;` : `localStorage.removeItem("apex26.tlxWarmPlus"); return 1;`);
+    const r = await reloadPage(ctx); row.bootApi = r.api;
+    await exec(ctx.base, ctx.sid, HITCH_ARM);
+    row.entry = await timedEntry(ctx, `warmplus ${arm}`);
+    for (let i = 0; i < 12 && !row.frames; i++) { await sleep(2000); try { row.frames = await exec(ctx.base, ctx.sid, "return window.__dfFrames;", 1); } catch (_) { /* reload */ } }
+    log(`warmplus ${arm}: programWarm post=${row.entry.warm && row.entry.warm.post} shadow=${row.entry.warm && row.entry.warm.shadow} frames=${JSON.stringify(row.frames)}`);
+    pullLogs(ctx.base, ctx.sid, out);
+  }
+}
+// tracks: steady-state race frames on chosen circuits (skyline-heavy night tracks vs Monza): per track a fresh
+// reload, one timed entry, 5 s settle, then 20 s of rAF intervals.
+const SAMPLE = `
+  window.__dfSample = null;
+  const d = []; let last = 0, t0 = 0;
+  const tick = (t) => {
+    let st = null; try { st = __apex.info().state; } catch (_) {}
+    if (st === "race") { if (!t0) t0 = t; if (t - t0 > 5000) { if (last) d.push(t - last); last = t; } }
+    if (t0 && t - t0 > 25000) { d.sort((a, b) => a - b); const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(d.length * f))] * 10) / 10;
+      window.__dfSample = { n: d.length, fps: Math.round(d.length / 20 * 10) / 10, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
+        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length }; return; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick); return true;`;
+async function tracksScenario(ctx, tracks, report, out) {
+  report.tracks = [];
+  for (const spec of tracks) {
+    const [track, tod = "default"] = spec.split(":");
+    const r = await reloadPage(ctx);
+    await exec(ctx.base, ctx.sid, SAMPLE);
+    const entry = await timedEntry(ctx, `${track} ${tod}`, KICK_FOR(track, tod));
+    let sample = null;
+    for (let i = 0; i < 20 && !sample; i++) { await sleep(2000); try { sample = await exec(ctx.base, ctx.sid, "return window.__dfSample;", 1); } catch (_) { /* busy */ } }
+    report.tracks.push({ track, tod, api: r.api, entry, sample });
+    log(`${track} ${tod}: api=${r.api} entry ${entry.windowMs} ms; ${JSON.stringify(sample)}`);
+    try { shot(ctx.base, ctx.sid, path.join(out, `track-${track}-${tod}.png`)); } catch (_) { /* no shot */ }
+  }
+  pullLogs(ctx.base, ctx.sid, out);
+}
+// races: BENCHMARK "WEATHER & TRACKS" (six races, each reloads and starts cold) on each pinned path.
+async function racesScenario(ctx, pins, report, out) {
+  report.races = {};
+  for (const p of pins) {
+    await exec(ctx.base, ctx.sid, PIN(p));
+    const r = await reloadPage(ctx); log(`races ${p}: booted api=${r.api}`);
+    await exec(ctx.base, ctx.sid, `return BenchRun.run("races");`);
+    const t0 = Date.now(); let last = "", n = 0;
+    for (;;) {
+      await sleep(POLL_MS); n++;
+      if (n % LOG_EVERY === 0) pullLogs(ctx.base, ctx.sid, out);
+      let st; try { st = await exec(ctx.base, ctx.sid, BENCH_STATE, 2); } catch (e) { log("poll: " + e.message.slice(0, 100)); continue; }
+      const line = `${p} ${st.state} i=${st.i} api=${st.api} ${JSON.stringify(st.legs)}`;
+      if (line !== last) { log(line); last = line; }
+      if (st.state !== "running" && st.state !== "none") { report.races[p] = st.result; break; }
+      if (Date.now() - t0 > 15 * 60000) { report.races[p] = { timedOut: st }; break; }
+    }
+    try { shot(ctx.base, ctx.sid, path.join(out, `races-${p}.png`)); } catch (_) { /* no shot */ }
+  }
+}
+
+// ---- follow-ups for merged PRs (OrchA 31, 2026-10-23): visor A/B (#3581), LOW/renderScale soak (#3479), Photo (#3482)
+// A window of rAF intervals that starts when called: `ms` long after `delay` ms, read back from window.__dfWin.
+const WIN_FOR = (ms, delay = 3000) => `
+  window.__dfWin = null; const d = []; let last = 0, t0 = 0;
+  const tick = (t) => { if (!t0) t0 = t; if (t - t0 > ${delay}) { if (last) d.push(t - last); last = t; }
+    if (t - t0 > ${delay + ms}) { d.sort((a, b) => a - b); const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(d.length * f))] * 10) / 10;
+      window.__dfWin = { n: d.length, fps: Math.round(d.length / ${ms / 1000} * 10) / 10, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
+        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length }; return; }
+    requestAnimationFrame(tick); };
+  requestAnimationFrame(tick); return true;`;
+async function sampleWin(ctx, ms, delay = 3000, extra = "") {
+  await exec(ctx.base, ctx.sid, WIN_FOR(ms, delay));
+  await sleep(ms + delay);
+  for (let i = 0; i < 15; i++) {
+    try { const r = await exec(ctx.base, ctx.sid, `return window.__dfWin ? { win: window.__dfWin${extra ? ", " + extra : ""} } : null;`, 1); if (r) return r; } catch (_) { /* busy */ }
+    await sleep(2000);
+  }
+  return { win: null };
+}
+async function openUrl(ctx, u) {
+  wd(ctx.base, "POST", `/session/${ctx.sid}/url`, { url: u + (u.includes("?") ? "&" : "?") + "df=" + Date.now() });
+  await sleep(8000); return waitReady(ctx);
+}
+const GO = `try { return __apex.go(); } catch (e) { return String(e); }`;
+// visor (#3581): the HELMET cam at a night circuit, one fresh page per arm (the visor settings are read from the URL
+// at boot, js/camera/cockpit-opts.js choice()), the field released, 20 s of frames. Arms repeat (off … off) so a
+// thermal drift shows as a gap between the two "off" rows instead of hiding inside a visor delta.
+const VISOR_ARMS = { off: "helmetvisor=off", on: "helmetvisor=clear&visorreflections=medium&visorrefraction=off",
+  refr: "helmetvisor=clear&visorreflections=medium&visorrefraction=medium",
+  // #3659's A/B on one build: "over" is its WebGL2 default, `visorblend=add` forces the old plus-lighter.
+  "on-over": "helmetvisor=clear&visorreflections=medium&visorrefraction=off&visorblend=over",
+  "on-add": "helmetvisor=clear&visorreflections=medium&visorrefraction=off&visorblend=add",
+  "refr-over": "helmetvisor=clear&visorreflections=medium&visorrefraction=medium&visorblend=over" };
+const VISOR_READ = `(() => { let v = null; try { v = typeof VisorOptics !== "undefined" ? VisorOptics.stats() : null; } catch (e) { v = String(e); }
+    let cam = null; try { cam = __apex.camera().mode; } catch (_) {}
+    return { cam, optics: v, blend: document.body.dataset.visorBlend || null, perf: (() => { try { const r = __apex.renderScale(); return { scale: r.scale, tier: r.tier, autoTier: r.autoTier }; } catch (_) { return null; } })() }; })()`;
+async function visorScenario(ctx, url, pins, report, out) {
+  const [track, tod = "night"] = opt("track", "bahrain:night").split(":");
+  const arms = opt("arms", "off,on,refr,off").split(",");
+  report.visor = {};
+  for (const p of pins) {
+    const rows = report.visor[p] = [];
+    await exec(ctx.base, ctx.sid, PIN(p));
+    for (const [i, arm] of arms.entries()) {
+      const r = await openUrl(ctx, withApex(url) + "&" + VISOR_ARMS[arm]);
+      const entry = await timedEntry(ctx, `visor ${p} ${arm}`, KICK_FOR(track, tod));
+      await exec(ctx.base, ctx.sid, `__apex.camera("helmet"); ${GO}`);
+      const s = await sampleWin(ctx, 20000, 4000, "read: " + VISOR_READ);
+      rows.push({ arm, params: VISOR_ARMS[arm], api: r.api, entryMs: entry.windowMs, ...s });
+      log(`visor ${p} ${arm}: api=${r.api} ${JSON.stringify(s)}`);
+      try { shot(ctx.base, ctx.sid, path.join(out, `visor-${p}-${i}-${arm}.png`)); } catch (_) { /* no shot */ }
+    }
+    pullLogs(ctx.base, ctx.sid, out);
+  }
+}
+// soak (#3479): GRAPHICS LOW vs MEDIUM at renderScale 0.5 (the iPhone 15 before-numbers: LOW 51.2 < MEDIUM 57.6),
+// then one race walked 1.0 → 0.75 → 0.5 (the "never recovered" linger), then the governor back on for a soak.
+const PRESET = (id) => `GameStore.store.set("gfxPreset", ${JSON.stringify(id)}); return GameStore.store.get("gfxPreset");`;
+const RS = `(() => { try { const r = __apex.renderScale(); return { scale: r.scale, auto: r.auto, tier: r.tier, autoTier: r.autoTier,
+    lookPostShed: r.lookPostShed, autoShed: r.autoShed, userTier: r.userTier, frameTimes: r.frameTimes }; } catch (e) { return String(e); } })()`;
+async function soakScenario(ctx, url, pins, report, out) {
+  const [track, tod = "day"] = opt("track", "monza:day").split(":");
+  const presets = opt("presets", "medium,low,medium").split(","), soakS = Number(opt("soak-s", "60"));
+  report.soak = {};
+  for (const p of pins) {
+    const R = report.soak[p] = { presets: [], ladder: null };
+    await exec(ctx.base, ctx.sid, PIN(p));
+    for (const [i, id] of presets.entries()) {
+      await exec(ctx.base, ctx.sid, PRESET(id));
+      const r = await openUrl(ctx, withApex(url));
+      const entry = await timedEntry(ctx, `soak ${p} ${id}`, KICK_FOR(track, tod));
+      await exec(ctx.base, ctx.sid, `try { __apex.go(); } catch (_) {} return __apex.renderScale(0.5);`);
+      const s = await sampleWin(ctx, 20000, 4000, "rs: " + RS + ", preset: GfxQuality.current()");
+      R.presets.push({ preset: id, api: r.api, entryMs: entry.windowMs, ...s });
+      log(`soak ${p} ${id}@0.5: ${JSON.stringify(s.win)} shed=${s.rs && s.rs.lookPostShed}`);
+      try { shot(ctx.base, ctx.sid, path.join(out, `soak-${p}-${i}-${id}.png`)); } catch (_) { /* no shot */ }
+    }
+    // The ladder runs on the last preset's race, still live.
+    const steps = R.ladder = [];
+    for (const v of [1, 0.75, 0.5]) {
+      await exec(ctx.base, ctx.sid, `return __apex.renderScale(${v});`);
+      const s = await sampleWin(ctx, 12000, 3000, "rs: " + RS); steps.push({ scale: v, ...s });
+      log(`soak ${p} scale ${v}: ${JSON.stringify(s.win)}`);
+    }
+    await exec(ctx.base, ctx.sid, `return __apex.renderScale(true);`);
+    const s = await sampleWin(ctx, soakS * 1000, 2000, "rs: " + RS); steps.push({ scale: "auto", soakS, ...s });
+    log(`soak ${p} auto ${soakS}s: ${JSON.stringify(s.win)} rs=${JSON.stringify(s.rs && { scale: s.rs.scale, tier: s.rs.tier, autoShed: s.rs.autoShed })}`);
+    pullLogs(ctx.base, ctx.sid, out);
+  }
+  await exec(ctx.base, ctx.sid, PRESET(opt("restore-preset", "medium")));
+}
+// photo (#3482): Photo Studio driven by native finger taps from the title screen, every visible control's painted
+// size against the 44 px floor, one shot preset, CAPTURE, CLOSE — and every page error on the way.
+const RECT = (sel) => `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; el.scrollIntoView({ block: "center" }); const r = el.getBoundingClientRect();
+    return r.width && r.height ? { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height } : null; })()`;
+async function nativeTap(ctx, sel) {
+  const g = await exec(ctx.base, ctx.sid, `return { p: ${RECT(sel)}, w: innerWidth, h: innerHeight };`);
+  if (!g.p) return { sel, tapped: false, why: "not on screen" };
+  const web = wd(ctx.base, "GET", `/session/${ctx.sid}/context`);
+  wd(ctx.base, "POST", `/session/${ctx.sid}/context`, { name: "NATIVE_APP" });
+  try {
+    const win = wd(ctx.base, "GET", `/session/${ctx.sid}/window/rect`);
+    const k = win.width / g.w, oy = win.height - g.h * k, x = Math.round(g.p.x * k), y = Math.round(oy + g.p.y * k);
+    wd(ctx.base, "POST", `/session/${ctx.sid}/actions`, { actions: [{ type: "pointer", id: "finger", parameters: { pointerType: "touch" }, actions: [
+      { type: "pointerMove", duration: 0, x, y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 80 }, { type: "pointerUp", button: 0 }] }] });
+    try { wd(ctx.base, "DELETE", `/session/${ctx.sid}/actions`); } catch (_) { /* nothing held */ }
+    return { sel, tapped: true, at: [x, y], css: [Math.round(g.p.x), Math.round(g.p.y)] };
+  } finally {
+    const ctxs = wd(ctx.base, "GET", `/session/${ctx.sid}/contexts`);
+    const back = (typeof web === "string" && web !== "NATIVE_APP") ? web : (ctxs || []).find((c) => (c.id || c) !== "NATIVE_APP");
+    wd(ctx.base, "POST", `/session/${ctx.sid}/context`, { name: back && back.id ? back.id : back });
+  }
+}
+const PHOTO_ERRS = `window.__dfErr = window.__dfErr || []; if (!window.__dfErrOn) { window.__dfErrOn = 1;
+  addEventListener("error", (e) => window.__dfErr.push(String(e.message).slice(0, 160)));
+  addEventListener("unhandledrejection", (e) => window.__dfErr.push("rej " + String(e.reason).slice(0, 160))); } return true;`;
+const PHOTO_READ = `const ps = document.getElementById("photo-studio"); const open = !!ps && !ps.hidden && getComputedStyle(ps).display !== "none";
+  const ctl = open ? [...ps.querySelectorAll("button, select, input, [role=slider]")].filter((el) => { const r = el.getBoundingClientRect(); return r.width && r.height && getComputedStyle(el).visibility !== "hidden"; })
+    .map((el) => { const r = el.getBoundingClientRect(); return { id: el.id || el.textContent.trim().slice(0, 16), w: Math.round(r.width), h: Math.round(r.height), off: r.bottom > innerHeight + 0.5 || r.top < -0.5 }; }) : [];
+  // The panel body scrolls by design (#ps-body); CAPTURE and CLOSE are the two that must stay on screen.
+  const msg = document.getElementById("ps-message");
+  return { open, w: innerWidth, h: innerHeight, controls: ctl.length, under44: ctl.filter((c) => Math.min(c.w, c.h) < 44), offscreen: ctl.filter((c) => c.off && (c.id === "ps-capture" || c.id === "ps-close")).map((c) => c.id),
+    message: msg ? msg.textContent.trim().slice(0, 120) : null, errors: (window.__dfErr || []).slice(0, 20) };`;
+async function photoScenario(ctx, url, report, out) {
+  const R = report.photo = { steps: [] };
+  await openUrl(ctx, withApex(url));
+  await exec(ctx.base, ctx.sid, PHOTO_ERRS);
+  await sleep(4000);   // the title scene's car settles before the first tap
+  const step = async (name, sel, wait = 3000) => {
+    const tap = sel ? await nativeTap(ctx, sel) : null; await sleep(wait);
+    const read = await exec(ctx.base, ctx.sid, PHOTO_READ); R.steps.push({ name, tap, read });
+    log(`photo ${name}: tap=${tap && tap.tapped} open=${read.open} controls=${read.controls} under44=${read.under44.length} off=${read.offscreen.length} msg=${read.message} errors=${read.errors.length}`);
+    try { shot(ctx.base, ctx.sid, path.join(out, `photo-${R.steps.length}-${name}.png`)); } catch (_) { /* no shot */ }
+    return read;
+  };
+  await step("menu", null, 0);
+  const opened = await step("open", "#mb-photo", 5000);
+  if (opened.open) {
+    await step("shot-preset", "#ps-shots button");
+    await step("capture", "#ps-capture", 6000);
+    await step("close", "#ps-close");
+  }
+  pullLogs(ctx.base, ctx.sid, out);
+}
+
 async function run() {
-  const want = opt("device", "iPhone 18 Pro Max"), legs = Number(opt("legs", "0")), url = opt("url", SITE);
+  const want = opt("device", "iPhone 18 Pro Max"), legs = Number(opt("legs", "0")), scenario = opt("scenario", "bench");
+  const pins = opt("pins", "webgpu,webgl2").split(",");
+  // --touch drives __apex too, which a Pages build loads only with ?apex (js/core/lazy-bundles.js wantAgentSurface).
+  const url = scenario === "bench" && !Number(opt("touch", "0")) ? opt("url", SITE) : withApex(opt("url", SITE));
   const out = opt("out", path.join("artifacts", "devicefarm", new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)));
   fs.mkdirSync(out, { recursive: true });
   const dev = iosPhones().find((d) => d.name === want || d.name.endsWith(" " + want) || d.arn.endsWith(want));
@@ -114,28 +606,90 @@ async function run() {
   const cfg = JSON.stringify({ parameters: { "appium:version": "3" } });
   const ses = aws("devicefarm", "create-remote-access-session", "--project-arn", proj.arn, "--device-arn", dev.arn,
     "--name", "apex-" + Date.now(), "--configuration", cfg).remoteAccessSession;
-  const report = { device: dev.name, os: dev.os, url, legs, startedAt: new Date().toISOString(), sessionArn: ses.arn };
+  const report = { device: dev.name, os: dev.os, url, legs, scenario, pins, startedAt: new Date().toISOString(), sessionArn: ses.arn };
   let sid = null, base = null;
+  // --wait-min (A·W15) overrides APEX_DF_WAIT_MIN for one run.
+  const tq = Date.now(), WAIT_MIN = Number(opt("wait-min", process.env.APEX_DF_WAIT_MIN || 30));
   try {
     for (let t = 0; ; t++) {
       const s = aws("devicefarm", "get-remote-access-session", "--arn", ses.arn).remoteAccessSession;
       if (s.status === "RUNNING" && s.endpoints && s.endpoints.remoteDriverEndpoint) { base = s.endpoints.remoteDriverEndpoint.replace(/\/$/, ""); break; }
-      if (/COMPLETED|STOPPING|ERRORED|FAILED/.test(s.status) || t > 90) throw new Error(`session ${s.status} ${s.result || ""} ${s.message || ""}`);
+      // PENDING_DEVICE / PENDING_CONCURRENCY cost nothing: wait up to APEX_DF_WAIT_MIN (sessions still STOPPING hold
+      // concurrency for minutes after they end, and public devices are shared with other AWS customers).
+      if (/COMPLETED|STOPPING|ERRORED|FAILED/.test(s.status) || Date.now() - tq > WAIT_MIN * 60000) throw new Error(`session ${s.status} ${s.result || ""} ${s.message || ""}`);
       if (t % 6 === 0) log(`session ${s.status}`);
       await sleep(5000);
     }
     log("session RUNNING; endpoint ready (not printed)");
+    // The physical phone: Safari's shader cache survives between sessions on one instance (A·D1), so a BEFORE/AFTER
+    // pair is only comparable on the same instanceArn.
+    try { const s = aws("devicefarm", "get-remote-access-session", "--arn", ses.arn).remoteAccessSession;
+      report.instanceArn = s.instanceArn || (s.device && s.device.instances && s.device.instances.map((i) => i.arn)) || null;
+      report.deviceUdid = s.deviceUdid || null;
+      log("instance " + String(report.instanceArn).split("/").pop() + (report.deviceUdid ? " udid " + report.deviceUdid : "")); } catch (e) { log("instance: " + e.message.slice(0, 120)); }
     report.status = wd(base, "GET", "/status");
     const caps = { platformName: "iOS", browserName: "Safari", "appium:automationName": "XCUITest", "appium:newCommandTimeout": 300,
       "appium:showSafariConsoleLog": true, "appium:showSafariNetworkLog": true };
     const created = wd(base, "POST", "/session", { capabilities: { alwaysMatch: caps, firstMatch: [{}] } });
     sid = created.sessionId; log("WebDriver session up");
+    // Which physical phone: Device Farm has several units per model and Safari's cache survives between sessions
+    // on one unit (note §8), so a "first entry" is only cold if this unit has not run the game before.
+    try { const d = wd(base, "POST", `/session/${sid}/execute/sync`, { script: "mobile: deviceInfo", args: [] });
+      report.deviceInfo = d; report.unit = String((d && d.uuid) || "").slice(0, 8) || null; log(`unit ${report.unit}`); } catch (_) { report.unit = null; }
     try { wd(base, "POST", `/session/${sid}/orientation`, { orientation: "LANDSCAPE" }); } catch (e) { log("orientation: " + e.message.slice(0, 120)); }
     wd(base, "POST", `/session/${sid}/url`, { url });
     await sleep(20000);
     report.boot = await exec(base, sid, PROBE);
     log(`boot: gpu=${report.boot.gpu} live=${JSON.stringify(report.boot.live)} title=${report.boot.title}`);
     shot(base, sid, path.join(out, "boot.png"));
+    if (scenario !== "bench") {
+      const ctx = { base, sid, caps, out };
+      log(`live view: AWS console > Device Farm > Mobile Device Testing > Projects > ${PROJECT} > Remote access > ${ses.name}`);
+      try { if (scenario === "cache") await cacheScenario(ctx, url, pins, report, out); else if (scenario === "races") await racesScenario(ctx, pins, report, out);
+        else if (scenario === "warmplus") await warmplusScenario(ctx, url, report, out);
+        else if (scenario === "tracks") await tracksScenario(ctx, opt("tracks", "monza:night,singapore:night,vegas:night").split(","), report, out);
+        else {
+          // --scenario visor,soak,photo chains the follow-ups in ONE session (a session bills ~13 device-minutes minimum).
+          for (const sc of scenario.split(",")) {
+            // --visor-pins / --soak-pins: the visor delta shows only where frames are not pinned at 60 Hz (iPhone 14
+            // WebGL2, ledger rows 1-4); #3479's before-numbers are WebGPU.
+            try { if (sc === "visor") await visorScenario(ctx, opt("url", SITE), opt("visor-pins", "webgl2,webgpu").split(","), report, out);
+              else if (sc === "soak") await soakScenario(ctx, opt("url", SITE), opt("soak-pins", "webgpu").split(","), report, out);
+              else if (sc === "photo") await photoScenario(ctx, opt("url", SITE), report, out);
+              else throw new Error("unknown scenario " + sc); }
+            catch (e) { (report.scenarioErrors = report.scenarioErrors || {})[sc] = e.message; log(`${sc}: ERROR ${e.message.slice(0, 160)}`); }
+          }
+        } }
+      finally { sid = ctx.sid; }
+    }
+    const touchN = Number(opt("touch", "0"));
+    // --variants none,dom,state,none: one fresh page load per entry in the SAME Safari session (same phone, same
+    // process caches), so a warm-up's effect is read against a no-warm load before AND after it.
+    const variants = opt("variants", "");
+    if (touchN && variants) {
+      report.variants = [];
+      // Entry = warm[@live|@fix]; --fix-url names the @fix page. --cold kills Safari between entries (a fresh
+      // process: run 5 showed the stall is paid once per Safari PROCESS, so a reload alone hides it).
+      const fixUrl = opt("fix-url", ""), cold = args.includes("--cold");
+      for (const [i, spec] of variants.split(",").entries()) {
+        const [v, target] = spec.split("@");
+        const base0 = target === "fix" ? fixUrl : url;
+        if (target === "fix" && !fixUrl) throw new Error("@fix needs --fix-url");
+        const u = base0 + (base0.includes("?") ? "&" : "?") + "v" + i + "=" + Date.now();
+        if (i && cold) {
+          try { wd(base, "POST", `/session/${sid}/context`, { name: "NATIVE_APP" });
+            wd(base, "POST", `/session/${sid}/execute/sync`, { script: "mobile: terminateApp", args: [{ bundleId: "com.apple.mobilesafari" }] }); }
+          catch (e) { log("terminate: " + e.message.slice(0, 120)); }
+          try { wd(base, "DELETE", `/session/${sid}`); } catch (_) { /* gone with Safari */ }
+          sid = wd(base, "POST", "/session", { capabilities: { alwaysMatch: caps, firstMatch: [{}] } }).sessionId;
+          try { wd(base, "POST", `/session/${sid}/orientation`, { orientation: "LANDSCAPE" }); } catch (_) { /* already */ }
+          log(`variant ${i}: cold Safari`);
+        }
+        if (i || target === "fix") { wd(base, "POST", `/session/${sid}/url`, { url: u }); await sleep(20000); }
+        try { const t = await touchRun(base, sid, out, touchN, v); t.target = target || "live"; t.url = u.replace(/[?&]v\d+=\d+$/, ""); report.variants.push(t); log(`variant ${i} ${spec}: first=${t.read && t.read.perTap && t.read.perTap[0]} load=${JSON.stringify(t.read && t.read.load)} warm=${JSON.stringify(t.read && t.read.warmLog)} perTap=${JSON.stringify(t.read && t.read.perTap)} spansFrameMax=${t.read && t.read.spans && t.read.spans.frame && t.read.spans.frame.max}`); }
+        catch (e) { report.variants.push({ warm: spec, error: e.message }); log(`variant ${i} ${spec}: ERROR ${e.message.slice(0, 160)}`); }
+      }
+    } else if (touchN) report.touch = await touchRun(base, sid, out, touchN);
     if (legs) {
       report.benchStart = await exec(base, sid, BENCH(legs));
       log("bench " + JSON.stringify(report.benchStart));
@@ -290,4 +844,4 @@ const cmd = args[0];
 if (cmd === "devices") { for (const d of iosPhones()) console.log(`${d.name}\tiOS ${d.os}\t${d.availability}\tremoteAccess=${d.remoteAccess}`); }
 else if (cmd === "run") run().catch((e) => { console.error(e.message); process.exit(1); });
 else if (cmd === "auto") auto().catch((e) => { console.error(e.message); process.exit(1); });
-else { console.error("usage: devicefarm-iphone.mjs devices | run --device NAME [--legs 0|2|4] | auto --device NAME [--legs N] [--perf NAME|none]"); process.exit(2); }
+else { console.error("usage: devicefarm-iphone.mjs devices | run --device NAME [--legs 0|2|4] [--touch N] | auto --device NAME [--legs N] [--perf NAME|none]"); process.exit(2); }

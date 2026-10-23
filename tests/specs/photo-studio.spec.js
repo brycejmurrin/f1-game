@@ -123,6 +123,20 @@ test("Home photo retains its shot across rotation at 200%, captures, and returns
   await page.waitForFunction(() => PhotoStudio.state().captured && !PhotoStudio.state().busy &&
     document.getElementById("ps-preview").naturalWidth > 0, null, { polling: 100, timeout: BOOT_MS });
   await evidence(page, info, "home-captured");
+  // #3656: a live view below native resolution (an iPhone's title scene) still
+  // photographs at the full backing size, and keeps its own scale afterwards.
+  const shoot = async (scale) => {
+    await page.evaluate((s) => __apex.renderScale(s), scale);
+    await present(page);
+    await nativeClick(page, "ps-capture");
+    await page.waitForFunction(() => !PhotoStudio.state().busy, null, { polling: 100, timeout: BOOT_MS });
+    return page.evaluate(() => ({ w: PhotoStudio.state().width, h: PhotoStudio.state().height, live: __apex.renderScale().scale }));
+  };
+  const full = await shoot(1), half = await shoot(0.5);
+  expect(full.w * full.h).toBeGreaterThan(0);
+  expect([half.w, half.h], "photo at renderScale 0.5 = the renderScale 1 photo").toEqual([full.w, full.h]);
+  expect(half.live).toBeCloseTo(0.5);
+  await page.evaluate(() => __apex.renderScale(true));
   await nativeClick(page, "ps-close");
   await expect(page.locator("#photo-studio")).toBeHidden();
   await page.waitForSelector('#overlay[data-home-ready="1"]', { timeout: BOOT_MS });

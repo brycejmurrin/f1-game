@@ -246,3 +246,144 @@ device syslog or the packet capture, or for unattended runs across several devic
 
 **Trial budget.** The account has a 1,000-minute free trial: 844.83 minutes were left at 03:14Z (both fleets
 combined), so nothing has been billed.
+
+## 8. Shader-cache lifetime on the post-fix build (iPhone 18 Pro Max, 07:07–07:14Z)
+
+Bryce: "go deeper do more runs and live connections". The live site at this point (`version.json` build 20919)
+carries both follow-ups: #3603 (AUTO picks three.js WebGPU on WebKit; the unpinned boot now reports `api=webgpu`)
+and #3604 (the warm-up/mirrorPrepare fix; the stage is now reported as `programWarm`). Run:
+`devicefarm-iphone.mjs run --scenario cache --pins webgpu,webgl2` (remote access, `?apex=1`). Each step is one
+`__apex.race("monza")` entry timed by `RaceEntryProfile` plus `GLX.__tlx.memState().warm`. **Caveat on "first":** a
+Device Farm session does not reliably start with an empty Safari cache. A·W14 (#3604, comment 6359610979) saw the
+first-WebGPU `scene` stage at 3.5 s in a session that began about 1 min after its previous session on the same
+phone, against 7.8 s in that previous one. Device Farm has more than one iPhone 18 Pro Max, and this unit may have
+run the game earlier tonight, so the "first" row is a first entry in this session, not a guaranteed cold device.
+A truly cold number needs either a unit known to be unused or a cache clear (Settings › Safari › Clear History and
+Website Data via XCUITest) before the first entry.
+
+| step | WEBGPU entry window | WEBGPU `programWarm` (warm.total) | WEBGL2 entry window | WEBGL2 `programWarm` (warm.total) |
+|---|---|---|---|---|
+| first entry of the session | 9.1 s | **7.3 s** (6.8) | 5.3 s | 2.3 s (2.3) |
+| after a page reload | 3.8 s | 2.3 s (2.4) | 1.9 s | 0.37 s (0.43) |
+| after a second reload | 1.7 s | 0.24 s (0.30) | 2.9 s | 0.37 s (0.42) |
+| after force-quitting Safari (`mobile: terminateApp`) | **2.8 s** | **0.24 s** (0.29) | 1.9 s | 0.24 s (0.30) |
+
+- **Safari's compiled-shader cache survives a force-quit.** After the first two loads a WebGPU race warms in
+  0.24 s, the same as WebGL2. A player pays the warm-up about once per device (per cache life), not per launch, and Device Farm's
+  own cache carry-over between sessions points the same way.
+  Still unmeasured: a reboot, low-storage eviction, and a deploy that changes shader source.
+- **WebGPU needs two loads to finish warming** (7.3 → 2.3 → 0.24 s); WebGL2 needs one (2.3 → 0.37 s). The second
+  WebGPU warm is mostly `post` (1.9 s): pipelines the first warm deferred.
+- **#3604's gain: the mirror stage is confirmed; the total cold warm is bounded, not pinned.** The cache-proof
+  evidence is A·W14's same-build A/B on #3604 (comment 6359610979, live build 6931fdf7, 18 Pro Max). With #3604 on,
+  the mirror stage is 3–25× smaller on every leg than with it off (`?tlxMirMrt=0`). The off arm ran second, with
+  Safari's cache already warm, and its mirror stage was still 2.8× the on arm's. The size of the total first-WebGPU
+  gain is less certain. A·W14's on-arm cold build was 16.1 s against 28.8 s BEFORE (old build, fresh device), but
+  the on arm's unit history is unknown. My 7.3 s `programWarm` / 6.8 s `warm.total` above (quoted as "fresh device"
+  in #3604's addendum, comment 6359620914) comes from a unit that may also have held pipelines, so it is an upper
+  bound, not a clean AFTER. OrchA 27's read (10.5 s on the branch vs 16.3 s at the merged tip, both on phones with
+  WebGPU history) fits the same picture. A clean number needs a known-cold unit or a Safari data clear before the
+  first entry. `run` now records the unit's identifier (`mobile: deviceInfo` uuid, first 8 characters) in
+  `report.unit`, so sessions on the same physical phone can be told apart.
+- **The entry floor is not the renderer.** With a warm cache, both paths enter in 1.7–2.9 s, made of `loadTrack`
+  (0.36–0.41 s), `gridCountdown` (0.73–0.86 s) and `warmCarAssets` (0.69–0.82 s), plus about 1 s of `scenery` when
+  it is not cached. Any further entry win is there, not in shaders.
+- Live view: each run logs `live view: AWS console > Device Farm > … > Remote access > <session>`; the stream and
+  the recorded video are in the console while the script drives the phone.
+
+## 9. Heavy scenes: BENCHMARK "WEATHER & TRACKS" per path (iPhone 18 Pro Max, 07:23–07:31Z)
+
+`devicefarm-iphone.mjs run --scenario races --pins webgpu,webgl2`, live build 20919. Six races per path, each
+reloaded and started cold (BenchRun), then timed for 20 s: rAF p50/p95/p99, frames over 33 ms (`n33`) and over
+50 ms (`n50`), and cold `buildMs`.
+
+| race | WEBGPU p50/p95/p99 ms (fps) | n33 / n50 | cold build | WEBGL2 p50/p95/p99 ms (fps) | n33 / n50 | cold build |
+|---|---|---|---|---|---|---|
+| Monza dry | 17/17/22 (59.8) | 4 / 1 | 10.2 s | 17/17/25 (59.7) | 6 / 1 | 5.3 s |
+| Monza rain | 17/17/21 (59.8) | 4 / 0 | 5.1 s | 17/17/22 (59.8) | 4 / 0 | 2.9 s |
+| Monza night | 17/17/20 (59.8) | 4 / 0 | **14.1 s** | 17/17/22 (59.8) | 5 / 0 | 3.6 s |
+| Singapore night | 17/17/17 (59.9) | 2 / 0 | 3.0 s | 17/17/22 (59.7) | 4 / 1 | 2.8 s |
+| Spa rain | 17/17/21 (59.8) | 7 / 0 | 2.8 s | 17/17/21 (59.8) | 5 / 0 | 3.5 s |
+| Monaco dry | 17/17/21 (59.9) | 3 / 0 | 2.5 s | 17/17/22 (59.9) | 2 / 0 | 2.8 s |
+
+- **The 18 Pro Max holds 60 fps on both paths in every scene,** rain and night included. WebGPU's tail is a
+  little tighter (p99 17–22 ms against 21–25 ms). Frame time cannot rank the paths on this phone; the iPhone 14
+  (§6, Fleet D's device now) is where they separate.
+- **A new lighting or weather variant pays the WebGPU pipeline build again.** The first night race took 14.1 s on
+  WebGPU against 3.6 s on WebGL2, and the first rain race 5.1 s against 2.9 s. Once those variants were compiled,
+  Singapore night entered in 3.0 s and Spa rain in 2.8 s. The cost is per new shader variant, once per cache life
+  (§8), and it lands on the first race a player runs in each new condition. A pre-warm of the night and rain
+  variants on the menu, or during the first race's countdown, would hide it. Bryce has assigned that to A·W14
+  (via OrchA 27).
+- Cost: the account's trial showed 779.87 of 1,000 minutes left at 07:35Z (both fleets combined).
+
+## 10. iPhone 14 on the post-fix build: the warmPlus A/B and a non-shader entry cost (08:26–08:43Z)
+
+One iPhone 14 window (Bryce's yes via DAD, relayed by OrchA 28; bus 718a173/6410282, claim c5c962e), live build
+20919, three's WebGPU pinned (the boot is already `api=webgpu` unpinned since #3603).
+`run --scenario warmplus`: each arm times one `__apex.race("monza")` entry and the race's first 15 s of rAF
+frames. Arm "warmplus" sets `apex26.tlxWarmPlus=1`, which forces the post-chain and caster warms (§9 ledger
+item 3). Session 2 cleared Safari (Settings › Apps › Safari › Clear History and Website Data) before each arm and
+ran the arms in reverse order.
+
+| session / unit | order | arm | entry window | `mirrorPrepare` | `programWarm` | warm post / shadow | worst frame | p99 | >33 / >50 / >100 ms |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 / B86EBFDD (no clear) | 1st | default | 20.2 s | 16.1 s | 2.6 s | 1.7 s / 0 | **243 ms** | 30 | 6 / 3 / **2** |
+| 1 / B86EBFDD | 2nd | warmPlus | 11.9 s | 8.1 s | 8.1 s | 3.1 s / 2 ms | 89 ms | 27 | 7 / 3 / 0 |
+| 2 / F0544D0A (cleared) | 1st | warmPlus | 24.5 s | 20.7 s | 5.8 s | 1.9 s / 1 ms | **266 ms** | 32 | 8 / 4 / **2** |
+| 2 / F0544D0A (cleared) | 2nd | default | 8.2 s | 5.2 s | 5.1 s | 0 / 0 | 86 ms | 31 | 6 / 3 / 0 |
+
+- **warmPlus does not remove the first-race hitch.** Whichever arm runs first on a unit gets two frames over
+  100 ms (243 / 266 ms); whichever runs second gets none, with or without warmPlus. The first-race long frames come
+  from work that neither the post-chain warm nor the caster warm covers, and warmPlus only adds 1.9–3.1 s of
+  post warm. A·W14 (#3618, owner of both gates) was advised to leave the post gate as is on WebGPU.
+- **"Clear History and Website Data" does not clear WebGPU's pipeline cache.** Both clears in session 2 succeeded
+  (the button greys out), yet the second arm entered in 8.2 s. A player who clears Safari data does not re-pay
+  the warm, and a test cannot get a cold cache this way: only a fresh unit (`report.unit`) is cold.
+- **New on the iPhone 14: 13–15 s of `mirrorPrepare` is not shader compile.** On the first arm of each session,
+  `mirrorPrepare` took 16.1 / 20.7 s while `programWarm` inside it took 2.6 / 5.8 s. On the 18 Pro Max the two
+  match (7.3 / 7.3 s, §8). This is the stage OrchA 27 saw hit the 30 s safety timer on the iPhone 14 before
+  #3604. Candidates inside that window: the GPU-settle waits (`_gpuSettled(5000)`), warm retries (`attempts`), or
+  memory pressure on a 6 GB phone. Next step for the warm owner: log `warm.attempts`, `failed` and each settle
+  wait on an iPhone 14 first entry. This is now the largest single piece of first-race entry on the mid-range
+  phone.
+
+### 10b. Same window: the post-fix paths A/B and the night circuits on the iPhone 14 (08:43–09:06Z)
+
+**`run --legs 4`** (BENCHMARK paths, WEBGPU-WEBGL2-WEBGL2-WEBGPU; unit B6CBB218):
+
+| | WEBGPU | WEBGL2 |
+|---|---|---|
+| fps default / 0.75 / full res | **59.5 / 59.4 / 59.5** (p95 17 ms everywhere) | 52.8 / 46.2 / **38.4** (p95 26.5 / 31 / 35 ms) |
+| fill slope | 0 | 9.87 ms per full frame |
+| cold build, leg 1 / later leg | **18.5 s** / 9.2 s | 16.5 s / 5.7 s |
+| warm build | 1.86 s / 0.45 s | 0.42 s |
+
+- WebGPU still holds 60 fps at every scale on the iPhone 14. WebGL2 is slightly worse than pre-fix (38.4 vs 41.8 fps
+  at full res), so #3603's switch to WebGPU is worth up to 21 fps on this phone.
+- The first WebGPU entry of a session is 18.5 s, against 33.9 s pre-fix (§6). Different units; both were leg 1 of
+  their session.
+
+**`run --scenario tracks`** (unit 6AC4D1A1, three's WebGPU, 20 s of steady race frames after a 5 s settle):
+
+| circuit | entry window | fps | p95 / p99 | worst | >33 / >50 ms |
+|---|---|---|---|---|---|
+| Monza night (1st entry on unit) | 23.4 s | 59.7 | 17 / 22 | 44 ms | 6 / 0 |
+| Singapore night | 7.5 s | 60.0 | 17 / 17 | 32 ms | 0 / 0 |
+| Vegas night | 5.2 s | 59.7 | 17 / 21 | 46 ms | 6 / 0 |
+
+- The skyline-heavy night circuits are not a frame-rate cost on the iPhone 14. This matches A·O5's corrected vertex
+  counts (Vegas 239k, Singapore 278k, Monza 331k): no far-skyline cull is needed on this evidence.
+
+**The `mirrorPrepare` gap, captured (A·W14's fields, the Monza night first entry):**
+- `warmCarAssets` 1.36 → 2.80 s
+- `mirrorPrepare:start` = `programWarm:start` at 3.16 s
+- `present:warming` at 5.35 s
+- `programWarm:end` at 7.75 s
+- `mirrorPrepare:end` at **23.28 s**
+
+So 15.5 s of the stage comes after the program warm ends. `memState().warm`: attempts 1, failed 0, total 11.7 s,
+post 1.84 s. `__apex.mirror()` at entry end: lite quality, 288×82 HDR target, `renders 1`, `prepared true`. It is
+neither warm retries nor a failed warm: the wait is in the mirror pass's own frame-driven prepare (A·W14: render()
+frames, the `#hud-mirror` measure, the real-size rear pass, a 30 s timer). A·W14 has a diagnostic PR proposed
+for the counters inside it.

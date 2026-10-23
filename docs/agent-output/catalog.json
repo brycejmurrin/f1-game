@@ -2744,6 +2744,15 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/perf/devicefarm-boot.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/perf/devicefarm-host.mjs",
       "classification": "ambiguous",
       "outputPolicy": "keep-native"
@@ -2767,6 +2776,15 @@
         "--json",
         "--out",
         "--quiet"
+      ]
+    },
+    {
+      "path": "tools/perf/ers-deploy-census.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
       ]
     },
     {
@@ -2834,6 +2852,12 @@
       "path": "tools/perf/runtime-memory.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/perf/touch-boost-probe.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
     },
     {
       "path": "tools/shot/ab-gallery.mjs",
@@ -3730,7 +3754,7 @@
     },
     {
       "name": "test:docs-guards",
-      "command": "node tools/ci/run-node-group.mjs test:docs-guards tests/unit/agent-config.test.mjs tests/unit/agent-surface.test.mjs tests/unit/apex-tools-mcp.test.mjs tests/unit/assets-pack.test.mjs tests/unit/bash-guard-hardening.test.mjs tests/unit/bootstrap-doctor.test.mjs tests/unit/catalog-discovery.test.mjs tests/unit/cdmcp-measure.test.mjs tests/unit/change-kind.test.mjs tests/unit/changelog-fragments.test.mjs tests/unit/ci-coverage.test.mjs tests/unit/ci-gate-selection.test.mjs tests/unit/ci-gpu-census.test.mjs tests/unit/ci-pages-train.test.mjs tests/unit/ci-ship-filter-geometry.test.mjs tests/unit/ci-ship-smoke-renderer.test.mjs tests/unit/ci-workflow-triggers.test.mjs tests/unit/component-inventory.test.mjs tests/unit/curvature-channels.test.mjs tests/unit/diagnostics-tools.test.mjs tests/unit/docs-integrity.test.mjs tests/unit/environment-json.test.mjs tests/unit/f1-dev-tools.test.mjs tests/unit/gen-arch-table.test.mjs tests/unit/generated-docs.test.mjs tests/unit/hooks-documented.test.mjs tests/unit/pre-commit-guards.test.mjs tests/unit/skill-hint-hook.test.mjs tests/unit/skill-progressive.test.mjs tests/unit/skill-routing-eval.test.mjs tests/unit/skill-smoke.test.mjs tests/unit/subagent-contract-hook.test.mjs tests/unit/test-groups.test.mjs tests/unit/ui-improve-pass.test.mjs tests/unit/vendor-licences.test.mjs --"
+      "command": "node tools/ci/run-node-group.mjs test:docs-guards tests/unit/agent-config.test.mjs tests/unit/agent-surface.test.mjs tests/unit/apex-tools-mcp.test.mjs tests/unit/assets-pack.test.mjs tests/unit/assets-verify-material-md5.test.mjs tests/unit/bash-guard-hardening.test.mjs tests/unit/bootstrap-doctor.test.mjs tests/unit/catalog-discovery.test.mjs tests/unit/cdmcp-measure.test.mjs tests/unit/change-kind.test.mjs tests/unit/changelog-fragments.test.mjs tests/unit/ci-coverage.test.mjs tests/unit/ci-gate-selection.test.mjs tests/unit/ci-gpu-census.test.mjs tests/unit/ci-pages-train.test.mjs tests/unit/ci-ship-filter-geometry.test.mjs tests/unit/ci-ship-smoke-renderer.test.mjs tests/unit/ci-workflow-triggers.test.mjs tests/unit/component-inventory.test.mjs tests/unit/curvature-channels.test.mjs tests/unit/diagnostics-tools.test.mjs tests/unit/docs-integrity.test.mjs tests/unit/environment-json.test.mjs tests/unit/f1-dev-tools.test.mjs tests/unit/gen-arch-table.test.mjs tests/unit/generated-docs.test.mjs tests/unit/hooks-documented.test.mjs tests/unit/pre-commit-guards.test.mjs tests/unit/skill-hint-hook.test.mjs tests/unit/skill-progressive.test.mjs tests/unit/skill-routing-eval.test.mjs tests/unit/skill-smoke.test.mjs tests/unit/subagent-contract-hook.test.mjs tests/unit/test-groups.test.mjs tests/unit/ui-improve-pass.test.mjs tests/unit/vendor-licences.test.mjs --"
     },
     {
       "name": "test:float",
@@ -3846,7 +3870,7 @@
     },
     {
       "name": "test:state-unit",
-      "command": "node --test --test-timeout=900000 tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/apex-diag-canvas.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-determinism.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/pause-opts.test.mjs tests/unit/post-fx-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/apex-diag-canvas.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-determinism.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-readslot-quota.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/pause-opts.test.mjs tests/unit/post-fx-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs"
     },
     {
       "name": "test:steering-unit",

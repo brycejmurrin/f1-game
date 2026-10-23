@@ -109,7 +109,7 @@ var AudioPanel = {
     function setSound(b) {
       G.soundOn = b; store.set("sound", b);
       if (els.soundbtn) {
-        els.soundbtn.textContent = b ? "♪ SOUND ON" : "♪ SOUND OFF";
+        els.soundbtn.textContent = b ? "SOUND ON" : "SOUND OFF";
         els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
       }
       if (typeof GameAudio !== "undefined" && GameAudio.setEnabled) GameAudio.setEnabled(b);
@@ -134,7 +134,7 @@ var AudioPanel = {
       // index.html's static label is SOUND ON; a saved SOUND OFF must show before the first gesture
       // loads the real panel, or the button claims the opposite and its tap turns the sound ON.
       if (G.soundOn === false) {
-        els.soundbtn.textContent = "♪ SOUND OFF";
+        els.soundbtn.textContent = "SOUND OFF";
         els.soundbtn.setAttribute("aria-pressed", "false");
       }
     }
