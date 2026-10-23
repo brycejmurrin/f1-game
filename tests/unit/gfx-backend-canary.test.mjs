@@ -4137,6 +4137,13 @@ test("GLX backendState and race entry defer pack retry on software GL (#3584)", 
   assert.ok(game.includes("requestIdleCallback(run, { timeout: 120000 })"));
 });
 
+test("TLX WebGL2 software raster uses renderer string, not adapter-only (#3601)", () => {
+  const tlx = code("js/render/three/tlx.js");
+  assert.match(tlx, /const softwareGL = !!_softAdapter/);
+  assert.match(tlx, /renderer\.backend && renderer\.backend\.isWebGLBackend[\s\S]*detectSoftwareGL\(\)/);
+  assert.doesNotMatch(tlx, /const softwareGL = forceWebGL \? detectSoftwareGL\(\) : !!_softAdapter;/);
+});
+
 test("software GL garage path gates readback and stall reload (#3589)", () => {
   const loop = readFile("js/perf/loop-health.js");
   assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"'));
