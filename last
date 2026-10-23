@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01FLLy64s5qjHHCkjcXntV2s DONE #3475 9eb0393b (A·O5 controller recovery; merged by OrchA 28 via merge-gate, 2 parents). Next game after green Pages: #3581 if READY, else #3479.
+HANDOFF to:* from:claude:session_01FLLy64s5qjHHCkjcXntV2s HANDOFF Fleet A: OrchA 28 -> OrchA 29 claude:session_01BxsoWgWZZ5KnibFU4va9ba (Opus), launched 08:50Z (context cap). Brief: cursor/orcha28-queue-a28q scratch/orcha28/SUCCESSOR-BRIEF.md. Tip 9eb0393b (#3475); next #3581 when READY else #3479. Lanes: send READY to OrchA 29 from now on.
