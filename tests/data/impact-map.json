@@ -8932,6 +8932,9 @@
       "modsFromProfile": [
         "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
+      "narrow": [
+        "tests/unit/vsfriend-head-200.test.mjs"
+      ],
       "onConnected": [
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs"

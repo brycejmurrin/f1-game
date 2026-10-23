@@ -750,8 +750,15 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
 #vsfriend-inner[data-density="compact"] { position: relative; }
 /* Absolute CLOSE is --tap-paint tall; the title band must clear it
    (ui-redesign closeInHead). Flex-centre the title so a short h2 does not
-   leave CLOSE hanging past the head bottom. */
+   leave CLOSE hanging past the head bottom.
+   Zero vertical padding (same longhand beat as the compact foot below):
+   .sheet[data-density=compact] .sheet-head still brings pad*0.28/0.2 from
+   @layer components, and with height locked to --tap-paint + border-box that
+   ate the content box — layout-audit desktop-1440x900@200 clipped
+   #dlg-vsfriend past #vs-head (top 7 / bottom 2). (#3306) */
 #vsfriend-inner[data-density="compact"] > #vs-head {
+  padding-top: 0;
+  padding-bottom: 0;
   padding-right: calc(var(--pad) + var(--tap));
   min-height: var(--tap-paint);
   height: var(--tap-paint);
@@ -760,6 +767,11 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   display: flex;
   align-items: center;
   overflow: hidden;
+}
+#vsfriend-inner[data-density="compact"] > #vs-head > #dlg-vsfriend {
+  /* Keep the title inside the --tap-paint band once padding is gone. */
+  line-height: 1;
+  margin: 0;
 }
 /* top:0 (not pad*0.18): that inset pushed a --tap-paint CLOSE past a
    title-sized head on 852×393 (Selected specs 2026-10-05).
