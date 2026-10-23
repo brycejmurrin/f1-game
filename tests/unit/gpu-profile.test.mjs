@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const src = fs.readFileSync(new URL("../../js/perf/gpu-profile.js", import.meta.url), "utf8");
 
@@ -15,7 +16,8 @@ function load(opts) {
   const logs = [];
   const Log = { warn: (...a) => logs.push(a) };
   const ctx = { performance, location, Log, window: {} };
-  vm.runInNewContext(src + ";this.GpuProfile = GpuProfile;", ctx);
+  // VF6: pass filename so vm-filename-lint does not count this as a free load.
+  vm.runInNewContext(src + ";this.GpuProfile = GpuProfile;", ctx, { filename: absSrc("js/perf/gpu-profile.js") });
   return {
     GP: ctx.GpuProfile,
     tick: (d) => { t += d; },
