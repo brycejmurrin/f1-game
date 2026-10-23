@@ -85,6 +85,13 @@ function preload(files, opts) {
 // failed, exactly like onerror, so every caller's existing fallback and its
 // memo-clear-on-failure retry path run. Overridable per load: opts.slowMs / deadlineMs.
 const SLOW_MS = 10000, DEADLINE_MS = 25000;
+// PAGE-LEVEL: classic scripts that have already evaluated in this tab (#3295).
+// A fresh ScriptLoader (career UI retry clears its memo and calls create()
+// again) has an empty opts.loaded; re-appending a const IIFE redeclares and the
+// door stays on could-not-load until a full reload. Only STRICT loads skip the
+// second insert — non-strict callers (scenery / circuit payloads) intentionally
+// re-fetch when their registry entry was cleared ("next ask fetches again").
+const evaluated = new Set();
 function create() {
 const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
 function loadBackendScripts(files, edges, opts) {
@@ -100,6 +107,8 @@ function loadBackendScripts(files, edges, opts) {
   const inject = async (src) => {
     if (typeof UpdateCheck !== "undefined" && UpdateCheck.prepareLazyLoad && !(await UpdateCheck.prepareLazyLoad(generationScope))) return false;
     return new Promise((resolve) => {
+    // Strict retry: already evaluated in this tab — no second <script>.
+    if (strict && evaluated.has(src)) { resolve(true); return; }
     // NEVER MIX BUILDS. A lazy file is asked for as `?v=<booted build>`; once a
     // newer deploy's worker controls this tab it has swept that generation, the
     // request misses, and Pages (which ignores the query) answers with the NEW
@@ -155,6 +164,7 @@ function loadBackendScripts(files, edges, opts) {
       let ready = true;
       try { if (opts && opts.ready) ready = !!opts.ready(src); }
       catch (e) { ready = false; }
+      if (ready) evaluated.add(src);
       settle(ready);
     };
     el.onerror = () => { if (el.remove) el.remove(); settle(false); };

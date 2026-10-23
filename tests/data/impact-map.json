@@ -4891,6 +4891,7 @@
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/script-loader-preload.test.mjs",
+        "tests/unit/script-loader-retry-eval.test.mjs",
         "tests/unit/script-loader-starved.test.mjs",
         "tests/unit/script-loader-throw.test.mjs",
         "tests/unit/service-worker.test.mjs",
