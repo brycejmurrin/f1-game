@@ -1291,6 +1291,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-mat-key-memo.test.mjs",
   // TLX post P2 / audit #6: fixed H/V blur + per-mip bloom materials (no .tex.value ping-pong).
   "tests/unit/tlx-post-fixed-mats.test.mjs",
+  // TLX phone post at half scene resolution (D·IP3 / BrowserStack GPU-bound fill).
+  "tests/unit/tlx-post-phone-res.test.mjs",
   // TLX perf hunt 6 (B·H6): gfx.warmDraws captures the cockpit rig's draws (never painted) and the next present compiles exactly those pairs, owned like the deferred mirror warm; the first rig frame then links nothing (a cold one links). Race entry awaits it under the cover.
   "tests/unit/tlx-rig-warm.test.mjs",
   // TLX drops a createTexture() source canvas once three has uploaded it,
@@ -1447,6 +1449,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/vertex-pack.test.mjs",
   // tools/viewer: the 3D viewer page carries the engine-built car (within 0.5 mm) and circuit. ~6 s, no browser.
   "tests/unit/viewer.test.mjs",
+  // VisorOptics (js/fx/visor-optics.js): eye-port geometry per aspect, the lighting→visor mapping (additive, zero in the dark, projected sun/lamp glints) and the helmet-only / OFF gates. ~0.3 s.
+  "tests/unit/visor-optics.test.mjs",
   "tests/unit/visual-oracle.test.mjs",
   // #2960: opt-in vm-debug-preload turns a no-filename brake-cue load into a file:// URL.
   "tests/unit/vm-debug-preload.test.mjs",

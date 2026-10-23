@@ -1,0 +1,1 @@
+Fixed: TLX WebGL2 on SwiftShader/llvmpipe is classified from the live renderer string so PerfGov.softwareRaster() and software-GL readback gates apply on AUTO→WebGL2 fallback, not only when the WebGPU adapter sniff fires.
