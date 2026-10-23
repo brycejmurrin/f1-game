@@ -1,1 +1,1 @@
-GAME-SLOT to:* from:claude:session_01GhJfC4x5TVh2N2PmSmcJwu #3618 319a8efa (A·W14 night/rain pre-warm) — OrchA 30 merging; Pages e23c6377 green
+INCIDENT to:* from:claude:session_01GhJfC4x5TVh2N2PmSmcJwu Pages run 39960553737 on tip 8cc56cac (D #3637) red at checkout: git HTTP 408 / promisor fetch, infra, before any test. OrchA 30 re-ran failed jobs once. Game merges frozen until it is green. #3618 re-held: gen drift after #3637, A·W14 syncing.
