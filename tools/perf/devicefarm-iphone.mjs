@@ -5,6 +5,9 @@
 //
 //   node tools/perf/devicefarm-iphone.mjs devices
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" [--legs 2|4|0] [--url URL] [--out DIR]
+//   node tools/perf/devicefarm-iphone.mjs run --scenario cache|races [--pins webgpu,webgl2]   (adds ?apex=1)
+//     cache: cold race entry per path — first, after two reloads, after force-quitting Safari (shader-cache lifetime)
+//     races: BENCHMARK "WEATHER & TRACKS" pinned per path
 //   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
 // `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
@@ -102,8 +105,104 @@ function shot(base, sid, file) {
   fs.writeFileSync(file, Buffer.from(b64, "base64")); log(`screenshot ${file}`);
 }
 
+// ---- scenarios (run --scenario cache|races) ---------------------------------------------------------------------
+// The page needs the `__apex` surface (`?apex=1` loads it on the live site, js/core/lazy-bundles.js bindAgent).
+const withApex = (u) => (/[?&]apex=1/.test(u) ? u : u + (u.includes("?") ? "&" : "?") + "apex=1");
+// Pin the THREE PATH the way BenchRun.pathPrefs/writePrefs do; it takes effect at the next boot.
+const PIN = (p) => `
+  const s = GameStore.store; s.rawSet("apex26.gfxBackend", "three"); s.rawSet("apex26.tlxForceGL", ${JSON.stringify(p === "webgl2" ? "1" : "0")});
+  try { for (const k of RendererPicker.RENDERER_SS_KEYS || []) sessionStorage.removeItem(k); } catch (_) {}
+  return true;`;
+const READY = `
+  let st = null, api = null; try { st = __apex.info().state; } catch (_) {}
+  try { api = RendererPicker.liveThreeApi(); } catch (_) {}
+  return { ready: st === "menu" && !!api, state: st, api };`;
+const KICK = `
+  window.__dfRace = undefined; window.__dfT0 = performance.now();
+  let prev = null; try { prev = RaceEntryProfile.snapshot().winT0; } catch (_) {}
+  Promise.resolve(__apex.race("monza", "default", "dry")).then((v) => { window.__dfRace = { ok: !!v, ms: performance.now() - window.__dfT0 }; },
+    (e) => { window.__dfRace = { err: String(e) }; });
+  return prev;`;
+const ENTRY = `
+  let s = null, t = null, warm = null, st = null;
+  try { s = RaceEntryProfile.snapshot(); t = RaceEntryProfile.stageTable(s); } catch (_) {}
+  try { warm = GLX.__tlx.memState().warm; } catch (_) {}
+  try { st = __apex.info().state; } catch (_) {}
+  return { state: st, race: window.__dfRace || null, sinceKickMs: Math.round(performance.now() - (window.__dfT0 || 0)),
+    winT0: s && s.winT0, armed: s && s.armed, windowMs: t && t.windowMs, blockMs: t && t.blockMs, maxBlockMs: t && t.maxBlockMs,
+    stages: t ? t.stages.filter((r) => r.ms == null || r.ms >= 50).map((r) => [r.n, r.ms]) : null, warm,
+    api: (() => { try { return RendererPicker.liveThreeApi(); } catch (_) { return null; } })() };`;
+
+async function waitReady(ctx, ms = 120000) {
+  const t0 = Date.now();
+  for (;;) {
+    await sleep(3000);
+    try { const r = await exec(ctx.base, ctx.sid, READY, 1); if (r.ready) return r; } catch (_) { /* page loading */ }
+    if (Date.now() - t0 > ms) throw new Error("page never reached the menu");
+  }
+}
+// One timed race entry: kick __apex.race, poll until the RaceEntryProfile window that opened after the kick closes.
+async function timedEntry(ctx, label) {
+  const prev = await exec(ctx.base, ctx.sid, KICK);
+  const t0 = Date.now();
+  for (;;) {
+    await sleep(2000);
+    let e; try { e = await exec(ctx.base, ctx.sid, ENTRY, 1); } catch (err) { log(`${label}: poll ${err.message.slice(0, 100)}`); continue; }
+    if (e.race && e.winT0 !== prev && e.armed === false && e.windowMs > 0) { log(`${label}: api=${e.api} window ${e.windowMs} ms`); return e; }
+    if (Date.now() - t0 > 180000) { log(`${label}: timed out`); return { ...e, timedOut: true }; }
+  }
+}
+async function reloadPage(ctx) { await exec(ctx.base, ctx.sid, "setTimeout(() => location.reload(), 50); return true;"); await sleep(8000); return waitReady(ctx); }
+// Force-quit Safari: the WebDriver session dies with it, so open a fresh one and navigate again.
+async function killSafari(ctx, url) {
+  try { wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: terminateApp", args: [{ bundleId: "com.apple.mobilesafari" }] }); } catch (e) { log("terminate: " + e.message.slice(0, 100)); }
+  try { wd(ctx.base, "DELETE", `/session/${ctx.sid}`); } catch (_) { /* gone */ }
+  ctx.sid = wd(ctx.base, "POST", "/session", { capabilities: { alwaysMatch: ctx.caps, firstMatch: [{}] } }).sessionId;
+  try { wd(ctx.base, "POST", `/session/${ctx.sid}/orientation`, { orientation: "LANDSCAPE" }); } catch (_) { /* keep portrait */ }
+  wd(ctx.base, "POST", `/session/${ctx.sid}/url`, { url });
+  await sleep(8000);
+  return waitReady(ctx);
+}
+
+// cache: how long does a path's first-race shader warm stay paid for? Cold entry first, after reloads, after a Safari kill.
+async function cacheScenario(ctx, url, pins, report, out) {
+  report.cache = {};
+  for (const p of pins) {
+    const rows = report.cache[p] = [];
+    await exec(ctx.base, ctx.sid, PIN(p));
+    let r = await reloadPage(ctx); log(`cache ${p}: booted api=${r.api}`);
+    rows.push({ step: "first", ...(await timedEntry(ctx, `${p} first`)) });
+    for (const step of ["reload", "reload2"]) { r = await reloadPage(ctx); rows.push({ step, bootApi: r.api, ...(await timedEntry(ctx, `${p} ${step}`)) }); }
+    r = await killSafari(ctx, url); rows.push({ step: "safariKill", bootApi: r.api, ...(await timedEntry(ctx, `${p} safariKill`)) });
+    try { shot(ctx.base, ctx.sid, path.join(out, `cache-${p}.png`)); } catch (_) { /* no shot */ }
+    pullLogs(ctx.base, ctx.sid, out);
+  }
+}
+// races: BENCHMARK "WEATHER & TRACKS" (six races, each reloads and starts cold) on each pinned path.
+async function racesScenario(ctx, pins, report, out) {
+  report.races = {};
+  for (const p of pins) {
+    await exec(ctx.base, ctx.sid, PIN(p));
+    const r = await reloadPage(ctx); log(`races ${p}: booted api=${r.api}`);
+    await exec(ctx.base, ctx.sid, `return BenchRun.run("races");`);
+    const t0 = Date.now(); let last = "", n = 0;
+    for (;;) {
+      await sleep(POLL_MS); n++;
+      if (n % LOG_EVERY === 0) pullLogs(ctx.base, ctx.sid, out);
+      let st; try { st = await exec(ctx.base, ctx.sid, BENCH_STATE, 2); } catch (e) { log("poll: " + e.message.slice(0, 100)); continue; }
+      const line = `${p} ${st.state} i=${st.i} api=${st.api} ${JSON.stringify(st.legs)}`;
+      if (line !== last) { log(line); last = line; }
+      if (st.state !== "running" && st.state !== "none") { report.races[p] = st.result; break; }
+      if (Date.now() - t0 > 15 * 60000) { report.races[p] = { timedOut: st }; break; }
+    }
+    try { shot(ctx.base, ctx.sid, path.join(out, `races-${p}.png`)); } catch (_) { /* no shot */ }
+  }
+}
+
 async function run() {
-  const want = opt("device", "iPhone 18 Pro Max"), legs = Number(opt("legs", "0")), url = opt("url", SITE);
+  const want = opt("device", "iPhone 18 Pro Max"), legs = Number(opt("legs", "0")), scenario = opt("scenario", "bench");
+  const pins = opt("pins", "webgpu,webgl2").split(",");
+  const url = scenario === "bench" ? opt("url", SITE) : withApex(opt("url", SITE));
   const out = opt("out", path.join("artifacts", "devicefarm", new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)));
   fs.mkdirSync(out, { recursive: true });
   const dev = iosPhones().find((d) => d.name === want || d.name.endsWith(" " + want) || d.arn.endsWith(want));
@@ -114,7 +213,7 @@ async function run() {
   const cfg = JSON.stringify({ parameters: { "appium:version": "3" } });
   const ses = aws("devicefarm", "create-remote-access-session", "--project-arn", proj.arn, "--device-arn", dev.arn,
     "--name", "apex-" + Date.now(), "--configuration", cfg).remoteAccessSession;
-  const report = { device: dev.name, os: dev.os, url, legs, startedAt: new Date().toISOString(), sessionArn: ses.arn };
+  const report = { device: dev.name, os: dev.os, url, legs, scenario, pins, startedAt: new Date().toISOString(), sessionArn: ses.arn };
   let sid = null, base = null;
   try {
     for (let t = 0; ; t++) {
@@ -136,6 +235,12 @@ async function run() {
     report.boot = await exec(base, sid, PROBE);
     log(`boot: gpu=${report.boot.gpu} live=${JSON.stringify(report.boot.live)} title=${report.boot.title}`);
     shot(base, sid, path.join(out, "boot.png"));
+    if (scenario !== "bench") {
+      const ctx = { base, sid, caps };
+      log(`live view: AWS console > Device Farm > Mobile Device Testing > Projects > ${PROJECT} > Remote access > ${ses.name}`);
+      try { if (scenario === "cache") await cacheScenario(ctx, url, pins, report, out); else if (scenario === "races") await racesScenario(ctx, pins, report, out); }
+      finally { sid = ctx.sid; }
+    }
     if (legs) {
       report.benchStart = await exec(base, sid, BENCH(legs));
       log("bench " + JSON.stringify(report.benchStart));
