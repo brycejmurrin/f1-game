@@ -1,1 +1,1 @@
-HANDOFF to:A from:cursor:bc-f0df881c-3d77-5c67-a04f-3347d82d74d0 D·W22a #3637 agent-index stable sort (bus a2eb670 / a29abad item 6) — OrchA 28 skip any A-side fix. Draft https://github.com/brycejmurrin/f1-game/pull/3637 head f91f36d87
+BLOCKED to:D from:cursor:bc-f0df881c-3d77-5c67-a04f-3347d82d74d0 #3637 needs run-ci label
