@@ -6,7 +6,7 @@
 // the moment the game reports state "menu". Each trial is one of: first (fresh Safari), reload (same process, HTTP cache
 // warm), relaunch (Safari force-quit, disk cache warm).
 //
-//   node tools/perf/devicefarm-boot.mjs --device "iPhone 14" [--trials 3] [--url URL] [--max-min 25] [--out DIR]
+//   node tools/perf/devicefarm-boot.mjs --device "iPhone 14" [--trials 3] [--url URL] [--apex] [--max-min 25] [--out DIR]
 //   node tools/perf/devicefarm-boot.mjs --self-test              # no AWS: the probes parse as function bodies
 //   node tools/perf/devicefarm-boot.mjs --self-test-live URL      # no AWS: probes against a local page, fails unless the menu is detected
 //
@@ -43,13 +43,16 @@ function wd(base, method, p, body) {
 const withApex = (u) => (/[?&]apex=1/.test(u) ? u : u + (u.includes("?") ? "&" : "?") + "apex=1");
 
 // ---- page-side probes (function bodies for WebDriver execute/sync) -------------------------------------------------
-// Cheap poll: is the game on the menu yet, and what time is it on the page's own clock (ms since navigation start).
+// Cheap poll. The game's own `state` reads "menu" from the first script line, so it cannot mark readiness. The milestones are
+// the Log records (page clock, ms since navigation start): TitleMenu.create = the title's handlers are wired (interactive),
+// track `build done` = the title backdrop world is built.
 export const POLL = `
-  let st = null; try { st = window.__apex && __apex.info ? __apex.info().state : null; } catch (_) {}
+  let wired = null, built = null;
+  try { for (const x of Log.records()) { if (wired == null && x.msg === "TitleMenu.create") wired = x.t; if (built == null && x.ns === "track" && /^build done/.test(x.msg)) built = x.t; } } catch (_) {}
   const ov = document.getElementById("overlay");
   let shown = false;
   if (ov && !ov.hidden) { const c = getComputedStyle(ov), r = ov.getBoundingClientRect(); shown = c.display !== "none" && c.visibility !== "hidden" && r.width > 0 && r.height > 0; }
-  return { t: performance.now(), rs: document.readyState, st, ovShown: shown, res: performance.getEntriesByType("resource").length };`;
+  return { t: performance.now(), rs: document.readyState, wired, built, ovShown: shown, res: performance.getEntriesByType("resource").length };`;
 // Full dump once the menu is up: what the browser measured, with no interpretation.
 export const DUMP = `
   const r = (x) => (x == null ? null : Math.round(x));
@@ -118,8 +121,8 @@ async function timedBoot(ctx, label, go, capMs = 60000) {
     let p = null;
     try { p = await exec(ctx, POLL, 1); } catch (_) { /* page is navigating */ }
     if (p) {
-      samples.push([Date.now() - t0, Math.round(p.t), p.rs, p.st, p.ovShown, p.res]);
-      if (p.st === "menu" && p.ovShown) { menu = { wallMs: Date.now() - t0, pageMs: Math.round(p.t) }; break; }
+      samples.push([Date.now() - t0, Math.round(p.t), p.rs, p.wired, p.built, p.ovShown, p.res]);
+      if (p.rs === "complete" && p.wired != null && p.ovShown) { menu = { wallMs: Date.now() - t0, pageMs: Math.round(p.t), wiredMs: Math.round(p.wired), builtMs: p.built == null ? null : Math.round(p.built) }; break; }
     }
     if (Date.now() - t0 > capMs) break;
     await sleep(250);
@@ -128,13 +131,13 @@ async function timedBoot(ctx, label, go, capMs = 60000) {
   if (menu) { try { dump = JSON.parse(await exec(ctx, DUMP)); } catch (e) { dumpError = e.message.slice(0, 200); log(`${label}: dump failed: ${dumpError}`); } }
   let thermal = null;
   try { const d = wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: deviceInfo", args: [] }); thermal = d && d.thermalState; } catch (_) { /* optional */ }
-  log(`${label}: ${menu && dump ? `menu at page ${menu.pageMs} ms (wall ${menu.wallMs}); fcp ${dump.paint["first-contentful-paint"]}; load ${dump.nav && dump.nav.loadEnd}; res ${dump.counts.res} (cached ${dump.counts.cached}); thermal ${thermal}` : menu ? `menu at page ${menu.pageMs} ms (dump failed)` : "NO MENU within cap"}`);
+  log(`${label}: ${menu && dump ? `title wired ${menu.wiredMs} ms, world built ${menu.builtMs == null ? "n/a" : menu.builtMs + " ms"} (seen at page ${menu.pageMs}, wall ${menu.wallMs}); fcp ${dump.paint["first-contentful-paint"]}; load ${dump.nav && dump.nav.loadEnd}; res ${dump.counts.res} (cached ${dump.counts.cached}); thermal ${thermal}` : menu ? `title wired ${menu.wiredMs} ms, world built ${menu.builtMs == null ? "n/a" : menu.builtMs + " ms"} (dump failed)` : "NO MENU within cap"}`);
   return { label, menu, thermal, dump, dumpError, samples: samples.length > 60 ? samples.filter((_, i) => i % 3 === 0) : samples };
 }
 
 async function main() {
   const want = opt("device", "iPhone 14"), trials = Number(opt("trials", "3")), maxMin = Number(opt("max-min", "25"));
-  const url = withApex(opt("url", SITE));
+  const url = args.includes("--apex") ? withApex(opt("url", SITE)) : opt("url", SITE);   // ?apex=1 loads the agent harness, which a player's boot does not
   const out = opt("out", path.join("artifacts", "devicefarm", "boot-" + new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)));
   fs.mkdirSync(out, { recursive: true });
   const phones = aws("devicefarm", "list-devices", "--filters", "attribute=PLATFORM,operator=EQUALS,values=IOS", "attribute=FORM_FACTOR,operator=EQUALS,values=PHONE").devices;
@@ -195,11 +198,11 @@ async function selfTestLive(url) {
   const b = await chromium.launch({ executablePath: exe, args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
   try {
     const p = await (await b.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true })).newPage();
-    await p.goto(withApex(url));
+    await p.goto(url);
     const t0 = Date.now(); let menu = null;
     while (Date.now() - t0 < 120000) {
       const r = await p.evaluate(new Function(POLL));
-      if (r.st === "menu" && r.rs === "complete" && r.ovShown) { menu = r; break; }
+      if (r.rs === "complete" && r.wired != null && r.ovShown) { menu = r; break; }
       await p.waitForTimeout(250);
     }
     if (!menu) throw new Error("self-test: menu never detected by POLL");
@@ -207,7 +210,7 @@ async function selfTestLive(url) {
     if (typeof raw !== "string") throw new Error("self-test: DUMP must return a JSON string");
     const d = JSON.parse(raw);
     if (!d.nav || !d.counts.res || !d.log || !d.log.length) throw new Error("self-test: DUMP incomplete " + JSON.stringify({ nav: !!d.nav, res: d.counts.res, log: d.log && d.log.length }));
-    process.stdout.write(`self-test-live OK: menu at page ${Math.round(menu.t)} ms; overlay ${JSON.stringify(d.overlay)}; res ${d.counts.res}; log ${d.log.length} lines\n`);
+    process.stdout.write(`self-test-live OK: title wired ${Math.round(menu.wired)} ms, world built ${menu.built == null ? "n/a" : Math.round(menu.built) + " ms"} (seen at ${Math.round(menu.t)}); overlay ${JSON.stringify(d.overlay)}; res ${d.counts.res}; log ${d.log.length} lines\n`);
   } finally { await b.close(); }
 }
 if (process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]))) {
