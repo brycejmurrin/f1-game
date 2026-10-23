@@ -102,18 +102,14 @@ const LoopHealth = (() => {
   function loading() {
     try { const el = typeof document !== "undefined" && document.getElementById && document.getElementById("loading"); return !!(el && !el.hidden); } catch (_) { return false; }
   }
-  // Race entry uses #loading; the garage setup sheet can hold the GL thread for
-  // tens of seconds on SwiftShader without being a "stuck load" — same relaxed
-  // reload budget as the loading cover (#3510 / live garage-close repro).
+  // Race entry uses #loading; MenuTeardown cover (quit/garage) uses the same
+  // relaxed reload budget as the loading cover (#3510 / live garage-close repro).
   function slowPathCover() {
     if (loading()) return true;
     try {
       if (typeof MenuTeardown !== "undefined" && MenuTeardown.cover()) return true;
     } catch (_) { /* harness */ }
-    try {
-      const cs = typeof document !== "undefined" && document.getElementById && document.getElementById("carsetup");
-      return !!(cs && !cs.hidden);
-    } catch (_) { return false; }
+    return false;
   }
   function shed() {
     sheds++; stallAct = "shed"; shedRun = true;

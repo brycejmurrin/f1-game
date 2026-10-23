@@ -1201,11 +1201,6 @@
       "presentation": "native",
       "preserve": "Real/stubbed link qualification, frame denominator and native JSON mode."
     },
-    "tools/gfx/readback-garage-oracle.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "readPixels hook phases, stall watchdog state and before/after JSON report paths."
-    },
     "tools/gfx/res-scale-ab.mjs": {
       "action": "keep-native",
       "presentation": "native",

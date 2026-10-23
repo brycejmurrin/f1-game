@@ -1,0 +1,1 @@
+Fixed: reverted #3589 (software GL readback gating during the garage): it broke garage-livery-churn, parts-livery-designs and parts-livery-zones on llvmpipe (Pages red on c698dd09); to be re-landed with a fix.

@@ -307,16 +307,6 @@ const Assets = (function () {
     _scratchGl = { cv, gl, tex, fbo, size };
     return _scratchGl;
   }
-  function deferScratchReadback() {
-    try {
-      if (typeof PerfGov === "undefined" || !PerfGov.softwareRaster()) return false;
-      const ld = typeof document !== "undefined" && document.getElementById && document.getElementById("loading");
-      if (ld && !ld.hidden) return true;
-      const cs = typeof document !== "undefined" && document.getElementById && document.getElementById("carsetup");
-      if (cs && !cs.hidden) return true;
-    } catch (_) { /* harness */ }
-    return false;
-  }
   function readLayerBytes(size, images, n, data) {
     const page = size * size * 4;
     const done = [];
@@ -332,7 +322,6 @@ const Assets = (function () {
       } else pending.push(i);
     }
     if (!pending.length) return done;
-    if (deferScratchReadback()) return done;
     const scratch = _ensureScratchGl(size);
     if (!scratch) return done;
     const { gl, tex, fbo } = scratch;

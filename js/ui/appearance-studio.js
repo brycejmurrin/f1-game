@@ -55,6 +55,8 @@ const AppearanceStudio = (function () {
       if (ENUMS[k]) out[k] = ENUMS[k].includes(v) ? v : DEFAULTS[k];
       else if (k.endsWith("Hex")) out[k] = /^#[0-9a-f]{6}$/i.test(v || "") ? v.toLowerCase() : DEFAULTS[k];
       else if (k.endsWith("Scale") || k.endsWith("Opacity")) {
+        // HUD_SCALE_MIN 70: css/hud.css .hud-label floors painted size at this zoom
+        // (14×0.7 would be 9.8px without max(--fs-micro, --fs-micro/1.4/--hud-z)).
         const lo = k.endsWith("Opacity") ? 20 : k === "hudScale" ? 70 : 40, hi = k.endsWith("Opacity") ? 100 : k === "hudBtnScale" ? 300 : 200;
         out[k] = typeof v === "number" && Number.isFinite(v) ? Math.round(Math.max(lo, Math.min(hi, v)) * 4) / 4 : null;
       } else if (LOOKS[k]) out[k] = isObject(v) && typeof ScreenLooks !== "undefined" ? ScreenLooks.normalize(LOOKS[k], v) : null;
