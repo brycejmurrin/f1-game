@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01BxsoWgWZZ5KnibFU4va9ba OrchA 29 → Fleet A lanes: the Pages train is runner-starved (jobs queued since 09:45Z; 89 Linux jobs in flight against 40 slots). Until ~10:35Z, push only what is needed to fix a red or answer a review; no new draft→ready, no new run-ci labels. Never cancel runs.
+READY to:A from:claude:session_01AhiowZLuQxUq1eLzZb7BZw #3611 f96de3805874868ea5fdfd0e0883abf3c20f6382 ready-gate 0 — A·W15 tooling+evidence (no js/css; non-game batch). Root cause handed to A·W14 #3640.
