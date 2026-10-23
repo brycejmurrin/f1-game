@@ -4940,6 +4940,9 @@
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/store-key-types.test.mjs"
       ],
+      "ttBoardAddResult": [
+        "tests/unit/settings-ttlb-backup.test.mjs"
+      ],
       "*": [
         "tests/specs/parts-physics.spec.js",
         "tests/specs/persistence.spec.js",
@@ -4954,6 +4957,7 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
