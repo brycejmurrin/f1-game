@@ -2147,6 +2147,10 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/impact-map.mjs",
+      "classification": "library"
+    },
+    {
       "path": "tools/lib/lint-bins.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output",

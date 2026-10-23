@@ -71,6 +71,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/harness.mjs** | Shared harness for the headless `__apex` tools: in-process static server + Chromium launch with teardown-safe shutdown. | playwright-probe |
 | **lib/hud-geometry.mjs** | In-page HUD box probe (rect, visibility, font px) + the pure overlap/safe-area rules of hud-layout.spec. | — |
 | **lib/hud-survey-matrix.mjs** | HUD survey core: cells, quick/full/exhaustive matrices, shards, expected-visible rules, findings, merge, report HTML. | — |
+| **lib/impact-map.mjs** | Narrow `tests/data/impact-map.json` pins for change-aware spec selection. | — |
 | **lib/lint-bins.mjs** | Locates the pinned lint binaries (actionlint, zizmor, glslang, naga, shellcheck) and defines what an absent one means. | — |
 | **lib/mem-census.mjs** | Page-side memory census (track WeakRefs, decoded audio, render objects, forced GC) for the CLI and its spec. | — |
 | **lib/node-compile-cache.cjs** | NODE_COMPILE_CACHE env for tooling-fast / run-group child processes (off under coverage). | — |

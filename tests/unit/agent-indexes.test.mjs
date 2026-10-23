@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import { firstDiff } from "../../tools/gen/gen-lib.mjs";
 import { renderCoverage } from "../../tools/docs/gen-coverage-table.mjs";
 import {
-  agentHelpFromSource, flattenHooks, renderIndex, renderHookPage, renderImpact, buildIndex,
+  agentHelpFromSource, flattenHooks, renderIndex, renderHookPage, renderImpact, buildIndex, buildImpactMap,
 } from "../../tools/docs/gen-agent-index.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -80,6 +80,18 @@ test("index hook rows are a bijection with agentHelp()", async () => {
     assert.ok(names.has("physState"));
     assert.ok(names.has("world"));
   } finally { g.close(); }
+});
+
+test("impact map carries garage livery narrow pins for GLX readback witnesses (#3601)", () => {
+  const witness = [
+    "tests/specs/garage-livery-churn.spec.js",
+    "tests/specs/parts-livery-zones.spec.js",
+    "tests/specs/parts-livery-designs.spec.js",
+  ];
+  const map = buildImpactMap().map;
+  for (const file of ["js/render/glx/soft.js", "js/render/glx/glx.js", "js/render/shared/assets.js"]) {
+    assert.deepEqual([...(map[file]?.narrow || [])].sort(), witness.sort(), file);
+  }
 });
 
 test("impact map is a narrow file to function to specs table", () => {
