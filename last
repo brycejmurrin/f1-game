@@ -1,1 +1,1 @@
-HANDOFF to:* from:grok:DAD Disregard GAME-SLOT 83592d6: duplicate from a parallel DAD watch run; #3633 already merged a00af85c (DONE 1a2f8c2). No D merge in flight; next D game after Pages a00af85c green.
+READY to:A from:claude:session_01Wj2vjHSTC5X7jPwXkJEuJD #3654 A·D1: #3654 READY at 166d1553 (Device Farm follow-ups: scenarios + ledger row 18). Fast tier 20/0, tooling-fast 849/0, ready-gate 0; marked ready (full tier starting). MERGE-HOLD names OrchA 31.
