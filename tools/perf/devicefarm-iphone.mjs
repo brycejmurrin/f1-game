@@ -64,12 +64,28 @@ const BENCH_STATE = `
   let p = null; try { p = JSON.parse(GameStore.store.raw("apex26.benchRun")); } catch (_) {}
   if (!p) return { state: "none" };
   return { state: p.state, i: p.i, legs: p.legs.map((l) => l.state + (l.reason ? ":" + l.reason : "")),
-    api: (() => { try { return RendererPicker.liveThreeApi(); } catch (_) { return null; } })(), result: p.state !== "running" ? p : null };`;
+    api: (() => { try { return RendererPicker.liveThreeApi(); } catch (_) { return null; } })(), result: p.state !== "running" ? p : null,
+    entry: (() => { try { const t = RaceEntryProfile.stageTable(), s = RaceEntryProfile.snapshot();
+      return { kind: t.entry, winT0: s.winT0, armed: s.armed, windowMs: t.windowMs, blockMs: t.blockMs, maxBlockMs: t.maxBlockMs,
+        stages: t.stages.filter((r) => r.ms == null || r.ms >= 50).map((r) => [r.n, r.ms]),
+        longTasks: (s.longTasks || []).filter((l) => l && l.ms >= 200).length }; } catch (_) { return null; } })() };`;
+// The poll keeps the newest RaceEntryProfile window per (leg, window start): cold and warm entry are separate windows.
+const LOG_EVERY = 5, THERMAL_EVERY = 15; // in polls of POLL_MS
+const POLL_MS = 4000;
 
 async function exec(base, sid, script, tries = 3) {
   for (let t = 1; ; t++) {
     try { return wd(base, "POST", `/session/${sid}/execute/sync`, { script, args: [] }); }
     catch (e) { if (t >= tries) throw e; log(`execute retry ${t}: ${e.message.slice(0, 120)}`); await sleep(5000); }
+  }
+}
+// Drain Appium's Safari console / network buffers (each read empties them) into JSONL files beside the report.
+function pullLogs(base, sid, out) {
+  for (const type of ["safariConsole", "safariNetwork"]) {
+    try {
+      const rows = wd(base, "POST", `/session/${sid}/se/log`, { type });
+      if (Array.isArray(rows) && rows.length) fs.appendFileSync(path.join(out, type + ".jsonl"), rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+    } catch (e) { fs.appendFileSync(path.join(out, "log-errors.txt"), `${type}: ${e.message.slice(0, 200)}\n`); }
   }
 }
 function shot(base, sid, file) {
@@ -89,7 +105,7 @@ async function run() {
   const cfg = JSON.stringify({ parameters: { "appium:version": "3" } });
   const ses = aws("devicefarm", "create-remote-access-session", "--project-arn", proj.arn, "--device-arn", dev.arn,
     "--name", "apex-" + Date.now(), "--configuration", cfg).remoteAccessSession;
-  const report = { device: dev.name, os: dev.os, url, legs, startedAt: new Date().toISOString() };
+  const report = { device: dev.name, os: dev.os, url, legs, startedAt: new Date().toISOString(), sessionArn: ses.arn };
   let sid = null, base = null;
   try {
     for (let t = 0; ; t++) {
@@ -101,7 +117,8 @@ async function run() {
     }
     log("session RUNNING; endpoint ready (not printed)");
     report.status = wd(base, "GET", "/status");
-    const caps = { platformName: "iOS", browserName: "Safari", "appium:automationName": "XCUITest", "appium:newCommandTimeout": 300 };
+    const caps = { platformName: "iOS", browserName: "Safari", "appium:automationName": "XCUITest", "appium:newCommandTimeout": 300,
+      "appium:showSafariConsoleLog": true, "appium:showSafariNetworkLog": true };
     const created = wd(base, "POST", "/session", { capabilities: { alwaysMatch: caps, firstMatch: [{}] } });
     sid = created.sessionId; log("WebDriver session up");
     try { wd(base, "POST", `/session/${sid}/orientation`, { orientation: "LANDSCAPE" }); } catch (e) { log("orientation: " + e.message.slice(0, 120)); }
@@ -114,15 +131,24 @@ async function run() {
       report.benchStart = await exec(base, sid, BENCH(legs));
       log("bench " + JSON.stringify(report.benchStart));
       const t0 = Date.now(), cap = (legs * 4.5 + 3) * 60000;
-      let last = "";
+      let last = "", n = 0;
+      const entries = report.entries = {}, thermal = report.thermal = [];
       for (;;) {
-        await sleep(20000);
+        await sleep(POLL_MS); n++;
+        if (n % LOG_EVERY === 0) pullLogs(base, sid, out);
+        if (n % THERMAL_EVERY === 1) {
+          try { const d = wd(base, "POST", `/session/${sid}/execute/sync`, { script: "mobile: deviceInfo", args: [] });
+            thermal.push({ t: Math.round((Date.now() - t0) / 1000), thermalState: d && d.thermalState, leg: last.split(" ")[1] || null });
+          } catch (e) { if (!thermal.length) log("thermal: " + e.message.slice(0, 120)); thermal.push({ t: Math.round((Date.now() - t0) / 1000), error: true }); }
+        }
         let st; try { st = await exec(base, sid, BENCH_STATE, 2); } catch (e) { log("poll: " + e.message.slice(0, 120)); continue; }
+        if (st.entry && st.entry.winT0 && st.entry.windowMs > 0) entries[`${st.i}:${st.api}:${Math.round(st.entry.winT0)}`] = st.entry;
         const line = `${st.state} i=${st.i} api=${st.api} ${JSON.stringify(st.legs)}`;
         if (line !== last) { log(line); last = line; }
         if (st.state !== "running" && st.state !== "none") { report.bench = st.result; break; }
         if (Date.now() - t0 > cap) { log("bench cap reached"); report.benchTimedOut = st; break; }
       }
+      pullLogs(base, sid, out);
       try { shot(base, sid, path.join(out, "bench.png")); } catch (e) { log("shot: " + e.message.slice(0, 120)); }
     }
   } catch (e) {
