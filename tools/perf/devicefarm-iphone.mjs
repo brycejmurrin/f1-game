@@ -240,7 +240,9 @@ async function run() {
     for (let t = 0; ; t++) {
       const s = aws("devicefarm", "get-remote-access-session", "--arn", ses.arn).remoteAccessSession;
       if (s.status === "RUNNING" && s.endpoints && s.endpoints.remoteDriverEndpoint) { base = s.endpoints.remoteDriverEndpoint.replace(/\/$/, ""); break; }
-      if (/COMPLETED|STOPPING|ERRORED|FAILED/.test(s.status) || t > 90) throw new Error(`session ${s.status} ${s.result || ""} ${s.message || ""}`);
+      // --wait-min: how long to queue for the device (default 7.5 min); a fleet-shared phone can sit in
+      // PENDING_DEVICE longer than that while another lane holds it (A·W15 run 7, 2026-10-23).
+      if (/COMPLETED|STOPPING|ERRORED|FAILED/.test(s.status) || t > Number(opt("wait-min", "7.5")) * 12) throw new Error(`session ${s.status} ${s.result || ""} ${s.message || ""}`);
       if (t % 6 === 0) log(`session ${s.status}`);
       await sleep(5000);
     }
