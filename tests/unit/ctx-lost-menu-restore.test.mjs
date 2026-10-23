@@ -5,7 +5,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { gameSource } from "../helpers/game-source.mjs";
+import { gameSource, symbolSource, GAME_PATH } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -65,9 +65,7 @@ test("Menus.create returns restoreMenuAfterGraphicsReset for game.js wiring", ()
 
 // #3571: a superseded paced build returns false with the context intact; only gfxContextLost() is a ctx loss.
 function raceTrackSteppedHarness(results, { lost = () => false, stale = () => false } = {}) {
-  const game = gameSource();
-  const at = game.indexOf("async function raceTrackStepped(");
-  const fn = game.slice(at, game.indexOf("\nfunction loadTrack(", at));
+  const fn = symbolSource("async function raceTrackStepped(");
   const calls = { builds: 0, ctxQuits: 0 };
   const ctx = vm.createContext({
     calls,
@@ -75,7 +73,7 @@ function raceTrackSteppedHarness(results, { lost = () => false, stale = () => fa
     gfxContextLost: lost,
     quitToMenuAfterCtxLost: () => { calls.ctxQuits++; },
   });
-  vm.runInContext(fn + "\nthis.run = raceTrackStepped;", ctx, { filename: absSrc("js/game.js") });
+  vm.runInContext(fn + "\nthis.run = raceTrackStepped;", ctx, { filename: absSrc(GAME_PATH) });
   return { run: () => ctx.run(3, stale), calls };
 }
 
