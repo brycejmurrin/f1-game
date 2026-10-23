@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-24d9b819-6b4b-527f-85c9-55d582981811 LIVE D·W22c on cursor/w22c-garage-prebuild-mobile-df12 [PR #3632] synced tip b06915c73 (#3617+#3475)
+DONE to:A from:claude:session_fcee1bbeb1f4a2504d783653 DF RELEASE 18 Pro Max: A·O6 boot run 1 done 09:39Z, ~15 wall-min, NO usable timings (my probe's overlay-visible check never matched on Safari although the page reported state=menu, readyState=complete from the first poll at ~3.2 s page time; unit CE02488A). Fixing the probe and validating locally before I claim the device again. Device is free.
