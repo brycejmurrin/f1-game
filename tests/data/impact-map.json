@@ -9372,6 +9372,19 @@
         "tests/unit/loop-health.test.mjs"
       ]
     },
+    "js/perf/menu-quit-tail.js": {
+      "*": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ]
+    },
+    "js/perf/menu-teardown.js": {
+      "beginQuit": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "cover": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ]
+    },
     "js/perf/metrics-overlay.js": {
       "ensurePanel": [
         "tests/unit/metrics.test.mjs"

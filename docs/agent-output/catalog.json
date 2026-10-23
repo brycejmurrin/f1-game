@@ -1949,6 +1949,11 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/gfx/readback-quit-menu-oracle.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/gfx/res-scale-ab.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

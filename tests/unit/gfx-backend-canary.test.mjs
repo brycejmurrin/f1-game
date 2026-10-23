@@ -4138,9 +4138,26 @@ test("software GL garage path gates readback and stall reload (#3589)", () => {
   const soft = readFile("js/render/glx/soft.js");
   assert.ok(soft.includes("PerfGov.softwareRaster()") && soft.includes('"carsetup"'));
   const assets = readFile("js/render/shared/assets.js");
-  assert.ok(assets.includes("deferScratchReadback"));
+  assert.ok(assets.includes("deferScratchReadback") && !assets.includes("MenuTeardown"));
   const game = gameSource();
   assert.ok(game.includes("openGarage") && game.includes("PerfGov.softwareRaster()") && game.includes("invalidateSoftPresent"));
+});
+
+test("software GL quit-to-menu and garage-close use MenuTeardown readback cover", () => {
+  const mt = readFile("js/perf/menu-teardown.js");
+  assert.ok(mt.includes("beginQuit") && mt.includes("garageBusyPlate") && mt.includes("pauseSheetUp"));
+  assert.ok(mt.includes("deferQuitTail") && mt.includes("noteSync"));
+  const loop = readFile("js/perf/loop-health.js");
+  assert.ok(loop.includes("MenuTeardown.cover()") && loop.includes("noteSync"));
+  assert.ok(!readFile("js/render/glx/post.js").includes("MenuTeardown"));
+  assert.ok(!readFile("js/render/glx/soft.js").includes("MenuTeardown"));
+  assert.ok(!readFile("js/render/shared/assets.js").includes("MenuTeardown"));
+  const game = gameSource();
+  assert.ok(game.includes("MenuTeardown.beginQuit()") && game.includes("_menuGate.warm = 0"));
+  assert.ok(readFile("js/perf/menu-quit-tail.js").includes("afterOverlay") && game.includes("deferQuitTail"));
+  const garageOracle = readFile("tools/gfx/readback-garage-oracle.mjs");
+  const quitOracle = readFile("tools/gfx/readback-quit-menu-oracle.mjs");
+  assert.ok(garageOracle.includes("garageClose") && quitOracle.includes("ttiMs"));
 });
 
 test("GLX boot waits on progress, not one fixed wall clock (#3587)", () => {

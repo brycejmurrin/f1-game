@@ -76,6 +76,9 @@ const LoopHealth = (() => {
   let watchOn = null;
   let shedRun = false;     // this run already shed / reloaded: once each per run
   let reloadRun = false;
+  let syncWorstMs = 0;
+  let syncEvents = 0;
+  let syncLastLabel = "";
 
   function now() {
     try { return performance.now(); } catch (_) { return Date.now(); }
@@ -104,6 +107,9 @@ const LoopHealth = (() => {
   // reload budget as the loading cover (#3510 / live garage-close repro).
   function slowPathCover() {
     if (loading()) return true;
+    try {
+      if (typeof MenuTeardown !== "undefined" && MenuTeardown.cover()) return true;
+    } catch (_) { /* harness */ }
     try {
       const cs = typeof document !== "undefined" && document.getElementById && document.getElementById("carsetup");
       return !!(cs && !cs.hidden);
@@ -143,7 +149,16 @@ const LoopHealth = (() => {
     } else { slowRun = 0; shedRun = reloadRun = false; }
   }
 
+  function noteSync(ms, label) {
+    if (!watching() || !(ms > SLOW_MS)) return;
+    syncEvents++;
+    if (ms > syncWorstMs) syncWorstMs = ms;
+    syncLastLabel = String(label || "").slice(0, 80);
+    Log.warn("game", `stall watchdog: sync gap ${Math.round(ms)} ms in ${syncLastLabel} (no frame completed)`);
+  }
+
   return {
+    noteSync,
     // A frame finished: pay the run back and stamp the heartbeat
     clean() {
       run = 0;
@@ -188,7 +203,8 @@ const LoopHealth = (() => {
         staleMs: lastCleanAt ? Math.round(now() - lastCleanAt) : null,
         // The stall watchdog: slowRun is the live run of SLOW_MS frames, act
         // the last response ("shed" | "reload" | "budget" | "")
-        stall: { watching: watching(), slowRun, slowFrames, worstMs: Math.round(worstMs), sheds, reloads: stallReloads, act: stallAct, slowMs: SLOW_MS, shedRun: SHED_RUN, reloadRun: RELOAD_RUN },
+        stall: { watching: watching(), slowRun, slowFrames, worstMs: Math.round(worstMs), sheds, reloads: stallReloads, act: stallAct, slowMs: SLOW_MS, shedRun: SHED_RUN, reloadRun: RELOAD_RUN,
+          syncWorstMs: Math.round(syncWorstMs), syncEvents, syncLastLabel },
       };
     },
     // The only writer for apex26.stallWatch (automation override); invalidates the watch cache.

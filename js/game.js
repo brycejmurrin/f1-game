@@ -4293,10 +4293,17 @@ if (typeof GfxEscalation !== "undefined" && GfxEscalation.registerMenuRecover) {
   GfxEscalation.registerMenuRecover(quitToMenuAfterCtxLost);
   installRaceEntrySoften();
 }
+if (typeof MenuQuitTail !== "undefined" && MenuQuitTail.wire) {
+  MenuQuitTail.wire({ mirrorPass, stormFx, flybyPanel, quali, qualiNet, netLobby, Particles, Droplets, GameAudio, SeasonCal, CustomTracks, IncidentSim, DebrisWorld, closeLightTuner, closeCamTuner, exitPhotoMode, consumeGhostHash, ensureNet, refreshCareerButton, setFlow, tyres, $, get soundOn() { return soundOn; }, set session(v) { session = v; }, get session() { return session; }, practiceMode, raceTyreWear, get season() { return season; }, set season(v) { season = v; } });
+}
 // A quit from under the pit garage (WORK ON CAR, then any path to quitToMenu) takes the garage down
 // with the race: left open, the title showed RETURN TO RACE, whose closePitWork charged a dead race.
 function quitToMenu() {
   clearRaceEntrySoften();
+  if (typeof MenuTeardown !== "undefined") MenuTeardown.beginQuit();
+  els.pausemenu.hidden = true;
+  if (typeof PauseOpts !== "undefined" && PauseOpts.disarm) PauseOpts.disarm();
+  _menuGate.warm = 0; _menuGate.garageWarm = 0;
   Ghost.flush(); resultsCam.reset(); replayBuf.clear(); cancelIntro();
   if (raceMessageHistory) raceMessageHistory.clear();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
@@ -4315,9 +4322,6 @@ function quitToMenu() {
   if (qualiField) { try { IncidentSim.reset(); } catch (_) { /* module absent */ } cars = qualiField; qualiField = null; }
   const forgetGp = !isChampionship() && !!season && season.qualiMode === "gp";   // read before setFlow: a one-off weekend ends here (RACE AGAIN never passes)
   stormFx._ltBase = null; stormFx._ltFlash = 0;   // the lightning's saved race base is not the menu's
-  mirrorPass.cancelPreparation();
-  closeLightTuner(false); stormFx._ltNextT = 0; stormFx._thunderT = -1;   // a queued strike or thunder is not the menu's either
-  closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
   // THE PRE-RACE SCREEN OUTLIVES A FAILED START without this: its only other
   // stop is clearMenuScreens(), which startRaceBody() reaches near the END of
   // its work, so a throw before that lands in startRace()'s `.catch` here and
@@ -4353,38 +4357,11 @@ function quitToMenu() {
   GameAudio.radioStingStop();
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
-  // The menu render returns before Particles.update and Droplets.tick: the lens canvas stayed painted over the
-  // title and the pool's smoke/sparks drew at the old circuit's coordinates in the next flyby (perf-debug-e5b2).
-  Particles.rainShow(false); Particles.clear(); Droplets.clear();
-  // (#soundbtn returns with #overlay above — no write needed.)
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
-  if (soundOn) GameAudio.startMusic(-1);
-  // Back at the title screen no session is running, so drop back to the neutral
-  // mode. Every entry point (#mb-race/#mb-tt/#mb-season/#mb-career) sets flow and
-  // session for itself, so this only stops a half-finished career leaking into the
-  // next thing the player presses. The championship SAVES are untouched — what
-  // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
-  setFlow("gp"); session = "race"; practiceMode = false; tyres.setLevel(raceTyreWear);   // practice is per-session; a time trial / Daily left the tyre model "off" (gridUp)
-  quali.clear(forgetGp);   // memory only — persist stays until award/abort so CONTINUE keeps the grid (a one-off GP's own order is forgotten)
-  qualiNet.clearPeers();
-  // Title QUIT leaves the session: cancel() tears RTC down; q-back keeps abortQuali().
-  qualiNet.hasArmed() ? qualiNet.resetOnQuitWithCancel() : qualiNet.resetSoft();
-  try { IncidentSim.reset(); } catch (_) { /* module absent */ }
-  try { DebrisWorld.reset(); } catch (_) { /* module absent */ }
-  try { delete document.documentElement.dataset.team; } catch (_) { /* no DOM */ }
-  // …and drop the career championship alias with it, so STANDINGS on the title
-  // screen describes the standalone season again.
-  season = SeasonCal.load();
-  // Standings once an active season has scored. hasProgress(), not `round > 0`:
-  // a sprint banks points while its round is still open (js/career/season-cal.js).
-  const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
-  $("mb-standings").hidden = !hasSeason;
-  refreshCareerButton();
-  consumeGhostHash();   // a #ghost= link deferred while racing lands now (no-op without one)
-  CustomTracks.consumeTrackHash();   // same for a #track= share link (opens the designer; no-op without one)
-  // ...and so does a #vs= invite link the lobby deferred (racing / in a room).
-  if (/[#&]vs=/.test(location.hash)) ensureNet().then((ok) => { if (ok) netLobby.openFromUrl(); });
+  if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferQuitTail(() => MenuQuitTail.afterOverlay(forgetGp))) return;
+  MenuQuitTail.afterOverlay(forgetGp);
+  if (typeof MenuTeardown !== "undefined") MenuTeardown.endQuit();
 }
 
 
@@ -9069,7 +9046,11 @@ function closePitWork() {
 // the part maths, which both exits owe the rest of the game.
 function leaveGarage() {
   setupCam.cancelArrival();
-  if (garageReturn !== "pit" && !loadingScreen.phase()) loadingScreen.busy("Returning");
+  if (typeof MenuTeardown !== "undefined") MenuTeardown.beginGarageClose();
+  if (garageReturn !== "pit" && !loadingScreen.phase()) {
+    const busyOk = typeof MenuTeardown === "undefined" || MenuTeardown.garageBusyPlate();
+    if (busyOk) loadingScreen.busy("Returning");
+  }
   $("carsetup").hidden = true;
   setupPreviewOn = false;
   recomputePlayerMods();
@@ -9088,7 +9069,11 @@ function garageBack() {
   if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
   else if (garageReturn === "career") careerUi.openHub();
   else if (garageReturn === "select") { buildSelect(); $("select").hidden = false; }
-  else { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); }   // no vt: snapshot after hiding #carsetup is a black hold
+  else {
+    const finish = () => { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); if (typeof MenuTeardown !== "undefined") MenuTeardown.endGarageClose(); };
+    if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferUi) MenuTeardown.deferUi(finish);
+    else finish();
+  }
   if (garageReturn !== "menu") loadingScreen.stop();
 }
 $("cs-back").onclick = garageBack;
@@ -9105,7 +9090,11 @@ $("cs-done").onclick = () => {
   // settings' own BACK still returns to #select, so the circuit stays two taps
   // away if you change your mind.
   else if (garageReturn === "select") raceSettings.openRaceSettings("select");
-  else { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); }   // no vt: snapshot after hiding #carsetup is a black hold
+  else {
+    const finish = () => { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); if (typeof MenuTeardown !== "undefined") MenuTeardown.endGarageClose(); };
+    if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferUi) MenuTeardown.deferUi(finish);
+    else finish();
+  }
   if (garageReturn !== "menu") loadingScreen.stop();
 };
 $("cs-unlimited").onclick = () => {
