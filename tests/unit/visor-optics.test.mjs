@@ -29,7 +29,7 @@ function ctx2d(calls) {
   };
 }
 
-function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 } } = {}) {
+function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 } } = {}) {
   const calls = { clear: 0, stroke: 0, arc: 0, inserted: null, props: {}, attrs: {} };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } }, nextSibling: null };
   const body = {
@@ -51,7 +51,7 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
     Math, Float32Array, Uint8ClampedArray, Object, Path2D, performance: { now: () => 0 },
     getComputedStyle: () => ({ getPropertyValue: (k) => (k === "--visor-lens" ? lens : "") }),
     document, window: { ...win, __apex: apex },
-    CockpitOpts: { visor: () => visor, visorReflections: () => reflections, visorRefraction: () => refraction, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
+    CockpitOpts: { visor: () => visor, visorReflections: () => reflections, visorRefraction: () => refraction, visorBeams: () => beams, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
     GfxQuality: { current: () => "high" },
   });
   seedLog(ctx);
@@ -146,6 +146,41 @@ test("visor mapping: a bright flood leaves a beam along its aim; BLOOM AMOUNT an
   assert.equal(many.glints.filter((g) => g.star).length, 3, "stars on the three brightest only");
   const dim = V.lightMap({ ...NIGHT, lights: new Float32Array(lamp(0, -40, [150, 150, 150])) }, 844, 390, { level: 1 });
   assert.ok(dim.glints.length === 0 || !dim.glints[0].beam, "a weak glint carries no beam");
+});
+
+test("visor beams: VISOR BEAMS scales the lamp beams, the sun's rays and the star flares, and OFF keeps the glints alone", () => {
+  const { V } = load();
+  const L = new Float32Array(lamp(0, -40));
+  const med = V.lightMap({ ...NIGHT, lights: L }, 844, 390, { level: 1, beams: V.BEAMS.medium });
+  const strong = V.lightMap({ ...NIGHT, lights: L }, 844, 390, { level: 1, beams: V.BEAMS.strong });
+  const light = V.lightMap({ ...NIGHT, lights: L }, 844, 390, { level: 1, beams: V.BEAMS.light });
+  const off = V.lightMap({ ...NIGHT, lights: L }, 844, 390, { level: 1, beams: V.BEAMS.off });
+  assert.ok(strong.glints[0].beam.len > med.glints[0].beam.len && med.glints[0].beam.len > light.glints[0].beam.len, "STRONG > MEDIUM > LIGHT beam length");
+  assert.ok(strong.glints[0].beam.k > med.glints[0].beam.k && strong.glints[0].star.k > med.glints[0].star.k, "STRONG: brighter beams and star flares");
+  assert.equal(off.glints.length, med.glints.length, "OFF keeps every glint…");
+  assert.equal(off.glints[0].beam, null); assert.equal(off.glints[0].star, null);
+  assert.ok(Math.abs(off.glints[0].k - med.glints[0].k) < 1e-9 && off.glints[0].r === med.glints[0].r, "…at the same brightness and size: beams never touch the glints");
+  const sunIn = { ...DAY, sunDir: [0, 0.5, -0.87] };
+  assert.ok(V.lightMap(sunIn, 844, 390, { level: 1, beams: V.BEAMS.strong }).rays.len > V.lightMap(sunIn, 844, 390, { level: 1, beams: V.BEAMS.medium }).rays.len, "STRONG: longer god rays");
+  assert.equal(V.lightMap(sunIn, 844, 390, { level: 1, beams: 0 }).rays, null, "OFF: no god rays, the sun's glint stays");
+  assert.ok(V.lightMap(sunIn, 844, 390, { level: 1, beams: 0 }).sun.k > 0.1);
+  assert.ok(V.lightMap(sunIn, 844, 390, { level: 1, beams: NaN }).rays, "a non-numeric level falls back to MEDIUM");
+  // The tick reads the cockpit slider (a 0..2 factor): 0 still paints the glints (the layer is not the reflections
+  // gate); a level word from an old URL or a stub maps through BEAMS; a slider drag never rebuilds the port image.
+  const apex = { visorScene: () => ({ ...NIGHT, lights: L }) };
+  const noBeams = load({ apex, beams: 0 });
+  noBeams.V.tick(1 / 60, true, 0, false);
+  assert.ok(noBeams.V.stats().paints === 1 && noBeams.V.stats().glints >= 1, "VISOR BEAMS 0 %: the glints still paint");
+  const word = load({ apex, beams: "off" });
+  word.V.tick(1 / 60, true, 0, false);
+  assert.ok(word.V.stats().paints === 1 && word.V.stats().glints >= 1, "a level word still reads");
+  const { V: live, calls, listeners } = load({ apex, beams: 2 });
+  live.tick(1 / 60, true, 0, false);
+  const port = calls.props["--visor-port"];
+  for (const fn of listeners) fn("visorBeams", 1.5);
+  live.tick(1 / 60, true, 0, false);
+  assert.equal(calls.props["--visor-port"], port, "a beams change does not rebuild the port image…");
+  assert.equal(live.stats().paints, 2, "…but repaints the light at once");
 });
 
 test("visor mapping: lamps glint where they project, the brightest first, capped and with tail-lights in their colour", () => {

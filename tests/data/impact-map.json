@@ -1320,6 +1320,7 @@
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "onWheel": [
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "parseLead": [
@@ -1358,6 +1359,9 @@
       "setVisor": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
+      "setVisorBeams": [
+        "tests/unit/camera-defaults.test.mjs"
+      ],
       "setVisorColor": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
@@ -1373,6 +1377,9 @@
       ],
       "visor": [
         "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "visorBeams": [
+        "tests/unit/camera-defaults.test.mjs"
       ],
       "visorColor": [
         "tests/unit/cockpit-wheels.test.mjs"

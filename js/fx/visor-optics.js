@@ -27,6 +27,7 @@ const VisorOptics = (function () {
   const LAMP_GAIN = 1.5;             // glint = GAIN·√(energy/d²)·beam: a Bahrain flood (12 000) at 50 m saturates, a Monaco soffit (40) at 10 m ≈ 0.9
   const LIGHT_STRIDE = 15;           // gfx.js §frame: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner,cosOuter, bleed, volW, glareW]
   const LEVEL = { off: 0, light: 0.6, medium: 1, strong: 1.6 };       // VISOR REFLECTIONS
+  const BEAMS = { off: 0, light: 0.6, medium: 1, strong: 1.6 };       // VISOR BEAMS: lamp beams, god rays, star flares
   const FRINGE = { off: 0, light: 0.35, medium: 0.6, strong: 1 };    // VISOR REFRACTION → chromatic fringe
   const BEND = { light: 14, medium: 32, strong: 56 };                // feDisplacementMap scale per level (rim only)
   // Lens colours: css/tokens.css --visor-{neutral,amber,ice,rose}, selected into --visor-lens by css/helmet-visor.css from
@@ -147,9 +148,11 @@ const VisorOptics = (function () {
    *  (VISOR REFLECTIONS); `fringe` is the chromatic rim amount (VISOR REFRACTION); `smoke` marks the tinted lens
    *  (its inner reflections read stronger against the darker transmitted scene). Every intensity is 0..~1.5 and
    *  proportional to light actually reaching the shield: a dark scene returns zeros. */
-  function lightMap(scene, w, h, { level = 1, fringe = 0, smoke = false, tint = null, bloom = 1, glare = 0.12 } = {}) {
+  function lightMap(scene, w, h, { level = 1, fringe = 0, smoke = false, tint = null, bloom = 1, glare = 0.12, beams = 1 } = {}) {
     const out = { sun: null, ghost: null, rays: null, rim: null, glints: [], fringe: 0, haze: 0, bloom: clampTo(bloom, 0, 2.5) };
     if (!scene || !scene.eye || !scene.tgt || !(level > 0)) return out;
+    // VISOR BEAMS: one scale for every streak — the lamps' beams, the sun's rays, the star flares; 0 keeps the glints alone.
+    const bm = Number.isFinite(beams) ? clampTo(beams, 0, 2) : 1;
     const basis = camBasis(scene.eye, scene.tgt, _basis);
     const exp = scene.exposure > 0 ? scene.exposure : 1;
     const gain = level * (smoke ? 1.25 : 1);
@@ -183,7 +186,7 @@ const VisorOptics = (function () {
           if (over === 0) out.ghost = { x: w - x, y: h - y, k: k * 0.4, r: base * 0.3, rgb };
           // God rays: a sun in the frame streaks across the shield's micro-scratches and the tear-off film —
           // radial, longest when the sun sits low in the frame (a low sun ahead is what blinds a driver).
-          if (over === 0) out.rays = { x, y, k: k * 1.0, len: Math.hypot(w, h) * 0.75, rgb };
+          if (over === 0 && bm > 0) out.rays = { x, y, k: k * bm, len: Math.hypot(w, h) * 0.75 * (0.7 + 0.3 * bm), rgb };
         }
       }
       // Fresnel rim sheen: the inner rim is seen at grazing angles, where reflectance climbs, and it is lit on
@@ -243,9 +246,9 @@ const VisorOptics = (function () {
         const r = base * clampTo(0.14 + 8 / Math.max(8, g.d), 0.14, 0.36) * (0.8 + 0.2 * out.bloom);
         out.glints.push({ x: g.x, y: g.y, k, r, rgb: g.rgb,
           // The fixture's beam, seen in the air and on the shield: longer and brighter the harder the lamp hits the eye.
-          beam: k > 0.25 ? { dx: g.bx, dy: g.by, len: base * (0.45 + 0.55 * g.beam) * clampTo(k, 0, 1), k: k * 0.5 } : null,
+          beam: bm > 0 && k > 0.25 ? { dx: g.bx, dy: g.by, len: base * (0.45 + 0.55 * g.beam) * clampTo(k, 0, 1) * (0.6 + 0.4 * bm), k: k * 0.5 * bm } : null,
           // A star flare on the brightest three: the shield's micro-scratches split a hard point source into spokes.
-          star: i < 3 && k > 0.45 ? { len: r * 2.8, k: k * 0.4 } : null });
+          star: bm > 0 && i < 3 && k > 0.45 ? { len: r * 2.8 * (0.7 + 0.3 * bm), k: k * 0.4 * bm } : null });
         sceneLight += g.k * 0.6;
       }
     }
@@ -288,6 +291,12 @@ const VisorOptics = (function () {
 
   function _helmet() { return typeof document !== "undefined" && !!document.body && document.body.hasAttribute("data-helmet-cam"); }
   function _opt(name, dflt) { return typeof CockpitOpts !== "undefined" && typeof CockpitOpts[name] === "function" ? CockpitOpts[name]() : dflt; }
+  // VISOR BEAMS: CockpitOpts.visorBeams() is the 0..2 slider factor; a level word (a stub, an old URL) maps through BEAMS.
+  function _beams() {
+    const v = _opt("visorBeams", 1);
+    const n = typeof v === "string" && BEAMS[v] != null ? BEAMS[v] : +v;
+    return Number.isFinite(n) ? clampTo(n, 0, 2) : 1;
+  }
   function _low() { return typeof GfxQuality !== "undefined" && GfxQuality.current && GfxQuality.current() === "low"; }
 
   function _lookup() {
@@ -308,7 +317,8 @@ const VisorOptics = (function () {
     }
     _ctx = _cv && _cv.getContext ? _cv.getContext("2d") : null;
     if (!_ctx) { _cv = null; return null; }
-    if (typeof CockpitOpts !== "undefined" && CockpitOpts.onWheel) CockpitOpts.onWheel((name) => { if (name && name.startsWith("visor")) { _portKey = ""; _acc = 1; } });
+    // A visor setting change repaints at once; the port image is rebuilt only for the settings it shows (not a beams slider drag).
+    if (typeof CockpitOpts !== "undefined" && CockpitOpts.onWheel) CockpitOpts.onWheel((name) => { if (name && name.startsWith("visor")) { if (name !== "visorBeams") _portKey = ""; _acc = 1; } });
     Log.info("game", "VisorOptics: helmet visor overlay ready");
     return _cv;
   }
@@ -577,10 +587,11 @@ const VisorOptics = (function () {
     const scene = readScene();
     if (!scene) return;
     const fringe = FRINGE[_opt("visorRefraction", "off")] || 0;
+    const beams = _beams();
     const kn = readKnobs(t0 || 0);
     let m;
     try {
-      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? tintRGB(_opt("visorColor", "neutral")) : null, bloom: kn.bloom, glare: kn.glare });
+      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? tintRGB(_opt("visorColor", "neutral")) : null, bloom: kn.bloom, glare: kn.glare, beams });
       _paint(m);
     } catch (e) {
       // Cosmetic layer: a bad frame (a non-finite gradient, a hook mid-rebuild) must never take the render loop
@@ -614,6 +625,6 @@ const VisorOptics = (function () {
     };
   }
 
-  return { tick, clear, stats, lightMap, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, FRINGE, MAX_GLINTS, sceneFromG, _reset };
+  return { tick, clear, stats, lightMap, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, BEAMS, FRINGE, MAX_GLINTS, sceneFromG, _reset };
 })();
 Object.freeze(VisorOptics);

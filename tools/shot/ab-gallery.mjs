@@ -23,8 +23,10 @@ Wetness is pinned to the weather target for comparison; rainfall may still be ra
 Import equal-size images to compare different code revisions or any other captured settings.
 Serve the gallery over HTTP; publish separately. No credentials or hosting identity are needed.
 `;
-const optics={visor:['off','clear','smoke'],visorColor:['neutral','amber','ice','rose'],visorIntensity:['light','medium','strong'],visorRefraction:['off','light','medium','strong'],visorReflections:['off','light','medium','strong'],visorRain:['off','light','normal','heavy'],visorRunoff:['slow','normal','fast']};
-const defaults={visor:'off',visorColor:'neutral',visorIntensity:'light',visorRefraction:'off',visorReflections:'off',visorRain:'off',visorRunoff:'normal'};
+const optics={visor:['off','clear','smoke'],visorColor:['neutral','amber','ice','rose'],visorIntensity:['light','medium','strong'],visorRefraction:['off','light','medium','strong'],visorReflections:['off','light','medium','strong'],visorBeams:[],visorRain:['off','light','normal','heavy'],visorRunoff:['slow','normal','fast']};
+const defaults={visor:'off',visorColor:'neutral',visorIntensity:'light',visorRefraction:'off',visorReflections:'off',visorBeams:'100',visorRain:'off',visorRunoff:'normal'};
+// visorBeams is the cockpit SLIDER: a percent 0..200 (CockpitOpts.setVisorBeams takes the percent), not a level word.
+function beamsPercent(v){const n=Number(v);if(!Number.isFinite(n)||n<0||n>200)throw new Error('invalid visor setting: visorBeams='+v+' (0..200 percent)');return String(Math.round(n));}
 function id(value){if(typeof value!=='string'||!/^[a-z0-9][a-z0-9_-]{0,79}$/.test(value))throw new Error('id must be a lowercase slug (1..80 characters)');return value;}
 export function selectionFields(raw={}){
  const selected={};
@@ -41,7 +43,7 @@ export function recipePairs(data){
   const key=id(p.id);if(seen.has(key))throw new Error('duplicate recipe id: '+key);seen.add(key);
   const scene={track:'bahrain',tod:'night',weather:'rain',camera:'helmet',frac:.18,...p.scene};
   if(!/^[a-z0-9_-]+$/.test(scene.track)||!['day','dawn','dusk','night'].includes(scene.tod)||!['dry','wet','rain','storm','fog','overcast'].includes(scene.weather)||!Number.isFinite(scene.frac)||scene.frac<0||scene.frac>=1||!/^\w+$/.test(scene.camera))throw new Error('invalid scene: '+key);
-  const side=(raw={},fallback)=>{const settings={...defaults};for(const [k,v] of Object.entries(raw)){if(k==='label')continue;if(!optics[k]?.includes(v))throw new Error('invalid visor setting: '+k+'='+v);settings[k]=v;}return {label:String(raw.label||fallback),settings};};
+  const side=(raw={},fallback)=>{const settings={...defaults};for(const [k,v] of Object.entries(raw)){if(k==='label')continue;if(k==='visorBeams'){settings[k]=beamsPercent(v);continue;}if(!optics[k]?.includes(v))throw new Error('invalid visor setting: '+k+'='+v);settings[k]=v;}return {label:String(raw.label||fallback),settings};};
   const a=side(p.a,'Original'),b=side(p.b,'Candidate');
   const changed=Object.keys(optics).filter(k=>a.settings[k]!==b.settings[k]);
   const effect=p.effect||(changed.length===1&&changed[0]==='visorReflections'?'reflections':changed.length===1&&changed[0]==='visorRefraction'?'refraction':'combined');
