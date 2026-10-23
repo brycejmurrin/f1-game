@@ -211,6 +211,8 @@ const RENDERER_LS_KEYS = [
   "apex26.gfxBootBound",
   "apex26.envProbeOff", "apex26.perChunkOff",
   "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
+  // tlx.js's per-device WebKit kill switch: AUTO on WebKit stays on three WebGL2 until RESET.
+  "apex26.tlxWebKitGL",
   // __tlx.roadSplit(false) persists the road-split A/B arm (tlx.js); RESET brings the split back.
   "apex26.tlxRoadSplit",
   "apex26.wgxCapture",
@@ -222,7 +224,7 @@ const RENDERER_LS_KEYS = [
 // belongs in one of these two lists. applyBackend clears the session lane
 // too: switching backends must not inherit the previous path's hold/auto-GL
 // latches across the reload (RESET already wiped them; a pick did not).
-const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.ctxLostNotice", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent", "apex26.gfxFallbackWhy"];
+const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent", "apex26.gfxFallbackWhy"];
 
 function clearRendererStorage() {
   const removed = [];
@@ -288,6 +290,26 @@ function openUnavailableDialog(dialog, closeButton, returnFocus) {
   }
   queueMicrotask(() => { if (closeButton && closeButton.focus) closeButton.focus(); });
 }
+// Shared scrub for #nogl RETRY / USE WEBGL2 — must match applyBackend's ledger
+// reset or a strike/probe left behind makes every reload hit Graphics unavailable.
+function clearCtxLostWindowName() {
+  try {
+    if (/^apex26\.ctxLostReloads=\d+$/.test(String(window.name || ""))) window.name = "";
+  } catch (_) { /* harness */ }
+}
+function clearGfxBootRecovery({ webgl2Pick = false } = {}) {
+  try {
+    for (const k of RENDERER_LS_KEYS) {
+      if (k === "apex26.gfxBackend") continue;
+      localStorage.removeItem(k);
+    }
+    if (webgl2Pick) localStorage.setItem("apex26.gfxBackend", "webgl2");
+  } catch (_) { /* blocked storage */ }
+  try {
+    for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k);
+  } catch (_) { /* blocked storage */ }
+  clearCtxLostWindowName();
+}
 function showUnavailable(opts) {
   opts = mergeUnavailableOpts(opts);
   const panel = opts.panel;
@@ -329,10 +351,12 @@ function showUnavailable(opts) {
   status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
   title.textContent = "Graphics unavailable";
   detail.textContent = "Apex 26 could not start a compatible graphics renderer. You can retry, select the WebGL2 fallback, or use the game’s help and data tools.";
-  retry.onclick = () => { try { location.reload(); } catch (_) { /* embedded host */ } };
+  retry.onclick = () => {
+    clearGfxBootRecovery();
+    try { location.reload(); } catch (_) { /* embedded host */ }
+  };
   webgl.onclick = () => {
-    try { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
-    try { sessionStorage.removeItem("apex26.gfxClaimFail"); sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* blocked storage */ }
+    clearGfxBootRecovery({ webgl2Pick: true });
     try { location.reload(); } catch (_) { /* embedded host */ }
   };
   diagnostics.onclick = async () => {
@@ -396,6 +420,13 @@ function applyBackend(next, rb) {
   if (next === "webgpu") {
     for (const k of ["apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail"]) GameStore.store.rawDel(k);
   }
+  // Landing on a backend by hand is the retry signal for the boot canary
+  // too: clear its strike ledger (renderer-boot.js) so the fresh pick does
+  // not inherit a strike. The ledger names the backend it belongs to, but
+  // the name cannot acquit a SAME-backend re-pick — the player just vouched
+  // for it — and a strike another backend earned must never follow the
+  // player onto this one (#3547 / Merlin).
+  GameStore.store.rawDel("apex26.gfxProbeStrikes");
   markReloading(rb, next);
   reloadSoon();
   return true;
@@ -935,7 +966,7 @@ if (typeof document !== "undefined") {
 
 return { BACKENDS, init,
   nextBackend, prevBackend, applyBackend, backendLabel, readBackend, liveBackend, clearRendererStorage,
-  showUnavailable, setUnavailableDefaults,
+  showUnavailable, setUnavailableDefaults, clearGfxBootRecovery,
   RENDERER_LS_KEYS, RENDERER_SS_KEYS,
   THREE_PATHS, SHOT_MODES, readThreePath, applyThreePath, threePathLabel, liveThreeApi,
   ENV_PROBES, readEnvProbe, applyEnvProbe, envProbeLabel,

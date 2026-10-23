@@ -135,7 +135,7 @@ const SoakRun = (function () {
       G.trackIdx = i; G.seasonMode = false; G.timeTrial = false; G.duel = false;
       G.raceLaps = LAPS;
       if (G.endWeatherSession) G.endWeatherSession();
-      G.raceWeather = opts.weather || "wet"; G.raceTimeOfDay = "default";   // GPU TEST (gpu-test-run.js) runs it dry
+      G.raceWeather = opts.weather || "wet"; G.raceTimeOfDay = opts.tod || "default";   // GPU TEST runs it dry; BENCHMARK (bench-run.js) asks for rain / night
     } catch (e) { try { Log.warn("game", "SoakRun start refused: " + (e && e.message)); } catch (_) { /* Log not loaded */ } return Promise.resolve(false); }
     _run = { raf: 0, t0: performance.now(), tRace: 0, prev: 0, started: false, minutes: opts.minutes > 0 ? opts.minutes : SOAK_MIN,
       st: { hold: 30, stalled: 0, lastS: null } };

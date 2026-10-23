@@ -1,4 +1,4 @@
-// mcp-smoke.test.mjs — five-wrapper shell probe (no Chromium).
+// mcp-smoke.test.mjs — six-wrapper shell probe (no Chromium).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";

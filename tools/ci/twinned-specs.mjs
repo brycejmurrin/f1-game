@@ -168,7 +168,7 @@ export const BROWSER_ONLY = {
   // adapter (artifacts/logs/vmpage/*.log): these fail for a reason no static
   // scan sees, and the reason is structural, not a flake.
   "tests/specs/new-hooks.spec.js": "tests/unit/new-hooks-vm.test.mjs replays 55 of 56 against the virgin boot (the VM boots without racing, so the first-load assertions hold); the Madrid foundation test needs a real Chromium, so the spec stays the browser reference rather than a TWINNED pair",
-  "tests/specs/car-effects.spec.js": "every test reads the shell DOM inside evaluate (querySelector on a node the VM's document does not build): 0/9",
+  "tests/specs/car-effects.spec.js": "every test reads the shell DOM inside evaluate (querySelector on a node the VM's document does not build): 0/9; D·DP3 geo-stable pin needs TLX memState().geoLive + real presents after green (browser-only)",
   "tests/specs/multiplayer-npeer.spec.js": "reads the lobby DOM inside evaluate (querySelector → null): 0/4",
   "tests/specs/multiplayer-roles.spec.js": "reads the lobby DOM inside evaluate (querySelector → null): 0/5",
   "tests/specs/parts-ers.spec.js": "reads the setup screen's DOM inside evaluate (querySelector → null): 0/4",

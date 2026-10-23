@@ -197,7 +197,9 @@ test("intro builds cancel at async boundaries and never fly over pending compila
     }
   }
   for (const name of ["quitToMenu", "clearMenuScreens"]) {
-    assert.match(game.slice(game.indexOf("function " + name + "()"), game.indexOf("function " + name + "()") + 100), /cancelIntro\(\)/);
+    const start = game.indexOf("function " + name + "()");
+    const span = name === "quitToMenu" ? 240 : 100;
+    assert.match(game.slice(start, start + span), /cancelIntro\(\)/);
   }
 });
 

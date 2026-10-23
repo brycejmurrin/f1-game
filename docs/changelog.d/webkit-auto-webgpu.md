@@ -1,0 +1,1 @@
+Improved: On iPhone and Safari, AUTO graphics now uses three.js's WebGPU backend when the browser offers it, which holds 60 fps on an iPhone 14 where WebGL2 drops to 42. A device whose WebGPU fails falls back to WebGL2 and stays there until RESET RENDERER.

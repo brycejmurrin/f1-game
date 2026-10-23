@@ -417,12 +417,15 @@ const SettingDeps = (function () {
 
   /* Re-evaluate after any settings interaction. Capture phase because a
      SettingRow stops its change event; deferred because an owner flips
-     aria-pressed in its own click handler, after this one. */
+     aria-pressed in its own click handler, after this one.
+     48 ms (was 0): openSettings toggles several [disabled] attrs in one turn
+     and the MutationObserver below would schedule a refresh per attr; folding
+     them keeps Settings open off the critical path (D·IP2). */
   let pending = false;
   function soon() {
     if (pending) return;
     pending = true;
-    setTimeout(() => { pending = false; refresh(); }, 0);
+    setTimeout(() => { pending = false; refresh(); }, 48);
   }
   function init() {
     const d = doc();

@@ -25,6 +25,8 @@ const DevFlags = (function () {
     fullIntro: { param: "fullIntro", legacyQueryOne: true, noHash: true, default: false },
     "three-devtools": { param: "three-devtools", legacyQueryOne: true, noHash: true, default: false },
     viz: { param: "viz", storage: "tlxViz", kind: "string", noHash: true, default: null },
+    // URL-only A/B lever: ?tlxMirMrt=0 restores TLX's one-attachment mirror target (tlx.js, A·W14). No storage key.
+    mirMrt: { param: "tlxMirMrt", noHash: true, default: true },
   };
 
   function parseBoolish(raw) {

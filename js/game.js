@@ -2150,14 +2150,11 @@ for (const ev of ["pointerdown", "keydown"])
 // Resolves true once the menu has had MENU_IDLE_MS without a tap or key (false
 // if the selection moved on meanwhile): the build and the warm frames each hold
 // the main thread for seconds, so they wait for the player's hands to stop.
-const menuSlice = () => new Promise((r) => setTimeout(r, 32));
+// MenuSheetGate: yield while Settings is open so warmPrograms / garage prep
+// do not overlap the sheet (D·IP2). slice/idle live there — keeps game.js flat.
+const menuSlice = () => MenuSheetGate.slice();
 async function menuIdle(current) {
-  for (;;) {
-    const wait = MENU_IDLE_MS - (performance.now() - _menuInputAt);
-    if (wait <= 0) return current();
-    await new Promise((r) => setTimeout(r, wait));
-    if (!current()) return false;
-  }
+  return MenuSheetGate.idle(current, MENU_IDLE_MS, () => _menuInputAt, menuSlice);
 }
 // Dark sessions: bake the lamp pools in 8 ms slices now, so RACE!'s sync bake hits the cache (lamp-bake.js prebake).
 async function menuLampBake(current) {
@@ -2521,6 +2518,7 @@ async function startRaceBody() {
   // live() stays true: this session owns the build (menu prep uses a generation gate).
   // live() also drops on ctxLost so a CONTEXT_LOST mid-step does not wait forever.
   if (_menuGate.join) { const step = _menuGate.join; _menuGate.join = null; await step.catch(() => false); if (stale()) return false; }   // startRace joined the menu's build
+  if (typeof GfxEscalation !== "undefined" && GfxEscalation.softenRaceEntry) GfxEscalation.softenRaceEntry(gfx);
   if (vmNoFramePump) loadTrack(trackIdx);
   else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost())) && !stale()) { quitToMenuAfterCtxLost(); return false; }
   if (stale()) return false; rlap("loadTrack");
@@ -2688,6 +2686,7 @@ async function startRaceBody() {
     await RaceEntryProfile.spanAsync("mirrorPrepare", () => mirrorPass.prepareRace());
   if (stale()) return false; if (gfxContextLost()) { quitToMenuAfterCtxLost(); return false; }
   if (player !== entryPlayer || (state !== "count" && state !== "race")) return false;
+  clearRaceEntrySoften();
 
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
@@ -3439,6 +3438,7 @@ wxArc = WeatherArc.create(G, { isTimeTrial, isQuali });
 // (js/physics/tyre-model.js). Created before the first gridUp fits a compound.
 tyres = TyreModel.create(G);
 if (typeof SoakRun !== "undefined") SoakRun.create(G);   // AUTO SOAK (js/perf/soak-run.js): idle until PhoneRecorder's button calls start()
+if (typeof BenchRun !== "undefined") BenchRun.create(G);   // BENCHMARK (js/perf/bench-run.js): resumes its own multi-reload run, else idle
 const playerForces = PlayerForces.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.
@@ -3483,7 +3483,7 @@ const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
 if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
-const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice } = Menus.create(G);
+const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice, restoreMenuAfterGraphicsReset } = Menus.create(G);
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's
 // wheel spec, decal queue, cockpit rig, planted wheels, warm-ups, GLB body.
 // resolveLivery lives in CustomLiveries; partsVisualKey / drawAeroFlaps / damp
@@ -3842,9 +3842,6 @@ function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
   if (!(idx >= 0)) return false;   // reduce-motion still builds then plays the garage-out before the card and the flyby
-  // JOIN the menu's in-flight build of this world (tile → SETTINGS → RACE!); claim owner before
-  // generation++ so the stepped build does not abort. When join is false (buildKey / PerfGov.tier
-  // mismatch), still await that abort — two loadTrackStepped calls race on `track` (Pages DAILY).
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
   const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = live;
@@ -4258,15 +4255,35 @@ function stashCtxLostNotice() {
   try { sessionStorage.setItem(CTX_LOST_NOTICE_KEY, "1"); } catch (_) { /* blocked storage: quit still lands on the menu */ }
 }
 function quitToMenuAfterCtxLost() {
+  clearRaceEntrySoften();
   stashCtxLostNotice();
   loadingScreen.stop();
   quitToMenu();
+  try {
+    resetSetupCam();
+    spMeshBust();
+    garagePre.release();
+    _menuGate.warm = 0;
+    _menuGate.garageWarm = 0;
+    _menuGate.garageReady = false;
+    _carWarm.busy = false;
+    if (gfx && gfx.invalidateSoftPresent) gfx.invalidateSoftPresent();
+    if (canvas) canvas.style.visibility = "";
+    if (!_softEl && gfx && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
+    if (_softEl) _softEl.style.visibility = "";
+  } catch (_) { /* harness: recovery must not throw over teardown */ }
+  if (typeof restoreMenuAfterGraphicsReset === "function") restoreMenuAfterGraphicsReset();
   if (typeof showCtxLostNotice === "function") showCtxLostNotice();
   else if (typeof announce === "function") announce(CTX_LOST_NOTICE_MSG, 5, "info");
+}
+if (typeof GfxEscalation !== "undefined" && GfxEscalation.registerMenuRecover) {
+  GfxEscalation.registerMenuRecover(quitToMenuAfterCtxLost);
+  installRaceEntrySoften();
 }
 // A quit from under the pit garage (WORK ON CAR, then any path to quitToMenu) takes the garage down
 // with the race: left open, the title showed RETURN TO RACE, whose closePitWork charged a dead race.
 function quitToMenu() {
+  clearRaceEntrySoften();
   Ghost.flush(); resultsCam.reset(); replayBuf.clear(); cancelIntro();
   if (raceMessageHistory) raceMessageHistory.clear();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
@@ -6659,6 +6676,28 @@ const _envLatch = [NaN, NaN, NaN, NaN, NaN, NaN, NaN, -1], ENV_HOLD_MOVE_M = 4, 
 // the reflection feature can't keep exhausting a memory-constrained GPU.
 let _envProbeOff = false;
 try { _envProbeOff = localStorage.getItem("apex26.envProbeOff") === "1"; } catch (_) {}
+let _raceEntryEnvProbeSession = false;
+let _raceEntryRenderScaleSaved = null;
+function clearRaceEntrySoften() {
+  _raceEntryEnvProbeSession = false;
+  if (_raceEntryRenderScaleSaved != null && gfx && gfx.setRenderScale) {
+    gfx.setRenderScale(_raceEntryRenderScaleSaved);
+    _raceEntryRenderScaleSaved = null;
+  }
+  try { if (gfx && gfx.envProbeOptOut) gfx.envProbeOptOut = false; } catch (_) { /* harness */ }
+}
+function installRaceEntrySoften() {
+  if (typeof GfxEscalation === "undefined" || !GfxEscalation.registerRaceEntrySoften) return;
+  GfxEscalation.registerRaceEntrySoften((g) => {
+    if (typeof RaceEntryProfile === "undefined" || !RaceEntryProfile.softwareRaster || !RaceEntryProfile.softwareRaster()) return;
+    if (g && g.setRenderScale && g.getRenderScale) {
+      const cur = g.getRenderScale();
+      if (cur > 0.72) { _raceEntryRenderScaleSaved = cur; g.setRenderScale(0.72); }
+    }
+    _raceEntryEnvProbeSession = true;
+    try { if (g) g.envProbeOptOut = true; } catch (_) { /* harness */ }
+  });
+}
 // Same latch for PER-CHUNK LAMPS, set by the same webglcontextlost handler. It
 // is the loop-breaker the crash sentinel cannot be: that ledger is mobile-only
 // (js/perf/governor.js gates it on gfx.isMobile so the desktop suite never enters
@@ -7152,6 +7191,7 @@ function render(dt) {
   if (gfxContextLost()) {
     try { mirrorPass.cancelPreparation(); } catch (_) { /* harness */ }
     if (loadingScreen.phase() === "handoff") loadingScreen.stop();
+    if (typeof GfxEscalation !== "undefined" && GfxEscalation.maybeRecoverRaceEntry) GfxEscalation.maybeRecoverRaceEntry(gfxContextLost, quitToMenuAfterCtxLost);
     return;
   }
   // Warming used to return before the visibility pass. openGarage's Home→bay
@@ -7598,7 +7638,7 @@ function render(dt) {
     (gfx.getRenderScale && gfx.getRenderScale() < 0.98) ||
     (PerfGov.autoShed && PerfGov.autoShed() > 0)
   )) ? 7 : 3;
-  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && gfx.envProbeOptOut !== true && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  if (player && (state === "race" || state === "count") && !_envProbeOff && !_raceEntryEnvProbeSession && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && gfx.envProbeOptOut !== true && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x, _pey = smp2.p[1] + 0.9, _pez = smp2.p[2] + smp2.r[2] * player.x;
     const _es = frame.sunDir || _envUp, _ew = frame.wetness || 0, _elg = frame.lampSetGen || 0;   // the lamp SET and scale, not the flicker (hunt 2 F9)

@@ -98,10 +98,12 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
   about 40 %; Opus to Sonnet halves them again. Keep tool results small (comms.md §Output budget), route verbose reads through a subagent.
 - **Monitoring and reporting.** Every hunter and PR-owner launch prompt carries the block in `role-pr-owner.md` §Monitoring and reporting
   (own the PR to merged or STOP AT; `fleet-status:` line in the fleet block plus a PR comment per state change; decisions to the orchestrator via needs-decision).
-- **No desk field.** READY goes to the lane's own orchestrator (`ORCHESTRATOR:` in the brief); no Merge Desk exists
-  unless Bryce designates one, and a lane never runs `list_sessions` to look for one (7 lanes, 24 calls, 2026-10-16).
-  The standing rules (merge by `merge-gate`, archive by rule, Plan edits, Pages dispatch) are AGENTS.md §Concurrent PRs
-  and are never quoted as grants or re-asked (2026-10-19).
+- **No desk field.** READY goes to the lane's own orchestrator (`ORCHESTRATOR:` in the brief) via
+  `agent-msg.mjs send --type READY` (needs `APEX_AGENT_WEBHOOK_URL` + `APEX_AGENT_WEBHOOK_AUTH` from Bryce — never
+  commit; mirrors to the bus; messages carry no authority). No Merge Desk exists unless Bryce designates one, and a
+  lane never runs `list_sessions` to look for one (7 lanes, 24 calls, 2026-10-16). The standing rules (merge by
+  `merge-gate`, archive by rule, Plan edits, Pages dispatch) are AGENTS.md §Concurrent PRs and are never quoted as
+  grants or re-asked (2026-10-19).
 - **Before launching an owner:** `who-is-on-it.mjs`, armed auto-merge, PR `updated_at` < 15 min. Skip a PR that is armed and green or is
   being driven (6 owners did no work on 2026-10-17).
 - **Hunters and perf lanes:** stop after the first zero-finding round and put the note in the single docs PR (5 of 13 debugger hunts and

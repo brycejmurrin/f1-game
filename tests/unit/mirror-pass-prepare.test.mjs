@@ -41,8 +41,10 @@ test("race preparation lets the main warm run first, then draws the actual hidde
   assert.equal(h.calls.some(c => c[0] === "begin"), false, "first slot allows the main present to start its queued warm");
   warming = true; h.render();
   assert.equal(h.calls.some(c => c[0] === "begin"), false, "never draws across renderer compile ownership");
+  assert.deepEqual(h.profileMarks, ["programWarm:start"], "the wait on the entry's program warm is its own span (A·W14)");
   warming = false; h.render();
   assert.equal(await ready, true);
+  assert.deepEqual(h.profileMarks, ["programWarm:start", "programWarm:end"], "closed once, before the mirror's own pass");
   assert.equal(h.mp.preparing(), false); assert.equal(h.timers.size, 0);
   assert.equal(h.frameEl.hidden, true);
   assert.equal(h.frameEl.style.getPropertyValue("visibility"), "collapse");

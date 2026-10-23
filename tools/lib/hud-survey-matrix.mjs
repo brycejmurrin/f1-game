@@ -119,7 +119,7 @@ export const ENUMS = Object.freeze({
 // escapes css/track-detail.css's touch-cockpit hide.
 export const PRESETS = Object.freeze({
   shipped: [],
-  clean: ["tower", "map", "gaps", "sectors", "limits", "ot", "aero"],
+  clean: ["tower", "map", "gaps", "sectors", "limits"],
   big: ["tower", "map", "gaps", "gearbox"],
   corners: ["gearbox", "energy", "tyre"],
 });

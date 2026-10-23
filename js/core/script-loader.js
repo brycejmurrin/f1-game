@@ -55,8 +55,10 @@ function url(src) {
 // exact URL, CORS mode and SRI inject() will use starts every gated file's fetch
 // now; the <script> still runs only when its turn comes, so evaluation order,
 // strict failure and the deadline are unchanged. A file inject() would refuse
-// (integrity false) is not fetched. Returns how many links it added.
-function preload(files) {
+// (integrity false) is not fetched. Returns how many links it added. opts.low: a
+// speculative hint (renderer-boot's unsure guess, #3515) asks for fetchPriority low.
+function preload(files, opts) {
+  const low = !!(opts && opts.low);
   if (typeof document === "undefined" || !document.createElement || !document.head) return 0;
   let n = 0;
   for (const src of files || []) {
@@ -71,6 +73,7 @@ function preload(files) {
     el.href = href;
     el.crossOrigin = "anonymous";
     if (sri) el.integrity = sri;
+    if (low) el.fetchPriority = "low";
     document.head.appendChild(el);
     n++;
   }
@@ -179,7 +182,11 @@ function loadBackendScripts(files, edges, opts) {
           return false;
         }).then((ok) => {
           inflight.delete(src);
-          if (ok) { done.add(src); if (loaded) loaded.add(src); }
+          if (ok) {
+            done.add(src);
+            if (loaded) loaded.add(src);
+            try { if (opts && opts.onSettled) opts.onSettled(src); } catch (_) { /* boot progress hook */ }
+          }
           else { failed = true; if (!strict) done.add(src); }
           pump();
         });

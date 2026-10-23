@@ -164,7 +164,11 @@ const NetSession = (function () {
       }
       const valid = !!NetSnapshot.decodeSnapshot(dv);
       if (!synced()) {
-        heldState = { data: data, now: now };
+        // Only a real snapshot is worth replaying when the clock lands: a
+        // truncated or unknown-type frame used to overwrite heldState and then
+        // flush into the game on the first PONG (one garbage pose, or the loss
+        // of a good snapshot that arrived earlier in the same pre-sync window).
+        if (valid) heldState = { data: data, now: now };
         return valid;
       }
       deliverState(data, now);
