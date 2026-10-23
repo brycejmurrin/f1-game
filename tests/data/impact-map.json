@@ -4601,6 +4601,7 @@
         "tests/unit/reliability.test.mjs",
         "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/select-specs.test.mjs",
+        "tests/unit/service-worker.test.mjs",
         "tests/unit/stage-minify.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs",
