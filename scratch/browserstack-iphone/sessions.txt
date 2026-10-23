@@ -1,0 +1,3 @@
+iPhone-13-ios18-landscape passed 110 https://automate.browserstack.com/builds/d0d0fb4eaa93d5af94bccdfe196bd68d63c08a27/sessions/804242603376f8184369cacac1b0ce540bcc040e?auth_token=REDACTED
+iPhone-15-Pro-ios17-landscape passed 103 https://automate.browserstack.com/builds/d0d0fb4eaa93d5af94bccdfe196bd68d63c08a27/sessions/6ee146826d8a02897f0eef3fadbb3170f724f19c?auth_token=REDACTED
+iPhone-17-Pro-ios26-landscape passed 114 https://automate.browserstack.com/builds/d0d0fb4eaa93d5af94bccdfe196bd68d63c08a27/sessions/94f013935ec9c0f2f709a058fefd1dcf9c0ff12e?auth_token=REDACTED

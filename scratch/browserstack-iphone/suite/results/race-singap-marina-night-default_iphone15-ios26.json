@@ -1,0 +1,162 @@
+{
+ "scen": "race:singap|marina:night:default",
+ "device": "iPhone 15",
+ "os": "26",
+ "tag": "race-singap-marina-night-default_iphone15-ios26",
+ "steps": [
+  {
+   "name": "raceEntry",
+   "ms": 16827,
+   "entryMs": 16633,
+   "result": "ok"
+  },
+  {
+   "name": "drive",
+   "ms": 61067,
+   "frames": 2718,
+   "avgFps": 45.3,
+   "p5Fps": 31.3,
+   "p1Fps": 21.7,
+   "worstMs": 70,
+   "gt33": 96,
+   "gt50": 16,
+   "gt100": 0,
+   "buckets": [
+    47.1,
+    48.3,
+    45.8,
+    40.6,
+    46
+   ]
+  }
+ ],
+ "shots": [
+  "results/race-singap-marina-night-default_iphone15-ios26__racing.png",
+  "results/race-singap-marina-night-default_iphone15-ios26__end.png"
+ ],
+ "session": "b399091901400e2ed2c75413e3a431950701a7e9",
+ "bootMs": 2852,
+ "gfxMenu": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": null,
+  "gfxHigh": null,
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 2,
+  "autoTier": 0,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "trackId": "singapore",
+ "gfxRace": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": null,
+  "gfxHigh": null,
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 3,
+  "autoTier": 3,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "drive": {
+  "frames": 2718,
+  "avgFps": 45.3,
+  "p5Fps": 31.3,
+  "p1Fps": 21.7,
+  "worstMs": 70,
+  "gt33": 96,
+  "gt50": 16,
+  "gt100": 0,
+  "buckets": [
+   47.1,
+   48.3,
+   45.8,
+   40.6,
+   46
+  ]
+ },
+ "ap1": {
+  "maxKph": 191,
+  "offRoadFrames": 0,
+  "ticks": 2879,
+  "err": null,
+  "lastSpeedKph": 34
+ },
+ "info": {
+  "state": "race",
+  "track": "singapore",
+  "n": 1227,
+  "total": 4906.293616566812,
+  "timeTrial": false,
+  "seasonMode": false,
+  "flow": "gp",
+  "session": "race",
+  "career": false,
+  "practice": false,
+  "duel": false,
+  "raceQuali": false,
+  "raceGrid": "random",
+  "lapsTarget": 20,
+  "sectors": [
+   0.331,
+   0.68
+  ],
+  "turns": 19
+ },
+ "ap2": {
+  "maxKph": 29,
+  "offRoadFrames": 0,
+  "ticks": 5,
+  "err": null,
+  "lastSpeedKph": 13
+ },
+ "errors": [],
+ "logs": [
+  "{\"id\":18,\"t\":1524,\"ns\":\"gfx\",\"level\":\"warn\",\"msg\":\"TLX on a phone: three keeps ~54 MB of CPU geometry copies — a jetsam mid-race reverts to WebGL2 at the next boot; apex26.tlxMobile=0 declines\"}",
+  "{\"id\":105,\"t\":3095,\"ns\":\"scenery\",\"level\":\"warn\",\"msg\":\"bahrain: suppressed mountain=3\"}",
+  "{\"id\":139,\"t\":4234,\"ns\":\"scenery\",\"level\":\"warn\",\"msg\":\"singapore: suppressed backdrop=10 building=1 palm=125\"}"
+ ]
+}

@@ -1,0 +1,13 @@
+/workspace/apex-status/browserstack-iphone/node_modules/selenium-webdriver/lib/error.js:553
+        throw new ctor(message)
+              ^
+
+WebDriverError: Automate testing time expired.
+    at Object.checkLegacyResponse (/workspace/apex-status/browserstack-iphone/node_modules/selenium-webdriver/lib/error.js:553:15)
+    at parseHttpResponse (/workspace/apex-status/browserstack-iphone/node_modules/selenium-webdriver/lib/http.js:519:13)
+    at Executor.execute (/workspace/apex-status/browserstack-iphone/node_modules/selenium-webdriver/lib/http.js:459:28)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+  remoteStacktrace: ''
+}
+
+Node.js v20.19.2

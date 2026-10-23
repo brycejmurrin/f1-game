@@ -1,0 +1,71 @@
+{
+ "device": "iPhone 17 Pro",
+ "os": "26",
+ "tag": "iPhone-17-Pro-ios26",
+ "session": "94f013935ec9c0f2f709a058fefd1dcf9c0ff12e",
+ "bootMs": 1706,
+ "booted": true,
+ "preInfo": {
+  "state": "menu",
+  "track": null,
+  "n": 1347,
+  "total": 5386.934741802869,
+  "timeTrial": false,
+  "seasonMode": false,
+  "flow": "gp",
+  "session": "race",
+  "career": false,
+  "practice": false,
+  "duel": false,
+  "raceQuali": false,
+  "raceGrid": "random",
+  "lapsTarget": 3,
+  "sectors": [
+   0.28,
+   0.62
+  ],
+  "turns": 15
+ },
+ "raceEntryMs": 13522,
+ "raceErr": null,
+ "perf": {
+  "frames": 4448,
+  "avgFps": 59.306666666666665,
+  "p5Fps": 52.63157894736842,
+  "p1Fps": 43.47826086956522,
+  "maxMs": 246,
+  "long50": 2,
+  "long100": 1,
+  "heap": null
+ },
+ "info": {
+  "state": "race",
+  "track": "monza",
+  "n": 1444,
+  "total": 5777.579011126656,
+  "timeTrial": false,
+  "seasonMode": false,
+  "flow": "gp",
+  "session": "race",
+  "career": false,
+  "practice": false,
+  "duel": false,
+  "raceQuali": false,
+  "raceGrid": "random",
+  "lapsTarget": 3,
+  "sectors": [
+   0.26536876,
+   0.58048447
+  ],
+  "turns": 11
+ },
+ "backend": {
+  "gpu": true,
+  "pin": null,
+  "dpr": 3,
+  "w": 874,
+  "h": 338,
+  "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.1 Mobile/15E148 Safari/604.1"
+ },
+ "errors": []
+}

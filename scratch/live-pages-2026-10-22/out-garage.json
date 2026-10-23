@@ -1,0 +1,1699 @@
+{
+ "log": [
+  "gar-P warning [scenery] bahrain: suppressed mountain=3",
+  "gar-P warning CopyExternalImageToTexture(): Browser fails extracting valid resourcefrom external image. This API call will return early.",
+  "gar-L warning [scenery] bahrain: suppressed mountain=3",
+  "gar-L warning CopyExternalImageToTexture(): Browser fails extracting valid resourcefrom external image. This API call will return early.",
+  "gar-D warning CopyExternalImageToTexture(): Browser fails extracting valid resourcefrom external image. This API call will return early.",
+  "ps-L warning [scenery] bahrain: suppressed mountain=3"
+ ],
+ "res": [
+  {
+   "sc": "gar-P",
+   "measure": [
+    "#cs-tabs",
+    "#carsetup .sheet-foot",
+    "#cs-done",
+    "#cs-options",
+    "#cs-budget",
+    "#carsetup"
+   ],
+   "v": [
+    {
+     "s": "#cs-tabs",
+     "x": 36,
+     "y": 245,
+     "w": 316,
+     "h": 51,
+     "sw": 2002,
+     "cw": 290,
+     "sh": 48,
+     "ch": 48,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "auto"
+    },
+    {
+     "s": "#carsetup .sheet-foot",
+     "x": 13,
+     "y": 585,
+     "w": 364,
+     "h": 69,
+     "sw": 334,
+     "cw": 334,
+     "sh": 64,
+     "ch": 64,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#cs-done",
+     "x": 33,
+     "y": 588,
+     "w": 322,
+     "h": 63,
+     "sw": 290,
+     "cw": 290,
+     "sh": 58,
+     "ch": 58,
+     "fs": "20px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#cs-options",
+     "x": 36,
+     "y": 310,
+     "w": 316,
+     "h": 262,
+     "sw": 283,
+     "cw": 283,
+     "sh": 1485,
+     "ch": 241,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#cs-budget",
+     "x": 36,
+     "y": 95,
+     "w": 121,
+     "h": 46,
+     "sw": 112,
+     "cw": 112,
+     "sh": 42,
+     "ch": 42,
+     "fs": "14px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#carsetup",
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 844,
+     "sw": 390,
+     "cw": 390,
+     "sh": 844,
+     "ch": 844,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "gar-P",
+   "eval": "(()=>{const t=[...document.querySelectorAll('#cs-tabs button",
+   "v": [
+    "TEAMVerstapp",
+    "ENGINEFord P",
+    "AEROCircuit ",
+    "SUSPKeynes P",
+    "BRAKESKeynes",
+    "TYRESKeynes ",
+    "ERSKeynes De",
+    "GEARBOXKeyne",
+    "FUELKeynes B",
+    "EXHAUSTKeyne",
+    "FLOORKeynes ",
+    "COCKPITKeyne",
+    "WHEELSStanda",
+    "SETUPWORKS",
+    "LIVERYCUSTOM"
+   ]
+  },
+  {
+   "sc": "gar-P",
+   "measure": [
+    "#cs-tabs",
+    "#carsetup .sheet-foot",
+    "#cs-done",
+    "#cs-options",
+    "#cs-budget",
+    "#carsetup"
+   ],
+   "v": [
+    {
+     "s": "#cs-tabs",
+     "x": 36,
+     "y": 245,
+     "w": 316,
+     "h": 51,
+     "sw": 2002,
+     "cw": 290,
+     "sh": 48,
+     "ch": 48,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "auto"
+    },
+    {
+     "s": "#carsetup .sheet-foot",
+     "x": 13,
+     "y": 585,
+     "w": 364,
+     "h": 69,
+     "sw": 334,
+     "cw": 334,
+     "sh": 64,
+     "ch": 64,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#cs-done",
+     "x": 33,
+     "y": 588,
+     "w": 322,
+     "h": 63,
+     "sw": 290,
+     "cw": 290,
+     "sh": 58,
+     "ch": 58,
+     "fs": "20px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#cs-options",
+     "x": 36,
+     "y": 310,
+     "w": 316,
+     "h": 262,
+     "sw": 283,
+     "cw": 283,
+     "sh": 6071,
+     "ch": 241,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#cs-budget",
+     "x": 36,
+     "y": 95,
+     "w": 121,
+     "h": 46,
+     "sw": 112,
+     "cw": 112,
+     "sh": 42,
+     "ch": 42,
+     "fs": "14px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#carsetup",
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 844,
+     "sw": 390,
+     "cw": 390,
+     "sh": 844,
+     "ch": 844,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "gar-P",
+   "eval": "(()=>{const t=document.querySelector('#cs-tabs');t.scrollLef",
+   "v": [
+    2002,
+    290,
+    48,
+    48
+   ]
+  },
+  {
+   "sc": "gar-P",
+   "eval": "(()=>{const t=[...document.querySelectorAll('#cs-tabs button",
+   "v": true
+  },
+  {
+   "sc": "gar-P",
+   "eval": "(()=>{const b=[...document.querySelectorAll('#cs-options but",
+   "v": "Red Bull RacingRBR · Red Bull Ford▾"
+  },
+  {
+   "sc": "gar-P",
+   "measure": [
+    "#teampicker",
+    "#sel-teams",
+    "#tp-close"
+   ],
+   "v": [
+    {
+     "s": "#teampicker",
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 844,
+     "sw": 390,
+     "cw": 390,
+     "sh": 844,
+     "ch": 844,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#sel-teams",
+     "x": 13,
+     "y": 75,
+     "w": 364,
+     "h": 673,
+     "sw": 334,
+     "cw": 334,
+     "sh": 1049,
+     "ch": 618,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#tp-close",
+     "x": 131,
+     "y": 757,
+     "w": 126,
+     "h": 65,
+     "sw": 108,
+     "cw": 108,
+     "sh": 58,
+     "ch": 58,
+     "fs": "20px",
+     "vis": true,
+     "ovx": "hidden"
+    }
+   ]
+  },
+  {
+   "sc": "gar-P",
+   "ms": 52614
+  },
+  {
+   "sc": "gar-L",
+   "measure": [
+    "#cs-tabs",
+    "#carsetup .sheet-foot",
+    "#cs-done",
+    "#cs-options",
+    "#cs-budget",
+    "#carsetup"
+   ],
+   "v": [
+    {
+     "s": "#cs-tabs",
+     "x": 379,
+     "y": 132,
+     "w": 455,
+     "h": 51,
+     "sw": 1118,
+     "cw": 418,
+     "sh": 48,
+     "ch": 48,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "auto"
+    },
+    {
+     "s": "#carsetup .sheet-foot",
+     "x": 706,
+     "y": 42,
+     "w": 128,
+     "h": 51,
+     "sw": 118,
+     "cw": 118,
+     "sh": 48,
+     "ch": 48,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#cs-done",
+     "x": 707,
+     "y": 42,
+     "w": 115,
+     "h": 51,
+     "sw": 101,
+     "cw": 101,
+     "sh": 48,
+     "ch": 48,
+     "fs": "14px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#cs-options",
+     "x": 379,
+     "y": 188,
+     "w": 455,
+     "h": 192,
+     "sw": 416,
+     "cw": 411,
+     "sh": 1048,
+     "ch": 177,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#cs-budget",
+     "x": 393,
+     "y": 69,
+     "w": 99,
+     "h": 54,
+     "sw": 91,
+     "cw": 91,
+     "sh": 52,
+     "ch": 50,
+     "fs": "14px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#carsetup",
+     "x": 0,
+     "y": 0,
+     "w": 844,
+     "h": 390,
+     "sw": 844,
+     "cw": 844,
+     "sh": 390,
+     "ch": 390,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "gar-L",
+   "eval": "(()=>{const t=[...document.querySelectorAll('#cs-tabs button",
+   "v": [
+    "TEAMVerstapp",
+    "ENGINEFord P",
+    "AEROCircuit ",
+    "SUSPKeynes P",
+    "BRAKESKeynes",
+    "TYRESKeynes ",
+    "ERSKeynes De",
+    "GEARBOXKeyne",
+    "FUELKeynes B",
+    "EXHAUSTKeyne",
+    "FLOORKeynes ",
+    "COCKPITKeyne",
+    "WHEELSStanda",
+    "SETUPWORKS",
+    "LIVERYCUSTOM"
+   ]
+  },
+  {
+   "sc": "gar-L",
+   "measure": [
+    "#cs-tabs",
+    "#carsetup .sheet-foot",
+    "#cs-done",
+    "#cs-options",
+    "#cs-budget",
+    "#carsetup"
+   ],
+   "v": [
+    {
+     "s": "#cs-tabs",
+     "x": 379,
+     "y": 132,
+     "w": 455,
+     "h": 51,
+     "sw": 1118,
+     "cw": 418,
+     "sh": 48,
+     "ch": 48,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "auto"
+    },
+    {
+     "s": "#carsetup .sheet-foot",
+     "x": 706,
+     "y": 42,
+     "w": 128,
+     "h": 51,
+     "sw": 118,
+     "cw": 118,
+     "sh": 48,
+     "ch": 48,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#cs-done",
+     "x": 707,
+     "y": 42,
+     "w": 115,
+     "h": 51,
+     "sw": 101,
+     "cw": 101,
+     "sh": 48,
+     "ch": 48,
+     "fs": "14px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#cs-options",
+     "x": 379,
+     "y": 188,
+     "w": 455,
+     "h": 192,
+     "sw": 411,
+     "cw": 411,
+     "sh": 3966,
+     "ch": 177,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#cs-budget",
+     "x": 393,
+     "y": 69,
+     "w": 99,
+     "h": 54,
+     "sw": 91,
+     "cw": 91,
+     "sh": 52,
+     "ch": 50,
+     "fs": "14px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#carsetup",
+     "x": 0,
+     "y": 0,
+     "w": 844,
+     "h": 390,
+     "sw": 844,
+     "cw": 844,
+     "sh": 390,
+     "ch": 390,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "gar-L",
+   "eval": "(()=>{const t=document.querySelector('#cs-tabs');t.scrollLef",
+   "v": [
+    1118,
+    418,
+    48,
+    48
+   ]
+  },
+  {
+   "sc": "gar-L",
+   "eval": "(()=>{const t=[...document.querySelectorAll('#cs-tabs button",
+   "v": true
+  },
+  {
+   "sc": "gar-L",
+   "eval": "(()=>{const b=[...document.querySelectorAll('#cs-options but",
+   "v": "Red Bull RacingRBR · Red Bull Ford▾"
+  },
+  {
+   "sc": "gar-L",
+   "measure": [
+    "#teampicker",
+    "#sel-teams",
+    "#tp-close"
+   ],
+   "v": [
+    {
+     "s": "#teampicker",
+     "x": 0,
+     "y": 0,
+     "w": 844,
+     "h": 390,
+     "sw": 844,
+     "cw": 844,
+     "sh": 390,
+     "ch": 390,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#sel-teams",
+     "x": 9,
+     "y": 38,
+     "w": 826,
+     "h": 279,
+     "sw": 758,
+     "cw": 758,
+     "sh": 448,
+     "ch": 256,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#tp-close",
+     "x": 359,
+     "y": 321,
+     "w": 125,
+     "h": 56,
+     "sw": 108,
+     "cw": 108,
+     "sh": 50,
+     "ch": 50,
+     "fs": "14px",
+     "vis": true,
+     "ovx": "hidden"
+    }
+   ]
+  },
+  {
+   "sc": "gar-L",
+   "ms": 52773
+  },
+  {
+   "sc": "gar-D",
+   "measure": [
+    "#cs-tabs",
+    "#carsetup .sheet-foot",
+    "#cs-done",
+    "#cs-options",
+    "#cs-budget",
+    "#carsetup"
+   ],
+   "v": [
+    {
+     "s": "#cs-tabs",
+     "x": 849,
+     "y": 237,
+     "w": 142,
+     "h": 397,
+     "sw": 132,
+     "cw": 132,
+     "sh": 1039,
+     "ch": 398,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#carsetup .sheet-foot",
+     "x": 849,
+     "y": 634,
+     "w": 418,
+     "h": 72,
+     "sw": 418,
+     "cw": 418,
+     "sh": 72,
+     "ch": 72,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#cs-done",
+     "x": 868,
+     "y": 642,
+     "w": 379,
+     "h": 56,
+     "sw": 374,
+     "cw": 374,
+     "sh": 57,
+     "ch": 57,
+     "fs": "20px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#cs-options",
+     "x": 1003,
+     "y": 237,
+     "w": 263,
+     "h": 397,
+     "sw": 268,
+     "cw": 254,
+     "sh": 1576,
+     "ch": 398,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#cs-budget",
+     "x": 871,
+     "y": 67,
+     "w": 374,
+     "h": 21,
+     "sw": 374,
+     "cw": 374,
+     "sh": 21,
+     "ch": 21,
+     "fs": "14px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#carsetup",
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "sw": 1280,
+     "cw": 1280,
+     "sh": 720,
+     "ch": 720,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "gar-D",
+   "eval": "(()=>{const t=[...document.querySelectorAll('#cs-tabs button",
+   "v": [
+    "TEAMVerstapp",
+    "ENGINEFord P",
+    "AEROCircuit ",
+    "SUSPKeynes P",
+    "BRAKESKeynes",
+    "TYRESKeynes ",
+    "ERSKeynes De",
+    "GEARBOXKeyne",
+    "FUELKeynes B",
+    "EXHAUSTKeyne",
+    "FLOORKeynes ",
+    "COCKPITKeyne",
+    "WHEELSStanda",
+    "SETUPWORKS",
+    "LIVERYCUSTOM"
+   ]
+  },
+  {
+   "sc": "gar-D",
+   "measure": [
+    "#cs-tabs",
+    "#carsetup .sheet-foot",
+    "#cs-done",
+    "#cs-options",
+    "#cs-budget",
+    "#carsetup"
+   ],
+   "v": [
+    {
+     "s": "#cs-tabs",
+     "x": 849,
+     "y": 237,
+     "w": 142,
+     "h": 397,
+     "sw": 132,
+     "cw": 132,
+     "sh": 1039,
+     "ch": 398,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#carsetup .sheet-foot",
+     "x": 849,
+     "y": 634,
+     "w": 418,
+     "h": 72,
+     "sw": 418,
+     "cw": 418,
+     "sh": 72,
+     "ch": 72,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#cs-done",
+     "x": 868,
+     "y": 642,
+     "w": 379,
+     "h": 56,
+     "sw": 374,
+     "cw": 374,
+     "sh": 57,
+     "ch": 57,
+     "fs": "20px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#cs-options",
+     "x": 1003,
+     "y": 237,
+     "w": 263,
+     "h": 397,
+     "sw": 254,
+     "cw": 254,
+     "sh": 5977,
+     "ch": 398,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#cs-budget",
+     "x": 871,
+     "y": 67,
+     "w": 374,
+     "h": 21,
+     "sw": 374,
+     "cw": 374,
+     "sh": 21,
+     "ch": 21,
+     "fs": "14px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#carsetup",
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "sw": 1280,
+     "cw": 1280,
+     "sh": 720,
+     "ch": 720,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "gar-D",
+   "eval": "(()=>{const t=document.querySelector('#cs-tabs');t.scrollLef",
+   "v": [
+    132,
+    132,
+    1039,
+    398
+   ]
+  },
+  {
+   "sc": "gar-D",
+   "eval": "(()=>{const t=[...document.querySelectorAll('#cs-tabs button",
+   "v": true
+  },
+  {
+   "sc": "gar-D",
+   "eval": "(()=>{const b=[...document.querySelectorAll('#cs-options but",
+   "v": "Red Bull RacingRBR · Red Bull Ford▾"
+  },
+  {
+   "sc": "gar-D",
+   "measure": [
+    "#teampicker",
+    "#sel-teams",
+    "#tp-close"
+   ],
+   "v": [
+    {
+     "s": "#teampicker",
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "sw": 1280,
+     "cw": 1280,
+     "sh": 720,
+     "ch": 720,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#sel-teams",
+     "x": 261,
+     "y": 80,
+     "w": 758,
+     "h": 541,
+     "sw": 743,
+     "cw": 743,
+     "sh": 541,
+     "ch": 541,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#tp-close",
+     "x": 581,
+     "y": 629,
+     "w": 116,
+     "h": 58,
+     "sw": 108,
+     "cw": 108,
+     "sh": 57,
+     "ch": 57,
+     "fs": "20px",
+     "vis": true,
+     "ovx": "hidden"
+    }
+   ]
+  },
+  {
+   "sc": "gar-D",
+   "ms": 60632
+  },
+  {
+   "sc": "ps-P",
+   "measure": [
+    "#photo-studio"
+   ],
+   "v": [
+    {
+     "s": "#photo-studio",
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 844,
+     "sw": 390,
+     "cw": 390,
+     "sh": 844,
+     "ch": 844,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "ps-P",
+   "eval": "(()=>{const r=document.getElementById('photo-studio'); retur",
+   "v": [
+    {
+     "id": "ps-look-room-row-prev",
+     "c": "",
+     "t": "‹",
+     "r": [
+      112,
+      859,
+      52,
+      52,
+      859,
+      164,
+      912,
+      112
+     ]
+    },
+    {
+     "id": "ps-look-room",
+     "c": "",
+     "t": "TEAM BAYSILVER STUDI",
+     "r": [
+      167,
+      860,
+      139,
+      51,
+      860,
+      307,
+      912,
+      167
+     ]
+    },
+    {
+     "id": "ps-look-room-row-next",
+     "c": "",
+     "t": "›",
+     "r": [
+      310,
+      859,
+      52,
+      52,
+      859,
+      362,
+      912,
+      310
+     ]
+    },
+    {
+     "id": "ps-look-crew-row-prev",
+     "c": "",
+     "t": "‹",
+     "r": [
+      112,
+      947,
+      52,
+      52,
+      947,
+      164,
+      999,
+      112
+     ]
+    },
+    {
+     "id": "ps-look-crew",
+     "c": "",
+     "t": "CLASSICSCULPTEDPIT S",
+     "r": [
+      167,
+      947,
+      139,
+      51,
+      947,
+      307,
+      999,
+      167
+     ]
+    },
+    {
+     "id": "ps-look-crew-row-next",
+     "c": "",
+     "t": "›",
+     "r": [
+      310,
+      947,
+      52,
+      52,
+      947,
+      362,
+      999,
+      310
+     ]
+    },
+    {
+     "id": "ps-look-mood-row-prev",
+     "c": "",
+     "t": "‹",
+     "r": [
+      112,
+      1034,
+      52,
+      52,
+      1034,
+      164,
+      1086,
+      112
+     ]
+    },
+    {
+     "id": "ps-look-mood",
+     "c": "",
+     "t": "STANDARDBROADCASTNIG",
+     "r": [
+      167,
+      1034,
+      139,
+      51,
+      1034,
+      307,
+      1086,
+      167
+     ]
+    },
+    {
+     "id": "ps-look-mood-row-next",
+     "c": "",
+     "t": "›",
+     "r": [
+      310,
+      1034,
+      52,
+      52,
+      1034,
+      362,
+      1086,
+      310
+     ]
+    },
+    {
+     "id": "ps-aspect-row-prev",
+     "c": "",
+     "t": "‹",
+     "r": [
+      112,
+      1160,
+      52,
+      52,
+      1160,
+      164,
+      1213,
+      112
+     ]
+    },
+    {
+     "id": "ps-aspect",
+     "c": "",
+     "t": "Full scene16:91:14:5",
+     "r": [
+      167,
+      1161,
+      139,
+      51,
+      1161,
+      307,
+      1213,
+      167
+     ]
+    },
+    {
+     "id": "ps-aspect-row-next",
+     "c": "",
+     "t": "›",
+     "r": [
+      310,
+      1160,
+      52,
+      52,
+      1160,
+      362,
+      1213,
+      310
+     ]
+    },
+    {
+     "id": "ps-grid-select-row-prev",
+     "c": "",
+     "t": "‹",
+     "r": [
+      112,
+      1248,
+      52,
+      52,
+      1248,
+      164,
+      1300,
+      112
+     ]
+    },
+    {
+     "id": "ps-grid-select",
+     "c": "",
+     "t": "OffThirdsCentre",
+     "r": [
+      167,
+      1248,
+      139,
+      51,
+      1248,
+      307,
+      1300,
+      167
+     ]
+    },
+    {
+     "id": "ps-grid-select-row-next",
+     "c": "",
+     "t": "›",
+     "r": [
+      310,
+      1248,
+      52,
+      52,
+      1248,
+      362,
+      1300,
+      310
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "HERO",
+     "r": [
+      27,
+      1305,
+      108,
+      51,
+      1305,
+      136,
+      1357,
+      27
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "FRONT",
+     "r": [
+      140,
+      1305,
+      109,
+      51,
+      1305,
+      249,
+      1357,
+      140
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "SIDE",
+     "r": [
+      253,
+      1305,
+      108,
+      51,
+      1305,
+      362,
+      1357,
+      253
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "REAR",
+     "r": [
+      27,
+      1361,
+      165,
+      51,
+      1361,
+      192,
+      1413,
+      27
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "TOP",
+     "r": [
+      197,
+      1361,
+      165,
+      51,
+      1361,
+      362,
+      1413,
+      197
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "Car detail",
+     "r": [
+      27,
+      1580,
+      88,
+      51,
+      1580,
+      115,
+      1632,
+      27
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "Corner story",
+     "r": [
+      27,
+      1683,
+      109,
+      51,
+      1683,
+      137,
+      1735,
+      27
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "Space ahead",
+     "r": [
+      27,
+      1786,
+      111,
+      51,
+      1786,
+      138,
+      1838,
+      27
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "DISMISS TIPS",
+     "r": [
+      138,
+      1786,
+      119,
+      51,
+      1786,
+      258,
+      1838,
+      138
+     ]
+    },
+    {
+     "id": "ps-postcard-row-prev",
+     "c": "",
+     "t": "‹",
+     "r": [
+      112,
+      1564,
+      52,
+      52,
+      1564,
+      164,
+      1617,
+      112
+     ]
+    }
+   ]
+  },
+  {
+   "sc": "ps-P",
+   "ms": 37140
+  },
+  {
+   "sc": "ps-L",
+   "measure": [
+    "#photo-studio"
+   ],
+   "v": [
+    {
+     "s": "#photo-studio",
+     "x": 0,
+     "y": 0,
+     "w": 844,
+     "h": 390,
+     "sw": 844,
+     "cw": 844,
+     "sh": 390,
+     "ch": 390,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "ps-L",
+   "eval": "(()=>{const r=document.getElementById('photo-studio'); retur",
+   "v": [
+    {
+     "id": "ps-look-room-row-prev",
+     "c": "",
+     "t": "‹",
+     "r": [
+      570,
+      407,
+      52,
+      52,
+      407,
+      622,
+      460,
+      570
+     ]
+    },
+    {
+     "id": "ps-look-room",
+     "c": "",
+     "t": "TEAM BAYSILVER STUDI",
+     "r": [
+      625,
+      407,
+      139,
+      51,
+      407,
+      765,
+      459,
+      625
+     ]
+    },
+    {
+     "id": "ps-look-room-row-next",
+     "c": "",
+     "t": "›",
+     "r": [
+      768,
+      407,
+      52,
+      52,
+      407,
+      820,
+      460,
+      768
+     ]
+    },
+    {
+     "id": "ps-look-crew-row-prev",
+     "c": "",
+     "t": "‹",
+     "r": [
+      570,
+      494,
+      52,
+      52,
+      494,
+      622,
+      547,
+      570
+     ]
+    },
+    {
+     "id": "ps-look-crew",
+     "c": "",
+     "t": "CLASSICSCULPTEDPIT S",
+     "r": [
+      625,
+      495,
+      139,
+      51,
+      495,
+      765,
+      547,
+      625
+     ]
+    },
+    {
+     "id": "ps-look-crew-row-next",
+     "c": "",
+     "t": "›",
+     "r": [
+      768,
+      494,
+      52,
+      52,
+      494,
+      820,
+      547,
+      768
+     ]
+    },
+    {
+     "id": "ps-look-mood-row-prev",
+     "c": "",
+     "t": "‹",
+     "r": [
+      570,
+      582,
+      52,
+      52,
+      582,
+      622,
+      634,
+      570
+     ]
+    },
+    {
+     "id": "ps-look-mood",
+     "c": "",
+     "t": "STANDARDBROADCASTNIG",
+     "r": [
+      625,
+      582,
+      139,
+      51,
+      582,
+      765,
+      634,
+      625
+     ]
+    },
+    {
+     "id": "ps-look-mood-row-next",
+     "c": "",
+     "t": "›",
+     "r": [
+      768,
+      582,
+      52,
+      52,
+      582,
+      820,
+      634,
+      768
+     ]
+    },
+    {
+     "id": "ps-aspect-row-prev",
+     "c": "",
+     "t": "‹",
+     "r": [
+      570,
+      708,
+      52,
+      52,
+      708,
+      622,
+      761,
+      570
+     ]
+    },
+    {
+     "id": "ps-aspect",
+     "c": "",
+     "t": "Full scene16:91:14:5",
+     "r": [
+      625,
+      708,
+      139,
+      51,
+      708,
+      765,
+      760,
+      625
+     ]
+    },
+    {
+     "id": "ps-aspect-row-next",
+     "c": "",
+     "t": "›",
+     "r": [
+      768,
+      708,
+      52,
+      52,
+      708,
+      820,
+      761,
+      768
+     ]
+    },
+    {
+     "id": "ps-grid-select-row-prev",
+     "c": "",
+     "t": "‹",
+     "r": [
+      570,
+      795,
+      52,
+      52,
+      795,
+      622,
+      848,
+      570
+     ]
+    },
+    {
+     "id": "ps-grid-select",
+     "c": "",
+     "t": "OffThirdsCentre",
+     "r": [
+      625,
+      796,
+      139,
+      51,
+      796,
+      765,
+      848,
+      625
+     ]
+    },
+    {
+     "id": "ps-grid-select-row-next",
+     "c": "",
+     "t": "›",
+     "r": [
+      768,
+      795,
+      52,
+      52,
+      795,
+      820,
+      848,
+      768
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "HERO",
+     "r": [
+      564,
+      853,
+      126,
+      51,
+      853,
+      690,
+      905,
+      564
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "FRONT",
+     "r": [
+      694,
+      853,
+      126,
+      51,
+      853,
+      820,
+      905,
+      694
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "SIDE",
+     "r": [
+      564,
+      909,
+      126,
+      51,
+      909,
+      690,
+      961,
+      564
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "REAR",
+     "r": [
+      694,
+      909,
+      126,
+      51,
+      909,
+      820,
+      961,
+      694
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "TOP",
+     "r": [
+      564,
+      966,
+      256,
+      51,
+      966,
+      820,
+      1018,
+      564
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "Car detail",
+     "r": [
+      564,
+      1209,
+      88,
+      51,
+      1209,
+      652,
+      1261,
+      564
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "Corner story",
+     "r": [
+      564,
+      1312,
+      109,
+      51,
+      1312,
+      674,
+      1364,
+      564
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "Space ahead",
+     "r": [
+      564,
+      1415,
+      111,
+      51,
+      1415,
+      676,
+      1467,
+      564
+     ]
+    },
+    {
+     "id": "",
+     "c": "",
+     "t": "DISMISS TIPS",
+     "r": [
+      676,
+      1415,
+      119,
+      51,
+      1415,
+      795,
+      1467,
+      676
+     ]
+    },
+    {
+     "id": "ps-postcard-row-prev",
+     "c": "",
+     "t": "‹",
+     "r": [
+      570,
+      1193,
+      52,
+      52,
+      1193,
+      622,
+      1245,
+      570
+     ]
+    }
+   ]
+  },
+  {
+   "sc": "ps-L",
+   "ms": 40366
+  }
+ ]
+}

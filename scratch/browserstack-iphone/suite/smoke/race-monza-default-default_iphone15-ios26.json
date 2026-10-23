@@ -1,0 +1,154 @@
+{
+ "scen": "race:monza:default:default",
+ "device": "iPhone 15",
+ "os": "26",
+ "tag": "race-monza-default-default_iphone15-ios26",
+ "steps": [
+  {
+   "name": "raceEntry",
+   "ms": 16404,
+   "entryMs": 16255,
+   "result": "ok"
+  },
+  {
+   "name": "drive",
+   "ms": 21195,
+   "frames": 1130,
+   "avgFps": 56.5,
+   "p5Fps": 41.7,
+   "p1Fps": 26.3,
+   "worstMs": 67,
+   "gt33": 19,
+   "gt50": 1,
+   "gt100": 0,
+   "buckets": [
+    55.5
+   ]
+  }
+ ],
+ "shots": [
+  "smoke/race-monza-default-default_iphone15-ios26__racing.png",
+  "smoke/race-monza-default-default_iphone15-ios26__end.png"
+ ],
+ "session": "38ac29dc9a6abeacd7f868d709bf73b6aefd57c4",
+ "bootMs": 3390,
+ "gfxMenu": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": null,
+  "gfxHigh": null,
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 2,
+  "autoTier": 0,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "trackId": "monza",
+ "gfxRace": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": null,
+  "gfxHigh": null,
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 3,
+  "autoTier": 3,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "drive": {
+  "frames": 1130,
+  "avgFps": 56.5,
+  "p5Fps": 41.7,
+  "p1Fps": 26.3,
+  "worstMs": 67,
+  "gt33": 19,
+  "gt50": 1,
+  "gt100": 0,
+  "buckets": [
+   55.5
+  ]
+ },
+ "ap1": {
+  "maxKph": 193,
+  "offRoadFrames": 164,
+  "ticks": 1321,
+  "err": null,
+  "lastSpeedKph": 7
+ },
+ "info": {
+  "state": "race",
+  "track": "monza",
+  "n": 1444,
+  "total": 5777.579011126656,
+  "timeTrial": false,
+  "seasonMode": false,
+  "flow": "gp",
+  "session": "race",
+  "career": false,
+  "practice": false,
+  "duel": false,
+  "raceQuali": false,
+  "raceGrid": "random",
+  "lapsTarget": 20,
+  "sectors": [
+   0.26536876,
+   0.58048447
+  ],
+  "turns": 11
+ },
+ "ap2": {
+  "maxKph": 0,
+  "offRoadFrames": 8,
+  "ticks": 8,
+  "err": null,
+  "lastSpeedKph": 0
+ },
+ "errors": [],
+ "logs": [
+  "{\"id\":18,\"t\":1569,\"ns\":\"gfx\",\"level\":\"warn\",\"msg\":\"TLX on a phone: three keeps ~54 MB of CPU geometry copies — a jetsam mid-race reverts to WebGL2 at the next boot; apex26.tlxMobile=0 declines\"}",
+  "{\"id\":105,\"t\":3642,\"ns\":\"scenery\",\"level\":\"warn\",\"msg\":\"bahrain: suppressed mountain=3\"}",
+  "{\"id\":139,\"t\":4996,\"ns\":\"scenery\",\"level\":\"warn\",\"msg\":\"monza: suppressed wall=2 tree=19 pine=1 grandstand=1 building=2\"}"
+ ]
+}

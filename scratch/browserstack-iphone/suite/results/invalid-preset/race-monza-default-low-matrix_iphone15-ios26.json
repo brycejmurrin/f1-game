@@ -1,0 +1,226 @@
+{
+ "scen": "race:monza:default:low:matrix",
+ "device": "iPhone 15",
+ "os": "26",
+ "tag": "race-monza-default-low-matrix_iphone15-ios26",
+ "steps": [
+  {
+   "name": "raceEntry",
+   "ms": 16456,
+   "entryMs": 16281,
+   "result": "ok"
+  },
+  {
+   "name": "drive",
+   "ms": 61790,
+   "frames": 3488,
+   "avgFps": 58.1,
+   "p5Fps": 47.6,
+   "p1Fps": 30.3,
+   "worstMs": 52,
+   "gt33": 33,
+   "gt50": 3,
+   "gt100": 0,
+   "buckets": [
+    55.8,
+    59.2,
+    59,
+    58.4,
+    57.7
+   ]
+  },
+  {
+   "name": "scale1",
+   "ms": 13770,
+   "frames": 512,
+   "avgFps": 42.6,
+   "p5Fps": 33.3,
+   "p1Fps": 23.3,
+   "worstMs": 65,
+   "gt33": 15,
+   "gt50": 1,
+   "gt100": 0,
+   "got": 1
+  },
+  {
+   "name": "scale0.75",
+   "ms": 13769,
+   "frames": 591,
+   "avgFps": 49.2,
+   "p5Fps": 38.5,
+   "p1Fps": 30.3,
+   "worstMs": 41,
+   "gt33": 5,
+   "gt50": 0,
+   "gt100": 0,
+   "got": 0.75
+  },
+  {
+   "name": "scale0.5",
+   "ms": 13816,
+   "frames": 676,
+   "avgFps": 56.3,
+   "p5Fps": 41.7,
+   "p1Fps": 27.8,
+   "worstMs": 53,
+   "gt33": 8,
+   "gt50": 1,
+   "gt100": 0,
+   "got": 0.5
+  },
+  {
+   "name": "upscale0.75",
+   "ms": 15797,
+   "frames": 590,
+   "avgFps": 49.1,
+   "p5Fps": 34.5,
+   "p1Fps": 25.6,
+   "worstMs": 50,
+   "gt33": 10,
+   "gt50": 0,
+   "gt100": 0,
+   "upscale": {
+    "on": true,
+    "active": true,
+    "available": true
+   },
+   "set": {
+    "on": true,
+    "active": true,
+    "available": true
+   }
+  }
+ ],
+ "shots": [
+  "results/race-monza-default-low-matrix_iphone15-ios26__racing.png",
+  "results/race-monza-default-low-matrix_iphone15-ios26__upscale075.png",
+  "results/race-monza-default-low-matrix_iphone15-ios26__end.png"
+ ],
+ "session": "77dfa9889c2299f33f5a91ccefb802a2f5346088",
+ "bootMs": 2480,
+ "rebootMs": 1745,
+ "gfxMenu": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": null,
+  "gfxHigh": "0",
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 2,
+  "autoTier": 0,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "trackId": "monza",
+ "gfxRace": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": null,
+  "gfxHigh": "0",
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 3,
+  "autoTier": 3,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "drive": {
+  "frames": 3488,
+  "avgFps": 58.1,
+  "p5Fps": 47.6,
+  "p1Fps": 30.3,
+  "worstMs": 52,
+  "gt33": 33,
+  "gt50": 3,
+  "gt100": 0,
+  "buckets": [
+   55.8,
+   59.2,
+   59,
+   58.4,
+   57.7
+  ]
+ },
+ "ap1": {
+  "maxKph": 205,
+  "offRoadFrames": 0,
+  "ticks": 3728,
+  "err": null,
+  "lastSpeedKph": 82
+ },
+ "info": {
+  "state": "race",
+  "track": "monza",
+  "n": 1444,
+  "total": 5777.579011126656,
+  "timeTrial": false,
+  "seasonMode": false,
+  "flow": "gp",
+  "session": "race",
+  "career": false,
+  "practice": false,
+  "duel": false,
+  "raceQuali": false,
+  "raceGrid": "random",
+  "lapsTarget": 20,
+  "sectors": [
+   0.26536876,
+   0.58048447
+  ],
+  "turns": 11
+ },
+ "ap2": {
+  "maxKph": 209,
+  "offRoadFrames": 0,
+  "ticks": 2828,
+  "err": null,
+  "lastSpeedKph": 206
+ },
+ "errors": [],
+ "logs": [
+  "{\"id\":14,\"t\":162,\"ns\":\"game\",\"level\":\"warn\",\"msg\":\"apex26.gfxPreset was unreadable (SyntaxError: JSON Parse error: Unexpected identifier \\\"low\\\"; 3 chars) — removed, using the default\"}",
+  "{\"id\":19,\"t\":209,\"ns\":\"gfx\",\"level\":\"warn\",\"msg\":\"TLX on a phone: three keeps ~54 MB of CPU geometry copies — a jetsam mid-race reverts to WebGL2 at the next boot; apex26.tlxMobile=0 declines\"}",
+  "{\"id\":100,\"t\":791,\"ns\":\"scenery\",\"level\":\"warn\",\"msg\":\"bahrain: suppressed mountain=3\"}",
+  "{\"id\":137,\"t\":2518,\"ns\":\"scenery\",\"level\":\"warn\",\"msg\":\"monza: suppressed wall=2 tree=19 pine=1 grandstand=1 building=2\"}"
+ ]
+}

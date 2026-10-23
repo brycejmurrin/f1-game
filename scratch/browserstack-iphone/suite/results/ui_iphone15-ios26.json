@@ -1,0 +1,312 @@
+{
+ "scen": "ui",
+ "device": "iPhone 15",
+ "os": "26",
+ "tag": "ui_iphone15-ios26",
+ "steps": [
+  {
+   "name": "title-idle",
+   "ms": 5067,
+   "frames": 266,
+   "avgFps": 53.2,
+   "p5Fps": 58.8,
+   "p1Fps": 6.1,
+   "worstMs": 196,
+   "gt33": 6,
+   "gt50": 6,
+   "gt100": 4
+  },
+  {
+   "name": "open-settings",
+   "ms": 299,
+   "transitionMs": 299
+  },
+  {
+   "name": "settings-idle",
+   "ms": 7334,
+   "frames": 191,
+   "avgFps": 26.6,
+   "p5Fps": 52.6,
+   "p1Fps": 6.6,
+   "worstMs": 3711,
+   "gt33": 4,
+   "gt50": 4,
+   "gt100": 4
+  },
+  {
+   "name": "close-settings",
+   "ms": 211,
+   "transitionMs": 210
+  },
+  {
+   "name": "open-race-select",
+   "ms": 164,
+   "transitionMs": 164
+  },
+  {
+   "name": "select-idle",
+   "ms": 4071,
+   "frames": 161,
+   "avgFps": 40.1,
+   "p5Fps": 17.2,
+   "p1Fps": 6,
+   "worstMs": 182,
+   "gt33": 29,
+   "gt50": 14,
+   "gt100": 3
+  },
+  {
+   "name": "back-from-select",
+   "ms": 141,
+   "transitionMs": 141
+  },
+  {
+   "name": "title-again-idle",
+   "ms": 3921,
+   "frames": 66,
+   "avgFps": 17.2,
+   "p5Fps": 9.9,
+   "p1Fps": 0.8,
+   "worstMs": 1228,
+   "gt33": 6,
+   "gt50": 5,
+   "gt100": 4
+  },
+  {
+   "name": "open-garage",
+   "ms": 463,
+   "transitionMs": 463
+  },
+  {
+   "name": "garage-idle",
+   "ms": 6108,
+   "frames": 360,
+   "avgFps": 59.9,
+   "p5Fps": 58.8,
+   "p1Fps": 40,
+   "worstMs": 54,
+   "gt33": 2,
+   "gt50": 1,
+   "gt100": 0
+  },
+  {
+   "name": "garage-orbit",
+   "ms": 15912,
+   "frames": 478,
+   "avgFps": 59.7,
+   "p5Fps": 55.6,
+   "p1Fps": 33.3,
+   "worstMs": 49,
+   "gt33": 3,
+   "gt50": 0,
+   "gt100": 0
+  },
+  {
+   "name": "team-ferrari",
+   "ms": 3479,
+   "switchCallMs": 179,
+   "ok": true,
+   "frames": 177,
+   "avgFps": 58.9,
+   "p5Fps": 47.6,
+   "p1Fps": 25,
+   "worstMs": 56,
+   "gt33": 2,
+   "gt50": 1,
+   "gt100": 0
+  },
+  {
+   "name": "team-mclaren",
+   "ms": 4329,
+   "switchCallMs": 1029,
+   "ok": true,
+   "frames": 178,
+   "avgFps": 59.3,
+   "p5Fps": 52.6,
+   "p1Fps": 25.6,
+   "worstMs": 51,
+   "gt33": 2,
+   "gt50": 1,
+   "gt100": 0
+  },
+  {
+   "name": "team-redbull",
+   "ms": 3525,
+   "switchCallMs": 225,
+   "ok": true,
+   "frames": 176,
+   "avgFps": 58.4,
+   "p5Fps": 52.6,
+   "p1Fps": 25.6,
+   "worstMs": 58,
+   "gt33": 3,
+   "gt50": 1,
+   "gt100": 0
+  },
+  {
+   "name": "parts",
+   "ms": 79,
+   "tabs": [
+    "cs-tab-team:TEAMVerstappen",
+    "cs-tab-engine:ENGINEFord Powertrai",
+    "cs-tab-aero:AEROCircuit Adaptive",
+    "cs-tab-suspension:SUSPKeynes Pullrod",
+    "cs-tab-brakes:BRAKESKeynes Brake P",
+    "cs-tab-tyres:TYRESKeynes Compound",
+    "cs-tab-ers:ERSKeynes Deploy Map",
+    "cs-tab-gearbox:GEARBOXKeynes Gearca",
+    "cs-tab-fuel:FUELKeynes Blend",
+    "cs-tab-exhaust:EXHAUSTKeynes Exhaus",
+    "cs-tab-floor:FLOORKeynes Floor",
+    "cs-tab-cockpit:COCKPITKeynes Cockpi",
+    "cs-tab-wheels:WHEELSStandard",
+    "cs-tab-tune:SETUPWORKS",
+    "cs-tab-livery:LIVERYCUSTOM"
+   ]
+  },
+  {
+   "name": "open-livery-tab",
+   "ms": 209,
+   "tab": "cs-tab-livery",
+   "transitionMs": 208
+  },
+  {
+   "name": "livery-apply-0",
+   "ms": 2899,
+   "pill": "Matte NavyPAINT /228",
+   "applyTo2FramesMs": 173,
+   "frames": 144,
+   "avgFps": 57.5,
+   "p5Fps": 52.6,
+   "p1Fps": 18.9,
+   "worstMs": 100,
+   "gt33": 2,
+   "gt50": 2,
+   "gt100": 0
+  },
+  {
+   "name": "livery-apply-1",
+   "ms": 2901,
+   "pill": "⧉ /228",
+   "applyTo2FramesMs": 142,
+   "frames": 147,
+   "avgFps": 58.7,
+   "p5Fps": 50,
+   "p1Fps": 30.3,
+   "worstMs": 55,
+   "gt33": 1,
+   "gt50": 1,
+   "gt100": 0
+  },
+  {
+   "name": "livery-apply-2",
+   "ms": 2844,
+   "pill": "ACID CARBON /72",
+   "applyTo2FramesMs": 147,
+   "frames": 145,
+   "avgFps": 57.7,
+   "p5Fps": 50,
+   "p1Fps": 28.6,
+   "worstMs": 66,
+   "gt33": 3,
+   "gt50": 1,
+   "gt100": 0
+  },
+  {
+   "name": "livery-apply-3",
+   "ms": 2872,
+   "pill": " /75",
+   "applyTo2FramesMs": 141,
+   "frames": 149,
+   "avgFps": 59.4,
+   "p5Fps": 52.6,
+   "p1Fps": 26.3,
+   "worstMs": 48,
+   "gt33": 2,
+   "gt50": 0,
+   "gt100": 0
+  },
+  {
+   "name": "livery-apply-4",
+   "ms": 2822,
+   "pill": " /73",
+   "applyTo2FramesMs": 134,
+   "frames": 148,
+   "avgFps": 58.9,
+   "p5Fps": 50,
+   "p1Fps": 41.7,
+   "worstMs": 62,
+   "gt33": 1,
+   "gt50": 1,
+   "gt100": 0
+  },
+  {
+   "name": "livery-apply-5",
+   "ms": 2798,
+   "pill": "finish:matte /73",
+   "applyTo2FramesMs": 107,
+   "frames": 149,
+   "avgFps": 59.5,
+   "p5Fps": 52.6,
+   "p1Fps": 40,
+   "worstMs": 54,
+   "gt33": 1,
+   "gt50": 1,
+   "gt100": 0
+  },
+  {
+   "name": "close-garage",
+   "ms": 197,
+   "transitionMs": 196
+  }
+ ],
+ "shots": [
+  "results/ui_iphone15-ios26__title.png",
+  "results/ui_iphone15-ios26__settings.png",
+  "results/ui_iphone15-ios26__race-select.png",
+  "results/ui_iphone15-ios26__garage.png",
+  "results/ui_iphone15-ios26__garage-team.png",
+  "results/ui_iphone15-ios26__livery.png",
+  "results/ui_iphone15-ios26__livery-after.png",
+  "results/ui_iphone15-ios26__end.png"
+ ],
+ "session": "c0e06458aecf379dac2f33b58bcaa49d5982f231",
+ "bootMs": 2302,
+ "gfx": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": null,
+  "gfxHigh": null,
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 2,
+  "autoTier": 0,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "errors": [],
+ "logs": [
+  "{\"id\":18,\"t\":1561,\"ns\":\"gfx\",\"level\":\"warn\",\"msg\":\"TLX on a phone: three keeps ~54 MB of CPU geometry copies — a jetsam mid-race reverts to WebGL2 at the next boot; apex26.tlxMobile=0 declines\"}",
+  "{\"id\":102,\"t\":2567,\"ns\":\"scenery\",\"level\":\"warn\",\"msg\":\"bahrain: suppressed mountain=3\"}"
+ ]
+}

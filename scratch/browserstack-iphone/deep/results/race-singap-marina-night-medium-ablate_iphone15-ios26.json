@@ -1,0 +1,1297 @@
+{
+ "scen": "race:singap|marina:night:medium:ablate",
+ "device": "iPhone 15",
+ "os": "26",
+ "tag": "race-singap-marina-night-medium-ablate_iphone15-ios26",
+ "startPT": "10/21/2026, 9:50:52 PM",
+ "steps": [
+  {
+   "name": "raceEntry",
+   "ms": 15608,
+   "entryMs": 13382,
+   "result": "ok",
+   "gapsTotalMs": 10165,
+   "gapsN": 35,
+   "gapsTop": [
+    {
+     "at": 8243,
+     "d": 5263
+    },
+    {
+     "at": 6333,
+     "d": 1472
+    },
+    {
+     "at": 7830,
+     "d": 316
+    },
+    {
+     "at": 1106,
+     "d": 282
+    },
+    {
+     "at": 2488,
+     "d": 207
+    },
+    {
+     "at": 921,
+     "d": 185
+    },
+    {
+     "at": 444,
+     "d": 172
+    },
+    {
+     "at": 3203,
+     "d": 161
+    },
+    {
+     "at": 776,
+     "d": 145
+    },
+    {
+     "at": 13506,
+     "d": 144
+    },
+    {
+     "at": 5184,
+     "d": 140
+    },
+    {
+     "at": 4268,
+     "d": 119
+    },
+    {
+     "at": 638,
+     "d": 107
+    },
+    {
+     "at": 1811,
+     "d": 88
+    },
+    {
+     "at": 13650,
+     "d": 88
+    }
+   ],
+   "stages": {
+    "entry": "startRace",
+    "software": false,
+    "budgetMs": 120000,
+    "budgetLeftMs": 104802,
+    "windowMs": 13450,
+    "stages": [
+     {
+      "n": "scenery",
+      "ms": 14,
+      "kind": "leg"
+     },
+     {
+      "n": "resets",
+      "ms": 134,
+      "kind": "leg"
+     },
+     {
+      "n": "loadTrack",
+      "ms": 915,
+      "kind": "leg"
+     },
+     {
+      "n": "makeCars",
+      "ms": 3,
+      "kind": "leg"
+     },
+     {
+      "n": "settings",
+      "ms": 137,
+      "kind": "leg"
+     },
+     {
+      "n": "gridUp",
+      "ms": 7,
+      "kind": "leg"
+     },
+     {
+      "n": "finish",
+      "ms": 1,
+      "kind": "leg"
+     },
+     {
+      "n": "ensureScenery",
+      "ms": 13,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "gridCountdown",
+      "ms": 1934,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "warmCarAssets",
+      "ms": 1890,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "debrisPrime",
+      "ms": 1,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "rigWarm",
+      "ms": 31,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "mirrorPrepare",
+      "ms": 9980,
+      "kind": "span",
+      "open": false
+     }
+    ],
+    "blockMs": 0,
+    "maxBlockMs": 0
+   },
+   "legs": [
+    {
+     "n": "scenery",
+     "ms": 14
+    },
+    {
+     "n": "resets",
+     "ms": 134
+    },
+    {
+     "n": "loadTrack",
+     "ms": 915
+    },
+    {
+     "n": "makeCars",
+     "ms": 3
+    },
+    {
+     "n": "settings",
+     "ms": 137
+    },
+    {
+     "n": "gridUp",
+     "ms": 7
+    },
+    {
+     "n": "finish",
+     "ms": 1
+    }
+   ],
+   "longtasks": {
+    "sup": false,
+    "e": []
+   },
+   "res": {
+    "n": 24,
+    "by": {
+     "js": {
+      "n": 20,
+      "kb": 0,
+      "ms": 82
+     },
+     "json": {
+      "n": 1,
+      "kb": 14,
+      "ms": 90
+     },
+     "bin": {
+      "n": 1,
+      "kb": 5889,
+      "ms": 271
+     },
+     "woff2": {
+      "n": 2,
+      "kb": 0,
+      "ms": 11
+     }
+    },
+    "top": [
+     {
+      "u": "assets/voice/fable.bin",
+      "ms": 271,
+      "st": 6491,
+      "kb": 5889
+     },
+     {
+      "u": "assets/voice/fable.json",
+      "ms": 90,
+      "st": 6490,
+      "kb": 14
+     },
+     {
+      "u": "js/audio/announcer-recorded.js?v=d43aae5f515f",
+      "ms": 82,
+      "st": 6320,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/driving-cues.js?v=b90d93165b2d",
+      "ms": 82,
+      "st": 6320,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/voice-pack.js?v=c529f5e5cafe",
+      "ms": 81,
+      "st": 6320,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/battle-earcon.js?v=6c3758a2771f",
+      "ms": 81,
+      "st": 6320,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/rivals.js?v=76e8cbc3e70c",
+      "ms": 24,
+      "st": 6320,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/car-sfx.js?v=fe869b5266af",
+      "ms": 24,
+      "st": 6320,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/ers-layer.js?v=8136baec9d68",
+      "ms": 20,
+      "st": 6320,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/spotify.js?v=e3d9a867e6c5",
+      "ms": 20,
+      "st": 6320,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/radio-fx.js?v=d79136f3588f",
+      "ms": 18,
+      "st": 6319,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/tone-model.js?v=80b84f21d9ce",
+      "ms": 18,
+      "st": 6320,
+      "kb": 0
+     }
+    ]
+   },
+   "logs": [
+    [
+     6852,
+     "scenery",
+     "info",
+     "singapore: superseded by the pit complex signBoard=1 place=28 floodMast=9 palm=6 bush=1"
+    ],
+    [
+     6852,
+     "track",
+     "info",
+     "singapore: culled 16 on-track primitive(s)"
+    ],
+    [
+     6852,
+     "track",
+     "info",
+     "buildProps done singapore verts=240532"
+    ],
+    [
+     6915,
+     "track",
+     "info",
+     "pits singapore: 12 bays, wall true, 8 lamps"
+    ],
+    [
+     6920,
+     "audio",
+     "info",
+     "VoicePack fable ready: 790 clips"
+    ],
+    [
+     7347,
+     "track",
+     "info",
+     "build done singapore total=4906.3 n=1227 night=true"
+    ],
+    [
+     7347,
+     "game",
+     "info",
+     "AeroZones.build track=singapore"
+    ],
+    [
+     7347,
+     "car",
+     "info",
+     "ghost load singapore none"
+    ],
+    [
+     7350,
+     "game",
+     "info",
+     "Atmosphere.applyRaceSettings tod=night wx=dry"
+    ],
+    [
+     7487,
+     "gfx",
+     "info",
+     "lamp bake 248 lamps -> 918 tiles, atlas 756x792 @1.55 m in 134 ms"
+    ],
+    [
+     7495,
+     "game",
+     "info",
+     "race singapore race laps=20 pace=0.840 vTop=60.5m/s grip=1.00 weather=dry tod=night mods=s1.00/a1.88/c2.05/b1.52 aeroLoad=0.81 assists=help0"
+    ],
+    [
+     7495,
+     "game",
+     "info",
+     "Reliability.arm scale=0 n=22"
+    ],
+    [
+     7521,
+     "game",
+     "info",
+     "garage released for the race"
+    ],
+    [
+     7530,
+     "car",
+     "info",
+     "build mercedes"
+    ],
+    [
+     7608,
+     "car",
+     "info",
+     "livery mercedes"
+    ],
+    [
+     7663,
+     "car",
+     "info",
+     "build mercedes"
+    ],
+    [
+     7722,
+     "car",
+     "info",
+     "build ferrari"
+    ],
+    [
+     7776,
+     "car",
+     "info",
+     "livery ferrari"
+    ],
+    [
+     7811,
+     "car",
+     "info",
+     "build ferrari"
+    ],
+    [
+     7864,
+     "car",
+     "info",
+     "livery ferrari"
+    ],
+    [
+     7889,
+     "car",
+     "info",
+     "build mclaren"
+    ],
+    [
+     7972,
+     "car",
+     "info",
+     "build mclaren"
+    ],
+    [
+     8029,
+     "car",
+     "info",
+     "build redbull"
+    ],
+    [
+     8104,
+     "car",
+     "info",
+     "build redbull"
+    ],
+    [
+     8116,
+     "car",
+     "info",
+     "build redbull"
+    ],
+    [
+     8228,
+     "car",
+     "info",
+     "build alpine"
+    ],
+    [
+     8317,
+     "car",
+     "info",
+     "build alpine"
+    ],
+    [
+     8368,
+     "car",
+     "info",
+     "build racingbulls"
+    ],
+    [
+     8420,
+     "car",
+     "info",
+     "livery racingbulls"
+    ],
+    [
+     8456,
+     "car",
+     "info",
+     "build racingbulls"
+    ],
+    [
+     8500,
+     "car",
+     "info",
+     "livery racingbulls"
+    ],
+    [
+     8504,
+     "car",
+     "info",
+     "build haas"
+    ],
+    [
+     8577,
+     "car",
+     "info",
+     "build haas"
+    ],
+    [
+     8624,
+     "car",
+     "info",
+     "livery haas"
+    ],
+    [
+     8630,
+     "car",
+     "info",
+     "build williams"
+    ],
+    [
+     8676,
+     "car",
+     "info",
+     "livery williams"
+    ],
+    [
+     8842,
+     "car",
+     "info",
+     "build williams"
+    ],
+    [
+     8922,
+     "car",
+     "info",
+     "livery williams"
+    ],
+    [
+     8926,
+     "car",
+     "info",
+     "build audi"
+    ],
+    [
+     8988,
+     "car",
+     "info",
+     "livery audi"
+    ],
+    [
+     9027,
+     "car",
+     "info",
+     "build audi"
+    ],
+    [
+     9081,
+     "car",
+     "info",
+     "livery audi"
+    ],
+    [
+     9097,
+     "car",
+     "info",
+     "build astonmartin"
+    ],
+    [
+     9169,
+     "car",
+     "info",
+     "livery astonmartin"
+    ],
+    [
+     9220,
+     "car",
+     "info",
+     "build astonmartin"
+    ],
+    [
+     9280,
+     "car",
+     "info",
+     "build cadillac"
+    ],
+    [
+     9332,
+     "car",
+     "info",
+     "livery cadillac"
+    ],
+    [
+     9352,
+     "car",
+     "info",
+     "build cadillac"
+    ],
+    [
+     9404,
+     "car",
+     "info",
+     "livery cadillac"
+    ],
+    [
+     9420,
+     "gfx",
+     "info",
+     "race car assets ready {\"cars\":22,\"casters\":false,\"lodWarm\":true,\"cpuMs\":1462,\"maxStepMs\":84,\"yields\":39,\"wallMs\":1890,\"deferred\":8}"
+    ],
+    [
+     9421,
+     "game",
+     "info",
+     "State menu->count why=race-start raceT=0.0"
+    ],
+    [
+     14209,
+     "gfx",
+     "info",
+     "TLX per-chunk lamps ON lamps=248 chunks=550 recs=3 idx=2902 grid=32x24"
+    ],
+    [
+     19721,
+     "car",
+     "info",
+     "livery mercedes"
+    ],
+    [
+     19863,
+     "car",
+     "info",
+     "livery mclaren"
+    ],
+    [
+     19952,
+     "car",
+     "info",
+     "livery mclaren"
+    ],
+    [
+     19954,
+     "car",
+     "info",
+     "livery redbull"
+    ],
+    [
+     19977,
+     "car",
+     "info",
+     "livery alpine"
+    ],
+    [
+     20020,
+     "car",
+     "info",
+     "livery alpine"
+    ],
+    [
+     20023,
+     "car",
+     "info",
+     "livery haas"
+    ],
+    [
+     20057,
+     "car",
+     "info",
+     "livery astonmartin"
+    ]
+   ]
+  },
+  {
+   "name": "drive",
+   "ms": 31544,
+   "frames": 1402,
+   "avgFps": 46.7,
+   "p5Fps": 33.3,
+   "p1Fps": 24.4,
+   "worstMs": 62,
+   "gt33": 43,
+   "gt50": 4,
+   "gt100": 0,
+   "buckets": [
+    45.8,
+    51.9
+   ],
+   "perf": {
+    "frame": {
+     "p50": 5,
+     "p95": 8,
+     "p99": 20,
+     "max": 37,
+     "mean": 4.95,
+     "n": 1406
+    },
+    "input": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.02,
+     "n": 1406
+    },
+    "physics": {
+     "p50": 1,
+     "p95": 3,
+     "p99": 5,
+     "max": 16,
+     "mean": 1.25,
+     "n": 1406
+    },
+    "ai": {
+     "p50": 1,
+     "p95": 1,
+     "p99": 2,
+     "max": 15,
+     "mean": 0.75,
+     "n": 1797
+    },
+    "collide": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.05,
+     "n": 1797
+    },
+    "audio": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.01,
+     "n": 1797
+    },
+    "camera": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 0,
+     "max": 1,
+     "mean": 0,
+     "n": 1406
+    },
+    "render": {
+     "p50": 3,
+     "p95": 5,
+     "p99": 6,
+     "max": 25,
+     "mean": 3.28,
+     "n": 1406
+    },
+    "hud": {
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 18,
+     "mean": 0.24,
+     "n": 1406
+    }
+   },
+   "render": {
+    "occl": {
+     "supported": false,
+     "on": false
+    },
+    "md": {
+     "supported": false,
+     "on": false
+    },
+    "tier": 2,
+    "autoTier": 0,
+    "floorMs": 26.2,
+    "autoShed": 0,
+    "gpu": {
+     "supported": false,
+     "on": false,
+     "ms": -1,
+     "software": false
+    },
+    "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+   }
+  },
+  {
+   "name": "ablate-noProps",
+   "ms": 9530,
+   "frames": 235,
+   "avgFps": 29.3,
+   "p5Fps": 20.8,
+   "p1Fps": 15.9,
+   "worstMs": 68,
+   "gt33": 100,
+   "gt50": 8,
+   "gt100": 0,
+   "perf": {
+    "frame": {
+     "p50": 6,
+     "p95": 13,
+     "p99": 31,
+     "max": 42,
+     "mean": 7.48,
+     "n": 239
+    },
+    "input": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.03,
+     "n": 239
+    },
+    "physics": {
+     "p50": 2,
+     "p95": 5,
+     "p99": 6,
+     "max": 7,
+     "mean": 2.34,
+     "n": 239
+    },
+    "ai": {
+     "p50": 1,
+     "p95": 2,
+     "p99": 3,
+     "max": 3,
+     "mean": 0.95,
+     "n": 487
+    },
+    "collide": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.03,
+     "n": 487
+    },
+    "audio": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.01,
+     "n": 487
+    },
+    "camera": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 0,
+     "max": 1,
+     "mean": 0.01,
+     "n": 239
+    },
+    "render": {
+     "p50": 4,
+     "p95": 7,
+     "p99": 10,
+     "max": 11,
+     "mean": 4.25,
+     "n": 239
+    },
+    "hud": {
+     "p50": 0,
+     "p95": 1,
+     "p99": 15,
+     "max": 23,
+     "mean": 0.39,
+     "n": 239
+    }
+   },
+   "render": {
+    "occl": {
+     "supported": false,
+     "on": false
+    },
+    "md": {
+     "supported": false,
+     "on": false
+    },
+    "tier": 2,
+    "autoTier": 0,
+    "floorMs": 31.5,
+    "autoShed": 0,
+    "gpu": {
+     "supported": false,
+     "on": false,
+     "ms": -1,
+     "software": false
+    },
+    "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+   }
+  },
+  {
+   "name": "ablate-noTerrain",
+   "ms": 9503,
+   "frames": 202,
+   "avgFps": 25.1,
+   "p5Fps": 19.6,
+   "p1Fps": 16.1,
+   "worstMs": 84,
+   "gt33": 165,
+   "gt50": 11,
+   "gt100": 0,
+   "perf": {
+    "frame": {
+     "p50": 8,
+     "p95": 14,
+     "p99": 29,
+     "max": 36,
+     "mean": 9.17,
+     "n": 206
+    },
+    "input": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.03,
+     "n": 206
+    },
+    "physics": {
+     "p50": 3,
+     "p95": 6,
+     "p99": 13,
+     "max": 24,
+     "mean": 3.39,
+     "n": 206
+    },
+    "ai": {
+     "p50": 1,
+     "p95": 2,
+     "p99": 3,
+     "max": 14,
+     "mean": 1.13,
+     "n": 489
+    },
+    "collide": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.04,
+     "n": 489
+    },
+    "audio": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.02,
+     "n": 489
+    },
+    "camera": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 0,
+     "max": 1,
+     "mean": 0.01,
+     "n": 206
+    },
+    "render": {
+     "p50": 5,
+     "p95": 7,
+     "p99": 9,
+     "max": 10,
+     "mean": 5.19,
+     "n": 206
+    },
+    "hud": {
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 3,
+     "mean": 0.24,
+     "n": 206
+    }
+   },
+   "render": {
+    "occl": {
+     "supported": false,
+     "on": false
+    },
+    "md": {
+     "supported": false,
+     "on": false
+    },
+    "tier": 2,
+    "autoTier": 0,
+    "floorMs": 30.3,
+    "autoShed": 0,
+    "gpu": {
+     "supported": false,
+     "on": false,
+     "ms": -1,
+     "software": false
+    },
+    "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+   }
+  },
+  {
+   "name": "ablate-noCars",
+   "ms": 9479,
+   "frames": 185,
+   "avgFps": 23.1,
+   "p5Fps": 16.9,
+   "p1Fps": 11.2,
+   "worstMs": 90,
+   "gt33": 151,
+   "gt50": 35,
+   "gt100": 0,
+   "perf": {
+    "frame": {
+     "p50": 9,
+     "p95": 15,
+     "p99": 38,
+     "max": 42,
+     "mean": 9.6,
+     "n": 189
+    },
+    "input": {
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.06,
+     "n": 189
+    },
+    "physics": {
+     "p50": 3,
+     "p95": 6,
+     "p99": 10,
+     "max": 18,
+     "mean": 3.1,
+     "n": 189
+    },
+    "ai": {
+     "p50": 1,
+     "p95": 2,
+     "p99": 3,
+     "max": 8,
+     "mean": 0.97,
+     "n": 483
+    },
+    "collide": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.04,
+     "n": 483
+    },
+    "audio": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 0,
+     "max": 1,
+     "mean": 0.01,
+     "n": 483
+    },
+    "camera": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 0,
+     "max": 1,
+     "mean": 0.01,
+     "n": 189
+    },
+    "render": {
+     "p50": 5,
+     "p95": 8,
+     "p99": 10,
+     "max": 10,
+     "mean": 5.35,
+     "n": 189
+    },
+    "hud": {
+     "p50": 0,
+     "p95": 1,
+     "p99": 18,
+     "max": 32,
+     "mean": 0.52,
+     "n": 189
+    }
+   },
+   "render": {
+    "occl": {
+     "supported": false,
+     "on": false
+    },
+    "md": {
+     "supported": false,
+     "on": false
+    },
+    "tier": 2,
+    "autoTier": 0,
+    "floorMs": 35.8,
+    "autoShed": 0,
+    "gpu": {
+     "supported": false,
+     "on": false,
+     "ms": -1,
+     "software": false
+    },
+    "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+   }
+  },
+  {
+   "name": "ablate-base",
+   "ms": 8376,
+   "frames": 218,
+   "avgFps": 27.2,
+   "p5Fps": 18.9,
+   "p1Fps": 14.7,
+   "worstMs": 88,
+   "gt33": 133,
+   "gt50": 16,
+   "gt100": 0,
+   "perf": {
+    "frame": {
+     "p50": 7,
+     "p95": 12,
+     "p99": 39,
+     "max": 41,
+     "mean": 7.94,
+     "n": 224
+    },
+    "input": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.03,
+     "n": 224
+    },
+    "physics": {
+     "p50": 2,
+     "p95": 5,
+     "p99": 6,
+     "max": 6,
+     "mean": 2.38,
+     "n": 224
+    },
+    "ai": {
+     "p50": 1,
+     "p95": 2,
+     "p99": 3,
+     "max": 3,
+     "mean": 0.9,
+     "n": 492
+    },
+    "collide": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.05,
+     "n": 492
+    },
+    "audio": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.02,
+     "n": 492
+    },
+    "camera": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 0,
+     "max": 1,
+     "mean": 0,
+     "n": 224
+    },
+    "render": {
+     "p50": 5,
+     "p95": 6,
+     "p99": 7,
+     "max": 13,
+     "mean": 4.67,
+     "n": 224
+    },
+    "hud": {
+     "p50": 0,
+     "p95": 1,
+     "p99": 13,
+     "max": 28,
+     "mean": 0.49,
+     "n": 224
+    }
+   },
+   "render": {
+    "occl": {
+     "supported": false,
+     "on": false
+    },
+    "md": {
+     "supported": false,
+     "on": false
+    },
+    "tier": 2,
+    "autoTier": 0,
+    "floorMs": 27.4,
+    "autoShed": 0,
+    "gpu": {
+     "supported": false,
+     "on": false,
+     "ms": -1,
+     "software": false
+    },
+    "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+   }
+  }
+ ],
+ "session": "c7d3e81c2ad389e2ca1e75dd48c23ff4e8ebbfa1",
+ "bootMs": 5550,
+ "rebootMs": 4987,
+ "gfxMenu": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": "\"medium\"",
+  "gfxHigh": "0",
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 2,
+  "autoTier": 0,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "renderMenu": {
+  "occl": {
+   "supported": false,
+   "on": false
+  },
+  "md": {
+   "supported": false,
+   "on": false
+  },
+  "tier": 2,
+  "autoTier": 0,
+  "floorMs": 16.7,
+  "autoShed": 0,
+  "gpu": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+ },
+ "diagGfx": {
+  "err": "ReferenceError: Can't find variable: G"
+ },
+ "trackId": "singapore",
+ "ensureMs": 4,
+ "gfxRace": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": "\"medium\"",
+  "gfxHigh": "0",
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 4,
+  "autoTier": 4,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "ap": {
+  "maxKph": 189,
+  "offRoadFrames": 0,
+  "ticks": 2519,
+  "err": null,
+  "lastSpeedKph": 126
+ },
+ "errors": [],
+ "endPT": "10/21/2026, 9:52:53 PM"
+}

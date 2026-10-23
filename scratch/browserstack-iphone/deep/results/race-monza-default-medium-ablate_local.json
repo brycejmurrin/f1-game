@@ -1,0 +1,1650 @@
+{
+ "scen": "race:monza:default:medium:ablate",
+ "device": "local-chromium",
+ "os": "26",
+ "tag": "race-monza-default-medium-ablate_local",
+ "startPT": "10/21/2026, 9:34:18 PM",
+ "steps": [
+  {
+   "name": "raceEntry",
+   "ms": 35393,
+   "entryMs": 16996,
+   "result": "ok",
+   "gapsTotalMs": 17319,
+   "gapsN": 30,
+   "gapsTop": [
+    {
+     "at": 3724,
+     "d": 13233
+    },
+    {
+     "at": 775,
+     "d": 317
+    },
+    {
+     "at": 1708,
+     "d": 250
+    },
+    {
+     "at": 16957,
+     "d": 250
+    },
+    {
+     "at": 17207,
+     "d": 233
+    },
+    {
+     "at": 1491,
+     "d": 217
+    },
+    {
+     "at": 2341,
+     "d": 167
+    },
+    {
+     "at": 1208,
+     "d": 150
+    },
+    {
+     "at": 1958,
+     "d": 150
+    },
+    {
+     "at": 3008,
+     "d": 150
+    },
+    {
+     "at": 1358,
+     "d": 133
+    },
+    {
+     "at": 2108,
+     "d": 133
+    },
+    {
+     "at": 2624,
+     "d": 133
+    },
+    {
+     "at": 2874,
+     "d": 133
+    },
+    {
+     "at": 258,
+     "d": 117
+    }
+   ],
+   "stages": {
+    "entry": "startRace",
+    "software": false,
+    "budgetMs": 120000,
+    "budgetLeftMs": 95524.9,
+    "windowMs": 17149.5,
+    "stages": [
+     {
+      "n": "scenery",
+      "ms": 153.7,
+      "kind": "leg"
+     },
+     {
+      "n": "resets",
+      "ms": 256.9,
+      "kind": "leg"
+     },
+     {
+      "n": "loadTrack",
+      "ms": 1085.3,
+      "kind": "leg"
+     },
+     {
+      "n": "makeCars",
+      "ms": 3.4,
+      "kind": "leg"
+     },
+     {
+      "n": "settings",
+      "ms": 2,
+      "kind": "leg"
+     },
+     {
+      "n": "gridUp",
+      "ms": 16.4,
+      "kind": "leg"
+     },
+     {
+      "n": "finish",
+      "ms": 0.8,
+      "kind": "leg"
+     },
+     {
+      "n": "ensureScenery",
+      "ms": 153,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "gridCountdown",
+      "ms": 2324.1,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "warmCarAssets",
+      "ms": 2303.8,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "debrisPrime",
+      "ms": 1.3,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "rigWarm",
+      "ms": 0.2,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "mirrorPrepare",
+      "ms": 0.2,
+      "kind": "span",
+      "open": false
+     }
+    ],
+    "blockMs": 15417,
+    "maxBlockMs": 13107
+   },
+   "legs": [
+    {
+     "n": "scenery",
+     "ms": 153.7
+    },
+    {
+     "n": "resets",
+     "ms": 256.9
+    },
+    {
+     "n": "loadTrack",
+     "ms": 1085.3
+    },
+    {
+     "n": "makeCars",
+     "ms": 3.4
+    },
+    {
+     "n": "settings",
+     "ms": 2
+    },
+    {
+     "n": "gridUp",
+     "ms": 16.4
+    },
+    {
+     "n": "finish",
+     "ms": 0.8
+    }
+   ],
+   "longtasks": {
+    "sup": true,
+    "e": [
+     {
+      "t": 3640,
+      "d": 122,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 3930,
+      "d": 972,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 42200,
+      "d": 55,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 42414,
+      "d": 85,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 42645,
+      "d": 97,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 42759,
+      "d": 113,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 42875,
+      "d": 50,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 43094,
+      "d": 57,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 43176,
+      "d": 266,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 43463,
+      "d": 76,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 43741,
+      "d": 69,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 43881,
+      "d": 199,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 44089,
+      "d": 88,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 44178,
+      "d": 159,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 44338,
+      "d": 82,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 44420,
+      "d": 59,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 44515,
+      "d": 52,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 44568,
+      "d": 50,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 44620,
+      "d": 62,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 44761,
+      "d": 128,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 44927,
+      "d": 78,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 45007,
+      "d": 87,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 45166,
+      "d": 56,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 45324,
+      "d": 69,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 45423,
+      "d": 54,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 45478,
+      "d": 57,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 45579,
+      "d": 75,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 45705,
+      "d": 66,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 45808,
+      "d": 76,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 46231,
+      "d": 13107,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 59384,
+      "d": 207,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 59677,
+      "d": 150,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 59834,
+      "d": 71,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 60129,
+      "d": 3610,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 63741,
+      "d": 2333,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 66078,
+      "d": 776,
+      "n": "self",
+      "a": "unknown"
+     },
+     {
+      "t": 66863,
+      "d": 1843,
+      "n": "self",
+      "a": "unknown"
+     }
+    ]
+   },
+   "res": {
+    "n": 34,
+    "by": {
+     "js": {
+      "n": 21,
+      "kb": 91,
+      "ms": 25
+     },
+     "bin": {
+      "n": 9,
+      "kb": 16,
+      "ms": 17034
+     },
+     "mp3": {
+      "n": 1,
+      "kb": 474,
+      "ms": 141
+     },
+     "json": {
+      "n": 1,
+      "kb": 14,
+      "ms": 95
+     },
+     "woff2": {
+      "n": 2,
+      "kb": 43,
+      "ms": 7
+     }
+    },
+    "top": [
+     {
+      "u": "assets/voice/fable.bin",
+      "ms": 17034,
+      "st": 42795,
+      "kb": 0
+     },
+     {
+      "u": "assets/sfx/f1_engine.mp3",
+      "ms": 141,
+      "st": 42739,
+      "kb": 474
+     },
+     {
+      "u": "assets/pack/models/k_pitsoffice.bin",
+      "ms": 129,
+      "st": 42406,
+      "kb": 1
+     },
+     {
+      "u": "assets/pack/models/k_bannertowerred.bin",
+      "ms": 127,
+      "st": 42406,
+      "kb": 4
+     },
+     {
+      "u": "assets/pack/models/k_radarequipment.bin",
+      "ms": 116,
+      "st": 42406,
+      "kb": 4
+     },
+     {
+      "u": "assets/pack/models/k_barrierwhite.bin",
+      "ms": 116,
+      "st": 42406,
+      "kb": 1
+     },
+     {
+      "u": "assets/pack/models/k_tentlong.bin",
+      "ms": 110,
+      "st": 42406,
+      "kb": 1
+     },
+     {
+      "u": "assets/pack/models/k_pitsgarageclosed.bin",
+      "ms": 107,
+      "st": 42406,
+      "kb": 2
+     },
+     {
+      "u": "assets/pack/models/k_pitsgarage.bin",
+      "ms": 98,
+      "st": 42406,
+      "kb": 1
+     },
+     {
+      "u": "assets/pack/models/k_pylon.bin",
+      "ms": 95,
+      "st": 42406,
+      "kb": 1
+     },
+     {
+      "u": "assets/voice/fable.json",
+      "ms": 95,
+      "st": 42795,
+      "kb": 14
+     },
+     {
+      "u": "js/audio/signal.js?v=f0dfd98e1e31",
+      "ms": 25,
+      "st": 42567,
+      "kb": 2
+     }
+    ]
+   },
+   "logs": [
+    [
+     43467,
+     "track",
+     "info",
+     "monza: culled 51 on-track primitive(s)"
+    ],
+    [
+     43475,
+     "track",
+     "info",
+     "buildProps done monza verts=269567"
+    ],
+    [
+     43539,
+     "track",
+     "info",
+     "pits monza: 12 bays, wall true, 8 lamps"
+    ],
+    [
+     43880,
+     "track",
+     "info",
+     "build done monza total=5777.6 n=1444 night=false"
+    ],
+    [
+     43881,
+     "game",
+     "info",
+     "AeroZones.build track=monza"
+    ],
+    [
+     43881,
+     "car",
+     "info",
+     "ghost load monza none"
+    ],
+    [
+     43885,
+     "game",
+     "info",
+     "Atmosphere.applyRaceSettings tod=default wx=dry"
+    ],
+    [
+     43904,
+     "game",
+     "info",
+     "race monza race laps=20 pace=0.840 vTop=60.5m/s grip=1.00 weather=dry tod=default mods=s1.00/a1.88/c2.05/b1.52 aeroLoad=0.81 assists=help0.0"
+    ],
+    [
+     43904,
+     "game",
+     "info",
+     "Reliability.arm scale=0 n=22"
+    ],
+    [
+     43906,
+     "game",
+     "info",
+     "garage released for the race"
+    ],
+    [
+     43911,
+     "car",
+     "info",
+     "build mercedes"
+    ],
+    [
+     44095,
+     "car",
+     "info",
+     "livery mercedes"
+    ],
+    [
+     44338,
+     "car",
+     "info",
+     "build mercedes"
+    ],
+    [
+     44420,
+     "car",
+     "info",
+     "livery mercedes"
+    ],
+    [
+     44423,
+     "car",
+     "info",
+     "build ferrari"
+    ],
+    [
+     44516,
+     "car",
+     "info",
+     "build ferrari"
+    ],
+    [
+     44568,
+     "car",
+     "info",
+     "build mclaren"
+    ],
+    [
+     44683,
+     "car",
+     "info",
+     "build mclaren"
+    ],
+    [
+     44726,
+     "car",
+     "info",
+     "livery mclaren"
+    ],
+    [
+     44763,
+     "car",
+     "info",
+     "build redbull"
+    ],
+    [
+     44873,
+     "car",
+     "info",
+     "build redbull"
+    ],
+    [
+     44890,
+     "car",
+     "info",
+     "livery redbull"
+    ],
+    [
+     44930,
+     "car",
+     "info",
+     "build redbull"
+    ],
+    [
+     45095,
+     "car",
+     "info",
+     "build alpine"
+    ],
+    [
+     45136,
+     "car",
+     "info",
+     "livery alpine"
+    ],
+    [
+     45223,
+     "car",
+     "info",
+     "build alpine"
+    ],
+    [
+     45262,
+     "car",
+     "info",
+     "build racingbulls"
+    ],
+    [
+     45324,
+     "car",
+     "info",
+     "build racingbulls"
+    ],
+    [
+     45394,
+     "car",
+     "info",
+     "livery racingbulls"
+    ],
+    [
+     45424,
+     "car",
+     "info",
+     "build haas"
+    ],
+    [
+     45542,
+     "car",
+     "info",
+     "build haas"
+    ],
+    [
+     45586,
+     "car",
+     "info",
+     "build williams"
+    ],
+    [
+     45658,
+     "car",
+     "info",
+     "livery williams"
+    ],
+    [
+     45773,
+     "car",
+     "info",
+     "build williams"
+    ],
+    [
+     45808,
+     "car",
+     "info",
+     "build audi"
+    ],
+    [
+     45885,
+     "car",
+     "info",
+     "livery audi"
+    ],
+    [
+     45940,
+     "car",
+     "info",
+     "build audi"
+    ],
+    [
+     45970,
+     "car",
+     "info",
+     "livery audi"
+    ],
+    [
+     45972,
+     "car",
+     "info",
+     "build astonmartin"
+    ],
+    [
+     46006,
+     "car",
+     "info",
+     "livery astonmartin"
+    ],
+    [
+     46077,
+     "car",
+     "info",
+     "build astonmartin"
+    ],
+    [
+     46112,
+     "car",
+     "info",
+     "build cadillac"
+    ],
+    [
+     46153,
+     "car",
+     "info",
+     "livery cadillac"
+    ],
+    [
+     46187,
+     "car",
+     "info",
+     "build cadillac"
+    ],
+    [
+     46207,
+     "car",
+     "info",
+     "livery cadillac"
+    ],
+    [
+     46209,
+     "gfx",
+     "info",
+     "race car assets ready {\"cars\":22,\"casters\":false,\"lodWarm\":true,\"cpuMs\":2259,\"maxStepMs\":171,\"yields\":42,\"wallMs\":2304,\"deferred\":10}"
+    ],
+    [
+     46211,
+     "game",
+     "info",
+     "State menu->count why=race-start raceT=0.0"
+    ],
+    [
+     46377,
+     "car",
+     "info",
+     "livery ferrari"
+    ],
+    [
+     59311,
+     "track",
+     "info",
+     "maps compute monza"
+    ],
+    [
+     59385,
+     "car",
+     "info",
+     "livery ferrari"
+    ],
+    [
+     59596,
+     "audio",
+     "info",
+     "VoicePack fable unavailable: pack fetch timed out"
+    ],
+    [
+     59682,
+     "car",
+     "info",
+     "livery mclaren"
+    ],
+    [
+     59834,
+     "car",
+     "info",
+     "livery redbull"
+    ],
+    [
+     59866,
+     "car",
+     "info",
+     "livery haas"
+    ],
+    [
+     59883,
+     "car",
+     "info",
+     "livery williams"
+    ],
+    [
+     59916,
+     "car",
+     "info",
+     "livery alpine"
+    ],
+    [
+     59945,
+     "car",
+     "info",
+     "livery racingbulls"
+    ],
+    [
+     59963,
+     "car",
+     "info",
+     "livery haas"
+    ],
+    [
+     59965,
+     "car",
+     "info",
+     "livery astonmartin"
+    ],
+    [
+     74288,
+     "game",
+     "info",
+     "State count->race why=lights-out raceT=0.0"
+    ]
+   ]
+  },
+  {
+   "name": "drive",
+   "ms": 49930,
+   "error": "TimeoutError: page.screenshot: Timeout 30000ms exceeded.\nCall log:\n  - taking page screenshot\n  - waiting for fonts to load...\n  - fonts loaded\n"
+  },
+  {
+   "name": "ablate-noProps",
+   "ms": 9417,
+   "frames": 2,
+   "avgFps": 0.2,
+   "p5Fps": 0.2,
+   "p1Fps": 0.2,
+   "worstMs": 6190,
+   "gt33": 2,
+   "gt50": 2,
+   "gt100": 2,
+   "perf": {
+    "frame": {
+     "p50": 19.2,
+     "p95": 22.7,
+     "p99": 22.7,
+     "max": 22.7,
+     "mean": 20.95,
+     "n": 2
+    },
+    "input": {
+     "p50": 0.1,
+     "p95": 0.2,
+     "p99": 0.2,
+     "max": 0.2,
+     "mean": 0.15,
+     "n": 2
+    },
+    "physics": {
+     "p50": 7.7,
+     "p95": 13.2,
+     "p99": 13.2,
+     "max": 13.2,
+     "mean": 10.45,
+     "n": 2
+    },
+    "ai": {
+     "p50": 0.8,
+     "p95": 4.1,
+     "p99": 4.1,
+     "max": 4.1,
+     "mean": 1.36,
+     "n": 10
+    },
+    "collide": {
+     "p50": 0,
+     "p95": 0.3,
+     "p99": 0.3,
+     "max": 0.3,
+     "mean": 0.06,
+     "n": 10
+    },
+    "audio": {
+     "p50": 0,
+     "p95": 3.1,
+     "p99": 3.1,
+     "max": 3.1,
+     "mean": 0.51,
+     "n": 10
+    },
+    "camera": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 0,
+     "max": 0,
+     "mean": 0,
+     "n": 2
+    },
+    "render": {
+     "p50": 8,
+     "p95": 8.5,
+     "p99": 8.5,
+     "max": 8.5,
+     "mean": 8.25,
+     "n": 2
+    },
+    "hud": {
+     "p50": 0.9,
+     "p95": 1.4,
+     "p99": 1.4,
+     "max": 1.4,
+     "mean": 1.15,
+     "n": 2
+    }
+   },
+   "render": {
+    "occl": {
+     "supported": null,
+     "on": false,
+     "tested": 0,
+     "culled": 0,
+     "queries": 0,
+     "passes": 0,
+     "lagMax": 0,
+     "lagAvg": 0
+    },
+    "md": {
+     "supported": null,
+     "on": false,
+     "multiCalls": 0,
+     "rangesSubmitted": 0,
+     "drawElementsAvoided": 0,
+     "perChunkDraws": 0,
+     "consecutiveGroups": 0,
+     "setGroups": 0,
+     "lampFrames": 0,
+     "plainFrames": 136,
+     "perChunkKnob": 0,
+     "allLightsLen": -1
+    },
+    "scale": 0.5,
+    "tier": 3,
+    "autoTier": 3,
+    "floorMs": 79.4,
+    "autoShed": 1,
+    "gpu": {
+     "supported": true,
+     "on": true,
+     "ms": 6950.309744,
+     "software": false
+    },
+    "heapMB": 132.6,
+    "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+   }
+  },
+  {
+   "name": "ablate-noTerrain",
+   "ms": 10405,
+   "frames": 3,
+   "avgFps": 0.3,
+   "p5Fps": 0.3,
+   "p1Fps": 0.3,
+   "worstMs": 3750,
+   "gt33": 3,
+   "gt50": 3,
+   "gt100": 3,
+   "perf": {
+    "frame": {
+     "p50": 13.2,
+     "p95": 20.6,
+     "p99": 20.6,
+     "max": 20.6,
+     "mean": 13.23,
+     "n": 3
+    },
+    "input": {
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.1,
+     "max": 0.1,
+     "mean": 0.03,
+     "n": 3
+    },
+    "physics": {
+     "p50": 6.9,
+     "p95": 13.8,
+     "p99": 13.8,
+     "max": 13.8,
+     "mean": 7.93,
+     "n": 3
+    },
+    "ai": {
+     "p50": 0.7,
+     "p95": 8.2,
+     "p99": 8.2,
+     "max": 8.2,
+     "mean": 1.35,
+     "n": 15
+    },
+    "collide": {
+     "p50": 0.1,
+     "p95": 0.1,
+     "p99": 0.1,
+     "max": 0.1,
+     "mean": 0.05,
+     "n": 15
+    },
+    "audio": {
+     "p50": 0,
+     "p95": 0.4,
+     "p99": 0.4,
+     "max": 0.4,
+     "mean": 0.04,
+     "n": 15
+    },
+    "camera": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 0,
+     "max": 0,
+     "mean": 0,
+     "n": 3
+    },
+    "render": {
+     "p50": 5.5,
+     "p95": 5.6,
+     "p99": 5.6,
+     "max": 5.6,
+     "mean": 4.33,
+     "n": 3
+    },
+    "hud": {
+     "p50": 0.5,
+     "p95": 0.7,
+     "p99": 0.7,
+     "max": 0.7,
+     "mean": 0.57,
+     "n": 3
+    }
+   },
+   "render": {
+    "occl": {
+     "supported": null,
+     "on": false,
+     "tested": 0,
+     "culled": 0,
+     "queries": 0,
+     "passes": 0,
+     "lagMax": 0,
+     "lagAvg": 0
+    },
+    "md": {
+     "supported": null,
+     "on": false,
+     "multiCalls": 0,
+     "rangesSubmitted": 0,
+     "drawElementsAvoided": 0,
+     "perChunkDraws": 0,
+     "consecutiveGroups": 0,
+     "setGroups": 0,
+     "lampFrames": 0,
+     "plainFrames": 142,
+     "perChunkKnob": 0,
+     "allLightsLen": -1
+    },
+    "scale": 0.5,
+    "tier": 3,
+    "autoTier": 3,
+    "floorMs": 133.5,
+    "autoShed": 1,
+    "gpu": {
+     "supported": true,
+     "on": true,
+     "ms": 6950.309744,
+     "software": false
+    },
+    "heapMB": 132.6,
+    "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+   }
+  },
+  {
+   "name": "ablate-noCars",
+   "ms": 11212,
+   "frames": 4,
+   "avgFps": 0.4,
+   "p5Fps": 0.2,
+   "p1Fps": 0.2,
+   "worstMs": 4417,
+   "gt33": 4,
+   "gt50": 4,
+   "gt100": 3,
+   "perf": {
+    "frame": {
+     "p50": 15.3,
+     "p95": 28.7,
+     "p99": 28.7,
+     "max": 28.7,
+     "mean": 20.68,
+     "n": 4
+    },
+    "input": {
+     "p50": 0.1,
+     "p95": 0.2,
+     "p99": 0.2,
+     "max": 0.2,
+     "mean": 0.1,
+     "n": 4
+    },
+    "physics": {
+     "p50": 9.3,
+     "p95": 19.9,
+     "p99": 19.9,
+     "max": 19.9,
+     "mean": 12.1,
+     "n": 4
+    },
+    "ai": {
+     "p50": 0.8,
+     "p95": 9.2,
+     "p99": 10.3,
+     "max": 10.3,
+     "mean": 2.29,
+     "n": 20
+    },
+    "collide": {
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.1,
+     "max": 0.1,
+     "mean": 0.04,
+     "n": 20
+    },
+    "audio": {
+     "p50": 0,
+     "p95": 0.2,
+     "p99": 0.2,
+     "max": 0.2,
+     "mean": 0.04,
+     "n": 20
+    },
+    "camera": {
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.1,
+     "max": 0.1,
+     "mean": 0.05,
+     "n": 4
+    },
+    "render": {
+     "p50": 5.5,
+     "p95": 7.9,
+     "p99": 7.9,
+     "max": 7.9,
+     "mean": 5.5,
+     "n": 4
+    },
+    "hud": {
+     "p50": 0.6,
+     "p95": 1.3,
+     "p99": 1.3,
+     "max": 1.3,
+     "mean": 0.68,
+     "n": 4
+    }
+   },
+   "render": {
+    "occl": {
+     "supported": null,
+     "on": false,
+     "tested": 0,
+     "culled": 0,
+     "queries": 0,
+     "passes": 0,
+     "lagMax": 0,
+     "lagAvg": 0
+    },
+    "md": {
+     "supported": null,
+     "on": false,
+     "multiCalls": 0,
+     "rangesSubmitted": 0,
+     "drawElementsAvoided": 0,
+     "perChunkDraws": 0,
+     "consecutiveGroups": 0,
+     "setGroups": 0,
+     "lampFrames": 0,
+     "plainFrames": 154,
+     "perChunkKnob": 0,
+     "allLightsLen": -1
+    },
+    "scale": 0.5,
+    "tier": 3,
+    "autoTier": 3,
+    "floorMs": 147.5,
+    "autoShed": 1,
+    "gpu": {
+     "supported": true,
+     "on": true,
+     "ms": 6950.309744,
+     "software": false
+    },
+    "heapMB": 132.6,
+    "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+   }
+  },
+  {
+   "name": "ablate-noOccl",
+   "ms": 17598,
+   "frames": 4,
+   "avgFps": 0.5,
+   "p5Fps": 0.2,
+   "p1Fps": 0.2,
+   "worstMs": 5483,
+   "gt33": 3,
+   "gt50": 3,
+   "gt100": 3,
+   "perf": {
+    "frame": {
+     "p50": 15.4,
+     "p95": 39.6,
+     "p99": 39.6,
+     "max": 39.6,
+     "mean": 22.05,
+     "n": 4
+    },
+    "input": {
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.1,
+     "max": 0.1,
+     "mean": 0.05,
+     "n": 4
+    },
+    "physics": {
+     "p50": 6.3,
+     "p95": 28.9,
+     "p99": 28.9,
+     "max": 28.9,
+     "mean": 12.43,
+     "n": 4
+    },
+    "ai": {
+     "p50": 0.7,
+     "p95": 12.6,
+     "p99": 12.6,
+     "max": 12.6,
+     "mean": 1.88,
+     "n": 17
+    },
+    "collide": {
+     "p50": 0.1,
+     "p95": 0.2,
+     "p99": 0.2,
+     "max": 0.2,
+     "mean": 0.07,
+     "n": 17
+    },
+    "audio": {
+     "p50": 0,
+     "p95": 14,
+     "p99": 14,
+     "max": 14,
+     "mean": 0.86,
+     "n": 17
+    },
+    "camera": {
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.1,
+     "max": 0.1,
+     "mean": 0.05,
+     "n": 4
+    },
+    "render": {
+     "p50": 3.2,
+     "p95": 10.4,
+     "p99": 10.4,
+     "max": 10.4,
+     "mean": 4.92,
+     "n": 4
+    },
+    "hud": {
+     "p50": 0.6,
+     "p95": 2.1,
+     "p99": 2.1,
+     "max": 2.1,
+     "mean": 1.25,
+     "n": 4
+    }
+   },
+   "render": {
+    "occl": {
+     "supported": null,
+     "on": false,
+     "tested": 0,
+     "culled": 0,
+     "queries": 0,
+     "passes": 0,
+     "lagMax": 0,
+     "lagAvg": 0
+    },
+    "md": {
+     "supported": null,
+     "on": false,
+     "multiCalls": 0,
+     "rangesSubmitted": 0,
+     "drawElementsAvoided": 0,
+     "perChunkDraws": 0,
+     "consecutiveGroups": 0,
+     "setGroups": 0,
+     "lampFrames": 0,
+     "plainFrames": 169,
+     "perChunkKnob": 0,
+     "allLightsLen": -1
+    },
+    "scale": 0.5,
+    "tier": 3,
+    "autoTier": 3,
+    "floorMs": 120.2,
+    "autoShed": 1,
+    "gpu": {
+     "supported": true,
+     "on": true,
+     "ms": 6950.309744,
+     "software": false
+    },
+    "heapMB": 132.6,
+    "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+   }
+  },
+  {
+   "name": "ablate-base",
+   "ms": 19419,
+   "frames": 2,
+   "avgFps": 0.2,
+   "p5Fps": 0.1,
+   "p1Fps": 0.1,
+   "worstMs": 8233,
+   "gt33": 1,
+   "gt50": 1,
+   "gt100": 1,
+   "perf": {
+    "frame": {
+     "p50": 6876,
+     "p95": 8199.1,
+     "p99": 8199.1,
+     "max": 8199.1,
+     "mean": 6433.43,
+     "n": 3
+    },
+    "input": {
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.1,
+     "max": 0.1,
+     "mean": 0.03,
+     "n": 3
+    },
+    "physics": {
+     "p50": 11.1,
+     "p95": 17.2,
+     "p99": 17.2,
+     "max": 17.2,
+     "mean": 11.67,
+     "n": 3
+    },
+    "ai": {
+     "p50": 0.7,
+     "p95": 9.3,
+     "p99": 9.3,
+     "max": 9.3,
+     "mean": 2.15,
+     "n": 15
+    },
+    "collide": {
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.1,
+     "max": 0.1,
+     "mean": 0.04,
+     "n": 15
+    },
+    "audio": {
+     "p50": 0,
+     "p95": 0.2,
+     "p99": 0.2,
+     "max": 0.2,
+     "mean": 0.03,
+     "n": 15
+    },
+    "camera": {
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.1,
+     "max": 0.1,
+     "mean": 0.03,
+     "n": 3
+    },
+    "render": {
+     "p50": 6854.3,
+     "p95": 8166.3,
+     "p99": 8166.3,
+     "max": 8166.3,
+     "mean": 6412.8,
+     "n": 3
+    },
+    "hud": {
+     "p50": 7.7,
+     "p95": 15.5,
+     "p99": 15.5,
+     "max": 15.5,
+     "mean": 7.93,
+     "n": 3
+    }
+   },
+   "render": {
+    "occl": {
+     "supported": true,
+     "on": true,
+     "tested": 189,
+     "culled": 0,
+     "queries": 0,
+     "passes": 4,
+     "lagMax": 0,
+     "lagAvg": 0
+    },
+    "md": {
+     "supported": null,
+     "on": false,
+     "multiCalls": 0,
+     "rangesSubmitted": 0,
+     "drawElementsAvoided": 0,
+     "perChunkDraws": 0,
+     "consecutiveGroups": 0,
+     "setGroups": 0,
+     "lampFrames": 0,
+     "plainFrames": 181,
+     "perChunkKnob": 0,
+     "allLightsLen": -1
+    },
+    "scale": 0.5,
+    "tier": 3,
+    "autoTier": 3,
+    "floorMs": 188.5,
+    "autoShed": 1,
+    "gpu": {
+     "supported": true,
+     "on": true,
+     "ms": 6950.309744,
+     "software": false
+    },
+    "heapMB": 132.6,
+    "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+   }
+  }
+ ],
+ "bootMs": 11596,
+ "rebootMs": 3932,
+ "gfxMenu": {
+  "liveBackend": "webgl2",
+  "bound": "webgl2",
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": "\"medium\"",
+  "gfxHigh": "0",
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 2,
+  "autoTier": 0,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": true,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   393
+  ]
+ },
+ "renderMenu": {
+  "occl": {
+   "supported": null,
+   "on": false,
+   "tested": 0,
+   "culled": 0,
+   "queries": 0,
+   "passes": 0,
+   "lagMax": 0,
+   "lagAvg": 0
+  },
+  "md": {
+   "supported": null,
+   "on": false,
+   "multiCalls": 0,
+   "rangesSubmitted": 0,
+   "drawElementsAvoided": 0,
+   "perChunkDraws": 0,
+   "consecutiveGroups": 0,
+   "setGroups": 0,
+   "lampFrames": 0,
+   "plainFrames": 0,
+   "perChunkKnob": null,
+   "allLightsLen": -1
+  },
+  "scale": 0.5,
+  "tier": 2,
+  "autoTier": 0,
+  "floorMs": 16.7,
+  "autoShed": 0,
+  "gpu": {
+   "supported": true,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "heapMB": 132.6,
+  "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":false,\"tier\":null,\"layers\":0,\"normal\":false,\"scales\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],\"bytes\":569858,\"models\":41,\"error\":null}"
+ },
+ "diagGfx": {
+  "canvas": {
+   "css": [
+    852,
+    393
+   ],
+   "buffer": [
+    639,
+    295
+   ],
+   "dpr": 3
+  },
+  "gl": {
+   "vendor": "Google Inc. (Google)",
+   "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+   "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+   "maxTexture": 8192,
+   "maxLayers": 2048
+  }
+ },
+ "trackId": "monza",
+ "gfxRace": {
+  "liveBackend": "webgl2",
+  "bound": "webgl2",
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": "\"medium\"",
+  "gfxHigh": "0",
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 2,
+  "autoTier": 0,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": true,
+   "on": true,
+   "ms": 6950.309744,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   393
+  ]
+ },
+ "ap": {
+  "maxKph": 80,
+  "offRoadFrames": 0,
+  "ticks": 37,
+  "err": null,
+  "lastSpeedKph": 80
+ },
+ "errors": [],
+ "error": "TimeoutError: page.screenshot: Timeout 30000ms exceeded.\nCall log:\n  - taking page screenshot\n  - waiting for fonts to load...\n  - fonts loaded\n",
+ "endPT": "10/21/2026, 9:38:59 PM"
+}

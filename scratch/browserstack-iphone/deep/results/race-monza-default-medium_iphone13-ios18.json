@@ -1,0 +1,902 @@
+{
+ "scen": "race:monza:default:medium",
+ "device": "iPhone 13",
+ "os": "18",
+ "tag": "race-monza-default-medium_iphone13-ios18",
+ "startPT": "10/21/2026, 9:50:52 PM",
+ "steps": [
+  {
+   "name": "raceEntry",
+   "ms": 5456,
+   "entryMs": 3138,
+   "result": "ok",
+   "gapsTotalMs": 2006,
+   "gapsN": 18,
+   "gapsTop": [
+    {
+     "at": 2466,
+     "d": 481
+    },
+    {
+     "at": 349,
+     "d": 236
+    },
+    {
+     "at": 671,
+     "d": 162
+    },
+    {
+     "at": 1036,
+     "d": 148
+    },
+    {
+     "at": 2323,
+     "d": 143
+    },
+    {
+     "at": 3034,
+     "d": 95
+    },
+    {
+     "at": 2947,
+     "d": 87
+    },
+    {
+     "at": 869,
+     "d": 69
+    },
+    {
+     "at": 1229,
+     "d": 69
+    },
+    {
+     "at": 1428,
+     "d": 69
+    },
+    {
+     "at": 56,
+     "d": 63
+    },
+    {
+     "at": 3931,
+     "d": 63
+    },
+    {
+     "at": 288,
+     "d": 60
+    },
+    {
+     "at": 2173,
+     "d": 54
+    },
+    {
+     "at": 119,
+     "d": 52
+    }
+   ],
+   "stages": {
+    "entry": "startRace",
+    "software": false,
+    "budgetMs": 120000,
+    "budgetLeftMs": 115041,
+    "windowMs": 2838,
+    "stages": [
+     {
+      "n": "scenery",
+      "ms": 150,
+      "kind": "leg"
+     },
+     {
+      "n": "resets",
+      "ms": 214,
+      "kind": "leg"
+     },
+     {
+      "n": "loadTrack",
+      "ms": 559,
+      "kind": "leg"
+     },
+     {
+      "n": "makeCars",
+      "ms": 3,
+      "kind": "leg"
+     },
+     {
+      "n": "settings",
+      "ms": 1,
+      "kind": "leg"
+     },
+     {
+      "n": "gridUp",
+      "ms": 6,
+      "kind": "leg"
+     },
+     {
+      "n": "finish",
+      "ms": 1,
+      "kind": "leg"
+     },
+     {
+      "n": "ensureScenery",
+      "ms": 149,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "gridCountdown",
+      "ms": 1285,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "warmCarAssets",
+      "ms": 1251,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "debrisPrime",
+      "ms": 1,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "rigWarm",
+      "ms": 0,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "mirrorPrepare",
+      "ms": null,
+      "kind": "span",
+      "open": true
+     }
+    ],
+    "blockMs": 0,
+    "maxBlockMs": 0
+   },
+   "legs": [
+    {
+     "n": "scenery",
+     "ms": 150
+    },
+    {
+     "n": "resets",
+     "ms": 214
+    },
+    {
+     "n": "loadTrack",
+     "ms": 559
+    },
+    {
+     "n": "makeCars",
+     "ms": 3
+    },
+    {
+     "n": "settings",
+     "ms": 1
+    },
+    {
+     "n": "gridUp",
+     "ms": 6
+    },
+    {
+     "n": "finish",
+     "ms": 1
+    }
+   ],
+   "longtasks": {
+    "sup": false,
+    "e": []
+   },
+   "res": {
+    "n": 32,
+    "by": {
+     "js": {
+      "n": 20,
+      "kb": 0,
+      "ms": 14
+     },
+     "bin": {
+      "n": 9,
+      "kb": 5905,
+      "ms": 185
+     },
+     "json": {
+      "n": 1,
+      "kb": 14,
+      "ms": 19
+     },
+     "woff2": {
+      "n": 2,
+      "kb": 0,
+      "ms": 454
+     }
+    },
+    "top": [
+     {
+      "u": "assets/fonts/barlow-condensed-latin-700-normal.woff2",
+      "ms": 454,
+      "st": 8415,
+      "kb": 0
+     },
+     {
+      "u": "assets/voice/fable.bin",
+      "ms": 185,
+      "st": 6464,
+      "kb": 5889
+     },
+     {
+      "u": "assets/pack/models/k_barrierwhite.bin",
+      "ms": 112,
+      "st": 6098,
+      "kb": 1
+     },
+     {
+      "u": "assets/pack/models/k_pitsgarage.bin",
+      "ms": 106,
+      "st": 6095,
+      "kb": 1
+     },
+     {
+      "u": "assets/pack/models/k_radarequipment.bin",
+      "ms": 105,
+      "st": 6096,
+      "kb": 4
+     },
+     {
+      "u": "assets/pack/models/k_pylon.bin",
+      "ms": 97,
+      "st": 6098,
+      "kb": 1
+     },
+     {
+      "u": "assets/pack/models/k_pitsgarageclosed.bin",
+      "ms": 92,
+      "st": 6094,
+      "kb": 2
+     },
+     {
+      "u": "assets/pack/models/k_pitsoffice.bin",
+      "ms": 86,
+      "st": 6095,
+      "kb": 1
+     },
+     {
+      "u": "assets/pack/models/k_tentlong.bin",
+      "ms": 85,
+      "st": 6096,
+      "kb": 1
+     },
+     {
+      "u": "assets/pack/models/k_bannertowerred.bin",
+      "ms": 84,
+      "st": 6097,
+      "kb": 4
+     },
+     {
+      "u": "assets/fonts/barlow-condensed-latin-500-normal.woff2",
+      "ms": 56,
+      "st": 8348,
+      "kb": 0
+     },
+     {
+      "u": "assets/voice/fable.json",
+      "ms": 19,
+      "st": 6463,
+      "kb": 14
+     }
+    ]
+   },
+   "logs": [
+    [
+     6605,
+     "scenery",
+     "info",
+     "scenery-identity dress monza"
+    ],
+    [
+     6787,
+     "scenery",
+     "warn",
+     "monza: suppressed wall=2 tree=19 pine=1 grandstand=1 building=2"
+    ],
+    [
+     6787,
+     "scenery",
+     "info",
+     "monza: superseded by the pit complex stonePine=14 tree=3 pine=3 bush=10 grandstand=1 building=8 guardrail=32"
+    ],
+    [
+     6787,
+     "track",
+     "info",
+     "monza: culled 51 on-track primitive(s)"
+    ],
+    [
+     6789,
+     "track",
+     "info",
+     "buildProps done monza verts=269567"
+    ],
+    [
+     6819,
+     "track",
+     "info",
+     "pits monza: 12 bays, wall true, 8 lamps"
+    ],
+    [
+     6820,
+     "audio",
+     "info",
+     "VoicePack fable ready: 790 clips"
+    ],
+    [
+     6987,
+     "track",
+     "info",
+     "build done monza total=5777.6 n=1444 night=false"
+    ],
+    [
+     6987,
+     "game",
+     "info",
+     "AeroZones.build track=monza"
+    ],
+    [
+     6987,
+     "car",
+     "info",
+     "ghost load monza none"
+    ],
+    [
+     6991,
+     "game",
+     "info",
+     "Atmosphere.applyRaceSettings tod=default wx=dry"
+    ],
+    [
+     6998,
+     "game",
+     "info",
+     "race monza race laps=20 pace=0.840 vTop=60.5m/s grip=1.00 weather=dry tod=default mods=s1.00/a1.88/c2.05/b1.52 aeroLoad=0.81 assists=help0.0"
+    ],
+    [
+     6998,
+     "game",
+     "info",
+     "Reliability.arm scale=0 n=22"
+    ],
+    [
+     7018,
+     "game",
+     "info",
+     "garage released for the race"
+    ],
+    [
+     7024,
+     "car",
+     "info",
+     "build mercedes"
+    ],
+    [
+     7077,
+     "car",
+     "info",
+     "livery mercedes"
+    ],
+    [
+     7136,
+     "car",
+     "info",
+     "build mercedes"
+    ],
+    [
+     7180,
+     "car",
+     "info",
+     "build ferrari"
+    ],
+    [
+     7249,
+     "car",
+     "info",
+     "build ferrari"
+    ],
+    [
+     7275,
+     "car",
+     "info",
+     "livery ferrari"
+    ],
+    [
+     7289,
+     "car",
+     "info",
+     "build mclaren"
+    ],
+    [
+     7311,
+     "car",
+     "info",
+     "livery mclaren"
+    ],
+    [
+     7357,
+     "car",
+     "info",
+     "build mclaren"
+    ],
+    [
+     7383,
+     "car",
+     "info",
+     "livery mclaren"
+    ],
+    [
+     7388,
+     "car",
+     "info",
+     "build redbull"
+    ],
+    [
+     7444,
+     "car",
+     "info",
+     "build redbull"
+    ],
+    [
+     7452,
+     "car",
+     "info",
+     "build redbull"
+    ],
+    [
+     7499,
+     "car",
+     "info",
+     "livery redbull"
+    ],
+    [
+     7556,
+     "car",
+     "info",
+     "build alpine"
+    ],
+    [
+     7628,
+     "car",
+     "info",
+     "build alpine"
+    ],
+    [
+     7666,
+     "car",
+     "info",
+     "livery alpine"
+    ],
+    [
+     7671,
+     "car",
+     "info",
+     "build racingbulls"
+    ],
+    [
+     7703,
+     "car",
+     "info",
+     "livery racingbulls"
+    ],
+    [
+     7742,
+     "car",
+     "info",
+     "build racingbulls"
+    ],
+    [
+     7774,
+     "car",
+     "info",
+     "livery racingbulls"
+    ],
+    [
+     7778,
+     "car",
+     "info",
+     "build haas"
+    ],
+    [
+     7811,
+     "car",
+     "info",
+     "livery haas"
+    ],
+    [
+     7849,
+     "car",
+     "info",
+     "build haas"
+    ],
+    [
+     7894,
+     "car",
+     "info",
+     "build williams"
+    ],
+    [
+     7929,
+     "car",
+     "info",
+     "livery williams"
+    ],
+    [
+     7967,
+     "car",
+     "info",
+     "build williams"
+    ],
+    [
+     8000,
+     "car",
+     "info",
+     "livery williams"
+    ],
+    [
+     8004,
+     "car",
+     "info",
+     "build audi"
+    ],
+    [
+     8035,
+     "car",
+     "info",
+     "livery audi"
+    ],
+    [
+     8075,
+     "car",
+     "info",
+     "build audi"
+    ],
+    [
+     8101,
+     "car",
+     "info",
+     "build astonmartin"
+    ],
+    [
+     8127,
+     "car",
+     "info",
+     "livery astonmartin"
+    ],
+    [
+     8183,
+     "car",
+     "info",
+     "build astonmartin"
+    ],
+    [
+     8209,
+     "car",
+     "info",
+     "livery astonmartin"
+    ],
+    [
+     8214,
+     "car",
+     "info",
+     "build cadillac"
+    ],
+    [
+     8235,
+     "car",
+     "info",
+     "livery cadillac"
+    ],
+    [
+     8254,
+     "car",
+     "info",
+     "build cadillac"
+    ],
+    [
+     8275,
+     "gfx",
+     "info",
+     "race car assets ready {\"cars\":22,\"casters\":false,\"lodWarm\":true,\"cpuMs\":1107,\"maxStepMs\":61,\"yields\":34,\"wallMs\":1251,\"deferred\":6}"
+    ],
+    [
+     8276,
+     "game",
+     "info",
+     "State menu->count why=race-start raceT=0.0"
+    ],
+    [
+     8419,
+     "car",
+     "info",
+     "livery mercedes"
+    ],
+    [
+     9081,
+     "car",
+     "info",
+     "livery ferrari"
+    ],
+    [
+     9116,
+     "car",
+     "info",
+     "livery alpine"
+    ],
+    [
+     9145,
+     "car",
+     "info",
+     "livery haas"
+    ],
+    [
+     9193,
+     "car",
+     "info",
+     "livery audi"
+    ],
+    [
+     9234,
+     "car",
+     "info",
+     "livery cadillac"
+    ]
+   ]
+  },
+  {
+   "name": "drive",
+   "ms": 31473,
+   "frames": 831,
+   "avgFps": 27.7,
+   "p5Fps": 20,
+   "p1Fps": 17.2,
+   "worstMs": 76,
+   "gt33": 509,
+   "gt50": 33,
+   "gt100": 0,
+   "buckets": [
+    28.8,
+    28.3,
+    25.9
+   ],
+   "perf": {
+    "frame": {
+     "p50": 7,
+     "p95": 14,
+     "p99": 25,
+     "max": 41,
+     "mean": 7.37,
+     "n": 835
+    },
+    "input": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.04,
+     "n": 835
+    },
+    "physics": {
+     "p50": 4,
+     "p95": 8,
+     "p99": 9,
+     "max": 23,
+     "mean": 4.02,
+     "n": 835
+    },
+    "ai": {
+     "p50": 1,
+     "p95": 3,
+     "p99": 4,
+     "max": 17,
+     "mean": 1.57,
+     "n": 1783
+    },
+    "collide": {
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 2,
+     "mean": 0.09,
+     "n": 1783
+    },
+    "audio": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.02,
+     "n": 1783
+    },
+    "camera": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 0,
+     "max": 1,
+     "mean": 0.01,
+     "n": 835
+    },
+    "render": {
+     "p50": 2,
+     "p95": 3,
+     "p99": 4,
+     "max": 29,
+     "mean": 1.92,
+     "n": 835
+    },
+    "hud": {
+     "p50": 0,
+     "p95": 3,
+     "p99": 18,
+     "max": 30,
+     "mean": 1.05,
+     "n": 835
+    }
+   },
+   "render": {
+    "occl": {
+     "supported": null,
+     "on": false,
+     "tested": 0,
+     "culled": 0,
+     "queries": 0,
+     "passes": 0,
+     "lagMax": 0,
+     "lagAvg": 0
+    },
+    "md": {
+     "supported": null,
+     "on": false,
+     "multiCalls": 0,
+     "rangesSubmitted": 0,
+     "drawElementsAvoided": 0,
+     "perChunkDraws": 0,
+     "consecutiveGroups": 0,
+     "setGroups": 0,
+     "lampFrames": 0,
+     "plainFrames": 5373,
+     "perChunkKnob": 0,
+     "allLightsLen": -1
+    },
+    "tier": 2,
+    "autoTier": 0,
+    "floorMs": 30.6,
+    "autoShed": 0,
+    "gpu": {
+     "supported": false,
+     "on": false,
+     "ms": -1,
+     "software": false
+    },
+    "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+   }
+  }
+ ],
+ "session": "be3eca1365ff5922bbbca2406ab9c57bb012ebe9",
+ "bootMs": 7578,
+ "rebootMs": 5989,
+ "gfxMenu": {
+  "liveBackend": "webgl2",
+  "bound": "webgl2",
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": "\"medium\"",
+  "gfxHigh": "0",
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 2,
+  "autoTier": 0,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": false,
+  "dpr": 3,
+  "vp": [
+   844,
+   340
+  ]
+ },
+ "renderMenu": {
+  "occl": {
+   "supported": null,
+   "on": false,
+   "tested": 0,
+   "culled": 0,
+   "queries": 0,
+   "passes": 0,
+   "lagMax": 0,
+   "lagAvg": 0
+  },
+  "md": {
+   "supported": null,
+   "on": false,
+   "multiCalls": 0,
+   "rangesSubmitted": 0,
+   "drawElementsAvoided": 0,
+   "perChunkDraws": 0,
+   "consecutiveGroups": 0,
+   "setGroups": 0,
+   "lampFrames": 0,
+   "plainFrames": 0,
+   "perChunkKnob": null,
+   "allLightsLen": -1
+  },
+  "tier": 2,
+  "autoTier": 0,
+  "floorMs": 16.7,
+  "autoShed": 0,
+  "gpu": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+ },
+ "diagGfx": {
+  "err": "ReferenceError: Can't find variable: G"
+ },
+ "trackId": "monza",
+ "ensureMs": 8,
+ "gfxRace": {
+  "liveBackend": "webgl2",
+  "bound": "webgl2",
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": "\"medium\"",
+  "gfxHigh": "0",
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 3,
+  "autoTier": 3,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": false,
+  "dpr": 3,
+  "vp": [
+   844,
+   340
+  ]
+ },
+ "ap": {
+  "maxKph": 185,
+  "offRoadFrames": 0,
+  "ticks": 954,
+  "err": null,
+  "lastSpeedKph": 152
+ },
+ "errors": [],
+ "endPT": "10/21/2026, 9:52:08 PM"
+}

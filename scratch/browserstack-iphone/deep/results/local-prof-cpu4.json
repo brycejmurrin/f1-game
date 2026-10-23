@@ -1,0 +1,527 @@
+{
+ "settings-open": {
+  "wallMs": 5374,
+  "top": [
+   [
+    2986,
+    "(program) :0"
+   ],
+   [
+    2329,
+    "(idle) :0"
+   ],
+   [
+    437,
+    "requestAnimationFrame :0"
+   ],
+   [
+    98,
+    "querySelectorAll :0"
+   ],
+   [
+    89,
+    "measure js/ui/scroll-fade.js?v=feb463778187:1"
+   ],
+   [
+    58,
+    "showModal :0"
+   ],
+   [
+    54,
+    "shownLayer js/ui/layers.js?v=100aa0322e1b:1"
+   ],
+   [
+    51,
+    "createCtx js/audio/engine.js?v=92ce05e1a79c:1"
+   ],
+   [
+    41,
+    "detectPeriod js/audio/signal.js?v=f0dfd98e1e31:1"
+   ],
+   [
+    33,
+    "tick js/game.js?v=5817df56c8f1:1"
+   ],
+   [
+    30,
+    "renderHome js/ui/experience.js?v=442bb483db31:1"
+   ],
+   [
+    28,
+    "get setupPreviewOn js/game.js?v=5817df56c8f1:1"
+   ],
+   [
+    25,
+    "show js/ui/settings-tabs.js?v=1bcd4243bc47:1"
+   ],
+   [
+    24,
+    "appendChild :0"
+   ],
+   [
+    23,
+    "_findStableLoopUncached js/audio/signal.js?v=f0dfd98e1e31:1"
+   ],
+   [
+    23,
+    "inRace js/ui/layers.js?v=100aa0322e1b:1"
+   ],
+   [
+    22,
+    "flush js/input/haptics.js?v=c28fb7a32157:1"
+   ],
+   [
+    19,
+    "(anon) js/game.js?v=5817df56c8f1:1"
+   ],
+   [
+    16,
+    "(anon) js/xr/xr-boot.js?v=3a1c8f8df61b:1"
+   ],
+   [
+    15,
+    "getPropertyValue :0"
+   ],
+   [
+    13,
+    "noiseBuffer js/audio/rivals.js?v=76e8cbc3e70c:1"
+   ],
+   [
+    12,
+    "afterTick js/xr/xr-boot.js?v=3a1c8f8df61b:1"
+   ],
+   [
+    12,
+    "querySelector :0"
+   ],
+   [
+    11,
+    "loadBackendScripts js/core/script-loader.js?v=3f4314d44873:1"
+   ],
+   [
+    11,
+    "(garbage collector) :0"
+   ]
+  ]
+ },
+ "settings-close": {
+  "wallMs": 2103,
+  "top": [
+   [
+    1775,
+    "(idle) :0"
+   ],
+   [
+    615,
+    "(program) :0"
+   ],
+   [
+    69,
+    "querySelectorAll :0"
+   ],
+   [
+    30,
+    "syncRotateBlocker js/game.js?v=5817df56c8f1:1"
+   ],
+   [
+    19,
+    "requestAnimationFrame :0"
+   ],
+   [
+    8,
+    "paintOnOff js/ui/aria-state.js?v=b1222f2c9798:1"
+   ],
+   [
+    7,
+    "(anon) js/xr/xr-boot.js?v=3a1c8f8df61b:1"
+   ],
+   [
+    7,
+    "apply js/ui/setting-deps.js?v=88ca4c872e00:1"
+   ],
+   [
+    6,
+    "speak :0"
+   ],
+   [
+    5,
+    "clamp js/core/mat4.js?v=fcfafffdbbbe:1"
+   ],
+   [
+    4,
+    "(anon) :0"
+   ],
+   [
+    4,
+    "poll js/input/input.js?v=9852e1155ab3:1"
+   ],
+   [
+    2,
+    "closest :0"
+   ],
+   [
+    2,
+    "get js/core/store.js?v=ebb8b73ca0c5:1"
+   ],
+   [
+    2,
+    "getElementById :0"
+   ],
+   [
+    1,
+    "closeSettings js/game.js?v=5817df56c8f1:1"
+   ],
+   [
+    1,
+    "close :0"
+   ],
+   [
+    1,
+    "render js/game.js?v=5817df56c8f1:1"
+   ],
+   [
+    1,
+    "tick js/game.js?v=5817df56c8f1:1"
+   ],
+   [
+    1,
+    "renderHome js/ui/experience.js?v=442bb483db31:1"
+   ],
+   [
+    1,
+    "disarmAll js/ui/key-binds.js?v=d115a924f8a6:1"
+   ],
+   [
+    1,
+    "querySelector :0"
+   ],
+   [
+    1,
+    "$ js/game.js?v=5817df56c8f1:1"
+   ],
+   [
+    1,
+    "clock js/ui/layers.js?v=100aa0322e1b:1"
+   ],
+   [
+    1,
+    "visible js/ui/appearance-studio.js?v=18ab4c3dc69c:1"
+   ]
+  ]
+ },
+ "race-select": {
+  "wallMs": 3189,
+  "top": [
+   [
+    652,
+    "(program) :0"
+   ],
+   [
+    442,
+    "getBoundingClientRect :0"
+   ],
+   [
+    274,
+    "u.query js/track/core/mesh.js?v=b78a230fa7e9:1"
+   ],
+   [
+    231,
+    "ribbon js/track/core/mesh.js?v=b78a230fa7e9:1"
+   ],
+   [
+    169,
+    "getPropertyValue :0"
+   ],
+   [
+    142,
+    "querySelectorAll :0"
+   ],
+   [
+    133,
+    "(garbage collector) :0"
+   ],
+   [
+    100,
+    "(idle) :0"
+   ],
+   [
+    85,
+    "relaxLine js/track/core/line.js?v=da35051f9ba8:1"
+   ],
+   [
+    83,
+    "buildRoad js/track/core/mesh.js?v=b78a230fa7e9:1"
+   ],
+   [
+    75,
+    "buildTerrainSteps js/track/core/mesh.js?v=b78a230fa7e9:1"
+   ],
+   [
+    74,
+    "requestAnimationFrame :0"
+   ],
+   [
+    69,
+    "bin js/render/shared/chunk-bins.js?v=1219c56fc1e8:1"
+   ],
+   [
+    59,
+    "buildSteps js/track/tracks.js?v=cecb59454679:1"
+   ],
+   [
+    52,
+    "localBox js/ui/css-zoom.js?v=4faf3582c4d6:1"
+   ],
+   [
+    49,
+    "createChunkedMesh js/render/glx/chunked.js?v=6abd02028749:1"
+   ],
+   [
+    41,
+    "measure js/ui/scroll-fade.js?v=feb463778187:1"
+   ],
+   [
+    31,
+    "tri js/track/core/mesh.js?v=b78a230fa7e9:1"
+   ],
+   [
+    31,
+    "buildCenterline js/track/tracks.js?v=cecb59454679:1"
+   ],
+   [
+    30,
+    "updateTrackPreview js/ui/select-screen.js?v=140304e36ae7:1"
+   ],
+   [
+    25,
+    "emitRing js/track/core/mesh.js?v=b78a230fa7e9:1"
+   ],
+   [
+    22,
+    "relaxCoarse js/track/core/line.js?v=da35051f9ba8:1"
+   ],
+   [
+    19,
+    "measureText :0"
+   ],
+   [
+    18,
+    "(anon) js/xr/xr-boot.js?v=3a1c8f8df61b:1"
+   ],
+   [
+    18,
+    "pack js/render/shared/vertex-pack.js?v=6022dd625018:1"
+   ]
+  ]
+ },
+ "back-title": {
+  "wallMs": 4094,
+  "top": [
+   [
+    3074,
+    "(idle) :0"
+   ],
+   [
+    694,
+    "(program) :0"
+   ],
+   [
+    91,
+    "querySelectorAll :0"
+   ],
+   [
+    84,
+    "shownLayer js/ui/layers.js?v=100aa0322e1b:1"
+   ],
+   [
+    63,
+    "_buildGrid js/track/scenery/build-props.js?v=b52b13acc83f:1"
+   ],
+   [
+    55,
+    "weld js/car/car-geometry.js?v=af3c43f98b3c:1"
+   ],
+   [
+    33,
+    "refinish js/car/car-materials.js?v=ff1c1c708f3b:1"
+   ],
+   [
+    24,
+    "requestAnimationFrame :0"
+   ],
+   [
+    24,
+    "smooth js/car/car-shade.js?v=fa60307aa178:1"
+   ],
+   [
+    16,
+    "texImage2D :0"
+   ],
+   [
+    15,
+    "terrainYAt js/track/scenery/build-props.js?v=b52b13acc83f:1"
+   ],
+   [
+    13,
+    "present js/render/glx/post.js?v=9c776d8cc890:1"
+   ],
+   [
+    12,
+    "pack js/render/shared/vertex-pack.js?v=6022dd625018:1"
+   ],
+   [
+    12,
+    "getError :0"
+   ],
+   [
+    11,
+    "buildSteps js/track/tracks.js?v=cecb59454679:1"
+   ],
+   [
+    11,
+    "buildSteps js/track/scenery/build-props.js?v=b52b13acc83f:1"
+   ],
+   [
+    10,
+    "resolveSetup js/car/parts.js?v=50508ef01b9c:1"
+   ],
+   [
+    9,
+    "(garbage collector) :0"
+   ],
+   [
+    9,
+    "push js/track/scenery/models.js?v=80a989114a71:1"
+   ],
+   [
+    9,
+    "syncGroup js/ui/aria-state.js?v=b1222f2c9798:1"
+   ],
+   [
+    8,
+    "num js/car/crest-draw.js?v=3703754a5611:1"
+   ],
+   [
+    8,
+    "measure js/ui/scroll-fade.js?v=feb463778187:1"
+   ],
+   [
+    8,
+    "toF32 js/render/glx/glx.js?v=1c59b7217a9d:1"
+   ],
+   [
+    8,
+    "getSetupPreviewMesh js/garage/setup-camera.js?v=e203ac136c53:1"
+   ],
+   [
+    7,
+    "finishPass js/car/car-materials.js?v=ff1c1c708f3b:1"
+   ]
+  ]
+ },
+ "race-entry": {
+  "wallMs": 29460,
+  "top": [
+   [
+    9521,
+    "readPixels :0"
+   ],
+   [
+    1062,
+    "smooth js/car/car-shade.js?v=fa60307aa178:1"
+   ],
+   [
+    994,
+    "(program) :0"
+   ],
+   [
+    965,
+    "addTri js/car/car-geometry.js?v=af3c43f98b3c:1"
+   ],
+   [
+    895,
+    "weld js/car/car-geometry.js?v=af3c43f98b3c:1"
+   ],
+   [
+    886,
+    "foilThick js/car/car-geometry.js?v=af3c43f98b3c:1"
+   ],
+   [
+    562,
+    "u.query js/track/core/mesh.js?v=b78a230fa7e9:1"
+   ],
+   [
+    532,
+    "(garbage collector) :0"
+   ],
+   [
+    484,
+    "measureText :0"
+   ],
+   [
+    454,
+    "elemPoint js/car/car-body-geom.js?v=9e8b6f8f54ea:1"
+   ],
+   [
+    420,
+    "getBoundingClientRect :0"
+   ],
+   [
+    304,
+    "(anon) js/car/car-shade.js?v=fa60307aa178:1"
+   ],
+   [
+    288,
+    "elemTopAt js/car/car-body-geom.js?v=9e8b6f8f54ea:1"
+   ],
+   [
+    282,
+    "push js/track/scenery/models.js?v=80a989114a71:1"
+   ],
+   [
+    251,
+    "ribbon js/track/core/mesh.js?v=b78a230fa7e9:1"
+   ],
+   [
+    219,
+    "bin js/render/shared/chunk-bins.js?v=1219c56fc1e8:1"
+   ],
+   [
+    218,
+    "texImage2D :0"
+   ],
+   [
+    216,
+    "build js/car/car3d.js?v=9d04a479ee85:1"
+   ],
+   [
+    194,
+    "toF32 js/render/glx/glx.js?v=1c59b7217a9d:1"
+   ],
+   [
+    192,
+    "compact js/track/core/hidden-faces.js?v=2f2f84d1b317:1"
+   ],
+   [
+    174,
+    "finishPass js/car/car-materials.js?v=ff1c1c708f3b:1"
+   ],
+   [
+    165,
+    "buildRoad js/track/core/mesh.js?v=b78a230fa7e9:1"
+   ],
+   [
+    162,
+    "fillText :0"
+   ],
+   [
+    154,
+    "grow js/track/scenery/models.js?v=80a989114a71:1"
+   ],
+   [
+    148,
+    "pack js/render/shared/vertex-pack.js?v=6022dd625018:1"
+   ]
+  ]
+ }
+}

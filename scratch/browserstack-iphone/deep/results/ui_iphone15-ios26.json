@@ -1,0 +1,713 @@
+{
+ "scen": "ui",
+ "device": "iPhone 15",
+ "os": "26",
+ "tag": "ui_iphone15-ios26",
+ "startPT": "10/21/2026, 9:50:52 PM",
+ "steps": [
+  {
+   "name": "title-idle",
+   "ms": 5547,
+   "gapsTotalMs": 2628,
+   "gaps": [
+    {
+     "at": 3313,
+     "d": 1217
+    },
+    {
+     "at": 2597,
+     "d": 694
+    },
+    {
+     "at": 1848,
+     "d": 162
+    },
+    {
+     "at": 1,
+     "d": 160
+    },
+    {
+     "at": 267,
+     "d": 147
+    },
+    {
+     "at": 1615,
+     "d": 138
+    },
+    {
+     "at": 1033,
+     "d": 110
+    }
+   ],
+   "res": {
+    "n": 0,
+    "by": {},
+    "top": []
+   },
+   "lt": {
+    "sup": false,
+    "e": []
+   },
+   "logs": [
+    [
+     11613,
+     "game",
+     "info",
+     "garage prewarm ready in 5873 ms (title, home none: car 198 ms, room 67 ms, frames 5536 ms)"
+    ]
+   ]
+  },
+  {
+   "name": "open-settings",
+   "ms": 5718,
+   "gapsTotalMs": 294,
+   "gaps": [
+    {
+     "at": 44,
+     "d": 149
+    },
+    {
+     "at": 240,
+     "d": 78
+    },
+    {
+     "at": 347,
+     "d": 67
+    }
+   ],
+   "res": {
+    "n": 22,
+    "by": {
+     "woff2": {
+      "n": 2,
+      "kb": 0,
+      "ms": 28
+     },
+     "js": {
+      "n": 19,
+      "kb": 0,
+      "ms": 77
+     },
+     "mp3": {
+      "n": 1,
+      "kb": 474,
+      "ms": 103
+     }
+    },
+    "top": [
+     {
+      "u": "assets/sfx/f1_engine.mp3",
+      "ms": 103,
+      "st": 13043,
+      "kb": 474
+     },
+     {
+      "u": "js/audio/driving-cues.js?v=b90d93165b2d",
+      "ms": 77,
+      "st": 12868,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/car-sfx.js?v=fe869b5266af",
+      "ms": 76,
+      "st": 12868,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/voice-pack.js?v=c529f5e5cafe",
+      "ms": 76,
+      "st": 12868,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/battle-earcon.js?v=6c3758a2771f",
+      "ms": 76,
+      "st": 12868,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/announcer-recorded.js?v=d43aae5f515f",
+      "ms": 76,
+      "st": 12868,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/engine.js?v=92ce05e1a79c",
+      "ms": 28,
+      "st": 12823,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/music-lib.js?v=7cbfa5debc36",
+      "ms": 28,
+      "st": 12823,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/crowd.js?v=69999b01bfa9",
+      "ms": 28,
+      "st": 12823,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/radio-voice.js?v=3643641e7876",
+      "ms": 28,
+      "st": 12823,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/announcer.js?v=812d2d19d908",
+      "ms": 28,
+      "st": 12823,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/panel.js?v=41fae88ba43a",
+      "ms": 28,
+      "st": 12824,
+      "kb": 0
+     }
+    ]
+   },
+   "lt": {
+    "sup": false,
+    "e": []
+   },
+   "logs": [
+    [
+     12707,
+     "game",
+     "info",
+     "SettingsNav.show home"
+    ],
+    [
+     12797,
+     "ui",
+     "info",
+     "TopModal open #pmsettings"
+    ],
+    [
+     12886,
+     "audio",
+     "info",
+     "SpotifyMusic.init"
+    ],
+    [
+     12952,
+     "audio",
+     "info",
+     "MusicLib.init"
+    ],
+    [
+     12955,
+     "audio",
+     "info",
+     "RadioVoice.create enabled=false"
+    ],
+    [
+     12956,
+     "audio",
+     "info",
+     "AudioPanel.create"
+    ],
+    [
+     12957,
+     "audio",
+     "info",
+     "AudioPanel.init sound=true"
+    ],
+    [
+     12967,
+     "audio",
+     "info",
+     "DrivingCues.create"
+    ],
+    [
+     12978,
+     "audio",
+     "info",
+     "GameAudio.init state=suspended"
+    ]
+   ]
+  },
+  {
+   "name": "close-settings",
+   "ms": 2453,
+   "gapsTotalMs": 82,
+   "gaps": [
+    {
+     "at": 42,
+     "d": 82
+    }
+   ],
+   "res": {
+    "n": 0,
+    "by": {},
+    "top": []
+   },
+   "lt": {
+    "sup": false,
+    "e": []
+   },
+   "logs": [
+    [
+     19086,
+     "ui",
+     "info",
+     "TopModal close #pmsettings"
+    ]
+   ]
+  },
+  {
+   "name": "open-race-select",
+   "ms": 4451,
+   "gapsTotalMs": 1463,
+   "gaps": [
+    {
+     "at": 3327,
+     "d": 234
+    },
+    {
+     "at": 169,
+     "d": 164
+    },
+    {
+     "at": 3044,
+     "d": 160
+    },
+    {
+     "at": 2117,
+     "d": 153
+    },
+    {
+     "at": 1842,
+     "d": 150
+    },
+    {
+     "at": 531,
+     "d": 79
+    },
+    {
+     "at": 2478,
+     "d": 65
+    },
+    {
+     "at": 49,
+     "d": 60
+    }
+   ],
+   "res": {
+    "n": 2,
+    "by": {
+     "webp": {
+      "n": 2,
+      "kb": 25,
+      "ms": 90
+     }
+    },
+    "top": [
+     {
+      "u": "assets/stills/bahrain.webp",
+      "ms": 90,
+      "st": 21525,
+      "kb": 25
+     },
+     {
+      "u": "assets/stills/bahrain.webp",
+      "ms": 51,
+      "st": 21585,
+      "kb": 0
+     }
+    ]
+   },
+   "lt": {
+    "sup": false,
+    "e": []
+   },
+   "logs": [
+    [
+     22471,
+     "car",
+     "info",
+     "livery alpine"
+    ],
+    [
+     22474,
+     "car",
+     "info",
+     "build racingbulls"
+    ],
+    [
+     22509,
+     "car",
+     "info",
+     "livery racingbulls"
+    ],
+    [
+     22512,
+     "car",
+     "info",
+     "build racingbulls"
+    ],
+    [
+     22543,
+     "car",
+     "info",
+     "livery racingbulls"
+    ],
+    [
+     22548,
+     "car",
+     "info",
+     "build haas"
+    ],
+    [
+     22580,
+     "car",
+     "info",
+     "livery haas"
+    ],
+    [
+     22585,
+     "car",
+     "info",
+     "build haas"
+    ],
+    [
+     22616,
+     "car",
+     "info",
+     "livery haas"
+    ],
+    [
+     22622,
+     "car",
+     "info",
+     "build williams"
+    ],
+    [
+     22655,
+     "car",
+     "info",
+     "livery williams"
+    ],
+    [
+     22659,
+     "car",
+     "info",
+     "build williams"
+    ],
+    [
+     22692,
+     "car",
+     "info",
+     "livery williams"
+    ],
+    [
+     22696,
+     "car",
+     "info",
+     "build audi"
+    ],
+    [
+     22733,
+     "car",
+     "info",
+     "livery audi"
+    ],
+    [
+     22743,
+     "car",
+     "info",
+     "build audi"
+    ],
+    [
+     22780,
+     "car",
+     "info",
+     "livery audi"
+    ],
+    [
+     22788,
+     "car",
+     "info",
+     "build astonmartin"
+    ],
+    [
+     22831,
+     "car",
+     "info",
+     "livery astonmartin"
+    ],
+    [
+     22837,
+     "car",
+     "info",
+     "build astonmartin"
+    ],
+    [
+     22881,
+     "car",
+     "info",
+     "livery astonmartin"
+    ],
+    [
+     22885,
+     "car",
+     "info",
+     "build cadillac"
+    ],
+    [
+     22921,
+     "car",
+     "info",
+     "livery cadillac"
+    ],
+    [
+     22927,
+     "car",
+     "info",
+     "build cadillac"
+    ],
+    [
+     22965,
+     "car",
+     "info",
+     "livery cadillac"
+    ],
+    [
+     23187,
+     "gfx",
+     "info",
+     "selector car assets ready {\"cars\":22,\"steps\":43,\"casters\":false,\"lod\":true,\"cpuMs\":1214,\"maxCpuMs\":71,\"yields\":32,\"wallMs\":1234,\"at\":23187}"
+    ],
+    [
+     23247,
+     "gfx",
+     "info",
+     "TLX per-chunk lamps ON lamps=163 chunks=1170 recs=3 idx=4501 grid=37x36"
+    ],
+    [
+     23910,
+     "gfx",
+     "info",
+     "lamp bake 163 lamps -> 923 tiles, atlas 756x792 @2.34 m in 720 ms"
+    ],
+    [
+     24727,
+     "gfx",
+     "info",
+     "TLX per-chunk lamps ON lamps=163 chunks=1170 recs=3 idx=4501 grid=37x36"
+    ],
+    [
+     24742,
+     "gfx",
+     "info",
+     "menu warm drawn bahrain"
+    ]
+   ]
+  },
+  {
+   "name": "back-to-title",
+   "ms": 4388,
+   "gapsTotalMs": 210,
+   "gaps": [
+    {
+     "at": 2822,
+     "d": 93
+    },
+    {
+     "at": 125,
+     "d": 60
+    },
+    {
+     "at": 68,
+     "d": 57
+    }
+   ],
+   "res": {
+    "n": 0,
+    "by": {},
+    "top": []
+   },
+   "lt": {
+    "sup": false,
+    "e": []
+   },
+   "logs": [
+    [
+     28706,
+     "car",
+     "info",
+     "refinish"
+    ],
+    [
+     28899,
+     "game",
+     "info",
+     "garage prewarm ready in 194 ms (title, home none: car 74 ms, room 11 ms, frames 36 ms)"
+    ]
+   ]
+  },
+  {
+   "name": "open-garage",
+   "ms": 6573,
+   "gapsTotalMs": 123,
+   "gaps": [
+    {
+     "at": 88,
+     "d": 64
+    },
+    {
+     "at": 190,
+     "d": 59
+    }
+   ],
+   "res": {
+    "n": 0,
+    "by": {},
+    "top": []
+   },
+   "lt": {
+    "sup": false,
+    "e": []
+   },
+   "logs": [
+    [
+     30339,
+     "audio",
+     "info",
+     "GameAudio.init state=suspended"
+    ],
+    [
+     30347,
+     "ui",
+     "info",
+     "SetupUI.openSetup"
+    ],
+    [
+     30400,
+     "game",
+     "info",
+     "garage first frame 64 ms after the tap (9 ms in 1 frame call(s), prebuilt true)"
+    ]
+   ]
+  },
+  {
+   "name": "close-garage",
+   "ms": 4492,
+   "gapsTotalMs": 104,
+   "gaps": [
+    {
+     "at": 70,
+     "d": 104
+    }
+   ],
+   "res": {
+    "n": 0,
+    "by": {},
+    "top": []
+   },
+   "lt": {
+    "sup": false,
+    "e": []
+   },
+   "logs": []
+  }
+ ],
+ "session": "24188c0e2bc3a828801b1dbf3e3e00e2906a54a2",
+ "bootMs": 6236,
+ "gfx": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": null,
+  "gfxHigh": null,
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 2,
+  "autoTier": 0,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "menuPrep": {
+  "state": "menu",
+  "trackId": "bahrain",
+  "key": "0|default|dry|22",
+  "world": true,
+  "building": false,
+  "done": true,
+  "warmable": true,
+  "warmKey": "0|default|dry|22",
+  "warmed": true,
+  "warmFrames": 0,
+  "warming": false,
+  "garageReady": true,
+  "cars": {
+   "cars": 22,
+   "steps": 43,
+   "casters": false,
+   "lod": true,
+   "cpuMs": 1214,
+   "maxCpuMs": 71,
+   "yields": 32,
+   "wallMs": 1234,
+   "at": 23187
+  }
+ },
+ "garagePrebuild": {
+  "enabled": true,
+  "ready": true,
+  "garageReady": true,
+  "prepped": false,
+  "garageWarm": 0,
+  "key": "redbull:manu_ford|circuit_adaptive|sig_redbull_pullrod|sig_redbull_brakes|sig_redbull_tyre|sig_redbull_ers|sig_redbull_gbox|sig_redbull_fuel|sig_redbull_exh|sig_redbull_floor|sig_redbull_cpit|standard|L:custom_17921685243141:3|bahrain:1|dry|default|0|1|0|0|-|-|0|-",
+  "running": false,
+  "kind": "none",
+  "blockers": [],
+  "programsWarm": true,
+  "room": true,
+  "previewMeshes": 1,
+  "last": {
+   "want": "title",
+   "kind": "none",
+   "key": "redbull:manu_ford|circuit_adaptive|sig_redbull_pullrod|sig_redbull_brakes|sig_redbull_tyre|sig_redbull_ers|sig_redbull_gbox|sig_redbull_fuel|sig_redbull_exh|sig_redbull_floor|sig_redbull_cpit|standard|L:custom_17921685243141:3|bahrain:1|dry|default|0|1|0|0|-|-|0|-",
+   "carMs": 74,
+   "roomMs": 11,
+   "frameMs": 36,
+   "room": true,
+   "frames": true,
+   "result": "ready",
+   "ms": 194
+  },
+  "firstFrame": {
+   "from": "menu",
+   "visit": 1,
+   "tapMs": 64,
+   "workMs": 9,
+   "calls": 1,
+   "prebuilt": true
+  }
+ },
+ "errors": [],
+ "endPT": "10/21/2026, 9:51:54 PM"
+}

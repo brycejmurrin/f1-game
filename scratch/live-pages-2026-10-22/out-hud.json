@@ -1,0 +1,730 @@
+{
+ "log": [
+  "hud-shipped-None-1280 warning [scenery] monza: suppressed wall=2 tree=19 pine=1 grandstand=1 building=2",
+  "hud-shipped-None-1280 warning CopyExternalImageToTexture(): Browser fails extracting valid resourcefrom external image. This API call will return early.",
+  "hud-shipped-None-1280 warning CopyExternalImageToTexture(): Browser fails extracting valid resourcefrom external image. This API call will return early.",
+  "hud-clean-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/race/race-radio.js?v=3ae0dcfdc953 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is prel",
+  "hud-clean-None-1280 warning [scenery] monza: suppressed wall=2 tree=19 pine=1 grandstand=1 building=2",
+  "hud-clean-None-1280 warning CopyExternalImageToTexture(): Browser fails extracting valid resourcefrom external image. This API call will return early.",
+  "hud-big-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/race/race-radio.js?v=3ae0dcfdc953 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is prel",
+  "hud-big-None-1280 warning [scenery] monza: suppressed wall=2 tree=19 pine=1 grandstand=1 building=2",
+  "hud-big-None-1280 warning CopyExternalImageToTexture(): Browser fails extracting valid resourcefrom external image. This API call will return early.",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-chunks.js?v=843d7d5bc79b was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-viewport.js?v=cd029996a6b5 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and ",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-post.js?v=d1d9f3ab6042 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-shadow.js?v=945cde8af825 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx.js?v=01180df5273c was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is pre",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-post.js?v=16ea3f7fcef1 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-chunked.js?v=8aab3ed249b7 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-fx.js?v=b0495321e734 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is ",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-sky.js?v=2443c21775bf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-lit.js?v=6a6d898cc7a2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-chunks.js?v=843d7d5bc79b was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-viewport.js?v=cd029996a6b5 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and ",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-post.js?v=d1d9f3ab6042 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-shadow.js?v=945cde8af825 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx.js?v=01180df5273c was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is pre",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-post.js?v=16ea3f7fcef1 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-chunked.js?v=8aab3ed249b7 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-fx.js?v=b0495321e734 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is ",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-sky.js?v=2443c21775bf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-lit.js?v=6a6d898cc7a2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-chunks.js?v=843d7d5bc79b was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-viewport.js?v=cd029996a6b5 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and ",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-post.js?v=d1d9f3ab6042 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-shadow.js?v=945cde8af825 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx.js?v=01180df5273c was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is pre",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-post.js?v=16ea3f7fcef1 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-chunked.js?v=8aab3ed249b7 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-fx.js?v=b0495321e734 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is ",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-sky.js?v=2443c21775bf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-lit.js?v=6a6d898cc7a2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is",
+  "hud-corners-None-1280 warning [scenery] monza: suppressed wall=2 tree=19 pine=1 grandstand=1 building=2",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-chunks.js?v=843d7d5bc79b was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-viewport.js?v=cd029996a6b5 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and ",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-post.js?v=d1d9f3ab6042 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-shadow.js?v=945cde8af825 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx.js?v=01180df5273c was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is pre",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-post.js?v=16ea3f7fcef1 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-chunked.js?v=8aab3ed249b7 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-fx.js?v=b0495321e734 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is ",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-sky.js?v=2443c21775bf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-lit.js?v=6a6d898cc7a2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-chunks.js?v=843d7d5bc79b was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-viewport.js?v=cd029996a6b5 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and ",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-post.js?v=d1d9f3ab6042 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-shadow.js?v=945cde8af825 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx.js?v=01180df5273c was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is pre",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-post.js?v=16ea3f7fcef1 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-chunked.js?v=8aab3ed249b7 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-fx.js?v=b0495321e734 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is ",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-sky.js?v=2443c21775bf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-lit.js?v=6a6d898cc7a2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-chunks.js?v=843d7d5bc79b was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-viewport.js?v=cd029996a6b5 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and ",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-post.js?v=d1d9f3ab6042 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-shadow.js?v=945cde8af825 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx.js?v=01180df5273c was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is pre",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-post.js?v=16ea3f7fcef1 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tlx-chunked.js?v=8aab3ed249b7 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and i",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-fx.js?v=b0495321e734 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is ",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-sky.js?v=2443c21775bf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is",
+  "hud-corners-None-1280 warning The resource https://brycejmurrin.github.io/f1-game/js/render/three/tsl-lit.js?v=6a6d898cc7a2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is",
+  "hud-corners-None-1280 STEPERR {\"shot\":\"h-corners-1280x720\"} TimeoutError: page.screenshot: Timeout 30000ms exceeded.\nCall log:\n  - taking page screenshot\n  - waiting for fonts to load...\n  - fonts loaded\n",
+  "hud-shipped-70-1280 warning [scenery] monza: suppressed wall=2 tree=19 pine=1 grandstand=1 building=2",
+  "hud-shipped-70-1280 warning CopyExternalImageToTexture(): Browser fails extracting valid resourcefrom external image. This API call will return early.",
+  "hud-shipped-None-844 warning [scenery] bahrain: suppressed mountain=3",
+  "hud-shipped-None-844 warning [scenery] monza: suppressed wall=2 tree=19 pine=1 grandstand=1 building=2",
+  "hud-shipped-None-844 warning CopyExternalImageToTexture(): Browser fails extracting valid resourcefrom external image. This API call will return early."
+ ],
+ "res": [
+  {
+   "sc": "hud-shipped-None-1280",
+   "eval": "__apex.race('monza')",
+   "v": {
+    "track": "monza",
+    "timeOfDay": "default",
+    "weather": "dry"
+   }
+  },
+  {
+   "sc": "hud-shipped-None-1280",
+   "eval": "__apex.go()",
+   "v": "race"
+  },
+  {
+   "sc": "hud-shipped-None-1280",
+   "eval": "__apex.camera('chase')",
+   "v": {
+    "mode": "chase",
+    "index": 0
+   }
+  },
+  {
+   "sc": "hud-shipped-None-1280",
+   "eval": "(()=>{for(const pn of HudLayout.PROFILES||[undefined]){HudLa",
+   "v": true
+  },
+  {
+   "sc": "hud-shipped-None-1280",
+   "measure": [
+    "#hud-speed",
+    "#hud .hud-label",
+    "#hud"
+   ],
+   "v": [
+    {
+     "s": "#hud-speed",
+     "x": 509,
+     "y": 579,
+     "w": 88,
+     "h": 46,
+     "sw": 89,
+     "cw": 89,
+     "sh": 48,
+     "ch": 46,
+     "fs": "46.2px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#hud .hud-label",
+     "x": 373,
+     "y": 13,
+     "w": 62,
+     "h": 18,
+     "sw": 63,
+     "cw": 63,
+     "sh": 18,
+     "ch": 18,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#hud",
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "sw": 1280,
+     "cw": 1280,
+     "sh": 720,
+     "ch": 720,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "hud-shipped-None-1280",
+   "eval": "[...document.querySelectorAll('#hud .hud-label')].filter(e=>",
+   "v": [
+    16,
+    16,
+    16
+   ]
+  },
+  {
+   "sc": "hud-shipped-None-1280",
+   "eval": "(()=>{const els=[...document.querySelectorAll('#hud [id^=hud",
+   "v": {
+    "o": [
+     "hud-energy-fill x hud-energy-n 811"
+    ],
+    "off": []
+   }
+  },
+  {
+   "sc": "hud-shipped-None-1280",
+   "ms": 57754
+  },
+  {
+   "sc": "hud-clean-None-1280",
+   "eval": "__apex.race('monza')",
+   "v": {
+    "track": "monza",
+    "timeOfDay": "default",
+    "weather": "dry"
+   }
+  },
+  {
+   "sc": "hud-clean-None-1280",
+   "eval": "__apex.go()",
+   "v": "race"
+  },
+  {
+   "sc": "hud-clean-None-1280",
+   "eval": "__apex.camera('chase')",
+   "v": {
+    "mode": "chase",
+    "index": 0
+   }
+  },
+  {
+   "sc": "hud-clean-None-1280",
+   "eval": "(()=>{for(const pn of HudLayout.PROFILES||[undefined]){HudLa",
+   "v": true
+  },
+  {
+   "sc": "hud-clean-None-1280",
+   "measure": [
+    "#hud-speed",
+    "#hud .hud-label",
+    "#hud"
+   ],
+   "v": [
+    {
+     "s": "#hud-speed",
+     "x": 512,
+     "y": 642,
+     "w": 88,
+     "h": 46,
+     "sw": 89,
+     "cw": 89,
+     "sh": 48,
+     "ch": 46,
+     "fs": "46.2px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#hud .hud-label",
+     "x": 413,
+     "y": 12,
+     "w": 53,
+     "h": 15,
+     "sw": 63,
+     "cw": 63,
+     "sh": 18,
+     "ch": 18,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#hud",
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "sw": 1280,
+     "cw": 1280,
+     "sh": 720,
+     "ch": 720,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "hud-clean-None-1280",
+   "eval": "[...document.querySelectorAll('#hud .hud-label')].filter(e=>",
+   "v": [
+    16,
+    16,
+    16
+   ]
+  },
+  {
+   "sc": "hud-clean-None-1280",
+   "eval": "(()=>{const els=[...document.querySelectorAll('#hud [id^=hud",
+   "v": {
+    "o": [
+     "hud-energy-fill x hud-energy-n 811"
+    ],
+    "off": []
+   }
+  },
+  {
+   "sc": "hud-clean-None-1280",
+   "ms": 53558
+  },
+  {
+   "sc": "hud-big-None-1280",
+   "eval": "__apex.race('monza')",
+   "v": {
+    "track": "monza",
+    "timeOfDay": "default",
+    "weather": "dry"
+   }
+  },
+  {
+   "sc": "hud-big-None-1280",
+   "eval": "__apex.go()",
+   "v": "race"
+  },
+  {
+   "sc": "hud-big-None-1280",
+   "eval": "__apex.camera('chase')",
+   "v": {
+    "mode": "chase",
+    "index": 0
+   }
+  },
+  {
+   "sc": "hud-big-None-1280",
+   "eval": "(()=>{for(const pn of HudLayout.PROFILES||[undefined]){HudLa",
+   "v": true
+  },
+  {
+   "sc": "hud-big-None-1280",
+   "measure": [
+    "#hud-speed",
+    "#hud .hud-label",
+    "#hud"
+   ],
+   "v": [
+    {
+     "s": "#hud-speed",
+     "x": 443,
+     "y": 607,
+     "w": 88,
+     "h": 46,
+     "sw": 89,
+     "cw": 89,
+     "sh": 48,
+     "ch": 46,
+     "fs": "46.2px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#hud .hud-label",
+     "x": 306,
+     "y": 14,
+     "w": 78,
+     "h": 22,
+     "sw": 63,
+     "cw": 63,
+     "sh": 18,
+     "ch": 18,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#hud",
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "sw": 1280,
+     "cw": 1280,
+     "sh": 720,
+     "ch": 720,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "hud-big-None-1280",
+   "eval": "[...document.querySelectorAll('#hud .hud-label')].filter(e=>",
+   "v": [
+    16,
+    16,
+    16
+   ]
+  },
+  {
+   "sc": "hud-big-None-1280",
+   "eval": "(()=>{const els=[...document.querySelectorAll('#hud [id^=hud",
+   "v": {
+    "o": [
+     "hud-box-pos x hud-gap-ahead 617",
+     "hud-box-pos x hud-gap-behind 617",
+     "hud-dock x hud-gear 3389",
+     "hud-dock x hud-tach 4837",
+     "hud-dock x hud-rpm-fill 4249",
+     "hud-speed x hud-gear 657",
+     "hud-speed-n x hud-gear 657",
+     "hud-energy-fill x hud-energy-n 811"
+    ],
+    "off": []
+   }
+  },
+  {
+   "sc": "hud-big-None-1280",
+   "ms": 62626
+  },
+  {
+   "sc": "hud-corners-None-1280",
+   "eval": "__apex.race('monza')",
+   "v": {
+    "track": "monza",
+    "timeOfDay": "default",
+    "weather": "dry"
+   }
+  },
+  {
+   "sc": "hud-corners-None-1280",
+   "eval": "__apex.go()",
+   "v": "race"
+  },
+  {
+   "sc": "hud-corners-None-1280",
+   "eval": "__apex.camera('chase')",
+   "v": {
+    "mode": "chase",
+    "index": 0
+   }
+  },
+  {
+   "sc": "hud-corners-None-1280",
+   "eval": "(()=>{for(const pn of HudLayout.PROFILES||[undefined]){HudLa",
+   "v": true
+  },
+  {
+   "sc": "hud-corners-None-1280",
+   "measure": [
+    "#hud-speed",
+    "#hud .hud-label",
+    "#hud"
+   ],
+   "v": [
+    {
+     "s": "#hud-speed",
+     "x": 412,
+     "y": 651,
+     "w": 88,
+     "h": 46,
+     "sw": 89,
+     "cw": 89,
+     "sh": 48,
+     "ch": 46,
+     "fs": "46.2px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#hud .hud-label",
+     "x": 373,
+     "y": 13,
+     "w": 62,
+     "h": 18,
+     "sw": 63,
+     "cw": 63,
+     "sh": 18,
+     "ch": 18,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#hud",
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "sw": 1280,
+     "cw": 1280,
+     "sh": 720,
+     "ch": 720,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "hud-corners-None-1280",
+   "eval": "[...document.querySelectorAll('#hud .hud-label')].filter(e=>",
+   "v": [
+    16,
+    16,
+    16
+   ]
+  },
+  {
+   "sc": "hud-corners-None-1280",
+   "eval": "(()=>{const els=[...document.querySelectorAll('#hud [id^=hud",
+   "v": {
+    "o": [
+     "hud-dock x hud-energy-fill 1304",
+     "hud-dock x hud-energy-n 432",
+     "hud-dock x hud-tyre-code 478",
+     "hud-dock x hud-tyre-bar 1289",
+     "hud-dock x hud-tyre-fill 1080",
+     "hud-dock x hud-plan 1320",
+     "hud-speed x hud-tyre-bar 249",
+     "hud-speed x hud-tyre-fill 202",
+     "hud-speed x hud-plan 199",
+     "hud-speed-n x hud-tyre-bar 249",
+     "hud-speed-n x hud-tyre-fill 202",
+     "hud-speed-n x hud-plan 199",
+     "hud-bb x hud-tyre-bar 700",
+     "hud-bb x hud-tyre-fill 634",
+     "hud-bb x hud-plan 412",
+     "hud-energy-fill x hud-energy-n 811"
+    ],
+    "off": [
+     "hud-tach 1222,594,1394,612",
+     "hud-rpm-fill 1223,595,1393,611"
+    ]
+   }
+  },
+  {
+   "sc": "hud-corners-None-1280",
+   "ms": 130256
+  },
+  {
+   "sc": "hud-shipped-70-1280",
+   "eval": "__apex.race('monza')",
+   "v": {
+    "track": "monza",
+    "timeOfDay": "default",
+    "weather": "dry"
+   }
+  },
+  {
+   "sc": "hud-shipped-70-1280",
+   "eval": "__apex.go()",
+   "v": "race"
+  },
+  {
+   "sc": "hud-shipped-70-1280",
+   "eval": "__apex.camera('chase')",
+   "v": {
+    "mode": "chase",
+    "index": 0
+   }
+  },
+  {
+   "sc": "hud-shipped-70-1280",
+   "eval": "(()=>{for(const pn of HudLayout.PROFILES||[undefined]){HudLa",
+   "v": true
+  },
+  {
+   "sc": "hud-shipped-70-1280",
+   "eval": "__apex.hudScale(70)",
+   "v": {
+    "pct": 70,
+    "stored": 70,
+    "min": 70,
+    "max": 200,
+    "step": 0.25
+   }
+  },
+  {
+   "sc": "hud-shipped-70-1280",
+   "measure": [
+    "#hud-speed",
+    "#hud .hud-label",
+    "#hud"
+   ],
+   "v": [
+    {
+     "s": "#hud-speed",
+     "x": 548,
+     "y": 614,
+     "w": 61,
+     "h": 32,
+     "sw": 89,
+     "cw": 89,
+     "sh": 49,
+     "ch": 46,
+     "fs": "46.2px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#hud .hud-label",
+     "x": 453,
+     "y": 9,
+     "w": 44,
+     "h": 12,
+     "sw": 63,
+     "cw": 63,
+     "sh": 18,
+     "ch": 18,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#hud",
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "sw": 1280,
+     "cw": 1280,
+     "sh": 720,
+     "ch": 720,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "hud-shipped-70-1280",
+   "eval": "[...document.querySelectorAll('#hud .hud-label')].filter(e=>",
+   "v": [
+    16,
+    16,
+    16
+   ]
+  },
+  {
+   "sc": "hud-shipped-70-1280",
+   "eval": "(()=>{const els=[...document.querySelectorAll('#hud [id^=hud",
+   "v": {
+    "o": [
+     "hud-energy-fill x hud-energy-n 395"
+    ],
+    "off": []
+   }
+  },
+  {
+   "sc": "hud-shipped-70-1280",
+   "ms": 53611
+  },
+  {
+   "sc": "hud-shipped-None-844",
+   "eval": "__apex.race('monza')",
+   "v": {
+    "track": "monza",
+    "timeOfDay": "default",
+    "weather": "dry"
+   }
+  },
+  {
+   "sc": "hud-shipped-None-844",
+   "eval": "__apex.go()",
+   "v": "race"
+  },
+  {
+   "sc": "hud-shipped-None-844",
+   "eval": "__apex.camera('chase')",
+   "v": {
+    "mode": "chase",
+    "index": 0
+   }
+  },
+  {
+   "sc": "hud-shipped-None-844",
+   "eval": "(()=>{for(const pn of HudLayout.PROFILES||[undefined]){HudLa",
+   "v": true
+  },
+  {
+   "sc": "hud-shipped-None-844",
+   "measure": [
+    "#hud-speed",
+    "#hud .hud-label",
+    "#hud"
+   ],
+   "v": [
+    {
+     "s": "#hud-speed",
+     "x": 406,
+     "y": 277,
+     "w": 64,
+     "h": 30,
+     "sw": 65,
+     "cw": 65,
+     "sh": 32,
+     "ch": 31,
+     "fs": "30.8px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#hud .hud-label",
+     "x": 236,
+     "y": 13,
+     "w": 60,
+     "h": 18,
+     "sw": 60,
+     "cw": 60,
+     "sh": 18,
+     "ch": 18,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    },
+    {
+     "s": "#hud",
+     "x": 0,
+     "y": 0,
+     "w": 844,
+     "h": 390,
+     "sw": 844,
+     "cw": 844,
+     "sh": 390,
+     "ch": 390,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "hud-shipped-None-844",
+   "eval": "[...document.querySelectorAll('#hud .hud-label')].filter(e=>",
+   "v": [
+    16,
+    16,
+    16
+   ]
+  },
+  {
+   "sc": "hud-shipped-None-844",
+   "eval": "(()=>{const els=[...document.querySelectorAll('#hud [id^=hud",
+   "v": {
+    "o": [
+     "hud-energy-fill x hud-energy-n 811"
+    ],
+    "off": []
+   }
+  },
+  {
+   "sc": "hud-shipped-None-844",
+   "ms": 51798
+  }
+ ]
+}

@@ -1,0 +1,203 @@
+{
+ "log": [
+  "title-desk warning The resource https://brycejmurrin.github.io/f1-game/js/net/lobby.js?v=ae00d1eacf08 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded ",
+  "title-desk warning The resource https://brycejmurrin.github.io/f1-game/js/net/rendezvous.js?v=2577af6c39b7 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is prelo",
+  "title-desk warning The resource https://brycejmurrin.github.io/f1-game/js/career/career-ui.js?v=ddaac70c733f was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is pre",
+  "title-desk warning The resource https://brycejmurrin.github.io/f1-game/js/net/lobby-codes.js?v=86f1efe5f066 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is prel",
+  "title-desk warning The resource https://brycejmurrin.github.io/f1-game/js/net/netplay.js?v=0baf6c1fa632 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloade",
+  "title-desk warning The resource https://brycejmurrin.github.io/f1-game/js/net/session.js?v=78cf137cb8fd was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloade",
+  "title-desk warning The resource https://brycejmurrin.github.io/f1-game/js/net/handshake.js?v=94106a4f9a65 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloa",
+  "title-phoneL warning [scenery] bahrain: suppressed mountain=3",
+  "title-phoneP warning [scenery] bahrain: suppressed mountain=3",
+  "career-desk warning The resource https://brycejmurrin.github.io/f1-game/js/track/scenery/build-props.js?v=b52b13acc83f was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and ",
+  "career-desk warning The resource https://brycejmurrin.github.io/f1-game/js/race/race-radio.js?v=3ae0dcfdc953 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is prel",
+  "career-phoneL warning [scenery] bahrain: suppressed mountain=3",
+  "career-phoneP warning [scenery] bahrain: suppressed mountain=3",
+  "settings-phoneL warning [scenery] bahrain: suppressed mountain=3"
+ ],
+ "res": [
+  {
+   "sc": "title-desk",
+   "measure": [
+    "#menu-buttons",
+    "#mb-daily",
+    "#mb-career"
+   ],
+   "v": [
+    {
+     "s": "#menu-buttons",
+     "x": 713,
+     "y": 138,
+     "w": 409,
+     "h": 443,
+     "sw": 410,
+     "cw": 410,
+     "sh": 443,
+     "ch": 443,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#mb-daily",
+     "x": 725,
+     "y": 210,
+     "w": 385,
+     "h": 52,
+     "sw": 384,
+     "cw": 384,
+     "sh": 51,
+     "ch": 51,
+     "fs": "20px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#mb-career",
+     "x": 722,
+     "y": 150,
+     "w": 391,
+     "h": 55,
+     "sw": 384,
+     "cw": 384,
+     "sh": 53,
+     "ch": 53,
+     "fs": "20px",
+     "vis": true,
+     "ovx": "hidden"
+    }
+   ]
+  },
+  {
+   "sc": "title-desk",
+   "ms": 14520
+  },
+  {
+   "sc": "title-phoneL",
+   "measure": [
+    "#menu-buttons",
+    "#mb-daily"
+   ],
+   "v": [
+    {
+     "s": "#menu-buttons",
+     "x": 344,
+     "y": 8,
+     "w": 492,
+     "h": 374,
+     "sw": 451,
+     "cw": 451,
+     "sh": 343,
+     "ch": 343,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    },
+    {
+     "s": "#mb-daily",
+     "x": 352,
+     "y": 87,
+     "w": 474,
+     "h": 43,
+     "sw": 434,
+     "cw": 434,
+     "sh": 38,
+     "ch": 38,
+     "fs": "14.8px",
+     "vis": true,
+     "ovx": "hidden"
+    }
+   ]
+  },
+  {
+   "sc": "title-phoneL",
+   "ms": 10101
+  },
+  {
+   "sc": "title-phoneP",
+   "ms": 9826
+  },
+  {
+   "sc": "career-desk",
+   "measure": [
+    "#cr-left"
+   ],
+   "v": [
+    {
+     "s": "#cr-left",
+     "x": 131,
+     "y": 92,
+     "w": 486,
+     "h": 553,
+     "sw": 491,
+     "cw": 486,
+     "sh": 1004,
+     "ch": 554,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "hidden"
+    }
+   ]
+  },
+  {
+   "sc": "career-desk",
+   "ms": 18559
+  },
+  {
+   "sc": "career-phoneL",
+   "measure": [
+    "#cr-left"
+   ],
+   "v": [
+    {
+     "s": "#cr-left",
+     "x": 23,
+     "y": 56,
+     "w": 394,
+     "h": 1100,
+     "sw": 362,
+     "cw": 362,
+     "sh": 1010,
+     "ch": 1010,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "career-phoneL",
+   "ms": 16207
+  },
+  {
+   "sc": "career-phoneP",
+   "measure": [
+    "#cr-left"
+   ],
+   "v": [
+    {
+     "s": "#cr-left",
+     "x": 36,
+     "y": 133,
+     "w": 316,
+     "h": 1321,
+     "sw": 290,
+     "cw": 290,
+     "sh": 1213,
+     "ch": 1212,
+     "fs": "16px",
+     "vis": true,
+     "ovx": "visible"
+    }
+   ]
+  },
+  {
+   "sc": "career-phoneP",
+   "ms": 15899
+  },
+  {
+   "sc": "settings-phoneL",
+   "ms": 16012
+  }
+ ]
+}

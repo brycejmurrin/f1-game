@@ -1,0 +1,225 @@
+{
+ "scen": "race:monza:default:low:matrix",
+ "device": "iPhone 15",
+ "os": "26",
+ "tag": "race-monza-default-low-matrix_iphone15-ios26",
+ "steps": [
+  {
+   "name": "raceEntry",
+   "ms": 17130,
+   "entryMs": 16963,
+   "result": "ok"
+  },
+  {
+   "name": "drive",
+   "ms": 61430,
+   "frames": 3073,
+   "avgFps": 51.2,
+   "p5Fps": 35.7,
+   "p1Fps": 26.3,
+   "worstMs": 60,
+   "gt33": 73,
+   "gt50": 6,
+   "gt100": 0,
+   "buckets": [
+    47.2,
+    53.3,
+    49.7,
+    53.3,
+    52.9
+   ]
+  },
+  {
+   "name": "scale1",
+   "ms": 13819,
+   "frames": 302,
+   "avgFps": 25.1,
+   "p5Fps": 17.9,
+   "p1Fps": 14.9,
+   "worstMs": 71,
+   "gt33": 205,
+   "gt50": 44,
+   "gt100": 0,
+   "got": 1
+  },
+  {
+   "name": "scale0.75",
+   "ms": 13825,
+   "frames": 332,
+   "avgFps": 27.7,
+   "p5Fps": 21.3,
+   "p1Fps": 19.2,
+   "worstMs": 68,
+   "gt33": 213,
+   "gt50": 6,
+   "gt100": 0,
+   "got": 0.75
+  },
+  {
+   "name": "scale0.5",
+   "ms": 13897,
+   "frames": 441,
+   "avgFps": 36.7,
+   "p5Fps": 31.3,
+   "p1Fps": 27.8,
+   "worstMs": 45,
+   "gt33": 11,
+   "gt50": 0,
+   "gt100": 0,
+   "got": 0.5
+  },
+  {
+   "name": "upscale0.75",
+   "ms": 15410,
+   "frames": 313,
+   "avgFps": 26,
+   "p5Fps": 20.4,
+   "p1Fps": 18.9,
+   "worstMs": 62,
+   "gt33": 227,
+   "gt50": 8,
+   "gt100": 0,
+   "upscale": {
+    "on": true,
+    "active": true,
+    "available": true
+   },
+   "set": {
+    "on": true,
+    "active": true,
+    "available": true
+   }
+  }
+ ],
+ "shots": [
+  "results/race-monza-default-low-matrix_iphone15-ios26__racing.png",
+  "results/race-monza-default-low-matrix_iphone15-ios26__upscale075.png",
+  "results/race-monza-default-low-matrix_iphone15-ios26__end.png"
+ ],
+ "session": "a735b6da169676f80cf5342e47b232a2f3031edc",
+ "bootMs": 2425,
+ "rebootMs": 1822,
+ "gfxMenu": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": "\"low\"",
+  "gfxHigh": "0",
+  "preset": "low",
+  "renderScale": 0.5,
+  "tier": 4,
+  "autoTier": 0,
+  "userTier": 4,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "trackId": "monza",
+ "gfxRace": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": "\"low\"",
+  "gfxHigh": "0",
+  "preset": "low",
+  "renderScale": 0.5,
+  "tier": 4,
+  "autoTier": 4,
+  "userTier": 4,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "drive": {
+  "frames": 3073,
+  "avgFps": 51.2,
+  "p5Fps": 35.7,
+  "p1Fps": 26.3,
+  "worstMs": 60,
+  "gt33": 73,
+  "gt50": 6,
+  "gt100": 0,
+  "buckets": [
+   47.2,
+   53.3,
+   49.7,
+   53.3,
+   52.9
+  ]
+ },
+ "ap1": {
+  "maxKph": 202,
+  "offRoadFrames": 338,
+  "ticks": 3289,
+  "err": null,
+  "lastSpeedKph": 103
+ },
+ "info": {
+  "state": "race",
+  "track": "monza",
+  "n": 1444,
+  "total": 5777.579011126656,
+  "timeTrial": false,
+  "seasonMode": false,
+  "flow": "gp",
+  "session": "race",
+  "career": false,
+  "practice": false,
+  "duel": false,
+  "raceQuali": false,
+  "raceGrid": "random",
+  "lapsTarget": 20,
+  "sectors": [
+   0.26536876,
+   0.58048447
+  ],
+  "turns": 11
+ },
+ "ap2": {
+  "maxKph": 211,
+  "offRoadFrames": 0,
+  "ticks": 1668,
+  "err": null,
+  "lastSpeedKph": 164
+ },
+ "errors": [],
+ "logs": [
+  "{\"id\":18,\"t\":226,\"ns\":\"gfx\",\"level\":\"warn\",\"msg\":\"TLX on a phone: three keeps ~54 MB of CPU geometry copies — a jetsam mid-race reverts to WebGL2 at the next boot; apex26.tlxMobile=0 declines\"}",
+  "{\"id\":99,\"t\":827,\"ns\":\"scenery\",\"level\":\"warn\",\"msg\":\"bahrain: suppressed mountain=3\"}",
+  "{\"id\":137,\"t\":2696,\"ns\":\"scenery\",\"level\":\"warn\",\"msg\":\"monza: suppressed wall=2 tree=19 pine=1 grandstand=1 building=2\"}"
+ ]
+}

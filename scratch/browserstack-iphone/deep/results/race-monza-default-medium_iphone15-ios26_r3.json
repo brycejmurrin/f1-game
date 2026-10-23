@@ -1,0 +1,1056 @@
+{
+ "scen": "race:monza:default:medium",
+ "device": "iPhone 15",
+ "os": "26",
+ "tag": "race-monza-default-medium_iphone15-ios26_r3",
+ "startPT": "10/21/2026, 9:53:20 PM",
+ "steps": [
+  {
+   "name": "raceEntry",
+   "ms": 7727,
+   "entryMs": 5503,
+   "result": "ok",
+   "gapsTotalMs": 4374,
+   "gapsN": 28,
+   "gapsTop": [
+    {
+     "at": 4052,
+     "d": 1574
+    },
+    {
+     "at": 3486,
+     "d": 327
+    },
+    {
+     "at": 807,
+     "d": 183
+    },
+    {
+     "at": 3835,
+     "d": 173
+    },
+    {
+     "at": 2168,
+     "d": 158
+    },
+    {
+     "at": 2713,
+     "d": 157
+    },
+    {
+     "at": 497,
+     "d": 156
+    },
+    {
+     "at": 2987,
+     "d": 138
+    },
+    {
+     "at": 5626,
+     "d": 137
+    },
+    {
+     "at": 672,
+     "d": 108
+    },
+    {
+     "at": 1019,
+     "d": 108
+    },
+    {
+     "at": 1312,
+     "d": 101
+    },
+    {
+     "at": 5763,
+     "d": 92
+    },
+    {
+     "at": 325,
+     "d": 81
+    },
+    {
+     "at": 1487,
+     "d": 81
+    }
+   ],
+   "stages": {
+    "entry": "startRace",
+    "software": false,
+    "budgetMs": 120000,
+    "budgetLeftMs": 112674,
+    "windowMs": 5553,
+    "stages": [
+     {
+      "n": "scenery",
+      "ms": 69,
+      "kind": "leg"
+     },
+     {
+      "n": "resets",
+      "ms": 127,
+      "kind": "leg"
+     },
+     {
+      "n": "loadTrack",
+      "ms": 738,
+      "kind": "leg"
+     },
+     {
+      "n": "makeCars",
+      "ms": 3,
+      "kind": "leg"
+     },
+     {
+      "n": "settings",
+      "ms": 0,
+      "kind": "leg"
+     },
+     {
+      "n": "gridUp",
+      "ms": 6,
+      "kind": "leg"
+     },
+     {
+      "n": "finish",
+      "ms": 0,
+      "kind": "leg"
+     },
+     {
+      "n": "ensureScenery",
+      "ms": 68,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "gridCountdown",
+      "ms": 1703,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "warmCarAssets",
+      "ms": 1662,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "debrisPrime",
+      "ms": 1,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "rigWarm",
+      "ms": 27,
+      "kind": "span",
+      "open": false
+     },
+     {
+      "n": "mirrorPrepare",
+      "ms": 2666,
+      "kind": "span",
+      "open": false
+     }
+    ],
+    "blockMs": 0,
+    "maxBlockMs": 0
+   },
+   "legs": [
+    {
+     "n": "scenery",
+     "ms": 69
+    },
+    {
+     "n": "resets",
+     "ms": 127
+    },
+    {
+     "n": "loadTrack",
+     "ms": 738
+    },
+    {
+     "n": "makeCars",
+     "ms": 3
+    },
+    {
+     "n": "settings",
+     "ms": 0
+    },
+    {
+     "n": "gridUp",
+     "ms": 6
+    },
+    {
+     "n": "finish",
+     "ms": 0
+    }
+   ],
+   "longtasks": {
+    "sup": false,
+    "e": []
+   },
+   "res": {
+    "n": 30,
+    "by": {
+     "js": {
+      "n": 20,
+      "kb": 0,
+      "ms": 77
+     },
+     "bin": {
+      "n": 9,
+      "kb": 5905,
+      "ms": 168
+     },
+     "json": {
+      "n": 1,
+      "kb": 14,
+      "ms": 11
+     }
+    },
+    "top": [
+     {
+      "u": "assets/voice/fable.bin",
+      "ms": 168,
+      "st": 6744,
+      "kb": 5889
+     },
+     {
+      "u": "js/audio/voice-pack.js?v=c529f5e5cafe",
+      "ms": 77,
+      "st": 6598,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/battle-earcon.js?v=6c3758a2771f",
+      "ms": 77,
+      "st": 6598,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/announcer-recorded.js?v=d43aae5f515f",
+      "ms": 76,
+      "st": 6599,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/driving-cues.js?v=b90d93165b2d",
+      "ms": 76,
+      "st": 6599,
+      "kb": 0
+     },
+     {
+      "u": "assets/pack/models/k_pitsgarageclosed.bin",
+      "ms": 19,
+      "st": 6525,
+      "kb": 2
+     },
+     {
+      "u": "assets/pack/models/k_pitsgarage.bin",
+      "ms": 19,
+      "st": 6526,
+      "kb": 1
+     },
+     {
+      "u": "js/audio/rivals.js?v=76e8cbc3e70c",
+      "ms": 19,
+      "st": 6598,
+      "kb": 0
+     },
+     {
+      "u": "js/audio/car-sfx.js?v=fe869b5266af",
+      "ms": 19,
+      "st": 6598,
+      "kb": 0
+     },
+     {
+      "u": "assets/pack/models/k_pitsoffice.bin",
+      "ms": 17,
+      "st": 6527,
+      "kb": 1
+     },
+     {
+      "u": "assets/pack/models/k_radarequipment.bin",
+      "ms": 16,
+      "st": 6528,
+      "kb": 4
+     },
+     {
+      "u": "assets/pack/models/k_bannertowerred.bin",
+      "ms": 16,
+      "st": 6528,
+      "kb": 4
+     }
+    ]
+   },
+   "logs": [
+    [
+     6924,
+     "scenery",
+     "info",
+     "scenery-identity dress monza"
+    ],
+    [
+     7091,
+     "scenery",
+     "warn",
+     "monza: suppressed wall=2 tree=19 pine=1 grandstand=1 building=2"
+    ],
+    [
+     7091,
+     "scenery",
+     "info",
+     "monza: superseded by the pit complex stonePine=14 tree=3 pine=3 bush=10 grandstand=1 building=8 guardrail=32"
+    ],
+    [
+     7091,
+     "track",
+     "info",
+     "monza: culled 51 on-track primitive(s)"
+    ],
+    [
+     7091,
+     "audio",
+     "info",
+     "VoicePack fable ready: 790 clips"
+    ],
+    [
+     7094,
+     "track",
+     "info",
+     "buildProps done monza verts=269567"
+    ],
+    [
+     7154,
+     "track",
+     "info",
+     "pits monza: 12 bays, wall true, 8 lamps"
+    ],
+    [
+     7438,
+     "track",
+     "info",
+     "build done monza total=5777.6 n=1444 night=false"
+    ],
+    [
+     7438,
+     "game",
+     "info",
+     "AeroZones.build track=monza"
+    ],
+    [
+     7438,
+     "car",
+     "info",
+     "ghost load monza none"
+    ],
+    [
+     7441,
+     "game",
+     "info",
+     "Atmosphere.applyRaceSettings tod=default wx=dry"
+    ],
+    [
+     7447,
+     "game",
+     "info",
+     "race monza race laps=20 pace=0.840 vTop=60.5m/s grip=1.00 weather=dry tod=default mods=s1.00/a1.88/c2.05/b1.52 aeroLoad=0.81 assists=help0.0"
+    ],
+    [
+     7447,
+     "game",
+     "info",
+     "Reliability.arm scale=0 n=22"
+    ],
+    [
+     7472,
+     "game",
+     "info",
+     "garage released for the race"
+    ],
+    [
+     7481,
+     "car",
+     "info",
+     "build mercedes"
+    ],
+    [
+     7550,
+     "car",
+     "info",
+     "livery mercedes"
+    ],
+    [
+     7596,
+     "car",
+     "info",
+     "build mercedes"
+    ],
+    [
+     7653,
+     "car",
+     "info",
+     "build ferrari"
+    ],
+    [
+     7731,
+     "car",
+     "info",
+     "build ferrari"
+    ],
+    [
+     7784,
+     "car",
+     "info",
+     "build mclaren"
+    ],
+    [
+     7858,
+     "car",
+     "info",
+     "build mclaren"
+    ],
+    [
+     7909,
+     "car",
+     "info",
+     "build redbull"
+    ],
+    [
+     7980,
+     "car",
+     "info",
+     "build redbull"
+    ],
+    [
+     7995,
+     "car",
+     "info",
+     "build redbull"
+    ],
+    [
+     8099,
+     "car",
+     "info",
+     "build alpine"
+    ],
+    [
+     8183,
+     "car",
+     "info",
+     "build alpine"
+    ],
+    [
+     8237,
+     "car",
+     "info",
+     "build racingbulls"
+    ],
+    [
+     8311,
+     "car",
+     "info",
+     "build racingbulls"
+    ],
+    [
+     8352,
+     "car",
+     "info",
+     "livery racingbulls"
+    ],
+    [
+     8356,
+     "car",
+     "info",
+     "build haas"
+    ],
+    [
+     8399,
+     "car",
+     "info",
+     "livery haas"
+    ],
+    [
+     8427,
+     "car",
+     "info",
+     "build haas"
+    ],
+    [
+     8471,
+     "car",
+     "info",
+     "build williams"
+    ],
+    [
+     8543,
+     "car",
+     "info",
+     "build williams"
+    ],
+    [
+     8698,
+     "car",
+     "info",
+     "livery williams"
+    ],
+    [
+     8703,
+     "car",
+     "info",
+     "build audi"
+    ],
+    [
+     8793,
+     "car",
+     "info",
+     "build audi"
+    ],
+    [
+     8846,
+     "car",
+     "info",
+     "livery audi"
+    ],
+    [
+     8853,
+     "car",
+     "info",
+     "build astonmartin"
+    ],
+    [
+     8911,
+     "car",
+     "info",
+     "livery astonmartin"
+    ],
+    [
+     8959,
+     "car",
+     "info",
+     "build astonmartin"
+    ],
+    [
+     9019,
+     "car",
+     "info",
+     "build cadillac"
+    ],
+    [
+     9087,
+     "car",
+     "info",
+     "build cadillac"
+    ],
+    [
+     9143,
+     "gfx",
+     "info",
+     "race car assets ready {\"cars\":22,\"casters\":false,\"lodWarm\":true,\"cpuMs\":1322,\"maxStepMs\":78,\"yields\":33,\"wallMs\":1662,\"deferred\":15}"
+    ],
+    [
+     9144,
+     "game",
+     "info",
+     "State menu->count why=race-start raceT=0.0"
+    ],
+    [
+     12047,
+     "car",
+     "info",
+     "livery mercedes"
+    ],
+    [
+     12182,
+     "car",
+     "info",
+     "livery ferrari"
+    ],
+    [
+     12275,
+     "car",
+     "info",
+     "livery ferrari"
+    ],
+    [
+     12305,
+     "car",
+     "info",
+     "livery mclaren"
+    ],
+    [
+     12334,
+     "car",
+     "info",
+     "livery mclaren"
+    ],
+    [
+     12337,
+     "car",
+     "info",
+     "livery redbull"
+    ],
+    [
+     12354,
+     "car",
+     "info",
+     "livery alpine"
+    ],
+    [
+     12357,
+     "car",
+     "info",
+     "livery alpine"
+    ],
+    [
+     12372,
+     "car",
+     "info",
+     "livery racingbulls"
+    ],
+    [
+     12375,
+     "car",
+     "info",
+     "livery haas"
+    ],
+    [
+     12390,
+     "car",
+     "info",
+     "livery williams"
+    ],
+    [
+     12393,
+     "car",
+     "info",
+     "livery audi"
+    ],
+    [
+     12416,
+     "car",
+     "info",
+     "livery astonmartin"
+    ],
+    [
+     12435,
+     "car",
+     "info",
+     "livery cadillac"
+    ],
+    [
+     12463,
+     "car",
+     "info",
+     "livery cadillac"
+    ]
+   ]
+  },
+  {
+   "name": "drive",
+   "ms": 31290,
+   "frames": 1642,
+   "avgFps": 54.7,
+   "p5Fps": 41.7,
+   "p1Fps": 27.8,
+   "worstMs": 63,
+   "gt33": 22,
+   "gt50": 4,
+   "gt100": 0,
+   "buckets": [
+    54,
+    55.2
+   ],
+   "perf": {
+    "frame": {
+     "p50": 4,
+     "p95": 6,
+     "p99": 10,
+     "max": 39,
+     "mean": 4.05,
+     "n": 1650
+    },
+    "input": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.02,
+     "n": 1650
+    },
+    "physics": {
+     "p50": 1,
+     "p95": 2,
+     "p99": 3,
+     "max": 19,
+     "mean": 1.24,
+     "n": 1650
+    },
+    "ai": {
+     "p50": 1,
+     "p95": 1,
+     "p99": 2,
+     "max": 5,
+     "mean": 0.88,
+     "n": 1807
+    },
+    "collide": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.04,
+     "n": 1807
+    },
+    "audio": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1,
+     "mean": 0.02,
+     "n": 1807
+    },
+    "camera": {
+     "p50": 0,
+     "p95": 0,
+     "p99": 0,
+     "max": 1,
+     "mean": 0.01,
+     "n": 1650
+    },
+    "render": {
+     "p50": 3,
+     "p95": 4,
+     "p99": 5,
+     "max": 16,
+     "mean": 2.45,
+     "n": 1650
+    },
+    "hud": {
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 21,
+     "mean": 0.17,
+     "n": 1650
+    }
+   },
+   "render": {
+    "mem": {
+     "mats": 27,
+     "pool": 186,
+     "draws": 0,
+     "geoKeys": 137,
+     "batch": 3335,
+     "dropLater": {
+      "now": 0,
+      "held": 0,
+      "overflow": 0
+     },
+     "mirror": {
+      "sweeps": 0,
+      "geos": 0,
+      "freedMB": 0,
+      "drains": 1895,
+      "chunks": 0,
+      "gate": "----"
+     },
+     "progs": 54,
+     "rGeo": 362,
+     "rTex": 44,
+     "resources": {
+      "total": 70138999,
+      "geometries": 362,
+      "textures": 44,
+      "texturesSize": 21755988,
+      "programs": 54,
+      "programsSize": 881181,
+      "attributes": 1847,
+      "attributesSize": 43008888,
+      "indexAttributes": 318,
+      "indexAttributesSize": 4353198,
+      "storageAttributes": 0,
+      "storageAttributesSize": 0,
+      "indirectStorageAttributes": 0,
+      "indirectStorageAttributesSize": 0,
+      "readbackBuffers": 0,
+      "readbackBuffersSize": 0,
+      "renderTargets": 6,
+      "uniformBuffers": 530,
+      "uniformBuffersSize": 139744
+     },
+     "rUbo": 530,
+     "rUboKB": 136.5,
+     "rObj": 463,
+     "calls": 7955,
+     "groupVer": 7955,
+     "sharedUniforms": true,
+     "matHit": 229298,
+     "matMiss": 27,
+     "matEvict": 0,
+     "presentMs": 1.301,
+     "warm": {
+      "at": 5026,
+      "scene": 3324,
+      "fx": 239,
+      "lateLayouts": 2,
+      "post": 767,
+      "shadow": 0,
+      "mirror": 549,
+      "draw": 331,
+      "drawn": {
+       "mirror": 1,
+       "scene": 1,
+       "post": 1,
+       "casts": 1
+      },
+      "garageScene": 6,
+      "mirrorDeferred": false,
+      "mirrorLazy": null,
+      "rig": {
+       "ms": 177,
+       "pairs": 28,
+       "mirror": false,
+       "ok": true
+      },
+      "total": 5216,
+      "attempts": 1,
+      "failed": 0,
+      "pending": false,
+      "done": true,
+      "history": [
+       {
+        "at": 5026,
+        "scene": 3324,
+        "fx": 239,
+        "post": 767,
+        "shadow": 0,
+        "mirror": 549,
+        "draw": 331,
+        "garageScene": 6,
+        "total": 5216,
+        "failed": 0
+       }
+      ]
+     },
+     "presents": 1895,
+     "backendData": null,
+     "backendDataKind": "WeakMap",
+     "geoLive": 378,
+     "geoKinds": {
+      "mesh": 216,
+      "tex": 20,
+      "chunk": 141,
+      "chunked": 1
+     },
+     "geoRegLen": 378
+    },
+    "occl": {
+     "supported": false,
+     "on": false
+    },
+    "md": {
+     "supported": false,
+     "on": false
+    },
+    "tier": 4,
+    "autoTier": 4,
+    "floorMs": 13.9,
+    "autoShed": 2,
+    "gpu": {
+     "supported": false,
+     "on": false,
+     "ms": -1,
+     "software": false
+    },
+    "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+   }
+  }
+ ],
+ "session": "a83658f40e768bc54320ba800042a4afde271664",
+ "bootMs": 5512,
+ "rebootMs": 5044,
+ "gfxMenu": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": "\"medium\"",
+  "gfxHigh": "0",
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 2,
+  "autoTier": 0,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "renderMenu": {
+  "mem": {
+   "mats": 9,
+   "pool": 27,
+   "draws": 28,
+   "geoKeys": 26,
+   "batch": 1,
+   "dropLater": {
+    "now": 0,
+    "held": 0,
+    "overflow": 0
+   },
+   "mirror": {
+    "sweeps": 0,
+    "geos": 0,
+    "freedMB": 0,
+    "drains": 0,
+    "chunks": 0,
+    "gate": "?"
+   },
+   "progs": 2,
+   "rGeo": 1,
+   "rTex": 10,
+   "resources": {
+    "total": 12187537,
+    "geometries": 1,
+    "textures": 10,
+    "texturesSize": 12171154,
+    "programs": 2,
+    "programsSize": 15739,
+    "attributes": 1,
+    "attributesSize": 36,
+    "indexAttributes": 0,
+    "indexAttributesSize": 0,
+    "storageAttributes": 0,
+    "storageAttributesSize": 0,
+    "indirectStorageAttributes": 0,
+    "indirectStorageAttributesSize": 0,
+    "readbackBuffers": 0,
+    "readbackBuffersSize": 0,
+    "renderTargets": 2,
+    "uniformBuffers": 2,
+    "uniformBuffersSize": 608
+   },
+   "rUbo": 2,
+   "rUboKB": 0.6,
+   "rObj": 2,
+   "calls": 1,
+   "groupVer": 0,
+   "sharedUniforms": true,
+   "matHit": 12,
+   "matMiss": 9,
+   "matEvict": 0,
+   "presentMs": 0,
+   "warm": {
+    "at": 5026,
+    "scene": null,
+    "fx": null,
+    "post": null,
+    "shadow": null,
+    "draw": null,
+    "drawn": null,
+    "garageScene": null,
+    "mirrorDeferred": false,
+    "mirrorLazy": null,
+    "rig": null,
+    "total": null,
+    "attempts": 1,
+    "failed": 0,
+    "pending": true,
+    "done": false,
+    "history": []
+   },
+   "presents": 0,
+   "backendData": null,
+   "backendDataKind": "WeakMap",
+   "geoLive": 214,
+   "geoKinds": {
+    "mesh": 51,
+    "tex": 14,
+    "chunk": 149
+   },
+   "geoRegLen": 214
+  },
+  "occl": {
+   "supported": false,
+   "on": false
+  },
+  "md": {
+   "supported": false,
+   "on": false
+  },
+  "tier": 2,
+  "autoTier": 0,
+  "floorMs": 16.7,
+  "autoShed": 0,
+  "gpu": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "assets": "{\"supported\":true,\"pack\":true,\"uploaded\":true,\"tier\":\"low\",\"layers\":14,\"normal\":true,\"scales\":[0,5.5,2.799999952316284,0,2.799999952316284,2.799999952316284,4,1.7999999523162842,11,4.5,8,7,2.5999999046325684,3.5,2.5,0,3.5],\"bytes\":569858,\"models\":41,\"error\":null}"
+ },
+ "diagGfx": {
+  "err": "ReferenceError: Can't find variable: G"
+ },
+ "trackId": "monza",
+ "ensureMs": 19,
+ "gfxRace": {
+  "liveBackend": "three",
+  "bound": null,
+  "fallbackWhy": null,
+  "pin": null,
+  "presetKey": "\"medium\"",
+  "gfxHigh": "0",
+  "preset": "medium",
+  "renderScale": 0.5,
+  "tier": 4,
+  "autoTier": 4,
+  "userTier": 2,
+  "autoRes": false,
+  "upscale": {
+   "on": false,
+   "active": false,
+   "scale": 0.5,
+   "available": true
+  },
+  "gpuTimer": {
+   "supported": false,
+   "on": false,
+   "ms": -1,
+   "software": false
+  },
+  "navGpu": true,
+  "dpr": 3,
+  "vp": [
+   852,
+   329
+  ]
+ },
+ "ap": {
+  "maxKph": 191,
+  "offRoadFrames": 0,
+  "ticks": 1857,
+  "err": null,
+  "lastSpeedKph": 181
+ },
+ "errors": [],
+ "endPT": "10/21/2026, 9:54:35 PM"
+}

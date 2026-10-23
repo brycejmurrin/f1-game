@@ -1,0 +1,8 @@
+ui_iphone15-ios26 title-idle 5547
+ui_iphone15-ios26 open-settings 5718
+ui_iphone15-ios26 close-settings 2453
+ui_iphone15-ios26 open-race-select 4451
+ui_iphone15-ios26 back-to-title 4388
+ui_iphone15-ios26 open-garage 6573
+ui_iphone15-ios26 close-garage 4492
+DONE ui_iphone15-ios26 24188c0e2bc3a828801b1dbf3e3e00e2906a54a2 

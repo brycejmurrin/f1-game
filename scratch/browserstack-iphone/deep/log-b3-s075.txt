@@ -1,0 +1,4 @@
+race-monza-default-medium-scale=0.75_iphone15-ios26_r2 ensure 4
+race-monza-default-medium-scale=0.75_iphone15-ios26_r2 raceEntry 6641
+race-monza-default-medium-scale=0.75_iphone15-ios26_r2 drive 31910
+DONE race-monza-default-medium-scale=0.75_iphone15-ios26_r2 44c6fc5a3632072cf12692d9fce33b877981b9b4 

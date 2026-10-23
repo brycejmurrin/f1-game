@@ -1,0 +1,17 @@
+race-singap-marina-night-medium_iphone15-ios26_r2 | passed | 79s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/cafe6a403e0ce71514b9cc1545f0bd8695e3b5b5?auth_token=REDACTED
+race-monza-default-medium-scale 0.75_iphone15-ios26_r2 | passed | 76s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/44c6fc5a3632072cf12692d9fce33b877981b9b4?auth_token=REDACTED
+race-monza-default-medium_iphone15-ios26_r3 | passed | 74s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/a83658f40e768bc54320ba800042a4afde271664?auth_token=REDACTED
+race-monza-default-medium-soak 300_iphone15-ios26 | passed | 355s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/6ede70a53ae69034669803d4889d78d1b6fd16a8?auth_token=REDACTED
+race-monza-default-medium-scale 1_iphone15-ios26_r2 | passed | 87s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/1a8c323a3ebb60a1f7203c5fda0420bd1847565c?auth_token=REDACTED
+ui_iphone15-ios26 | passed | 62s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/24188c0e2bc3a828801b1dbf3e3e00e2906a54a2?auth_token=REDACTED
+race-singap-marina-night-medium-ablate_iphone15-ios26 | passed | 121s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/c7d3e81c2ad389e2ca1e75dd48c23ff4e8ebbfa1?auth_token=REDACTED
+race-monza-default-medium_iphone13-ios18 | passed | 75s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/be3eca1365ff5922bbbca2406ab9c57bb012ebe9?auth_token=REDACTED
+race-monza-default-medium-ablate_iphone15-ios26 | passed | 119s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/be45c3c61ae958611fee383667d6ff6a6d0e5d2a?auth_token=REDACTED
+race-monza-default-medium-ablate_iphone15-ios26 | done | 36s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/ef5f4745704a982620c1250a335e62d9a6e6d629?auth_token=REDACTED
+race-monza-default-medium-ablate_iphone15-ios26 | done | 34s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/c487b3593700e71db5d7f5c0524ee80a34a8df0c?auth_token=REDACTED
+race-monza-default-medium-ablate_iphone15-ios26 | done | 31s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/582ce43d5c9418d26b675e97d171a772613e9768?auth_token=REDACTED
+ui_iphone15-ios26 | passed | 54s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/518a56add8580c7df93586a891e0618c3b00cc12?auth_token=REDACTED
+race-monza-default-medium_iphone13-ios18 | passed | 153s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/3bd0f66d38c69508e6c6078bfc2f3d01a2f53b29?auth_token=REDACTED
+race-singap-marina-night-medium-ablate_iphone15-ios26 | done | 327s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/4c2c47b594dc92aa1f4ea5657fadffd2bb0ce9c7?auth_token=REDACTED
+race-monza-default-medium-ablate_iphone15-ios26 | done | 328s | https://automate.browserstack.com/builds/2af7ff6913064760e88d4c770efabcd450c92308/sessions/50952234f9769264ac84cfcc9fa2d3bf29e92b37?auth_token=REDACTED
+TOTAL 2011s = 33.5 min

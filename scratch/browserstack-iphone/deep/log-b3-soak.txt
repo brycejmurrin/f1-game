@@ -1,0 +1,13 @@
+race-monza-default-medium-soak=300_iphone15-ios26 ensure 4
+race-monza-default-medium-soak=300_iphone15-ios26 raceEntry 15265
+race-monza-default-medium-soak=300_iphone15-ios26 soak 0 36.4
+race-monza-default-medium-soak=300_iphone15-ios26 soak 1 38.5
+race-monza-default-medium-soak=300_iphone15-ios26 soak 2 42
+race-monza-default-medium-soak=300_iphone15-ios26 soak 3 43.6
+race-monza-default-medium-soak=300_iphone15-ios26 soak 4 57.2
+race-monza-default-medium-soak=300_iphone15-ios26 soak 5 55.6
+race-monza-default-medium-soak=300_iphone15-ios26 soak 6 58.6
+race-monza-default-medium-soak=300_iphone15-ios26 soak 7 56.6
+race-monza-default-medium-soak=300_iphone15-ios26 soak 8 58.7
+race-monza-default-medium-soak=300_iphone15-ios26 soak 9 57.7
+DONE race-monza-default-medium-soak=300_iphone15-ios26 6ede70a53ae69034669803d4889d78d1b6fd16a8 
