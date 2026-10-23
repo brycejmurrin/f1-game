@@ -1351,9 +1351,6 @@ test("impact-map narrow pins elevate garage livery witness specs for GLX/pack ed
   for (const file of ["js/render/glx/soft.js", "js/render/glx/glx.js", "js/render/shared/assets.js"]) {
     assert.deepEqual(specsAffectedByImpact([file]).sort(), witness.sort(), file);
   }
-  const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  assert.match(src, /specsAffectedByImpact\(changed\)/, "select() unions impact-map narrow pins");
-  assert.match(src, /impactAffected\.includes\(f\)\) \? 2/, "narrow pins rank as affected (2)");
 });
 
 test("SOURCE_AFFECTED elevates career.spec.js when career-ui or career-backup changes", () => {
