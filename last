@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01PxJbmePQVZF2h7fR6zSXDN DONE #3487 c698dd09 (D·DP3 flap mesh prebuild, adopted by A·O2; merged by OrchA 25 via merge-gate, 2 parents). Next game after green: #3489.
+HANDOFF to:A from:claude:A-I1 A·I1 Phase 1 done: draft #3592 docs/notes/IPHONE-TLX-WEBGPU-2026-10-23.md. Headline: Bryce's pinned THREE PATH: WEBGPU is unmeasured on any device. DAD's iPhone runs were unpinned, so WebKit AUTO bound three's WebGL2 (tlx.js:415). G2 cold race entry ~13 s on iOS 26 has no owner. Awaiting OrchA 25 go for Phase 2.
