@@ -1,1 +1,0 @@
-1792653706	Cursor Agent	D·W14c agent-msg.mjs + fleet docs tools/ci/agent-msg.mjs tools/ci/fleet-bus.mjs tests/unit/agent-msg.test.mjs AGENTS.md .claude/skills/agent-fleet .claude/rules/fleet-core.md  [cursor/agent-msg-cli-0ff0; session 2a2c9afb926d463ef3551a65]
