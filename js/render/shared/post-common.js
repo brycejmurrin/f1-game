@@ -183,7 +183,7 @@ const PostCommon = (function () {
   // sheds bloom (#3610). Callers scale str before gfx.drawGlow().
   function softwareGlowScale(str) {
     if (!(str > 0) || typeof PerfGov === "undefined" || !PerfGov.softwareRaster()) return str;
-    return str * (PerfGov.autoTier && PerfGov.autoTier() >= 4 ? 0.22 : 0.55);
+    return str * (PerfGov.lookPostShed && PerfGov.lookPostShed() ? 0.22 : 0.55);
   }
 
   function roadReflection(opts, wetness, strength, tier, autoTier, transition, nowMs, emergency) {
