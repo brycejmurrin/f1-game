@@ -519,9 +519,10 @@ const GLXPost = (function () {
       // clamps like LDR). The bright-pass knee then blooms mid-tones — cockpit halo,
       // wheels, garage paint — that hardware keeps in specular-only halos. Not tied to
       // soft-present readback skips (#3590); present() always runs the full chain.
-      if (typeof PerfGov !== "undefined" && PerfGov.softwareRaster()) {
+      const swSoft = typeof PerfGov !== "undefined" && PerfGov.softwareRaster();
+      if (swSoft) {
         if (colorType !== gl.HALF_FLOAT) { threshold *= 1.18; bloomAmt *= 0.5; }
-        else { threshold *= 1.06; bloomAmt *= 0.75; }
+        else { threshold *= 1.10; bloomAmt *= 0.62; }
       }
       const aoStr = opts && opts.ssao !== undefined ? opts.ssao : 0;
       const contactStr = opts && opts.contact !== undefined ? opts.contact : 0;
@@ -736,6 +737,9 @@ const GLXPost = (function () {
       // opts.bloomLevels>0 truncates the widest octaves (MEDIUM/LOW / mid shed).
       const useLv = (opts && opts.bloomLevels > 0) ? Math.min(nLv, opts.bloomLevels | 0) : nLv;
       const doBloom = bloomAmt > 0 && useLv > 0;
+      // Tier-4 bloom shed: composite flare/exposure knees on swSoft only (#3597 path).
+      const swFlareK = swSoft ? (doBloom ? 0.42 : 0) : 1;
+      const swExposureK = swSoft ? (doBloom ? 1 : 0.72) : 1;
       if (doBloom) {
         // 1) bright-pass scene -> bloom level 0 (half res)
         gl.viewport(0, 0, bloomLv[0].w, bloomLv[0].h);
@@ -745,7 +749,7 @@ const GLXPost = (function () {
         gl.bindTexture(gl.TEXTURE_2D, sceneTex);
         gl.uniform1i(brightU.uScene, 0);
         gl.uniform1f(brightU.uThreshold, threshold);
-        gl.uniform1f(brightU.uExposure, opts && opts.exposure !== undefined ? opts.exposure : 1.0);
+        gl.uniform1f(brightU.uExposure, (opts && opts.exposure !== undefined ? opts.exposure : 1.0) * swExposureK);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
 
         // 2) mip-chain bloom: progressive 13-tap downsample to the smallest level,
@@ -836,9 +840,9 @@ const GLXPost = (function () {
       const flareStr = sun.flare, sunShaft = sun.shaft;
       gl.uniform2fv(compU.uSunUV, _sunUV);
       // LENS FLARE knob scales the whole sun/lamp flare + ghost stack (def 1).
-      gl.uniform1f(compU.uFlareStr, flareStr * flareMul);
+      gl.uniform1f(compU.uFlareStr, flareStr * flareMul * swFlareK);
       const exposure = opts && opts.exposure !== undefined ? opts.exposure : 1.0;
-      gl.uniform1f(compU.uExposure, exposure);
+      gl.uniform1f(compU.uExposure, exposure * swExposureK);
       // SCREEN SUN-SHAFT knob scales the radial crepuscular pass (def 1 = as-shipped).
       // GATED ON doBloom, because the shaft pass READS THE BLOOM CHAIN. Its loop's
       // only input is texture(uBloom, suv) (js/render/glx/shaders/glsl-post.js), and when
@@ -926,8 +930,8 @@ const GLXPost = (function () {
       // 2x radius rather than blowing the pass across the whole frame.
       const _shaftMul = PostCommon.knob(opts && opts.tune, "sunShaftMul");
       uf1(compU.uShaftSpread, "shaftSpread", Math.sqrt(Math.max(0.05, _shaftMul)));
-      uf1(compU.uFlareStreak, "flareStreak", PostCommon.knob(CT, "flareStreak"));
-      uf1(compU.uFlareStreak2, "flareStreak2", PostCommon.knob(CT, "flareStreak2"));
+      uf1(compU.uFlareStreak, "flareStreak", PostCommon.knob(CT, "flareStreak") * swFlareK);
+      uf1(compU.uFlareStreak2, "flareStreak2", PostCommon.knob(CT, "flareStreak2") * swFlareK);
       // EXHAUST HEAT HAZE: screen-anchored shimmer plume (opts.haze = {u, v, str}
       // computed by the caller from the player tailpipe projection; absent = off).
       const hz = opts && opts.haze;

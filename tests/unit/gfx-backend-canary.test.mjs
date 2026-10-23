@@ -21,6 +21,9 @@
  * identifier and shape, never by exact whitespace, argument order or comment
  * text. Remaining pin count: see tests/unit/assert-match-ratchet.test.mjs.
  *
+ * Tier-4 / stall-watchdog shed (bloom off, doBloom false): software GL composite
+ * flare, exposure and drawGlow knees in post.js / glx.js — pinned in one test.
+ *
  * Run: node --test tests/unit/gfx-backend-canary.test.mjs
  */
 import { readCssSource } from "../helpers/css-source.mjs";
@@ -4359,6 +4362,18 @@ test("GLX readbackLdrPixels skips software GL readPixels while #carsetup is visi
 test("GLX present() reins in bloom on software GL when the scene target is LDR", () => {
   const body = span(read("js/render/glx/post.js"), "function present(opts) {", "function ", "present");
   assert.ok(body.includes("PerfGov.softwareRaster()") && body.includes("colorType !== gl.HALF_FLOAT") && body.includes("bloomAmt *="));
+});
+
+test("GLX software GL knees when lowest rung sheds bloom (tier 4 stall watchdog)", () => {
+  const body = span(read("js/render/glx/post.js"), "function present(opts) {", "function ", "present");
+  assert.ok(body.includes("swFlareK") && body.includes("swSoft") && body.includes("doBloom ? 0.42 : 0"));
+  assert.ok(body.includes("swExposureK") && body.includes("doBloom ? 1 : 0.72"));
+  const race = gameUnionCode();
+  assert.ok(race.includes("po.bloom = PerfGov.autoTier() >= 4 ? 0 :"));
+  const gar = read("js/garage/setup-camera.js");
+  assert.ok(gar.includes("PerfGov.autoTier() >= 4") && gar.includes("_presentOpts.bloom = shed ? 0 :"));
+  const glow = span(read("js/render/glx/glx.js"), "function drawGlow(lights, str) {", "function ", "drawGlow");
+  assert.ok(glow.includes("PerfGov.softwareRaster()") && glow.includes("0.22 : 0.55") && glow.includes("autoTier() >= 4"));
 });
 
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {

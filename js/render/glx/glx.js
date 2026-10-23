@@ -2575,6 +2575,7 @@ const GLXBackend = (function () {
   const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
   function drawGlow(lights, str) {
     if (ctxGone() || !glowProg || !lights || !lights.length || !(str > 0)) return;
+    if (typeof PerfGov !== "undefined" && PerfGov.softwareRaster()) str *= PerfGov.autoTier && PerfGov.autoTier() >= 4 ? 0.22 : 0.55;
     const nL = (lights.length / 15) | 0;  // stride-15 light records (see frame.lights)
     const floatsPerLamp = 6 * 9;
     if (!glowData || glowData.length < nL * floatsPerLamp) glowData = new Float32Array(nL * floatsPerLamp);
