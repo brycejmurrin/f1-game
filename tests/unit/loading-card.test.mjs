@@ -285,12 +285,15 @@ test("SETTINGS › MOTION: REDUCED still runs the card, the flyby and the announ
   assert.equal(on.els.loading.dataset.phase, "run", "motion ON keeps the flyby");
 });
 
-test("the loading screen instance exposes isAutomation — game.js reads it for the software flyby skip", () => {
-  const bot = harness({}, null, null, { webdriver: true });
-  assert.equal(typeof bot.screen.isAutomation, "function");
-  assert.equal(bot.screen.isAutomation(), true);
+test("software GL, a PLAYER (no automation): raceIntro's hasWorld:false still shows the race card, then starts the race", () => {
   const player = harness({}, null, null, { webdriver: false });
-  assert.equal(player.screen.isAutomation(), false);
+  player.run({ hasWorld: false });
+  assert.equal(player.els.loading.dataset.phase, "card", "the card naming the event, not a skipped screen");
+  assert.equal(player.els.loading.hidden, false, "the screen is up");
+  assert.equal(player.plays.length, 0, "no announcer read over the short card");
+  assert.equal(player.races.length, 0, "the race waits for the card");
+  player.tick(LS.CARD_MS);
+  assert.equal(player.races.length, 1, "the race starts after the card");
 });
 
 test("a harness-driven launch (navigator.webdriver) keeps the 700 ms card and hands off to the grid promptly; a player's reduced motion still flies", () => {

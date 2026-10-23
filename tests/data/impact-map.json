@@ -15981,8 +15981,7 @@
         "tests/unit/loading-card.test.mjs"
       ],
       "isAutomation": [
-        "tests/unit/global-registry.test.mjs",
-        "tests/unit/loading-card.test.mjs"
+        "tests/unit/global-registry.test.mjs"
       ],
       "lowerWaitPlate": [
         "tests/unit/loading-card.test.mjs"
