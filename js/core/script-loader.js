@@ -85,6 +85,9 @@ function preload(files, opts) {
 // failed, exactly like onerror, so every caller's existing fallback and its
 // memo-clear-on-failure retry path run. Overridable per load: opts.slowMs / deadlineMs.
 const SLOW_MS = 10000, DEADLINE_MS = 25000;
+// Transient github.io 5xx on a lazy <script>: retry the SAME file with a fresh
+// query key before the bundle gives up (Data Hub, grip-steer, results-sheet, …).
+const TRANSIENT_RETRY_MS = [400, 1200];
 // PAGE-LEVEL: classic scripts that have already evaluated in this tab (#3295).
 // A fresh ScriptLoader (career UI retry clears its memo and calls create()
 // again) has an empty opts.loaded; re-appending a const IIFE redeclares and the
@@ -104,26 +107,19 @@ function loadBackendScripts(files, edges, opts) {
   for (const [a, b] of (edges || BACKEND_EDGES)) {
     if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
   }
-  const inject = async (src) => {
-    if (typeof UpdateCheck !== "undefined" && UpdateCheck.prepareLazyLoad && !(await UpdateCheck.prepareLazyLoad(generationScope))) return false;
-    return new Promise((resolve) => {
-    // Strict retry: already evaluated in this tab — no second <script>.
-    if (strict && evaluated.has(src)) { resolve(true); return; }
-    // NEVER MIX BUILDS. A lazy file is asked for as `?v=<booted build>`; once a
-    // newer deploy's worker controls this tab it has swept that generation, the
-    // request misses, and Pages (which ignores the query) answers with the NEW
-    // file for the OLD code. Refuse it — a missing global is every caller's
-    // fallback — and let UpdateCheck put up UPDATE READY instead.
+  const injectOnce = (src, cacheBust) => {
     if (typeof UpdateCheck !== "undefined" && UpdateCheck.blocksLazyLoad()) {
       if (typeof Log !== "undefined") Log.warn("game", "lazy load refused, a newer build is active: " + src);
-      resolve(false);
-      return;
+      return Promise.resolve({ ok: false, retry: false });
     }
     const sri = integrity(src);
-    if (sri === false) { resolve(false); return; }
+    if (sri === false) return Promise.resolve({ ok: false, retry: false });
+    return new Promise((resolve) => {
     const el = document.createElement("script");
     if (sri) el.integrity = sri;
-    el.src = url(src);
+    let href = url(src);
+    if (cacheBust) href += (href.indexOf("?") >= 0 ? "&" : "?") + "retry=" + cacheBust;
+    el.src = href;
     el.crossOrigin = "anonymous";
     // MARKED so index.html's broken-install repair (sweeps every SW cache and
     // reloads) leaves it alone: that repair is right for a shell tag the CDN
@@ -133,8 +129,8 @@ function loadBackendScripts(files, edges, opts) {
     if (el.dataset) el.dataset.apexLazy = "1";   // guarded: a stubbed element has none
     const slowMs = (opts && opts.slowMs) || SLOW_MS, deadlineMs = (opts && opts.deadlineMs) || DEADLINE_MS;
     let slowT = null, deadT = null;
-    const W = typeof window !== "undefined" ? window : null, timed = !!(W && typeof W.setTimeout === "function");   // window timers only: inert/fake-timer test contexts opt out
-    const settle = (ok) => { if (timed) { W.clearTimeout(slowT); W.clearTimeout(deadT); } resolve(ok); };
+    const W = typeof window !== "undefined" ? window : null, timed = !!(W && typeof W.setTimeout === "function");
+    const settle = (ok, retry) => { if (timed) { W.clearTimeout(slowT); W.clearTimeout(deadT); } resolve({ ok, retry: !!retry }); };
     if (timed) {
     slowT = W.setTimeout(() => {
       try { if (opts && opts.onSlow) opts.onSlow(src); } catch (_) { /* UI hook only */ }
@@ -156,7 +152,7 @@ function loadBackendScripts(files, edges, opts) {
       if (typeof Log !== "undefined") Log.warn("game", "lazy load timed out after " + deadlineMs + " ms: " + src);
       el.onload = el.onerror = null;
       if (el.remove) el.remove();
-      settle(false);
+      settle(false, false);
     };
     deadT = W.setTimeout(beat, tickMs);
     }
@@ -165,11 +161,39 @@ function loadBackendScripts(files, edges, opts) {
       try { if (opts && opts.ready) ready = !!opts.ready(src); }
       catch (e) { ready = false; }
       if (ready) evaluated.add(src);
-      settle(ready);
+      settle(ready, false);
     };
-    el.onerror = () => { if (el.remove) el.remove(); settle(false); };
+    el.onerror = () => { if (el.remove) el.remove(); settle(false, true); };
     document.head.appendChild(el);
   });
+  };
+  // Strict bundles with a `loaded` set (ensureDataHub / ensureNet / …) keep one inject
+  // per file per load attempt so a miss leaves siblings resident and the next ensure*
+  // call retries only what is missing. `transientRetry: false` opts out (idle
+  // lighting prefetch re-asks at race start). Otherwise inject retries 503s in place
+  // (grip-steer, results-sheet, …).
+  const deferInjectRetry = (strict && (loaded || files.length > 1)) || (opts && opts.transientRetry === false);
+  const inject = async (src) => {
+    if (typeof UpdateCheck !== "undefined" && UpdateCheck.prepareLazyLoad && !(await UpdateCheck.prepareLazyLoad(generationScope))) return false;
+    // Strict retry: already evaluated in this tab — no second <script>.
+    if (strict && evaluated.has(src)) return true;
+    const optBust = opts && opts.cacheBust;
+    if (deferInjectRetry) {
+      const r = await injectOnce(src, optBust || 0);
+      return r.ok;
+    }
+    const W = typeof window !== "undefined" ? window : null;
+    const maxAttempts = TRANSIENT_RETRY_MS.length + 1;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0 && W && typeof W.setTimeout === "function") {
+        await new Promise((r) => W.setTimeout(r, TRANSIENT_RETRY_MS[attempt - 1]));
+      }
+      const bust = attempt > 0 ? attempt : (optBust || 0);
+      const r = await injectOnce(src, bust);
+      if (r.ok) return true;
+      if (!r.retry) return false;
+    }
+    return false;
   };
   // Only files that WAIT for a predecessor: the first wave is injected below at once.
   const blocked = typeof UpdateCheck !== "undefined" && UpdateCheck.blocksLazyLoad && UpdateCheck.blocksLazyLoad();
