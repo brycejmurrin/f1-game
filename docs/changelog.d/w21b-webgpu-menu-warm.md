@@ -1,0 +1,1 @@
+Improved: WebGPU menu program warm now runs the post and shadow stages (warmPlus) in idle-time chunks with the cockpit rig, and records where each warm ran (menu / loading / race) so race-entry stalls of ~616 ms / ~115 ms on iPhone 14 move off the first race frames (#3279).
