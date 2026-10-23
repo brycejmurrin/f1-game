@@ -181,14 +181,17 @@ run**, so the differences below are not throttling.
 | 4 WEBGPU | 5 758 | 4 132 | 9 364 | 6 285 |
 | warm (all legs) | 221–234 | 70–88 | 384–454 (WEBGPU leg 1: 2 945) | 123–2 642 |
 
-- **The "29 s WebGPU cold entry" in §5 was mostly order, not path.** The first leg of a session pays a one-time
-  cost. Later legs: WebGPU 5.8 s vs WebGL2 3.2 s (18 Pro Max), 9.4 s vs 5.7 s (iPhone 14). WebGPU is still about
-  1.6–1.8× slower to enter cold, but not 4.5×.
+- **Corrected (A·W14, PR #3604, 02:44Z): the 28–34 s first-leg cost belongs to WebGPU, not to session order.** In
+  my runs leg 1 was always WEBGPU, so order and path were confounded. A·W14 ran the iPhone 14 as WEBGL2, WEBGPU,
+  WEBGL2, WEBGPU with `GLX.__tlx.memState().warm` per entry. The spike moved to the first WEBGPU leg (warm 42.9 s:
+  scene 16.6, mirror 16.9, draw 5.2, fx 4.2 s), and the session's first WEBGL2 leg took only 9.4 s. **The first
+  WebGPU pipeline build costs about 30 s on a phone.** Safari then caches it: my later WEBGPU legs entered in 5.8 s
+  (18 Pro Max) and 9.4 s (iPhone 14), still about 1.7× WebGL2's 3.2 / 5.7 s. Whether that cache survives a tab
+  close, an app kill or a new deploy (new shader source) decides how often a player pays the 30 s. Not measured yet.
 - **`mirrorPrepare` is 70–93 % of every cold entry, on both paths.** Every other stage (`loadTrack` 0.3–0.8 s,
   `gridCountdown` 0.8–1.6 s, `warmCarAssets` 0.8–1.5 s) is small and path-independent. This is the same stage G2
-  found on iOS 26 (9.96 s). Its first-in-session cost (28–30 s) is consistent with shader/pipeline compilation that
-  Safari then caches across the reload. To separate "first WebGPU" from "first in session", the next run should
-  start with WEBGL2.
+  found on iOS 26 (9.96 s). A·W14 measured `mirrorPrepare` ≈ `memState().warm.total` on every cold leg, so this stage is the whole
+  shader/pipeline warm-up, not mirror work alone.
 - No WebGPU validation errors, device-lost events or error-level console lines on either phone. The console has
   only known warnings (`TLX on a phone: ~54 MB CPU geometry copies`, `unregistered save key apex26.phoneRec`,
   music `NotAllowedError` without a user gesture). The network log captured about 8.5k rows per phone (not analysed
