@@ -46,40 +46,46 @@ The lit pipeline states, and what forks each one:
 | `-keep` (noAlphaWrite) opaque, back/cw / back/ccw / none/ccw | 3 | rig fx, lamps, flames: the separate keep program |
 | `-keep` **transparent**, back/ccw, back/cw, none/ccw, none/cw | **4** | the LATE variants (`warmLateLit`, `_LATE_LIT` / `_LATE_FX`): brake ring, cockpit ERS bar / OT lamp, both windings |
 
-## 2. Candidates, ranked by measured cost
+## 2. Candidates, measured and ranked
 
-Each removed lit pipeline is worth about 1.2 s on a cold iPhone 14.
+Each lit pipeline removed is worth about 1.2 s on a cold iPhone 14. Two candidates from the first pass did not
+survive measurement.
 
-1. **Take the late variants off the blocking warm. Compile them during the grid countdown.** This covers the `fx`
-   stage: 5 lit pipelines, 5.3 s on lavapipe, 2.2 s on the iPhone 14.
-   - Their first draw is always after lights-out: hot brakes, the first ERS deploy, a throttle lift. The countdown
-     (`COUNTDOWN_S` lights plus `startHold`) gives at least ~5 s, more than the 2.2 s they take.
-   - The look is unchanged and the mid-race stall stays covered. The compile just stops holding the entry.
-   - Mechanics: each compile sets the warm's render context (scene target + ssrTag MRT), starts `compileAsync`
-     (three fixes the context synchronously), restores the context, and only then awaits. A race frame can't
-     interleave.
-   - **Expected: −2.2 s of the 16.9 s.**
-2. **One depth bias for floor and terrain.** Use one value for both `[4,16]` and `[2,10]`.
-   - Saves 1 scene pipeline, about 1.2 s.
-   - Risk: their relative order where floor meets terrain changes, so it needs a z-fight check on the circuits
-     that use both.
-3. **Drop the speculative winding twins nobody draws.** `warmLateLit` compiles every late variant for both
-   winding signs.
-   - The cockpit ERS bar and OT lamp (`_rigFxA`, `none/cw`) are not drawn mirrored, so their twin is likely dead:
-     0–1 pipeline.
-   - Measure which twins a real race uses before cutting any.
-4. **Merge the chunked and plain lit programs.** Saves 2 pipelines, but it's a large refactor of tlx-chunked and
-   tsl-lit. Not proposed.
-5. **The `draw` stage (3.85 s).** It covers the post chain's first-frame pipelines plus the rig warm (1.12 s, 28
-   pairs). The post chain is needed at the first frame. The rig warm is the next thing to break down. It isn't
-   measured here, because `draw` does not run on the lavapipe census.
+- **Deferring the late variants into the grid countdown is not possible as built.** These are the `fx` stage: 5 lit
+  pipelines, 2.2 s on the iPhone 14.
+  - three r185+ reads the renderer's target and MRT again *after* `compileAsync`'s awaits, while it builds nodes
+    (the note above `_warmPending` in `startProgramWarm`).
+  - That is why the warm holds `present()` and pauses game.js for its whole run.
+  - A compile that overlaps countdown frames would build its programs against whatever context the frame left set.
+    That is the wrong-MRT class of defect `mintLateLit` documents.
+  - So the late compile can only move to another window that also owns render state. The menu warm in #3633 is one
+    such window; Fleet D owns it.
+- **One depth bias for floor and terrain saves nothing.** The census reads the bias values:
+  - the floor `[4,16]` and the start line `[-2,-4]` fork the plain lit program, and their biases point in opposite
+    directions;
+  - the terrain `[2,10]` is the CHUNKED program, so it is a separate pipeline whatever its bias.
+  - Unifying any of them removes zero pipelines.
 
-The scene set (8 lit pipelines, ~9.6 s on the iPhone 14) is what the first frame draws. Shrinking it beyond
-candidates 2 and 3 means fewer pipeline states: fewer biases, fewer double-sided or mirrored draws. That's a
-content and look decision, not a renderer change.
+What remains, by size:
+
+1. **Shrink the lit fragment program itself, as a mobile-tier variant.** All 14 lit pipelines compile the same
+   ~116 KB of WGSL.
+   - Compile cost grows faster than size: an 8 KB fx program compiles in ~10 ms on lavapipe, a 116 KB lit program in
+     ~1,000 ms.
+   - A lite-GPU lit program that constant-folds features the mobile tier doesn't show would cut every lit pipeline at
+     once. Candidates: sparkle/flake, clear-coat, ground mist, lamp-bake bounce.
+   - Potential: several seconds of the 16.9 s.
+   - It changes what phones render, so it's a look decision, and it needs a per-feature size and compile-time
+     measurement first.
+2. **Drop winding twins no race draws.** `warmLateLit` compiles every late variant for both winding signs.
+   - The brake ring is drawn mirrored, so it needs both.
+   - The cockpit ERS bar and OT lamp (`_rigFxA`, the `none/cw` twin) are probably never drawn mirrored. That's at
+     most 1 pipeline (~1.2 s on the iPhone 14), and needs a runtime check before cutting.
+3. **The `draw` stage, 3.85 s on device:** the post chain's first-frame pipelines plus the rig warm (1.12 s, 28
+   pairs). The post chain is needed at the first frame. The rig warm is the next thing to break down; this
+   lavapipe census doesn't run `draw`.
 
 ## 3. Overlap
 
 Fleet D's #3633 (W21b, open, MERGE-HOLD DAD) changes the same warm region of `js/render/three/tlx.js`: a menu warm
-in idle chunks plus `where` recording. Candidate 1 touches `runProgramWarmStages`, so whichever lands second merges
-the other.
+in idle chunks plus `where` recording. Its menu warm is the one window that could pre-compile the late variants without blocking entry.
