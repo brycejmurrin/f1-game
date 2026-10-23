@@ -123,7 +123,7 @@ async function main() {
   const phones = aws("devicefarm", "list-devices", "--filters", "attribute=PLATFORM,operator=EQUALS,values=IOS", "attribute=FORM_FACTOR,operator=EQUALS,values=PHONE").devices;
   const dev = phones.find((d) => d.name === want || d.name.endsWith(" " + want));
   if (!dev) throw new Error(`no iOS phone named ${want}`);
-  if (/18 Pro Max/.test(dev.name)) throw new Error("the 18 Pro Max is reserved for other lanes");
+  // Which phone a lane may use is a bus matter (DF CLAIM); the tool does not second-guess it.
   const proj = aws("devicefarm", "list-projects").projects.find((p) => p.name === PROJECT);
   log(`device ${dev.name} iOS ${dev.os}; trials ${trials}; cap ${maxMin} min`);
   const ses = aws("devicefarm", "create-remote-access-session", "--project-arn", proj.arn, "--device-arn", dev.arn,
