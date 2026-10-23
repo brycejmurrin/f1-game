@@ -7,7 +7,8 @@
 // warm), relaunch (Safari force-quit, disk cache warm).
 //
 //   node tools/perf/devicefarm-boot.mjs --device "iPhone 14" [--trials 3] [--url URL] [--max-min 25] [--out DIR]
-//   node tools/perf/devicefarm-boot.mjs --self-test      # no AWS: checks the page-side probes against a local page
+//   node tools/perf/devicefarm-boot.mjs --self-test              # no AWS: the probes parse as function bodies
+//   node tools/perf/devicefarm-boot.mjs --self-test-live URL      # no AWS: probes against a local page, fails unless the menu is detected
 //
 // Credentials come only from the environment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION), read by
 // the aws CLI (APEX_AWS_CLI, else `aws` on PATH). Nothing here prints them or the endpoint URL. Device minutes are metered
@@ -46,8 +47,9 @@ const withApex = (u) => (/[?&]apex=1/.test(u) ? u : u + (u.includes("?") ? "&" :
 export const POLL = `
   let st = null; try { st = window.__apex && __apex.info ? __apex.info().state : null; } catch (_) {}
   const ov = document.getElementById("overlay");
-  return { t: performance.now(), rs: document.readyState, st,
-    ovShown: !!(ov && !ov.hidden && ov.offsetParent !== null), res: performance.getEntriesByType("resource").length };`;
+  let shown = false;
+  if (ov && !ov.hidden) { const c = getComputedStyle(ov), r = ov.getBoundingClientRect(); shown = c.display !== "none" && c.visibility !== "hidden" && r.width > 0 && r.height > 0; }
+  return { t: performance.now(), rs: document.readyState, st, ovShown: shown, res: performance.getEntriesByType("resource").length };`;
 // Full dump once the menu is up: what the browser measured, with no interpretation.
 export const DUMP = `
   const r = (x) => (x == null ? null : Math.round(x));
@@ -70,7 +72,10 @@ export const DUMP = `
   try { build = window.__apex && __apex.info ? __apex.info().build || null : null; } catch (_) {}
   try { api = RendererPicker.liveThreeApi(); } catch (_) {}
   try { errors = (window.__apexErrors || []).length; } catch (_) {}
-  return { nowMs: r(performance.now()), nav: navOut, paint, counts: { res: res.length, cached, xfer: sum(() => true) }, byType, lastEnd,
+  let log = null; try { log = Log.records().slice(0, 160).map((x) => [x.t, x.ns, String(x.msg).slice(0, 90)]); } catch (_) {}
+  const ov = document.getElementById("overlay"), oc = ov && getComputedStyle(ov), orc = ov && ov.getBoundingClientRect();
+  const overlay = ov ? { hidden: ov.hidden, display: oc.display, vis: oc.visibility, pos: oc.position, w: Math.round(orc.width), h: Math.round(orc.height) } : null;
+  return { nowMs: r(performance.now()), overlay, log, nav: navOut, paint, counts: { res: res.length, cached, xfer: sum(() => true) }, byType, lastEnd,
     slowest, latest, marks, api, build, errors, sw: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
     mem: (performance.memory && performance.memory.usedJSHeapSize) || null };`;
 
@@ -93,7 +98,7 @@ function killSafari(ctx) {
 }
 // One timed load. `go` starts the navigation; the wall clock t0 is taken just before it, so wallMs includes the Appium
 // round trips (~0.3-1 s) while pageMs is the page's own performance.now() at the first poll that saw state "menu".
-async function timedBoot(ctx, label, go, capMs = 150000) {
+async function timedBoot(ctx, label, go, capMs = 60000) {
   const t0 = Date.now();
   go();
   const samples = [];
@@ -148,8 +153,9 @@ async function main() {
       // first: a fresh Safari process loads the URL; reload: same process, HTTP cache warm; relaunch: Safari killed, disk cache warm
       killSafari(ctx);
       report.trials.push({ i, ...(await timedBoot(ctx, `t${i} first`, () => wd(ctx.base, "POST", `/session/${ctx.sid}/url`, { url }))) , kind: "first" });
+      if (i === 1 && !report.trials[0].menu) { log("trial 1 never saw the menu: stopping early to save device minutes"); break; }
       if (over()) break;
-      report.trials.push({ i, ...(await timedBoot(ctx, `t${i} reload`, () => { exec(ctx, "setTimeout(() => location.reload(), 30); return true;").catch(() => {}); }, 120000)), kind: "reload" });
+      report.trials.push({ i, ...(await timedBoot(ctx, `t${i} reload`, () => { exec(ctx, "setTimeout(() => location.reload(), 30); return true;").catch(() => {}); }, 45000)), kind: "reload" });
       fs.writeFileSync(path.join(out, "boot.json"), JSON.stringify(report, null, 2));
     }
     if (over()) log(`run cap of ${maxMin} min reached`);
@@ -170,8 +176,29 @@ async function main() {
   }
 }
 
+// --self-test-live URL: run POLL and DUMP in local headless Chromium against URL and FAIL unless the menu is detected.
+async function selfTestLive(url) {
+  const { chromium } = await import("playwright");
+  const exe = execFileSync("node", ["tools/lib/chromium-path.mjs", "--path"], { encoding: "utf8" }).trim();
+  const b = await chromium.launch({ executablePath: exe, args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+  try {
+    const p = await (await b.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true })).newPage();
+    await p.goto(withApex(url));
+    const t0 = Date.now(); let menu = null;
+    while (Date.now() - t0 < 120000) {
+      const r = await p.evaluate(new Function(POLL));
+      if (r.st === "menu" && r.rs === "complete" && r.ovShown) { menu = r; break; }
+      await p.waitForTimeout(250);
+    }
+    if (!menu) throw new Error("self-test: menu never detected by POLL");
+    const d = await p.evaluate(new Function(DUMP));
+    if (!d.nav || !d.counts.res || !d.log || !d.log.length) throw new Error("self-test: DUMP incomplete " + JSON.stringify({ nav: !!d.nav, res: d.counts.res, log: d.log && d.log.length }));
+    process.stdout.write(`self-test-live OK: menu at page ${Math.round(menu.t)} ms; overlay ${JSON.stringify(d.overlay)}; res ${d.counts.res}; log ${d.log.length} lines\n`);
+  } finally { await b.close(); }
+}
 if (process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]))) {
-  if (args.includes("--self-test")) {
+  if (args.includes("--self-test-live")) selfTestLive(opt("self-test-live", "http://127.0.0.1:3457/")).catch((e) => { process.stderr.write(String(e.message || e) + "\n"); process.exitCode = 1; });
+  else if (args.includes("--self-test")) {
     for (const [n, s] of [["POLL", POLL], ["DUMP", DUMP]]) { new Function(s); process.stdout.write(`${n}: parses as a function body\n`); }
   } else main().catch((e) => { process.stderr.write(String(e.message || e) + "\n"); process.exitCode = 1; });
 }
