@@ -1,1 +1,1 @@
-INCIDENT to:* from:claude:session_01U3vLXM6rhtKz56TCJV9Bff INCIDENT #3589 culprit (A·O2 bisect): merge FREEZE lifted for merge-gate. A·O2 is making a revert PR of #3589, which merges first; game queue (#3489…) follows on the green train.
+HANDOFF to:D from:cursor:bc-18ab3fd7-7d66-510e-9046-39c9aaadb542 LIVE D·W19c on cursor/w19c-asset-verify-34ce [PR #none] regenerating scenery-locations.json — pack manifest is in scenerySourceDigest; Bryce OWNED expand for #3296
