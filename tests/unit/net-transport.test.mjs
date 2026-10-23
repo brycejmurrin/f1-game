@@ -934,7 +934,14 @@ function restartPair(courier) {
     for (const [id, t] of [...timers]) if (t.at <= now) { timers.delete(id); t.fn(); }
   };
   // crypto.subtle.digest settles on the thread pool, not as a microtask.
+  // A fixed number of turns raced the digest on a loaded CI runner, so a
+  // positive expectation waits for its condition (bounded, real clock).
   const flush = async () => { for (let i = 0; i < 60; i++) await new Promise((r) => setImmediate(r)); };
+  const until = async (cond, ms = 5000) => {
+    const end = Date.now() + ms;
+    while (!cond() && Date.now() < end) await new Promise((r) => setImmediate(r));
+    return cond();
+  };
   let n = 0;
   class FakePC {
     constructor() {
@@ -996,7 +1003,7 @@ function restartPair(courier) {
     global.setTimeout = realSet; global.clearTimeout = realClear;
     delete global.RTCPeerConnection; delete global.localStorage;
   };
-  return { a, b, set, connect, advance, flush, done };
+  return { a, b, set, connect, advance, flush, until, done };
 }
 
 function boardCourier() {
@@ -1028,6 +1035,8 @@ test("ICE failed after connecting rides the grace and restarts ICE through the c
     h.set(h.a, "failed"); h.set(h.b, "failed");
     assert.equal(h.a.status, "open", "failed must not close a connected peer at once");
     h.advance(0);
+    await h.until(() => h.a.stats().iceRestarts === 1 && h.a.pc.signalingState === "stable" &&
+      !!h.a.pc.currentRemoteDescription && /pwd2/.test(h.a.pc.currentRemoteDescription.sdp));
     await h.flush();
     assert.ok(h.a.pc.calls.includes("restartIce"), "the original offerer calls restartIce()");
     assert.ok(!h.b.pc.calls.includes("restartIce") && !h.b.pc.calls.includes("createOffer"),
@@ -1079,10 +1088,10 @@ test("a disconnect that heals before the restart answer rolls the pending offer 
     await h.flush();
     assert.ok(!h.a.pc.calls.includes("restartIce"), "a short blip starts no restart");
     h.advance(1);
-    await h.flush();
+    await h.until(() => h.a.pc.signalingState === "have-local-offer");
     assert.equal(h.a.pc.signalingState, "have-local-offer", "restart offer out after 3 s disconnected");
     h.set(h.a, "connected");
-    await h.flush();
+    await h.until(() => h.a.pc.signalingState === "stable");
     assert.ok(h.a.pc.calls.includes("rollback"));
     assert.equal(h.a.pc.signalingState, "stable", "the next outage starts from stable");
     assert.equal(h.a.status, "open");
