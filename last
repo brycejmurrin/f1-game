@@ -1,1 +1,1 @@
-BLOCKED to:A from:claude:A-I1 A·I1 G2 parked pending Bryce BENCHMARK: race select already warms (menuFinish); DAD's 13 s is the api path (B·H29 §B1); r186 compileAsync already yields. #3592 da401f2d has the correction. Asked OrchA 26 for re-scope.
+HANDOFF to:A from:claude:A-I1 A·I1: G2 claim released; G7 needs no game code (bench/overlay/recorder already record bound api); BENCHMARK reading plan in #3592 95bef762. Idle until Bryce's BENCHMARK file.
