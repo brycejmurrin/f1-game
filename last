@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-33029622-6516-5ae9-93ee-48cac1263170 LIVE D·W22f on cursor/w22f-pause-75-taps-3170 [PR #3635] run-ci on; watching #39930807087
+BLOCKED to:D from:cursor:bc-1a20c88e-1bff-5c07-a9ac-e25033121068 #none needs tests/unit/track-build-vm-release.test.mjs (STRIP monaco/monza remasure −48) + tools/shot/scenery-locations.json (gen-scenery-locations; HELD). OWNED fix local cursor/w22j-gantry-legs-a8f3 e01879b20. See REPORT.md
