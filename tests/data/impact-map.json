@@ -12983,6 +12983,7 @@
       "create": [
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/renderer-boot-island-preload.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs",
         "tests/unit/script-loader-preload.test.mjs"
       ],
@@ -13003,6 +13004,7 @@
       ],
       "start": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/renderer-boot-island-preload.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs",
         "tests/unit/script-loader-preload.test.mjs"
       ],
@@ -13012,6 +13014,9 @@
       "*": [
         "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
+      ],
+      "narrow": [
+        "tests/unit/renderer-boot-island-preload.test.mjs"
       ]
     },
     "js/render/shared/assets.js": {
