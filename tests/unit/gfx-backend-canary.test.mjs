@@ -4127,7 +4127,7 @@ test("eval-time preload skips TLX on unset navigator.gpu hunch (#3536 Graphics u
 test("GLX backendState and race entry defer pack retry on software GL (#3584)", () => {
   const glx = code("js/render/glx/glx.js");
   assert.ok(glx.includes("detectSoftwareGl") && glx.includes("softwareGL: _softwareGl"));
-  const game = readFile("js/game.js");
+  const game = gameSource();
   assert.ok(game.includes("Assets.retry && !PerfGov.softwareRaster()"));
   assert.ok(game.includes("requestIdleCallback(run, { timeout: 120000 })"));
 });
