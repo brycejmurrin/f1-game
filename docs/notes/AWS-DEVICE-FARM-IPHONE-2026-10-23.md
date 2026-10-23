@@ -281,3 +281,29 @@ Website Data via XCUITest) before the first entry.
   it is not cached. Any further entry win is there, not in shaders.
 - Live view: each run logs `live view: AWS console > Device Farm > … > Remote access > <session>`; the stream and
   the recorded video are in the console while the script drives the phone.
+
+## 9. Heavy scenes: BENCHMARK "WEATHER & TRACKS" per path (iPhone 18 Pro Max, 07:23–07:31Z)
+
+`devicefarm-iphone.mjs run --scenario races --pins webgpu,webgl2`, live build 20919. Six races per path, each
+reloaded and started cold (BenchRun), then timed for 20 s: rAF p50/p95/p99, frames over 33 ms (`n33`) and over
+50 ms (`n50`), and cold `buildMs`.
+
+| race | WEBGPU p50/p95/p99 ms (fps) | n33 / n50 | cold build | WEBGL2 p50/p95/p99 ms (fps) | n33 / n50 | cold build |
+|---|---|---|---|---|---|---|
+| Monza dry | 17/17/22 (59.8) | 4 / 1 | 10.2 s | 17/17/25 (59.7) | 6 / 1 | 5.3 s |
+| Monza rain | 17/17/21 (59.8) | 4 / 0 | 5.1 s | 17/17/22 (59.8) | 4 / 0 | 2.9 s |
+| Monza night | 17/17/20 (59.8) | 4 / 0 | **14.1 s** | 17/17/22 (59.8) | 5 / 0 | 3.6 s |
+| Singapore night | 17/17/17 (59.9) | 2 / 0 | 3.0 s | 17/17/22 (59.7) | 4 / 1 | 2.8 s |
+| Spa rain | 17/17/21 (59.8) | 7 / 0 | 2.8 s | 17/17/21 (59.8) | 5 / 0 | 3.5 s |
+| Monaco dry | 17/17/21 (59.9) | 3 / 0 | 2.5 s | 17/17/22 (59.9) | 2 / 0 | 2.8 s |
+
+- **The 18 Pro Max holds 60 fps on both paths in every scene,** rain and night included. WebGPU's tail is a
+  little tighter (p99 17–22 ms against 21–25 ms). Frame time cannot rank the paths on this phone; the iPhone 14
+  (§6, Fleet D's device now) is where they separate.
+- **A new lighting or weather variant pays the WebGPU pipeline build again.** The first night race took 14.1 s on
+  WebGPU against 3.6 s on WebGL2, and the first rain race 5.1 s against 2.9 s. Once those variants were compiled,
+  Singapore night entered in 3.0 s and Spa rain in 2.8 s. The cost is per new shader variant, once per cache life
+  (§8), and it lands on the first race a player runs in each new condition. A pre-warm of the night and rain
+  variants on the menu, or during the first race's countdown, would hide it. That decision belongs to the
+  warm-up owner (#3604's area), not this note.
+- Cost: the account's trial showed 779.87 of 1,000 minutes left at 07:35Z (both fleets combined).
