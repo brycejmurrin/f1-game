@@ -1466,6 +1466,7 @@
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/settings-one-home.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/settings-search.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/share-code.test.mjs",
@@ -2006,671 +2007,677 @@
       "roster": "tag"
     },
     {
+      "path": "js/core/menu-sheet-gate.js",
+      "global": "MenuSheetGate",
+      "order": 9,
+      "roster": "tag"
+    },
+    {
       "path": "js/core/lazy-bundles.js",
       "global": "LazyBundles",
-      "order": 9,
+      "order": 10,
       "roster": "tag"
     },
     {
       "path": "js/core/wake-lock.js",
       "global": "RaceWakeLock",
-      "order": 10,
+      "order": 11,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/glx-facade.js",
       "global": null,
-      "order": 11,
+      "order": 12,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/light-budget.js",
       "global": "LightBudget",
-      "order": 12,
+      "order": 13,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/post-common.js",
       "global": "PostCommon",
-      "order": 13,
+      "order": 14,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/canvas-css-size.js",
       "global": "CanvasCssSize",
-      "order": 14,
+      "order": 15,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/lamp-chunks.js",
       "global": "LampChunks",
-      "order": 15,
+      "order": 16,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/frustum.js",
       "global": "Frustum",
-      "order": 16,
+      "order": 17,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/inst-cells.js",
       "global": "InstCells",
-      "order": 17,
+      "order": 18,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/vertex-pack.js",
       "global": "VertexPack",
-      "order": 18,
+      "order": 19,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/chunk-bins.js",
       "global": "ChunkBins",
-      "order": 19,
+      "order": 20,
       "roster": "tag"
     },
     {
       "path": "js/render/gfx.js",
       "global": "Gfx",
-      "order": 20,
+      "order": 21,
       "roster": "tag"
     },
     {
       "path": "js/render/renderer-boot.js",
       "global": "RendererBoot",
-      "order": 21,
+      "order": 22,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/gltf.js",
       "global": "GLTF",
-      "order": 22,
+      "order": 23,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/assets.js",
       "global": "Assets",
-      "order": 23,
+      "order": 24,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/driving-line.js",
       "global": "DrivingLine",
-      "order": 24,
+      "order": 25,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/puddles.js",
       "global": "Puddles",
-      "order": 25,
+      "order": 26,
       "roster": "tag"
     },
     {
       "path": "js/data/teams.js",
       "global": "Teams",
-      "order": 26,
+      "order": 27,
       "roster": "tag"
     },
     {
       "path": "js/data/driver-ratings.js",
       "global": "DriverRatings",
-      "order": 27,
+      "order": 28,
       "roster": "tag"
     },
     {
       "path": "js/data/legends.js",
       "global": "Legends",
-      "order": 28,
+      "order": 29,
       "roster": "tag"
     },
     {
       "path": "js/career/team-identity.js",
       "global": "CareerTeamIdentity",
-      "order": 29,
+      "order": 30,
       "roster": "tag"
     },
     {
       "path": "js/career/save-migrate.js",
       "global": "SaveMigrate",
-      "order": 30,
+      "order": 31,
       "roster": "tag"
     },
     {
       "path": "js/data/settings-defaults.js",
       "global": "SettingsDefaults",
-      "order": 31,
+      "order": 32,
       "roster": "tag"
     },
     {
       "path": "js/data/garage-defaults.js",
       "global": "GarageDefaults",
-      "order": 32,
+      "order": 33,
       "roster": "tag"
     },
     {
       "path": "js/core/save-schema-registry.js",
       "global": "SaveSchemaRegistry",
-      "order": 33,
+      "order": 34,
       "roster": "tag"
     },
     {
       "path": "js/core/store.js",
       "global": "GameStore",
-      "order": 34,
+      "order": 35,
       "roster": "tag"
     },
     {
       "path": "js/core/i18n-pseudo.js",
       "global": "I18nPseudo",
-      "order": 35,
+      "order": 36,
       "roster": "tag"
     },
     {
       "path": "js/core/i18n.js",
       "global": "I18n",
-      "order": 36,
+      "order": 37,
       "roster": "tag"
     },
     {
       "path": "js/core/dom-apply.js",
       "global": "I18nDom",
-      "order": 37,
+      "order": 38,
       "roster": "tag"
     },
     {
       "path": "js/career/restore-points.js",
       "global": "CareerRestorePoints",
-      "order": 38,
+      "order": 39,
       "roster": "tag"
     },
     {
       "path": "js/career/career-backup.js",
       "global": "CareerBackup",
-      "order": 39,
+      "order": 40,
       "roster": "tag"
     },
     {
       "path": "js/ui/dom.js",
       "global": "Dom",
-      "order": 40,
+      "order": 41,
       "roster": "tag"
     },
     {
       "path": "js/ui/title-fx.js",
       "global": "TitleFx",
-      "order": 41,
+      "order": 42,
       "roster": "tag"
     },
     {
       "path": "js/track/core/geom.js",
       "global": "TrackGeom",
-      "order": 42,
+      "order": 43,
       "roster": "tag"
     },
     {
       "path": "js/track/core/pit.js",
       "global": "TrackPit",
-      "order": 43,
+      "order": 44,
       "roster": "tag"
     },
     {
       "path": "js/track/scenery/data.js",
       "global": "TrackSceneryData",
-      "order": 44,
+      "order": 45,
       "roster": "tag"
     },
     {
       "path": "js/track/core/space.js",
       "global": "TrackSpace",
-      "order": 45,
+      "order": 46,
       "roster": "tag"
     },
     {
       "path": "js/track/core/surface.js",
       "global": "TrackSurface",
-      "order": 46,
+      "order": 47,
       "roster": "tag"
     },
     {
       "path": "js/track/scenery/graph.js",
       "global": "TrackGraph",
-      "order": 47,
+      "order": 48,
       "roster": "tag"
     },
     {
       "path": "js/track/core/spline.js",
       "global": "TrackSpline",
-      "order": 48,
+      "order": 49,
       "roster": "tag"
     },
     {
       "path": "js/track/core/line.js",
       "global": "TrackLine",
-      "order": 49,
+      "order": 50,
       "roster": "tag"
     },
     {
       "path": "js/track/core/mesh.js",
       "global": "TrackMesh",
-      "order": 50,
+      "order": 51,
       "roster": "tag"
     },
     {
       "path": "js/track/core/def.js",
       "global": "TrackDef",
-      "order": 51,
+      "order": 52,
       "roster": "tag"
     },
     {
       "path": "js/track/circuit-meta.js",
       "global": "TrackDefs",
-      "order": 52,
+      "order": 53,
       "roster": "tag"
     },
     {
       "path": "js/race/session-stub.js",
       "global": null,
-      "order": 53,
+      "order": 54,
       "roster": "tag"
     },
     {
       "path": "js/race/session-entry.js",
       "global": "SessionEntry",
-      "order": 54,
+      "order": 55,
       "roster": "tag"
     },
     {
       "path": "js/track/circuit-elevations.js",
       "global": null,
-      "order": 55,
+      "order": 56,
       "roster": "tag"
     },
     {
       "path": "js/track/tracks.js",
       "global": "Tracks",
-      "order": 56,
+      "order": 57,
       "roster": "tag",
       "ratchetLines": 800
     },
     {
       "path": "js/track/build-client.js",
       "global": "TrackBuildClient",
-      "order": 57,
+      "order": 58,
       "roster": "tag"
     },
     {
       "path": "js/workers/bitmap-decode-client.js",
       "global": "BitmapDecode",
-      "order": 58,
+      "order": 59,
       "roster": "tag"
     },
     {
       "path": "js/ui/track-maps.js",
       "global": "TrackMaps",
-      "order": 59,
+      "order": 60,
       "roster": "tag"
     },
     {
       "path": "js/editor/track-themes.js",
       "global": "TrackThemes",
-      "order": 60,
+      "order": 61,
       "roster": "tag"
     },
     {
       "path": "js/editor/props.js",
       "global": "TrackDesignerProps",
-      "order": 61,
+      "order": 62,
       "roster": "tag"
     },
     {
       "path": "js/editor/custom-tracks.js",
       "global": "CustomTracks",
-      "order": 62,
+      "order": 63,
       "roster": "tag"
     },
     {
       "path": "js/car/helmets.js",
       "global": "Helmets",
-      "order": 63,
+      "order": 64,
       "roster": "tag"
     },
     {
       "path": "js/car/car-geometry.js",
       "global": "CarGeometry",
-      "order": 64,
+      "order": 65,
       "roster": "tag"
     },
     {
       "path": "js/car/car-wheels.js",
       "global": "CarWheels",
-      "order": 65,
+      "order": 66,
       "roster": "tag"
     },
     {
       "path": "js/car/car-material-shade.js",
       "global": "CarMaterialShade",
-      "order": 66,
+      "order": 67,
       "roster": "tag"
     },
     {
       "path": "js/car/car-materials.js",
       "global": "CarMaterials",
-      "order": 67,
+      "order": 68,
       "roster": "tag"
     },
     {
       "path": "js/car/car-shade.js",
       "global": "CarShade",
-      "order": 68,
+      "order": 69,
       "roster": "tag"
     },
     {
       "path": "js/car/car-body-geom.js",
       "global": "CarBodyGeom",
-      "order": 69,
+      "order": 70,
       "roster": "tag"
     },
     {
       "path": "js/car/car3d.js",
       "global": "Car3D",
-      "order": 70,
+      "order": 71,
       "roster": "tag",
       "ratchetLines": 2330
     },
     {
       "path": "js/input/tilt-roll.js",
       "global": "TiltRoll",
-      "order": 71,
+      "order": 72,
       "roster": "tag"
     },
     {
       "path": "js/input/bindings.js",
       "global": "InputBindings",
-      "order": 72,
+      "order": 73,
       "roster": "tag"
     },
     {
       "path": "js/input/pad-menu.js",
       "global": "InputPadMenu",
-      "order": 73,
+      "order": 74,
       "roster": "tag"
     },
     {
       "path": "js/input/haptics.js",
       "global": "InputHaptics",
-      "order": 74,
+      "order": 75,
       "roster": "tag"
     },
     {
       "path": "js/input/hold-buttons.js",
       "global": "InputHoldButtons",
-      "order": 75,
+      "order": 76,
       "roster": "tag"
     },
     {
       "path": "js/input/controller-profiles.js",
       "global": "ControllerProfiles",
-      "order": 76,
+      "order": 77,
       "roster": "tag"
     },
     {
       "path": "js/input/input.js",
       "global": "Input",
-      "order": 77,
+      "order": 78,
       "roster": "tag"
     },
     {
       "path": "js/audio/stub.js",
       "global": "GameAudio",
-      "order": 78,
+      "order": 79,
       "roster": "tag"
     },
     {
       "path": "js/data/circuit-lore.js",
       "global": "CircuitLore",
-      "order": 79,
+      "order": 80,
       "roster": "tag"
     },
     {
       "path": "js/data/flyby-overrides.js",
       "global": "FlybyOverrides",
-      "order": 80,
+      "order": 81,
       "roster": "tag"
     },
     {
       "path": "js/car/parts.js",
       "global": "Parts",
-      "order": 81,
+      "order": 82,
       "roster": "tag"
     },
     {
       "path": "js/car/liveries.js",
       "global": "Liveries",
-      "order": 82,
+      "order": 83,
       "roster": "tag"
     },
     {
       "path": "js/car/custom-liveries.js",
       "global": "CustomLiveries",
-      "order": 83,
+      "order": 84,
       "roster": "tag"
     },
     {
       "path": "js/car/crest-paths.js",
       "global": "CrestPaths",
-      "order": 84,
+      "order": 85,
       "roster": "tag"
     },
     {
       "path": "js/car/livery-design.js",
       "global": "LiveryDesign",
-      "order": 85,
+      "order": 86,
       "roster": "tag"
     },
     {
       "path": "js/car/livery-graphics.js",
       "global": "LiveryGraphics",
-      "order": 86,
+      "order": 87,
       "roster": "tag"
     },
     {
       "path": "js/car/livery-stations.js",
       "global": "LiveryStations",
-      "order": 87,
+      "order": 88,
       "roster": "tag"
     },
     {
       "path": "js/car/crest-draw.js",
       "global": "LiveryCrests",
-      "order": 88,
+      "order": 89,
       "roster": "tag"
     },
     {
       "path": "js/car/liverytex.js",
       "global": "LiveryTex",
-      "order": 89,
+      "order": 90,
       "roster": "tag"
     },
     {
       "path": "js/car/ghost.js",
       "global": "Ghost",
-      "order": 90,
+      "order": 91,
       "roster": "tag"
     },
     {
       "path": "js/car/ghost-share.js",
       "global": "GhostShare",
-      "order": 91,
+      "order": 92,
       "roster": "tag"
     },
     {
       "path": "js/car/input-ghost.js",
       "global": "InputGhost",
-      "order": 92,
+      "order": 93,
       "roster": "tag"
     },
     {
       "path": "js/race/race-insights.js",
       "global": "RaceInsights",
-      "order": 93,
+      "order": 94,
       "roster": "tag"
     },
     {
       "path": "js/race/driving-coach.js",
       "global": "DrivingCoach",
-      "order": 94,
+      "order": 95,
       "roster": "tag"
     },
     {
       "path": "js/physics/consts.js",
       "global": "PhysicsConsts",
-      "order": 95,
+      "order": 96,
       "roster": "tag"
     },
     {
       "path": "js/lighting/knobs.js",
       "global": "LightKnobs",
-      "order": 96,
+      "order": 97,
       "roster": "tag"
     },
     {
       "path": "js/lighting/track-lights.js",
       "global": "TrackLights",
-      "order": 97,
+      "order": 98,
       "roster": "tag"
     },
     {
       "path": "js/lighting/frame-lights.js",
       "global": "FrameLights",
-      "order": 98,
+      "order": 99,
       "roster": "tag"
     },
     {
       "path": "js/lighting/lamp-bake.js",
       "global": "LampBake",
-      "order": 99,
+      "order": 100,
       "roster": "tag"
     },
     {
       "path": "js/lighting/lighting.js",
       "global": "LightTune",
-      "order": 100,
+      "order": 101,
       "roster": "tag"
     },
     {
       "path": "js/lighting/profiles.js",
       "global": "LightStore",
-      "order": 101,
+      "order": 102,
       "roster": "tag"
     },
     {
       "path": "js/car/car-mesh.js",
       "global": "CarMesh",
-      "order": 102,
+      "order": 103,
       "roster": "tag"
     },
     {
       "path": "js/garage/experience.js",
       "global": "GarageExperience",
-      "order": 103,
+      "order": 104,
       "roster": "tag"
     },
     {
       "path": "js/garage/scene-prims.js",
       "global": "GaragePrims",
-      "order": 104,
+      "order": 105,
       "roster": "tag"
     },
     {
       "path": "js/garage/scene-equipment.js",
       "global": "GarageEquipment",
-      "order": 105,
+      "order": 106,
       "roster": "tag"
     },
     {
       "path": "js/garage/scene-live.js",
       "global": "GarageLive",
-      "order": 106,
+      "order": 107,
       "roster": "tag"
     },
     {
       "path": "js/garage/scene-dress.js",
       "global": "GarageDress",
-      "order": 107,
+      "order": 108,
       "roster": "tag"
     },
     {
       "path": "js/garage/crew-motion.js",
       "global": "GarageCrewMotion",
-      "order": 108,
+      "order": 109,
       "roster": "tag"
     },
     {
       "path": "js/garage/crew-service.js",
       "global": "GarageCrewService",
-      "order": 109,
+      "order": 110,
       "roster": "tag"
     },
     {
       "path": "js/garage/scene-crew.js",
       "global": "GarageCrew",
-      "order": 110,
+      "order": 111,
       "roster": "tag"
     },
     {
       "path": "js/garage/scene.js",
       "global": "GarageScene",
-      "order": 111,
+      "order": 112,
       "roster": "tag"
     },
     {
       "path": "js/garage/arrival.js",
       "global": "GarageArrival",
-      "order": 112,
+      "order": 113,
       "roster": "tag"
     },
     {
       "path": "js/garage/surface-inspection.js",
       "global": "GarageSurfaceInspection",
-      "order": 113,
+      "order": 114,
       "roster": "tag"
     },
     {
       "path": "js/car/surface-outline.js",
       "global": "GarageSurfaceOutline",
-      "order": 114,
+      "order": 115,
       "roster": "tag"
     },
     {
       "path": "js/garage/setup-camera.js",
       "global": "SetupCamera",
-      "order": 115,
+      "order": 116,
       "roster": "tag"
     },
     {
       "path": "js/garage/prebuild.js",
       "global": "GaragePrebuild",
-      "order": 116,
+      "order": 117,
       "roster": "tag"
     },
     {
       "path": "js/garage/pit-signs.js",
       "global": "PitSigns",
-      "order": 117,
+      "order": 118,
       "roster": "tag"
     },
     {
       "path": "js/physics/body-attitude.js",
       "global": "BodyAttitude",
-      "order": 118,
+      "order": 119,
       "roster": "tag"
     },
     {
       "path": "js/fx/particles.js",
       "global": "Particles",
-      "order": 119,
+      "order": 120,
       "roster": "tag"
     },
     {

@@ -46,6 +46,9 @@ const BitmapDecode = (function () {
       const w = new Worker(url("js/workers/bitmap-decode-worker.js"));
       w.onmessage = (e) => {
         const m = e.data || {};
+        // A reply from a worker we already terminated (drop + respawn) must not
+        // settle a newer seq, and its transferred bitmap still needs closing.
+        if (_w !== w) { closeBitmap(m.bmp); return; }
         const valid = m.type === "decoded" && m.bmp && typeof m.bmp.close === "function" &&
           Number.isFinite(m.bmp.width) && m.bmp.width > 0 && Number.isFinite(m.bmp.height) && m.bmp.height > 0;
         settle(m.seq, valid ? null : new Error(m.message || "invalid bitmap worker reply"), m.bmp);
@@ -94,10 +97,19 @@ const BitmapDecode = (function () {
           if (signal.aborted) { p.abort(); return; }
         }
         p.timer = setTimeout(() => settle(seq, new Error("bitmap worker timed out")), REQUEST_MS);
+        // drop() may have terminated `w` between spawn() and here (or the
+        // browser neutered it without firing onerror). Never postMessage at a
+        // corpse — that throws, and leaving `_w` pointed at it makes every
+        // later decode hit the same InvalidStateError forever.
+        if (_w !== w) {
+          settle(seq, new Error("bitmap worker dropped"));
+          return;
+        }
         try {
           w.postMessage({ type: "decode", seq, blob, opts: o, crop: crop || null });
         } catch (err) {
-          settle(seq, err);
+          if (_w === w) drop();
+          else settle(seq, err);
         }
       });
     } catch (err) {

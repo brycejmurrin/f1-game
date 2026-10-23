@@ -1803,6 +1803,51 @@ test("phone hold controls accept Space and Enter without cancelling another held
   } finally { ctl.cancel(); }
 });
 
+test("requestSensor attaches deviceorientation once across arm + connect (D·W18d)", async () => {
+  // SCAN arms the sensor inside its gesture, then CONNECT calls requestSensor
+  // again while sensorOn is still false (no orientation event yet). Without an
+  // attach guard those stack: every lean sample()s and paints N times.
+  const previous = {
+    document: globalThis.document,
+    window: globalThis.window,
+    DeviceOrientationEvent: globalThis.DeviceOrientationEvent,
+  };
+  const orient = [];
+  globalThis.document = { hidden: false, addEventListener() {}, visibilityState: "visible" };
+  globalThis.window = {
+    addEventListener(type, fn) { if (type === "deviceorientation") orient.push(fn); },
+  };
+  globalThis.DeviceOrientationEvent = {};   // present, no permission gate
+  let receive, closed, ctl;
+  const transport = {
+    status: "open", onMessage(f) { receive = f; }, onOpen() {}, onClose(f) { closed = f; },
+    send() { return true; }, pump() {}, close() { this.status = "closed"; if (closed) closed("local"); },
+  };
+  const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl() };
+  try {
+    ctl = PhonePad.pad(dom, { deps: {
+      rtc: () => transport, prefetchIce: async () => null, normalise: (c) => c, valid: () => true,
+      privateRelay: () => false, swap: async () => ({ ok: true }),
+    } });
+    assert.equal(await ctl.armSensor(), true);
+    assert.equal(orient.length, 1, "first arm attaches once");
+    assert.equal(await ctl.armSensor(), true);
+    assert.equal(orient.length, 1, "a second arm is a no-op");
+    assert.equal(ctl.state().sensorOn, false, "sensorOn waits for a real reading");
+    await ctl.connect("ABC234");
+    assert.equal(orient.length, 1, "connect after arm must not stack another listener");
+    receive("event", PhonePad.encodeHello("host", false, true));
+    orient[0]({ beta: 0, gamma: -20 });
+    assert.equal(ctl.state().sensorOn, true);
+    assert.equal(orient.length, 1, "a live reading does not re-attach");
+  } finally {
+    if (ctl) ctl.cancel();
+    for (const [key, old] of Object.entries(previous)) {
+      if (old === undefined) delete globalThis[key]; else globalThis[key] = old;
+    }
+  }
+});
+
 test("phone touch steering restores the remaining held arrow and ignores old-key repeats", async () => {
   let receive, closed;
   const transport = { status: "open", onMessage(f) { receive = f; }, onOpen() {}, onClose(f) { closed = f; }, send() { return true; }, pump() {}, close() { this.status = "closed"; if (closed) closed("local"); } };

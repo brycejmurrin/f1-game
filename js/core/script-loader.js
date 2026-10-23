@@ -182,7 +182,11 @@ function loadBackendScripts(files, edges, opts) {
           return false;
         }).then((ok) => {
           inflight.delete(src);
-          if (ok) { done.add(src); if (loaded) loaded.add(src); }
+          if (ok) {
+            done.add(src);
+            if (loaded) loaded.add(src);
+            try { if (opts && opts.onSettled) opts.onSettled(src); } catch (_) { /* boot progress hook */ }
+          }
           else { failed = true; if (!strict) done.add(src); }
           pump();
         });

@@ -134,6 +134,7 @@ const FULL = [
   // LAZY_*) as one frozen global, ApexRoster, read by js/game.js at eval.
   "js/roster.js",
   "js/core/script-loader.js", // ScriptLoader: dependency-aware runtime script injection
+  "js/core/menu-sheet-gate.js", // MenuSheetGate: defer menu prep / warm frames while Settings is open (D·IP2)
   "js/core/lazy-bundles.js", // LazyBundles: data, scenery, network and agent payload lifecycles
   "js/core/wake-lock.js", // RaceWakeLock: race wake-lock acquisition and release
   "js/render/shared/glx-facade.js", // stable GLX identity and eval-time mobile tier; no WebGL/GLSL parsed yet
@@ -643,6 +644,9 @@ const HARD_EDGES = [
   ["js/career/restore-points.js", "js/ui/save-health.js"],
   ["js/ui/save-health.js", "js/ui/select-screen.js"],
   ["js/core/script-loader.js", "js/game.js"],
+  ["js/core/menu-sheet-gate.js", "js/game.js"],
+  ["js/core/menu-sheet-gate.js", "js/garage/prebuild.js"],
+  ["js/core/menu-sheet-gate.js", "js/core/lazy-bundles.js"],
   ["js/core/lazy-bundles.js", "js/game.js"],
   ["js/core/wake-lock.js", "js/game.js"],
   ["js/race/session-stub.js", "js/game.js"], // stub globals before game.js create() wires

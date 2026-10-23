@@ -39,7 +39,7 @@ function descendants(node) {
   return [node, ...node.children.flatMap(descendants)];
 }
 
-function bootPicker() {
+function bootPicker({ windowName = "" } = {}) {
   const byId = {
     nogl: element("div", "nogl"),
     loading: element("div", "loading"),
@@ -55,6 +55,7 @@ function bootPicker() {
     getElementById: (id) => byId[id] || null,
     addEventListener() {},
   };
+  const win = { addEventListener() {}, name: windowName };
   const ctx = vm.createContext({
     document,
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
@@ -62,13 +63,13 @@ function bootPicker() {
     navigator: {},
     location: { reload() {} },
     queueMicrotask,
-    window: { addEventListener() {} },
+    window: win,
   });
   seedLog(ctx);
   seedClipboard(ctx);
   vm.runInContext(read("js/perf/renderer-picker.js"), ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
-  return { G, byId, hud, overlay, dataDialog, helpDialog, document };
+  return { G, byId, hud, overlay, dataDialog, helpDialog, document, win };
 }
 
 function dataHubButton(panel) {
@@ -102,6 +103,12 @@ test("showUnavailable panel-only uses registered defaults for Data Hub", async (
   assert.equal(ensureCalls, 1);
   assert.equal(openCalls, 1);
   assert.equal(data.disabled, false);
+});
+
+test("clearGfxBootRecovery clears window.name ctx-loss tally", () => {
+  const { G, win } = bootPicker({ windowName: "apex26.ctxLostReloads=3" });
+  G.clearGfxBootRecovery();
+  assert.equal(win.name, "");
 });
 
 test("showUnavailable Data Hub failure re-enables the button and shows status", async () => {

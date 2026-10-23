@@ -86,6 +86,7 @@ const NetScan = (function () {
       const wasLive = !stopped && !!stream;
       generation++;
       stopped = true;
+      detecting = false;   // an in-flight BarcodeDetector.detect() must not leave the gate stuck
       clearInterval(timer);
       timer = null;
       if (stream) {

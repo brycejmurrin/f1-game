@@ -4118,6 +4118,28 @@ test("the strike ledger is per backend: one death each on two backends retires n
   assert.equal(legacy.get("apex26.gfxProbeStrikes"), "three:1");
 });
 
+test("eval-time preload skips TLX on unset navigator.gpu hunch (#3536 Graphics unavailable)", () => {
+  const src = code("js/render/renderer-boot.js");
+  assert.ok(src.includes('unsetPick && !g.sure && g.pick === "three") return 0'),
+    "first boot must not prefetch TLX before the adapter probe commits");
+});
+
+test("GLX boot waits on progress, not one fixed wall clock (#3587)", () => {
+  const src = code("js/render/renderer-boot.js");
+  assert.ok(src.includes("withIdleProgressTimeout"));
+  assert.ok(src.includes("loadDeferredScripts"));
+  assert.ok(src.includes("onSettled"));
+  assert.ok(src.includes("GLX boot"));
+});
+
+test("Graphics unavailable RETRY and USE WEBGL2 scrub canary state (#3587)", () => {
+  const src = code("js/perf/renderer-picker.js");
+  assert.ok(src.includes("function clearGfxBootRecovery"));
+  assert.ok(/retry\.onclick[\s\S]*clearGfxBootRecovery\(\)/.test(src));
+  assert.ok(/webgl\.onclick[\s\S]*clearGfxBootRecovery\(\{ webgl2Pick: true \}\)/.test(src));
+  assert.ok(src.includes("gfxProbeStrikes"));
+});
+
 test("a pick that proves itself still pays off an older strike", async () => {
   const ls = new Map([["apex26.gfxBackend", "three"], ["apex26.gfxProbeStrikes", "1"]]);
   const rb = rendererBootRun(ls);
@@ -4327,6 +4349,11 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
     "TLX SAA must differentiate the pre-material snapshot");
   assert.match(post, /Math\.min\(4, cMax, dMax\)/,
     "desktop GLX MSAA starts from min(4, cMax, dMax); the preset cap (ULTRA 4×, else 2×) is applied AFTER, see the gfxPreset test");
+});
+
+test("GLX readbackLdrPixels skips software GL readPixels while #carsetup is visible", () => {
+  const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h) {", "function ", "readbackLdrPixels");
+  assert.ok(body.includes("PerfGov.softwareRaster()") && body.includes('getElementById("carsetup")') && body.includes("!cs.hidden) return false"));
 });
 
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
@@ -6189,15 +6216,25 @@ test("selector preparation waits for the player's hands before the build and the
     "the warm frames follow the paced car assets, on an idle menu, with the program warm requested first");
   assert.ok(fin.indexOf("_menuGate.warm = 2") < fin.indexOf("menuLampBake(current)"),
     "…and come BEFORE the lamp pre-bake: a RACE! tap mid-bake met cold shaders");
-  const idle = eval("(function(){ let _menuInputAt = 0; const MENU_IDLE_MS = 1200; let now = 0;" +
-    " const performance = { now: () => now }; const waits = [];" +
-    " const setTimeout = (fn, ms) => { waits.push(ms); now += ms; fn(); };" +
-    src.match(/async function menuIdle\(current\) \{[\s\S]*?\n\}/)[0] +
-    " return { menuIdle, waits, tap: (t) => { _menuInputAt = t; now = t; } }; })()");
-  idle.tap(5000);
-  assert.equal(await idle.menuIdle(() => true), true);
-  assert.deepEqual(idle.waits, [1200], "a tap pushes the build a full idle window out");
-  assert.equal(await idle.menuIdle(() => false), false, "a stale selection never builds");
+  // D·IP2: idle clock lives in MenuSheetGate; game.js keeps a thin menuIdle wrapper.
+  assert.ok(/MenuSheetGate\.idle\(/.test(src) && /async function menuIdle\(current\)/.test(src),
+    "menuIdle delegates through MenuSheetGate.idle");
+  const waits = [];
+  let now = 0, inputAt = 0;
+  const ctx = vm.createContext({
+    performance: { now: () => now, mark() {} },
+    setTimeout: (fn, ms) => { waits.push(ms); now += ms; fn(); return 1; },
+    document: { getElementById: () => null, activeElement: null },
+    Object, Promise, WeakMap,
+  });
+  vm.runInContext(read("js/core/menu-sheet-gate.js"), ctx, { filename: absSrc("js/core/menu-sheet-gate.js") });
+  const Gate = vm.runInContext("MenuSheetGate", ctx);
+  const menuIdle = (c) => Gate.idle(c, 1200, () => inputAt, () => new Promise((r) => { waits.push(32); now += 32; r(); }));
+  inputAt = 5000; now = 5000;
+  assert.equal(await menuIdle(() => true), true);
+  assert.deepEqual(waits, [1200], "a tap pushes the build a full idle window out");
+  waits.length = 0;
+  assert.equal(await menuIdle(() => false), false, "a stale selection never builds");
 });
 
 test("selector preparation rejects stale requests, reuses the world, and waits for compilation", async () => {

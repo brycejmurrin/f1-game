@@ -1,0 +1,1 @@
+Fixed: boot no longer prefetches the full TLX/WGX roster on a navigator.gpu hunch alone, so a SwiftShader GLX fallback after clearing site data is not starved into Graphics unavailable (#3536 follow-up).

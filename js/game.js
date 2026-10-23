@@ -2150,14 +2150,11 @@ for (const ev of ["pointerdown", "keydown"])
 // Resolves true once the menu has had MENU_IDLE_MS without a tap or key (false
 // if the selection moved on meanwhile): the build and the warm frames each hold
 // the main thread for seconds, so they wait for the player's hands to stop.
-const menuSlice = () => new Promise((r) => setTimeout(r, 32));
+// MenuSheetGate: yield while Settings is open so warmPrograms / garage prep
+// do not overlap the sheet (D·IP2). slice/idle live there — keeps game.js flat.
+const menuSlice = () => MenuSheetGate.slice();
 async function menuIdle(current) {
-  for (;;) {
-    const wait = MENU_IDLE_MS - (performance.now() - _menuInputAt);
-    if (wait <= 0) return current();
-    await new Promise((r) => setTimeout(r, wait));
-    if (!current()) return false;
-  }
+  return MenuSheetGate.idle(current, MENU_IDLE_MS, () => _menuInputAt, menuSlice);
 }
 // Dark sessions: bake the lamp pools in 8 ms slices now, so RACE!'s sync bake hits the cache (lamp-bake.js prebake).
 async function menuLampBake(current) {
@@ -3845,9 +3842,6 @@ function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
   if (!(idx >= 0)) return false;   // reduce-motion still builds then plays the garage-out before the card and the flyby
-  // JOIN the menu's in-flight build of this world (tile → SETTINGS → RACE!); claim owner before
-  // generation++ so the stepped build does not abort. When join is false (buildKey / PerfGov.tier
-  // mismatch), still await that abort — two loadTrackStepped calls race on `track` (Pages DAILY).
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
   const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = live;

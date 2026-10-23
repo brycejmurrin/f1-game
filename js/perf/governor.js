@@ -176,6 +176,45 @@ let _scaleFutile = false;
 // player changes preset (either changes what a step means).
 let _tierFutile = false;
 
+// THE §2au DISCRIMINATOR (docs/notes/PERF-FINDINGS.md §2au). The floor below does
+// what it was built to do — and that is the defect: on a genuinely slow phone
+// it converges on the sustained frame time within ~2.7 s, `degradeAt` becomes
+// unreachable, and only the ladder's FIRST rung is ever taken (live capture:
+// Suzuka, 32.2 fps, scale 0.5, tier 0, nothing shed). The floor cannot tell a
+// slow device from an externally capped one, but `_pendingVerify` already
+// can: an external cap is INDIFFERENT to render scale, a compute-bound frame
+// is not. So a verified step — a down-step the EMA felt, or an up-step it
+// refused — latches `_computeBound`: the floor rewinds to the lowest value
+// observed this race (`_floorMinMs`, the budget the device had when the
+// episode began) and may then only creep at FLOOR_UP_A_BOUND, so the ladder
+// keeps shedding rather than restoring until the rungs run out or stop
+// helping. A verified INDIFFERENCE — a down-step that bought nothing, big
+// probe included, or a tier probe rolled back — clears the latch, as do the
+// restore branch (the device meeting its pre-episode budget again), a frame
+// below the race's best cadence (a cheap moment: the budget is intact), and
+// race start. The capped-clock protection is untouched: a capped device never
+// produces the evidence that latches this, so its floor still converges on
+// the cap and it still settles at full quality.
+//
+// Two guards keep the held floor from overshooting. The ceiling's headroom
+// test in _ageClocks reads `_floorShadowMs` — a shadow floor that adapts at
+// the normal rates and never rewinds — because against the held floor a
+// plateaued EMA would read as "still missing" forever and a measured ceiling
+// could never age out. And a latched degrade step must clear the held
+// threshold by DEGRADE_OVER a second time: the margin over a stale minimum
+// is weaker evidence than the margin over a live floor, so it is asked for
+// twice — the same conservatism DEGRADE_CONFIRM applies in time, applied in
+// magnitude. A lap's heavy section, ~1 ms over the held threshold after two
+// cuts, is absorbed; a §2au device, several ms over it at every rung, is not.
+let _computeBound = false;
+let _floorMinMs = 16.7;
+let _floorShadowMs = 16.7;
+// Set by any frame below `_floorMinMs` (see tick): this episode has shown a
+// cheap moment, so its steps' verify evidence is scene variance as much as
+// device cost and the latch must not engage. Cleared when the episode ends —
+// the restore branch, or race start. A §2au episode never sets it.
+let _cheapSeen = false;
+
 // THE BUDGET IS DERIVED, NOT HARDCODED. "> 19 ms" only ever meant "slower than
 // a 60 Hz display can go" — it silently assumed the frame INTERVAL is a proxy
 // for frame COST, which is true only while the display is what you are
@@ -197,6 +236,7 @@ let _tierFutile = false;
 let _floorMs = 16.7;
 const FLOOR_DOWN_A = 0.3;
 const FLOOR_UP_A = 0.02;
+const FLOOR_UP_A_BOUND = 0.002;   // §2au: the creep rate while _computeBound holds (see below)
 // DEGRADE_OVER sits ABOVE the floor; RESTORE_WITHIN also sits above it, just
 // barely. That asymmetry is what lets the governor go both ways: a restore
 // threshold 4.2 ms BELOW the floor, `_frameEMA < _floorMs - 4.2`, is
@@ -381,6 +421,24 @@ let _userTier = 0;
 // asked for it.
 function _floorTier() { return Math.max(_perfTierFloor, _userTier); }
 
+// One derived-floor adaptation, shared by the fast path and the slow-run path
+// in tick(): pulled toward a faster sample at FLOOR_DOWN_A, crept toward a
+// slower one at FLOOR_UP_A — or at FLOOR_UP_A_BOUND while §2au evidence holds,
+// so a compute-bound device's budget cannot converge on its own slowness and
+// close the ladder. `_floorMinMs` tracks the race's lowest observed floor.
+function _floorStep(x) {
+  _floorShadowMs += (x - _floorShadowMs) * (x < _floorShadowMs ? FLOOR_DOWN_A : FLOOR_UP_A);
+  _floorMs += (x - _floorMs) * (x < _floorMs ? FLOOR_DOWN_A : (_computeBound ? FLOOR_UP_A_BOUND : FLOOR_UP_A));
+  if (_floorMs < _floorMinMs) _floorMinMs = _floorMs;
+}
+// §2au evidence arrived: judge the rest of this episode against the budget the
+// device had when it began, not the one its slowness has since negotiated.
+function _latchBound() {
+  if (_computeBound || _cheapSeen) return;
+  _computeBound = true;
+  if (_floorMinMs < _floorMs) _floorMs = _floorMinMs;
+}
+
 function init(gfx) {
   Log.info("game", "PerfGov.init");
   _gfx = gfx;
@@ -478,7 +536,8 @@ function sentinelArm(on) {
             _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS;
             _scaleMoves = 0; _degradeArm = 0;
             // A futile ladder measured in a DRY race must not block the next (wet) race's shed.
-            _tierFutile = false; _scaleFutile = false; } else _live = false;
+            _tierFutile = false; _scaleFutile = false;
+            _computeBound = false; _cheapSeen = false; _floorMinMs = 16.7; _floorShadowMs = 16.7; } else _live = false;   // §2au verdicts are race-local too
   if (!_gfx || !_gfx.isMobile) return;
   if (on) {
     _raceTicked = false;
@@ -558,7 +617,10 @@ function _ageClocks(stepMs) {
   // restore threshold restarts the two minutes, so a device that is merely
   // between heavy sections never probes its way back up.
   if (_scaleCap <= 1) {
-    if (_frameEMA < _floorMs + RESTORE_WITHIN) {
+    // §2au: headroom is judged against the SUSTAINED floor (the shadow, which
+    // never rewinds) — against the held floor a plateaued EMA would read as
+    // "still missing" forever and the ceiling could never age out.
+    if (_frameEMA < Math.max(_floorMs, _floorShadowMs) + RESTORE_WITHIN) {
       if ((_capProbeMs -= stepMs) <= 0) { _scaleCap = Infinity; _armCapProbe(); }
     } else _armCapProbe();
   }
@@ -616,7 +678,7 @@ function tick(dtMs, drawn) {
   if (!(dtMs > 0)) return;
   const stepMs = Number.isFinite(dtMs) ? Math.min(dtMs, COOL_STEP_MAX_MS) : 16.7;
   if (drawn === false) { _ageClocks(stepMs); return; }   // see _ageClocks
-  if (_drift && dtMs < SPIKE_MS && _drift.feed(dtMs) && driftStep()) _drift.stepped();
+  if (_drift && dtMs < SPIKE_MS && _drift.feed(dtMs) && (driftRenderRate() || driftStep())) _drift.stepped();
   // Before any smoothing: the opening window wants the raw frame, spikes and
   // all, because a spike in the first seconds IS the thing being reported.
   if (_openN < OPEN_FRAMES) {
@@ -624,14 +686,20 @@ function tick(dtMs, drawn) {
     if (dtMs > _openMax) _openMax = dtMs;
     if (dtMs > _floorMs * 2) _openSlow++;
   }
+  // §2au release: a frame below the race's best cadence (`_floorMinMs`) is a
+  // cheap moment — the device just demonstrated its budget is intact, so any
+  // compute-bound verdict from earlier steps is spent. A §2au device never
+  // shows one; a device whose slowness comes with scene-variance cheap
+  // frames clears the latch with them and is governed exactly as before.
+  if (dtMs < _floorMinMs) { _computeBound = false; _cheapSeen = true; }
   if (dtMs < SPIKE_MS) {
     _slowRun = 0;
     _frameEMA += (dtMs - _frameEMA) * 0.1;
-    _floorMs += (dtMs - _floorMs) * (dtMs < _floorMs ? FLOOR_DOWN_A : FLOOR_UP_A);
+    _floorStep(dtMs);
   } else if (++_slowRun >= SPIKE_RUN) {
     const s = Math.min(dtMs, SLOW_CAP);
     _frameEMA += (s - _frameEMA) * 0.1;
-    _floorMs += (s - _floorMs) * (s < _floorMs ? FLOOR_DOWN_A : FLOOR_UP_A);
+    _floorStep(s);
   }
   if (_ageClocks(stepMs)) return;
   if (_govCool > 0) { _govCool--; return; }   // a verify window: frames, so the EMA has its samples
@@ -697,13 +765,25 @@ function tick(dtMs, drawn) {
       // render-target reallocation each time. Back off: each refused climb
       // doubles the wait before the next try (10 s, 20 s, 40 s, … 2 min).
       if (v.up) { _sinceUp = -1; _downHold = _upBackoff; _upBackoff = Math.min(_upBackoff * 2, UP_BACKOFF_MAX); }
+      // §2au, the failure half: a refused CLIMB is scale-response evidence too
+      // (cost rose when resolution did), so it latches; a refused DOWN step
+      // that reaches here is final — the continuations above returned — and
+      // final indifference clears the latch. See _computeBound.
+      if (v.up) _latchBound(); else _computeBound = false;
       return;
     }
+    // §2au, the success half: a DOWN step the EMA felt is the compute-bound
+    // proof; an UP step it accepted means the headroom was real and the
+    // episode, if any, is over.
+    if (v.up) _computeBound = false; else _latchBound();
     // A climb that passed its verify is still ON PROBATION: the survival clock
     // above, not this one evaluation, is what restores the backoff.
   }
 
   const degradeAt = _floorMs + DEGRADE_OVER, restoreAt = _floorMs + RESTORE_WITHIN;
+  // §2au guard (see _computeBound): a latched degrade step must clear the held
+  // threshold by the margin twice.
+  const boundOver = _computeBound ? DEGRADE_OVER : 0;
   const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
   // ONE SPIKE IS NOT A TREND. Every scale change reallocates all HDR/bloom
   // targets, and on TLX tlx-post.js disposes each texture and the depth texture
@@ -733,7 +813,7 @@ function tick(dtMs, drawn) {
   // most one reallocation per race instead of dozens.
   if (_frameEMA <= degradeAt) _degradeArm = 0;
   else if (_scaleMoves > 0 && ++_degradeArm < DEGRADE_CONFIRM) return;
-  if (_frameEMA > degradeAt) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
+  if (_frameEMA > degradeAt + boundOver) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
     // With the scale PINNED (_autoRes false) the ladder is the only lever left,
     // so fall straight through to shedding instead of skipping the evaluation.
     // THE RENDERER'S BOOLEAN IS THE "SCALE LEVER EXHAUSTED" SIGNAL — ask it,
@@ -796,6 +876,8 @@ function tick(dtMs, drawn) {
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
     _scaleFutile = false;   // headroom is back — nothing about the old verdict still applies
     _tierFutile = false;
+    _computeBound = false;   // §2au: the EMA is back within RESTORE_WITHIN of the (rewound) floor — the episode is over
+    _cheapSeen = false;
     // The up-step is VERIFIED like the down-step. Restoring is a guess that the
     // headroom is real, and the same _pendingVerify machinery that reverts a
     // useless cut reverts a premature restore one evaluation later — without
@@ -877,6 +959,26 @@ function tick(dtMs, drawn) {
 let _drift = null;
 function setThermalDrift(on) {
   _drift = on && typeof ThermalDrift !== "undefined" ? ThermalDrift.drift() : null;
+}
+// Thermal drift, first resort on a phone: cap the PRESENTED rate before
+// trading quality. RenderRate's 45 tier draws 3 of every 4 vsyncs at
+// 60 Hz — a quarter less work per second to sustain — while every drawn
+// frame keeps full quality; the governor rungs (driftStep) trade pixels
+// and features instead. Only an UNDECIDED player is moved: mode "auto"
+// means no explicit DISPLAY choice, and setMode is session-only
+// (js/perf/render-rate.js: persisting is the caller's job) — a hot
+// afternoon must not rewrite the stored preference, so the next boot
+// re-reads the store and starts at "auto" again. An explicit mode
+// (off / half / 45 / 30) is the player's word and is never overridden,
+// and desktops keep the governor rung: render-rate tiers are a mobile
+// facility (state().mobile). Once this engages, the mode is no longer
+// "auto", so a later drift step in the same session falls through to
+// driftStep — the response still escalates, one mechanism per step.
+function driftRenderRate() {
+  if (typeof RenderRate === "undefined") return false;
+  const st = RenderRate.state();
+  if (!st.mobile || st.mode !== "auto") return false;
+  return RenderRate.setMode("45");
 }
 function driftStep() {
   if (_pendingVerify || _govCoolMs > 0 || _govCool > 0) return false;   // mid-verify or cooling: ask again next window
@@ -999,6 +1101,10 @@ return {
   // evidence.
   scaleFutile: () => _scaleFutile,
   tierFutile: () => _tierFutile,
+  // §2au's latch, inspectable for the same reason as the two above: true means
+  // a step's verify proved this device compute-bound and the floor is being
+  // held at the race's observed minimum while the ladder finishes its work.
+  computeBound: () => _computeBound,
   autoRes: () => _autoRes,
   // Drop any unverified SCALE step on the way in or out of manual resolution.
   // _pendingVerify holds {kind:"scale", prev} and the next evaluation would

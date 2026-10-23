@@ -25,6 +25,22 @@ export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
 export const METRICS_BRANCH = "metrics";
 const API = `https://api.github.com/repos/${REPO}`;
 
+/** Jobs page size. `jobs?per_page=100` 502s on large runs (flake-tally #2233;
+ *  process-dashboard run 39724286675 / 39578940130). Page at 30 like flake-tally. */
+export const JOBS_PAGE = 30;
+export const MAX_JOB_PAGES = 12;
+/** GitHub REST hiccups that deserve a bounded retry (not 404 / 401). */
+const TRANSIENT_HTTP = new Set([429, 502, 503, 504]);
+
+let _fetch = proxyFetch;
+let _delay = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
+
+/** @param {{ fetch?: typeof fetch, delay?: (ms: number) => Promise<void> }} [hooks] */
+export function setProcessDashboardTestHooks(hooks = {}) {
+  _fetch = hooks.fetch || proxyFetch;
+  _delay = hooks.delay || ((ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve()));
+}
+
 /** Families whose presence (a job that actually ran) marks a full-tier ci.yml run. */
 export const FULL_FAMILIES = [
   "Smoke (page boots, __apex responds)",
@@ -418,20 +434,48 @@ export function formatMarkdown(dash, { baseline = false } = {}) {
   return lines.join("\n");
 }
 
-async function ghJson(url, token) {
-  const res = await proxyFetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      "User-Agent": "apex-process-dashboard",
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`${res.status} ${url} ${body.slice(0, 200)}`);
+/**
+ * GET JSON with bounded retries on 429/5xx (process-dashboard 2026-10-21:
+ * bare `jobs?per_page=100` answered 502 and killed the nightly with no retry).
+ * @param {string} url
+ * @param {string} token
+ * @param {{ retries?: number }} [opts]
+ */
+export async function ghJson(url, token, { retries = 3 } = {}) {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "apex-process-dashboard",
+  };
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await _fetch(url, { headers });
+      if (!res.ok) {
+        const body = await res.text();
+        const err = new Error(`${res.status} ${url} ${body.slice(0, 200)}`);
+        if (TRANSIENT_HTTP.has(res.status) && attempt < retries) {
+          lastErr = err;
+          await _delay(Math.min(8_000, 400 * 2 ** attempt));
+          continue;
+        }
+        throw err;
+      }
+      return res.json();
+    } catch (err) {
+      lastErr = err;
+      const status = Number(/^(\d{3})\b/.exec(err?.message || "")?.[1] || 0);
+      const transient = TRANSIENT_HTTP.has(status)
+        || /fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket/i.test(String(err?.message || err));
+      if (transient && attempt < retries) {
+        await _delay(Math.min(8_000, 400 * 2 ** attempt));
+        continue;
+      }
+      throw err;
+    }
   }
-  return res.json();
+  throw lastErr;
 }
 
 function slimRun(r) {
@@ -481,14 +525,19 @@ async function listRuns(token, workflow, { limit, branch }) {
   return runs;
 }
 
-async function attachJobs(token, runs) {
+/** Attach slim jobs to each run, paging JOBS_PAGE at a time (#2233). */
+export async function attachJobs(token, runs) {
   for (const run of runs) {
     const jobs = [];
-    for (let page = 1; page <= 5; page++) {
-      const data = await ghJson(`${API}/actions/runs/${run.id}/jobs?per_page=100&page=${page}`, token);
+    for (let page = 1; page <= MAX_JOB_PAGES; page++) {
+      const data = await ghJson(
+        `${API}/actions/runs/${run.id}/jobs?per_page=${JOBS_PAGE}&page=${page}`,
+        token,
+      );
       const batch = data.jobs || [];
       for (const j of batch) jobs.push(slimJob(j));
-      if (batch.length < 100) break;
+      if (batch.length < JOBS_PAGE) break;
+      if (data.total_count != null && jobs.length >= data.total_count) break;
     }
     run.jobs = jobs;
   }

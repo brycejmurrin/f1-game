@@ -1,0 +1,1 @@
+Fixed: boot GLX deferred load uses idle progress timeouts and onSettled heartbeats so slow SwiftShader is not cut off by one wall clock; `#nogl` RETRY and USE WEBGL2 clear probe, strike, session latches, and `window.name` ctx-loss tally (#3587).

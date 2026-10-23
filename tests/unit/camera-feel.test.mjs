@@ -189,6 +189,19 @@ test("buzz / free-look scope tables stay aligned", () => {
   for (const sp of [0, 0.5, 1]) assert.equal(CamFeel.modeFov("helmet", sp, 1), CamFeel.modeFov("cockpit", sp, 1));
 });
 
+test("helmet drive rates match cockpit so a mode switch does not retune the lens", () => {
+  const { CamFeel } = loadCamFeel();
+  const att = { yawRateCur: 0.4, baPitch: 0.02 };
+  const extra = { dt: 0.05, att, slipLat: 2 };
+  // Fresh follows from the same seed: if helmet fell through to the generic
+  // {sp:3…} defaults, its FOV after one frame would diverge from cockpit.
+  CamFeel.resetFollow();
+  const cockpit = CamFeel.drive("cockpit", [0, 1, 0], [0, 1, 10], 64, extra, 0.7);
+  CamFeel.resetFollow();
+  const helmet = CamFeel.drive("helmet", [0, 1, 0], [0, 1, 10], 64, extra, 0.7);
+  assert.equal(helmet, cockpit, "helmet must share cockpit DRIVE_RESPONSE rates");
+});
+
 test("speed vignette defaults off and persists", () => {
   const { CamFeel, store } = loadCamFeel();
   assert.equal(CamFeel.speedVignette(), false);
