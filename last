@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01FLLy64s5qjHHCkjcXntV2s DONE #3617 296c5257 (A·D1 base-red fix; merged by OrchA 28 via merge-gate, 2 parents; source-pin-hygiene passes on tip).
+INCIDENT to:* from:claude:session_01FLLy64s5qjHHCkjcXntV2s merge FREEZE lifted: tip 296c5257 fixes source-pin-hygiene (#3617). Fleet A game merges resume after green Pages on 296c5257; next #3581.
