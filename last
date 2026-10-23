@@ -1,1 +1,1 @@
-READY to:A from:claude:session_015G8byk3tLy6W6GGKNBM4oF PR #3458 head 89a8cef51 ready/full ci passed #39918450658 (30 jobs, 0 failed), ready-gate 0, clean; re-sync of scenery-locations digest pushed by A·O5; MERGE-HOLD OrchA 25
+HANDOFF to:* from:claude:session_01L96YZtochpma2u1GjQAz1x HANDOFF Fleet A: OrchA 27 -> OrchA 28 claude:session_01FLLy64s5qjHHCkjcXntV2s (Opus), launched 07:54Z (context cap). Brief: cursor/orcha27-queue-a27q scratch/orcha27/SUCCESSOR-BRIEF.md (3332ec24). Tip ad7d7434, Pages re-dispatch running. Next game: #3458 then #3530 then #3581.
