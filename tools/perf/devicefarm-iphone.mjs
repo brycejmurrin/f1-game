@@ -69,7 +69,8 @@ const TOUCH_GO = `
   const went = __apex.go();
   return { ready: true, went, state: __apex.info().state };`;
 const TOUCH_ARM = `
-  const P = window.__tbp = { raf: [], long: [], ev: [] };
+  const P = window.__tbp = { raf: [], long: [], ev: [], t0: performance.now() };
+  try { PerfSpans.on(true); PerfSpans.reset(); } catch (_) {}
   let last = performance.now();
   (function tick(t) { P.raf.push([t, t - last]); last = t; requestAnimationFrame(tick); })(last);
   try { new PerformanceObserver((l) => { for (const e of l.getEntries()) P.long.push([e.startTime, e.duration]); }).observe({ type: "longtask" }); } catch (_) {}
@@ -77,12 +78,13 @@ const TOUCH_ARM = `
     window.addEventListener(type, (e) => { const t = e.target, p = e.changedTouches ? e.changedTouches[0] : e;
       P.ev.push([type, (t && t.id) || (t && t.tagName) || "?", performance.now(), p ? Math.round(p.clientX) : null, p ? Math.round(p.clientY) : null]); }, { capture: true, passive: true });
   const rect = (id) => { const el = document.getElementById(id); if (!el || el.hidden) return null; const r = el.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; };
-  return { from: rect(window.__tbpFrom || "btn-throttle"), to: rect(window.__tbpTo || "btn-boost"), w: innerWidth, h: innerHeight, dpr: devicePixelRatio,
+  return { from: rect(window.__tbpFrom || "btn-throttle"), to: String(window.__tbpTo || "btn-boost").split(",").map(rect), w: innerWidth, h: innerHeight, dpr: devicePixelRatio,
     body: document.body.className, api: (() => { try { return RendererPicker.liveThreeApi(); } catch (_) { return null; } })() };`;
 const TOUCH_READ = (win, from, to) => `
   const P = window.__tbp, WIN = ${win};
-  const downs = (id) => P.ev.filter((e) => e[0] === "pointerdown" && e[1] === id).map((e) => e[2]);
-  const taps = downs(${JSON.stringify(to)}), ctrls = downs(${JSON.stringify(from)}).map((t) => t + 600);
+  // One pointerdown per tap: WebKit has delivered two within a few ms for one native tap (run 3).
+  const downs = (ids) => { const out = []; for (const e of P.ev) if (e[0] === "pointerdown" && ids.includes(e[1]) && !(out.length && e[2] - out[out.length - 1][1] < 50)) out.push([e[1], e[2]]); return out; };
+  const tapRows = downs(${JSON.stringify(to.split(","))}), taps = tapRows.map((r) => r[1]), ctrls = downs([${JSON.stringify(from)}]).map((r) => r[1] + 600);
   const pct = (a, q) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(q * (s.length - 1) + 0.5))]; };
   const stat = (starts) => { const f = P.raf.filter(([t]) => starts.some((m) => t >= m && t < m + WIN)).map(([, d]) => d);
     const lt = P.long.filter(([t]) => starts.some((m) => t >= m && t < m + WIN));
@@ -91,7 +93,10 @@ const TOUCH_READ = (win, from, to) => `
   // Lift → BOOST pointerdown delivery latency as the page saw it (touchend of GAS to pointerdown of BOOST).
   let ps = null; try { ps = __apex.physState(); } catch (_) {}
   return { taps: taps.length, ctrls: ctrls.length, tap: stat(taps), ctrl: stat(ctrls), speed: ps && ps.speed, boostOn: ps && ps.boostOn,
-    perTap: taps.map((m) => { const f = P.raf.filter(([t]) => t >= m && t < m + WIN).map(([, d]) => d); return +(f.length ? Math.max(...f) : 0).toFixed(1); }),
+    perTap: tapRows.map(([id, m]) => { const f = P.raf.filter(([t]) => t >= m && t < m + WIN).map(([, d]) => d); return id + ":" + (f.length ? Math.max(...f) : 0).toFixed(0); }),
+    spans: (() => { try { const r = PerfSpans.stats(); const o = {}; for (const k in r) o[k] = { max: +(+r[k].max).toFixed(1), p95: r[k].p95 != null ? +(+r[k].p95).toFixed(1) : null }; return o; } catch (e) { return String(e); } })(),
+    logs: (() => { try { return (__apex.logs() || []).filter((x) => x && x.t >= P.t0).slice(0, 60).map((x) => Math.round(x.t - P.t0) + " " + x.ns + " " + String(x.msg).slice(0, 120)); } catch (_) { return null; } })(),
+    tapsAt: tapRows.map(([id, m]) => id + "@" + Math.round(m - P.t0)),
     ev: P.ev.length, evHead: P.ev.slice(0, 6).map((e) => [e[0], e[1], e[3], e[4]]) };`;
 
 // Page-side probes. Each is a function body for WebDriver execute/sync (returns JSON-able data).
@@ -156,7 +161,7 @@ async function touchRun(base, sid, out, n) {
   await exec(base, sid, `window.__tbpFrom = ${JSON.stringify(from)}; window.__tbpTo = ${JSON.stringify(to)}; return true;`);
   r.arm = await exec(base, sid, TOUCH_ARM);
   log("touch arm " + JSON.stringify(r.arm));
-  if (!r.arm.from || !r.arm.to) throw new Error("touch controls not on screen: " + JSON.stringify(r.arm));
+  if (!r.arm.from || !r.arm.to.length || r.arm.to.some((p) => !p)) throw new Error("touch controls not on screen: " + JSON.stringify(r.arm));
   const web = wd(base, "GET", `/session/${sid}/context`);
   wd(base, "POST", `/session/${sid}/context`, { name: "NATIVE_APP" });
   try {
@@ -174,8 +179,10 @@ async function touchRun(base, sid, out, n) {
     const pt = (p) => ({ x: Math.round(p.x * k), y: Math.round(oy + p.y * k) });
     r.map = { window: win, webview: wr, k, oy };
     log("touch map " + JSON.stringify(r.map));
-    const a = pt(r.arm.from), b = pt(r.arm.to);
+    // --to a,b,c: cycle c taps the c-th id (the last repeats), so a first tap on AERO can precede the first BOOST.
+    const a = pt(r.arm.from), bs = r.arm.to.map(pt);
     for (let c = 0; c < n; c++) {
+      const b = bs[Math.min(c, bs.length - 1)];
       wd(base, "POST", `/session/${sid}/actions`, { actions: [{ type: "pointer", id: "finger", parameters: { pointerType: "touch" }, actions: [
         { type: "pointerMove", duration: 0, x: a.x, y: a.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 1500 },
         { type: "pointerUp", button: 0 }, { type: "pause", duration: 60 },
