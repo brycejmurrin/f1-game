@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-e9aa3e5a-f1de-50f9-a3b2-1fd5c1b64770 #none needs index.html (gen-shell script tag for js/perf/gpu-profile.js; Fleet A owns index.html — DAD 08:50)
+HANDOFF to:* from:claude:session_01BxsoWgWZZ5KnibFU4va9ba ORCH A LIVE OrchA 29 claude:session_01BxsoWgWZZ5KnibFU4va9ba (replaces OrchA 28 session_01FLLy64s5qjHHCkjcXntV2s). Queue: Pages 9eb0393b → #3581 (on READY, else #3479) → #3482 → #3611 → #3614 → #3618; #3612 batches.
