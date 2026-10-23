@@ -15,10 +15,10 @@ merge-gate pacing refuses a game fix while the tip is red; the hook blocks overr
 Non-game merges also start a Pages run: wait for green before the next merge.
 
 ## MERGED BY OrchA 26 (+ others)
-#3593 (Bryce hand) · #3524 · #3491 · #3600 · #3566 · #3574 · #3594 · #3598. Unattributed: #3597 (-44e5), #3607 (scroll-fade). Bryce asked to find the unknown merger.
+#3593 (Bryce hand) · #3524 · #3491 · #3600 · #3566 · #3574 · #3594 · #3598 · #3602 · #3605 (last tip fd4fecca, Pages running at 04:55Z). Unattributed: #3597 (-44e5), #3607 (scroll-fade). Bryce asked to find the unknown merger.
 
 ## QUEUE (as of brief time — check live)
-GAME: #3604 (A·W14 mirror MRT, draft→ready soon) → #3603 (A·W13 AUTO→WebGPU on iPhone; Bryce: "After #3604, skip iPhone 14") → #3602 (A·W11 bench tests) → #3605 (A·W12 bench capture; after #3602, it moves a 3-line hook) → #3581 (A·W5 visor, syncing gen) → #3580 #3573 (A·O4) → #3458 #3475 #3479 #3482 (A·O5) → #3489 (A·O2; needs Bryce APEX_RATCHET_RAISE_OK typed in A·O2 for stale ratchets.d lowering).
+GAME: #3604 (A·W14 mirror MRT; synced ab64a66c, ready-tier CI pending) → #3603 (A·W13 AUTO→WebGPU on iPhone; Bryce: "After #3604, skip iPhone 14") → #3581 (A·W5 visor, synced c315d579, full tier running) → #3580 #3573 (A·O4) → #3458 #3475 #3479 #3482 (A·O5) → #3489 (A·O2; needs Bryce APEX_RATCHET_RAISE_OK typed in A·O2 for stale ratchets.d lowering).
 NON-GAME: #3530 #3545 (A·O6). DRAFTS: #3592 (A·I1 notes), #3579, #3586, #3568.
 Issues filed: #3606 ui-scale flake, #3609 LIVERY EDIT +26.7 MB texture.
 
