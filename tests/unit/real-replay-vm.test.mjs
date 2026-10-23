@@ -196,13 +196,14 @@ test("JUMP IN samples published trace time when a timing gap separates it from t
     // lap durations used to calibrate the simulated field's pace.
     for (const d of script.drivers) d.lapStart = d.lapStart.map((t, i) => t != null && i >= 2 ? t + 45 : t);
     const at = RR.fieldAt(script, 3);
-    assert.ok(at.traceT0 - at.t0 > 40, "the fixture exercises different position and pace clocks");
+    const published = Math.min(...script.drivers.map(d => d.lapStart[2]).filter(Number.isFinite));
+    assert.ok(published - at.t0 > 40, "the fixture exercises different position and pace clocks");
     const traces = { frame: "track", cars: { 63: line(-14, 50, 0.5, -5, 400) } };
     RR.launch(script, { seat: "HAM", traces, startLap: 3 });
     await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
     g.step(2);
     const car = G.cars.find((c) => c.code === "RUS");
-    const want = -14 + 50 * at.traceT0, old = -14 + 50 * at.t0;
+    const want = -14 + 50 * published, old = -14 + 50 * at.t0;
     assert.ok(Math.abs(car.prog - want) < 60, "the car is at the published instant: " + car.prog + " vs " + want);
     assert.ok(Math.abs(car.prog - old) > 1900, "the synthetic clock would drop the car over two kilometres early");
     assert.equal(car.lap, Math.floor(want / G.track.total) + 1);
