@@ -315,12 +315,13 @@ const BenchRun = (function () {
   // The counters tests/specs/garage-livery-churn.spec.js reads (TLX only; another renderer reports nulls).
   function memSample() {
     const o = { textures: null, geometries: null, texMB: null, geoLive: null, sticky: null, flapRuns: null, flapSets: null };
+    const T = (_G && _G.gfx && _G.gfx.__tlx) || (typeof GLX !== "undefined" ? GLX.__tlx : null);   // the bound TLX, as experience.js reads it
     try {
-      const m = GLX.__tlx.memState(), k = m.geoKinds || {};
+      const m = T.memState(), k = m.geoKinds || {};
       Object.assign(o, { textures: m.rTex, geometries: m.rGeo, geoLive: m.geoLive, sticky: (k.chunk || 0) + (k.carSh || 0) + (k.tex || 0),
         texMB: m.resources && m.resources.texturesSize != null ? r2(m.resources.texturesSize / 1048576) : null });
     } catch (_) { /* not TLX */ }
-    try { o.flapRuns = GLX.__tlx.coState().runs; } catch (_) { /* not TLX */ }
+    try { o.flapRuns = T.coState().runs; } catch (_) { /* not TLX */ }
     try { o.flapSets = CarMesh.flapState().sets; } catch (_) { /* no flap cache */ }
     return o;
   }
@@ -353,10 +354,16 @@ const BenchRun = (function () {
       const r = Array.from(D.querySelectorAll(".cs-liv-ed-row")).find((x) => (x.querySelector(".cs-liv-ed-lbl") || {}).textContent === label);
       const b = r && Array.from(r.querySelectorAll("button")).filter((x) => !x.disabled)[i]; if (!b) return false; b.click(); return true;
     };
+    // An adjustable SPINE TOP design (LiveryDesign.PATTERNS), so DESIGN WIDTH below is live.
+    const pattern = () => {
+      const ids = (typeof LiveryDesign !== "undefined" && LiveryDesign.PATTERNS) || [];
+      const b = qa('[data-cs-pill^="spineLogo:"]').find((x) => !x.classList.contains("active") && ids.includes(x.dataset.csPill.slice(10)));
+      if (!b) return false; b.click(); return true;
+    };
     // A part STYLE row starts on FITTED: its next pill is a style.
     const style = () => { const f = q('[data-cs-pill$=":fitted"]'); const b = f && f.nextElementSibling; if (!b || b.disabled) return false; b.click(); return true; };
     const edits = [["primary colour", set("c1", "#1a6bd8")], ["accent colour", set("c2", "#f2c014")], ["colour chip", tap("[data-cs-colour]", 1)],
-      ["palette", rowBtn("PALETTE", 1)], ["finish", tap("[data-cs-finish]", 1)], ["pattern", tap('[data-cs-pill^="spineLogo:"]', 2)],
+      ["palette", rowBtn("PALETTE", 1)], ["finish", tap("[data-cs-finish]", 1)], ["pattern", pattern],
       ["pattern width", set("patternWidth", 70)], ["number font", tap('[data-cs-pill^="numFont:"]', 0)], ["sponsors", tap('[data-cs-pill^="sponsors:"]', 0)],
       ["body style", tap('[data-cs-pill^="bodyStyle:"]', 0)], ["part style", style]];
     // Then the accent dragged through colours never seen before: the churn tests/specs/garage-livery-churn.spec.js pins.
