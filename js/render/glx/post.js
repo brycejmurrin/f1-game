@@ -749,7 +749,7 @@ const GLXPost = (function () {
         gl.bindTexture(gl.TEXTURE_2D, sceneTex);
         gl.uniform1i(brightU.uScene, 0);
         gl.uniform1f(brightU.uThreshold, threshold);
-        gl.uniform1f(brightU.uExposure, (opts && opts.exposure !== undefined ? opts.exposure : 1.0) * swExposureK);
+        gl.uniform1f(brightU.uExposure, opts && opts.exposure !== undefined ? opts.exposure : 1.0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
 
         // 2) mip-chain bloom: progressive 13-tap downsample to the smallest level,
@@ -837,10 +837,10 @@ const GLXPost = (function () {
       // Project sun direction to screen UV for lens flare (`sun` from above).
       _sunUV[0] = sun.visible ? sun.ndcx * 0.5 + 0.5 : -2;
       _sunUV[1] = sun.visible ? sun.ndcy * 0.5 + 0.5 : -2;
-      const flareStr = sun.flare, sunShaft = sun.shaft;
+      const flareStr = sun.flare * swFlareK, sunShaft = sun.shaft;
       gl.uniform2fv(compU.uSunUV, _sunUV);
       // LENS FLARE knob scales the whole sun/lamp flare + ghost stack (def 1).
-      gl.uniform1f(compU.uFlareStr, flareStr * flareMul * swFlareK);
+      gl.uniform1f(compU.uFlareStr, flareStr * flareMul);
       const exposure = opts && opts.exposure !== undefined ? opts.exposure : 1.0;
       gl.uniform1f(compU.uExposure, exposure * swExposureK);
       // SCREEN SUN-SHAFT knob scales the radial crepuscular pass (def 1 = as-shipped).

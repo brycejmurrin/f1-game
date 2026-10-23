@@ -4372,8 +4372,9 @@ test("GLX software GL knees when lowest rung sheds bloom (tier 4 stall watchdog)
   assert.ok(race.includes("po.bloom = PerfGov.autoTier() >= 4 ? 0 :"));
   const gar = read("js/garage/setup-camera.js");
   assert.ok(gar.includes("PerfGov.autoTier() >= 4") && gar.includes("_presentOpts.bloom = shed ? 0 :"));
-  const glow = span(read("js/render/glx/glx.js"), "function drawGlow(lights, str) {", "function ", "drawGlow");
-  assert.ok(glow.includes("PerfGov.softwareRaster()") && glow.includes("0.22 : 0.55") && glow.includes("autoTier() >= 4"));
+  const glow = read("js/render/shared/post-common.js");
+  assert.ok(glow.includes("softwareGlowScale") && glow.includes("PerfGov.softwareRaster()") && glow.includes("0.22 : 0.55") && glow.includes("autoTier() >= 4"));
+  assert.ok(gameUnionCode().includes("PostCommon.softwareGlowScale(LT.glareStr)"));
 });
 
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {

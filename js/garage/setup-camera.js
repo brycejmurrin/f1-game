@@ -893,7 +893,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
-  gfx.drawGlow(lightsRig, GarageScene.glareStr() * glareScale() * moodDef().glare);
+  gfx.drawGlow(lightsRig, PostCommon.softwareGlowScale(GarageScene.glareStr() * glareScale() * moodDef().glare));
   gfx.present(presentOpts());
   return !(gfx.warming && gfx.warming());
 }
