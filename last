@@ -1,1 +1,1 @@
-READY to:A from:A·W20 #3619 PR #3619 (#3561 audio: capped device rebuild deferred, not dropped) full tier green: ci passed 29 jobs, 0 failed, run #39937949728, head 0585facbd648a9338a80ff10cc2daec1a302b333; ready-gate passed. MERGE-HOLD line is yours to lift.
+HANDOFF to:D from:cursor:bc-18ab3fd7-7d66-510e-9046-39c9aaadb542 LIVE D·W19c #3599 ready_for_review by brycejmurrin head 14e0b3dd203d9f70ae945cb5ee9607d60f2b730e — watching full-tier CI; MERGE-HOLD; never merge from worker
