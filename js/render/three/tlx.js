@@ -218,6 +218,9 @@ const TLX = (function () {
       //   AUTO + no navigator.gpu         → three WebGL2
       //   AUTO + session tlxAutoGL="1"    → three WebGL2 (this tab already
       //                                     lost WebGPU; stay on TLX)
+      //   AUTO + WebKit + local tlxWebKitGL → three WebGL2 (this DEVICE
+      //                                     already failed WebGPU; RESET
+      //                                     RENDERER clears it)
       //   AUTO + gpu present              → try WebGPU (lite caps on phone /
       //                                     WebKit / software). If init()
       //                                     throws before #game is claimed,
@@ -235,6 +238,19 @@ const TLX = (function () {
       const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
       const isWebKit = /CriOS|FxiOS|EdgiOS/.test(ua) ||
         (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
+      // The per-DEVICE kill switch for WebKit AUTO. tlxAutoGL above is per TAB
+      // (sessionStorage), so an iPhone whose WebGPU fails would retry it on
+      // every new tab; this localStorage marker sends AUTO on WebKit straight
+      // to three WebGL2 once any detected WebGPU failure (init throw, device
+      // lost x3, early GPU errors, a refused tab) has happened here. The value
+      // is the reason; RESET RENDERER (renderer-picker.js) removes it.
+      const _webkitStayGL = isWebKit && (function () {
+        try { return !!localStorage.getItem("apex26.tlxWebKitGL"); } catch (_) { return false; }
+      })();
+      const _latchWebKitGL = (why) => {
+        if (!isWebKit || _glPin === "0" || _glPin === "1") return;
+        try { localStorage.setItem("apex26.tlxWebKitGL", String(why).slice(0, 200)); } catch (_) { /* the tab latch still holds */ }
+      };
       // Software WebGPU never composites a visible swapchain — AUTO keeps
       // three's WebGPU backend and 2D-blits the LDR target (same as WGX)
       // until this tab proves WebGPU cannot stay up. mappedAtCreation
@@ -407,13 +423,16 @@ const TLX = (function () {
       // An explicit WebGPU pin (`_glPin === "0"`) is still honoured — the clause
       // already excludes it, and a pin is a user override. backendState()
       // reports canvasAlpha so that case is diagnosable rather than silent.
-      // WEBKIT (Safari, every iOS browser) TAKES three's WebGL2 BACKEND ON AUTO:
-      // three-WebGPU rendered wrongly on an iPhone (missing bodywork, then sky
-      // only) with ZERO reported GPU or WGSL errors, while three's WebGL2 backend
-      // on the same phone is known-good. A pin of "0" (THREE PATH: WEBGPU) still
-      // forces WebGPU; backendState().pin/forceWebGL say which one bound.
+      // WEBKIT (Safari, every iOS browser) TRIES three's WebGPU BACKEND ON AUTO
+      // (2026-10-23, Bryce's call). 2026-09-03 it was forced to WebGL2: two
+      // deploys rendered three-WebGPU wrongly on an iPhone (missing bodywork,
+      // then sky only) with zero GPU or WGSL errors. Device Farm on iOS 27.0
+      // (PR #3598, its Device Farm note §6): WebGPU holds 60
+      // fps on an iPhone 14 where WebGL2 drops to 42, no WebGPU errors. Every
+      // fallback stays: no navigator.gpu (iOS <= 18) or no WebGPU context →
+      // WebGL2, and a detected failure latches _webkitStayGL for the device.
       let forceWebGL = _glPin === "1"
-        || (_glPin !== "0" && (!_gpuCanvasOk || _autoStayGL || isWebKit));
+        || (_glPin !== "0" && (!_gpuCanvasOk || _autoStayGL || _webkitStayGL));
       const _liteGpu = !!(isMobile || isWebKit || _softAdapter);
 
       // SCREENSHOTS (`apex26.wgxCapture`, same key as WGX): session then local.
@@ -690,6 +709,7 @@ const TLX = (function () {
         // present() — so #game is still unbound and AUTO can retry WebGL2.
         if (_glPin !== "0" && _glPin !== "1" && !forceWebGL) {
           try { Log.warn("gfx", "[TLX] AUTO WebGPU init failed — three WebGL2", e); } catch (_) { /* Log optional */ }
+          _latchWebKitGL("WebGPU init failed: " + ((e && e.message) || e));
           forceWebGL = true;
           const boot = await bootRenderer(true);
           renderer = boot.renderer;
@@ -1074,6 +1094,7 @@ const TLX = (function () {
             const autoPath = _glPin !== "0" && _glPin !== "1";
             if (autoPath) {
               try { sessionStorage.setItem("apex26.tlxAutoGL", "1"); } catch (_) { /* next boot still tries WebGPU */ }
+              _latchWebKitGL("context lost x" + n);
               try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — AUTO stayed on three WebGL2"); } catch (_) { /* backendState still names the path */ }
             } else {
               try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — tab fell back to WebGL2"); } catch (_) { /* blocked storage: the label still flips via gfxBound */ }
@@ -4429,6 +4450,7 @@ const TLX = (function () {
       const refuseTab = () => {
         const toGlx = _glPin === "0" || _glPin === "1" || forceWebGL || _autoStayGL;
         try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
+        if (!toGlx) _latchWebKitGL("first render refused");
         try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
         let n;
         try {
@@ -6083,6 +6105,7 @@ const TLX = (function () {
               if (n <= 2) {
                 sessionStorage.setItem(rk, String(n));
                 sessionStorage.setItem("apex26.tlxAutoGL", "1");
+                _latchWebKitGL("GPU errors in the first " + _presentN + " frames");
                 try { localStorage.setItem("apex26.gfxTlxFail", "WebGPU rejected work in the first " + _presentN + " frames (" + String(_gpuFirstError || "gpu error").slice(0, 160) + ") — AUTO takes three WebGL2"); } catch (_) { /* backendState still carries the reason */ }
                 try { Log.warn("gfx", "TLX: " + _gpuErrors + " GPU error(s) in the first " + _presentN + " frames — reloading on three WebGL2:", _gpuFirstError); } catch (_) { /* no Log in the node VM harness */ }
                 setTimeout(function () { try { location.reload(); } catch (_) { /* harness: the session key still steers the next real boot */ } }, 300);
@@ -6349,7 +6372,7 @@ const TLX = (function () {
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
-              forceWebGL, pin: _glPin, autoStayGL: _autoStayGL, hasGpu: _hasGpu,
+              forceWebGL, pin: _glPin, autoStayGL: _autoStayGL, webkitStayGL: _webkitStayGL, hasGpu: _hasGpu,
               gpuAdapterOk: _gpuAdapterOk, gpuCanvasOk: _gpuCanvasOk,
               // Read back off the LIVE context, not inferred from what we
               // passed: `true` IS the see-through-car defect, and the paths

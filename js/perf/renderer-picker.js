@@ -211,6 +211,8 @@ const RENDERER_LS_KEYS = [
   "apex26.gfxBootBound",
   "apex26.envProbeOff", "apex26.perChunkOff",
   "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
+  // tlx.js's per-device WebKit kill switch: AUTO on WebKit stays on three WebGL2 until RESET.
+  "apex26.tlxWebKitGL",
   // __tlx.roadSplit(false) persists the road-split A/B arm (tlx.js); RESET brings the split back.
   "apex26.tlxRoadSplit",
   "apex26.wgxCapture",

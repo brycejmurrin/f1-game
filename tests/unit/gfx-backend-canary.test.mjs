@@ -296,13 +296,21 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   // the caller-supplied opaque context it is keyed on. The canvas came up
   // alpha-composited and the cars rendered see-through. The gate is now the
   // obtainable WebGPU CONTEXT; renderer-soft-lifecycle.test.mjs holds the rest.
-  // 2026-09-03: `|| isWebKit` joined the clause. Two consecutive deploys
-  // rendered three-WebGPU wrongly on the owner's iPhone (bodywork missing,
-  // then sky-only at c6d8fd3) with ZERO reported GPU/WGSL errors, while
-  // three's WebGL2 backend on the same phone is known-good (ed8f41f). AUTO on
-  // WebKit takes WebGL2; THREE PATH: WEBGPU (pin "0") still forces WebGPU.
-  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_gpuCanvasOk\s*\|\|\s*_autoStayGL\s*\|\|\s*isWebKit\s*\)\s*\)/,
-    "AUTO stays on WebGL2 when no WebGPU context is obtainable, after an init failure, or on WebKit; a pin of 1/0 overrides");
+  // 2026-09-03: `|| isWebKit` joined the clause (three-WebGPU rendered wrongly
+  // on the owner's iPhone with zero GPU errors). 2026-10-23 it left again:
+  // Device Farm on iOS 27.0 holds 60 fps on WebGPU, 42 on WebGL2, no errors
+  // (PR #3598, its Device Farm note §6). AUTO on WebKit now
+  // tries WebGPU, and a detected failure latches the per-DEVICE kill switch
+  // `_webkitStayGL` (localStorage apex26.tlxWebKitGL) back to WebGL2.
+  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_gpuCanvasOk\s*\|\|\s*_autoStayGL\s*\|\|\s*_webkitStayGL\s*\)\s*\)/,
+    "AUTO stays on WebGL2 when no WebGPU context is obtainable, after a tab failure, or on a WebKit device that failed WebGPU; a pin of 1/0 overrides");
+  assert.match(src, /const _webkitStayGL = isWebKit && /, "the kill switch is WebKit-only");
+  assert.match(src, /localStorage\.getItem\("apex26\.tlxWebKitGL"\)/);
+  // Every AUTO path that latches the tab onto WebGL2 latches the device too.
+  for (const site of [/_latchWebKitGL\("WebGPU init failed/, /_latchWebKitGL\("context lost x/, /_latchWebKitGL\("first render refused"\)/, /_latchWebKitGL\("GPU errors in the first/])
+    assert.match(src, site);
+  assert.match(src, /if \(!isWebKit \|\| _glPin === "0" \|\| _glPin === "1"\) return;/, "a pin never writes the latch");
+  assert.match(code("js/perf/renderer-picker.js"), /"apex26\.tlxWebKitGL"/, "RESET RENDERER clears the kill switch");
   assert.match(src, /async\s+function\s+bootRenderer\b/);
   assert.match(src, /AUTO WebGPU init failed/);
   assert.match(src, /await renderer\.init\(\)[\s\S]{0,200}?disposeKeepingContext\(renderer\)/,
@@ -921,6 +929,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.tlxForceGL": "0",
     "apex26.tlxEnvProbe": "1",
     "apex26.tlxViz": "lit",
+    "apex26.tlxWebKitGL": "WebGPU init failed",
     "apex26.wgxCapture": "1",
     "apex26.gfxHigh": "1",
     "apex26.uiScale": "110",
@@ -960,6 +969,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBootBound",
     "apex26.envProbeOff", "apex26.perChunkOff",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
+    // tlx.js's per-DEVICE WebKit kill switch (the failure reason): while set, AUTO on WebKit binds three WebGL2.
+    "apex26.tlxWebKitGL",
     // The road-split A/B arm: __tlx.roadSplit(false) writes "0" (tlx.js); RESET restores the split.
     "apex26.tlxRoadSplit",
     "apex26.wgxCapture",

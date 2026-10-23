@@ -144,7 +144,7 @@ test("mirrorEnd: only four CONSECUTIVE failed mirror renders retire the mirror (
 // three WebGL2 reloaded into the identical configuration, uncounted, for ever. The real function body runs here.
 function refuse(o = {}) {
   const store = Object.assign({}, o.ss || {});
-  const out = { reloads: 0, errors: [], store, local: Object.assign({ "apex26.gfxBackendProbe": "1" }, o.ls || {}) };
+  const out = { reloads: 0, errors: [], latched: [], store, local: Object.assign({ "apex26.gfxBackendProbe": "1" }, o.ls || {}) };
   const ss = o.ssThrows
     ? { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } }
     : { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
@@ -157,6 +157,7 @@ function refuse(o = {}) {
   };
   const ctx = vm.createContext({
     _glPin: o.pin ?? null, forceWebGL: !!o.forceWebGL, _autoStayGL: !!o.autoStayGL, _sessLostN: 0,
+    _latchWebKitGL: (why) => out.latched.push(why),
     sessionStorage: ss,
     localStorage: { removeItem: (k) => { delete out.local[k]; } },
     location: { reload() { out.reloads++; } },
@@ -180,6 +181,7 @@ test("refuseTab: AUTO on WebGPU takes three WebGL2, counted against the shared r
   assert.equal(r.store["apex26.ctxLostReloads"], "1", "the reload spends a ctxLostReloads credit");
   assert.equal(r.reloads, 1);
   assert.equal(r.local["apex26.gfxBackendProbe"], undefined, "the canary probe is cleared as before");
+  assert.deepEqual(r.latched, ["first render refused"], "AUTO's refusal also latches the WebKit device kill switch");
 });
 
 test("refuseTab: a boot already on three WebGL2 binds GLX instead of reloading into itself (08-F1)", () => {
@@ -187,6 +189,7 @@ test("refuseTab: a boot already on three WebGL2 binds GLX instead of reloading i
     const r = refuse(o);
     r.call();
     assert.equal(r.store["apex26.gfxClaimFail"], "1", JSON.stringify(o));
+    assert.deepEqual(r.latched, [], "a GLX hand-off is not a WebGPU verdict: " + JSON.stringify(o));
     assert.equal(r.store["apex26.tlxAutoGL"], undefined, JSON.stringify(o));
     assert.equal(r.reloads, 1, JSON.stringify(o));
   }
