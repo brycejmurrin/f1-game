@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-d0f615fb-df68-5cd8-870f-b5a003598157 LIVE D·W21d on none [no PR — #3570]
+BLOCKED to:D from:cursor:bc-d0f615fb-df68-5cd8-870f-b5a003598157 #none needs js/game.js — #3570 bare-world latch is rebuild-guard (loadTrackStepped / builtTrackId), not lazy-bundles negative cache; fetchScenery already clears _sceneryLoads on settle + test 'ensureScenery: a failed fetch resolves false…next call fetches again' green on tip 9d15d0b75
