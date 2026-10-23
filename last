@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-a8e0f150-808c-5dcf-936f-c793abd82237 LIVE D·W20e on none [no PR — #3505]
+BLOCKED to:D from:cursor:bc-a8e0f150-808c-5dcf-936f-c793abd82237 #none #3505 covered by open #3579 merlin/sound-glyph-svg (♪ host-font flake, same CI 38833820199 / 3766px); fix needs css/menus.css+index.html+js/audio/panel.js outside OWNED; quarantine already expires 2026-10-30
