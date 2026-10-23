@@ -331,7 +331,7 @@ async function mirrorWarmRig(t, { ls = {}, store = {}, soft = false } = {}) {
   const entry = async () => { R.request(); R.present(OPTS); await R.pending(); };
   const mirrorCompiles = () => compiles.filter((tg) => tg && tg === R.mirRT()).length;
   const mirrorDraws = () => draws.filter((d) => d.size && d.size[0] === 4 && d.size[1] === 4).length;
-  return { renderer, R, compiles, draws, entry, OPTS, mirrorCompiles, mirrorDraws };
+  return { renderer, R, compiles, draws, entry, OPTS, mirrorCompiles, mirrorDraws, fg };
 }
 
 // Pass root: three's projectObject visits every child of castScene, hidden or not, so each pass must hand it only
@@ -428,6 +428,40 @@ test("B-F3.1: the default (unset), apex26.tlxMirWarmLazy=0, an explicit ON, a Pi
     assert.equal(h.R.mirUsed(), false, `${name}: _mirUsed untouched (unchanged)`);
     assert.equal(h.R.mirrorBegin(), true, `${name}: a forced mirror takes today's cold path`);
   }
+});
+
+// A·W14: the mirror target takes the scene target's attachment list and the mirror draws under the scene's MRT, so
+// the eager mirror stage reuses the scene stage's programs instead of linking the world a second time.
+test("A·W14: the mirror shares the scene pass's render context — the eager warm's mirror stage links (almost) nothing new", async (t) => {
+  const run = async (ls) => {
+    const h = await mirrorWarmRig(t, { ls: { "apex26.tlxMirWarmLazy": "0", ...ls } });
+    await h.entry();
+    assert.equal(h.R.stages.failed, 0);
+    assert.equal(typeof h.R.stages.mirror, "number", "the mirror stage ran at the lights");
+    assert.equal(h.mirrorDraws(), 1, "W1's 4x4 mirror draw");
+    return { h, links: h.fg.counts.linkProgram || 0, rt: h.R.mirRT() };
+  };
+  const on = await run({}), off = await run({ "apex26.tlxMirMrt": "0" });
+  assert.equal(on.rt.textures.length, 2, "default: the mirror target is shaped like the scene target");
+  assert.deepEqual(on.rt.textures.map((x) => x.name), ["output", "ssrTag"], "the MRT node maps its outputs by these names");
+  assert.equal(on.rt.textures[1].generateMipmaps, false, "the tag attachment keeps no mip chain");
+  assert.equal(on.rt.texture.generateMipmaps, true, "the colour attachment keeps its (capped) chain");
+  assert.equal(off.rt.textures.length, 1, "apex26.tlxMirMrt=0: the one-attachment target (the old way)");
+  t.diagnostic(`entry warm program links: mirror MRT ${on.links}, old target ${off.links}`);
+  assert.ok(on.links < off.links, `fewer links with the shared context (${on.links} vs ${off.links})`);
+  for (const r of [on, off]) {
+    assert.equal(r.h.renderer.getMRT(), null, "the warm leaves the MRT as it found it");
+  }
+});
+
+test("A·W14: tlx.js wiring — mirrorEnd and the mirror warm arm the scene MRT only for a mirror-shaped target, the knob read once", () => {
+  const me = TLX.slice(TLX.indexOf("        mirrorEnd() {"), TLX.indexOf("        mirrorRect(r, flip)"));
+  assert.match(me, /const mrt = _mirMrt\(\), prevMrt = mrt \? renderer\.getMRT\(\) : null;\n\s*if \(mrt\) _mirMrtArm\(true\);\n\s*try \{ renderer\.render\(scene, mirCam\); \} finally \{ if \(mrt\) _mirMrtArm\(false, prevMrt\); \}/);
+  const ws = TLX.slice(TLX.indexOf("      async function warmMirrorStage("), TLX.indexOf("      // garageSceneOnly:"));
+  assert.ok(ws.indexOf("_mirMrtArm(_mirMrt());") < ws.indexOf("await renderer.compileAsync(scene, camera);"), "the world compiles under the mirror's MRT");
+  assert.ok(ws.indexOf("_mirMrtArm(false);") > ws.indexOf("await renderer.compileAsync(scene, camera);")
+    && ws.indexOf("_mirMrtArm(false);") < ws.indexOf("mirrorGlassMaterial"), "the glass and composite compile as before");
+  assert.equal((TLX.match(/localStorage\.getItem\("apex26\.tlxMirMrt"\)/g) || []).length, 1, "read once");
 });
 
 test("B-F3.1: every entry warm re-decides — a race after one that used the mirror defers it again", async (t) => {
