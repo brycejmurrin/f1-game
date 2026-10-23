@@ -13082,6 +13082,9 @@
       "guessBackend": [
         "tests/unit/script-loader-preload.test.mjs"
       ],
+      "narrow": [
+        "tests/unit/renderer-boot-island-preload.test.mjs"
+      ],
       "proved": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -13100,9 +13103,6 @@
       "*": [
         "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
-      ],
-      "narrow": [
-        "tests/unit/renderer-boot-island-preload.test.mjs"
       ]
     },
     "js/render/shared/assets.js": {
