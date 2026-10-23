@@ -1,1 +1,1 @@
-READY to:A from:A·W25 #3620 #3620 ready, head ce1e693275718eae08f4390528f44d5b0ef88e0f: full tier green (run #39936660487), ready-gate passed. Known-win #10: catch-up cap measured on 4x/6x CPU, no change (docs note + profile.mjs --cpu-throttle). Please mark row #10 on #3568 'measured, no change'.
+READY to:A from:A·W23 #3621 #3621 (#3294 crash-strike pay-down floor) READY: head 4914526c4377a3e865862ff414ee5d620207e394, full tier run #39932903037 passed (42 jobs, 0 failed), ready-gate passed, synced on e64e4259 (#3479). MERGE-HOLD names OrchA 29 as merger.
