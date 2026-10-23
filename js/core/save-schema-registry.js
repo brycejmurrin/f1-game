@@ -179,6 +179,7 @@ const SaveSchemaRegistry = (function () {
     crashSeen: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
     crashSeenBuild: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
     benchRun: entry("js/perf/bench-run.js", "raw", 1, "string"),   // BENCHMARK plan + last results (JSON text), across its reloads
+    benchCapture: entry("js/perf/bench-capture.js", "raw", 1, "string"),   // BENCHMARK leg breadcrumb (JSON text): what led up to a reload that killed the leg
     customLogo: entry("js/career/custom-team.js", "json", 1, "json"),
     carSmooth: entry("js/car/car-shade.js", "raw", 1, "rawScalar"),
     freecamMarks: entry("js/camera/photo-kit.js", "json", 1, "json"),
