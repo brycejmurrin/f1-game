@@ -31,7 +31,9 @@ async function armTimeline(page) {
         && cs.visibility !== "hidden";
       const cam = window.__apex && window.__apex.garageCam && window.__apex.garageCam();
       const st = window.__apex && window.__apex.info ? window.__apex.info().state : "";
+      const go = document.getElementById("rs-go");
       window.__garageOutTL.push({
+        prep: !!(go && go.disabled && String(go.textContent).startsWith("PREPARING")),
         t: performance.now(), tag, phase, hidden: !!L.hidden,
         cardVis: cs.visibility, cardShown,
         garageOn: !!(cam && cam.on), state: st,
@@ -133,14 +135,23 @@ async function startRaceFromSettings(page) {
 /** Wait until the armed timeline shows the garage-out and then the card (or the race), and return it. */
 async function awaitGarageThenCard(page) {
   try {
-    await page.waitForFunction(() => {
+    const verdict = await page.waitForFunction(() => {
       const tl = window.__garageOutTL || [];
       const hadGarage = tl.some((s) => s.phase === "garage" || s.garageOn);
-      if (!hadGarage) return false;
+      if (!hadGarage) {
+        // #3591: PREPARING handed back to an enabled START with no garage-out and no
+        // card is a terminal answer (the intro gave up; nothing re-arms it), so end on it
+        // now with the game's own reason (afterGarageOut's Log.warn), not the 180 s timeout.
+        const go = document.getElementById("rs-go");
+        const text = (go && go.textContent) || "";
+        if (tl.some((s) => s.prep) && go && !go.disabled && /START/i.test(text) && !text.startsWith("PREPARING")) return "released";
+        return false;
+      }
       // Wait for the card itself — assertGarageThenCard requires it. Still in
       // garage: the timeout allows studioDone's 3× duration cap to fire (~8 s × 3).
-      return tl.some((s) => s.cardShown);
+      return tl.some((s) => s.cardShown) && "card";
     }, null, { polling: 100, timeout: 180_000 });
+    if ((await verdict.jsonValue()) === "released") throw new Error("START released after PREPARING with no garage-out (#3591): see the apex-logs line \"intro released without a garage-out\"");
   } catch (e) {
     const tl = await stopTimeline(page);
     const snapshot = await page.evaluate(() => {
