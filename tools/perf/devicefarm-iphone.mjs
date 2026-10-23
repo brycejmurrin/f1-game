@@ -132,6 +132,9 @@ const ENTRY = `
   return { state: st, race: window.__dfRace || null, sinceKickMs: Math.round(performance.now() - (window.__dfT0 || 0)),
     winT0: s && s.winT0, armed: s && s.armed, windowMs: t && t.windowMs, blockMs: t && t.blockMs, maxBlockMs: t && t.maxBlockMs,
     stages: t ? t.stages.filter((r) => r.ms == null || r.ms >= 50).map((r) => [r.n, r.ms]) : null, warm,
+    // A·W14's ask for the iPhone 14 mirrorPrepare gap: the mirror pass's own state and every mark inside the stage.
+    mirror: (() => { try { return __apex.mirror ? __apex.mirror() : null; } catch (e) { return { error: String(e) }; } })(),
+    marks: s ? (s.marks || []).filter((m) => m && /mirror|warm|program|prepare/i.test(m.n)).map((m) => [m.n, Math.round(m.t)]) : null,
     api: (() => { try { return RendererPicker.liveThreeApi(); } catch (_) { return null; } })() };`;
 
 async function waitReady(ctx, ms = 120000) {
