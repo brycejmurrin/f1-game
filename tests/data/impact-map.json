@@ -16117,6 +16117,7 @@
     "js/ui/post-fx-opts.js": {
       "applyLookShed": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/post-fx-opts.test.mjs"
       ],
@@ -16125,6 +16126,7 @@
       ],
       "read": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/post-fx-opts.test.mjs"
       ],

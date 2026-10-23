@@ -4399,7 +4399,10 @@ test("GLX software GL knees when lowest rung sheds bloom (tier 4 stall watchdog)
   assert.ok(body.includes("swFlareK") && body.includes("swSoft") && body.includes("doBloom ? 0.42 : 0"));
   assert.ok(body.includes("swExposureK") && body.includes("doBloom ? 1 : 0.72"));
   const race = gameUnionCode();
-  assert.ok(race.includes("po.bloom = PerfGov.autoTier() >= 4 ? 0 :"));
+  assert.ok(race.includes("PostFxOpts.applyLookShed(po,") && race.includes("bloom: _bloom * LT.bloomMul"));
+  const shed = read("js/ui/post-fx-opts.js");
+  assert.ok(shed.includes("po.bloom = off ? 0 : v.bloom"));
+  assert.ok(shed.includes("PerfGov.autoTier() >= 4") || shed.includes("lookPostShed"));
   const gar = read("js/garage/setup-camera.js");
   assert.ok(gar.includes("PerfGov.autoTier() >= 4") && gar.includes("_presentOpts.bloom = shed ? 0 :"));
   const glow = read("js/render/shared/post-common.js");
