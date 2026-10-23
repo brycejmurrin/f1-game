@@ -253,8 +253,13 @@ Bryce: "go deeper do more runs and live connections". The live site at this poin
 carries both follow-ups: #3603 (AUTO picks three.js WebGPU on WebKit; the unpinned boot now reports `api=webgpu`)
 and #3604 (the warm-up/mirrorPrepare fix; the stage is now reported as `programWarm`). Run:
 `devicefarm-iphone.mjs run --scenario cache --pins webgpu,webgl2` (remote access, `?apex=1`). Each step is one
-`__apex.race("monza")` entry timed by `RaceEntryProfile` plus `GLX.__tlx.memState().warm`. The device starts each
-Device Farm session with an empty cache (the earlier sessions all paid the first-entry cost).
+`__apex.race("monza")` entry timed by `RaceEntryProfile` plus `GLX.__tlx.memState().warm`. **Caveat on "first":** a
+Device Farm session does not reliably start with an empty Safari cache. A·W14 (#3604, comment 6359610979) saw the
+first-WebGPU `scene` stage at 3.5 s in a session that began about 1 min after its previous session on the same
+phone, against 7.8 s in that previous one. Device Farm has more than one iPhone 18 Pro Max, and this unit may have
+run the game earlier tonight, so the "first" row is a first entry in this session, not a guaranteed cold device.
+A truly cold number needs either a unit known to be unused or a cache clear (Settings › Safari › Clear History and
+Website Data via XCUITest) before the first entry.
 
 | step | WEBGPU entry window | WEBGPU `programWarm` (warm.total) | WEBGL2 entry window | WEBGL2 `programWarm` (warm.total) |
 |---|---|---|---|---|
@@ -264,7 +269,8 @@ Device Farm session with an empty cache (the earlier sessions all paid the first
 | after force-quitting Safari (`mobile: terminateApp`) | **2.8 s** | **0.24 s** (0.29) | 1.9 s | 0.24 s (0.30) |
 
 - **Safari's compiled-shader cache survives a force-quit.** After the first two loads a WebGPU race warms in
-  0.24 s, the same as WebGL2. A player pays the warm-up about once per device (per cache life), not per launch.
+  0.24 s, the same as WebGL2. A player pays the warm-up about once per device (per cache life), not per launch, and Device Farm's
+  own cache carry-over between sessions points the same way.
   Still unmeasured: a reboot, low-storage eviction, and a deploy that changes shader source.
 - **WebGPU needs two loads to finish warming** (7.3 → 2.3 → 0.24 s); WebGL2 needs one (2.3 → 0.37 s). The second
   WebGPU warm is mostly `post` (1.9 s): pipelines the first warm deferred.
