@@ -83,21 +83,29 @@ export const DUMP = `
   return JSON.stringify(out);`;
 
 // ---- Appium ----------------------------------------------------------------------------------------------------------
-const CAPS = { platformName: "iOS", browserName: "Safari", "appium:automationName": "XCUITest", "appium:newCommandTimeout": 300 };
+const CAPS = { platformName: "iOS", browserName: "Safari", "appium:automationName": "XCUITest", "appium:newCommandTimeout": 300, "appium:webviewConnectTimeout": 30000 };
 async function exec(ctx, script, tries = 2) {
   for (let t = 1; ; t++) {
     try { return wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script, args: [] }); }
     catch (e) { if (t >= tries) throw e; await sleep(1500); }
   }
 }
-function newSession(ctx) {
-  ctx.sid = wd(ctx.base, "POST", "/session", { capabilities: { alwaysMatch: CAPS, firstMatch: [{}] } }).sessionId;
+// A Safari that was just force-quit can take a few seconds before the remote debugger lists a web application again
+// (seen on unit 071266C0: "did not return any connected web applications"), so retry the session with a pause.
+async function newSession(ctx, tries = 4) {
+  for (let t = 1; ; t++) {
+    try {
+      ctx.sid = wd(ctx.base, "POST", "/session", { capabilities: { alwaysMatch: CAPS, firstMatch: [{}] } }).sessionId;
+      break;
+    } catch (e) { if (t >= tries) throw e; log(`session create retry ${t}: ${e.message.slice(0, 110)}`); await sleep(6000); }
+  }
   try { wd(ctx.base, "POST", `/session/${ctx.sid}/orientation`, { orientation: "LANDSCAPE" }); } catch (_) { /* keep portrait */ }
 }
-function killSafari(ctx) {
+async function killSafari(ctx) {
   try { wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: terminateApp", args: [{ bundleId: "com.apple.mobilesafari" }] }); } catch (e) { log("terminate: " + e.message.slice(0, 100)); }
   try { wd(ctx.base, "DELETE", `/session/${ctx.sid}`); } catch (_) { /* gone with Safari */ }
-  newSession(ctx);
+  await sleep(3000);
+  await newSession(ctx);
 }
 // One timed load. `go` starts the navigation; the wall clock t0 is taken just before it, so wallMs includes the Appium
 // round trips (~0.3-1 s) while pageMs is the page's own performance.now() at the first poll that saw state "menu".
@@ -150,12 +158,12 @@ async function main() {
       await sleep(5000);
     }
     report.queuedMs = Date.now() - tq;
-    newSession(ctx);
+    await newSession(ctx);
     try { const d = wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: deviceInfo", args: [] }); report.unit = String((d && d.uuid) || "").slice(0, 8) || null; } catch (_) { report.unit = null; }
     log(`session up; unit ${report.unit}`);
     for (let i = 1; i <= trials && !over(); i++) {
       // first: a fresh Safari process loads the URL; reload: same process, HTTP cache warm; relaunch: Safari killed, disk cache warm
-      killSafari(ctx);
+      if (i > 1) await killSafari(ctx);   // trial 1 uses the fresh session as it is; later trials start from a force-quit Safari
       report.trials.push({ i, ...(await timedBoot(ctx, `t${i} first`, () => wd(ctx.base, "POST", `/session/${ctx.sid}/url`, { url }))) , kind: "first" });
       if (i === 1 && !report.trials[0].menu) { log("trial 1 never saw the menu: stopping early to save device minutes"); break; }
       if (over()) break;
