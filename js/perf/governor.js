@@ -564,15 +564,23 @@ function cleanRace() {
     // forces that reload (it flips the mobileHigh bit, see
     // js/perf/quality-preset.js syncBootTier), so the symptom reads as "wet
     // sheen and per-chunk only work on ULTRA" rather than as a stuck floor.
-    // clearStrikes() recomputes the floor the same way; both paths then release
-    // `_perfTier` to the new floor so they cannot drift apart.
-    _perfTierFloor = _floorFromStrikes(_crashStrikes);
-    // The floor just dropped. _perfTier may be sitting on the OLD one (the
-    // degrade branch steps from _floorTier(), so it absorbs whatever floor was
-    // live when it fired). Release it to the new floor and let the governor
-    // re-earn any shed from its own measurements.
-    if (_perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
+    // clearStrikes() recomputes the floor the same way; both go through
+    // _setCrashFloor() so they cannot drift apart.
+    _setCrashFloor();
   }
+}
+
+// Re-derive the crash floor from the strike counter. When it DROPS, _perfTier
+// may be sitting on the OLD one (init() seeds it there, and the degrade branch
+// steps from _floorTier(), so it absorbs whatever floor was live when it fired).
+// Release it to the new CRASH floor and let the governor re-earn any shed from
+// its own measurements. Not _floorTier(): that folds in the GRAPHICS preset, so
+// one strike paid down on MEDIUM (2 > 2 is false) left autoTier() pinned at the
+// old floor for the session (#3294). tier() still applies the preset at read time.
+function _setCrashFloor() {
+  const prev = _perfTierFloor;
+  _perfTierFloor = _floorFromStrikes(_crashStrikes);
+  if (_perfTierFloor < prev && _perfTier > _perfTierFloor) { _perfTier = _perfTierFloor; _autoShed = 0; }
 }
 
 // Bounded raw-frame history supplements the EMA: occasional hitches must not
@@ -997,12 +1005,11 @@ function driftStep() {
 
 function clearStrikes() {
   _crashStrikes = 0;
-  _perfTierFloor = _floorFromStrikes(_crashStrikes);
   // Same latch release as cleanRace(): lifting the floor alone leaves
   // `_perfTier` on evidence earned under the old floor, so tier() stays high
   // after __apex.safeMode(false) until a reload. Drop to the new floor so the device
   // can prove itself again (governor may re-shed if frames still miss).
-  if (_perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
+  _setCrashFloor();
   GameStore.store.rawSet(SENT_STRIKES, "0"); GameStore.store.rawDel(SENT_ACTIVE);
   GameStore.store.rawDel(SENT_TICKED);
 }
