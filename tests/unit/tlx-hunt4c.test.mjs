@@ -292,7 +292,7 @@ async function mirrorWarmRig(t, { ls = {}, store = {}, soft = false } = {}) {
     const _instPerPass = true, skipBatches = () => false, _instRegistry = [], _mirOf = () => null;
     const fx = null, vizMat = null, softGpu = () => SOFT, softwareGL = SOFT, softContent = () => false, _warmFx = true;
     const pinSkyMaterial = () => {}, mintLateLit = () => {}, warmFxPrograms = async () => {}, warmLateLit = async () => {};
-    const warmPlusOn = () => true, softOutRT = () => null;
+    const warmPlusOn = () => true, casterWarmOn = warmPlusOn, softOutRT = () => null;
     const I = new THREE.Matrix4().toArray();
     const _postF = { proj: I, invProj: I, invVP: I, viewProj: I, upVS: [0, 1, 0], time: 0, sunVS: [0, 0, -1] };
     const _warmHistory = [];   // tlx.js keeps every warm's stages (B·H8 prep timeline)
@@ -517,4 +517,55 @@ test("TLX ambient fill preserves zero and proportional positive multipliers", ()
     assert.deepEqual(lit.uniforms.ambGround.value.toArray(), ground.map((v) => v * expected), `ground multiplier ${multiplier}`);
     assert.deepEqual(lit.uniforms.sunColor.value.toArray(), [1, 1, 1], "unscaled vector uniforms keep their default multiplier");
   }
+});
+
+// A·W14: decals read their glow per material (materialReference -> object uniform block), so every glow a race uses
+// shares ONE program. The night glows (car tails 0.35, signs 0.5, lamps 1.6) used to be one program and one WebGPU
+// pipeline each, built at their first night draw. Real three r186 + the real fx factory over the fake WebGL2.
+test("A·W14: decal glows share one program; each material keeps its own glow", async (t) => {
+  if (!globalThis.TLXShaders.fx) vm.runInThisContext(read("js/render/three/tsl-fx.js"), { filename: absSrc("js/render/three/tsl-fx.js") });
+  const fg = makeFakeGL(64, 64);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+    ssrTag: true, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+  const fx = globalThis.TLXShaders.fx(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), sharedUniforms: true, lit });
+  const tex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); tex.needsUpdate = true;
+  const glows = [0, 0.35, 0.5, 1.6];
+  const mats = glows.map((g) => fx.decalMaterialFor(tex, g));
+  assert.equal(new Set(mats).size, glows.length, "a material per glow (the cache key is texture|glow)");
+  assert.deepEqual(mats.map((m) => m.tlxGlow), glows, "each material carries its own glow");
+  assert.equal(new Set(mats.map((m) => m.customProgramCacheKey())).size, 1, "one program key for every glow");
+  assert.equal(fx.decalMaterialFor(tex, 0.35), mats[1], "cached per texture and glow");
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(); camera.position.z = 3;
+  const g = new THREE.PlaneGeometry(1, 1);
+  for (const m of mats) { const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false; scene.add(mesh); }
+  fg.reset();
+  await renderer.compileAsync(scene, camera);
+  assert.equal(fg.counts.linkProgram || 0, 1, `four glows link ONE program (was one per glow): ${fg.counts.linkProgram}`);
+});
+
+// A·W14: the caster warm with NO caster in any pool (a night grid: no sun pass, no lamp reached yet) compiled
+// nothing, so the first lamp pass built its depth pipelines mid-race. Probe casters in the scene's layouts
+// compile them in the warm, one pair (both winding signs) per layout, a fresh set each warm, never in castScene after.
+test("A·W14: probe casters compile the depth programs with empty pools; one pair per layout, outside castScene after", async (t) => {
+  const h = await shadowRig(t);
+  const geoA = buildTri();
+  const geoB = new THREE.BufferGeometry();
+  for (const [n, k] of [["position", 3], ["normal", 3], ["color", 3], ["mat", 1]])
+    geoB.setAttribute(n, new THREE.BufferAttribute(new Float32Array(k * 3).fill(0.5), k));
+  h.fg.reset();
+  await h.sys.warm();
+  assert.ok((h.fg.counts.linkProgram || 0) <= 1, "empty pools and no sources: no caster program (the night gap), at most the PCSS blocker quad");
+  h.fg.reset();
+  await h.sys.warm([geoA, geoB, geoA]);
+  assert.ok((h.fg.counts.linkProgram || 0) >= 1, `probe casters linked the depth program(s): ${h.fg.counts.linkProgram}`);
+  assert.equal(h.sys.S.probeLayouts, 2, "one probe pair per distinct layout");
+  assert.ok(h.castScene.children.every((m) => !m.geometry || m.geometry.attributes.position.count !== 3 || m.geometry === geoA),
+    "the probes left castScene after the warm");
+  h.fg.reset();
+  await h.sys.warm([geoA, geoB]);
+  assert.equal(h.sys.S.probeLayouts, 2, "a fresh probe set, one pair per layout again");
+  assert.equal(h.fg.counts.linkProgram || 0, 0, "and link nothing new: the previous set held the programs until this one had them");
 });

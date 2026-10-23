@@ -1,5 +1,7 @@
-/* Apex 26 — DevFlags: one registry for boot-time URL / hash / localStorage toggles.
-   Resolution order: query string, then hash (#…&name=value), then apex26.* storage.
+/* Apex 26 — DevFlags: one registry for boot-time URL / localStorage toggles.
+   Resolution order: query string, then apex26.* storage. The URL hash is never
+   read: every migrated reader was query/storage only (#3299 removed the unused
+   hash channel).
    Bool flags: 1/on/true → on, 0/off/false → off (the set metrics-overlay always
    took). Legacy boot readers keep their old semantics so migrated call sites
    behave as before:
@@ -16,19 +18,19 @@ const DevFlags = (function () {
 
   const PREFIX = "apex26.";
 
-  /** @type {Record<string, { param: string, storage?: string, kind?: "bool"|"string", legacyQueryOne?: boolean, legacyStorageOne?: boolean, viaStore?: boolean, ciParam?: boolean, noHash?: boolean, default?: boolean|string|null }>} */
+  /** @type {Record<string, { param: string, storage?: string, kind?: "bool"|"string", legacyQueryOne?: boolean, legacyStorageOne?: boolean, viaStore?: boolean, ciParam?: boolean, default?: boolean|string|null }>} */
   const REGISTRY = {
-    upscale: { param: "upscale", storage: "spatialUpscale", legacyQueryOne: true, legacyStorageOne: true, noHash: true },
-    gfxdebug: { param: "gfxdebug", storage: "gfxDebug", legacyQueryOne: true, legacyStorageOne: true, noHash: true },
-    inputdebug: { param: "inputdebug", storage: "inputDebug", legacyQueryOne: true, legacyStorageOne: true, noHash: true },
-    metrics: { param: "metrics", storage: "metrics", legacyStorageOne: true, viaStore: true, ciParam: true, noHash: true },
-    fullIntro: { param: "fullIntro", legacyQueryOne: true, noHash: true, default: false },
-    "three-devtools": { param: "three-devtools", legacyQueryOne: true, noHash: true, default: false },
-    viz: { param: "viz", storage: "tlxViz", kind: "string", noHash: true, default: null },
+    upscale: { param: "upscale", storage: "spatialUpscale", legacyQueryOne: true, legacyStorageOne: true },
+    gfxdebug: { param: "gfxdebug", storage: "gfxDebug", legacyQueryOne: true, legacyStorageOne: true },
+    inputdebug: { param: "inputdebug", storage: "inputDebug", legacyQueryOne: true, legacyStorageOne: true },
+    metrics: { param: "metrics", storage: "metrics", legacyStorageOne: true, viaStore: true, ciParam: true },
+    fullIntro: { param: "fullIntro", legacyQueryOne: true, default: false },
+    "three-devtools": { param: "three-devtools", legacyQueryOne: true, default: false },
+    viz: { param: "viz", storage: "tlxViz", kind: "string", default: null },
     // URL-only A/B lever: ?tlxMirMrt=0 restores TLX's one-attachment mirror target (tlx.js, A·W14). No storage key.
-    mirMrt: { param: "tlxMirMrt", noHash: true, default: true },
+    mirMrt: { param: "tlxMirMrt", default: true },
     // URL-only bench lever: ?swFlyby=1 runs the loading flyby on software GL (game.js race entry; default skips).
-    swFlyby: { param: "swFlyby", legacyQueryOne: true, noHash: true, default: false },
+    swFlyby: { param: "swFlyby", legacyQueryOne: true, default: false },
   };
 
   function parseBoolish(raw) {
@@ -53,16 +55,6 @@ const DevFlags = (function () {
     } catch (_) { return null; }
   }
 
-  function hashGet(param) {
-    try {
-      const h = typeof location !== "undefined" && location.hash ? String(location.hash) : "";
-      if (!h) return null;
-      const esc = param.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const m = new RegExp("[#&]" + esc + "=([^&]*)", "i").exec(h);
-      return m ? decodeURIComponent(m[1].replace(/\+/g, " ")) : null;
-    } catch (_) { return null; }
-  }
-
   function storageGet(shortKey, viaStore) {
     if (!shortKey) return null;
     try {
@@ -78,11 +70,6 @@ const DevFlags = (function () {
     const q = searchGet(param, def.ciParam);
     const fromQuery = def.legacyQueryOne ? parseLegacyOne(q) : parseBoolish(q);
     if (fromQuery !== null) return fromQuery;
-
-    if (!def.noHash) {
-      const fromHash = def.legacyQueryOne ? parseLegacyOne(hashGet(param)) : parseBoolish(hashGet(param));
-      if (fromHash !== null) return fromHash;
-    }
 
     if (def.storage) {
       const raw = storageGet(def.storage, def.viaStore);
@@ -102,10 +89,6 @@ const DevFlags = (function () {
     const param = def.param || name;
     const q = searchGet(param, def.ciParam);
     if (q != null && q !== "") return q;
-    if (!def.noHash) {
-      const h = hashGet(param);
-      if (h != null && h !== "") return h;
-    }
     const raw = def.storage ? storageGet(def.storage, def.viaStore) : null;
     if (raw != null && raw !== "") return raw;
     return def.default === undefined ? null : def.default;

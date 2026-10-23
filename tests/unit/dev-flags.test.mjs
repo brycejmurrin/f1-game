@@ -1,4 +1,4 @@
-/* dev-flags.test.mjs — DevFlags query / hash / storage resolution.
+/* dev-flags.test.mjs — DevFlags query / storage resolution (the URL hash is never read).
  *
  * Run: node --test tests/unit/dev-flags.test.mjs   (test:tooling-fast)
  */
@@ -74,6 +74,19 @@ test("viz: string from query then storage", () => {
   assert.equal(boot({ search: "?viz=mat" }).get("viz"), "mat");
   assert.equal(boot({ store: { tlxViz: "normal" } }).get("viz"), "normal");
   assert.equal(boot().get("viz"), null);
+});
+
+test("the URL hash is never a flag channel, for bool or string flags (#3299)", () => {
+  const D = boot();
+  for (const name of D.names()) {
+    const def = D.REGISTRY[name];
+    assert.ok(!("noHash" in def), `${name}: noHash is gone with the hash channel`);
+    const h = "#" + def.param + "=1&" + def.param + "=on";
+    assert.equal(boot({ hash: h }).get(name), D.get(name), `${name}: ${h} must not change the resolved value`);
+  }
+  assert.equal(boot({ hash: "#viz=ssao" }).get("viz"), null);
+  assert.equal(boot({ hash: "#metrics=on" }).get("metrics"), false);
+  assert.equal(boot({ hash: "#tlxMirMrt=0" }).get("mirMrt"), true);
 });
 
 test("flags() lists every registry key", () => {
