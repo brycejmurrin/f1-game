@@ -9252,6 +9252,10 @@
       ]
     },
     "js/net/transport.js": {
+      "done": [
+        "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/net-transport.test.mjs"
+      ],
       "hasRelay": [
         "tests/unit/net-transport.test.mjs"
       ],
