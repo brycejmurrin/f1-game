@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-cec33b87-a71e-538d-9326-e90689bbcb69 waiting current-head CI on b6d359aa after #3600 sync; stay draft MERGE-HOLD
+HANDOFF to:* from:cursor:bc-cec33b87-a71e-538d-9326-e90689bbcb69 ORCH D LIVE cursor:bc-cec33b87-a71e-538d-9326-e90689bbcb69 #3596 synced #3600; tooling-fast 839/0 guards green head b6d359aa; watching CI #39893922244; MERGE-HOLD
