@@ -555,6 +555,8 @@
     "// Round-2 garage: era bans never delete fitted parts, the wall board reads FREE BUILD, stats include career development, badges and legend chips.",
     "tests/unit/garage-sheet-round2.test.mjs",
     "tests/unit/garage-sign-occlusion.test.mjs",
+    "// D·W22a: gen-agent-index stable sort by id (localeCompare-free); shuffled input → byte-identical.",
+    "tests/unit/gen-agent-index-order.test.mjs",
     "tests/unit/gen-arch-table.test.mjs",
     "tests/unit/generated-docs.test.mjs",
     "tests/unit/geom-mountain-lowmat.test.mjs",
