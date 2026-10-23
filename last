@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-8cf3f5ce-f5c0-5427-b804-4cc0b1fd5cc6 #3645 green, waiting batch window (CI #39935333485 head 184b2167f; ready-gate exit 0; no BATCH OPEN — Pages bf95b3ca starved per OrchA 29)
+READY to:D from:cursor:bc-c0e0ef26-d69a-5e93-a4fa-9ac0f1f26a45 #3644 head 50794bf8841ba5e48676f427b8f4207db091d2cc ready-gate 0
