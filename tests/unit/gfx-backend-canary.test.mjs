@@ -686,7 +686,7 @@ test("TLX frame uniforms share one render-group buffer (setGroup loop after the 
 test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
   const fx = read("js/render/three/tsl-fx.js");
   const start = fx.indexOf("if (decalCache.size >= DECAL_CACHE_CAP)");
-  const evict = fx.slice(start, fx.indexOf("m = fxMaterial({ doubleSided: true, key: \"tlx-fx-decal-\"", start));
+  const evict = fx.slice(start, fx.indexOf("m = fxMaterial({ doubleSided: true, key: \"tlx-fx-decal\" })", start));
   assert.match(evict, /decalCache\.delete\(k\)/);
   const code = evict.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
   assert.doesNotMatch(code, /\.dispose\s*\(/);
@@ -696,12 +696,14 @@ test("TLX decal programs share a material map reference, not the first car's tex
   const fx = read("js/render/three/tsl-fx.js");
   assert.match(fx, /materialReference\("map", "texture"\)/);
   assert.match(fx, /m\.map = tex/);
-  // One graph PER GLOW VALUE, not one shared graph: a TSL uniform node lives in
-  // the shared graph, so a single per-draw uniform would retroactively restyle
-  // every decal material already built from it (2026-09 survey, `_decalGraph` in tsl-fx.js).
-  // decalCache and the program key are already keyed per glow; the graph now is too.
-  assert.match(fx, /const _decalGraph = new Map\(\)/);
-  assert.match(fx, /_decalGraph\.get\(glow\)/);
+  // ONE graph, the glow a PER-MATERIAL reference (A·W14). A shared uniform() node
+  // would restyle every decal material built from the graph (2026-09 survey); a
+  // materialReference reads each material's own tlxGlow into the object
+  // uniform block, so the values stay per material and one program serves them all.
+  assert.ok(fx.includes('materialReference("tlxGlow", "float")'), "the glow is read per material");
+  assert.ok(fx.includes("m.tlxGlow = glow;"), "each decal material carries its own glow");
+  assert.ok(fx.includes('key: "tlx-fx-decal" })'), "one program key for every glow");
+  assert.ok(!/uniform\(\s*glow/.test(fx), "never a shared uniform() for the glow");
   assert.doesNotMatch(fx, /const smp = texture\(tex\)/,
     "a per-texture node cannot sit behind the shared tlx-fx-decal program key");
 });
@@ -2887,7 +2889,7 @@ test("TextureNode clones share the BASE node's flipY / uv-matrix uniforms (PATCH
 
 test("shadow-bug batch: lamp/car targets warmed, caster key from the cast matrix, thrown-pass recovery", () => {
   const sh = code("js/render/three/tlx-shadow.js");
-  const warm = sh.slice(sh.indexOf("async warm()"), sh.indexOf("async warm()") + 1200);
+  const warm = sh.slice(sh.indexOf("async warm(sources)"), sh.indexOf("async warm(sources)") + 1500);
   assert.match(warm, /for \(const rt of \[lampRT, lampStaticRT, carRT\]\)/, "warm() must compile the lamp/car targets' pipelines too");
   assert.match(sh, /_lampStaticValid = _lastPassOk;/, "lampStaticEnd judges its own render, not the sticky S.enabled");
   const begin = fnBody(sh, "beginPass");
@@ -5877,6 +5879,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   const mintLateLit = () => { assert.equal(tag, false, "late lit variants are minted BEFORE setSsrMrt stamps the MRT"); minted = true; };
   const warmLateLit = async () => { assert.ok(minted); assert.equal(mrt, "tag", "late lit variants compile under the scene MRT"); };
   const warmPlusOn = () => true;   // apex26.tlxWarmPlus=1 or three's WebGL2 backend: the full warm
+  const casterWarmOn = warmPlusOn, casterSources = () => [];   // A·W14: the caster warm's own gate and probe layouts
   const drawWarmOn = () => false;   // the A-W1 draw stage (after the mirror stage) has its own rig: tlx-hunt4b.test.mjs
   // The stage timeline memState().warm reports (census 207 spent its window
   // inside the warm with no row saying so): the sandbox owns the record.
@@ -5929,11 +5932,11 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   // warm and the caster warm, and the caster warm still guarded on the module.
   const iPost = stageBody.indexOf("await post.warm(opts, _postF)");
   const iNull = stageBody.indexOf("renderer.setMRT(null)", iPost);
-  const iShadow = stageBody.indexOf("shadowSys.warm()", iNull);
+  const iShadow = stageBody.indexOf("shadowSys.warm(casterSources())", iNull);
   assert.ok(iPost > 0 && iNull > iPost && iShadow > iNull, "setMRT(null) must sit between the post warm and the caster warm");
   assert.equal(stageBody.indexOf("renderer.setMRT(null)", iNull + 1), -1,
     "runProgramWarmStages nulls the MRT exactly once in the full path (the garage-only branch has its own null)");
-  assert.match(stageBody, /if \(warmPlusOn\(\) && shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none or apex26.tlxWarmPlus is not 1");
+  assert.match(stageBody, /if \(casterWarmOn\(\) && shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none or apex26.tlxWarmPlus=0 (A·W14: AUTO is on for both backends)");
   assert.match(stageBody, /post\.warm && \(warmPlusOn\(\) \|\| performance\.now\(\) - _warmAt < 3000\)/, "without tlxWarmPlus=1 the post warm keeps its 3 s gate");
   const warm = eval("(function(opts){ async function runProgramWarmStages(usePost, useTag, opts, garageSceneOnly){" + stageBody
     + "} " + body + "})");

@@ -3224,6 +3224,9 @@ const TLX = (function () {
       let _warmPlus = null;
       try { const v = localStorage.getItem("apex26.tlxWarmPlus"); _warmPlus = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
       const warmPlusOn = () => _warmPlus !== null ? _warmPlus : !!(renderer && renderer.backend && renderer.backend.isWebGLBackend);
+      // The caster warm alone is cheap depth programs and saves a mid-race build on BOTH backends (A·W14), so AUTO
+      // is on everywhere; an explicit apex26.tlxWarmPlus still forces it either way.
+      const casterWarmOn = () => _warmPlus !== null ? _warmPlus : true;
       // A-W1 (perf hunt 4): THE DRAW WARM. The race's opening frames were rAF
       // gaps of 1.1-4.1 s with the main thread idle (census 452-454): the
       // DRIVER's first-draw work, which compileAsync cannot reach — ANGLE-Metal
@@ -3247,6 +3250,19 @@ const TLX = (function () {
       let _drawWarmKnob = null;
       try { const v = localStorage.getItem("apex26.tlxDrawWarm"); _drawWarmKnob = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
       const drawWarmOn = () => (_drawWarmKnob !== null ? _drawWarmKnob : !(softGpu() || softwareGL));
+      // One geometry per vertex layout among the scene's lit meshes: the layouts the casters draw (tlx-shadow probes).
+      function casterSources() {
+        const seen = new Set(), out = [];
+        scene.traverse((o) => {
+          const g = o.isMesh && o.geometry, m = o.material;
+          if (!g || !g.attributes || !g.attributes.position || !m || typeof m.customProgramCacheKey !== "function") return;
+          if (String(m.customProgramCacheKey()).indexOf("tlx-lit") !== 0) return;
+          const sig = Object.keys(g.attributes).sort().join(",") + (g.index ? "|i" : "");
+          if (seen.has(sig) || out.length >= 8) return;
+          seen.add(sig); out.push(g);
+        });
+        return out;
+      }
       function drawWarmStage(usePost, useTag, opts, mirrorWarmed, mirrorOnly) {   // mirrorOnly: startMirrorWarm (B-F3.1)
         const drawn = { mirror: 0, scene: 0, post: 0, casts: 0 };
         if (!usePost || !post || !post.sceneTarget) { _mirWarmUnswap(); return drawn; }
@@ -3417,8 +3433,10 @@ const TLX = (function () {
         // blocker — on the main thread (gpu-census 203/205 stacks, via
         // endPass). sunPass runs before present() on the same frame, so by
         // now castScene holds the grid's casters and the warm compiles the
-        // real ones.
-        if (warmPlusOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
+        // real ones. A·W14: plus probe casters in the scene's lit layouts, for the targets no caster has reached
+        // yet (night lamp and car maps), and on WebGPU too: there the lamp-pass pipelines were built synchronously
+        // mid-race, and only depth programs move into the covered warm (casterWarmOn, apex26.tlxWarmPlus=0 off).
+        if (casterWarmOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(casterSources()); }
         _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
         // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
         if (typeof sky !== "undefined" && sky && sky.cacheWarm) { _gpuLastOperation = "compile-sky-cache"; await sky.cacheWarm(renderer); }

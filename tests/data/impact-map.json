@@ -13505,7 +13505,8 @@
       "warm": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "*": [
         "tests/unit/godray-keep-nearest.test.mjs"
@@ -13701,6 +13702,9 @@
       ],
       "buildPost": [
         "tests/unit/tlx-round2.test.mjs"
+      ],
+      "casterSources": [
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "castShadowInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13991,6 +13995,7 @@
     },
     "js/render/three/tsl-fx.js": {
       "decalMaterialFor": [
+        "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ],
       "fxMaterial": [
@@ -13998,6 +14003,9 @@
       ],
       "releaseTexture": [
         "tests/unit/tlx-texture-release.test.mjs"
+      ],
+      "updateFrame": [
+        "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",
