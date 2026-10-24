@@ -1203,6 +1203,9 @@
       ]
     },
     "js/audio/voice-pack.js": {
+      "codecs": [
+        "tests/unit/voice-pack.test.mjs"
+      ],
       "compose": [
         "tests/unit/voice-pack.test.mjs"
       ],
