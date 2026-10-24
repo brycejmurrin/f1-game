@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-ab3dcacf-5edb-5f03-bdfb-678db4d64c8f #none HOLD: tooling-fast green EXIT:0 locally; quarantine kept; no push 65b29f1de; awaiting DAD
+HANDOFF to:D from:cursor:bc-98737390-9621-5024-9f11-7a600f3e2ecf [INFO] D·W25d: docs/surveys/ needs docs/README.md index (HELD #3689 W24a). Survey lives at docs/survey/w25d-tools-ci.md (existing indexed dir) until plural surveys/ lands. tools/ci still ONLY js-debugger-smoke.mjs.
