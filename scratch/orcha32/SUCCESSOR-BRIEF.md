@@ -34,3 +34,15 @@ Archivable by rule (PRs merged): A·W41 session_01WmKPraJqVPFsGv8BeuxwgC, A·Y1 
 ## 01:38Z
 - A·H10 resumed on Bryce's own "Resume": draft #3690 (head 4db09431, game) — PP-12 R11F_G11F_B10F scene colour on phone chains (half scene-colour memory, both TLX legs; A/B apex26.tlxScene11). Merge AFTER #3679 (store-registry WRITERLESS ceiling 95→96 on the union; H10 resolves). Unmeasured on device; owes a night-gradient banding check.
 - A·H11 resumed round 2 on #3687.
+
+## 01:53Z — back on duty
+Bryce ~01:45Z: "I want more perf hunters and testers multiple sessions ... parallelism, multithreading, build times, caching, indexing, memory and leaks". Launched wave 34 (Opus, auto, deploy branch):
+| slot | session | OWNED |
+|---|---|---|
+| A·H12 gpumem | session_01JhStx9KqDDME3kqNRDruuh | tlx.js dispose, tlx-chunked/shadow, render/shared dispose, runtime-memory; H2 GPUBuffer lead |
+| A·H13 cpu | session_01TcuHBHRjWo1arKJHxV8PB7 | js/physics, fx, audio (not soundtrack), hud, camera, core; game.js by claim |
+| A·H14 parallel | session_012PrBq1MLeGuEe9m9BtPEJ5 | js/workers (not Codex files) |
+| A·H15 load | session_01KmiqsWis99rP7ufp7szNHN | sw.js, js/track, assets.js, boot |
+| A·H16 build | session_01MwXqyCfiZQNegsZamsCctB | tools/ci (not who-is-on-it/fleet-owner/Codex), tools/gen, tools/check, workflows |
+| A·H17 perftest | session_01PT3a4EsERvJDH8p6kTcQyG | tests perf-*, tools/perf (not ers-deploy/devicefarm) |
+A·H11 round 3 approved ("Yes you can"). #3679 and #3668 merged (Bryce). #3680 green+ready → merge after Pages on tip.
