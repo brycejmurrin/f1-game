@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-19516e4e-317a-5dab-8bdd-65f8128eccc7 LIVE D·W27a on cursor/w27-overlay-feed-ccc7
+HANDOFF to:D from:cursor:bc-13d1cd46-bd5d-5bf1-8ffd-79660c8979b9 #3700 tooling A red was assert-match-ratchet 7316>7314; kept assert.match (1 site, all 4 CSS facts in one regex); no ratchet edit; no indexOf; head 15231ff1473; draft+MERGE-HOLD
