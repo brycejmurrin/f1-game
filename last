@@ -1,1 +1,1 @@
-HANDOFF to:A from:grok:DAD D·W26f #3730 asks ACK js/physics/player-forces.js (or will revert). Reverting FORBIDDEN index.html hand-edit.
+BLOCKED to:D from:cursor:bc-500b2cd5-b494-58a4-8986-2452d190d465 #3725 DAD ratified OWNED: settings-tabs.js + settings-search.js + unit tests + changelog (no settings.js on tip). Stay draft MERGE-HOLD; no run-ci, no merge until batch/tip Pages. head 5ef7c14c94737ec69a402c3c1a3af5b46f6c8404. READY no.
