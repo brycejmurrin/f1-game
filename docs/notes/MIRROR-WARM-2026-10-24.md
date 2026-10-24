@@ -79,6 +79,7 @@ a pipeline switched away from and back keeps its first build.
 | base | 79 | 14 | 13 | — |
 | sweep pin only (`fix1`) | 69 | 4 | 3 | 67 |
 | create-time pin (`fix2`) | 66 | 4 | 3 on the recorded fields (a field not recorded differs) | 68 |
+| + rig both windings (`fix5`) | 66 | 4 (2 async under the rig cover, 2 cheap sync decals) | — | 68 |
 
 With the create-time pin, `programWarm` inside `mirrorPrepare` fell from 1.1 s to 25 ms.
 
@@ -88,8 +89,22 @@ The 4 left:
 - two `-8`-biased decal states.
 
 Three of them match a pinned pipeline on everything the census recorded (shaders, targets, bias, cull, winding), yet
-three keyed them as new, so they differ in a field it did not record: the vertex-buffer layout or the blend. They are
-the next target: name that field, then warm those states in the menu (see below).
+three keyed them as new, so they differ in a field it did not record: the vertex-buffer layout or the blend.
+
+The extended census (`fix3`) records the vertex buffers, blend, depth write and sample count. It names all four:
+
+| pipeline | state | menu built | cost |
+|---|---|---|---|
+| `_90` lit, ccw | double-sided, opaque with an explicit `one/zero` blend that keeps alpha (the rig's no-alpha-write material) | the same program only with blend `null` or alpha blend | built async by the rig warm, under the cover |
+| `_90` lit, cw | the same, mirrored | no | **synchronous on the first race frame** (a lit pipeline: about 1.2 s on an iPhone 14) |
+| `_53` decal, `-8` bias | identical to its menu build on every GPU descriptor field; three's cache key differs | yes (same descriptor) | synchronous, cheap program |
+| `_50` decal, `-8` bias, back/cw | position only, alpha blend, mirrored | no | synchronous, cheap program |
+
+Fix for the lit one: the rig warm (`startRigWarm`) compiles a `DoubleSide` pair on both windings, because the race
+also draws the rig's double-sided keep material mirrored. After it (`fix5`), the `_90` cw twin is built async by the
+rig warm under the cover, not on the first race frame. The count stays 4, and only the two cheap decal states are
+still built synchronously on the first race frame. Test: `tests/unit/tlx-rig-warm.test.mjs` (fails before, passes
+after).
 
 Lavapipe-only artifacts, not on a phone:
 

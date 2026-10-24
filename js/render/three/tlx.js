@@ -3658,6 +3658,10 @@ const TLX = (function () {
               if (i && typeof warmIdleChunks === "function" && warmIdleChunks() && (i & 1) === 0) await _idleYield(32);
               const r = job.recs[i];
               await compileWarmProbe(r.geo, r.mat, r.sx);
+              // A·W50: a double-sided pair keys its pipeline on the winding too, and the race draws the rig's
+              // double-sided keep material mirrored as well: the first race frame built its cw twin synchronously
+              // (lavapipe census, the one lit pipeline left after the pin). Compile the other sign under the cover.
+              if (r.mat.side === THREE.DoubleSide) await compileWarmProbe(r.geo, r.mat, -r.sx);
               let s = _rigDone.get(r.geo);
               if (!s) _rigDone.set(r.geo, s = new Set());
               s.add(_rigKey(r));
