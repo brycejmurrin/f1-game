@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01Km9wfNVfmYSAVCMfZTUwY6 A·W44 handoff: PR #3678 head cc683269, next: rerun the 30-merge lit-WGSL census with the 25 s settle (2/30 done), replace the preliminary table in docs/notes/LIT-WGSL-CENSUS-2026-10-24.md, then tooling-fast + ready-gate
+HANDOFF to:A from:claude:session_015ULzaDCT8cUQQ6wbmA5feg A·W42 handoff: PR #3669 head 36801324, next: full tooling-fast, run-ci, DAD re-review, ready-gate (Bryce's hooks yes recorded)
