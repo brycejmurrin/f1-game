@@ -316,19 +316,29 @@
     },
     "js/audio/crowd.js": {
       "attach": [
-        "tests/unit/crowd-audio.test.mjs"
+        "tests/unit/crowd-audio.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
       "bind": [
-        "tests/unit/crowd-audio.test.mjs"
+        "tests/unit/crowd-audio.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
       "bindHost": [
-        "tests/unit/crowd-audio.test.mjs"
+        "tests/unit/crowd-audio.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ],
+      "detach": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ],
+      "ensureAttached": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
       "fireCheer": [
         "tests/unit/crowd-audio.test.mjs"
       ],
       "inspect": [
-        "tests/unit/crowd-audio.test.mjs"
+        "tests/unit/crowd-audio.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
       "liveOk": [
         "tests/unit/crowd-audio.test.mjs"
@@ -337,7 +347,8 @@
         "tests/unit/crowd-audio.test.mjs"
       ],
       "update": [
-        "tests/unit/crowd-audio.test.mjs"
+        "tests/unit/crowd-audio.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
       ]
     },
     "js/audio/driving-cues.js": {
@@ -398,6 +409,9 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs"
       ],
+      "createCtx": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ],
       "deployBoost": [
         "tests/unit/audio-tune.test.mjs"
       ],
@@ -420,6 +434,7 @@
         "tests/unit/rival-contact-sfx.test.mjs"
       ],
       "finish": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
@@ -459,6 +474,7 @@
         "tests/unit/audio-tune.test.mjs"
       ],
       "rebuildCtx": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/reject-lint.test.mjs"
       ],
       "resetReplayScrub": [
@@ -495,6 +511,7 @@
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/engine-note-quality.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
@@ -504,6 +521,7 @@
       ],
       "setGridIdle": [
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
       ],
       "setLayer": [
@@ -539,6 +557,7 @@
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
@@ -602,6 +621,7 @@
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/engine-note-quality.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
@@ -615,6 +635,9 @@
         "tests/unit/tyre-squeal-slip.test.mjs",
         "tests/unit/wind-speed.test.mjs"
       ],
+      "startEngineGraph": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ],
       "startRain": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-recovery.test.mjs"
@@ -624,6 +647,7 @@
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
@@ -961,6 +985,7 @@
         "tests/unit/audio-sample-upgrade.test.mjs"
       ],
       "*": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/engine-note-quality.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",

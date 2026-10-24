@@ -342,6 +342,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // cross-tool-guards: Cursor/Codex reach bash-guard through one adapter; .githooks
   // pre-push refuses deploy-branch, delete and rewrite pushes. Real git, ~2 s.
   "tests/unit/cross-tool-guards.test.mjs",
+  // #3289: crowd bed leaves a closed AudioContext after rebuildCtx / startEngineGraph.
+  "tests/unit/crowd-ctx-rebuild.test.mjs",
   "tests/unit/css-comments.test.mjs",
   "tests/unit/css-critical-path.test.mjs",
   "tests/unit/css-faces.test.mjs",
