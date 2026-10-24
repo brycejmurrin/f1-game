@@ -1,1 +1,1 @@
-1792806607	Bryce Murrin	Fleet C share QR changelog: docs/changelog.d/share-card-qr-lazy.md; alongside live share QR claim 4b86ee5  [cursor/share-qr-lazy-9b72; session fa2fe35468c612fda4a08d8d]
+1792807032	Bryce Murrin	Fleet C share QR generated impact map: tests/data/impact-map.json from gen-agent-index; disjoint entries from overlay chroma claim, user authorized claimed area  [cursor/share-qr-lazy-9b72; session fa2fe35468c612fda4a08d8d]
