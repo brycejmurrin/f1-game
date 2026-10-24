@@ -784,3 +784,79 @@ test("A-P2W: discardHint is a no-op off WebGPU", async (t) => {
   assert.equal(h.post.discardHint(rt, 2, true), false, "WebGL2 leg: the invalidate path owns it");
   assert.equal(rt.apexDiscardColor, undefined);
 });
+
+// ── phoneperf 2026-10-24: scene colour R11F_G11F_B10F on phones where renderable (KNOWN-WINS row 15) ───────
+// Own rig (postRig above is pinned to a one-attachment phone chain by the A-P1 tests): the real post chain over the
+// fake WebGL2, which exposes EXT_color_buffer_float, so the 11/11/10 format is renderable here as on a phone GPU.
+async function rig11(t, { ls = {}, isMobile = true, ssrTag = true } = {}) {
+  const fg = makeFakeGL(320, 180);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  const post = withStore(ls, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile,
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest: () => null,
+    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
+  post.resize(320, 180);
+  t.after(() => { post.dispose(); renderer.dispose(); });
+  return { post, renderer, gl: fg.gl };
+}
+
+test("scene11: a phone chain's scene colour is rg11b10 where renderable; the tag attachment keeps half float", async (t) => {
+  const h = await rig11(t);
+  const rt = h.post.sceneTarget();
+  assert.equal(rt.textures[0].type, THREE.UnsignedInt101111Type);
+  assert.equal(rt.textures[0].format, THREE.RGBFormat);
+  assert.equal(rt.textures[1].type, THREE.HalfFloatType, "attachment 1 (ssrTag) keeps the chain's hdrType");
+  assert.equal(rt.textures[1].format, THREE.RedFormat, "and its own format (indexed blending on the fake GL)");
+  assert.equal(h.post.state().sceneFormat, "rg11b10");
+  assert.equal(h.post.hdrOk(), true, "the scene is still float HDR to every reader");
+  // The scene pass renders into it and A-P1's depth rule still runs on the same target.
+  h.renderer.setRenderTarget(rt);
+  assert.equal(h.post.depthBegin(OFF, NIGHT), false);
+  h.renderer.render(new THREE.Scene(), new THREE.PerspectiveCamera());
+  assert.equal(h.post.depthEnd(), true, "depth discarded on the 11/11/10 target as on RGBA16F");
+  h.renderer.setRenderTarget(null);
+  const off = await rig11(t, { ls: { "apex26.tlxScene11": "0" } });
+  assert.equal(off.post.sceneTarget().textures[0].type, THREE.HalfFloatType, "apex26.tlxScene11=0 keeps RGBA16F");
+  assert.equal(off.post.state().sceneFormat, "rgba16f");
+  const desk = await rig11(t, { isMobile: false });
+  assert.equal(desk.post.sceneTarget().textures[0].type, THREE.HalfFloatType, "desktop keeps RGBA16F by default");
+  const deskOn = await rig11(t, { isMobile: false, ls: { "apex26.tlxScene11": "1" } });
+  assert.equal(deskOn.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "apex26.tlxScene11=1 forces it anywhere renderable");
+  const one = await rig11(t, { ssrTag: false });
+  assert.equal(one.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "a one-attachment chain too");
+  assert.equal(one.post.sceneTarget().textures.length, 1);
+  const bloomOff = await rig11(t, { ls: { "apex26.tlxBloom11": "0" } });
+  assert.equal(bloomOff.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "the bloom knob does not reach the scene target");
+});
+
+test("scene11: never on the WebGPU leg — a blend state against an alpha-less target fails pipeline validation there", async (t) => {
+  // gpu-census macos-latest run 40052670537 (886e476f, Dawn/Metal): "Async render pipeline creation failed
+  // (renderPipeline_MeshBasicNodeMaterial_70): Color blending srcFactor (BlendFactor::One) or dstFactor
+  // (BlendFactor::OneMinusSrcAlpha) …" with the scene target in rg11b10ufloat. The fake WebGL2 cannot reproduce
+  // a WebGPU validation rule, so this pins the gate in the source and the behaviour under a WebGPU-shaped backend.
+  const post = read("js/render/three/tlx-post.js");
+  assert.ok(post.includes("const _r11Blendable = r11Renderable && !(renderer.backend && renderer.backend.isWebGPUBackend);"), "the gate reads the backend kind");
+  assert.ok(post.includes("let scene11 = _r11Blendable && !!ctx.isMobile;"), "the default goes through the gate");
+  assert.ok(post.includes('if (k === "1") scene11 = _r11Blendable;'), "the force knob cannot override the WebGPU exclusion");
+  // Behaviour: the real chain over the fake WebGL2, with the backend flagged as WebGPU for the probe's purposes.
+  const h = await rig11(t, { ls: { "apex26.tlxScene11": "1" } });
+  assert.equal(h.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "WebGL backend: forced on");
+  const fg = makeFakeGL(320, 180);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  renderer.backend.isWebGPUBackend = true;   // the gate reads this flag; nothing else in the chain's construction does
+  const made = withStore({ "apex26.tlxScene11": "1" }, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true,
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag: true, softDest: () => null,
+    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
+  t.after(() => { made.dispose(); renderer.dispose(); });
+  assert.equal(made.sceneTarget().textures[0].type, THREE.HalfFloatType, "WebGPU-flagged backend keeps RGBA16F even when forced");
+  assert.equal(made.state().sceneFormat, "rgba16f");
+});
+
+test("scene11: the probe is read before the bloom knob, and no post reader samples scene alpha", () => {
+  const post = read("js/render/three/tlx-post.js");
+  assert.ok(post.includes("const r11Renderable = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;"), "the probe is its own const");
+  assert.ok(post.indexOf("const r11Renderable") < post.indexOf('localStorage.getItem("apex26.tlxBloom11")'), "the probe is read before the bloom knob can clear it");
+  const tslPost = read("js/render/three/tsl-post.js");
+  assert.ok(!/sceneT\.sample\([^)]*\)\)?\.[aw]\b/.test(tslPost) && !/\bscn\.[aw]\b/.test(tslPost), "scene alpha is never read: RGB-only storage is lossless for the composite");
+});

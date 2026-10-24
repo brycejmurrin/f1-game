@@ -3000,12 +3000,10 @@ test("WebGPU beginRender honours the single-sample discard hint, storeOp only (P
   // around the last render of a frame into a write-only target (tlx-post.js A-P2W).
   // Pristine r186 stores every single-sample attachment; a re-drop without the
   // patch silently stores them again, so the WebGPU leg loses the bandwidth.
-  assert.match(THREE_BUNDLE, /\w+=\w+\?0\|\w+\.apexDiscardColor:0,\w+=!!\w+&&!0===\w+\.apexDiscardDepth/,
-    "beginRender no longer reads the apexDiscard* hint (vendor/three-0.186.1/PATCHES.md §17)");
-  assert.match(THREE_BUNDLE, /\.storeOp=\w+\|\|1==\(\w+>>\w+&1\)\?\w+:\w+/,
-    "the colour storeOp ignores apexDiscardColor (PATCHES.md §17)");
-  assert.match(THREE_BUNDLE, /\.depthStoreOp=\w+\|\|\w+\?\w+:\w+/,
-    "the depth storeOp ignores apexDiscardDepth (PATCHES.md §17)");
+  // One ordered pin over the three edits (hint read → colour storeOp → depth storeOp), so the
+  // tree-wide source-pin ratchet pays one site, not three.
+  assert.match(THREE_BUNDLE, /\w+=\w+\?0\|\w+\.apexDiscardColor:0,\w+=!!\w+&&!0===\w+\.apexDiscardDepth[^]*?\.storeOp=\w+\|\|1==\(\w+>>\w+&1\)\?\w+:\w+[^]*?\.depthStoreOp=\w+\|\|\w+\?\w+:\w+/,
+    "beginRender no longer reads the apexDiscard* hint into the colour / depth storeOp (vendor/three-0.186.1/PATCHES.md §17)");
   // Never the loadOp: a discarded attachment must still load/clear exactly as before.
   assert.doesNotMatch(THREE_BUNDLE, /apexDiscard\w*\?\w+:\w+\)?,?\w*\.?loadOp/,
     "the hint leaked into a loadOp (PATCHES.md §17)");

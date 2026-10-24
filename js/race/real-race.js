@@ -301,7 +301,9 @@ const RealRace = (function () {
    *  leader completed lap L-1 (t0). Per driver: the lap in progress, how far
    *  round it the car was (by time, so a slow car is placed where it was, not
    *  where a fast one would be), the set on the car and its age, the stops
-   *  made, or `retired` when the data ended before t0. Null at lap 1 (the grid). */
+   *  made, or `retired` when the data ended before t0. traceT0 is the published
+   *  start for the positions feed; t0 remains the pace model's clock, whose
+   *  untimed laps are filled. Null at lap 1 (the grid). */
   function fieldAt(script, startLap) {
     const laps = script.laps | 0;
     const L = clamp(startLap | 0, 1, Math.max(1, laps));
@@ -311,6 +313,7 @@ const RealRace = (function () {
     for (const d of script.drivers || []) { const row = cum[d.num]; if (row.length > L - 1 && row[L - 1] < t0) t0 = row[L - 1]; }
     if (!isFinite(t0)) return null;
     const by = {};
+    let traceT0 = Infinity;   // published seconds from lights out, apart from the synthetic pace clock
     for (const d of script.drivers || []) {
       const row = cum[d.num];
       let k = 0;
@@ -318,6 +321,8 @@ const RealRace = (function () {
       // The car had stopped when its row ends before t0 (cumTable fills a
       // finisher's untimed laps, so a short row is a retirement, not a gap).
       const retired = row.length <= k + 1 || (d.dnf && k >= (d.lapsDone | 0));
+      const published = Array.isArray(d.lapStart) ? d.lapStart[L - 1] : null;
+      if (!retired && !d.dns && Number.isFinite(published) && published >= 0) traceT0 = Math.min(traceT0, published);
       const dur = retired ? 0 : row[k + 1] - row[k];   // the lap in progress: its full duration
       const frac = retired ? 0 : clamp((t0 - row[k]) / dur, 0, 0.98);
       const lap = k + 1;
@@ -328,7 +333,7 @@ const RealRace = (function () {
       const age = s ? Math.max(0, lap - s.from) + (s.age | 0) : 0;
       by[d.num] = { lap, frac, retired, stint, compound: classOf(s), age, into: retired ? 0 : t0 - row[k] };
     }
-    return { lap: L, t0, by };
+    return { lap: L, t0, traceT0: Number.isFinite(traceT0) ? traceT0 : t0, by };
   }
 
   /** The closed loop: the multiplier the car runs next lap. `err` is the
@@ -650,7 +655,7 @@ const RealRace = (function () {
       G.raceT = K0 * at.t0; raceT0 = G.raceT;
       const wearOn = G.tyres && G.tyres.on && G.tyres.on();
       const vTop = G.vTop ? G.vTop() : 80;
-      // The real positions, when loaded and the distance is real: each car exactly where it was at t0.
+      // The real positions, when loaded and the distance is real: each car at the published jump instant.
       const built = active.traces && simLaps === realLaps && typeof RealReplay !== "undefined" ? RealReplay.buildTraces(G.track, script, active.traces) : null;
       const real = {};
       let side = 0, parked = 0, dropped = 0, exact = 0;
@@ -660,7 +665,9 @@ const RealRace = (function () {
         if (!a) { if (!c.human) { parkCar(c, "dns", 0); parked++; } continue; }
         if (a.retired) { parkCar(c, "accident", simLapFor(a.lap, simLaps, realLaps)); parked++; f.lap = c.lap; continue; }
         const tr = built ? built.byNum.get(f.d.num) : null;
-        const r = tr ? RealReplay.sampleAt(tr, at.t0, real) : null;
+        // Filled untimed laps and restart gaps can move the synthetic pace clock
+        // away from the positions feed's published seconds from lights out.
+        const r = tr ? RealReplay.sampleAt(tr, at.traceT0, real) : null;
         const onTrace = r && !r.before && !r.ended && r.prog > 0;
         const ls = onTrace ? Math.floor(r.prog / total) + 1 : simLapFor(a.lap, simLaps, realLaps);
         const s = onTrace ? r.prog - (ls - 1) * total : a.frac * total;

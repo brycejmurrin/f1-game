@@ -1365,7 +1365,7 @@ and retention, MCP protocol/level routing and retrieval, configured launch pins,
 and the generated surface catalog. It runs without browsers and is included in
 the structural floor; its files are listed in `tests/groups.json`.
 
-The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`.
+The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`. Recent unit pins include `pause-taps.test.mjs` (#3274 painted pause-door floor at UI SIZE 75%).
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 
