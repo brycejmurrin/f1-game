@@ -400,6 +400,13 @@ const VisorOptics = (function () {
     const key = _w + "x" + _h + "|" + visor + "|" + color + "|" + strength;
     if (key === _portKey) return;
     _portKey = key;
+    // OFF is no visor at all: the eye-port (bezel, cheek pads, oval falloff) goes with it, or the plain helmet
+    // view keeps an oval frame the player switched off.
+    if (visor === "off") {
+      document.body.style.removeProperty("--visor-port");
+      document.body.removeAttribute("data-visor-port");
+      return;
+    }
     const tinted = visor === "smoke";
     document.body.style.setProperty("--visor-port", portImage(_w, _h, { tint: tinted ? tintRGB(color) : null, tintAlpha: tinted ? TINT_ALPHA[strength] || TINT_ALPHA.light : 0 }));
     document.body.setAttribute("data-visor-port", "1");
@@ -607,7 +614,7 @@ const VisorOptics = (function () {
     const helmet = _helmet();
     if (!helmet) { _show(false); return; }
     const resized = _size();
-    _port();                                                   // the aperture itself, whatever the visor setting
+    _port();                                                   // the aperture: CLEAR / TINTED build it, OFF clears it
     const visor = _opt("visor", "off");
     const level = LEVEL[_opt("visorReflections", "light")] || 0;
     if (visor === "off" || !on || !(level > 0) || _low()) { _show(false); return; }
