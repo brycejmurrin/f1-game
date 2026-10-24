@@ -116,3 +116,9 @@ Also seen, not yet reproduced (OrchA 27's read of the raw artifacts):
   not per minute of test: batch several measurements into one session (as `--scenario cache` and `tracks` do).
 - **Flaky session start:** one unit failed `POST /session` straight after PREPARING ("remote debugger did not
   return any connected web applications"). A retry fixes it.
+
+- **Entry path (A·W43, 2026-10-24):** the harness enters races through `__apex.race`, which skips race settings'
+  `prepareMenuCarAssets`. Every entry-time figure above (rows 17 and 21 included) is a **cold-API path** no player
+  takes: warmCarAssets 3.5–4.7 s there against 7 ms via menu → RACE SETUP → START. Use `--entry menu` (the player's
+  path; waits for the menu's own prep, then presses START RACE) for any entry-time claim. Each row's JSON now carries
+  `entryPath`. `--entry menu` is untested on a device as of this note; its first run needs a Go.
