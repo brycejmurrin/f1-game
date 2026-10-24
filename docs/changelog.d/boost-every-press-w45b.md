@@ -1,0 +1,1 @@
+Fixed: on three.js WebGPU (THREE PATH: WEBGPU), every BOOST press after a straight without boost no longer rebuilds the cockpit ERS bar, ERS strip, active OT lamp and lift-flame pipelines mid-race; the idle mesh prune now keeps those deploy-only meshes (#3677).

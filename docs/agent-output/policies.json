@@ -1196,6 +1196,11 @@
       "presentation": "native",
       "preserve": "Per-row frame/JS percentiles, slow-call and pipeline rows, and the --json file; paravirtual ms read as structure only."
     },
+    "tools/gfx/mem-cycles-lib.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/gfx/mem-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1947,6 +1952,11 @@
       "preserve": "@c1"
     },
     "tools/perf/runtime-memory.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
+    "tools/perf/boost-press-census.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"

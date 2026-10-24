@@ -16,7 +16,9 @@ import { ciWorkflow, gpuWorkflow } from "../helpers/ci-workflow.mjs";
 // on its own by "gpu-census relaunch" below.
 const RELAUNCH_NAME = "Game check — three.js / WebGPU, first and second launch (one profile)";
 const RELAUNCH_STEP = /\n      - name: Game check — three\.js \/ WebGPU, first and second launch \(one profile\)[\s\S]*?\n          done\n/;
-const gpuControls = gpuWorkflow.replace(RELAUNCH_STEP, "\n");
+// The opt-in mem-cycles step (A·H12) is a measurement, not a control leg: cut out like the relaunch step.
+const MEMCYCLES_STEP = /\n      - name: Memory cycles — three\.js race to quit[\s\S]*?\n          done\n/;
+const gpuControls = gpuWorkflow.replace(RELAUNCH_STEP, "\n").replace(MEMCYCLES_STEP, "\n");
 
 test("gpu-census runs nightly staggered from the boot group, with the full check and its dispatch defaults", () => {
   // 2026-09-29: both were `17 3 * * *` and stacked on the same ~20 slots with
@@ -108,7 +110,7 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   const wf = parseYAML(gpuWorkflow);
   const inputs = wf.on.workflow_dispatch.inputs;
   // Appended last: every earlier input keeps its name, position and default.
-  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam", "entry", "relaunch"]);
+  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam", "entry", "relaunch", "mem_cycles"]);
   assert.equal(inputs.track.default, "montreal"); assert.equal(inputs.clock.default, "12"); assert.equal(inputs.tod.default, "");
   assert.equal(inputs.cam.type, "choice");
   assert.deepEqual(inputs.cam.options, ["helmet", "chase", "chase>cockpit"]);
@@ -147,7 +149,7 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
 test("gpu-census threads an entry input (api default; menu / menu-full = the player's RACE!) to every game check (hunt 5 E)", () => {
   const wf = parseYAML(gpuWorkflow);
   const inputs = wf.on.workflow_dispatch.inputs;
-  assert.equal(Object.keys(inputs).at(-2), "entry", "appended last (before relaunch, #3235): every earlier input keeps its position");
+  assert.equal(Object.keys(inputs).at(-3), "entry", "appended last (before relaunch, #3235, and mem_cycles, A·H12): every earlier input keeps its position");
   assert.equal(inputs.entry.type, "choice");
   assert.deepEqual(inputs.entry.options, ["api", "menu", "menu-full"]);
   assert.equal(inputs.entry.default, "api", "a default dispatch and the nightly enter as every earlier census did");
@@ -329,4 +331,24 @@ test("gpu-census relaunch: one profile, one origin, the TLX/WebGPU check twice (
   assert.ok(lines.includes('PROF="$RUNNER_TEMP/tlx-relaunch-profile"; rm -rf "$PROF"'), "the first leg is a first-ever launch");
   assert.ok(lines.includes("for leg in cold warm; do"), "two legs on the one profile: cold, then warm");
   assert.ok(RELAUNCH_STEP.test(gpuWorkflow), "the controls' cut-out finds the step");
+});
+
+test("gpu-census mem cycles: race to quit on both three.js paths, opt-in (dispatch input or push request), never the verdict (A·H12)", () => {
+  const wf = parseYAML(gpuWorkflow);
+  const plan = wf.jobs.plan, split = plan.steps.find((s) => s.id === "split");
+  const inp = wf.on.workflow_dispatch.inputs.mem_cycles;
+  assert.equal(inp.type, "string"); assert.equal(inp.default, "0", "off by default: a default dispatch and the nightly are unchanged");
+  assert.equal(plan.outputs.mem_cycles, "${{ steps.split.outputs.mem_cycles }}");
+  assert.equal(split.env.INPUT_MEM_CYCLES, "${{ inputs.mem_cycles || '0' }}");
+  assert.ok(split.run.includes('print("mem_cycles=" + str(min(max(mc, 0), 16)))'), "clamped 0..16 in the plan");
+  assert.equal(wf.jobs.census.env.CENSUS_MEM_CYCLES, "${{ needs.plan.outputs.mem_cycles }}");
+  const step = wf.jobs.census.steps.find((s) => s.name === "Memory cycles — three.js race to quit, WebGPU then WebGL2 (opt-in)");
+  assert.ok(step, "the mem-cycles step exists");
+  assert.ok(step.if.includes("needs.plan.outputs.mem_cycles != '0'"), "opt-in: 0 (every dispatch and the nightly) skips it");
+  assert.equal(step["continue-on-error"], true, "a measurement, never the job's verdict");
+  assert.ok(step["timeout-minutes"] <= 15, "inside the job cap");
+  assert.ok(!step.name.startsWith("Game check —"), "not counted as a control leg");
+  assert.ok(/--mem-cycles "\$\{CENSUS_MEM_CYCLES\}"/.test(step.run) && /for p in webgpu webgl2; do/.test(step.run));
+  assert.ok(!step.run.includes("${{"), "no expression expansion inside run (zizmor template-injection)");
+  assert.ok(MEMCYCLES_STEP.test(gpuWorkflow), "the controls' cut-out finds the step");
 });
