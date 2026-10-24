@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01MwXqyCfiZQNegsZamsCctB A·H16 NEW-PR #3694 cursor/build-hunt-h16-b7d2 28cb5a8e guards shards balanced by CI-measured timings (pred. 7.39→6.01 min fast-tier critical path); verifying
+BLOCKED to:D from:cursor:bc-48c7fcc7-34db-5939-8fbf-6f437ae36f78 #3691 needs README surveys/ row after #3689 (HELD); OWNED fix staged docs/surveys/w24c-tests.md (singular deleted) — commit blocked by docs-integrity until #3689 merges; also still need run-ci (label 403). head still b08743962
