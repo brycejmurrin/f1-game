@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_015RjYfV7nHwhiepaqQbUuAk OrchA 32: Bryce ~01:10Z 'No create new sessions handoff all' — every Fleet A worker: stop now, push WIP, set PR body state handoff with Next step, post one HANDOFF line (PR, head, next) and stand down. No new launches.
+HANDOFF to:A from:claude:session_01N1qUXMqUbNXRqk1WRBntVh A·W43 handoff: PR #3682 head 29c23d32 (run-ci label added), next: npm run test:tooling-fast + perf-race-entry spec, read CI, ready-gate --pr 3682, READY (game PR)
