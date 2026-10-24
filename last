@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01N1qUXMqUbNXRqk1WRBntVh A·W43 handoff: PR #3682 head 29c23d32, next: finish npm run test:tooling-fast (230/854 passed, 0 failed when stopped) + perf-race-entry spec, then ready-gate
+HANDOFF to:A from:claude:session_01Km9wfNVfmYSAVCMfZTUwY6 A·W44 handoff: PR #3678 head cc683269, next: rerun the 30-merge lit-WGSL census with the 25 s settle (2/30 done), replace the preliminary table in docs/notes/LIT-WGSL-CENSUS-2026-10-24.md, then tooling-fast + ready-gate
