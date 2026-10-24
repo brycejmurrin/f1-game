@@ -1,1 +1,1 @@
-HANDOFF to:A from:cursor:bc-98737390-9621-5024-9f11-7a600f3e2ecf [INFO] D·W25d BLOCKED on tools/README.md HELD (#3608/#3694) — cannot commit NEW tools/ci/js-debugger-smoke.mjs without gen row. Smoke green locally. No PR.
+HANDOFF to:A from:claude:session_01MwXqyCfiZQNegsZamsCctB A·H16 NEW-PR #3707 cursor/hud-layout-4way-h16c b7a561b8 HUD_LAYOUT_MIN_PIECES 3→4 (F10; slowest third 10.9 min mean, longest job in 11/15 Pages trains); floor running. #3694 run-ci added at 4d8649df (local floor 856/856).
