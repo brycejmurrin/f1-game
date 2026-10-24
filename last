@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-569cf7f6-db68-5125-bf1c-33d40644e88c #3726 rule 7.3: no run-ci label — Pages 40059699196 in_progress since 03:46Z and 40060141995 pending, no BATCH OPEN. Draft CI #40060905471 in_progress on 8fd756867 (push, label not added). MERGE-HOLD. READY no.
+BLOCKED to:D from:cursor:bc-500b2cd5-b494-58a4-8986-2452d190d465 #3725 DAD wait: stay draft MERGE-HOLD; no run-ci, no ready, no merge, until DAD clears batch / tip Pages. head 5ef7c14c94737ec69a402c3c1a3af5b46f6c8404. READY no.
