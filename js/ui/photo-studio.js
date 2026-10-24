@@ -625,11 +625,21 @@ function create(G, deps) {
     thumb.getContext("2d").drawImage(canvas, 0, 0, thumb.width, thumb.height);
     return thumb.toDataURL("image/jpeg", 0.7);
   }
+  // #3656: the live view may run below native resolution (the governor, a
+  // phone's title scene), and the photo copied that backing store: 217 x 122 px
+  // on an iPhone 14. The shot renders at renderScale 1 (the native backing
+  // size, still under the backend's DPR cap and texture limit; keepSource and
+  // compose bound it at 2048 px), then the live scale comes back unchanged.
+  async function fullRes(run) {
+    const gfx = G.gfx, prev = gfx && gfx.getRenderScale && gfx.setRenderScale ? gfx.getRenderScale() : 1;
+    const raised = prev < 1 && !!gfx.setRenderScale(1);
+    try { return await run(); } finally { if (raised) gfx.setRenderScale(prev); }
+  }
   async function capture() {
     if (!st.open || st.busy) return false;
     const gen = st.generation, opts = options(); busy(true); say("Capturing the rendered scene…");
     try {
-      const source = await frame(); if (gen !== st.generation) return false;
+      const source = await fullRes(frame); if (gen !== st.generation) return false;
       keepSource(source, opts); last = compose(raw, opts); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;
       say("Captured " + last.width + " × " + last.height + ". Ready to download or save."); return true;
     } catch (e) { Log.warn("ui", "capture failed", e); if (gen === st.generation) say("Capture failed: " + text(e.message, 120) + ". Try again once the scene is ready."); return false; }
@@ -720,7 +730,7 @@ function create(G, deps) {
     } catch (e) { if (gen === st.generation) say("This photo could not be opened: " + text(e.message)); }
     finally { if (gen === st.generation) { busy(false); importFile.value = ""; } }
   }
-  function state() { return { open: st.open, generation: st.generation, source: st.source, subject: !!st.subject, aspect: st.aspect, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, background: !!background() }; }
+  function state() { return { open: st.open, generation: st.generation, source: st.source, subject: !!st.subject, aspect: st.aspect, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, width: last ? last.width : 0, height: last ? last.height : 0, background: !!background() }; }
   async function album() {
     let photos;
     try { photos = await library("list"); } catch (e) { if (!session.length) throw e; photos = []; }

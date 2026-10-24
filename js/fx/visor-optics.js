@@ -5,8 +5,9 @@
  *           aperture with rounded lower corners, cheek pads in the periphery and a chin bar below — not a centred
  *           ellipse. Built per viewport aspect (resize only) and per tint setting; nothing per frame.
  *   LIGHT   a <canvas id="fx-visor"> composited with mix-blend-mode: plus-lighter (screen where unsupported), so
- *           reflections are ADDED light and can never grey the scene. Repainted at ~15 Hz from the scene lighting
- *           the game already publishes through window.__apex (visorScene(), else camState() + lightState()):
+ *           reflections are ADDED light and can never grey the scene — on WebGPU. On the WebGL2 path (TLX's WebGL2
+ *           backend, GLX) the layer composites as plain "over" instead (blendMode(), #3657). Repainted at ~15 Hz
+ *           from the scene lighting the game already publishes through window.__apex (visorScene(), else camState() + lightState()):
  *           the sun's glint and its double-reflection ghost, a Fresnel rim sheen on the sun's side, one glint per
  *           flood / street lamp / tail-light in view (projected through the camera, so they slide with heading),
  *           and a chromatic fringe along the rim that scales with VISOR REFRACTION. Every term is proportional to
@@ -25,6 +26,10 @@ const VisorOptics = (function () {
   const HZ_REDUCED = 8;              // prefers-reduced-motion: the glints still follow the heading, more slowly
   const MAX_GLINTS = 8;              // the brightest lamps in view
   const LAMP_GAIN = 1.5;             // glint = GAIN·√(energy/d²)·beam: a Bahrain flood (12 000) at 50 m saturates, a Monaco soffit (40) at 10 m ≈ 0.9
+  // An eye adapted to daylight sees a lamp's reflection against the light already in the scene, not against black:
+  // glints scale by 1/(1 + ADAPT·max(0, daylight − DARK)). Night (moon key + sky ≈ 0.14) keeps every glint; a dusk
+  // sky (≈ 0.95) keeps ≈ 0.3 — eight pit-lane lamps at full night strength washed the dusk view amber (A·W46).
+  const LAMP_ADAPT = 3, LAMP_DARK = 0.2;
   const LIGHT_STRIDE = 15;           // gfx.js §frame: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner,cosOuter, bleed, volW, glareW]
   const LEVEL = { off: 0, light: 0.6, medium: 1, strong: 1.6 };       // VISOR REFLECTIONS
   const BEAMS = { off: 0, light: 0.6, medium: 1, strong: 1.6 };       // VISOR BEAMS: lamp beams, god rays, star flares
@@ -35,7 +40,10 @@ const VisorOptics = (function () {
   const TINT = { neutral: [12, 12, 20], amber: [80, 61, 32], ice: [35, 59, 80], rose: [76, 45, 60] };
   const TINT_ALPHA = { light: 0.12, medium: 0.18, strong: 0.24 };
 
+  const BLEND_RECHECK_MS = 1000;     // the live backend is re-read this often (it settles once after boot or a fallback)
+
   let _cv = null, _ctx = null, _looked = false;
+  let _blend = "", _blendParam, _blendT = -Infinity;
   let _w = 0, _h = 0, _shown = false, _acc = 1, _bendLevelBuilt = "";
   let _portKey = "", _bendKey = "", _paths = null, _svg = null;
   const _stats = { ticks: 0, paints: 0, msLast: 0, msMax: 0, msSum: 0, glints: 0, sun: 0, rim: 0, lamp: 0, msBend: 0, msLookup: 0, errors: 0 };
@@ -141,6 +149,12 @@ const VisorOptics = (function () {
     return o;
   }
 
+  /** How much of a key light reaches the shield from its direction, by z = the sun direction's forward component
+   *  (1 ahead, 0 level with the eye, −1 behind): 1 for z ≥ 0.2, falling to 0 at z = −0.5 (~120° off the nose). */
+  function sunFacing(z) { return clampTo((z + 0.5) / 0.7, 0, 1); }
+  /** A lamp glint's visibility against the daylight the eye is adapted to (key·sunUp + sky, exposed units). */
+  function lampAdapt(daylight) { return 1 / (1 + LAMP_ADAPT * Math.max(0, (daylight || 0) - LAMP_DARK)); }
+
   // ---------- lighting → visor (pure) ----------
 
   /** What the shield shows for one scene. `scene` is __apex.visorScene()'s shape: eye, tgt, fov, sunDir,
@@ -190,9 +204,11 @@ const VisorOptics = (function () {
         }
       }
       // Fresnel rim sheen: the inner rim is seen at grazing angles, where reflectance climbs, and it is lit on
-      // the sun's side of the view — brightest when the sun is beside or behind the eye (its light rakes the rim).
+      // the sun's side of the view. Only light coming in through the shield reaches it: the helmet shell shades
+      // the visor from a sun behind the eye, so the sheen is full with the sun ahead or level with the eye and
+      // fades to nothing once it is ~120° behind (sunFacing). It used to peak with the sun behind (A·W46).
       const side = Math.hypot(p.sx, p.sy);
-      const rake = 0.35 + 0.65 * clampTo(-p.z, 0, 1) + 0.3 * side;
+      const rake = sunFacing(p.z) * (0.35 + 0.3 * side);
       const rk = clampTo(1.0 * key * sunUp * rake * gain, 0, 1);
       if (rk > 0.004) out.rim = { k: rk, dx: side > 1e-3 ? p.sx / side : 0, dy: side > 1e-3 ? -p.sy / side : -1, rgb };
       sceneLight += key * sunUp;
@@ -201,6 +217,7 @@ const VisorOptics = (function () {
     // Sky haze on the brow: the sky reflected in the top of the shield; only a daylight sky is bright enough.
     const amb = clampTo(lum(scene.ambientSky) * exp, 0, 2);
     out.haze = clampTo(0.3 * amb * gain, 0, 0.32);
+    const lampVis = lampAdapt(key * sunUp + amb);
     sceneLight += amb * 0.5;
 
     // Lamp glints: each light in this frame's culled list, projected; the brightest MAX_GLINTS kept.
@@ -227,7 +244,7 @@ const VisorOptics = (function () {
         // the law the road obeys; the square root compresses a 100× energy range into glints of one family.
         const dl = Math.sqrt(d2), cosT = -(dx * L[i + 7] + dy * L[i + 8] + dz * L[i + 9]) / dl;
         const beam = clampTo((cosT - L[i + 11]) / Math.max(1e-3, L[i + 10] - L[i + 11]), 0, 1);
-        const kl = LAMP_GAIN * Math.sqrt(Math.max(0, lum([L[i + 3], L[i + 4], L[i + 5]]) * exp) / d2) * (0.5 + 0.5 * beam) * edgeFade;
+        const kl = LAMP_GAIN * Math.sqrt(Math.max(0, lum([L[i + 3], L[i + 4], L[i + 5]]) * exp) / d2) * (0.5 + 0.5 * beam) * edgeFade * lampVis;
         if (kl < 0.15) continue;                                // below this a glint would not read; the road gets little from it either
         const m = Math.max(1e-3, L[i + 3], L[i + 4], L[i + 5]);
         // The fixture's aim on screen (its cone): a faint beam leaves each glint that way — the floods' light
@@ -285,6 +302,43 @@ const VisorOptics = (function () {
       return { eye: c.eye, tgt: c.tgt, fov: c.fov, sunDir: l.skySunDir, sunColor: l.sunColor, exposure: l.exposure,
                ambientSky: l.ambientSky, lights: null, tailStart: 0, floodEmit: l.floodEmit };
     } catch (_) { return null; }   // a hook that throws mid-build: paint nothing this tick
+  }
+
+  // ---------- BLEND gate (#3657) ----------
+
+  /** How #fx-visor composites over the world: "add" (mix-blend-mode: plus-lighter) or "over" (plain alpha).
+   *  plus-lighter costs nothing on WebGPU, but on a real iPhone 14 on WebGL2 it tripped the perf governor
+   *  (Bahrain night, HELMET cam: autoTier 0 with the visor off, 4 with it on and refraction off; JS paint 0.2 ms —
+   *  ledger row 18 of docs/notes/DEVICE-FARM-LEDGER-2026-10-23.md). So WebGPU keeps "add" and everything else
+   *  takes "over". The canvas is painted with near-white and lamp-coloured light only, so over a darker scene
+   *  "over" still brightens; it differs from "add" only where the scene under a glint is already brighter than
+   *  the glint. `?visorblend=add|over` forces either arm for a device A/B. */
+  function blendMode(api, param) {
+    if (param === "add" || param === "over") return param;
+    return api === "webgpu" ? "add" : "over";
+  }
+  function _api() {
+    if (typeof RendererPicker === "undefined") return null;
+    try {
+      const three = RendererPicker.liveThreeApi && RendererPicker.liveThreeApi();
+      if (three) return three;
+      return RendererPicker.liveBackend && RendererPicker.liveBackend() === "webgpu" ? "webgpu" : "webgl2";
+    } catch (_) { return null; }
+  }
+  function _param() {
+    if (_blendParam !== undefined) return _blendParam;
+    _blendParam = null;
+    try { _blendParam = new URLSearchParams(window.location.search).get("visorblend"); } catch (_) { /* no URL here */ }
+    return _blendParam;
+  }
+  /** Sets body[data-visor-blend] (css/helmet-visor.css reads it) when the mode changes; re-reads at most once a second. */
+  function _syncBlend(now) {
+    if (now - _blendT < BLEND_RECHECK_MS) return;
+    _blendT = now;
+    const mode = blendMode(_api(), _param());
+    if (mode === _blend) return;
+    _blend = mode;
+    if (typeof document !== "undefined" && document.body) document.body.setAttribute("data-visor-blend", mode);
   }
 
   // ---------- DOM: canvas, port image, displacement map ----------
@@ -359,6 +413,13 @@ const VisorOptics = (function () {
     const key = _w + "x" + _h + "|" + visor + "|" + color + "|" + strength;
     if (key === _portKey) return;
     _portKey = key;
+    // OFF is no visor at all: the eye-port (bezel, cheek pads, oval falloff) goes with it, or the plain helmet
+    // view keeps an oval frame the player switched off.
+    if (visor === "off") {
+      document.body.style.removeProperty("--visor-port");
+      document.body.removeAttribute("data-visor-port");
+      return;
+    }
     const tinted = visor === "smoke";
     document.body.style.setProperty("--visor-port", portImage(_w, _h, { tint: tinted ? tintRGB(color) : null, tintAlpha: tinted ? TINT_ALPHA[strength] || TINT_ALPHA.light : 0 }));
     document.body.setAttribute("data-visor-port", "1");
@@ -566,7 +627,7 @@ const VisorOptics = (function () {
     const helmet = _helmet();
     if (!helmet) { _show(false); return; }
     const resized = _size();
-    _port();                                                   // the aperture itself, whatever the visor setting
+    _port();                                                   // the aperture: CLEAR / TINTED build it, OFF clears it
     const visor = _opt("visor", "off");
     const level = LEVEL[_opt("visorReflections", "light")] || 0;
     if (visor === "off" || !on || !(level > 0) || _low()) { _show(false); return; }
@@ -577,6 +638,7 @@ const VisorOptics = (function () {
     const t2 = t1 ? performance.now() : 0;
     _bend();
     if (t2 && _bendKey && !_stats.msBend) _stats.msBend = r2(performance.now() - t2);
+    _syncBlend(t1 || Date.now());
     _show(true);
     const hz = reduced ? HZ_REDUCED : HZ;
     _acc += dt > 0 ? dt : 0;
@@ -610,11 +672,11 @@ const VisorOptics = (function () {
   function stats() {
     return { shown: _shown, w: _w, h: _h, ticks: _stats.ticks, paints: _stats.paints, msLast: r2(_stats.msLast), msMax: r2(_stats.msMax),
              msAvg: _stats.paints ? r2(_stats.msSum / _stats.paints) : 0, glints: _stats.glints, sun: _stats.sun, rim: _stats.rim, lamp: _stats.lamp,
-             port: !!_portKey, bend: _bendLevelBuilt, msBend: _stats.msBend, msLookup: _stats.msLookup, errors: _stats.errors };
+             port: !!_portKey, bend: _bendLevelBuilt, blend: _blend, msBend: _stats.msBend, msLookup: _stats.msLookup, errors: _stats.errors };
   }
   function clear() { _show(false); }
   /** Tests: forget the cached canvas and keys (a new stub DOM). */
-  function _reset() { _looked = false; _cv = _ctx = _paths = _svg = null; _w = _h = 0; _shown = false; _acc = 1; _portKey = _bendKey = _bendLevelBuilt = ""; for (const k of Object.keys(_stats)) _stats[k] = 0; }
+  function _reset() { _looked = false; _cv = _ctx = _paths = _svg = null; _w = _h = 0; _shown = false; _acc = 1; _portKey = _bendKey = _bendLevelBuilt = _blend = ""; _blendParam = undefined; _blendT = -Infinity; for (const k of Object.keys(_stats)) _stats[k] = 0; }
 
   /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
   function sceneFromG(G) {
@@ -625,6 +687,6 @@ const VisorOptics = (function () {
     };
   }
 
-  return { tick, clear, stats, lightMap, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, BEAMS, FRINGE, MAX_GLINTS, sceneFromG, _reset };
+  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, BEAMS, FRINGE, MAX_GLINTS, sceneFromG, _reset };
 })();
 Object.freeze(VisorOptics);

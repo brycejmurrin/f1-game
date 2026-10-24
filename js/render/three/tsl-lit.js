@@ -1315,7 +1315,7 @@
     // array reads a constant (0,0,0), which a node material cannot express.
     // Cost: one extra program. INVARIANT: a chunked mesh must only ever be
     // drawn through drawChunked/castShadowChunked (it is — js/game.js,4810).
-    function buildFragment(matU, chunked, instanced) {
+    function buildFragment(matU, chunked, instanced, fx) {
       return Fn(() => {
         // STANDING-RULE ANCHORS: unconditional Fn-body .toVar() on every
         // shared varying-derived node BEFORE any conditional use.
@@ -2264,7 +2264,11 @@
         });
         // END EXPANDED FINISHES
         // FINISH TINTS 60-85 (mirrors glsl-lit.js: geometric-normal angles, crease mask, footprint-faded cells).
-        If(matU.carFinish.greaterThan(0.5).and(finishId.greaterThanEqual(60.0)).and(finishId.lessThanEqual(85.0)), () => {   // carFinish draws only
+        // FINISHES ON DEMAND (Bryce 2026-10-23): built only into the `fx` graph, which tlx.js picks for a carFinish
+        // draw whose geometry carries an id in 60-85 (buildGeometry tlxFx). It is ~12 % of every lit pipeline's
+        // compile (the cold first-race warm census, PR #3653), paid on a cold first race whether or not a car
+        // on the grid wore one of these finishes.
+        if (fx) If(matU.carFinish.greaterThan(0.5).and(finishId.greaterThanEqual(60.0)).and(finishId.lessThanEqual(85.0)), () => {   // carFinish draws only
           // Snapshot once with toVar(): a bare node is inlined and cached by TSL, so later branches read a stale (zero) value
           // (pearlwhite / silverfade / alubare rendered black on TLX while GLX was right, 2026-10-19).
           const pvHue = albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)).toVar();
@@ -2620,7 +2624,7 @@
       });
       return { draw, pA, pB };
     }
-    const _sharedGraph = [null, null, null]; // [plain, chunked, instanced]
+    const _sharedGraph = [null, null, null, null, null, null]; // [plain, chunked, instanced] x [base, fx]
     // The receiver lives in attachment R, not scene alpha. Keeping only A on
     // translucent/noAlphaWrite materials does not protect this metadata.
     const _tagKeep = {
@@ -2631,8 +2635,8 @@
     };
     const _mats = [];
     let _sharedPos = null;
-    function sharedFragment(chunked, instanced) {
-      const idx = instanced ? 2 : (chunked ? 1 : 0);
+    function sharedFragment(chunked, instanced, fx) {
+      const idx = (instanced ? 2 : (chunked ? 1 : 0)) + (fx ? 3 : 0);
       let g = _sharedGraph[idx];
       if (!g) {
         // The seven per-MATERIAL scalars ride two packed vec4s (makeMaterial
@@ -2645,7 +2649,7 @@
         matU.roughness = pA.x; matU.metalness = pA.y;
         matU.specular = pA.z;  matU.detail = pA.w;
         matU.clearcoat = pB.x; matU.carPaint = pB.y; matU.sparkle = pB.z; matU.carFinish = pB.w;
-        const packed = buildFragment(matU, chunked, instanced);
+        const packed = buildFragment(matU, chunked, instanced, fx);
         // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
         // fresh wrapper is a fresh cache key — the whole point is one graph.
         // `opacity` is the REAL material alpha (never the 0.35 SSR tag).
@@ -2692,8 +2696,9 @@
       ud.tlxPackB = new THREE.Vector4(ud.tlxClearcoat, ud.tlxCarPaint, ud.tlxSparkle, o.carFinish ? 1 : 0);
       ud.tlxChunked   = !!o.chunked;
       ud.tlxInstanced = !!o.instanced;
+      ud.tlxFx = !!o.finishX && !o.chunked;   // finishes on demand: the 60-85 tint graph (tlx.js materialFor fx)
       ud.tlxKeepSsrTag = alpha < 1 || !!o.noAlphaWrite;
-      const packed = sharedFragment(!!o.chunked, !!o.instanced);
+      const packed = sharedFragment(!!o.chunked, !!o.instanced, ud.tlxFx);
       _mats.push(m);
       m.colorNode = packed.rgb;
       // Coverage only. packed.a is the SSR tag (0.35 on paint) — putting it
@@ -2701,7 +2706,7 @@
       m.opacityNode = packed.opacity;
       m.outputNode = packed.out;
       m.positionNode = _sharedPos || (_sharedPos = vertexMotionNode());
-      pinProgram(m, o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit"));
+      pinProgram(m, (o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit")) + (ud.tlxFx ? "-fx" : ""));
       m.transparent = alpha < 1;
       // GLX: draw() -> depthMask(alpha>=1); drawChunked() -> depthMask(true).
       m.depthWrite = o.chunked ? true : alpha >= 1;
@@ -2827,7 +2832,7 @@
       if (!SSR_TAG) return;
       for (let i = 0; i < _mats.length; i++) {
         const m = _mats[i];
-        const g = sharedFragment(!!m.userData.tlxChunked, !!m.userData.tlxInstanced);
+        const g = sharedFragment(!!m.userData.tlxChunked, !!m.userData.tlxInstanced, !!m.userData.tlxFx);
         m.mrtNode = on ? (m.userData.tlxKeepSsrTag ? g.mrtKeep : g.mrt) : null;
       }
     }

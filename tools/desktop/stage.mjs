@@ -31,7 +31,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
-import { STAGE_DIRS, STAGE_ROOT_FILES } from "./stage-files.mjs";
+import { STAGE_DIRS, STAGE_ROOT_FILES, stageExcluded } from "./stage-files.mjs";
 import { minifyStaged } from "./minify.mjs";
 
 const require = createRequire(import.meta.url);
@@ -122,7 +122,10 @@ export function stageSite(outDir, opts = {}) {
   }
   for (const name of STAGE_DIRS) {
     const src = path.join(root, name);
-    fs.cpSync(src, path.join(dest, name), { recursive: true, dereference: true });
+    fs.cpSync(src, path.join(dest, name), {
+      recursive: true, dereference: true,
+      filter: (from) => !stageExcluded(path.relative(root, from)),
+    });
   }
   return dest;
 }

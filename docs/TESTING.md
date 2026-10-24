@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 950+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 1000+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -451,6 +451,7 @@ tools directly.)
 | `phone-recorder` | the PHONE TEST recorder: RECORD at 844x390 touch, rAF frames advance, SHARE hands `navigator.share` one valid `apex26.phone-soak/1` JSON file (menu-only, seconds) |
 | `perf-frametime` | SwiftShader frame-time regression: fixed Monza night race, ~5 s warm + ~20 s rAF sample, p50/p95/p99 + long-task count + `performance.memory` heap; compares to `tests/data/perf-frametime-baseline.json`. Soft by default (`APEX_PERF_FRAMETIME_STRICT=1` fails only on large deltas). Intended as a separate non-blocking CI job (continue-on-error, off the Pages verdict gate) |
 | `shimmer` | does baked tarmac crawl under motion |
+| `perf-budget` | `perf-sw-cache-hit.spec.js` — the service-worker install already holds every script and stylesheet a first race loads (cache snapshot read inside the worker; dev-only LAZY_AGENT excluded). Count-based perf gates, docs/notes/PERFTEST-HUNT-2026-10-24.md |
 | `perf-race-entry` | `perf-race-entry.spec.js` — race vs practice PREPARING stage spans (`RaceEntryProfile` / `__apex.raceEntryStages`), writes `artifacts/perf-race-entry/*.json` for regression diffs (issue #1881) |
 | `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |
 | `xr` | Immersive Web Emulation Runtime (IWER) emulated-VR suite — Playwright project `xr-emulated`, pinned `tests/vendor/iwer-2.5.0.min.js`, `forceInstall` metaQuest3. Spec-level only (not Quest GPU). Run `npm run test:xr`. Path-gated CI job (`xr-filter` → `xr`) when the diff touches `js/xr/`, IWER, or `vr-emulated.spec.js`. On-device checklist: `docs/notes/XR-QUEST-ON-DEVICE.md` |
@@ -1365,7 +1366,7 @@ and retention, MCP protocol/level routing and retrieval, configured launch pins,
 and the generated surface catalog. It runs without browsers and is included in
 the structural floor; its files are listed in `tests/groups.json`.
 
-The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`.
+The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`. Recent unit pins include `pause-taps.test.mjs` (#3274 painted pause-door floor at UI SIZE 75%).
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 

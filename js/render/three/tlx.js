@@ -1508,6 +1508,13 @@ const TLX = (function () {
         }
         return rt;
       }
+      let _mirDiscards = 0, _mirInvD = null, _mirInvDT = null;
+      function _mirInv(mrt) {
+        const gl = renderer.backend && renderer.backend.gl;
+        if (!gl) return null;
+        if (!_mirInvD) { _mirInvD = [gl.DEPTH_ATTACHMENT]; _mirInvDT = [gl.DEPTH_ATTACHMENT, gl.COLOR_ATTACHMENT1]; }
+        return mrt ? _mirInvDT : _mirInvD;
+      }
       // Arm (true) / disarm (false) the scene pass's MRT for a draw into a mirror-shaped target.
       function _mirMrtArm(on, prev) {
         if (lit && lit.setSsrMrt) lit.setSsrMrt(on);
@@ -1967,13 +1974,13 @@ const TLX = (function () {
         c.key = buildMatKey(o, chunked, instanced);
         return c.key;
       }
-      function materialFor(opts, chunked, instanced) {
+      function materialFor(opts, chunked, instanced, fx) {
         if (_drawMatMode || !lit) return fallbackMat(instanced);
         if (vizMat) return instanced === 2 ? _aiOf(vizMat) : vizMat;
         if (!opts) return chunked ? defaultMatChunked : instanced === 2
           ? (_aiDefault || (_aiDefault = _attrInst(lit.makeMaterial({ instanced: true })))) : (instanced ? defaultMatInstanced : defaultMat);
         const o = opts;
-        const key = matKeyFor(o, chunked, instanced);
+        const key = fx ? matKeyFor(o, chunked, instanced) + "|fx" : matKeyFor(o, chunked, instanced);
         let m = matCache.get(key);
         if (m) _matHit++; else {
           _matMiss++;
@@ -2003,7 +2010,7 @@ const TLX = (function () {
           }
           m = lit.makeMaterial(chunked
             ? Object.assign({ chunked: true }, o)
-            : (instanced ? Object.assign({ instanced: true }, o) : o));
+            : (instanced ? Object.assign({ instanced: true }, o, fx ? { finishX: true } : null) : (fx ? Object.assign({ finishX: true }, o) : o)));
           if (instanced === 2 && m) _attrInst(m);
           matCache.set(key, m);
         }
@@ -2800,7 +2807,7 @@ const TLX = (function () {
         return (pair[s] = { __tlx: true, imesh: m, ib, instances: CO_CAP, visible: 0, rec: -1 });
       }
       function _coAppend(geo, w, opts) {
-        if (!_coOn || !w || _drawMatMode || vizMat || !lit || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches()) return false;
+        if (!_coOn || !w || _drawMatMode || vizMat || !lit || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches() || fxFor(geo, opts)) return false;
         const neg = w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
         const b = _coRun(geo, neg), mat = materialFor(opts, false, 2), em = drawEm(opts);
         // This pass's run is live while its record is (resetRecs nulls it) — A6's sentinel.
@@ -3209,7 +3216,11 @@ const TLX = (function () {
           // matrixWorld.determinantAffine() < 0, and the car draws one side's
           // parts (the brake ring among them) through a mirrored matrix — the
           // one field the lap's pipeline key differed in (probe, field 27).
-          for (const g of geos.values()) for (const sx of [1, -1]) {
+          // The double-sided variant is the cockpit dash ERS bar / OT lamp
+          // (_rigFxA), never drawn mirrored: its cw twin was a whole lit
+          // pipeline (~1.2 s cold on an iPhone 14) no race used —
+          // ers-deploy-census tlx-gpu helmet, first deploy: lazy=0 without it.
+          for (const g of geos.values()) for (const sx of (o.doubleSided ? [1] : [1, -1])) {
             await compileWarmProbe(g, mat, sx);
           }
         }
@@ -3620,7 +3631,7 @@ const TLX = (function () {
         if (!mesh || !mesh.geo || (opts && opts.coalesce)) return;
         const w = model;
         const neg = !!w && w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
-        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false), sx: neg ? -1 : 1 });
+        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1 });
       }
       function startRigWarm() {
         const job = _rigWarm;
@@ -4157,8 +4168,13 @@ const TLX = (function () {
             ? TLXShaders.packIndex(THREE, data.idx, verts)
             : new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
         }
+        // FINISHES ON DEMAND: a car geometry wearing a 60-85 finish id draws its carFinish material through the
+        // `fx` lit graph (materialFor), the only one that carries those tints. Scanned once, here.
+        const ids = data.mat;
+        if (ids) for (let i = 0; i < ids.length; i++) { const v = Math.round(ids[i]); if (v >= 60 && v <= 85) { g.userData.tlxFx = true; break; } }
         return _regGeo(g, "mesh");
       }
+      const fxFor = (geo, opts) => !!(opts && opts.carFinish && geo && geo.userData.tlxFx);
 
       /** Read the raw (un-colour-managed, un-premultiplied) pixels of each
        * pack layer into `data` through Assets.readLayerBytes (one scratch
@@ -5378,6 +5394,9 @@ const TLX = (function () {
             const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
             if (mrt) _mirMrtArm(true);
             try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); }
+            // A-P2: nothing reads the mirror's depth or its ssrTag attachment (only textures[0] is
+            // ever sampled), so on WebGL2 drop both stores while its FBO is still bound (tlx-post).
+            if (post && post.discardAttachments && post.discardAttachments(mirRT, _mirInv(mrt))) _mirDiscards++;
             _mirRenders++;
             _mirFails = 0;   // the cap means FOUR CONSECUTIVE failures: unrelated one-frame throws must not retire the mirror
           } catch (e) {
@@ -5394,7 +5413,7 @@ const TLX = (function () {
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
-            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr,
+            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr, discards: _mirDiscards,
             mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned };   // A-H5
         },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
@@ -5773,7 +5792,7 @@ const TLX = (function () {
         draw(mesh, model, opts) {
           if (opts && opts.coalesce && mesh && mesh.geo && _coAppend(mesh.geo, model, opts)) return;   // R1
           if (_capture) { _captureRec(mesh, model, opts); return; }   // warmDraws: compile, never paint
-          if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false), drawEm(opts), drawAl(opts),
+          if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false, undefined, fxFor(mesh.geo, opts)), drawEm(opts), drawAl(opts),
             opts && opts.surfaceId === 16 ? 1 : 0, null, null);
         },
         drawChunked(mesh, model, opts) {
@@ -6418,6 +6437,8 @@ const TLX = (function () {
               if (!rt) return Promise.resolve({ label, err: "no rt" });
               const w = rt.width, h = rt.height;
               const isHalf = rt.texture && rt.texture.type === THREE.HalfFloatType;
+              // A packed 11/11/10 scene target (phones, tlx-post scene11) reads back one uint32 per pixel: not decoded here.
+              if (rt.texture && rt.texture.type === THREE.UnsignedInt101111Type) return Promise.resolve({ label, err: "rg11b10 target: this probe decodes half/byte only (apex26.tlxScene11=0 for a reading)" });
               return renderer.readRenderTargetPixelsAsync(rt, 0, 0, w, h).then(function (src) {
                 // three pads copyTextureToBuffer rows to 256 BYTES (WebGPU rule).
                 const bpp = isHalf ? 8 : 4;

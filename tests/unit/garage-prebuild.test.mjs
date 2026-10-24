@@ -30,7 +30,7 @@ function loadModule(extra = {}) {
 
 const GO = {
   want: "title", kind: "none", state: "menu", setupOpen: false, starting: false, tabHidden: false, headless: false,
-  surface: "title", intro: false, saveData: false, packSettled: true, worldReady: false, homePainted: false,
+  surface: "title", intro: false, saveData: false, phoneHold: false, packSettled: true, worldReady: false, homePainted: false,
   worldWarm: false, warming: false, sheetOpen: false,
 };
 
@@ -56,6 +56,7 @@ test("blockers: the title is speculative — Save-Data, the intro and the world 
   const { GP } = loadModule();
   const why = (patch) => [...GP.blockers({ ...GO, ...patch })];
   assert.deepEqual(why({ saveData: true }), ["save-data"]);
+  assert.deepEqual(why({ phoneHold: true }), ["phone-hold"], "phones must not hold ~11 MB idle on the title (PERF item 13)");
   assert.deepEqual(why({ packSettled: false }), [], "pack no longer blocks car/room; frames wait inside run()");
   assert.deepEqual(why({ intro: true }), ["title-intro"]);
   assert.deepEqual(why({ kind: "track" }), ["world-build"], "a circuit Home finishes its own build first");
@@ -76,6 +77,24 @@ test("blockers: race settings keeps its old gates — RACE! needs that garage", 
   const settings = { ...GO, want: "settings", surface: "settings", saveData: true, packSettled: false, intro: true };
   assert.deepEqual([...GP.blockers(settings)], []);
   assert.deepEqual([...GP.blockers({ ...settings, surface: "title" })], ["surface"]);
+});
+
+test("blockers: race settings ignores phoneHold — RACE! still needs that garage on phones", () => {
+  const { GP } = loadModule();
+  const settings = { ...GO, want: "settings", surface: "settings", phoneHold: true };
+  assert.deepEqual([...GP.blockers(settings)], [], "desktop-unchanged: settings prewarm still runs on a phone");
+});
+
+test("phoneHold: mobile tier / isMobile / low deviceMemory; desktop stays clear", () => {
+  const { GP } = loadModule();
+  assert.equal(GP.phoneHold(null, null), false);
+  assert.equal(GP.phoneHold({}, null), false, "no deviceMemory and no gfx hint = desktop");
+  assert.equal(GP.phoneHold({ deviceMemory: 8 }, null), false);
+  assert.equal(GP.phoneHold({ deviceMemory: 2 }, null), true, "deviceMemory < 4 GB");
+  assert.equal(GP.phoneHold({ deviceMemory: 0 }, null), false, "0 is unsupported / unknown");
+  assert.equal(GP.phoneHold({}, { isMobile: true }), true);
+  assert.equal(GP.phoneHold({}, { mobileTier: true }), true);
+  assert.equal(GP.phoneHold({}, { isMobile: false, mobileTier: false }), false);
 });
 
 test("plan: only a hidden canvas gets hidden frames; a Home garage keeps its own room", () => {
@@ -108,7 +127,8 @@ test("homeKind, packSettled and saveData read the real signals", () => {
 
 // A scripted page: the gate, the camera's prebuild surface and an explicit
 // slice clock (each menuSlice resolves when the test calls flush()).
-function page({ kind = "none", painted = true, surface = "title", worldWarm = 0, quiet = true, listeners = null } = {}) {
+// `timers`: when an array, setTimeout pushes the callback so a test can fire tick().
+function page({ kind = "none", painted = true, surface = "title", worldWarm = 0, quiet = true, listeners = null, timers = null } = {}) {
   let t = 0, team = "mclaren", meshKey = "", warms = 0, slices = [];
   const built = [];
   const els = {
@@ -136,6 +156,8 @@ function page({ kind = "none", painted = true, surface = "title", worldWarm = 0,
   const { GP, ctx, logs } = loadModule({
     performance: { now: () => t }, document: { hidden: false },
     navigator: {}, matchMedia: () => ({ matches: false }),
+    setTimeout: timers ? (fn) => { timers.push(fn); return timers.length; } : () => 0,
+    clearTimeout() {},
     ...(listeners ? { addEventListener: (ev, fn) => { (listeners[ev] = listeners[ev] || []).push(fn); } } : {}),
     Assets: { state: () => ({ supported: true, uploaded: true }) },
   });
@@ -272,6 +294,49 @@ test("a frameless title prebuild never stands in for race settings' hidden frame
     assert.equal(h.pre.state().last.want, "settings");
     assert.equal(await h.pre.run(owned(h), "settings"), false, kind + ": drawn — now settings is ready");
   }
+});
+
+test("phoneHold: title skips / releases on mobile; desktop and settings keep the prebuild", async () => {
+  // Mobile stub: title speculative run is blocked (PERF item 13 — ~11 MB not held).
+  const mobile = page();
+  mobile.G.gfx.isMobile = true;
+  assert.equal(await mobile.pre.run(owned(mobile), "title"), false);
+  assert.deepEqual(mobile.built, []);
+  assert.deepEqual([...mobile.pre.state().blockers], ["phone-hold"]);
+  // Race settings still builds on a phone — RACE! needs that garage.
+  mobile.els["race-settings"].hidden = false; mobile.els.overlay.hidden = true;
+  const settings = mobile.pre.run(owned(mobile), "settings");
+  await mobile.flush(2); mobile.gate.garageReady = true; await mobile.flush();
+  assert.equal(await settings, true);
+  assert.deepEqual(mobile.built, ["car", "room"]);
+
+  // Low deviceMemory on the title is the same gate; desktop (no hint) still builds.
+  const lowMem = page();
+  lowMem.ctx.navigator = { deviceMemory: 2 };
+  assert.equal(await lowMem.pre.run(owned(lowMem), "title"), false);
+  assert.deepEqual([...lowMem.pre.state().blockers], ["phone-hold"]);
+  const desk = page();
+  const deskGo = desk.pre.run(owned(desk), "title");
+  await desk.flush(2); desk.gate.garageReady = true; await desk.flush();
+  assert.equal(await deskGo, true, "desktop behaviour unchanged");
+  assert.deepEqual(desk.built, ["car", "room"]);
+
+  // Idle title tick on a phone releases a held prebuild (e.g. after leaving settings).
+  const timers = [];
+  const hold = page({ timers });
+  const built = hold.pre.run(owned(hold), "title");
+  await hold.flush(2); hold.gate.garageReady = true; await hold.flush();
+  assert.equal(await built, true);
+  assert.equal(hold.pre.state().ready, true);
+  hold.G.gfx.isMobile = true;
+  hold.pre.start();
+  assert.ok(timers.length >= 1, "start() arms the title poll");
+  timers.shift()();
+  assert.equal(hold.cam.released, 1, "phone idle tick frees the held garage");
+  assert.equal(hold.gate.garageReady, false);
+  assert.equal(hold.gate.garageKey, "");
+  assert.equal(hold.pre.state().ready, false);
+  assert.ok(hold.logs.includes("game: garage released for the race"));
 });
 
 test("blocked runs build nothing: Save-Data on the title, a race start anywhere", async () => {

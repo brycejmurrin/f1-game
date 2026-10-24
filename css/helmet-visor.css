@@ -25,6 +25,9 @@ body[data-helmet-visor-color="rose"] { --visor-lens: var(--visor-rose); }
 #fx-visor { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; mix-blend-mode: screen; }
 @supports (mix-blend-mode: plus-lighter) { #fx-visor { mix-blend-mode: plus-lighter; } }
 #fx-visor[hidden] { display: none; }
+/* #3657: plus-lighter tripped the perf governor on iPhone WebGL2 (free on WebGPU). VisorOptics sets
+   data-visor-blend="over" on every path but WebGPU, and there the light layer composites as plain alpha. */
+body[data-visor-blend="over"] #fx-visor { mix-blend-mode: normal; }
 
 /* Only the world is displaced: HUD and menus retain their original pixels. The map behind each filter is the
    port-shaped rim field VisorOptics builds (zero across the centre). Broadcast, WATCH, a hidden HUD and photo

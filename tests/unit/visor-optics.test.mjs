@@ -29,13 +29,15 @@ function ctx2d(calls) {
   };
 }
 
-function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 } } = {}) {
+function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "" } = {}) {
   const calls = { clear: 0, stroke: 0, arc: 0, inserted: null, props: {}, attrs: {} };
+  const live = { visor };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } }, nextSibling: null };
   const body = {
     hasAttribute: (k) => k === "data-helmet-cam" && helmet,
     setAttribute: (k, v) => { calls.attrs[k] = v; },
-    style: { setProperty: (k, v) => { calls.props[k] = v; } },
+    removeAttribute: (k) => { delete calls.attrs[k]; },
+    style: { setProperty: (k, v) => { calls.props[k] = v; }, removeProperty: (k) => { delete calls.props[k]; } },
     appendChild() {},
   };
   const document = {
@@ -50,13 +52,14 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
   const ctx = vm.createContext({
     Math, Float32Array, Uint8ClampedArray, Object, Path2D, performance: { now: () => 0 },
     getComputedStyle: () => ({ getPropertyValue: (k) => (k === "--visor-lens" ? lens : "") }),
-    document, window: { ...win, __apex: apex },
-    CockpitOpts: { visor: () => visor, visorReflections: () => reflections, visorRefraction: () => refraction, visorBeams: () => beams, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
+    document, window: { ...win, __apex: apex, location: { search } }, URLSearchParams, Date,
+    CockpitOpts: { visor: () => live.visor, visorReflections: () => reflections, visorRefraction: () => refraction, visorBeams: () => beams, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
     GfxQuality: { current: () => "high" },
+    ...(picker ? { RendererPicker: picker } : {}),
   });
   seedLog(ctx);
   const V = vm.runInContext(read("js/fx/visor-optics.js") + ";VisorOptics", ctx, { filename: absSrc("js/fx/visor-optics.js") });
-  return { V, calls, listeners };
+  return { V, calls, listeners, live };
 }
 
 const DAY = { eye: [0, 1, 0], tgt: [0, 1, -10], fov: 62, sunDir: [0.3, 0.7, -0.65], sunColor: [1.1, 1.0, 0.9], exposure: 1, ambientSky: [0.5, 0.6, 0.8], lights: null, tailStart: 0, floodEmit: 0 };
@@ -123,12 +126,41 @@ test("visor mapping: the sun's glint sits where the sun is and slides across as 
   assert.ok(Math.abs(turned.sun.x - 422) < 20, `facing the sun recentres the glint (${turned.sun.x.toFixed(0)})`);
   const behind = V.lightMap({ ...DAY, sunDir: [0, 0.5, 0.87] }, 844, 390, { level: 1 });
   assert.equal(behind.sun, null, "a sun behind the eye has no glint…");
-  assert.ok(behind.rim && behind.rim.k > ahead.rim.k, "…but rakes the rim harder than a sun ahead");
+  assert.equal(behind.rim, null, "…and the helmet shell shades the rim from it (A·W46: it used to peak there)");
   const set = V.lightMap({ ...DAY, sunDir: [0, -0.2, -0.98] }, 844, 390, { level: 1 });
   assert.equal(set.sun, null); assert.equal(set.rim, null);
   // God rays only for a sun in the frame, anchored on its glint; none for the high sun that only glows at the rim.
   assert.ok(ahead.rays && ahead.rays.x === ahead.sun.x && ahead.rays.k > 0.05, "a sun in the frame streaks across the shield");
   assert.equal(V.lightMap(DAY, 844, 390, { level: 1 }).rays, null, "a sun past the frame edge has no rays");
+});
+
+test("visor sun-behind (A·W46): no glare from a sun behind the eye; lamps glint against the daylight they compete with", () => {
+  const { V } = load();
+  // sunFacing: the sun direction's forward component → how much of it reaches the shield.
+  assert.equal(V.sunFacing(-1), 0, "sun straight behind: nothing");
+  assert.equal(V.sunFacing(-0.5), 0, "~120° off the nose: nothing");
+  assert.equal(V.sunFacing(0.2), 1); assert.equal(V.sunFacing(1), 1, "ahead and just past level: full");
+  assert.ok(V.sunFacing(0) > 0.6 && V.sunFacing(0) < 0.8, "level with the eye: most of it (it rakes the shield)");
+  for (let z = -1; z < 1; z += 0.05) assert.ok(V.sunFacing(z + 0.05) >= V.sunFacing(z), "monotonic in the forward component");
+  // A low dusk sun (COTA's start straight at dusk, measured): behind → no rim, no glint; ahead → the shipped glint.
+  const DUSK = { ...DAY, sunDir: [0, 0.094, -0.996], sunColor: [1.068, 0.618, 0.202], exposure: 1.03, ambientSky: [0.209, 0.246, 0.3] };
+  for (const lv of [0.6, 1, 1.6]) {
+    const behind = V.lightMap({ ...DUSK, sunDir: [0, 0.094, 0.996] }, 844, 390, { level: lv });
+    assert.equal(behind.sun, null); assert.equal(behind.rays, null); assert.equal(behind.rim, null, `level ${lv}: no rim sheen from a sun behind`);
+  }
+  const ahead = V.lightMap(DUSK, 844, 390, { level: 1 });
+  assert.ok(ahead.sun && ahead.sun.k > 1 && ahead.rays, "a low sun ahead still blinds: glint and rays kept");
+  // lampAdapt: night keeps every lamp glint; a dusk sky dims them to about a third; brighter keeps falling.
+  assert.equal(V.lampAdapt(0), 1); assert.equal(V.lampAdapt(0.14), 1, "night (moon key + sky ≈ 0.14) is untouched");
+  assert.ok(V.lampAdapt(0.95) > 0.25 && V.lampAdapt(0.95) < 0.35, `dusk ≈ 0.3 (${V.lampAdapt(0.95).toFixed(2)})`);
+  assert.ok(V.lampAdapt(1.5) < V.lampAdapt(0.95), "more daylight, fainter glints");
+  // The same pit-lane lamps ahead: full glints at night, few and faint at dusk.
+  const lamps = [...lamp(-3, -20, [400, 300, 200]), ...lamp(3, -25, [400, 300, 200]), ...lamp(0, -35, [400, 300, 200])];
+  const night = V.lightMap({ ...NIGHT, lights: lamps }, 844, 390, { level: 1 });
+  const dusk = V.lightMap({ ...DUSK, sunDir: [0, 0.094, 0.996], lights: lamps }, 844, 390, { level: 1 });
+  assert.equal(night.glints.length, 3, "night: every lamp glints");
+  const sum = (m) => m.glints.reduce((a, g) => a + g.k, 0);
+  assert.ok(sum(dusk) < sum(night) * 0.4, `dusk: the lamps no longer flood the shield (${sum(dusk).toFixed(2)} vs ${sum(night).toFixed(2)})`);
 });
 
 test("visor mapping: a bright flood leaves a beam along its aim; BLOOM AMOUNT and LENS GLARE scale the halos", () => {
@@ -228,7 +260,8 @@ test("visor tick: helmet cam only, the port image per size and tint, reflections
   const none = load({ apex, visor: "off" });
   none.V.tick(1 / 60, true, 0, false);
   assert.equal(none.V.stats().paints, 0, "visor OFF: no light layer");
-  assert.ok(none.calls.attrs["data-visor-port"] === "1", "visor OFF still has the helmet's eye-port");
+  assert.equal(none.calls.attrs["data-visor-port"], undefined, "visor OFF: no eye-port frame (Bryce: OFF kept the oval)");
+  assert.equal(none.calls.props["--visor-port"], undefined, "…and no port image");
   const chase = load({ apex, helmet: false });
   chase.V.tick(1 / 60, true, 0, false);
   assert.equal(chase.calls.attrs["data-visor-port"], undefined, "not a helmet cam: no port, no paint");
@@ -237,6 +270,24 @@ test("visor tick: helmet cam only, the port image per size and tint, reflections
   smoke.V.tick(1 / 60, true, 0, false);
   assert.ok(String(smoke.calls.props["--visor-port"]).includes("rgb(80,61,32)"), "TINTED amber bakes the lens colour into the port");
   assert.ok(smoke.V.stats().sun > V.stats().sun, "a tinted lens reflects harder");
+});
+
+test("visor tick: switching HELMET VISOR to OFF mid-race takes the oval eye-port down (and CLEAR brings it back)", () => {
+  const apex = { visorScene: () => DAY };
+  const { V, calls, listeners, live } = load({ apex, visor: "clear" });
+  V.tick(1 / 60, true, 0, false);
+  assert.equal(calls.attrs["data-visor-port"], "1", "CLEAR: the eye-port stands");
+  live.visor = "off";
+  for (const fn of listeners) fn("visor", "off");
+  V.tick(1 / 60, true, 0, false);
+  assert.equal(calls.attrs["data-visor-port"], undefined, "OFF: the stale port attribute is cleared");
+  assert.equal(calls.props["--visor-port"], undefined, "OFF: the port image is cleared");
+  live.visor = "clear";
+  for (const fn of listeners) fn("visor", "clear");
+  V.tick(1 / 60, true, 0, false);
+  assert.equal(calls.attrs["data-visor-port"], "1", "back to CLEAR: rebuilt");
+  // css/hud.css's static frame (the no-JS / first-frame fallback) is keyed off the same choice.
+  assert.match(read("css/hud.css"), /body\[data-helmet-cam\]:not\(\[data-helmet-visor="off"\]\) #hud::before \{/, "the static oval frame skips visor OFF");
 });
 
 test("visor tick: falls back to camState + lightState without visorScene, and reads nothing without __apex", () => {
@@ -274,4 +325,28 @@ test("visor refraction: the rim bend map and its three filters are built once pe
   const { V: off } = load({ apex, refraction: "off" });
   off.tick(1 / 60, true, 0, false);
   assert.equal(off.stats().bend, "", "refraction OFF builds no map");
+});
+
+test("visor blend (#3657): plus-lighter on WebGPU only; WebGL2, GLX and an unknown backend composite as plain over", () => {
+  const apex = { visorScene: () => DAY };
+  const arm = (picker, search) => { const r = load({ apex, picker, search }); r.V.tick(1 / 60, true, 0, false); return r; };
+  const gpu = arm({ liveThreeApi: () => "webgpu", liveBackend: () => "three" });
+  assert.equal(gpu.calls.attrs["data-visor-blend"], "add", "TLX on WebGPU keeps the additive blend");
+  assert.equal(gpu.V.stats().blend, "add");
+  assert.equal(arm({ liveThreeApi: () => null, liveBackend: () => "webgpu" }).calls.attrs["data-visor-blend"], "add", "WGX is WebGPU too");
+  assert.equal(arm({ liveThreeApi: () => "webgl2", liveBackend: () => "three" }).calls.attrs["data-visor-blend"], "over", "TLX on WebGL2: over");
+  assert.equal(arm({ liveThreeApi: () => null, liveBackend: () => "webgl2" }).calls.attrs["data-visor-blend"], "over", "GLX: over");
+  assert.equal(arm(undefined).calls.attrs["data-visor-blend"], "over", "no picker loaded: over");
+  assert.equal(arm({ liveThreeApi: () => { throw new Error("mid-boot"); } }).calls.attrs["data-visor-blend"], "over", "a throwing picker: over");
+  assert.equal(arm({ liveThreeApi: () => "webgl2" }, "?visorblend=add").calls.attrs["data-visor-blend"], "add", "?visorblend=add forces the old arm on WebGL2");
+  assert.equal(arm({ liveThreeApi: () => "webgpu" }, "?apex=1&visorblend=over").calls.attrs["data-visor-blend"], "over", "?visorblend=over forces it on WebGPU");
+  assert.equal(arm({ liveThreeApi: () => "webgl2" }, "?visorblend=bogus").calls.attrs["data-visor-blend"], "over", "an unknown value is ignored");
+  const off = load({ apex, visor: "off", picker: { liveThreeApi: () => "webgl2" } });
+  off.V.tick(1 / 60, true, 0, false);
+  assert.equal(off.calls.attrs["data-visor-blend"], undefined, "visor OFF never touches the blend");
+  for (const [api, param, want] of [["webgpu", null, "add"], ["webgl2", null, "over"], [null, null, "over"], ["webgl2", "add", "add"]]) {
+    assert.equal(gpu.V.blendMode(api, param), want, `blendMode(${api}, ${param})`);
+  }
+  const css = read("css/helmet-visor.css");
+  assert.match(css, /body\[data-visor-blend="over"\] #fx-visor \{ mix-blend-mode: normal; \}/, "the stylesheet drops the blend on the over arm");
 });

@@ -755,6 +755,8 @@
         "tests/unit/offtrack-edges-vm.test.mjs",
         "tests/unit/offtrack-vm.test.mjs",
         "tests/unit/pace-arming-vm.test.mjs",
+        "tests/unit/perf-vm-alloc-budget.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
@@ -767,6 +769,7 @@
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/race-flow-fixes-vm.test.mjs",
+        "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/race-retain-vm.test.mjs",
         "tests/unit/race-settings-pitplan-key.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
@@ -852,6 +855,8 @@
         "tests/unit/offtrack-edges-vm.test.mjs",
         "tests/unit/offtrack-vm.test.mjs",
         "tests/unit/pace-arming-vm.test.mjs",
+        "tests/unit/perf-vm-alloc-budget.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
@@ -864,6 +869,7 @@
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/race-flow-fixes-vm.test.mjs",
+        "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/race-retain-vm.test.mjs",
         "tests/unit/race-settings-pitplan-key.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
@@ -963,6 +969,8 @@
         "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/obs-act-edge-vm.test.mjs",
+        "tests/unit/perf-vm-alloc-budget.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
@@ -970,6 +978,7 @@
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
+        "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/race-retain-vm.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/rain-cells-vm.test.mjs",
@@ -1281,6 +1290,15 @@
         "tests/unit/foundation-core-vm.test.mjs",
         "tests/unit/livery-contrast.test.mjs",
         "tests/unit/slider-effect.test.mjs"
+      ],
+      "twinned": false
+    },
+    {
+      "id": "perf-budget",
+      "script": "test:perf-budget",
+      "kind": "browser",
+      "files": [
+        "tests/specs/perf-sw-cache-hit.spec.js"
       ],
       "twinned": false
     },

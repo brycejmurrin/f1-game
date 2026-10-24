@@ -38,7 +38,10 @@
    garage open, behind a hidden tab, during the title intro, before the menu
    world's own hidden frames have drawn, while Settings (#pmsettings) is open
    (D·IP2: the 3.7 s Settings freeze was this prep overlapping the sheet), or —
-   on the title, where it is speculative — under Save-Data / prefers-reduced-data.
+   on the title, where it is speculative — under Save-Data / prefers-reduced-data,
+   or on a phone / low-deviceMemory client (PERF item 13: the idle title otherwise
+   holds ~11 MB; race settings still prebuilds because RACE! needs that garage).
+   A phone that already holds a prebuild releases it while the title idles.
    The material pack no longer blocks the car/room CPU steps (those run while it
    downloads); only the hidden program frames wait for packSettled, because a
    draw before the pack lands compiles the programs again. Race settings keeps
@@ -75,6 +78,20 @@ const GaragePrebuild = (function () {
     } catch (_) { return false; }
   }
 
+  // Phones (isMobile / mobileTier) and low-RAM clients (deviceMemory < 4 GB)
+  // must not keep the title's speculative garage prebuild — ~11 MB idle in the
+  // menu (PERF-KNOWN-WINS item 13 / LIVE-MEMORY-H12 #4). `hint` is G.gfx, GLX,
+  // or any object exposing isMobile / mobileTier. Race settings ignores this.
+  function phoneHold(nav, hint) {
+    try {
+      if (hint && (hint.isMobile || hint.mobileTier)) return true;
+      if (nav && typeof nav.deviceMemory === "number" && nav.deviceMemory > 0 && nav.deviceMemory < 4) {
+        return true;
+      }
+    } catch (_) { /* no navigator / gfx */ }
+    return false;
+  }
+
   // What the title draws under its buttons (UiExperience.state()).
   function homeKind(st) {
     if (!st) return "none";
@@ -103,6 +120,7 @@ const GaragePrebuild = (function () {
       if (e.off) out.push("off");
       if (e.intro) out.push("title-intro");
       if (e.saveData) out.push("save-data");
+      if (e.phoneHold) out.push("phone-hold");
       if (e.quietMs < QUIET_MS) out.push("input-recent");
       // Speculative title work must not run under Settings — the overlay still
       // counts as surface "title", so sheetOpen is its own gate (D·IP2).
@@ -157,12 +175,18 @@ const GaragePrebuild = (function () {
     const starting = () => !!(G.loadingScreen && G.loadingScreen.active()) || !!d.studio();
     function env(want) {
       const ov = $("overlay"), st = ui(), k = homeKind(st);
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      // Prefer the live gfx façade (isMobile / mobileTier); fall back to GLX.
+      const gfx = G.gfx;
+      const hint = (gfx && (gfx.isMobile || gfx.mobileTier)) ? gfx
+        : (typeof GLX !== "undefined" && GLX && (GLX.isMobile || GLX.mobileTier)) ? GLX
+          : (gfx || null);
       return {
         want, kind: k, off: !enabled, state: G.state, setupOpen: !!G.setupPreviewOn, starting: starting(),
         tabHidden: typeof document !== "undefined" && !!document.hidden, headless: !!G.headlessMode,
         surface: surface(), intro: !!(ov && ov.hasAttribute("data-intro")),
-        saveData: saveData(typeof navigator !== "undefined" ? navigator : null,
-          typeof matchMedia === "function" ? matchMedia : null),
+        saveData: saveData(nav, typeof matchMedia === "function" ? matchMedia : null),
+        phoneHold: phoneHold(nav, hint),
         packSettled: packSettled(typeof Assets !== "undefined" && Assets.state ? Assets.state() : null),
         worldReady: !!d.worldReady(), homePainted: !!(st && st.painted),
         worldWarm: gate.warm > 0, warming: !!(G.gfx && G.gfx.warming && G.gfx.warming()),
@@ -267,7 +291,14 @@ const GaragePrebuild = (function () {
     function tick() {
       timer = setTimeout(tick, POLL_MS);
       if (surface() !== "title" || sheetOpenNow()) noisy();
-      if (running || G.state !== "menu" || ready("title") || sheetOpenNow()) return;
+      if (running || G.state !== "menu" || sheetOpenNow()) return;
+      // Phones: never start a title prebuild, and free one already held so the
+      // idle menu does not keep ~11 MB (PERF item 13). Race settings still runs.
+      if (env("title").phoneHold) {
+        if (prepped || gate.garageReady || gate.garageKey) release();
+        return;
+      }
+      if (ready("title")) return;
       run(titleCurrent, "title").catch((e) => Log.warn("game", "garage prewarm failed", e));
     }
     function start() { if (!timer) timer = setTimeout(tick, POLL_MS); }
@@ -318,6 +349,6 @@ const GaragePrebuild = (function () {
   // The page's one instance, for __apex.garagePrebuild() (the MirrorPass.instance() idiom: no G member).
   let _instance = null;
 
-  return { create, instance: () => _instance, readSwitch, blockers, plan, homeKind, packSettled, saveData, sheetOpenNow, POLL_MS, GIVE_UP_MS, QUIET_MS };
+  return { create, instance: () => _instance, readSwitch, blockers, plan, homeKind, packSettled, saveData, phoneHold, sheetOpenNow, POLL_MS, GIVE_UP_MS, QUIET_MS };
 })();
 Object.freeze(GaragePrebuild);

@@ -4063,17 +4063,12 @@ function raceIntro(go) {
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
   // SwiftShader / llvmpipe: the loading flyby compiles and draws the whole circuit again
   // behind the race-settings sheet (18-30 s of frozen UI with no visible progress).
-  // Hardware keeps the cinematic; software GL hands off straight to startRace().
+  // Hardware keeps the cinematic; software GL takes the screen's no-world path: the
+  // short race card (it names the event), no flyby, no read — then startRace().
+  // Players and harnesses alike: a harness-only card would test a path no player sees.
   let forceSoftwareFlyby = false;
   try { forceSoftwareFlyby = typeof DevFlags !== "undefined" && !!DevFlags.get("swFlyby"); } catch (_) { /* bench A/B */ }
-  const autoHarness = typeof loadingScreen !== "undefined" && loadingScreen.isAutomation && loadingScreen.isAutomation();
-  // Players on software GL skip the flyby; harnesses keep loadingScreen.run()'s card path (#1290, real-race.spec).
-  if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.softwareRaster && RaceEntryProfile.softwareRaster() && !forceSoftwareFlyby && !autoHarness) {
-    sheetRelease(true);
-    loadingScreen.stop();
-    go();
-    return;
-  }
+  if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.softwareRaster && RaceEntryProfile.softwareRaster() && !forceSoftwareFlyby) info.hasWorld = false;
   (async () => {
     try {
       await RaceEntryProfile.spanAsync("flyby", async () => {
@@ -7543,10 +7538,10 @@ function render(dt) {
   }
   M4.lookAtTo(_mView, camEye, camTgt, _camUp);
   M4.mulTo(_mVP, _mProj, _mView);
-  // inv VP: sky rays always; god-rays when live. inv Proj: SSAO and SSR,
-  // including the reflection fade after the governor sheds the other effects.
+  // inv VP: sky rays always; god-rays when live. inv Proj: post AND TLX's
+  // main-view reconstruction, even after tier 4 sheds all view-space post.
   M4.invertTo(_mInvVP, _mVP);
-  if (PerfGov.autoTier() < 4 || _roadReflectionTransition.value > 0) M4.invertTo(_mInvProj, _mProj);
+  M4.invertTo(_mInvProj, _mProj);
   // Sun direction in VIEW space (for screen-space contact shadows): mat3(view)·sunDir.
   {
     const sd = frame.sunDir || [0, 1, 0];
@@ -8384,7 +8379,7 @@ function render(dt) {
   // after env/SSR/shadows. GRAPHICS: LOW sheds look post via lookPostShed (not autoTier alone).
   po.exposure = frame.exposure * LT.exposureMul;
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2) * frame.exposure; po.grade = _grade;   // exposed units (BRIGHT_FS): x the TOD exposure keeps the shipped bloom; EXPOSURE now moves it
-  PostFxOpts.applyLookShed(po, { bloom: _bloom * LT.bloomMul, ssao: _ao, godray: _gr, contact: _cs, lampVol: _lampVol });
+  PostFxOpts.applyLookShed(po, { bloom: _bloom * LT.bloomMul, ssao: _ao, godray: _gr, contact: _cs, lampVol: _lampVol, flareMul: LT.flareMul });
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
   // slow at the scale floor sheds those instead. Tier 2 drops dry + car-paint SSR; wet roads use a reduced budget.
@@ -8417,7 +8412,7 @@ function render(dt) {
   const _ssrLow = onboard;
   po.ssrTopUV = _ssrLow ? 0.82 : 0.62;
   po.ssrNear  = _ssrLow ? -1.0 : -2.5;
-  po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
+  po.speedBlur = _spd; po.tune = LT;   // po.flareMul: applyLookShed above
   // Avoidable post passes at lower GRAPHICS tiers / mid autoShed (perf frame r2):
   //   bloomLevels — drop the widest bloom octaves (2 FS passes each) on MEDIUM/LOW
   //   grLite — one godray blur pair even with sun shafts (MEDIUM+); ULTRA/HIGH keep two
