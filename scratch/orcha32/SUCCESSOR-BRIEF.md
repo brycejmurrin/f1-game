@@ -26,3 +26,7 @@ Confirmed stopped: A·W47 (#3685 head c1f8dd52, depends on #3679; Next step in b
 Not yet confirmed at write time: A·W44, A·H10, A·H11 (#3687 round 1: no confirmed player-facing defect; F2 `frozen` after failed RESTART noted). Check the bus.
 #3686 (A·W46 glare) head d5aa59d5: not run — full tooling-fast, ui group, live after-capture, device.
 Archivable by rule (PRs merged): A·W41 session_01WmKPraJqVPFsGv8BeuxwgC, A·Y1 session_01WX6ZeUZWiMthYewAKtHitY — only after Bryce is done with them.
+
+## 01:15Z update
+- Archived A·W41 and A·Y1 (Bryce: "Archive them").
+- Bryce: "message our fable runners they can use any skill, mcp, web research, create new tests or try new things to hunt". The Fable runners A·H11 (race, #3687) and A·H10 (phone perf round 2; narrow claim, not #3670) were told to RESUME with that latitude. Every other worker stays handed off.
