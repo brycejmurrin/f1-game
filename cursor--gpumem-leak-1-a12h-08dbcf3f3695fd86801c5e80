@@ -1,1 +1,1 @@
-1792806645	Claude	[A·H12] gpumem: js/render/three/tlx.js dispose paths, js/render/three/tlx-chunked.js, js/render/three/tlx-shadow.js, js/perf/three-inspector.js, tools/perf/runtime-memory.mjs, docs/notes/GPUMEM-HUNT-2026-10-24.md  [cursor/gpumem-leak-1-a12h; session 08dbcf3f3695fd86801c5e80]
+1792812987	Claude	[A·H12] tools/gfx/gpu-game-check.mjs --mem-cycles, .github/workflows/gpu-census.yml mem_cycles input  [cursor/gpumem-leak-1-a12h; session 08dbcf3f3695fd86801c5e80]
