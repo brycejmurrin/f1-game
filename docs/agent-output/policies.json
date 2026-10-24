@@ -866,6 +866,11 @@
       "presentation": "shared-levels",
       "preserve": "NotStarted/bail, timeouts/empty-run, unchanged-tree stamp, suite terminal line"
     },
+    "tools/ci/tooling-timings.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Four '= ' lines (source runs, coverage, predicted shard walls old/new); token/API errors exit 1; never writes without --write"
+    },
     "tools/ci/twinned-specs.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -1190,6 +1195,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Per-row frame/JS percentiles, slow-call and pipeline rows, and the --json file; paravirtual ms read as structure only."
+    },
+    "tools/gfx/mem-cycles-lib.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
     },
     "tools/gfx/mem-census.mjs": {
       "action": "keep-native",
@@ -1861,6 +1871,11 @@
       "presentation": "native",
       "preserve": "Timestamped progress lines (device, session state, boot probe, bench leg states, session minutes) and the report.json path; the endpoint URL is never printed."
     },
+    "tools/perf/devicefarm-opus-probe.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "A module, not a command: it exports the page-side function devicefarm-iphone.mjs serialises into Safari, and prints nothing."
+    },
     "tools/perf/devicefarm-syslog.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1891,10 +1906,30 @@
       "presentation": "native",
       "preserve": "Stubbed/real link qualification, measured-frame denominator, distance band, the `= mesh-census` summary JSON line and the --json / --md artifacts."
     },
+    "tools/perf/vm-leak-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-reading counts (meshes, textures, batches, listeners by scope, intervals, timers), every LEAK row, the `= vm-leak-census clean|LEAK` line, exit status and the --json artifact."
+    },
+    "tools/perf/vm-alloc-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Window KB/frame values with their (gc) marks, the mean, the baseline ratio and limit, the `= vm-alloc-census ok|OVER` line, exit status and the --json artifact."
+    },
+    "tools/perf/baselines/vm-alloc.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
     "tools/perf/ers-deploy-census.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c1"
+    },
+    "tools/perf/lit-wgsl-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The `= capture` / `= lit-wgsl CHANGED|unchanged` verdict lines, the family hash and the advisory markdown table the CI step appends to the job summary."
     },
     "tools/perf/garage-census.mjs": {
       "action": "keep-native",
@@ -1917,6 +1952,11 @@
       "preserve": "@c1"
     },
     "tools/perf/runtime-memory.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
+    "tools/perf/boost-press-census.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"
