@@ -117,17 +117,11 @@ test("pinPipelines: render pipelines only, capped, and apex26.tlxPipePin=0 pins 
   assert.equal(makePin({}).pinPipelines(), 0, "no pipeline cache (another three shape): a no-op, never a throw");
 });
 
-test("tlx.js wiring: prune pins before it drops, every warm pins at its end, device loss clears the set", () => {
+test("tlx.js wiring: prunePool arms the pin at the first present and sweeps before it drops a wrapper", () => {
+  // Behaviour above; this pins only the order inside prunePool (no assert.match source pins: assert-match-ratchet).
   const prune = tslice("      function prunePool(now) {", "      // A WRAPPER WE DROP MUST SAY SO TO THREE.");
-  assert.ok(prune.indexOf("pinPipelines();") > 0 && prune.indexOf("pinPipelines();") < prune.indexOf("dropWrapper(m);"),
-    "prunePool pins what was built since the last sweep before any wrapper is dropped");
-  const program = tslice("      function startProgramWarm(opts) {", "      function startMirrorWarm(opts) {");
-  assert.match(program, /\.finally\(\(\) => \{ _warmPending = null; _warmDone = true; pinPipelines\(\); \}\)/, "the program warm (menu, loading or race) pins on settle");
-  const mirror = tslice("      function startMirrorWarm(opts) {", "      // THE DRAWS NO WARM FRAME HELD");
-  assert.match(mirror, /\.finally\(\(\) => \{ _warmPending = null; pinPipelines\(\); \}\)/, "the deferred mirror warm pins on settle");
-  const rigw = tslice("      function startRigWarm() {", "      const ENV_PROBE_TRIES");
-  assert.match(rigw, /\.finally\(\(\) => \{ _warmPending = null; pinPipelines\(\); job\.done\(ok\); \}\)/, "the cockpit rig warm pins on settle");
-  const lost = tslice("      renderer.onDeviceLost = function (info) {", "        try {\n          if (!document.hidden");
-  assert.match(lost, /_pinnedPipes\.clear\(\)/, "a lost device's pipelines are not held");
-  assert.match(TLX, /history: _warmHistory\.slice\(\), pinned: _pinnedPipes\.size \}/, "memState().warm.pinned reports the set");
+  const arm = prune.indexOf("if (!_pinArmed) pinPipelines();"), cadence = prune.indexOf("PRUNE_EVERY_MS) return;");
+  const sweep = prune.indexOf("pinPipelines();", cadence), drop = prune.indexOf("dropWrapper(m);");
+  assert.ok(arm > 0 && arm < cadence, "armed before the 5 s cadence gate, so the first present wraps three's pipeline factory");
+  assert.ok(sweep > cadence && sweep < drop, "each sweep pins what was built since, before any wrapper is dropped");
 });

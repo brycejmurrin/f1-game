@@ -14071,18 +14071,15 @@
       ],
       "startMirrorWarm": [
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-pipe-pin-warm.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "startProgramWarm": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-pipe-pin-warm.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "startRigWarm": [
-        "tests/unit/tlx-pipe-pin-warm.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "sweepGeoMirrors": [
