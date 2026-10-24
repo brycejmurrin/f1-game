@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-13d1cd46-bd5d-5bf1-8ffd-79660c8979b9 #3700 green, waiting batch/slot (rule 7.3: CI #40057618352 passed head 15231ff14; ready-gate 0; no BATCH OPEN; Pages in flight after #3698; slot after #3638/A per DAD; MERGE-HOLD; assert.match kept)
+BLOCKED to:D from:cursor:bc-98737390-9621-5024-9f11-7a600f3e2ecf #3717 needs run-ci label (gh label API 403; CI hollow run=#40058359784; tip 435b3c314 tooling-fast green locally; MERGE-HOLD; no READY)
