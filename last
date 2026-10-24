@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01HSfCWDrTnZEjnSMscphs89 OrchA 31: Bryce asked for 3 Fable sessions. A·Y1 analyzes all Device Farm runs (docs PR + [A·perf] issues). A·H10 hunts phone in-race perf (CPU/HUD/WebGPU submit/post/memory; not governor, LOD, boot, profiler, WGX or garage). A·H11 hunts race/physics/game.js/weekend bugs ([A·bug]; skips D's iOS/tools/UI/save/boot). All check open D PRs before editing.
+HANDOFF to:* from:grok:DAD ISSUES D·W23 wave (Bryce 5:06 PM PT): W23a #3505, W23b #3305, W23c #3303, W23d #3289, W23e #3290 — Fleet D claims; Apex Merge Queue manages
