@@ -147,6 +147,22 @@ const TOUCH_READ = (win, from, to) => `
     warmLog: (() => { try { return (__apex.logs() || []).filter((x) => x && /warmed/.test(String(x.msg))).map((x) => String(x.msg)); } catch (_) { return null; } })(),
     ev: P.ev.length, evHead: P.ev.slice(0, 6).map((e) => [e[0], e[1], e[3], e[4]]) };`;
 
+// #3673 / #3676 (6): every frame over 100 ms inside a sample window, attributed — when (ms from window start), the
+// game state, the PerfSpans that began or ended inside that frame, and the material-cache misses (count + new keys)
+// since the previous hitch. memState() runs only on a hitch, so the recorder costs nothing on a healthy frame.
+const HITCH_JS = `
+  const H = window.__dfHitch = { rows: [], ring: [], miss0: null };
+  try { const ms = GLX.__tlx.memState(); H.miss0 = ms.matMiss; H.keys0 = (ms.matMissKeys || []).slice(); } catch (_) {}
+  if (!window.__dfSpanWrap && typeof PerfSpans !== "undefined") { window.__dfSpanWrap = 1;
+    const b0 = PerfSpans.begin, e0 = PerfSpans.end;
+    PerfSpans.begin = function (n) { const R = window.__dfHitch && window.__dfHitch.ring; if (R) { R.push([n, 0, performance.now()]); if (R.length > 400) R.shift(); } return b0.apply(this, arguments); };
+    PerfSpans.end = function (n) { const R = window.__dfHitch && window.__dfHitch.ring; if (R) { R.push([n, 1, performance.now()]); if (R.length > 400) R.shift(); } return e0.apply(this, arguments); }; }
+  const hitch = (t, dt, t0) => { if (H.rows.length >= 20) return;
+    let st = null, miss = null, keys = null; try { st = __apex.info().state; } catch (_) {}
+    try { const ms = GLX.__tlx.memState(); miss = H.miss0 == null ? null : ms.matMiss - H.miss0; H.miss0 = ms.matMiss;
+      keys = (ms.matMissKeys || []).filter((k) => !(H.keys0 || []).includes(k)); H.keys0 = (ms.matMissKeys || []).slice(); } catch (_) {}
+    const spans = H.ring.filter((r) => r[2] >= t - dt && r[2] <= t).map((r) => r[0] + (r[1] ? ">" : "<") + Math.round(r[2] - (t - dt)));
+    H.rows.push({ at: Math.round(t - t0), dt: Math.round(dt), state: st, spans: spans.slice(0, 24), miss, keys }); };`;
 // Page-side probes. Each is a function body for WebDriver execute/sync (returns JSON-able data).
 const PROBE = `
   const R = typeof RendererPicker !== "undefined" ? RendererPicker : null;
@@ -457,22 +473,6 @@ async function racesScenario(ctx, pins, report, out) {
 }
 
 // ---- follow-ups for merged PRs (OrchA 31, 2026-10-23): visor A/B (#3581), LOW/renderScale soak (#3479), Photo (#3482)
-// #3673 / #3676 (6): every frame over 100 ms inside a sample window, attributed — when (ms from window start), the
-// game state, the PerfSpans that began or ended inside that frame, and the material-cache misses (count + new keys)
-// since the previous hitch. memState() runs only on a hitch, so the recorder costs nothing on a healthy frame.
-const HITCH_JS = `
-  const H = window.__dfHitch = { rows: [], ring: [], miss0: null };
-  try { const ms = GLX.__tlx.memState(); H.miss0 = ms.matMiss; H.keys0 = (ms.matMissKeys || []).slice(); } catch (_) {}
-  if (!window.__dfSpanWrap && typeof PerfSpans !== "undefined") { window.__dfSpanWrap = 1;
-    const b0 = PerfSpans.begin, e0 = PerfSpans.end;
-    PerfSpans.begin = function (n) { const R = window.__dfHitch && window.__dfHitch.ring; if (R) { R.push([n, 0, performance.now()]); if (R.length > 400) R.shift(); } return b0.apply(this, arguments); };
-    PerfSpans.end = function (n) { const R = window.__dfHitch && window.__dfHitch.ring; if (R) { R.push([n, 1, performance.now()]); if (R.length > 400) R.shift(); } return e0.apply(this, arguments); }; }
-  const hitch = (t, dt, t0) => { if (H.rows.length >= 20) return;
-    let st = null, miss = null, keys = null; try { st = __apex.info().state; } catch (_) {}
-    try { const ms = GLX.__tlx.memState(); miss = H.miss0 == null ? null : ms.matMiss - H.miss0; H.miss0 = ms.matMiss;
-      keys = (ms.matMissKeys || []).filter((k) => !(H.keys0 || []).includes(k)); H.keys0 = (ms.matMissKeys || []).slice(); } catch (_) {}
-    const spans = H.ring.filter((r) => r[2] >= t - dt && r[2] <= t).map((r) => r[0] + (r[1] ? ">" : "<") + Math.round(r[2] - (t - dt)));
-    H.rows.push({ at: Math.round(t - t0), dt: Math.round(dt), state: st, spans: spans.slice(0, 24), miss, keys }); };`;
 // A window of rAF intervals that starts when called: `ms` long after `delay` ms, read back from window.__dfWin.
 const WIN_FOR = (ms, delay = 3000) => `${HITCH_JS}
   window.__dfWin = null; const d = []; let last = 0, t0 = 0;
