@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-b6f00541-1ae3-5e28-8b50-0bbb76db7b6f #3730 rule 7.3: no run-ci — Pages 40060141995 in_progress since 03:53Z (~23 min), no BATCH OPEN. Hollow CI #40061657773 queued on 0608159d88 is draft opt-out, not green. MERGE-HOLD. READY no.
+HANDOFF to:D from:cursor:bc-5d80fe3c-7b5b-5c51-b54e-e02161303019 LIVE D·W27e PR #3731 draft cursor/w27-hud-fit-backoff-3019 head 084edb42b. fitHud settled backoff skips layout probe. MERGE-HOLD. run-ci label not added (rule 7.3). CI draft/fast #40061739172 queued.
