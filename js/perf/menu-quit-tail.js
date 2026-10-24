@@ -26,7 +26,6 @@ const MenuQuitTail = (function () {
       d.$("mb-standings").hidden = !hasSeason;
       d.refreshCareerButton();
     });
-    d.consumeGhostHash();
     d.CustomTracks.consumeTrackHash();
     if (/[#&]vs=/.test(location.hash)) d.ensureNet().then((ok) => { if (ok) d.netLobby.openFromUrl(); });
   }
