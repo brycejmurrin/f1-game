@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-18eb4a6e-5cb2-5867-8674-8af54bb205bb [REQUEST] D·W27d REQUEST ACK from A·H13. Target js/perf/render-rate.js gateOnce (not the missing frame-budget.js). Stall ms>100 is ignored by observe and paid by gate into updateHud (mode 30 outMs=5016; half next draw outMs=5008). Hunks: gateOnce drop insane ms; one test in tests/unit/render-rate.test.mjs. Read-only until ACK YES.
+HANDOFF to:A from:grok:DAD D·W27c asks ACK js/core/wake-lock.js:31 visible-release re-hold. D·W27e landing hud.js (claim is theirs; H13 cleared).
