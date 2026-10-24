@@ -338,7 +338,7 @@ function fakeAudio(duration) {
     const el = { preload: "", currentTime: 0, duration: NaN, onloadedmetadata: null, onerror: null, onended: null, onplaying: null,
       _src: "", pause() {}, load() {}, removeAttribute() { el._src = ""; }, play() { return Promise.resolve(); } };
     Object.defineProperty(el, "src", { get: () => el._src, set(v) {
-      el._src = v; el.duration = duration;
+      el._src = v; el.duration = duration; el.currentTime = 0;
       Promise.resolve().then(() => { if (el.onloadedmetadata) el.onloadedmetadata(); });
     } });
     made.push(el);
@@ -360,6 +360,30 @@ test("an upload streams through the media element on desktop, never through deco
   assert.equal(mediaEls[0].src, UPLOAD.url);
   assert.ok(!fetched.includes(UPLOAD.url) && !decoded.includes(UPLOAD.url), "and its bytes are never fetched for a full decode");
   assert.equal(A.currentTrackId(), UPLOAD.id);
+});
+
+test("a streamed track keeps its position when a stalled AudioContext is rebuilt", async () => {
+  let clock = 1000;
+  const Audio = fakeAudio(200);
+  const { A, contexts } = boot({ Audio, mediaSource: true, clock: () => clock });
+  A.init(); await flush();
+  A.addTracks([UPLOAD]);
+  A.playTrackId(UPLOAD.id); await flush();
+  assert.equal(Audio.made.length, 1);
+  Audio.made[0].currentTime = 42;
+
+  contexts[0].state = "interrupted";
+  A.init(); await flush();
+  clock += 1000;
+  A.init(); await flush();
+
+  assert.equal(contexts.length, 2, "a later gesture replaces the stalled context");
+  assert.equal(Audio.made.length, 2, "the new context owns a new media element");
+  assert.equal(A.currentTrackId(), UPLOAD.id);
+  assert.equal(Audio.made[1].currentTime, 42, "recovery seeks to the stream's saved offset");
+
+  A.stopMusic(); A.startMusic(); await flush();
+  assert.equal(Audio.made[1].currentTime, 0, "an explicit stop still starts from the top");
 });
 
 test("the shipped tracks still decode on desktop next to a streamed upload", async () => {
