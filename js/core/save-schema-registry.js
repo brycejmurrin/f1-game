@@ -108,6 +108,7 @@ const SaveSchemaRegistry = (function () {
     "multiDraw": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "musicStream": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "nostrRelays": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "packDecodeWorker": entry("js/workers/bitmap-decode-client.js (apex26.packDecodeWorker \"1\": pack strip decode in the worker; default OFF)", "raw", 1, "rawScalar"),
     "perChunkOff": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "pitTaught": entry("js/race/pit-lane.js", "json", 1, "json"),
     "propsUnchunked": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),

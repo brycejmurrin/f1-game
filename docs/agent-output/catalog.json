@@ -1947,6 +1947,11 @@
       ]
     },
     {
+      "path": "tools/gfx/mem-cycles-lib.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/gfx/pass-census.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2753,6 +2758,11 @@
     {
       "path": "tools/perf/baselines/vm-alloc.json",
       "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/perf/boost-press-census.mjs",
+      "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
     },
     {
@@ -3898,7 +3908,7 @@
     },
     {
       "name": "test:perf-budget",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/perf-sw-cache-hit.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/perf-boost-press-pipelines-gl.spec.js tests/specs/perf-boost-press-pipelines.spec.js tests/specs/perf-sw-cache-hit.spec.js"
     },
     {
       "name": "test:perf-frametime",

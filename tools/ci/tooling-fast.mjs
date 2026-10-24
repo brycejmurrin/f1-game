@@ -855,6 +855,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/meeting-picker-labels.test.mjs",
   // The track-switch growth verdict (mem-census sustainedGrowthMB) replayed on the #773 / 2026-10-04 leak numbers and the Metal warm-up step. ~0.1 s.
   "tests/unit/mem-census-growth.test.mjs",
+  // gpu-game-check --mem-cycles (A·H12): the plateau-vs-growing verdict over race>quit cycles, and the in-page live GPUBuffer/GPUTexture counter on a stub GPUDevice. ~0.1 s.
+  "tests/unit/mem-cycles-lib.test.mjs",
   // memory-sync.sh's three-way sync: a stale session never reverts other
   // sessions' memories (2026-10-02, twice). Real hook, throwaway repo. ~1 s.
   "tests/unit/memory-sync.test.mjs",
@@ -1319,6 +1321,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-post-fixed-mats.test.mjs",
   // TLX phone post at half scene resolution (D·IP3 / BrowserStack GPU-bound fill).
   "tests/unit/tlx-post-phone-res.test.mjs",
+  // TLX's mesh-pool prune keeps a gfx.pinMesh geometry's wrappers (the deploy-only ERS bar,
+  // OT lamp and ERS strip): an idle unpinned wrapper still goes. Lifts the real prunePool (#3677).
+  "tests/unit/tlx-prune-pin.test.mjs",
   // TLX perf hunt 6 (B·H6): gfx.warmDraws captures the cockpit rig's draws (never painted) and the next present compiles exactly those pairs, owned like the deferred mirror warm; the first rig frame then links nothing (a cold one links). Race entry awaits it under the cover.
   "tests/unit/tlx-rig-warm.test.mjs",
   // TLX drops a createTexture() source canvas once three has uploaded it,
@@ -1525,6 +1530,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // WIND (js/race/wind.js): a pure function of (seed, circuit, weather, clock), fog calm and a storm gusty,
   // gusts and the side force capped, head/tail wind a few km/h of top speed, OFF a true no-op. VM, ~1 s.
   "tests/unit/wind.test.mjs",
+  // BitmapDecode.strip pack-strip lane (apex26.packDecodeWorker, default OFF): worker bytes equal sharp's per layer; OFF/refused/crash answer null. VM, ~3 s.
+  "tests/unit/worker-pack-strip.test.mjs",
   "tests/unit/workflow-harness.test.mjs",
   // ci.yml structure read from the PARSED YAML (job → step by name): base-green plan, geometry filter, behind-ship step. ~0.3 s.
   "tests/unit/workflow-lint-ci-plan.test.mjs",
@@ -2020,8 +2027,11 @@ function pinIndex() {
   return _pinIndex;
 }
 
-/** Which CI tooling-fast shards (1/3 .. 3/3, ci.yml guards-a/b/c) touch any of `files`. */
-export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 3) {
+/** CI tooling-fast shards: ci.yml guards-a..d run --shard=1/4 .. 4/4 (BUILD-HUNT B2, 2026-10-24). */
+export const CI_SHARDS = 4;
+
+/** Which CI tooling-fast shards (1/4 .. 4/4, ci.yml guards-a/b/c/d) touch any of `files`. */
+export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = CI_SHARDS) {
   const want = new Set(files);
   const out = [];
   for (let i = 1; i <= shardCount; i++) {
