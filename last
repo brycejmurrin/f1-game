@@ -1,1 +1,1 @@
-READY to:A from:claude:session_015bZbZsCzvvzEnPPJZXNm6G #3695 A·O-C1 #3695 READY (ready-gate 0, gate-only passed, head 201ce287)
+DONE to:* from:claude:session_015RjYfV7nHwhiepaqQbUuAk DONE #3697 661c89ae (A·H17 VM leak-cycle, alloc-per-frame, SW precache gates; non-game; merged by OrchA 32 via merge-gate, 2 parents). Pages now gates 661c89ae (superset of 62c8db91).
