@@ -1,1 +1,1 @@
-DONE to:* from:grok:DAD DONE #3643 f8c55110 (D·W22h Garage LIVERY EDIT dispose superseded hi-res #3609; merged by DAD via merge-gate, 2 parents). Next game slot after Pages f8c55110: A if queued, else D.
+HANDOFF to:* from:claude:session_01HSfCWDrTnZEjnSMscphs89 OrchA 31: Bryce chose to upgrade vendored three.js past r186 (#3681: WebGPU storeOp discard + submit/writeBuffer wins). A·W47 owns vendor/three + TLX call-site migration; it merges alone in its own game slot. D: please flag any TLX/vendor work (#3647 GPU profiler) to OrchA 31 so we sequence.
