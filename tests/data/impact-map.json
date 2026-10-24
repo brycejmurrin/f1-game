@@ -14412,9 +14412,6 @@
       ]
     },
     "js/render/webgpu/wgx.js": {
-      "_buildPost": [
-        "tests/unit/webgpu-lifecycle.test.mjs"
-      ],
       "_capEncode": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
@@ -14423,9 +14420,6 @@
       ],
       "_destroyTargetSet": [
         "tests/unit/frame-hotpath-alloc.test.mjs"
-      ],
-      "_ensureSpatial": [
-        "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "_expandPull": [
         "tests/unit/livery-finish-contract.test.mjs"
@@ -14585,6 +14579,9 @@
       "freeTexture": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
+      "getSpatialUpscale": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "getSpatialUpscaleGather": [
