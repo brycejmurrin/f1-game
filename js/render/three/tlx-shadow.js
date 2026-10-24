@@ -120,7 +120,14 @@
       const rt = new THREE.RenderTarget(size, size, opts);
       rt.texture.name = name + ".color";
       rt.texture.generateMipmaps = false;
+      // A-P2W (vendored patch 17): WebGPU never writes this colour (depthMat.colorWrite) and
+      // its blocker reads the depth texture, so the R8 store is never fetched — discard it
+      // on every pass. apex26.tlxTagDiscard="0" keeps it (the WebGL2 leg's A-P2 is endPass).
+      if (renderer.backend && renderer.backend.isWebGPUBackend && _colorDiscardOn()) rt.apexDiscardColor = 1;
       return rt;
+    }
+    function _colorDiscardOn() {
+      try { return localStorage.getItem("apex26.tlxTagDiscard") !== "0"; } catch (_) { return true; }
     }
 
     const isWebGPU = !!(renderer.backend && renderer.backend.isWebGPUBackend);

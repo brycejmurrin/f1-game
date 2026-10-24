@@ -80,10 +80,20 @@ async function runGarage(page) {
   await page.waitForSelector("#carsetup:not([hidden])", { timeout: WAIT_MS });
   await page.waitForTimeout(8000);
   await setPhase(page, "garage-close");
+  await page.evaluate(() => { window.__garageCloseClicks = 0; });
+  await page.evaluate(() => {
+    const done = document.getElementById("cs-done");
+    if (!done) throw new Error("no cs-done");
+    done.addEventListener("click", () => { window.__garageCloseClicks = (window.__garageCloseClicks || 0) + 1; }, true);
+  });
+  const tClose = Date.now();
   await page.locator("#cs-done").click({ timeout: 60000, force: true });
   await page.waitForSelector("#carsetup[hidden]", { timeout: WAIT_MS }).catch(() => {});
+  const closeClicks = await page.evaluate(() => window.__garageCloseClicks || 1);
+  const closeMs = Date.now() - tClose;
   await page.waitForTimeout(3000);
   await setPhase(page, "post-close");
+  return { closeClicks, closeMs };
 }
 
 async function runRaceEntry(page) {
@@ -118,9 +128,10 @@ try {
 
   const paths = pathArg === "both" ? ["garage", "race"] : [pathArg];
   for (const p of paths) {
+    let garageClose = null;
     if (p === "garage") {
       await page.evaluate(() => { window.__readbackOracle.log.length = 0; });
-      await runGarage(page);
+      garageClose = await runGarage(page);
     } else if (p === "race") {
       await page.evaluate(() => { window.__readbackOracle.log.length = 0; });
       await runRaceEntry(page);
@@ -131,6 +142,7 @@ try {
       const sw = typeof PerfGov !== "undefined" && PerfGov.softwareRaster ? PerfGov.softwareRaster() : null;
       return { summary: window.__readbackOracle.summary(), stall, softBlitGen: soft, softwareRaster: sw };
     });
+    if (garageClose) slice.garageClose = garageClose;
     report.paths[p] = slice;
   }
 

@@ -565,6 +565,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `thermal-drift.js` | `ThermalDrift` | tag | ThermalDrift: a pure, clock-free helper for a phone that throttles over a long session (#2652). |
 | `governor.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
+| `menu-teardown.js` | `MenuTeardown` | tag | MenuTeardown: software-GL readback cover, sync-task probes, and UI-yield helpers for quit-to-menu and garage-close teardown. |
+| `menu-quit-tail.js` | `MenuQuitTail` | tag | deferred quit-to-menu tail (js/game.js quitToMenu after #overlay is up). |
 | `loop-health.js` | `LoopHealth` | tag | LoopHealth: the frame-loop fault policy and the one heartbeat that outlives the loop. |
 | `render-rate.js` | `RenderRate` | tag | RenderRate: draw every second requestAnimationFrame when a PHONE's display delivers rAF at 100 Hz or more. |
 | `spans.js` | `PerfSpans` | tag | PerfSpans: the per-subsystem frame budget. begin(name)/end(name) bracket a phase of the frame loop (game.js tickBody: frame, input, physics, ai, collide,… |

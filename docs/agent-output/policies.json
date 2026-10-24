@@ -1221,6 +1221,16 @@
       "presentation": "native",
       "preserve": "readPixels hook phases, stall watchdog state and before/after JSON report paths."
     },
+    "tools/gfx/readback-quit-menu-oracle.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "SwiftShader quit TTI, LoopHealth sync/stall metrics and JSON report path."
+    },
+    "tools/gfx/readback-quit-menu-oracle-repeat.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Repeated quit-menu oracle runs with median/worst aggregation JSON."
+    },
     "tools/gfx/res-scale-ab.mjs": {
       "action": "keep-native",
       "presentation": "native",
