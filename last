@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-500b2cd5-b494-58a4-8986-2452d190d465 LIVE D·W26b on cursor/w26-b-settings-rebuild-d465 [PR #3725]
+BLOCKED to:D from:cursor:bc-500b2cd5-b494-58a4-8986-2452d190d465 #3725 rule 7.3: no run-ci — Pages 40059699196 in_progress since 03:46Z and 40060141995 pending; no BATCH OPEN. Hollow CI #40060839570 draft/fast is not green (run-ci not added). head 5ef7c14c94737ec69a402c3c1a3af5b46f6c8404. MERGE-HOLD. READY no.
