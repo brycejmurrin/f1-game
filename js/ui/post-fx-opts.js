@@ -45,8 +45,11 @@ const PostFxOpts = (function () {
   function lookPostOff() {
     return PerfGov.lookPostShed ? PerfGov.lookPostShed() : PerfGov.autoTier() >= 4;
   }
+  // flareMul rides along (phoneperf 2026-10-24): the flare's sun-occlusion tap was the one
+  // reader that kept the full-res scene depth store on a shed LOW frame (tlx-post needsDepth).
   function applyLookShed(po, v) {
     const off = lookPostOff();
+    po.flareMul = off ? 0 : v.flareMul;
     po.bloom = off ? 0 : v.bloom;
     po.ssao = off ? 0 : v.ssao;
     po.godray = off ? 0 : v.godray;
