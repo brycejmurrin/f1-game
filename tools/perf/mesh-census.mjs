@@ -191,7 +191,16 @@ function installTlxWrap(bandM) {
       try {
         // Shadow rows band by distance to the PLAYER camera, not the light's.
         const cam = (pass === "shadow" ? state.mainCam : state.cam) || r.__meshCensusCam;
-        if (cam && object.getWorldPosition && _wp) {
+        const bs = object.geometry && object.geometry.boundingSphere;
+        if (cam && bs && _wp && object.matrixWorld) {
+          // Chunks are world-baked at an IDENTITY transform, so the mesh origin is
+          // the world origin and getWorldPosition() measured the camera's distance
+          // to (0,0,0) for every chunk (the 2026-10-19 bands). The chunk's own
+          // bounding sphere (set from its bin AABB) is where its triangles are:
+          // report the NEAREST point, the distance an LOD switch would key on.
+          _wp.copy(bs.center).applyMatrix4(object.matrixWorld);
+          dist = Math.max(0, cam.position.distanceTo(_wp) - bs.radius);
+        } else if (cam && object.getWorldPosition && _wp) {
           object.getWorldPosition(_wp);
           dist = cam.position.distanceTo(_wp);
         } else if (cam && object.position && cam.position) {
@@ -681,7 +690,7 @@ function buildMarkdown(results, summary) {
   lines.push("## Method caveats", "");
   lines.push("- Counts are exact submitted triangles / draw calls, never frame times (SwiftShader).");
   lines.push("- GLX per-object distance bands are `unknown` at the GL wrap; the build-oracle line is a centroid reach estimate, labelled as such.");
-  lines.push("- TLX distance uses each draw's world-position distance to the active camera.");
+  lines.push("- TLX distance is the nearest point of each draw's bounding sphere to the player camera (chunks are world-baked at identity, so their origin is not their position).");
   lines.push("- Mirror must be ON (`__apex.mirror(\"on\")`); lite-rung mobile tier optional via `--mobile`.");
   return lines.join("\n");
 }
