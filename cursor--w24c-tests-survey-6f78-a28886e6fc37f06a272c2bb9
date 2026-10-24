@@ -1,1 +1,1 @@
-1792804409	Cursor Agent	docs/README.md W24c surveys/ index row (docs-integrity; shared with W24a/b/d)  [cursor/w24c-tests-survey-6f78; session a28886e6fc37f06a272c2bb9]
+1792804440	Cursor Agent	docs/survey/w24c-tests.md docs/changelog.d/w24c-tests.md W24c tests survey (docs/survey/ — singular, already indexed; avoids README race)  [cursor/w24c-tests-survey-6f78; session a28886e6fc37f06a272c2bb9]
