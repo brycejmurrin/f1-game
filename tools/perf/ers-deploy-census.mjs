@@ -137,6 +137,8 @@ async function run(o) {
       // Back onto the main straight at speed: a BOOST press only deploys on the throttle, and a held GAS with no
       // steering has found a wall by now.
       await page.evaluate((f) => { try { window.__apex.jump(f, 70); } catch (_) { /* no jump hook */ } }, o.jumpFrac);
+      // Let the jump's own work (new chunks in view, their pipelines) land BEFORE the press snapshot: 6 frames.
+      await page.evaluate(() => new Promise((r) => { let n = 0; requestAnimationFrame(function f() { if (++n >= 6) r(); else requestAnimationFrame(f); }); }));
       const a = await page.evaluate(pressSnap);
       await page.evaluate(() => { const P = window.__edc; window.__apex.setBoost(true);
         const F = P.pf = []; let last = -1; const end = performance.now() + 60000;
@@ -145,7 +147,7 @@ async function run(o) {
       await page.waitForTimeout(o.hold * 1000);
       await page.waitForFunction(() => window.__edc.pf.length >= 4, null, { polling: 250, timeout: 60000 }).catch(() => {});
       const r = await page.evaluate((from) => ({ f: window.__edc.pf.slice(), dep: !!(window.__apex.carState().find((c) => c.boostOn) || {}).deploying,
-        names: window.__edc.pipes.slice(from).map((p) => p.obj + " " + p.mat + " pass=" + p.pass) }), a.pipes);
+        names: window.__edc.pipes.slice(from).map((p) => `${p.obj} ${p.mat} pass=${p.pass} rt=${p.rt} tr=${p.transparent} attrs=${p.attrs} parents=${p.parents} ${p.ms}ms`) }), a.pipes);
       const b = await page.evaluate(pressSnap);
       out.presses.push({ n: i + 2, deployed: r.dep, press: pressDelta(a, b, r.f), control: pressDelta(c0, a, null), pipes: r.names });
     }
