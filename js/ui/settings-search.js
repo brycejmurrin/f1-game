@@ -82,6 +82,16 @@ const SettingsSearch = (function () {
   // replaces only that owner's rows; disposing an old registration is harmless.
   const owners = new Map(), subscribers = new Set();
   const PAGES = new Set(["controls", "driving", "display", "appearance", "a11y", "advanced", "audio", "files"]);
+  // Catalog concat and option-label walks were repeated on every keystroke.
+  let rowCache = null;
+  const optionText = new Map();
+  function allRows() {
+    if (!rowCache) rowCache = CATALOG.concat(...owners.values());
+    return rowCache;
+  }
+  function optionSig(el) {
+    return (el._srKey || "") + ":" + (el.children ? el.children.length : 0);
+  }
   function register(owner, descriptors) {
     if (typeof owner !== "string" || !owner || !Array.isArray(descriptors)) throw new TypeError("Settings search owner and descriptors required");
     const rows = descriptors.map((r) => {
@@ -92,22 +102,39 @@ const SettingsSearch = (function () {
     if (new Set(rows.map((r) => r.id)).size !== rows.length) throw new TypeError("Duplicate settings search id");
     for (const row of rows) if (CATALOG.some((r) => r.id === row.id) || [...owners].some(([id, existing]) => id !== owner && existing.some((r) => r.id === row.id))) throw new TypeError("Settings search id already owned");
     owners.set(owner, rows);
+    rowCache = null;
     for (const fn of subscribers) fn();
-    return () => { if (owners.get(owner) === rows) { owners.delete(owner); for (const fn of subscribers) fn(); } };
+    return () => { if (owners.get(owner) === rows) { owners.delete(owner); rowCache = null; for (const fn of subscribers) fn(); } };
   }
   function optionsOf(row) {
     // Read labels only. Never select an option, dispatch change, or ensure a
-    // lazy bundle merely to answer a query.
-    const target = typeof document !== "undefined" ? document.querySelector("#" + row.target) : null;
-    const labels = target && target.tagName === "SELECT" ? [...target.children].map((o) => o.textContent || "").join(" ") : "";
-    return labels + " " + (typeof row.options === "function" ? String(row.options() || "") : String(row.options || ""));
+    // lazy bundle merely to answer a query. A select's joined option text is
+    // cached until its SettingRow key or child count changes, so the next
+    // keystroke does not walk those labels again. A missing id is looked up
+    // again so a control mounted later can still match.
+    const extra = typeof row.options === "function" ? String(row.options() || "") : String(row.options || "");
+    const hit = optionText.get(row.target);
+    if (hit && hit.el && hit.el.isConnected !== false && optionSig(hit.el) === hit.sig) return hit.labels + " " + extra;
+    const target = typeof document !== "undefined" && document.querySelector ? document.querySelector("#" + row.target) : null;
+    if (!target || target.tagName !== "SELECT") {
+      optionText.set(row.target, { el: null, sig: "", labels: "" });
+      return extra;
+    }
+    const labels = [...target.children].map((o) => o.textContent || "").join(" ");
+    optionText.set(row.target, { el: target, sig: optionSig(target), labels });
+    return labels + " " + extra;
   }
   function find(query) {
     const words = String(query || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return words.length ? CATALOG.concat(...owners.values()).filter((r) => {
-      const haystack = (r.label + " " + r.aliases + " " + optionsOf(r)).toLowerCase();
-      return words.every((w) => haystack.includes(w));
-    }) : [];
+    if (!words.length) return [];
+    const out = [];
+    for (const r of allRows()) {
+      const base = (r.label + " " + r.aliases).toLowerCase();
+      if (words.every((w) => base.includes(w))) { out.push(r); continue; }
+      const haystack = (base + " " + optionsOf(r)).toLowerCase();
+      if (words.every((w) => haystack.includes(w))) out.push(r);
+    }
+    return out;
   }
   function reveal(target) {
     if (!target) return false;
@@ -153,31 +180,58 @@ const SettingsSearch = (function () {
       if (!panel) note.textContent = row.unavailableReason || message;
       if (typeof LiveRegion !== "undefined") LiveRegion.say(row.unavailableReason || message, "hud");
     }
-    function paint() {
-      list.replaceChildren();
-      const matches = find(input.value);
-      note.textContent = input.value.trim() ? matches.length + " matching settings" : "Search names or everyday terms. Your settings stay as they are.";
-      for (const row of matches) {
-        const li = document.createElement("li"), button = document.createElement("button");
-        const route = typeof SettingsNav !== "undefined" && SettingsNav.routes && SettingsNav.routes[row.page];
-        button.type = "button"; button.className = "sel-chip"; button.textContent = row.label + " · " + (route ? route.title : row.page.toUpperCase());
-        button.dataset.settingResult = row.id;
-        button.onclick = () => {
-          clearFeedback();
-          // Navigation ownership is committed only after the destination won
-          // the lazy generation race. A cancelled audio request owns no BACK.
-          const arrived = () => {
-            last = row.id; fromSearch = true;
-            if (o.onSelect) o.onSelect(row.page);
-            const placed = reveal(document.querySelector("#" + row.target));
-            if (!placed) unavailable(row);
-            return placed;
-          };
-          if (typeof row.navigate === "function") { if (row.navigate(arrived) === false) unavailable(row); }
-          else o.show(row.page, true, arrived);
+    const slots = new Map();
+    function slotFor(row) {
+      let slot = slots.get(row.id);
+      if (slot) return slot;
+      const li = document.createElement("li"), button = document.createElement("button");
+      button.type = "button"; button.className = "sel-chip";
+      button.dataset.settingResult = row.id;
+      li.appendChild(button);
+      slot = { li, button, row: null };
+      slots.set(row.id, slot);
+      return slot;
+    }
+    function armResult(slot, row) {
+      if (slot.row === row) return;
+      slot.row = row;
+      const route = typeof SettingsNav !== "undefined" && SettingsNav.routes && SettingsNav.routes[row.page];
+      const label = row.label + " · " + (route ? route.title : row.page.toUpperCase());
+      if (slot.button.textContent !== label) slot.button.textContent = label;
+      slot.button.onclick = () => {
+        clearFeedback();
+        // Navigation ownership is committed only after the destination won
+        // the lazy generation race. A cancelled audio request owns no BACK.
+        const arrived = () => {
+          last = row.id; fromSearch = true;
+          if (o.onSelect) o.onSelect(row.page);
+          const placed = reveal(document.querySelector("#" + row.target));
+          if (!placed) unavailable(row);
+          return placed;
         };
-        li.appendChild(button); list.appendChild(li);
+        if (typeof row.navigate === "function") { if (row.navigate(arrived) === false) unavailable(row); }
+        else o.show(row.page, true, arrived);
+      };
+    }
+    function paint() {
+      const matches = find(input.value);
+      const caption = input.value.trim() ? matches.length + " matching settings" : "Search names or everyday terms. Your settings stay as they are.";
+      if (note.textContent !== caption) note.textContent = caption;
+      // Reuse the row nodes. replaceChildren() on every input dropped and
+      // reallocated a button per match (often dozens for a one-letter query).
+      const keep = [];
+      for (const row of matches) {
+        const slot = slotFor(row);
+        armResult(slot, row);
+        keep.push(slot.li);
       }
+      const kids = list.children;
+      for (let i = 0; i < keep.length; i++) {
+        if (kids[i] === keep[i]) continue;
+        if (keep[i].parentNode) keep[i].remove();
+        list.insertBefore(keep[i], kids[i] || null);
+      }
+      while (list.children.length > keep.length) list.children[list.children.length - 1].remove();
     }
     input.oninput = paint;
     subscribers.add(paint);
