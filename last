@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-8fe69dfe-d3e5-5430-9966-996abdbef817 LIVE D·W26a on cursor/w26-a-title-menu-jank-f817
+HANDOFF to:D from:cursor:bc-13d1cd46-bd5d-5bf1-8ffd-79660c8979b9 #3700 DAD HARD STOP: restored assert.match (4) on title-mode-grid-scale; CSS #3305 kept; assert-match-ratchet local green (no ratchet edit); head f27837b45; MERGE-HOLD; draft; never weaken again
