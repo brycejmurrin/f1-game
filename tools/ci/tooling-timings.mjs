@@ -14,6 +14,7 @@
  *
  *   node tools/ci/tooling-timings.mjs                 # newest 6 green runs → predicted shard walls, old vs new
  *   node tools/ci/tooling-timings.mjs --runs 10 --write
+ *   node tools/ci/tooling-timings.mjs --branch cursor/x --runs 3     # only that branch's runs (a packing experiment)
  *   node tools/ci/tooling-timings.mjs --log a.log --log b.log --write   # saved job logs, no API
  *
  * Read-only on GitHub (token via github-token.mjs). `--write` rewrites the
@@ -82,10 +83,10 @@ function fetchLog(jobId, token) {
 }
 
 /** Samples from the newest `runs` ci.yml runs whose three guard shards all passed. */
-export function harvestFromActions(runs, { log = () => {} } = {}) {
+export function harvestFromActions(runs, { log = () => {}, branch = null } = {}) {
   const token = githubToken();
   if (!token) throw new Error(NO_TOKEN_HINT);
-  const list = api("actions/workflows/ci.yml/runs?status=completed&per_page=60");
+  const list = api(`actions/workflows/ci.yml/runs?status=completed&per_page=60${branch ? `&branch=${encodeURIComponent(branch)}` : ""}`);
   if (list.error) throw new Error(`runs: ${list.error}`);
   const samples = {};
   const used = [];
@@ -114,7 +115,7 @@ function main(argv) {
     for (const p of logs) parseDurations(fs.readFileSync(p, "utf8"), samples);
     source = `${logs.length} log file(s)`;
   } else {
-    const h = harvestFromActions(Number(val("--runs", "6")), { log: (s) => console.error(s) });
+    const h = harvestFromActions(Number(val("--runs", "6")), { log: (s) => console.error(s), branch: val("--branch", null) });
     samples = h.samples;
     source = `ci.yml runs ${h.runs.join(" ")}`;
   }
