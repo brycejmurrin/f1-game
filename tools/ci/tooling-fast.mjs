@@ -719,6 +719,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/inputs-hash.test.mjs",
   // #3302: INSTALL APP lifts clear of PAUSE BACKGROUND on title landscape (844×390).
   "tests/unit/install-chip-overlap.test.mjs",
+  // #3558 D·W25e: iOS Safari focus auto-zoom — OWNED free sheets (appearance-studio / race-setup / tuner) floor text inputs at 16px.
+  "tests/unit/ios-input-zoom-w25e.test.mjs",
   "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
   "tests/unit/js-debugger-mcp.test.mjs",
   "tests/unit/js-debugger-node.test.mjs",
