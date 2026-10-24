@@ -23,11 +23,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // canary); 2026-10-19 net-lobby-lifecycle slice lowered it (7401 -> 7316 on the merged tip).
 
 // 2026-10-22 #3465: shot-jobs A/B path + --batch/--clear usage pins → behaviour (7318 → 7315); tip #3483/#3459 left 7314.
-// 2026-10-24: deploy tip e13059a0e is already 7315 (worker-pack-strip.test.mjs +1,
-// ready-gate.test.mjs 13→14). This branch adds no assert.match. A PR CI merge
-// of that tip fails the old 7314 ceiling, so the ceiling absorbs the landed pins.
 // Lower this when more pins convert; never raise without a reason.
-const CEILING = 7315;
+const CEILING = 7314;
 
 const EXEMPT = new Set([
   "tests/unit/assert-match-ratchet.test.mjs",
