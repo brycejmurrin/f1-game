@@ -1508,6 +1508,13 @@ const TLX = (function () {
         }
         return rt;
       }
+      let _mirDiscards = 0, _mirInvD = null, _mirInvDT = null;
+      function _mirInv(mrt) {
+        const gl = renderer.backend && renderer.backend.gl;
+        if (!gl) return null;
+        if (!_mirInvD) { _mirInvD = [gl.DEPTH_ATTACHMENT]; _mirInvDT = [gl.DEPTH_ATTACHMENT, gl.COLOR_ATTACHMENT1]; }
+        return mrt ? _mirInvDT : _mirInvD;
+      }
       // Arm (true) / disarm (false) the scene pass's MRT for a draw into a mirror-shaped target.
       function _mirMrtArm(on, prev) {
         if (lit && lit.setSsrMrt) lit.setSsrMrt(on);
@@ -5391,6 +5398,9 @@ const TLX = (function () {
             const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
             if (mrt) _mirMrtArm(true);
             try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); }
+            // A-P2: nothing reads the mirror's depth or its ssrTag attachment (only textures[0] is
+            // ever sampled), so on WebGL2 drop both stores while its FBO is still bound (tlx-post).
+            if (post && post.discardAttachments && post.discardAttachments(mirRT, _mirInv(mrt))) _mirDiscards++;
             _mirRenders++;
             _mirFails = 0;   // the cap means FOUR CONSECUTIVE failures: unrelated one-frame throws must not retire the mirror
           } catch (e) {
@@ -5407,7 +5417,7 @@ const TLX = (function () {
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
-            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr,
+            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr, discards: _mirDiscards,
             mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned };   // A-H5
         },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
@@ -6431,6 +6441,8 @@ const TLX = (function () {
               if (!rt) return Promise.resolve({ label, err: "no rt" });
               const w = rt.width, h = rt.height;
               const isHalf = rt.texture && rt.texture.type === THREE.HalfFloatType;
+              // A packed 11/11/10 scene target (phones, tlx-post scene11) reads back one uint32 per pixel: not decoded here.
+              if (rt.texture && rt.texture.type === THREE.UnsignedInt101111Type) return Promise.resolve({ label, err: "rg11b10 target: this probe decodes half/byte only (apex26.tlxScene11=0 for a reading)" });
               return renderer.readRenderTargetPixelsAsync(rt, 0, 0, w, h).then(function (src) {
                 // three pads copyTextureToBuffer rows to 256 BYTES (WebGPU rule).
                 const bpp = isHalf ? 8 : 4;

@@ -4949,6 +4949,9 @@
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/store-key-types.test.mjs"
       ],
+      "ttBoardAddResult": [
+        "tests/unit/settings-ttlb-backup.test.mjs"
+      ],
       "*": [
         "tests/specs/parts-physics.spec.js",
         "tests/specs/persistence.spec.js",
@@ -4963,6 +4966,7 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
@@ -6622,6 +6626,7 @@
       "otEnabled": [
         "tests/unit/pace-arming-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
+        "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ],
       "paceVmax": [
@@ -6637,6 +6642,7 @@
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs",
         "tests/unit/start-race-latch.test.mjs",
@@ -13570,6 +13576,9 @@
       "depthEnd": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
+      "discardAttachments": [
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
       "dispose": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13583,6 +13592,9 @@
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "needsDepth": [
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
+      "needsTag": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "place": [

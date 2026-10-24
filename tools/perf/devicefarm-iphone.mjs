@@ -5,7 +5,7 @@
 //
 //   node tools/perf/devicefarm-iphone.mjs devices
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" [--legs 2|4|0] [--url URL] [--out DIR]
-//   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --touch 5 [--from btn-throttle] [--to btn-boost]
+//   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --touch 5 [--touch-gap 28] [--touch-pair] [--entry menu] [--from btn-throttle] [--to btn-boost]
 //     [--variants none,dom,state,none]   one fresh page load per entry, warm-up before the first tap (see WARM)
 //     [--variants none@live,dom@live,none@fix --fix-url URL --cold]   a fresh Safari PROCESS per entry
 //   node tools/perf/devicefarm-iphone.mjs run --scenario cache|races [--pins webgpu,webgl2]   (adds ?apex=1)
@@ -15,7 +15,12 @@
 //     warmplus: WebGPU entry + first-race frames, default vs apex26.tlxWarmPlus=1, each after a Safari data clear
 //     visor,soak,photo (chainable in one session): HELMET-cam visor arms --arms off,on,refr,off at --track bahrain:night
 //       (--visor-pins); GRAPHICS --presets medium,low,medium at renderScale 0.5, a 1/0.75/0.5 ladder and a --soak-s
-//       governor soak (--soak-pins); Photo Studio by native taps with the 44 px floor read
+//       governor soak (--soak-pins); Photo Studio by native taps with the 44 px floor read (--photo-scales auto,1)
+//     flags: fixed targets / SGSR arms (--flag-arms off,fixed,sgsr,both,off) at pinned --flag-scales 0.5,0.75
+//   Method (#3676; DEVICE-FARM-ANALYSIS-2026-10-24.md): rows carry build/first/thermal/warm; --prime TRACK:TOD spends a
+//   throwaway entry; --pin-scale S pins the governor in visor arms; units.json logs unit history; never read WebGPU
+//   timestamp-query as absolute GPU ms on iOS; repeat counts per the note's §2e (cold deltas: 3+ fresh units).
+//   node tools/perf/devicefarm-iphone.mjs download artifacts/devicefarm/<run>... [--all]   (video + logs; --all adds the syslog)
 //   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
 // `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
@@ -143,6 +148,22 @@ const TOUCH_READ = (win, from, to) => `
     warmLog: (() => { try { return (__apex.logs() || []).filter((x) => x && /warmed/.test(String(x.msg))).map((x) => String(x.msg)); } catch (_) { return null; } })(),
     ev: P.ev.length, evHead: P.ev.slice(0, 6).map((e) => [e[0], e[1], e[3], e[4]]) };`;
 
+// #3673 / #3676 (6): every frame over 100 ms inside a sample window, attributed — when (ms from window start), the
+// game state, the PerfSpans that began or ended inside that frame, and the material-cache misses (count + new keys)
+// since the previous hitch. memState() runs only on a hitch, so the recorder costs nothing on a healthy frame.
+const HITCH_JS = `
+  const H = window.__dfHitch = { rows: [], ring: [], miss0: null };
+  try { const ms = GLX.__tlx.memState(); H.miss0 = ms.matMiss; H.keys0 = (ms.matMissKeys || []).slice(); } catch (_) {}
+  if (!window.__dfSpanWrap && typeof PerfSpans !== "undefined") { window.__dfSpanWrap = 1;
+    const b0 = PerfSpans.begin, e0 = PerfSpans.end;
+    PerfSpans.begin = function (n) { const R = window.__dfHitch && window.__dfHitch.ring; if (R) { R.push([n, 0, performance.now()]); if (R.length > 400) R.shift(); } return b0.apply(this, arguments); };
+    PerfSpans.end = function (n) { const R = window.__dfHitch && window.__dfHitch.ring; if (R) { R.push([n, 1, performance.now()]); if (R.length > 400) R.shift(); } return e0.apply(this, arguments); }; }
+  const hitch = (t, dt, t0) => { if (H.rows.length >= 20) return;
+    let st = null, miss = null, keys = null; try { st = __apex.info().state; } catch (_) {}
+    try { const ms = GLX.__tlx.memState(); miss = H.miss0 == null ? null : ms.matMiss - H.miss0; H.miss0 = ms.matMiss;
+      keys = (ms.matMissKeys || []).filter((k) => !(H.keys0 || []).includes(k)); H.keys0 = (ms.matMissKeys || []).slice(); } catch (_) {}
+    const spans = H.ring.filter((r) => r[2] >= t - dt && r[2] <= t).map((r) => r[0] + (r[1] ? ">" : "<") + Math.round(r[2] - (t - dt)));
+    H.rows.push({ at: Math.round(t - t0), dt: Math.round(dt), state: st, spans: spans.slice(0, 24), miss, keys }); };`;
 // Page-side probes. Each is a function body for WebDriver execute/sync (returns JSON-able data).
 const PROBE = `
   const R = typeof RendererPicker !== "undefined" ? RendererPicker : null;
@@ -152,7 +173,10 @@ const PROBE = `
   return { title: document.title, ua: navigator.userAgent, gpu: !!navigator.gpu, readyState: document.readyState,
     live: R ? { api: R.liveThreeApi && R.liveThreeApi(), backend: R.liveBackend && R.liveBackend() } : null,
     pins: { gfxBackend: localStorage.getItem("apex26.gfxBackend"), tlxForceGL: localStorage.getItem("apex26.tlxForceGL") },
-    backendState: be, info, w: innerWidth, h: innerHeight, dpr: devicePixelRatio };`;
+    backendState: be, info, w: innerWidth, h: innerHeight, dpr: devicePixelRatio,
+    // #3676 (1): the build this run measured, from the shell's own metas (pages.yml stamps both).
+    build: (() => { const m = (n) => { const e = document.querySelector('meta[name="' + n + '"]'); return e ? e.content : null; };
+      return { sha: m("apex-sha"), build: m("apex-build") }; })() };`;
 // Start BENCHMARK "paths" and keep only the first `n` legs (WEBGPU, WEBGL2 for n = 2). BenchRun.run saves the plan and
 // reloads after this task, so the trimmed plan is what the next boot resumes.
 const BENCH = (n) => `
@@ -235,13 +259,19 @@ async function touchRun(base, sid, out, n, warm) {
     log("touch map " + JSON.stringify(r.map));
     // --to a,b,c: cycle c taps the c-th id (the last repeats), so a first tap on AERO can precede the first BOOST.
     const a = pt(r.arm.from), bs = r.arm.to.map(pt);
+    // --touch-gap S: seconds from one press to the next (default: the old fixed ~2.8 s cycle). --touch-pair: every
+    // press is BOOST ON then OFF (it toggles), so a deploy-ON press is followed by its release 1.2 s later; the read
+    // then lists 2N pointerdowns, the even ones being the ON presses.
+    const gapMs = Math.round(Number(opt("touch-gap", "0")) * 1000), pair = opt("touch-pair", "") !== "";
     for (let c = 0; c < n; c++) {
       const b = bs[Math.min(c, bs.length - 1)];
+      const press = [{ type: "pointerMove", duration: 0, x: b.x, y: b.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 70 }, { type: "pointerUp", button: 0 }];
+      const used = 1500 + 60 + 70 + (pair ? 1200 + 70 : 0);
+      const tail = Math.max(1200, gapMs - used);
       wd(base, "POST", `/session/${sid}/actions`, { actions: [{ type: "pointer", id: "finger", parameters: { pointerType: "touch" }, actions: [
         { type: "pointerMove", duration: 0, x: a.x, y: a.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 1500 },
-        { type: "pointerUp", button: 0 }, { type: "pause", duration: 60 },
-        { type: "pointerMove", duration: 0, x: b.x, y: b.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 70 },
-        { type: "pointerUp", button: 0 }, { type: "pause", duration: 1200 }] }] });
+        { type: "pointerUp", button: 0 }, { type: "pause", duration: 60 }, ...press,
+        ...(pair ? [{ type: "pause", duration: 1200 }, ...press] : []), { type: "pause", duration: tail }] }] });
     }
     try { wd(base, "DELETE", `/session/${sid}/actions`); } catch (_) { /* nothing held */ }
   } finally {
@@ -267,12 +297,40 @@ const READY = `
   let st = null, api = null; try { st = __apex.info().state; } catch (_) {}
   try { api = RendererPicker.liveThreeApi(); } catch (_) {}
   return { ready: st === "menu" && !!api, state: st, api };`;
-const KICK_FOR = (track = "monza", tod = "default") => `
+// --entry menu (A·W43): the player's path — RACE > pick the circuit > RACE SETUP > wait for the menu's own prep
+// (menuPrep + garage prewarm, as tools/lib/census-entry.mjs menuPrepReady) > START RACE. `__apex.race` skips race
+// settings' prepareMenuCarAssets, so its entry times are a cold-API path no player takes. The prep wait is bounded
+// (60 s) and recorded in window.__dfMenu; a prep that never settles still starts the race, and says so.
+const KICK_API = (track, tod) => `
   window.__dfRace = undefined; window.__dfT0 = performance.now();
   let prev = null; try { prev = RaceEntryProfile.snapshot().winT0; } catch (_) {}
   Promise.resolve(__apex.race(${JSON.stringify(track)}, ${JSON.stringify(tod)}, "dry")).then((v) => { window.__dfRace = { ok: !!v, ms: performance.now() - window.__dfT0 }; },
     (e) => { window.__dfRace = { err: String(e) }; });
   return prev;`;
+const KICK_MENU = (track, tod) => `
+  window.__dfRace = undefined; window.__dfT0 = performance.now(); const M = window.__dfMenu = { entry: "menu", steps: [] };
+  let prev = null; try { prev = RaceEntryProfile.snapshot().winT0; } catch (_) {}
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const until = async (f, ms) => { const t = performance.now(); while (performance.now() - t < ms) { try { if (f()) return true; } catch (_) {} await sleep(100); } return false; };
+  const shown = (id) => { const e = document.getElementById(id); return !!(e && !e.hidden); };
+  const step = (n) => M.steps.push([n, Math.round(performance.now() - window.__dfT0)]);
+  (async () => {
+    document.getElementById("mb-race").click(); if (!(await until(() => shown("select"), 60000))) throw new Error("no track picker"); step("select");
+    const i = Tracks.LIST.findIndex((t) => t.id === ${JSON.stringify(track)}), row = document.querySelector('.track-row[data-track-idx="' + i + '"]');
+    if (row) row.click(); M.tile = !!row;
+    document.getElementById("sel-go").click(); if (!(await until(() => shown("race-settings"), 60000))) throw new Error("no race settings"); step("race-settings");
+    const sel = document.getElementById("rs-time-sel"); if (sel && ${JSON.stringify(tod)} !== "default") { sel.value = ${JSON.stringify(tod)}; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    const t1 = performance.now();
+    M.prepReady = await until(() => { const p = __apex.menuPrep(); return p && p.state === "menu" && p.world && p.done && p.warmFrames === 0 && !p.warming; }, 60000);
+    await until(() => { const g = __apex.garagePrebuild && __apex.garagePrebuild(); return !g || g.garageReady || !!(g.last && g.last.want === "settings"); }, 30000);
+    M.prepWaitMs = Math.round(performance.now() - t1); step("prepared");
+    window.__dfT0 = performance.now(); document.getElementById("rs-go").click(); step("start-race");
+    const t2 = performance.now(); await until(() => { const s = __apex.info().state; return s && s !== "menu"; }, 180000);
+    window.__dfRace = { ok: true, ms: performance.now() - t2 };
+  })().catch((e) => { window.__dfRace = { err: String(e) }; });
+  return prev;`;
+const ENTRY_MENU = opt("entry", "api") === "menu";
+const KICK_FOR = (track = "monza", tod = "default") => (ENTRY_MENU ? KICK_MENU : KICK_API)(track, tod);
 const KICK = KICK_FOR();
 const ENTRY = `
   let s = null, t = null, warm = null, st = null;
@@ -306,7 +364,7 @@ async function timedEntry(ctx, label, kick = KICK) {
     if (Date.now() - t0 > 180000) { log(`${label}: timed out`); return { ...e, timedOut: true }; }
   }
 }
-async function reloadPage(ctx) { await exec(ctx.base, ctx.sid, "setTimeout(() => location.reload(), 50); return true;"); await sleep(8000); return waitReady(ctx); }
+async function reloadPage(ctx) { try { await exec(ctx.base, ctx.sid, UNARM, 1); } catch (_) { /* no page */ } await exec(ctx.base, ctx.sid, "setTimeout(() => location.reload(), 50); return true;"); await sleep(8000); return waitReady(ctx); }
 // Force-quit Safari: the WebDriver session dies with it, so open a fresh one and navigate again.
 async function killSafari(ctx, url) {
   try { wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: terminateApp", args: [{ bundleId: "com.apple.mobilesafari" }] }); } catch (e) { log("terminate: " + e.message.slice(0, 100)); }
@@ -398,28 +456,29 @@ async function warmplusScenario(ctx, url, report, out) {
 }
 // tracks: steady-state race frames on chosen circuits (skyline-heavy night tracks vs Monza): per track a fresh
 // reload, one timed entry, 5 s settle, then 20 s of rAF intervals.
-const SAMPLE = `
+const SAMPLE = `${HITCH_JS}
   window.__dfSample = null;
   const d = []; let last = 0, t0 = 0;
   const tick = (t) => {
     let st = null; try { st = __apex.info().state; } catch (_) {}
-    if (st === "race") { if (!t0) t0 = t; if (t - t0 > 5000) { if (last) d.push(t - last); last = t; } }
+    // Hitches count from the first race frame (#3673's two land early); the fps window still skips the first 5 s.
+    if (st === "race") { if (!t0) t0 = t; if (last) { if (t - last > 100) hitch(t, t - last, t0); if (t - t0 > 5000) d.push(t - last); } last = t; }
     if (t0 && t - t0 > 25000) { d.sort((a, b) => a - b); const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(d.length * f))] * 10) / 10;
       window.__dfSample = { n: d.length, fps: Math.round(d.length / 20 * 10) / 10, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
-        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length }; return; }
+        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length, hitches: H.rows }; return; }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick); return true;`;
 async function tracksScenario(ctx, tracks, report, out) {
   report.tracks = [];
-  for (const spec of tracks) {
+  for (const [i, spec] of tracks.entries()) {
     const [track, tod = "default"] = spec.split(":");
     const r = await reloadPage(ctx);
     await exec(ctx.base, ctx.sid, SAMPLE);
     const entry = await timedEntry(ctx, `${track} ${tod}`, KICK_FOR(track, tod));
     let sample = null;
     for (let i = 0; i < 20 && !sample; i++) { await sleep(2000); try { sample = await exec(ctx.base, ctx.sid, "return window.__dfSample;", 1); } catch (_) { /* busy */ } }
-    report.tracks.push({ track, tod, api: r.api, entry, sample });
+    report.tracks.push({ track, tod, api: r.api, entry, sample, ...rowMeta(ctx, report, i, entry) });
     log(`${track} ${tod}: api=${r.api} entry ${entry.windowMs} ms; ${JSON.stringify(sample)}`);
     try { shot(ctx.base, ctx.sid, path.join(out, `track-${track}-${tod}.png`)); } catch (_) { /* no shot */ }
   }
@@ -432,6 +491,7 @@ async function racesScenario(ctx, pins, report, out) {
     await exec(ctx.base, ctx.sid, PIN(p));
     const r = await reloadPage(ctx); log(`races ${p}: booted api=${r.api}`);
     await exec(ctx.base, ctx.sid, `return BenchRun.run("races");`);
+    (report.racesThermal = report.racesThermal || {})[p] = { start: thermalNow(ctx) };
     const t0 = Date.now(); let last = "", n = 0;
     for (;;) {
       await sleep(POLL_MS); n++;
@@ -442,18 +502,19 @@ async function racesScenario(ctx, pins, report, out) {
       if (st.state !== "running" && st.state !== "none") { report.races[p] = st.result; break; }
       if (Date.now() - t0 > 15 * 60000) { report.races[p] = { timedOut: st }; break; }
     }
+    report.racesThermal[p].end = thermalNow(ctx);
     try { shot(ctx.base, ctx.sid, path.join(out, `races-${p}.png`)); } catch (_) { /* no shot */ }
   }
 }
 
 // ---- follow-ups for merged PRs (OrchA 31, 2026-10-23): visor A/B (#3581), LOW/renderScale soak (#3479), Photo (#3482)
 // A window of rAF intervals that starts when called: `ms` long after `delay` ms, read back from window.__dfWin.
-const WIN_FOR = (ms, delay = 3000) => `
+const WIN_FOR = (ms, delay = 3000) => `${HITCH_JS}
   window.__dfWin = null; const d = []; let last = 0, t0 = 0;
-  const tick = (t) => { if (!t0) t0 = t; if (t - t0 > ${delay}) { if (last) d.push(t - last); last = t; }
+  const tick = (t) => { if (!t0) t0 = t; if (t - t0 > ${delay}) { if (last) { d.push(t - last); if (t - last > 100) hitch(t, t - last, t0); } last = t; }
     if (t - t0 > ${delay + ms}) { d.sort((a, b) => a - b); const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(d.length * f))] * 10) / 10;
       window.__dfWin = { n: d.length, fps: Math.round(d.length / ${ms / 1000} * 10) / 10, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
-        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length }; return; }
+        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length, hitches: H.rows }; return; }
     requestAnimationFrame(tick); };
   requestAnimationFrame(tick); return true;`;
 async function sampleWin(ctx, ms, delay = 3000, extra = "") {
@@ -465,11 +526,38 @@ async function sampleWin(ctx, ms, delay = 3000, extra = "") {
   }
   return { win: null };
 }
+// The governor's crash sentinel (js/perf/governor.js init) counts a reload over a live race as a jetsam kill: a
+// strike floors the next boot's tier (1 -> 2, 2+ -> 4). A harness reload is not a crash, so drop the race flag first.
+const UNARM = `try { GameStore.store.rawDel("apex26.raceActive"); GameStore.store.rawDel("apex26.raceTicked"); } catch (_) {} return true;`;
 async function openUrl(ctx, u) {
+  try { await exec(ctx.base, ctx.sid, UNARM, 1); } catch (_) { /* no page yet */ }
   wd(ctx.base, "POST", `/session/${ctx.sid}/url`, { url: u + (u.includes("?") ? "&" : "?") + "df=" + Date.now() });
   await sleep(8000); return waitReady(ctx);
 }
 const GO = `try { return __apex.go(); } catch (e) { return String(e); }`;
+// #3676 (3): the phone's thermal state, once per arm (the --legs bench polls it on its own clock).
+function thermalNow(ctx) {
+  try { const d = wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: deviceInfo", args: [] }); return d ? d.thermalState : null; }
+  catch (_) { return null; }
+}
+// #3676 (1, 2, 3, 7): what every scenario row carries — the build, whether it is the session's first arm (the cold
+// one on this unit; --prime spends a throwaway entry so none is), the thermal state, and the entry's warm timeline
+// including the menu warm (warm.history).
+function rowMeta(ctx, report, i, entry) {
+  return { build: report.boot && report.boot.build ? report.boot.build.sha : null, first: i === 0 && !report.primed,
+    thermal: thermalNow(ctx), warm: entry && entry.warm ? entry.warm : null, entryPath: ENTRY_MENU ? "menu" : "api (cold: skips race settings' prepareMenuCarAssets)" };
+}
+// --prime TRACK:TOD: one discarded race entry before the first arm, so no measured arm pays the unit's cold compile.
+async function primeOnce(ctx, url, report) {
+  const spec = opt("prime", ""); if (!spec || report.primed) return;
+  const [track, tod = "default"] = spec.split(":");
+  await openUrl(ctx, withApex(url));
+  const e = await timedEntry(ctx, `prime ${spec}`, KICK_FOR(track, tod));
+  report.primed = { spec, windowMs: e.windowMs, warm: e.warm };
+}
+// #3676 (4): --pin-scale S pins the 3D scale (which also stops the auto-governor) before an fps window; the row
+// records autoTier before and after, and tierMoved marks a window the ladder changed under.
+const GOV = `(() => { try { const r = __apex.renderScale(); return { scale: r.scale, auto: r.auto, tier: r.tier, autoTier: r.autoTier, crashStrikes: r.crashStrikes }; } catch (_) { return null; } })()`;
 // visor (#3581): the HELMET cam at a night circuit, one fresh page per arm (the visor settings are read from the URL
 // at boot, js/camera/cockpit-opts.js choice()), the field released, 20 s of frames. Arms repeat (off … off) so a
 // thermal drift shows as a gap between the two "off" rows instead of hiding inside a visor delta.
@@ -481,7 +569,7 @@ const VISOR_ARMS = { off: "helmetvisor=off", on: "helmetvisor=clear&visorreflect
   "refr-over": "helmetvisor=clear&visorreflections=medium&visorrefraction=medium&visorblend=over" };
 const VISOR_READ = `(() => { let v = null; try { v = typeof VisorOptics !== "undefined" ? VisorOptics.stats() : null; } catch (e) { v = String(e); }
     let cam = null; try { cam = __apex.camera().mode; } catch (_) {}
-    return { cam, optics: v, blend: document.body.dataset.visorBlend || null, perf: (() => { try { const r = __apex.renderScale(); return { scale: r.scale, tier: r.tier, autoTier: r.autoTier }; } catch (_) { return null; } })() }; })()`;
+    return { cam, optics: v, blend: document.body.dataset.visorBlend || null, perf: (() => { try { const r = __apex.renderScale(); return { scale: r.scale, tier: r.tier, autoTier: r.autoTier, crashStrikes: r.crashStrikes }; } catch (_) { return null; } })() }; })()`;
 async function visorScenario(ctx, url, pins, report, out) {
   const [track, tod = "night"] = opt("track", "bahrain:night").split(":");
   const arms = opt("arms", "off,on,refr,off").split(",");
@@ -489,15 +577,22 @@ async function visorScenario(ctx, url, pins, report, out) {
   for (const p of pins) {
     const rows = report.visor[p] = [];
     await exec(ctx.base, ctx.sid, PIN(p));
+    await primeOnce(ctx, url, report);
+    const pin = opt("pin-scale", "");
     for (const [i, arm] of arms.entries()) {
       const r = await openUrl(ctx, withApex(url) + "&" + VISOR_ARMS[arm]);
       const entry = await timedEntry(ctx, `visor ${p} ${arm}`, KICK_FOR(track, tod));
       await exec(ctx.base, ctx.sid, `__apex.camera("helmet"); ${GO}`);
+      if (pin) await exec(ctx.base, ctx.sid, `return __apex.renderScale(${Number(pin)});`);
+      const gov0 = await exec(ctx.base, ctx.sid, "return " + GOV);
       const s = await sampleWin(ctx, 20000, 4000, "read: " + VISOR_READ);
-      rows.push({ arm, params: VISOR_ARMS[arm], api: r.api, entryMs: entry.windowMs, ...s });
+      const gov1 = s.read && s.read.perf;
+      rows.push({ arm, params: VISOR_ARMS[arm], api: r.api, entryMs: entry.windowMs, gov0, tierMoved: !!(gov0 && gov1 && gov0.autoTier !== gov1.autoTier),
+        ...rowMeta(ctx, report, i, entry), ...s });
       log(`visor ${p} ${arm}: api=${r.api} ${JSON.stringify(s)}`);
       try { shot(ctx.base, ctx.sid, path.join(out, `visor-${p}-${i}-${arm}.png`)); } catch (_) { /* no shot */ }
     }
+    if (pin) await exec(ctx.base, ctx.sid, "return __apex.renderScale(true);");
     pullLogs(ctx.base, ctx.sid, out);
   }
 }
@@ -519,7 +614,7 @@ async function soakScenario(ctx, url, pins, report, out) {
       const entry = await timedEntry(ctx, `soak ${p} ${id}`, KICK_FOR(track, tod));
       await exec(ctx.base, ctx.sid, `try { __apex.go(); } catch (_) {} return __apex.renderScale(0.5);`);
       const s = await sampleWin(ctx, 20000, 4000, "rs: " + RS + ", preset: GfxQuality.current()");
-      R.presets.push({ preset: id, api: r.api, entryMs: entry.windowMs, ...s });
+      R.presets.push({ preset: id, api: r.api, entryMs: entry.windowMs, ...rowMeta(ctx, report, i, entry), ...s });
       log(`soak ${p} ${id}@0.5: ${JSON.stringify(s.win)} shed=${s.rs && s.rs.lookPostShed}`);
       try { shot(ctx.base, ctx.sid, path.join(out, `soak-${p}-${i}-${id}.png`)); } catch (_) { /* no shot */ }
     }
@@ -536,6 +631,43 @@ async function soakScenario(ctx, url, pins, report, out) {
     pullLogs(ctx.base, ctx.sid, out);
   }
   await exec(ctx.base, ctx.sid, PRESET(opt("restore-preset", "medium")));
+}
+// flags (A·Y1 lever 6, PERF-KNOWN-WINS rows 4 and 7): the two fill levers that ship behind boot flags, on one pinned
+// path — fixed render targets (apex26.tlxFixedTargets) and SGSR1 upscale (apex26.spatialUpscale) — one fresh page per
+// arm (both are read at boot), the governor pinned at each --flag-scales value for a --flag-win-s window. Restores
+// both flags off at the end.
+const FLAG_ARMS = { off: [0, 0], fixed: [1, 0], sgsr: [0, 1], both: [1, 1] };
+const FLAG_SET = ([fx, up]) => `const s = GameStore.store;
+  if (${fx}) s.rawSet("apex26.tlxFixedTargets", "1"); else s.rawDel("apex26.tlxFixedTargets");
+  s.rawSet("spatialUpscale", ${up} ? "1" : "0"); return true;`;
+const FLAG_READ = `(() => { let up = null; try { up = __apex.spatialUpscale(); } catch (_) {}
+    return { fixed: localStorage.getItem("apex26.tlxFixedTargets"), upscale: up }; })()`;
+async function flagsScenario(ctx, url, report, out) {
+  const [track, tod = "day"] = opt("track", "monza:day").split(":");
+  const pin = opt("flag-pin", "webgl2"), scales = opt("flag-scales", "0.5,0.75").split(",").map(Number), winS = Number(opt("flag-win-s", "15"));
+  const R = report.flags = { pin, track, tod, rows: [] };
+  await exec(ctx.base, ctx.sid, PIN(pin));
+  await primeOnce(ctx, url, report);
+  try {
+    for (const [i, arm] of opt("flag-arms", "off,fixed,sgsr,both,off").split(",").entries()) {
+      await exec(ctx.base, ctx.sid, FLAG_SET(FLAG_ARMS[arm]));
+      const r = await openUrl(ctx, withApex(url));
+      const entry = await timedEntry(ctx, `flags ${arm}`, KICK_FOR(track, tod));
+      await exec(ctx.base, ctx.sid, GO);
+      const meta = rowMeta(ctx, report, i, entry);
+      for (const sc of scales) {
+        await exec(ctx.base, ctx.sid, `return __apex.renderScale(${sc});`);
+        const gov0 = await exec(ctx.base, ctx.sid, "return " + GOV);
+        const s2 = await sampleWin(ctx, winS * 1000, 3000, "gov: " + GOV + ", flag: " + FLAG_READ);
+        R.rows.push({ arm, scale: sc, api: r.api, entryMs: entry.windowMs, gov0, tierMoved: !!(gov0 && s2.gov && gov0.autoTier !== s2.gov.autoTier), ...meta, ...s2 });
+        log(`flags ${arm}@${sc}: api=${r.api} ${JSON.stringify(s2.win && { fps: s2.win.fps, p95: s2.win.p95, n50: s2.win.n50 })} flag=${JSON.stringify(s2.flag)} tier=${s2.gov && s2.gov.autoTier}`);
+      }
+      try { shot(ctx.base, ctx.sid, path.join(out, `flags-${i}-${arm}.png`)); } catch (_) { /* no shot */ }
+    }
+  } finally {
+    try { await exec(ctx.base, ctx.sid, FLAG_SET([0, 0]) + ""); await exec(ctx.base, ctx.sid, "return __apex.renderScale(true);"); } catch (_) { /* best effort */ }
+    pullLogs(ctx.base, ctx.sid, out);
+  }
 }
 // photo (#3482): Photo Studio driven by native finger taps from the title screen, every visible control's painted
 // size against the 44 px floor, one shot preset, CAPTURE, CLOSE — and every page error on the way.
@@ -569,26 +701,50 @@ const PHOTO_READ = `const ps = document.getElementById("photo-studio"); const op
   const msg = document.getElementById("ps-message");
   return { open, w: innerWidth, h: innerHeight, controls: ctl.length, under44: ctl.filter((c) => Math.min(c.w, c.h) < 44), offscreen: ctl.filter((c) => c.off && (c.id === "ps-capture" || c.id === "ps-close")).map((c) => c.id),
     message: msg ? msg.textContent.trim().slice(0, 120) : null, errors: (window.__dfErr || []).slice(0, 20) };`;
+// --photo-scales auto,1: one fresh page per entry, the 3D render scale pinned before Photo opens ("auto" = the
+// governor's own), so a small capture can be pinned on the scale (#3482: 217 x 122 px at the title scene).
+const CANVAS_READ = `(() => { const c = document.getElementById("game"), s = document.getElementById("game-soft");
+    let rs = null; try { const r = __apex.renderScale(); rs = { scale: r.scale, auto: r.auto }; } catch (_) {}
+    return { game: c ? [c.width, c.height] : null, soft: s ? [s.width, s.height] : null, css: [innerWidth, innerHeight], dpr: devicePixelRatio, rs }; })()`;
 async function photoScenario(ctx, url, report, out) {
-  const R = report.photo = { steps: [] };
-  await openUrl(ctx, withApex(url));
-  await exec(ctx.base, ctx.sid, PHOTO_ERRS);
-  await sleep(4000);   // the title scene's car settles before the first tap
-  const step = async (name, sel, wait = 3000) => {
-    const tap = sel ? await nativeTap(ctx, sel) : null; await sleep(wait);
-    const read = await exec(ctx.base, ctx.sid, PHOTO_READ); R.steps.push({ name, tap, read });
-    log(`photo ${name}: tap=${tap && tap.tapped} open=${read.open} controls=${read.controls} under44=${read.under44.length} off=${read.offscreen.length} msg=${read.message} errors=${read.errors.length}`);
-    try { shot(ctx.base, ctx.sid, path.join(out, `photo-${R.steps.length}-${name}.png`)); } catch (_) { /* no shot */ }
-    return read;
-  };
-  await step("menu", null, 0);
-  const opened = await step("open", "#mb-photo", 5000);
-  if (opened.open) {
-    await step("shot-preset", "#ps-shots button");
-    await step("capture", "#ps-capture", 6000);
-    await step("close", "#ps-close");
+  const R = report.photo = { runs: [] };
+  for (const scale of opt("photo-scales", "auto").split(",")) {
+    const run = { scale, steps: [] }; R.runs.push(run);
+    await openUrl(ctx, withApex(url));
+    await exec(ctx.base, ctx.sid, PHOTO_ERRS);
+    if (scale !== "auto") await exec(ctx.base, ctx.sid, `return __apex.renderScale(${Number(scale)});`);
+    await sleep(4000);   // the title scene's car settles (and a pinned scale resizes) before the first tap
+    const step = async (name, sel, wait = 3000) => {
+      const tap = sel ? await nativeTap(ctx, sel) : null; await sleep(wait);
+      const read = await exec(ctx.base, ctx.sid, PHOTO_READ), canvas = await exec(ctx.base, ctx.sid, "return " + CANVAS_READ);
+      run.steps.push({ name, tap, read, canvas });
+      log(`photo@${scale} ${name}: tap=${tap && tap.tapped} open=${read.open} controls=${read.controls} under44=${read.under44.length} off=${read.offscreen.length} msg=${read.message} errors=${read.errors.length} canvas=${JSON.stringify(canvas)}`);
+      try { shot(ctx.base, ctx.sid, path.join(out, `photo-${scale}-${run.steps.length}-${name}.png`)); } catch (_) { /* no shot */ }
+      return read;
+    };
+    await step("menu", null, 0);
+    const opened = await step("open", "#mb-photo", 5000);
+    if (opened.open) {
+      await step("shot-preset", "#ps-shots button");
+      await step("capture", "#ps-capture", 6000);
+      await step("close", "#ps-close");
+    }
+    if (scale !== "auto") await exec(ctx.base, ctx.sid, "return __apex.renderScale(true);");
   }
   pullLogs(ctx.base, ctx.sid, out);
+}
+
+// #3676 (5): unit history. Only a fresh unit is cold (a Safari data clear keeps the pipeline cache, ledger row 13), so
+// every session appends unit -> {at, scenario, build, out} to artifacts/devicefarm/units.json and logs whether this
+// unit has run the game before. The file is local (artifacts/ is ignored); the ledger's device column is the record.
+function noteUnit(report, scenario, out) {
+  if (!report.unit) return;
+  const file = path.join("artifacts", "devicefarm", "units.json");
+  let db = {}; try { db = JSON.parse(fs.readFileSync(file, "utf8")); } catch (_) { /* first session */ }
+  const seen = (db[report.unit] || []).length;
+  (db[report.unit] = db[report.unit] || []).push({ at: new Date().toISOString(), scenario, build: report.boot && report.boot.build ? report.boot.build.sha : null, out });
+  try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(db, null, 2)); } catch (e) { log("units.json: " + e.message.slice(0, 100)); }
+  log(`unit ${report.unit}: ${seen ? seen + " earlier session(s) in units.json" : "first session in units.json"}`);
 }
 
 async function run() {
@@ -640,7 +796,7 @@ async function run() {
     wd(base, "POST", `/session/${sid}/url`, { url });
     await sleep(20000);
     report.boot = await exec(base, sid, PROBE);
-    log(`boot: gpu=${report.boot.gpu} live=${JSON.stringify(report.boot.live)} title=${report.boot.title}`);
+    log(`boot: gpu=${report.boot.gpu} live=${JSON.stringify(report.boot.live)} build=${JSON.stringify(report.boot.build)} title=${report.boot.title}`);
     shot(base, sid, path.join(out, "boot.png"));
     if (scenario !== "bench") {
       const ctx = { base, sid, caps, out };
@@ -656,6 +812,7 @@ async function run() {
             try { if (sc === "visor") await visorScenario(ctx, opt("url", SITE), opt("visor-pins", "webgl2,webgpu").split(","), report, out);
               else if (sc === "soak") await soakScenario(ctx, opt("url", SITE), opt("soak-pins", "webgpu").split(","), report, out);
               else if (sc === "photo") await photoScenario(ctx, opt("url", SITE), report, out);
+              else if (sc === "flags") await flagsScenario(ctx, opt("url", SITE), report, out);
               else throw new Error("unknown scenario " + sc); }
             catch (e) { (report.scenarioErrors = report.scenarioErrors || {})[sc] = e.message; log(`${sc}: ERROR ${e.message.slice(0, 160)}`); }
           }
@@ -728,6 +885,7 @@ async function run() {
     log("session " + JSON.stringify(report.session));
     fs.writeFileSync(path.join(out, "report.json"), JSON.stringify(report, null, 2));
     log(`report ${path.join(out, "report.json")}`);
+    noteUnit(report, scenario, out);
   }
 }
 
@@ -840,8 +998,35 @@ async function auto() {
   log(`report ${path.join(out, "auto-report.json")}`);
 }
 
+// download REPORT_DIR...: every artifact Device Farm kept for each run's remote access session (video, device /
+// Appium / Safari logs, screenshots) into REPORT_DIR/df-artifacts/, named by type. The session ARN comes from the
+// report; artifact URLs are pre-signed and short-lived, so they are fetched at once and never printed. The device
+// syslog (~300 MB a session) and the TCP dump are skipped unless --all: the container's disk is a fixed allowance.
+function download(dirs) {
+  const all = dirs.includes("--all"); dirs = dirs.filter((d) => d !== "--all");
+  for (const dir of dirs) {
+    let r; try { r = JSON.parse(fs.readFileSync(path.join(dir, "report.json"), "utf8")); } catch (e) { log(`${dir}: no report.json`); continue; }
+    if (!r.sessionArn) { log(`${dir}: report has no sessionArn`); continue; }
+    const dest = path.join(dir, "df-artifacts"); fs.mkdirSync(dest, { recursive: true });
+    let n = 0, bytes = 0;
+    for (const type of ["FILE", "LOG", "SCREENSHOT"]) {
+      let list = []; try { list = aws("devicefarm", "list-artifacts", "--arn", r.sessionArn, "--type", type).artifacts || []; }
+      catch (e) { log(`${dir} ${type}: ${e.message.slice(0, 120)}`); continue; }
+      for (const a of list) {
+        if (!all && (a.type === "DEVICE_LOG" || a.type === "RAW_FILE")) continue;
+        const name = `${type.toLowerCase()}-${String(a.type || "x").toLowerCase()}-${String(a.name || "artifact").replace(/[^A-Za-z0-9._-]+/g, "_")}.${a.extension || "bin"}`;
+        const f = path.join(dest, name);
+        try { execFileSync("curl", ["-sS", "--fail", "-o", f, a.url], { stdio: ["ignore", "ignore", "pipe"] }); n++; bytes += fs.statSync(f).size; }
+        catch (e) { log(`${dir}: ${name} failed`); }
+      }
+    }
+    log(`${dir}: ${n} artifact(s), ${(bytes / 1048576).toFixed(1)} MB -> ${dest}`);
+  }
+}
+
 const cmd = args[0];
 if (cmd === "devices") { for (const d of iosPhones()) console.log(`${d.name}\tiOS ${d.os}\t${d.availability}\tremoteAccess=${d.remoteAccess}`); }
 else if (cmd === "run") run().catch((e) => { console.error(e.message); process.exit(1); });
 else if (cmd === "auto") auto().catch((e) => { console.error(e.message); process.exit(1); });
-else { console.error("usage: devicefarm-iphone.mjs devices | run --device NAME [--legs 0|2|4] [--touch N] | auto --device NAME [--legs N] [--perf NAME|none]"); process.exit(2); }
+else if (cmd === "download") download(args.slice(1));
+else { console.error("usage: devicefarm-iphone.mjs devices | run --device NAME [--legs 0|2|4] [--touch N] | auto --device NAME [--legs N] [--perf NAME|none] | download REPORT_DIR..."); process.exit(2); }

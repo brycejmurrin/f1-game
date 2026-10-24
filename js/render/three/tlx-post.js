@@ -128,9 +128,34 @@
         bloom11 = !!(dev && dev.features && dev.features.has("rg11b10ufloat-renderable"));
       }
     } catch (_) { hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend); bloom11 = false; }
+    // The probe's verdict, before the bloom knob: the scene target below shares it.
+    const r11Renderable = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;
     try { if (localStorage.getItem("apex26.tlxBloom11") === "0") bloom11 = false; } catch (_) { /* no storage: on */ }
     const hdrType = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
     bloom11 = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;
+    // SCENE COLOUR FORMAT (phoneperf 2026-10-24, PERF-KNOWN-WINS row 15): R11F_G11F_B10F / rg11b10ufloat for
+    // the scene target where it is renderable (the bloom probe above), 4 B/px instead of RGBA16F's 8 for the
+    // one target every 3D fragment is written to and that the composite, SSR, haze and the mirror fold read
+    // back at full res — on a tile GPU that is the store plus every read of the frame's biggest surface. No
+    // reader takes scene alpha (tsl-post.js samples .rgb; the car tag is attachment 1, which keeps its own
+    // half-float type), lit colour is never negative, and the composite's sceneHdr uniform is unchanged: the
+    // scene is still float HDR. PHONES ONLY by default (the bandwidth-bound tier; a desktop keeps RGBA16F so
+    // its goldens and env/mirror parity stay as they were). apex26.tlxScene11="1" forces it on, "0" keeps
+    // RGBA16F — the Device Farm A/B pair. 11/11/10 keeps 6/6/5 mantissa bits: a banding check on a night
+    // gradient is the device evidence this still owes (docs/notes/PERF-KNOWN-WINS-2026-10-23.md row 15).
+    // WEBGL2 LEG ONLY. On WebGPU three sizes the fragment output to the target's three components, and the
+    // spec refuses a src-alpha blend factor when the fragment output has no alpha (gpuweb "validating
+    // GPUFragmentState"; Dawn RenderPipeline.cpp "is reading alpha but it is missing from fragment output"):
+    // every blended material's pipeline failed on the real-GPU census (macos-latest run 40052670537 on
+    // 886e476f — decals, glass and particles would vanish). GL has no such rule, so the format stays a WebGL2
+    // win and the WebGPU leg keeps RGBA16F whatever the knob says. A vendored three that kept a vec4 output
+    // for RGB targets (the spec allows "RGB requires vec3 or vec4") would let the WebGPU leg take it too.
+    const _r11Blendable = r11Renderable && !(renderer.backend && renderer.backend.isWebGPUBackend);
+    let scene11 = _r11Blendable && !!ctx.isMobile;
+    try {
+      const k = localStorage.getItem("apex26.tlxScene11");
+      if (k === "0") scene11 = false; else if (k === "1") scene11 = _r11Blendable;
+    } catch (_) { /* no storage: the default above */ }
     // sceneHdr is fixed for the chain's life — hdr is decided once at factory time.
     let _sceneHdr = hdr ? 1 : 0;
 
@@ -215,6 +240,7 @@
       samples: ctx.sceneSamples || 0, resolveDepthBuffer: true,   // SCENE MSAA (header)
     }));
     ownedTextures.delete(sceneDepthTex); // sceneRT.dispose owns it from here
+    if (scene11) { sceneRT.texture.type = THREE.UnsignedInt101111Type; sceneRT.texture.format = THREE.RGBFormat; }   // attachment 0 only
     sceneRT.texture.name = "output";
     sceneRT.texture.generateMipmaps = false;
     sceneRT.texture.colorSpace = THREE.NoColorSpace;
@@ -995,6 +1021,38 @@
     let _depthDiscard = true;
     try { _depthDiscard = localStorage.getItem("apex26.tlxDepthDiscard") !== "0"; } catch (_) { /* no storage: on */ }
     let _depthKeep = true, _depthDiscards = 0, _invDepth = null;
+    // A-P2 (phoneperf 2026-10-24): THE SSR TAG, DISCARDED THE SAME WAY. Attachment 1
+    // (ssrTag) stays on every chain so a wet spell never reallocates the scene target
+    // (_wantTag), yet its only readers are the composite's SSR gate (ssrOk &&
+    // reflect|carReflect > 0.001, tsl-post.js) and the heat-haze plume (hazeStr >
+    // 0.002) — both uniform-gated If blocks, so on a dry phone frame at tier >= 2
+    // (carReflect 0, reflect 0, haze null on mobileTier) the tag is written and
+    // stored by every scene fragment and fetched by nothing. Same rule shape as
+    // needsDepth, from the SAME opts/F present() is about to upload, so a frame
+    // whose composite reads the tag always has it. Single-sample targets only (an
+    // MSAA tag has already been resolved by the time depthEnd runs). WebGPU r186
+    // has no storeOp lever, as for depth. apex26.tlxTagDiscard="0" always keeps it.
+    let _tagDiscard = true;
+    try { _tagDiscard = localStorage.getItem("apex26.tlxTagDiscard") !== "0"; } catch (_) { /* no storage: on */ }
+    let _tagKeep = true, _tagDiscards = 0, _invTag = null, _invBoth = null;
+    function needsTag(opts, F) {
+      const o = opts || {};
+      if (viz) return true;
+      const hz = o.haze;
+      if (hz && hz.str > 0.002) return true;   // the plume's car-mask fetch
+      const car = o.carReflect != null ? o.carReflect : PostCommon.knob(o.tune || null, "carReflect");
+      return !!(F.invProj && F.proj && F.upVS) && ((o.reflect || 0) > 0.001 || car > 0.001);   // the composite's SSR gate, exactly
+    }
+    // WebGL2 only: invalidate `list` on rt's FBO, and only while three still has THAT FBO bound
+    // (the pass it just rendered) — never a guess. Returns true when it did.
+    function discardAttachments(rt, list) {
+      const be = renderer.backend, gl = be && be.gl, st = be && be.state;
+      if (!rt || !list || !list.length || !gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
+      const d = be.get(rt), fb = st.currentBoundFramebuffers[gl.DRAW_FRAMEBUFFER];
+      if (!fb || !d || !d.framebuffers || Object.values(d.framebuffers).indexOf(fb) < 0) return false;
+      gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, list);
+      return true;
+    }
     function needsDepth(opts, F) {
       const o = opts || {};
       if (viz) return true;
@@ -1016,11 +1074,12 @@
     function depthBegin(opts, F) {
       _depthKeep = !_depthDiscard || needsDepth(opts, F);
       sceneRT.resolveDepthBuffer = _depthKeep;
+      _tagKeep = !_tagDiscard || !tagOn || (sceneRT.samples | 0) > 0 || needsTag(opts, F);   // A-P2
       return _depthKeep;
     }
-    // After the scene pass, before present(): drop the depth this frame does not read (WebGL2 only).
+    // After the scene pass, before present(): drop the depth (and the tag) this frame does not read (WebGL2 only).
     function depthEnd() {
-      if (_depthKeep) return false;
+      if (_depthKeep && _tagKeep) return false;
       const be = renderer.backend, gl = be && be.gl, st = be && be.state;
       if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
       const d = be.get(sceneRT), msaa = (sceneRT.samples | 0) > 0;
@@ -1029,8 +1088,10 @@
       const fb = st.currentBoundFramebuffers[target];
       const ours = msaa ? (fb && fb === d.msaaFrameBuffer) : (fb && d.framebuffers && Object.values(d.framebuffers).indexOf(fb) >= 0);
       if (!ours) return false;
-      gl.invalidateFramebuffer(target, _invDepth || (_invDepth = [gl.DEPTH_ATTACHMENT]));
-      _depthDiscards++;
+      if (!_invDepth) { _invDepth = [gl.DEPTH_ATTACHMENT]; _invTag = [gl.COLOR_ATTACHMENT1]; _invBoth = [gl.DEPTH_ATTACHMENT, gl.COLOR_ATTACHMENT1]; }
+      gl.invalidateFramebuffer(target, _depthKeep ? _invTag : _tagKeep ? _invDepth : _invBoth);
+      if (!_tagKeep) _tagDiscards++;
+      if (!_depthKeep) _depthDiscards++;
       return true;
     }
 
@@ -1121,6 +1182,7 @@
       drawWarm,   // A-W1
       warmMirror,
       needsDepth, depthBegin, depthEnd,   // A-P1
+      needsTag, discardAttachments,   // A-P2 (the mirror discards its depth + tag through this)
       present,
       dispose,
       viz,
@@ -1130,8 +1192,10 @@
         on: true,
         hdr,
         attachments: tagOn ? 2 : 1,
+        sceneFormat: scene11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",   // phoneperf: the scene colour attachment
         ssrQuality: P.composite.U.ssrQuality.value,
         depth: { discard: _depthDiscard, kept: _depthKeep, discards: _depthDiscards },   // A-P1: the last frame's call
+        tag: { discard: _tagDiscard, kept: _tagKeep, discards: _tagDiscards },   // A-P2
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],

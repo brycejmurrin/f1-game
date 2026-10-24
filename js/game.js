@@ -8381,7 +8381,7 @@ function render(dt) {
   // after env/SSR/shadows. GRAPHICS: LOW sheds look post via lookPostShed (not autoTier alone).
   po.exposure = frame.exposure * LT.exposureMul;
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2) * frame.exposure; po.grade = _grade;   // exposed units (BRIGHT_FS): x the TOD exposure keeps the shipped bloom; EXPOSURE now moves it
-  PostFxOpts.applyLookShed(po, { bloom: _bloom * LT.bloomMul, ssao: _ao, godray: _gr, contact: _cs, lampVol: _lampVol });
+  PostFxOpts.applyLookShed(po, { bloom: _bloom * LT.bloomMul, ssao: _ao, godray: _gr, contact: _cs, lampVol: _lampVol, flareMul: LT.flareMul });
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
   // slow at the scale floor sheds those instead. Tier 2 drops dry + car-paint SSR; wet roads use a reduced budget.
@@ -8414,7 +8414,7 @@ function render(dt) {
   const _ssrLow = onboard;
   po.ssrTopUV = _ssrLow ? 0.82 : 0.62;
   po.ssrNear  = _ssrLow ? -1.0 : -2.5;
-  po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
+  po.speedBlur = _spd; po.tune = LT;   // po.flareMul: applyLookShed above
   // Avoidable post passes at lower GRAPHICS tiers / mid autoShed (perf frame r2):
   //   bloomLevels — drop the widest bloom octaves (2 FS passes each) on MEDIUM/LOW
   //   grLite — one godray blur pair even with sun shafts (MEDIUM+); ULTRA/HIGH keep two
