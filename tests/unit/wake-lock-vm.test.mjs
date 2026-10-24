@@ -4,7 +4,9 @@
  * js/game.js and PlatformSession) with the SAME mock, the same
  * sequences and the same expected logs as the browser spec.
  *
- * Ported: all 13 tests. Not portable: none — every assertion reads the mock's
+ * Ported: all 13 tests, plus the visible-release re-arm (also in the browser
+ * spec, isolated from the race path so the twin count stays 14-for-14).
+ * Not portable: none of the ported tests — every assertion reads the mock's
  * `__wakeLog` (a JSON array) and two of them the page-error record.
  *
  * WHY A TWIN, WHY NOW (2026-09-16). The browser copy was CI's dominant flake:
@@ -70,6 +72,44 @@ for (const late of [false, true]) {
     });
   }
 }
+
+test("a visible UA release with no visibilitychange re-acquires; drop and hidden do not", async () => {
+  const requests = [];
+  let onRelease = null;
+  const ctx = vm.createContext({
+    navigator: { wakeLock: { request: () => {
+      requests.push(1);
+      return Promise.resolve({
+        addEventListener: (_e, cb) => { onRelease = cb; },
+        release: () => Promise.resolve(),
+      });
+    } } },
+    document: { hidden: false },
+    Log: { info() {} },
+    Promise,
+    setTimeout: (fn) => setTimeout(fn, 0),
+  });
+  vm.runInContext(readFileSync(new URL("../../js/core/wake-lock.js", import.meta.url), "utf8"), ctx);
+  const owner = vm.runInContext("RaceWakeLock.create()", ctx);
+  owner.hold();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(requests.length, 1);
+  onRelease();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(requests.length, 2);
+  owner.drop();
+  const afterDrop = requests.length;
+  onRelease();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(requests.length, afterDrop);
+  owner.hold();
+  await new Promise((r) => setImmediate(r));
+  ctx.document.hidden = true;
+  const whileHidden = requests.length;
+  onRelease();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(requests.length, whileHidden);
+});
 
 let g = null;
 before(async () => { g = await createGame({ storage: { trackId: "bahrain" } }); });
