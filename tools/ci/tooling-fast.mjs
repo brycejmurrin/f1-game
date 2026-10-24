@@ -1324,6 +1324,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).
   "tests/unit/tolerance-diff.test.mjs",
   "tests/unit/tooling-fast-runner.test.mjs",
+  // tools/ci/tooling-timings.mjs: CI-measured per-file durations for the guards-shard packer (BUILD-HUNT-2026-10-24 B1). Pure fixtures, ~0.2 s.
+  "tests/unit/tooling-timings.test.mjs",
   // Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.
   "tests/unit/tools-a12-guards.test.mjs",
   "tests/unit/tools-runnable.test.mjs",
