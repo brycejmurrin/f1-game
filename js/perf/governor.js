@@ -311,9 +311,8 @@ const VERIFY_COOL = 5000;   // ms: the wait after a step that made things worse
 // Taken just before an evaluation it crosses `degradeAt`, the cut is priced
 // against that inflated EMA, and 75-135 frames later the EMA has relaxed back,
 // so the step "verifies" by regression to the mean, whatever it bought. On a
-// phone a verified shed then latches `_phoneSlowLatch` for the session: one
-// way #3657's iPhone 14, at ~52 fps on the degrade line, sheds to tier 3-4
-// (replays: docs/notes/PERF-GOVERNOR-QUANTUM-2026-10-23.md). So the degrade
+// phone a verified shed then latches `_phoneSlowLatch` for the session (raised
+// by #3657; replays: docs/notes/PERF-GOVERNOR-QUANTUM-2026-10-23.md). So the degrade
 // gate and both ends of a verify read `_evEMA`: the same alpha-0.1 average,
 // fed the same samples, except that a multi-vsync stall (over 2.5 floors)
 // enters as ONE missed vsync (2 floors), for at most STALL_TRIM per evaluation

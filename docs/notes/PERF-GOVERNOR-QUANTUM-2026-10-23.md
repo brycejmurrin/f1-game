@@ -99,6 +99,16 @@ useless sheds, 20–30 % of arms end at tier ≥ 3. A noise-scaled margin
 (`k·σ`, k = 1–3) was replayed and dropped: a stricter margin refuses the early
 rungs and the walk accepts a deeper one (useful-shed trips 14 % → 43–53 %).
 
+**Caveat from A·D1 (2026-10-24, #3657):** the per-arm autoTier in ledger rows
+18–22 may be partly a harness artefact. The harness reloads the page over a live
+race, and the crash sentinel (`apex26.raceActive` + `apex26.raceTicked` still
+set at the next `init()`) counts that reload as a jetsam kill. One strike floors
+the next boot at tier 2, two or more at tier 4. The off arm right after a
+tripped arm stayed at tier 3, which fits. It is not proven, because
+`crashStrikes` was not recorded. Draft #3666 clears the sentinel before each
+harness reload and records strikes per arm. Until that re-run, the device trip
+rate is not evidence about the governor's shed logic either way.
+
 **What the device data says:** ledger rows 18–20 show the iPhone 14 at 48–56 fps,
 p95 23–27 ms, which puts the EMA within about 1 ms of `degradeAt` in every arm. Tier-4
 arms ran faster (54–56 fps) than tier-0 arms (48–51), so on this unit the
