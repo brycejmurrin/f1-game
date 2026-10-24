@@ -5,7 +5,7 @@
 //
 //   node tools/perf/devicefarm-iphone.mjs devices
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" [--legs 2|4|0] [--url URL] [--out DIR]
-//   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --touch 5 [--from btn-throttle] [--to btn-boost]
+//   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --touch 5 [--touch-gap 28] [--touch-pair] [--entry menu] [--from btn-throttle] [--to btn-boost]
 //     [--variants none,dom,state,none]   one fresh page load per entry, warm-up before the first tap (see WARM)
 //     [--variants none@live,dom@live,none@fix --fix-url URL --cold]   a fresh Safari PROCESS per entry
 //   node tools/perf/devicefarm-iphone.mjs run --scenario cache|races [--pins webgpu,webgl2]   (adds ?apex=1)
@@ -259,13 +259,19 @@ async function touchRun(base, sid, out, n, warm) {
     log("touch map " + JSON.stringify(r.map));
     // --to a,b,c: cycle c taps the c-th id (the last repeats), so a first tap on AERO can precede the first BOOST.
     const a = pt(r.arm.from), bs = r.arm.to.map(pt);
+    // --touch-gap S: seconds from one press to the next (default: the old fixed ~2.8 s cycle). --touch-pair: every
+    // press is BOOST ON then OFF (it toggles), so a deploy-ON press is followed by its release 1.2 s later; the read
+    // then lists 2N pointerdowns, the even ones being the ON presses.
+    const gapMs = Math.round(Number(opt("touch-gap", "0")) * 1000), pair = opt("touch-pair", "") !== "";
     for (let c = 0; c < n; c++) {
       const b = bs[Math.min(c, bs.length - 1)];
+      const press = [{ type: "pointerMove", duration: 0, x: b.x, y: b.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 70 }, { type: "pointerUp", button: 0 }];
+      const used = 1500 + 60 + 70 + (pair ? 1200 + 70 : 0);
+      const tail = Math.max(1200, gapMs - used);
       wd(base, "POST", `/session/${sid}/actions`, { actions: [{ type: "pointer", id: "finger", parameters: { pointerType: "touch" }, actions: [
         { type: "pointerMove", duration: 0, x: a.x, y: a.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 1500 },
-        { type: "pointerUp", button: 0 }, { type: "pause", duration: 60 },
-        { type: "pointerMove", duration: 0, x: b.x, y: b.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 70 },
-        { type: "pointerUp", button: 0 }, { type: "pause", duration: 1200 }] }] });
+        { type: "pointerUp", button: 0 }, { type: "pause", duration: 60 }, ...press,
+        ...(pair ? [{ type: "pause", duration: 1200 }, ...press] : []), { type: "pause", duration: tail }] }] });
     }
     try { wd(base, "DELETE", `/session/${sid}/actions`); } catch (_) { /* nothing held */ }
   } finally {
@@ -291,12 +297,40 @@ const READY = `
   let st = null, api = null; try { st = __apex.info().state; } catch (_) {}
   try { api = RendererPicker.liveThreeApi(); } catch (_) {}
   return { ready: st === "menu" && !!api, state: st, api };`;
-const KICK_FOR = (track = "monza", tod = "default") => `
+// --entry menu (A·W43): the player's path — RACE > pick the circuit > RACE SETUP > wait for the menu's own prep
+// (menuPrep + garage prewarm, as tools/lib/census-entry.mjs menuPrepReady) > START RACE. `__apex.race` skips race
+// settings' prepareMenuCarAssets, so its entry times are a cold-API path no player takes. The prep wait is bounded
+// (60 s) and recorded in window.__dfMenu; a prep that never settles still starts the race, and says so.
+const KICK_API = (track, tod) => `
   window.__dfRace = undefined; window.__dfT0 = performance.now();
   let prev = null; try { prev = RaceEntryProfile.snapshot().winT0; } catch (_) {}
   Promise.resolve(__apex.race(${JSON.stringify(track)}, ${JSON.stringify(tod)}, "dry")).then((v) => { window.__dfRace = { ok: !!v, ms: performance.now() - window.__dfT0 }; },
     (e) => { window.__dfRace = { err: String(e) }; });
   return prev;`;
+const KICK_MENU = (track, tod) => `
+  window.__dfRace = undefined; window.__dfT0 = performance.now(); const M = window.__dfMenu = { entry: "menu", steps: [] };
+  let prev = null; try { prev = RaceEntryProfile.snapshot().winT0; } catch (_) {}
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const until = async (f, ms) => { const t = performance.now(); while (performance.now() - t < ms) { try { if (f()) return true; } catch (_) {} await sleep(100); } return false; };
+  const shown = (id) => { const e = document.getElementById(id); return !!(e && !e.hidden); };
+  const step = (n) => M.steps.push([n, Math.round(performance.now() - window.__dfT0)]);
+  (async () => {
+    document.getElementById("mb-race").click(); if (!(await until(() => shown("select"), 60000))) throw new Error("no track picker"); step("select");
+    const i = Tracks.LIST.findIndex((t) => t.id === ${JSON.stringify(track)}), row = document.querySelector('.track-row[data-track-idx="' + i + '"]');
+    if (row) row.click(); M.tile = !!row;
+    document.getElementById("sel-go").click(); if (!(await until(() => shown("race-settings"), 60000))) throw new Error("no race settings"); step("race-settings");
+    const sel = document.getElementById("rs-time-sel"); if (sel && ${JSON.stringify(tod)} !== "default") { sel.value = ${JSON.stringify(tod)}; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    const t1 = performance.now();
+    M.prepReady = await until(() => { const p = __apex.menuPrep(); return p && p.state === "menu" && p.world && p.done && p.warmFrames === 0 && !p.warming; }, 60000);
+    await until(() => { const g = __apex.garagePrebuild && __apex.garagePrebuild(); return !g || g.garageReady || !!(g.last && g.last.want === "settings"); }, 30000);
+    M.prepWaitMs = Math.round(performance.now() - t1); step("prepared");
+    window.__dfT0 = performance.now(); document.getElementById("rs-go").click(); step("start-race");
+    const t2 = performance.now(); await until(() => { const s = __apex.info().state; return s && s !== "menu"; }, 180000);
+    window.__dfRace = { ok: true, ms: performance.now() - t2 };
+  })().catch((e) => { window.__dfRace = { err: String(e) }; });
+  return prev;`;
+const ENTRY_MENU = opt("entry", "api") === "menu";
+const KICK_FOR = (track = "monza", tod = "default") => (ENTRY_MENU ? KICK_MENU : KICK_API)(track, tod);
 const KICK = KICK_FOR();
 const ENTRY = `
   let s = null, t = null, warm = null, st = null;
@@ -511,7 +545,7 @@ function thermalNow(ctx) {
 // including the menu warm (warm.history).
 function rowMeta(ctx, report, i, entry) {
   return { build: report.boot && report.boot.build ? report.boot.build.sha : null, first: i === 0 && !report.primed,
-    thermal: thermalNow(ctx), warm: entry && entry.warm ? entry.warm : null };
+    thermal: thermalNow(ctx), warm: entry && entry.warm ? entry.warm : null, entryPath: ENTRY_MENU ? "menu" : "api (cold: skips race settings' prepareMenuCarAssets)" };
 }
 // --prime TRACK:TOD: one discarded race entry before the first arm, so no measured arm pays the unit's cold compile.
 async function primeOnce(ctx, url, report) {
