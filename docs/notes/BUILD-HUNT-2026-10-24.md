@@ -95,6 +95,20 @@ mean and −1.5 min at p90. That is real but smaller than the −1.4 min the
 noise-free simulation promised, and three runs cannot show it: B1 lands as a coverage fix plus a tool, and the ≥10-run re-measure after B2 decides. B2 (a fourth
 shard) is the bigger lever: about −1.65 min mean more, for one runner per run.
 
+## B2: four guards shards (#3720)
+
+| run | shard walls (min) A / B / C / D | slowest |
+|---|---|---:|
+| 40062492271 (`924ccace`) | 5.3 / 5.2 / 5.4 / 3.3 | 5.4 |
+
+The three-shard runs on the B1 table had a slowest shard of 7.4 / 7.5 / 7.5 /
+6.9 min, and the Monte Carlo expects 5.57 for four shards. That is one sample.
+OrchA 32's condition 4 is a ≥10-run re-measure after merge, recorded here
+(`node tools/ci/tooling-timings.mjs --runs 10` prints the four predicted walls;
+read the step walls with the GitHub jobs API). Shard D carried less work than
+the others on this run (3.3 min). The next table refresh will rebalance it,
+but stays out of this PR so B2's gain is attributable on its own.
+
 ## Re-consider: existing levers
 
 | lever | keep / revisit / drop | why |
