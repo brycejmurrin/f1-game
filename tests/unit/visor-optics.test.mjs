@@ -124,12 +124,41 @@ test("visor mapping: the sun's glint sits where the sun is and slides across as 
   assert.ok(Math.abs(turned.sun.x - 422) < 20, `facing the sun recentres the glint (${turned.sun.x.toFixed(0)})`);
   const behind = V.lightMap({ ...DAY, sunDir: [0, 0.5, 0.87] }, 844, 390, { level: 1 });
   assert.equal(behind.sun, null, "a sun behind the eye has no glint…");
-  assert.ok(behind.rim && behind.rim.k > ahead.rim.k, "…but rakes the rim harder than a sun ahead");
+  assert.equal(behind.rim, null, "…and the helmet shell shades the rim from it (A·W46: it used to peak there)");
   const set = V.lightMap({ ...DAY, sunDir: [0, -0.2, -0.98] }, 844, 390, { level: 1 });
   assert.equal(set.sun, null); assert.equal(set.rim, null);
   // God rays only for a sun in the frame, anchored on its glint; none for the high sun that only glows at the rim.
   assert.ok(ahead.rays && ahead.rays.x === ahead.sun.x && ahead.rays.k > 0.05, "a sun in the frame streaks across the shield");
   assert.equal(V.lightMap(DAY, 844, 390, { level: 1 }).rays, null, "a sun past the frame edge has no rays");
+});
+
+test("visor sun-behind (A·W46): no glare from a sun behind the eye; lamps glint against the daylight they compete with", () => {
+  const { V } = load();
+  // sunFacing: the sun direction's forward component → how much of it reaches the shield.
+  assert.equal(V.sunFacing(-1), 0, "sun straight behind: nothing");
+  assert.equal(V.sunFacing(-0.5), 0, "~120° off the nose: nothing");
+  assert.equal(V.sunFacing(0.2), 1); assert.equal(V.sunFacing(1), 1, "ahead and just past level: full");
+  assert.ok(V.sunFacing(0) > 0.6 && V.sunFacing(0) < 0.8, "level with the eye: most of it (it rakes the shield)");
+  for (let z = -1; z < 1; z += 0.05) assert.ok(V.sunFacing(z + 0.05) >= V.sunFacing(z), "monotonic in the forward component");
+  // A low dusk sun (COTA's start straight at dusk, measured): behind → no rim, no glint; ahead → the shipped glint.
+  const DUSK = { ...DAY, sunDir: [0, 0.094, -0.996], sunColor: [1.068, 0.618, 0.202], exposure: 1.03, ambientSky: [0.209, 0.246, 0.3] };
+  for (const lv of [0.6, 1, 1.6]) {
+    const behind = V.lightMap({ ...DUSK, sunDir: [0, 0.094, 0.996] }, 844, 390, { level: lv });
+    assert.equal(behind.sun, null); assert.equal(behind.rays, null); assert.equal(behind.rim, null, `level ${lv}: no rim sheen from a sun behind`);
+  }
+  const ahead = V.lightMap(DUSK, 844, 390, { level: 1 });
+  assert.ok(ahead.sun && ahead.sun.k > 1 && ahead.rays, "a low sun ahead still blinds: glint and rays kept");
+  // lampAdapt: night keeps every lamp glint; a dusk sky dims them to about a third; brighter keeps falling.
+  assert.equal(V.lampAdapt(0), 1); assert.equal(V.lampAdapt(0.14), 1, "night (moon key + sky ≈ 0.14) is untouched");
+  assert.ok(V.lampAdapt(0.95) > 0.25 && V.lampAdapt(0.95) < 0.35, `dusk ≈ 0.3 (${V.lampAdapt(0.95).toFixed(2)})`);
+  assert.ok(V.lampAdapt(1.5) < V.lampAdapt(0.95), "more daylight, fainter glints");
+  // The same pit-lane lamps ahead: full glints at night, few and faint at dusk.
+  const lamps = [...lamp(-3, -20, [400, 300, 200]), ...lamp(3, -25, [400, 300, 200]), ...lamp(0, -35, [400, 300, 200])];
+  const night = V.lightMap({ ...NIGHT, lights: lamps }, 844, 390, { level: 1 });
+  const dusk = V.lightMap({ ...DUSK, sunDir: [0, 0.094, 0.996], lights: lamps }, 844, 390, { level: 1 });
+  assert.equal(night.glints.length, 3, "night: every lamp glints");
+  const sum = (m) => m.glints.reduce((a, g) => a + g.k, 0);
+  assert.ok(sum(dusk) < sum(night) * 0.4, `dusk: the lamps no longer flood the shield (${sum(dusk).toFixed(2)} vs ${sum(night).toFixed(2)})`);
 });
 
 test("visor mapping: a bright flood leaves a beam along its aim; BLOOM AMOUNT and LENS GLARE scale the halos", () => {

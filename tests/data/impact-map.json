@@ -6331,6 +6331,9 @@
       "blendMode": [
         "tests/unit/visor-optics.test.mjs"
       ],
+      "lampAdapt": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
       "lightMap": [
         "tests/unit/visor-optics.test.mjs"
       ],
@@ -6344,6 +6347,9 @@
         "tests/unit/visor-optics.test.mjs"
       ],
       "stats": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
+      "sunFacing": [
         "tests/unit/visor-optics.test.mjs"
       ],
       "tick": [
