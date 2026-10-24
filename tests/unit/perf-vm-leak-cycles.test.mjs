@@ -43,8 +43,9 @@ test("positive control: a skipped Tracks.free and a listener added per quit are 
       g.G.quitToMenu = function (...a) { g.sandbox.addEventListener("resize", () => {}); return quit.apply(this, a); };
     },
   });
-  const fails = leakVerdict(readings).join("\n");
-  assert.match(fails, /meshes \d+ vs \d+ on cycle 2/, "a track whose meshes are never freed must fail the gate:\n" + fails);
-  assert.match(fails, /batches \d+ vs \d+ on cycle 2/, "instanced batches never freed must fail the gate:\n" + fails);
-  assert.match(fails, /menu: listeners \d+ vs \d+ on cycle 2/, "a listener added per quit must fail the gate:\n" + fails);
+  const rows = leakVerdict(readings), fails = rows.join("\n");
+  const named = (re) => rows.some((r) => re.test(r));
+  assert.ok(named(/ meshes \d+ vs \d+ on cycle 2/), "a track whose meshes are never freed must fail the gate:\n" + fails);
+  assert.ok(named(/ batches \d+ vs \d+ on cycle 2/), "instanced batches never freed must fail the gate:\n" + fails);
+  assert.ok(named(/ menu: listeners \d+ vs \d+ on cycle 2/), "a listener added per quit must fail the gate:\n" + fails);
 });

@@ -1226,6 +1226,7 @@
         "test:input",
         "test:modes",
         "test:net",
+        "test:perf-budget",
         "test:perf-frametime",
         "test:perf-race-entry",
         "test:phone-recorder",
@@ -3855,6 +3856,10 @@
     {
       "name": "test:node-slow",
       "command": "node --test --test-timeout=900000 --test-concurrency=1 tests/unit/cockpit-pale-surfaces.test.mjs tests/unit/cover-legibility.test.mjs tests/unit/crest-marks.test.mjs tests/unit/flyby-fleet.test.mjs tests/unit/flyby-frame-report.test.mjs tests/unit/foundation-core-vm.test.mjs tests/unit/livery-contrast.test.mjs tests/unit/slider-effect.test.mjs"
+    },
+    {
+      "name": "test:perf-budget",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/perf-boost-press-pipelines.spec.js tests/specs/perf-sw-cache-hit.spec.js"
     },
     {
       "name": "test:perf-frametime",

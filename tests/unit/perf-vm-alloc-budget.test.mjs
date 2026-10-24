@@ -28,7 +28,7 @@ test("compare(): over the ratio fails, at or under it passes, far under asks for
   const base = { meanKbPerFrame: 200 };
   assert.equal(compare({ meanKbPerFrame: 200 * MAX_RATIO + 0.5 }, base).ok, false);
   assert.equal(compare({ meanKbPerFrame: 200 * MAX_RATIO }, base).ok, true);
-  assert.match(compare({ meanKbPerFrame: 100 }, base).note, /lower it with --update/);
+  assert.ok(compare({ meanKbPerFrame: 100 }, base).note.includes("lower it with --update"), "far under the baseline must ask for a lower one");
   assert.equal(compare({ meanKbPerFrame: null }, base).ok, false, "all windows invalid is a failure, not a pass");
   assert.equal(compare({ meanKbPerFrame: 1 }, null).ok, false, "no baseline is a failure");
 });
