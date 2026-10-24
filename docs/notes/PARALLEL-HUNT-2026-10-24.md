@@ -50,7 +50,7 @@ Score = main-thread ms saved on the player's path × feasibility × (1 − risk)
 |---|---|---|---|---|---|---|
 | 1 | **P1: pack strip decode in the BitmapDecode worker** | **539 ms at 4× CPU, 111 ms at 1×** (high tier, measured §4) | high: pure bytes in, bytes out | low: byte-identical, falls back on any failure, default OFF | A·H14 (worker) + A·H15 (assets.js hook) | prototyped |
 | 2 | iPhone WebGPU `programWarm` / pipelines (15–18 s of first-race entry) | the largest number in the game, but GPU-process compile, not main-thread JS | low for threading. Async pipelines already run concurrently | — | A·H10 / A·H12 | not a thread move. Attack it by compiling fewer pipelines (variant count), not with workers (DEVICE-FARM-ANALYSIS rows 12–21) |
-| 3 | Rapier debris `prime()` BVH in a worker: build the world there, `takeSnapshot()` → transfer → `World.restoreSnapshot` on the page | ≤ 216 ms (vegas) minus the restore cost (unmeasured) | medium: the snapshot API exists. Is a restore cheaper than a BVH build? Unmeasured | medium: Rapier pin, a second WASM instance (~MBs) in the worker | A·H13 (`js/physics/**`) | next measurement: time `restoreSnapshot` against `prime()` in node |
+| 3 | Rapier debris road world in a worker: build the trimesh there, `takeSnapshot()`, transfer the bytes, `World.restoreSnapshot` on the page | **build 111 → restore 8 ms (vegas), 101 → 11 (monza), 50 → 4 (monaco)**, measured §4b | medium: the snapshot API works in the vendored 0.19.3. Costs a 4–8 MB transfer and a second WASM instance in the worker | medium: construction order is the determinism contract (`debris-world.js` prime comment). A ball trajectory is bit-identical after a restore; the full mirror/furniture world is not yet checked | A·H13 (`js/physics/**`) | measured. Proposal for A·H13 |
 | 4 | Serial fx warm probes in TLX (`warmFxPrograms` awaits 5 `compileAsync` in a row) | GPU-side. With WebKit's async compile queue it may overlap. Estimate ≤ 5 pipeline latencies | high: `Promise.all` over the jobs | low | A·H10 (`js/render/three/`) | proposed on the bus. Needs the census to measure |
 | 5 | `ChunkBins.bin` + chunk packing during build-worker replay (runs on the page even when the worker built the track) | unmeasured; in-session switch only | medium: needs the bins in the worker's recorder | low | A·H15 (`js/track/`) | measure with `__apex.buildProfile()` on a track switch |
 | 6 | car / helmet mesh build (~800 ms first draw, a 2026-09 estimate) in a worker, like the track build | ≤ 800 ms (estimate) | low: `Car3D` recipes touch gfx and liveries | medium | car/render lanes | first attribute the cost (RaceEntryProfile `warmCarAssets` span) |
@@ -120,6 +120,33 @@ Caveats, stated plainly:
 **Reproduce.** `npx serve -l 3456 .`, apply the hook, then run the A/B script
 from the PR body: `node <script> 3456 9 <1|4> <high|low>`.
 
+## 4b. Row 3 measured — Rapier snapshot restore against the trimesh build
+
+`scratch` bench (in the PR body). It runs the real `Tracks.build` in the node
+VM (`tools/lib/track-build-vm.cjs`), then does what `debris-world.js
+buildWorld` does for the road: a fixed body plus a `ColliderDesc.trimesh(pos,
+idx, FIX_INTERNAL_EDGES)`. Then `world.takeSnapshot()` and
+`RAPIER.World.restoreSnapshot(bytes)`. A dynamic ball dropped on the original
+and on the restored world must sit at bit-identical coordinates after 120
+steps. Median of 7, vendored Rapier 0.19.3. Node runs on this box under load
+(loadavg ~6, tooling-fast was running), so read the ratios, not the absolute ms.
+
+| circuit | road tris | trimesh build ms | snapshot ms | restore ms | snapshot KB | ball after 120 steps |
+|---|---|---|---|---|---|---|
+| vegas | 55 656 | 111.1 | 6.0 | 8.2 | 7 668 | bit-identical |
+| monza | 51 394 | 101.4 | 7.1 | 11.1 | 7 073 | bit-identical |
+| monaco | 31 318 | 49.5 | 3.5 | 3.9 | 4 335 | bit-identical |
+
+So the page would pay about a tenth of the build. The worker builds the road
+world from the `roadGeo` the page already has (posted, ~1 MB), snapshots it and
+transfers it back; the page restores it, then adds the mirrors and furniture in
+today's order. That moves ~100–200 ms out of the countdown on a phone core.
+`prime()` already runs it during the countdown rather than on the lights-out
+frame, so this is a countdown-smoothness win, not a lights-out fix. Before any
+code: A·H13 must confirm that the whole world (mirror handles, furniture,
+panels) is sim-identical after a restore, with the existing debris
+determinism tests run against a restored world.
+
 ## 5. Next steps
 
 1. Land the `assets.js` hook (A·H15, or with A·H15's OK), then measure on the
@@ -128,5 +155,5 @@ from the PR body: `node <script> 3456 9 <1|4> <high|low>`.
    `hardwareConcurrency > 1` (the same rule as `apex26.buildWorker`), and make
    `assets.js` call `PngStrip` for its own page path too, so there is one copy
    of the reader.
-3. Row 3: a node bench of Rapier `restoreSnapshot` against `prime()` decides
-   whether the debris BVH is worth a worker.
+3. Row 3 (§4b): restore is ~10× cheaper than the build. Hand it to A·H13 with
+   the determinism check that must come first.
