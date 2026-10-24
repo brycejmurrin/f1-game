@@ -1861,6 +1861,11 @@
       "presentation": "native",
       "preserve": "Timestamped progress lines (device, session state, boot probe, bench leg states, session minutes) and the report.json path; the endpoint URL is never printed."
     },
+    "tools/perf/devicefarm-syslog.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The window and process-limit lines, one row per game-page WebContent footprint dump (time, pid, event, footprint, internal, compressed, resident), the peak-versus-limit line and the kill, SIGKILL and buffer-failure counts; --json prints the same as one object."
+    },
     "tools/perf/live-render-matrix.mjs": {
       "action": "keep-native",
       "presentation": "native",
