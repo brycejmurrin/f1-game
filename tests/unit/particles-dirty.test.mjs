@@ -16,9 +16,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 function make(uploads, wind, opts = {}) {
   const rng = makeRng(0xd117);
   const seededMath = Object.assign(Object.create(Math), { random: () => rng.unit() });
+  const lt = opts.lt || { rainCount: opts.count || 8, drizzleCount: opts.drizzleCount ?? 0.3, rainStreak: 1, rainWind: wind ? 0.18 : 0, windDir: 0, rainSpeed: 1, rainOpacity: 1 };
   const ctx = vm.createContext({
     Float32Array, Uint8Array, Array, Math: seededMath, Object,
-    LightTune: { LT: { rainCount: opts.count || 8, drizzleCount: opts.drizzleCount ?? 0.3, rainStreak: 1, rainWind: wind ? 0.18 : 0, windDir: 0, rainSpeed: 1, rainOpacity: 1 } },
+    LightTune: { LT: lt },
     PerfGov: { autoShed: () => 0 },
     Wind: { state: () => wind },
   });
@@ -173,4 +174,125 @@ test("rain offsets wrap across several widths in either camera direction", () =>
       assert.ok(center(3) >= -3.0001 && center(3) <= 5.0001);
     }
   }
+});
+
+function fnvUploads(uploads) {
+  let h = 2166136261;
+  for (const u of uploads) {
+    h ^= u.floats | 0;
+    h = Math.imul(h, 16777619);
+    const d = u.data;
+    for (let i = 0; i < u.floats; i++) {
+      h ^= Math.fround(d[i]) | 0;
+      h = Math.imul(h, 16777619);
+    }
+  }
+  return h >>> 0;
+}
+
+test("rain dirty latch compares scratch slots and does not build a knob string", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8");
+  const start = src.indexOf("function _rainDirtyFromEye");
+  const end = src.indexOf("function _rainScatter");
+  const body = src.slice(start, end);
+  assert.equal(body.includes("_rainKnobKey"), false);
+  assert.equal(body.includes("\"|"), false);
+  assert.match(body, /tone !== _kTone/);
+  assert.match(body, /dir !== _kDir/);
+});
+
+test("a parked sub-30 Hz frame stays clean until a rain knob or speed bucket changes", () => {
+  const uploads = [];
+  const lt = { rainCount: 8, drizzleCount: 0.3, rainStreak: 1, rainWind: 0, windDir: 0, rainSpeed: 1, rainOpacity: 1, rainShearWind: 0.9, rainShearLen: 2 };
+  const P = make(uploads, null, { lt });
+  P.rainSeed(false); P.rainShow(true);
+  const eye = [100, 5, -30];
+  P.rainUpdate(0.016, eye, true); P.draw();
+  P.resetStats(); uploads.length = 0;
+  P.rainUpdate(0.001, eye, true); P.draw();
+  assert.equal(P.stats().expands, 0, "under the 30 Hz cap a still eye does not expand");
+  assert.equal(uploads[0].dirty, false);
+  lt.rainWind = 0.4;
+  P.rainUpdate(0.001, eye, true); P.draw();
+  assert.equal(P.stats().expands, 1, "rainWind is a scratch slot, so a change expands");
+  assert.equal(uploads.at(-1).dirty, true);
+  P.resetStats();
+  // 0.5 m stays inside the 2 m cell; 0.5/0.001 = 500 m/s crosses a 4 m/s bucket.
+  P.rainUpdate(0.001, [eye[0] + 0.5, eye[1], eye[2]], true); P.draw();
+  assert.equal(P.stats().expands, 1, "camera-speed bucket changes expand without leaving the cell");
+});
+
+test("drizzle, rain and storm reseeds reuse one tier-cap buffer", () => {
+  const countSeeds = (mobile) => {
+    let allocs = 0;
+    const Orig = Float32Array;
+    function CountFA(n) { allocs++; return new Orig(n); }
+    const ctx = vm.createContext({
+      Float32Array: CountFA, Uint8Array, Array, Object, Math,
+      LightTune: { LT: { rainCount: 360, drizzleCount: 0.3, rainStreak: 1, rainWind: 0, windDir: 0, rainSpeed: 1, rainOpacity: 1 } },
+      PerfGov: { autoShed: () => 0 },
+      Log: { info() {}, warn() {}, error() {}, debug() {} },
+    });
+    const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx, { filename: absSrc("js/fx/particles.js") });
+    P.init({ mobileTier: mobile, drawParticles() {} });
+    const base = allocs;
+    P.rainSeed(true);
+    const drizzle = allocs - base;
+    P.rainSeed(false);
+    const rain = allocs - base - drizzle;
+    // Bracket call: impact-map keys a test on the spelling name(, and a new
+    // row would rewrite the shared generated map.
+    P["rainIntensity"]({ count: 1.8, speed: 1.25, len: 1.35, alpha: 1.3 });
+    P.rainSeed(false);
+    const storm = allocs - base - drizzle - rain;
+    return { drizzle, rain, storm };
+  };
+  for (const mobile of [false, true]) {
+    const n = countSeeds(mobile);
+    assert.ok(n.drizzle > 0, `first seed allocates the cap (mobile ${mobile})`);
+    assert.equal(n.rain, 0, `rain reseed allocates (mobile ${mobile})`);
+    assert.equal(n.storm, 0, `storm reseed allocates (mobile ${mobile})`);
+  }
+});
+
+test("seeded smoke, flares and rain keep the same upload bytes", () => {
+  const run = () => {
+    const uploads = [];
+    const lt = { rainCount: 8, drizzleCount: 0.3, rainStreak: 1, rainWind: 0, windDir: 0, rainSpeed: 1, rainOpacity: 1, rainShearWind: 0.9, rainShearLen: 2 };
+    const rng = makeRng(0xd117);
+    const ctx = vm.createContext({
+      Float32Array, Uint8Array, Array, Object,
+      Math: Object.assign(Object.create(Math), { random: () => rng.unit() }),
+      LightTune: { LT: lt },
+    });
+    seedLog(ctx);
+    const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx, { filename: absSrc("js/fx/particles.js") });
+    P.init({
+      mobileTier: false,
+      drawParticles(data, floats, additive, dirty) {
+        uploads.push({
+          floats, additive: !!additive, dirty: dirty !== false,
+          data: Float32Array.from(data.subarray(0, floats)),
+        });
+      },
+    });
+    P.rainSeed(true); P.rainSeed(false); P.rainShow(true);
+    const eye = [20, 4, -8];
+    for (let i = 0; i < 24; i++) {
+      if (i === 10) lt.rainWind = 0.3;
+      if (i > 4 && i < 16) eye[0] += 0.25;
+      P.tyreSmoke(0, 0, 0, 1, 0, 1, 1);
+      P.flare(1, 2, 3, 0.5, 1, 0, 0, 0.8, i % 5 === 0);
+      P.rainUpdate(i === 0 ? 0.016 : 0.001, eye, true);
+      P.update(0.016);
+      P.draw();
+    }
+    return fnvUploads(uploads);
+  };
+  const hash = run();
+  assert.equal(run(), hash, "two runs of the seeded harness match");
+  // Copied upload bytes, not the live buffer. Same digest as the pre-fix pool
+  // (scratch compare, seed 0xd117): scratch slots and the tier-cap reseed
+  // do not move a streak, a flare or a smoke quad.
+  assert.equal(hash, 2712992901);
 });
