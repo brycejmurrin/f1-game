@@ -3725,7 +3725,10 @@ const TLX = (function () {
         let w = 0;
         for (let i = 0; i < meshPool.length; i++) {
           const m = meshPool[i];
-          if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS) { meshPool[w++] = m; continue; }
+          // A PINNED geometry (pinMesh: the cockpit ERS bar, OT lamp, ERS strip) keeps its wrappers: they draw
+          // only while ERS deploys, and on WebGPU the wrapper is its pipeline's last holder, so a prune between
+          // two BOOST presses made every press rebuild the pipeline mid-race (#3677).
+          if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS || (m.geometry && m.geometry.__tlxPin)) { meshPool[w++] = m; continue; }
           const byMat = meshByGeo.get(m.geometry);
           if (byMat) {
             // Drop the wrapper from its occurrence list; an emptied list and an
@@ -4885,6 +4888,8 @@ const TLX = (function () {
           return true;
         },
         freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
+        // Exempt a small, intermittently drawn mesh from the idle prune (feature-detected; freeMesh still frees it).
+        pinMesh(m) { if (m && m.geo) m.geo.__tlxPin = true; },
         freeChunkedMesh(m) {
           if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }

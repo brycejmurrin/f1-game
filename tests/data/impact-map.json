@@ -2425,7 +2425,8 @@
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/tlx-prune-pin.test.mjs"
       ]
     },
     "js/car/car-geometry.js": {
@@ -13941,6 +13942,9 @@
       "prepareMirrorTarget": [
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
+      ],
+      "prunePool": [
+        "tests/unit/tlx-prune-pin.test.mjs"
       ],
       "pumpAnimation": [
         "tests/unit/tlx-anim-pump.test.mjs"

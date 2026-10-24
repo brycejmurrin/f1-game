@@ -1285,6 +1285,16 @@
       "twinned": false
     },
     {
+      "id": "perf-budget",
+      "script": "test:perf-budget",
+      "kind": "browser",
+      "files": [
+        "tests/specs/perf-boost-press-pipelines-gl.spec.js",
+        "tests/specs/perf-boost-press-pipelines.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "perf-frametime",
       "script": "test:perf-frametime",
       "kind": "browser",
