@@ -292,6 +292,7 @@ const FULL = [
   "js/physics/tyre-model.js",
   "js/physics/grip-steer.js",
   "js/physics/wheel-state.js", // opt-in torque-balanced κ / lockup / wheelspin (#1628); default OFF
+  "js/physics/vehicle.js", // tick scratch bags; loads before player-forces.js
   "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A); uses GripSteer after muF
   "js/physics/ai-drive.js",
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
@@ -903,6 +904,7 @@ const HARD_EDGES = [
   ["js/race/wind.js", "js/game.js"],                     // game.js calls Wind.setLevel at eval
   ["js/core/mat4.js", "js/physics/grip-steer.js"],       // GripSteer binds M4.clamp/lerp at eval
   ["js/physics/grip-steer.js", "js/physics/player-forces.js"], // PlayerForces.step caps via GripSteer.forPlayer
+  ["js/physics/vehicle.js", "js/physics/player-forces.js"], // PlayerForces.step writes Vehicle.grip / Vehicle.wheel
   ["js/core/mat4.js", "js/physics/wheel-state.js"],      // WheelState binds M4.clamp at eval
   ["js/physics/tyre-model.js", "js/physics/wheel-state.js"], // lateralCurve for combined-slip force shape
   ["js/physics/wheel-state.js", "js/physics/player-forces.js"], // opt-in κ path after slip angles

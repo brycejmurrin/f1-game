@@ -1420,6 +1420,8 @@
     "tests/unit/ui-sheets-audit.test.mjs",
     "tests/unit/uilayers-modal-order.test.mjs",
     "tests/unit/validation-cli.test.mjs",
+    "// Vehicle tick scratch: grip and wheel bags are reused, and the player step matches the fresh-literal path.",
+    "tests/unit/vehicle-tick-alloc.test.mjs",
     "// Vendored licence files: every vendor/ package has one and a declared SPDX licence matches its text (#3092). < 0.1 s.",
     "tests/unit/vendor-licences.test.mjs",
     "tests/unit/verify-live.test.mjs",
