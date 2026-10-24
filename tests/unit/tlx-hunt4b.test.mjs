@@ -790,9 +790,9 @@ test("scene11: never on the WebGPU leg — a blend state against an alpha-less t
   // (BlendFactor::OneMinusSrcAlpha) …" with the scene target in rg11b10ufloat. The fake WebGL2 cannot reproduce
   // a WebGPU validation rule, so this pins the gate in the source and the behaviour under a WebGPU-shaped backend.
   const post = read("js/render/three/tlx-post.js");
-  assert.match(post, /const _r11Blendable = r11Renderable && !\(renderer\.backend && renderer\.backend\.isWebGPUBackend\);/);
-  assert.match(post, /let scene11 = _r11Blendable && !!ctx\.isMobile;/);
-  assert.match(post, /if \(k === "1"\) scene11 = _r11Blendable;/, "the force knob cannot override the WebGPU exclusion");
+  assert.ok(post.includes("const _r11Blendable = r11Renderable && !(renderer.backend && renderer.backend.isWebGPUBackend);"), "the gate reads the backend kind");
+  assert.ok(post.includes("let scene11 = _r11Blendable && !!ctx.isMobile;"), "the default goes through the gate");
+  assert.ok(post.includes('if (k === "1") scene11 = _r11Blendable;'), "the force knob cannot override the WebGPU exclusion");
   // Behaviour: the real chain over the fake WebGL2, with the backend flagged as WebGPU for the probe's purposes.
   const h = await rig11(t, { ls: { "apex26.tlxScene11": "1" } });
   assert.equal(h.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "WebGL backend: forced on");
@@ -810,7 +810,7 @@ test("scene11: never on the WebGPU leg — a blend state against an alpha-less t
 
 test("scene11: the probe is read before the bloom knob, and no post reader samples scene alpha", () => {
   const post = read("js/render/three/tlx-post.js");
-  assert.match(post, /const r11Renderable = bloom11 && hdr && THREE\.UnsignedInt101111Type != null && THREE\.RGBFormat != null;/);
+  assert.ok(post.includes("const r11Renderable = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;"), "the probe is its own const");
   assert.ok(post.indexOf("const r11Renderable") < post.indexOf('localStorage.getItem("apex26.tlxBloom11")'), "the probe is read before the bloom knob can clear it");
   const tslPost = read("js/render/three/tsl-post.js");
   assert.ok(!/sceneT\.sample\([^)]*\)\)?\.[aw]\b/.test(tslPost) && !/\bscn\.[aw]\b/.test(tslPost), "scene alpha is never read: RGB-only storage is lossless for the composite");
