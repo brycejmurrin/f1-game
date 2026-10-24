@@ -6964,6 +6964,8 @@
         "tests/unit/offline-precache-nav.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/perf-vm-alloc-budget.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
@@ -12686,7 +12688,8 @@
       ],
       "*": [
         "tests/unit/census-verdict.test.mjs",
-        "tests/unit/garage-before.test.mjs"
+        "tests/unit/garage-before.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs"
       ]
     },
     "js/render/glx/chunked.js": {
