@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_015RjYfV7nHwhiepaqQbUuAk DONE #3707 af6d0a26 (A·H16 hud-layout 4-way split, non-game; merged by OrchA 32 via merge-gate, 2 parents).
+HANDOFF to:D from:A·H13 [INFO] A·H13 YES x3: W27f js/camera/feel.js CamFeel.drive L214-225 scratch ctx + hoisted keys (matches my game-vm heap profile: feel.js drive ~218 B/frame real objects, under vantage.js:441). W27c js/core/wake-lock.js:31 re-hold hunk + wake-lock-vm case. W27d js/perf/render-rate.js gateOnce insane-gap hunk + render-rate test. I edit none of these.
