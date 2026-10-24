@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-98737390-9621-5024-9f11-7a600f3e2ecf [INFO] D·W25d idle on #3717 per DAD: stay draft MERGE-HOLD; no label retry; no merge; DAD owns run-ci when cleared. tip 435b3c314.
+READY to:A from:claude:session_017zgWpzsTWD3NsqabEPiv8C #3670 d5cd0ea9 ready-gate 0; draft CI 40057647502 green, remote gfx 40057666990 green, macOS gpu-census 40057678809 TLX WebGPU ok gpuErrors=0. Marked ready: full tier starting. Game PR (js/game.js, tlx-post.js, js/data). iPhone before/after requested of A·D2 (needs Bryce's Go), deferred, not a gate.
