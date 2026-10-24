@@ -41,7 +41,7 @@ Tooling-fast step only, 18 green runs where all three shards ran:
 
 | id | lever | verdict | evidence | minutes |
 |---|---|---|---|---|
-| B1 | `tests/data/tooling-fast-timings.json` covers 396 of 855 files and was last rewritten 2026-10-19 (local box, `--jobs=3`). `applyFileShard` packs the 459 unmeasured files at a fallback cost and `scheduleLongestFirst` starts them FIRST in each shard (log: `132 with a recorded duration, 153 unmeasured scheduled first`). | CONFIRMED | Simulation (LPT pack with the table, 4-slot greedy run with CI-median truth) reproduces the observed split: 7.39 / 6.30 / 4.79 min vs measured means 6.44 / 6.69 / 5.28 and mean-max 7.39. With a CI-median table: 6.01 / 6.01 / 6.01. | −1.4 min per fast-tier and Pages-gate run on the critical path, 0 extra job-min |
+| B1 | `tests/data/tooling-fast-timings.json` covers 396 of 855 files and was last rewritten 2026-10-19 (local box, `--jobs=3`). `applyFileShard` packs the 459 unmeasured files at a fallback cost and `scheduleLongestFirst` starts them FIRST in each shard (log: `132 with a recorded duration, 153 unmeasured scheduled first`). | CONFIRMED (cause) · win UNCONFIRMED | Simulation (LPT pack with the table, 4-slot greedy run with CI-median truth) reproduces the observed split: 7.39 / 6.30 / 4.79 min vs measured means 6.44 / 6.69 / 5.28 and mean-max 7.39. With a CI-median table: 6.01 / 6.01 / 6.01. | predicted −1.4 min; NOT confirmed on 2 runs (7.4, 7.5 vs 7.39 baseline), see §After B1 |
 | B2 | Four tooling shards instead of three. | PROPOSED | Same simulation with fresh timings: 4.51 min × 4. One more runner per run (~0.4 min setup: checkout 0.1 + setup-apex 0.1 + hash/cache). | a further −1.5 min wall; +~0.4 job-min per run |
 | B3 | The table rots again: every new test file is unmeasured until someone runs `--record` locally, and local timings are a different machine and `--jobs`. | PROPOSED | 459 files went unmeasured in 5 days. Fix: a harvest CLI that folds the CI shard logs' per-file durations (median) into the table, run by the existing timings bot or by hand. | keeps B1's −1.4 min |
 | B4 | `npm run test:tooling-fast` (the pre-push floor every session runs) defaults to `--jobs=1`. | MEASURING | see §Local floor | — |
@@ -57,29 +57,30 @@ This container (4 cores, one session):
 
 B4 (auto `--jobs=2` on a quiet box) is its own PR, which OrchA 32 approved with conditions.
 
-## After B1: the first run-ci run (40055143256, `4d8649df`)
+## After B1: two run-ci runs — NOT CONFIRMED
 
-| shard | table (min of file time) | actual (min of file time) | ratio | step wall |
-|---|---:|---:|---:|---:|
-| A (1/3) | 24.0 | 28.3 | 1.18 | 7.4 |
-| B (2/3) | 24.0 | 17.1 | 0.71 | 4.3 |
-| C (3/3) | 24.0 | 15.3 | 0.64 | 4.0 |
+| run | shard | table (min of file time) | actual (min of file time) | ratio | step wall |
+|---|---|---:|---:|---:|---:|
+| 40055143256 (`4d8649df`) | A (1/3) | 24.0 | 28.3 | 1.18 | 7.4 |
+| | B (2/3) | 24.0 | 17.1 | 0.71 | 4.3 |
+| | C (3/3) | 24.0 | 15.3 | 0.64 | 4.0 |
+| 40056252968 (`3a3b6c30`) | A (1/3) | 24.0 | 28.4 | 1.19 | 7.5 |
+| | B (2/3) | 24.0 | 21.6 | 0.90 | 5.5 |
+| | C (3/3) | 24.0 | 23.3 | 0.97 | 6.1 |
 
-The table now splits the work evenly (24.0 min of file time per shard, against
-the old table's 7.58 / 6.27 / 5.13 min walls). On this run, though, every file
-in A ran about 18 % slower than its median, and every file in B and C about
-30 % faster. One shard's files slow down together, so this is runner speed
-(GitHub-hosted runners vary by job), not packing: no table can fix it. B1
-therefore removes the systematic imbalance (the old table made C 2.4 min
-lighter than A on average), while the remaining spread of up to ±30 % per job
-is runner noise. Judge B1 by the mean slowest-shard wall over many runs:
-`node tools/ci/tooling-timings.mjs` re-reads the newest green runs and prints
-the predicted walls, and the 18-run baseline above was 7.39 min mean, 7.57 p50.
-
-B6 (new, measured here): with ±30 % runner speed per job, the wall of the
-slowest of N shards grows with N even at perfect balance. A fourth shard (B2)
-still cuts each shard's work by a quarter, so its gain survives the noise;
-re-running a slow-runner shard does not (never re-run for speed).
+The table splits the work evenly on paper, yet the slowest shard ran 7.4 and
+7.5 min, the same as the 18-run baseline (7.39 mean, 7.57 p50). Shard A's files
+ran 18–19 % over their medians on BOTH runs, so that is not random runner speed
+(B and C moved between 0.64 and 0.97). It is not load either: mean loadavg was
+6.2 / 6.8 / 6.7 across A / B / C. A's two longest files (`apex-tools-mcp`
+237–241 s, median 221; `real-replay-vm` 171–174 s, median 148) both start at
+t=0. My working hypothesis is that per-file durations depend on what runs beside
+them (both spawn child processes), so medians taken under the OLD packing
+misprice the new one. Next: re-harvest from runs on the new packing
+(`node tools/ci/tooling-timings.mjs --runs 6`), which folds that context back
+in, and check the slowest-shard wall again. Until then B1 is a coverage fix
+(855/855 files measured, none started blind) and a tool, not a measured win.
+No regression either: 7.4 / 7.5 are inside the baseline's spread.
 
 ## Re-consider: existing levers
 
