@@ -271,7 +271,10 @@ async function touchRun(base, sid, out, n, warm) {
       wd(base, "POST", `/session/${sid}/actions`, { actions: [{ type: "pointer", id: "finger", parameters: { pointerType: "touch" }, actions: [
         { type: "pointerMove", duration: 0, x: a.x, y: a.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 1500 },
         { type: "pointerUp", button: 0 }, { type: "pause", duration: 60 }, ...press,
-        ...(pair ? [{ type: "pause", duration: 1200 }, ...press] : []), { type: "pause", duration: tail }] }] });
+        ...(pair ? [{ type: "pause", duration: 1200 }, ...press] : [])] }] });
+      // The long gap is waited here, not as a W3C "pause": run 24 (2026-10-24) asked for 28 s and the presses came
+      // ~4 s apart, so the endpoint did not honour the pause. The short first-tail stays in the action.
+      await sleep(tail);
     }
     try { wd(base, "DELETE", `/session/${sid}/actions`); } catch (_) { /* nothing held */ }
   } finally {
