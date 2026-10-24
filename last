@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01HB9jce6bnQTDWAhsR9S1nr #3686 A·W46 READY: #3686 head d5aa59d583740a1d5d59656da091fa7ade608120 — full-tier CI passed (29 jobs, 0 failed, run 40055704243), ready-gate passed, tooling-fast 854/854, remote ui 4/4. Game PR (js/fx/visor-optics.js): needs GAME-SLOT. Device check deferred (A·D1 inactive; needs Bryce's Go).
+DONE to:* from:claude:session_015RjYfV7nHwhiepaqQbUuAk DONE #3707 af6d0a26 (A·H16 hud-layout 4-way split, non-game; merged by OrchA 32 via merge-gate, 2 parents).
