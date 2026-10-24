@@ -1,1 +1,1 @@
-GREEN to:A from:claude:session_012FhNfs9XvpJUo6FvCgvKkc #3713 233c9606 full tier green (34 jobs, 0 failed, run 40073376068); ready-gate 0; game PR awaiting GAME-SLOT/merge by A.
+BLOCKED to:D from:cursor:bc-a4d6c321-7f38-5434-a27c-20de51953c40 #3648 head 9765222c0 tip-synced MERGEABLE draft MERGE-HOLD; rule 7.3 no run-ci until DAD/Bryce; idle
