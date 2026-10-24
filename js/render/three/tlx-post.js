@@ -128,9 +128,26 @@
         bloom11 = !!(dev && dev.features && dev.features.has("rg11b10ufloat-renderable"));
       }
     } catch (_) { hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend); bloom11 = false; }
+    // The probe's verdict, before the bloom knob: the scene target below shares it.
+    const r11Renderable = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;
     try { if (localStorage.getItem("apex26.tlxBloom11") === "0") bloom11 = false; } catch (_) { /* no storage: on */ }
     const hdrType = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
     bloom11 = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;
+    // SCENE COLOUR FORMAT (phoneperf 2026-10-24, PERF-KNOWN-WINS row 15): R11F_G11F_B10F / rg11b10ufloat for
+    // the scene target where it is renderable (the bloom probe above), 4 B/px instead of RGBA16F's 8 for the
+    // one target every 3D fragment is written to and that the composite, SSR, haze and the mirror fold read
+    // back at full res — on a tile GPU that is the store plus every read of the frame's biggest surface. No
+    // reader takes scene alpha (tsl-post.js samples .rgb; the car tag is attachment 1, which keeps its own
+    // half-float type), lit colour is never negative, and the composite's sceneHdr uniform is unchanged: the
+    // scene is still float HDR. PHONES ONLY by default (the bandwidth-bound tier; a desktop keeps RGBA16F so
+    // its goldens and env/mirror parity stay as they were). apex26.tlxScene11="1" forces it on, "0" keeps
+    // RGBA16F — the Device Farm A/B pair. 11/11/10 keeps 6/6/5 mantissa bits: a banding check on a night
+    // gradient is the device evidence this still owes (docs/notes/PERF-KNOWN-WINS-2026-10-23.md row 15).
+    let scene11 = r11Renderable && !!ctx.isMobile;
+    try {
+      const k = localStorage.getItem("apex26.tlxScene11");
+      if (k === "0") scene11 = false; else if (k === "1") scene11 = r11Renderable;
+    } catch (_) { /* no storage: the default above */ }
     // sceneHdr is fixed for the chain's life — hdr is decided once at factory time.
     let _sceneHdr = hdr ? 1 : 0;
 
@@ -212,6 +229,7 @@
       samples: ctx.sceneSamples || 0, resolveDepthBuffer: true,   // SCENE MSAA (header)
     }));
     ownedTextures.delete(sceneDepthTex); // sceneRT.dispose owns it from here
+    if (scene11) { sceneRT.texture.type = THREE.UnsignedInt101111Type; sceneRT.texture.format = THREE.RGBFormat; }   // attachment 0 only
     sceneRT.texture.name = "output";
     sceneRT.texture.generateMipmaps = false;
     sceneRT.texture.colorSpace = THREE.NoColorSpace;
@@ -1127,6 +1145,7 @@
         on: true,
         hdr,
         attachments: tagOn ? 2 : 1,
+        sceneFormat: scene11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",   // phoneperf: the scene colour attachment
         ssrQuality: P.composite.U.ssrQuality.value,
         depth: { discard: _depthDiscard, kept: _depthKeep, discards: _depthDiscards },   // A-P1: the last frame's call
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,

@@ -1,0 +1,1 @@
+Improved: On phones the THREE.JS renderer now keeps the scene's HDR colour in a 32-bit float format instead of 64-bit, halving the memory traffic of the frame's largest surface; the look is unchanged and `apex26.tlxScene11=0` restores the old format.
