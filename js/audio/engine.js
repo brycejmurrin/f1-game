@@ -892,6 +892,12 @@ var GameAudio = (function () {
       if (p && p.catch) p.catch((e) => { Log.debug("audio", "old context close rejected on rebuild:", e && e.message); });
     } catch (e) { /* already closed */ }
     if (typeof ErsLayer !== "undefined" && ErsLayer.detach) ErsLayer.detach();
+    // Crowd bed + cheer pool are ctx-bound; startEngineGraph() below bypasses
+    // GameAudio.startEngine's crowd wrapper, so detach here and re-attach after
+    // the new buses exist (#3289).
+    if (typeof CrowdAudio !== "undefined" && CrowdAudio.detach) {
+      try { CrowdAudio.detach(); } catch (e) { /* stub / mid-teardown */ }
+    }
     ctx = null;
     master = null;
     sfxBus = null; focusBus = null; focusVoices.clear();
@@ -918,6 +924,9 @@ var GameAudio = (function () {
                             // tests/tools call centroidHz() today, not the game loop)
     if (!createCtx()) return;
     reapplyContextState();
+    if (typeof CrowdAudio !== "undefined" && CrowdAudio.attach) {
+      try { CrowdAudio.attach(); } catch (e) { /* stub / mid-teardown */ }
+    }
     if (wasMusic) soundtrack.resumeMusic(wasTrack);
     if (wasEngine) startEngineGraph();
     if (rainWanted) startRain();
@@ -1514,6 +1523,11 @@ var GameAudio = (function () {
     // drone for permanent silence, because every later startEngine() would
     // early-return on it; down, the next one is free to retry.
     catch (e) { try { stopEngine(); } catch (_) { /* teardown of a half-graph */ } engineOn = false; throw e; }
+    // Visibility-resume and rebuildCtx call this directly (not startEngine), so
+    // the crowd wrapper on startEngine never runs — re-bind the bed here (#3289).
+    if (typeof CrowdAudio !== "undefined" && CrowdAudio.attach) {
+      try { CrowdAudio.attach(); } catch (e) { /* stub / mid-teardown */ }
+    }
   }
 
   function stopEngine() {
