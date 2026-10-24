@@ -67,8 +67,8 @@ test("check() names an over-cap, re-sampled or truncated track", () => {
     fs.writeFileSync(path.join(dir, t.file), frames([192, 128]));
     const problems = check(dir);
     assert.equal(problems.length, 2, problems.join("\n"));
-    assert.match(problems[0], /192 kbps, over the 128 kbps cap/);
-    assert.match(problems[1], /the original is/);
+    assert.ok(problems[0].includes("192 kbps, over the 128 kbps cap"), problems[0]);
+    assert.ok(problems[1].includes("the original is"), problems[1]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
