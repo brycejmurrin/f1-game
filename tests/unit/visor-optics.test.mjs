@@ -31,11 +31,13 @@ function ctx2d(calls) {
 
 function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "" } = {}) {
   const calls = { clear: 0, stroke: 0, arc: 0, inserted: null, props: {}, attrs: {} };
+  const live = { visor };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } }, nextSibling: null };
   const body = {
     hasAttribute: (k) => k === "data-helmet-cam" && helmet,
     setAttribute: (k, v) => { calls.attrs[k] = v; },
-    style: { setProperty: (k, v) => { calls.props[k] = v; } },
+    removeAttribute: (k) => { delete calls.attrs[k]; },
+    style: { setProperty: (k, v) => { calls.props[k] = v; }, removeProperty: (k) => { delete calls.props[k]; } },
     appendChild() {},
   };
   const document = {
@@ -51,13 +53,13 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
     Math, Float32Array, Uint8ClampedArray, Object, Path2D, performance: { now: () => 0 },
     getComputedStyle: () => ({ getPropertyValue: (k) => (k === "--visor-lens" ? lens : "") }),
     document, window: { ...win, __apex: apex, location: { search } }, URLSearchParams, Date,
-    CockpitOpts: { visor: () => visor, visorReflections: () => reflections, visorRefraction: () => refraction, visorBeams: () => beams, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
+    CockpitOpts: { visor: () => live.visor, visorReflections: () => reflections, visorRefraction: () => refraction, visorBeams: () => beams, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
     GfxQuality: { current: () => "high" },
     ...(picker ? { RendererPicker: picker } : {}),
   });
   seedLog(ctx);
   const V = vm.runInContext(read("js/fx/visor-optics.js") + ";VisorOptics", ctx, { filename: absSrc("js/fx/visor-optics.js") });
-  return { V, calls, listeners };
+  return { V, calls, listeners, live };
 }
 
 const DAY = { eye: [0, 1, 0], tgt: [0, 1, -10], fov: 62, sunDir: [0.3, 0.7, -0.65], sunColor: [1.1, 1.0, 0.9], exposure: 1, ambientSky: [0.5, 0.6, 0.8], lights: null, tailStart: 0, floodEmit: 0 };
@@ -229,7 +231,8 @@ test("visor tick: helmet cam only, the port image per size and tint, reflections
   const none = load({ apex, visor: "off" });
   none.V.tick(1 / 60, true, 0, false);
   assert.equal(none.V.stats().paints, 0, "visor OFF: no light layer");
-  assert.ok(none.calls.attrs["data-visor-port"] === "1", "visor OFF still has the helmet's eye-port");
+  assert.equal(none.calls.attrs["data-visor-port"], undefined, "visor OFF: no eye-port frame (Bryce: OFF kept the oval)");
+  assert.equal(none.calls.props["--visor-port"], undefined, "…and no port image");
   const chase = load({ apex, helmet: false });
   chase.V.tick(1 / 60, true, 0, false);
   assert.equal(chase.calls.attrs["data-visor-port"], undefined, "not a helmet cam: no port, no paint");
@@ -238,6 +241,24 @@ test("visor tick: helmet cam only, the port image per size and tint, reflections
   smoke.V.tick(1 / 60, true, 0, false);
   assert.ok(String(smoke.calls.props["--visor-port"]).includes("rgb(80,61,32)"), "TINTED amber bakes the lens colour into the port");
   assert.ok(smoke.V.stats().sun > V.stats().sun, "a tinted lens reflects harder");
+});
+
+test("visor tick: switching HELMET VISOR to OFF mid-race takes the oval eye-port down (and CLEAR brings it back)", () => {
+  const apex = { visorScene: () => DAY };
+  const { V, calls, listeners, live } = load({ apex, visor: "clear" });
+  V.tick(1 / 60, true, 0, false);
+  assert.equal(calls.attrs["data-visor-port"], "1", "CLEAR: the eye-port stands");
+  live.visor = "off";
+  for (const fn of listeners) fn("visor", "off");
+  V.tick(1 / 60, true, 0, false);
+  assert.equal(calls.attrs["data-visor-port"], undefined, "OFF: the stale port attribute is cleared");
+  assert.equal(calls.props["--visor-port"], undefined, "OFF: the port image is cleared");
+  live.visor = "clear";
+  for (const fn of listeners) fn("visor", "clear");
+  V.tick(1 / 60, true, 0, false);
+  assert.equal(calls.attrs["data-visor-port"], "1", "back to CLEAR: rebuilt");
+  // css/hud.css's static frame (the no-JS / first-frame fallback) is keyed off the same choice.
+  assert.match(read("css/hud.css"), /body\[data-helmet-cam\]:not\(\[data-helmet-visor="off"\]\) #hud::before \{/, "the static oval frame skips visor OFF");
 });
 
 test("visor tick: falls back to camState + lightState without visorScene, and reads nothing without __apex", () => {
