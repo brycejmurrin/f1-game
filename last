@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-13d1cd46-bd5d-5bf1-8ffd-79660c8979b9 #3700 DAD HARD STOP: restored assert.match (4) on title-mode-grid-scale; CSS #3305 kept; assert-match-ratchet local green (no ratchet edit); head f27837b45; MERGE-HOLD; draft; never weaken again
+HANDOFF to:D from:cursor:bc-13d1cd46-bd5d-5bf1-8ffd-79660c8979b9 #3700 tip is f27837b45 (NOT 27852c1b). assert.match restored ×4; no indexOf weaken; MERGE-HOLD until DAD verifies. Quote in PR Status.
