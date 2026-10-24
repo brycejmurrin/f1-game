@@ -2321,6 +2321,7 @@
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/livery-tex-dispose.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
       "drawCockpitRig": [
@@ -2351,13 +2352,15 @@
       ],
       "getCarDecalTexture": [
         "tests/unit/car-draw-decal-budget.test.mjs",
-        "tests/unit/car-draw-decal-sweep.test.mjs"
+        "tests/unit/car-draw-decal-sweep.test.mjs",
+        "tests/unit/livery-tex-dispose.test.mjs"
       ],
       "glassState": [
         "tests/unit/car-presentation-vm.test.mjs"
       ],
       "invalidateDecalTextures": [
         "tests/unit/car-draw-decal-budget.test.mjs",
+        "tests/unit/livery-tex-dispose.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
       "kick": [
@@ -2371,6 +2374,9 @@
       ],
       "mirrorWarmPolicy": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "narrow": [
+        "tests/unit/livery-tex-dispose.test.mjs"
       ],
       "planPhotoAtlases": [
         "tests/unit/livery-tier.test.mjs"
@@ -4940,6 +4946,9 @@
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/store-key-types.test.mjs"
       ],
+      "ttBoardAddResult": [
+        "tests/unit/settings-ttlb-backup.test.mjs"
+      ],
       "*": [
         "tests/specs/parts-physics.spec.js",
         "tests/specs/persistence.spec.js",
@@ -4954,6 +4963,7 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
@@ -13558,9 +13568,6 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "discardAttachments": [
-        "tests/unit/tlx-hunt4b.test.mjs"
-      ],
-      "discardHint": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "discardHintOff": [
