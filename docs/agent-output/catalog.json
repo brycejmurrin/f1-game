@@ -2802,6 +2802,15 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/perf/lit-wgsl-census.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
+    },
+    {
       "path": "tools/perf/live-render-matrix.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
