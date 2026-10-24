@@ -433,6 +433,29 @@ test("fieldAt(): the race as it stood at the start of a lap — who was where, o
   assert.equal(R.fieldAt(aged, 5).by[63].age, 7, "4 laps run plus 3 laps old at the start");
 });
 
+test("fieldAt keeps published trace time separate from the filled pace clock", () => {
+  const { R } = load();
+  const driver = { num: 1, laps: [null, 100, 100], lapStart: [0, 120, 220], lapsDone: 3, stints: [] };
+  const script = { laps: 3, drivers: [driver] };
+  const at = R.fieldAt(script, 3);
+  assert.equal(at.t0, 200, "the untimed opening lap still uses the pace fallback");
+  assert.equal(at.traceT0, 220, "positions use the published start of lap 3");
+  const later = { ...driver, num: 2, lapStart: [0, 125, 225] };
+  const retired = { ...driver, num: 3, dnf: true, lapsDone: 1, laps: [100], lapStart: [0, 100, 1] };
+  const dns = { ...driver, num: 4, dns: true, lapStart: [0, 0, 0] };
+  assert.equal(R.fieldAt({ laps: 3, drivers: [later, retired, dns, driver] }, 3).traceT0, 220,
+    "the earliest running driver's published start wins, independent of roster order");
+  for (const published of [null, undefined, -1, NaN, Infinity, "220"]) {
+    assert.equal(R.fieldAt({ ...script, drivers: [{ ...driver, lapStart: [0, 120, published] }] }, 3).traceT0, 200,
+      "missing or malformed published starts fall back to the synthetic clock: " + published);
+  }
+  for (const lapStart of [undefined, null, { 2: 220 }]) {
+    assert.equal(R.fieldAt({ ...script, drivers: [{ ...driver, lapStart }] }, 3).traceT0, 200);
+  }
+  assert.equal(R.fieldAt({ ...script, drivers: [{ ...driver, lapStart: [null, null, 0] }] }, 3).traceT0, 0,
+    "a published zero is a valid lights-out timestamp");
+});
+
 test("a mid-race jump-in drops every car where it was, on its set, with the clock and the reference seeded", () => {
   const { R, script, Teams } = load();
   const cars = makeCars(Teams, "ferrari:0");

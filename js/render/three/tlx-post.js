@@ -998,6 +998,38 @@
     let _depthDiscard = true;
     try { _depthDiscard = localStorage.getItem("apex26.tlxDepthDiscard") !== "0"; } catch (_) { /* no storage: on */ }
     let _depthKeep = true, _depthDiscards = 0, _invDepth = null;
+    // A-P2 (phoneperf 2026-10-24): THE SSR TAG, DISCARDED THE SAME WAY. Attachment 1
+    // (ssrTag) stays on every chain so a wet spell never reallocates the scene target
+    // (_wantTag), yet its only readers are the composite's SSR gate (ssrOk &&
+    // reflect|carReflect > 0.001, tsl-post.js) and the heat-haze plume (hazeStr >
+    // 0.002) — both uniform-gated If blocks, so on a dry phone frame at tier >= 2
+    // (carReflect 0, reflect 0, haze null on mobileTier) the tag is written and
+    // stored by every scene fragment and fetched by nothing. Same rule shape as
+    // needsDepth, from the SAME opts/F present() is about to upload, so a frame
+    // whose composite reads the tag always has it. Single-sample targets only (an
+    // MSAA tag has already been resolved by the time depthEnd runs). WebGPU r186
+    // has no storeOp lever, as for depth. apex26.tlxTagDiscard="0" always keeps it.
+    let _tagDiscard = true;
+    try { _tagDiscard = localStorage.getItem("apex26.tlxTagDiscard") !== "0"; } catch (_) { /* no storage: on */ }
+    let _tagKeep = true, _tagDiscards = 0, _invTag = null, _invBoth = null;
+    function needsTag(opts, F) {
+      const o = opts || {};
+      if (viz) return true;
+      const hz = o.haze;
+      if (hz && hz.str > 0.002) return true;   // the plume's car-mask fetch
+      const car = o.carReflect != null ? o.carReflect : PostCommon.knob(o.tune || null, "carReflect");
+      return !!(F.invProj && F.proj && F.upVS) && ((o.reflect || 0) > 0.001 || car > 0.001);   // the composite's SSR gate, exactly
+    }
+    // WebGL2 only: invalidate `list` on rt's FBO, and only while three still has THAT FBO bound
+    // (the pass it just rendered) — never a guess. Returns true when it did.
+    function discardAttachments(rt, list) {
+      const be = renderer.backend, gl = be && be.gl, st = be && be.state;
+      if (!rt || !list || !list.length || !gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
+      const d = be.get(rt), fb = st.currentBoundFramebuffers[gl.DRAW_FRAMEBUFFER];
+      if (!fb || !d || !d.framebuffers || Object.values(d.framebuffers).indexOf(fb) < 0) return false;
+      gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, list);
+      return true;
+    }
     function needsDepth(opts, F) {
       const o = opts || {};
       if (viz) return true;
@@ -1019,11 +1051,12 @@
     function depthBegin(opts, F) {
       _depthKeep = !_depthDiscard || needsDepth(opts, F);
       sceneRT.resolveDepthBuffer = _depthKeep;
+      _tagKeep = !_tagDiscard || !tagOn || (sceneRT.samples | 0) > 0 || needsTag(opts, F);   // A-P2
       return _depthKeep;
     }
-    // After the scene pass, before present(): drop the depth this frame does not read (WebGL2 only).
+    // After the scene pass, before present(): drop the depth (and the tag) this frame does not read (WebGL2 only).
     function depthEnd() {
-      if (_depthKeep) return false;
+      if (_depthKeep && _tagKeep) return false;
       const be = renderer.backend, gl = be && be.gl, st = be && be.state;
       if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
       const d = be.get(sceneRT), msaa = (sceneRT.samples | 0) > 0;
@@ -1032,8 +1065,10 @@
       const fb = st.currentBoundFramebuffers[target];
       const ours = msaa ? (fb && fb === d.msaaFrameBuffer) : (fb && d.framebuffers && Object.values(d.framebuffers).indexOf(fb) >= 0);
       if (!ours) return false;
-      gl.invalidateFramebuffer(target, _invDepth || (_invDepth = [gl.DEPTH_ATTACHMENT]));
-      _depthDiscards++;
+      if (!_invDepth) { _invDepth = [gl.DEPTH_ATTACHMENT]; _invTag = [gl.COLOR_ATTACHMENT1]; _invBoth = [gl.DEPTH_ATTACHMENT, gl.COLOR_ATTACHMENT1]; }
+      gl.invalidateFramebuffer(target, _depthKeep ? _invTag : _tagKeep ? _invDepth : _invBoth);
+      if (!_tagKeep) _tagDiscards++;
+      if (!_depthKeep) _depthDiscards++;
       return true;
     }
 
@@ -1124,6 +1159,7 @@
       drawWarm,   // A-W1
       warmMirror,
       needsDepth, depthBegin, depthEnd,   // A-P1
+      needsTag, discardAttachments,   // A-P2 (the mirror discards its depth + tag through this)
       present,
       dispose,
       viz,
@@ -1135,6 +1171,7 @@
         attachments: tagOn ? 2 : 1,
         ssrQuality: P.composite.U.ssrQuality.value,
         depth: { discard: _depthDiscard, kept: _depthKeep, discards: _depthDiscards },   // A-P1: the last frame's call
+        tag: { discard: _tagDiscard, kept: _tagKeep, discards: _tagDiscards },   // A-P2
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],

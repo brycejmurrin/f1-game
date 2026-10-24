@@ -130,6 +130,13 @@ test("applyLookShed zeros look-defining strengths when lookPostShed is true", ()
   vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
   const M = vm.runInContext("PostFxOpts", ctx);
   const po = { bloom: 1, ssao: 0.8, godray: 0.5, contact: 0.3, lampVol: 0.2 };
-  M.applyLookShed(po, { bloom: 1, ssao: 0.8, godray: 0.5, contact: 0.3, lampVol: 0.2 });
-  assert.deepEqual(po, { bloom: 0, ssao: 0, godray: 0, contact: 0, lampVol: 0 });
+  const v = { bloom: 1, ssao: 0.8, godray: 0.5, contact: 0.3, lampVol: 0.2, flareMul: 1 };
+  M.applyLookShed(po, v);
+  // flareMul too (phoneperf 2026-10-24): its depthAt(sunUV) tap was the one reader that kept the
+  // full-res scene depth store on a shed LOW frame (tlx-post needsDepth, GLX needDepth).
+  assert.deepEqual(po, { bloom: 0, ssao: 0, godray: 0, contact: 0, lampVol: 0, flareMul: 0 });
+  sb.PerfGov.lookPostShed = () => false;
+  assert.deepEqual(M.applyLookShed({}, v), v, "not shed: every strength passes through, the flare included");
+  assert.ok(GAME.includes("flareMul: LT.flareMul });"), "game.js hands LT.flareMul to applyLookShed");
+  assert.ok(!/po\.flareMul = LT\.flareMul/.test(GAME), "and no later write puts the flare back");
 });
