@@ -46,7 +46,21 @@ alike. What leaks below the contract (three's caches) stays the job of the brows
 
 ## Results
 
-(filled after the local runs: see PR #3697 Verified)
+- VM leak cycles: clean. Every count repeats exactly from cycle 1 on, and the positive control is caught
+  (skipped `Tracks.free` → meshes/batches grow; listener per quit → menu listeners grow).
+- VM allocation: 188 KB/frame baseline, inside the bound on every run.
+- **BOOST presses (TLX WebGPU, SwiftShader adapter, api=webgpu): FINDING #3703.** The no-BOOST control
+  windows before presses 2–4 built 0 pipelines. Every press window built ≥ 1: a transparent
+  `MeshBasicNodeMaterial` (attributes `color,mat,normal,position,trk`, main pass) on presses 1–4, plus
+  two fx quads (`fxAlpha,fxColor,fxCorner,fxSize`) on press 2. That is a compile on **every** press. Reported to A·W45
+  (#3677) on the bus. The test stays strict and red until the fix lands. The repo has no expected-fail
+  convention (`flaky-quarantine.json` only admits pass-on-retry), so none is used.
+- BOOST presses (TLX WebGL2 / ANGLE SwiftShader): the leg's frame waits time out locally (see the PR for
+  the measured frame rate). CI's llvmpipe runs this path ~2.7× faster.
+- SW precache: the first attempt (offline reload) was invalid. Playwright's `context.setOffline()` does not
+  reach the worker's own fetches: a never-cached URL still answered 200. Rewritten as a precache snapshot
+  check. Its only misses were the 9 `LAZY_AGENT` files (the dev-only `__apex` surface sw.js excludes by
+  design), so it found no real precache gap.
 
 ## Follow-ups (not in this PR)
 

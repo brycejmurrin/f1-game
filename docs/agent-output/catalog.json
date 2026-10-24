@@ -2740,7 +2740,13 @@
     },
     {
       "path": "tools/perf/baselines/vm-alloc.json",
-      "classification": "data"
+      "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/perf/boost-press-census.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/perf/cpuprofile-summary.mjs",
@@ -2867,6 +2873,7 @@
     {
       "path": "tools/perf/vm-alloc-census.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
@@ -2875,6 +2882,7 @@
     {
       "path": "tools/perf/vm-leak-census.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
@@ -3859,7 +3867,7 @@
     },
     {
       "name": "test:perf-budget",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/perf-boost-press-pipelines.spec.js tests/specs/perf-sw-cache-hit.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/perf-boost-press-pipelines-gl.spec.js tests/specs/perf-boost-press-pipelines.spec.js tests/specs/perf-sw-cache-hit.spec.js"
     },
     {
       "name": "test:perf-frametime",
