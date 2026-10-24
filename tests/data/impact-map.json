@@ -15550,6 +15550,9 @@
       "migrate": [
         "tests/unit/hud-layout.test.mjs"
       ],
+      "narrow": [
+        "tests/unit/hud-layout-hidden.test.mjs"
+      ],
       "originOf": [
         "tests/unit/hud-layout.test.mjs"
       ],
@@ -15593,9 +15596,6 @@
         "tests/unit/hud-helmet-placement.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
         "tests/unit/hud-survey.test.mjs"
-      ],
-      "narrow": [
-        "tests/unit/hud-layout-hidden.test.mjs"
       ]
     },
     "js/ui/hud-minimap.js": {
