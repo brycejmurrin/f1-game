@@ -2227,6 +2227,12 @@
       ],
       "kind": "browser"
     },
+    "test:perf-idle-churn": {
+      "files": [
+        "tests/specs/perf-idle-pipeline-churn.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:perf-race-entry": {
       "files": [
         "tests/specs/perf-race-entry.spec.js"

@@ -1228,6 +1228,7 @@
         "test:net",
         "test:perf-budget",
         "test:perf-frametime",
+        "test:perf-idle-churn",
         "test:perf-race-entry",
         "test:phone-recorder",
         "test:physics-core",
@@ -2808,6 +2809,11 @@
       ]
     },
     {
+      "path": "tools/perf/idle-pipeline-census.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/perf/lib.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -3872,6 +3878,10 @@
     {
       "name": "test:perf-frametime",
       "command": "node tools/ci/run-playwright.mjs tests/specs/perf-frametime.spec.js tests/specs/track-switch-release.spec.js"
+    },
+    {
+      "name": "test:perf-idle-churn",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/perf-idle-pipeline-churn.spec.js"
     },
     {
       "name": "test:perf-race-entry",
