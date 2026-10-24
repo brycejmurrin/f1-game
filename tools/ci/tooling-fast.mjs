@@ -1292,6 +1292,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pass no longer clears the SUN flag; a retired post chain is rebuilt at the
   // next realloc and a post-only death keeps the bound label.
   "tests/unit/tlx-fail-scope.test.mjs",
+  // A·H12 GPU-memory hunt (G1): over three r186 on the fake WebGL2, the real tlx-shadow warm releases the previous race's probe-caster render objects — Renderer._objects stays flat across six warms (budget pin).
+  "tests/unit/tlx-gpumem-leak.test.mjs",
   // TLX perf hunt 3 (lane TLX-1): three's real WebGPURenderer over a no-op WebGL2 compiles the real lit material; GLSL pins (no env cube when opted out) + tlx.js source pins.
   "tests/unit/tlx-hunt3.test.mjs",
   // TLX perf hunt 4 (lane RENDER-S, A-H1): bufferSubData bytes over three r186 on the fake WebGL2 — the plain-Mesh instance streams (batches, mirror views, R1 runs, FX streams) upload 0 B unchanged and exactly the written range when written; the real InstancedMesh caster keeps Dynamic.

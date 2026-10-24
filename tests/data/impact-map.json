@@ -13703,6 +13703,7 @@
       ],
       "shadowSys": [
         "tests/unit/tlx-fail-scope.test.mjs",
+        "tests/unit/tlx-gpumem-leak.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",

@@ -1,0 +1,46 @@
+# GPU memory hunt — TLX on three's WebGPU backend (A·H12, 2026-10-24)
+
+Lane: GPU memory growth and leaks on Bryce's path (SETTINGS › THREE PATH: WEBGPU). First lead: A·H11 row H2
+(branch cursor/live-debug-race-1-ah11, its LIVE-DEBUGGER-RACE note): `GPUBuffer` 371 → 1102 → 1247
+across race→quit cycles, retained through `renderer.backend.data`.
+
+## Method
+
+A Playwright probe (not committed yet; scratch/gpumem/probe.mjs on the hunter's box) at 844×390, `hasTouch`,
+`isMobile`, TLX with `apex26.tlxForceGL=0` on SwiftShader WebGPU (`WEBGPU_CHROMIUM_ARGS`). An init script wraps
+`GPUDevice.prototype.create{Buffer,Texture,BindGroup,RenderPipeline,Sampler,ShaderModule}` and
+`GPU{Buffer,Texture}.prototype.destroy`, keeps per-object metadata (bytes, creating stack, the cycle "epoch"), and
+drops an entry on `destroy` or on GC (`FinalizationRegistry`, so the census never pins an object). After boot it wraps
+`renderer.backend.create*Attribute` to tie each vertex buffer to its `BufferAttribute`, and `?three-devtools=1`
+exposes `THREE` so `BufferGeometry.setAttribute/setIndex` stamp each attribute with its builder's stack. Each cycle:
+`__apex.race(track)`, 10 s, pause → QUIT TO MENU, two CDP `HeapProfiler.collectGarbage`, then a census of live GPU
+objects and of three's `Renderer._objects._renderObjects` (the strong Set that keeps a RenderObject, its bindings
+and its geometry until the object's or material's `"dispose"`).
+
+Software numbers rank work; they are not device evidence (no GPU in this container).
+
+## Findings
+
+| ID | sev | verdict | file:line | mechanism | fix | evidence |
+|---|---|---|---|---|---|---|
+| H2 | — | REFUTED (as an unbounded leak) | — | The growth is bounded caches warming up, not a per-cycle leak. Live buffers after quit, 10 cycles monza/spa/monaco: 852, 1007, 1199, 1182, 1289, 1357, 1362, 1339, 1521, 1661 (29–49 MB); textures flat at 56 / 85.7 MB from cycle 2. Render objects older than the previous race stop accumulating: per-epoch survivors at cycle 10 are e2 60, e3 61, e4 10, e5 81, e6 21, e7 11, e8 8. They are the car caches (`car-draw.js` `putBoundedMesh` LRU: team bodies, field wheels, decals, compound rings, flaps), their warm-compile bindings, and one-time warm targets. The swing at cycles 9–10 is the CURRENT and previous track's own objects. | none | probe runs 2–6 (artifacts/logs/gpumem-probe2..6 logs on the hunter's box) |
+| G1 | low | CONFIRMED (VM + live) | `js/render/three/tlx-shadow.js` `warm()` finally | Each race's caster warm builds probe meshes (`probeCasters`), and one warm later disposed only their geometries. A geometry dispose only nulls a RenderObject's attribute cache (`RenderObject.onGeometryDispose`, three r186); the RenderObject frees itself on the OBJECT's or MATERIAL's dispose. So every race left 4–6 probe render objects (uniform buffers, bind groups, the probe geometry) for the session: live census, `probeGeometry` render objects from epochs 2, 3, 4 still present at epoch 10. | dispatch `"dispose"` on the previous warm's probe meshes before disposing their geometries | `tests/unit/tlx-gpumem-leak.test.mjs`: render objects 9 17 25 33 41 49 over six warms before, 9 9 9 9 9 9 after |
+| G2 | info | CODE-TRACED | `js/car/car-draw.js:667` (hi-res player livery atlas) | The player's hi-res decal atlas is 2048×2560 RGBA8 with a full mip chain: 26.6 MB of the 85.7 MB texture total on this box, resident for the session. The 22 field liveries add 512×640 × 22 ≈ 36.5 MB. Bounded (`trimDecalCache`), but the largest single footprint lever in the census. | IDEA: phone tier caps the hi-res atlas at 1024×1280 (6.7 MB) or drops its mips below the cockpit's minification need | texture list, probe run 6 |
+| G3 | info | CODE-TRACED | `js/track/tracks.js:363` floor mesh; `tlx-post.js` warm | One floor geometry's render objects (4) and 27 post-warm quad render objects from epoch 2 stay to the end. Neither grows after epoch 2 (one-time), so not a leak. | none | probe runs 5–6 |
+
+## Re-considered levers (keep / revisit / drop)
+
+- `releaseGeometry` → `dropWrapper` dispatching `"dispose"` (TRACK-SWITCH-LEAKS 2026-10-02): KEEP. The census found no freed-track geometry held through the pool.
+- `compileWarmProbe` per-(geo, material) probes released on geometry/material dispose: KEEP. Its stale render objects did not accumulate across races.
+- `_ssrMrtNode()` built once (one render context): KEEP. One `ctx/mrt` id across all ten races.
+- Car caches (`putBoundedMesh`): KEEP. Bounded, and they are the plateau.
+- Probe casters in `tlx-shadow.js` warm: FIXED here (G1).
+
+## Next
+
+1. Commit the probe as a tools/perf GPU-object census CLI (one JSON verdict per cycle: live buffers/textures/bind groups/render objects, survivors by epoch) with a unit test, so later hunts reuse it rather than heap-snapshot diffs.
+2. G2 on a real iPhone: the 26.6 MB hi-res atlas is the biggest single texture; measure a 1024×1280 cap on the phone tier (car lane, not this one).
+3. Run the same census on the WebGL2 leg (`backend=gl`) for parity, and on gpu-census.yml `macos-latest` for a hardware number.
+
+Sources: three r186 src/renderers/common RenderObjects / RenderObject (npm `three@0.186.1`, read locally); WebKit bug
+[275958](https://bugs.webkit.org/show_bug.cgi?id=275958) (iOS jetsam near 1 GB), [253172](https://bugs.webkit.org/show_bug.cgi?id=253172) (GPU process growth shows as a WebContent jetsam).
