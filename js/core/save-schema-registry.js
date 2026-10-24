@@ -153,10 +153,13 @@ const SaveSchemaRegistry = (function () {
     "tlxSkipBatches": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxSkyCache": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxSkyCache512": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "tlxTagDiscard": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxTagLess": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxViz": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxWarmFx": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxWarmPlus": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    // Written by tlx.js itself: WebKit's per-device kill switch (the failure reason); RESET RENDERER clears it.
+    "tlxWebKitGL": entry("js/render/three/tlx.js", "raw", 1, "rawScalar"),
     "track": entry("js/game.js", "json", 1, "json"),
     "trackFilter": entry("js/ui/select-screen.js", "json", 1, "json"),
     "trackId": entry("js/game.js", "json", 1, "string"),

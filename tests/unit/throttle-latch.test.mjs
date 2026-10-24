@@ -383,7 +383,7 @@ test("a driving key released after focus moves into a HUD tap button clears its 
   assert.equal(Input.throttle(), false, "moving focus cannot strand a rebound driving key");
 });
 
-for (const id of ["pausebtn", "btn-cam", "hud-restore"]) {
+for (const id of ["pausebtn", "btn-cam", "hud-restore", "pc-restore"]) {
   test(id + " leaves native activation keys to the button and preserves movement releases", () => {
     const { Input, sb, listeners } = boot(), button = sb.document.getElementById(id);
     let clicks = 0;

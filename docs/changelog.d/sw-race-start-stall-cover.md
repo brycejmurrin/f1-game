@@ -1,0 +1,1 @@
+Fixed: software-GL race starts no longer trip the stall watchdog during RACE SETTINGS “PREPARING…” shader warm (the sheet now shares the relaxed loading-cover budget with the garage and loading scrim).

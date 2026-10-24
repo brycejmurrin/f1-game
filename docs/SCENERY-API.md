@@ -22,7 +22,7 @@ see [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
 > (tree species + lamp), `kit` (barrier/signage/marshal families, read through
 > `api.kitOf`), `standSet` (grandstand livery rotation) and `cityStyle` (the
 > city generator's palette — `neon` / `dayPal` are NAMES into
-> `TrackSceneryData.NC` / `.DC`). The generic fallbacks (`FURN_DEF`, `KIT_DEF`,
+> `TrackSceneryData.NC` / `.DC`). The generic fallbacks (`FURN_DEF`,
 > `THEME_DEF`, `STAND_SET_DEF`, the colour packs) stay in
 > `js/track/scenery/data.js`; the generators (`neonTower`, `streetLamp`, …) are
 > in `js/track/scenery/city.js`, `conifer` and the rest of the flora in

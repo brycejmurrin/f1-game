@@ -128,6 +128,8 @@ test("mirrorEnd: only four CONSECUTIVE failed mirror renders retire the mirror (
     _hideUndrawnInstanced() {}, scene: { backgroundNode: null }, pinSkyMaterial() {}, mirRT: {}, mirCam: {}, _gpuLastOperation: "",
     _mirRenders: 0, _mirFails: 0, _mirDead: false, _mirErr: null, softOutRT: () => null, resetRecs() {},
     _dMatUsed: 0, _fxMatUsed: 0, _instAlive: new Set(), _kidsBegin() {}, _kidsMir: [], _poolShow() {},   // R6 pool root (hunt 3)
+    _mirMrt: () => false, _mirMrtArm() {},   // A·W14: a one-attachment mirror target draws with no MRT
+    post: null, _mirInv: () => null, _mirDiscards: 0,   // A-P2: the WebGL2 depth + tag discard after the mirror render
     renderer: { setRenderTarget() {}, render() { if (st.boom) throw new Error("stale geometry"); } },
   });
   const obj = vm.runInContext("({" + body.replace(/,\s*$/, "") + "})", ctx);
@@ -144,7 +146,7 @@ test("mirrorEnd: only four CONSECUTIVE failed mirror renders retire the mirror (
 // three WebGL2 reloaded into the identical configuration, uncounted, for ever. The real function body runs here.
 function refuse(o = {}) {
   const store = Object.assign({}, o.ss || {});
-  const out = { reloads: 0, errors: [], store, local: Object.assign({ "apex26.gfxBackendProbe": "1" }, o.ls || {}) };
+  const out = { reloads: 0, errors: [], latched: [], store, local: Object.assign({ "apex26.gfxBackendProbe": "1" }, o.ls || {}) };
   const ss = o.ssThrows
     ? { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } }
     : { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
@@ -157,6 +159,7 @@ function refuse(o = {}) {
   };
   const ctx = vm.createContext({
     _glPin: o.pin ?? null, forceWebGL: !!o.forceWebGL, _autoStayGL: !!o.autoStayGL, _sessLostN: 0,
+    _latchWebKitGL: (why) => out.latched.push(why),
     sessionStorage: ss,
     localStorage: { removeItem: (k) => { delete out.local[k]; } },
     location: { reload() { out.reloads++; } },
@@ -180,6 +183,7 @@ test("refuseTab: AUTO on WebGPU takes three WebGL2, counted against the shared r
   assert.equal(r.store["apex26.ctxLostReloads"], "1", "the reload spends a ctxLostReloads credit");
   assert.equal(r.reloads, 1);
   assert.equal(r.local["apex26.gfxBackendProbe"], undefined, "the canary probe is cleared as before");
+  assert.deepEqual(r.latched, ["first render refused"], "AUTO's refusal also latches the WebKit device kill switch");
 });
 
 test("refuseTab: a boot already on three WebGL2 binds GLX instead of reloading into itself (08-F1)", () => {
@@ -187,6 +191,7 @@ test("refuseTab: a boot already on three WebGL2 binds GLX instead of reloading i
     const r = refuse(o);
     r.call();
     assert.equal(r.store["apex26.gfxClaimFail"], "1", JSON.stringify(o));
+    assert.deepEqual(r.latched, [], "a GLX hand-off is not a WebGPU verdict: " + JSON.stringify(o));
     assert.equal(r.store["apex26.tlxAutoGL"], undefined, JSON.stringify(o));
     assert.equal(r.reloads, 1, JSON.stringify(o));
   }
@@ -222,4 +227,85 @@ test("ctxLost window.name fallback: every reader regex parses the marker the wri
     if (m[1] !== undefined) assert.equal(m[1], "2", `${lit} captures the count`);
     assert.equal(re.test("apex26xctxLostReloads=2"), false, `${lit} must escape the dot`);
   }
+});
+
+// 2026-10-23: AUTO on WebKit tries WebGPU; the per-DEVICE kill switch (localStorage apex26.tlxWebKitGL) sends that
+// device back to three WebGL2 after a detected failure. The REAL declarations run here, sliced from isWebKit's
+// declaration to the end of _latchWebKitGL.
+function webkitSwitch({ ua, pin = null, ls = {} }) {
+  const local = Object.assign({}, ls);
+  const src = read("js/render/three/tlx.js");
+  const from = src.indexOf("      const isWebKit = ");
+  const end = src.indexOf("      };\n", src.indexOf("const _latchWebKitGL = ")) + 9;
+  assert.ok(from > 0 && end > from && end - from < 2500, "the WebKit kill-switch needles moved — check this test, not the code");
+  const ctx = vm.createContext({ ua, _glPin: pin,
+    localStorage: { getItem: (k) => (k in local ? local[k] : null), setItem: (k, v) => { local[k] = String(v); } } });
+  vm.runInContext(src.slice(from, end) + "\n globalThis.r = { isWebKit, _webkitStayGL, _latchWebKitGL };", ctx, { filename: absSrc("js/render/three/tlx.js") });
+  return { local, ...ctx.r };
+}
+const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1";
+const CHROME = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+
+test("WebKit kill switch: unset → AUTO may try WebGPU; a latched failure keeps the device on WebGL2", () => {
+  const fresh = webkitSwitch({ ua: IPHONE });
+  assert.equal(fresh.isWebKit, true);
+  assert.equal(fresh._webkitStayGL, false, "a fresh iPhone tries WebGPU on AUTO");
+  fresh._latchWebKitGL("WebGPU init failed: x".padEnd(400, "!"));
+  assert.equal(fresh.local["apex26.tlxWebKitGL"].length, 200, "the reason is stored, capped");
+  assert.equal(webkitSwitch({ ua: IPHONE, ls: fresh.local })._webkitStayGL, true, "the next boot on this device stays on WebGL2");
+});
+
+test("WebKit kill switch: never on Chromium, never written under a pin", () => {
+  const chrome = webkitSwitch({ ua: CHROME, ls: { "apex26.tlxWebKitGL": "stale" } });
+  assert.equal(chrome._webkitStayGL, false, "a desktop Chrome ignores the marker");
+  chrome._latchWebKitGL("x");
+  assert.equal(chrome.local["apex26.tlxWebKitGL"], "stale", "and never writes it");
+  for (const pin of ["0", "1"]) {
+    const p = webkitSwitch({ ua: IPHONE, pin });
+    p._latchWebKitGL("x");
+    assert.equal(p.local["apex26.tlxWebKitGL"], undefined, `pin ${pin} is a user override, not a verdict`);
+  }
+});
+
+// A-P2 (phoneperf 2026-10-24): after a depth pass on WebGL2 the map's R8 colour — written because WebGL
+// cannot render colourless, read only by the PCSS blocker off the SUN map — is invalidated while the FBO
+// three just rendered into is still bound. Never the sun map while colorPcss reads it; never a guess at
+// which FBO; nothing at all without a WebGL backend (WebGPU never writes it: depthMat.colorWrite).
+function bootGL({ isMobile, bound = true, gl: glOn = true } = {}) {
+  const fb = {}, inv = [];
+  const gl = glOn ? { DRAW_FRAMEBUFFER: 36009, COLOR_ATTACHMENT0: 36064, invalidateFramebuffer: (t, l) => inv.push([t, Array.from(l)]) } : null;   // Array.from: a host-realm copy (deepEqual checks prototypes)
+  const renderer = { backend: { gl, state: { currentBoundFramebuffers: { 36009: bound ? fb : null } }, get: () => ({ framebuffers: { 0: fb } }) },
+    getRenderTarget: () => null, setRenderTarget() {}, render() {}, autoClear: true };
+  const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} },
+    Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
+  vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
+  const sys = ctx.window.TLXShaders.shadowSys(mk(), mk(), { renderer, isMobile, softwareGL: false });
+  return { sys, S: sys.S, inv };
+}
+
+test("A-P2: a phone's sun pass drops its unread R8 colour store on WebGL2 (the one FBO three rendered into)", () => {
+  const { sys, S, inv } = bootGL({ isMobile: true });
+  sys.shadowBegin(new Float32Array(16)); sys.shadowEnd();
+  assert.deepEqual(inv, [[36009, [36064]]], "COLOR_ATTACHMENT0 on DRAW_FRAMEBUFFER, once");
+  assert.equal(S.colorDiscards, 1);
+  sys.shadowBegin(new Float32Array(16)); sys.shadowEnd();
+  assert.equal(S.colorDiscards, 2, "every pass, not only the first");
+});
+
+test("A-P2: the desktop sun map keeps its colour for the PCSS blocker; the car map still drops it", () => {
+  const { sys, S, inv } = bootGL({ isMobile: false });
+  sys.shadowBegin(new Float32Array(16)); sys.shadowEnd();
+  assert.equal(inv.length, 0, "colorPcss reads the sun map's colour");
+  sys.carShadowBegin(new Float32Array(16), 1); sys.carShadowEnd();
+  assert.deepEqual(inv, [[36009, [36064]]]);
+  assert.equal(S.colorDiscards, 1);
+});
+
+test("A-P2: no discard with another FBO bound, and none without a WebGL backend", () => {
+  const a = bootGL({ isMobile: true, bound: false });
+  a.sys.shadowBegin(new Float32Array(16)); a.sys.shadowEnd();
+  assert.equal(a.inv.length, 0); assert.equal(a.S.colorDiscards, 0);
+  const b = bootGL({ isMobile: true, gl: false });
+  b.sys.shadowBegin(new Float32Array(16)); b.sys.shadowEnd();
+  assert.equal(b.S.colorDiscards, 0, "WebGPU: nothing to drop, nothing thrown");
 });

@@ -314,14 +314,14 @@ function withStore(ls, fn) {
   }
 }
 // The REAL post chain (tlx-post + tsl-post) on three r186 over the fake WebGL2, plus one lit mesh to draw.
-async function postRig(t, { ls = {}, samples = 0 } = {}) {
+async function postRig(t, { ls = {}, samples = 0, ssrTag = false } = {}) {
   const fg = makeFakeGL(320, 180);
   const inv = [];
   fg.gl.invalidateFramebuffer = (target, list) => { inv.push([target, list.slice()]); };
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
   const post = withStore(ls, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true,
-    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag: false, softDest: () => null,
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest: () => null,
     wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: samples }));
   post.resize(320, 180);
   t.after(() => { post.dispose(); renderer.dispose(); });
@@ -457,7 +457,7 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
     const _instPerPass = true, skipBatches = () => false, _instRegistry = [], _mirOf = () => null;
     const fx = null, vizMat = null, softGpu = () => SOFT, softwareGL = SOFT, softContent = () => false;
     const pinSkyMaterial = () => {}, mintLateLit = () => {}, warmFxPrograms = async () => {}, warmLateLit = async () => {};
-    const warmPlusOn = () => true, wantMirrorWarm = () => true, softOutRT = () => null;
+    const warmPlusOn = () => true, casterWarmOn = warmPlusOn, wantMirrorWarm = () => true, softOutRT = () => null;
     const I = new THREE.Matrix4().toArray();
     const _postF = { proj: I, invProj: I, invVP: I, viewProj: I, upVS: [0, 1, 0], time: 0, sunVS: [0, 0, -1], noEnv: NOENV };
     const _warmHistory = [];   // tlx.js keeps every warm's stages (B·H8 prep timeline)
@@ -690,4 +690,52 @@ test("stale cloud warm releases resources without overwriting a successor render
   finish(); await pending;
   assert.equal(h.renderer.target, "successor"); assert.equal(h.renderer.mrt, "successor-mrt");
   assert.equal(h.events.filter((e) => e.startsWith("dispose")).length, 4);
+});
+
+// ── A-P2 (phoneperf 2026-10-24): the ssrTag attachment, discarded like the depth ─────────────────────
+test("A-P2: needsTag — the composite's SSR gate and the haze plume are the tag's only readers", async (t) => {
+  const { post } = await postRig(t, { ssrTag: true });
+  assert.equal(post.needsTag(OFF, NIGHT), false, "dry, carReflect 0, no haze: unread");
+  assert.equal(post.needsTag({ ...OFF, reflect: 0.3 }, NIGHT), true, "wet road SSR reads it");
+  assert.equal(post.needsTag({ ...OFF, carReflect: 0.2 }, NIGHT), true, "car-paint SSR reads it");
+  assert.equal(post.needsTag({ ...OFF, reflect: 0.3 }, { ...NIGHT, upVS: null }), false, "ssrOk 0 (no view basis): the If never runs");
+  assert.equal(post.needsTag({ ...OFF, haze: { u: 0.5, v: 0.5, str: 0.4 } }, NIGHT), true, "the plume's car mask reads it");
+  assert.equal(post.needsTag({ ...OFF, haze: { u: 0.5, v: 0.5, str: 0.001 } }, NIGHT), false, "below the shader's 0.002 gate");
+  assert.equal(post.needsTag({ ...OFF, carReflect: undefined, tune: { carReflect: 0.35 } }, NIGHT), true, "the knob default counts, as in needsDepth");
+});
+
+test("A-P2: WebGL2 invalidates depth AND the tag after a dry phone scene pass; a reader keeps the tag", async (t) => {
+  const h = await postRig(t, { ssrTag: true });
+  assert.equal(h.post.state().attachments, 2);
+  assert.deepEqual(h.scenePass(OFF, NIGHT), { keep: false, dropped: true });
+  assert.equal(h.inv.length, 1, "one invalidate call carries both");
+  assert.deepEqual(h.inv[0][1], [h.gl.DEPTH_ATTACHMENT, h.gl.COLOR_ATTACHMENT1]);
+  assert.deepEqual(h.post.state().tag, { discard: true, kept: false, discards: 1 });
+  h.scenePass({ ...OFF, reflect: 0.4 }, NIGHT);   // wet: SSR reads depth and the tag
+  assert.equal(h.inv.length, 1, "nothing invalidated on a frame that reads both");
+  assert.equal(h.post.state().tag.kept, true);
+  h.scenePass({ ...OFF, ssao: 0.5 }, NIGHT);      // SSAO reads depth only: the tag still goes
+  assert.deepEqual(h.inv[1][1], [h.gl.COLOR_ATTACHMENT1], "tag alone");
+  assert.deepEqual(h.post.state().depth.kept, true);
+  const knob = await postRig(t, { ssrTag: true, ls: { "apex26.tlxTagDiscard": "0" } });
+  knob.scenePass(OFF, NIGHT);
+  assert.deepEqual(knob.inv[0][1], [knob.gl.DEPTH_ATTACHMENT], "apex26.tlxTagDiscard=0: depth only, the tag always kept");
+  const one = await postRig(t, { ssrTag: false });
+  one.scenePass(OFF, NIGHT);
+  assert.deepEqual(one.inv[0][1], [one.gl.DEPTH_ATTACHMENT], "a one-attachment chain never names an attachment it lacks");
+});
+
+test("A-P2: discardAttachments acts only on the FBO three has bound; the mirror hands it depth + tag", async (t) => {
+  const h = await postRig(t, { ssrTag: true });
+  const rt = h.post.sceneTarget();
+  h.renderer.setRenderTarget(rt);
+  h.renderer.render(new THREE.Scene(), new THREE.PerspectiveCamera());
+  assert.equal(h.post.discardAttachments(rt, [h.gl.DEPTH_ATTACHMENT]), true);
+  assert.deepEqual(h.inv.at(-1), [h.gl.DRAW_FRAMEBUFFER, [h.gl.DEPTH_ATTACHMENT]]);
+  h.renderer.backend.state.bindFramebuffer(h.gl.FRAMEBUFFER, null);   // setRenderTarget(null) alone binds nothing until the next render
+  assert.equal(h.post.discardAttachments(rt, [h.gl.DEPTH_ATTACHMENT]), false, "another FBO bound: no guess");
+  assert.equal(h.post.discardAttachments(rt, []), false);
+  assert.match(TLX, /renderer\.render\(scene, mirCam\); \} finally \{ if \(mrt\) _mirMrtArm\(false, prevMrt\); \}\s*\n[^\n]*\n[^\n]*\n\s*if \(post && post\.discardAttachments && post\.discardAttachments\(mirRT, _mirInv\(mrt\)\)\) _mirDiscards\+\+;/,
+    "tlx.js: the mirror discards right after its render, before anything else binds");
+  assert.match(TLX, /return mrt \? _mirInvDT : _mirInvD;/, "tag only when the mirror target carries one");
 });

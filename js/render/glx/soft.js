@@ -73,6 +73,20 @@ const GLXSoft = (function () {
       // snapCam()/invalidateSoftPresent() arms one explicit blit on the next
       // present — not a periodic background readback every N frames.
       if (!_softPresentWaiters.length && !_softCaptureDue) return;
+      // Software GL + menu/race-entry sheets: skip full-frame readback (post.js
+      // readPixels) while PerfGov.softwareGlUiReadbackDefer() — garage, race
+      // settings flyby, loading cover (#3589; live race-entry on SwiftShader).
+      // Tests and __apex.awaitPresent() still need a generation bump: satisfy
+      // waiters without touching the GPU (same contract as a successful blit).
+      try {
+        if (typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) {
+          if (_softPresentWaiters.length || _softCaptureDue) {
+            _softCaptureDue = false;
+            softBlitNotify();
+          }
+          return;
+        }
+      } catch (_) { /* harness */ }
       // Drawing-buffer size, not render width/height: with spatial upscale the
       // canvas (and default FB) is presentW×presentH while width/height stay at
       // the internal render scale — readPixels of the small box only captured a

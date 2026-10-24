@@ -1,5 +1,6 @@
 /* PhotoStudio: camera borrowing, readback ordering, bounded composition,
- * cancellation and local persistence failure, without renderer hardware. */
+ * cancellation and local persistence failure, without renderer hardware.
+ * Also PHOTO LIGHTING: TUNE_DEFS clone/restore via ltSet (no latching setLightTune). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -26,11 +27,14 @@ function boot(options = {}) {
     return el;
   };
   let closed = 0, restored = null, overlays = true, current = options.priorCamera || { open: false };
+  const ltProfiles = { value: options.profiles || {} };
+  const LT = options.LT || { exposureMul: 1, contrast: 1, sunElev: 12 };
   const G = { $: dom.byId, canvas: dom.byId("game"), track: { name: "Monza", total: 1000 }, photoMode: !!options.priorPhoto,
     player: options.player || null, raceTimeOfDay: "day", raceWeather: "dry", weatherArc: options.arc || null,
     setTimeOfDay(v) { if (v !== undefined) G.raceTimeOfDay = v; return G.raceTimeOfDay; },
     weather(v) { if (v !== undefined) { G.weatherArc = null; G.raceWeather = v; } return G.raceWeather; },
     photoCam: { pos: [1, 2, 3], yaw: 1, pitch: 0.3, fov: 60 },
+    get _ltStore() { return ltProfiles.value; }, set _ltStore(v) { ltProfiles.value = v; },
     gfx: { capturePixels: () => { order.push("read"); return options.readback || Promise.resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4).fill(123) }); } } };
   const freeCam = {
     state: () => current,
@@ -43,6 +47,7 @@ function boot(options = {}) {
   const garage = { snapshot: () => ({ az: 1, spin: true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); },
     looks: options.looks, looked: options.looked };
   const scene = { value: options.homeScene || "photo" };
+  const ltWrites = [];
   const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
@@ -50,14 +55,30 @@ function boot(options = {}) {
       out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
     } }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
     NativeDownload: options.nativeDownload,
+    LightTune: options.noLightTune ? undefined : {
+      LT,
+      TUNE_DEFS: options.tuneDefs || [
+        { id: "exposureMul", group: "IMAGE & COLOUR", label: "Exposure", min: 0.2, max: 3, step: 0.05 },
+        { id: "contrast", group: "IMAGE & COLOUR", label: "Contrast", min: 0.5, max: 2, step: 0.05 },
+        { id: "sunElev", group: "SUN & MOON", label: "Sun elevation", min: -20, max: 90, step: 1 },
+      ],
+    },
+    LightStore: { reapply: () => { order.push("lt-reapply"); } },
     GameStore: { store: { get: (k, d) => (k === "homeScene" ? scene.value : d), set: (k, v) => { if (k === "homeScene") scene.value = v; } } },
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
   vm.runInContext(source, ctx);
+  const ltSet = options.ltSet || ((id, v) => {
+    ltWrites.push([id, v]); LT[id] = v;
+    const key = "test|day|dry", prof = ltProfiles.value[key] || (ltProfiles.value[key] = {});
+    prof[id] = v; return true;
+  });
   const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => order.push("draw"),
+    ltSet: options.skipLtSet ? undefined : ltSet,
     borrowCar: options.borrowCar ? () => options.borrowCar(G) : undefined });
-  return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, closed: () => closed, restored: () => restored, overlays: () => overlays };
+  return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites,
+    closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
 
 test("Home circuit photo borrows a subject, places its complete pose, and returns ownership", () => {
@@ -222,6 +243,24 @@ test("closing and reopening during a photo export stays usable and ignores stale
   assert.equal(b.api.state().busy, false);
   await b.api.exportPhoto();
   assert.equal(calls, 2);
+});
+test("#3656: a live view below native resolution captures at renderScale 1, then restores the live scale", async () => {
+  const b = boot(), scales = [];
+  let scale = 0.5;   // the governor / a phone's title scene runs the backing store at half size
+  const backing = () => ({ width: Math.round(1600 * scale), height: Math.round(900 * scale) });
+  b.G.gfx.getRenderScale = () => scale;
+  b.G.gfx.setRenderScale = (s) => { if (Math.abs(s - scale) < 0.02) return false; scale = s; scales.push(s); return true; };
+  b.G.gfx.capturePixels = () => { const { width, height } = backing(); b.order.push("read@" + scale); return Promise.resolve({ width, height, data: new Uint8ClampedArray(width * height * 4) }); };
+  b.api.open({ source: "race" }); assert.equal(await b.api.capture(), true);
+  assert.deepEqual(b.order.slice(-2), ["draw", "read@1"], "the shot is drawn and read at full scale");
+  const st = b.api.state();
+  assert.deepEqual([st.width, st.height], [1600, 900], "photo = the full backing size, not the 800 x 450 live store");
+  assert.deepEqual(scales, [1, 0.5]); assert.equal(scale, 0.5, "the live view keeps its scale");
+  // A failed read still restores the live scale.
+  b.G.gfx.capturePixels = () => Promise.reject(new Error("lost"));
+  b.G.canvas.width = 0; scales.length = 0;
+  assert.equal(await b.api.capture(), false);
+  assert.deepEqual(scales, [1, 0.5]); assert.equal(scale, 0.5);
 });
 test("software presentation is awaited while raw pixels are captured before compositing", async () => {
   const b = boot(); let present;
@@ -573,6 +612,38 @@ test("#1895: the Home title art does not paint over a live Photo Studio subject"
   const css = fs.readFileSync(new URL("../../css/experience.css", import.meta.url), "utf8");
   assert.match(css, /body\.photo-studio-open #overlay\[data-home-ready="1"\] #title-car \{ display: none; \}/,
     "once the garage/track subject has painted, #title-car must be hidden while the studio is open");
+});
+
+test("Photo Lighting clones the profile store, writes via ltSet, and restores the exact original reference on close", () => {
+  const original = { "monza|day|dry": { exposureMul: 1.1 } };
+  const b = boot({ profiles: original });
+  assert.equal(b.api.open({ source: "race" }), true);
+  const group = b.dom.byId("ps-lt-tabs").closest("section");
+  assert.equal(group.hidden, false, "PHOTO LIGHTING shows on a circuit shoot");
+  assert.equal(group.getAttribute("aria-label"), "PHOTO LIGHTING");
+  assert.ok(b.dom.byId("ps-lt-tab-sun-moon"), "builds a tab per TUNE_DEFS group");
+  assert.ok(b.dom.byId("ps-lt-in-exposureMul"), "lazy range for each knob");
+  assert.notEqual(b.G._ltStore, original, "open swaps in a clone");
+  assert.equal(JSON.stringify(b.G._ltStore), JSON.stringify(original));
+  const inp = b.dom.byId("ps-lt-in-exposureMul");
+  inp.value = "2"; inp.dispatchEvent({ type: "input" });
+  assert.deepEqual(b.ltWrites, [["exposureMul", 2]]);
+  assert.equal(b.LT.exposureMul, 2);
+  assert.equal(b.dom.byId("ps-lt-reset").disabled, false);
+  b.dom.byId("ps-lt-reset").click();
+  assert.equal(b.order.includes("lt-reapply"), true, "RESET re-applies the snap");
+  assert.equal(JSON.stringify(b.G._ltStore), JSON.stringify(original), "RESET restores open-time values");
+  inp.value = "2.5"; inp.dispatchEvent({ type: "input" });
+  b.api.close(false);
+  assert.equal(b.G._ltStore, original, "close restores the exact original profiles reference");
+  assert.equal(original["monza|day|dry"].exposureMul, 1.1, "original map was never mutated");
+});
+
+test("Photo Lighting stays out of the garage subject", () => {
+  const b = boot({ profiles: { "*": { exposureMul: 1 } } });
+  b.api.open({ source: "garage" });
+  assert.equal(b.dom.byId("ps-lt-tabs").closest("section").hidden, true);
+  assert.equal(b.ltWrites.length, 0);
 });
 
 test("Time & weather preview changes the session live and every reset or close restores it, arc included", () => {

@@ -268,6 +268,26 @@ test("review T B S legend occupies separated rows even when all channels coincid
   assert.ok(legend[1].y-legend[0].y>=20&&legend[2].y-legend[1].y>=20,"16px labels have separate readable rows at equal inputs");
 });
 
+test("live HUD T B S legend stays on separated rows when pedals and steer coincide", () => {
+  const d = fakeDom();
+  const labels = [];
+  const store = {};
+  const ctx2 = new Proxy(store, {
+    get: (o, k) => (k === "fillText" ? (text, x, y) => { labels.push({ text, x, y }); }
+      : (k === "stroke" || k === "fillRect") ? () => { d.calls[k]++; }
+      : (k in o ? o[k] : () => {})),
+    set: (o, k, v) => { o[k] = v; return true; },
+  });
+  d.cv.getContext = () => ctx2;
+  const I = load({ document: d.doc, window: d.win, HudElements: { isOn: () => true } });
+  I.frame({}, { throttleDemand: 0, brakeDemand: 0, steerCommand: 0, gear: 1 }, 1000 / 30);
+  const legend = labels.filter((p) => ["T", "B", "S"].includes(p.text));
+  assert.deepEqual(legend.map((p) => p.text), ["T", "B", "S"]);
+  assert.equal(new Set(legend.map((p) => p.x)).size, 1, "legend stays in the right column");
+  assert.ok(legend[1].y > legend[0].y && legend[2].y > legend[1].y, "rows are vertically separated");
+  assert.ok(legend[1].y - legend[0].y >= 8 && legend[2].y - legend[1].y >= 8, "glyphs do not share a pixel");
+});
+
 test("hidden paint keeps fixed-step input samples without canvas/DOM work and redraws on show", () => {
   const d = fakeDom();
   const I = load({ document: d.doc, window: d.win, HudElements: { isOn: () => true } });

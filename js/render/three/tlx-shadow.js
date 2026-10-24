@@ -71,6 +71,7 @@
       enabled: false,
       lightVP: new Float32Array(16),
       pcssEnabled: false,        // true once the WebGPU blocker map builds (header note)
+      colorDiscards: 0,          // A-P2: WebGL2 depth passes whose unread R8 colour store was dropped
       // True only between a Begin that actually opened a pass and its End —
       // casts gate on THIS, not enabled: on a phone the car/lamp maps
       // are never created, so their Begins no-op but game.js still issues the
@@ -564,6 +565,15 @@
       S.depthPassOn = true;
     }
 
+    let _invColor0 = null;
+    function discardColor(rt) {
+      const be = renderer.backend, gl = be && be.gl, st = be && be.state;
+      if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
+      const d = be.get(rt), fb = st.currentBoundFramebuffers[gl.DRAW_FRAMEBUFFER];
+      if (!fb || !d || !d.framebuffers || Object.values(d.framebuffers).indexOf(fb) < 0) return false;
+      gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, _invColor0 || (_invColor0 = [gl.COLOR_ATTACHMENT0]));
+      return true;
+    }
     function endPass(rt) {
       S.depthPassOn = false;
       // Only the pass this End's Begin opened: after a throw between Begin and
@@ -592,6 +602,10 @@
           castScene.children = _passKids;
         }
         try { renderer.render(castScene, shadowCam); } finally { castScene.children = all; }
+        // A-P2: only the PCSS blocker ever reads a map's colour (the sun map's, colorPcss); every
+        // other R8 attachment is written for the pass and fetched by nothing. WebGL2: drop its store
+        // while the FBO three just rendered into is still bound. WebGPU never writes it (colorWrite).
+        if (!(wasSun && colorPcss) && discardColor(target)) S.colorDiscards++;
         if (target === lampRT) _lampRendered = true;
         _lastPassOk = true;
       } catch (e) {
@@ -771,6 +785,68 @@
     }
     function hideCasters(shown) { for (const [m, count] of shown) { m.visible = false; if (count >= 0) m.count = count; } }
 
+    // A·W14 — PROBE CASTERS. The warm compiles only casters that exist when it runs, and at night there are none:
+    // no sun pass, and the lamp and car pools fill only once the car is near a lamp. So every night (and the first
+    // rain) race built its tlx-depth pipelines synchronously at the first lamp pass, mid-race (lavapipe: 3 at
+    // night, 2 in rain, every key equal to one the day race had compiled). Each probe is a 3-vertex geometry
+    // with a SOURCE layout's attribute formats (item size, array type, normalisation, interleaving: what the
+    // vertex-buffer layout keys on), drawn with depthMat, one per winding sign (the pipeline keys frontFace on the
+    // determinant). A FRESH set every warm: three releases a pipeline when its last render object goes (a
+    // race's casters and its targets do at every switch), and a probe kept from the last warm is a render object
+    // compileAsync does not rebuild, so night after day still built two lamp pipelines mid-race. The set joins
+    // castScene only for the warm's compiles, then stays alive (out of every pass) until the NEXT warm has
+    // compiled its own: only then are the old geometries disposed, which drops their render objects while the new
+    // ones still hold the pipelines. Tiny geometries of their own, so a freed track never takes them down.
+    let _probePrev = null;   // { geos } of the previous warm, disposed once the next one has compiled
+    function layoutSig(geo) {
+      const a = geo.attributes, out = [];
+      for (const k of Object.keys(a).sort()) {
+        const v = a[k];
+        if (!v) continue;
+        const arr = v.isInterleavedBufferAttribute ? v.data.array : v.array;
+        out.push(k + ":" + v.itemSize + ":" + (arr && arr.constructor.name) + ":" + !!v.normalized
+          + (v.isInterleavedBufferAttribute ? ":i" + v.data.stride + "@" + v.offset : ""));
+      }
+      if (geo.index) out.push("index:" + geo.index.array.constructor.name);
+      return out.join(",");
+    }
+    function probeGeometry(src) {
+      const g = new THREE.BufferGeometry(), ibs = new Map();
+      for (const k of Object.keys(src.attributes)) {
+        const v = src.attributes[k];
+        if (!v) continue;
+        if (v.isInterleavedBufferAttribute) {
+          let ib = ibs.get(v.data);
+          if (!ib) { ib = new THREE.InterleavedBuffer(new v.data.array.constructor(v.data.stride * 3), v.data.stride); ibs.set(v.data, ib); }
+          g.setAttribute(k, new THREE.InterleavedBufferAttribute(ib, v.itemSize, v.offset, v.normalized));
+        } else {
+          g.setAttribute(k, new THREE.BufferAttribute(new v.array.constructor(v.itemSize * 3), v.itemSize, v.normalized));
+        }
+      }
+      // An indexed source keys its pipeline on the index too (the render cache key ends `,index`): match it.
+      if (src.index) g.setIndex(new THREE.BufferAttribute(new src.index.array.constructor([0, 1, 2]), 1));
+      return g;
+    }
+    function probeCasters(sources) {
+      const meshes = [], geos = [], seen = new Set();
+      if (!sources) return { meshes, geos };
+      for (const src of sources) {
+        if (!src || !src.attributes || !src.attributes.position || src.attributes.iM0) continue;   // instanced casters: their own material
+        const sig = layoutSig(src);
+        if (seen.has(sig)) continue;
+        seen.add(sig);
+        const g = probeGeometry(src);
+        geos.push(g);
+        for (const sx of [1, -1]) {
+          const m = new THREE.Mesh(g, depthMat);
+          m.matrixAutoUpdate = false; m.matrixWorldAutoUpdate = false; m.frustumCulled = false;
+          m.matrix.makeScale(sx, 1, 1); m.matrixWorld.copy(m.matrix);
+          meshes.push(m);
+        }
+      }
+      return { meshes, geos };
+    }
+
     return {
       S,
       // WARM THE CASTER PROGRAMS DURING THE LIGHTS. castScene is its own Scene,
@@ -778,7 +854,9 @@
       // race built 9 programs on the main thread (gpu-census 203/205). Called
       // from startProgramWarm after the scene and post warms, when castScene
       // already holds the grid's casters (sunPass runs before present()).
-      async warm() {
+      // sources (A·W14): geometries whose vertex layouts the casters will have (tlx.js passes the scene's lit
+      // meshes'); each gets a pair of probe casters for this warm (probeCasters above).
+      async warm(sources) {
         const prev = renderer.getRenderTarget();
         // compileAsync skips INVISIBLE objects (three's _projectObject returns on
         // visible === false), and beginPass hides the previous pass's pool and
@@ -787,6 +865,8 @@
         // then restore. Pipelines key on material + layout + target, so one
         // visible caster per layout is what each target needs.
         const shown = showAllCasters();
+        const probes = probeCasters(sources);
+        for (const m of probes.meshes) { m.visible = true; castScene.add(m); }
         try {
           if (sunRT) { renderer.setRenderTarget(sunRT); await renderer.compileAsync(castScene, shadowCam); }
           // The lamp maps carry depth32float when L1 is on and the car map its own
@@ -798,6 +878,11 @@
           }
           if (blockerQuad && blockerRT) { renderer.setRenderTarget(blockerRT); await renderer.compileAsync(blockerQuad, blockerQuad.camera); }
         } finally {
+          for (const m of probes.meshes) { castScene.remove(m); m.visible = false; }
+          // The previous set goes only now, after this one holds every pipeline it held (see _probePrev).
+          if (_probePrev) for (const g of _probePrev.geos) { try { g.dispose(); } catch (_) { /* device dying */ } }
+          _probePrev = probes;
+          S.probeLayouts = probes.geos.length;
           hideCasters(shown);
           try { renderer.setRenderTarget(prev); } catch (_) { /* already unbound */ }
         }

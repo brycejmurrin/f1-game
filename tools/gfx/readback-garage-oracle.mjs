@@ -80,7 +80,7 @@ async function runGarage(page) {
   await page.waitForSelector("#carsetup:not([hidden])", { timeout: WAIT_MS });
   await page.waitForTimeout(8000);
   await setPhase(page, "garage-close");
-  let closeClicks = 0;
+  await page.evaluate(() => { window.__garageCloseClicks = 0; });
   await page.evaluate(() => {
     const done = document.getElementById("cs-done");
     if (!done) throw new Error("no cs-done");
@@ -89,7 +89,7 @@ async function runGarage(page) {
   const tClose = Date.now();
   await page.locator("#cs-done").click({ timeout: 60000, force: true });
   await page.waitForSelector("#carsetup[hidden]", { timeout: WAIT_MS }).catch(() => {});
-  closeClicks = await page.evaluate(() => window.__garageCloseClicks || 1);
+  const closeClicks = await page.evaluate(() => window.__garageCloseClicks || 1);
   const closeMs = Date.now() - tClose;
   await page.waitForTimeout(3000);
   await setPhase(page, "post-close");
@@ -99,7 +99,10 @@ async function runGarage(page) {
 async function runRaceEntry(page) {
   await setPhase(page, "menu");
   await page.click("#mb-race", { timeout: WAIT_MS });
-  await setPhase(page, "race-setup");
+  await setPhase(page, "track-select");
+  await page.waitForSelector("#select:not([hidden])", { timeout: WAIT_MS });
+  await page.click("#sel-go", { timeout: WAIT_MS });
+  await setPhase(page, "race-settings");
   await page.waitForSelector("#race-settings:not([hidden])", { timeout: WAIT_MS });
   await page.click("#rs-go", { timeout: WAIT_MS });
   await setPhase(page, "race-entry");

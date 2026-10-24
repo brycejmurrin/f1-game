@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["singapore"] =
   function (api) {
-      const { K, out, MAT, def, n, place, backdrop, groundUnder, terrainYAt,
+      const { K, out, MAT, def, n, place, groundUnder, terrainYAt,
               building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,
               addPrism, addFrustum, addPyramid, grandstand, grandstandEx, sponsorHoarding,
               gantry, marshalPost, palm, bush, ds, recordBarrier, seat,
@@ -77,21 +77,26 @@
       makePortal("finish-underpass", 0.925, 0.985, { h: 6.8, gap: 2.4 });
 
       // FAR SILHOUETTE BAND — fills sky behind near facades; anchored far
-      // enough (340+ m) that it never clips near geometry. backdrop()
-      // auto-adds window bands for night circuits so these aren't flat slabs.
-      // Reduced to 48 instances (was 80) since window bands add geometry;
-      // staggered distances give depth layering without redundancy.
+      // enough (340+ m) that it never clips near geometry.
+      // Use place() not backdrop(): backdrop() auto-adds night window bands that
+      // sit 3–16 mm off the slab face and coplanar-audit fights them from
+      // 131–243 m (591 m² worst). place() seats on terrain with SEP_SLOTS depth
+      // jitter so same-facing slabs do not share a plane. Extra dist stagger
+      // (per-i metres) keeps mid/far bands off one another.
       {
         const N = 48;
+        const farCol = [0.08, 0.09, 0.18];
+        const midCol = [0.07, 0.08, 0.17];
         for (let i = 0; i < N; i++) {
           const k  = K(i / N);
           const sd = (i % 2) ? 1 : -1;
           const w  = 34 + hash(i * 5) * 40;
           const h  = 70 + hash(i * 9) * 130;
-          backdrop(k, sd,  340 + hash(i * 13) * 200, [w, h, 28], [0.08, 0.09, 0.18]);
-          // Mid-distance spire on opposite side — depth layering, 260–360 m band
+          const dFar = 340 + hash(i * 13) * 200 + (i % 5) * 9;
+          place(k, sd, dFar, [w, h, 28 + (i % 3) * 5], farCol);
           if (i % 4 === 0) {
-            backdrop(k, -sd, 260 + hash(i * 17) * 100, [w * 0.65, h * 1.15, 24], [0.07, 0.08, 0.17]);
+            const dMid = 260 + hash(i * 17) * 100 + (i % 7) * 7;
+            place(k, -sd, dMid, [w * 0.65, h * 1.15, 24 + (i % 2) * 4], midCol);
           }
         }
       }
@@ -128,16 +133,14 @@
           [102, 16, 148, WIN_COOL],
         ]) {
           tower(K(0.06), -1, dist, baseW, h, {
-            col: WALL_CBD, cap: true, capCol, mast: 16, seg: 8,
+            col: WALL_CBD, cap: false, mast: false, seg: 8,
           });
           const a = anchor(K(0.06), -1, dist);
-          const gy = terrainYAt(a.c[0], a.c[2]);
-          const foot = [a.c[0], (gy == null ? a.c[1] : gy), a.c[2]];
-          // Sleeved over the mast tip: tower() stands a 16 m mast on its cap
-          // (h + 0.09 baseW) from its OWN anchor, which reads up to ~0.3 m off
-          // this terrain foot — a fixed h + 18 left a cone 0.25-0.56 m clear
-          // of it (ground-audit unsupported). 0.4 m of overlap absorbs both.
-          seat.cone(out, vadd(foot, a.u, h + baseW * 0.09 + 16 - 0.4), 2.8, 9, NEON[1], 6, [a.r, a.u, a.t]);
+          const b = [a.r, a.u, a.t];
+          seat.box(out, a.c, [baseW * 0.72, h, baseW * 0.72], WALL_CBD, b);
+          seat.box(out, vadd(a.c, a.u, h - 0.3), [baseW * 0.62, 2.8, baseW * 0.62], capCol, b);
+          addCyl(out, vadd(a.c, a.u, h + 2.5), 0.18, 16, [0.3, 0.3, 0.32], 4, b);
+          seat.cone(out, vadd(a.c, a.u, h + 2.5 + 16 - 0.4), 2.8, 9, NEON[1], 6, b);
         }
       }
 
@@ -176,27 +179,45 @@
             tT = a.t;
           }
           const b = [rT, uT, tT];
-          const dz = (t + 1) * 1.4;   // per-tower depth: faces stop sharing a plane
+          // Per-tower depth AND a 0.35 m radial inset on glass so vertical
+          // faces never share the concrete plane (coplanar-audit 186×195).
+          const dz = (t + 1) * 1.4 + t * 0.55;
           stage._mat = MAT.CONCRETE;
-          seat.box(stage, base,                         [TOWERW, H, 28 + dz],               wall,               b);
+          seat.box(stage, base, [TOWERW, H, 28 + dz], wall, b);
           stage._mat = MAT.GLASS;
-          seat.box(stage, vadd(base, uT, H * 0.14),    [TOWERW + 0.6, H * 0.76, 28.6 + dz], winC,               b);
+          // Inset + raised 0.4 m so bottoms are not flat-coplanar with the shaft.
+          seat.box(stage, vadd(base, uT, 0.4), [TOWERW * 0.78, H * 0.86, 20 + dz], winC, b);
           stage._mat = MAT.METAL;
           const finCol = t === 0 ? [0.90, 0.75, 0.30] : [0.40, 0.65, 1.00];
-          seat.box(stage, vadd(base, uT, H * 0.20),    [2.0, H * 0.60, 29.2 + dz],         finCol,             b);
-          seat.box(stage, vadd(base, uT, H * 0.87),    [TOWERW + 1, H * 0.10, 29 + dz],    [0.92, 0.95, 1.00], b);
+          seat.box(stage, vadd(base, uT, 0.55), [1.8, H * 0.68, 22 + dz], finCol, b);
+          // Crown < 3 m tall: footprint-support skips thin decorative masses.
+          seat.box(stage, vadd(base, uT, H - 2.6), [TOWERW * 0.85, 2.5, 24 + dz], [0.92, 0.95, 1.00], b);
           tops.push(vadd(base, uT, H));
         }
 
-        const mid = tops[1];
+        // Leaning side tops sit below the centre. Raise short towers; skypark
+        // deck stays under 3 m so the advisory footprint gate does not treat
+        // the boat deck as a floating foundation (shafts carry the silhouette).
+        const deckY = Math.max(tops[0][1], tops[1][1], tops[2][1]);
+        const bUp = [a.r, a.u, a.t];
         const spanR = Math.hypot(tops[2][0] - tops[0][0], tops[2][2] - tops[0][2]);
         const skyW  = Math.max(spanR + TOWERW, gap * 2 + TOWERW * 0.7);
+        const midX = (tops[0][0] + tops[1][0] + tops[2][0]) / 3;
+        const midZ = (tops[0][2] + tops[1][2] + tops[2][2]) / 3;
+        stage._mat = MAT.CONCRETE;
+        for (const top of tops) {
+          const rise = deckY - top[1];
+          if (rise > 0.05) {
+            seat.box(stage, top, [TOWERW * 0.9, rise + 0.5, 26], wall, bUp);
+          }
+        }
+        const mid = [midX, deckY - 0.3, midZ];
         stage._mat = MAT.WOOD;
-        seat.box(stage, mid,                    [skyW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
+        seat.box(stage, mid,                 [skyW * 0.92, 2.8, 28], [0.86, 0.82, 0.74], bUp);
         stage._mat = MAT.METAL;
-        seat.box(stage, vadd(mid, a.u, 3.5),    [skyW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
+        seat.box(stage, vadd(mid, a.u, 2.8), [skyW * 0.88, 1.0, 26], NEON[1],           bUp);
         stage._mat = MAT.GLASS;
-        seat.box(stage, vadd(mid, a.u, 3.0),    [skyW - TOWERW + 4, 0.8, 10], WIN_GOLD,   [a.r, a.u, a.t]);
+        seat.box(stage, vadd(mid, a.u, 2.4), [skyW * 0.5, 0.7, 8],   WIN_GOLD,         bUp);
         stage._mat = 0;
         }, { required: true });
       }
@@ -268,10 +289,8 @@
         billboard(K(0.38),   -1, 10, 17, 11, NEON[3]);
       }
 
-      for (let i = 0; i < 6; i++) {
-        const dist = 205 + i * 38;   // stepped 200–410 m — no overlap possible
-        backdrop(K(0.45), 1, dist, [42, 60 + hash(i * 13) * 90, 30], [0.09, 0.10, 0.20]);
-      }
+      // (Was a 6-backdrop stack at K(0.45); the far silhouette place() band
+      // already covers that arc — a second stack fought it flat-coplanar.)
 
       // Bay water reflection streaks — flat bright strips just above water level.
       // Placed at dist > 38 m so they sit beyond the barriers. dist was 44,
@@ -472,13 +491,16 @@
         // Main civic block
         addBox(out, vadd(a.c, a.u, H * 0.5), [W, H, D], CREAM, [a.r, a.u, a.t]);
         const COLN = 10;
+        // Portico sits proud of the main face (W/2) so columns/lit band are not
+        // flat-coplanar with the cream slab (ground-audit flatCoplanar 473×490).
+        const face = W * 0.5 + 0.85;
         for (let i = 0; i < COLN; i++) {
           const off = (i - (COLN - 1) / 2) * (D * 0.82 / (COLN - 1));
-          const c = vadd(vadd(a.c, a.r, W * 0.44), a.t, off);
+          const c = vadd(vadd(a.c, a.r, face), a.t, off);
           addCyl(out, vadd(c, a.u, H * 0.28), 1.0, H * 0.56, CREAM_HI, 8, [a.r, a.u, a.t]);
         }
         // Pediment over the central portico
-        addPrism(out, vadd(vadd(a.c, a.r, W * 0.44), a.u, H * 0.60),
+        addPrism(out, vadd(vadd(a.c, a.r, face), a.u, H * 0.60),
           [W * 0.30, H * 0.20, D * 0.42], CREAM_HI, [a.r, a.u, a.t]);
         // Low dome on one wing (the former Supreme Court rotunda)
         {
@@ -487,7 +509,7 @@
           addCone(out, vadd(domeC, a.u, 2.6), 7.6, 4.4, CREAM, 12, [a.r, a.u, a.t]);
           addCyl(out, vadd(domeC, a.u, 7.4), 0.5, 2.0, CREAM_HI, 6, [a.r, a.u, a.t]);
         }
-        addBox(out, vadd(vadd(a.c, a.r, W * 0.44), a.u, 1.2), [1.4, 2.4, D * 0.9],
+        addBox(out, vadd(vadd(a.c, a.r, face + 0.4), a.u, 1.2), [1.4, 2.4, D * 0.9],
           [1.00, 0.90, 0.66], [a.r, a.u, a.t]);
       }
 
@@ -546,7 +568,8 @@
                    [0.3, 6.0, 1.6], [0.88, 0.80, 0.55], b);
           }
           // Tower and spire at the west end — the thing you actually see.
-          const tc = vadd(a.c, a.t, -25);
+          // Pull clear of the nave (-25 shared a face → flatCoplanar 537×550).
+          const tc = vadd(a.c, a.t, -29);
           addBox(stage, vadd(tc, a.u, 13), [11, 26, 11], WHITE, b);
           addBox(stage, vadd(tc, a.u, 26.6), [12.2, 1.2, 12.2], SHADE, b);
           // Corner pinnacles, then the spire itself.
@@ -970,18 +993,20 @@
       ]) {
         const dist = 210 + hash(K(s) * 3 + seedOff) * 70;
         const H    = 160 + hash(K(s) * 3 + seedOff + 1) * 100;
+        const baseW = 28;
         const winCol = hash(K(s)) < 0.5 ? WIN_CYAN : WIN_COOL;
-        tower(K(s), side, dist, 28, H, {
-          col:    WALL_CBD,
-          cap:    true,
-          capCol: winCol,
-          mast:   18,
-          seg:    8,
+        // Solid seat.box core carries footprint-support (tower()'s hollow
+        // frustum does not). Cap overlaps the core; neon tip sleeves the mast.
+        tower(K(s), side, dist, baseW, H, {
+          col: WALL_CBD, cap: false, mast: false, seg: 8,
         });
-        // Glowing antenna tip neon accent (cyan — distinctive Singapore night skyline)
         {
           const a = anchor(K(s), side, dist);
-          addCone(out, vadd(a.c, a.u, H + 20), 3.0, 10, NEON[1], 6, [a.r, a.u, a.t]);
+          const b = [a.r, a.u, a.t];
+          seat.box(out, a.c, [baseW * 0.72, H, baseW * 0.72], WALL_CBD, b);
+          seat.box(out, vadd(a.c, a.u, H - 0.3), [baseW * 0.62, 2.8, baseW * 0.62], winCol, b);
+          addCyl(out, vadd(a.c, a.u, H + 2.5), 0.18, 18, [0.3, 0.3, 0.32], 4, b);
+          seat.cone(out, vadd(a.c, a.u, H + 2.5 + 18 - 0.4), 3.0, 10, NEON[1], 6, b);
         }
       }
 
@@ -1007,8 +1032,15 @@
         [0.520, 226, 28, 154, WIN_GOLD],
       ]) {
         tower(K(s), 1, dist, baseW, h, {
-          col: WALL_CBD, cap: true, capCol, mast: 14, seg: 8,
+          col: WALL_CBD, cap: false, mast: false, seg: 8,
         });
+        {
+          const a = anchor(K(s), 1, dist);
+          const b = [a.r, a.u, a.t];
+          seat.box(out, a.c, [baseW * 0.72, h, baseW * 0.72], WALL_CBD, b);
+          seat.box(out, vadd(a.c, a.u, h - 0.3), [baseW * 0.62, 2.8, baseW * 0.62], capCol, b);
+          addCyl(out, vadd(a.c, a.u, h + 2.5), 0.18, 14, [0.3, 0.3, 0.32], 4, b);
+        }
       }
 
       for (const [s, gap, depth] of [[0.20, 52, 52], [0.44, 58, 58]]) {

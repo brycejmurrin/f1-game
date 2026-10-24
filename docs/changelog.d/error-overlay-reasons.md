@@ -1,0 +1,1 @@
+Fixed: the boot error overlay and the __apex error ring now serialize non-Error rejection/error reasons (name + JSON shape, or the key list for circular values, capped at 500 chars) instead of destroying them as "[object Object]", so a platform rejection's source is identifiable from a field report.

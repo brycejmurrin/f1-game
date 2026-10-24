@@ -1365,11 +1365,7 @@ const TrackBuildProps = (function () {
       // semantic prop registry (see note() above) — scenery modules call this
       // after their own guards so only props that actually ship are recorded
       note, unnote, noteSpan, noteSuppressed,
-      kitOf: (family, fallback) => {
-        const D = TrackSceneryData.KIT_DEF || {};
-        const row = def.kit || D[theme] || D.green || {};
-        return row[family] || fallback;
-      },
+      kitOf: (family, fallback) => (def.kit || {})[family] || fallback,
     };
     Object.assign(ctx, SceneryNature.create(ctx));
     Object.assign(ctx, SceneryStructures.create(ctx));

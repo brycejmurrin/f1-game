@@ -1201,6 +1201,11 @@
       "presentation": "native",
       "preserve": "Real/stubbed link qualification, frame denominator and native JSON mode."
     },
+    "tools/gfx/readback-garage-oracle.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "readPixels hook phases, stall watchdog state and before/after JSON report paths."
+    },
     "tools/gfx/res-scale-ab.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1362,6 +1367,11 @@
       "preserve": "@c3"
     },
     "tools/lib/hud-survey-matrix.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/impact-map.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
@@ -1841,10 +1851,20 @@
       "presentation": "native",
       "preserve": "Runs on the Device Farm test host, not locally: its stdout is the run's test spec output and its files land in $DEVICEFARM_LOG_DIR."
     },
+    "tools/perf/devicefarm-boot.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Timestamped progress lines (device, session state, one line per timed boot with menu time, first contentful paint, load end, resource and cached counts, thermal state, session minutes) and the boot.json path; the endpoint URL is never printed."
+    },
     "tools/perf/devicefarm-iphone.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Timestamped progress lines (device, session state, boot probe, bench leg states, session minutes) and the report.json path; the endpoint URL is never printed."
+    },
+    "tools/perf/devicefarm-syslog.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The window and process-limit lines, one row per game-page WebContent footprint dump (time, pid, event, footprint, internal, compressed, resident), the peak-versus-limit line and the kill, SIGKILL and buffer-failure counts; --json prints the same as one object."
     },
     "tools/perf/live-render-matrix.mjs": {
       "action": "keep-native",
@@ -1871,6 +1891,11 @@
       "presentation": "native",
       "preserve": "Stubbed/real link qualification, measured-frame denominator, distance band, the `= mesh-census` summary JSON line and the --json / --md artifacts."
     },
+    "tools/perf/ers-deploy-census.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c1"
+    },
     "tools/perf/garage-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1895,6 +1920,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"
+    },
+    "tools/perf/touch-boost-probe.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c1"
     },
     "tools/shot/ab-gallery.mjs": {
       "action": "artifact-first",

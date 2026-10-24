@@ -60,6 +60,16 @@ const GLXBackend = (function () {
   // per present. Exists because the real-GPU gate read null here and passed
   // vacuously: docs/PERF-FINDINGS.md 2e.
   let _glErrors = 0, _glFirstError = "";
+  let _softwareGl = false;
+  function detectSoftwareGl() {
+    if (!gl) return false;
+    try {
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      if (!ext) return false;
+      const ren = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "").toLowerCase();
+      return /swiftshader|llvmpipe|lavapipe|software|subzero|softpipe/.test(ren);
+    } catch (_) { return false; }
+  }
   const GL_ERR_NAMES = { 1280: "INVALID_ENUM", 1281: "INVALID_VALUE", 1282: "INVALID_OPERATION",
                          1285: "OUT_OF_MEMORY", 1286: "INVALID_FRAMEBUFFER_OPERATION", 37442: "CONTEXT_LOST" };
   // gl.getError() is a synchronous command-buffer flush + a blocking IPC to
@@ -585,6 +595,7 @@ const GLXBackend = (function () {
       ...(typeof navigator !== "undefined" && navigator.xr ? { xrCompatible: true } : {}),
     });
     if (!gl) return false; try { setTimeout(function () { if (/^apex26\.ctxLostReloads=\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
+    _softwareGl = detectSoftwareGl();
     if (Soft.isEnabled()) Soft.ensureSoftDisplay();
 
     // Parallel shader compile (Chrome 76+, Safari 14.1+; not Firefox): see link().
@@ -806,8 +817,8 @@ const GLXBackend = (function () {
       // in the CURRENTLY BOUND set. A per-chunk set reorders lamps, so the
       // caller must point the slot at the mapped lamp's position in ITS set
       // (or -1) per draw, then restore the global slot. The lit program is
-      // already bound on every chunked draw path.
-      setLampShadowSlot: (i) => { gl.uniform1i(litU.uLampShadowIdx, i | 0); },
+      // already bound on every chunked draw path. Through ufI (#3291), not raw uniform1i.
+      setLampShadowSlot: (i) => { ufI(litU.uLampShadowIdx, _litUf, "lampShadowIdx", i | 0); },
       getSize: () => ({ width, height }),
       getPresentSize: () => ({ width: presentW || width, height: presentH || height }),
       outputFBO, outputViewport, setOutput, clearOutput,
@@ -2809,6 +2820,7 @@ const GLXBackend = (function () {
       gpuErrors: _glErrors, gpuFirstError: _glFirstError || null,
       ctxLost: _ctxLost, packLive: !!matAlbedoTex,
       softPresent: Soft.isEnabled(), softBlitGen: Soft.gen(),
+      softwareGL: _softwareGl, softAdapter: _softwareGl,
     }),
     envFaceBegin,
     envFaceEnd,

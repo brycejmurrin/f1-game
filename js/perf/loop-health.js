@@ -102,14 +102,21 @@ const LoopHealth = (() => {
   function loading() {
     try { const el = typeof document !== "undefined" && document.getElementById && document.getElementById("loading"); return !!(el && !el.hidden); } catch (_) { return false; }
   }
-  // Race entry uses #loading; MenuTeardown cover (quit/garage) uses the same
-  // relaxed reload budget as the loading cover (#3510 / live garage-close repro).
+  // Race entry uses #loading; garage / race-settings sheets and MenuTeardown quit
+  // cover share the relaxed reload budget (#3510 / live garage-close repro).
   function slowPathCover() {
     if (loading()) return true;
     try {
       if (typeof MenuTeardown !== "undefined" && MenuTeardown.cover()) return true;
     } catch (_) { /* harness */ }
-    return false;
+    try {
+      const g = typeof document !== "undefined" && document.getElementById;
+      if (!g) return false;
+      const cs = g("carsetup");
+      if (cs && !cs.hidden) return true;
+      const rs = g("race-settings");
+      return !!(rs && !rs.hidden);
+    } catch (_) { return false; }
   }
   function shed() {
     sheds++; stallAct = "shed"; shedRun = true;
