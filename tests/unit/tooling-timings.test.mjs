@@ -8,7 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { parseDurations, median, foldTable, predictShards } from "../../tools/ci/tooling-timings.mjs";
-import { TOOLING_FAST_FILES, TIMINGS_FILE, applyFileShard } from "../../tools/ci/tooling-fast.mjs";
+import { TOOLING_FAST_FILES, TIMINGS_FILE, CI_SHARDS, applyFileShard } from "../../tools/ci/tooling-fast.mjs";
 
 const LOG = [
   "2026-10-24T01:36:39.8806444Z [tooling-fast] PASS  1/285 fx-a duration=158ms exit=0 loadavg=1.96 0.62 0.22",
@@ -54,7 +54,8 @@ test("the committed table keeps the CI shards a partition of the list", () => {
   // How many files it measures is printed by tooling-fast's `order=` line, not gated:
   // new test files land unmeasured and must not red unrelated PRs.
   const ms = JSON.parse(fs.readFileSync(TIMINGS_FILE, "utf8")).ms;
-  const union = [1, 2, 3].flatMap((i) => applyFileShard(TOOLING_FAST_FILES, `${i}/3`, ms));
+  assert.equal(CI_SHARDS, 4, "ci.yml guards-a..d");
+  const union = Array.from({ length: CI_SHARDS }, (_, i) => applyFileShard(TOOLING_FAST_FILES, `${i + 1}/${CI_SHARDS}`, ms)).flat();
   assert.equal(union.length, TOOLING_FAST_FILES.length);
   assert.equal(new Set(union).size, TOOLING_FAST_FILES.length);
 });

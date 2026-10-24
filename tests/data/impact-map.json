@@ -2434,7 +2434,8 @@
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/tlx-prune-pin.test.mjs"
       ]
     },
     "js/car/car-geometry.js": {
@@ -2588,6 +2589,12 @@
       "getCrewMesh": [
         "tests/unit/car-mesh-crew-cache.test.mjs"
       ],
+      "getErsBar": [
+        "tests/unit/tlx-prune-pin.test.mjs"
+      ],
+      "getErsLight": [
+        "tests/unit/tlx-prune-pin.test.mjs"
+      ],
       "getForearm": [
         "tests/unit/cockpit-pale-surfaces.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
@@ -2604,6 +2611,9 @@
       ],
       "getMirrorGlass": [
         "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "getOtLamp": [
+        "tests/unit/tlx-prune-pin.test.mjs"
       ],
       "getSpinDisc": [
         "tests/unit/car-mesh-crew-cache.test.mjs"
@@ -13165,7 +13175,8 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/pack-png-bytes.test.mjs"
+        "tests/unit/pack-png-bytes.test.mjs",
+        "tests/unit/worker-pack-strip.test.mjs"
       ],
       "load": [
         "tests/specs/assets-api.spec.js",
@@ -13174,7 +13185,8 @@
         "tests/unit/build-worker.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs",
-        "tests/unit/service-worker.test.mjs"
+        "tests/unit/service-worker.test.mjs",
+        "tests/unit/worker-pack-strip.test.mjs"
       ],
       "loadModels": [
         "tests/unit/assets-pack.test.mjs",
@@ -14011,6 +14023,9 @@
       "prepareMirrorTarget": [
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
+      ],
+      "prunePool": [
+        "tests/unit/tlx-prune-pin.test.mjs"
       ],
       "pumpAnimation": [
         "tests/unit/tlx-anim-pump.test.mjs"
@@ -17037,13 +17052,24 @@
       "drop": [
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
+      "strip": [
+        "tests/unit/worker-pack-strip.test.mjs"
+      ],
+      "stripEnabled": [
+        "tests/unit/worker-pack-strip.test.mjs"
+      ],
       "*": [
         "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/workers/bitmap-decode-worker.js": {
+      "decode": [
+        "tests/unit/bitmap-decode-worker.test.mjs"
+      ],
+      "strip": [
+        "tests/unit/worker-pack-strip.test.mjs"
+      ],
       "*": [
-        "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/deploy-staging.test.mjs"
       ]
     },
