@@ -1891,6 +1891,11 @@
       "presentation": "shared-levels",
       "preserve": "@c1"
     },
+    "tools/perf/lit-wgsl-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The `= capture` / `= lit-wgsl CHANGED|unchanged` verdict lines, the family hash and the advisory markdown table the CI step appends to the job summary."
+    },
     "tools/perf/garage-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
