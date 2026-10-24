@@ -9787,6 +9787,9 @@
       "stageTable": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
+      "stagesFromSnapshot": [
+        "tests/unit/race-entry-profile.test.mjs"
+      ],
       "tickFrame": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
