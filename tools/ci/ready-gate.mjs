@@ -37,11 +37,12 @@ export const REPO = "brycejmurrin/f1-game";
 /** Sidecar written by a full green tooling-fast suite (see tooling-fast.mjs). */
 const LOCAL_STAMP = path.join(ROOT, "artifacts/logs/tooling-fast-ready.sha");
 const LOCAL_LOG = path.join(ROOT, "artifacts/logs/tooling-fast-suite.log");
-/** Aggregator job name in ci.yml — halves are tooling A/B. */
+/** Aggregator job name in ci.yml; its shards are tooling A–D (four since 2026-10-24, three before, two before that). */
 export const GUARDS_JOB = "Structural guards";
 export const GUARDS_A = "Structural guards (tooling A)";
 export const GUARDS_B = "Structural guards (tooling B)";
 export const GUARDS_C = "Structural guards (tooling C)";
+export const GUARDS_D = "Structural guards (tooling D)";
 
 const say = (...a) => console.log("[ready-gate]", ...a);
 
@@ -95,9 +96,9 @@ export function guardsVerdict(checkRuns) {
     }
     // cancelled / skipped / neutral — fall through to halves (reuse-draft path)
   }
-  const a = by.get(GUARDS_A), b = by.get(GUARDS_B), c = by.get(GUARDS_C);
+  const a = by.get(GUARDS_A), b = by.get(GUARDS_B), c = by.get(GUARDS_C), d = by.get(GUARDS_D);
   if (a && b) {
-    const halves = c ? [a, b, c] : [a, b];
+    const halves = [a, b, c, d].filter(Boolean);
     const pending = halves.some((j) => j.status && j.status !== "completed");
     if (pending) return { state: "pending", evidence: `${halves.map((j) => j.name).join("/")} still running`, code: 1 };
     if (halves.every((j) => j.conclusion === "success")) {

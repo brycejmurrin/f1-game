@@ -177,11 +177,25 @@ const SceneryNature = (function () {
       }
       return res;
     };
+    // Stored SORTED BY n.x in one flat [nx, ny, nz, d] Float64Array: the coplanar guard only pairs facets
+    // with |n_F . n_G| >= 0.999, i.e. unit normals within a chord of sqrt(0.002) ~ 0.0447 of each other
+    // (or of the opposite one), so |nx_G -+ nx_F| <= 0.0447 and a binary-searched window of a neighbour's
+    // facets holds every candidate. The exact test still decides (A·H15, tests/unit/track-build-load.test.mjs).
     const pineFacetsAdd = (x, z, reach, facets) => {
       const key = `${Math.floor(x / PINE_CELL)}|${Math.floor(z / PINE_CELL)}`;
       if (!pineFacetGrid.has(key)) pineFacetGrid.set(key, []);
-      pineFacetGrid.get(key).push({ x, z, reach, facets });
+      // A NaN facet never clashes (each comparison with it is false) and would break the sort the search needs.
+      const sorted = facets.filter((F) => F.every(Number.isFinite)).sort((A, B) => A[0] - B[0]), flat = new Float64Array(sorted.length * 4);
+      sorted.forEach((F, i) => flat.set(F, i * 4));
+      pineFacetGrid.get(key).push({ x, z, reach, facets: flat });
     };
+    // First index i (in facets, stride 4) with nx >= v.
+    const facetFrom = (flat, v) => {
+      let lo = 0, hi = flat.length >> 2;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (flat[m * 4] < v) lo = m + 1; else hi = m; }
+      return lo;
+    };
+    const FACET_NX_WINDOW = 0.045;   // >= the 0.0447 chord, with slack for normalisation rounding
     const pine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
@@ -245,12 +259,25 @@ const SceneryNature = (function () {
       const near = pineFacetsNear(a.c[0], a.c[2], reach);
       let dz = 0;
       if (near.length) {
-        const clash = (d) => {
-          for (const q of near) for (const F of facets) for (const G of q) {
-            if (Math.abs(F[0] * G[0] + F[1] * G[1] + F[2] * G[2]) < 0.999) continue;
-            const dF = F[3] - d * F[1], sgn = F[0] * G[0] + F[1] * G[1] + F[2] * G[2] > 0 ? 1 : -1;
-            if (Math.abs(dF - sgn * G[3]) < TrackGeom.MIN_SEP) return true;
+        // Which facet pairs are parallel does not depend on the sink d, so find them ONCE: re-testing all
+        // ~1764 pairs per neighbour on every one of up to 13 sink slots was 3.8 s of an 11 s Spa build ×4
+        // (A·H15, tests/unit/track-build-load.test.mjs). Same arithmetic per pair, so the same sinks.
+        const par = [];   // flat [F.y, F.d, ±G.d] per parallel pair
+        for (const q of near) for (const F of facets) {
+          const fx = F[0], fy = F[1], fz = F[2];
+          // Two windows of q's nx-sorted facets: around +fx (same-facing) and -fx (opposite-facing). Near
+          // fx = 0 they overlap and a pair is listed twice, which changes no answer of clash().
+          for (let w = 0; w < 2; w++) {
+            const c = w ? -fx : fx;
+            for (let i = facetFrom(q, c - FACET_NX_WINDOW) * 4; i < q.length && q[i] <= c + FACET_NX_WINDOW; i += 4) {
+              const dot = fx * q[i] + fy * q[i + 1] + fz * q[i + 2];
+              if (Math.abs(dot) < 0.999) continue;
+              par.push(fy, F[3], dot > 0 ? q[i + 3] : -q[i + 3]);
+            }
           }
+        }
+        const clash = (d) => {
+          for (let p = 0; p < par.length; p += 3) if (Math.abs(par[p + 1] - d * par[p] - par[p + 2]) < TrackGeom.MIN_SEP) return true;
           return false;
         };
         for (let i = 0; clash(dz) && i < 12; i++) dz = TrackGeom.SEP_SLOTS[i % 4] + Math.floor(i / 4) * 0.2;

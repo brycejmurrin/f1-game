@@ -7522,10 +7522,10 @@ function render(dt) {
   }
   M4.lookAtTo(_mView, camEye, camTgt, _camUp);
   M4.mulTo(_mVP, _mProj, _mView);
-  // inv VP: sky rays always; god-rays when live. inv Proj: SSAO and SSR,
-  // including the reflection fade after the governor sheds the other effects.
+  // inv VP: sky rays always; god-rays when live. inv Proj: post AND TLX's
+  // main-view reconstruction, even after tier 4 sheds all view-space post.
   M4.invertTo(_mInvVP, _mVP);
-  if (PerfGov.autoTier() < 4 || _roadReflectionTransition.value > 0) M4.invertTo(_mInvProj, _mProj);
+  M4.invertTo(_mInvProj, _mProj);
   // Sun direction in VIEW space (for screen-space contact shadows): mat3(view)·sunDir.
   {
     const sd = frame.sunDir || [0, 1, 0];

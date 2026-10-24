@@ -2861,6 +2861,7 @@ const TLX = (function () {
         ib.setUsage(_instUsage);   // A-H1: uploads only through uploadStream (a dirty producer)
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
+        geo.__tlxPin = true;   // a stream idle for 20 s (no sparks, no kick-up) kept its pipeline: prunePool skips it (#3677)
         slot.geo = geo; slot.ib = ib; slot.cap = cap;
         return true;
       }
@@ -2877,6 +2878,7 @@ const TLX = (function () {
         ib.setUsage(_instUsage);   // A-H1, as ensureStream
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
+        geo.__tlxPin = true;   // as ensureStream
         slot.geo = geo; slot.ib = ib; slot.cap = (arr.length / slot.stride) | 0;
         return true;
       }
@@ -3732,7 +3734,10 @@ const TLX = (function () {
         let w = 0;
         for (let i = 0; i < meshPool.length; i++) {
           const m = meshPool[i];
-          if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS) { meshPool[w++] = m; continue; }
+          // A PINNED geometry (pinMesh: the cockpit ERS bar, OT lamp, ERS strip) keeps its wrappers: they draw
+          // only while ERS deploys, and on WebGPU the wrapper is its pipeline's last holder, so a prune between
+          // two BOOST presses made every press rebuild the pipeline mid-race (#3677).
+          if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS || (m.geometry && m.geometry.__tlxPin)) { meshPool[w++] = m; continue; }
           const byMat = meshByGeo.get(m.geometry);
           if (byMat) {
             // Drop the wrapper from its occurrence list; an emptied list and an
@@ -4892,6 +4897,8 @@ const TLX = (function () {
           return true;
         },
         freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
+        // Exempt a small, intermittently drawn mesh from the idle prune (feature-detected; freeMesh still frees it).
+        pinMesh(m) { if (m && m.geo) m.geo.__tlxPin = true; },
         freeChunkedMesh(m) {
           if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }
@@ -6437,6 +6444,8 @@ const TLX = (function () {
               if (!rt) return Promise.resolve({ label, err: "no rt" });
               const w = rt.width, h = rt.height;
               const isHalf = rt.texture && rt.texture.type === THREE.HalfFloatType;
+              // A packed 11/11/10 scene target (phones, tlx-post scene11) reads back one uint32 per pixel: not decoded here.
+              if (rt.texture && rt.texture.type === THREE.UnsignedInt101111Type) return Promise.resolve({ label, err: "rg11b10 target: this probe decodes half/byte only (apex26.tlxScene11=0 for a reading)" });
               return renderer.readRenderTargetPixelsAsync(rt, 0, 0, w, h).then(function (src) {
                 // three pads copyTextureToBuffer rows to 256 BYTES (WebGPU rule).
                 const bpp = isHalf ? 8 : 4;
