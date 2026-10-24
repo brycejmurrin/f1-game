@@ -13568,6 +13568,9 @@
       "drawWarm": [
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
+      "layoutHalf": [
+        "tests/unit/tlx-post-phone-res.test.mjs"
+      ],
       "needsDepth": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
@@ -13608,6 +13611,9 @@
       ],
       "runPass": [
         "tests/unit/tlx-post-fixed-mats.test.mjs"
+      ],
+      "syncAaRT": [
+        "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "trackMaterial": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"

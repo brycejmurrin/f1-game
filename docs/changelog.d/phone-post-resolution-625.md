@@ -1,0 +1,1 @@
+Improved: Phone rendering keeps more detail through post-processing: its working resolution rises from 50% to 62.5% of the scene dimensions. Resolution settings and the automatic performance governor still apply.
