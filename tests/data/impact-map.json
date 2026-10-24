@@ -13557,6 +13557,9 @@
       "depthEnd": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
+      "discardAttachments": [
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
       "dispose": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13569,6 +13572,9 @@
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "needsDepth": [
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
+      "needsTag": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "place": [
