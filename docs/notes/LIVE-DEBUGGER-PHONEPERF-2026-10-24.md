@@ -41,3 +41,36 @@ Out of scope (other lanes): governor, TLX chunk LOD / mirror / road culling (#36
   clears what was discarded, every reader is uniform-gated), and `apex26.tlxTagDiscard=0` /
   `apex26.tlxDepthDiscard=0` are the A/B switches for Device Farm (A·D1).
 - Browser groups: `gfx` (TLX probe spec) on the pushed branch via `remote-group.mjs` — see the PR.
+
+## Handoff (A·H10 stopped 2026-10-24 ~01:00Z on Bryce's fleet-wide handoff; quota resets Wed Oct 28 10 PM PT)
+
+Round 1 shipped as draft PR #3679 (head `ed53162a`, `run-ci`); A·W47 stacks the vendored three storeOp
+discard for the WebGPU leg on that branch (#3681, Bryce chose the three upgrade), so the branch is merge-only.
+
+Angles NOT covered, for a successor (in rank order):
+
+1. **Renderer-side residency across race restarts** (TLX): count `renderer.info.memory` (geometries, textures,
+   renderTargets, uniformBuffers) and `GLX.__tlx.memState()` after each of 5 `__apex.race()` restarts on a hardware
+   browser; PP-7 only covered the CPU heap in the VM. Suspects named by the TLX hunter and unread: `tlx-shadow.js`
+   `pools` per lampRT, `iByBatch` keyed by a dead batch, lit/fx materials minted per livery.
+2. **Lamp-grid colour texture upload** (TLX hunter F3, PLAUSIBLE): `tsl-lit.js setLampGridColors` re-uploads the
+   whole 4 × 1024 RGBA32F `lampTex` (64 KB) on every `allLightsGen` bump (≤ 20 Hz) though a track uses ~23 % of
+   the rows. Check `texture.updateRanges` on r186 DataTexture for both backends before shrinking.
+3. **AI/field update at 22 cars**: `profile.mjs <track> --mode spans` says `ai` share of `physics`; FRESH #15
+   (far cars at 30 Hz) is known and unlanded — a physics-characterization-safe variant needs the digest to be
+   compared with cars beyond 550 m excluded, which nobody has designed.
+4. **HUD / DOM at 844×390 on a hardware trace**: the per-frame half of `updateHud` is write-cached and 10 Hz;
+   the open items are the known fitHud full-fit bursts and `clearReadouts` (PERF-HUNT-CPU #2/#3), owned by the
+   HUD-fit lane. `HudInputs.measure()` reads `innerWidth` / `currentCSSZoom` after the instrument writes on its
+   draw frames (CPU hunter #7): a resize-dirty flag would remove the read.
+5. **Post chain at phone MEDIUM**: the pass list traced by the hunter is mirror → scene (MRT) → SSAO + 2 blurs →
+   godray + 1 blur pair → bright + bloom chain → composite → FXAA; the known rows (#3479 half-res, row 16 LOW
+   direct path, row 15 rg11b10 scene — its WebGPU capability probe exists at `tlx-post.js:128`) cover the big
+   levers. Nothing new found beyond PP-1/PP-2.
+6. **WebGPU submit / bind-group census** needs a hardware adapter: this box's TLX-WebGPU runs over SwiftShader
+   with batches and post skipped (one swapchain pass of ~10 draws per soft readback). Use gpu-census.yml on
+   macos-latest or Device Farm with the hooks in this note's Method.
+
+Small confirmed-but-unfixed rows a game.js pass could batch: PP-8 (`ranked.concat(parked)` per step), the four
+`for…of` car loops at `game.js` render / `mirror-pass.js` drawCars / checkRetirements (CPU hunter #5), the
+catch-up `AiBand` ctx + `applyVmax` objects per car per step (CPU hunter #1, catch-up pace only).
