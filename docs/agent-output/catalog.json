@@ -1961,6 +1961,17 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/gfx/readback-quit-menu-oracle-repeat.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
+      "path": "tools/gfx/readback-quit-menu-oracle.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/gfx/res-scale-ab.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
