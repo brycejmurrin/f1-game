@@ -150,6 +150,7 @@ const SaveSchemaRegistry = (function () {
     "tlxSharedTex": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxSharedUniforms": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxRoadSplit": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "tlxBundles": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxSkipBatches": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxSkyCache": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxSkyCache512": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),

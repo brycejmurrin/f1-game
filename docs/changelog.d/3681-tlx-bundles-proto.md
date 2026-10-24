@@ -1,0 +1,1 @@
+New: An opt-in render-bundle prototype for three.js on WebGPU (`apex26.tlxBundles=1`, off by default) that replays the road, terrain and chunked props from recorded GPU bundles, so their per-frame CPU cost can be measured.

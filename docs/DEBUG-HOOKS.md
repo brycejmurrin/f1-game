@@ -5392,6 +5392,14 @@ Set it to `"0"` (or remove the key) and reload to restore the default off state.
 The post chain reads this 0/1 flag once at creation; it is included in SETTINGS
 backup/export/reset under DISPLAY.
 
+The TLX render-bundle prototype (#3681 lever B) uses `apex26.tlxBundles`: set it
+to `"1"` and reload. On three's WebGPU path only, the main pass then replays its
+opaque chunked draws (road, terrain, chunked props) from per-region render bundles
+(`tlx-chunked.js` `chunkBundles`); mirror, env and shadow passes keep the pooled
+path. `__tlx.bundleState()` reads `{on, handles, regions, meshes, shown, rerecords}`
+(`{on:false}` when off or on WebGL2), and the GPU census reports it as `bundles`.
+Remove the key and reload for the default (off).
+
 **On the default GLX backend** the equivalent of "visual helpers" is data rather
 than wireframes, and it is already there:
 

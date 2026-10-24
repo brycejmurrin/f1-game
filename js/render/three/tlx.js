@@ -1860,6 +1860,22 @@ const TLX = (function () {
         try { Log.warn("gfx", "TLX: chunked factory failed, un-culled props —", e); } catch (_) {}
         chunkedSys = null;
       }
+      // #3681 lever B prototype: opaque chunked draws of the MAIN pass replay per-region
+      // render bundles (tlx-chunked.js chunkBundles). WebGPU only (WebGL has no bundles),
+      // opt-in: apex26.tlxBundles="1". Mirror, env and shadow passes keep the pooled path.
+      let _bundles = null, _bundlesWant = false;
+      const _bundleOut = [];
+      try { _bundlesWant = localStorage.getItem("apex26.tlxBundles") === "1"; } catch (_) { /* no storage: off */ }
+      // Lazy: the backend is not known until init; decided once, on the first main-pass chunk.
+      function bundlesReady() {
+        if (!_bundlesWant) return null;
+        _bundlesWant = false;
+        try {
+          if (chunkedSys && isWebGPU() && TLXShaders.chunkBundles) _bundles = TLXShaders.chunkBundles(THREE);
+        } catch (_) { _bundles = null; }
+        try { Log.info("gfx", "TLX render bundles " + (_bundles ? "on (main pass, opaque chunks)" : "off: needs three's WebGPU path")); } catch (_) { /* harness */ }
+        return _bundles;
+      }
 
       // ?viz=mat|normal|lamp paints the mat attribute / world normal / raw
       // lamp-loop output (the spike's bisect views). Post viz modes (ssao/
@@ -4893,7 +4909,7 @@ const TLX = (function () {
         },
         freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
         freeChunkedMesh(m) {
-          if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
+          if (m && m.chunks && chunkedSys) { if (_bundles) _bundles.free(m); chunkedSys.free(m); return; }
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }
         },
         freeTexture(t) {
@@ -6059,7 +6075,14 @@ const TLX = (function () {
               // one's grid and only the last survived.
               const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist, frameCullFog);
               const vis = chunkedSys.visList;
-              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
+              if ((_bundles || bundlesReady()) && _r6 && !rec.m && rec.mat && !rec.mat.transparent) {
+                const k = _bundles.show(rec.chunked, vis, n, rec.mat, rec, _poolBatch, _bundleOut);
+                for (let j = 0; j < k; j++) {
+                  const g = _bundleOut[j];
+                  if (g.parent !== poolRoot) g.parent = poolRoot;
+                  if (_kidBatch === _poolBatch) _kids[_kidN++] = g;
+                }
+              } else for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
               _chunkFrame.total += rec.chunked.chunks.length;
               _chunkFrame.visible += n;
               // Hold the release until the env probe has LATCHED.
@@ -6401,6 +6424,8 @@ const TLX = (function () {
                      texDisposed: _texStat.disposed, texPooled: _texPool.length };
           },
           // R1: live?, runs held, and lifetime run records / instances / per-record fallbacks.
+          // #3681 lever B prototype (apex26.tlxBundles=1): null when off or not on WebGPU.
+          bundleState() { return _bundles ? Object.assign({ on: true }, _bundles.stats) : { on: false }; },
           coState() {
             let runs = 0, shown = 0;
             for (const pair of _coRuns.values()) for (const b of pair) if (b) { runs++; if (b.imesh.visible) shown++; }

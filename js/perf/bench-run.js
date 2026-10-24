@@ -349,6 +349,7 @@ const BenchRun = (function () {
         texMB: m.resources && m.resources.texturesSize != null ? r2(m.resources.texturesSize / 1048576) : null });
     } catch (_) { /* not TLX */ }
     try { o.flapRuns = T.coState().runs; } catch (_) { /* not TLX */ }
+    try { o.bundles = T.bundleState(); } catch (_) { /* not TLX, or a build without the prototype */ }
     try { o.flapSets = CarMesh.flapState().sets; } catch (_) { /* no flap cache */ }
     return o;
   }

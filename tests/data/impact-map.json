@@ -13530,6 +13530,9 @@
       "build": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
+      "chunkBundles": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+      ],
       "chunked": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
@@ -13552,6 +13555,10 @@
       ],
       "releaseMirrors": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "show": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs"
       ],
       "splitRanges": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs"

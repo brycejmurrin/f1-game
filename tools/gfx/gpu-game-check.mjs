@@ -1116,6 +1116,11 @@ try {
   }), 10000, "camera-end");
   if (out.cam) out.cam.atWindowEnd = _camEnd && !_camEnd.error ? _camEnd.mode : null;
   out.mirror = _camEnd && !_camEnd.error ? _camEnd.mirror : { note: "mirror read failed: " + ((_camEnd && _camEnd.error) || "?") };
+  // #3681 lever B: the render-bundle prototype's counters (apex26.tlxBundles=1; {on:false} otherwise, null off TLX).
+  out.bundles = await bounded(() => page.evaluate(() => {
+    const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
+    return t && t.bundleState ? t.bundleState() : null;
+  }), 10000, "bundles");
   // THE WARM TIMELINE AFTER THE WINDOW (hunt 5 E). out.race.warm is read at the
   // race gate, before any camera switch; a lazy mirror warm (mirrorDeferred at
   // entry, mirrorLazy {ms, drawn, ok} once a mirror view asked for it) lands

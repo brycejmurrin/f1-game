@@ -714,11 +714,99 @@
     });
   }
 
+  // RENDER-BUNDLE PROTOTYPE (#3681 lever B, apex26.tlxBundles=1, WebGPU main pass only).
+  // TLX draws chunks in immediate mode: each pass culls, binds the visible chunks to pooled
+  // wrappers (acquireMesh) and swaps poolRoot.children. A three BundleGroup replays what it
+  // RECORDED (children are projected once; per-child visibility and pool churn are ignored),
+  // so the bundle path keeps its own PERSISTENT meshes: one per chunk, grouped by REGION
+  // (regionCells × regionCells grid cells), and culls whole regions by putting their group in
+  // the pass's child list when any of their chunks survived the normal per-chunk cull. A
+  // region re-records only when its material changes (weather / night), never per frame.
+  // Opaque only: three draws bundles BEFORE the opaque and transparent lists.
+  function chunkBundles(THREE, opts) {
+    if (!THREE || typeof THREE.BundleGroup !== "function") return null;
+    const regionCells = (opts && opts.regionCells) || 4;
+    const byHandle = new Map();
+    const stats = { handles: 0, regions: 0, meshes: 0, shown: 0, rerecords: 0 };
+    function build(handle) {
+      const regions = new Map(), regionOf = new Map();
+      for (let i = 0; i < handle.chunks.length; i++) {
+        const ch = handle.chunks[i];
+        if (!ch.geo) continue;
+        const key = Math.floor(ch.gx / regionCells) * 4096 + Math.floor(ch.gz / regionCells);
+        let r = regions.get(key);
+        if (!r) {
+          const g = new THREE.BundleGroup();
+          g.matrixAutoUpdate = false;
+          g.matrixWorldAutoUpdate = false;
+          r = { group: g, meshes: [], mat: null, em: undefined, al: undefined, lg: 0, seen: -1 };
+          regions.set(key, r);
+        }
+        const m = new THREE.Mesh(ch.geo);
+        m.matrixAutoUpdate = false;   // world-baked chunk geometry: identity, never promoted
+        m.matrixWorldAutoUpdate = false;
+        m.frustumCulled = false;      // the region is the cull unit
+        r.group.add(m);
+        r.meshes.push(m);
+        regionOf.set(ch, r);
+        stats.meshes++;
+      }
+      const e = { list: Array.from(regions.values()), regionOf };
+      byHandle.set(handle, e);
+      stats.handles++;
+      stats.regions += e.list.length;
+      return e;
+    }
+    /** Push the region groups holding any of vis[0..n) into `out`; stamps batch on their chunk geometry. */
+    function show(handle, vis, n, mat, rec, batch, out) {
+      if (!handle || !handle.chunks) return 0;
+      const e = byHandle.get(handle) || build(handle);
+      const em = rec ? rec.em : undefined, al = rec ? rec.al : undefined, lg = rec && rec.lg ? 1 : 0;
+      let k = 0;
+      for (let i = 0; i < n; i++) {
+        const r = e.regionOf.get(vis[i]);
+        if (!r || r.seen === batch) continue;
+        r.seen = batch;
+        if (r.mat !== mat) {
+          for (let j = 0; j < r.meshes.length; j++) r.meshes[j].material = mat;
+          r.mat = mat;
+          r.group.needsUpdate = true;
+          stats.rerecords++;
+        }
+        if (r.em !== em || r.al !== al || r.lg !== lg) {
+          // Per-object uniforms (tsl-lit perObject): a replayed bundle still refreshes them.
+          for (let j = 0; j < r.meshes.length; j++) {
+            const ud = r.meshes[j].userData;
+            ud.tlxEmissive = em; ud.tlxAlpha = al; ud.tlxLgRoad = lg;
+          }
+          r.em = em; r.al = al; r.lg = lg;
+        }
+        for (let j = 0; j < r.meshes.length; j++) r.meshes[j].geometry.__tlxDrawnBatch = batch;
+        out[k++] = r.group;
+      }
+      stats.shown = k;
+      return k;
+    }
+    function free(handle) {
+      const e = byHandle.get(handle);
+      if (!e) return;
+      byHandle.delete(handle);
+      for (const r of e.list) {
+        stats.meshes -= r.meshes.length;
+        r.group.clear();
+        r.group.parent = null;
+      }
+      stats.handles--;
+      stats.regions -= e.list.length;
+    }
+    return { show, free, stats };
+  }
+
   // The cull helpers ride alongside the factory, NOT on its instance: tlx.js
   // must be able to re-export them in GLX's shape even when the factory itself
   // failed and chunkedSys is null. See the note at their definition.
   window.TLXShaders = Object.assign(window.TLXShaders || {},
-    { chunked, idleYield,
+    { chunked, chunkBundles, idleYield,
       makeFrustumPlanes: Frustum.makeFrustumPlanes,
       aabbInFrustum: Frustum.aabbInFrustum, aabbDist2: Frustum.aabbDist2,
       packAttr, packIndex, packStats, splitRanges, mergeRuns });

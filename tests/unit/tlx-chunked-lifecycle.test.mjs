@@ -311,3 +311,40 @@ test("mergeRuns joins contiguous ranges and closes the smallest gaps down to the
   assert.deepEqual(out.slice(0, 4), [0, 12, 30, 7]);   // a merged run draws the gap: a superset, never a hole
   assert.equal(S.mergeRuns(vis, 0, 4, out), 0);
 });
+
+// #3681 lever B: chunkBundles keeps PERSISTENT per-chunk meshes in per-region BundleGroups. The real
+// three build supplies BundleGroup / Mesh, so the version bump that forces a re-record is three's own.
+test("chunkBundles: regions dedupe per frame, re-record only on a material change, and stamp the drawn batch", async () => {
+  const REAL = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
+  const sandbox = { window: {}, localStorage: { getItem: () => null }, Float32Array, Uint32Array, Uint16Array, Uint8Array,
+    Int16Array, Int32Array, Array, Map, Math, Frustum: {} };
+  vm.createContext(sandbox);
+  seedLog(sandbox);
+  vm.runInContext(CHUNK_BINS, sandbox, { filename: absSrc("js/render/shared/chunk-bins.js") });
+  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: absSrc("js/render/three/tlx-chunked.js") });
+  const B = sandbox.window.TLXShaders.chunkBundles(REAL, { regionCells: 4 });
+  assert.ok(B, "factory exists with a BundleGroup-capable three");
+  assert.equal(sandbox.window.TLXShaders.chunkBundles({}), null, "no BundleGroup → null (the pooled path stays)");
+  const chunk = (gx, gz) => ({ geo: new REAL.BufferGeometry(), gx, gz });
+  const handle = { chunks: [chunk(0, 0), chunk(1, 3), chunk(4, 0), chunk(9, 9)] };   // regions: (0,0)×2, (1,0), (2,2)
+  const matA = new REAL.MeshBasicNodeMaterial(), matB = new REAL.MeshBasicNodeMaterial();
+  const out = [];
+  let k = B.show(handle, [handle.chunks[0], handle.chunks[1], handle.chunks[3]], 3, matA, { em: 0.5 }, 7, out);
+  assert.equal(k, 2, "two chunks of one region push its group once");
+  assert.equal(B.stats.regions, 3); assert.equal(B.stats.meshes, 4);
+  assert.ok(out[0].isBundleGroup && out[0].children.length === 2, "the region carries every chunk it owns");
+  assert.equal(out[0].children[0].material, matA);
+  assert.equal(out[0].children[0].userData.tlxEmissive, 0.5);
+  assert.equal(handle.chunks[1].geo.__tlxDrawnBatch, 7, "drawn this batch (the chunk-release gate reads it)");
+  assert.equal(handle.chunks[2].geo.__tlxDrawnBatch, undefined, "an unshown region is not stamped");
+  const v0 = out[0].version;
+  assert.equal(B.stats.rerecords, 2, "first show records each region once");
+  k = B.show(handle, [handle.chunks[0]], 1, matA, { em: 0.5 }, 8, out);
+  assert.equal(out[0].version, v0, "same material: no re-record");
+  k = B.show(handle, [handle.chunks[0]], 1, matB, { em: 0.5 }, 9, out);
+  assert.equal(out[0].version, v0 + 1, "material change (weather / night): one re-record");
+  assert.equal(out[0].children[1].material, matB);
+  B.free(handle);
+  assert.deepEqual({ ...B.stats, shown: 0 }, { handles: 0, regions: 0, meshes: 0, shown: 0, rerecords: 3 });
+  assert.equal(out[0].children.length, 0, "freed regions drop their meshes (the chunk geometry is chunkedSys's)");
+});
