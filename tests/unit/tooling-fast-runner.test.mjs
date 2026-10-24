@@ -250,7 +250,7 @@ test("--changed selects pinned unit tests for a tool edit, not the full suite", 
   assert.deepEqual(r.files.sort(), ["tests/unit/agent-config.test.mjs", "tests/unit/test-bg-outcome.test.mjs"].sort());
   assert.ok(r.files.length < all.length);
   // Which CI halves run those files follows the CI split (time-balanced since 2026-10-21), not a stride.
-  const covering = ["1/3", "2/3", "3/3"].filter((sp) => ciShardFiles(all, sp).some((f) => r.files.includes(f)));
+  const covering = ["1/4", "2/4", "3/4", "4/4"].filter((sp) => ciShardFiles(all, sp).some((f) => r.files.includes(f)));
   assert.deepEqual(shardsCoveringFiles(r.files, all), covering);
   assert.ok(covering.length >= 1);
 });
@@ -602,7 +602,12 @@ test("applyFileShard with timings packs longest first onto the least-loaded shar
   for (const spec of ["1/2", "2/2"]) {
     assert.deepEqual(applyFileShard(more, spec, t), applyFileShard(more, spec, { ...t, z: 60 }), spec);
   }
-  // Three shards still partition the list.
+  // Three and four shards (ci.yml since 2026-10-24) still partition the list.
+  for (const n of [3, 4]) {
+    const parts = Array.from({ length: n }, (_, i) => applyFileShard(more, `${i + 1}/${n}`, t));
+    assert.deepEqual(parts.flat().sort(), [...more].sort());
+    assert.equal(new Set(parts.flat()).size, more.length);
+  }
   const parts = ["1/3", "2/3", "3/3"].map((s3) => applyFileShard(more, s3, t));
   assert.deepEqual(parts.flat().sort(), [...more].sort());
   assert.equal(new Set(parts.flat()).size, more.length);

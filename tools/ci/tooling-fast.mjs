@@ -1982,8 +1982,11 @@ function pinIndex() {
   return _pinIndex;
 }
 
-/** Which CI tooling-fast shards (1/3 .. 3/3, ci.yml guards-a/b/c) touch any of `files`. */
-export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 3) {
+/** CI tooling-fast shards: ci.yml guards-a..d run --shard=1/4 .. 4/4 (BUILD-HUNT B2, 2026-10-24). */
+export const CI_SHARDS = 4;
+
+/** Which CI tooling-fast shards (1/4 .. 4/4, ci.yml guards-a/b/c/d) touch any of `files`. */
+export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = CI_SHARDS) {
   const want = new Set(files);
   const out = [];
   for (let i = 1; i <= shardCount; i++) {
