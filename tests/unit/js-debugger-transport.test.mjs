@@ -23,7 +23,7 @@ test("JSON-RPC protocol responds to initialize/list/ping, not notifications", as
   const s = new DebugSession();
   const request = method => ({ jsonrpc: "2.0", id: 1, method });
   assert.equal((await handleRpc(s, request("initialize"))).result.serverInfo.name, "js-debugger-mcp");
-  assert.equal((await handleRpc(s, request("tools/list"))).result.tools.length, 22);
+  assert.equal((await handleRpc(s, request("tools/list"))).result.tools.length, 23);
   assert.equal(await handleRpc(s, { jsonrpc: "2.0", method: "notifications/initialized" }), null);
   assert.equal((await handleRpc(s, request("missing"))).error.code, -32601);
   assert.equal((await handleRpc(s, [])).error.code, -32600);
@@ -44,7 +44,7 @@ test("real stdio subprocess discovery and malformed JSON recovery, no browser la
   child.stdin.end('bad json\n{"jsonrpc":"2.0","id":1,"method":"initialize"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"debugger_state","arguments":null}}\n');
   const [code] = await once(child, "exit"); assert.equal(code, 0, err);
   const rows = out.trim().split("\n").map(JSON.parse); assert.equal(rows.length, 4); assert.equal(rows[0].error.code, -32700);
-  assert.equal(rows.find(r => r.id === 2).result.tools.length, 22);
+  assert.equal(rows.find(r => r.id === 2).result.tools.length, 23);
   assert.equal(rows.find(r => r.id === 3).error.code, -32602);
 });
 test("project catalogs launch the separate debugger wrapper and discover its tools", async () => {
@@ -59,7 +59,7 @@ test("project catalogs launch the separate debugger wrapper and discover its too
   assert.equal((await once(child, "exit"))[0], 0, err);
   const rows = out.trim().split("\n").map(JSON.parse);
   assert.equal(rows.find(r => r.id === 1).result.serverInfo.name, "js-debugger-mcp");
-  assert.equal(rows.find(r => r.id === 2).result.tools.length, 22);
+  assert.equal(rows.find(r => r.id === 2).result.tools.length, 23);
   assert.equal(rows.find(r => r.id === 3).result.structuredContent.connected, false);
 });
 
@@ -159,7 +159,7 @@ test("wrapper validates port and missing-daemon calls fail without creating a se
   const daemon = await startDebuggerHttp({ port: 0 }); const port = daemon.server.address().port; await daemon.close();
   const result = await shell(["call", "debugger_state", "{}"], port);
   assert.equal(result.code, 1); assert.match(result.body.error, /start js-debugger-mcp.sh serve-http/);
-  assert.equal((await shell(["list-tools"], port)).body.length, 22);
+  assert.equal((await shell(["list-tools"], port)).body.length, 23);
 });
 test("daemon shutdown drops incomplete uploads before cleaning up a paused target", { timeout: 3000 }, async () => {
   const { s, c } = await attached(); paused(c);
