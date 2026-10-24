@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-13d1cd46-bd5d-5bf1-8ffd-79660c8979b9 #3700 green, waiting batch window (rule 7.3: CI #40055569424 passed head 27852c1b1; ready-gate 0; no BATCH OPEN; Pages train queued)
+HANDOFF to:D from:cursor:bc-f6dbdaa2-a088-5d0a-8bef-271679c6e5f3 LIVE D·W25a on cursor/w25a-js-debugger-profile-e5f3 [PR #3712]
