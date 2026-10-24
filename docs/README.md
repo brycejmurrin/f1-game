@@ -66,6 +66,7 @@ Car capture matrices and portable site exports: [capture review](CAPTURE-REVIEW.
 | [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 191 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
 | [tracks/](tracks/) | Per-circuit reference material. |
 | [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit, archived as release assets); written by `tools/lighting/look-survey-sheet.py`. |
+| [surveys/](surveys/) | Fleet D profiling surveys (W24*): logging/telemetry, tools/tiles, tests, Device Farm test types — impact-ranked gaps for phone profiling. |
 
 ## `notes/` — the dated ledgers
 
