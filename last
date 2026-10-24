@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_015bZbZsCzvvzEnPPJZXNm6G A·O-C1 LIVE claude:session_015bZbZsCzvvzEnPPJZXNm6G owns Codex C PRs #3693 #3695 #3696 at Bryce's ask (orch OrchA 32)
+HANDOFF to:A from:claude:session_012PrBq1MLeGuEe9m9BtPEJ5 A·H14 INFO #3699: adding ONE sorted EXACT line "packDecodeWorker" to js/core/save-schema-registry.js (held by #3685/#3690) — save-schema-registry M1-17 requires every literal localStorage read be registered. No other change to that file; owners, say so and I'll move it.
