@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { readDefaults } from "../../tools/gen/settings-defaults.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -46,11 +47,18 @@ function boot(opts = {}) {
       get length() { return disk.size; },
       key(i) { return Array.from(disk.keys())[i]; },
       getItem(k) { const v = disk.get(k); return v === undefined ? null : v; },
+      setItem(k, v) { if (opts.denyWrites) throw Object.assign(new Error("quota refused"), { name: "QuotaExceededError" }); disk.set(k, v); },
+      removeItem(k) { if (opts.denyWrites) throw Object.assign(new Error("storage refused"), { name: "SecurityError" }); disk.delete(k); },
     },
   };
   if (opts.globals) Object.assign(sb, opts.globals);
   sb.window = sb;
   const ctx = vm.createContext(sb);
+  if (opts.realStore) {
+    seedSaveMigrate(ctx);
+    vm.runInContext(read("js/core/store.js"), ctx, { filename: absSrc("js/core/store.js") });
+    sb.GameStore = vm.runInContext("GameStore", ctx);
+  }
   // In the page js/data/teams.js loads long before this file; opt in where a
   // test is about what Teams.sanitizeCustom does to an imported team.
   if (opts.teams) vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
@@ -72,7 +80,7 @@ function boot(opts = {}) {
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));
-  return { SettingsExport, G, disk,
+  return { SettingsExport, GameStore: sb.GameStore, G, disk,
     careerVersion: opts.career ? vm.runInContext("SaveMigrate.CAREER_V", ctx) : null,
     collect: (mode) => plain(SettingsExport.collect(mode, G)),
     garage: () => plain(SettingsExport.collectGarage()),
@@ -594,6 +602,36 @@ test("an empty or blocked store still produces a valid garage file", () => {
   assert.equal(f.format, "apex26-garage-v1");
   assert.deepEqual(f.garage, {});
   assert.equal(f.count, 0);
+});
+
+test("garage export recovers refused existing and cache-only writes without changing storage", () => {
+  const b = boot({ realStore: true, denyWrites: true, disk: {
+    "apex26.setup.mercedes": JSON.stringify({ arb: 2 }),
+    "apex26.parts.ferrari": JSON.stringify({ wing: 3 }),
+    "apex26.setup.corrupt": "invalid JSON",
+  } });
+  const s = b.GameStore.store;
+  assert.equal(s.set("setup.mercedes", { arb: 6 }), false);
+  assert.equal(s.set("setup.mercedes", 1n), false, "serialization refusal preserves the previous cached value");
+  assert.equal(s.set("livery.custom.ferrari", JSON.parse(GARAGE["apex26.livery.custom.ferrari"])), false);
+  assert.equal(s.set("parts.ferrari", undefined), false, "a refused removal is session state too");
+  assert.equal(s.set("setup.corrupt", 1n), false, "serialization failure leaves the old disk bytes untouched");
+  s.set("spotify.token", "SECRET");
+  s.set("setup.invalid/id", { secret: "SECRET" });
+  s.rawSet("setup.raw", "SECRET");
+  const before = [...b.disk], revision = s.rev, failures = s.failedKeys();
+  const file = b.garage();
+  assert.deepEqual(file.garage, {
+    "setup.mercedes": { arb: 6 },
+    "livery.custom.ferrari": JSON.parse(GARAGE["apex26.livery.custom.ferrari"]),
+  });
+  assert.equal(file.count, 2);
+  assert.ok(!JSON.stringify(file).includes("SECRET"), "both session and disk obey the export allowlist");
+  assert.deepEqual([...b.disk], before, "export neither retries writes nor repairs malformed disk values");
+  assert.equal(s.rev, revision);
+  assert.deepEqual(s.failedKeys(), failures);
+  b.SettingsExport.collectGarage().garage["setup.mercedes"].arb = 99;
+  assert.equal(s.get("setup.mercedes").arb, 6, "the exported object does not alias the session cache");
 });
 
 test("loading a settings file writes the allowlist and refuses everything else", () => {
