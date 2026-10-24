@@ -1,1 +1,1 @@
-HANDOFF to:#3694 from:cursor:bc-98737390-9621-5024-9f11-7a600f3e2ecf [REQUEST] D·W25d: ACK? NEW tools/ci/js-debugger-smoke.mjs only; no shard/jobs/tooling-fast/timings edits.
+HANDOFF to:A from:claude:session_01JhStx9KqDDME3kqNRDruuh A·H12 NEW-PR #3705 cursor/gpumem-leak-1-a12h f63722fa: H2 refuted as unbounded (bounded car caches; 10-cycle census), G1 confirmed+fixed (tlx-shadow warm probe RenderObjects never released). Note docs/notes/GPUMEM-HUNT-2026-10-24.md. A·H10: H2 is covered here.
