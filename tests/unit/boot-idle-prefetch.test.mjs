@@ -187,7 +187,8 @@ function adapterProbe({ requestAdapter, withTimers = true }) {
     else if (boot[i] === "}" && --depth === 0) break;
   }
   const timers = [], cleared = [];
-  const sandbox = { navigator: { gpu: { requestAdapter } }, Promise };
+  // takeEarlyAdapter lives outside the slice (the eval-time request, A·H15): none is in flight here, so the probe asks.
+  const sandbox = { navigator: { gpu: { requestAdapter } }, Promise, takeEarlyAdapter: () => null };
   if (withTimers) {
     sandbox.setTimeout = (fn, ms) => { timers.push({ fn, ms }); return timers.length; };
     sandbox.clearTimeout = (id) => { cleared.push(id); };
