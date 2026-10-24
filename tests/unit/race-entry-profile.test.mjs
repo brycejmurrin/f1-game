@@ -439,6 +439,17 @@ test("stageTable and diffStages summarise span legs for probes", () => {
   assert.ok(diff.rows.some((r) => r.n === "awaitIntroWarm" && r.deltaMs > 900));
 });
 
+test("software GL reports span starts to the progress sink", () => {
+  let t = 0;
+  const labels = [];
+  const P = load({ performance: { now: () => t }, PerfGov: { softwareRaster: () => true } });
+  P.beginUi("race");
+  P.setProgressSink((label) => labels.push(label));
+  P.mark("introPrepare:start");
+  P.mark("introPrepare:end");
+  assert.deepEqual(labels, ["Prepare", "Prepare"]);
+});
+
 test("introBudgetExpired fires after the soft budget elapses", () => {
   let t = 0;
   const P = load({ performance: { now: () => t }, PerfGov: { softwareRaster: () => true } });

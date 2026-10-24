@@ -72,6 +72,7 @@ test("loadTrackStepped matches loadTrack: menu skip, race/count arm", async () =
     function sessionDarkFor() { return false; }
     function fieldSize() { return 22; }
     function trackBuildOpts() { return {}; }
+    const builtWorldFits = (def) => builtTrackId === def.id && builtTrackNight === sessionDarkFor(def) && builtGridSlots === fieldSize();
     function dropTrackWorld() {}
     function freeTrackMeshes() {}
     const sceneryResident = () => false;

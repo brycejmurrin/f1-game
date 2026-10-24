@@ -655,7 +655,7 @@ async function main() {
     const r = await autoRaise({ maxRaise });
     for (const x of r.raised) console.log(`RAISED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value} (+${x.value - x.ceiling}, within the ${maxRaise}-line auto-raise; it is in this commit's diff: ${fragmentName(currentBranch()) ? `tests/data/ratchets.d/${fragmentName(currentBranch())}` : "tests/data/ratchets.json"})`);
     for (const x of r.lowered) console.log(`LOWERED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value}`);
-    for (const x of r.blocked) console.log(`OVER   ${x.file} ${x.metric}: ${x.value} > ceiling ${x.ceiling} (+${x.over}) — ${x.reason}: ${x.tree || x.slackMax === 0 ? "shrink it back" : "extract"}, or raise it deliberately (node tools/check/ratchets.mjs --update) and say why in the commit`);
+    for (const x of r.blocked) console.log(`OVER   ${x.file} ${x.metric}: ${x.value} > ceiling ${x.ceiling} (+${x.over}) — ${x.reason}: ${x.tree || x.slackMax === 0 ? "shrink it back" : "extract"}, or raise it deliberately (node tools/check/ratchets.mjs --update --fragment --reason="<why>") and say why in the commit`);
     process.exitCode = r.ok ? 0 : 1;
     return;
   }
@@ -668,7 +668,7 @@ async function main() {
   const where = (r) => (r.tree ? " — breakdown: node tools/check/tree-counts.mjs --offenders" : "");
   for (const r of v.over) console.log(`OVER   ${r.file} ${r.metric}: ${r.value} > ceiling ${r.ceiling} (+${r.over}) — extract, or raise it deliberately and say why in the commit${where(r)}`);
   for (const r of v.loose) {
-    const msg = `LOOSE  ${looseLine(r)} — lower it: node tools/check/ratchets.mjs --update`
+    const msg = `LOOSE  ${looseLine(r)} — lower it: node tools/check/ratchets.mjs --update --lower-only`
       + (v.looseAdvisory ? ` (advisory on ${process.env.GITHUB_EVENT_NAME}: an improvement; the PR run is the gate)` : "");
     console.log(v.looseAdvisory && process.env.GITHUB_ACTIONS === "true"
       ? `::warning file=tests/data/ratchets.json,title=ratchet loose::${msg}` : msg);

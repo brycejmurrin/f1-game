@@ -28,22 +28,22 @@ main.setTimeout = setTimeout; main.performance = performance;
 // worker's own buffers are detached by the post (hunt 2 T7), so a build that
 // transferred a buffer it still caches would meet it detached on its NEXT build
 // in the same worker — which the two-builds test below would catch (hunt 3 X7).
-function spawnWorker() {
+function spawnWorker({ importScripts: importHook } = {}) {
   const posted = [], transferred = [];
-  const ctx = vm.createContext({ performance, console, URL, postMessage: (m, t) => {
+  const ctx = vm.createContext({ performance, console, URL, setTimeout, clearTimeout, postMessage: (m, t) => {
     transferred.push((t || []).length);
     posted.push(structuredClone(m, { transfer: t || [] }));
   } });
   ctx.self = ctx;
-  ctx.importScripts = (...files) => {
+  const loadFiles = (...files) => {
     for (const f of files) {
       const rel = f.replace(/^https?:\/\/[^/]+\//, "").replace(/\?.*$/, "");
       vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8"), ctx, { filename: absSrc(rel) });
     }
   };
+  ctx.importScripts = importHook ? (...files) => importHook(ctx, ...files) : loadFiles;
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), ctx, { filename: absSrc("js/track/build-worker.js") });
-  // onmessage is async (a build awaits the model pack): send() returns it.
-  return { send: (m) => ctx.onmessage({ data: m }), posted, transferred };
+  return { send: async (m) => { await ctx.onmessage({ data: m }); }, posted, transferred, ctx };
 }
 const vmFiles = MANIFEST.TRACK_VM.flatMap((e) => (e === "@circuits" ? MANIFEST.CIRCUITS.map((id) => MANIFEST.circuitPath(id)) : [e]));
 
@@ -74,10 +74,34 @@ const physics = (t) => PHYS.filter((k) => t[k]).map((k) => k + ":" + createHash(
 
 vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8").replace(/^const\b/gm, "var"), main, { filename: absSrc("js/track/build-client.js") });
 const worker = spawnWorker();
-worker.send({ type: "init", files: vmFiles.map((f) => "http://x/" + f + "?v=1") });
+await worker.send({ type: "init", files: vmFiles.map((f) => "http://x/" + f + "?v=1") });
 
 test("the worker loads the page's build modules and answers ready", () => {
   assert.deepEqual(worker.posted.map((m) => m.type), ["ready"]);
+});
+
+test("importScripts retries transient scenery failures with a cache-busted URL", async () => {
+  const sceneryPath = MANIFEST.sceneryPath("okayama");
+  const attempts = [];
+  const w = spawnWorker({
+    importScripts(ctx, ...files) {
+      for (const f of files) {
+        attempts.push(f);
+        const rel = f.replace(/^https?:\/\/[^/]+\//, "").replace(/\?.*$/, "");
+        if (rel === sceneryPath && !/retry=/.test(f)) throw new Error("503");
+        vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8"), ctx, { filename: absSrc(rel) });
+      }
+    },
+  });
+  await w.send({ type: "init", files: vmFiles.map((f) => "http://x/" + f + "?v=1") });
+  const t0 = Date.now();
+  await w.send({
+    type: "build", seq: 99, idx: MANIFEST.CIRCUITS.indexOf("okayama"), id: "okayama",
+    opts: { chunkRibbons: true, retainGraph: false }, scenery: "http://x/" + sceneryPath + "?v=1",
+  });
+  assert.ok(Date.now() - t0 >= 350, "scenery import waits before retry");
+  assert.ok(attempts.some((u) => /retry=1/.test(u)), "the retry asks for a fresh URL");
+  assert.equal(w.posted.at(-1).type, "built", w.posted.at(-1).message);
 });
 
 for (const id of ["monza", "vegas"]) {

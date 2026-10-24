@@ -69,6 +69,7 @@ async function rig(t, ls = {}) {
     }
     function resetRecs() { for (let i = 0; i < drawList.n; i++) drawList[i].instanced = null; drawList.n = 0; }
     const cache = new Map();
+    const fxFor = () => false;   // finishes on demand (tlx.js): these rigs draw no 60-85 geometry
     function materialFor(o, chunked, instanced) {
       const k = JSON.stringify(o) + instanced;
       if (!cache.has(k)) { const m = lit.makeMaterial(instanced ? Object.assign({ instanced: true }, o) : o); if (instanced === 2) _attrInst(m); cache.set(k, m); }

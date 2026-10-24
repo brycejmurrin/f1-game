@@ -131,6 +131,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apex-server-fixes.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
+  // #3307: Appearance SettingRow ‹ › steppers floor at --tap-paint under
+  // sheet zoom (ios-iphone-landscape@75 soft taps were 39 vs 52).
+  "tests/unit/appearance-steppers-tap.test.mjs",
   "tests/unit/appearance-studio.test.mjs",
   // Sunlight/Broadcast Appearance chrome: preset label wrap, selected ring,
   // theme-stable art, light --gold, light .sheet-foot (css pins).
@@ -143,6 +146,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // #1682: repo-wide assert.match under tests/unit only goes down (source-pin → behaviour).
   "tests/unit/assert-match-ratchet.test.mjs",
   "tests/unit/assets-pack.test.mjs",
+  // #3296: material filmstrip PNGs require albedoMd5/normalMd5 (same as model md5).
+  "tests/unit/assets-verify-material-md5.test.mjs",
   "tests/unit/audio-mix-improvements.test.mjs",
   // Round-2: MUSIC OFF never decodes the menu track (setMusic before setSound) and rows changed before the race bundle lands reach the store, not the stub.
   "tests/unit/audio-panel-boot.test.mjs",
@@ -245,6 +250,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-experience.test.mjs",
   "tests/unit/career-hire-rating.test.mjs",
   "tests/unit/career-legends.test.mjs",
+  // #3559: readSlot must not JSON.parse(null) over a cache-only protected career when quota refused the localStorage write-back.
+  "tests/unit/career-readslot-quota.test.mjs",
   "tests/unit/career-regulations.test.mjs",
   // Round-2 (2026-10-10) career: the save carries its calendar (calIds), beatRival offers sign the rival they show, weakerSeat before the team moves, no re-hire of the sitting hire, rep before market value, podium p>0, NEW CAREER number 1, null-team slots.
   "tests/unit/career-round2.test.mjs",
@@ -613,6 +620,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 garage: era bans never delete fitted parts, the wall board reads FREE BUILD, stats include career development, badges and legend chips.
   "tests/unit/garage-sheet-round2.test.mjs",
   "tests/unit/garage-sign-occlusion.test.mjs",
+  // D·W22a: gen-agent-index stable sort by id (localeCompare-free); shuffled input → byte-identical.
+  "tests/unit/gen-agent-index-order.test.mjs",
   "tests/unit/gen-arch-table.test.mjs",
   "tests/unit/generated-docs.test.mjs",
   "tests/unit/geom-mountain-lowmat.test.mjs",
@@ -630,6 +639,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/global-registry.test.mjs",
   // Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).
   "tests/unit/glx-failure-paths.test.mjs",
+  // #3291: GLX setLampShadowSlot shares begin()'s ufI cache; drawChunkedBody restores the slot in finally.
+  "tests/unit/glx-lamp-shadow-slot.test.mjs",
   "tests/unit/glx-multidraw.test.mjs",
   "tests/unit/glx-occlusion.test.mjs",
   // GLX output-target (VR task 30): source-scan of bindFramebuffer(null) plus a recording-mock proof that setOutputTarget routes the final pass.
@@ -689,6 +700,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/i18n-lint.test.mjs",
   "tests/unit/i18n.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
+  // #3560 F1: CamTune.decodeShare bounds paste/decode before JSON.parse (APXC1).
+  "tests/unit/import-hardening-apxc1.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
@@ -702,6 +715,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/input-hud-properties.test.mjs",
   // #1712: per-job inputs-hash path sets cover what guards / sweeps-parts read; ci.yml lookup-only cache + NO_MEMO nightly.
   "tests/unit/inputs-hash.test.mjs",
+  // #3302: INSTALL APP lifts clear of PAUSE BACKGROUND on title landscape (844×390).
+  "tests/unit/install-chip-overlap.test.mjs",
   // #3558: iOS Safari focus auto-zoom — text inputs in FREE sheets must floor at 16px.
   "tests/unit/ios-input-zoom.test.mjs",
   "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
@@ -781,6 +796,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-stations.test.mjs",
   // LIVERY card swatches painted once per look and blitted after (B·H13 garage pick cost). < 1 s.
   "tests/unit/livery-swatch-cache.test.mjs",
+  // #3609: SAVE & FIT new custom_<ts> disposes the previous fitted hi-res atlas (stubbed CarDraw VM). < 1 s.
+  "tests/unit/livery-tex-dispose.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
   "tests/unit/livery-wheels.test.mjs",
@@ -924,6 +941,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/pause-key-tools.test.mjs",
   "tests/unit/pause-opts.test.mjs",
+  "tests/unit/pause-taps.test.mjs",
   "tests/unit/perf-frametime.test.mjs",
   "tests/unit/perf-governor.test.mjs",
   "tests/unit/perf-race-entry.test.mjs",
@@ -1104,6 +1122,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/screen-looks.test.mjs",
   // Lazy bundles preload every gated wave and still evaluate in edge order; the boot preloads its likely backend (B·H8 load hunt).
   "tests/unit/script-loader-preload.test.mjs",
+  // #3295: a strict retry after a sibling failure must not re-append a classic script that already evaluated.
+  "tests/unit/script-loader-retry-eval.test.mjs",
   "tests/unit/script-loader-starved.test.mjs",
   "tests/unit/script-loader-throw.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
@@ -1291,6 +1311,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-mat-key-memo.test.mjs",
   // TLX post P2 / audit #6: fixed H/V blur + per-mip bloom materials (no .tex.value ping-pong).
   "tests/unit/tlx-post-fixed-mats.test.mjs",
+  // TLX phone post at half scene resolution (D·IP3 / BrowserStack GPU-bound fill).
+  "tests/unit/tlx-post-phone-res.test.mjs",
   // TLX perf hunt 6 (B·H6): gfx.warmDraws captures the cockpit rig's draws (never painted) and the next present compiles exactly those pairs, owned like the deferred mirror warm; the first rig frame then links nothing (a cold one links). Race entry awaits it under the cover.
   "tests/unit/tlx-rig-warm.test.mjs",
   // TLX drops a createTexture() source canvas once three has uploaded it,
@@ -1447,6 +1469,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/vertex-pack.test.mjs",
   // tools/viewer: the 3D viewer page carries the engine-built car (within 0.5 mm) and circuit. ~6 s, no browser.
   "tests/unit/viewer.test.mjs",
+  // VisorOptics (js/fx/visor-optics.js): eye-port geometry per aspect, the lighting→visor mapping (additive, zero in the dark, projected sun/lamp glints) and the helmet-only / OFF gates. ~0.3 s.
+  "tests/unit/visor-optics.test.mjs",
   "tests/unit/visual-oracle.test.mjs",
   // #2960: opt-in vm-debug-preload turns a no-filename brake-cue load into a file:// URL.
   "tests/unit/vm-debug-preload.test.mjs",
@@ -1470,6 +1494,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a chip or __apex.weather() still cuts. VM-executed atmosphere.js, ~0.1 s.
   "tests/unit/weather-blend.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
+  // D·W21b / #3279: WebGPU menu warm enables warmPlus + idle-chunks post/shadow/cockpit; records where.
+  "tests/unit/webgpu-menu-warm.test.mjs",
   // WET_GRIP orders the treads as treadFor picks them: inter owns the damp, full wet the storm. VM, < 0.2 s.
   "tests/unit/wet-grip-ladder.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",

@@ -267,4 +267,23 @@
   max-width: 100%;
   padding: calc(var(--pad) * .2);
 }
+/* #3307: Appearance SettingRow ‹ › steppers (#pm-uitheme-prev/next, menu/HUD
+   accent, CVD, app-icon, …) lived on .pm-group button { min-height: var(--tap) }.
+   --tap is local; sheet zoom shrinks it (52×0.75 → 39 painted soft taps on
+   ios-iphone-landscape@75). --tap-paint divides by scale so the painted box
+   stays on the house floor. Same carve as css/photo-studio.css #ps-panel
+   button[data-step]. Lives here (@layer overlays) so it outranks the
+   components .pm-group button rule without an unlayered settings.css carve. */
+@media (pointer: coarse) {
+  #pm-panel-appearance .set-row button[data-step] {
+    min-height: var(--tap-paint);
+    min-width: var(--tap-paint);
+    box-sizing: border-box;
+  }
+}
+body[data-density="compact"] #pm-panel-appearance .set-row button[data-step] {
+  min-height: var(--tap-paint);
+  min-width: var(--tap-paint);
+  box-sizing: border-box;
+}
 }

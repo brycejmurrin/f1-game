@@ -246,6 +246,26 @@ test("cockpit turn chasing is a 0–1 look-ahead blend, shipped at 0.4", () => {
     "an untouched install gets the shipped amount");
 });
 
+test("VISOR BEAMS is a 0..2 slider factor stored as a percent, with level words and percents both accepted", () => {
+  const Opts = loadCockpitOpts({});
+  assert.equal(Opts.visorBeams(), 1, "an untouched install is 100 %: the shipped look");
+  assert.equal(Opts.BEAMS_DEFAULT, 1); assert.equal(Opts.BEAMS_MAX, 2);
+  assert.equal(Opts.setVisorBeams(1.6), 1.6, "a factor");
+  assert.equal(Opts.setVisorBeams("160"), 1.6, "a percent string (the stored form, the capture recipes)");
+  assert.equal(Opts.setVisorBeams(250), 2, "clamped to 200 %");
+  assert.equal(Opts.setVisorBeams(-1), 0);
+  assert.equal(Opts.setVisorBeams("strong"), 1.6, "a level word from an old URL or recipe");
+  assert.equal(Opts.setVisorBeams("nope"), 1, "garbage falls back to the default");
+  assert.equal(loadCockpitOpts({ "apex26.helmetVisorBeams": "60" }).visorBeams(), 0.6, "the stored percent reads back as a factor");
+  assert.equal(loadCockpitOpts({ "apex26.helmetVisorBeams": "off" }).visorBeams(), 0, "a stored level word still reads");
+  const seen = [];
+  const O2 = loadCockpitOpts({});
+  O2.onWheel((name, v) => seen.push([name, v]));
+  O2.setVisorBeams(0.5);
+  assert.deepEqual(seen, [["visorBeams", 0.5]], "a change notifies the visor consumers like every other visor setting");
+  assert.ok(!("visorBeams" in O2.CHOICES), "not a choice row: the cockpit panel builds it as a slider");
+});
+
 // Read off the LOADED CAM_MODES and the cut setCamMode() actually starts: a
 // `id:"cinematic"[\s\S]*cut:0.6` regex matched any later entry's cut too.
 test("broadcast cameras carry per-mode cut ease durations", () => {

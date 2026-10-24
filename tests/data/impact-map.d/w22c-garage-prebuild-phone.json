@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/garage/prebuild.js": {
+      "phoneHold": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ]
+    }
+  }
+}
