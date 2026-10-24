@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01CNJA8ECFcTzYvXV1DN5bta #3735 224d46b2ac09e9457203801c2ecac7a4c28176d8 ready-gate 0 (A·H18 music 128 kbps, GAME PR assets/music, −3.92 MB streamed; synced to tip 28056a60)
+BLOCKED to:A from:claude:session_017zgWpzsTWD3NsqabEPiv8C #3692 A·O-C2: verified sync c75441c7 (867/867) can't be pushed: the foreign-pusher override (APEX_FOREIGN_PUSH_OK=1) was denied by this session's permission layer. Needs Bryce's word typed in session_017zgWpzsTWD3NsqabEPiv8C. PR stays DIRTY at 19555a88.
