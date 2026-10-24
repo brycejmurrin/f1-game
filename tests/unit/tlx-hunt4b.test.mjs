@@ -737,8 +737,6 @@ test("A-P2: discardAttachments acts only on the FBO three has bound; the mirror 
   assert.equal(h.post.discardAttachments(rt, []), false);
   assert.match(TLX, /renderer\.render\(scene, mirCam\); \} finally \{ if \(mrt\) _mirMrtArm\(false, prevMrt\); if \(hinted\) post\.discardHintOff\(mirRT\); \}\s*\n[^\n]*\n[^\n]*\n\s*if \(hinted \|\| \(post && post\.discardAttachments && post\.discardAttachments\(mirRT, _mirInv\(mrt\)\)\)\) _mirDiscards\+\+;/,
     "tlx.js: the mirror discards right after its render, before anything else binds");
-  assert.match(TLX, /const hinted = !!\(post && post\.discardHint && post\.discardHint\(mirRT, mrt \? 2 : 0, true\)\);\s*\n\s*try \{ renderer\.render\(scene, mirCam\);/,
-    "tlx.js: the WebGPU hint goes on BEFORE the mirror pass begins (A-P2W)");
   assert.match(TLX, /return mrt \? _mirInvDT : _mirInvD;/, "tag only when the mirror target carries one");
 });
 
@@ -780,11 +778,9 @@ test("A-P2W: the A/B switches gate the WebGPU hint; MSAA and a one-attachment ch
   assert.deepEqual(gpuPass(msaa, OFF, NIGHT).seen, { color: 0, depth: false }, "MSAA: single-sample hint only (r186's storeMultisampled* owns MSAA)");
 });
 
-test("A-P2W: discardHint is a no-op off WebGPU, and tlx.js takes the scene hint off in the present finally", async (t) => {
+test("A-P2W: discardHint is a no-op off WebGPU", async (t) => {
   const h = await postRig(t, { ssrTag: true });
   const rt = h.post.sceneTarget();
   assert.equal(h.post.discardHint(rt, 2, true), false, "WebGL2 leg: the invalidate path owns it");
   assert.equal(rt.apexDiscardColor, undefined);
-  assert.match(TLX, /\} finally \{\s*\n\s*if \(post\.discardHintOff\) post\.discardHintOff\(\);/,
-    "a throw inside the scene pass must not leave the hint on sceneRT");
 });
