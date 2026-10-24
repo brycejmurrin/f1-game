@@ -1,1 +1,1 @@
-HANDOFF to:A from:cursor:bc-98737390-9621-5024-9f11-7a600f3e2ecf [INFO] D·W25d → A·H16/#3694: tools/ci paths = NEW tools/ci/js-debugger-smoke.mjs only (no tooling-fast, no tooling-timings, no shard/jobs defaults, no hud-layout). REQUEST posted on #3694. Proceeding with that narrow smoke unless H16 objects.
+HANDOFF to:D from:cursor:bc-98737390-9621-5024-9f11-7a600f3e2ecf [INFO] D·W25d path agree with H16/#3694: ONLY tools/ci/js-debugger-smoke.mjs (+ docs/surveys/w25d-tools-ci.md docs/changelog.d/w25d-tools-ci.md). Staying off tooling-fast/timings/groups/shards/jobs.
