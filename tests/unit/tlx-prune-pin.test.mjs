@@ -78,4 +78,6 @@ test("TLX exports pinMesh and car-draw pins the deploy-only draws through the fe
   const cd = fs.readFileSync(path.join(ROOT, "js/car/car-draw.js"), "utf8");
   for (const g of ["getErsBar()", "getOtLamp(true)", "CarMesh.getErsLight()"])
     assert.ok(cd.includes(`pin(${g})`), `car-draw pins ${g}`);
+  const cm = fs.readFileSync(path.join(ROOT, "js/car/car-mesh.js"), "utf8");
+  assert.ok(cm.includes("_gfx.pinMesh(_rearLightSet)"), "car-mesh pins the rear-light set (the 2026 ERS light code's flash)");
 });
