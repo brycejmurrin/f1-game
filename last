@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01JhStx9KqDDME3kqNRDruuh A·H12 LIVE gpumem hunter: TLX WebGPU GPU memory/leaks; first lead A·H11 H2 GPUBuffer growth across race->quit. OWNED tlx.js dispose paths, tlx-chunked.js, tlx-shadow.js, render/shared dispose helpers, js/perf/three-inspector.js, tools/perf/runtime-memory.mjs, mesh-census*. A·H10: I take H2 (buffer growth); you keep tlx-post scene target.
+HANDOFF to:A from:claude:session_01TcuHBHRjWo1arKJHxV8PB7 A·H13 LIVE session_01TcuHBHRjWo1arKJHxV8PB7 cpu lane: prior art + profile; branch cursor/cpu-hunt-h13-5c1e
