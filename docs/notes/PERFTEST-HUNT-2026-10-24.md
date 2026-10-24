@@ -38,7 +38,7 @@ PR #3697.
 |---|---|---|
 | `tests/unit/perf-vm-leak-cycles.test.mjs` (+ `tools/perf/vm-leak-census.mjs`) | monza + spa × 3 in the game VM. From cycle 2, live gfx handles (meshes / textures / instanced batches; created minus freed through the `js/render/gfx.js` contract), live listeners (window / document / element), and live intervals repeat **exactly** for the same circuit and phase. Pending timers at the menu do not exceed cycles 1–2. A positive control (Tracks.free stubbed out + one listener per quit) must be named by the same verdict. | 4 cycles measured: monza 33/23/31, spa 33/23/32, 643 listeners, 0 intervals, identical every cycle. 38 s |
 | `tests/unit/perf-vm-alloc-budget.test.mjs` (+ `tools/perf/vm-alloc-census.mjs`, baseline `tools/perf/baselines/vm-alloc.json`, `--update`) | JS bytes per race frame (monza, seeded, renderer stubbed), mean of six GC-free 60-frame windows after 600 warm frames, ≤ 1.15 × baseline (188 KB/frame) | 5 runs: mean 186.9–189.2 KB/frame. Two of them ran beside three busy loops (loadavg 3.2): the mean moved 1 %, single windows 8 %. 8 s |
-| `tests/specs/perf-boost-press-pipelines.spec.js` | TLX WebGPU leg (Bryce's path; falls back to WebGL2 and annotates where the runner has no adapter), then TLX WebGL2. Press 1 is reported, not asserted. Presses 2..4, spaced 30 frames apart, build **0** `createRenderPipeline`. Every press must actually deploy ERS | see Results |
+| BOOST per-press pipeline gate (**handed to A·W45**, see below) | TLX WebGPU and WebGL2 legs: presses 2..4, spaced 30 frames apart, build **0** render pipelines; an equal no-BOOST control window precedes each press; every press must deploy ERS | found #3703 |
 | `tests/specs/perf-sw-cache-hit.spec.js` | After the install settles, an offline reload serves every same-origin script / stylesheet / document from the SW with 200, every shell `<script src>` arrives, and `race("monza")` reaches the race offline. A control (a never-cached URL must fail offline) proves the offline emulation reaches the worker's own fetches | see Results |
 
 The VM census is the layer above the renderer: a handle the game forgets leaks on GLX, TLX and WGX
@@ -61,6 +61,15 @@ alike. What leaks below the contract (three's caches) stays the job of the brows
   reach the worker's own fetches: a never-cached URL still answered 200. Rewritten as a precache snapshot
   check. Its only misses were the 9 `LAZY_AGENT` files (the dev-only `__apex` surface sw.js excludes by
   design), so it found no real precache gap.
+
+## BOOST gate: handed to A·W45 (#3677 / #3703)
+
+OrchA 32 (2026-10-24, option b): the BOOST gate is red on today's tree by design (#3703), and the repo has no
+expected-fail convention. So it lands with the fix as its regression test, not in #3697. The files are on branch
+cursor/boost-press-gate-h17b (head 089a9bfa), three files: the tests/specs perf-boost-press-pipelines spec
+(TLX WebGPU leg), its -gl sibling spec (TLX WebGL2 leg, in its own file because a second TLX boot in one
+Chromium process stalls), and the tools/perf boost-press-census module (page driver + control windows).
+Expected green on the fix: presses 2..4 build 0 pipelines on both legs, with every press deployed.
 
 ## Follow-ups (not in this PR)
 

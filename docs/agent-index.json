@@ -1295,8 +1295,6 @@
       "script": "test:perf-budget",
       "kind": "browser",
       "files": [
-        "tests/specs/perf-boost-press-pipelines-gl.spec.js",
-        "tests/specs/perf-boost-press-pipelines.spec.js",
         "tests/specs/perf-sw-cache-hit.spec.js"
       ],
       "twinned": false

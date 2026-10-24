@@ -1896,11 +1896,6 @@
       "presentation": "native",
       "preserve": "Window KB/frame values with their (gc) marks, the mean, the baseline ratio and limit, the `= vm-alloc-census ok|OVER` line, exit status and the --json artifact."
     },
-    "tools/perf/boost-press-census.mjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
     "tools/perf/baselines/vm-alloc.json": {
       "action": "no-direct-output",
       "presentation": "native",
