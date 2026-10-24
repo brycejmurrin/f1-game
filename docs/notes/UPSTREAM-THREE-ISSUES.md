@@ -152,3 +152,48 @@ with the tab backgrounded before the call resolves. Downstream reference:
 Apex 26 (`brycejmurrin/f1-game`), `vendor/three-0.186.1/PATCHES.md` §5.
 
 **three.js version:** r184–r186, `dev` (2026-09-22).
+
+## 4. WebGPURenderer: no way to discard a single-sample attachment's store (draft, 2026-10-24; carried as vendored patch 17)
+
+**Title:** WebGPUBackend: allow `storeOp: 'discard'` for single-sample render-target attachments
+
+**Body:**
+
+`RenderTarget.storeMultisampledColorBuffer` / `storeMultisampledDepthBuffer` (r183+) let an
+app skip the store of an MSAA attachment, but `WebGPUBackend.beginRender` gates both on
+`renderContext.sampleCount > 1`:
+
+```js
+const discardColor = renderContext.sampleCount > 1 && renderTarget?.storeMultisampledColorBuffer === false;
+const discardDepth = renderContext.sampleCount > 1 && renderTarget?.storeMultisampledDepthBuffer === false;
+```
+
+A single-sample attachment is always `GPUStoreOp.Store`. On tile-based GPUs (Apple, most
+Android) a store is a full write of the tile memory to RAM. Common attachments that nobody
+reads after the pass:
+
+- an MRT side output that is only conditionally sampled (e.g. a reflection mask that the
+  composite reads only when wet);
+- the colour of a depth-only pass. WebGPU can render colourless, but a `RenderTarget`
+  always carries a texture;
+- a depth buffer used only for the depth test, when the app uses a `DepthTexture` so it
+  *can* sample it on some frames.
+
+WebGL apps get this today with `gl.invalidateFramebuffer`. The WebGPU path has no
+equivalent.
+
+**Proposal:** keep the MSAA semantics and add single-sample flags that change the
+storeOp only (not the loadOp, so a cleared pass stays cleared and a loaded pass still
+loads). Either generalise the existing members (`storeColorBuffer` / `storeDepthBuffer`, or
+drop the `sampleCount > 1` guard when the target is single-sample and the user opted
+in), or accept a per-attachment array for MRT, e.g. `renderTarget.storeColorBuffers = [true, false]`.
+Our local patch (vendor/three-patches/patches.mjs id 17) uses a bitmask and a
+boolean read at every `beginRender`. It is three edits in `beginRender`.
+
+**Related, not part of this ask:** #30560 (per-object UBO / bind-group cost) is the other
+WebGPU-on-phone cost we see (about 9 `queue.submit` and 38 `writeBuffer` per frame in our
+census). It is open and High priority with no linked PR as of 2026-10-24
+(https://github.com/mrdoob/three.js/issues/30560); sunag (2026-01-06): sharing buffers across groups of
+similar objects is in progress. r186 already ships `BundleGroup` (render bundles), which
+TLX does not use yet, so that is the lever to measure first. See
+`docs/notes/RENDERER-ALTERNATIVES-2026-10-24.md`.

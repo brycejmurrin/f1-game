@@ -59,3 +59,8 @@ JSON body: `{ from, to, type, pr, text, sha, ts }` — `from` is `APEX_FLEET_AS`
    `fleet-bus.mjs who <X>`).
 3. Acks are **one line**.
 4. **No secrets** in any message (no webhook auth, tokens, or keys).
+5. **Status is READY / BLOCKED / DONE.** A worker reports state with those
+   three; `HANDOFF` is only a size-stop rotation or `ORCH <X> LIVE`. An
+   orchestrator never asks for "a HANDOFF" as a progress report (batch 9).
+   A READY is refused unless the sender's checkout holds a passing
+   `artifacts/ready-gate/<pr>.json` (≤ 60 min, same head as any sha it names).

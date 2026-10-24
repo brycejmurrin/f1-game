@@ -329,7 +329,7 @@ function initUI() {
     "Apply a coordinated cockpit, or mix individual options below. HISTORIC uses leather, gauges, a round wheel and no halo.", preset, setPreset);
   const C = CHOICES;
   row("pm-helmet-visor", "HELMET VISOR", C.visor.values, C.visor.labels,
-    "Optional see-through shield in HELMET camera only. CLEAR adds a curved rim and faint reflections; TINTED adds your chosen lens color and intensity. OFF keeps the original helmet view.", visor, setVisor);
+    "Optional see-through shield in HELMET camera only. CLEAR adds a curved rim and faint reflections; TINTED adds your chosen lens color and intensity. OFF removes the visor and its frame: a plain, unframed helmet view.", visor, setVisor);
   row("pm-visor-color", "TINT COLOR", C.visorColor.values, C.visorColor.labels,
     "Lens color for TINTED visor: neutral, warm amber, ice blue or rose. CLEAR keeps an untinted centre.", visorColor, setVisorColor);
   row("pm-visor-intensity", "TINT INTENSITY", C.visorIntensity.values, C.visorIntensity.labels,

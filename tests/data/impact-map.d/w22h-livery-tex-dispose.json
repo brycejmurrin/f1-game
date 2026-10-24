@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/car/car-draw.js": {
+      "narrow": [
+        "tests/unit/livery-tex-dispose.test.mjs"
+      ]
+    }
+  }
+}
