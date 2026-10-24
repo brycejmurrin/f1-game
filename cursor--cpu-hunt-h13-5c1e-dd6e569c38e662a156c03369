@@ -1,1 +1,1 @@
-1792806670	Claude	[A·H13] CPU hunt: docs/notes/CPU-HUNT-2026-10-24.md, tests/unit/*-alloc*.test.mjs (fix files named per PR)  [cursor/cpu-hunt-h13-5c1e; session dd6e569c38e662a156c03369]
+1792811306	Claude	[A·H13] js/game.js update() ranking: ranked.sort + ranked.concat(parked) (~4415-4630) alloc-free; tests/unit/rank-sort-alloc.test.mjs  [cursor/cpu-hunt-h13-5c1e; session dd6e569c38e662a156c03369]
