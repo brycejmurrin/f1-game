@@ -43,7 +43,7 @@ for (const language of ["WGSL", "GLSL"]) test(`folded mirror: ${language} sample
     assert.equal(normalize(insetGuards[0]), normalize(insetGuards[1]), "sampling uses exactly the overwrite predicate");
     assert.equal((insetGuards[0].match(/>=/g) || []).length, 2, "inclusive left/top");
     assert.equal((insetGuards[0].match(/<(?![=])/g) || []).length, 2, "exclusive right/bottom");
-    assert.match(insetGuards[0], /> 0\.5/, "mirror-off remains gated");
+    assert.equal((insetGuards[0].match(/> 0\.5/g) || []).length, 1, "mirror-off remains gated by exactly one test");
     const branchStart = shader.indexOf(insetGuards[0]);
     let end = shader.indexOf("{", branchStart) + 1, depth = 1;
     for (; depth > 0 && end < shader.length; end++) {
