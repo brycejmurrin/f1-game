@@ -60,6 +60,13 @@ test("claim text -> paths and session; the board's hash tag is neither", () => {
   assert.equal(claimSession(t), "#3099");
   assert.equal(claimSession("on js/a.js for claude:session_01ABC"), "claude:session_01ABC");
   assert.equal(claimSession("on js/a.js cse_01XYZ"), "cse_01XYZ");
+  assert.equal(claimSession("on js/a.js codex:01a16b2c-b44f-72c4-ad07-c859b1bdf022"),
+    "codex:01a16b2c-b44f-72c4-ad07-c859b1bdf022");
+  assert.equal(claimSession("on js/a.js cursor:bc-13d1cd46-bd5d-5bf1-8ffd-79660c8979b9"),
+    "cursor:bc-13d1cd46-bd5d-5bf1-8ffd-79660c8979b9");
+  assert.equal(claimSession("on js/a.js grok:track-engine-8d41"), "grok:track-engine-8d41");
+  assert.equal(claimSession("on js/a.js codex:1923dcd1d9ef874aad548d82"), null,
+    "a claims-board hash cannot receive a bus message");
   assert.equal(claimSession("on js/a.js  [claude/x; session 1923dcd1d9ef874aad548d82]"), null);
 });
 
@@ -118,6 +125,14 @@ test("--release-answer: HELD per holding PR, and the rest released", () => {
 test("--release-answer: another session's live claim is not the caller's to release", () => {
   const lines = releaseAnswer("R9", decide(["js/a.js"], { claims: [claim("js/a.js cse_01OTHER")], now: NOW }), "claude:session_01ME");
   assert.deepEqual(lines, ["NOT-OWNER R9 js/a.js: claimed by Claude cse_01OTHER"]);
+});
+
+test("--release-answer names a Codex claimant instead of calling it unaddressable", () => {
+  const owner = "codex:01a16b2c-b44f-72c4-ad07-c859b1bdf022";
+  const lines = releaseAnswer("R10", decide(["js/a.js"], {
+    claims: [claim(`OWNED js/a.js ${owner}`)], now: NOW,
+  }), "claude:session_01ME");
+  assert.deepEqual(lines, [`NOT-OWNER R10 js/a.js: claimed by Claude ${owner}`]);
 });
 
 test("lapse rule: only with --requested-at >= 60 min ago, only claims > 60 min old, never an open-diff path", () => {

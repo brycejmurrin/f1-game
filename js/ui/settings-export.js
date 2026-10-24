@@ -405,12 +405,41 @@ function collect(mode, G) {
 }
 
 // TIME-TRIAL LEADERBOARDS (apex26.ttlb.<trackId>). Optional in the settings
-// file: old backups without `ttlb` still import. Export is every board on disk;
+// file: old backups without `ttlb` still import. Export includes refused session writes;
 // import validates through GameStore.ttParseBoard (same filter as ttRead) and
 // merges per track via ttBoardAdd so caps and class limits stay enforced.
 const TTLB_TRACK_RE = /^[A-Za-z0-9_.-]{1,64}$/;
 const TTLB_TRACKS_MAX = 64;
-const TTLB_LAPS_MAX = 600;   // 10 laps x 6 classes x a few tracks of headroom
+const TTLB_LAPS_MAX = TTLB_TRACKS_MAX * 6 * 10;   // every native board: 6 classes × 10 laps
+// Read disk without load-time repairs, then overlay refused JSON writes. Those
+// values are still usable in GameStore (including keys disk never accepted),
+// and exporting them is the player's recovery path. Never retry a write here.
+function collectJson(accept) {
+  const out = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const full = localStorage.key(i);
+      if (!full || !full.startsWith("apex26.")) continue;
+      const k = full.slice(7);
+      if (!accept(k)) continue;
+      const raw = localStorage.getItem(full);
+      if (raw !== null) { try { out[k] = JSON.parse(raw); } catch (_) { /* not ours to repair */ } }
+    }
+  } catch (_) { /* blocked disk: session writes can still be exported below */ }
+  const s = typeof GameStore !== "undefined" && GameStore.store;
+  if (s && s.failedKeys && s.getStored) for (const f of s.failedKeys()) {
+    if (f.lane !== "json" || !accept(f.key)) continue;
+    // A serialization refusal may never have populated the cache. Avoid the
+    // repairing read path in that case; the original disk snapshot above wins.
+    if (!s._cache || typeof s._cache.has !== "function" || !s._cache.has("apex26." + f.key)) continue;
+    try {
+      const value = s.getStored(f.key);
+      if (value === undefined) delete out[f.key];
+      else out[f.key] = JSON.parse(JSON.stringify(value));
+    } catch (_) { /* an unserializable session value cannot replace valid disk data */ }
+  }
+  return out;
+}
 function ttlbEntryKey(e) {
   return JSON.stringify({ t: e.t, teamId: e.teamId, code: e.code, name: e.name, ts: e.ts, context: e.context || null });
 }
@@ -432,18 +461,11 @@ function ttlbParseBoard(b) {
 }
 function collectTtlb() {
   const out = {};
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const full = localStorage.key(i);
-      if (!full || full.indexOf("apex26.ttlb.") !== 0) continue;
-      const trackId = full.slice(12);
-      if (!TTLB_TRACK_RE.test(trackId)) continue;
-      let raw = null;
-      try { raw = JSON.parse(localStorage.getItem(full)); } catch (_) { continue; }
-      const laps = ttlbParseBoard(raw);
-      if (laps.length) out[trackId] = laps;
-    }
-  } catch (_) { /* storage blocked */ }
+  const boards = collectJson((k) => k.startsWith("ttlb.") && TTLB_TRACK_RE.test(k.slice(5)));
+  for (const [k, raw] of Object.entries(boards)) {
+    const laps = ttlbParseBoard(raw);
+    if (laps.length) out[k.slice(5)] = laps;
+  }
   return out;
 }
 function applyTtlb(bag) {
@@ -503,26 +525,13 @@ function isGarageKey(k) {
   }
   return false;
 }
-// The one place anything ENUMERATES the namespace. Guarded by isGarageKey on
-// every hit, so a key that is not garage-shaped cannot reach the file.
+// Every disk and refused-session key passes the same garage allowlist.
 function collectGarage() {
-  const out = {};
-  let n = 0;
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const full = localStorage.key(i);
-      if (!full || full.indexOf("apex26.") !== 0) continue;
-      const k = full.slice(7);
-      if (!isGarageKey(k)) continue;
-      const raw = localStorage.getItem(full);
-      if (raw == null) continue;
-      try { out[k] = JSON.parse(raw); n++; } catch (_) { /* not ours to repair */ }
-    }
-  } catch (_) { /* storage blocked: an empty garage file, not a crash */ }
+  const out = collectJson(isGarageKey);
   let build = null;
   try { const m = document.querySelector('meta[name="apex-build"]'); build = (m && m.content) || null; } catch (_) { /* no DOM */ }
   return { format: GARAGE_FORMAT, exportedAt: new Date().toISOString(), build,
-           excluded: GARAGE_EXCLUDED, count: n, garage: out };
+           excluded: GARAGE_EXCLUDED, count: Object.keys(out).length, garage: out };
 }
 
 // Reading a file back in. Both loaders answer {ok, applied, skipped, reason}. They are deliberately

@@ -437,6 +437,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/determinism-bisect.test.mjs",
   // DevFlags: query/hash/storage resolution for boot toggles (js/core/dev-flags.js).
   "tests/unit/dev-flags.test.mjs",
+  // Device Farm iOS syslog reader (tools/perf/devicefarm-syslog.mjs): WebContent footprint dumps, memory limits, kills; trimmed real-format fixture.
+  "tests/unit/devicefarm-syslog.test.mjs",
   "tests/unit/diagnostics-tools.test.mjs",
   "tests/unit/digital-steer.test.mjs",
   // Live TV director (js/camera/director.js): pure cut dwell/battles + dbgCam publish without car forces. ~0.05 s.
@@ -771,6 +773,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lighting-rebuild.test.mjs",
   "tests/unit/lighting-tuner-reset-weather.test.mjs",
   "tests/unit/lighting-tuner-sweep.test.mjs",
+  // tools/perf/lit-wgsl-census.mjs: WGSL normalise/classify/hash/diff core for the lit-WGSL re-key census (#3672). < 1 s, no browser.
+  "tests/unit/lit-wgsl-census.test.mjs",
   // GATE GAP (2026-09-10): these three garage files and the three steering
   // files below sat in test:garage-unit / test:steering-unit, which ran in NO
   // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
@@ -794,6 +798,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-stations.test.mjs",
   // LIVERY card swatches painted once per look and blitted after (B·H13 garage pick cost). < 1 s.
   "tests/unit/livery-swatch-cache.test.mjs",
+  // #3609: SAVE & FIT new custom_<ts> disposes the previous fitted hi-res atlas (stubbed CarDraw VM). < 1 s.
+  "tests/unit/livery-tex-dispose.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
   "tests/unit/livery-wheels.test.mjs",
@@ -1290,6 +1296,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pass no longer clears the SUN flag; a retired post chain is rebuilt at the
   // next realloc and a post-only death keeps the bound label.
   "tests/unit/tlx-fail-scope.test.mjs",
+  // A·H12 GPU-memory hunt (G1): over three r186 on the fake WebGL2, the real tlx-shadow warm releases the previous race's probe-caster render objects — Renderer._objects stays flat across six warms (budget pin).
+  "tests/unit/tlx-gpumem-leak.test.mjs",
   // TLX perf hunt 3 (lane TLX-1): three's real WebGPURenderer over a no-op WebGL2 compiles the real lit material; GLSL pins (no env cube when opted out) + tlx.js source pins.
   "tests/unit/tlx-hunt3.test.mjs",
   // TLX perf hunt 4 (lane RENDER-S, A-H1): bufferSubData bytes over three r186 on the fake WebGL2 — the plain-Mesh instance streams (batches, mirror views, R1 runs, FX streams) upload 0 B unchanged and exactly the written range when written; the real InstancedMesh caster keeps Dynamic.
@@ -1325,6 +1333,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).
   "tests/unit/tolerance-diff.test.mjs",
   "tests/unit/tooling-fast-runner.test.mjs",
+  // tools/ci/tooling-timings.mjs: CI-measured per-file durations for the guards-shard packer (BUILD-HUNT-2026-10-24 B1). Pure fixtures, ~0.2 s.
+  "tests/unit/tooling-timings.test.mjs",
   // Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.
   "tests/unit/tools-a12-guards.test.mjs",
   "tests/unit/tools-runnable.test.mjs",

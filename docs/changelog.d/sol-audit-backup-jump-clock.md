@@ -1,0 +1,2 @@
+Fixed: Garage and time-trial backup exports include session-only changes retained after storage refuses a save, and settings imports retain leaderboard histories larger than 600 laps within the supported backup limit.
+Fixed: Mid-race JUMP IN samples recorded positions at the published lap-start time when missing lap timings or restart gaps separate the recording clock from the simulated pace clock.

@@ -437,6 +437,27 @@ const CarDraw = (function () {
         if (key.indexOf(prefix) === 0) dropDecalTexture(key);
       });
     }
+    // SAVE & FIT always mints a fresh custom_<ts> id (setup-sheet) and only drops
+    // draft keys (invalidateDecalTextures(team, true)). The new id cache-misses and
+    // schedulePlayerHiRes uploads another 2048×2560 (~26.7 MB) while the previous
+    // fitted id's atlas stays live (#3609). Drop every non-draft atlas for this
+    // team whose key is not under the CURRENT fitted id. Skip while a draft is
+    // live for the team so CANCEL still restores the saved 2048.
+    function dropSupersededFittedAtlases(team) {
+      const d = G.livDraftOverride;
+      if (d && d.teamId === team.id) return;
+      const keep = team.id + ":" + G.getLiveryId(team.id) + ":";
+      const teamColon = team.id + ":";
+      const draftPrefix = teamColon + DRAFT_TAG;
+      const keys = Object.keys(_decalTexCache);
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        if (key.indexOf(teamColon) !== 0) continue;
+        if (key.indexOf(draftPrefix) === 0) continue;
+        if (key.indexOf(keep) === 0) continue;
+        dropDecalTexture(key);
+      }
+    }
 
     // PHOTO MODE ATLASES. A close-up is what photo mode is for, so a rival
     // drawn there asks for the player-tier PREVIEW atlas (":P", 1024 on desktop)
@@ -691,6 +712,9 @@ const CarDraw = (function () {
       // isPlayer is part of the key: on the mobile tier the player's atlas uploads
       // at 512² and AI atlases at 256², so a team the player later switches to
       // must not reuse a cached AI-resolution atlas (and vice versa).
+      // A SAVE & FIT that minted a new id: free the previous fitted atlas before
+      // this miss schedules another ~26.7 MB upload (#3609).
+      if (isPlayer) dropSupersededFittedAtlases(team);
       const key = decalKeyFor(team, num, isPlayer);
       const wantHi = !!isPlayer && allowHiRes !== false;
       if (key in _decalTexCache) {
