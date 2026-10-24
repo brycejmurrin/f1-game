@@ -24,7 +24,7 @@ function rig({ lazyV = null, integrity = null, blocked = false } = {}) {
   const byId = { "apex-lazy-v": json("apex-lazy-v", lazyV), "apex-lazy-integrity": json("apex-lazy-integrity", integrity) };
   const ctx = vm.createContext({
     ApexRoster: { DEFERRED_EDGES: [] },
-    window: { __APEX_BUILD: "b7" },
+    window: { __APEX_BUILD: "b7", setTimeout, clearTimeout },
     Log: { warn() {} },
     UpdateCheck: { prepareLazyLoad: async () => true, blocksLazyLoad: () => blocked },
     document: {
@@ -210,4 +210,47 @@ test("eval-time hunch guesses skip the TLX roster; sure guesses preload at defau
   assert.equal(!!(sureTlx.opts && sureTlx.opts.low), false);
   const blocked = bootRig({ throws: true, gpu: true });
   assert.equal(blocked.preloadCalls.length, 0, "blocked storage: no guess, no fetch");
+});
+
+test("a transient script onerror retries with cache-bust, then succeeds without a fourth inject", async () => {
+  const urls = [];
+  let loads = 0;
+  const r = rig();
+  const docHead = r.ctx.document.head;
+  const orig = docHead.appendChild.bind(docHead);
+  docHead.appendChild = (el) => {
+    orig(el);
+    if (el.tag !== "script") return;
+    urls.push(el.src);
+    queueMicrotask(() => {
+      loads++;
+      if (loads === 1) el.onerror();
+      else el.onload();
+    });
+  };
+  const t0 = Date.now();
+  const p = r.ctx.ScriptLoader.create().load(["a.js"], []);
+  await r.flush();
+  assert.equal(await p, true);
+  assert.ok(Date.now() - t0 >= 350, "waits before the second inject");
+  assert.equal(loads, 2);
+  assert.ok(urls[1].includes("retry=1"), "the retry uses a fresh URL key");
+});
+
+test("three transient failures on one file settle the load as failed", async () => {
+  const r = rig();
+  const docHead = r.ctx.document.head;
+  const orig = docHead.appendChild.bind(docHead);
+  let loads = 0;
+  docHead.appendChild = (el) => {
+    orig(el);
+    if (el.tag !== "script") return;
+    queueMicrotask(() => { loads++; el.onerror(); });
+  };
+  const t0 = Date.now();
+  const p = r.ctx.ScriptLoader.create().load(["a.js"], [], { strict: true });
+  await r.flush();
+  assert.equal(await p, false);
+  assert.equal(loads, 3);
+  assert.ok(Date.now() - t0 >= 1500, "both backoff delays ran");
 });

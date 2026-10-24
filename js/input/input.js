@@ -982,7 +982,7 @@ const Input = (function () {
     // Native HUD buttons own their activation keys. Let the browser deliver
     // their click once; releases still clear keys held before focus moved here.
     const nativeHudActivation = tag === "BUTTON" && active && active.matches &&
-      active.matches("#btn-cam, #pausebtn, #hud-restore") &&
+      active.matches("#btn-cam, #pausebtn, #hud-restore, #pc-restore") &&
       (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter");
     if (nativeHudActivation) {
       if (!down) { heldKeys.delete(e.code); syncHeldKeys(); }

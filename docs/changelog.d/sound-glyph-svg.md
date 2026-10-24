@@ -1,0 +1,1 @@
+Fixed: the title screen's SOUND button now draws its music note as a CSS-masked icon instead of the ♪ character, which no bundled font contains — the note no longer renders in a different fallback font (or as a missing-glyph box) from one machine to the next.

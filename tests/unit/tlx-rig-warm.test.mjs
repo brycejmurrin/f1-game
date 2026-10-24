@@ -57,6 +57,7 @@ async function rig(t, { soft = false } = {}) {
     let _coOn = true;
     let _warmPending = null, _warmRequested = false, _deviceLost = false, _gpuLastOperation = "";
     const mats = new Map();
+    const fxFor = () => false;   // finishes on demand (tlx.js): these rigs draw no 60-85 geometry
     const materialFor = (o) => { let m = mats.get(o); if (!m) mats.set(o, m = lit.makeMaterial({ roughness: o.roughness })); return m; };
     const _gpuSettled = async () => {}, _ssrMrtNode = () => null, softOutRT = () => null;
     const drawList = []; drawList.n = 0;
@@ -193,4 +194,35 @@ test("wiring: present() dispatches the rig warm after the entry and mirror warms
   assert.ok(i > 0 && j > i, "startRaceBody awaits the rig warm under the cover, before the mirror preparation");
   assert.ok(GAME.indexOf('spanAsync("warmCarAssets"') < i, "after the car meshes exist");
   assert.ok(GAME.includes("_warmKey === menuKey(trackIdx) ? _warmKey : null))"), "the mirror key only when the menu warmed this world (the entry warm was skipped)");
+});
+
+test("finishes on demand: the 60-85 tint branch lives in its own lit graph, picked per draw by the geometry's ids", async (t) => {
+  // Bryce 2026-10-23 (OrchA 31): the expanded-finish tint block is ~12 % of every lit pipeline's compile, paid on a
+  // cold first race whether or not a car wore one of those finishes (the cold first-race warm census, PR #3653).
+  const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+    ssrTag: false, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+  const plain = lit.makeMaterial({ carFinish: true, roughness: 0.3 }), plain2 = lit.makeMaterial({ carFinish: true, roughness: 0.5 });
+  const fx = lit.makeMaterial({ carFinish: true, roughness: 0.3, finishX: true }), fx2 = lit.makeMaterial({ carFinish: true, finishX: true });
+  assert.equal(plain.customProgramCacheKey(), "tlx-lit", "a car with no 60-85 finish keeps the base program");
+  assert.equal(fx.customProgramCacheKey(), "tlx-lit-fx", "a 60-85 car draws the fx program");
+  assert.equal(plain.colorNode, plain2.colorNode, "every base material binds the one shared graph");
+  assert.equal(fx.colorNode, fx2.colorNode, "every fx material binds the one fx graph");
+  assert.notEqual(plain.colorNode, fx.colorNode, "the fx graph is its own (the branch is built into it alone)");
+  assert.equal(lit.makeMaterial({ chunked: true, finishX: true }).customProgramCacheKey(), "tlx-lit-ch", "the world (chunked) never takes it");
+  const lsrc = read("js/render/three/tsl-lit.js");
+  assert.ok(lsrc.includes("if (fx) If(matU.carFinish.greaterThan(0.5).and(finishId.greaterThanEqual(60.0)).and(finishId.lessThanEqual(85.0))"),
+    "buildFragment builds the 60-85 block only into the fx graph");
+  // The geometry flag and the draw-site choice (tlx.js).
+  const geoSrc = tslice("      function buildGeometry(data) {", "      /** Read the raw");
+  const flag = new Function("data", `const g = { userData: {} };
+    ${geoSrc.slice(geoSrc.indexOf("const ids = data.mat;"), geoSrc.indexOf("return _regGeo"))} return !!g.userData.tlxFx;`);
+  assert.equal(flag({ mat: [20, 20, 59.6, 21] }), true, "59.6 rounds to 60: a 60-85 id");
+  assert.equal(flag({ mat: [20, 44, 85.4] }), true);
+  assert.equal(flag({ mat: [20, 44, 85.6, 59.4] }), false, "86 and 59 are outside the range");
+  assert.equal(flag({}), false);
+  assert.ok(TLX.includes("const fxFor = (geo, opts) => !!(opts && opts.carFinish && geo && geo.userData.tlxFx);"), "only carFinish draws take it");
+  assert.ok(TLX.includes("materialFor(opts, false, undefined, fxFor(mesh.geo, opts))"), "draw() picks the variant per draw");
+  assert.ok(TLX.includes("mat: materialFor(opts, false, false, fxFor(mesh.geo, opts))"), "the rig warm compiles the variant the draw will use");
+  assert.ok(TLX.includes("skipBatches() || fxFor(geo, opts)) return false;"), "an fx geometry never joins a coalesced run (its program has no branch)");
+  assert.ok(TLX.includes('const key = fx ? matKeyFor(o, chunked, instanced) + "|fx" : matKeyFor(o, chunked, instanced);'), "its own cache key");
 });

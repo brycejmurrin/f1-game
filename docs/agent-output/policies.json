@@ -1851,6 +1851,11 @@
       "presentation": "native",
       "preserve": "Runs on the Device Farm test host, not locally: its stdout is the run's test spec output and its files land in $DEVICEFARM_LOG_DIR."
     },
+    "tools/perf/devicefarm-boot.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Timestamped progress lines (device, session state, one line per timed boot with menu time, first contentful paint, load end, resource and cached counts, thermal state, session minutes) and the boot.json path; the endpoint URL is never printed."
+    },
     "tools/perf/devicefarm-iphone.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1881,6 +1886,11 @@
       "presentation": "native",
       "preserve": "Stubbed/real link qualification, measured-frame denominator, distance band, the `= mesh-census` summary JSON line and the --json / --md artifacts."
     },
+    "tools/perf/ers-deploy-census.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c1"
+    },
     "tools/perf/garage-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1905,6 +1915,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"
+    },
+    "tools/perf/touch-boost-probe.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c1"
     },
     "tools/shot/ab-gallery.mjs": {
       "action": "artifact-first",

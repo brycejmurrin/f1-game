@@ -232,8 +232,9 @@ window.ScrollFade = (function () {
   }
   let settleSoon = 0;
   let settleLate = 0;
-  // Viewport / scale / explicit refresh must land in the same frame budget as
-  // layout (ui-scale.spec counts zoom + sf-* mask within six frames). Screen
+  // Viewport / scale / explicit refresh paint in the same frame as layout, so
+  // the fade never describes the pre-scale column (ui-scale.spec counts zoom
+  // within six frames; the sf-* mask transitions are paint-only, #3606). Screen
   // [hidden] flips and mutation storms keep SCHEDULE_MS coalescing (D·IP2).
   function settle(immediate) {
     pruneWatched();
