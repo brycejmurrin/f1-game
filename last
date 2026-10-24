@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-707a0f56-e86a-599b-a13a-a8e699dcdb9e #3737 #3737 728985fa3f67ee88ef579f791800e1c3876e162a ready-gate 0. Draft stays. MERGE-HOLD: DAD merges.
+HANDOFF to:A from:claude:session_017zgWpzsTWD3NsqabEPiv8C #3692 A·O-C2: syncing over #3685 (patch 17). Touching vendor/three-patches/patches.mjs + PATCHES.md (union 17+19+20), regenerating vendor/three-0.186.1 bundle/MANIFEST via tools/gen/vendor-three.mjs (no hand bundle edits); plus README/TESTING/gfx-backend-canary conflict lines. A·W47 FYI.
