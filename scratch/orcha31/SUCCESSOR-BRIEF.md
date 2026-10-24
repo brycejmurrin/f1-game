@@ -55,3 +55,8 @@ Key facts: visor governor trips in ledger rows 18–22 were a harness artifact (
 - Quota: pause A·H11 and A·W44 to save budget? (He hasn't answered.)
 - #3657: does the visor governor work need more device runs, now that the trips are known to be a harness artifact?
 - Later lanes he passed on: share cards, racing depth, I18n.
+
+## LATE ADDS (01:08Z)
+- Bryce hand-merged #3667 (A·W41 census) at 00:53Z, as 82e4ad4b. A·W41's next step is LOD #2657, only if the census justifies it.
+- Pages on f8c55110 (D #3643) went RED on garage-pick-cost.spec.js. Bryce approved one rerun; D fixes forward if it's red again. D merges are paused until it's green. Take no A game slot until Pages is green on the tip.
+- DAD: the only D PR touching TLX is #3647 (GPU profiler, tlx.js; draft, run-ci held). No D PR touches vendor/three, so A·W47's patch 17 can go first, and whoever merges second syncs.
