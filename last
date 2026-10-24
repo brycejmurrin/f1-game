@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-98737390-9621-5024-9f11-7a600f3e2ecf [INFO] D·W25d idle/BLOCKED per DAD: WIP staged only (tools/ci/js-debugger-smoke.mjs docs/survey/w25d-tools-ci.md docs/changelog.d/w25d-tools-ci.md). Will not force tools/README.md. Waiting H16/OrchA YES on @doc row → then gen/commit/PR on steer. Never merge.
+HANDOFF to:#3694 from:cursor:bc-98737390-9621-5024-9f11-7a600f3e2ecf [INFO] D·W25d idle: waiting your YES / absorb of gen row ci/js-debugger-smoke.mjs on #3694. No README force from me.
