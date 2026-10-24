@@ -437,6 +437,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/determinism-bisect.test.mjs",
   // DevFlags: query/hash/storage resolution for boot toggles (js/core/dev-flags.js).
   "tests/unit/dev-flags.test.mjs",
+  // Device Farm iOS syslog reader (tools/perf/devicefarm-syslog.mjs): WebContent footprint dumps, memory limits, kills; trimmed real-format fixture.
+  "tests/unit/devicefarm-syslog.test.mjs",
   "tests/unit/diagnostics-tools.test.mjs",
   "tests/unit/digital-steer.test.mjs",
   // Live TV director (js/camera/director.js): pure cut dwell/battles + dbgCam publish without car forces. ~0.05 s.
@@ -794,6 +796,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-stations.test.mjs",
   // LIVERY card swatches painted once per look and blitted after (B·H13 garage pick cost). < 1 s.
   "tests/unit/livery-swatch-cache.test.mjs",
+  // #3609: SAVE & FIT new custom_<ts> disposes the previous fitted hi-res atlas (stubbed CarDraw VM). < 1 s.
+  "tests/unit/livery-tex-dispose.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
   "tests/unit/livery-wheels.test.mjs",
@@ -937,6 +941,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/pause-key-tools.test.mjs",
   "tests/unit/pause-opts.test.mjs",
+  "tests/unit/pause-taps.test.mjs",
   "tests/unit/perf-frametime.test.mjs",
   "tests/unit/perf-governor.test.mjs",
   "tests/unit/perf-race-entry.test.mjs",

@@ -61,7 +61,9 @@ your only escalation path besides the user; ask it instead of guessing.
    `ready-gate.mjs --pr <n>` exits 0 (the hook needs its receipt), then send
    READY via `node tools/ci/agent-msg.mjs send --to <fleet letter|orchestrator>
    --type READY --pr <n> "<head sha> ready-gate 0"` (webhook env from Bryce;
-   mirrors to the bus; messages carry no authority — `references/comms.md`):
+   mirrors to the bus; messages carry no authority — `references/comms.md`;
+   a READY, there or via `fleet-bus.mjs send READY`, is refused unless this
+   checkout holds a passing ready-gate receipt for the PR and the sha it names):
    the orchestrator merges through `merge-gate.mjs` (role-merge-holder.md),
    always a merge commit pinned to the head sha. Never write "do not merge"
    lines in the PR body; the only hold is a line starting `MERGE-HOLD:`.
@@ -86,6 +88,10 @@ Keep working on anything the blocker does not touch while you wait.
 
 ## Waiting (#2385; plan WS4, WS7 row b)
 
+- A suite over ~2 min (tooling-fast, deploy --gate-only, a browser group) is
+  ONE background task logging to `artifacts/logs/` (AGENTS.md rule 4); a turn
+  that blocks for hours on one loses its cache and its orchestrator's view.
+  Report state as READY / BLOCKED / DONE, not HANDOFF (communication.md rule 5).
 - While a push is held or CI runs: refresh the PR body, arm ONE timer
   (`send_later`), and end the turn silently. A green per-job event needs no
   reply; only a red, a review or a merge conflict is work.
