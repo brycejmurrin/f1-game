@@ -207,8 +207,11 @@ const PlayerForces = (function () {
     const rollAx = SetupTune.axleGrip(c.rollBalance, c.lateralAccel || 0, loadF);
     const muF = Math.max(0.5, muBase * ellipseF * loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1)) * FRONT_GRIP * tyreAx.f * rollAx.f);   // load-sensitive: the loaded axle gains less than its share (LOAD_SENS)
     // Grip steer: own-state driverDelta cap (js/physics/grip-steer.js). Identity at OFF.
+    const og = Vehicle.grip;
+    og.muF = muF; og.csFront = CS_FRONT; og.af = af; og.ar = ar;
+    og.braking = braking; og.shaped = steer; og.dt = dt;
     const gripped = (typeof GripSteer !== "undefined" && GripSteer.forPlayer)
-      ? GripSteer.forPlayer(driverDelta, c, { muF, csFront: CS_FRONT, af, ar, braking, shaped: steer, dt })
+      ? GripSteer.forPlayer(driverDelta, c, og)
       : driverDelta;
     delta = clamp(gripped + assistDelta + lineDelta, -0.7, 0.7);
     const muR = Math.max(0.5, muBase * ellipseR * loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1)) * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
@@ -242,13 +245,14 @@ const PlayerForces = (function () {
       const bF = TyreModel.brakeFront(beta, loadF, loadR) * (bb ? bb.f : 1);
       const bR = beta * (bb ? bb.r : 1);
       const capG = longBudget * surfMu * kerbGrip * tyreMu * marbleMu * aeroGrip;
-      const ws = WheelState.stepPlayer(c, {
-        dt, braking, thrOn,
-        aReqF: -pedal * bF * longBudget,
-        aReqR: thrOn ? axThrDemand * LONG_GRIP : -(pedal * bR + engine) * longBudget,
-        muLongF: capG * tyreAx.f, muLongR: capG * tyreAx.r,
-        slipF, slipR, csFront: CS_FRONT, csRear: csR, muLatF: muF, muLatR: muR,
-      });
+      const ow = Vehicle.wheel;
+      ow.dt = dt; ow.braking = braking; ow.thrOn = thrOn;
+      ow.aReqF = -pedal * bF * longBudget;
+      ow.aReqR = thrOn ? axThrDemand * LONG_GRIP : -(pedal * bR + engine) * longBudget;
+      ow.muLongF = capG * tyreAx.f; ow.muLongR = capG * tyreAx.r;
+      ow.slipF = slipF; ow.slipR = slipR; ow.csFront = CS_FRONT; ow.csRear = csR;
+      ow.muLatF = muF; ow.muLatR = muR;
+      const ws = WheelState.stepPlayer(c, ow);
       latScaleF = ws.latScaleF;
       latScaleR = ws.latScaleR;
       // Fx → speed. axTarget is game.js's longitudinal target this tick
