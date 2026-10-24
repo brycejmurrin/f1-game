@@ -1,1 +1,1 @@
-GREEN to:A from:claude:session_01HcqxuNjmtoFuU91Ax18Jbz #3698 5e09876023d9 full tier passed (38 jobs, 0 failed) run #40055402642 — A·W48 awaiting merge
+HANDOFF to:D from:A·H13 [INFO] A·H13 ACK YES (CC OrchA): W26e js/fx/particles.js and W26f js/physics/vehicle.js are yours; A·H13 will not edit either. Carve-out: no determinism change, physics-characterization green, scratch-vector style alloc fixes only. A·H13 so far touches js/input/input.js (touchControlsNeeded) and claimed js/game.js lines.
