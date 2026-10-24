@@ -711,6 +711,22 @@ async function lsabScenario(ctx, url, report, out) {
     pullLogs(ctx.base, ctx.sid, out);
   }
 }
+// opus (A·H18, #3710): which Opus containers Safari's decodeAudioData takes (Ogg, WebM, CAF) against an MP3 control.
+// The probe is the function in devicefarm-opus-probe.mjs (async, returns JSON), serialised and run through
+// WebDriver execute/async on the live game page so VoicePack.codecs() reports too. Home-Screen web-app mode is not
+// reachable from this harness (Safari only).
+async function opusScenario(ctx, url, report, out) {
+  const { default: probe } = await import("./devicefarm-opus-probe.mjs");
+  await openUrl(ctx, withApex(url));
+  const script = `const cb = arguments[arguments.length - 1]; (${probe.toString()})().then(cb, (e) => cb(JSON.stringify({ probeError: String(e && e.message || e) })));`;
+  let raw;
+  try { raw = wd(ctx.base, "POST", `/session/${ctx.sid}/execute/async`, { script, args: [] }); }
+  catch (e) { raw = JSON.stringify({ probeError: "execute/async: " + e.message.slice(0, 160) }); }
+  let parsed; try { parsed = JSON.parse(raw); } catch (_) { parsed = { raw: String(raw).slice(0, 400) }; }
+  report.opus = parsed;
+  log("opus " + JSON.stringify(parsed));
+  fs.writeFileSync(path.join(out, "opus-probe.json"), JSON.stringify(parsed, null, 2));
+}
 // photo (#3482): Photo Studio driven by native finger taps from the title screen, every visible control's painted
 // size against the 44 px floor, one shot preset, CAPTURE, CLOSE — and every page error on the way.
 const RECT = (sel) => `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; el.scrollIntoView({ block: "center" }); const r = el.getBoundingClientRect();
@@ -853,6 +869,7 @@ async function run() {
             // WebGL2, ledger rows 1-4); #3479's before-numbers are WebGPU.
             try { if (sc === "visor") await visorScenario(ctx, opt("url", SITE), opt("visor-pins", "webgl2,webgpu").split(","), report, out);
               else if (sc === "lsab") await lsabScenario(ctx, opt("url", SITE), report, out);
+              else if (sc === "opus") await opusScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "soak") await soakScenario(ctx, opt("url", SITE), opt("soak-pins", "webgpu").split(","), report, out);
               else if (sc === "photo") await photoScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "flags") await flagsScenario(ctx, opt("url", SITE), report, out);
