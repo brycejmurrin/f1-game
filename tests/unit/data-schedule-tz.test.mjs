@@ -178,6 +178,46 @@ test("countdown is stable at boundaries and never goes negative", () => {
   assert.equal(S.countdown(-1), "STARTED");
 });
 
+test("final-minute countdown announces the race start, including reduced motion", async () => {
+  for (const reduced of [false, true]) {
+    const start = Date.parse("2026-11-22T04:00:00Z");
+    let now = start - 20_000;
+    let interval;
+    const microtasks = [];
+    class ClockDate extends Date { static now() { return now; } }
+    class Observer { observe() {} disconnect() {} }
+    function el(tag, cls, text) {
+      return {
+        tag, cls, textContent: text || "", attrs: {}, children: [],
+        isConnected: false, parentElement: null, classList: { add() {} },
+        addEventListener() {}, removeAttribute(k) { delete this.attrs[k]; },
+        setAttribute(k, value) { this.attrs[k] = value; },
+        appendChild(child) { child.parentElement = this; this.children.push(child); return child; }
+      };
+    }
+    const context = vm.createContext({
+      Date: ClockDate, MutationObserver: Observer,
+      document: { documentElement: {} },
+      matchMedia: () => ({ matches: reduced }),
+      queueMicrotask: (fn) => microtasks.push(fn),
+      setInterval: (fn) => { interval = fn; return 1; }, clearInterval() {},
+      F1API: { schedule: () => Promise.resolve([VEGAS]) }
+    });
+    vm.runInContext(SRC + ";globalThis.S = DataSchedule;", context);
+    const { loadSchedule } = context.S.create({ el, emptyMsg: (t) => el("div", "empty", t) });
+    const wrap = await loadSchedule();
+    const clock = wrap.children[0].children.find((child) => child.attrs["data-nextgp"] === "countdown");
+    wrap.isConnected = true;
+    while (microtasks.length) microtasks.shift()();
+    assert.equal(clock.attrs["aria-label"], "Race starts in 0m 20s");
+    now = start + 1_000;
+    interval();
+    assert.equal(clock.textContent, "STARTED", `visible text with reduced motion ${reduced}`);
+    assert.equal(clock.attrs["aria-label"], "Race started", `accessible text with reduced motion ${reduced}`);
+    wrap.dispose();
+  }
+});
+
 
 test("countdown ownership retires document observers and timers, including queued deliveries", async () => {
   const observers = new Set(), timers = new Set(), microtasks = [];
