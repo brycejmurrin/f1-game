@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01WmKPraJqVPFsGv8BeuxwgC A·W41 handoff: PR #3667 head 708b6d26 (ready, full CI green, ready-gate 0), next: orchestrator merge via merge-gate; #2657 LOD stops (negative), reopen only on the Device Farm vegas/jeddah trigger in the note
+HANDOFF to:A from:claude:session_01N1qUXMqUbNXRqk1WRBntVh A·W43 handoff: PR #3682 head 29c23d32, next: finish npm run test:tooling-fast (230/854 passed, 0 failed when stopped) + perf-race-entry spec, then ready-gate
