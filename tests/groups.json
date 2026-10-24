@@ -1723,6 +1723,8 @@
         "tests/unit/offtrack-edges-vm.test.mjs",
         "tests/unit/offtrack-vm.test.mjs",
         "tests/unit/pace-arming-vm.test.mjs",
+        "tests/unit/perf-vm-alloc-budget.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
@@ -1815,6 +1817,8 @@
         "tests/unit/offtrack-edges-vm.test.mjs",
         "tests/unit/offtrack-vm.test.mjs",
         "tests/unit/pace-arming-vm.test.mjs",
+        "tests/unit/perf-vm-alloc-budget.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
@@ -1921,6 +1925,8 @@
         "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/obs-act-edge-vm.test.mjs",
+        "tests/unit/perf-vm-alloc-budget.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
@@ -2210,6 +2216,12 @@
         "--test-concurrency=1"
       ],
       "kind": "node"
+    },
+    "test:perf-budget": {
+      "files": [
+        "tests/specs/perf-sw-cache-hit.spec.js"
+      ],
+      "kind": "browser"
     },
     "test:perf-frametime": {
       "files": [

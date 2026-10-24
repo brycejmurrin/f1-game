@@ -1896,6 +1896,21 @@
       "presentation": "native",
       "preserve": "Stubbed/real link qualification, measured-frame denominator, distance band, the `= mesh-census` summary JSON line and the --json / --md artifacts."
     },
+    "tools/perf/vm-leak-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-reading counts (meshes, textures, batches, listeners by scope, intervals, timers), every LEAK row, the `= vm-leak-census clean|LEAK` line, exit status and the --json artifact."
+    },
+    "tools/perf/vm-alloc-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Window KB/frame values with their (gc) marks, the mean, the baseline ratio and limit, the `= vm-alloc-census ok|OVER` line, exit status and the --json artifact."
+    },
+    "tools/perf/baselines/vm-alloc.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
     "tools/perf/ers-deploy-census.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
