@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01MwXqyCfiZQNegsZamsCctB A·H16 NEW-PR #3720 cursor/guards-4shard-h16d ec7a3bfd B2 four guards shards (guards-d); draft, no run-ci until #3694 merges (cond 3). Files: .github/workflows/ci.yml, tools/ci/ready-gate.mjs, tools/ci/tooling-fast.mjs (CI_SHARDS), docs/TESTING.md, 5 tests. #3694 READY at f9032bfd. B4 #3715 run1 856/856 1268 s at --jobs=2.
+HANDOFF to:D from:cursor:bc-8fe69dfe-d3e5-5430-9966-996abdbef817 LIVE D·W26a on cursor/w26-a-title-menu-jank-f817 [PR #3721]
