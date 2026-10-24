@@ -1017,9 +1017,9 @@
     // clears depth). On WebGL2: invalidateFramebuffer(DEPTH) on the scene FBO
     // while its pass is still open (ANGLE-Metal: store action DontCare), and on
     // an MSAA target the depth resolve blit is skipped instead
-    // (resolveDepthBuffer). three r186 has no lever on WebGPU: it stores a
-    // single-sample depth whatever its usage (WebGPUBackend discardDepth is
-    // MSAA-only), so a rebuild with a non-sampled depth would buy nothing there.
+    // (resolveDepthBuffer). Pristine r186 has no lever on WebGPU (WebGPUBackend
+    // discardDepth is MSAA-only); vendored patch 17 adds the per-pass hint that
+    // depthBegin sets on a single-sample target (A-P2W, discardHint).
     // apex26.tlxDepthDiscard="0" always keeps it.
     let _depthDiscard = true;
     try { _depthDiscard = localStorage.getItem("apex26.tlxDepthDiscard") !== "0"; } catch (_) { /* no storage: on */ }
@@ -1033,11 +1033,13 @@
     // stored by every scene fragment and fetched by nothing. Same rule shape as
     // needsDepth, from the SAME opts/F present() is about to upload, so a frame
     // whose composite reads the tag always has it. Single-sample targets only (an
-    // MSAA tag has already been resolved by the time depthEnd runs). WebGPU r186
-    // has no storeOp lever, as for depth. apex26.tlxTagDiscard="0" always keeps it.
+    // MSAA tag has already been resolved by the time depthEnd runs). WebGPU: the
+    // storeOp hint of vendored patch 17 (A-P2W, discardHint). apex26.tlxTagDiscard="0" always keeps it.
     let _tagDiscard = true;
     try { _tagDiscard = localStorage.getItem("apex26.tlxTagDiscard") !== "0"; } catch (_) { /* no storage: on */ }
     let _tagKeep = true, _tagDiscards = 0, _invTag = null, _invBoth = null;
+    const isGpu = () => !!(renderer.backend && renderer.backend.isWebGPUBackend);
+    let _gpuArmed = false;   // A-P2W: depthBegin put patch 17's hint on sceneRT
     function needsTag(opts, F) {
       const o = opts || {};
       if (viz) return true;
@@ -1078,10 +1080,37 @@
       _depthKeep = !_depthDiscard || needsDepth(opts, F);
       sceneRT.resolveDepthBuffer = _depthKeep;
       _tagKeep = !_tagDiscard || !tagOn || (sceneRT.samples | 0) > 0 || needsTag(opts, F);   // A-P2
+      // A-P2W: WebGPU fixes a storeOp when the pass BEGINS, so the same decision rides on the
+      // target as patch 17's hint before the scene render; depthEnd takes it off. Single-sample only.
+      _gpuArmed = discardHint(sceneRT, _tagKeep ? 0 : 2, !_depthKeep && (sceneRT.samples | 0) === 0);
       return _depthKeep;
     }
-    // After the scene pass, before present(): drop the depth (and the tag) this frame does not read (WebGL2 only).
+    // WebGPU leg (vendored three patch 17): store nothing of the attachments in `colorMask` (bit i =
+    // colour attachment i) and, with `depth`, of the depth, in the NEXT pass into rt. Only around the
+    // LAST render of a frame into rt — the next pass's loadOp still reads what was stored. Returns
+    // true when a hint went on; discardHintOff(rt) after the render, also on a throw.
+    function discardHint(rt, colorMask, depth) {
+      if (!rt || !isGpu()) return false;
+      const c = _tagDiscard ? colorMask | 0 : 0, d = _depthDiscard && !!depth;
+      rt.apexDiscardColor = c;
+      rt.apexDiscardDepth = d;
+      return c !== 0 || d;
+    }
+    function discardHintOff(rt) {
+      const t = rt || sceneRT;
+      if (t.apexDiscardColor) t.apexDiscardColor = 0;
+      if (t.apexDiscardDepth) t.apexDiscardDepth = false;
+      if (!rt) _gpuArmed = false;
+    }
+    // After the scene pass, before present(): drop the depth (and the tag) this frame does not read
+    // (WebGL2: invalidate; WebGPU: depthBegin's hint already did it, count it and take it off).
     function depthEnd() {
+      if (_gpuArmed) {
+        discardHintOff();
+        if (!_tagKeep) _tagDiscards++;
+        if (!_depthKeep && (sceneRT.samples | 0) === 0) _depthDiscards++;
+        return true;
+      }
       if (_depthKeep && _tagKeep) return false;
       const be = renderer.backend, gl = be && be.gl, st = be && be.state;
       if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
@@ -1186,6 +1215,7 @@
       warmMirror,
       needsDepth, depthBegin, depthEnd,   // A-P1
       needsTag, discardAttachments,   // A-P2 (the mirror discards its depth + tag through this)
+      discardHint, discardHintOff,   // A-P2W: the WebGPU leg's twin (vendored three patch 17)
       present,
       dispose,
       viz,
