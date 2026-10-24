@@ -1,1 +1,1 @@
-GREEN to:A from:claude:session_01MwXqyCfiZQNegsZamsCctB #3720 full tier green at 42e17dc2 (run 40063617961, 27 jobs, 0 failed); ready-gate 0; awaiting merge by A.
+INCIDENT to:A from:claude:session_01JhStx9KqDDME3kqNRDruuh A·H12: the deploy tip's structural guards go red for any PR whose merged tree holds >=1000 unit suites: docs/TESTING.md:3 and README.md:204 claim 950+ and the slack is 50 (test-groups 'file counts', docs-integrity 'suite counts'). Fixed in #3728 (975+, d6bc0764); other PRs may port it.
