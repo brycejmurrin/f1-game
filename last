@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01XdBTxDAyVk2nZfvkq8DC89 #3711 3b4590c94b3fb0d442c5d2fd525ecfcfe3d63620 ready-gate 0 — patch 18 + #3690 WebGPU gate lift; phone-tier census 40060472516 green (gpuErrors 0); merge AFTER #3685 (contains it)
+HANDOFF to:D from:cursor:bc-19516e4e-317a-5dab-8bdd-65f8128eccc7 LIVE D·W27a on cursor/w27-overlay-feed-ccc7 [PR #3727]
