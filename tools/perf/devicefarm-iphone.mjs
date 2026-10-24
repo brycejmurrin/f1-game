@@ -16,6 +16,9 @@
 //     visor,soak,photo (chainable in one session): HELMET-cam visor arms --arms off,on,refr,off at --track bahrain:night
 //       (--visor-pins); GRAPHICS --presets medium,low,medium at renderScale 0.5, a 1/0.75/0.5 ladder and a --soak-s
 //       governor soak (--soak-pins); Photo Studio by native taps with the 44 px floor read (--photo-scales auto,1)
+//   Method (#3676; DEVICE-FARM-ANALYSIS-2026-10-24.md): rows carry build/first/thermal/warm; --prime TRACK:TOD spends a
+//   throwaway entry; --pin-scale S pins the governor in visor arms; units.json logs unit history; never read WebGPU
+//   timestamp-query as absolute GPU ms on iOS; repeat counts per the note's §2e (cold deltas: 3+ fresh units).
 //   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
 // `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
@@ -152,7 +155,10 @@ const PROBE = `
   return { title: document.title, ua: navigator.userAgent, gpu: !!navigator.gpu, readyState: document.readyState,
     live: R ? { api: R.liveThreeApi && R.liveThreeApi(), backend: R.liveBackend && R.liveBackend() } : null,
     pins: { gfxBackend: localStorage.getItem("apex26.gfxBackend"), tlxForceGL: localStorage.getItem("apex26.tlxForceGL") },
-    backendState: be, info, w: innerWidth, h: innerHeight, dpr: devicePixelRatio };`;
+    backendState: be, info, w: innerWidth, h: innerHeight, dpr: devicePixelRatio,
+    // #3676 (1): the build this run measured, from the shell's own metas (pages.yml stamps both).
+    build: (() => { const m = (n) => { const e = document.querySelector('meta[name="' + n + '"]'); return e ? e.content : null; };
+      return { sha: m("apex-sha"), build: m("apex-build") }; })() };`;
 // Start BENCHMARK "paths" and keep only the first `n` legs (WEBGPU, WEBGL2 for n = 2). BenchRun.run saves the plan and
 // reloads after this task, so the trimmed plan is what the next boot resumes.
 const BENCH = (n) => `
@@ -398,28 +404,29 @@ async function warmplusScenario(ctx, url, report, out) {
 }
 // tracks: steady-state race frames on chosen circuits (skyline-heavy night tracks vs Monza): per track a fresh
 // reload, one timed entry, 5 s settle, then 20 s of rAF intervals.
-const SAMPLE = `
+const SAMPLE = `${HITCH_JS}
   window.__dfSample = null;
   const d = []; let last = 0, t0 = 0;
   const tick = (t) => {
     let st = null; try { st = __apex.info().state; } catch (_) {}
-    if (st === "race") { if (!t0) t0 = t; if (t - t0 > 5000) { if (last) d.push(t - last); last = t; } }
+    // Hitches count from the first race frame (#3673's two land early); the fps window still skips the first 5 s.
+    if (st === "race") { if (!t0) t0 = t; if (last) { if (t - last > 100) hitch(t, t - last, t0); if (t - t0 > 5000) d.push(t - last); } last = t; }
     if (t0 && t - t0 > 25000) { d.sort((a, b) => a - b); const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(d.length * f))] * 10) / 10;
       window.__dfSample = { n: d.length, fps: Math.round(d.length / 20 * 10) / 10, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
-        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length }; return; }
+        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length, hitches: H.rows }; return; }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick); return true;`;
 async function tracksScenario(ctx, tracks, report, out) {
   report.tracks = [];
-  for (const spec of tracks) {
+  for (const [i, spec] of tracks.entries()) {
     const [track, tod = "default"] = spec.split(":");
     const r = await reloadPage(ctx);
     await exec(ctx.base, ctx.sid, SAMPLE);
     const entry = await timedEntry(ctx, `${track} ${tod}`, KICK_FOR(track, tod));
     let sample = null;
     for (let i = 0; i < 20 && !sample; i++) { await sleep(2000); try { sample = await exec(ctx.base, ctx.sid, "return window.__dfSample;", 1); } catch (_) { /* busy */ } }
-    report.tracks.push({ track, tod, api: r.api, entry, sample });
+    report.tracks.push({ track, tod, api: r.api, entry, sample, ...rowMeta(ctx, report, i, entry) });
     log(`${track} ${tod}: api=${r.api} entry ${entry.windowMs} ms; ${JSON.stringify(sample)}`);
     try { shot(ctx.base, ctx.sid, path.join(out, `track-${track}-${tod}.png`)); } catch (_) { /* no shot */ }
   }
@@ -432,6 +439,7 @@ async function racesScenario(ctx, pins, report, out) {
     await exec(ctx.base, ctx.sid, PIN(p));
     const r = await reloadPage(ctx); log(`races ${p}: booted api=${r.api}`);
     await exec(ctx.base, ctx.sid, `return BenchRun.run("races");`);
+    (report.racesThermal = report.racesThermal || {})[p] = { start: thermalNow(ctx) };
     const t0 = Date.now(); let last = "", n = 0;
     for (;;) {
       await sleep(POLL_MS); n++;
@@ -442,18 +450,35 @@ async function racesScenario(ctx, pins, report, out) {
       if (st.state !== "running" && st.state !== "none") { report.races[p] = st.result; break; }
       if (Date.now() - t0 > 15 * 60000) { report.races[p] = { timedOut: st }; break; }
     }
+    report.racesThermal[p].end = thermalNow(ctx);
     try { shot(ctx.base, ctx.sid, path.join(out, `races-${p}.png`)); } catch (_) { /* no shot */ }
   }
 }
 
 // ---- follow-ups for merged PRs (OrchA 31, 2026-10-23): visor A/B (#3581), LOW/renderScale soak (#3479), Photo (#3482)
+// #3673 / #3676 (6): every frame over 100 ms inside a sample window, attributed — when (ms from window start), the
+// game state, the PerfSpans that began or ended inside that frame, and the material-cache misses (count + new keys)
+// since the previous hitch. memState() runs only on a hitch, so the recorder costs nothing on a healthy frame.
+const HITCH_JS = `
+  const H = window.__dfHitch = { rows: [], ring: [], miss0: null };
+  try { const ms = GLX.__tlx.memState(); H.miss0 = ms.matMiss; H.keys0 = (ms.matMissKeys || []).slice(); } catch (_) {}
+  if (!window.__dfSpanWrap && typeof PerfSpans !== "undefined") { window.__dfSpanWrap = 1;
+    const b0 = PerfSpans.begin, e0 = PerfSpans.end;
+    PerfSpans.begin = function (n) { const R = window.__dfHitch && window.__dfHitch.ring; if (R) { R.push([n, 0, performance.now()]); if (R.length > 400) R.shift(); } return b0.apply(this, arguments); };
+    PerfSpans.end = function (n) { const R = window.__dfHitch && window.__dfHitch.ring; if (R) { R.push([n, 1, performance.now()]); if (R.length > 400) R.shift(); } return e0.apply(this, arguments); }; }
+  const hitch = (t, dt, t0) => { if (H.rows.length >= 20) return;
+    let st = null, miss = null, keys = null; try { st = __apex.info().state; } catch (_) {}
+    try { const ms = GLX.__tlx.memState(); miss = H.miss0 == null ? null : ms.matMiss - H.miss0; H.miss0 = ms.matMiss;
+      keys = (ms.matMissKeys || []).filter((k) => !(H.keys0 || []).includes(k)); H.keys0 = (ms.matMissKeys || []).slice(); } catch (_) {}
+    const spans = H.ring.filter((r) => r[2] >= t - dt && r[2] <= t).map((r) => r[0] + (r[1] ? ">" : "<") + Math.round(r[2] - (t - dt)));
+    H.rows.push({ at: Math.round(t - t0), dt: Math.round(dt), state: st, spans: spans.slice(0, 24), miss, keys }); };`;
 // A window of rAF intervals that starts when called: `ms` long after `delay` ms, read back from window.__dfWin.
-const WIN_FOR = (ms, delay = 3000) => `
+const WIN_FOR = (ms, delay = 3000) => `${HITCH_JS}
   window.__dfWin = null; const d = []; let last = 0, t0 = 0;
-  const tick = (t) => { if (!t0) t0 = t; if (t - t0 > ${delay}) { if (last) d.push(t - last); last = t; }
+  const tick = (t) => { if (!t0) t0 = t; if (t - t0 > ${delay}) { if (last) { d.push(t - last); if (t - last > 100) hitch(t, t - last, t0); } last = t; }
     if (t - t0 > ${delay + ms}) { d.sort((a, b) => a - b); const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(d.length * f))] * 10) / 10;
       window.__dfWin = { n: d.length, fps: Math.round(d.length / ${ms / 1000} * 10) / 10, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
-        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length }; return; }
+        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length, hitches: H.rows }; return; }
     requestAnimationFrame(tick); };
   requestAnimationFrame(tick); return true;`;
 async function sampleWin(ctx, ms, delay = 3000, extra = "") {
@@ -474,6 +499,29 @@ async function openUrl(ctx, u) {
   await sleep(8000); return waitReady(ctx);
 }
 const GO = `try { return __apex.go(); } catch (e) { return String(e); }`;
+// #3676 (3): the phone's thermal state, once per arm (the --legs bench polls it on its own clock).
+function thermalNow(ctx) {
+  try { const d = wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: deviceInfo", args: [] }); return d ? d.thermalState : null; }
+  catch (_) { return null; }
+}
+// #3676 (1, 2, 3, 7): what every scenario row carries — the build, whether it is the session's first arm (the cold
+// one on this unit; --prime spends a throwaway entry so none is), the thermal state, and the entry's warm timeline
+// including the menu warm (warm.history).
+function rowMeta(ctx, report, i, entry) {
+  return { build: report.boot && report.boot.build ? report.boot.build.sha : null, first: i === 0 && !report.primed,
+    thermal: thermalNow(ctx), warm: entry && entry.warm ? entry.warm : null };
+}
+// --prime TRACK:TOD: one discarded race entry before the first arm, so no measured arm pays the unit's cold compile.
+async function primeOnce(ctx, url, report) {
+  const spec = opt("prime", ""); if (!spec || report.primed) return;
+  const [track, tod = "default"] = spec.split(":");
+  await openUrl(ctx, withApex(url));
+  const e = await timedEntry(ctx, `prime ${spec}`, KICK_FOR(track, tod));
+  report.primed = { spec, windowMs: e.windowMs, warm: e.warm };
+}
+// #3676 (4): --pin-scale S pins the 3D scale (which also stops the auto-governor) before an fps window; the row
+// records autoTier before and after, and tierMoved marks a window the ladder changed under.
+const GOV = `(() => { try { const r = __apex.renderScale(); return { scale: r.scale, auto: r.auto, tier: r.tier, autoTier: r.autoTier, crashStrikes: r.crashStrikes }; } catch (_) { return null; } })()`;
 // visor (#3581): the HELMET cam at a night circuit, one fresh page per arm (the visor settings are read from the URL
 // at boot, js/camera/cockpit-opts.js choice()), the field released, 20 s of frames. Arms repeat (off … off) so a
 // thermal drift shows as a gap between the two "off" rows instead of hiding inside a visor delta.
@@ -493,15 +541,22 @@ async function visorScenario(ctx, url, pins, report, out) {
   for (const p of pins) {
     const rows = report.visor[p] = [];
     await exec(ctx.base, ctx.sid, PIN(p));
+    await primeOnce(ctx, url, report);
+    const pin = opt("pin-scale", "");
     for (const [i, arm] of arms.entries()) {
       const r = await openUrl(ctx, withApex(url) + "&" + VISOR_ARMS[arm]);
       const entry = await timedEntry(ctx, `visor ${p} ${arm}`, KICK_FOR(track, tod));
       await exec(ctx.base, ctx.sid, `__apex.camera("helmet"); ${GO}`);
+      if (pin) await exec(ctx.base, ctx.sid, `return __apex.renderScale(${Number(pin)});`);
+      const gov0 = await exec(ctx.base, ctx.sid, "return " + GOV);
       const s = await sampleWin(ctx, 20000, 4000, "read: " + VISOR_READ);
-      rows.push({ arm, params: VISOR_ARMS[arm], api: r.api, entryMs: entry.windowMs, ...s });
+      const gov1 = s.read && s.read.perf;
+      rows.push({ arm, params: VISOR_ARMS[arm], api: r.api, entryMs: entry.windowMs, gov0, tierMoved: !!(gov0 && gov1 && gov0.autoTier !== gov1.autoTier),
+        ...rowMeta(ctx, report, i, entry), ...s });
       log(`visor ${p} ${arm}: api=${r.api} ${JSON.stringify(s)}`);
       try { shot(ctx.base, ctx.sid, path.join(out, `visor-${p}-${i}-${arm}.png`)); } catch (_) { /* no shot */ }
     }
+    if (pin) await exec(ctx.base, ctx.sid, "return __apex.renderScale(true);");
     pullLogs(ctx.base, ctx.sid, out);
   }
 }
@@ -523,7 +578,7 @@ async function soakScenario(ctx, url, pins, report, out) {
       const entry = await timedEntry(ctx, `soak ${p} ${id}`, KICK_FOR(track, tod));
       await exec(ctx.base, ctx.sid, `try { __apex.go(); } catch (_) {} return __apex.renderScale(0.5);`);
       const s = await sampleWin(ctx, 20000, 4000, "rs: " + RS + ", preset: GfxQuality.current()");
-      R.presets.push({ preset: id, api: r.api, entryMs: entry.windowMs, ...s });
+      R.presets.push({ preset: id, api: r.api, entryMs: entry.windowMs, ...rowMeta(ctx, report, i, entry), ...s });
       log(`soak ${p} ${id}@0.5: ${JSON.stringify(s.win)} shed=${s.rs && s.rs.lookPostShed}`);
       try { shot(ctx.base, ctx.sid, path.join(out, `soak-${p}-${i}-${id}.png`)); } catch (_) { /* no shot */ }
     }
@@ -606,6 +661,19 @@ async function photoScenario(ctx, url, report, out) {
   pullLogs(ctx.base, ctx.sid, out);
 }
 
+// #3676 (5): unit history. Only a fresh unit is cold (a Safari data clear keeps the pipeline cache, ledger row 13), so
+// every session appends unit -> {at, scenario, build, out} to artifacts/devicefarm/units.json and logs whether this
+// unit has run the game before. The file is local (artifacts/ is ignored); the ledger's device column is the record.
+function noteUnit(report, scenario, out) {
+  if (!report.unit) return;
+  const file = path.join("artifacts", "devicefarm", "units.json");
+  let db = {}; try { db = JSON.parse(fs.readFileSync(file, "utf8")); } catch (_) { /* first session */ }
+  const seen = (db[report.unit] || []).length;
+  (db[report.unit] = db[report.unit] || []).push({ at: new Date().toISOString(), scenario, build: report.boot && report.boot.build ? report.boot.build.sha : null, out });
+  try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(db, null, 2)); } catch (e) { log("units.json: " + e.message.slice(0, 100)); }
+  log(`unit ${report.unit}: ${seen ? seen + " earlier session(s) in units.json" : "first session in units.json"}`);
+}
+
 async function run() {
   const want = opt("device", "iPhone 18 Pro Max"), legs = Number(opt("legs", "0")), scenario = opt("scenario", "bench");
   const pins = opt("pins", "webgpu,webgl2").split(",");
@@ -655,7 +723,7 @@ async function run() {
     wd(base, "POST", `/session/${sid}/url`, { url });
     await sleep(20000);
     report.boot = await exec(base, sid, PROBE);
-    log(`boot: gpu=${report.boot.gpu} live=${JSON.stringify(report.boot.live)} title=${report.boot.title}`);
+    log(`boot: gpu=${report.boot.gpu} live=${JSON.stringify(report.boot.live)} build=${JSON.stringify(report.boot.build)} title=${report.boot.title}`);
     shot(base, sid, path.join(out, "boot.png"));
     if (scenario !== "bench") {
       const ctx = { base, sid, caps, out };
@@ -743,6 +811,7 @@ async function run() {
     log("session " + JSON.stringify(report.session));
     fs.writeFileSync(path.join(out, "report.json"), JSON.stringify(report, null, 2));
     log(`report ${path.join(out, "report.json")}`);
+    noteUnit(report, scenario, out);
   }
 }
 
