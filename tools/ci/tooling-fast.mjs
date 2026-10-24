@@ -1274,6 +1274,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tex-census.test.mjs",
   "tests/unit/thermal-drift.test.mjs",
   "tests/unit/three-inspector.test.mjs",
+  // Round 7: actual vendor binding/index updates and generated post/lamp shader contracts.
+  "tests/unit/three-shared-binding-update.test.mjs",
   // ...and THROTTLE = LATCH, which shares digital-steer's VM harness and runs
   // in 0.1 s: the pedal is the one control that can be left ON, so the drop on
   // blur/reset belongs in the edit loop rather than in a browser group.
@@ -1307,6 +1309,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // failure mode is a STALE key, which returns the wrong material and shows
   // up only on screen. Fuzzes the real lifted source over every field.
   "tests/unit/tlx-mat-key-memo.test.mjs",
+  "tests/unit/tlx-mirror-inset.test.mjs",
   // TLX post P2 / audit #6: fixed H/V blur + per-mip bloom materials (no .tex.value ping-pong).
   "tests/unit/tlx-post-fixed-mats.test.mjs",
   // TLX phone post at half scene resolution (D·IP3 / BrowserStack GPU-bound fill).
@@ -1318,6 +1321,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // against three r186's real Texture). The pit-crew mesh cache is capped.
   // Round-2 TLX: post chain retries after death, shadowStr 0 when the sun pass failed, DPR cap on mobileTier, caster geometry clone, warm-guarded releaseGeometry, true-LRU materials, pack CPU copy dropped, devtools-gated globals.
   "tests/unit/tlx-round2.test.mjs",
+  "tests/unit/tlx-smith-root.test.mjs",
   "tests/unit/tlx-texture-release.test.mjs",
   // Fixed render targets (#2655): the viewport helper + the raw-screenUV canary. VM + source scan, ~0.1 s.
   "tests/unit/tlx-viewport.test.mjs",
@@ -1494,6 +1498,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/webgpu-lifecycle.test.mjs",
   // D·W21b / #3279: WebGPU menu warm enables warmPlus + idle-chunks post/shadow/cockpit; records where.
   "tests/unit/webgpu-menu-warm.test.mjs",
+  "tests/unit/webgpu-uint16-index.test.mjs",
   // WET_GRIP orders the treads as treadFor picks them: inter owns the damp, full wet the storm. VM, < 0.2 s.
   "tests/unit/wet-grip-ladder.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
