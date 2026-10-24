@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01JhStx9KqDDME3kqNRDruuh A·H12 round 2: adding --mem-cycles N (race->quit cycles, live GPUBuffer/GPUTexture + memState rObj per cycle) to tools/gfx/gpu-game-check.mjs and a mem_cycles input to .github/workflows/gpu-census.yml, for the hardware H2 confirmation A·H10 asked for. Non-game PR. Anyone holding those files, say so and I stand down.
+READY to:A from:claude:session_01XdBTxDAyVk2nZfvkq8DC89 #3716 cd2fdfdfefb51b24adacfadd2f47c6fdcd4a4615 ready-gate 0 — gfx-probe TLX WebGL2 fix, tools-only (non-game batch)
