@@ -792,7 +792,8 @@ def signing_issues(text):
         for a in args:
             if a == "--no-gpg-sign" or (verb == "tag" and a == "--no-sign"):
                 why.append(a)
-        if verb == "config":
+        if verb == "config" and not any(x in ("--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l",
+                                                   "get", "list") for x in args):
             for j, a in enumerate(args):
                 key, eq, val = a.partition("=")
                 if key.lower() not in SIGN_KEYS:
@@ -821,7 +822,8 @@ GATE_PIPED = re.compile(r"(ready|merge)-gate\.mjs(?:[^;&|\n]|>&|&>)*\|(?!\|)")
 
 
 def gate_pipe_warning(text):
-    m = GATE_PIPED.search(text)
+    # heredoc bodies and quoted strings are text being written or echoed, not the pipeline that runs
+    m = GATE_PIPED.search(re.sub(r"'[^']*'|\"(?:[^\"\\]|\\.)*\"", " ", strip_heredocs(text)))
     if not m or "pipefail" in text:
         return ""
     g = m.group(1)
@@ -829,6 +831,35 @@ def gate_pipe_warning(text):
             f"gate's. Read the gate's own `= {g}-gate passed|refused` line, or artifacts/{g}-gate/<pr>.json (`\"ok\"`), "
             "before you report it; or run it unpiped / under `set -o pipefail`. The hooks read the receipt, so a "
             "refused gate never flips or merges, but a READY message built on `| tail` can be wrong.")
+
+
+PR_STATE_JS = ("import('./tools/ci/ready-gate.mjs').then((m) => { const r = m.api(`pulls?head=${process.argv[1]}&state=all"
+               "&per_page=20`); console.log(JSON.stringify(r.error ? { error: r.error } : r.json)); })")
+
+
+def closed_pr_refusal(dests, root):
+    """Why a push to a cursor/* branch whose every PR is MERGED or CLOSED is refused (Transcript Auditor batch 9:
+    W19c pushed after its PR merged, recreating the branch, then deleted it through the API), or "". One REST call
+    per branch (GraphQL is blocked for Claude sessions); an API error fails open."""
+    import subprocess
+    for where, _remote, branch, penv in dests:
+        if not str(branch).startswith("cursor/") or (penv or {}).get("APEX_CLOSED_PR_PUSH_OK") == "1":
+            continue
+        try:
+            cmd = shlex.split(os.environ["APEX_PR_STATE_CMD"]) if os.environ.get("APEX_PR_STATE_CMD") else \
+                ["node", "--input-type=module", "-e", PR_STATE_JS]
+            r = subprocess.run(cmd + ["brycejmurrin:" + branch], cwd=root, capture_output=True, text=True, timeout=30)
+            prs = json.loads(r.stdout) if r.returncode == 0 else None
+        except Exception:
+            prs = None
+        if not isinstance(prs, list) or not prs or any(p.get("state") == "open" for p in prs):
+            continue
+        done = ", ".join("#%s %s" % (p.get("number"), "merged" if p.get("merged_at") else "closed") for p in prs[:5])
+        return ("BLOCKED: every PR from %s is already finished (%s). A push would recreate or extend a branch nobody "
+                "reviews, and a merged PR's branch is not a place for new work (Transcript Auditor batch 9). Start a "
+                "new branch from the deploy tip and open a new PR; APEX_CLOSED_PR_PUSH_OK=1 as the push's own prefix "
+                "only when Bryce reopened the PR.\n" % (branch, done))
+    return ""
 
 
 def held_warning(dests, root):
@@ -858,8 +889,11 @@ def held_warning(dests, root):
         for row in data.get("rows") or []:
             for h in row.get("holders") or []:
                 sha = str(h.get("sha") or "")
-                mine = sha and subprocess.run(["git", "-C", where, "merge-base", "--is-ancestor", sha, ref],
-                                              capture_output=True).returncode == 0
+                try:
+                    mine = sha and subprocess.run(["git", "-C", where, "merge-base", "--is-ancestor", sha, ref],
+                                                  capture_output=True, timeout=10).returncode == 0
+                except Exception:
+                    mine = False
                 if not mine:
                     rows.append(f"{row.get('path')} HELD by #{h.get('pr')} ({h.get('owner')})")
     if not rows:
@@ -1275,6 +1309,10 @@ def guard(payload, root):
     refs = [x for x in gh if x["decision"] == "deny-ref"]
     if refs:
         sys.stderr.write("BLOCKED: `" + refs[0]["cmd"] + "` (" + refs[0]["why"] + ") " + P.DENY_REF + "\n")
+        return 2
+    closed = closed_pr_refusal(dests, root) if dests and os.environ.get("APEX_CLOSED_PR_PUSH_OK") != "1" else ""
+    if closed:
+        sys.stderr.write(closed)
         return 2
     ctx = "\n".join(w for w in (gate_pipe_warning(cmd), held_warning(dests, root) if dests else "") if w)
     desk = os.environ.get("APEX_MERGE_DESK") == "1"

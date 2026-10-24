@@ -46,7 +46,9 @@
 #    under APEX_MERGE_DESK). Advisories, never blocks (additionalContext): a
 #    cursor/* push whose diff touches another open PR's paths (fleet-owner.mjs;
 #    APEX_HELD_CHECK=0 skips it), and ready-gate/merge-gate piped without
-#    `set -o pipefail`.
+#    `set -o pipefail`. A push to a cursor/* branch whose every PR is merged
+#    or closed is refused (one REST call; APEX_CLOSED_PR_PUSH_OK=1 as the
+#    push's own prefix when Bryce reopened it; an API error fails open).
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
 #    .claude/agents, survey images/reports under artifacts/shots/{tracks,gallery}
 #    and artifacts/track-survey; never a generated doc) runs only

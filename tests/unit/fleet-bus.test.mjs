@@ -131,7 +131,7 @@ test("send to #<PR> dispatches the mirror once; other addresses and a failed dis
     g(h, "remote", "add", "origin", path.join(dir, "origin.git"));
     const out = [];
     let calls = 0;
-    const opts = (dispatch) => ({ cwd: h, log: (l) => out.push(l), dispatch });
+    const opts = (dispatch) => ({ cwd: h, log: (l) => out.push(l), dispatch, readyCheck: () => ({ ok: true }) });
     assert.equal(main(["send", "READY", "--to", "#7", "--as", A, "abc ready"], opts(() => { calls++; return "dispatched"; })), 0);
     assert.equal(calls, 1);
     assert.equal(out.at(-1), "= mirror dispatched", out.join("\n"));
@@ -278,6 +278,41 @@ test("main who: prints one line for the fleet's newest LIVE line, exits 1 for a 
     assert.equal(main(["who", "C"], opts), 1);
     assert.ok(out.at(-1).startsWith("= who C: no ORCH C LIVE line"), out.at(-1));
     assert.equal(main(["who", "AB"], opts), 1, "one letter only");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("send READY needs a passing ready-gate receipt for the PR (and the head it names); unknown types say what to use", async () => {
+  const { writeReceipt } = await import("../../tools/lib/gate-receipt.mjs");
+  const dir = path.join(ROOT, "artifacts", `fleet-bus-ready-${process.pid}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+  const g = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    g(dir, "init", "-q", "--bare", "origin.git");
+    g(dir, "init", "-q", "h");
+    const h = path.join(dir, "h");
+    g(h, "remote", "add", "origin", path.join(dir, "origin.git"));
+    const out = [];
+    const opts = { cwd: h, log: (l) => out.push(l), dispatch: () => "x" };
+    assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "#41 abc1234 ready-gate 0"], opts), 2, "no receipt");
+    assert.match(out.at(-1), /REFUSED: no ready-gate receipt for #41/);
+    writeReceipt(h, "ready", { pr: 41, head: "abc1234def", ok: false, evidence: "plan-open: 1 open item" }, { main: null });
+    assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "#41 abc1234 ready-gate 0"], opts), 2, "a refused gate");
+    assert.match(out.at(-1), /refused \(plan-open/);
+    writeReceipt(h, "ready", { pr: 41, head: "abc1234def", ok: true }, { main: null });
+    assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "#41 fedcba9 ready-gate 0"], opts), 2, "another head");
+    assert.match(out.at(-1), /ready-gate passed on abc1234def/);
+    assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "ready-gate 0"], opts), 2, "no PR named");
+    assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "#41 abc1234 ready-gate 0"], opts), 0);
+    assert.equal(main(["send", "READY", "--to", "#41", "--as", A, "abc1234 ready"], opts), 0, "the PR may be the address");
+    const errs = [];
+    const orig = console.error; console.error = (l) => errs.push(l);
+    try { assert.equal(main(["send", "LIVE", "--to", "*", "--as", A, "ORCH A LIVE"], opts), 1); } finally { console.error = orig; }
+    assert.match(errs.join("\n"), /READY \/ BLOCKED \/ DONE/);
+    assert.match(errs.join("\n"), /ORCH <X> LIVE/);
+    assert.throws(() => formatLine("LIVE", "*", A, "x"), /READY \/ BLOCKED \/ DONE/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

@@ -28,7 +28,8 @@ const PROTECT = path.join(ROOT, ".claude/hooks/protect-files.sh");
 const SHELL_GUARD = path.join(ROOT, ".cursor/hooks/shell-guard.sh");
 const EDIT_GUARD = path.join(ROOT, ".cursor/hooks/edit-guard.sh");
 const ENV = { ...process.env, APEX_LIVE_RUN_CHECK: "/nonexistent", APEX_RATCHET_RAISE_OK: "", APEX_FOREIGN_PUSH_OK: "",
-  APEX_SKIP_GUARDS: "", CLAUDECODE: "" };
+  APEX_SKIP_GUARDS: "", CLAUDECODE: "", APEX_CLOSED_PR_PUSH_OK: "", APEX_HELD_CHECK: "0",
+  APEX_PR_STATE_CMD: `node -e "console.log('[]')"` };
 
 const run = (hook, payload, cwd = ROOT, env = {}) => {
   const r = spawnSync("bash", [hook], { cwd, input: JSON.stringify(payload), encoding: "utf8", env: { ...ENV, ...env } });
@@ -288,7 +289,8 @@ test("ban 5: turning commit signing off is refused in both doors; reading it and
   }
   for (const cmd of ["git config --get commit.gpgsign", "git config commit.gpgsign", "git config commit.gpgsign true",
     "git -c commit.gpgsign=true log -1", "git -c commit.gpgsign log -1", "git log --show-signature -1",
-    "echo 'git -c commit.gpgsign=false commit'", "git grep -n no-gpg-sign"]) {
+    "echo 'git -c commit.gpgsign=false commit'", "git grep -n no-gpg-sign",
+    "git config --get-all commit.gpgsign false", "git config --get-regexp gpgsign", "git config -l"]) {
     assert.equal(claudeBash(cmd).status, 0, `claude: ${cmd}`);
     assert.deepEqual(cursorShell(cmd).out, { permission: "allow" }, `cursor: ${cmd}`);
   }
@@ -330,7 +332,8 @@ test("advisory: a piped ready-gate/merge-gate without pipefail gets a reminder, 
     assert.match(c.out.agent_message, /is piped/, "the Cursor agent reads the reminder");
   }
   for (const cmd of ["set -o pipefail; node tools/ci/ready-gate.mjs --pr 12 | tail -3", "node tools/ci/ready-gate.mjs --pr 12",
-    "node tools/ci/merge-gate.mjs --pr 12 || echo refused", "node tools/ci/ready-gate.mjs --pr 12 > artifacts/logs/rg.log"]) {
+    "node tools/ci/merge-gate.mjs --pr 12 || echo refused", "node tools/ci/ready-gate.mjs --pr 12 > artifacts/logs/rg.log",
+    "echo 'node tools/ci/ready-gate.mjs --pr 12 | tail'", "cat > notes.md <<'EOF'\nrun `ready-gate.mjs | tee`\nEOF"]) {
     assert.equal(claudeBash(cmd).out, null, cmd);
   }
 });
@@ -363,10 +366,39 @@ test("advisory: a cursor/* push whose diff touches another open PR's paths names
     assert.ok(!ctx.includes("mine.js"), "the branch's own PR is not a holder");
     assert.match(cursorShell("git push -u origin cursor/t-1", a, env).out.agent_message, /HELD by #900/);
     // A failed lookup says so instead of passing silently.
-    const broken = claudeBash("git push origin cursor/t-1", a, { APEX_FLEET_OWNER_CMD: "false" });
+    const broken = claudeBash("git push origin cursor/t-1", a, { APEX_FLEET_OWNER_CMD: "false", APEX_HELD_CHECK: "" });
     assert.match(broken.out.hookSpecificOutput.additionalContext, /held-file check did not finish/);
     // APEX_HELD_CHECK=0 and non-cursor branches skip the lookup.
     assert.equal(claudeBash("git push origin cursor/t-1", a, { ...env, APEX_HELD_CHECK: "0" }).out, null);
     assert.equal(claudeBash("git push origin cursor/t-1:claude/fleet-bus", a, env).out, null);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a push to a cursor/* branch whose every PR is merged or closed is refused; an open PR or none passes", () => {
+  const dir = fixture("safety-closedpr-");
+  try {
+    const g = gitAs(dir, "alice");
+    g("init", "-q", "-b", "cursor/t-9");
+    g("commit", "-q", "--allow-empty", "-m", "x");
+    let k = 0;
+    const stub = (prs) => {   // a stand-in for the REST call: prints the PR list for the branch it is given
+      const f = path.join(dir, `prs-${k++}.mjs`);
+      fs.writeFileSync(f, `if (process.argv[2] === "brycejmurrin:cursor/t-9") console.log(${JSON.stringify(JSON.stringify(prs))});`);
+      return { APEX_PR_STATE_CMD: `node ${f}` };
+    };
+    const merged = stub([{ number: 3599, state: "closed", merged_at: "2026-10-23T00:00:00Z" }]);
+    const r = claudeBash("git push origin cursor/t-9", dir, merged);
+    assert.equal(r.status, 2, r.stderr);
+    assert.match(r.stderr, /#3599 merged/);
+    const c = cursorShell("git push -u origin HEAD", dir, merged);
+    assert.equal(c.status, 2);
+    assert.match(c.out.agent_message, /already finished/);
+    assert.equal(claudeBash("git push origin cursor/t-9", dir, stub([{ number: 1, state: "closed", merged_at: null },
+      { number: 2, state: "open", merged_at: null }])).status, 0, "a reopened / second open PR");
+    assert.equal(claudeBash("git push origin cursor/t-9", dir, stub([])).status, 0, "no PR yet: the first push");
+    assert.equal(claudeBash("APEX_CLOSED_PR_PUSH_OK=1 git push origin cursor/t-9", dir, merged).status, 0, "the push's own prefix");
+    assert.equal(claudeBash("echo APEX_CLOSED_PR_PUSH_OK=1; git push origin cursor/t-9", dir, merged).status, 2, "not text elsewhere");
+    assert.equal(claudeBash("git push origin cursor/t-9", dir, { APEX_PR_STATE_CMD: "false" }).status, 0, "an API error fails open");
+    assert.equal(claudeBash("git push origin HEAD:claude/fleet-bus", dir, merged).status, 0, "only cursor/* branches");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

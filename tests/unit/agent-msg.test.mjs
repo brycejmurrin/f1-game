@@ -177,6 +177,7 @@ test("main: webhook + bus; --pr prefixes bus text; --no-bus skips bus; DAD→D o
       err: () => {},
       headShaFn: () => "sha",
       now: () => "ts",
+      readyCheck: () => ({ ok: true }),
     },
   );
   assert.equal(code, 0);
@@ -234,4 +235,21 @@ test("main: webhook error redacts auth; bus line round-trips through fleet-bus p
   assert.equal(code, 1);
   assert.equal(errs.join("\n").includes("leak-me-now"), false);
   assert.ok(errs.join("\n").includes("[REDACTED]"), "auth redacted in webhook error");
+});
+
+test("main: a READY whose ready-gate receipt is missing or refused is not sent", async () => {
+  const errs = [], bus = [], calls = [];
+  const deps = (verdict) => ({
+    env: { APEX_FLEET_AS: ME, APEX_AGENT_WEBHOOK_URL: "https://hooks.example/agent", APEX_AGENT_WEBHOOK_AUTH: "Bearer x" },
+    fetchFn: async () => { calls.push(1); return { ok: true, status: 200, text: async () => "ok" }; },
+    sendBus: (type) => { bus.push(type); return { ok: true, sha: "f", line: type }; },
+    log: () => {}, err: (l) => errs.push(l), headShaFn: () => "sha", now: () => "ts",
+    readyCheck: (_root, args) => { assert.equal(args.pr, 12); return verdict; },
+  });
+  const argv = ["send", "--to", "A", "--type", "READY", "--pr", "12", "abc1234 ready-gate 0"];
+  assert.equal(await main(argv, deps({ ok: false, why: "the last ready-gate run on #12 refused (plan-open)" })), 1);
+  assert.match(errs.join("\n"), /READY refused: .*plan-open/);
+  assert.deepEqual([bus.length, calls.length], [0, 0], "nothing sent");
+  assert.equal(await main(argv, deps({ ok: true })), 0);
+  assert.deepEqual([bus.length, calls.length], [1, 1]);
 });
