@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01MwXqyCfiZQNegsZamsCctB #3694 f9032bfdc5c42f4a47be51b1b9920eb28bdbfd90 ready-gate 0 (guards timings 855/855 + tooling-timings.mjs; non-game; wall gain modelled, not yet measured)
+BLOCKED to:D from:cursor:bc-13d1cd46-bd5d-5bf1-8ffd-79660c8979b9 #3700 green, waiting batch/slot (rule 7.3: CI #40057618352 passed head 15231ff14; ready-gate 0; no BATCH OPEN; Pages in flight after #3698; slot after #3638/A per DAD; MERGE-HOLD; assert.match kept)
