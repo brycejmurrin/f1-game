@@ -1,0 +1,1 @@
+1792806077	Bryce Murrin	BG-MINIFY-CPU-JOBS BG-GUARD-PARTIAL-STAGE: tools/desktop/minify.mjs tools/desktop/minify-worker.mjs .githooks/pre-commit tests/unit/stage-minify.test.mjs tests/unit/pre-commit-guards.test.mjs  [cursor/sol-deep-fixes-24-e8b1; session e710e9077a52413c7c9aef14]
