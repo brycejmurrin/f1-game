@@ -316,6 +316,7 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/diagnostics.mjs** | Bounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses. | renderer-debug / mcp-probe |
 | **perf/ers-deploy-census.mjs** | First-ERS-deploy pipeline census: every three createRenderPipeline across the first BOOST deploy, named | — |
 | **perf/garage-census.mjs** | Garage perf census (#B·L24): frame CPU, draws/tris/programs, heap, DOM, Car3D.build ms per body style. | perf-memory-census |
+| **perf/idle-pipeline-census.mjs** | Idle pipeline-churn census: three createRenderPipeline per equal idle race window (GAS held, no BOOST). | — |
 | **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
 | **perf/live-render-matrix.mjs** | #2572 render matrix: rebuild A/B, context loss, quality tiers, visibility/resize, night/mirror per backend. | renderer-debug |
 | **perf/mesh-census-lib.mjs** | Pure aggregation for mesh-census: pass/source/distance bands + #2657 recommend. | — |

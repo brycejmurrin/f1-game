@@ -1298,6 +1298,15 @@
       "twinned": false
     },
     {
+      "id": "perf-idle-churn",
+      "script": "test:perf-idle-churn",
+      "kind": "browser",
+      "files": [
+        "tests/specs/perf-idle-pipeline-churn.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "perf-race-entry",
       "script": "test:perf-race-entry",
       "kind": "browser",

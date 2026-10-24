@@ -1891,6 +1891,11 @@
       "presentation": "native",
       "preserve": "@c8"
     },
+    "tools/perf/idle-pipeline-census.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
     "tools/perf/mesh-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
