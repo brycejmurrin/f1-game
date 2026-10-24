@@ -1645,12 +1645,15 @@ GLX/WGX/TLX.
 
 1. `shadowBegin` → cast* → `shadowEnd` (optional car/lamp on desktop)
 2. Optional env-probe faces
-3. `begin(frame)` → `drawSky` → lit/chunked/instanced/FX draws
+3. `begin(frame)` → opaque world draws → `drawSky` → cars/decals/FX draws
 4. `present(opts)` — SSAO → godrays → bloom → composite (ACES) → FXAA
 
 GLX owns the reference pass order in `GLXPost` / `GLXShadow`. WGX mirrors
 formats and mobile cost caps. TLX uses a draw-list of pooled Three meshes +
 TSL post chain; stamps `renderOrder` for FX/glass.
+
+The sky follows the opaque world so early-Z can reject covered sky fragments;
+additive glow follows the sky (`js/render/gfx.js` frame protocol).
 
 ### Boot / safety
 

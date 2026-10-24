@@ -55,6 +55,11 @@ MEASUREMENT: <automatic recorder + exact FIRST command, or not measured; host by
 PR: <worker | orchestrator> opens the DRAFT PR, base <deploy branch | track-survey-assets>.
 DELIVERABLES: <the full checklist: every section, weather/frame, doc, merge step the PR must contain>
 PUSH: when your own cycle is green, and before any browser run or wait over ~10 min.
+REPORT: to me, only READY <PR> <head sha> | BLOCKED <PR> <question> | DONE <PR>; never a
+      HANDOFF for progress (HANDOFF = a size-stop rotation to a successor only).
+WAIT: a suite over ~2 min runs in the background (AGENTS.md rule 4: test-bg.mjs, tooling-fast,
+      deploy --gate-only → artifacts/logs/), never a foreground block; CI is a subscription
+      plus one timer, then end the turn. Never pipe ready-gate/merge-gate (`| tail` hides the exit).
 PARALLEL: while CI or a browser run waits, keep working inside OWNED: start the
       next item in a linked worktree (EnterWorktree), and hand read-only checks to
       ≤ 2 subagents (finding-verifier, code-hunter, verify-agent). Never give a

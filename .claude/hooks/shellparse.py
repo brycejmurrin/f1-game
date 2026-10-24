@@ -21,7 +21,7 @@ BODY` recursively, and tracks `cd DIR` so relative targets resolve.
   python3 shellparse.py commit  < cmd   # JSON: [{"all":…, "paths":[…], "dry":…, "skip":…}]
   python3 shellparse.py writes CWD < cmd  # JSON: [{"path": abs, "kind": "redirect|sed|tee|cp|…", …}]
   python3 shellparse.py push < cmd     # JSON: [{"cmd": …, "why": [reasons]}] for refused pushes; [] = none
-  python3 shellparse.py gh < cmd       # JSON: [{"cmd", "decision": deny|ask|ref, "why"}] gh merge/ready calls
+  python3 shellparse.py gh < cmd       # JSON: [{"cmd", "decision": deny|ask|ref|deny-ref, "why"}] gh merge/ready/ref calls
   python3 shellparse.py browser ROOT < cmd   # JSON: [why] browser starts (the subagent ban)
   python3 shellparse.py surveyor CWD < cmd   # JSON: removals / whole-tree git verbs (track-surveyor scope)
   python3 shellparse.py guard ROOT < payload # bash-guard's one call: commit line, PARSE ok|null, gh decision
@@ -765,6 +765,159 @@ def push_issues(text, branch_of=_current_branch, dests=None):
     return found
 
 
+# ---- commit signing ------------------------------------------------------------------
+# Shared safety ban 5 (Transcript Auditor batch 9, D·W21e, 2026-10-24): commits stay
+# signed. Refused: an inline `-c commit.gpgsign=<false>` / `tag.gpgsign` (also through
+# GIT_CONFIG_KEY_<n>/VALUE_<n>), `--no-gpg-sign` (`--no-sign` on a tag) on any verb, and
+# `git config` writing such a key false or unsetting it. Reading the key is fine.
+SIGN_KEYS = ("commit.gpgsign", "tag.gpgsign")
+FALSY = ("false", "no", "off", "0", "")
+
+
+def signing_issues(text):
+    """Why each `git …` in the command turns commit signing off; [] = fine. Raises ParseError."""
+    found = []
+    for env, argv, _cwd, i, _gd, cfg in git_commands(text, os.getcwd()):
+        why = []
+        for kv in cfg:
+            k, eq, v = kv.partition("=")
+            if k.lower() in SIGN_KEYS and eq and v.strip().lower() in FALSY:
+                why.append(f"-c {kv}")
+        for k, v in (env or {}).items():
+            m = re.match(r"^GIT_CONFIG_KEY_(\d+)$", k)
+            if m and v.lower() in SIGN_KEYS and str(env.get("GIT_CONFIG_VALUE_" + m.group(1), "")).lower() in FALSY:
+                why.append(f"{k}={v}")
+        verb = argv[i] if i < len(argv) else ""
+        args = argv[i + 1:]
+        for a in args:
+            if a == "--no-gpg-sign" or (verb == "tag" and a == "--no-sign"):
+                why.append(a)
+        if verb == "config" and not any(x in ("--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l",
+                                                   "get", "list") for x in args):
+            for j, a in enumerate(args):
+                key, eq, val = a.partition("=")
+                if key.lower() not in SIGN_KEYS:
+                    continue
+                if any(x in ("--unset", "--unset-all", "unset", "--remove-section") for x in args[:j]):
+                    why.append(f"git config unsets {key}")
+                elif eq:
+                    pass   # `key=value` is not git config syntax
+                else:
+                    rest = [x for x in args[j + 1:] if not x.startswith("-")]
+                    if rest and rest[0].strip().lower() in FALSY:
+                        why.append(f"git config {key} {rest[0]}")
+        if why:
+            found.append({"cmd": " ".join(argv), "why": sorted(set(why))})
+    return found
+
+
+# ---- advisories (additionalContext, never a block) ---------------------------------
+# Transcript Auditor batch 9 (2026-10-24). (b) a worker pushed files another fleet's
+# open PR still held: a cursor/* push runs tools/ci/fleet-owner.mjs on the branch's
+# diff against the deploy branch and names every path another open PR holds (a warning:
+# the lookup costs ~14 s of API calls (capped at HELD_BUDGET_S), and shared generated files would make a refusal
+# noisy). (d) `ready-gate.mjs | tail` reported a refusal as a pass: a gate piped without
+# `set -o pipefail` gets a reminder that the pipe's status is the last command's.
+GATE_PIPED = re.compile(r"(ready|merge)-gate\.mjs(?:[^;&|\n]|>&|&>)*\|(?!\|)")
+
+
+def gate_pipe_warning(text):
+    # heredoc bodies and quoted strings are text being written or echoed, not the pipeline that runs
+    m = GATE_PIPED.search(re.sub(r"'[^']*'|\"(?:[^\"\\]|\\.)*\"", " ", strip_heredocs(text)))
+    if not m or "pipefail" in text:
+        return ""
+    g = m.group(1)
+    return (f"bash-guard: `{g}-gate.mjs` is piped, so this command's exit status is the last pipe stage's, not the "
+            f"gate's. Read the gate's own `= {g}-gate passed|refused` line, or artifacts/{g}-gate/<pr>.json (`\"ok\"`), "
+            "before you report it; or run it unpiped / under `set -o pipefail`. The hooks read the receipt, so a "
+            "refused gate never flips or merges, but a READY message built on `| tail` can be wrong.")
+
+
+PR_STATE_JS = ("import('./tools/ci/ready-gate.mjs').then((m) => { const r = m.api(`pulls?head=${process.argv[1]}&state=all"
+               "&per_page=20`); console.log(JSON.stringify(r.error ? { error: r.error } : r.json)); })")
+
+
+def closed_pr_refusal(dests, root):
+    """Why a push to a cursor/* branch whose every PR is MERGED or CLOSED is refused (Transcript Auditor batch 9:
+    W19c pushed after its PR merged, recreating the branch, then deleted it through the API), or "". One REST call
+    per branch (GraphQL is blocked for Claude sessions); an API error fails open."""
+    import subprocess
+    for where, _remote, branch, penv in dests:
+        if not str(branch).startswith("cursor/") or (penv or {}).get("APEX_CLOSED_PR_PUSH_OK") == "1":
+            continue
+        try:
+            cmd = shlex.split(os.environ["APEX_PR_STATE_CMD"]) if os.environ.get("APEX_PR_STATE_CMD") else \
+                ["node", "--input-type=module", "-e", PR_STATE_JS]
+            r = subprocess.run(cmd + ["brycejmurrin:" + branch], cwd=root, capture_output=True, text=True, timeout=30)
+            prs = json.loads(r.stdout) if r.returncode == 0 else None
+        except Exception:
+            prs = None
+        if not isinstance(prs, list) or not prs or any(p.get("state") == "open" for p in prs):
+            continue
+        done = ", ".join("#%s %s" % (p.get("number"), "merged" if p.get("merged_at") else "closed") for p in prs[:5])
+        return ("BLOCKED: every PR from %s is already finished (%s). A push would recreate or extend a branch nobody "
+                "reviews, and a merged PR's branch is not a place for new work (Transcript Auditor batch 9). Start a "
+                "new branch from the deploy tip and open a new PR; APEX_CLOSED_PR_PUSH_OK=1 as the push's own prefix "
+                "only when Bryce reopened the PR.\n" % (branch, done))
+    return ""
+
+
+HELD_BUDGET_S = 20   # fleet-owner.mjs --no-fetch measured ~14 s (open-PR list + per-PR files); a tighter cap skips every push
+
+
+def held_warning(dests, root):
+    """Paths in this push's diff that ANOTHER open PR holds (fleet-owner.mjs), as one warning, or ""."""
+    import subprocess
+    import time
+    budget = float(os.environ.get("APEX_HELD_BUDGET_S") or HELD_BUDGET_S)   # env: tests only
+    rows, seen, deadline = [], set(), time.time() + budget
+    for where, _remote, branch, _env in dests:
+        if not str(branch).startswith("cursor/") or os.environ.get("APEX_HELD_CHECK") == "0":
+            continue
+        ref = "HEAD" if _current_branch(where) == branch else branch
+        if (where, ref) in seen:   # one lookup per (checkout, ref) per push
+            continue
+        seen.add((where, ref))
+        left = deadline - time.time()
+        if left < 1:
+            rows.append(f"(held-file check skipped for {branch}: the {budget:g} s budget ran out)")
+            continue
+        try:
+            d = subprocess.run(["git", "-C", where, "diff", "--name-only", "--no-renames",
+                                "origin/" + DEPLOY_BRANCH + "..." + ref], capture_output=True, text=True, timeout=10)
+            paths = [x for x in d.stdout.splitlines() if x.strip()]
+            if d.returncode != 0 or not paths:
+                continue
+            cmd = shlex.split(os.environ.get("APEX_FLEET_OWNER_CMD") or "node tools/ci/fleet-owner.mjs")
+            r = subprocess.run(cmd + ["--json", "--no-fetch"], input="\n".join(paths), cwd=root,
+                               capture_output=True, text=True, timeout=left)
+            data = json.loads(r.stdout) if r.returncode == 0 else None
+        except subprocess.TimeoutExpired:
+            rows.append(f"(held-file check skipped for {branch}: fleet-owner.mjs ran past the {budget:g} s budget)")
+            continue
+        except Exception:
+            data = None
+        if not data:
+            rows.append(f"(held-file check did not finish for {branch}: run `git diff --name-only origin/{DEPLOY_BRANCH}...HEAD"
+                        " | node tools/ci/fleet-owner.mjs` before the next push)")
+            continue
+        for row in data.get("rows") or []:
+            for h in row.get("holders") or []:
+                sha = str(h.get("sha") or "")
+                try:
+                    mine = sha and subprocess.run(["git", "-C", where, "merge-base", "--is-ancestor", sha, ref],
+                                                  capture_output=True, timeout=5).returncode == 0
+                except Exception:
+                    mine = False
+                if not mine:
+                    rows.append(f"{row.get('path')} HELD by #{h.get('pr')} ({h.get('owner')})")
+    if not rows:
+        return ""
+    return ("bash-guard: this push touches paths another open PR holds (fleet-core: one owner per path; Transcript Auditor "
+            "batch 9) — " + "; ".join(rows[:12]) + ("; …" if len(rows) > 12 else "") + ". Unless the holder released them "
+            "(`fleet-owner.mjs --release-answer`), message its fleet before merging, or drop the paths from your diff.")
+
+
 # ---- hand ratchet raises ----------------------------------------------------------
 # Shared safety ban 1 (Fleet A + D, Bryce 2026-10-22): a ceiling rises only through
 # the commit hook's `ratchets.mjs --auto-raise` (<= 40 lines of real growth into
@@ -839,7 +992,7 @@ def gh_issues(text, cwd=None):
     arms auto-merge, flips a draft ready or moves a branch outside a PR
     (red-team round 2, 2026-10-14): `gh pr merge` (deny with --squash/-s or
     --rebase/-r, else ask), `gh pr ready` (not --undo), and `gh api` on
-    …/pulls/<n>/merge, …/merges, …/git/refs (a write), a PATCH of a pull with
+    …/pulls/<n>/merge, …/merges, …/git/refs (a write: deny-ref, refused outright since batch 9), a PATCH of a pull with
     draft=false, or a GraphQL mergePullRequest / enablePullRequestAutoMerge /
     markPullRequestReadyForReview (deny when the method names SQUASH/REBASE).
     Raises ParseError on untokenisable text."""
@@ -904,8 +1057,9 @@ def gh_issues(text, cwd=None):
                 dec = "deny" if re.search(r"merge_method=\s*\"?(squash|rebase)", blob, re.I) else "ask"
             elif re.search(r"(^|/)pulls/[^/]+$", ep) and method == "PATCH" and re.search(r"\bdraft=\s*(false|0)\b", blob, re.I):
                 dec = "ask"
-            elif (re.search(r"(^|/)merges$", ep) and method == "POST") or \
-                    (re.search(r"(^|/)git/refs(/|$)", ep) and method in ("POST", "PATCH", "DELETE")):
+            elif re.search(r"(^|/)git/refs(/|$)", ep) and method in ("POST", "PATCH", "PUT", "DELETE"):
+                dec = "deny-ref"   # shared safety ban 6: a branch moves or dies only through git push / a PR
+            elif re.search(r"(^|/)merges$", ep) and method == "POST":
                 dec = "ref"
             if dec:
                 out.append({"cmd": cmd, "decision": dec, "why": f"gh api {method} {ep}"})
@@ -1161,6 +1315,21 @@ def guard(payload, root):
                          "only Playwright process. Run the node-only checks (verify-change.mjs --fast, node --test, "
                          "verify-track.cjs) and report the browser groups as NOT RUN; the parent starts them.\n")
         return 2
+    unsigned = signing_issues(cmd)
+    if unsigned:
+        sys.stderr.write("BLOCKED: `" + unsigned[0]["cmd"] + "` turns commit signing off (" + "; ".join(unsigned[0]["why"])
+                         + ") — shared safety ban 5 (Transcript Auditor batch 9). Commits stay signed; if signing "
+                         "fails, report the error to your orchestrator instead of disabling it.\n")
+        return 2
+    refs = [x for x in gh if x["decision"] == "deny-ref"]
+    if refs:
+        sys.stderr.write("BLOCKED: `" + refs[0]["cmd"] + "` (" + refs[0]["why"] + ") " + P.DENY_REF + "\n")
+        return 2
+    closed = closed_pr_refusal(dests, root) if dests and os.environ.get("APEX_CLOSED_PR_PUSH_OK") != "1" else ""
+    if closed:
+        sys.stderr.write(closed)
+        return 2
+    ctx = "\n".join(w for w in (gate_pipe_warning(cmd), held_warning(dests, root) if dests else "") if w)
     desk = os.environ.get("APEX_MERGE_DESK") == "1"
     deny = [x for x in gh if x["decision"] == "deny"]
     if deny:
@@ -1184,7 +1353,9 @@ def guard(payload, root):
     if rest and not desk:
         ready = all("ready" in x["why"] or "Ready" in x["why"] for x in rest)
         ref = any(x["decision"] == "ref" for x in rest)
-        P.emit("ask", (P.ASK_REF if ref else P.ASK_READY if ready else P.ASK_MERGE) + " (" + rest[0]["why"] + ")")
+        P.emit("ask", (P.ASK_REF if ref else P.ASK_READY if ready else P.ASK_MERGE) + " (" + rest[0]["why"] + ")", ctx)
+    elif ctx:
+        P.emit(None, None, ctx)
     return 0
 
 

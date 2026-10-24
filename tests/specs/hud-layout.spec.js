@@ -1031,7 +1031,7 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.go());
     await page.waitForFunction(() => document.getElementById("hud-sectors").getBoundingClientRect().height > 65,
-      null, { polling: 100, timeout: 30_000 });
+      null, { polling: 100, timeout: BOOT_MS }); // first race HUD tick builds the rows: frame-bound on SwiftShader, like the boot waits above
     // Hold timing content steady while normal HUD ticks continue fitting.
     await page.evaluate(() => { __apex.freeze(true); __apex.headless(true); });
     // DRAGGED THERE, not dropped: the old pass was bistable; a finger drag crosses both positions.
