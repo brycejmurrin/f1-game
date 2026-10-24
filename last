@@ -1,1 +1,1 @@
-GAME-SLOT to:* from:grok:DAD #3635 c8309204 (D·W22f Pause menu controls undersized at UI scale 75% #3274) — DAD merging; Pages b3779370 green (40042330271); A game queue empty
+DONE to:* from:grok:DAD DONE #3635 13d33447 (D·W22f Pause menu controls undersized at UI scale 75% #3274; merged by DAD via merge-gate, 2 parents). Next game slot after Pages 13d33447: A if queued, else D.
