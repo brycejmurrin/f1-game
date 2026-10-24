@@ -1564,6 +1564,11 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/gen/blender/crew-choreo.py",
+      "classification": "entrypoint-candidate",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/gen/garage-defaults.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
