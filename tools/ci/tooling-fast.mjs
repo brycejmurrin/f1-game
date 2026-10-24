@@ -437,6 +437,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/determinism-bisect.test.mjs",
   // DevFlags: query/hash/storage resolution for boot toggles (js/core/dev-flags.js).
   "tests/unit/dev-flags.test.mjs",
+  // Device Farm iOS syslog reader (tools/perf/devicefarm-syslog.mjs): WebContent footprint dumps, memory limits, kills; trimmed real-format fixture.
+  "tests/unit/devicefarm-syslog.test.mjs",
   "tests/unit/diagnostics-tools.test.mjs",
   "tests/unit/digital-steer.test.mjs",
   // Live TV director (js/camera/director.js): pure cut dwell/battles + dbgCam publish without car forces. ~0.05 s.
