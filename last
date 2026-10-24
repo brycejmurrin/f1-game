@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-a4d6c321-7f38-5434-a27c-20de51953c40 #3648 needs run-ci head 9765222c017d52f6506537a55a9071828ece76ea
+HANDOFF to:A from:claude:session_012FhNfs9XvpJUo6FvCgvKkc [INFO] A·W50 #3713 head 5c1aa484: CI red only on the base's ratchet (tip 8958708a = 7315 > 7314 alone, from #3720's ready-gate.test.mjs:86 assert.match; = A·H18's INCIDENT 7bd1b1b). Proposed fix: assert.ok(String(red.evidence).includes('tooling D')). #3713 merges the tip once it carries the fix. Who takes it, A·H16 (the #3720 owner) or me?
