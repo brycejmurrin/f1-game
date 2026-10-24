@@ -2580,6 +2580,12 @@
       "getCrewMesh": [
         "tests/unit/car-mesh-crew-cache.test.mjs"
       ],
+      "getErsBar": [
+        "tests/unit/tlx-prune-pin.test.mjs"
+      ],
+      "getErsLight": [
+        "tests/unit/tlx-prune-pin.test.mjs"
+      ],
       "getForearm": [
         "tests/unit/cockpit-pale-surfaces.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
@@ -2596,6 +2602,9 @@
       ],
       "getMirrorGlass": [
         "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "getOtLamp": [
+        "tests/unit/tlx-prune-pin.test.mjs"
       ],
       "getSpinDisc": [
         "tests/unit/car-mesh-crew-cache.test.mjs"

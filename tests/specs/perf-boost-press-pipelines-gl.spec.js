@@ -19,11 +19,11 @@
 // This file is the TLX WebGL2 leg (tlxForceGL); perf-boost-press-pipelines.spec.js is TLX on WebGPU, Bryce's path.
 // One leg per spec file: a second TLX boot in one Chromium process stalls (tools/perf/boost-press-census.mjs).
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
-import { measureBoostPresses } from "../../tools/perf/boost-press-census.mjs";
+import { measureBoostPresses, boostVerdict } from "../../tools/perf/boost-press-census.mjs";
 
 test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
 
-test("TLX WebGL2: BOOST presses 2..N build no render pipelines", async ({ page }, testInfo) => {
+test("TLX WebGL2: BOOST presses 2..N re-mint no BOOST pipelines and add no background ones", async ({ page }, testInfo) => {
   test.setTimeout(900000);
   const { hook, presses } = await measureBoostPresses(page, { forceGL: true, bootMs: BOOT_MS * 2,
     gas: (on) => (on ? page.keyboard.down("ArrowUp") : page.keyboard.up("ArrowUp")) });
@@ -32,7 +32,7 @@ test("TLX WebGL2: BOOST presses 2..N build no render pipelines", async ({ page }
   testInfo.annotations.push({ type: "press 1", description: `${presses[0].pipelines} pipelines on the first press (first-use warm-up, #3677)` });
   testInfo.annotations.push({ type: "control windows", description: presses.map((p) => p.control).join(",") + " pipelines in the equal no-BOOST windows" });
   for (const p of presses) expect(p.deployed, `press ${p.press} never deployed ERS: the count would pass vacuously`).toBe(true);
-  for (const p of presses.slice(1)) {
-    expect(p.pipelines, `press ${p.press} built ${p.pipelines} render pipelines (#3703): ${JSON.stringify(p.built.slice(0, 8))}`).toBe(0);
-  }
+  const v = boostVerdict(presses);
+  testInfo.annotations.push({ type: "fx streams", description: `${v.fxPress} in presses 2..N vs ${v.fxCtrl} in their control windows (background, #3713)` });
+  expect(v.fail, v.fail.join("; ")).toEqual([]);
 });

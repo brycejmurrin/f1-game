@@ -90,3 +90,24 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas }) {
   writeFileSync(`artifacts/perf/boost-press-pipelines-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
   return out;
 }
+
+// THE VERDICT, shared by both legs (#3677 / #3703, agreed with OrchA 32 and A·H17):
+//   (a) STRICT: presses 2..N build ZERO pipelines on a lit mesh layout (the BOOST/deploy draws — the cockpit ERS
+//       bar, ERS strip, OT lamp, lift flame and rear-light flash all draw through createMesh geometry, whose
+//       layout carries `trk`). Any such build is a per-press re-mint: Bryce's "every press, a hitch".
+//   (b) BACKGROUND: the fx particle streams (attrs `fxAlpha…`) re-mint on their own (#3713, background pipeline
+//       release), in the no-BOOST control windows as well. Over presses 2..N the press windows must not build
+//       more of them than the matched control windows did: BOOST adds nothing to the background rate.
+// The background re-mint itself is pinned strictly in #3713 (zero in N idle windows), red until that lands.
+export const isFxStream = (b) => /(^|,)fxAlpha(,|$)/.test(b.attrs || "");
+export function boostVerdict(presses) {
+  const later = presses.slice(1), fail = [];
+  for (const p of later) {
+    const lit = p.built.filter((b) => !isFxStream(b));
+    if (lit.length) fail.push(`press ${p.press} built ${lit.length} BOOST/lit pipelines (#3677): ${JSON.stringify(lit.slice(0, 6))}`);
+  }
+  const fxPress = later.reduce((n, p) => n + p.built.filter(isFxStream).length, 0);
+  const fxCtrl = later.reduce((n, p) => n + (p.controlBuilt || []).filter(isFxStream).length, 0);
+  if (fxPress > fxCtrl) fail.push(`presses 2..${presses.length} built ${fxPress} fx-stream pipelines vs ${fxCtrl} in the matched no-BOOST windows`);
+  return { fail, fxPress, fxCtrl };
+}
