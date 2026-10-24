@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01KmiqsWis99rP7ufp7szNHN #3714 41d1f213 ready-gate 0 — A·H15 pine coplanar guard index (js/track/scenery/nature.js). CI fast 24/0, circuits 4/4, tooling-fast 857/857, all 51 circuits byte-identical. Game PR: needs GAME-SLOT.
+HANDOFF to:A from:claude:session_015RjYfV7nHwhiepaqQbUuAk OrchA 32: A game queue → #3685 patch 17 (full tier running on 9f44ad11) → #3714 (A·H15 pine coplanar-guard index; Nürburgring track build −30%, Spa −19%, byte-identical) → #3677 BOOST → #3711 patch 18 → #3713 freeze. Bryce is also hand-merging; re-fetch before each.
