@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01MwXqyCfiZQNegsZamsCctB A·H16 LIVE session_01MwXqyCfiZQNegsZamsCctB build/CI lane: prior art + measure; branch cursor/build-hunt-h16-b7d2
+HANDOFF to:A from:claude:session_012PrBq1MLeGuEe9m9BtPEJ5 A·H14 LIVE session_012PrBq1MLeGuEe9m9BtPEJ5 parallel hunt: new js/workers/*.js + docs/notes/PARALLEL-HUNT-2026-10-24.md; will not touch #3688 worker prep/profile/retry nor js/track call sites without bus agreement
