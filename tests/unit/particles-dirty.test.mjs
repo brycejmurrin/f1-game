@@ -197,8 +197,6 @@ test("rain dirty latch compares scratch slots and does not build a knob string",
   const body = src.slice(start, end);
   assert.equal(body.includes("_rainKnobKey"), false);
   assert.equal(body.includes("\"|"), false);
-  assert.match(body, /tone !== _kTone/);
-  assert.match(body, /dir !== _kDir/);
 });
 
 test("a parked sub-30 Hz frame stays clean until a rain knob or speed bucket changes", () => {
@@ -218,8 +216,17 @@ test("a parked sub-30 Hz frame stays clean until a rain knob or speed bucket cha
   assert.equal(uploads.at(-1).dirty, true);
   P.resetStats();
   // 0.5 m stays inside the 2 m cell; 0.5/0.001 = 500 m/s crosses a 4 m/s bucket.
-  P.rainUpdate(0.001, [eye[0] + 0.5, eye[1], eye[2]], true); P.draw();
+  const slid = [eye[0] + 0.5, eye[1], eye[2]];
+  P.rainUpdate(0.001, slid, true); P.draw();
   assert.equal(P.stats().expands, 1, "camera-speed bucket changes expand without leaving the cell");
+  P.resetStats();
+  lt.windDir = 90;
+  P.rainUpdate(0.001, slid, true); P.draw();
+  assert.equal(P.stats().expands, 1, "windDir is a scratch slot, so a change expands");
+  P.resetStats();
+  // Boolean rain pins tone at 1; a numeric rate moves tone and the speed/len scales.
+  P.rainUpdate(0.001, slid, 0.25); P.draw();
+  assert.equal(P.stats().expands, 1, "a rainfall rate change expands without leaving the cell");
 });
 
 test("drizzle, rain and storm reseeds reuse one tier-cap buffer", () => {
