@@ -8471,6 +8471,7 @@
     "js/lighting/frame-lights.js": {
       "appendCarTailLights": [
         "tests/unit/all-lights-fill.test.mjs",
+        "tests/unit/frame-lights-release.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
       ],
       "glowFade": [
@@ -8483,6 +8484,7 @@
         "tests/unit/frame-lights-rank-cache.test.mjs"
       ],
       "release": [
+        "tests/unit/frame-lights-release.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
       ],
       "resetRankStats": [
