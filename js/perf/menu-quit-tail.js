@@ -9,13 +9,10 @@ const MenuQuitTail = (function () {
       ? MenuTeardown.runSync(label, fn) : fn();
     run("quit-mirror", () => d.mirrorPass.cancelPreparation());
     run("quit-tuners", () => {
-      d.closeLightTuner(false); d.stormFx._ltNextT = 0; d.stormFx._thunderT = -1;
-      d.closeCamTuner(false); d.flybyPanel.closeFlyby(false); d.exitPhotoMode();
+      d.stormFx._ltNextT = 0; d.stormFx._thunderT = -1;
     });
     run("quit-session", () => {
       d.setFlow("gp"); d.session = "race"; d.tyres.setLevel(d.raceTyreWear);
-      d.quali.clear(forgetGp); d.qualiNet.clearPeers();
-      d.qualiNet.hasArmed() ? d.qualiNet.resetOnQuitWithCancel() : d.qualiNet.resetSoft();
       try { d.IncidentSim.reset(); } catch (_) { /* module absent */ }
       try { d.DebrisWorld.reset(); } catch (_) { /* module absent */ }
       try { delete document.documentElement.dataset.team; } catch (_) { /* no DOM */ }
