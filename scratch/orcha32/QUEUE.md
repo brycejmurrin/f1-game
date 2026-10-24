@@ -10,3 +10,8 @@ Tip 9e462845 (#3683 merged by OrchA 32). Pages on it running.
 - #3678 (A·W44), #3687 (A·H11 round 3), #3666 (A·D2), #3592 (Bryce BENCHMARK)
 ## Sessions
 Wave 34 hunters H12–H17 LIVE; A·D2 Device Farm; A·W48 lens bug. Archived: OrchA31, W40, W41, Y1, Y2.
+
+## Follow-ups
+- three "patch 18": keep vec4 fragment output for 3-component colour targets so rg11b10 scene colour (#3690, flag apex26.tlxScene11) works on WebGPU. Own lane after #3685 (A·W47 offered the analysis; dawn RenderPipeline.cpp ~L549).
+- A·H13 to propose AI far-car 30 Hz planning (PP-18); needs Bryce yes.
+- Bryce decision open: SC MIN_HOLD 6 s after debris caution.
