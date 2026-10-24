@@ -29,12 +29,13 @@
     13,
     14,
     15,
-    16
+    16,
+    17
   ],
   "files": {
     "three.webgpu.min.js": {
-      "sha256": "6d8a9cd05d0be97e2d035afcef9fb3aca60427b1d6ad8985a2b4f0420c145712",
-      "bytes": 712060
+      "sha256": "4a25a16a3e22c1a36b6c3f80edd8cba5dca58b8437c0bab66037349692d1ae1c",
+      "bytes": 712134
     },
     "three.core.min.js": {
       "sha256": "dae72ed2eea6703b95e6b57e26469ffa95733a9320675b4bfd1b5f5df1c12f8b",

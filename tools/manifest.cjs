@@ -373,6 +373,8 @@ const FULL = [
   "js/input/steer-tuning.js",
   "js/perf/thermal-drift.js",    // ThermalDrift: pure slow-drift detector + opt-in 45/30 render gate (#2652); before governor
   "js/perf/governor.js",
+  "js/perf/menu-teardown.js",
+  "js/perf/menu-quit-tail.js",
   "js/perf/loop-health.js",
   "js/perf/render-rate.js",   // RenderRate: phones draw every 2nd rAF on a 100 Hz+ display (physics unchanged)
   "js/perf/spans.js",

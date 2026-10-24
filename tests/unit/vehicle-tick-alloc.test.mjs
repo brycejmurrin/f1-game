@@ -84,7 +84,9 @@ function run(ctx, rel, source) {
 }
 
 function grab(ctx, name) {
-  return vm.runInContext(name, ctx);
+  // The name is a lexical global, not a source file. A non-file filename keeps
+  // the load out of the filename-less source-load count (vm-filename-lint).
+  return vm.runInContext(name, ctx, { filename: "vm-grab" });
 }
 
 function loadStack(literal) {

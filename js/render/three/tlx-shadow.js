@@ -120,7 +120,14 @@
       const rt = new THREE.RenderTarget(size, size, opts);
       rt.texture.name = name + ".color";
       rt.texture.generateMipmaps = false;
+      // A-P2W (vendored patch 17): WebGPU never writes this colour (depthMat.colorWrite) and
+      // its blocker reads the depth texture, so the R8 store is never fetched — discard it
+      // on every pass. apex26.tlxTagDiscard="0" keeps it (the WebGL2 leg's A-P2 is endPass).
+      if (renderer.backend && renderer.backend.isWebGPUBackend && _colorDiscardOn()) rt.apexDiscardColor = 1;
       return rt;
+    }
+    function _colorDiscardOn() {
+      try { return localStorage.getItem("apex26.tlxTagDiscard") !== "0"; } catch (_) { return true; }
     }
 
     const isWebGPU = !!(renderer.backend && renderer.backend.isWebGPUBackend);
@@ -880,7 +887,13 @@
         } finally {
           for (const m of probes.meshes) { castScene.remove(m); m.visible = false; }
           // The previous set goes only now, after this one holds every pipeline it held (see _probePrev).
-          if (_probePrev) for (const g of _probePrev.geos) { try { g.dispose(); } catch (_) { /* device dying */ } }
+          // The MESHES say "dispose" too: three's RenderObject frees itself on its object's (or material's)
+          // dispose; a geometry dispose only nulls its attribute cache, so each race left its probes' render
+          // objects and uniform buffers for the session (A·H12 G1, tests/unit/tlx-gpumem-leak.test.mjs).
+          if (_probePrev) {
+            for (const m of _probePrev.meshes) { try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object */ } }
+            for (const g of _probePrev.geos) { try { g.dispose(); } catch (_) { /* device dying */ } }
+          }
           _probePrev = probes;
           S.probeLayouts = probes.geos.length;
           hideCasters(shown);
