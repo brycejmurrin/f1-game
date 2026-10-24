@@ -20,3 +20,9 @@ lift.sh: copy from that branch and sed "OrchA 31"→your name. QUOTA: 7-day allo
 2. Read full-tier CI on #3679 / #3680 / #3668 (`ci-watch.mjs --sha <head> --once --failures-only`). Merge order: #3679 → #3685 (patch 17, stacked) → #3680 → #3668, one GAME-SLOT each, alternating with D per the slot agreement.
 3. #3683, #3666: fast CI was running; then ready-gate (tick the open **now:** item with evidence first if it is the gate itself), ready, merge (non-game).
 4. #3670 red (camera-defaults subtest 27), #3677 no fix yet (Bryce's #1 complaint), #3682/#3678/#3669/#3686 need remaining checks — all unstaffed now.
+
+## Stand-down confirmations (01:08Z)
+Confirmed stopped: A·W47 (#3685 head c1f8dd52, depends on #3679; Next step in body), A·W45 (#3677 467db719; next: census → TLX-only gfx.pinMesh for ERS bar/OT lamp/ERS strip + unit test), A·W43 (#3682 29c23d32, run-ci added), A·W42 (#3669 36801324; fast CI #40048291537 running, DAD re-review requested f2ca2c1).
+Not yet confirmed at write time: A·W44, A·H10, A·H11 (#3687 round 1: no confirmed player-facing defect; F2 `frozen` after failed RESTART noted). Check the bus.
+#3686 (A·W46 glare) head d5aa59d5: not run — full tooling-fast, ui group, live after-capture, device.
+Archivable by rule (PRs merged): A·W41 session_01WmKPraJqVPFsGv8BeuxwgC, A·Y1 session_01WX6ZeUZWiMthYewAKtHitY — only after Bryce is done with them.
