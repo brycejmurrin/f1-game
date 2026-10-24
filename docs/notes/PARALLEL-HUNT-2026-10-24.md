@@ -112,13 +112,15 @@ Caveats, stated plainly:
 - No iPhone number yet. The worker uses `DecompressionStream` (Safari 16.4+)
   and transferables, both available on iOS 26. Bryce's TLX-WebGPU path reads the
   same `Uint8Array` layers as every backend.
-- **The game does not call the lane yet.** The opt-in is a 4-line hook in
-  `assets.js _decodeStrip`, and A·H15 holds that file (bus 94faa92). The patch
-  is in the PR body. Until it lands, the flag has no effect in the shipped game,
-  and the numbers above were taken with that patch applied locally.
+- **The opt-in is in `assets.js _decodeStrip`** (5 lines, landed with A·H15's
+  OK on this PR). The worker lane is tried first. A `null` answer falls back to
+  `_decodeStripBytes`, and a cancel still rethrows `DECODE_CANCELED`.
+  `worker-pack-strip.test.mjs` loads the real `assets.js` and checks two things.
+  With the flag ON, every strip's upload is the worker's bytes. A `null`
+  answer uploads the page decoder's bytes, identical to the flag-OFF run.
 
-**Reproduce.** `npx serve -l 3456 .`, apply the hook, then run the A/B script
-from the PR body: `node <script> 3456 9 <1|4> <high|low>`.
+**Reproduce.** `npx serve -l 3456 .`, then run the A/B script from the PR body:
+`node <script> 3456 9 <1|4> <high|low>`.
 
 ## 4b. Row 3 measured — Rapier snapshot restore against the trimesh build
 
@@ -149,8 +151,8 @@ determinism tests run against a restored world.
 
 ## 5. Next steps
 
-1. Land the `assets.js` hook (A·H15, or with A·H15's OK), then measure on the
-   device farm with the flag ON (Bryce's iPhone path, title idle → first race).
+1. Measure on the device farm with the flag ON: Bryce's iPhone path, title idle
+   → first race.
 2. If the device run confirms the gain, flip the default to ON when
    `hardwareConcurrency > 1` (the same rule as `apex26.buildWorker`), and make
    `assets.js` call `PngStrip` for its own page path too, so there is one copy

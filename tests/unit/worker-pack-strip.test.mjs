@@ -142,3 +142,48 @@ test("client strip: a worker that cannot spawn or crashes answers null (the page
   const { BD } = clientCtx();
   assert.equal(await BD.strip(new Blob([new Uint8Array(8)]), 128, [0, 0]), null, "no layer asked for");
 });
+
+// The assets.js opt-in (_decodeStrip): the worker's layers are what reach the
+// backend, and a null answer leaves the page's own reader in charge.
+async function loadAssets(BitmapDecode) {
+  const uploads = [];
+  const sandbox = {
+    Blob, TextDecoder, DataView, Uint8Array, ArrayBuffer, Promise, setTimeout, DecompressionStream, BitmapDecode,
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    async fetch(url) {
+      const name = url.split("/").pop();
+      if (name === "manifest.json") return { ok: true, json: async () => manifest };
+      return { ok: true, blob: async () => new Blob([fs.readFileSync(path.join(PACK, name))]) };
+    },
+    async createImageBitmap() { throw new Error("no bitmaps on the bytes path"); },
+  };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  const { seedLog } = await import("../helpers/seed-log.mjs");
+  seedLog(sandbox);
+  vm.runInContext(read("js/render/shared/assets.js"), sandbox, { filename: absSrc("js/render/shared/assets.js") });
+  sandbox.Assets.init({ createTextureArray(size, images) { uploads.push(images); return { size }; }, setMaterialMaps() {}, freeTexture() {} });
+  return { A: sandbox.Assets, uploads };
+}
+
+test("assets hook: flag ON uploads the worker's layers; a null answer decodes on the page, same bytes", async () => {
+  const { BD } = clientCtx();
+  let calls = 0;
+  const viaWorker = await loadAssets({ stripEnabled: () => true, strip: async (...a) => { const o = await BD.strip(...a); if (o) calls++; return o; } });
+  assert.equal(await viaWorker.A.load({ tier: "low" }), true);
+  assert.equal(calls, viaWorker.uploads.length, "every strip was decoded by the worker, none fell back");
+  const onPage = await loadAssets({ stripEnabled: () => true, strip: async () => null });
+  assert.equal(await onPage.A.load({ tier: "low" }), true);
+  const off = await loadAssets(undefined);
+  assert.equal(await off.A.load({ tier: "low" }), true);
+  for (const run of [viaWorker, onPage]) {
+    assert.equal(run.uploads.length, off.uploads.length);
+    for (let k = 0; k < off.uploads.length; k++) {
+      for (let i = 0; i < off.uploads[k].length; i++) {
+        const a = run.uploads[k][i], b = off.uploads[k][i];
+        assert.equal(!!a, !!b, `strip ${k} layer ${i} presence`);
+        if (b) assert.ok(Buffer.from(a.buffer, a.byteOffset, a.length).equals(Buffer.from(b.buffer, b.byteOffset, b.length)), `strip ${k} layer ${i}`);
+      }
+    }
+  }
+});

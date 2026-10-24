@@ -13137,7 +13137,8 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/pack-png-bytes.test.mjs"
+        "tests/unit/pack-png-bytes.test.mjs",
+        "tests/unit/worker-pack-strip.test.mjs"
       ],
       "load": [
         "tests/specs/assets-api.spec.js",
@@ -13146,7 +13147,8 @@
         "tests/unit/build-worker.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs",
-        "tests/unit/service-worker.test.mjs"
+        "tests/unit/service-worker.test.mjs",
+        "tests/unit/worker-pack-strip.test.mjs"
       ],
       "loadModels": [
         "tests/unit/assets-pack.test.mjs",
