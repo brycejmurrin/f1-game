@@ -566,6 +566,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // every frame, the mirror viewLights shares that budget, standstill does not
   // churn on the clock, and the rear window stays flash-free. ~0.2 s.
   "tests/unit/frame-lights-rank-cache.test.mjs",
+  // release() drops pooled tail-light car refs so a day track cannot keep the
+  // previous night grid alive (#3290). VM, no browser, ~0.05 s.
+  "tests/unit/frame-lights-release.test.mjs",
   "tests/unit/frame-lights-shed.test.mjs",
   // The FRAMING REPORT's math (tools/lib/frame-math.mjs): projection handedness,
   // ray-vs-box, occlusion, horizon, motion and the flags an agent acts on without
