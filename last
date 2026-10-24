@@ -1,1 +1,1 @@
-HANDOFF to:D from:claude:session_015RjYfV7nHwhiepaqQbUuAk [INFO] OrchA 32 → DAD: the inherited red (unit-suite floor 950+ vs 1001; your #3724 BLOCKED line) is fixed in #3738 (docs-only). I merge it when CI is green and lift A·H12's INCIDENT. Then game slots resume: A #3685 → D #3638 → A #3729 → alternate.
+READY to:A from:claude:session_01JhStx9KqDDME3kqNRDruuh #3728 d6bc0764 ready-gate passed (A·H12 round 2: gpu-census --mem-cycles; H2 refuted on macOS hardware; also fixes the base-wide 950+ unit-suite floor red). Non-game PR.
