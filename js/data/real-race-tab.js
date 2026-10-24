@@ -467,7 +467,7 @@ const DataRealRace = (function () {
     const q = (path, opts) => F1API.request(OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey), TTL, fresh ? Object.assign({}, opts, { cache: false }) : opts);
     return Promise.all([
       q("/sessions?"), q("/drivers?"), q("/laps?", { cache: false }), q("/stints?"), q("/pit?"), q("/overtakes?"),
-      q("/race_control?"), q("/weather?"), q("/session_result?"), q("/position?"), q("/team_radio?"),
+      q("/race_control?"), q("/weather?"), q("/session_result?"), q("/position?", { cache: "memory" }), q("/team_radio?"),
     ]).then((r) => {
       const session = arr(r[0])[0] || { session_key: sessionKey };
       const raw = { session, drivers: r[1], laps: r[2], stints: r[3], pits: r[4], overtakes: r[5], raceControl: r[6], weather: r[7], result: r[8], positions: r[9], teamRadio: r[10] };

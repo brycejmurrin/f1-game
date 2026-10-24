@@ -1889,7 +1889,11 @@ function getRearLightSet() {
   const ep = _flatQuadData(0.030, 0.038, [1.75, 0.18, 0.12]);
   _appendAt(out, ep, -E[0], E[1], E[2]);
   _appendAt(out, ep, E[0], E[1], E[2]);
-  return (_rearLightSet = _gfx.createMesh(out));
+  _rearLightSet = _gfx.createMesh(out);
+  // Pinned against TLX's idle prune (#3677): on a dry day the 2026 ERS light code is the player's only rear-light
+  // draw, so every BOOST press after a straight rebuilt its pipeline on WebGPU.
+  if (typeof _gfx.pinMesh === "function") _gfx.pinMesh(_rearLightSet);
+  return _rearLightSet;
 }
 // Its own opts bag ON PURPOSE. game.js's _ringWorld / _rainLightOpts are shared
 // singletons walked by the brake ring, the ERS strip and the flame inside one

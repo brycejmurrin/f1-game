@@ -221,7 +221,11 @@ const Assets = (function () {
     let bytes = null;
     // A stream this reader refuses (a corrupt IDAT, an unknown filter) goes
     // to the browser's decoder below; a cancel still cancels.
-    try { bytes = await _decodeStripBytes(blob, size, present, check); }
+    // The worker lane first (apex26.packDecodeWorker, default OFF; PARALLEL-HUNT
+    // P1): the same bytes, decoded off this thread. null decodes here as before.
+    try { if (typeof BitmapDecode !== "undefined" && BitmapDecode.stripEnabled()) { bytes = await BitmapDecode.strip(blob, size, present); check(); } }
+    catch (error) { if (error === DECODE_CANCELED) throw error; bytes = null; }
+    if (!bytes) try { bytes = await _decodeStripBytes(blob, size, present, check); }
     catch (error) { if (error === DECODE_CANCELED) throw error; bytes = null; }
     if (bytes) return bytes;
     const out = new Array(MAT_LAYERS);

@@ -87,3 +87,63 @@ test("halo-limited sharpen is opt-in and bounds bright and dark edge extrema", (
   assert.match(read("js/render/three/tsl-post.js"), /sharpenLimit: uniform\(0\)/);
   assert.match(read("js/render/three/tlx-post.js"), /apex26\.tlxSharpenLimit.*=== "1" \? 1 : 0/);
 });
+
+test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIGH", () => {
+  // Execute the live resolve branch, upscale gate and viewport mapper. Draws
+  // and numeric TSL vectors are mocked; this does not validate GPU pixels.
+  const post = read("js/render/three/tlx-post.js");
+  const tlx = read("js/render/three/tlx.js");
+  const viewport = read("js/render/three/tsl-viewport.js");
+  function section(src, start, end) {
+    const a = src.indexOf(start), b = src.indexOf(end, a);
+    assert.ok(a >= 0 && b > a, `missing source section ${start}`);
+    return src.slice(a, b);
+  }
+  const resolve = section(post, "        vset(P.composite, pW, pH);", "      _last.ssao")
+    .replace(/\n      }\s*$/, ""); // close of present()'s non-viz branch
+  const gate = section(tlx, "      function wantSpatialUpscale()", "      function getPresentSize()");
+  const sizing = section(post, "    const halfOf =", "    function layoutHalf()");
+  const uv = section(viewport, "    function uv(v)", "    function tex(node)");
+  const vector = () => ({ values: [], set(...values) { this.values = values; } });
+  const pass = (name) => ({ mat: name, tex: {}, V: vector(),
+    U: { texel: { value: vector() }, viewport: { value: vector() }, plain: {} } });
+  // Exercise both direct hardware presentation and the present-sized soft RT.
+  for (const soft of [false, true]) {
+    const draws = [], P = { composite: pass("composite"), fxaa: pass("fxaa"), sgsr: pass("sgsr") };
+    const presentW = 1266, presentH = 585;
+    const dest = soft ? { width: presentW, height: presentH } : null;
+    const aaRT = { texture: {} }, ldrRT = { texture: {} };
+    const context = vm.createContext({ P, presentW, presentH, phonePost: true,
+      fixed: true, fixedActive: () => true, spatialUpscale: false,
+      dest, aaRT, ldrRT, _last: {}, _lastPresentRT: null, _mirComposites: 0,
+      presentSize: () => [presentW, presentH], mirrorPass() {}, fxaaMirror: () => false,
+      vset(p, w, h) { p.V.set(w, h); },
+      runPass(mat, target) { draws.push({ mat, target, view: P[mat].V.values.slice() }); },
+      enabled: true, screenCoordinate: { xy: [presentW / 2, presentH / 2] },
+      vec2: (xy) => ({ div: (size) => xy.map((v, i) => v / size[i]) }),
+    });
+    vm.runInContext(gate + sizing + uv, context);
+    context.ctx = { wantSpatialUpscale: context.wantSpatialUpscale, userSpatialUpscale: () => false };
+    for (const [W, H, scale] of [[1266, 585, 1], [950, 439, .75], [633, 293, .5], [1266, 585, 1]]) {
+      Object.assign(context, { W, H, renderScale: scale });
+      vm.runInContext("pW = postSize(W); pH = postSize(H);", context);
+      draws.length = 0;
+      vm.runInContext("{\n" + resolve + "\n}", context);
+      const { pW, pH } = context;
+      assert.deepEqual(draws[0].view, [pW, pH], "composite keeps its reduced target");
+      assert.deepEqual(P.fxaa.U.texel.value.values, [1 / pW, 1 / pH], "FXAA texels follow its input");
+      const final = draws.at(-1);
+      assert.equal(final.target, dest);
+      assert.deepEqual(final.view, [presentW, presentH], "final output view covers its destination");
+      assert.deepEqual(context.uv({ size: final.view }), [.5, .5], "canvas center reads image center");
+      if (scale === 1) {
+        assert.deepEqual(draws.map((d) => d.mat), ["composite", "fxaa"]);
+      } else {
+        assert.deepEqual(draws.map((d) => d.mat), ["composite", "fxaa", "sgsr"]);
+        assert.equal(draws[1].target, aaRT);
+        assert.deepEqual(draws[1].view, [pW, pH], "intermediate FXAA view resets after HIGH");
+        assert.deepEqual(P.sgsr.U.viewport.value.values, [1 / pW, 1 / pH, pW, pH]);
+      }
+    }
+  }
+});
