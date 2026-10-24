@@ -4402,7 +4402,12 @@ function quitToMenu() {
 // ---------- per-frame update ----------
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
-const ranked = [], parked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comparator closure per step
+const ranked = [], parked = [], _colField = [];   // _colField: ranked + parked for resolveCollisions, refilled (was ranked.concat(parked) per step, PP-8)
+// Progress order, descending, by STABLE insertion: the order ranked.sort((a, b) => b.prog - a.prog) gave from the same
+// input, without the work array both V8's and JSC's Array.prototype.sort allocate per call (CPU-HUNT-2026-10-24 C1).
+function rankByProg(a) {
+  for (let i = 1; i < a.length; i++) { const c = a[i], p = c.prog; let j = i - 1; while (j >= 0 && a[j].prog < p) { a[j + 1] = a[j]; j--; } a[j + 1] = c; }
+}
 // AFTER THE FLAG a finished car keeps accruing prog in coast(), so a later but faster finisher out-progressed an
 // earlier one and took its c.rank (the HUD position, the relative board). The finishers' rank SLOTS are handed
 // back out in classification order (RaceControl.finishOrder: laps, then the clock); running cars keep theirs and
@@ -4417,7 +4422,7 @@ function rankFinishers() {
 // A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
 // Cutting _lk.track (a cache: lk.track !== track rebuilds it) leaves any other stale scratch holding a car, not a circuit.
 function releaseFieldScratch() {
-  ranked.length = 0; parked.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(); pits.releaseTrack();
+  ranked.length = 0; parked.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(); pits.releaseTrack();
   _wallCtx.track = null; _tfSamp.track = null; _tfSamp.s = NaN;
   for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i]._lk) cars[i]._lk.track = null;
 }
@@ -4567,7 +4572,7 @@ function update(dt) {
   // own `c.retired` check and one of them would eventually be forgotten.
   ranked.length = 0;
   for (let i = 0; i < cars.length; i++) if (!cars[i].retired) ranked.push(cars[i]);   // indexed, not for-of: update() runs unoptimized enough that each for-of allocated its iterator results (PERF-SCENE-CPU-2026-10-20)
-  ranked.sort(byProgDesc);
+  rankByProg(ranked);
   let nFin = 0;
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
@@ -4609,7 +4614,8 @@ function update(dt) {
   }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
 
-  PerfSpans.begin("collide"); collide.resolveCollisions(parked.length ? ranked.concat(parked) : ranked, dt); PerfSpans.end("collide");
+  PerfSpans.begin("collide"); let field = ranked; if (parked.length) { field = _colField; field.length = 0; for (let i = 0; i < ranked.length; i++) field.push(ranked[i]); for (let i = 0; i < parked.length; i++) field.push(parked[i]); }
+  collide.resolveCollisions(field, dt); PerfSpans.end("collide");
 
   // Rapier debris side-world: reads car poses (kinematic mirrors), owns only
   // its own shards, writes NOTHING back to gameplay. Inert unless enabled.
