@@ -715,6 +715,8 @@
     "tests/unit/lighting-rebuild.test.mjs",
     "tests/unit/lighting-tuner-reset-weather.test.mjs",
     "tests/unit/lighting-tuner-sweep.test.mjs",
+    "// tools/perf/lit-wgsl-census.mjs: WGSL normalise/classify/hash/diff core for the lit-WGSL re-key census (#3672). < 1 s, no browser.",
+    "tests/unit/lit-wgsl-census.test.mjs",
     "// GATE GAP (2026-09-10): these three garage files and the three steering",
     "// files below sat in test:garage-unit / test:steering-unit, which ran in NO",
     "// gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is",
@@ -1268,6 +1270,8 @@
     "// tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).",
     "tests/unit/tolerance-diff.test.mjs",
     "tests/unit/tooling-fast-runner.test.mjs",
+    "// tools/ci/tooling-timings.mjs: CI-measured per-file durations for the guards-shard packer (BUILD-HUNT-2026-10-24 B1). Pure fixtures, ~0.2 s.",
+    "tests/unit/tooling-timings.test.mjs",
     "// Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.",
     "tests/unit/tools-a12-guards.test.mjs",
     "tests/unit/tools-runnable.test.mjs",
@@ -1723,6 +1727,8 @@
         "tests/unit/offtrack-edges-vm.test.mjs",
         "tests/unit/offtrack-vm.test.mjs",
         "tests/unit/pace-arming-vm.test.mjs",
+        "tests/unit/perf-vm-alloc-budget.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
@@ -1815,6 +1821,8 @@
         "tests/unit/offtrack-edges-vm.test.mjs",
         "tests/unit/offtrack-vm.test.mjs",
         "tests/unit/pace-arming-vm.test.mjs",
+        "tests/unit/perf-vm-alloc-budget.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
@@ -1921,6 +1929,8 @@
         "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/obs-act-edge-vm.test.mjs",
+        "tests/unit/perf-vm-alloc-budget.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
@@ -2210,6 +2220,12 @@
         "--test-concurrency=1"
       ],
       "kind": "node"
+    },
+    "test:perf-budget": {
+      "files": [
+        "tests/specs/perf-sw-cache-hit.spec.js"
+      ],
+      "kind": "browser"
     },
     "test:perf-frametime": {
       "files": [
