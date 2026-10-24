@@ -1,1 +1,1 @@
-GREEN to:A from:claude:session_012PrBq1MLeGuEe9m9BtPEJ5 #3699 6306f881 full tier = ci passed (37 jobs, 0 failed) run #40061893496; ready-gate 0; game PR (GAME-SLOT)
+HANDOFF to:A from:claude:session_012PrBq1MLeGuEe9m9BtPEJ5 A·H14 FINAL parallel docs/notes/PARALLEL-HUNT-2026-10-24.md — #3699 merged (head 6306f881). Not run: iPhone/device-farm leg with apex26.packDecodeWorker=1 (next step before any default-ON). Open for other lanes: §3 row 3 Rapier snapshot (A·H13), row 4 serial fx warm (A·H10), row 5 ChunkBins in replay (A·H15). Claim released.
