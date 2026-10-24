@@ -20,6 +20,7 @@
 //   Method (#3676; DEVICE-FARM-ANALYSIS-2026-10-24.md): rows carry build/first/thermal/warm; --prime TRACK:TOD spends a
 //   throwaway entry; --pin-scale S pins the governor in visor arms; units.json logs unit history; never read WebGPU
 //   timestamp-query as absolute GPU ms on iOS; repeat counts per the note's §2e (cold deltas: 3+ fresh units).
+//   node tools/perf/devicefarm-iphone.mjs download artifacts/devicefarm/<run>... [--all]   (video + logs; --all adds the syslog)
 //   node tools/perf/devicefarm-iphone.mjs auto --device "iPhone 18 Pro Max" [--legs 2] [--perf none|"Activity Monitor"] [--out DIR]
 //
 // `run` is a remote access session driven from here; `auto` is a server-side automated run: it packages
@@ -963,8 +964,35 @@ async function auto() {
   log(`report ${path.join(out, "auto-report.json")}`);
 }
 
+// download REPORT_DIR...: every artifact Device Farm kept for each run's remote access session (video, device /
+// Appium / Safari logs, screenshots) into REPORT_DIR/df-artifacts/, named by type. The session ARN comes from the
+// report; artifact URLs are pre-signed and short-lived, so they are fetched at once and never printed. The device
+// syslog (~300 MB a session) and the TCP dump are skipped unless --all: the container's disk is a fixed allowance.
+function download(dirs) {
+  const all = dirs.includes("--all"); dirs = dirs.filter((d) => d !== "--all");
+  for (const dir of dirs) {
+    let r; try { r = JSON.parse(fs.readFileSync(path.join(dir, "report.json"), "utf8")); } catch (e) { log(`${dir}: no report.json`); continue; }
+    if (!r.sessionArn) { log(`${dir}: report has no sessionArn`); continue; }
+    const dest = path.join(dir, "df-artifacts"); fs.mkdirSync(dest, { recursive: true });
+    let n = 0, bytes = 0;
+    for (const type of ["FILE", "LOG", "SCREENSHOT"]) {
+      let list = []; try { list = aws("devicefarm", "list-artifacts", "--arn", r.sessionArn, "--type", type).artifacts || []; }
+      catch (e) { log(`${dir} ${type}: ${e.message.slice(0, 120)}`); continue; }
+      for (const a of list) {
+        if (!all && (a.type === "DEVICE_LOG" || a.type === "RAW_FILE")) continue;
+        const name = `${type.toLowerCase()}-${String(a.type || "x").toLowerCase()}-${String(a.name || "artifact").replace(/[^A-Za-z0-9._-]+/g, "_")}.${a.extension || "bin"}`;
+        const f = path.join(dest, name);
+        try { execFileSync("curl", ["-sS", "--fail", "-o", f, a.url], { stdio: ["ignore", "ignore", "pipe"] }); n++; bytes += fs.statSync(f).size; }
+        catch (e) { log(`${dir}: ${name} failed`); }
+      }
+    }
+    log(`${dir}: ${n} artifact(s), ${(bytes / 1048576).toFixed(1)} MB -> ${dest}`);
+  }
+}
+
 const cmd = args[0];
 if (cmd === "devices") { for (const d of iosPhones()) console.log(`${d.name}\tiOS ${d.os}\t${d.availability}\tremoteAccess=${d.remoteAccess}`); }
 else if (cmd === "run") run().catch((e) => { console.error(e.message); process.exit(1); });
 else if (cmd === "auto") auto().catch((e) => { console.error(e.message); process.exit(1); });
-else { console.error("usage: devicefarm-iphone.mjs devices | run --device NAME [--legs 0|2|4] [--touch N] | auto --device NAME [--legs N] [--perf NAME|none]"); process.exit(2); }
+else if (cmd === "download") download(args.slice(1));
+else { console.error("usage: devicefarm-iphone.mjs devices | run --device NAME [--legs 0|2|4] [--touch N] | auto --device NAME [--legs N] [--perf NAME|none] | download REPORT_DIR..."); process.exit(2); }
