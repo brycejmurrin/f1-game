@@ -48,6 +48,13 @@ test.describe("garage livery pick cost", () => {
       const wrap = (obj, key, field, after) => { const f = obj[key]; obj[key] = function () { n[field]++; const r = f.apply(this, arguments); if (after) after(r); return r; }; };
       wrap(Car3D, "build", "car3dBuilds");   // eslint-disable-line no-undef -- script-level const in the page
       wrap(LiveryTex, "buildAtlas", "atlases", (c) => { if (c && typeof c === "object") atlas.set(c, window.__pick); });   // eslint-disable-line no-undef
+      const creditAtlasUpload = (src) => {
+        if (!src || !atlas.has(src)) return;
+        const k = atlas.get(src);
+        n.texByPick[k] = (n.texByPick[k] || 0) + 1;
+        if (uploaded.has(src)) n.reuploads++;
+        uploaded.add(src);
+      };
       if (typeof window.createImageBitmap === "function") {
         const cib = window.createImageBitmap;
         window.createImageBitmap = function (src) {
@@ -55,29 +62,22 @@ test.describe("garage livery pick cost", () => {
           return atlas.has(src) && p && p.then ? p.then((b) => { atlas.set(b, atlas.get(src)); return b; }) : p;
         };
       }
-      const b = window.renderer && window.renderer.backend;
-      if (b && b.createTexture) { const c = b.createTexture.bind(b);
-        b.createTexture = function (t, o) {
-          if (t && t.image && atlas.has(t.image)) {
-            const k = atlas.get(t.image);
-            n.texByPick[k] = (n.texByPick[k] || 0) + 1;
-            if (uploaded.has(t.image)) n.reuploads++;
-            uploaded.add(t.image);
-          }
-          return c(t, o);
-        }; }
-      // TLX pool re-fill often skips backend.createTexture; attribute decal atlas
-      // paints from the pick that scheduled them (setup-sheet primes on click).
-      const cd = CarDraw.instance();   // eslint-disable-line no-undef
-      if (cd && cd.getCarDecalTexture) {
-        const orig = cd.getCarDecalTexture.bind(cd);
-        cd.getCarDecalTexture = function () {
-          const atlBefore = n.atlases;
-          const tex = orig.apply(this, arguments);
-          const delta = n.atlases - atlBefore;
-          if (tex && delta > 0 && window.__pick) n.texByPick[window.__pick] = (n.texByPick[window.__pick] || 0) + delta;
-          return tex;
+      // TLX: pooled decal re-fill and fresh uploads go through renderer.initTexture
+      // (createTexture / refillTexture / uploadTexture), not always backend.createTexture.
+      const ren = window.renderer;
+      if (ren && typeof ren.initTexture === "function") {
+        const it = ren.initTexture.bind(ren);
+        ren.initTexture = function (tex) {
+          if (tex && tex.image) creditAtlasUpload(tex.image);
+          return it(tex);
         };
+      } else {
+        const b = ren && ren.backend;
+        if (b && b.createTexture) { const c = b.createTexture.bind(b);
+          b.createTexture = function (t, o) {
+            if (t && t.image) creditAtlasUpload(t.image);
+            return c(t, o);
+          }; }
       }
     });
     const rows = [];

@@ -1051,14 +1051,6 @@ function buildLiveryOptions(container, team) {
     row.onclick = () => {
       if (active) return;
       saveLiveryId(team.id, liv.id);
-      // Eager preview-tier upload: a pick can repaint the atlas without a garage
-      // present before the pick-cost gate's settle window (TLX defers by default).
-      const cd = typeof CarDraw !== "undefined" && CarDraw.instance ? CarDraw.instance() : null;
-      if (cd) {
-        const num = cd.carDecalNum(team, null);
-        const tex = cd.getCarDecalTexture(team, num, true);
-        if (tex && G.gfx && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex);
-      }
       if (G.soundOn) GameAudio.uiSelect();
       buildSetup();
       // IDs can come from imported paint jobs: compare data, never interpolate
