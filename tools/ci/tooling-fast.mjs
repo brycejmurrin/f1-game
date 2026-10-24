@@ -204,6 +204,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/build-gallery.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
+  // Camera tuner reads stored track/team once per Store revision (CPU-HUNT C6). VM, < 0.1 s.
+  "tests/unit/cam-context-alloc.test.mjs",
   "tests/unit/cam-motion.test.mjs",
   // Round-2 camera: corridor-clamped hang, wall clamp on street circuits, look-free director/PiP, NaN hold, bend hysteresis, frame-rate-free drone; 30/60/144 Hz sweep.
   "tests/unit/cam-round2.test.mjs",
