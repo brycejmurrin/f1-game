@@ -2861,6 +2861,7 @@ const TLX = (function () {
         ib.setUsage(_instUsage);   // A-H1: uploads only through uploadStream (a dirty producer)
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
+        geo.__tlxPin = true;   // a stream idle for 20 s (no sparks, no kick-up) kept its pipeline: prunePool skips it (#3677)
         slot.geo = geo; slot.ib = ib; slot.cap = cap;
         return true;
       }
@@ -2877,6 +2878,7 @@ const TLX = (function () {
         ib.setUsage(_instUsage);   // A-H1, as ensureStream
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
+        geo.__tlxPin = true;   // as ensureStream
         slot.geo = geo; slot.ib = ib; slot.cap = (arr.length / slot.stride) | 0;
         return true;
       }
@@ -3732,7 +3734,10 @@ const TLX = (function () {
         let w = 0;
         for (let i = 0; i < meshPool.length; i++) {
           const m = meshPool[i];
-          if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS) { meshPool[w++] = m; continue; }
+          // A PINNED geometry (pinMesh: the cockpit ERS bar, OT lamp, ERS strip) keeps its wrappers: they draw
+          // only while ERS deploys, and on WebGPU the wrapper is its pipeline's last holder, so a prune between
+          // two BOOST presses made every press rebuild the pipeline mid-race (#3677).
+          if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS || (m.geometry && m.geometry.__tlxPin)) { meshPool[w++] = m; continue; }
           const byMat = meshByGeo.get(m.geometry);
           if (byMat) {
             // Drop the wrapper from its occurrence list; an emptied list and an
@@ -4892,6 +4897,8 @@ const TLX = (function () {
           return true;
         },
         freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
+        // Exempt a small, intermittently drawn mesh from the idle prune (feature-detected; freeMesh still frees it).
+        pinMesh(m) { if (m && m.geo) m.geo.__tlxPin = true; },
         freeChunkedMesh(m) {
           if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }
@@ -5393,10 +5400,12 @@ const TLX = (function () {
             _gpuLastOperation = "render-mirror";
             const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
             if (mrt) _mirMrtArm(true);
-            try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); }
+            // A-P2W: WebGPU takes the same discard as a hint set BEFORE the pass (vendored patch 17).
+            const hinted = !!(post && post.discardHint && post.discardHint(mirRT, mrt ? 2 : 0, true));
+            try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); if (hinted) post.discardHintOff(mirRT); }
             // A-P2: nothing reads the mirror's depth or its ssrTag attachment (only textures[0] is
             // ever sampled), so on WebGL2 drop both stores while its FBO is still bound (tlx-post).
-            if (post && post.discardAttachments && post.discardAttachments(mirRT, _mirInv(mrt))) _mirDiscards++;
+            if (hinted || (post && post.discardAttachments && post.discardAttachments(mirRT, _mirInv(mrt)))) _mirDiscards++;
             _mirRenders++;
             _mirFails = 0;   // the cap means FOUR CONSECUTIVE failures: unrelated one-frame throws must not retire the mirror
           } catch (e) {
@@ -6159,6 +6168,7 @@ const TLX = (function () {
                   _postHealth = { state: "healthy", attempts: _postStrikes, maxAttempts: 3, reason: "" };
                 }
               } finally {
+                if (post.discardHintOff) post.discardHintOff();   // A-P2W: a throw mid-scene must not leave the hint on
                 if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
                 if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
                 if (_hadMrt) renderer.setMRT(_prevMrt || null);
