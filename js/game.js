@@ -4328,6 +4328,7 @@ function quitToMenu() {
   cancelIntro();
   if (typeof MenuTeardown !== "undefined") MenuTeardown.beginQuit();
   els.pausemenu.hidden = true;
+  Input.unlockLandscape();
   _menuGate.warm = 0; _menuGate.garageWarm = 0;
   resultsCam.reset(); replayBuf.clear();
   if (raceMessageHistory) raceMessageHistory.clear();
@@ -4337,7 +4338,7 @@ function quitToMenu() {
   qualiSheet.close();
   if (announcer.stop) announcer.stop();   // results commentary must not outlive the race
   feel.shake = 0; feel.hitStop = 0;
-  PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();   // inactive: forgets a stale disconnect reason
+  PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker();   // inactive: forgets a stale disconnect reason
   if (setupTrialSession) setupTrialSession.cancel();
   if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session ended before attempt completed");
   if (garageReturn === "pit") { setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; pitWorkSpec = null; garageReturn = "select"; }   // the pit garage goes down with the race (comment above)
