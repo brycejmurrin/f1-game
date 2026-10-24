@@ -1227,6 +1227,8 @@
     "tests/unit/title-flow.test.mjs",
     "tests/unit/title-home-scene-prepaint.test.mjs",
     "tests/unit/title-menu-even.test.mjs",
+    "// #3305: compact-wide title mode doors keep an em-floor + compact --tap-paint at UI scale 200%.",
+    "tests/unit/title-mode-grid-scale.test.mjs",
     "// three's per-frame tick once per drawn frame on WebGL2 (the pump), WebGPU untouched: the real pumpAnimation over a fake three Animation, and the install gate.",
     "tests/unit/tlx-anim-pump.test.mjs",
     "tests/unit/tlx-car-shadow-cpu.test.mjs",

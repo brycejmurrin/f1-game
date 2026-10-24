@@ -336,9 +336,7 @@ html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
   touch-action: pan-y; margin-bottom: calc(var(--tap) + var(--gap) * 0.5);
 }
-/* Compact-wide live Home: subgrid-place #menu-secondary under brand (no DOM move).
-   Keep #menu-buttons as the scroll box — ui-scale @200% scrolls RACE into it.
-   display:contents broke that box and let brand (z-index) steal hits on DATA HUB. */
+/* Compact-wide: subgrid secondary; #menu-buttons scrolls (not display:contents). */
 html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
   grid-template-rows: minmax(0, 1fr);
@@ -378,26 +376,24 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
   gap: calc(var(--gap) * 0.15); min-height: var(--tap); height: auto; max-height: none;
   --balance-basis: 0%; --balance-min: 0%;
 }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn { justify-content: flex-start; white-space: normal; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn { min-height: var(--tap-paint); justify-content: flex-start; white-space: normal; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary.balanced-row > :not([hidden]) {
   flex: 1 1 0; min-width: 0; width: auto;
 }
 :where(body[data-density="compact"]) #overlay #menu-buttons .bigbtn {
   min-height: var(--tap); padding-block: calc(var(--gap) / 2);
 }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-primary, #menu-explore, #menu-hero) .bigbtn {
-  min-height: max(var(--tap-min), var(--tap-paint));
-  padding-block: calc(var(--gap) * 0.3);
+/* #3305: 2.75em !important beats destinations 40px @200%. */
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons :is(#menu-primary,#menu-explore,#menu-hero,#menu-retention,#menu-garage) .bigbtn {
+  min-height: max(32px, var(--tap-min), var(--tap-paint), 2.75em) !important;
+  padding-block: calc(var(--gap) * 0.3); height: auto; max-height: none;
 }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn {
-  padding-block: calc(var(--gap) * 0.4);
-}
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
-  min-height: var(--tap-paint); height: auto; max-height: none;
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.4); }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons #menu-secondary > .bigbtn {
+  min-height: max(32px, var(--tap-paint), 2.75em) !important; height: auto; max-height: none;
 }
 html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
-/* Live Home on tall: drop #title-car from the grid before data-home-ready (deferred
-   experience.css used to wait). Classic/static keeps the three-band portrait cars. */
+/* Tall live Home: drop #title-car before data-home-ready. */
 @media (max-width: 699px) {
   html[data-home-live] :where(body[data-shape="tall"]) #overlay {
     grid-template-rows: auto minmax(0, 1fr);
@@ -861,6 +857,7 @@ html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"]
     --vwz: calc(1vw / var(--ui-compact-scale));
     --vhz: calc(1vh / var(--ui-compact-scale));
     --svhz: calc(1svh / var(--ui-compact-scale));
+    --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--ui-compact-scale))); /* #3305 */
   }
   /* Compact sheet zoom cap (#1346): --_sheet-z is the painted zoom; re-derive
      --tap-paint / vwz against it (shortHelpChips at 150%+). */
