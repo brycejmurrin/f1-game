@@ -88,12 +88,8 @@ test("the draw loop draws body + planted wheels for every procedural car", () =>
   const end = game.indexOf("      const wholeCarMat =", start);
   assert.ok(start >= 0 && end > start, "procedural body branch precedes the whole-car fallback");
   const draw = game.slice(start, end);
-  assert.match(draw, /const sharedBody = FieldLod\.on && !c\.isPlayer && _lod >= 2;/,
-    "only distant non-player rivals with LOD enabled may coalesce");
-  assert.match(draw, /const body = carDraw\.modelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\)/,
-    "loaded models bypass the procedural body and the player keeps its own body");
-  assert.match(draw, /sharedBody \? carDraw\.sharedRivalBodyMesh\(FieldLod\.farBody\(_lodD2, fovY, c\)\) : teamBodyMesh\(c\.team, c\)/,
-    "the shared guard selects distant geometry; close rivals keep team bodies");
+  // Which body each car gets (shared / team / player / model) runs as
+  // behaviour in field-lod.test.mjs; this pins only what is drawn with it.
   assert.match(draw, /gfx\.draw\(body, tmpMat, sharedBody \? carDraw\.coOpt\(paint\) : paint\);/,
     "only shared bodies coalesce; close and player bodies retain ordinary paint and chassis attitude");
   assert.match(draw, /drawPlayerWheels\(c, _groundMat, dt, _wheelOpts\);/,

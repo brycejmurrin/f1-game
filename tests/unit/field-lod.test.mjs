@@ -472,11 +472,8 @@ test("warm: TLX compiles the flame / ERS lit keys during the lights", () => {
 });
 
 test("game.js swaps rivals to the one shared body mesh past tier 2", () => {
+  // Behaviour, not source shape: run the production body-selection lines.
   const source = gameSource();
-  assert.match(source, /const sharedBody = FieldLod\.on && !c\.isPlayer && _lod >= 2;/,
-    "only enabled distant non-player rivals may share a body");
-  assert.match(source, /sharedBody \? carDraw\.sharedRivalBodyMesh\(FieldLod\.farBody\(_lodD2, fovY, c\)\) : teamBodyMesh\(c\.team, c\)/,
-    "the guarded branch retains far-body selection and per-seat fallback");
   const start = source.indexOf("    const sharedBody = FieldLod.on");
   const end = source.indexOf("    if (body) {", start);
   assert.ok(start >= 0 && end > start, "body selection remains bounded before submission");
