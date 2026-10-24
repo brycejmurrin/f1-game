@@ -152,6 +152,7 @@ jobs:
       force: ${{ steps.split.outputs.force }}
       census_only: ${{ steps.split.outputs.census_only }}
       relaunch: ${{ steps.split.outputs.relaunch }}
+      mem_cycles: ${{ steps.split.outputs.mem_cycles }}
       cam: ${{ steps.split.outputs.cam }}
       entry: ${{ steps.split.outputs.entry }}
       run: ${{ steps.gate.outputs.run }}
@@ -267,6 +268,10 @@ jobs:
           if rl is None:
             rl = (os.environ.get("INPUT_RELAUNCH") or "").lower() in ("true", "1")
           print("relaunch=" + ("true" if rl else "false"))
+          # RACE > QUIT memory cycles (A·H12, tools/gfx/mem-cycles-lib.mjs): push requests only, 0 = off, at most 16.
+          try: mc = int(req.get("mem_cycles") or 0)
+          except (TypeError, ValueError): mc = 0
+          print("mem_cycles=" + str(min(max(mc, 0), 16)))
           # Historical exact-revision experiment: never part of an ordinary
           # dispatch/nightly or an unrelated pushed request. Its candidate pin
           # intentionally rejects newer product trees; the four controls do not.
@@ -338,6 +343,7 @@ jobs:
       CENSUS_ONLY: ${{ needs.plan.outputs.census_only }}
       CENSUS_CAM: ${{ needs.plan.outputs.cam }}
       CENSUS_ENTRY: ${{ needs.plan.outputs.entry }}
+      CENSUS_MEM_CYCLES: ${{ needs.plan.outputs.mem_cycles }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -557,6 +563,20 @@ jobs:
             node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
               --backend three --path webgpu --ls apex26.wgxCapture=0 --beats 10 --profile "$PROF" --port 47610 \
               --json "game-relaunch-$leg-${{ matrix.image }}.json" || true
+          done
+
+      # GPU RESIDENCY ACROSS RACE > QUIT (A·H12, docs/notes/GPUMEM-HUNT-2026-10-24.md): N cycles
+      # alternating the circuit, live GPUBuffer/GPUTexture and three render objects after each quit,
+      # on both three.js paths. SwiftShader cannot answer "does it plateau on a real GPU"; this can.
+      # Opt-in (a push request's mem_cycles); a measurement, never the job's verdict.
+      - name: Memory cycles — three.js race to quit, WebGPU then WebGL2 (opt-in)
+        if: ${{ needs.plan.outputs.mem_cycles != '0' && needs.plan.outputs.mem_cycles != '' && needs.plan.outputs.census_only != 'true' }}
+        continue-on-error: true
+        timeout-minutes: 14
+        shell: bash
+        run: |
+          for p in webgpu webgl2; do
+            node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --backend three --path "$p" --ls apex26.wgxCapture=0 --beats 3 --mem-cycles "${CENSUS_MEM_CYCLES}" --json "game-memcycles-$p-$IMAGE.json" || true
           done
 
       # The control: the same pin (a no-op here — forceWebGL short-circuits

@@ -1941,6 +1941,11 @@
       ]
     },
     {
+      "path": "tools/gfx/mem-cycles-lib.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/gfx/pass-census.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

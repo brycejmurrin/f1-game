@@ -853,6 +853,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/meeting-picker-labels.test.mjs",
   // The track-switch growth verdict (mem-census sustainedGrowthMB) replayed on the #773 / 2026-10-04 leak numbers and the Metal warm-up step. ~0.1 s.
   "tests/unit/mem-census-growth.test.mjs",
+  // gpu-game-check --mem-cycles (A·H12): the plateau-vs-growing verdict over race>quit cycles, and the in-page live GPUBuffer/GPUTexture counter on a stub GPUDevice. ~0.1 s.
+  "tests/unit/mem-cycles-lib.test.mjs",
   // memory-sync.sh's three-way sync: a stale session never reverts other
   // sessions' memories (2026-10-02, twice). Real hook, throwaway repo. ~1 s.
   "tests/unit/memory-sync.test.mjs",

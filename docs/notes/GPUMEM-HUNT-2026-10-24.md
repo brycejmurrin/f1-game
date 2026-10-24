@@ -13,9 +13,17 @@ A Playwright probe (not committed yet; scratch/gpumem/probe.mjs on the hunter's 
 drops an entry on `destroy` or on GC (`FinalizationRegistry`, so the census never pins an object). After boot it wraps
 `renderer.backend.create*Attribute` to tie each vertex buffer to its `BufferAttribute`, and `?three-devtools=1`
 exposes `THREE` so `BufferGeometry.setAttribute/setIndex` stamp each attribute with its builder's stack. Each cycle:
-`__apex.race(track)`, 10 s, pause → QUIT TO MENU, two CDP `HeapProfiler.collectGarbage`, then a census of live GPU
+`__apex.race(track)`, 10 s, pause → one QUIT TO MENU tap, two CDP `HeapProfiler.collectGarbage`, then a census of live GPU
 objects and of three's `Renderer._objects._renderObjects` (the strong Set that keeps a RenderObject, its bindings
 and its geometry until the object's or material's `"dispose"`).
+
+CORRECTION (same day): QUIT TO MENU needs two taps (`js/ui/pause-opts.js` confirm guard), so the one tap above only
+armed it, and probe runs 1–6 measured RACE → RACE switches from a paused race (`G.state` still `count`/`race`).
+The real RACE → QUIT → MENU series, `gpu-game-check.mjs --mem-cycles 8` with both taps (state `menu` every cycle,
+monza/montreal, SwiftShader WebGPU), read live buffers 1059, 1117, 1130, 1246, 1532, 1367, 1576, 1251 (43–63 MB),
+textures 52–62 (101–109 MB), render objects 299, 319, 293, 393, 509, 477, 536, 351. No monotonic climb in count
+or render objects. Same-track buffer MB drifts +1.2–1.5 MB per two cycles (≈0.7 MB a cycle) in the second half,
+too short a series to separate from cache warm-up. The hardware series (gpu-census `mem_cycles`, 16 cycles) decides it.
 
 Software numbers rank work; they are not device evidence (no GPU in this container).
 
@@ -38,9 +46,9 @@ Software numbers rank work; they are not device evidence (no GPU in this contain
 
 ## Next
 
-1. Commit the probe as a tools/perf GPU-object census CLI (one JSON verdict per cycle: live buffers/textures/bind groups/render objects, survivors by epoch) with a unit test, so later hunts reuse it rather than heap-snapshot diffs.
+1. DONE (round 2): `node tools/gfx/gpu-game-check.mjs <track> --mem-cycles N` is the reusable census (live GPUBuffer/GPUTexture, render objects, heap after each RACE > QUIT; `out.memCycles.verdict`), and gpu-census.yml runs it on both three.js paths when a push request sets `mem_cycles`.
 2. Re-run the census with an iPhone UA (`LiveryTex.IS_PHONE`) for the phone footprint; the desktop numbers here include the 26.6 MB hi-res atlas a phone never builds.
-3. Run the same census on the WebGL2 leg (`backend=gl`) for parity, and on gpu-census.yml `macos-latest` for a hardware number.
+3. Dispatch the hardware series: a gpu-census push request with `mem_cycles: 16` on `macos-latest` (both three.js paths). A plateau there closes H2; a same-track MB climb names the cache to bound.
 
 Sources: three r186 src/renderers/common RenderObjects / RenderObject (npm `three@0.186.1`, read locally); WebKit bug
 [275958](https://bugs.webkit.org/show_bug.cgi?id=275958) (iOS jetsam near 1 GB), [253172](https://bugs.webkit.org/show_bug.cgi?id=253172) (GPU process growth shows as a WebContent jetsam).
