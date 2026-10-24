@@ -1566,6 +1566,7 @@
     {
       "path": "tools/gen/blender/crew-choreo.py",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "python3"
     },
     {
