@@ -33,6 +33,7 @@ test.describe("garage livery pick cost", () => {
     await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
     await page.waitForFunction((n) => document.querySelectorAll(".cs-liv-swatch:not(.cs-liv-plus)").length > n + 1,
       PICKS, { polling: 100, timeout: 30_000 });
+    await page.waitForFunction(() => typeof CarDraw !== "undefined" && CarDraw.instance && CarDraw.instance(), null, { polling: 100 });   // eslint-disable-line no-undef
     // Count through the shared globals every pick path calls at call time (Car3D / LiveryTex are not
     // frozen), and the GPU textures three allocates FOR A LIVERY ATLAS: a texture counts only when its
     // source is a canvas buildAtlas returned (or a bitmap made from one). Counting every createTexture
@@ -65,6 +66,19 @@ test.describe("garage livery pick cost", () => {
           }
           return c(t, o);
         }; }
+      // TLX pool re-fill often skips backend.createTexture; attribute decal atlas
+      // paints from the pick that scheduled them (setup-sheet primes on click).
+      const cd = CarDraw.instance();   // eslint-disable-line no-undef
+      if (cd && cd.getCarDecalTexture) {
+        const orig = cd.getCarDecalTexture.bind(cd);
+        cd.getCarDecalTexture = function () {
+          const atlBefore = n.atlases;
+          const tex = orig.apply(this, arguments);
+          const delta = n.atlases - atlBefore;
+          if (tex && delta > 0 && window.__pick) n.texByPick[window.__pick] = (n.texByPick[window.__pick] || 0) + delta;
+          return tex;
+        };
+      }
     });
     const rows = [];
     for (let i = 1; i <= PICKS; i++) {
