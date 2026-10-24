@@ -5,7 +5,7 @@
 //
 //   node tools/perf/devicefarm-iphone.mjs devices
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" [--legs 2|4|0] [--url URL] [--out DIR]
-//   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --touch 5 [--from btn-throttle] [--to btn-boost]
+//   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --touch 5 [--touch-gap 28] [--touch-pair] [--entry menu] [--from btn-throttle] [--to btn-boost]
 //     [--variants none,dom,state,none]   one fresh page load per entry, warm-up before the first tap (see WARM)
 //     [--variants none@live,dom@live,none@fix --fix-url URL --cold]   a fresh Safari PROCESS per entry
 //   node tools/perf/devicefarm-iphone.mjs run --scenario cache|races [--pins webgpu,webgl2]   (adds ?apex=1)
@@ -259,13 +259,22 @@ async function touchRun(base, sid, out, n, warm) {
     log("touch map " + JSON.stringify(r.map));
     // --to a,b,c: cycle c taps the c-th id (the last repeats), so a first tap on AERO can precede the first BOOST.
     const a = pt(r.arm.from), bs = r.arm.to.map(pt);
+    // --touch-gap S: seconds from one press to the next (default: the old fixed ~2.8 s cycle). --touch-pair: every
+    // press is BOOST ON then OFF (it toggles), so a deploy-ON press is followed by its release 1.2 s later; the read
+    // then lists 2N pointerdowns, the even ones being the ON presses.
+    const gapMs = Math.round(Number(opt("touch-gap", "0")) * 1000), pair = opt("touch-pair", "") !== "";
     for (let c = 0; c < n; c++) {
       const b = bs[Math.min(c, bs.length - 1)];
+      const press = [{ type: "pointerMove", duration: 0, x: b.x, y: b.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 70 }, { type: "pointerUp", button: 0 }];
+      const used = 1500 + 60 + 70 + (pair ? 1200 + 70 : 0);
+      const tail = Math.max(1200, gapMs - used);
       wd(base, "POST", `/session/${sid}/actions`, { actions: [{ type: "pointer", id: "finger", parameters: { pointerType: "touch" }, actions: [
         { type: "pointerMove", duration: 0, x: a.x, y: a.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 1500 },
-        { type: "pointerUp", button: 0 }, { type: "pause", duration: 60 },
-        { type: "pointerMove", duration: 0, x: b.x, y: b.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 70 },
-        { type: "pointerUp", button: 0 }, { type: "pause", duration: 1200 }] }] });
+        { type: "pointerUp", button: 0 }, { type: "pause", duration: 60 }, ...press,
+        ...(pair ? [{ type: "pause", duration: 1200 }, ...press] : [])] }] });
+      // The long gap is waited here, not as a W3C "pause": run 24 (2026-10-24) asked for 28 s and the presses came
+      // ~4 s apart, so the endpoint did not honour the pause. The short first-tail stays in the action.
+      await sleep(tail);
     }
     try { wd(base, "DELETE", `/session/${sid}/actions`); } catch (_) { /* nothing held */ }
   } finally {
@@ -291,12 +300,40 @@ const READY = `
   let st = null, api = null; try { st = __apex.info().state; } catch (_) {}
   try { api = RendererPicker.liveThreeApi(); } catch (_) {}
   return { ready: st === "menu" && !!api, state: st, api };`;
-const KICK_FOR = (track = "monza", tod = "default") => `
+// --entry menu (A·W43): the player's path — RACE > pick the circuit > RACE SETUP > wait for the menu's own prep
+// (menuPrep + garage prewarm, as tools/lib/census-entry.mjs menuPrepReady) > START RACE. `__apex.race` skips race
+// settings' prepareMenuCarAssets, so its entry times are a cold-API path no player takes. The prep wait is bounded
+// (60 s) and recorded in window.__dfMenu; a prep that never settles still starts the race, and says so.
+const KICK_API = (track, tod) => `
   window.__dfRace = undefined; window.__dfT0 = performance.now();
   let prev = null; try { prev = RaceEntryProfile.snapshot().winT0; } catch (_) {}
   Promise.resolve(__apex.race(${JSON.stringify(track)}, ${JSON.stringify(tod)}, "dry")).then((v) => { window.__dfRace = { ok: !!v, ms: performance.now() - window.__dfT0 }; },
     (e) => { window.__dfRace = { err: String(e) }; });
   return prev;`;
+const KICK_MENU = (track, tod) => `
+  window.__dfRace = undefined; window.__dfT0 = performance.now(); const M = window.__dfMenu = { entry: "menu", steps: [] };
+  let prev = null; try { prev = RaceEntryProfile.snapshot().winT0; } catch (_) {}
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const until = async (f, ms) => { const t = performance.now(); while (performance.now() - t < ms) { try { if (f()) return true; } catch (_) {} await sleep(100); } return false; };
+  const shown = (id) => { const e = document.getElementById(id); return !!(e && !e.hidden); };
+  const step = (n) => M.steps.push([n, Math.round(performance.now() - window.__dfT0)]);
+  (async () => {
+    document.getElementById("mb-race").click(); if (!(await until(() => shown("select"), 60000))) throw new Error("no track picker"); step("select");
+    const i = Tracks.LIST.findIndex((t) => t.id === ${JSON.stringify(track)}), row = document.querySelector('.track-row[data-track-idx="' + i + '"]');
+    if (row) row.click(); M.tile = !!row;
+    document.getElementById("sel-go").click(); if (!(await until(() => shown("race-settings"), 60000))) throw new Error("no race settings"); step("race-settings");
+    const sel = document.getElementById("rs-time-sel"); if (sel && ${JSON.stringify(tod)} !== "default") { sel.value = ${JSON.stringify(tod)}; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    const t1 = performance.now();
+    M.prepReady = await until(() => { const p = __apex.menuPrep(); return p && p.state === "menu" && p.world && p.done && p.warmFrames === 0 && !p.warming; }, 60000);
+    await until(() => { const g = __apex.garagePrebuild && __apex.garagePrebuild(); return !g || g.garageReady || !!(g.last && g.last.want === "settings"); }, 30000);
+    M.prepWaitMs = Math.round(performance.now() - t1); step("prepared");
+    window.__dfT0 = performance.now(); document.getElementById("rs-go").click(); step("start-race");
+    const t2 = performance.now(); await until(() => { const s = __apex.info().state; return s && s !== "menu"; }, 180000);
+    window.__dfRace = { ok: true, ms: performance.now() - t2 };
+  })().catch((e) => { window.__dfRace = { err: String(e) }; });
+  return prev;`;
+const ENTRY_MENU = opt("entry", "api") === "menu";
+const KICK_FOR = (track = "monza", tod = "default") => (ENTRY_MENU ? KICK_MENU : KICK_API)(track, tod);
 const KICK = KICK_FOR();
 const ENTRY = `
   let s = null, t = null, warm = null, st = null;
@@ -511,7 +548,7 @@ function thermalNow(ctx) {
 // including the menu warm (warm.history).
 function rowMeta(ctx, report, i, entry) {
   return { build: report.boot && report.boot.build ? report.boot.build.sha : null, first: i === 0 && !report.primed,
-    thermal: thermalNow(ctx), warm: entry && entry.warm ? entry.warm : null };
+    thermal: thermalNow(ctx), warm: entry && entry.warm ? entry.warm : null, entryPath: ENTRY_MENU ? "menu" : "api (cold: skips race settings' prepareMenuCarAssets)" };
 }
 // --prime TRACK:TOD: one discarded race entry before the first arm, so no measured arm pays the unit's cold compile.
 async function primeOnce(ctx, url, report) {
@@ -634,6 +671,61 @@ async function flagsScenario(ctx, url, report, out) {
     try { await exec(ctx.base, ctx.sid, FLAG_SET([0, 0]) + ""); await exec(ctx.base, ctx.sid, "return __apex.renderScale(true);"); } catch (_) { /* best effort */ }
     pullLogs(ctx.base, ctx.sid, out);
   }
+}
+// lsab (patch 17 #3685, #3690): a localStorage A/B on one pinned path. --ls-arms "A=key:val,key:val|B=|A=key:val": each
+// arm sets its keys (an empty value removes the key, a bare "B=" sets nothing), loads a fresh page (flags are read at
+// boot), times one entry, then samples --ls-win-s seconds in --ls-cam (default helmet) with the governor left alone.
+// Each row reads back the keys, GLX.__tlx.postState() tag/depth discard counters and mirrorState().discards, so an arm
+// that did not switch the code path shows. Every key an arm touched is removed at the end.
+const LS_PARSE = (spec) => spec.split("|").map((a) => { const [name, kv = ""] = a.split("="); return { name, kv: kv ? kv.split(",").map((p) => { const i = p.indexOf(":"); return [p.slice(0, i), p.slice(i + 1)]; }) : [] }; });
+const LS_SET = (kv, all) => `const s = GameStore.store; ${all.map((k) => `s.rawDel(${JSON.stringify(k)});`).join(" ")}
+  ${kv.map(([k, v]) => `s.rawSet(${JSON.stringify(k)}, ${JSON.stringify(v)});`).join(" ")} return true;`;
+const LS_READ = (keys) => `(() => { const o = { keys: {} }; ${keys.map((k) => `o.keys[${JSON.stringify(k)}] = localStorage.getItem(${JSON.stringify(k)});`).join(" ")}
+  try { const t = GLX.__tlx.postState(); o.tag = t.tag; o.depth = t.depth; } catch (e) { o.postErr = String(e).slice(0, 80); }
+  try { o.mirrorDiscards = GLX.__tlx.mirrorState().discards; } catch (_) {}
+  try { o.backend = __apex.diag().env.backend; } catch (_) {}
+  return o; })()`;
+async function lsabScenario(ctx, url, report, out) {
+  const [track, tod = "night"] = opt("track", "monza:night").split(":");
+  const pin = opt("ls-pin", "webgpu"), winS = Number(opt("ls-win-s", "30")), cam = opt("ls-cam", "helmet");
+  const arms = LS_PARSE(opt("ls-arms", "A=apex26.tlxTagDiscard:0,apex26.tlxDepthDiscard:0|B=|A=apex26.tlxTagDiscard:0,apex26.tlxDepthDiscard:0"));
+  const keys = [...new Set(arms.flatMap((a) => a.kv.map(([k]) => k)))];
+  const R = report.lsab = { pin, track, tod, cam, arms, rows: [] };
+  await exec(ctx.base, ctx.sid, PIN(pin));
+  await primeOnce(ctx, url, report);
+  try {
+    for (const [i, arm] of arms.entries()) {
+      await exec(ctx.base, ctx.sid, LS_SET(arm.kv, keys));
+      const r = await openUrl(ctx, withApex(url));
+      const entry = await timedEntry(ctx, `lsab ${arm.name}`, KICK_FOR(track, tod));
+      await exec(ctx.base, ctx.sid, GO);
+      try { await exec(ctx.base, ctx.sid, `return __apex.camera(${JSON.stringify(cam)});`); } catch (_) { /* keep default */ }
+      const meta = rowMeta(ctx, report, i, entry);
+      const s2 = await sampleWin(ctx, winS * 1000, 3000, "ls: " + LS_READ(keys));
+      R.rows.push({ arm: arm.name, i, api: r.api, entryMs: entry.windowMs, ...meta, ...s2 });
+      log(`lsab ${arm.name}: api=${r.api} ${JSON.stringify(s2.win && { fps: s2.win.fps, p95: s2.win.p95, p99: s2.win.p99, n50: s2.win.n50 })} ls=${JSON.stringify(s2.ls)}`);
+      try { shot(ctx.base, ctx.sid, path.join(out, `lsab-${i}-${arm.name}.png`)); } catch (_) { /* no shot */ }
+    }
+  } finally {
+    try { await exec(ctx.base, ctx.sid, LS_SET([], keys)); } catch (_) { /* best effort */ }
+    pullLogs(ctx.base, ctx.sid, out);
+  }
+}
+// opus (A·H18, #3710): which Opus containers Safari's decodeAudioData takes (Ogg, WebM, CAF) against an MP3 control.
+// The probe is the function in devicefarm-opus-probe.mjs (async, returns JSON), serialised and run through
+// WebDriver execute/async on the live game page so VoicePack.codecs() reports too. Home-Screen web-app mode is not
+// reachable from this harness (Safari only).
+async function opusScenario(ctx, url, report, out) {
+  const { default: probe } = await import("./devicefarm-opus-probe.mjs");
+  await openUrl(ctx, withApex(url));
+  const script = `const cb = arguments[arguments.length - 1]; (${probe.toString()})().then(cb, (e) => cb(JSON.stringify({ probeError: String(e && e.message || e) })));`;
+  let raw;
+  try { raw = wd(ctx.base, "POST", `/session/${ctx.sid}/execute/async`, { script, args: [] }); }
+  catch (e) { raw = JSON.stringify({ probeError: "execute/async: " + e.message.slice(0, 160) }); }
+  let parsed; try { parsed = JSON.parse(raw); } catch (_) { parsed = { raw: String(raw).slice(0, 400) }; }
+  report.opus = parsed;
+  log("opus " + JSON.stringify(parsed));
+  fs.writeFileSync(path.join(out, "opus-probe.json"), JSON.stringify(parsed, null, 2));
 }
 // photo (#3482): Photo Studio driven by native finger taps from the title screen, every visible control's painted
 // size against the 44 px floor, one shot preset, CAPTURE, CLOSE — and every page error on the way.
@@ -776,6 +868,8 @@ async function run() {
             // --visor-pins / --soak-pins: the visor delta shows only where frames are not pinned at 60 Hz (iPhone 14
             // WebGL2, ledger rows 1-4); #3479's before-numbers are WebGPU.
             try { if (sc === "visor") await visorScenario(ctx, opt("url", SITE), opt("visor-pins", "webgl2,webgpu").split(","), report, out);
+              else if (sc === "lsab") await lsabScenario(ctx, opt("url", SITE), report, out);
+              else if (sc === "opus") await opusScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "soak") await soakScenario(ctx, opt("url", SITE), opt("soak-pins", "webgpu").split(","), report, out);
               else if (sc === "photo") await photoScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "flags") await flagsScenario(ctx, opt("url", SITE), report, out);
