@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01Km9wfNVfmYSAVCMfZTUwY6 A·W44 stand down: PR #3678 head cc683269 (state handoff), next: resume the 30-merge lit-WGSL census (settle 25 s, steps in the PR body), replace the preliminary table, tooling-fast, ready-gate
+HANDOFF to:A from:claude:session_0142jEDWuu4rWGUB15jEoNgP A·W45 handoff (2nd, per OrchA 32): PR #3677 head 467db719, next: ers-deploy-census --backend tlx-gl --cam helmet --presses 3 --gap 25 to name per-press pipelines, then optional TLX gfx.pinMesh for ERS bar/OT lamp/ERS strip vs prunePool + unit test
