@@ -5404,10 +5404,12 @@ const TLX = (function () {
             _gpuLastOperation = "render-mirror";
             const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
             if (mrt) _mirMrtArm(true);
-            try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); }
+            // A-P2W: WebGPU takes the same discard as a hint set BEFORE the pass (vendored patch 17).
+            const hinted = !!(post && post.discardHint && post.discardHint(mirRT, mrt ? 2 : 0, true));
+            try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); if (hinted) post.discardHintOff(mirRT); }
             // A-P2: nothing reads the mirror's depth or its ssrTag attachment (only textures[0] is
             // ever sampled), so on WebGL2 drop both stores while its FBO is still bound (tlx-post).
-            if (post && post.discardAttachments && post.discardAttachments(mirRT, _mirInv(mrt))) _mirDiscards++;
+            if (hinted || (post && post.discardAttachments && post.discardAttachments(mirRT, _mirInv(mrt)))) _mirDiscards++;
             _mirRenders++;
             _mirFails = 0;   // the cap means FOUR CONSECUTIVE failures: unrelated one-frame throws must not retire the mirror
           } catch (e) {
@@ -6170,6 +6172,7 @@ const TLX = (function () {
                   _postHealth = { state: "healthy", attempts: _postStrikes, maxAttempts: 3, reason: "" };
                 }
               } finally {
+                if (post.discardHintOff) post.discardHintOff();   // A-P2W: a throw mid-scene must not leave the hint on
                 if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
                 if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
                 if (_hadMrt) renderer.setMRT(_prevMrt || null);
