@@ -9381,6 +9381,9 @@
       ]
     },
     "js/overlay/render.js": {
+      "boot": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
       "clear": [
         "tests/unit/overlay-feed.test.mjs"
       ],

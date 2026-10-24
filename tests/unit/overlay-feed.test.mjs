@@ -135,6 +135,32 @@ test("query options clamp scale/rows and select chroma + side", () => {
     { scale: 2, rows: 3, side: "right", chroma: "green", demo: true, only: "" });
 });
 
+test("overlay boot enables chroma styles only for a selected chroma colour", () => {
+  function boot(search) {
+    const dom = makeDom();
+    const root = dom.document.createElement("main");
+    root.id = "overlay";
+    root.setAttribute("role", "region");
+    const tower = dom.document.createElement("div"); tower.className = "ov-tower";
+    const battle = dom.document.createElement("div"); battle.className = "ov-battle";
+    battle.append(dom.document.createElement("strong"), dom.document.createElement("span"));
+    const sectors = dom.document.createElement("div"); sectors.className = "ov-sectors";
+    sectors.append(dom.document.createElement("span"), dom.document.createElement("span"), dom.document.createElement("span"));
+    const caption = dom.document.createElement("div"); caption.className = "ov-caption";
+    caption.append(dom.document.createElement("strong"), dom.document.createElement("span"));
+    root.append(tower, battle, sectors, caption);
+    dom.body.appendChild(root);
+    const ctx = { console, document: dom.document, URLSearchParams, location: { search }, OverlayFeed: load() };
+    vm.createContext(ctx);
+    vm.runInContext(source("js/overlay/render.js"), ctx, { filename: absSrc("js/overlay/render.js") });
+    return dom.documentElement.dataset;
+  }
+
+  assert.equal(Object.hasOwn(boot(""), "chroma"), false, "transparent default must not match html[data-chroma]");
+  assert.equal(Object.hasOwn(boot("?chroma=orange"), "chroma"), false, "unsupported colours stay transparent");
+  assert.equal(boot("?chroma=green").chroma, "green", "explicit chroma still enables keyed styling");
+});
+
 test("painter builds fixed rows once, moves by transform and skips unchanged text", () => {
   const dom = makeDom();
   const root = dom.document.createElement("section");
