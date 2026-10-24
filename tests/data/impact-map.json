@@ -1879,10 +1879,14 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "comfortGet": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "comfortSet": [
         "tests/unit/camera-defaults.test.mjs"
+      ],
+      "context": [
+        "tests/unit/cam-context-alloc.test.mjs"
       ],
       "copyFrom": [
         "tests/unit/camera-defaults.test.mjs"
@@ -1928,6 +1932,7 @@
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "importPack": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "importText": [
@@ -1935,11 +1940,15 @@
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "load": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/light-grid.test.mjs"
       ],
       "persist": [
         "tests/unit/camera-defaults.test.mjs"
+      ],
+      "refreshStoredContext": [
+        "tests/unit/cam-context-alloc.test.mjs"
       ],
       "reset": [
         "tests/unit/camera-defaults.test.mjs",
@@ -1951,7 +1960,11 @@
       "rollTarget": [
         "tests/unit/camera-defaults.test.mjs"
       ],
+      "scopeKey": [
+        "tests/unit/cam-context-alloc.test.mjs"
+      ],
       "setContext": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "setGlobal": [
@@ -1966,6 +1979,7 @@
       ],
       "values": [
         "tests/specs/camera-tuner.spec.js",
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "*": [
