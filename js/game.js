@@ -4324,10 +4324,11 @@ if (typeof GfxEscalation !== "undefined" && GfxEscalation.registerMenuRecover) {
 // with the race: left open, the title showed RETURN TO RACE, whose closePitWork charged a dead race.
 function quitToMenu() {
   clearRaceEntrySoften();
+  cancelIntro();
   if (typeof MenuTeardown !== "undefined") MenuTeardown.beginQuit();
   els.pausemenu.hidden = true;
   _menuGate.warm = 0; _menuGate.garageWarm = 0;
-  Ghost.flush(); resultsCam.reset(); replayBuf.clear(); cancelIntro();
+  Ghost.flush(); resultsCam.reset(); replayBuf.clear();
   if (raceMessageHistory) raceMessageHistory.clear();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
