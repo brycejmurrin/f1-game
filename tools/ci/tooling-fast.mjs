@@ -1317,6 +1317,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-post-fixed-mats.test.mjs",
   // TLX phone post at half scene resolution (D·IP3 / BrowserStack GPU-bound fill).
   "tests/unit/tlx-post-phone-res.test.mjs",
+  // TLX's mesh-pool prune keeps a gfx.pinMesh geometry's wrappers (the deploy-only ERS bar,
+  // OT lamp and ERS strip): an idle unpinned wrapper still goes. Lifts the real prunePool (#3677).
+  "tests/unit/tlx-prune-pin.test.mjs",
   // TLX perf hunt 6 (B·H6): gfx.warmDraws captures the cockpit rig's draws (never painted) and the next present compiles exactly those pairs, owned like the deferred mirror warm; the first rig frame then links nothing (a cold one links). Race entry awaits it under the cover.
   "tests/unit/tlx-rig-warm.test.mjs",
   // TLX drops a createTexture() source canvas once three has uploaded it,
