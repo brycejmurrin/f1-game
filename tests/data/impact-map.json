@@ -13160,7 +13160,8 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/pack-png-bytes.test.mjs"
+        "tests/unit/pack-png-bytes.test.mjs",
+        "tests/unit/worker-pack-strip.test.mjs"
       ],
       "load": [
         "tests/specs/assets-api.spec.js",
@@ -13169,7 +13170,8 @@
         "tests/unit/build-worker.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs",
-        "tests/unit/service-worker.test.mjs"
+        "tests/unit/service-worker.test.mjs",
+        "tests/unit/worker-pack-strip.test.mjs"
       ],
       "loadModels": [
         "tests/unit/assets-pack.test.mjs",
@@ -17020,13 +17022,24 @@
       "drop": [
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
+      "strip": [
+        "tests/unit/worker-pack-strip.test.mjs"
+      ],
+      "stripEnabled": [
+        "tests/unit/worker-pack-strip.test.mjs"
+      ],
       "*": [
         "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/workers/bitmap-decode-worker.js": {
+      "decode": [
+        "tests/unit/bitmap-decode-worker.test.mjs"
+      ],
+      "strip": [
+        "tests/unit/worker-pack-strip.test.mjs"
+      ],
       "*": [
-        "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/deploy-staging.test.mjs"
       ]
     },
