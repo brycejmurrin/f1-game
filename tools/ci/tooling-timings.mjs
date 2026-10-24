@@ -4,7 +4,7 @@
  * @section runner
  * @skill check-changes
  *
- * The CI tooling shards (ci.yml guards-a/b/c) pack files by that committed
+ * The CI tooling shards (ci.yml guards-a..d) pack files by that committed
  * table. On 2026-10-24 it held 396 of 855 files, recorded on a local box;
  * the 459 unmeasured files were packed at a fallback cost and started first,
  * and the slowest shard ran a mean 7.4 min against a 6.1 min balance
@@ -28,11 +28,12 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { api, REPO } from "./github-api.mjs";
 import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
-import { TOOLING_FAST_FILES, TIMINGS_FILE, applyFileShard, scheduleLongestFirst } from "./tooling-fast.mjs";
+import { TOOLING_FAST_FILES, TIMINGS_FILE, CI_SHARDS, applyFileShard, scheduleLongestFirst } from "./tooling-fast.mjs";
 
 const relFile = (f) => (path.isAbsolute(f) ? path.relative(process.cwd(), f) : f);
 
-export const GUARD_JOBS = ["Structural guards (tooling A)", "Structural guards (tooling B)", "Structural guards (tooling C)"];
+/** ci.yml guards-a..d (four since 2026-10-24, B2). A run older than that has no tooling D; it still counts if its own shards all passed. */
+export const GUARD_JOBS = ["Structural guards (tooling A)", "Structural guards (tooling B)", "Structural guards (tooling C)", "Structural guards (tooling D)"];
 export const CI_JOBS = 4;   // ci.yml: tooling-fast.mjs --jobs=4 on a 4-vCPU ubuntu-latest
 
 const PASS_RE = /\[tooling-fast\] PASS\s+\d+\/\d+ (\S+) duration=([\d.]+)(ms|s)\b/g;
@@ -63,7 +64,7 @@ export function foldTable(samples, oldMs = {}, files = TOOLING_FAST_FILES) {
 }
 
 /** Predicted wall (ms) of each CI shard: pack by `table`, run `jobs` slots greedily on `truth` durations. */
-export function predictShards(table, truth, { files = TOOLING_FAST_FILES, shards = 3, jobs = CI_JOBS, fallbackMs = 1000 } = {}) {
+export function predictShards(table, truth, { files = TOOLING_FAST_FILES, shards = CI_SHARDS, jobs = CI_JOBS, fallbackMs = 1000 } = {}) {
   const walls = [];
   for (let i = 1; i <= shards; i++) {
     const slots = new Array(jobs).fill(0);
@@ -93,8 +94,8 @@ export function harvestFromActions(runs, { log = () => {}, branch = null } = {})
   for (const run of list.json.workflow_runs) {
     if (used.length >= runs) break;
     const jobs = api(`actions/runs/${run.id}/jobs?per_page=50`).json?.jobs || [];
-    const guard = GUARD_JOBS.map((n) => jobs.find((j) => j.name === n));
-    if (!guard.every((j) => j && j.conclusion === "success")) continue;
+    const guard = GUARD_JOBS.map((n) => jobs.find((j) => j.name === n)).filter(Boolean);
+    if (guard.length < 3 || !guard.every((j) => j.conclusion === "success")) continue;
     const one = {};
     for (const j of guard) parseDurations(fetchLog(j.id, token), one);
     if (!Object.keys(one).length) continue;   // memoized or reused-draft skip: no PASS lines

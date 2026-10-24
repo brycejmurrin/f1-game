@@ -853,6 +853,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/meeting-picker-labels.test.mjs",
   // The track-switch growth verdict (mem-census sustainedGrowthMB) replayed on the #773 / 2026-10-04 leak numbers and the Metal warm-up step. ~0.1 s.
   "tests/unit/mem-census-growth.test.mjs",
+  // gpu-game-check --mem-cycles (A·H12): the plateau-vs-growing verdict over race>quit cycles, and the in-page live GPUBuffer/GPUTexture counter on a stub GPUDevice. ~0.1 s.
+  "tests/unit/mem-cycles-lib.test.mjs",
   // memory-sync.sh's three-way sync: a stale session never reverts other
   // sessions' memories (2026-10-02, twice). Real hook, throwaway repo. ~1 s.
   "tests/unit/memory-sync.test.mjs",
@@ -2025,8 +2027,11 @@ function pinIndex() {
   return _pinIndex;
 }
 
-/** Which CI tooling-fast shards (1/3 .. 3/3, ci.yml guards-a/b/c) touch any of `files`. */
-export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 3) {
+/** CI tooling-fast shards: ci.yml guards-a..d run --shard=1/4 .. 4/4 (BUILD-HUNT B2, 2026-10-24). */
+export const CI_SHARDS = 4;
+
+/** Which CI tooling-fast shards (1/4 .. 4/4, ci.yml guards-a/b/c/d) touch any of `files`. */
+export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = CI_SHARDS) {
   const want = new Set(files);
   const out = [];
   for (let i = 1; i <= shardCount; i++) {
