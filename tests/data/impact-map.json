@@ -2404,6 +2404,9 @@
       "setPlayerParts": [
         "tests/unit/livery-tier.test.mjs"
       ],
+      "sharedRivalBodyMesh": [
+        "tests/unit/field-lod.test.mjs"
+      ],
       "teamBodyMesh": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs"
@@ -8579,7 +8582,9 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-smith-root.test.mjs",
         "tests/unit/weather-blend.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
@@ -13417,6 +13422,7 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-smith-root.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
       ]
@@ -13475,6 +13481,7 @@
       "*": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
       ]
@@ -13611,7 +13618,8 @@
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs"
       ],
       "drawWarm": [
         "tests/unit/tlx-hunt4c.test.mjs"
@@ -13638,6 +13646,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs"
       ],
@@ -13645,7 +13654,8 @@
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs"
       ],
       "present": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13655,6 +13665,7 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "resize": [
@@ -13663,10 +13674,14 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "runPass": [
         "tests/unit/tlx-post-fixed-mats.test.mjs"
+      ],
+      "setMirror": [
+        "tests/unit/tlx-mirror-inset.test.mjs"
       ],
       "syncAaRT": [
         "tests/unit/tlx-post-phone-res.test.mjs"
@@ -14182,7 +14197,8 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-smith-root.test.mjs"
       ],
       "*": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -14217,7 +14233,8 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-smith-root.test.mjs"
       ],
       "setLampBake": [
         "tests/unit/tlx-hunt3.test.mjs"

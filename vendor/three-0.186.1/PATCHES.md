@@ -324,3 +324,33 @@ What it does (backport of upstream #34601 and a reduced #34610):
 Upstream: fixed on dev for r187 (not published; npm latest is 0.186.1). Retire this
 patch at the r187 bump. References: https://github.com/mrdoob/three.js/issues/34597,
 https://github.com/mrdoob/three.js/pull/34601, https://github.com/mrdoob/three.js/pull/34610
+
+## 19. Shared binding group update shortcut
+
+Homogeneous shared groups whose node version, binding array, member identities and
+member group nodes remain unchanged skip repeated `Nodes.updateGroup` dispatches.
+Object groups, mixed groups and empty groups keep the original path. The cache lives
+in Bindings' existing DataMap and commits only after the whole update succeeds;
+replacement of the Nodes group cache also invalidates it. A version change still
+processes texture generations, samplers, uniforms, storage attributes and ranges.
+
+The shipping-method CPU regression test is
+`tests/unit/three-shared-binding-update.test.mjs`. It verifies exact side-effect
+traces and 4,800 → 12 group-map reads for 400 draws with 12 shared bindings.
+This is a dispatch count, not a device frame-time claim. Revisit against upstream
+`src/renderers/common/nodes/Nodes.js` on every vendor bump.
+
+## 20. Opted-in Uint16 index storage
+
+`__apexUint16Index` opts owned static scalar Uint16 INDEX buffers into narrow
+storage when they contain no primitive-restart sentinel. Vertex/storage,
+interleaved, instanced, normalized and unmarked attributes retain upstream handling.
+A padded CPU shadow ensures four-byte-aligned whole and partial writes, preserving
+neighbor elements outside explicitly requested ranges. Array replacement with the
+same format and length is supported. Later format/length/restart changes throw
+explicitly: replace the BufferAttribute so renderer layout and allocation caches
+are invalidated. This policy never silently discards an update.
+
+`tests/unit/webgpu-uint16-index.test.mjs` exercises generated vendor methods and
+mapped/writeBuffer bytes. Alignment reference:
+https://developer.mozilla.org/en-US/docs/Web/API/GPUQueue/writeBuffer.
