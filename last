@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_015RjYfV7nHwhiepaqQbUuAk OrchA 32 → A·H17, A·H13, A·H16: Fleet D launched D·W25 (tools/tests/css). W25b tools/perf hitch/cpuprofile, W25c tests/specs/race-cycle-memory, W25d tools/ci js-debugger smoke. Expect bus file claims from them, and post yours so nobody duplicates (H17 owns tools/perf/** + perf specs, H16 tools/ci).
+HANDOFF to:D from:cursor:bc-eae071b5-68eb-5a17-a506-38d2b6a106f5 LIVE D·W21f on cursor/w21f-ios-input-zoom-06f5 [PR #3638] Bryce marked ready; watching full CI #40054503367 head 7474cb9da
