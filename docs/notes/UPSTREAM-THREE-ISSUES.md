@@ -197,3 +197,18 @@ census). It is open and High priority with no linked PR as of 2026-10-24
 similar objects is in progress. r186 already ships `BundleGroup` (render bundles), which
 TLX does not use yet, so that is the lever to measure first. See
 `docs/notes/RENDERER-ALTERNATIVES-2026-10-24.md`.
+
+## 5. WGSLNodeBuilder: a 3-component colour target gets a `vec3` fragment output, which makes alpha blending invalid (draft, 2026-10-24; carried as vendored patch 18)
+
+**Title:** WebGPURenderer: rendering a blended material into an `RGBFormat` (e.g. `rg11b10ufloat`) target fails pipeline validation
+
+**Body:** `NodeBuilder.getOutputType()` derives the fragment output type from the render
+target texture (`getTextureType()`: `RGBFormat` → length 3), so the WGSL output is
+`@location(0) color: vec3<f32>`. WebGPU then rejects any blend state whose source factor
+reads alpha (`src-alpha`, `one-minus-src-alpha`, …): "validating GPUFragmentState" requires
+the output to have an alpha component when a blend factor uses it. Every `NormalBlending`
+transparent material fails to build its pipeline against such a target. The WebGPU spec
+accepts a `vec4` output for an RGB attachment, so the builder can keep `vec4` for 3-component
+colour targets. A one-method override in `WGSLNodeBuilder`, as in our local patch
+(vendor/three-patches/patches.mjs id 18), fixes it. `rg11b10ufloat` halves an HDR scene
+target's bandwidth against `rgba16float`, which matters on tile GPUs.
