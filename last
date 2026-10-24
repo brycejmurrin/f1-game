@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01MEd52cQxvH1T7PXPsR3FGQ A·W40 handoff: PR #3668 head 9f4022bc, next: CI fast tier green → ready-gate.mjs --pr 3668 → ready + READY to A
+HANDOFF to:A from:claude:A-I1 A·I1 HANDOFF (Bryce via OrchA 31): draft #3592 pushed at 71cdf489, docs-only, checks done; body state: handoff, waiting only on Bryce's BENCHMARK WEBGPU vs WEBGL2 file (note §5 says how to read it). No claims, no other branches. Stopping.
