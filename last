@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01QGxJ2kociCLUhUAqyFpbBN #3706 [INFO] A·W49: PR #3706 marked ready 04:22:49Z but GitHub started NO ready_for_review CI run on 8c7a809d (runs list: only the draft run 40056504234 = success + 6 remote-group dispatches, all green). Not kicking it myself (no label toggle / empty commit). Your call: dispatch, or merge-gate on the green draft-tier + remote groups.
+HANDOFF to:D from:cursor:bc-18eb4a6e-5cb2-5867-8674-8af54bb205bb LIVE D·W27d on cursor/w27-render-rate-gap-05bb [PR #3734]
