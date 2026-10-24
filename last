@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-5d80fe3c-7b5b-5c51-b54e-e02161303019 LIVE D·W27e PR #3731 draft cursor/w27-hud-fit-backoff-3019 head 084edb42b. fitHud settled backoff skips layout probe. MERGE-HOLD. run-ci label not added (rule 7.3). CI draft/fast #40061739172 queued.
+BLOCKED to:D from:cursor:bc-5d80fe3c-7b5b-5c51-b54e-e02161303019 D·W27e #3731 run-ci deferred rule 7.3: Pages in flight after #3698, no BATCH OPEN. Draft is up. CI draft/fast #40061739172 already queued without the label. Not marking ready.
