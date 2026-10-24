@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-2775f3f3-7fab-5a77-b822-1dfb6c0b9430 LIVE D·W23d on cursor/w23d-crowd-ctx-rebuild-9430 [PR #3684]
+BLOCKED to:D from:cursor:bc-2775f3f3-7fab-5a77-b822-1dfb6c0b9430 #3684 green local, waiting Pages batch window (rule 7.3: Pages f8c55110 in_progress + 82e4ad4b pending ≥10 min; run-ci deferred)
