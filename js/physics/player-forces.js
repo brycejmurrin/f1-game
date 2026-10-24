@@ -207,9 +207,16 @@ const PlayerForces = (function () {
     const rollAx = SetupTune.axleGrip(c.rollBalance, c.lateralAccel || 0, loadF);
     const muF = Math.max(0.5, muBase * ellipseF * loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1)) * FRONT_GRIP * tyreAx.f * rollAx.f);   // load-sensitive: the loaded axle gains less than its share (LOAD_SENS)
     // Grip steer: own-state driverDelta cap (js/physics/grip-steer.js). Identity at OFF.
-    const gripped = (typeof GripSteer !== "undefined" && GripSteer.forPlayer)
-      ? GripSteer.forPlayer(driverDelta, c, { muF, csFront: CS_FRONT, af, ar, braking, shaped: steer, dt })
-      : driverDelta;
+    // Vehicle.grip is one scratch bag; the else keeps the old literal if that module is absent.
+    let gripped = driverDelta;
+    if (typeof Vehicle !== "undefined" && Vehicle.forPlayer) {
+      const o = Vehicle.grip;
+      o.muF = muF; o.csFront = CS_FRONT; o.af = af; o.ar = ar;
+      o.braking = braking; o.shaped = steer; o.dt = dt;
+      gripped = Vehicle.forPlayer(driverDelta, c);
+    } else if (typeof GripSteer !== "undefined" && GripSteer.forPlayer) {
+      gripped = GripSteer.forPlayer(driverDelta, c, { muF, csFront: CS_FRONT, af, ar, braking, shaped: steer, dt });
+    }
     delta = clamp(gripped + assistDelta + lineDelta, -0.7, 0.7);
     const muR = Math.max(0.5, muBase * ellipseR * loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1)) * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
@@ -242,13 +249,25 @@ const PlayerForces = (function () {
       const bF = TyreModel.brakeFront(beta, loadF, loadR) * (bb ? bb.f : 1);
       const bR = beta * (bb ? bb.r : 1);
       const capG = longBudget * surfMu * kerbGrip * tyreMu * marbleMu * aeroGrip;
-      const ws = WheelState.stepPlayer(c, {
-        dt, braking, thrOn,
-        aReqF: -pedal * bF * longBudget,
-        aReqR: thrOn ? axThrDemand * LONG_GRIP : -(pedal * bR + engine) * longBudget,
-        muLongF: capG * tyreAx.f, muLongR: capG * tyreAx.r,
-        slipF, slipR, csFront: CS_FRONT, csRear: csR, muLatF: muF, muLatR: muR,
-      });
+      let ws;
+      if (typeof Vehicle !== "undefined" && Vehicle.stepWheel) {
+        const w = Vehicle.wheel;
+        w.dt = dt; w.braking = braking; w.thrOn = thrOn;
+        w.aReqF = -pedal * bF * longBudget;
+        w.aReqR = thrOn ? axThrDemand * LONG_GRIP : -(pedal * bR + engine) * longBudget;
+        w.muLongF = capG * tyreAx.f; w.muLongR = capG * tyreAx.r;
+        w.slipF = slipF; w.slipR = slipR; w.csFront = CS_FRONT; w.csRear = csR;
+        w.muLatF = muF; w.muLatR = muR;
+        ws = Vehicle.stepWheel(c);
+      } else {
+        ws = WheelState.stepPlayer(c, {
+          dt, braking, thrOn,
+          aReqF: -pedal * bF * longBudget,
+          aReqR: thrOn ? axThrDemand * LONG_GRIP : -(pedal * bR + engine) * longBudget,
+          muLongF: capG * tyreAx.f, muLongR: capG * tyreAx.r,
+          slipF, slipR, csFront: CS_FRONT, csRear: csR, muLatF: muF, muLatR: muR,
+        });
+      }
       latScaleF = ws.latScaleF;
       latScaleR = ws.latScaleR;
       // Fx → speed. axTarget is game.js's longitudinal target this tick
