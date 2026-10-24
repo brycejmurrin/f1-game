@@ -1342,6 +1342,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-accuracy-validator.test.mjs",
   // Perf hunt 2 (T1/T2/T4): the build's spatial short-cuts answer exactly what the slow path did. Engine prelude in a VM, < 1 s.
   "tests/unit/track-build-grids.test.mjs",
+  // Track build load budget: the pine coplanar guard scans an n.x window, not every facet pair (A·H15 load hunt).
+  "tests/unit/track-build-load.test.mjs",
   "tests/unit/track-build-vm-release.test.mjs",
   "tests/unit/track-build-wait.test.mjs",
   "tests/unit/track-centerline-seam.test.mjs",
