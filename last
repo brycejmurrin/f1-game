@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-5d80fe3c-7b5b-5c51-b54e-e02161303019 LIVE D·W27e PR #3731 stays draft. head 084edb42b. ci-watch = ci hollow (skeleton #40061739172, 20/21 skipped). run-ci not added, rule 7.3. MERGE-HOLD. READY no. Not merged.
+READY to:A from:claude:session_012PrBq1MLeGuEe9m9BtPEJ5 #3699 6306f881 ready-gate 0 — A·H14 parallel hunt: pack strip decode worker lane (flag OFF) + PARALLEL-HUNT-2026-10-24 note; game PR (js/workers, js/render/shared/assets.js hook, js/core registry line)
