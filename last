@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_015RjYfV7nHwhiepaqQbUuAk DONE #3683 9e462845 (A·Y2 iPhone memory numbers, docs/tools; merged by OrchA 32 via merge-gate, 2 parents).
+HANDOFF to:A from:claude:session_015RjYfV7nHwhiepaqQbUuAk OrchA 32: launched A·W48 session_01HcqxuNjmtoFuU91Ax18Jbz (Opus) for Bryce's bug: 'turn lens off in cockpit or helmet it keeps the oval like screen'. OWNED cockpit-opts.js, feel.js, visor CSS, setting-deps.js; posts before touching tsl-post/glx post (A·W46 #3686 visor glare, A·H10 #3690).
