@@ -38,6 +38,27 @@ session at 844×390 with touch for the menu→race→pause→restart→quit→ra
 
 Six-plus angles, no CONFIRMED player-facing defect: S1–S11 all cleared; F1/F3 refuted by the verifier, F2 a code-only leak with no visible effect. Round 2 targets what the VM cannot reach (natural debris cautions, pause/resume countdown) and the remaining physics/AI angles.
 
+## Round 2 (cut short: Bryce 2026-10-24 ~01:10Z "No create new sessions handoff all", relayed by OrchA 32)
+
+| id | scenario | result |
+|---|---|---|
+| S12 | Overtake gate across an SC (Monza 10 laps, AI-only, SC 40→80 s) + RELIABILITY real | `otEnabled` false from the grid, stays false after the SC is withdrawn until the LEADER's next crossing (lap 2 at 164 s), then true for the rest of the race (B7.2.2c approximation holds). Reliability "real" produced no retirement in 10 laps on this seed (life scales with distance); the one retired car was the benched player. |
+| S13 | VSC (level 2) 40→100 s, AI-only Monza | 0 swaps under VSC; field at 35–36 m/s (SC: 26–28); release gaps 12–98 m; GREEN at release, results reached. |
+| S14 | Pause / resume | VM: `__apex.step()` calls `update()` directly, so the pause gate (the frame loop's) is bypassed — a VM pause "advances" physics; NOT evidence. Browser (S10/S11): speed stayed constant for the whole paused window. |
+| S15 | Jump start: throttle held through the lights | +5 s penalty at green (`JumpStartPenalty`), the car still launches, P3 at 6 s; without the hold, no penalty. By design. |
+| S16 | Natural caution (browser, Rapier debris, `__apex.debris(true)` first; headless stepping, AI-only Monza) | first run: `DebrisWorld` is OFF on this software-GL page (`enabled:false, loadState 0`, IncidentSim `rejected.inactive`) — the natural SC path never runs here without the explicit switch. With debris on: a real pile at raceT 128 s escalated YELLOW (hz 4) → VSC (8) → SAFETY CAR (20) within 4 s, then fell SC → YELLOW after exactly `MIN_HOLD` 6 s as the picture settled (hz 3) and GREEN at 145 s. The machine deploys and withdraws as its constants say (`MIN_HOLD = 6`, `SC_MAX` cap); whether a SIX-SECOND safety car is what Bryce wants (F1 holds one for laps / until the queue forms) is a design question, not a defect — handoff item 5. `incident({launch:true})` itself forced nothing (`count 0`) on this page. |
+| A1 | AGENTS.md §Physics contract (agent physics-contract-auditor) | pass: every curvature / racing-line read on the player path is behind `ROAD_FOLLOW` (default 0) or `raceLineAssist !== 0` (default 0), or reaches only audio/render; vstd-invariant pass, curvature-channels pass. 22 sites tabled in the agent's report (not copied here). |
+
+Two rounds, no CONFIRMED player-facing defect in this lane.
+
+## Handoff (for the next race hunter)
+
+1. The natural-caution path ran here only with `__apex.debris(true)` (S16): `DebrisWorld` is disabled under software GL. Confirm on a real GPU (gpu-census.yml `macos-latest`, or the phone) that the default-on path raises and withdraws the same way, and read `caution({hazards:true})` through one full `SC_MAX` cap.
+2. Human pit stop UNDER the SC (lane entry, pass-watch debt while in the lane) still lacks a VM scenario: reuse `tests/unit/pit-lane-vm.test.mjs` `drive()`/`aimTo()` to enter the lane with `G.holdCaution(3)` flying, then assert `cautionInfo().owed === 0` and `penalty === 0` at the flag.
+3. F2 (`frozen` left true after a failed RESTART start) is a one-line hygiene fix in `quitToMenu` if anyone touches that function; no test can observe it.
+4. Probe scripts live in `scratch/probe-*-ah11.*` on this container only (ignored); each row above names its scenario so they can be rewritten in minutes.
+5. Design question for Bryce: an SC raised by a quick-settling pile is withdrawn after `MIN_HOLD` 6 s (S16). If an SC should hold at least until the field has queued (or one lap), raise `MIN_HOLD` for levels ≥ 3 only in `js/race/race-control.js` with a `tests/unit/race-control.test.mjs` case; the yellow/VSC anti-flicker can keep 6 s.
+
 ## CPU profile (VM, 22 cars, Monza, AI-only, 60 Hz, 14 400 ticks) — data for #3109, no change made
 
 2.20 ms per physics tick on this box (`node --cpu-prof scratch/probe-perf-ah11.cjs`, summary `scratch/prof-summary-ah11.cjs`).
