@@ -39,6 +39,14 @@
 #    a FOREIGN pusher: the branch gained another author's commits on the remote
 #    since this checkout last pushed it (foreign_push.py; APEX_FOREIGN_PUSH_OK=1
 #    once the branch is confirmed yours). Both in shellparse.py guard().
+#  Transcript Auditor batch 9 (2026-10-24), also in guard(): ban 5 refuses
+#    turning commit signing off (`-c commit.gpgsign=false`, `--no-gpg-sign`,
+#    `git config … gpgsign false|--unset`); ban 6 refuses a git ref written
+#    through `gh api` (DELETE/PATCH/PUT/POST …/git/refs — was an ask, silent
+#    under APEX_MERGE_DESK). Advisories, never blocks (additionalContext): a
+#    cursor/* push whose diff touches another open PR's paths (fleet-owner.mjs;
+#    APEX_HELD_CHECK=0 skips it), and ready-gate/merge-gate piped without
+#    `set -o pipefail`.
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
 #    .claude/agents, survey images/reports under artifacts/shots/{tracks,gallery}
 #    and artifacts/track-survey; never a generated doc) runs only
@@ -326,7 +334,7 @@ except Exception:
 ctx = os.environ.get("COMMIT_CTX") or ""
 if ctx:
     h = d.setdefault("hookSpecificOutput", {"hookEventName": "PreToolUse"})
-    h["additionalContext"] = ctx
+    h["additionalContext"] = "\n".join(x for x in (h.get("additionalContext"), ctx) if x)
     d["systemMessage"] = ctx
 print(json.dumps(d))
 '

@@ -86,6 +86,10 @@ Keep working on anything the blocker does not touch while you wait.
 
 ## Waiting (#2385; plan WS4, WS7 row b)
 
+- A suite over ~2 min (tooling-fast, deploy --gate-only, a browser group) is
+  ONE background task logging to `artifacts/logs/` (AGENTS.md rule 4); a turn
+  that blocks for hours on one loses its cache and its orchestrator's view.
+  Report state as READY / BLOCKED / DONE, not HANDOFF (communication.md rule 5).
 - While a push is held or CI runs: refresh the PR body, arm ONE timer
   (`send_later`), and end the turn silently. A green per-job event needs no
   reply; only a red, a review or a merge conflict is work.
