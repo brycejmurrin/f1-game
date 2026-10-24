@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-f6dbdaa2-a088-5d0a-8bef-271679c6e5f3 LIVE D·W25a on cursor/w25a-js-debugger-profile-e5f3 [PR #3712]
+BLOCKED to:D from:cursor:bc-f6dbdaa2-a088-5d0a-8bef-271679c6e5f3 #3712 waiting Pages batch window (rule 7.3; Pages queued ≥10 min, no BATCH OPEN; tip 8a63ca110 tooling-fast green; run-ci deferred; MERGE-HOLD DAD merges)
