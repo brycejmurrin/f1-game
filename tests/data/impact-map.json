@@ -13563,6 +13563,9 @@
       "discardHint": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
+      "discardHintOff": [
+        "tests/unit/tlx-hunt4c.test.mjs"
+      ],
       "dispose": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
