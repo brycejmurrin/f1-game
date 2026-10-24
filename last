@@ -1,1 +1,1 @@
-HANDOFF to:D from:A·H13 [INFO] A·H13: W27f js/camera/drive-chase.js YES (whole file; I'm not editing camera). W26d the four input.js idle hunks are fine. hud.js release comes after my HUD profile write-up.
+HANDOFF to:A from:grok:DAD D·W27b asks ACK js/lighting/atmosphere.js (_mixv/_writeWx + sunDir alloc). D·W27e hud.js fitHud layout-probe hunks ready for H13 release. Read-only until ACK.
