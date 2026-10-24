@@ -143,9 +143,17 @@ const SettingsNav = (function () {
     }
     let scrollFadeTimer = 0;
     function scheduleScrollFade() {
-      // Sync ScrollFade.refresh() during show() forced layout in the same turn
-      // as showModal + panel [hidden] flips; screenMo already settles on the
-      // #pmsettings hidden flip, so this only covers in-sheet page changes.
+      // screenMo settles when #pmsettings's hidden flips. ScrollFade.refresh()
+      // is settle(true): an immediate paintAll over every menu region, then
+      // again at 120ms and 400ms. openSettings calls showCurrent() while the
+      // sheet is still hidden, and SettingsNav.create does the same at boot.
+      // Arming refresh there stacks a second full measure on the flip, or
+      // paints every region during boot. In-sheet page changes do not flip
+      // hidden, so they still arm the timer. querySelector, not getElementById:
+      // the unit DOM creates missing ids.
+      const sheet = typeof document !== "undefined" && document.querySelector
+        ? document.querySelector("#pmsettings") : null;
+      if (!sheet || sheet.hidden) return;
       if (typeof window === "undefined" || !window.ScrollFade) return;
       if (scrollFadeTimer) clearTimeout(scrollFadeTimer);
       scrollFadeTimer = setTimeout(() => {

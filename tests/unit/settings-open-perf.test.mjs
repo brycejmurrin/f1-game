@@ -41,6 +41,34 @@ test("SettingsNav.show marks apex:settings:show and apex:settings:shown", () => 
   ]);
 });
 
+test("SettingsNav.show skips ScrollFade.refresh while the sheet is hidden", () => {
+  const timers = [];
+  let refreshes = 0;
+  const dom = makeDom();
+  const sheet = dom.byId("pmsettings");
+  sheet.hidden = true;
+  dom.byId("audioset"); dom.byId("pm-audio"); dom.byId("pm-settings-index"); dom.byId("dlg-settings");
+  const ctx = vm.createContext({
+    document: dom.document,
+    window: { ScrollFade: { refresh() { refreshes++; } } },
+    performance: { mark: () => {} },
+    setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+    clearTimeout(id) { if (id) timers[id - 1] = null; },
+    Log: { info() {}, warn() {} },
+  });
+  vm.runInContext(read("js/ui/settings-tabs.js").replace(/^const SettingsNav/m, "var SettingsNav"), ctx, { filename: absSrc("js/ui/settings-tabs.js") });
+  ctx.SettingsNav.create(null, () => {});
+  ctx.SettingsNav.show("controls", false);
+  assert.equal(timers.length, 0, "hidden sheet (boot and openSettings before unhide) does not arm refresh");
+  assert.equal(refreshes, 0);
+  sheet.hidden = false;
+  ctx.SettingsNav.show("display", false);
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].ms, 48);
+  timers[0].fn();
+  assert.equal(refreshes, 1, "an in-sheet page change still refreshes once");
+});
+
 test("ensureAudio loads LAZY_AUDIO one file at a time while Settings is open", async () => {
   const loaderSrc = read("js/core/script-loader.js");
   const bundlesSrc = read("js/core/lazy-bundles.js");
