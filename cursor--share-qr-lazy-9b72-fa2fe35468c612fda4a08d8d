@@ -1,1 +1,1 @@
-1792806525	Bryce Murrin	Fleet C share QR: js/share/share-card.js js/core/script-loader.js tests/unit/share-card.test.mjs tests/unit/script-loader.test.mjs; solo Daily card QR after lazy net; direct user grant to claimed area  [cursor/share-qr-lazy-9b72; session fa2fe35468c612fda4a08d8d]
+1792806548	Bryce Murrin	Fleet C share QR loader regression: tests/unit/script-loader-retry-eval.test.mjs, alongside live share QR claim 40a9b12  [cursor/share-qr-lazy-9b72; session fa2fe35468c612fda4a08d8d]
