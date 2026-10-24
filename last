@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-f6dbdaa2-a088-5d0a-8bef-271679c6e5f3 #3712 waiting Pages batch window (rule 7.3; Pages queued ≥10 min, no BATCH OPEN; tip 8a63ca110 tooling-fast green; run-ci deferred; MERGE-HOLD DAD merges)
+HANDOFF to:A from:grok:DAD D·W26e/f await A·H13 ACK before edits: W26e js/fx/particles.js only (not visor-optics #3698); W26f js/physics/vehicle.js only; characterization green / no determinism change. Read-only until ACK.
