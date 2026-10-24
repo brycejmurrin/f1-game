@@ -59,6 +59,14 @@ Two rounds, no CONFIRMED player-facing defect in this lane.
 4. Probe scripts live in `scratch/probe-*-ah11.*` on this container only (ignored); each row above names its scenario so they can be rewritten in minutes.
 5. Design question for Bryce: an SC raised by a quick-settling pile is withdrawn after `MIN_HOLD` 6 s (S16). If an SC should hold at least until the field has queued (or one lap), raise `MIN_HOLD` for levels ≥ 3 only in `js/race/race-control.js` with a `tests/unit/race-control.test.mjs` case; the yellow/VSC anti-flicker can keep 6 s.
 
+## Round 2, resumed (Bryce 2026-10-24 ~01:15Z: "they can use any skill, mcp, web research, create new tests or try new things to hunt")
+
+| id | scenario | result |
+|---|---|---|
+| H1 | Heap snapshots across four race→quit cycles (chrome-devtools MCP, 844×390 touch emulation, TLX on WebGPU, SwiftShader) | JS heap FLAT once warm: A→B −9.0 MB, B→C +21.7 MB (one-off: compiled code +5.6 MB, `(array)` +10 MB), C→D −0.4 MB. The 22 car objects that looked retained in A→B are `pace-math paceRef`'s one-field cache (snapshot C holds 23 cars total, not 45): one race deep, not growing. The 529 kB array buffer is GameAudio's noise pool (one-off). No race-flow retention leak on the JS side. |
+| H2 | same snapshots, `GPUBuffer` count | 371 → 1102 → 1247 across cycles B→C→D (+731, then +145), each retained through `GLX.__tlx.renderer.backend.data` (the three.js WebGPU backend's attribute→buffer WeakMap). Renderer lane, not race flow: handed to the orchestrator as a LEAD for the TLX/WebGPU owners (Bryce's iPhone path); not measured on a real GPU, and a WeakMap entry survives only while its geometry does, so the question is which geometry cache outlives a race. |
+| T1 | New test `tests/unit/race-flow-vm.test.mjs` (group `test:game-vm`, one boot, ~34 s) | pins S1/S12 (held SC withdrawn on release, OVERTAKE off until the leader's next crossing), S3 (quit→start: flag, pass-watch debt, pit arm/state/stops, tyre wear/lapsOn, race clock, paused/frozen, no timer growth) and S6 (red flag: stationary one-lap re-grid, clock resumes where it stopped, no flag or pit state at the restart). 3/3 green on the deploy tip. |
+
 ## CPU profile (VM, 22 cars, Monza, AI-only, 60 Hz, 14 400 ticks) — data for #3109, no change made
 
 2.20 ms per physics tick on this box (`node --cpu-prof scratch/probe-perf-ah11.cjs`, summary `scratch/prof-summary-ah11.cjs`).

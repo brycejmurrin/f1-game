@@ -6613,6 +6613,7 @@
       "otEnabled": [
         "tests/unit/pace-arming-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
+        "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ],
       "paceVmax": [
@@ -6628,6 +6629,7 @@
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs",
         "tests/unit/start-race-latch.test.mjs",
