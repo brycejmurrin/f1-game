@@ -12,10 +12,8 @@ const MenuQuitTail = (function () {
       d.closeLightTuner(false); d.stormFx._ltNextT = 0; d.stormFx._thunderT = -1;
       d.closeCamTuner(false); d.flybyPanel.closeFlyby(false); d.exitPhotoMode();
     });
-    run("quit-fx", () => { d.Particles.rainShow(false); d.Particles.clear(); d.Droplets.clear(); });
-    if (d.soundOn) d.GameAudio.startMusic(-1);
     run("quit-session", () => {
-      d.setFlow("gp"); d.session = "race"; d.practiceMode = false; d.tyres.setLevel(d.raceTyreWear);
+      d.setFlow("gp"); d.session = "race"; d.tyres.setLevel(d.raceTyreWear);
       d.quali.clear(forgetGp); d.qualiNet.clearPeers();
       d.qualiNet.hasArmed() ? d.qualiNet.resetOnQuitWithCancel() : d.qualiNet.resetSoft();
       try { d.IncidentSim.reset(); } catch (_) { /* module absent */ }

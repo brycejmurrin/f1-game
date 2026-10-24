@@ -4384,6 +4384,9 @@ function quitToMenu() {
   els.overlay.hidden = false;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
+  practiceMode = false;
+  Particles.rainShow(false); Particles.clear(); Droplets.clear();
+  if (soundOn) GameAudio.startMusic(-1);
   consumeGhostHash();
   if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferQuitTail(() => MenuQuitTail.afterOverlay(forgetGp))) return;
   MenuQuitTail.afterOverlay(forgetGp);
@@ -9076,10 +9079,8 @@ function closePitWork() {
 function leaveGarage() {
   setupCam.cancelArrival();
   if (typeof MenuTeardown !== "undefined") MenuTeardown.beginGarageClose();
-  if (garageReturn !== "pit" && !loadingScreen.phase()) {
-    const busyOk = typeof MenuTeardown === "undefined" || MenuTeardown.garageBusyPlate();
-    if (busyOk) loadingScreen.busy("Returning");
-  }
+  if (garageReturn !== "pit" && !loadingScreen.phase()) loadingScreen.busy("Returning");
+  if (garageReturn !== "pit" && !loadingScreen.phase() && typeof MenuTeardown !== "undefined" && !MenuTeardown.garageBusyPlate()) loadingScreen.lowerWaitPlate();
   $("carsetup").hidden = true;
   setupPreviewOn = false;
   recomputePlayerMods();
@@ -9099,9 +9100,10 @@ function garageBack() {
   else if (garageReturn === "career") careerUi.openHub();
   else if (garageReturn === "select") { buildSelect(); $("select").hidden = false; }
   else {
-    const finish = () => { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); if (typeof MenuTeardown !== "undefined") MenuTeardown.endGarageClose(); };
-    if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferUi) MenuTeardown.deferUi(finish);
-    else finish();
+    const finish = () => { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); }   // no vt: snapshot after hiding #carsetup is a black hold
+    const done = () => { finish(); if (typeof MenuTeardown !== "undefined") MenuTeardown.endGarageClose(); };
+    if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferUi) MenuTeardown.deferUi(done);
+    else done();
   }
   if (garageReturn !== "menu") loadingScreen.stop();
 }
@@ -9120,9 +9122,10 @@ $("cs-done").onclick = () => {
   // away if you change your mind.
   else if (garageReturn === "select") raceSettings.openRaceSettings("select");
   else {
-    const finish = () => { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); if (typeof MenuTeardown !== "undefined") MenuTeardown.endGarageClose(); };
-    if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferUi) MenuTeardown.deferUi(finish);
-    else finish();
+    const finish = () => { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); }   // no vt: snapshot after hiding #carsetup is a black hold
+    const done = () => { finish(); if (typeof MenuTeardown !== "undefined") MenuTeardown.endGarageClose(); };
+    if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferUi) MenuTeardown.deferUi(done);
+    else done();
   }
   if (garageReturn !== "menu") loadingScreen.stop();
 };
