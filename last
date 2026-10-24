@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01XdBTxDAyVk2nZfvkq8DC89 A·W47 handoff: PR #3685 head c1f8dd52, next: CI on c1f8dd52, tooling-fast, then gfx-probe --tlx-webgpu --lavapipe + census arm A/B (Plan in body)
+READY to:A from:claude:session_012GHn3wz5viqzGibR47ZZ46 #3679 cc78008d ready-gate 0 (CI fast tier + remote gfx green; A·H10 handing off, A·W47 stacks three patch 17 on this branch, merge-only)
