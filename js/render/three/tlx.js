@@ -3735,10 +3735,7 @@ const TLX = (function () {
       // released mid-warm (a RenderObject switching pipeline, e.g. one wrapper drawn ccw then cw, frees the old one at
       // once: 3 of the 4 left), so each render pipeline takes one extra use as three creates it, and the sweep (each
       // warm's end, each prune) pins any built before. Capped, and cleared on device loss with the rest.
-      // ?tlxPipePin=0 (DevFlags pipePin, URL only) is the A/B handle.
       const PIPE_PIN_CAP = 512;
-      let _pipePinOn = true;
-      try { _pipePinOn = typeof DevFlags === "undefined" || DevFlags.get("pipePin") !== false; } catch (_) { /* no flags: pinned */ }
       const _pinnedPipes = new Set();
       let _pinArmed = null;   // the Pipelines instance whose _getRenderPipeline pins
       function pinPipe(p) {
@@ -3747,7 +3744,7 @@ const TLX = (function () {
         _pinnedPipes.add(p);
       }
       function pinPipelines() {
-        const P = _pipePinOn && renderer && renderer._pipelines, caches = P && P.caches;
+        const P = renderer && renderer._pipelines, caches = P && P.caches;
         if (!caches || typeof caches.values !== "function") return _pinnedPipes.size;
         if (_pinArmed !== P && typeof P._getRenderPipeline === "function") {
           const get = P._getRenderPipeline;

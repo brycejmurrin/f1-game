@@ -28,9 +28,9 @@ const tslice = (from, to) => {
   return TLX.slice(a, b);
 };
 const PIN_SRC = tslice("      const PIPE_PIN_CAP = ", "      const PRUNE_EVERY_MS = ");
-const makePin = (renderer, flags) => new Function("renderer", "DevFlags", `"use strict";
+const makePin = (renderer) => new Function("renderer", `"use strict";
   ${PIN_SRC}
-  return { pinPipelines, pinned: () => _pinnedPipes.size, cap: PIPE_PIN_CAP };`)(renderer, flags || { get: () => undefined });
+  return { pinPipelines, pinned: () => _pinnedPipes.size, cap: PIPE_PIN_CAP };`)(renderer);
 
 async function rig(t) {
   const fg = makeFakeGL(320, 180);
@@ -98,7 +98,7 @@ test("armed before the first frame: a pipeline a RenderObject switches away from
   assert.equal(await run(true), 0, "armed: the first pipeline was pinned at creation and is reused");
 });
 
-test("pinPipelines: render pipelines only, capped, and ?tlxPipePin=0 pins nothing", () => {
+test("pinPipelines: render pipelines only, capped, and a no-op without a pipeline cache", () => {
   const pipe = () => ({ usedTimes: 1, vertexProgram: { usedTimes: 1 }, fragmentProgram: { usedTimes: 1 } });
   const caches = new Map();
   const compute = { usedTimes: 1, computeProgram: { usedTimes: 1 } };
@@ -112,8 +112,6 @@ test("pinPipelines: render pipelines only, capped, and ?tlxPipePin=0 pins nothin
   const first = caches.get("r0");
   assert.deepEqual([first.usedTimes, first.vertexProgram.usedTimes, first.fragmentProgram.usedTimes], [2, 2, 2],
     "one extra use on the pipeline and both programs, so neither _releasePipeline nor _releaseProgram reaches 0");
-  const off = makePin({ _pipelines: { caches: new Map([["r", pipe()]]) } }, { get: (n) => (n === "pipePin" ? false : undefined) });
-  assert.equal(off.pinPipelines(), 0, "the URL A/B handle (DevFlags pipePin) leaves three's own lifetime");
   assert.equal(makePin({}).pinPipelines(), 0, "no pipeline cache (another three shape): a no-op, never a throw");
 });
 
