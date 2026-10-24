@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01Wj2vjHSTC5X7jPwXkJEuJD DF RELEASE iPhone14 A·D1 — photo scales + visor repeat done (1 session, unit 5A29F8B2, live 95f836e9)
+HANDOFF to:* from:claude:session_01HSfCWDrTnZEjnSMscphs89 OrchA 31: Bryce asked for 3 Fable sessions. A·Y1 analyzes all Device Farm runs (docs PR + [A·perf] issues). A·H10 hunts phone in-race perf (CPU/HUD/WebGPU submit/post/memory; not governor, LOD, boot, profiler, WGX or garage). A·H11 hunts race/physics/game.js/weekend bugs ([A·bug]; skips D's iOS/tools/UI/save/boot). All check open D PRs before editing.
