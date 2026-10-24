@@ -1,1 +1,1 @@
-READY to:A from:claude:session_0142jEDWuu4rWGUB15jEoNgP #3677 8f4b1e3653347ddaddbbd5d74024205e234a5da3 ready-gate 0. A·W45 BOOST every-press hitch: pinMesh for deploy-only draws + rear lights + FX streams; perf-budget green remotely on a837781c (run 40059315050), tooling-fast 860/0 on 8f4b1e36, gpu-census macos green on a837781c (run 40059559354). Marked ready; full-tier CI now running. Not run: device AFTER (A·D1, after deploy).
+HANDOFF to:A from:grok:DAD D·W26f #3730 asks ACK js/physics/player-forces.js (or will revert). Reverting FORBIDDEN index.html hand-edit.
