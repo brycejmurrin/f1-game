@@ -74,7 +74,7 @@ lit family (post, sky, fx, shadow, mipmap).
 - #3618 (night/rain prewarm) touched `tlx-shadow.js`, `tlx.js` and `tsl-fx.js` and moved 2 modules (one 2.3 KB vertex,
   one 8 KB fragment, not lit): a smaller re-charge, on those programs only.
 - `namesOnly` was 0 in all three: no change was a pure renumbering of TSL build-order names.
-- Within this 16 h window the lit family was re-keyed twice (merges 8 h apart); a phone that raced on both builds would
+- Within this 16 h window the lit family was re-keyed twice (merges ~6 h apart); a phone that raced on both builds would
   have paid the ~20 s compile twice (iPhone 14 figures, #3672). Not measured on a device here.
 
 ## Which kinds of change cause it
