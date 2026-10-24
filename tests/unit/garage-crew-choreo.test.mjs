@@ -29,7 +29,7 @@ function load(extra = {}) {
   const gfx = { createMesh: (d) => { const mesh = { n: d.pos.length }; meshes.push(mesh); return mesh; }, freeMesh() {}, draw: (mesh, m) => draws.push({ mesh, m: Array.from(m) }) };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, WeakMap, Map, String, Log: { info() {}, warn() {} }, ...extra });
   for (const f of FILES) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
-  const get = (n) => vm.runInContext(n, ctx);
+  const get = (n) => vm.runInContext(n, ctx, { filename: "garage-crew-choreo:get" });
   get("GarageCrew").init(gfx);
   return { Choreo: get("GarageCrewChoreo"), Crew: get("GarageCrew"), Arrival: get("GarageArrival"), Pit: get("PitCrewAnim"), gfx, draws, meshes };
 }
