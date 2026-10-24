@@ -382,6 +382,37 @@ export const PATCHES = [
         count: 1
       }
     ]
+  },
+  {
+    id: 17,
+    title: "single-sample storeOp discard — a per-pass hint for write-only attachments",
+    file: "build/three.webgpu.js",
+    why: "WebGPUBackend.beginRender stores every attachment unless the target is MULTISAMPLED and " +
+      "storeMultisampled*Buffer is false, so a single-sample attachment nobody reads (the scene ssrTag, " +
+      "the shadow R8 colour, the mirror depth/tag, an unread scene depth) is written to memory every " +
+      "pass — the WebGL2 leg drops the same bytes with invalidateFramebuffer (#3679). Two opt-in members " +
+      "on the RenderTarget, read at every beginRender: apexDiscardColor (bit i = colour attachment i) " +
+      "and apexDiscardDepth (true). They change the storeOp only — never the loadOp — so the caller " +
+      "sets them around the LAST render into the target of a frame and clears them after.",
+    upstream: "unfixed on dev as of 2026-10-24 (discardColor/discardDepth still gate on sampleCount > 1); " +
+      "draft in docs/notes/UPSTREAM-THREE-ISSUES.md §4. Array-camera layer descriptors are not patched (XR only).",
+    edits: [
+      {
+        find: "\t\tconst discardDepth = renderContext.sampleCount > 1 && renderTarget?.storeMultisampledDepthBuffer === false;\n\t\tconst discardStencil = renderContext.sampleCount > 1 && renderTarget?.storeMultisampledStencilBuffer === false;\n\n\t\t// A fullscreen pass",
+        replace: "\t\tconst discardDepth = renderContext.sampleCount > 1 && renderTarget?.storeMultisampledDepthBuffer === false;\n\t\tconst discardStencil = renderContext.sampleCount > 1 && renderTarget?.storeMultisampledStencilBuffer === false;\n\t\tconst apexDiscardColor = renderTarget ? renderTarget.apexDiscardColor | 0 : 0;\n\t\tconst apexDiscardDepth = renderTarget ? renderTarget.apexDiscardDepth === true : false;\n\n\t\t// A fullscreen pass",
+        count: 1,
+      },
+      {
+        find: "\t\t\t\tif ( discardColor ) {\n\n\t\t\t\t\tcolorAttachment.storeOp = GPUStoreOp.Discard;\n",
+        replace: "\t\t\t\tif ( discardColor || ( ( apexDiscardColor >> i ) & 1 ) === 1 ) {\n\n\t\t\t\t\tcolorAttachment.storeOp = GPUStoreOp.Discard;\n",
+        count: 1,
+      },
+      {
+        find: "\t\t\tif ( discardDepth ) {\n\n\t\t\t\tdepthStencilAttachment.depthStoreOp = GPUStoreOp.Discard;\n",
+        replace: "\t\t\tif ( discardDepth || apexDiscardDepth ) {\n\n\t\t\t\tdepthStencilAttachment.depthStoreOp = GPUStoreOp.Discard;\n",
+        count: 1,
+      },
+    ],
   }
 ];
 

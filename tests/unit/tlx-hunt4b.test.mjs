@@ -735,7 +735,56 @@ test("A-P2: discardAttachments acts only on the FBO three has bound; the mirror 
   h.renderer.backend.state.bindFramebuffer(h.gl.FRAMEBUFFER, null);   // setRenderTarget(null) alone binds nothing until the next render
   assert.equal(h.post.discardAttachments(rt, [h.gl.DEPTH_ATTACHMENT]), false, "another FBO bound: no guess");
   assert.equal(h.post.discardAttachments(rt, []), false);
-  assert.match(TLX, /renderer\.render\(scene, mirCam\); \} finally \{ if \(mrt\) _mirMrtArm\(false, prevMrt\); \}\s*\n[^\n]*\n[^\n]*\n\s*if \(post && post\.discardAttachments && post\.discardAttachments\(mirRT, _mirInv\(mrt\)\)\) _mirDiscards\+\+;/,
+  assert.match(TLX, /renderer\.render\(scene, mirCam\); \} finally \{ if \(mrt\) _mirMrtArm\(false, prevMrt\); if \(hinted\) post\.discardHintOff\(mirRT\); \}\s*\n[^\n]*\n[^\n]*\n\s*if \(hinted \|\| \(post && post\.discardAttachments && post\.discardAttachments\(mirRT, _mirInv\(mrt\)\)\)\) _mirDiscards\+\+;/,
     "tlx.js: the mirror discards right after its render, before anything else binds");
+  assert.match(TLX, /const hinted = !!\(post && post\.discardHint && post\.discardHint\(mirRT, mrt \? 2 : 0, true\)\);\s*\n\s*try \{ renderer\.render\(scene, mirCam\);/,
+    "tlx.js: the WebGPU hint goes on BEFORE the mirror pass begins (A-P2W)");
   assert.match(TLX, /return mrt \? _mirInvDT : _mirInvD;/, "tag only when the mirror target carries one");
+});
+
+// ── A-P2W (#3681): the WebGPU twin — vendored three patch 17 reads rt.apexDiscardColor / apexDiscardDepth at
+// beginRender, so the decision rides on the target BEFORE the pass and comes off after it. The fake GL cannot
+// run three's WebGPU backend; the backend flag is flipped after the chain is built, and the pass is depthBegin →
+// (what beginRender would read) → depthEnd, with no draw in between.
+function gpuPass(h, opts, F) {
+  const rt = h.post.sceneTarget(), bk = h.renderer.backend;
+  bk.isWebGPUBackend = true;
+  try {
+    const keep = h.post.depthBegin(opts, F);
+    const seen = { color: rt.apexDiscardColor | 0, depth: rt.apexDiscardDepth === true };
+    const dropped = h.post.depthEnd();
+    return { keep, seen, dropped, after: { color: rt.apexDiscardColor | 0, depth: rt.apexDiscardDepth === true } };
+  } finally { delete bk.isWebGPUBackend; }
+}
+
+test("A-P2W: WebGPU — a dry phone pass hints depth + tag discard before the pass and clears it after", async (t) => {
+  const h = await postRig(t, { ssrTag: true });
+  const r = gpuPass(h, OFF, NIGHT);
+  assert.deepEqual(r.seen, { color: 2, depth: true }, "bit 1 = the ssrTag attachment; the depth");
+  assert.equal(r.dropped, true);
+  assert.deepEqual(r.after, { color: 0, depth: false }, "off after the pass: a later render into the target stores");
+  assert.equal(h.inv.length, 0, "no WebGL invalidate on the WebGPU leg");
+  assert.equal(h.post.state().tag.discards, 1); assert.equal(h.post.state().depth.discards, 1);
+  assert.deepEqual(gpuPass(h, { ...OFF, reflect: 0.4 }, NIGHT).seen, { color: 0, depth: false }, "wet: SSR reads both, nothing hinted");
+  assert.deepEqual(gpuPass(h, { ...OFF, ssao: 0.5 }, NIGHT).seen, { color: 2, depth: false }, "SSAO reads depth: the tag alone");
+});
+
+test("A-P2W: the A/B switches gate the WebGPU hint; MSAA and a one-attachment chain never hint what they lack", async (t) => {
+  const tag0 = await postRig(t, { ssrTag: true, ls: { "apex26.tlxTagDiscard": "0" } });
+  assert.deepEqual(gpuPass(tag0, OFF, NIGHT).seen, { color: 0, depth: true }, "tlxTagDiscard=0: the tag is stored");
+  const dep0 = await postRig(t, { ssrTag: true, ls: { "apex26.tlxDepthDiscard": "0" } });
+  assert.deepEqual(gpuPass(dep0, OFF, NIGHT).seen, { color: 2, depth: false }, "tlxDepthDiscard=0: the depth is stored");
+  const one = await postRig(t, { ssrTag: false });
+  assert.deepEqual(gpuPass(one, OFF, NIGHT).seen, { color: 0, depth: true }, "one attachment: no tag bit");
+  const msaa = await postRig(t, { ssrTag: true, samples: 4 });
+  assert.deepEqual(gpuPass(msaa, OFF, NIGHT).seen, { color: 0, depth: false }, "MSAA: single-sample hint only (r186's storeMultisampled* owns MSAA)");
+});
+
+test("A-P2W: discardHint is a no-op off WebGPU, and tlx.js takes the scene hint off in the present finally", async (t) => {
+  const h = await postRig(t, { ssrTag: true });
+  const rt = h.post.sceneTarget();
+  assert.equal(h.post.discardHint(rt, 2, true), false, "WebGL2 leg: the invalidate path owns it");
+  assert.equal(rt.apexDiscardColor, undefined);
+  assert.match(TLX, /\} finally \{\s*\n\s*if \(post\.discardHintOff\) post\.discardHintOff\(\);/,
+    "a throw inside the scene pass must not leave the hint on sceneRT");
 });
