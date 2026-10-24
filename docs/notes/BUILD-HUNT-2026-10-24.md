@@ -48,7 +48,38 @@ Tooling-fast step only, 18 green runs where all three shards ran:
 
 ## Local floor
 
-(filled in below once the serial and `--jobs=3` runs on this box finish)
+This container (4 cores, one session):
+
+| run | wall |
+|---|---:|
+| `npm run test:tooling-fast` (default `--jobs=1`), 856 files | ~47 min: the sum of per-file times; stopped after 5 files (≈40 s each) |
+| `tooling-fast.mjs --jobs=3` | 966 s and 962 s (16.1 min), loadavg ~5 |
+
+B4 (auto `--jobs=2` on a quiet box) is its own PR, which OrchA 32 approved with conditions.
+
+## After B1: the first run-ci run (40055143256, `4d8649df`)
+
+| shard | table (min of file time) | actual (min of file time) | ratio | step wall |
+|---|---:|---:|---:|---:|
+| A (1/3) | 24.0 | 28.3 | 1.18 | 7.4 |
+| B (2/3) | 24.0 | 17.1 | 0.71 | 4.3 |
+| C (3/3) | 24.0 | 15.3 | 0.64 | 4.0 |
+
+The table now splits the work evenly (24.0 min of file time per shard, against
+the old table's 7.58 / 6.27 / 5.13 min walls). On this run, though, every file
+in A ran about 18 % slower than its median, and every file in B and C about
+30 % faster. One shard's files slow down together, so this is runner speed
+(GitHub-hosted runners vary by job), not packing: no table can fix it. B1
+therefore removes the systematic imbalance (the old table made C 2.4 min
+lighter than A on average), while the remaining spread of up to ±30 % per job
+is runner noise. Judge B1 by the mean slowest-shard wall over many runs:
+`node tools/ci/tooling-timings.mjs` re-reads the newest green runs and prints
+the predicted walls, and the 18-run baseline above was 7.39 min mean, 7.57 p50.
+
+B6 (new, measured here): with ±30 % runner speed per job, the wall of the
+slowest of N shards grows with N even at perfect balance. A fourth shard (B2)
+still cuts each shard's work by a quarter, so its gain survives the noise;
+re-running a slow-runner shard does not (never re-run for speed).
 
 ## Re-consider: existing levers
 
