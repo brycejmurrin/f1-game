@@ -5,7 +5,7 @@
 //
 //   node tools/perf/devicefarm-iphone.mjs devices
 //   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" [--legs 2|4|0] [--url URL] [--out DIR]
-//   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --touch 5 [--from btn-throttle] [--to btn-boost]
+//   node tools/perf/devicefarm-iphone.mjs run --device "iPhone 18 Pro Max" --touch 5 [--touch-gap 28] [--touch-pair] [--from btn-throttle] [--to btn-boost]
 //     [--variants none,dom,state,none]   one fresh page load per entry, warm-up before the first tap (see WARM)
 //     [--variants none@live,dom@live,none@fix --fix-url URL --cold]   a fresh Safari PROCESS per entry
 //   node tools/perf/devicefarm-iphone.mjs run --scenario cache|races [--pins webgpu,webgl2]   (adds ?apex=1)
@@ -259,13 +259,19 @@ async function touchRun(base, sid, out, n, warm) {
     log("touch map " + JSON.stringify(r.map));
     // --to a,b,c: cycle c taps the c-th id (the last repeats), so a first tap on AERO can precede the first BOOST.
     const a = pt(r.arm.from), bs = r.arm.to.map(pt);
+    // --touch-gap S: seconds from one press to the next (default: the old fixed ~2.8 s cycle). --touch-pair: every
+    // press is BOOST ON then OFF (it toggles), so a deploy-ON press is followed by its release 1.2 s later; the read
+    // then lists 2N pointerdowns, the even ones being the ON presses.
+    const gapMs = Math.round(Number(opt("touch-gap", "0")) * 1000), pair = opt("touch-pair", "") !== "";
     for (let c = 0; c < n; c++) {
       const b = bs[Math.min(c, bs.length - 1)];
+      const press = [{ type: "pointerMove", duration: 0, x: b.x, y: b.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 70 }, { type: "pointerUp", button: 0 }];
+      const used = 1500 + 60 + 70 + (pair ? 1200 + 70 : 0);
+      const tail = Math.max(1200, gapMs - used);
       wd(base, "POST", `/session/${sid}/actions`, { actions: [{ type: "pointer", id: "finger", parameters: { pointerType: "touch" }, actions: [
         { type: "pointerMove", duration: 0, x: a.x, y: a.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 1500 },
-        { type: "pointerUp", button: 0 }, { type: "pause", duration: 60 },
-        { type: "pointerMove", duration: 0, x: b.x, y: b.y }, { type: "pointerDown", button: 0 }, { type: "pause", duration: 70 },
-        { type: "pointerUp", button: 0 }, { type: "pause", duration: 1200 }] }] });
+        { type: "pointerUp", button: 0 }, { type: "pause", duration: 60 }, ...press,
+        ...(pair ? [{ type: "pause", duration: 1200 }, ...press] : []), { type: "pause", duration: tail }] }] });
     }
     try { wd(base, "DELETE", `/session/${sid}/actions`); } catch (_) { /* nothing held */ }
   } finally {
