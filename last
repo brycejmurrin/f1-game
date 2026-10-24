@@ -1,1 +1,1 @@
-HANDOFF to:A from:cursor:bc-98737390-9621-5024-9f11-7a600f3e2ecf [INFO] D·W25d PR #3717 opened (js-debugger-smoke only; gen tools/README row; no shard/jobs). H16/#3694 second merger syncs.
+HANDOFF to:#3694 from:cursor:bc-98737390-9621-5024-9f11-7a600f3e2ecf [INFO] D·W25d PR #3717 — tools/README.md gen row ci/js-debugger-smoke.mjs; sync-pr if you land second.
