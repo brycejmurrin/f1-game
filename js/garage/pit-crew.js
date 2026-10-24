@@ -24,7 +24,8 @@ const PitCrewAnim = (function () {
     for (const [end, name] of STEPS) if (u < end) { step = name; break; }
     return { step, t: Math.min(1, u) * len };
   }
-  let gfx = null;
+  let gfx = null, on = true, frames = 0, ms = 0;
+  const now = () => { try { return performance.now(); } catch (_) { return 0; } };
   const rigs = new Map();   // team colour → { body, props }
   function rigFor(c) {
     const team = c.team || {}, c1 = team.color || [0.30, 0.32, 0.36], c2 = team.color2 || [0.85, 0.86, 0.88];
@@ -39,7 +40,7 @@ const PitCrewAnim = (function () {
   /** Draw the animated crew round car c in its grounded basis `base`; false
    *  leaves the stop to the static crew mesh. */
   function draw(G, c, base, opts) {
-    if (!c || !c.isPlayer || c.pitState !== "box" || !G || !G.gfx || !G.pits || !G.pits.stopAnim) return false;
+    if (!on || !c || !c.isPlayer || c.pitState !== "box" || !G || !G.gfx || !G.pits || !G.pits.stopAnim) return false;
     if (typeof GarageCrewChoreo === "undefined" || typeof GarageCrewMotion === "undefined" || typeof GarageCrew === "undefined" || !GarageCrew.helmet) return false;
     const eye = G.camEye;
     if (eye) {
@@ -49,9 +50,14 @@ const PitCrewAnim = (function () {
     const anim = G.pits.stopAnim(c), p = phase(anim);
     if (p.t < 0) return false;
     if (G.gfx !== gfx) { gfx = G.gfx; rigs.clear(); }
-    const r = rigFor(c);
+    const t0 = now(), r = rigFor(c);
     GarageCrewChoreo.draw(r.body, r.props, gfx, "pit", p.t, 1, p.t, false, opts, base, anim.lift || 0);
+    frames++; ms += now() - t0;
     return true;
   }
-  return Object.freeze({ draw, phase, NEAR_M, STEPS });
+  /** The A/B switch (perf census, the PR's table): off hands every stop to the static mesh. */
+  function setEnabled(v) { if (v != null) on = !!v; return on; }
+  /** Frames drawn and their CPU submit ms since the last read (clears). */
+  function stats() { const out = { frames, ms }; frames = 0; ms = 0; return out; }
+  return Object.freeze({ draw, phase, setEnabled, stats, NEAR_M, STEPS });
 })();
