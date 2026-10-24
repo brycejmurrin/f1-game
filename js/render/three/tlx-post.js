@@ -948,6 +948,10 @@
           _lastPresentRT = dest || aaRT;
           _last.sgsr = true;
         } else {
+          // FXAA reads the post-sized LDR but draws the whole destination.
+          // Fixed phone targets keep that destination present-sized even at
+          // scale 1, where SGSR is bypassed; pW/pH here would crop the image.
+          if (fixed) { const ps = presentSize(); vset(P.fxaa, ps[0], ps[1]); }
           const mirIn = !!P.fxaa.mirTex && fxaaMirror(true);
           runPass(P.fxaa.mat, dest);
           if (mirIn) _mirComposites++;

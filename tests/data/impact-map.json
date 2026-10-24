@@ -4672,6 +4672,7 @@
       ],
       "lookAtTo": [
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/shared-math.test.mjs"
       ],
@@ -4693,6 +4694,7 @@
       "perspectiveTo": [
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/shared-math.test.mjs"
@@ -4983,6 +4985,7 @@
         "tests/unit/data-lazy-loader.test.mjs"
       ],
       "forget": [
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-hub-picker.test.mjs"
       ],
       "purgeOldestCache": [
@@ -5235,6 +5238,7 @@
       ],
       "create": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-replay-improvements.test.mjs",
         "tests/unit/data-results.test.mjs",
         "tests/unit/loading-card.test.mjs",
@@ -5243,6 +5247,9 @@
         "tests/unit/real-race-tab-gap-refresh.test.mjs",
         "tests/unit/real-race.test.mjs",
         "tests/unit/real-replay-frame-fit.test.mjs"
+      ],
+      "fetchRaw": [
+        "tests/unit/data-api-status.test.mjs"
       ],
       "fetchTraces": [
         "tests/unit/real-race-script.test.mjs",
@@ -6966,6 +6973,7 @@
         "tests/unit/ratchet-reason.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/ready-gate.test.mjs",
+        "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/report-server.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
@@ -12742,6 +12750,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/glx-lamp-shadow-slot.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/surface-id-parity.test.mjs"
       ],
@@ -13569,7 +13578,11 @@
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "layoutHalf": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs"
+      ],
+      "mirrorPass": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "needsDepth": [
         "tests/unit/tlx-hunt4b.test.mjs"
@@ -13583,6 +13596,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "postChain": [
@@ -13619,6 +13633,7 @@
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
       "vset": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "warm": [
@@ -13904,6 +13919,9 @@
       "freeInstancedBatch": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "getPresentSize": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs"
+      ],
       "half": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -13976,6 +13994,7 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-inst-cells.test.mjs",
+        "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/tlx-round2.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
@@ -14075,6 +14094,9 @@
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
+      ],
+      "wantSpatialUpscale": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "warmDraws": [
         "tests/unit/tlx-rig-warm.test.mjs"
@@ -14236,6 +14258,9 @@
       ],
       "viewport": [
         "tests/unit/tlx-viewport.test.mjs"
+      ],
+      "*": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs"
       ]
     },
     "js/render/webgpu/wgsl-chunks.js": {
