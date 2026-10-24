@@ -62,7 +62,10 @@ export function renderAdvisory(d) {
 }
 
 export function summarise(modules) {
-  const rows = modules.map((m) => {
+  // The same module is created more than once (per device/pipeline variant), and how many times depends on timing:
+  // identical text is one row, so counts and the family hash do not move with capture length.
+  const uniq = [...new Map(modules.map((m) => [sha(m.code), m])).values()];
+  const rows = uniq.map((m) => {
     const c = classify(m.code);
     return { raw: sha(m.code), norm: sha(normaliseWgsl(m.code)), bytes: m.code.length, label: m.label || "", ...c };
   });
@@ -140,9 +143,11 @@ async function capture(o) {
     await page.evaluate(async () => { try { await Assets.loadModels(); } catch (_) { /* pack optional */ } });
     await page.evaluate(({ id, tod, weather }) => { __apex.race(id, tod, weather); __apex.go(); },
       { id: o.track || "monza", tod: o.tod || "day", weather: o.weather || "dry" });
-    // Settle: the lit programs are built during race entry; wait until no new module arrives for 8 s (max 150 s).
+    // Settle: the lit programs are built during race entry and on the first frames; wait until no new module
+    // arrives for `settle` s (default 25; software GL is slow to reach the late programs), at most 240 s.
+    const settle = Number(o.settle || 25);
     let last = -1, stable = 0;
-    for (let t = 0; t < 150 && stable < 8; t++) {
+    for (let t = 0; t < 240 && stable < settle; t++) {
       await new Promise((r) => setTimeout(r, 1000));
       if (modules.length === last) stable++; else { stable = 0; last = modules.length; }
     }

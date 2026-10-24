@@ -48,3 +48,11 @@ test("diffSummaries: a non-lit module change leaves the lit family hash alone", 
   assert.equal(d.changed, true);
   assert.equal(d.familyChanged, false);
 });
+
+test("summarise: a module created twice is one row (capture length must not move the counts or the hash)", () => {
+  const a = { label: "fragment", code: litFs(5) }, v = { label: "vertex", code: "@vertex fn v(){}" };
+  const once = summarise([v, a]), twice = summarise([v, a, a, v, a]);
+  assert.equal(twice.rows.length, 2);
+  assert.equal(twice.familyHash, once.familyHash);
+  assert.equal(twice.allHash, once.allHash);
+});
