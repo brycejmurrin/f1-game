@@ -13,7 +13,8 @@
 //
 //   npx serve -l 3456 .     (or let the harness serve: it does by default)
 //   node tools/perf/ers-deploy-census.mjs [--backend tlx-gpu|tlx-gl] [--cam helmet|chase|…] [--mirror on|off|auto]
-//        [--track monza] [--warm 6] [--after 4] [--json artifacts/perf/ers-deploy-census.json]
+//        [--track monza] [--warm 6] [--after 4]
+//        [--presses N --gap S --hold S --jump FRAC] [--json artifacts/perf/ers-deploy-census.json]
 //
 // Output: `= ers-deploy-census backend=… cam=… mirror=… api=… deployed=… pre=N lazy=M misses=K` and one line per
 // pipeline built after BOOST went on: `  +<ms after boost> <obj> <mat> rt=<target> attrs=<…> <build ms>`.
@@ -25,7 +26,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export function parseArgs(argv) {
-  const o = { backend: "tlx-gpu", cam: "helmet", mirror: "on", track: "monza", warm: 6, after: 4, json: "artifacts/perf/ers-deploy-census.json" };
+  const o = { backend: "tlx-gpu", cam: "helmet", mirror: "on", track: "monza", warm: 6, after: 4, presses: 0, gap: 3, hold: 1.5, jumpFrac: 0.02, json: "artifacts/perf/ers-deploy-census.json" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], v = argv[i + 1];
     if (a === "--backend") { if (!["tlx-gpu", "tlx-gl"].includes(v)) throw new Error("--backend tlx-gpu|tlx-gl"); o.backend = v; i++; }
@@ -34,6 +35,10 @@ export function parseArgs(argv) {
     else if (a === "--track") { o.track = String(v); i++; }
     else if (a === "--warm") { o.warm = Math.max(1, Math.min(60, +v || 6)); i++; }
     else if (a === "--after") { o.after = Math.max(1, Math.min(30, +v || 4)); i++; }
+    else if (a === "--presses") { o.presses = Math.max(0, Math.min(12, +v | 0)); i++; }
+    else if (a === "--gap") { o.gap = Math.max(0.5, Math.min(60, +v || 3)); i++; }
+    else if (a === "--hold") { o.hold = Math.max(0.2, Math.min(10, +v || 1.5)); i++; }
+    else if (a === "--jump") { o.jumpFrac = Math.max(0, Math.min(1, +v || 0)); i++; }
     else if (a === "--json") { o.json = String(v); i++; }
     else throw new Error("unknown flag: " + a);
   }
@@ -64,6 +69,24 @@ export function hookPipelines() {
   };
   P.hook = "ok";
   return P.hook;
+}
+
+// Page side: the counters one BOOST press can move. Every field is a running total; a press is the delta.
+export function pressSnap() {
+  const P = window.__edc, T = GLX.__tlx; let ms = null; try { ms = T.memState(); } catch (_) { /* no memState */ }
+  if (!P.mo && typeof MutationObserver !== "undefined") {
+    P.mut = 0; P.mo = new MutationObserver((l) => { P.mut += l.length; });
+    P.mo.observe(document.body, { subtree: true, attributes: true, childList: true, characterData: true });
+  }
+  return { at: performance.now(), pipes: P.pipes.length, matMiss: ms ? ms.matMiss : null, matEvict: ms ? ms.matEvict : null,
+    mats: ms ? ms.mats : null, pool: ms ? ms.pool : null, rObj: ms ? ms.rObj : null, mut: P.mut || 0 };
+}
+
+// Per-press deltas, then the worst rAF gap in the first second after the press.
+export function pressDelta(a, b, frames) {
+  const d = (k) => (a[k] == null || b[k] == null ? null : b[k] - a[k]);
+  return { pipes: d("pipes"), matMiss: d("matMiss"), matEvict: d("matEvict"), pool: d("pool"), rObj: d("rObj"), mut: d("mut"),
+    frameMax: frames && frames.length ? Math.max(...frames) : null };
 }
 
 async function run(o) {
@@ -104,6 +127,30 @@ async function run(o) {
       return { deployed: !!(me && me.deploying), energy: me && me.energy, lazy: P.pipes.slice(P.preCount).map((p) => ({ ...p, at: Math.round(p.at - P.boostAt) })),
         matMissKeys: ms && ms.matMissKeys, matMisses: ms && ms.matMisses, frameMax: P.frames.length ? Math.max(...P.frames) : null, frames: P.frames.slice(0, 40) };
     });
+    // --presses N: the EVERY-press question (Bryce 2026-10-24, "every press, a hitch"). BOOST off, then N
+    // more presses spaced --gap s apart, each held --hold s; the off window before each is the control.
+    out.presses = [];
+    for (let i = 0; i < o.presses; i++) {
+      await page.evaluate(() => window.__apex.setBoost(false));
+      const c0 = await page.evaluate(pressSnap);
+      await page.waitForTimeout(Math.max(0, o.gap - o.hold) * 1000);
+      // Back onto the main straight at speed: a BOOST press only deploys on the throttle, and a held GAS with no
+      // steering has found a wall by now.
+      await page.evaluate((f) => { try { window.__apex.jump(f, 70); } catch (_) { /* no jump hook */ } }, o.jumpFrac);
+      // Let the jump's own work (new chunks in view, their pipelines) land BEFORE the press snapshot: 6 frames.
+      await page.evaluate(() => new Promise((r) => { let n = 0; requestAnimationFrame(function f() { if (++n >= 6) r(); else requestAnimationFrame(f); }); }));
+      const a = await page.evaluate(pressSnap);
+      await page.evaluate(() => { const P = window.__edc; window.__apex.setBoost(true);
+        const F = P.pf = []; let last = -1; const end = performance.now() + 60000;
+        requestAnimationFrame(function f(t) { if (last >= 0) F.push(Math.round(t - last)); last = t; if (t < end && F.length < 8) requestAnimationFrame(f); }); });
+      // Hold by FRAMES as well as time: under SwiftShader a frame can take a second, and a press no frame saw is no press.
+      await page.waitForTimeout(o.hold * 1000);
+      await page.waitForFunction(() => window.__edc.pf.length >= 4, null, { polling: 250, timeout: 60000 }).catch(() => {});
+      const r = await page.evaluate((from) => ({ f: window.__edc.pf.slice(), dep: !!(window.__apex.carState().find((c) => c.boostOn) || {}).deploying,
+        names: window.__edc.pipes.slice(from).map((p) => `${p.obj} ${p.mat} pass=${p.pass} rt=${p.rt} tr=${p.transparent} attrs=${p.attrs} parents=${p.parents} ${p.ms}ms`) }), a.pipes);
+      const b = await page.evaluate(pressSnap);
+      out.presses.push({ n: i + 2, deployed: r.dep, press: pressDelta(a, b, r.f), control: pressDelta(c0, a, null), pipes: r.names });
+    }
     await page.keyboard.up("ArrowUp");
   } finally {
     mkdirSync(path.dirname(o.json), { recursive: true });
@@ -123,6 +170,11 @@ async function main() {
     `pre=${pre.pipes} lazy=${(post.lazy || []).length} misses=${missNew.length} frameMax=${post.frameMax}`);
   for (const p of post.lazy || []) console.log(`  +${p.at}ms ${p.obj} ${p.mat} pass=${p.pass} rt=${p.rt} attrs=${p.attrs} parents=${p.parents} ${p.ms}ms${p.async ? " async" : ""}`);
   for (const k of missNew) console.log(`  miss ${k}`);
+  for (const p of r.presses || []) {
+    const f = (x) => `pipes=${x.pipes} matMiss=${x.matMiss} matEvict=${x.matEvict} pool=${x.pool} rObj=${x.rObj} mut=${x.mut}`;
+    console.log(`  press ${p.n} deployed=${p.deployed} ${f(p.press)} frameMax=${p.press.frameMax} | control ${f(p.control)}`);
+    for (const n of p.pipes || []) console.log(`    + ${n}`);
+  }
   console.log("json: " + o.json);
 }
 

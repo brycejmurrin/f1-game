@@ -118,8 +118,8 @@ test("pinPipelines: render pipelines only, capped, and a no-op without a pipelin
 test("tlx.js wiring: prunePool arms the pin at the first present and sweeps before it drops a wrapper", () => {
   // Behaviour above; this pins only the order inside prunePool (indexOf, not regex source pins: assert-match-ratchet).
   const prune = tslice("      function prunePool(now) {", "      // A WRAPPER WE DROP MUST SAY SO TO THREE.");
-  const arm = prune.indexOf("if (!_pinArmed) pinPipelines();"), cadence = prune.indexOf("PRUNE_EVERY_MS) return;");
-  const sweep = prune.indexOf("pinPipelines();", cadence), drop = prune.indexOf("dropWrapper(m);");
+  const arm = prune.indexOf("if (pin && !_pinArmed) pin();"), cadence = prune.indexOf("PRUNE_EVERY_MS) return;");
+  const sweep = prune.indexOf("if (pin) pin();", cadence), drop = prune.indexOf("dropWrapper(m);");
   assert.ok(arm > 0 && arm < cadence, "armed before the 5 s cadence gate, so the first present wraps three's pipeline factory");
   assert.ok(sweep > cadence && sweep < drop, "each sweep pins what was built since, before any wrapper is dropped");
 });

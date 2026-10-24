@@ -1956,6 +1956,11 @@
       "presentation": "native",
       "preserve": "@c8"
     },
+    "tools/perf/boost-press-census.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
     "tools/perf/touch-boost-probe.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",

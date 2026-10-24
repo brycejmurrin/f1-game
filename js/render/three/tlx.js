@@ -2862,6 +2862,7 @@ const TLX = (function () {
         ib.setUsage(_instUsage);   // A-H1: uploads only through uploadStream (a dirty producer)
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
+        geo.__tlxPin = true;   // a stream idle for 20 s (no sparks, no kick-up) kept its pipeline: prunePool skips it (#3677)
         slot.geo = geo; slot.ib = ib; slot.cap = cap;
         return true;
       }
@@ -2878,6 +2879,7 @@ const TLX = (function () {
         ib.setUsage(_instUsage);   // A-H1, as ensureStream
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
+        geo.__tlxPin = true;   // as ensureStream
         slot.geo = geo; slot.ib = ib; slot.cap = (arr.length / slot.stride) | 0;
         return true;
       }
@@ -3756,14 +3758,18 @@ const TLX = (function () {
       }
       const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 20000;
       function prunePool(now) {
-        if (!_pinArmed) pinPipelines();   // arm the pin at the first present, before any warm builds a pipeline
+        const pin = typeof pinPipelines === "function" ? pinPipelines : null;   // typeof: sandboxed prunePool bodies
+        if (pin && !_pinArmed) pin();   // arm the pin at the first present, before any warm builds a pipeline
         if (now - _pruneLast < PRUNE_EVERY_MS) return;
         _pruneLast = now;
-        pinPipelines();
+        if (pin) pin();
         let w = 0;
         for (let i = 0; i < meshPool.length; i++) {
           const m = meshPool[i];
-          if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS) { meshPool[w++] = m; continue; }
+          // A PINNED geometry (pinMesh: the cockpit ERS bar, OT lamp, ERS strip) keeps its wrappers: they draw
+          // only while ERS deploys, and on WebGPU the wrapper is its pipeline's last holder, so a prune between
+          // two BOOST presses made every press rebuild the pipeline mid-race (#3677).
+          if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS || (m.geometry && m.geometry.__tlxPin)) { meshPool[w++] = m; continue; }
           const byMat = meshByGeo.get(m.geometry);
           if (byMat) {
             // Drop the wrapper from its occurrence list; an emptied list and an
@@ -4923,6 +4929,8 @@ const TLX = (function () {
           return true;
         },
         freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
+        // Exempt a small, intermittently drawn mesh from the idle prune (feature-detected; freeMesh still frees it).
+        pinMesh(m) { if (m && m.geo) m.geo.__tlxPin = true; },
         freeChunkedMesh(m) {
           if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }

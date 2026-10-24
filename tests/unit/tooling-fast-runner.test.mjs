@@ -14,7 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
-  selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, changedHeader, EMPTY_DIFF_MESSAGE,
+  selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, AUTO_JOBS, AUTO_JOBS_MAX_LOAD, autoJobs, changedHeader, EMPTY_DIFF_MESSAGE,
   isScriptTagOnlyIndexHtmlDiff, isScriptsOnlyPackageJsonDiff, isVersionOnlySwJsDiff, widenedLine, ciShardFiles,
   LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS }
   from "../../tools/ci/tooling-fast.mjs";
@@ -238,6 +238,19 @@ test("CLI: default --jobs stays 1 (AGENTS.md rule 4 load limits); --changed is a
   assert.equal(d.jobs, 1);
   assert.equal(parseToolingFastArgv(["--changed"]).changed, true);
   assert.match(TOOLING_FAST_USAGE, /--changed/);
+});
+
+test("CLI auto width (B4): --jobs=2 only on a quiet box with no live browser run; an explicit --jobs always wins", () => {
+  assert.equal(AUTO_JOBS, 2);
+  assert.equal(AUTO_JOBS_MAX_LOAD, 2);
+  assert.deepEqual(autoJobs({ busy: false, load1: 0.4 }), { jobs: 2, why: "no live browser run, loadavg 0.40 < 2" });
+  assert.equal(autoJobs({ busy: true, load1: 0.1 }).jobs, 1, "rule 4: never a wide node run on top of a browser run");
+  assert.equal(autoJobs({ busy: false, load1: 2 }).jobs, 1, "a busy box stays serial");
+  assert.equal(autoJobs({ busy: null, load1: 0.1 }).jobs, 1, "unknown occupancy is treated as busy");
+  assert.equal(autoJobs({ busy: false, load1: NaN }).jobs, 1, "unknown load stays serial");
+  assert.equal(parseToolingFastArgv([]).jobsExplicit, false);
+  assert.equal(parseToolingFastArgv(["--jobs=4"]).jobsExplicit, true);
+  assert.equal(parseToolingFastArgv(["--jobs=4"]).jobs, 4);
 });
 
 test("--changed selects pinned unit tests for a tool edit, not the full suite", () => {

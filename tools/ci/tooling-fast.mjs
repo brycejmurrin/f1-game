@@ -1319,6 +1319,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-post-fixed-mats.test.mjs",
   // TLX phone post at half scene resolution (D·IP3 / BrowserStack GPU-bound fill).
   "tests/unit/tlx-post-phone-res.test.mjs",
+  // TLX's mesh-pool prune keeps a gfx.pinMesh geometry's wrappers (the deploy-only ERS bar,
+  // OT lamp and ERS strip): an idle unpinned wrapper still goes. Lifts the real prunePool (#3677).
+  "tests/unit/tlx-prune-pin.test.mjs",
   // TLX perf hunt 6 (B·H6): gfx.warmDraws captures the cockpit rig's draws (never painted) and the next present compiles exactly those pairs, owned like the deferred mirror warm; the first rig frame then links nothing (a cold one links). Race entry awaits it under the cover.
   "tests/unit/tlx-rig-warm.test.mjs",
   // TLX drops a createTexture() source canvas once three has uploaded it,
@@ -1525,6 +1528,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // WIND (js/race/wind.js): a pure function of (seed, circuit, weather, clock), fog calm and a storm gusty,
   // gusts and the side force capped, head/tail wind a few km/h of top speed, OFF a true no-op. VM, ~1 s.
   "tests/unit/wind.test.mjs",
+  // BitmapDecode.strip pack-strip lane (apex26.packDecodeWorker, default OFF): worker bytes equal sharp's per layer; OFF/refused/crash answer null. VM, ~3 s.
+  "tests/unit/worker-pack-strip.test.mjs",
   "tests/unit/workflow-harness.test.mjs",
   // ci.yml structure read from the PARSED YAML (job → step by name): base-green plan, geometry filter, behind-ship step. ~0.3 s.
   "tests/unit/workflow-lint-ci-plan.test.mjs",
@@ -1938,6 +1943,34 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
 }
 
 export const DEFAULT_JOBS = 1;
+
+/** THE CLI'S OWN WIDTH WHEN NO --jobs IS GIVEN (2026-10-24, BUILD-HUNT B4).
+ *  Serial, the full floor is ~47 min of file time on a 4-core container; at
+ *  --jobs=3 it measured 16.1 min. deploy.mjs's gate measured --jobs=2 peaking
+ *  at loadavg 2.57, under the >= 3 line this repo calls too busy to measure.
+ *  So `npm run test:tooling-fast` takes AUTO_JOBS only on a quiet box: no live
+ *  Playwright suite or host browser (rule 4: no node suite on top of a browser
+ *  run) and 1-min loadavg under AUTO_JOBS_MAX_LOAD; otherwise DEFAULT_JOBS.
+ *  An explicit --jobs (CI's 4, the deploy gate's 2) and the programmatic
+ *  runToolingFast() default are unchanged. */
+export const AUTO_JOBS = 2;
+export const AUTO_JOBS_MAX_LOAD = 2;
+
+/** Pick the CLI width from the box's state: `{ busy, load1 }` → `{ jobs, why }`. Unknown state is treated as busy. */
+export function autoJobs({ busy, load1 } = {}) {
+  if (busy !== false) return { jobs: DEFAULT_JOBS, why: busy ? "a Playwright suite or host browser is live" : "browser occupancy unknown" };
+  if (!(Number(load1) < AUTO_JOBS_MAX_LOAD)) return { jobs: DEFAULT_JOBS, why: `loadavg ${Number(load1).toFixed(2)} >= ${AUTO_JOBS_MAX_LOAD}` };
+  return { jobs: AUTO_JOBS, why: `no live browser run, loadavg ${Number(load1).toFixed(2)} < ${AUTO_JOBS_MAX_LOAD}` };
+}
+
+async function probeAutoJobs() {
+  let busy = null;
+  try {
+    const { scanPlaywrightLines } = await import("./playwright-occupancy.mjs");
+    busy = scanPlaywrightLines(execFileSync("ps", ["-eo", "pid,args"], { encoding: "utf8" })).busy;
+  } catch (_) { /* no ps: stay serial */ }
+  return autoJobs({ busy, load1: os.loadavg()[0] });
+}
 
 /** Paths that force a full tooling-fast run in --changed mode (fail-safe). */
 const TOOLING_FAST_CHANGED_RUN_ALL = [
@@ -2377,6 +2410,7 @@ export function parseToolingFastArgv(argv) {
     quiet: argv.includes("--quiet"),
     stop: argv.includes("--stop"),
     jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
+    jobsExplicit: val("jobs") !== undefined,
     order: val("order"),
     record: argv.includes("--record"),
     shard: val("shard"),
@@ -2433,6 +2467,11 @@ if (isMain) {
     files0 = [...TOOLING_FAST_FILES];
   }
   const files = ciShardFiles(files0, parsed.shard);
+  if (!parsed.jobsExplicit) {
+    const pick = await probeAutoJobs();
+    parsed.jobs = pick.jobs;
+    console.log(`[tooling-fast] jobs=${pick.jobs} (auto: ${pick.why}; pass --jobs=N to choose)`);
+  }
   const { ok } = await runToolingFast(files, {
     jobs: parsed.jobs,
     bail: parsed.bail,
