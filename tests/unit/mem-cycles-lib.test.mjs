@@ -14,6 +14,14 @@ test("warm-up then flat (A·H12's SwiftShader series) reads plateau", () => {
   assert.equal(v.judgedFrom, 5);
 });
 
+test("the macos-latest hardware series (gpu-census run 40061540893, TLX/WebGPU, 12 race>quit) reads plateau", () => {
+  const buf = [2165, 1954, 2182, 2048, 2217, 2055, 2137, 2019, 2153, 2047, 2179, 2056];
+  const mb = [54.4, 52.2, 55.2, 52.4, 54.9, 52.7, 56, 53, 56, 53, 56, 53];
+  const ro = [515, 378, 468, 406, 477, 413, 435, 391, 439, 405, 453, 404];
+  const v = memCyclesVerdict(buf.map((b, i) => row(b, mb[i], ro[i])));
+  assert.equal(v.verdict, "plateau", JSON.stringify(v));   // +9.9 buffers a cycle on ~2100: noise, not a leak
+});
+
 test("a steady per-cycle climb in the second half reads growing and names the field", () => {
   const rows = Array.from({ length: 8 }, (_, i) => row(800 + 60 * i, 30 + 2 * i, 300 + 20 * i));
   const v = memCyclesVerdict(rows);

@@ -50,7 +50,8 @@ export function gpuObjectCounter() {
  * Plateau verdict over per-cycle rows ({ buffers, bufMB, textures, texMB, rObj }).
  * Caches warm for the first cycles, so only the SECOND HALF is judged: the mean
  * of the last two rows against the mean of the first two second-half rows, per
- * cycle between them (two rows, because the cycles alternate circuits). Report,
+ * cycle between them (two rows, because the cycles alternate circuits). An object
+ * count must climb faster than max(objPerCycle, 1% of itself) a cycle. Report,
  * not a gate: "growing" names the field and its per-cycle rate.
  */
 export function memCyclesVerdict(rows, { mbPerCycle = 0.5, objPerCycle = 5 } = {}) {
@@ -66,6 +67,9 @@ export function memCyclesVerdict(rows, { mbPerCycle = 0.5, objPerCycle = 5 } = {
   }
   const growing = [];
   for (const k of ["bufMB", "texMB"]) if (rate[k] > mbPerCycle) growing.push(k);
-  for (const k of ["buffers", "textures", "rObj"]) if (rate[k] > objPerCycle) growing.push(k);
+  // Counts swing a few dozen with what the last race drew; a leak shows as a share of the total.
+  for (const k of ["buffers", "textures", "rObj"]) {
+    if (rate[k] > Math.max(objPerCycle, 0.01 * mean(rows[n - 2], rows[n - 1], k))) growing.push(k);
+  }
   return { verdict: growing.length ? "growing" : "plateau", cycles: n, judgedFrom: h, perCycle: rate, growing };
 }
