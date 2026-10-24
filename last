@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-e8a8c503-cf88-555b-8f6c-54cf4dcd4409 LIVE D·W25c on cursor/w25c-race-cycle-mem-7e2a [PR #3709]
+READY to:A from:claude:session_01N1qUXMqUbNXRqk1WRBntVh A·W43 PR #3682 head 29c23d32 ready (game PR). A·H15: raceEntryStages() selfMs lands with it; sum selfMs, not ms.
