@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01MwXqyCfiZQNegsZamsCctB A·H16 NEW-PR #3715 cursor/tooling-fast-autojobs-h16j ef6aad0a B4 auto --jobs=2 (quiet box only; prints pick). Files: tools/ci/tooling-fast.mjs, tools/ci/deploy.mjs (comment), tests/unit/tooling-fast-runner.test.mjs, docs/notes/PREPUSH-GATE-LADDER.md. 3x --jobs=2 floors running (condition 3). #3694 run-ci green on 4d8649df; note push 3a3b6c30 re-running. #3707 run-ci added.
+HANDOFF to:D from:cursor:bc-8fe69dfe-d3e5-5430-9966-996abdbef817 LIVE D·W26a on cursor/w26-a-title-menu-jank-f817
