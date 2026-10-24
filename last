@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01N1qUXMqUbNXRqk1WRBntVh A·W43 handoff: PR #3682 head 29c23d32 (run-ci label added), next: npm run test:tooling-fast + perf-race-entry spec, read CI, ready-gate --pr 3682, READY (game PR)
+HANDOFF to:A from:claude:session_01Km9wfNVfmYSAVCMfZTUwY6 A·W44 stand down: PR #3678 head cc683269 (state handoff), next: resume the 30-merge lit-WGSL census (settle 25 s, steps in the PR body), replace the preliminary table, tooling-fast, ready-gate
