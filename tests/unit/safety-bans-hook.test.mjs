@@ -325,11 +325,11 @@ test("advisory: a piped ready-gate/merge-gate without pipefail gets a reminder, 
   for (const cmd of ["node tools/ci/ready-gate.mjs --pr 12 | tail -3", "node tools/ci/merge-gate.mjs --pr 12 2>&1 | tail -1"]) {
     const r = claudeBash(cmd);
     assert.equal(r.status, 0, cmd);
-    assert.match(r.out.hookSpecificOutput.additionalContext, /is piped, so this command's exit status/);
+    assert.ok(r.out.hookSpecificOutput.additionalContext.includes("is piped, so this command's exit status"));
     assert.equal(r.out.hookSpecificOutput.permissionDecision, undefined, "advice only, the call is not asked or denied");
     const c = cursorShell(cmd);
     assert.equal(c.out.permission, "allow");
-    assert.match(c.out.agent_message, /is piped/, "the Cursor agent reads the reminder");
+    assert.ok(c.out.agent_message.includes("is piped"), "the Cursor agent reads the reminder");
   }
   for (const cmd of ["set -o pipefail; node tools/ci/ready-gate.mjs --pr 12 | tail -3", "node tools/ci/ready-gate.mjs --pr 12",
     "node tools/ci/merge-gate.mjs --pr 12 || echo refused", "node tools/ci/ready-gate.mjs --pr 12 > artifacts/logs/rg.log",
@@ -362,12 +362,19 @@ test("advisory: a cursor/* push whose diff touches another open PR's paths names
     const r = claudeBash("git push -u origin cursor/t-1", a, env);
     assert.equal(r.status, 0, r.stderr);
     const ctx = r.out.hookSpecificOutput.additionalContext;
-    assert.match(ctx, /held\.js HELD by #900 \(cursor:bc-other\)/);
+    assert.ok(ctx.includes("held.js HELD by #900 (cursor:bc-other)"), ctx);
     assert.ok(!ctx.includes("mine.js"), "the branch's own PR is not a holder");
-    assert.match(cursorShell("git push -u origin cursor/t-1", a, env).out.agent_message, /HELD by #900/);
+    assert.ok(cursorShell("git push -u origin cursor/t-1", a, env).out.agent_message.includes("HELD by #900"));
     // A failed lookup says so instead of passing silently.
     const broken = claudeBash("git push origin cursor/t-1", a, { APEX_FLEET_OWNER_CMD: "false", APEX_HELD_CHECK: "" });
-    assert.match(broken.out.hookSpecificOutput.additionalContext, /held-file check did not finish/);
+    assert.ok(broken.out.hookSpecificOutput.additionalContext.includes("held-file check did not finish"));
+    // A lookup past the budget is skipped, and says so (the real budget is 20 s; fleet-owner measured ~14 s).
+    const slow = path.join(dir, "slow.mjs");
+    fs.writeFileSync(slow, "setTimeout(() => console.log('{}'), 5000);");
+    const t0 = Date.now();
+    const late = claudeBash("git push origin cursor/t-1", a, { APEX_FLEET_OWNER_CMD: `node ${slow}`, APEX_HELD_CHECK: "", APEX_HELD_BUDGET_S: "2" });
+    assert.ok(Date.now() - t0 < 4500, "the budget bounds the push");
+    assert.ok(late.out.hookSpecificOutput.additionalContext.includes("held-file check skipped"));
     // APEX_HELD_CHECK=0 and non-cursor branches skip the lookup.
     assert.equal(claudeBash("git push origin cursor/t-1", a, { ...env, APEX_HELD_CHECK: "0" }).out, null);
     assert.equal(claudeBash("git push origin cursor/t-1:claude/fleet-bus", a, env).out, null);
@@ -389,10 +396,10 @@ test("a push to a cursor/* branch whose every PR is merged or closed is refused;
     const merged = stub([{ number: 3599, state: "closed", merged_at: "2026-10-23T00:00:00Z" }]);
     const r = claudeBash("git push origin cursor/t-9", dir, merged);
     assert.equal(r.status, 2, r.stderr);
-    assert.match(r.stderr, /#3599 merged/);
+    assert.ok(r.stderr.includes("#3599 merged"), r.stderr);
     const c = cursorShell("git push -u origin HEAD", dir, merged);
     assert.equal(c.status, 2);
-    assert.match(c.out.agent_message, /already finished/);
+    assert.ok(c.out.agent_message.includes("already finished"));
     assert.equal(claudeBash("git push origin cursor/t-9", dir, stub([{ number: 1, state: "closed", merged_at: null },
       { number: 2, state: "open", merged_at: null }])).status, 0, "a reopened / second open PR");
     assert.equal(claudeBash("git push origin cursor/t-9", dir, stub([])).status, 0, "no PR yet: the first push");

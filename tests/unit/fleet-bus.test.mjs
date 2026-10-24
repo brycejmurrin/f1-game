@@ -297,21 +297,21 @@ test("send READY needs a passing ready-gate receipt for the PR (and the head it 
     const out = [];
     const opts = { cwd: h, log: (l) => out.push(l), dispatch: () => "x" };
     assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "#41 abc1234 ready-gate 0"], opts), 2, "no receipt");
-    assert.match(out.at(-1), /REFUSED: no ready-gate receipt for #41/);
+    assert.ok(out.at(-1).includes("REFUSED: no ready-gate receipt for #41"), out.at(-1));
     writeReceipt(h, "ready", { pr: 41, head: "abc1234def", ok: false, evidence: "plan-open: 1 open item" }, { main: null });
     assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "#41 abc1234 ready-gate 0"], opts), 2, "a refused gate");
-    assert.match(out.at(-1), /refused \(plan-open/);
+    assert.ok(out.at(-1).includes("refused (plan-open"), out.at(-1));
     writeReceipt(h, "ready", { pr: 41, head: "abc1234def", ok: true }, { main: null });
     assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "#41 fedcba9 ready-gate 0"], opts), 2, "another head");
-    assert.match(out.at(-1), /ready-gate passed on abc1234def/);
+    assert.ok(out.at(-1).includes("ready-gate passed on abc1234def"), out.at(-1));
     assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "ready-gate 0"], opts), 2, "no PR named");
     assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "#41 abc1234 ready-gate 0"], opts), 0);
     assert.equal(main(["send", "READY", "--to", "#41", "--as", A, "abc1234 ready"], opts), 0, "the PR may be the address");
     const errs = [];
     const orig = console.error; console.error = (l) => errs.push(l);
     try { assert.equal(main(["send", "LIVE", "--to", "*", "--as", A, "ORCH A LIVE"], opts), 1); } finally { console.error = orig; }
-    assert.match(errs.join("\n"), /READY \/ BLOCKED \/ DONE/);
-    assert.match(errs.join("\n"), /ORCH <X> LIVE/);
+    assert.ok(errs.join("\n").includes("READY / BLOCKED / DONE"));
+    assert.ok(errs.join("\n").includes("ORCH <X> LIVE"));
     assert.throws(() => formatLine("LIVE", "*", A, "x"), /READY \/ BLOCKED \/ DONE/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

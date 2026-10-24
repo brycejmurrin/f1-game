@@ -248,7 +248,7 @@ test("main: a READY whose ready-gate receipt is missing or refused is not sent",
   });
   const argv = ["send", "--to", "A", "--type", "READY", "--pr", "12", "abc1234 ready-gate 0"];
   assert.equal(await main(argv, deps({ ok: false, why: "the last ready-gate run on #12 refused (plan-open)" })), 1);
-  assert.match(errs.join("\n"), /READY refused: .*plan-open/);
+  assert.ok(errs.join("\n").includes("READY refused: ") && errs.join("\n").includes("plan-open"), errs.join("\n"));
   assert.deepEqual([bus.length, calls.length], [0, 0], "nothing sent");
   assert.equal(await main(argv, deps({ ok: true })), 0);
   assert.deepEqual([bus.length, calls.length], [1, 1]);

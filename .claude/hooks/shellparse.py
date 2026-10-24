@@ -815,7 +815,7 @@ def signing_issues(text):
 # Transcript Auditor batch 9 (2026-10-24). (b) a worker pushed files another fleet's
 # open PR still held: a cursor/* push runs tools/ci/fleet-owner.mjs on the branch's
 # diff against the deploy branch and names every path another open PR holds (a warning:
-# the lookup costs ~14 s of API calls, and shared generated files would make a refusal
+# the lookup costs ~14 s of API calls (capped at HELD_BUDGET_S), and shared generated files would make a refusal
 # noisy). (d) `ready-gate.mjs | tail` reported a refusal as a pass: a gate piped without
 # `set -o pipefail` gets a reminder that the pipe's status is the last command's.
 GATE_PIPED = re.compile(r"(ready|merge)-gate\.mjs(?:[^;&|\n]|>&|&>)*\|(?!\|)")
@@ -862,14 +862,26 @@ def closed_pr_refusal(dests, root):
     return ""
 
 
+HELD_BUDGET_S = 20   # fleet-owner.mjs --no-fetch measured ~14 s (open-PR list + per-PR files); a tighter cap skips every push
+
+
 def held_warning(dests, root):
     """Paths in this push's diff that ANOTHER open PR holds (fleet-owner.mjs), as one warning, or ""."""
     import subprocess
-    rows = []
+    import time
+    budget = float(os.environ.get("APEX_HELD_BUDGET_S") or HELD_BUDGET_S)   # env: tests only
+    rows, seen, deadline = [], set(), time.time() + budget
     for where, _remote, branch, _env in dests:
         if not str(branch).startswith("cursor/") or os.environ.get("APEX_HELD_CHECK") == "0":
             continue
         ref = "HEAD" if _current_branch(where) == branch else branch
+        if (where, ref) in seen:   # one lookup per (checkout, ref) per push
+            continue
+        seen.add((where, ref))
+        left = deadline - time.time()
+        if left < 1:
+            rows.append(f"(held-file check skipped for {branch}: the {budget:g} s budget ran out)")
+            continue
         try:
             d = subprocess.run(["git", "-C", where, "diff", "--name-only", "--no-renames",
                                 "origin/" + DEPLOY_BRANCH + "..." + ref], capture_output=True, text=True, timeout=10)
@@ -878,8 +890,11 @@ def held_warning(dests, root):
                 continue
             cmd = shlex.split(os.environ.get("APEX_FLEET_OWNER_CMD") or "node tools/ci/fleet-owner.mjs")
             r = subprocess.run(cmd + ["--json", "--no-fetch"], input="\n".join(paths), cwd=root,
-                               capture_output=True, text=True, timeout=45)
+                               capture_output=True, text=True, timeout=left)
             data = json.loads(r.stdout) if r.returncode == 0 else None
+        except subprocess.TimeoutExpired:
+            rows.append(f"(held-file check skipped for {branch}: fleet-owner.mjs ran past the {budget:g} s budget)")
+            continue
         except Exception:
             data = None
         if not data:
@@ -891,7 +906,7 @@ def held_warning(dests, root):
                 sha = str(h.get("sha") or "")
                 try:
                     mine = sha and subprocess.run(["git", "-C", where, "merge-base", "--is-ancestor", sha, ref],
-                                                  capture_output=True, timeout=10).returncode == 0
+                                                  capture_output=True, timeout=5).returncode == 0
                 except Exception:
                     mine = False
                 if not mine:
