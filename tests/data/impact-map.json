@@ -15032,7 +15032,8 @@
       "*": [
         "tests/unit/scenery-guards.test.mjs",
         "tests/unit/shared-track-foundation-characterization.test.cjs",
-        "tests/unit/source-integrity.test.mjs"
+        "tests/unit/source-integrity.test.mjs",
+        "tests/unit/track-build-load.test.mjs"
       ]
     },
     "js/track/scenery/pits.js": {
