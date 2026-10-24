@@ -1392,6 +1392,7 @@
     {
       "path": "tools/ci/tooling-timings.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node"
     },
     {

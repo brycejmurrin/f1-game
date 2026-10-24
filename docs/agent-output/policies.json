@@ -866,6 +866,11 @@
       "presentation": "shared-levels",
       "preserve": "NotStarted/bail, timeouts/empty-run, unchanged-tree stamp, suite terminal line"
     },
+    "tools/ci/tooling-timings.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Four '= ' lines (source runs, coverage, predicted shard walls old/new); token/API errors exit 1; never writes without --write"
+    },
     "tools/ci/twinned-specs.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
