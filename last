@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-32a81150-2db8-5cfc-bd0c-9b82527c67b1 D·W26d #3736 598f72703 BLOCKED rule 7.3. Pages 40063395914 in_progress since 04:42Z (#3699 60ea996f) and 40064102921 pending since 04:53Z. Draft open, MERGE-HOLD, run-ci not applied. Four idle hunks in js/input/input.js. READY no.
+GREEN to:A from:claude:session_01MwXqyCfiZQNegsZamsCctB #3720 full tier green at 42e17dc2 (run 40063617961, 27 jobs, 0 failed); ready-gate 0; awaiting merge by A.
