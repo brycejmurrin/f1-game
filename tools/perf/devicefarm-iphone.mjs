@@ -16,6 +16,7 @@
 //     visor,soak,photo (chainable in one session): HELMET-cam visor arms --arms off,on,refr,off at --track bahrain:night
 //       (--visor-pins); GRAPHICS --presets medium,low,medium at renderScale 0.5, a 1/0.75/0.5 ladder and a --soak-s
 //       governor soak (--soak-pins); Photo Studio by native taps with the 44 px floor read (--photo-scales auto,1)
+//     flags: fixed targets / SGSR arms (--flag-arms off,fixed,sgsr,both,off) at pinned --flag-scales 0.5,0.75
 //   Method (#3676; DEVICE-FARM-ANALYSIS-2026-10-24.md): rows carry build/first/thermal/warm; --prime TRACK:TOD spends a
 //   throwaway entry; --pin-scale S pins the governor in visor arms; units.json logs unit history; never read WebGPU
 //   timestamp-query as absolute GPU ms on iOS; repeat counts per the note's §2e (cold deltas: 3+ fresh units).
@@ -596,6 +597,43 @@ async function soakScenario(ctx, url, pins, report, out) {
   }
   await exec(ctx.base, ctx.sid, PRESET(opt("restore-preset", "medium")));
 }
+// flags (A·Y1 lever 6, PERF-KNOWN-WINS rows 4 and 7): the two fill levers that ship behind boot flags, on one pinned
+// path — fixed render targets (apex26.tlxFixedTargets) and SGSR1 upscale (apex26.spatialUpscale) — one fresh page per
+// arm (both are read at boot), the governor pinned at each --flag-scales value for a --flag-win-s window. Restores
+// both flags off at the end.
+const FLAG_ARMS = { off: [0, 0], fixed: [1, 0], sgsr: [0, 1], both: [1, 1] };
+const FLAG_SET = ([fx, up]) => `const s = GameStore.store;
+  if (${fx}) s.rawSet("apex26.tlxFixedTargets", "1"); else s.rawDel("apex26.tlxFixedTargets");
+  s.rawSet("spatialUpscale", ${up} ? "1" : "0"); return true;`;
+const FLAG_READ = `(() => { let up = null; try { up = __apex.spatialUpscale(); } catch (_) {}
+    return { fixed: localStorage.getItem("apex26.tlxFixedTargets"), upscale: up }; })()`;
+async function flagsScenario(ctx, url, report, out) {
+  const [track, tod = "day"] = opt("track", "monza:day").split(":");
+  const pin = opt("flag-pin", "webgl2"), scales = opt("flag-scales", "0.5,0.75").split(",").map(Number), winS = Number(opt("flag-win-s", "15"));
+  const R = report.flags = { pin, track, tod, rows: [] };
+  await exec(ctx.base, ctx.sid, PIN(pin));
+  await primeOnce(ctx, url, report);
+  try {
+    for (const [i, arm] of opt("flag-arms", "off,fixed,sgsr,both,off").split(",").entries()) {
+      await exec(ctx.base, ctx.sid, FLAG_SET(FLAG_ARMS[arm]));
+      const r = await openUrl(ctx, withApex(url));
+      const entry = await timedEntry(ctx, `flags ${arm}`, KICK_FOR(track, tod));
+      await exec(ctx.base, ctx.sid, GO);
+      const meta = rowMeta(ctx, report, i, entry);
+      for (const sc of scales) {
+        await exec(ctx.base, ctx.sid, `return __apex.renderScale(${sc});`);
+        const gov0 = await exec(ctx.base, ctx.sid, "return " + GOV);
+        const s2 = await sampleWin(ctx, winS * 1000, 3000, "gov: " + GOV + ", flag: " + FLAG_READ);
+        R.rows.push({ arm, scale: sc, api: r.api, entryMs: entry.windowMs, gov0, tierMoved: !!(gov0 && s2.gov && gov0.autoTier !== s2.gov.autoTier), ...meta, ...s2 });
+        log(`flags ${arm}@${sc}: api=${r.api} ${JSON.stringify(s2.win && { fps: s2.win.fps, p95: s2.win.p95, n50: s2.win.n50 })} flag=${JSON.stringify(s2.flag)} tier=${s2.gov && s2.gov.autoTier}`);
+      }
+      try { shot(ctx.base, ctx.sid, path.join(out, `flags-${i}-${arm}.png`)); } catch (_) { /* no shot */ }
+    }
+  } finally {
+    try { await exec(ctx.base, ctx.sid, FLAG_SET([0, 0]) + ""); await exec(ctx.base, ctx.sid, "return __apex.renderScale(true);"); } catch (_) { /* best effort */ }
+    pullLogs(ctx.base, ctx.sid, out);
+  }
+}
 // photo (#3482): Photo Studio driven by native finger taps from the title screen, every visible control's painted
 // size against the 44 px floor, one shot preset, CAPTURE, CLOSE — and every page error on the way.
 const RECT = (sel) => `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; el.scrollIntoView({ block: "center" }); const r = el.getBoundingClientRect();
@@ -739,6 +777,7 @@ async function run() {
             try { if (sc === "visor") await visorScenario(ctx, opt("url", SITE), opt("visor-pins", "webgl2,webgpu").split(","), report, out);
               else if (sc === "soak") await soakScenario(ctx, opt("url", SITE), opt("soak-pins", "webgpu").split(","), report, out);
               else if (sc === "photo") await photoScenario(ctx, opt("url", SITE), report, out);
+              else if (sc === "flags") await flagsScenario(ctx, opt("url", SITE), report, out);
               else throw new Error("unknown scenario " + sc); }
             catch (e) { (report.scenarioErrors = report.scenarioErrors || {})[sc] = e.message; log(`${sc}: ERROR ${e.message.slice(0, 160)}`); }
           }
