@@ -29,6 +29,8 @@ const DevFlags = (function () {
     viz: { param: "viz", storage: "tlxViz", kind: "string", default: null },
     // URL-only A/B lever: ?tlxMirMrt=0 restores TLX's one-attachment mirror target (tlx.js, A·W14). No storage key.
     mirMrt: { param: "tlxMirMrt", default: true },
+    // URL-only A/B lever: ?tlxPipePin=0 lets three destroy unused render pipelines again (tlx.js pinPipelines, A·W50).
+    pipePin: { param: "tlxPipePin", default: true },
     // URL-only bench lever: ?swFlyby=1 runs the loading flyby on software GL (game.js race entry; default skips).
     swFlyby: { param: "swFlyby", legacyQueryOne: true, default: false },
   };

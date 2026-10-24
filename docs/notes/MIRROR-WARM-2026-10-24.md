@@ -63,7 +63,7 @@ less than 20 s after the first race's frames last drew those wrappers.
 - A sweep at each warm's end (program, deferred mirror and rig warms) and before each prune pins anything built
   before the wrap was armed.
 - It is capped at 512 pipelines and cleared on device loss.
-- `apex26.tlxPipePin=0` turns it off for A/B runs, and `__tlx.memState().warm.pinned` reports the count.
+- `?tlxPipePin=0` (DevFlags `pipePin`, URL only, no storage key) turns it off for A/B runs, and `__tlx.memState().warm.pinned` reports the count.
 - `vendor/three` is untouched, and `prunePool` still drops wrappers (and their geometry), so A·W45's #3677 pool
   behaviour is unchanged.
 

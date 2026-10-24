@@ -1058,7 +1058,7 @@ const TLX = (function () {
         _warmRequested = false;
         _warmPending = null;
         _warmDone = true;
-        _pinnedPipes.clear();   // A·W50: the lost device's pipelines are gone with it
+        if (typeof _pinnedPipes !== "undefined") _pinnedPipes.clear();   // A·W50: the lost device's pipelines go with it (typeof: sandboxed bodies)
         try {
           if (!document.hidden && _nowMs() - _shownAt < 3000) {   // seen on the way back: reload now, uncounted, nothing latched
             setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 300);
@@ -3547,7 +3547,7 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        })().finally(() => { _warmPending = null; _warmDone = true; pinPipelines(); });
+        })().finally(() => { _warmPending = null; _warmDone = true; if (typeof pinPipelines === "function") pinPipelines(); });
       }
       // B-F3.1: THE DEFERRED MIRROR STAGE ALONE, requested by the first mirrorBegin after an AUTO entry warm skipped
       // it (wantMirrorWarm / mirrorWarmGate). The same compiles and W1's 4x4 mirror draw, owned the way the entry
@@ -3584,7 +3584,7 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        })().finally(() => { _warmPending = null; pinPipelines(); });
+        })().finally(() => { _warmPending = null; if (typeof pinPipelines === "function") pinPipelines(); });
       }
       // THE DRAWS NO WARM FRAME HELD (hunt 6 B·H6): the cockpit rig. The scene warm compiles what its frame drew,
       // and a chase start draws no rig — the menu path does not even run that warm (its world was warmed in the
@@ -3675,7 +3675,7 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        })().finally(() => { _warmPending = null; pinPipelines(); job.done(ok); });
+        })().finally(() => { _warmPending = null; if (typeof pinPipelines === "function") pinPipelines(); job.done(ok); });
       }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
@@ -3735,10 +3735,10 @@ const TLX = (function () {
       // released mid-warm (a RenderObject switching pipeline, e.g. one wrapper drawn ccw then cw, frees the old one at
       // once: 3 of the 4 left), so each render pipeline takes one extra use as three creates it, and the sweep (each
       // warm's end, each prune) pins any built before. Capped, and cleared on device loss with the rest.
-      // apex26.tlxPipePin=0 is the A/B handle.
+      // ?tlxPipePin=0 (DevFlags pipePin, URL only) is the A/B handle.
       const PIPE_PIN_CAP = 512;
       let _pipePinOn = true;
-      try { _pipePinOn = localStorage.getItem("apex26.tlxPipePin") !== "0"; } catch (_) { /* no storage: pinned */ }
+      try { _pipePinOn = typeof DevFlags === "undefined" || DevFlags.get("pipePin") !== false; } catch (_) { /* no flags: pinned */ }
       const _pinnedPipes = new Set();
       let _pinArmed = null;   // the Pipelines instance whose _getRenderPipeline pins
       function pinPipe(p) {
