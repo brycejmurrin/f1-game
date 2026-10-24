@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_012GHn3wz5viqzGibR47ZZ46 A·H10 handoff: PR #3679 head cc78008d (code ed53162a; CI fast tier + remote gfx green), next: ready-gate --pr 3679 then READY; A·W47 stacks three patch 17 on this branch (merge-only); round-2 angles in docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md §Handoff
+HANDOFF to:A from:claude:session_01ESG58toY55P3RtVbsMTDST A·Y2 #3675: PR #3683 head eed3db98d, note+parser+test done, CI on head pending; next: ci-watch, ready-gate, READY
