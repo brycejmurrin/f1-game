@@ -112,6 +112,11 @@ on:
         type: boolean
         required: false
         default: false
+      mem_cycles:
+        description: "RACE > QUIT memory cycles on both three.js paths (0 = off, max 16): live GPU buffers/textures and render objects after each quit, game-memcycles-*.json. Costs about 1 macOS runner minute per cycle per path"
+        type: string
+        required: false
+        default: "0"
   push:
     branches: ["cursor/**", "claude/**"]
     paths: [".github/gpu-census-request.json"]
@@ -268,8 +273,8 @@ jobs:
           if rl is None:
             rl = (os.environ.get("INPUT_RELAUNCH") or "").lower() in ("true", "1")
           print("relaunch=" + ("true" if rl else "false"))
-          # RACE > QUIT memory cycles (A·H12, tools/gfx/mem-cycles-lib.mjs): push requests only, 0 = off, at most 16.
-          try: mc = int(req.get("mem_cycles") or 0)
+          # RACE > QUIT memory cycles (A·H12, tools/gfx/mem-cycles-lib.mjs): dispatch input or push request, 0 = off, at most 16.
+          try: mc = int(req.get("mem_cycles") or os.environ.get("INPUT_MEM_CYCLES") or 0)
           except (TypeError, ValueError): mc = 0
           print("mem_cycles=" + str(min(max(mc, 0), 16)))
           # Historical exact-revision experiment: never part of an ordinary
@@ -321,6 +326,7 @@ jobs:
           INPUT_FORCE: ${{ inputs.force || '' }}
           INPUT_CENSUS_ONLY: ${{ inputs.census_only || false }}
           INPUT_RELAUNCH: ${{ inputs.relaunch || false }}
+          INPUT_MEM_CYCLES: ${{ inputs.mem_cycles || '0' }}
           INPUT_CAM: ${{ inputs.cam || 'helmet' }}
           INPUT_ENTRY: ${{ inputs.entry || 'api' }}
 
@@ -568,7 +574,7 @@ jobs:
       # GPU RESIDENCY ACROSS RACE > QUIT (A·H12, docs/notes/GPUMEM-HUNT-2026-10-24.md): N cycles
       # alternating the circuit, live GPUBuffer/GPUTexture and three render objects after each quit,
       # on both three.js paths. SwiftShader cannot answer "does it plateau on a real GPU"; this can.
-      # Opt-in (a push request's mem_cycles); a measurement, never the job's verdict.
+      # Opt-in (the mem_cycles dispatch input or a push request's); a measurement, never the job's verdict.
       - name: Memory cycles — three.js race to quit, WebGPU then WebGL2 (opt-in)
         if: ${{ needs.plan.outputs.mem_cycles != '0' && needs.plan.outputs.mem_cycles != '' && needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true

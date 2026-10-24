@@ -110,7 +110,7 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   const wf = parseYAML(gpuWorkflow);
   const inputs = wf.on.workflow_dispatch.inputs;
   // Appended last: every earlier input keeps its name, position and default.
-  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam", "entry", "relaunch"]);
+  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam", "entry", "relaunch", "mem_cycles"]);
   assert.equal(inputs.track.default, "montreal"); assert.equal(inputs.clock.default, "12"); assert.equal(inputs.tod.default, "");
   assert.equal(inputs.cam.type, "choice");
   assert.deepEqual(inputs.cam.options, ["helmet", "chase", "chase>cockpit"]);
@@ -149,7 +149,7 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
 test("gpu-census threads an entry input (api default; menu / menu-full = the player's RACE!) to every game check (hunt 5 E)", () => {
   const wf = parseYAML(gpuWorkflow);
   const inputs = wf.on.workflow_dispatch.inputs;
-  assert.equal(Object.keys(inputs).at(-2), "entry", "appended last (before relaunch, #3235): every earlier input keeps its position");
+  assert.equal(Object.keys(inputs).at(-3), "entry", "appended last (before relaunch, #3235, and mem_cycles, A·H12): every earlier input keeps its position");
   assert.equal(inputs.entry.type, "choice");
   assert.deepEqual(inputs.entry.options, ["api", "menu", "menu-full"]);
   assert.equal(inputs.entry.default, "api", "a default dispatch and the nightly enter as every earlier census did");
@@ -333,10 +333,13 @@ test("gpu-census relaunch: one profile, one origin, the TLX/WebGPU check twice (
   assert.ok(RELAUNCH_STEP.test(gpuWorkflow), "the controls' cut-out finds the step");
 });
 
-test("gpu-census mem cycles: race to quit on both three.js paths, push-request opt-in, never the verdict (A·H12)", () => {
+test("gpu-census mem cycles: race to quit on both three.js paths, opt-in (dispatch input or push request), never the verdict (A·H12)", () => {
   const wf = parseYAML(gpuWorkflow);
   const plan = wf.jobs.plan, split = plan.steps.find((s) => s.id === "split");
+  const inp = wf.on.workflow_dispatch.inputs.mem_cycles;
+  assert.equal(inp.type, "string"); assert.equal(inp.default, "0", "off by default: a default dispatch and the nightly are unchanged");
   assert.equal(plan.outputs.mem_cycles, "${{ steps.split.outputs.mem_cycles }}");
+  assert.equal(split.env.INPUT_MEM_CYCLES, "${{ inputs.mem_cycles || '0' }}");
   assert.ok(split.run.includes('print("mem_cycles=" + str(min(max(mc, 0), 16)))'), "clamped 0..16 in the plan");
   assert.equal(wf.jobs.census.env.CENSUS_MEM_CYCLES, "${{ needs.plan.outputs.mem_cycles }}");
   const step = wf.jobs.census.steps.find((s) => s.name === "Memory cycles — three.js race to quit, WebGPU then WebGL2 (opt-in)");
