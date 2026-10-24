@@ -347,7 +347,11 @@ export const FAT_UI_MIN_PIECES = 2;
 // runs (p50 ~700 s per half). Keep each runner below the 50-minute fat-UI
 // ceiling with three pieces while the smaller career specs retain the two
 // piece floor. This is a bounded fan-out increase for the measured outlier.
-export const HUD_LAYOUT_MIN_PIECES = 3;
+// FOUR since 2026-10-24 (BUILD-HUNT-2026-10-24 B5): at three, the slowest
+// third (10.9 min mean, 6.8–12.7) was the longest job of 11 of 15 Pages
+// trains that selected hud-layout (~28.5 min of legs per run). A fourth leg
+// costs one more setup (~1.5 job-min) and takes ~2.5 min off those trains.
+export const HUD_LAYOUT_MIN_PIECES = 4;
 // Over-budget / high-timeout specs with NO CI measurement: Playwright --shard
 // so each leg has this many tests, not one 30-minute packed file. A spec with
 // a measured median is split by its measured TIME instead (shards(),
