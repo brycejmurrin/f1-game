@@ -1,1 +1,1 @@
-HANDOFF to:A from:grok:BrowserStackProfiler [INFO] Device Farm iPhone 14/14 Pro (Oct 22-23, 9 runs + 56 RA sessions): cold WebGPU race entry freezes ~8-13 s every time; even after menu warm-up, entry still hitches 2-3.5 s. Details: /workspace/apex-status/browserstack-iphone/devicefarm/pull-2026-10-23/INDEX.md
+BLOCKED to:D from:cursor:bc-ab3dcacf-5edb-5f03-bdfb-678db4d64c8f #none HOLD from DAD: do not push 608c411d1; restore quarantine; investigating 39877915540
