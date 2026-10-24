@@ -84,23 +84,37 @@ function _snapWx() {
 // skipped null writes (`if (v != null)`), so even a corrected mix could not
 // clear it. Fade RGB/scalars toward 0, then land on null when the target is
 // absent — matches the cut path and the sky shaders' >0.001 gate.
-const _mixv = (a, b, s) => {
+// RGB mixes write into `out` when the caller already owns a vector of the
+// right length that is not one of the fade snapshots. A weather blend ticks
+// for WX_BLEND_S seconds; returning a.map() built a new array per colour per
+// frame (sun included). Scalars and a missing/aliased out still allocate once.
+const _mixv = (a, b, s, out) => {
+  const rgb = (src, fn) => {
+    const n = src.length;
+    if (out && out.length === n) {
+      for (let i = 0; i < n; i++) out[i] = fn(src[i], i);
+      return out;
+    }
+    const r = new Array(n);
+    for (let i = 0; i < n; i++) r[i] = fn(src[i], i);
+    return r;
+  };
   if (b == null) {
     if (a == null || s >= 1) return null;
-    if (Array.isArray(a)) return a.map((v) => v * (1 - s));
+    if (Array.isArray(a)) return rgb(a, (v) => v * (1 - s));
     return typeof a === "number" ? a * (1 - s) : a;
   }
   if (a == null) {
     if (s <= 0) return null;
-    if (Array.isArray(b)) return b.map((v) => v * s);
+    if (Array.isArray(b)) return rgb(b, (v) => v * s);
     return typeof b === "number" ? b * s : b;
   }
   if (Array.isArray(b)) {
     if (!Array.isArray(a)) {
       const a0 = typeof a === "number" && isFinite(a) ? a : 0;
-      return b.map((v) => a0 + (v - a0) * s);
+      return rgb(b, (v) => a0 + (v - a0) * s);
     }
-    return b.map((v, i) => {
+    return rgb(b, (v, i) => {
       const ai = a[i];
       const a0 = typeof ai === "number" && isFinite(ai) ? ai : 0;
       return a0 + (v - a0) * s;
@@ -108,11 +122,24 @@ const _mixv = (a, b, s) => {
   }
   return a + (b - a) * s;
 };
+// The live frame vector is safe to reuse only when it is not the snapshot
+// itself (a slice() copy is a different array; an alias would corrupt `from`).
+function _wxOut(live, a, b) {
+  if (!Array.isArray(live) || live === a || live === b) return undefined;
+  const src = Array.isArray(b) ? b : a;
+  if (!Array.isArray(src) || live.length !== src.length) return undefined;
+  return live;
+}
 function _writeWx(s) {
   const { from, to } = _wx;
-  for (const k of WX_FRAME) { const v = _mixv(from.frame[k], to.frame[k], s); if (v != null) G.frame[k] = v; }
+  for (const k of WX_FRAME) {
+    const a = from.frame[k], b = to.frame[k];
+    const v = _mixv(a, b, s, _wxOut(G.frame[k], a, b));
+    if (v != null) G.frame[k] = v;
+  }
   for (const k of WX_SKY) {
-    const v = _mixv(from.sky[k], to.sky[k], s);
+    const a = from.sky[k], b = to.sky[k];
+    const v = _mixv(a, b, s, _wxOut(G.frameSky[k], a, b));
     // cityGlow is the only sky field that is legitimately null (day/twilight);
     // other keys skip a null mix so a missing snap never blanks zenith/sun.
     if (v != null || k === "cityGlow") G.frameSky[k] = v;
@@ -629,8 +656,10 @@ function _applyRaceBody() {
       let el = Math.asin(clamp(d[1], -1, 1)) + (LT.sunElev || 0) * Math.PI / 180;
       let az = Math.atan2(d[0], d[2]) + (LT.sunAzim || 0) * Math.PI / 180;
       el = clamp(el, -1.54, 1.54);
-      const ce = Math.cos(el), nd = [ce * Math.sin(az), Math.sin(el), ce * Math.cos(az)];
-      G.frame.sunDir = nd; G.frameSky.sunDir = nd;
+      const ce = Math.cos(el);
+      // el/az are already locals, so this may rewrite `d` when it is _sunDir.
+      _sunDir[0] = ce * Math.sin(az); _sunDir[1] = Math.sin(el); _sunDir[2] = ce * Math.cos(az);
+      G.frame.sunDir = _sunDir; G.frameSky.sunDir = _sunDir;
     }
     // CLOUD COVER offset (also drives cloud shadows via uCloudCover).
     if (LT.cloudCover) G.frameSky.cloud = clamp((G.frameSky.cloud != null ? G.frameSky.cloud : 0) + LT.cloudCover, 0, 1);
@@ -750,10 +779,16 @@ function _twilightFog(h) {
 // its branch is written for. `xBias` sets the compass angle; the elevation stays
 // at the branch's authored base (dawn 6.71°, dusk 10.37°, day 42.96°). Holding
 // y AND the horizontal length |xz| fixed is what makes a rotation a rotation.
+// Published sun direction. _sunDirAz and the sunElev/sunAzim offset both write
+// this same array; callers read its components before the next write.
+const _sunDir = [0, 0, 0];
 function _sunDirAz(base, xBias) {
   const az = Math.atan2(base[0] + xBias, base[2]);   // the compass angle, as shipped
   const h  = Math.hypot(base[0], base[2]);           // authored horizontal length — preserved
-  return V3.norm([h * Math.sin(az), base[1], h * Math.cos(az)]);
+  const x = h * Math.sin(az), y = base[1], z = h * Math.cos(az);
+  const l = Math.hypot(x, y, z) || 1;               // V3.norm, without a fresh array
+  _sunDir[0] = x / l; _sunDir[1] = y / l; _sunDir[2] = z / l;
+  return _sunDir;
 }
 
 // Specific well-known circuits first (highest priority) — module const, not a
