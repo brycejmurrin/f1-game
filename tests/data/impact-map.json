@@ -13091,6 +13091,7 @@
       ],
       "create": [
         "tests/unit/boot-idle-prefetch.test.mjs",
+        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs",
         "tests/unit/script-loader-preload.test.mjs"
@@ -13111,6 +13112,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "start": [
+        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs",
         "tests/unit/script-loader-preload.test.mjs"

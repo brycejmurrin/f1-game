@@ -265,9 +265,54 @@ test("the boot probe's adapter rides to Gfx.create, so TLX need not ask the GPU 
   await h.rb.start();
   assert.equal(asked, 1, "the unset default probes once");
   assert.equal(seen && seen.adapter, adapter, "Gfx.create got the probe's adapter");
-  // An explicit pick skips the probe: no stale adapter rides along, TLX asks itself.
-  let seen2;
-  const pick = boot({ stored: "three", requestAdapter: async () => adapter, gfxCreate: async (_c, opts) => { seen2 = opts; return { api: "three" }; } });
+  // An explicit pick runs no probe; the eval-time adapter rides along, so TLX's sniff does not ask again (A·H15).
+  let seen2, asked2 = 0;
+  const pick = boot({ stored: "three", requestAdapter: async () => { asked2++; return adapter; }, gfxCreate: async (_c, opts) => { seen2 = opts; return { api: "three" }; } });
   await pick.rb.start();
-  assert.equal(seen2 && seen2.adapter, null, "an explicit pick hands no adapter");
+  assert.equal(seen2 && seen2.adapter, adapter, "an explicit THREE pick hands the eval-time adapter to Gfx.create");
+  assert.equal(asked2, 1, "and asks the GPU process once");
+});
+
+// A·H15 load hunt (2026-10-24, docs/notes/LOAD-HUNT-2026-10-24.md): start() asked for the adapter only after game.js
+// had evaluated (warm SW boot, 150 ms RTT: probe 840 -> 1405 ms, this file evaluated at ~350 ms). The request now goes
+// out when renderer-boot.js evaluates, for a THREE or WGX guess, and start() consumes it instead of asking again.
+test("the adapter request leaves at eval time for a THREE/WGX guess, and start() consumes it", async () => {
+  for (const stored of [null, "three", "webgpu"]) {
+    let asked = 0;
+    const h = boot({ stored, requestAdapter: async () => { asked++; return { tag: "early" }; }, gfxCreate: async () => ({ api: stored || "three" }) });
+    assert.equal(asked, 1, (stored || "unset") + ": requestAdapter() is out before start() runs");
+    const r = await h.rb.start();
+    assert.equal(r.bound, true, (stored || "unset") + ": the backend still binds");
+    assert.equal(asked, 1, (stored || "unset") + ": start() asks no second time");
+  }
+});
+
+test("a GLX guess asks the GPU process nothing at eval", async () => {
+  for (const [stored, extra, why] of [["webgl2", null, "an explicit WebGL2 pick"], ["three", ["apex26.gfxBackendProbe", "three"], "an armed canary"], ["three", ["apex26.gfxBootBound", "webgl2"], "a THREE pick whose last boot bound GLX"]]) {
+    let asked = 0;
+    const ls = new Map([["apex26.gfxBackend", stored], ...(extra ? [extra] : [])]);
+    const ctx = vm.createContext({
+      localStorage: { getItem: (k) => (ls.has(k) ? ls.get(k) : null), setItem() {}, removeItem() {} },
+      sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+      navigator: { gpu: { requestAdapter: async () => { asked++; return {}; } } },
+      document: { createElement: () => ({}), head: { appendChild() {} } },
+    });
+    vm.runInContext(src.replace(/^const\b/gm, "var"), ctx);
+    assert.equal(asked, 0, why);
+  }
+});
+
+test("an explicit THREE pick whose early adapter hangs or rejects hands null after the cap, and TLX asks itself", async () => {
+  let seen = "unset";
+  const hung = boot({ stored: "three", requestAdapter: () => new Promise(() => {}), gfxCreate: async (_c, opts) => { seen = opts.adapter; return { api: "three" }; } });
+  const started = hung.rb.start();
+  await settle();
+  assert.equal(seen, "unset", "create() waits on the early adapter's cap, not past it");
+  hung.fire(4000);
+  assert.equal((await started).bound, true);
+  assert.equal(seen, null, "a hung early adapter rides as null");
+  let seen2 = "unset";
+  const bad = boot({ stored: "three", requestAdapter: () => Promise.reject(new Error("refused")), gfxCreate: async (_c, opts) => { seen2 = opts.adapter; return { api: "three" }; } });
+  assert.equal((await bad.rb.start()).bound, true);
+  assert.equal(seen2, null, "a rejected early adapter rides as null");
 });
