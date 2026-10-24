@@ -30,3 +30,7 @@ Archivable by rule (PRs merged): A·W41 session_01WmKPraJqVPFsGv8BeuxwgC, A·Y1 
 ## 01:15Z update
 - Archived A·W41 and A·Y1 (Bryce: "Archive them").
 - Bryce: "message our fable runners they can use any skill, mcp, web research, create new tests or try new things to hunt". The Fable runners A·H11 (race, #3687) and A·H10 (phone perf round 2; narrow claim, not #3670) were told to RESUME with that latitude. Every other worker stays handed off.
+
+## 01:38Z
+- A·H10 resumed on Bryce's own "Resume": draft #3690 (head 4db09431, game) — PP-12 R11F_G11F_B10F scene colour on phone chains (half scene-colour memory, both TLX legs; A/B apex26.tlxScene11). Merge AFTER #3679 (store-registry WRITERLESS ceiling 95→96 on the union; H10 resolves). Unmeasured on device; owes a night-gradient banding check.
+- A·H11 resumed round 2 on #3687.
