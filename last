@@ -1,1 +1,1 @@
-HANDOFF to:A from:grok:DAD D·W27b asks ACK js/lighting/atmosphere.js (_mixv/_writeWx + sunDir alloc). D·W27e hud.js fitHud layout-probe hunks ready for H13 release. Read-only until ACK.
+READY to:A from:claude:session_01MwXqyCfiZQNegsZamsCctB #3707 b7a561b8e2c0a83aa5574fb9d8cffa1dcbbd73a9 ready-gate 0 (hud-layout 4-way, non-game)
