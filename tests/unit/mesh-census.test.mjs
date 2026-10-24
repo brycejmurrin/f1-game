@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   distanceBand, classifySource, classifyPass, aggregateRows, tableRows,
   formatBandTable, recommend, parseSummaryLine, perFrame,
+  passKeyTotals, passTotalsFromKeys, groupTotals, formatGroups,
 } from "../../tools/perf/mesh-census-lib.mjs";
 
 test("distanceBand: 150 m cut", () => {
@@ -107,4 +108,53 @@ test("parseSummaryLine reads = mesh-census JSON", () => {
   const log = "noise\n= mesh-census {\"tracks\":[\"monaco\"],\"errors\":0}\n";
   assert.deepEqual(parseSummaryLine(log), { tracks: ["monaco"], errors: 0 });
   assert.equal(parseSummaryLine("nope"), null);
+});
+
+test("aggregateRows shadow:true keeps the shadow bucket apart; aux never", () => {
+  const rows = [
+    { pass: "main", source: "ribbon", band: "near", tris: 10, calls: 1, draws: 1 },
+    { pass: "shadow", source: "ribbon", band: "near", tris: 7, calls: 1, draws: 1 },
+    { pass: "aux", source: "other", band: "near", tris: 2, calls: 1, draws: 1 },
+  ];
+  const off = aggregateRows(rows);
+  assert.equal(off.by.shadow, undefined, "default still drops shadow (#2631)");
+  const on = aggregateRows(rows, { shadow: true });
+  assert.equal(on.by.shadow.ribbon.near.tris, 7);
+  assert.equal(on.by.aux, undefined);
+  assert.deepEqual(tableRows(on, 1, ["shadow"]).map((r) => r.pass), ["shadow"]);
+});
+
+test("passKeyTotals: one row per render target, per-frame means, heaviest first", () => {
+  const s = [
+    { pass: "main", passKey: "output 844x390", calls: 70, tris: 100000 },
+    { pass: "main", passKey: "output 844x390", calls: 72, tris: 104000 },
+    { pass: "mirror", passKey: "output 168x48", calls: 14, tris: 30000 },
+    { pass: "shadow", passKey: "TLXSunShadow.color 1024x1024", calls: 26, tris: 80000 },
+  ];
+  const t = passKeyTotals(s, 2);
+  assert.deepEqual(t.map((r) => r.passKey), ["output 844x390", "TLXSunShadow.color 1024x1024", "output 168x48"]);
+  assert.equal(t[0].renders, 1);
+  assert.equal(t[0].tris, 102000);
+  assert.equal(t[1].renders, 0.5, "an amortised shadow rebuild reads as a fraction of a render per frame");
+  const p = passTotalsFromKeys(t);
+  assert.equal(p.main.tris, 102000);
+  assert.equal(p.shadow.tris, 40000);
+  assert.equal(p.mirror.calls, 7);
+});
+
+test("groupTotals: distance histogram per mesh group, top-N per pass", () => {
+  const rows = [
+    { pass: "main", group: "unflagged v9000", tris: 100, calls: 1, dist: 50 },
+    { pass: "main", group: "unflagged v9000", tris: 200, calls: 1, dist: 200 },
+    { pass: "main", group: "unflagged v9000", tris: 300, calls: 1, dist: 450 },
+    { pass: "main", group: "unflagged v9000", tris: 400, calls: 1, dist: 900 },
+    { pass: "main", group: "inst", tris: 5, calls: 1, dist: NaN },
+    { pass: "mirror", group: "unflagged v9000", tris: 60, calls: 1, dist: 700 },
+  ];
+  const g = groupTotals(rows, 1, { top: 1 });
+  assert.equal(g.length, 2, "top 1 per pass");
+  assert.deepEqual(g[0], { pass: "main", group: "unflagged v9000", calls: 4, tris: 1000, bins: [100, 200, 300, 400, 0] });
+  assert.deepEqual(g[1].bins, [0, 0, 0, 60, 0]);
+  assert.deepEqual(groupTotals(rows, 1).find((r) => r.group === "inst").bins, [0, 0, 0, 0, 5], "no distance → unknown bin");
+  assert.match(formatGroups(g), /\| main \| unflagged v9000 \| 4 \| 1000 \| 100 \| 200 \| 300 \| 400 \|/);
 });

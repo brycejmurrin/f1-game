@@ -60,12 +60,13 @@ export function emptyCell() {
  * rows: [{ pass, source, band, draws, tris, calls }]
  * → nested map pass → source → band → totals (sums), plus pass totals.
  */
-export function aggregateRows(rows, { threshold = 150 } = {}) {
+export function aggregateRows(rows, { threshold = 150, shadow = false } = {}) {
   const by = Object.create(null);
   const passTotals = Object.create(null);
   for (const r of rows || []) {
     const pass = r.pass || classifyPass(r.passKey || r.key);
-    if (pass === "shadow" || pass === "aux") continue; // #2631: not the main scene
+    // #2631: shadow / aux are never the main scene; shadow is kept only on request, in its own bucket.
+    if (pass === "aux" || (pass === "shadow" && !shadow)) continue;
     const source = r.source || classifySource(r.group || r.label);
     const band = r.band || distanceBand(r.dist, threshold);
     by[pass] ||= Object.create(null);
@@ -99,9 +100,9 @@ export function perFrame(cell, frames) {
  * Flatten one circuit/backend aggregate into table rows for markdown / JSON.
  * frames: measured game frames used as the denominator.
  */
-export function tableRows(agg, frames) {
+export function tableRows(agg, frames, passes = ["main", "mirror"]) {
   const out = [];
-  for (const pass of ["main", "mirror"]) {
+  for (const pass of passes) {
     const sources = agg.by[pass] || {};
     for (const source of ["ribbon", "props", "other"]) {
       const bands = sources[source] || {};
@@ -186,6 +187,84 @@ export function recommend(stats) {
           : ` (main far ribbon share ${(farShare * 100).toFixed(0)}% / ${mainFar} tris).`)
       : `#2657 step 2 does NOT clearly pay on these counts (far ribbon share ${farUnmeasured ? "unmeasured on this backend" : (farShare * 100).toFixed(0) + "%"}, mirror/main ${(mirrorShare * 100).toFixed(0)}%); keep as a phone-timeline experiment only.`,
   };
+}
+
+/**
+ * Per-render-target totals from the renderer.render wrap's samples:
+ * [{ pass, passKey, calls, tris }] → rows sorted by tris, per-frame means.
+ * Keeps each target (sun shadow vs car shadow vs mirror RT) apart so no pass is
+ * folded into another (#2631 contract).
+ */
+export function passKeyTotals(samples, frames) {
+  const n = Math.max(1, frames | 0);
+  const m = new Map();
+  for (const s of samples || []) {
+    const key = s.passKey || "?";
+    let e = m.get(key);
+    if (!e) m.set(key, e = { passKey: key, pass: s.pass || classifyPass(key), renders: 0, calls: 0, tris: 0 });
+    e.renders += 1;
+    e.calls += s.calls || 0;
+    e.tris += s.tris || 0;
+  }
+  return [...m.values()]
+    .map((e) => ({ ...e, renders: +(e.renders / n).toFixed(2), calls: +(e.calls / n).toFixed(1), tris: Math.round(e.tris / n) }))
+    .sort((a, b) => b.tris - a.tris || b.calls - a.calls);
+}
+
+/**
+ * Which meshes carry the triangles: rows grouped by pass + mesh label, with a
+ * distance histogram (metres from the player camera), per-frame means, the
+ * `top` heaviest per pass. Feeds the #2657 "is the far ribbon terrain or
+ * road?" question that the band table alone cannot answer.
+ */
+export const DIST_EDGES = Object.freeze([150, 300, 600]);
+export function groupTotals(rows, frames, { top = 8 } = {}) {
+  const n = Math.max(1, frames | 0);
+  const m = new Map();
+  for (const r of rows || []) {
+    const key = (r.pass || "?") + "\u0000" + (r.group || "?");
+    let e = m.get(key);
+    if (!e) m.set(key, e = { pass: r.pass || "?", group: r.group || "?", calls: 0, tris: 0, distTris: 0, bins: [0, 0, 0, 0, 0] });
+    e.calls += r.calls || 0;
+    e.tris += r.tris || 0;
+    const d = r.dist;
+    let b = 4;   // unknown
+    if (Number.isFinite(d)) { b = 0; while (b < DIST_EDGES.length && d >= DIST_EDGES[b]) b++; }
+    e.bins[b] += r.tris || 0;
+  }
+  const byPass = {};
+  for (const e of m.values()) (byPass[e.pass] ||= []).push(e);
+  const out = [];
+  for (const pass of Object.keys(byPass)) {
+    byPass[pass].sort((a, b) => b.tris - a.tris);
+    for (const e of byPass[pass].slice(0, top)) {
+      out.push({ pass, group: e.group, calls: +(e.calls / n).toFixed(1), tris: Math.round(e.tris / n),
+        bins: e.bins.map((t) => Math.round(t / n)) });
+    }
+  }
+  return out;
+}
+
+/** Markdown for groupTotals(): bins are <150 / 150-300 / 300-600 / ≥600 m / unknown. */
+export function formatGroups(rows) {
+  const lines = ["| pass | mesh group | calls/frame | tris/frame | <150 m | 150–300 | 300–600 | ≥600 m |",
+    "|---|---|---:|---:|---:|---:|---:|---:|"];
+  for (const r of rows) {
+    lines.push(`| ${r.pass} | ${r.group} | ${r.calls} | ${r.tris} | ${r.bins[0]} | ${r.bins[1]} | ${r.bins[2]} | ${r.bins[3]} |`);
+  }
+  return lines.join("\n");
+}
+
+/** Per-pass totals (main / mirror / shadow / aux) from passKeyTotals rows. */
+export function passTotalsFromKeys(keyRows) {
+  const out = {};
+  for (const r of keyRows || []) {
+    const t = out[r.pass] ||= { calls: 0, tris: 0, renders: 0 };
+    t.calls = +(t.calls + r.calls).toFixed(1);
+    t.tris += r.tris;
+    t.renders = +(t.renders + r.renders).toFixed(2);
+  }
+  return out;
 }
 
 /** Parse the tool's `= mesh-census {...}` summary line from a log. */
