@@ -1937,6 +1937,34 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
 
 export const DEFAULT_JOBS = 1;
 
+/** THE CLI'S OWN WIDTH WHEN NO --jobs IS GIVEN (2026-10-24, BUILD-HUNT B4).
+ *  Serial, the full floor is ~47 min of file time on a 4-core container; at
+ *  --jobs=3 it measured 16.1 min. deploy.mjs's gate measured --jobs=2 peaking
+ *  at loadavg 2.57, under the >= 3 line this repo calls too busy to measure.
+ *  So `npm run test:tooling-fast` takes AUTO_JOBS only on a quiet box: no live
+ *  Playwright suite or host browser (rule 4: no node suite on top of a browser
+ *  run) and 1-min loadavg under AUTO_JOBS_MAX_LOAD; otherwise DEFAULT_JOBS.
+ *  An explicit --jobs (CI's 4, the deploy gate's 2) and the programmatic
+ *  runToolingFast() default are unchanged. */
+export const AUTO_JOBS = 2;
+export const AUTO_JOBS_MAX_LOAD = 2;
+
+/** Pick the CLI width from the box's state: `{ busy, load1 }` → `{ jobs, why }`. Unknown state is treated as busy. */
+export function autoJobs({ busy, load1 } = {}) {
+  if (busy !== false) return { jobs: DEFAULT_JOBS, why: busy ? "a Playwright suite or host browser is live" : "browser occupancy unknown" };
+  if (!(Number(load1) < AUTO_JOBS_MAX_LOAD)) return { jobs: DEFAULT_JOBS, why: `loadavg ${Number(load1).toFixed(2)} >= ${AUTO_JOBS_MAX_LOAD}` };
+  return { jobs: AUTO_JOBS, why: `no live browser run, loadavg ${Number(load1).toFixed(2)} < ${AUTO_JOBS_MAX_LOAD}` };
+}
+
+async function probeAutoJobs() {
+  let busy = null;
+  try {
+    const { scanPlaywrightLines } = await import("./playwright-occupancy.mjs");
+    busy = scanPlaywrightLines(execFileSync("ps", ["-eo", "pid,args"], { encoding: "utf8" })).busy;
+  } catch (_) { /* no ps: stay serial */ }
+  return autoJobs({ busy, load1: os.loadavg()[0] });
+}
+
 /** Paths that force a full tooling-fast run in --changed mode (fail-safe). */
 const TOOLING_FAST_CHANGED_RUN_ALL = [
   /^tests\/groups\.json$/,
@@ -2375,6 +2403,7 @@ export function parseToolingFastArgv(argv) {
     quiet: argv.includes("--quiet"),
     stop: argv.includes("--stop"),
     jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
+    jobsExplicit: val("jobs") !== undefined,
     order: val("order"),
     record: argv.includes("--record"),
     shard: val("shard"),
@@ -2431,6 +2460,11 @@ if (isMain) {
     files0 = [...TOOLING_FAST_FILES];
   }
   const files = ciShardFiles(files0, parsed.shard);
+  if (!parsed.jobsExplicit) {
+    const pick = await probeAutoJobs();
+    parsed.jobs = pick.jobs;
+    console.log(`[tooling-fast] jobs=${pick.jobs} (auto: ${pick.why}; pass --jobs=N to choose)`);
+  }
   const { ok } = await runToolingFast(files, {
     jobs: parsed.jobs,
     bail: parsed.bail,
