@@ -143,10 +143,18 @@
     // its goldens and env/mirror parity stay as they were). apex26.tlxScene11="1" forces it on, "0" keeps
     // RGBA16F — the Device Farm A/B pair. 11/11/10 keeps 6/6/5 mantissa bits: a banding check on a night
     // gradient is the device evidence this still owes (docs/notes/PERF-KNOWN-WINS-2026-10-23.md row 15).
-    let scene11 = r11Renderable && !!ctx.isMobile;
+    // WEBGL2 LEG ONLY. On WebGPU three sizes the fragment output to the target's three components, and the
+    // spec refuses a src-alpha blend factor when the fragment output has no alpha (gpuweb "validating
+    // GPUFragmentState"; Dawn RenderPipeline.cpp "is reading alpha but it is missing from fragment output"):
+    // every blended material's pipeline failed on the real-GPU census (macos-latest run 40052670537 on
+    // 886e476f — decals, glass and particles would vanish). GL has no such rule, so the format stays a WebGL2
+    // win and the WebGPU leg keeps RGBA16F whatever the knob says. A vendored three that kept a vec4 output
+    // for RGB targets (the spec allows "RGB requires vec3 or vec4") would let the WebGPU leg take it too.
+    const _r11Blendable = r11Renderable && !(renderer.backend && renderer.backend.isWebGPUBackend);
+    let scene11 = _r11Blendable && !!ctx.isMobile;
     try {
       const k = localStorage.getItem("apex26.tlxScene11");
-      if (k === "0") scene11 = false; else if (k === "1") scene11 = r11Renderable;
+      if (k === "0") scene11 = false; else if (k === "1") scene11 = _r11Blendable;
     } catch (_) { /* no storage: the default above */ }
     // sceneHdr is fixed for the chain's life — hdr is decided once at factory time.
     let _sceneHdr = hdr ? 1 : 0;
