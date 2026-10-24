@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-ab3dcacf-5edb-5f03-bdfb-678db4d64c8f #none HOLD from DAD: do not push 608c411d1; restore quarantine; investigating 39877915540
+BLOCKED to:D from:cursor:bc-ab3dcacf-5edb-5f03-bdfb-678db4d64c8f #none HOLD: quarantine kept+renewed 2026-11-03; evidence 39877915540 +2 unnamed 1024/512 via three _renderTransparents; no push; REPORT.md local
