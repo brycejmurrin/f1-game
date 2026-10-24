@@ -77,16 +77,18 @@ a pipeline switched away from and back keeps its first build.
 |---|---|---|---|---|
 | base | 79 | 14 | 13 | — |
 | sweep pin only (`fix1`) | 69 | 4 | 3 | 67 |
-| create-time pin (`fix2`) | 66 | 4 | 0 (new states) | 68 |
+| create-time pin (`fix2`) | 66 | 4 | 3 on the recorded fields (a field not recorded differs) | 68 |
 
 With the create-time pin, `programWarm` inside `mirrorPrepare` fell from 1.1 s to 25 ms.
 
-The 4 left are pipeline states that the menu world never draws:
+The 4 left:
 
 - `none/ccw` and `none/cw` double-sided pairs of one lit program;
 - two `-8`-biased decal states.
 
-They are the next target: warm them in the menu (see below).
+Three of them match a pinned pipeline on everything the census recorded (shaders, targets, bias, cull, winding), yet
+three keyed them as new, so they differ in a field it did not record: the vertex-buffer layout or the blend. They are
+the next target: name that field, then warm those states in the menu (see below).
 
 Lavapipe-only artifacts, not on a phone:
 
