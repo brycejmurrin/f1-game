@@ -4422,7 +4422,7 @@ function rankFinishers() {
 // A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
 // Cutting _lk.track (a cache: lk.track !== track rebuilds it) leaves any other stale scratch holding a car, not a circuit.
 function releaseFieldScratch() {
-  ranked.length = 0; parked.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(); pits.releaseTrack();
+  ranked.length = 0; parked.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(); pits.releaseTrack();
   _wallCtx.track = null; _tfSamp.track = null; _tfSamp.s = NaN;
   for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i]._lk) cars[i]._lk.track = null;
 }
@@ -4615,7 +4615,7 @@ function update(dt) {
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
 
   PerfSpans.begin("collide"); let field = ranked; if (parked.length) { field = _colField; field.length = 0; for (let i = 0; i < ranked.length; i++) field.push(ranked[i]); for (let i = 0; i < parked.length; i++) field.push(parked[i]); }
-  collide.resolveCollisions(field, dt); _colField.length = 0; PerfSpans.end("collide");
+  collide.resolveCollisions(field, dt); PerfSpans.end("collide");
 
   // Rapier debris side-world: reads car poses (kinematic mirrors), owns only
   // its own shards, writes NOTHING back to gameplay. Inert unless enabled.
