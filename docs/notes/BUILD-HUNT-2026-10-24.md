@@ -41,7 +41,7 @@ Tooling-fast step only, 18 green runs where all three shards ran:
 
 | id | lever | verdict | evidence | minutes |
 |---|---|---|---|---|
-| B1 | `tests/data/tooling-fast-timings.json` covers 396 of 855 files and was last rewritten 2026-10-19 (local box, `--jobs=3`). `applyFileShard` packs the 459 unmeasured files at a fallback cost and `scheduleLongestFirst` starts them FIRST in each shard (log: `132 with a recorded duration, 153 unmeasured scheduled first`). | CONFIRMED (cause); win modelled, not yet measured | Simulation (LPT pack with the table, 4-slot greedy run with CI-median truth) reproduces the observed split: 7.39 / 6.30 / 4.79 min vs measured means 6.44 / 6.69 / 5.28 and mean-max 7.39. With a CI-median table: 6.01 / 6.01 / 6.01. | −0.7 min mean, −1.5 min p90 expected under measured runner noise (§After B1); 2 runs (7.4, 7.5) consistent, not yet a measured win |
+| B1 | `tests/data/tooling-fast-timings.json` covers 396 of 855 files and was last rewritten 2026-10-19 (local box, `--jobs=3`). `applyFileShard` packs the 459 unmeasured files at a fallback cost and `scheduleLongestFirst` starts them FIRST in each shard (log: `132 with a recorded duration, 153 unmeasured scheduled first`). | CONFIRMED (cause); win modelled, not yet measured | Simulation (LPT pack with the table, 4-slot greedy run with CI-median truth) reproduces the observed split: 7.39 / 6.30 / 4.79 min vs measured means 6.44 / 6.69 / 5.28 and mean-max 7.39. With a CI-median table: 6.01 / 6.01 / 6.01. | −0.7 min mean, −1.5 min p90 expected under measured runner noise (§After B1); 3 runs (7.4, 7.5, 7.5) consistent, not yet a measured win |
 | B2 | Four tooling shards instead of three. | PROPOSED | Noise-free: 4.51 min × 4; under measured runner noise E[max] 5.57 vs 7.22 (§After B1). One more runner per run (~0.4 min setup: checkout 0.1 + setup-apex 0.1 + hash/cache). | a further −1.5 min wall; +~0.4 job-min per run |
 | B3 | The table rots again: every new test file is unmeasured until someone runs `--record` locally, and local timings are a different machine and `--jobs`. | PROPOSED | 459 files went unmeasured in 5 days. Fix: a harvest CLI that folds the CI shard logs' per-file durations (median) into the table, run by the existing timings bot or by hand. | keeps B1's −1.4 min |
 | B4 | `npm run test:tooling-fast` (the pre-push floor every session runs) defaults to `--jobs=1`. | MEASURING | see §Local floor | — |
@@ -67,9 +67,10 @@ B4 (auto `--jobs=2` on a quiet box) is its own PR, which OrchA 32 approved with 
 | 40056252968 (`3a3b6c30`) | A (1/3) | 24.0 | 28.4 | 1.19 | 7.5 |
 | | B (2/3) | 24.0 | 21.6 | 0.90 | 5.5 |
 | | C (3/3) | 24.0 | 23.3 | 0.97 | 6.1 |
+| 40057075049 (`8c70def0`) | A / B / C | 24.0 each | — | — | 7.5 / 7.1 / 6.9 |
 
-The table splits the work evenly on paper, yet the slowest shard ran 7.4 and
-7.5 min, against an 18-run baseline of 7.39 mean and 7.57 p50. Shard A's files
+The table splits the work evenly on paper, yet the slowest shard ran 7.4, 7.5
+and 7.5 min (spread between shards 3.4, 2.0, 0.6 min), against an 18-run baseline of 7.39 mean and 7.57 p50. Shard A's files
 ran 18–19 % over their medians on both runs, at the same load as B and C
 (mean loadavg 6.2 / 6.8 / 6.7), and uniformly over the whole run, including
 after its two heavy files ended. Contention from those files is ruled out.
@@ -88,10 +89,10 @@ predicted wall × a ratio sampled from the 30 measured ones):
 | new table, 3 shards (6.23 / 6.05 / 6.27) | 7.22 | 7.41 | 8.00 |
 | new table, 4 shards (B2: 4.77 / 4.51 / 4.51 / 4.77) | 5.57 | 5.67 | 6.13 |
 
-The model overstates the old mean (7.92 vs 7.39 observed) and puts the two
-after-runs (7.4, 7.5) right at its new p50. Expected B1 gain: about −0.7 min
+The model overstates the old mean (7.92 vs 7.39 observed) and puts the three
+after-runs (7.4, 7.5, 7.5) right at its new p50. Expected B1 gain: about −0.7 min
 mean and −1.5 min at p90. That is real but smaller than the −1.4 min the
-noise-free simulation promised, and two runs cannot show it. B2 (a fourth
+noise-free simulation promised, and three runs cannot show it: B1 lands as a coverage fix plus a tool, and the ≥10-run re-measure after B2 decides. B2 (a fourth
 shard) is the bigger lever: about −1.65 min mean more, for one runner per run.
 
 ## Re-consider: existing levers
