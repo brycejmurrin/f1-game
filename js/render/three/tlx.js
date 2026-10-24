@@ -1058,6 +1058,7 @@ const TLX = (function () {
         _warmRequested = false;
         _warmPending = null;
         _warmDone = true;
+        _pinnedPipes.clear();   // A·W50: the lost device's pipelines are gone with it
         try {
           if (!document.hidden && _nowMs() - _shownAt < 3000) {   // seen on the way back: reload now, uncounted, nothing latched
             setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 300);
@@ -3546,7 +3547,7 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        })().finally(() => { _warmPending = null; _warmDone = true; });
+        })().finally(() => { _warmPending = null; _warmDone = true; pinPipelines(); });
       }
       // B-F3.1: THE DEFERRED MIRROR STAGE ALONE, requested by the first mirrorBegin after an AUTO entry warm skipped
       // it (wantMirrorWarm / mirrorWarmGate). The same compiles and W1's 4x4 mirror draw, owned the way the entry
@@ -3583,7 +3584,7 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        })().finally(() => { _warmPending = null; });
+        })().finally(() => { _warmPending = null; pinPipelines(); });
       }
       // THE DRAWS NO WARM FRAME HELD (hunt 6 B·H6): the cockpit rig. The scene warm compiles what its frame drew,
       // and a chase start draws no rig — the menu path does not even run that warm (its world was warmed in the
@@ -3674,7 +3675,7 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        })().finally(() => { _warmPending = null; job.done(ok); });
+        })().finally(() => { _warmPending = null; pinPipelines(); job.done(ok); });
       }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
@@ -3725,10 +3726,43 @@ const TLX = (function () {
       // Cadence on the CLOCK, never a frame count — rAF runs at a fraction of
       // a Hz on a software rasteriser, where a "% N frames" gate fires either
       // never or constantly (measured, PERF-FINDINGS 2n).
+      // A·W50: A DROPPED WRAPPER MUST NOT TAKE ITS PIPELINE WITH IT. three r186 destroys a render pipeline (and its
+      // programs) when the last RenderObject using it is deleted (Pipelines.delete -> _releasePipeline at usedTimes 0),
+      // so every pipeline the menu warm built for a world mesh not drawn for 20 s (the garage on screen) was destroyed
+      // here, and race entry rebuilt it synchronously: lavapipe census, Monza after a full menu warm, 13 of the 14
+      // race-entry pipelines byte-identical (vertex + fragment WGSL, targets, depth bias, cull) to ones the menu had
+      // built; iPhone 14 Pro ~1.2 s each (docs/notes/MIRROR-WARM-2026-10-24.md). A sweep at warm ends missed the ones
+      // released mid-warm (a RenderObject switching pipeline, e.g. one wrapper drawn ccw then cw, frees the old one at
+      // once: 3 of the 4 left), so each render pipeline takes one extra use as three creates it, and the sweep (each
+      // warm's end, each prune) pins any built before. Capped, and cleared on device loss with the rest.
+      // apex26.tlxPipePin=0 is the A/B handle.
+      const PIPE_PIN_CAP = 512;
+      let _pipePinOn = true;
+      try { _pipePinOn = localStorage.getItem("apex26.tlxPipePin") !== "0"; } catch (_) { /* no storage: pinned */ }
+      const _pinnedPipes = new Set();
+      let _pinArmed = null;   // the Pipelines instance whose _getRenderPipeline pins
+      function pinPipe(p) {
+        if (!p || _pinnedPipes.size >= PIPE_PIN_CAP || _pinnedPipes.has(p) || !p.vertexProgram || !p.fragmentProgram) return;   // render pipelines only
+        p.usedTimes++; p.vertexProgram.usedTimes++; p.fragmentProgram.usedTimes++;
+        _pinnedPipes.add(p);
+      }
+      function pinPipelines() {
+        const P = _pipePinOn && renderer && renderer._pipelines, caches = P && P.caches;
+        if (!caches || typeof caches.values !== "function") return _pinnedPipes.size;
+        if (_pinArmed !== P && typeof P._getRenderPipeline === "function") {
+          const get = P._getRenderPipeline;
+          P._getRenderPipeline = function () { const p = get.apply(this, arguments); pinPipe(p); return p; };
+          _pinArmed = P;
+        }
+        for (const p of caches.values()) pinPipe(p);
+        return _pinnedPipes.size;
+      }
       const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 20000;
       function prunePool(now) {
+        if (!_pinArmed) pinPipelines();   // arm the pin at the first present, before any warm builds a pipeline
         if (now - _pruneLast < PRUNE_EVERY_MS) return;
         _pruneLast = now;
+        pinPipelines();
         let w = 0;
         for (let i = 0; i < meshPool.length; i++) {
           const m = meshPool[i];
@@ -6599,7 +6633,7 @@ const TLX = (function () {
                        draw: _warmStages.draw, drawn: _warmStages.drawn, garageScene: _warmStages.garageScene,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
-                       pending: !!_warmPending, done: _warmDone, history: _warmHistory.slice() };
+                       pending: !!_warmPending, done: _warmDone, history: _warmHistory.slice(), pinned: _pinnedPipes.size };   // A·W50
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
             // THIS WAS ALWAYS undefined. `renderer.backend.data` is a
             // WeakMap, which has no `.size`, so the guard never passed and the

@@ -13896,7 +13896,8 @@
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "dropWrapper": [
-        "tests/unit/render-final-contracts.test.mjs"
+        "tests/unit/render-final-contracts.test.mjs",
+        "tests/unit/tlx-pipe-pin-warm.test.mjs"
       ],
       "ensureStream": [
         "tests/unit/tlx-hunt3.test.mjs",
@@ -13949,6 +13950,9 @@
       "onErr": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "pinPipelines": [
+        "tests/unit/tlx-pipe-pin-warm.test.mjs"
+      ],
       "pinSkyMaterial": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs"
@@ -13959,6 +13963,9 @@
       "prepareMirrorTarget": [
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
+      ],
+      "prunePool": [
+        "tests/unit/tlx-pipe-pin-warm.test.mjs"
       ],
       "pumpAnimation": [
         "tests/unit/tlx-anim-pump.test.mjs"
@@ -14064,15 +14071,18 @@
       ],
       "startMirrorWarm": [
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-pipe-pin-warm.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "startProgramWarm": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-pipe-pin-warm.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "startRigWarm": [
+        "tests/unit/tlx-pipe-pin-warm.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "sweepGeoMirrors": [
