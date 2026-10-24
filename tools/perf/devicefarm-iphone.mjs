@@ -669,6 +669,45 @@ async function flagsScenario(ctx, url, report, out) {
     pullLogs(ctx.base, ctx.sid, out);
   }
 }
+// lsab (patch 17 #3685, #3690): a localStorage A/B on one pinned path. --ls-arms "A=key:val,key:val|B=|A=key:val": each
+// arm sets its keys (an empty value removes the key, a bare "B=" sets nothing), loads a fresh page (flags are read at
+// boot), times one entry, then samples --ls-win-s seconds in --ls-cam (default helmet) with the governor left alone.
+// Each row reads back the keys, GLX.__tlx.postState() tag/depth discard counters and mirrorState().discards, so an arm
+// that did not switch the code path shows. Every key an arm touched is removed at the end.
+const LS_PARSE = (spec) => spec.split("|").map((a) => { const [name, kv = ""] = a.split("="); return { name, kv: kv ? kv.split(",").map((p) => { const i = p.indexOf(":"); return [p.slice(0, i), p.slice(i + 1)]; }) : [] }; });
+const LS_SET = (kv, all) => `const s = GameStore.store; ${all.map((k) => `s.rawDel(${JSON.stringify(k)});`).join(" ")}
+  ${kv.map(([k, v]) => `s.rawSet(${JSON.stringify(k)}, ${JSON.stringify(v)});`).join(" ")} return true;`;
+const LS_READ = (keys) => `(() => { const o = { keys: {} }; ${keys.map((k) => `o.keys[${JSON.stringify(k)}] = localStorage.getItem(${JSON.stringify(k)});`).join(" ")}
+  try { const t = GLX.__tlx.postState(); o.tag = t.tag; o.depth = t.depth; } catch (e) { o.postErr = String(e).slice(0, 80); }
+  try { o.mirrorDiscards = GLX.__tlx.mirrorState().discards; } catch (_) {}
+  try { o.backend = __apex.diag().env.backend; } catch (_) {}
+  return o; })()`;
+async function lsabScenario(ctx, url, report, out) {
+  const [track, tod = "night"] = opt("track", "monza:night").split(":");
+  const pin = opt("ls-pin", "webgpu"), winS = Number(opt("ls-win-s", "30")), cam = opt("ls-cam", "helmet");
+  const arms = LS_PARSE(opt("ls-arms", "A=apex26.tlxTagDiscard:0,apex26.tlxDepthDiscard:0|B=|A=apex26.tlxTagDiscard:0,apex26.tlxDepthDiscard:0"));
+  const keys = [...new Set(arms.flatMap((a) => a.kv.map(([k]) => k)))];
+  const R = report.lsab = { pin, track, tod, cam, arms, rows: [] };
+  await exec(ctx.base, ctx.sid, PIN(pin));
+  await primeOnce(ctx, url, report);
+  try {
+    for (const [i, arm] of arms.entries()) {
+      await exec(ctx.base, ctx.sid, LS_SET(arm.kv, keys));
+      const r = await openUrl(ctx, withApex(url));
+      const entry = await timedEntry(ctx, `lsab ${arm.name}`, KICK_FOR(track, tod));
+      await exec(ctx.base, ctx.sid, GO);
+      try { await exec(ctx.base, ctx.sid, `return __apex.camera(${JSON.stringify(cam)});`); } catch (_) { /* keep default */ }
+      const meta = rowMeta(ctx, report, i, entry);
+      const s2 = await sampleWin(ctx, winS * 1000, 3000, "ls: " + LS_READ(keys));
+      R.rows.push({ arm: arm.name, i, api: r.api, entryMs: entry.windowMs, ...meta, ...s2 });
+      log(`lsab ${arm.name}: api=${r.api} ${JSON.stringify(s2.win && { fps: s2.win.fps, p95: s2.win.p95, p99: s2.win.p99, n50: s2.win.n50 })} ls=${JSON.stringify(s2.ls)}`);
+      try { shot(ctx.base, ctx.sid, path.join(out, `lsab-${i}-${arm.name}.png`)); } catch (_) { /* no shot */ }
+    }
+  } finally {
+    try { await exec(ctx.base, ctx.sid, LS_SET([], keys)); } catch (_) { /* best effort */ }
+    pullLogs(ctx.base, ctx.sid, out);
+  }
+}
 // photo (#3482): Photo Studio driven by native finger taps from the title screen, every visible control's painted
 // size against the 44 px floor, one shot preset, CAPTURE, CLOSE — and every page error on the way.
 const RECT = (sel) => `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; el.scrollIntoView({ block: "center" }); const r = el.getBoundingClientRect();
@@ -810,6 +849,7 @@ async function run() {
             // --visor-pins / --soak-pins: the visor delta shows only where frames are not pinned at 60 Hz (iPhone 14
             // WebGL2, ledger rows 1-4); #3479's before-numbers are WebGPU.
             try { if (sc === "visor") await visorScenario(ctx, opt("url", SITE), opt("visor-pins", "webgl2,webgpu").split(","), report, out);
+              else if (sc === "lsab") await lsabScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "soak") await soakScenario(ctx, opt("url", SITE), opt("soak-pins", "webgpu").split(","), report, out);
               else if (sc === "photo") await photoScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "flags") await flagsScenario(ctx, opt("url", SITE), report, out);
