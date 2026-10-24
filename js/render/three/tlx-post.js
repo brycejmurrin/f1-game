@@ -89,11 +89,12 @@
       ownedMaterials.clear(); ownedRTs.clear(); ownedTextures.clear();
     }
     try {
-    // Phone post at HALF the scene resolution (BrowserStack iPhone 15 deep
+    // Phone post at 5/8 scene resolution: a modest clarity lift from half-res.
+    // BrowserStack iPhone 15 deep
     // profile 2026-10-22: JS 3.8–6.4 ms while frames 17–28 ms → GPU/fill-bound;
     // running the look-post chain at full scene res on a tile GPU was the
     // leftover cost after the governor recovered to autoTier 0). Scene stays
-    // at W×H; LDR + bloom L0 + SSAO/godray base off pW×pH (= W/2 on phone).
+    // at W×H; LDR + bloom L0 + SSAO/godray base off pW×pH (= 5W/8 on phone).
     // Desktop keeps pW===W. Scene MSAA remains the caller's (ctx.sceneSamples).
     // Block gates still come from present(opts) / PerfGov — this only shrinks
     // the surfaces those blocks draw into. FORMATS: the SSAO pair is R8
@@ -202,8 +203,8 @@
     const VP = ctx.vp || null;
     const fixed = !!(ctx.fixedTargets && VP && VP.enabled);
     let PW = 1, PH = 1;   // the physical (present) size; fixed mode only
-    // Post working size. On phones this is half the scene (W×H); aux passes
-    // (SSAO/godray/bloom) then half THAT again. Desktop keeps pW===W.
+    // Post working size. Phones use 5/8 of the scene dimensions; aux passes
+    // (SSAO/godray/bloom) then halve that again. Desktop keeps pW===W.
     const phonePost = !!ctx.isMobile;
     let pW = 1, pH = 1;
 
@@ -362,13 +363,14 @@
       if (rt.depthTexture) VP.layout(rt.depthTexture, lw, lh, pw, ph);
     }
     const halfOf = (v) => Math.max(1, Math.floor(v / 2));
+    const postSize = (v) => Math.max(1, Math.floor(Math.max(1, v | 0) * (phonePost ? 0.625 : 1)));
     function layoutHalf() {
-      // Base off the post working size so phones get quarter-of-scene AO/GR.
+      // Base AO/GR off the post working size, including fixed allocations.
       aoW = halfOf(pW);
       aoH = halfOf(pH);
       grW = aoW; grH = aoH;
-      const physBaseW = fixed ? (phonePost ? halfOf(PW) : PW) : pW;
-      const physBaseH = fixed ? (phonePost ? halfOf(PH) : PH) : pH;
+      const physBaseW = fixed ? postSize(PW) : pW;
+      const physBaseH = fixed ? postSize(PH) : pH;
       const pw = fixed ? halfOf(physBaseW) : aoW, ph = fixed ? halfOf(physBaseH) : aoH;
       if (ssaoRT) { place(ssaoRT, aoW, aoH, pw, ph); place(ssaoBlurRT, aoW, aoH, pw, ph); }
       if (godrayRT) { place(godrayRT, grW, grH, pw, ph); place(godrayBlurRT, grW, grH, pw, ph); }
@@ -377,8 +379,8 @@
       if (!bloomLv) return;
       let bw = Math.max(1, Math.floor(pW / BLOOM_DIV));
       let bh = Math.max(1, Math.floor(pH / BLOOM_DIV));
-      const physBloomW = fixed ? (phonePost ? halfOf(PW) : PW) : pW;
-      const physBloomH = fixed ? (phonePost ? halfOf(PH) : PH) : pH;
+      const physBloomW = fixed ? postSize(PW) : pW;
+      const physBloomH = fixed ? postSize(PH) : pH;
       let pbw = Math.max(1, Math.floor(physBloomW / BLOOM_DIV)), pbh = Math.max(1, Math.floor(physBloomH / BLOOM_DIV));
       nLv = 0;
       for (let i = 0; i < bloomLv.length; i++) {
@@ -573,8 +575,8 @@
     // w x h: the render (logical) size; pw x ph: the present size (fixed mode only).
     function resize(w, h, pw, ph) {
       const nPW = fixed ? Math.max(1, pw | 0, w | 0) : 0, nPH = fixed ? Math.max(1, ph | 0, h | 0) : 0;
-      const nPostW = phonePost ? halfOf(Math.max(1, w | 0)) : Math.max(1, w | 0);
-      const nPostH = phonePost ? halfOf(Math.max(1, h | 0)) : Math.max(1, h | 0);
+      const nPostW = postSize(w);
+      const nPostH = postSize(h);
       if (w === W && h === H && nPW === PW && nPH === PH && nPostW === pW && nPostH === pH) {
         // Still may need aaRT when flag toggles at same render size.
         syncAaRT();
@@ -583,8 +585,8 @@
       W = Math.max(1, w | 0); H = Math.max(1, h | 0);
       PW = nPW; PH = nPH;
       pW = nPostW; pH = nPostH;
-      const ldrPW = fixed ? (phonePost ? halfOf(PW) : PW) : pW;
-      const ldrPH = fixed ? (phonePost ? halfOf(PH) : PH) : pH;
+      const ldrPW = fixed ? postSize(PW) : pW;
+      const ldrPH = fixed ? postSize(PH) : pH;
       place(sceneRT, W, H, PW, PH);
       place(ldrRT, pW, pH, ldrPW, ldrPH);
       layoutHalf();
@@ -600,8 +602,8 @@
           aaRT = makeRT(fixed ? 1 : pW, fixed ? 1 : pH, THREE.UnsignedByteType);
           aaRT.texture.name = "TLXPostAA";
         }
-        const aaPW = fixed ? (phonePost ? halfOf(PW) : PW) : pW;
-        const aaPH = fixed ? (phonePost ? halfOf(PH) : PH) : pH;
+        const aaPW = fixed ? postSize(PW) : pW;
+        const aaPH = fixed ? postSize(PH) : pH;
         place(aaRT, pW, pH, aaPW, aaPH);
       } else if (aaRT) {
         // _lastPresentRT may still BE this target (present() stores `dest ||
@@ -920,7 +922,7 @@
       C.lensDirt.value = dirtTex ? gk("lensDirt") : 0;
       // uReflTexel drives SSR + SHARPEN + the vignette aspect — every frame.
       // SSR samples the full-res scene, so the UV quantum stays 1/W even when
-      // the LDR composite runs at phone post size pW (= W/2).
+      // the LDR composite runs at phone post size pW (= 5W/8).
       C.reflTexel.value.set(1 / W, 1 / H);
       // Wet-road/car SSR needs depth + view/proj + world-up-in-view; uSsrOk
       // gates the whole branch on probe-less paths (setup preview).
@@ -975,6 +977,10 @@
           _lastPresentRT = dest || aaRT;
           _last.sgsr = true;
         } else {
+          // FXAA reads the post-sized LDR but draws the whole destination.
+          // Fixed phone targets keep that destination present-sized even at
+          // scale 1, where SGSR is bypassed; pW/pH here would crop the image.
+          if (fixed) { const ps = presentSize(); vset(P.fxaa, ps[0], ps[1]); }
           const mirIn = !!P.fxaa.mirTex && fxaaMirror(true);
           runPass(P.fxaa.mat, dest);
           if (mirIn) _mirComposites++;
@@ -1199,7 +1205,7 @@
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],
-        // Post working size (half of scene on phones). Aux passes half of this.
+        // Post working size (5/8 of scene on phones). Aux passes half of this.
         postTargets: [pW, pH],
         phonePost,
         // Lazy targets still alive. A shed that stuck must drop these; the

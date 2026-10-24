@@ -4681,6 +4681,7 @@
       ],
       "lookAtTo": [
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/shared-math.test.mjs"
       ],
@@ -4702,6 +4703,7 @@
       "perspectiveTo": [
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/shared-math.test.mjs"
@@ -4996,6 +4998,7 @@
         "tests/unit/data-lazy-loader.test.mjs"
       ],
       "forget": [
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-hub-picker.test.mjs"
       ],
       "purgeOldestCache": [
@@ -5248,6 +5251,7 @@
       ],
       "create": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-replay-improvements.test.mjs",
         "tests/unit/data-results.test.mjs",
         "tests/unit/loading-card.test.mjs",
@@ -5256,6 +5260,9 @@
         "tests/unit/real-race-tab-gap-refresh.test.mjs",
         "tests/unit/real-race.test.mjs",
         "tests/unit/real-replay-frame-fit.test.mjs"
+      ],
+      "fetchRaw": [
+        "tests/unit/data-api-status.test.mjs"
       ],
       "fetchTraces": [
         "tests/unit/real-race-script.test.mjs",
@@ -6344,6 +6351,9 @@
       "blendMode": [
         "tests/unit/visor-optics.test.mjs"
       ],
+      "lampAdapt": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
       "lightMap": [
         "tests/unit/visor-optics.test.mjs"
       ],
@@ -6357,6 +6367,9 @@
         "tests/unit/visor-optics.test.mjs"
       ],
       "stats": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
+      "sunFacing": [
         "tests/unit/visor-optics.test.mjs"
       ],
       "tick": [
@@ -6969,6 +6982,8 @@
         "tests/unit/offline-precache-nav.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/perf-vm-alloc-budget.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
@@ -6981,6 +6996,7 @@
         "tests/unit/ratchet-reason.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/ready-gate.test.mjs",
+        "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/report-server.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
@@ -9802,6 +9818,9 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "stageTable": [
+        "tests/unit/race-entry-profile.test.mjs"
+      ],
+      "stagesFromSnapshot": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "tickFrame": [
@@ -12693,7 +12712,8 @@
       ],
       "*": [
         "tests/unit/census-verdict.test.mjs",
-        "tests/unit/garage-before.test.mjs"
+        "tests/unit/garage-before.test.mjs",
+        "tests/unit/perf-vm-leak-cycles.test.mjs"
       ]
     },
     "js/render/glx/chunked.js": {
@@ -12759,6 +12779,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/glx-lamp-shadow-slot.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/surface-id-parity.test.mjs"
       ],
@@ -13591,6 +13612,13 @@
       "drawWarm": [
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
+      "layoutHalf": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs",
+        "tests/unit/tlx-post-phone-res.test.mjs"
+      ],
+      "mirrorPass": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs"
+      ],
       "needsDepth": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
@@ -13607,6 +13635,7 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
+        "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "postChain": [
@@ -13642,10 +13671,14 @@
       "setMirror": [
         "tests/unit/tlx-mirror-inset.test.mjs"
       ],
+      "syncAaRT": [
+        "tests/unit/tlx-post-phone-res.test.mjs"
+      ],
       "trackMaterial": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
       "vset": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "warm": [
@@ -13720,6 +13753,7 @@
       ],
       "shadowSys": [
         "tests/unit/tlx-fail-scope.test.mjs",
+        "tests/unit/tlx-gpumem-leak.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
@@ -13931,6 +13965,9 @@
       "freeInstancedBatch": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "getPresentSize": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs"
+      ],
       "half": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -14003,6 +14040,7 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-inst-cells.test.mjs",
+        "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/tlx-round2.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
@@ -14102,6 +14140,9 @@
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
+      ],
+      "wantSpatialUpscale": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "warmDraws": [
         "tests/unit/tlx-rig-warm.test.mjs"
@@ -14265,6 +14306,9 @@
       ],
       "viewport": [
         "tests/unit/tlx-viewport.test.mjs"
+      ],
+      "*": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs"
       ]
     },
     "js/render/webgpu/wgsl-chunks.js": {
@@ -15005,7 +15049,8 @@
       "*": [
         "tests/unit/scenery-guards.test.mjs",
         "tests/unit/shared-track-foundation-characterization.test.cjs",
-        "tests/unit/source-integrity.test.mjs"
+        "tests/unit/source-integrity.test.mjs",
+        "tests/unit/track-build-load.test.mjs"
       ]
     },
     "js/track/scenery/pits.js": {

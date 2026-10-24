@@ -2,12 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { absSrc } from '../helpers/abs-src.mjs';
 import { parse } from 'acorn';
 import * as THREE from '../../vendor/three-0.186.1/three.webgpu.min.js';
 
 // Execute the actual generated vendor utility, locating it by public methods,
 // not terser's unstable class name. The queue models WebGPU's byte-level contract.
-const source = fs.readFileSync(new URL('../../vendor/three-0.186.1/three.webgpu.min.js', import.meta.url), 'utf8');
+const VENDOR = absSrc('vendor/three-0.186.1/three.webgpu.min.js');
+const source = fs.readFileSync(VENDOR, 'utf8');
 const ast = parse(source, { ecmaVersion: 'latest', sourceType: 'module' });
 const node = ast.body.find(n => n.type === 'ClassDeclaration' && n.body.body.some(m => m.key.name === 'createShaderVertexBuffers'));
 assert.ok(node, 'actual WebGPUAttributeUtils class exists');
@@ -22,7 +24,7 @@ for (const n of ast.body) {
 const descriptor = /([\w$]+)\.mappedAtCreation=/.exec(code)?.[1];
 assert.ok(descriptor, 'mapped descriptor located');
 context[descriptor] = { reset() {} };
-const AttributeUtils = vm.runInNewContext(`${code};${node.id.name}`, context);
+const AttributeUtils = vm.runInNewContext(`${code};${node.id.name}`, context, { filename: absSrc('vendor/three-0.186.1/three.webgpu.min.js') });
 
 function fixture(values = [0, 1, 2], options = {}) {
   const records = [], writes = [], data = new WeakMap();
@@ -130,7 +132,7 @@ test('actual primitive state keeps narrow strip format and wide restart format c
   }
   const owner = ast.body.find(n => n.type === 'ClassDeclaration' && n.body.body.some(m => m.key.name === '_getPrimitiveState'));
   const method = owner.body.body.find(m => m.key.name === '_getPrimitiveState');
-  const pipeline = vm.runInNewContext(`({${source.slice(method.start, method.end)}})`, context);
+  const pipeline = vm.runInNewContext(`({${source.slice(method.start, method.end)}})`, context, { filename: absSrc('vendor/three-0.186.1/three.webgpu.min.js') });
   pipeline.backend = { utils: { getPrimitiveTopology: () => 'line-strip' } };
   const narrow = fixture(), restart = fixture([0, 65535, 2]);
   for (const [f, expected] of [[narrow, 'uint16'], [restart, 'uint32']]) {

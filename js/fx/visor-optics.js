@@ -26,6 +26,10 @@ const VisorOptics = (function () {
   const HZ_REDUCED = 8;              // prefers-reduced-motion: the glints still follow the heading, more slowly
   const MAX_GLINTS = 8;              // the brightest lamps in view
   const LAMP_GAIN = 1.5;             // glint = GAIN·√(energy/d²)·beam: a Bahrain flood (12 000) at 50 m saturates, a Monaco soffit (40) at 10 m ≈ 0.9
+  // An eye adapted to daylight sees a lamp's reflection against the light already in the scene, not against black:
+  // glints scale by 1/(1 + ADAPT·max(0, daylight − DARK)). Night (moon key + sky ≈ 0.14) keeps every glint; a dusk
+  // sky (≈ 0.95) keeps ≈ 0.3 — eight pit-lane lamps at full night strength washed the dusk view amber (A·W46).
+  const LAMP_ADAPT = 3, LAMP_DARK = 0.2;
   const LIGHT_STRIDE = 15;           // gfx.js §frame: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner,cosOuter, bleed, volW, glareW]
   const LEVEL = { off: 0, light: 0.6, medium: 1, strong: 1.6 };       // VISOR REFLECTIONS
   const BEAMS = { off: 0, light: 0.6, medium: 1, strong: 1.6 };       // VISOR BEAMS: lamp beams, god rays, star flares
@@ -145,6 +149,12 @@ const VisorOptics = (function () {
     return o;
   }
 
+  /** How much of a key light reaches the shield from its direction, by z = the sun direction's forward component
+   *  (1 ahead, 0 level with the eye, −1 behind): 1 for z ≥ 0.2, falling to 0 at z = −0.5 (~120° off the nose). */
+  function sunFacing(z) { return clampTo((z + 0.5) / 0.7, 0, 1); }
+  /** A lamp glint's visibility against the daylight the eye is adapted to (key·sunUp + sky, exposed units). */
+  function lampAdapt(daylight) { return 1 / (1 + LAMP_ADAPT * Math.max(0, (daylight || 0) - LAMP_DARK)); }
+
   // ---------- lighting → visor (pure) ----------
 
   /** What the shield shows for one scene. `scene` is __apex.visorScene()'s shape: eye, tgt, fov, sunDir,
@@ -194,9 +204,11 @@ const VisorOptics = (function () {
         }
       }
       // Fresnel rim sheen: the inner rim is seen at grazing angles, where reflectance climbs, and it is lit on
-      // the sun's side of the view — brightest when the sun is beside or behind the eye (its light rakes the rim).
+      // the sun's side of the view. Only light coming in through the shield reaches it: the helmet shell shades
+      // the visor from a sun behind the eye, so the sheen is full with the sun ahead or level with the eye and
+      // fades to nothing once it is ~120° behind (sunFacing). It used to peak with the sun behind (A·W46).
       const side = Math.hypot(p.sx, p.sy);
-      const rake = 0.35 + 0.65 * clampTo(-p.z, 0, 1) + 0.3 * side;
+      const rake = sunFacing(p.z) * (0.35 + 0.3 * side);
       const rk = clampTo(1.0 * key * sunUp * rake * gain, 0, 1);
       if (rk > 0.004) out.rim = { k: rk, dx: side > 1e-3 ? p.sx / side : 0, dy: side > 1e-3 ? -p.sy / side : -1, rgb };
       sceneLight += key * sunUp;
@@ -205,6 +217,7 @@ const VisorOptics = (function () {
     // Sky haze on the brow: the sky reflected in the top of the shield; only a daylight sky is bright enough.
     const amb = clampTo(lum(scene.ambientSky) * exp, 0, 2);
     out.haze = clampTo(0.3 * amb * gain, 0, 0.32);
+    const lampVis = lampAdapt(key * sunUp + amb);
     sceneLight += amb * 0.5;
 
     // Lamp glints: each light in this frame's culled list, projected; the brightest MAX_GLINTS kept.
@@ -231,7 +244,7 @@ const VisorOptics = (function () {
         // the law the road obeys; the square root compresses a 100× energy range into glints of one family.
         const dl = Math.sqrt(d2), cosT = -(dx * L[i + 7] + dy * L[i + 8] + dz * L[i + 9]) / dl;
         const beam = clampTo((cosT - L[i + 11]) / Math.max(1e-3, L[i + 10] - L[i + 11]), 0, 1);
-        const kl = LAMP_GAIN * Math.sqrt(Math.max(0, lum([L[i + 3], L[i + 4], L[i + 5]]) * exp) / d2) * (0.5 + 0.5 * beam) * edgeFade;
+        const kl = LAMP_GAIN * Math.sqrt(Math.max(0, lum([L[i + 3], L[i + 4], L[i + 5]]) * exp) / d2) * (0.5 + 0.5 * beam) * edgeFade * lampVis;
         if (kl < 0.15) continue;                                // below this a glint would not read; the road gets little from it either
         const m = Math.max(1e-3, L[i + 3], L[i + 4], L[i + 5]);
         // The fixture's aim on screen (its cone): a faint beam leaves each glint that way — the floods' light
@@ -674,6 +687,6 @@ const VisorOptics = (function () {
     };
   }
 
-  return { tick, clear, stats, blendMode, lightMap, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, BEAMS, FRINGE, MAX_GLINTS, sceneFromG, _reset };
+  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, BEAMS, FRINGE, MAX_GLINTS, sceneFromG, _reset };
 })();
 Object.freeze(VisorOptics);
