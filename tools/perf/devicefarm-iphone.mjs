@@ -306,7 +306,7 @@ async function timedEntry(ctx, label, kick = KICK) {
     if (Date.now() - t0 > 180000) { log(`${label}: timed out`); return { ...e, timedOut: true }; }
   }
 }
-async function reloadPage(ctx) { await exec(ctx.base, ctx.sid, "setTimeout(() => location.reload(), 50); return true;"); await sleep(8000); return waitReady(ctx); }
+async function reloadPage(ctx) { try { await exec(ctx.base, ctx.sid, UNARM, 1); } catch (_) { /* no page */ } await exec(ctx.base, ctx.sid, "setTimeout(() => location.reload(), 50); return true;"); await sleep(8000); return waitReady(ctx); }
 // Force-quit Safari: the WebDriver session dies with it, so open a fresh one and navigate again.
 async function killSafari(ctx, url) {
   try { wd(ctx.base, "POST", `/session/${ctx.sid}/execute/sync`, { script: "mobile: terminateApp", args: [{ bundleId: "com.apple.mobilesafari" }] }); } catch (e) { log("terminate: " + e.message.slice(0, 100)); }
@@ -465,7 +465,11 @@ async function sampleWin(ctx, ms, delay = 3000, extra = "") {
   }
   return { win: null };
 }
+// The governor's crash sentinel (js/perf/governor.js init) counts a reload over a live race as a jetsam kill: a
+// strike floors the next boot's tier (1 -> 2, 2+ -> 4). A harness reload is not a crash, so drop the race flag first.
+const UNARM = `try { GameStore.store.rawDel("apex26.raceActive"); GameStore.store.rawDel("apex26.raceTicked"); } catch (_) {} return true;`;
 async function openUrl(ctx, u) {
+  try { await exec(ctx.base, ctx.sid, UNARM, 1); } catch (_) { /* no page yet */ }
   wd(ctx.base, "POST", `/session/${ctx.sid}/url`, { url: u + (u.includes("?") ? "&" : "?") + "df=" + Date.now() });
   await sleep(8000); return waitReady(ctx);
 }
@@ -481,7 +485,7 @@ const VISOR_ARMS = { off: "helmetvisor=off", on: "helmetvisor=clear&visorreflect
   "refr-over": "helmetvisor=clear&visorreflections=medium&visorrefraction=medium&visorblend=over" };
 const VISOR_READ = `(() => { let v = null; try { v = typeof VisorOptics !== "undefined" ? VisorOptics.stats() : null; } catch (e) { v = String(e); }
     let cam = null; try { cam = __apex.camera().mode; } catch (_) {}
-    return { cam, optics: v, blend: document.body.dataset.visorBlend || null, perf: (() => { try { const r = __apex.renderScale(); return { scale: r.scale, tier: r.tier, autoTier: r.autoTier }; } catch (_) { return null; } })() }; })()`;
+    return { cam, optics: v, blend: document.body.dataset.visorBlend || null, perf: (() => { try { const r = __apex.renderScale(); return { scale: r.scale, tier: r.tier, autoTier: r.autoTier, crashStrikes: r.crashStrikes }; } catch (_) { return null; } })() }; })()`;
 async function visorScenario(ctx, url, pins, report, out) {
   const [track, tod = "night"] = opt("track", "bahrain:night").split(":");
   const arms = opt("arms", "off,on,refr,off").split(",");
