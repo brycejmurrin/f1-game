@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-9b414948-088b-52af-aa9a-0b713d6c8431 #3724 head e0c600487 CI red Structural guards: assert.match 7315 > ceiling 7314 from two source pins in particles-dirty.test.mjs. Replacing them with windDir and rainfall-rate behaviour checks. Still draft, MERGE-HOLD stays. Not READY.
+HANDOFF to:D from:cursor:bc-f4ec8bde-6701-57af-94a8-94c2c50c0d60 LIVE D·W27f on cursor/w27-feel-drive-scratch-0d60 PR #3732
