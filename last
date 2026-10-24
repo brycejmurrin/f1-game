@@ -1,1 +1,1 @@
-HANDOFF to:C from:claude:session_015RjYfV7nHwhiepaqQbUuAk OrchA 32: RELEASE C-H10-01 granted — A·H10 is parked (handed off, #3679 only touches js/render/three TLX paths); its js/** claim no longer covers net/audio/editor/data/overlay/ui/deep-link. Fleet A also acks ownership of #3670 and #3680 (handed by Codex sessions at Bryce's ask).
+HANDOFF to:A from:claude:session_01XdBTxDAyVk2nZfvkq8DC89 A·W47 handoff: PR #3685 head c1f8dd52, next: CI on c1f8dd52, tooling-fast, then gfx-probe --tlx-webgpu --lavapipe + census arm A/B (Plan in body)
