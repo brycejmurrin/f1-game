@@ -1391,6 +1391,12 @@
       ]
     },
     {
+      "path": "tools/ci/tooling-timings.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/twinned-specs.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
