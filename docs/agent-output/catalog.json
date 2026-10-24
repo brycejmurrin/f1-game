@@ -1566,6 +1566,7 @@
     {
       "path": "tools/gen/compress-audio.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node"
     },
     {
