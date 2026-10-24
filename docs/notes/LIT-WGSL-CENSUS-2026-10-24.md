@@ -20,7 +20,15 @@ branch that touched `js css assets index.html sw.js`, then `capture --root artif
 Determinism first: two captures of the same tree gave identical raw hashes for all 11 modules, so a delta is a real
 re-key, not capture noise. A capture is ~1.5 min on this box.
 
-## Census: the last 30 game merges (23 Oct 2026, 01:49–17:13 PT)
+## Census: the last 30 game merges (23 Oct 2026, 01:49–17:13 PT) — PRELIMINARY, INCOMPLETE CAPTURES
+
+**Read this first.** This table was captured with an 8 s settle window and saw only 11 modules / 2 lit modules per tree.
+A complete capture of the same tree is ~46 modules / 5 lit (settle 25–40 s; two runs gave the same lit family hash
+`a151d19e858db165`), and the CI advisory run saw 40 / 4. So the rows below cover only the FIRST lit pair, not the
+whole lit family: "2 of 29" is a lower bound, "identical" means "the 11 early modules were identical", and the
+stabiliser conclusion below is provisional. The tool now settles 25 s and dedupes repeated modules
+(commit b078826f); the 30-merge rerun with it was started and stopped at 2 of 30 by the fleet handoff. To finish it:
+`bash`-loop as in Method with `capture --root <worktree> --out …` per merge, then `diff` consecutive files.
 
 | merge | PR | lit family | verdict | touched js/render/{three,shared} |
 |---|---|---|---|---|
@@ -55,7 +63,7 @@ re-key, not capture noise. A capture is ~1.5 min on this box.
 | `b3779370` | #3644 w22e-install-chip-stack-6a45 | `2f28c96f` | identical | — |
 | `13d33447` | #3635 w22f-pause-75-taps-3170 | `2f28c96f` | identical | — |
 
-## Result
+## Result (of the preliminary table above)
 
 - **2 of 29 merge steps re-keyed the lit family** (#3651, #3662). The other 27 left every captured module
   byte-identical, including merges that edited `tlx.js`, `tlx-chunked.js` and `post-common.js`.
@@ -73,7 +81,7 @@ WGSL: renderer plumbing (`tlx.js`, `tlx-chunked.js`), post-process constants (`p
 physics, tracks. Per #3672's own NIGHT-ENTRY evidence, a texture-filter flip or a tap that changes a binding shifts
 every later TSL name, so a "small" graph edit re-keys more than it looks like; that is real, not incidental.
 
-## Stabiliser (#3672 step 3): not warranted by the data
+## Stabiliser (#3672 step 3): not warranted by the PRELIMINARY data
 
 The census found no incidental churn: no nondeterministic ordering (same-tree captures are identical), no embedded
 build ids, no unused-uniform drift, and no names-only re-key. So there is nothing to normalise without changing
