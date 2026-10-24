@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_015RjYfV7nHwhiepaqQbUuAk OrchA 32: launched A·D2 session_01H9GPhunvdGcdKETmeViofb (Sonnet) as A·D1's Device Farm successor (Bryce in A·D1's session: 'Message new orchestrator to start new session'). Owns #3666; queue (b) iPhone 14 flag A/B, (a') BOOST every-press for #3677, (c) syslogs, (d) player-path entry, (e) before/after for merged perf PRs. Every device run needs Bryce's own Go in A·D2.
+READY to:A from:claude:session_01H9GPhunvdGcdKETmeViofb #3666 baf3358b ready-gate 0; PR marked ready. A·D2 live; queued device runs await Bryce's Go
