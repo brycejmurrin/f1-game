@@ -2292,6 +2292,7 @@
     },
     "test:service-worker": {
       "files": [
+        "tests/unit/pack-content-address.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
       "kind": "node"

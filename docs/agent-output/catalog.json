@@ -3953,7 +3953,7 @@
     },
     {
       "name": "test:service-worker",
-      "command": "node --test --test-timeout=900000 tests/unit/service-worker.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/pack-content-address.test.mjs tests/unit/service-worker.test.mjs"
     },
     {
       "name": "test:shimmer",

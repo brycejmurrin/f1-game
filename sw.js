@@ -912,6 +912,36 @@ function packNetworkFirst(event, req) {
   })());
 }
 
+// Content-addressed pack files: assets.js asks for `assets/pack/<file>?h=<md5>`
+// with the md5 the (network-first) manifest records. The URL IS the content, so
+// a cached copy is always right and no revalidation round trip is owed; a
+// rebake changes the md5, hence the URL, hence misses the old entry.
+const PACK_HASHED = /^\?h=[0-9a-f]{32}$/;
+function isHashedPackRequest(url) {
+  return PACK_HASHED.test(url.search) && url.pathname.includes("/assets/pack/") &&
+    !url.pathname.endsWith("/manifest.json");
+}
+function packCacheFirst(event, req) {
+  let cacheWrite = Promise.resolve();
+  const response = (async () => {
+    const hit = await matchPreferCurrent(req);
+    if (hit) return hit;
+    try {
+      const res = await fetch(req);
+      if (res && res.ok) {
+        const copy = res.clone();
+        cacheWrite = (async () => {
+          const cache = await openCache(await currentCacheName());
+          await cache.put(req, copy);
+        })().catch(noteCacheWriteFail);
+      }
+      return res;
+    } catch (_) { return Response.error(); }
+  })();
+  event.waitUntil(response.then(() => cacheWrite, () => undefined));
+  event.respondWith(response);
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -1049,8 +1079,11 @@ self.addEventListener("fetch", (event) => {
   // after a deploy — the layer index IS the MAT id. Network first (HTTP
   // revalidation makes an unchanged file a 304), the cache when the network
   // fails or a cached copy exists and the network is slower than NAV_RACE_MS.
+  // The exception is a `?h=<md5>` file (isHashedPackRequest): content-addressed,
+  // so cache-first. The manifest that names the hashes stays network-first.
   if (url.pathname.includes("/assets/pack/") && !DEV_HOST) {
-    packNetworkFirst(event, req);
+    if (isHashedPackRequest(url)) packCacheFirst(event, req);
+    else packNetworkFirst(event, req);
     return;
   }
 

@@ -151,7 +151,7 @@ async function loadAssets(BitmapDecode) {
     Blob, TextDecoder, DataView, Uint8Array, ArrayBuffer, Promise, setTimeout, DecompressionStream, BitmapDecode,
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     async fetch(url) {
-      const name = url.split("/").pop();
+      const name = url.split("?")[0].split("/").pop();   // pack URLs carry ?h=<md5> (L3)
       if (name === "manifest.json") return { ok: true, json: async () => manifest };
       return { ok: true, blob: async () => new Blob([fs.readFileSync(path.join(PACK, name))]) };
     },
