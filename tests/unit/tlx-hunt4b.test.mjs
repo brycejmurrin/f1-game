@@ -829,28 +829,29 @@ test("scene11: a phone chain's scene colour is rg11b10 where renderable; the tag
   assert.equal(bloomOff.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "the bloom knob does not reach the scene target");
 });
 
-test("scene11: never on the WebGPU leg — a blend state against an alpha-less target fails pipeline validation there", async (t) => {
-  // gpu-census macos-latest run 40052670537 (886e476f, Dawn/Metal): "Async render pipeline creation failed
+test("scene11: the WebGPU leg takes it too once vendored patch 18 keeps a vec4 output (#3711)", async (t) => {
+  // gpu-census macos-latest run 40052670537 (886e476f, no patch 18): "Async render pipeline creation failed
   // (renderPipeline_MeshBasicNodeMaterial_70): Color blending srcFactor (BlendFactor::One) or dstFactor
-  // (BlendFactor::OneMinusSrcAlpha) …" with the scene target in rg11b10ufloat. The fake WebGL2 cannot reproduce
-  // a WebGPU validation rule, so this pins the gate in the source and the behaviour under a WebGPU-shaped backend.
+  // (BlendFactor::OneMinusSrcAlpha) …". Run 40056676327 (patch 18, same input): green. The WebGPU rule lives in
+  // the vendored WGSL builder (gfx-backend-canary §18, by behaviour); here: the gate no longer reads the backend kind.
   const post = read("js/render/three/tlx-post.js");
-  assert.ok(post.includes("const _r11Blendable = r11Renderable && !(renderer.backend && renderer.backend.isWebGPUBackend);"), "the gate reads the backend kind");
+  assert.ok(post.includes("const _r11Blendable = r11Renderable;"), "no backend-kind exclusion");
+  assert.ok(post.includes('bloom11 = !!(dev && dev.features && dev.features.has("rg11b10ufloat-renderable"));'), "WebGPU renderability still needs the adapter feature");
   assert.ok(post.includes("let scene11 = _r11Blendable && !!ctx.isMobile;"), "the default goes through the gate");
-  assert.ok(post.includes('if (k === "1") scene11 = _r11Blendable;'), "the force knob cannot override the WebGPU exclusion");
-  // Behaviour: the real chain over the fake WebGL2, with the backend flagged as WebGPU for the probe's purposes.
+  assert.ok(post.includes('if (k === "1") scene11 = _r11Blendable;'), "the force knob goes through the gate too");
+  // Behaviour: the real chain over the fake WebGL2, with the backend flagged as WebGPU for the gate's purposes.
   const h = await rig11(t, { ls: { "apex26.tlxScene11": "1" } });
   assert.equal(h.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "WebGL backend: forced on");
   const fg = makeFakeGL(320, 180);
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
-  renderer.backend.isWebGPUBackend = true;   // the gate reads this flag; nothing else in the chain's construction does
+  renderer.backend.isWebGPUBackend = true;   // the old gate read this flag; nothing else in the chain's construction does
   const made = withStore({ "apex26.tlxScene11": "1" }, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true,
     chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag: true, softDest: () => null,
     wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
   t.after(() => { made.dispose(); renderer.dispose(); });
-  assert.equal(made.sceneTarget().textures[0].type, THREE.HalfFloatType, "WebGPU-flagged backend keeps RGBA16F even when forced");
-  assert.equal(made.state().sceneFormat, "rgba16f");
+  assert.equal(made.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "a WebGPU-flagged backend takes rg11b10 when forced");
+  assert.equal(made.state().sceneFormat, "rg11b10");
 });
 
 test("scene11: the probe is read before the bloom knob, and no post reader samples scene alpha", () => {

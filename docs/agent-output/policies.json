@@ -986,6 +986,11 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/gen/compress-audio.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
     "tools/gen/garage-defaults.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1907,6 +1912,11 @@
       "preserve": "@c8"
     },
     "tools/perf/mesh-census-lib.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
+    "tools/perf/idle-pipeline-census.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"
