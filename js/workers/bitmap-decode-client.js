@@ -3,7 +3,12 @@
    Falls back to main-thread createImageBitmap when Workers are missing or
    the worker errors. Upload / draw stays on the caller (render thread).
    Not a <script> tag dependency of the boot path — callers import via
-   new Worker URL the same way TrackBuildClient loads build-worker.js. */
+   new Worker URL the same way TrackBuildClient loads build-worker.js.
+   strip() is the pack-strip lane (PARALLEL-HUNT-2026-10-24 P1): the worker
+   inflates + unfilters a baked strip PNG and transfers the RGBA bytes back,
+   behind apex26.packDecodeWorker ("1" on; unset or "0" OFF — a prototype).
+   It answers null on anything but success, so the caller decodes on the page
+   exactly as before. */
 const BitmapDecode = (function () {
   "use strict";
   const DEFAULT_OPTS = Object.freeze({
@@ -14,6 +19,10 @@ const BitmapDecode = (function () {
   let _w = null, _seq = 0;
   const _pending = new Map();
   const REQUEST_MS = 4000;
+  // A whole 256 strip is ~90 ms of decode on a desktop core (node, the shipped
+  // pack); a phone core several times that. Generous: a timeout only falls back.
+  const STRIP_MS = 15000;
+  const STRIP_KEY = "apex26.packDecodeWorker";
   function closeBitmap(bmp) { try { if (bmp && typeof bmp.close === "function") bmp.close(); } catch (_) { /* best-effort disposal of an abandoned bitmap */ } }
   function validCrop(crop) {
     if (crop != null && (!Array.isArray(crop) || crop.length !== 4 ||
@@ -25,7 +34,7 @@ const BitmapDecode = (function () {
     _pending.delete(seq);
     if (p.timer != null) clearTimeout(p.timer);
     if (p.signal) p.signal.removeEventListener("abort", p.abort);
-    if (err) { closeBitmap(bmp); p.reject(err); } else p.resolve(bmp);
+    if (err) { if (!p.strip) closeBitmap(bmp); p.reject(err); } else p.resolve(bmp);
   }
 
   function url(f) {
@@ -49,6 +58,7 @@ const BitmapDecode = (function () {
         // A reply from a worker we already terminated (drop + respawn) must not
         // settle a newer seq, and its transferred bitmap still needs closing.
         if (_w !== w) { closeBitmap(m.bmp); return; }
+        if (m.type === "strip") { settle(m.seq, null, m.pix ? { pix: m.pix, stride: m.stride } : null); return; }
         const valid = m.type === "decoded" && m.bmp && typeof m.bmp.close === "function" &&
           Number.isFinite(m.bmp.width) && m.bmp.width > 0 && Number.isFinite(m.bmp.height) && m.bmp.height > 0;
         settle(m.seq, valid ? null : new Error(m.message || "invalid bitmap worker reply"), m.bmp);
@@ -118,10 +128,44 @@ const BitmapDecode = (function () {
     }
   }
 
+  function stripEnabled() {
+    try { if (localStorage.getItem(STRIP_KEY) !== "1") return false; } catch (_) { return false; }
+    return typeof Worker !== "undefined";
+  }
+  // blob: the strip PNG; size: layer edge in px; present: per-MAT-layer truthy
+  // flags (assets.js's own). Resolves an Array of per-layer Uint8Array views
+  // (undefined where !present), or null — off, no worker, a refused PNG, an
+  // error or a timeout — and the caller decodes on the page as before.
+  async function strip(blob, size, present) {
+    if (!stripEnabled() || !blob || !present) return null;
+    let last = -1;
+    for (let i = 0; i < present.length; i++) if (present[i]) last = i;
+    if (last < 0) return null;
+    const w = spawn();
+    if (!w) return null;
+    const seq = ++_seq;
+    let got = null;
+    try {
+      got = await new Promise((resolve, reject) => {
+        const p = { resolve, reject, timer: null, strip: true };
+        _pending.set(seq, p);
+        p.timer = setTimeout(() => settle(seq, new Error("strip worker timed out")), STRIP_MS);
+        if (_w !== w) { settle(seq, new Error("bitmap worker dropped")); return; }
+        try { w.postMessage({ type: "strip", seq, blob, size, layers: last + 1 }); }
+        catch (err) { if (_w === w) drop(); else settle(seq, err); }
+      });
+    } catch (_) { return null; }
+    const layer = got && size * size * 4;
+    if (!got || !(got.pix instanceof Uint8Array) || got.stride !== size * 4 || got.pix.length < (last + 1) * layer) return null;
+    const out = new Array(present.length);
+    for (let i = 0; i <= last; i++) if (present[i]) out[i] = got.pix.subarray(i * layer, (i + 1) * layer);
+    return out;
+  }
+
   function supported() {
     return typeof Worker !== "undefined" && typeof createImageBitmap === "function";
   }
 
-  return { decode, supported, DEFAULT_OPTS, drop };
+  return { decode, strip, stripEnabled, supported, DEFAULT_OPTS, drop };
 })();
 if (typeof window !== "undefined") window.BitmapDecode = BitmapDecode;

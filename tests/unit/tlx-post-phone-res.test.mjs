@@ -1,12 +1,9 @@
-/* tlx-post-phone-res.test.mjs — phones run the look-post chain at half the
- * scene resolution (BrowserStack iPhone 15 2026-10-22: GPU/fill-bound while
- * JS was only a few ms). Desktop keeps post size === scene size.
- *
- * Behaviour pins via a tiny layout extract (includes / deepEqual, not source regex).
- */
+/* Phone post clarity and target layout. Execute the actual sizing/layout code,
+ * including fixed physical allocations and scale changes; no GPU claim. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,29 +21,53 @@ test("tlx-post declares a phone post working size distinct from the scene", () =
     "state() exposes the phonePost flag");
 });
 
-test("phone post size is half the scene; desktop post size equals the scene", () => {
-  // Mirror resize()'s post-size rule without spinning up three.js.
-  const halfOf = (v) => Math.max(1, Math.floor(v / 2));
-  function postSize(w, h, isMobile) {
-    const phonePost = !!isMobile;
-    const pW = phonePost ? halfOf(Math.max(1, w | 0)) : Math.max(1, w | 0);
-    const pH = phonePost ? halfOf(Math.max(1, h | 0)) : Math.max(1, h | 0);
-    const aoW = halfOf(pW), aoH = halfOf(pH);
-    return { pW, pH, aoW, aoH };
+function layoutFixture(phonePost, fixed = false) {
+  const placed = {};
+  const context = vm.createContext({ phonePost, fixed,
+    place(rt, w, h, pw, ph) { placed[rt] = { logical: [w, h], physical: fixed ? [pw, ph] : [w, h] }; },
+    ctx: { wantSpatialUpscale: () => true }, P: { sgsr: true },
+    sceneRT: "scene", ldrRT: "ldr", aaRT: "aa", ssaoRT: "ao", ssaoBlurRT: "aoBlur",
+    godrayRT: "gr", godrayBlurRT: "grBlur", BLOOM_DIV: 2,
+    bloomLv: Array.from({ length: 4 }, (_, i) => ({ rt: "bloom" + i })),
+  });
+  const helpers = SRC.slice(SRC.indexOf("    const halfOf ="), SRC.indexOf("    // the TSL pass set"));
+  const resize = SRC.slice(SRC.indexOf("    function resize(w, h, pw, ph)"), SRC.indexOf("    function syncAaRT()"));
+  const aa = SRC.slice(SRC.indexOf("    function syncAaRT()"), SRC.indexOf("      } else if (aaRT)") ) + "\n      }\n    }";
+  assert.ok(helpers.includes("function layoutBloom"));
+  assert.ok(resize.includes("layoutHalf()"));
+  assert.ok(aa.includes("place(aaRT"));
+  vm.runInContext("let W=1,H=1,PW=0,PH=0,pW=1,pH=1,aoW=1,aoH=1,grW=1,grH=1,nLv=0;\n" + helpers + resize + aa, context);
+  return (w, h, pw = w, ph = h) => { context.resize(w, h, pw, ph); return structuredClone(placed); };
+}
+
+test("phone composite preserves 5/8 scene detail; desktop stays full scene", () => {
+  const phone = layoutFixture(true)(800, 400);
+  assert.deepEqual(phone.scene.logical, [800, 400]);
+  assert.deepEqual(phone.ldr.logical, [500, 250]);
+  assert.deepEqual(phone.aa.logical, [500, 250]);
+  for (const key of ["ao", "gr", "bloom0"]) assert.deepEqual(phone[key].logical, [250, 125]);
+  const desktop = layoutFixture(false)(800, 400);
+  assert.deepEqual(desktop.ldr.logical, [800, 400]);
+  assert.deepEqual(desktop.ao.logical, [400, 200]);
+});
+
+test("fixed phone allocations contain the logical post viewports after shrink and restore", () => {
+  const resize = layoutFixture(true, true);
+  resize(800, 400, 800, 400);
+  const smaller = resize(400, 200, 800, 400);
+  assert.deepEqual(smaller.ldr, { logical: [250, 125], physical: [500, 250] });
+  assert.deepEqual(smaller.aa, smaller.ldr);
+  for (const key of ["ao", "gr", "bloom0"]) {
+    assert.deepEqual(smaller[key], { logical: [125, 62], physical: [250, 125] });
   }
-  assert.deepEqual(postSize(800, 400, false), { pW: 800, pH: 400, aoW: 400, aoH: 200 },
-    "desktop: LDR at scene size, AO at half scene");
-  assert.deepEqual(postSize(800, 400, true), { pW: 400, pH: 200, aoW: 200, aoH: 100 },
-    "phone: LDR at half scene, AO at quarter scene");
-  // Source must apply the same halfOf(w) rule when phonePost is set.
-  assert.ok(SRC.includes("const nPostW = phonePost ? halfOf(Math.max(1, w | 0))"),
-    "resize() must halve width on phones");
-  assert.ok(SRC.includes("place(ldrRT, pW, pH,"),
-    "LDR target is placed at the post working size");
-  assert.ok(SRC.includes("aoW = halfOf(pW)"),
-    "SSAO/godray base off post size (quarter on phones)");
-  assert.ok(SRC.includes("Math.floor(pW / BLOOM_DIV)"),
-    "bloom L0 bases off post size");
+  assert.deepEqual(resize(800, 400, 800, 400).ldr, { logical: [500, 250], physical: [500, 250] });
+});
+
+test("odd and minimum phone dimensions remain valid through a scale change", () => {
+  const resize = layoutFixture(true);
+  assert.deepEqual(resize(633, 293).ldr.logical, [395, 183]);
+  const tiny = resize(1, 1);
+  for (const key of ["scene", "ldr", "aa", "ao", "gr"]) assert.deepEqual(tiny[key].logical, [1, 1]);
 });
 
 test("composite and FXAA draw at post size, scene stays at W×H", () => {
