@@ -1054,6 +1054,12 @@ async function auto() {
     }
   }
   for (const a of report.artifacts) log(`artifact ${a.type} ${a.name} ${a.bytes ?? a.error}`);
+  // The device syslog carries the only phone memory numbers there are (#3675): print the WebContent footprint table.
+  const sys = report.artifacts.filter((a) => a.file && /syslog/i.test(a.name || "")).map((a) => a.file);
+  if (sys.length) {
+    try { const sl = await import("./devicefarm-syslog.mjs"), st = await sl.parseFiles(sys); report.syslog = sl.summarise(st); console.log(sl.table(st)); }
+    catch (e) { log("syslog table failed: " + e.message.slice(0, 120)); }
+  }
   fs.writeFileSync(path.join(out, "auto-report.json"), JSON.stringify(report, null, 2));
   log(`report ${path.join(out, "auto-report.json")}`);
 }
