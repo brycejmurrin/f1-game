@@ -112,11 +112,39 @@ Lavapipe-only artifacts, not on a phone:
   hundreds of frames in a row.
 - The rig warm's 9–11 s for 28 pairs, which builds 0 pipelines.
 
+## The title warm (follow-up, 2026-10-25)
+
+Device Farm S5 (iPhone 14 Pro WebGPU, ~8:53 PM PT 2026-10-24): 45 s of TITLE idle advanced nothing. `menuPrep()`
+read world, done and warmed false in all 9 samples, so a cold title → START still compiled at the lights:
+`mirrorPrepare` 34.7 s, worst hitch 9.2 s. The prep's `current()` (`game.js` `scheduleFlybyTrack`) accepted only the
+track picker, RACE SETTINGS or a circuit Home.
+
+Bryce chose "once per update" (2026-10-25, via OrchA 32). `js/perf/title-warm.js` (`TitleWarm`) polls the title once a
+second. When the title has been idle for `MENU_IDLE_MS`, it calls `scheduleFlybyTrack(true)`, and `current()` also
+accepts a title warm in progress (`titleWarm.wants()`). Everything after that is the existing menu prep: stepped
+build, car assets, `warmPrograms`, hidden warm frames.
+
+- **Once per update on a phone.** `apex26.titleWarm` holds the build (`<meta name="apex-build">`) whose title warm
+  completed. A phone (GaragePrebuild's `phoneHold`) with that build skips it. Safari keeps compiled pipelines across
+  sessions (row 10 of the ledger: 7.3 s, then 0.24 s), so only the first title session after a deploy pays for
+  the speculative world. Desktop and hardware warm every session.
+- **Never** under Save-Data / prefers-reduced-data, behind a hidden tab, under a menu sheet, during the title intro,
+  headless, without a `gfx.warm` (GLX, WGX), or where the title draws a 3D Home. Garage, night and studio own the
+  frames the hidden warm needs; a circuit Home already preps its world. The default Home (`photo`) draws no 3D
+  scene, so the warm's hidden frames run behind it.
+- **Cancellable.** It only widens `current()`, so leaving the title stops the prep at its next step and an open sheet
+  pauses it (`MenuSheetGate`). Tapping RACE carries it on through the picker. Leaving for another screen re-arms it.
+- **Done** is `census-entry`'s `menuPrepReady` test: world built, `menuFinish` done, warmed, no warm frames owed, no
+  compile in flight.
+- **With the pipeline pin** (above), the warm's pipelines survive until race entry even when the player idles on
+  the title for minutes. They also survive a different track pick in the picker, which reuses most lit programs.
+
+Test: `tests/unit/title-warm.test.mjs` (the real module in a VM: the once-per-build gate, the blockers, re-arming,
+the `game.js` wiring).
+
 ## Still open
 
 - The 4 race-only states: warm them in the menu, or give them a state the menu already builds.
-- **When** the menu warm starts. A·H15's lead: prep runs only on select, RACE SETTINGS or a home world that wants a
-  track. Title → quick race starts the full compile at START. Starting the selected track's prep during title idle
-  would move the cold compile out of race entry.
+- The title warm on device: A·D2's S5-style dose run (title idle 0 / 15 / 45 s → START, cold), WebGPU then WebGL2.
 - The device before/after: gpu-census.yml on macos-latest (Dawn/Metal), then A·D2's iPhone 14 Pro cold entry,
   WebGPU then WebGL2.

@@ -2267,7 +2267,7 @@ function scheduleFlybyTrack(settle) {
   const prep = _menuGate.prep = { want, tod: raceTimeOfDay, weather: raceWeather, key: menuKey(want), bkey: buildKey(want), building: false, owner: null, step: null };
   const current = prep.current = () => generation === _menuGate.generation && state === "menu" &&
     !setupPreviewOn && trackIdx === want && raceTimeOfDay === prep.tod && raceWeather === prep.weather &&
-    (!els.select.hidden || !$("race-settings").hidden || (uiExperience && uiExperience.wantsTrack()));
+    (!els.select.hidden || !$("race-settings").hidden || (uiExperience && uiExperience.wantsTrack()) || titleWarm.wants());
   const prepare = async () => {
     if (!current()) return;
     try {
@@ -3533,6 +3533,10 @@ const garagePre = GaragePrebuild.create(G, { gate: _menuGate, setupCam, menuIdle
   ui: () => uiExperience, studio: () => _studio, worldReady: () => menuWorld() });
 const renderSetupPreview = garagePre.timed(setupCam.renderSetupPreview);
 garagePre.start();
+// The same prep and program warm on an idle TITLE, once per update on a phone (js/perf/title-warm.js, A·W50).
+const titleWarm = TitleWarm.create(G, { $, ui: () => uiExperience, schedule: () => scheduleFlybyTrack(true), idleMs: MENU_IDLE_MS,
+  warmable: () => !!gfx.warm, prepReady: () => { const p = menuPrep(); return p.world && p.done && p.warmed && p.warmFrames === 0 && !p.warming; } });
+titleWarm.start();
 // The three shadow-map passes (js/render/shared/shadow-pass.js): sun snap cache,
 // per-frame car map, night lamp map, the caster pools and the blob flush.
 const shadowPass = ShadowPass.create(G, { teamMesh, vStd, cockpitCaster: carDraw.cockpitCaster });

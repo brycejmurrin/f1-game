@@ -4905,6 +4905,9 @@
       ]
     },
     "js/core/save-schema-registry.js": {
+      "entry": [
+        "tests/unit/title-warm.test.mjs"
+      ],
       "noteWrite": [
         "tests/unit/save-schema-registry.test.mjs"
       ],
@@ -6742,7 +6745,8 @@
       ],
       "scheduleFlybyTrack": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/settings-open-perf.test.mjs"
+        "tests/unit/settings-open-perf.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "seatsFor": [
         "tests/unit/legends-team.test.mjs"
@@ -6870,6 +6874,7 @@
         "tests/unit/results-cam.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/sporting-regs.test.mjs",
+        "tests/unit/title-warm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
@@ -7179,7 +7184,8 @@
       ],
       "create": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-prebuild.test.mjs"
+        "tests/unit/garage-prebuild.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "homeKind": [
         "tests/unit/garage-prebuild.test.mjs"
@@ -7213,17 +7219,20 @@
       ],
       "start": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-prebuild.test.mjs"
+        "tests/unit/garage-prebuild.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "state": [
-        "tests/unit/garage-prebuild.test.mjs"
+        "tests/unit/garage-prebuild.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "stop": [
         "tests/unit/garage-arrival.test.mjs"
       ],
       "tick": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-prebuild.test.mjs"
+        "tests/unit/garage-prebuild.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "timed": [
         "tests/unit/garage-prebuild.test.mjs"
@@ -10013,6 +10022,14 @@
       ],
       "wanted": [
         "tests/unit/three-inspector.test.mjs"
+      ]
+    },
+    "js/perf/title-warm.js": {
+      "create": [
+        "tests/unit/title-warm.test.mjs"
+      ],
+      "poll": [
+        "tests/unit/title-warm.test.mjs"
       ]
     },
     "js/physics/aero-zones.js": {
