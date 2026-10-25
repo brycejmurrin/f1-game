@@ -324,6 +324,7 @@ const TrackBuildClient = (function () {
           const r = recs[i];
           const args = (r.op === "mesh" || r.op === "chunked") ? stampKeep(r.args) : r.args;
           await prepare(r, args);
+          checkLive(); // preparation also yields a microtask for plain uploads
           const opStart = performance.now();
           real[i++] = r.op === "mesh" ? gfx.createMesh(...args)
             : r.op === "chunked" ? gfx.createChunkedMesh(...args) : gfx.createInstancedBatch(...r.args);

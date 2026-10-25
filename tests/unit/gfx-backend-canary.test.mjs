@@ -42,7 +42,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx, recordingOverlay } from "../helpers/glx-mock.mjs";
-import { gameSource, GAME_REL } from "../helpers/game-source.mjs";
+import { gameSource, symbolSource, GAME_REL } from "../helpers/game-source.mjs";
 import { bootRendererBoot } from "../helpers/renderer-boot-vm.mjs";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -270,10 +270,22 @@ test("first world present re-arms the canary so a jetsam mid-frame still reverts
   assert.match(before, /armBackendProbe\(\)\s*;\s*(?:\n\s*if \(!XrBoot\.present\(gfx, _xrEyes, po\)\) )?$/,
     "the last statement before gfx.present(po) must arm the canary");
   assert.match(after, /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/);
-  const helper = fnBody(game, "armBackendProbe");
-  assert.match(helper, /backendPreference\(\)/,
-    "canary re-arm must resolve an unset preference to the default THREE pick");
-  assert.match(helper, /setItem\(\s*"apex26\.gfxBackendProbe"/);
+  const helper = symbolSource("function armBackendProbe()");
+  for (const pref of ["three", "webgpu", "webgl2"]) {
+    const writes = [];
+    const ctx = vm.createContext({ _backendProved: false, _backendBound: true, _probeArmed: false,
+      backendPreference: () => pref, localStorage: { setItem: (...args) => writes.push(args) } });
+    vm.runInContext(helper + "\narmBackendProbe(); armBackendProbe();", ctx, { filename: absSrc(GAME_REL) });
+    assert.deepEqual(writes, pref === "webgl2" ? [] : [["apex26.gfxBackendProbe", pref]],
+      "only deferred backends arm, once, using the resolved preference");
+    assert.equal(ctx._probeArmed, pref !== "webgl2");
+    for (const flags of [{ _backendProved: true }, { _backendBound: false }]) {
+      Object.assign(ctx, { _backendProved: false, _backendBound: true, _probeArmed: false }, flags);
+      writes.length = 0;
+      vm.runInContext("armBackendProbe()", ctx, { filename: absSrc(GAME_REL) });
+      assert.deepEqual(writes, [], "proved and unbound backends never arm");
+    }
+  }
 });
 
 test("RENDERER picker lives in renderer-picker.js, not game.js or gfx-quality.js", () => {
@@ -692,9 +704,16 @@ test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
   const fx = read("js/render/three/tsl-fx.js");
   const start = fx.indexOf("if (decalCache.size >= DECAL_CACHE_CAP)");
   const evict = fx.slice(start, fx.indexOf("m = fxMaterial({ doubleSided: true, key: \"tlx-fx-decal\" })", start));
-  assert.match(evict, /decalCache\.delete\(k\)/);
-  const code = evict.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-  assert.doesNotMatch(code, /\.dispose\s*\(/);
+  let disposed = 0;
+  const current = { __tlxFrame: 8, dispose() { disposed++; } };
+  const old = { __tlxFrame: 7, dispose() { disposed++; } };
+  const decalCache = new Map([["current", current], ["old", old]]);
+  const _evicted = [], _fxMats = [current, old], _decalFrame = 8, DECAL_CACHE_CAP = 2;
+  eval(evict);
+  assert.deepEqual([...decalCache.keys()], ["current"], "eviction skips materials used in this frame");
+  assert.deepEqual(_evicted, [old], "disposal is deferred until after presentation");
+  assert.deepEqual(_fxMats, [current], "eviction releases the per-frame material registry too");
+  assert.equal(disposed, 0, "neither live nor evicted material is disposed during draw-list construction");
 });
 
 test("TLX decal programs share a material map reference, not the first car's texture node", () => {
@@ -6160,7 +6179,7 @@ test("all track loaders release selector ownership before building, even on fail
     assert.equal(_menuGate.warm, 0);
     throw new Error("build failed");
   };
-  const load = eval("(function(idx){" + fnBody(read("js/game.js"), "loadTrack") + "})");
+  const load = eval("(function(idx){" + fnBody(symbolSource("function loadTrack("), "loadTrack") + "})");
   assert.throws(() => load(0), /build failed/);
   assert.equal(_menuGate.track, null, "failed replacement cannot retain a stale world");
 });
@@ -6206,7 +6225,10 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const cockpitBodies = {}, cockpitBodyOrder = [], COCKPIT_BODY_CACHE_MAX = 3;
   let cockpitStyle = "standard";
   const CockpitOpts = { halo: () => true, haloSize: () => 2, body: () => cockpitStyle }, Parts = { getVisualTiers: () => ({}) };
-  const Car3D = { build: () => { builds++; return {}; } };
+  const recipes = [];
+  const Car3D = { build: (_c1, _c2, recipe) => { builds++; recipes.push(recipe); return {}; } };
+  let playerParts = null, playerPartsTeam = "";
+  const playerPartsFor = eval("(" + fnSource(read("js/car/car-draw.js"), "function playerPartsFor(") + ")");
   // js/car/car-draw.js reads the backend and the parts through the G façade and the livery through deps.
   const G = { gfx: { createMesh: x => x }, getTeamParts: () => ({}) };
   const deps = { resolveLivery: () => ({ c1: [], c2: [] }) };
@@ -6214,14 +6236,17 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
   const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "playerBodyMesh") + "})");
   // cockpitBodyMesh memoises its key on the last inputs and builds through a hoisted factory.
-  let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "";
+  let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;
   const buildPendingCockpitBody = eval("(function(){" + fnBody(read("js/car/car-draw.js"), "buildPendingCockpitBody") + "})");
   const cockpitKey = eval("(function(team, car, visualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitKey") + "})");
   const cockpit = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitBodyMesh") + "})");
   const team = { id: "mclaren" }, car = { num: 81 };
   const preparedBody = body(team, car, "selected-setup"), preparedCockpit = cockpit(team, car, "selected-setup");
   assert.equal(playerVisualKey, "previous-setup", "menu preparation does not mutate race globals");
+  assert.equal(recipes[0].parts != null, true, "menu preparation resolves body parts before race state exists");
+  assert.deepEqual(recipes[1].parts, recipes[0].parts, "cockpit preparation resolves the same parts recipe");
   playerVisualKey = "selected-setup";
+  playerParts = { race: true }; playerPartsTeam = team.id;
   assert.equal(body(team, car), preparedBody); assert.equal(cockpit(team, car), preparedCockpit);
   assert.equal(builds, 2, "race reuses both prepared meshes instead of rebuilding");
   cockpitStyle = "wide";
@@ -7341,9 +7366,8 @@ test("GLX mirrorBegin / envFaceBegin put their active flag down when begin() thr
 // 08-F3: render() asked the backend for its full backendState() (TLX: ~50 fields, a meshPool walk, ~1 KB of garbage)
 // every frame to read one boolean. Every backend now carries a cheap ctxLost(); backendState() is only the fallback.
 test("game.js gfxContextLost reads the cheap ctxLost() accessor, not backendState() (08-F3)", () => {
-  const game = read("js/game.js");
-  const fn = span(game, "function gfxContextLost()", "function render(dt)", "gfxContextLost");
-  const run = (gfx) => vm.runInContext(fn + "\ngfxContextLost();", vm.createContext({ gfx }));
+  const fn = symbolSource("function gfxContextLost()");
+  const run = (gfx) => vm.runInContext(fn + "\ngfxContextLost();", vm.createContext({ gfx }), { filename: absSrc(GAME_REL) });
   let built = 0;
   const bs = () => { built++; return { ctxLost: true }; };
   assert.equal(run({ ctxLost: () => false, backendState: bs }), false);
@@ -7353,12 +7377,27 @@ test("game.js gfxContextLost reads the cheap ctxLost() accessor, not backendStat
   assert.equal(run({}), false);
   assert.equal(run(null), false);
   assert.equal(run({ ctxLost() { throw new Error("x"); } }), false, "a throwing accessor reads as not lost");
-  // Each backend exposes it, and it reads the same flag its backendState reports.
-  assert.match(read("js/render/glx/glx.js"), /ctxLost: \(\) => _ctxLost,/);
-  assert.match(read("js/render/webgpu/wgx.js"), /ctxLost: \(\) => !!_lost,/);
+  // Execute backend accessors as well: a boolean must track loss without a diagnostic snapshot.
+  const glx = bootGlx();
+  assert.equal(glx.GLX.ctxLost(), false);
+  glx.loseContext();
+  assert.equal(glx.GLX.ctxLost(), true);
+  const wgx = read("js/render/webgpu/wgx.js");
+  const accessor = wgx.match(/ctxLost:\s*(\(\)\s*=>[^,\n]+)/);
+  assert.ok(accessor, "WGX exposes its context-loss accessor");
+  const lost = vm.createContext({ _lost: false });
+  vm.runInContext("var accessor = " + accessor[1], lost, { filename: absSrc("js/render/webgpu/wgx.js") });
+  assert.equal(vm.runInContext("accessor()", lost, { filename: absSrc("js/render/webgpu/wgx.js") }), false);
+  lost._lost = { reason: "destroyed" };
+  assert.equal(vm.runInContext("accessor()", lost, { filename: absSrc("js/render/webgpu/wgx.js") }), true);
   const tlx = read("js/render/three/tlx.js");
-  assert.match(tlx, /ctxLost\(\) \{ return !!_deviceLost; \},/, "the __tlx object");
-  assert.match(tlx, /ctxLost\(\) \{\s*const t = this && this\.__tlx;\s*return !!\(t && typeof t\.ctxLost === "function" && t\.ctxLost\(\)\);/, "the façade that game.js sees");
+  const facade = new Function(fnBody(tlx, "ctxLost"));
+  assert.equal(facade.call({}), false);
+  assert.equal(facade.call({ __tlx: { ctxLost: () => false } }), false);
+  assert.equal(facade.call({ __tlx: { ctxLost: () => true } }), true);
+  const backend = new Function("_deviceLost", fnBody(tlx.slice(tlx.lastIndexOf("ctxLost()")), "ctxLost"));
+  assert.equal(backend(false), false);
+  assert.equal(backend({ reason: "destroyed" }), true);
 });
 
 // 14-F1: window.__apex is NULL on the shipped build (game.js declares it null, only dev surfaces fill it), so
@@ -7378,7 +7417,7 @@ test("COPY DIAG copies a real payload when __apex is null, and prefers __apex.di
       liveBackend: () => "three", unavailableDiagnostics: () => JSON.stringify({ renderer: { stored: null } }),
       setTimeout() {},
     });
-    vm.runInContext(fn + "\ncopyDiag(btn);", ctx);
+    vm.runInContext(fn + "\ncopyDiag(btn);", ctx, { filename: absSrc("js/perf/renderer-picker.js") });
     for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
     return { btn, written };
   };

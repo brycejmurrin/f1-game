@@ -959,11 +959,11 @@ function bootCamModes(camMode = 2, extra = {}) {
   const sb = uiSandbox(dom, { CamTunerPanel: { refresh() {} }, ...extra });
   vm.runInNewContext(src("js/camera/mode-switch.js"), sb, { filename: absSrc("js/camera/mode-switch.js") });
   const store = {};
-  const G = { $: (id) => dom.byId(id), camMode, camCutT: 0, store: { set: (k, v) => { store[k] = v; }, get: () => null } };
+  const G = { $: (id) => dom.byId(id), state: "race", paused: false, camMode, camCutT: 0, store: { set: (k, v) => { store[k] = v; }, get: () => null } };
   const api = sb.CamModes.create(G);
   const trigger = dom.byId("btn-cam");
   const open = () => { dom.dispatch(trigger, { type: "contextmenu" }); return dom.document.querySelector("#campicker"); };
-  return { dom, G, api, store, trigger, open, key: (el, k) => dom.dispatch(el, { type: "keydown", key: k }), active: () => dom.document.activeElement };
+  return { dom, G, api, store, trigger, open, runTimers: () => sb.__timers.splice(0).forEach((fn) => fn()), key: (el, k) => dom.dispatch(el, { type: "keydown", key: k }), active: () => dom.document.activeElement };
 }
 
 test("camera picker is a keyboard radio menu and cannot outlive the race layer", () => {
@@ -999,6 +999,30 @@ test("camera picker is a keyboard radio menu and cannot outlive the race layer",
   const game = gameCode();
   assert.match(fnBody(game, "quitToMenu", "game entry"), /hideCamPicker\(\s*\)/);
   assert.match(fnBody(game, "setPaused", "game entry"), /hideCamPicker\(\s*\)/);
+});
+
+test("camera picker refuses hidden, paused and inactive race layers, including queued holds", () => {
+  const blocked = [
+    ["hidden document", (h) => { h.dom.document.hidden = true; }],
+    ["paused race", (h) => { h.G.paused = true; }],
+    ["menu", (h) => { h.G.state = "menu"; }],
+    ["missing state", (h) => { delete h.G.state; }],
+    ["hidden HUD", (h) => { h.dom.body.classList.add("hud-hidden"); }],
+    ["open tuner", (h) => { h.dom.body.classList.add("lt-open"); }],
+  ];
+  for (const [label, block] of blocked) {
+    const h = bootCamModes();
+    h.dom.dispatch(h.trigger, { type: "pointerdown" });
+    block(h);
+    h.runTimers();
+    assert.equal(h.open(), null, `${label}: neither queued hold nor context menu builds the picker`);
+    assert.equal(h.trigger.getAttribute("aria-expanded"), "false", label);
+  }
+  const h = bootCamModes();
+  h.G.state = "count";
+  h.dom.dispatch(h.trigger, { type: "pointerdown" });
+  h.runTimers();
+  assert.equal(h.dom.document.querySelector("#campicker").hidden, false, "countdown permits the hold picker");
 });
 
 test("in a REAL RACE WATCH the picker and the C cycle carry AUTO (the TV director); outside one they do not", () => {

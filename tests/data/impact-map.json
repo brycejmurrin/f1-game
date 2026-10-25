@@ -2396,6 +2396,9 @@
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/daily-challenge.test.mjs"
       ],
+      "playerPartsFor": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "prepareMenuCarAssets": [
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
@@ -13422,7 +13425,8 @@
         "tests/unit/frustum-buckets.test.mjs"
       ],
       "*": [
-        "tests/unit/build-worker.test.mjs"
+        "tests/unit/build-worker.test.mjs",
+        "tests/unit/deploy-tool.test.mjs"
       ]
     },
     "js/render/shared/gltf.js": {
@@ -14268,6 +14272,7 @@
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/census-verdict.test.mjs",
         "tests/unit/ci-gate-selection.test.mjs",
+        "tests/unit/deploy-tool.test.mjs",
         "tests/unit/fleet-owner.test.mjs",
         "tests/unit/frame-hitch-analyse.test.mjs",
         "tests/unit/global-registry.test.mjs",

@@ -714,6 +714,21 @@ test("a targeted edit routes ONLY the suite that reads it, in test:sweeps order"
   }
 });
 
+test("worker-only manifest dependencies route the worker sweep without rebuilding the fleet", () => {
+  const extras = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs")).TRACK_WORKER_EXTRA;
+  assert.ok(extras.includes("js/render/shared/frustum.js"), "premise: chunk dependencies are worker extras");
+  for (const dep of extras) {
+    assert.equal(GEOMETRY_PATHS.test(dep), false, `${dep} is a worker input, not a fleet input`);
+    assert.deepEqual(targetedSuites([dep]), ["tests/unit/build-worker.test.mjs"],
+      `${dep} must run the sweep that imports the worker's full manifest`);
+    assert.deepEqual(targetedSuites([dep + ".bak"]), [], "worker paths are exact files");
+  }
+  assert.equal(GEOMETRY_PATHS.test("tools/gfx/gpu-game-check.mjs"), false, "the profile probe builds no fleet geometry");
+  assert.deepEqual(targetedSuites(["tools/gfx/gpu-game-check.mjs"]), ["tests/unit/build-worker.test.mjs"]);
+  assert.deepEqual(targetedSuites(extras), ["tests/unit/build-worker.test.mjs"], "worker dependencies deduplicate");
+  assert.deepEqual(targetedSuites(["js/render/three/tlx.js"]), [], "unrelated renderer files stay outside the worker sweep");
+});
+
 /* THE NO-DRIFT RULE. A suite that starts reading a js/ or tools/ source no
  * tier names is a sweep the trigger silently stops running — the exact class
  * geometry-paths.mjs exists to close. Read from each suite's SOURCE (comments

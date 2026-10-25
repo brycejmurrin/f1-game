@@ -181,10 +181,17 @@ test("A-W2: WebGPU (fmt24) and the tools' raw pack (no fmt24) are untouched by t
     }
   }
   assert.equal(on.packStats.pad4, 0, "nothing widened");
-  // Both shipping call sites hand the WebGL2 rule over as `false`: the chunked factory's fmt24() and tlx.js buildGeometry.
-  assert.match(CHUNKED, /const fmt24 = \(\) => !!\(ctx && ctx\.isWebGPU && ctx\.isWebGPU\(\)\);/);
-  assert.match(read("js/render/three/tlx.js"), /const fmt24 = !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\);/);
-  assert.match(CHUNKED, /const pad = fmt24 === false && pad4On && \(itemSize === 3 \|\| itemSize === 1\);/);
+  // Only explicit WebGL2 mode widens narrow packed strides. Compare the
+  // actual shader fetch so the policy survives helper extraction.
+  const narrow = off.packAttr(THREE, SRC.nrm, N * 3, 3, "unit", false);
+  const wide = on.packAttr(THREE, SRC.nrm, N * 3, 3, "unit", false);
+  assert.equal(narrow.itemSize, 3); assert.equal(wide.itemSize, 4);
+  assert.equal(stride(narrow), 6); assert.equal(stride(wide), 8);
+  for (let v = 0; v < N; v++) assert.deepEqual(fetch(wide, v).slice(0, 3), fetch(narrow, v));
+  for (const fmt24 of [true, undefined]) {
+    const a = on.packAttr(THREE, SRC.nrm, N * 3, 3, "unit", fmt24);
+    assert.equal(a.itemSize, fmt24 === true ? 4 : 3);
+  }
 });
 
 test("A-W2: the lit program reads a widened colour as vec3 and a Float32 mat as float — the same inputs, one wider fetch", async (t) => {

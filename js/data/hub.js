@@ -638,7 +638,8 @@ const DataHub = (function () {
     fieldsRow.appendChild(sesField);
 
     box.appendChild(fieldsRow);
-    const pickerError = el("div", "dh-picker-error");
+    const pickerError = el("div");
+    pickerError.setAttribute("data-role", "picker-error");
     pickerError.setAttribute("role", "status");
     pickerError.hidden = true;
     box.appendChild(pickerError);

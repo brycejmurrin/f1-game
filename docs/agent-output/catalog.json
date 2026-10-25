@@ -819,7 +819,8 @@
     },
     {
       "path": "tools/ci/deploy-child.mjs",
-      "classification": "ambiguous"
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/ci/deploy.mjs",
@@ -1450,7 +1451,8 @@
     },
     {
       "path": "tools/desktop/minify-worker.mjs",
-      "classification": "ambiguous"
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/desktop/minify.mjs",
@@ -2538,7 +2540,8 @@
     },
     {
       "path": "tools/mcp/job-admission.mjs",
-      "classification": "ambiguous"
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/mcp/js-debugger-boot.cjs",
