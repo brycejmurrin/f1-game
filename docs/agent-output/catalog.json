@@ -2809,7 +2809,8 @@
     },
     {
       "path": "tools/perf/devicefarm-method.mjs",
-      "classification": "ambiguous"
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
     },
     {
       "path": "tools/perf/devicefarm-opus-probe.mjs",
