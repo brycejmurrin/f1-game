@@ -310,7 +310,7 @@ const KICK_API = (track, tod) => `
   Promise.resolve(__apex.race(${JSON.stringify(track)}, ${JSON.stringify(tod)}, "dry")).then((v) => { window.__dfRace = { ok: !!v, ms: performance.now() - window.__dfT0 }; },
     (e) => { window.__dfRace = { err: String(e) }; });
   return prev;`;
-const KICK_MENU = (track, tod) => `
+const KICK_MENU = (track, tod, idleS = 0) => `
   window.__dfRace = undefined; window.__dfT0 = performance.now(); const M = window.__dfMenu = { entry: "menu", steps: [] };
   let prev = null; try { prev = RaceEntryProfile.snapshot().winT0; } catch (_) {}
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -327,6 +327,7 @@ const KICK_MENU = (track, tod) => `
     M.prepReady = await until(() => { const p = __apex.menuPrep(); return p && p.state === "menu" && p.world && p.done && p.warmFrames === 0 && !p.warming; }, 60000);
     await until(() => { const g = __apex.garagePrebuild && __apex.garagePrebuild(); return !g || g.garageReady || !!(g.last && g.last.want === "settings"); }, 30000);
     M.prepWaitMs = Math.round(performance.now() - t1); step("prepared");
+    if (${idleS}) { await sleep(${idleS * 1000}); step("idled"); }
     window.__dfT0 = performance.now(); document.getElementById("rs-go").click(); step("start-race");
     const t2 = performance.now(); await until(() => { const s = __apex.info().state; return s && s !== "menu"; }, 180000);
     window.__dfRace = { ok: true, ms: performance.now() - t2 };
@@ -720,12 +721,39 @@ async function opusScenario(ctx, url, report, out) {
   await openUrl(ctx, withApex(url));
   const script = `const cb = arguments[arguments.length - 1]; (${probe.toString()})().then(cb, (e) => cb(JSON.stringify({ probeError: String(e && e.message || e) })));`;
   let raw;
+  // Run 2026-10-25: execute/async died "after 30 ms" with the endpoint's default script timeout; set it explicitly (ms).
+  try { wd(ctx.base, "POST", `/session/${ctx.sid}/timeouts`, { script: 60000 }); } catch (e) { log("timeouts: " + e.message.slice(0, 120)); }
   try { raw = wd(ctx.base, "POST", `/session/${ctx.sid}/execute/async`, { script, args: [] }); }
   catch (e) { raw = JSON.stringify({ probeError: "execute/async: " + e.message.slice(0, 160) }); }
   let parsed; try { parsed = JSON.parse(raw); } catch (_) { parsed = { raw: String(raw).slice(0, 400) }; }
   report.opus = parsed;
   log("opus " + JSON.stringify(parsed));
   fs.writeFileSync(path.join(out, "opus-probe.json"), JSON.stringify(parsed, null, 2));
+}
+// coldrace (A·W50, #3713): the cold first race on the player's path. --cold-arms menu30,title0,title15,title45,second:
+// "menuN" idles N s on RACE SETTINGS (after the menu's own prep) before START; "titleN" idles N s on the title screen
+// before RACE; "second" is a fresh page after the others in the same session (a warm pipeline cache: the control).
+// One fresh page per arm, the first arm is the cold one only on a fresh unit (rowMeta.first). Per arm: the entry
+// window with warm timeline (mirrorPrepare/programWarm/rig/warmCarAssets via the stage table and memState().warm),
+// then --cold-win-s seconds of frames after a 3 s settle (fps, worst frame, hitches). gpuMs and memory peak are NOT collected.
+async function coldraceScenario(ctx, url, report, out) {
+  const [track, tod = "day"] = opt("track", "monza:day").split(":");
+  const pin = opt("cold-pin", "webgpu"), winS = Number(opt("cold-win-s", "20"));
+  const R = report.coldrace = { pin, track, tod, rows: [] };
+  await exec(ctx.base, ctx.sid, PIN(pin));
+  for (const [i, arm] of opt("cold-arms", "menu30,title0,title15,title45,second").split(",").entries()) {
+    const m = /^(menu|title)(\d+)$/.exec(arm), idle = m ? Number(m[2]) : 0;
+    const r = await openUrl(ctx, withApex(url));
+    if (m && m[1] === "title" && idle) await sleep(idle * 1000);
+    const entry = await timedEntry(ctx, `coldrace ${arm}`, KICK_MENU(track, tod, m && m[1] === "menu" ? idle : 0));
+    await exec(ctx.base, ctx.sid, GO);
+    const menu = await exec(ctx.base, ctx.sid, "return window.__dfMenu || null;");
+    const s2 = await sampleWin(ctx, winS * 1000, 3000, "mem: (() => { try { return GLX.__tlx.memState().warm; } catch (_) { return null; } })()");
+    R.rows.push({ arm, idleS: idle, api: r.api, entryMs: entry.windowMs, stages: entry.stages, menu, ...rowMeta(ctx, report, i, entry), ...s2 });
+    log(`coldrace ${arm}: api=${r.api} entry ${entry.windowMs} ms stages=${JSON.stringify(entry.stages)} warm=${JSON.stringify(entry.warm && { total: entry.warm.total, scene: entry.warm.scene, post: entry.warm.post, mirror: entry.warm.mirror, rig: entry.warm.rig && entry.warm.rig.ms })} win=${JSON.stringify(s2.win && { fps: s2.win.fps, max: s2.win.max, n50: s2.win.n50 })} menu=${JSON.stringify(menu && { prepReady: menu.prepReady, prepWaitMs: menu.prepWaitMs, steps: menu.steps })}`);
+    try { shot(ctx.base, ctx.sid, path.join(out, `coldrace-${i}-${arm}.png`)); } catch (_) { /* no shot */ }
+  }
+  pullLogs(ctx.base, ctx.sid, out);
 }
 // photo (#3482): Photo Studio driven by native finger taps from the title screen, every visible control's painted
 // size against the 44 px floor, one shot preset, CAPTURE, CLOSE — and every page error on the way.
@@ -870,6 +898,7 @@ async function run() {
             try { if (sc === "visor") await visorScenario(ctx, opt("url", SITE), opt("visor-pins", "webgl2,webgpu").split(","), report, out);
               else if (sc === "lsab") await lsabScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "opus") await opusScenario(ctx, opt("url", SITE), report, out);
+              else if (sc === "coldrace") await coldraceScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "soak") await soakScenario(ctx, opt("url", SITE), opt("soak-pins", "webgpu").split(","), report, out);
               else if (sc === "photo") await photoScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "flags") await flagsScenario(ctx, opt("url", SITE), report, out);
