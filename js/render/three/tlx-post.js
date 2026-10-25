@@ -68,6 +68,7 @@
     const ownedMaterials = new Set();
     let quad = null;
     let disposed = false;
+    let viewportScope = null;
     function ownRT(rt) { ownedRTs.add(rt); return rt; }
     function ownTexture(tex) { if (tex) ownedTextures.add(tex); return tex; }
     function trackMaterial(mat) { if (mat) ownedMaterials.add(mat); return mat; }
@@ -75,6 +76,7 @@
       if (disposed) return;
       disposed = true;
       if (quad) quad.material = null;
+      if (viewportScope) viewportScope.dispose();
       for (const mat of ownedMaterials) {
         try { mat.dispose(); } catch (_) { /* device already dying */ }
       }
@@ -174,7 +176,8 @@
     // chain draws into — rt.viewport (0, 0, lw, lh), the top-left of the target on
     // both backends — and the ratio uniforms of the VP.tex readers. Off: place()
     // is rtSetSize and nothing else here changes.
-    const VP = ctx.vp || null;
+    if (ctx.fixedTargets && ctx.vp && ctx.vp.enabled && ctx.vp.scope) viewportScope = ctx.vp.scope();
+    const VP = viewportScope || ctx.vp || null;
     const fixed = !!(ctx.fixedTargets && VP && VP.enabled);
     let PW = 1, PH = 1;   // the physical (present) size; fixed mode only
     // Post working size. On phones this is half the scene (W×H); aux passes

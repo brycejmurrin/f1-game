@@ -494,7 +494,11 @@ tools directly.)
 The `tooling-fast` renderer contracts also include `three-shared-binding-update`
 (shared group invalidation and side effects), `webgpu-uint16-index` (mapped bytes
 and aligned partial writes), `tlx-mirror-inset` (WGSL/GLSL derivative safety), and
-`tlx-smith-root` (lazy lamp-root reuse). These Node checks do not measure device speed.
+`tlx-smith-root` (generated lamp-root control-flow nesting), and
+`tlx-glow-instancing` (packed light records, instance layout, growth and isolated
+warm-probe ownership). `tlx-viewport` covers texture rebinds and post-chain reader
+retirement; `car-presentation-vm` covers shared/far cache generation and disposal.
+These Node checks do not measure device speed or replace rendered validation.
 
 ### Partitions (not topical — they do not count for coverage)
 

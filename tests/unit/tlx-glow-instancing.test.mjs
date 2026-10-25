@@ -1,0 +1,89 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import * as THREE from '../../vendor/three-0.186.1/three.webgpu.min.js';
+import {fnSource} from '../helpers/fn-source.mjs';
+import {absSrc} from '../helpers/abs-src.mjs';
+import {makeFakeGL, installThreeGlobals} from '../helpers/fake-webgl2.mjs';
+const source = fs.readFileSync(new URL('../../js/render/three/tlx.js', import.meta.url), 'utf8');
+const fxSource = fs.readFileSync(new URL('../../js/render/three/tsl-fx.js', import.meta.url), 'utf8');
+const makeFx = vm.runInNewContext(`(${fnSource(fxSource,'function fx(THREE, TSL, opts) {')})`, {}, {filename:absSrc('js/render/three/tsl-fx.js')});
+const corners = source.match(/const _glowCorners = (\[[^;]+\]);/)[1];
+function fixture() {
+  const disposed=[], records=[], glowStream={geo:null,ib:null,cap:0};
+  const context={THREE, Float32Array, Math, glowStream, _instUsage:THREE.StaticDrawUsage,
+    _glowCorners:JSON.parse(corners), frameEye:[0,0,0], _fxFrame:{}, fx:makeFx(THREE,THREE.TSL,{}),
+    disposeGeometry(g){disposed.push(g);g.dispose();}, pushRec(...args){records.push(args);}};
+  const methods=['function ensureGlowStream(instances, slot = glowStream) {','function uploadStream(slot, floats) {','function setRange0(attr, count) {'].map(d=>fnSource(source,d)).join('\n');
+  const api=vm.runInNewContext(`${methods};({drawGlow:${fnSource(source,'drawGlow(lights, str) {').replace(/^drawGlow/,'function')},ensureGlowStream})`,context,{filename:absSrc('js/render/three/tlx.js')});
+  return {context,api,glowStream,disposed,records};
+}
+function light(x=10,glare=1){return [x,0,0,10,20,30,20,0,0,0,0,0,0,0,glare];}
+function many(n){return new Float32Array(Array.from({length:n},(_,i)=>light(10+i%20)).flat());}
+
+test('glow admission and packed values retain fade, HDR clamp, order and instance rates',()=>{
+ const f=fixture(); f.api.drawGlow(new Float32Array([...light(10),...light(170),...light(20,0),...light(115)]),1);
+ const g=f.glowStream.geo, a=f.glowStream.ib.array;
+ assert.equal(g.instanceCount,2); assert.equal(g.attributes.position.count,6); assert.deepEqual(g.drawRange,{start:0,count:6});
+ assert.equal(g.attributes.position.data,g.attributes.fxCorner.data);
+ assert.equal(g.attributes.position.data.isInstancedInterleavedBuffer,undefined);
+ for(const key of ['fxCenter','fxColor','fxRadius'])assert.equal(g.attributes[key].data,f.glowStream.ib);
+ assert.equal(f.glowStream.ib.isInstancedInterleavedBuffer,true);assert.equal(f.glowStream.ib.stride,7);
+ const expected=new Float32Array([10,0,0,10*(3.2/30)*0.875,20*(3.2/30)*0.875,30*(3.2/30)*0.875,2*1.3,
+ 115,0,0,10*(3.2/30)*0.875*0.5,20*(3.2/30)*0.875*0.5,30*(3.2/30)*0.875*0.5,2*1.3]);
+ assert.deepEqual(a.slice(0,14),expected);
+ assert.equal(f.glowStream.ib.updateRanges[0].count*4,56);
+ assert.equal(f.records.length,1); assert.equal(f.records[0][2],f.context.fx.glowMat);
+});
+
+test('glow growth disposes previous geometry; shrink, zero and moving eye preserve active prefix',()=>{
+ const f=fixture();f.api.drawGlow(many(1),1);const first=f.glowStream.geo;let disposed=0;first.addEventListener('dispose',()=>disposed++);
+ f.api.drawGlow(many(40),1);assert.equal(disposed,1);assert.deepEqual(f.disposed,[first]);assert.equal(f.glowStream.cap,64);
+ const grown=f.glowStream.geo;f.api.drawGlow(many(2),1);assert.equal(f.glowStream.geo,grown);assert.equal(grown.instanceCount,2);
+ const before=f.records.length;f.context.frameEye=[1000,0,0];f.api.drawGlow(many(2),1);assert.equal(grown.instanceCount,0);assert.equal(f.records.length,before);
+ f.context.frameEye=[0,0,0];f.api.drawGlow(many(1),1);assert.equal(grown.instanceCount,1);assert.equal(f.glowStream.ib.updateRanges[0].count,7);
+});
+
+test('warm owns an independent layout while live draws shrink, grow and compilation fails',async()=>{
+ const f=fixture(),seen=[];f.api.drawGlow(many(3),1);const original=f.glowStream.geo;
+ let rejectCompile;const pending=new Promise((_,reject)=>{rejectCompile=reject;});
+ Object.assign(f.context,{_warmFx:true,skidStream:{},lineStream:{},partStreams:[{},{}],_blob:null,_decalRuns:new Map(),_coWarm:async()=>{},
+  ensureStream(){throw new Error('glow must not use the per-vertex stream allocator');},
+  compileWarmProbe:async(g)=>{seen.push(g);return pending;}});
+ f.context.fx={glowMat:f.context.fx.glowMat};f.context.ensureGlowStream=f.api.ensureGlowStream;
+ const warm=vm.runInNewContext(`(${fnSource(source,'async function warmFxPrograms() {')})`,f.context,{filename:absSrc('js/render/three/tlx.js')});
+ const work=warm();assert.equal(seen[0].instanceCount,1);assert.notEqual(seen[0],original);
+ // Restore producer uniforms while the warm awaits its isolated material probe.
+ f.context.fx.glowStr={value:0};f.api.drawGlow(many(2),1);assert.equal(original.instanceCount,2);
+ f.api.drawGlow(many(40),1);const grown=f.glowStream.geo;assert.notEqual(grown,original);
+ rejectCompile(new Error('compile failed'));await assert.rejects(work,/compile failed/);
+ assert.equal(grown.instanceCount,40);assert.equal(seen[0].instanceCount,1);
+ assert.notEqual(seen[0].attributes.fxCenter.data,grown.attributes.fxCenter.data);
+ const probe=seen[0],data=probe.attributes.fxCenter.data;
+ assert.equal(data.array.byteLength+probe.attributes.position.data.array.byteLength,100);
+ f.context.compileWarmProbe=async(g)=>{assert.equal(g,probe);};await warm();
+ assert.equal(f.glowStream.geo,grown);assert.equal(grown.instanceCount,40);
+ let released=0;probe.addEventListener('dispose',()=>released++);f.context.fx.glowMat.dispose();
+ assert.equal(released,1);assert.equal(f.glowStream.warm,null);
+ assert.equal(f.glowStream.geo,grown);assert.equal(grown.instanceCount,40);
+});
+
+test('actual vendor builds one six-vertex instanced draw; glow state and particle shader remain distinct',async()=>{
+ installThreeGlobals();const fake=makeFakeGL(), draws=[];
+ fake.gl.drawArraysInstanced=(...args)=>draws.push(args);
+ const renderer=new THREE.WebGPURenderer({canvas:fake.canvas,context:fake.gl,forceWebGL:true,antialias:false});await renderer.init();
+ const f=fixture();f.api.drawGlow(many(3),1);
+ const mat=f.context.fx.glowMat;
+ assert.equal(mat.transparent,true);assert.equal(mat.depthWrite,false);assert.equal(mat.depthTest,true);
+ assert.equal(mat.blendSrc,THREE.OneFactor);assert.equal(mat.blendDst,THREE.OneFactor);
+ assert.equal(mat.blendSrcAlpha,THREE.ZeroFactor);assert.equal(mat.blendDstAlpha,THREE.OneFactor);assert.equal(mat.forceSinglePass,true);
+ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();camera.position.set(0,0,5);
+ const mesh=new THREE.Mesh(f.glowStream.geo,mat);mesh.frustumCulled=false;scene.add(mesh);renderer.render(scene,camera);
+ assert.ok(draws.some(a=>a[2]===6&&a[3]===3),'actual renderer draws six vertices and three instances');
+ const glowCode=fake.shaders.join('\n');assert.match(glowCode,/fxCenter/);assert.doesNotMatch(glowCode,/instanceMatrix/);
+ const p=new THREE.BufferGeometry();for(const [name,size]of [['position',3],['fxCorner',2],['fxColor',3],['fxSize',1],['fxAlpha',1]])p.setAttribute(name,new THREE.BufferAttribute(new Float32Array(size*6),size));
+ scene.remove(mesh);const start=fake.shaders.length;const particles=new THREE.Mesh(p,f.context.fx.particleMats[0]);particles.frustumCulled=false;scene.add(particles);renderer.render(scene,camera);
+ const particleCode=fake.shaders.slice(start).join('\n');assert.doesNotMatch(particleCode,/fxCenter/);assert.match(particleCode,/position/);
+ scene.remove(particles);p.dispose();f.glowStream.geo.dispose();renderer.dispose();
+});
