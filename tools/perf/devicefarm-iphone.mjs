@@ -310,7 +310,7 @@ const KICK_API = (track, tod) => `
   Promise.resolve(__apex.race(${JSON.stringify(track)}, ${JSON.stringify(tod)}, "dry")).then((v) => { window.__dfRace = { ok: !!v, ms: performance.now() - window.__dfT0 }; },
     (e) => { window.__dfRace = { err: String(e) }; });
   return prev;`;
-const KICK_MENU = (track, tod, idleS = 0) => `
+const KICK_MENU = (track, tod, idleS = 0, quick = false) => `
   window.__dfRace = undefined; window.__dfT0 = performance.now(); const M = window.__dfMenu = { entry: "menu", steps: [] };
   let prev = null; try { prev = RaceEntryProfile.snapshot().winT0; } catch (_) {}
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -324,10 +324,13 @@ const KICK_MENU = (track, tod, idleS = 0) => `
     document.getElementById("sel-go").click(); if (!(await until(() => shown("race-settings"), 60000))) throw new Error("no race settings"); step("race-settings");
     const sel = document.getElementById("rs-time-sel"); if (sel && ${JSON.stringify(tod)} !== "default") { sel.value = ${JSON.stringify(tod)}; sel.dispatchEvent(new Event("change", { bubbles: true })); }
     const t1 = performance.now();
-    M.prepReady = await until(() => { const p = __apex.menuPrep(); return p && p.state === "menu" && p.world && p.done && p.warmFrames === 0 && !p.warming; }, 60000);
-    await until(() => { const g = __apex.garagePrebuild && __apex.garagePrebuild(); return !g || g.garageReady || !!(g.last && g.last.want === "settings"); }, 30000);
+    if (!${quick}) {
+      M.prepReady = await until(() => { const p = __apex.menuPrep(); return p && p.state === "menu" && p.world && p.done && p.warmFrames === 0 && !p.warming; }, 60000);
+      await until(() => { const g = __apex.garagePrebuild && __apex.garagePrebuild(); return !g || g.garageReady || !!(g.last && g.last.want === "settings"); }, 30000);
+    }
     M.prepWaitMs = Math.round(performance.now() - t1); step("prepared");
     if (${idleS}) { await sleep(${idleS * 1000}); step("idled"); }
+    try { M.prepAtClick = JSON.parse(JSON.stringify(__apex.menuPrep())); } catch (e) { M.prepAtClick = String(e).slice(0, 80); }
     window.__dfT0 = performance.now(); document.getElementById("rs-go").click(); step("start-race");
     const t2 = performance.now(); await until(() => { const s = __apex.info().state; return s && s !== "menu"; }, 180000);
     window.__dfRace = { ok: true, ms: performance.now() - t2 };
@@ -732,7 +735,8 @@ async function opusScenario(ctx, url, report, out) {
 }
 // coldrace (A·W50, #3713): the cold first race on the player's path. --cold-arms menu30,title0,title15,title45,second:
 // "menuN" idles N s on RACE SETTINGS (after the menu's own prep) before START; "titleN" idles N s on the title screen
-// before RACE; "second" is a fresh page after the others in the same session (a warm pipeline cache: the control).
+// before RACE; "quickN" is titleN with NO menu-prep or garage wait: START is pressed as soon as RACE SETTINGS shows
+// and menuPrep() is recorded at the click (menu.prepAtClick), the S5 symptom path (#3713 part 2); "second" is a fresh page after the others in the same session (a warm pipeline cache: the control).
 // One fresh page per arm, the first arm is the cold one only on a fresh unit (rowMeta.first). Per arm: the entry
 // window with warm timeline (mirrorPrepare/programWarm/rig/warmCarAssets via the stage table and memState().warm),
 // then --cold-win-s seconds of frames after a 3 s settle (fps, worst frame, hitches). gpuMs and memory peak are NOT collected.
@@ -744,8 +748,8 @@ async function coldraceScenario(ctx, url, report, out) {
   for (const [i, arm] of opt("cold-arms", "menu30,title0,title15,title45,second").split(",").entries()) {
     const m = /^(menu|title)(\d+)$/.exec(arm), idle = m ? Number(m[2]) : 0;
     const r = await openUrl(ctx, withApex(url));
-    if (m && m[1] === "title" && idle) await sleep(idle * 1000);
-    const entry = await timedEntry(ctx, `coldrace ${arm}`, KICK_MENU(track, tod, m && m[1] === "menu" ? idle : 0));
+    if (m && (m[1] === "title" || m[1] === "quick") && idle) await sleep(idle * 1000);
+    const entry = await timedEntry(ctx, `coldrace ${arm}`, KICK_MENU(track, tod, m && m[1] === "menu" ? idle : 0, !!m && m[1] === "quick"));
     await exec(ctx.base, ctx.sid, GO);
     const menu = await exec(ctx.base, ctx.sid, "return window.__dfMenu || null;");
     const s2 = await sampleWin(ctx, winS * 1000, 3000, "mem: (() => { try { return GLX.__tlx.memState().warm; } catch (_) { return null; } })()");
