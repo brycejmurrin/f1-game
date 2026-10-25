@@ -203,7 +203,7 @@ test("final-minute countdown announces the race start, including reduced motion"
       setInterval: (fn) => { interval = fn; return 1; }, clearInterval() {},
       F1API: { schedule: () => Promise.resolve([VEGAS]) }
     });
-    vm.runInContext(SRC + ";globalThis.S = DataSchedule;", context);
+    vm.runInContext(SRC + ";globalThis.S = DataSchedule;", context, { filename: absSrc("js/data/schedule.js") });
     const { loadSchedule } = context.S.create({ el, emptyMsg: (t) => el("div", "empty", t) });
     const wrap = await loadSchedule();
     const clock = wrap.children[0].children.find((child) => child.attrs["data-nextgp"] === "countdown");
