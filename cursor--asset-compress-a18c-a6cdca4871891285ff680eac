@@ -1,1 +1,0 @@
-1792809844	Claude	[A·H18] asset compression: tools/gen/assets.mjs tools/gen/import-models.mjs tools/gen/synth-models.mjs tools/gen/compress-*.mjs assets/** tests/unit/*compress*|*ktx* docs/notes/ASSET-COMPRESSION-2026-10-24.md  [cursor/asset-compress-a18c; session a6cdca4871891285ff680eac]

@@ -1,1 +1,0 @@
-1792806556	Bryce Murrin	deep fixes race/car: js/game.js js/race/pit-lane.js js/car/car-draw.js js/garage/setup-camera.js js/physics/collide.js + dedicated unit regressions; user approved active scope override  [cursor/sol-deep-fixes-24-e8b1; session 41dafaf2e4be88d4466a327f]
