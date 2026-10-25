@@ -351,4 +351,8 @@ test("gpu-census mem cycles: race to quit on both three.js paths, opt-in (dispat
   assert.ok(/--mem-cycles "\$\{CENSUS_MEM_CYCLES\}"/.test(step.run) && /for p in webgpu webgl2; do/.test(step.run));
   assert.ok(!step.run.includes("${{"), "no expression expansion inside run (zizmor template-injection)");
   assert.ok(MEMCYCLES_STEP.test(gpuWorkflow), "the controls' cut-out finds the step");
+  // The dispatcher's ls reaches the cycles legs (A·H12 round 3: the phone tier is apex26.forceMobileTier=1), after the pin.
+  assert.ok(step.run.includes('LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done'), "builds $LS from the plan's ls");
+  const cmd = step.run.split("\n").find((l) => l.includes("--mem-cycles"));
+  assert.ok(cmd.indexOf("wgxCapture=0") < cmd.indexOf("$LS"), "the pin precedes $LS so a dispatch can override it");
 });
