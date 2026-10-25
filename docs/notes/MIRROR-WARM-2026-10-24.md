@@ -112,6 +112,22 @@ Lavapipe-only artifacts, not on a phone:
   hundreds of frames in a row.
 - The rig warm's 9–11 s for 28 pairs, which builds 0 pipelines.
 
+## On the device after #3713 (Device Farm ledger row 29, 2026-10-25)
+
+iPhone 14 Pro 20ACE5A3, fresh unit, WebGPU, live build 21432 (#3713 in). A·D2's `coldrace` scenario, arm `menu30`
+(menu prep, then 30 s idle on RACE SETTINGS, then START), Monza day. Only that first arm is cold.
+
+| stage | before (s1-gputimer, 30 s menu idle) | after #3713 |
+|---|---|---|
+| `mirrorPrepare` at race start | 4.7 s | **67 ms** |
+| `programWarm` at race start | 4.7 s | **none**: no warm record has `where: "race"` |
+| `rigWarm` at race start | not separated | **5.7 s** (28 pairs, `mirror: true`) |
+
+Both warm records are `where: "menu"`: the world warm (28.8 s total, mirror 7.3 s) and the garage warm (17.0 s). 92
+pipelines are pinned. Later arms in the same session (Safari cache warm) read `rigWarm` 81–121 ms. So the cold
+race-start cost left on the menu path is the cockpit rig's own pipelines. The rig warm needs the race's player car,
+so no menu or title warm builds them. That is the next item (issue #3673's first-race lane).
+
 ## The title warm (follow-up, 2026-10-25)
 
 Device Farm S5 (iPhone 14 Pro WebGPU, ~8:53 PM PT 2026-10-24): 45 s of TITLE idle advanced nothing. `menuPrep()`
