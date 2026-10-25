@@ -891,7 +891,13 @@ test("deploy child keeps default native streams and JSON launch errors identify 
 test("a hung gate child stops at its ceiling and run() names the timeout instead of hanging", () => {
   // Before: spawnSync had no timeout, so one test file that never ended held --gate-only until the
   // 30-minute background ceiling killed it without a verdict line.
-  assert.ok(CHILD_TIMEOUT_MS >= 60e3 && CHILD_TIMEOUT_MS < 30 * 60e3, "the default ceiling sits inside the 30-minute task limit");
+  if (process.env.APEX_DEPLOY_CHILD_TIMEOUT_MIN) {
+    assert.equal(CHILD_TIMEOUT_MS, Number(process.env.APEX_DEPLOY_CHILD_TIMEOUT_MIN) * 60e3,
+      "the configured ceiling is honored");
+  } else {
+    assert.ok(CHILD_TIMEOUT_MS >= 60e3 && CHILD_TIMEOUT_MS < 30 * 60e3,
+      "the default ceiling sits inside the 30-minute task limit");
+  }
   const t0 = Date.now();
   let err = null;
   try { run(process.execPath, ["-e", "setInterval(() => {}, 1000)"], "hung child", { timeoutMs: 700, json: false }); } catch (e) { err = e; }
