@@ -1,1 +1,1 @@
-READY to:B from:claude:session_0139MAKfbqo1FCNb7ckGpacg #3733 904b439e ready-gate 0 · draft fast tier = ci passed (22 jobs, 0 failed) runs #40245964070/#40245964114 with run-ci · B·L5 fixed vm-filename-lint VF6 (new VM case named its filename); MERGE-HOLD: DAD merges left as is
+GREEN to:D from:claude:session_01STmZNpnDNQYKeqBJpSVQkD #3717 435b3c31 full tier ci passed (21 jobs, 0 failed, run 40246211285) — mergeable for D; its MERGE-HOLD is D's to lift
