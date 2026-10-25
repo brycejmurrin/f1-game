@@ -22,6 +22,25 @@
 self.window = self;
 let _loaded = false;
 const _scenery = new Set();
+const IMPORT_RETRY_MS = [400, 1200];
+function importScriptUrl(u, bust) {
+  if (!bust) return u;
+  return u + (u.indexOf("?") >= 0 ? "&" : "?") + "retry=" + bust;
+}
+async function importScriptsRetry(urls) {
+  const list = Array.isArray(urls) ? urls : [urls];
+  const max = IMPORT_RETRY_MS.length + 1;
+  for (let attempt = 0; attempt < max; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, IMPORT_RETRY_MS[attempt - 1]));
+    try {
+      if (attempt === 0) importScripts(...list);
+      else importScripts(...list.map((u) => importScriptUrl(u, attempt)));
+      return;
+    } catch (e) {
+      if (attempt === max - 1) throw e;
+    }
+  }
+}
 
 // Relative URLs resolve against the PAGE (init's `base`), not this script:
 // assets.js fetches "assets/pack/…", which from js/track/ would 404.
@@ -101,7 +120,7 @@ async function build(m, job) {
     createMesh: rec("mesh"), createChunkedMesh: rec("chunked"), createInstancedBatch: rec("inst"),
     mobileTier: !!m.mobileTier, chunkedTrackCoords: m.chunkedTrackCoords,
   };
-  if (m.scenery && !_scenery.has(m.scenery)) { importScripts(m.scenery); _scenery.add(m.scenery); }
+  if (m.scenery && !_scenery.has(m.scenery)) { await importScriptsRetry(m.scenery); _scenery.add(m.scenery); }
   const def = Tracks.LIST[m.idx];
   if (!def || def.id !== m.id) throw new Error("worker track list differs at " + m.idx + " (" + (def && def.id) + " != " + m.id + ")");
   adoptTeam(m.team);
@@ -137,7 +156,7 @@ self.onmessage = async (e) => {
     if (m.type === "init") {
       if (!_loaded) {
         pageRelativeFetch(m.base);
-        importScripts(...m.files);
+        await importScriptsRetry(m.files);
         _loaded = true;   // no model prefetch: each build fetches its own circuit's set
       }
       self.postMessage({ type: "ready" });

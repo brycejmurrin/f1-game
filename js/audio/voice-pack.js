@@ -116,7 +116,44 @@ var VoicePack = (() => {
     return !!(VOICES[id] && VOICES[id].speaker === "announcer");
   }
 
+  // OPUS WHEN THE DECODER SAYS SO (docs/notes/ASSET-COMPRESSION-2026-10-24.md).
+  // A pack's .json may carry `opus: { container, file, binary, clips }`: the
+  // same keys as self-contained Opus clips, ~40 % fewer bytes on the wire and in
+  // the kept .bin than the 32 kbps MP3. Safari's decodeAudioData support for
+  // Opus differs from canPlayType and by container (WebKit bugs 238546,
+  // 245428), so the only test is a real decode: one 0.06 s clip per container
+  // through an OfflineAudioContext (no gesture needed), once per page. Anything
+  // short of a decoded buffer keeps the MP3 .bin, which every browser decodes.
+  const OPUS_PROBE = Object.freeze({
+    ogg: "T2dnUwACAAAAAAAAAAAAAAAAAAAAAAIotXIBE09wdXNIZWFkAQE4AYC7AAAAAABPZ2dTAAAAAAAAAAAAAAAAAAABAAAASZW+VAEuT3B1c1RhZ3MGAAAAZmZtcGVnAQAAABQAAABlbmNvZGVyPUxhdmMgbGlib3B1c09nZ1MABHgMAAAAAAAAAAAAAAIAAAB5JR4OBEU7Mh94ggG3bEck6gJGb/q2A4yBNNboXgHrG7Fe78l4GPIKsyFBzNGmn+GKm4ada4HqBJ7rQIorR1AoCdBGUwB0TbafesP0APl4oz/3rJiFA1wmClefivKNPWyFTMAT6kG2Yed3+3cUzFh1rzUSx/cLIQV4W+FGeLL14n2PtXj6aSnTy3iboxJRRQCs41GbcyG875GH/caGJGY0Sci32GDsrhkNeobIkg5fhZVJgoXdRj72lCmLeAZNpoExSNLAZ4ssddqo352sB/U6sgIJS3M97fBiZw==",
+    webm: "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwEAAAAAAAKXEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHGTbuMU6uEElTDZ1OsggEwTbuMU6uEHFO7a1OsggKB7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmoCrXsYMPQkBNgIRMYXZmV0GETGF2ZkSJiEBRAAAAAAAAFlSua+WuAQAAAAAAAFzXgQFzxYgAAAAAAAAAAZyBACK1nIN1bmSIgQCGhkFfT1BVU1aqg2MuoFa7hATEtACDgQLhkZ+BAbWIQOdwAAAAAABiZIEQY6KTT3B1c0hlYWQBATgBgLsAAAAAABJUw2fRc3POY8CLY8WIAAAAAAAAAAFnyJlFo4dFTkNPREVSRIeMTGF2YyBsaWJvcHVzZ8ihRaOIRFVSQVRJT05Eh5MwMDowMDowMC4wNjgwMDAwMDAAH0O2dUD154EAo8mBAACAeIIBt2xHJOoCRm/6tgOMgTTW6F4B6xuxXu/JeBjyCrMhQczRpp/hipuGnWuB6gSe60CKK0dQKAnQRlMAdE22n3rD9AD5o7+BABWAeKM/96yYhQNcJgpXn4ryjT1shUzAE+pBtmHnd/t3FMxYda81Esf3CyEFeFvhRniy9eJ9j7V4+mkp08ujtoEAKYB4m6MSUUUArONRm3MhvO+Rh/3GhiRmNEnIt9hg7K4ZDXqGyJIOX4WVSYKF3UY+9pQpi6CsoaOBAD0AeAZNpoExSNLAZ4ssddqo352sB/U6sgIJS3M97fBiZ3WihADN/mAcU7trkbuPs4EAt4r3gQHxggGG8IED",
+    caf: "Y2FmZgABAABkZXNjAAAAAAAAACBA53AAAAAAAG9wdXMAAAAAAAAAAAAAA8AAAAABAAAAAGNoYW4AAAAAAAAADABkAAEAAAAAAAAAAGluZm8AAAAAAAAAGgAAAAFlbmNvZGVyAExhdmY2MC4xNi4xMDAAZGF0YQAAAAAAAADVAAAAAHiCAbdsRyTqAkZv+rYDjIE01uheAesbsV7vyXgY8gqzIUHM0aaf4Yqbhp1rgeoEnutAiitHUCgJ0EZTAHRNtp96w/QA+XijP/esmIUDXCYKV5+K8o09bIVMwBPqQbZh53f7dxTMWHWvNRLH9wshBXhb4UZ4svXifY+1ePppKdPLeJujElFFAKzjUZtzIbzvkYf9xoYkZjRJyLfYYOyuGQ16hsiSDl+FlUmChd1GPvaUKYt4Bk2mgTFI0sBniyx12qjfnawH9TqyAglLcz3t8GJncGFrdAAAAAAAAAAcAAAAAAAAAAQAAAAAAAAPAAAAAAAAAAAARTsyHw==",
+  });
+  const PROBE_MS = 2000;
+  let codecProbe = null;
+  let codecKnown = null;   // the probe's settled answer, read synchronously by ensure()
+  /** { ogg, webm, caf }: true where this browser decodes that Opus container. */
+  function codecs() {
+    if (codecProbe) return codecProbe;
+    // Unprefixed since Safari 14.1; an older browser keeps the MP3 packs.
+    const OAC = typeof OfflineAudioContext === "function" ? OfflineAudioContext : null;
+    if (!OAC || typeof atob !== "function") { codecKnown = {}; return (codecProbe = Promise.resolve(codecKnown)); }
+    codecProbe = Promise.all(Object.keys(OPUS_PROBE).map((k) => new Promise((resolve) => {
+      let settled = false, timer = null;
+      const done = (ok) => { if (settled) return; settled = true; if (timer) clearTimeout(timer); resolve([k, ok]); };
+      try {
+        const bytes = Uint8Array.from(atob(OPUS_PROBE[k]), (c) => c.charCodeAt(0));
+        const ctx = new OAC(1, 4800, 48000);
+        timer = setTimeout(() => done(false), PROBE_MS);
+        const p = ctx.decodeAudioData(bytes.buffer, (buf) => done(!!(buf && buf.length > 0)), () => done(false));
+        if (p && typeof p.catch === "function") p.catch(() => done(false));
+      } catch (_) { done(false); }
+    }))).then((rows) => { const out = {}; for (const [k, ok] of rows) out[k] = ok; return (codecKnown = out); });
+    return codecProbe;
+  }
+
   function create(G, opts) {
+    codecs();   // start the probe now: it settles long before the first pack is asked for
     const base = (opts && opts.base) || "assets/voice/";
     const voices = {};   // id -> { state, man, bin, cache: Map, gen, failedAt }
     const wanted = new Set(); // latest keep/ensure intent, including queued tiers
@@ -165,21 +202,43 @@ var VoicePack = (() => {
       // return fresh JSON but an older cached binary on a slow/offline link.
       // Require the manifest's digest even for legacy caches; a missing voice
       // stays written instead of playing unrelated bytes at the new offsets.
-      const pair = Promise.all([get(id + ".json", "json"), get(id + ".bin", "arrayBuffer")])
-        .then(async ([man, bin]) => {
-          const meta = man && man.binary;
-          if (!meta || !/^[0-9a-f]{64}$/.test(meta.sha256) || meta.bytes !== bin.byteLength || !bin.byteLength) throw new Error("voice binary integrity metadata missing or invalid");
-          if (typeof crypto === "undefined" || !crypto.subtle) throw new Error("voice binary integrity verification unavailable");
-          const digest = await crypto.subtle.digest("SHA-256", bin);
-          const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
-          if (hex !== meta.sha256) throw new Error("voice binary integrity mismatch");
-          return [man, bin];
+      const verify = async (bin, meta) => {
+        if (!meta || !/^[0-9a-f]{64}$/.test(meta.sha256) || !bin || meta.bytes !== bin.byteLength || !bin.byteLength) throw new Error("voice binary integrity metadata missing or invalid");
+        if (typeof crypto === "undefined" || !crypto.subtle) throw new Error("voice binary integrity verification unavailable");
+        const digest = await crypto.subtle.digest("SHA-256", bin);
+        const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+        if (hex !== meta.sha256) throw new Error("voice binary integrity mismatch");
+        return bin;
+      };
+      // The Opus twin only where this browser decodes its container. Any failure
+      // of it (fetch, digest, empty) falls back to the MP3 .bin, never to silence.
+      const opusOf = (man) => {
+        const o = man && man.opus;
+        return o && o.clips && typeof o.file === "string" && /^[\w.-]+$/.test(o.file) &&
+          Object.prototype.hasOwnProperty.call(OPUS_PROBE, o.container) ? o : null;
+      };
+      // A browser the probe has already ruled out keeps today's parallel
+      // fetch; one that may decode Opus reads the .json first to pick its .bin.
+      const known = codecKnown;
+      const noOpus = !!known && !Object.keys(OPUS_PROBE).some((k) => known[k] === true);
+      const mp3Early = noOpus ? get(id + ".bin", "arrayBuffer") : null;
+      if (mp3Early) mp3Early.catch(() => {});   // reported through `pair` below
+      const pair = Promise.all([get(id + ".json", "json"), codecs()])
+        .then(async ([man, can]) => {
+          const o = opusOf(man);
+          if (o && can[o.container] === true) {
+            try {
+              const bin = await verify(await get(o.file, "arrayBuffer"), o.binary);
+              return [Object.assign({}, man, { clips: o.clips }), bin, "opus-" + o.container];
+            } catch (e) { Log.info("audio", "VoicePack " + id + " opus unavailable, using mp3: " + (e && e.message)); }
+          }
+          return [man, await verify(await (mp3Early || get(id + ".bin", "arrayBuffer")), man && man.binary), "mp3"];
         });
       v.loading = Promise.race([timeout, pair])
-        .then(([man, bin]) => {
+        .then(([man, bin, fmt]) => {
           if (!man || !man.clips || !(bin && bin.byteLength)) throw new Error("empty pack");
-          v.man = man; v.bin = bin; v.state = "ready";
-          Log.info("audio", "VoicePack " + id + " ready: " + Object.keys(man.clips).length + " clips");
+          v.man = man; v.bin = bin; v.fmt = fmt; v.state = "ready";
+          Log.info("audio", "VoicePack " + id + " ready: " + Object.keys(man.clips).length + " clips (" + fmt + ")");
         })
         .catch((e) => { v.state = "failed"; v.failedAt = Date.now(); Log.info("audio", "VoicePack " + id + " unavailable: " + (e && e.message)); })
         .finally(() => {
@@ -350,9 +409,10 @@ var VoicePack = (() => {
       busy: (channel) => (channel ? !!live[channel] : Object.keys(live).length > 0),
       debug: () => ({ voices: Object.fromEntries(Object.values(voices).map((v) => [v.id, v.state])), spoke, missed, last: lastSeq,
         raceLoad, deferred: [...deferred],
+        formats: Object.fromEntries(Object.values(voices).filter((v) => v.fmt).map((v) => [v.id, { fmt: v.fmt, bytes: v.bin ? v.bin.byteLength : 0 }])),
         cache: Object.fromEntries(Object.values(voices).map((v) => [v.id, { clips: v.cache.size, secs: +v.secs.toFixed(2) }])), cacheS: CACHE_S }),
     };
   }
 
-  return Object.freeze({ create, norm, compose, keyOf, lineKey, choices, packFor, isAnnouncerPack, VOICES, PAUSE, MAX_WORDS, SLACK_S });
+  return Object.freeze({ create, codecs, norm, compose, keyOf, lineKey, choices, packFor, isAnnouncerPack, VOICES, PAUSE, MAX_WORDS, SLACK_S });
 })();

@@ -85,7 +85,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `log.js` | `Log` | tag | levelled namespaced logging (global Log). |
-| `dev-flags.js` | `DevFlags` | tag | DevFlags: one registry for boot-time URL / hash / localStorage toggles. |
+| `dev-flags.js` | `DevFlags` | tag | DevFlags: one registry for boot-time URL / localStorage toggles. |
 | `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the three SCALAR helpers modules share (M4.clamp / M4.lerp / M4.wrapDelta). ident() allocates; every *To variant… |
 | `hash32.js` | `Hash32` | tag | stateless FNV-1a + murmur-style mix for career, daily challenge, and driver ratings. |
 | `clipboard.js` | `ApexClipboard` | tag | one clipboard write/read home. navigator.clipboard + textarea execCommand fallback for plain http / older WebKit. |
@@ -511,6 +511,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision and plank sparks, gravel/grass kickup, rain spray) for js/game.js. |
+| `visor-optics.js` | `VisorOptics` | tag | VisorOptics: the HELMET camera's eye-port and the light on the inside of its shield. |
 | `droplets.js` | `Droplets` | tag | Droplets: rain on the lens / visor for the ONBOARD cameras (cockpit, hood, visor, helmet, T-cam). |
 | `grade-tint.js` | `GradeTint` | tag | GradeTint: car-paint bases, the tuner scratch, and sky grade hue/sat. |
 | `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
@@ -562,6 +563,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `thermal-drift.js` | `ThermalDrift` | tag | ThermalDrift: a pure, clock-free helper for a phone that throttles over a long session (#2652). |
 | `governor.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
+| `menu-teardown.js` | `MenuTeardown` | tag | MenuTeardown: software-GL readback cover, sync-task probes, and UI-yield helpers for quit-to-menu and garage-close teardown. |
+| `menu-quit-tail.js` | `MenuQuitTail` | tag | deferred quit-to-menu tail (js/game.js quitToMenu after #overlay is up). |
 | `loop-health.js` | `LoopHealth` | tag | LoopHealth: the frame-loop fault policy and the one heartbeat that outlives the loop. |
 | `render-rate.js` | `RenderRate` | tag | RenderRate: draw every second requestAnimationFrame when a PHONE's display delivers rAF at 100 Hz or more. |
 | `spans.js` | `PerfSpans` | tag | PerfSpans: the per-subsystem frame budget. begin(name)/end(name) bracket a phase of the frame loop (game.js tickBody: frame, input, physics, ai, collide,… |
@@ -1045,7 +1048,7 @@ the on-track rejection guard (`RAW`).
 ## js/track/scenery/data.js — `TrackSceneryData`
 
 The GENERIC dressing tables hoisted out of buildProps: the theme fallbacks
-`FURN_DEF` (trees + lamps), `KIT_DEF` (barrier/signage/marshal families),
+`FURN_DEF` (trees + lamps),
 `THEME_DEF` (city style) and `STAND_SET_DEF`, plus `STAND_LIVERIES`,
 `CROWD_DAY`, `WINTINTS`, `HOUSE_*`, `MOTORHOME_BODY`, `SIGN_SEG`/`SIGN_DIGIT`,
 the colour packs `NC`/`DC`/`ATM`/`COL`, `BLD`, and `resolveCityStyle()` (turns
@@ -1644,12 +1647,15 @@ GLX/WGX/TLX.
 
 1. `shadowBegin` → cast* → `shadowEnd` (optional car/lamp on desktop)
 2. Optional env-probe faces
-3. `begin(frame)` → `drawSky` → lit/chunked/instanced/FX draws
+3. `begin(frame)` → opaque world draws → `drawSky` → cars/decals/FX draws
 4. `present(opts)` — SSAO → godrays → bloom → composite (ACES) → FXAA
 
 GLX owns the reference pass order in `GLXPost` / `GLXShadow`. WGX mirrors
 formats and mobile cost caps. TLX uses a draw-list of pooled Three meshes +
 TSL post chain; stamps `renderOrder` for FX/glass.
+
+The sky follows the opaque world so early-Z can reject covered sky fragments;
+additive glow follows the sky (`js/render/gfx.js` frame protocol).
 
 ### Boot / safety
 

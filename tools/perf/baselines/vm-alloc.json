@@ -1,0 +1,17 @@
+{
+ "track": "monza",
+ "warm": 600,
+ "windows": 6,
+ "frames": 60,
+ "meanKbPerFrame": 188,
+ "windowKb": [
+  128.2,
+  149.3,
+  162.2,
+  232.7,
+  251.2,
+  204.6
+ ],
+ "node": "v22.22.0",
+ "measured": "2026-10-24"
+}

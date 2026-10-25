@@ -1,0 +1,1 @@
+Improved: On the three.js WebGPU path (the iPhone's), the scene's reflection tag, an unread scene depth, the mirror's depth and tag, and the shadow maps' unused colour are no longer written back to memory on frames that never read them. This is the same bandwidth saving the WebGL2 path already had.

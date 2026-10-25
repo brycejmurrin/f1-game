@@ -598,8 +598,10 @@ const MERGE_GUARDS = Object.freeze(
    the >= 3 line this repo refuses to deploy above — and a gate that drives the
    box past its own "the machine is too busy to be measured" threshold is buying
    speed with the credibility of its verdicts. Two peaks at 2.57.
-   The DEFAULT stays 1 for everyone else: this opts the deploy in rather than
-   changing what `npm run test:tooling-fast` does under other sessions and CI. */
+   The gate stays pinned at 2 whatever the box looks like. Since 2026-10-24
+   (BUILD-HUNT B4) a bare `npm run test:tooling-fast` also takes 2, but only on a
+   quiet box (no live browser run, loadavg < 2; else 1: tooling-fast.mjs
+   autoJobs); CI passes its own --jobs=4. */
 const GATE_JOBS = "--jobs=2";
 
 /* WHAT A REJECTED PUSH ACTUALLY NEEDS RE-VERIFIED.
