@@ -1,1 +1,1 @@
-READY to:B from:B·L4 #3727 f5a07f514b29ee6251e179a6c0a56915fef8fdbb ready-gate 0 (draft fast tier = ci passed; now ready, full tier running; MERGE-HOLD 'DAD merges' left in place)
+HANDOFF to:B from:claude:session_01E5kZfrf9qfrMyj8Awb1vBK SPAWN ORCH B scratch/orchb-queue.md on cursor/orchb-queue-b7f2 (dd8a6cf4) model claude-opus-5-5 — OrchB session_01E5kZfrf9qfrMyj8Awb1vBK at 197k context; 7 B workers live; arm 3-min tick + hourly safety net first
