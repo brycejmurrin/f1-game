@@ -120,16 +120,8 @@ test("garage livery grid class is wired", () => {
 });
 
 test("select track filter persists via store", () => {
-  const js = code("js/ui/select-screen.js");
-  assert.match(js, /\btrackFilter\b/);
-  assert.match(js, /store\.set\(\s*"trackFilter"/);
-  assert.match(js, /"classic"\s*,\s*"CLASSICS"/);
-  // FAVOURITES joins the same filter table, is accepted by the persisted-value
-  // check, and skips tiles beside the season/classic/daily-open rules.
-  assert.match(js, /\["fav",\s*"♥ FAVOURITES"\]/);
-  assert.match(js, /trackFilter\s*!==\s*"fav"\)\s*trackFilter\s*=\s*"all"/);
-  assert.match(js, /filter === "fav"\) return \(favs \|\| favList\(\)\)\.includes\(t\.id\)/);
-  assert.match(js, /snapTrackToFilter/);
+  // store.set("trackFilter"), FAVOURITES, snapTrackToFilter and invalid fav→all:
+  // behaviour in the bootMenus() tests below (chip clicks, CLASSICS snap, fav chip).
   assert.ok(ruleFor(css("css/menus.css"), /^#sel-tracks \.track-row\[data-fav\]::after$/), "the ♥ badge is a pseudo-element on [data-fav]");
   assert.equal(decl(css("css/menus.css"), "#sel-tracks .track-row[data-fav]", "position"), "relative",
     "only a favourited tile is positioned — the shipped strip paints unchanged");
