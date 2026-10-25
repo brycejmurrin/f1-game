@@ -35,6 +35,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
@@ -89,7 +90,7 @@ test("a visible UA release with no visibilitychange re-acquires; drop and hidden
     Promise,
     setTimeout: (fn) => setTimeout(fn, 0),
   });
-  vm.runInContext(readFileSync(new URL("../../js/core/wake-lock.js", import.meta.url), "utf8"), ctx);
+  vm.runInContext(readFileSync(new URL("../../js/core/wake-lock.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/core/wake-lock.js") });
   const owner = vm.runInContext("RaceWakeLock.create()", ctx);
   owner.hold();
   await new Promise((r) => setImmediate(r));
