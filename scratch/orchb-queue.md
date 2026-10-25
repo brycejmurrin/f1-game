@@ -25,3 +25,10 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Routines to arm FIRST: 3-min send_later bus tick + hourly create_trigger safety net bound to your session (predecessor's are deleted at handoff).
 - B·W3·L6 = Fleet B's own PR (agent-fleet docs): you merge it via merge-gate when green (non-game).
 - Every Claude owner was told to subscribe_pr_activity + 15-min send_later (23:33Z).
+
+## 23:50Z (16:50 PT) — ORCH B now session_01STmZNpnDNQYKeqBJpSVQkD (946dd8d LIVE)
+- Routines: 3-min send_later tick chain; hourly safety net trig_01YFhm11i98ni5pKW9Hvefdc (:44).
+- All 7 workers told the new ORCHESTRATOR id.
+- READY to:D on bus already: #3726 (7ef339b) #3727 (3761899) #3732 (759dad7) #3734 (367a4d8). Open with B: #3717 (L4), #3733 (L5), #3623, #3724, #3576/#3684 (sync).
+- B's own: #3753 B·W3·L6 draft (agent-fleet docs) → merge-gate when READY+green.
+- Bus cursor: 946dd8d.
