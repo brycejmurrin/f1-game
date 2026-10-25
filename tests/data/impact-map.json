@@ -9592,6 +9592,19 @@
         "tests/unit/loop-health.test.mjs"
       ]
     },
+    "js/perf/menu-quit-tail.js": {
+      "*": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ]
+    },
+    "js/perf/menu-teardown.js": {
+      "beginQuit": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "cover": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ]
+    },
     "js/perf/metrics-overlay.js": {
       "ensurePanel": [
         "tests/unit/metrics.test.mjs"
@@ -13604,6 +13617,12 @@
       ],
       "discardAttachments": [
         "tests/unit/tlx-hunt4b.test.mjs"
+      ],
+      "discardHint": [
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
+      "discardHintOff": [
+        "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "dispose": [
         "tests/unit/frame-hotpath-alloc.test.mjs",

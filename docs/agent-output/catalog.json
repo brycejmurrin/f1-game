@@ -1572,6 +1572,12 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/gen/compress-audio.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/gen/garage-defaults.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1957,6 +1963,17 @@
     },
     {
       "path": "tools/gfx/readback-garage-oracle.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/gfx/readback-quit-menu-oracle-repeat.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
+      "path": "tools/gfx/readback-quit-menu-oracle.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
@@ -3792,7 +3809,7 @@
     },
     {
       "name": "test:audio-unit",
-      "command": "node --test --test-timeout=900000 tests/unit/announcer.test.mjs tests/unit/audio-mix-improvements.test.mjs tests/unit/audio-panel-boot.test.mjs tests/unit/audio-recovery.test.mjs tests/unit/audio-sample-upgrade.test.mjs tests/unit/audio-tune.test.mjs tests/unit/battle-earcon.test.mjs tests/unit/blip-voice-pool.test.mjs tests/unit/crowd-audio.test.mjs tests/unit/end-race-music-vm.test.mjs tests/unit/engine-note-quality.test.mjs tests/unit/engine-revs-replay-vm.test.mjs tests/unit/ers-audio-layer.test.mjs tests/unit/finish-coast-rev-vm.test.mjs tests/unit/incident-rpm.test.mjs tests/unit/keyboard-first-audio-vm.test.mjs tests/unit/lazy-audio-firstbind-vm.test.mjs tests/unit/lazy-audio-yield.test.mjs tests/unit/mix-duck-radio.test.mjs tests/unit/net-audio-revs-vm.test.mjs tests/unit/pause-silence.test.mjs tests/unit/photomode-hold.test.mjs tests/unit/player-collision-side.test.mjs tests/unit/pu-harvest-audio.test.mjs tests/unit/radio-duration.test.mjs tests/unit/radio-voice.test.mjs tests/unit/real-replay-captions.test.mjs tests/unit/rival-attach-init.test.mjs tests/unit/rival-audio.test.mjs tests/unit/rival-contact-sfx.test.mjs tests/unit/rival-passby-pool.test.mjs tests/unit/spotify-refresh.test.mjs tests/unit/spotter-lifecycle.test.mjs tests/unit/tyre-squeal-race-vm.test.mjs tests/unit/tyre-squeal-slip.test.mjs tests/unit/voice-pack.test.mjs tests/unit/wind-speed.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/announcer.test.mjs tests/unit/audio-mix-improvements.test.mjs tests/unit/audio-panel-boot.test.mjs tests/unit/audio-recovery.test.mjs tests/unit/audio-sample-upgrade.test.mjs tests/unit/audio-tune.test.mjs tests/unit/battle-earcon.test.mjs tests/unit/blip-voice-pool.test.mjs tests/unit/compress-audio.test.mjs tests/unit/crowd-audio.test.mjs tests/unit/end-race-music-vm.test.mjs tests/unit/engine-note-quality.test.mjs tests/unit/engine-revs-replay-vm.test.mjs tests/unit/ers-audio-layer.test.mjs tests/unit/finish-coast-rev-vm.test.mjs tests/unit/incident-rpm.test.mjs tests/unit/keyboard-first-audio-vm.test.mjs tests/unit/lazy-audio-firstbind-vm.test.mjs tests/unit/lazy-audio-yield.test.mjs tests/unit/mix-duck-radio.test.mjs tests/unit/net-audio-revs-vm.test.mjs tests/unit/pause-silence.test.mjs tests/unit/photomode-hold.test.mjs tests/unit/player-collision-side.test.mjs tests/unit/pu-harvest-audio.test.mjs tests/unit/radio-duration.test.mjs tests/unit/radio-voice.test.mjs tests/unit/real-replay-captions.test.mjs tests/unit/rival-attach-init.test.mjs tests/unit/rival-audio.test.mjs tests/unit/rival-contact-sfx.test.mjs tests/unit/rival-passby-pool.test.mjs tests/unit/spotify-refresh.test.mjs tests/unit/spotter-lifecycle.test.mjs tests/unit/tyre-squeal-race-vm.test.mjs tests/unit/tyre-squeal-slip.test.mjs tests/unit/voice-pack.test.mjs tests/unit/wind-speed.test.mjs"
     },
     {
       "name": "test:audit",
