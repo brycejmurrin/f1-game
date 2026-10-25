@@ -45,6 +45,25 @@ test('glow growth disposes previous geometry; shrink, zero and moving eye preser
  f.context.frameEye=[0,0,0];f.api.drawGlow(many(1),1);assert.equal(grown.instanceCount,1);assert.equal(f.glowStream.ib.updateRanges[0].count,7);
 });
 
+test('glow wrappers survive actual idle pruning after initial allocation and growth',()=>{
+ const constants=source.match(/const PRUNE_EVERY_MS = [^;]+;/)[0];
+ for(const grow of [false,true])for(const unpinned of [true,false]){
+  const f=fixture();f.api.drawGlow(many(1),1);if(grow)f.api.drawGlow(many(40),1);
+  const geo=f.glowStream.geo;if(unpinned)geo.__tlxPin=false;
+  const mat=f.context.fx.glowMat, mesh=new THREE.Mesh(geo,mat);mesh.__tlxSeen=1000;
+  const pool=[mesh], byGeo=new Map([[geo,new Map([[mat,[mesh]]])]]), dropped=[];
+  const prune=vm.runInNewContext(`${constants}\nlet _pruneLast=0;\n${fnSource(source,'function prunePool(now) {')}\nprunePool`,
+   {meshPool:pool,meshByGeo:byGeo,dropWrapper:m=>dropped.push(m)}, {filename:absSrc('js/render/three/tlx.js')});
+  prune(20999); // 19,999 ms idle: both pinned and unpinned wrappers survive.
+  assert.equal(pool.length,1);assert.equal(dropped.length,0);
+  prune(27001); // 26,001 ms idle, also beyond the actual five-second prune cadence.
+  assert.equal(pool.length,unpinned?0:1,`growth=${grow}, unpinned=${unpinned}`);
+  assert.equal(dropped.length,unpinned?1:0);
+  assert.equal(byGeo.has(geo),!unpinned,'the live geometry lookup follows wrapper ownership');
+  if(!unpinned)assert.equal(pool[0],mesh,'retain the original render wrapper');
+ }
+});
+
 test('warm owns an independent layout while live draws shrink, grow and compilation fails',async()=>{
  const f=fixture(),seen=[];f.api.drawGlow(many(3),1);const original=f.glowStream.geo;
  let rejectCompile;const pending=new Promise((_,reject)=>{rejectCompile=reject;});
@@ -73,6 +92,11 @@ test('actual vendor builds one six-vertex instanced draw; glow state and particl
  installThreeGlobals();const fake=makeFakeGL(), draws=[];
  fake.gl.drawArraysInstanced=(...args)=>draws.push(args);
  const renderer=new THREE.WebGPURenderer({canvas:fake.canvas,context:fake.gl,forceWebGL:true,antialias:false});await renderer.init();
+ const inputs=new Map(),compile=renderer.backend.createRenderPipeline.bind(renderer.backend);
+ renderer.backend.createRenderPipeline=(object,...args)=>{
+  inputs.set(object.geometry,[...object.getAttributes()]);
+  return compile(object,...args);
+ };
  const f=fixture();f.api.drawGlow(many(3),1);
  const mat=f.context.fx.glowMat;
  assert.equal(mat.transparent,true);assert.equal(mat.depthWrite,false);assert.equal(mat.depthTest,true);
@@ -81,9 +105,19 @@ test('actual vendor builds one six-vertex instanced draw; glow state and particl
  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();camera.position.set(0,0,5);
  const mesh=new THREE.Mesh(f.glowStream.geo,mat);mesh.frustumCulled=false;scene.add(mesh);renderer.render(scene,camera);
  assert.ok(draws.some(a=>a[2]===6&&a[3]===3),'actual renderer draws six vertices and three instances');
- const glowCode=fake.shaders.join('\n');assert.match(glowCode,/fxCenter/);assert.doesNotMatch(glowCode,/instanceMatrix/);
+ const glowInputs=inputs.get(f.glowStream.geo),center=f.glowStream.geo.attributes.fxCenter;
+ assert.ok(glowInputs.includes(center),'compiled glow pipeline binds its actual center attribute');
+ assert.equal(center.data,f.glowStream.ib);assert.equal(center.data.isInstancedInterleavedBuffer,true);
+ assert.equal(center.data.stride,7);assert.equal(center.data.meshPerAttribute,1);
+ assert.ok(glowInputs.every(a=>Object.values(f.glowStream.geo.attributes).includes(a)),
+  'glow pipeline inputs belong to its quad/instance geometry without synthetic matrix attributes');
  const p=new THREE.BufferGeometry();for(const [name,size]of [['position',3],['fxCorner',2],['fxColor',3],['fxSize',1],['fxAlpha',1]])p.setAttribute(name,new THREE.BufferAttribute(new Float32Array(size*6),size));
- scene.remove(mesh);const start=fake.shaders.length;const particles=new THREE.Mesh(p,f.context.fx.particleMats[0]);particles.frustumCulled=false;scene.add(particles);renderer.render(scene,camera);
- const particleCode=fake.shaders.slice(start).join('\n');assert.doesNotMatch(particleCode,/fxCenter/);assert.match(particleCode,/position/);
+ scene.remove(mesh);const particles=new THREE.Mesh(p,f.context.fx.particleMats[0]);particles.frustumCulled=false;scene.add(particles);renderer.render(scene,camera);
+ const particleInputs=inputs.get(p);
+ assert.ok(particleInputs.includes(p.attributes.position),'compiled particle pipeline binds its actual vertex centers');
+ assert.equal(p.attributes.position.count,6);assert.equal(p.attributes.position.isInstancedBufferAttribute,undefined);
+ assert.ok(particleInputs.every(a=>Object.values(p.attributes).includes(a)),
+  'particle pipeline inputs all belong to the per-vertex particle geometry');
+ assert.equal(particleInputs.includes(center),false,'particle pipeline does not bind the glow center stream');
  scene.remove(particles);p.dispose();f.glowStream.geo.dispose();renderer.dispose();
 });

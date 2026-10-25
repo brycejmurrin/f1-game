@@ -52,8 +52,34 @@ test("canary: tlx.js hands every chain the same viewport mapper and the physical
   assert.match(tlx, /fixedTargets, vp: vport/);
   assert.match(tlx, /sky = TLXShaders\.sky\(THREE, TSL, \{[^}]*vp: vport, sceneView/);
   assert.equal((tlx.match(/post\.resize\([^)]*\)/g) || []).every((c) => /presentW, presentH/.test(c)), true);
-  // Off by default: the key must be an explicit "1".
-  assert.match(tlx, /apex26\.tlxFixedTargets"\) === "1"/);
+});
+
+test("fixed targets preference is opt-in and stays off when storage is unavailable", () => {
+  const source = read("js/render/three/tlx.js");
+  // Execute the production declaration and storage read, including its catch.
+  // Bound the slice by declarations, without restating the preference condition.
+  const start = source.indexOf("let fixedTargets");
+  const end = source.indexOf("function fixedActive", start);
+  assert.ok(start >= 0 && end > start, "production preference initializer exists");
+  const initializer = new vm.Script(source.slice(start, end) + "\nfixedTargets;", {
+    filename: absSrc("js/render/three/tlx.js"),
+  });
+  for (const [label, stored, throws, expected] of [
+    ["unset", null, false, false],
+    ["disabled", "0", false, false],
+    ["enabled", "1", false, true],
+    ["unrecognized", "true", false, false],
+    ["storage throws", null, true, false],
+  ]) {
+    const keys = [];
+    const actual = initializer.runInNewContext({ localStorage: { getItem(key) {
+      keys.push(key);
+      if (throws) throw new Error("storage unavailable");
+      return stored;
+    } } });
+    assert.deepEqual(keys, ["apex26.tlxFixedTargets"], label + " reads the intended preference");
+    assert.equal(actual, expected, label);
+  }
 });
 
 // ---- the helper itself, over a recording fake of the TSL surface -------------

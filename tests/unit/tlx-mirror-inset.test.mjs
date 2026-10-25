@@ -4,12 +4,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 import * as THREE from "../../vendor/three-0.186.1/three.webgpu.min.js";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 
 installThreeGlobals();
 for (const file of ["tsl-chunks.js", "tsl-post.js"]) {
-  vm.runInThisContext(fs.readFileSync(new URL(`../../js/render/three/${file}`, import.meta.url), "utf8"));
+  vm.runInThisContext(fs.readFileSync(new URL(`../../js/render/three/${file}`, import.meta.url), "utf8"), { filename: absSrc(`js/render/three/${file}`) });
 }
 
 for (const language of ["WGSL", "GLSL"]) test(`folded mirror: ${language} samples only the exact inset with explicit gradients`, async () => {
@@ -42,7 +43,7 @@ for (const language of ["WGSL", "GLSL"]) test(`folded mirror: ${language} sample
     assert.equal(normalize(insetGuards[0]), normalize(insetGuards[1]), "sampling uses exactly the overwrite predicate");
     assert.equal((insetGuards[0].match(/>=/g) || []).length, 2, "inclusive left/top");
     assert.equal((insetGuards[0].match(/<(?![=])/g) || []).length, 2, "exclusive right/bottom");
-    assert.match(insetGuards[0], /> 0\.5/, "mirror-off remains gated");
+    assert.equal((insetGuards[0].match(/> 0\.5/g) || []).length, 1, "mirror-off remains gated by exactly one test");
     const branchStart = shader.indexOf(insetGuards[0]);
     let end = shader.indexOf("{", branchStart) + 1, depth = 1;
     for (; depth > 0 && end < shader.length; end++) {
@@ -64,7 +65,7 @@ for (const language of ["WGSL", "GLSL"]) test(`folded mirror: ${language} sample
 
 test("production mirror fallback declares its gradient sampler through cold/off/on/off transitions", async () => {
   for (const file of ["js/lighting/knobs.js", "js/render/shared/post-common.js", "js/render/three/tlx-post.js"]) {
-    vm.runInThisContext(fs.readFileSync(new URL(`../../${file}`, import.meta.url), "utf8"));
+    vm.runInThisContext(fs.readFileSync(new URL(`../../${file}`, import.meta.url), "utf8"), { filename: absSrc(file) });
   }
   const fake = makeFakeGL(192, 96);
   const renderer = new THREE.WebGPURenderer({ canvas: fake.canvas, context: fake.gl, forceWebGL: true });

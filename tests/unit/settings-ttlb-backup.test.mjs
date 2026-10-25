@@ -77,6 +77,55 @@ test("settings export round-trips ttlb boards (export, clear, import, laps match
   assert.equal(got[1], 90.1);
 });
 
+test("settings export includes refused updates and new session-only leaderboard keys", () => {
+  const b = boot({ denyWrites: true, disk: { "apex26.ttlb.monza": JSON.stringify([lap(90)]) } });
+  assert.equal(b.GameStore.ttBoardAddResult("monza", lap(89)).durable, false);
+  assert.equal(b.GameStore.ttBoardAddResult("spa", lap(88)).durable, false);
+  b.GameStore.store.set("spotify.token", "SECRET");
+  b.GameStore.store.set("ttlb.invalid/id", [lap(87, { name: "SECRET" })]);
+  b.GameStore.store.rawSet("ttlb.raw", "SECRET");
+  const before = [...b.disk], failures = b.GameStore.store.failedKeys();
+  const file = b.collect("all");
+  assert.deepEqual(Object.keys(file.ttlb).sort(), ["monza", "spa"]);
+  assert.deepEqual(file.ttlb.monza.map(e => e.t), [89, 90]);
+  assert.deepEqual(file.ttlb.spa.map(e => e.t), [88]);
+  assert.ok(!JSON.stringify(file).includes("SECRET"));
+  assert.deepEqual([...b.disk], before, "export leaves refused writes pending");
+  assert.deepEqual(b.GameStore.store.failedKeys(), failures);
+  const target = boot();
+  assert.equal(target.loadSettings({ ...file, settings: {} }).applied, 3);
+  assert.equal(target.GameStore.ttBoard("spa")[0].t, 88);
+});
+
+test("a native 660-lap backup round-trips every circuit and class", () => {
+  const src = boot(), tracks = Array.from({ length: 11 }, (_, i) => "track-" + i);
+  for (const track of tracks) for (let c = 0; c < 6; c++) for (let n = 0; n < 10; n++) {
+    src.GameStore.ttBoardAddResult(track, lap(80 + c + n / 100, { context: JSON.stringify({ physics: c }) }));
+  }
+  const file = { ...src.collect("all"), settings: {} }; // isolate lap counts from exported settings
+  assert.equal(Object.values(file.ttlb).reduce((n, rows) => n + rows.length, 0), 660);
+  const dst = boot(), result = dst.loadSettings(file);
+  assert.equal(result.applied, 660);
+  assert.equal(result.skipped, 0);
+  for (const track of tracks) assert.deepEqual(
+    JSON.parse(JSON.stringify(dst.GameStore.ttBoard(track))), file.ttlb[track], track + " retains all six classes");
+  assert.equal(dst.loadSettings(file).applied, 0, "re-import remains idempotent");
+});
+
+test("ttlb import retains finite track and lap work budgets", () => {
+  const b = boot();
+  const oversized = Object.fromEntries(Array.from({ length: 65 }, (_, i) => ["track-" + i, [lap(90)]]));
+  assert.equal(b.loadSettings({ format: "apex26-settings-v1", ttlb: oversized }).rejectedTtlb, 65);
+  assert.equal(b.disk.size, 0, "too many tracks are refused before writes");
+  const rows = Array.from({ length: 64 * 6 * 10 }, () => lap(90));
+  rows.push(lap(89));
+  const result = b.loadSettings({ format: "apex26-settings-v1", ttlb: { monza: rows } });
+  assert.equal(result.applied, 1);
+  assert.equal(result.skipped, rows.length - 1);
+  assert.equal(b.GameStore.ttBoard("monza").length, 1);
+  assert.equal(b.GameStore.ttBoard("monza")[0].t, 90, "rows beyond the native maximum are not applied");
+});
+
 test("ttlb import reports quota-refused laps as failed rather than reloading them away", () => {
   const file = { format: "apex26-settings-v1", settings: {}, ttlb: { monza: [lap(90)] } };
   const opts = { denyWrites: true }, denied = boot(opts);

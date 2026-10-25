@@ -2,13 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import * as THREE from "../../vendor/three-0.186.1/three.webgpu.min.js";
 const read = rel => fs.readFileSync(new URL("../../" + rel, import.meta.url), "utf8");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"])
-  vm.runInThisContext(read(f));
+  vm.runInThisContext(read(f), { filename: absSrc(f) });
 async function litShader(language) {
   const fg = makeFakeGL();
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true });

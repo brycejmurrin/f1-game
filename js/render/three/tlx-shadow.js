@@ -71,6 +71,7 @@
       enabled: false,
       lightVP: new Float32Array(16),
       pcssEnabled: false,        // true once the WebGPU blocker map builds (header note)
+      colorDiscards: 0,          // A-P2: WebGL2 depth passes whose unread R8 colour store was dropped
       // True only between a Begin that actually opened a pass and its End —
       // casts gate on THIS, not enabled: on a phone the car/lamp maps
       // are never created, so their Begins no-op but game.js still issues the
@@ -564,6 +565,15 @@
       S.depthPassOn = true;
     }
 
+    let _invColor0 = null;
+    function discardColor(rt) {
+      const be = renderer.backend, gl = be && be.gl, st = be && be.state;
+      if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
+      const d = be.get(rt), fb = st.currentBoundFramebuffers[gl.DRAW_FRAMEBUFFER];
+      if (!fb || !d || !d.framebuffers || Object.values(d.framebuffers).indexOf(fb) < 0) return false;
+      gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, _invColor0 || (_invColor0 = [gl.COLOR_ATTACHMENT0]));
+      return true;
+    }
     function endPass(rt) {
       S.depthPassOn = false;
       // Only the pass this End's Begin opened: after a throw between Begin and
@@ -592,6 +602,10 @@
           castScene.children = _passKids;
         }
         try { renderer.render(castScene, shadowCam); } finally { castScene.children = all; }
+        // A-P2: only the PCSS blocker ever reads a map's colour (the sun map's, colorPcss); every
+        // other R8 attachment is written for the pass and fetched by nothing. WebGL2: drop its store
+        // while the FBO three just rendered into is still bound. WebGPU never writes it (colorWrite).
+        if (!(wasSun && colorPcss) && discardColor(target)) S.colorDiscards++;
         if (target === lampRT) _lampRendered = true;
         _lastPassOk = true;
       } catch (e) {
@@ -866,7 +880,13 @@
         } finally {
           for (const m of probes.meshes) { castScene.remove(m); m.visible = false; }
           // The previous set goes only now, after this one holds every pipeline it held (see _probePrev).
-          if (_probePrev) for (const g of _probePrev.geos) { try { g.dispose(); } catch (_) { /* device dying */ } }
+          // The MESHES say "dispose" too: three's RenderObject frees itself on its object's (or material's)
+          // dispose; a geometry dispose only nulls its attribute cache, so each race left its probes' render
+          // objects and uniform buffers for the session (A·H12 G1, tests/unit/tlx-gpumem-leak.test.mjs).
+          if (_probePrev) {
+            for (const m of _probePrev.meshes) { try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object */ } }
+            for (const g of _probePrev.geos) { try { g.dispose(); } catch (_) { /* device dying */ } }
+          }
           _probePrev = probes;
           S.probeLayouts = probes.geos.length;
           hideCasters(shown);
