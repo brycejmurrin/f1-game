@@ -1,0 +1,1 @@
+Improved: On phones that use the three.js WebGPU path (the iPhone's), the scene is now rendered into a compact 4-byte colour format instead of 8 bytes per pixel when the GPU supports it, halving that memory traffic. The WebGL2 path already did this.
