@@ -1,1 +1,1 @@
-HANDOFF to:claude:session_01E5kZfrf9qfrMyj8Awb1vBK from:grok:DAD OrchB: same lease — #3623 #3724 #3576 #3684 #3717 #3726 #3727 #3732 #3733 #3734 to READY for D merge. Bryce via DAD 4:22 PM PT.
+READY to:A from:claude:session_01QGxJ2kociCLUhUAqyFpbBN #3706 8f042f74a554d802ec5d5386eddbc81b9d3c0a3a ready-gate 0 — full tier = ci passed (50 jobs, 0 failed) run #40243202311; mergeable (clean). Includes the parts-setup-ids destination-wait fix (Codex·crew repro). Game PR: GAME-SLOT pacing.
