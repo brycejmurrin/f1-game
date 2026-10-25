@@ -36,6 +36,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { appendUnit, tierMoved } from "./devicefarm-method.mjs";
 
 const AWS = process.env.APEX_AWS_CLI || "aws";
 const REGION = process.env.AWS_DEFAULT_REGION || "us-west-2";
@@ -590,7 +591,7 @@ async function visorScenario(ctx, url, pins, report, out) {
       const gov0 = await exec(ctx.base, ctx.sid, "return " + GOV);
       const s = await sampleWin(ctx, 20000, 4000, "read: " + VISOR_READ);
       const gov1 = s.read && s.read.perf;
-      rows.push({ arm, params: VISOR_ARMS[arm], api: r.api, entryMs: entry.windowMs, gov0, tierMoved: !!(gov0 && gov1 && gov0.autoTier !== gov1.autoTier),
+      rows.push({ arm, params: VISOR_ARMS[arm], api: r.api, entryMs: entry.windowMs, gov0, tierMoved: tierMoved(gov0, gov1),
         ...rowMeta(ctx, report, i, entry), ...s });
       log(`visor ${p} ${arm}: api=${r.api} ${JSON.stringify(s)}`);
       try { shot(ctx.base, ctx.sid, path.join(out, `visor-${p}-${i}-${arm}.png`)); } catch (_) { /* no shot */ }
@@ -662,7 +663,7 @@ async function flagsScenario(ctx, url, report, out) {
         await exec(ctx.base, ctx.sid, `return __apex.renderScale(${sc});`);
         const gov0 = await exec(ctx.base, ctx.sid, "return " + GOV);
         const s2 = await sampleWin(ctx, winS * 1000, 3000, "gov: " + GOV + ", flag: " + FLAG_READ);
-        R.rows.push({ arm, scale: sc, api: r.api, entryMs: entry.windowMs, gov0, tierMoved: !!(gov0 && s2.gov && gov0.autoTier !== s2.gov.autoTier), ...meta, ...s2 });
+        R.rows.push({ arm, scale: sc, api: r.api, entryMs: entry.windowMs, gov0, tierMoved: tierMoved(gov0, s2.gov), ...meta, ...s2 });
         log(`flags ${arm}@${sc}: api=${r.api} ${JSON.stringify(s2.win && { fps: s2.win.fps, p95: s2.win.p95, n50: s2.win.n50 })} flag=${JSON.stringify(s2.flag)} tier=${s2.gov && s2.gov.autoTier}`);
       }
       try { shot(ctx.base, ctx.sid, path.join(out, `flags-${i}-${arm}.png`)); } catch (_) { /* no shot */ }
@@ -799,8 +800,7 @@ function noteUnit(report, scenario, out) {
   if (!report.unit) return;
   const file = path.join("artifacts", "devicefarm", "units.json");
   let db = {}; try { db = JSON.parse(fs.readFileSync(file, "utf8")); } catch (_) { /* first session */ }
-  const seen = (db[report.unit] || []).length;
-  (db[report.unit] = db[report.unit] || []).push({ at: new Date().toISOString(), scenario, build: report.boot && report.boot.build ? report.boot.build.sha : null, out });
+  const seen = appendUnit(db, report.unit, { at: new Date().toISOString(), scenario, build: report.boot && report.boot.build ? report.boot.build.sha : null, out });
   try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(db, null, 2)); } catch (e) { log("units.json: " + e.message.slice(0, 100)); }
   log(`unit ${report.unit}: ${seen ? seen + " earlier session(s) in units.json" : "first session in units.json"}`);
 }

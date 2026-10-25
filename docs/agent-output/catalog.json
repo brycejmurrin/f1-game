@@ -2808,6 +2808,10 @@
       ]
     },
     {
+      "path": "tools/perf/devicefarm-method.mjs",
+      "classification": "ambiguous"
+    },
+    {
       "path": "tools/perf/devicefarm-opus-probe.mjs",
       "classification": "ambiguous",
       "outputPolicy": "keep-native"
