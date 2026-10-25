@@ -13,3 +13,5 @@ Lanes: A·O3 01ELQk4Q, A·O4 011uRMn2, A·W50 012FhNfs, A·W49 01QGxJ2k, A·H13 
 Decided: voice twins = A (4 default packs), Bryce 23:08Z via AskUserQuestion.
 
 Non-game: #3746 d2106223 (W53 docs) READY, waiting required CI.
+
+A game order (23:48Z): #3741 → #3718 (H13 READY 19075a7a) → #3706 → #3744, alternating with D.
