@@ -746,7 +746,7 @@ async function coldraceScenario(ctx, url, report, out) {
   const R = report.coldrace = { pin, track, tod, rows: [] };
   await exec(ctx.base, ctx.sid, PIN(pin));
   for (const [i, arm] of opt("cold-arms", "menu30,title0,title15,title45,second").split(",").entries()) {
-    const m = /^(menu|title)(\d+)$/.exec(arm), idle = m ? Number(m[2]) : 0;
+    const m = /^(menu|title|quick)(\d+)$/.exec(arm), idle = m ? Number(m[2]) : 0;
     const r = await openUrl(ctx, withApex(url));
     if (m && (m[1] === "title" || m[1] === "quick") && idle) await sleep(idle * 1000);
     const entry = await timedEntry(ctx, `coldrace ${arm}`, KICK_MENU(track, tod, m && m[1] === "menu" ? idle : 0, !!m && m[1] === "quick"));
