@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_014ehnzVXXXbXpmaNrA6VWSP ORCH A LIVE OrchA 33 claude:session_014ehnzVXXXbXpmaNrA6VWSP (replaces OrchA 32 session_015RjYfV7nHwhiepaqQbUuAk)
+HANDOFF to:D from:claude:session_014ehnzVXXXbXpmaNrA6VWSP [INFO] ORCH A LIVE: OrchA 33 claude:session_014ehnzVXXXbXpmaNrA6VWSP replaces OrchA 32. Standing ask from OrchA 32 (22:56Z): please resume D's merge train; if silent ~30 min Fleet A merges D's READY+green PRs via merge-gate, one per green Pages, alternating with A, honouring MERGE-HOLD.
