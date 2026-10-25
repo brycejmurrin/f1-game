@@ -188,7 +188,8 @@ const TrackBuildClient = (function () {
     // Page-only diagnostic switches cannot be reproduced by the worker copy.
     // Drop the memo so restoring defaults cannot reuse a diagnostic-era request.
     if (typeof Tracks !== "undefined" && Tracks.diagnosticBuild && Tracks.diagnosticBuild()) { _last = null; return null; }
-    const key = [def.id, opts.night, opts.gridSlots, !!opts.chunkRibbons, !!gfx.mobileTier].join("|");
+    const prepare = gfx.trackPrepareConfig ? gfx.trackPrepareConfig() : null;
+    const key = [JSON.stringify(prepare), def.id, opts.night, opts.gridSlots, !!opts.chunkRibbons, !!gfx.mobileTier].join("|");
     // A live caller owns its own permit; unrelated equal-key callers retain
     // their shared request without inheriting another caller's cancellation.
     if (!_last || _last.key !== key || _last.live !== live) _last = { key, live, p: post(idx, def, opts, gfx, sceneryFile, live) };
@@ -223,6 +224,7 @@ const TrackBuildClient = (function () {
           // The graph cannot cross; the CPU geometry only when the dev surface will read it.
           retainGeometry: !!(opts.retainGraph || (typeof Tracks !== "undefined" && Tracks.keepGeometry && Tracks.keepGeometry())) },
         mobileTier: !!gfx.mobileTier, chunkedTrackCoords: gfx.chunkedTrackCoords,
+        prepare: gfx.trackPrepareConfig ? gfx.trackPrepareConfig() : null,
         scenery: sceneryFile ? url(sceneryFile) : null,
         team: myTeam(),
       }); } catch (e) {
@@ -279,6 +281,39 @@ const TrackBuildClient = (function () {
       return args;
     };
     const canceled = {};
+    let replayCpu = 0, mainPrepare = 0;
+    const frame = () => new Promise(res => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(res) : setTimeout(res, 0)));
+    const prepare = async (r, args) => {
+      const S = typeof window !== "undefined" && window.TLXShaders;
+      if (r.op !== "chunked" || !S || !gfx.trackPrepareConfig) return;
+      for (;;) {
+        const config = gfx.trackPrepareConfig();
+        if (!S.validPrepareConfig(config)) return;
+        checkLive();
+        let payload = r.prepared;
+        if (!payload || payload.version !== 1 || !S.samePrepareConfig(payload.config, config) || payload.cellSize !== ChunkBins.cellSize(args[1])) {
+          const steps = S.prepareChunksSteps(args[0], args[1], config);
+          // An old worker, unsupported config or admission refusal still yields
+          // within packing/binning/merge loops, rather than after a whole record.
+          for (;;) {
+            checkLive();
+            const start = performance.now();
+            let next, stepsInSlice = 0;
+            do { next = steps.next(); stepsInSlice++; } while (!next.done && stepsInSlice < 64 && performance.now() - start < budget);
+            mainPrepare += performance.now() - start;
+            if (next.done) { payload = next.value; break; }
+            await frame();
+          }
+        }
+        checkLive();
+        r.prepared = null;
+        // Settings/backend may have changed while the cooperative path yielded.
+        // Reprepare under the new snapshot before entering synchronous finalize.
+        if (!S.samePrepareConfig(config, gfx.trackPrepareConfig())) continue;
+        args[0]._tlxPrepared = payload;
+        return;
+      }
+    };
     const checkLive = () => { if (!isLive(live)) throw canceled; };
     try {
       checkLive();
@@ -288,12 +323,16 @@ const TrackBuildClient = (function () {
         do {
           const r = recs[i];
           const args = (r.op === "mesh" || r.op === "chunked") ? stampKeep(r.args) : r.args;
+          await prepare(r, args);
+          const opStart = performance.now();
           real[i++] = r.op === "mesh" ? gfx.createMesh(...args)
             : r.op === "chunked" ? gfx.createChunkedMesh(...args) : gfx.createInstancedBatch(...r.args);
+          replayCpu += performance.now() - opStart;
         } while (i < recs.length && performance.now() - t0 < budget);
         if (i < recs.length) await new Promise((res) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(res) : setTimeout(res, 0)));
       }
       checkLive();
+      const finishStart = performance.now();
       const swap = (v) => {
         if (Array.isArray(v)) return v.map(swap);
         if (!v || typeof v !== "object" || typeof v.__rec !== "number") return v;
@@ -329,12 +368,21 @@ const TrackBuildClient = (function () {
       // there skipped PitSigns.upload (tracks.js) — paint and upload them here,
       // exactly where the main-thread build does, from the geometry it posted.
       if (typeof PitSigns !== "undefined") PitSigns.upload(gfx, track);
-      track.buildProfile.push({ n: "worker", k: "off", ms: +msg.ms.toFixed(2) });
-      Log.info("track", "build worker: replayed " + def.id + " (" + recs.length + " uploads; " + Math.round(msg.ms) + " ms off-thread)");
       if (typeof Tracks !== "undefined" && Tracks.dropRibbonCpuIfReady) Tracks.dropRibbonCpuIfReady(track);
+      replayCpu += performance.now() - finishStart;
+      // Worker phase rows overlap its elapsed summary; keep them visible as
+      // detail, but never add them to either CPU total or main blocking ratios.
+      track.buildProfile = (track.buildProfile || []).map(r => Object.assign({}, r, { thread: "worker", additive: false }));
+      track.buildProfile.push(
+        { n: "worker", k: "off", thread: "worker", additive: true, ms: +(msg.cpuMs == null ? (msg.ms || 0) : Math.max(0, msg.cpuMs - (msg.prepareMs || 0))).toFixed(2) },
+        { n: "worker prepare", k: "prepare", thread: "worker", additive: true, ms: +(msg.prepareMs || 0).toFixed(2) },
+        { n: "replay prepare", k: "prepare", thread: "main", additive: true, ms: +mainPrepare.toFixed(2) },
+        { n: "replay finalize", k: "up", thread: "main", additive: true, ms: +replayCpu.toFixed(2) });
+      Log.info("track", "build worker: replayed " + def.id + " (" + recs.length + " uploads; " + Math.round(msg.cpuMs == null ? msg.ms : msg.cpuMs) + " ms off-thread)");
       checkLive();
       return track;
     } catch (e) {
+      for (const r of recs) { r.prepared = null; if (r.args && r.args[0]) delete r.args[0]._tlxPrepared; }
       // Own uploads until the entire replay succeeds, including fallback
       // meshes and surface reconstruction after the upload loop.
       for (let i = 0; i < real.length; i++) {

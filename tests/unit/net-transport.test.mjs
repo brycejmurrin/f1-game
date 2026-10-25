@@ -999,6 +999,7 @@ function restartPair(courier) {
     set(a, "connected"); set(b, "connected");
   };
   const done = () => {
+    a.close(); b.close(); // cancel passive/restart continuations before restoring real timers
     timers.clear();
     global.setTimeout = realSet; global.clearTimeout = realClear;
     delete global.RTCPeerConnection; delete global.localStorage;
@@ -1006,20 +1007,30 @@ function restartPair(courier) {
   return { a, b, set, connect, advance, flush, until, done };
 }
 
-function boardCourier() {
+function boardCourier({ delayAnswerAck = false } = {}) {
   const slots = new Map();
+  const listens = [], offers = [];
   const slot = (code) => { if (!slots.has(code)) slots.set(code, {}); return slots.get(code); };
   return {
     codes: () => [...slots.keys()],
-    offer: (code, sdp) => new Promise((resolve) => {
+    listens, offers,
+    offer: (code, sdp, token) => new Promise((resolve) => {
+      offers.push({ code, sdp, token });
       const s = slot(code);
       s.offer = sdp;
       s.onAnswer = (out) => resolve({ ok: true, payload: out });
       if (s.wake) s.wake();
     }),
-    answer: (code, reply) => new Promise((resolve) => {
+    answer: (code, reply, token) => new Promise((resolve) => {
+      const request = { code, reply, token, active: true }; listens.push(request);
       const s = slot(code);
-      const go = async () => { const out = await reply(s.offer); s.onAnswer(out); resolve({ ok: true, payload: s.offer }); };
+      const go = async () => {
+        const out = token.cancelled ? null : await reply(s.offer);
+        if (!out || token.cancelled) { request.active = false; resolve({ ok: false, error: "cancelled" }); return; }
+        s.onAnswer(out);
+        request.complete = () => { request.active = false; resolve({ ok: true, payload: s.offer }); };
+        if (!delayAnswerAck) request.complete();
+      };
       if (s.offer) go(); else s.wake = go;
     }),
   };
@@ -1095,6 +1106,176 @@ test("a disconnect that heals before the restart answer rolls the pending offer 
     assert.ok(h.a.pc.calls.includes("rollback"));
     assert.equal(h.a.pc.signalingState, "stable", "the next outage starts from stable");
     assert.equal(h.a.status, "open");
+  } finally { h.done(); }
+});
+
+test("connecting preserves the restart token and accepts its late valid answer", async () => {
+  let pending;
+  const courier = { offer: (code, sdp, token) => new Promise((resolve) => { pending = { code, sdp, token, resolve }; }),
+    answer: () => new Promise(() => {}) };
+  const h = restartPair(courier);
+  try {
+    await h.connect(); h.a.setDisconnectGrace(25000);
+    h.set(h.a, "failed"); h.advance(0);
+    assert.equal(await h.until(() => !!pending), true);
+    h.set(h.a, "connecting"); await h.flush();
+    assert.equal(pending.token.cancelled, false, "connecting is progress, not completed recovery");
+    assert.equal(h.a.pc.signalingState, "have-local-offer");
+    assert.equal(h.a.pc.calls.includes("rollback"), false);
+    h.advance(1000);
+    await h.b.pc.setRemoteDescription({ type: "offer", sdp: pending.sdp });
+    await h.b.pc.setLocalDescription(await h.b.pc.createAnswer());
+    pending.resolve({ ok: true, payload: h.b.pc.localDescription.sdp });
+    assert.equal(await h.until(() => h.a.pc.signalingState === "stable"), true);
+    assert.equal(h.a.pc.currentRemoteDescription.sdp, h.b.pc.localDescription.sdp);
+    h.set(h.a, "connected"); h.advance(30000); await h.flush();
+    assert.equal(pending.token.cancelled, true, "actual connected recovery closes the old restart generation");
+    assert.equal(h.a.status, "open");
+  } finally { h.done(); }
+});
+
+test("connecting keeps the outage deadline; close rejects a late answer and stale recovery event", async () => {
+  let pending;
+  const courier = { offer: (code, sdp, token) => new Promise((resolve) => { pending = { code, sdp, token, resolve }; }),
+    answer: () => new Promise(() => {}) };
+  const h = restartPair(courier);
+  try {
+    await h.connect(); h.a.setDisconnectGrace(25000);
+    h.set(h.a, "failed"); h.advance(0);
+    assert.equal(await h.until(() => !!pending), true);
+    const original = h.a.pc.currentRemoteDescription;
+    h.set(h.a, "connecting"); h.advance(24999);
+    assert.equal(h.a.status, "open");
+    h.advance(1);
+    assert.equal(h.a.status, "closed", "an unfinished connecting state cannot remove the race's outage bound");
+    assert.equal(pending.token.cancelled, true);
+    const calls = h.a.pc.calls.slice();
+    pending.resolve({ ok: true, payload: "late answer from a closed generation" });
+    h.set(h.a, "connected"); await h.flush();
+    assert.equal(h.a.pc.currentRemoteDescription, original);
+    assert.deepEqual(h.a.pc.calls, calls, "late continuations/events cannot touch a closed PC");
+    assert.equal(h.a.status, "closed");
+  } finally { h.done(); }
+});
+
+test("actual connected recovery cancels an unanswered offer and refuses its late answer", async () => {
+  let pending;
+  const courier = { offer: (code, sdp, token) => new Promise((resolve) => { pending = { code, sdp, token, resolve }; }),
+    answer: () => new Promise(() => {}) };
+  const h = restartPair(courier);
+  try {
+    await h.connect();
+    const original = h.a.pc.currentRemoteDescription;
+    h.set(h.a, "failed"); h.advance(0);
+    assert.equal(await h.until(() => !!pending), true);
+    h.set(h.a, "connected");
+    assert.equal(await h.until(() => h.a.pc.signalingState === "stable"), true);
+    assert.equal(pending.token.cancelled, true);
+    assert.equal(h.a.pc.calls.includes("rollback"), true);
+    pending.resolve({ ok: true, payload: "answer from the canceled generation" });
+    await h.flush(); h.advance(30000);
+    assert.equal(h.a.pc.currentRemoteDescription, original);
+    assert.equal(h.a.status, "open");
+  } finally { h.done(); }
+});
+
+test("a connected answerer handles one-sided failure, retry, and subsequent credential generation", async () => {
+  const courier = boardCourier(), h = restartPair(courier);
+  try {
+    await h.connect(); h.a.setDisconnectGrace(25000); h.b.setDisconnectGrace(25000);
+    assert.equal(await h.until(() => courier.listens.length === 1), true, "the original answerer listens while healthy");
+    const first = courier.listens[0];
+    assert.equal(courier.offers.length, 0, "healthy endpoints never offer a restart");
+    h.set(h.a, "failed"); h.advance(0);
+    assert.equal(await h.until(() => h.a.stats().iceRestarts === 1 && h.b.stats().iceRestarts === 1 &&
+      h.a.pc.signalingState === "stable" && courier.listens.some((r) => r.code.slice(0, -2) !== first.code.slice(0, -2))), true);
+    assert.equal(h.b.pc.connectionState, "connected", "the answerer never needed its own down event");
+    assert.equal(h.b.pc.currentRemoteDescription.sdp, h.a.pc.currentLocalDescription.sdp);
+    assert.equal(h.a.pc.currentRemoteDescription.sdp, h.b.pc.currentLocalDescription.sdp);
+    const second = courier.listens.find((r) => r.code.slice(0, -2) !== first.code.slice(0, -2));
+    assert.equal(second.code.slice(-2), "R0", "the next outage listens on the completed credentials");
+    assert.ok(courier.listens.filter((r) => r.active && !r.token.cancelled).length <= 2);
+    // The failed offerer has applied the answer but its new path is not yet
+    // connected. Its retry still uses the previous generation's R1 topic.
+    h.advance(8000);
+    assert.equal(await h.until(() => h.a.stats().iceRestarts === 2 && h.b.stats().iceRestarts === 2 &&
+      h.a.pc.signalingState === "stable" && second.token.cancelled), true);
+    assert.equal(courier.offers[1].code, first.code.slice(0, -1) + "1");
+    assert.equal(h.b.pc.calls.includes("createOffer"), false, "only the original offerer can restart");
+    h.set(h.a, "connected");
+    h.set(h.a, "failed"); h.advance(0);
+    assert.equal(await h.until(() => h.a.stats().iceRestarts === 3 && h.b.stats().iceRestarts === 3 &&
+      h.a.pc.signalingState === "stable"), true, "a second outage meets the still-connected answerer on the rotated secret");
+    assert.notEqual(courier.offers[2].code.slice(0, -2), first.code.slice(0, -2));
+    assert.equal(courier.offers[2].code.slice(-2), "R0");
+    assert.ok(courier.listens.filter((r) => r.active && !r.token.cancelled).length <= 2,
+      "obsolete generations do not accumulate live listeners");
+    h.a.close(); h.b.close(); await h.flush();
+    assert.ok(courier.listens.every((r) => r.token.cancelled));
+    assert.ok(courier.offers.every((r) => r.token.cancelled));
+    const before = h.b.pc.calls.slice();
+    assert.equal(await first.reply("stale authenticated offer"), null);
+    assert.deepEqual(h.b.pc.calls, before, "closed-generation courier callbacks are inert");
+  } finally { h.done(); }
+});
+
+test("a healthy answerer rotates credentials before courier repost completion and expires only the old chain", async () => {
+  const courier = boardCourier({ delayAnswerAck: true }), h = restartPair(courier);
+  try {
+    await h.connect(); h.a.setDisconnectGrace(25000); // B retains its shorter 5 s lobby grace
+    h.set(h.a, "failed"); h.advance(0);
+    assert.equal(await h.until(() => h.a.stats().iceRestarts === 1 && h.a.pc.signalingState === "stable" &&
+      courier.listens.some((r) => r.complete) && courier.listens.some((r) => !r.complete && r.code.slice(-2) === "R0")), true);
+    const old = courier.listens.find((r) => r.complete);
+    const fresh = courier.listens.find((r) => r !== old && !r.token.cancelled);
+    assert.notEqual(fresh.code, old.code);
+    assert.equal(old.active, true, "the answer is delivered while the real-style repost completion is still pending");
+    h.set(h.a, "connected"); h.advance(5000); await h.flush();
+    assert.equal(old.token.cancelled, true, "the previous retry chain expires at its own bound");
+    assert.equal(fresh.token.cancelled, false, "its expiry cannot cancel the new credential generation");
+    assert.equal(h.b.status, "open", "expiry of old signaling does not close a healthy connection");
+    h.set(h.a, "failed"); h.advance(0);
+    assert.equal(await h.until(() => h.a.stats().iceRestarts === 2 && h.b.stats().iceRestarts === 2 &&
+      h.a.pc.signalingState === "stable"), true, "the next outage is answered without waiting for the old courier return");
+    old.complete(); await h.flush();
+    assert.equal(h.b.status, "open");
+  } finally { h.done(); }
+});
+
+test("closing while a restart offer is being created prevents its late SDP mutation", async () => {
+  const h = restartPair({ offer: () => new Promise(() => {}), answer: () => new Promise(() => {}) });
+  try {
+    await h.connect();
+    const original = h.a.pc.localDescription;
+    let release;
+    h.a.pc.createOffer = () => new Promise((resolve) => { release = resolve; });
+    h.set(h.a, "failed"); h.advance(0);
+    assert.equal(await h.until(() => !!release), true);
+    h.a.close();
+    release({ type: "offer", sdp: "late SDP for a closed PC" }); await h.flush();
+    assert.equal(h.a.pc.localDescription, original);
+    assert.equal(h.a.pc.signalingState, "stable");
+    assert.equal(h.a.status, "closed");
+  } finally { h.done(); }
+});
+
+test("raising race grace also re-arms the answerer's live retry-generation expiry", async () => {
+  const courier = boardCourier({ delayAnswerAck: true }), h = restartPair(courier);
+  try {
+    await h.connect(); h.a.setDisconnectGrace(25000);
+    h.set(h.a, "failed"); h.advance(0);
+    assert.equal(await h.until(() => courier.listens.some((r) => r.complete) && h.a.pc.signalingState === "stable"), true);
+    const old = courier.listens.find((r) => r.complete);
+    h.set(h.a, "connected");
+    h.advance(1000); h.b.setDisconnectGrace(25000);
+    h.advance(5000);
+    assert.equal(old.token.cancelled, false, "lobby-to-race adoption extends the existing chain past its former deadline");
+    h.advance(19999);
+    assert.equal(old.token.cancelled, false);
+    h.advance(1);
+    assert.equal(old.token.cancelled, true, "the raised grace still bounds the old signaling generation");
+    assert.equal(h.b.status, "open");
+    old.complete(); await h.flush();
   } finally { h.done(); }
 });
 

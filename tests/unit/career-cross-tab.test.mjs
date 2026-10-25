@@ -435,6 +435,7 @@ test("missing calendar preserves exact raw JSON through reads, save, mutation an
   const original = save(1, 250);
   original.season.calIds = ["a", "gone"];
   original.season.roundPts = { "haas:0": [10, 4] };
+  original.season.finishes = { "haas:0": [1, 0, 0, 1] };
   original.results = [{ r: 0, p: 1, pts: 10 }, { r: 1, p: 4, pts: 4 }];
   const raw = JSON.stringify(original, null, 2);
   const disk = new Map([["apex26.career.driver.0", raw], ["apex26.careerSlot", JSON.stringify("driver:0")]]);
@@ -454,21 +455,30 @@ test("missing calendar preserves exact raw JSON through reads, save, mutation an
   assert.equal(kept.length, 2);
   assert.equal(kept[0].r, 0);
   assert.equal(kept[1].archivedCircuit, "gone");
+  assert.deepEqual(Array.from(Career.data().season.finishes["haas:0"]), [1, 0, 0, 1], "partial adoption retains scored achievements and countback");
   assert.equal("r" in kept[1], false);
   assert.equal(Career.conflicted(), false);
 });
 
 test("all missing and malformed calendar stamps are read-only; explicit adoption resets progress", () => {
-  for (const ids of [["gone"], ["a", "a"], "broken"]) {
+  for (const ids of [["gone"], ["a", "a"], "broken", null]) {
     const original = save(1, 250); original.season.calIds = ids;
+    original.season.pts = { "haas:1": 25 };
+    original.season.teamPts = { haas: 25 };
+    original.season.roundPts = { "haas:1": [25] };
+    original.season.finishes = { "haas:1": [1], "haas:0": [] };
     original.results = [{ r: 0, pts: 10, p: 1 }];
     const raw = JSON.stringify(original);
     const disk = new Map([["apex26.career.driver.0", raw]]);
-    const { Career } = load({ disk }); Career.load();
+    const { Career, SeasonCal } = load({ disk }); Career.load();
     assert.equal(disk.get("apex26.career.driver.0"), raw);
     assert.equal(Career.planning().adopt(), true);
-    assert.equal(Career.data().season.round, 0);
+    const season = Career.data().season;
+    assert.equal(season.round, 0);
+    for (const key of ["pts", "teamPts", "roundPts", "finishes"]) assert.deepEqual(Object.keys(season[key]), []);
+    assert.equal(SeasonCal.rank(season, "haas:1", "haas:0"), 1, "discarded wins cannot break a fresh season's tie");
     assert.equal(Career.data().results.length, 0);
+    assert.deepEqual(JSON.parse(disk.get("apex26.career.driver.0")).season.finishes, {});
   }
 });
 
@@ -522,6 +532,41 @@ test("quota-failed calendar adoption retains original through slot switching and
     assert.equal(Career.planning().protection().raw, raw);
     assert.equal(Career.data().season.calIds.length, 2);
     assert.equal(disk.get("apex26.career.driver.0"), raw);
+  }
+});
+
+
+test("refused calendar adoption leaves cache and retry ownership on the original scored save", () => {
+  for (const ids of [["a", "gone"], ["gone"]]) {
+    const original = save(1, 250); original.season.calIds = ids;
+    original.season.pts = { "haas:0": 25 }; original.season.finishes = { "haas:0": [1] };
+    original.results = [{ r: 0, p: 1, pts: 25 }];
+    const key = "apex26.career.driver.0", raw = JSON.stringify(original, null, 2);
+    const disk = new Map([[key, raw]]); let refuse = true;
+    const { Career, store } = load({ disk, setItem(k, v, d) {
+      if (refuse) throw new DOMException("full", "QuotaExceededError");
+      d.set(k, v);
+    } });
+    Career.load();
+    const view = Career.data(), cached = store.get("career.driver.0"), revision = store.keyRevision("career.driver.0");
+    store.write("unrelated", { session: "keep-me" });
+    assert.equal(Career.planning().adopt(), false);
+    assert.equal(Career.data(), view); assert.equal(Career.conflicted(), true);
+    assert.equal(Career.saveStatus().durable, false);
+    assert.equal(store.get("career.driver.0"), cached);
+    assert.equal(store.keyRevision("career.driver.0"), revision);
+    assert.deepEqual(JSON.parse(JSON.stringify(cached)), original);
+    assert.deepEqual(Array.from(store.failedKeys(), (r) => r.key), ["unrelated"]);
+    refuse = false;
+    const retried = store.retryFailed(); assert.equal(retried.retried, 1); assert.equal(retried.durable, true);
+    assert.equal(disk.get(key), raw);
+    assert.deepEqual(JSON.parse(disk.get("apex26.unrelated")), { session: "keep-me" });
+    Career.load();
+    assert.deepEqual(Array.from(Career.data().season.calIds), ids);
+    assert.equal(Career.data().results.length, 1); assert.equal(Career.data().season.pts["haas:0"], 25);
+    assert.equal(Career.planning().protection().raw, raw);
+    assert.equal(Career.planning().adopt(), true, "a later explicit adoption succeeds when storage recovers");
+    assert.equal(Career.saveStatus().durable, true);
   }
 });
 

@@ -1,4 +1,4 @@
-/* Apex 26 — serialized API transport: cache, rate limits, timeouts, retries and cancellation. */
+/* Apex 26 — paced API transport: bounded bodies, cache, timeouts, retries and cancellation. */
 const F1Transport = (function () {
   "use strict";
 
@@ -16,13 +16,14 @@ const F1Transport = (function () {
     // act on; a 90 s+ sleep behind a spinner is not.
     const RETRY_AFTER_MAX_MS = 90000;
     const FETCH_TIMEOUT_MS = 15000;
+    const MAX_ACTIVE = 2;                 // bound response bodies independently of start-rate pacing
 
     const MINUTE = 60 * 1000;
     const CACHE_SWEEP_MS = 5 * MINUTE;     // a response batch must not rescan localStorage per item
 
     // OpenF1's minute budget must not block an unrelated Jolpica request.
-    const openF1Lane = { queue: Promise.resolve(), lastNetAt: 0 };
-    const otherLane = { queue: Promise.resolve(), lastNetAt: 0 };
+    const openF1Lane = { queue: Promise.resolve(), lastNetAt: 0, pauseUntil: 0, active: new Set() };
+    const otherLane = { queue: Promise.resolve(), lastNetAt: 0, pauseUntil: 0, active: new Set() };
     // OPENF1'S FREE TIER IS 30 REQUESTS A MINUTE (and 3/s — https://openf1.org/).
     // MIN_GAP_MS alone allowed ~150/min: a 4-lane TELEMETRY compare is ~18
     // requests, two in a minute tripped 429s whose +10 s/+20 s retries landed in
@@ -187,7 +188,8 @@ const F1Transport = (function () {
     // Own the entire attempt, including reading/parsing the body. fetch() itself
     // resolves at headers; timing only that Promise leaves a stalled response
     // body holding its provider's queue slot forever.
-    function fetchTimed(url, consume) {
+    function fetchTimed(url, lane, consume) {
+      const myGen = netGen;
       const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
       if (controller) liveControllers.add(controller);
       let timer = null;
@@ -209,7 +211,15 @@ const F1Transport = (function () {
           // Remember failure headers BEFORE awaiting the body. A rejected body
           // or the original attempt deadline must not turn a known 401/403
           // into an offline error eligible for stale-cache fallback.
-          if (!res.ok) responseError = httpError(url, res);
+          if (!res.ok) {
+            responseError = httpError(url, res);
+            // Publish exposed throttle windows at headers, even when the error
+            // body stalls. Cancellation does not erase the server's window;
+            // late headers from an obsolete attempt cannot extend it.
+            if (myGen === netGen && responseError.status === 429 && responseError.retryAfterMs > 0) {
+              lane.pauseUntil = Math.max(lane.pauseUntil, Date.now() + responseError.retryAfterMs);
+            }
+          }
           return consume(res, responseError);
         });
       }
@@ -257,7 +267,7 @@ const F1Transport = (function () {
       lane.lastNetAt = Date.now();
       // Count actual attempts, never a reservation cancelled during pacing.
       if (lane === openF1Lane) _of1Recent.push(lane.lastNetAt);
-      return fetchTimed(url, function (res, httpErr) {
+      return fetchTimed(url, lane, function (res, httpErr) {
         if (!res.ok) {
           return res.text().then(function (txt) {
             try {
@@ -301,6 +311,18 @@ const F1Transport = (function () {
       });
     }
 
+    function waitForCapacity(lane, url) {
+      if (lane.active.size < MAX_ACTIVE) return null;
+      let cancel;
+      const cancelled = new Promise(function (_resolve, reject) {
+        cancel = function () { reject(cancelledError(url)); };
+        pendingWaits.add(cancel);
+      });
+      return Promise.race([Promise.race(lane.active), cancelled]).finally(function () {
+        pendingWaits.delete(cancel);
+      });
+    }
+
     function request(url, ttl, options) {
       const myGen = netGen;
       const lane = url.indexOf(OPENF1) === 0 ? openF1Lane : otherLane;
@@ -321,14 +343,32 @@ const F1Transport = (function () {
       const shared = inFlight.get(flightKey);
       if (shared) return shared;
 
-      // Each attempt claims ONE queue slot (MIN_GAP pacing included) and releases
-      // it before any backoff sleep, so other endpoints proceed while this one
-      // waits out a 429 — the chain stays alive per-slot, not per-job.
+      // Only capacity/start reservations are serialized. Each attempt owns its
+      // body until settlement, with at most MAX_ACTIVE bodies per provider.
+      // Backoff sleeps hold neither a reservation nor response capacity.
       // A cancelAll() between any two of these checks drops the request: a
       // queued one never waits or fetches, an aborted one never retries or
       // sleeps, a late completion never reaches the caller.
+      function startAfterProviderGate() {
+        if (myGen !== netGen) throw cancelledError(url);
+        const wait = lane.pauseUntil - Date.now();
+        // Check and start in one callback: headers can arrive between any two
+        // Promise reactions, including after a pacing reservation wakes.
+        if (wait > 0) return waitForRequest(wait, url).then(startAfterProviderGate);
+        const work = fetchOnce(url, lane);
+        const release = function () { lane.active.delete(owned); };
+        const owned = work.then(release, release);
+        lane.active.add(owned);
+        // Keep body settlement outside the serialized start chain.
+        return { work };
+      }
+
       function attempt(n) {
-        const slot = lane.queue
+        const reservation = lane.queue
+          .then(function () {
+            if (myGen !== netGen) throw cancelledError(url);
+            return waitForCapacity(lane, url);
+          })
           .then(function () {
             if (myGen !== netGen) throw cancelledError(url);
             let wait = lane.lastNetAt + MIN_GAP_MS - Date.now();
@@ -340,12 +380,9 @@ const F1Transport = (function () {
             if (wait > 0) return waitForRequest(wait, url);
             return null;
           })
-          .then(function () {
-            if (myGen !== netGen) throw cancelledError(url);
-            return fetchOnce(url, lane);
-          });
-        lane.queue = slot.then(function () {}, function () {});
-        return slot.catch(function (err) {
+          .then(startAfterProviderGate);
+        lane.queue = reservation.then(function () {}, function () {});
+        return reservation.then(function (started) { return started.work; }).catch(function (err) {
           if (myGen !== netGen) throw cancelledError(url);
           const status = err && err.status;
           if ((status === 429 || (status >= 500 && status < 600)) && n < MAX_RETRY) {

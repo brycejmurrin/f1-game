@@ -550,8 +550,8 @@ const DataHub = (function () {
     // A pin is an explicit user pick (buildPicker) — it outranks force, which
     // only means "my cached view went stale": LIVE re-entry must not trample a
     // pinned historic session (and the telemetry tab with it) with whatever
-    // latestSession() returns. Only an explicit unpin (year/meeting change)
-    // releases it.
+    // latestSession() returns. Pending/failed year and meeting picks also keep
+    // their explicit intent until the picker resolves a replacement session.
     if (sel.pinned) return Promise.resolve(sel.meta);
     if (have && !force && fresh) return Promise.resolve(sel.meta);
     const mySelection = selectionGen;
@@ -597,10 +597,9 @@ const DataHub = (function () {
     if (title) selectEl.title = title; else selectEl.removeAttribute("title");
   }
 
-  // onChange (optional) runs synchronously when the player starts a YEAR or GRAND
-  // PRIX change, BEFORE the picker queues its own meetings / sessions request: that
-  // request shares F1API's serialized lane, so whatever the tab still has in
-  // flight (TELEMETRY's COMPARE lanes) would be waited out first.
+  // Clearing an explicit pick synchronously retires the previous body (including
+  // TELEMETRY's COMPARE requests) before asking for replacement metadata.
+  // onChange is the cancellation fallback if that body is already detached.
   function buildPicker(onPick, onChange) {
     let pickerGen = 0;
     const initialSessionKey = sel.sessionKey;
@@ -613,8 +612,8 @@ const DataHub = (function () {
         if (y === sel.year) return;
         ++selectionGen;
         cancelRealRace();
-        if (onChange) onChange();
-        sel.year = y; sel.meetingKey = null; sel.sessionKey = null; sel.pinned = false;
+        sel.year = y; sel.meetingKey = null;
+        if (!emptySelection(true) && onChange) onChange();
         for (let i = 0; i < yearRow.children.length; i++) {
           yearRow.children[i].classList.toggle("active", yearRow.children[i] === b);
         }
@@ -639,16 +638,21 @@ const DataHub = (function () {
     fieldsRow.appendChild(sesField);
 
     box.appendChild(fieldsRow);
+    const pickerError = el("div", "dh-picker-error");
+    pickerError.setAttribute("role", "status");
+    pickerError.hidden = true;
+    box.appendChild(pickerError);
 
     let sesIndex = {};
     function ph(s, t) { setSelectOptions(s, [{ value: "", label: t }], ""); }
     // An explicit empty year/meeting is still the player's selection. Clear
     // the old session body and keep sibling tabs from reverting to latest.
     function emptySelection(userChanged) {
-      if (!userChanged) return;
+      if (!userChanged) return false;
       sel.meta = null; sel.sessionKey = null; sel.selAt = 0;
       sel.pinned = true;
-      if (openFlag && box.isConnected !== false) onPick(null);
+      if (openFlag && box.isConnected !== false) { onPick(null); return true; }
+      return false;
     }
     // A pick made here and answered after the player left this tab must not
     // call onPick: its invalidateOther would bump the generation of the tab now
@@ -666,10 +670,8 @@ const DataHub = (function () {
     gpSel.addEventListener("change", function () {
       ++selectionGen;
       cancelRealRace();
-      if (onChange) onChange();
       sel.meetingKey = gpSel.value ? Number(gpSel.value) : null;
-      sel.sessionKey = null;
-      sel.pinned = false;
+      if (!emptySelection(true) && onChange) onChange();
       loadSessions(true);
     });
     sesSel.addEventListener("change", function () {
@@ -704,6 +706,8 @@ const DataHub = (function () {
 
     function loadGPs(userChanged) {
       const myGen = ++pickerGen, mySelection = selectionGen;
+      clear(pickerError);
+      pickerError.hidden = true;
       ph(gpSel, "loading…"); ph(sesSel, "—");
       F1API.meetings(sel.year).then(function (ms) {
         if (myGen !== pickerGen || mySelection !== selectionGen) return;
@@ -721,12 +725,16 @@ const DataHub = (function () {
         loadSessions(userChanged);
       }, function () {
         if (myGen !== pickerGen || mySelection !== selectionGen) return;
+        if (detached(userChanged)) return;
         ph(gpSel, "error");
+        retryPicker("Grand Prix", function () { loadGPs(userChanged); });
       });
     }
 
     function loadSessions(userChanged) {
       const myGen = ++pickerGen, mySelection = selectionGen;
+      clear(pickerError);
+      pickerError.hidden = true;
       ph(sesSel, "loading…");
       F1API.sessionsForMeeting(sel.meetingKey).then(function (ss) {
         if (myGen !== pickerGen || mySelection !== selectionGen) return;
@@ -749,8 +757,21 @@ const DataHub = (function () {
         if (userChanged || (initialSessionKey === null && openFlag && box.isConnected !== false)) onPick(sel.meta);
       }, function () {
         if (myGen !== pickerGen || mySelection !== selectionGen) return;
+        if (detached(userChanged)) return;
         ph(sesSel, "error");
+        retryPicker("session", function () { loadSessions(userChanged); });
       });
+    }
+
+    function retryPicker(label, retry) {
+      clear(pickerError);
+      pickerError.hidden = false;
+      pickerError.appendChild(el("span", "dh-error-msg", "Couldn't load the " + label + " list. Try again."));
+      const button = el("button", "dh-retry dh-picker-retry", "RETRY");
+      button.type = "button";
+      button.setAttribute("aria-label", "Retry " + label + " list");
+      button.addEventListener("click", retry);
+      pickerError.appendChild(button);
     }
 
     loadGPs(false);   // reflect current selection without firing onPick

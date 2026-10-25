@@ -4814,6 +4814,7 @@ const TLX = (function () {
           g.setIndex(new THREE.BufferAttribute(new IndexArray(data.idx), 1));
           return { __tlx: true, geo: _regGeo(g, "tex"), tex: true, count: data.idx.length };
         },
+        trackPrepareConfig: () => chunkedSys ? chunkedSys.prepareConfig() : null,
         createChunkedMesh(data, cellSize) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
           _meshMade.chunked++;

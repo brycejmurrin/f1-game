@@ -1579,7 +1579,7 @@ function makeCars() {
         // road ahead currently allows X-mode at all (see inAeroZone).
         xOn: false, aeroX: 0, xArmed: false,
         lapTime: 0, best: Infinity, totalT: 0,
-        finished: false, finishT: 0, finPos: 0,
+        finished: false, finishT: 0, finPos: 0, compoundShortAtFinish: null,
         // Retirement (js/race/reliability.js). `retired`/`dnf` are the record;
         // dnfAt/dnfWhy are the plan Reliability.arm() draws at the green light.
         // Declared here so every car has the shape whether or not a race arms it.
@@ -1795,7 +1795,7 @@ function gridUp(preOrder) {
     // (the row IS the compound); an AI car's from the class it just drew. No RNG
     // here — `h` is already the per-car race hash, so arming costs the sim
     // stream nothing, exactly as Reliability's retirement draw does.
-    c.tyreStints = 0; c.tyreLog = null;   // a new race is a new strip, not an appended one
+    c.tyreStints = 0; c.tyreLog = null; c.compoundShortAtFinish = null;   // a new race is a new strip, not an appended one
     pits.reset(c); engineer.reset(c);
     // STRATEGY (js/physics/ai-drive.js stintPlan). Drawn ONCE here from its own
     // hash of seed, round and DRIVER (not grid slot + skill: tier-adjacent cars

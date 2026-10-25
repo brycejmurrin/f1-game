@@ -39,7 +39,9 @@ export function lintWorkflows({ dir = ".github/workflows", useRepoConfig = true 
     const sc = resolveBin("shellcheck");
     results.push(sc ? { tool: "shellcheck", status: "clean", version: versionOf(sc), output: "" }
       : { tool: "shellcheck", status: "skipped", output: skipLine("workflow-lint", "shellcheck") });
-    const args = ["-no-color", ...(useRepoConfig ? ["-config-file", path.join(ROOT, ".github/actionlint.yaml")] : []), ...fs.readdirSync(abs).filter((f) => /\.ya?ml$/.test(f)).map((f) => path.join(abs, f))];
+    // Pin the exact binary we reported. An empty path disables discovery when
+    // the authoritative override is unavailable (actionlint usage.md).
+    const args = ["-no-color", "-shellcheck", sc || "", ...(useRepoConfig ? ["-config-file", path.join(ROOT, ".github/actionlint.yaml")] : []), ...fs.readdirSync(abs).filter((f) => /\.ya?ml$/.test(f)).map((f) => path.join(abs, f))];
     const r = run(al, args, ROOT);
     const out = `${r.stdout}${r.stderr}`.trim();
     results.push({ tool: "actionlint", version: versionOf(al), output: out,

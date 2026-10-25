@@ -119,13 +119,8 @@ const WGXChunked = (function () {
       const indexFormat = big ? "uint32" : "uint16";
       const BPI = big ? 4 : 2;
       let vbuf = null, sbuf = null, attrBG = null, ibuf = null;
-      try {
-        vbuf = core.mkBuffer(b.vert, GPUBufferUsage.VERTEX);
-      } catch (e) {
-        try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
-        core.allocFail("createChunkedMesh", e);
-        return { _wgx: "chunked", vbuf: null, sbuf: null, attrBG: null, chunks: [], count: 0, indexFormat };
-      }
+      // Finish fallible CPU staging before any buffer exists: a failed index
+      // allocation has no published mesh through which teardown could free it.
       const buckets = new Map();
       for (let t = 0; t < srcIdx.length; t += 3) {
         const a = srcIdx[t], bi = srcIdx[t+1], c = srcIdx[t+2];
@@ -158,6 +153,7 @@ const WGXChunked = (function () {
         bk.idx = null;
       });
       try {
+        vbuf = core.mkBuffer(b.vert, GPUBufferUsage.VERTEX);
         ibuf = core.mkBuffer(packed, GPUBufferUsage.INDEX);
         const a = core.attrOrZero(b.attr);
         sbuf = a.sbuf; attrBG = a.attrBG;
@@ -169,7 +165,7 @@ const WGXChunked = (function () {
       } catch (e) {
         // Partial chunk set under memory pressure: release everything — a
         // half-uploaded prop mesh must not pin buffers on a struggling core.device.
-        try { vbuf.destroy(); } catch (_) { /* already invalid */ }
+        try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
         try { if (ibuf) ibuf.destroy(); } catch (_) { /* already invalid */ }
         try { if (sbuf) sbuf.destroy(); } catch (_) { /* already invalid */ }
         core.allocFail("createChunkedMesh", e);

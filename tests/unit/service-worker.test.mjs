@@ -1877,3 +1877,68 @@ test("required stamped admission fails closed without digest support", async () 
     assert.equal(h.stores.get("apex26-322").has(`${ORIGIN}/__apex_install_complete__`), false);
   }
 });
+
+test("cache retirement retains the actual previous settled build across gaps for old worker URLs", async () => {
+  for (const clientWindows of [0, 1, undefined]) {
+    const state = { offline: false }, body = "previous build worker", worker = `js/track/build-worker.js?v=${hash12(body)}`;
+    const h = createHarness({ fetchImpl: generationFetch(state), clientWindows });
+    const settled = () => [`${ORIGIN}/__apex_install_settled__`, new Response("settled")];
+    h.stores.set("apex26-300", new Map([settled()]));
+    h.stores.set("apex26-314", new Map([settled(), [`${ORIGIN}/${worker}`, new Response(body)]]));
+    h.stores.set("apex26-320", new Map([[`${ORIGIN}/__apex_install_complete__`, new Response("complete")]]));
+    h.stores.set("apex26-321", new Map([settled(), [`${ORIGIN}/js/track/build-worker.js?v=${hash12("current worker")}`, new Response("current worker")]]));
+    h.stores.set("apex26-322", new Map([settled()]));
+    h.stores.set("apex26-unknown", new Map([["unrelated", new Response("leave alone")]]));
+    await h.lifecycleEvent("activate").done();
+    const keepPrevious = clientWindows !== 0;
+    assert.equal(h.stores.has("apex26-314"), keepPrevious, "missing clients API conservatively retains the installed predecessor");
+    assert.ok(h.stores.has("apex26-321"));
+    assert.ok(h.stores.has("apex26-322"), "newer caches are never retired by this worker");
+    assert.ok(h.stores.has("apex26-unknown"), "unrecognized cache metadata stays untouched");
+    assert.equal(h.stores.has("apex26-300"), false, "retention stays bounded to one actual predecessor");
+    assert.equal(h.stores.has("apex26-320"), false, "a partial arithmetic predecessor cannot displace the older settled one");
+    state.offline = true;
+    const oldWorker = h.fetchEvent(new Request(`${ORIGIN}/${worker}`));
+    const response = await oldWorker.responsePromise;
+    if (keepPrevious) assert.equal(await response.text(), body, "an old-shell worker still resolves its exact changed content key offline");
+    else assert.equal(response.type, "error");
+    await Promise.all(oldWorker.lifetimes);
+  }
+});
+
+test("essential preload URLs get one verified admission while optional-only hints and recovery remain intact", async () => {
+  const files = Array.from({ length: 6 }, (_, i) => ({ path: `css/title-${i}.css`, body: `body { --fixture-${i}: ${i}; }` }));
+  for (const scenario of ["cold", "warm", "corrupt"]) {
+    const puts = new Map(), fetches = new Map(); let digests = 0;
+    const urls = files.map(f => `${f.path}?v=${hash12(f.body)}`);
+    const shell = '<meta name="apex-build" content="321">' + urls.map(u => `<link rel="preload" as="style" href="${u}"><link rel="stylesheet" href="${u}">`).join("") +
+      '<link rel="preload" as="font" href="assets/fonts/fixture.woff2">';
+    const h = createHarness({ fetchImpl: async request => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`), key = url.pathname.slice(1) + url.search;
+      fetches.set(key, (fetches.get(key) || 0) + 1);
+      if (url.pathname.endsWith("/version.json")) return new Response('{"build":321}');
+      if (url.pathname.endsWith("/index.html")) return new Response(shell);
+      const css = files.find(f => `/${f.path}` === url.pathname);
+      if (css) return new Response(css.body);
+      if (url.pathname.endsWith("/fixture.woff2")) return new Response("optional miss", { status: 404 });
+      return new Response("asset");
+    }, putImpl: (_name, request) => { const key = requestKey(request); puts.set(key, (puts.get(key) || 0) + 1); }, globals: {
+      crypto: { subtle: { digest(algorithm, bytes) { digests++; return webcrypto.subtle.digest(algorithm, bytes); } } },
+    } });
+    if (scenario !== "cold") h.stores.set("apex26-314", new Map(files.map((f, i) => [`${ORIGIN}/${urls[i]}`, new Response(scenario === "corrupt" && i === 0 ? "corrupt" : f.body)])));
+    await h.lifecycleEvent("install").done();
+    const cache = h.stores.get("apex26-321"), status = await cache.get(`${ORIGIN}/__apex_offline_status__`).json();
+    for (let i = 0; i < files.length; i++) {
+      const url = urls[i];
+      assert.equal(puts.get(`${ORIGIN}/${url}`), 1, `${scenario}: required CSS writes once`);
+      assert.equal(fetches.get(url) || 0, scenario === "cold" || (scenario === "corrupt" && i === 0) ? 1 : 0, `${scenario}: no duplicate network fetch`);
+      assert.equal(await cache.get(`${ORIGIN}/${url}`).text(), files[i].body);
+      assert.ok(status.required.includes(url));
+      assert.equal(status.optional.includes(url), false, "preload hints cannot duplicate required URLs");
+    }
+    assert.equal(digests, files.length + (scenario === "corrupt" ? 1 : 0), "one digest per required CSS, plus only a corrupt old-copy recovery");
+    assert.ok(status.optional.includes("assets/fonts/fixture.woff2"), "optional-only fonts keep their existing policy");
+    assert.equal(cache.has(`${ORIGIN}/assets/fonts/fixture.woff2`), false, "optional-only miss remains tolerated");
+    assert.equal(h.skipped, 1);
+  }
+});

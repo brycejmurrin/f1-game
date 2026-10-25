@@ -455,6 +455,63 @@ function recordLap(Ghost, time) {
 }
 const ghostOnDisk = (h) => { for (const k of h.disk.keys()) if (/ghost/i.test(k)) return true; return false; };
 
+test("refused idle and off-race saves remain retryable on a later ordinary flush", () => {
+  for (const first of ["idle", "flush", "timer"]) {
+    const opts = { idle: first !== "timer", deferWrites: first === "timer", failWrites: true };
+    const h = createHarness(opts);
+    h.Ghost.setTrack("monza");
+    recordLap(h.Ghost, 1);
+    if (first === "idle") h.runIdle(40);
+    else if (first === "timer") h.flushTimers();
+    else h.Ghost.flush();
+    h.Ghost.flush();
+    assert.equal(ghostOnDisk(h), false, `${first}: repeated refusals keep the PB in memory`);
+    assert.equal(h.Ghost.bestTime(), 1);
+    assert.equal(h.GameStore.store.failedKeys()[0].key, "ghost.v1");
+
+    opts.failWrites = false;
+    h.Ghost.flush();
+    const reloaded = createHarness({ disk: Object.fromEntries(h.disk) }).Ghost;
+    reloaded.setTrack("monza");
+    assert.equal(reloaded.bestTime(), 1, `${first}: ordinary flush persists after recovery`);
+    assert.equal(h.GameStore.store.failedKeys().length, 0);
+  }
+});
+
+test("manual SAVE RETRY persists a refused pose PB and leaves ordinary flush safe", () => {
+  const opts = { idle: true, failWrites: true };
+  const h = createHarness(opts);
+  h.Ghost.setTrack("monza"); recordLap(h.Ghost, 1); h.Ghost.flush();
+  opts.failWrites = false;
+  assert.equal(h.GameStore.store.retryFailed().durable, true);
+  assert.equal(JSON.parse(h.store.getItem("apex26.ghost.v1")).monza.time, 1);
+  h.Ghost.flush(); h.runIdle(40);
+  assert.equal(JSON.parse(h.store.getItem("apex26.ghost.v1")).monza.time, 1);
+});
+
+test("failed pose retries honor supersede, exact clear and foreign faster or clear controls", () => {
+  for (const control of ["supersede", "clear", "foreign-faster", "foreign-clear"]) {
+    const opts = { idle: true, failWrites: true };
+    const h = createHarness(opts);
+    h.Ghost.setTrack("monza", "dry"); recordLap(h.Ghost, 2); h.runIdle(40);
+    opts.failWrites = false;
+    if (control === "supersede") recordLap(h.Ghost, 1);
+    if (control === "clear") h.Ghost.clear("v2:monza:dry");
+    if (control === "foreign-faster") {
+      const fast = h.Ghost.snapshot(); fast.time = 1;
+      h.store.setItem("apex26.ghost.v1", JSON.stringify({ "v2:monza:dry": fast }));
+      h.GameStore.store.onForeignWrite({ key: "apex26.ghost.v1" });
+    }
+    if (control === "foreign-clear") {
+      h.store.clear(); h.GameStore.store.onForeignWrite({ key: null });
+    }
+    h.Ghost.flush(); h.runIdle(40); h.Ghost.flush();
+    const saved = JSON.parse(h.store.getItem("apex26.ghost.v1") || "{}");
+    assert.equal(saved["v2:monza:dry"]?.time,
+      control === "supersede" || control === "foreign-faster" ? 1 : undefined, control);
+  }
+});
+
 test("a new record is written in a LONG idle slot only, never a short mid-race one", () => {
   const h = createHarness({ idle: true });
   h.Ghost.setTrack("monza");

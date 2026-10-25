@@ -133,6 +133,7 @@ window.CamModes = (function () {
     }
 
     const camTrigger = $("btn-cam");
+    let cancelCamHold = () => {};
     const camPicker = (() => {
       let el = null;
       const build = () => {
@@ -194,15 +195,17 @@ window.CamModes = (function () {
         }
       };
       const show = () => {
-        if (document.body.classList.contains("hud-hidden") ||
-            document.body.classList.contains("lt-open")) return;
+        if (document.hidden || G.paused || (G.state !== "race" && G.state !== "count") ||
+            document.body.classList.contains("hud-hidden") || document.body.classList.contains("lt-open")) return false;
         if (!el) build();
         sync();
         el.hidden = false;
         camTrigger?.setAttribute("aria-expanded", "true");
         el.querySelector('[aria-checked="true"]')?.focus();
+        return true;
       };
       const hide = () => {
+        cancelCamHold();
         if (el) el.hidden = true;
         camTrigger?.setAttribute("aria-expanded", "false");
       };
@@ -214,12 +217,13 @@ window.CamModes = (function () {
       if (!b) return;
       b.setAttribute("aria-haspopup", "menu");
       b.setAttribute("aria-expanded", "false");
-      let holdT = 0;
+      let holdT = 0, holdGeneration = 0;
       let held = false;
       let released = false;
       b.addEventListener("pointerdown", () => {
-        held = false; released = false;
-        holdT = setTimeout(() => { held = true; camPicker.show(); }, HOLD_MS);
+        cancelCamHold();
+        const generation = holdGeneration;
+        holdT = setTimeout(() => { if (generation !== holdGeneration) return; holdT = 0; held = camPicker.show(); }, HOLD_MS);
       });
       b.addEventListener("pointerup", () => { clearTimeout(holdT); released = true; });
       b.addEventListener("pointerleave", () => clearTimeout(holdT));
@@ -227,7 +231,7 @@ window.CamModes = (function () {
       // (edge swipe, notification, gesture arbitration) and a touch pointer
       // holds implicit capture, so pointerleave never fires either: the timer
       // opened the picker mid-corner and `held` then ate the next genuine tap.
-      const cancelHold = () => { clearTimeout(holdT); held = false; };
+      const cancelHold = cancelCamHold = () => { holdGeneration++; clearTimeout(holdT); holdT = 0; held = false; released = false; };
       b.addEventListener("pointercancel", cancelHold);
       // Touch implicitly releases capture AFTER pointerup and BEFORE click.
       // Preserve the consumed long press through that normal release.
@@ -245,6 +249,10 @@ window.CamModes = (function () {
       document.addEventListener("visibilitychange", () => {
         if (document.hidden) camPicker.hide();
       });
+      if (window.addEventListener) {
+        window.addEventListener("blur", camPicker.hide);
+        window.addEventListener("pagehide", camPicker.hide);
+      }
     })();
     refreshCamBtn();
     // A WHEEL change mid-race flips whether the HUD shows gear and speed.

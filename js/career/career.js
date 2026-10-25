@@ -1873,14 +1873,14 @@ function adoptCalendar(c, explicit) {
   }
   if (!Array.isArray(ids) || !ids.length || ids.length > CAL_MAX ||
       ids.some((id) => typeof id !== "string") || new Set(ids).size !== ids.length) {
-    if (explicit) { if (typeof CareerPlanning !== "undefined") CareerPlanning.remapWeekend(c, s.round, 0); s.round = 0; s.pts = {}; s.teamPts = {}; s.roundPts = {}; c.results = []; }
+    if (explicit) { if (typeof CareerPlanning !== "undefined") CareerPlanning.remapWeekend(c, s.round, 0); s.round = 0; s.pts = {}; s.teamPts = {}; s.roundPts = {}; s.finishes = {}; c.results = []; }
     stampCalendar(s);
     return c;
   }
   const known = new Set((Tracks.LIST || []).map((t) => t && t.id));
   if (!known.size || ids.every((id) => known.has(id))) return c;
   const keep = ids.filter((id) => known.has(id));
-  if (!keep.length) { if (typeof CareerPlanning !== "undefined") CareerPlanning.remapWeekend(c, s.round, 0); s.round = 0; s.pts = {}; s.teamPts = {}; s.roundPts = {}; c.results = []; stampCalendar(s); return c; }
+  if (!keep.length) { if (typeof CareerPlanning !== "undefined") CareerPlanning.remapWeekend(c, s.round, 0); s.round = 0; s.pts = {}; s.teamPts = {}; s.roundPts = {}; s.finishes = {}; c.results = []; stampCalendar(s); return c; }
   const done = Number.isInteger(s.round) ? Math.min(Math.max(s.round, 0), ids.length) : 0;
   const to = [];                       // old round -> new round, or -1 (dropped)
   let n = 0;
@@ -1926,7 +1926,8 @@ function planning() {
           (typeof SaveMigrate !== "undefined" && career.v > SaveMigrate.CAREER_V)) return false;
       const original = career, protection = calendarProtection;
       career = adoptCalendar(JSON.parse(JSON.stringify(career)), true);
-      calendarProtection = null; save();
+      // Adoption is accepted only after durable storage; refusal must not queue a session-only replacement.
+      calendarProtection = null; save({ requireDurable: true });
       if (!lastSave.durable) { career = original; calendarProtection = protection; return false; }
       protectedRaw.delete(liveSlotKey()); return true;
     },

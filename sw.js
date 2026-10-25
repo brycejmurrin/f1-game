@@ -229,12 +229,14 @@ async function sweepStaleCaches() {
   // #2194: an old tab still runs the previous shell after activate; its lazy
   // non-script fetches keep the booted ?v= keys. Keep exactly one prior SETTLED
   // generation while any window client remains (closed tabs → matchAll is
-  // empty and the predecessor can go). Older than N-1 is always deleted.
-  const prev = build - 1;
-  const prevName = CACHE_PREFIX + prev;
+  // empty and the predecessor can go). Installed builds can skip integers:
+  // select the newest actually SETTLED predecessor, skipping partial installs.
+  let prevName = null;
+  for (const k of keys.filter(k => cacheBuild(k) > 0 && cacheBuild(k) < build).sort((a, b) => cacheBuild(b) - cacheBuild(a))) {
+    if (await caches.match(INSTALL_SETTLED_URL, { cacheName: k })) { prevName = k; break; }
+  }
   let retainPrev = false;
-  if (prev > 0 && keys.includes(prevName)
-    && (await caches.match(INSTALL_SETTLED_URL, { cacheName: prevName }))) {
+  if (prevName) {
     const cl = self.clients;
     if (cl && typeof cl.matchAll === "function") {
       const list = await cl.matchAll({ includeUncontrolled: true, type: "window" });
@@ -244,7 +246,7 @@ async function sweepStaleCaches() {
   const stale = keys.filter((k) => {
     const b = cacheBuild(k);
     if (!(b > 0 && b < build)) return false;
-    if (retainPrev && b === prev) return false;
+    if (retainPrev && k === prevName) return false;
     return true;
   });
   await Promise.all(stale.map((k) => caches.delete(k)));
@@ -604,6 +606,9 @@ async function precacheAssetLists() {
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
   }
+  // A preload and its required stylesheet share one admission. Required wins;
+  // leave optional-only hints/fonts in the background pool.
+  for (const u of essential) optional.delete(u);
   return { essential: Array.from(essential), optional: Array.from(optional), shellResponse, lazyV, shellBuild: (/<meta name="apex-build" content="(\d+)"/.exec(html) || [])[1] };
 }
 

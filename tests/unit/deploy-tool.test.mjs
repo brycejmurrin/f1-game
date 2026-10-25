@@ -14,6 +14,8 @@ import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
   REGEN_MESSAGE, mergeTreeConflicts, assertMergeable,
   sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly, changedPaths, advisoryGet, run, CHILD_TIMEOUT_MS } from "../../tools/ci/deploy.mjs";
+import { superviseDeployChild } from "../../tools/ci/deploy-child.mjs";
+import { alive } from "../../tools/lib/process-tree.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites, PARTS_ERE, partsFiles } from "../../tools/ci/geometry-paths.mjs";
 import { createRequire } from "node:module";
@@ -307,7 +309,7 @@ test("two sides that each add a unit file merge clean and refresh only the cover
     g("checkout", "-q", "-b", "ours", "base"); addUnit("zz-regen-ours.test.mjs");
 
     const out = execFileSync(process.execPath, ["--input-type=module", "-e",
-      `const m = await import(${JSON.stringify(path.join(dir, "tools/ci/deploy.mjs"))}); console.log(m.mergeDeployTip());`],
+      `const m = await import(${JSON.stringify(path.join(dir, "tools/ci/deploy.mjs"))}); console.log(await m.mergeDeployTip());`],
       { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     assert.doesNotMatch(out, /AGENTS\.md|TESTING\.md|PREPUSH-GATE-LADDER/, "no ladder doc needed re-deriving: " + out);
     assert.match(out, /TESTING-COVERAGE\.md/, "a new unit file is a coverage row: " + out);
@@ -842,7 +844,7 @@ test("advisoryGet: token on stdin when present, unauthenticated without, null on
   }
   assert.equal(advisoryGet(url, { token: "t", run: () => { throw new Error("spawn"); } }), null);
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/deploy.mjs"), "utf8");
-  const health = src.slice(src.indexOf("function trainHealth("), src.indexOf("export function main("));
+  const health = src.slice(src.indexOf("function trainHealth("), src.indexOf("export async function main("));
   assert.doesNotMatch(health, /spawnSync\("curl"/, "train/nightly health GETs go through advisoryGet");
 });
 
@@ -854,7 +856,7 @@ test("deploy JSON child retains complete large stdout and late failure while std
     const tail = 'not ok 999 - late exact TAP cause\n';
     const producer = `const fs=require('node:fs');for(let i=0;i<40;i++)fs.writeSync(1,${JSON.stringify(chunk)});fs.writeSync(1,${JSON.stringify(tail)});fs.writeSync(2,'LIVE STDERR CAUSE\\n');process.exit(23);`;
     const entry = `import {run} from ${JSON.stringify(moduleUrl)};
-try {run(process.execPath,['-e',${JSON.stringify(producer)}],'fixture',{root:${JSON.stringify(dir)},json:true});process.exitCode=0;}
+try {await run(process.execPath,['-e',${JSON.stringify(producer)}],'fixture',{root:${JSON.stringify(dir)},json:true});process.exitCode=0;}
 catch(e){console.log(JSON.stringify({status:'failed',error:e.message,stdoutArtifact:e.stdoutArtifact}));process.exitCode=1;}`;
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', entry], { cwd: ROOT, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
     assert.equal(result.status, 1, result.stderr);
@@ -878,24 +880,65 @@ test("deploy child keeps default native streams and JSON launch errors identify 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-deploy-output-"));
   try {
     const moduleUrl = new URL('../../tools/ci/deploy.mjs', import.meta.url).href;
-    const entry = `import {run} from ${JSON.stringify(moduleUrl)};run(process.execPath,['-e',"process.stdout.write('native stdout');process.stderr.write('native stderr')"],'fixture',{json:false});`;
+    const entry = `import {run} from ${JSON.stringify(moduleUrl)};await run(process.execPath,['-e',"process.stdout.write('native stdout');process.stderr.write('native stderr')"],'fixture',{json:false});`;
     const native = spawnSync(process.execPath, ['--input-type=module','-e',entry], {encoding:'utf8'});
     assert.equal(native.status,0,native.stderr);assert.equal(native.stdout,'native stdout');assert.match(native.stderr,/native stderr/);assert.doesNotMatch(native.stderr,/child stdout:/);
-    const missing = `import {run} from ${JSON.stringify(moduleUrl)};try {run('/definitely-missing-apex-command',[],'launch',{json:true,root:${JSON.stringify(dir)}});}catch(e){console.log(JSON.stringify({error:e.message,stdoutArtifact:e.stdoutArtifact}));}`;
+    const missing = `import {run} from ${JSON.stringify(moduleUrl)};try {await run('/definitely-missing-apex-command',[],'launch',{json:true,root:${JSON.stringify(dir)}});}catch(e){console.log(JSON.stringify({error:e.message,stdoutArtifact:e.stdoutArtifact}));}`;
     const failed = spawnSync(process.execPath, ['--input-type=module','-e',missing], {encoding:'utf8'});
     assert.equal(failed.status,0,failed.stderr);const out=JSON.parse(failed.stdout);
     assert.match(out.error,/ENOENT/);assert.equal(fs.statSync(path.join(dir,out.stdoutArtifact.path)).size,0);
   } finally {fs.rmSync(dir,{recursive:true,force:true});}
 });
 
-test("a hung gate child stops at its ceiling and run() names the timeout instead of hanging", () => {
+test("a hung gate child stops at its ceiling and run() names the timeout instead of hanging", async () => {
   // Before: spawnSync had no timeout, so one test file that never ended held --gate-only until the
   // 30-minute background ceiling killed it without a verdict line.
   assert.ok(CHILD_TIMEOUT_MS >= 60e3 && CHILD_TIMEOUT_MS < 30 * 60e3, "the default ceiling sits inside the 30-minute task limit");
   const t0 = Date.now();
   let err = null;
-  try { run(process.execPath, ["-e", "setInterval(() => {}, 1000)"], "hung child", { timeoutMs: 700, json: false }); } catch (e) { err = e; }
+  try { await run(process.execPath, ["-e", "setInterval(() => {}, 1000)"], "hung child", { timeoutMs: 700, json: false }); } catch (e) { err = e; }
   assert.ok(err, "run() throws for a child that never exits");
   assert.ok(err.message.includes("hung child failed") && err.message.includes("timed out"), err.message);
   assert.ok(Date.now() - t0 < 10000, "…and returns promptly");
+});
+
+test("deploy timeout fails even when a SIGTERM handler exits successfully", async () => {
+  await assert.rejects(run(process.execPath, ["-e", "process.on('SIGTERM',()=>process.exit(0));setTimeout(()=>process.exit(0),2000)"],
+    "over-deadline success", { timeoutMs: 300, json: false }), /over-deadline success failed.*timed out/);
+  await run(process.execPath, ["-e", ""], "ordinary success", { timeoutMs: 1000, json: false });
+  await assert.rejects(run(process.execPath, ["-e", "process.exit(9)"], "ordinary failure", { timeoutMs: 1000, json: false }), /exit 9/);
+});
+
+test("deploy escalates resistant children and reaps finite descendants before returning", async () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "deploy-tree-"));
+  const pidFile = path.join(dir, "pids.json"), marker = path.join(dir, "late.txt");
+  const descendant = `const fs=require('node:fs');process.on('SIGTERM',()=>{});setTimeout(()=>fs.writeFileSync(${JSON.stringify(marker)},'leaked'),2200);`;
+  const parent = `const {spawn}=require('node:child_process');const fs=require('node:fs');process.on('SIGTERM',()=>{});const c=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{detached:true,stdio:'ignore'});fs.writeFileSync(${JSON.stringify(pidFile)},JSON.stringify([process.pid,c.pid]));setTimeout(()=>process.exit(0),2500);`;
+  let pids = [];
+  try {
+    const started = Date.now();
+    const result = await superviseDeployChild(process.execPath, ["-e", parent], { cwd: ROOT, env: process.env,
+      stdio: "ignore", timeoutMs: 500, graceMs: 100, cleanupMs: 1000 });
+    pids = JSON.parse(fs.readFileSync(pidFile, "utf8"));
+    assert.equal(result.error?.code, "ETIMEDOUT");
+    assert.ok(Date.now() - started < 1800, "escalation returns before the resistant fixtures naturally finish");
+    assert.deepEqual(result.survivors, []);
+    assert.ok(pids.every(pid => !alive(pid)), "both the resistant leader and detached descendant are stopped at return");
+    assert.equal(fs.existsSync(marker), false, "the descendant never reaches its finite late work");
+  } finally {
+    // Fixtures also self-end; a failing assertion must not leave active work.
+    for (const pid of pids) { if (alive(pid)) { try { process.kill(pid, "SIGKILL"); } catch { /* exited */ } } }
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("deploy interruption waits for owned child cleanup and remains a failure", () => {
+  const moduleUrl = new URL("../../tools/ci/deploy-child.mjs", import.meta.url).href;
+  const entry = `import {superviseDeployChild} from ${JSON.stringify(moduleUrl)};
+setTimeout(()=>process.kill(process.pid,'SIGTERM'),300);
+const r=await superviseDeployChild(process.execPath,['-e',"process.on('SIGTERM',()=>process.exit(0));setTimeout(()=>{},2000)"],{stdio:'ignore',timeoutMs:3000,graceMs:100});
+console.log(JSON.stringify({error:r.error?.code,survivors:r.survivors}));`;
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", entry], { encoding: "utf8", timeout: 5000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout), { error: "SIGTERM", survivors: [] });
 });
