@@ -78,6 +78,24 @@ test("results-sheet exposes SHARE CARD beside the daily copy chip", () => {
   assert.match(src, /G\.daily\.shareCard/);
 });
 
+test("deliver reports native sharing, cancellation and real failures", async () => {
+  const blob = { size: 4, type: "image/png" }, calls = [];
+  let failure = null;
+  const card = load({ NativeDownload: {
+    viable: () => true,
+    async saveBlob(...args) { calls.push(args); if (failure) throw failure; },
+    isCancelled: (error) => error.name === "AbortError" || error.message === "Share canceled.",
+  } });
+  assert.equal(await card.deliver(blob, "daily.png"), "shared");
+  assert.deepEqual(calls[0], [blob, "daily.png"]);
+  failure = Object.assign(new Error("cancel"), { name: "AbortError" });
+  assert.equal(await card.deliver(blob, "daily.png"), "cancelled");
+  failure = new Error("Share canceled.");
+  assert.equal(await card.deliver(blob, "daily.png"), "cancelled");
+  failure = new Error("Filesystem write failed");
+  await assert.rejects(card.deliver(blob, "daily.png"), (error) => error === failure);
+});
+
 test("Daily Challenge exposes a delivery hook built from its canonical result", async () => {
   const rendered = [], delivered = [];
   const ctx = vm.createContext({

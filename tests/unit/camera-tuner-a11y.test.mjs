@@ -19,16 +19,17 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\
 
 function bootPanel() {
   const dom = makeDom();
-  const disk = new Map();
+  const disk = new Map([["trackId", "monza"], ["team", 1]]);
   const store = { get: (k, d) => (disk.has(k) ? disk.get(k) : d), set: (k, v) => { disk.set(k, v); return true; } };
   const $ = (id) => dom.byId(id);
   const mk = dom.document.createElement;   // a <select> has an option list the mini DOM lacks
   dom.document.createElement = (tag) => { const e = mk(tag); if (tag === "select") e.options = e.children; return e; };
   $("ct-help-on").checked = false;
   dom.byId("camtune-inner");
-  const G = { $, els: { pmsettings: $("pmsettings") }, store, camMode: 0, track: { id: "monza" }, teamIdx: 0, paused: false };
+  const G = { $, els: { pmsettings: $("pmsettings") }, store, camMode: 0, track: { def: { id: "spa" } }, teamIdx: 0, paused: false };
   const sb = { Math, JSON, Object, Array, String, Number, console, document: dom.document, window: null,
-    GameStore: { store }, M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) }, setTimeout: () => 0 };
+    GameStore: { store }, Teams: { LIST: [{ id: "mclaren" }, { id: "ferrari" }] },
+    M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) }, setTimeout: () => 0 };
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
@@ -37,7 +38,7 @@ function bootPanel() {
   vm.runInContext(read("js/camera/tuner-panel.js") + "\n;globalThis.__panel = CamTunerEditor;", ctx, { filename: absSrc("js/camera/tuner-panel.js") });
   const panel = ctx.__panel.create(G);
   panel.buildCamTunePanel();
-  return { dom, panel };
+  return { dom, panel, G, CamTune: ctx.CamTune };
 }
 
 test("camera tuner scope buttons expose exactly one aria-pressed after every click", () => {
@@ -51,4 +52,17 @@ test("camera tuner scope buttons expose exactly one aria-pressed after every cli
     assert.deepEqual(pressed(), [id], `after clicking ${id}`);
     for (const b of btns) assert.ok(["true", "false"].includes(b.getAttribute("aria-pressed")), "every chip carries an explicit state");
   }
+});
+
+test("camera tuner resolves built track definitions instead of saved menu selections", () => {
+  const { panel, G, CamTune } = bootPanel();
+  panel.refreshCamTunePanel();
+  assert.deepEqual(JSON.parse(JSON.stringify(CamTune.context())), { track: "spa", car: "mclaren" });
+  CamTune.setScoped("track", "chase", "height", 2);
+  assert.equal(CamTune.exportPack().tracks.spa.modes.chase.height, 2);
+  assert.equal(CamTune.exportPack().tracks.monza, undefined);
+  G.track = { def: { id: "suzuka" } }; G.teamIdx = 1;
+  panel.refreshCamTunePanel();
+  assert.deepEqual(JSON.parse(JSON.stringify(CamTune.context())), { track: "suzuka", car: "ferrari" });
+  assert.equal(CamTune.getScoped("track", "chase", "height"), 0);
 });

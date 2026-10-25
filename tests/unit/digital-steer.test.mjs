@@ -420,3 +420,31 @@ test("held-code state is cleared by reset, modifier teardown and rebind", () => 
     assert.equal(h.Input.throttle(), false);
   }
 });
+
+test("d-pad advances once per physics step, independent of display polling", () => {
+  const run = (stepsPerFrame) => {
+    const { Input: I, pad, clock } = padRig();
+    I.setAdaptiveButtons(0); I.setSteerExpo(1); I.reset();
+    pad.buttons[15] = { pressed: true, value: 1 };
+    const samples = [];
+    for (let step = 0; step < 15; step++) {
+      if (step % stepsPerFrame === 0) { clock.t += STEP * stepsPerFrame; I.poll(); }
+      samples.push(I.steer(1 / 60));
+    }
+    return samples;
+  };
+  const one = run(1), three = run(3);
+  assert.deepEqual(three, one, 'catch-up substeps follow the same steering timeline');
+  assert.ok(Math.abs(one[0] - 4 / 60) < 1e-9);
+  assert.ok(Math.abs(one[14] - 1) < 1e-9);
+});
+
+test("a captured d-pad cannot regain steering during a physics substep", () => {
+  for (const capture of ['padCapture', 'beginAxisCapture']) {
+    const { Input: I, pad } = padRig();
+    pad.buttons[15] = { pressed: true, value: 1 }; I.poll();
+    assert.ok(I.steer(1 / 60) > 0);
+    I[capture](() => {}); I.poll();
+    assert.equal(I.steer(1 / 60), 0, capture + ' owns driving throughout the step');
+  }
+});

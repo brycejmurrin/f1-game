@@ -628,6 +628,42 @@ test("a stalled now-playing body can reject after cancellation without an unhand
   assert.equal(SpotifyMusic.status().state, "connected");
 });
 
+for (const failure of ["stalled", "rejected"]) {
+  test("playback refusal restores built-in music when its error body is " + failure, async () => {
+    const audio = fakeAudio();
+    let signal, resolveBody;
+    const body = new Promise((resolve) => { resolveBody = resolve; });
+    const { SpotifyMusic, flush } = load((url, opts) => {
+      if (String(url).includes("/me/player/play")) {
+        signal = opts.signal;
+        return Promise.resolve({ ok: false, status: 403,
+          text: () => failure === "stalled" ? body : Promise.reject(new Error("body failed")) });
+      }
+      return Promise.resolve(jsonResponse({ devices: [], items: [] }));
+    }, { disk: [[TOKEN_KEY, liveToken("live")]], globals: { AbortController, GameAudio: audio.GameAudio } });
+    await SpotifyMusic.connect();
+    assert.ok(audio.backend, "Spotify initially owns the soundtrack");
+    let settled = false;
+    const playing = SpotifyMusic.play().then(() => { settled = true; });
+    await settle();
+    if (failure === "stalled") {
+      assert.equal(settled, false);
+      flush();
+      await settle();
+      assert.equal(signal.aborted, true, "the timeout releases the network body");
+    }
+    assert.equal(settled, true, "an unreadable refusal must settle playback");
+    await playing;
+    assert.equal(audio.backend, null, "built-in music regains ownership");
+    assert.equal(SpotifyMusic.lastPlayError().status, 403);
+    assert.match(SpotifyMusic.status().message, /refused playback \(403\).*own music/);
+    const message = SpotifyMusic.status().message;
+    resolveBody('{"error":{"message":"late error"}}');
+    await settle();
+    assert.equal(SpotifyMusic.status().message, message, "a late body cannot replace the fallback result");
+  });
+}
+
 /** A fake GameAudio that records the music backend the module installs/removes. */
 function fakeAudio() {
   const a = { backend: null, sets: [] };

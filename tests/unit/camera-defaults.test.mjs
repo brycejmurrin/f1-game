@@ -604,6 +604,57 @@ test("camera overrides resolve track over car over the existing global baseline"
   assert.equal(CamTune.comfortGet("bob"), 0.8);
 });
 
+test("live camera scopes override saved menu choices and follow world transitions", () => {
+  const disk = new Map([["trackId", "monza"], ["team", 1]]);
+  const C = loadCamTune(disk);
+  C.setContext("spa", "mclaren");
+  C.setScoped("track", "chase", "height", 2);
+  C.setScoped("car", "chase", "dist", 3);
+  C.comfortSetScoped("track", "bob", 0.2);
+  assert.deepEqual(plain(C.context()), { track: "spa", car: "mclaren" });
+  assert.deepEqual(Object.keys(C.exportPack().tracks), ["spa"]);
+  assert.deepEqual(Object.keys(C.exportPack().cars), ["mclaren"]);
+
+  let live = { track: "spa", car: "mclaren" };
+  C.bindContext(() => live);
+  assert.equal(C.get("chase", "height"), 2);
+  assert.equal(C.get("chase", "dist"), 3);
+  assert.equal(C.bob(), 0.2);
+  live = { track: "suzuka", car: "ferrari" }; // next round/car, without reopening the panel
+  assert.equal(C.get("chase", "height"), 0);
+  assert.equal(C.get("chase", "dist"), 0);
+  assert.equal(C.bob(), 1);
+  C.setScoped("track", "chase", "height", 4);
+  assert.equal(C.exportPack().tracks.suzuka.modes.chase.height, 4);
+  assert.equal(C.exportPack().tracks.spa.modes.chase.height, 2);
+
+  live = { track: null, car: null };
+  assert.deepEqual(plain(C.context()), { track: "monza", car: "ferrari" });
+  disk.set("trackId", "imola"); disk.set("team", 0);
+  assert.deepEqual(plain(C.context()), { track: "imola", car: "mclaren" }, "fallback follows saved changes");
+  C.bindContext(null);
+  C.setContext(null, null);
+  disk.delete("trackId");
+  assert.deepEqual(plain(C.context()), { track: null, car: "mclaren" }, "absent track never retains the prior fallback");
+});
+
+test("game camera context follows WATCH cuts and returns to the menu selection", () => {
+  const source = gameSource();
+  const statement = source.match(/CamTune\.bindContext\(\(\) => \(\{[\s\S]*?\}\)\);/);
+  assert.ok(statement, "game binds the live camera context");
+  let readContext;
+  const G = { state: "race", track: { def: { id: "spa" } }, teamIdx: 0,
+    player: { team: { id: "mclaren" } } };
+  const ctx = { G, Teams: { LIST: [{ id: "mclaren" }, { id: "ferrari" }] },
+    CamTune: { bindContext(read) { readContext = read; } } };
+  vm.runInNewContext(statement[0], ctx, { filename: absSrc("js/game.js") });
+  assert.equal(readContext().car, "mclaren");
+  G.player = { team: { id: "ferrari" } }; // G.followCar does not change teamIdx
+  assert.equal(readContext().car, "ferrari");
+  G.state = "menu";
+  assert.equal(readContext().car, "mclaren");
+});
+
 test("JSON and APXC1 camera packs round-trip track and car overrides", () => {
   const source = loadCamTune();
   source.importPack({

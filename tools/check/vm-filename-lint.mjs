@@ -24,7 +24,7 @@ import * as espree from "espree";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const SCAN_DIRS = ["tests/unit", "tests/helpers"];
 
-export const SRC_CEILING = 599;
+export const SRC_CEILING = 594;
 
 // method -> index of the options argument
 const OPTS_AT = { runInContext: 2, runInNewContext: 2, runInThisContext: 1 };

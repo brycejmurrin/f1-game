@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 let ctx0 = null;
 function fixture({ rate = 1, commentary = false, reel = false, radio = false, sound = false, volume = 0.8 } = {}) {
@@ -32,8 +33,40 @@ function fixture({ rate = 1, commentary = false, reel = false, radio = false, so
   assert.equal(replay.start(options), true);
   // game.js drains accepted cards only when `still` is absent or still true.
   const drain = () => pending.splice(0).filter((card) => !card.still || card.still()).map((card) => card.text);
-  return { replay, options, pending, drain, commentaryCalls, ctx };
+  return { replay, options, pending, drain, commentaryCalls, ctx, G };
 }
+
+test("WATCH captions SC/VSC ending before clearance and still announces the actual green", () => {
+  for (const level of [2, 3]) {
+    const { replay, options, pending, drain, ctx, G } = fixture();
+    ctx.RadioVoice = { SPEAKERS: {}, RADIO_LEAD_S: 0, CONTROL_LEAD_S: 0, cardDurS: () => 3 };
+    for (const file of ["radio-lines", "race-facts", "race-radio"]) {
+      vm.runInContext(fs.readFileSync(new URL("../../js/race/" + file + ".js", import.meta.url), "utf8"), ctx,
+        { filename: absSrc("js/race/" + file + ".js") });
+    }
+    G.store = { get: (_key, fallback) => fallback };
+    G.vTop = () => 80; G.lapsTarget = 5;
+    G.cautionLevel = () => G._caution || 0;
+    G.raceRadio = vm.runInContext("RaceRadio", ctx).create(G);
+    options.script.passes = [];
+    options.script.cautions = [{ level, from: 1, to: 2, tFrom: 5, tEnding: 10, tTo: 15 }];
+    const R = vm.runInContext("RealReplay", ctx), highlights = R.highlightsFor(options.script);
+    assert.deepEqual(Array.from(highlights, h => [h.kind, h.t]), [["sc", 5], ["ending", 10], ["green", 15]]);
+    assert.equal(R.reelFor(highlights).length, 3, "both ending and clearance remain reel moments");
+    options.onTimeline = (T) => { G._caution = T >= 5 && T < 15 ? level : 0; };
+    replay.start(options);
+    replay.tick(5); G.raceRadio.update(0.1); drain();
+    replay.tick(5); G.raceRadio.update(0.1);
+    assert.equal(G._caution, level, "the ending call precedes clearance");
+    assert.match(drain().join(" | "), /IN THIS LAP/, "ending copy survives with commentary enabled");
+    replay.tick(5); G.raceRadio.update(0.1);
+    assert.equal(G._caution, 0);
+    assert.ok(pending.some(card => card.kind === "comm" && /GREEN/.test(card.text)),
+      "actual clearance still receives green commentary");
+    assert.equal(G.raceRadio.debug().drops.some(row => row.reason === "stale" && row.t === 10), false);
+    replay.stop();
+  }
+});
 
 test("fallback replay captions cannot drain across seeks, stop, restart or finish", () => {
   for (const mode of [{ rate: 1, commentary: false }, { rate: 4, commentary: true }]) {

@@ -28,6 +28,44 @@ for (const file of [
 }
 const T = vm.runInContext("DataTelemetry", ctx);
 
+test("comparison map closes only the lap boundary while preserving GPS gaps", () => {
+  const renderer = vm.runInContext("DataTelemetryRender", ctx).create({ cssColor: () => "comparison" });
+  for (const gapped of [false, true]) for (const complete of [false, true]) {
+    const loc = Array.from({ length: 12 }, (_, i) => ({
+      x: 100 * Math.cos(i / 11 * Math.PI * (complete ? 1.95 : 1.5)),
+      y: 100 * Math.sin(i / 11 * Math.PI * (complete ? 1.95 : 1.5)),
+      date: i * 250 + (gapped && i >= 6 ? 10000 : 0)
+    }));
+    let start, last, segments = [], comparison;
+    const drawing = new Proxy({
+      beginPath() { start = last = null; segments = []; },
+      moveTo(x, y) { start = last = [x, y]; },
+      lineTo(x, y) { const next = [x, y]; segments.push([last, next]); last = next; },
+      closePath() { segments.push([last, start]); last = start; },
+      stroke() { if (!comparison) comparison = segments.slice(); }
+    }, { get: (target, key) => key in target ? target[key] : () => {} });
+    const inert = new Proxy({}, { get: () => () => {} });
+    const primary = { loc, car: [] }, compare = { loc, car: [] };
+    const view = {
+      primary, compare, laps: [primary, compare], colC: [1, 0, 0],
+      visible: {}, visibleC: {}, tMax: 13, speedMax: 1, rpmMax: 1,
+      cw: 320, ch: 200, mw: 320, mh: 320, map: true,
+      chartBase: { getContext: () => inert }, mapBase: { getContext: () => drawing }
+    };
+    renderer.buildBases(view);
+    const point = (p) => {
+      const m = view.mapT;
+      return [m.ox + (p.x - m.minx) * m.sc, m.H - (m.oy + (p.y - m.miny) * m.sc)];
+    };
+    const expected = [];
+    for (let i = 1; i < loc.length; i++) {
+      if (!(gapped && i === 6)) expected.push([point(loc[i - 1]), point(loc[i])]);
+    }
+    if (complete) expected.push([point(loc.at(-1)), point(loc[0])]);
+    assert.deepEqual(comparison, expected, `gapped=${gapped}, complete=${complete}`);
+  }
+});
+
 test("braking duel aligns distance and refuses clamped or missing feed intervals", () => {
   const model = vm.runInContext("DataTelemetryModel", ctx);
   function lane(speed) {

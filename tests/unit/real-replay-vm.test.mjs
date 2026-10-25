@@ -28,7 +28,7 @@ test("the highlights list every moment of the race in time order, and the reel k
     const list = R.highlightsFor(script);
     const kinds = {};
     for (const h of list) kinds[h.kind] = (kinds[h.kind] || 0) + 1;
-    assert.deepEqual(host(kinds), { pass: 128, pit: 36, out: 7, sc: 2, green: 2, fastest: 1, radio: 27 });
+    assert.deepEqual(host(kinds), { pass: 128, pit: 36, out: 7, sc: 2, ending: 2, green: 2, fastest: 1, radio: 27 });
     for (let i = 1; i < list.length; i++) assert.ok(list[i].t >= list[i - 1].t, "time order");
     const first = list.find((h) => h.kind === "pass");
     assert.equal(first.text, "PIA PASSES LEC FOR P2"); assert.equal(first.lap, 1); assert.ok(first.t > 10 && first.t < 20);

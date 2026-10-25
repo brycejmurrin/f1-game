@@ -119,6 +119,21 @@ test("start: moves the line to the longest straight; the zones stay on the same 
   assert.equal(apply(r.design, { code: "start", level: "amber", fix: "start", s: 0 }, again), null, "a second START is a no-op");
 });
 
+test("start and spacing repairs preserve full-lap road width through storage and rebuild", () => {
+  const base = ellipse();
+  const crowded = base.slice(0, 11).concat([[base[10][0] + 3, base[10][1] + 3]], base.slice(11));
+  for (const [code, pts] of [["start", stadium()], ["spacing", crowded]]) {
+    const d = design({ pts, baseHW: 8, hwZones: [{ s0: 0, s1: 1, hw: 5, ease: 0.025 }] });
+    const { r } = fix(d, code, { movesStart: code === "start" });
+    const stored = B.C.sanitize(r.design);
+    assert.ok(stored, `${code}: repaired circuit can be stored`);
+    assert.deepEqual(plain(stored.hwZones), d.hwZones, `${code}: whole-lap width survives sanitization`);
+    const built = V.build(stored).tr;
+    assert.ok(built && built.n, `${code}: stored circuit builds`);
+    assert.ok([...built.hw].every((hw) => Math.abs(hw - 5) < 1e-6), `${code}: every rebuilt road node retains the authored half-width`);
+  }
+});
+
 test("length: a short lap scales to 4 km and a long one to 6.5 km on the BUILT road; zones keep fractions", () => {
   for (const [pts, want] of [[ellipse(24, 150, 90), 4000], [ellipse(36, 1600, 1000), 6500]]) {
     const d = design(zones({ pts }));

@@ -4135,6 +4135,11 @@ const photomode = Photomode.create(G), { updatePhotoCam, enterPhotoMode, exitPho
 // LIGHTING TUNER panel UI (js/lighting/tuner-panel.js).
 const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 // CAMERA TUNER panel UI (js/camera/tuner-panel.js) — per-camera-mode framing offsets.
+CamTune.bindContext(() => ({
+  track: G.track && G.track.def && G.track.def.id,
+  car: ((G.state === "race" || G.state === "count") && G.player && G.player.team && G.player.team.id)
+    || (Teams.LIST[G.teamIdx] && Teams.LIST[G.teamIdx].id),
+}));
 const { closeCamTuner } = CamTunerPanel.create(G);
 // FLYBY SHOT EDITOR panel UI (js/camera/flyby-panel.js) — authors the pre-race
 // shot list; previews through __apex.flybyCam, touches no render-path state.
@@ -8519,7 +8524,7 @@ function tickBody(now) {
     // state in which it should still be flying.
     // SETTINGS still needs selected live frames: the sky animates and SAVE SCREENSHOT
     // waits for a fresh present (headed GLX has no preserved buffer).
-    if (setupPreviewOn || replayBuf.isScrubbing() || ((state === "race" || state === "count") &&
+    if (XrBoot.comfort() || setupPreviewOn || replayBuf.isScrubbing() || ((state === "race" || state === "count") &&
         (!paused || !els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode || !els.pmsettings.hidden))) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete

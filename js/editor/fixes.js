@@ -52,7 +52,13 @@ const TrackFixes = (function () {
   /** Every zone list through one fraction map (the designer's zoneMap shapes). */
   function mapZones(d, at) {
     const pt = (key) => (z) => (z && Number.isFinite(z[key]) ? Object.assign({}, z, { [key]: wrap01(at(z[key])) }) : z);
-    const range = (z) => (z && Number.isFinite(z.s0) && Number.isFinite(z.s1) ? Object.assign({}, z, { s0: wrap01(at(z.s0)), s1: wrap01(at(z.s1)) }) : z);
+    const range = (z) => {
+      if (!z || !Number.isFinite(z.s0) || !Number.isFinite(z.s1)) return z;
+      // 0→1 is the whole lap, not two coincident point anchors. Moving the
+      // start or remapping surviving controls must retain that width everywhere.
+      if (z.s0 === 0 && z.s1 === 1) return Object.assign({}, z);
+      return Object.assign({}, z, { s0: wrap01(at(z.s0)), s1: wrap01(at(z.s1)) });
+    };
     const each = (list, fn) => (Array.isArray(list) ? list.map(fn) : list);
     const out = { hwZones: each(d.hwZones, range), bankZones: each(d.bankZones, pt("frac")), elevations: each(d.elevations, pt("s")), bridges: each(d.bridges, pt("s")) };
     if (Array.isArray(d.props)) out.props = each(d.props, pt("s"));   // authored scenery rides the road like any zone

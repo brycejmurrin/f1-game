@@ -309,7 +309,12 @@ const DataTelemetryRender = (function () {
         if (!open || (i > 0 && isGap(loc, i, limit))) { g.moveTo(p[0], p[1]); open = true; }
         else g.lineTo(p[0], p[1]);
       }
-      if (closesLoop(view, loc)) g.closePath();
+      if (closesLoop(view, loc)) {
+        // A GPS gap starts a new subpath: closePath would join the finish
+        // back to the first fix AFTER that gap instead of the lap's start.
+        const first = mapPoint(view, loc[0]);
+        g.lineTo(first[0], first[1]);
+      }
       g.stroke();
     }
 

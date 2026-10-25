@@ -13,7 +13,7 @@ const RealReplay = (function () {
   const ENDED_S = 3;      // a trace with no sample this long is a stopped car
   const FINISH_S = 6;     // the results come this long after the winner's last sample
   const MAX_X = 3;        // a car this far outside the road edge (the pit lane) is drawn at the edge
-  const REEL_KINDS = { pass: 1, out: 1, sc: 1, green: 1, fastest: 1, pit: 1 };
+  const REEL_KINDS = { pass: 1, out: 1, sc: 1, ending: 1, green: 1, fastest: 1, pit: 1 };
   const REEL_PIT_TOP = 8;   // a stop makes the reel only for the top classified drivers
   const KEY_SPEED_UP = "Equal", KEY_SPEED_DOWN = "Minus", KEY_NEXT = "Period", KEY_PREV = "Comma", KEY_SKIP = "KeyN";
 
@@ -173,7 +173,10 @@ const RealReplay = (function () {
     for (const w of script.cautions || []) {
       const cause = w.cause || (w.level >= 4 ? "RED FLAG" : w.level === 3 ? "SAFETY CAR" : "VIRTUAL SAFETY CAR");
       if (w.tFrom != null) out.push({ t: w.tFrom, lap: w.from, kind: "sc", num: null, level: w.level, text: cause });
-      if (w.tEnding != null || w.tTo != null) out.push({ t: w.tEnding != null ? w.tEnding : w.tTo, lap: w.to, kind: "green", num: null, text: cause + " IN THIS LAP" });
+      // The warning precedes clearance: keep both moments, so commentary cannot
+      // mistake an active safety car's "in this lap" for a green flag.
+      if (w.tEnding != null) out.push({ t: w.tEnding, lap: w.to, kind: "ending", num: null, text: cause + " IN THIS LAP" });
+      if (w.tTo != null) out.push({ t: w.tTo, lap: w.to, kind: "green", num: null, text: "GREEN FLAG" });
     }
     if (script.fastest && script.fastest.t != null) out.push({ t: script.fastest.t, lap: script.fastest.lap, kind: "fastest", num: script.fastest.num, dur: script.fastest.dur, text: "FASTEST LAP · " + code(script.fastest.num) + " " + fmtLap(script.fastest.dur) });
     for (const r of script.radio || []) if (r.t != null) out.push({ t: r.t, lap: r.lap || 0, kind: "radio", num: r.num, url: r.url, text: "RADIO · " + code(r.num) });

@@ -737,6 +737,9 @@ const WGX = (function () {
             for (let r = 0; r < 4; r++) {
               const base = r * STRIDE;
               for (let i = 0; i < LANES && base + i < px.length; i++) {
+                // Alpha carries SSR surface tags (.35/.75/1), not light.
+                // Counting it makes an opaque black patch look healthy.
+                if ((i & 3) === 3) continue;
                 const f = _f16to32(px[base + i]);
                 if (f > max) max = f;
               }

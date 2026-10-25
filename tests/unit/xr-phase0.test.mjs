@@ -871,6 +871,31 @@ async function mountWith({ xr, ls = {} }) {
   return loads;
 }
 
+test("fresh lazy XR boot publishes capability to settings and the next boot", async () => {
+  const values = new Map();
+  const ctx = bootXr();
+  const element = () => ({ hidden: false, disabled: false, setAttribute() {}, addEventListener() {}, appendChild() {} });
+  ctx.localStorage = { getItem: (k) => values.get(k) ?? null, setItem: (k, v) => values.set(k, v), removeItem: (k) => values.delete(k) };
+  ctx.navigator = { xr: { isSessionSupported: async () => true } };
+  ctx.document = { readyState: "loading", body: element(), addEventListener() {}, createElement: element };
+  ctx.setTimeout = setTimeout; ctx.clearTimeout = clearTimeout;
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx,
+    { filename: absSrc("js/xr/xr-boot.js") });
+  ctx.ApexRoster = { LAZY_XR: ["plan", "opts", "apex", "session", "ui"], LAZY_XR_EDGES: [] };
+  ctx.ScriptLoader = { create: () => ({ load: async () => {
+    for (const name of ["xr-plan", "xr-opts", "apex-xr", "xr-session", "xr-ui"])
+      vm.runInContext(read(`js/xr/${name}.js`).replace(/^const\b/gm, "var"), ctx,
+        { filename: absSrc(`js/xr/${name}.js`) });
+    return true;
+  } }) };
+  ctx.XrBoot.mountUi();
+  for (let i = 0; i < 12; i++) await Promise.resolve();
+  assert.equal(ctx.XrSession.isSupported(), true);
+  assert.equal(ctx.XrUi.ensureButton().hidden, false);
+  assert.equal(ctx.XROpts.capsVr(), true, "VR settings see the fresh headset capability");
+  assert.equal(values.get("apex26.xrCaps"), "1", "next boot receives the positive capability");
+});
+
 test("XrBoot.mountUi: a desktop browser with navigator.xr but no headset never fetches the XR bundle", async () => {
   assert.deepEqual(await mountWith({ xr: { isSessionSupported: async (m) => { assert.equal(m, "immersive-vr"); return false; } } }), []);
 });

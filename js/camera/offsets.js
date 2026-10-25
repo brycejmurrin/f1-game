@@ -125,6 +125,7 @@ let _comfort = {};
 let _tracks = {};
 let _cars = {};
 let _context = { track: null, car: null };
+let _readContext = null;
 
 function sanitizeProf(src, keepDefaults = false) {
   const prof = {};
@@ -196,19 +197,23 @@ function setContext(trackId, carId) {
   };
   return { ..._context };
 }
-function context() { return { ..._context }; }
-function scopeMap(scope) { return scope === "track" ? _tracks : scope === "car" ? _cars : null; }
-function refreshStoredContext() {
-  const trackId = store.get("trackId", null);
-  if (typeof trackId === "string" && trackId) _context.track = trackId;
-  const team = store.get("team", 2);
-  if (Number.isInteger(team) && typeof Teams !== "undefined" && Teams.LIST && Teams.LIST[team]) {
-    _context.car = Teams.LIST[team].id;
+// The live world can advance without changing the saved menu selections (career,
+// championship and WATCH). Resolve it at use time so a closed tuner follows cuts.
+function bindContext(read) { _readContext = typeof read === "function" ? read : null; }
+function context() {
+  const live = (_readContext ? _readContext() : _context) || {};
+  const track = typeof live.track === "string" && live.track ? live.track : store.get("trackId", null);
+  let car = typeof live.car === "string" && live.car ? live.car : null;
+  if (!car) {
+    const team = store.get("team", 2);
+    if (Number.isInteger(team) && typeof Teams !== "undefined" && Teams.LIST && Teams.LIST[team]) car = Teams.LIST[team].id;
   }
+  return { track: typeof track === "string" && track ? track : null, car };
 }
+function scopeMap(scope) { return scope === "track" ? _tracks : scope === "car" ? _cars : null; }
 function scopeKey(scope) {
-  refreshStoredContext();
-  return scope === "track" ? _context.track : scope === "car" ? _context.car : null;
+  const current = context();
+  return scope === "track" ? current.track : scope === "car" ? current.car : null;
 }
 function scopeEntry(scope, create) {
   const map = scopeMap(scope), key = scopeKey(scope);
@@ -690,7 +695,7 @@ return { CAM_TUNE_DEFS, COMFORT_DEFS, PRESETS, FOV_MIN, FOV_MAX, GLOBAL_MODE, SH
          exportEdits, exportGlobal, exportPack,
          set, setGlobal, setScoped, reset, resetGlobal, resetScoped, resetAll,
          count, countGlobal, countScoped, tunedModes, load, loadGlobal, loadComfort, loadTrack, loadCar, persist,
-         setContext, context, comfortGet, comfortGetGlobal, comfortSet, comfortGetScoped, comfortSetScoped, fovBias, speedFov, bob, rollLean,
+         setContext, bindContext, context, comfortGet, comfortGetGlobal, comfortSet, comfortGetScoped, comfortSetScoped, fovBias, speedFov, bob, rollLean,
          shakeOffset, buzzAmp, rollTarget,
          copyFrom, applyToAllModes, applyPreset,
          importModes, importGlobal, importComfort, importTracks, importCars, importPack, importText,

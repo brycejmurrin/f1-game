@@ -23,6 +23,35 @@ function loadPuddles() {
 const P = loadPuddles();
 const K = P.K;
 
+test("GLX key GGX follows the final ripple normal while diffuse keeps its original normal", () => {
+  const src = read("js/render/glx/shaders/glsl-lit.js").replace(/\/\/[^\n]*/g, "");
+  const ripple = src.indexOf("N = normalize(N + vec3(rg.x");
+  const key = src.indexOf("float keySpecNoL =");
+  assert.ok(ripple > 0 && key > ripple, "key incidence is evaluated after ripple perturbation");
+  assert.ok(src.indexOf("float NoL =") < ripple, "diffuse incidence remains before ripple perturbation");
+  const dot = (a, b) => a.reduce((sum, x, i) => sum + x * b[i], 0);
+  const normalize = (v) => v.map((x) => x / Math.hypot(...v));
+  const evalScalar = (name, values) => {
+    const expr = src.match(new RegExp(`float ${name} = ([^;]+);`))?.[1];
+    assert.ok(expr, `shader declares ${name}`);
+    return new Function(...Object.keys(values), "dot", "max", `return ${expr};`)
+      (...Object.values(values), dot, Math.max);
+  };
+  const keyBlock = src.slice(src.indexOf("if (keySpecNoL > 0.0)"), src.indexOf("float ccSaaVar ="));
+  assert.match(keyBlock, /D_GGX\(keySpecNoH, a\)/);
+  assert.match(keyBlock, /V_SmithGGX\(keySpecNoV, keySpecNoL, a\)/);
+  assert.match(keyBlock, /specCol = .*keySpecNoL \* shadow \* uKeyMul/);
+  assert.match(src, /float litNoL = NoL \* shadow \* uKeyMul;/);
+  const L = [0, 1, 0], V = normalize([0.2, 1, 0]), H = normalize(L.map((x, i) => x + V[i]));
+  const flat = { N: L, L, V, H }, rippled = { ...flat, N: normalize([0.05, 1, 0]) };
+  for (const name of ["keySpecNoL", "keySpecNoH", "keySpecNoV"]) {
+    assert.notEqual(evalScalar(name, flat), evalScalar(name, rippled), `${name} responds to the ripple normal`);
+  }
+  // A dry surface retains the previous key inputs exactly.
+  assert.equal(evalScalar("keySpecNoL", flat), evalScalar("NoL", flat));
+  assert.equal(evalScalar("keySpecNoV", flat), evalScalar("NoV", flat));
+});
+
 // GLSL/WGSL spell a float with a decimal point; "1.0" not "1".
 const fl = (x) => (Number.isInteger(x) ? x.toFixed(1) : String(x));
 
