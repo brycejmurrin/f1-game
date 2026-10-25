@@ -157,7 +157,7 @@ test("model and strip requests carry ?h=<md5> from the manifest", async () => {
   await A.model("x");
   await A.model("nohash");
   A.init({ createTextureArray() { return null; }, setMaterialMaps() {} });
-  await A.load({ tier: "high" }).catch(() => {});
+  assert.equal(await A.load({ tier: "high" }), false, "strip fetches answer not-ok -> no pack");
   assert.ok(urls.includes(`assets/pack/models/x.bin?h=${H1}`), urls.join());
   assert.ok(urls.includes("assets/pack/models/n.bin"), "no md5 -> bare URL, still network-first");
   assert.ok(urls.includes(`assets/pack/a.png?h=${H1}`), urls.join());
