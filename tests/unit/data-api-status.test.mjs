@@ -1133,7 +1133,7 @@ function routeHarness(routes, { store = new Map(), start = Date.parse("2026-10-1
   });
   seedLog(context);
   vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
-  return { api: context.__api, calls, store, tick: (ms) => { now += ms; }, now: () => now };
+  return { api: context.__api, context, calls, store, tick: (ms) => { now += ms; }, now: () => now };
 }
 
 const NO_RESULTS = { status: 404, body: { detail: "No results found." } };
@@ -1257,4 +1257,71 @@ test("429 header microtasks interleaved with a waking pacing reservation cannot 
     assert.ok((await Promise.all([...jobs, third])).every(e => e.cancelled || Array.isArray(e)));
     assert.equal(h.timers.size, 0);
   }
+});
+
+test("RACE IT caches bulk positions without serializing them and fresh bypasses that cache", async () => {
+  const big = Array.from({ length: 10000 }, (_, i) => ({ driver_number: i % 22 + 1,
+    position: i % 22 + 1, date: "2026-10-01T12:00:00.000Z" }));
+  const h = routeHarness({ "/position?": { status: 200, body: big } });
+  const serialized = [];
+  h.context.JSON = { parse: JSON.parse, stringify(value) {
+    if (value && Array.isArray(value.data) && value.data.length === big.length) serialized.push(value);
+    return JSON.stringify(value);
+  } };
+  vm.runInContext(await readFile(new URL("../../js/data/real-race-tab.js", import.meta.url), "utf8") +
+    ";globalThis.realRace=DataRealRace", h.context, { filename: absSrc("js/data/real-race-tab.js") });
+  const first = await h.context.realRace.fetchRaw(123, false);
+  assert.equal(first.positions.length, big.length);
+  assert.equal(serialized.length, 0, "the bulk history never reaches JSON.stringify");
+  assert.equal(h.store.has("apex26.api.https://api.openf1.org/v1/position?session_key=123"), false);
+  const positionCalls = () => h.calls.filter((url) => url.includes("/position?")).length;
+  const second = await h.context.realRace.fetchRaw(123, false);
+  assert.equal(second.positions, first.positions, "same parsed object reused from memory");
+  assert.equal(positionCalls(), 1);
+  // Separate provider windows: this test is about cache policy, not quota pacing.
+  h.tick(60001);
+  await h.context.realRace.fetchRaw(123, true);
+  assert.equal(positionCalls(), 2, "explicit refresh still downloads positions");
+  assert.equal(serialized.length, 0);
+});
+
+test("memory-only cache retains stale fallback, auth refusal, LRU and explicit invalidation", async () => {
+  const url = "https://api.openf1.org/v1/position?session_key=7";
+  const key = "apex26.api." + url, policy = { cache: "memory" }, ttl = 1000;
+  let reply = { status: 200, body: [{ position: 1 }] };
+  const h = routeHarness({ "/position?": () => reply });
+  h.store.set(key, JSON.stringify({ t: h.now() - ttl - 1, data: [{ position: 20 }] }));
+  const first = await h.api.request(url, ttl, policy);
+  assert.equal(h.store.has(key), false, "successful memory write removes older disk copy");
+  assert.equal(await h.api.request(url, ttl, policy), first);
+  h.tick(ttl + 1); reply = "offline";
+  const mark = h.api.staleMark();
+  assert.equal(await h.api.request(url, ttl, policy), first);
+  assert.notEqual(h.api.staleSince(mark), null);
+  reply = { status: 403, body: { detail: "forbidden" } };
+  await assert.rejects(h.api.request(url, ttl, policy), (e) => e.status === 403);
+  reply = { status: 200, body: [{ position: 2 }] };
+  for (let i = 0; i < 4; i++) await h.api.request(url + i, ttl, policy);
+  reply = "offline";
+  await assert.rejects(h.api.request(url, ttl, policy), "oldest memory entry was evicted");
+  h.api.forget(url + 3);
+  await assert.rejects(h.api.request(url + 3, ttl, policy), "forget clears memory too");
+});
+
+test("memory-only requests deduplicate by policy and detach after cancellation", async () => {
+  const h = cancelHarness();
+  const url = "https://api.openf1.org/v1/position?session_key=7";
+  const first = h.api.request(url, 0, { cache: "memory" });
+  const duplicate = h.api.request(url, 0, { cache: "memory" });
+  const disk = h.api.request(url, 0);
+  assert.equal(first, duplicate);
+  assert.notEqual(first, disk, "different write policies cannot inherit each other's in-flight job");
+  const outcomes = Promise.all([first, duplicate, disk].map((p) => p.catch((e) => e)));
+  await h.settle();
+  h.api.cancelAll();
+  for (const error of await outcomes) assert.equal(error.cancelled, true);
+  const fresh = h.api.request(url, 0, { cache: "memory" });
+  await h.settle(); await h.fireTimers();
+  assert.equal((await fresh)[0].rainfall, 3);
+  assert.equal(h.calls.length, 2, "cancelled queued disk request never fetched; reopened request did");
 });

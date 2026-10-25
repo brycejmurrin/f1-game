@@ -663,9 +663,11 @@ test("helmet inherits the production onboard SSR range and releases it outside r
   }
 });
 
-test("SSR fade keeps inverse projection current at measured tier 4, then releases the work", () => {
-  const statement = gameSource().match(/^  if \([^\n]+\) M4\.invertTo\(_mInvProj, _mProj\);$/m);
-  assert.ok(statement, "production inverse-projection update exists");
+test("inverse projection stays current at measured tier 4, through and after the SSR fade", () => {
+  // TLX's main-view reconstruction reads _mInvProj even after tier 4 sheds all
+  // view-space post, so the update is unconditional (PR #3670).
+  const statement = gameSource().match(/^  M4\.invertTo\(_mInvProj, _mProj\);$/m);
+  assert.ok(statement, "production inverse-projection update exists and is unconditional");
   const math = {};
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/core/mat4.js"), "utf8") +
     "\nthis.exported = M4;", math, { filename: absSrc("js/core/mat4.js") });
@@ -676,6 +678,14 @@ test("SSR fade keeps inverse projection current at measured tier 4, then release
     M4: { invertTo(out, input) { calls++; return M4.invertTo(out, input); } } };
   const run = new vm.Script(statement[0], { filename: absSrc("js/game.js") });
   vm.createContext(ctx);
+  const assertCancels = label => {
+    const identity = new Float32Array(16);
+    M4.mulTo(identity, projection, inverse);
+    for (let i = 0; i < 16; i++) {
+      assert.ok(Math.abs(identity[i] - (i % 5 === 0 ? 1 : 0)) < 1e-5,
+        label + ": projection and inverse cancel at element " + i);
+    }
+  };
   M4.perspectiveTo(projection, 1.1, 2.16, 0.3, 900);
   run.runInContext(ctx);
   const before = Array.from(inverse);
@@ -685,23 +695,21 @@ test("SSR fade keeps inverse projection current at measured tier 4, then release
   ctx._roadReflectionTransition.value = 0.5;
   M4.perspectiveTo(projection, 0.8, 1.9, 0.9, 900);
   run.runInContext(ctx);
-  assert.equal(calls, 2, "active fade refreshes the inverse despite measured tier 4");
+  assert.equal(calls, 2, "active fade refreshes the inverse at measured tier 4");
   assert.notDeepEqual(Array.from(inverse), before, "the camera change is reflected in the inverse");
-  const identity = new Float32Array(16);
-  M4.mulTo(identity, projection, inverse);
-  for (let i = 0; i < 16; i++) {
-    assert.ok(Math.abs(identity[i] - (i % 5 === 0 ? 1 : 0)) < 1e-5,
-      "current projection and inverse cancel at element " + i);
-  }
-  const settled = Array.from(inverse);
+  assertCancels("tier-4 fade");
+  const faded = Array.from(inverse);
   ctx._roadReflectionTransition.value = 0;
   M4.perspectiveTo(projection, 1.3, 2.16, 0.3, 500);
   run.runInContext(ctx);
-  assert.equal(calls, 2, "settled tier 4 still skips the unused inversion");
-  assert.deepEqual(Array.from(inverse), settled);
+  assert.equal(calls, 3, "settled tier 4 still refreshes the inverse TLX reconstruction reads");
+  assert.notDeepEqual(Array.from(inverse), faded, "settled tier-4 camera change is reflected");
+  assertCancels("settled tier 4");
   tier = 0;
+  M4.perspectiveTo(projection, 1.0, 2.16, 0.3, 900);
   run.runInContext(ctx);
-  assert.equal(calls, 3, "restoring normal post work refreshes the camera inverse");
+  assert.equal(calls, 4, "restoring normal post work refreshes the camera inverse");
+  assertCancels("restored tier 0");
 });
 
 test("pending CAM hold is retired on pause/hide/quit, hidden page and blur without pointer cancellation", () => {

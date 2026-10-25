@@ -96,6 +96,11 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
   about context x cache-read price ($0.20 / MTok Opus 5.5, $0.10 Sonnet 5.5), and a session's cost is roughly quadratic in its calls.
   Cache reads were 41-69 % of every long session's bill. A handoff at 150k instead of 300k cuts cache-read dollars per unit of work by
   about 40 %; Opus to Sonnet halves them again. Keep tool results small (comms.md §Output budget), route verbose reads through a subagent.
+- **Status words and waiting (Transcript Auditor batch 9, 2026-10-24).** A brief asks for READY / BLOCKED / DONE
+  (template `REPORT:`), never "post a HANDOFF": that wording produced a HANDOFF per worker per step and buried the
+  real hand-offs. HANDOFF is only a size-stop rotation to a successor or `ORCH <X> LIVE`. The template's `WAIT:` line
+  sends every suite over ~2 min to the background (AGENTS.md rule 4); sessions that blocked one turn for hours on a
+  suite lost the turn and the cache. Gates run unpiped (bash-guard reminds a piped `ready-gate`/`merge-gate`).
 - **Monitoring and reporting.** Every hunter and PR-owner launch prompt carries the block in `role-pr-owner.md` §Monitoring and reporting
   (own the PR to merged or STOP AT; `fleet-status:` line in the fleet block plus a PR comment per state change; decisions to the orchestrator via needs-decision).
 - **No desk field.** READY goes to the lane's own orchestrator (`ORCHESTRATOR:` in the brief) via

@@ -15,7 +15,7 @@
  *
  * Run: node tools/gfx/gpu-game-check.mjs [track] [--json out.json] [--shot out.png]
  *      [--backend three|webgl2|webgpu] [--path webgpu|webgl2] [--boot-timeout MS]
- *      [--ls apex26.key=value ...] [--gl-err-drain] [--mem-switch] [--help]
+ *      [--ls apex26.key=value ...] [--gl-err-drain] [--mem-switch] [--mem-cycles N] [--help]
  *
  * Memory (#1648, I-3): every leg's gfx object carries mem.usedJSHeapSize
  * (Chrome performance.memory), mem.geometries / textures / uniformBuffers /
@@ -43,6 +43,7 @@ import { fileURLToPath } from "node:url";
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
 import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
+import { gpuObjectCounter, memCyclesVerdict } from "./mem-cycles-lib.mjs";
 import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate, prepTimelineStart, prepTimelineRead } from "../lib/census-entry.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
@@ -85,6 +86,10 @@ if (argv.includes("--help") || argv.includes("-h")) {
                                   RACE (harness intro); menu-full = the same at player pace
   --menu-timeout MS               menu entry: longest wait for the menu prep (default 150000)
   --ls apex26.k=v                 extra localStorage (repeatable; after the defaults)
+  --mem-cycles N                  after the window: N race>QUIT TO MENU cycles alternating this track and
+                                  montreal|monza; per cycle the live GPUBuffer/GPUTexture count and MB
+                                  (device-side counter, mem-cycles-lib.mjs), three's render objects and
+                                  heap; out.memCycles.verdict = plateau|growing over the second half
   --gl-err-drain                  GLX: drain getError() on EVERY present (apex26.glErrDrain=1);
                                   default drains once per beat via GLX.drainGpuErrors()
   --json out.json  --shot out.png   checkpointed JSON; screenshots (+ per-A/B captures)
@@ -99,7 +104,8 @@ if (argv.includes("--help") || argv.includes("-h")) {
 const flag = (n, d = null) => { const i = argv.indexOf(n); return i > -1 ? argv[i + 1] : d; };
 // The track is the first bare word that is not some flag's value.
 const VALUE_FLAGS = new Set(["--json", "--shot", "--backend", "--path", "--cam", "--tod", "--clock", "--beats", "--ls",
-  "--boot-timeout", "--race-timeout", "--entry", "--menu-timeout", "--profile", "--port"]);
+  "--boot-timeout", "--race-timeout", "--entry", "--menu-timeout", "--profile", "--port", "--mem-cycles"]);
+const memCycles = Math.max(0, Math.min(24, parseInt(flag("--mem-cycles", "0"), 10) || 0));
 const track = argv.find((a, i) => !a.startsWith("--") && !VALUE_FLAGS.has(argv[i - 1])) || "montreal";
 // --cam ID (hunt 4 H5): the player camera, set right after boot so no frame of
 // race entry draws through another one. The default camera is helmet
@@ -216,6 +222,7 @@ try {
   page.on("crash", () => { out.crashed = true; checkpoint("renderer-crashed"); });
   page.on("close", () => { out.pageClosed = true; });
   browser.on("disconnected", () => { out.browserGone = true; });
+  if (memCycles) await page.addInitScript(gpuObjectCounter);
   await page.addInitScript(([be, p, ls, drainEvery, pick]) => {
     // THE SPIKE TRAIN, recorded on the machine that has a real GPU.
     //
@@ -1576,6 +1583,36 @@ try {
       return { steps };
     }, [track, other, track]), 240000, "mem-switch");
     checkpoint("mem-switch");
+  }
+  if (memCycles) {
+    // RACE > QUIT, the player's loop (A·H11 H2 measured it on SwiftShader; this is the GPU's answer).
+    const other = track === "monza" ? "montreal" : "monza";
+    const rows = [];
+    for (let i = 0; i < memCycles && !out.crashed; i++) {
+      const id = i % 2 ? other : track;
+      const r = await bounded(() => page.evaluate(async (id) => {
+        const A = window.__apex, sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+        if (!A || !A.race) return { error: "no __apex.race" };
+        await A.race(id);
+        await sleep(6000);
+        const pb = document.getElementById("pausebtn"); if (pb) pb.click();
+        await sleep(400);
+        // Two presses: the pause card's confirm guard (js/ui/pause-opts.js) swallows the first and arms it.
+        const q = document.getElementById("pm-quit"); if (q) { q.click(); await sleep(150); q.click(); }
+        await sleep(4000);
+        const row = { id, state: A.info && A.info().state };   // "menu" after a real quit
+        try { Object.assign(row, window.__apexGpuObjects ? window.__apexGpuObjects() : {}); } catch (_) { /* no WebGPU */ }
+        try { const ro = GLX.__tlx.renderer._objects; if (ro && ro._renderObjects) row.rObj = ro._renderObjects.size; } catch (_) { /* not TLX */ }
+        try { if (performance.memory) row.heapMB = +(performance.memory.usedJSHeapSize / 1048576).toFixed(1); } catch (_) { /* not Chromium */ }
+        return row;
+      }, id), 180000, "mem-cycle");
+      rows.push(Object.assign({ cycle: i + 1 }, r));
+      if (r && r.error) break;
+      console.log(`[game-check] mem-cycle ${i + 1}/${memCycles} ${id} state=${r.state} buffers=${r.buffers ?? "?"} (${r.bufMB ?? "?"} MB) textures=${r.textures ?? "?"} (${r.texMB ?? "?"} MB) rObj=${r.rObj ?? "?"} heap=${r.heapMB ?? "?"}MB`);
+    }
+    out.memCycles = { rows, ...memCyclesVerdict(rows.filter((r) => !r.error)) };
+    console.log(`[game-check] mem-cycles verdict=${out.memCycles.verdict} perCycle=${JSON.stringify(out.memCycles.perCycle || {})}`);
+    checkpoint("mem-cycles");
   }
   if (out.overlay && out.overlay.error) out.overlayReadFailed = "read failed: " + out.overlay.error;
   // WHAT THE GPU TIMER SPANS (hunt 4 I5). The three backends' gpuMs time
