@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { bootGlx } from "../helpers/glx-mock.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = new URL("../..", import.meta.url);
 const MANIFEST = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs");
@@ -52,25 +53,45 @@ const LIGHT_SBO_BYTES =
 
 
 test("WGX deferred seams expose WGXShadow / WGXChunked / WGXPost globals", () => {
-  assert.match(WGX_SHADOW_SOURCE, /const WGXShadow/);
-  assert.match(WGX_CHUNKED_SOURCE, /const WGXChunked/);
-  assert.match(WGX_POST_SOURCE, /const WGXPost/);
-  assert.match(INST_CELLS_SOURCE, /const InstCells/);
+  function evalSeam(rel, source, exportName, { needsStorage = false } = {}) {
+    const ctx = vm.createContext({
+      window: {},
+      localStorage: needsStorage
+        ? { getItem: () => null, setItem() {}, removeItem() {} }
+        : undefined,
+    });
+    seedLog(ctx);
+    vm.runInContext(`${source}\n;globalThis.out = ${exportName};`, ctx, { filename: absSrc(rel) });
+    assert.equal(typeof ctx.out, "object", `${exportName} must export from its deferred seam`);
+    assert.ok(
+      typeof ctx.out.init === "function" || typeof ctx.out.enabled === "function",
+      `${exportName} must expose its init or enabled API`,
+    );
+  }
+  evalSeam(P.WGX_SHADOW, WGX_SHADOW_SOURCE, "WGXShadow");
+  evalSeam(P.WGX_CHUNKED, WGX_CHUNKED_SOURCE, "WGXChunked");
+  evalSeam(P.WGX_POST, WGX_POST_SOURCE, "WGXPost");
+  evalSeam(P.INST_CELLS, INST_CELLS_SOURCE, "InstCells", { needsStorage: true });
 });
 
-test("WGX constructs SGSR resources only when spatial upscaling is requested", () => {
-  // Pipeline construction lives in wgx-post.js after the GLX-seam peel.
-  assert.match(WGX_POST_SOURCE, /function _ensureSpatial\(\)/);
-  const post = WGX_POST_SOURCE.slice(WGX_POST_SOURCE.indexOf("function _buildPost()"),
-    WGX_POST_SOURCE.indexOf("function _ensureSpatial()"));
-  assert.doesNotMatch(post, /pSGSR\s*=\s*fsPipe|sgsrUBO\s*=\s*device\.createBuffer/,
-    "the disabled-by-default boot must not construct SGSR pipelines or buffers");
-  const ensure = WGX_POST_SOURCE.slice(WGX_POST_SOURCE.indexOf("function _ensureSpatial()"));
-  assert.match(ensure, /pSGSR\s*=\s*.*fsPipe|core\.pSGSR\s*=/);
-  assert.match(ensure, /sgsrUBO\s*=\s*.*createBuffer|core\.sgsrUBO\s*=/);
-  const setter = WGX_MAIN_SOURCE.slice(WGX_MAIN_SOURCE.indexOf("function setSpatialUpscale"),
-    WGX_MAIN_SOURCE.indexOf("function getSpatialUpscale"));
-  assert.match(setter, /if\s*\(\s*spatialUpscale\s*\)\s*_ensureSpatial\(\)/);
+test("WGX constructs SGSR resources only when spatial upscaling is requested", async () => {
+  const boot = isolatedPost();
+  boot.post.buildPost();
+  assert.ok(!boot.core.pSGSR, "buildPost must not construct SGSR pipelines");
+  assert.ok(!boot.core.sgsrUBO, "buildPost must not allocate the SGSR UBO");
+
+  const h = makeGpuHarness({ errorScopes: true });
+  const gfx = await h.create();
+  assert.equal(gfx.getSpatialUpscale(), false, "spatial upscale is off by default");
+  h.holdPops();
+  gfx.setSpatialUpscale(true);
+  assert.equal(gfx.getSpatialUpscale(), true, "setSpatialUpscale records the request");
+  await h.settlePops();
+  assert.equal(
+    gfx.getSpatialUpscaleGather(),
+    true,
+    "enabling spatial upscale must compile SGSR (gather on a clean mock scope)",
+  );
 });
 
 // GPUTexture.destroy() is deterministic; waiting for the wrapper to be garbage

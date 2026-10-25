@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 1000+ `node --test` unit suites
+150+ root Playwright spec files (`tests/specs/*.spec.js`) + 1000+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -451,6 +451,7 @@ tools directly.)
 | `phone-recorder` | the PHONE TEST recorder: RECORD at 844x390 touch, rAF frames advance, SHARE hands `navigator.share` one valid `apex26.phone-soak/1` JSON file (menu-only, seconds) |
 | `perf-frametime` | SwiftShader frame-time regression: fixed Monza night race, ~5 s warm + ~20 s rAF sample, p50/p95/p99 + long-task count + `performance.memory` heap; compares to `tests/data/perf-frametime-baseline.json`. Soft by default (`APEX_PERF_FRAMETIME_STRICT=1` fails only on large deltas). Intended as a separate non-blocking CI job (continue-on-error, off the Pages verdict gate) |
 | `shimmer` | does baked tarmac crawl under motion |
+| `perf-idle-churn` | `perf-idle-pipeline-churn.spec.js` — after warm-up, equal idle race windows on TLX WebGPU build zero render pipelines (#3713 background re-mint; counts, not ms) |
 | `perf-budget` | `perf-boost-press-pipelines.spec.js` (TLX WebGPU) and `perf-boost-press-pipelines-gl.spec.js` (TLX WebGL2, its own file: a second TLX boot in one Chromium stalls), driven by `tools/perf/boost-press-census.mjs` (A·H17) — BOOST presses 2..N re-mint zero BOOST pipelines, and add no fx-stream re-mints beyond the matched no-BOOST windows; every press must deploy ERS (#3677, #3703; counts, not ms); `perf-sw-cache-hit.spec.js` — the service-worker install already holds every script and stylesheet a first race loads (cache snapshot read inside the worker; dev-only LAZY_AGENT excluded). Count-based perf gates, docs/notes/PERFTEST-HUNT-2026-10-24.md |
 | `perf-race-entry` | `perf-race-entry.spec.js` — race vs practice PREPARING stage spans (`RaceEntryProfile` / `__apex.raceEntryStages`), writes `artifacts/perf-race-entry/*.json` for regression diffs (issue #1881) |
 | `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |

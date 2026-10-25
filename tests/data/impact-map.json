@@ -1203,6 +1203,9 @@
       ]
     },
     "js/audio/voice-pack.js": {
+      "codecs": [
+        "tests/unit/voice-pack.test.mjs"
+      ],
       "compose": [
         "tests/unit/voice-pack.test.mjs"
       ],
@@ -9592,6 +9595,19 @@
         "tests/unit/loop-health.test.mjs"
       ]
     },
+    "js/perf/menu-quit-tail.js": {
+      "*": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ]
+    },
+    "js/perf/menu-teardown.js": {
+      "beginQuit": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "cover": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ]
+    },
     "js/perf/metrics-overlay.js": {
       "ensurePanel": [
         "tests/unit/metrics.test.mjs"
@@ -13605,6 +13621,12 @@
       "discardAttachments": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
+      "discardHint": [
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
+      "discardHintOff": [
+        "tests/unit/tlx-hunt4c.test.mjs"
+      ],
       "dispose": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13942,7 +13964,8 @@
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "dropWrapper": [
-        "tests/unit/render-final-contracts.test.mjs"
+        "tests/unit/render-final-contracts.test.mjs",
+        "tests/unit/tlx-pipe-pin-warm.test.mjs"
       ],
       "ensureStream": [
         "tests/unit/tlx-hunt3.test.mjs",
@@ -13998,6 +14021,9 @@
       "onErr": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "pinPipelines": [
+        "tests/unit/tlx-pipe-pin-warm.test.mjs"
+      ],
       "pinSkyMaterial": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs"
@@ -14010,6 +14036,7 @@
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "prunePool": [
+        "tests/unit/tlx-pipe-pin-warm.test.mjs",
         "tests/unit/tlx-prune-pin.test.mjs"
       ],
       "pumpAnimation": [
@@ -14412,9 +14439,6 @@
       ]
     },
     "js/render/webgpu/wgx.js": {
-      "_buildPost": [
-        "tests/unit/webgpu-lifecycle.test.mjs"
-      ],
       "_capEncode": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
@@ -14423,9 +14447,6 @@
       ],
       "_destroyTargetSet": [
         "tests/unit/frame-hotpath-alloc.test.mjs"
-      ],
-      "_ensureSpatial": [
-        "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "_expandPull": [
         "tests/unit/livery-finish-contract.test.mjs"
@@ -14585,6 +14606,9 @@
       "freeTexture": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
+      "getSpatialUpscale": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "getSpatialUpscaleGather": [
