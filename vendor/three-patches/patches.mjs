@@ -382,6 +382,55 @@ export const PATCHES = [
         count: 1
       }
     ]
+  },
+  {
+    id: 17,
+    title: "single-sample storeOp discard — a per-pass hint for write-only attachments",
+    file: "build/three.webgpu.js",
+    why: "WebGPUBackend.beginRender stores every attachment unless the target is MULTISAMPLED and " +
+      "storeMultisampled*Buffer is false, so a single-sample attachment nobody reads (the scene ssrTag, " +
+      "the shadow R8 colour, the mirror depth/tag, an unread scene depth) is written to memory every " +
+      "pass — the WebGL2 leg drops the same bytes with invalidateFramebuffer (#3679). Two opt-in members " +
+      "on the RenderTarget, read at every beginRender: apexDiscardColor (bit i = colour attachment i) " +
+      "and apexDiscardDepth (true). They change the storeOp only — never the loadOp — so the caller " +
+      "sets them around the LAST render into the target of a frame and clears them after.",
+    upstream: "unfixed on dev as of 2026-10-24 (discardColor/discardDepth still gate on sampleCount > 1); " +
+      "draft in docs/notes/UPSTREAM-THREE-ISSUES.md §4. Array-camera layer descriptors are not patched (XR only).",
+    edits: [
+      {
+        find: "\t\tconst discardDepth = renderContext.sampleCount > 1 && renderTarget?.storeMultisampledDepthBuffer === false;\n\t\tconst discardStencil = renderContext.sampleCount > 1 && renderTarget?.storeMultisampledStencilBuffer === false;\n\n\t\t// A fullscreen pass",
+        replace: "\t\tconst discardDepth = renderContext.sampleCount > 1 && renderTarget?.storeMultisampledDepthBuffer === false;\n\t\tconst discardStencil = renderContext.sampleCount > 1 && renderTarget?.storeMultisampledStencilBuffer === false;\n\t\tconst apexDiscardColor = renderTarget ? renderTarget.apexDiscardColor | 0 : 0;\n\t\tconst apexDiscardDepth = renderTarget ? renderTarget.apexDiscardDepth === true : false;\n\n\t\t// A fullscreen pass",
+        count: 1,
+      },
+      {
+        find: "\t\t\t\tif ( discardColor ) {\n\n\t\t\t\t\tcolorAttachment.storeOp = GPUStoreOp.Discard;\n",
+        replace: "\t\t\t\tif ( discardColor || ( ( apexDiscardColor >> i ) & 1 ) === 1 ) {\n\n\t\t\t\t\tcolorAttachment.storeOp = GPUStoreOp.Discard;\n",
+        count: 1,
+      },
+      {
+        find: "\t\t\tif ( discardDepth ) {\n\n\t\t\t\tdepthStencilAttachment.depthStoreOp = GPUStoreOp.Discard;\n",
+        replace: "\t\t\tif ( discardDepth || apexDiscardDepth ) {\n\n\t\t\t\tdepthStencilAttachment.depthStoreOp = GPUStoreOp.Discard;\n",
+        count: 1,
+      },
+    ],
+  },
+  {
+    id: 18,
+    title: "a 3-component colour target keeps a vec4 WGSL fragment output",
+    file: "build/three.webgpu.js",
+    why: "NodeBuilder.getOutputType() sizes @location(i) to the target's component count, so an RGBFormat " +
+      "target (rg11b10ufloat) gets a vec3 output; WebGPU then refuses any blend factor that reads source " +
+      "alpha (gpuweb 'validating GPUFragmentState'), and every blended material's pipeline fails. The spec " +
+      "accepts a vec4 output into an RGB attachment (extra components are dropped), so the WGSL builder " +
+      "reports vec4 wherever the base answer is vec3. GLSL (WebGL2) is untouched: GL has no such rule.",
+    upstream: "unfixed on dev as of 2026-10-24 (NodeUtils.getTextureType RGBFormat -> length 3); #3690 / A·H10 lead",
+    edits: [
+      {
+        find: "\tgetOutputStructName() {\n\n\t\treturn 'output';\n\n\t}\n",
+        replace: "\tgetOutputStructName() {\n\n\t\treturn 'output';\n\n\t}\n\n\t/**\n\t * Returns the WGSL type of a colour output: a 3-component target still takes a vec4\n\t * so source-alpha blend factors stay valid (apex patch 18).\n\t *\n\t * @param {number} [index=0] - The index of the render target texture.\n\t * @return {string} The type.\n\t */\n\tgetOutputType( index = 0 ) {\n\n\t\tconst type = super.getOutputType( index );\n\n\t\treturn type === 'vec3' ? 'vec4' : type;\n\n\t}\n",
+        count: 1,
+      },
+    ],
   }
 ];
 

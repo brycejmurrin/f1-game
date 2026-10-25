@@ -125,17 +125,24 @@ const F1Transport = (function () {
       return null;
     }
 
-    function writeCache(url, data) {
+    function writeMemory(url, data) {
+      memCache.delete(url);
+      memCache.set(url, { t: Date.now(), data });
+      while (memCache.size > MEM_MAX) memCache.delete(memCache.keys().next().value);
+      try { localStorage.removeItem(CACHE_PREFIX + url); } catch (e) { /* no storage */ }
+    }
+
+    function writeCache(url, data, memoryOnly) {
+      // Known bulk histories never need a temporary full JSON string merely to
+      // discover that they exceed the disk budget. Keep normal cache semantics.
+      if (memoryOnly) { writeMemory(url, data); return; }
       const key = CACHE_PREFIX + url;
       const payload = JSON.stringify({ t: Date.now(), data });
       // A multi-MB body (/position, car_data) would take the origin's whole
       // localStorage quota from the game's own saves: keep it in memory only,
       // and drop an older small disk copy so it cannot stand in as the stale fallback.
       if (payload.length > CACHE_MAX_CHARS) {
-        memCache.delete(url);
-        memCache.set(url, { t: Date.now(), data });
-        while (memCache.size > MEM_MAX) memCache.delete(memCache.keys().next().value);
-        try { localStorage.removeItem(key); } catch (e) { /* no storage */ }
+        writeMemory(url, data);
         return;
       }
       memCache.delete(url);
@@ -304,7 +311,11 @@ const F1Transport = (function () {
     function request(url, ttl, options) {
       const myGen = netGen;
       const lane = url.indexOf(OPENF1) === 0 ? openF1Lane : otherLane;
-      const cache = !options || options.cache !== false;
+      // false bypasses both tiers; "memory" keeps TTL/stale reuse but skips
+      // disk writes. Existing disk entries may still satisfy either cached tier.
+      const cachePolicy = options && options.cache === false ? "network" :
+        options && options.cache === "memory" ? "memory" : "cache";
+      const cache = cachePolicy !== "network";
       const quiet = ttl <= 0 || (options && options.cache === false);
       const name = endpointName(url);
       const hit = cache ? readCache(url) : null;
@@ -317,7 +328,7 @@ const F1Transport = (function () {
       // live delta request never inherits stale fallback from a cached request.
       // Generation is part of it so work started after cancelAll() can never
       // attach to the cancelled Promise from the closed hub.
-      const flightKey = myGen + "|" + (cache ? "cache|" : "network|") + url;
+      const flightKey = myGen + "|" + cachePolicy + "|" + url;
       const shared = inFlight.get(flightKey);
       if (shared) return shared;
 
@@ -361,7 +372,7 @@ const F1Transport = (function () {
       const job = attempt(0)
         .then(function (json) {
           if (myGen !== netGen) throw cancelledError(url);
-          if (cache) writeCache(url, json);
+          if (cache) writeCache(url, json, cachePolicy === "memory");
           if (!quiet) Log.info("data", "fetch " + name + " ok");
           return json;
         })
