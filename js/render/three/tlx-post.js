@@ -144,14 +144,14 @@
     // its goldens and env/mirror parity stay as they were). apex26.tlxScene11="1" forces it on, "0" keeps
     // RGBA16F — the Device Farm A/B pair. 11/11/10 keeps 6/6/5 mantissa bits: a banding check on a night
     // gradient is the device evidence this still owes (docs/notes/PERF-KNOWN-WINS-2026-10-23.md row 15).
-    // WEBGL2 LEG ONLY. On WebGPU three sizes the fragment output to the target's three components, and the
+    // BOTH LEGS. Stock three sizes the WebGPU fragment output to the target's three components, and the
     // spec refuses a src-alpha blend factor when the fragment output has no alpha (gpuweb "validating
-    // GPUFragmentState"; Dawn RenderPipeline.cpp "is reading alpha but it is missing from fragment output"):
-    // every blended material's pipeline failed on the real-GPU census (macos-latest run 40052670537 on
-    // 886e476f — decals, glass and particles would vanish). GL has no such rule, so the format stays a WebGL2
-    // win and the WebGPU leg keeps RGBA16F whatever the knob says. A vendored three that kept a vec4 output
-    // for RGB targets (the spec allows "RGB requires vec3 or vec4") would let the WebGPU leg take it too.
-    const _r11Blendable = r11Renderable && !(renderer.backend && renderer.backend.isWebGPUBackend);
+    // GPUFragmentState"): every blended material's pipeline failed on the real-GPU census (macos-latest run
+    // 40052670537 on 886e476f — decals, glass and particles would vanish). Vendored three patch 18 keeps a
+    // vec4 output for RGB targets (the spec allows "RGB requires vec3 or vec4"); with it the same census is
+    // green (run 40056676327, #3711). Renderability still gates WebGPU on the adapter's
+    // "rg11b10ufloat-renderable" feature (bloom11 above); gfx-backend-canary pins patch 18 by behaviour.
+    const _r11Blendable = r11Renderable;
     let scene11 = _r11Blendable && !!ctx.isMobile;
     try {
       const k = localStorage.getItem("apex26.tlxScene11");

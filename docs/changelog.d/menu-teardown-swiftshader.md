@@ -1,0 +1,1 @@
+Fixed: on software GL, quit-to-menu paints the title before heavy teardown work, defers the tail off the click handler, and records sync gaps the frame stall watchdog cannot see; garage CLOSE defers buildSelect so one tap is not swallowed by a multi-thread block. Independent of #3589 garage readback gates (#3593 revert).

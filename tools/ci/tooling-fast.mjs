@@ -329,6 +329,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 4 MB outside assets/: a June burst left ~750 MB in history. ~0.1 s.
   "tests/unit/committed-images.test.mjs",
   "tests/unit/component-inventory.test.mjs",
+  // Soundtrack bitrate cap (tools/gen/compress-audio.mjs): every frame of the listed tracks at 128 kbps, 44.1 kHz stereo, full length. ~0.3 s.
+  "tests/unit/compress-audio.test.mjs",
   "tests/unit/conflict-cure.test.mjs",
   "tests/unit/contact-geometry.test.mjs",
   "tests/unit/controller-profiles.test.mjs",
@@ -1318,6 +1320,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // up only on screen. Fuzzes the real lifted source over every field.
   "tests/unit/tlx-mat-key-memo.test.mjs",
   "tests/unit/tlx-mirror-inset.test.mjs",
+  // A·W50: TLX pins the warm's render pipelines (pinPipelines) so prunePool's 20 s drop no longer destroys them and race entry rebuilds none (three r186 releases a pipeline at usedTimes 0; real renderer over fake GL).
+  "tests/unit/tlx-pipe-pin-warm.test.mjs",
   // TLX post P2 / audit #6: fixed H/V blur + per-mip bloom materials (no .tex.value ping-pong).
   "tests/unit/tlx-post-fixed-mats.test.mjs",
   // TLX phone post at half scene resolution (D·IP3 / BrowserStack GPU-bound fill).

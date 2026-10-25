@@ -414,6 +414,24 @@ export const PATCHES = [
       },
     ],
   },
+  {
+    id: 18,
+    title: "a 3-component colour target keeps a vec4 WGSL fragment output",
+    file: "build/three.webgpu.js",
+    why: "NodeBuilder.getOutputType() sizes @location(i) to the target's component count, so an RGBFormat " +
+      "target (rg11b10ufloat) gets a vec3 output; WebGPU then refuses any blend factor that reads source " +
+      "alpha (gpuweb 'validating GPUFragmentState'), and every blended material's pipeline fails. The spec " +
+      "accepts a vec4 output into an RGB attachment (extra components are dropped), so the WGSL builder " +
+      "reports vec4 wherever the base answer is vec3. GLSL (WebGL2) is untouched: GL has no such rule.",
+    upstream: "unfixed on dev as of 2026-10-24 (NodeUtils.getTextureType RGBFormat -> length 3); #3690 / A·H10 lead",
+    edits: [
+      {
+        find: "\tgetOutputStructName() {\n\n\t\treturn 'output';\n\n\t}\n",
+        replace: "\tgetOutputStructName() {\n\n\t\treturn 'output';\n\n\t}\n\n\t/**\n\t * Returns the WGSL type of a colour output: a 3-component target still takes a vec4\n\t * so source-alpha blend factors stay valid (apex patch 18).\n\t *\n\t * @param {number} [index=0] - The index of the render target texture.\n\t * @return {string} The type.\n\t */\n\tgetOutputType( index = 0 ) {\n\n\t\tconst type = super.getOutputType( index );\n\n\t\treturn type === 'vec3' ? 'vec4' : type;\n\n\t}\n",
+        count: 1,
+      },
+    ],
+  },
 {
   "id": 19,
   "title": "skip repeated shared binding group checks at the same version",

@@ -1,0 +1,1 @@
+Fixed: TLX keeps the pipelines the menu warm builds (they were destroyed after 20 s off screen and rebuilt at the lights), so the first race on three.js WebGPU no longer recompiles most of the world at race entry (A·W50).

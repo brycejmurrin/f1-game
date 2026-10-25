@@ -581,8 +581,10 @@ jobs:
         timeout-minutes: 14
         shell: bash
         run: |
+          # The dispatcher's ls reaches these legs too (after the pin), e.g. apex26.forceMobileTier=1 for the phone tier.
+          LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
           for p in webgpu webgl2; do
-            node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --backend three --path "$p" --ls apex26.wgxCapture=0 --beats 3 --mem-cycles "${CENSUS_MEM_CYCLES}" --json "game-memcycles-$p-$IMAGE.json" || true
+            node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --backend three --path "$p" --ls apex26.wgxCapture=0 $LS --beats 3 --mem-cycles "${CENSUS_MEM_CYCLES}" --json "game-memcycles-$p-$IMAGE.json" || true
           done
 
       # The control: the same pin (a no-op here — forceWebGL short-circuits

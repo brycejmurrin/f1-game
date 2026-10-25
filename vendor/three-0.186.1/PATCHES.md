@@ -350,6 +350,22 @@ Upstream: unfixed on `dev` as of 2026-10-24 (the `discardColor`/`discardDepth` c
 after r186 exists. Draft: `docs/notes/UPSTREAM-THREE-ISSUES.md` §4. Canary:
 `gfx-backend-canary.test.mjs` "honours the single-sample discard hint".
 
+## 18. A 3-component colour target keeps a vec4 WGSL fragment output (#3690)
+
+`NodeBuilder.getOutputType()` types `@location(i)` from `NodeUtils.getTextureType()`, which
+gives `RGBFormat` 3 components. An `rg11b10ufloat` scene target (#3690, `apex26.tlxScene11`)
+therefore gets a `vec3` output, and WebGPU rejects any blend factor that reads the source
+alpha (gpuweb "validating GPUFragmentState"; Dawn `RenderPipeline.cpp`). On the real-GPU
+census every blended material's pipeline failed (decals, glass, particles). The spec accepts
+a `vec4` output into an RGB attachment (the extra component is dropped), so
+`WGSLNodeBuilder.getOutputType()` reports `vec4` wherever the base answer is `vec3`. That one
+override covers the plain output struct, MRT members (`MRTNode` asks the builder per index)
+and `NodeMaterial`'s fragment conversion. GLSL is untouched: WebGL2 has no such rule, and
+#3690's WebGL2 leg already works.
+
+Upstream: unfixed on `dev` as of 2026-10-24. Draft: `docs/notes/UPSTREAM-THREE-ISSUES.md` §5.
+Canary: `gfx-backend-canary.test.mjs` "gives a 3-component colour target a vec4 output".
+
 ## 19. Shared binding group update shortcut
 
 Homogeneous shared groups whose node version, binding array, member identities and
