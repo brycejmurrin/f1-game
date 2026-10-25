@@ -15,3 +15,13 @@ DAD agreements: 40497cf #3505 split (B row 1 garage-livery-churn only); 6bdf39c 
 
 Open asks: A (d09acfd) and C (ca36216) — any PRs/lanes for B? No reply yet.
 B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/car-draw.js, js/garage/**.
+
+## Handoff 23:43Z (16:43 PT) — predecessor at 197k context
+- READY (from B·L4, ready-gate 0, full tier running, D merges): #3726 8fd75686, #3727 f5a07f51. #3717 still with B·L4.
+- A: OrchA 33 lost the first offer; resent 23:38Z (agent-msg to A). Await reply; A game queue #3741 → #3706 → #3718.
+- C: owns its far-rival cache fix itself (12ee924); nothing for B.
+- D: #3638 in GAME-SLOT now; A #3741 after.
+- Bus cursor: 35df38d.
+- Routines to arm FIRST: 3-min send_later bus tick + hourly create_trigger safety net bound to your session (predecessor's are deleted at handoff).
+- B·W3·L6 = Fleet B's own PR (agent-fleet docs): you merge it via merge-gate when green (non-game).
+- Every Claude owner was told to subscribe_pr_activity + 15-min send_later (23:33Z).
