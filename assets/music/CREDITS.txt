@@ -17,3 +17,8 @@ visitor and is never fetched. Three CC0 race loops from Beatscribe's "Homebrew
 Free Jingle and Fanfare Music Assets" (race_a.wav, race_b.wav, night.wav) sat
 here unreferenced for exactly that reason and were removed; they are in the git
 history if they are ever wanted back.
+
+Bitrate (2026-10-24): menu.mp3 (160 kbps), song2.mp3 and song5.mp3 (192 kbps)
+were re-encoded to 128 kbps CBR stereo with Bryce's approval, by
+`node tools/gen/compress-audio.mjs --apply`, from the originals as committed at
+dd923f85 (digests in that tool's TRACKS). The originals stay in git history.

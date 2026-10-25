@@ -28,7 +28,7 @@ import os from "node:os";
 import { createRequire } from "node:module";
 import { stageSite } from "../../tools/desktop/stage.mjs";
 import { fileURLToPath } from "node:url";
-import { STAGE_DIRS, STAGE_ROOT_FILES, stagedNames } from "../../tools/desktop/stage-files.mjs";
+import { STAGE_DIRS, STAGE_EXCLUDE, STAGE_ROOT_FILES, stageExcluded, stagedNames } from "../../tools/desktop/stage-files.mjs";
 
 const { SW_LOCALES } = createRequire(import.meta.url)("../../tools/manifest.cjs");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -207,5 +207,48 @@ test("real stageSite preserves manifest-declared locale catalogs and SW locale b
       assert.deepEqual(fs.readFileSync(path.join(dest, rel)), fs.readFileSync(path.join(root, rel)), rel);
     }
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dest, "locales/manifest.json"))), manifest);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+// STAGE_EXCLUDE drops author-time inputs (assets/atlases/, 15.1 MB) from the
+// deploy. That is only safe while nothing the browser loads can name them: scan
+// every shipped text file for an excluded path, the way referenced() scans
+// for top-level entries.
+test("no shipped file references a STAGE_EXCLUDE path", () => {
+  assert.ok(STAGE_EXCLUDE.length > 0);
+  const offenders = [];
+  const scan = (rel) => {
+    const abs = path.join(ROOT, rel);
+    if (stageExcluded(rel)) return;
+    const st = fs.statSync(abs);
+    if (st.isDirectory()) { for (const n of fs.readdirSync(abs)) scan(rel + "/" + n); return; }
+    if (!/\.(m?js|cjs|css|html|json|webmanifest)$/.test(rel)) return;
+    const text = fs.readFileSync(abs, "utf8");
+    for (const x of STAGE_EXCLUDE) if (text.includes(x + "/") || text.includes(x + "\"")) offenders.push(`${rel} -> ${x}`);
+  };
+  for (const name of [...STAGE_ROOT_FILES, ...STAGE_DIRS]) if (fs.existsSync(path.join(ROOT, name))) scan(name);
+  assert.deepEqual(offenders, [], "a shipped file names an excluded path: stage it again or drop the reference");
+});
+
+test("stageSite skips STAGE_EXCLUDE paths and keeps their siblings", () => {
+  assert.equal(stageExcluded("assets/atlases"), true);
+  assert.equal(stageExcluded("assets/atlases/atlas-arch-albedo.png"), true);
+  assert.equal(stageExcluded("assets/atlases-old/x.png"), false);
+  assert.equal(stageExcluded("assets/pack/mat-albedo-128.png"), false);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "exclude-stage-"));
+  const root = path.join(tmp, "source"), dest = path.join(tmp, "site");
+  const put = (rel) => {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    fs.writeFileSync(path.join(root, rel), "fixture\n");
+  };
+  try {
+    for (const name of STAGE_ROOT_FILES) put(name);
+    for (const name of STAGE_DIRS) fs.mkdirSync(path.join(root, name), { recursive: true });
+    put("assets/atlases/atlas-arch-albedo.png");
+    put("assets/atlases/README.md");
+    put("assets/pack/mat-albedo-128.png");
+    stageSite(dest, { root });
+    assert.equal(fs.existsSync(path.join(dest, "assets/atlases")), false);
+    assert.equal(fs.existsSync(path.join(dest, "assets/pack/mat-albedo-128.png")), true);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });

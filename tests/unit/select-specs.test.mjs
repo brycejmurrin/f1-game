@@ -1473,7 +1473,7 @@ test("C4: a fat-UI leg that cannot fit its cap splits into more native --shard p
     return shards({ selected: [], oversize: [{ file: hud, tests: n, rank: 0 }] }, db, new Set());
   };
   // The measured 945 s leg fits the current cap. hud-layout still gets its
-  // measured three-piece floor because recent Actions halves are ~700 s.
+  // HUD_LAYOUT_MIN_PIECES floor (four since 2026-10-24: thirds ran ~10.9 min).
   if (945 / 60 <= room) {
     const one = plan(945);
     assert.equal(one.length, HUD_LAYOUT_MIN_PIECES, `945 s fits ${FAT_UI_SELECTED_JOB_MIN} min with setup and wrap-up: the HUD minimum pieces`);

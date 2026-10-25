@@ -1584,6 +1584,11 @@ Summarises the armed `RaceEntryProfile` window as span rows (`introBuild`,
 Arms from the race-settings START tap (`beginUi`) through countdown. Use with
 `raceEntryProfile()` when you need raw marks; this is the stage table the
 `perf-race-entry` spec writes to `artifacts/perf-race-entry/*.json`.
+Spans nest (`gridCountdown` encloses `warmCarAssets` and `debrisPrime`; `mirrorPrepare`
+encloses `programWarm`), so `ms` does not add up: sum each closed span's `selfMs`, its time
+minus the closed spans directly inside it (#3674). A cold `__apex.race` entry skips race
+settings' car prep, so measure any player-facing entry floor on the menu path
+(`tools/lib/census-entry.mjs` `menu`).
 
 ### `raceEntryStageDiff(raceSnap, practiceSnap) → { rows, entryRace, entryPractice }`
 Pairwise race vs practice stage table from two `raceEntryProfile()` snapshots
