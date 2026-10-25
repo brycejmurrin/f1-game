@@ -11,6 +11,7 @@ DAD agreements: 40497cf #3505 split (B row 1 garage-livery-churn only); 6bdf39c 
 | B·sync | session_018q2mQMSpBgwjPUSBzX9Ppm | D #3576 then #3684 conflicts → READY |
 | B·L4 | session_016KNaCzCBSTjwTYcbnNru71 | D #3717 #3726 #3727 (no CI ran) → READY |
 | B·L5 | session_0139MAKfbqo1FCNb7ckGpacg | D #3732 #3733 #3734 (no CI ran) → READY |
+| B·W3·L6 | session_01YFfG5gea5X1VMUh1BN1zpC | agent-fleet WATCH line + orch routines (Bryce "Approved" 16:35 PT) |
 
 Open asks: A (d09acfd) and C (ca36216) — any PRs/lanes for B? No reply yet.
 B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/car-draw.js, js/garage/**.
