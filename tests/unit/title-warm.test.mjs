@@ -106,7 +106,7 @@ test("game.js wiring: the prep's current() accepts a title warm, and the poll is
   const GAME = read("js/game.js");
   const at = GAME.indexOf("const current = prep.current = ");
   const cur = GAME.slice(at, GAME.indexOf("\n  const prepare = ", at));
-  assert.ok(cur.includes("|| titleWarm.wants()"), "scheduleFlybyTrack's liveness includes the title warm");
+  assert.ok(cur.includes('|| (typeof titleWarm !== "undefined" && titleWarm.wants())'), "scheduleFlybyTrack's liveness includes the title warm (typeof: canary sandboxes lift it alone)");
   assert.ok(GAME.includes("schedule: () => scheduleFlybyTrack(true)") && GAME.includes("titleWarm.start();"), "created and started");
   assert.ok(GAME.includes("p.world && p.done && p.warmed && p.warmFrames === 0 && !p.warming"), "done = census-entry menuPrepReady's test");
   assert.ok(read("tools/manifest.cjs").includes('"js/perf/title-warm.js"'), "loaded");

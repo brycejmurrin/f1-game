@@ -142,6 +142,15 @@ build, car assets, `warmPrograms`, hidden warm frames.
 Test: `tests/unit/title-warm.test.mjs` (the real module in a VM: the once-per-build gate, the blockers, re-arming,
 the `game.js` wiring).
 
+Lavapipe census, `scratch/w50/census.mjs title`, Bahrain, 90 s of title idle with no input, then RACE → picker →
+RACE SETTINGS → START with no waiting:
+
+| tree | title idle built the world | pipelines built during the idle | pipelines built after START |
+|---|---|---|---|
+| deploy tip 0b1bc59c (pin only) | no: `world`, `done` and `warmed` false (the S5 symptom) | 46 (the garage) | 18, during the intro build and lamp bake |
+| + title warm | yes: `world`, `done` and `warmed` true | 48 | 6 (`programWarm` 150 ms) |
+
+
 ## Still open
 
 - The 4 race-only states: warm them in the menu, or give them a state the menu already builds.

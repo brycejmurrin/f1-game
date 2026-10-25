@@ -2267,7 +2267,7 @@ function scheduleFlybyTrack(settle) {
   const prep = _menuGate.prep = { want, tod: raceTimeOfDay, weather: raceWeather, key: menuKey(want), bkey: buildKey(want), building: false, owner: null, step: null };
   const current = prep.current = () => generation === _menuGate.generation && state === "menu" &&
     !setupPreviewOn && trackIdx === want && raceTimeOfDay === prep.tod && raceWeather === prep.weather &&
-    (!els.select.hidden || !$("race-settings").hidden || (uiExperience && uiExperience.wantsTrack()) || titleWarm.wants());
+    (!els.select.hidden || !$("race-settings").hidden || (uiExperience && uiExperience.wantsTrack()) || (typeof titleWarm !== "undefined" && titleWarm.wants()));
   const prepare = async () => {
     if (!current()) return;
     try {
