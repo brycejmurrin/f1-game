@@ -262,7 +262,8 @@ const F1Transport = (function () {
       const hdr = res.headers && res.headers.get && res.headers.get("retry-after");
       let ra = parseFloat(hdr);
       if (!isFinite(ra) && hdr) ra = (Date.parse(hdr) - Date.now()) / 1000;
-      if (isFinite(ra) && ra > 0) err.retryAfterMs = Math.round(ra * 1000);
+      const retryMs = Math.round(ra * 1000);
+      if (isFinite(retryMs) && retryMs > 0 && isFinite(Date.now() + retryMs)) err.retryAfterMs = retryMs;
       return err;
     }
 
@@ -365,7 +366,9 @@ const F1Transport = (function () {
         const wait = lane.pauseUntil - Date.now();
         // Check and start in one callback: headers can arrive between any two
         // Promise reactions, including after a pacing reservation wakes.
-        if (wait > 0) return waitForRequest(wait, url).then(startAfterProviderGate);
+        // Browser timers overflow above the signed 32-bit delay range.
+        // Keep the server deadline, but revisit it in cancellable chunks.
+        if (wait > 0) return waitForRequest(Math.min(wait, RETRY_AFTER_MAX_MS), url).then(startAfterProviderGate);
         const work = fetchOnce(url, lane);
         const release = function () { lane.active.delete(owned); };
         const owned = work.then(release, release);

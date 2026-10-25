@@ -1325,3 +1325,46 @@ test("memory-only requests deduplicate by policy and detach after cancellation",
   assert.equal((await fresh)[0].rainfall, 3);
   assert.equal(h.calls.length, 2, "cancelled queued disk request never fetched; reopened request did");
 });
+
+
+test("a 30-day Retry-After date keeps its full pause using bounded cancellable timer chunks", async () => {
+  const pauseMs = 30 * 24 * 60 * 60 * 1000;
+  const h = overlapHarness(url => url === rawURL(1)
+    ? { status: 429, retryAfter: new Date(1_000_000 + pauseMs).toUTCString(), delay: 0 }
+    : { delay: 0 }, ms => assert.ok(Number.isFinite(ms) && ms >= 0 && ms <= 90000,
+      "every fired timer uses a safe bounded delay"));
+  const failed = rawRequest(h, 1).catch(e => e), pending = rawRequest(h, 2).catch(e => e);
+  await h.flush(); await h.advance(400);
+  assert.equal((await failed).retryAfterMs, pauseMs);
+  const safeTimers = () => {
+    for (const timer of h.timers.values()) {
+      assert.ok(timer.at - h.now > 0 && timer.at - h.now <= 90000,
+        "every remaining pause chunk is finite, positive and below the platform timer limit");
+    }
+  };
+  safeTimers();
+  await h.advance(90000); safeTimers();
+  assert.equal(h.calls.length, 1, "the long window never becomes an overflowed immediate timer");
+  h.api.cancelAll(); assert.equal((await pending).cancelled, true);
+  assert.equal(h.timers.size, 0);
+  const reopened = rawRequest(h, 3); await h.flush(); safeTimers();
+  // Virtual time exercises every bounded chunk through the original deadline.
+  await h.advance(pauseMs - (h.now - 1_000_000) - 1); safeTimers();
+  assert.equal(h.calls.length, 1, "cancel/reopen retains the valid long server window");
+  await h.advance(1); await reopened;
+  assert.equal(h.calls[1].at, 1_000_000 + pauseMs);
+  assert.equal(h.timers.size, 0);
+});
+
+test("a finite Retry-After seconds value that overflows milliseconds cannot install an infinite pause", async () => {
+  const h = overlapHarness(url => url === rawURL(1)
+    ? { status: 429, retryAfter: "1e308", delay: 0 } : { delay: 0 });
+  const failed = rawRequest(h, 1).catch(e => e), sibling = rawRequest(h, 2);
+  await h.flush(); await h.advance(400); await sibling;
+  assert.equal(h.calls.length, 2, "nonfinite converted milliseconds are ignored");
+  h.api.cancelAll(); assert.equal((await failed).cancelled, true);
+  assert.equal(h.timers.size, 0);
+  const reopened = rawRequest(h, 3); await h.flush(); await h.advance(400); await reopened;
+  assert.equal(h.calls.length, 3, "invalid header cannot leave a permanent provider pause");
+  assert.equal(h.timers.size, 0);
+});
