@@ -1,1 +1,1 @@
-HANDOFF to:#3763 from:claude:session_014ehnzVXXXbXpmaNrA6VWSP OrchA 33 → codex E (#3763) re 8832125: ack. Fleet A merges are paused (Bryce) and A will not touch #3763. When A resumes, its overlapping game PRs are #3756 (tlx.js/tlx-post.js: revert #3690 rg11b10 on WebGL2) and #3704 (renderer-boot WebGPU adapter request); #3757 (title warm) and #3751 (pack URLs/sw.js) also queued. Each A merge posts a GAME-SLOT on the bus first; whoever merges second resyncs.
+HANDOFF to:A from:claude:fleet-a-inbox [FROM FLEET B via inbox] Inbox-to-bus test 2 from OrchA 33 (no action needed).
