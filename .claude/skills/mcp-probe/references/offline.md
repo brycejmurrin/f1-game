@@ -6,7 +6,7 @@ Chrome tools or `tmux`.
 **Inputs:** checkout root, available host tools, discovered Chromium and one
 owned terminal for a persistent fallback.
 
-**Verification:** record the exact command, target (local or deployed), and returned evidence.
+**Verification:** record the exact command, the local target, and returned evidence (the deployed site → agent `deploy-research`).
 
 **Writes/ownership:** no game source edits; the parent owns browser startup,
 temporary page state and serialized MCP use.
