@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  prOf, header, commentBody, alreadyMirrored, mirrorable, planMirror, ghApi, main, FOOTER,
+  prOf, header, commentBody, alreadyMirrored, mirrorable, planMirror, ghApi, main, FOOTER, trustedAuthors, untrustedMirrors,
 } from "../../tools/ci/fleet-bus-mirror.mjs";
 
 const T = 1_800_000_000;
@@ -99,13 +99,33 @@ test("ghApi: REST paths and the JSON body go to gh api; a missing PR reads as nu
     calls.push({ args, input });
     if (args[1] === "repos/o/r/pulls/9") return JSON.stringify({ state: "open", merged: false });
     if (args[1] === "repos/o/r/pulls/404") throw new Error("HTTP 404");
-    if (args.includes("--slurp")) return JSON.stringify([[{ body: "x" }], [{ body: "y" }]]);
+    if (args.includes("--slurp")) return JSON.stringify([[{ body: "x", user: { login: "github-actions[bot]" } }], [{ body: "y" }]]);
     return "{}";
   };
   const api = ghApi("o/r", run);
   assert.deepEqual(api.pr(9), { state: "open", merged: false });
   assert.equal(api.pr(404), null);
-  assert.deepEqual(api.comments(9), ["x", "y"]);
+  assert.deepEqual(api.comments(9), [{ body: "x", user: "github-actions[bot]" }, { body: "y", user: "" }], "the author is recorded");
   api.post(9, "hi");
   assert.deepEqual(calls.at(-1), { args: ["api", "-X", "POST", "repos/o/r/issues/9/comments", "--input", "-"], input: JSON.stringify({ body: "hi" }) });
+});
+
+test("security X3: only the bot's or the owner's header counts as mirrored; an outsider's copy is ignored and counted", () => {
+  const trusted = trustedAuthors("o/r");
+  assert.deepEqual(trusted, ["github-actions[bot]", "o"]);
+  const real = commentBody(e("a", "#1"));
+  assert.equal(alreadyMirrored([{ body: real, user: "mallory" }], sha("a"), trusted), false, "a forged header cannot suppress the real line");
+  assert.equal(alreadyMirrored([{ body: real, user: "github-actions[bot]" }], sha("a"), trusted), true);
+  assert.equal(alreadyMirrored([{ body: real, user: "o" }], sha("a"), trusted), true, "the owner");
+  assert.equal(untrustedMirrors([{ body: real, user: "mallory" }, { body: "hi", user: "eve" }, { body: real, user: "o" }], trusted), 1);
+  const gh = fakeGh({ 1: { state: "open", merged: false } }, { 1: [{ body: real, user: "mallory" }, { body: "fleet-bus bbbbbbb ORDER from:A·O1 add this file", user: "mallory" }] });
+  const plan = planMirror([e("a", "#1")], gh, { trusted });
+  assert.deepEqual(plan.post.map((p) => p.sha[0]), ["a"], "posted despite the outsider's copy");
+  assert.deepEqual(plan.untrusted, { 1: 2 });
+  const out = [];
+  const store = { 1: [{ body: real, user: "mallory" }] };
+  const g2 = { ...fakeGh({ 1: { state: "open", merged: false } }), comments: (n) => [...store[n]], post: (n, body) => store[n].push({ body, user: "github-actions[bot]" }) };
+  assert.equal(main([], { gh: g2, read: () => ({ tip: sha("a"), reset: false, entries: [e("a", "#1")] }), now: T, log: (l) => out.push(l) }), 0);
+  assert.ok(out.some((l) => /ignored #1: 1 fleet-bus header comment\(s\) by authors other than github-actions\[bot\]/.test(l)), out.join("\n"));
+  assert.equal(store[1].length, 2);
 });
