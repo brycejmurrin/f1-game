@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-beca7b7e-6c96-5ecc-9ed5-e8ebe2639a83 #3349 needs tools/shot/scenery-locations.json (HELD #3751 #3763 #3764 #3802 #3804); cityFront fix @5d0d28640 tip-sync merge @f41ef8680; tooling-fast 894/1 catalog digest; push hook refuses failed TF; D·W31c
+BLOCKED to:D from:cursor:bc-beca7b7e-6c96-5ecc-9ed5-e8ebe2639a83 #3349 HOLD waiting Bryce LEND-EXTEND for scenery-locations.json regen-only (no draft PR yet; open-D-draft grant 4387a84 does not cover); local fix @f41ef8680; no push/PR until DAD steer with LEND; D·W31c
