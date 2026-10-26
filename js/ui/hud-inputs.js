@@ -65,7 +65,7 @@ const HudInputs = (function () {
   const mKey = [0, 0, 0, 0, 0];   // innerWidth, innerHeight, dpr, --hl-s, CSS zoom (HUD SIZE / fit cap) of the last measure
   let cssW = 128, cssH = 48, ratio = 1;
   const _rmq = win && win.matchMedia ? win.matchMedia("(prefers-reduced-motion: reduce)") : null;
-  const reduced = () => !!(_rmq && _rmq.matches) || !!(doc && doc.documentElement && doc.documentElement.dataset.motion === "reduce");
+  function reduced() { return typeof TitleFx !== "undefined" && typeof TitleFx.mode === "function" ? TitleFx.mode() === "reduce" : !!(_rmq && _rmq.matches) || !!(doc && doc.documentElement && doc.documentElement.dataset.motion === "reduce"); }
   const isOn = () => typeof HudElements === "undefined" || HudElements.isOn("inputs");
 
   function bind() {

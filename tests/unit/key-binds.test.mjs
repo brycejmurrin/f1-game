@@ -6,7 +6,39 @@
 // pressed by calling the listeners it registered.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { read, boot, fakePad, plain } from "../helpers/key-binds-rig.mjs";
+import vm from "node:vm";
+import { read, boot, bootUi, fakePad, plain } from "../helpers/key-binds-rig.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
+
+test("malformed imported binding slots cannot stop Controls initialization", () => {
+  for (const kind of ["keys", "pad"]) {
+    const disk = {};
+    const store = {
+      get: (k, fallback) => Object.hasOwn(disk, k) ? plain(disk[k]) : fallback,
+      set: (k, value) => { disk[k] = plain(value); return true; },
+    };
+    const sb = { GameStore: { store }, navigator: { userAgent: "test" } };
+    sb.window = sb;
+    const ctx = vm.createContext(sb);
+    vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+    const settings = vm.runInContext("SettingsExport", ctx);
+    const hostile = JSON.parse('{"toString":null,"valueOf":null}');
+    const saved = kind === "keys"
+      ? { throttle: [hostile, "KeyW"], camera: [[], null], brake: [true, "KeyS"] }
+      : { throttle: [hostile, "7"], camera: [[], null], brake: [true, 6] };
+    const imported = settings.applySettings({
+      format: "apex26-settings-v1", settings: { controls: { [kind]: saved } },
+    }, { gfx: { isMobile: false } });
+    assert.equal(imported.applied, 1, "exercise the same persisted input LOAD SETTINGS accepts");
+    assert.deepEqual(disk[kind], saved);
+    assert.doesNotThrow(() => bootUi(true, {}, disk), "the next Controls initialization stays usable");
+    const { Input } = boot();
+    const map = kind === "keys" ? Input.setKeyMap(disk.keys) : Input.setPadMap(disk.pad);
+    assert.deepEqual(plain(map.throttle), [null, kind === "keys" ? "KeyW" : 7]);
+    assert.deepEqual(plain(map.camera), [null, null]);
+    assert.deepEqual(plain(map.brake), [null, kind === "keys" ? "KeyS" : 6]);
+  }
+});
 
 test("inputState gate distinguishes title navigation, menus, typing and HUD focus without modifying held keys", () => {
   const { Input, sb, navOpen, anyOpen, key } = boot();

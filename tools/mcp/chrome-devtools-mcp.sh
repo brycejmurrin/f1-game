@@ -148,7 +148,9 @@ run_mcp() {
   [[ -n "${APEX_MCP_VERBOSE:-}" ]] && echo "No local clone ($0 clone && $0 build) — running npx $MCP_NPM_PACKAGE" >&2
     # `npm exec --package` resolves the exact audited release. We launch the
     # materialized copy directly so signals/exit status flow through this exec.
-    npx_bin="$(npm exec --yes --package="$MCP_NPM_PACKAGE" -- bash -c 'command -v chrome-devtools-mcp')"
+    # Skip freshness checks for a cached exact pin; cold caches may still fetch.
+    # https://docs.npmjs.com/cli/v11/using-npm/config#prefer-offline
+    npx_bin="$(npm exec --yes --prefer-offline --package="$MCP_NPM_PACKAGE" -- bash -c 'command -v chrome-devtools-mcp')"
     [[ -n "$npx_bin" ]] || { echo "Could not resolve pinned $MCP_NPM_PACKAGE" >&2; exit 1; }
     npx_bin="$(node -e 'process.stdout.write(require("fs").realpathSync(process.argv[1]))' "$npx_bin")"
     source_root="$(cd "$(dirname "$npx_bin")/../../.." && pwd)"

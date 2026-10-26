@@ -168,7 +168,7 @@ test('materializer still fails closed on an unaudited version', t => {
 test('Chrome wrapper routes local and pinned npm backends through the version gate', () => {
   const wrapper = fs.readFileSync(new URL('../../tools/mcp/chrome-devtools-mcp.sh', import.meta.url), 'utf8');
   assert.match(wrapper, /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.11\.0"/);
-  assert.match(wrapper, /npm exec --yes --package="\$MCP_NPM_PACKAGE"/);
+  assert.ok(wrapper.includes('npm exec --yes --prefer-offline --package="$MCP_NPM_PACKAGE"'));
   assert.match(wrapper, /runtime_bin="\$\(node "\$PATCHER"/);
   assert.match(wrapper, /exec node "\$runtime_bin"/);
   assert.doesNotMatch(wrapper, /exec npx -y "\$MCP_NPM_PACKAGE"/);
