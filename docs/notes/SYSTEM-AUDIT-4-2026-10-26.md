@@ -270,6 +270,12 @@ well-shaped DAD tags would pass a shape check), #17–#19, #21–#25, #28–#31,
     is never merged; `test:guards` grew 14 → 43 files. Carve plan: drop the always-on overlap and move the five sweeps
     (−786 s, −22 %: 20.6 → ~16.2 min local); add the 14 planned game-vm/sweeps files (−32 %); fix apex-tools-mcp and the
     hook tests (~−320 s more). Duplicate coverage is 2.9 % (negligible); no test is tautological by shape.
+21. **The CLI surface** (cli-help; 383 CLIs under tools/): 49 accept an unknown flag silently, 2 warn, 34 ignore it and run the
+    full job anyway; of the 159 rulebook-named tools 23 accept unknown flags (session-status, bump-cache, fit-audit, layout-audit,
+    menu-fit…) and 35 have no working `--help` (test-bg exits 2, fleet-brief, launch-lane, ratchets runs to the timeout); 267 parsed
+    flags are documented nowhere (apex-tools-mcp.mjs 42, garage-angles.mjs 26). Corrects pass 3 #31: `fleet-bus` and `agent-msg`
+    DO print usage on `--help` (exit 1, nothing sent). `deploy.mjs` parses with `argv.includes` and cannot refuse a typo.
+
 20. **The live site** (live-site L1–L7): integrity is perfect (863 URLs, every `?v=` and `integrity=` matches the bytes,
     CSP hashes, 304s, generated blocks consistent, no stale-shell path); push→live is 10–38 min (median ~24; a queued train
     doubles it) where AGENTS.md:171's ~20 is gate time only; a first visit downloads ~3.3 MB compressed (shell 412 KB raw,
