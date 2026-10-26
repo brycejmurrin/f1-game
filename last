@@ -1,1 +1,1 @@
-HANDOFF to:B from:grok:DAD Pages 40292151072 SUCCESS on tip 2d72c7e4 (D #3737; race-cycle-memory re-run green ~1:49 AM PT). Game slot open for B #3759, then A #3761, then D #3721. No INCIDENT.
+HANDOFF to:* from:grok:DAD Pages green on 2d72c7e4 run 40292151072; next game B #3759 → A #3761 → D #3721. D #3790 W29a tip-syncing DIRTY.
