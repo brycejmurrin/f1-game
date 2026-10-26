@@ -791,10 +791,9 @@ const WGX = (function () {
     const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
     let _shownAt = -1e9;
     try {
-      const onShown = function () { if (!document.hidden) _shownAt = _nowMs(); };
-      const onPageShow = function (e) { if (e && e.persisted) _shownAt = _nowMs(); };   // bfcache return only: the FIRST load fires pageshow too
-      document.addEventListener("visibilitychange", onShown);
-      window.addEventListener("pageshow", onPageShow);
+      let onShown = null, onPageShow = null;
+      document.addEventListener("visibilitychange", onShown = function () { if (!document.hidden) _shownAt = _nowMs(); });
+      window.addEventListener("pageshow", onPageShow = function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
       _pageListenersOff = function () { document.removeEventListener("visibilitychange", onShown); window.removeEventListener("pageshow", onPageShow); };
     } catch (_) { /* no document events (harness) */ }
     device.lost.then(function (info) {

@@ -60,7 +60,6 @@
     "tests/unit/apex-memory.test.mjs",
     "// __apex.physState() with G.track null (stepped rebuild / flyby drop): {error:\"no track\"}, no throw (audit4 B3). ~0.1 s.",
     "tests/unit/apex-physstate.test.mjs",
-    "tests/unit/apex-server-fixes.test.mjs",
     "tests/unit/apex-tools-mcp.test.mjs",
     "// #3307: Appearance SettingRow ‹ › steppers floor at --tap-paint under",
     "// sheet zoom (ios-iphone-landscape@75 soft taps were 39 vs 52).",

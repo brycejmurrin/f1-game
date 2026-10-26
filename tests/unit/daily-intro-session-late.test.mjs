@@ -12,7 +12,7 @@ const game = gameSource();
 const wrapper = game.slice(game.indexOf("function raceIntroFromSheet("), game.indexOf("function raceIntro(go) {"));
 const awaitWarm = game.slice(game.indexOf("async function awaitIntroWarm("), game.indexOf("// THE STUDIO DRIVE-OUT:"));
 
-function harness({ dailyOn, stub }) {
+function harness({ dailyOn, stub, cls = "standard" }) {
   const events = [];
   const btn = { textContent: "START TIME TRIAL", disabled: false }, back = { disabled: false }, sheet = { hidden: false };
   const ctx = {
@@ -22,7 +22,7 @@ function harness({ dailyOn, stub }) {
     RaceEntryProfile: { spanAsync: async (_n, fn) => fn(), beginUi() {}, setProgressSink() {}, afterPaint: async () => {} },
     UiExperience: { isPracticePick: () => false }, isTimeTrial: () => true,
     entrySettings: () => ctx.settings, loadingScreen: { stop() {} }, cancelIntro() { ctx._introRun++; ctx.sheetRelease(false); },
-    daily: { isActive: () => dailyOn }, SessionRecords: stub ? { _stub: true } : {},
+    daily: { isActive: () => dailyOn, current: () => (dailyOn ? { class: cls } : null) }, SessionRecords: stub ? { _stub: true } : {},
     // The bundle's ready hook: a STANDARD daily's prepareDaily moves the car/driver/difficulty.
     ensureRaceSession: async () => { events.push(["session"]); ctx.settings = "after"; return true; },
     raceIntro: () => events.push(["intro", ctx.settings]),
@@ -42,10 +42,10 @@ test("a DAILY on the session stub loads the bundle under the sheet, then starts 
   assert.deepStrictEqual(h.events, [["session"], ["intro", "after"]], "the intro runs on the post-prepareDaily request");
 });
 
-test("no DAILY, or the bundle already landed: the intro starts at once, as before", () => {
-  for (const [dailyOn, stub] of [[false, true], [true, false]]) {
-    const h = harness({ dailyOn, stub });
+test("no DAILY, the bundle already landed, or an OPEN-class daily: the intro starts at once, as before", () => {
+  for (const [dailyOn, stub, cls] of [[false, true], [true, false], [true, true, "open"]]) {
+    const h = harness({ dailyOn, stub, cls });
     h.ctx.raceIntroFromSheet(() => {}, h.sheet, h.btn);
-    assert.deepStrictEqual(h.events, [["intro", "before"]], JSON.stringify({ dailyOn, stub }));
+    assert.deepStrictEqual(h.events, [["intro", "before"]], JSON.stringify({ dailyOn, stub, cls }));
   }
 });
