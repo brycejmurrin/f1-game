@@ -58,6 +58,7 @@ export const TOOLS = [
     { breakpoints: arr(obj({ ...location, condition: { type: "string", maxLength: 4000 } }, ["url", "line"]), 10, "Breakpoints to set first (may be empty to wait on existing ones)"),
       trigger: str("Expression run (debugger_run semantics) after the breakpoints are set", 16000), awaitPromise: { type: "boolean" },
       timeoutMs: integer("Wait for the pause (default 10000)", 100, 30000), frames: integer("Frames whose locals are read (default 1)", 0, 3),
+      executionTimeoutMs: integer("Trigger response deadline including time spent paused (default 600000). Check the operation's terminal state after resume before detaching.", 1000, 600000),
       maxLocals: integer("Variables per frame (default 40)", 1, 100), resume: { type: "boolean", description: "Resume after reading and remove these breakpoints" },
       keep: { type: "boolean", description: "Keep the breakpoints (default: keep unless resume)" } }, ["breakpoints"]),
   def("debugger_collect", "WORKFLOW, one call on a running page/Node target: set logpoints, run a trigger, wait, read hit counts plus recorded values, then remove the logpoints (keep:true leaves them).",
