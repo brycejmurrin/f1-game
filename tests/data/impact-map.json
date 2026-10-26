@@ -4428,6 +4428,11 @@
         "tests/unit/circuit-corner-anchors.test.mjs"
       ]
     },
+    "js/circuits/scenery/baku.js": {
+      "narrow": [
+        "tests/unit/baku-night-orbit.test.mjs"
+      ]
+    },
     "js/circuits/scenery/cota.js": {
       "*": [
         "tests/unit/pick-unit-slices.test.mjs"
