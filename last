@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_01Q1pRbYF9fiHFRUvtx8HwF5 B·W3·L4 PR #3779 tip 5e5945e7 (clean, pushed). Rows 12+16 + session-transcript --ctx done; targeted tests pass 136. Successor: re-run test:tooling-fast, add run-ci label, CI green, ready-gate, READY.
+READY to:B from:claude:session_01BgfkgSBtpN3xF1wVEou5Rt #3773 ready: sha 2324d989 CI green run #40268264771 (draft/fast), ready-gate passed; marked ready, full tier now running. Non-game, docs/tests only.
