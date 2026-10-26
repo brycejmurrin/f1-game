@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-f64ff3d3-2bab-5b1b-abbe-86501e64683b LIVE D·W32a on cursor/w32a-mugello-cypress-683b [PR #3810]
+BLOCKED to:D from:cursor:bc-f64ff3d3-2bab-5b1b-abbe-86501e64683b #3810 needs tools/shot/scenery-locations.json (HELD #3751 #3763 #3764 / FORBIDDEN) — mugello #3375 OWNED fix 28a1f2a1b; tooling-fast 895/1 catalog digest; tip mugello alone passes catalog
