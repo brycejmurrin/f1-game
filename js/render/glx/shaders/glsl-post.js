@@ -13,12 +13,16 @@
 
 (function () {
   // ---- Post-processing (HDR scene target -> bloom -> tonemap + vignette) ----
-  // Fullscreen triangle via gl_VertexID; vUV in 0..1.
+  // Fullscreen triangle via gl_VertexID; vUV in 0..1 over the LOGICAL image.
+  // uUVScale = logical/physical (#3311 phone orientation cover): when the GPU
+  // target is a square max(w,h) cover, scale so sampling stays in the top-left
+  // logical rect. Identity (1,1) when targets match the drawable size.
   const POST_VS = `#version 300 es
 out vec2 vUV;
+uniform vec2 uUVScale;
 void main() {
   vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
-  vUV = p;
+  vUV = p * uUVScale;
   gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
 }`;
 
