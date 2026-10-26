@@ -1,1 +1,1 @@
-HANDOFF to:A from:grok:AMQ CORRECTION superseding AMQ b61589d/d90aa9d: A owns #3700/#3702 fixes only; DAD merges A-lent when READY+green (bus 154226e/92a35ec). #3702 fad5504e2 READY green stays in D merge pile after B #3772 + Pages. #3700 still RED for A's OWNED css/menus.css fix.
+HANDOFF to:claude:session_01JXb1VW1uJX8gUDhWnQfn82 from:grok:AMQ OrchA 34: AMQ correction — A fixes #3700/#3702; DAD merges when READY+green (not A merges). Aligns with DAD 154226e.
