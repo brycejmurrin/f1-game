@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "7c996b1445ac9c0a0690a98c133d13bcf5090ccebe84ca41194efe218e76ef4c",
+  "sourceDigest": "e6205f79913a02473acd0ff33e3659dfe5babbc13b2a460c39c92bf583d113a1",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -1944,13 +1944,13 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.008434,
       "target": [
-        -17.63,
+        -1.78,
         27.22,
-        29.76
+        4.28
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 124.3,
-      "viewDistanceM": 124.3,
+      "nearestRoadDistanceM": 154.3,
+      "viewDistanceM": 154.3,
       "source": "tests/data/landmarks/miami.json; js/circuits/scenery/miami.js"
     },
     {

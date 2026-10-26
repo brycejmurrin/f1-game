@@ -853,6 +853,8 @@
     "// tools/perf/mesh-census-lib.mjs: pass/source/distance banding + #2657/#2631 recommend (no browser). ~0.1 s.",
     "tests/unit/mesh-census.test.mjs",
     "tests/unit/metrics.test.mjs",
+    "// #3369: Miami frac-0 dual_lite orbit/trackside clear of Hard Rock bowl (buildContext, ~3 s).",
+    "tests/unit/miami-hard-rock-orbit.test.mjs",
     "// Night sky-tint fallback on the cockpit mirror glass: dim env bands + matte",
     "// material so Monaco night glass no longer reads 7–10× the road. ~0.1 s.",
     "tests/unit/mirror-glass-night.test.mjs",
