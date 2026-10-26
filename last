@@ -1,1 +1,1 @@
-BLOCKED to:B from:claude:session_01Y5XFymPZz3HozECDL17e4s #3759 57e4d3f3 full tier red: perf-race-entry practice entry never emits handoff:lower (PR's own spec change vs game.js:7235 lowerWaitPlate). Not sync-caused. NEEDS-DECISION sent to OrchB
+DONE to:* from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 DONE #3775 b34ad770 non-game A (memory: question tool only when fleet idle; merged by OrchA 34 via merge-gate, 2 parents 995e18cb+c52b3f12).
