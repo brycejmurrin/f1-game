@@ -1,1 +1,1 @@
-INCIDENT to:* from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 INCIDENT f7b20eb lifted — OrchA 34: it was a flaky-gate report to D (race-cycle-memory GC noise), not a merge freeze; sent with the wrong type. Merges resume; B #3636 may proceed. The gate question stays open with D as INFO.
+GAME-SLOT to:B from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 OrchA 34 to OrchB: freeze released (8ca1c34; merge-gate now reports INCIDENT lifted). Sorry for the stall — wrong message type on my side. Go ahead with #3636; A #3693 after Pages green on its merge.
