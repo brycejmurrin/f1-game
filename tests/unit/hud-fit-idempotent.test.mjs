@@ -471,6 +471,20 @@ test("fitHud: --hud-fit-stamp is written once in steady state, and again after a
   assert.notEqual(after, stamp, "the stamp changes after a clash clears");
 });
 
+test("syncPhoneFit (the specs' probe) forces a fresh --hud-fit-stamp on every call, even in steady state", () => {
+  const h = bootFlipHarness();
+  for (let i = 0; i < 20; i++) h.tick();
+  const read = () => h.root.style.getPropertyValue("--hud-fit-stamp");
+  const settled = read();
+  assert.match(settled, /^\d+$/);
+  assert.equal(h.sb.GameHud.syncPhoneFit(), true, "clash-free: the probe reports a clear, stamped fit");
+  const first = read();
+  assert.match(first, /^\d+$/);
+  assert.notEqual(first, settled, "a forced sync publishes a new stamp although nothing changed");
+  h.sb.GameHud.syncPhoneFit();
+  assert.notEqual(read(), first, "…and again on the next call: waiters need a fresh value each time");
+});
+
 test("fitHud: a steady tick skips the stamp probe, but a clash the key cannot see voids the stamp within the 3 s backstop (#2240)", () => {
   const h = bootFlipHarness();
   for (let i = 0; i < 40; i++) h.tick();

@@ -4627,6 +4627,7 @@ function update(dt) {
   RaceControl.beginLineStep(cars); pits.stepBegin();
   parked.length = 0;
   for (let i = 0; i < cars.length; i++) if (cars[i].retired && cars[i].parkedOnRoad) parked.push(cars[i]);
+  _windStep.st = null;   // updateCar's Wind.sync, once per step (#3109 row 9)
   PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
   pits.stepEnd();
   if (jumpStartPenalty.reactWindowOpen()) {
@@ -4811,6 +4812,9 @@ function collideFx(a, b, impact) {
 
 // updateCar's per-step scratch: the locals its parts (below it) read and hand back; rewritten before every read.
 const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0, pvA: 0, pvB: 0 }, ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl", "pvA", "pvB"]);
+// The step's Wind.sync() answer: every car of a step synced with the same (seed, weather, track, raceT), so the
+// first car to reach it pays and the rest share its object — the same one sync's own cache returned (#3109 row 9).
+const _windStep = { st: null };
 function updateCar(c, dt, ranked) {
   const S = _ucS;
   // This scratch snapshot never supplies controls to physics. Native Input is
@@ -4884,7 +4888,7 @@ function updateCar(c, dt, ranked) {
   // --- speed targets ---
   let vmax = VMAX * driveTune.PACE * (c.human ? mods.speed : c.tierV * c.skill * dd.ai);
   // WIND (js/race/wind.js) off the car's OWN heading (an AI's: tangent less its aiHead): head/tail wind moves top speed.
-  vmax *= Wind.carInto(Wind.sync(simSeed(), raceWeather, track.def && track.def.id, raceT), c.human ? (c.head || 0) : Math.atan2(smp.t[0], smp.t[2]) - (c.aiHead || 0), vStd(Math.abs(c.speed))).vmaxMul;
+  vmax *= Wind.carInto(_windStep.st || (_windStep.st = Wind.sync(simSeed(), raceWeather, track.def && track.def.id, raceT)), c.human ? (c.head || 0) : Math.atan2(smp.t[0], smp.t[2]) - (c.aiHead || 0), vStd(Math.abs(c.speed))).vmaxMul;
   if (!c.human && aq.safeV < Infinity) vmax = Math.min(vmax, aq.safeV * vT / VMAX);   // an AI driver lifts in standing water
   // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
   // restores the reverse-only rubber band via AiBand (start + lapping gates).

@@ -20,7 +20,8 @@ const src = (p) => read(p).replace(/^const\b/gm, "var");
 function boot(opts = {}) {
   const dom = makeDom();
   const rawCreate = dom.document.createElement;
-  let gbrCalls = 0, gcsCalls = 0;
+  let gbrCalls = 0, gcsCalls = 0, now = 1000;
+  const ros = [];
   const wrapRect = (el) => {
     if (!el || el._laneRectWrapped) return el;
     el._laneRectWrapped = true;
@@ -50,9 +51,17 @@ function boot(opts = {}) {
     GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
     TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
     setTimeout: () => 1, clearTimeout: () => {},
-    performance: { now: () => 1000 },
+    performance: { now: () => now },
     getComputedStyle: () => { gcsCalls++; return { getPropertyValue: () => "", transform: "none", columnGap: "0px", rowGap: "0px" }; },
   };
+  if (opts.ro) {
+    sb.ResizeObserver = class {
+      constructor(cb) { this.fn = cb; ros[ros.length] = this; }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+  }
   sb.window = sb;
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
   vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });
@@ -142,6 +151,11 @@ function boot(opts = {}) {
     $,
     misses: () => hud.laneRectMisses(),
     resetMisses: () => hud.resetLaneRectMisses(),
+    advance: (ms) => { now += ms; },
+    poke: (el, w, h) => {
+      const entry = { target: el, contentRect: { width: w, height: h }, borderBoxSize: [{ inlineSize: w, blockSize: h }] };
+      for (const ro of ros) ro.fn([entry]);
+    },
   };
 }
 
@@ -261,4 +275,25 @@ test("PERF #2151: phone ticks with a radio card up → no painted-collapse re-re
   for (const k in by) delete by[k];
   h.force();
   assert.ok(reads("announce:radioPaintedCollapse") >= 1, "forced update measures");
+});
+
+// A quiet ResizeObserver is the phone's settled signal. The same-key backoff
+// must not read layout on those ticks. A size change past the settle window
+// dirties the observer and the probe runs again.
+test("PERF: settled backoff skips fitHud layout reads; a dirty observer still probes", () => {
+  const h = boot({ phone: true, ro: true });
+  const boost = h.$("btn-boost");
+  boost._rect = { left: 1180, top: 400, right: 1240, bottom: 460, width: 60, height: 60 };
+  for (let i = 0; i < 4; i++) h.force();
+  h.nat();
+  h.poke(h.els.hudSectors, 220, 70);   // record a size while still inside the settle window
+  h.resetGbr();
+  for (let i = 0; i < 20; i++) h.nat();
+  assert.equal(h.gbrCalls(), 0, "settled backoff: 0 getBoundingClientRect over 20 ticks");
+  assert.equal(h.gcsCalls(), 0, "settled backoff: 0 getComputedStyle over 20 ticks");
+  h.advance(500);
+  h.poke(h.els.hudSectors, 260, 70);
+  h.resetGbr();
+  h.nat();
+  assert.ok(h.gbrCalls() > 0, "dirty observer: the backoff probe reads layout again");
 });

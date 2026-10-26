@@ -336,9 +336,7 @@ html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
   touch-action: pan-y; margin-bottom: calc(var(--tap) + var(--gap) * 0.5);
 }
-/* Compact-wide live Home: subgrid-place #menu-secondary under brand (no DOM move).
-   Keep #menu-buttons as the scroll box — ui-scale @200% scrolls RACE into it.
-   display:contents broke that box and let brand (z-index) steal hits on DATA HUB. */
+/* Compact-wide: subgrid secondary; #menu-buttons scrolls (not display:contents). */
 html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
   grid-template-rows: minmax(0, 1fr);
@@ -395,34 +393,24 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
   min-height: var(--tap-paint); height: auto; max-height: none;
 }
+@media (max-height: 460px) {
+  :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { --_3305: clamp(0, calc((var(--ui-compact-text, 1) - 1.001) * 999), 1); }
+  :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons :is(#menu-primary,#menu-explore,#menu-hero,#menu-retention,#menu-garage) .bigbtn {
+    min-height: max(var(--tap-min), var(--tap-paint), calc(40px + (2.75em - 40px) * var(--_3305))) !important;
+  }
+}
 html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
-/* Live Home on tall: drop #title-car from the grid before data-home-ready (deferred
-   experience.css used to wait). Classic/static keeps the three-band portrait cars. */
-@media (max-width: 699px) {
-  html[data-home-live] :where(body[data-shape="tall"]) #overlay {
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-  html[data-home-live] :where(body[data-shape="tall"]) #title-car { display: none; }
-  html[data-home-live] :where(body[data-shape="tall"]) #menu-buttons {
-    grid-row: 2;
-    align-self: stretch;
-    height: auto;
-    max-height: none;
-  }
+/* Tall live Home: two-band grid + menu row (all widths; was duplicated 699/700). */
+html[data-home-live] :where(body[data-shape="tall"]) #overlay {
+  grid-template-rows: auto minmax(0, 1fr);
 }
-@media (min-width: 700px) {
-  html[data-home-live] :where(body[data-shape="tall"]) #overlay {
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-  html[data-home-live] :where(body[data-shape="tall"]) #title-car { display: none; }
-  html[data-home-live] :where(body[data-shape="tall"]) #menu-buttons {
-    grid-row: 2;
-    align-self: stretch;
-    height: auto;
-    max-height: none;
-  }
+html[data-home-live] :where(body[data-shape="tall"]) #title-car { display: none; }
+html[data-home-live] :where(body[data-shape="tall"]) #menu-buttons {
+  grid-row: 2;
+  align-self: stretch;
+  height: auto;
+  max-height: none;
 }
-
 /* The height half of this condition now comes from data-density, measured in the
    units the content is actually laid out in (js/ui/sheet-shape.js). Orientation
    and width stay media queries: zoom does not distort either.
@@ -861,6 +849,7 @@ html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"]
     --vwz: calc(1vw / var(--ui-compact-scale));
     --vhz: calc(1vh / var(--ui-compact-scale));
     --svhz: calc(1svh / var(--ui-compact-scale));
+    --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--ui-compact-scale)));
   }
   /* Compact sheet zoom cap (#1346): --_sheet-z is the painted zoom; re-derive
      --tap-paint / vwz against it (shortHelpChips at 150%+). */

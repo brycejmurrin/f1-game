@@ -1,0 +1,1 @@
+Fixed: Red Bull Ring scenery-orbit cameras no longer clip inside the +1 climb and stadium stands at survey stations ~0.17 / 0.25 / 0.75 / 0.92 — those shells and bowl lamp posts sit past the orbit ring so the eye and sightline stay clear (#3364).

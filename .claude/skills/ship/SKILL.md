@@ -20,7 +20,7 @@ refused by branch protection.
 2. **Verify** with `check-changes`: `node tools/ci/pick-tests.mjs`, then
    `tooling-fast --changed --jobs=3` plus the picked group, or the docs-only fast path;
    `node tools/ci/deploy.mjs --gate-only` before a code push.
-3. **Push** once per green cycle; refresh the Plan and Status (`run-ci` label for draft CI).
+3. **Push** once per green cycle; refresh the Plan and Status (`run-ci` label, or a body line starting `CI: run`, for draft CI).
 4. **Gate**: draft → ready per `.claude/rules/fleet-core.md` (`ready-gate.mjs --pr <n>` exit 0).
 5. **Hand over**: tell your fleet's orchestrator the PR is READY —
    `node tools/ci/agent-msg.mjs send --to <fleet letter> --type READY "#<PR> <head sha> ready-gate 0"`

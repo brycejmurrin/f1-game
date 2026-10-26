@@ -196,6 +196,8 @@ const HudRelative = (function () {
     }
     return k;
   }
+  // ot-*/ax-* flip with overtake/aero state and never change a clearance box, so they stay out of the key.
+  const VOLATILE_CLS = /(^|\s)(ot|ax)-\S*/g;
   /** Everything fitRows reads that is not layout itself: occupied rows, viewport,
    *  HUD scale, the body's mode classes and each clearance control's hidden/class. */
   function fitKey() {
@@ -210,7 +212,7 @@ const HudRelative = (function () {
     k += "|" + (doc.body ? doc.body.className : "");
     if (doc.getElementById) for (let i = 0; i < CLEAR_IDS.length; i++) {
       const c = doc.getElementById(CLEAR_IDS[i]);
-      k += "|" + (c ? (c.hidden ? "h" : "v") + c.className : "-");
+      k += "|" + (c ? (c.hidden ? "h" : "v") + String(c.className || "").replace(VOLATILE_CLS, "") : "-");
     }
     return k;
   }

@@ -265,6 +265,7 @@ const WINDOW_WRITES = {
   __apexErrors: "js/agent/apex.js",                 // index.html's error ring → __apex health
   __apexROLoops: "js/agent/apex.js",                // index.html's ResizeObserver loop counter → health roLoops
   __apexReportError: "js/game.js",                  // the shell's visible error card
+  __apexScriptRepair: "tests/unit/boot-script-repair-overlay.test.mjs", // shell scriptRetry: overlay suppressed until reload
   __apexXr: "tests/unit/xr-phase0.test.mjs",        // xr-boot's phase-0 seam
 };
 

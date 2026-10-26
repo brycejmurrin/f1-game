@@ -1008,6 +1008,7 @@ const LAZY_AGENT = [
   "js/agent/apex-track.js",
   "js/agent/apex-lobby.js",
   "js/agent/apex-gpu-capture.js",
+  "js/agent/apex-lifecycle.js",
   "js/agent/apex.js",
 ];
 const LAZY_EDGES = [

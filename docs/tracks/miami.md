@@ -1,6 +1,6 @@
 # Miami International Autodrome — Visual Design Brief
 
-**Setting:** DAY race · theme `modern` · ~5.41 km, 19 corners, clockwise.
+**Setting:** DAY race · theme `modern` · ~5.41 km, 19 corners, anti-clockwise.
 
 ## 1. Setting
 A purpose-built temporary circuit wrapping the Hard Rock Stadium (home of the Miami Dolphins) on a closed campus in Miami Gardens, Florida. The lap threads stadium parking lots, perimeter roads, and engineered sections, with the great stadium bowl as a constant visual anchor on the north side by the pit/paddock complex. Pure South Florida spectacle: yachts, palms, and bright pastels under a hazy tropical sky — not downtown South Beach Art Deco on-site.

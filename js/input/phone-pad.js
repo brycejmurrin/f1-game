@@ -954,7 +954,10 @@ const PhonePad = (function () {
       pointerReleases.push(up);   // an outside lift must work even when capture was refused
       base.addEventListener("pointerup", up);
       base.addEventListener("pointercancel", up);
-      base.addEventListener("lostpointercapture", up);
+      // WebKit can move its single capture slot to a second held control.
+      // Keep navigating while this stick is still visible; document/window
+      // pointerup and pointercancel catch the actual lift even without capture.
+      base.addEventListener("lostpointercapture", (e) => { if (!base.isConnected || !base.getClientRects().length) up(e); });
       base.addEventListener("contextmenu", (e) => e.preventDefault());
     }
     menuStick(dom.stick, dom.nub, dom.arrows);

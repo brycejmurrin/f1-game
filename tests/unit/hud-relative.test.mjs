@@ -474,3 +474,23 @@ test("refit: the phone stamp sync's per-tick call skips a settled REL, refits wh
   doc.body.className = "hud-touch"; R.refit();
   assert.ok(reads > before, "a changed layout input refits");
 });
+
+test("fit key ignores ot-*/ax-* class churn on clearance controls (perf H7 row 11)", () => {
+  const mk = () => ({ hidden: false, className: "", style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" }, children: [],
+    setAttribute() {}, removeAttribute() {}, appendChild(c) { this.children.push(c); return c; }, textContent: "" });
+  const ot = mk(); ot.className = "ot-off";
+  const els = { "hud-ot": ot, "hud-rel": mk() };
+  let fits = 0;
+  els["hud-rel"].getBoundingClientRect = () => ({ left: 0, right: 1, top: 0, bottom: 1, width: 1, height: 1 });
+  ot.getBoundingClientRect = () => { fits++; return { left: 500, right: 600, top: 0, bottom: 1, width: 100, height: 1 }; };
+  const doc = { body: { className: "", classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  const R = load({ document: doc, HudElements: { isOn: () => true } });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  const G = { cars: [p, car("A1", 1100, 3, { rank: 1 })], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } };
+  R.tick(G, p);
+  const base = fits;
+  ot.className = "ot-armed"; R.tick(G, p); ot.className = "ot-active ax-open"; R.tick(G, p);
+  assert.equal(fits, base, "an overtake/aero class flip does not rerun the fit");
+  ot.className = "hidden-by-layout"; R.tick(G, p);
+  assert.ok(fits > base, "a class that can move the box still does");
+});

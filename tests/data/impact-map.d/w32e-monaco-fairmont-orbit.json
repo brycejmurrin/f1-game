@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/circuits/scenery/monaco.js": {
+      "narrow": [
+        "tests/unit/monaco-fairmont-orbit.test.mjs"
+      ]
+    }
+  }
+}

@@ -128,7 +128,7 @@ const WatchTransport = (function () {
       // and painted the button in the pressed red while paused.
       setText(refs.play, s.paused ? "▶︎" : "❚❚");
       setAttr(refs.play, "aria-label", s.paused ? "Play replay" : "Pause replay");
-      if (!scrubbing) setVal(refs.seek, String(s.T));   // the clock text stays clamped at 0:00 before lights-out
+      if (!scrubbing) setVal(refs.seek, String(Math.round(s.T * 10) / 10));   // the input's step is 0.1: an unrounded T never equals the value it reads back   // the clock text stays clamped at 0:00 before lights-out
       // The timeline's spoken value follows the clock only while a reader is not
       // sitting on it during playback: a focused range whose valuetext changes
       // every second is read every second. Paused, scrubbing or elsewhere: live.

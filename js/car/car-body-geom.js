@@ -1836,7 +1836,9 @@ const CarBodyGeom = (function () {
     ];
     const sculpt = style.podSculpt;
     const coverKnots = [-0.55, -0.66, -0.90, -1.13, -1.28, -1.47, -1.70, -1.90, -2.00];
-    const coverStops = !(sculpt && sculpt.complete) ? null : sculpt.sparse ? coverKnots.filter((_, i) => i % 2 === 0)   // sparse: the shared default's triangle budget
+    // #3417: authored complete pods default to CONCEPT_SCULPT sparse station density (opt out with sparse:false).
+    const sparseSculpt = !!(sculpt && sculpt.sparse !== false);
+    const coverStops = !(sculpt && sculpt.complete) ? null : sparseSculpt ? coverKnots.filter((_, i) => i % 2 === 0)   // sparse: the shared default's triangle budget
       : coverKnots.flatMap((z, i) => i < coverKnots.length - 1 ? [z, (z + coverKnots[i + 1]) / 2] : [z]);
     if (coverStops) {
       const ends = coverStations;
@@ -1862,7 +1864,7 @@ const CarBodyGeom = (function () {
       return sampleStations(podStations, z);
     };
     // Thirds depart from the linear chord; a smoothstep midpoint does not.
-    const podStops = sculpt && round && !style.sculptSparse ? podStations.flatMap((p, i) => i === 0 || i >= podStations.length - 2 ? [p]
+    const podStops = sculpt && round && !style.sculptSparse && !sparseSculpt ? podStations.flatMap((p, i) => i === 0 || i >= podStations.length - 2 ? [p]
       : [p, ...[1 / 3, 2 / 3].map(t => podSample(p.z + (podStations[i + 1].z - p.z) * t))]) : podStations;
     const noseStations = styledNoseStations(style).map((station) => ({
       z: station.z, side: station.w * 0.5, topSide: station.w * station.t * 0.5,
@@ -1969,7 +1971,7 @@ const CarBodyGeom = (function () {
       [side * (p.outer - span * (0.14 + waist)), p.outerBottom + height * 0.22, p.z],
       [side * p.outer, p.outerBottom + height * 0.65, p.z],
       [side * (p.outer - span * 0.06), p.outerTop, p.z],
-      ...(sculpt?.sparse ? [roof(0.5)] : [roof(0.75), roof(0.5), roof(0.25)]), roof(0)];
+      ...(sculpt && sculpt.sparse !== false ? [roof(0.5)] : [roof(0.75), roof(0.5), roof(0.25)]), roof(0)];
     return side < 0 ? q.reverse() : q;
   }
 
