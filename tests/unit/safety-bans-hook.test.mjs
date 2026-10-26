@@ -27,7 +27,14 @@ const BASH_GUARD = path.join(ROOT, ".claude/hooks/bash-guard.sh");
 const PROTECT = path.join(ROOT, ".claude/hooks/protect-files.sh");
 const SHELL_GUARD = path.join(ROOT, ".cursor/hooks/shell-guard.sh");
 const EDIT_GUARD = path.join(ROOT, ".cursor/hooks/edit-guard.sh");
-const ENV = { ...process.env, APEX_LIVE_RUN_CHECK: "/nonexistent", APEX_RATCHET_RAISE_OK: "", APEX_FOREIGN_PUSH_OK: "",
+// A live Playwright run in this checkout must not flip these tests: protect-files.py refuses js/css/index.html edits
+// while one is live, by scanning /proc. A sitecustomize.py on PYTHONPATH hides /proc from the hook's python, so the
+// tests measure the safety bans only (audit Q10, finding 16). Written once, under artifacts/ (regenerable).
+const STUB_DIR = path.join(ROOT, "artifacts", "safety-bans-stub");
+fs.mkdirSync(STUB_DIR, { recursive: true });
+fs.writeFileSync(path.join(STUB_DIR, "sitecustomize.py"),
+  "import os\n_ls = os.listdir\nos.listdir = lambda p='.': [] if str(p) == '/proc' else _ls(p)\n");
+const ENV = { ...process.env, PYTHONPATH: [STUB_DIR, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter), APEX_LIVE_RUN_CHECK: "/nonexistent", APEX_RATCHET_RAISE_OK: "", APEX_FOREIGN_PUSH_OK: "",
   APEX_SKIP_GUARDS: "", CLAUDECODE: "", APEX_CLOSED_PR_PUSH_OK: "", APEX_HELD_CHECK: "0",
   APEX_PR_STATE_CMD: `node -e "console.log('[]')"` };
 
@@ -408,4 +415,9 @@ test("a push to a cursor/* branch whose every PR is merged or closed is refused;
     assert.equal(claudeBash("git push origin cursor/t-9", dir, { APEX_PR_STATE_CMD: "false" }).status, 0, "an API error fails open");
     assert.equal(claudeBash("git push origin HEAD:claude/fleet-bus", dir, merged).status, 0, "only cursor/* branches");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("Q10: the live-run stub hides /proc from the hook's python, so a live browser run cannot flip these tests", () => {
+  const r = spawnSync("python3", ["-c", "import os; print(len(os.listdir('/proc')), len(os.listdir('.')) > 0)"], { cwd: ROOT, encoding: "utf8", env: ENV });
+  assert.equal(r.stdout.trim(), "0 True");
 });

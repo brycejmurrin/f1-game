@@ -1,5 +1,7 @@
 # Base-context audit — 2026-10-19
 
+Superseded by: [Base context of a fresh Claude cloud session — 2026-10-26](BASE-CONTEXT-2026-10-26.md) — the ~50–60k figure below is stale; read that note for the current base.
+
 Goal (Bryce, 2026-10-19: "Yes, audit and trim"): fresh sessions read ~50–60k tokens per call before work starts.
 Guidance: [costs](https://code.claude.com/docs/en/costs), [memory](https://code.claude.com/docs/en/memory)
 (keep CLAUDE.md under ~200 lines; move rarely-needed detail to skills / path-scoped rules).

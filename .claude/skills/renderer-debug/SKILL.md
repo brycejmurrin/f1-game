@@ -15,7 +15,7 @@ backend is not evidence that it runs (`docs/ARCHITECTURE.md` §Boot evidence).
 
 | Layer | Path | Notes |
 |---|---|---|
-| Backend factory | `js/render/gfx.js` | `Gfx.create(canvas, opts)` tries TLX → WGX → GLX; stores `gfx` on `G` |
+| Backend factory | `js/render/gfx.js` | `Gfx.create(canvas, opts)` returns the resolved pick (TLX or WGX) or `null` on absence or any failure; game.js then falls back to GLX and stores `gfx` on `G` |
 | TLX (default) | `js/render/three/tlx.js`, `tsl-*.js`, `tlx-post.js` | `TLX.create`; pin with `apex26.gfxBackend` / `apex26.tlxForceGL` |
 | GLX fallback | `js/render/glx/glx.js`, `glsl-*.js` | WebGL2 path; `GLX.create` |
 | WGX opt-in | `js/render/webgpu/wgx.js`, `wgsl-chunks.js` | `WGX.create`; failures land in `apex26.gfxWgxFail` |
@@ -107,4 +107,4 @@ textured-vs-procedural material look on WGX is **asset-pack**.
 `js/xr/` (ENTER VR, `XrBoot` / `XrSession`, the WebGL2-default VR path, Quest
 controllers, `test:xr` under IWER): [references/xr.md](references/xr.md).
 
-Chrome DevTools heap/LCP playbook: [references/chrome-devtools-perf.md](references/chrome-devtools-perf.md). Census workflow: skill **perf-memory-census**.
+Chrome DevTools heap/LCP playbook: [references/chrome-devtools-perf.md](references/chrome-devtools-perf.md). Census tools: skill **mcp-probe** §Census tools.

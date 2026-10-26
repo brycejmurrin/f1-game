@@ -151,6 +151,7 @@ const Input = (function () {
   let tiltZero = 0;           // calibrated neutral
   let tiltSeen = false, tiltRemote = false; // seen data and ownership of the shared tilt sample
   let gyroAttached = false;
+  let gyroRequestGeneration = 0;
   let gyroDenied = false;
   // HARD refusal only: the sensor API is absent, or requestPermission()
   // RESOLVED to something other than "granted" (the player said no in the
@@ -173,6 +174,7 @@ const Input = (function () {
   let steerMode = "buttons";
   let tiltSmoothed = 0;       // One-Euro-filtered tilt angle (deg)
   let lastOrientMs = 0;
+  const LOCAL_TILT_STALE_MS = 1000; // live sensors normally deliver many samples per second
   let OE_MIN_CUTOFF = 1.2;    // Hz — THE smoothing knob (set by the SMOOTHING slider)
   let OE_BETA = 0.10;
   const OE_DCUTOFF = 1.0;     // Hz, cutoff for the derivative estimate
@@ -256,6 +258,7 @@ const Input = (function () {
     // A non-finite roll (Infinity angles from a broken sensor) would seed the One-Euro
     // state with NaN and every later reading would stay NaN: drop it like a no-sensor event.
     if (roll === null || !Number.isFinite(roll) || remoteSteers()) return; // a live phone owns the shared tilt pipeline
+    localTiltFresh(); // a stalled stream restarts its filter on this reading
     tiltRaw = roll;
     const n = nowMs();
     const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
@@ -283,6 +286,7 @@ const Input = (function () {
   // Must be called from a user gesture (iOS permission prompt).
   // Resolves true if tilt data can be expected.
   function requestGyro() {
+    const generation = ++gyroRequestGeneration;
     if (typeof DeviceOrientationEvent === "undefined") {
       gyroDenied = gyroHardDenied = true;   // no sensor API at all: as final as a "denied"
       return Promise.resolve(false);
@@ -291,6 +295,7 @@ const Input = (function () {
       try {
         return DeviceOrientationEvent.requestPermission()
           .then(res => {
+            if (generation !== gyroRequestGeneration) return false;
             if (res === "granted") {
               // A grant clears an earlier refusal. The flag latched true on ANY
               // rejection — including the transient kind (a request outside a
@@ -305,6 +310,7 @@ const Input = (function () {
             return false;
           })
           .catch(() => {
+            if (generation !== gyroRequestGeneration) return false;
             gyroDenied = true;   // rejected: no user activation, ask again from a real tap
             return false;
           });
@@ -326,7 +332,7 @@ const Input = (function () {
      (A phone controller's roll and a detached sensor keep the immediate zero.) */
   let calibPending = false;
   function calibrate() {
-    if (gyroAttached && !tiltSeen && !remoteSteers()) { calibPending = true; return; }
+    if (gyroAttached && !localTiltFresh() && !remoteSteers()) { calibPending = true; return; }
     calibPending = false;
     tiltZero = tiltRaw;
     oePrev = tiltRaw; oeDPrev = 0; oeInit = true;
@@ -336,7 +342,14 @@ const Input = (function () {
   }
 
   function tiltActive() {
-    return steerMode === "tilt" && tiltSeen && (!tiltRemote || remoteSteers());
+    return steerMode === "tilt" && localTiltFresh() && (!tiltRemote || remoteSteers());
+  }
+  function localTiltFresh() {
+    if (tiltSeen && !tiltRemote && nowMs() - lastOrientMs >= LOCAL_TILT_STALE_MS) {
+      tiltSeen = false;
+      tiltFilterClear();
+    }
+    return tiltSeen;
   }
 
   function remoteActive() {
@@ -456,6 +469,7 @@ const Input = (function () {
   function simTilt(rawDeg, dt) {
     const step = dt > 0 ? dt : 0.016;
     tiltSeen = true; tiltRemote = false;
+    lastOrientMs = nowMs();
     tiltRaw = rawDeg;
     tiltSmoothed = oneEuro(rawDeg, step);
     // Same map and same slew the live path uses — deliberately WITHOUT
@@ -1999,7 +2013,7 @@ const Input = (function () {
       touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
       dragFilterClear();
     }
-    if (steerMode !== "tilt") detachGyro();
+    if (steerMode !== "tilt") { ++gyroRequestGeneration; detachGyro(); }
   }
 
   // TOUCH SENSITIVITY: the drag mode's touchRangeFrac (read by touchRangePx()),
@@ -2370,6 +2384,7 @@ const Input = (function () {
     keySteerT = 0;
     tiltSteerVal = 0;
     tiltSteerT = 0;
+    tiltSeen = false; lastOrientMs = 0; // interruption releases local sensor ownership; keep tiltZero
     oeInit = false; oePrev = 0; oeDPrev = 0;
     overtakePressed = false;
     boostTogglePressed = false;
@@ -2500,6 +2515,7 @@ const Input = (function () {
     poll,
     rumble,
     requestGyro,
+    gyroRequestId: () => gyroRequestGeneration,
     calibrate,
     steer,
     throttle,
@@ -2570,7 +2586,7 @@ const Input = (function () {
     onPointerKindChange,
     clearEdges, clearDriveEdges,
     get padConnected() { return padConnected; },
-    get gyroSeen() { return tiltSeen; },
+    get gyroSeen() { return localTiltFresh(); },
     get gyroDenied() { return gyroDenied; },
     get gyroHardDenied() { return gyroHardDenied; },
     // True once init() has finished wiring listeners. Specs wait on ready() —

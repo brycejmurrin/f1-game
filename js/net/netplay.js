@@ -435,11 +435,14 @@ const NetPlay = (function () {
       return lap > 1 && (role !== "host" || lap > G.lapsTarget ||
         G.cars.some((c) => c.finished && !c.retired));
     }
+    // The hidden pump advances netNow while rAF/physics is stopped. Validation
+    // and fallback finishes use the shared green clock, not the last sim step.
+    function raceTime() { return Number.isFinite(G.netRaceT) ? G.netRaceT : G.raceT; }
     function poseRemote(c, st) {
       // clampWire (module scope) — the same clamp the predicted sample gets.
       st = clampWire(st, (G.track && G.track.total) || 0, G.lapsTarget, _clamped);
       // HOST: a guest's lap is EARNED, not declared (gateLap, module scope).
-      if (role === "host") st.lap = gateLap(c, st, (G.track && G.track.total) || 0, G.raceT);
+      if (role === "host") st.lap = gateLap(c, st, (G.track && G.track.total) || 0, raceTime());
       c.s = st.s;
       c.x = st.x;
       c.xVis = st.x;
@@ -477,7 +480,7 @@ const NetPlay = (function () {
       // target otherwise.
       // A short finish may arrive before the winner's delayed pose. Hold it
       // briefly, but never let an early claim survive until a later real flag.
-      if (c._nFinLap <= G.lapsTarget && Number.isFinite(c._nFin) && Math.abs(c._nFin - G.raceT) > FIN_SLACK_S) {
+      if (c._nFinLap <= G.lapsTarget && Number.isFinite(c._nFin) && Math.abs(c._nFin - raceTime()) > FIN_SLACK_S) {
         c._nFin = null; c._nFinLap = null;
       }
       const finLap = Number.isFinite(c._nFin) && c._nFinLap != null ? c._nFinLap : G.lapsTarget + 1;
@@ -485,7 +488,7 @@ const NetPlay = (function () {
         // A `fin` that arrived before this pose crossed (LAP handler) is used now.
         const pf = c._nFin;
         c.finished = true;
-        c.finishT = Number.isFinite(pf) && Math.abs(pf - G.raceT) <= FIN_SLACK_S ? pf : G.raceT;
+        c.finishT = Number.isFinite(pf) && Math.abs(pf - raceTime()) <= FIN_SLACK_S ? pf : raceTime();
         c._nFin = null; c._nFinLap = null;
         // A held short finish was not relayed before the authoritative flag.
         if (role === "host" && finLap <= G.lapsTarget && Number.isFinite(pf)) {
@@ -740,7 +743,7 @@ const NetPlay = (function () {
             const lt = Number(d.time), best = Number(d.best);
             const ltOk = !d.invalid && lapTimeOk(lt, total), bestOk = lapTimeOk(best, total);
             const finLap = finishLap(d.lap);
-            const finOk = finLap > 1 && Number.isFinite(fin) && fin > 0 && Math.abs(fin - (G.raceT || 0)) <= FIN_SLACK_S;
+            const finOk = finLap > 1 && Number.isFinite(fin) && fin > 0 && Math.abs(fin - (raceTime() || 0)) <= FIN_SLACK_S;
             if (fr && ltOk) fr.car.lastLap = lt;
             if (fr && bestOk && !(fr.car.best <= best)) fr.car.best = best;
             if (fr && finOk && !fr.car.retired) {

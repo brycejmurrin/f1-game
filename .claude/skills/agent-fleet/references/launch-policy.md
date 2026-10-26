@@ -4,118 +4,97 @@
 
 ## Launch policy (moved from AGENTS.md §Concurrent PRs)
 
-Binding on every orchestrator, desk or person writing a cloud launch prompt.
+Binding on every orchestrator or person writing a cloud launch prompt. The template
+and its hard lines are `orchestrator.md` §Launch template / §Hard lines (their one
+home); this file holds the policy numbers.
 
-- Cloud launch prompts must include `OWNED:` / `FORBIDDEN:` path globs, done-when, shot/test caps, and the exact line `Do not enable auto-merge or merge.` (it limits that worker's own actions; it is not a veto and never goes into a PR body — a hold is `MERGE-HOLD:`),
-  mark ready only after `ready-gate.mjs` exits 0; stand down on overlap. The template in `references/orchestrator.md` carries every field.
-- **Hard lines** (full list and why: `orchestrator.md` §Hard lines): `permission_mode: "auto"`; `source_revision` = the deploy branch or a NAMED integration branch; model stated; who opens the PR and its base; the full deliverable checklist in the first brief. **Quota gate:** read `rate_limit_info` from `get_session` before each `create_session` and each Agent wave > 5, stop at `allowed_warning`, stagger launches ≥ 30 s and confirm each (#2380).
-- **Model by task** (Bryce 2026-10-19, "decide which workers should be opus or [sonnet] based on the issue. Make this standard."). Every
-  `create_session` and fresh-session scheduled task passes an explicit model, and the brief carries `MODEL: <id> — <reason>`:
-  - `claude-opus-5-5`: a design or look call, a rework of a rejected approach, a red with no known cause, or a change in physics,
-    a renderer backend or `js/game.js`.
-  - `claude-sonnet-5-5`: everything else: port a known fix, sync, one screen's CSS, tests, docs, PR babysitting, surveys.
-  - A Sonnet worker that finds the task is Opus-shaped sets `needs-decision` rather than grinding; never Fable for a worker.
-    An Opus lane keeps the Sonnet cost cap (below). Never invent another id. Own notes go to `docs/notes/<topic>.md`.
-- **Session titles and tags** (FLEET-ROLES-2026-10-19.md §4-5; Bryce 2026-10-19 ~18:00Z, "Land it as proposed"). Every
-  `create_session` sets `title` and `tags`; the same ids go in the fleet block (`fleet:`, `slot:`), claims (`[<Fleet>·<Slot>]`
-  prefix, real `--session` id) and bus lines (text starts `<Fleet>·<Slot>`).
-  - Title: `[<Role>] <Fleet>·<Slot> · <scope> · <Model> — <task, ≤ 60 chars>`. Role ∈ Orchestrator | Seed | Watch | Worker | Hunter | Owner |
-    Sync | Review | Coordinator | Merge Desk. Fleet = one capital letter per orchestrator fleet (survives rotation). Slot: Orchestrator
-    `O<gen>`, Seed `S0`, Watch `FW<n>`, Worker `W<wave>·L<lane>`, Hunter `H<n>·<lane>`, Owner/Sync `#<PR>`, Review `R<n>·#<PR>`, Coordinator `<host>`.
-    Scope ∈ game | tests | tools | docs | track | ui | ci | fleet (game = js/, css/, assets/, index.html, sw.js: paced). Model = Opus | Sonnet.
-  - Tags: `fleet:<a|b>`, `role:<orchestrator|watch|worker|hunter|owner|sync|review|merge-desk>`, `orchestrator:<session id>`,
-    `wave:<n>`, `lane:<Lnn|sync|…>`, `scope:<…>`, `pr:<n>` (owner, sync, review), `variant:<medic|survey|synth>`; plus the flag `f1-game-fleet`.
-  - Examples: `[Orchestrator] B·O1 · fleet · Opus — backlog waves, own-fleet gated merges` · `[Watch] B·FW1 · fleet · Sonnet — PR/CI/session watch`
-    · `[Worker] B·W1·L3 · tests · Sonnet — L25 agent-config budgets` · `[Hunter] B·H2·physics · game · Opus — live-debugger round 1`
-    · `[Owner] A·#3020 · game · Sonnet — drive #3020 to merged` · `[Sync] A·#2920 · game · Sonnet — conflict-only resync`
-    · `[Review] B·R1·#3053 · tests · Sonnet — test-review pass` · `[Coordinator] C·cursor · fleet · — Cursor agents (title in PR comments/bus)`
-    · `[Merge Desk] A·MD · fleet · Sonnet — sweep (only when designated)`. Variants: medic (ship-red fix, claim + INCIDENT link), survey, synth.
-- Lane mutex: garage CSS → UI Survey; `js/car/*` → Cars; scenery (`js/circuits/scenery/*`) → Tracks; `js/game.js` needs `who-is-on-it --claim` before an edit. Lighting: ≤ 1 concurrent lighting agent, OWNED=`js/lighting/**` only, no scenery PRs from that lane.
-- Review farm: ≤ 2 concurrent review agents unless the user overrides. ≤ 2 parallel nested subagents inside one cloud agent; more → separate agents with disjoint OWNED.
-- Resolve swarm: only red/dirty PRs with no specialist owner (capped); one `--claim` per PR; stand down if a specialist already owns the paths.
-- Refuse a launch whose sole goal is "read/understand the project" or "investigate all", and a bare "continue working" without a new delta or a narrower scope.
-- **Survey lane (read-only first):** track/UI survey launches are findings-only for
-  the first pass — measurements, captures, and a written report. No PR unless a
-  single fix is **under 20 lines** in the surveyor's OWNED pair (circuit def +
-  scenery for tracks; one screen/CSS slice for UI survey). Larger fixes become one
-  tracking issue (or an entry in `docs/tracks/surveys/<id>.md` / the circuit survey
-  gallery), not an open-ended survey branch. Prefer each lane skill's **Where things
-  live** map over repo-wide `grep` churn.
-- **Follow-up cap:** each worker gets at most **two** orchestrator follow-up rounds
-  after the first hand-back (three attempts total). Round 3 needs a new launch
-  prompt with new evidence or a narrower OWNED — never "keep going" on the same scope.
-- **Closeout (every worker, including surveys):** fold findings into **one** tracking
-  issue or the survey gallery doc; list redundant draft PRs the work superseded
-  (closing them is for a human or Merge Desk — do not close or merge from the worker);
-  `--release` the claim; set fleet `state: done`; archive the agent. No fourth
-  "polish" round without a new claim.
-- Feature / Survey / Chromium-play budgets: abort at > ~400 messages or > ~90 min with no OWNED push; ≤ 25 apex-eval/shot/Playwright captures unless the user raises the cap (sample the matrix over menus/teams/tracks). 
-  Never fork or relaunch an errored or > 400-message agent on the same prompt: a new launch needs new evidence or a narrower OWNED.
-- **Pre-launch claim (mandatory):** before spawning any worker, the orchestrator runs
-  `node tools/ci/who-is-on-it.mjs` and refuses the launch when the same task text,
-  path overlap, or an active `--claim` already covers the OWNED globs. The worker's
-  first loop step is its own `--claim "<task>" --session <id>` (or the host claim
-  tool); two agents must not take the same job.
-- Twin guard: `who-is-on-it.mjs` plus a title/PR scan; stand down when the same title, the same PR feature or an overlapping OWNED is already running.
-- Pin long Chromium/visual smoke to `apex-sha` or the PR's Pages preview; never bind a loop to the moving production github.io (tip-vs-Pages is Monitor-only).
-- Sync agents: sync with `sync-pr.mjs` only when GitHub reports CONFLICTING/DIRTY or a required tip check is red; a Finish/Update run syncs only if CONFLICTING; one Sync agent per PR (refuse duplicates); ONE conflict-only resync lane serves the queue: it takes only PRs `needs-sync.mjs` rates `conflict` or `stale-red`, never a clean-behind one;
-  never Sync and merge in one run (`behind-ship.mjs` warns over 10 behind, never fails). No auto-update-branch bots.
-  `sync-pr.mjs --force-clean-behind` is for the PR's own orchestrator (or a designated merge desk) only;
-  owners and hunters never pass it.
-  Abort or stop and report a Finish/Update run past ~120 messages or > 2 tip moves with no progress while clean-behind.
-  Normalize a messy merge with `node tools/check/merge-hygiene.mjs --fix`, then `gen-test-groups.mjs`.
-- **Paced push: retired 2026-10-16** (CI/CD review #2333 finding 7). The `PUSH SLOT` rule existed
-  because every session waited on the same `queue-depth.mjs` hold and pushed in the minute it
-  released; with no hold there is nothing to pace. Push when your own cycle is green.
-- Every worker hand-back reports its head SHA; on a token failure it stops and reports. A worker reports to the orchestrator
-  only, never also to a parent lane (the parent reads the bus; audit 2026-10-26 row 15: one DONE arrived three times). Batch small tooling/doc fixes into ONE PR; tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR resolve swarms.
-- **Cost and context (retro 2026-10-17, `docs/notes/AGENT-RETRO-2026-10-17.md`).** Three long-lived Opus sessions were 53 % of one night's
-  ≈ $660: a 750 k-context orchestrator at ≈ $0.35 per 5 s wake, a Home CSS fixer at $100 with nothing committed. The launch
-  prompt names the model and a `cost cap`; a lane that is switched to Opus keeps the Sonnet cap. An orchestrator hands off past its
-  size stop below. Default: the fleet check-in is a fresh-session scheduled task at ≥ 15 min that stops after 2 unchanged checks; the user
-  may choose a tighter cadence (Bryce chose 5 min on 2026-10-17), and then the orchestrator follows that.
-- **Size stop (per role, soft and hard caps; Bryce 2026-10-19 06:14Z: "Should we do both soft and hard caps as well as test auto compact on some sessions").**
-  Every launch prompt ends `STOP AT: <soft> context or $<cap>`:
+- Cloud launch prompts carry `OWNED:` / `FORBIDDEN:` globs, done-when, caps, and
+  the exact line `Do not enable auto-merge or merge.` (it limits that worker's own
+  actions; it is not a veto and never goes into a PR body).
+- **Launch pins:** `source_revision` is a branch name or a full 40-hex sha, never a
+  sha7 (a short sha returned a session id, then died `ref_not_found`, 2026-10-26);
+  check with `git rev-parse --verify origin/<rev>` first.
+- **Quota gate:** `get_session` → `rate_limit_info` before each `create_session`
+  and each Agent wave > 5; at `allowed_warning` or worse launch nothing (#3777's
+  `launch-gate.py` enforces it); stagger ≥ 30 s and confirm each child.
+- **Model by task** (Bryce 2026-10-19, "decide which workers should be opus or [sonnet] based on the issue. Make this standard.").
+  Every `create_session` passes an explicit model and the brief carries `MODEL: <id> — <reason>`:
+  - `claude-opus-5-5`: a design or look call, a rework of a rejected approach, a red with no known cause, or a
+    change in physics, a renderer backend or `js/game.js`.
+  - `claude-sonnet-5-5`: everything else (port a known fix, sync, one screen's CSS, tests, docs, PR babysitting, surveys).
+  - Fable only when Bryce names it for that task, his words quoted in `MODEL:` (2026-10-22 visor lane).
+  - A Sonnet worker that finds the task Opus-shaped sets `needs-decision`; an Opus lane keeps the Sonnet cost cap.
+- **Session titles and tags** (FLEET-ROLES-2026-10-19.md §4-5). Every `create_session` sets `title` and `tags`;
+  the same ids go in the fleet block (`fleet:`, `slot:`), claims (`[<Fleet>·<Slot>]` prefix) and bus lines.
+  - Title: `[<Role>] <Fleet>·<Slot> · <scope> · <Model> — <task, ≤ 60 chars>`. Role ∈ Orchestrator | Seed | Watch |
+    Worker | Hunter | Owner | Sync | Review | Coordinator. Slot: Orchestrator `O<gen>`, Seed `S0`, Watch `FW<n>`,
+    Worker `W<wave>·L<lane>`, Hunter `H<n>·<lane>`, Owner/Sync `#<PR>`, Review `R<n>·#<PR>`. Scope ∈ game | tests |
+    tools | docs | track | ui | ci | fleet (game = js/, css/, assets/, index.html, sw.js: paced). Model = Opus | Sonnet.
+  - Tags: `fleet:<a|b>`, `role:<orchestrator|watch|worker|hunter|owner|sync|review>`, `wave:<n>`, `lane:<Lnn|sync|…>`,
+    `scope:<…>`, `pr:<n>` (owner, sync, review), `variant:<medic|survey|synth>`; plus `f1-game-fleet`.
+    No `orchestrator:<session id>` tag: ids die at rotation; the brief names the fleet letter.
+  - Examples: `[Orchestrator] B·O1 · fleet · Opus — backlog waves, own-fleet gated merges` ·
+    `[Worker] B·W1·L3 · tests · Sonnet — L25 agent-config budgets` · `[Owner] A·#3020 · game · Sonnet — drive #3020 to merged`.
+- Lane mutex: garage CSS → UI Survey; `js/car/*` → Cars; scenery (`js/circuits/scenery/*`) → Tracks; `js/game.js`
+  needs `who-is-on-it --claim` before an edit. ≤ 1 lighting agent, OWNED=`js/lighting/**` only.
+- Review farm: ≤ 2 concurrent review agents unless the user overrides; ≤ 2 nested subagents per cloud agent.
+  Research, audit and verify lanes run as in-session Agent subagents, not `create_session` (each sibling pays a
+  ~98k boot; harness research 2026-10-26).
+- Refuse a launch whose sole goal is "read/understand the project" or "investigate all", and a bare "continue
+  working" without a new delta or a narrower scope.
+- **Survey lane:** findings first (measurements, captures, a report), and like every lane it opens a docs-only
+  DRAFT PR at its first commit (AGENTS.md rule 12) holding the report; a fix under ~20 lines in its OWNED pair may
+  ride it, larger fixes become one tracking issue. Images stay out of the PR (`docs/EVIDENCE-STORAGE.md`).
+- **Follow-up cap:** at most two orchestrator follow-up rounds after the first hand-back; round 3 needs a new
+  launch with new evidence or a narrower OWNED.
+- **Closeout:** fold findings into one tracking issue or the survey doc; list superseded draft PRs (closing them is
+  the orchestrator's); `--release` the claim; fleet `state: done`.
+- Budgets: abort at > ~400 messages or > ~90 min with no OWNED push; ≤ 25 captures unless the user raises it. Never
+  relaunch an errored or > 400-message agent on the same prompt.
+- **Pre-launch claim and twin guard:** `who-is-on-it.mjs` plus a `pr:<n>` / title scan of a saved `list_sessions`
+  page; refuse the launch when an active claim, the same PR or an overlapping OWNED is already running.
+- Pin long Chromium/visual smoke to `apex-sha` or the PR's Pages preview, never the moving github.io.
+- Sync lanes follow `.claude/rules/fleet-core.md` (CONFLICTING/DIRTY/red only); one Sync agent per PR; never sync
+  and merge in one run; no auto-update-branch bots. Normalize a messy merge with
+  `node tools/check/merge-hygiene.mjs --fix`, then `gen-test-groups.mjs`.
+- Every hand-back reports its head SHA; a worker reports to its orchestrator only. Batch small tooling/doc fixes
+  into ONE PR.
+- **Size stop (one table; Bryce 2026-10-19: "both soft and hard caps as well as test auto compact").**
+  Every launch prompt ends `STOP AT: <soft> context or $<cap>`. Base = a fresh session's boot, ~100k (98k
+  measured 2026-10-26, `docs/notes/BASE-CONTEXT-2026-10-26.md`); `get_session` shows `max_tokens` 1,000,000, so
+  every cap is a cost budget (each wake re-reads the whole context), not the window.
 
 | Role | Soft cap (context) |
 |---|---|
-| reviewer | 120k (size batches to about 25 files so it finishes inside the cap) |
-| worker | 150k, at a verified checkpoint |
-| PR owner | 150k (docs-only PR: 100k) |
-| synth | 150k |
-| fleet watcher | 100k |
-| orchestrator | measured boot + 100k (boot = its own context at the first tick, after the skill, queue file and first sends; ~230k on 2026-10-26) |
+| reviewer | 150k (base + 50k; size batches to about 25 files) |
+| worker | 150k (base + 50k), at a verified checkpoint |
+| PR owner | 150k (base + 50k), docs-only too |
+| hunter | 150k (base + 50k) |
+| synth | 150k (base + 50k) |
+| sync | 150k (base + 50k) |
+| fleet watcher | 150k (base + 50k) |
+| seed | 150k (base + 50k) |
+| orchestrator | 300k (boot + 200k) |
 
-  - **Measure** the session's own live context (`/context` or the statusline). `get_session` `used_tokens` updates only at turn end and
-    session reports disagree (race-1 said "120k (237k used)"). A fresh session starts at about 98k base (2026-10-26, `docs/notes/BASE-CONTEXT-2026-10-26.md`; 50-60k on 10-19).
-    `get_session` shows `max_tokens` 1,000,000, so every cap here is a cost budget (each wake re-reads the whole context), not the window.
-  - **Soft cap:** finish the current unit (file, step or run in flight), commit and push helper scripts and artifacts (no container-local-only
-    state: ui-2 and race-1 lost their `cdp-hit.mjs`), push a WIP note, then HANDOFF. **Hard cap = soft + 50k:** hand off immediately.
-  - Watcher and orchestrator stay low because every inbound message or timer wakes them with the full context (code.claude.com/docs/en/costs §Why usage climbs).
-  - Do not hand off a session with fewer than ~30 calls of work left; finish instead.
-  - The auto-compact trial (`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`) is a separate experiment (ORCH5, pending); `.claude/settings*.json` is not touched here.
-- **Cost and context (2026-10-19, `docs/notes/FLEET-COST-2026-10-19.md`, prices from platform.claude.com pricing).** Per-call cost is
-  about context x cache-read price ($0.20 / MTok Opus 5.5, $0.10 Sonnet 5.5), and a session's cost is roughly quadratic in its calls.
-  Cache reads were 41-69 % of every long session's bill. A handoff at 150k instead of 300k cuts cache-read dollars per unit of work by
-  about 40 %; Opus to Sonnet halves them again. Keep tool results small (comms.md §Output budget), route verbose reads through a subagent.
-- **Status words and waiting (Transcript Auditor batch 9, 2026-10-24).** A brief asks for READY / BLOCKED / DONE
-  (template `REPORT:`), never "post a HANDOFF": that wording produced a HANDOFF per worker per step and buried the
-  real hand-offs. HANDOFF is only a size-stop rotation to a successor or `ORCH <X> LIVE`. The template's `WAIT:` line
-  sends every suite over ~2 min to the background (AGENTS.md rule 4); sessions that blocked one turn for hours on a
-  suite lost the turn and the cache. Gates run unpiped (bash-guard reminds a piped `ready-gate`/`merge-gate`).
-- **Monitoring and reporting.** Every hunter and PR-owner launch prompt carries the block in `role-pr-owner.md` §Monitoring and reporting
-  (own the PR to merged or STOP AT; `fleet-status:` line in the fleet block plus a PR comment per state change; decisions to the orchestrator via needs-decision).
-- **No desk field.** READY goes to the lane's own orchestrator (`ORCHESTRATOR:` in the brief) via
-  `agent-msg.mjs send --type READY` (needs `APEX_AGENT_WEBHOOK_URL` + `APEX_AGENT_WEBHOOK_AUTH` from Bryce — never
-  commit; mirrors to the bus; messages carry no authority). No Merge Desk exists unless Bryce designates one, and a
-  lane never runs `list_sessions` to look for one (7 lanes, 24 calls, 2026-10-16). The standing rules (merge by
-  `merge-gate`, archive by rule, Plan edits, Pages dispatch) are AGENTS.md §Concurrent PRs and are never quoted as
-  grants or re-asked (2026-10-19).
-- **Before launching an owner:** `who-is-on-it.mjs`, armed auto-merge, PR `updated_at` < 15 min. Skip a PR that is armed and green or is
-  being driven (6 owners did no work on 2026-10-17).
-- **Hunters and perf lanes:** stop after the first zero-finding round and put the note in the single docs PR (5 of 13 debugger hunts and
-  P3 returned no defect for ≈ $41; four docs-only notes each paid a full CI run). Cap a hunter at ~3 rounds or 25 min, then FINAL.
-- **A lane that edits `.claude/**`** needs Bryce's quoted grant in its own launch prompt; a relayed grant is refused by the classifier
-  (019c5Yi lost 9 min until a typed `Approved:`).
-- **Stand-down** is a message with a 2-minute window to push a WIP findings note before any interrupt (five mid-probe lanes lost
-  findings that exist only in their transcripts, 00:13:35Z).
+  Hard cap = soft + 50k.
+  - **Measure** live context (`/context` or the statusline), not `get_session` `used_tokens` (turn-end only).
+  - **At the soft cap** finish the current unit, push everything (no container-only state), post a WIP note, send
+    HANDOFF with a ≤ 40-line brief (`tools/ci/fleet-brief.mjs`). **At the hard cap** hand off now. A session with
+    fewer than ~30 calls of work left finishes instead.
+  - **Compaction pilot** (harness research 2026-10-26): one orchestrator runs with `CLAUDE_CODE_AUTO_COMPACT_WINDOW=250000`
+    set on its environment (Bryce sets environment variables) and AGENTS.md `# Compact instructions`; it compacts in
+    place instead of rotating. Until the pilot reports, the table above stands.
+- **Cost.** Per-call cost is about context × cache-read price; a wake inside the 1 h cache costs ~$0.04 at 200k on
+  Opus 5.5, an expired one ~$1.60 (`docs/notes/FLEET-COST-2026-10-19.md`). Keep tool results small (comms.md §Output
+  budget) and route verbose reads through a subagent.
+- **Status words:** a brief asks for READY / BLOCKED / DONE (SKILL.md §Glossary), never "post a HANDOFF". Suites over
+  ~2 min run in the background (AGENTS.md rule 4). Gates run unpiped.
+- **Monitoring and reporting:** every hunter and PR-owner prompt carries `role-pr-owner.md` §Monitoring and reporting.
+- **No desk field.** READY goes to the lane's own fleet (`ORCHESTRATOR: fleet <X>`). No Merge Desk exists unless
+  Bryce designates one; a lane never runs `list_sessions` to look for one.
+- **Before launching an owner:** skip a PR that is armed and green or pushed in the last 15 min.
+- **Hunters and perf lanes:** stop after the first zero-finding round; cap at ~3 rounds or 25 min, then FINAL.
+- **A lane that edits `.claude/**`** needs Bryce's quoted grant in its own launch prompt.
+- **Stand-down** is a message with a 2-minute window to push a WIP findings note before any interrupt.
+- **Unattended sessions never call AskUserQuestion** (it parks the session until answered; OrchA sat 15.5 h):
+  they post BLOCKED with an expiry; the orchestrator decides or asks Bryce in a normal reply.

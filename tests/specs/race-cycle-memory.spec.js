@@ -53,6 +53,26 @@ async function raceAndDrive(page, id) {
   }, DRIVE_STEPS);
 }
 
+// THE MENU MUST BE QUIET BEFORE ITS HEAP COUNTS. The census forces GC, but live work in flight survives it:
+// the title warm's race prep (js/perf/title-warm.js starts it after 1.2 s of title quiet), the menu program warm
+// and the garage prebuild. One post-warm pair read mid-prep swung ±35 MiB on unchanged heads (A·W56, 2026-10-26).
+// Wait until none runs for QUIET_MS (> the title warm's start delay), then read.
+const QUIET_MS = 3000;
+async function menuQuiet(page) {
+  const t0 = Date.now();
+  const hooks = await page.evaluate(() => { window.__rcmQuiet = null; const A = window.__apex;
+    return { menuPrep: typeof A.menuPrep === "function" && !!A.menuPrep(), garagePrebuild: typeof A.garagePrebuild === "function" }; });
+  expect(hooks, "menuQuiet needs __apex.menuPrep() (a snapshot) and __apex.garagePrebuild()").toEqual({ menuPrep: true, garagePrebuild: true });
+  await page.waitForFunction((quietMs) => {
+    const A = window.__apex, p = A.menuPrep(), g = A.garagePrebuild();
+    const busy = p.building || p.warming || p.warmFrames > 0 || !!(g && g.running);
+    const now = performance.now(), q = window.__rcmQuiet || (window.__rcmQuiet = { since: now });
+    if (busy) q.since = now;
+    return !busy && now - q.since >= quietMs;
+  }, QUIET_MS, { polling: 250, timeout: 120000 });
+  return Date.now() - t0;
+}
+
 async function flagToMenu(page) {
   await page.evaluate(() => window.__apex.finishRace());
   await page.waitForFunction(() => window.__apex.info().state === "results", null, { polling: 200, timeout: 60000 });
@@ -89,8 +109,9 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
       expect(built.aliveTracks, `cycle ${cycle}, ${id} built: built tracks still reachable after GC`).toEqual([id]);
 
       await flagToMenu(page);
+      const quietMs = id === CIRCUITS[CIRCUITS.length - 1] ? await menuQuiet(page) : null;
       const menu = await censusAfterGc(page, cdp);
-      log({ cycle, id, at: "menu", aliveTracks: menu.aliveTracks, heapMB: menu.heapMB, audioMB: menu.audioMB, audioBuffers: menu.audioBuffers, three: menu.three && { geometries: menu.three.geometries, textures: menu.three.textures } });
+      log({ cycle, id, at: "menu", quietMs, aliveTracks: menu.aliveTracks, heapMB: menu.heapMB, audioMB: menu.audioMB, audioBuffers: menu.audioBuffers, three: menu.three && { geometries: menu.three.geometries, textures: menu.three.textures } });
       expect(menu.aliveTracks.length, `cycle ${cycle}, menu after ${id}: ${menu.aliveTracks.join(", ")} still reachable after GC`).toBeLessThanOrEqual(1);
       // Final menu of the cycle (last circuit) feeds the post-warm slope series.
       if (id === CIRCUITS[CIRCUITS.length - 1]) {

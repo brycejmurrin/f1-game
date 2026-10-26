@@ -241,8 +241,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const at = new Date().toISOString();
     let live;
     try {
-      const { api } = await import("./ci-watch.mjs");   // dynamic: ci-watch parses --help at import
-      live = fetchLivePr({ prArg: arg, branch: s.branch, request: api });
+      // The shared ETag-cached snapshot (tools/lib/pr-snapshot.mjs): a re-run on
+      // an unchanged PR costs 304s, which GitHub does not count against the limit.
+      const { createSnapshot } = await import("../lib/pr-snapshot.mjs");
+      const snap = createSnapshot();
+      live = fetchLivePr({ prArg: arg, branch: s.branch, request: snap.get });
+      snap.save();
     } catch (e) { live = { error: String(e.message || e) }; }
     s.livePr = { at, ...live, localHead: git("rev-parse", "HEAD") };
   }

@@ -10,7 +10,7 @@ import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { createServer as netServer } from "node:net";
 import { statSync, createReadStream, existsSync } from "node:fs";
-import { join, normalize, extname } from "node:path";
+import { join, normalize, extname, sep } from "node:path";
 import os from "node:os";
 
 const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
@@ -26,6 +26,7 @@ const port = await new Promise((r) => {
 const server = createServer((req, res) => {
   try {
     const file = normalize(join(ROOT, decodeURIComponent(new URL(req.url, "http://x").pathname)));
+    if (!file.startsWith(ROOT + sep)) { res.writeHead(403).end(); return; }
     const st = statSync(file);
     res.writeHead(200, { "Content-Type": MIME[extname(file)] || "application/octet-stream",
                          "Content-Length": st.size,
@@ -41,7 +42,9 @@ await new Promise((r) => server.listen(port, "127.0.0.1", r));
 console.log(`loadavg before run: [${os.loadavg().map((x) => x.toFixed(2)).join(", ")}]` +
   ` on ${os.cpus().length} cores`);
 
-const browser = await chromium.launch({
+let browser;
+try {
+browser = await chromium.launch({
   executablePath: existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined,
   args: ["--use-angle=swiftshader", "--enable-precise-memory-info"],
 });
@@ -61,6 +64,7 @@ const wall = Date.now() - t0;
 const sw = await page.evaluate(() => window.__sideworld);
 if (sw.error) {
   console.log("RUN FAILED:", sw.error);
+  process.exitCode = 1;
 } else {
   const r = sw.result;
   const f = (o) => `mean ${o.mean.toFixed(3)}  p95 ${o.p95.toFixed(3)}  max ${o.max.toFixed(3)}`;
@@ -87,5 +91,7 @@ if (sw.error) {
   console.log("\nJSON:", JSON.stringify(r));
 }
 
-await browser.close();
-server.close();
+} finally {
+  try { if (browser) await browser.close(); }
+  finally { await new Promise(resolve => server.close(resolve)); }
+}

@@ -48,7 +48,11 @@ const Particles = (function () {
   let _dirty = true, _lastPa = 0, _lastPb = 0;
   let _rainAcc = 0;   // seconds since the last forced re-expand (parked-eye staleness cap)
   let _rainCellX = 0x7fffffff, _rainCellY = 0x7fffffff, _rainCellZ = 0x7fffffff;
-  let _rainKnobKey = "";
+  // Knob identity is scratch slots, not a string built every rainUpdate (the
+  // same shape as Wind.sync). Sentinels never match a live sample, so the
+  // first compare after a seed dirties exactly once.
+  let _kTone = -1, _kShown = -1, _kSpdQ = -1, _kSpdS = NaN, _kLenS = NaN;
+  let _kWind = NaN, _kRainSpd = NaN, _kOp = NaN, _kShW = NaN, _kShL = NaN, _kDir = NaN;
   const RAIN_CELL_M = 2;
   let _statUpload = 0, _statExpand = 0, _statSkip = 0, _statAlphaExpand = 0, _statAddExpand = 0;
 
@@ -486,12 +490,26 @@ const Particles = (function () {
     // cell but velocity changes (parked→pullaway); 4 m/s ≈ one gear of slant.
     const spdQ = (Math.hypot(_camVel[0], _camVel[1], _camVel[2]) / 4) | 0;
     const LT = _lt();
-    const key = (Math.round(_rainTone * 100) + "|" + _rainShown() + "|" + spdQ + "|" + _rainSpeedScale + "|" + _rainLenScale + "|" +
-      (LT.rainWind != null ? LT.rainWind : 0) + "|" + (LT.rainSpeed != null ? LT.rainSpeed : 1) + "|" +
-      (LT.rainOpacity != null ? LT.rainOpacity : 1) + "|" + (LT.rainShearWind != null ? LT.rainShearWind : 0.9) + "|" +
-      (LT.rainShearLen != null ? LT.rainShearLen : 2) + "|" + (LT.windDir != null ? LT.windDir : 35));
-    if (cx !== _rainCellX || cy !== _rainCellY || cz !== _rainCellZ || key !== _rainKnobKey) {
-      _rainCellX = cx; _rainCellY = cy; _rainCellZ = cz; _rainKnobKey = key;
+    const tone = Math.round(_rainTone * 100);
+    const shown = _rainShown();
+    const wind = LT.rainWind != null ? LT.rainWind : 0;
+    const rainSpeed = LT.rainSpeed != null ? LT.rainSpeed : 1;
+    const opacity = LT.rainOpacity != null ? LT.rainOpacity : 1;
+    const shearW = LT.rainShearWind != null ? LT.rainShearWind : 0.9;
+    const shearL = LT.rainShearLen != null ? LT.rainShearLen : 2;
+    const dir = LT.windDir != null ? LT.windDir : 35;
+    // Same inequality the old concatenated key had for these finite numbers:
+    // a parked eye with stable knobs does not dirty; any one slot change does.
+    if (cx !== _rainCellX || cy !== _rainCellY || cz !== _rainCellZ
+        || tone !== _kTone || shown !== _kShown || spdQ !== _kSpdQ
+        || _rainSpeedScale !== _kSpdS || _rainLenScale !== _kLenS
+        || wind !== _kWind || rainSpeed !== _kRainSpd || opacity !== _kOp
+        || shearW !== _kShW || shearL !== _kShL || dir !== _kDir) {
+      _rainCellX = cx; _rainCellY = cy; _rainCellZ = cz;
+      _kTone = tone; _kShown = shown; _kSpdQ = spdQ;
+      _kSpdS = _rainSpeedScale; _kLenS = _rainLenScale;
+      _kWind = wind; _kRainSpd = rainSpeed; _kOp = opacity;
+      _kShW = shearW; _kShL = shearL; _kDir = dir;
       _dirty = true;
     }
   }
@@ -519,9 +537,11 @@ const Particles = (function () {
     const hk = drizzle ? null : _rainK;
     _rainBudget = base * (hk ? hk.count : 1);
     const count = Math.max(0, Math.min(wetCap, Math.round(base * (drizzle ? dzCount : 1) * (hk ? hk.count : 1))));
-    if (!_rox || _rox.length < count) {
-      _rox = new Float32Array(count); _roy = new Float32Array(count); _roz = new Float32Array(count);
-      _rspd = new Float32Array(count); _rlen = new Float32Array(count); _ralpha = new Float32Array(count);
+    // One scratch set at the tier cap. count only ever grows up to wetCap, so a
+    // drizzle → rain → storm reseed rewrites slots in place and does not allocate.
+    if (!_rox || _rox.length < wetCap) {
+      _rox = new Float32Array(wetCap); _roy = new Float32Array(wetCap); _roz = new Float32Array(wetCap);
+      _rspd = new Float32Array(wetCap); _rlen = new Float32Array(wetCap); _ralpha = new Float32Array(wetCap);
     }
     _rainN = count;
     _rainAmount = 1;
@@ -538,9 +558,12 @@ const Particles = (function () {
     _dirty = true;
     _rainCellX = _rainCellY = _rainCellZ = 0x7fffffff;
     _rainAcc = 0;
-    _rainKnobKey = "";
+    _kTone = -1; _kShown = -1; _kSpdQ = -1;
+    _kSpdS = NaN; _kLenS = NaN; _kWind = NaN; _kRainSpd = NaN; _kOp = NaN;
+    _kShW = NaN; _kShL = NaN; _kDir = NaN;
     // The alpha batch must hold the pool AND the shower in ONE call (see draw()).
-    const need = (MAX + count) * FLOATS_PER;
+    // Size it for the cap, not this seed's count, so the heavier tier reuses it.
+    const need = (MAX + wetCap) * FLOATS_PER;
     if (!_vertA || _vertA.length < need) _vertA = new Float32Array(need);
   }
 

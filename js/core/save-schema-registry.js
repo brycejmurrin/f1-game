@@ -121,6 +121,7 @@ const SaveSchemaRegistry = (function () {
     "ssrDayGate": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "stallWatch": entry("js/perf/loop-health.js (?stallwatch=1 forces the stall watchdog under automation)", "raw", 1, "rawScalar"),
     "team": entry("js/garage/setup-sheet.js", "json", 1, "json"),
+    "titleWarm": entry("js/perf/title-warm.js (the build whose title warm completed; a phone skips it on that build)", "raw", 1, "rawScalar"),
     "tlxAoFold": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxArrayNearest": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxAttrInst": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),

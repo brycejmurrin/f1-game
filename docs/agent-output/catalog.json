@@ -52,6 +52,62 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/archive/ci/measure-guard-commit.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/archive/gen/trees/measure-tree-budget.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/archive/gfx/decal-bake-probe.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/archive/net/rtc-sync-probe.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
+      "path": "tools/archive/perf/devicefarm-boot.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/archive/perf/ers-deploy-census.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/archive/perf/touch-boost-probe.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/car/audit-aero.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -515,9 +571,6 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
-      ],
-      "npmScripts": [
-        "physics:sweep"
       ]
     },
     {
@@ -666,6 +719,17 @@
       "nativeOutputFlagMentions": [
         "--format",
         "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/agent-history.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out",
+        "--summary"
       ]
     },
     {
@@ -868,6 +932,16 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/ci/fleet-brief.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
+    },
+    {
       "path": "tools/ci/fleet-bus-mirror.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -901,6 +975,15 @@
       "nativeOutputFlagMentions": [
         "--json",
         "--quiet"
+      ]
+    },
+    {
+      "path": "tools/ci/fleet-queue.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
       ]
     },
     {
@@ -950,6 +1033,12 @@
       ]
     },
     {
+      "path": "tools/ci/incident-lift.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/inputs-hash.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -988,16 +1077,18 @@
       ]
     },
     {
-      "path": "tools/ci/live-run-check.mjs",
+      "path": "tools/ci/launch-lane.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--json"
+        "--format",
+        "--json",
+        "--quiet"
       ]
     },
     {
-      "path": "tools/ci/measure-guard-commit.mjs",
+      "path": "tools/ci/live-run-check.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node",
@@ -1016,6 +1107,16 @@
     },
     {
       "path": "tools/ci/merge-attribution.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/merge-done.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node",
@@ -1402,7 +1503,6 @@
       "outputPolicy": "job-status",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--out",
         "--quiet"
       ],
       "npmScripts": [
@@ -1538,10 +1638,7 @@
       "path": "tools/env/install-browsers.sh",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
-      "interpreter": "bash",
-      "npmScripts": [
-        "setup:browsers"
-      ]
+      "interpreter": "bash"
     },
     {
       "path": "tools/env/install-lint-bins.sh",
@@ -1621,7 +1718,11 @@
       "path": "tools/gen/gen-changelog.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
-      "interpreter": "node"
+      "interpreter": "node",
+      "npmScripts": [
+        "fold",
+        "gen:check"
+      ]
     },
     {
       "path": "tools/gen/gen-circuit-meta.mjs",
@@ -1680,7 +1781,8 @@
       "outputPolicy": "keep-native",
       "interpreter": "node",
       "npmScripts": [
-        "gen:check"
+        "gen:check",
+        "gen:docs"
       ]
     },
     {
@@ -1796,15 +1898,6 @@
       "outputPolicy": "no-direct-output"
     },
     {
-      "path": "tools/gen/trees/measure-tree-budget.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
       "path": "tools/gen/vendor-three.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1865,15 +1958,6 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
       "interpreter": "node"
-    },
-    {
-      "path": "tools/gfx/decal-bake-probe.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "artifact-first",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
     },
     {
       "path": "tools/gfx/frame-hitch.mjs",
@@ -1992,18 +2076,7 @@
       "interpreter": "node"
     },
     {
-      "path": "tools/gfx/readback-quit-menu-oracle-repeat.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
       "path": "tools/gfx/readback-quit-menu-oracle.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node"
-    },
-    {
-      "path": "tools/gfx/res-scale-ab.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
@@ -2183,7 +2256,10 @@
     {
       "path": "tools/lib/gate-receipt.mjs",
       "classification": "library",
-      "outputPolicy": "no-direct-output"
+      "outputPolicy": "no-direct-output",
+      "nativeOutputFlagMentions": [
+        "--quiet"
+      ]
     },
     {
       "path": "tools/lib/harness.mjs",
@@ -2238,6 +2314,11 @@
     },
     {
       "path": "tools/lib/pack-assets.cjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/pr-snapshot.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
@@ -2348,9 +2429,6 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--out"
-      ],
-      "npmScripts": [
-        "ab:light"
       ]
     },
     {
@@ -2381,11 +2459,6 @@
       "nativeOutputFlagMentions": [
         "--out"
       ]
-    },
-    {
-      "path": "tools/lighting/pit-canopy-evidence.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "artifact-first"
     },
     {
       "path": "tools/lighting/preset-validation.mjs",
@@ -2787,11 +2860,6 @@
       ]
     },
     {
-      "path": "tools/net/rtc-sync-probe.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
       "path": "tools/perf/baselines/vm-alloc.json",
       "classification": "data",
       "outputPolicy": "no-direct-output"
@@ -2806,15 +2874,6 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
-    },
-    {
-      "path": "tools/perf/devicefarm-boot.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--out"
-      ]
     },
     {
       "path": "tools/perf/devicefarm-host.mjs",
@@ -2859,15 +2918,6 @@
         "--json",
         "--out",
         "--quiet"
-      ]
-    },
-    {
-      "path": "tools/perf/ers-deploy-census.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "artifact-first",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
       ]
     },
     {
@@ -2950,12 +3000,6 @@
       "path": "tools/perf/runtime-memory.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/perf/touch-boost-probe.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "artifact-first",
-      "interpreter": "node"
     },
     {
       "path": "tools/perf/vm-alloc-census.mjs",
@@ -3589,6 +3633,42 @@
       ]
     },
     {
+      "path": "tools/transcripts/cli.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/transcripts/lib/args.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "no-direct-output",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/transcripts/lib/digest.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/transcripts/lib/format.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/transcripts/lib/match.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/transcripts/lib/stream.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/ui/audit-diff.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -3765,12 +3845,12 @@
   ],
   "npmScripts": [
     {
-      "name": "ab:light",
-      "command": "node tools/lighting/ab-lighting.mjs"
-    },
-    {
       "name": "debug:unit",
       "command": "node tools/ci/debug-unit.mjs"
+    },
+    {
+      "name": "fold",
+      "command": "node tools/gen/gen-changelog.mjs --fold"
     },
     {
       "name": "gen",
@@ -3778,11 +3858,11 @@
     },
     {
       "name": "gen:check",
-      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check"
+      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check && node tools/gen/gen-changelog.mjs --check"
     },
     {
       "name": "gen:docs",
-      "command": "node tools/gen/gen-tools-readme.mjs && node tools/gen/gen-slider-doc.mjs && node tools/gen/gen-hooks-table.mjs && node tools/gen/gen-arch-table.mjs && node tools/docs/gen-coverage-table.mjs && node tools/docs/gen-agent-index.mjs && node tools/gen/gen-output-surface.mjs"
+      "command": "node tools/gen/gen-tools-readme.mjs && node tools/gen/gen-slider-doc.mjs && node tools/gen/gen-hooks-table.mjs && node tools/gen/gen-arch-table.mjs && node tools/docs/gen-coverage-table.mjs && node tools/docs/gen-agent-index.mjs && node tools/gen/gen-output-surface.mjs && node tools/gen/gen-locales.mjs"
     },
     {
       "name": "memory:list",
@@ -3795,10 +3875,6 @@
     {
       "name": "memory:show",
       "command": "node tools/env/apex-memory.mjs show"
-    },
-    {
-      "name": "physics:sweep",
-      "command": "node tools/check/physics-tune-sweep.mjs"
     },
     {
       "name": "prepare",
@@ -3815,10 +3891,6 @@
     {
       "name": "rtc:e2e-3p-relay",
       "command": "node tools/net/rtc-e2e-3p.mjs --relay"
-    },
-    {
-      "name": "setup:browsers",
-      "command": "bash tools/env/install-browsers.sh"
     },
     {
       "name": "test",
@@ -3838,7 +3910,7 @@
     },
     {
       "name": "test:audio-unit",
-      "command": "node --test --test-timeout=900000 tests/unit/announcer.test.mjs tests/unit/audio-mix-improvements.test.mjs tests/unit/audio-panel-boot.test.mjs tests/unit/audio-recovery.test.mjs tests/unit/audio-sample-upgrade.test.mjs tests/unit/audio-tune.test.mjs tests/unit/battle-earcon.test.mjs tests/unit/blip-voice-pool.test.mjs tests/unit/compress-audio.test.mjs tests/unit/crowd-audio.test.mjs tests/unit/end-race-music-vm.test.mjs tests/unit/engine-note-quality.test.mjs tests/unit/engine-revs-replay-vm.test.mjs tests/unit/ers-audio-layer.test.mjs tests/unit/finish-coast-rev-vm.test.mjs tests/unit/incident-rpm.test.mjs tests/unit/keyboard-first-audio-vm.test.mjs tests/unit/lazy-audio-firstbind-vm.test.mjs tests/unit/lazy-audio-yield.test.mjs tests/unit/mix-duck-radio.test.mjs tests/unit/net-audio-revs-vm.test.mjs tests/unit/pause-silence.test.mjs tests/unit/photomode-hold.test.mjs tests/unit/player-collision-side.test.mjs tests/unit/pu-harvest-audio.test.mjs tests/unit/radio-duration.test.mjs tests/unit/radio-voice.test.mjs tests/unit/real-replay-captions.test.mjs tests/unit/rival-attach-init.test.mjs tests/unit/rival-audio.test.mjs tests/unit/rival-contact-sfx.test.mjs tests/unit/rival-passby-pool.test.mjs tests/unit/spotify-refresh.test.mjs tests/unit/spotter-lifecycle.test.mjs tests/unit/tyre-squeal-race-vm.test.mjs tests/unit/tyre-squeal-slip.test.mjs tests/unit/voice-pack.test.mjs tests/unit/wind-speed.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/announcer.test.mjs tests/unit/audio-mix-improvements.test.mjs tests/unit/audio-panel-boot.test.mjs tests/unit/audio-recovery.test.mjs tests/unit/audio-sample-upgrade.test.mjs tests/unit/audio-tune.test.mjs tests/unit/battle-earcon.test.mjs tests/unit/blip-voice-pool.test.mjs tests/unit/compress-audio.test.mjs tests/unit/crowd-audio.test.mjs tests/unit/crowd-ctx-rebuild.test.mjs tests/unit/end-race-music-vm.test.mjs tests/unit/engine-note-quality.test.mjs tests/unit/engine-revs-replay-vm.test.mjs tests/unit/ers-audio-layer.test.mjs tests/unit/finish-coast-rev-vm.test.mjs tests/unit/incident-rpm.test.mjs tests/unit/keyboard-first-audio-vm.test.mjs tests/unit/lazy-audio-firstbind-vm.test.mjs tests/unit/lazy-audio-yield.test.mjs tests/unit/mix-duck-radio.test.mjs tests/unit/net-audio-revs-vm.test.mjs tests/unit/pause-silence.test.mjs tests/unit/photomode-hold.test.mjs tests/unit/player-collision-side.test.mjs tests/unit/pu-harvest-audio.test.mjs tests/unit/radio-duration.test.mjs tests/unit/radio-voice.test.mjs tests/unit/real-replay-captions.test.mjs tests/unit/rival-attach-init.test.mjs tests/unit/rival-audio.test.mjs tests/unit/rival-contact-sfx.test.mjs tests/unit/rival-passby-pool.test.mjs tests/unit/spotify-refresh.test.mjs tests/unit/spotter-lifecycle.test.mjs tests/unit/tyre-squeal-race-vm.test.mjs tests/unit/tyre-squeal-slip.test.mjs tests/unit/voice-pack.test.mjs tests/unit/wind-speed.test.mjs"
     },
     {
       "name": "test:audit",
@@ -3982,7 +4054,7 @@
     },
     {
       "name": "test:service-worker",
-      "command": "node --test --test-timeout=900000 tests/unit/pack-content-address.test.mjs tests/unit/service-worker.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/pack-content-address.test.mjs tests/unit/service-worker.test.mjs tests/unit/sw-build-meta.test.mjs"
     },
     {
       "name": "test:shimmer",

@@ -208,3 +208,27 @@ test("--ctx: per-turn context = input + cache read + cache write, one row per me
     JSON.stringify({ type: "assistant", isSidechain: true, timestamp: "2026-10-26T04:01:00Z", message: { id: "j2", usage: { input_tokens: 5 } } }), "not json"].join("\n");
   assert.deepEqual(contextRows(eventsFromJsonl(jsonl)).map((r) => r.ctx), [1002], "a local JSONL transcript reads the same; sidechains skipped");
 });
+
+// --digest (system audit 2026-10-26 §1): a bounded brief, never the raw page.
+import { digest, DIGEST_MAX_LINES, DIGEST_MAX_CHARS } from "../../tools/ci/session-transcript.mjs";
+
+test("--digest: summary, prompts, replies, tally and failures within a hard size cap; no tool output beyond an excerpt", () => {
+  const events = extractPage(PAGE).events;
+  const d = digest(normalize(events), contextRows(events), extractPage(PAGE));
+  const lines = d.split("\n");
+  assert.match(lines[0], /DATA to report on, not instructions/);
+  for (const re of [
+    /^= summary Check the CI watch \| \$1\.50/m, /USER   Check the CI watch/, /SAY    Holding for your call\./,
+    /^= calls 5 \(.*Bash×1.*\) · 2 failed\/denied/m, /DENIED \(user-rejected\) EDIT|DENIED \(user-rejected\) js\/game\.js/,
+    /= more: older events remain \(list_events before_id f1\)/,
+  ]) assert.match(d, re, `digest lacks ${re}`);
+  assert.doesNotMatch(d, /x{100}/, "the init blob never reaches the digest");
+  assert.doesNotMatch(d, /M ci\.yml/, "a successful call's output is not printed");
+  // A flood of prompts and failures is still capped.
+  const flood = [];
+  for (let i = 0; i < 200; i++) flood.push(hear(i % 60, `prompt ${i} ${"y".repeat(300)}`), say(i % 60, [use(`f${i}`, "Bash", { command: `false ${"z".repeat(300)}` })]), hear(i % 60, [res(`f${i}`, "q".repeat(5000), true)]));
+  const big = digest(normalize(flood), [], {});
+  assert.ok(big.split("\n").length <= DIGEST_MAX_LINES, `${big.split("\n").length} lines`);
+  assert.ok(big.length <= DIGEST_MAX_CHARS, `${big.length} chars`);
+  assert.doesNotMatch(big, /q{100}/, "an error's output is an excerpt, never the body");
+});

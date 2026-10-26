@@ -74,6 +74,35 @@ function create(G) {
 
   function announce(msg) { if (G.announce) G.announce(msg); }
 
+  function writerMessage() {
+    const s = typeof GameStore !== "undefined" && GameStore.store;
+    const status = s && s.careerWriteStatus ? s.careerWriteStatus() : { ok: true };
+    if (status.ok) return "";
+    return status.reason === "writer-busy"
+      ? "Career is open in another tab. Close it, then reload this tab to play or change saves. You can still read and export your saves here."
+      : status.reason === "writer-pending" ? "Checking career save access…"
+      : "This browser cannot safely coordinate career saves. Career is read-only; use a current browser over HTTPS to play. You can still export your saves.";
+  }
+  function writerRefused() {
+    const message = writerMessage();
+    if (message) announce(message);
+    return !!message;
+  }
+  function showWriterStatus() {
+    const message = writerMessage();
+    if (!message) return;
+    const notice = el("p", "cr-card cr-note", message);
+    notice.id = "cr-writer-status"; notice.setAttribute("role", "status");
+    $("cr-left").insertBefore(notice, $("cr-left").firstChild);
+    for (const panel of [$("cr-left"), $("cr-right")]) {
+      panel.querySelectorAll("button, input, select").forEach((n) => {
+        if (n.getAttribute("data-cr-act") !== "export") n.disabled = true;
+      });
+    }
+    $("cr-go").disabled = true;
+    $("cr-garage").disabled = true;
+  }
+
   function pickBackupFile(onJson) {
     let pickerGeneration = ++backupReadGeneration;
     if (pendingImport) {
@@ -192,6 +221,7 @@ function create(G) {
           ? "Start a team here" : "Start a career here"));
     }
     open.onclick = () => {
+      if (writerRefused()) return;
       if (G.soundOn) GameAudio.uiSelect();
       // A newer-build slot cannot replace the live career. Keep the picker
       // intact, including when another tab updated this card after rendering.
@@ -252,6 +282,7 @@ function create(G) {
         : (armedImport === id ? `Confirm: restore the backup's ${modeName} saves`
           : `Import career backup: restores its ${modeName} saves`));
       imp.onclick = (ev) => {
+        if (writerRefused()) return;
         ev.stopPropagation();
         if (G.soundOn) GameAudio.uiTick();
         armedDelete = "";
@@ -322,6 +353,7 @@ function create(G) {
       // screen reader, and the second press deleted a save with no warning.
       del.setAttribute("aria-label", armed ? `Confirm: delete ${what}. Press again to delete` : `Delete ${what}`);
       del.onclick = (ev) => {
+        if (writerRefused()) return;
         ++backupReadGeneration;   // DELETE abandons any still-pending file review
         ev.stopPropagation();
         if (G.soundOn) GameAudio.uiTick();
@@ -1582,6 +1614,8 @@ function create(G) {
       else if (Career.active()) { draft = null; buildHubPanes(); }
       else if (draft) buildSetupPanes();
       else buildSlotPanes();
+      $("cr-garage").disabled = false;
+      showWriterStatus();
     });
     // The foot button must say where it GOES: from the hub's CAREER MODES door
     // it returns to the HUB; from the title it is MAIN MENU. Labelling MAIN MENU
@@ -1670,8 +1704,9 @@ function create(G) {
     { const mb = $("mb-standings"); if (mb) mb.hidden = !(SeasonCal.hasProgress(G.season) && G.season && G.season.round < SeasonCal.rounds()); }
     if (G.soundOn) GameAudio.uiSelect();
   };
-  $("cr-garage").onclick = () => { close(); G.openGarage("career"); };
+  $("cr-garage").onclick = () => { if (writerRefused()) return; close(); G.openGarage("career"); };
   $("cr-go").onclick = () => {
+    if (writerRefused()) return;
     if (G.soundOn) GameAudio.uiSelect();
     // The picker comes first: a career is normally LOADED while it is open (you
     // are choosing another one), so the "no career yet" branch below would never

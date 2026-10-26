@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Forty-two `apex_*` tools (`apex_help {tool}`, the full text `tools/list` shortens, plus `apex_viewer` and five bounded UI/diagnostics tools) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Forty `apex_*` tools (`apex_help {tool}`, the full text `tools/list` shortens, plus `apex_viewer` and five bounded UI/diagnostics tools) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -49,7 +49,7 @@ allowed tools, and the required hand-back format. Claude frontmatter such as
 `readonly`, `tools`, `background` and `model` is reference metadata in Codex;
 repeat the safety limits in the launch prompt. Keep Merge Desk authority with
 the explicitly designated parent session. Delegate bounded read-only evidence
-work (for example `release-auditor`), never ready/arm/merge authority.
+work (for example `deploy-research`), never ready/arm/merge authority.
 
 The doctor catalog warning is host metadata, not a repository failure. If the
 host provides a redacted JSON snapshot, inspect it with
@@ -247,25 +247,32 @@ what the gateway costs per tool: `docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20
 |---|---|---|
 | **Skills** | `.claude/skills/*/SKILL.md` — index [`.claude/skills/README.md`](../.claude/skills/README.md) | When to load a workflow; hard don'ts; which composer to run. |
 | **Subagents** | `.claude/agents/*.md` — index [`.claude/agents/README.md`](../.claude/agents/README.md) | Isolated verify / survey / deploy-research / audits / hunts. No browser groups. |
-| **MCP wrap** | `tools/mcp/apex-tools-mcp.mjs` + catalog `tools/mcp/apex-tools-mcp.json` | Pinned argv. Tree = no lock. Browser = lock + occupancy. |
+| **MCP wrap** | `tools/mcp/apex-tools-mcp.mjs` + catalog `tools/mcp/apex-tools-mcp.json` | Pinned argv. Browser ownership follows each tool’s live help, including tree tools that start browser jobs. |
 | **CLIs** | `tools/*.mjs` / `*.cjs` — index [`tools/README.md`](../tools/README.md) | The real commands. Most exist whether or not they are wrapped. |
 
-A skill is **not** an MCP tool. An MCP tool is **not** a new implementation —
-it spawns the CLI with flags the project already considers safe (`--check`,
-`--fast`, `--json`; never `--apply`, `--wait`, `--write`, `--bg`).
+A skill is **not** an MCP tool. MCP wrappers expose bounded CLI operations
+through validated schemas. Read-only checks commonly use `--check`, `--fast`,
+and `--json`; dedicated job and persistent-session tools also own lifecycle
+operations. Inspect live `apex_help` before invoking those routes.
 
 ## Wrap map
 
-`Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
-Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Forty-two tools today (`apex_catalog` lists them; the wrap-map table below is the one row per tool; the history follows: 30 → 11 on 2026-09: the audits, startline,
+`Kind` describes the entry point: `tree` often performs static/VM work, while
+`browser` uses harness Chromium. It does not by itself establish resource
+ownership: `apex_job_start` is a tree tool whose browser job kinds retain
+`scratch/apex-browser.lock` until exit; persistent browser sessions also retain
+ownership. Check occupancy and the individual tool’s live help before starting.
+`Skill` names the workflow. Discover tool names through the host’s active tool
+list or the wrapper’s `list-tools` command, and schemas through `apex_help`.
+`apex_catalog` supplies valid argument IDs, not the tool inventory. The table
+below maps tools to CLIs; the historical expansion follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
 `apex_frame_report`, a node-VM framing report that answers in seconds what a
 flyby render answers in minutes; 12 → 13 on 2026-10-01 for the read-only
 `apex_doctor` capability and skill diagnostics; 13 → 16 on 2026-10-02 for
-`apex_session_status`, `apex_who_is_on_it` and `apex_ci_status`, the three
+`apex_who_is_on_it`, the one
 read-only session checks; 16 → 24 on 2026-10-03 for `apex_track` (a persistent
 track session: boot once, then shots in ~10–25 s instead of ~45 s each),
 `apex_job_start`/`_status`/`_cancel` (survey-track, layout-audit matrices,
@@ -329,10 +336,8 @@ and report comparison do not launch Chromium.
 | `apex_rotate_markings_check` | `track/rotate-markings.cjs` | tree | new-track |
 | `apex_graph_parity` | `track/graph-parity.cjs` | tree | scenery-dress |
 | `apex_frame_report` | `shot/frame-report.mjs` | tree | playwright-probe |
-| `apex_session_status` | `ci/session-status.mjs` | tree | steward |
 | `apex_who_is_on_it` | `ci/who-is-on-it.mjs` | tree | steward |
 | `apex_debug_chrome` | `mcp/debug-chrome.mjs` | tree | mcp-probe |
-| `apex_ci_status` | `ci/ci-watch.mjs` | tree | steward |
 | `apex_cursor_agents` | `ci/cursor-agents.mjs` | tree | agent-fleet |
 | `apex_track` | `shot/track-session.mjs` | browser | survey-track |
 | `apex_job_start` | `mcp/apex-extras.mjs` | tree | check-changes |
@@ -385,8 +390,6 @@ Pins the wrap always applies (you cannot override them):
   (`frame-report.mjs --fleet`, ~10 min) and `--diff old.json new.json` stay CLI.
 - `apex_who_is_on_it` → `--json`, never `--claim` / `--release` (they push refs);
   `paths` that start with `-` are refused so none reaches the CLI as a flag
-- `apex_ci_status` → `ci-watch.mjs --once --sha <hex|HEAD>`, never `--timeout` /
-  `--pages`; exits 0/1/2/124 are verdicts (`ok:true`, `out.verdict`), 3 (no
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
 - `apex_cursor_agents` → `cursor-agents.mjs <verb>`: ONE tool with a `verb` argument, only `verb`, `id`, `options` and
   `dryRun` published (the listing is byte-capped, so the per-verb `options` live in the text `apex_help` returns and

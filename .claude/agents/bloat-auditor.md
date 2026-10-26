@@ -8,7 +8,7 @@ memory: project
 readonly: true
 is_background: true
 background: true
-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics
 ---
 
 You audit ONE assigned scope for agent bloat. You are READ-ONLY. The

@@ -29,4 +29,8 @@ carries everything it needs. Output it in chat in one code block. Never write a
      `node tools/ci/session-status.mjs --pr`
    - skills to load (`.claude/skills/README.md`), and the user's grants quoted
      with their time; no merge grant is implied
-4. Under ~25 lines. Link the PR for detail instead of pasting it.
+4. Under ~25 lines. Link the PR for detail instead of pasting it. A fleet
+   orchestrator's successor brief is different: ≤ 40 lines from
+   `node tools/ci/fleet-brief.mjs` (`agent-fleet` `references/orchestrator.md`
+   §Hand-off). What a session must keep across compaction: AGENTS.md
+   `# Compact instructions`.

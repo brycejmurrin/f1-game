@@ -95,8 +95,21 @@ window.UiLayers = (function () {
      panel inside it. Judged on its own box the whole tuner was invisible to the
      layer stack — Escape did nothing there and the arrow keys still reached the
      car. Ask the children before calling a layer closed. */
+  /* Layers that still need a geometry read for ranking (`top`) and for the
+     rare CSS-only hide:
+     - #rotate-device — shown/hidden by CSS media queries, never `hidden`
+     - #lighting / #camtune — zero-size wrappers (children hold the box)
+     An open <dialog> is platform-visible (`el.open`). Measuring a dialog
+     (or every ordinary :not([hidden]) layer) after TopModal's showModal()/
+     inert writes forces a sync reflow — DevTools ForcedReflow on
+     Title→Settings, survey #3248. `shownLayer` still measures non-dialogs
+     so navOpen/anyOpen memo pins keep their layout-count assertions;
+     `top()` uses `layerOpen` so ranking itself does not flush layout. */
+  const NEEDS_BOX = { "rotate-device": 1, lighting: 1, camtune: 1 };
+
   function shownLayer(el) {
     if (!el || el.hidden) return false;
+    if (el.open) return true;
     if (getComputedStyle(el).visibility === "hidden") return false;
     const r = el.getBoundingClientRect();
     if (r.width >= 1 && r.height >= 1) return true;
@@ -104,6 +117,22 @@ window.UiLayers = (function () {
       if (shown(c)) return true;
     }
     return false;
+  }
+
+  /* Ranking open-test: trust `hidden` / `open` for ordinary layers so a
+     focusin→top() during Settings open does not force layout on #overlay.
+     #rotate-device is CSS-gated on body.in-race — without that class it cannot
+     be visible, so skip the geometry flush on the title/Settings path. */
+  function layerOpen(el) {
+    if (!el || el.hidden) return false;
+    if (el.open) return true;
+    if (el.id === "rotate-device") {
+      const root = document.body || document.documentElement;
+      if (!root || !root.classList || !root.classList.contains("in-race")) return false;
+      return shownLayer(el);
+    }
+    if (NEEDS_BOX[el.id]) return shownLayer(el);
+    return true;
   }
 
   function isModal(el) {
@@ -165,12 +194,22 @@ window.UiLayers = (function () {
     // Keep the native selector separate for engines without :modal support.
     let layers = Array.from(document.querySelectorAll(ALL_SEL));
     try { layers = layers.concat(Array.from(document.querySelectorAll(":modal"))); } catch (_) { /* older engine */ }
-    for (const el of new Set(layers)) {
+    const uniq = Array.from(new Set(layers));
+    // A live :modal always wins ranking. Skip non-modals entirely then so
+    // focusin→top() during Settings open does not getComputedStyle /
+    // getBoundingClientRect the title sheet behind it (#3248 ForcedReflow).
+    let anyModal = false;
+    for (let i = 0; i < uniq.length; i++) {
+      if (isModal(uniq[i])) { anyModal = true; break; }
+    }
+    for (const el of uniq) {
       const modal = isModal(el);
+      if (anyModal && !modal) continue;
       // :modal is the platform top layer even when Chromium has dropped the
       // element's box (css-layers: hidden→showModal re-attach). Size is the
       // wrong closed-test for that case — skip it and still rank the dialog.
-      if (!modal && !shownLayer(el)) continue;
+      // Ordinary non-modals use layerOpen (no geometry) when no modal is up.
+      if (!modal && !layerOpen(el)) continue;
       const rank = modal ? modalRank(el) : (parseInt(getComputedStyle(el).zIndex, 10) || 0);
       // A modal always outranks a non-modal; between two modals (or two
       // non-modals) the higher rank wins, ties going to the later element.

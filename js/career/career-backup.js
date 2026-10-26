@@ -590,6 +590,7 @@ const CareerBackup = (function () {
   function writeSlotValue(f, i, data, expectedRevision, prepared) {
     const s = store();
     if (!s) return { ok: false, durable: false, reason: "no-store" };
+    if (s.careerWriteStatus && !s.careerWriteStatus().ok) return s.careerWriteStatus();
     const key = slotKey(f, i);
     const versionIssue = destinationVersionIssue(s.get(key, null));
     if (versionIssue) return { ok: false, durable: false, reason: versionIssue };
@@ -609,7 +610,7 @@ const CareerBackup = (function () {
       if (previous) CareerRestorePoints.capture(f, i, previous, { reason: "before-import" });
     }
     const result = typeof s.write === "function" ? s.write(key, value) : { ok: true, durable: s.set(key, value) !== false, reason: null };
-    if (typeof Career !== "undefined" && Career) {
+    if (result.ok && typeof Career !== "undefined" && Career) {
       const live = Career.slot && Career.slot();
       if (live && live.flavour === f && live.i === i && Career.useSlot) {
         // Refresh the in-memory career from the just-written slot (re-arms revision).
@@ -813,6 +814,7 @@ const CareerBackup = (function () {
     const pendingOther = !!(focus && !o.otherFlavourConfirmed && otherFlavourPending(envelope, focus));
 
     const s = store();
+    if (s && s.careerWriteStatus && !s.careerWriteStatus().ok) return s.careerWriteStatus();
     const selected = o.liveSlot;
     if (o.recovery && envelope.season != null && o.expectedSeasonRevision != null && s && s.keyRevision
       && o.expectedSeasonRevision !== s.keyRevision("season")) return { ok: false, reason: "conflict" };
@@ -960,6 +962,7 @@ const CareerBackup = (function () {
   function wipeAllSlots() {
     const s = store();
     if (!s) return { ok: false, reason: "no-store" };
+    if (s.careerWriteStatus && !s.careerWriteStatus().ok) return s.careerWriteStatus();
     for (const f of FLAVOURS) {
       for (let i = 0; i < SLOTS; i++) {
         if (typeof s.write === "function") s.write(slotKey(f, i), null);

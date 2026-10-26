@@ -38,11 +38,6 @@ const GLXBackend = (function () {
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
   const MOBILE_TIER = GLX.mobileTier;
   let _ctxLost = false, _lossCounted = false;   // lost→restore; counted loss arms ctxLostNotice (#3513)
-  // Fallback for the two-reload budget when sessionStorage throws (Safari
-  // private / quota). Without it, both the loss timer and the restore reload
-  // bailed, leaving a restored context with _ctxLost still set — a silent
-  // dead canvas. In-memory only, so a real new visit still gets two attempts.
-  let _sessLostN = 0; const _fallbackLossCount = () => { try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { return 0; } };
   // Past the ctx-loss reload budget: record for __apex.diag() without painting
   // the full-screen error overlay — RendererPicker.showUnavailable already shows
   // the Graphics unavailable panel and a second tap should not dismiss a card.
@@ -106,6 +101,7 @@ const GLXBackend = (function () {
   // gpuMs() returns -1) when the extension is missing — notably iOS Safari,
   // where it's unreliable/absent, so this is a Chrome/Android profiling aid.
   let _gpuTimerExt = null, _gpuTimerOn = false, _gpuQPending = [], _gpuMs = -1;
+  let _gpuSamples = 0, _gpuSampleAt = -1;
   let _anisoExt = null, _anisoMax = 0;   // EXT_texture_filter_anisotropic (capped 4×)
   let _gpuQActive = null;   // query open between begin() and present() this frame
   let litProg = null, litU = null;
@@ -594,7 +590,7 @@ const GLXBackend = (function () {
       // xrCompatible only when navigator.xr (task 20); omit otherwise (Safari/SwiftShader).
       ...(typeof navigator !== "undefined" && navigator.xr ? { xrCompatible: true } : {}),
     });
-    if (!gl) return false; try { setTimeout(function () { if (/^apex26\.ctxLostReloads=\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
+    if (!gl) return false;
     _softwareGl = detectSoftwareGl();
     if (Soft.isEnabled()) Soft.ensureSoftDisplay();
 
@@ -715,12 +711,7 @@ const GLXBackend = (function () {
         } catch (_) { /* no document events: the restore handler below is the remaining path */ }
         return;
       }
-      var _n;
-      try {
-        var _rk = "apex26.ctxLostReloads";
-        _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
-        sessionStorage.setItem(_rk, String(_n));
-      } catch (_) { _n = Math.max(++_sessLostN, _fallbackLossCount() + 1); try { window.name = "apex26.ctxLostReloads=" + _n; } catch (_) { /* best effort */ } }
+      var _n = GfxEscalation.nextReloadCount();
       _lossCounted = true;
       if (_n <= 2) setTimeout(function () {
         try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: menu still loads; the player just gets no explanation */ }
@@ -747,8 +738,7 @@ const GLXBackend = (function () {
     }, false);
     // Restore obeys the same two-reload budget; storage failure must not skip reload.
     canvas.addEventListener("webglcontextrestored", function () {
-      var n = 0;
-      try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
+      var n = GfxEscalation.reloadCount();
       if (n > 2) return;
       if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage */ }
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
@@ -1649,13 +1639,16 @@ const GLXBackend = (function () {
     const disjoint = gl.getParameter(_gpuTimerExt.GPU_DISJOINT_EXT);
     if (disjoint) {
       for (let i = 0; i < _gpuQPending.length; i++) gl.deleteQuery(_gpuQPending[i]);
-      _gpuQPending.length = 0;
+      _gpuQPending.length = 0; _gpuMs = -1; _gpuSampleAt = -1;
       return;
     }
     while (_gpuQPending.length) {
       const q = _gpuQPending[0];
       if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
-      _gpuMs = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6;   // ns → ms
+      const ms = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6;   // ns → ms
+      if (Number.isFinite(ms) && ms >= 0) {
+        _gpuMs = ms; _gpuSampleAt = performance.now(); _gpuSamples++;
+      }
       gl.deleteQuery(q);
       _gpuQPending.shift();
     }
@@ -2878,12 +2871,15 @@ const GLXBackend = (function () {
         if (!_gpuTimerOn) {
           if (_gpuQActive) { try { gl.endQuery(_gpuTimerExt.TIME_ELAPSED_EXT); gl.deleteQuery(_gpuQActive); } catch (_) {} _gpuQActive = null; }
           for (let i = 0; i < _gpuQPending.length; i++) gl.deleteQuery(_gpuQPending[i]);
-          _gpuQPending.length = 0; _gpuMs = -1;
+          _gpuQPending.length = 0; _gpuMs = -1; _gpuSampleAt = -1;
         }
       }
-      return { supported: !!_gpuTimerExt, on: _gpuTimerOn };
+      if (ctxGone()) { _gpuMs = -1; _gpuSampleAt = -1; }
+      // Resolution time, not query submission time. Serial survives toggles.
+      return { supported: !!_gpuTimerExt, on: _gpuTimerOn, samples: _gpuSamples, sampleAt: _gpuSampleAt,
+        sampleAgeMs: _gpuSampleAt < 0 ? -1 : Math.max(0, performance.now() - _gpuSampleAt) };
     },
-    gpuMs() { return _gpuMs; },
+    gpuMs() { return ctxGone() ? -1 : _gpuMs; },
     isMobile: IS_MOBILE,
     mobileTier: MOBILE_TIER,   // phone NOT opted into GRAPHICS: HIGH → memory-safe caps apply
   };
