@@ -689,6 +689,8 @@
     "tests/unit/ios-input-zoom-w25e.test.mjs",
     "// #3558: iOS Safari focus auto-zoom — text inputs in FREE sheets must floor at 16px.",
     "tests/unit/ios-input-zoom.test.mjs",
+    "// #3315: Jeddah night_pass/dual_lite/scenery orbit at frac 0 clears near-field neon canyon (game-vm + propsGeo, ~5 s).",
+    "tests/unit/jeddah-night-orbit.test.mjs",
     "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
     "tests/unit/js-debugger-mcp.test.mjs",
     "tests/unit/js-debugger-node.test.mjs",
