@@ -215,25 +215,30 @@
       gantry(sl(0.80), 8.5, [0.12, 0.12, 0.16]);
 
       const { cx, cz, radius: trad } = lapBounds();
-      const ring = trad + 520;
-      const desertN = 22;
+      // Far desert ring — keep it as hinterland, not the day-orbit hero (#3363).
+      // Fewer, lower, further mounds so Strip hotel massing reads first.
+      const ring = trad + 680;
+      const desertN = 12;
       for (let i = 0; i < desertN; i++) {
         const a = i / desertN * 6.2832, h = hash(i * 7 + 3), h2 = hash(i * 13 + 2);
         const mx = cx + Math.cos(a) * ring, mz = cz + Math.sin(a) * ring;
         if (onTrack(mx, mz, 60)) continue;
-        const mh = 34 + h * 56, baseR = 150 + h2 * 130;
+        const mh = 22 + h * 34, baseR = 120 + h2 * 90;
         const rock = [DARKROCK[0] * (0.9 + h * 0.4), DARKROCK[1] * (0.9 + h * 0.4), DARKROCK[2] * (0.95 + h * 0.5)];
         addFrustum(out, [mx, pyMin - 4, mz], baseR * 1.5, baseR * 0.95, mh * 0.42, [rock[0] * 1.1, rock[1] * 1.1, rock[2] * 1.1], 6);
         addFrustum(out, [mx, pyMin - 4 + mh * 0.30, mz], baseR, baseR * 0.58, mh * 0.7, rock, 6);
       }
 
-      // Far skyline — vary WIDTH / height / crown tint so the ring is not one
-      // cloned extrusion (sheet-02 overview). Keep every solid ground-seated:
-      // stepped/cylinder experiments floated crowns off pyMin (float-audit).
+      // Far skyline — day-readable hotel glass / cream (not neon-washed grey
+      // ziggurats). Neon crown bands stay for night; walls must read by day.
       {
         const sky = trad + 300;
         const skyN = 44;
-        const SKYTINT = [CYAN, WARM, VIOLET, BLUE, ROSE];
+        // Cream / copper / cool-glass hotel skins (day orbit identity).
+        const SKYWALL = [
+          [0.72, 0.68, 0.58], [0.58, 0.62, 0.70], [0.66, 0.58, 0.50],
+          [0.62, 0.66, 0.72], [0.70, 0.64, 0.56], [0.54, 0.58, 0.66],
+        ];
         for (let i = 0; i < skyN; i++) {
           const a = i / skyN * 6.2832, h = hash(i * 11 + 17), h2 = hash(i * 23 + 5);
           const rr = sky + (hash(i * 31 + 9) - 0.5) * 160;
@@ -241,19 +246,18 @@
           if (onTrack(mx, mz, 80)) continue;
           const slim = (i % 5 === 1) ? 0.62 : (i % 5 === 3) ? 1.18 : 1.0;
           const bh = 50 + h * 130, bw = (34 + h2 * 30) * slim, bd = (34 + h2 * 26) * (2.0 - slim * 0.5);
-          const tint = SKYTINT[i % SKYTINT.length];
-          const lvl = 0.46 + h2 * 0.16;
-          const skin = [tint[0] * lvl + 0.06, tint[1] * lvl + 0.06, tint[2] * lvl + 0.08];
+          const skin = SKYWALL[i % SKYWALL.length];
           const baseH = bh * 0.78;
           addBox(out, [mx, pyMin + baseH / 2, mz], [bw, baseH, bd], skin);
           // thin dark floor spandrels — storey rhythm without the checker
           const floors = Math.max(3, Math.round(baseH / 18));
           for (let f = 1; f < floors; f++) {
-            addBox(out, [mx, pyMin + f * (baseH / floors), mz], [bw * 1.02, 0.9, bd * 1.02], [0.05, 0.05, 0.08]);
+            addBox(out, [mx, pyMin + f * (baseH / floors), mz], [bw * 1.02, 0.9, bd * 1.02], [0.22, 0.20, 0.18]);
           }
-          // TAPERED frustum crown → a slim top, not a flat box edge
-          const crownCol = [tint[0] * 0.6 * lvl + 0.05, tint[1] * 0.6 * lvl + 0.05, tint[2] * 0.6 * lvl + 0.07];
-          addFrustum(out, [mx, pyMin + baseH, mz], Math.max(bw, bd) * 0.5, Math.max(bw, bd) * 0.28, bh - baseH, crownCol, 6);
+          // Setback crown (box, not frustum) — hotel top, not a desert ziggurat.
+          const crownCol = [skin[0] * 0.88, skin[1] * 0.88, skin[2] * 0.90];
+          addBox(out, [mx, pyMin + baseH + (bh - baseH) / 2, mz],
+            [bw * 0.72, bh - baseH, bd * 0.72], crownCol);
           const neon = NEON[i % NEON.length];
           addBox(out, [mx, pyMin + bh - 2, mz], [bw * 0.55, 3, bd * 0.55], neon);   // bright crown band
           // spires on the taller landmark towers
@@ -479,28 +483,43 @@
         // equator, flat base, so the vertical axis is squashed to H = 112 m.
         const R = 78.5, H = 112;
         const baseY = a.c[1];
-        const SPHERE = [0.16, 0.72, 0.98];
-        const SPHERE_HI = [0.42, 0.92, 1.00];
+        // Day panel skin (dark LED matrix) + brighter night bands: the orb must
+        // read as a sphere in daylight, not only when neon emissives fire (#3363).
+        const SPHERE = [0.10, 0.28, 0.42];
+        const SPHERE_HI = [0.28, 0.72, 0.92];
+        const SPHERE_EQ = [0.92, 0.28, 0.78];
+        const RIB = [0.14, 0.16, 0.20];
         modelGroup("vegas-sphere", {
           center: [a.c[0], baseY + H / 2, a.c[2]],
           size: [R * 2.08, H * 1.04, R * 2.08],
         }, (stage) => {
           // 14 cos-spaced latitude bands of an ellipsoid, flat-based (phi from
           // P0) and capped near the pole, so the silhouette reads as an orb, not
-          // stacked buckets. Bands alternate LED tint; the equator is magenta.
+          // stacked buckets. Dark/bright alternate for day contrast; equator magenta.
           const P0 = 0.62, P1 = Math.PI - 0.12, bands = 14;
           const yAt = (ph) => baseY + H * (Math.cos(P0) - Math.cos(ph)) / (Math.cos(P0) - Math.cos(P1));
           for (let i = 0; i < bands; i++) {
             const ph0 = P0 + (P1 - P0) * i / bands, ph1 = P0 + (P1 - P0) * (i + 1) / bands;
             const mid = (ph0 + ph1) / 2;
-            const tint = Math.abs(mid - Math.PI / 2) < 0.12 ? [1.0, 0.35, 0.85] : (i % 2 ? SPHERE_HI : SPHERE);
+            const tint = Math.abs(mid - Math.PI / 2) < 0.12 ? SPHERE_EQ : (i % 2 ? SPHERE_HI : SPHERE);
             addFrustum(stage, [a.c[0], yAt(ph0), a.c[2]], R * Math.sin(ph0), R * Math.sin(ph1),
               yAt(ph1) - yAt(ph0), tint, 28, null);
           }
-          // Bright polar cap + dark pedestal ring on grade.
+          // Meridian ribs — day silhouette of the LED panel grid (MSG Sphere).
+          const eqY = yAt(Math.PI / 2);
+          for (let m = 0; m < 12; m++) {
+            const ang = (m / 12) * Math.PI * 2;
+            const rr = R * 0.98;
+            addBox(stage,
+              [a.c[0] + Math.cos(ang) * rr, eqY, a.c[2] + Math.sin(ang) * rr],
+              [2.2, H * 0.72, 2.2], RIB, null);
+          }
+          // Bright polar cap + dark pedestal ring on grade (ground-seated).
           addCyl(stage, [a.c[0], yAt(P1) - 0.5, a.c[2]], R * Math.sin(P1) + 1.5, 1.5, SPHERE_HI, 16, null);
-          seat.frustum(stage, [a.c[0], baseY, a.c[2]], R * Math.sin(P0) + 3, R * Math.sin(P0) + 1, 3.5,
-            [0.22, 0.24, 0.28], 24, null);
+          seat.frustum(stage, [a.c[0], baseY, a.c[2]], R * Math.sin(P0) + 3, R * Math.sin(P0) + 1, 4.2,
+            [0.18, 0.20, 0.24], 24, null);
+          // Plaza apron under the Sphere so the cluster seats on grade in day orbit.
+          seat.box(stage, [a.c[0], baseY, a.c[2]], [R * 1.15, 1.6, R * 1.15], [0.28, 0.28, 0.32], null);
         }, { required: true });
         // Cyan / lime runoff stripe near the Sphere.
         groundPatch(K(sl(0.292)), -1, 4.5, [10, 0.16, 42], [0.12, 0.55, 0.62],
@@ -589,23 +608,30 @@
         place(K(sl(0.62)), 1, 14, [10, 1.2, 50], [0.95, 0.75, 0.15], 0.3);   // deeper foot: not coplanar with the strip above
       }
 
-      // Bellagio + fountain lake — long elegant box + blue reflective pool.
+      // Bellagio + fountain lake — cream Italianate mass + blue reflective pool.
+      // Day walls must read without neon (#3363); crown gold stays for night.
       {
         const a = anchor(K(sl(0.68)), 1, 70);
         const b = [a.r, a.u, a.t];
-        const BEL = [0.52, 0.48, 0.44];
-        const BEL_WIN = [1.0, 0.88, 0.42];
+        const BEL = [0.78, 0.72, 0.60];
+        const BEL_D = [0.68, 0.62, 0.50];
+        const BEL_WIN = [0.55, 0.72, 0.88];
         modelGroup("vegas-bellagio", {
           center: vadd(a.c, a.u, 36),
           size: [48, 78, 120],
           basis: b,
         }, (stage) => {
           seat.box(stage, a.c, [40, 14, 108], BEL, b);
-          seat.box(stage, vadd(a.c, a.u, 14), [36, 52, 100], BEL, b);
+          seat.box(stage, vadd(a.c, a.u, 14), [36, 52, 100], BEL_D, b);
           stage._mat = MAT.GLASS;
           addBox(stage, vadd(a.c, a.u, 38), [37.2, 42, 101], BEL_WIN, b);
           stage._mat = 0;
-          seat.box(stage, vadd(a.c, a.u, 66), [32, 8, 88], [0.42, 0.40, 0.38], b);
+          // Arcade colonnade on the lake face — day-readable Bellagio language.
+          for (const off of [-40, -24, -8, 8, 24, 40]) {
+            seat.cyl(stage, vadd(vadd(a.c, a.t, off), a.r, -19), 1.1, 12, BEL, 8, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, -19), a.u, 12.5), [1.6, 1.2, 96], [0.92, 0.86, 0.70], b);
+          seat.box(stage, vadd(a.c, a.u, 66), [32, 8, 88], [0.62, 0.56, 0.46], b);
           addBox(stage, vadd(a.c, a.u, 72), [20, 2.5, 60], [1.0, 0.78, 0.28], b);
           // Crown neon band — keep proud of the roof slab (no coplanar fight).
           addBox(stage, vadd(a.c, a.u, 75.2), [18, 2.0, 56], [1.0, 0.82, 0.35], b);
@@ -623,13 +649,14 @@
           addBox(out, vadd(ba.c, ba.u, 1.45), [0.55, 0.18, 0.55], [0.95, 0.85, 0.45], [ba.r, ba.u, ba.t]);
         }
       }
+      // Fountain jets — white/cyan water columns that read by day (neon accents stay sparse).
       const bellagioJets = 18;
-      const jetCols = [CYAN, [0.15, 0.50, 1.00], LED, [0.30, 0.85, 1.00], BLUE, MAGENTA, [0.20, 0.90, 0.95], ROSE];
+      const jetCols = [LED, [0.55, 0.82, 0.95], CYAN, LED, [0.40, 0.70, 0.95], LED, [0.60, 0.88, 1.00], CYAN];
       for (let i = 0; i < bellagioJets; i++) {
         const s = 0.663 + (i / (bellagioJets - 1)) * 0.046;
         const a = anchor(K(sl(s)), 1, 26 + hash(i * 4.7) * 10);
-        const jetH = 8 + hash(i * 9.3 + 2) * 16;
-        addBox(out, vadd(a.c, a.u, jetH / 2), [0.8, jetH, 0.8], jetCols[i % jetCols.length], [a.r, a.u, a.t]);
+        const jetH = 10 + hash(i * 9.3 + 2) * 18;
+        addBox(out, vadd(a.c, a.u, jetH / 2), [1.0, jetH, 1.0], jetCols[i % jetCols.length], [a.r, a.u, a.t]);
       }
       waterSurface(K(sl(0.672)), 1, 18, [118, 1.4, 160], [0.04, 0.18, 0.32],
         { id: "vegas-bellagio-lake-east", required: true });
@@ -658,42 +685,44 @@
         // Lit tip seated on the tower mast height (connected, not a free float).
         addBox(out, vadd(tw.c, tw.u, 132), [2.4, 4, 2.4], [1.0, 0.85, 0.35], tb);
       }
-      building(K(sl(0.73)), -1, 24, 36, 55, 34, { wall: [0.62, 0.58, 0.48], window: [1.0, 0.82, 0.30], floor: 7 });
+      building(K(sl(0.73)), -1, 24, 36, 55, 34, { wall: [0.72, 0.66, 0.54], window: [1.0, 0.82, 0.30], floor: 7 });
       {
-        const a = anchor(K(sl(0.748)), -1, 26), b = [a.r, a.u, a.t];
+        // Paris Montgolfier as a PLAZA SIGN beside the hotel — not a sky-dominating
+        // hot-air balloon in the day orbit panel (#3363). Landmark id kept.
+        const a = anchor(K(sl(0.748)), -1, 38), b = [a.r, a.u, a.t];
         const RED   = [0.72, 0.12, 0.14], RED_D = [0.56, 0.09, 0.11];
         const GOLD  = [0.94, 0.74, 0.24], BLUE_RIB = [0.16, 0.22, 0.52];
         modelGroup("vegas-paris-balloon", {
-          center: vadd(a.c, a.u, 21), size: [26, 44, 26], basis: b,
+          center: vadd(a.c, a.u, 9), size: [14, 22, 14], basis: b,
         }, (stage) => {
-          seat.box(stage, a.c, [12, 6, 16], [0.20, 0.18, 0.22], b);
-          addBox(stage, vadd(vadd(a.c, a.r, -6.2), a.u, 3.4), [0.5, 4.2, 13], GOLD, b);
-          const bc = vadd(a.c, a.u, 7.5);
+          seat.box(stage, a.c, [8, 3.2, 10], [0.20, 0.18, 0.22], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -4.0), a.u, 2.0), [0.4, 2.6, 8], GOLD, b);
+          const bc = vadd(a.c, a.u, 3.6);
+          // Compact envelope (~14 m tall) so the Eiffel silhouette owns Paris by day.
           const bands = [
-            [0.0,  5.0,  8.6, 5.5, RED],
-            [5.5,  8.6, 11.2, 5.5, GOLD],
-            [11.0, 11.2, 11.6, 5.0, RED_D],
-            [16.0, 11.6,  9.2, 5.0, GOLD],
-            [21.0,  9.2,  5.4, 4.6, RED],
-            [25.6,  5.4,  1.8, 3.0, GOLD],
+            [0.0,  2.8,  5.0, 3.2, RED],
+            [3.2,  5.0,  6.2, 3.0, GOLD],
+            [6.2,  6.2,  5.4, 2.8, RED_D],
+            [9.0,  5.4,  3.6, 2.6, GOLD],
+            [11.6, 3.6,  1.2, 2.0, RED],
           ];
           for (const [y, r0, r1, h, col] of bands) {
-            seat.frustum(stage, vadd(bc, a.u, y), r0, r1, h, col, 16, b);
+            seat.frustum(stage, vadd(bc, a.u, y), r0, r1, h, col, 14, b);
           }
-          for (let i = 0; i < 8; i++) {
-            const ang = (i / 8) * Math.PI * 2;
-            const rr = 11.3;
+          for (let i = 0; i < 6; i++) {
+            const ang = (i / 6) * Math.PI * 2;
+            const rr = 5.8;
             addBox(stage, vadd(vadd(vadd(bc, a.r, Math.cos(ang) * rr),
-                                     a.t, Math.sin(ang) * rr), a.u, 13.0),
-                   [0.5, 11.0, 0.5], BLUE_RIB, b);
+                                     a.t, Math.sin(ang) * rr), a.u, 6.5),
+                   [0.35, 6.0, 0.35], BLUE_RIB, b);
           }
-          const gc = vadd(a.c, a.u, 5.0);
-          seat.box(stage, gc, [4.6, 3.2, 4.6], [0.46, 0.30, 0.16], b);
-          addBox(stage, vadd(gc, a.u, 3.4), [5.0, 0.4, 5.0], GOLD, b);
+          const gc = vadd(a.c, a.u, 2.4);
+          seat.box(stage, gc, [3.2, 2.2, 3.2], [0.46, 0.30, 0.16], b);
+          addBox(stage, vadd(gc, a.u, 2.3), [3.6, 0.35, 3.6], GOLD, b);
           stage._mat = MAT.METAL;
-          for (const [dx, dz] of [[-2.0, -2.0], [2.0, -2.0], [-2.0, 2.0], [2.0, 2.0]]) {
-            seat.cyl(stage, vadd(vadd(vadd(gc, a.r, dx), a.t, dz), a.u, 3.2),
-                   0.07, 2.6, [0.62, 0.55, 0.34], 4, b);
+          for (const [dx, dz] of [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]]) {
+            seat.cyl(stage, vadd(vadd(vadd(gc, a.r, dx), a.t, dz), a.u, 2.2),
+                   0.06, 1.8, [0.62, 0.55, 0.34], 4, b);
           }
           stage._mat = 0;
         }, { required: true });
@@ -727,7 +756,8 @@
         const span = ((s1 - s0) + 1) % 1 || (s1 - s0);
 
         const STEP = 0.009;
-        const backdropCols = [[0.20, 0.18, 0.24], [0.18, 0.16, 0.22], [0.22, 0.20, 0.20]];
+        // Day hotel canyon — cream / terracotta / glass, not near-black blocks (#3363).
+        const backdropCols = [[0.70, 0.64, 0.54], [0.58, 0.62, 0.70], [0.66, 0.56, 0.48]];
         let idx = 0;
         for (let s = 0.485; s <= 0.815; s += STEP, idx++) {
           const k = K(sl(s));
@@ -744,8 +774,6 @@
           }
         }
 
-        const casinoPalL = [[0.22, 0.18, 0.22], [0.18, 0.17, 0.24], [0.24, 0.20, 0.20], [0.20, 0.18, 0.26]];
-        const casinoPalR = [[0.20, 0.19, 0.26], [0.24, 0.20, 0.22], [0.18, 0.18, 0.22], [0.22, 0.21, 0.20]];
         // Street-level storefront pods — closed solid cores (NOT building()).
         // Gap ~10.5 sits between barrier neon (~3) and palms (15) / cityFront
         // (19). Thin depth avoids neonTower / signature-tower clips.
@@ -758,7 +786,8 @@
           const along = 10 + h * 5;
           const depth = 3.2;
           const H = 10 + h * 4;
-          const wall = [0.08, 0.07, 0.10];
+          // Day-readable shop fronts (warm plaster), neon fascia for night.
+          const wall = [0.42, 0.36, 0.30];
           addBox(out, vadd(a.c, a.u, H / 2), [depth, H, along], wall, b);
           addBox(out, vadd(vadd(a.c, a.r, -side * (depth / 2 + 0.32)), a.u, H * 0.84),
             [0.45, 1.8, along * 0.94], neon, b);
@@ -790,12 +819,17 @@
           groundPatch(K(sl(s)), side, 8.0, [6, 0.14, 16], LOT_ASPHALT,
             { id: `vegas-strip-sidewalk-${side > 0 ? "r" : "l"}-${Math.round(s * 1000)}`, samples: 3 });
         }
-        // Tall signature casino towers punched along the canyon (prominent landmarks)
+        // Tall signature casino towers — cream / copper / ivory day walls so the
+        // Strip reads as hotels by day, not grey blocks (#3363). Neon windows stay.
+        const casinoDayWall = [
+          [0.74, 0.68, 0.56], [0.62, 0.58, 0.68], [0.70, 0.60, 0.48], [0.68, 0.66, 0.58],
+          [0.58, 0.62, 0.70], [0.72, 0.64, 0.52], [0.66, 0.60, 0.54], [0.60, 0.56, 0.48],
+        ];
         for (let j = 0; j < 8; j++) {
           const s = 0.485 + (j + 0.5) / 8 * 0.33, side = (j % 2) ? -1 : 1;
           const windowCol = [WARM, CYAN, MAGENTA, GOLD, VIOLET][j % 5];
           building(K(sl(s)), side, 68, 28, 120 + hash(j * 17) * 65, 36,
-            { wall: [0.22, 0.20, 0.22], window: windowCol, floor: 16, lit: true });
+            { wall: casinoDayWall[j], window: windowCol, floor: 16, lit: true });
         }
 
         // Strip-side neon billboards (spaced, not every step — avoids overdraw)
@@ -841,11 +875,12 @@
       billboard(K(sl(0.18)), 1, 18, 14, 9, ROSE);
       billboard(K(sl(0.26)), -1, 18, 14, 9, BLUE);
 
-      for (let j = 0; j < 6; j++) {
-        const a = j / 6 * 6.2832 + 0.4, h = hash(j * 13 + 5);
-        const mx = cx + Math.cos(a) * (ring - 180), mz = cz + Math.sin(a) * (ring - 180);
+      // Inner desert foothills — low hinterland only (day Strip must not read as sand).
+      for (let j = 0; j < 4; j++) {
+        const a = j / 4 * 6.2832 + 0.4, h = hash(j * 13 + 5);
+        const mx = cx + Math.cos(a) * (ring - 120), mz = cz + Math.sin(a) * (ring - 120);
         if (onTrack(mx, mz, 60)) continue;
-        const mw = 180 + h * 140, mh = 18 + h * 22;
+        const mw = 140 + h * 100, mh = 10 + h * 14;
         addFrustum(out, [mx, pyMin, mz], mw * 0.5, mw * 0.3, mh, DARKROCK, 5, null);
       }
       overheadSpan({

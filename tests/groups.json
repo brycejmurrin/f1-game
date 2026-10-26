@@ -1470,6 +1470,8 @@
     "tests/unit/ui-sheets-audit.test.mjs",
     "tests/unit/uilayers-modal-order.test.mjs",
     "tests/unit/validation-cli.test.mjs",
+    "// #3363: Vegas day Strip — cream hotel walls, Sphere meridians, Bellagio colonnade, plaza Montgolfier (not desert+balloon). Source pins, < 0.1 s.",
+    "tests/unit/vegas-day-strip.test.mjs",
     "// Vendored licence files: every vendor/ package has one and a declared SPDX licence matches its text (#3092). < 0.1 s.",
     "tests/unit/vendor-licences.test.mjs",
     "tests/unit/verify-live.test.mjs",

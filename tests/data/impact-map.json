@@ -4500,8 +4500,24 @@
       ]
     },
     "js/circuits/scenery/vegas.js": {
+      "casinoDayWall": [
+        "tests/unit/vegas-day-strip.test.mjs"
+      ],
+      "desertN": [
+        "tests/unit/vegas-day-strip.test.mjs"
+      ],
+      "vegas-bellagio": [
+        "tests/unit/vegas-day-strip.test.mjs"
+      ],
+      "vegas-paris-balloon": [
+        "tests/unit/vegas-day-strip.test.mjs"
+      ],
+      "vegas-sphere": [
+        "tests/unit/vegas-day-strip.test.mjs"
+      ],
       "*": [
-        "tests/unit/scenery-guards.test.mjs"
+        "tests/unit/scenery-guards.test.mjs",
+        "tests/unit/vegas-day-strip.test.mjs"
       ]
     },
     "js/circuits/shanghai.js": {
