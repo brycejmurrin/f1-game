@@ -186,7 +186,23 @@ window.UiLayers = (function () {
      DOM order breaks z-index ties between non-modal layers.
      Rank a :modal layer even at 0×0: Chromium can drop its box after the
      hidden→showModal seam, and shownLayer would then pick the screen behind. */
+  /* MEMOISED like navOpen() (audit4 UB2): pad-menu's padNavPoll asks top() EVERY
+     FRAME while a pad is in a menu, and each live call is a 36-selector
+     querySelectorAll plus :modal plus a getComputedStyle per open layer. The same
+     observer drops the memo (navDirty), a second one sees any `open` attribute in
+     the document (showModal on a dynamic dialog), and a detached answer is never
+     returned. */
+  let topMemo, topMemoAt = 0;
   function top() {
+    const now = clock();
+    if (navObs && now - topMemoAt < NAV_MEMO_MS && !navDirty() && topMemo !== undefined
+      && (!topMemo || topMemo.isConnected !== false)) return topMemo;
+    topMemo = topNow();
+    topMemoAt = now;
+    if (navObs) { navDirty(); navStale = false; }
+    return topMemo;
+  }
+  function topNow() {
     let best = null;
     let bestRank = -Infinity;
     let bestModal = false;
@@ -232,8 +248,8 @@ window.UiLayers = (function () {
 
      top() deliberately keeps its querySelectorAll: it ranks by z-index and
      relies on DOCUMENT ORDER to break ties ("the LATER element, which is the
-     one painted on top"), which DEFS order does not promise. It also runs on
-     key events, not per frame. */
+     one painted on top"), which DEFS order does not promise. The pad poll asks it
+     every frame, so it is memoised behind navDirty (see top()). */
   let _gateEls = null;
   function gateEls() {
     if (_gateEls) {
@@ -262,6 +278,7 @@ window.UiLayers = (function () {
   let navMemo = null;
   let navMemoAt = 0;
   let navObs = null;
+  let openObs = null;
   let navStale = false;
   const navWatched = new WeakSet();
   const NAV_ATTRS = ["hidden", "class", "style", "open", "inert"];
@@ -337,13 +354,14 @@ window.UiLayers = (function () {
   function navDirty() {
     if (!navObs) return true;
     if (navObs.takeRecords().length) navStale = true;
+    if (openObs && openObs.takeRecords().length) navStale = true;
     // Layers created since the last look join the watch before the memo is trusted.
     for (const el of gateEls()) navWatch(el, true);
     navWatch(document.getElementById("overlay"), true);
     navWatch(document.getElementById("rotate-device"), true);
     const stale = navStale;
     navStale = false;
-    if (stale) { gateMemo = null; navMemo = null; } // one dirty flag, two memos: whoever reads it must drop both
+    if (stale) { gateMemo = null; navMemo = null; topMemo = undefined; } // one dirty flag, three memos: whoever reads it must drop all
     return stale;
   }
 
@@ -351,6 +369,10 @@ window.UiLayers = (function () {
     navObs = new MutationObserver(() => { navStale = true; });
     const root = document.documentElement;
     navWatch(root, false);
+    // top()'s memo: any dialog's `open` anywhere (a separate observer, since a second
+    // observe() of root on navObs would replace its options).
+    openObs = new MutationObserver(() => { navStale = true; });
+    openObs.observe(root, { attributes: true, attributeFilter: ["open"], subtree: true });
     if (document.body) navWatch(document.body, false);
     else document.addEventListener("DOMContentLoaded", () => { navWatch(document.body, false); navStale = true; }, { once: true });
     const drop = () => { navStale = true; };

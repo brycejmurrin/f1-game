@@ -77,15 +77,15 @@ const lazyBundles = LazyBundles.create({
   applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
   createNetwork: () => { netPlay = NetPlay.create(G); netLobby = NetLobby.create(G); return netLobby; },
   bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G); if (typeof VisorOptics !== "undefined") window.__apex.visorScene = () => VisorOptics.sceneFromG(G); } },
-  // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals.
-  onAudioReady: () => {
-    radioVoice = RadioVoice.create(G);
-    announcer = Announcer.create(G);
-    rivalAudio = RivalAudio.create(G);
-    carSfx = CarSfx.create(G);
-    audioPanel = AudioPanel.create(G);
-    if (audioPanel && audioPanel.init) audioPanel.init();
-    if (typeof DrivingCues !== "undefined" && DrivingCues.create) DrivingCues.create(G);
+  // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals; `once` latches each part (a retry re-runs only the one that threw).
+  onAudioReady: (once = (k, f) => f()) => {
+    once("radio", () => { radioVoice = RadioVoice.create(G); });
+    once("announcer", () => { announcer = Announcer.create(G); });
+    once("rivals", () => { rivalAudio = RivalAudio.create(G); });
+    once("carSfx", () => { carSfx = CarSfx.create(G); });
+    once("panel", () => { audioPanel = AudioPanel.create(G); });
+    once("panelInit", () => { if (audioPanel && audioPanel.init) audioPanel.init(); });
+    once("cues", () => { if (typeof DrivingCues !== "undefined" && DrivingCues.create) DrivingCues.create(G); });
   },
   // Recreate race-session instances after LAZY_RACE_SESSION reinjects real `var`s.
   onRaceSessionReady: () => {
@@ -9534,7 +9534,7 @@ lazyBundles.raceAssets();
 // keydown too, but on the stub — with nothing pulling the bundle, restoreOnEngine's
 // replay never ran and a keyboard-first title stayed silent. Escape is no activation.
 if (typeof window !== "undefined") {
-  window.addEventListener("pointerdown", () => { ensureAudio(); }, { once: true, capture: true });
+  window.addEventListener("pointerdown", () => { ensureAudio(); }, { once: true, capture: true });   // pointerup/touchend/click (activation-triggering for touch): lazy-bundles armAudioGesture
   const keyKick = (e) => { if (e && e.key === "Escape") return; window.removeEventListener("keydown", keyKick, true); ensureAudio(); };
   window.addEventListener("keydown", keyKick, true);
 }
