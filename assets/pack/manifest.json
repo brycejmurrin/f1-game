@@ -235,8 +235,12 @@
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         }
-      ]
-    }
+      ],
+      "albedoMd5": "65e32c76512843491b211ffec92e65c9",
+      "normalMd5": "2793b6b4827222ef2a6d7f89862dfcb3"
+    },
+    "albedoMd5": "d7c21c5f34dc46cffd4f279654952a91",
+    "normalMd5": "95a9d4bd450f745d82a66f0eeef80148"
   },
   "models": {
     "k_bannertowergreen": {
