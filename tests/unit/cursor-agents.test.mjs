@@ -48,6 +48,8 @@ import {
   buildEnvVars,
   maskBody,
   interpolate,
+  LAUNCH_ENV_ALLOW,
+  mcpHostAllowed,
   loadRuns,
   handback,
   transcript,
@@ -589,39 +591,62 @@ test("launch refuses a twin (same name, not archived) before any write, and --al
 // ---- launch-time options: mcpServers, customSubagents, envVars ------------------------------------------------------
 
 const SECRET = "tok_SECRETVALUE_12345";
-const ENVV = { LIN: SECRET, GH: "ghp_SECRETVALUE_99" };
+// Allowlisted names carry the test secrets; the rest are the families security audit 4 X1 says must never leave the box.
+const ENVV = { APEX_AGENT_WEBHOOK_AUTH: SECRET, APEX_FLEET_AS: "fleet_SECRETVALUE_99", APEX_AGENT_WEBHOOK_URL: "https://hooks.example.net/apex", AWS_SECRET_ACCESS_KEY: "aws_SECRETVALUE", GITHUB_TOKEN: "ghp_SECRETVALUE_1", FLEET_A_OAUTH_TOKEN: "oat_SECRETVALUE", GROK_API_KEY: "xai_SECRETVALUE", ANTHROPIC_API_KEY: "ant_SECRETVALUE", HTTPS_PROXY: "http://u:SECRETVALUE@proxy" };
+const FORBIDDEN_ENV = ["AWS_SECRET_ACCESS_KEY", "GITHUB_TOKEN", "FLEET_A_OAUTH_TOKEN", "GROK_API_KEY", "ANTHROPIC_API_KEY", "HTTPS_PROXY"];
 const leaks = (s) => String(s).includes("SECRETVALUE");
 
-test("parseMcpServers accepts stdio and remote servers and fills ${NAME} from the environment", () => {
+test("parseMcpServers accepts stdio and remote servers and fills allowlisted ${NAME} from the environment", () => {
   const out = parseMcpServers(
     [
-      { name: "apex-tools", command: "node", args: ["tools/mcp/apex-tools-mcp.mjs"], env: { GITHUB_TOKEN: "${GH}" } },
-      { name: "linear", url: "https://mcp.linear.app/mcp", headers: { Authorization: "Bearer ${LIN}" } },
-      { name: "figma", type: "http", url: "https://api.figma.com/mcp", auth: { CLIENT_ID: "id", CLIENT_SECRET: "${LIN}", scopes: ["file_content:read"] } },
+      { name: "apex-tools", command: "node", args: ["tools/mcp/apex-tools-mcp.mjs"], env: { FLEET_AS: "${APEX_FLEET_AS}" } },
+      { name: "hook", url: "https://hooks.example.net/mcp", headers: { Authorization: "Bearer ${APEX_AGENT_WEBHOOK_AUTH}" } },
+      { name: "gh", type: "http", url: "https://api.github.com/mcp", auth: { CLIENT_ID: "id", CLIENT_SECRET: "${APEX_AGENT_WEBHOOK_AUTH}", scopes: ["repo"] } },
+      { name: "cursor", url: "https://api.cursor.com/mcp" },
     ],
     ENVV,
   );
-  assert.deepEqual(out[0], { name: "apex-tools", type: "stdio", command: "node", args: ["tools/mcp/apex-tools-mcp.mjs"], env: { GITHUB_TOKEN: ENVV.GH } });
-  assert.deepEqual(out[1], { name: "linear", type: "http", url: "https://mcp.linear.app/mcp", headers: { Authorization: `Bearer ${SECRET}` } });
-  assert.deepEqual(out[2].auth, { CLIENT_ID: "id", CLIENT_SECRET: SECRET, scopes: ["file_content:read"] });
+  assert.deepEqual(out[0], { name: "apex-tools", type: "stdio", command: "node", args: ["tools/mcp/apex-tools-mcp.mjs"], env: { FLEET_AS: ENVV.APEX_FLEET_AS } });
+  assert.deepEqual(out[1], { name: "hook", type: "http", url: "https://hooks.example.net/mcp", headers: { Authorization: `Bearer ${SECRET}` } });
+  assert.deepEqual(out[2].auth, { CLIENT_ID: "id", CLIENT_SECRET: SECRET, scopes: ["repo"] });
+  // the names the placeholders read ride along (non-enumerable, so never in the POST body)
+  assert.deepEqual(out.envRefs, ["APEX_AGENT_WEBHOOK_AUTH", "APEX_FLEET_AS"]);
+  assert.ok(!JSON.stringify(out).includes("envRefs"));
   assert.equal(interpolate("no placeholders", {}), "no placeholders");
+  assert.equal(LAUNCH_ENV_ALLOW.join(","), "APEX_FLEET_AS,APEX_SESSION_ID,APEX_AGENT_WEBHOOK_URL,APEX_AGENT_WEBHOOK_AUTH,CURSOR_API_KEY");
+});
+
+test("security audit 4 X1: placeholders resolve only from the allowlist and MCP urls only to allowlisted hosts", () => {
+  const bad = (list, env, re) => assert.throws(() => parseMcpServers(list, env), (e) => re.test(e.message) && !leaks(e.message));
+  for (const n of FORBIDDEN_ENV) {
+    bad([{ name: "a", url: "https://github.com/mcp", headers: { A: `\${${n}}` } }], ENVV, new RegExp(`\\$\\{${n}\\}: ${n} is not in the launch env allowlist`));
+    bad([{ name: "a", command: "node", env: { X: `\${${n}}` } }], ENVV, /is not in the launch env allowlist/);
+    bad([{ name: "a", url: "https://github.com/mcp", auth: { CLIENT_ID: `\${${n}}` } }], ENVV, /is not in the launch env allowlist/);
+  }
+  // the host is named; a lookalike or a suffix trick is not GitHub
+  for (const h of ["evil.example", "github.com.evil.example", "evilgithub.com", "api.cursor.com.evil.example", "cursor.com"]) bad([{ name: "a", url: `https://${h}/mcp` }], ENVV, new RegExp(`url host ${h.replace(/\./g, "\\.")} is not allowed`));
+  // the webhook host comes from APEX_AGENT_WEBHOOK_URL; without it that host is refused
+  bad([{ name: "a", url: "https://hooks.example.net/mcp" }], {}, /hooks\.example\.net is not allowed/);
+  for (const h of ["api.cursor.com", "github.com", "api.github.com", "GITHUB.COM"]) assert.ok(mcpHostAllowed(h, {}), h);
+  assert.ok(mcpHostAllowed("hooks.example.net", ENVV));
+  assert.ok(!mcpHostAllowed("hooks.example.net", { APEX_AGENT_WEBHOOK_URL: "not a url" }));
 });
 
 test("parseMcpServers rejects every shape the spec forbids, and no message carries a secret", () => {
   const bad = (list, re) => assert.throws(() => parseMcpServers(list, ENVV), (e) => re.test(e.message) && !leaks(e.message));
   bad({}, /JSON array/);
   bad([{ name: "a" }], /exactly one of command/);
-  bad([{ name: "a", command: "x", url: "https://x.io" }], /exactly one of command/);
+  bad([{ name: "a", command: "x", url: "https://github.com" }], /exactly one of command/);
   bad([{ name: "a", command: "x" }, { name: "a", command: "y" }], /duplicate name a/);
   bad([{ name: "a", command: "x", headers: {} }], /unknown field headers/);
-  bad([{ name: "a", url: "https://x.io", env: {} }], /unknown field env/);
-  bad([{ name: "a", url: "https://x.io", type: "sse" }], /do not support sse/);
-  bad([{ name: "a", url: `https://user:${SECRET}@x.io/mcp` }], /must not carry credentials/);
-  bad([{ name: "a", url: "ftp://x.io" }], /http or https/);
+  bad([{ name: "a", url: "https://github.com", env: {} }], /unknown field env/);
+  bad([{ name: "a", url: "https://github.com", type: "sse" }], /do not support sse/);
+  bad([{ name: "a", url: `https://user:${SECRET}@github.com/mcp` }], /must not carry credentials/);
+  bad([{ name: "a", url: "ftp://github.com" }], /http or https/);
   bad([{ name: "a", url: "not a url" }], /not a valid URL/);
-  bad([{ name: "a", url: "https://x.io", headers: { A: "${MISSING}" } }], /\$\{MISSING\} but it is not set/);
-  bad([{ name: "a", url: "https://x.io", headers: { A: 5 } }], /object of strings/);
-  bad([{ name: "a", url: "https://x.io", auth: { CLIENT_SECRET: "${LIN}" } }], /CLIENT_ID is required/);
+  bad([{ name: "a", url: "https://github.com", headers: { A: "${APEX_SESSION_ID}" } }], /\$\{APEX_SESSION_ID\} but it is not set/);
+  bad([{ name: "a", url: "https://github.com", headers: { A: 5 } }], /object of strings/);
+  bad([{ name: "a", url: "https://github.com", auth: { CLIENT_SECRET: "${APEX_FLEET_AS}" } }], /CLIENT_ID is required/);
   bad([{ name: "a", command: "x", args: [1] }], /array of strings/);
   bad(Array.from({ length: 51 }, (_, i) => ({ name: `s${i}`, command: "x" })), /over 50/);
 });
@@ -643,19 +668,23 @@ test("parseSubagents enforces names, sizes and the built-in collision rule", () 
 });
 
 test("buildEnvVars reads names from the environment and NAME=VALUE lines, and never echoes a value", () => {
-  assert.deepEqual(buildEnvVars({ names: ["LIN"] }, ENVV), { LIN: SECRET });
-  const file = `# comment\n\nA=1\nB = "two words"\nC='x'\n`;
-  assert.deepEqual(buildEnvVars({ fileText: file }, {}), { A: "1", B: "two words", C: "x" });
+  assert.deepEqual(buildEnvVars({ names: ["APEX_AGENT_WEBHOOK_AUTH"] }, ENVV), { APEX_AGENT_WEBHOOK_AUTH: SECRET });
+  const file = `# comment\n\nAPEX_FLEET_AS=1\nAPEX_SESSION_ID = "two words"\nAPEX_AGENT_WEBHOOK_URL='x'\n`;
+  assert.deepEqual(buildEnvVars({ fileText: file }, {}), { APEX_FLEET_AS: "1", APEX_SESSION_ID: "two words", APEX_AGENT_WEBHOOK_URL: "x" });
   const bad = (a, env, re) => assert.throws(() => buildEnvVars(a, env), (e) => re.test(e.message) && !leaks(e.message));
   bad({ names: ["CURSOR_API_KEY"] }, ENVV, /reserved/);
   bad({ names: ["cursor_x"] }, ENVV, /reserved/);
   bad({ names: ["1BAD"] }, ENVV, /not a valid variable name/);
-  bad({ names: ["NOPE"] }, ENVV, /--env NOPE: not set/);
+  bad({ names: ["APEX_SESSION_ID"] }, ENVV, /--env APEX_SESSION_ID: not set/);
+  // security audit 4 X1: nothing outside the allowlist leaves the box, by --env or by an env file
+  for (const n of [...FORBIDDEN_ENV, "NOPE"]) {
+    bad({ names: [n] }, ENVV, new RegExp(`env name ${n} is not in the launch env allowlist`));
+    bad({ fileText: `${n}=SECRETVALUE` }, {}, /is not in the launch env allowlist/);
+  }
   bad({ fileText: "SECRETVALUE_no_equals_sign" }, {}, /line 1 is not NAME=VALUE/);
   bad({ fileText: "CURSOR_X=1" }, {}, /reserved/);
-  bad({ fileText: `K=${"v".repeat(4097)}` }, {}, /K: value must be 1 to 4096 bytes/);
-  bad({ fileText: "K=" }, {}, /K: value must be 1 to 4096 bytes/);
-  bad({ fileText: Array.from({ length: 51 }, (_, i) => `V${i}=1`).join("\n") }, {}, /over 50/);
+  bad({ fileText: `APEX_FLEET_AS=${"v".repeat(4097)}` }, {}, /APEX_FLEET_AS: value must be 1 to 4096 bytes/);
+  bad({ fileText: "APEX_FLEET_AS=" }, {}, /APEX_FLEET_AS: value must be 1 to 4096 bytes/);
 });
 
 test("buildLaunchBody attaches the options, and envVars drops the client agentId (the spec forbids both)", () => {
@@ -675,20 +704,21 @@ test("buildLaunchBody attaches the options, and envVars drops the client agentId
 test("maskBody and the DRYRUN line carry names and counts, never a header, env, auth or variable value", async () => {
   const mcpServers = parseMcpServers(
     [
-      { name: "s", command: "node", env: { T: "${GH}" } },
-      { name: "r", url: "https://x.io/mcp", headers: { Authorization: "Bearer ${LIN}" }, auth: { CLIENT_ID: "cid", CLIENT_SECRET: "${LIN}" } },
+      { name: "s", command: "node", env: { T: "${APEX_FLEET_AS}" } },
+      { name: "r", url: "https://github.com/mcp", headers: { Authorization: "Bearer ${APEX_AGENT_WEBHOOK_AUTH}" }, auth: { CLIENT_ID: "cid", CLIENT_SECRET: "${APEX_AGENT_WEBHOOK_AUTH}" } },
     ],
     ENVV,
   );
   // An explicit name: a derived one is the first 100 chars of the prompt by design (it is also what the Cursor dashboard shows).
-  const body = buildLaunchBody({ prompt: "a very private prompt", name: "t", mcpServers, envVars: { STAGING: SECRET } });
+  const body = buildLaunchBody({ prompt: "a very private prompt", name: "t", mcpServers, envVars: { APEX_SESSION_ID: SECRET } });
   const masked = JSON.stringify(maskBody(body));
   assert.ok(!leaks(masked) && !masked.includes("private prompt"));
-  assert.deepEqual(maskBody(body).envVars, ["STAGING"]);
+  assert.deepEqual(maskBody(body).envVars, ["APEX_SESSION_ID"]);
+  assert.deepEqual(maskBody(body).mcpEnvRefs, ["APEX_AGENT_WEBHOOK_AUTH", "APEX_FLEET_AS"]);
   assert.deepEqual(maskBody(body).mcpServers[1], { name: "r", type: "http", headerNames: ["Authorization"], auth: ["CLIENT_ID", "CLIENT_SECRET"] });
   const calls = stub();
   try {
-    const lines = await launchAgent({ prompt: "x", dryRun: true, mcpServers, envVars: { STAGING: SECRET } }, { file: tmpAllow() });
+    const lines = await launchAgent({ prompt: "x", dryRun: true, mcpServers, envVars: { APEX_SESSION_ID: SECRET } }, { file: tmpAllow() });
     assert.equal(calls.length, 0);
     assert.ok(lines[0].startsWith("DRYRUN (server-minted) promptChars=1 ") && !leaks(lines[0]));
   } finally {
@@ -700,11 +730,13 @@ test("launch with envVars: no client id, no 5xx retry, the id is recorded from t
   const file = tmpAllow();
   const calls = stub([200, { items: [] }], [201, { agent: { id: ID }, run: { id: "run-1" } }]);
   try {
-    const lines = await launchAgent({ prompt: "p", envVars: { STAGING: SECRET }, mcpServers: [{ name: "a", type: "stdio", command: "x" }] }, { file });
+    const mcpServers = parseMcpServers([{ name: "a", command: "x", env: { T: "${APEX_FLEET_AS}" } }], ENVV);
+    const lines = await launchAgent({ prompt: "p", envVars: { STAGING: SECRET }, mcpServers }, { file });
     assert.deepEqual(calls.map((c) => c.method), ["GET", "POST"]);
     assert.equal(calls[1].body.agentId, undefined);
     assert.deepEqual(calls[1].body.envVars, { STAGING: SECRET });
-    assert.ok(lines[0].endsWith(" mcp=1 subagents=0 env=1") && !leaks(lines[0]));
+    // the forwarded env NAMES are logged (X1 audit trail), never their values
+    assert.ok(lines[0].endsWith(" mcp=1 subagents=0 env=1 envNames=STAGING mcpEnvRefs=APEX_FLEET_AS") && !leaks(lines[0]), lines[0]);
     assert.ok(readAllow(file)[ID]);
   } finally {
     after();
