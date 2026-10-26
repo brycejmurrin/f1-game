@@ -5,6 +5,7 @@
  * answer cannot disagree.
  *
  * Run: node --test tests/unit/pause-opts.test.mjs */
+import { cssRules } from "../helpers/css-rules.mjs";
 import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -436,4 +437,15 @@ test("CSS: each new LAYOUT and every lookPause knob has a rule in the pause bloc
   assert.match(COMP, /:root\[data-look-pause-btn\] #pausemenu \.sheet \.sheet-body\.stack > button \{ min-height: calc\(var\(--tap-0\) \* var\(--look-pause-btn\)\); \}/);
   // OUTLINE never repaints an armed door.
   assert.match(COMP, /:root\[data-look-pause-style="outline"\] #pausemenu \.sheet-body\.stack > button:is\([^)]*\):not\(#pm-resume\):not\(\.armed\)/);
+});
+
+
+test("dialog backdrop animations respect the explicit in-game reduced-motion preference", () => {
+  const rules = cssRules(fs.readFileSync(path.join(ROOT, "css/dialog-platform.css"), "utf8"));
+  const animated = rules.filter(r => r.selector.includes("::backdrop") && r.decls.has("animation"));
+  assert.ok(animated.length, "normal-motion dialogs retain their entrance animation");
+  for (const rule of animated) {
+    assert.ok(rule.context.some(c => c.includes("prefers-reduced-motion: no-preference")));
+    assert.ok(rule.selector.includes(':root:not([data-motion="reduce"])'), "the in-game motion override must exclude backdrops too");
+  }
 });

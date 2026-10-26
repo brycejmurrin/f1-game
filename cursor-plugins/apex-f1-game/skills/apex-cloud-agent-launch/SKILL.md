@@ -16,14 +16,14 @@ Use when launching a Cursor cloud agent for the Apex (f1-game) repo.
 - Topic heads: `cursor/<topic>-<hash>` (Cursor often supplies the suffix). No new `claude/<topic>` feature branches; legacy `claude/<topic>` PRs stay mid-flight.
 - Model: `default` (Auto) **only**. Never invent other model ids. Do **not** fall back to an alternate model if Auto is blocked — tell the user and stop.
 - Never clone the repo onto the box; cloud agent does coding.
-- Cap: max **6 launches / 10 min**. If `node tools/ci/queue-depth.mjs` says `= queue hold` (JOBS, not runs: ≥ 60 Linux in flight (40 slots), ≥ 10 queued or ≥ 5 macOS; `--write /workspace/apex-status/queue-depth.json` leaves the same verdict as JSON), do not launch (and launched agents commit locally only).
+- Launch caps, quota checks, and role permissions: use the current `.claude/skills/agent-fleet/references/launch-policy.md`. `queue-depth.mjs` is informational and returns exit 0 for either queue verdict; its output does not block a launch or push.
 - Ship-checkpoint freeze: no sync **pushes** or **merges** while freeze is on.
 
 ## Prompt template (fill gaps)
 1. **Goal** — outcome, not line edits.
 2. **Context** — symptoms, PR number/URL, attached files/images.
 3. **Constraints** — include `OWNED:` / `FORBIDDEN:` globs, done-when, shot/test caps, and the exact line `Do not enable auto-merge or merge.` Draft PR unless asked. Stay in lane (UI/cars/tracks/perf/audio/net). Sync = merge `origin/claude/f1-game-project-26h3ng`; never rebase or force-push. Pre-push = `npm run test:tooling-fast` plus pick-tests Structural guards. Push once per green local cycle. No CI poll loops (`ci-watch.mjs` / CI Watch, not `sleep` / `gh run view`).
-4. **Success** — PR link or clear “no PR”; tests run / named not-run. Mark ready **within 15 min of tip-green** (CI Watch flips otherwise). Close-out must pass the stall/handoff gate in `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md`.
+4. **Success** — PR link or clear “no PR”; tests run / named not-run. Mark ready only after the tip is green and `node tools/ci/ready-gate.mjs --pr <n>` exits 0. Close-out must pass the stall/handoff gate in `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md`.
 5. Invite the agent to verify its own diagnosis.
 
 ## Attachments

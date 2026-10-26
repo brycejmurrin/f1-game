@@ -6,6 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { SELECTED_GATE } from "../../tools/ci/select-specs.mjs";
 import { report, groupSpecs } from "../../tools/ci/ci-coverage.mjs";
 import { ciWorkflow, pagesWorkflow, selectJob, selectedJob, selectStep, shipFilter, rendererJob, rendererFilter, SELECTED_TIMEOUT_MS } from "../helpers/ci-workflow.mjs";
@@ -382,4 +383,39 @@ test("smoke.spec.js is ONE shard on PRs and the Pages call; the wide nightly/dis
     "a scheduled run must pick its group from tools/ci/nightly-group.mjs, and only when the checkout above ran");
   assert.match(smokeJob, /run: npm run "test:\$\{GROUP:-tiny\}" -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
   assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      group:\n/, "the dispatch declares the group input");
+});
+
+
+test("staged-boot honors the SwiftShader opt-out for renderer env as well as setup", () => {
+  const staged = ciWorkflow.split("\n  staged-boot:")[1].split(/^  [a-z][\w-]*:$/m)[0];
+  assert.match(staged, /APEX_GL: \$\{\{ inputs\.gl != 'swiftshader' && 'llvmpipe' \|\| '' \}\}/);
+  assert.match(staged, /LIBGL_ALWAYS_SOFTWARE: \$\{\{ inputs\.gl != 'swiftshader' && '1' \|\| '' \}\}/);
+});
+
+
+function runMesaFixture(t, sudoBody) {
+  const root = fs.mkdtempSync(path.resolve("scratch/mesa-action-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const yml = fs.readFileSync(new URL("../../.github/actions/mesa-xvfb/action.yml", import.meta.url), "utf8");
+  const script = yml.split("      run: |\n")[1].split("\n").map(line => line.replace(/^        /, "")).join("\n")
+    .replaceAll("/tmp/.X11-unix/X99", path.join(root, "missing-display"));
+  const prelude = `sudo() { ${sudoBody}; }; Xvfb() { return 0; }; seq() { echo 1; }; sleep() { :; };`;
+  const r = spawnSync("bash", ["-e", "-c", prelude + "\n" + script], {
+    encoding: "utf8", timeout: 2000,
+    env: { ...process.env, GITHUB_ENV: path.join(root, "env"), RUNNER_TEMP: root },
+  });
+  return {r, root};
+}
+
+test("Mesa setup fails before exporting a missing Xvfb display", (t) => {
+  const {r, root} = runMesaFixture(t, "return 0");
+  assert.notEqual(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /::error::.*Xvfb/);
+  assert.equal(fs.existsSync(path.join(root, "env")), false);
+});
+
+test("Mesa retries share a total deadline instead of exhausting the caller job", (t) => {
+  const {r} = runMesaFixture(t, "echo APT-CALL; SECONDS=$((SECONDS + 300)); return 1");
+  assert.notEqual(r.status, 0);
+  assert.equal((r.stdout.match(/APT-CALL/g) || []).length, 1, "no retry after setup budget is spent");
 });

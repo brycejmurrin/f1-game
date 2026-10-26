@@ -80,7 +80,7 @@ explicitly to `no-user-gesture-required` (Electron’s default).
 ## Soft GL / WebGPU
 
 - Default (real GPU): no extra WebGPU flags; WebGL2 is the game’s fallback.
-- Soft-GL / CI (`APEX_DESKTOP_SOFT_GL=1` or Linux `CI=true`): ANGLE SwiftShader
+- Soft-GL / CI (explicit `APEX_DESKTOP_SOFT_GL=1`; `CI=true` alone does not enable it): ANGLE SwiftShader
   + `enable-unsafe-webgpu` so `requestAdapter()` can return a software adapter.
   Without that switch, `requestAdapter()` is `null` on GPU-less boxes.
 - Linux Vulkan feature flags (`VulkanFromANGLE`, etc.) were **unverified** in

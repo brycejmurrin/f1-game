@@ -1,7 +1,8 @@
 // cross-tool-guards — the guards every agent host obeys, not just Claude Code.
 // Claude runs .claude/hooks/bash-guard.sh as a PreToolUse hook; Cursor
 // (.cursor/hooks.json) and Codex (.codex/hooks.json) reach the same script
-// through .cursor/hooks/shell-guard.sh, and .githooks/ holds the git-level
+// through .cursor/hooks/shell-guard.sh (Codex normalizes its answer through
+// .codex/hooks/shell-guard.sh), and .githooks/ holds the git-level
 // commit and push rules for any host (docs/notes/AGENT-GUARDS-2026-10-14.md).
 // The pre-push rules run against real git in a throwaway repo under
 // artifacts/; the adapter runs the real guard. A few seconds.
@@ -16,17 +17,63 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ZERO = "0".repeat(40);
 
+// Run the real adapters against a disposable delegated guard, including failures
+// that a live GitHub call must never be used to reproduce.
+function adapterFixture(adapter, delegate, script, payload = {}) {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "adapter-verdict-"));
+  try {
+    for (const [file, source] of [[adapter, fs.readFileSync(path.join(ROOT, adapter), "utf8")], [delegate, script]]) {
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.writeFileSync(path.join(dir, file), source);
+    }
+    return spawnSync("bash", [path.join(dir, adapter)], {
+      input: JSON.stringify(payload), encoding: "utf8", cwd: dir, timeout: 5000,
+      env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+    });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
+
+test("MCP adapters deny delegated failures and malformed decisions", () => {
+  for (const adapter of [".codex/hooks/mcp-guard.sh", ".cursor/hooks/mcp-guard.sh"]) {
+    for (const script of ["exit 1", "exit 2", "printf 'not json'", "printf '{}'", "printf '[]'",
+      `printf '%s' '{"hookSpecificOutput":{"permissionDecision":"unexpected"}}'`]) {
+      const r = adapterFixture(adapter, ".claude/hooks/github-mcp-guard.sh", script);
+      const out = r.stdout.trim() ? JSON.parse(r.stdout) : null;
+      const permission = out?.permission || out?.hookSpecificOutput?.permissionDecision;
+      assert.equal(permission, "deny", `${adapter}: ${script}\n${r.stderr}`);
+    }
+    const r = adapterFixture(adapter, ".claude/hooks/github-mcp-guard.sh", "exit 0");
+    assert.equal(r.status, 0, `${adapter} preserves a successful silent pass`);
+  }
+});
+
+test("Codex shell decisions normalize ask and delegated failures to deny", () => {
+  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".codex/hooks.json"), "utf8"));
+  assert.equal(cfg.hooks.PreToolUse[0].hooks[0].command, "bash .codex/hooks/shell-guard.sh");
+  for (const script of ["exit 1", "exit 2", "printf 'not json'", "printf '[]'",
+    `printf '%s' '{"hookSpecificOutput":{"permissionDecision":"ask","permissionDecisionReason":"Confirm this action"}}'`]) {
+    const r = adapterFixture(".codex/hooks/shell-guard.sh", ".cursor/hooks/shell-guard.sh", script);
+    assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, "deny", script);
+  }
+  for (const script of ["exit 0", `printf '%s' '{"hookSpecificOutput":{"additionalContext":"advice"}}'`]) {
+    const r = adapterFixture(".codex/hooks/shell-guard.sh", ".cursor/hooks/shell-guard.sh", script);
+    assert.equal(r.status, 0, r.stderr);
+    if (r.stdout.trim()) assert.equal(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, "advice");
+  }
+});
+
 test("each host's hook config points at an executable guard that exists", () => {
   const cursor = JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/hooks.json"), "utf8"));
   assert.equal(cursor.version, 1);
   assert.match(cursor.hooks.beforeShellExecution[0].command, /\.cursor\/hooks\/shell-guard\.sh/);
   const codex = JSON.parse(fs.readFileSync(path.join(ROOT, ".codex/hooks.json"), "utf8"));
-  assert.match(codex.hooks.PreToolUse[0].hooks[0].command, /\.cursor\/hooks\/shell-guard\.sh/);
+  assert.match(codex.hooks.PreToolUse[0].hooks[0].command, /\.codex\/hooks\/shell-guard\.sh/);
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   assert.match(pkg.scripts.prepare || "", /git config core\.hooksPath \.githooks/, "npm install must activate .githooks");
   assert.match(cursor.hooks.beforeMCPExecution[0].command, /\.cursor\/hooks\/mcp-guard\.sh/);
   assert.equal(cursor.hooks.beforeMCPExecution[0].failClosed, true, "a crashed MCP guard must block, not pass");
-  for (const f of [".cursor/hooks/shell-guard.sh", ".cursor/hooks/mcp-guard.sh", ".githooks/pre-commit", ".githooks/pre-push", ".claude/hooks/bash-guard.sh"])
+  for (const f of [".codex/hooks/shell-guard.sh", ".cursor/hooks/shell-guard.sh", ".cursor/hooks/mcp-guard.sh", ".githooks/pre-commit", ".githooks/pre-push", ".claude/hooks/bash-guard.sh"])
     assert.ok(fs.statSync(path.join(ROOT, f)).mode & 0o111, `${f} must be executable`);
 });
 
