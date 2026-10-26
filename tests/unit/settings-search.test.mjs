@@ -88,6 +88,38 @@ test("successful lazy search still owns BACK and opens ancestor disclosures", as
   const result = h.result("music volume"); result.onclick(); h.ctx.GameAudio._stub = false; h.complete(); await tick(); await tick();
   assert.equal(fold.open, true); assert.equal(h.dom.document.activeElement, target); h.nav.back(); assert.equal(h.dom.document.activeElement, result); assert.equal(target.value, "42");
 });
+test("narrowing a query reuses result buttons and does not re-read option labels", () => {
+  const h = boot();
+  const page = h.dom.document.querySelector("#pm-panel-display");
+  const sel = h.el("select", "pm-hudscale", page);
+  const opt = h.el("option", "", sel);
+  let reads = 0;
+  Object.defineProperty(opt, "textContent", { get() { reads++; return "ENORMOUS"; } });
+  const created = [];
+  const orig = h.dom.document.createElement;
+  h.dom.document.createElement = (tag) => { const node = orig(tag); created.push(node); return node; };
+  h.search.value = "volume";
+  h.search.oninput();
+  const wide = [...h.index.querySelectorAll("button")].filter((b) => b.dataset.settingResult);
+  const byId = new Map(wide.map((b) => [b.dataset.settingResult, b]));
+  assert.ok(wide.length > 2, "volume matches several settings");
+  const made = created.length;
+  const readOnce = reads;
+  assert.ok(readOnce >= 1, "the unmatched select's option text is read once");
+  h.search.value = "music volume";
+  h.search.oninput();
+  const narrow = [...h.index.querySelectorAll("button")].filter((b) => b.dataset.settingResult);
+  assert.ok(narrow.length > 0 && narrow.length < wide.length);
+  for (const b of narrow) assert.equal(b, byId.get(b.dataset.settingResult));
+  assert.equal(created.length, made, "narrowing allocates no new result nodes");
+  assert.equal(reads, readOnce, "option labels stay cached on the next keystroke");
+  h.search.value = "enormous";
+  h.search.oninput();
+  const hit = [...h.index.querySelectorAll("button")].find((b) => b.dataset.settingResult === "hud-size");
+  assert.ok(hit, "option text still matches after the cache fill");
+  assert.equal(reads, readOnce, "the cached label answers a later option-text query");
+});
+
 test("search spans the existing two-column door grid and a full flex row on narrow sheets", () => {
   const css = read("css/player-tools.css"), rule = /\.settings-find\s*\{([^}]+)\}/.exec(css)[1];
   assert.match(read("css/settings-controls.css"), /#pm-settings-index\s*\{\s*display:\s*grid;\s*grid-template-columns:\s*repeat\(2/);
