@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "8365a80155b8d883a2df49ab808fc927077e71104100cfab4bb6d1e1c4f32797",
+  "sourceDigest": "c5662c1a3f71fec57cb9d041e4ec3729cbe2e75d96b9d014334a29105c16b3ce",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -97,7 +97,7 @@
       "frac": 0.981804,
       "target": [
         116.77,
-        16.4,
+        15.92,
         90.04
       ],
       "stationMethod": "nearest-road-projection",
@@ -538,15 +538,15 @@
       "track": "buenos_aires",
       "name": "Curvón Terrace",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.379472,
+      "frac": 0.379464,
       "target": [
-        -377.46,
-        6.83,
-        188.27
+        -352.4,
+        8.89,
+        190.89
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 35,
-      "viewDistanceM": 35,
+      "nearestRoadDistanceM": 60.2,
+      "viewDistanceM": 60.2,
       "source": "tests/data/landmarks/buenos_aires.json; js/circuits/scenery/buenos_aires.js"
     },
     {
@@ -858,15 +858,15 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.12,
       "target": [
-        3038.57,
-        378.05,
-        90.34
+        3036.5,
+        377.79,
+        92.55
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "docs/tracks/fuji.md §4 skyline viewing station",
       "projectedFrac": 0.89832,
-      "nearestRoadDistanceM": 2449.6,
-      "viewDistanceM": 3193.5,
+      "nearestRoadDistanceM": 2447.9,
+      "viewDistanceM": 3191.3,
       "source": "tests/data/landmarks/fuji.json; js/circuits/scenery/fuji.js"
     },
     {
@@ -1647,13 +1647,13 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.95,
       "target": [
-        -533.21,
-        6.09,
-        97.17
+        -522.21,
+        3.52,
+        113.88
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 23.5,
-      "viewDistanceM": 23.5,
+      "nearestRoadDistanceM": 43.5,
+      "viewDistanceM": 43.5,
       "source": "tests/data/landmarks/kyalami.json; js/circuits/scenery/kyalami.js"
     },
     {
@@ -1944,13 +1944,13 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.008434,
       "target": [
-        -17.63,
+        -1.78,
         27.22,
-        29.76
+        4.28
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 124.3,
-      "viewDistanceM": 124.3,
+      "nearestRoadDistanceM": 154.3,
+      "viewDistanceM": 154.3,
       "source": "tests/data/landmarks/miami.json; js/circuits/scenery/miami.js"
     },
     {
@@ -2386,15 +2386,15 @@
       "track": "nurburgring",
       "name": "Burg Nurburg",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.681681,
+      "frac": 0.796557,
       "target": [
-        785.62,
-        87.28,
-        1026.16
+        -100.15,
+        105.03,
+        1230.66
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 802.7,
-      "viewDistanceM": 802.7,
+      "nearestRoadDistanceM": 562.9,
+      "viewDistanceM": 562.9,
       "source": "tests/data/landmarks/nurburgring.json; js/circuits/scenery/nurburgring.js"
     },
     {
@@ -2701,7 +2701,7 @@
       "frac": 0.067507,
       "target": [
         552.03,
-        3.92,
+        5.16,
         -4.79
       ],
       "stationMethod": "nearest-road-projection",
@@ -2766,15 +2766,15 @@
       "track": "redbull",
       "name": "Lauda Kurve Stand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.096023,
+      "frac": 0.096035,
       "target": [
-        78.04,
-        12.27,
-        -401.05
+        71.27,
+        8.8,
+        -396.79
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 34.8,
-      "viewDistanceM": 34.8,
+      "nearestRoadDistanceM": 42.8,
+      "viewDistanceM": 42.8,
       "source": "tests/data/landmarks/redbull.json; js/circuits/scenery/redbull.js"
     },
     {
@@ -3311,15 +3311,15 @@
       "track": "suzuka",
       "name": "Circuit Wheel",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.020249,
+      "frac": 0.015662,
       "target": [
-        -682.86,
-        31.14,
-        88.14
+        -692.22,
+        42.73,
+        130.26
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 69,
-      "viewDistanceM": 69,
+      "nearestRoadDistanceM": 103,
+      "viewDistanceM": 103,
       "source": "tests/data/landmarks/suzuka.json; js/circuits/scenery/suzuka.js"
     },
     {
@@ -3464,15 +3464,15 @@
       "track": "vegas",
       "name": "Paris Balloon",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.74791,
+      "frac": 0.747899,
       "target": [
-        540.62,
-        15.46,
-        -351.74
+        528.62,
+        6.02,
+        -352.08
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 33,
-      "viewDistanceM": 33,
+      "nearestRoadDistanceM": 45,
+      "viewDistanceM": 45,
       "source": "tests/data/landmarks/vegas.json; js/circuits/scenery/vegas.js"
     },
     {

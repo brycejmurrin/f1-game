@@ -203,13 +203,15 @@
         // does not read as a solid green hill under soft blit.
         addFrustum(stage, [fx, FUJI_BASE - 2, fz], FUJI_W * 0.48, FUJI_W * 0.32, FUJI_H * 0.12,
           [0.30, 0.28, 0.32], 12, null);
-        // snowline 0.28 made EVERY quad snow, and warm sun on all-white faces
-        // read as one tan pyramid (2026-10-15 survey). 0.50 leaves the lower
-        // flank dark scoria/forest and a ragged snow edge across the mid band:
-        // contrast, not brightness, is what makes a cap read.
+        // Day/dry pit-straight orbit (#3314): default lowMat FOLIAGE + green
+        // forest RGB painted the whole cone as a dark-green pyramid; snowline
+        // 0.50 left only the tip as MAT.SNOW and soft blit washed it out.
+        // 0.28 flooded every quad white → tan pyramid under warm sun.
+        // 0.38 + ROCK foot + cool bright snow: dark scoria base, clear cap.
         addMountain(stage, [fx, FUJI_BASE, fz], FUJI_W * 0.5, FUJI_H, {
-          seg: 16, seed: 11, rough: 0.05, snowline: 0.50,
-          snow: [0.90, 0.95, 1.00], rock: [0.30, 0.27, 0.32], forest: [0.12, 0.20, 0.19],
+          seg: 16, seed: 11, rough: 0.06, snowline: 0.38,
+          lowMat: MAT.ROCK,
+          snow: [0.97, 0.99, 1.00], rock: [0.26, 0.23, 0.28], forest: [0.20, 0.18, 0.17],
         });
       };
       modelGroup("fuji-mount-fuji", {

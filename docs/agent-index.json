@@ -792,6 +792,7 @@
         "tests/unit/red-flag-fuel-vm.test.mjs",
         "tests/unit/red-flag-pit-vm.test.mjs",
         "tests/unit/red-flag-vm.test.mjs",
+        "tests/unit/redbull-orbit-clear.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
@@ -893,6 +894,7 @@
         "tests/unit/red-flag-fuel-vm.test.mjs",
         "tests/unit/red-flag-pit-vm.test.mjs",
         "tests/unit/red-flag-vm.test.mjs",
+        "tests/unit/redbull-orbit-clear.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
@@ -948,6 +950,7 @@
         "tests/unit/real-replay-vm.test.mjs",
         "tests/unit/red-flag-fuel-vm.test.mjs",
         "tests/unit/red-flag-vm.test.mjs",
+        "tests/unit/redbull-orbit-clear.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],

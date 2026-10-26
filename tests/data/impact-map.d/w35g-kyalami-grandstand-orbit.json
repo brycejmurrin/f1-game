@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/circuits/scenery/kyalami.js": {
+      "narrow": [
+        "tests/unit/kyalami-grandstand-orbit.test.mjs"
+      ]
+    }
+  }
+}

@@ -4459,9 +4459,19 @@
         "tests/unit/circuit-corner-anchors.test.mjs"
       ]
     },
+    "js/circuits/scenery/baku.js": {
+      "narrow": [
+        "tests/unit/baku-night-orbit.test.mjs"
+      ]
+    },
     "js/circuits/scenery/cota.js": {
       "*": [
         "tests/unit/pick-unit-slices.test.mjs"
+      ]
+    },
+    "js/circuits/scenery/dijon.js": {
+      "narrow": [
+        "tests/unit/dijon-clips-coplanar.test.mjs"
       ]
     },
     "js/circuits/scenery/estoril.js": {
@@ -4472,6 +4482,11 @@
     "js/circuits/scenery/fuji.js": {
       "*": [
         "tests/unit/deploy-tool.test.mjs"
+      ]
+    },
+    "js/circuits/scenery/hungaroring.js": {
+      "*": [
+        "tests/unit/hungaroring-pit-firs-orbit.test.mjs"
       ]
     },
     "js/circuits/scenery/imola.js": {
@@ -4490,8 +4505,28 @@
         "tests/unit/deploy-tool.test.mjs"
       ]
     },
-    "js/circuits/scenery/monaco.js": {
+    "js/circuits/scenery/kyalami.js": {
+      "narrow": [
+        "tests/unit/kyalami-grandstand-orbit.test.mjs"
+      ],
       "*": [
+        "tests/unit/kyalami-grandstand-orbit.test.mjs"
+      ]
+    },
+    "js/circuits/scenery/miami.js": {
+      "narrow": [
+        "tests/unit/miami-hard-rock-orbit.test.mjs"
+      ],
+      "*": [
+        "tests/unit/miami-hard-rock-orbit.test.mjs"
+      ]
+    },
+    "js/circuits/scenery/monaco.js": {
+      "narrow": [
+        "tests/unit/monaco-fairmont-orbit.test.mjs"
+      ],
+      "*": [
+        "tests/unit/monaco-fairmont-orbit.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/scenery-ground-audit.test.mjs",
         "tests/unit/stage-minify.test.mjs"
@@ -4503,6 +4538,9 @@
       ]
     },
     "js/circuits/scenery/monza.js": {
+      "narrow": [
+        "tests/unit/monza-coplanar-clip.test.mjs"
+      ],
       "*": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/bash-guard-hardening.test.mjs",
@@ -4514,9 +4552,42 @@
         "tests/unit/service-worker.test.mjs"
       ]
     },
+    "js/circuits/scenery/mugello.js": {
+      "attach": [
+        "tests/unit/mugello-arrabbiata-orbit.test.mjs"
+      ]
+    },
+    "js/circuits/scenery/nurburgring.js": {
+      "narrow": [
+        "tests/unit/nurburgring-eifel-horizon.test.mjs"
+      ],
+      "*": [
+        "tests/unit/nurburgring-eifel-horizon.test.mjs"
+      ]
+    },
+    "js/circuits/scenery/qatar.js": {
+      "narrow": [
+        "tests/specs/qatar-foundation.spec.js",
+        "tests/unit/floodmast-lamp-register.test.mjs",
+        "tests/unit/qatar-day-sf-orbit.test.mjs",
+        "tests/unit/scenery-guards.test.mjs"
+      ],
+      "*": [
+        "tests/unit/qatar-day-sf-orbit.test.mjs"
+      ]
+    },
     "js/circuits/scenery/redbull.js": {
       "*": [
+        "tests/unit/redbull-orbit-clear.test.mjs",
         "tests/unit/scenery-guards.test.mjs"
+      ]
+    },
+    "js/circuits/scenery/shanghai.js": {
+      "pudongCluster": [
+        "tests/unit/shanghai-pudong-horizon.test.mjs"
+      ],
+      "*": [
+        "tests/unit/shanghai-pudong-horizon.test.mjs"
       ]
     },
     "js/circuits/scenery/silverstone.js": {
@@ -4530,9 +4601,33 @@
         "tests/unit/select-specs.test.mjs"
       ]
     },
-    "js/circuits/scenery/vegas.js": {
+    "js/circuits/scenery/suzuka.js": {
+      "scenery": [
+        "tests/unit/suzuka-circuit-wheel.test.mjs"
+      ],
       "*": [
-        "tests/unit/scenery-guards.test.mjs"
+        "tests/unit/suzuka-circuit-wheel.test.mjs"
+      ]
+    },
+    "js/circuits/scenery/vegas.js": {
+      "casinoDayWall": [
+        "tests/unit/vegas-day-strip.test.mjs"
+      ],
+      "desertN": [
+        "tests/unit/vegas-day-strip.test.mjs"
+      ],
+      "vegas-bellagio": [
+        "tests/unit/vegas-day-strip.test.mjs"
+      ],
+      "vegas-paris-balloon": [
+        "tests/unit/vegas-day-strip.test.mjs"
+      ],
+      "vegas-sphere": [
+        "tests/unit/vegas-day-strip.test.mjs"
+      ],
+      "*": [
+        "tests/unit/scenery-guards.test.mjs",
+        "tests/unit/vegas-day-strip.test.mjs"
       ]
     },
     "js/circuits/shanghai.js": {

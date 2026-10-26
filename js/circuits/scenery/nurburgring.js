@@ -354,13 +354,17 @@
       }
 
       const { cx, cz, radius: rad } = lapBounds();
+      // Eifel backdrop rings. addMountain paints fr>0.34 as ROCK even with
+      // snowline:2, so rock[] MUST stay spruce-green (spa pattern) — the prior
+      // grey/beige rock made the GP-Strecke S/F orbit read as bare sand pyramids
+      // (#3373). Topology unchanged (cone/seg/count) so props-tris stays put.
       for (const rg of [
         { extra: 240, wMin: 150, hMin: 44, hVar: 40, wVar: 70, count: 30, phase: 0.0,
-          opts: { seg: 7, rough: 0.30, forest: [0.10, 0.30, 0.14], rock: [0.30, 0.33, 0.30], snowline: 2 } },
+          opts: { seg: 7, rough: 0.30, forest: [0.08, 0.24, 0.12], rock: [0.10, 0.27, 0.14], snowline: 2 } },
         { extra: 300, wMin: 300, hMin: 74, hVar: 56, wVar: 130, count: 24, phase: 0.5,
-          opts: { seg: 7, rough: 0.32, forest: [0.13, 0.34, 0.17], rock: [0.36, 0.39, 0.37], snowline: 2 } },
+          opts: { seg: 7, rough: 0.32, forest: [0.10, 0.28, 0.14], rock: [0.13, 0.30, 0.16], snowline: 2 } },
         { extra: 440, wMin: 360, hMin: 104, hVar: 84, wVar: 140, count: 20, phase: 0.25,
-          opts: { seg: 7, rough: 0.34, forest: [0.18, 0.40, 0.21], rock: [0.46, 0.49, 0.50], snowline: 2 } },
+          opts: { seg: 7, rough: 0.34, forest: [0.14, 0.32, 0.17], rock: [0.18, 0.34, 0.20], snowline: 2 } },
       ]) {
         const ring = rad + rg.extra;
         for (let i = 0; i < rg.count; i++) {
@@ -430,43 +434,50 @@
       spectatorHill(0.70, 0.762, -1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });  // ends before the Schumacher-S scaffold stand (0.766, same side)
 
       {
-        const ang = 1.15 * 6.2832 % 6.2832;
-        const r = rad + 210;
-        const bx = cx + Math.cos(ang) * r, bz = cz + Math.sin(ang) * r;
-        mountain(bx, bz, pyMin, 170, 128,
-          { seg: 7, rough: 0.16, forest: [0.13, 0.32, 0.16], rock: [0.42, 0.40, 0.37], snowline: 2, seed: 991 });
-        const STONE = [0.55, 0.53, 0.48], STONE_D = [0.44, 0.42, 0.38];
-        const SLATE = [0.30, 0.31, 0.34];
-        const base = pyMin + 118;   // near the summit of that cone
+        // Burg Nürburg: real ruin sits ~1.2 km NNE of the GP-Strecke centre
+        // (50.3465°N 6.9535°E vs circuit 50.3356°N 6.9475°E ≈ bearing 10°).
+        // Engine frame matches Fuji/donington/qatar: +X west, +Z north, so
+        // bearing θ → (-sin θ, cos θ). Game distance is silhouette-scaled.
+        const BURG_BEARING = 10 * Math.PI / 180, BURG_DIST = rad + 210;
+        const bx = cx - Math.sin(BURG_BEARING) * BURG_DIST;
+        const bz = cz + Math.cos(BURG_BEARING) * BURG_DIST;
+        // Volcanic cone stays forested to the summit (green rock[], not beige).
+        mountain(bx, bz, pyMin, 170, 148,
+          { seg: 7, rough: 0.16, forest: [0.08, 0.24, 0.13], rock: [0.12, 0.28, 0.15], snowline: 2, seed: 991 });
+        const STONE = [0.60, 0.60, 0.59], STONE_D = [0.47, 0.47, 0.47];
+        const SLATE = [0.30, 0.31, 0.35];
+        const base = pyMin + 132;   // near the summit of that cone
         const R = 26;
         modelGroup("nurburgring-burg-nurburg", {
-          center: [bx, base + 16, bz], size: [70, 50, 70], basis: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+          center: [bx, base + 18, bz], size: [70, 56, 70], basis: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
           for (let i = 0; i < 8; i++) {
             const t = i / 8 * 6.2832;
             const tx = bx + Math.cos(t) * R, tz = bz + Math.sin(t) * R;
-            const th = 9 + hash(i * 37 + 3) * 5;
+            const th = 10 + hash(i * 37 + 3) * 5;
             addCyl(stage, [tx, base, tz], 4.2, th, i & 1 ? STONE : STONE_D, 6);
             addCyl(stage, [tx, base + th, tz], 4.8, 1.2, STONE_D, 6);
             const t2 = (i + 1) / 8 * 6.2832;
             const mx = bx + Math.cos((t + t2) / 2) * R * 0.96;
             const mz = bz + Math.sin((t + t2) / 2) * R * 0.96;
-            addBox(stage, [mx, base + 4.2, mz], [R * 0.72, 8.4, 2.4], STONE_D,
+            addBox(stage, [mx, base + 4.6, mz], [R * 0.72, 9.2, 2.4], STONE_D,
               [[Math.cos((t + t2) / 2 + 1.5708), 0, Math.sin((t + t2) / 2 + 1.5708)],
                [0, 1, 0],
                [Math.cos((t + t2) / 2), 0, Math.sin((t + t2) / 2)]]);
           }
-          addBox(stage, [bx, base + 13, bz], [13, 26, 13], STONE);
-          addBox(stage, [bx, base + 26.4, bz], [14.2, 1.4, 14.2], STONE_D);
+          // Keep + battlements + bergfried: pale masonry against spruce so the
+          // silhouette reads from the Arena / S/F day orbit (#3373).
+          addBox(stage, [bx, base + 15, bz], [14, 30, 14], STONE);
+          addBox(stage, [bx, base + 30.4, bz], [15.4, 1.5, 15.4], STONE_D);
           for (let i = 0; i < 12; i++) {
             const t = i / 12 * 6.2832;
             if (i % 3 === 2) continue;
-            addBox(stage, [bx + Math.cos(t) * 6.6, base + 28.2, bz + Math.sin(t) * 6.6],
-              [1.8, 2.4, 1.8], STONE);
+            addBox(stage, [bx + Math.cos(t) * 7.2, base + 32.4, bz + Math.sin(t) * 7.2],
+              [2.0, 2.8, 2.0], STONE);
           }
-          addCyl(stage, [bx + 8.5, base, bz - 8.5], 3.0, 32, STONE, 6);
-          addCone(stage, [bx + 8.5, base + 32, bz - 8.5], 3.6, 7.5, SLATE, 6);
+          addCyl(stage, [bx + 8.5, base, bz - 8.5], 3.2, 38, STONE, 6);
+          addCone(stage, [bx + 8.5, base + 38, bz - 8.5], 4.0, 9.0, SLATE, 6);
           stage._mat = 0;
         }, { required: true });
       }
