@@ -236,7 +236,8 @@ const Droplets = (function () {
     if (!_n && rain < RAIN_MIN * 0.5) _show(false);
   }
 
-  function clear() { _show(false); }
+  // Race exit / results entry: the visor's light layer goes down with the water (render() stops ticking it off-race).
+  function clear() { if (typeof VisorOptics !== "undefined") VisorOptics.clear(); _show(false); }
   function stats() { return { n: _n, shown: _shown, cap: cap(_mob(), false), w: _w, h: _h, first: _n ? { x: _x[0], y: _y[0], radius: _r[0], age: _age[0], vx: _vx[0], vy: _vy[0] } : null }; }
   /** Tests: forget the cached canvas / device class (a new stub DOM). */
   function _reset() { _looked = false; _spriteReflection = 1; _cv = _ctx = _sprite = null; _mobile = null; _n = 0; _acc = 0; _shown = false; _w = _h = 0; }
