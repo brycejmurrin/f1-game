@@ -109,6 +109,8 @@
     "tests/unit/baked-model-instancing.test.mjs",
     "tests/unit/baked-model-road-guard.test.mjs",
     "tests/unit/baku-migration.test.mjs",
+    "// #3340: Baku Caspian night_pass/dual_lite/scenery orbit at frac≈0.833 clears theme-dress neonTowers on +1 (game-vm, ~5 s).",
+    "tests/unit/baku-night-orbit.test.mjs",
     "// Barrier run-off lateral teleports (ledger 2026-09-26): synthetic cliff / featherBarrierEnds + fleet caps (monza/spa/bahrain/silverstone/monaco maxOver < 3). Pure helper + a few track-build-vm builds, ~6 s.",
     "tests/unit/barrier-runoff-jumps.test.mjs",
     "tests/unit/base-green.test.mjs",

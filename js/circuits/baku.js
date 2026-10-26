@@ -24,6 +24,11 @@
       { kinds: ["city", "foliage", "lighting"], s0: 0.36, s1: 0.56 },
       // Preserve the Caspian void on the left of Neftchilar Avenue.
       { kinds: ["city", "foliage", "lighting"], s0: 0.58, s1: 0.97, side: -1 },
+      // #3340: theme-dress front-row neonTowers (gap 13–25) buried night_pass
+      // orbit at frac≈0.833 (az 45, dist 40) on +1 — black-scene-with-edge-
+      // content. Hand-authored cityFront/towers in scenery/baku.js sit past
+      // the orbit ring (gap 48 / 72+); keep generic city off this side.
+      { kinds: ["city"], s0: 0.58, s1: 0.97, side: 1 },
     ],
     pal: { horizon: [0.10, 0.12, 0.22], zenith: [0.04, 0.05, 0.14], sunColor: [0.72, 0.74, 0.88], ambientSky: [0.24, 0.26, 0.36], ambientGround: [0.20, 0.20, 0.28], fogColor: [0.08, 0.10, 0.18], fogDensity: 0.0016 },
     hwZones: [

@@ -665,7 +665,11 @@
         minH: 40, maxH: 100, depth: 20, step: 20,
         palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
       });
-      cityFront(0.762, 0.9203, 1, 14, {
+      // Gap 48 (was 14): night_pass / dual_lite orbit at frac≈0.833 (az 45,
+      // dist 40) sits ~21 m past the road edge on +1 — the glass canyon at
+      // gap 14 buried the eye (black-scene-with-edge-content, #3340). Near
+      // face past the orbit ring; towers below move out in lockstep.
+      cityFront(0.762, 0.9203, 1, 48, {
         minH: 40, maxH: 100, depth: 20, step: 20,
         palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
       });
@@ -706,15 +710,17 @@
         grandstand(0.755, -1, 14, 70, [0.50, 0.52, 0.56], [0.60, 0.40, 0.36]);
       }
 
+      // Tower gaps 72+ (was 52+): clear of cityFront far face at gap 48 + depth 20.
       for (let i = 0; i < 9; i++) {
         const k   = K(0.77 + i * 0.011);
         const isPortBaku = i === 2 || i === 3;
         const bW  = 14 + (i % 2) * 4;
         const h   = isPortBaku ? 150 : 85 + (i % 3) * 45;
-        tower(k, 1, 52 + (i % 4) * 24, bW, h,
+        const gap = 72 + (i % 4) * 24;
+        tower(k, 1, gap, bW, h,
           { col: GLASS, seg: 7, cap: true, capCol: i % 3 ? WIN_COOL : WIN_WARM });
         // Lit crown ring on each tower (emissive band near top)
-        const a = anchor(k, 1, 52 + (i % 4) * 24);
+        const a = anchor(k, 1, gap);
         addFrustum(out, vadd(a.c, a.u, h - 6), bW * 0.32 * 1.1, bW * 0.32 * 0.9, 4,
           i % 3 ? WIN_COOL : WIN_WARM, 7, [a.r, a.u, a.t]);
         if (isPortBaku) {
