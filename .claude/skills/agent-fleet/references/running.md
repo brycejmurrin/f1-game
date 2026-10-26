@@ -33,14 +33,17 @@ the acting session.
 - **Bus routine (Bryce 2026-10-22: "set routine to check the bus every few mins").**
   From the `ORCH <letter> LIVE` line until no fleet work is live, keep two timers,
   armed as your first acts (orchestrator.md §First acts):
-  1. a TICK every ~3 min: one `send_later` at a time whose message runs the wake
-     pass (ReadNotifications, `fleet-bus.mjs read --to <letter>`, `pr-board.mjs`,
-     READY → `merge-gate.mjs`) and re-arms itself; report changes only;
-  2. a recurring SAFETY NET, `create_trigger` `cron_expression: "0 * * * *"`,
-     `initiation: human_request`, bound to this session: it re-arms the tick
-     chain if it broke, then runs the same pass. Recurring schedules under 1 h
-     are refused (`*/5` measured 2026-10-22: "the minimum interval is 1 hour"),
-     so the few-minute cadence is the `send_later` chain, not the cron.
+  1. a BUS WATCH `Monitor` (audit 2026-10-26 row 14: a 3-min `send_later` tick
+     on top of it read the bus twice, so there is no tick): it prints only NEW
+     `fleet-bus.mjs read --to <letter>` lines, and each line wakes you for the
+     wake pass (ReadNotifications, `fleet-bus.mjs read --to <letter>`,
+     `pr-board.mjs`, READY → `merge-gate.mjs`); re-arm it when it expires
+     (30 min); report changes only;
+  2. a recurring SAFETY NET, an hourly `create_trigger`
+     (`cron_expression: "0 * * * *"`, `initiation: human_request`) bound to this
+     session: it re-arms the Monitor if it died, then runs the same pass.
+     Recurring schedules under 1 h are refused (`*/5` measured 2026-10-22: "the
+     minimum interval is 1 hour"), so the cron is the net, never the cadence.
   Cursor hosts use `subscribe_timer` for both. At hand-off, `delete_trigger` your
   own safety net (it fires into your session only) and let the successor arm its own.
   3. a FLEET BUS WATCH that survives the orchestrator (Bryce 2026-10-22: "setup

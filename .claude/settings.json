@@ -213,16 +213,6 @@
     ],
     "PreToolUse": [
       {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "Write|Edit|MultiEdit|NotebookEdit",
         "hooks": [
           {
@@ -283,6 +273,17 @@
         ]
       },
       {
+        "matcher": "^(Agent|mcp__claude-code-remote__create_session)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
+            "timeout": 5,
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
         "matcher": "^mcp__claude-code-remote__create_session$",
         "hooks": [
           {
@@ -294,16 +295,6 @@
       }
     ],
     "PostToolUse": [
-      {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
-            "timeout": 5
-          }
-        ]
-      },
       {
         "matcher": "Grep|Bash",
         "hooks": [
@@ -326,6 +317,15 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/memory-sync.sh\" save",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
+            "timeout": 5
           }
         ]
       }
@@ -357,6 +357,11 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/ui-fixer-uncommitted.sh\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
             "timeout": 5
           }
         ]

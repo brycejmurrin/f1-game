@@ -67,28 +67,28 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
 - **Paced push: retired 2026-10-16** (CI/CD review #2333 finding 7). The `PUSH SLOT` rule existed
   because every session waited on the same `queue-depth.mjs` hold and pushed in the minute it
   released; with no hold there is nothing to pace. Push when your own cycle is green.
-- Every worker hand-back reports its head SHA; on a token failure it stops and reports. Batch small tooling/doc fixes into ONE PR; tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR resolve swarms.
+- Every worker hand-back reports its head SHA; on a token failure it stops and reports. A worker reports to the orchestrator
+  only, never also to a parent lane (the parent reads the bus; audit 2026-10-26 row 15: one DONE arrived three times). Batch small tooling/doc fixes into ONE PR; tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR resolve swarms.
 - **Cost and context (retro 2026-10-17, `docs/notes/AGENT-RETRO-2026-10-17.md`).** Three long-lived Opus sessions were 53 % of one night's
   ≈ $660: a 750 k-context orchestrator at ≈ $0.35 per 5 s wake, a Home CSS fixer at $100 with nothing committed. The launch
-  prompt names the model and a `cost cap`; a lane that is switched to Opus keeps the Sonnet cap. An orchestrator hands off past 200k
-  context. Default: the fleet check-in is a fresh-session scheduled task at ≥ 15 min that stops after 2 unchanged checks; the user
+  prompt names the model and a `cost cap`; a lane that is switched to Opus keeps the Sonnet cap. An orchestrator hands off past its
+  size stop below. Default: the fleet check-in is a fresh-session scheduled task at ≥ 15 min that stops after 2 unchanged checks; the user
   may choose a tighter cadence (Bryce chose 5 min on 2026-10-17), and then the orchestrator follows that.
 - **Size stop (per role, soft and hard caps; Bryce 2026-10-19 06:14Z: "Should we do both soft and hard caps as well as test auto compact on some sessions").**
   Every launch prompt ends `STOP AT: <soft> context or $<cap>`:
 
 | Role | Soft cap (context) |
 |---|---|
-| reviewer | 150k (size batches to about 25 files so it finishes inside the cap) |
+| reviewer | 120k (size batches to about 25 files so it finishes inside the cap) |
 | worker | 150k, at a verified checkpoint |
-| PR owner | 150k (docs-only PR too) |
+| PR owner | 150k (docs-only PR: 100k) |
 | synth | 150k |
-| hunter, sync | 150k |
-| fleet watcher | 150k |
-| orchestrator | 200k |
+| fleet watcher | 100k |
+| orchestrator | measured boot + 100k (boot = its own context at the first tick, after the skill, queue file and first sends; ~230k on 2026-10-26) |
 
   - **Measure** the session's own live context (`/context` or the statusline). `get_session` `used_tokens` updates only at turn end and
-    session reports disagree (race-1 said "120k (237k used)"). A fresh session starts at about 105k base on 2026-10-26
-    (relay/test sessions 105–108k after 1–3 turns; A·W58's first call read 101.9k); every soft cap is base + working room, so no cap below ~150k.
+    session reports disagree (race-1 said "120k (237k used)"). A fresh session starts at about 98k base (2026-10-26, `docs/notes/BASE-CONTEXT-2026-10-26.md`; 50-60k on 10-19).
+    `get_session` shows `max_tokens` 1,000,000, so every cap here is a cost budget (each wake re-reads the whole context), not the window.
   - **Soft cap:** finish the current unit (file, step or run in flight), commit and push helper scripts and artifacts (no container-local-only
     state: ui-2 and race-1 lost their `cdp-hit.mjs`), push a WIP note, then HANDOFF. **Hard cap = soft + 50k:** hand off immediately.
   - Watcher and orchestrator stay low because every inbound message or timer wakes them with the full context (code.claude.com/docs/en/costs §Why usage climbs).

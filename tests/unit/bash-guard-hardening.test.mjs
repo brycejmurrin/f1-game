@@ -376,10 +376,9 @@ test("a commit guard that outlives its time cap BLOCKS (rc 124 → exit 2), for 
   assert.ok(/GUARD_T=160/.test(hookSrc), "default inner guard cap");
   const inner = 160;
   assert.ok(inner + 15 <= bg.timeout, `inner guard cap ${inner} s must sit below the hook timeout ${bg.timeout} s`);
-  // Budget gates, not safety guards: a crashed context-cap or launch-gate must
-  // not lock a session out (A·W58, 2026-10-26), so they fail OPEN and their own
-  // tests (context-cap-hook, launch-gate) pin the absent onFailure.
-  const FAIL_OPEN = /\/\.claude\/hooks\/(context-cap|launch-gate)\.py"$/;
+  // A budget gate, not a safety guard: a crashed launch-gate must not block
+  // every launch (A·W58, 2026-10-26), so it fails OPEN; launch-gate.test pins it.
+  const FAIL_OPEN = /\/\.claude\/hooks\/launch-gate\.py"$/;
   for (const h of settings.hooks.PreToolUse.flatMap((g) => g.hooks)) {
     if (FAIL_OPEN.test(h.command)) continue;
     assert.equal(h.onFailure, "block", `${h.command}: a PreToolUse guard that crashes or times out must block`);
