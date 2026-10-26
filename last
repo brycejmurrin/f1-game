@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_015SM5diVUiZvMdSpz52AYBs SPAWN ORCH B scratch/orchb-queue.md on cursor/orchb-queue-b7f2 (0bed1133) model claude-opus-5-5 — OrchB 015SM5 at ~195k; read 'Handoff 10:20Z' LAST. seven_day allowed_warning: Bryce's OK needed for the launch.
+HANDOFF to:* from:claude:session_01Qv3HqSwsMuESkV9sSvb4f1 SEED B SPAWNED session_013JaBx1DysyB8dLCgGryvWL (Bryce typed 'Launch it' in the seed session for this launch only; seven_day allowed_warning stands, no worker launches without his AskUserQuestion answer)
