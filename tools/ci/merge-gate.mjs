@@ -17,11 +17,14 @@
 //
 //   node tools/ci/merge-gate.mjs --pr <n>                  # gate the PR's head; exit 0 = merge now with expectedHeadSha=<head>
 //   node tools/ci/merge-gate.mjs --pr <n> --sha <head>     # refuse unless the PR head is still <head>
-//   node tools/ci/merge-gate.mjs --pr <n> --skip-local-merge   # no worktree merge / gen:check (the receipt says so)
+//   node tools/ci/merge-gate.mjs --pr <n> --skip-local-merge   # advisory: no worktree merge / gen:check, never an ok receipt
 //   node tools/ci/merge-gate.mjs --pr <n> --json
 //
 // Rows (every one must pass): open (not draft, mergeable_state not dirty /
-// unknown / blocked), hold (no `MERGE-HOLD:` body line outside HTML comments),
+// unknown / blocked; the head did not move while the gate ran), fork (head repo is the base repo, audit 4 X7),
+// body (Status/Verified name the head, or its first parent when the head is a sync merge of the deploy tip, audit 4
+// §1 #11), base (game PRs: the green CI ran on a base at most BASE_MAX_GAME_MERGES game merges / BASE_MAX_HOURS behind
+// the tip, audit 4 #6), hold (no `MERGE-HOLD:` body line outside HTML comments),
 // ready (ready-gate: Structural guards green, Plan closed, memory marker),
 // ci (the required `CI` check-run success on the head), gen (local merge onto
 // the fetched deploy tip + gen:check), ratchets (the shrink-only ratchets on
@@ -49,7 +52,7 @@ import { hasMergeHold } from "./pr-board.mjs";
 import { readBus, whoAmI } from "./fleet-bus.mjs";
 import { DEPLOY_BRANCH } from "./deploy.mjs";
 import { mergeTrailers } from "./merge-attribution.mjs";
-import { writeReceipt } from "../lib/gate-receipt.mjs";
+import { writeReceipt, headPinProblem } from "../lib/gate-receipt.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -62,7 +65,89 @@ export const gameFiles = (files) => (files || []).filter(isGamePath);
 /** A GAME-SLOT with no DONE after this long has lapsed (role-merge-holder.md §Parallel orchestrators). */
 export const SLOT_LAPSE_MIN = 30;
 
+/** A game PR's green CI may sit at most this many game merges, or hours, behind the deploy tip (audit 4 #6: all 20
+ *  last game merges had merges land after their green, median 7.5 / 160 min; trains went red 13.3 % vs 4.3 %). */
+export const BASE_MAX_GAME_MERGES = 6;
+export const BASE_MAX_HOURS = 24;
+
 const row = (ok, evidence) => ({ ok: !!ok, evidence });
+
+/** A fork PR is never merged by a gate (audit 4 security X7: a forged fleet block + green CI would ship). Pure. */
+export function forkVerdict(pull) {
+  const head = pull?.head?.repo?.full_name || "", base = pull?.base?.repo?.full_name || "";
+  if (!head || !base) return row(false, "cannot tell the head repo from the base repo (head.repo / base.repo missing)");
+  return head === base ? row(true, `head repo ${head}`) : row(false, `a fork PR (${head} into ${base}): never merged by a gate`);
+}
+
+/** The body's `## Status` and `## Verified…` sections, HTML comments removed. Pure. */
+export function statusSections(body) {
+  const text = String(body || "").replace(/<!--[\s\S]*?-->/g, "");
+  const out = [];
+  const re = /^##[ \t]+(Status|Verified)\b.*$/gim;
+  for (let m; (m = re.exec(text)); ) {
+    const rest = text.slice(m.index + m[0].length);
+    const next = /^##[ \t]/m.exec(rest);
+    out.push(next ? rest.slice(0, next.index) : rest);
+  }
+  return out.join("\n");
+}
+
+/**
+ * Does the body's Status/Verified name what is being merged (audit 4 §1 #11)? The head's sha prefix (7+ hex), or —
+ * when the head is a merge whose second parent is on the deploy branch (a sync-pr merge) — its first parent, since a
+ * sync adds no work of the PR's own. parents: [first, second?]; secondOnDeploy: bool. Pure.
+ */
+export function bodyShaVerdict(body, { head, parents = [], secondOnDeploy = false } = {}) {
+  const text = statusSections(body);
+  if (!text.trim()) return row(false, "the body has no filled ## Status / ## Verified section (rule 12): paste session-status.mjs --pr and the verdict lines");
+  const shas = text.match(/\b[0-9a-f]{7,40}\b/gi) || [];
+  if (shas.some((x) => !headPinProblem(x, head))) return row(true, `Status/Verified name the head ${String(head).slice(0, 8)}`);
+  const first = parents.length === 2 && secondOnDeploy ? parents[0] : "";
+  if (first && shas.some((x) => !headPinProblem(x, first))) return row(true, `Status/Verified name ${first.slice(0, 8)}, the head's first parent (the head is a sync merge of the deploy tip)`);
+  return row(false, `Status/Verified do not name the head ${String(head).slice(0, 8)}${first ? ` or its pre-sync parent ${first.slice(0, 8)}` : ""}: refresh them (session-status.mjs --pr) for the head you merge`);
+}
+
+/**
+ * Base staleness for a GAME PR (audit 4 #6 / verify item 8): the green CI tested the merge with the base as it was
+ * when the run started; refuse when more than BASE_MAX_GAME_MERGES game merges, or more than BASE_MAX_HOURS of deploy
+ * history, landed since. merges: deploy first-parent commits newer than ciStartedAt, `{ sha, at (ms), game }`. Pure.
+ */
+export function baseStalenessVerdict({ ciStartedAt, merges, error = "" } = {}) {
+  if (error) return row(false, `cannot measure the CI base: ${error}`);
+  const start = Date.parse(ciStartedAt || "");
+  if (!start) return row(false, "the CI check-run has no started_at: cannot tell which base it tested");
+  const list = (merges || []).filter((m) => m.at > start);
+  const game = list.filter((m) => m.game).length;
+  const newest = list.reduce((t, m) => Math.max(t, m.at), 0);
+  const hours = newest ? (newest - start) / 3_600_000 : 0;
+  if (game > BASE_MAX_GAME_MERGES || hours > BASE_MAX_HOURS) {
+    return row(false, `sync first: the green CI ran on a base ${game} game merge(s) / ${hours.toFixed(1)} h behind the tip (max ${BASE_MAX_GAME_MERGES} / ${BASE_MAX_HOURS} h) — node tools/ci/sync-pr.mjs <branch>, push, let CI go green`);
+  }
+  return row(true, `CI base ${game} game merge(s) / ${hours.toFixed(1)} h behind the tip`);
+}
+
+/** Deploy first-parent commits after `sinceIso` with whether each touched a game path: [{ sha, at, game }] | { error }. */
+export function deployMergesSince(sinceIso, { cwd = ROOT, deploy = DEPLOY_BRANCH } = {}) {
+  const t = Math.floor(Date.parse(sinceIso || "") / 1000);
+  if (!t) return { error: "no CI start time" };
+  const r = git(["log", "--first-parent", "--diff-merges=first-parent", "--name-only", "--format=@@%H %ct", `--since=@${t}`, `refs/remotes/origin/${deploy}`], cwd);
+  if (r.status !== 0) return { error: `git log ${deploy}: ${(r.stderr || "").trim().split("\n")[0]}` };
+  const out = [];
+  for (const line of r.stdout.split("\n")) {
+    const m = /^@@([0-9a-f]{40}) (\d+)$/.exec(line);
+    if (m) out.push({ sha: m[1], at: Number(m[2]) * 1000, game: false });
+    else if (line.trim() && out.length && isGamePath(line.trim())) out[out.length - 1].game = true;
+  }
+  return out;
+}
+
+/** The head's parents, from this clone (the gate fetched the head) or the API. [] when unknown. */
+export function parentsOf(head, { cwd = ROOT, request = api } = {}) {
+  const r = git(["rev-list", "--parents", "-n", "1", head], cwd);
+  if (r.status === 0) return r.stdout.trim().split(/\s+/).slice(1);
+  const c = request(`commits/${encodeURIComponent(head)}`);
+  return (c.json?.parents || []).map((x) => x.sha).filter(Boolean);
+}
 
 /** The PR itself: open, not a draft, GitHub does not call it dirty/unknown/blocked. Pure. */
 export function openVerdict(pull) {
@@ -78,14 +163,20 @@ export function openVerdict(pull) {
 
 /** The required `CI` check-run on the head, newest attempt. Pure. */
 export function ciVerdict(checkRuns, name = REQUIRED_CHECK) {
+  const best = newestCheck(checkRuns, name);
+  if (!best) return row(false, `no ${name} check-run on the head yet (a draft runs the fast tier only; the full tier starts at ready)`);
+  if (best.status !== "completed") return row(false, `${name} ${best.status}`);
+  return best.conclusion === "success" ? row(true, `${name} success (check-run ${best.id})`) : row(false, `${name} ${best.conclusion}`);
+}
+
+/** The newest attempt of the check-run `name`, or null. Pure. */
+export function newestCheck(checkRuns, name = REQUIRED_CHECK) {
   let best = null;
   for (const c of checkRuns || []) {
     if (!c || c.name !== name) continue;
     if (!best || (c.id || 0) > (best.id || 0)) best = c;
   }
-  if (!best) return row(false, `no ${name} check-run on the head yet (a draft runs the fast tier only; the full tier starts at ready)`);
-  if (best.status !== "completed") return row(false, `${name} ${best.status}`);
-  return best.conclusion === "success" ? row(true, `${name} success (check-run ${best.id})`) : row(false, `${name} ${best.conclusion}`);
+  return best;
 }
 
 /** Entries that are GAME-SLOT claims: the GAME-SLOT type, or the HANDOFF text form orchestrators wrote before it existed. Pure. */
@@ -183,6 +274,10 @@ export function pagesGreenFor(sha, request = api, contains = isAncestor()) {
   if (r.error || !Array.isArray(r.json?.workflow_runs)) return null;
   return pagesVerdict(sha, r.json.workflow_runs, contains);
 }
+
+/** Is `sha` on the fetched deploy branch (an ancestor of its tip)? */
+export const onDeployBranch = (sha, cwd = ROOT, deploy = DEPLOY_BRANCH) =>
+  !!sha && git(["merge-base", "--is-ancestor", sha, `refs/remotes/origin/${deploy}`], cwd).status === 0;
 
 const git = (args, cwd = ROOT, extra = {}) => spawnSync("git", args, { cwd, encoding: "utf8", timeout: 120_000, ...extra });
 
@@ -286,6 +381,11 @@ export function mergeCall({ pull, pr, head, by, fleet, role }) {
   };
 }
 
+const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+/** The `gh pr merge` form of a passing gate: pinned with --match-head-commit, merge commit, never --admin (G6). Pure. */
+export const ghMergeCommand = (pr, call) =>
+  `gh pr merge ${Number(pr)} --merge --match-head-commit ${call.expectedHeadSha} --subject ${shq(call.commit_title)} --body ${shq(call.commit_message)}`;
+
 // ---- CLI -------------------------------------------------------------------
 
 export function verdictLine(v) {
@@ -299,14 +399,18 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--sk
   the body carries no MERGE-HOLD: line, the head merges clean onto the CURRENT deploy tip with gen:check 0 and
   the ratchets (tools/check/ratchets.mjs, the assert.match ceiling) holding on that merge result,
   and (game PRs) the bus shows no INCIDENT freeze, this session's GAME-SLOT for the PR, and a green Pages run on
-  the last game merge. Writes artifacts/merge-gate/<n>.json, which github-mcp-guard.sh requires on merge_pull_request
+  the last game merge, and (game PRs) a CI base at most 6 game merges / 24 h behind the tip ("sync first"). Also: not a
+  fork PR; the body's Status/Verified name the head (or its first parent when the head is a sync merge); the head
+  did not move while the gate ran. --skip-local-merge is advisory: it never writes an ok receipt. A pass prints the
+  MCP merge call and the exact \`gh pr merge <n> --merge --match-head-commit <head>\` form. Writes artifacts/merge-gate/<n>.json, which github-mcp-guard.sh requires on merge_pull_request
   with expectedHeadSha pinned to the gated head (docs/plans/2026-10-19-fleet-redesign.md).`;
 
 /** Backoff before each re-read of a PR whose mergeable_state is still `unknown` (GitHub computes it lazily). */
 export const UNKNOWN_RETRY_MS = [2000, 4000, 8000];
 const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
-export function main(argv, { request = api, root = ROOT, env = process.env, now = () => Date.now(), bus = readBus, localMerge = localMergeGenCheck, pages = pagesGreenFor, log = console.log, sleep = sleepSync, unknownRetryMs = UNKNOWN_RETRY_MS } = {}) {
+export function main(argv, { request = api, root = ROOT, env = process.env, now = () => Date.now(), bus = readBus, localMerge = localMergeGenCheck, pages = pagesGreenFor, log = console.log, sleep = sleepSync, unknownRetryMs = UNKNOWN_RETRY_MS,
+  deployMerges = (since) => deployMergesSince(since, { cwd: root }), parents = (h) => parentsOf(h, { cwd: root, request }), onDeploy = (sha) => onDeployBranch(sha, root) } = {}) {
   exitIfHelp(argv, USAGE);
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   const pr = Number(opt("--pr"));
@@ -334,6 +438,7 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
   const rows = {};
   rows.open = openVerdict(pull);
   if (want && !(head.startsWith(want) || want.startsWith(head))) rows.open = row(false, `PR head is ${head.slice(0, 8)}, not the --sha ${want.slice(0, 8)} you gated`);
+  rows.fork = forkVerdict(pull);
   rows.hold = hasMergeHold(pull.body) ? row(false, "the body carries a MERGE-HOLD: line (the one veto)") : row(true, "no MERGE-HOLD:");
 
   const resolved = resolveSha({ pr, request });
@@ -349,8 +454,10 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
 
   let tip = "";
   if (skipLocal) {
-    rows.gen = row(true, "skipped (--skip-local-merge): gen:check on the merge result is NOT proven");
-    rows.ratchets = row(true, "skipped (--skip-local-merge): the ratchets on the merge result are NOT proven");
+    // Advisory only (audit 4 G17): the hook never read `rows`, so an ok receipt with these unproven let a merge-time
+    // ratchet union land red. Both rows refuse; the receipt is written ok:false.
+    rows.gen = row(false, "skipped (--skip-local-merge): gen:check on the merge result is NOT proven (advisory run, no ok receipt)");
+    rows.ratchets = row(false, "skipped (--skip-local-merge): the ratchets on the merge result are NOT proven (advisory run, no ok receipt)");
   } else {
     const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root });
     if (g.error) { log(`[merge-gate] = merge-gate unknown — ${g.evidence}`); return 3; }
@@ -360,24 +467,43 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
     tip = g.tip;
   }
 
+  const ps = head ? parents(head) : [];
+  rows.body = bodyShaVerdict(pull.body, { head, parents: ps, secondOnDeploy: ps.length === 2 && onDeploy(ps[1]) });
+
   const game = gameFiles(resolved.files || []);
   let incident = "";
   if (game.length) {
     const b = bus({ cwd: root, last: 200 });
     incident = incidentNote(b.entries);
     rows.pacing = pacingVerdict(b.entries, { pr, me, pagesGreen: (sha) => pages(sha, request, isAncestor(root)), now: Math.floor(now() / 1000) });
-  } else rows.pacing = row(true, "non-game paths: no slot needed");
+    const green = newestCheck(checks.list);
+    const since = green?.started_at || "";
+    const m = since ? deployMerges(since) : [];
+    rows.base = baseStalenessVerdict({ ciStartedAt: since, merges: Array.isArray(m) ? m : [], error: Array.isArray(m) ? "" : m.error || "unknown" });
+  } else {
+    rows.pacing = row(true, "non-game paths: no slot needed");
+    rows.base = row(true, "non-game paths: base staleness not paced");
+  }
+
+  // The gate takes minutes (the local merge): a push meanwhile must not ride this receipt (G6). Re-read the head.
+  const again = request(`pulls/${pr}`);
+  const nowHead = String(again.json?.head?.sha || "").toLowerCase();
+  if (again.error || !nowHead) rows.open = row(false, `cannot re-read #${pr}'s head after the gate (${again.error || "no sha"}): re-run`);
+  else if (headPinProblem(nowHead, head)) rows.open = row(false, `the head moved during the gate (${head.slice(0, 8)} -> ${nowHead.slice(0, 8)}): re-run merge-gate on the new head`);
 
   const ok = Object.values(rows).every((r) => r.ok);
   const v = { state: ok ? "passed" : "refused", pr, head, tip, game: game.length, rows, by: me || "" };
-  if (ok) v.merge = mergeCall({ pull, pr, head, by: me, fleet: opt("--fleet") || env.APEX_FLEET || "", role: opt("--role") || env.APEX_FLEET_ROLE || "orchestrator" });
+  if (ok) {
+    v.merge = mergeCall({ pull, pr, head, by: me, fleet: opt("--fleet") || env.APEX_FLEET || "", role: opt("--role") || env.APEX_FLEET_ROLE || "orchestrator" });
+    v.gh = ghMergeCommand(pr, v.merge);
+  }
   const evidence = Object.entries(rows).filter(([, r]) => !r.ok).map(([k, r]) => `${k}: ${r.evidence}`).join("; ");
   writeReceipt(root, "merge", { pr, head, tip, ok, by: me || "", game: game.length, evidence, rows, at: new Date(now()).toISOString() });
   if (asJson) log(JSON.stringify(v, null, 2));
   else {
     log(`[merge-gate] ${verdictLine(v)}`);
     if (incident) log(`[merge-gate] ${incident}`);
-    if (ok) log(`[merge-gate] merge now: merge_pull_request pullNumber=${pr} merge_method=merge expectedHeadSha=${head} commit_title=${JSON.stringify(v.merge.commit_title)} commit_message=${JSON.stringify(v.merge.commit_message)} (pass them verbatim: the Merged-by trailer is how the merge is attributed); then \`git log -1 --format=%p <merge sha>\` shows two parents and \`fleet-bus.mjs send DONE\`.`);
+    if (ok) log(`[merge-gate] merge now: merge_pull_request pullNumber=${pr} merge_method=merge expectedHeadSha=${head} commit_title=${JSON.stringify(v.merge.commit_title)} commit_message=${JSON.stringify(v.merge.commit_message)} (pass them verbatim: the Merged-by trailer is how the merge is attributed); from a shell, exactly: ${v.gh} (never without --match-head-commit, never --admin); then \`git log -1 --format=%p <merge sha>\` shows two parents and \`fleet-bus.mjs send DONE\`.`);
   }
   return ok ? 0 : 1;
 }

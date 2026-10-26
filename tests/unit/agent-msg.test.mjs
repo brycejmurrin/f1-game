@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   MSG_TYPES, busTypeFor, busTextFor, buildPayload, resolveBusTo, redactSecrets, parseArgs, postWebhook, main,
-  relayEnvNames, relayRoute, relayTextFor, relayBackoff, fireRelay,
+  relayEnvNames, relayRoute, relayTextFor, relayBackoff, fireRelay, livePrHead,
 } from "../../tools/ci/agent-msg.mjs";
 import { TYPES, formatLine, parseLine } from "../../tools/ci/fleet-bus.mjs";
 
@@ -243,7 +243,8 @@ test("main: a READY whose ready-gate receipt is missing or refused is not sent",
     fetchFn: async () => { calls.push(1); return { ok: true, status: 200, text: async () => "ok" }; },
     sendBus: (type) => { bus.push(type); return { ok: true, sha: "f", line: type }; },
     log: () => {}, err: (l) => errs.push(l), headShaFn: () => "sha", now: () => "ts",
-    readyCheck: (_root, args) => { assert.equal(args.pr, 12); return verdict; },
+    readyCheck: (_root, args) => { assert.equal(args.pr, 12); assert.equal(args.prHead(12).sha, "f".repeat(40), "the live head rides to the check"); return verdict; },
+    prHead: () => ({ sha: "f".repeat(40) }),
   });
   const argv = ["send", "--to", "A", "--type", "READY", "--pr", "12", "abc1234 ready-gate 0"];
   assert.equal(await main(argv, deps({ ok: false, why: "the last ready-gate run on #12 refused (plan-open)" })), 1);
@@ -412,4 +413,19 @@ test("main --to A --dry-run with the relay pair names the route, fires nothing",
   assert.ok(out.join("\n").includes("would fire relay APEX_A_RELAY_URL"));
   assert.equal(out.join("\n").includes(RELAY_TOKEN), false);
   assert.equal(relayTextFor({ type: "READY", from: "x", pr: null, text: "t" }), "READY from:x t");
+});
+
+test("audit 4 G6/G7/G11: livePrHead reads the PR's head; APEX_READY_NO_RECEIPT no longer skips the READY check", async () => {
+  const H = "e".repeat(40);
+  assert.deepEqual(livePrHead(5, (p) => (p === "pulls/5" ? { json: { head: { sha: H } } } : { error: "x" })), { sha: H });
+  assert.deepEqual(livePrHead(5, () => ({ error: "HTTP 502" })), { error: "HTTP 502" });
+  assert.deepEqual(livePrHead(5, () => ({ json: {} })), { error: "no head sha" });
+  let checked = 0;
+  const code = await main(["send", "--to", "A", "--type", "READY", "--pr", "5", "ready"], {
+    env: { APEX_FLEET_AS: ME, APEX_READY_NO_RECEIPT: "1" },
+    sendBus: () => ({ ok: true }), log: () => {}, err: () => {}, headShaFn: () => "sha", now: () => "ts",
+    readyCheck: () => { checked++; return { ok: false, why: "no receipt" }; }, prHead: () => ({ sha: H }),
+  });
+  assert.equal(code, 1);
+  assert.equal(checked, 1, "the env flag is not a bypass");
 });

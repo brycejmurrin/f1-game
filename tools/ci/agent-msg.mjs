@@ -26,6 +26,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readyClaimVerdict } from "../lib/gate-receipt.mjs";
+import { api } from "./github-api.mjs";
 import { whoAmI, sendBusLine, addressProblem, bodyProblem, ADDRESS_FORMS } from "./fleet-bus.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -140,6 +141,14 @@ export function parseArgs(argv) {
     as: flags.as || "",
     idem: flags.idem || "",
   };
+}
+
+/** The PR's current head from GitHub: { sha } | { error }. A READY is checked against it (audit 4 G6/G7). */
+export function livePrHead(pr, request = api) {
+  const r = request(`pulls/${Number(pr)}`);
+  if (r.error) return { error: r.error };
+  const sha = r.json?.head?.sha;
+  return /^[0-9a-f]{40}$/i.test(String(sha || "")) ? { sha } : { error: "no head sha" };
 }
 
 function headSha(cwd) {
@@ -275,6 +284,7 @@ export async function main(argv, {
   err = console.error,
   headShaFn = headSha,
   readyCheck = readyClaimVerdict,
+  prHead = livePrHead,
   sleep = undefined,
 } = {}) {
   let opts;
@@ -284,9 +294,11 @@ export async function main(argv, {
     return usage(e.message);
   }
 
-  // A READY carries the ready-gate's verdict, not the shell's (Transcript Auditor batch 9: `| tee` hid a refusal).
-  if (opts.type === "READY" && !opts.dryRun && env.APEX_READY_NO_RECEIPT !== "1") {
-    const v = readyCheck(cwd, { pr: opts.pr, text: opts.text });
+  // A READY carries the ready-gate's verdict, not the shell's (Transcript Auditor batch 9: `| tee` hid a refusal):
+  // a receipt from the committed gate, for the PR's live head. No env bypass (audit 4 G11: APEX_READY_NO_RECEIPT
+  // was in no doc and skipped all of it).
+  if (opts.type === "READY" && !opts.dryRun) {
+    const v = readyCheck(cwd, { pr: opts.pr, text: opts.text, prHead });
     if (!v.ok) { err(`agent-msg: READY refused: ${v.why}`); return 1; }
   }
 
