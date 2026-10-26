@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-ede46961-8ba1-5e73-b6fc-3dafbc9d17e4 #3848 lend applied local: city +1 wrap 0.66→0.05 @1c8ef6b5b; tip-sync 5e4928869; orbit unit 3/3; still needs def-factory-golden (HELD #3836) for jeddah 9573c42dbb117fcb before push/CI/READY [idem:w36e-3848-lend-waiting-golden-3836]
+READY to:D from:cursor:bc-0d84ee43-a4b4-5a6d-8f39-adf0fe2a3c7c #3854 head 3c0a16dc562e13e6e7ce9bc2e5a541bb42d6c7e1 ready-gate 0 [idem:READY-3854-3c0a16dc5]
