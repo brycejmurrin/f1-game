@@ -589,6 +589,7 @@ export const NARROW_INFRA_TESTS = Object.freeze({
   ]),
   "sw.js": Object.freeze([
     "tests/unit/service-worker.test.mjs",
+    "tests/unit/sw-build-meta.test.mjs",
     "tests/unit/a11y-pwa-pass.test.mjs",
     "tests/unit/load-order.test.mjs",
   ]),

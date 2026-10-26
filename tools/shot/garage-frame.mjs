@@ -2,7 +2,7 @@
 // @doc Garage turntable screenshot + garageCam() JSON for WebGPU/WebGL2 A/B.
 //   node tools/shot/garage-frame.mjs [--backend webgpu|webgl2] [--viewport 1440x900] [--out dir]
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   launchChromium, shutdown, startStaticServer, sleep,
@@ -13,7 +13,7 @@ import {
 } from "./probe-page.mjs";
 import { assertGarageInterior, sampleGarageGapPixels } from "./garage-interior.mjs";
 import sharp from "sharp";
-import { resolveRepoDefault, resolveContainedChild } from "../lib/output-paths.mjs";
+import { resolveRepoDefault, assertOutputDir } from "../lib/output-paths.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -25,17 +25,24 @@ exitIfHelp(argv, `garage-frame — garage turntable screenshot + garageCam() JSO
 Default out: artifacts/garage-frame/. Soft-present + interior gate.`);
 const flag = (n, d) => {
   const i = argv.indexOf(n);
-  return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : d;
+  if (i < 0) return d;
+  if (!argv[i + 1] || argv[i + 1].startsWith("-")) throw new Error(`${n} needs a value`);
+  return argv[i + 1];
 };
 const backends = flag("--backend", "webgpu,webgl2").split(",").map((s) => s.trim());
-const vp = flag("--viewport", "1440x900").split("x").map(Number);
+if (!backends.length || backends.some((be) => !["webgpu", "webgl2"].includes(be)))
+  throw new Error("--backend must be webgpu or webgl2 (comma-separated)");
+const viewport = flag("--viewport", "1440x900");
+const vp = viewport.split("x").map(Number);
+if (!/^\d+x\d+$/.test(viewport) || vp.some((n) => !Number.isSafeInteger(n) || n <= 0))
+  throw new Error("--viewport must contain positive integer dimensions, for example 1440x900");
 // Was hardcoded to /opt/cursor/artifacts/garage-frame — a Cursor-Cloud path
 // that does not exist on other boxes, and outside the repo either way.
 // AGENTS.md: regenerable output goes in artifacts/ or scratch/, nowhere else,
 // and tools/lib/output-paths.mjs already enforces exactly that.
-const outDir = flag("--out", null)
-  ? resolveContainedChild(ROOT, flag("--out"), "--out")
-  : resolveRepoDefault(ROOT, "artifacts", "garage-frame");
+const outDir = assertOutputDir(flag("--out", null)
+  ? resolve(ROOT, flag("--out"))
+  : resolveRepoDefault(ROOT, "artifacts", "garage-frame"), ROOT, "--out");
 
 mkdirSync(outDir, { recursive: true });
 
