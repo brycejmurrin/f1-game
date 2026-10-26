@@ -10202,6 +10202,9 @@
       ],
       "poll": [
         "tests/unit/title-warm.test.mjs"
+      ],
+      "*": [
+        "tests/specs/race-cycle-memory.spec.js"
       ]
     },
     "js/physics/aero-zones.js": {
