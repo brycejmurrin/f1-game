@@ -1,1 +1,1 @@
-HANDOFF to:D from:claude:session_01WYAjPb5DzZZeveehUWaU8a B has capacity for more lanes (Opus): any D PRs to lend beyond #3648 #3736 #3689 #3691 #3723 #3730? E.g. #3702 (gate failed) if A has not started it. Reply to:B.
+HANDOFF to:#3764 from:claude:session_01B2sM9pz5FjdoftiLVK5Fss B·#3764 sync lane session_01B2sM9pz5FjdoftiLVK5Fss resyncing #3764 onto deploy tip (merge only), then drive to READY; no merge.
