@@ -3,12 +3,41 @@ const GarageArrival = (function () {
   "use strict";
   const DOOR_S = 1.8;
   const ease = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
-  const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54, enterCrew: "current", leaveCrew: "current" });
+  const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54, enterCrew: "mix", leaveCrew: "mix" });
+  // THE CREWS each way: the shipped five, MIX (a different one every visit) and
+  // the Blender-authored variants (GarageCrewChoreo.IDS, js/garage/crew-choreo.js).
+  const SHARED = ["mix", "current", "guides", "service", "welcome", "none"];
+  const crewIds = (dir) => SHARED.concat(typeof GarageCrewChoreo !== "undefined" ? GarageCrewChoreo.IDS[dir] : []);
+  /* MIX, resolved once per playback: the first read of a config object picks
+   * the visit's crew and every later read of the same object (pose, poseOut,
+   * duration, finish) gets the same one. Each playback reads a fresh object
+   * (settings() / Object.assign), so the next visit takes the next crew. The
+   * count persists, so a reload does not restart the rotation. */
+  const _picked = new WeakMap();
+  let _visit = null;
+  function nextVisit() {
+    if (_visit === null) {
+      _visit = 0;
+      try { const v = typeof localStorage !== "undefined" && Number(localStorage.getItem("apex26.crewVisit")); if (v > 0) _visit = v | 0; } catch (_) { /* no storage */ }
+    }
+    const n = _visit++;
+    try { if (typeof localStorage !== "undefined") localStorage.setItem("apex26.crewVisit", String(_visit)); } catch (_) { /* private mode */ }
+    return n;
+  }
+  function crewFor(config, dir) {
+    const key = dir === "out" ? "leaveCrew" : "enterCrew", v = config && config[key];
+    if (v !== "mix") return v || "current";
+    if (typeof GarageCrewChoreo === "undefined") return "current";
+    let memo = _picked.get(config);
+    if (!memo) { memo = {}; _picked.set(config, memo); }
+    if (!memo[key]) memo[key] = GarageCrewChoreo.pick(dir, nextVisit());
+    return memo[key];
+  }
   function settings(value) {
     const v = value && typeof value === "object" ? value : {};
     const number = (key, lo, hi) => typeof v[key] === "number" && Number.isFinite(v[key])
       ? Math.max(lo, Math.min(hi, v[key])) : DEFAULT[key];
-    const crew = (key) => ["current", "guides", "service", "welcome", "none"].includes(v[key]) ? v[key] : DEFAULT[key];
+    const crew = (key) => crewIds(key === "leaveCrew" ? "out" : "in").includes(v[key]) ? v[key] : DEFAULT[key];
     return { enabled: v.enabled !== false, speed: number("speed", 0.5, 2),
       angle: ["cut", "left", "right"].includes(v.angle) ? v.angle : "cut", fov: number("fov", 40, 75),
       enterCrew: crew("enterCrew"), leaveCrew: crew("leaveCrew") };
@@ -41,6 +70,16 @@ const GarageArrival = (function () {
     const read = () => settings(store.get("garageArrival", null));
     const fields = { enabled: $("ga-enabled"), speed: $("ga-speed"), angle: $("ga-angle"), fov: $("ga-fov"),
       enterCrew: $("ga-crew-in"), leaveCrew: $("ga-crew-out") };
+    // MIX and the Blender crews (GarageCrewChoreo) join each crew picker from
+    // their own table, once: the static five stay index.html's.
+    const option = (value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; return o; };
+    for (const [key, dir] of [["enterCrew", "in"], ["leaveCrew", "out"]]) {
+      const el = fields[key], ids = typeof GarageCrewChoreo !== "undefined" ? GarageCrewChoreo.IDS[dir] : [];
+      if (!el || !el.add || !el.options || typeof document === "undefined" || Array.from(el.options).some((o) => o.value === "mix")) continue;
+      el.add(option("mix", "MIX: NEW CREW EACH VISIT"), 0);
+      const none = Array.from(el.options).find((o) => o.value === "none") || null;
+      for (const id of ids) el.add(option(id, GarageCrewChoreo.label(id)), none);
+    }
     function refresh() {
       const value = read();
       for (const key of Object.keys(fields)) {
@@ -125,8 +164,9 @@ const GarageArrival = (function () {
   const IN_LANE = 2.6, IN_LANE_M = 22, IN_PAUSE = 0.4, IN_BACK = 3.6;
   const DURATION = DOOR_S + IN_LANE + IN_PAUSE + IN_BACK + 0.3;
   function duration(config = DEFAULT, dir = "in") {
-    const service = config && config[dir === "out" ? "leaveCrew" : "enterCrew"] === "service";
-    return (dir === "out" ? OUT_DURATION : DURATION) + (service ? (dir === "out" ? 3 : 6) : 0);
+    const crew = crewFor(config, dir), service = crew === "service";
+    const extra = service ? (dir === "out" ? 3 : 6) : typeof GarageCrewChoreo !== "undefined" ? GarageCrewChoreo.extra(crew) : 0;
+    return (dir === "out" ? OUT_DURATION : DURATION) + extra;
   }
   function pose(seconds, config = DEFAULT, calm = false) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), end = duration(config);
@@ -136,7 +176,7 @@ const GarageArrival = (function () {
     const back = ease((t - DOOR_S - IN_LANE - IN_PAUSE) / IN_BACK);
     const p = back > 0 ? pathAt(OUT_PATH * (1 - back), side)
       : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN };
-    return shot({ active: t < end, serviceTime: t - (DURATION - .3), seconds: t, direction: "in", calm, crewClear: 1 - ease((t - (DURATION - .6)) / .3), crew: config.enterCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
+    return shot({ active: t < end, serviceTime: t - (DURATION - .3), seconds: t, direction: "in", side, calm, crewClear: 1 - ease((t - (DURATION - .6)) / .3), crew: crewFor(config, "in"), fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
       label: t < DOOR_S ? "OPENING GARAGE" : t < DURATION - 0.3 ? "BRINGING CAR IN" : end > DURATION && t < end - .5 ? "CREW SERVICING CAR" : "READY FOR WORK" },
       // Interior versions of garage-angles' bay/rear three-quarter framings.
       // A cut after the shutter opens keeps both eyes behind the threshold.
@@ -181,7 +221,7 @@ const GarageArrival = (function () {
       e = [eye[0] * (1 - 0.25 * k), eye[1] - 0.25 * k, eye[2] + HOLD_PUSH * k];
       aim[0] -= side * 2.2 * k;
     }
-    return shot({ active: t < end, serviceTime: t, seconds: t, direction: "out", calm, crewClear: ease((t - (DOOR_S + OUT_HOLD + delay - .3)) / .3), crew: config.leaveCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
+    return shot({ active: t < end, serviceTime: t, seconds: t, direction: "out", side, calm, crewClear: ease((t - (DOOR_S + OUT_HOLD + delay - .3)) / .3), crew: crewFor(config, "out"), fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
       label: delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm);
   }
   // The most one frame gap may credit: a slow GPU's 1–2 s frames play in real
@@ -235,5 +275,5 @@ const GarageArrival = (function () {
     skip.onclick = finish;
     return { start, step, cancel, finish, get state() { return state; } };
   }
-  return Object.freeze({ create, pose, poseOut, duration, angleMap, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
+  return Object.freeze({ create, pose, poseOut, duration, crewFor, angleMap, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
 })();

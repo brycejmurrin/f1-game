@@ -164,6 +164,7 @@
         "tests/unit/apex-arg-guards.test.mjs",
         "tests/unit/apex-career-delete.test.mjs",
         "tests/unit/apex-diag-canvas.test.mjs",
+        "tests/unit/devicefarm-syslog.test.mjs",
         "tests/unit/flying-start.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -178,7 +179,8 @@
       "settled": [
         "tests/specs/camera-hooks.spec.js",
         "tests/specs/monaco-foundation.spec.js",
-        "tests/specs/redbull-foundation.spec.js"
+        "tests/specs/redbull-foundation.spec.js",
+        "tests/unit/devicefarm-syslog.test.mjs"
       ],
       "*": [
         "tests/specs/camera-driving-hooks.spec.js",
@@ -1882,10 +1884,14 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "comfortGet": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "comfortSet": [
         "tests/unit/camera-defaults.test.mjs"
+      ],
+      "context": [
+        "tests/unit/cam-context-alloc.test.mjs"
       ],
       "copyFrom": [
         "tests/unit/camera-defaults.test.mjs"
@@ -1931,6 +1937,7 @@
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "importPack": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "importText": [
@@ -1938,11 +1945,15 @@
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "load": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/light-grid.test.mjs"
       ],
       "persist": [
         "tests/unit/camera-defaults.test.mjs"
+      ],
+      "refreshStoredContext": [
+        "tests/unit/cam-context-alloc.test.mjs"
       ],
       "reset": [
         "tests/unit/camera-defaults.test.mjs",
@@ -1954,7 +1965,11 @@
       "rollTarget": [
         "tests/unit/camera-defaults.test.mjs"
       ],
+      "scopeKey": [
+        "tests/unit/cam-context-alloc.test.mjs"
+      ],
       "setContext": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "setGlobal": [
@@ -1969,6 +1984,7 @@
       ],
       "values": [
         "tests/specs/camera-tuner.spec.js",
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "*": [
@@ -2430,6 +2446,7 @@
       ],
       "*": [
         "tests/specs/quali.spec.js",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -6781,7 +6798,8 @@
         "tests/unit/race-step-snap.test.mjs"
       ],
       "retireCar": [
-        "tests/unit/net-authority.test.mjs"
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/rank-sort-alloc-vm.test.mjs"
       ],
       "saveTeamParts": [
         "tests/unit/garage-followups.test.mjs"
@@ -6959,6 +6977,7 @@
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/rank-sort-alloc-vm.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/sim-bytecode-budget.test.mjs",
@@ -7080,7 +7099,8 @@
         "tests/unit/garage-crew.test.mjs"
       ],
       "bindSettings": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs"
       ],
       "cancel": [
         "tests/unit/garage-arrival.test.mjs"
@@ -7089,12 +7109,17 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
+      "crewFor": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
       "duration": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "pose": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "poseOut": [
@@ -7103,6 +7128,7 @@
       ],
       "settings": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "start": [
@@ -7112,19 +7138,42 @@
         "tests/unit/garage-arrival.test.mjs"
       ]
     },
+    "js/garage/crew-choreo.js": {
+      "actors": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "draw": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "pick": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "sample": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "value": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ]
+    },
     "js/garage/crew-motion.js": {
       "draw": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "free": [
         "tests/unit/garage-crew.test.mjs"
       ],
       "sample": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ]
     },
     "js/garage/crew-service.js": {
+      "actors": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
       "draw": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "free": [
@@ -7202,6 +7251,14 @@
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs"
+      ]
+    },
+    "js/garage/pit-crew.js": {
+      "draw": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "phase": [
+        "tests/unit/garage-crew-choreo.test.mjs"
       ]
     },
     "js/garage/pit-signs.js": {
@@ -7283,6 +7340,7 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "draw": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
@@ -7291,6 +7349,7 @@
         "tests/unit/garage-crew.test.mjs"
       ],
       "init": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
@@ -7300,6 +7359,9 @@
       ],
       "noseTip": [
         "tests/unit/garage-crew.test.mjs"
+      ],
+      "place": [
+        "tests/unit/garage-crew-choreo.test.mjs"
       ],
       "setLook": [
         "tests/unit/garage-crew.test.mjs",
@@ -7398,6 +7460,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "*": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -9896,12 +9959,14 @@
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
       "runSession": [
+        "tests/unit/devicefarm-syslog.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "setProgressSink": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "snapshot": [
+        "tests/unit/devicefarm-syslog.test.mjs",
         "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
@@ -9916,6 +9981,7 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "stageTable": [
+        "tests/unit/devicefarm-syslog.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "stagesFromSnapshot": [
@@ -11678,6 +11744,7 @@
       ],
       "info": [
         "tests/specs/pit-lane.spec.js",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -11738,7 +11805,8 @@
         "tests/unit/pit-lane.test.mjs"
       ],
       "reset": [
-        "tests/unit/damage.test.mjs"
+        "tests/unit/damage.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs"
       ],
       "serviceCar": [
         "tests/unit/pit-lane.test.mjs"
@@ -11773,6 +11841,7 @@
         "tests/unit/pit-lane-vm.test.mjs"
       ],
       "update": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -12509,6 +12578,7 @@
         "tests/unit/session-entry-vm.test.mjs"
       ],
       "create": [
+        "tests/unit/devicefarm-syslog.test.mjs",
         "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/session-entry-vm.test.mjs"
       ]
@@ -14963,6 +15033,7 @@
         "tests/specs/material-shimmer.spec.js",
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/build-worker.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
@@ -15029,6 +15100,7 @@
       ],
       "resolve": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",

@@ -125,6 +125,7 @@ let _comfort = {};
 let _tracks = {};
 let _cars = {};
 let _context = { track: null, car: null };
+let _ctxRev = -1, _ctxList = null;   // refreshStoredContext's memo (store.rev, Teams.LIST)
 
 function sanitizeProf(src, keepDefaults = false) {
   const prof = {};
@@ -190,6 +191,7 @@ function persist(which) {
 }
 
 function setContext(trackId, carId) {
+  _ctxRev = -1;   // the next scopeKey re-reads storage over this, as before
   _context = {
     track: typeof trackId === "string" && trackId ? trackId : null,
     car: typeof carId === "string" && carId ? carId : null,
@@ -198,7 +200,12 @@ function setContext(trackId, carId) {
 }
 function context() { return { ..._context }; }
 function scopeMap(scope) { return scope === "track" ? _tracks : scope === "car" ? _cars : null; }
+// Stored trackId/team only move on a Store write, and store.rev bumps on every one (set, clear, import, another
+// tab): re-read them per revision, not per call. Each scopeKey (a dozen a rendered frame from the rig's knob reads)
+// was two Store.get, each building an "apex26." key string (CPU-HUNT-2026-10-24 C6).
 function refreshStoredContext() {
+  const rev = store.rev, list = typeof Teams !== "undefined" ? Teams.LIST : null;   // a roster swap re-reads too
+  if (typeof rev === "number") { if (rev === _ctxRev && list === _ctxList) return; _ctxRev = rev; _ctxList = list; }
   const trackId = store.get("trackId", null);
   if (typeof trackId === "string" && trackId) _context.track = trackId;
   const team = store.get("team", 2);
