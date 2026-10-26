@@ -31,11 +31,11 @@
       "spec": "tests/specs/garage-livery-churn.spec.js",
       "since": "2026-10-20",
       "owner": "brycejmurrin",
-      "why": "llvmpipe, intermittent: run 39415873380 car 2/4 counted 1 GPU texture created on the post-pause (final) edit, first try and retry; diagnostic run 39417032506 (same code + texture logging) passed 4/4. Flap sets stay 1 and runs 0 after #3201; SwiftShader passes 5/5 with --retries=0 after #3194 + #3201. The failure message now lists each texture created after warm-up (name, size, stack). Owner of the fix: B\u00b7C1.",
+      "why": "llvmpipe, intermittent; three causes in turn, each named by the texture-creation log. (1) Run 39415873380 (2026-10-20): 1 texture on the post-pause edit; the 1.5 s live-atlas trace tick re-created its 512\u00b2 texture, fixed by #3205 refillTexture. (2) Run 39501456087 (2026-10-20 21:36Z, after #3205): one 1024\u00d71280 texture, the player decal-atlas preview; the draft-keyed decal fix 45d576dd followed. (3) Run 39876864967 (2026-10-23 00:16Z, after both fixes; job 120164712044, first try and retry): two textures on the post-pause edit, 1024\u00b2 and 512\u00b2, the garage bay dress atlas (scene-dress.js DRESS) and live atlas (scene-live.js LIVE), both created by three on first draw (Rb._createBindings \u2192 updateTexture). scene.js frees and re-creates both on every paint edit; the TLX _texPool reuse was missed. Since then: 37 cold llvmpipe first-try passes and no failure (scan of every ci.yml/pages.yml run 2026-10-20 to 2026-10-25, docs/notes/FLAKY-QUARANTINE-3505-2026-10-25.md). Renewed 2026-10-25 by B\u00b7W1\u00b7L1 (#3505 row 1).",
       "title": "Garage livery churn \u203a N paint edits in the garage leave GPU textures, flap meshes, flap runs, textures and settled geoLive flat (TLX)",
-      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/39415873380",
-      "expires": "2026-10-27",
-      "review": "By 2026-10-27, name the texture from the diag run's creation stack, fix its cause, and remove this row once the exact test passes without retry on three cold llvmpipe car runs. No automatic extension; a new deadline needs fresh failed-run evidence. Every other assertion in the spec stays blocking."
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/39876864967/job/120164712044",
+      "expires": "2026-11-10",
+      "review": "By 2026-11-10, find out why the bay dress (1024\u00b2) and live (512\u00b2) atlases in js/garage/scene.js missed the TLX texture pool on the post-pause edit, fix it, and remove this row once the exact test passes without retry on three cold llvmpipe car runs after that fix. No automatic extension; another deadline needs a fresh failed-run link. Every other assertion in the spec stays blocking."
     },
     {
       "spec": "tests/specs/image-grade-visual.spec.js",

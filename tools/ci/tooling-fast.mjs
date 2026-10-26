@@ -204,6 +204,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/build-gallery.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
+  // Camera tuner reads stored track/team once per Store revision (CPU-HUNT C6). VM, < 0.1 s.
+  "tests/unit/cam-context-alloc.test.mjs",
   "tests/unit/cam-motion.test.mjs",
   // Round-2 camera: corridor-clamped hang, wall clamp on street circuits, look-free director/PiP, NaN hold, bend hysteresis, frame-rate-free drone; 30/60/144 Hz sweep.
   "tests/unit/cam-round2.test.mjs",
@@ -329,6 +331,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 4 MB outside assets/: a June burst left ~750 MB in history. ~0.1 s.
   "tests/unit/committed-images.test.mjs",
   "tests/unit/component-inventory.test.mjs",
+  // Soundtrack bitrate cap (tools/gen/compress-audio.mjs): every frame of the listed tracks at 128 kbps, 44.1 kHz stereo, full length. ~0.3 s.
+  "tests/unit/compress-audio.test.mjs",
   "tests/unit/conflict-cure.test.mjs",
   "tests/unit/contact-geometry.test.mjs",
   "tests/unit/controller-profiles.test.mjs",
@@ -600,6 +604,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Garage before pack: recipe, MANIFEST, fetch --help / no-pack, workflow is
   // not Car shot. Pure + spawn, no network / Chromium.
   "tests/unit/garage-before.test.mjs",
+  // The Blender crew clips: per-visit MIX, clear of the car's path, and the in-race pit crew on stopAnim's u.
+  "tests/unit/garage-crew-choreo.test.mjs",
   // The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.
   "tests/unit/garage-crew.test.mjs",
   "tests/unit/garage-defaults.test.mjs",
@@ -721,6 +727,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/install-chip-overlap.test.mjs",
   // #3558 D·W25e: iOS Safari focus auto-zoom — OWNED free sheets (appearance-studio / race-setup / tuner) floor text inputs at 16px.
   "tests/unit/ios-input-zoom-w25e.test.mjs",
+  // #3558: iOS Safari focus auto-zoom — text inputs in FREE sheets must floor at 16px.
+  "tests/unit/ios-input-zoom.test.mjs",
   "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
   "tests/unit/js-debugger-mcp.test.mjs",
   "tests/unit/js-debugger-node.test.mjs",
@@ -775,6 +783,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lighting-rebuild.test.mjs",
   "tests/unit/lighting-tuner-reset-weather.test.mjs",
   "tests/unit/lighting-tuner-sweep.test.mjs",
+  // tools/perf/lit-wgsl-census.mjs: WGSL normalise/classify/hash/diff core for the lit-WGSL re-key census (#3672). < 1 s, no browser.
+  "tests/unit/lit-wgsl-census.test.mjs",
   // GATE GAP (2026-09-10): these three garage files and the three steering
   // files below sat in test:garage-unit / test:steering-unit, which ran in NO
   // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
@@ -853,6 +863,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/meeting-picker-labels.test.mjs",
   // The track-switch growth verdict (mem-census sustainedGrowthMB) replayed on the #773 / 2026-10-04 leak numbers and the Metal warm-up step. ~0.1 s.
   "tests/unit/mem-census-growth.test.mjs",
+  // gpu-game-check --mem-cycles (A·H12): the plateau-vs-growing verdict over race>quit cycles, and the in-page live GPUBuffer/GPUTexture counter on a stub GPUDevice. ~0.1 s.
+  "tests/unit/mem-cycles-lib.test.mjs",
   // memory-sync.sh's three-way sync: a stale session never reverts other
   // sessions' memories (2026-10-02, twice). Real hook, throwaway repo. ~1 s.
   "tests/unit/memory-sync.test.mjs",
@@ -1094,6 +1106,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/res-scale-census.test.mjs",
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
+  // #3297: retro (2000s) shift lights flash 9↔8 at the limiter, never dark; reduced motion stays on 9.
+  "tests/unit/retro-shift-lights.test.mjs",
   "tests/unit/ribbon-cpu-release.test.mjs",
   "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
@@ -1278,6 +1292,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tex-census.test.mjs",
   "tests/unit/thermal-drift.test.mjs",
   "tests/unit/three-inspector.test.mjs",
+  // Round 7: actual vendor binding/index updates and generated post/lamp shader contracts.
+  "tests/unit/three-shared-binding-update.test.mjs",
   // ...and THROTTLE = LATCH, which shares digital-steer's VM harness and runs
   // in 0.1 s: the pedal is the one control that can be left ON, so the drop on
   // blur/reset belongs in the edit loop rather than in a browser group.
@@ -1296,6 +1312,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pass no longer clears the SUN flag; a retired post chain is rebuilt at the
   // next realloc and a post-only death keeps the bound label.
   "tests/unit/tlx-fail-scope.test.mjs",
+  // A·H12 GPU-memory hunt (G1): over three r186 on the fake WebGL2, the real tlx-shadow warm releases the previous race's probe-caster render objects — Renderer._objects stays flat across six warms (budget pin).
+  "tests/unit/tlx-gpumem-leak.test.mjs",
   // TLX perf hunt 3 (lane TLX-1): three's real WebGPURenderer over a no-op WebGL2 compiles the real lit material; GLSL pins (no env cube when opted out) + tlx.js source pins.
   "tests/unit/tlx-hunt3.test.mjs",
   // TLX perf hunt 4 (lane RENDER-S, A-H1): bufferSubData bytes over three r186 on the fake WebGL2 — the plain-Mesh instance streams (batches, mirror views, R1 runs, FX streams) upload 0 B unchanged and exactly the written range when written; the real InstancedMesh caster keeps Dynamic.
@@ -1311,10 +1329,16 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // failure mode is a STALE key, which returns the wrong material and shows
   // up only on screen. Fuzzes the real lifted source over every field.
   "tests/unit/tlx-mat-key-memo.test.mjs",
+  "tests/unit/tlx-mirror-inset.test.mjs",
+  // A·W50: TLX pins the warm's render pipelines (pinPipelines) so prunePool's 20 s drop no longer destroys them and race entry rebuilds none (three r186 releases a pipeline at usedTimes 0; real renderer over fake GL).
+  "tests/unit/tlx-pipe-pin-warm.test.mjs",
   // TLX post P2 / audit #6: fixed H/V blur + per-mip bloom materials (no .tex.value ping-pong).
   "tests/unit/tlx-post-fixed-mats.test.mjs",
   // TLX phone post at half scene resolution (D·IP3 / BrowserStack GPU-bound fill).
   "tests/unit/tlx-post-phone-res.test.mjs",
+  // TLX's mesh-pool prune keeps a gfx.pinMesh geometry's wrappers (the deploy-only ERS bar,
+  // OT lamp and ERS strip): an idle unpinned wrapper still goes. Lifts the real prunePool (#3677).
+  "tests/unit/tlx-prune-pin.test.mjs",
   // TLX perf hunt 6 (B·H6): gfx.warmDraws captures the cockpit rig's draws (never painted) and the next present compiles exactly those pairs, owned like the deferred mirror warm; the first rig frame then links nothing (a cold one links). Race entry awaits it under the cover.
   "tests/unit/tlx-rig-warm.test.mjs",
   // TLX drops a createTexture() source canvas once three has uploaded it,
@@ -1322,12 +1346,15 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // against three r186's real Texture). The pit-crew mesh cache is capped.
   // Round-2 TLX: post chain retries after death, shadowStr 0 when the sun pass failed, DPR cap on mobileTier, caster geometry clone, warm-guarded releaseGeometry, true-LRU materials, pack CPU copy dropped, devtools-gated globals.
   "tests/unit/tlx-round2.test.mjs",
+  "tests/unit/tlx-smith-root.test.mjs",
   "tests/unit/tlx-texture-release.test.mjs",
   // Fixed render targets (#2655): the viewport helper + the raw-screenUV canary. VM + source scan, ~0.1 s.
   "tests/unit/tlx-viewport.test.mjs",
   // tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).
   "tests/unit/tolerance-diff.test.mjs",
   "tests/unit/tooling-fast-runner.test.mjs",
+  // tools/ci/tooling-timings.mjs: CI-measured per-file durations for the guards-shard packer (BUILD-HUNT-2026-10-24 B1). Pure fixtures, ~0.2 s.
+  "tests/unit/tooling-timings.test.mjs",
   // Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.
   "tests/unit/tools-a12-guards.test.mjs",
   "tests/unit/tools-runnable.test.mjs",
@@ -1344,6 +1371,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-accuracy-validator.test.mjs",
   // Perf hunt 2 (T1/T2/T4): the build's spatial short-cuts answer exactly what the slow path did. Engine prelude in a VM, < 1 s.
   "tests/unit/track-build-grids.test.mjs",
+  // Track build load budget: the pine coplanar guard scans an n.x window, not every facet pair (A·H15 load hunt).
+  "tests/unit/track-build-load.test.mjs",
   "tests/unit/track-build-vm-release.test.mjs",
   "tests/unit/track-build-wait.test.mjs",
   "tests/unit/track-centerline-seam.test.mjs",
@@ -1490,6 +1519,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Six arcs plus surface-water persistence. VM-executed weather-arc.js.
   // Round-2: WATCH scrub `input` events coalesce to one seek per rAF; `change` seeks at once; stop() drops a pending seek.
   "tests/unit/watch-transport-scrub.test.mjs",
+  // #3281: waterSurface seats on local terrainY, not lap pyMin (Spa brook).
+  "tests/unit/water-local-level.test.mjs",
   "tests/unit/weather-arc-plan.test.mjs",
   "tests/unit/weather-arc-rain.test.mjs",
   // A weather-arc step cross-fades sun, cloud, ambient and fog over WX_BLEND_S;
@@ -1498,6 +1529,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/webgpu-lifecycle.test.mjs",
   // D·W21b / #3279: WebGPU menu warm enables warmPlus + idle-chunks post/shadow/cockpit; records where.
   "tests/unit/webgpu-menu-warm.test.mjs",
+  "tests/unit/webgpu-uint16-index.test.mjs",
   // WET_GRIP orders the treads as treadFor picks them: inter owns the damp, full wet the storm. VM, < 0.2 s.
   "tests/unit/wet-grip-ladder.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
@@ -1517,6 +1549,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // WIND (js/race/wind.js): a pure function of (seed, circuit, weather, clock), fog calm and a storm gusty,
   // gusts and the side force capped, head/tail wind a few km/h of top speed, OFF a true no-op. VM, ~1 s.
   "tests/unit/wind.test.mjs",
+  // BitmapDecode.strip pack-strip lane (apex26.packDecodeWorker, default OFF): worker bytes equal sharp's per layer; OFF/refused/crash answer null. VM, ~3 s.
+  "tests/unit/worker-pack-strip.test.mjs",
   "tests/unit/workflow-harness.test.mjs",
   // ci.yml structure read from the PARSED YAML (job → step by name): base-green plan, geometry filter, behind-ship step. ~0.3 s.
   "tests/unit/workflow-lint-ci-plan.test.mjs",
@@ -1931,6 +1965,34 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
 
 export const DEFAULT_JOBS = 1;
 
+/** THE CLI'S OWN WIDTH WHEN NO --jobs IS GIVEN (2026-10-24, BUILD-HUNT B4).
+ *  Serial, the full floor is ~47 min of file time on a 4-core container; at
+ *  --jobs=3 it measured 16.1 min. deploy.mjs's gate measured --jobs=2 peaking
+ *  at loadavg 2.57, under the >= 3 line this repo calls too busy to measure.
+ *  So `npm run test:tooling-fast` takes AUTO_JOBS only on a quiet box: no live
+ *  Playwright suite or host browser (rule 4: no node suite on top of a browser
+ *  run) and 1-min loadavg under AUTO_JOBS_MAX_LOAD; otherwise DEFAULT_JOBS.
+ *  An explicit --jobs (CI's 4, the deploy gate's 2) and the programmatic
+ *  runToolingFast() default are unchanged. */
+export const AUTO_JOBS = 2;
+export const AUTO_JOBS_MAX_LOAD = 2;
+
+/** Pick the CLI width from the box's state: `{ busy, load1 }` → `{ jobs, why }`. Unknown state is treated as busy. */
+export function autoJobs({ busy, load1 } = {}) {
+  if (busy !== false) return { jobs: DEFAULT_JOBS, why: busy ? "a Playwright suite or host browser is live" : "browser occupancy unknown" };
+  if (!(Number(load1) < AUTO_JOBS_MAX_LOAD)) return { jobs: DEFAULT_JOBS, why: `loadavg ${Number(load1).toFixed(2)} >= ${AUTO_JOBS_MAX_LOAD}` };
+  return { jobs: AUTO_JOBS, why: `no live browser run, loadavg ${Number(load1).toFixed(2)} < ${AUTO_JOBS_MAX_LOAD}` };
+}
+
+async function probeAutoJobs() {
+  let busy = null;
+  try {
+    const { scanPlaywrightLines } = await import("./playwright-occupancy.mjs");
+    busy = scanPlaywrightLines(execFileSync("ps", ["-eo", "pid,args"], { encoding: "utf8" })).busy;
+  } catch (_) { /* no ps: stay serial */ }
+  return autoJobs({ busy, load1: os.loadavg()[0] });
+}
+
 /** Paths that force a full tooling-fast run in --changed mode (fail-safe). */
 const TOOLING_FAST_CHANGED_RUN_ALL = [
   /^tests\/groups\.json$/,
@@ -1984,8 +2046,11 @@ function pinIndex() {
   return _pinIndex;
 }
 
-/** Which CI tooling-fast shards (1/3 .. 3/3, ci.yml guards-a/b/c) touch any of `files`. */
-export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 3) {
+/** CI tooling-fast shards: ci.yml guards-a..d run --shard=1/4 .. 4/4 (BUILD-HUNT B2, 2026-10-24). */
+export const CI_SHARDS = 4;
+
+/** Which CI tooling-fast shards (1/4 .. 4/4, ci.yml guards-a/b/c/d) touch any of `files`. */
+export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = CI_SHARDS) {
   const want = new Set(files);
   const out = [];
   for (let i = 1; i <= shardCount; i++) {
@@ -2369,6 +2434,7 @@ export function parseToolingFastArgv(argv) {
     quiet: argv.includes("--quiet"),
     stop: argv.includes("--stop"),
     jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
+    jobsExplicit: val("jobs") !== undefined,
     order: val("order"),
     record: argv.includes("--record"),
     shard: val("shard"),
@@ -2425,6 +2491,11 @@ if (isMain) {
     files0 = [...TOOLING_FAST_FILES];
   }
   const files = ciShardFiles(files0, parsed.shard);
+  if (!parsed.jobsExplicit) {
+    const pick = await probeAutoJobs();
+    parsed.jobs = pick.jobs;
+    console.log(`[tooling-fast] jobs=${pick.jobs} (auto: ${pick.why}; pass --jobs=N to choose)`);
+  }
   const { ok } = await runToolingFast(files, {
     jobs: parsed.jobs,
     bail: parsed.bail,

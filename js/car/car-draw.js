@@ -1418,6 +1418,12 @@ const CarDraw = (function () {
       || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
     // Windscreen / aeroscreen glass: a faint tint that still shows the road.
     const _glassOpts = { alpha: 0.16, roughness: 0.05, specular: 0.9, doubleSided: true, noAlphaWrite: true };
+    // DEPLOY-ONLY DRAWS ARE PINNED (#3677): TLX prunes a pool wrapper unseen for 20 s, and the dash ERS bar's
+    // pulse, the active OT lamp, the ERS strip and the lift flame draw only while ERS deploys or GAS lifts. On
+    // WebGPU that wrapper was its pipeline's last holder, so every BOOST press after a straight rebuilt it
+    // mid-race ("every press, a hitch"). gfx.pinMesh is feature-detected; GLX/WGX keep no such pool.
+    const _pinned = new WeakSet();
+    const pin = (m) => { if (m && !_pinned.has(m)) { _pinned.add(m); if (typeof G.gfx.pinMesh === "function") G.gfx.pinMesh(m); } return m; };
     const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
     // The rig's programs before the first onboard frame needs them (TLX gfx.warmDraws captures the draws
     // and compiles them; GLX/WGX have no warmDraws). Both seats: cockpit/helmet with the wheel, visor without.
@@ -1537,12 +1543,12 @@ const CarDraw = (function () {
         _digT[12] = 0.048; _digT[13] = 0.001; _digT[14] = -0.0315;
         M4.mulTo(_digM, _rigB, _digT);
         _digM[4] *= en; _digM[5] *= en; _digM[6] *= en;
-        G.gfx.draw(getErsBar(), _digM, c.deploying ? (_rigFxA.alpha = 0.75 + 0.25 * Math.sin(G.raceT * 22), _rigFxA) : fx);
+        G.gfx.draw(pin(getErsBar()), _digM, c.deploying ? (_rigFxA.alpha = 0.75 + 0.25 * Math.sin(G.raceT * 22), _rigFxA) : fx);
       }
       // OVERTAKE lamp on the wheel: white when armed, pulsing purple while active
       // (the floating HUD OVERTAKE text is hidden in cockpit view).
       if (c.otT > 0) {
-        G.gfx.draw(getOtLamp(true), _rigB, (_rigFxA.alpha = 0.7 + 0.3 * Math.sin(G.raceT * 18), _rigFxA));
+        G.gfx.draw(pin(getOtLamp(true)), _rigB, (_rigFxA.alpha = 0.7 + 0.3 * Math.sin(G.raceT * 18), _rigFxA));
       } else if (c.otArmed) {
         G.gfx.draw(getOtLamp(false), _rigB, fx);
       }
@@ -1674,6 +1680,8 @@ const CarDraw = (function () {
       if (!c || c.pitState !== "box") return false;
       const dx = base[12] - G.camEye[0], dy = base[13] - G.camEye[1], dz = base[14] - G.camEye[2];
       if (dx * dx + dy * dy + dz * dz > 90 * 90) return false;
+      // The player's stop plays the garage crew's Blender clip (js/garage/pit-crew.js).
+      if (typeof PitCrewAnim !== "undefined" && PitCrewAnim.draw(G, c, base, opt || _crewOpts)) { _crewDrawn++; return true; }
       const col = (c.team && c.team.color) || [0.30, 0.32, 0.36];
       const m = getCrewMesh(col);
       if (!m) return false;
@@ -1968,7 +1976,7 @@ const CarDraw = (function () {
         W[13] += W[5] * 0.605 - W[9] * 2.615;
         W[14] += W[6] * 0.605 - W[10] * 2.615;
         _ersLightOpts.alpha = 0.5 + 0.5 * (Math.sin(raceT * 28.0) > 0 ? 1 : 0.2);
-        G.gfx.draw(CarMesh.getErsLight(), W, _ersLightOpts);
+        G.gfx.draw(pin(CarMesh.getErsLight()), W, _ersLightOpts);
       }
       if ((c.exhaustPop || 0) > 0.05 && flameOk) {   // every car — the transient lasts ~0.2 s
         const fl = 0.6 + 0.4 * Math.sin(raceT * 41.0 + Math.sin(raceT * 23.0) * 3.0);
@@ -1979,7 +1987,7 @@ const CarDraw = (function () {
         W[13] += W[5] * 0.40 - W[9] * 2.63;
         W[14] += W[6] * 0.40 - W[10] * 2.63;
         _flameOpts.alpha = (0.30 + 0.55 * fl) * c.exhaustPop;
-        G.gfx.draw(CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame), W, _flameOpts);
+        G.gfx.draw(pin(CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame)), W, _flameOpts);
       }
     }
 

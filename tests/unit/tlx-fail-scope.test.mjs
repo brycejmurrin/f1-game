@@ -309,3 +309,21 @@ test("A-P2: no discard with another FBO bound, and none without a WebGL backend"
   b.sys.shadowBegin(new Float32Array(16)); b.sys.shadowEnd();
   assert.equal(b.S.colorDiscards, 0, "WebGPU: nothing to drop, nothing thrown");
 });
+
+test("A-P2W: on WebGPU every shadow map hints its unread R8 colour discard (vendored patch 17); tlxTagDiscard=0 keeps it", () => {
+  for (const [ls, want] of [[null, 1], ["0", undefined]]) {
+    const renderer = { backend: { isWebGPUBackend: true }, getRenderTarget: () => null, setRenderTarget() {}, render() {}, autoClear: true };
+    const ctx = vm.createContext({ window: {}, localStorage: { getItem: (k) => (k === "apex26.tlxTagDiscard" ? ls : null) }, Log: { warn() {} },
+      Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
+    vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
+    // mk() swallows writes, so RenderTarget alone is a recording object (unknown members still mk()).
+    const made = [], base = mk();
+    function RT() { const o = { texture: {} }; made.push(o); return new Proxy(o, { get: (t, k) => (k in t ? t[k] : k === "then" ? undefined : mk()) }); }
+    const T = new Proxy(base, { get: (t, k) => (k === "RenderTarget" ? RT : base[k]) });
+    ctx.window.TLXShaders.shadowSys(T, mk(), { renderer, isMobile: true, softwareGL: false });
+    const sun = made.find((rt) => rt.texture && rt.texture.name === "TLXSunShadow.color");
+    assert.ok(sun, "the sun map was built");
+    assert.equal(sun.apexDiscardColor, want, ls === "0" ? "switch off: stored" : "bit 0 = the R8 colour");
+    assert.equal(sun.apexDiscardDepth, undefined, "the depth IS the shadow map: never discarded");
+  }
+});

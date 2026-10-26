@@ -70,7 +70,7 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
   // Same four RaceWakeLock cases as tests/unit/wake-lock-vm.test.mjs: a
   // rejected release() must not surface as an unhandled rejection, whether
   // the grant is late or the throw is sync. Isolated from the race path so
-  // the twin count stays 13-for-13 without extra SwiftShader laps.
+  // the twin count stays 14-for-14 without extra SwiftShader laps.
   for (const late of [false, true]) {
     for (const synchronous of [false, true]) {
       test(`${late ? "late grant" : "held lock"} handles ${synchronous ? "synchronous" : "asynchronous"} release failure`, async ({ page }) => {
@@ -112,6 +112,54 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
       });
     }
   }
+
+  test("a visible UA release with no visibilitychange re-acquires; drop and hidden do not", async ({ page }) => {
+    await boot(page);
+    const result = await page.evaluate(async () => {
+      const requests = [];
+      let onRelease = null;
+      let hidden = false;
+      const desc = Object.getOwnPropertyDescriptor(Document.prototype, "hidden");
+      Object.defineProperty(Document.prototype, "hidden", { configurable: true, get: () => hidden });
+      Object.defineProperty(navigator, "wakeLock", {
+        configurable: true,
+        value: { request: () => {
+          requests.push(1);
+          return Promise.resolve({
+            addEventListener: (_e, cb) => { onRelease = cb; },
+            release: () => Promise.resolve(),
+          });
+        } },
+      });
+      try {
+        const owner = RaceWakeLock.create();
+        owner.hold();
+        await new Promise((r) => setTimeout(r, 0));
+        const afterGrant = requests.length;
+        onRelease();
+        await new Promise((r) => setTimeout(r, 0));
+        const afterVisible = requests.length;
+        owner.drop();
+        const afterDrop = requests.length;
+        onRelease();
+        await new Promise((r) => setTimeout(r, 0));
+        const afterDropFire = requests.length;
+        owner.hold();
+        await new Promise((r) => setTimeout(r, 0));
+        hidden = true;
+        const whileHidden = requests.length;
+        onRelease();
+        await new Promise((r) => setTimeout(r, 0));
+        return { afterGrant, afterVisible, afterDrop, afterDropFire, whileHidden, afterHidden: requests.length };
+      } finally {
+        if (desc) Object.defineProperty(Document.prototype, "hidden", desc);
+      }
+    });
+    expect(result.afterGrant).toBe(1);
+    expect(result.afterVisible).toBe(2);
+    expect(result.afterDropFire).toBe(result.afterDrop);
+    expect(result.afterHidden).toBe(result.whileHidden);
+  });
 
   test("starting a race requests the lock", async ({ page }) => {
     await mockWakeLock(page);

@@ -1,0 +1,1 @@
+Improved: the agent-fleet launch template carries an explicit WATCH line (`subscribe_pr_activity` + a ~15 min `send_later` at the first push; Cursor `subscribe_github_ci` + `subscribe_github_pr` + `subscribe_timer`), and every orchestrator's first acts arm the ~3-min bus tick and the hourly `create_trigger` safety net.

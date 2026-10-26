@@ -47,6 +47,7 @@ function parseArgs(argv) {
     cam: "park",
     lite: false,
     iphone: false,
+    viewport: null,   // "WxH"; default 1280x720 (640x360 for the SwiftShader WebGL2 pin)
     tod: null,
     weather: null,   // dry | wet | rain | overcast | fog (needs --tod too; default dry)
     tune: [],        // --tune cloudCover=0.9 (repeatable): __apex.lightTune after the race starts
@@ -57,7 +58,7 @@ function parseArgs(argv) {
     retries: 2,
     retryDelayMs: 3000,
     ls: [],
-    presentMs: 60000,
+    presentMs: 0,   // 0 = default: 60 s, 180 s for the SwiftShader WebGL2 pin (seconds per frame)
   };
   const skip = new Set();
   for (let i = 0; i < argv.length; i++) {
@@ -73,6 +74,7 @@ function parseArgs(argv) {
     else if (a === "--tune") { const kv = next(); skip.add(kv); if (kv) o.tune.push(kv); }
     else if (a === "--lite") o.lite = true;
     else if (a === "--iphone") o.iphone = true;
+    else if (a === "--viewport") { const v = next(); skip.add(v); o.viewport = v; }
     else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
     else if (a === "--lavapipe") o.lavapipe = true;
     else if (a === "--hardware") o.hardware = true;
@@ -93,7 +95,10 @@ function parseArgs(argv) {
   --lavapipe    Dawn via Mesa Lavapipe ICD (pair with --tlx-webgpu on Cloud)
   --hardware    use full Chromium with platform-native GPU flags; require identifiable, non-fallback WebGPU hardware
   --ls k=v      set a localStorage key before boot (repeatable)
-  --present-timeout MS   total attempt page-operation wall budget (default 60000)
+  --viewport WxH page size (default 1280x720; the SwiftShader WebGL2 pin defaults to
+                640x360, where TLX draws seconds per frame at 1280x720 and outran
+                every presentation deadline)
+  --present-timeout MS   total attempt page-operation wall budget (default 60000; 180000 for the SwiftShader WebGL2 pin)
   --no-stale-check       skip the second capture (a soft-present frame that does not
                          change across a camera move is STALE and fails the run —
                          on llvmpipe a phone-resolution three-WebGPU lit frame reads
@@ -115,6 +120,7 @@ function parseArgs(argv) {
 }
 
 const opts = parseArgs(process.argv.slice(2));
+if (!opts.presentMs) opts.presentMs = (!opts.hardware && !opts.lavapipe && opts.backend === "three" && !opts.tlxWebgpu) ? 180000 : 60000;
 if (opts.backend !== "webgpu" && opts.backend !== "three") {
   console.error("gfx-probe: --backend must be webgpu or three");
   process.exit(1);
@@ -236,7 +242,12 @@ async function runProbeAttempt(attemptNum) {
     }), (lateBrowser) => lateBrowser.close());
     const viewport = opts.iphone
       ? { width: 844, height: 390 }
-      : { width: 1280, height: 720 };
+      : (() => {
+        const m = /^(\d+)x(\d+)$/.exec(opts.viewport || "");
+        if (m) return { width: +m[1], height: +m[2] };
+        const softGl = !opts.hardware && !opts.lavapipe && opts.backend === "three" && !opts.tlxWebgpu;
+        return softGl ? { width: 640, height: 360 } : { width: 1280, height: 720 };
+      })();
     const rawPage = await bounded("new page", () => browser.newPage({
       viewport,
       userAgent: opts.iphone ? IPHONE_UA : undefined,
@@ -350,12 +361,20 @@ async function runProbeAttempt(attemptNum) {
     // which left soft-present showing a stale / blown-out frame (orbit into
     // Montreal floodlights read as solid white). wgx-capture.mjs uses this path.
     await snapshot();
-    log("frames", "rAF 45");
-    await page.evaluate((n) => new Promise((res) => {
+    // 45 frames, or a third of the presentation budget (≤ 30 s), whichever comes first: TLX
+    // WebGL2 on SwiftShader at 1280×720 draws a frame every few seconds, so a bare 45-frame
+    // wait outran even a 240 s deadline (#3685). Zero frames in the budget is a real hang.
+    const rafBudgetMs = Math.min(30000, Math.round(opts.presentMs / 3));
+    log("frames", `rAF 45 (budget ${rafBudgetMs} ms)`);
+    const rafSeen = await page.evaluate(({ n, ms }) => new Promise((res) => {
       let i = 0;
-      const tick = () => { if (++i > n) res(); else requestAnimationFrame(tick); };
+      const t0 = performance.now();
+      const tick = () => { if (++i >= n || performance.now() - t0 >= ms) res(i); else requestAnimationFrame(tick); };
       requestAnimationFrame(tick);
-    }), 45);
+      setTimeout(() => res(i), ms + 1000);   // rAF itself may never fire again
+    }), { n: 45, ms: rafBudgetMs });
+    if (!(rafSeen > 0)) throw new Error(`no animation frame in ${rafBudgetMs} ms (render loop hung)`);
+    log("frames", `${rafSeen} rAF frames`);
 
     const canvasPath = join(opts.outDir, "canvas.png");
     const pagePath = join(opts.outDir, "page-hud.png");
@@ -519,8 +538,13 @@ async function runProbeAttempt(attemptNum) {
           if (typeof GLX === "undefined" || !GLX.capturePixels) {
             throw new Error("no GLX.capturePixels on live backend");
           }
+          // No soft blit (TLX's WebGL2 pin): readPixels only sees the frame in the task that drew
+          // it (no preserveDrawingBuffer), so read in the microtask after a render resolves.
+          const synced = GLX.softPresent && !GLX.softPresent() && GLX.awaitSoftPresent
+            ? GLX.awaitSoftPresent(30000, "frame").then(() => GLX.capturePixels())
+            : GLX.capturePixels();
           const cap = await Promise.race([
-            GLX.capturePixels(),
+            synced,
             new Promise((_, rej) => setTimeout(() => rej(new Error("capturePixels timeout")), 30000)),
           ]);
           const c = document.createElement("canvas");
@@ -540,6 +564,9 @@ async function runProbeAttempt(attemptNum) {
           };
         }), { attempts: 1, delayMs: 0 });
         writeFileSync(join(opts.outDir, "frame.png"), Buffer.from(frameCap.png, "base64"));
+        // TLX's WebGL2 pin has no #game-soft, so the toDataURL above read a cleared (black) canvas:
+        // the frame-synced readback is the real picture.
+        if (opts.backend === "three") writeFileSync(canvasPath, Buffer.from(frameCap.png, "base64"));
         log("capture", `capturePixels ${frameCap.width}x${frameCap.height} meanLuma=${frameCap.meanLuma.toFixed(1)} maxLuma=${frameCap.maxLuma}`);
       } catch (e) {
         log("capture", "skipped (optional GPU readback)", { error: String(e.message || e).slice(0, 120) });

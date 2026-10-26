@@ -134,6 +134,18 @@ test("after the warm, drawing the rig links nothing; without it the same draw li
   assert.ok(draw1(c, geo(RIG_LAYOUT), c.lit.makeMaterial({ roughness: CAB.roughness })) > 0, "control: a cold first draw links its program");
 });
 
+test("A·W50: a double-sided pair compiles both windings (the race also draws the rig's DoubleSide keep material mirrored)", async (t) => {
+  // Lavapipe census after the pipeline pin: the one lit pipeline left at race entry was that material's cw twin, built
+  // synchronously on the first race frame; the rig warm had compiled only the winding it captured.
+  const h = await rig(t);
+  const ds = { geo: geo(RIG_LAYOUT) }, one = { geo: geo(RIG_LAYOUT) }, DS = { roughness: 0.5 }, ONE = { roughness: 0.6 };
+  const p = h.R.warmDraws(() => { h.R.draw(ds, I, DS); h.R.draw(one, I, ONE); });
+  h.R.mats.get(DS).side = THREE.DoubleSide;
+  h.R.present(); assert.equal(await p, true);
+  assert.deepEqual(h.compiles.map((c) => [c.geo === ds.geo ? "ds" : "one", c.sx]), [["ds", 1], ["ds", -1], ["one", 1]],
+    "the DoubleSide pair on both signs, a one-sided pair on the sign it was drawn with");
+});
+
 test("a second warmDraws over pairs already compiled resolves at once and holds no present", async (t) => {
   const h = await rig(t);
   const g = { geo: geo(RIG_LAYOUT) };
