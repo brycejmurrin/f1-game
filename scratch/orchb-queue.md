@@ -94,3 +94,8 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Fleet B state: Bryce stood B down at 02:25Z (all workers archived). B has no open PRs. D-lent left with D: #3734 (ready, next game slot), #3724 #3684 (drafts). D merged #3576 #3623 #3717 #3727 #3733.
 - Live B sessions: B·R1 session_01PfAQjrkJvDyTMsca9X2aFo — NEVER ARCHIVE. B·R2 session_015dWWDGedLQR3Y2bihGFsqb — told to stop polling at 02:57Z; confirm its "B·R2 inbox poll" send_later is gone (list_triggers), then archive it after an hour idle. One-shot test sessions L7d session_01TkeuWEHrpM1oYPgf7rs3WQ, L7e session_01FLZj6vn98KNsxjS1uXEF5W, L7f session_01D14WVKbAa8nHVbbWoT9ri3, L7g session_019sfjdPaPLtKU5vnpTTnBcF, L7h session_0146AMba7fi8W1n7eAB8vx3T: done; archive after an hour idle.
 - My timers: none left (safety net deleted at stand-down; relay check fired). No new lanes without Bryce.
+
+## 03:05Z (20:05 PT) — ORCH B now session_012x87N1tqGS3UuFtnE1AkBh (bus e0666ec LIVE)
+- Routines: 3-min send_later chain; hourly safety net trig_01PFv4ZT2Uhyjo8SVrr6s6BQ (:43); 60 s bus Monitor --to B --to claude:<id>. APEX_A_RELAY_URL/TOKEN present in env.
+- B·R1 told new id. B·R2 poll trigger confirmed gone (list_triggers). L7d–h + R2: archive after 1 h idle (~04:00Z).
+- D-lent: #3734 ready/clean/green, #3724 #3684 drafts green — all WAIT (HOLD), D's to merge. B has no open PRs; no new lanes without Bryce.
