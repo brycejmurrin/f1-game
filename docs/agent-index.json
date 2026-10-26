@@ -14,7 +14,7 @@
       "name": "awaitPresent",
       "group": "perceive",
       "signature": "awaitPresent(timeoutMs)?",
-      "summary": "WAIT FOR THE PIXELS — resolve once the next real frame has reached the screen; a screenshot tool taken before this resolves can read a stale or black canvas under HeadlessChrome"
+      "summary": "WAIT FOR THE PIXELS — resolve once the next real frame has reached the screen; a screenshot taken before this resolves can read a stale or black canvas under HeadlessChrome"
     },
     {
       "name": "field",
@@ -68,7 +68,7 @@
       "name": "spatialUpscale",
       "group": "know",
       "signature": "spatialUpscale(0|1)",
-      "summary": "GLX + WGX + TLX SGSR1 (flag OFF by default). active only when on AND renderScale<~1; see UPSCALING-2026-09 §6–7"
+      "summary": "GLX/WGX/TLX SGSR1 (flag OFF by default). active only when on AND renderScale<~1; see UPSCALING-2026-09 §6–7"
     },
     {
       "name": "survey",
@@ -182,7 +182,7 @@
       "name": "camState",
       "group": "read",
       "signature": "camState()",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)"
     },
     {
       "name": "carAt",
@@ -212,7 +212,7 @@
       "name": "gpuTimer",
       "group": "read",
       "signature": "gpuTimer()",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)"
     },
     {
       "name": "groundY",
@@ -236,7 +236,7 @@
       "name": "inspector",
       "group": "read",
       "signature": "inspector(on)",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)"
     },
     {
       "name": "lapHistory",
@@ -247,20 +247,20 @@
     {
       "name": "lifecycle",
       "group": "read",
-      "signature": "lifecycle({hidden,bfcache,resize,loseContext})",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
+      "signature": "lifecycle(o)",
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)"
     },
     {
       "name": "lightState",
       "group": "read",
       "signature": "lightState()",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)"
     },
     {
       "name": "lightTune",
       "group": "read",
       "signature": "lightTune()",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)"
     },
     {
       "name": "obs",
@@ -272,7 +272,7 @@
       "name": "perf",
       "group": "read",
       "signature": "perf({on,reset,measure})",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)"
     },
     {
       "name": "physState",
@@ -338,7 +338,7 @@
       "name": "viewState",
       "group": "read",
       "signature": "viewState()",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)"
     },
     {
       "name": "wallStats",
