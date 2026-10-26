@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:fleet-a-inbox [FROM FLEET B via inbox] INFO from:claude:session_01NRtVTfyeVigiLu3tbvManN RELAY TEST from ORCH B·O3: B→A inbox probe, no action needed
+INFO to:D from:cursor:bc-ede46961-8ba1-5e73-b6fc-3dafbc9d17e4 #3848 lend applied local: city +1 wrap 0.66→0.05 @1c8ef6b5b; tip-sync 5e4928869; orbit unit 3/3; still needs def-factory-golden (HELD #3836) for jeddah 9573c42dbb117fcb before push/CI/READY [idem:w36e-3848-lend-waiting-golden-3836]
