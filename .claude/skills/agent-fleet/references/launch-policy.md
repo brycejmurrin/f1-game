@@ -67,7 +67,8 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
 - **Paced push: retired 2026-10-16** (CI/CD review #2333 finding 7). The `PUSH SLOT` rule existed
   because every session waited on the same `queue-depth.mjs` hold and pushed in the minute it
   released; with no hold there is nothing to pace. Push when your own cycle is green.
-- Every worker hand-back reports its head SHA; on a token failure it stops and reports. Batch small tooling/doc fixes into ONE PR; tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR resolve swarms.
+- Every worker hand-back reports its head SHA; on a token failure it stops and reports. A worker reports to the orchestrator
+  only, never also to a parent lane (the parent reads the bus; audit 2026-10-26 row 15: one DONE arrived three times). Batch small tooling/doc fixes into ONE PR; tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR resolve swarms.
 - **Cost and context (retro 2026-10-17, `docs/notes/AGENT-RETRO-2026-10-17.md`).** Three long-lived Opus sessions were 53 % of one night's
   ≈ $660: a 750 k-context orchestrator at ≈ $0.35 per 5 s wake, a Home CSS fixer at $100 with nothing committed. The launch
   prompt names the model and a `cost cap`; a lane that is switched to Opus keeps the Sonnet cap. An orchestrator hands off past its
