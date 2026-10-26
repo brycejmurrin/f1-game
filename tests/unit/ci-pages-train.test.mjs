@@ -10,7 +10,7 @@ import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { report } from "../../tools/ci/ci-coverage.mjs";
-import { ciWorkflow, pagesWorkflow, selectedJob, shipFilter } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, pagesWorkflow, selectedJob, shipFilter, LABEL_NOISE, EDIT_NOISE } from "../helpers/ci-workflow.mjs";
 
 test("no workflow demotes the change-aware gate to advisory", () => {
   assert.doesNotMatch(pagesWorkflow, /^\s+advisory:/m);
@@ -37,7 +37,7 @@ test("one CI run per branch head: push and pull_request share a group, manual ru
   // unique run_id group (the nightly must not share the tip's group —
   // run 2758). The train is not in this group: pages.yml passes a unique
   // concurrency_key. PR branches keep newest-wins cancel on pull_request.
-  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'pull_request' && github\.event\.action == 'labeled' && \(github\.event\.label\.name != 'run-ci' \|\| !github\.event\.pull_request\.draft\)\) && format\('label-\{0\}', github\.run_id\)\) \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\) && github\.run_id\) \|\| github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
+  assert.ok(ciWorkflow.includes(`group: ci-\${{ inputs.concurrency_key || (${LABEL_NOISE} && format('label-{0}', github.run_id)) || (${EDIT_NOISE} && format('edit-{0}', github.run_id)) || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}`),
     "PR runs of one branch share a group; dispatched/scheduled runs keep run_id (no ship-fast since 2026-10-16: pages.yml runs on push)");
   assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/,
     "newest wins on PR only; ship pushes must not cancel each other");

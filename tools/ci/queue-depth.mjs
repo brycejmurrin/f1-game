@@ -291,7 +291,7 @@ export function pushTargets(text, current) {
 /**
  * Does a push to `branch` start a CI run? The deploy branch's push starts
  * pages.yml (the train, which calls ci.yml); ci.yml runs on pull_request
- * otherwise; a draft without `run-ci` gets one
+ * otherwise; a draft without `run-ci` (or the `CI: run` body line) gets one
  * 2-min `draft-ci-skipped` job. `ci` is null when the lookup failed.
  */
 export function pushStartsCi(branch, request = api) {
@@ -299,10 +299,20 @@ export function pushStartsCi(branch, request = api) {
   const r = request(`pulls?head=${OWNER}:${encodeURIComponent(branch)}&state=open&per_page=10`);
   if (r.error || !Array.isArray(r.json)) return { ci: null, why: `${branch}: PR lookup failed (${r.error || "no array"})` };
   if (!r.json.length) return { ci: false, why: `${branch}: no open PR` };
-  const live = r.json.find((p) => !p.draft || (p.labels || []).some((l) => l?.name === "run-ci"));
-  if (live) return { ci: true, why: `${branch}: PR #${live.number}${live.draft ? " (draft, run-ci)" : ""}` };
-  return { ci: false, why: `${branch}: PR #${r.json[0].number} is a draft without run-ci` };
+  const label = (p) => (p.labels || []).some((l) => l?.name === "run-ci");
+  const live = r.json.find((p) => !p.draft || label(p) || hasCiRunMarker(p.body));
+  if (live) return { ci: true, why: `${branch}: PR #${live.number}${live.draft ? (label(live) ? " (draft, run-ci)" : " (draft, CI: run)") : ""}` };
+  return { ci: false, why: `${branch}: PR #${r.json[0].number} is a draft without run-ci or a CI: run body line` };
 }
+
+/**
+ * ci.yml's draft opt-in BODY MARKER, mirrored: a PR-body line that starts
+ * `CI: run`, case-insensitive (Actions `contains` is). ci.yml prepends a
+ * newline to the body and looks for "\nCI: run", so line 1 counts and a
+ * mid-line quote does not; the ci-workflow tests pin both to the same cases.
+ */
+export const CI_RUN_MARKER = /(?:^|\n)CI: run/i;
+export const hasCiRunMarker = (body) => CI_RUN_MARKER.test(String(body ?? ""));
 
 /** Skip the gauge only when every target is known to start no CI. */
 export function pushVerdict(text, current, request = null) {

@@ -101,6 +101,16 @@ test("newestByName keeps the latest completed check-run per name", () => {
   assert.equal(by.get(GUARDS_JOB).id, 2);
 });
 
+test("a skipped check-run from an ignored edit/label event never hides a real result (#3862, 2026-10-26)", () => {
+  // A `CI ignored: edit` run on the same head posts a newer, skipped Structural guards.
+  const green = run(GUARDS_JOB, "completed", "success", 10), noise = run(GUARDS_JOB, "completed", "skipped", 11);
+  for (const list of [[green, noise], [noise, green]]) assert.equal(guardsVerdict(list).state, "passed");
+  const red = run(GUARDS_JOB, "completed", "failure", 10);
+  for (const list of [[red, noise], [noise, red]]) assert.equal(guardsVerdict(list).state, "failed");
+  // Only skipped runs: still the reuse-draft fallback to the shards.
+  assert.equal(newestByName([noise]).get(GUARDS_JOB).conclusion, "skipped");
+});
+
 test("localVerdict: stamp + passed log matching tip is green", () => {
   const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "tooling-fast-ready.sha");
