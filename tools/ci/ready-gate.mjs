@@ -163,6 +163,18 @@ export function localVerdict(tipSha, { stampPath = LOCAL_STAMP, logPath = LOCAL_
   return { state: "none", evidence: "local suite log has no = run verdict", code: 1 };
 }
 
+/**
+ * A ready flip on a PR GitHub already considers conflicting starts NO run (2026-10-26 08:36Z: #3785 was
+ * flipped seconds after #3737 landed; ci-watch said `= ci blocked` five minutes later). `dirty` refuses;
+ * `unknown` means GitHub has not computed it yet: re-read (the caller retries), then refuse. Pure.
+ * @returns {null | { state: "dirty"|"unknown", evidence: string }}
+ */
+export function mergeableProblem(state) {
+  if (state === "dirty") return { state: "dirty", evidence: "GitHub reports mergeable_state dirty: sync first (node tools/ci/sync-pr.mjs <branch>); a ready flip on a conflicting PR starts no CI" };
+  if (state === "unknown") return { state: "unknown", evidence: "GitHub has not computed mergeability yet (mergeable_state unknown): re-read before flipping" };
+  return null;
+}
+
 export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
   if (sha) {
     const r = git("git", ["rev-parse", "--verify", sha], { cwd: ROOT, encoding: "utf8" });
@@ -207,6 +219,7 @@ export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
     const labels = (one.json?.labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
     return {
       sha: head, error: null, pr: n,
+      mergeableState: one.json?.mergeable_state ?? null,
       branch: one.json?.head?.ref || "",
       body: one.json?.body || "",
       title: one.json?.title || "",
@@ -420,7 +433,10 @@ export function stampReadySha(sha, { tree = "", stampPath = LOCAL_STAMP, write =
   return true;
 }
 
-const USAGE = `usage: node tools/ci/ready-gate.mjs [--sha <sha|ref>] [--pr <n>] [--local] [--json]
+const USAGE = `usage: node tools/ci/ready-gate.mjs [--sha <sha|ref>] [--pr <n>] [--local] [--json] [--wait [--timeout <min>]]
+  --wait: while Structural guards is still running, poll every 30 s (default 30 min; a new head aborts the wait).
+  With --pr, a conflicting PR (mergeable_state dirty) refuses first: sync, then re-run (a ready flip on a dirty
+  PR starts no CI). The Plan's terminal item may start \`READY to \` (the orchestrator's step): it never blocks.
   Exit 0 only when tooling-fast / Structural guards is green on the tip (AGENTS.md §Concurrent PRs)
   and, with --pr, every item of the PR body's ## Plan checklist is ticked or struck (rule 12),
   and .claude/memory/ edits carry an explicit intent marker: a body line
@@ -440,12 +456,45 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   };
   const localOnly = argv.includes("--local");
   const asJson = argv.includes("--json");
-  const resolved = resolveSha({ sha: opt("--sha"), pr: opt("--pr") });
+  const waitMin = argv.includes("--wait") ? Number(opt("--timeout") || 30) : 0;
+  const sleepS = (s) => spawnSync("sleep", [String(s)]);
+  let resolved = resolveSha({ sha: opt("--sha"), pr: opt("--pr") });
   if (resolved.error) {
     say(`= ready-gate unknown — ${resolved.error}`);
     process.exit(3);
   }
-  const planned = withFleet(withPlan(evaluate({ sha: resolved.sha, localOnly }), resolved.body),
+  // mergeability first: `unknown` is re-read up to 3 times (2, 4, 8 s), `dirty` refuses with its own row.
+  if (resolved.pr) {
+    for (let i = 0; i < 3 && resolved.mergeableState === "unknown"; i++) {
+      sleepS(2 ** (i + 1));
+      resolved = resolveSha({ pr: opt("--pr") });
+      if (resolved.error) { say(`= ready-gate unknown — ${resolved.error}`); process.exit(3); }
+    }
+    const mp = mergeableProblem(resolved.mergeableState);
+    if (mp) {
+      say(`= ready-gate conflicting — ${mp.evidence} sha=${resolved.sha}`);
+      try { writeReceipt(ROOT, "ready", { pr: resolved.pr, head: resolved.sha, ok: false, evidence: `conflicting: ${mp.evidence}` }); }
+      catch (e) { say(`warning: could not write the ready-gate receipt: ${e.message}`); }
+      process.exit(1);
+    }
+  }
+  // --wait: while Structural guards is pending, poll every 30 s up to --timeout minutes (default 30),
+  // one "waiting" line per 5 minutes; the head is re-read so a new push is noticed, not misjudged.
+  let judged = evaluate({ sha: resolved.sha, localOnly });
+  if (waitMin > 0) {
+    const deadline = Date.now() + waitMin * 60_000;
+    let lastSaid = 0;
+    while (judged.state === "pending" && Date.now() < deadline) {
+      if (Date.now() - lastSaid > 5 * 60_000) { say(`= ready-gate waiting — ${judged.evidence} sha=${resolved.sha}`); lastSaid = Date.now(); }
+      sleepS(30);
+      if (resolved.pr) {
+        const again = resolveSha({ pr: opt("--pr") });
+        if (!again.error && again.sha !== resolved.sha) { say(`= ready-gate moved — head is now ${again.sha} (was ${resolved.sha}); re-run on the new head`); process.exit(1); }
+      }
+      judged = evaluate({ sha: resolved.sha, localOnly });
+    }
+  }
+  const planned = withFleet(withPlan(judged, resolved.body),
     resolved.pr ? resolved.branch || "" : null, resolved.body);
   const v = withMemory(planned, resolved.files, {
     title: resolved.title || "",
