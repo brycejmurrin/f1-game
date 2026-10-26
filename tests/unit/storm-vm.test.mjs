@@ -10,6 +10,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 
 let g;
@@ -63,17 +64,20 @@ function flashes(secs) {
 test("lightning strikes in a storm, and never flashes under REDUCED MOTION", async () => {
   const root = g.sandbox && g.sandbox.document ? g.sandbox.document.documentElement : (g.ctx && g.ctx.document && g.ctx.document.documentElement);
   assert.ok(root && root.dataset, "the VM DOM has a documentElement dataset");
-  await race("storm");
-  delete root.dataset.motion;
-  const on = flashes(90);
-  assert.ok(on.max > 0.5, "a storm flashes within 90 s, max " + on.max);
-  await race("storm");
-  root.dataset.motion = "reduce";   // SETTINGS › MOTION: REDUCED (game.js motionReduced())
+  const motion = vm.runInContext("TitleFx", g.ctx, { filename: "storm-motion-preference-probe" });
+  const previous = motion.choice();
   try {
+    motion.setChoice("off");
+    await race("storm");
+    const on = flashes(90);
+    assert.ok(on.max > 0.5, "a storm flashes within 90 s, max " + on.max);
+    await race("storm");
+    motion.setChoice("reduce");
+    assert.equal(root.dataset.motion, "reduce", "the real preference updates the DOM too");
     g.G._ltFlash = 0;   // the last race's strike, still decaying, is not this one's
     const off = flashes(90);
     assert.equal(off.max, 0, "no flash under reduced motion");
-  } finally { delete root.dataset.motion; }
+  } finally { motion.setChoice(previous); }
 });
 
 test("a friend room keeps a storm staged: the lobby accepts it", () => {
