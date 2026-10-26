@@ -33,7 +33,9 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractSessions, prOf } from "./fleet-archive.mjs";
+import { extractSessions, prsOf } from "./fleet-archive.mjs";
+// #3789: a session may name several PRs (pr: tags and title); a twin shares any of them.
+const hasPr = (s, n) => prsOf(s).includes(Number(n));
 import { extractSession, rateLimitOf, verdict, writeReceipt as writeGateReceipt, PAGE_MAX_AGE_S } from "./launch-gate.mjs";
 import { whoAmI } from "./fleet-bus.mjs";
 
@@ -87,9 +89,9 @@ export function twinsOf(sessions, { fleet, lane, pr, selfId = "" }) {
   return (sessions || []).filter((s) => s && s.id !== selfId && isLive(s)).filter((s) => {
     const t = tagsOf(s).map((x) => String(x).toLowerCase());
     const sameLane = lane && t.includes(f) && t.includes(`lane:${String(lane).toLowerCase()}`);
-    const samePr = pr && prOf(s) === Number(pr);
+    const samePr = pr && hasPr(s, pr);
     return sameLane || samePr;
-  }).map((s) => ({ id: s.id, title: s.title || "", why: prOf(s) === Number(pr) && pr ? `pr:${pr}` : `lane:${lane}` }));
+  }).map((s) => ({ id: s.id, title: s.title || "", why: pr && hasPr(s, pr) ? `pr:${pr}` : `lane:${lane}` }));
 }
 
 /** The create_session arguments the orchestrator passes on. Pure. */
