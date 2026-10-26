@@ -21,3 +21,15 @@ No timing claim: none measured in this container.
 **Side fix.** The committed manifest carried no strip md5s, so `assets.mjs verify`
 failed on them; the four `albedoMd5`/`normalMd5` fields are now stamped (same values
 `stampMaterialHashes` writes).
+
+## SECOND: pine W() allocation / GC (zero finding, no fix)
+
+Profiled 4 builds each of Spa and Nürburgring (TRACK_VM, `node --cpu-prof --trace-gc`):
+the whole process spent 652 ms (5 %) in GC of 12.6 s, 418 scavenges and 9 mark-compacts,
+and the `pine` closure's self time was 2.0 s (16 %), the arithmetic of its 28 facets
+rather than allocation. A scalar rewrite of the facet loop (no `W()`/`cross`/`norm`
+arrays) kept Tracks.build typed arrays byte-identical (sha256, Spa/Nürburgring/Monza/Suzuka)
+but moved nothing measurable: Spa 1380-1550 ms before vs 1426-1551 ms after, Nürburgring
+1404-1516 vs 1376-1516 (steady-state builds, within run-to-run noise, far under the 5 %
+bar). V8 already scalar-replaces the short-lived arrays, so the change was reverted and
+`nature.js` is untouched. No second PR.
