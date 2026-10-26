@@ -1285,6 +1285,7 @@
     "tests/unit/tlx-fail-scope.test.mjs",
     "// A·W50 #3673: the fx warm indexes the driving-line probe like the race (three keys a pipeline on the index) and warms the per-record blob on both windings: 0 sync first-race pipelines.",
     "tests/unit/tlx-fx-warm.test.mjs",
+    "tests/unit/tlx-glow-instancing.test.mjs",
     "// A·H12 GPU-memory hunt (G1): over three r186 on the fake WebGL2, the real tlx-shadow warm releases the previous race's probe-caster render objects — Renderer._objects stays flat across six warms (budget pin).",
     "tests/unit/tlx-gpumem-leak.test.mjs",
     "// TLX perf hunt 3 (lane TLX-1): three's real WebGPURenderer over a no-op WebGL2 compiles the real lit material; GLSL pins (no env cube when opted out) + tlx.js source pins.",

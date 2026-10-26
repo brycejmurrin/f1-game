@@ -2876,6 +2876,33 @@ const TLX = (function () {
         slot.geo = geo; slot.ib = ib; slot.cap = cap;
         return true;
       }
+      // Glow uses a six-vertex quad plus one seven-float record per light.
+      function ensureGlowStream(instances, slot = glowStream) {
+        if (slot.geo && slot.cap >= instances) return false;
+        const cap = Math.max(slot.cap * 2, instances, slot.min || 32);
+        if (slot.geo) disposeGeometry(slot.geo);
+        const geo = new THREE.InstancedBufferGeometry();
+        const corners = new Float32Array(18);
+        for (let i = 0; i < 6; i++) {
+          corners[i * 3] = _glowCorners[i * 2];
+          corners[i * 3 + 1] = _glowCorners[i * 2 + 1];
+        }
+        const quad = new THREE.InterleavedBuffer(corners, 3);
+        quad.name = "tlx-glow-quad";
+        geo.setAttribute("position", new THREE.InterleavedBufferAttribute(quad, 3, 0));
+        geo.setAttribute("fxCorner", new THREE.InterleavedBufferAttribute(quad, 2, 0));
+        const ib = new THREE.InstancedInterleavedBuffer(new Float32Array(cap * 7), 7, 1);
+        ib.name = "tlx-glow-instances";
+        ib.setUsage(_instUsage);
+        geo.setAttribute("fxCenter", new THREE.InterleavedBufferAttribute(ib, 3, 0));
+        geo.setAttribute("fxColor", new THREE.InterleavedBufferAttribute(ib, 3, 3));
+        geo.setAttribute("fxRadius", new THREE.InterleavedBufferAttribute(ib, 1, 6));
+        geo.setDrawRange(0, 6);
+        geo.instanceCount = 0;
+        geo.__tlxPin = true;   // retain idle glow wrappers, as ensureStream does for other FX
+        slot.geo = geo; slot.ib = ib; slot.cap = cap;
+        return true;
+      }
       // R9 (perf hunt 3): a stream whose producer keeps ONE long-lived Float32Array
       // (particles.js _vertA / _vertB, rain included) is wrapped, not copied: the
       // InterleavedBuffer IS the caller's array, so each upload is three's
@@ -2903,8 +2930,7 @@ const TLX = (function () {
       // (three draws Mesh triangles, not strips): (i, i+1, i+2) per strip step.
       const lineStream = { geo: null, ib: null, cap: 0, min: 2048 * 2, stride: 7,
         attrs: [["position", 3, 0], ["lineAcross", 1, 3], ["lineSpeed", 1, 4], ["lineZone", 1, 5], ["lineAlong", 1, 6]] };
-      const glowStream = { geo: null, ib: null, cap: 0, min: 32 * 6, stride: 9,
-        attrs: [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxRadius", 1, 8]] };
+      const glowStream = { geo: null, ib: null, cap: 0 };
       let _wrapPart = true;   // R9 A/B handle: apex26.tlxPartWrap=0 restores the copy into TLX's own array
       try { _wrapPart = localStorage.getItem("apex26.tlxPartWrap") !== "0"; } catch (_) { /* no storage: wrap */ }
       const PART_ATTRS = [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxSize", 1, 8], ["fxAlpha", 1, 9]];
@@ -3159,12 +3185,31 @@ const TLX = (function () {
           [partStreams[1], fx.particleMats && fx.particleMats[1]], [glowStream, fx.glowMat], [lineStream, fx.lineMat]];
         for (const [stream, mat] of jobs) {
           if (!mat) continue;
-          ensureStream(stream, 1);
-          // A·W50 (#3673): the line draws INDEXED, and three keys a pipeline on the geometry's index too ("index,"
-          // in getGeometryCacheKey), so an unindexed probe warmed a pipeline the race never used: the first race
-          // frame built it synchronously (lavapipe census after the pin).
-          if (stream === lineStream) lineIndex(stream);
-          await compileWarmProbe(stream.geo, mat);
+          if (stream === glowStream) {
+            // A dedicated layout probe cannot overwrite a live draw/count across await.
+            let probe = stream.warm;
+            if (!probe) {
+              probe = stream.warm = { geo: null, ib: null, cap: 0, min: 1 };
+              // 100 bytes: six xyz corners + one centre/colour/radius record.
+              // Keep the compiled pipeline alive until its material is retired.
+              const release = () => {
+                mat.removeEventListener("dispose", release);
+                disposeGeometry(probe.geo);
+                if (stream.warm === probe) stream.warm = null;
+              };
+              mat.addEventListener("dispose", release);
+            }
+            ensureGlowStream(1, probe);
+            probe.geo.instanceCount = 1;
+            await compileWarmProbe(probe.geo, mat);
+          } else {
+            ensureStream(stream, 1);
+            // A·W50 (#3673): the line draws INDEXED, and three keys a pipeline on the geometry's index too ("index,"
+            // in getGeometryCacheKey), so an unindexed probe warmed a pipeline the race never used: the first race
+            // frame built it synchronously (lavapipe census after the pin).
+            if (stream === lineStream) lineIndex(stream);
+            await compileWarmProbe(stream.geo, mat);
+          }
         }
         // The per-record blob (a run past BLOB_CAP, a second run in a pass, software WebGPU) on both windings: a
         // mirrored model draws it cw, the census's other first-race-frame pipeline. One tiny fx program, two states.
@@ -5953,7 +5998,7 @@ const TLX = (function () {
         drawGlow(lights, str) {
           if (!fx || !lights || !lights.length || !(str > 0)) return;
           const nL = (lights.length / 15) | 0;
-          ensureStream(glowStream, nL * 6);
+          ensureGlowStream(nL);
           const out = glowStream.ib.array;
           let p = 0, nDraw = 0;
           const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
@@ -5972,18 +6017,16 @@ const TLX = (function () {
             const csc = Math.min(1, 3.2 / cm) * (0.5 + 0.5 * Math.min(1, cm / 40)) * fade * glareW;
             r *= csc; g *= csc; b *= csc;
             const brad = Math.min(2.2, rad * 0.10) * (0.7 + 0.6 * Math.min(glareW, 2));
-            for (let v = 0; v < 12; v += 2) {
-              out[p++] = _glowCorners[v]; out[p++] = _glowCorners[v + 1];
-              out[p++] = cx; out[p++] = cy; out[p++] = cz;
-              out[p++] = r; out[p++] = g; out[p++] = b;
-              out[p++] = brad;
-            }
+            out[p++] = cx; out[p++] = cy; out[p++] = cz;
+            out[p++] = r; out[p++] = g; out[p++] = b;
+            out[p++] = brad;
             nDraw++;
           }
+          glowStream.geo.instanceCount = nDraw;
           if (!nDraw) return;
           fx.glowStr.value = str;
           uploadStream(glowStream, p);
-          glowStream.geo.setDrawRange(0, nDraw * 6);
+          glowStream.geo.setDrawRange(0, 6);
           pushRec(glowStream.geo, null, fx.glowMat, undefined, undefined, 0, null, null);
           _fxFrame.glow = nDraw;
         },

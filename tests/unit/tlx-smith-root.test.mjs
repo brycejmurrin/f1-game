@@ -10,7 +10,7 @@ installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
-async function litGLSL() {
+async function litShader(language) {
   const fg = makeFakeGL();
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true });
   await renderer.init();
@@ -21,8 +21,17 @@ async function litGLSL() {
     g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(k * 3), k));
   const m = new THREE.Mesh(g, lit.makeMaterial({ clearcoat: 0.8, carPaint: 1 }));
   m.frustumCulled = false; scene.add(m);
-  renderer.render(scene, cam);
-  const src = fg.shaders.join("\n"); renderer.dispose();
+  let src;
+  if (language === "WGSL") {
+    renderer.backend.utils.getTextureSampleData = () => ({ primarySamples: 1 });
+    const builder = new THREE.WGSLNodeBuilder(m, renderer);
+    builder.scene = scene; builder.camera = cam; builder.build();
+    src = builder.fragmentShader;
+  } else {
+    renderer.render(scene, cam);
+    src = fg.shaders.join("\n");
+  }
+  g.dispose(); m.material.dispose(); renderer.dispose();
   return { src };
 }
 
@@ -79,19 +88,64 @@ test("lamp Smith visibility caches preserve f32 arithmetic and defer roots until
   }
 });
 
-test("lamp Smith caches are initialized outside the generated loop and rooted inside lazy branches", async () => {
-  const { src } = await litGLSL();
+for (const language of ["GLSL", "WGSL"]) test(`lamp Smith ${language} caches retain actual acceptance and independent coat gates`, async () => {
+  const { src } = await litShader(language);
   const caches = [...src.matchAll(/(nodeVar\d+) = -1\.0;/g)].map(m => m[1])
     .filter(id => src.includes(`if ( ( ${id} < 0.0 ) )`));
   assert.equal(caches.length, 2);
-  const loopAt = src.indexOf("for ( int i = 0; i < 16; i ++ )");
+  const loopAt = /for \( [^;\n]*; i < 16;/.exec(src)?.index ?? -1;
   assert(loopAt > 0);
+  // Parse brace nesting, not text order: an earlier test accepted moving the
+  // root before NoLl > 0 because both branches still occurred after the loop.
+  const scopesAt = at => {
+    const stack = [];
+    for (let i = 0; i < at; i++) {
+      if (src[i] === "{") {
+        const lineStart = src.lastIndexOf("\n", i) + 1;
+        stack.push(src.slice(lineStart, i).trim());
+      } else if (src[i] === "}") stack.pop();
+    }
+    return stack;
+  };
+  const conditions = [];
   for (const id of caches) {
     assert(src.indexOf(`${id} = -1.0;`) < loopAt);
     const branchAt = src.indexOf(`if ( ( ${id} < 0.0 ) )`);
     const rootAt = src.indexOf(`${id} = sqrt(`);
     assert(branchAt > loopAt && rootAt > branchAt);
     assert.equal(src.slice(branchAt, rootAt).includes("}"), false, "assignment stays in the lazy branch");
-    assert(src.slice(rootAt).includes(` * ${id} )`), "visibility consumes the initialized root");
+    const light = new RegExp(`\\( (nodeVar\\d+) \\* ${id} \\)`).exec(src.slice(rootAt))?.[1];
+    assert.ok(light, "identify the actual NoL operand consuming the cache");
+    const scopes = scopesAt(rootAt);
+    assert.ok(scopes.some(header => /^for \(/.test(header) && /i < 16/.test(header)), "root assignment stays inside the bounded lamp loop");
+    assert.ok(scopes.some(header => /^if \(/.test(header) && header.includes("dot(") && header.includes(" < ")),
+      "range-rejected lamps cannot initialize the root");
+    assert.ok(scopes.some(header => /^if \(/.test(header) && header.includes(">= 0.000001")),
+      "attenuation-rejected lamps cannot initialize the root");
+    const lightGuard = `if ( ( ${light} > 0.0 ) )`;
+    assert.ok(scopes.includes(lightGuard), "root assignment must be nested within its consuming light's front-face gate");
+    assert.equal(scopes.at(-1), `if ( ( ${id} < 0.0 ) )`, "root assignment must stay inside its sentinel test");
+    const coatGuard = scopes.filter(header => /^if \( \( nodeVar\d+ > 0\.001 \) \)$/.test(header)).at(-1);
+    conditions.push({ lightGuard, coatGuard, lazy: scopes.at(-1), id, light });
+  }
+  assert.equal(conditions[0].coatGuard, undefined, "base root does not depend on clearcoat");
+  assert.ok(conditions[1].coatGuard, "coat root retains independent clearcoat admission");
+  // Evaluate the emitted admission and sentinel expressions for rejected,
+  // back-facing and mixed light sequences, with independent coat admission.
+  const evaluate = (header, values) => Function(...Object.keys(values),
+    `return ${header.slice(3)};`)(...Object.values(values));
+  for (const lights of [[], [0], Array(48).fill(0), [0, .2, 0, .8], Array(48).fill(.6)]) {
+    for (const coat of [0, .001, .0011, 1]) {
+      const cache = [-1, -1], roots = [0, 0];
+      for (const light of lights) for (let k = 0; k < conditions.length; k++) {
+        const c = conditions[k], values = { [c.light]: light, [c.id]: cache[k] };
+        if (c.coatGuard) values[/nodeVar\d+/.exec(c.coatGuard)[0]] = coat;
+        if (evaluate(c.lightGuard, values) && (!c.coatGuard || evaluate(c.coatGuard, values)) && evaluate(c.lazy, values)) {
+          roots[k]++; cache[k] = .5;
+        }
+      }
+      const accepted = lights.some(x => x > 0);
+      assert.deepEqual(roots, [accepted ? 1 : 0, accepted && coat > .001 ? 1 : 0]);
+    }
   }
 });

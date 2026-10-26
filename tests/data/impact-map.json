@@ -2384,6 +2384,9 @@
       "drawPlayerWheels": [
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "farRivalBodyReady": [
+        "tests/unit/car-presentation-vm.test.mjs"
+      ],
       "finish": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -2408,11 +2411,17 @@
         "tests/unit/livery-tex-dispose.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
+      "invalidateFactoryMeshCaches": [
+        "tests/unit/car-presentation-vm.test.mjs"
+      ],
       "kick": [
         "tests/unit/livery-tier.test.mjs"
       ],
       "liveryBitmapOpts": [
         "tests/unit/car-draw-decal-budget.test.mjs"
+      ],
+      "loadCarModel": [
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "menuStepYield": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -2450,6 +2459,7 @@
         "tests/unit/livery-tier.test.mjs"
       ],
       "sharedRivalBodyMesh": [
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs"
       ],
       "teamBodyMesh": [
@@ -2497,6 +2507,9 @@
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs"
+      ],
+      "decimate": [
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "frame": [
         "tests/unit/car-shade.test.mjs"
@@ -8761,6 +8774,7 @@
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/tlx-smith-root.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/weather-blend.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
@@ -13781,6 +13795,7 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
       ]
@@ -13925,7 +13940,8 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
-        "tests/unit/tlx-recovery-lifecycle.test.mjs"
+        "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "drawWarm": [
         "tests/unit/tlx-hunt4c.test.mjs"
@@ -13955,7 +13971,8 @@
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
-        "tests/unit/tlx-post-phone-res.test.mjs"
+        "tests/unit/tlx-post-phone-res.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "postChain": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -13963,7 +13980,8 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
-        "tests/unit/tlx-recovery-lifecycle.test.mjs"
+        "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "present": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13975,7 +13993,8 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
-        "tests/unit/tlx-recovery-lifecycle.test.mjs"
+        "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "resize": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13985,7 +14004,8 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs",
-        "tests/unit/tlx-recovery-lifecycle.test.mjs"
+        "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "runPass": [
         "tests/unit/tlx-post-fixed-mats.test.mjs"
@@ -14245,6 +14265,7 @@
         "tests/unit/three-inspector.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
       "createInstancedBatch": [
@@ -14262,6 +14283,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "disposeGeometry": [
+        "tests/unit/tlx-glow-instancing.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
       ],
       "disposeInstancedObject": [
@@ -14281,7 +14303,12 @@
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/tlx-pipe-pin-warm.test.mjs"
       ],
+      "ensureGlowStream": [
+        "tests/unit/tlx-glow-instancing.test.mjs",
+        "tests/unit/tlx-hunt4.test.mjs"
+      ],
       "ensureStream": [
+        "tests/unit/tlx-glow-instancing.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
       ],
@@ -14356,6 +14383,7 @@
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "prunePool": [
+        "tests/unit/tlx-glow-instancing.test.mjs",
         "tests/unit/tlx-pipe-pin-warm.test.mjs",
         "tests/unit/tlx-prune-pin.test.mjs"
       ],
@@ -14365,6 +14393,7 @@
       "pushRec": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
+        "tests/unit/tlx-glow-instancing.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
       ],
@@ -14434,7 +14463,8 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
-        "tests/unit/tlx-round2.test.mjs"
+        "tests/unit/tlx-round2.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "resizeNow": [
         "tests/unit/tlx-round2.test.mjs"
@@ -14449,6 +14479,7 @@
         "tests/unit/tlx-hunt4.test.mjs"
       ],
       "setRange0": [
+        "tests/unit/tlx-glow-instancing.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
@@ -14489,6 +14520,7 @@
       ],
       "uploadStream": [
         "tests/unit/render-final-contracts.test.mjs",
+        "tests/unit/tlx-glow-instancing.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
       ],
@@ -14501,6 +14533,7 @@
       "warmFxPrograms": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fx-warm.test.mjs",
+        "tests/unit/tlx-glow-instancing.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
@@ -14536,7 +14569,8 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
-        "tests/unit/tlx-smith-root.test.mjs"
+        "tests/unit/tlx-smith-root.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "*": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -14559,7 +14593,8 @@
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",
-        "tests/unit/surface-id-parity.test.mjs"
+        "tests/unit/surface-id-parity.test.mjs",
+        "tests/unit/tlx-glow-instancing.test.mjs"
       ]
     },
     "js/render/three/tsl-lit.js": {
@@ -14652,6 +14687,12 @@
     },
     "js/render/three/tsl-viewport.js": {
       "layout": [
+        "tests/unit/tlx-viewport.test.mjs"
+      ],
+      "layoutOf": [
+        "tests/unit/tlx-viewport.test.mjs"
+      ],
+      "scope": [
         "tests/unit/tlx-viewport.test.mjs"
       ],
       "sync": [

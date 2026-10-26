@@ -257,16 +257,26 @@ test("Cursor's hooks.json runs the edit guard on every preToolUse, failing close
   }
   // Content shapes the adapter cannot read never read as an empty Write (review of c2589f2a):
   // index.html and package.json edits pass, an outright generated file and a ratchet file do not.
-  const cursorEdit = (ti) => run(EDIT_GUARD, { tool_name: "Write", tool_input: ti }).out.permission;
-  // Linked worktrees retain the shared-contract restriction before content checks.
-  const gitDir = execFileSync("git", ["rev-parse", "--git-dir"], { cwd: ROOT, encoding: "utf8" }).trim();
-  const commonDir = execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd: ROOT, encoding: "utf8" }).trim();
-  const sharedPermission = gitDir !== commonDir && !fs.existsSync(path.join(ROOT, ".claude/allow-protected")) ? "deny" : "allow";
-  assert.equal(cursorEdit({ target_file: "index.html", code_edit: "<p>x</p>" }), sharedPermission);
-  assert.equal(cursorEdit({ target_file: "package.json", code_edit: "{}" }), sharedPermission);
-  assert.equal(cursorEdit({ file_path: "index.html", old_str: "<title>", new_str: "<title>" }), sharedPermission);
-  assert.equal(cursorEdit({ target_file: "version.json", code_edit: "{}" }), "deny");
-  assert.equal(cursorEdit({ target_file: "tests/data/ratchets.json", code_edit: "{}" }), "deny");
+  // Use explicit fixture roots: the caller may itself be a linked worktree,
+  // where shared-contract edits are correctly denied. The adapter changes cwd.
+  const dir = fixture("safety-cursor-shapes-");
+  try {
+    const git = gitAs(dir, "a");
+    git("init", "-q", "-b", "cursor/shapes");
+    fs.writeFileSync(path.join(dir, "index.html"), "<title>Fixture</title>\n");
+    fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ scripts: { "test:tiny": "node test.mjs" } }));
+    git("add", "index.html", "package.json"); git("commit", "-qm", "fixture");
+    const linked = path.join(dir, "linked");
+    git("worktree", "add", "--quiet", "--detach", linked, "HEAD");
+    for (const [root, sharedPermission] of [[dir, "allow"], [linked, "deny"]]) {
+      const cursorEdit = (ti) => run(EDIT_GUARD, { tool_name: "Write", tool_input: ti }).out.permission;
+      assert.equal(cursorEdit({ target_file: path.join(root, "index.html"), code_edit: "<p>x</p>" }), sharedPermission);
+      assert.equal(cursorEdit({ target_file: path.join(root, "package.json"), code_edit: "{}" }), sharedPermission);
+      assert.equal(cursorEdit({ file_path: path.join(root, "index.html"), old_str: "<title>", new_str: "<title>" }), sharedPermission);
+      assert.equal(cursorEdit({ target_file: path.join(root, "version.json"), code_edit: "{}" }), "deny");
+      assert.equal(cursorEdit({ target_file: path.join(root, "tests/data/ratchets.json"), code_edit: "{}" }), "deny");
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("edit-guard judges a path key beyond file_path/path/target_file/filePath, and write shapes with no path", () => {

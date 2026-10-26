@@ -319,6 +319,29 @@ const CarDraw = (function () {
     // callback after the full shared body exists; until it lands a far rival draws the full shared body.
     const FAR_BODY_TRIS = 1500;
     let _sharedRivalBody = null, _sharedRivalGeom = null, _farRivalBody = null, _farRivalKick = false;
+    let _sharedRivalEpoch = 0;
+    function freeSharedRivalBodies() {
+      _sharedRivalEpoch++; // queued idle work belongs to the old cache generation
+      const near = _sharedRivalBody, far = _farRivalBody;
+      _sharedRivalBody = _farRivalBody = _sharedRivalGeom = null;
+      _farRivalKick = false;
+      if (G.gfx.freeMesh) {
+        if (near) G.gfx.freeMesh(near);
+        if (far && far !== near) G.gfx.freeMesh(far);
+      }
+    }
+    // Shared by the synchronous race warm and its deferred first-use fallback.
+    function buildFarRivalBody(epoch) {
+      if (epoch !== _sharedRivalEpoch || carModelBuf || _farRivalBody || !_sharedRivalGeom) return;
+      const geom = _sharedRivalGeom;
+      _farRivalKick = true;
+      try {
+        const mesh = G.gfx.createMesh(CarGeometry.decimate(geom, FAR_BODY_TRIS));
+        if (epoch === _sharedRivalEpoch && !carModelBuf && !_farRivalBody) _farRivalBody = mesh;
+        else if (G.gfx.freeMesh) G.gfx.freeMesh(mesh); // invalidated during allocation
+      } catch (e) { Log.warn("gfx", "far rival body failed", e); }
+      finally { if (epoch === _sharedRivalEpoch && _sharedRivalGeom === geom) _sharedRivalGeom = null; }
+    }
     function sharedRivalBodyMesh(far) {
       if (carModelBuf) return null;
       if (!_sharedRivalBody) {
@@ -334,11 +357,8 @@ const CarDraw = (function () {
       if (far && _farRivalBody) return _farRivalBody;
       if (far && !_farRivalKick && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
         _farRivalKick = true;
-        const make = () => {
-          try { _farRivalBody = G.gfx.createMesh(CarGeometry.decimate(_sharedRivalGeom, FAR_BODY_TRIS)); }
-          catch (e) { Log.warn("gfx", "far rival body failed", e); }
-          _sharedRivalGeom = null;
-        };
+        const epoch = _sharedRivalEpoch;
+        const make = () => buildFarRivalBody(epoch);
         if (typeof requestIdleCallback === "function") requestIdleCallback(make, { timeout: 2000 }); else setTimeout(make, 0);
       }
       return _sharedRivalBody;
@@ -993,10 +1013,7 @@ const CarDraw = (function () {
         try {
           sharedRivalBodyMesh(false);
           if (!_farRivalBody && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
-            _farRivalKick = true;
-            try { _farRivalBody = G.gfx.createMesh(CarGeometry.decimate(_sharedRivalGeom, FAR_BODY_TRIS)); }
-            catch (e2) { Log.warn("gfx", "far rival body warm failed", e2); }
-            _sharedRivalGeom = null;
+            buildFarRivalBody(_sharedRivalEpoch);
           }
         } catch (e) { Log.warn("gfx", "shared rival body warm failed", e); }
       }
@@ -2019,8 +2036,7 @@ const CarDraw = (function () {
         for (const k in teamMeshes) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
         for (const k in teamBodies) { freeBodyPair(teamBodies[k]); delete teamBodies[k]; }
         for (const k in playerBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
-        if (_sharedRivalBody && G.gfx.freeMesh) G.gfx.freeMesh(_sharedRivalBody);
-        _sharedRivalBody = null;
+        freeSharedRivalBodies();
         playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = 0;
         for (const k in cockpitBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
         cockpitBodyOrder.length = 0;
@@ -2090,8 +2106,7 @@ const CarDraw = (function () {
       wheelMeshOrder.length = 0;
       for (const k in fieldWheelCache) { freeWheelPair(fieldWheelCache[k]); delete fieldWheelCache[k]; }
       fieldWheelOrder.length = 0;
-      if (_sharedRivalBody && G.gfx.freeMesh) G.gfx.freeMesh(_sharedRivalBody);
-      _sharedRivalBody = null;
+      freeSharedRivalBodies();
       _teamMeshKeyCache.clear();
     }
 
