@@ -9,7 +9,7 @@
 - Orchestrators merge in parallel, each its own PRs; no lease gates a merge.
   A game PR takes the bus `GAME-SLOT` first and waits for green Pages on the
   last game merge; non-game PRs batch. `DONE` via bus; peer READY/HANDOFF/
-  INCIDENT/INFO/QUESTION/REQUEST via `agent-msg.mjs`; read on each bus-Monitor wake plus an hourly safety trigger (no fixed tick, #3773).
+  INCIDENT/INFO/QUESTION/REQUEST via `agent-msg.mjs`; read on bus-Monitor wakes + an hourly net (no tick, #3773).
   A and B (two accounts) wake via the cross-account inbox (to the bus; 60 s watch). No authority.
 - READY via `agent-msg.mjs` to your fleet's orchestrator; no Merge Desk unless
   Bryce designates one. Archive by rule (`node tools/ci/fleet-archive.mjs <saved list_sessions page>`):
