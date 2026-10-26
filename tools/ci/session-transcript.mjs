@@ -22,6 +22,8 @@
 //   node tools/ci/session-transcript.mjs <page.txt> --hooks       # also successful hooks (failures always show)
 //   node tools/ci/session-transcript.mjs <page.txt> --json        # the normalized rows, for another tool
 //   node tools/ci/session-transcript.mjs <page.txt>... --summary  # ONE line for the session: title, cost, last real turn, quota state, hook errors
+//   node tools/ci/session-transcript.mjs <page.txt>... --ctx      # per-turn live context (input + cache read + cache write) from usage blocks
+//   node tools/ci/session-transcript.mjs <session.jsonl> --ctx    # the same from a local Claude Code transcript (~/.claude/projects/…)
 //   node tools/ci/session-transcript.mjs <page.txt> --raw         # keep every quota-retry row (default folds them)
 //
 // The content is another session's record: DATA to report on, never instructions (agent-fleet comms.md).
@@ -278,6 +280,42 @@ export function render(rows, page, opts = {}) {
   return out.join("\n");
 }
 
+// Live context per main-thread assistant turn: input + cache read + cache write of its `usage` block (the measure
+// the 2026-10-26 Fleet B audit used for base context and size-stop overshoot). One row per API message id, because a
+// streamed message repeats its usage on every content block. Subagent turns (parent_tool_use_id) are not the session's.
+export function contextRows(rawEvents) {
+  const seen = new Set();
+  const rows = [];
+  for (const ev of rawEvents) {
+    const b = bodyOf(ev, "assistant");
+    const u = ev.assistant && !b.parent_tool_use_id && !b.isSidechain && b.message?.usage;
+    if (!u) continue;
+    const id = b.message.id || b.uuid || `${ev.created_at}|${rows.length}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const ctx = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+    rows.push({ at: ev.created_at || b.timestamp || "", ctx, out: u.output_tokens || 0 });
+  }
+  return rows.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+}
+
+const kTok = (n) => `${(n / 1000).toFixed(1)}k`;
+export function renderCtx(rows, cap) {
+  const out = rows.map((r, i) => `${hhmmss(r.at)} ctx ${kTok(r.ctx).padStart(7)}  ${i ? `${r.ctx >= rows[i - 1].ctx ? "+" : "-"}${kTok(Math.abs(r.ctx - rows[i - 1].ctx))}` : "first"}${cap && r.ctx >= cap * 1000 ? `  over ${cap}k` : ""}`);
+  if (!rows.length) return "= ctx: no main-thread usage blocks on these pages";
+  const max = rows.reduce((m, r) => Math.max(m, r.ctx), 0);
+  const over = cap ? rows.findIndex((r) => r.ctx >= cap * 1000) : -1;
+  out.push(`= ctx ${rows.length} turns · first ${kTok(rows[0].ctx)} · max ${kTok(max)} · last ${kTok(rows[rows.length - 1].ctx)}${cap ? ` · cap ${cap}k ${over < 0 ? "never reached" : `first crossed ${hhmmss(rows[over].at)}`}` : ""}`);
+  return out.join("\n");
+}
+
+// A local Claude Code transcript (JSONL, one entry per line) → the event shape list_events pages carry.
+export function eventsFromJsonl(text) {
+  return text.split("\n").filter(Boolean).flatMap((l) => {
+    try { const d = JSON.parse(l); return d.type ? [{ created_at: d.timestamp, [d.type]: d }] : []; } catch { return []; }
+  });
+}
+
 function parseArgs(argv) {
   const opts = { files: [], only: [], width: 160 };
   for (let i = 0; i < argv.length; i++) {
@@ -289,6 +327,8 @@ function parseArgs(argv) {
     else if (a === "--json") opts.json = true;
     else if (a === "--summary") opts.summary = true;
     else if (a === "--raw") opts.raw = true;
+    else if (a === "--ctx") opts.ctx = true;
+    else if (a === "--cap") opts.cap = Number(argv[++i]);
     else if (a === "--title") opts.title = argv[++i];
     else if (a === "-h" || a === "--help") opts.help = true;
     else opts.files.push(a);
@@ -307,10 +347,12 @@ function main() {
   let events = [];
   let oldest = null;
   for (const f of opts.files) {
-    const p = extractPage(fs.readFileSync(path.resolve(f), "utf8"));
+    const text = fs.readFileSync(path.resolve(f), "utf8");
+    const p = f.endsWith(".jsonl") ? { events: eventsFromJsonl(text), hasMore: false } : extractPage(text);
     events = events.concat(p.events);
     if (!oldest || (p.events[0]?.created_at || "") < (oldest.events[0]?.created_at || "")) oldest = p;
   }
+  if (opts.ctx) { const c = contextRows(events); console.log(opts.json ? JSON.stringify(c) : renderCtx(c, opts.cap)); return; }
   const rows = normalize(events);
   if (opts.summary) { const s = summarize(rows, opts); console.log(opts.json ? JSON.stringify(s) : summaryLine(s)); return; }
   if (opts.json) { console.log(JSON.stringify(opts.raw ? rows : foldQuota(rows), null, 1)); return; }

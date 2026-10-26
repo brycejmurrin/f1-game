@@ -13,6 +13,7 @@ AGENTS.md §Concurrent PRs — a successor never re-asks it at a hand-off.
 - Before launching
 - Launch template (every vendor; SKILL.md §Launch policy makes these fields mandatory)
 - Hand-off to a successor (the one tested path; plan §7)
+- Env: cross-fleet POSTs leave through a sender session
 - Talking to other fleets: the agent webhook
 - Never
 - Bounded workflow experiments
@@ -27,12 +28,16 @@ Bryce 2026-10-25: "we should setup routines on orchestrator for checking bus
 every few mins". Before planning or launching anything:
 
 1. Bus `ORCH <letter> LIVE` (`fleet-bus.mjs send`).
-2. TICK: one self-re-arming `send_later` ~3 min out that runs the wake pass
-   (running.md §Bus routine 1).
+2. ONE wake source (audit 2026-10-26 row 14: a 3-min tick on top of a bus
+   watch read the bus twice): a `Monitor` that prints only NEW
+   `fleet-bus.mjs read --to <letter>` lines, so it wakes you only when a line
+   lands, and runs the wake pass (running.md §Bus routine 1) on each one.
+   Re-arm it when it expires. No 3-min `send_later` tick (running.md §Bus
+   routine 1 matches).
 3. SAFETY NET: an hourly `create_trigger` (`cron_expression: "0 * * * *"`,
-   `initiation: human_request`) bound to this session that re-arms the tick
-   if the chain broke (running.md §Bus routine 2). Cursor: `subscribe_timer`
-   for both.
+   `initiation: human_request`) bound to this session that re-arms the
+   Monitor if it died and runs the same pass (running.md §Bus routine 2).
+   Cursor: `subscribe_timer` for both.
 4. `list_triggers`: the account-wide FLEET BUS WATCH exists (running.md §Bus
    routine 3); never create a second.
 
@@ -192,7 +197,7 @@ trips `Sandbox allocation failed … rate_limited`.
 
 ## Hand-off to a successor (the one tested path; plan §7)
 
-At the soft cap (200k), or when Bryce asks, and never sooner than ~30 calls of
+At the soft cap (measured boot + 100k, launch-policy.md §Size stop), or when Bryce asks, and never sooner than ~30 calls of
 work left:
 
 1. Write the successor's brief as a file on a pushed branch (your own
@@ -207,17 +212,23 @@ work left:
      direct session);
    - the env-secret presence check (names only): the webhook pair above plus
      the inbox pair (`APEX_B_RELAY_URL` / `APEX_B_RELAY_TOKEN` on A,
-     `APEX_A_INBOX_URL` / `APEX_A_INBOX_TOKEN` on B);
+     `APEX_A_RELAY_URL` / `APEX_A_RELAY_TOKEN` on B; the retired
+     `APEX_A_INBOX_*` names are refused by `agent-msg.mjs`, #3774);
    - the FIRST steps: bus `ORCH <letter> LIVE` in the canonical form
      `ORCH <letter> LIVE claude:session_<id> (…)` (a free-text line makes
      `fleet-bus.mjs who` return the wrong id, bus 5ca9880), `send_message` to the
-     predecessor, arm the tick and the hourly safety net, one message to each
-     lane, the queue branch.
+     predecessor, arm the bus Monitor and the hourly safety net, the queue
+     branch. No message to each lane: lanes resolve the orchestrator with
+     `fleet-bus.mjs who <letter>` when they next send (audit row 9: the fan-out
+     woke every lane for a no-op).
    - which timers are the successor's: the account-wide FLEET BUS WATCH
      routine (running.md §Bus routine 3) survives the hand-off and is never
-     recreated; the per-session tick and safety net are re-armed by the
-     successor, whose 60 s bus watch includes `claude:fleet-<letter>-inbox`
+     recreated; the per-session Monitor and safety net are re-armed by the
+     successor, whose bus watch includes `claude:fleet-<letter>-inbox`
      (communication.md rule 6).
+   - the queue file holds the live state plus the LAST hand-off only; older
+     sections are dropped (they stay in `git log` of the queue branch), so
+     each successor's boot reads one page, not every rotation (audit row 1).
 2. `get_session` (no id) on yourself; read `lineage.depth` and `rate_limit_info`.
    - quota at `allowed_warning` or worse → no launch; tell Bryce once and park.
    - depth < 7 → `create_session` the successor yourself (source_url + deploy
@@ -229,10 +240,25 @@ work left:
      launch lines of role-seed.md) and stop.
    Never a scheduled task, a routine or `create_new_session_on_fire` for a
    successor: on 2026-10-19 both produced dead successors.
-3. When the successor posts `ORCH <fleet> LIVE`, release your claims, delete
-   your own per-session timers (`list_triggers`: the tick and safety net bound
-   to your session, never the account-wide bus watch), and stop. The successor archives you by
-   the archive rule; nobody waits for Bryce to approve it.
+3. When the successor posts `ORCH <fleet> LIVE`, release your claims, stop
+   your bus Monitor, delete your own per-session timers (`list_triggers`: the
+   safety net bound to your session, never the account-wide bus watch),
+   `set_session_title` to `[Done → <successor title>] <your title>`, and end
+   with a reply carrying `https://claude.ai/code/<successor id>`. A typed ask
+   that reaches you after this (Bryce's old tab) is forwarded to the successor
+   in ONE `send_message`, quoted with its time, and answered with that link;
+   you do not act on it (audit row 6). The successor archives you by the
+   archive rule; nobody waits for Bryce to approve it.
+
+## Env: cross-fleet POSTs leave through a sender session
+
+A container reads environment variables only at start, so an env fix used to
+force an orchestrator rotation (audit 2026-10-26 row 13). The orchestrator
+never POSTs cross-fleet itself: it hands the message to the fleet's
+long-lived relay session (or a one-shot sender session launched for it) with
+one `send_message`, and the relay runs the send. An env fix then restarts at
+most that relay, never the orchestrator. The bus (`fleet-bus.mjs`) needs no
+secret and stays the orchestrator's own channel.
 
 ## Talking to other fleets: the agent webhook
 
@@ -245,7 +271,7 @@ session with `send_message`. The bus stays the record. The channel map is in
 - **Env**: `APEX_AGENT_WEBHOOK_URL` and `APEX_AGENT_WEBHOOK_AUTH` are in the
   environment's secrets. Check presence and length only; never print, echo or
   commit either one.
-- **Send** (helper lands with #3518): `node tools/ci/<agent-msg.mjs> send --to D --type <INFO|QUESTION|REQUEST|INCIDENT|READY|HANDOFF> [--pr N] "text"`.
+- **Send** (helper lands with #3518; an orchestrator hands this to its relay, §Env above): `node tools/ci/<agent-msg.mjs> send --to D --type <INFO|QUESTION|REQUEST|INCIDENT|READY|HANDOFF> [--pr N] "text"`.
   It POSTs `{from,to,type,pr,text}`, with `Authorization` set to the env value
   verbatim, and mirrors the message to the bus. Where the helper is missing,
   curl the same JSON (`-o /dev/null -w '%{http_code}'`, so the response stays

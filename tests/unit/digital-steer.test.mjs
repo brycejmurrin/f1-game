@@ -24,9 +24,36 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\
 
 // The real js/input/input.js in a VM, with a clock the test steps by hand and
 // just enough DOM for init() to attach its window key listeners.
-function boot() {
+function boot(count) {
   const listeners = {};
   const clock = { t: 0 };
+  let MathObj = Math, ObjectObj = Object, SetObj = Set;
+  if (count) {
+    const OrigSet = Set;
+    SetObj = function CountingSet(iterable) {
+      if (count.on) count.setN++;
+      return new OrigSet(iterable);
+    };
+    SetObj.prototype = OrigSet.prototype;
+    const origKeys = Object.keys;
+    // Prototype link. Object.create would look like the factory those modules export,
+    // and this file already names them, so the impact map would list this test there.
+    MathObj = { pow: function (a, b) {
+      if (count.on) count.powN++;
+      return Math.pow(a, b);
+    } };
+    Object.setPrototypeOf(MathObj, Math);
+    ObjectObj = new Proxy(Object, {
+      get(target, prop, receiver) {
+        if (prop === "keys") return function keys(o) {
+          if (count.on) count.keyN++;
+          return origKeys(o);
+        };
+        const v = Reflect.get(target, prop, receiver);
+        return typeof v === "function" ? v.bind(target) : v;
+      },
+    });
+  }
   const el = () => ({
     addEventListener() {}, removeEventListener() {}, style: {}, dataset: {},
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
@@ -35,7 +62,7 @@ function boot() {
     setPointerCapture() {}, releasePointerCapture() {}, hasPointerCapture: () => false,
   });
   const sb = {
-    Math, Object, Array, Number, isFinite, JSON, Map, Set, Date,
+    Math: MathObj, Object: ObjectObj, Array, Number, isFinite, JSON, Map, Set: SetObj, Date,
     performance: { now: () => clock.t }, DeviceOrientationEvent: function DeviceOrientationEvent() {},
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     addEventListener: (t, f) => { (listeners[t] ||= []).push(f); },
@@ -419,4 +446,77 @@ test("held-code state is cleared by reset, modifier teardown and rebind", () => 
     h.key("ArrowUp", true); h.key("ArrowUp", false);
     assert.equal(h.Input.throttle(), false);
   }
+});
+
+/* W26d: a connected pad polled notePadUse's `new Set` and padAxesAreDefault's
+ * Object.keys every frame, and a centred d-pad / idle keyboard ran digitalStep's
+ * two Math.pow for a result that is already 0. The ramp while a key or d-pad
+ * is actually held is unchanged. */
+function restingPad(h) {
+  const pad = {
+    id: "Xbox Wireless Controller", index: 0, mapping: "standard", connected: true, timestamp: 1,
+    axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })),
+  };
+  h.sb.navigator.getGamepads = () => [pad];
+  h.fire("gamepadconnected", { gamepad: pad });
+  return pad;
+}
+
+test("a resting pad poll allocates no Set or Object.keys and skips the d-pad exponent", () => {
+  const count = { on: false, setN: 0, keyN: 0, powN: 0 };
+  const h = boot(count);
+  h.Input.setSteerMode("touch");
+  const pad = restingPad(h);
+  h.clock.t += 16; h.Input.poll(); // caches PAD_AXIS_DEF keys once
+  count.on = true; count.setN = count.keyN = count.powN = 0;
+  for (let i = 0; i < 60; i++) { h.clock.t += 16; h.Input.poll(); }
+  assert.equal(count.setN, 0, "notePadUse built a Set on a poll");
+  assert.equal(count.keyN, 0, "padAxesAreDefault built an Object.keys array on a poll");
+  assert.equal(count.powN, 0, "a centred d-pad still ran the steering exponent");
+  count.on = false;
+  pad.axes[0] = 1; h.clock.t += 16; h.Input.poll();
+  assert.equal(h.Input.steer(1 / 60), 1, "a full stick is still full lock");
+  pad.axes[0] = 0; pad.buttons[15] = { pressed: true, value: 1 };
+  h.clock.t += 16; h.Input.poll();
+  h.clock.t += 16; h.Input.poll();
+  assert.ok(h.Input.steer(1 / 60) > 0, "a held d-pad right still ramps");
+});
+
+test("idle keyboard steer skips the exponent and a held arrow still builds lock", () => {
+  const count = { on: false, setN: 0, keyN: 0, powN: 0 };
+  const { Input, key, clock } = boot(count);
+  Input.setSteerMode("touch");
+  Input.reset();
+  count.on = true; count.powN = 0;
+  for (let i = 0; i < 30; i++) { clock.t += 16; Input.steer(1 / 60); }
+  assert.equal(Input.steer(1 / 60), 0);
+  assert.equal(count.powN, 0, "idle keyboardSteer still ran Math.pow");
+  count.on = false;
+  key("ArrowRight", true);
+  const a = Input.steer(1 / 60);
+  const b = Input.steer(1 / 60);
+  assert.ok(a > 0 && b > a, `held arrow must keep ramping, got ${a} then ${b}`);
+});
+
+test("dropping a pad still forgets its use record when the live set is reused", () => {
+  const h = boot();
+  h.Input.setSteerMode("touch");
+  const mk = (index, ts) => ({
+    id: "Pad" + index, index, mapping: "standard", connected: true, timestamp: ts,
+    axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })),
+  });
+  const a = mk(0, 50), b = mk(1, 1);
+  let list = [a, b];
+  h.sb.navigator.getGamepads = () => list;
+  h.fire("gamepadconnected", { gamepad: a });
+  h.clock.t += 16; h.Input.poll();
+  b.axes[0] = 1; h.clock.t += 16; h.Input.poll();
+  assert.ok(h.Input.steer(1 / 60) > 0.9, "the pad that moved is the one that drives");
+  list = [a];
+  h.clock.t += 16; h.Input.poll();
+  assert.ok(Math.abs(h.Input.steer(1 / 60)) < 0.05, "an unplugged pad must not keep the wheel");
+  b.timestamp = 1; a.timestamp = 100; a.axes[0] = 0; b.axes[0] = 1;
+  list = [a, b];
+  h.clock.t += 16; h.Input.poll();
+  assert.ok(Math.abs(h.Input.steer(1 / 60)) < 0.05, "the unplugged pad's use record must not survive");
 });

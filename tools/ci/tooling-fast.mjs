@@ -337,6 +337,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/compress-audio.test.mjs",
   "tests/unit/conflict-cure.test.mjs",
   "tests/unit/contact-geometry.test.mjs",
+  // context-cap.py hook: transcript usage vs the brief's size stop; advisory once per level, hard-cap spawn deny.
+  "tests/unit/context-cap-hook.test.mjs",
   "tests/unit/controller-profiles.test.mjs",
   // coverage-merge is the only consumer of the raw V8 lists a flagged run
   // writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops
@@ -754,6 +756,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lane-preamble.test.mjs",
   // Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.
   "tests/unit/lap-format-rollover.test.mjs",
+  // tools/ci/launch-gate.mjs + .claude/hooks/launch-gate.py: create_session gate (quota, size, role tag), fails open. < 2 s.
+  "tests/unit/launch-gate.test.mjs",
   "tests/unit/layers-anyopen-memo.test.mjs",
   "tests/unit/layers-nav-memo.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
@@ -1511,6 +1515,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/vm-filename-lint.test.mjs",
   "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
+  "tests/unit/vsfriend-head-200.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
   "tests/unit/wait-for.test.mjs",
   "tests/unit/wait-polling.test.mjs",
