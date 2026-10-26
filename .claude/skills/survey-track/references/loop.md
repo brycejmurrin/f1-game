@@ -7,9 +7,20 @@ Combined parent/worker loop. Steps marked PARENT use a browser: the track-survey
 skips them (it reads the artifacts they produce). Surveyor steps: 1, 3, 4.
 
 ## Contents
+- Layout check (no browser)
 - The loop
 - Worked example — Montreal floating trees
 - Gotchas
+
+## Layout check (no browser)
+
+Compare the BUILT centreline's `total`, apexes, widths, sectors and elevation against dated
+evidence. `path.len` is source metadata, not built length; the existing OSM comparison normalizes
+scale, rotation and lap origin, so it cannot certify those quantities. Surveyed elevation
+conditionally overrides authored bumps via `TrackDef.fromRaw` (`js/track/core/def.js`); absent
+profiles do not prove flatness. `startFrac` and width zones use control-index fractions, built
+`s/total` arc fractions, and turns/sectors racing-space fractions. Respect `_sceneryShift` through
+wrapped helpers; never pre-shift `K(s)` (`.claude/rules/game-code.md`).
 
 ## The loop
 
