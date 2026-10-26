@@ -226,7 +226,12 @@ var RaceEngineer = (function () {
       if (s.planned && s.setLaps != null && s.stintLeft != null && s.setLaps >= s.stintLeft + PUSH_SPARE && s.ahead
         && take("TYRES ARE GOOD — PUSH, " + s.ahead + " IS " + s.aheadGap.toFixed(1) + "s AHEAD", "push")) return;
       // WIND (js/race/wind.js): a strong gust is worth a word, below everything a driver can act on in the pits.
-      if (s.gust != null && take("GUSTY OUT THERE — " + s.gustKmh + " KM/H, CAREFUL ON THE BRAKES", "gust")) return;
+      if (s.gust != null) {
+        const display = typeof AppearanceOpts !== "undefined" && typeof AppearanceOpts.speed === "function" && typeof AppearanceOpts.unitLabel === "function";
+        const speed = display ? AppearanceOpts.speed(s.gustKmh) : s.gustKmh;
+        const unit = display ? AppearanceOpts.unitLabel() : "KM/H";
+        if (take("GUSTY OUT THERE — " + speed + " " + unit + ", CAREFUL ON THE BRAKES", "gust")) return;
+      }
       if (s.step >= 0) take("TYRES AT " + Math.round((1 - WEAR_STEPS[s.step]) * 100) + "%", "wear" + s.step);
     }
 

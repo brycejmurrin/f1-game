@@ -8,8 +8,8 @@
  * every module carved out of it, derived from the manifest) and
  * `symbolSource(decl)` (fnSource over that union) — so a carve stops being a
  * 5-20-test rewrite. Existing sites stay (counted, not moved); new code reads
- * through the helper. Same idiom as `waitForTimeout` in tests/data/ratchets.json:
- * the ceiling below only ever moves DOWN — lower it when you migrate sites.
+ * through the helper. The ceiling is `tree.rawGameReads` in tests/data/ratchets.json
+ * and only ever moves DOWN — lower it when you migrate sites.
  *
  * Run: node --test tests/unit/source-pin-hygiene.test.mjs
  */
@@ -19,33 +19,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { carvedFromGame, gameSource, symbolSource } from "../helpers/game-source.mjs";
+import { pinVerdict, pinSites, pinPatterns } from "../../tools/check/ratchets.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-// The count of quoted `game.js` path literals under tests/ (the hunter's metric:
-// `rg -c "game\.js['\"]" tests`), less the helper that is the sanctioned reader.
-// 2026-10-11: ship #1313/#1398 lowered to 308; #1389/#1403 sync keeps that.
-const CEILING = 308;
-const EXEMPT = new Set(["tests/helpers/game-source.mjs", "tests/unit/source-pin-hygiene.test.mjs"]);
-// A quoted path literal ends `game.js"` / `game.js'`. A possessive in prose (`game.js's`)
-// is not a read: 2026-10-16 a comment saying "game.js's real scale" counted as the 309th
-// read and turned the tip red, so an apostrophe followed by `s` is not counted.
-const RAW = /game\.js(?:"|'(?!s\b))/g;
-
-function rawSites() {
-  const per = [];
-  const walk = (rel) => {
-    for (const e of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
-      const r = rel + "/" + e.name;
-      if (e.isDirectory()) { if (e.name !== "node_modules") walk(r); }
-      else if (/\.(mjs|cjs|js)$/.test(e.name) && !EXEMPT.has(r)) {
-        const n = (fs.readFileSync(path.join(ROOT, r), "utf8").match(RAW) || []).length;
-        if (n) per.push([r, n]);
-      }
-    }
-  };
-  walk("tests");
-  return per;
-}
+// The count is `tree.rawGameReads` in tests/data/ratchets.json (quoted `game.js` path
+// literals under tests/, less the helper that is the sanctioned reader), judged
+// diff-relative on a PR like every pin counter (tools/check/ratchets.mjs ratchetMode).
+// A possessive in prose (`game.js's`) is not a read: 2026-10-16 a comment saying
+// "game.js's real scale" counted as the 309th read and turned the tip red.
+const RAW = pinPatterns.RAW_GAME;
 
 test("the raw-read pattern counts quoted path literals, not possessive prose", () => {
   const count = (t) => (t.match(RAW) || []).length;
@@ -55,15 +37,14 @@ test("the raw-read pattern counts quoted path literals, not possessive prose", (
   assert.equal(count("// see game.js's note and also read 'js/game.js'"), 1, "only the real literal counts");
 });
 
-test("raw js/game.js source reads under tests/ never grow (read through tests/helpers/game-source.mjs)", () => {
-  const per = rawSites();
-  const total = per.reduce((a, [, n]) => a + n, 0);
-  assert.ok(total <= CEILING,
-    `${total} raw game.js reads (ceiling ${CEILING}) — read game.js through gameSource()/symbolSource() ` +
-    `(tests/helpers/game-source.mjs) so the pin survives the next carve. Biggest: ` +
-    per.sort((a, b) => b[1] - a[1]).slice(0, 5).map(([f, n]) => `${f} ${n}`).join(", "));
-  assert.ok(total > CEILING - 60,
-    `${total} raw reads is far under the ceiling ${CEILING}: lower CEILING to ${total} so the ratchet keeps its grip`);
+test("raw js/game.js source reads under tests/ never grow (read through tests/helpers/game-source.mjs)", async () => {
+  const v = await pinVerdict("rawGameReads");
+  const biggest = (await pinSites("rawGameReads")).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([f, n]) => `${f} ${n}`).join(", ");
+  assert.ok(v.ok,
+    `${v.value} raw game.js reads (ceiling ${v.ceiling}${v.base ? `; base ${v.base.value}/${v.base.ceiling}` : ""}) — read game.js through ` +
+    `gameSource()/symbolSource() (tests/helpers/game-source.mjs) so the pin survives the next carve. Biggest: ${biggest}`);
+  assert.ok(v.looseOk,
+    `${v.value} raw reads is far under the ceiling ${v.ceiling}: node tools/check/ratchets.mjs --update --lower-only so the ratchet keeps its grip`);
 });
 
 test("gameSource is game.js plus the modules game.js instantiates — derived, not listed", () => {

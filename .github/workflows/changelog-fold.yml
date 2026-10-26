@@ -1,0 +1,89 @@
+name: Changelog fold
+
+# THE OWNER OF THE CHANGELOG FOLD (audit 2026-10-26, lane X3). Every player-facing PR adds one
+# docs/changelog.d/<slug>.md fragment and never edits CHANGELOG.md (docs/changelog.d/README.md), but nothing
+# folded them: 507 fragments had piled up, the README named an `npm run fold` that did not exist, and a fold
+# keyed to version.json would have filed them all under the frozen placeholder build 1695.
+#
+# Weekly (and on dispatch) this job runs `npm run fold` (tools/gen/gen-changelog.mjs --fold) on the deploy tip.
+# The heading is that tip's STAMPED build, 2000 + `git rev-list --count HEAD` (tools/desktop/stage.mjs
+# pagesBuild, the formula pages.yml stamps with), so it needs full history (fetch-depth 0). The entries are the
+# ones landed by that build; a later deploy ships them too, never an earlier one. The result goes to
+# bot/changelog-fold and a PR into the deploy branch, never a direct push (the branch is protected).
+#
+# A run is a no-op while an earlier fold PR is open or no fragment exists. A fold PR conflicts with no open
+# PR: no PR edits CHANGELOG.md, and the fold deletes only fragments already on the deploy tip.
+#
+# CI FOR THE FOLD PR: a PR opened with GITHUB_TOKEN starts no `pull_request` run, but `workflow_dispatch`
+# always does ("events triggered by the GITHUB_TOKEN will not create a new workflow run ... workflow_dispatch
+# and repository_dispatch events always create workflow runs":
+# https://docs.github.com/en/actions/concepts/security/github_token), so the job dispatches ci.yml on
+# bot/changelog-fold itself, the same answer ratchets-fold.yml uses.
+# Schedules fire hours late under load (https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule);
+# nothing here depends on the exact time, and the minute is off the hour.
+
+on:
+  schedule:
+    - cron: "37 6 * * 1"   # Mondays 06:37 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write   # workflow_dispatch of ci.yml on bot/changelog-fold (the fold PR's CI)
+
+concurrency:
+  group: changelog-fold
+  cancel-in-progress: false
+
+jobs:
+  fold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1   # zizmor: ignore[artipacked] this job commits and pushes bot/changelog-fold
+        with:
+          ref: claude/f1-game-project-26h3ng
+          fetch-depth: 0   # pagesBuild refuses a shallow clone (its count would be the depth)
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Skip while a fold PR is open
+        id: open
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n="$(gh pr list --repo "$GITHUB_REPOSITORY" --head bot/changelog-fold --state open --json number --jq length)"
+          echo "open fold PRs: $n"
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+
+      - name: Fold
+        if: steps.open.outputs.n == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node tools/gen/gen-changelog.mjs --check
+          npm run -s fold | tee fold.log
+          if git diff --quiet -- CHANGELOG.md docs/changelog.d; then
+            echo "nothing to fold"; exit 0
+          fi
+          node tools/gen/gen-changelog.mjs --check
+          cat fold.log >> "$GITHUB_STEP_SUMMARY"
+          git config user.name "apex-changelog-bot"
+          git config user.email "noreply@anthropic.com"
+          git checkout -B bot/changelog-fold
+          git add -A CHANGELOG.md docs/changelog.d
+          git commit -m "chore(changelog): fold docs/changelog.d fragments
+
+          $(cat fold.log)"
+          git push --force-with-lease origin bot/changelog-fold
+          gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng --head bot/changelog-fold \
+            --title "chore(changelog): fold docs/changelog.d fragments" \
+            --body "Scheduled fold: $(cat fold.log). Opened by .github/workflows/changelog-fold.yml, which dispatched ci.yml on bot/changelog-fold for this head. CHANGELOG: no player-facing change (this PR moves existing entries)." \
+            || echo "::warning::PR creation failed (repo setting may forbid Actions PRs); open it from bot/changelog-fold"
+          # A GITHUB_TOKEN PR starts no CI; a workflow_dispatch always does (header).
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref bot/changelog-fold \
+            || echo "::warning::ci.yml dispatch failed; dispatch it on bot/changelog-fold by hand"

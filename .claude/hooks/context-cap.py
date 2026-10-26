@@ -126,6 +126,11 @@ def decide(data, root, env):
     """The hook's stdout for one event payload ('' for nothing)."""
     if env.get("APEX_CTX_CAP") == "off":
         return ""
+    # Escape hatch for a session the user has told to continue past its cap (Bryce 2026-10-26,
+    # "Any session and yourself can use any tokens" / "Fix hook or guard or perm"): the same
+    # marker shape as protect-files' `.claude/allow-protected`. Untracked; delete it to re-arm.
+    if os.path.isfile(os.path.join(root, ".claude", "allow-context-cap")):
+        return ""
     event, path = data.get("hook_event_name"), data.get("transcript_path")
     if not path or not os.path.isfile(path):
         return ""

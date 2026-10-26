@@ -23,7 +23,7 @@ The measurements below stand as the record. The TLX phone gaps they found are op
    is the software-GL fallback. On SwiftShader `softContent("sky")` arms `sky.fallbackNode`, a zenith-to-horizon gradient with
    no clouds, stars, moon or sun disc; GLX has no such swap. A real iPhone ("Apple GPU") draws the full sky, and no mobile,
    tier, PerfGov or time-of-day gate skips clouds or stars on TLX. The probe is `GLX.__tlx.skyState()` (`fallback: true`
-   names the gradient sky); TLX stills of the sky need `apex26.tlxForceHw=sky` on this box. `docs/notes/LIVE-DEBUGGER-RENDER-2026-10-21.md` R2.
+   names the gradient sky); TLX stills of the sky need `apex26.tlxForceHw=sky` on this box. `docs/archive/notes/LIVE-DEBUGGER-RENDER-2026-10-21.md` R2.
 2. **Memory gap.** TLX holds 30 MiB more than GLX at the menu and 42–53 MiB more in a race (§2), and 59 MiB more JS heap on
    the Mac GPU (§3). This is mostly three's CPU geometry copies (`tlx.js` ~176), the cost that has jetsam-killed an iPhone
    tab before. Releasing them has failed four times (`CEILING-HISTORY.md` ~1478).

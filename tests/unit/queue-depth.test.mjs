@@ -10,7 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   LINUX_SLOTS, LINUX_HOLD, MACOS_SLOTS, QUEUED_HOLD, MAX_RUNS, DEFAULT_OUT,
-  isMac, countJobs, evaluate, reportLine, measure, pushTargets, pushStartsCi, pushVerdict, waitForOk, HYSTERESIS_MS,
+  isMac, countJobs, evaluate, RUN_STATUSES, reportLine, measure, pushTargets, pushStartsCi, pushVerdict, waitForOk, HYSTERESIS_MS,
 } from "../../tools/ci/queue-depth.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -96,8 +96,11 @@ test("#2181: queued runs are examined FIRST — 35 in-progress runs no longer hi
   assert.equal(v.verdict, "hold");
   assert.equal(v.truncated, true, "10 in-progress runs were not examined");
   assert.ok(v.reasons.some((r) => /^queued jobs ≥50 \(a lower bound\) ≥ 10$/.test(r)), v.reasons.join("|"));
-  for (const s of ["queued", "pending", "requested", "in_progress"])
+  for (const s of ["queued", "in_progress"])
     assert.ok(f.calls.includes(`actions/runs?status=${s}&per_page=100&page=1`), `lists ${s} runs (REST status filter)`);
+  // 2026-10-26: pending / requested / waiting RUNS hold no runner; their three list calls were dropped.
+  for (const s of ["pending", "requested", "waiting"])
+    assert.ok(!f.calls.some((q) => q.startsWith(`actions/runs?status=${s}&`)), `no ${s} run list`);
   assert.ok(f.calls.indexOf("actions/runs?status=queued&per_page=100&page=1") < f.calls.indexOf("actions/runs?status=in_progress&per_page=100&page=1"));
 });
 
@@ -217,11 +220,15 @@ test("#2266: running, queued and the oldest-queued age are reported; a starved q
   assert.match(reportLine(mac), /; 5 Linux running\)$/);
 });
 
-test("#2266: a run in status `waiting` is listed too (its queued jobs count)", () => {
-  const f = fakeApi({ waiting: [{ id: 77, status: "waiting" }] }, () => many(3, "queued"));
+test("2026-10-26: only queued and in_progress runs are listed; a waiting run (environment gate) holds no runner", () => {
+  // #2266 listed `waiting` runs too; the one environment here (github-pages) has no
+  // reviewers or wait timer, so a run never waits on it, and pending/requested
+  // runs hold no runner. Three list calls per gauge for nothing (system audit §7).
+  assert.deepEqual(RUN_STATUSES, ["queued", "in_progress"]);
+  const f = fakeApi({ waiting: [{ id: 77, status: "waiting" }], queued: [{ id: 78, status: "queued" }] }, () => many(3, "queued"));
   const v = measure({ request: f.request });
-  assert.ok(f.calls.includes("actions/runs?status=waiting&per_page=100&page=1"));
-  assert.equal(v.queued, 3);
+  assert.ok(!f.calls.includes("actions/runs?status=waiting&per_page=100&page=1"));
+  assert.equal(v.queued, 3, "the queued run's jobs still count");
 });
 
 test("an old queued job with half the slots running is a released lane leg, not starvation", () => {

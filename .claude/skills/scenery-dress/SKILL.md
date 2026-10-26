@@ -1,6 +1,6 @@
 ---
 name: scenery-dress
-description: "Use when asked to add/edit track scenery, dress a circuit, add buildings/trees/grandstands/barriers/mountains/billboards/floodlights, make Spa denser, fix floating/sunken/missing props, or work in a circuit scenery(api) callback, or migrate scenery emitters to TrackGraph.instance / check graph parity / debug batches()/bakeOnly. Picture-driven accuracy pass (survey first) → survey-track."
+description: "Use when adding or editing track scenery — buildings, trees, grandstands, barriers, mountains, billboards, floodlights, a denser Spa — fixing floating/sunken/missing props, a circuit scenery(api) callback, or TrackGraph.instance migration, graph parity, batches()/bakeOnly. Survey-first accuracy pass → survey-track."
 ---
 
 # Dress a circuit's scenery
@@ -70,7 +70,5 @@ accuracy / floating-tree survey → **survey-track** (Montreal already ships
 - `TrackGraph.instance` migration, `apex_graph_parity` / `BASE=` parity,
   `batches()` / `bakeOnly`, `__apex.trackGraph()` stats →
   [references/instancing.md](references/instancing.md).
-- Procedural scenery / wet-surface playbook →
-  [references/graphics-scenery-playbook.md](references/graphics-scenery-playbook.md).
 
 `grandstand` / `grandstandEx` take a lap fraction `(s,side,...)`; range helpers take fraction endpoints; raw primitives take world coordinates.

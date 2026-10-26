@@ -80,7 +80,7 @@ growth is the fixes themselves — the cluster span that skips the dock-anchored
 BUTTON SIZE floor token, `data-flag-low`, the RELATIVE drop mask, the OVERTAKE gate order, the pit arrow
 cache, the DELTA refit — and the rest is the comments that carry the hud-mock measurements each fix was
 judged by (168 cells before / after: 86 → 22 red cells, 40 → 0 capped docks, 56 → 0 sub-10px text;
-`docs/notes/HUD-ADAPT-2026-10-14.md`). Nothing in either file was replaced wholesale, so there was nothing
+`docs/archive/notes/HUD-ADAPT-2026-10-14.md`). Nothing in either file was replaced wholesale, so there was nothing
 to delete against it; the structural shrink is the band allocator (`HUD-PHONE-LAYOUT-PLAN-2026-10-10.md`),
 which replaces the fit's hand-stacked offsets in one PR.
 

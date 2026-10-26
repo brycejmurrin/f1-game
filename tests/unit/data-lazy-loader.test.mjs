@@ -234,3 +234,38 @@ test("ensureDataHub: three failed load rounds log the final warning and stay clo
   assert.equal(await ctx.__ensureDataHub(), false);
   assert.ok(logged.some((m) => /DATA stays closed/.test(m)));
 });
+
+
+for (const destination of ["title", "help", "race", "new-title-visit"]) test(`delayed title DATA preserves its origin across ${destination}`, async () => {
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ track: "monza", carMeshes: false });
+  const doc = g.sandbox.document, head = doc.head, append = head.appendChild;
+  const evaluate = s => vm.runInContext(s, g.ctx, { filename: "vm-snippet:data-navigation" }), tick = () => new Promise(r => setImmediate(r));
+  const held = [];
+  try {
+    g.G.quitToMenu();
+    const hub = readFileSync(new URL("../../js/data/hub.js", import.meta.url), "utf8");
+    const selector = vm.runInNewContext(hub.match(/const BLOCKING_SEL = \(([\s\S]*?)\);/)[1], {}, { filename: "vm-snippet:data-hub-blocking-selector" });
+    const blockers = selector.split(",").map(s => doc.getElementById(s.slice(1)));
+    for (const el of blockers) el.hidden = true;
+    const query = doc.querySelectorAll;
+    doc.querySelectorAll = function(s) { return s === selector ? blockers : query.call(this, s); };
+    doc.getElementById("datahub").hidden = true;
+    head.appendChild = function(el) {
+      if (el.tagName === "SCRIPT" && /js\/data\//.test(el.src)) { held.push(el); return el; }
+      return append.call(this, el);
+    };
+    doc.getElementById("mb-data").onclick();
+    for (let n = 0; n < 10; n++) await tick();
+    assert.ok(held.length > 0, "actual lazy data scripts are pending");
+    if (destination === "help") doc.getElementById("howtoplay").hidden = false;
+    if (destination === "race" || destination === "new-title-visit") await g.G.startRace();
+    if (destination === "new-title-visit") g.G.quitToMenu();
+    head.appendChild = append;
+    for (const el of held) append.call(head, el);
+    for (let n = 0; n < 60; n++) await tick();
+    assert.equal(evaluate('typeof DataHub !== "undefined" && DataHub.isOpen()'), destination === "title");
+    assert.equal(doc.getElementById("datahub").hidden, destination !== "title");
+    if (destination === "race") assert.equal(g.G.state, "count");
+  } finally { head.appendChild = append; g.close(); }
+});

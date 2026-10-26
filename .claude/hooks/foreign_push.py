@@ -114,8 +114,16 @@ def foreign_commits(where, remote, branch):
             if r[1].lower() != me or (mine and _sid(r[4]) and _sid(r[4]) != mine)]
 
 
+QUEUE_BRANCH = re.compile(r"^cursor/[^/]*queue-[0-9a-z]+$")
+
+
 def check(where, remote, branch):
     """The refusal text for a push of `branch`, or None to let it through."""
+    # An orchestrator queue/state branch (cursor/orchb-queue-b7f2 …) is written by
+    # successive orchestrator sessions by design, so a predecessor's commit is not
+    # a foreign push there (2026-10-26: the block stopped a successor's first push).
+    if branch and QUEUE_BRANCH.match(branch):
+        return None
     try:
         found = foreign_commits(where, remote, branch)
     except Exception as e:                          # fail open, loudly

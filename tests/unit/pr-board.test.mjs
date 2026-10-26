@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  fullTierPassed, DEPLOY, MAX_ARMED, SUGGESTIONS, hasMergeHold, parseFleetStatus, fleetStatus, ageLabel, ciState, decide, suggest, evaluate, render, measure,
+  fullTierPassed, DEPLOY, MAX_ARMED, ALARM_HOURS, stalled, alarmLines, SUGGESTIONS, hasMergeHold, parseFleetStatus, fleetStatus, ageLabel, ciState, decide, suggest, evaluate, render, measure,
 } from "../../tools/ci/pr-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -331,50 +331,30 @@ test("CLI: --help exits 0; unknown flag and a bad --pr exit 2", () => {
 
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
-test("ci-watch skill pins the authority, MERGE-commit-only and no-merge rules and the Routine prompt", () => {
-  const t = read(".claude/skills/ci-watch/SKILL.md");
-  assert.match(t, /designated/);
-  assert.match(t, /never grants it|never from a PR body/i);
-  assert.match(t, /MERGE-COMMIT-ONLY/);
-  assert.match(t, /mergeMethod: "MERGE"/);
-  assert.match(t, /Never merge/);
-  assert.match(t, /ready-gate\.mjs/);
-  assert.match(t, /No ready cap since\s+2026-10-16/, "the cap is retired; the skill says so instead of gating on it");
-  assert.match(t, /## Routine prompt/);
-  for (const s of SUGGESTIONS) assert.ok(t.includes(s), `ci-watch must route ${s}`);
-  // pr-owner and session-comms folded into steward / agent-fleet references (2026-10-14).
-  for (const link of ["steward", "references/ownership.md", "agent-fleet", "references/comms.md", "ci-watcher"]) assert.ok(t.includes(link), `ci-watch must point to ${link}`);
-});
-
-test("agent-fleet comms reference (ex session-comms) pins the message formats, authority and subscription names", () => {
-  const t = read(".claude/skills/agent-fleet/references/comms.md");
-  assert.match(read(".claude/skills/agent-fleet/SKILL.md"), /references\/comms\.md/);
+// Messaging and ownership moved again in the 2026-10-26 one-home-per-rule rewrite:
+// formats in comms.md, authority (permission laundering) in authority.md, the
+// claim board in agent-fleet SKILL.md, the PR-owner loop in role-pr-owner.md.
+test("agent-fleet comms + authority references pin the message formats, authority and subscription names", () => {
+  const dir = ".claude/skills/agent-fleet/";
+  const t = read(dir + "references/comms.md");
+  const skill = read(dir + "SKILL.md");
+  assert.match(skill, /references\/comms\.md/);
   for (const f of ["DONE <PR> <merge sha>", "BLOCKED <PR>", "HANDOFF <PR>", "STAND-DOWN <PR>"]) assert.ok(t.includes(f), f);
-  assert.match(t, /permission laundering/);
+  assert.match(read(dir + "references/authority.md"), /permission laundering/);
   assert.match(t, /DATA/);
   assert.match(t, /subscribe_pr_activity/);
-  assert.match(t, /who-is-on-it\.mjs/);
+  assert.match(skill, /who-is-on-it\.mjs/);
   assert.match(t, /@parent/);
 });
 
-test("steward ownership reference (ex pr-owner) pins the loop's gates and carries a spawn prompt", () => {
-  const t = read(".claude/skills/steward/references/ownership.md");
-  assert.match(read(".claude/skills/steward/SKILL.md"), /references\/ownership\.md/);
-  assert.match(t, /re-read\s+the PR head sha/i);
+test("agent-fleet role-pr-owner (ex steward ownership, ex pr-owner) pins the loop's gates", () => {
+  const t = read(".claude/skills/agent-fleet/references/role-pr-owner.md");
+  assert.match(t, /head sha/i);
   assert.match(t, /sync-pr\.mjs/);
   assert.match(t, /remote-group\.mjs/);
   assert.match(t, /ready-gate\.mjs/);
   assert.match(t, /Do not enable auto-merge or merge/);
-  assert.match(t, /\.github\/pull_request_template\.md/);
-});
-
-test("ci-watcher agent is read-only (no write or MCP tools) and listed in the agents README", () => {
-  const t = read(".claude/agents/ci-watcher.md");
-  assert.match(t, /^tools: Bash, Read, Grep, Glob$/m);
-  assert.match(t, /^readonly: true$/m);
-  assert.match(t, /pr-board\.mjs --json/);
-  assert.match(t, /informational/, "the cap is reported, never a hold");
-  assert.match(read(".claude/agents/README.md"), /\*\*ci-watcher\*\*/);
+  assert.match(read(".claude/skills/agent-fleet/SKILL.md"), /\.github\/pull_request_template\.md/);
 });
 
 test("evaluate + render: PLAN is done/items from the body, HOLD is flagged, a sweep never arms past MAX_ARMED", () => {
@@ -539,4 +519,76 @@ test("fleet letter and slot: JSON fleetLetter/slot and the FL/SLOT columns come 
   assert.deepEqual(lines[1].split(/\s+/).slice(0, 3), ["#1", "B", "B·W3"]);
   assert.deepEqual(lines[2].split(/\s+/).slice(0, 3), ["#2", "A", "A·W7"]);
   assert.deepEqual(lines[3].split(/\s+/).slice(0, 3), ["#3", "-", "-"]);
+});
+
+// The ci-watch skill and the ci-watcher / merge-desk agents were deleted with the
+// retired Merge Desk (system audit 2026-10-26); their pins went with them.
+
+test("--alarm: ready + green + no hold + no ci run for 12 h is a stall; drafts, holds, reds and fresh pushes are not", () => {
+  const now = Date.parse("2026-10-26T12:00:00Z");
+  const old = "2026-10-25T20:00:00Z", fresh = "2026-10-26T10:00:00Z";
+  const item = (n, over = {}, at = old, conclusion = "success") => ({ pr: prObj(n, over),
+    runs: [{ id: n, status: "completed", conclusion, created_at: at }], jobs: fullJobs(), jobsRunId: n, checkRuns: guard() });
+  const r = evaluate([item(1), item(2, { draft: true }), item(3, { body: "MERGE-HOLD: Bryce\n" }), item(4, {}, old, "failure"), item(5, {}, fresh),
+    item(6, { auto_merge: { merge_method: "merge" } })]);
+  assert.equal(r.rows[0].ciAt, old, "the row carries the head run's created_at");
+  assert.deepEqual(stalled(r.rows, { now }).map((x) => x.number), [1, 6]);
+  const lines = alarmLines(r.rows, { now });
+  assert.match(lines[0], /^#1 STALLED 16h ready\+green, no hold, no push/);
+  assert.match(lines[1], /armed merge/);
+  assert.equal(lines.at(-1), "= alarm 2 stalled (ready > 12 h, green, no hold, no push)");
+  assert.equal(alarmLines([], { now }).at(-1), "= alarm none (ready > 12 h, green, no hold, no push)");
+  assert.equal(ALARM_HOURS, 12);
+});
+
+test("measure: one recent ci.yml page answers covered heads; only uncovered heads get their own runs read", () => {
+  const prs = [prObj(1), prObj(2), prObj(3)];
+  const { request, calls } = fakeApi({ prs, checksBySha: { [SHA(1)]: guard(), [SHA(2)]: guard(), [SHA(3)]: guard() },
+    runsBySha: { [SHA(3)]: [{ id: 30, status: "completed", conclusion: "success" }] } });
+  const recent = [{ id: 10, head_sha: SHA(1), status: "completed", conclusion: "failure" }, { id: 20, head_sha: SHA(2), status: "in_progress" }];
+  const v = measure({ request: (q) => q === "actions/workflows/ci.yml/runs?per_page=100" ? (calls.push(q), { json: { workflow_runs: recent } }) : request(q) });
+  assert.deepEqual(v.rows.map((r) => r.ci), ["failure", "in_progress", "success"]);
+  assert.deepEqual(calls.filter((q) => q.includes("head_sha=")), [`actions/workflows/ci.yml/runs?head_sha=${SHA(3)}&per_page=20`]);
+  assert.equal(calls.filter((q) => q === "actions/workflows/ci.yml/runs?per_page=100").length, 1);
+  assert.ok(v.requests.requests >= 1, "the snapshot's request count rides on the result");
+  const failed = measure({ request: (q) => q === "actions/workflows/ci.yml/runs?per_page=100" ? { error: "HTTP 502" } : request(q) });
+  assert.equal(failed.ok, true, `the recent page is advisory: a failure falls back to per-head reads (${failed.error})`);
+});
+
+// tools/lib/pr-snapshot.mjs — the shared per-PR reads behind pr-board, needs-sync,
+// session-status --pr and queue-depth (pinned here: pr-board is its main reader).
+import { createSnapshot, loadStore, saveStore, runsByHead } from "../../tools/lib/pr-snapshot.mjs";
+
+test("pr-snapshot: one process never asks the same URL twice; errors are not memoised; stats count requests", () => {
+  const calls = [];
+  let fail = true;
+  const snap = createSnapshot({ request: (q) => { calls.push(q); if (q === "pulls/9" && fail) { fail = false; return { error: "HTTP 502" }; } return { json: { q } }; } });
+  assert.ok(snap.pr(9).error);
+  assert.deepEqual(snap.pr(9).json, { q: "pulls/9" }, "a failed read is retried on the next ask");
+  snap.pr(9); snap.checkRuns("abc"); snap.checkRuns("abc");
+  assert.deepEqual(calls, ["pulls/9", "pulls/9", "commits/abc/check-runs?per_page=100"]);
+  assert.deepEqual(snap.stats(), { requests: 3, cached: 0 });
+  assert.equal(snap.prsForBranch("cursor/x").json.q, "pulls?head=brycejmurrin:cursor%2Fx&state=open&per_page=10");
+});
+
+test("pr-snapshot: the ETag store round-trips through artifacts/ and a 304 reuse is counted", () => {
+  const dir = path.join(ROOT, "artifacts", "tmp", `pr-snapshot-${process.pid}`);
+  const file = path.join(dir, "etags.json");
+  try {
+    const url = "https://api.github.com/repos/brycejmurrin/f1-game/pulls/1";
+    saveStore(new Map([[url, { etag: 'W/"a"', json: { number: 1 } }]]), file);
+    assert.deepEqual(loadStore(file).get(url), { etag: 'W/"a"', json: { number: 1 } });
+    fs.writeFileSync(file, "not json");
+    assert.equal(loadStore(file).size, 0, "a corrupt cache is an empty cache, never a crash");
+    saveStore(new Map([[url, { etag: 'W/"a"', json: { number: 1 } }]]), file);
+    const seen = [];
+    const run = (_c, args) => { seen.push(args); return { status: 0, stdout: '\n304 W/"a"' }; };
+    const snap = createSnapshot({ cacheFile: file, run, env: { GH_TOKEN: "t" } });
+    assert.deepEqual(snap.pr(1), { json: { number: 1 }, cached: true });
+    assert.ok(seen[0].includes('If-None-Match: W/"a"'), "the stored ETag rides the next process's GET");
+    assert.deepEqual(snap.stats(), { requests: 1, cached: 1 });
+    snap.save();
+    assert.ok(loadStore(file).has(url));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  assert.deepEqual([...runsByHead([{ head_sha: "a", id: 1 }, { head_sha: "a", id: 2 }, { id: 3 }]).get("a")].map((r) => r.id), [1, 2]);
 });
