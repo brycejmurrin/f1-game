@@ -4483,6 +4483,14 @@
         "tests/unit/service-worker.test.mjs"
       ]
     },
+    "js/circuits/scenery/nurburgring.js": {
+      "narrow": [
+        "tests/unit/nurburgring-eifel-horizon.test.mjs"
+      ],
+      "*": [
+        "tests/unit/nurburgring-eifel-horizon.test.mjs"
+      ]
+    },
     "js/circuits/scenery/redbull.js": {
       "*": [
         "tests/unit/scenery-guards.test.mjs"
