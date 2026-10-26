@@ -300,8 +300,11 @@
   // Uint16 indices wherever the vertex count allows — three picks the GL type
   // from the array, so this is a straight halving with no shader involvement.
   function packIndex(THREE, idx, vCount) {
-    return new THREE.BufferAttribute(
+    const attribute = new THREE.BufferAttribute(
       (!packOn || vCount > 65535) ? new Uint32Array(idx) : new Uint16Array(idx), 1);
+    // The vendor keeps owned scalar indices narrow and aligns later updates.
+    if (attribute.array instanceof Uint16Array) attribute.__apexUint16Index = true;
+    return attribute;
   }
 
   // Immutable CPU payload: no THREE objects, canvas or GPU ownership crosses
@@ -559,6 +562,8 @@
         const geo = new THREE.BufferGeometry(); made.push(geo);
         for (const [name, attr] of Object.entries(attributes)) geo.setAttribute(name, attr);
         geo.setIndex(new THREE.BufferAttribute(idx, 1));
+        // All prepared/synchronous small and chunked indices share this finalizer.
+        if (geo.index.array instanceof Uint16Array) geo.index.__apexUint16Index = true;
         if (min) {
           geo.boundingBox = new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max));
           geo.boundingSphere = new THREE.Sphere(); geo.boundingBox.getBoundingSphere(geo.boundingSphere);

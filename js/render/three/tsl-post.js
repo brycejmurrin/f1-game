@@ -1035,11 +1035,21 @@
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const t = vec2(fxaaU.texel).toVar();
         const fxL = (p) => fxLuma(fxaaTex.sample(TL(p)).rgb);
-        // Mirror tap FIRST, under the UNIFORM gate: the mirror target is
-        // mipmapped, so the implicit LOD needs the whole quad live — the same
-        // derivatives the viewport-limited mirror pass saw.
+        // The mipmapped mirror RT has identity UV mapping. Analytic gradients
+        // preserve its LOD inside a varying inset guard; dFdx/dFdy nodes can
+        // be emitted lazily inside that guard and would be nonuniform.
         const mirC = vec3(0.0).toVar();
-        If(fxaaU.mir.greaterThan(0.5), () => { mirC.assign(mirrorSample(fxaaMirTex)); });
+        const mf = vec2(screenCoordinate).toVar();
+        const mp = mf.sub(mirrorU.rect.xy).div(mirrorU.rect.zw).toVar();
+        const mu = vec2(mix(mp.x, mp.x.oneMinus(), mirrorU.flip), mp.y).toVar();
+        const mx = vec2(mix(float(1), float(-1), mirrorU.flip).div(mirrorU.rect.z), 0).toVar();
+        const my = vec2(0, float(1).div(mirrorU.rect.w)).toVar();
+        If(fxaaU.mir.greaterThan(0.5).and(mf.x.greaterThanEqual(mirrorU.rect.x))
+          .and(mf.x.lessThan(mirrorU.rect.x.add(mirrorU.rect.z)))
+          .and(mf.y.greaterThanEqual(mirrorU.rect.y))
+          .and(mf.y.lessThan(mirrorU.rect.y.add(mirrorU.rect.w))), () => {
+          mirC.assign(fxaaMirTex.sample(mu).grad(mx, my).rgb);
+        });
         const cM = vec3(fxaaTex.sample(TL(vUV)).rgb).toVar();
         const res = vec3(cM).toVar();
         const lM = fxLuma(cM).toVar();
