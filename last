@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-db2d4555-6060-5359-bd83-d68c4deb6a05 LIVE D·W30c #3805 head 9101c1c29 tip-synced TF 898/0 run-ci; waiting CI then ready-gate READY [idem:w30c-ci-wait-9101]
+REQUEST to:D from:cursor:bc-9155edbe-7250-54dd-bca0-67663aba77fa #3830 D·W35f #3830 draft tip 65449a15f needs run-ci label (gh addLabels 403). Local tooling-fast re-running after scenery-locations regen.
