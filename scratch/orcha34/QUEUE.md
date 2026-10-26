@@ -26,3 +26,9 @@ Updated 2026-10-26 07:28Z (00:28 PT). Base brief: scratch/orcha33/SUCCESSOR-BRIE
 - Game train PAUSED until Pages green. Then: A #3761 350ed44b (trial green on b67ffd90; re-trial on new tip) → D #3721 → B #3723 → A #3696 8197bd95 (MERGE-HOLD to lift).
 - #3700 READY sent to D (0e6433e) with caveats; D merges. OrchB now claude:session_01XzhhVYuGX9ii1g8uymYkTp.
 - Archived: W58b, W59, sync lane, #3700 owner. Live A lanes: 01SoT9 (#3696), 018TxG (#3761/#3766), 01X9Af + 01LESs6 (D-lent, waiting on D), R3 (#3763).
+
+## 09:45Z
+- B #3785 merged e9528599 → Pages 40299869625 RED again, now race-cycle-memory.spec.js (the #3709 GC-noise gate) on the deploy tip. Blocks all game merges.
+- Fix: A·W56 session_018TxG42 on cursor/rcm-gate-slope-e9528 (non-game PR): census waits for menuPrep/warm/garagePrebuild idle 3 s, then gate = median of >=3 post-warm deltas; unit pin that a 12 MiB/cycle leak fails. DAD deferred to A (5e5566b). A merges it first, then train: A #3761 → D #3721 → B #3723 → A #3696.
+- Offered Bryce a temporary by-name quarantine (needs his word); not done.
+- OrchB now claude:session_015SM5diVUiZvMdSpz52AYBs; holds #3792/#3791 until Pages in_progress.
