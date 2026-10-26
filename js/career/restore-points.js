@@ -7,8 +7,9 @@ const CareerRestorePoints = (function () {
   function create(opts) {
     opts = opts || {};
     const store = opts.store || (typeof GameStore !== "undefined" && GameStore.store);
-    const idb = opts.indexedDB || (typeof indexedDB !== "undefined" && indexedDB);
-    const disk = opts.localStorage || (typeof localStorage !== "undefined" && localStorage);
+    // Browser storage getters may throw, and policy can recover without reload.
+    const safe = (read) => { try { return read(); } catch (_) { return null; } };
+    const getDisk = () => safe(() => opts.localStorage || (typeof localStorage !== "undefined" && localStorage));
     const now = opts.now || (() => Date.now());
     const previews = new WeakMap();
     let opening = null, sequence = 0;
@@ -20,6 +21,7 @@ const CareerRestorePoints = (function () {
     function refused(reason) { return { ok: false, durable: false, reason }; }
     function open() {
       if (opening) return opening;
+      const idb = safe(() => opts.indexedDB || (typeof indexedDB !== "undefined" && indexedDB));
       if (!idb) return Promise.resolve(null);
       opening = new Promise((resolve) => {
         let settled = false, timer = null;
@@ -116,6 +118,7 @@ const CareerRestorePoints = (function () {
       return opts.inCareer ? opts.inCareer() : typeof Career !== "undefined" && Career.inCareer && Career.inCareer();
     }
     async function preview(flavour, i, id) {
+      const disk = getDisk();
       if (!store || !disk || engaged()) return refused(engaged() ? "leave-career-first" : "storage-unavailable");
       const r = await read(flavour, i), row = r.items.find((x) => x.id === id);
       if (!r.ok || !row) return refused(r.reason || "point-missing");
@@ -134,6 +137,8 @@ const CareerRestorePoints = (function () {
       previews.delete(token);
       if (engaged()) return refused("leave-career-first");
       try {
+        const disk = getDisk();
+        if (!disk) return refused("storage-unavailable");
         const unchanged = () => store.keyRevision(p.key) === p.revision && disk.getItem("apex26." + p.key) === p.raw &&
           JSON.stringify(store.get(p.key, null)) === p.session;
         if (!unchanged()) return refused("slot-changed");

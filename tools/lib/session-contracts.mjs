@@ -114,8 +114,11 @@ export function analyzeSessionCatalog(input) {
     else { seen.add(t.name); names.push(t.name); }
   }
   const skillNames = skills.map((s) => typeof s === "string" ? s : s?.name).filter(Boolean);
-  const deterministicBrowser = skillNames.some((s) => /^(?:.*:)?(?:browser|control-browser)$/.test(s))
-    && names.some((n) => /(?:node_repl|browser_snapshot|browser_evaluate)/.test(n));
+  // Attached browser primitives are usable without a separately advertised
+  // skill. Generic execution tools still need the browser workflow metadata.
+  const deterministicBrowser = names.some((n) => /(?:^|__)browser_(?:snapshot|evaluate)$/.test(n))
+    || (skillNames.some((s) => /^(?:.*:)?(?:browser|control-browser)$/.test(s))
+      && names.some((n) => /node_repl/.test(n)));
   const browserUse = names.some((n) => n.includes("browser_use_"));
   const cancellation = names.some((n) => /browser_use_.*cancel/.test(n));
   const library = names.some((n) => /(?:^|__)library_/.test(n));

@@ -117,6 +117,32 @@ function points(h, extra = {}) {
   return h.c.Points.create({ store: h.store, indexedDB: h.idb, localStorage: h.storage, ...extra });
 }
 const save = (round = 0, flavour = "driver") => ({ v: 1, flavour, year: 2026, team: flavour === "myteam" ? "custom" : "haas", money: 100 + round, season: { round, pts: {}, teamPts: {}, results: [] } });
+test("storage health and lazy restore history survive denied getters and recover without reload", async () => {
+  const h = boot(); await h.store.mirror.ready;
+  vm.runInContext(src("js/career/restore-points.js") + ";globalThis.Points=CareerRestorePoints", h.c, { filename: absSrc("js/career/restore-points.js") });
+  vm.runInContext(src("js/ui/save-health.js") + ";globalThis.Health=SaveHealth", h.c, { filename: absSrc("js/ui/save-health.js") });
+  let denied = true;
+  for (const [key, value] of [["indexedDB", h.idb], ["localStorage", h.storage]]) {
+    Object.defineProperty(h.c, key, { configurable: true, get() {
+      if (denied) throw Object.assign(new Error("Denied"), { name: "SecurityError" });
+      return value;
+    } });
+  }
+  assert.equal((await h.c.Health.inspect()).ok, false, "real lazy history must not escape the report's storage guard");
+  assert.equal((await h.c.Points.list("driver", 0)).ok, false);
+  denied = false;
+  assert.equal((await h.c.Health.inspect()).ok, true);
+  assert.equal((await h.c.Points.capture("driver", 0, save(1), { reason: "round" })).durable, true);
+  const id = (await h.c.Points.list("driver", 0)).items[0].id;
+  h.store.write("career.driver.0", save(5));
+  denied = true;
+  assert.equal((await h.c.Points.preview("driver", 0, id)).reason, "storage-unavailable");
+  denied = false;
+  const token = await h.c.Points.preview("driver", 0, id);
+  assert.equal(token.ok, true);
+  assert.equal((await h.c.Points.restore(token)).ok, true);
+  assert.equal(h.store.get("career.driver.0").season.round, 1);
+});
 test("restore history is bounded per slot, captures only explicit boundaries and never fills primary storage", async () => {
   const h = boot(); await h.store.mirror.ready; const p = points(h); const before = h.disk.size;
   assert.equal((await p.capture("driver", 0, save(), { reason: "autosave" })).ok, false);

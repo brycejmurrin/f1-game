@@ -67,6 +67,48 @@ test("Playwright MCP network fallback is pinned to the audited release", () => {
   assert.doesNotMatch(src, /npx[\s\S]*--port/);
 });
 
+test("browser MCP launches prefer cached exact pins while retaining cold-cache downloads and Chrome runtime gate", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-browser-launch-"));
+  try {
+    const mcp = path.join(dir, "tools/mcp"), bin = path.join(dir, "bin");
+    const packageBin = path.join(dir, "cached/build/src/bin/chrome-devtools-mcp.js");
+    fs.mkdirSync(mcp, { recursive: true });
+    fs.mkdirSync(bin);
+    fs.mkdirSync(path.dirname(packageBin), { recursive: true });
+    for (const name of ["playwright-mcp.sh", "chrome-devtools-mcp.sh"]) fs.copyFileSync(path.join(ROOT, "tools/mcp", name), path.join(mcp, name));
+    fs.writeFileSync(path.join(mcp, "mcp-preflight.sh"), "mcp_preflight() { :; }\n");
+    const stub = (name, source) => fs.writeFileSync(path.join(bin, name), "#!/bin/bash\n" + source, { mode: 0o755 });
+    stub("npx", 'printf "%s\\n" "$@" > "$LAUNCH_LOG"\n');
+    stub("npm", 'printf "%s\\n" "$@" > "$LAUNCH_LOG"\nprintf "%s\\n" "$PACKAGE_BIN"\n');
+    stub("node", `case "$1" in
+      */chromium-path.mjs) printf '/bin/true\\n';;
+      -e) printf '%s\\n' "$3";;
+      */webgpu-chrome-args.cjs) :;;
+      */chrome-devtools-runtime.mjs) printf '%s\\n' "$@" > "$GATE_LOG"; printf '/fixture/gated-runtime.js\\n';;
+      *) printf '%s\\n' "$@" > "$RUNTIME_LOG";;
+    esac\n`);
+    const log = path.join(dir, "launch"), gate = path.join(dir, "gate"), runtime = path.join(dir, "runtime");
+    const env = { ...process.env, PATH: bin + path.delimiter + process.env.PATH, LAUNCH_LOG: log,
+      GATE_LOG: gate, RUNTIME_LOG: runtime, PACKAGE_BIN: packageBin, APEX_PW_DEVICE: "iPhone 15", APEX_PW_CDP: "", APEX_CDT_BROWSER_URL: "" };
+    for (const cdp of ["", "http://127.0.0.1:9222"]) {
+      const r = spawnSync("bash", [path.join(mcp, "playwright-mcp.sh"), "run"], { env: { ...env, APEX_PW_CDP: cdp }, encoding: "utf8", timeout: 5000 });
+      assert.equal(r.status, 0, r.stderr);
+      const args = fs.readFileSync(log, "utf8").trim().split("\n");
+      assert.deepEqual(args.slice(0, 3), ["--yes", "--prefer-offline", "@playwright/mcp@0.0.79"]);
+      assert.equal(args.includes("--offline"), false, "cold cache can still fetch");
+      assert.ok(args.includes(cdp ? "--cdp-endpoint" : "--isolated"));
+      assert.ok(args.includes("iPhone 15"));
+    }
+    const r = spawnSync("bash", [path.join(mcp, "chrome-devtools-mcp.sh"), "run"], { env, encoding: "utf8", timeout: 5000 });
+    assert.equal(r.status, 0, r.stderr);
+    const args = fs.readFileSync(log, "utf8").trim().split("\n");
+    assert.deepEqual(args.slice(0, 4), ["exec", "--yes", "--prefer-offline", "--package=chrome-devtools-mcp@1.11.0"]);
+    assert.equal(args.includes("--offline"), false);
+    assert.ok(fs.readFileSync(gate, "utf8").includes(path.join(dir, "cached")), "resolved package still passes through version gate");
+    assert.equal(fs.readFileSync(runtime, "utf8").split("\n")[0], "/fixture/gated-runtime.js");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // ── mcp-cli probe mode + the Chrome flags it depends on ─────────────────────
 const CLI = MCP_CLI;
 const dryRun = (...args) => {
