@@ -900,6 +900,8 @@ function statDeltaChips(opt) {
 }
 
 let livBuild = 0;   // one per buildLiveryOptions: swatchCanvas never hands one canvas to two cards of a build
+let csLivQuery = "";           // #3339: filter string sticky across rebuilds
+let csLivFactoryOpen = false;  // #3339: factory <details> open state
 function livSwatch(team, liv, tags) {
   const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
   if (typeof LiveryTex !== "undefined" && LiveryTex.swatchCanvas) {
@@ -930,6 +932,95 @@ function livSwatch(team, liv, tags) {
 // tuner's .tune-row markup (DOM only, no new classes), a RAKE readout, and a
 function buildTuneOptions(container, team) { tuneExperiments.build(container, team); }
 
+function makeLiveryRow(team, liv, cur, isCustom) {
+  const active = liv.id === cur;
+  const row = document.createElement("button");
+  row.type = "button";
+  row.className = "cs-opt cs-liv" + (active ? " active" : "") + (isCustom ? " cs-liv-custom" : "");
+  row.dataset.csLivery = liv.id;
+  row.setAttribute("aria-label", "Select " + liv.name + " livery");
+  row.title = liv.name;
+  row.setAttribute("aria-pressed", active ? "true" : "false");
+  const rowWrap = document.createElement("div");
+  rowWrap.className = "cs-liv-row";
+  rowWrap.appendChild(row);
+
+  const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
+  const tags = [];
+  if (isCustom) tags.push("MINE");
+  if (liv.finish && liv.finish !== "gloss") tags.push(liv.finish.toUpperCase());
+  row.appendChild(livSwatch(team, liv, tags));
+
+  const main = document.createElement("div"); main.className = "cs-opt-main";
+  const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
+  nameRow.textContent = liv.name;
+  main.appendChild(nameRow);
+  row.appendChild(main);
+
+  if (isCustom) {
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "cs-liv-edit"; edit.textContent = "✎";
+    edit.title = "Edit this livery";
+    edit.setAttribute("aria-label", "Edit " + liv.name + " livery");
+    edit.onclick = () => {
+      csLivDraft = livDraftFrom(liv, liv.name || "");
+      csLivEditId = liv.id;
+      csLivCreating = true; csLivTeamId = team.id;
+      if (G.soundOn) GameAudio.uiSelect();
+      buildSetup();
+    };
+    rowWrap.appendChild(edit);
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "cs-liv-del"; del.textContent = "✕";
+    del.title = "Delete this livery";
+    del.setAttribute("aria-label", "Delete " + liv.name + " livery");
+    del.onclick = () => {
+      // Arm-then-confirm (G.armConfirm, the career DELETE? idiom): this was
+      // one tap from destroying a one-of-a-kind paint job with no undo.
+      if (G.soundOn) GameAudio.uiTick();
+      G.armConfirm(del, "✕?", () => {
+        setCustomLiveries(team.id, getCustomLiveries(team.id).filter((l) => l.id !== liv.id));
+        if (active) saveLiveryId(team.id, "default");
+        buildSetup();
+      });
+    };
+    rowWrap.appendChild(del);
+  } else {
+    const tag = document.createElement("span");
+    tag.className = "cs-opt-cost free";
+    tag.textContent = active ? "FITTED" : "PAINT";
+    row.appendChild(tag);
+    const dup = document.createElement("button");
+    dup.type = "button";
+    dup.className = "cs-liv-edit"; dup.textContent = "⧉";
+    dup.title = "Customize a copy of this livery";
+    dup.setAttribute("aria-label", "Customize a copy of " + liv.name);
+    dup.onclick = () => {
+      const copyName = (liv.name || "Custom").slice(0, 14) + " MK2";
+      csLivDraft = liv.id === "default" ? livDraftFromOwn(liv, copyName, team.id) : livDraftFrom(liv, copyName);
+      csLivEditId = null;   // create-new: never overwrites the stock scheme
+      csLivCreating = true; csLivTeamId = team.id;
+      if (G.soundOn) GameAudio.uiSelect();
+      buildSetup();
+    };
+    rowWrap.appendChild(dup);
+  }
+
+  row.onclick = () => {
+    if (active) return;
+    saveLiveryId(team.id, liv.id);
+    if (G.soundOn) GameAudio.uiSelect();
+    buildSetup();
+    // IDs can come from imported paint jobs: compare data, never interpolate
+    // an untrusted id into a CSS selector.
+    const choices = $("cs-options")?.querySelectorAll("[data-cs-livery]") || [];
+    for (const choice of choices) if (choice.dataset.csLivery === liv.id) { choice.focus({ preventScroll: true }); break; }
+  };
+  return rowWrap;
+}
+
 function buildLiveryOptions(container, team) {
   if (csLivCreating) {
     container.classList.remove("cs-liv-grid");
@@ -940,6 +1031,39 @@ function buildLiveryOptions(container, team) {
   livBuild++;
   const cur = getLiveryId(team.id);
   const customIds = new Set(getCustomLiveries(team.id).map((l) => l.id));
+  const q = String(csLivQuery || "").trim().toLowerCase();
+  const match = (liv) => !q || String(liv.name || "").toLowerCase().includes(q) || String(liv.id || "").toLowerCase().includes(q);
+
+  // #3339: search + collapse factory finishes so phone scroll is not ~25 screens.
+  {
+    const tools = document.createElement("div");
+    tools.className = "cs-liv-tools";
+    const search = document.createElement("input");
+    search.type = "search";
+    search.className = "cs-liv-search";
+    search.placeholder = "Search paint";
+    search.setAttribute("aria-label", "Search liveries");
+    search.value = csLivQuery;
+    search.autocomplete = "off";
+    search.onclick = (e) => e.stopPropagation();
+    let searchTimer = 0;
+    search.oninput = () => {
+      csLivQuery = search.value;
+      // Debounce rebuild so each keystroke is not a full swatch pass.
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        const caret = search.selectionStart;
+        buildSetup();
+        const again = $("cs-options")?.querySelector(".cs-liv-search");
+        if (again) {
+          again.focus({ preventScroll: true });
+          try { again.setSelectionRange(caret, caret); } catch (_) { /* type=search */ }
+        }
+      }, 120);
+    };
+    tools.appendChild(search);
+    container.appendChild(tools);
+  }
 
   // ＋ CREATE row (top so it's always reachable without scrolling the list)
   {
@@ -971,94 +1095,32 @@ function buildLiveryOptions(container, team) {
     container.appendChild(row);
   }
 
+  const customs = [], factory = [], factoryHidden = [];
   for (const liv of getLiveries(team)) {
-    const active = liv.id === cur;
+    if (!match(liv)) continue;
     const isCustom = customIds.has(liv.id);
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = "cs-opt cs-liv" + (active ? " active" : "") + (isCustom ? " cs-liv-custom" : "");
-    row.dataset.csLivery = liv.id;
-    row.setAttribute("aria-label", "Select " + liv.name + " livery");
-    row.title = liv.name;
-    row.setAttribute("aria-pressed", active ? "true" : "false");
-    const rowWrap = document.createElement("div");
-    rowWrap.className = "cs-liv-row";
-    rowWrap.appendChild(row);
+    if (isCustom) customs.push(liv);
+    else if (liv.id === cur || q) factory.push(liv); // fitted + search hits stay visible
+    else factoryHidden.push(liv);
+  }
+  for (const liv of customs) container.appendChild(makeLiveryRow(team, liv, cur, true));
+  for (const liv of factory) container.appendChild(makeLiveryRow(team, liv, cur, false));
 
-    const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
-    const tags = [];
-    if (isCustom) tags.push("MINE");
-    if (liv.finish && liv.finish !== "gloss") tags.push(liv.finish.toUpperCase());
-    row.appendChild(livSwatch(team, liv, tags));
-
-    const main = document.createElement("div"); main.className = "cs-opt-main";
-    const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
-    nameRow.appendChild(document.createTextNode(liv.name));
-    main.appendChild(nameRow);
-    row.appendChild(main);
-
-    if (isCustom) {
-      const edit = document.createElement("button");
-      edit.type = "button";
-      edit.className = "cs-liv-edit"; edit.textContent = "✎";
-      edit.title = "Edit this livery";
-      edit.setAttribute("aria-label", "Edit " + liv.name + " livery");
-      edit.onclick = () => {
-        csLivDraft = livDraftFrom(liv, liv.name || "");
-        csLivEditId = liv.id;
-        csLivCreating = true; csLivTeamId = team.id;
-        if (G.soundOn) GameAudio.uiSelect();
-        buildSetup();
-      };
-      rowWrap.appendChild(edit);
-      const del = document.createElement("button");
-      del.type = "button";
-      del.className = "cs-liv-del"; del.textContent = "✕";
-      del.title = "Delete this livery";
-      del.setAttribute("aria-label", "Delete " + liv.name + " livery");
-      del.onclick = () => {
-        // Arm-then-confirm (G.armConfirm, the career DELETE? idiom): this was
-        // one tap from destroying a one-of-a-kind paint job with no undo.
-        if (G.soundOn) GameAudio.uiTick();
-        G.armConfirm(del, "✕?", () => {
-          setCustomLiveries(team.id, getCustomLiveries(team.id).filter((l) => l.id !== liv.id));
-          if (active) saveLiveryId(team.id, "default");
-          buildSetup();
-        });
-      };
-      rowWrap.appendChild(del);
-    } else {
-      const tag = document.createElement("span");
-      tag.className = "cs-opt-cost free";
-      tag.textContent = active ? "FITTED" : "PAINT";
-      row.appendChild(tag);
-      const dup = document.createElement("button");
-      dup.type = "button";
-      dup.className = "cs-liv-edit"; dup.textContent = "⧉";
-      dup.title = "Customize a copy of this livery";
-      dup.setAttribute("aria-label", "Customize a copy of " + liv.name);
-      dup.onclick = () => {
-        const copyName = (liv.name || "Custom").slice(0, 14) + " MK2";
-        csLivDraft = liv.id === "default" ? livDraftFromOwn(liv, copyName, team.id) : livDraftFrom(liv, copyName);
-        csLivEditId = null;   // create-new: never overwrites the stock scheme
-        csLivCreating = true; csLivTeamId = team.id;
-        if (G.soundOn) GameAudio.uiSelect();
-        buildSetup();
-      };
-      rowWrap.appendChild(dup);
-    }
-
-    row.onclick = () => {
-      if (active) return;
-      saveLiveryId(team.id, liv.id);
-      if (G.soundOn) GameAudio.uiSelect();
-      buildSetup();
-      // IDs can come from imported paint jobs: compare data, never interpolate
-      // an untrusted id into a CSS selector.
-      const choices = $("cs-options")?.querySelectorAll("[data-cs-livery]") || [];
-      for (const choice of choices) if (choice.dataset.csLivery === liv.id) { choice.focus({ preventScroll: true }); break; }
-    };
-    container.appendChild(rowWrap);
+  // Collapse the rest of the factory catalogue when it would dominate the scroll.
+  if (factoryHidden.length) {
+    const fold = document.createElement("details");
+    fold.className = "cs-liv-factory";
+    fold.open = !!csLivFactoryOpen || !!q;
+    fold.ontoggle = () => { csLivFactoryOpen = fold.open; };
+    const sum = document.createElement("summary");
+    sum.className = "cs-liv-factory-sum";
+    sum.textContent = "Factory finishes (" + factoryHidden.length + ")";
+    fold.appendChild(sum);
+    const grid = document.createElement("div");
+    grid.className = "cs-liv-factory-grid";
+    for (const liv of factoryHidden) grid.appendChild(makeLiveryRow(team, liv, cur, false));
+    fold.appendChild(grid);
+    container.appendChild(fold);
   }
 }
 
