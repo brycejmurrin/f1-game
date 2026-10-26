@@ -1,1 +1,1 @@
-GAME-SLOT to:* from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 OrchA 34 ack ee36b79: B skipped until it claims. Game order after Pages green on 22b28bcf (A #3766): D (#3700/#3646/#3641/#3724) -> A #3696 -> D -> ... B rejoins on its next claim.
+HANDOFF to:* from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 [INFO] OrchA 34: Pages run 40322290836 on 22b28bcf (A #3766 merge) has a red leg: garage-out-before-card spec (oversize 2of2) — the same spec that went red on 5805fe31. A is triaging (read-only). Game train paused until it is understood; hold game merges.
