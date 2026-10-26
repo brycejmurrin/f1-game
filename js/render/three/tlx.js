@@ -3625,9 +3625,7 @@ const TLX = (function () {
       const _rigMirrorOn = () => !!(_warmFx && post && post.enabled() && !_mirDead && !vizMat && !softGpu() && !softwareGL);
       function warmDraws(fn, opts) {
         if (_deviceLost || !lit || _drawMatMode || vizMat || typeof renderer.compileAsync !== "function") return Promise.resolve(false);
-        // One job at a time. The menu's telemetry job (car-draw.js warmCockpitTelemetry) may still be queued or running
-        // at race entry: wait for it, then capture, or the race's own rig pairs went unwarmed (A·W56, #3673).
-        if (_rigWarm) return _rigWarm.finished.then(() => warmDraws(fn, opts));
+        // Capture NOW, while the caller's state (track, car) is current: fn never runs later (A·W56, #3673).
         const recs = [];
         const co = _coOn;
         _capture = recs; _coOn = false;   // a coalesced draw reaches draw()'s capture, which skips it, never a run
@@ -3636,6 +3634,17 @@ const TLX = (function () {
         const todo = recs.filter((r) => { const s = _rigDone.get(r.geo); return !(s && s.has(_rigKey(r))); });
         const mirror = !!(opts && opts.mirror) && opts.mirror !== _rigMirrorKey && _rigMirrorOn() ? opts.mirror : null;
         if (!todo.length && !mirror) return Promise.resolve(recs.length > 0);
+        // One job at a time. The menu's telemetry job (car-draw.js warmCockpitTelemetry) may still be queued at race
+        // entry: join it, or the race's own rig pairs went unwarmed. Waiting and capturing later ran fn after the
+        // track had gone (a 'def' of null per race) and held the race's car until then (race-cycle-memory heap slope).
+        if (_rigWarm && !_rigWarm.started) {
+          const job = _rigWarm;
+          for (const r of todo) job.recs.push(r);
+          if (mirror && !job.mirror) job.mirror = mirror;
+          return _warmRequested || _warmPending ? Promise.resolve(true) : job.finished.then(() => true);
+        }
+        // One already compiling is bounded: queue these pairs (captured above) right behind it.
+        if (_rigWarm) return _rigWarm.finished.then(() => warmDraws(() => { for (const r of todo) _capture.push(r); }, mirror ? { mirror } : null));
         // BEHIND A PROGRAM WARM, QUEUE AND RETURN. Race entry requests the program warm just before this, and the rig
         // job may only start once it is done (present() starts one warm at a time), so awaiting it held race entry for
         // the whole program warm, and on software GL (a ~17 s warm) the 20 s fallback fired first, dropped the job and

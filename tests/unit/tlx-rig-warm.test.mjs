@@ -178,13 +178,15 @@ test("behind a requested program warm, warmDraws resolves at once and the rig st
   assert.equal(await h.R.warmDraws(() => h.R.draw(cab, I, CAB)), true, "and it is recorded as done");
 });
 
-test("A·W56: a warmDraws while another rig job is in flight waits for it, then compiles its own pairs (was: refused)", async (t) => {
+test("A·W56: a warmDraws meeting a queued rig job captures NOW and joins it, then both compile (was: refused)", async (t) => {
   // The menu queues the wheel telemetry (car-draw.js warmCockpitTelemetry); race entry's warmCockpitRig can meet it.
+  // Its fn must run at the call: run later (after the job), it met a gone track and held the race's car meanwhile.
   const h = await rig(t);
   const tel = { geo: geo(RIG_LAYOUT) }, cab = { geo: geo(RIG_LAYOUT) };
   const p1 = h.R.warmDraws(() => h.R.draw(tel, I, FX));
-  let v2 = "pending";
-  const p2 = h.R.warmDraws(() => h.R.draw(cab, I, CAB));
+  let v2 = "pending", ran = 0;
+  const p2 = h.R.warmDraws(() => { ran++; h.R.draw(cab, I, CAB); });
+  assert.equal(ran, 1, "the second fn ran at the call, not after the first job");
   p2.then((v) => { v2 = v; });
   await new Promise((r) => setImmediate(r));
   assert.equal(v2, "pending", "the second job waits for the first rather than resolving false unwarmed");
@@ -192,6 +194,20 @@ test("A·W56: a warmDraws while another rig job is in flight waits for it, then 
   await new Promise((r) => setImmediate(r));
   h.R.present(); assert.equal(await p2, true);
   assert.deepEqual(h.compiles.map((c) => c.geo === tel.geo ? "tel" : c.geo === cab.geo ? "cab" : "?"), ["tel", "cab"], "both jobs' pairs compiled, in order");
+});
+
+test("A·W56: a warmDraws meeting a rig job already compiling queues its captured pairs behind it; fn runs once", async (t) => {
+  const h = await rig(t);
+  const tel = { geo: geo(RIG_LAYOUT) }, cab = { geo: geo(RIG_LAYOUT) };
+  const p1 = h.R.warmDraws(() => h.R.draw(tel, I, FX));
+  assert.equal(h.R.present(), false, "the first job starts compiling");
+  let ran = 0;
+  const p2 = h.R.warmDraws(() => { ran++; h.R.draw(cab, I, CAB); });
+  assert.equal(await p1, true);
+  for (let i = 0; i < 4 && h.compiles.length < 2; i++) { await new Promise((r) => setImmediate(r)); h.R.present(); while (h.R.pending()) await h.R.pending(); }
+  assert.equal(await p2, true);
+  assert.equal(ran, 1, "fn ran once, at the call; the follow-up job replays its captured pairs");
+  assert.deepEqual(h.compiles.map((c) => c.geo === tel.geo ? "tel" : c.geo === cab.geo ? "cab" : "?"), ["tel", "cab"]);
 });
 
 test("A·W56: a queued rig job outlives a long held warm while presents come, and is dropped only when none came for 20 s", async (t) => {
