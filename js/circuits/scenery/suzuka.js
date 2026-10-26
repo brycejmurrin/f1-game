@@ -605,7 +605,7 @@
       guardrail(0.24, 0.36, -1, 3, [0.84, 0.84, 0.88]);  // Degner inner
       guardrail(0.55, 0.66,  1, 3, [0.84, 0.84, 0.88]);  // Spoon outer
       // Hairpin inner tyreWall dropped: SRTM rise under the stack buried the
-      // cap 0.71 m (ground-audit structures.js:319) and a wider gap still sat
+      // cap 0.71 m (ground-audit, the tyreWall cap instance in structures.js) and a wider gap still sat
       // in the bowl. Casio / 130R stacks stay.
       tyreWall(0.93, 0.96,  1, 2.5, [0.20, 0.35, 0.80]);   // Casio chicane outer
       tyreWall(0.83, 0.86,  1, 3.0, [0.85, 0.20, 0.20]);   // 130R outer
