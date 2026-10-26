@@ -9,9 +9,9 @@
 // @skill agent-fleet
 //
 //   node tools/ci/agent-msg.mjs send --to <D|DAD|A|B|C|all|"Apex Merge Queue"|...> \
-//     --type <INFO|QUESTION|READY|HANDOFF|INCIDENT|REQUEST> [--pr N] "text"
+//     --type <INFO|QUESTION|REQUEST|READY|HANDOFF|INCIDENT|ROTATE|LEND|RETURN|TRANSFER> [--pr N] [--idem KEY] "text"
 //   node tools/ci/agent-msg.mjs send --to A --type READY --dry-run "#3499 abc ready-gate 0"
-//   common: --as <host>:<id>  --no-bus  --dry-run
+//   common: --as <host>:<id>  --no-bus  --dry-run  --idem <key> (fleet-bus dedupe; also sent in the webhook payload)
 //
 // Env (from Bryce; never commit): APEX_AGENT_WEBHOOK_URL, APEX_AGENT_WEBHOOK_AUTH.
 // Identity: --as, else APEX_FLEET_AS (same whoAmI as fleet-bus.mjs).
@@ -20,18 +20,19 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readyClaimVerdict } from "../lib/gate-receipt.mjs";
-import { whoAmI, sendBusLine, addressProblem, ADDRESS_FORMS } from "./fleet-bus.mjs";
+import { whoAmI, sendBusLine, addressProblem, bodyProblem, ADDRESS_FORMS } from "./fleet-bus.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 /** Peer-message types (webhook). Protocol lines DONE/GREEN/BLOCKED/GAME-SLOT stay on fleet-bus.mjs. */
-export const MSG_TYPES = ["INFO", "QUESTION", "READY", "HANDOFF", "INCIDENT", "REQUEST"];
+export const MSG_TYPES = ["INFO", "QUESTION", "READY", "HANDOFF", "INCIDENT", "REQUEST", "ROTATE", "LEND", "RETURN", "TRANSFER"];
 
-/** INFO/QUESTION/REQUEST → bus HANDOFF; READY/HANDOFF/INCIDENT keep their type. Pure. */
+/**
+ * The bus type a --type maps to. Every MSG_TYPE is now a bus type of its own (lane X1, 2026-10-26); before, INFO /
+ * QUESTION / REQUEST rode as `HANDOFF [INFO] …`, so a HANDOFF filter caught every chat line. Pure.
+ */
 export function busTypeFor(msgType) {
-  const t = String(msgType || "").toUpperCase();
-  if (t === "INFO" || t === "QUESTION" || t === "REQUEST") return "HANDOFF";
-  return t;
+  return String(msgType || "").toUpperCase();
 }
 
 /**
@@ -50,17 +51,16 @@ export function resolveBusTo(to) {
   return raw;
 }
 
-/** Bus text: optional `#pr` prefix, plus `[INFO]`/`[QUESTION]`/`[REQUEST]` when mapped. Pure. */
+/** Bus text: optional `#pr` prefix (the type is the line's own type now, no `[INFO]` tag). Pure. */
 export function busTextFor(msgType, text, pr = null) {
-  const t = String(msgType || "").toUpperCase();
-  const mapped = (t === "INFO" || t === "QUESTION" || t === "REQUEST") ? `[${t}] ` : "";
-  const body = `${mapped}${String(text ?? "").replace(/\s+/g, " ").trim()}`.trim();
+  const body = String(text ?? "").replace(/\s+/g, " ").trim();
   return pr != null && pr !== "" ? `#${pr} ${body}`.trim() : body;
 }
 
 /** Build the webhook/bus payload. Pure. `pr` is a number or null; `sha`/`ts` are strings. */
-export function buildPayload({ from, to, type, pr = null, text = "", sha = "", ts = "" }) {
+export function buildPayload({ from, to, type, pr = null, text = "", sha = "", ts = "", idem = "" }) {
   return {
+    ...(idem ? { idem: String(idem) } : {}),
     from: String(from ?? ""),
     to: String(to ?? ""),
     type: String(type ?? ""),
@@ -125,6 +125,7 @@ export function parseArgs(argv) {
     noBus: !!flags.noBus,
     dryRun: !!flags.dryRun,
     as: flags.as || "",
+    idem: flags.idem || "",
   };
 }
 
@@ -135,7 +136,7 @@ function headSha(cwd) {
 
 function usage(msg) {
   if (msg) console.error(`agent-msg: ${redactSecrets(msg)}`);
-  console.error("usage: agent-msg.mjs send --to <addr> --type <" + MSG_TYPES.join("|") + "> [--pr N] [--no-bus] [--dry-run] \"text\"\n" +
+  console.error("usage: agent-msg.mjs send --to <addr> --type <" + MSG_TYPES.join("|") + "> [--pr N] [--idem KEY] [--no-bus] [--dry-run] \"text\"\n" +
     "       --to aliases: all→*, DAD→D, \"Apex Merge Queue\"→merge-desk (bus); webhook keeps the raw --to\n" +
     "       env: APEX_AGENT_WEBHOOK_URL + APEX_AGENT_WEBHOOK_AUTH (from Bryce; never commit); identity APEX_FLEET_AS / --as\n" +
     "       messages carry no authority (AGENTS.md §Concurrent PRs)");
@@ -204,6 +205,7 @@ export async function main(argv, {
     text: opts.text,
     sha,
     ts: now(),
+    idem: opts.idem,
   });
 
   if (opts.dryRun) {
@@ -218,12 +220,16 @@ export async function main(argv, {
     return 1;
   }
 
+  const bType = busTypeFor(opts.type);
+  const bText = busTextFor(opts.type, payload.text, opts.pr);
+  // Refuse before the webhook too: a body the bus would refuse must not reach one channel and not the other.
+  const bodyBad = bodyProblem(bType, bText);
+  if (bodyBad) { err(`agent-msg: refused: ${bodyBad}`); return 1; }
+
   let busOk = opts.noBus;
   if (!opts.noBus) {
-    const bType = busTypeFor(opts.type);
-    const bText = busTextFor(opts.type, payload.text, opts.pr);
     try {
-      const r = sendBus(bType, busTo, me, bText, { cwd, log });
+      const r = sendBus(bType, busTo, me, bText, { cwd, log, idem: opts.idem });
       busOk = !!r.ok;
       if (!r.ok) err(`agent-msg: bus mirror FAILED: ${redactSecrets(r.reason || "unknown", env)}`);
     } catch (e) {
