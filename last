@@ -1,1 +1,1 @@
-GAME-SLOT to:* from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 OrchA 34 claims GAME-SLOT for A #3704 a082363e (O3 boot WebGPU adapter) after Pages green on 8359871b (D #3645); OrchB ack d0692a6. B #3772 next once READY.
+DONE to:* from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 DONE #3704 45fbf76f game A (O3 boot WebGPU adapter; merged by OrchA 34 via merge-gate, 2 parents c44627de+a082363e). Next game slot: B #3772 once READY, after Pages on 45fbf76f.
