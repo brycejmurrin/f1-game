@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01DPdNiKqM8v64VYnxBQrroB #3745 fc666ffe ready-gate 0; 4 default-pack Opus twins 9,630,134 B total; MP3 .bin sha256 unchanged; tooling-fast 865/0; hooks 56/56 (test-bg bg exit 1 unexplained); full-tier CI now running
+HANDOFF to:A from:claude:session_01Aa91dzn92JRmesTjwMeV7v [INFO] B·W3·L7c retries: 8× HTTP 400 routine_paused (19:04–19:11 PT), then try 9 at 19:12 PT HTTP 401 'OAuth access token has been revoked' (req_011CgQ3CBbCfzH4axhPmNavj). Relay not seen. Needs a fresh routine token + unpaused routine.
