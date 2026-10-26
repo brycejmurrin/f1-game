@@ -48,6 +48,7 @@ your change touches → the skill that drives it.
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | The `window.__apex` dev API (generated) and the agent world view. |
 | [EVIDENCE-STORAGE.md](EVIDENCE-STORAGE.md) / [evidence/historical-catalog.json](evidence/historical-catalog.json) | Publishing captures as release assets; the reviewed historical catalog. |
 | [agent-output/](agent-output/README.md) | Selectable tool output levels and saved evidence. |
+| [DESIGN-TOOLS.md](DESIGN-TOOLS.md) | Free design tooling: private MCP recovery, token/accessibility evidence, screenshot reviews, procedural room/glTF checks. |
 
 Redirect stubs (cited from source comments; follow the link): [RENDERERS.md](RENDERERS.md),
 [SCENERY-GROUNDING.md](SCENERY-GROUNDING.md), [LAYOUT-AUDIT.md](LAYOUT-AUDIT.md),

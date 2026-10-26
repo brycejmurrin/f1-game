@@ -343,15 +343,15 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
 #pm-build,
 #pm-now-card { grid-column: 1 / -1; }   /* the NOW PLAYING card spans the pair grid like the build tag */
 #pm-quit { margin-top: calc(var(--gap) * 0.65); }
-/* The card's transport keeps the --chip-h square every other small control
-   has (css/tuner.css .as-tbtn): the stack's own button rules — full width,
-   compact padding — must not reshape it. */
+/* The card's transport keeps the shared .as-tbtn square (css/tuner.css): the
+   stack's own button rules — full width, compact padding — must not reshape
+   it. #3275: same painted floor as .as-tbtn (not bare --chip-h). */
 #pausemenu .sheet .stack .as-tbtn {
-  width: var(--chip-h);
-  min-width: var(--chip-h);
-  height: var(--chip-h);
-  min-height: var(--chip-h);
-  flex: 0 0 var(--chip-h);
+  width: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  min-width: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  flex: 0 0 max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
   padding: 0;
   margin: 0;
 }

@@ -148,6 +148,62 @@ test("apex-gpu-capture is off by default and registered with one apex.js line", 
   assert.match(read("tools/manifest.cjs"), /apex-gpu-capture\.js/);
 });
 
+function loadGpuCapture() {
+  const scripts = [];
+  const sb = {
+    location: { search: "" },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    Log: { info() {} },
+    document: {
+      querySelector: (selector) => scripts.find((s) => selector.includes(s.dataset.apexGpuCapture)) || null,
+      createElement: () => ({ dataset: {}, listeners: {}, addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); } }),
+      head: { appendChild(script) { scripts.push(script); } },
+    },
+    addEventListener() {}, removeEventListener() {},
+  };
+  sb.window = sb;
+  vm.createContext(sb);
+  vm.runInContext(read("js/agent/apex-gpu-capture.js") + "\nthis.C = ApexGpuCapture;", sb,
+    { filename: absSrc("js/agent/apex-gpu-capture.js") });
+  const fire = (script, type) => {
+    if (type === "load") script.onload(); else script.onerror();
+    for (const fn of script.listeners[type] || []) fn();
+  };
+  return { sb, capture: sb.C, scripts, fire };
+}
+
+test("disabling GPU capture while Spector loads cannot start spying afterward", async () => {
+  const { sb, capture, scripts, fire } = loadGpuCapture();
+  let spies = 0;
+  const pending = capture.enable("spector");
+  assert.equal(scripts.length, 1);
+  assert.equal(capture.status().loading, true);
+  capture.disable();
+  sb.SPECTOR = { Spector: class { spyCanvases() { spies++; } } };
+  fire(scripts[0], "load");
+  const state = await pending;
+  assert.equal(spies, 0);
+  assert.equal(state.on, false);
+  assert.equal(state.spector, false);
+  assert.equal(state.loading, false);
+});
+
+test("an old GPU capture load failure cannot clear a newer mode", async () => {
+  const { capture, scripts, fire } = loadGpuCapture();
+  const old = capture.enable("spector");
+  const current = capture.enable("webgl-lint");
+  assert.equal(scripts.length, 2);
+  fire(scripts[0], "error");
+  await old;
+  assert.equal(capture.status().mode, "webgl-lint");
+  assert.equal(capture.status().loading, true);
+  fire(scripts[1], "load");
+  const state = await current;
+  assert.equal(state.on, true);
+  assert.equal(state.mode, "webgl-lint");
+  assert.equal(state.loading, false);
+});
+
 test("vendored Spector + webgl-lint are hash-pinned and licensed", () => {
   const m = JSON.parse(read("vendor/gpu-capture/MANIFEST.json"));
   for (const f of Object.keys(m.files)) {

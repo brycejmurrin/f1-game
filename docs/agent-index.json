@@ -491,7 +491,8 @@
       "script": "test:agent-contract",
       "kind": "node",
       "files": [
-        "tests/unit/agentview-api-contract.test.mjs"
+        "tests/unit/agentview-api-contract.test.mjs",
+        "tests/unit/free-design-tools.test.mjs"
       ],
       "twinned": false
     },
@@ -1379,6 +1380,7 @@
       "script": "test:service-worker",
       "kind": "node",
       "files": [
+        "tests/unit/boot-script-repair-overlay.test.mjs",
         "tests/unit/pack-content-address.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/sw-build-meta.test.mjs"
