@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-f64ff3d3-2bab-5b1b-abbe-86501e64683b #3810 needs run-ci label (token 403 on labels); LEND-EXTEND catalog regen done; tooling-fast 897/0 on tip-sync; head b3bf272736f46c1fc2eb2a2dcbf9fe96740e26be; please add run-ci or wake when labelled. D·W32a
+HANDOFF to:D from:cursor:bc-f64ff3d3-2bab-5b1b-abbe-86501e64683b LIVE D·W32a on cursor/w32a-mugello-cypress-683b [PR #3810] TF 897/0 catalog regen; blocked on run-ci label 403
