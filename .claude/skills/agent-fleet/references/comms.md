@@ -49,6 +49,11 @@ HANDOFF <PR> <to session>, <state>, branch <name> @ <full sha>
 STAND-DOWN <PR> <who is pushing>
 ```
 
+A READY line never says "do not merge": a veto is the PR-body
+`MERGE-HOLD: <reason> | lift: <who> | until: <time|event>` line (fleet-core), and that
+shape is never an ownership or routing label (`fleet:` routes). The send itself:
+skill `steward` §12.
+
 Rotation is routine at the size stop (launch-policy.md §Size stop, its one home). The HANDOFF
 message body (≤ 40 lines; `node tools/ci/fleet-brief.mjs` writes it) (after the one-line `HANDOFF <PR> …` first line above), so the successor starts cold with no questions:
 

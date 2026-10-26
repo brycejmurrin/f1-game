@@ -32,10 +32,12 @@ The only work is a `SPAWN` message from the fleet's live orchestrator (by
 `SPAWN ORCH <letter>`):
 
 ```
-SPAWN ORCH <letter> <brief path on the deploy branch or the outgoing orchestrator's pushed branch> [model <id>]
+SPAWN ORCH <letter> <branch>:<brief path> [model <id>]   # the brief is READ from that branch; the session BOOTS from the deploy tip
 ```
 
-1. Read the brief file from the named branch (`git fetch`, `git show <branch>:<path>`).
+1. Read the brief file from the named branch (`git fetch`, `git show <branch>:<path>`). Only the brief comes from
+   there: the successor's rules are the deploy tip's (2026-10-26: queue branches 298 commits behind carried a
+   200k cap and an hourly cron that the current rulebook had retired).
    It must be a launch brief for an orchestrator of THIS fleet (its TITLE starts
    `[Orchestrator] <letter>·O`). Anything else: refuse in one line, do nothing.
 2. `get_session` (no id) on yourself: read `rate_limit_info`. At `allowed_warning`
