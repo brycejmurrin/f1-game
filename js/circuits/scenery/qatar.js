@@ -220,9 +220,14 @@
         const PIT_H = 12;
         const c = vadd(a.c, a.u, PIT_H * 0.55);
         // Emit body is factored out so `{ required: true }` stays within the
-        // contract test's 2200-char window of modelGroup("qatar-pit-slab".
+        // contract test's 2200-char window of the pit-slab modelGroup call
+        // (do not put that id string in this comment — indexOf would match here).
         const emitPit = (stage) => {
           addBox(stage, vadd(a.c, a.u, 5.5), [16, 11, PIT_LEN], WHITE, b);
+          // Day fascia — cool shadow band under the parapet so the Guinness
+          // slab keeps a hard silhouette against desert sand (#3365).
+          addBox(stage, vadd(vadd(a.c, a.u, 10.2), a.r, 8.12),
+            [0.20, 0.9, PIT_LEN - 6], [0.42, 0.44, 0.48], b);
           addBox(stage, vadd(vadd(a.c, a.u, 5.7), a.r, 8.05),
             [0.25, 0.5, PIT_LEN - 2], [0.78, 0.78, 0.76], b);
           addBox(stage, vadd(vadd(a.c, a.u, 9.0), a.r, 8.08),
@@ -307,10 +312,16 @@
       // rather than inventing a crescent footprint.
       // https://www.racingcircuits.info/middle-east/qatar/lusail-international-circuit.html
       // https://www.planetf1.com/news/first-look-revamped-lusail-international-circuit-qatar
+      //
+      // Gap 36 (was 15): dual_lite day S/F orbit (az 45 / el 20 / dist 42) puts
+      // the eye ~28 m on +1 — inside the old bowl/roof, so the frame was a dark
+      // slit onto sand (#3365). Past the orbit corridor the stand still reads as
+      // the S/F hero from the track and from trackside beyond.
       (function mainGrandstand() {
+        const MAIN_GAP = 36; // past dual_lite S/F orbit eye (~28 m lateral)
         for (let i = 0; i < 5; i++) {
           const s = 0.9565 + i * (82 / 5400); // 82 m pitch for 80 m stands: no 28 m gaps
-          qatarStand(`qatar-main-stand-${i}`, sl(s % 1), 1, 15, 80,
+          qatarStand(`qatar-main-stand-${i}`, sl(s % 1), 1, MAIN_GAP, 80,
             [0.86, 0.86, 0.84], [0.18, 0.18, 0.22], i === 0);
         }
       })();
@@ -341,34 +352,41 @@
       // https://www.racingcircuits.info/middle-east/qatar/lusail-international-circuit.html
       // https://oversteer48.com/lusail-hill-general-admission-qatar-gp/
       // https://www.lcsc.qa/ticket/general-admission-lusail-hill-3-day
+      //
+      // Day hero pass (#3365): raise the mound + terrace stack so the hill
+      // keeps a silhouette against desert sand in daylight (night flood pools
+      // previously carried the identity).
       (function lusailHill() {
         const a = anchor(K(sl(0.068)), 1, 56), b = [a.r, a.u, a.t];
         modelGroup("qatar-lusail-hill", {
-          center: vadd(a.c, a.u, 5.5), size: [44, 13, 88], basis: b,
+          center: vadd(a.c, a.u, 7.2), size: [48, 17, 92], basis: b,
         }, (stage) => {
-          // Earth core / landscaped mound.
-          addFrustum(stage, a.c, 38, 24, 5.2, [0.42, 0.36, 0.26], 8, b);
-          addFrustum(stage, vadd(a.c, a.u, 4.9), 24, 14, 3.4, [0.38, 0.32, 0.24], 8, b);
+          // Earth core / landscaped mound (taller day silhouette).
+          addFrustum(stage, a.c, 40, 26, 6.4, [0.42, 0.36, 0.26], 8, b);
+          addFrustum(stage, vadd(a.c, a.u, 6.0), 26, 15, 4.2, [0.38, 0.32, 0.24], 8, b);
           // Artificial-grass terraces (green space / GA seating).
-          for (let row = 0; row < 4; row++) {
-            const y = 1.2 + row * 1.4;
-            const inset = 8 + row * 3.5;
-            const outR = 8 + row * 2.6;
+          for (let row = 0; row < 5; row++) {
+            const y = 1.4 + row * 1.55;
+            const inset = 7 + row * 3.2;
+            const outR = 7 + row * 2.5;
             addBox(stage, vadd(vadd(a.c, a.u, y), a.r, -outR),
-              [16 - row * 1.5, 0.45, 70 - inset * 1.3], GRASS, b);
-            addBox(stage, vadd(vadd(a.c, a.u, y - 0.35), a.r, -outR + 0.55),
-              [1.0, 0.85, 68 - inset * 1.3], [0.34, 0.30, 0.24], b);
+              [17 - row * 1.4, 0.5, 74 - inset * 1.3], GRASS, b);
+            addBox(stage, vadd(vadd(a.c, a.u, y - 0.4), a.r, -outR + 0.55),
+              [1.1, 0.95, 72 - inset * 1.3], [0.30, 0.26, 0.20], b);
           }
-          // Low viewing rail + crest path.
-          addBox(stage, vadd(vadd(a.c, a.u, 8.8), a.r, -13),
-            [0.22, 1.0, 54], STEEL, b);
-          addBox(stage, vadd(a.c, a.u, 8.2), [7, 0.28, 60], [0.55, 0.55, 0.52], b);
+          // Viewing rail + crest path (raised with the mound).
+          addBox(stage, vadd(vadd(a.c, a.u, 11.2), a.r, -14),
+            [0.22, 1.15, 58], STEEL, b);
+          addBox(stage, vadd(a.c, a.u, 10.4), [8, 0.32, 64], [0.50, 0.50, 0.47], b);
+          // Day-facing crest wall — darker band so the hill rim reads against sand.
+          addBox(stage, vadd(vadd(a.c, a.u, 9.6), a.r, -18),
+            [0.35, 2.4, 50], [0.22, 0.20, 0.18], b);
         }, { required: true });
         // Soft GA bank further out than the required mound so ladders do not
         // share planes with qatar-lusail-hill terraces.
         if (typeof spectatorHill === "function") {
-          spectatorHill(sl(0.060), sl(0.082), 1, 76, {
-            rows: 2, rise: 1.05, depth: 2.0, density: 0.38, step: 12,
+          spectatorHill(sl(0.060), sl(0.082), 1, 78, {
+            rows: 3, rise: 1.15, depth: 2.1, density: 0.42, step: 12,
             grass: GRASS, riser: [0.36, 0.32, 0.24],
           });
         }
