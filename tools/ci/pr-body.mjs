@@ -22,36 +22,26 @@
 //     https://docs.github.com/en/rest/pulls/pulls#update-a-pull-request
 //   POST  https://api.github.com/repos/{o}/{r}/issues/{n}/labels  {"labels": […]}
 //     https://docs.github.com/en/rest/issues/labels#add-labels-to-an-issue
-// Auth goes through github-token.mjs and curl -K (the token never reaches argv).
+// Auth goes through github-api.mjs (github-token.mjs + curl -K: the token never reaches argv).
 //
 // Exit 0 ok, 1 usage / bad index / API refusal, 3 no token.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
+import { NO_TOKEN_HINT } from "./github-token.mjs";
+import { api } from "./github-api.mjs";
 import { CliArgError, exitIfHelp, makeFlags } from "../lib/cli-args.mjs";
 
 export const REPO = "brycejmurrin/f1-game";
 
-/** One REST call. `payload` is sent as a JSON body through curl's config on
- *  stdin (with the auth header), so neither the token nor the body is argv.
+/** One REST call through github-api.mjs's client (one door, 2026-10-26):
+ *  `payload` is sent as a JSON body through curl's config on stdin (with the
+ *  auth header), so neither the token nor the body is argv; 5xx/429 back off.
  *  @returns {{ json?: any, error?: string, noToken?: boolean }} */
 export function ghRequest(method, pathQs, payload, { run = spawnSync, env = process.env } = {}) {
-  const token = githubToken({ env });
-  if (!token) return { error: NO_TOKEN_HINT, noToken: true };
-  const q = (s) => String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
-  let cfg = `header = "Authorization: Bearer ${token}"\n`;
-  if (payload !== undefined) cfg += `header = "Content-Type: application/json"\ndata-binary = "${q(JSON.stringify(payload))}"\n`;
-  const r = run("curl", ["-sS", "--max-time", "30", "-K", "-", "-X", method, "-w", "\n%{http_code}",
-    "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28",
-    "-H", "Cache-Control: no-cache", `https://api.github.com/repos/${REPO}/${pathQs}`],
-  { encoding: "utf8", maxBuffer: 64 << 20, input: cfg });
-  if (r.status !== 0) return { error: (r.stderr || r.error?.code || "curl failed").trim() };
-  const out = (r.stdout || "").split("\n");
-  const code = Number(out.pop());
-  if (code < 200 || code >= 300) return { error: `HTTP ${code}` };
-  try { return { json: JSON.parse(out.join("\n") || "null") }; } catch { return { error: "bad JSON" }; }
+  const r = api(pathQs, { method, run, env, ...(payload !== undefined ? { body: payload } : {}) });
+  return r.error === NO_TOKEN_HINT ? { ...r, noToken: true } : r;
 }
 
 // ── pure transforms ─────────────────────────────────────────────────────────

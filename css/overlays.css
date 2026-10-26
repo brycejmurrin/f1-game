@@ -750,8 +750,15 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
 #vsfriend-inner[data-density="compact"] { position: relative; }
 /* Absolute CLOSE is --tap-paint tall; the title band must clear it
    (ui-redesign closeInHead). Flex-centre the title so a short h2 does not
-   leave CLOSE hanging past the head bottom. */
+   leave CLOSE hanging past the head bottom.
+   Zero vertical padding (same longhand beat as the compact foot below):
+   .sheet[data-density=compact] .sheet-head still brings pad*0.28/0.2 from
+   @layer components, and with height locked to --tap-paint + border-box that
+   ate the content box — layout-audit desktop-1440x900@200 clipped
+   #dlg-vsfriend past #vs-head (top 7 / bottom 2). (#3306) */
 #vsfriend-inner[data-density="compact"] > #vs-head {
+  padding-top: 0;
+  padding-bottom: 0;
   padding-right: calc(var(--pad) + var(--tap));
   min-height: var(--tap-paint);
   height: var(--tap-paint);
@@ -760,6 +767,11 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   display: flex;
   align-items: center;
   overflow: hidden;
+}
+#vsfriend-inner[data-density="compact"] > #vs-head > #dlg-vsfriend {
+  /* Keep the title inside the --tap-paint band once padding is gone. */
+  line-height: 1;
+  margin: 0;
 }
 /* top:0 (not pad*0.18): that inset pushed a --tap-paint CLOSE past a
    title-sized head on 852×393 (Selected specs 2026-10-05).
@@ -871,19 +883,36 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
 }
 /* Live Home docks ANIMATE BACKGROUND at the same bottom-left corner
-   (#home-motion, css/experience.css). Lift this chip one --tap so the
-   two never share a hit target (survey ~500px, 2026-10-05). --safe-b
-   already includes --sab, matching the toggle's dock. Desktop Classic
-   keeps ANIMATE top-left, so a bare :has(home-motion) lift would
-   still walk INSTALL on the title-desktop golden. */
+   (#home-motion, css/experience.css). Lift this chip so the two never
+   share a hit target (survey ~500px, 2026-10-05). --safe-b already
+   includes --sab, matching the toggle's dock. Desktop Classic keeps
+   ANIMATE top-left, so a bare :has(home-motion) lift would still walk
+   INSTALL on the title-desktop golden.
+   Tall: one --tap (title-menu-even pins the formula).
+   Compact-wide / live-wide (844×390 title landscape, #3302): one --tap
+   left only ~8px of air between INSTALL APP (top ~270) and PAUSE
+   BACKGROUND (top ~330) — stacked, not independently tappable by eye.
+   Two (tap+gap) rows clear a full --tap of air. When the iOS Add-to-
+   Home banner is also up (bottom: safe-b + 4.5rem in touch-controls),
+   park INSTALL above that banner so the three do not paint as one
+   pile (chip×ios was ~4700px² at 844×390 with the one-tap lift). */
 body[data-shape="tall"]:has(> :where(#overlay) > #home-motion:not([hidden])) #install-chip {
   bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
 }
 :where(body[data-shape="wide"][data-density="compact"]):has(> :where(#overlay) > #home-motion:not([hidden])) #install-chip {
-  bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+  bottom: calc(var(--safe-b) + (var(--tap) + var(--gap)) * 2);
 }
 body[data-shape="wide"]:has(> #overlay[data-home-scene]:not([data-home-scene="static"])):has(> :where(#overlay) > #home-motion:not([hidden])) #install-chip {
-  bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+  bottom: calc(var(--safe-b) + (var(--tap) + var(--gap)) * 2);
+}
+/* Not :where(body…): the live-wide lift above keeps body[data-shape]
+   specificity and would otherwise win over a zero-spec :where body when
+   data-home-scene is photo/live (measured 844×390, chip stuck at 128px and
+   still painted through #ios-install). */
+body[data-shape="wide"][data-density="compact"]:has(> :where(#overlay) > #home-motion:not([hidden])):has(> #ios-install:not([hidden])) #install-chip {
+  /* ios-install docks at safe-b+4.5rem (~80px) and paints ~5.5rem tall at
+     844×390; sit one --gap above that band so INSTALL is not inside it. */
+  bottom: calc(var(--safe-b) + 4.5rem + 5.5rem + var(--gap));
 }
 /* Same layer as experience.css's live-scene `padding: var(--gap)` shorthand,
    which would otherwise wipe the leftover-row inset (menus.css is

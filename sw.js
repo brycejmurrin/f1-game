@@ -229,12 +229,16 @@ async function sweepStaleCaches() {
   // #2194: an old tab still runs the previous shell after activate; its lazy
   // non-script fetches keep the booted ?v= keys. Keep exactly one prior SETTLED
   // generation while any window client remains (closed tabs → matchAll is
-  // empty and the predecessor can go). Older than N-1 is always deleted.
-  const prev = build - 1;
-  const prevName = CACHE_PREFIX + prev;
+  // empty and the predecessor can go). Published build numbers can skip;
+  // choose the newest settled generation actually present on this device.
+  let prevName = null;
+  const older = keys.filter((k) => cacheBuild(k) > 0 && cacheBuild(k) < build)
+    .sort((a, b) => cacheBuild(b) - cacheBuild(a));
+  for (const k of older) {
+    if (await caches.match(INSTALL_SETTLED_URL, { cacheName: k })) { prevName = k; break; }
+  }
   let retainPrev = false;
-  if (prev > 0 && keys.includes(prevName)
-    && (await caches.match(INSTALL_SETTLED_URL, { cacheName: prevName }))) {
+  if (prevName) {
     const cl = self.clients;
     if (cl && typeof cl.matchAll === "function") {
       const list = await cl.matchAll({ includeUncontrolled: true, type: "window" });
@@ -244,7 +248,7 @@ async function sweepStaleCaches() {
   const stale = keys.filter((k) => {
     const b = cacheBuild(k);
     if (!(b > 0 && b < build)) return false;
-    if (retainPrev && b === prev) return false;
+    if (retainPrev && k === prevName) return false;
     return true;
   });
   await Promise.all(stale.map((k) => caches.delete(k)));
@@ -713,9 +717,9 @@ self.addEventListener("install", (event) => {
     // GLX is the fallback renderer every device can run: when TLX/WGX are not
     // cached (or fail), an offline boot without it is "graphics unavailable".
     // Career UI is also required: an update must not replace working offline
-    // career access with a shell whose lazy entry point was never cached.
+    // career access with a shell whose strict lazy group was not fully cached.
     // Stamp these files exactly as ScriptLoader requests them.
-    const isRequiredLazy = (u) => /^js\/render\/glx\//.test(u) || u === "js/career/career-ui.js";
+    const isRequiredLazy = (u) => /^js\/render\/glx\//.test(u) || /^js\/career\/career-(planning-ui|ui)\.js$/.test(u);
     const isShell = (u) => u === "./" || u === "index.html";
     // A lazy file's key: its content hash from the shell's map, else the build.
     const lazyV = urls.lazyV || new Map();

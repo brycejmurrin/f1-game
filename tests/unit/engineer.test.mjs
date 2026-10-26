@@ -28,15 +28,20 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function load() {
+function load({ appearance = false } = {}) {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });
   seedLog(ctx);
   ctx.window = ctx;
-  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js",
+  if (appearance) {
+    const preferences = new Map();
+    ctx.GameStore = { store: { get: (key, fallback) => preferences.has(key) ? preferences.get(key) : fallback,
+      set: (key, value) => preferences.set(key, value) } };
+  }
+  for (const f of ["js/core/mat4.js", ...(appearance ? ["js/ui/appearance-opts.js"] : []), "js/physics/consts.js", "js/data/teams.js",
                    "js/car/parts.js", "js/physics/tyre-model.js", "js/race/engineer.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
-  return { E: vm.runInContext("RaceEngineer", ctx), T: vm.runInContext("TyreModel", ctx) };
+  return { E: vm.runInContext("RaceEngineer", ctx), T: vm.runInContext("TyreModel", ctx), ctx };
 }
 const { E, T } = load();
 
@@ -147,10 +152,42 @@ test("a LOCAL SHOWER names its sector, and says whether the lap as a whole wants
 });
 
 test("a strong GUST is a word below every pit line, said once per gusty spell", () => {
-  assert.match(line({ gust: 7, gustKmh: 46 }), /GUSTY OUT THERE — 46 KM\/H/);
+  assert.equal(line({ gust: 7, gustKmh: 46 }), "GUSTY OUT THERE — 46 KM/H, CAREFUL ON THE BRAKES");
   assert.equal(E.create({}).callFor(sense({ gust: 7, gustKmh: 46 }))[1], "gust");
-  assert.match(line({ gust: 7, gustKmh: 46, wrongTread: true, wet: true }), /BOX FOR WETS/, "the tread still comes first");
+  assert.equal(line({ gust: 7, gustKmh: 46, wrongTread: true, wet: true }), "RAIN — BOX FOR WETS", "the tread still comes first");
   assert.equal(line({ gust: null }), "", "no gust, no line");
+});
+
+test("gust advice follows real speed preferences while retaining canonical wind and once-per-gust ownership", () => {
+  const { E: Engineer, ctx } = load({ appearance: true });
+  const preferences = vm.runInContext("AppearanceOpts", ctx);
+  const rawSpeed = 160.9344;
+  const advice = Engineer.create({});
+  for (const [units, value, label] of [["kmh", 161, "KM/H"], ["mph", 100, "MPH"], ["kmh", 161, "KM/H"]]) {
+    preferences.setUnits(units);
+    const snapshot = sense({ gust: 7, gustKmh: rawSpeed });
+    const [message, key] = advice.callFor(snapshot);
+    assert.equal(message, `GUSTY OUT THERE — ${value} ${label}, CAREFUL ON THE BRAKES`);
+    assert.equal(key, "gust"); assert.equal(snapshot.gustKmh, rawSpeed);
+    assert.equal(advice.callFor(sense({ gust: 7, gustKmh: rawSpeed, wrongTread: true, wet: true }))[0], "RAIN — BOX FOR WETS");
+  }
+  const session = sessionFor(), car = carOn(session.tyres), eng = Engineer.create(session.G);
+  let bucket = 7;
+  ctx.Wind = { gustCall: () => bucket, state: () => ({ kmh: rawSpeed }) };
+  preferences.setUnits("kmh");
+  eng.update(car, Engineer.QUIET_S + 1);
+  assert.equal(session.said.at(-1), "GUSTY OUT THERE — 161 KM/H, CAREFUL ON THE BRAKES");
+  const initialCalls = session.said.length;
+  preferences.setUnits("mph");
+  eng.update(car, Engineer.QUIET_S + 1);
+  assert.equal(session.said.length, initialCalls, "changing units never repeats the same gust bucket");
+  bucket++;
+  eng.update(car, Engineer.QUIET_S + 1);
+  assert.equal(session.said.at(-1), "GUSTY OUT THERE — 100 MPH, CAREFUL ON THE BRAKES");
+  preferences.setUnits("kmh"); bucket++;
+  eng.update(car, Engineer.QUIET_S + 1);
+  assert.equal(session.said.at(-1), "GUSTY OUT THERE — 161 KM/H, CAREFUL ON THE BRAKES");
+  assert.equal(eng.senseOf(car).gustKmh, rawSpeed, "only the announcement converts wind units");
 });
 
 test("ONE COMPOUND with five laps left is called after the tread and before everything else (FIA 2026 SR B6.3.6)", () => {

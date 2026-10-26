@@ -129,6 +129,7 @@ test("mirrorEnd: only four CONSECUTIVE failed mirror renders retire the mirror (
     _mirRenders: 0, _mirFails: 0, _mirDead: false, _mirErr: null, softOutRT: () => null, resetRecs() {},
     _dMatUsed: 0, _fxMatUsed: 0, _instAlive: new Set(), _kidsBegin() {}, _kidsMir: [], _poolShow() {},   // R6 pool root (hunt 3)
     _mirMrt: () => false, _mirMrtArm() {},   // A·W14: a one-attachment mirror target draws with no MRT
+    post: null, _mirInv: () => null, _mirDiscards: 0,   // A-P2: the WebGL2 depth + tag discard after the mirror render
     renderer: { setRenderTarget() {}, render() { if (st.boom) throw new Error("stale geometry"); } },
   });
   const obj = vm.runInContext("({" + body.replace(/,\s*$/, "") + "})", ctx);
@@ -157,7 +158,7 @@ function refuse(o = {}) {
     out.errors.push([where, msg]);
   };
   const ctx = vm.createContext({
-    _glPin: o.pin ?? null, forceWebGL: !!o.forceWebGL, _autoStayGL: !!o.autoStayGL, _sessLostN: 0,
+    _glPin: o.pin ?? null, forceWebGL: !!o.forceWebGL, _autoStayGL: !!o.autoStayGL,
     _latchWebKitGL: (why) => out.latched.push(why),
     sessionStorage: ss,
     localStorage: { removeItem: (k) => { delete out.local[k]; } },
@@ -170,6 +171,7 @@ function refuse(o = {}) {
   // the arrow function by its own closing column instead of up to present()'s `let painted`.
   const body = fnSource(src, "const refuseTab = () => {") + ";";
   assert.ok(body.startsWith("const refuseTab") && body.length < 2000, "the refuseTab needles moved — check this test, not the code");
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   out.call = vm.runInContext(body + "\n refuseTab", ctx);
   return out;
 }
@@ -212,19 +214,11 @@ test("refuseTab: bounded at two reloads per tab; past the cap the latch is kept 
   assert.equal(blocked.reloads, 2);
 });
 
-test("ctxLost window.name fallback: every reader regex parses the marker the writer stores (c91f)", () => {
-  // sessionStorage throws → the reload budget rides window.name as "apex26.ctxLostReloads=N".
-  // A double-escaped literal (/apex26\\.…\\d+/) wants a backslash and never matched, so the
-  // budget was never read back or cleared (report: codex perf-investigation-c91f, GLX twin).
-  const src = read("js/render/three/tlx.js");
-  const lits = [...src.matchAll(/\/\^apex26\\{1,2}\.ctxLostReloads=[^\n]*?\$\//g)].map((m) => m[0]);
-  assert.ok(lits.length >= 3, `expected the clear and two read regexes, found ${lits.length}`);
-  for (const lit of lits) {
-    const re = vm.runInNewContext(lit);
-    const m = "apex26.ctxLostReloads=2".match(re);
-    assert.ok(m, `${lit} does not match the stored marker`);
-    if (m[1] !== undefined) assert.equal(m[1], "2", `${lit} captures the count`);
-    assert.equal(re.test("apex26xctxLostReloads=2"), false, `${lit} must escape the dot`);
+test("ctxLost window.name fallback parses legacy and preserved-prefix markers (c91f)", () => {
+  for (const [name, expected] of [["apex26.ctxLostReloads=2", 2], ["player\napex26.ctxLostReloads=2", 2], ["apex26xctxLostReloads=2", 0]]) {
+    const ctx = vm.createContext({ window: { name }, sessionStorage: { getItem() { throw Error("blocked"); } } });
+    vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
+    assert.equal(vm.runInContext("GfxEscalation.reloadCount()", ctx), expected);
   }
 });
 
@@ -263,5 +257,66 @@ test("WebKit kill switch: never on Chromium, never written under a pin", () => {
     const p = webkitSwitch({ ua: IPHONE, pin });
     p._latchWebKitGL("x");
     assert.equal(p.local["apex26.tlxWebKitGL"], undefined, `pin ${pin} is a user override, not a verdict`);
+  }
+});
+
+// A-P2 (phoneperf 2026-10-24): after a depth pass on WebGL2 the map's R8 colour — written because WebGL
+// cannot render colourless, read only by the PCSS blocker off the SUN map — is invalidated while the FBO
+// three just rendered into is still bound. Never the sun map while colorPcss reads it; never a guess at
+// which FBO; nothing at all without a WebGL backend (WebGPU never writes it: depthMat.colorWrite).
+function bootGL({ isMobile, bound = true, gl: glOn = true } = {}) {
+  const fb = {}, inv = [];
+  const gl = glOn ? { DRAW_FRAMEBUFFER: 36009, COLOR_ATTACHMENT0: 36064, invalidateFramebuffer: (t, l) => inv.push([t, Array.from(l)]) } : null;   // Array.from: a host-realm copy (deepEqual checks prototypes)
+  const renderer = { backend: { gl, state: { currentBoundFramebuffers: { 36009: bound ? fb : null } }, get: () => ({ framebuffers: { 0: fb } }) },
+    getRenderTarget: () => null, setRenderTarget() {}, render() {}, autoClear: true };
+  const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} },
+    Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
+  vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
+  const sys = ctx.window.TLXShaders.shadowSys(mk(), mk(), { renderer, isMobile, softwareGL: false });
+  return { sys, S: sys.S, inv };
+}
+
+test("A-P2: a phone's sun pass drops its unread R8 colour store on WebGL2 (the one FBO three rendered into)", () => {
+  const { sys, S, inv } = bootGL({ isMobile: true });
+  sys.shadowBegin(new Float32Array(16)); sys.shadowEnd();
+  assert.deepEqual(inv, [[36009, [36064]]], "COLOR_ATTACHMENT0 on DRAW_FRAMEBUFFER, once");
+  assert.equal(S.colorDiscards, 1);
+  sys.shadowBegin(new Float32Array(16)); sys.shadowEnd();
+  assert.equal(S.colorDiscards, 2, "every pass, not only the first");
+});
+
+test("A-P2: the desktop sun map keeps its colour for the PCSS blocker; the car map still drops it", () => {
+  const { sys, S, inv } = bootGL({ isMobile: false });
+  sys.shadowBegin(new Float32Array(16)); sys.shadowEnd();
+  assert.equal(inv.length, 0, "colorPcss reads the sun map's colour");
+  sys.carShadowBegin(new Float32Array(16), 1); sys.carShadowEnd();
+  assert.deepEqual(inv, [[36009, [36064]]]);
+  assert.equal(S.colorDiscards, 1);
+});
+
+test("A-P2: no discard with another FBO bound, and none without a WebGL backend", () => {
+  const a = bootGL({ isMobile: true, bound: false });
+  a.sys.shadowBegin(new Float32Array(16)); a.sys.shadowEnd();
+  assert.equal(a.inv.length, 0); assert.equal(a.S.colorDiscards, 0);
+  const b = bootGL({ isMobile: true, gl: false });
+  b.sys.shadowBegin(new Float32Array(16)); b.sys.shadowEnd();
+  assert.equal(b.S.colorDiscards, 0, "WebGPU: nothing to drop, nothing thrown");
+});
+
+test("A-P2W: on WebGPU every shadow map hints its unread R8 colour discard (vendored patch 17); tlxTagDiscard=0 keeps it", () => {
+  for (const [ls, want] of [[null, 1], ["0", undefined]]) {
+    const renderer = { backend: { isWebGPUBackend: true }, getRenderTarget: () => null, setRenderTarget() {}, render() {}, autoClear: true };
+    const ctx = vm.createContext({ window: {}, localStorage: { getItem: (k) => (k === "apex26.tlxTagDiscard" ? ls : null) }, Log: { warn() {} },
+      Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
+    vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
+    // mk() swallows writes, so RenderTarget alone is a recording object (unknown members still mk()).
+    const made = [], base = mk();
+    function RT() { const o = { texture: {} }; made.push(o); return new Proxy(o, { get: (t, k) => (k in t ? t[k] : k === "then" ? undefined : mk()) }); }
+    const T = new Proxy(base, { get: (t, k) => (k === "RenderTarget" ? RT : base[k]) });
+    ctx.window.TLXShaders.shadowSys(T, mk(), { renderer, isMobile: true, softwareGL: false });
+    const sun = made.find((rt) => rt.texture && rt.texture.name === "TLXSunShadow.color");
+    assert.ok(sun, "the sun map was built");
+    assert.equal(sun.apexDiscardColor, want, ls === "0" ? "switch off: stored" : "bit 0 = the R8 colour");
+    assert.equal(sun.apexDiscardDepth, undefined, "the depth IS the shadow map: never discarded");
   }
 });

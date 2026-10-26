@@ -196,6 +196,33 @@ test("multiple cache misses load one model, and a no-op append touches neither m
   } finally { f.close(); }
 });
 
+test("--opus records an Ogg Opus twin from the same render, and leaves the MP3 bytes untouched", async () => {
+  const f = recordingFixture();
+  try {
+    const list = [{ key: "box", text: "Box" }, { key: "@line:box now", text: "Box now." }];
+    const plain = await recordClips({ ...f.opts, list });
+    const both = await recordClips({ ...f.opts, list, opus: { clips: {}, chunks: [] } });
+    assert.deepEqual(both.binary, plain.binary, "the MP3 .bin is byte-identical with or without the twin");
+    assert.deepEqual(both.clips, plain.clips);
+    assert.deepEqual(f.counts(), { loads: 2, generations: 4 }, "a missing twin re-renders, it never transcodes the MP3");
+    const opusEncodes = f.calls().filter((a) => a.includes("libopus"));
+    assert.equal(opusEncodes.length, 2);
+    assert.ok(opusEncodes.every((a) => a.includes("ogg") && a.includes("20k") && a.includes("24000") && a[a.indexOf("-af") + 1] === f.calls()[0][f.calls()[0].indexOf("-af") + 1]),
+      "same trim filter, 24 kHz mono, 20 kbps Ogg");
+    let off = 0;
+    for (const { key } of list) {
+      const [o, len, secs] = both.opus.clips[key];
+      assert.equal(o, off, key + " is contiguous in the twin");
+      assert.equal(secs, 1.25);
+      off += len;
+    }
+    assert.equal(off, both.opus.binary.length, "the twin's index accounts for every byte");
+    const warm = await recordClips({ ...f.opts, list, opus: { clips: {}, chunks: [] },
+      loadTTS: () => { throw new Error("warm opus build imported Kokoro"); } });
+    assert.deepEqual(warm.opus.binary, both.opus.binary, "cached twin clips rebuild without synthesis");
+  } finally { f.close(); }
+});
+
 test("CLI no-op append succeeds without an installed Kokoro package and preserves the published pack", () => {
   fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "voice-append-"));
@@ -1249,5 +1276,89 @@ test("a later keep, ensure, or staged request can reselect a queued voice", asyn
     assert.equal(await selected, true);
     assert.deepEqual(J(P.debug().voices), { heart: "ready" }, "only the selected voice remains");
     assert.equal(calls.length, 4, "old and new queues share the reselected pack request");
+  }
+});
+
+// ── Opus twin (docs/notes/ASSET-COMPRESSION-2026-10-24.md) ──────────────────
+// A pack's .json may name an Opus twin. It is fetched ONLY where a real decode
+// of the probe clip succeeds; every other path, and every failure of the twin,
+// plays the MP3 .bin exactly as before.
+const digestOf = (u8) => ({ sha256: createHash("sha256").update(u8).digest("hex"), bytes: u8.byteLength });
+function opusSandbox({ decodes, opusBytes, opusMeta, man }) {
+  const urls = [];
+  const mp3 = new Uint8Array(8);   // integrity(8) is the digest of eight zero bytes
+  const body = { "george.bin": mp3.buffer, "george.opus.bin": opusBytes.buffer };
+  class FakeOAC {
+    decodeAudioData(buf, ok, fail) {
+      const magic = String.fromCharCode(...new Uint8Array(buf, 0, 4));
+      const can = decodes.some((c) => ({ ogg: "OggS", webm: "\x1aE\xdf\xa3", caf: "caff" })[c] === magic);
+      queueMicrotask(() => (can ? ok({ length: 2880 }) : fail(new Error("EncodingError"))));
+    }
+  }
+  const pack = man || { binary: integrity(8), clips: { hello: [0, 8, 0.5] },
+    opus: { container: "ogg", file: "george.opus.bin", binary: opusMeta || digestOf(opusBytes), clips: { hello: [0, opusBytes.byteLength, 0.48] } } };
+  if (opusMeta === null) delete pack.opus.binary;
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    OfflineAudioContext: FakeOAC, atob: (s) => Buffer.from(s, "base64").toString("binary"), queueMicrotask,
+    GameAudio: { now: () => 0, ctxGen: () => 1, decodeClip: () => Promise.resolve({ duration: 0.5 }) },
+    fetch: (u) => { urls.push(u); const f = u.split("/").pop();
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(pack), arrayBuffer: () => Promise.resolve(body[f].slice(0)) }); },
+  });
+  return { sb, urls };
+}
+
+test("the Opus probe clips are real Ogg, WebM and CAF Opus files", () => {
+  const src = read("js/audio/voice-pack.js");
+  const b64 = (k) => Buffer.from(src.match(new RegExp(`\\b${k}: "([A-Za-z0-9+/=]+)"`))[1], "base64");
+  assert.equal(b64("ogg").subarray(0, 4).toString("latin1"), "OggS");
+  assert.ok(b64("ogg").includes(Buffer.from("OpusHead")), "an Ogg Opus stream");
+  assert.deepEqual([...b64("webm").subarray(0, 4)], [0x1a, 0x45, 0xdf, 0xa3], "an EBML (WebM) file");
+  assert.ok(b64("webm").includes(Buffer.from("A_OPUS")), "a WebM Opus track");
+  assert.equal(b64("caf").subarray(0, 4).toString("latin1"), "caff");
+  for (const k of ["ogg", "webm", "caf"]) assert.ok(b64(k).length < 1024, `${k} probe stays tiny`);
+});
+
+test("a browser that decodes Ogg Opus fetches the Opus twin and never the MP3", async () => {
+  const opus = new Uint8Array([79, 103, 103, 83, 9]);
+  const { sb, urls } = opusSandbox({ decodes: ["ogg", "webm"], opusBytes: opus });
+  assert.deepEqual(J(await sb.VoicePack.codecs()), { ogg: true, webm: true, caf: false });
+  const P = sb.VoicePack.create({});
+  assert.equal(await P.load("george"), true);
+  assert.deepEqual(urls.map((u) => u.split("/").pop()), ["george.json", "george.opus.bin"]);
+  assert.deepEqual(J(P.debug().formats), { george: { fmt: "opus-ogg", bytes: 5 } });
+  assert.equal(J(P.plan("george", "hello")).secs.toFixed(2), "0.48", "the twin's own clip table plans the line");
+});
+
+test("a browser that cannot decode Opus keeps today's parallel MP3 fetch", async () => {
+  const { sb, urls } = opusSandbox({ decodes: [], opusBytes: new Uint8Array([79, 103, 103, 83]) });
+  assert.deepEqual(J(await sb.VoicePack.codecs()), { ogg: false, webm: false, caf: false });
+  const P = sb.VoicePack.create({});
+  P.ensure("george");
+  assert.deepEqual(urls.map((u) => u.split("/").pop()).sort(), ["george.bin", "george.json"], "both requested at once, no twin");
+  assert.equal(await P.load("george"), true);
+  assert.equal(P.debug().formats.george.fmt, "mp3");
+});
+
+test("an Opus twin that fails its digest or lacks one falls back to the MP3, not to silence", async () => {
+  for (const meta of [{ sha256: "0".repeat(64), bytes: 4 }, null]) {
+    const { sb, urls } = opusSandbox({ decodes: ["ogg"], opusBytes: new Uint8Array([79, 103, 103, 83]), opusMeta: meta });
+    await sb.VoicePack.codecs();
+    const P = sb.VoicePack.create({});
+    assert.equal(await P.load("george"), true);
+    assert.equal(P.debug().formats.george.fmt, "mp3");
+    assert.deepEqual(urls.map((u) => u.split("/").pop()), ["george.json", "george.opus.bin", "george.bin"]);
+    assert.equal(J(P.plan("george", "hello")).secs.toFixed(2), "0.50", "MP3 offsets, not the twin's");
+  }
+});
+
+test("a twin naming an unknown container or a path is ignored", async () => {
+  for (const opus of [{ container: "mp4", file: "george.opus.bin" }, { container: "ogg", file: "../x.bin" }]) {
+    const man = { binary: integrity(8), clips: { hello: [0, 8, 0.5] }, opus: { ...opus, binary: integrity(4), clips: { hello: [0, 4, 0.4] } } };
+    const { sb, urls } = opusSandbox({ decodes: ["ogg", "webm", "caf"], opusBytes: new Uint8Array(4), man });
+    await sb.VoicePack.codecs();
+    const P = sb.VoicePack.create({});
+    assert.equal(await P.load("george"), true);
+    assert.equal(P.debug().formats.george.fmt, "mp3");
+    assert.ok(!urls.some((u) => u.includes("..") || u.endsWith("opus.bin")), urls.join());
   }
 });

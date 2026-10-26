@@ -40,12 +40,12 @@ function tlxLossVm(store, out) {
     document: { hidden: false, addEventListener() {}, removeEventListener() {}, getElementById: (id) => ({ id }) },
     _nowMs: () => 1e6, _shownAt: 0, _lossCounted: false,
     localStorage: { setItem() {}, removeItem() {} }, sessionStorage: ss,
-    _sessLostN: 0, _fallbackLossCount: () => 0, _rememberFallbackLoss: () => {},
     _glPin: "1", forceWebGL: true, _autoStayGL: false,
     setTimeout: (fn) => { timers.push(fn); }, location: { reload() { out.reloads.push(store["apex26.ctxLostNotice"] || null); } },
     recordGfxBudgetExhausted() {}, RendererPicker: { showUnavailable() {} }, window: { name: "" }, renderer: {},
     Log: { warn() {} },
   });
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   return { ctx, timers };
 }
 
@@ -116,13 +116,13 @@ test("lights-out and goRolling clear apex26.ctxLostReloads", () => {
   const game = read("js/game.js");
   const lights = game.indexOf('setState("race", feel.restartPending ? "restart-green" : "lights-out")');
   assert.ok(lights > 0);
-  assert.ok(game.slice(lights, lights + 220).includes('sessionStorage.removeItem("apex26.ctxLostReloads")'));
-  assert.ok(game.includes('goRolling: () => { if (state !== "count") return false; try { sessionStorage.removeItem("apex26.ctxLostReloads")'));
+  assert.ok(game.slice(lights, lights + 220).includes('GfxEscalation.resetReloadBudget()'));
+  assert.ok(game.includes('goRolling: () => { if (state !== "count") return false; GfxEscalation.resetReloadBudget()'));
 });
 
 test("endRace still clears apex26.ctxLostReloads (radio-voice pin)", () => {
   const game = read("js/game.js");
   const i = game.indexOf("function endRace(forcedOrder)");
   assert.ok(i >= 0);
-  assert.ok(game.slice(i, i + 400).includes('sessionStorage.removeItem("apex26.ctxLostReloads")'));
+  assert.ok(game.slice(i, i + 400).includes('GfxEscalation.resetReloadBudget()'));
 });

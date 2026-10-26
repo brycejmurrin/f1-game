@@ -1,0 +1,12 @@
+{
+  "pins": {
+    "js/lighting/frame-lights.js": {
+      "release": [
+        "tests/unit/frame-lights-release.test.mjs"
+      ],
+      "appendCarTailLights": [
+        "tests/unit/frame-lights-release.test.mjs"
+      ]
+    }
+  }
+}

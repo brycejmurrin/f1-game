@@ -783,6 +783,15 @@ const TrackBuildProps = (function () {
       addBox(o, vadd(top, rr, side * outM), headSz, headCol, b);
     };
     const overheadSpan = (spec) => models.overheadSpan(spec);
+    // Water finds its level at the LOCAL ground, not the lap's global low point.
+    // pyMin - 0.8 buried Eau Rouge's brook ~50 m under the valley floor (and every
+    // other elevated pond) while coastal sheets whose terrainY ≈ pyMin looked fine.
+    // Prefer terrainYAt at the sheet's XZ; fall back to the station's road height
+    // (waterSurface) or pyMin (waterEmit, far cells with no terrain hit).
+    const waterLevelY = (x, z, fallbackY) => {
+      const gy = terrainYAt(x, z);
+      return (gy != null ? gy : fallbackY) - 0.8;
+    };
     const waterSurface = (k, side, gap, sz, col, opts) => {
       opts = opts || {};
       if (!finiteVec(sz, 3, true)) {
@@ -791,7 +800,8 @@ const TrackBuildProps = (function () {
       }
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const o = side * (hw[k] + gap + sz[0] / 2);
-      const center = [px[k] + r[0] * o, pyMin - 0.8 - sz[1] / 2, pz[k] + r[2] * o];
+      const x = px[k] + r[0] * o, z = pz[k] + r[2] * o;
+      const center = [x, waterLevelY(x, z, py[k]) - sz[1] / 2, z];
       if (onTrack(center[0], center[2], sz[0] / 2 + 4)) {
         diagnostics.suppressed.push({ id: opts.id || "water", required: !!opts.required, reason: "footprint rejected" });
         return false;
@@ -855,7 +865,11 @@ const TrackBuildProps = (function () {
         let a = rows.get(iz); if (!a) rows.set(iz, a = []);
         a.push(ix);
       }
-      const y = pyMin - 0.82;   // 2 cm below prior sheet — overlapping bands z-fight less (S5/S7)
+      // Bands stay at the lap floor (pyMin - 0.82): coastal seas and river
+      // basins are authored as one flat plane, and per-cell terrainY raised
+      // montreal flatCoplanar 2→11. Hillside ponds use waterSurface (local).
+      // 2 cm below waterSurface's -0.8 so overlapping bands z-fight less (S5/S7).
+      const y = pyMin - 0.82;
       const vert0 = waterBuf.pos.length / 3;
       let placed = 0;
       for (const [iz, list] of rows) {
@@ -1365,11 +1379,7 @@ const TrackBuildProps = (function () {
       // semantic prop registry (see note() above) — scenery modules call this
       // after their own guards so only props that actually ship are recorded
       note, unnote, noteSpan, noteSuppressed,
-      kitOf: (family, fallback) => {
-        const D = TrackSceneryData.KIT_DEF || {};
-        const row = def.kit || D[theme] || D.green || {};
-        return row[family] || fallback;
-      },
+      kitOf: (family, fallback) => (def.kit || {})[family] || fallback,
     };
     Object.assign(ctx, SceneryNature.create(ctx));
     Object.assign(ctx, SceneryStructures.create(ctx));

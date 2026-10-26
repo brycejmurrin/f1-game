@@ -866,12 +866,17 @@ test("a CPU-bound device sheds features instead of looping on a scale lever that
   // dt responds to TIER but not to SCALE — the shape of a draw-call/CPU-bound
   // frame. Modelling a cost that responds to NEITHER would be the capped-clock
   // case above, where shedding nothing is the correct answer.
+  // 1500 frames, not 1200: past 1200 the 10 ms sawtooth reads as ±1 ms at the
+  // evaluation phase, and on the pre-floor-probe code a quantum probe kept on
+  // that noise walked the scale 0.707 -> 0.607 -> 0.5 by frame 1329. The probe
+  // must now buy back half the miss (A·W40), so the scale returns to 1.
   const { PerfGov, scale } = makeGov();
-  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 43 - PerfGov.tier() * 7), 1200);
+  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 43 - PerfGov.tier() * 7), 1500);
   assert.ok(PerfGov.tier() > 0,
     `the feature ladder must be reachable once the scale lever is proven useless, got tier ${PerfGov.tier()}`);
-  assert.ok(scale() > 0.5,
-    "and it must not have ground the resolution to the floor on the way there");
+  // 1e-6: the 0.1-step chain ends at 0.5000000000000001, which `> 0.5` let pass.
+  assert.ok(scale() > 0.5 + 1e-6,
+    `and it must not have ground the resolution to the floor on the way there (${scale()})`);
 });
 
 test("raising the GRAPHICS preset releases a shed the preset itself caused", () => {
@@ -1447,10 +1452,28 @@ test("replay Eq/Eq2: a vsync-quantised fill-bound phone crosses to 60 fps (was s
     assert.ok(r.floor < 17.5 && r.ema < 18, `settles on the 16.7 ms quantum (c=${c}: ${JSON.stringify(r)})`);
     assert.ok(r.scale >= 0.6 && r.scale < 1, `at a scale that holds 60 (c=${c}: ${r.scale})`);
     assert.equal(r.tier, 0, "resolution alone accounts for it");
-    // Bounded: settled within three moves, then the ceiling's designed
-    // re-measure (30 s, then the doubling refused-climb patience).
-    assert.ok(r.moves <= 10, `bounded moves (c=${c}: ${r.moves})`);
+    // Bounded: settled within five moves, then the ceiling's designed
+    // re-measure (30 s, then the doubling refused-climb patience). Was <= 10
+    // while the probe stopped at half the pixels (9 moves); the probe now goes
+    // to the 0.5 floor and the verified climb takes two more moves back up.
+    assert.ok(r.moves <= 12, `bounded moves (c=${c}: ${r.moves})`);
     assert.ok(r.slowShare < 0.15, `after 10 s, under 15 % of wall time at 30 fps (c=${c}: ${r.slowShare.toFixed(3)})`);
+  }
+});
+
+test("replay Eq4: a fill-bound phone that half the pixels cannot cross still reaches 60 fps (was scale 1, floor 33.3)", () => {
+  // 40 % fixed cost: at c = 24-30 ms the half-pixel probe (0.707) still costs
+  // over 16.7 ms and presents at 33.3, so the old probe declared the lever
+  // futile and the phone sat at 30 fps where 0.5-0.7 holds 60. Each case must
+  // settle at a scale within one climb step of the best one that holds 60.
+  for (const c of [24, 26, 28, 30]) {
+    const best = [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5].find((s) => fill(c)(s) <= 16.667);
+    const r = replay("off", quantised(fill(c)), 7200);
+    assert.ok(r.floor < 17.5, `settles on the 16.7 ms quantum (c=${c}: ${JSON.stringify(r)})`);
+    assert.ok(fill(c)(r.scale) <= 16.667 && r.scale >= best - 0.1, `holds 60 near the best scale ${best} (c=${c}: ${r.scale})`);
+    assert.equal(r.tier, 0, "resolution alone accounts for it");
+    assert.ok(r.moves <= 12, `bounded moves (c=${c}: ${r.moves})`);
+    assert.ok(r.slowShare < 0.2, `after 10 s, under 20 % of wall time at 30 fps (c=${c}: ${r.slowShare.toFixed(3)})`);
   }
 });
 
@@ -1535,4 +1558,10 @@ test("without RenderRate the drift response is the governor rung, unchanged", ()
   assert.ok(PerfGov.thermalDrift().steps > 0, `a drift step must land (ticks used: ${used})`);
   assert.ok(scale() < 1 || PerfGov.autoShed() > 0, "driftStep's rung moved, exactly the pre-wiring behaviour");
   delete globalThis.RenderRate; delete globalThis.ThermalDrift;
+});
+
+test("software garage preview sheds render scale on SwiftShader and restores", () => {
+  assert.match(SRC, /softwareGaragePreviewBegin\(gfx\)/);
+  assert.match(SRC, /softwareGaragePreviewEnd\(gfx\)/);
+  assert.match(SRC, /if \(cur > 0\.55\) \{ _swGarageScaleSaved = cur; gfx\.setRenderScale\(0\.55\); \}/);
 });

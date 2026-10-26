@@ -439,6 +439,37 @@ test("stageTable and diffStages summarise span legs for probes", () => {
   assert.ok(diff.rows.some((r) => r.n === "awaitIntroWarm" && r.deltaMs > 900));
 });
 
+test("nested spans report selfMs: gridCountdown minus the car warm it encloses (#3674)", () => {
+  const P = load({ performance: { now: () => 0 } });
+  // startRaceBody's shape, measured on the Monza night cold entry: grid encloses the car warm and debris prime.
+  const marks = [[0, "gridCountdown:start"], [22, "warmCarAssets:start"], [3934, "warmCarAssets:end"],
+    [3934, "debrisPrime:start"], [3936, "debrisPrime:end"], [3936, "gridCountdown:end"],
+    [3940, "mirrorPrepare:start"], [3941, "programWarm:start"], [3960, "programWarm:end"], [3962, "mirrorPrepare:end"],
+    [3970, "open:start"]].map(([t, n]) => ({ n, t }));
+  const rows = P.stagesFromSnapshot({ legs: [{ n: "loadTrack", ms: 5 }], marks });
+  const row = (n) => rows.find((r) => r.n === n);
+  assert.equal(row("gridCountdown").ms, 3936);
+  assert.equal(row("gridCountdown").selfMs, 22, "the grid's own work, not the car warm again");
+  assert.equal(row("warmCarAssets").selfMs, 3912);
+  assert.equal(row("mirrorPrepare").selfMs, 3);
+  assert.equal(row("programWarm").selfMs, 19);
+  assert.equal(row("open").selfMs, undefined, "an open span has no self time");
+  assert.equal(row("loadTrack").selfMs, undefined, "legs are sequential already");
+  const sum = rows.filter((r) => r.selfMs != null).reduce((s, r) => s + r.selfMs, 0);
+  assert.equal(sum, 3936 + 22, "selfMs sums to the covered time, counted once");
+});
+
+test("software GL reports span starts to the progress sink", () => {
+  let t = 0;
+  const labels = [];
+  const P = load({ performance: { now: () => t }, PerfGov: { softwareRaster: () => true } });
+  P.beginUi("race");
+  P.setProgressSink((label) => labels.push(label));
+  P.mark("introPrepare:start");
+  P.mark("introPrepare:end");
+  assert.deepEqual(labels, ["Prepare", "Prepare"]);
+});
+
 test("introBudgetExpired fires after the soft budget elapses", () => {
   let t = 0;
   const P = load({ performance: { now: () => t }, PerfGov: { softwareRaster: () => true } });

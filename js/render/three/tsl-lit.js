@@ -137,9 +137,9 @@
     //    the mobile tier never compiles them, mirroring GLX's always-bound-
     // texture trick without needing dummy bindings.
     const SHD = (ctx.shadow && ctx.shadow.S) ? ctx.shadow : null;
-    // M8: the offscreen HDR target exists — write the SSR car-paint tag into
-    // alpha (js/render/glx/shaders/glsl-lit.js). False (no post chain) keeps the M3 behaviour:
-    // the canvas is the target and a 0.35 alpha would ghost the cars.
+    // M8: capability to emit SSR receiver tags on a separate MRT attachment.
+    // Independent of initial post success: retry may create that target later.
+    // setSsrMrt arms compatible passes only; canvas alpha remains real opacity.
     const SSR_TAG = !!ctx.ssrTag;
     // M9: the live env-probe cube (tlx.js CubeRenderTarget.texture), bound at
     // factory time. Null (no probe target) keeps the analytic-gradient mirror
@@ -538,9 +538,13 @@
       return a2.div(max(d.mul(d).mul(PI), 1e-6));
     };
     // Height-correlated Smith visibility (folds in 1/(4 NoL NoV)).
-    const V_SmithGGX = (NoV, NoL, a) => {
+    const smithViewRoot = (NoV, a) => {
       const a2 = a.mul(a);
-      const gv = NoL.mul(sqrt(NoV.mul(NoV).mul(a2.oneMinus()).add(a2)));
+      return sqrt(NoV.mul(NoV).mul(a2.oneMinus()).add(a2));
+    };
+    const V_SmithGGX = (NoV, NoL, a, viewRoot) => {
+      const a2 = a.mul(a);
+      const gv = NoL.mul(viewRoot || sqrt(NoV.mul(NoV).mul(a2.oneMinus()).add(a2)));
       const gl = NoV.mul(sqrt(NoL.mul(NoL).mul(a2.oneMinus()).add(a2)));
       return float(0.5).div(max(gv.add(gl), 1e-5));
     };
@@ -915,8 +919,14 @@
      * plus its tile indirection (NEAREST), each swapped into ONE texture node —
      * the node, not the texture, is what the graph holds, so a new track never
      * mints a program. 1x1 black placeholders until the first bake; bakeOn
-     * gates the term either way. */
+     * gates the term either way. Each placeholder carries its real texture's
+     * FILTER: TSL emits textureLoad for a NEAREST float texture and
+     * textureSampleLevel for a LINEAR one, so a page that builds its programs
+     * before the first bake (a day race) and one that builds them after (a
+     * night race) otherwise write different WGSL for the same graph — every
+     * lit pipeline missed Safari's pipeline cache on the first night race. */
     const _bakeBlank = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType);
+    _bakeBlank.minFilter = _bakeBlank.magFilter = THREE.LinearFilter;
     _bakeBlank.needsUpdate = true;
     const _bakeIdxBlank = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType);
     _bakeIdxBlank.minFilter = _bakeIdxBlank.magFilter = THREE.NearestFilter;
@@ -1309,7 +1319,7 @@
     // array reads a constant (0,0,0), which a node material cannot express.
     // Cost: one extra program. INVARIANT: a chunked mesh must only ever be
     // drawn through drawChunked/castShadowChunked (it is — js/game.js,4810).
-    function buildFragment(matU, chunked, instanced) {
+    function buildFragment(matU, chunked, instanced, fx) {
       return Fn(() => {
         // STANDING-RULE ANCHORS: unconditional Fn-body .toVar() on every
         // shared varying-derived node BEFORE any conditional use.
@@ -1947,6 +1957,11 @@
         // compile-time constant — and breaks on whichever count applies.
         // The chunk's list is nearest-first (LampChunks), so min(n, lampCap) keeps its nearest lamps.
         const lampN = PC ? select(PC.use, min(PC.n, U.lampCap), U.numLights) : U.numLights;
+        // NoV and final wet roughness stay fixed across lamps. Negative sentinels
+        // defer each positive root until its first accepted specular contribution;
+        // zero lamps, rejected lamps and inactive clearcoat do no extra root work.
+        const lampViewRoot = float(-1.0).toVar();
+        const lampCoatViewRoot = float(-1.0).toVar();
 
         Loop({ start: int(0), end: int(MAX_LIGHTS), type: "int", condition: "<" }, ({ i }) => {
           If(float(i).greaterThanEqual(lampN), () => { Break(); });
@@ -2029,18 +2044,24 @@
               });
               // GGX + clearcoat lamp speculars, NoLl-gated (js/render/glx/shaders/glsl-lit.js)
               If(NoLl.greaterThan(0.0), () => {
+                If(lampViewRoot.lessThan(0.0), () => {
+                  lampViewRoot.assign(smithViewRoot(NoV, a));
+                });
                 const Hl = normalize(Ld.add(V));
                 const NoHl = max(dot(N, Hl), 0.0).toVar();
                 const VoHl = max(dot(V, Hl), 0.0).toVar();
                 const Dl = D_GGX(NoHl, a);
-                const Vl = V_SmithGGX(NoV, NoLl, a);
+                const Vl = V_SmithGGX(NoV, NoLl, a, lampViewRoot);
                 const Fll = F_Schlick(VoHl, f0, clamp(rough.oneMinus(), 0.0, 1.0));
                 const radianceS = lCol.mul(att.mul(spotS).mul(lampSh)).toVar();
                 const lspec = Fll.mul(Dl.mul(Vl)).mul(radianceS).mul(NoLl).toVar();
                 color.addAssign(lspec.div(lspec.add(1.0)));                     // soft-clip
                 If(clearcoat.greaterThan(0.001), () => {
+                  If(lampCoatViewRoot.lessThan(0.0), () => {
+                    lampCoatViewRoot.assign(smithViewRoot(NoV, float(0.01)));
+                  });
                   const Dcc = D_GGX(NoHl, float(0.03));
-                  const Vcc = V_SmithGGX(NoV, NoLl, float(0.01));
+                  const Vcc = V_SmithGGX(NoV, NoLl, float(0.01), lampCoatViewRoot);
                   const Fcc = F_Schlick(VoHl, vec3(0.05), float(1.0)).x;
                   const ccl = radianceS.mul(Dcc.mul(Vcc).mul(Fcc)).mul(NoLl).mul(clearcoat).toVar();
                   color.addAssign(ccl.mul(2.2).div(ccl.add(2.2)));              // 2.2 HDR shoulder
@@ -2258,7 +2279,11 @@
         });
         // END EXPANDED FINISHES
         // FINISH TINTS 60-85 (mirrors glsl-lit.js: geometric-normal angles, crease mask, footprint-faded cells).
-        If(matU.carFinish.greaterThan(0.5).and(finishId.greaterThanEqual(60.0)).and(finishId.lessThanEqual(85.0)), () => {   // carFinish draws only
+        // FINISHES ON DEMAND (Bryce 2026-10-23): built only into the `fx` graph, which tlx.js picks for a carFinish
+        // draw whose geometry carries an id in 60-85 (buildGeometry tlxFx). It is ~12 % of every lit pipeline's
+        // compile (the cold first-race warm census, PR #3653), paid on a cold first race whether or not a car
+        // on the grid wore one of these finishes.
+        if (fx) If(matU.carFinish.greaterThan(0.5).and(finishId.greaterThanEqual(60.0)).and(finishId.lessThanEqual(85.0)), () => {   // carFinish draws only
           // Snapshot once with toVar(): a bare node is inlined and cached by TSL, so later branches read a stale (zero) value
           // (pearlwhite / silverfade / alubare rendered black on TLX while GLX was right, 2026-10-19).
           const pvHue = albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)).toVar();
@@ -2614,7 +2639,7 @@
       });
       return { draw, pA, pB };
     }
-    const _sharedGraph = [null, null, null]; // [plain, chunked, instanced]
+    const _sharedGraph = [null, null, null, null, null, null]; // [plain, chunked, instanced] x [base, fx]
     // The receiver lives in attachment R, not scene alpha. Keeping only A on
     // translucent/noAlphaWrite materials does not protect this metadata.
     const _tagKeep = {
@@ -2625,8 +2650,8 @@
     };
     const _mats = [];
     let _sharedPos = null;
-    function sharedFragment(chunked, instanced) {
-      const idx = instanced ? 2 : (chunked ? 1 : 0);
+    function sharedFragment(chunked, instanced, fx) {
+      const idx = (instanced ? 2 : (chunked ? 1 : 0)) + (fx ? 3 : 0);
       let g = _sharedGraph[idx];
       if (!g) {
         // The seven per-MATERIAL scalars ride two packed vec4s (makeMaterial
@@ -2639,7 +2664,7 @@
         matU.roughness = pA.x; matU.metalness = pA.y;
         matU.specular = pA.z;  matU.detail = pA.w;
         matU.clearcoat = pB.x; matU.carPaint = pB.y; matU.sparkle = pB.z; matU.carFinish = pB.w;
-        const packed = buildFragment(matU, chunked, instanced);
+        const packed = buildFragment(matU, chunked, instanced, fx);
         // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
         // fresh wrapper is a fresh cache key — the whole point is one graph.
         // `opacity` is the REAL material alpha (never the 0.35 SSR tag).
@@ -2686,8 +2711,9 @@
       ud.tlxPackB = new THREE.Vector4(ud.tlxClearcoat, ud.tlxCarPaint, ud.tlxSparkle, o.carFinish ? 1 : 0);
       ud.tlxChunked   = !!o.chunked;
       ud.tlxInstanced = !!o.instanced;
+      ud.tlxFx = !!o.finishX && !o.chunked;   // finishes on demand: the 60-85 tint graph (tlx.js materialFor fx)
       ud.tlxKeepSsrTag = alpha < 1 || !!o.noAlphaWrite;
-      const packed = sharedFragment(!!o.chunked, !!o.instanced);
+      const packed = sharedFragment(!!o.chunked, !!o.instanced, ud.tlxFx);
       _mats.push(m);
       m.colorNode = packed.rgb;
       // Coverage only. packed.a is the SSR tag (0.35 on paint) — putting it
@@ -2695,7 +2721,7 @@
       m.opacityNode = packed.opacity;
       m.outputNode = packed.out;
       m.positionNode = _sharedPos || (_sharedPos = vertexMotionNode());
-      pinProgram(m, o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit"));
+      pinProgram(m, (o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit")) + (ud.tlxFx ? "-fx" : ""));
       m.transparent = alpha < 1;
       // GLX: draw() -> depthMask(alpha>=1); drawChunked() -> depthMask(true).
       m.depthWrite = o.chunked ? true : alpha >= 1;
@@ -2821,7 +2847,7 @@
       if (!SSR_TAG) return;
       for (let i = 0; i < _mats.length; i++) {
         const m = _mats[i];
-        const g = sharedFragment(!!m.userData.tlxChunked, !!m.userData.tlxInstanced);
+        const g = sharedFragment(!!m.userData.tlxChunked, !!m.userData.tlxInstanced, !!m.userData.tlxFx);
         m.mrtNode = on ? (m.userData.tlxKeepSsrTag ? g.mrtKeep : g.mrt) : null;
       }
     }

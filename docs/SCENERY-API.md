@@ -10,7 +10,7 @@ contract** — `tests/unit/scenery-api-contract.test.mjs` fails on any rename/re
 because every circuit callback destructures from it. Everything emits
 flat-shaded geometry into the track's prop mesh.
 
-The per-circuit visual targets are the briefs in [docs/tracks/](tracks/); this
+The per-circuit visual targets are the briefs in [docs/tracks/](tracks); this
 is the toolkit for building them. Verify with the `__apex.view` survey camera —
 see [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
 
@@ -22,7 +22,7 @@ see [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
 > (tree species + lamp), `kit` (barrier/signage/marshal families, read through
 > `api.kitOf`), `standSet` (grandstand livery rotation) and `cityStyle` (the
 > city generator's palette — `neon` / `dayPal` are NAMES into
-> `TrackSceneryData.NC` / `.DC`). The generic fallbacks (`FURN_DEF`, `KIT_DEF`,
+> `TrackSceneryData.NC` / `.DC`). The generic fallbacks (`FURN_DEF`,
 > `THEME_DEF`, `STAND_SET_DEF`, the colour packs) stay in
 > `js/track/scenery/data.js`; the generators (`neonTower`, `streetLamp`, …) are
 > in `js/track/scenery/city.js`, `conifer` and the rest of the flora in

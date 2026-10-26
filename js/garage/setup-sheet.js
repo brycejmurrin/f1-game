@@ -1628,23 +1628,26 @@ window.addEventListener("keydown", (e) => {
   e.stopPropagation();
   cancel.click();
 }, true);
-// CLOSE GARAGE is the other door out of an edited design: BACK (game.js garageBack)
-// hides #carsetup, and discardLivDraft() above threw the edits away unasked. Same
-// arm-then-confirm as CANCEL: the first tap on BACK with unsaved edits only arms
-// it (capture phase, so garageBack never runs); the confirming tap falls through.
+// Both footer routes hide #carsetup: DONE is the visible exit for ordinary visits,
+// while RACE SETUP also offers BACK. Guard before either navigation handler runs.
 {
-  const back = $("cs-back");
-  if (back) back.addEventListener("click", (e) => {
-    const armedNow = back.dataset.armed;
-    if (!armedNow && csLivCreating && csLivDirty && csLivDirty()) {
-      e.stopImmediatePropagation();
-      back.dataset.label = back.textContent;
-      G.armConfirm(back, "DISCARD EDITS?", () => {});
-    } else if (armedNow) {
-      G.armConfirm(back, "", () => {});
-      back.textContent = back.dataset.label || "BACK"; delete back.dataset.label;
-    }
-  }, true);
+  for (const [id, button] of [["cs-back", $("cs-back")], ["cs-done", $("cs-done")]]) {
+    let armedDraft = null;
+    const disarm = () => {
+      G.armConfirm(button, "", () => {});
+      if (button.textContent === "DISCARD EDITS?") button.textContent = button.dataset.label || (id === "cs-back" ? "BACK" : "DONE");
+      delete button.dataset.label; armedDraft = null;
+    };
+    if (button) button.addEventListener("click", (e) => {
+      if (button.dataset.armed && armedDraft !== csLivDraft) disarm();
+      if (!button.dataset.armed && csLivCreating && csLivDirty && csLivDirty()) {
+        e.stopImmediatePropagation();
+        armedDraft = csLivDraft;
+        button.dataset.label = button.textContent;
+        G.armConfirm(button, "DISCARD EDITS?", () => {});
+      } else if (button.dataset.armed) disarm();
+    }, true);
+  }
 }
 // lookRowSpecs: Photo Studio's garage visit offers the same rows (js/ui/photo-studio.js deps.garage.looks).
 return { buildSetup, openSetup, lookRowSpecs };

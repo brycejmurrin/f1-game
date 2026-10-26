@@ -21,6 +21,9 @@
  * identifier and shape, never by exact whitespace, argument order or comment
  * text. Remaining pin count: see tests/unit/assert-match-ratchet.test.mjs.
  *
+ * Tier-4 / stall-watchdog shed (bloom off, doBloom false): software GL composite
+ * flare, exposure and drawGlow knees in post.js / glx.js — pinned in one test.
+ *
  * Run: node --test tests/unit/gfx-backend-canary.test.mjs
  */
 import { readCssSource } from "../helpers/css-source.mjs";
@@ -39,7 +42,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx, recordingOverlay } from "../helpers/glx-mock.mjs";
-import { gameSource } from "../helpers/game-source.mjs";
+import { gameSource, GAME_REL } from "../helpers/game-source.mjs";
 import { bootRendererBoot } from "../helpers/renderer-boot-vm.mjs";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -47,7 +50,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readFile = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 // These guards span boot and frame-loop ownership; load the extracted owners explicitly.
-const read = (p) => p === "js/game.js"
+const read = (p) => p === GAME_REL
   ? ["js/render/renderer-boot.js", "js/core/lazy-bundles.js", "js/ui/platform-session.js", p].map(readFile).join("\n")
   : readFile(p);
 // Comment-stripped source: a pin can only match code, and a comment can
@@ -164,6 +167,7 @@ test("renderer-picker readBackend is Three.js when unset and preserves explicit 
     });
     seedLog(ctx);
     seedStore(ctx);
+    vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
     vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
     const G = vm.runInContext("RendererPicker", ctx);
     assert.equal(G.readBackend(), expected, `stored ${stored} resolves to ${expected}`);
@@ -509,9 +513,6 @@ test("TLX past ctx-loss budget records ring only, not the full-screen error over
       _shownAt: 0,
       localStorage: { setItem() {}, removeItem() {} },
       sessionStorage: ss,
-      _sessLostN: 0,
-      _fallbackLossCount: () => 0,
-      _rememberFallbackLoss: () => {},
       _glPin: "1",
       forceWebGL: true,
       _autoStayGL: false,
@@ -526,6 +527,7 @@ test("TLX past ctx-loss budget records ring only, not the full-screen error over
       },
     });
     ctx.document.getElementById = (id) => ({ id });
+    vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
     return { ctx, ring, overlays };
   };
 
@@ -579,7 +581,9 @@ test("race-start render fail-fasts on backendState.ctxLost (drops handoff)", () 
   assert.match(src, /gfxContextLost\(\)[\s\S]{0,250}?loadingScreen\.phase\(\) === "handoff"/);
   assert.match(code("js/perf/race-entry-profile.js"), /handoff:lower-lost/);
   const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("const sessionEntry = SessionEntry.create();"));
-  assert.match(body, /loadTrackStepped\(trackIdx, \(\) => !stale\(\) && !gfxContextLost\(\)\)/,
+  assert.ok(body.includes("await raceTrackStepped(trackIdx, stale)"), "the paced load goes through raceTrackStepped (#3571)");
+  const paced = src.slice(src.indexOf("async function raceTrackStepped("), src.indexOf("function loadTrack(idx)"));
+  assert.match(paced, /loadTrackStepped\(idx, \(\) => !stale\(\) && !gfxContextLost\(\)\)/,
     "paced load aborts mid-step when its entry is stale or its context is lost");
   assert.match(body, /await yieldMain\(\);[\s\S]{0,80}?if \(gfxContextLost\(\)\)/,
     "fail-closed covers the scheduler.yield gaps between paced startRaceBody legs");
@@ -686,7 +690,7 @@ test("TLX frame uniforms share one render-group buffer (setGroup loop after the 
 test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
   const fx = read("js/render/three/tsl-fx.js");
   const start = fx.indexOf("if (decalCache.size >= DECAL_CACHE_CAP)");
-  const evict = fx.slice(start, fx.indexOf("m = fxMaterial({ doubleSided: true, key: \"tlx-fx-decal-\"", start));
+  const evict = fx.slice(start, fx.indexOf("m = fxMaterial({ doubleSided: true, key: \"tlx-fx-decal\" })", start));
   assert.match(evict, /decalCache\.delete\(k\)/);
   const code = evict.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
   assert.doesNotMatch(code, /\.dispose\s*\(/);
@@ -696,12 +700,14 @@ test("TLX decal programs share a material map reference, not the first car's tex
   const fx = read("js/render/three/tsl-fx.js");
   assert.match(fx, /materialReference\("map", "texture"\)/);
   assert.match(fx, /m\.map = tex/);
-  // One graph PER GLOW VALUE, not one shared graph: a TSL uniform node lives in
-  // the shared graph, so a single per-draw uniform would retroactively restyle
-  // every decal material already built from it (2026-09 survey, `_decalGraph` in tsl-fx.js).
-  // decalCache and the program key are already keyed per glow; the graph now is too.
-  assert.match(fx, /const _decalGraph = new Map\(\)/);
-  assert.match(fx, /_decalGraph\.get\(glow\)/);
+  // ONE graph, the glow a PER-MATERIAL reference (A·W14). A shared uniform() node
+  // would restyle every decal material built from the graph (2026-09 survey); a
+  // materialReference reads each material's own tlxGlow into the object
+  // uniform block, so the values stay per material and one program serves them all.
+  assert.ok(fx.includes('materialReference("tlxGlow", "float")'), "the glow is read per material");
+  assert.ok(fx.includes("m.tlxGlow = glow;"), "each decal material carries its own glow");
+  assert.ok(fx.includes('key: "tlx-fx-decal" })'), "one program key for every glow");
+  assert.ok(!/uniform\(\s*glow/.test(fx), "never a shared uniform() for the glow");
   assert.doesNotMatch(fx, /const smp = texture\(tex\)/,
     "a per-texture node cannot sit behind the shared tlx-fx-decal program key");
 });
@@ -875,6 +881,7 @@ test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgp
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
   seedLog(ctx);
   seedStore(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   assert.equal(G.nextBackend("webgl2"), "three");
@@ -938,6 +945,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: ls, sessionStorage: ss });
   seedLog(ctx);
   seedStore(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   // Frozen deepEqual, not spot includes(): a round-6 audit found 7 of 12 keys
@@ -1198,6 +1206,7 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
   });
   seedLog(ctx);
   seedStore(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   G.init();
@@ -2210,6 +2219,7 @@ function bootPicker(opts) {
   });
   seedLog(ctx);
   seedStore(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   // readyState is "complete", so the IIFE already called init().
@@ -2437,6 +2447,7 @@ test("terminal graphics recovery works before the late menu wiring", async () =>
     DataHub: { open() { dataOpens++; dataDialog.hidden = false; } },
   });
   seedClipboard(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(read("js/perf/renderer-picker.js"), ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   ctx.RendererPicker = vm.runInContext("RendererPicker", ctx);
   vm.runInContext(src.slice(from, to) + "\nglobalThis.__showGraphicsUnavailable = showGraphicsUnavailable;", ctx);
@@ -2618,6 +2629,7 @@ test("presentStatus names the three screenshot paths in plain language", () => {
     sessionStorage: makeStorage(),
   });
   seedStore(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   assert.match(G.presentStatus(), /native swapchain/);
@@ -2746,9 +2758,12 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
   // MDN: one context type per canvas for life. three r185.1 configure() is
   // lazy on first present(); sniffing WebGL2 on #game after init() made
   // getContext("webgpu") return null (mcp-probe 2026-08-18).
-  assert.match(tlx, /softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(\s*\)\s*:\s*!!\s*_softAdapter\b/);
+  assert.ok(tlx.includes("const softwareGL = !!_softAdapter")
+    && tlx.includes("renderer.backend && renderer.backend.isWebGLBackend")
+    && tlx.includes("detectSoftwareGL()"),
+    "WebGL2 backend classifies from renderer string, not adapter sniff alone (#3601)");
   const initAt = tlx.search(/await\s+renderer\.init\(\s*\)/);
-  const sniffAt = tlx.search(/softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(/);
+  const sniffAt = tlx.search(/const softwareGL = !!_softAdapter/);
   assert.ok(initAt > 0 && sniffAt > initAt, "software sniff stays after init");
   assert.match(tlx, /getContext\("webgpu"\)===null/);
 });
@@ -2887,7 +2902,7 @@ test("TextureNode clones share the BASE node's flipY / uv-matrix uniforms (PATCH
 
 test("shadow-bug batch: lamp/car targets warmed, caster key from the cast matrix, thrown-pass recovery", () => {
   const sh = code("js/render/three/tlx-shadow.js");
-  const warm = sh.slice(sh.indexOf("async warm()"), sh.indexOf("async warm()") + 1200);
+  const warm = sh.slice(sh.indexOf("async warm(sources)"), sh.indexOf("async warm(sources)") + 1500);
   assert.match(warm, /for \(const rt of \[lampRT, lampStaticRT, carRT\]\)/, "warm() must compile the lamp/car targets' pipelines too");
   assert.match(sh, /_lampStaticValid = _lastPassOk;/, "lampStaticEnd judges its own render, not the sticky S.enabled");
   const begin = fnBody(sh, "beginPass");
@@ -2985,6 +3000,36 @@ test("the vendored three keys WebGPU pipelines on polygonOffset (patch 3 retired
   assert.match(THREE_BUNDLE, /\.polygonOffset===(\w+)\.polygonOffset&&\w+\.polygonOffsetFactor===\1\.polygonOffsetFactor&&\w+\.polygonOffsetUnits===\1\.polygonOffsetUnits/,
     "needsRenderUpdate does not compare polygonOffset* (PATCHES.md §3)");
 });
+test("WebGPU beginRender honours the single-sample discard hint, storeOp only (PATCHES.md §17)", () => {
+  // TLX sets rt.apexDiscardColor (bit i = colour attachment i) / rt.apexDiscardDepth
+  // around the last render of a frame into a write-only target (tlx-post.js A-P2W).
+  // Pristine r186 stores every single-sample attachment; a re-drop without the
+  // patch silently stores them again, so the WebGPU leg loses the bandwidth.
+  // One ordered pin over the three edits (hint read → colour storeOp → depth storeOp), so the
+  // tree-wide source-pin ratchet pays one site, not three.
+  assert.match(THREE_BUNDLE, /\w+=\w+\?0\|\w+\.apexDiscardColor:0,\w+=!!\w+&&!0===\w+\.apexDiscardDepth[^]*?\.storeOp=\w+\|\|1==\(\w+>>\w+&1\)\?\w+:\w+[^]*?\.depthStoreOp=\w+\|\|\w+\?\w+:\w+/,
+    "beginRender no longer reads the apexDiscard* hint into the colour / depth storeOp (vendor/three-0.186.1/PATCHES.md §17)");
+  // Never the loadOp: a discarded attachment must still load/clear exactly as before.
+  assert.doesNotMatch(THREE_BUNDLE, /apexDiscard\w*\?\w+:\w+\)?,?\w*\.?loadOp/,
+    "the hint leaked into a loadOp (PATCHES.md §17)");
+});
+test("the WGSL builder gives a 3-component colour target a vec4 output (PATCHES.md §18)", async () => {
+  // rg11b10ufloat (RGBFormat) would otherwise get a vec3 @location, and WebGPU refuses every
+  // source-alpha blend factor against it: every blended material's pipeline fails (#3690).
+  // Behaviour, not a source pin: the real builders, answering for a real RGB render target.
+  const T = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
+  const rt = new T.RenderTarget(4, 4, { format: T.RGBFormat, type: T.UnsignedInt101111Type });
+  const renderer = { getRenderTarget: () => rt };
+  const wgsl = Object.assign(Object.create(T.WGSLNodeBuilder.prototype), { renderer });
+  const glsl = Object.assign(Object.create(T.GLSLNodeBuilder.prototype), { renderer });
+  assert.equal(T.NodeBuilder.prototype.getOutputType.call(wgsl), "vec3", "the base rule still sizes an RGB target to 3");
+  assert.equal(wgsl.getOutputType(), "vec4", "WGSLNodeBuilder.getOutputType no longer widens vec3 (vendor/three-0.186.1/PATCHES.md §18)");
+  assert.equal(glsl.getOutputType(), "vec3", "GLSL is untouched (WebGL2 has no blend-vs-arity rule)");
+  rt.texture.format = T.RGBAFormat;
+  assert.equal(wgsl.getOutputType(), "vec4", "an RGBA target is unchanged");
+  rt.texture.format = T.RedFormat;
+  assert.equal(wgsl.getOutputType(), "float", "only vec3 widens: a 1-channel target keeps float");
+});
 test("the vendored three matches its MANIFEST.json — generated by tools/gen/vendor-three.mjs, never hand-edited", () => {
   // The .min.js files are terser output of the PATCHED readable build; a hand
   // edit or a re-drop that skipped the generator changes a hash. The pinned
@@ -2993,7 +3038,7 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   const dir = "vendor/three-0.186.1";
   const m = JSON.parse(read(`${dir}/MANIFEST.json`));
   assert.equal(m.three, "0.186.1");
-  assert.deepEqual(m.patches, [1, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16], "patch ids applied (2 and 3 retired in r186; 15 frees the WebGL fallback's GL programs, shaders and VAOs (#2651); 7 and 8 were #228's reverted skip-draw pair; 11 and 12 are the TLX-PERF-HUNT D3 / A2 pair; 13 is PERF-HUNT-3 B14; 14 handles rejected pipeline scopes/diagnostics)");
+  assert.deepEqual(m.patches, [1, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], "patch ids applied (2 and 3 retired in r186; 17 is the single-sample storeOp discard hint (#3681); 18 widens a vec3 WGSL colour output to vec4 (#3690); 19 skips repeated shared binding-group checks and 20 keeps opted-in Uint16 indices (#3692); 15 frees the WebGL fallback's GL programs, shaders and VAOs (#2651); 7 and 8 were #228's reverted skip-draw pair; 11 and 12 are the TLX-PERF-HUNT D3 / A2 pair; 13 is PERF-HUNT-3 B14; 14 handles rejected pipeline scopes/diagnostics)");
   // §13: a shared group's cache key names texture bindings (node id + binding name), and texture clones keep their group.
   assert.match(THREE_BUNDLE, /\?"s":"t"\)\+\(\w+\.textureNode\?\w+\.textureNode\.id:""\)\+":"\+\w+\.name\+","/, "shared-group key for texture / sampler bindings (PATCHES.md §13)");
   assert.match(THREE_BUNDLE, /\.groupNode=this\.groupNode/, "TextureNode.clone() keeps the group (PATCHES.md §13)");
@@ -3355,26 +3400,19 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // device-wide. TLX sniffs the adapter (info fields are not JSON-
   // enumerable), keeps #game as the GPU canvas, and blits onto #game-soft.
   const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(src, /navigator\.gpu\.requestAdapter\(\)/,
-    "soft-adapter sniff must use requestAdapter — getContext('webgl2') is null after WebGPU claims the canvas");
-  assert.match(src, /info\.vendor/,
-    "adapter.info fields are not enumerable — read vendor/device/architecture directly");
-  assert.match(src, /swiftshader\|llvmpipe\|lavapipe\|microsoft basic render\|soft/,
-    "sniff regex must match WGX's software-adapter list");
-  assert.match(src, /apex26\.wgxCapture/,
-    "sessionStorage apex26.wgxCapture=1 must force the blit (gfx-probe --tlx-webgpu)");
-  assert.match(src, /game-soft/,
-    "#game stays the GPU canvas; visible present is the #game-soft sibling");
-  assert.match(src, /_displayCanvas\.getContext\("2d"/,
-    "soft-present overlay is a 2D sibling — never getContext(2d) on #game");
-  assert.match(src, /softDest:\s*(?:function\s*\(\s*\)\s*\{\s*return|\(\s*\)\s*=>)\s*softOutRT\b/,
-    "post chain must receive softDest so FXAA never targets the swapchain");
-  assert.match(src, /awaitSoftPresent/,
-    "backend must expose awaitSoftPresent (copied onto GLX by game.js)");
-  assert.match(src, /capturePixels/,
-    "backend must expose capturePixels for gfx-probe frame.png");
-  assert.match(src, /readRenderTargetPixelsAsync/,
-    "blit must go through three's copyTextureToBuffer + mapAsync, not the swapchain");
+  // One table, one assertion site: the TLX soft-present markers and why each one matters.
+  for (const [re, why] of [
+    [/navigator\.gpu\.requestAdapter\(\)/, "soft-adapter sniff must use requestAdapter — getContext('webgl2') is null after WebGPU claims the canvas"],
+    [/info\.vendor/, "adapter.info fields are not enumerable — read vendor/device/architecture directly"],
+    [/swiftshader\|llvmpipe\|lavapipe\|microsoft basic render\|soft/, "sniff regex must match WGX's software-adapter list"],
+    [/apex26\.wgxCapture/, "sessionStorage apex26.wgxCapture=1 must force the blit (gfx-probe --tlx-webgpu)"],
+    [/game-soft/, "#game stays the GPU canvas; visible present is the #game-soft sibling"],
+    [/_displayCanvas\.getContext\("2d"/, "soft-present overlay is a 2D sibling — never getContext(2d) on #game"],
+    [/softDest:\s*(?:function\s*\(\s*\)\s*\{\s*return|\(\s*\)\s*=>)\s*softOutRT\b/, "post chain must receive softDest so FXAA never targets the swapchain"],
+    [/awaitSoftPresent/, "backend must expose awaitSoftPresent (copied onto GLX by game.js)"],
+    [/capturePixels/, "backend must expose capturePixels for gfx-probe frame.png"],
+    [/readRenderTargetPixelsAsync/, "blit must go through three's copyTextureToBuffer + mapAsync, not the swapchain"],
+  ]) assert.match(src, re, why);
   // TLX must hear Dawn. WGX has hooked onuncapturederror since it shipped; TLX
   // hooked nothing, so a black three-on-WebGPU frame was chased for a whole
   // session against probes reporting `gpuErrors: null` — which read as "no
@@ -3524,8 +3562,9 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // the same value, so this narrows nothing that was ever correct.
   assert.match(fnBody(src, "softContent"), /^\s*return\s+softwareGL\s*&&\s*!_forceHw\.has\(\s*part\s*\)/,
     "content skips ask softwareGL, which already answers for the BOUND backend");
-  assert.match(src, /softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(\s*\)\s*:\s*!!\s*_softAdapter\b/,
-    "…and softwareGL stays the backend-aware constant the line above relies on");
+  assert.ok(src.includes("const softwareGL = !!_softAdapter")
+    && src.includes("isWebGLBackend") && src.includes("detectSoftwareGL()"),
+    "softwareGL stays backend-aware: adapter OR live WebGL renderer string (#3601)");
   assert.doesNotMatch(src, /softContent\(\)/,
     "softContent() must never be called without a part name");
   for (const part of ["sky", "env", "chunked", "shadow"]) {
@@ -4139,13 +4178,31 @@ test("GLX backendState and race entry defer pack retry on software GL (#3584)", 
 
 test("software GL garage path gates readback and stall reload (#3589)", () => {
   const loop = readFile("js/perf/loop-health.js");
-  assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"'));
+  assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"') && loop.includes('"race-settings"'));
   const soft = readFile("js/render/glx/soft.js");
   assert.ok(soft.includes("PerfGov.softwareGlUiReadbackDefer"));
   const assets = readFile("js/render/shared/assets.js");
   assert.ok(assets.includes("deferScratchReadback") && assets.includes("softwareGlUiReadbackDefer"));
   const game = gameSource();
   assert.ok(game.includes("openGarage") && game.includes("PerfGov.softwareRaster()") && game.includes("invalidateSoftPresent"));
+});
+
+test("software GL quit-to-menu and garage-close use MenuTeardown readback cover", () => {
+  const mt = readFile("js/perf/menu-teardown.js");
+  assert.ok(mt.includes("beginQuit") && mt.includes("garageBusyPlate") && mt.includes("pauseSheetUp"));
+  assert.ok(mt.includes("deferQuitTail") && mt.includes("noteSync"));
+  const loop = readFile("js/perf/loop-health.js");
+  assert.ok(loop.includes("MenuTeardown.cover()") && loop.includes("noteSync"));
+  assert.ok(!readFile("js/render/glx/post.js").includes("MenuTeardown"));
+  assert.ok(!readFile("js/render/glx/soft.js").includes("MenuTeardown"));
+  assert.ok(!readFile("js/render/shared/assets.js").includes("MenuTeardown"));
+  const game = gameSource();
+  assert.ok(game.includes("MenuTeardown.beginQuit()") && game.includes("_menuGate.warm = 0"));
+  assert.ok(readFile("js/perf/menu-quit-tail.js").includes("afterOverlay") && game.includes("deferQuitTail"));
+  const garageOracle = readFile("tools/gfx/readback-garage-oracle.mjs");
+  const quitOracle = readFile("tools/gfx/readback-quit-menu-oracle.mjs");
+  assert.ok(garageOracle.includes("garageClose") && garageOracle.includes("#sel-go"));
+  assert.ok(quitOracle.includes("ttiMs"));
 });
 
 test("GLX boot waits on progress, not one fixed wall clock (#3587)", () => {
@@ -4385,6 +4442,37 @@ test("GLX readbackLdrPixels skips software GL readPixels while menu/race-entry s
 test("GLX present() reins in bloom on software GL when the scene target is LDR", () => {
   const body = span(read("js/render/glx/post.js"), "function present(opts) {", "function ", "present");
   assert.ok(body.includes("PerfGov.softwareRaster()") && body.includes("colorType !== gl.HALF_FLOAT") && body.includes("bloomAmt *="));
+});
+
+test("GLX software GL knees when lowest rung sheds bloom (tier 4 stall watchdog)", () => {
+  const body = span(read("js/render/glx/post.js"), "function present(opts) {", "function ", "present");
+  assert.ok(body.includes("swFlareK") && body.includes("swSoft") && body.includes("doBloom ? 0.42 : 0"));
+  assert.ok(body.includes("swExposureK") && body.includes("doBloom ? 1 : 0.72"));
+  const race = gameUnionCode();
+  assert.ok(race.includes("PostFxOpts.applyLookShed(po,") && race.includes("bloom: _bloom * LT.bloomMul"));
+  const shed = read("js/ui/post-fx-opts.js");
+  assert.ok(shed.includes("po.bloom = off ? 0 : v.bloom"));
+  assert.ok(shed.includes("lookPostShed"));
+  const gar = read("js/garage/setup-camera.js");
+  assert.ok(gar.includes("PerfGov.lookPostShed") && gar.includes("_presentOpts.bloom = shed ? 0 :"));
+  const glow = read("js/render/shared/post-common.js");
+  assert.ok(glow.includes("softwareGlowScale") && glow.includes("PerfGov.softwareRaster()") && glow.includes("0.22 : 0.55") && glow.includes("lookPostShed"));
+  assert.ok(gameUnionCode().includes("PostCommon.softwareGlowScale(LT.glareStr)"));
+});
+
+test("softwareGlowScale tier-4 knee follows lookPostShed on software GL (watchdog userTier shed)", () => {
+  const ctx = vm.createContext({
+    PerfGov: {
+      softwareRaster: () => true,
+      autoTier: () => 0,
+      lookPostShed: () => true,
+    },
+  });
+  vm.runInContext(read("js/render/shared/post-common.js"), ctx, { filename: absSrc("js/render/shared/post-common.js") });
+  const { softwareGlowScale } = vm.runInContext("PostCommon", ctx);
+  assert.equal(softwareGlowScale(1), 0.22, "userTier 4 shed with autoTier 0 must use the ×0.22 knee");
+  ctx.PerfGov.lookPostShed = () => false;
+  assert.equal(softwareGlowScale(1), 0.55, "healthy look post keeps the softer ×0.55 knee");
 });
 
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
@@ -4710,7 +4798,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
     "ResultsCam.live() keeps redrawing chequered/orbit/highlights");
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
     "the visibility gate precedes the no-track return");
-  assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
+  assert.match(game, /const builtWorldFits = \(def\) => builtTrackId === def\.id && builtTrackNight === sessionDarkFor\(def\)/,
     "loadTrack's memo still makes a repeat build free");
 });
 
@@ -5726,22 +5814,28 @@ test("GLX spatial upscale spike: SGSR1, no textureGather, flag-gated size split"
 });
 
 test("UPSCALE SettingRow + TLX spatial API markers", () => {
-  const html = read("index.html");
-  assert.match(html, /id="pm-upscale"/, "shell must ship the UPSCALE set-row");
-  assert.match(html, /id="pm-upscale-label">UPSCALE</, "label must be UPSCALE");
-  const scale = read("js/ui/scale.js");
-  assert.match(scale, /SettingRow\.wire\("pm-upscale"/, "scale.js must wire the row");
-  assert.match(scale, /setSpatialUpscale/, "row must call the backend API");
-  const tlx = read("js/render/three/tlx.js");
-  assert.match(tlx, /setSpatialUpscale/, "TLX must export setSpatialUpscale");
-  assert.match(tlx, /wantSpatialUpscale/, "TLX must gate size split");
-  const post = read("js/render/three/tlx-post.js");
-  assert.match(post, /spatialOk:\s*\(\)\s*=>/, "TLX post must expose spatialOk");
-  const tsl = read("js/render/three/tsl-post.js");
-  assert.match(tsl, /tlx-post-sgsr/, "TSL SGSR pass must exist");
+  // One table, one assertion site: [file, marker, why] for the shell, the UI row and the four backends.
   const wgsl = read("js/render/webgpu/wgsl-post.js");
-  assert.match(wgsl, /const SGSR =/, "WGX WGSL SGSR shader must ship");
-  assert.match(wgsl, /const SGSR_GATHER = SGSR/, "WGX must ship the textureGather SGSR variant");
+  for (const [file, re, why] of [
+    ["index.html", /id="pm-upscale"/, "shell must ship the UPSCALE set-row"],
+    ["index.html", /id="pm-upscale-label">UPSCALE</, "label must be UPSCALE"],
+    ["js/ui/scale.js", /SettingRow\.wire\("pm-upscale"/, "scale.js must wire the row"],
+    ["js/ui/scale.js", /setSpatialUpscale/, "row must call the backend API"],
+    ["js/render/three/tlx.js", /setSpatialUpscale/, "TLX must export setSpatialUpscale"],
+    ["js/render/three/tlx.js", /wantSpatialUpscale/, "TLX must gate size split"],
+    ["js/render/three/tlx-post.js", /spatialOk:\s*\(\)\s*=>/, "TLX post must expose spatialOk"],
+    ["js/render/three/tsl-post.js", /tlx-post-sgsr/, "TSL SGSR pass must exist"],
+    ["js/render/webgpu/wgsl-post.js", /const SGSR =/, "WGX WGSL SGSR shader must ship"],
+    ["js/render/webgpu/wgsl-post.js", /const SGSR_GATHER = SGSR/, "WGX must ship the textureGather SGSR variant"],
+    ["js/render/webgpu/wgsl-post.js", /fn weightY\([^)]*edgeStd/, "SGSR WGSL weightY must not use reserved std (Dawn/Naga reserve `std`)"],
+    ["js/render/webgpu/wgx.js", /setSpatialUpscale/, "WGX must export setSpatialUpscale"],
+    ["js/render/webgpu/wgx.js", /wantSpatialUpscale/, "WGX must gate size split"],
+    ["js/render/webgpu/wgx.js", /!!pSGSR/, "WGX wantSpatialUpscale must require linked SGSR pipeline"],
+    ["js/render/webgpu/wgx.js", /getSpatialUpscaleGather/, "WGX must export gather active state"],
+    // SGSR pipeline link + gather escape live in wgx-post.js after the peel.
+    ["js/render/webgpu/wgx-post.js", /SGSR_GATHER/, "WGX must try the gather pipeline first"],
+    ["js/render/webgpu/wgx-post.js", /spatialUpscaleGather/, "gather escape pin apex26.spatialUpscaleGather=0"],
+  ]) assert.match(read(file), re, why);
   // Strip comments then isolate the 4-tap SGSR string (ends before SGSR_GATHER).
   const wgslCode = wgsl.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
   const sgsrTap = wgslCode.match(/const SGSR = `([\s\S]*?)`;\s*const SGSR_GATHER/);
@@ -5750,17 +5844,6 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
     "4-tap SGSR must not use textureGather (parity with GLX/TLX)");
   assert.match(wgslCode, /textureGather\s*\(\s*1i\s*,\s*srcTex\s*,\s*srcSamp\s*,\s*p\s*\)/,
     "SGSR_GATHER must call textureGather(component, tex, samp, uv) — WGSL arg order");
-  // Dawn/Naga reserves `std` — the shared SGSR port must use edgeStd (validate caught this).
-  assert.match(wgsl, /fn weightY\([^)]*edgeStd/, "SGSR WGSL weightY must not use reserved std");
-  const wgx = read("js/render/webgpu/wgx.js");
-  const wgxPost = read("js/render/webgpu/wgx-post.js");
-  assert.match(wgx, /setSpatialUpscale/, "WGX must export setSpatialUpscale");
-  assert.match(wgx, /wantSpatialUpscale/, "WGX must gate size split");
-  assert.match(wgx, /!!pSGSR/, "WGX wantSpatialUpscale must require linked SGSR pipeline");
-  // SGSR pipeline link + gather escape live in wgx-post.js after the peel.
-  assert.match(wgxPost, /SGSR_GATHER/, "WGX must try the gather pipeline first");
-  assert.match(wgxPost, /spatialUpscaleGather/, "gather escape pin apex26.spatialUpscaleGather=0");
-  assert.match(wgx, /getSpatialUpscaleGather/, "WGX must export gather active state");
 });
 
 test("spatial upscale persists once through GameStore at the UI boundary", () => {
@@ -5785,7 +5868,8 @@ test("TLX timing enables the bundled backend, not a shadow renderer property", a
   const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0, _inspectorHold = false;
-  const _gpuSupported = () => true;
+  let _gpuSampleAt = -1, _gpuSamples = 0;
+  const _deviceLost = false, _nowMs = () => 100, _gpuSupported = () => true;
   const body = fnBody(code("js/render/three/tlx.js"), "gpuTimer");
   const timer = eval("(function(on){" + body + "})");
   assert.equal(timer(true).on, true);
@@ -5877,6 +5961,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   const mintLateLit = () => { assert.equal(tag, false, "late lit variants are minted BEFORE setSsrMrt stamps the MRT"); minted = true; };
   const warmLateLit = async () => { assert.ok(minted); assert.equal(mrt, "tag", "late lit variants compile under the scene MRT"); };
   const warmPlusOn = () => true;   // apex26.tlxWarmPlus=1 or three's WebGL2 backend: the full warm
+  const casterWarmOn = warmPlusOn, casterSources = () => [];   // A·W14: the caster warm's own gate and probe layouts
   const drawWarmOn = () => false;   // the A-W1 draw stage (after the mirror stage) has its own rig: tlx-hunt4b.test.mjs
   // The stage timeline memState().warm reports (census 207 spent its window
   // inside the warm with no row saying so): the sandbox owns the record.
@@ -5929,11 +6014,11 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   // warm and the caster warm, and the caster warm still guarded on the module.
   const iPost = stageBody.indexOf("await post.warm(opts, _postF)");
   const iNull = stageBody.indexOf("renderer.setMRT(null)", iPost);
-  const iShadow = stageBody.indexOf("shadowSys.warm()", iNull);
+  const iShadow = stageBody.indexOf("shadowSys.warm(casterSources())", iNull);
   assert.ok(iPost > 0 && iNull > iPost && iShadow > iNull, "setMRT(null) must sit between the post warm and the caster warm");
   assert.equal(stageBody.indexOf("renderer.setMRT(null)", iNull + 1), -1,
     "runProgramWarmStages nulls the MRT exactly once in the full path (the garage-only branch has its own null)");
-  assert.match(stageBody, /if \(warmPlusOn\(\) && shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none or apex26.tlxWarmPlus is not 1");
+  assert.match(stageBody, /if \(casterWarmOn\(\) && shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none or apex26.tlxWarmPlus=0 (A·W14: AUTO is on for both backends)");
   assert.match(stageBody, /post\.warm && \(warmPlusOn\(\) \|\| performance\.now\(\) - _warmAt < 3000\)/, "without tlxWarmPlus=1 the post warm keeps its 3 s gate");
   const warm = eval("(function(opts){ async function runProgramWarmStages(usePost, useTag, opts, garageSceneOnly){" + stageBody
     + "} " + body + "})");
@@ -6041,18 +6126,104 @@ test("TLX defers resize during compilation and applies the latest requested size
   resize(); assert.equal(calls.length, 2, "deferred changes apply once");
 });
 
-test("TLX ignores a timing result after disabling or restarting its measurement session", async () => {
-  let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _inspectorHold = false;
-  const pending = [], _gpuSupported = () => true;
-  const renderer = { backend: {}, resolveTimestampsAsync: () => new Promise(r => pending.push(r)) };
-  const src = code("js/render/three/tlx.js");
-  const timer = eval("(function(on){" + fnBody(src, "gpuTimer") + "})");
-  const resolve = eval("(function(){" + fnBody(src, "resolveGpuTimer") + "})");
-  timer(true); resolve(); timer(false); pending.shift()(7.25); await Promise.resolve();
-  assert.equal(_gpuMs, -1);
-  timer(true); resolve(); timer(false); timer(true);
-  pending.shift()(8); await Promise.resolve(); assert.equal(_gpuMs, -1);
-  resolve(); pending.shift()(4); await Promise.resolve(); assert.equal(_gpuMs, 4);
+function tlxTimerFixture(webgl = false) {
+  const src = read("js/render/three/tlx.js"), pending = [];
+  let now = 100, disjoint = false;
+  const pool = { frames: [], currentQueryIndex: 0, pendingResolve: false, isDisposed: false,
+    queryOffsets: new Map(), queryStates: new Map(), queries: [], ext: { GPU_DISJOINT_EXT: 1 } };
+  const renderer = { backend: { timestampQueryPool: { render: pool }, isWebGLBackend: webgl,
+    gl: { QUERY_RESULT_AVAILABLE: 2, getParameter: () => disjoint, getQueryParameter: q => q.ready } },
+    resolveTimestampsAsync: () => new Promise(resolve => pending.push(resolve)) };
+  const state = span(src, "      let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch", "      function _gpuSupported()", "GPU timer state");
+  const make = new Function("renderer", "clock", `
+    let _deviceLost = false;
+    const _nowMs = clock, _gpuSupported = () => true, Log = { debug() {} };
+    ${state}
+    return { timer(on) { ${fnBody(src, "gpuTimer")} }, resolve: resolveGpuTimer,
+      ms() { ${fnBody(src, "gpuMs")} }, lost() { _deviceLost = true; },
+      inspectorHost() { ${fnBody(src, "inspectorHost")} } };
+  `);
+  const api = make(renderer, () => now);
+  return { ...api, pool, pending, clock(t) { now = t; }, disjoint(v) { disjoint = v; },
+    queue() { pool.currentQueryIndex = 2; pool.queryOffsets.set("r:1:0:f1", 0); pool.queryStates.set(0, "ended"); pool.queries[0] = { ready: true }; },
+    async finish(ms, fresh = true) {
+      if (fresh) pool.frames = [1]; // new array even for a second resolved batch with the same frame/duration
+      pool.currentQueryIndex = 0;
+      pending.shift()(ms);
+      await new Promise(resolve => setImmediate(resolve));
+    } };
+}
+
+test("TLX timer publishes one serial per fresh resolution, including identical durations, never cached reads", async () => {
+  for (const webgl of [false, true]) {
+    const h = tlxTimerFixture(webgl);
+    h.timer(true); h.queue(); h.resolve(); h.resolve();
+    assert.equal(h.pending.length, 1, "one owned asynchronous resolve");
+    h.clock(120); await h.finish(4);
+    assert.equal(h.ms(), 4); assert.equal(h.timer().samples, 1); assert.equal(h.timer().sampleAt, 120);
+    h.clock(125);
+    assert.equal(h.timer().sampleAgeMs, 5); assert.equal(h.timer().samples, 1);
+    h.resolve(); assert.equal(h.pending.length, 0, "empty pool cannot produce a sample");
+    h.queue(); h.resolve(); await h.finish(4, false);
+    assert.equal(h.timer().samples, 1, "vendor cached lastValue is not a new observation");
+    assert.equal(h.timer().sampleAt, 120);
+    h.queue(); h.resolve(); h.clock(140); await h.finish(4);
+    assert.equal(h.timer().samples, 2, "equal-valued newly resolved timing still advances");
+    assert.equal(h.timer().sampleAt, 140);
+  }
+});
+
+test("TLX ignores old epochs, inspector/lost-device completions and disjoint results", async () => {
+  const h = tlxTimerFixture(true);
+  h.timer(true); h.queue(); h.resolve(); h.timer(false); await h.finish(7.25);
+  assert.equal(h.ms(), -1); assert.equal(h.timer().samples, 0); assert.equal(h.timer().sampleAt, -1);
+  h.timer(true); h.queue(); h.resolve(); h.timer(false); h.timer(true); await h.finish(8);
+  assert.equal(h.ms(), -1); assert.equal(h.timer().samples, 0);
+  h.queue(); h.resolve(); await h.finish(4);
+  assert.equal(h.ms(), 4); assert.equal(h.timer().samples, 1);
+  h.disjoint(true); h.queue(); h.resolve(); await h.finish(4);
+  assert.equal(h.ms(), -1); assert.equal(h.timer().samples, 1); assert.equal(h.timer().sampleAt, -1);
+  h.disjoint(false); h.queue(); h.resolve();
+  h.inspectorHost().hold(true); await h.finish(6);
+  assert.equal(h.timer().on, false); assert.equal(h.timer().sampleAt, -1); assert.equal(h.timer().samples, 1);
+  h.inspectorHost().hold(false); h.timer(true); h.queue(); h.resolve(); h.lost(); await h.finish(9);
+  assert.equal(h.ms(), -1); assert.equal(h.timer().samples, 1); assert.equal(h.timer().sampleAt, -1);
+});
+
+function glxTimerFixture() {
+  const src = read("js/render/glx/glx.js");
+  let now = 100, disjoint = false, lost = false, available = true;
+  const ext = { TIME_ELAPSED_EXT: 1, GPU_DISJOINT_EXT: 2 };
+  const gl = { QUERY_RESULT_AVAILABLE: 3, QUERY_RESULT: 4, createQuery: () => ({}), beginQuery() {}, endQuery() {}, deleteQuery() {},
+    getParameter: () => disjoint, getQueryParameter: (_q, k) => k === 3 ? available : 4e6 };
+  const make = new Function("gl", "ext", "clock", "ctxGone", `
+    let _gpuTimerExt = ext, _gpuTimerOn = false, _gpuQPending = [], _gpuQActive = null, _gpuMs = -1;
+    let _gpuSamples = 0, _gpuSampleAt = -1;
+    const performance = { now: clock };
+    ${fnSource(src, "function _gpuTimerBegin() {")}
+    ${fnSource(src, "function _gpuTimerEnd() {")}
+    return { timer(on) { ${fnBody(src, "gpuTimer")} }, ms() { ${fnBody(src, "gpuMs")} },
+      begin: _gpuTimerBegin, end: _gpuTimerEnd };
+  `);
+  return { ...make(gl, ext, () => now, () => lost), clock(t) { now = t; }, disjoint(v) { disjoint = v; },
+    lost() { lost = true; }, ready(v) { available = v; } };
+}
+
+test("GLX timing serial counts completed queries, not cached reads, and survives invalidation", () => {
+  const h = glxTimerFixture();
+  h.timer(true); h.begin(); h.ready(false); h.end();
+  assert.equal(h.timer().samples, 0); assert.equal(h.ms(), -1);
+  h.ready(true); h.clock(120); h.end();
+  assert.equal(h.ms(), 4); assert.equal(h.timer().samples, 1); assert.equal(h.timer().sampleAt, 120);
+  h.clock(125); h.end();
+  assert.equal(h.timer().samples, 1); assert.equal(h.timer().sampleAt, 120); assert.equal(h.timer().sampleAgeMs, 5);
+  h.begin(); h.clock(140); h.end();
+  assert.equal(h.ms(), 4); assert.equal(h.timer().samples, 2); assert.equal(h.timer().sampleAt, 140);
+  h.begin(); h.disjoint(true); h.end();
+  assert.equal(h.ms(), -1); assert.equal(h.timer().samples, 2); assert.equal(h.timer().sampleAt, -1);
+  h.disjoint(false); h.timer(false); h.timer(true); h.begin(); h.end();
+  assert.equal(h.timer().samples, 3, "serial is monotonic across timer toggles");
+  h.lost(); assert.equal(h.ms(), -1); assert.equal(h.timer().sampleAt, -1); assert.equal(h.timer().samples, 3);
 });
 
 test("all track loaders release selector ownership before building, even on failure", () => {
@@ -6297,6 +6468,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const menuIdle = async (current) => current(), menuSlice = async () => {};
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; builtTrackId = id; };
+  const bareStale = () => false;   // a dressed world (#3570: session-entry-vm covers the bare one)
   const loadTrackStepped = async (id, cur) => { if (!cur()) return false; loadTrack(id); return true; };   // the real one: tracks.js buildPaced + build-steps.test.mjs
   const garagePrewarm = async () => {};   // garage-arrival.test.mjs pins it
   const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
@@ -6334,7 +6506,8 @@ test("selector retains a different circuit during compilation, then releases it 
   const gfx = { warming: () => compiling }, els = { select: { hidden: false } }, $ = () => ({ hidden: true });
   const menuKey = idx => [idx, raceTimeOfDay, raceWeather, 22].join("|"), fieldSize = () => 22;
   const buildKey = idx => [idx, false, 22].join("|");
-  const sessionDarkFor = () => false, trackBuildOpts = () => ({}), sceneryResident = () => false;
+  const sessionDarkFor = () => false, trackBuildOpts = () => ({}), sceneryResident = () => false, bareStale = () => false;
+  const builtWorldFits = def => builtTrackId === def.id && builtTrackNight === sessionDarkFor(def) && builtGridSlots === fieldSize() && !bareStale();
   const PerfGov = { sentinelArm() {} }, Log = { warn() {} };
   const freeTrackMeshes = t => { assert.equal(compiling, false, "compileAsync still owns the old geometries"); freed.push(t); };
   const shadowPass = { reset() { assert.equal(compiling, false, "shadow programs also retain ownership until compile settles"); } };
@@ -6418,7 +6591,7 @@ test("the startline mesh beats the unbiased road without burying the cars", () =
   // small negative bias that still beats it.
   const src = read("js/game.js");
   const start = src.match(/const _startBias = \[(-?[\d.]+), (-?[\d.]+)\]/);
-  assert.ok(start, "_startBias not found in js/game.js");
+  assert.ok(start, "_startBias not found in game source union");
   const roads = [...src.matchAll(/const _wmRoad\w+ = \{[^}]*\}/g)];
   assert.ok(roads.length >= 4, `expected the four _wmRoad* materials, found ${roads.length}`);
   for (const r of roads) assert.doesNotMatch(r[0], /depthBias/, `road material must not carry a depth bias: ${r[0]}`);
@@ -6440,8 +6613,14 @@ test("TLX FX: double-sided FX draw in ONE pass and their programs warm on the st
     assert.match(body, pair, "the FX warm compiles " + pair + " on its real stream geometry");
   assert.match(body, /ensureStream\(stream, 1\)/, "the stream geometry (its vertex layout) exists before the compile");
   assert.match(fnBody(tlx, "runProgramWarmStages"), /await warmFxPrograms\(\);\s*await warmLateLit\(\);/, "runProgramWarmStages runs the FX warm, then the late lit variants");
-  assert.match(tlx, /const _LATE_LIT = \[\{ roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 0\.5 \}\]/,
-    "the brake-ring transparent variant (census 245 minted t,0.9,0,0,0,0,0,1|na) is pre-minted during the lights");
+  assert.match(tlx, /const _LATE_LIT = \[\{ roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 0\.5 \},\s*\{ doubleSided: true, roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 0\.5 \}\]/,
+    "the brake-ring transparent variant (census 245 minted t,0.9,0,0,0,0,0,1|na) and the cockpit ERS bar's double-sided one (…|ds|na, the first-BOOST stall) are pre-minted during the lights");
+  // The ds variant must stay the cockpit rig's key: drift in either table re-opens the first-BOOST stall.
+  assert.match(code("js/car/car-draw.js"), /_rigFxA = \{ doubleSided: true, emissive: 1\.0, roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 1 \}/,
+    "car-draw's _rigFxA (dash ERS bar, OT lamp) matches the double-sided _LATE_LIT variant");
+  // Its cw twin compiled a whole lit pipeline no race draws (the rig is never mirrored): one winding for it only.
+  assert.ok(fnBody(tlx, "warmLateLit").includes("for (const sx of (o.doubleSided ? [1] : [1, -1]))"),
+    "warmLateLit compiles the double-sided (cockpit rig) variant in one winding, the brake ring in both");
 });
 
 test("lamp shadow: the player takes the AI cars' lamp-radius bound in BOTH the key and the cast (TLX-PERF-PLAN L0)", () => {
@@ -6546,7 +6725,7 @@ test("the eager GLX handle preserves eval-time mobile tier and live backend gett
   next.window = next;
   vm.runInContext(source("js/render/shared/glx-facade.js"), next, { filename: absSrc("js/render/shared/glx-facade.js") });
   assert.equal(next.GLX.isMobile, true);
-  assert.equal(next.GLX.mobileTier, false, "high quality overrides only the safe tier");
+  assert.equal(next.GLX.mobileTier, true, "legacy high-quality bit cannot bypass the phone memory cap");
 });
 
 test("GLX implementation is deferred and ordered, while the facade precedes its consumers", () => {
@@ -6671,7 +6850,7 @@ test("GLX racing-line chevrons keep vAlong at highp, and a restored context obey
     const src = code(f);
     const i = src.indexOf('"webglcontextrestored"');
     assert.ok(i > 0, f);
-    assert.match(src.slice(i, i + 600), /ctxLostReloads[\s\S]*> 2\) return;/, f + ": the restore reload checks the counter");
+    assert.match(src.slice(i, i + 600), /GfxEscalation\.reloadCount\(\)[\s\S]*> 2\) return;/, f + ": the restore reload checks the counter");
   }
 });
 

@@ -39,6 +39,9 @@ const RaceEntryProfile = (() => {
   let progressSink = null;
   /** True from beginUi until startRace commits — keeps the window armed through flyby/handoff. */
   let menuEntrySession = false;
+  /** Where each gfx.warm ran (menu / loading / race) — filled by TLX (#3279). */
+  const warmHistory = [];
+  const MAX_WARMS = 8;
   const INTRO_BUDGET_SOFT_MS = 45000;
   const INTRO_BUDGET_HW_MS = 120000;
   const STAGE_LABELS = {
@@ -152,8 +155,20 @@ const RaceEntryProfile = (() => {
         ms: e ? +((e.t - m.t)).toFixed(2) : null,
         kind: "span",
         open: !e,
+        t0: m.t, t1: e ? e.t : null,
       });
     }
+    // SPANS NEST, SO `ms` DOES NOT ADD UP (#3674): gridCountdown encloses warmCarAssets and debrisPrime, mirrorPrepare
+    // encloses programWarm. Summed, the Device Farm read 0.7-0.9 s of "grid" next to 0.7-1.4 s of car warm; the grid's
+    // own work was 24-51 ms. `selfMs` is a closed span minus the closed spans directly inside it — the column to sum.
+    const spans = rows.filter((r) => r.kind === "span" && r.t1 != null);
+    const inside = (c, p) => c !== p && c.t0 >= p.t0 && c.t1 <= p.t1 && !(c.t0 === p.t0 && c.t1 === p.t1 && spans.indexOf(c) < spans.indexOf(p));
+    for (const p of spans) {
+      const kids = spans.filter((c) => inside(c, p));
+      const direct = kids.filter((c) => !kids.some((k) => inside(c, k)));
+      p.selfMs = +Math.max(0, p.ms - direct.reduce((s, c) => s + c.ms, 0)).toFixed(2);
+    }
+    for (const r of rows) { delete r.t0; delete r.t1; }
     return rows;
   }
 
@@ -280,8 +295,14 @@ const RaceEntryProfile = (() => {
   function mark(n) {
     if (!armed) return;
     pushMark(n);
-    if (progressSink && /:end$/.test(n)) {
+    if (!progressSink) return;
+    if (/:end$/.test(n)) {
       const base = n.slice(0, -4);
+      try { progressSink(STAGE_LABELS[base] || base); } catch (_) { /* UI only */ }
+      return;
+    }
+    if (softwareRaster() && /:start$/.test(n)) {
+      const base = n.slice(0, -6);
       try { progressSink(STAGE_LABELS[base] || base); } catch (_) { /* UI only */ }
     }
   }
@@ -308,8 +329,18 @@ const RaceEntryProfile = (() => {
 
   /** TLX warm request (or skipped/noop) — one call site in startRaceBody. */
   function requestWarm(gfx, alreadyWarmed) {
+    // Bare gfx.warm() — flyby-intro pins this call shape. TLX _resolveWarmWhere
+    // tags loading (menuEntrySession) vs race (armed) vs menu (idle) itself.
     if (gfx && gfx.warm && !alreadyWarmed) { mark("warm:request"); gfx.warm(); }
     else mark(alreadyWarmed ? "warm:skipped-menu" : "warm:noop");
+  }
+
+  /** TLX records each warm's where + stage ms (menu / loading / race). */
+  function noteWarm(rec) {
+    if (!rec || typeof rec !== "object") return;
+    if (warmHistory.length >= MAX_WARMS) warmHistory.shift();
+    warmHistory.push(rec);
+    if (armed && rec.where) pushMark("warm:where:" + rec.where);
   }
 
   function raiseHandoff(screen) {
@@ -394,15 +425,18 @@ const RaceEntryProfile = (() => {
       windowMs: armed || marks.length ? +((armed ? now() : winT1) - winT0).toFixed(2) : 0,
       budgetMs: introBudgetMs,
       budgetLeftMs: introBudgetT0 ? +introBudgetLeft().toFixed(2) : null,
+      warmHistory: warmHistory.slice(),
     };
   }
 
   return {
     begin, beginUi, continueWindow, afterPaint, end, lap, mark, notePresent, tickFrame,
-    requestWarm, raiseHandoff, span, spanAsync, afterPresent, runSession, clearMenuEntrySession,
+    requestWarm, noteWarm, raiseHandoff, span, spanAsync, afterPresent, runSession, clearMenuEntrySession,
     snapshot, stageTable, diffStages, stagesFromSnapshot,
     introBudgetLeft, introBudgetExpired, setProgressSink, softwareRaster,
     legs: () => legs.slice(),
+    warmHistory: () => warmHistory.slice(),
+    menuEntrySession: () => menuEntrySession,
     armed: () => armed,
     supported: () => supported,
     // Test / probe seam: inject synthetic longtasks without a real observer.

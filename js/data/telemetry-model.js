@@ -4,9 +4,35 @@ const DataTelemetryModel = (function () {
 
   const clamp = M4.clamp;                     // shared scalar helper (js/core/mat4.js)
 
-  function cumDist(car) {
+  // Retain actual lap boundaries only when observed samples bracket them.
+  // A normal sub-sample offset is interpolable; a >1.5s outage is unknown.
+  function clipCar(car, duration) {
+    if (!car || !car.length) return [];
+    const out = car.filter((row) => row.t >= 0 && row.t <= duration);
+    function boundary(t) {
+      let i = 0;
+      while (i < car.length && car[i].t < t) i++;
+      if (!i || i === car.length || car[i].t === t) return null;
+      const a = car[i - 1], b = car[i], span = b.t - a.t;
+      if (!(span > 0 && span <= 1.5)) return null;
+      const f = (t - a.t) / span;
+      const row = { ... (f < 0.5 ? a : b), t, date: +a.date + f * (+b.date - +a.date) };
+      for (const key of ["speed", "throttle", "brake", "rpm"]) {
+        row[key] = typeof a[key] === "number" && isFinite(a[key]) && typeof b[key] === "number" && isFinite(b[key])
+          ? a[key] + f * (b[key] - a[key]) : null;
+      }
+      return row;
+    }
+    const first = boundary(0), last = boundary(duration);
+    if (first) out.unshift(first);
+    if (last) out.push(last);
+    return out;
+  }
+
+  function cumDist(car, duration) {
     const t = [], d = [];
-    let acc = 0;
+    // A later first sample cannot establish distance from the lap start.
+    let acc = car.length && car[0].t > 0 ? NaN : 0;
     for (let i = 0; i < car.length; i++) {
       if (i > 0) {
         const dt = car[i].t - car[i - 1].t;
@@ -19,7 +45,7 @@ const DataTelemetryModel = (function () {
       }
       t.push(car[i].t); d.push(acc);
     }
-    return { t: t, d: d };
+    return { t: t, d: d, endCovered: !(duration > 0) || !!(t.length && t[t.length - 1] >= duration) };
   }
   function interp(xs, ys, x, end = xs.length) {
     if (!end || !isFinite(x)) return NaN;
@@ -31,9 +57,13 @@ const DataTelemetryModel = (function () {
     const x0 = xs[lo - 1], x1 = xs[lo], f = (x - x0) / ((x1 - x0) || 1);
     return ys[lo - 1] + (ys[lo] - ys[lo - 1]) * f;
   }
-  function distAtT(cum, t) { return interp(cum.t, cum.d, t); }
+  function distAtT(cum, t) {
+    if (cum.endCovered === false && t > cum.t[cum.t.length - 1]) return NaN;
+    return interp(cum.t, cum.d, t);
+  }
   function timeAtDist(cum, dist) {
     const d = cum.d;
+    if (cum.endCovered === false && dist > d[d.length - 1]) return NaN;
     let end = d.length;
     // cumDist's accumulation never becomes finite again after an unknown
     // interval: d is a finite prefix followed by a nonfinite suffix. Find
@@ -57,7 +87,7 @@ const DataTelemetryModel = (function () {
     const lanes = [];
     for (const lane of [primary, compare]) {
       const car = lane.car || [], cum = lane.cum || cumDist(car);
-      if (car.length < 2 || cum.d[0] > from || cum.d[cum.d.length - 1] < to) return unavailable("Both lanes must cover the whole interval.");
+      if (car.length < 2 || !isFinite(cum.d[0]) || !isFinite(cum.d[cum.d.length - 1]) || cum.d[0] > from || cum.d[cum.d.length - 1] < to) return unavailable("Both lanes must cover the whole interval.");
       const start = timeAtDist(cum, from), end = timeAtDist(cum, to);
       for (let i = 0; i < car.length; i++) {
         const c = car[i];
@@ -96,7 +126,7 @@ const DataTelemetryModel = (function () {
   function dateAtT(car, t) {
     if (!car || !car.length) return null;
     const n = car.length;
-    if (t <= car[0].t) return +car[0].date;
+    if (t <= car[0].t) return +car[0].date + (t - car[0].t) * 1000;
     if (t >= car[n - 1].t) return +car[n - 1].date;
     let lo = 0, hi = n - 1;
     while (lo < hi - 1) {
@@ -248,8 +278,20 @@ const DataTelemetryModel = (function () {
   // OpenF1 DRS codes: 10/12/14 = wing open, everything else closed/eligible.
   function drsOpen(v) { return v === 10 || v === 12 || v === 14; }
 
+  function speedUnit() {
+    return typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph" ? "mph" : "km/h";
+  }
+  function speedValue(v) {
+    if (typeof v !== "number" || !isFinite(v)) return "—";
+    return typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(v) : Math.round(v);
+  }
+  function speedText(v) {
+    const value = speedValue(v);
+    return value === "—" ? value : value + " " + speedUnit();
+  }
+
   const CHANNELS = [
-    { id: "speed",    label: "SPEED",    color: "#39d0ff", w: 2,   norm: "speed", get: function (c) { return c.speed; },    fmt: function (v) { return Math.round(v) + " km/h"; } },
+    { id: "speed",    label: "SPEED",    color: "#39d0ff", w: 2,   norm: "speed", get: function (c) { return c.speed; },    fmt: function (v) { return speedText(v); } },
     { id: "throttle", label: "THR",      color: "#3fb950", w: 1.5, lo: 0, hi: 100, get: function (c) { return c.throttle; }, fmt: function (v) { return Math.round(v) + "%"; } },
     { id: "brake",    label: "BRAKE",    color: "#ff4d4d", w: 1.5, lo: 0, hi: 100, get: function (c) { return c.brake; },    fmt: function (v) { return Math.round(v) + "%"; } },
     { id: "gear",     label: "GEAR",     color: "#f6d200", w: 1.5, lo: 0, hi: 8, step: true, get: function (c) { return c.gear; }, fmt: function (v) { return v ? "G" + v : "N"; } },
@@ -302,8 +344,8 @@ const DataTelemetryModel = (function () {
     return { driverColor, laneColors };
   }
 
-  return { create, clamp, laneRole, summaryTime, signed, summaryValue, dcode, sessionShort, drsOpen,
-           CHANNELS, PADL, PADR, PADY, chartX, chanRaw, chanNorm, sampleAt, cumDist,
+  return { create, speedUnit, speedValue, speedText, clamp, laneRole, summaryTime, signed, summaryValue, dcode, sessionShort, drsOpen,
+           CHANNELS, PADL, PADR, PADY, chartX, chanRaw, chanNorm, sampleAt, clipCar, cumDist,
            distAtT, timeAtDist, brakingDuel, locAt, dropStrays, locBounds, gapLimitMs, isGap };
 })();
 Object.freeze(DataTelemetryModel);

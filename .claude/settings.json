@@ -161,6 +161,9 @@
       "mcp__github__update_pull_request_branch",
       "mcp__github__create_repository",
       "mcp__github__fork_repository",
+      "mcp__github__push_files",
+      "mcp__github__create_or_update_file",
+      "mcp__github__create_branch",
       "Skill(agent-protocols:ship)",
       "Skill(agent-protocols:build)",
       "Skill(agent-protocols:plan)",
@@ -188,8 +191,7 @@
     "baseRef": "head"
   },
   "env": {
-    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "0",
-    "APEX_MERGE_DESK": "1"
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "0"
   },
   "enabledMcpjsonServers": [
     "apex-tools",
@@ -218,6 +220,7 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.sh\"",
+            "timeout": 30,
             "onFailure": "block"
           }
         ]
@@ -240,7 +243,7 @@
         ]
       },
       {
-        "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|js-debugger__.*|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|ui_inspect|diagnostics|profile|job_start))$",
+        "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|js-debugger__.*|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|ui_inspect|diagnostics|profile|job_start|debug_chrome)|plugin_browser-use.*)$",
         "hooks": [
           {
             "type": "command",
@@ -251,7 +254,7 @@
         ]
       },
       {
-        "matcher": "^mcp__github__(enable_pr_auto_merge|merge_pull_request|update_pull_request|actions_run_trigger)$",
+        "matcher": "^mcp__github__(enable_pr_auto_merge|merge_pull_request|update_pull_request|actions_run_trigger|push_files|create_or_update_file|create_branch|delete_file)$",
         "hooks": [
           {
             "type": "command",
@@ -269,6 +272,27 @@
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-contract.py\"",
             "timeout": 10,
             "onFailure": "block"
+          }
+        ]
+      },
+      {
+        "matcher": "^(Agent|mcp__claude-code-remote__create_session)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
+            "timeout": 5,
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
+        "matcher": "^mcp__claude-code-remote__create_session$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/launch-gate.py\"",
+            "timeout": 5
           }
         ]
       }
@@ -296,6 +320,15 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/memory-sync.sh\" save",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
+            "timeout": 5
           }
         ]
       }
@@ -328,13 +361,18 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/ui-fixer-uncommitted.sh\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
+            "timeout": 5
           }
         ]
       }
     ],
     "SubagentStop": [
       {
-        "matcher": "^(code-hunter|finding-verifier|prior-art-scout|agent-surface-reviewer|bloat-auditor|physics-contract-auditor|ci-red-triage|ci-watcher)$",
+        "matcher": "^(code-hunter|finding-verifier|prior-art-scout|agent-surface-reviewer|bloat-auditor|physics-contract-auditor|ci-red-triage)$",
         "hooks": [
           {
             "type": "command",

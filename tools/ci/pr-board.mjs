@@ -2,7 +2,7 @@
 /**
  * @doc One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch.
  * @section runner
- * @skill ci-watch
+ * @skill steward
  *
  * CI Watch (AGENTS.md §Concurrent PRs) needs five facts per PR before it may act:
  * draft or ready, mergeable_state, whether auto-merge is armed and with which
@@ -44,12 +44,15 @@
  *   node tools/ci/pr-board.mjs              # the table
  *   node tools/ci/pr-board.mjs --json       # rows, for the skill
  *   node tools/ci/pr-board.mjs --pr 1234    # one PR
+ *   node tools/ci/pr-board.mjs --alarm      # only the stall alarm: READY > 12 h, green, no hold, no push
  *
- * Exit: 0 printed, 2 bad args (or --pr is not open into the deploy branch), 3 no token / API error.
+ * Exit: 0 printed (--alarm: none stalled), 1 --alarm found a stalled PR, 2 bad args (or --pr is not open
+ * into the deploy branch), 3 no token / API error.
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { api, DEPLOY } from "./github-api.mjs";
+import { DEPLOY } from "./github-api.mjs";
+import { createSnapshot, runsByHead } from "../lib/pr-snapshot.mjs";
 import { guardsVerdict, planVerdict, fleetIdentity } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
@@ -220,6 +223,7 @@ export function evaluate(items, opts = {}) {
       mergeMethod: pr.auto_merge?.merge_method ?? null,
       ci: ci.state,
       ciRunId: ci.runId,
+      ciAt: (it.runs || []).find((r) => r && r.id === ci.runId)?.created_at || null,
       fullTier: ci.state === "success" && it.jobsRunId === ci.runId && fullTierPassed(it.jobs),
       failing,
       gate: gate.state,
@@ -258,30 +262,37 @@ export function render(result, { now = Date.now() } = {}) {
 }
 
 /**
- * Gather every open PR into the deploy branch and evaluate. GET requests only.
- * Injectable `request` (a `pathQs` -> `{json}|{error}` function) for tests; the
- * default is github-api.mjs's api(), which sends a plain curl GET.
- * @param {{ request?: typeof api, run?: Function, env?: object, gh?: Function, only?: number|null }} [opts]
+ * Gather every open PR into the deploy branch and evaluate. GET requests only,
+ * through tools/lib/pr-snapshot.mjs (conditional GETs: a 304 on an unchanged
+ * PR is free against the rate limit). Injectable `request` (a `pathQs` ->
+ * `{json}|{error}` function) for tests.
+ *
+ * REST budget at N open PRs (request sites, 2026-10-26): 1 list page + 1
+ * recent-ci.yml-runs page + N pulls/{n} + N check-runs, plus a per-head runs
+ * read only for heads absent from the recent page, jobs for red/ready-green
+ * heads, and the last comment page for PRs with comments. Before: 1 + 3N plus
+ * the same extras, every one unconditional.
+ * @param {{ request?: Function, run?: Function, env?: object, gh?: Function, only?: number|null, snapshot?: ReturnType<typeof createSnapshot> }} [opts]
  */
 export function measure(opts = {}) {
-  const request = opts.request || ((p) => api(p, { run: opts.run, env: opts.env, gh: opts.gh }));
+  const snap = opts.snapshot || createSnapshot({ request: opts.request, run: opts.run, env: opts.env, gh: opts.gh });
   const fail = (error) => ({ ok: false, error, rows: [] });
 
   // --pr limits expensive detail/CI reads, not the repository-wide armed cap.
   // The list includes auto_merge metadata; no sibling detail request is needed.
   // https://docs.github.com/en/rest/pulls/pulls#list-pull-requests
-  const armedByPr = new Map();
-  for (let page = 1; page <= 5; page++) {
-    const r = request(`pulls?state=open&base=${encodeURIComponent(DEPLOY)}&per_page=100&page=${page}`);
-    if (r.error) return fail(r.error);
-    const batch = Array.isArray(r.json) ? r.json : [];
-    for (const pr of batch) armedByPr.set(pr.number, !!pr.auto_merge);
-    if (batch.length < 100) break;
-  }
+  const list = snap.openPrs();
+  if (list.error) return fail(list.error);
+  const armedByPr = new Map(list.json.map((pr) => [pr.number, !!pr.auto_merge]));
   const nums = opts.only != null ? [opts.only] : [...armedByPr.keys()];
+  // One page of the newest ci.yml runs answers most heads (advisory: a failed
+  // or empty page only means every head is read on its own). A single --pr
+  // read skips it: one per-head call is cheaper than a 100-run page.
+  const recent = opts.only == null && nums.length > 1 ? snap.recentCiRuns() : { json: null };
+  const byHead = runsByHead(recent.error ? [] : recent.json?.workflow_runs);
   const items = [];
   for (const n of nums) {
-    const one = request(`pulls/${n}`);
+    const one = snap.pr(n);
     if (one.error) return fail(`PR #${n}: ${one.error}`);
     const pr = one.json || {};
     if (opts.only != null && (pr.state !== "open" || pr.base?.ref !== DEPLOY)) {
@@ -290,42 +301,66 @@ export function measure(opts = {}) {
     const sha = pr.head?.sha;
     if (!sha) return fail(`PR #${n}: no head sha`);
     armedByPr.set(n, !!pr.auto_merge);   // refresh selected rows after discovery
-    const runsR = request(`actions/workflows/ci.yml/runs?head_sha=${sha}&per_page=20`);
-    if (runsR.error) return fail(`PR #${n} runs: ${runsR.error}`);
-    const runs = runsR.json?.workflow_runs || [];
-    const checks = request(`commits/${sha}/check-runs?per_page=100`);
+    let runs = byHead.get(sha);
+    if (!runs) {
+      const runsR = snap.ciRuns(sha);
+      if (runsR.error) return fail(`PR #${n} runs: ${runsR.error}`);
+      runs = runsR.json?.workflow_runs || [];
+    }
+    const checks = snap.checkRuns(sha);
     if (checks.error) return fail(`PR #${n} check-runs: ${checks.error}`);
     let jobs = [];
     const ci = ciState(runs);
     if (ci.runId && (ci.state === "failure" || ci.state === "cancelled"
         || (ci.state === "success" && !pr.draft && !pr.auto_merge))) {
-      for (let page = 1; ; page++) {
-        const j = request(`actions/runs/${ci.runId}/jobs?per_page=100&page=${page}`);
-        if (j.error) return fail(`PR #${n} jobs: ${j.error}`);
-        const batch = j.json?.jobs || [];
-        jobs.push(...batch);
-        if (batch.length < 100) break;
-      }
+      const j = snap.jobs(ci.runId);
+      if (j.error) return fail(`PR #${n} jobs: ${j.error}`);
+      jobs = j.json;
     }
-    // The newest issue comments (ascending order: the last page holds them) for
-    // the FLEET column; advisory, so a failed read leaves the body line alone.
+    // The newest issue comments for the FLEET column; advisory, so a failed
+    // read leaves the body line alone.
     // https://docs.github.com/en/rest/issues/comments#list-issue-comments
     let comments = [];
     if (pr.comments > 0) {
-      const c = request(`issues/${n}/comments?per_page=100&page=${Math.ceil(pr.comments / 100)}`);
+      const c = snap.comments(n, pr.comments);
       if (!c.error && Array.isArray(c.json)) comments = c.json;
     }
     items.push({ pr, runs, jobs, jobsRunId: ci.runId, checkRuns: checks.json?.check_runs || [], comments });
   }
+  snap.save();
   const result = evaluate(items, { armed: [...armedByPr.values()].filter(Boolean).length });
-  return { ok: true, ...result };
+  return { ok: true, ...result, requests: snap.stats() };
+}
+
+/** Hours a ready, green, unheld PR may sit with no push before it is a stall (audit 2026-10-26 Top 10 #3). */
+export const ALARM_HOURS = 12;
+
+/**
+ * The stall alarm: ready (not draft), ci.yml green on the head, Structural
+ * guards passed, no MERGE-HOLD:, and the head's newest ci.yml run created
+ * ≥ ALARM_HOURS ago (a push or a draft→ready flip starts a run, so this is
+ * "nothing has happened for 12 h"). Pure.
+ */
+export function stalled(rows, { now = Date.now(), hours = ALARM_HOURS } = {}) {
+  return (rows || []).filter((r) => !r.draft && r.ci === "success" && r.gate === "passed" && !r.hold
+    && r.ciAt && now - Date.parse(r.ciAt) >= hours * 3600e3);
+}
+export function alarmLines(rows, opts = {}) {
+  const now = opts.now ?? Date.now();
+  const hit = stalled(rows, opts);
+  return [
+    ...hit.map((r) => `#${r.number} STALLED ${ageLabel(r.ciAt, now)} ready+green, no hold, no push`
+      + ` (fleet ${r.fleetLetter || "-"}${r.armed ? `, armed ${r.mergeMethod}` : ""}): ${clip(r.title, 60)} ${r.url}`),
+    `= alarm ${hit.length ? `${hit.length} stalled` : "none"} (ready > ${opts.hours ?? ALARM_HOURS} h, green, no hold, no push)`,
+  ];
 }
 
 function parseArgs(argv) {
-  const out = { json: false, only: null };
+  const out = { json: false, only: null, alarm: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") out.json = true;
+    else if (a === "--alarm") out.alarm = true;
     else if (a === "--pr") {
       const n = Number(argv[++i]);
       if (!Number.isInteger(n) || n < 1) return { error: `--pr needs a positive integer (got ${argv[i]})` };
@@ -337,28 +372,38 @@ function parseArgs(argv) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
-  exitIfHelp(argv, `usage: node tools/ci/pr-board.mjs [--json] [--pr <n>]
+  exitIfHelp(argv, `usage: node tools/ci/pr-board.mjs [--json] [--pr <n>] [--alarm]
 
 Read-only board of every open PR into ${DEPLOY}: draft/ready, mergeable_state,
 auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
 the worker's fleet-status report (state, age, reason), the fleet block's letter (FL)
 and slot (SLOT), and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
 Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|stale-red|no; git fetch, no writes).
-Exit 0 printed, 2 bad args, 3 API/token.`);
+--alarm prints only the stall alarm: PRs ready > ${ALARM_HOURS} h, green, no MERGE-HOLD, no push
+(\`= alarm none|<n> stalled\`; exit 1 when any). Requests go through tools/lib/pr-snapshot.mjs (ETag cache).
+Exit 0 printed, 1 --alarm hit, 2 bad args, 3 API/token.`);
   const args = parseArgs(argv);
   if (args.error) {
     console.error(`pr-board: ${args.error}`);
     process.exit(2);
   }
-  const v = measure({ only: args.only });
+  const snapshot = createSnapshot();
+  const v = measure({ only: args.only, snapshot });
   if (!v.ok) {
     console.error(`pr-board: ${v.error}`);
     process.exit(v.badArgs ? 2 : 3);
   }
+  if (args.alarm) {
+    const lines = alarmLines(v.rows);
+    if (args.json) console.log(JSON.stringify({ stalled: stalled(v.rows), requests: v.requests }, null, 2));
+    else console.log(lines.join("\n"));
+    process.exit(stalled(v.rows).length ? 1 : 0);
+  }
   // needs-sync.mjs runs FIRST for every row the board would send to SYNC or FIX
   // (a red may be stale, a "dirty" may be generated-file-only): one verdict line each.
   const sync = {};
-  for (const r of v.rows) if (r.suggest === "SYNC" || r.suggest === "FIX") sync[r.number] = needsSync(r.branch);
+  for (const r of v.rows) if (r.suggest === "SYNC" || r.suggest === "FIX") sync[r.number] = needsSync(r.branch, { request: snapshot.get });
+  snapshot.save();
   const syncLine = (n) => (sync[n].ok ? `${verdictLine(sync[n])} (${sync[n].why})` : `= sync needed: unknown (${sync[n].error})`);
   if (args.json) console.log(JSON.stringify({ rows: v.rows.map((r) => (sync[r.number] ? { ...r, sync: sync[r.number] } : r)) }, null, 2));
   else {

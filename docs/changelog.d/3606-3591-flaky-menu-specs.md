@@ -1,0 +1,1 @@
+Fixed: two flaky menu specs — ui-scale no longer counts paint-only scroll-fade mask transitions in its zoom settle (#3606), and a race intro that hands START back without a garage-out now logs where it stopped, with the DAILY garage-out spec failing on that in seconds instead of a 180 s timeout (#3591).

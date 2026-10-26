@@ -1,0 +1,1 @@
+Improved: On the WebGL2 renderer path, the scene's reflection tag, the shadow maps' unused colour and the mirror's depth are no longer stored on frames nothing reads them, which saves memory bandwidth on phones; GRAPHICS LOW now also turns the lens flare off with the other look effects.

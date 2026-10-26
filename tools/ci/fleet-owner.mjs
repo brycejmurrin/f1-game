@@ -15,9 +15,15 @@
 // then `= fleet-owner <n> held, <n> claimed, <n> free`.
 //
 // HELD: every open PR into the deploy branch whose current diff contains the path (git three-dot diff when both
-// shas are local, else the PR files API, paginated; a list shorter than the PR's changed_files fails closed).
+// shas are local, else a cached files list keyed by head+base sha under artifacts/fleet-owner/, else the PR files
+// API — page 1 of every uncached PR in ONE parallel curl, further pages after; a list at GitHub's 3000-file cap
+// fails closed). `--pr <n>` still checks its own list against changed_files.
+// SPEED (2026-10-26 system audit §4; user grant, Bryce 2026-10-26 ~23:00 PT: "Fix hook or guard or perm"): the
+// bash-guard push lookup made two sequential calls per open PR (`pulls/<n>` only for changed_files, then the
+// files) and needed 38.9 s against its 20 s budget, so it timed out on every push. Stale claims (who-is-on-it's
+// STALE_MIN) no longer hold a path.
 // CLAIMED: a board claim whose text names the path, a glob over it (`*`, `**`, `?`, `{a,b}`) or a directory
-// prefix. A claim is messageable when its text carries a `session_…`/`cse_…` id or a `#<PR>`; the board's
+// prefix. A claim is messageable when its text carries a bus-addressable host/session id or a `#<PR>`; the board's
 // 24-hex session hash is not. LAPSE: with `--requested-at <ISO>` at least 60 min old, a claim older than 60 min
 // on a path outside every open diff prints `CLAIMED (lapsed-after-release-request)` and releases; an open-diff
 // path is never lapsed (it is HELD first).
@@ -32,8 +38,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api } from "./ready-gate.mjs";
+import { urlFor } from "./github-api.mjs";
+import { githubToken } from "./github-token.mjs";
 import { parseFleetStatus } from "./pr-board.mjs";
 import { parseBoard, readBoard, CLAIMS_BOARD } from "./who-is-on-it.mjs";
+import { addressProblem } from "./fleet-bus.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DEPLOY = "claude/f1-game-project-26h3ng";
@@ -93,11 +102,14 @@ export function claimPaths(text) {
   return out;
 }
 
-/** Who to message about a claim: a `session_…`/`cse_…` id or `#<PR>` in its text, else null (unaddressable). */
+/** Who to message about a claim: a bus-addressable session id or `#<PR>`, else null. */
 export function claimSession(text) {
   const body = claimBody(text);
   const s = /\b((?:[a-z]+:)?(?:session|cse)_[A-Za-z0-9]+)\b/.exec(body);
   if (s) return s[1];
+  for (const m of body.matchAll(/(?:^|[\s(])((?:codex|cursor|grok):[A-Za-z0-9_-]+)(?=$|[\s),;.])/g)) {
+    if (!addressProblem(m[1])) return m[1];
+  }
   const pr = /(?:^|[\s(])(#\d+)\b/.exec(body);
   return pr ? pr[1] : null;
 }
@@ -180,20 +192,97 @@ export function apiFiles(n, request = api) {
   return { files, head: one.json?.head?.sha };
 }
 
-/** Open PRs with their diffs: [{ holder, files }], or { error }. */
-export function openDiffs({ request = api, git = null } = {}) {
+/** GitHub's files endpoint lists at most this many files; a list that reaches it may be truncated. */
+export const FILES_CAP = 3000;
+const filesOf = (rows) => rows.flatMap((row) => [row?.filename, row?.previous_filename].filter(Boolean).map(norm));
+const filesPage = (n, page) => `pulls/${n}/files?per_page=100${page > 1 ? `&page=${page}` : ""}`;
+
+/** The rest of a PR's files after page 1 (sequential: only PRs over 100 files get here). */
+function restOfFiles(n, first, request) {
+  const rows = [...first];
+  let last = first;
+  for (let page = 2; last.length >= 100; page++) {
+    const b = request(filesPage(n, page));
+    if (b.error) return { error: `PR #${n} files: ${b.error}` };
+    if (!Array.isArray(b.json)) return { error: `PR #${n} files: bad payload` };
+    rows.push(...b.json);
+    last = b.json;
+  }
+  if (rows.length >= FILES_CAP) return { error: `PR #${n}: files list at GitHub's ${FILES_CAP}-file cap (may be incomplete)` };
+  return { files: filesOf(rows) };
+}
+
+/**
+ * GET many API paths in ONE curl (`--parallel`), the token on stdin like github-api.mjs. Returns
+ * Map(path -> { json } | { error }), or null when it cannot run (no token / curl failed); callers then fall back to
+ * `request` one by one. A non-200 answer is retried through `request` (its 5xx/429 backoff).
+ */
+export function curlBatch(paths, { request = api, env = process.env, run = spawnSync, dir = path.join(ROOT, "artifacts", "fleet-owner", "tmp") } = {}) {
+  if (!paths.length) return new Map();
+  const token = githubToken({ env });
+  if (!token) return null;
+  fs.mkdirSync(dir, { recursive: true });
+  const tmp = fs.mkdtempSync(path.join(dir, "b-"));
+  try {
+    const outFor = (i) => path.join(tmp, `${i}.json`);
+    const cfg = [`header = "Authorization: Bearer ${token}"`, `header = "Accept: application/vnd.github+json"`,
+      `header = "X-GitHub-Api-Version: 2022-11-28"`];
+    paths.forEach((p, i) => cfg.push(`url = ${JSON.stringify(urlFor(p))}`, `output = ${JSON.stringify(outFor(i))}`));
+    const r = run("curl", ["-sS", "--parallel", "--parallel-max", "16", "--max-time", "30", "-w", "%{http_code} %{filename_effective}\n", "-K", "-"],
+      { input: cfg.join("\n") + "\n", encoding: "utf8", maxBuffer: 16 << 20 });
+    if (r.error) return null;
+    const status = new Map();
+    for (const line of String(r.stdout || "").split("\n")) {
+      const m = /^(\d{3}) (.+)$/.exec(line.trim());
+      if (m) status.set(path.resolve(m[2]), Number(m[1]));
+    }
+    const out = new Map();
+    paths.forEach((p, i) => {
+      if (status.get(path.resolve(outFor(i))) === 200) {
+        try { out.set(p, { json: JSON.parse(fs.readFileSync(outFor(i), "utf8")) }); return; } catch { /* fall through */ }
+      }
+      out.set(p, request(p));
+    });
+    return out;
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+}
+
+const cacheFile = (dir, pr) => path.join(dir, `${pr.head?.sha}-${pr.base?.sha}.json`);
+function readCache(dir, pr) {
+  if (!dir || !pr.head?.sha || !pr.base?.sha) return null;
+  try { const c = JSON.parse(fs.readFileSync(cacheFile(dir, pr), "utf8")); return Array.isArray(c.files) ? c.files : null; } catch { return null; }
+}
+function writeCache(dir, pr, files) {
+  if (!dir || !pr.head?.sha || !pr.base?.sha) return;
+  try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(cacheFile(dir, pr), JSON.stringify({ pr: pr.number, files })); } catch { /* a cache is optional */ }
+}
+
+/**
+ * Open PRs with their diffs: [{ holder, files }], or { error }. Per PR: local git, else the head+base cache, else
+ * the API — page 1 for every remaining PR in one `batch` (parallel curl in production; `request` one by one when
+ * batch is null or cannot run), no `pulls/<n>` call.
+ */
+export function openDiffs({ request = api, git = null, batch = null, cacheDir = null } = {}) {
   const list = listOpenPrs(request);
   if (list.error) return list;
-  const out = [];
+  const files = new Map();
+  const need = [];
   for (const pr of list.prs) {
-    let files = gitFiles(pr, git);
-    if (!files) {
-      const r = apiFiles(pr.number, request);
-      if (r.error) return { error: r.error };
-      files = r.files;
-    }
-    out.push({ holder: holderOf(pr), files: new Set(files) });
+    const f = gitFiles(pr, git) || readCache(cacheDir, pr);
+    if (f) files.set(pr.number, f);
+    else need.push(pr);
   }
+  const firsts = (batch && batch(need.map((pr) => filesPage(pr.number, 1)), { request })) || null;
+  for (const pr of need) {
+    const b = firsts ? firsts.get(filesPage(pr.number, 1)) : request(filesPage(pr.number, 1));
+    if (!b || b.error) return { error: `PR #${pr.number} files: ${b ? b.error : "no answer"}` };
+    if (!Array.isArray(b.json)) return { error: `PR #${pr.number} files: bad payload` };
+    const r = restOfFiles(pr.number, b.json, request);
+    if (r.error) return { error: r.error };
+    writeCache(cacheDir, pr, r.files);
+    files.set(pr.number, r.files);
+  }
+  const out = list.prs.map((pr) => ({ holder: holderOf(pr), files: new Set(files.get(pr.number)) }));
   return { diffs: out.sort((a, b) => a.holder.pr - b.holder.pr) };
 }
 
@@ -207,7 +296,7 @@ const ageLabel = (min) => (min < 120 ? `${min}m` : min < 48 * 60 ? `${Math.round
 export function decide(paths, { diffs = [], claims = [], now = Date.now(), requestedAt = null, excludePr = null } = {}) {
   const reqAt = requestedAt ? Date.parse(requestedAt) : NaN;
   const lapseArmed = Number.isFinite(reqAt) && now - reqAt >= LAPSE_MIN * 60_000;
-  const live = claims.filter((c) => !c.released).map((c) => ({ ...c, session: claimSession(c.text), paths: claimPaths(c.text) }));
+  const live = claims.filter((c) => !c.released && !c.stale).map((c) => ({ ...c, session: claimSession(c.text), paths: claimPaths(c.text) }));
   const rows = [];
   for (const p of [...new Set(paths.map(norm).filter(Boolean))]) {
     const holders = diffs.filter((d) => d.holder.pr !== excludePr && d.files.has(p)).map((d) => d.holder);
@@ -328,7 +417,10 @@ export function main(argv = process.argv.slice(2), deps = {}) {
   }
   if (!paths.length) { err(`fleet-owner: no paths (args, stdin or --pr)\n${USAGE}`); return 2; }
 
-  const od = openDiffs({ request, git });
+  // Production (no injected request): one parallel curl + the head-sha cache; tests inject request and stay serial.
+  const batch = deps.batch !== undefined ? deps.batch : (deps.request ? null : curlBatch);
+  const cacheDir = deps.cacheDir !== undefined ? deps.cacheDir : (deps.request ? null : path.join(ROOT, "artifacts", "fleet-owner"));
+  const od = openDiffs({ request, git, batch, cacheDir });
   if (od.error) { err(`= fleet-owner unknown — ${od.error}`); return 3; }
   const claims = deps.claims !== undefined ? deps.claims : defaultBoard({ noFetch: o.noFetch, git: git || defaultGit, now });
   if (!claims) { err(`= fleet-owner unknown — cannot fetch ${CLAIMS_BOARD} (--no-fetch reads the local ref)`); return 3; }

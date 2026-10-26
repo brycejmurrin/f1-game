@@ -719,7 +719,6 @@ const TLX = (function () {
         }
       }
       _abortRenderer = renderer;
-      try { setTimeout(function () { if (/^apex26\.ctxLostReloads=\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
@@ -974,15 +973,20 @@ const TLX = (function () {
       // forceWebGL path already owns #game as WebGL2 (ownGL above).
       function detectSoftwareGL() {
         try {
-          const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+          const gl = (renderer.backend && renderer.backend.gl)
+            || canvas.getContext("webgl2") || canvas.getContext("webgl");
           if (!gl) return false;
           const ext = gl.getExtension("WEBGL_debug_renderer_info");
           const name = ((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || "")
             + " " + (gl.getParameter(gl.RENDERER) || "");
-          return /swiftshader|llvmpipe|softpipe|microsoft basic render|gdi generic/i.test(name);
+          return /swiftshader|llvmpipe|lavapipe|softpipe|microsoft basic render|gdi generic|subzero/i.test(name);
         } catch (_) { return false; }
       }
-      const softwareGL = forceWebGL ? detectSoftwareGL() : !!_softAdapter;
+      // Adapter sniff alone misses AUTO→WebGL2 when requestAdapter() is null or
+      // reports trimmed info (production SwiftShader). Classify from the LIVE
+      // WebGL renderer string — never from softPresent/headless UA (#3601).
+      const softwareGL = !!_softAdapter
+        || (!!(renderer.backend && renderer.backend.isWebGLBackend) && detectSoftwareGL());
       try {
         if (canvas && typeof canvas.setAttribute === "function") {
           const api = (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2";
@@ -1030,12 +1034,6 @@ const TLX = (function () {
       // says "Graphics reset" instead of a silent restart (#3513). Hidden-tab reloads stay quiet,
       // and so does the early-frame GPU-error heal: it fires on the title, before any race.
       let _lossCounted = false;
-      let _sessLostN = 0;   // two-reload budget when sessionStorage throws (GLX _sessLostN)
-      const _fallbackLossCount = () => {
-        try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; }
-        catch (_) { return 0; }
-      };
-      const _rememberFallbackLoss = (n) => { try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ } };
       try {
         let onShown = null, onPageShow = null;
         document.addEventListener("visibilitychange", onShown = function () { if (!document.hidden) _shownAt = _nowMs(); });
@@ -1053,6 +1051,7 @@ const TLX = (function () {
         _warmRequested = false;
         _warmPending = null;
         _warmDone = true;
+        if (typeof _pinnedPipes !== "undefined") _pinnedPipes.clear();   // A·W50: the lost device's pipelines go with it (typeof: sandboxed bodies)
         try {
           if (!document.hidden && _nowMs() - _shownAt < 3000) {   // seen on the way back: reload now, uncounted, nothing latched
             setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 300);
@@ -1076,12 +1075,7 @@ const TLX = (function () {
             document.addEventListener("visibilitychange", onVisible);
             return;
           }
-          const rk = "apex26.ctxLostReloads";
-          let n;
-          try {
-            n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
-            sessionStorage.setItem(rk, String(n));
-          } catch (_) { n = Math.max(++_sessLostN, _fallbackLossCount() + 1); _rememberFallbackLoss(n); }
+          const n = GfxEscalation.nextReloadCount();
           _lossCounted = true;
           if (n <= 2) setTimeout(function () { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: nothing to explain on the menu; the menu just cannot explain it */ } try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
           else {
@@ -1150,7 +1144,7 @@ const TLX = (function () {
               } catch (_) { /* picker absent in harness */ }
             }
           }
-        } catch (_) { /* visibility / picker / harness; budget uses _sessLostN when storage throws */ }
+        } catch (_) { /* visibility / picker / harness */ }
       };
       try {
         let onRestored = null;
@@ -1158,8 +1152,7 @@ const TLX = (function () {
           // Same two-reload budget as the loss handler: an unguarded restore
           // reload looped on a device that loses the context every boot.
           // Storage failure must not skip the reload (GLX: dead canvas).
-          var n = 0;
-          try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
+          const n = GfxEscalation.reloadCount();
           if (n > 2) return;
           if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ }
           try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
@@ -1208,18 +1201,38 @@ const TLX = (function () {
       // skipped, not double-counted). Software GL (SwiftShader/CI) stays
       // {supported:false}: it exposes the extension, but its time means nothing.
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
+      let _gpuSamples = 0, _gpuSampleAt = -1, _gpuResolvePending = false;
       let _inspectorHold = false;   // dev Inspector owns timestamp resolution (inspectorHost below)
       function resolveGpuTimer() {
-        if (!_gpuTimerOn) return;
-        const epoch = _gpuTimerEpoch;
+        if (!_gpuTimerOn || _deviceLost || _gpuResolvePending) return;
+        const epoch = _gpuTimerEpoch, be = renderer.backend;
+        const pool = be && be.timestampQueryPool && be.timestampQueryPool.render;
+        // r186 returns lastValue for an empty/in-flight resolve. Its frames
+        // array is replaced only after a new query batch finishes, even when
+        // that batch has exactly the same duration as the preceding one.
+        if (!pool || pool.isDisposed || pool.pendingResolve || !pool.currentQueryIndex) return;
+        const frames = pool.frames, gl = be.isWebGLBackend && be.gl;
+        const queries = [];
+        if (gl) {
+          for (const i of pool.queryOffsets.values()) if (pool.queryStates.get(i) === "ended") queries.push(pool.queries[i]);
+          if (!queries.length) return;
+        }
+        _gpuResolvePending = true;
         try {
           renderer.resolveTimestampsAsync("render").then(v => {
-            if (_gpuTimerOn && epoch === _gpuTimerEpoch && v != null && isFinite(v)) _gpuMs = v;
+            if (!_gpuTimerOn || _deviceLost || epoch !== _gpuTimerEpoch || pool.isDisposed) return;
+            // WebGL's pool also returns lastValue for interrupted queries.
+            // Require actual ready query objects and a non-disjoint clock.
+            if (gl && (gl.getParameter(pool.ext.GPU_DISJOINT_EXT) || queries.some(q => !gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)))) {
+              _gpuMs = -1; _gpuSampleAt = -1; return;
+            }
+            if (pool.frames === frames || !pool.frames.length || v == null || !isFinite(v) || v < 0) return;
+            _gpuMs = v; _gpuSampleAt = _nowMs(); _gpuSamples++;
           }).catch((e) => {
             // Per-frame call: note the first rejection only.
             if (!_gpuTimerFailLogged) { _gpuTimerFailLogged = true; Log.debug("gfx", "TLX: GPU timestamp resolve rejected:", e && e.message); }
-          });
-        } catch (_) { /* timing is optional */ }
+          }).finally(() => { _gpuResolvePending = false; });
+        } catch (_) { _gpuResolvePending = false; /* timing is optional */ }
       }
       function _gpuSupported() {
         try {
@@ -1503,6 +1516,13 @@ const TLX = (function () {
         }
         return rt;
       }
+      let _mirDiscards = 0, _mirInvD = null, _mirInvDT = null;
+      function _mirInv(mrt) {
+        const gl = renderer.backend && renderer.backend.gl;
+        if (!gl) return null;
+        if (!_mirInvD) { _mirInvD = [gl.DEPTH_ATTACHMENT]; _mirInvDT = [gl.DEPTH_ATTACHMENT, gl.COLOR_ATTACHMENT1]; }
+        return mrt ? _mirInvDT : _mirInvD;
+      }
       // Arm (true) / disarm (false) the scene pass's MRT for a draw into a mirror-shaped target.
       function _mirMrtArm(on, prev) {
         if (lit && lit.setSsrMrt) lit.setSsrMrt(on);
@@ -1686,7 +1706,8 @@ const TLX = (function () {
           // fragment-uniform floor (224) once three/TSL adds its own block, so
           // the lit shader fails to LINK on iOS Safari and every lit surface
           // draws nothing. Same _liteGpu gate as samples/outputType above.
-          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!post,
+          // Keep tag capability through an initial post failure; arm MRT only for compatible passes.
+          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!(TSL.mrt && renderer.setMRT),
             envCube: envRT ? envRT.texture : null, matMaps, lampGrid,
             sharedUniforms: _sharedUniforms,
             maxLights: _liteGpu ? LightBudget.LITE : LightBudget.MAX });
@@ -1962,13 +1983,13 @@ const TLX = (function () {
         c.key = buildMatKey(o, chunked, instanced);
         return c.key;
       }
-      function materialFor(opts, chunked, instanced) {
+      function materialFor(opts, chunked, instanced, fx) {
         if (_drawMatMode || !lit) return fallbackMat(instanced);
         if (vizMat) return instanced === 2 ? _aiOf(vizMat) : vizMat;
         if (!opts) return chunked ? defaultMatChunked : instanced === 2
           ? (_aiDefault || (_aiDefault = _attrInst(lit.makeMaterial({ instanced: true })))) : (instanced ? defaultMatInstanced : defaultMat);
         const o = opts;
-        const key = matKeyFor(o, chunked, instanced);
+        const key = fx ? matKeyFor(o, chunked, instanced) + "|fx" : matKeyFor(o, chunked, instanced);
         let m = matCache.get(key);
         if (m) _matHit++; else {
           _matMiss++;
@@ -1998,7 +2019,7 @@ const TLX = (function () {
           }
           m = lit.makeMaterial(chunked
             ? Object.assign({ chunked: true }, o)
-            : (instanced ? Object.assign({ instanced: true }, o) : o));
+            : (instanced ? Object.assign({ instanced: true }, o, fx ? { finishX: true } : null) : (fx ? Object.assign({ finishX: true }, o) : o)));
           if (instanced === 2 && m) _attrInst(m);
           matCache.set(key, m);
         }
@@ -2795,7 +2816,7 @@ const TLX = (function () {
         return (pair[s] = { __tlx: true, imesh: m, ib, instances: CO_CAP, visible: 0, rec: -1 });
       }
       function _coAppend(geo, w, opts) {
-        if (!_coOn || !w || _drawMatMode || vizMat || !lit || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches()) return false;
+        if (!_coOn || !w || _drawMatMode || vizMat || !lit || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches() || fxFor(geo, opts)) return false;
         const neg = w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
         const b = _coRun(geo, neg), mat = materialFor(opts, false, 2), em = drawEm(opts);
         // This pass's run is live while its record is (resetRecs nulls it) — A6's sentinel.
@@ -2827,15 +2848,17 @@ const TLX = (function () {
           b.rec = -1;
         }
       }
-      // The warm (warmFxPrograms): the attribute-instanced program and its double-sided opaque pipeline on
-      // the car basis' sign, when no run was on screen for the scene warm.
+      // Warm the double-sided opaque pipeline used by wheels and shared rival paint.
+      // A visible run alone does not prove the scene warm compiled this pipeline.
       let _coProbe = null;
       async function _coWarm() {
         if (!_coOn || !lit || skipBatches()) return;
-        for (const pair of _coRuns.values()) for (const b of pair) if (b && b.imesh.visible) return;
         if (!_coProbe) _coProbe = buildGeometry({ pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 0, 1, 0, 0, 1, 0, 0, 1], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] });
-        const m = _coRun(_coProbe, true).imesh;
-        m.material = materialFor({ doubleSided: true }, false, 2); m.count = 1; m.visible = true;
+        const b = _coRun(_coProbe, true), m = b.imesh;
+        b.ib.array[0] = b.ib.array[5] = b.ib.array[10] = b.ib.array[15] = 1;
+        setRange0(b.ib, CO_STRIDE); b.ib.needsUpdate = true;
+        m.count = 1; m.visible = true;
+        m.material = materialFor({ doubleSided: true }, false, 2);
         try { await renderer.compileAsync(m, camera, scene); } finally { m.visible = false; }
       }
       function ensureStream(slot, verts) {
@@ -2849,6 +2872,7 @@ const TLX = (function () {
         ib.setUsage(_instUsage);   // A-H1: uploads only through uploadStream (a dirty producer)
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
+        geo.__tlxPin = true;   // a stream idle for 20 s (no sparks, no kick-up) kept its pipeline: prunePool skips it (#3677)
         slot.geo = geo; slot.ib = ib; slot.cap = cap;
         return true;
       }
@@ -2865,6 +2889,7 @@ const TLX = (function () {
         ib.setUsage(_instUsage);   // A-H1, as ensureStream
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
+        geo.__tlxPin = true;   // as ensureStream
         slot.geo = geo; slot.ib = ib; slot.cap = (arr.length / slot.stride) | 0;
         return true;
       }
@@ -3143,11 +3168,16 @@ const TLX = (function () {
       // (car-draw.js _ringOpts) is queued only once a disc is hot, so its first
       // draw is the first braking zone, at alpha ~0.3 — the TRANSPARENT ("t,")
       // variant of a key the grid never draws. Census 245 caught it as the one
-      // material minted mid-race and its one lazy pipeline. The cockpit ERS /
-      // overtake / aero-flap pulses share that key. Mint it during the lights and
-      // compile it once per vertex layout already in the pool: the pipeline also
-      // keys on the layout, and tlx-chunked's pack makes layouts differ by mesh.
-      const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
+      // material minted mid-race and its one lazy pipeline. The cockpit dash ERS
+      // bar and armed overtake lamp (car-draw.js _rigFxA) pulse the same opts
+      // DOUBLE-SIDED, a key of their own ("t,0.9,…|ds|na") first drawn on the
+      // first ERS deploy: the first BOOST tap on WebGPU waited 734–934 ms for its
+      // pipeline (A·W15, iPhone 18 Pro Max, cockpit cam). Mint both during the
+      // lights and compile each once per vertex layout already in the pool: the
+      // pipeline also keys on the layout, and tlx-chunked's pack makes layouts
+      // differ by mesh.
+      const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 },
+        { doubleSided: true, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
       // THE LAUNCH'S FX VARIANTS (FieldLod warm, js/car/field-lod.js): the
       // throttle-lift exhaust flame (car-draw.js _flameOpts, alpha < 1) and the
       // ERS strip's two phases (_ersLightOpts, alpha 1 / 0.6) are first drawn when
@@ -3199,7 +3229,11 @@ const TLX = (function () {
           // matrixWorld.determinantAffine() < 0, and the car draws one side's
           // parts (the brake ring among them) through a mirrored matrix — the
           // one field the lap's pipeline key differed in (probe, field 27).
-          for (const g of geos.values()) for (const sx of [1, -1]) {
+          // The double-sided variant is the cockpit dash ERS bar / OT lamp
+          // (_rigFxA), never drawn mirrored: its cw twin was a whole lit
+          // pipeline (~1.2 s cold on an iPhone 14) no race used —
+          // ers-deploy-census tlx-gpu helmet, first deploy: lazy=0 without it.
+          for (const g of geos.values()) for (const sx of (o.doubleSided ? [1] : [1, -1])) {
             await compileWarmProbe(g, mat, sx);
           }
         }
@@ -3214,16 +3248,39 @@ const TLX = (function () {
         }
         _warmStages.lateFx = _LATE_FX.length;
       }
-      // AUTO (unset) = ON for three's WebGL2 backend only. There compileAsync
-      // links with KHR_parallel_shader_compile and polls COMPLETION_STATUS, but
-      // the render path links synchronously (WebGLBackend createRenderPipeline,
-      // promises === null -> getProgramParameter(LINK_STATUS)), so the 8 post
-      // programs the gated warm skipped each blocked the thread mid-race —
-      // census 245's WebGL2 leg: 8 lazy links and a 4.25 s callback. On WebGPU
-      // the post chain does not compile lazily (census 244), so it stays off.
+      // AUTO (unset) = ON for three's WebGL2 backend, and for WebGPU when the
+      // warm is from the menu path (#3279). WebGL2: compileAsync polls
+      // COMPLETION_STATUS but the render path links synchronously, so the 8
+      // post programs a gated warm skipped each blocked mid-race (census 245:
+      // 4.25 s). WebGPU race/loading keep the 3 s gate (census 244); menu
+      // enables post+shadow so they do not land in race frames (iPhone 14:
+      // 616 ms post / 115 ms shadow stalls). apex26.tlxWarmPlus=1/0 forces.
       let _warmPlus = null;
+      let _warmWhere = "menu";   // menu | loading | race — set by warm(opts) / auto
       try { const v = localStorage.getItem("apex26.tlxWarmPlus"); _warmPlus = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
-      const warmPlusOn = () => _warmPlus !== null ? _warmPlus : !!(renderer && renderer.backend && renderer.backend.isWebGLBackend);
+      function _resolveWarmWhere(opts) {
+        if (opts && typeof opts.where === "string" && (opts.where === "menu" || opts.where === "loading" || opts.where === "race")) return opts.where;
+        try {
+          if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.armed && RaceEntryProfile.armed()) {
+            if (RaceEntryProfile.menuEntrySession && RaceEntryProfile.menuEntrySession()) return "loading";
+            return "race";
+          }
+        } catch (_) { /* profile optional */ }
+        return "menu";
+      }
+      const warmPlusOn = () => {
+        if (_warmPlus !== null) return _warmPlus;
+        if (renderer && renderer.backend && renderer.backend.isWebGLBackend) return true;
+        return _warmWhere === "menu";   // WebGPU menu path only
+      };
+      // Menu warm: yield between post / shadow / cockpit so the title stays responsive.
+      const warmIdleChunks = () => _warmWhere === "menu";
+      const _idleYield = (ms) => (typeof TLXShaders !== "undefined" && TLXShaders.idleYield)
+        ? TLXShaders.idleYield(ms)
+        : new Promise((r) => { if (typeof requestIdleCallback === "function") requestIdleCallback(r, { timeout: ms || 48 }); else setTimeout(r, 0); });
+      // The caster warm alone is cheap depth programs and saves a mid-race build on BOTH backends (A·W14), so AUTO
+      // is on everywhere; an explicit apex26.tlxWarmPlus still forces it either way.
+      const casterWarmOn = () => _warmPlus !== null ? _warmPlus : true;
       // A-W1 (perf hunt 4): THE DRAW WARM. The race's opening frames were rAF
       // gaps of 1.1-4.1 s with the main thread idle (census 452-454): the
       // DRIVER's first-draw work, which compileAsync cannot reach — ANGLE-Metal
@@ -3247,6 +3304,19 @@ const TLX = (function () {
       let _drawWarmKnob = null;
       try { const v = localStorage.getItem("apex26.tlxDrawWarm"); _drawWarmKnob = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
       const drawWarmOn = () => (_drawWarmKnob !== null ? _drawWarmKnob : !(softGpu() || softwareGL));
+      // One geometry per vertex layout among the scene's lit meshes: the layouts the casters draw (tlx-shadow probes).
+      function casterSources() {
+        const seen = new Set(), out = [];
+        scene.traverse((o) => {
+          const g = o.isMesh && o.geometry, m = o.material;
+          if (!g || !g.attributes || !g.attributes.position || !m || typeof m.customProgramCacheKey !== "function") return;
+          if (String(m.customProgramCacheKey()).indexOf("tlx-lit") !== 0) return;
+          const sig = Object.keys(g.attributes).sort().join(",") + (g.index ? "|i" : "");
+          if (seen.has(sig) || out.length >= 8) return;
+          seen.add(sig); out.push(g);
+        });
+        return out;
+      }
       function drawWarmStage(usePost, useTag, opts, mirrorWarmed, mirrorOnly) {   // mirrorOnly: startMirrorWarm (B-F3.1)
         const drawn = { mirror: 0, scene: 0, post: 0, casts: 0 };
         if (!usePost || !post || !post.sceneTarget) { _mirWarmUnswap(); return drawn; }
@@ -3406,6 +3476,9 @@ const TLX = (function () {
         // makes — so it is ON only where it measured a win (three's WebGL2
         // backend, see _warmPlus), as is the caster warm below; elsewhere
         // the 3 s gate stands. apex26.tlxWarmPlus=1/0 forces it.
+        // Gate lines owned by A·W14 #3618 — do not edit. Menu idle yield (#3279) sits above.
+        // typeof: canary sandboxes eval this body without the outer helpers.
+        if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
         if (usePost && post.warm && (warmPlusOn() || performance.now() - _warmAt < 3000)) {
           _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
         }
@@ -3417,8 +3490,11 @@ const TLX = (function () {
         // blocker — on the main thread (gpu-census 203/205 stacks, via
         // endPass). sunPass runs before present() on the same frame, so by
         // now castScene holds the grid's casters and the warm compiles the
-        // real ones.
-        if (warmPlusOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
+        // real ones. A·W14: plus probe casters in the scene's lit layouts, for the targets no caster has reached
+        // yet (night lamp and car maps), and on WebGPU too: there the lamp-pass pipelines were built synchronously
+        // mid-race, and only depth programs move into the covered warm (casterWarmOn, apex26.tlxWarmPlus=0 off).
+        if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
+        if (casterWarmOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(casterSources()); }
         _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
         // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
         if (typeof sky !== "undefined" && sky && sky.cacheWarm) { _gpuLastOperation = "compile-sky-cache"; await sky.cacheWarm(renderer); }
@@ -3474,14 +3550,16 @@ const TLX = (function () {
             try { Log.warn("gfx", "TLX program warm failed", String(e), (e && e.stack) || ""); } catch (_) { /* logging is optional */ }
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
-            _warmHistory.push({ at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
-              mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed });
+            const _warmRec = { where: (typeof _warmWhere !== "undefined" ? _warmWhere : "menu"), at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
+              mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed };
+            _warmHistory.push(_warmRec);
             if (_warmHistory.length > 6) _warmHistory.shift();
+            try { if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.noteWarm) RaceEntryProfile.noteWarm(_warmRec); } catch (_) { /* optional */ }
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        })().finally(() => { _warmPending = null; _warmDone = true; });
+        })().finally(() => { _warmPending = null; _warmDone = true; if (typeof pinPipelines === "function") pinPipelines(); });
       }
       // B-F3.1: THE DEFERRED MIRROR STAGE ALONE, requested by the first mirrorBegin after an AUTO entry warm skipped
       // it (wantMirrorWarm / mirrorWarmGate). The same compiles and W1's 4x4 mirror draw, owned the way the entry
@@ -3518,7 +3596,7 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        })().finally(() => { _warmPending = null; });
+        })().finally(() => { _warmPending = null; if (typeof pinPipelines === "function") pinPipelines(); });
       }
       // THE DRAWS NO WARM FRAME HELD (hunt 6 B·H6): the cockpit rig. The scene warm compiles what its frame drew,
       // and a chase start draws no rig — the menu path does not even run that warm (its world was warmed in the
@@ -3566,7 +3644,7 @@ const TLX = (function () {
         if (!mesh || !mesh.geo || (opts && opts.coalesce)) return;
         const w = model;
         const neg = !!w && w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
-        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false), sx: neg ? -1 : 1 });
+        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1 });
       }
       function startRigWarm() {
         const job = _rigWarm;
@@ -3585,13 +3663,23 @@ const TLX = (function () {
             renderer.setMRT(useTag ? _ssrMrtNode() : null);
             renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
             _gpuLastOperation = "compile-rig";
-            for (const r of job.recs) {
+            for (let i = 0; i < job.recs.length; i++) {
+              // Menu path: yield every other cockpit pair so the title stays live (#3279).
+              if (i && typeof warmIdleChunks === "function" && warmIdleChunks() && (i & 1) === 0) await _idleYield(32);
+              const r = job.recs[i];
               await compileWarmProbe(r.geo, r.mat, r.sx);
+              // A·W50: a double-sided pair keys its pipeline on the winding too, and the race draws the rig's
+              // double-sided keep material mirrored as well: the first race frame built its cw twin synchronously
+              // (lavapipe census, the one lit pipeline left after the pin). Compile the other sign under the cover.
+              if (r.mat.side === THREE.DoubleSide) await compileWarmProbe(r.geo, r.mat, -r.sx);
               let s = _rigDone.get(r.geo);
               if (!s) _rigDone.set(r.geo, s = new Set());
               s.add(_rigKey(r));
             }
-            if (job.mirror) { _gpuLastOperation = "compile-rig-mirror"; await warmMirrorStage(usePost, useTag); _rigMirrorKey = job.mirror; }
+            if (job.mirror) {
+              if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
+              _gpuLastOperation = "compile-rig-mirror"; await warmMirrorStage(usePost, useTag); _rigMirrorKey = job.mirror;
+            }
             await _gpuSettled(3000);   // the driver's own compile is GPU-process side, as the draw warm's is
             ok = true;
           } catch (e) {
@@ -3603,7 +3691,7 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        })().finally(() => { _warmPending = null; job.done(ok); });
+        })().finally(() => { _warmPending = null; if (typeof pinPipelines === "function") pinPipelines(); job.done(ok); });
       }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
@@ -3654,14 +3742,48 @@ const TLX = (function () {
       // Cadence on the CLOCK, never a frame count — rAF runs at a fraction of
       // a Hz on a software rasteriser, where a "% N frames" gate fires either
       // never or constantly (measured, PERF-FINDINGS 2n).
+      // A·W50: A DROPPED WRAPPER MUST NOT TAKE ITS PIPELINE WITH IT. three r186 destroys a render pipeline (and its
+      // programs) when the last RenderObject using it is deleted (Pipelines.delete -> _releasePipeline at usedTimes 0),
+      // so every pipeline the menu warm built for a world mesh not drawn for 20 s (the garage on screen) was destroyed
+      // here, and race entry rebuilt it synchronously: lavapipe census, Monza after a full menu warm, 13 of the 14
+      // race-entry pipelines byte-identical (vertex + fragment WGSL, targets, depth bias, cull) to ones the menu had
+      // built; iPhone 14 Pro ~1.2 s each (docs/notes/MIRROR-WARM-2026-10-24.md). A sweep at warm ends missed the ones
+      // released mid-warm (a RenderObject switching pipeline, e.g. one wrapper drawn ccw then cw, frees the old one at
+      // once: 3 of the 4 left), so each render pipeline takes one extra use as three creates it, and the sweep (each
+      // warm's end, each prune) pins any built before. Capped, and cleared on device loss with the rest.
+      const PIPE_PIN_CAP = 512;
+      const _pinnedPipes = new Set();
+      let _pinArmed = null;   // the Pipelines instance whose _getRenderPipeline pins
+      function pinPipe(p) {
+        if (!p || _pinnedPipes.size >= PIPE_PIN_CAP || _pinnedPipes.has(p) || !p.vertexProgram || !p.fragmentProgram) return;   // render pipelines only
+        p.usedTimes++; p.vertexProgram.usedTimes++; p.fragmentProgram.usedTimes++;
+        _pinnedPipes.add(p);
+      }
+      function pinPipelines() {
+        const P = renderer && renderer._pipelines, caches = P && P.caches;
+        if (!caches || typeof caches.values !== "function") return _pinnedPipes.size;
+        if (_pinArmed !== P && typeof P._getRenderPipeline === "function") {
+          const get = P._getRenderPipeline;
+          P._getRenderPipeline = function () { const p = get.apply(this, arguments); pinPipe(p); return p; };
+          _pinArmed = P;
+        }
+        for (const p of caches.values()) pinPipe(p);
+        return _pinnedPipes.size;
+      }
       const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 20000;
       function prunePool(now) {
+        const pin = typeof pinPipelines === "function" ? pinPipelines : null;   // typeof: sandboxed prunePool bodies
+        if (pin && !_pinArmed) pin();   // arm the pin at the first present, before any warm builds a pipeline
         if (now - _pruneLast < PRUNE_EVERY_MS) return;
         _pruneLast = now;
+        if (pin) pin();
         let w = 0;
         for (let i = 0; i < meshPool.length; i++) {
           const m = meshPool[i];
-          if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS) { meshPool[w++] = m; continue; }
+          // A PINNED geometry (pinMesh: the cockpit ERS bar, OT lamp, ERS strip) keeps its wrappers: they draw
+          // only while ERS deploys, and on WebGPU the wrapper is its pipeline's last holder, so a prune between
+          // two BOOST presses made every press rebuild the pipeline mid-race (#3677).
+          if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS || (m.geometry && m.geometry.__tlxPin)) { meshPool[w++] = m; continue; }
           const byMat = meshByGeo.get(m.geometry);
           if (byMat) {
             // Drop the wrapper from its occurrence list; an emptied list and an
@@ -4096,9 +4218,15 @@ const TLX = (function () {
           g.setIndex(TLXShaders.packIndex
             ? TLXShaders.packIndex(THREE, data.idx, verts)
             : new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
+          if (g.index.array instanceof Uint16Array) g.index.__apexUint16Index = true; // owned final triangle indices
         }
+        // FINISHES ON DEMAND: a car geometry wearing a 60-85 finish id draws its carFinish material through the
+        // `fx` lit graph (materialFor), the only one that carries those tints. Scanned once, here.
+        const ids = data.mat;
+        if (ids) for (let i = 0; i < ids.length; i++) { const v = Math.round(ids[i]); if (v >= 60 && v <= 85) { g.userData.tlxFx = true; break; } }
         return _regGeo(g, "mesh");
       }
+      const fxFor = (geo, opts) => !!(opts && opts.carFinish && geo && geo.userData.tlxFx);
 
       /** Read the raw (un-colour-managed, un-premultiplied) pixels of each
        * pack layer into `data` through Assets.readLayerBytes (one scratch
@@ -4484,16 +4612,7 @@ const TLX = (function () {
         try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
         if (!toGlx) _latchWebKitGL("first render refused");
         try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
-        let n;
-        try {
-          n = (parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) + 1;
-          sessionStorage.setItem("apex26.ctxLostReloads", String(n));
-        } catch (_) {
-          let prior = 0;
-          try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); prior = m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { /* best effort */ }
-          n = Math.max(++_sessLostN, prior + 1);
-          try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ }
-        }
+        const n = GfxEscalation.nextReloadCount();
         if (n <= 2) { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ } try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
         try {
           recordGfxBudgetExhausted("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
@@ -4656,18 +4775,21 @@ const TLX = (function () {
           const sup = _gpuSupported();
           if (on !== undefined) {
             const next = !!on && sup && !_inspectorHold;
-            if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuMs = -1; }
+            if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuMs = -1; _gpuSampleAt = -1; }
             _gpuTimerOn = next;
             if (!_inspectorHold) try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
-            if (!_gpuTimerOn) _gpuMs = -1;
+            if (!_gpuTimerOn) { _gpuMs = -1; _gpuSampleAt = -1; }
           }
-          return { supported: sup, on: _gpuTimerOn };
+          if (_deviceLost) { _gpuMs = -1; _gpuSampleAt = -1; }
+          // sampleAt dates resolution, not submission; reads never mint samples.
+          return { supported: sup, on: _gpuTimerOn, samples: _gpuSamples, sampleAt: _gpuSampleAt,
+            sampleAgeMs: _gpuSampleAt < 0 ? -1 : Math.max(0, _nowMs() - _gpuSampleAt) };
         },
-        gpuMs() { return _gpuMs; },
+        gpuMs() { return _deviceLost ? -1 : _gpuMs; },
         // Dev Inspector hand-off (js/perf/three-inspector.js): the renderer plus the gpuTimer interlock — while held,
         // gpuTimer stays off so only the Inspector's own pass resolves timestamp queries.
         inspectorHost() {
-          return { renderer, hold(on) { _inspectorHold = !!on; if (on) { _gpuTimerOn = false; _gpuMs = -1; _gpuTimerEpoch++; } } };
+          return { renderer, hold(on) { _inspectorHold = !!on; if (on) { _gpuTimerOn = false; _gpuMs = -1; _gpuSampleAt = -1; _gpuTimerEpoch++; } } };
         },
         // "Skipped for cadence, map still valid" — see tlx-shadow.js §KEEP.
         carShadowKeep() { return !!(shadowSys && shadowSys.carShadowKeep()); },
@@ -4736,6 +4858,7 @@ const TLX = (function () {
           const vCount = data.pos.length / 3;
           const IndexArray = vCount > 65535 ? Uint32Array : Uint16Array;
           g.setIndex(new THREE.BufferAttribute(new IndexArray(data.idx), 1));
+          if (g.index.array instanceof Uint16Array) g.index.__apexUint16Index = true; // owned final triangle indices
           return { __tlx: true, geo: _regGeo(g, "tex"), tex: true, count: data.idx.length };
         },
         createChunkedMesh(data, cellSize) {
@@ -4816,6 +4939,8 @@ const TLX = (function () {
           return true;
         },
         freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
+        // Exempt a small, intermittently drawn mesh from the idle prune (feature-detected; freeMesh still frees it).
+        pinMesh(m) { if (m && m.geo) m.geo.__tlxPin = true; },
         freeChunkedMesh(m) {
           if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }
@@ -5317,7 +5442,12 @@ const TLX = (function () {
             _gpuLastOperation = "render-mirror";
             const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
             if (mrt) _mirMrtArm(true);
-            try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); }
+            // A-P2W: WebGPU takes the same discard as a hint set BEFORE the pass (vendored patch 17).
+            const hinted = !!(post && post.discardHint && post.discardHint(mirRT, mrt ? 2 : 0, true));
+            try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); if (hinted) post.discardHintOff(mirRT); }
+            // A-P2: nothing reads the mirror's depth or its ssrTag attachment (only textures[0] is
+            // ever sampled), so on WebGL2 drop both stores while its FBO is still bound (tlx-post).
+            if (hinted || (post && post.discardAttachments && post.discardAttachments(mirRT, _mirInv(mrt)))) _mirDiscards++;
             _mirRenders++;
             _mirFails = 0;   // the cap means FOUR CONSECUTIVE failures: unrelated one-frame throws must not retire the mirror
           } catch (e) {
@@ -5334,7 +5464,7 @@ const TLX = (function () {
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
-            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr,
+            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr, discards: _mirDiscards,
             mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned };   // A-H5
         },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
@@ -5477,9 +5607,10 @@ const TLX = (function () {
         castShadowInstanced,
         // Request after race setup; present() compiles the prepared race frame,
         // not the previous menu scene. Each race gets another warm opportunity.
-        warm() {
+        // opts.where: "menu" | "loading" | "race" (auto when omitted — see _resolveWarmWhere).
+        warm(opts) {
           if (_deviceLost) return;
-          if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
+          if (!_warmPending) { _warmWhere = _resolveWarmWhere(opts); _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !_deviceLost && !!_warmPending; },
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
@@ -5712,7 +5843,7 @@ const TLX = (function () {
         draw(mesh, model, opts) {
           if (opts && opts.coalesce && mesh && mesh.geo && _coAppend(mesh.geo, model, opts)) return;   // R1
           if (_capture) { _captureRec(mesh, model, opts); return; }   // warmDraws: compile, never paint
-          if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false), drawEm(opts), drawAl(opts),
+          if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false, undefined, fxFor(mesh.geo, opts)), drawEm(opts), drawAl(opts),
             opts && opts.surfaceId === 16 ? 1 : 0, null, null);
         },
         drawChunked(mesh, model, opts) {
@@ -6079,6 +6210,7 @@ const TLX = (function () {
                   _postHealth = { state: "healthy", attempts: _postStrikes, maxAttempts: 3, reason: "" };
                 }
               } finally {
+                if (post.discardHintOff) post.discardHintOff();   // A-P2W: a throw mid-scene must not leave the hint on
                 if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
                 if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
                 if (_hadMrt) renderer.setMRT(_prevMrt || null);
@@ -6134,17 +6266,16 @@ const TLX = (function () {
               && _glPin !== "0" && _glPin !== "1" && !_forceHw.on && !_softBlit) {
             _healTried = true;
             try {
-              const rk = "apex26.ctxLostReloads";
-              const n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
+              const n = GfxEscalation.reloadCount() + 1;
               if (n <= 2) {
-                sessionStorage.setItem(rk, String(n));
+                GfxEscalation.nextReloadCount();
                 sessionStorage.setItem("apex26.tlxAutoGL", "1");
                 _latchWebKitGL("GPU errors in the first " + _presentN + " frames");
                 try { localStorage.setItem("apex26.gfxTlxFail", "WebGPU rejected work in the first " + _presentN + " frames (" + String(_gpuFirstError || "gpu error").slice(0, 160) + ") — AUTO takes three WebGL2"); } catch (_) { /* backendState still carries the reason */ }
                 try { Log.warn("gfx", "TLX: " + _gpuErrors + " GPU error(s) in the first " + _presentN + " frames — reloading on three WebGL2:", _gpuFirstError); } catch (_) { /* no Log in the node VM harness */ }
                 setTimeout(function () { try { location.reload(); } catch (_) { /* harness: the session key still steers the next real boot */ } }, 300);
               }
-            } catch (_) { /* no sessionStorage: cannot bound a reload, so do not start one */ }
+            } catch (_) { /* no sessionStorage: cannot persist the AUTO path, so do not reload */ }
           }
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
           // Count the CHUNKED releases too. tlxMirror reported only the static
@@ -6357,6 +6488,8 @@ const TLX = (function () {
               if (!rt) return Promise.resolve({ label, err: "no rt" });
               const w = rt.width, h = rt.height;
               const isHalf = rt.texture && rt.texture.type === THREE.HalfFloatType;
+              // A packed 11/11/10 scene target (phones, tlx-post scene11) reads back one uint32 per pixel: not decoded here.
+              if (rt.texture && rt.texture.type === THREE.UnsignedInt101111Type) return Promise.resolve({ label, err: "rg11b10 target: this probe decodes half/byte only (apex26.tlxScene11=0 for a reading)" });
               return renderer.readRenderTargetPixelsAsync(rt, 0, 0, w, h).then(function (src) {
                 // three pads copyTextureToBuffer rows to 256 BYTES (WebGPU rule).
                 const bpp = isHalf ? 8 : 4;
@@ -6515,11 +6648,11 @@ const TLX = (function () {
             o.presentMs = +_presentMs.toFixed(3);
             // The warm timeline: how long the lights held on THIS GPU, by stage;
             // pending/done say whether a census beat is inside it (207 was, all 15).
-            o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
+            o.warm = { where: _warmWhere, at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
                        draw: _warmStages.draw, drawn: _warmStages.drawn, garageScene: _warmStages.garageScene,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
-                       pending: !!_warmPending, done: _warmDone, history: _warmHistory.slice() };
+                       pending: !!_warmPending, done: _warmDone, history: _warmHistory.slice(), pinned: _pinnedPipes.size };   // A·W50
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
             // THIS WAS ALWAYS undefined. `renderer.backend.data` is a
             // WeakMap, which has no `.size`, so the guard never passed and the

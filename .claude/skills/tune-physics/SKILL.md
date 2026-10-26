@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: "Use when the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, A-B physics settings, a physics sweep, ROAD_FOLLOW, or whether driving feel improved; skidpad/step-steer/`player-dyn` VM A/B. Shake/hit-stop/juice → game-feel; camera lag → playwright-probe; gamepad/touch/tilt/steer sliders → input-controls; AI → ai-racecraft."
+description: "Use when the car understeers/oversteers, turn-in is too lazy or snappy, grip, trail braking, road-follow or pace feels wrong, A/B physics settings, a sweep, ROAD_FOLLOW, or skidpad/step-steer/player-dyn VM A/B. Shake/juice → game-feel; camera lag → playwright-probe; steer sliders → input-controls; AI → ai-racecraft."
 ---
 
 # Tune the physics
@@ -29,7 +29,7 @@ absolute magnitudes.
 `expo` / `maxSlip` / `speedRef` are also the player's STEER sliders (LINEARITY / STEER LOCK /
 SPEED STEER): the slider UI, defaults and migration are **input-controls**; here they are A/B knobs.
 There is no "steer gain" knob: `updateCar` (js/game.js) steers `sign(s)·|s|^expo · maxSlip · lockTaper`, where
-`lockTaper` is 1 up to 15 m/s (vStd), `1/(1 + vStd/speedRef)` from 30 m/s, and a linear blend between, so slow corners
+`lockTaper` is 1.06 up to 15 m/s (vStd; a slight low-speed boost), `1/(1 + vStd/speedRef)` from 30 m/s, and a linear blend between, so slow corners
 sit in the blend. A/B `maxSlip` (linear gain), `expo` (near centre) or `speedRef` (speed taper); turn-in understeer also
 moves with `frontGrip` and `yawInertia`.
 

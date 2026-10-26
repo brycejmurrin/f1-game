@@ -1,5 +1,7 @@
 # Mesh census — main vs mirror × distance × source (2026-10-19)
 
+> **Erratum (2026-10-23):** the TLX near/far bands below measured each draw's `getWorldPosition()`, which for a world-baked chunk is the world origin, so they do not say how far the chunks were from the camera; the "LOD pays … main-far" calls built on them do not stand. Pass totals and call counts do. Corrected phone-shaped counts and the LOD decision: [TLX-PHONE-PASS-CENSUS-2026-10-23](TLX-PHONE-PASS-CENSUS-2026-10-23.md).
+
 Counting step of [#2657](https://github.com/brycejmurrin/f1-game/issues/2657) and the measurement contract of [#2631](https://github.com/brycejmurrin/f1-game/issues/2631).
 
 Tool: `tools/perf/mesh-census.mjs` (aggregation: `tools/perf/mesh-census-lib.mjs`). **No `js/render/**` edits** — wraps `renderer.render` / `renderObject` (TLX) or WebGL `draw*` + `bindFramebuffer` (GLX) from Playwright/__apex, same shape as `tools/gfx/pass-census.mjs` (2026-10-17).

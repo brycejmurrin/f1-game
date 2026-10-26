@@ -5,6 +5,43 @@
 const GfxEscalation = (function () {
   "use strict";
 
+  // One recovery episode spans renderer switches and reloads. window.name is
+  // the per-tab fallback when either storage operation is denied. Preserve its
+  // caller-owned prefix, and reset only at explicit clean-race / user boundaries.
+  const LOSS_KEY = "apex26.ctxLostReloads";
+  const LOSS_MARKER = /(?:^|\n)apex26\.ctxLostReloads=(\d+)$/;
+  let _reloadCount = 0;
+  function reloadCount() {
+    let n = 0, marker = null;
+    try { marker = String(window.name || "").match(LOSS_MARKER); } catch (_) { /* no window */ }
+    // A zero fallback marker records a clean boundary even if stale storage
+    // could not be cleared. Prefer it to those old bytes after storage recovers.
+    if (marker) n = parseInt(marker[1], 10) || 0;
+    else try { n = parseInt(sessionStorage.getItem(LOSS_KEY), 10) || 0; } catch (_) { /* memory fallback */ }
+    return Math.max(_reloadCount, n);
+  }
+  function rememberReloadCount(n) {
+    try {
+      const name = String(window.name || "").replace(LOSS_MARKER, "");
+      window.name = name + (name ? "\n" : "") + LOSS_KEY + "=" + n;
+    } catch (_) { /* storage / memory still bound same-document losses */ }
+  }
+  function nextReloadCount() {
+    _reloadCount = reloadCount() + 1;
+    try { sessionStorage.setItem(LOSS_KEY, String(_reloadCount)); } catch (_) { /* fallback below */ }
+    // Keep both stores coherent even when reads and writes recover separately.
+    rememberReloadCount(_reloadCount);
+    return _reloadCount;
+  }
+  function resetReloadBudget() {
+    _reloadCount = 0;
+    let cleared = false;
+    try { sessionStorage.removeItem(LOSS_KEY); cleared = true; } catch (_) { /* retain zero marker */ }
+    if (cleared) {
+      try { window.name = String(window.name || "").replace(LOSS_MARKER, ""); } catch (_) { /* no window */ }
+    } else rememberReloadCount(0);
+  }
+
   let _menuRecover = null;
   let _raceEntryCtxRecover = false;
 
@@ -62,6 +99,9 @@ const GfxEscalation = (function () {
   }
 
   return {
+    reloadCount,
+    nextReloadCount,
+    resetReloadBudget,
     raceEntryActive,
     registerMenuRecover,
     registerRaceEntrySoften,

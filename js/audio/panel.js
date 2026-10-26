@@ -3,7 +3,7 @@
    The mixer is a SettingsNav page (same sheet as DISPLAY), not its own dialog.
    Levels persist.
 
-   Owns: the ♪ master button, MUSIC/SFX switches, both volume sliders, the
+   Owns: the SOUND master button, MUSIC/SFX switches, both volume sliders, the
    music-source row (ALL / DEFAULT / MY TRACKS / SPOTIFY) and the transport.
    game.js keeps the race start/end soundbtn writes and the first-gesture
    audio unlock — those belong to race flow, not to this panel.
@@ -50,7 +50,9 @@ var AudioPanel = (() => {
       // labelled state (this is the MASTER gate: engine and SFX too, so
       // SOUND, not MUSIC). index.html's static markup is the other writer
       // and must carry the same strings.
-      els.soundbtn.textContent = b ? "♪ SOUND ON" : "♪ SOUND OFF";
+      // The note before SOUND is a CSS mask on #soundbtn::before (css/menus.css),
+      // not a text glyph: U+266A is in no bundled font.
+      els.soundbtn.textContent = b ? "SOUND ON" : "SOUND OFF";
       els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
       if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }
       else if (G.state === "menu") GameAudio.startMusic(-1);
