@@ -120,8 +120,9 @@ test("phone recordings retain render-rate transitions and identify counter reset
 
 test("Device Farm rAF samplers label callback cadence and retain gate counters at forced rates", () => {
   const farm = readFileSync(join(ROOT, "tools/perf/devicefarm-iphone.mjs"), "utf8");
-  const shared = farm.slice(farm.indexOf('const RENDER_RATE_SAMPLE ='), farm.indexOf('const HITCH_ARM ='));
   const declaration = (start, end) => farm.slice(farm.indexOf(start), farm.indexOf(end, farm.indexOf(start)));
+  const shared = declaration('const HITCH_JS =', '// Page-side probes.') +
+    declaration('const RENDER_RATE_SAMPLE =', 'const HITCH_ARM =');
   const scripts = vm.runInNewContext(shared +
     declaration('const HITCH_ARM =', '// Best effort: Settings') +
     declaration('const SAMPLE =', 'async function tracksScenario') +

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
-import { Matrix4 } from '../../vendor/three-0.186.1/three.core.min.js';
+import { Matrix4, PerspectiveCamera } from '../../vendor/three-0.186.1/three.core.min.js';
 const read = p => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 function fn(source, name) {
   const start = source.indexOf('function ' + name + '('); assert.ok(start >= 0, name);
@@ -41,6 +41,46 @@ test('tier-4 recovery keeps inverse projection current through ordinary camera s
   } finally { game.close(); }
 });
 function ctx(values, code) { const c = vm.createContext(values); vm.runInContext(code, c); return c; }
+
+test('tier 4 keeps the main camera view and inverse projection current across lens changes', () => {
+  const game = read('js/game.js');
+  const assemblyStart = game.indexOf('  M4.lookAtTo(_mView, camEye, camTgt, _camUp);');
+  const assemblyEnd = game.indexOf('  // Sun direction in VIEW space', assemblyStart);
+  assert.ok(assemblyStart >= 0 && assemblyEnd > assemblyStart);
+  const cameraStart = tlx.indexOf('          if (frame && frame.proj && frame.invProj && frame.viewProj) {', tlx.indexOf('        begin(frame) {'));
+  const cameraEnd = tlx.indexOf('          camera.projectionMatrixInverse.copy', cameraStart);
+  assert.ok(cameraStart >= 0 && cameraEnd > cameraStart);
+  const c = ctx({}, read('js/core/mat4.js') + ';globalThis.math = M4;');
+  const M4 = c.math;
+  const close = (actual, expected, label) => {
+    for (let i = 0; i < 16; i++) assert.ok(Math.abs(actual[i] - expected[i]) < 2e-5,
+      `${label} [${i}]: ${actual[i]} vs ${expected[i]}`);
+  };
+  for (const webgpu of [false, true]) {
+    const proj = new Float32Array(16), inverse = new Float32Array(16), view = new Float32Array(16), vp = new Float32Array(16);
+    const camera = new PerspectiveCamera();
+    let tier = 0;
+    const s = ctx({ M4, _mProj: proj, _mInvProj: inverse, _mView: view, _mVP: vp, _mInvVP: new Float32Array(16),
+      camEye: [3, 2, 7], camTgt: [1, 1, -4], _camUp: [0, 1, 0],
+      PerfGov: { autoTier: () => tier }, _roadReflectionTransition: { value: 0 },
+      frame: { proj, invProj: inverse, viewProj: vp }, camera, _wgpu: webgpu, renderer: { coordinateSystem: 2001 },
+      _mul4Col: M4.mulTo, _projGpu: new Float32Array(16), _tmpMat4: new Matrix4(), _tmpMat4b: new Matrix4(),
+      Z01: new Matrix4().set(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, .5, .5, 0, 0, 0, 1).elements,
+    }, '');
+    // First seed the inverse normally, then hold the fully shed, zero-SSR state.
+    for (const [label, fov, aspect, near] of [
+      ['baseline', 60, 2, .3], ['FOV', 80, 2, .3], ['rotation', 80, .5, .3], ['external camera near plane', 80, .5, .9],
+    ]) {
+      M4.perspectiveTo(proj, fov * Math.PI / 180, aspect, near, 900);
+      vm.runInContext(game.slice(assemblyStart, assemblyEnd), s);
+      vm.runInContext(tlx.slice(cameraStart, cameraEnd), s);
+      const expectedInverse = new Matrix4().fromArray(proj).invert();
+      close(inverse, expectedInverse.elements, `${label} inverse`);
+      close(camera.matrixWorldInverse.elements, view, `${label} view (WebGPU=${webgpu})`);
+      tier = 4;
+    }
+  }
+});
 for (const warm of [false, true]) test(`coalesced teardown retires object and owned geometry once (warm=${warm})`, () => {
   const events = [], geometry = { dispose() { events.push('geometry'); } };
   const mesh = { geometry, material: {}, parent: { remove() { events.push('remove'); } }, dispatchEvent(e) { events.push(e.type); } };

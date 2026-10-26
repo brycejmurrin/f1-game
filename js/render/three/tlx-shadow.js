@@ -71,6 +71,7 @@
       enabled: false,
       lightVP: new Float32Array(16),
       pcssEnabled: false,        // true once the WebGPU blocker map builds (header note)
+      colorDiscards: 0,          // A-P2: WebGL2 depth passes whose unread R8 colour store was dropped
       // True only between a Begin that actually opened a pass and its End —
       // casts gate on THIS, not enabled: on a phone the car/lamp maps
       // are never created, so their Begins no-op but game.js still issues the
@@ -119,7 +120,14 @@
       const rt = new THREE.RenderTarget(size, size, opts);
       rt.texture.name = name + ".color";
       rt.texture.generateMipmaps = false;
+      // A-P2W (vendored patch 17): WebGPU never writes this colour (depthMat.colorWrite) and
+      // its blocker reads the depth texture, so the R8 store is never fetched — discard it
+      // on every pass. apex26.tlxTagDiscard="0" keeps it (the WebGL2 leg's A-P2 is endPass).
+      if (renderer.backend && renderer.backend.isWebGPUBackend && _colorDiscardOn()) rt.apexDiscardColor = 1;
       return rt;
+    }
+    function _colorDiscardOn() {
+      try { return localStorage.getItem("apex26.tlxTagDiscard") !== "0"; } catch (_) { return true; }
     }
 
     const isWebGPU = !!(renderer.backend && renderer.backend.isWebGPUBackend);
@@ -564,6 +572,15 @@
       S.depthPassOn = true;
     }
 
+    let _invColor0 = null;
+    function discardColor(rt) {
+      const be = renderer.backend, gl = be && be.gl, st = be && be.state;
+      if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
+      const d = be.get(rt), fb = st.currentBoundFramebuffers[gl.DRAW_FRAMEBUFFER];
+      if (!fb || !d || !d.framebuffers || Object.values(d.framebuffers).indexOf(fb) < 0) return false;
+      gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, _invColor0 || (_invColor0 = [gl.COLOR_ATTACHMENT0]));
+      return true;
+    }
     function endPass(rt) {
       S.depthPassOn = false;
       // Only the pass this End's Begin opened: after a throw between Begin and
@@ -592,6 +609,10 @@
           castScene.children = _passKids;
         }
         try { renderer.render(castScene, shadowCam); } finally { castScene.children = all; }
+        // A-P2: only the PCSS blocker ever reads a map's colour (the sun map's, colorPcss); every
+        // other R8 attachment is written for the pass and fetched by nothing. WebGL2: drop its store
+        // while the FBO three just rendered into is still bound. WebGPU never writes it (colorWrite).
+        if (!(wasSun && colorPcss) && discardColor(target)) S.colorDiscards++;
         if (target === lampRT) _lampRendered = true;
         _lastPassOk = true;
       } catch (e) {

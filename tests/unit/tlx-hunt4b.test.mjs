@@ -314,14 +314,14 @@ function withStore(ls, fn) {
   }
 }
 // The REAL post chain (tlx-post + tsl-post) on three r186 over the fake WebGL2, plus one lit mesh to draw.
-async function postRig(t, { ls = {}, samples = 0 } = {}) {
+async function postRig(t, { ls = {}, samples = 0, ssrTag = false } = {}) {
   const fg = makeFakeGL(320, 180);
   const inv = [];
   fg.gl.invalidateFramebuffer = (target, list) => { inv.push([target, list.slice()]); };
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
   const post = withStore(ls, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true,
-    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag: false, softDest: () => null,
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest: () => null,
     wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: samples }));
   post.resize(320, 180);
   t.after(() => { post.dispose(); renderer.dispose(); });
@@ -690,4 +690,174 @@ test("stale cloud warm releases resources without overwriting a successor render
   finish(); await pending;
   assert.equal(h.renderer.target, "successor"); assert.equal(h.renderer.mrt, "successor-mrt");
   assert.equal(h.events.filter((e) => e.startsWith("dispose")).length, 4);
+});
+
+// ── A-P2 (phoneperf 2026-10-24): the ssrTag attachment, discarded like the depth ─────────────────────
+test("A-P2: needsTag — the composite's SSR gate and the haze plume are the tag's only readers", async (t) => {
+  const { post } = await postRig(t, { ssrTag: true });
+  assert.equal(post.needsTag(OFF, NIGHT), false, "dry, carReflect 0, no haze: unread");
+  assert.equal(post.needsTag({ ...OFF, reflect: 0.3 }, NIGHT), true, "wet road SSR reads it");
+  assert.equal(post.needsTag({ ...OFF, carReflect: 0.2 }, NIGHT), true, "car-paint SSR reads it");
+  assert.equal(post.needsTag({ ...OFF, reflect: 0.3 }, { ...NIGHT, upVS: null }), false, "ssrOk 0 (no view basis): the If never runs");
+  assert.equal(post.needsTag({ ...OFF, haze: { u: 0.5, v: 0.5, str: 0.4 } }, NIGHT), true, "the plume's car mask reads it");
+  assert.equal(post.needsTag({ ...OFF, haze: { u: 0.5, v: 0.5, str: 0.001 } }, NIGHT), false, "below the shader's 0.002 gate");
+  assert.equal(post.needsTag({ ...OFF, carReflect: undefined, tune: { carReflect: 0.35 } }, NIGHT), true, "the knob default counts, as in needsDepth");
+});
+
+test("A-P2: WebGL2 invalidates depth AND the tag after a dry phone scene pass; a reader keeps the tag", async (t) => {
+  const h = await postRig(t, { ssrTag: true });
+  assert.equal(h.post.state().attachments, 2);
+  assert.deepEqual(h.scenePass(OFF, NIGHT), { keep: false, dropped: true });
+  assert.equal(h.inv.length, 1, "one invalidate call carries both");
+  assert.deepEqual(h.inv[0][1], [h.gl.DEPTH_ATTACHMENT, h.gl.COLOR_ATTACHMENT1]);
+  assert.deepEqual(h.post.state().tag, { discard: true, kept: false, discards: 1 });
+  h.scenePass({ ...OFF, reflect: 0.4 }, NIGHT);   // wet: SSR reads depth and the tag
+  assert.equal(h.inv.length, 1, "nothing invalidated on a frame that reads both");
+  assert.equal(h.post.state().tag.kept, true);
+  h.scenePass({ ...OFF, ssao: 0.5 }, NIGHT);      // SSAO reads depth only: the tag still goes
+  assert.deepEqual(h.inv[1][1], [h.gl.COLOR_ATTACHMENT1], "tag alone");
+  assert.deepEqual(h.post.state().depth.kept, true);
+  const knob = await postRig(t, { ssrTag: true, ls: { "apex26.tlxTagDiscard": "0" } });
+  knob.scenePass(OFF, NIGHT);
+  assert.deepEqual(knob.inv[0][1], [knob.gl.DEPTH_ATTACHMENT], "apex26.tlxTagDiscard=0: depth only, the tag always kept");
+  const one = await postRig(t, { ssrTag: false });
+  one.scenePass(OFF, NIGHT);
+  assert.deepEqual(one.inv[0][1], [one.gl.DEPTH_ATTACHMENT], "a one-attachment chain never names an attachment it lacks");
+});
+
+test("A-P2: discardAttachments acts only on the FBO three has bound; the mirror hands it depth + tag", async (t) => {
+  const h = await postRig(t, { ssrTag: true });
+  const rt = h.post.sceneTarget();
+  h.renderer.setRenderTarget(rt);
+  h.renderer.render(new THREE.Scene(), new THREE.PerspectiveCamera());
+  assert.equal(h.post.discardAttachments(rt, [h.gl.DEPTH_ATTACHMENT]), true);
+  assert.deepEqual(h.inv.at(-1), [h.gl.DRAW_FRAMEBUFFER, [h.gl.DEPTH_ATTACHMENT]]);
+  h.renderer.backend.state.bindFramebuffer(h.gl.FRAMEBUFFER, null);   // setRenderTarget(null) alone binds nothing until the next render
+  assert.equal(h.post.discardAttachments(rt, [h.gl.DEPTH_ATTACHMENT]), false, "another FBO bound: no guess");
+  assert.equal(h.post.discardAttachments(rt, []), false);
+  assert.match(TLX, /renderer\.render\(scene, mirCam\); \} finally \{ if \(mrt\) _mirMrtArm\(false, prevMrt\); if \(hinted\) post\.discardHintOff\(mirRT\); \}\s*\n[^\n]*\n[^\n]*\n\s*if \(hinted \|\| \(post && post\.discardAttachments && post\.discardAttachments\(mirRT, _mirInv\(mrt\)\)\)\) _mirDiscards\+\+;/,
+    "tlx.js: the mirror discards right after its render, before anything else binds");
+  assert.match(TLX, /return mrt \? _mirInvDT : _mirInvD;/, "tag only when the mirror target carries one");
+});
+
+// ── A-P2W (#3681): the WebGPU twin — vendored three patch 17 reads rt.apexDiscardColor / apexDiscardDepth at
+// beginRender, so the decision rides on the target BEFORE the pass and comes off after it. The fake GL cannot
+// run three's WebGPU backend; the backend flag is flipped after the chain is built, and the pass is depthBegin →
+// (what beginRender would read) → depthEnd, with no draw in between.
+function gpuPass(h, opts, F) {
+  const rt = h.post.sceneTarget(), bk = h.renderer.backend;
+  bk.isWebGPUBackend = true;
+  try {
+    const keep = h.post.depthBegin(opts, F);
+    const seen = { color: rt.apexDiscardColor | 0, depth: rt.apexDiscardDepth === true };
+    const dropped = h.post.depthEnd();
+    return { keep, seen, dropped, after: { color: rt.apexDiscardColor | 0, depth: rt.apexDiscardDepth === true } };
+  } finally { delete bk.isWebGPUBackend; }
+}
+
+test("A-P2W: WebGPU — a dry phone pass hints depth + tag discard before the pass and clears it after", async (t) => {
+  const h = await postRig(t, { ssrTag: true });
+  const r = gpuPass(h, OFF, NIGHT);
+  assert.deepEqual(r.seen, { color: 2, depth: true }, "bit 1 = the ssrTag attachment; the depth");
+  assert.equal(r.dropped, true);
+  assert.deepEqual(r.after, { color: 0, depth: false }, "off after the pass: a later render into the target stores");
+  assert.equal(h.inv.length, 0, "no WebGL invalidate on the WebGPU leg");
+  assert.equal(h.post.state().tag.discards, 1); assert.equal(h.post.state().depth.discards, 1);
+  assert.deepEqual(gpuPass(h, { ...OFF, reflect: 0.4 }, NIGHT).seen, { color: 0, depth: false }, "wet: SSR reads both, nothing hinted");
+  assert.deepEqual(gpuPass(h, { ...OFF, ssao: 0.5 }, NIGHT).seen, { color: 2, depth: false }, "SSAO reads depth: the tag alone");
+});
+
+test("A-P2W: the A/B switches gate the WebGPU hint; MSAA and a one-attachment chain never hint what they lack", async (t) => {
+  const tag0 = await postRig(t, { ssrTag: true, ls: { "apex26.tlxTagDiscard": "0" } });
+  assert.deepEqual(gpuPass(tag0, OFF, NIGHT).seen, { color: 0, depth: true }, "tlxTagDiscard=0: the tag is stored");
+  const dep0 = await postRig(t, { ssrTag: true, ls: { "apex26.tlxDepthDiscard": "0" } });
+  assert.deepEqual(gpuPass(dep0, OFF, NIGHT).seen, { color: 2, depth: false }, "tlxDepthDiscard=0: the depth is stored");
+  const one = await postRig(t, { ssrTag: false });
+  assert.deepEqual(gpuPass(one, OFF, NIGHT).seen, { color: 0, depth: true }, "one attachment: no tag bit");
+  const msaa = await postRig(t, { ssrTag: true, samples: 4 });
+  assert.deepEqual(gpuPass(msaa, OFF, NIGHT).seen, { color: 0, depth: false }, "MSAA: single-sample hint only (r186's storeMultisampled* owns MSAA)");
+});
+
+test("A-P2W: discardHint is a no-op off WebGPU", async (t) => {
+  const h = await postRig(t, { ssrTag: true });
+  const rt = h.post.sceneTarget();
+  assert.equal(h.post.discardHint(rt, 2, true), false, "WebGL2 leg: the invalidate path owns it");
+  assert.equal(rt.apexDiscardColor, undefined);
+});
+
+// ── phoneperf 2026-10-24: scene colour R11F_G11F_B10F on phones where renderable (KNOWN-WINS row 15) ───────
+// Own rig (postRig above is pinned to a one-attachment phone chain by the A-P1 tests): the real post chain over the
+// fake WebGL2, which exposes EXT_color_buffer_float, so the 11/11/10 format is renderable here as on a phone GPU.
+async function rig11(t, { ls = {}, isMobile = true, ssrTag = true } = {}) {
+  const fg = makeFakeGL(320, 180);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  const post = withStore(ls, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile,
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest: () => null,
+    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
+  post.resize(320, 180);
+  t.after(() => { post.dispose(); renderer.dispose(); });
+  return { post, renderer, gl: fg.gl };
+}
+
+test("scene11: a phone chain's scene colour is rg11b10 where renderable; the tag attachment keeps half float", async (t) => {
+  const h = await rig11(t);
+  const rt = h.post.sceneTarget();
+  assert.equal(rt.textures[0].type, THREE.UnsignedInt101111Type);
+  assert.equal(rt.textures[0].format, THREE.RGBFormat);
+  assert.equal(rt.textures[1].type, THREE.HalfFloatType, "attachment 1 (ssrTag) keeps the chain's hdrType");
+  assert.equal(rt.textures[1].format, THREE.RedFormat, "and its own format (indexed blending on the fake GL)");
+  assert.equal(h.post.state().sceneFormat, "rg11b10");
+  assert.equal(h.post.hdrOk(), true, "the scene is still float HDR to every reader");
+  // The scene pass renders into it and A-P1's depth rule still runs on the same target.
+  h.renderer.setRenderTarget(rt);
+  assert.equal(h.post.depthBegin(OFF, NIGHT), false);
+  h.renderer.render(new THREE.Scene(), new THREE.PerspectiveCamera());
+  assert.equal(h.post.depthEnd(), true, "depth discarded on the 11/11/10 target as on RGBA16F");
+  h.renderer.setRenderTarget(null);
+  const off = await rig11(t, { ls: { "apex26.tlxScene11": "0" } });
+  assert.equal(off.post.sceneTarget().textures[0].type, THREE.HalfFloatType, "apex26.tlxScene11=0 keeps RGBA16F");
+  assert.equal(off.post.state().sceneFormat, "rgba16f");
+  const desk = await rig11(t, { isMobile: false });
+  assert.equal(desk.post.sceneTarget().textures[0].type, THREE.HalfFloatType, "desktop keeps RGBA16F by default");
+  const deskOn = await rig11(t, { isMobile: false, ls: { "apex26.tlxScene11": "1" } });
+  assert.equal(deskOn.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "apex26.tlxScene11=1 forces it anywhere renderable");
+  const one = await rig11(t, { ssrTag: false });
+  assert.equal(one.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "a one-attachment chain too");
+  assert.equal(one.post.sceneTarget().textures.length, 1);
+  const bloomOff = await rig11(t, { ls: { "apex26.tlxBloom11": "0" } });
+  assert.equal(bloomOff.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "the bloom knob does not reach the scene target");
+});
+
+test("scene11: the WebGPU leg takes it too once vendored patch 18 keeps a vec4 output (#3711)", async (t) => {
+  // gpu-census macos-latest run 40052670537 (886e476f, no patch 18): "Async render pipeline creation failed
+  // (renderPipeline_MeshBasicNodeMaterial_70): Color blending srcFactor (BlendFactor::One) or dstFactor
+  // (BlendFactor::OneMinusSrcAlpha) …". Run 40056676327 (patch 18, same input): green. The WebGPU rule lives in
+  // the vendored WGSL builder (gfx-backend-canary §18, by behaviour); here: the gate no longer reads the backend kind.
+  const post = read("js/render/three/tlx-post.js");
+  assert.ok(post.includes("const _r11Blendable = r11Renderable;"), "no backend-kind exclusion");
+  assert.ok(post.includes('bloom11 = !!(dev && dev.features && dev.features.has("rg11b10ufloat-renderable"));'), "WebGPU renderability still needs the adapter feature");
+  assert.ok(post.includes("let scene11 = _r11Blendable && !!ctx.isMobile;"), "the default goes through the gate");
+  assert.ok(post.includes('if (k === "1") scene11 = _r11Blendable;'), "the force knob goes through the gate too");
+  // Behaviour: the real chain over the fake WebGL2, with the backend flagged as WebGPU for the gate's purposes.
+  const h = await rig11(t, { ls: { "apex26.tlxScene11": "1" } });
+  assert.equal(h.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "WebGL backend: forced on");
+  const fg = makeFakeGL(320, 180);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  renderer.backend.isWebGPUBackend = true;   // the old gate read this flag; nothing else in the chain's construction does
+  const made = withStore({ "apex26.tlxScene11": "1" }, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true,
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag: true, softDest: () => null,
+    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
+  t.after(() => { made.dispose(); renderer.dispose(); });
+  assert.equal(made.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "a WebGPU-flagged backend takes rg11b10 when forced");
+  assert.equal(made.state().sceneFormat, "rg11b10");
+});
+
+test("scene11: the probe is read before the bloom knob, and no post reader samples scene alpha", () => {
+  const post = read("js/render/three/tlx-post.js");
+  assert.ok(post.includes("const r11Renderable = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;"), "the probe is its own const");
+  assert.ok(post.indexOf("const r11Renderable") < post.indexOf('localStorage.getItem("apex26.tlxBloom11")'), "the probe is read before the bloom knob can clear it");
+  const tslPost = read("js/render/three/tsl-post.js");
+  assert.ok(!/sceneT\.sample\([^)]*\)\)?\.[aw]\b/.test(tslPost) && !/\bscn\.[aw]\b/.test(tslPost), "scene alpha is never read: RGB-only storage is lossless for the composite");
 });
