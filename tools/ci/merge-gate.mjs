@@ -97,6 +97,14 @@ export const slotOf = (e) => {
   return { pr: m ? Number(m[1]) : null, from: e.from, at: e.at, text };
 };
 
+/** The newest INCIDENT line the pacing check honoured, as one printable string, or "" when the bus has none. Print-only. Pure. */
+export function incidentNote(entries) {
+  const e = [...(entries || [])].reverse().find((x) => x.type === "INCIDENT");
+  if (!e) return "";
+  const lifted = /\blifted\b/i.test(e.text);
+  return `INCIDENT ${lifted ? "lifted" : "OPEN (freezes game merges)"}: from:${e.from} ${e.text.slice(0, 160)}`;
+}
+
 /**
  * Game pacing from the bus entries (oldest first). Pure except `pagesGreen(sha)` → true | false | null (pending).
  * now in unix seconds.
@@ -353,8 +361,10 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
   }
 
   const game = gameFiles(resolved.files || []);
+  let incident = "";
   if (game.length) {
     const b = bus({ cwd: root, last: 200 });
+    incident = incidentNote(b.entries);
     rows.pacing = pacingVerdict(b.entries, { pr, me, pagesGreen: (sha) => pages(sha, request, isAncestor(root)), now: Math.floor(now() / 1000) });
   } else rows.pacing = row(true, "non-game paths: no slot needed");
 
@@ -366,6 +376,7 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
   if (asJson) log(JSON.stringify(v, null, 2));
   else {
     log(`[merge-gate] ${verdictLine(v)}`);
+    if (incident) log(`[merge-gate] ${incident}`);
     if (ok) log(`[merge-gate] merge now: merge_pull_request pullNumber=${pr} merge_method=merge expectedHeadSha=${head} commit_title=${JSON.stringify(v.merge.commit_title)} commit_message=${JSON.stringify(v.merge.commit_message)} (pass them verbatim: the Merged-by trailer is how the merge is attributed); then \`git log -1 --format=%p <merge sha>\` shows two parents and \`fleet-bus.mjs send DONE\`.`);
   }
   return ok ? 0 : 1;

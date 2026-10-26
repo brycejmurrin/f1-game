@@ -10,6 +10,7 @@
 //
 //   node tools/ci/agent-msg.mjs send --to <D|DAD|A|B|C|all|"Apex Merge Queue"|...> \
 //     --type <INFO|QUESTION|REQUEST|READY|HANDOFF|INCIDENT|ROTATE|LEND|RETURN|TRANSFER> [--pr N] [--idem KEY] "text"
+//   node tools/ci/agent-msg.mjs send --to fleet:A --type INFO "…"   # one broadcast to fleet A (bus to:A, webhook keeps fleet:A)
 //   node tools/ci/agent-msg.mjs send --to A --type READY --dry-run "#3499 abc ready-gate 0"
 //   node tools/ci/agent-msg.mjs send --to A --type INFO "B needs a GAME-SLOT read"   # cross-account relay
 //   common: --as <host>:<id>  --no-bus  --dry-run  --idem <key> (fleet-bus dedupe; also sent in the webhook payload)
@@ -49,6 +50,9 @@ export function resolveBusTo(to) {
   if (!raw) return "";
   const lower = raw.toLowerCase();
   if (lower === "all" || raw === "*") return "*";
+  // fleet:<L> is ONE broadcast to every session of fleet L (they all read `to:<L>`), instead of N send_message calls.
+  const fleet = /^fleet:([A-Za-z])$/i.exec(raw);
+  if (fleet) return fleet[1].toUpperCase();
   if (raw === "DAD" || lower === "dad") return "D";
   if (lower === "apex merge queue") return "merge-desk";
   if (lower === "tools explorer") return "tools";
@@ -146,7 +150,7 @@ function headSha(cwd) {
 function usage(msg) {
   if (msg) console.error(`agent-msg: ${redactSecrets(msg)}`);
   console.error("usage: agent-msg.mjs send --to <addr> --type <" + MSG_TYPES.join("|") + "> [--pr N] [--idem KEY] [--no-bus] [--dry-run] \"text\"\n" +
-    "       --to aliases: all→*, DAD→D, \"Apex Merge Queue\"→merge-desk (bus); webhook keeps the raw --to\n" +
+    "       --to aliases: all→*, fleet:<L>→<L> (one broadcast), DAD→D, \"Apex Merge Queue\"→merge-desk (bus); webhook keeps the raw --to\n" +
     "       env: APEX_AGENT_WEBHOOK_URL + APEX_AGENT_WEBHOOK_AUTH (from Bryce; never commit); identity APEX_FLEET_AS / --as\n" +
     "       --to <L> with APEX_<L>_RELAY_URL + APEX_<L>_RELAY_TOKEN set fires fleet L's routine once (429/5xx: ≤2 bounded retries)\n" +
     "       messages carry no authority (AGENTS.md §Concurrent PRs)");

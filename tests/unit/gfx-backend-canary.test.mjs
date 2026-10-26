@@ -3395,26 +3395,19 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // device-wide. TLX sniffs the adapter (info fields are not JSON-
   // enumerable), keeps #game as the GPU canvas, and blits onto #game-soft.
   const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(src, /navigator\.gpu\.requestAdapter\(\)/,
-    "soft-adapter sniff must use requestAdapter — getContext('webgl2') is null after WebGPU claims the canvas");
-  assert.match(src, /info\.vendor/,
-    "adapter.info fields are not enumerable — read vendor/device/architecture directly");
-  assert.match(src, /swiftshader\|llvmpipe\|lavapipe\|microsoft basic render\|soft/,
-    "sniff regex must match WGX's software-adapter list");
-  assert.match(src, /apex26\.wgxCapture/,
-    "sessionStorage apex26.wgxCapture=1 must force the blit (gfx-probe --tlx-webgpu)");
-  assert.match(src, /game-soft/,
-    "#game stays the GPU canvas; visible present is the #game-soft sibling");
-  assert.match(src, /_displayCanvas\.getContext\("2d"/,
-    "soft-present overlay is a 2D sibling — never getContext(2d) on #game");
-  assert.match(src, /softDest:\s*(?:function\s*\(\s*\)\s*\{\s*return|\(\s*\)\s*=>)\s*softOutRT\b/,
-    "post chain must receive softDest so FXAA never targets the swapchain");
-  assert.match(src, /awaitSoftPresent/,
-    "backend must expose awaitSoftPresent (copied onto GLX by game.js)");
-  assert.match(src, /capturePixels/,
-    "backend must expose capturePixels for gfx-probe frame.png");
-  assert.match(src, /readRenderTargetPixelsAsync/,
-    "blit must go through three's copyTextureToBuffer + mapAsync, not the swapchain");
+  // One table, one assertion site: the TLX soft-present markers and why each one matters.
+  for (const [re, why] of [
+    [/navigator\.gpu\.requestAdapter\(\)/, "soft-adapter sniff must use requestAdapter — getContext('webgl2') is null after WebGPU claims the canvas"],
+    [/info\.vendor/, "adapter.info fields are not enumerable — read vendor/device/architecture directly"],
+    [/swiftshader\|llvmpipe\|lavapipe\|microsoft basic render\|soft/, "sniff regex must match WGX's software-adapter list"],
+    [/apex26\.wgxCapture/, "sessionStorage apex26.wgxCapture=1 must force the blit (gfx-probe --tlx-webgpu)"],
+    [/game-soft/, "#game stays the GPU canvas; visible present is the #game-soft sibling"],
+    [/_displayCanvas\.getContext\("2d"/, "soft-present overlay is a 2D sibling — never getContext(2d) on #game"],
+    [/softDest:\s*(?:function\s*\(\s*\)\s*\{\s*return|\(\s*\)\s*=>)\s*softOutRT\b/, "post chain must receive softDest so FXAA never targets the swapchain"],
+    [/awaitSoftPresent/, "backend must expose awaitSoftPresent (copied onto GLX by game.js)"],
+    [/capturePixels/, "backend must expose capturePixels for gfx-probe frame.png"],
+    [/readRenderTargetPixelsAsync/, "blit must go through three's copyTextureToBuffer + mapAsync, not the swapchain"],
+  ]) assert.match(src, re, why);
   // TLX must hear Dawn. WGX has hooked onuncapturederror since it shipped; TLX
   // hooked nothing, so a black three-on-WebGPU frame was chased for a whole
   // session against probes reporting `gpuErrors: null` — which read as "no

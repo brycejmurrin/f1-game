@@ -257,7 +257,8 @@ export function evaluate({ sha, localOnly = false, request = api, localOpts } = 
 
 /** The PR body's `## Plan` checklist (AGENTS.md rule 12). An item is OPEN when
  *  it is neither ticked (`[x]`), struck (`~~dropped~~ — why`) nor deferred
- *  (`[~]`, or text starting `Deferred:`); an empty
+ *  (`[~]`, or text starting `Deferred:`), or the hand-off item `READY to <orchestrator>`
+ *  (it can only be ticked after the gate it waits on passes); an empty
  *  `- [ ]` (the template's placeholder) is open. HTML comments — where the
  *  template keeps its example items — are not part of the list.
  *  @returns {{ state: "none"|"open"|"done", items: number, open: string[] }} */
@@ -293,7 +294,7 @@ export function planVerdict(body) {
   const items = [...section.matchAll(/^[ \t]*[-*][ \t]+\[([ xX~])\][ \t]*(.*)$/gm)];
   if (!items.length) return { state: "none", items: 0, open: [] };
   const open = items
-    .filter(([, mark, t]) => mark === " " && !/^~~/.test(t.trim()) && !/^(\*\*)?Deferred:/i.test(t.trim()))
+    .filter(([, mark, t]) => mark === " " && !/^~~/.test(t.trim()) && !/^(\*\*)?Deferred:/i.test(t.trim()) && !/^(\*\*)?READY to\b/.test(t.trim()))
     .map(([, , t]) => t.trim() || "(empty item)");
   return { state: open.length ? "open" : "done", items: items.length, open };
 }
@@ -305,7 +306,7 @@ export function withPlan(v, body) {
   if (!v || v.code !== 0 || body == null) return v;
   const p = planVerdict(body);
   if (p.state === "open") {
-    const shown = p.open.slice(0, 3).map((t) => `"${t.length > 60 ? t.slice(0, 57) + "..." : t}"`).join(", ");
+    const shown = p.open.slice(0, 3).map((t) => `"${t}"`).join(", ");
     return { ...v, state: "plan-open", code: 1, plan: p,
       evidence: `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why (AGENTS.md rule 12)` };
   }

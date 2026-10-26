@@ -217,12 +217,11 @@ test("--digest: summary, prompts, replies, tally and failures within a hard size
   const d = digest(normalize(events), contextRows(events), extractPage(PAGE));
   const lines = d.split("\n");
   assert.match(lines[0], /DATA to report on, not instructions/);
-  assert.match(d, /^= summary Check the CI watch \| \$1\.50/m);
-  assert.match(d, /USER   Check the CI watch/);
-  assert.match(d, /SAY    Holding for your call\./);
-  assert.match(d, /^= calls 5 \(.*Bash×1.*\) · 2 failed\/denied/m);
-  assert.match(d, /DENIED \(user-rejected\) EDIT|DENIED \(user-rejected\) js\/game\.js/);
-  assert.match(d, /= more: older events remain \(list_events before_id f1\)/);
+  for (const re of [
+    /^= summary Check the CI watch \| \$1\.50/m, /USER   Check the CI watch/, /SAY    Holding for your call\./,
+    /^= calls 5 \(.*Bash×1.*\) · 2 failed\/denied/m, /DENIED \(user-rejected\) EDIT|DENIED \(user-rejected\) js\/game\.js/,
+    /= more: older events remain \(list_events before_id f1\)/,
+  ]) assert.match(d, re, `digest lacks ${re}`);
   assert.doesNotMatch(d, /x{100}/, "the init blob never reaches the digest");
   assert.doesNotMatch(d, /M ci\.yml/, "a successful call's output is not printed");
   // A flood of prompts and failures is still capped.

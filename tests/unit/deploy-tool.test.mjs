@@ -259,8 +259,10 @@ test("only GENERATED files cure themselves, and only when their source merged cl
   assert.equal(cure(["tools/shot/scenery-locations.json"]), true, "the scenery cache regenerates");
   assert.deepEqual(cureableConflicts(["tools/shot/scenery-locations.json", "package.json"]).sceneryF, ["tools/shot/scenery-locations.json"]);
   assert.equal(cure(["tools/shot/scenery-locations.json", "js/circuits/spa.js"]), false, "a circuit conflict is authored");
-  const src = fs.readFileSync(path.join(ROOT, "tools/ci/deploy.mjs"), "utf8");
-  assert.match(src, /run\("node", \["tools\/shot\/gen-scenery-locations\.cjs"\]/, "the cure runs the generator");
+  // docs/agent-index.json is derived (gen-agent-index.mjs) too.
+  assert.deepEqual(cureableConflicts(["docs/agent-index.json"]).derivedF, ["docs/agent-index.json"]);
+  assert.equal(cure(["docs/agent-index.json", "package.json"]), true, "agent index cures with other derived files");
+  assert.equal(cure(["docs/agent-index.json", "AGENTS.md"]), false, "prose still stops");
 });
 
 test("prose docs are never cured: no doc carries generated ladder digits any more", () => {

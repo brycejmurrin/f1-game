@@ -4932,6 +4932,9 @@
       ]
     },
     "js/core/save-schema-registry.js": {
+      "entry": [
+        "tests/unit/title-warm.test.mjs"
+      ],
       "noteWrite": [
         "tests/unit/save-schema-registry.test.mjs"
       ],
@@ -7246,7 +7249,8 @@
       ],
       "create": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-prebuild.test.mjs"
+        "tests/unit/garage-prebuild.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "homeKind": [
         "tests/unit/garage-prebuild.test.mjs"
@@ -7280,17 +7284,20 @@
       ],
       "start": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-prebuild.test.mjs"
+        "tests/unit/garage-prebuild.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "state": [
-        "tests/unit/garage-prebuild.test.mjs"
+        "tests/unit/garage-prebuild.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "stop": [
         "tests/unit/garage-arrival.test.mjs"
       ],
       "tick": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-prebuild.test.mjs"
+        "tests/unit/garage-prebuild.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "timed": [
         "tests/unit/garage-prebuild.test.mjs"
@@ -8582,6 +8589,7 @@
     "js/lighting/frame-lights.js": {
       "appendCarTailLights": [
         "tests/unit/all-lights-fill.test.mjs",
+        "tests/unit/frame-lights-release.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
       ],
       "glowFade": [
@@ -8594,6 +8602,7 @@
         "tests/unit/frame-lights-rank-cache.test.mjs"
       ],
       "release": [
+        "tests/unit/frame-lights-release.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
       ],
       "resetRankStats": [
@@ -10091,6 +10100,14 @@
       ],
       "wanted": [
         "tests/unit/three-inspector.test.mjs"
+      ]
+    },
+    "js/perf/title-warm.js": {
+      "create": [
+        "tests/unit/title-warm.test.mjs"
+      ],
+      "poll": [
+        "tests/unit/title-warm.test.mjs"
       ]
     },
     "js/physics/aero-zones.js": {

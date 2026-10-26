@@ -591,6 +591,11 @@
       "presentation": "shared-levels",
       "preserve": "HELD versus CLAIMED versus FREE per path with PR number and head sha; unaddressable claims; the exact RELEASED/HELD bus line; exit 3 with no guessed rows"
     },
+    "tools/ci/fleet-queue.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One line per PR (state, head, owner, next); check exits 1 naming each unowned row; exit 2 for an unknown PR"
+    },
     "tools/ci/fleet-tick.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -620,6 +625,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "No SWEEP when pending/red/open Plan; trigger IDs; gate/CI exits"
+    },
+    "tools/ci/incident-lift.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The = incident-lift line (none / still frozen with the fix sha / lifted); exit 2 while Pages is not green on the fix sha"
     },
     "tools/ci/inputs-hash.mjs": {
       "action": "keep-native",

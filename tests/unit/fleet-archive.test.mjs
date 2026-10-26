@@ -67,6 +67,19 @@ test("main prints one row per session, caches PR lookups, and --offline never ca
   assert.equal(JSON.parse(off[0]).filter((r) => /pr-unknown/.test(r.why)).length, 2);
 });
 
+test("Q5: a no-archive tag or an in-flight post_turn_summary keeps an otherwise archivable session", () => {
+  const merged = () => "merged";
+  assert.equal(decide(sess(), { now: NOW, prState: merged }).verdict, "ARCHIVE");
+  const pinned = decide(sess({ tags: [...sess().tags, "no-archive"] }), { now: NOW, prState: merged });
+  assert.equal(pinned.verdict, "KEEP"); assert.ok(/no-archive/.test(pinned.why));
+  for (const text of ["CI watch, tooling-fast, macOS census still running on #3766", "#3693 gate running … then #3696"]) {
+    const r = decide(sess({ post_turn_summary: text }), { now: NOW, prState: merged });
+    assert.equal(r.verdict, "KEEP", text); assert.ok(/in flight/.test(r.why));
+  }
+  assert.equal(decide(sess({ post_turn_summary: { text: "census running" } }), { now: NOW, prState: merged }).verdict, "KEEP");
+  assert.equal(decide(sess({ post_turn_summary: "Merged and handed off." }), { now: NOW, prState: merged }).verdict, "ARCHIVE");
+});
+
 // System audit 2026-10-26 §1: retired orchestrators piled up (ten ORCH B in six hours).
 import { fleetOf, retired } from "../../tools/ci/fleet-archive.mjs";
 
@@ -74,17 +87,23 @@ test("a retired orchestrator is ARCHIVE once its successor's LIVE line is on the
   const orch = (over = {}) => sess({ id: "session_01OLD", title: "[Done → B·O-queue9] B·O-queue8 orchestrator", updated_at: ago(90),
     tags: ["f1-game-fleet", "role:orchestrator", "fleet:B", "config:session-created"], ...over });
   const next = (L) => (L === "B" ? { letter: "B", id: "claude:session_01NEW" } : null);
-  const r = decide(orch(), { now: NOW, successorOf: next });
-  assert.equal(r.verdict, "ARCHIVE"); assert.match(r.why, /successor claude:session_01NEW LIVE/);
   assert.equal(decide(orch({ title: "B·O-queue8", session_status: "SESSION_STATUS_COMPLETED" }), { now: NOW, successorOf: next }).verdict, "ARCHIVE", "completed counts as retired");
-  assert.match(decide(orch({ title: "B·O-queue8 orchestrator" }), { now: NOW, successorOf: next }).why, /live orchestrator is never archived/);
-  assert.match(decide(orch(), { now: NOW, successorOf: () => null }).why, /no ORCH B LIVE line/);
-  assert.match(decide(orch(), { now: NOW, successorOf: () => ({ letter: "B", id: "claude:session_01OLD" }) }).why, /still names this session/);
-  assert.match(decide(orch({ updated_at: ago(5) }), { now: NOW, successorOf: next }).why, /touched 5 min ago/);
-  assert.match(decide(orch({ origin: "ios", tags: ["role:orchestrator", "fleet:B"] }), { now: NOW, successorOf: next }).why, /not agent-created/);
-  assert.match(decide(orch({ tags: ["role:orchestrator", "config:session-created"], title: "[Done → x] y" }), { now: NOW, successorOf: next }).why, /no fleet letter/);
-  for (const role of ["watch", "fleet-watch", "merge-desk"])
-    assert.match(decide(orch({ tags: [`role:${role}`, "fleet:B", "config:session-created"] }), { now: NOW, successorOf: next }).why, /never archived/, role);
+  // [session override, successorOf, verdict, why]
+  const cases = [
+    [{}, next, "ARCHIVE", /successor claude:session_01NEW LIVE/],
+    [{ title: "B·O-queue8 orchestrator" }, next, "KEEP", /live orchestrator is never archived/],
+    [{}, () => null, "KEEP", /no ORCH B LIVE line/],
+    [{}, () => ({ letter: "B", id: "claude:session_01OLD" }), "KEEP", /still names this session/],
+    [{ updated_at: ago(5) }, next, "KEEP", /touched 5 min ago/],
+    [{ origin: "ios", tags: ["role:orchestrator", "fleet:B"] }, next, "KEEP", /not agent-created/],
+    [{ tags: ["role:orchestrator", "config:session-created"], title: "[Done → x] y" }, next, "KEEP", /no fleet letter/],
+    ...["watch", "fleet-watch", "merge-desk"].map((role) => [{ tags: [`role:${role}`, "fleet:B", "config:session-created"] }, next, "KEEP", /never archived/]),
+  ];
+  for (const [over, successorOf, verdict, why] of cases) {
+    const r = decide(orch(over), { now: NOW, successorOf });
+    assert.equal(r.verdict, verdict, JSON.stringify(over));
+    assert.match(r.why, why, JSON.stringify(over));
+  }
   assert.equal(fleetOf({ title: "[Done → ORCH C] ORCH C queue" }), "C");
   assert.equal(fleetOf({ title: "A·O7 orchestrator" }), "A");
   assert.equal(retired({ title: "[Done -> x] y" }), true);
