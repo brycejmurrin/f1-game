@@ -1482,8 +1482,10 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
       const uploads = [], requests = [];
       const assets = assetLoader({ Blob, DecompressionStream, Uint8Array, Float32Array, DataView, ArrayBuffer,
         async fetch(url) {
-          requests.push(url);
-          const file = path.join(dir, url.slice("assets/pack/".length));
+          // Pack URLs are content-addressed (`<file>?h=<md5>`); serve by path.
+          const rel = url.slice("assets/pack/".length).split("?")[0];
+          requests.push(rel);
+          const file = path.join(dir, rel);
           return { ok: true, json: async () => JSON.parse(fs.readFileSync(file, "utf8")),
             blob: async () => new Blob([fs.readFileSync(file)]) };
         } });
