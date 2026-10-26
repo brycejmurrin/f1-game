@@ -85,6 +85,11 @@ prompt. Escalate when:
 - a red is not yours (red on the base too) and no fix exists to port;
 - you hit a cap (captures, ~400 messages, ~90 min with no OWNED push).
 
+Never call AskUserQuestion from a worker, owner, hunter or sync lane: it parks
+the session (no events, ticks or messages) until Bryce answers, and W47 sat
+3 h on one (audit 2026-10-26 #1). The question goes to the orchestrator as
+`QUESTION`; it decides or asks Bryce.
+
 Keep working on anything the blocker does not touch while you wait.
 
 ## Waiting (#2385; plan WS4, WS7 row b)
@@ -110,7 +115,7 @@ Keep working on anything the blocker does not touch while you wait.
   red or a conflict after READY is still yours.
 - Idle-wake discipline: a duplicate or no-change event gets no tool call and at most one line;
   keep the ~15 min timer (inside the 1 h cache TTL, so the wake reads a warm cache).
-- STOP AT 150k context at a verified checkpoint (docs-only 100k). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop). Hand off (PR body current, new
+- STOP AT 150k context at a verified checkpoint (docs-only too: a fresh session starts near 105k). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop). Hand off (PR body current, new
   small session or Merge Desk watches) instead of idling in the big session:
   at 677k an idle wake costs $0.26–0.55.
 - `SendMessage` reaches in-session subagents only. A parent `session_…` id

@@ -10,10 +10,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  rateLimitOf, parseSaved, quotaVerdict, revisionProblem, claimKey, twinsOf, launchSpec, pushClaim, releaseClaim, readClaim,
+  quotaVerdict, revisionProblem, claimKey, twinsOf, launchSpec, pushClaim, releaseClaim, readClaim,
   isHeld, main, CLAIM_NS,
 } from "../../tools/ci/launch-lane.mjs";
 import { extractSessions } from "../../tools/ci/fleet-archive.mjs";
+import { extractSession } from "../../tools/ci/launch-gate.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const FX = path.join(ROOT, "tests", "fixtures", "launch-lane");
@@ -21,22 +22,20 @@ const fx = (f) => path.join(FX, f);
 const ME = "claude:session_01ORCHORCHORCHORCHORCHOR";
 const NOW = Date.parse("2026-10-26T06:00:00Z");
 
-test("quota: allowed launches; allowed_warning refuses unless the user's words are quoted; rejected always refuses; missing refuses", () => {
-  const ok = rateLimitOf(parseSaved(fs.readFileSync(fx("get-session-allowed.json"), "utf8")));
-  assert.equal(ok.status, "allowed");
-  assert.equal(quotaVerdict(ok).ok, true);
-  const warn = rateLimitOf(parseSaved(fs.readFileSync(fx("get-session-warning.json"), "utf8")));
-  const v = quotaVerdict(warn);
+test("quota: launch-gate's rule (allowed, or the user's quoted words over a warning); rejected never launches", () => {
+  const page = (f) => extractSession(fs.readFileSync(fx(f), "utf8"));
+  assert.equal(quotaVerdict(page("get-session-allowed.json")).ok, true);
+  const v = quotaVerdict(page("get-session-warning.json"));
   assert.equal(v.ok, false);
-  assert.match(v.why, /seven_day allowed_warning .*launch nothing and ask/);
-  const o = quotaVerdict(warn, 'Bryce: "launch all lanes now"');
+  assert.equal(v.status, "allowed_warning");
+  assert.match(v.why, /launch nothing/);
+  const o = quotaVerdict(page("get-session-warning.json"), "launch all lanes now");
   assert.equal(o.ok, true);
-  assert.match(o.why, /^override: Bryce/);
-  assert.equal(quotaVerdict({ status: "rejected", rateLimitType: "five_hour" }, "anything").ok, false, "an override never passes a rejection");
-  assert.equal(quotaVerdict(null).status, "missing");
-  assert.equal(quotaVerdict({}).ok, false, "unknown status refuses");
-  assert.equal(rateLimitOf({ rate_limit_info: { status: "allowed" } }).status, "allowed", "top level too");
-  assert.equal(rateLimitOf(parseSaved(`noise before {"ccr":{"external_metadata":{"rate_limit_info":{"status":"allowed"}}}} after`)).status, "allowed");
+  assert.equal(o.override, "launch all lanes now");
+  const rejected = { external_metadata: { rate_limit_info: { status: "rejected", rateLimitType: "five_hour" } } };
+  assert.equal(quotaVerdict(rejected, "anything").ok, false, "an override never passes a rejection");
+  assert.equal(quotaVerdict({}).ok, false, "no rate_limit_info refuses");
+  assert.equal(quotaVerdict(null).ok, false);
 });
 
 test("revision: a branch name or a full sha; a sha7 and malformed names are refused", () => {
@@ -97,7 +96,7 @@ test("main gate: quota, revision, twin and claim refusals exit 2 in that order, 
   assert.match(r.out.at(-1), /REFUSED \(quota\)/);
   assert.deepEqual([r.claims.length, r.receipts.length], [0, 0]);
   r = run(["--session-json", fx("get-session-allowed.json")], { deps: { mtime: () => NOW - 30 * 60_000 } });
-  assert.match(r.out.at(-1), /REFUSED \(quota\): --session-json is 30 min old/);
+  assert.match(r.out.at(-1), /REFUSED \(quota\): --session-json is 1800 s old \(max 120\)/);
   const sha7 = [...ARGS]; sha7[sha7.indexOf("claude/f1-game-project-26h3ng")] = "3e8abc0";
   const out = [];
   assert.equal(main([...sha7, "--session-json", fx("get-session-allowed.json")], { log: (l) => out.push(l), now: () => NOW, mtime: () => NOW, claim: () => assert.fail("no claim"), writeReceipt: () => assert.fail("no receipt") }), 2);
@@ -119,14 +118,15 @@ test("main gate: a pass claims, writes the receipt and prints the create_session
   const j = JSON.parse(r.out.at(-1));
   assert.equal(j.claim, `${CLAIM_NS}/B-X9`);
   assert.equal(j.spec.model, "claude-opus-5-5");
-  assert.equal(r.receipts[0].quota.status, "allowed");
-  assert.equal(r.receipts[0].override, null);
+  assert.deepEqual([r.receipts[0].ok, r.receipts[0].status, r.receipts[0].session, r.receipts[0].override, r.receipts[0].lane],
+    [true, "allowed", "session_01ORCHORCHORCHORCHORCHOR", null, "X9"], "launch-gate's receipt shape, plus the lane");
   r = run(["--session-json", fx("get-session-warning.json"), "--override", "Bryce: go", "--no-claim"]);
   assert.equal(r.code, 0, r.out.join("\n"));
   assert.equal(r.claims.length, 0);
   assert.equal(r.receipts[0].override, "Bryce: go");
   assert.equal(r.receipts[0].claim, null);
   assert.match(r.out[0], /quota allowed_warning \(override: Bryce: go\).*no claim/);
+  assert.equal(r.receipts[0].status, "allowed_warning");
   assert.equal(main(["--fleet", "B", "--lane", "X9", "--bogus", "1"], { log: () => {} }), 1, "unknown flag");
 });
 

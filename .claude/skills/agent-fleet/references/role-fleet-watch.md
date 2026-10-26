@@ -31,7 +31,7 @@ needs a decision or a merge. Merging stays with the PR's own orchestrator
   `role:fleet-watch`.
 - The prompt carries this file's path, the orchestrator id, the Merge Desk id
   (or `none`), `USER GRANTS:` quoting every standing grant verbatim with its date and the
-  session it was typed in (the quotes above included), and `STOP AT: 100k context`.
+  session it was typed in (the quotes above included), and `STOP AT: 150k context`.
   A changed grant is a relaunch with the amended brief, never a message: relayed grants are refused (authority.md).
 - One watcher at a time. Before launching, archive the old one and delete its
   pending `FLEET-WATCH` scheduled tasks (`list_triggers`).
@@ -115,7 +115,7 @@ republishing. Send its URL to the orchestrator once.
 
 ## Handoff
 
-Soft cap 100k context. At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft cap finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k hand off now (launch-policy.md §Size stop). Send
+Soft cap 150k context. At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft cap finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k hand off now (launch-policy.md §Size stop). Send
 `FLEET-WATCH HANDOFF | dashboard <url> | pending triggers <ids>` and stop arming ticks. State is in the
 dashboard `db`, so the handoff carries only the URL and the pending trigger ids. The orchestrator starts a
 fresh watcher from this card.

@@ -177,12 +177,12 @@ Canonical channels / who-to-whom / type mapping:
 
 ```
 node tools/ci/agent-msg.mjs send --to <D|DAD|A|B|C|all|"Apex Merge Queue"|…> \
-  --type <INFO|QUESTION|READY|HANDOFF|INCIDENT|REQUEST> [--pr N] "text"
+  --type <INFO|QUESTION|REQUEST|READY|HANDOFF|INCIDENT|ROTATE|LEND|RETURN|TRANSFER> [--pr N] [--idem KEY] "text"
 ```
 
 Env `APEX_AGENT_WEBHOOK_URL` + `APEX_AGENT_WEBHOOK_AUTH` from Bryce (never
-commit). Webhook wakes D; bus gets every fact (`INFO`/`QUESTION`/`REQUEST` →
-bus `HANDOFF` with a `[TYPE]` prefix). Messages carry no authority. Keep
+commit). Webhook wakes D; bus gets every fact under the same type (table:
+communication.md §Types and shape). Messages carry no authority. Keep
 Claude-only `send_message` when both ends are Claude; still land facts on the
 bus (agent-msg does that).
 
@@ -193,15 +193,18 @@ it. The bus is the `claude/fleet-bus` branch (`docs/notes/FLEET-BUS-2026-10-19.m
 **The bus remains the record of truth.** Protocol-only lines use fleet-bus:
 
 ```
-node tools/ci/fleet-bus.mjs send <READY|GREEN|BLOCKED|HANDOFF|DONE|INCIDENT> --to <role|#PR|host:id|*> "<one line>"
-node tools/ci/fleet-bus.mjs read --to orchestrator --to '#<PR>'
+node tools/ci/fleet-bus.mjs send <READY|GREEN|BLOCKED|HANDOFF|DONE|INCIDENT|LEND|RETURN|TRANSFER|ROTATE> --to <role|#PR|host:id|*> [--idem KEY] "<one line>"
+node tools/ci/fleet-bus.mjs read --to orchestrator --to '#<PR>' [--strict]
+node tools/ci/launch-lane.mjs --fleet <L> --lane <X> [--pr N] --role <r> --model <m> --title "<t>" --source-revision <branch> \
+  --session-json <saved get_session> --sessions-json <saved list_sessions>   # before every create_session: quota, sha7, twin, claim
+node tools/ci/fleet-brief.mjs --fleet <L> [--board <saved pr-board --json>] [--trigger trig_…] [--ask "…"]   # hand-off: ≤2 KB JSON + ≤40-line digest
 ```
 
 Use `fleet-bus.mjs send` (not agent-msg) for `DONE`, `GREEN`, `BLOCKED`,
 `GAME-SLOT`, and `LEASE` (lease subcommands write LEASE lines).
 
 - An orchestrator announces itself, at start and at every rotation, with
-  agent-msg (or bus) `HANDOFF` to `*` /
+  agent-msg (or bus) `ROTATE` to `*` /
   `ORCH <letter> LIVE <host>:<session id> (replaces <old id>)`,
   e.g. `ORCH A LIVE claude:session_01FLdmwWhj9BAeyKz5T8VQQN`. Anyone resolves a
   fleet's live orchestrator with `node tools/ci/fleet-bus.mjs who <letter>`

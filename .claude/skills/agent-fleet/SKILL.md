@@ -37,7 +37,7 @@ Read your role's reference before acting:
   seed → [`references/role-seed.md`](references/role-seed.md) (one tiny depth-0 session per
   fleet that Bryce starts once; it only launches orchestrators on `SPAWN ORCH`);
   reviewer → [`references/role-reviewer.md`](references/role-reviewer.md)
-  (one pass, findings only, STOP AT 120k);
+  (one pass, findings only, STOP AT 150k);
   fleet watch → [`references/role-fleet-watch.md`](references/role-fleet-watch.md)
   (one session: PR events + bus Monitor, routine fixes, no merges, dashboard);
   sync → [`references/role-sync.md`](references/role-sync.md) (conflict-only

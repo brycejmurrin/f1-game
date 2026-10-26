@@ -89,13 +89,14 @@
       ownedMaterials.clear(); ownedRTs.clear(); ownedTextures.clear();
     }
     try {
-    // Phone post at 5/8 scene resolution: a modest clarity lift from half-res.
-    // BrowserStack iPhone 15 deep
-    // profile 2026-10-22: JS 3.8–6.4 ms while frames 17–28 ms → GPU/fill-bound;
-    // running the look-post chain at full scene res on a tile GPU was the
-    // leftover cost after the governor recovered to autoTier 0). Scene stays
-    // at W×H; LDR + bloom L0 + SSAO/godray base off pW×pH (= 5W/8 on phone).
-    // Desktop keeps pW===W. Scene MSAA remains the caller's (ctx.sceneSamples).
+    // Phone post working size = PHONE_POST_SCALE × the scene (W×H). #3479 cut
+    // it to 1/2 (BrowserStack iPhone 15 deep profile 2026-10-22: JS 3.8–6.4 ms
+    // of 17–28 ms frames → GPU/fill-bound) and #3670 raised it to 5/8; both read
+    // as a blurry image on Bryce's iPhone (TLX WebGPU), so it is back at 1 —
+    // the pre-#3479 full-res composite. Frame cost is the governor's job: its
+    // renderScale step shrinks W×H (and so pW×pH), and the look-post shed /
+    // phone slow latch drop the passes. LDR + bloom L0 + SSAO/godray base off
+    // pW×pH. Desktop keeps pW===W. Scene MSAA remains the caller's (ctx.sceneSamples).
     // Block gates still come from present(opts) / PerfGov — this only shrinks
     // the surfaces those blocks draw into. FORMATS: the SSAO pair is R8
     // and bloom R11F_G11F_B10F (when renderable) on both; the godray pair stays
@@ -205,8 +206,8 @@
     const VP = ctx.vp || null;
     const fixed = !!(ctx.fixedTargets && VP && VP.enabled);
     let PW = 1, PH = 1;   // the physical (present) size; fixed mode only
-    // Post working size. Phones use 5/8 of the scene dimensions; aux passes
-    // (SSAO/godray/bloom) then halve that again. Desktop keeps pW===W.
+    // Post working size. Phones use PHONE_POST_SCALE of the scene dimensions;
+    // aux passes (SSAO/godray/bloom) then halve that again. Desktop keeps pW===W.
     const phonePost = !!ctx.isMobile;
     let pW = 1, pH = 1;
 
@@ -365,7 +366,8 @@
       if (rt.depthTexture) VP.layout(rt.depthTexture, lw, lh, pw, ph);
     }
     const halfOf = (v) => Math.max(1, Math.floor(v / 2));
-    const postSize = (v) => Math.max(1, Math.floor(Math.max(1, v | 0) * (phonePost ? 0.625 : 1)));
+    const PHONE_POST_SCALE = 1;   // phone post size × scene; 1 = full res (pre-#3479)
+    const postSize = (v) => Math.max(1, Math.floor(Math.max(1, v | 0) * (phonePost ? PHONE_POST_SCALE : 1)));
     function layoutHalf() {
       // Base AO/GR off the post working size, including fixed allocations.
       aoW = halfOf(pW);
@@ -924,7 +926,7 @@
       C.lensDirt.value = dirtTex ? gk("lensDirt") : 0;
       // uReflTexel drives SSR + SHARPEN + the vignette aspect — every frame.
       // SSR samples the full-res scene, so the UV quantum stays 1/W even when
-      // the LDR composite runs at phone post size pW (= 5W/8).
+      // the LDR composite runs at a reduced phone post size pW.
       C.reflTexel.value.set(1 / W, 1 / H);
       // Wet-road/car SSR needs depth + view/proj + world-up-in-view; uSsrOk
       // gates the whole branch on probe-less paths (setup preview).
@@ -1237,7 +1239,7 @@
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],
-        // Post working size (5/8 of scene on phones). Aux passes half of this.
+        // Post working size (PHONE_POST_SCALE of scene on phones). Aux passes half of this.
         postTargets: [pW, pH],
         phonePost,
         // Lazy targets still alive. A shed that stuck must drop these; the

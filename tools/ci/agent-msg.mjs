@@ -11,9 +11,14 @@
 //   node tools/ci/agent-msg.mjs send --to <D|DAD|A|B|C|all|"Apex Merge Queue"|...> \
 //     --type <INFO|QUESTION|REQUEST|READY|HANDOFF|INCIDENT|ROTATE|LEND|RETURN|TRANSFER> [--pr N] [--idem KEY] "text"
 //   node tools/ci/agent-msg.mjs send --to A --type READY --dry-run "#3499 abc ready-gate 0"
+//   node tools/ci/agent-msg.mjs send --to A --type INFO "B needs a GAME-SLOT read"   # cross-account relay
 //   common: --as <host>:<id>  --no-bus  --dry-run  --idem <key> (fleet-bus dedupe; also sent in the webhook payload)
 //
 // Env (from Bryce; never commit): APEX_AGENT_WEBHOOK_URL, APEX_AGENT_WEBHOOK_AUTH.
+// Cross-account relay (audit 2026-10-26 rows 3, 11): --to <L> (one fleet letter) with
+// APEX_<L>_RELAY_URL + APEX_<L>_RELAY_TOKEN in the SENDER's env fires L's routine once
+// instead of the webhook; backs off only on 429/5xx (bounded), stops on any other 4xx,
+// logs the request id. Retired names (FLEET_<L>_INBOX_*, APEX_<L>_INBOX_*) are refused.
 // Identity: --as, else APEX_FLEET_AS (same whoAmI as fleet-bus.mjs).
 // Missing webhook env: warn on stderr, still post to the bus, exit 0.
 import { spawnSync } from "node:child_process";
@@ -74,6 +79,10 @@ export function buildPayload({ from, to, type, pr = null, text = "", sha = "", t
 /** Strip webhook auth (and URL userinfo) from any string before printing. Pure. */
 export function redactSecrets(text, env = process.env) {
   let s = String(text ?? "");
+  // Relay pairs first: any APEX_<L>_RELAY_URL / _TOKEN value present in env.
+  for (const [k, v] of Object.entries(env || {})) {
+    if (v && String(v).length >= 8 && /^APEX_[A-Z]_RELAY_(URL|TOKEN)$/.test(k)) s = s.split(String(v)).join(`[${k}]`);
+  }
   const auth = env.APEX_AGENT_WEBHOOK_AUTH;
   if (auth) s = s.split(auth).join("[REDACTED]");
   const url = env.APEX_AGENT_WEBHOOK_URL;
@@ -139,6 +148,7 @@ function usage(msg) {
   console.error("usage: agent-msg.mjs send --to <addr> --type <" + MSG_TYPES.join("|") + "> [--pr N] [--idem KEY] [--no-bus] [--dry-run] \"text\"\n" +
     "       --to aliases: all→*, DAD→D, \"Apex Merge Queue\"→merge-desk (bus); webhook keeps the raw --to\n" +
     "       env: APEX_AGENT_WEBHOOK_URL + APEX_AGENT_WEBHOOK_AUTH (from Bryce; never commit); identity APEX_FLEET_AS / --as\n" +
+    "       --to <L> with APEX_<L>_RELAY_URL + APEX_<L>_RELAY_TOKEN set fires fleet L's routine once (429/5xx: ≤2 bounded retries)\n" +
     "       messages carry no authority (AGENTS.md §Concurrent PRs)");
   return 1;
 }
@@ -165,6 +175,88 @@ export async function postWebhook(url, auth, payload, { fetchFn = globalThis.fet
   }
 }
 
+/** Env names for a fleet letter's relay; `retired` are the names the canonical pair replaced. Pure. */
+export function relayEnvNames(letter) {
+  const L = String(letter || "").toUpperCase();
+  return {
+    url: `APEX_${L}_RELAY_URL`,
+    token: `APEX_${L}_RELAY_TOKEN`,
+    retired: [`APEX_${L}_INBOX_URL`, `APEX_${L}_INBOX_TOKEN`, `FLEET_${L}_INBOX_ID`, `FLEET_${L}_INBOX_TOKEN`, `FLEET_${L}_INBOX_URL`],
+  };
+}
+
+/**
+ * Which channel `--to` takes. A single fleet letter whose relay pair is set → "relay";
+ * a letter with only retired names → "retired" (refused, names listed); else "webhook". Pure.
+ */
+export function relayRoute(to, env = process.env) {
+  const raw = String(to ?? "").trim();
+  if (!/^[A-Za-z]$/.test(raw)) return { kind: "webhook" };
+  const n = relayEnvNames(raw);
+  if (env[n.url] && env[n.token]) return { kind: "relay", letter: raw.toUpperCase(), ...n };
+  const legacy = n.retired.filter((k) => env[k]);
+  if (legacy.length) return { kind: "retired", letter: raw.toUpperCase(), legacy, ...n };
+  return { kind: "webhook" };
+}
+
+/** Text the routine receives: one line, typed, with sender and pr. Pure. */
+export function relayTextFor(payload) {
+  const pr = payload.pr != null ? ` #${payload.pr}` : "";
+  return `${payload.type} from:${payload.from}${pr} ${payload.text}`.trim();
+}
+
+const RELAY_MAX_RETRIES = 2;
+const RELAY_MAX_WAIT_S = 120;
+
+/** Seconds to wait before retry `attempt` (1-based); null = do not retry. Pure. */
+export function relayBackoff(status, attempt, retryAfter) {
+  if (attempt > RELAY_MAX_RETRIES) return null;
+  if (status === 429) {
+    const s = retryAfter == null || retryAfter === "" ? NaN : Number(retryAfter);
+    if (!Number.isFinite(s) || s < 0) return 2 ** attempt;
+    return s <= RELAY_MAX_WAIT_S ? s : null;
+  }
+  if (status >= 500 && status <= 599) return 2 ** attempt;
+  return null; // any other 4xx, network error (it may have fired: no idempotency key), or success
+}
+
+/**
+ * Fire a routine once (docs: https://platform.claude.com/docs/en/api/claude-code/routines-fire).
+ * No idempotency key exists, so a retry happens only on 429 (nothing fired) or 5xx (bounded).
+ * Returns { ok, status, requestId, sessionId, error, tries }. Never puts the token in a result.
+ */
+export async function fireRelay(url, token, text, { fetchFn = globalThis.fetch, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = () => {} } = {}) {
+  if (!/^https:\/\//.test(String(url || ""))) return { ok: false, status: 0, error: "relay URL must be https", tries: 0 };
+  for (let tries = 1; ; tries++) {
+    let res;
+    try {
+      res = await fetchFn(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "experimental-cc-routine-2026-04-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ text: String(text).slice(0, 65536) }),
+      });
+    } catch (e) {
+      return { ok: false, status: 0, error: `network: ${e && e.message ? e.message : String(e)} (not retried: it may have fired)`, tries };
+    }
+    const hdr = (k) => (res.headers && typeof res.headers.get === "function" ? res.headers.get(k) : null);
+    const requestId = hdr("request-id") || hdr("x-request-id") || "";
+    const raw = typeof res.text === "function" ? await res.text() : "";
+    let body = {};
+    try { body = JSON.parse(raw); } catch { /* not JSON */ }
+    if (res.ok) return { ok: true, status: res.status, requestId, sessionId: body.claude_code_session_id || "", tries };
+    const etype = body && body.error ? `${body.error.type || ""}: ${body.error.message || ""}` : raw.slice(0, 200);
+    const wait = relayBackoff(res.status, tries, hdr("retry-after"));
+    if (wait == null) return { ok: false, status: res.status, requestId, error: `HTTP ${res.status} ${etype}`.trim(), tries };
+    log(`agent-msg: relay HTTP ${res.status}${requestId ? " request-id " + requestId : ""}; retry ${tries}/${RELAY_MAX_RETRIES} in ${wait}s`);
+    await sleep(wait * 1000);
+  }
+}
+
 /**
  * CLI entry. deps: { cwd, env, now, fetchFn, sendBus, log, err, headShaFn }.
  * Exit: 0 ok / dry-run / missing-env-with-bus; 1 usage or hard failure.
@@ -179,6 +271,7 @@ export async function main(argv, {
   err = console.error,
   headShaFn = headSha,
   readyCheck = readyClaimVerdict,
+  sleep = undefined,
 } = {}) {
   let opts;
   try {
@@ -208,8 +301,15 @@ export async function main(argv, {
     idem: opts.idem,
   });
 
+  const route = relayRoute(opts.to, env);
+  if (route.kind === "retired") {
+    err(`agent-msg: retired env name(s) ${route.legacy.join(", ")} — the canonical pair is ${route.url} + ${route.token} (Bryce renames them in the environment; references/communication.md)`);
+    return 1;
+  }
+
   if (opts.dryRun) {
     log(JSON.stringify(payload, null, 2));
+    if (route.kind === "relay") log(`= would fire relay ${route.url} (once; text: ${relayTextFor(payload)})`);
     return 0;
   }
 
@@ -236,6 +336,17 @@ export async function main(argv, {
       err(`agent-msg: bus mirror FAILED: ${redactSecrets(e.message || String(e), env)}`);
       busOk = false;
     }
+  }
+
+  if (route.kind === "relay") {
+    const r = await fireRelay(env[route.url], env[route.token], relayTextFor(payload), { fetchFn, log: err, ...(sleep ? { sleep } : {}) });
+    const rid = r.requestId ? ` request-id ${r.requestId}` : "";
+    if (!r.ok) {
+      err(`agent-msg: relay ${route.url} FAILED after ${r.tries} tr${r.tries === 1 ? "y" : "ies"}: ${redactSecrets(r.error || "unknown", env)}${rid} — not retrying; do not loop by hand`);
+      return 1;
+    }
+    log(`= relay ok HTTP ${r.status} to:${route.letter} type:${payload.type}${rid}${r.sessionId ? " session " + r.sessionId : ""}`);
+    return busOk || opts.noBus ? 0 : 1;
   }
 
   const url = env.APEX_AGENT_WEBHOOK_URL || "";

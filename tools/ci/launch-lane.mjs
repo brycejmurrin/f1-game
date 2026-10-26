@@ -5,6 +5,9 @@
 // @section runner
 // @skill agent-fleet
 //
+// The quota rule and the receipt are launch-gate.mjs's (#3777): this tool calls its verdict and writes its receipt, so
+// .claude/hooks/launch-gate.py passes the create_session that follows (within its 120 s window).
+//
 // Why (system audit 2026-10-26, FLEET-A-TRANSCRIPT-AUDIT finding 5 and lane X1): OrchA 33 launched seven sessions into
 // `seven_day allowed_warning`, although orchestrator.md says launch nothing at allowed_warning; twins of one PR were launched
 // twice from two orchestrators that each read a stale roster; and a `source_revision` sha7 failed the checkout. Each rule
@@ -31,51 +34,24 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractSessions, prOf } from "./fleet-archive.mjs";
+import { extractSession, rateLimitOf, verdict, writeReceipt as writeGateReceipt, PAGE_MAX_AGE_S } from "./launch-gate.mjs";
 import { whoAmI } from "./fleet-bus.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 /** Claims live on branches: the cloud git proxy answers a push to a non-branch ref (refs/fleet/…) with HTTP 403 (measured
  *  2026-10-26), and no workflow triggers on `fleet-claims/**` (.github/workflows `on.push.branches`). */
 export const CLAIM_NS = "refs/heads/fleet-claims";
-export const RECEIPT = path.join("artifacts", "launch-gate", "receipt.json");
-/** A saved get_session older than this does not describe the quota now. */
-export const MAX_AGE_MIN = 10;
-/** rate_limit_info.status values that allow a launch; everything else (allowed_warning, rejected, unknown) refuses. */
-export const OK_STATUS = ["allowed"];
 /** Fleet lane tags an orchestrator stamps on every launch (launch-policy.md §Session titles and tags). */
 export const BASE_TAG = "f1-game-fleet";
 
-/** Find rate_limit_info anywhere a get_session result keeps it (ccr.external_metadata, external_metadata, top level). Pure. */
-export function rateLimitOf(obj) {
-  const seen = new Set();
-  const walk = (o, depth) => {
-    if (!o || typeof o !== "object" || depth > 6 || seen.has(o)) return null;
-    seen.add(o);
-    if (o.rate_limit_info && typeof o.rate_limit_info === "object") return o.rate_limit_info;
-    for (const v of Object.values(o)) { const r = walk(v, depth + 1); if (r) return r; }
-    return null;
-  };
-  return walk(obj, 0);
-}
-
-/** A saved tool result (raw JSON, or the MCP text with an envelope around it) -> the object. Throws when none parses. Pure. */
-export function parseSaved(text) {
-  const s = String(text);
-  const start = s.indexOf("{");
-  if (start < 0) throw new Error("no JSON object in the saved file");
-  return JSON.parse(s.slice(start, s.lastIndexOf("}") + 1));
-}
-
-/** The quota verdict: { ok, status, type, resetsAt, why }. An override records the user's words and lets a warning through. Pure. */
-export function quotaVerdict(info, override = "") {
-  if (!info) return { ok: false, status: "missing", why: "no rate_limit_info in --session-json (save `get_session` with no id, then pass the file)" };
-  const status = String(info.status || "unknown"), type = String(info.rateLimitType || "?");
-  const resets = Number.isFinite(info.resetsAt) ? new Date(info.resetsAt * 1000).toISOString().slice(0, 16) + "Z" : "?";
-  if (OK_STATUS.includes(status)) return { ok: true, status, type, resetsAt: info.resetsAt ?? null, why: "" };
-  if (status === "rejected") return { ok: false, status, type, resetsAt: info.resetsAt ?? null, why: `quota ${type} rejected until ${resets}: nothing launches` };
-  if (String(override).trim()) return { ok: true, status, type, resetsAt: info.resetsAt ?? null, why: `override: ${String(override).trim()}` };
-  return { ok: false, status, type, resetsAt: info.resetsAt ?? null,
-    why: `quota ${type} ${status} (resets ${resets}): launch nothing and ask the user (orchestrator.md); --override "<their words>" records a typed yes` };
+/**
+ * The quota verdict: launch-gate.mjs's rule (allowed, or a quoted user override), plus one line of its own: a `rejected`
+ * quota never launches, override or not (the sandbox refuses it anyway: TRANSCRIPT-MINING-2026-10-16). Pure.
+ */
+export function quotaVerdict(session, override = "") {
+  const rl = rateLimitOf(session || {});
+  if (rl && rl.status === "rejected") return { ok: false, status: "rejected", why: `quota ${rl.rateLimitType || "?"} rejected: nothing launches` };
+  return verdict(session || {}, { override });
 }
 
 /** Why `rev` is not a source_revision create_session can check out ("" when it is). Branch names or a full 40-hex sha. Pure. */
@@ -199,7 +175,7 @@ const claimLine = (key, c) => `${CLAIM_NS}/${key} held by ${c.claim?.by || "?"} 
 
 const BOOL = new Set(["json", "no-claim"]);
 const VALUE = new Set(["fleet", "lane", "pr", "role", "scope", "model", "title", "source-revision", "session-json", "sessions-json",
-  "override", "as", "remote", "max-age"]);
+  "override", "as", "remote"]);
 
 function usage(log, msg) {
   if (msg) log(`launch-lane: ${msg}`);
@@ -211,7 +187,7 @@ function usage(log, msg) {
 
 export function main(argv, { cwd = ROOT, log = console.log, now = () => Date.now(), read = (f) => fs.readFileSync(f, "utf8"),
   mtime = (f) => fs.statSync(f).mtimeMs, claim = pushClaim, release = releaseClaim, lookup = readClaim,
-  writeReceipt = (o) => { const f = path.join(cwd, RECEIPT); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n"); } } = {}) {
+  writeReceipt = (o) => writeGateReceipt(process.env.CLAUDE_PROJECT_DIR || cwd, o, now()) } = {}) {
   const f = {}, pos = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -243,10 +219,11 @@ export function main(argv, { cwd = ROOT, log = console.log, now = () => Date.now
 
     // 1. quota
     if (!f["session-json"]) return usage(log, "--session-json is required: save `get_session` (no id) and pass the file");
-    const ageMin = (now() - mtime(f["session-json"])) / 60000;
-    const maxAge = Number(f["max-age"]) || MAX_AGE_MIN;
-    if (ageMin > maxAge) return refuse("quota", `--session-json is ${Math.round(ageMin)} min old (max ${maxAge}): save a fresh get_session`);
-    const q = quotaVerdict(rateLimitOf(parseSaved(read(f["session-json"]))), f.override);
+    // The same freshness the launch-gate hook demands of its receipt: a saved page goes stale with the quota.
+    const ageS = (now() - mtime(f["session-json"])) / 1000;
+    if (ageS > PAGE_MAX_AGE_S) return refuse("quota", `--session-json is ${Math.round(ageS)} s old (max ${PAGE_MAX_AGE_S}): call get_session again and save it`);
+    const session = extractSession(read(f["session-json"]));
+    const q = quotaVerdict(session, f.override);
     if (!q.ok) return refuse("quota", q.why);
     // 2. revision
     const rv = revisionProblem(f["source-revision"]);
@@ -268,11 +245,13 @@ export function main(argv, { cwd = ROOT, log = console.log, now = () => Date.now
       if (!c.ok) return refuse("claim", c.held ? claimLine(key, c.held) : c.reason);
       claimed = `${CLAIM_NS}/${key}`;
     }
-    writeReceipt({ at, by: me, ok: true, quota: { status: q.status, type: q.type, resetsAt: q.resetsAt }, override: f.override || null,
-      fleet: f.fleet.toUpperCase(), lane: f.lane, pr: f.pr ? Number(f.pr) : null, claim: claimed, spec });
+    // launch-gate.mjs's receipt (kind, ok, status, session, override, why, at), so .claude/hooks/launch-gate.py lets the
+    // create_session through; the lane fields ride along.
+    writeReceipt({ ok: true, status: q.status, session: session.id || null, override: q.override || null, why: q.why,
+      by: me, fleet: f.fleet.toUpperCase(), lane: f.lane, pr: f.pr ? Number(f.pr) : null, claim: claimed, spec });
     if (f.json) log(JSON.stringify({ ok: true, claim: claimed, spec }));
     else {
-      log(`= launch ok: quota ${q.status}${q.why ? ` (${q.why})` : ""}, revision ${f["source-revision"]}, no twin, ${claimed ? `claimed ${claimed}` : "no claim (--no-claim)"}`);
+      log(`= launch ok: quota ${q.status}${q.override ? ` (override: ${q.override})` : ""}, revision ${f["source-revision"]}, no twin, ${claimed ? `claimed ${claimed}` : "no claim (--no-claim)"}`);
       log(JSON.stringify(spec));
     }
     return 0;
