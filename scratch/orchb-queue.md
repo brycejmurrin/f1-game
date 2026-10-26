@@ -192,3 +192,8 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Bus cursor 7d10075. DAD 80da0f7 HANDOFF to:B had an empty body — ask DAD to resend.
 - Archive by rule after 05:10Z: 01GETh 011NoeB 01Q7NM 01B2s 018Eoa 01EWg3 01AXz6 019yb 01WV8q 01Y3Fm 01KBMb. Never R1 01PfAQjr, seed, orchestrators.
 - 04:23Z addendum: L4 → draft #3779 (5e5945e7), owner session_015uGq51cXgHdUCimQRLJzS7. L3 → draft #3780 (8a9cfd48), owner session_01SMXUtKAU4RogSZgfRi2MBE; Bryce's row-5 grant must now be typed in session_01SMXUtKAU4RogSZgfRi2MBE. L3/L4 stopped (archive by rule).
+
+## 04:25Z (21:25 PT) — ORCH B now session_01GU6nDgZAeLPfbcYDtLHubd (bus 3debba6 LIVE). READ LAST.
+- Routines: 3-min send_later chain ("OrchB 3-min tick"); hourly trig_01Wbak5zU1pzpmsJQibPjWyX (:23). Predecessor triggers deleted.
+- GAME-SLOT order: #3772 (draft 4ab25422, fast tier green; owner 01Xmgd → ready-gate → full tier) after Pages green on 45fbf76f; then #3634 321bbb1eb, #3636 482c8d6f4 (READY green, lane 01Q7NM); then #3736 #3684 #3724 #3641 #3646 #3730 #3648(sync) #3723.
+- Owners: #3779 (L4) session_015uGq51cXgHdUCimQRLJzS7; #3780 (L3) session_01XJAQaNpRDAGvVkH4Bg67hk (row-5 grant goes here). All told new id.
