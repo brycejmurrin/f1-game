@@ -38,7 +38,7 @@ const GarageCrewMotion = (function () {
     a = acc(); tube(a, [0, 0, 0], [0, THIGH, 0], .082, c1, 8); block(a, 0, THIGH, -.06, .06, .06, .02, DARK); add("thigh", a);
     a = acc(); tube(a, [0, 0, 0], [0, SHIN, 0], .062, scale(c1, .72), 8); add("shin", a);
     a = acc(); block(a, 0, -.03, .04, .065, .05, .12, DARK); add("boot", a);
-    return { mesh, m: new Float32Array(16), walk: new Float32Array(7), signal: new Float32Array(7), joint: new Float32Array(2), knee: new Float32Array(3), x: 0, z: 0, cy: 1, sy: 0 };
+    return { mesh, m: new Float32Array(16), pm: new Float32Array(16), parent: null, walk: new Float32Array(7), signal: new Float32Array(7), joint: new Float32Array(2), knee: new Float32Array(3), x: 0, z: 0, cy: 1, sy: 0 };
   }
   function free(rig, gfx) {
     if (!rig) return 0;
@@ -68,7 +68,8 @@ const GarageCrewMotion = (function () {
     m[8]=cy*zx+sy*zz;m[9]=zy;m[10]=-sy*zx+cy*zz;m[11]=0;
     m[12]=rig.x+cy*x+sy*z;m[13]=y;m[14]=rig.z-sy*x+cy*z;m[15]=1;
     if(footYaw!==null) { const c=Math.cos(footYaw),s=Math.sin(footYaw);m[0]=c;m[1]=0;m[2]=-s;m[4]=0;m[5]=1;m[6]=0;m[8]=s;m[9]=0;m[10]=c; }
-    gfx.draw(rig.mesh[name],m,opts);
+    // rig.parent (GarageCrewChoreo.draw): the in-race stop places the crew in the car's grounded basis.
+    gfx.draw(rig.mesh[name],rig.parent?GarageCrewChoreo.mul(rig.pm,rig.parent,m):m,opts);
   }
   function draw(rig, gfx, x, z, yaw, pose, side, opts) {
     rig.x = x; rig.z = z; rig.cy = Math.cos(yaw); rig.sy = Math.sin(yaw);

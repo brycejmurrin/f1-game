@@ -1,0 +1,1 @@
+Improved: Reduce repeated Three.js binding checks, preserve eligible 16-bit WebGPU indices, limit mirror sampling to its inset, batch distant rival bodies, and reuse lamp-lighting calculations without lowering resolution.

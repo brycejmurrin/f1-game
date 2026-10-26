@@ -20,7 +20,8 @@ and the no-authority rule. Env `APEX_AGENT_WEBHOOK_URL` +
 
 Read your role's reference before acting:
 
-- **Orchestrator** → [`references/orchestrator.md`](references/orchestrator.md);
+- **Orchestrator** → [`references/orchestrator.md`](references/orchestrator.md)
+  (§First acts: the ~3-min `send_later` tick and the hourly `create_trigger` safety net);
   each wake after (roles, reading the fleet, escalations) →
   [`references/running.md`](references/running.md); the per-host spawn / message /
   status / stop table → [`references/adapters.md`](references/adapters.md).
@@ -126,8 +127,8 @@ reference §Escalate).
   bus record). Protocol lines (`DONE`, `GREEN`, `BLOCKED`, `GAME-SLOT`) use
   `fleet-bus.mjs send`.
 - Subscribe with the host's own tool (Claude Code `subscribe_pr_activity`;
-  Cursor `subscribe_github_ci` + `subscribe_github_pr`) plus one timer
-  (`send_later` / `subscribe_timer`); never call a name the host does not
+  Cursor `subscribe_github_ci` + `subscribe_github_pr`) at the first push, plus one
+  ~15 min timer (`send_later` / `subscribe_timer`); never call a name the host does not
   list. A subscription alone has missed reds: read CI on every wake.
 - Browser runs belong to a worker SESSION, never to an in-process subagent
   (the Bash hook blocks it). A Cursor `Task` worker launched with

@@ -93,3 +93,21 @@ test("a stream with no dumps still summarises", () => {
   assert.equal(s.peakDump, null);
   assert.equal(s.limits.webContent, null);
 });
+
+// tools/perf/devicefarm-method.mjs — pure harness helpers (#3676 items 4 and 5).
+import { appendUnit, tierMoved } from "../../tools/perf/devicefarm-method.mjs";
+
+test("appendUnit counts the sessions a unit had before this one", () => {
+  const db = {};
+  assert.equal(appendUnit(db, "U1", { out: "a" }), 0);
+  assert.equal(appendUnit(db, "U1", { out: "b" }), 1);
+  assert.equal(appendUnit(db, "U2", { out: "c" }), 0);
+  assert.deepEqual(db.U1.map((e) => e.out), ["a", "b"]);
+});
+
+test("tierMoved only flags a changed autoTier between two reads", () => {
+  assert.equal(tierMoved({ autoTier: 2 }, { autoTier: 2 }), false);
+  assert.equal(tierMoved({ autoTier: 2 }, { autoTier: 1 }), true);
+  assert.equal(tierMoved(null, { autoTier: 1 }), false);
+  assert.equal(tierMoved({ autoTier: 1 }, undefined), false);
+});
