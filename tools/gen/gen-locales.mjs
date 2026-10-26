@@ -10,13 +10,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { argGate } from "./gen-lib.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const EN_REL = "locales/en.json";
 const MANIFEST_REL = "locales/manifest.json";
 const INDEX = path.join(ROOT, "index.html");
-
-const USAGE = "usage: node tools/gen/gen-locales.mjs [--check]\n";
 
 function sha8(text) {
   return createHash("sha256").update(text).digest("hex").slice(0, 8);
@@ -90,10 +89,8 @@ export function stale(root = ROOT) {
 }
 
 export function main(argv = process.argv.slice(2)) {
-  if (argv.includes("--help") || argv.includes("-h")) {
-    process.stdout.write(USAGE);
-    return 0;
-  }
+  const gated = argGate(argv, { tool: "tools/gen/gen-locales.mjs" });
+  if (gated !== null) return gated;
   const check = argv.includes("--check");
   const drift = stale();
   if (check) {

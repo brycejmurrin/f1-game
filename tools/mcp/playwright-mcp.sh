@@ -91,12 +91,15 @@ cmd_run() {
   local extra=()
   [[ -n "${APEX_PW_DEVICE:-}" ]] && extra+=(--device "$APEX_PW_DEVICE")
   if [[ -n "${APEX_PW_CDP:-}" ]]; then
-    exec npx --yes "$MCP_NPM_PACKAGE" \
+    exec npx --yes --prefer-offline "$MCP_NPM_PACKAGE" \
       --cdp-endpoint "$APEX_PW_CDP" \
       --output-dir "$OUTDIR" \
       "${extra[@]}" "$@"
   fi
-  exec npx --yes "$MCP_NPM_PACKAGE" \
+  # Reuse the exact cached pin without registry freshness checks. Unlike
+  # --offline, --prefer-offline still downloads missing packages on cold starts.
+  # https://docs.npmjs.com/cli/v11/using-npm/config#prefer-offline
+  exec npx --yes --prefer-offline "$MCP_NPM_PACKAGE" \
     --isolated \
     --headless \
     --browser chromium \

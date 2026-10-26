@@ -34,7 +34,7 @@ export function withoutDefaultHints(annotations, toolTitle) {
 
 // Moving a schema into anyOf changes the root of document-local JSON pointers.
 // Rewrite only schema positions, leaving literal example/const payloads untouched.
-function resultSchema(original) {
+function relocateSchema(original, prefix) {
   const singles = new Set(['additionalProperties', 'additionalItems', 'contains', 'contentSchema', 'else', 'if', 'then', 'items', 'not', 'propertyNames', 'unevaluatedItems', 'unevaluatedProperties']);
   const arrays = new Set(['allOf', 'anyOf', 'oneOf', 'prefixItems']);
   const maps = new Set(['$defs', 'definitions', 'dependentSchemas', 'dependencies', 'patternProperties', 'properties']);
@@ -42,24 +42,90 @@ function resultSchema(original) {
     if (!schema || typeof schema !== 'object' || Array.isArray(schema) || schema.$id) return schema;
     const out = { ...schema };
     for (const [key, value] of Object.entries(schema)) {
-      if (['$ref', '$dynamicRef', '$recursiveRef'].includes(key) && typeof value === 'string' && (value === '#' || value.startsWith('#/'))) out[key] = '#/anyOf/0' + value.slice(1);
+      if (['$ref', '$dynamicRef', '$recursiveRef'].includes(key) && typeof value === 'string' && (value === '#' || value.startsWith('#/'))) out[key] = prefix + value.slice(1);
       else if (singles.has(key)) out[key] = Array.isArray(value) ? value.map(move) : move(value);
       else if (arrays.has(key) && Array.isArray(value)) out[key] = value.map(move);
       else if (maps.has(key) && value && typeof value === 'object') out[key] = Object.fromEntries(Object.entries(value).map(([name, child]) => [name, move(child)]));
     }
     return out;
   }
-  return { type: 'object', anyOf: [move(original), ENVELOPE] };
+  return move(original);
+}
+function resultSchema(original) {
+  return { type: 'object', anyOf: [relocateSchema(original, '#/anyOf/0'), ENVELOPE] };
 }
 
 function inputWithLevel(schema, parameter) {
   if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return schema;
-  const result = { ...schema, properties: { ...schema.properties, [parameter]: LEVEL } };
-  // Composition branches validate the same argument object. Closed branches
-  // must recognize the presentation key too, before the gateway strips it.
-  for (const key of ['allOf', 'anyOf', 'oneOf']) if (Array.isArray(schema[key])) result[key] = schema[key].map(branch => inputWithLevel(branch, parameter));
-  for (const key of ['if', 'then', 'else', 'not']) if (schema[key] !== undefined) result[key] = inputWithLevel(schema[key], parameter);
-  return result;
+  // A local pointer is relative to its schema resource, not necessarily the
+  // outer tool document. Keep the id on the decorated resource only: copying
+  // it into the preserved source would change the relocated pointers' base.
+  const resourceId = schema.$id;
+  if (resourceId) { schema = { ...schema }; delete schema.$id; }
+  const restoreId = result => resourceId ? { ...result, $id: resourceId } : result;
+  const definitions = { ...schema.$defs }, adapted = new Map();
+  let originalName = '__upstreamInput';
+  while (own(definitions, originalName)) originalName = '_' + originalName;
+  const originalPrefix = '#/$defs/' + originalName;
+  function target(ref) {
+    if (ref === '#') return schema;
+    if (!ref.startsWith('#/')) return undefined;
+    let value = schema;
+    try {
+      for (const part of decodeURIComponent(ref.slice(2)).split('/')) {
+        const key = part.replace(/~1/g, '/').replace(/~0/g, '~');
+        if (!value || typeof value !== 'object' || !own(value, key)) return undefined;
+        value = value[key];
+      }
+    } catch { return undefined; }
+    return value;
+  }
+  function adapt(branch) {
+    if (!branch || typeof branch !== 'object' || Array.isArray(branch)) return branch;
+    if (branch.$id) return inputWithLevel(branch, parameter);
+    // A preserved source document keeps nested references to the root (or an
+    // applicator) from resolving back into a gateway-decorated argument schema.
+    const relocated = relocateSchema(branch, originalPrefix);
+    const out = { ...relocated, properties: { ...relocated.properties, [parameter]: LEVEL } };
+    // Only same-instance applicators get the presentation key. Leave property
+    // values and the original definitions closed, even when they reuse a ref.
+    if (typeof branch.$ref === 'string') {
+      const source = target(branch.$ref);
+      if (source !== undefined) {
+        if (!adapted.has(branch.$ref)) {
+          let name = '__outputLevel';
+          while (own(definitions, name)) name = '_' + name;
+          definitions[name] = {}; // reserve before following a recursive alias
+          adapted.set(branch.$ref, '#/$defs/' + name);
+          definitions[name] = adapt(source);
+        }
+        out.$ref = adapted.get(branch.$ref);
+      }
+    }
+    for (const key of ['allOf', 'anyOf', 'oneOf']) if (Array.isArray(branch[key])) out[key] = branch[key].map(adapt);
+    for (const key of ['if', 'then', 'else', 'not']) if (branch[key] !== undefined) out[key] = adapt(branch[key]);
+    for (const key of ['dependentSchemas', 'dependencies']) if (branch[key] && typeof branch[key] === 'object') out[key] = Object.fromEntries(Object.entries(branch[key]).map(([name, child]) => [name, adapt(child)]));
+    return out;
+  }
+  const result = adapt(schema);
+  if (adapted.size) {
+    definitions[originalName] = relocateSchema(schema, originalPrefix);
+    result.$defs = definitions;
+  } else {
+    // No referenced same-instance schema was adapted, so references need no relocation.
+    return restoreId(adaptWithoutRefs(schema));
+  }
+  return restoreId(result);
+
+  function adaptWithoutRefs(branch) {
+    if (!branch || typeof branch !== 'object' || Array.isArray(branch)) return branch;
+    if (branch.$id) return inputWithLevel(branch, parameter);
+    const out = { ...branch, properties: { ...branch.properties, [parameter]: LEVEL } };
+    for (const key of ['allOf', 'anyOf', 'oneOf']) if (Array.isArray(branch[key])) out[key] = branch[key].map(adaptWithoutRefs);
+    for (const key of ['if', 'then', 'else', 'not']) if (branch[key] !== undefined) out[key] = adaptWithoutRefs(branch[key]);
+    for (const key of ['dependentSchemas', 'dependencies']) if (branch[key] && typeof branch[key] === 'object') out[key] = Object.fromEntries(Object.entries(branch[key]).map(([name, child]) => [name, adaptWithoutRefs(child)]));
+    return out;
+  }
 }
 
 export function runGateway({ server, command, args = [], root = process.cwd() }) {

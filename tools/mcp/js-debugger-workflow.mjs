@@ -114,7 +114,14 @@ export function workflowMethods() {
       const digest = await this.pauseDigest(Math.min(3, frames), maxLocals);
       Object.assign(body, digest);
       if (resume) {
-        try { await this.connected().send("Debugger.resume"); this.resetPause(); this.markOperations("paused", "pending"); body.resumed = true; body.token = undefined; }
+        try {
+          const at = this.pause?.token;
+          await this.connected().send("Debugger.resume");
+          if (this.pause?.token === at) { this.resetPause(); this.markOperations("paused", "pending"); }
+          body.resumed = true;
+          if (this.pause) Object.assign(body, await this.pauseDigest(Math.min(3, frames), maxLocals));
+          else { body.paused = false; body.token = undefined; }
+        }
         catch (e) { body.resumeError = clip(e.message, 300); }
         if (!keep) Object.assign(body, await this.dropAll(set));
       }

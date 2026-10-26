@@ -8,6 +8,21 @@ import { callTool } from "../../tools/mcp/js-debugger-mcp.mjs";
 import http from "node:http";
 import { FakeCdp, frame, paused, attached } from "../helpers/js-debugger-rig.mjs";
 
+test("break-and-inspect auto-resume retains a newer pause delivered before the resume acknowledgment", async () => {
+  const { s, c } = await attached();
+  c.reply = async method => {
+    if (method === "Debugger.resume") { c.emit("Debugger.resumed"); paused(c); }
+    return {};
+  };
+  setImmediate(() => paused(c));
+  const result = await s.breakAndInspect({ resume: true, timeoutMs: 100 });
+  assert.equal(result.resumed, true);
+  assert.equal(s.state().paused, true);
+  assert.equal(result.paused, true);
+  assert.equal(result.token, s.pause.token, "caller receives the current pause token");
+  await s.detach();
+});
+
 test("break workflow keeps trigger execution independent of the breakpoint wait budget", async () => {
   for (const executionTimeoutMs of [undefined, 2000]) {
     const { s, c } = await attached();
