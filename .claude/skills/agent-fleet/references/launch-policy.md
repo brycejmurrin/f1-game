@@ -71,7 +71,7 @@ home); this file holds the policy numbers.
 | Role | Soft cap (context) |
 |---|---|
 | reviewer | 150k (base + 50k; size batches to about 25 files) |
-| worker | 150k (base + 50k), at a verified checkpoint |
+| worker | 200k (base + 100k), at a verified checkpoint; a 150k cap left ~50k of work after the ~100k boot (all three A·W9 lanes stopped within ~10 min, Bryce 2026-10-26) |
 | PR owner | 150k (base + 50k), docs-only too |
 | hunter | 150k (base + 50k) |
 | synth | 150k (base + 50k) |
