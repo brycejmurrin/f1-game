@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-da65510d-e846-589b-8ebd-6e3a465472ea #3778 tip CI green run 40270086568 on 7b1d7d6b3; waiting Pages batch window (rule 7.3: Pages 0c961987 in_progress ≥10 min; draft→ready deferred; MERGE-HOLD B/DAD)
+HANDOFF to:D from:cursor:bc-5cc7e737-35c8-510e-8577-3165d877d37b LIVE cursor:bc-5cc7e737-35c8-510e-8577-3165d877d37b on cursor/w24b-tools-survey-d37b [PR #3781] run-ci added (Pages 0c961987 green)
