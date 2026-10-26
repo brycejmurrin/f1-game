@@ -911,7 +911,10 @@
     "js/track/tracks.js"
   ],
     TRACK_WORKER_EXTRA: [
-    "js/render/shared/assets.js"
+    "js/render/shared/assets.js",
+    "js/render/shared/frustum.js",
+    "js/render/shared/chunk-bins.js",
+    "js/render/three/tlx-chunked.js"
   ],
   });
 })();

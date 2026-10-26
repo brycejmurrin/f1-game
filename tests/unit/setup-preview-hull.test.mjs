@@ -33,7 +33,7 @@ const OPTIONAL = ["stripe", "noseStripe", "accent", "nose", "pod", "wing",
 // "value change never moves a vertex" premise can be tested for it as well —
 // which it deliberately FAILS: a different outline IS a different hull, and
 // the field earns its place in SP_HULL_GEOM_FIELDS by presence, like the strips.
-const ENUM_GEOM = { finShape: ["swept", "stub"], coverVents: ["gills", "spine"], spineHeight: ["raised", "high"], spineSide: ["number", "logo"], bodyStyle: ["needle", "brick"],
+const ENUM_GEOM = { finShape: ["swept", "stub"], coverVents: ["gills", "spine"], spineHeight: ["raised", "high"], spineSide: ["number", "logo"], spineLogo: ["logo", "wrap"], bodyStyle: ["needle", "brick"],
   aeroShape: ["style_aero_rift", "style_aero_keel"], floorShape: ["style_floor_tray", "style_floor_ddiff"] };
 // ...and the enum that is a COLOUR: the T-cam housing. It must behave like a
 // hue — two values, byte-identical positions — or the hull would need it.
@@ -86,7 +86,14 @@ test("a HUE change never moves a vertex — only presence can", () => {
 test("SP_HULL_GEOM_FIELDS names exactly the fields whose PRESENCE moves a vertex", () => {
   const base = build(BASE);
   const fields = OPTIONAL.concat(Object.keys(ENUM_GEOM));
-  const measured = fields.filter((k) => ENUM_GEOM[k] ? ENUM_GEOM[k].some(v => !samePos(base, build(withField(k, v)))) : !samePos(base, build(withField(k, onValue(k)))));
+  const measured = fields.filter((k) => {
+    // WRAP moves the flank trim only with a side mark: exercise the supported
+    // interaction instead of concluding that an inactive knob is paint-only.
+    const liv = k === "spineLogo" ? { ...BASE, spineSide: "logo", spineLogo: "logo" } : BASE;
+    const reference = k === "spineLogo" ? build(liv) : base;
+    return ENUM_GEOM[k] ? ENUM_GEOM[k].some(v => !samePos(reference, build({ ...liv, [k]: v })))
+      : !samePos(reference, build(withField(k, onValue(k))));
+  });
   const declared = declaredGeomFields();
   assert.deepEqual(measured.slice().sort(), declared.slice().sort(),
     `js/garage/setup-camera.js SP_HULL_GEOM_FIELDS is [${declared}] but Car3D.build moves geometry for ` +

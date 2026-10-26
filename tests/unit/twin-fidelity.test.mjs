@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { MUTANTS, needleReport, parseTap, verdictFor } from "../../tools/check/twin-fidelity.mjs";
+import { MUTANTS, needleReport, parseTap, verdictFor, planFidelity, runFidelity } from "../../tools/check/twin-fidelity.mjs";
 
 const MATRIX = JSON.parse(fs.readFileSync(new URL("../data/mutants.json", import.meta.url), "utf8"));
 
@@ -76,4 +76,52 @@ test("every named catcher is a real test title in the mutant's spec (a renamed t
         `${m.id}: catcher "${name}" is not a test title in ${m.spec} — the verdict would read it as "never ran"`);
     }
   }
+});
+
+test("invalid fidelity selectors and flags fail before even checking needles", () => {
+  let calls = 0;
+  const forbidden = () => { calls++; throw new Error("must validate before any work"); };
+  const dependencies = { needles: forbidden, mutate: forbidden, spec: forbidden };
+  for (const args of [["m-wall-scrub-flatt"], [MUTANTS[0].id, "no-such-mutant"],
+    ["--dray"], ["--dry=no"], ["-x"], ["--list", "--dry"], ["--dry", ""],
+    ["--list", "no-such-mutant"]]) {
+    assert.throws(() => runFidelity(args, dependencies), /unknown (mutant id|flag)|cannot be combined/);
+  }
+  assert.equal(calls, 0, "invalid requests must neither read needles nor patch files or launch specs");
+});
+
+test("fidelity planning preserves all-mutant, explicit selection, help, list and dry modes", () => {
+  assert.deepEqual(planFidelity([]), { mode: "run", run: MUTANTS });
+  assert.deepEqual(planFidelity([MUTANTS[0].id]).run, [MUTANTS[0]]);
+  assert.equal(planFidelity(["-h"]).mode, "help");
+  assert.equal(planFidelity(["--list"]).mode, "list");
+  assert.equal(planFidelity(["--dry"]).mode, "dry");
+  const forbidden = () => assert.fail("help/list/dry must not mutate or run specs");
+  assert.equal(runFidelity(["--help"], { needles: forbidden, mutate: forbidden, spec: forbidden }), 0);
+  assert.equal(runFidelity(["--list"], { needles: forbidden, mutate: forbidden, spec: forbidden }), 0);
+  assert.equal(runFidelity(["--dry"], { needles: () => [], mutate: forbidden, spec: forbidden }), 0);
+});
+
+test("a valid fidelity selection runs only its declared mutant through the injected runner", () => {
+  const selected = [];
+  let current;
+  const status = runFidelity([MUTANTS[0].id], {
+    needles: () => [],
+    mutate: (m, fn) => { selected.push(m.id); current = m; return fn(); },
+    spec: (spec) => {
+      assert.equal(spec, current.spec);
+      return new Map(Object.entries(current.catchers).map(([name, mustFail]) => [name, !mustFail]));
+    },
+  });
+  assert.equal(status, 0);
+  assert.deepEqual(selected, [MUTANTS[0].id]);
+});
+
+test("the fidelity CLI reports an unknown selector as a caller error", () => {
+  const TOOL = fileURLToPath(new URL("../../tools/check/twin-fidelity.mjs", import.meta.url));
+  const r = spawnSync(process.execPath, [TOOL, "no-such-mutant"], { encoding: "utf8", timeout: 10000 });
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, /unknown mutant id.*no-such-mutant/);
+  assert.doesNotMatch(r.stdout, /0\/0|^PASS /m);
+  assert.doesNotMatch(r.stderr, /\n\s+at /, "a typo needs no stack trace");
 });

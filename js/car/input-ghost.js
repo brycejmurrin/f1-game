@@ -283,7 +283,8 @@ const InputGhost = (function () {
         Log.warn("car", "input-ghost store was not an object; starting empty");
       parsed = {};
     }
-    parsed = Object.fromEntries(Object.entries(parsed).map(([id, g]) => [id, unpackedGhost(g)]));
+    // Keep compact tapes compact: a tiny constant-channel entry may represent
+    // 36,000 steps. Only the selected context (or a pending merge) decodes it.
     for (const g of Object.values(parsed)) {
       if (g && Number.isFinite(g._used)) accessClock = Math.max(accessClock, g._used);
     }
@@ -320,7 +321,9 @@ const InputGhost = (function () {
     let changed = false;
     for (const id of Object.keys(store)) {
       const g = store[id];
-      if (!(g && _validSnaps.has(g)) && !valid(g)) { delete store[id]; changed = true; }
+      // Unselected packed entries are opaque until used; valid() accepts the
+      // decoded envelope, so applying it here would discard valid history.
+      if (!(g && (g.packedV2 || g.packedV3 || _validSnaps.has(g))) && !valid(g)) { delete store[id]; changed = true; }
     }
     const oldest = Object.keys(store).sort((a, b) => {
       const at = Number.isFinite(store[a] && store[a]._used) ? store[a]._used : 0;
@@ -347,10 +350,10 @@ const InputGhost = (function () {
   // cached copy, re-read it, and lay this tab's unsaved laps back on top, so the
   // next save does not write a stale whole-object over the other tab's ghosts.
   function betterGhost(a, b) {
-    const av = valid(a), bv = valid(b);
-    if (!av) return bv ? b : null;
-    if (!bv) return a;
-    const ac = compatible(a), bc = compatible(b);
+    const ad = materialized(a), bd = materialized(b);
+    if (!ad) return bd ? b : null;
+    if (!bd) return a;
+    const ac = compatible(ad), bc = compatible(bd);
     if (ac !== bc) return ac ? a : b;
     const winner = a.time <= b.time ? a : b;
     winner._used = Math.max(Number(a._used) || 0, Number(b._used) || 0);
@@ -368,14 +371,16 @@ const InputGhost = (function () {
     let fresh = null;
     try { fresh = GameStore.store.get(STORE_KEY, {}); } catch { fresh = null; }
     if (!fresh || typeof fresh !== "object" || Array.isArray(fresh)) fresh = {};
-    fresh = Object.fromEntries(Object.entries(fresh).map(([id, g]) => [id, unpackedGhost(g)]));
+    for (const g of Object.values(fresh)) {
+      if (g && Number.isFinite(g._used)) accessClock = Math.max(accessClock, g._used);
+    }
     for (const [id, snap] of pending) {
       const winner = betterGhost(fresh[id], snap);
       if (winner) fresh[id] = winner;
     }
     storeCache = fresh;
     const current = storageId == null ? null : fresh[storageId];
-    best = valid(current) ? current : null;
+    best = materialized(current);
   }
   if (typeof GameStore !== "undefined" && GameStore && GameStore.store && typeof GameStore.store.subscribe === "function")
     GameStore.store.subscribe(onStoreChange);
@@ -417,14 +422,17 @@ const InputGhost = (function () {
     else write();
   }
 
+  function materialized(g) {
+    const decoded = unpackedGhost(g);
+    return decoded && (_validSnaps.has(decoded) || valid(decoded)) ? committed(decoded) : null;
+  }
   function setTrack(id, eventContext) {
     trackId = id;
     context = eventContext == null ? null : eventContext;
     storageId = context == null ? id : "v2:" + id + ":" + context;
-    const g = loadStore()[storageId];
-    const good = valid(g);
-    if (good) touch(g);
-    best = good ? g : null;
+    const stored = loadStore()[storageId];
+    best = materialized(stored);
+    if (best) { touch(best); stored._used = best._used; }
     rec = null;
     meta = null;
     replayStep = 0; replayNative = false;

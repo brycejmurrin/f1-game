@@ -146,18 +146,22 @@ const DataLive = (function () {
       const infoTitle = el("div", "dh-live-title");
       infoTitle.appendChild(el("span", null, meta.name || meta.type || "Session"));
       if (meta.type && meta.type !== meta.name) infoTitle.appendChild(el("span", "dh-live-type", meta.type));
-      const phase = sessionStatus(meta);
-      const stateBadge = el("span", "dh-live-state", phase);
-      stateBadge.setAttribute("data-state", phase.toLowerCase());
+      const stateBadge = el("span", "dh-live-state");
       infoTitle.appendChild(stateBadge);
       info.appendChild(infoTitle);
       const place = (typeof F1API !== "undefined" && F1API.placeLabel)
         ? F1API.placeLabel(meta.circuit, meta.country, " · ")
         : [meta.circuit, meta.country].filter(Boolean).join(" · ");
       if (place) info.appendChild(el("div", "dh-live-sub", place));
-      const timeLabel = sessionTimeLabel(meta, phase, fmtDateTime);
-      if (timeLabel) info.appendChild(el("div", "dh-live-sub", timeLabel));
+      const timeLabel = el("div", "dh-live-sub");
+      if (meta.dateStart) info.appendChild(timeLabel);
       leftPane.appendChild(info);
+      function paintPhase() {
+        const phase = sessionStatus(meta);
+        stateBadge.textContent = phase;
+        stateBadge.setAttribute("data-state", phase.toLowerCase());
+        timeLabel.textContent = sessionTimeLabel(meta, phase, fmtDateTime);
+      }
 
       const bar = el("div", "dh-livecontrols");
       const refreshBtn = el("button", "dh-livebtn", "↻ REFRESH");
@@ -185,6 +189,7 @@ const DataLive = (function () {
 
       function refresh() {
         if (refreshPromise) return refreshPromise;
+        paintPhase();
         if (liveOpts.auto) stopLiveAuto();
         const myGen = ++liveRefreshGen;
         const priorState = dataEl.getAttribute("data-state");
@@ -212,6 +217,7 @@ const DataLive = (function () {
           settle(intervalReq)
         ]).then(batch => {
           if (myGen !== liveRefreshGen) return;
+          paintPhase();
           dataEl.setAttribute("aria-busy", "false");
           const failed = batch.filter((x) => !x.ok);
           const gate = failed.find((x) => {

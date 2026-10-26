@@ -62,6 +62,42 @@ function load(writeError = null) {
     onStorage: listeners.get("storage") || null };
 }
 
+test("durable-only refusal preserves prior pending session ownership for retry", () => {
+  const h = load();
+  const original = { money: 100 }, pending = { money: 150 };
+  h.store.write("career.driver.0", original);
+  h.fail("QuotaExceededError");
+  h.store.write("career.driver.0", pending);
+  const revision = h.store.rev, failed = JSON.stringify(h.store.failedKeys());
+  const changes = [];
+  h.store.subscribe(change => changes.push(change));
+  const refused = h.store.write("career.driver.0", { money: 0 }, { requireDurable: true });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.durable, false);
+  assert.equal(h.store.get("career.driver.0"), pending);
+  assert.equal(h.store.rev, revision);
+  assert.equal(JSON.stringify(h.store.failedKeys()), failed);
+  assert.deepEqual(changes, []);
+  assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 100);
+  h.fail(null);
+  assert.equal(h.store.retryFailed().durable, true);
+  assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 150);
+});
+
+test("durable-only serialization refusals never replace prior cache or enqueue invalid retries", () => {
+  const h = load(), original = { money: 100 }, cyclic = {};
+  cyclic.self = cyclic;
+  h.store.write("career.driver.0", original);
+  const revision = h.store.rev, raw = h.disk.get("apex26.career.driver.0");
+  for (const value of [() => {}, Symbol("unsupported"), 1n, cyclic]) {
+    assert.equal(h.store.write("career.driver.0", value, { requireDurable: true }).ok, false);
+    assert.equal(h.store.get("career.driver.0"), original);
+    assert.equal(h.store.rev, revision);
+    assert.equal(h.store.failedKeys().length, 0);
+    assert.equal(h.disk.get("apex26.career.driver.0"), raw);
+  }
+});
+
 test("write reports session success separately from reload durability", () => {
   const { store } = load("QuotaExceededError");
   const changes = [];

@@ -173,7 +173,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
 | `flyby-overrides.js` | `FlybyOverrides` | tag | per-circuit signature flyby shots + session when-variants. |
 | `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors and lane identity counts. |
-| `api-transport.js` | `F1Transport` | LAZY_DATA | serialized API transport: cache, rate limits, timeouts, retries and cancellation. |
+| `api-transport.js` | `F1Transport` | LAZY_DATA | paced API transport: bounded bodies, cache, timeouts, retries and cancellation. |
 | `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica + OpenF1 endpoint mapping and session cache policy. |
 | `telemetry-model.js` | `DataTelemetryModel` | LAZY_DATA | telemetry channels, lane identities and GPS/distance interpolation. |
 | `telemetry-render.js` | `DataTelemetryRender` | LAZY_DATA | telemetry canvas layers, frame compositing, delta chart and track map. |

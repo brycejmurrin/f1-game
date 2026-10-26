@@ -44,6 +44,21 @@ function check(tool) {
   return spawnSync(process.execPath, [path.join(ROOT, tool), "--check"], { encoding: "utf8", cwd: ROOT, timeout: 60000 });
 }
 
+test("aggregate generation can repair every checked locale and DevFlags output", () => {
+  const scripts = JSON.parse(read("package.json")).scripts;
+  const gen = scripts.gen.split(/\s*&&\s*/);
+  const docs = scripts["gen:docs"].split(/\s*&&\s*/);
+  const checks = scripts["gen:check"].split(/\s*&&\s*/);
+  // `gen` runs `gen:docs` inline; locales are written there, after the shell.
+  const steps = gen.flatMap((s) => s === "npm run gen:docs" ? docs : [s]);
+  assert.notEqual(steps.indexOf("node tools/gen/gen-shell.mjs"), -1);
+  assert.ok(steps.indexOf("node tools/gen/gen-locales.mjs") > steps.indexOf("node tools/gen/gen-shell.mjs"));
+  assert.ok(docs.includes("node tools/gen/gen-flags-table.mjs"));
+  assert.ok(checks.includes("node tools/gen/gen-flags-table.mjs --check"));
+  assert.ok(docs.indexOf("node tools/gen/gen-flags-table.mjs") > docs.indexOf("node tools/gen/gen-hooks-table.mjs"),
+    "the shared document's writers run serially");
+});
+
 function block(doc, name) {
   const open = `<!-- GENERATED: ${name} -->`, close = "<!-- /GENERATED -->";
   const a = doc.indexOf(open), b = doc.indexOf(close, a);

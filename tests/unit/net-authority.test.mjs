@@ -34,6 +34,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
 
@@ -948,6 +949,235 @@ test("strategy events require this race epoch and the sender's own car", () => {
   a.deliver(NetPlay.EV.STRATEGY,{...data,epoch:"old-race",fields:{tyreWear:.1}});
   assert.equal(G.cars[1].tyreWear,.7,"same-track stale events are ignored");
   net.stop();
+});
+
+test("host AI strategy crosses real sessions with human state and survives host departure", () => {
+  const host = poseG(3), guest = poseG(3);
+  host.track.def = guest.track.def = { id: "monza" };
+  host.gridPreOrdered = guest.gridPreOrdered = true;
+  guest.cars[0].local = guest.cars[0].human = false;
+  guest.cars[1].local = guest.cars[1].human = true; guest.player = guest.cars[1];
+  const [ta, tb] = NetTransport.loopback({ latencyMs: 0 });
+  const hs = NetSession.create({ transport: ta }), gs = NetSession.create({ transport: tb });
+  const sent = [], guestSent = [];
+  for (const [session, events] of [[hs, sent], [gs, guestSent]]) {
+    const send = session.sendEvent.bind(session);
+    session.sendEvent = (t, d) => { events.push({ t, d }); return send(t, d); };
+  }
+  const hn = NetPlay.create(host), gn = NetPlay.create(guest);
+  hn.start({ role: "host", session: hs }); gn.start({ role: "guest", session: gs });
+  const tyre = { id: "medium", code: "M", tread: 0, life: 0.9, colour: [0.9, 0.8, 0] };
+  Object.assign(host.cars[0], { pitState: "box", pitStops: 1, tyreWear: 0.6 });
+  Object.assign(host.cars[2], { s: 777, pitState: "box", pitArmed: true, pitT: 1.2, pitStops: 1,
+    tyre, tyreStints: 2, tyreWear: 0.8, tyreWearF: 0.7, tyreWearR: 0.9, tyreLap0: 3 });
+  for (let now = 10000; now <= 12000; now += 50) { hn.tick(now); gn.tick(now); }
+  const ai = guest.cars[2];
+  assert.equal(ai.s, 777, "the same real codec/session path still delivers AI poses");
+  assert.equal(guest.cars[0].tyreWear, 0.6, "human strategy remains a positive control");
+  assert.equal(guest.cars[0].pitState, "box");
+  for (const key of ["pitState", "pitArmed", "pitT", "pitStops", "tyreStints", "tyreWear", "tyreWearF", "tyreWearR", "tyreLap0"]) {
+    assert.equal(ai[key], host.cars[2][key], key);
+  }
+  assert.equal(ai.tyre.id, "medium");
+  assert.equal(ai.tyre.life, 0.9);
+  assert.equal(ai.tread, 0);
+  assert.equal(gn.owns(ai), true, "the guest does not advance its own AI strategy");
+  const strategies = sent.filter((e) => e.t === NetPlay.EV.STRATEGY);
+  assert.deepEqual([...new Set(strategies.map((e) => e.d.wire))].sort(), [0, 1, 2], "AI strategy now accompanies the host's driver and the existing checked human relay");
+  const receiverEpoch = guestSent.find((e) => e.t === NetPlay.EV.MODEL).d.epoch;
+  assert.ok(strategies.every((e) => e.d.epoch === receiverEpoch), "every AI update is stamped for this receiver's race");
+  hn.stop();
+  gn.tick(12050); // loopback drains the reliable BYE before delivering the close
+  assert.equal(gn.active(), false, "the real session's BYE hands back the host's field");
+  assert.equal(gn.owns(ai), false);
+  assert.equal(ai.pitStops, 1);
+  assert.equal(ai.tyreWear, 0.8);
+  assert.equal(ai.pitState, "box");
+  assert.equal(ai.tyre.id, "medium", "local AI resumes with the host's fitted set");
+  gn.stop();
+});
+
+test("AI strategy publishes on phase changes, bounded cadence, and every new receiver epoch", () => {
+  const G = poseG(4); G.track.def = { id: "monza" };
+  const net = NetPlay.create(G), s = stateSession();
+  net.start({ role: "host", session: s });
+  const model = s.sent.find((e) => e.t === NetPlay.EV.MODEL).d;
+  s.deliver(NetPlay.EV.MODEL, { ...model, epoch: "first-receiver" });
+  const ai = G.cars[2];
+  let logReads = 0;
+  Object.defineProperty(ai, "tyreLog", { get() { logReads++; return []; } });
+  for (let now = 10000; now < 11000; now += 50) net.tick(now);
+  const updates = () => s.sent.filter((e) => e.t === NetPlay.EV.STRATEGY && e.d.wire === 2);
+  assert.equal(updates().length, 1, "stable AI strategy is not a frame-by-frame reliable event");
+  assert.equal(logReads, 1, "stable frames never read/copy the stint history before the publish gate");
+  assert.equal(s.sent.some((e) => e.t === NetPlay.EV.STRATEGY && e.d.wire === 1), false,
+    "the AI publisher never simulates or publishes a connected human owner's strategy");
+  Object.assign(ai, { pitState: "box", pitStops: 1, tyreStints: 1, tyreWear: 0.4 });
+  net.tick(10975);
+  assert.equal(updates().length, 2, "a pit phase change is sent before the one-second deadline");
+  assert.equal(updates().at(-1).d.fields.pitStops, 1);
+  ai.tyreWear = 0.5;
+  net.tick(11000); net.tick(11500);
+  assert.equal(updates().length, 2, "continuous wear waits for the bounded cadence");
+  net.tick(11975);
+  assert.equal(updates().length, 3);
+  assert.equal(updates().at(-1).d.fields.tyreWear, 0.5);
+  s.deliver(NetPlay.EV.MODEL, { ...model, epoch: "late-receiver" });
+  net.tick(12000);
+  const late = updates().at(-1).d;
+  assert.equal(updates().length, 4, "a new epoch receives AI state immediately");
+  assert.equal(late.epoch, "late-receiver");
+  const guest = poseG(4); guest.track.def = { id: "monza" };
+  const gn = NetPlay.create(guest), gs = stateSession();
+  gn.start({ role: "guest", session: gs });
+  const epoch = gs.sent.find((e) => e.t === NetPlay.EV.MODEL).d.epoch;
+  gs.deliver(NetPlay.EV.STRATEGY, { ...late, epoch });
+  assert.equal(guest.cars[2].pitState, "box");
+  assert.equal(guest.cars[2].tyreWear, 0.5, "a late-bound receiver initializes without a local pit simulation");
+  ai.pitFitted = true; net.tick(12025);
+  assert.equal(updates().length, 5, "service completion within the same box phase publishes immediately");
+  ai.pitNext = { id: "hard", code: "H", life: 1.05, tread: 0 }; net.tick(12050);
+  assert.equal(updates().length, 6, "a new pending compound publishes before the one-second deadline");
+  ai.compoundShortAtFinish = true; net.tick(12075);
+  assert.equal(updates().length, 7, "the flag-time compliance snapshot is an immediate phase change");
+  assert.equal(logReads, 7, "history is copied exactly once per publication");
+  net.stop(); gn.stop();
+});
+
+test("AI strategy rejects stale epochs, bad models/tracks, wrong hosts, and guest forgeries", () => {
+  const G = poseG(4); G.track.def = { id: "monza" };
+  const net = NetPlay.create(G), host = fakeSession(), forged = fakeSession();
+  net.start({ role: "guest", session: host, sessions: [{ id: "host", session: host }, { id: "wrong", session: forged }],
+    peers: [{ id: "host" }] });
+  const epoch = host.sent.find((e) => e.t === NetPlay.EV.MODEL).d.epoch;
+  const data = { ...NetPlay.strategyState({ pitState: "box", pitStops: 1, tyreWear: 0.7 }, 2, "monza"), epoch };
+  forged.deliver(NetPlay.EV.STRATEGY, data);
+  assert.equal(G.cars[2].pitStops, undefined, "a non-host connection cannot speak for AI");
+  for (const altered of [{ epoch: "old-race" }, { track: "suzuka" }, { physics: "old-physics" }, { version: -1 }, { wire: 0 }]) {
+    host.deliver(NetPlay.EV.STRATEGY, { ...data, ...altered });
+    assert.equal(G.cars[2].pitStops, undefined, JSON.stringify(altered));
+  }
+  assert.equal(G.player.pitStops, undefined, "host strategy cannot overwrite the local driver");
+  host.deliver(NetPlay.EV.STRATEGY, data);
+  assert.equal(G.cars[2].pitStops, 1, "the connected host's valid current update is accepted");
+  const hostG = poseG(4); hostG.track.def = { id: "monza" };
+  const hn = NetPlay.create(hostG), a = fakeSession(), b = fakeSession();
+  hn.start({ role: "host", session: a, sessions: [{ id: "a", session: a }, { id: "b", session: b }] });
+  const hostEpoch = a.sent.find((e) => e.t === NetPlay.EV.MODEL).d.epoch;
+  for (const wire of [0, 2, 3]) a.deliver(NetPlay.EV.STRATEGY, { ...data, epoch: hostEpoch, wire });
+  assert.equal(hostG.cars[0].pitStops, undefined);
+  assert.equal(hostG.cars[2].pitStops, undefined, "a guest cannot update another human");
+  assert.equal(hostG.cars[3].pitStops, undefined, "a guest cannot update host AI");
+  a.deliver(NetPlay.EV.STRATEGY, { ...data, epoch: hostEpoch, wire: 1 });
+  assert.equal(hostG.cars[1].pitStops, 1, "the guest's own human strategy still works");
+  net.stop(); hn.stop();
+});
+
+test("strategy service extensions validate atomically, stay bounded, and accept legacy v1", () => {
+  const record = { id: "medium", code: "M", life: 0.74, tread: 0, colour: [1, 0.8, 0], mods: { speed: 0.92, arbitrary: {} } };
+  const row = { id: "soft", code: "S", colour: [1, 0, 0], lap0: 1, lap1: null };
+  const source = { tyre: record, tyreClass: "medium", tyreLog: [row], pitState: "box", pitFitted: true,
+    pitNext: null, tyreStints: 2, tyreWear: 0.2, tyrePhysicalOffset: 1.5, tyreLapAdj: 1, compoundShortAtFinish: true };
+  const data = NetPlay.strategyState(source, 2, "monza");
+  assert.equal(data.tyre.mods.arbitrary, undefined);
+  source.tyre.colour[0] = 0; source.tyreLog[0].code = "W";
+  assert.equal(data.tyre.colour[0], 1); assert.equal(data.tyreLog[0].code, "S", "published records own their bounded history");
+  for (const altered of [{ pitFitted: 1 }, { pitNext: {} }, { tyreClass: "unknown" }, { tyreLog: {} },
+    { tyreLog: [{ ...row, lap0: -1 }] }, { tyreLog: Array(257).fill(row) }, { compoundShortAtFinish: 1 }, { tyrePhysicalOffset: Infinity }]) {
+    const car = { tyreWear: 0.8, pitNext: record, tyreLog: [row] }, old = JSON.stringify(car);
+    assert.equal(NetPlay.applyStrategy(car, { ...data, ...altered }), false);
+    assert.equal(JSON.stringify(car), old, "invalid extension rejects before telemetry changes");
+  }
+  const car = { pitFitted: false, pitNext: record, tyreLog: [row] };
+  assert.equal(NetPlay.applyStrategy(car, data), true);
+  assert.equal(car.pitFitted, true); assert.equal(car.pitNext, null); assert.equal(car.tyreClass, "medium");
+  assert.equal(car.tyrePhysicalOffset, 1.5); assert.equal(car.tyreLapAdj, 1); assert.equal(car.compoundShortAtFinish, true);
+  const legacy = { version: data.version, physics: data.physics, fields: { tyreWear: 0.4 }, pitState: "box", pitArmed: false };
+  assert.equal(NetPlay.applyStrategy(car, legacy), true);
+  assert.equal(car.tyreWear, 0.4); assert.equal(car.pitFitted, true); assert.deepEqual(car.tyreLog, data.tyreLog);
+  const long = Array.from({ length: 1000 }, (_, i) => ({ ...row, code: i === 0 ? "I" : i === 1 ? "H" : "S", lap0: i, lap1: i + 1 }));
+  const bounded = NetPlay.strategyState({ tyreLog: long }, 2, "monza");
+  assert.ok(bounded.tyreLog.length <= 256);
+  assert.deepEqual([...new Set(bounded.tyreLog.map(e => e.code))], ["I", "H", "S"], "older compound evidence survives bounded history");
+  assert.equal(bounded.tyreLog.at(-1).lap1, 1000);
+});
+
+test("a real PitLane stop handed back before or after fitting matches uninterrupted service", async () => {
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const game = await createGame({ track: "bahrain", carMeshes: false, storage: { tyreWear: "real" } });
+  try {
+    const N = vm.runInContext("NetPlay", game.ctx), S = vm.runInContext("NetSession", game.ctx);
+    const T = vm.runInContext("NetTransport", game.ctx), regs = vm.runInContext("SportingRegs", game.ctx);
+    for (const phase of ["before-fit", "after-fit", "post-flag-fit"]) {
+      await game.race("bahrain", "day", "dry", { laps: 10 });
+      game.apex.go();
+      const G = game.G, net = G.netPlay;
+      G.tyres.setLevel("real");
+      const [ta, tb] = T.loopback({ latencyMs: 0 });
+      const sender = S.create({ transport: ta }), receiver = S.create({ transport: tb });
+      let epoch;
+      const send = receiver.sendEvent.bind(receiver);
+      receiver.sendEvent = (t, d) => { if (t === N.EV.MODEL) epoch = d.epoch; return send(t, d); };
+      assert.equal(net.start({ role: "guest", session: receiver }).ok, true);
+      const ai = G.cars.find(c => !c.human && net.owns(c)), wire = G.wireId(ai);
+      const host = { ...ai, tyreLog: [], pitState: "lane", pitArmed: true, pitStops: 0,
+        pitNext: G.tyres.classRecord("medium"), tyreClass: "soft", tyreStints: 0, lap: 4, speed: 0 };
+      const info = G.pits.info(host);
+      host.s = G.wrapS(host.s + info.boxM - info.atM); host.x = G.pits.info(host).laneX;
+      host.prog = 3 * G.track.total + host.s;
+      G.tyres.fit(host, G.tyres.classRecord("soft")); G.pits.update(host, 1 / 60);
+      assert.equal(host.pitState, "box"); assert.equal(host.pitFitted, false);
+      const beforeFit = { ...N.strategyState(host, wire, "bahrain"), epoch };
+      if (phase !== "before-fit") {
+        for (let i = 0; i < 180 && !host.pitFitted; i++) G.pits.update(host, 1 / 60);
+        assert.equal(host.pitFitted, true); assert.equal(host.tyre.code, "M");
+        host.tyreWear = host.tyreWearF = host.tyreWearR = 0.2;
+      }
+      host.compoundShortAtFinish = phase === "post-flag-fit" ? true : null;
+      // Deliberately make the guest's defaults disagree with the host.
+      Object.assign(ai, { s: host.s, prog: host.prog, x: host.x, lap: host.lap, tyreClass: "hard", pitFitted: false,
+        pitNext: G.tyres.classRecord("hard"), compoundShortAtFinish: null });
+      sender.pump(1000); net.tick(1000);
+      assert.equal(sender.sendEvent(N.EV.STRATEGY, beforeFit), true);
+      sender.pump(1010); net.tick(1010);
+      assert.equal(ai.pitFitted, false); assert.equal(ai.pitNext.code, "M"); assert.equal(ai.tyreStints, 1);
+      if (phase !== "before-fit") {
+        assert.equal(sender.sendEvent(N.EV.STRATEGY, { ...N.strategyState(host, wire, "bahrain"), epoch }), true);
+        sender.pump(1015); net.tick(1015);
+        assert.equal(ai.pitNext, null, "newer fitted state replaces the old pending choice");
+      }
+      assert.equal(ai.pitT, host.pitT); assert.equal(ai.pitFitted, host.pitFitted);
+      assert.equal(ai.tyreClass, "soft");
+      assert.deepEqual(Array.from(ai.tyreLog, e => e.code), Array.from(host.tyreLog, e => e.code));
+      assert.equal(net.owns(ai), true);
+      const currentLog = ai.tyreLog, wear = ai.tyreWear;
+      const latest = { ...N.strategyState(host, wire, "bahrain"), epoch };
+      sender.sendEvent(N.EV.STRATEGY, { ...latest, pitFitted: "false", fields: { tyreWear: 0.99 } });
+      sender.pump(1016); net.tick(1016);
+      assert.equal(ai.tyreWear, wear, "malformed JSON service state cannot partially update wear");
+      assert.equal(ai.tyreLog, currentLog);
+      const legacy = { version: latest.version, physics: latest.physics, epoch, wire, track: "bahrain", fields: latest.fields,
+        tyre: latest.tyre, tread: latest.tread, pitState: latest.pitState, pitArmed: latest.pitArmed };
+      sender.sendEvent(N.EV.STRATEGY, legacy); sender.pump(1017); net.tick(1017);
+      assert.equal(ai.tyreLog, currentLog, "legacy v1 JSON preserves optional history and service state");
+      assert.equal(ai.pitFitted, host.pitFitted);
+      sender.close(); net.tick(1020);
+      assert.equal(net.active(), false); assert.equal(net.owns(ai), false);
+      const sample = c => ({ tyre: c.tyre.code, wear: c.tyreWear, stints: c.tyreStints, stops: c.pitStops,
+        fitted: c.pitFitted, pit: c.pitState, log: Array.from(c.tyreLog, e => [e.code, e.lap0, e.lap1]) });
+      G.pits.update(ai, 1 / 60); G.pits.update(host, 1 / 60);
+      assert.deepEqual(sample(ai), sample(host), phase + ": the first adopted tick cannot repeat a fit");
+      for (let i = 0; i < 240 && host.pitState === "box"; i++) { G.pits.update(ai, 1 / 60); G.pits.update(host, 1 / 60); }
+      assert.deepEqual(sample(ai), sample(host), phase + ": the uninterrupted and adopted stops agree");
+      assert.equal(ai.tyre.code, "M"); assert.equal(ai.tyreStints, 2); assert.equal(ai.pitStops, 1);
+      assert.equal(ai.tyreWear, phase === "before-fit" ? 0 : 0.2);
+      ai.finished = true;
+      const verdict = regs.compoundVerdict(ai, { applies: true });
+      assert.equal(verdict && verdict.dsq, phase === "post-flag-fit" ? "one dry compound" : null,
+        "the frozen flag verdict survives independently of later service history");
+      net.stop();
+    }
+  } finally { game.close(); }
 });
 
 // ---- the HOST's AI retires on the guest too ------------------------------

@@ -711,3 +711,57 @@ test("inverse projection stays current at measured tier 4, through and after the
   assert.equal(calls, 4, "restoring normal post work refreshes the camera inverse");
   assertCancels("restored tier 0");
 });
+
+test("pending CAM hold is retired on pause/hide/quit, hidden page and blur without pointer cancellation", () => {
+  for (const ending of ["hide", "pause", "quit", "hidden", "blur", "pagehide"]) {
+    const dom = makeDom(), timers = new Map(), listeners = new Map(); let serial = 0;
+    const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
+      addEventListener(type, fn) { listeners.set(type, fn); },
+      setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); } };
+    ctx.window = ctx;
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+    const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", paused: false };
+    const cams = ctx.CamModes.create(G), button = dom.byId("btn-cam");
+    const fire = type => dom.dispatch(button, { type, pointerType: "touch", pointerId: 1 });
+    fire("pointerdown");
+    const late = [...timers.values()][0];
+    assert.equal(typeof late, "function");
+    // Pause/quit production paths invoke this exported hide while the first
+    // thumb remains held. No pointerup/cancel is manufactured by this fixture.
+    if (ending === "pause") { G.paused = true; cams.hideCamPicker(); }
+    else if (ending === "quit") { G.state = "menu"; cams.hideCamPicker(); }
+    else if (ending === "hide") cams.hideCamPicker();
+    else if (ending === "hidden") { dom.document.hidden = true; dom.dispatch(dom.document, { type: "visibilitychange" }); }
+    else listeners.get(ending)();
+    assert.equal(timers.size, 0, ending + " cancels its pending timer");
+    late(); // Even an already-queued stale callback cannot regain ownership.
+    assert.equal(button.getAttribute("aria-expanded"), "false", ending);
+    assert.equal(G.camMode, 0);
+    dom.document.hidden = false; G.state = "race"; G.paused = false;
+    fire("pointerup"); fire("lostpointercapture");
+    fire("pointerdown"); fire("pointerup"); fire("lostpointercapture"); button.onclick();
+    assert.equal(G.camMode, 1, ending + " does not consume the next genuine short tap");
+  }
+});
+
+test("CAM context-menu and late hold cannot open on a paused, hidden or non-race screen", () => {
+  for (const state of ["pause", "hidden", "menu"]) {
+    const dom = makeDom(); let callback;
+    const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
+      setTimeout(fn) { callback = fn; return 1; }, clearTimeout() {} };
+    ctx.window = ctx;
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+    const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", paused: false };
+    ctx.CamModes.create(G);
+    const button = dom.byId("btn-cam");
+    dom.dispatch(button, { type: "pointerdown" });
+    if (state === "pause") G.paused = true;
+    else if (state === "hidden") dom.document.hidden = true;
+    else G.state = "menu";
+    callback(); dom.dispatch(button, { type: "contextmenu" });
+    assert.equal(button.getAttribute("aria-expanded"), "false", state);
+    G.paused = false; G.state = "count"; dom.document.hidden = false;
+    dom.dispatch(button, { type: "contextmenu" });
+    assert.equal(button.getAttribute("aria-expanded"), "true", "countdown remains a valid CAM owner");
+  }
+});

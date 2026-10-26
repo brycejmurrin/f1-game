@@ -123,21 +123,29 @@ var AudioPanel = (() => {
       if (rr() && rr().stopBattleEarcon) rr().stopBattleEarcon();
     }
     function battleNote(text) { const n = $("as-battle-status"); if (n) n.textContent = text; }
+    let voicePreview = null;
+    function stopPanelPreviews() {
+      stopBattlePreview();
+      if (voicePreview) {
+        const owned = voicePreview; voicePreview = null;
+        owned.radio.stopPreviewIfGeneration(owned.generation);
+      }
+    }
     // BACK changes a page; closing the dialog hides its ancestor. Cover both
     // independently, including browsers without a speech-synthesis instance.
     if (typeof SettingsNav !== "undefined" && SettingsNav.onLeave) SettingsNav.onLeave((id) => {
-      if (id === "audio") stopBattlePreview();
+      if (id === "audio") stopPanelPreviews();
     });
     const battlePanel = $("audioset"), battleSettings = $("pmsettings");
     if (typeof MutationObserver === "function") {
       for (const el of [battlePanel, battleSettings]) if (el) {
-        new MutationObserver(() => { if (el.hidden) stopBattlePreview(); })
+        new MutationObserver(() => { if (el.hidden) stopPanelPreviews(); })
           .observe(el, { attributes: true, attributeFilter: ["hidden"] });
       }
     }
     if (battleSettings && battleSettings.addEventListener) {
-      battleSettings.addEventListener("close", stopBattlePreview);
-      battleSettings.addEventListener("cancel", stopBattlePreview);
+      battleSettings.addEventListener("close", stopPanelPreviews);
+      battleSettings.addEventListener("cancel", stopPanelPreviews);
     }
     function setRadio(b) {
       if (b && !G.soundOn) setSound(true, true);
@@ -705,7 +713,9 @@ var AudioPanel = (() => {
     // TEST is an explicit audition, independent of the automatic speech switch.
     const preview = (ch) => {
       if (ch === "announcer" && !recordedFor(ch)) { if (G.announcer && G.announcer.sample) G.announcer.sample(); return; }
-      if (G.radio && G.radio.preview) G.radio.preview(ch);
+      const radio = G.radio;
+      if (radio && radio.preview && radio.preview(ch) && radio.previewGeneration && radio.stopPreviewIfGeneration)
+        voicePreview = { radio, generation: radio.previewGeneration() };
     };
 
     function rememberVoiceFocus(host) {
