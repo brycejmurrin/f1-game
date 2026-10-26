@@ -1085,6 +1085,7 @@
         "tests/unit/committed-images.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/dup-keys.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/global-registry.test.mjs",
@@ -1096,6 +1097,7 @@
         "tests/unit/merge-hygiene.test.mjs",
         "tests/unit/nightly-group.test.mjs",
         "tests/unit/no-bare-console.test.mjs",
+        "tests/unit/output-surface.test.mjs",
         "tests/unit/prepush-gate-coverage.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchet-reason.test.mjs",
@@ -1289,6 +1291,8 @@
       "script": "test:node-slow",
       "kind": "node",
       "files": [
+        "tests/unit/car-mesh-anchors.test.mjs",
+        "tests/unit/cockpit-crest-stripe.test.mjs",
         "tests/unit/cockpit-pale-surfaces.test.mjs",
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/crest-marks.test.mjs",
@@ -1520,6 +1524,7 @@
       "kind": "node",
       "files": [
         "tests/unit/baked-model-road-guard.test.mjs",
+        "tests/unit/barrier-runoff-jumps.test.mjs",
         "tests/unit/build-steps.test.mjs",
         "tests/unit/build-worker.test.mjs",
         "tests/unit/car-front-wing-width.test.mjs",
@@ -1527,6 +1532,7 @@
         "tests/unit/debris-hazard-hint.test.mjs",
         "tests/unit/driving-line-opts.test.mjs",
         "tests/unit/driving-line.test.mjs",
+        "tests/unit/elevation-smoothness.test.mjs",
         "tests/unit/grid-boxes.test.mjs",
         "tests/unit/kerb-berm-surface.test.mjs",
         "tests/unit/kerb-stripes.test.mjs",
@@ -1542,6 +1548,7 @@
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/spline-project-height.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
+        "tests/unit/track-line-circuits.test.mjs",
         "tests/unit/track-themes-build.test.mjs",
         "tests/unit/track-validate-fleet.test.mjs",
         "tests/unit/water-local-level.test.mjs"

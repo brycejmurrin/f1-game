@@ -105,6 +105,7 @@ export const TREE_METRICS = {
   },
   twinDebt: async () => (await (await import("../ci/twinned-specs.mjs")).twinDebt()).length,
   assertPins: async () => pinCount("assertPins"),
+  assertPinsAll: async () => pinCount("assertPinsAll"),
   rawGameReads: async () => pinCount("rawGameReads"),
   vmSrcLoads: async () => pinCount("vmSrcLoads"),
 };
@@ -125,9 +126,73 @@ const RAW_GAME = /game\.js(?:"|'(?!s\b))/g;
 // `assert.ok(x.includes(` is the same source pin as `assert.match(x, /…/)`: counting
 // both keeps "includes() instead of assert.match" from lowering the number.
 const ASSERT_PIN = /assert\.match\b|assert\.ok\(\s*!?\s*[\w$.]+\.includes\(/g;
+/* assertPinsAll (audit4 E1 / tests-deep F3, 2026-10-26): every SHAPE a source pin
+ * takes, not just the two assertPins counts. assertPins read 8,420 while
+ * doesNotMatch alone had 1,095 uncounted sites (3.3x pass 3), so a pin written
+ * as `ok(/re/.test(src))` or `doesNotMatch` booked as flat. assertPins stays as it
+ * is (its ceiling and history); this is a NEW metric with its own ceiling, seeded
+ * at the measured value by `ratchets.mjs --seed=assertPinsAll`. Counted: the
+ * assertPins shapes; doesNotMatch; ok(<re or name>.test(…)); indexOf under
+ * ok/equal; equal(x.includes(…), b); (x.match(/…/g) || []).length; ok(x.startsWith
+ * / endsWith(…)); and each regex literal of an array a `for (… of [ … ])` loop
+ * walks (one pin per element: a loop of 28 patterns is 28 pins, not one). */
+const RE_LIT = String.raw`\/(?![*/])(?:[^/\\\n\[]|\\.|\[(?:[^\]\\\n]|\\.)*\])+\/[dgimsuyv]*`;
+const PIN_ALL_SHAPES = [
+  ASSERT_PIN,
+  /assert\.doesNotMatch\b/g,
+  new RegExp(String.raw`assert\.ok\(\s*!?\s*(?:${RE_LIT}|[\w$.]+)\.test\(`, "g"),
+  /assert\.(?:ok|equal|strictEqual|notEqual|notStrictEqual)\(\s*!?\s*[\w$.]+\.indexOf\(/g,
+  /assert\.(?:equal|strictEqual|notEqual|notStrictEqual|deepEqual)\(\s*[\w$.]+\.includes\(/g,
+  new RegExp(String.raw`\.match\(\s*(?:${RE_LIT}|[A-Z_$][\w$]*)\s*\)\s*\|\|\s*\[\]\s*\)\.length`, "g"),
+  /assert\.ok\(\s*!?\s*[\w$.]+\.(?:startsWith|endsWith)\(/g,
+];
+const LOOP_ARRAY = /for\s*\(\s*(?:const|let|var)\s+[^;)]*?\s+of\s+\[/g;
+const LOOP_NAMED = /for\s*\(\s*(?:const|let|var)\s+[^;)]*?\s+of\s+([A-Za-z_$][\w$]*)\s*\)/g;
+/** Regex literals that are elements (or tuple members) of each array a
+ *  `for (… of [ … ])` loop walks, inline or as a `const NAME = [ … ]` the loop
+ *  names. A light scanner: strings and regex literals are skipped whole so a `]`
+ *  inside them cannot close the array early. Each array is counted once. */
+export function loopRegexPins(t) {
+  let n = 0;
+  for (const m of t.matchAll(LOOP_ARRAY)) n += arrayRegexes(t, m.index + m[0].length);
+  const names = new Set([...t.matchAll(LOOP_NAMED)].map((m) => m[1]));
+  for (const name of names) {
+    const decl = new RegExp(String.raw`(?:const|let|var)\s+${name.replace(/\$/g, "\\$")}\s*=\s*(?:Object\.freeze\(\s*)?\[`, "g");
+    for (const m of t.matchAll(decl)) n += arrayRegexes(t, m.index + m[0].length);
+  }
+  return n;
+}
+function arrayRegexes(t, start) {
+  let n = 0;
+  const lit = new RegExp(RE_LIT, "y");
+  {
+    let i = start, depth = 1, prev = "[";
+    while (i < t.length && depth > 0) {
+      const c = t[i];
+      if (c === '"' || c === "'" || c === "`") {
+        let j = i + 1;
+        while (j < t.length && t[j] !== c) j += t[j] === "\\" ? 2 : 1;
+        i = j + 1; prev = c; continue;
+      }
+      if (c === "/" && (prev === "[" || prev === ",")) {
+        lit.lastIndex = i;
+        const r = lit.exec(t);
+        if (r) { n++; i += r[0].length; prev = "/"; continue; }
+      }
+      if (c === "[") depth++;
+      else if (c === "]") depth--;
+      if (!/\s/.test(c)) prev = c;
+      i++;
+    }
+  }
+  return n;
+}
+export const countPinsAll = (t) => PIN_ALL_SHAPES.reduce((a, re) => a + (t.match(re) || []).length, 0) + loopRegexPins(t);
+
 export const PIN_METRICS = {
   assertPins: { dirs: ["tests/unit"], exempt: ["tests/unit/assert-match-ratchet.test.mjs"],
     count: (t) => (t.match(ASSERT_PIN) || []).length },
+  assertPinsAll: { dirs: ["tests/unit"], exempt: ["tests/unit/assert-match-ratchet.test.mjs"], count: countPinsAll },
   rawGameReads: { dirs: ["tests"], exempt: ["tests/helpers/game-source.mjs", "tests/unit/source-pin-hygiene.test.mjs"],
     count: (t) => (t.match(RAW_GAME) || []).length },
   vmSrcLoads: { dirs: ["tests/unit", "tests/helpers"], exempt: [], skipDir: "fixtures",
@@ -756,8 +821,43 @@ export function compareToBase(ref, {
   return fatal ? 1 : 0;
 }
 
+/** `--seed=<metric>`: add a tree metric that ratchets.json does not carry yet,
+ *  at its measured value (a new metric is not a raise). Writes only that key into
+ *  ratchets.json itself; fragments are left alone. Refuses an existing key. */
+export async function seedTreeMetric(metric, { slack, dryRun = false } = {}) {
+  if (!Object.hasOwn(TREE_METRICS, metric)) throw new Error(`--seed: unknown tree metric "${metric}" (known: ${Object.keys(TREE_METRICS).join(", ")})`);
+  const base = loadBase();
+  if (Object.hasOwn(base.tree || {}, metric) || Object.hasOwn(load().tree || {}, metric))
+    throw new Error(`--seed: tree.${metric} already has a ceiling — that is a raise or a lower, not a seed (--update)`);
+  const value = await TREE_METRICS[metric]();
+  (base.tree ||= {})[metric] = slack === undefined ? value : { ceiling: value, slack };
+  if (!dryRun) {
+    const { normalizeRatchets, stableStringify } = await import("./merge-hygiene.mjs");
+    fs.writeFileSync(DATA, stableStringify(normalizeRatchets(base)));
+  }
+  return value;
+}
+
 async function main() {
   const argv = process.argv.slice(2);
+  const seed = argv.find((a) => a.startsWith("--seed="));
+  if (seed) {
+    const sl = argv.find((a) => a.startsWith("--slack="));
+    try {
+      const v = await seedTreeMetric(seed.slice("--seed=".length), { slack: sl ? Number(sl.split("=")[1]) : undefined });
+      console.log(`ratchets --seed: tree.${seed.slice("--seed=".length)} = ${v} written to tests/data/ratchets.json (a new ceiling at today's value)`);
+    } catch (e) { console.error(`ratchets: ${e.message}`); process.exitCode = 2; }
+    return;
+  }
+  const sites = argv.find((a) => a.startsWith("--pin-sites="));
+  if (sites) {
+    const name = sites.slice("--pin-sites=".length);
+    if (!Object.hasOwn(PIN_METRICS, name)) { console.error(`ratchets: --pin-sites: unknown pin metric "${name}" (known: ${Object.keys(PIN_METRICS).join(", ")})`); process.exitCode = 2; return; }
+    const per = (await pinSites(name)).sort((a, b) => b[1] - a[1]);
+    for (const [rel, n] of per) console.log(`${String(n).padStart(6)}  ${rel}`);
+    console.log(`${name}: ${per.reduce((a, [, n]) => a + n, 0)} sites in ${per.length} files`);
+    return;
+  }
   const baseAt = argv.indexOf("--base");
   if (baseAt >= 0) {
     const ref = argv[baseAt + 1];
@@ -812,7 +912,7 @@ async function main() {
   // A tree metric's number says something drifted; --offenders says WHERE, which
   // is the half a bare count cannot carry.
   const where = (r) => (!r.tree ? "" : Object.hasOwn(PIN_METRICS, r.metric)
-    ? ` — breakdown: node --test ${{ assertPins: "tests/unit/assert-match-ratchet.test.mjs", rawGameReads: "tests/unit/source-pin-hygiene.test.mjs", vmSrcLoads: "tests/unit/vm-filename-lint.test.mjs" }[r.metric]}`
+    ? ` — breakdown: node --test ${{ assertPins: "tests/unit/assert-match-ratchet.test.mjs", assertPinsAll: "tests/unit/assert-match-ratchet.test.mjs (per file: node tools/check/ratchets.mjs --pin-sites=assertPinsAll)", rawGameReads: "tests/unit/source-pin-hygiene.test.mjs", vmSrcLoads: "tests/unit/vm-filename-lint.test.mjs" }[r.metric]}`
     : " — breakdown: node tools/check/tree-counts.mjs --offenders");
   for (const r of v.over) console.log(`OVER   ${r.file} ${r.metric}: ${r.value} > ceiling ${r.ceiling} (+${r.over}${r.grew ? `, ${r.grew}` : ""}) — extract, or raise it deliberately and say why in the commit${where(r)}`);
   for (const r of v.rows.filter((x) => x.inherited)) {

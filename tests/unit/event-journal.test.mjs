@@ -35,7 +35,7 @@ function loadRaceStack() {
 function raceHarness(cars, player) {
   const { RF, RR, EJ } = loadRaceStack();
   const G = {
-    state: "race", raceT: 0, cars, player, lapsTarget: 3, timeTrial: false, practice: false,
+    state: "race", raceT: 0, cars, lapsTarget: 3, timeTrial: false, practice: false,
     track: { total: LAP }, cautionLevel: () => G._caution || 0, cautionInfo: () => ({ level: G._caution || 0 }),
     announce() { return true; }, announceBusy: false, paused: false, hudProfile: "race",
     store: null, player,

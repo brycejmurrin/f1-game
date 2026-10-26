@@ -68,7 +68,9 @@ test("known unit ownership narrows the node plan, while tooling-fast and unknown
 test("PR matched plans skip only tooling-fast ∩ always-on topical; --all and fail-safe do not", () => {
   const tf = new Set(TOOLING_FAST_FILES);
   const overlap = topicalTfOverlap();
-  assert.ok(overlap.length >= 40, `expected ~49–55 double-run files, got ${overlap.length}`);
+  // audit4 E1 (2026-10-26): the floor carve moved every always-on topical file out of tooling-fast, so the
+  // planner has nothing left to skip; a reappearing overlap is a double run, not a feature.
+  assert.deepEqual(overlap, [], "a file in both tooling-fast and an always-on topical group runs twice per CI run");
   for (const f of overlap) {
     assert.ok(tf.has(f), `${f} must be in tooling-fast (anti-vacuity)`);
     assert.ok(ALWAYS_ON_TOPICAL.some((s) => (groups[s]?.files || []).includes(f)),
