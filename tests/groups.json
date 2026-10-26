@@ -2357,6 +2357,7 @@
     },
     "test:service-worker": {
       "files": [
+        "tests/unit/boot-script-repair-overlay.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/sw-build-meta.test.mjs"
       ],
