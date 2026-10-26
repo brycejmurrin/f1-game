@@ -15,6 +15,11 @@ Standing authority: AGENTS.md §Concurrent PRs. QUOTA: 7-day allowed_warning (re
 - Game order when unpaused: D (#3700 #3646 #3641 #3724; DAD merges, one per slot) ↔ A #3696 8197bd95 (READY, clean; lift its work-state MERGE-HOLD with evidence: full tier #40279984209, deploy gate, tiny+ui remote green). B skipped until it claims (ee36b79).
 - #3700: READY sent to D (0e6433e) at 945d9270 with caveats (includes() pin weakening; unknown Cursor Agent pushed it). D merges.
 
+## 13:40Z update
+- Bryce (typed in OrchA 34, ~06:30 PT): "Need to coordinate with other fleets to start more sessions". Lanes split with B (b411b6d) and D (bfdba6b: D launches nothing, 0 seats). Launch gate: get_session → save → `launch-gate.mjs <file> --override "<Bryce's words typed in YOUR session>"`; receipt lasts 120 s. You need your own typed ask from Bryce to launch.
+- New A lanes: A·W61 session_01UUzBgvDsHLBQVHJqbiJCmC (Opus) — backlog sweep: which non-D/B `ready` issues are already fixed (#3512 closed as done by #3530; #3681 done by #3685, now labelled blocked pending device run); A·W62 session_01MZfDmhXmKkxGYkYYGMCcu7 (Sonnet) — #3509 chrome-devtools MCP audit, draft PR #3796 docs-only (head 614c6fcc), READY pending CI → merge (non-game); A·W63b session_01NAzq2mqjC4WayYAoRjqoVC (Opus) — #3797 garage-churn flake (GAME PR, #3505; deadline now 11-10). A·W63 session_01QysksdqdocWP8tXy2hXRjF stopped (archive after 1 h).
+- B's #3795 = DAILY garage-out INCIDENT fix; game order after green Pages: D #3641 → A #3696 → D #3646 → D #3700 → D #3724 → D #3648; B then merges #3765 #3768 #3782 (MERGE-HOLD lifted by Bryce in OrchB) in B slots. #3743 is Bryce's own (DAD calls it A-retained): leave it.
+
 ## Live A lanes
 | session | job |
 |---|---|
