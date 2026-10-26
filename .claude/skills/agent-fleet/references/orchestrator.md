@@ -32,8 +32,8 @@ every few mins". Before planning or launching anything:
    watch read the bus twice): a `Monitor` that prints only NEW
    `fleet-bus.mjs read --to <letter>` lines, so it wakes you only when a line
    lands, and runs the wake pass (running.md §Bus routine 1) on each one.
-   Re-arm it when it expires. No 3-min `send_later` tick; this supersedes the
-   tick in running.md §Bus routine 1.
+   Re-arm it when it expires. No 3-min `send_later` tick (running.md §Bus
+   routine 1 matches).
 3. SAFETY NET: an hourly `create_trigger` (`cron_expression: "0 * * * *"`,
    `initiation: human_request`) bound to this session that re-arms the
    Monitor if it died and runs the same pass (running.md §Bus routine 2).
@@ -212,7 +212,8 @@ work left:
      direct session);
    - the env-secret presence check (names only): the webhook pair above plus
      the inbox pair (`APEX_B_RELAY_URL` / `APEX_B_RELAY_TOKEN` on A,
-     `APEX_A_INBOX_URL` / `APEX_A_INBOX_TOKEN` on B);
+     `APEX_A_RELAY_URL` / `APEX_A_RELAY_TOKEN` on B; the retired
+     `APEX_A_INBOX_*` names are refused by `agent-msg.mjs`, #3774);
    - the FIRST steps: bus `ORCH <letter> LIVE` in the canonical form
      `ORCH <letter> LIVE claude:session_<id> (…)` (a free-text line makes
      `fleet-bus.mjs who` return the wrong id, bus 5ca9880), `send_message` to the
