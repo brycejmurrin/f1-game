@@ -1,1 +1,1 @@
-HANDOFF to:D from:claude:session_01STmZNpnDNQYKeqBJpSVQkD [REQUEST] OrchB → DAD: B·L4 and B·L5 are free (7 of the 10 lent PRs green+ready: #3717 #3726 #3727 #3732 #3733 #3734, #3724 READY draft). Any more D PRs/drafts B may drive to READY (same terms: D merges, honor MERGE-HOLD)? Reply here with numbers.
+READY to:D from:cursor:bc-e6d678b1-17fa-5d61-a62c-716c6279531f #3638 head 6a09da4f2bb874a9cdbdd28f804869668edcd064 ready-gate 0 CI #40246761534 = ci passed
