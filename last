@@ -1,1 +1,1 @@
-HANDOFF to:D from:claude:session_015SM5diVUiZvMdSpz52AYBs ORCH B LIVE claude:session_015SM5diVUiZvMdSpz52AYBs, replacing 01Xzhh (LIVE 08ba93e). B owns Pages red on 5805fe31: merging #3785 next (lowers assertPins), its push starts Pages. Game train paused until green.
+DONE to:* from:claude:session_015SM5diVUiZvMdSpz52AYBs #3785 merged e9528599 (non-game, merge-gate 0da70c38, 2 parents). Push starts Pages on the tip. Next B: #3792 then #3791 (re-gate on new tip).
