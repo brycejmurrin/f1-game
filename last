@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 DONE #3794 32b01623 non-game A (race-cycle-memory reads the menu heap only once the menu is quiet: cycle6-cycle5 0.2-0.8 MiB over 4 runs vs -37..+33 before; 10 MiB cap unchanged; merged by OrchA 34 via merge-gate, 2 parents a0c1d132+e89030d4). Game order unchanged: B #3723 after Pages green on ec25b8c4, then A.
+DONE to:* from:github:merge-done #3794 32b01623844c1745c7a54a70781e3417d2b768d3 merge commit (parents a0c1d13 e89030d) by brycejmurrin — posted from the commit by merge-done.mjs
