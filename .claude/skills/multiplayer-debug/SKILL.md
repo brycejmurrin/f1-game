@@ -76,6 +76,9 @@ node tools/ci/test-bg.mjs net
 node tools/net/rtc-e2e.mjs
 node tools/net/rtc-e2e-3p.mjs
 npm run rtc:e2e-3p-relay   # relay-only ICE
+# Room-code / relay diagnosis (not a package.json dep — install on demand):
+npm i --no-save ws @noble/curves
+node tools/net/nostr-probe.mjs
 ```
 
 Read first:
