@@ -45,7 +45,7 @@ function harness(opts = {}) {
     location,
     history,
     Teams: { LIST: (opts.teams || ["mercedes", "ferrari"]).map((id) => ({ id })) },
-    Liveries: { forTeam: () => (opts.catalog || ["default"]).map((id) => ({ id })) },
+    Liveries: { FIELDS: opts.liveryFields, forTeam: () => (opts.catalog || ["default"]).map((id) => ({ id })) },
     Tracks: {
       LIST: (opts.tracks || ["monza", "spa"]).map((id) => ({ id, name: id.toUpperCase() })),
       SEASON: (opts.tracks || ["monza", "spa"]).map((id) => ({ id, name: id.toUpperCase() })),
@@ -96,6 +96,38 @@ test("livery encode/decode keeps colours", () => {
   assert.equal(decoded.team, "ferrari");
   assert.equal(decoded.id, "mine");
   assert.deepEqual(j(decoded.livery.c1), [1, 0, 0]);
+});
+
+test("a fully customized editor livery round-trips every optional paint field", () => {
+  const editor = fs.readFileSync(path.join(ROOT, "js/garage/setup-sheet.js"), "utf8");
+  const ctx = vm.createContext({ hexToArr: () => [0.2, 0.4, 0.6] });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/liveries.js"), "utf8"), ctx, { filename: absSrc("js/car/liveries.js") });
+  vm.runInContext(editor.slice(editor.indexOf("const LIV_DRAFT_COLORS"), editor.indexOf("const LIV_ROW_HINT")) +
+    editor.slice(editor.indexOf("function livDraftTo("), editor.indexOf("function csTabId(")), ctx, { filename: absSrc("js/garage/setup-sheet.js") });
+  const optional = vm.runInContext(`(() => {
+    const d = Object.assign({ wingCarbon: "carbon", sponsors: "clean", tcam: "black", coverVents: "gills" },
+      Object.fromEntries(LIV_DRAFT_COLORS.map(k => [k, "#336699"])));
+    for (const k in LIV_DRAFT_PILLS) {
+      if (k === "finish" || /Finish$/.test(k)) d[k] = "satin";
+      else if (/^pattern/.test(k) && /^\\d+$/.test(LIV_DRAFT_PILLS[k])) d[k] = String(+LIV_DRAFT_PILLS[k] === 100 ? 99 : +LIV_DRAFT_PILLS[k] + 1);
+      else if (/^decal/.test(k)) d[k] = "off";
+    }
+    return livDraftTo(d, false);
+  })()`, ctx);
+  assert.ok(Object.keys(optional).length > 64, "fixture exercises the previous truncation boundary");
+  const fields = vm.runInContext("Liveries.FIELDS", ctx);
+  const { ShareCode } = harness({ liveryFields: fields });
+  const livery = { id: "mine", c1: [1, 0, 0], c2: [0, 0, 1], ...optional };
+  const encoded = ShareCode.encode("livery", { team: "ferrari", id: "mine", livery });
+  assert.equal(encoded.ok, true);
+  const decoded = ShareCode.decode(encoded.code);
+  assert.equal(decoded.ok, true);
+  assert.deepEqual(j(decoded.livery), j(livery));
+  const oversized = { ...livery };
+  for (let i = 0; i < 500; i++) oversized["extra" + i] = "satin";
+  const bounded = ShareCode.decode(ShareCode.encode("livery", { team: "ferrari", id: "mine", livery: oversized }).code);
+  assert.equal(bounded.ok, true);
+  assert.ok(Object.keys(bounded.livery).length < Object.keys(oversized).length, "hostile additive fields remain bounded");
 });
 
 test("daily encode/decode", () => {
