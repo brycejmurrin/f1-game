@@ -4483,6 +4483,17 @@
         "tests/unit/service-worker.test.mjs"
       ]
     },
+    "js/circuits/scenery/qatar.js": {
+      "narrow": [
+        "tests/specs/qatar-foundation.spec.js",
+        "tests/unit/floodmast-lamp-register.test.mjs",
+        "tests/unit/qatar-day-sf-orbit.test.mjs",
+        "tests/unit/scenery-guards.test.mjs"
+      ],
+      "*": [
+        "tests/unit/qatar-day-sf-orbit.test.mjs"
+      ]
+    },
     "js/circuits/scenery/redbull.js": {
       "*": [
         "tests/unit/scenery-guards.test.mjs"
