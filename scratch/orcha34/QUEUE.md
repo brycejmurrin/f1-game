@@ -32,3 +32,10 @@ Updated 2026-10-26 07:28Z (00:28 PT). Base brief: scratch/orcha33/SUCCESSOR-BRIE
 - Fix: A·W56 session_018TxG42 on cursor/rcm-gate-slope-e9528 (non-game PR): census waits for menuPrep/warm/garagePrebuild idle 3 s, then gate = median of >=3 post-warm deltas; unit pin that a 12 MiB/cycle leak fails. DAD deferred to A (5e5566b). A merges it first, then train: A #3761 → D #3721 → B #3723 → A #3696.
 - Offered Bryce a temporary by-name quarantine (needs his word); not done.
 - OrchB now claude:session_015SM5diVUiZvMdSpz52AYBs; holds #3792/#3791 until Pages in_progress.
+
+## 11:41Z
+- Merged since 09:45Z: A #3794 32b01623 (race-cycle-memory waits for a quiet menu; cycle6-cycle5 0.2-0.8 MiB vs -37..+33; cap unchanged), D #3721 ec25b8c4, B #3792, D #3790, B #3723 6b26b9a9, A #3761 38935aff (game; Pages building).
+- Game order: D (#3684/#3700/#3646/#3641/#3724 held) → B (#3641?) → A #3766 dcf978e0 READY (full tier 53/0, macOS census green) → A #3696 8197bd95 (MERGE-HOLD to lift).
+- Archived: 01X9Af (#3721/#3737 owner). Live A lanes: 018TxG (#3766), 01SoT9 (#3696), 01LESs6 (#3725/#3731 D-lent), R3 (#3763).
+- WAITING ON BRYCE: Cursor Agent on #3700/#3751 (his?), #3763 decision.
+- Auto mode refused one chained bus+lift+gate line (no reason); split commands work.
