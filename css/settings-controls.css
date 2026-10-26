@@ -78,6 +78,17 @@
   font-weight: 700;
   line-height: 1;
 }
+/* #3276: Race-settings ‹ › (#rs-*-prev/next) painted 40×40 on
+   desktop-1440x900@100 (--chip-h). Soft-flag vs house --tap (44). Floor both
+   axes like pause doors (dialogs.css #3274): --tap / --tap-paint / 44 painted.
+   data-step only — leaves #rs-duel-open and other set-row buttons alone. */
+#race-settings .set-row > div > button[data-step] {
+  flex: 0 1 max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  width: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  min-width: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+}
 .set-row > div > select {
   /* A FIXED 8rem, not a flex basis: with `width: auto` the select sized to
      its longest option, so ON and ALL rows put their chevrons at different

@@ -583,11 +583,16 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .as-now-sub { font-size: var(--fs-micro); color: var(--dim); }
 .as-transport { display: flex; align-items: center; gap: calc(var(--gap) * 0.5); flex: 0 0 auto; }
  /* One shape for every small square control on a settings sheet: the same
-    --chip-h plate square as a setting row's ‹ › (css/components.css .set-row).
-    Was a --tap-sm circle with a 1.22x play button — a third button shape on a
-    sheet that already had two. */
+    plate as a setting row's ‹ ›. Was a --tap-sm circle with a 1.22x play
+    button — a third button shape on a sheet that already had two.
+    #3275: bare --chip-h painted 40×40 on desktop-1440x900@100 (layout-audit
+    soft-flag on #pm-prev/#pm-play/#pm-skip). Floor both axes like pause
+    doors / race steppers (#3274/#3276): --tap / --tap-paint / 44 painted. */
 .as-tbtn {
-  width: var(--chip-h); height: var(--chip-h); min-height: var(--chip-h);
+  width: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  min-width: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
   display: flex; align-items: center; justify-content: center;
   padding: 0; font-size: 15px; line-height: 1; border-radius: var(--r-sm);
   border: 1px solid var(--plate-line); background: var(--plate);

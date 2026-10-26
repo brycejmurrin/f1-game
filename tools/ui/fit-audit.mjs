@@ -232,9 +232,19 @@ const MEASURE = function (rootSel) {
     // #sel-body and #cz-body, on three portrait viewports, with no child
     // overhanging the content box by a single pixel. Ask instead whether the
     // box can actually be scrolled: if the widest child fits, it cannot.
+    //
+    // ZOOM UNIT MATCH (#3332). `.sheet` uses `zoom: var(--ui-scale)`.
+    // getBoundingClientRect is in visual px; getComputedStyle padding/border
+    // stay in the element's layout px. Mixing them at UI SIZE 75% reported a
+    // phantom ~padR*(1-zoom) overhang on #cs-options (5.5px when padR=22) with
+    // every child flush to the real content edge. Scale layout lengths by
+    // visual/layout width before subtracting.
     if (el.scrollWidth - el.clientWidth > 2 && (ox === "hidden" || ox === "clip") && cs.textOverflow !== "ellipsis") {
       let overhang = 0;
-      const right = el.getBoundingClientRect().right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight);
+      const box = el.getBoundingClientRect();
+      const layoutW = el.offsetWidth;
+      const z = layoutW > 0 ? box.width / layoutW : 1;
+      const right = box.right - (parseFloat(cs.borderRightWidth) + parseFloat(cs.paddingRight)) * z;
       for (const c of el.children) {
         const cr = c.getBoundingClientRect();
         if (cr.width) overhang = Math.max(overhang, cr.right - right);
