@@ -136,8 +136,8 @@ before every `create_session`:
    No peer fan-out ("send to every session below"): replies go to the
    orchestrator only (three asks in four minutes cost ~21 wakes each, 2026-10-17).
 12. Size stop, every role: the launch prompt ends `STOP AT: <limit> context or $<cap>`,
-   the limit per role (reviewer 120k, worker 150k at a verified checkpoint, PR owner 150k /
-   docs-only 100k, synth 150k, watcher 100k, orchestrator 200k; launch-policy.md §Size stop).
+   the limit per role (reviewer, worker, PR owner, hunter, sync, synth and watcher 150k, orchestrator 200k;
+   launch-policy.md §Size stop; `.claude/hooks/context-cap.py` enforces the same table).
    The limits are soft caps; hard = soft + 50k. The session measures its live context (`/context` or the statusline, not
    `get_session` `used_tokens`) at every wake and, at the soft cap, finishes the unit, pushes, sends HANDOFF.
 13. `USER GRANTS:` quotes the lane's extra grants verbatim with their dates; the standing rules (merge by gate,
@@ -190,6 +190,16 @@ trips `Sandbox allocation failed … rate_limited`.
   (`status_bucket`, granted `permission_mode`, repo attached) before the next.
 - Waves stay within the lane caps in `launch-policy.md`.
 
+### Asking Bryce without stalling the fleet
+
+An open AskUserQuestion blocks this session: ticks, lane messages and PR
+events queue until he answers (OrchA 32: 15.5 h, four READY PRs +40 h;
+audit 2026-10-26 #1). Ask it only when nothing else in the fleet can move;
+otherwise put the question, its options and your default in the reply text,
+keep ticking, and act on the default after 30 min if the choice is
+reversible. Bryce 2026-10-25 ~21:00 PT ("Do all" on the audit): workers
+never ask him; the orchestrator only when the fleet is otherwise idle.
+
 ## Hand-off to a successor (the one tested path; plan §7)
 
 At the soft cap (200k), or when Bryce asks, and never sooner than ~30 calls of
@@ -212,7 +222,10 @@ work left:
      `ORCH <letter> LIVE claude:session_<id> (…)` (a free-text line makes
      `fleet-bus.mjs who` return the wrong id, bus 5ca9880), `send_message` to the
      predecessor, arm the tick and the hourly safety net, one message to each
-     lane, the queue branch.
+     lane naming the new orchestrator id (lanes keep writing to the old one
+     otherwise; audit 2026-10-26 #6), the queue branch.
+   - the predecessor, once the successor is LIVE, decides nothing: every
+     inbound gets one line, "re-send to <successor id>".
    - which timers are the successor's: the account-wide FLEET BUS WATCH
      routine (running.md §Bus routine 3) survives the hand-off and is never
      recreated; the per-session tick and safety net are re-armed by the

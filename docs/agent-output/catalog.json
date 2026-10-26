@@ -979,6 +979,14 @@
       ]
     },
     {
+      "path": "tools/ci/launch-gate.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/live-run-check.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
