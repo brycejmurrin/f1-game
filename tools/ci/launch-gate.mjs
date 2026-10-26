@@ -47,12 +47,20 @@ export function extractSession(text) {
   let obj = JSON.parse(s.slice(start, s.lastIndexOf("}") + 1));
   // The PostToolUse hook's page (`written_by`) wraps the tool result: read the session out of it.
   if (obj && obj.written_by) {
-    const inner = ["tool_response", "content", "text"].map((k) => obj[k]).find((v) => v != null);
+    const inner = hookInner(obj);
     if (inner != null) return extractSession(typeof inner === "string" ? inner : JSON.stringify(inner));
   }
   if (obj.ccr) obj = obj.ccr;
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) throw new Error("page is not a session object");
   return obj;
+}
+
+/** The tool result inside a launch-page.py wrapper: `response` (what the hook writes: an MCP content array of
+ *  `{text}` parts), or the older `tool_response` / `content` / `text` keys. Pure. */
+function hookInner(w) {
+  const v = ["response", "tool_response", "content", "text"].map((k) => w[k]).find((x) => x != null);
+  if (Array.isArray(v) && v.every((p) => p && typeof p.text === "string")) return v.map((p) => p.text).join("\n");
+  return v;
 }
 
 /** The newest harness timestamp a page carries (`timestamp` on the envelope/wrapper/session, or the session's
@@ -70,8 +78,11 @@ export function pageTimestamp(text) {
     if (t > best) best = t;
   }
   if (raw && raw.written_by) {
-    const inner = ["tool_response", "content", "text"].map((k) => raw[k]).find((v) => v != null);
+    const inner = hookInner(raw);
     if (inner != null) best = Math.max(best, pageTimestamp(typeof inner === "string" ? inner : JSON.stringify(inner)));
+    // The hook stamps `at` as it saves the page; the session's own updated_at trails the call it answers.
+    const at = Date.parse(raw.at || "");
+    if (at > best) best = at;
   }
   return best;
 }

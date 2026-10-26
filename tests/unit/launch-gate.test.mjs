@@ -123,6 +123,13 @@ test("audit 4 G13: a page needs its own timestamp, no hand-written mtime skew; t
   assert.equal(w.ok, true, w.why);
   assert.equal(w.writtenBy, "launch-page.py");
   assert.equal(verdict(extractSession(wrapped)).status, "allowed");
+  // what launch-page.py actually writes (2026-10-26, ORCH A): `response` = the MCP content array, stamped `at`;
+  // the session's updated_at trails the get_session call by a minute, so `at` is the page's timestamp
+  const hookPage = JSON.stringify({ written_by: "launch-page.py", at: iso(now - 1000), content_sha256: "0".repeat(64),
+    response: [{ type: "text", text: page("allowed_warning", iso(now - 60_000)).replace(/<\/?envelope>/g, "") }] });
+  const hp = pageVerdict(hookPage, { mtimeMs: now - 900, now });
+  assert.equal(hp.ok, true, hp.why);
+  assert.equal(verdict(extractSession(hookPage)).status, "allowed_warning");
   // the CLI: receipt carries page.sha256 + timestamp, lane and pr; a hand-touched page refuses; unknown flags are usage
   const root = tmp();
   const f = path.join(root, "page.txt");
