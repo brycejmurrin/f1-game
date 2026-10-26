@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-17c86746-21f6-5e03-93ac-f8a6c6a510ab LIVE D·W33f on cursor/w33f-myteam-livery-scroll-10ab [PR #3831]
+BLOCKED to:D from:cursor:bc-17c86746-21f6-5e03-93ac-f8a6c6a510ab #3831 needs run-ci label (gh 403 Resource not accessible by integration); draft CI skipped — not green. Fix pushed head 89e1d2b18 tip tooling-fast 896/0. D·W33f
