@@ -152,8 +152,20 @@ function createWindow() {
   win.loadURL(`${ORIGIN}/`);
 
   if (SMOKE) {
-    const deadline = Date.now() + 60000;
+    let finished = false;
+    let pollTimer;
+    const finish = (code, result) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(deadlineTimer);
+      clearTimeout(pollTimer);
+      process.stdout.write(JSON.stringify(result) + "\n");
+      app.exit(code);
+    };
+    // Independent of navigation and executeJavaScript: either can stall or reject.
+    const deadlineTimer = setTimeout(() => finish(1, { smoke: "timeout" }), 60000);
     const tick = async () => {
+      if (finished) return;
       try {
         const result = await win.webContents.executeJavaScript(`
           (function () {
@@ -171,18 +183,13 @@ function createWindow() {
         `, true);
         const ok = result && result.readyState === "complete" && result.native && result.native.desktop === true
           && typeof result.href === "string" && result.href.indexOf("app://apex/") === 0;
-        if (ok || Date.now() > deadline) {
-          process.stdout.write(JSON.stringify({ smoke: ok ? "ok" : "timeout", ...result }) + "\n");
-          app.exit(ok ? 0 : 1);
-          return;
-        }
+        if (ok) { finish(0, { ...result, smoke: "ok" }); return; }
       } catch (_) { /* page still loading */ }
-      setTimeout(tick, 250);
+      if (!finished) pollTimer = setTimeout(tick, 250);
     };
-    win.webContents.once("did-finish-load", () => setTimeout(tick, 200));
+    win.webContents.once("did-finish-load", () => { if (!finished) pollTimer = setTimeout(tick, 200); });
     win.webContents.once("did-fail-load", (_e, code, desc) => {
-      process.stdout.write(JSON.stringify({ smoke: "fail", code, desc }) + "\n");
-      app.exit(1);
+      finish(1, { smoke: "fail", code, desc });
     });
   }
 

@@ -33,21 +33,32 @@ or launching anything:
    to a dead session (the predecessor should have; check once), then post bus
    `ORCH <letter> LIVE claude:session_<id> (replaces <old id>)`.
 2. ONE wake source: a `Monitor` that prints only NEW
-   `fleet-bus.mjs read --to <letter>` lines (pass `timeout` 30 min, re-arm on expiry) of type READY,
+   `fleet-bus.mjs read --to <letter> --to '*' --strict` lines (pass `timeout` 30 min, re-arm on expiry) of type READY,
    BLOCKED, HANDOFF, DONE or INCIDENT (`grep -v 'GAME-SLOT\|INFO'`: other
    fleets' slot chatter woke ORCH B 6 times in 15 turns). No tick of any period.
-   No PR subscriptions on an orchestrator: owners subscribe.
+   No PR subscriptions on an orchestrator: owners subscribe. Never `get_session` a
+   worker you launched: each call returns ~10k tokens of another session's JSON
+   (the 14:40Z ORCH B called it 3× in 2 s and sat at 204k after 9 min); trust
+   `create_session`'s result and read every worker from ONE saved `list_sessions`
+   page per wake, digested by `fleet-archive.mjs` / `session-transcript.mjs`.
 3. SAFETY NET: one `send_later` 50–55 min out at an odd minute, re-armed on each
    wake, so every wake lands inside the 1 h prompt cache (a 61-min wake re-writes
    the whole context: ~$1.60 vs ~$0.04 at 200k on Opus 5.5, harness research
    2026-10-26). It re-arms the Monitor if it died and runs the wake pass. Stop
    the chain after 3 unchanged passes with no live lane. Cursor:
    `subscribe_timer` for both.
-4. The account-wide FLEET BUS WATCH: an hourly `create_trigger`
+4. The account-wide FLEET BUS WATCH: ONE hourly `create_trigger`
    (`cron_expression: "0 * * * *"`, `create_new_session_on_fire: true`, Sonnet) that reads the bus once,
    marks an orchestrator silent ≥ 30 min ABSENT (bus INCIDENT, wake the other
-   fleet) and ends; it never merges, pushes or edits. `list_triggers` first;
-   never create a second; it survives hand-offs.
+   fleet) and ends; it never merges, pushes or edits. `list_triggers` first (its
+   name is `FLEET BUS WATCH`); never create a second, and no per-session cron of
+   any kind; it survives hand-offs.
+5. Your budget is the launch-policy table's `orchestrator` row (300k = boot +
+   200k on the deploy branch), read from the branch you booted from, never from
+   the queue file: the 2026-10-26 queue brief still said "boot + 100k" and an
+   hourly cron, and successors obeyed it (19 ORCH B ids in 15 h). Boot from the
+   deploy tip (`role-seed.md`); the queue file is passed by path and keeps the
+   header plus the LAST hand-off section only.
 
 The wake pass itself: `running.md` §Reading the fleet.
 
