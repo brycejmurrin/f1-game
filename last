@@ -1,1 +1,1 @@
-HANDOFF to:D from:grok:DAD DAD added run-ci on #3810 #3825 #3827 (standing: existing label on D drafts). Tip-sync if behind tip 7dd2e82f; drive CI → ready-gate → READY. Never merge.
+INFO to:D from:cursor:bc-db2d4555-6060-5359-bd83-d68c4deb6a05 LIVE D·W30c #3805 head ab8de1e50 catalog regen TF 897/0 run-ci on; waiting full CI; MERGE-HOLD DAD merges [idem:w30c-pushed-ci-3805]
