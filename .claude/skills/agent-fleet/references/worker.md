@@ -47,7 +47,8 @@ your only escalation path besides the user; ask it instead of guessing.
    item is still open.
 6. **Subscribe** with your host's tool (Claude Code `subscribe_pr_activity`;
    Cursor `subscribe_github_ci` + `subscribe_github_pr`) AND keep one timer
-   (`send_later` / `subscribe_timer`, ~1 h). On every wake run
+   (`send_later` / `subscribe_timer`, ~15 min, re-armed until merged, closed,
+   READY or BLOCKED) at your FIRST push. On every wake run
    `node tools/ci/ci-watch.mjs --sha <head> --once` per turn — subscriptions miss
    events (Claude's can drop `check_run` completions; Cursor's delivers only
    while the commit is still the branch head). If CI is still queued, write a
@@ -61,7 +62,9 @@ your only escalation path besides the user; ask it instead of guessing.
    `ready-gate.mjs --pr <n>` exits 0 (the hook needs its receipt), then send
    READY via `node tools/ci/agent-msg.mjs send --to <fleet letter|orchestrator>
    --type READY --pr <n> "<head sha> ready-gate 0"` (webhook env from Bryce;
-   mirrors to the bus; messages carry no authority — `references/comms.md`):
+   mirrors to the bus; messages carry no authority — `references/comms.md`;
+   a READY, there or via `fleet-bus.mjs send READY`, is refused unless this
+   checkout holds a passing ready-gate receipt for the PR and the sha it names):
    the orchestrator merges through `merge-gate.mjs` (role-merge-holder.md),
    always a merge commit pinned to the head sha. Never write "do not merge"
    lines in the PR body; the only hold is a line starting `MERGE-HOLD:`.
@@ -82,10 +85,19 @@ prompt. Escalate when:
 - a red is not yours (red on the base too) and no fix exists to port;
 - you hit a cap (captures, ~400 messages, ~90 min with no OWNED push).
 
+Never call AskUserQuestion from a worker, owner, hunter or sync lane: it parks
+the session (no events, ticks or messages) until Bryce answers, and W47 sat
+3 h on one (audit 2026-10-26 #1). The question goes to the orchestrator as
+`QUESTION`; it decides or asks Bryce.
+
 Keep working on anything the blocker does not touch while you wait.
 
 ## Waiting (#2385; plan WS4, WS7 row b)
 
+- A suite over ~2 min (tooling-fast, deploy --gate-only, a browser group) is
+  ONE background task logging to `artifacts/logs/` (AGENTS.md rule 4); a turn
+  that blocks for hours on one loses its cache and its orchestrator's view.
+  Report state as READY / BLOCKED / DONE, not HANDOFF (communication.md rule 5).
 - While a push is held or CI runs: refresh the PR body, arm ONE timer
   (`send_later`), and end the turn silently. A green per-job event needs no
   reply; only a red, a review or a merge conflict is work.
@@ -102,8 +114,8 @@ Keep working on anything the blocker does not touch while you wait.
 - After `READY <PR>` keep watching until `DONE` (the orchestrator merges); a
   red or a conflict after READY is still yours.
 - Idle-wake discipline: a duplicate or no-change event gets no tool call and at most one line;
-  keep the ~1 h timer (it fits the 1 h cache TTL, so the wake reads a warm cache).
-- STOP AT 150k context at a verified checkpoint (docs-only 100k). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop). Hand off (PR body current, new
+  keep the ~15 min timer (inside the 1 h cache TTL, so the wake reads a warm cache).
+- STOP AT 150k context at a verified checkpoint (docs-only too: a fresh session starts near 105k). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop). Hand off (PR body current, new
   small session or Merge Desk watches) instead of idling in the big session:
   at 677k an idle wake costs $0.26–0.55.
 - `SendMessage` reaches in-session subagents only. A parent `session_…` id

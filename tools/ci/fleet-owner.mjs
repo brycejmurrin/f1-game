@@ -17,7 +17,7 @@
 // HELD: every open PR into the deploy branch whose current diff contains the path (git three-dot diff when both
 // shas are local, else the PR files API, paginated; a list shorter than the PR's changed_files fails closed).
 // CLAIMED: a board claim whose text names the path, a glob over it (`*`, `**`, `?`, `{a,b}`) or a directory
-// prefix. A claim is messageable when its text carries a `session_…`/`cse_…` id or a `#<PR>`; the board's
+// prefix. A claim is messageable when its text carries a bus-addressable host/session id or a `#<PR>`; the board's
 // 24-hex session hash is not. LAPSE: with `--requested-at <ISO>` at least 60 min old, a claim older than 60 min
 // on a path outside every open diff prints `CLAIMED (lapsed-after-release-request)` and releases; an open-diff
 // path is never lapsed (it is HELD first).
@@ -34,6 +34,7 @@ import { fileURLToPath } from "node:url";
 import { api } from "./ready-gate.mjs";
 import { parseFleetStatus } from "./pr-board.mjs";
 import { parseBoard, readBoard, CLAIMS_BOARD } from "./who-is-on-it.mjs";
+import { addressProblem } from "./fleet-bus.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DEPLOY = "claude/f1-game-project-26h3ng";
@@ -93,11 +94,14 @@ export function claimPaths(text) {
   return out;
 }
 
-/** Who to message about a claim: a `session_…`/`cse_…` id or `#<PR>` in its text, else null (unaddressable). */
+/** Who to message about a claim: a bus-addressable session id or `#<PR>`, else null. */
 export function claimSession(text) {
   const body = claimBody(text);
   const s = /\b((?:[a-z]+:)?(?:session|cse)_[A-Za-z0-9]+)\b/.exec(body);
   if (s) return s[1];
+  for (const m of body.matchAll(/(?:^|[\s(])((?:codex|cursor|grok):[A-Za-z0-9_-]+)(?=$|[\s),;.])/g)) {
+    if (!addressProblem(m[1])) return m[1];
+  }
   const pr = /(?:^|[\s(])(#\d+)\b/.exec(body);
   return pr ? pr[1] : null;
 }

@@ -18,7 +18,7 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Worker model by task](worker-model-by-task.md) — 2026-10-19: orchestrator picks Opus or Sonnet per worker; Fable only when Bryce names it (2026-10-22 visor)
 - [Fixers may screenshot](fixers-may-screenshot.md) — recorded UI campaign permits screenshot loops without count cap; keep time and host limits
 - [Lanes keep working](lanes-keep-working.md) — 2026-10-17 campaign: continue scoped work after dry rounds; preserve resource and ownership limits
-- [Ask via AskUserQuestion](ask-via-askuserquestion.md) — decisions/asks for Bryce go through AskUserQuestion with what/why/options explained
+- [Ask via AskUserQuestion](ask-via-askuserquestion.md) — question tool for Bryce only when the fleet is otherwise idle; workers never (2026-10-25)
 - [Preview must look different](preview-must-look-different.md) — design sheets must differ in the picture (pixel-diff, close-up framing), not just in mm metrics; Bryce: "they all look the same"
 - [Synced plugins not in child sessions](synced-plugins-not-in-child-sessions.md) — dated Claude sibling-session limitation; verify availability on each host
 - [Watcher tiered cadence](watcher-tiered-cadence.md) — fleet watcher: CI reds every 1 min, rest every 3 min, no per-PR subscriptions; takes over stale non-Claude PRs

@@ -30,7 +30,7 @@ Use the orchestrator.md launch template with:
   merge and the orchestrator armed it, say "auto-merge is armed (MERGE); leave
   it" — the owner still never arms or merges. `.claude/**` edits: `<quote> | NONE
   — push is expected to need a typed Approved: from Bryce in this session`.
-- `STOP AT: 150k context or $<cap>` as the last line (docs-only PR: 100k). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop).
+- `STOP AT: 150k context or $<cap>` as the last line (docs-only PR too). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop).
 - The relayed notes from the previous owner (head sha, last CI verdict, local
   sync state, files that conflicted).
 
@@ -61,8 +61,13 @@ the PR. On merge: `fleet-status: done`, `state: done`, `--release` the claim.
 2. A `Monitor` on `node tools/ci/ci-watch.mjs --sha <head> --timeout 30 --failures-only`,
    re-armed on expiry until the `= ci …` line (it expires at 30 min). Plain mode
    emits one event per job leg and woke ~15 owners per PR (retro 2026-10-17); do not SAY on a green leg.
-3. One `send_later` check-in ~50 min out, re-armed (~4 h later) while the PR is
-   open. The subscription drops `check_run` completions; the timer is not optional.
+3. One `send_later` check-in ~15 min out (Bryce 2026-10-19), re-armed until the
+   PR is merged or closed, or you send READY or BLOCKED (after READY the
+   orchestrator's tick reads it; the subscription still wakes you on a red).
+   After READY, delete the check-in (`delete_trigger`) and end the turn; a 600k
+   owner pays ~$0.75 per wake to learn its queue position (W49, audit
+   2026-10-26 #4).
+   The subscription drops `check_run` completions; the timer is not optional.
 4. Reply once: `ARMED <PR> sub=yes monitor=yes checkin=<UTC>`. No ARMED line
    means the orchestrator treats the owner as not live and nudges it.
 

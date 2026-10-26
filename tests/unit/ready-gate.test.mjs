@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  GUARDS_A, GUARDS_B, GUARDS_JOB,
+  GUARDS_A, GUARDS_B, GUARDS_C, GUARDS_D, GUARDS_JOB,
   guardsVerdict, localVerdict, evaluate, shaPrefixMatch, stampReadySha, newestByName,
   planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine, fleetBlock, fleetIdentity, withFleet,
 } from "../../tools/ci/ready-gate.mjs";
@@ -75,6 +75,16 @@ test("guardsVerdict: one red half fails even if the other is green", () => {
   ]);
   assert.equal(v.state, "failed");
   assert.match(v.evidence, /tooling B/);
+});
+
+test("guardsVerdict: the fourth shard counts (B2, 2026-10-24): a red or running tooling D blocks the fallback", () => {
+  const green = [run(GUARDS_A, "completed", "success", 2), run(GUARDS_B, "completed", "success", 3),
+    run(GUARDS_C, "completed", "success", 4)];
+  assert.equal(guardsVerdict([...green, run(GUARDS_D, "completed", "success", 5)]).state, "passed");
+  const red = guardsVerdict([...green, run(GUARDS_D, "completed", "failure", 5)]);
+  assert.equal(red.state, "failed");
+  assert.ok(red.evidence.includes("tooling D"));
+  assert.equal(guardsVerdict([...green, run(GUARDS_D, "in_progress", null, 5)]).state, "pending");
 });
 
 test("guardsVerdict: no Structural guards check-runs → none", () => {
@@ -538,4 +548,16 @@ test("resolveSha --pr fails closed when the API returns fewer files than the PR 
   assert.equal(resolved.files, null);
   assert.match(resolved.filesError, /received 3000 of 3001/);
   assert.equal(withMemory(GREEN, resolved.files, resolved).state, "memory-unknown");
+});
+
+test("Q8: a `READY to` Plan item is exempt; an open item is printed verbatim", () => {
+  const body = "## Plan\n- [x] a — sha\n- [ ] READY to OrchA 33 once the gate passes\n- [ ] **READY to** me\n";
+  const p = planVerdict(body);
+  assert.equal(p.state, "done");
+  assert.deepEqual(p.open, []);
+  assert.equal(planVerdict("## Plan\n- [ ] READYING the thing\n").state, "open", "only the `READY to` form is exempt");
+  const long = "x".repeat(90);
+  const v = withPlan({ code: 0, state: "passed", evidence: "ok" }, `## Plan\n- [ ] ${long}\n`);
+  assert.equal(v.state, "plan-open");
+  assert.ok(v.evidence.includes(`"${long}"`), "the item is not truncated");
 });

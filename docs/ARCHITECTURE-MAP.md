@@ -35,7 +35,7 @@ assets/pack/        baked PBR material arrays (ships ON; failures degrade)
    at boot for the resolved choice, never tagged.
 4. First race builds a circuit: `js/circuits/<id>.js` data +
    `js/circuits/scenery/<id>.js` (lazy) through the track engine in `js/track/`.
-5. Frame loop: input → physics/AI/race-control → HUD DOM → `gfx` draw/present.
+5. Frame loop: input → physics/AI/race-control → `gfx` draw/present → HUD DOM.
 
 Dev / test surface: `window.__apex` (`js/agent/apex.js`, lazy). Prefer JSON
 hooks (`info`, `physState`, `world`) over screenshots. See [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
@@ -78,8 +78,8 @@ Input.poll()
     → player forces / assists (assists OFF ⇒ no racing-line force)
     → AI field + RaceControl flags
     → Collide / debris / incidents (side worlds)
-    → GameHud DOM + Particles / SkidMarks
-    → gfx.begin → draw scene → present (post)
+    → gfx.begin → draw scene (including Particles / SkidMarks) → present (post)
+    → GameHud DOM
 ```
 
 Coordinates: **+Y up**, metres, radians, arc `s`, lateral `x` (+right).

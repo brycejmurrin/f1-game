@@ -2126,8 +2126,8 @@ body.bc-on #hud-sectors, body.bc-on #hud-limits { display: none !important; }
    close in soft at either side, and the shield lays a faint tint over the lot.
    Under the HUD's own children (the first thing #hud paints), never over a
    number; static, so REDUCE MOTION has nothing to take out; and gone with the
-   HUD when the player hides it. */
-body[data-helmet-cam] #hud::before {
+   HUD when the player hides it. HELMET VISOR OFF is no visor: no frame either. */
+body[data-helmet-cam]:not([data-helmet-visor="off"]) #hud::before {
   content: "";
   position: absolute;
   inset: 0;

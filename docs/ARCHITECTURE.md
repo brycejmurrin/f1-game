@@ -492,7 +492,9 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `scene-dress.js` | `GarageDress` | tag | GarageDress: the team dress of the garage bay. |
 | `crew-motion.js` | `GarageCrewMotion` | tag | Blender-authored guide motion. |
 | `crew-service.js` | `GarageCrewService` | tag | Timed garage service: blanket handlers, a rolling front jack and garage support. |
+| `crew-choreo.js` | `GarageCrewChoreo` | tag | GarageCrewChoreo: Blender-authored crew choreography. |
 | `scene-crew.js` | `GarageCrew` | tag | GarageCrew: the pit crew in the garage on an arrival and the RACE! drive-out. |
+| `pit-crew.js` | `PitCrewAnim` | tag | PitCrewAnim: the garage's crew at the in-race pit stop. |
 | `scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
 | `arrival.js` | `GarageArrival` | tag | Pit-work arrival: a render-clock sequence, independent of race simulation. |
 | `surface-inspection.js` | `GarageSurfaceInspection` | tag | Brief steady surface inspection. |
@@ -563,10 +565,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `thermal-drift.js` | `ThermalDrift` | tag | ThermalDrift: a pure, clock-free helper for a phone that throttles over a long session (#2652). |
 | `governor.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
+| `menu-teardown.js` | `MenuTeardown` | tag | MenuTeardown: software-GL readback cover, sync-task probes, and UI-yield helpers for quit-to-menu and garage-close teardown. |
+| `menu-quit-tail.js` | `MenuQuitTail` | tag | deferred quit-to-menu tail (js/game.js quitToMenu after #overlay is up). |
 | `loop-health.js` | `LoopHealth` | tag | LoopHealth: the frame-loop fault policy and the one heartbeat that outlives the loop. |
 | `render-rate.js` | `RenderRate` | tag | RenderRate: draw every second requestAnimationFrame when a PHONE's display delivers rAF at 100 Hz or more. |
 | `spans.js` | `PerfSpans` | tag | PerfSpans: the per-subsystem frame budget. begin(name)/end(name) bracket a phase of the frame loop (game.js tickBody: frame, input, physics, ai, collide,… |
 | `race-entry-profile.js` | `RaceEntryProfile` | tag | RaceEntryProfile: the race-entry stopwatch OUTSIDE the track build. |
+| `title-warm.js` | `TitleWarm` | tag | TitleWarm: the race world's prep and program warm on an idle TITLE (A·W50, 2026-10-25). |
 | `gfx-escalation.js` | `GfxEscalation` | tag | GfxEscalation: when a backend exhausts its ctx-lost reload budget, decide between the terminal Graphics unavailable panel and an in-tab title-menu recovery… |
 | `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
 | `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
@@ -1645,12 +1650,15 @@ GLX/WGX/TLX.
 
 1. `shadowBegin` → cast* → `shadowEnd` (optional car/lamp on desktop)
 2. Optional env-probe faces
-3. `begin(frame)` → `drawSky` → lit/chunked/instanced/FX draws
+3. `begin(frame)` → opaque world draws → `drawSky` → cars/decals/FX draws
 4. `present(opts)` — SSAO → godrays → bloom → composite (ACES) → FXAA
 
 GLX owns the reference pass order in `GLXPost` / `GLXShadow`. WGX mirrors
 formats and mobile cost caps. TLX uses a draw-list of pooled Three meshes +
 TSL post chain; stamps `renderOrder` for FX/glass.
+
+The sky follows the opaque world so early-Z can reject covered sky fragments;
+additive glow follows the sky (`js/render/gfx.js` frame protocol).
 
 ### Boot / safety
 

@@ -67,11 +67,12 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
 - **Paced push: retired 2026-10-16** (CI/CD review #2333 finding 7). The `PUSH SLOT` rule existed
   because every session waited on the same `queue-depth.mjs` hold and pushed in the minute it
   released; with no hold there is nothing to pace. Push when your own cycle is green.
-- Every worker hand-back reports its head SHA; on a token failure it stops and reports. Batch small tooling/doc fixes into ONE PR; tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR resolve swarms.
+- Every worker hand-back reports its head SHA; on a token failure it stops and reports. A worker reports to the orchestrator
+  only, never also to a parent lane (the parent reads the bus; audit 2026-10-26 row 15: one DONE arrived three times). Batch small tooling/doc fixes into ONE PR; tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR resolve swarms.
 - **Cost and context (retro 2026-10-17, `docs/notes/AGENT-RETRO-2026-10-17.md`).** Three long-lived Opus sessions were 53 % of one night's
   ≈ $660: a 750 k-context orchestrator at ≈ $0.35 per 5 s wake, a Home CSS fixer at $100 with nothing committed. The launch
-  prompt names the model and a `cost cap`; a lane that is switched to Opus keeps the Sonnet cap. An orchestrator hands off past 200k
-  context. Default: the fleet check-in is a fresh-session scheduled task at ≥ 15 min that stops after 2 unchanged checks; the user
+  prompt names the model and a `cost cap`; a lane that is switched to Opus keeps the Sonnet cap. An orchestrator hands off past its
+  size stop below. Default: the fleet check-in is a fresh-session scheduled task at ≥ 15 min that stops after 2 unchanged checks; the user
   may choose a tighter cadence (Bryce chose 5 min on 2026-10-17), and then the orchestrator follows that.
 - **Size stop (per role, soft and hard caps; Bryce 2026-10-19 06:14Z: "Should we do both soft and hard caps as well as test auto compact on some sessions").**
   Every launch prompt ends `STOP AT: <soft> context or $<cap>`:
@@ -83,10 +84,11 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
 | PR owner | 150k (docs-only PR: 100k) |
 | synth | 150k |
 | fleet watcher | 100k |
-| orchestrator | 200k |
+| orchestrator | measured boot + 100k (boot = its own context at the first tick, after the skill, queue file and first sends; ~230k on 2026-10-26) |
 
   - **Measure** the session's own live context (`/context` or the statusline). `get_session` `used_tokens` updates only at turn end and
-    session reports disagree (race-1 said "120k (237k used)"). A fresh session starts at about 50-60k base (a fresh PR owner read ~56k per call).
+    session reports disagree (race-1 said "120k (237k used)"). A fresh session starts at about 98k base (2026-10-26, `docs/notes/BASE-CONTEXT-2026-10-26.md`; 50-60k on 10-19).
+    `get_session` shows `max_tokens` 1,000,000, so every cap here is a cost budget (each wake re-reads the whole context), not the window.
   - **Soft cap:** finish the current unit (file, step or run in flight), commit and push helper scripts and artifacts (no container-local-only
     state: ui-2 and race-1 lost their `cdp-hit.mjs`), push a WIP note, then HANDOFF. **Hard cap = soft + 50k:** hand off immediately.
   - Watcher and orchestrator stay low because every inbound message or timer wakes them with the full context (code.claude.com/docs/en/costs §Why usage climbs).
@@ -96,6 +98,11 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
   about context x cache-read price ($0.20 / MTok Opus 5.5, $0.10 Sonnet 5.5), and a session's cost is roughly quadratic in its calls.
   Cache reads were 41-69 % of every long session's bill. A handoff at 150k instead of 300k cuts cache-read dollars per unit of work by
   about 40 %; Opus to Sonnet halves them again. Keep tool results small (comms.md §Output budget), route verbose reads through a subagent.
+- **Status words and waiting (Transcript Auditor batch 9, 2026-10-24).** A brief asks for READY / BLOCKED / DONE
+  (template `REPORT:`), never "post a HANDOFF": that wording produced a HANDOFF per worker per step and buried the
+  real hand-offs. HANDOFF is only a size-stop rotation to a successor or `ORCH <X> LIVE`. The template's `WAIT:` line
+  sends every suite over ~2 min to the background (AGENTS.md rule 4); sessions that blocked one turn for hours on a
+  suite lost the turn and the cache. Gates run unpiped (bash-guard reminds a piped `ready-gate`/`merge-gate`).
 - **Monitoring and reporting.** Every hunter and PR-owner launch prompt carries the block in `role-pr-owner.md` §Monitoring and reporting
   (own the PR to merged or STOP AT; `fleet-status:` line in the fleet block plus a PR comment per state change; decisions to the orchestrator via needs-decision).
 - **No desk field.** READY goes to the lane's own orchestrator (`ORCHESTRATOR:` in the brief) via

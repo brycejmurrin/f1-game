@@ -89,12 +89,14 @@
       ownedMaterials.clear(); ownedRTs.clear(); ownedTextures.clear();
     }
     try {
-    // Phone post at HALF the scene resolution (BrowserStack iPhone 15 deep
-    // profile 2026-10-22: JS 3.8–6.4 ms while frames 17–28 ms → GPU/fill-bound;
-    // running the look-post chain at full scene res on a tile GPU was the
-    // leftover cost after the governor recovered to autoTier 0). Scene stays
-    // at W×H; LDR + bloom L0 + SSAO/godray base off pW×pH (= W/2 on phone).
-    // Desktop keeps pW===W. Scene MSAA remains the caller's (ctx.sceneSamples).
+    // Phone post working size = PHONE_POST_SCALE × the scene (W×H). #3479 cut
+    // it to 1/2 (BrowserStack iPhone 15 deep profile 2026-10-22: JS 3.8–6.4 ms
+    // of 17–28 ms frames → GPU/fill-bound) and #3670 raised it to 5/8; both read
+    // as a blurry image on Bryce's iPhone (TLX WebGPU), so it is back at 1 —
+    // the pre-#3479 full-res composite. Frame cost is the governor's job: its
+    // renderScale step shrinks W×H (and so pW×pH), and the look-post shed /
+    // phone slow latch drop the passes. LDR + bloom L0 + SSAO/godray base off
+    // pW×pH. Desktop keeps pW===W. Scene MSAA remains the caller's (ctx.sceneSamples).
     // Block gates still come from present(opts) / PerfGov — this only shrinks
     // the surfaces those blocks draw into. FORMATS: the SSAO pair is R8
     // and bloom R11F_G11F_B10F (when renderable) on both; the godray pair stays
@@ -128,9 +130,36 @@
         bloom11 = !!(dev && dev.features && dev.features.has("rg11b10ufloat-renderable"));
       }
     } catch (_) { hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend); bloom11 = false; }
+    // The probe's verdict, before the bloom knob: the scene target below shares it.
+    const r11Renderable = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;
     try { if (localStorage.getItem("apex26.tlxBloom11") === "0") bloom11 = false; } catch (_) { /* no storage: on */ }
     const hdrType = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
     bloom11 = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;
+    // SCENE COLOUR FORMAT (phoneperf 2026-10-24, PERF-KNOWN-WINS row 15): R11F_G11F_B10F / rg11b10ufloat for
+    // the scene target where it is renderable (the bloom probe above), 4 B/px instead of RGBA16F's 8 for the
+    // one target every 3D fragment is written to and that the composite, SSR, haze and the mirror fold read
+    // back at full res — on a tile GPU that is the store plus every read of the frame's biggest surface. No
+    // reader takes scene alpha (tsl-post.js samples .rgb; the car tag is attachment 1, which keeps its own
+    // half-float type), lit colour is never negative, and the composite's sceneHdr uniform is unchanged: the
+    // scene is still float HDR. PHONES ONLY by default (the bandwidth-bound tier; a desktop keeps RGBA16F so
+    // its goldens and env/mirror parity stay as they were). apex26.tlxScene11="1" forces it on, "0" keeps
+    // RGBA16F — the Device Farm A/B pair. 11/11/10 keeps 6/6/5 mantissa bits: a banding check on a night
+    // gradient is the device evidence this still owes (docs/notes/PERF-KNOWN-WINS-2026-10-23.md row 15).
+    // WEBGPU LEG ONLY (revert of the WebGL2 leg, 2026-10-25: Device Farm iPhone 14 WebGL2, rg11b10 42.5 fps vs
+    // RGBA16F 45.7 / 47.0, 55 vs 13-19 frames over 33 ms; docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md
+    // §Reverted). WebGL2 keeps RGBA16F whatever the knob says. Stock three sizes the WebGPU fragment output to the target's three components, and the
+    // spec refuses a src-alpha blend factor when the fragment output has no alpha (gpuweb "validating
+    // GPUFragmentState"): every blended material's pipeline failed on the real-GPU census (macos-latest run
+    // 40052670537 on 886e476f — decals, glass and particles would vanish). Vendored three patch 18 keeps a
+    // vec4 output for RGB targets (the spec allows "RGB requires vec3 or vec4"); with it the same census is
+    // green (run 40056676327, #3711). Renderability still gates WebGPU on the adapter's
+    // "rg11b10ufloat-renderable" feature (bloom11 above); gfx-backend-canary pins patch 18 by behaviour.
+    const _r11Blendable = r11Renderable && !!(renderer.backend && renderer.backend.isWebGPUBackend);
+    let scene11 = _r11Blendable && !!ctx.isMobile;
+    try {
+      const k = localStorage.getItem("apex26.tlxScene11");
+      if (k === "0") scene11 = false; else if (k === "1") scene11 = _r11Blendable;
+    } catch (_) { /* no storage: the default above */ }
     // sceneHdr is fixed for the chain's life — hdr is decided once at factory time.
     let _sceneHdr = hdr ? 1 : 0;
 
@@ -143,6 +172,9 @@
     }
     const whiteTex = onePx(255);
     const blackTex = onePx(0);
+    // FXAA's explicit-gradient mirror tap needs a sampler even when compiled
+    // with this constant 1x1 fallback (before the first mirror, or after off).
+    blackTex.minFilter = blackTex.magFilter = THREE.LinearFilter;
 
     // LENS DIRT smudge map: the glx/post.js makeDirtTex canvas port —
     // deterministic LCG seed, value-noise base + grime blobs + dust specks +
@@ -174,8 +206,8 @@
     const VP = ctx.vp || null;
     const fixed = !!(ctx.fixedTargets && VP && VP.enabled);
     let PW = 1, PH = 1;   // the physical (present) size; fixed mode only
-    // Post working size. On phones this is half the scene (W×H); aux passes
-    // (SSAO/godray/bloom) then half THAT again. Desktop keeps pW===W.
+    // Post working size. Phones use PHONE_POST_SCALE of the scene dimensions;
+    // aux passes (SSAO/godray/bloom) then halve that again. Desktop keeps pW===W.
     const phonePost = !!ctx.isMobile;
     let pW = 1, pH = 1;
 
@@ -212,6 +244,7 @@
       samples: ctx.sceneSamples || 0, resolveDepthBuffer: true,   // SCENE MSAA (header)
     }));
     ownedTextures.delete(sceneDepthTex); // sceneRT.dispose owns it from here
+    if (scene11) { sceneRT.texture.type = THREE.UnsignedInt101111Type; sceneRT.texture.format = THREE.RGBFormat; }   // attachment 0 only
     sceneRT.texture.name = "output";
     sceneRT.texture.generateMipmaps = false;
     sceneRT.texture.colorSpace = THREE.NoColorSpace;
@@ -333,13 +366,15 @@
       if (rt.depthTexture) VP.layout(rt.depthTexture, lw, lh, pw, ph);
     }
     const halfOf = (v) => Math.max(1, Math.floor(v / 2));
+    const PHONE_POST_SCALE = 1;   // phone post size × scene; 1 = full res (pre-#3479)
+    const postSize = (v) => Math.max(1, Math.floor(Math.max(1, v | 0) * (phonePost ? PHONE_POST_SCALE : 1)));
     function layoutHalf() {
-      // Base off the post working size so phones get quarter-of-scene AO/GR.
+      // Base AO/GR off the post working size, including fixed allocations.
       aoW = halfOf(pW);
       aoH = halfOf(pH);
       grW = aoW; grH = aoH;
-      const physBaseW = fixed ? (phonePost ? halfOf(PW) : PW) : pW;
-      const physBaseH = fixed ? (phonePost ? halfOf(PH) : PH) : pH;
+      const physBaseW = fixed ? postSize(PW) : pW;
+      const physBaseH = fixed ? postSize(PH) : pH;
       const pw = fixed ? halfOf(physBaseW) : aoW, ph = fixed ? halfOf(physBaseH) : aoH;
       if (ssaoRT) { place(ssaoRT, aoW, aoH, pw, ph); place(ssaoBlurRT, aoW, aoH, pw, ph); }
       if (godrayRT) { place(godrayRT, grW, grH, pw, ph); place(godrayBlurRT, grW, grH, pw, ph); }
@@ -348,8 +383,8 @@
       if (!bloomLv) return;
       let bw = Math.max(1, Math.floor(pW / BLOOM_DIV));
       let bh = Math.max(1, Math.floor(pH / BLOOM_DIV));
-      const physBloomW = fixed ? (phonePost ? halfOf(PW) : PW) : pW;
-      const physBloomH = fixed ? (phonePost ? halfOf(PH) : PH) : pH;
+      const physBloomW = fixed ? postSize(PW) : pW;
+      const physBloomH = fixed ? postSize(PH) : pH;
       let pbw = Math.max(1, Math.floor(physBloomW / BLOOM_DIV)), pbh = Math.max(1, Math.floor(physBloomH / BLOOM_DIV));
       nLv = 0;
       for (let i = 0; i < bloomLv.length; i++) {
@@ -544,8 +579,8 @@
     // w x h: the render (logical) size; pw x ph: the present size (fixed mode only).
     function resize(w, h, pw, ph) {
       const nPW = fixed ? Math.max(1, pw | 0, w | 0) : 0, nPH = fixed ? Math.max(1, ph | 0, h | 0) : 0;
-      const nPostW = phonePost ? halfOf(Math.max(1, w | 0)) : Math.max(1, w | 0);
-      const nPostH = phonePost ? halfOf(Math.max(1, h | 0)) : Math.max(1, h | 0);
+      const nPostW = postSize(w);
+      const nPostH = postSize(h);
       if (w === W && h === H && nPW === PW && nPH === PH && nPostW === pW && nPostH === pH) {
         // Still may need aaRT when flag toggles at same render size.
         syncAaRT();
@@ -554,8 +589,8 @@
       W = Math.max(1, w | 0); H = Math.max(1, h | 0);
       PW = nPW; PH = nPH;
       pW = nPostW; pH = nPostH;
-      const ldrPW = fixed ? (phonePost ? halfOf(PW) : PW) : pW;
-      const ldrPH = fixed ? (phonePost ? halfOf(PH) : PH) : pH;
+      const ldrPW = fixed ? postSize(PW) : pW;
+      const ldrPH = fixed ? postSize(PH) : pH;
       place(sceneRT, W, H, PW, PH);
       place(ldrRT, pW, pH, ldrPW, ldrPH);
       layoutHalf();
@@ -571,8 +606,8 @@
           aaRT = makeRT(fixed ? 1 : pW, fixed ? 1 : pH, THREE.UnsignedByteType);
           aaRT.texture.name = "TLXPostAA";
         }
-        const aaPW = fixed ? (phonePost ? halfOf(PW) : PW) : pW;
-        const aaPH = fixed ? (phonePost ? halfOf(PH) : PH) : pH;
+        const aaPW = fixed ? postSize(PW) : pW;
+        const aaPH = fixed ? postSize(PH) : pH;
         place(aaRT, pW, pH, aaPW, aaPH);
       } else if (aaRT) {
         // _lastPresentRT may still BE this target (present() stores `dest ||
@@ -891,7 +926,7 @@
       C.lensDirt.value = dirtTex ? gk("lensDirt") : 0;
       // uReflTexel drives SSR + SHARPEN + the vignette aspect — every frame.
       // SSR samples the full-res scene, so the UV quantum stays 1/W even when
-      // the LDR composite runs at phone post size pW (= W/2).
+      // the LDR composite runs at a reduced phone post size pW.
       C.reflTexel.value.set(1 / W, 1 / H);
       // Wet-road/car SSR needs depth + view/proj + world-up-in-view; uSsrOk
       // gates the whole branch on probe-less paths (setup preview).
@@ -946,6 +981,10 @@
           _lastPresentRT = dest || aaRT;
           _last.sgsr = true;
         } else {
+          // FXAA reads the post-sized LDR but draws the whole destination.
+          // Fixed phone targets keep that destination present-sized even at
+          // scale 1, where SGSR is bypassed; pW/pH here would crop the image.
+          if (fixed) { const ps = presentSize(); vset(P.fxaa, ps[0], ps[1]); }
           const mirIn = !!P.fxaa.mirTex && fxaaMirror(true);
           runPass(P.fxaa.mat, dest);
           if (mirIn) _mirComposites++;
@@ -985,13 +1024,47 @@
     // clears depth). On WebGL2: invalidateFramebuffer(DEPTH) on the scene FBO
     // while its pass is still open (ANGLE-Metal: store action DontCare), and on
     // an MSAA target the depth resolve blit is skipped instead
-    // (resolveDepthBuffer). three r186 has no lever on WebGPU: it stores a
-    // single-sample depth whatever its usage (WebGPUBackend discardDepth is
-    // MSAA-only), so a rebuild with a non-sampled depth would buy nothing there.
+    // (resolveDepthBuffer). Pristine r186 has no lever on WebGPU (WebGPUBackend
+    // discardDepth is MSAA-only); vendored patch 17 adds the per-pass hint that
+    // depthBegin sets on a single-sample target (A-P2W, discardHint).
     // apex26.tlxDepthDiscard="0" always keeps it.
     let _depthDiscard = true;
     try { _depthDiscard = localStorage.getItem("apex26.tlxDepthDiscard") !== "0"; } catch (_) { /* no storage: on */ }
     let _depthKeep = true, _depthDiscards = 0, _invDepth = null;
+    // A-P2 (phoneperf 2026-10-24): THE SSR TAG, DISCARDED THE SAME WAY. Attachment 1
+    // (ssrTag) stays on every chain so a wet spell never reallocates the scene target
+    // (_wantTag), yet its only readers are the composite's SSR gate (ssrOk &&
+    // reflect|carReflect > 0.001, tsl-post.js) and the heat-haze plume (hazeStr >
+    // 0.002) — both uniform-gated If blocks, so on a dry phone frame at tier >= 2
+    // (carReflect 0, reflect 0, haze null on mobileTier) the tag is written and
+    // stored by every scene fragment and fetched by nothing. Same rule shape as
+    // needsDepth, from the SAME opts/F present() is about to upload, so a frame
+    // whose composite reads the tag always has it. Single-sample targets only (an
+    // MSAA tag has already been resolved by the time depthEnd runs). WebGPU: the
+    // storeOp hint of vendored patch 17 (A-P2W, discardHint). apex26.tlxTagDiscard="0" always keeps it.
+    let _tagDiscard = true;
+    try { _tagDiscard = localStorage.getItem("apex26.tlxTagDiscard") !== "0"; } catch (_) { /* no storage: on */ }
+    let _tagKeep = true, _tagDiscards = 0, _invTag = null, _invBoth = null;
+    const isGpu = () => !!(renderer.backend && renderer.backend.isWebGPUBackend);
+    let _gpuArmed = false;   // A-P2W: depthBegin put patch 17's hint on sceneRT
+    function needsTag(opts, F) {
+      const o = opts || {};
+      if (viz) return true;
+      const hz = o.haze;
+      if (hz && hz.str > 0.002) return true;   // the plume's car-mask fetch
+      const car = o.carReflect != null ? o.carReflect : PostCommon.knob(o.tune || null, "carReflect");
+      return !!(F.invProj && F.proj && F.upVS) && ((o.reflect || 0) > 0.001 || car > 0.001);   // the composite's SSR gate, exactly
+    }
+    // WebGL2 only: invalidate `list` on rt's FBO, and only while three still has THAT FBO bound
+    // (the pass it just rendered) — never a guess. Returns true when it did.
+    function discardAttachments(rt, list) {
+      const be = renderer.backend, gl = be && be.gl, st = be && be.state;
+      if (!rt || !list || !list.length || !gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
+      const d = be.get(rt), fb = st.currentBoundFramebuffers[gl.DRAW_FRAMEBUFFER];
+      if (!fb || !d || !d.framebuffers || Object.values(d.framebuffers).indexOf(fb) < 0) return false;
+      gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, list);
+      return true;
+    }
     function needsDepth(opts, F) {
       const o = opts || {};
       if (viz) return true;
@@ -1013,11 +1086,39 @@
     function depthBegin(opts, F) {
       _depthKeep = !_depthDiscard || needsDepth(opts, F);
       sceneRT.resolveDepthBuffer = _depthKeep;
+      _tagKeep = !_tagDiscard || !tagOn || (sceneRT.samples | 0) > 0 || needsTag(opts, F);   // A-P2
+      // A-P2W: WebGPU fixes a storeOp when the pass BEGINS, so the same decision rides on the
+      // target as patch 17's hint before the scene render; depthEnd takes it off. Single-sample only.
+      _gpuArmed = discardHint(sceneRT, _tagKeep ? 0 : 2, !_depthKeep && (sceneRT.samples | 0) === 0);
       return _depthKeep;
     }
-    // After the scene pass, before present(): drop the depth this frame does not read (WebGL2 only).
+    // WebGPU leg (vendored three patch 17): store nothing of the attachments in `colorMask` (bit i =
+    // colour attachment i) and, with `depth`, of the depth, in the NEXT pass into rt. Only around the
+    // LAST render of a frame into rt — the next pass's loadOp still reads what was stored. Returns
+    // true when a hint went on; discardHintOff(rt) after the render, also on a throw.
+    function discardHint(rt, colorMask, depth) {
+      if (!rt || !isGpu()) return false;
+      const c = _tagDiscard ? colorMask | 0 : 0, d = _depthDiscard && !!depth;
+      rt.apexDiscardColor = c;
+      rt.apexDiscardDepth = d;
+      return c !== 0 || d;
+    }
+    function discardHintOff(rt) {
+      const t = rt || sceneRT;
+      if (t.apexDiscardColor) t.apexDiscardColor = 0;
+      if (t.apexDiscardDepth) t.apexDiscardDepth = false;
+      if (!rt) _gpuArmed = false;
+    }
+    // After the scene pass, before present(): drop the depth (and the tag) this frame does not read
+    // (WebGL2: invalidate; WebGPU: depthBegin's hint already did it, count it and take it off).
     function depthEnd() {
-      if (_depthKeep) return false;
+      if (_gpuArmed) {
+        discardHintOff();
+        if (!_tagKeep) _tagDiscards++;
+        if (!_depthKeep && (sceneRT.samples | 0) === 0) _depthDiscards++;
+        return true;
+      }
+      if (_depthKeep && _tagKeep) return false;
       const be = renderer.backend, gl = be && be.gl, st = be && be.state;
       if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
       const d = be.get(sceneRT), msaa = (sceneRT.samples | 0) > 0;
@@ -1026,8 +1127,10 @@
       const fb = st.currentBoundFramebuffers[target];
       const ours = msaa ? (fb && fb === d.msaaFrameBuffer) : (fb && d.framebuffers && Object.values(d.framebuffers).indexOf(fb) >= 0);
       if (!ours) return false;
-      gl.invalidateFramebuffer(target, _invDepth || (_invDepth = [gl.DEPTH_ATTACHMENT]));
-      _depthDiscards++;
+      if (!_invDepth) { _invDepth = [gl.DEPTH_ATTACHMENT]; _invTag = [gl.COLOR_ATTACHMENT1]; _invBoth = [gl.DEPTH_ATTACHMENT, gl.COLOR_ATTACHMENT1]; }
+      gl.invalidateFramebuffer(target, _depthKeep ? _invTag : _tagKeep ? _invDepth : _invBoth);
+      if (!_tagKeep) _tagDiscards++;
+      if (!_depthKeep) _depthDiscards++;
       return true;
     }
 
@@ -1118,6 +1221,8 @@
       drawWarm,   // A-W1
       warmMirror,
       needsDepth, depthBegin, depthEnd,   // A-P1
+      needsTag, discardAttachments,   // A-P2 (the mirror discards its depth + tag through this)
+      discardHint, discardHintOff,   // A-P2W: the WebGPU leg's twin (vendored three patch 17)
       present,
       dispose,
       viz,
@@ -1127,12 +1232,14 @@
         on: true,
         hdr,
         attachments: tagOn ? 2 : 1,
+        sceneFormat: scene11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",   // phoneperf: the scene colour attachment
         ssrQuality: P.composite.U.ssrQuality.value,
         depth: { discard: _depthDiscard, kept: _depthKeep, discards: _depthDiscards },   // A-P1: the last frame's call
+        tag: { discard: _tagDiscard, kept: _tagKeep, discards: _tagDiscards },   // A-P2
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],
-        // Post working size (half of scene on phones). Aux passes half of this.
+        // Post working size (PHONE_POST_SCALE of scene on phones). Aux passes half of this.
         postTargets: [pW, pH],
         phonePost,
         // Lazy targets still alive. A shed that stuck must drop these; the

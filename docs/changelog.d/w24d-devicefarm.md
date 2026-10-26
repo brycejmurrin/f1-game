@@ -1,0 +1,1 @@
+New: Device Farm profiling survey for Fleet D (iPhone 14 / 14 Pro) — ranked cold-boot, thermal-soak, memory-pressure, long-race, garage-churn, and background/resume test types in docs/surveys/w24d-devicefarm.md (W24d).

@@ -271,6 +271,27 @@
             "onFailure": "block"
           }
         ]
+      },
+      {
+        "matcher": "^(Agent|mcp__claude-code-remote__create_session)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
+            "timeout": 5,
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
+        "matcher": "^mcp__claude-code-remote__create_session$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/launch-gate.py\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -296,6 +317,15 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/memory-sync.sh\" save",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
+            "timeout": 5
           }
         ]
       }
@@ -327,6 +357,11 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/ui-fixer-uncommitted.sh\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
             "timeout": 5
           }
         ]
