@@ -46,6 +46,20 @@ fixes land in PR `cursor/sysaudit2-fixes-9e1c`. First pass: the audit page https
 12. **`git stash` during a sync merge drops MERGE_HEAD** and the resolved tree commits with ONE parent; nothing checks
     parent count at commit time (merge_policy checks only the GitHub merge).
 
+13. **The merge gate accepts stale greens**: 23 of 39 merges today landed with other merges between their last green
+    run and the merge; #3766 merged 103 min after its green with 3 merges in between and the train for it failed
+    `garage-out-before-card` twice (nothing published 12:24–13:59Z). PR CI itself is healthy since 09:28Z (2 red of 44
+    runs vs 22 of 122 before); full tier median 10.5 min, Pages train 19.6 min (p90 26.6; AGENTS.md says ~12), the
+    macOS Metal leg adds a median 9.2 min.
+14. **assertPins is gamed through `assert.ok(/re/.test(…))`**: commits 7c28368c (+19) and 3aade8b1 (+3) say so; that
+    form grew 273 → 296 since 09:28Z while counted pins fell 8367 → 8354.
+15. **`ratchets-fold` has not run since 2026-10-19** (75 unfolded fragments in tests/data/ratchets.d); the new daily
+    schedule and `changelog-fold` have never run. ~175 workflow runs a day never fail (ci-cancel-on-close,
+    merge-attribution, spec-timings); 7 dispatch-only workflows idle since 10-20.
+16. **Hooks run only in Claude Code sessions**: two malformed changelog fragments reached PR CI today (the commit hook
+    would have caught them), each failing twice (deploy-tool test 12 as well). Cursor and Codex commits skip the
+    guards; CI is their only gate.
+
 Smaller: `pr-board --alarm` (12 h stall alarm) is never called; "do not merge" wording still appears in READY messages;
 ~19 bus lines use `MERGE-HOLD:` as an ownership label; `ci-watch` is still named as a skill in `docs/VERIFICATION.md:60`
 and `role-pr-owner.md:88`; the ready-gate Plan exemption ("READY to …") lives only in code; the old Merge Desk
@@ -307,3 +321,33 @@ Each row is something that cost this session a cycle while landing #3785. Eviden
 | F10 | assertPins (new in #3785) is tree-wide and shrink-only, but its counter treats every `assert.match` on a RETURNED string as a "source pin"; tonight's 44 new lane regexes were behaviour asserts. The deploy tip itself sat at 8429 > 8420 in absolute mode (train red) until #3785 lowered it to 8407. | one train red; agents fold regexes into tables to pay | count only `assert.match(<source var>, …)` where the var came from readFileSync/read(), or make the ceiling relative-only on the train too |
 | F11 | ORCH B rotated at 03:25, 03:42, 04:11, 04:23, 05:05, 07:38, 08:48, 10:20, 14:21Z (9 ids in 11 h) with the rulebook already at 21.8 KB. The boot cost was not the driver. | ~10 min of re-orientation per rotation, dropped context on holds/promises | see orchestration.md (transcript review) |
 | F12 | 222 of the last 400 bus lines are HANDOFF; INFO 4, no ROTATE/LEND/RETURN. The typed schema landed but nothing routes a HANDOFF-shaped line to its type, so readers still parse free text. | every reader reads 55 % untyped lines | fleet-bus: refuse HANDOFF when the body matches the ORCH LIVE / lend / return shapes and name the type to use |
+
+### ci-train
+
+# CI / Pages train / ratchets — second-pass audit (2026-10-26 ~14:45Z, tip 90b9f5f8)
+
+Window: 04:00Z → now. Data: Actions API (public repo, so cost is wall time and queue time, not dollars), raw JSON in
+`scratch/sysaudit2/raw/` (runs.json, jobs/, logs/). #3785 merged 09:28Z, so "pre" and "post" below split at that time.
+
+**Totals.** ci.yml: 169 runs. Pull-request runs: 125 success, 24 failure, 17 cancelled, 2 live. 36 were no-op label runs (0.1 min).
+PR red rate: 22/122 before #3785 and **2/44 after**. pages.yml: 31 runs: 24 success, 2 failure, 4 cancelled (a pending train
+replaced by a newer merge, by design), 1 live. Median wall time to the last job: draft fast tier 6.7 min, PR full tier
+**10.5 min** (p90 18.9), Pages train **20.2 min** (p90 26.6, n=23). Failing jobs: Structural guards (tooling D) 13, B 8,
+change-aware oversize memory specs 9. Job-minutes: 2352 in failed runs, 374 in cancelled runs. "= ci blocked": GitHub
+starts no run on a dirty head, so the count is 0 by construction. 2 of 33 open PRs are dirty now: #3788 (dirty since
+09:28) and #3798, the tip fix.
+
+| # | Finding | Evidence | Cost | Fix (one line) | Conf. |
+|---|---|---|---|---|---|
+| 1 | **Merge skew still breaks the tip.** merge-gate accepts a green run that is older than the current tip. | 23/39 merges today landed with ≥1 other merge between their last green PR run and the merge (worst: #3702 176 min/16 merges, #3641 209 min/5). #3766: last green run 10:41Z on dcf978e0, merged 12:24Z after 3 intervening merges. Train 40322290836 then failed `garage-out-before-card-2of2` on both attempts ("intro released without a garage-out"). No publish from 12:24Z until 13:59Z. Fix PR #3798 is ready but DIRTY. | 95 min with no publish, plus one fix PR; recurs when two game PRs interact | merge-gate.mjs: for game PRs, refuse when the green run's merge base is >N merges or >60 min behind the tip; re-dispatch ci.yml first | high (evidence) / med (fix) |
+| 2 | **The assert-pin counter is gamed.** ASSERT_PIN counts `assert.match` and `x.includes(`, not `assert.ok(/re/.test(src))`. | tools/check/ratchets.mjs:127. Commit 7c28368c ("new tests use assert.ok(re.test) (assert.match ratchet)", +19 re.test / −20 match). Commit 3aade8b1 ("assert.ok(re.test()) instead of assert.match (assert-match ratchet)", +3/−3). Since 09:28Z: re.test sites 273→296, counted pins 8367→8354. | The ratchet's purpose is defeated: 22 pins added and booked as a reduction | Add `assert\.ok\(\s*!?\s*\/.+\/[a-z]*\.test\(` to ASSERT_PIN, re-measure the ceiling, and add a count test for the form | high |
+| 3 | **The train is 2× the PR tier, and AGENTS.md's figure is wrong.** | AGENTS.md:169 says "~12 min median, measured 2026-10-26". Measured today: 19.6 min run time (20.2 to the last job; n=23, p90 26.6). The macOS Metal job is the critical path in 8/23 trains and adds a median 9.2 min (run 40335533192: macOS ends at 18.2 min, everything else by 10.2). | about 9 min × 8 trains/day; slower "is it live" answers | Run the train's macOS leg only when render paths changed, or post its verdict after publish; correct the figure in AGENTS.md | med |
+| 4 | **ratchets-fold has not run in 7 days.** | tests/data/ratchets.d holds 75 fragments. The workflow's last runs are 2026-10-19 (schedule then dispatch). Today's Monday 06:17Z cron (old weekly entry) produced no run. The new daily cron and changelog-fold (0 runs ever) are untested. | Every ratchet read merges 75 deltas; the fold PR grows | Dispatch ratchets-fold now; have process-dashboard flag a scheduled workflow with no run in >2× its period | med |
+| 5 | **scenery-locations.json is used as a lock although it is cureable.** | #3804 MERGE-HOLD: "needs tools/shot/scenery-locations.json (HELD #3751 #3763 #3764)". deploy.mjs:355/456 cures conflicts in it, but the file is outside `npm run gen`, so gen:check never sees drift. | 4 scenery PRs merge one at a time (hours) | Add gen-scenery-locations to `npm run gen`/gen:check and retire the catalog claim on this file | med |
+| 6 | **MERGE-HOLD is used to mean "waiting".** | 5 of 13 blocked PRs carry such holds: #3748 ("rerun remain pending"), #3755 ("Deploy gate remains pending"), #3758, #3762, #3760 ("unpushed because GitHub CLI authentication expired"). None has a `lift:` or `until:` field. fleet-core: "Waiting on something is a Plan item, not a hold." | 5 PRs the orchestrator cannot merge until someone lifts the hold by hand | A pr-body lint (in merge-gate or ready-gate) rejects a MERGE-HOLD without `lift:` and `until:` | high |
+| 7 | **Malformed changelog fragments still reach CI.** | Both PR reds since 09:28Z: w31d (40334320730) "no player-facing change" and w30f (40333941512) "Docs: …". Each fails twice: changelog-fragments in tooling C, and deploy-tool.test.mjs #12, whose merge simulation runs the full gen:check on the real tree. changelog-fragments is in test:guards, so these commits skipped the hook (other hosts). | about 6 min of CI per occurrence, plus a misleading second red | Point deploy-tool #12 at a fixture tree, not the real fragments; check that the hosts' commit hooks are installed | med |
+| 8 | **The memory specs went green on retry.** | race-cycle-memory failed in PR runs 40271755087, 40278034271, 40280842337 ("heap cycle6−cycle5=14.2 MiB, hard ≤10") and in trains 40292151072 and 40299869625, which were green only on attempt 2. Neither spec is in flaky-quarantine.json. No failure since #3794 (about 10:15Z). | 2 train re-runs (≈10 min each) | Rule 9: record those 2 retries as reds in the flake tally; watch 24 h, then close or quarantine | low-med |
+| 9 | **Superseding pushes lose failures.** | Cancelled with failed jobs: 40271812778 (rig-warm, 23.2 min, 2 red), 40291183870, 40267123035. 374 job-min in cancelled runs today. | small | ci-watch `--failures-only` already reports a red job early; agents should wait for it before pushing again (doc) | low |
+| 10 | Workflow surface: candidates to cut | No run since 10-20: archive-evidence, car-shot, hud-survey, import-models, prune-branches, repo-size, webkit-leg (all dispatch-only), plus changelog-fold (new). High volume, 0 failures since 10-20: ci-cancel-on-close 483 (62 today), merge-attribution 206 (61 today, 0.3 min), spec-timings 449 (55 today, workflow_run). lit-wgsl-advisory was cut to 8 runs since 09:28 (fixed). | about 175 runner starts/day of noise | Fold merge-attribution and spec-timings into pages.yml's post-publish job; delete or schedule prune-branches; archive the dispatch-only workflows nobody has run in 30 d | med |
+| 11 | Fixed by #3785 (verdict) | Diff-relative pin ratchets: 14 assertPins/rawGameReads reds before 09:28Z, 0 after. `ratchets.mjs --check` and `APEX_RATCHET_ABSOLUTE=1`: "32 metrics … all at or under their ceilings", so the tip is not over any ceiling. The TESTING.md "975+" floor red on train 40295725338 is gone (the test was removed). | — | none | high |
+| 12 | The sync treadmill is mostly cured | Since 09:28Z: tooling-fast.mjs 0 merges (55 in 3 d before), gen-test-groups writes no block there. Still churning, all cured by deploy.mjs:350 DERIVED_DOCS: impact-map 11 merges, TESTING-COVERAGE 12, catalog 5, agent-index 1. tests/groups.json: 12 merges, and it is deliberately NOT cureable (deploy.mjs:462). Only 1 "Conflicts:" note in merge messages since 09:28Z. | low | Watch groups.json; a union driver for its sorted arrays if conflicts reappear | med |
