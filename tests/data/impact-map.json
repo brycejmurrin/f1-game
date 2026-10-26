@@ -7615,6 +7615,9 @@
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
+      "reuploadTex": [
+        "tests/unit/garage-followups.test.mjs"
+      ],
       "setMood": [
         "tests/unit/garage-looks.test.mjs"
       ],
@@ -7623,9 +7626,6 @@
       ],
       "toolChest": [
         "tests/unit/garage-mesh.test.mjs"
-      ],
-      "uploadLive": [
-        "tests/unit/garage-followups.test.mjs"
       ],
       "*": [
         "tests/unit/deploy-tool.test.mjs",
