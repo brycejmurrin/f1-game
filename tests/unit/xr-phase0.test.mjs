@@ -314,6 +314,49 @@ test("B3: ensureXrBackend refuses silently only when storage is blocked; else pi
   assert.equal(ctx.XrBoot.ensureXrBackend().ok, true);
 });
 
+test("a pending VR entry waits for a fresh tap after renderer reload", async () => {
+  const store = new Map([["apex26.xrEnterPending", "1"]]);
+  const listeners = {};
+  const button = {
+    hidden: true, disabled: false, textContent: "", attrs: {},
+    addEventListener(type, fn) { listeners[type] = fn; },
+    setAttribute(key, value) { this.attrs[key] = value; },
+  };
+  const body = { appendChild(node) { node.parentNode = this; return node; } };
+  let activeGesture = false, requests = 0;
+  const ctx = vm.createContext({
+    document: { body, createElement: () => button }, window: {},
+    localStorage: { getItem: (k) => store.get(k) ?? null,
+      setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
+    navigator: { xr: { requestSession: () => {
+      requests++;
+      assert.equal(activeGesture, true, "immersive request needs the new click's activation");
+      return Promise.resolve({});
+    } } },
+    XrSession: { bind() {}, on: () => () => {}, probe: async () => true,
+      isPresenting: () => false, isSupported: () => true,
+      start() { return ctx.navigator.xr.requestSession("immersive-vr"); } },
+  });
+  seedLog(ctx);
+  vm.runInContext(read("js/xr/xr-ui.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-ui.js") });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
+  ctx.XrBoot.bind({ gfx: { xrCapable: () => true, attachXrSession() {} }, tickBody() {}, windowTick() {},
+    getCamMode: () => 0, setCamMode() {} });
+  ctx.XrBoot.mountUi();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(requests, 0, "mount never tries to auto-enter without activation");
+  assert.equal(store.has("apex26.xrEnterPending"), false);
+  assert.equal(button.hidden, false);
+  assert.equal(button.disabled, false);
+  assert.equal(button.textContent, "TAP TO ENTER VR");
+
+  activeGesture = true;
+  const click = listeners.click({ preventDefault() {}, stopPropagation() {} });
+  activeGesture = false;
+  await click;
+  assert.equal(requests, 1, "the user tap requests the immersive session");
+});
+
 test("CamModes.setCamMode({persist:false}) skips store.write", () => {
   const writes = [];
   const G = {

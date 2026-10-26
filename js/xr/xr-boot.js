@@ -300,14 +300,10 @@ const XrBoot = (function () {
       if (typeof ApexXR !== "undefined" && typeof ApexXR.detect === "function") {
         Promise.resolve(ApexXR.detect()).catch(() => { /* optional capability UI */ });
       }
-      if (typeof XrUi !== "undefined") XrUi.mount(document.body);
-      // After a backend-switch reload, auto-enter once XR is attachable.
-      if (consumePendingEnter() && typeof XrSession !== "undefined") {
-        Promise.resolve(XrSession.probe()).then((ok) => {
-          if (!ok || !canAttach()) return;
-          return XrSession.start();
-        }).catch(() => { /* auto-enter best-effort */ });
-      }
+      // A reload loses the click's transient user activation. Let the XR UI
+      // prompt for a fresh tap instead of requesting an immersive session here.
+      const pendingEnter = consumePendingEnter();
+      if (typeof XrUi !== "undefined") XrUi.mount(document.body, pendingEnter);
     };
     if (typeof XrUi !== "undefined") { finish(); return; }
     wantXrBundle().then((want) => (want ? ensureXr() : false)).then((ok) => { if (ok) finish(); }, () => { /* the VR button is optional */ });
