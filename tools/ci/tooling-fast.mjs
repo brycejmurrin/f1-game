@@ -683,6 +683,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-gap-decimals.test.mjs",
   "tests/unit/hud-helmet-placement.test.mjs",
   "tests/unit/hud-inputs.test.mjs",
+  // #3273: MOVE & SIZE greys sliders for chips the active MINIMAL/COMPACT preset hides (store, not lagging body class).
+  "tests/unit/hud-layout-hidden.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
   "tests/unit/hud-minimap-pitmark.test.mjs",
