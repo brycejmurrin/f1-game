@@ -6645,9 +6645,6 @@
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
-      "motionReduced": [
-        "tests/unit/storm-vm.test.mjs"
-      ],
       "naturalGear": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
