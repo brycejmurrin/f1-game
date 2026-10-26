@@ -54,13 +54,16 @@ const response = (status, body) => ({
 export function curlFetch(url, init = {}, spawnImpl = spawn) {
   const { args, config } = curlRequest(url, init);
   return new Promise((resolve, reject) => {
+    if (init.signal?.aborted) return reject(init.signal.reason || new Error("aborted"));
     const child = spawnImpl("curl", args, { stdio: ["pipe", "pipe", "pipe"] });
     const out = [], err = [];
     const onAbort = () => { child.kill("SIGKILL"); reject(init.signal.reason || new Error("aborted")); };
-    if (init.signal) { if (init.signal.aborted) return onAbort(); init.signal.addEventListener("abort", onAbort, { once: true }); }
     child.stdout.on("data", (d) => out.push(d));
     child.stderr.on("data", (d) => err.push(d));
-    child.on("error", (e) => reject(e));
+    child.on("error", (e) => {
+      init.signal?.removeEventListener?.("abort", onAbort);
+      reject(e);
+    });
     child.on("close", (code) => {
       init.signal?.removeEventListener?.("abort", onAbort);
       const stderr = Buffer.concat(err).toString("utf8");
@@ -68,6 +71,10 @@ export function curlFetch(url, init = {}, spawnImpl = spawn) {
       if (code !== 0 || !status) return reject(new Error(`curl: ${stderr.replace(/__APEX_HTTP_CODE__\d*\s*$/, "").trim() || `exit ${code}`}`));
       resolve(response(status, Buffer.concat(out)));
     });
+    if (init.signal) {
+      init.signal.addEventListener("abort", onAbort, { once: true });
+      if (init.signal.aborted) return onAbort();
+    }
     child.stdin.end(config);
   });
 }
