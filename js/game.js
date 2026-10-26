@@ -2208,7 +2208,7 @@ const _carWarm = { busy: false };   // the stepped race car warm (startRaceBody)
 // seconds: on a phone, RACE! on a circuit already raced met it pending, so the
 // garage drive-out waited behind the card and the flyby played instead.
 const _warmed = new Set();
-const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); carDraw.warmCockpitTelemetry(); return true; } } } catch (_) { /* optimisation only */ } return false; };
+const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; let fresh = false; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); fresh = true; } carDraw.warmCockpitTelemetry(); return fresh; } } catch (_) { /* optimisation only */ } return false; };   // telemetry every call (_rigDone dedupes; A·W56 / #3766 DAILY)
 async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
   if (!current()) return;
@@ -3687,7 +3687,7 @@ function introNow() {
 async function awaitIntroWarm(current) {
   return RaceEntryProfile.spanAsync("awaitIntroWarm", async () => {
     const at = introNow();
-    while (current() && gfx.warming && gfx.warming()) {
+    while (current() && gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued()))) {
       if (introNow() - at >= 30000) throw new Error("Shader preparation timed out");
       await menuSlice();
     }
@@ -3819,7 +3819,7 @@ async function introPrepare(live, key, info, n, cold) {
   return RaceEntryProfile.spanAsync("introPrepare", async () => {
     let failed = false;
     const current = () => !failed && live();
-    if (gfx.warming && gfx.warming() && !(await awaitIntroWarm(current))) return null;
+    if (gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued())) && !(await awaitIntroWarm(current))) return null;
     if (!current()) return null;
     const lamps = _atmo.prebakeLamps();
     const plan = RaceEntryProfile.spanAsync("introPlan", () => introPlan(current, key, info, n))
@@ -4009,7 +4009,7 @@ function raceIntroFromSheet(go, sheet, btn) {
     announce("PREPARATION FAILED — please retry", 5, "info");
   };
   const intro = () => { try { raceIntro(go); } catch (e) { failed(e); } };
-  try { if (!(gfx.warming && gfx.warming())) { intro(); return; } } catch (e) { failed(e); return; }
+  try { if (!(gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued())))) { intro(); return; } } catch (e) { failed(e); return; }
   const n = ++_introRun, settings = entrySettings();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings();
   (async () => { try {
