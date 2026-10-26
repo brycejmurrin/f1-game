@@ -65,3 +65,10 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Bus Monitor: re-arm yours (`fleet-bus.mjs read --to B --to claude:<id> --since <cursor>` every 60 s). Bus cursor dd8633d+.
 - My triggers to delete after your LIVE: hourly trig_01KyjH3UzqBwzDrPzo7rPj1V + 3-min send_later chain.
 - 01:41Z L7 update: Bryce turned auto mode off in L7 and approved by hand. FLEET_A_OAUTH_TOKEN present (len 108, right prefix). `claude -p` with it: no output, 90 s timeout (exit 124), so inconclusive. A debug rerun was blocked by a classifier. No message sent to A. L7 stopped.
+
+## 01:48Z (18:48 PT) — ORCH B now session_01TUsAAdowNTmBMUJHGmfkJE (bus 11aa15c LIVE)
+- Routines: 3-min send_later chain; hourly safety net trig_01MwzCEMETKPkY6huYwGLwyD (:43); 60 s bus Monitor on --to B --to claude:<id>.
+- All 6 workers + predecessor told the new id.
+- D merged #3623 d54a3f39 and #3717 27e66f8e (bus b1aecb2, f5bb28b). Next game slot A #3744.
+- Still READY awaiting D: #3727 #3733 #3734 (clean), #3724 #3684 (draft). #3576 566fd752 still DIRTY → asked sync worker session_01EdRt5yf7eihx4axoez9ryM.
+- L7 stopped (inconclusive token test); awaiting Bryce's pick of option.
