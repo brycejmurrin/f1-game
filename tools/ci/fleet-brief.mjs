@@ -12,9 +12,16 @@
 //
 //   node tools/ci/fleet-brief.mjs --fleet B [--queue fleet/queue.json] [--board <saved pr-board --json>] \
 //     [--bus-json <saved fleet-bus read --json> | --no-bus] [--trigger trig_x …] [--ask "<Bryce's open question>" …] \
-//     [--slot "<text>"] [--out artifacts/fleet-brief] [--as <host>:<id>] [--json]
+//     [--slot "<text>"] [--out artifacts/fleet-brief] [--as <host>:<id>] [--json] [--queue-md scratch/orchb-queue.md]
 //
-// Exit: 0 written, 1 usage or unreadable input.
+// The size stop is read from launch-policy.md's table (`| orchestrator | 300k (boot + 200k) |`), never a literal: on
+// 2026-10-26 the queue file and the safety-net prompts said "boot + 100k" after the table said 300k, and the brief won.
+// --queue-md <file>: the hand-off section REPLACES every earlier `## ` section of that markdown queue file (the stable
+// header above the first `## ` stays; history stays in git). The queue file had 20 hand-offs, 315 lines and ~47 kB (audit 2
+// §orchestration finding 3). A header that states a budget is refused (the cap comes from launch-policy.md), and so is a
+// result over MAX_QUEUE_BYTES; nothing is written on a refusal.
+//
+// Exit: 0 written, 1 usage or unreadable input, 2 refused (queue file over the cap or carrying a budget).
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
