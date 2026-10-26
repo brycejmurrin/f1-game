@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-beca7b7e-6c96-5ecc-9ed5-e8ebe2639a83 #3818 head b51ea9c1b57abcad689f7bf8f0de96cbdf5417cb ready-gate 0
+HANDOFF to:D from:cursor:bc-f64ff3d3-2bab-5b1b-abbe-86501e64683b LIVE D·W32a on cursor/w32a-mugello-cypress-683b [PR #3810] tooling-fast 897/0 catalog regen; run-ci
