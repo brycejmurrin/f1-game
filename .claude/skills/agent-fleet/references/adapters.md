@@ -18,8 +18,8 @@ launching Cursor workers uses the Cursor API column (needs a key).
 | worker → orchestrator | `send_message` back | the subagent's final message returns to you; mid-run only the PR | none: PR comment + fleet block | none: PR comment + fleet block |
 | status | `get_session` (`status_bucket`), `list_events` | `cursor-cloud` `list-cloud-agents` / `batch-fetch-details` | `GET /v1/agents/{id}`, `…/runs/{runId}`, `…/stream` | the job's log |
 | stop | `interrupt_session`, then `archive_session` | none in-tool: ask via PR; the API column can cancel | `POST /v1/agents/{id}/runs/{runId}/cancel`, then `POST /v1/agents/{id}/archive` | cancel the job; `--max-turns` caps it up front |
-| PR events | `subscribe_pr_activity` + a `send_later` poll | `subscribe_github_ci` + `subscribe_github_pr` | none (webhooks are v0-only) | none |
-| timer | `send_later` | `subscribe_timer` (`once: true` + `delaySeconds`) | none | none |
+| PR events | `subscribe_pr_activity` + a `send_later` poll | `subscribe_github_ci` + `subscribe_github_pr` | the launched agent subscribes itself (`subscribe_github_ci` + `subscribe_github_pr`); no push to the launcher (API webhooks are v0-only) | none |
+| timer | `send_later` | `subscribe_timer` (`once: true` + `delaySeconds`) | the launched agent's own `subscribe_timer`; none for the launcher | none |
 
 - Grok Build reads this repo as-is: `AGENTS.md`, `CLAUDE.md`, `.claude/rules/`,
   `.cursor/rules/`, and Claude Code's skills, agents, hooks and MCP config

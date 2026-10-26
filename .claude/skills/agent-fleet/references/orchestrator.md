@@ -32,15 +32,16 @@ or launching anything:
 1. Delete any timer of your predecessor's that `list_triggers` still shows bound
    to a dead session (the predecessor should have; check once), then post bus
    `ORCH <letter> LIVE claude:session_<id> (replaces <old id>)`.
-2. ONE wake source: a `Monitor` that prints only NEW
-   `fleet-bus.mjs read --to <letter> --to '*' --strict` lines (pass `timeout` 30 min, re-arm on expiry) of type READY,
-   BLOCKED, HANDOFF, DONE or INCIDENT (`grep -v 'GAME-SLOT\|INFO'`: other
-   fleets' slot chatter woke ORCH B 6 times in 15 turns). No tick of any period.
+2. ONE wake source: a `Monitor` that prints only NEW bus lines (pass `timeout`
+   30 min, re-arm on expiry), on
+   `node tools/ci/fleet-bus.mjs watch --to <letter> --to '*' --to claude:fleet-<letter>-inbox`
+   — the follow mode of `fleet-bus.mjs read --to …` with the same filters: each
+   new line once, never exits, other fleets' game-train chatter dropped unless
+   `--all`. No tick of any period.
    No PR subscriptions on an orchestrator: owners subscribe. Never `get_session` a
-   worker you launched: each call returns ~10k tokens of another session's JSON
-   (the 14:40Z ORCH B called it 3× in 2 s and sat at 204k after 9 min); trust
-   `create_session`'s result and read every worker from ONE saved `list_sessions`
-   page per wake, digested by `fleet-archive.mjs` / `session-transcript.mjs`.
+   worker you launched: trust `create_session`'s result and read the roster from
+   ONE saved `list_sessions` page per wake (`running.md` §Reading the fleet, the
+   one home of this rule).
 3. SAFETY NET: one `send_later` 50–55 min out at an odd minute, re-armed on each
    wake, so every wake lands inside the 1 h prompt cache (a 61-min wake re-writes
    the whole context: ~$1.60 vs ~$0.04 at 200k on Opus 5.5, harness research
@@ -55,8 +56,7 @@ or launching anything:
    any kind; it survives hand-offs.
 5. Your budget is the launch-policy table's `orchestrator` row (300k = boot +
    200k on the deploy branch), read from the branch you booted from, never from
-   the queue file: the 2026-10-26 queue brief still said "boot + 100k" and an
-   hourly cron, and successors obeyed it (19 ORCH B ids in 15 h). Boot from the
+   the queue file (a stale queue brief once rotated ORCH B 19 times in 15 h). Boot from the
    deploy tip (`role-seed.md`); the queue file is passed by path and keeps the
    header plus the LAST hand-off section only.
 
@@ -133,7 +133,7 @@ permission prompt, stale-seeded workers cost $5.55–9.50 against $1.74–2.74, 
 12 of 25 surveyors refused a relayed PR ask. Check the brief against this list
 before every `create_session`:
 
-1. `permission_mode: "auto"`, confirmed afterwards with `get_session`.
+1. `permission_mode: "auto"`, confirmed from `create_session`'s result (never `get_session` a worker; §First acts).
 2. `source_url` plus `source_revision` = a branch name (the deploy branch, a NAMED
    integration branch, or the PR's branch) or a full 40-hex sha; never a sha7, a
    stale topic branch or the default (launch-policy.md §Launch pins).
@@ -148,17 +148,14 @@ before every `create_session`:
 8. Every anticipated action AND path in `USER GRANTS:` (`js/game.js`, workflow
    dispatch, `.claude/**`, a ratchets row), and the worker's NEXT item named
    (issue #, PR): a grant the brief omits is refused as relayed and an unnamed
-   next item idles the lane (#2625 declined the game.js hook; #2709 refused
-   #1683 and a dispatch, 2026-10-17).
+   next item idles the lane.
 9. The cost cap and "low reasoning effort" in the brief. Effort cannot be set
-   by `create_session`: read `effort_level` in `get_session` metadata and say
-   so if it is higher than asked.
-10. `get_session` on any session before assigning it a PR or message: a dead
-   one fails `not found` (#2717's owner), and a foreign Cursor one is reached
-   through its PR.
-11. Fleet-wide asks: read `get_session` (`post_turn_summary`, `context_usage`,
-   `usage`) for every roster id first and message only sessions whose summary
-   is stale > 15 min. Copy ids from `list_sessions`, never retype them. One
+   by `create_session`; say so in the brief.
+10. Before assigning a session a PR or message, find it live on the wake's saved
+   `list_sessions` page: a dead one fails `not found`, and a foreign Cursor one
+   is reached through its PR.
+11. Fleet-wide asks: from the saved `list_sessions` page, message only sessions
+   whose last update is stale > 15 min. Copy ids from that page, never retype them. One
    message per ask; a correction is `RETRACT <ask>`, never a second broadcast.
    No peer fan-out ("send to every session below"): replies go to the
    orchestrator only (three asks in four minutes cost ~21 wakes each, 2026-10-17).
@@ -166,13 +163,11 @@ before every `create_session`:
 13. `USER GRANTS:` quotes the lane's extra grants verbatim with their dates; the standing rules (merge by gate,
    archive by rule, launch, Plan edits, Pages dispatch) are AGENTS.md and are NOT re-quoted or re-asked — a successor
    orchestrator's brief says "standing authority: AGENTS.md §Concurrent PRs", nothing more (authority.md) — no
-   "re-grant in your session", no "ask Bryce to archive the predecessor" (the archive rule covers it; ORCH14's
-   2026-10-19 20:11Z brief still carried both).
+   "re-grant in your session", no "ask Bryce to archive the predecessor" (the archive rule covers it).
    A changed lane grant is a relaunch with the amended brief, never a message.
 14. Route verbose reads (CI logs, transcripts, big lists) through a subagent that returns a summary;
    no tool result over 10k characters enters your context (comms.md §Output budget).
-15. A grant reaches a worker only through its own launch prompt, or typed into its own session (2026-10-22: two
-   lanes, correctly, refused a follow-up the orchestrator relayed by message). New scope means a NEW launch with
+15. A grant reaches a worker only through its own launch prompt, or typed into its own session. New scope means a NEW launch with
    the user's words quoted in `USER GRANTS:`, never a `send_message`. A message may only NARROW a lane's scope,
    point at evidence, or ask for something already inside its OWNED and grants.
 16. Coordination: the brief names how the lane reports (`ORCHESTRATOR: fleet <X>`, resolved at send time) and which
@@ -181,8 +176,9 @@ before every `create_session`:
 
 ### Pre-launch quota check
 
-launch-policy.md §Quota gate (#3777's `launch-gate.py` enforces it). Park under
-`worker.md` §Quota park with one `send_later` at the reset.
+launch-policy.md §Quota gate is the one home (what launches at `allowed_warning`,
+what posts at `rejected`). Park under `worker.md` §Quota park with one
+`send_later` at the reset.
 
 ## Hand-off to a successor (the one tested path; plan §7)
 
@@ -191,7 +187,7 @@ work left:
 
 0. Delete your own per-session timers (`list_triggers`: the safety net bound to
    your session, never the account-wide bus watch) BEFORE asking for a successor,
-   so neither side hunts them later ("not found" ×2 in queue6/queue7).
+   so neither side hunts them later.
 1. Write the successor's brief (≤ 40 lines, `node tools/ci/fleet-brief.mjs`) as a file on a pushed branch (your own
    `cursor/<topic>` branch, committed, never the deploy branch). It is the
    launch template above with `[Orchestrator]` TITLE/TAGS, the live queue (PR,
