@@ -38,12 +38,12 @@ function run(fx, payload, env = {}) {
 const prompt = { hook_event_name: "UserPromptSubmit", prompt: "wake" };
 
 test("soft cap from the role table: one line, once per level", () => {
-  const fx = fixture("You are Fleet B worker B·W9 for the repo.", [100000, 162400]);
-  assert.match(run(fx, prompt), /^context-cap: context 162k \/ cap 150k \(role worker \(launch-policy\.md\); hard 200k\)\. Over the soft cap/);
+  const fx = fixture("You are Fleet B worker B·W9 for the repo.", [100000, 212400]);
+  assert.match(run(fx, prompt), /^context-cap: context 212k \/ cap 200k \(role worker \(launch-policy\.md\); hard 250k\)\. Over the soft cap/);
   assert.equal(run(fx, prompt), "", "printed once");
-  const post = JSON.parse(run(fixture("You are Fleet B worker x.", [210000]), { hook_event_name: "PostToolUse", tool_name: "Bash" }));
+  const post = JSON.parse(run(fixture("You are Fleet B worker x.", [260000]), { hook_event_name: "PostToolUse", tool_name: "Bash" }));
   assert.equal(post.hookSpecificOutput.hookEventName, "PostToolUse");
-  assert.match(post.hookSpecificOutput.additionalContext, /context 210k \/ cap 150k .*Over the hard cap/);
+  assert.match(post.hookSpecificOutput.additionalContext, /context 260k \/ cap 200k .*Over the hard cap/);
 });
 
 test("STOP AT in the brief and env overrides beat the role; no brief means no cap", () => {
@@ -55,10 +55,10 @@ test("STOP AT in the brief and env overrides beat the role; no brief means no ca
 });
 
 test("PreToolUse: over the hard cap an Agent or create_session spawn is denied; a hand-off is allowed", () => {
-  const fx = fixture("You are Fleet B worker x.", [205000]);
+  const fx = fixture("You are Fleet B worker x.", [255000]);
   const deny = JSON.parse(run(fx, { hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: { prompt: "hand off" } })).hookSpecificOutput;
   assert.equal(deny.permissionDecision, "deny");
-  assert.match(deny.permissionDecisionReason, /context 205k \/ cap 150k, over the hard cap 200k/);
+  assert.match(deny.permissionDecisionReason, /context 255k \/ cap 200k, over the hard cap 250k/);
   const cs = { hook_event_name: "PreToolUse", tool_name: "mcp__claude-code-remote__create_session" };
   assert.equal(JSON.parse(run(fx, { ...cs, tool_input: { prompt: "do more work" } })).hookSpecificOutput.permissionDecision, "deny");
   assert.equal(run(fx, { ...cs, tool_input: { prompt: "HANDOFF: you are my successor" } }), "");
