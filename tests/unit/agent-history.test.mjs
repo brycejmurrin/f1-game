@@ -29,7 +29,7 @@ const CONV = {
     t1: { id: "t1", parent: "u1", children: ["r1"], message: msg("assistant", { content_type: "thoughts", thoughts: [{ summary: "Ran tests in tools/ci/ci-watch.mjs", content: "", chunks: [] }] },
       { model_slug: "gpt-6.1-sol-wm", tool_icons: ["run-command", "/images/ecosystem/apps/github/icon.png", "https://www.google.com/s2/favicons?domain=nodejs.org&sz=128"] }, 20) },
     r1: { id: "r1", parent: "t1", children: ["a1"], message: msg("assistant", { content_type: "reasoning_recap", content: "Worked for 5m 39s" }, {}, 30) },
-    a1: { id: "a1", parent: "r1", children: ["u2"], message: msg("assistant", { content_type: "text", parts: ["Put MERGE-HOLD: on the PR. Ran `node tools/ci/ci-watch.mjs --once` on js/game.js."] }, { model_slug: "gpt-6.1-sol-wm" }, 40) },
+    a1: { id: "a1", parent: "r1", children: ["u2"], message: msg("assistant", { content_type: "text", parts: ["Put MERGE-HOLD: on the PR. Ran `node tools/ci/ci-watch.mjs --once` on js/core/log.js."] }, { model_slug: "gpt-6.1-sol-wm" }, 40) },
     u2: { id: "u2", parent: "a1", children: ["e"], message: msg("user", { content_type: "text", parts: ["Keep going"] }, {}, 50) },
     e: { id: "e", parent: "u2", children: [], message: msg("assistant", { content_type: "text", parts: [""] }, { error_metadata: { error_code: "work_usage_limit_exceeded", error_type: "info" } }, 60) },
   },
@@ -49,7 +49,7 @@ test("chatgpt: follows current_node, counts prompts, steps, tools, work time, br
   assert.equal(d.errors[0].code, "work_usage_limit_exceeded");
   assert.equal(d.final.state, "stopped: work_usage_limit_exceeded");
   assert.deepEqual(d.mentioned.commands, ["node tools/ci/ci-watch.mjs --once"]);
-  assert.ok(d.mentioned.paths.includes("js/game.js") && d.mentioned.paths.includes("tools/ci/ci-watch.mjs"));
+  assert.ok(d.mentioned.paths.includes("js/core/log.js") && d.mentioned.paths.includes("tools/ci/ci-watch.mjs"));
   assert.equal(d.patterns["merge-hold"], 1);
   assert.equal(d.patterns["usage-limit"], 1);
   assert.equal(d.durationSec, 900);
@@ -76,7 +76,7 @@ const ROLLOUT = [
   L(5, "event_msg", { type: "exec_command_end", call_id: "c1", command: ["npm", "run", "test:guards"], aggregated_output: "1 failing", exit_code: 1, duration: { secs: 9, nanos: 0 }, status: "completed" }),
   L(5, "response_item", { type: "function_call_output", call_id: "c1", output: "1 failing" }),
   L(5, "response_item", { type: "function_call", name: "search", namespace: "mcp__github", arguments: "{}", call_id: "c3" }),
-  L(6, "response_item", { type: "custom_tool_call", name: "apply_patch", call_id: "c2", input: "*** Begin Patch\n*** Update File: js/game.js\n@@\n-a\n+b\n*** Add File: docs/README.md\n+x\n*** End Patch" }),
+  L(6, "response_item", { type: "custom_tool_call", name: "apply_patch", call_id: "c2", input: "*** Begin Patch\n*** Update File: js/core/log.js\n@@\n-a\n+b\n*** Add File: docs/README.md\n+x\n*** End Patch" }),
   L(7, "response_item", { type: "custom_tool_call_output", call_id: "c2", output: "Success" }),
   L(8, "event_msg", { type: "token_count", info: { total_token_usage: { input_tokens: 20000, cached_input_tokens: 15000, output_tokens: 1000, reasoning_output_tokens: 400, total_tokens: 21000 }, last_token_usage: { input_tokens: 12000 }, model_context_window: 272000 } }),
   L(9, "event_msg", { type: "token_count", info: { total_token_usage: { input_tokens: 50000, cached_input_tokens: 40000, output_tokens: 2000, reasoning_output_tokens: 800, total_tokens: 52000 }, last_token_usage: { input_tokens: 30000 }, model_context_window: 272000 } }),
@@ -92,7 +92,7 @@ test("rollout: session meta, model, prompt (injected context skipped), commands 
   assert.deepEqual(d.git, { branch: "main", commit: "abc" });
   assert.deepEqual(d.prompts.map((p) => p.text), ["Run the guards"], "event user_message wins; response_item duplicate and env context dropped");
   assert.deepEqual(d.commands.map((c) => [c.cmd, c.exit]), [["npm run test:guards", 1]]);
-  assert.deepEqual(d.filesEdited, ["js/game.js", "docs/README.md"]);
+  assert.deepEqual(d.filesEdited, ["js/core/log.js", "docs/README.md"]);
   assert.deepEqual(d.tools, { shell: 1, "mcp__github.search": 1, apply_patch: 1 });
   assert.equal(d.tokens.total, 52000);
   assert.deepEqual(d.ctx, { turns: 2, first: 12000, max: 30000, last: 30000, window: 272000 });
@@ -233,13 +233,13 @@ test("cursor cloud SSE: chat, tool calls with args, failures and the run result"
     ["assistant", { text: "Running checks" }],
     ["tool_call", { callId: "c1", name: "shell", status: "running", args: { command: "npm test" } }],
     ["tool_call", { callId: "c1", status: "completed", result: { error: { message: "exit 1" } } }],
-    ["tool_call", { callId: "c2", name: "edit", status: "completed", args: { path: "js/game.js" }, result: { success: {} } }],
+    ["tool_call", { callId: "c2", name: "edit", status: "completed", args: { path: "js/core/log.js" }, result: { success: {} } }],
     ["result", { status: "FINISHED", text: "done", durationMs: 4000 }],
   ].map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n`).join("\n");
   assert.equal(sniff(sse).format, "cursor-sse");
   const d = digestCursorSse(sse, "abcd1234_run12345.sse");
   assert.deepEqual(d.tools, { shell: 1, edit: 1 });
-  assert.deepEqual(d.filesEdited, ["js/game.js"]);
+  assert.deepEqual(d.filesEdited, ["js/core/log.js"]);
   assert.equal(d.commands[0].cmd, "npm test");
   assert.equal(d.errors.length, 1);
   assert.equal(d.final.state, "FINISHED");
