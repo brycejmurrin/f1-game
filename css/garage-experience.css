@@ -47,4 +47,67 @@
   @media (hover: hover) and (pointer: fine) {
     .cs-liv-editor [role="tab"][aria-selected="true"]:hover { background: var(--red); border-color: transparent; color: var(--text); }
   }
+
+  /* #3339: livery search + factory-finish collapse. Element/attribute selectors
+     only — no new class tokens (cssClasses ceiling) and no px spacing
+     (rawSpacing). Scoped by :has(input[type=search]) so other #cs-options
+     panes are untouched; carsetup.css stays free for the #3332 overflow lane. */
+  #cs-options:has(> div > input[type="search"]) > div:has(> input[type="search"]) {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: calc(var(--gap) * 0.5);
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--carbon);
+    padding-block: calc(var(--gap) * 0.35);
+  }
+  #cs-options:has(> div > input[type="search"]) input[type="search"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: var(--chip-h);
+    font: inherit;
+    font-size: 16px; /* iOS: avoid focus zoom */
+    font-weight: 700;
+    letter-spacing: var(--ls-3);
+    color: var(--text);
+    background: var(--plate-hover);
+    border: 1px solid var(--plate-line);
+    border-radius: var(--r-sm);
+    padding: calc(var(--gap) * 0.4) calc(var(--gap) * 0.7);
+  }
+  #cs-options:has(> div > input[type="search"]) > details {
+    grid-column: 1 / -1;
+    border: 1px solid var(--card-line);
+    border-radius: var(--r-md);
+    background: var(--plate);
+    padding: calc(var(--gap) * 0.35);
+  }
+  #cs-options:has(> div > input[type="search"]) > details > summary {
+    cursor: pointer;
+    list-style: none;
+    font-size: var(--fs-micro);
+    font-weight: 800;
+    letter-spacing: var(--ls-4);
+    text-transform: uppercase;
+    color: var(--dim);
+    min-height: var(--chip-h);
+    display: flex;
+    align-items: center;
+  }
+  #cs-options:has(> div > input[type="search"]) > details > summary::-webkit-details-marker { display: none; }
+  #cs-options:has(> div > input[type="search"]) > details > summary::after {
+    content: "\25BE";
+    margin-left: auto;
+    opacity: 0.7;
+  }
+  #cs-options:has(> div > input[type="search"]) > details[open] > summary::after { content: "\25B4"; }
+  #cs-options:has(> div > input[type="search"]) > details > div {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(calc(var(--tap) * 2), 100%), 1fr));
+    gap: calc(var(--gap) * 0.5);
+    align-content: start;
+    margin-top: calc(var(--gap) * 0.35);
+  }
 }
