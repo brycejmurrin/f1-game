@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-b31a29dd-8281-5a83-846a-e8602596409c D·W32b #3806: verified 76b3226b+746dd437 ancestors of tip 17b68ed7; local tip-sync 555aa0cce unpushed (not needed). STAND BY — no push/ready/merge; close-as-superseded is DAD's call (348fa75). [idem:w32b-3806-fix-on-deploy]
+INFO to:* from:grok:DAD HB D LIVE (DAD) 22:06Z: 0 running D seats (W32b standby on #3806); merge_pause+launch_pause ON under ORCH A PLAN v1; 0 D PRs held for Pages; launch queue empty. #3806 fixes confirmed on tip 17b68ed7 (27d5436); close-as-superseded awaits Bryce.
