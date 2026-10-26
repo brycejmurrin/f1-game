@@ -587,8 +587,9 @@ const Parts = (function () {
   // listed keys overridden. Open to every team, unlike a SIGNATURE.
   // Preview: node tools/viewer/build-viewer.mjs --sheet=parts:<category>:<team> --match=^style_
   const STYLES = [
+    // #3418: loft softened so garage dHausVis vs evo_kit lands ~213 mm (was ~228).
     ["engine", "evo_kit", "style_engine_zeropod", "Zero-Pod Concept", "near-vanishing sidepods with a deep undercut",
-      { podWidth: 0.80, shoulderHeight: 0.92, undercut: 1.30, coke: 1.30, tailWidth: 0.76, coverHeight: 0.92, inlet: 0, chimney: 0, twin: 0 }],
+      { podWidth: 0.81, shoulderHeight: 0.98, undercut: 1.18, coke: 1.16, tailWidth: 0.79, coverHeight: 1.00, inlet: 0, chimney: 0, twin: 0 }],
     ["engine", "turbo", "style_engine_bigbox", "Big Airbox", "towering airbox over broad, high-shouldered pods",
       { in: 1.90, snork: 1, coverHeight: 1.28, podWidth: 1.20, shoulderHeight: 1.24, undercut: 0.78, servicePanel: 4, chimney: 3, scoopLip: 2 }],
     ["aero", "low", "style_aero_spoon", "Spoon Wing", "deep-swept spoon rear wing and a raised, raked front",
