@@ -870,6 +870,7 @@
     {
       "path": "tools/ci/fleet-brief.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json",
@@ -999,6 +1000,7 @@
     {
       "path": "tools/ci/launch-lane.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--format",

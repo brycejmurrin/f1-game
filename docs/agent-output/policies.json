@@ -576,6 +576,11 @@
       "presentation": "shared-levels",
       "preserve": "REFUSED (exit 2) versus FAILED (exit 1) on lease ops; lease holder and minutes left; every new bus line and the new cursor sha; who: the one `<letter> <host:id> <sha7> <age>` line or exit 1 none"
     },
+    "tools/ci/fleet-brief.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The ≤40-line digest and the `= brief <bytes> B, <lines> lines -> <dir>/brief.{json,md}` line; --json brief; exit 0 written, 1 usage or unreadable input"
+    },
     "tools/ci/fleet-flags.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
@@ -640,6 +645,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "The `= launch-gate ok|refused` line with its reason and receipt path; --json verdict; exit 0 ok, 1 refused, 2 usage"
+    },
+    "tools/ci/launch-lane.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The `= launch REFUSED (<gate>): <why>` line (exit 2) or `= launch ok …` plus the create_session JSON; who/release lines; --json verdict; exit 0 launch, 1 usage/git, 2 refused"
     },
     "tools/ci/live-run-check.mjs": {
       "action": "keep-native",

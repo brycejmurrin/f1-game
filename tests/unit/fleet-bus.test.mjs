@@ -343,14 +343,14 @@ test("schema: protocol bodies are BODY_MIN..BODY_MAX chars after whitespace coll
   const exact = "x".repeat(BODY_MIN), over = "y".repeat(BODY_MAX + 1);
   for (const t of ["HANDOFF", "READY", "DONE", "BLOCKED"]) {
     assert.equal(bodyProblem(t, exact), "", t);
-    assert.match(bodyProblem(t, exact.slice(1)), /19 chars.*20-600/, t);
-    assert.match(bodyProblem(t, over), /601 chars/, t);
+    assert.ok(/19 chars.*20-600/.test(bodyProblem(t, exact.slice(1))), t);
+    assert.ok(/601 chars/.test(bodyProblem(t, over)), t);
     assert.throws(() => formatLine(t, "*", A, "#1 merged"), /20-600/, t);
   }
   assert.equal(bodyProblem("GREEN", "#1 ok"), "", "non-protocol types keep short bodies");
   assert.equal(bodyProblem("GAME-SLOT", "#3076 a06b99a1"), "");
   assert.equal(formatLine("DONE", "*", A, "  #3790   merged\n abc1234 two parents "), `DONE to:* from:${A} #3790 merged abc1234 two parents`);
-  assert.match(bodyProblem("LEND", "#3790 abc1234 lent for the merge"), /merger:<letter>/);
+  assert.ok(/merger:<letter>/.test(bodyProblem("LEND", "#3790 abc1234 lent for the merge")), bodyProblem("LEND", "#3790 abc1234 lent for the merge"));
   assert.equal(bodyProblem("LEND", "#3790 abc1234 lent for the merge merger:A"), "");
   assert.equal(lendMerger("#1 abc merger:C, until Pages"), "C");
   assert.equal(lendMerger("#1 abc merger:CD"), null, "one letter");
@@ -418,7 +418,7 @@ test("against real git: an --idem resend writes nothing; read --strict keeps a h
     out.length = 0;
     assert.equal(main(["read", "--to", "B", "--strict"], opts), 0);
     assert.deepEqual(out.filter((l) => !l.startsWith("=")).map((l) => l.split(" ").slice(-3).join(" ")), ["one for B", "two for B"]);
-    assert.match(out.at(-1), /1 hidden by --to.*strict: held at/);
+    assert.ok(/1 hidden by --to.*strict: held at/.test(out.at(-1)), out.at(-1));
     out.length = 0;
     assert.equal(main(["read"], opts), 0, "a wider read still sees the hidden line");
     assert.deepEqual(out.filter((l) => !l.startsWith("=")).map((l) => l.split(" ").slice(-3).join(" ")), ["one for nine", "two for B"],

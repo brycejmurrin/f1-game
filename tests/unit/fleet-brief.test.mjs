@@ -56,14 +56,14 @@ test("caps: an oversized brief fits 2048 bytes (bus first, then board, then text
   assert.ok(b.dropped > 40, String(b.dropped));
   const md = digest(b);
   assert.ok(md.trimEnd().split("\n").length <= MAX_LINES, `${md.split("\n").length} lines`);
-  assert.match(md, /item\(s\) dropped for the 2 KB cap/, "the digest says the brief was cut");
+  assert.ok(/item\(s\) dropped for the 2 KB cap/.test(md), "the digest says the brief was cut");
   // A brief already under the cap is untouched.
   const small = { ...huge(), lanes: [], board: [], bus: ["one line"], asks: [] };
   assert.equal(fitBrief(small).dropped, 0);
   assert.deepEqual(small.bus, ["one line"]);
   const many = digest({ ...small, bus: Array.from({ length: 80 }, (_, i) => `line ${i}`) });
   assert.equal(many.trimEnd().split("\n").length, MAX_LINES);
-  assert.match(many, /- … \d+ more in brief\.json/);
+  assert.ok(/- … \d+ more in brief\.json/.test(many), many);
 });
 
 test("main: writes brief.json and brief.md from a queue file, a saved board and saved bus entries; no live bus", () => {
@@ -82,8 +82,8 @@ test("main: writes brief.json and brief.md from a queue file, a saved board and 
     const j = JSON.parse(fs.readFileSync(path.join(dir, "out", "brief.json"), "utf8"));
     assert.deepEqual([j.fleet, j.lanes.length, j.board.length, j.triggers[0], j.cursor.tip, j.slot.text], ["B", 2, 2, "trig_01XYZ", "fffffff", "#3790 abc1234 slot"]);
     const md = fs.readFileSync(path.join(dir, "out", "brief.md"), "utf8");
-    assert.match(md, /\| #3791 \| queued \| \*\*none\*\* \|/, "an unowned lane is loud");
-    assert.match(md, /#3792 FIX/);
+    assert.ok(/\| #3791 \| queued \| \*\*none\*\* \|/.test(md), "an unowned lane is loud");
+    assert.ok(/#3792 FIX/.test(md), md);
     assert.equal(main(["--fleet", "BB"], { log: () => {} }), 1);
     assert.equal(main(["--fleet", "B", "--wat"], { log: () => {} }), 1);
   } finally {

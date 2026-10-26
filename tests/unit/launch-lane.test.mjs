@@ -28,7 +28,7 @@ test("quota: launch-gate's rule (allowed, or the user's quoted words over a warn
   const v = quotaVerdict(page("get-session-warning.json"));
   assert.equal(v.ok, false);
   assert.equal(v.status, "allowed_warning");
-  assert.match(v.why, /launch nothing/);
+  assert.ok(/launch nothing/.test(v.why), v.why);
   const o = quotaVerdict(page("get-session-warning.json"), "launch all lanes now");
   assert.equal(o.ok, true);
   assert.equal(o.override, "launch all lanes now");
@@ -40,11 +40,11 @@ test("quota: launch-gate's rule (allowed, or the user's quoted words over a warn
 
 test("revision: a branch name or a full sha; a sha7 and malformed names are refused", () => {
   for (const r of ["claude/f1-game-project-26h3ng", "cursor/audit-bus-schema-d35b", "a".repeat(40), "main"]) assert.equal(revisionProblem(r), "", r);
-  assert.match(revisionProblem("3e8abc0"), /short sha/);
-  assert.match(revisionProblem("3e8abc096fd435100a83b31d6ce50a3dcda7601"), /short sha/, "39 hex");
-  for (const r of ["a..b", "has space", "-lead", "x/", "x.lock", "a~1", "a:b"]) assert.match(revisionProblem(r), /not a valid branch/, r);
-  assert.match(revisionProblem("refs/heads/x"), /branch name, not the ref/);
-  assert.match(revisionProblem(""), /required/);
+  assert.ok(/short sha/.test(revisionProblem("3e8abc0")), revisionProblem("3e8abc0"));
+  assert.ok(/short sha/.test(revisionProblem("3e8abc096fd435100a83b31d6ce50a3dcda7601")), "39 hex");
+  for (const r of ["a..b", "has space", "-lead", "x/", "x.lock", "a~1", "a:b"]) assert.ok(/not a valid branch/.test(revisionProblem(r)), r);
+  assert.ok(/branch name, not the ref/.test(revisionProblem("refs/heads/x")), revisionProblem("refs/heads/x"));
+  assert.ok(/required/.test(revisionProblem("")), revisionProblem(""));
 });
 
 test("claimKey: <fleet>-<lane>[-pr<n>]; bad shapes throw", () => {
@@ -93,21 +93,21 @@ function run(extra, over = {}) {
 test("main gate: quota, revision, twin and claim refusals exit 2 in that order, before any side effect", () => {
   let r = run(["--session-json", fx("get-session-warning.json")]);
   assert.equal(r.code, 2);
-  assert.match(r.out.at(-1), /REFUSED \(quota\)/);
+  assert.ok(/REFUSED \(quota\)/.test(r.out.at(-1)), r.out.at(-1));
   assert.deepEqual([r.claims.length, r.receipts.length], [0, 0]);
   r = run(["--session-json", fx("get-session-allowed.json")], { deps: { mtime: () => NOW - 30 * 60_000 } });
-  assert.match(r.out.at(-1), /REFUSED \(quota\): --session-json is 1800 s old \(max 120\)/);
+  assert.ok(/REFUSED \(quota\): --session-json is 1800 s old \(max 120\)/.test(r.out.at(-1)), r.out.at(-1));
   const sha7 = [...ARGS]; sha7[sha7.indexOf("claude/f1-game-project-26h3ng")] = "3e8abc0";
   const out = [];
   assert.equal(main([...sha7, "--session-json", fx("get-session-allowed.json")], { log: (l) => out.push(l), now: () => NOW, mtime: () => NOW, claim: () => assert.fail("no claim"), writeReceipt: () => assert.fail("no receipt") }), 2);
-  assert.match(out.at(-1), /REFUSED \(revision\): 3e8abc0 is a short sha/);
+  assert.ok(/REFUSED \(revision\): 3e8abc0 is a short sha/.test(out.at(-1)), out.at(-1));
   const twin = [...ARGS]; twin[twin.indexOf("X9")] = "X2";
   const out2 = [];
   assert.equal(main([...twin, "--session-json", fx("get-session-allowed.json")], { log: (l) => out2.push(l), now: () => NOW, mtime: () => NOW, claim: () => assert.fail("no claim"), writeReceipt: () => assert.fail("no receipt") }), 2);
-  assert.match(out2.at(-1), /REFUSED \(twin\): session_01X2X2X2X2X2X2X2X2X2X2X2 \(lane:X2\)/);
+  assert.ok(/REFUSED \(twin\): session_01X2X2X2X2X2X2X2X2X2X2X2 \(lane:X2\)/.test(out2.at(-1)), out2.at(-1));
   r = run(["--session-json", fx("get-session-allowed.json")], { claim: () => ({ ok: false, held: { sha: "d", claim: { by: "claude:session_other", at: "t0" } } }) });
   assert.equal(r.code, 2);
-  assert.match(r.out.at(-1), /REFUSED \(claim\): refs\/heads\/fleet-claims\/B-X9 held by claude:session_other since t0/);
+  assert.ok(/REFUSED \(claim\): refs\/heads\/fleet-claims\/B-X9 held by claude:session_other since t0/.test(r.out.at(-1)), r.out.at(-1));
   assert.equal(r.receipts.length, 0);
 });
 
@@ -125,7 +125,7 @@ test("main gate: a pass claims, writes the receipt and prints the create_session
   assert.equal(r.claims.length, 0);
   assert.equal(r.receipts[0].override, "Bryce: go");
   assert.equal(r.receipts[0].claim, null);
-  assert.match(r.out[0], /quota allowed_warning \(override: Bryce: go\).*no claim/);
+  assert.ok(/quota allowed_warning \(override: Bryce: go\).*no claim/.test(r.out[0]), r.out[0]);
   assert.equal(r.receipts[0].status, "allowed_warning");
   assert.equal(main(["--fleet", "B", "--lane", "X9", "--bogus", "1"], { log: () => {} }), 1, "unknown flag");
 });
