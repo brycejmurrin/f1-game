@@ -14060,6 +14060,9 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
       ],
+      "_coWarm": [
+        "tests/unit/tlx-fx-warm.test.mjs"
+      ],
       "_decalAppend": [
         "tests/unit/tlx-hunt4.test.mjs"
       ],
@@ -14166,7 +14169,8 @@
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
       "compileWarmProbe": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-fx-warm.test.mjs"
       ],
       "create": [
         "tests/unit/assets-pack.test.mjs",
@@ -14236,6 +14240,9 @@
       "freeInstancedBatch": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "getFxQuad": [
+        "tests/unit/tlx-fx-warm.test.mjs"
+      ],
       "getPresentSize": [
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
@@ -14247,6 +14254,9 @@
       ],
       "isWebGPU": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "lineIndex": [
+        "tests/unit/tlx-fx-warm.test.mjs"
       ],
       "lruVictim": [
         "tests/unit/tlx-round2.test.mjs"
@@ -14431,6 +14441,7 @@
       ],
       "warmFxPrograms": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-fx-warm.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"

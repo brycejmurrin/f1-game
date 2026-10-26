@@ -3143,6 +3143,16 @@ const TLX = (function () {
         try { await renderer.compileAsync(m, camera, scene); }
         finally { if (!--p.pending && p.dead) p.release(); }
       }
+      // The driving line's index is a pure function of position — (i, i+1, i+2) — so it is built ONCE per stream
+      // geometry at full capacity and the draw range trims it. A fresh BufferAttribute per re-upload orphaned the
+      // old index's GPU buffer (three frees an index only on geo dispose). Shared with the fx warm (A·W50, #3673).
+      function lineIndex(slot) {
+        const capTris = Math.max(0, slot.cap - 2);
+        if (slot.geo.index && slot.geo.index.count >= capTris * 3) return;
+        const idx = new Uint32Array(capTris * 3);
+        for (let i = 0; i < capTris; i++) { idx[i * 3] = i; idx[i * 3 + 1] = i + 1; idx[i * 3 + 2] = i + 2; }
+        slot.geo.setIndex(new THREE.BufferAttribute(idx, 1));
+      }
       async function warmFxPrograms() {
         if (!_warmFx || !fx) return;
         const jobs = [[skidStream, fx.skidMat], [partStreams[0], fx.particleMats && fx.particleMats[0]],
@@ -3150,8 +3160,15 @@ const TLX = (function () {
         for (const [stream, mat] of jobs) {
           if (!mat) continue;
           ensureStream(stream, 1);
+          // A·W50 (#3673): the line draws INDEXED, and three keys a pipeline on the geometry's index too ("index,"
+          // in getGeometryCacheKey), so an unindexed probe warmed a pipeline the race never used: the first race
+          // frame built it synchronously (lavapipe census after the pin).
+          if (stream === lineStream) lineIndex(stream);
           await compileWarmProbe(stream.geo, mat);
         }
+        // The per-record blob (a run past BLOB_CAP, a second run in a pass, software WebGPU) on both windings: a
+        // mirrored model draws it cw, the census's other first-race-frame pipeline. One tiny fx program, two states.
+        if (fx.shadowMat) for (const sx of [1, -1]) await compileWarmProbe(getFxQuad(), fx.shadowMat, sx);
         // The instanced blob program (A6) and decal runs (F3), if none was on screen for the scene warm.
         for (const run of [_blob, ..._decalRuns.values()]) {
           if (!run || run.imesh.visible) continue;
@@ -5893,16 +5910,7 @@ const TLX = (function () {
             lineStream.ib.array.set(verts.length <= vertCount * 7 ? verts : verts.subarray(0, vertCount * 7));
             uploadStream(lineStream, vertCount * 7);
             const tris = Math.max(0, vertCount - 2);
-            // The index is a pure function of position — (i, i+1, i+2) — so it
-            // is built ONCE per stream geometry at full capacity and the draw
-            // range trims it. A fresh BufferAttribute per re-upload orphaned the
-            // old index's GPU buffer (three frees an index only on geo dispose).
-            const capTris = Math.max(0, lineStream.cap - 2);
-            if (!lineStream.geo.index || lineStream.geo.index.count < capTris * 3) {
-              const idx = new Uint32Array(capTris * 3);
-              for (let i = 0; i < capTris; i++) { idx[i * 3] = i; idx[i * 3 + 1] = i + 1; idx[i * 3 + 2] = i + 2; }
-              lineStream.geo.setIndex(new THREE.BufferAttribute(idx, 1));
-            }
+            lineIndex(lineStream);
             lineStream.geo.setDrawRange(0, tris * 3);
           }
           fx.lineSpeed.value = (opts && opts.speed) || 0;
