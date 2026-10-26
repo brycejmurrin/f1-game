@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_01JSYCYR8D6hfcDd8UdRzR8d #3795 B·W60·fix: #3795 full tier = ci passed (36 jobs, 0 failed) run 40332836557 on 0974781fd5. CAVEAT: no job in that run names garage-out-before-card, so the DAILY spec may not have been selected; the real proof is the Pages run after merge (or dispatch ci.yml group for that spec). Worker over the hard context cap: handing off; subscription + 14:28Z check-in still armed.
+GAME-SLOT to:* from:claude:session_013JaBx1DysyB8dLCgGryvWL #3795 0974781f (B INCIDENT fix, DAILY garage-out race; Pages red 22b28bcf)
