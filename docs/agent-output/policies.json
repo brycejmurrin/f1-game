@@ -2626,15 +2626,10 @@
       "presentation": "native",
       "preserve": "@c3"
     },
-    "tools/ci/fleet-brief.mjs": {
-      "action": "keep-native",
+    "tools/lib/generated-paths.mjs": {
+      "action": "no-direct-output",
       "presentation": "native",
-      "preserve": "The ≤40-line digest and the `= brief <bytes> B, <lines> lines -> <dir>/brief.{json,md}` line; --json brief; exit 0 written, 1 usage or unreadable input"
-    },
-    "tools/ci/launch-lane.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "The `= launch REFUSED (<gate>): <why>` line (exit 2) or `= launch ok …` plus the create_session JSON; who/release lines; --json verdict; exit 0 launch, 1 usage/git, 2 refused"
+      "preserve": "@c3"
     }
   }
 }

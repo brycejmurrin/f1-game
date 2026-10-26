@@ -9,22 +9,30 @@
 //   node tools/ci/wait-for.mjs --file-nonempty artifacts/logs/x.log --timeout 10
 //   node tools/ci/wait-for.mjs --pid-gone 12345 --timeout 30
 //   node tools/ci/wait-for.mjs --log-matches artifacts/logs/x.log '^= (run|bg exit)' --timeout 45
+//   node tools/ci/wait-for.mjs --merged <sha> --timeout 240 --background   # the sanctioned merge watch (steward §7)
 //
 // Exit 0 every condition held · 124 timeout (nothing is killed) · 1 usage error.
 import fs from "node:fs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import { pidAlive } from "../lib/deploy-status.mjs";
+
+/** The deploy branch a `--merged` wait reads (fetched each poll). */
+export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
+export const MERGED_POLL_MIN_SEC = 30;
 
 /** Bash kills a foreground command at 600 s; a waiter that outlives that is killed with a confusing exit. */
 export const FOREGROUND_CAP_SEC = 590;
 
-export const FLAGS = ["--load-below", "--file-nonempty", "--log-matches", "--pid-gone", "--timeout", "--poll", "--background", "--help"];
+export const FLAGS = ["--load-below", "--file-nonempty", "--log-matches", "--pid-gone", "--merged", "--timeout", "--poll", "--background", "--help"];
 export const USAGE = `usage: node tools/ci/wait-for.mjs <condition>... [--timeout <min>] [--poll <sec>]
   --load-below <n>        1-min loadavg < n
   --file-nonempty <path>  file exists with size > 0
   --log-matches <path> <re>  a line of <path> matches the regex (the verdict line; never pgrep -f, which matches its own shell)
   --pid-gone <pid>        process <pid> no longer exists
+  --merged <sha>          <sha> is an ancestor of origin/claude/f1-game-project-26h3ng (fetched each poll, ≥ 30 s apart):
+                          the one sanctioned merge watch — never a hand-rolled 'while … sleep' loop (AGENTS.md rules 4, 13)
   --background            this waiter IS the run_in_background task: no cap on --timeout
   a foreground wait is capped at ${FOREGROUND_CAP_SEC} s (Bash's own limit is 600 s); longer ones belong in run_in_background.
   conditions combine with AND; exit 0 held / 124 timeout / 1 usage. Run it as one background task.`;
@@ -65,6 +73,10 @@ export function parseArgs(argv) {
       if (!Number.isInteger(pid) || pid > 2147483647) throw new UsageError(`${name} needs a positive 32-bit integer PID, got ${JSON.stringify(val)}`);
       conds.push({ kind: "pid", pid });
     }
+    else if (name === "--merged") {
+      if (!val || !/^[0-9a-f]{7,40}$/i.test(val)) throw new UsageError(`${name} needs a commit sha (7-40 hex), got ${JSON.stringify(val)}`);
+      conds.push({ kind: "merged", sha: val.toLowerCase() });
+    }
     else if (name === "--log-matches") {
       const re = argv[++i];
       if (!val || val.startsWith("-") || re === undefined) throw new UsageError(`${name} needs a path and a regex`);
@@ -78,7 +90,15 @@ export function parseArgs(argv) {
     }
   }
   if (!conds.length) throw new UsageError("give at least one condition");
+  // A --merged poll fetches from GitHub: never faster than every 30 s.
+  if (conds.some((c) => c.kind === "merged") && pollSec < MERGED_POLL_MIN_SEC) pollSec = MERGED_POLL_MIN_SEC;
   return { conds, timeoutMin, pollSec, background };
+}
+
+/** Is `sha` on the deploy tip? Fetches first so a stale clone never answers "no" forever. */
+export function mergedOnDeploy(sha, { cwd = process.cwd(), run = spawnSync } = {}) {
+  run("git", ["fetch", "-q", "origin", DEPLOY_BRANCH], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  return run("git", ["merge-base", "--is-ancestor", sha, `origin/${DEPLOY_BRANCH}`], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).status === 0;
 }
 
 export const load1 = () => {
@@ -87,11 +107,12 @@ export const load1 = () => {
 
 /** One evaluation: `{ ok, pending[] }` — pending names what still blocks. */
 export function check(conds, deps = {}) {
-  const { load = load1, alive = pidAlive, read = (p) => { try { return fs.readFileSync(p, "utf8"); } catch { return ""; } }, size = (p) => { try { return fs.statSync(p).size; } catch { return 0; } } } = deps;
+  const { load = load1, alive = pidAlive, merged = mergedOnDeploy, read = (p) => { try { return fs.readFileSync(p, "utf8"); } catch { return ""; } }, size = (p) => { try { return fs.statSync(p).size; } catch { return 0; } } } = deps;
   const pending = [];
   for (const c of conds) {
     if (c.kind === "load") { const l = load(); if (!(l < c.max)) pending.push(`load ${l.toFixed(2)} >= ${c.max}`); }
     else if (c.kind === "pid") { if (alive(c.pid)) pending.push(`pid ${c.pid} alive`); }
+    else if (c.kind === "merged") { if (!merged(c.sha)) pending.push(`${c.sha.slice(0, 9)} not yet on origin/${DEPLOY_BRANCH}`); }
     else if (c.kind === "log") { if (!c.re.test(read(c.path))) pending.push(`${c.path} has no line matching ${c.re.source}`); }
     else if (!(size(c.path) > 0)) pending.push(`${c.path} empty or missing`);
   }
@@ -102,7 +123,7 @@ export async function waitFor(conds, { timeoutMin, pollSec = 3, deps, sleep = (m
   const deadline = now() + timeoutMin * 60_000;
   for (;;) {
     const r = check(conds, deps);
-    if (r.ok) return { code: 0, text: "= wait held" };
+    if (r.ok) return { code: 0, text: conds.some((c) => c.kind === "merged") ? `= wait held — merged: ${conds.filter((c) => c.kind === "merged").map((c) => c.sha.slice(0, 9)).join(" ")} on origin/${DEPLOY_BRANCH}` : "= wait held" };
     if (now() >= deadline) return { code: 124, text: `= wait timeout after ${timeoutMin} min — still: ${r.pending.join("; ")}` };
     // A long poll must not extend the user's deadline. Node also turns timer
     // delays above 2^31-1 into 1 ms, which would otherwise busy-poll.
