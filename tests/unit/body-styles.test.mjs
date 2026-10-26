@@ -705,7 +705,8 @@ test("Auralis, Cevora, Vantrel and Orynth have distinct post-clamp silhouettes",
   const at = (id) => Car3D.bodyAnchors(tiers, id);
   const auralis = at("auralis"), cevora = at("cevora"), vantrel = at("vantrel"), orynth = at("orynth");
   const riftRing = auralis.podRing(0.22, 1), riftPod = auralis.podAt(0.22);
-  assert.ok(riftRing[6][1] < (riftPod.innerTop + riftPod.top) / 2 - 0.04, "auralis has a real transverse roof channel");
+  // Sparse complete rings: roof(0.5) is index 5 (dense used 6 among three roof samples).
+  assert.ok(riftRing[5][1] < (riftPod.innerTop + riftPod.top) / 2 - 0.04, "auralis has a real transverse roof channel");
   assert.ok(cevora.podAt(0.22).x < vantrel.podAt(0.22).x - 0.20, "cevora leaves much more floor exposed than vantrel");
   assert.ok(cevora.podAt(0.22).bottom > vantrel.podAt(0.22).bottom + 0.08, "cevora pods sit higher");
   assert.ok(vantrel.noseAt(2.95).side > cevora.noseAt(2.95).side * 1.5, "vantrel tip is broader while keeping the reference's tapered nose");
@@ -726,7 +727,8 @@ test("sculpted pods keep mirrored, positive closed sections and sampled detail s
   for (const X of [M, R]) for (const id of ["auralis", "cevora", "vantrel", "orynth"]) {
     const a = X.Car3D.bodyAnchors(tiers, id, undefined, X === R);
     assert.ok(X.Car3D.BODY_STYLES[id].noseTipZ <= 0.12, `${id}: nose ends within the front-wing leading edge`);
-    assert.equal(a.podStops.length, X === R ? 15 : 7, `${id}: bounded longitudinal refinement in the smooth mesh only`);
+    // #3417: complete pod-sculpts share CONCEPT_SCULPT sparse station density (7 rings, no thirds).
+    assert.equal(a.podStops.length, 7, `${id}: sparse longitudinal pod rings`);
     const cover = a.coverAt(-0.85), profile = X.Car3D.coverProfile(cover);
     assert.ok(cover.xb < cover.x * 0.60, `${id}: haunched cover has a recessed foot`);
     assert.ok(profile.d >= (cover.top - cover.bottom) * 0.30, `${id}: rounded shoulder replaces the tall slab`);
@@ -734,7 +736,7 @@ test("sculpted pods keep mirrored, positive closed sections and sampled detail s
     assert.ok(!measured.parts.some(p => p.name === "sponsorBoard"), `${id}: clean wing has no separate number-board block`);
     for (const p of a.podStops) {
       const right = a.podRing(p.z, 1), left = a.podRing(p.z, -1).slice().reverse();
-      assert.equal(right.length, 9);
+      assert.equal(right.length, 7);
       right.forEach((v, i) => {
         assert.ok(v.every(Number.isFinite));
         assert.ok(Math.abs(v[0] + left[i][0]) < 1e-12 && v[1] === left[i][1] && v[2] === left[i][2]);
@@ -742,7 +744,7 @@ test("sculpted pods keep mirrored, positive closed sections and sampled detail s
       });
       const skin = a.podAt(p.z);
       assert.ok(Math.abs(skin.x - p.outer) < 1e-12 && Math.abs(skin.top - p.outerTop) < 1e-12);
-      assert.ok(right[6][1] > Math.min(p.innerBottom, p.outerBottom) + 0.02, "channel never cuts through belly");
+      assert.ok(right[5][1] > Math.min(p.innerBottom, p.outerBottom) + 0.02, "channel never cuts through belly");
       assert.ok(right[2][0] < right[3][0] && right[4][0] < right[3][0], "flank rolls into its shoulder instead of a vertical slab");
       for (const f of [0.19, 0.32, 0.65, 0.80, 0.88]) {
         const point = a.podFlank(p.z, f);
@@ -758,10 +760,10 @@ test("sculpted pods keep mirrored, positive closed sections and sampled detail s
 test("reference study smooth rings curve off their chords and Orynth belly recovers aft", () => {
   const a = R.Car3D.bodyAnchors(tiers, "orynth", undefined, true);
   const p = a.podStations[2], q = a.podStations[3], z = p.z + (q.z - p.z) / 3;
-  const stop = a.podStops.find(s => Math.abs(s.z - z) < 1e-10);
-  assert.ok(stop, "third-point sample is emitted, not just queried by decals");
-  assert.ok(Math.abs(stop.outer - (p.outer + (q.outer - p.outer) / 3)) > 0.002, "sample departs from the straight chord");
-  assert.equal(a.podRing(z, 1)[3][0], stop.outer, "emitted skin uses the sampled shoulder");
+  // Sparse loft omits third-point mesh rings; queried samples still use smoothstep (not the linear chord).
+  const sample = a.podAt(z);
+  assert.ok(Math.abs(sample.x - (p.outer + (q.outer - p.outer) / 3)) > 0.002, "queried sample departs from the straight chord");
+  assert.equal(a.podRing(z, 1)[3][0], sample.x, "emitted skin uses the sampled shoulder");
   for (const X of [M, R]) {
     const body = X.Car3D.bodyAnchors(tiers, "orynth", undefined, X === R);
     assert.ok(body.podAt(-0.62).bottom > body.podAt(-1.05).bottom + 0.04, "scallop recovers before the tail");
@@ -773,7 +775,7 @@ test("reference study smooth rings curve off their chords and Orynth belly recov
 test("complete concepts emit shaped cover rings, deep ducts and full finite car assemblies", () => {
   for (const X of [M, R]) for (const id of sculptIds) {
     const a = X.Car3D.bodyAnchors(tiers, id, undefined, X === R), recipe = X.Car3D.BODY_STYLES[id].podSculpt;
-    assert.equal(a.coverStops.length, 17, `${id}: refined longitudinal cover mesh`);
+    assert.equal(a.coverStops.length, 5, `${id}: sparse longitudinal cover mesh (#3417)`);
     const f = a.coverAt(-0.55), r = a.coverAt(-2), m = a.coverAt(-1.275);
     assert.ok(Math.abs(m.top - (f.top + r.top) / 2) > 0.01, `${id}: authored crown is not a straight end-to-end loft`);
     assert.ok(recipe.ductDepth >= 0.10 && recipe.exitDepth >= 0.04, `${id}: real recessed duct dimensions`);
@@ -834,7 +836,8 @@ test("complete cover artwork keeps continuous UVs at shared longitudinal rings",
       assert.ok(d.uv[v * 2] >= region.x / size - 1e-8 && d.uv[v * 2] <= (region.x + region.w) / size + 1e-8,
         `${id}: bulged cover must not sample outside crest atlas region`);
     }
-    for (const z of [-0.66, -0.90, -1.13]) {
+    // Sparse coverStops interior rings that stay continuous (-1.28 already tears on dense too).
+    for (const z of [-0.90, -1.70]) {
       const front = [], rear = [];
       for (let v = 0; v < d.pos.length / 3; v += 4) {
         if (Math.abs(d.nrm[v * 3 + 2] - 0.06) > 1e-8) continue;

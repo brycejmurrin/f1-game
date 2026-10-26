@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { refsIn, closesIn, holders, labelPlan, renderBoard, readLabels, coverageOf, readCoverage, BOARD_MARKER } from "../../tools/ci/fleet-board.mjs";
+import { refsIn, closesIn, holders, labelPlan, renderBoard, readLabels, coverageOf, readCoverage, ghRetry, BOARD_MARKER } from "../../tools/ci/fleet-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const issue = (number, labels, title = `issue ${number}`) => ({ number, title, labels: labels.map((name) => ({ name })) });
@@ -166,4 +166,19 @@ test("a cleanup PR mentioning an issue does not claim it, but an explicitly issu
   assert.equal(held.has(2889), false);
   assert.equal(held.get(2356).pr, 91);
   assert.equal(coverage.get(2889)[0].number, 90, "context link remains visible without asserting ownership");
+});
+
+test("ghRetry retries only HTTP 502/503/504, twice, then fails closed", () => {
+  const sleeps = [];
+  const sleep = (ms) => sleeps.push(ms);
+  const failing = (msgs) => { let i = 0; return () => { if (i < msgs.length) throw Object.assign(new Error("Command failed: gh api graphql"), { stderr: msgs[i++] }); return "ok"; }; };
+  assert.equal(ghRetry([], { run: failing(["gh: HTTP 504", "gh: HTTP 502"]), sleep }), "ok");
+  assert.deepEqual(sleeps, [2000, 5000]);
+  sleeps.length = 0;
+  assert.throws(() => ghRetry([], { run: failing(["HTTP 504", "HTTP 503", "HTTP 504"]), sleep }), (e) => e.stderr === "HTTP 504");
+  assert.deepEqual(sleeps, [2000, 5000], "a third gateway error aborts");
+  sleeps.length = 0;
+  assert.throws(() => ghRetry([], { run: failing(["gh: HTTP 401 Bad credentials"]), sleep }), (e) => /401/.test(e.stderr));
+  assert.throws(() => ghRetry([], { run: failing(["gh: HTTP 500"]), sleep }));
+  assert.deepEqual(sleeps, [], "non-gateway errors never retry");
 });

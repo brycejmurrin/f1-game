@@ -95,6 +95,10 @@ const TRANSIENT_RETRY_MS = [400, 1200];
 // second insert — non-strict callers (scenery / circuit payloads) intentionally
 // re-fetch when their registry entry was cleared ("next ask fetches again").
 const evaluated = new Set();
+// A share card can request qr.js while VS FRIEND is loading the network
+// bundle. Both are strict loads of the same top-level const, so they must
+// share the pending insertion as well as the completed evaluation.
+const evaluating = new Map();
 function create() {
 const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
 function loadBackendScripts(files, edges, opts) {
@@ -173,7 +177,7 @@ function loadBackendScripts(files, edges, opts) {
   // lighting prefetch re-asks at race start). Otherwise inject retries 503s in place
   // (grip-steer, results-sheet, …).
   const deferInjectRetry = (strict && (loaded || files.length > 1)) || (opts && opts.transientRetry === false);
-  const inject = async (src) => {
+  const injectFile = async (src) => {
     if (typeof UpdateCheck !== "undefined" && UpdateCheck.prepareLazyLoad && !(await UpdateCheck.prepareLazyLoad(generationScope))) return false;
     // Strict retry: already evaluated in this tab — no second <script>.
     if (strict && evaluated.has(src)) return true;
@@ -194,6 +198,19 @@ function loadBackendScripts(files, edges, opts) {
       if (!r.retry) return false;
     }
     return false;
+  };
+  const inject = (src) => {
+    if (!strict) return injectFile(src);
+    const pending = evaluating.get(src);
+    if (pending) return pending.then((ok) => {
+      if (!ok) return false;
+      try { return !opts.ready || !!opts.ready(src); } catch (_) { return false; }
+    });
+    const task = injectFile(src).finally(() => {
+      if (evaluating.get(src) === task) evaluating.delete(src);
+    });
+    evaluating.set(src, task);
+    return task;
   };
   // Only files that WAIT for a predecessor: the first wave is injected below at once.
   const blocked = typeof UpdateCheck !== "undefined" && UpdateCheck.blocksLazyLoad && UpdateCheck.blocksLazyLoad();

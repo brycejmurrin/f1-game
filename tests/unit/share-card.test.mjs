@@ -173,6 +173,46 @@ test("render waits on both card fonts, paints the layout with a real QR, encodes
   assert.equal(fontsAsked.length, 2);
 });
 
+test("a solo share card loads only the QR encoder before painting its link", async () => {
+  const injected = [], fills = [];
+  let sb;
+  const context2d = {
+    save() {}, restore() {}, fillText() {}, measureText: (t) => ({ width: String(t).length * 10 }),
+    fillRect(...args) { fills.push(args); },
+    set fillStyle(_) {}, set font(_) {}, set textAlign(_) {}, set textBaseline(_) {},
+  };
+  class OffscreenCanvas {
+    constructor(w, h) { this.width = w; this.height = h; }
+    getContext() { return context2d; }
+    convertToBlob() { return Promise.resolve({ type: "image/png" }); }
+  }
+  const document = {
+    getElementById: () => null,
+    createElement: () => ({ dataset: {}, remove() {} }),
+    head: { appendChild(el) {
+      injected.push(el.src);
+      queueMicrotask(() => {
+        vm.runInContext(fs.readFileSync(path.join(ROOT, "js/net/qr.js"), "utf8"), sb, { filename: absSrc("js/net/qr.js") });
+        el.onload();
+      });
+    } },
+  };
+  sb = vm.createContext({ Object, Array, String, Number, Math, Promise, setTimeout, clearTimeout,
+    Uint8Array, TextEncoder, OffscreenCanvas, document,
+    window: { __APEX_BUILD: "test", setTimeout, clearTimeout },
+    ApexRoster: { DEFERRED_EDGES: [] },
+  });
+  for (const file of ["js/core/script-loader.js", "js/share/share-card-layout.js", "js/share/share-card.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), sb, { filename: absSrc(file) });
+  const card = vm.runInContext("ShareCard", sb);
+  const link = "https://example.test/#share=APXD1.x";
+  const model = { title: "DAILY", trackName: "Spa", hero: { label: "BEST", value: "1:21.345" }, link };
+  const blob = await card.render(model, "portrait");
+  assert.equal(blob.type, "image/png");
+  assert.deepEqual(injected, ["js/net/qr.js?v=test"], "solo share does not load the multiplayer bundle");
+  assert.ok(fills.length > 100, "QR modules were painted before encoding the PNG");
+});
+
 // H3-11 (2026-10-22): the card painted a light-on-dark QR, and a decoder that
 // never tries inversion (many Android camera scanners) could not read it.
 // Paint every spec's whole card into pixels and decode it non-inverted.

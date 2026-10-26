@@ -2384,23 +2384,23 @@ const Car3D = (function () {
       }
       // aDrs (active-aero DRS slot flap) is not baked: rearFlap() (car-body-geom.js) flies it as "rearDrs" in rearC.
       const drsSX = aLvl >= 3 ? 0.16 : 0.13;
-      // DRS actuator pod + the slot-gap rail it sits on. The pod used to be a
-      // 5 cm brick lost on the crown; a taller raked housing and a carbon
-      // strip under the top flap make the mechanism (and the open slot) read
-      // from wingRear. Both ride the flap stack's crown (crownY), not the endplate centre: a
-      // lower wing's crown sits closer to its centre, so epCY offsets left them floating up
-      // to 12 cm over every wing below lvl ~3.6. These are the lvl-4 positions, unchanged there.
-      // A heat sleeve above the pod's floor at z -2.50 (Cadillac Trumpet: 0.69 m vs 0.654 m) runs its bell through
-      // the pod's tail: the pod then stops at z -2.49, cut on its own taper. Every factory tip keeps the full pod.
+      // DRS pod + slot-gap rail (#3413): pod ABOVE the closed top-flap TE at
+      // crownY, rail IN the rear↔rearDrs slot under the TE half only. Shipping
+      // put both through the flap (rail crownY+3 mm, pod floor on crownY) →
+      // horizontal banding on the wing-preset behind camera. Still crownY-anchored
+      // (not epCY) so a low wing carries them. Heat-sleeve trim at z -2.50
+      // (Cadillac Trumpet) unchanged: pod stops at z -2.49 when the sleeve is high.
       const podF = (2.49 - 2.40) / 0.22, f50 = 0.10 / 0.22;
+      const flapTop = crownY + 0.022, podCy = flapTop + 0.035, podH = 0.070;
+      const railY = crownY - 0.048, railZ = -2.56, railDepth = 0.08;
     // rwPlanes 1 (B·D3c): no DRS plane to sit on, so no pod or rail.
     if ((aeroStyle.rwPlanes | 0) !== 1) {
-    addSpan(out, { z: -2.40, x: 0, y: crownY + 0.035, w: drsSX, h: 0.070, t: 0.70 },
-                 exhSleeveTopY > crownY + 0.035 + 0.024 * f50 - (0.070 - 0.022 * f50) / 2
-                   ? { z: -2.49, x: 0, y: crownY + 0.035 + 0.024 * podF, w: drsSX * (1 - 0.28 * podF), h: 0.070 - 0.022 * podF, t: 0.70 - 0.20 * podF }
-                   : { z: -2.62, x: 0, y: crownY + 0.059, w: drsSX * 0.72, h: 0.048, t: 0.50 },
+    addSpan(out, { z: -2.40, x: 0, y: podCy, w: drsSX, h: podH, t: 0.70 },
+                 exhSleeveTopY > podCy + 0.024 * f50 - (podH - 0.022 * f50) / 2
+                   ? { z: -2.49, x: 0, y: podCy + 0.024 * podF, w: drsSX * (1 - 0.28 * podF), h: podH - 0.022 * podF, t: 0.70 - 0.20 * podF }
+                   : { z: -2.62, x: 0, y: flapTop + 0.059, w: drsSX * 0.72, h: 0.048, t: 0.50 },
             DARK);
-    addBox(out, 0, crownY + 0.003, -2.50, 0.42, 0.010, 0.20, CARBON, SURFACES.carbon);
+    addBox(out, 0, railY, railZ, 0.42, 0.010, railDepth, CARBON, SURFACES.carbon);
     }
 
       // Lamp above tip centreline so stock/megaphone mouth rim stays visible.

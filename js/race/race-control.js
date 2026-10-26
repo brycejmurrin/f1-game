@@ -68,7 +68,7 @@ const RaceControl = (function () {
   // presentation after every owner has reported its crossings for this step.
   let lineCars = null;
   const lineEntries = [];
-  function beginLineStep(cars) { lineCars = cars; lineEntries.length = 0; }
+  function beginLineStep(cars) { lineCars = cars; lineEntries.length = 0; ringCars = cars; ringTotal = NaN; }   // ring*: scQueueFrac's per-step order
   function settleLine(e) {
     const { c, cross, time, target, cars } = e;
     // Temporary AI motion cannot declare a connected owner finished or raise the flag.
@@ -654,22 +654,61 @@ const RaceControl = (function () {
   // tick does not shift the verdict with its place in cars[]. Live when unstamped.
   const snapProg = (o) => (Number.isFinite(o._snapProg) ? o._snapProg : o.prog);
   const snapSpeed = (o) => (Number.isFinite(o._snapSpeed) ? o._snapSpeed : o.speed);
+  const isOut = (o, skip) => o.finished || o.retired || (skip && skip(o));
+  // THE FORWARD-GAP SEARCH, ONCE PER STEP (#3109 row 12): scored per car against the whole field it was
+  // O(n²) a step under the SC. The snapshot is frozen for the step (stamped before beginLineStep), so the
+  // first call sorts the field once by snapshot place on the lap and each car walks that ring forward from
+  // its own place. Bit-identical: every candidate is still scored by the same `d` with the LIVE out()/self
+  // checks (a car may pit or finish mid-loop), and the walk stops only once no later place can beat the
+  // best d (RING_EPS ≫ the rounding between a place difference and d). Direct callers that did not
+  // beginLineStep this `cars`, or a field with an unstamped car, take the plain scan.
+  const RING_EPS = 1e-6;
+  let ringCars = null, ringTotal = NaN, ringOk = false;
+  const ring = [], ringKey = [];
+  const lapPlace = (p, total) => ((p % total) + total) % total;
+  function ringFor(cars, total) {
+    if (cars !== ringCars) return false;
+    if (ringTotal === total) return ringOk;
+    ringTotal = total; ringOk = false; ring.length = 0; ringKey.length = 0;
+    for (let i = 0; i < cars.length; i++) {
+      const o = cars[i], k = Number.isFinite(o._snapProg) ? lapPlace(o._snapProg, total) : NaN;
+      if (!Number.isFinite(k)) return false;
+      let j = ring.length;   // insertion sort: ~22 cars, no allocation
+      while (j > 0 && ringKey[j - 1] > k) { ring[j] = ring[j - 1]; ringKey[j] = ringKey[j - 1]; j--; }
+      ring[j] = o; ringKey[j] = k;
+    }
+    return (ringOk = true);
+  }
   function scQueueFrac(c, cars, total, leader, vTop, skip) {
-    const out = (o) => o.finished || o.retired || (skip && skip(o));
     // A leader in the pit lane (or out) is not the front of the queue: the
     // first car still on track by cumulative prog is. Otherwise that car's
     // forward gap search wrapped to the tail of the field a lap away and it
     // ran SC_CATCH while it should be setting the SC pace.
-    if (leader && out(leader)) {
+    if (leader && isOut(leader, skip)) {
       leader = null;
-      for (const o of cars) if (!out(o) && (!leader || snapProg(o) > snapProg(leader))) leader = o;
+      for (const o of cars) if (!isOut(o, skip) && (!leader || snapProg(o) > snapProg(leader))) leader = o;
     }
     if (!c || c === leader || !(total > 0)) return SC_PACE;
     let gap = Infinity;
-    for (const o of cars) {
-      if (o === c || out(o)) continue;
-      const d = ((snapProg(o) - c.prog) % total + total) % total;   // forward, on the road
-      if (d > 0 && d < gap) gap = d;
+    if (ringFor(cars, total)) {
+      const n = ring.length, kc = lapPlace(c.prog, total), from = kc - RING_EPS;
+      let lo = 0, hi = n;   // first place >= from
+      while (lo < hi) { const m = (lo + hi) >> 1; if (ringKey[m] < from) lo = m + 1; else hi = m; }
+      for (let m = 0; m < n; m++) {
+        const j = lo + m < n ? lo + m : lo + m - n;
+        const w = ringKey[j] - kc + (lo + m < n ? 0 : total);   // non-decreasing along the walk
+        if (w - RING_EPS >= gap) break;
+        const o = ring[j];
+        if (o === c || isOut(o, skip)) continue;
+        const d = ((snapProg(o) - c.prog) % total + total) % total;   // forward, on the road
+        if (d > 0 && d < gap) gap = d;
+      }
+    } else {
+      for (const o of cars) {
+        if (o === c || isOut(o, skip)) continue;
+        const d = ((snapProg(o) - c.prog) % total + total) % total;   // forward, on the road
+        if (d > 0 && d < gap) gap = d;
+      }
     }
     if (!Number.isFinite(gap)) return SC_PACE;
     const gapS = gap / Math.max(1, SC_PACE * vTop);   // seconds at the SC pace
@@ -688,7 +727,8 @@ const RaceControl = (function () {
   // next one. Infinity = no car to hold behind.
   const HOLD_M = 12;
   function holdCap(c, ranked, fair) {
-    const i = ranked ? ranked.indexOf(c) : -1;
+    // c.rank is its slot in `ranked` this step (game.js stamps it); indexOf only when it is not (#3109 row 12).
+    const i = !ranked ? -1 : ranked[c.rank - 1] === c ? c.rank - 1 : ranked.indexOf(c);
     for (let j = i - 1; j >= 0; j--) {
       const o = ranked[j];
       if (o.finished || o.retired || (fair && fair(o))) continue;

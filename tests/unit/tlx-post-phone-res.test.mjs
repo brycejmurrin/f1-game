@@ -30,10 +30,11 @@ test("phone post runs at the full scene resolution (pre-#3479 clarity)", () => {
   assert.equal(PHONE_POST_SCALE, 1, "PHONE_POST_SCALE must stay at the full scene size");
 });
 
-function layoutFixture(phonePost, fixed = false) {
+function layoutFixture(phonePost, fixed = false, orientCover = false) {
   const placed = {};
-  const context = vm.createContext({ phonePost, fixed,
-    place(rt, w, h, pw, ph) { placed[rt] = { logical: [w, h], physical: fixed ? [pw, ph] : [w, h] }; },
+  const phys = !!(fixed || orientCover);
+  const context = vm.createContext({ phonePost, fixed, orientCover, phys,
+    place(rt, w, h, pw, ph) { placed[rt] = { logical: [w, h], physical: phys ? [pw, ph] : [w, h] }; },
     ctx: { wantSpatialUpscale: () => true }, P: { sgsr: true },
     sceneRT: "scene", ldrRT: "ldr", aaRT: "aa", ssaoRT: "ao", ssaoBlurRT: "aoBlur",
     godrayRT: "gr", godrayBlurRT: "grBlur", BLOOM_DIV: 2,
@@ -90,4 +91,16 @@ test("composite and FXAA draw at post size, scene stays at W×H", () => {
   // SSR still samples the full-res scene — texel quantum must stay 1/W.
   assert.ok(SRC.includes("C.reflTexel.value.set(1 / W, 1 / H)"),
     "SSR texel stays scene-sized on phones");
+});
+
+test("#3311 phone orient cover: equal-pixel transpose keeps square physical", () => {
+  // Behaviour only (no assert.ok(SRC.includes) — those are assertPins).
+  const resize = layoutFixture(true, false, true);
+  const land = resize(422, 195);
+  assert.deepEqual(land.scene, { logical: [422, 195], physical: [422, 422] });
+  assert.deepEqual(land.ldr.physical, [422, 422]);
+  const port = resize(195, 422);
+  assert.deepEqual(port.scene, { logical: [195, 422], physical: [422, 422] },
+    "transpose must not grow past the cover already allocated");
+  assert.deepEqual(port.ldr.logical, [195, 422]);
 });

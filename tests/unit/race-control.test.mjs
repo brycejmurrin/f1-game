@@ -997,3 +997,39 @@ test("manual settlement shares the corrected-time opportunity, even after an ord
   rival.finished = true;
   assert.equal(R.finishPending(cars, 103, 3, 0), false, "actual rival finish permits immediate settlement");
 });
+
+test("scQueueFrac's per-step ring (#3109 row 12) answers exactly what the plain field scan answers", () => {
+  const R = load({ active: () => false });
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+  const total = 5793.4, vTop = 83.3;
+  for (let trial = 0; trial < 300; trial++) {
+    const n = 2 + Math.floor(rnd() * 22);
+    const laps = Math.floor(rnd() * 60);
+    const cars = [];
+    for (let i = 0; i < n; i++) {
+      // Bunched queues, wrap-straddling cars, exact ties and a lapped tail: the walk's edge cases.
+      const p = laps * total + (rnd() < 0.2 ? total - rnd() * 3 : rnd() < 0.2 ? rnd() * 3 : rnd() * total);
+      cars.push({ prog: p, _snapProg: rnd() < 0.15 && i ? cars[i - 1]._snapProg : p, retired: rnd() < 0.05, finished: rnd() < 0.05, lane: rnd() < 0.1 });
+    }
+    const skip = (o) => o.lane;
+    for (const c of cars) if (rnd() < 0.5) c.prog += rnd() * 2;   // moved this tick: live prog off its snapshot
+    const plain = cars.map((c) => R.scQueueFrac(c, cars, total, cars[0], vTop, skip));
+    R.beginLineStep(cars);   // arms the ring for this `cars`
+    const ringed = cars.map((c) => R.scQueueFrac(c, cars, total, cars[0], vTop, skip));
+    assert.deepEqual(ringed, plain, `trial ${trial}`);
+    // A car that pits or finishes MID-step is still read live through the ring.
+    cars[n - 1].lane = !cars[n - 1].lane;
+    const flipped = cars.map((c) => R.scQueueFrac(c, cars, total, cars[0], vTop, skip));
+    R.beginLineStep(null);   // disarm: the plain scan again
+    assert.deepEqual(flipped, cars.map((c) => R.scQueueFrac(c, cars, total, cars[0], vTop, skip)), `trial ${trial} live out()`);
+  }
+});
+
+test("holdCap reads c.rank's slot and falls back to indexOf when the slot is not c", () => {
+  const R = load({ active: () => false });
+  const a = { prog: 110, _snapProg: 110, _snapSpeed: 40, rank: 1 }, me = { prog: 100, _snapProg: 100, rank: 2 };
+  assert.equal(R.holdCap(me, [a, me], null), 40);
+  me.rank = 1;   // stale rank (a finisher's slot): the scan still finds it
+  assert.equal(R.holdCap(me, [a, me], null), 40);
+});

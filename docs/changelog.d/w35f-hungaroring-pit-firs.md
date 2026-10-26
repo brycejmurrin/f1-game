@@ -1,0 +1,1 @@
+Fixed: Hungaroring day/dry start orbit no longer reads a neat fir rank opposite a dark pit slab — pit-straight planting is carved back for the dusty amphitheatre, and the 2025 paddock mass keeps a white/glazed track face (#3317).

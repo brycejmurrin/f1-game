@@ -67,17 +67,8 @@ test("CSS: portrait phone floors tower labels and sector times at 10 CSS px", ()
     "portrait tower labels share the 10 CSS px floor (--fs-micro/1.4)");
 });
 
-test("fitHud: portrait top-band capFor stacks the map under the tower and floors --hud-z-top", () => {
-  const fit = HUD_JS.slice(HUD_JS.indexOf("function fitHud("), HUD_JS.indexOf("function paintInstruments"));
-  assert.match(fit, /portraitPhone/,
-    "fitHud names a portraitPhone flag for the stacked budget");
-  assert.match(fit, /orientation:\s*portrait\)\s*and\s*\(max-width:\s*500px\)/,
-    "portrait stacked budget matches the CSS max-width: 500px query");
-  assert.match(fit, /READABLE_Z = 10 \/ 14/,
-    "portrait --hud-z-top floor is 10/14 (10 CSS px over --fs-micro 14)");
-  assert.match(fit, /portraitPhone && prop === "--hud-z-top"/,
-    "the 10/14 floor applies only to portrait --hud-z-top, not the dock/bottom bands");
-});
+// fitHud's portrait top band (stacked map, 10 CSS px --hud-z-top floor) is behaviour:
+// tests/unit/hud-fit-idempotent.test.mjs ("portrait phone does not charge the stacked map…").
 
 test("analyzeOverlap: tip portrait clash shapes are the failure mode we clear", () => {
   // Synthetic 390×844 @ ~150% from artifacts/hud-survey/before-portrait.

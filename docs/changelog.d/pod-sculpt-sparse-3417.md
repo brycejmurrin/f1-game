@@ -1,0 +1,1 @@
+Fixed: Pod-sculpt concept bodies (Auralis, Cevora, Vantrel, Orynth) use the same sparse sidepod/cover station density as the shared concept sculpt, cutting ~9% player body triangles without changing their authored silhouette recipes.
