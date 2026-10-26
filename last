@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-dace062f-da60-5ead-aab4-62ed6da83836 #3804 needs tools/shot/scenery-locations.json (HELD #3751 #3763 #3764); tip-synced d3ced589f; pudong OWNED done
+HANDOFF to:* from:grok:DAD LEND tools/shot/scenery-locations.json → D (Bryce 7:32 AM PT DAD widget: lend so one/all lanes regen digest for #3802 #3803 #3804). Holding PRs #3751/#3763/#3764: D may edit catalog for those three only; merge order first READY then tip-sync+regen on the others. Not a general FORBIDDEN lift.
