@@ -4916,6 +4916,7 @@
         "tests/unit/tyre-peak-slip.test.mjs",
         "tests/unit/tyre-squeal-slip.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs",
         "tests/unit/wall-clamp.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs",
@@ -10856,6 +10857,7 @@
         "tests/unit/steer-feel-lift-off.test.mjs",
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/tyre-peak-slip.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs",
         "tests/unit/voice-pack.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/wet-grip-ladder.test.mjs",
@@ -10982,10 +10984,12 @@
         "tests/unit/grip-steer.test.mjs"
       ],
       "forPlayer": [
-        "tests/unit/grip-steer.test.mjs"
+        "tests/unit/grip-steer.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs"
       ],
       "setLevel": [
-        "tests/unit/grip-steer.test.mjs"
+        "tests/unit/grip-steer.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs"
       ]
     },
     "js/physics/incident-sim.js": {
@@ -11051,13 +11055,15 @@
       "create": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
-        "tests/unit/player-forces.test.mjs"
+        "tests/unit/player-forces.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs"
       ],
       "step": [
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
         "tests/unit/speed-coupling.test.mjs",
         "tests/unit/steer-feel-lift-off.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs",
         "tests/unit/yaw-damp-speed.test.mjs",
         "tests/unit/yaw-low-speed-substep.test.mjs"
       ],
@@ -11121,6 +11127,7 @@
         "tests/unit/real-race.test.mjs",
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/tyre-model.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs",
         "tests/unit/voice-pack.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
       ],
@@ -11187,7 +11194,8 @@
         "tests/unit/grip-steer.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/real-race.test.mjs",
-        "tests/unit/tyre-model.test.mjs"
+        "tests/unit/tyre-model.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs"
       ],
       "severity": [
         "tests/unit/tyre-model.test.mjs"
@@ -11255,6 +11263,17 @@
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/wheel-state.test.mjs"
+      ]
+    },
+    "js/physics/vehicle.js": {
+      "forPlayer": [
+        "tests/unit/vehicle-tick-alloc.test.mjs"
+      ],
+      "stepWheel": [
+        "tests/unit/vehicle-tick-alloc.test.mjs"
+      ],
+      "*": [
+        "tests/unit/player-forces.test.mjs"
       ]
     },
     "js/physics/wall-clamp.js": {
