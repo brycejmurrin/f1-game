@@ -65,11 +65,18 @@ test("hook: denies with no receipt, a refused receipt or a stale one; passes a f
   assert.equal(decision(hook(root, call)), "deny");
   writeReceipt(root, { ok: false, status: "allowed_warning", why: "warn" });
   assert.equal(decision(hook(root, call)), "deny");
-  writeReceipt(root, { ok: true, status: "allowed" });
+  // The receipt shape launch-gate.mjs writes (audit 4 G13): kind launch, the page's sha256 and timestamp, lane, pr.
+  const PG = { page: { sha256: "0".repeat(64), timestamp: new Date().toISOString(), writtenBy: "launch-page.py" }, lane: null, pr: null };
+  writeReceipt(root, { ok: true, status: "allowed", ...PG });
   assert.equal(decision(hook(root, call)), "pass");
-  writeReceipt(root, { ok: true, status: "allowed_warning", override: "Do all" });
+  writeReceipt(root, { ok: true, status: "allowed_warning", override: "Do all", ...PG });
   assert.equal(decision(hook(root, call)), "pass", "override receipt passes");
-  writeReceipt(root, { ok: true, status: "allowed" }, Date.now() - (MAX_AGE_S + 30) * 1000);
+  writeReceipt(root, { ok: true, status: "allowed" });
+  assert.equal(decision(hook(root, call)), "deny", "no page.sha256: not a receipt launch-gate.mjs wrote");
+  writeReceipt(root, { ok: true, status: "allowed", ...PG });
+  assert.equal(decision(hook(root, { ...call, tool_input: { prompt: "x", outcome_branch: "claude/f1-game-project-26h3ng" } })), "deny",
+    "a session that would push to the deploy branch");
+  writeReceipt(root, { ok: true, status: "allowed", ...PG }, Date.now() - (MAX_AGE_S + 30) * 1000);
   assert.equal(decision(hook(root, call)), "deny");
   fs.writeFileSync(path.join(root, "artifacts/launch-gate/receipt.json"), "{not json");
   assert.equal(decision(hook(root, call)), "deny", "a corrupt receipt is unproven quota, re-run the gate");
