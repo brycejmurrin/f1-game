@@ -18,7 +18,7 @@
  *     nothing to claim, squat, impersonate or recover.
  *   - No logging of payloads or addresses. The payload is an already-compressed
  *     SDP the two peers exchange anyway, and it is dropped on expiry.
- *   - No persistence beyond the TTL. Nothing survives to be leaked or subpoenaed.
+ *   - No serving beyond the per-slot TTL. An expiry alarm cleans up stored slots.
  *
  * DEPLOY:
  *   cd worker && npx wrangler deploy
@@ -41,9 +41,8 @@ const SLOTS = new Set(["offer", "answer"]);
 // the real payload is ~250 bytes of SDP, sealed browser-side (AES-GCM, a
 // 16-byte salt, a 12-byte IV, a 16-byte tag, base64 at 4/3), and 12 KB is
 // generous for a client that packs its SDP badly while still making the
-// object useless as free storage. ONLY the `v2.` envelope is stored: the
-// operator never holds a plaintext SDP, and a client that sends one is not a
-// shipped build (js/net/rendezvous.js sealPrivate).
+// object useless as bulk storage. Check the v2 base64url envelope structure;
+// only the clients can authenticate/decrypt it (js/net/rendezvous.js sealPrivate).
 const ENVELOPE_TAG = "v2.";
 const MAX_SEALED_PAYLOAD = 12288;
 // JSON adds a few bytes around `payload` and the stable owner capability.
@@ -147,7 +146,7 @@ export class Room {
       // Expiry is checked on READ as well as swept on a timer: an object that
       // has been idle since before its alarm fired must not serve a stale
       // offer to someone who typed a recycled code.
-      if (!rec || Date.now() > rec.expires) return json({ error: "not_found" }, 404);
+      if (!rec || Date.now() >= rec.expires) return json({ error: "not_found" }, 404);
       return json({ payload: rec.payload });
     }
 
@@ -158,38 +157,60 @@ export class Room {
       try { body = JSON.parse(raw.text); } catch (_) {}
       const payload = body && body.payload;
       const owner = body && body.owner;
-      if (typeof payload !== "string" || !payload.startsWith(ENVELOPE_TAG) || payload.length <= ENVELOPE_TAG.length) {
+      if (typeof payload !== "string") return json({ error: "bad_payload" }, 400);
+      if (new TextEncoder().encode(payload).byteLength > MAX_SEALED_PAYLOAD) return json({ error: "too_big" }, 413);
+      // salt(16) + IV(12) + GCM tag(16), encoded without base64 padding.
+      const encoded = payload.slice(ENVELOPE_TAG.length);
+      if (!payload.startsWith(ENVELOPE_TAG) || encoded.length < 59 ||
+          encoded.length % 4 === 1 || !/^[A-Za-z0-9_-]+$/.test(encoded)) {
         return json({ error: "bad_payload" }, 400);
       }
-      if (new TextEncoder().encode(payload).byteLength > MAX_SEALED_PAYLOAD) return json({ error: "too_big" }, 413);
       if (owner != null && (typeof owner !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(owner))) {
         return json({ error: "bad_owner" }, 400);
       }
 
-      const existing = await this.state.storage.get(slot);
-      // Refusing to overwrite a LIVE offer is what stops two hosts silently
-      // sharing a code — the second one is told to make a new one rather than
-      // stealing the first one's guest.
-      // A retry is recognised by the host's stable owner capability, never by
-      // ciphertext equality — a fresh IV makes every seal of one SDP differ.
-      if (slot === "offer" && existing && Date.now() < existing.expires) {
-        const sameOwner = owner && existing.owner && owner === existing.owner;
-        if (!sameOwner) return json({ error: "taken" }, 409);
-      }
-      await this.state.storage.put(slot, { payload, owner: owner || null, expires: Date.now() + TTL_MS });
-      // One alarm for the whole object: it wipes everything, so a room cannot
-      // outlive its TTL just because one slot was written later than the other.
-      await this.state.storage.setAlarm(Date.now() + TTL_MS + 1000);
-      return json({ ok: true });
+      // SQLite storage operations in this closure participate in the transaction:
+      // https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/#transaction
+      // Keep the slot update and earliest-expiry alarm atomic with alarm cleanup.
+      return this.state.storage.transaction(async () => {
+        const storage = this.state.storage;
+        const existing = await storage.get(slot);
+        // A retry is recognized by the stable owner capability, not ciphertext:
+        // each seal uses a fresh salt and IV.
+        if (slot === "offer" && existing && Date.now() < existing.expires) {
+          const sameOwner = owner && existing.owner && owner === existing.owner;
+          if (!sameOwner) return json({ error: "taken" }, 409);
+        }
+        await storage.put(slot, { payload, owner: owner || null, expires: Date.now() + TTL_MS });
+        let next = Infinity;
+        for (const name of SLOTS) {
+          const rec = await storage.get(name);
+          if (rec) next = Math.min(next, rec.expires);
+        }
+        await storage.setAlarm(next);
+        return json({ ok: true });
+      });
     }
 
     return json({ error: "method" }, 405);
   }
 
-  // Nothing is meant to survive. Deleting rather than expiring in place is what
-  // makes "no data retained" true instead of aspirational.
+  // A later answer must retain its own TTL, without retaining an expired offer.
+  // Alarm delivery may be delayed by the platform; reads still enforce expiry.
   async alarm() {
-    await this.state.storage.deleteAll();
+    await this.state.storage.transaction(async () => {
+      const storage = this.state.storage;
+      let next = Infinity;
+      const now = Date.now();
+      for (const slot of SLOTS) {
+        const rec = await storage.get(slot);
+        if (!rec) continue;
+        if (rec.expires <= now) await storage.delete(slot);
+        else next = Math.min(next, rec.expires);
+      }
+      if (Number.isFinite(next)) await storage.setAlarm(next);
+      else await storage.deleteAlarm();
+    });
   }
 }
 

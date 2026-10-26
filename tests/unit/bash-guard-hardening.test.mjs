@@ -1099,6 +1099,41 @@ test("bash-guard: survey images and reports commit on the docs-only path; a code
 // the debug log" — UserPromptSubmit/SessionStart are the exceptions
 // (https://code.claude.com/docs/en/hooks, Exit code 0). The advice must travel as
 // hookSpecificOutput.additionalContext or the model never reads it (#2228 research).
+test("post-edit circuit advice leaves verification until all edits are complete", () => {
+  const repo = scratchRepo("hook-postedit-circuit-");
+  try {
+    fs.mkdirSync(path.join(repo.dir, "js/circuits/scenery"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "tools/track"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "js/circuits/monza.js"), "var track = {};\n");
+    fs.writeFileSync(path.join(repo.dir, "js/circuits/scenery/monza.js"), "var scenery = {};\n");
+    const marker = path.join(repo.dir, "verify-ran");
+    fs.writeFileSync(path.join(repo.dir, "tools/track/verify-track.cjs"),
+      `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'yes');`);
+    for (const rel of ["js/circuits/monza.js", "js/circuits/scenery/monza.js"]) {
+      const r = hook("post-edit.sh", { tool_name: "Edit", tool_input: { file_path: path.join(repo.dir, rel) } }, { cwd: repo.dir });
+      assert.equal(r.status, 0, r.stderr);
+      const advice = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+      assert.equal(advice.trim(), `[post-edit] ${rel} changed: after all circuit and scenery edits, run \`node tools/track/verify-track.cjs monza\` once; no intermediate build was checked`);
+      assert.equal(fs.existsSync(marker), false, "no intermediate verification runs");
+    }
+  } finally { repo.rm(); }
+});
+
+test("post-edit group guidance edits the source instead of generated package scripts", () => {
+  const repo = scratchRepo("hook-postedit-group-");
+  try {
+    fs.mkdirSync(path.join(repo.dir, "tests"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "tools/gen"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "tests/groups.json"), "{}\n");
+    fs.writeFileSync(path.join(repo.dir, "tools/gen/gen-test-groups.mjs"), "process.exit(1);\n");
+    const r = hook("post-edit.sh", { tool_name: "Edit", tool_input: { file_path: path.join(repo.dir, "tests/groups.json") } }, { cwd: repo.dir });
+    assert.equal(r.status, 0, r.stderr);
+    const advice = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+    assert.equal(advice.trim(), "[post-edit] groups.json changed: package.json test:* scripts are STALE — finish the source group " +
+      "in tests/groups.json, run `node tools/gen/gen-test-groups.mjs`, then update the docs/TESTING.md group row");
+  } finally { repo.rm(); }
+});
+
 test("post-edit.sh hands its advice to the model as PostToolUse additionalContext JSON, and stays silent with none", () => {
   const repo = scratchRepo("hook-postedit-");
   const run = (rel) => hook("post-edit.sh", { tool_name: "Write", hook_event_name: "PostToolUse",

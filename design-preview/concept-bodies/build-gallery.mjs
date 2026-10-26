@@ -1,7 +1,9 @@
 import fs from "node:fs";
+import { lowerEnvelope } from "./envelope-limits.mjs";
 const b64ab = (f) => "data:image/jpeg;base64," + fs.readFileSync(f).toString("base64");
 const G = process.env.GAL || "scratch/d1d/gal/", b64 = (f) => "data:image/jpeg;base64," + fs.readFileSync(G + f).toString("base64");
 const env = JSON.parse(fs.readFileSync("scratch/d1d/env.json" /* node design-preview/concept-bodies/envelope.mjs --json > scratch/d1d/env.json */, "utf8"));
+const ceiling = lowerEnvelope(env.p75);
 const R = (process.env.ROUND || "1"), SHA = process.env.SHA || "", FIT = JSON.parse(process.env.FIT || "{}"), SIDE = JSON.parse(process.env.SIDE || "{}");
 const BODIES = [
   ["rift", "Rift", "Narrow pod front over a deep sculpted undercut, a dark teardrop scoop on the pod shoulder behind the inlet, pointed nose."],
@@ -14,7 +16,7 @@ const SBS = process.env.SBS;   // dir of <id>-front.jpg / <id>-rear.jpg: sheet c
 const sbs = (id) => SBS ? `<div class="sbs">${["front", "rear"].map((v) => `<figure><img src="${b64ab(SBS + "/" + id + "-" + v + ".jpg")}" alt="${id} ${v}: sheet left, in-game right"><figcaption>${v === "front" ? "front 3/4" : "rear"} · sheet (left) vs in-game through the camera solved from the sheet, fin off</figcaption></figure>`).join("")}</div>` : "";
 const card = ([id, name, blurb]) => `<section class="body" id="${id}"><header><h2>${name}</h2><p>${blurb}</p></header>${sbs(id)}
 <div class="views">${["front34", "rear34", "side"].map((v) => `<figure><img src="${b64(`${id}-${v}.jpg`)}" alt="${name} ${v}" loading="lazy"><figcaption>${{ front34: "front 3/4", rear34: "rear 3/4", side: "side" }[v]}</figcaption></figure>`).join("")}</div>
-<dl class="nums"><div><dt>fit NEW / WORSE</dt><dd>${FIT[id] || "–"}</dd></div><div><dt>side Δ vs team</dt><dd>${SIDE[id] || "–"}</dd></div>${keys.map((k) => `<div><dt>${lab[k]}</dt><dd>${env.rows[id].dims[k]} <small>/ p75 ${env.p75[k]} mm</small></dd></div>`).join("")}</dl></section>`;
+<dl class="nums"><div><dt>fit NEW / WORSE</dt><dd>${FIT[id] || "–"}</dd></div><div><dt>side Δ vs team</dt><dd>${SIDE[id] || "–"}</dd></div>${keys.map((k) => `<div><dt>${lab[k]}</dt><dd>${env.rows[id].dims[k]} <small>/ ceiling ${ceiling[k]} mm</small></dd></div>`).join("")}</dl></section>`;
 const html = `<title>Concept Bodies Gallery</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400&display=swap">
@@ -49,7 +51,7 @@ dt{font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var
 <p class="state">${process.env.STATE || ""}</p></div>
 <figure class="ref"><img src="${b64("ref.jpg")}" alt="Concept sheet: Rift, Keel, Delta, Serpent"><figcaption>Bryce's concept sheet (reference)</figcaption></figure>
 ${BODIES.map(card).join("\n")}
-<p class="intro" style="color:var(--muted)">Fit: car-fit-audit --bodies, each body against a zero-offset body on the same team car (a body replaces the team's own style numbers, so that is its fair base). None of the #3156 hood↔chassis, cockpit↔engineCover or bolster↔sidepod overlaps. Sizes: design-preview/bodies/measure.mjs, millimetres, p75 = the lower of the #3145 and #3160 trees.</p>
+<p class="intro" style="color:var(--muted)">Fit: car-fit-audit --bodies, each body against a zero-offset body on the same team car (a body replaces the team's own style numbers, so that is its fair base). None of the #3156 hood↔chassis, cockpit↔engineCover or bolster↔sidepod overlaps. Sizes: design-preview/bodies/measure.mjs, millimetres, ceiling = the lower of the current shipped p75 and the frozen #3160 measurements.</p>
 </main>`;
 fs.writeFileSync("scratch/d1d/concept-bodies.html", html);
 console.log((html.length / 1024 | 0) + " KB");

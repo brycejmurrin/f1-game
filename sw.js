@@ -986,8 +986,12 @@ self.addEventListener("fetch", (event) => {
         const copy = res.clone();
         cacheWrite = (async () => {
           const name = await currentCacheName();
+          // Require a matching apex-build meta. A captive portal / interstitial
+          // that returns HTTP 200 HTML without the marker must not replace the
+          // shell (#3293). Missing meta used to fall through via `!m` and get
+          // stored as this generation's index.html.
           const m = /<meta name="apex-build" content="(\d+)"/.exec(await copy.clone().text());
-          if (!m || CACHE_PREFIX + m[1] === name) {
+          if (m && CACHE_PREFIX + m[1] === name) {
             const cache = await openCache(name);
             await cache.put(req, copy);
           }

@@ -16,16 +16,25 @@
 # after `/hooks` trusts it.
 set -u
 DIR=$(cd "$(dirname "$0")/../.." && pwd)
-OUT=$(CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$DIR}" bash "$DIR/.claude/hooks/github-mcp-guard.sh")
+OUT=$(CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$DIR}" bash "$DIR/.claude/hooks/github-mcp-guard.sh"); RC=$?
 python3 -c '
 import json, sys
 raw = sys.argv[1].strip()
-h = (json.loads(raw).get("hookSpecificOutput") or {}) if raw else {}
-p = h.get("permissionDecision")
-if not p:
-    sys.exit(0)
-r = h.get("permissionDecisionReason") or ""
+try:
+    if int(sys.argv[2]) != 0:
+        raise ValueError("delegated guard failed (exit " + sys.argv[2] + ")")
+    if not raw:
+        sys.exit(0)
+    h = json.loads(raw)["hookSpecificOutput"]
+    p = h["permissionDecision"]
+    if p not in ("allow", "deny", "ask"):
+        raise ValueError("invalid permission decision")
+    r = h.get("permissionDecisionReason") or ""
+    if not isinstance(r, str):
+        raise ValueError("invalid permission reason")
+except (ValueError, TypeError, KeyError) as e:
+    p, r = "deny", "Codex MCP guard did not complete: " + str(e)
 if p == "ask":
     p, r = "deny", "Codex cannot ask, so this hook denies instead: " + r
 print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": p, "permissionDecisionReason": r}}))
-sys.exit(0)' "$OUT"
+sys.exit(0)' "$OUT" "$RC" || exit 2

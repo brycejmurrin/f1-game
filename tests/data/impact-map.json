@@ -8941,7 +8941,8 @@
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/rendezvous-worker.test.mjs"
       ]
     },
     "js/net/handshake.js": {
@@ -9388,7 +9389,8 @@
         "tests/unit/net-rendezvous.test.mjs"
       ],
       "sealPrivate": [
-        "tests/unit/net-rendezvous.test.mjs"
+        "tests/unit/net-rendezvous.test.mjs",
+        "tests/unit/rendezvous-worker.test.mjs"
       ],
       "setSessionUrl": [
         "tests/unit/net-rendezvous.test.mjs"
@@ -9410,9 +9412,6 @@
       ],
       "waitFor": [
         "tests/unit/net-rendezvous.test.mjs"
-      ],
-      "*": [
-        "tests/unit/rendezvous-worker.test.mjs"
       ]
     },
     "js/net/scan.js": {
@@ -17393,6 +17392,7 @@
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
       "strip": [
+        "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "stripEnabled": [
@@ -17407,6 +17407,7 @@
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
       "strip": [
+        "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "*": [

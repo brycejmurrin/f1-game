@@ -7,16 +7,15 @@ description: >-
 ---
 # Apex CI and Pages watch
 
-Repo: `brycejmurrin/f1-game`. Current local gate meanings: [`docs/VERIFICATION.md`](../../../docs/VERIFICATION.md). Ship / deploy branch: `claude/f1-game-project-26h3ng`. Prefer GitHub MCP (`user-GitHub-xai`) over a broken local `gh` token.
+Repo: `brycejmurrin/f1-game`. Current local gate meanings: [`docs/VERIFICATION.md`](../../../../docs/VERIFICATION.md). Ship / deploy branch: `claude/f1-game-project-26h3ng`. Prefer GitHub MCP (`user-GitHub-xai`) over a broken local `gh` token.
 
-**Merge pacing:** only Merge Desk arms auto-merge (MERGE commit only) on ready PRs; agents/sessions/tools never arm or merge — mark ready at tip-green. Disable any foreign MERGE/REBASE arm and tell CI Watch + Grok Bot. When a draft tip is green, mark ready within 15 min (CI Watch flips otherwise). Keep ~6 or fewer ready.
+**Authority and readiness:** follow `AGENTS.md` §Concurrent PRs and `.claude/rules/fleet-core.md`. Each orchestrator merges only its own fleet’s PRs after the pinned `merge-gate.mjs` receipt; workers do not merge. Draft→ready requires a green tip and successful `ready-gate.mjs --pr <n>`. There is no fixed ready-PR cap. This watch skill observes and reports; it does not grant merge, arm, readiness, or cancellation authority.
 
 ## What to watch (do not conflate)
 
 1. **PR CI** — workflow `CI` (`ci.yml`), event `pull_request`, head = PR branch. This is the merge gate for the PR tip.
-2. **Ship push CI** — same `CI` workflow, event `push`, branch = ship tip. Change-aware; may select different Playwright specs than the PR run.
-3. **Pages train** — workflow `Deploy to GitHub Pages` (`pages.yml`, id `295002043`). Started by a green FAST ship CI poke, or by `workflow_dispatch`. It **calls** `ci.yml` with a `concurrency_key` and `before_sha` (often the last live tip), so it can fail on specs the PR never ran.
-4. **Live site** — https://brycejmurrin.github.io/f1-game/ — confirm via Pages `verify-live` / `version.json` / deploy-research. Do not trust github.io from the box browser.
+2. **Pages train** — workflow `Deploy to GitHub Pages` (`pages.yml`). A deploy-branch push starts it directly; `workflow_dispatch` requests deployment explicitly. It calls reusable `ci.yml` with its selected `before_sha`, so it can fail on specs the PR never ran. There is no separate ship-push CI run.
+3. **Live site** — https://brycejmurrin.github.io/f1-game/ — confirm via Pages `verify-live` / `version.json` / deploy-research. Do not trust github.io from the box browser.
 
 A green PR CI does **not** prove Pages will pass. Pages diffs against `before_sha` (live tip) and re-runs the full release gate.
 
@@ -24,9 +23,9 @@ A green PR CI does **not** prove Pages will pass. Pages diffs against `before_sh
 
 Use `node tools/ci/ci-watch.mjs --sha <head> [--pages] [--once]` (rule 12). Match **head_sha**. Re-arm on expiry until the `= ci …` line. Ignore cancelled twins superseded by a newer run on the same SHA (draft/ready dedupe).
 
-If `mergeable_state` is `dirty`, sync by **merging** `origin/claude/f1-game-project-26h3ng` (`sync-pr.mjs`), never rebase or force-push. Sync only when CONFLICTING/DIRTY or a required tip check is red. Ship-checkpoint freeze: no sync pushes/merges. After merge, watch **ship** CI and Pages, not the closed PR.
+If `mergeable_state` is `dirty`, sync by **merging** `origin/claude/f1-game-project-26h3ng` (`sync-pr.mjs`), never rebase or force-push. Sync only when CONFLICTING/DIRTY or a required tip check is red. Ship-checkpoint freeze: no sync pushes/merges. After merge, watch Pages and its nested release gate, not the closed PR.
 
-Queue hold: if `node tools/ci/queue-depth.mjs` prints `= queue hold` (exit 1; it counts queued + running JOBS by OS against the 40 Linux / 5 macOS slots, never runs), commit locally only — do not push a sync.
+`node tools/ci/queue-depth.mjs` reports capacity only. Either queue verdict exits 0; it does not hold a launch, sync, or push. Use the current canonical launch and merge policies for actual gates.
 
 ## Reading failures (required path)
 
@@ -55,13 +54,13 @@ Pre-push for a fix: `npm run test:tooling-fast` plus pick-tests Structural guard
 
 ## Deploy / redeploy
 
-- Preferred local protocol: `node tools/ci/deploy.mjs` (see AGENTS.md). Green FAST ship CI should poke Pages.
+- Preferred local protocol: `node tools/ci/deploy.mjs` (see AGENTS.md). A deploy-branch push starts the Pages train directly.
 - Manual: `actions_run_trigger` `run_workflow` on workflow `295002043`, `ref: claude/f1-game-project-26h3ng`. One green tip → one train; do not dual-dispatch Pages.
 - After dispatch, watch that Pages run with `ci-watch.mjs --sha <sha> --pages`. On failure, read **nested** failed jobs (`ci / Selected specs…`), not only the Pages wrapper conclusion.
 - Geometry pushed to ship: also run / expect `test:sweeps`. Sweeps are not in tooling-fast.
 
 ## Report shape to the user
 
-Lead with: merged or not, head SHA, which run URL, green or red. If red: failing test name + Expected/Received (or timeout). Say whether PR CI, ship CI, or Pages failed. Next action in one sentence. Handoff: paths, PR/bc, OWNED, ranked next ≤3, blockers.
+Lead with: merged or not, head SHA, which run URL, green or red. If red: failing test name + Expected/Received (or timeout). Say whether PR CI or Pages’ release gate/publication failed. Next action in one sentence. Handoff: paths, PR/bc, OWNED, ranked next ≤3, blockers.
 
 Never narrate cancelled superseded runs as the verdict. Never declare deploy live until Pages succeeded (or verify-live / version confirms the merge commit).
