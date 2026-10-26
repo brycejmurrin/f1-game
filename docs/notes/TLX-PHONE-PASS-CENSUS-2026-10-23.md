@@ -23,7 +23,7 @@ node tools/perf/mesh-census.mjs --tracks monza,jeddah,vegas --backend tlx --mobi
 - Each render target is tabled on its own (main, mirror, sun shadow, post), so no pass is folded into the main
   scene. A shadow map that renders nested inside the main render is subtracted from the outer pass.
 - Distance is the NEAREST point of each draw's bounding sphere to the player camera. **Erratum for
-  [MESH-CENSUS-2026-10-19](../../notes/MESH-CENSUS-2026-10-19.md):** that run measured `getWorldPosition()`, which for a
+  [MESH-CENSUS-2026-10-19](MESH-CENSUS-2026-10-19.md):** that run measured `getWorldPosition()`, which for a
   world-baked chunk (identity transform) is the world origin, so its near/far bands said how far the camera was
   from (0,0,0), not from the chunk. Its pass totals and call counts stand; its bands and its "LOD pays" calls do not.
 - One boot per circuit. Two earlier runs this session (phone-a, phone-b) gave the same pass totals within 1 %.
@@ -75,7 +75,7 @@ boxes cross the 120 m cap; at 168×48 that is about 9 triangles a pixel.
    instanced props (`tlxBatch`, 24-vertex boxes): at least 25 k (jeddah) and 71 k (vegas) triangles beyond 600 m. A box has
    no coarser index list; that mass needs an instance draw-distance cap, not LOD.
 4. **No device evidence that geometry limits the frame.** Device Farm, iPhone 14, WebGPU leg
-   ([AWS-DEVICE-FARM-IPHONE-2026-10-23](../../notes/AWS-DEVICE-FARM-IPHONE-2026-10-23.md) §6): 59.4–59.7 fps at render scale
+   ([AWS-DEVICE-FARM-IPHONE-2026-10-23](AWS-DEVICE-FARM-IPHONE-2026-10-23.md) §6): 59.4–59.7 fps at render scale
    0.5, 0.75 and 1.0, and 59.5 with the mirror off. The WebGL2 leg is fill-bound (8.07 ms per full frame of fill
    slope) and the mirror is worth about 1.7 fps there (57.4 off vs 55.7 on). The GPU timer moves with pixels
    (14.9 → 21.3 → 45.6 relative ms from scale 0.5 to 1.0), not with geometry. That run was Monza; jeddah and vegas
@@ -97,7 +97,7 @@ boxes cross the 120 m cap; at 168×48 that is about 9 triangles a pixel.
 
 - Tool: `tools/perf/mesh-census.mjs` (`--viewport`, `--preset`, per-target and per-group tables added here),
   helpers `tools/perf/mesh-census-lib.mjs`, tests `tests/unit/mesh-census.test.mjs`.
-- Earlier counts: [MESH-CENSUS-2026-10-19](../../notes/MESH-CENSUS-2026-10-19.md), [PASS-CENSUS-2026-10-17](PASS-CENSUS-2026-10-17.md),
+- Earlier counts: [MESH-CENSUS-2026-10-19](MESH-CENSUS-2026-10-19.md), [PASS-CENSUS-2026-10-17](../../docs/archive/notes/PASS-CENSUS-2026-10-17.md),
   #2657 comment of 2026-10-17 (monaco phone tier, before the road split).
-- Phone evidence: [AWS-DEVICE-FARM-IPHONE-2026-10-23](../../notes/AWS-DEVICE-FARM-IPHONE-2026-10-23.md),
-  [PERF-KNOWN-WINS-2026-10-23](../../notes/PERF-KNOWN-WINS-2026-10-23.md).
+- Phone evidence: [AWS-DEVICE-FARM-IPHONE-2026-10-23](AWS-DEVICE-FARM-IPHONE-2026-10-23.md),
+  [PERF-KNOWN-WINS-2026-10-23](PERF-KNOWN-WINS-2026-10-23.md).

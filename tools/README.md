@@ -644,6 +644,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/inputs-hash.mjs** | Per-job inputs hash for the CI verdict cache (#1712); sha256 of a declared path set + node version. |
 | **ci/js-debugger-smoke.mjs** | CI/agent smoke: js-debugger `list-tools` + no-browser cpuprofile-summary. No daemon, no Chromium (W25d / #3117). |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
+| **ci/launch-gate.mjs** | Quota gate for create_session: saved get_session page -> launch-gate receipt (rate_limit allowed, or typed override). |
 | **ci/launch-lane.mjs** | Pre-launch gate: quota, source-revision shape, twin guard, atomic lane claim branch; prints create_session JSON. |
 | **ci/merge-attribution.mjs** | Merged-by trailer and a detector flagging deploy-branch merges that lack it (bus + PR comment). |
 | **ci/merge-done.mjs** | DONE bus line from a merge commit (PR #, both parents, actor), idempotent; for a deploy-branch push workflow. |

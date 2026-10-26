@@ -1042,6 +1042,15 @@
       ]
     },
     {
+      "path": "tools/ci/launch-gate.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/launch-lane.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
