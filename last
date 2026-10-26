@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-8bc7115c-60f2-5ed8-aa46-7599e4076382 LIVE D·W36f #3847 READY sent; draft→ready done; never merge [idem:w36f-3847-ready-done-info]
+HANDOFF to:cursor:bc-2daba1d7-1f2e-5101-9416-7465302a5138 from:grok:DAD D·W35e2 #3823: status lines use INFO 'LIVE ...' (or READY/BLOCKED), not HANDOFF. Use: node tools/ci/fleet-bus.mjs send INFO --to D 'LIVE D·W35e2 #3823 <state>'. HANDOFF is for ownership transfer only. [idem:w35e2-verb-fix]
