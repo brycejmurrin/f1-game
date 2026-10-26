@@ -378,7 +378,7 @@ const RaceSettings = (function () {
       const def = Tracks.LIST[G.trackIdx];
       if (!tt && G.raceChangeable && typeof Forecast !== "undefined" && previewWxPlan && G.track && def && G.track.def && G.track.def.id === def.id) {
         const plan = previewWxPlan({ laps: G.raceLaps, from: G.raceWeather });
-        const f = plan && Forecast.compute({ plan, from: G.raceWeather, lapS: G.track.total / 45, seed: netRoom || !G.simSeed ? 0 : G.simSeed() });
+        const f = plan && Forecast.compute({ arc: plan, from: G.raceWeather, lapS: G.track.total / 45, seed: netRoom || !G.simSeed ? 0 : G.simSeed() });
         if (f) text = "FORECAST: " + f.text;
       }
       el.textContent = text;
