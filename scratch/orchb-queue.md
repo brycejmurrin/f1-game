@@ -171,3 +171,4 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
   - #3774 (L2) tip 6dd8e23c: code done 19/19; left full tooling-fast, CI, ready-gate. Out of scope: orchestrator.md:209-210 + CROSS-ACCOUNT-INBOX note:29-30 still say APEX_A_INBOX_* (L1 successor can take orchestrator.md); Bryce must rename B env to APEX_A_RELAY_*. Launch successor owner.
   - #3723 b6b76fb2 fast CI running → ready-gate → ready → READY/merge (lent). #3730 b8ee6b41 ready, full tier running (lent). #3648 #3736 #3684 #3724 ready, full tier green (lent). All carry D's MERGE-HOLD line — wait for DAD to remove (f23b794).
   - Stopped (archive after 05:10Z by rule): 01GETh, 011NoeB, 01B2s, 01AXz6, 01EWg3, 019yb, 01WV8q, 01Y3Fm, 018Eoa.
+  - 04:11Z: launched [Owner] B·#3772 session_01XmgdKisM93VGcVMMkb77k3 (do not double-launch). Still to launch: #3773 owner (row 14 = (a)), #3774 owner, #3723 owner.
