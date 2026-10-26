@@ -54,7 +54,9 @@ auto-mode-config, read 2026-10-19).
   subscribe to this PR"; server-side): fall back to `ci-watch.mjs --sha <head>
   --once` on each timer wake and say so in the hand-back.
 - **Reach.** Workers resolve their fleet's orchestrator with `fleet-bus.mjs who
-  <X>` at send time (the brief's id is a hint; it dies at rotation) and may
+  <X>` at send time (the brief's id is a hint; it dies at rotation; exit 3 /
+  `STALE` means its last bus line is over 45 min old, so report the gap to the
+  coordinator or Bryce rather than waiting on it) and may
   message sibling owners directly; a fleet-wide instruction
   is one `send_message` per live session. The other account's fleet is reached
   through the bus and the cross-account inbox (which posts to the bus); no

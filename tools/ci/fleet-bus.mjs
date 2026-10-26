@@ -32,7 +32,8 @@
 //   node tools/ci/fleet-bus.mjs send BLOCKED --pr 2990 "text"   # --pr <n> is --to '#<n>'; empty text is refused
 //   node tools/ci/fleet-bus.mjs send INCIDENT --to '*' --fix <sha> "text"   # tools/ci/incident-lift.mjs lifts it when Pages is green on <sha>
 //   node tools/ci/fleet-bus.mjs read [--to merge-holder --to '#2990'] [--since <sha>] [--last 20] [--json] [--peek | --strict]
-//   node tools/ci/fleet-bus.mjs who A [--last 500] [--json]   # fleet A's live orchestrator: `A <host:id> <sha7> <age>`; exit 1 none
+//   node tools/ci/fleet-bus.mjs who A [--last 500] [--stale-min 45] [--json]   # fleet A's live orchestrator: `A <host:id> <sha7> <age>`; exit 1 none,
+//     exit 3 + ` STALE (last line <age> ago)` when its newest own bus line is older than --stale-min
 //   node tools/ci/fleet-bus.mjs watch --to B --to '*' [--all] [--interval 20]   # the orchestrator's Monitor: each NEW line once, never exits
 //
 // `--to` must be deliverable (addressProblem): *, #<PR>, a fleet letter (A, B·O3), a role, or a real
@@ -335,8 +336,28 @@ export function ageOf(at, now) {
   return m < 60 ? `${m}m` : m < 48 * 60 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`;
 }
 
-/** The `who` output line: `<letter> <host:id> <sha7> <age>`. Pure. */
-export const whoLine = (w, now) => `${w.letter} ${w.id} ${String(w.sha).slice(0, 7)} ${ageOf(w.at, now)}`;
+/** Minutes of bus silence from a fleet's orchestrator after which `who` calls it STALE (OrchA 36, 2026-10-26). */
+export const STALE_MIN = 45;
+
+/**
+ * whoIs plus liveness: the age of the newest line SENT BY the announced id (not of its LIVE line, which a peer may
+ * have written), falling back to the LIVE line's time when the id sent nothing in the window. Adds
+ * { lastSeenAt, lastSeenMin, stale }; null when no LIVE line. Entries oldest first. Pure.
+ */
+export function whoStatus(entries, letter, now, staleMin = STALE_MIN) {
+  const w = whoIs(entries, letter);
+  if (!w) return null;
+  let lastSeenAt = w.at;
+  for (let i = (entries || []).length - 1; i >= 0; i--) {
+    if (withHost(String(entries[i].from || ""), "") === w.id) { lastSeenAt = entries[i].at; break; }
+  }
+  const lastSeenMin = Math.max(0, Math.round((now - lastSeenAt) / 60));
+  return { ...w, lastSeenAt, lastSeenMin, stale: lastSeenMin > staleMin };
+}
+
+/** The `who` output line: `<letter> <host:id> <sha7> <age>`, plus ` STALE (last line <age> ago)` when stale. Pure. */
+export const whoLine = (w, now) => `${w.letter} ${w.id} ${String(w.sha).slice(0, 7)} ${ageOf(w.at, now)}` +
+  (w.stale ? ` STALE (last line ${ageOf(w.lastSeenAt, now)} ago)` : "");
 
 /**
  * Write one typed bus line (shared with agent-msg.mjs). Does not shell out.
@@ -532,7 +553,7 @@ function usage(msg) {
     "       fleet-bus.mjs send <TYPE> (--to <ADDR> | --pr <n>) [--fix <sha>, INCIDENT only] [--idem KEY] \"<text>\"   ADDR: " + ADDRESS_FORMS + "\n" +
     "       (" + PROTOCOL_TYPES.join("/") + " bodies " + BODY_MIN + "-" + BODY_MAX + " chars; LEND names merger:<letter>; --idem dedupes a resend in the last " + IDEM_WINDOW + " lines)\n" +
     "       fleet-bus.mjs read [--to ADDR ...] [--since SHA] [--last N] [--json] [--peek | --strict]   (--last applies only when no cursor is known; --peek leaves the cursor; --strict never moves it past a hidden line)\n" +
-    "       fleet-bus.mjs who <fleet letter> [--last N] [--json]   (exit 1: no live orchestrator line)\n" +
+    "       fleet-bus.mjs who <fleet letter> [--last N] [--stale-min M] [--json]   (exit 1: no live orchestrator line; exit 3: STALE, its last bus line older than M min, default " + STALE_MIN + ")\n" +
     "       fleet-bus.mjs watch [--to ADDR ...] [--all] [--interval S] [--since SHA]   (follow mode for a Monitor: each new line once, never exits;\n" +
     "         drops other senders' to:* " + WATCH_QUIET.join("/") + " unless --all)\n" +
     "       common: --as <host>:<id>   types: " + TYPES.join(" "));
@@ -544,7 +565,7 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
   const flags = {}, multi = { to: [] }, pos = [];
   // Flags are an allow-list: an unknown `--flag` used to swallow the next word
   // (so `--body "text"` sent an empty line). Text is positional.
-  const VALUE_FLAGS = new Set(["to", "as", "since", "last", "ttl", "note", "grant", "idem", "pr", "fix", "interval"]);
+  const VALUE_FLAGS = new Set(["to", "as", "since", "last", "ttl", "note", "grant", "idem", "pr", "fix", "interval", "stale-min"]);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") flags.json = true;
@@ -617,10 +638,13 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
       if (!sub || !/^[A-Za-z]$/.test(sub)) return usage("who needs one fleet letter (A, B, C, D, …)");
       const L = sub.toUpperCase(), last = Number(flags.last) || 500;
       // Not cursor-based: the newest LIVE line may sit behind this session's read cursor.
-      const w = whoIs(readBus({ cwd, last }).entries, L);
-      if (flags.json) log(JSON.stringify(w ? { ...w, age: ageOf(w.at, now()) } : { letter: L, id: null }));
-      else log(w ? whoLine(w, now()) : `= who ${L}: no ORCH ${L} LIVE line in the last ${last} bus entries`);
-      return w ? 0 : 1;
+      const staleMin = flags["stale-min"] === undefined ? STALE_MIN : Number(flags["stale-min"]);
+      if (!Number.isFinite(staleMin) || staleMin <= 0) return usage("--stale-min takes a positive number of minutes");
+      const t = now(), w = whoStatus(readBus({ cwd, last }).entries, L, t, staleMin);
+      if (flags.json) log(JSON.stringify(w ? { letter: w.letter, id: w.id, sha: w.sha, at: w.at, age: ageOf(w.at, t), stale: w.stale, lastSeenMin: w.lastSeenMin } : { letter: L, id: null }));
+      else log(w ? whoLine(w, t) : `= who ${L}: no ORCH ${L} LIVE line in the last ${last} bus entries`);
+      // 3 = announced but silent past --stale-min: messages to that fleet may go unread (archived without a hand-off).
+      return !w ? 1 : w.stale ? 3 : 0;
     }
     if (cmd === "watch") {
       for (const t of multi.to) { const bad = addressProblem(t); if (bad) return usage(`watch --to: ${bad}`); }
