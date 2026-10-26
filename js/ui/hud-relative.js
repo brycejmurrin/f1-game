@@ -177,7 +177,9 @@ const HudRelative = (function () {
     if (key !== fitSeen || ++fitAge >= FIT_REFRESH) fitRows();   // the age is a 1 Hz net for layout the key cannot see
   }
   let fitSeen = null, fitAge = 0;
-  const FIT_REFRESH = 10;
+  const FIT_REFRESH = 30;   // ticks at 10 Hz: a 3 s net
+  // ot-*/ax-* flip with overtake/aero state and never change a clearance box, so they stay out of the key.
+  const VOLATILE_CLS = /(^|\s)(ot|ax)-\S*/g;
   /** Everything fitRows reads that is not layout itself: occupied rows, viewport,
    *  HUD scale, the body's mode classes and each clearance control's hidden/class. */
   function fitKey() {
@@ -192,7 +194,7 @@ const HudRelative = (function () {
     k += "|" + (doc.body ? doc.body.className : "");
     if (doc.getElementById) for (let i = 0; i < CLEAR_IDS.length; i++) {
       const c = doc.getElementById(CLEAR_IDS[i]);
-      k += "|" + (c ? (c.hidden ? "h" : "v") + c.className : "-");
+      k += "|" + (c ? (c.hidden ? "h" : "v") + String(c.className || "").replace(VOLATILE_CLS, "") : "-");
     }
     return k;
   }
