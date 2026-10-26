@@ -522,6 +522,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
   // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
   "tests/unit/fleet-board.test.mjs",
+  // fleet-brief: the hand-off brief from a queue file, a saved pr-board and bus entries; the 2 KB JSON and 40-line digest caps under oversized input; < 0.2 s.
+  "tests/unit/fleet-brief.test.mjs",
   // fleet-bus-mirror: which bus lines become PR comments (to:#<n> only), the comment body, dedupe by bus sha and the closed/merged skip; gh injected, pure; < 0.2 s.
   "tests/unit/fleet-bus-mirror.test.mjs",
   // fleet-bus: the cross-host merge lease (acquire/renew/expiry/break), the bus cursor read, the deliverable-recipient rule and `who <letter>` (ORCH LIVE lines, explicit and free text); a real-git race on a local bare origin; < 2 s.
@@ -756,6 +758,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lane-preamble.test.mjs",
   // Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.
   "tests/unit/lap-format-rollover.test.mjs",
+  // launch-lane: quota from a saved get_session, sha7 refusal, the twin guard on a saved list_sessions page, the claim branch as a non-forced CAS against a local bare origin (claim, refusal, tombstone release, re-claim); < 2 s.
+  "tests/unit/launch-lane.test.mjs",
   "tests/unit/layers-anyopen-memo.test.mjs",
   "tests/unit/layers-nav-memo.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",

@@ -868,6 +868,15 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/ci/fleet-brief.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
+    },
+    {
       "path": "tools/ci/fleet-bus-mirror.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -975,6 +984,16 @@
       "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
+        "--quiet"
+      ]
+    },
+    {
+      "path": "tools/ci/launch-lane.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json",
         "--quiet"
       ]
     },

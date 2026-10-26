@@ -630,6 +630,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/flake-tally.mjs** | Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs. |
 | **ci/fleet-archive.mjs** | Applies the archive rule to a saved list_sessions page: ARCHIVE (role tag, agent-made, idle, PR done) or KEEP, why. |
+| **ci/fleet-brief.mjs** | Hand-off brief for a successor: lanes, slot, cursors, triggers, asks; ≤2 KB JSON + ≤40-line digest. |
 | **ci/fleet-bus-mirror.mjs** | Fleet-bus mirror: posts each `to:#<PR>` bus line as one idempotent comment on that open PR (Actions). |
 | **ci/fleet-bus.mjs** | Merge lease (one holder, expiry, refusal) and typed fleet bus on the claude/fleet-bus branch, any host. |
 | **ci/fleet-tick.mjs** | One fleet-watch fast tick: board + sync + ship/Pages CI, diffed against the saved state; prints only what changed. |
@@ -638,6 +639,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/inputs-hash.mjs** | Per-job inputs hash for the CI verdict cache (#1712); sha256 of a declared path set + node version. |
 | **ci/js-debugger-smoke.mjs** | CI/agent smoke: js-debugger `list-tools` + no-browser cpuprofile-summary. No daemon, no Chromium (W25d / #3117). |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
+| **ci/launch-lane.mjs** | Pre-launch gate: quota, source-revision shape, twin guard, atomic lane claim branch; prints create_session JSON. |
 | **ci/merge-attribution.mjs** | Merged-by trailer and a detector flagging deploy-branch merges that lack it (bus + PR comment). |
 | **ci/merge-gate.mjs** | Gate before a PR merge: ready-gate, CI, no hold, gen:check + ratchets on a local merge, pacing; writes the receipt. |
 | **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| no (sync only when you must). |

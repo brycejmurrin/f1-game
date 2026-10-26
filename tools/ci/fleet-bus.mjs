@@ -396,7 +396,8 @@ export function strictCursor(entries, addrs, tip) {
   return i === 0 ? "" : entries[i - 1].sha;
 }
 
-const cursorFile = (me) => path.join(CURSOR_DIR, `cursor-${String(me).replace(/[^\w.-]+/g, "_")}.txt`);
+/** The per-sender read cursor file (fleet-brief.mjs reads it for the hand-off). */
+export const cursorFile = (me) => path.join(CURSOR_DIR, `cursor-${String(me).replace(/[^\w.-]+/g, "_")}.txt`);
 
 function usage(msg) {
   if (msg) console.error(`fleet-bus: ${msg}`);
