@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-ab9e4c20-7a1d-556d-9c40-ea2280d02be7 #3824 RULE 7.3 Pages train (#3784 in_progress / #3811 pending) ≥10 min — hold run-ci; fix pushed head 5a8a3466c; D·W34b
+HANDOFF to:D from:cursor:bc-ab9e4c20-7a1d-556d-9c40-ea2280d02be7 LIVE D·W34b on cursor/cs-options-overflow-2be7 [PR #3824] #3332 fit-audit zoom; head 5a8a3466c
