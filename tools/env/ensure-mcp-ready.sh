@@ -102,12 +102,12 @@ verify_apex_tools_cli() {
 }
 
 run_mcp_smoke() {
-  if node "$ROOT/tools/mcp/mcp-smoke.mjs" >"$ROOT/artifacts/logs/mcp-smoke.json" 2>&1; then
+  if node "$ROOT/tools/mcp/mcp-smoke.mjs" >"$ROOT/artifacts/logs/mcp-smoke.log" 2>&1; then
     echo "mcp-smoke: OK (artifacts/logs/mcp-smoke.json)"
     return 0
   fi
-  echo "ERROR: mcp-smoke failed — see artifacts/logs/mcp-smoke.json" >&2
-  tail -20 "$ROOT/artifacts/logs/mcp-smoke.json" >&2 || true
+  echo "ERROR: mcp-smoke failed — see artifacts/logs/mcp-smoke.log" >&2
+  tail -20 "$ROOT/artifacts/logs/mcp-smoke.log" >&2 || true
   return 1
 }
 

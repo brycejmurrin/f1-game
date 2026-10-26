@@ -943,10 +943,9 @@ let _cloudBase = 0.4;
 // camera at 300 km/h — XAG 117). Live: the OS toggle can flip mid-session.
 const _mq = (typeof window !== "undefined" && window.matchMedia)
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
-// SETTINGS › APPEARANCE › MOTION: REDUCED counts too (html[data-motion], which
-// js/ui/title-fx.js sets from the OS flag OR the stored choice, live).
+// TitleFx resolves the live accessibility choice, including OFF overriding the OS.
 function motionReduced() {
-  return !!(_mq && _mq.matches)
+  return typeof TitleFx !== "undefined" && typeof TitleFx.mode === "function" ? TitleFx.mode() === "reduce" : !!(_mq && _mq.matches)
     || (typeof document !== "undefined" && document.documentElement && document.documentElement.dataset.motion === "reduce");
 }
 function camComfort() { return XrBoot.camComfort(motionReduced()) || (typeof CamComfort !== "undefined" && CamComfort.active()); }   // XR / OS reduce-motion / touch auto-comfort

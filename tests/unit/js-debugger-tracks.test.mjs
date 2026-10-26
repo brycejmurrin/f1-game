@@ -8,6 +8,21 @@ import { callTool } from "../../tools/mcp/js-debugger-mcp.mjs";
 import http from "node:http";
 import { FakeCdp, frame, paused, attached } from "../helpers/js-debugger-rig.mjs";
 
+test("break-and-inspect auto-resume retains a newer pause delivered before the resume acknowledgment", async () => {
+  const { s, c } = await attached();
+  c.reply = async method => {
+    if (method === "Debugger.resume") { c.emit("Debugger.resumed"); paused(c); }
+    return {};
+  };
+  setImmediate(() => paused(c));
+  const result = await s.breakAndInspect({ resume: true, timeoutMs: 100 });
+  assert.equal(result.resumed, true);
+  assert.equal(s.state().paused, true);
+  assert.equal(result.paused, true);
+  assert.equal(result.token, s.pause.token, "caller receives the current pause token");
+  await s.detach();
+});
+
 test("T7: targets lists worker/service_worker rows on request, attach accepts them (including blob: workers)", async () => {
   const rows = [{ type: "page", id: "p", url: "http://127.0.0.1:3456/", title: "g", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/p" },
     { type: "service_worker", id: "sw", url: "http://127.0.0.1:3456/sw.js", title: "sw", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/sw" },

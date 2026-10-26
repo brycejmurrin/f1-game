@@ -875,7 +875,9 @@ const Assets = (function () {
   // no model, resolves 0 without a model fetch.
   async function loadModelsFor(src) {
     if (!src) return 0;
+    const generation = _loadGeneration;
     const m = await manifest();
+    if (generation !== _loadGeneration) return 0;
     const ids = _idsNamedIn(m, String(src));
     if (!ids.length) return 0;
     // Fetch in parallel (shared model() memos). The shared decode lane in
@@ -885,7 +887,7 @@ const Assets = (function () {
     for (let i = 0; i < pending.length; i++) {
       if (await pending[i]) n++;
     }
-    return n;
+    return generation === _loadGeneration ? n : 0;
   }
 
   // Prefetch EVERY model in the pack. Resolves to the number now resident.

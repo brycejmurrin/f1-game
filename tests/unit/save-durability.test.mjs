@@ -177,6 +177,31 @@ test("storage-health UI does no measurements or prompts until opened, and remain
   assert.equal(panel.hidden, false); assert.equal(estimates, 1); assert.equal(prompts, 0);
   assert.equal(toggle.getAttribute("aria-expanded"), "true"); toggle.onclick(); assert.equal(panel.hidden, true);
 });
+test("storage health tolerates denied storage getters and keeps report and cleanup controls usable", async () => {
+  const h = boot(); await h.store.mirror.ready;
+  const dom = makeDom(); h.c.document = dom.document;
+  vm.runInContext(`
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw Object.assign(new Error("denied"), { name: "SecurityError" }); } });
+    globalThis.navigator = {};
+    Object.defineProperty(navigator, "storage", { get() { throw Object.assign(new Error("denied"), { name: "SecurityError" }); } });
+  `, h.c);
+  vm.runInContext(src("js/ui/save-health.js") + ";globalThis.Health=SaveHealth", h.c, { filename: absSrc("js/ui/save-health.js") });
+  const report = await h.c.Health.inspect();
+  assert.equal(report.ok, false); assert.equal(report.reason, "local-storage-unavailable");
+  assert.equal(report.estimateUnavailable, true);
+  assert.equal(h.c.Health.cleanup().ok, false);
+  const handle = h.c.Health.mount(dom.byId("health-denied-storage"), { store: h.store });
+  const panel = handle.root.children[1], status = panel.children[0], refresh = panel.children[2], clear = panel.children[3];
+  await handle.refresh(); assert.equal(refresh.disabled, false);
+  assert.match(panel.children[1].children[0].textContent, /could not be read/);
+  await clear.onclick(); assert.equal(clear.disabled, false); assert.equal(refresh.disabled, false);
+  assert.match(status.textContent, /could not be removed/);
+  // A failure in a health provider must not strand the buttons either.
+  const failing = h.c.Health.mount(dom.byId("health-failing-history"), { store: h.store, restorePoints: { health() { throw Error("history unavailable"); } } });
+  const fp = failing.root.children[1]; await failing.refresh();
+  assert.equal(fp.children[2].disabled, false); assert.match(fp.children[0].textContent, /report is unavailable/);
+  await fp.children[3].onclick(); assert.equal(fp.children[3].disabled, false);
+});
 test("history unavailable and active-career preview are explicit refusals", async () => {
   const h = boot(); await h.store.mirror.ready;
   const p = points(h, { indexedDB: { open() { throw Error("blocked"); } } });

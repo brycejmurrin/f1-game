@@ -3072,6 +3072,7 @@
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/settings-export.test.mjs",
+        "tests/unit/share-code.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ]
     },
@@ -6970,6 +6971,7 @@
         "tests/specs/multiplayer-seats.spec.js",
         "tests/specs/steer-migration.spec.js",
         "tests/specs/steering.spec.js",
+        "tests/unit/a11y-opts.test.mjs",
         "tests/unit/agent-output.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
@@ -7701,7 +7703,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "csTabId": [
-        "tests/unit/livery-design.test.mjs"
+        "tests/unit/livery-design.test.mjs",
+        "tests/unit/share-code.test.mjs"
       ],
       "discardLivDraft": [
         "tests/unit/team-livery.test.mjs"
@@ -7725,6 +7728,7 @@
       ],
       "livDraftTo": [
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/share-code.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "openSetup": [
@@ -13277,6 +13281,9 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/build-worker.test.mjs"
       ],
+      "loadModelsFor": [
+        "tests/unit/assets-pack.test.mjs"
+      ],
       "manifest": [
         "tests/specs/assets-api.spec.js",
         "tests/unit/ambient-env-override.test.mjs",
@@ -15707,6 +15714,9 @@
       ],
       "snapshot": [
         "tests/unit/hud-inputs.test.mjs"
+      ],
+      "*": [
+        "tests/unit/a11y-opts.test.mjs"
       ]
     },
     "js/ui/hud-layout.js": {
@@ -16065,6 +16075,7 @@
       ],
       "*": [
         "tests/specs/hud-mirror.spec.js",
+        "tests/unit/a11y-opts.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
@@ -16721,6 +16732,7 @@
       ],
       "applySettings": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/key-binds.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/settings-ttlb-backup.test.mjs"
