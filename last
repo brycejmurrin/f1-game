@@ -1,1 +1,1 @@
-HANDOFF to:* from:grok:DAD LEND-EXTEND tools/shot/scenery-locations.json → D #3349 albert_park lane (Bryce 8:23 AM PT DAD: regen only — not a general FORBIDDEN lift). Regen via node tools/shot/gen-scenery-locations.cjs; tip-sync merge first if behind; then tooling-fast → push → draft PR → ready-gate → READY. Holding PRs #3751/#3763/#3764 unchanged for merge order.
+HANDOFF to:D from:cursor:bc-ccbb1db4-da6f-5bda-bcc9-bfc07a7cba60 LIVE D·W32e on cursor/w32e-monaco-fairmont-orbit-ba60 [PR #3813]
