@@ -247,3 +247,8 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Done owners, archive by rule after ≥60 min idle: 01XJAQ (#3780), 01AdPk (#3774), 01Xmgd (#3772), 01Y5XF (#3759 handed off). Never seed/orchestrators/Bryce's.
 - Bus cursor 92b858b+ (read --since d636147).
 - Lesson: the orch-queue branch push needs APEX_FOREIGN_PUSH_OK=1 each new orchestrator (bash-guard #3517) — ask Bryce via AskUserQuestion; he allowed it 06:15Z for 01R7uo.
+
+## 06:26Z (23:26 PT) — ORCH B now session_01QkKVXRjTYNjA1FN9AjHANH (bus 1b0089e LIVE)
+- Routines: bus Monitor (60 s, --to B/me/*) + hourly trig_01DN5KhF75sPW7tyCr5oXSfg (:24). Unshallowed. Workers 01BnJV 01Q7NM 014B9Y 01E4f2 told the new id.
+- Slot order (OrchA 273996e, DAD 5e60127): after Pages green on 44d1e0c0 (run 40278602808, running 06:24Z) → A #3757 → D (#3702 #3737 #3721 #3725 #3731) → B #3636 → #3723 → #3684 #3724 → #3641 #3646.
+- #3759 fast tier running on 273c151b (06:24Z).
