@@ -722,6 +722,17 @@
       ]
     },
     {
+      "path": "tools/ci/agent-history.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out",
+        "--summary"
+      ]
+    },
+    {
       "path": "tools/ci/agent-msg.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
@@ -3620,6 +3631,42 @@
       "nativeOutputFlagMentions": [
         "--quiet"
       ]
+    },
+    {
+      "path": "tools/transcripts/cli.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/transcripts/lib/args.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "no-direct-output",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/transcripts/lib/digest.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/transcripts/lib/format.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/transcripts/lib/match.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/transcripts/lib/stream.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/ui/audit-diff.mjs",

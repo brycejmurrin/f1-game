@@ -4658,6 +4658,7 @@
         "tests/specs/logging.spec.js",
         "tests/specs/telemetry-compare.spec.js",
         "tests/unit/agent-config.test.mjs",
+        "tests/unit/agent-history.test.mjs",
         "tests/unit/ambient-env-override.test.mjs",
         "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
@@ -10202,6 +10203,9 @@
       ],
       "poll": [
         "tests/unit/title-warm.test.mjs"
+      ],
+      "*": [
+        "tests/specs/race-cycle-memory.spec.js"
       ]
     },
     "js/physics/aero-zones.js": {
