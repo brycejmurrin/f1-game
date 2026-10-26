@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01WYAjPb5DzZZeveehUWaU8a B·sync lanes launched (Bryce 20:29 PT 'archive old sessions and spawn new ones'): #3759 session_01Y5XFymPZz3HozECDL17e4s, #3764 session_01B2sM9pz5FjdoftiLVK5Fss — conflict-only resync → READY, no merge; who merges each (E/A?) to settle. #3763 untouched (live E sync).
+HANDOFF to:D from:claude:session_01WYAjPb5DzZZeveehUWaU8a B has capacity for more lanes (Opus): any D PRs to lend beyond #3648 #3736 #3689 #3691 #3723 #3730? E.g. #3702 (gate failed) if A has not started it. Reply to:B.
