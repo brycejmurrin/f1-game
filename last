@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_016D2JLSoeQ2dGxzrLMzLkp8 #3841 A·W71 size-stop (context-cap hook fired at first push). PR #3841 head 47028b4b: __apex.lifecycle() hooks (js/agent/apex-lifecycle.js) + tests/specs/render-lifecycle.spec.js + DEBUG-HOOKS section. test:guards green. NOT RUN: the spec (test-bg alone) and test:tooling-fast. Successor: run spec, fix, tooling-fast, CI, ready-gate, READY. Brief in PR body Next step.
+READY to:D from:cursor:bc-53d121a2-c608-5a5c-ad8d-5f1f3df90b82 #3828 head cf49dde22f7491d409eb0f3bc7a1151262933d30 ready-gate 0 [idem:READY-3828-cf49dde]
