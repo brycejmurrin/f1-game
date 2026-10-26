@@ -48,7 +48,7 @@ How they were destroyed:
 - The garage warm 20 s later rebuilt ten of them, and race entry rebuilt the rest synchronously on its first frames
   (`createRenderPipeline`, not the async variant).
 
-On the iPhone 14 a lit pipeline costs about 1.2 s (`docs/notes/COLD-FIRST-RACE-WARM-2026-10-23.md` §1), so 13 rebuilds
+On the iPhone 14 a lit pipeline costs about 1.2 s (`docs/archive/notes/COLD-FIRST-RACE-WARM-2026-10-23.md` §1), so 13 rebuilds
 are roughly the 4.7 s "after menu idle" residue. The second race in a session is fast (89 ms) only because it starts
 less than 20 s after the first race's frames last drew those wrappers.
 

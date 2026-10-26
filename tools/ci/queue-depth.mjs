@@ -33,8 +33,8 @@
  * QUEUED RUNS FIRST (#2181, 2026-10-15). The list used to be in_progress first,
  * then queued, cut at MAX_RUNS: under load ≥ 30 runs are in progress, so no
  * queued run — where the queued jobs live — was ever read (the tool said 155
- * queued while a full scan found 545). Now runs with status queued, pending
- * and requested are listed (paged) before in_progress; the first MAX_RUNS are
+ * queued while a full scan found 545). Now runs with status queued are listed
+ * (paged) before in_progress (pending/requested/waiting runs dropped 2026-10-26); the first MAX_RUNS are
  * read job by job, and up to MAX_COUNTED more QUEUED runs are counted by
  * their jobs `total_count` (one per_page=1 call each; the sampled job gives
  * the OS). A count that skipped live runs is a lower bound: the line and the
@@ -74,6 +74,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api } from "./github-api.mjs";   // githubToken + curl -K - (token on stdin) + 64 MB maxBuffer
+import { createSnapshot } from "../lib/pr-snapshot.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -94,9 +95,14 @@ export const MAX_RUNS = 30;
 const MAX_COUNTED = 60;
 /** Pages of 100 runs read per status. */
 const MAX_PAGES = 3;
-/** Run statuses listed, waiting-for-a-runner first: that is where queued jobs live (#2181). */
-const RUN_STATUSES = ["queued", "pending", "requested", "waiting", "in_progress"];
-const QUEUED_RUN = new Set(["queued", "pending", "requested", "waiting"]);
+/** Run statuses listed, waiting-for-a-runner first: that is where queued jobs live (#2181).
+ *  2026-10-26 (system audit §7): `pending`, `requested` and `waiting` runs were three
+ *  more list calls (up to nine pages) per gauge for runs that hold no runner — a
+ *  pending run waits on a workflow concurrency group (the Pages train), a waiting
+ *  one on an environment gate, a requested one for seconds — so only queued and
+ *  in_progress are listed. Pending JOBS inside live runs are still counted apart. */
+export const RUN_STATUSES = ["queued", "in_progress"];
+const QUEUED_RUN = new Set(["queued"]);
 export const DEFAULT_OUT = "apex-status/queue-depth.json";
 
 /** Job statuses that wait for a runner; `waiting` (an environment gate) holds no slot. */
@@ -299,10 +305,14 @@ export function pushStartsCi(branch, request = api) {
 }
 
 /** Skip the gauge only when every target is known to start no CI. */
-export function pushVerdict(text, current, request = api) {
+export function pushVerdict(text, current, request = null) {
   const targets = pushTargets(text, current);
   if (!targets || !targets.length) return { skip: false, why: "push target unknown" };
+  // Default transport: the shared ETag-cached PR snapshot (a 304 is free).
+  let snap = null;
+  if (!request) { snap = createSnapshot(); request = snap.get; }
   const reads = targets.map((b) => pushStartsCi(b, request));
+  snap?.save();
   if (reads.some((x) => x.ci !== false)) return { skip: false, why: reads.map((x) => x.why).join("; ") };
   const why = reads.map((x) => x.why).join("; ");
   return { skip: true, why, line: `= queue skip — push starts no CI (${why}): not held` };

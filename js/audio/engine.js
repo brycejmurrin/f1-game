@@ -837,8 +837,9 @@ var GameAudio = (function () {
    * later gesture arrives, rebuild inside that gesture.
    */
   function resumeIfNeeded(gestureEv) {
-    if (!ctx) return;
+    if (!ctx || document.hidden) return;
     const isGesture = !!gestureEv;
+    if (isGesture && gestureEv.isTrusted !== false) soundtrack.retryStreamUnlock();
     if (isGesture && deviceRebuildPending && !staleStateRebuild(deviceRebuildPending)) {
       if (performOutputDeviceRebuild(String(deviceRebuildPending).startsWith("state-") ? deviceRebuildPending : "deferred-gesture")) return;
     }

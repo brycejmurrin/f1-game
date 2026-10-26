@@ -46,8 +46,8 @@ C = {
     },
     "prior-art-scout": {
         "file": "prior-art-scout.md", "prefix": "KNOWN", "cap": 30,
-        "row": r"^KNOWN (none\b|\S.* — .* — (FIXED|OPEN|REJECTED|\?)(\s|$))",
-        "shape": "KNOWN file:line — claim — where recorded — FIXED|OPEN|REJECTED|? (plain lines, not a table)",
+        "row": r"^KNOWN (none\b|\S.* — .* — (FIXED|OPEN|REJECTED|DEFERRED|\?)(\s|$))",
+        "shape": "KNOWN file:line — claim — where recorded — FIXED|OPEN|REJECTED|DEFERRED|? (plain lines, not a table)",
         "need": [r"^sources read:", r"^not read:"],
     },
     "agent-surface-reviewer": {
@@ -71,15 +71,10 @@ C = {
     },
     "ci-red-triage": {
         "file": "ci-red-triage.md",
-        "need": [r"^SHA \S+ · run \S+", r"^base: (already-red-on-base|new-on-this-push|unknown)\b", r"^next: \S"],
+        # Step 0 of the card: with no current red the report says so instead of inventing a SHA line.
+        "need": [r"^(SHA \S+ · run \S+|no (current|confirmed) red\b)", r"^(base: (already-red-on-base|new-on-this-push|unknown)\b|no (current|confirmed) red\b)", r"^next: \S"],
     },
-    "ci-watcher": {
-        "file": "ci-watcher.md", "prefix": "#", "cap": 999,
-        "row": r"^#\d+ .*→ (ARM|READY|SYNC|FIX|FOREIGN-ARM|WAIT|NONE|STAND-DOWN)\b",
-        "shape": "#<pr> <draft|ready> <sha7> <mergeable_state> ci=<state> gate=<state> armed=<method|-> → <SUGGEST>",
-        "need": [r"^BOARD \d+ open"],
-        "escape": r"\bexit 3\b|no token|API error",
-    },
+    # ci-watcher removed 2026-10-26: the agent was deleted (system-audit lane S4b; user grant, Bryce 2026-10-26).
 }
 
 

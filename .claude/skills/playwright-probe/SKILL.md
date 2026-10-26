@@ -29,6 +29,8 @@ cover most needs; drop to a custom harness for bespoke sweeps.
 
 ## Committed tools (use these first)
 
+`apex_viewer` (MCP) opens the car/circuit viewer page (`tools/carview.html`) for a framed look.
+
 ```sh
 # Same CLIs via MCP (takes scratch/apex-browser.lock; apex_status first):
 #   ./tools/mcp/apex-tools-mcp.sh call apex_eval '{"track":"monza","expr":"a.info()"}'
@@ -118,5 +120,3 @@ both references say what the numbers mean before you A/B on them.
   [references/cameras.md](references/cameras.md), free-cam table and framing
   recipes in
   [references/debug-cameras-framing.md](references/debug-cameras-framing.md).
-- Anti-flake Playwright patterns → [references/anti-flake-playbook.md](references/anti-flake-playbook.md).
-- Smoke / visual / bot-playtest templates → [references/smoke-visual-playbook.md](references/smoke-visual-playbook.md).

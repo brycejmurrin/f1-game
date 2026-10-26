@@ -722,6 +722,7 @@ interface GameCtx {
   netStart: NetStart | null;
   /** A SESSION's clock, not the page's — netplay nulls it between sessions. */
   netNow: number | null;
+  readonly netRaceT: number;
   /** The countdown clock and how many lamps are lit. */
   countT: number;
   lightsLit: number;

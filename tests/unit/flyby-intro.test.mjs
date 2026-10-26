@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { gameSource } from "../helpers/game-source.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -197,9 +197,13 @@ test("intro builds cancel at async boundaries and never fly over pending compila
     }
   }
   for (const name of ["quitToMenu", "clearMenuScreens"]) {
-    const start = game.indexOf("function " + name + "()");
-    const span = name === "quitToMenu" ? 240 : 100;
-    assert.match(game.slice(start, start + span), /cancelIntro\(\)/);
+    const body = symbolSource("function " + name + "()");
+    if (name === "quitToMenu") {
+      const teardown = body.indexOf("  pendingFinishQuit = false;");
+      assert.ok(teardown > 0, "normal quit teardown follows the deferred finish branch");
+      assert.doesNotMatch(body.slice(0, teardown), /cancelIntro\(\)/, "a deferred quit retains the active race");
+      assert.match(body.slice(teardown), /cancelIntro\(\)/, "normal quit teardown cancels intro ownership");
+    } else assert.match(body, /cancelIntro\(\)/);
   }
 });
 

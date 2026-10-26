@@ -1,6 +1,8 @@
 // test-groups-generated.test.mjs — tests/groups.json is the ONE definition of
-// a test group: package.json's `test:*` scripts and tooling-fast's file list
-// are generated from it, and this fails the moment either drifts.
+// a test group: package.json's `test:*` scripts are generated from it and
+// tooling-fast reads its `toolingFast` list at runtime (2026-10-26: the
+// 1,512-line generated copy inside tooling-fast.mjs was a merge-conflict hot
+// spot), and this fails the moment either drifts.
 //
 // Before this, a new group was three coordinated edits (a package.json script,
 // the TOOLING_FAST_FILES array, a docs/TESTING.md row) and forgetting one
@@ -22,6 +24,9 @@ const doc = loadGroups();
 test("package.json and the tooling-fast list match tests/groups.json", () => {
   const r = spawnSync("node", ["tools/gen/gen-test-groups.mjs", "--check"], { cwd: ROOT, encoding: "utf8" });
   assert.equal(r.status, 0, `generated files are stale — run \`node tools/gen/gen-test-groups.mjs\`\n${r.stdout}${r.stderr}`);
+  const tf = fs.readFileSync(path.join(ROOT, "tools/ci/tooling-fast.mjs"), "utf8");
+  assert.doesNotMatch(tf, /@gen-test-groups:begin/, "tooling-fast reads groups.json at runtime; no generated copy to merge-conflict on");
+  assert.match(tf, /TOOLING_FAST_FILES = Object\.freeze\(filesOnly\(loadGroups\(\)\.toolingFast\)\)/);
 });
 
 test("every test:* script is a group, and every group is a script", () => {

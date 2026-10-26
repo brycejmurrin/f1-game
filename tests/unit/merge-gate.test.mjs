@@ -11,9 +11,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { ciVerdict, openVerdict, pacingVerdict, pagesVerdict, slotOf, isGamePath, gameFiles, verdictLine, main, REQUIRED_CHECK, ratchetsOnMerge, localMergeGenCheck } from "../../tools/ci/merge-gate.mjs";
-import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN } from "../../tools/lib/gate-receipt.mjs";
+import { ciVerdict, openVerdict, pacingVerdict, pagesVerdict, slotOf, isGamePath, gameFiles, verdictLine, main, incidentNote, REQUIRED_CHECK, ratchetsOnMerge, localMergeGenCheck } from "../../tools/ci/merge-gate.mjs";
+import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict } from "../../tools/lib/gate-receipt.mjs";
 import { TYPES, formatLine, parseLine } from "../../tools/ci/fleet-bus.mjs";
+import { decide as liftDecide, main as liftMain } from "../../tools/ci/incident-lift.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const scratch = (prefix) => fs.mkdtempSync(path.join(fs.mkdirSync(path.join(ROOT, "artifacts", "tmp"), { recursive: true }) || path.join(ROOT, "artifacts", "tmp"), prefix));
@@ -211,16 +212,22 @@ const NEVER_RAISE = " — convert the pins or extract, never raise the ceiling f
 
 test("ratchetsOnMerge: an overage names its sites; a check that cannot run is a failure, not a pass", () => {
   const out = (status, stdout = "", extra = {}) => ({ status, stdout, stderr: "", ...extra });
-  const runWith = (byScript) => (cmd, argv) => byScript[argv[0] === "--test" ? "ceiling" : "ratchets"];
-  const ok = ratchetsOnMerge({ run: runWith({ ratchets: out(0), ceiling: out(0) }) });
-  assert.deepEqual(ok, { ok: true, evidence: `ratchets.mjs and the ${PIN} ceiling hold on the merge result` });
-  const over = ratchetsOnMerge({ run: runWith({ ratchets: out(0), ceiling: out(1, `error: '7317 ${PIN} sites (ceiling 7316) — convert a source pin'`) }) });
+  const seen = [];
+  const runWith = (byScript) => (cmd, argv, o) => { seen.push([argv, o.env]); return byScript[argv[0] === "--test" ? argv[1] : "ratchets"] || byScript.tests; };
+  const ok = ratchetsOnMerge({ run: runWith({ ratchets: out(0), tests: out(0) }) });
+  assert.deepEqual(ok, { ok: true, evidence: "ratchets.mjs and the whole-tree count tests hold on the merge result" });
+  assert.deepEqual(seen.map(([a]) => a.at(-1)), ["tools/check/ratchets.mjs", ...["assert-match-ratchet", "source-pin-hygiene", "vm-filename-lint",
+    "test-groups", "docs-integrity", "output-surface"].map((f) => `tests/unit/${f}.test.mjs`)], "the whole count family runs on the merge result");
+  assert.ok(seen.every(([, env]) => env.APEX_RATCHET_BASE_REF === "HEAD" && !("NODE_TEST_CONTEXT" in env) && !("APEX_RATCHET_ABSOLUTE" in env)),
+    "judged against the tip the merge sits on, never inheriting a test context");
+  const pinFail = out(1, `error: '7317 ${PIN} sites (ceiling 7316) — convert a source pin'`);
+  const over = ratchetsOnMerge({ run: runWith({ ratchets: out(0), tests: out(0), "tests/unit/assert-match-ratchet.test.mjs": pinFail }) });
   assert.deepEqual(over, { ok: false, evidence: `${OVER}assert-match ceiling: 7317 ${PIN} sites (ceiling 7316)${NEVER_RAISE}` });
-  const both = ratchetsOnMerge({ run: runWith({ ratchets: out(1, "css/hud.css codeLines 2300 > 2279"), ceiling: out(1, `7317 ${PIN} sites (ceiling 7316)`) }) });
+  const both = ratchetsOnMerge({ run: runWith({ ratchets: out(1, "css/hud.css codeLines 2300 > 2279"), tests: out(0), "tests/unit/assert-match-ratchet.test.mjs": pinFail }) });
   assert.equal(both.ok, false);
   assert.equal(both.evidence, `${OVER}ratchets.mjs: css/hud.css codeLines 2300 > 2279; assert-match ceiling: 7317 ${PIN} sites (ceiling 7316)${NEVER_RAISE}`,
     "both overages are reported, not just the first");
-  const dead = ratchetsOnMerge({ run: runWith({ ratchets: out(null, "", { error: new Error("spawn ENOENT") }), ceiling: out(0) }) });
+  const dead = ratchetsOnMerge({ run: runWith({ ratchets: out(null, "", { error: new Error("spawn ENOENT") }), tests: out(0) }) });
   assert.deepEqual(dead, { ok: false, evidence: `${OVER}ratchets.mjs: spawn ENOENT${NEVER_RAISE}` });
 });
 
@@ -262,13 +269,12 @@ test("two PRs that are each at the assert-match ceiling alone are over it on the
     git(T, "init", "-q", "--bare", remote);
     git(T, "clone", "-q", remote, W);
     git(W, "checkout", "-q", "-b", "deploy-x");
-    // The real ratchet test, its ceiling lowered to 3 so the fixture stays small; ratchets.mjs is a no-op stand-in.
-    const real = fs.readFileSync(path.join(ROOT, "tests/unit/assert-match-ratchet.test.mjs"), "utf8");
-    const lowered = real.replace(/const CEILING = \d+;/, "const CEILING = 3;");
-    assert.notEqual(lowered, real, "the real test's ceiling line was found and lowered");
+    // The real ratchet test and the real ratchets.mjs, with a fixture ratchets.json whose only row is assertPins at 3.
     const UNIT = "tests/unit";   // the fixture repo's own dir: built, not spelled, so the path-reference lint reads no phantom file
-    write(W, `${UNIT}/assert-match-ratchet.test.mjs`, lowered);
-    write(W, "tools/check/ratchets.mjs", "process.exit(0);\n");
+    for (const rel of [`${UNIT}/assert-match-ratchet.test.mjs`, "tools/check/ratchets.mjs", "tools/hooks/ratchet-reason.mjs"]) {
+      write(W, rel, fs.readFileSync(path.join(ROOT, rel), "utf8"));
+    }
+    write(W, "tests/data/ratchets.json", JSON.stringify({ files: {}, tree: { assertPins: 3 } }) + "\n");
     write(W, `${UNIT}/base.test.mjs`, pins(2));
     git(W, "add", "-A"); git(W, "commit", "-q", "-m", "base: 2 pins, ceiling 3");
     git(W, "push", "-q", "origin", "deploy-x");
@@ -282,7 +288,9 @@ test("two PRs that are each at the assert-match ceiling alone are over it on the
     const head2 = git(W, "rev-parse", "pr2");
     const gate = (pr, head, headRef) => localMergeGenCheck({
       pr, head, headRef, cwd: W, deploy: "deploy-x",
-      run: (cmd, argv, o) => (cmd === "npm" ? { status: 0, stdout: "", stderr: "" } : spawnSync(cmd, argv, o)),
+      // npm (gen:check) and the other count tests are stubbed: the fixture carries only the pin counter.
+      run: (cmd, argv, o) => (cmd === "npm" || (argv[0] === "--test" && !argv[1].endsWith("assert-match-ratchet.test.mjs"))
+        ? { status: 0, stdout: "", stderr: "" } : spawnSync(cmd, argv, o)),
     });
     const alone = gate(2, head2, "pr2");
     assert.equal(alone.ok, true, alone.evidence);
@@ -294,6 +302,90 @@ test("two PRs that are each at the assert-match ceiling alone are over it on the
     // ... and now #3237's head, unchanged and still green in its own CI, is one over on the merge result.
     const together = gate(2, head2, "pr2");
     assert.equal(together.ok, true, "the merge and gen:check are fine: only the ratchet row sees the overage");
-    assert.deepEqual(together.ratchets, { ok: false, evidence: `${OVER}assert-match ceiling: 4 ${PIN} sites (ceiling 3)${NEVER_RAISE}` });
+    assert.equal(together.ratchets.ok, false, "pr2 adds the 4th pin onto a tip already at 3");
+    assert.ok(/assert-match ceiling: 4 pin-shaped asserts \(ceiling 3; base 3\/3\)/.test(together.ratchets.evidence), together.ratchets.evidence);
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+// 2026-10-26 system audit §10 (the O23 incident: an UNCOMMITTED merge-gate.mjs edit wrote an ok receipt). User grant,
+// Bryce 2026-10-26 ~23:00 PT: "Fix hook or guard or perm".
+test("a receipt records the gate files' sha256; gateFilesVerdict (JS) and gate_files_check (Python) refuse an edited or uncommitted gate", () => {
+  const dir = scratch("merge-gate-files-");
+  const g = (...a) => spawnSync("git", ["-C", dir, ...a], { encoding: "utf8" });
+  try {
+    g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    for (const f of GATE_FILES) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.copyFileSync(path.join(ROOT, f), path.join(dir, f)); }
+    g("add", "-A"); g("commit", "-qm", "gate");
+    writeReceipt(dir, "merge", { pr: 5, head: HEAD, ok: true }, { main: null, gateRoot: dir });
+    const rc = readReceipt(dir, "merge", 5);
+    assert.deepEqual(rc.gateFiles, gateFileHashes(dir));
+    assert.equal(rc.gateRoot, dir);
+    assert.match(rc.gateFiles["tools/ci/merge-gate.mjs"], /^[0-9a-f]{64}$/);
+    const py = (receipt) => JSON.parse(spawnSync("python3", ["-c", `import json,sys; sys.path.insert(0, ${JSON.stringify(path.join(ROOT, ".claude/hooks"))}); import merge_policy as P; print(json.dumps(P.gate_files_check(${JSON.stringify(dir)}, json.loads(sys.stdin.read()))))`], { input: JSON.stringify(receipt), encoding: "utf8" }).stdout);
+    const both = (receipt) => { const js = gateFilesVerdict(dir, receipt); const [ok, why] = py(receipt); assert.equal(ok, js.ok, `js=${js.why} py=${why}`); return js; };
+    assert.equal(both(rc).ok, true, "the committed gate's receipt");
+    const f = path.join(dir, "tools/ci/merge-gate.mjs");
+    const orig = fs.readFileSync(f, "utf8");
+    fs.writeFileSync(f, orig + "// --pacing-override\n");
+    assert.match(both(rc).why, /not the file that wrote this receipt/);
+    assert.match(both({ ...rc, gateFiles: gateFileHashes(dir) }).why, /differ from HEAD/, "the edited gate hashed itself: still refused");
+    fs.writeFileSync(f, orig);
+    assert.match(both({ ...rc, gateFiles: undefined }).why, /no gate-file hashes/);
+    // the receipt check proper: verify_files only where the hook doors ask for it
+    const [ok] = JSON.parse(spawnSync("python3", ["-c", `import json,sys; sys.path.insert(0, ${JSON.stringify(path.join(ROOT, ".claude/hooks"))}); import merge_policy as P; print(json.dumps(P.receipt_check(${JSON.stringify(dir)}, "merge", 5, ${JSON.stringify(HEAD)}, verify_files=True)))`], { encoding: "utf8" }).stdout);
+    assert.equal(ok, true);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("mergeable_state unknown is re-read up to 3 times with backoff before the open row refuses", () => {
+  const dir = scratch("merge-gate-unknown-");
+  try {
+    let reads = 0;
+    const states = ["unknown", "unknown", "clean"];
+    const pull = () => ({ state: "open", draft: false, mergeable_state: states[Math.min(reads - 1, states.length - 1)], head: { sha: HEAD, ref: "cursor/x" }, body: "## Plan\n- [x] done\n", changed_files: 1 });
+    const request = (p) => {
+      if (p === "pulls/7") { reads++; return { json: pull() }; }
+      if (p.startsWith("pulls/7/files")) return { json: [{ filename: "tools/ci/ready-gate.mjs" }] };
+      if (p.startsWith("commits/")) return { json: { check_runs: [{ id: 1, name: "Structural guards", status: "completed", conclusion: "success" }, { id: 2, name: "CI", status: "completed", conclusion: "success" }], total_count: 2 } };
+      return { error: `unexpected ${p}` };
+    };
+    const slept = [];
+    const deps = { request, root: dir, env: { APEX_FLEET_AS: "claude:session_ME" }, bus: () => ({ entries: [] }), localMerge: () => ({ ok: true, evidence: "ok", tip: "t".repeat(40) }), pages: () => true, log: () => {}, sleep: (ms) => slept.push(ms) };
+    assert.equal(main(["--pr", "7"], deps), 0, "clean on the third read");
+    assert.deepEqual(slept, [2000, 4000]);
+    reads = 0; slept.length = 0; states.splice(0, 3, "unknown", "unknown", "unknown", "unknown", "unknown");
+    assert.equal(main(["--pr", "7"], deps), 1);
+    assert.deepEqual(slept, [2000, 4000, 8000], "three retries, then the row refuses");
+    assert.match(readReceipt(dir, "merge", 7).evidence, /mergeable_state unknown/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("Q4: incidentNote prints the newest INCIDENT line and never changes pacing", () => {
+  assert.equal(incidentNote([e("DONE", "A", "x", 1)]), "");
+  assert.ok(/^INCIDENT OPEN .*pages red/.test(incidentNote([e("INCIDENT", "A", "pages red [fix:abcdef1]", 1)])));
+  assert.ok(/^INCIDENT lifted/.test(incidentNote([e("INCIDENT", "A", "pages red", 1), e("INCIDENT", "A", "lifted", 2)])));
+  const entries = [e("INCIDENT", "A", "pages red [fix:abcdef1]", 1)];
+  assert.equal(pacingVerdict(entries, { pr: 5 }).ok, false, "an open INCIDENT still freezes");
+});
+
+test("Q4: incident-lift lifts only when Pages is green on the fix sha", () => {
+  const open = [e("INCIDENT", "claude:A", "pages red [fix:abcdef1234]", 1)];
+  assert.equal(liftDecide([], () => true).action, "none");
+  assert.equal(liftDecide([e("INCIDENT", "A", "manual freeze", 1)], () => true).action, "none");
+  assert.equal(liftDecide(open, () => null).action, "wait");
+  assert.equal(liftDecide(open, () => false).action, "wait");
+  const d = liftDecide(open, () => true);
+  assert.equal(d.action, "lift");
+  assert.ok(/lifted/.test(d.text));
+  const sent = [];
+  const out = [];
+  const opts = (green) => ({ bus: () => ({ entries: open }), pages: () => green, send: (...a) => { sent.push(a); return { ok: true }; }, log: (l) => out.push(l), env: { APEX_FLEET_AS: "claude:session_X" } });
+  assert.equal(liftMain([], opts(null)), 2);
+  assert.equal(sent.length, 0);
+  assert.equal(liftMain(["--dry-run"], opts(true)), 0);
+  assert.equal(sent.length, 0, "dry run sends nothing");
+  assert.equal(liftMain([], opts(true)), 0);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0][0], "INCIDENT");
+  assert.ok(/lifted/.test(sent[0][3]));
 });

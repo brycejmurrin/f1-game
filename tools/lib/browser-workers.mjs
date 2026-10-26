@@ -46,9 +46,11 @@ export function captureGpuOptions({ env = process.env, gpu = glStack(env),
     if (!Number.isInteger(threads) || threads < 1 || threads > 256) throw new Error("capture: LP_NUM_THREADS must be an integer 1-256");
     launchEnv.LP_NUM_THREADS = String(threads);
     if (gpu === "llvmpipe") {
-      // Mesa's GL llvmpipe loads through a DRM node; without one Chromium silently
-      // falls back to SwiftShader (docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe).
-      if (!exists("/dev/dri") && !env.GITHUB_ACTIONS) throw new Error("capture: llvmpipe needs /dev/dri (CI only); this container has none — use --gpu swiftshader or unset APEX_GL");
+      // llvmpipe needs Mesa's EGL/GLES libraries, not /dev/dri: measured 2026-10-26 in a cloud
+      // container with no /dev/dri (docs/notes/LOCAL-LLVMPIPE-2026-10-26.md §Probe result) — ANGLE
+      // loads libEGL.so.1 by name and falls back to SwiftShader silently when it is missing.
+      const hasEgl = ["/usr/lib/x86_64-linux-gnu/libEGL.so.1", "/usr/lib/aarch64-linux-gnu/libEGL.so.1", "/usr/lib/libEGL.so.1"].some(exists);
+      if (!hasEgl && !env.GITHUB_ACTIONS) throw new Error("capture: llvmpipe needs Mesa EGL (libEGL.so.1 missing — `apt-get install -y libegl1 libgles2 mesa-vulkan-drivers xvfb`); use --gpu swiftshader or unset APEX_GL until then");
       launchEnv.LIBGL_ALWAYS_SOFTWARE = "1";
       launchEnv.GALLIUM_DRIVER = "llvmpipe";
       return { args: captureChromiumArgs(launchEnv), env: launchEnv };

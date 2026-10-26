@@ -80,6 +80,7 @@ const DataTelemetryView = (function () {
       tels.forEach(function (t, i) {
         const li = laps.indexOf(t);
         mainArea.appendChild(laneHeader(t, laneCols[i], dupNum, function (ht) {
+          if (t.car && t.car.length && t.car[0].t > 0) ht.appendChild(el("span", "dh-tsect", "Start telemetry missing · distance comparison unavailable"));
           if (!t.lap) {
             ht.appendChild(el("span", "dh-tsect", "No timed lap found in this session."));
             return;
@@ -131,7 +132,7 @@ const DataTelemetryView = (function () {
       // off before the lap ended.
       laps.forEach(function (t) { scan(t.car); });
       view.tMax = view.tMax || 1;
-      laps.forEach(function (t) { t.cum = cumDist(t.car); });
+      laps.forEach(function (t) { t.cum = cumDist(t.car, t.lap && t.lap.lapDuration); });
       if (primary.lap && primary.lap.s1 !== null && primary.lap.s2 !== null) {
         view.sectors = [primary.lap.s1, primary.lap.s1 + primary.lap.s2];
       }

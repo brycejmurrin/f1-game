@@ -1,0 +1,14 @@
+{
+ "ccr": {
+  "id": "session_01ORCHORCHORCHORCHORCHOR",
+  "title": "[Orch] B",
+  "external_metadata": {
+   "rate_limit_info": {
+    "isUsingOverage": false,
+    "rateLimitType": "five_hour",
+    "resetsAt": 1792996200,
+    "status": "allowed"
+   }
+  }
+ }
+}

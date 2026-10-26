@@ -147,6 +147,7 @@ const FULL = [
   "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
   "js/render/shared/chunk-bins.js",    // ChunkBins: the ONE centroid->cell binning of chunked meshes; its key is the cross-backend chunk identity (call-time read by the chunked builders)
   // GLX's shaders, pass modules and renderer are DEFERRED along with TLX/WGX.
+  "js/perf/gfx-escalation.js",
   "js/render/gfx.js",
   "js/render/renderer-boot.js", // RendererBoot: backend selection, canary and fallback boot
   "js/render/shared/gltf.js",
@@ -381,7 +382,6 @@ const FULL = [
   "js/perf/spans.js",
   "js/perf/race-entry-profile.js",
   "js/perf/title-warm.js",       // TitleWarm: the race world's prep + program warm on an idle title, once per update on a phone (A·W50)
-  "js/perf/gfx-escalation.js",
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
   "js/render/shared/compatibility-recovery.js",
@@ -562,6 +562,7 @@ const CARVIEW = [
   "js/render/shared/chunk-bins.js",    // ChunkBins: the ONE centroid->cell binning of chunked meshes; its key is the cross-backend chunk identity (call-time read by the chunked builders)
   "js/render/glx/chunked.js",
   "js/render/glx/soft.js",   // GLXSoft: headless soft-present overlay (before glx.js)
+  "js/perf/gfx-escalation.js",
   "js/render/glx/glx.js",
   "js/data/teams.js",
   "js/car/parts.js",
@@ -639,6 +640,7 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  ["js/perf/gfx-escalation.js", "js/render/gfx.js"],
   ["js/data/teams.js", "js/career/team-identity.js"],
   ["js/career/team-identity.js", "js/career/save-migrate.js"],
   ["js/garage/setup-tune.js", "js/garage/setup-presets.js"],
