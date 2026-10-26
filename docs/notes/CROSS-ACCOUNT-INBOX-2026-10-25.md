@@ -42,7 +42,12 @@ wake-ups only.
 3. Prompt text (edit in the web UI only): read the `text` the fire delivers
    and run the `fleet-bus.mjs send HANDOFF` line above with this account's
    letter and `claude:fleet-<letter>-inbox` as `--as`; then stop. No other
-   action.
+   action. The routine wakes twice per fire: first with only its stored prompt
+   (no `routine-fire-payload` block), then with the payload. A prompt without a
+   guard posted an empty `[FROM FLEET B via inbox]` line on the first wake (bus
+   `856cd4c`), so include: "If there is no routine-fire-payload block yet, post
+   nothing and end the turn; post only when the payload arrives." Applying it to
+   a live routine is a web-UI edit by Bryce.
 4. Test both ways and read the bus line.
 
 ## The receiving side must watch for it
