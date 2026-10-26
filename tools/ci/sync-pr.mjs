@@ -190,7 +190,7 @@ export function returnTo(startedOn, keptBranch, readGit = git) {
   return { ok: true, line: `working tree back on ${startedOn}; the attempt is kept on branch ${keptBranch} for inspection` };
 }
 
-export function main() {
+export async function main() {
   if (flag("--help") || flag("-h")) { usage(); return 0; }
   if (!branch) { usage(); return 1; }
   const unknown = argv.find((a) => a.startsWith("-") && !["--plan", "--push", "--resume", "--force-clean-behind", "--stop", "--ignore-claims"].includes(a) && !/^--(verify|from|wait-load)=/.test(a));
@@ -265,7 +265,7 @@ export function main() {
   try {
     if (!resume) {
       const fastForward = p.fastForward;
-      const merged = fastForward ? "already caught up" : mergeDeployTip();
+      const merged = fastForward ? "already caught up" : await mergeDeployTip();
       log(fastForward ? "already caught up with the deploy tip — nothing to merge" : `merge: ${merged}`);
       if (verify === "none" && !(fastForward || merged === "merged")) {
         log(`--verify=none needs a clean merge that regenerated nothing (got: ${merged}) — verifying fast instead`);

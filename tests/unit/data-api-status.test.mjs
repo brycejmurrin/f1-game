@@ -177,7 +177,7 @@ test("a stalled 429 keeps its 60 s retry delay outside the provider queue", asyn
   assert.equal([...h.timers.values()][0].at - h.calls[0].at, 75000);
   const other = h.api.weather(8, 0).catch((error) => error);
   await h.flush();
-  assert.equal(h.calls.length, 2, "a different endpoint starts during retry backoff");
+  assert.equal(h.calls.length, 1, "a different endpoint waits for the shared Retry-After window");
   h.api.cancelAll();
   assert.equal((await result).cancelled, true);
   assert.equal((await other).cancelled, true);
@@ -448,6 +448,168 @@ function pacedHarness(firstStatus = 200) {
   return { api: context.api, calls, timers, flush, advance };
 }
 
+function overlapHarness(reply = () => ({ delay: 2000, data: [] }), onTimer = null) {
+  let now = 1_000_000, nextId = 0;
+  const timers = new Map(), calls = [], active = { openf1: 0, other: 0 }, peak = { openf1: 0, other: 0 };
+  class Clock extends Date { static now() { return now; } }
+  const context = vm.createContext({ Date: Clock, AbortController,
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} },
+    setTimeout(fn, ms) { const id = ++nextId; timers.set(id, { fn: () => { fn(); if (onTimer) onTimer(ms); }, at: now + ms }); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    fetch(url, init) {
+      const provider = url.startsWith("https://api.openf1.org/") ? "openf1" : "other";
+      const call = { url, at: now, signal: init.signal };
+      calls.push(call); active[provider]++; peak[provider] = Math.max(peak[provider], active[provider]);
+      const spec = reply(url, calls.length), status = spec.status || 200;
+      const body = () => new Promise((resolve, reject) => {
+        let ended = false, timer;
+        const finish = (value, error) => {
+          if (ended) return;
+          ended = true; active[provider]--; context.clearTimeout(timer);
+          init.signal.removeEventListener("abort", abort);
+          error ? reject(error) : resolve(value);
+        };
+        const abort = () => finish(null, new Error("aborted body"));
+        init.signal.addEventListener("abort", abort, { once: true });
+        if (spec.delay != null) timer = context.setTimeout(() => finish(spec.data || []), spec.delay);
+      });
+      const response = { ok: status === 200, status,
+        headers: { get: () => { if (spec.headerRead) spec.headerRead(); return spec.retryAfter || null; } }, json: body,
+        text: () => body().then(() => JSON.stringify({ detail: "rate limited" })) };
+      if (spec.headersReady) return new Promise(resolve => spec.headersReady(() => resolve(response)));
+      return spec.headersDelay ? new Promise(resolve => context.setTimeout(() => resolve(response), spec.headersDelay))
+        : Promise.resolve(response);
+    } });
+  seedLog(context); vm.runInContext(apiSource + ";globalThis.api=F1API", context, { filename: absSrc("js/data/api.js") });
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  async function advance(ms) {
+    const target = now + ms;
+    for (;;) {
+      const next = [...timers].sort((a, b) => a[1].at - b[1].at)[0];
+      if (!next || next[1].at > target) break;
+      timers.delete(next[0]); now = next[1].at; next[1].fn(); await flush();
+    }
+    now = target; await flush();
+  }
+  async function finish(promise) {
+    let done = false, value, failure;
+    promise.then(v => { done = true; value = v; }, e => { done = true; failure = e; });
+    await flush();
+    for (let i = 0; !done && i < 500; i++) {
+      const next = [...timers.values()].sort((a, b) => a.at - b.at)[0];
+      assert.ok(next, "pending request graph owns a timer");
+      await advance(next.at - now);
+    }
+    assert.equal(done, true, "request graph settles within a bounded number of clock steps");
+    if (failure) throw failure;
+    return value;
+  }
+  return { api: context.api, context, calls, timers, peak, active, advance, flush, finish, get now() { return now; } };
+}
+
+const rawURL = n => "https://api.openf1.org/v1/location?session_key=" + n;
+const rawRequest = (h, n) => h.api.request(rawURL(n), 0, { cache: false });
+
+test("provider bodies overlap at cap two while shared callers, cancellation and other providers stay independent", async () => {
+  const h = overlapHarness(() => ({ delay: null }));
+  const first = rawRequest(h, 1), duplicate = rawRequest(h, 1);
+  assert.equal(first, duplicate, "duplicate URLs share the complete attempt");
+  const jobs = [first, rawRequest(h, 2), rawRequest(h, 3)].map(p => p.catch(e => e));
+  await h.flush(); await h.advance(400);
+  assert.deepEqual(h.calls.map(c => c.at), [1_000_000, 1_000_400]);
+  await h.advance(400);
+  assert.equal(h.calls.length, 2, "a third body waits for capacity after the pacing gap expires");
+  const other = h.api.request("https://api.jolpi.ca/ergast/f1/2026.json", 0, { cache: false }).catch(e => e);
+  await h.flush();
+  assert.equal(h.calls.length, 3, "Jolpica has its own body capacity and start coordinator");
+  assert.equal(h.api.cancelAll(), 3, "both OpenF1 bodies and the other provider retain abort ownership");
+  assert.ok((await Promise.all([...jobs, other])).every(e => e.cancelled));
+  assert.ok(h.calls.every(c => c.signal.aborted));
+  assert.equal(h.timers.size, 0, "cancel releases pacing/capacity waits and body deadlines");
+  const fresh = rawRequest(h, 4).catch(e => e); await h.flush();
+  assert.equal(h.calls.length, 4, "a new generation is not held by cancelled bodies");
+  h.api.cancelAll(); assert.equal((await fresh).cancelled, true);
+  assert.equal(h.peak.openf1, 2);
+});
+
+test("overlapping attempts retain separate original deadlines and release capacity on timeout", async () => {
+  const h = overlapHarness(url => ({ delay: url === rawURL(3) ? 0 : null }));
+  const first = rawRequest(h, 1).catch(e => e), second = rawRequest(h, 2).catch(e => e);
+  const third = rawRequest(h, 3);
+  await h.flush(); await h.advance(14999);
+  assert.equal(h.calls.length, 2);
+  await h.advance(1);
+  assert.match((await first).message, /timed out/);
+  assert.equal(h.calls[0].signal.aborted, true);
+  assert.equal(h.calls[1].signal.aborted, false);
+  assert.equal(h.calls[2].at, 1_015_000, "first deadline releases a slot without waiting for the second body");
+  await third;
+  await h.advance(400);
+  assert.match((await second).message, /timed out/);
+  assert.equal(h.calls[1].signal.aborted, true);
+  assert.equal(h.timers.size, 0);
+  assert.equal(h.peak.openf1, 2);
+});
+
+test("bounded overlap preserves 400 ms starts and the shared 28-start sliding minute window", async () => {
+  const h = overlapHarness(() => ({ delay: 1000 }));
+  await h.finish(Promise.all(Array.from({ length: 35 }, (_, i) => rawRequest(h, i))));
+  assert.equal(h.peak.openf1, 2);
+  const starts = h.calls.map(c => c.at);
+  for (let i = 1; i < starts.length; i++) assert.ok(starts[i] - starts[i - 1] >= 400);
+  for (const start of starts) assert.ok(starts.filter(t => t <= start && start - t < 60000).length <= 28);
+  assert.equal(starts[28] - starts[0], 60050);
+  assert.equal(h.timers.size, 0);
+});
+
+test("429 backoff releases body capacity and honours Retry-After alongside independent requests", async () => {
+  const attempts = new Map();
+  const h = overlapHarness(url => {
+    const n = (attempts.get(url) || 0) + 1; attempts.set(url, n);
+    return url === rawURL(1) && n === 1 ? { status: 429, retryAfter: "60", delay: 100 }
+      : { delay: 2000 };
+  });
+  const requests = Promise.all([1, 2, 3].map(n => rawRequest(h, n)));
+  await h.finish(requests);
+  assert.equal(h.calls.length, 4);
+  assert.deepEqual(h.calls.map(c => c.at - 1_000_000), [0, 60000, 60400, 62000]);
+  assert.equal(h.peak.openf1, 2);
+  assert.equal(h.timers.size, 0);
+});
+
+for (const delay of [100, 2000]) test(`four-driver dependent telemetry graph with ${delay} ms bodies preserves inputs and bounded pacing`, async () => {
+  const t0 = Date.parse("2026-09-20T11:00:00Z");
+  const h = overlapHarness(url => {
+    const endpoint = new URL(url).pathname;
+    const rows = endpoint.endsWith("/laps")
+      ? [{ lap_number: 4, lap_duration: 90, date_start: new Date(t0).toISOString(), is_pit_out_lap: false }]
+      : endpoint.endsWith("/car_data") ? Array.from({ length: 4 }, (_, i) => ({ date: new Date(t0 + i * 270).toISOString(),
+        speed: 250, throttle: 100, brake: 0, n_gear: 8, rpm: 10000, drs: 12 }))
+      : endpoint.endsWith("/location") ? Array.from({ length: 4 }, (_, i) => ({ date: new Date(t0 + i * 270).toISOString(), x: 100 + i, y: 200 + i })) : [];
+    return { delay, data: rows };
+  });
+  h.context.DataTelemetryView = { create: () => ({}) };
+  for (const name of ["core/mat4", "data/telemetry-model", "data/telemetry"]) {
+    let source = await readFile(new URL(`../../js/${name}.js`, import.meta.url), "utf8");
+    if (name === "data/telemetry") source = source.replace("return { loadTelemetry, closeTelemPopup };",
+      "return { loadTelemetry, closeTelemPopup, fetchDriverTel };");
+    vm.runInContext(source, h.context, { filename: absSrc(`js/${name}.js`) });
+  }
+  const controller = vm.runInContext("DataTelemetry.create({})", h.context);
+  const values = await h.finish(Promise.all([1, 4, 16, 44].map((num, i) => controller.fetchDriverTel(123, { num }, i === 0))));
+  assert.equal(h.calls.length, 14);
+  assert.ok(values.every(value => value.car.length === 4 && value.loc.length === 4));
+  for (const num of [1, 4, 16, 44]) {
+    const driver = h.calls.filter(c => new URL(c.url).searchParams.get("driver_number") === String(num));
+    assert.ok(driver[0].url.includes("/laps?"));
+    assert.ok(driver.slice(1).every(c => c.at >= driver[0].at + delay), "lap metadata settles before its dependent time-window requests start");
+  }
+  assert.equal(h.now - 1_000_000, delay === 100 ? 5300 : 14400,
+    "fast bodies stay pacing-bound; slow bodies overlap within the two-request cap");
+  assert.equal(h.peak.openf1, delay === 100 ? 1 : 2);
+  assert.equal(h.timers.size, 0);
+});
+
 test("cancel during OpenF1 pacing releases work without erasing the actual minute budget", async () => {
   const h = pacedHarness();
   const openf1 = (n) => h.api.request("https://api.openf1.org/v1/laps?session_key=" + n, 0, { cache: false });
@@ -561,7 +723,8 @@ test("Data Hub, LIVE, and telemetry keep failed state distinct from a valid empt
 // backoff sleep is observable instead of slept.
 function retryHarness(retryAfter) {
   const timers = [];
-  let calls = 0;
+  let calls = 0, now = 1_000_000;
+  class Clock extends Date { static now() { return now; } }
   const context = vm.createContext({
     fetch: async () => {
       calls++;
@@ -569,8 +732,8 @@ function retryHarness(retryAfter) {
     },
     AbortController,
     localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} },
-    Date,
-    setTimeout(fn, ms) { if (ms === 15000) return 0; timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},   // skip the fetch deadline
+    Date: Clock,
+    setTimeout(fn, ms) { if (ms === 15000) return 0; timers.push({ fn: () => { now += ms; fn(); }, ms }); return timers.length; }, clearTimeout() {},   // skip the fetch deadline
   });
   seedLog(context);
   vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
@@ -1031,6 +1194,70 @@ test("#2190 an oversize body is served from memory within its TTL and replaces t
   await assert.rejects(h.api.request(url, ttl), "the LRU holds 4 bodies: the oldest is evicted, not kept forever");
 });
 
+for (const headersDelay of [0, 200]) test(`429 headers at ${headersDelay} ms pause pending starts across cancel/reopen`, async () => {
+  const h = overlapHarness(url => url === rawURL(1)
+    ? { status: 429, retryAfter: "60", delay: null, headersDelay } : { delay: 10 });
+  const jobs = [1, 2, 3, 4].map(n => rawRequest(h, n).catch(e => e));
+  await h.flush(); await h.advance(1600);
+  assert.equal(h.calls.length, 1, "known headers stop even a reservation already sleeping for 400 ms");
+  const other = h.api.request("https://api.jolpi.ca/ergast/f1/2026.json", 0, { cache: false });
+  await h.flush(); await h.advance(10); await other;
+  assert.equal(h.calls.length, 2, "unrelated provider starts while the throttle body is stalled");
+  assert.equal(h.api.cancelAll(), 1);
+  assert.ok((await Promise.all(jobs)).every(e => e.cancelled));
+  assert.equal(h.timers.size, 0, "cancel cleans body deadlines and shared pause waits");
+  const fresh = rawRequest(h, 5); await h.flush();
+  await h.advance(60000 + headersDelay - (h.now - 1_000_000) - 1);
+  assert.equal(h.calls.length, 2, "reopen retains the announced provider window");
+  await h.advance(1);
+  assert.equal(h.calls.length, 3);
+  assert.equal(h.calls[2].at, 1_060_000 + headersDelay);
+  await h.advance(10); await fresh;
+  assert.equal(h.timers.size, 0);
+});
+
+for (const status of [401, 403]) test(`${status} headers retain per-request auth semantics without a permanent provider lock`, async () => {
+  const h = overlapHarness(url => url === rawURL(1) ? { status, delay: null, retryAfter: "60" } : { delay: 10 });
+  const refused = rawRequest(h, 1).catch(e => e), sibling = rawRequest(h, 2);
+  await h.flush(); await h.advance(410); await sibling;
+  assert.equal(h.calls.length, 2, "auth refusal does not invent a provider-wide lifetime");
+  await h.advance(14590);
+  assert.equal((await refused).status, status, "body timeout preserves auth status and never retries");
+  const fresh = rawRequest(h, 3); await h.flush(); await h.advance(10); await fresh;
+  assert.equal(h.calls.length, 3);
+  assert.equal(h.timers.size, 0);
+});
+
+
+test("429 header microtasks interleaved with a waking pacing reservation cannot pass the final start gate", async () => {
+  for (let hops = 0; hops < 12; hops++) {
+    let headers, known = false, lateStarts = 0;
+    const h = overlapHarness(url => {
+      if (url === rawURL(1)) return { status: 429, retryAfter: "60", delay: null,
+        headersReady: resolve => { headers = resolve; }, headerRead: () => { known = true; } };
+      if (known) lateStarts++;
+      return { delay: 10 };
+    }, ms => {
+        if (ms !== 400) return;
+        let pending = Promise.resolve();
+        for (let i = 0; i < hops; i++) pending = pending.then(() => {});
+        pending.then(headers);
+      });
+    const jobs = [rawRequest(h, 1), rawRequest(h, 2)].map(p => p.catch(e => e));
+    await h.flush(); await h.advance(400);
+    // Some orders legitimately start before headers are delivered. In every
+    // order, once headers publish their window a third start must be blocked.
+    assert.equal(known, true);
+    assert.equal(lateStarts, 0, `pacing wake must not cross a published throttle, microtask offset ${hops}`);
+    const before = h.calls.length;
+    const third = rawRequest(h, 3).catch(e => e);
+    await h.flush(); await h.advance(800);
+    assert.equal(h.calls.length, before, `no start after known throttle, microtask offset ${hops}`);
+    h.api.cancelAll();
+    assert.ok((await Promise.all([...jobs, third])).every(e => e.cancelled || Array.isArray(e)));
+    assert.equal(h.timers.size, 0);
+  }
+});
 
 test("RACE IT caches bulk positions without serializing them and fresh bypasses that cache", async () => {
   const big = Array.from({ length: 10000 }, (_, i) => ({ driver_number: i % 22 + 1,
@@ -1097,4 +1324,47 @@ test("memory-only requests deduplicate by policy and detach after cancellation",
   await h.settle(); await h.fireTimers();
   assert.equal((await fresh)[0].rainfall, 3);
   assert.equal(h.calls.length, 2, "cancelled queued disk request never fetched; reopened request did");
+});
+
+
+test("a 30-day Retry-After date keeps its full pause using bounded cancellable timer chunks", async () => {
+  const pauseMs = 30 * 24 * 60 * 60 * 1000;
+  const h = overlapHarness(url => url === rawURL(1)
+    ? { status: 429, retryAfter: new Date(1_000_000 + pauseMs).toUTCString(), delay: 0 }
+    : { delay: 0 }, ms => assert.ok(Number.isFinite(ms) && ms >= 0 && ms <= 90000,
+      "every fired timer uses a safe bounded delay"));
+  const failed = rawRequest(h, 1).catch(e => e), pending = rawRequest(h, 2).catch(e => e);
+  await h.flush(); await h.advance(400);
+  assert.equal((await failed).retryAfterMs, pauseMs);
+  const safeTimers = () => {
+    for (const timer of h.timers.values()) {
+      assert.ok(timer.at - h.now > 0 && timer.at - h.now <= 90000,
+        "every remaining pause chunk is finite, positive and below the platform timer limit");
+    }
+  };
+  safeTimers();
+  await h.advance(90000); safeTimers();
+  assert.equal(h.calls.length, 1, "the long window never becomes an overflowed immediate timer");
+  h.api.cancelAll(); assert.equal((await pending).cancelled, true);
+  assert.equal(h.timers.size, 0);
+  const reopened = rawRequest(h, 3); await h.flush(); safeTimers();
+  // Virtual time exercises every bounded chunk through the original deadline.
+  await h.advance(pauseMs - (h.now - 1_000_000) - 1); safeTimers();
+  assert.equal(h.calls.length, 1, "cancel/reopen retains the valid long server window");
+  await h.advance(1); await reopened;
+  assert.equal(h.calls[1].at, 1_000_000 + pauseMs);
+  assert.equal(h.timers.size, 0);
+});
+
+test("a finite Retry-After seconds value that overflows milliseconds cannot install an infinite pause", async () => {
+  const h = overlapHarness(url => url === rawURL(1)
+    ? { status: 429, retryAfter: "1e308", delay: 0 } : { delay: 0 });
+  const failed = rawRequest(h, 1).catch(e => e), sibling = rawRequest(h, 2);
+  await h.flush(); await h.advance(400); await sibling;
+  assert.equal(h.calls.length, 2, "nonfinite converted milliseconds are ignored");
+  h.api.cancelAll(); assert.equal((await failed).cancelled, true);
+  assert.equal(h.timers.size, 0);
+  const reopened = rawRequest(h, 3); await h.flush(); await h.advance(400); await reopened;
+  assert.equal(h.calls.length, 3, "invalid header cannot leave a permanent provider pause");
+  assert.equal(h.timers.size, 0);
 });

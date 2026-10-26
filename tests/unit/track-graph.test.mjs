@@ -279,6 +279,56 @@ const matDet3 = (m, i = 0) => {
   return rx * (uy * tz - uz * ty) - ry * (ux * tz - uz * tx) + rz * (ux * ty - uy * tx);
 };
 
+test("asymmetric models share a key across both handed frames without moving guarded geometry", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  const build = (rec) => {
+    rec.box([1, 2, 3], [2, 3, 4], [0.5, 0.6, 0.7]);
+    rec.cone([-2, 1, -3], 1.3, 4, [0.2, 0.5, 0.3], 7);
+  };
+  const r = [0.6, 0, 0.8], u = [0, 1, 0];
+  const places = [
+    { o: [10, 2, -4], r, u, t: [0.8, 0, -0.6] },
+    { o: [-30, 0, 12], r, u, t: [-0.8, 0, 0.6] },
+  ];
+  for (const place of places) {
+    const out = buf(); out._preferInstance = true;
+    g.instance("asymmetric", place, build, null, emitter(), out);
+    assert.equal(out.pos.length, 0, "the runtime draws these through batches");
+  }
+  const { batches } = g.batches({ instancedOnly: true });
+  assert.equal(batches.length, 2, "each handed frame needs its own canonical winding");
+  const keys = (values) => {
+    const out = [];
+    for (let i = 0; i < values.length; i += 3)
+      out.push(values.slice(i, i + 3).map((v) => Math.round(v * 1e4)).join(","));
+    return out.sort();
+  };
+  for (const batch of batches) {
+    assert.ok(matDet3(batch.matrices) > 0, "backend face culling keeps a positive determinant");
+    const place = places.find((p) => p.o[0] === batch.matrices[12]);
+    const expected = buf();
+    g.replay(g.models.get("asymmetric"), place, emitter(), expected);
+    const actual = [], normals = [], m = batch.matrices, geo = batch.geo;
+    for (let i = 0; i < geo.pos.length; i += 3) {
+      actual.push(...applyMat4(m, 0, geo.pos.slice(i, i + 3)));
+      const p = geo.nrm.slice(i, i + 3);
+      normals.push(m[0] * p[0] + m[4] * p[1] + m[8] * p[2],
+        m[1] * p[0] + m[5] * p[1] + m[9] * p[2],
+        m[2] * p[0] + m[6] * p[1] + m[10] * p[2]);
+    }
+    assert.deepEqual(keys(actual), keys(expected.pos), "batch vertices occupy exactly the guarded replay sites");
+    assert.deepEqual(keys(normals), keys(expected.nrm), "reflected canonical normals retain the replay lighting");
+    for (let i = 0; i < geo.idx.length; i += 3) {
+      const [a, b, c] = geo.idx.slice(i, i + 3).map((v) => v * 3);
+      const ab = actual.slice(b, b + 3).map((v, j) => v - actual[a + j]);
+      const ac = actual.slice(c, c + 3).map((v, j) => v - actual[a + j]);
+      const cross = [ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]];
+      assert.ok(cross.reduce((sum, v, j) => sum + v * normals[a + j], 0) > 0,
+        "triangle winding agrees with its outward normal");
+    }
+  }
+});
+
 test("an instanced UNIT_BOX on a left-handed basis gets a right-handed matrix", () => {
   const g = TrackGraph.create({ raw: RAW });
   const out = buf();

@@ -804,10 +804,13 @@ function resetGarage() {
       if (isGarageKey(k)) doomed.push(k);
     }
   } catch (_) { /* storage blocked: apply what we can */ }
+  let failed = 0;
   for (const k of doomed) {
-    try { GameStore.store.set(k, undefined); } catch (_) { /* keep clearing */ }
+    try { if (GameStore.store.set(k, undefined) === false) failed++; } catch (_) { failed++; }
   }
-  return applyGarage(GarageDefaults.file());
+  const result = applyGarage(GarageDefaults.file());
+  result.failed = (result.failed || 0) + failed;
+  return result;
 }
 
 // THE CAREER FILE: the six championship slots and the live pointer. Same

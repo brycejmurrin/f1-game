@@ -1596,6 +1596,19 @@ for (const fileReader of [false, true]) test(`leaving Saves and Data invalidates
   b.flushReloads(); assert.equal(b.reloads(), 0);
 });
 
+test("garage reset stays on screen when deleting an extra key is not durable", () => {
+  const b = bootImportUI({ disk: { "apex26.customTeam": JSON.stringify({ name: "Old team" }) },
+    store: { set(_key, value) { return value !== undefined; } },
+    globals: { GarageDefaults: { file: () => ({ format: "apex26-garage-v1", garage: { team: 0 } }) } },
+  });
+  const row = b.SettingsExport.garageRow(); b.dom.body.appendChild(row);
+  const reset = b.dom.byId("cs-garage-reset");
+  reset.click(); reset.click();
+  assert.equal(reset.textContent, "RESET GARAGE TO DEFAULTS — STORAGE FULL — 1 NOT SAVED");
+  assert.doesNotMatch(reset.textContent, /RELOADING/);
+  b.flushReloads(); assert.equal(b.reloads(), 0);
+});
+
 test("Saves and Data exposes independent garage and career loaders without duplicate IDs", async () => {
   const b = bootImportUI({ career: true });
   b.dom.body.append(b.SettingsExport.garageRow(), b.SettingsExport.careerRow());

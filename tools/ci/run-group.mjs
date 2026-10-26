@@ -10,23 +10,41 @@
 // `npm run test:<x>` unchanged. Empty after filter → exit 0 with SKIPPED.
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TOOLING_FAST_FILES } from "./tooling-fast.mjs";
+import { loadGroups } from "../gen/gen-test-groups.mjs";
+import { nodeGroupPhases } from "./run-node-group.mjs";
 
 const require = createRequire(import.meta.url);
 const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-export function filesFor(script, { skipTf = false } = {}) {
-  const groups = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8")).groups;
+export function filesFor(script, { skipTf = false, doc = loadGroups() } = {}) {
+  const groups = doc.groups;
   const entry = groups[script];
   if (!entry?.files?.length) throw new Error(`run-group: unknown or empty group ${script}`);
   if (!skipTf) return [...entry.files];
   const tf = new Set(TOOLING_FAST_FILES);
   return entry.files.filter((f) => !tf.has(f));
+}
+
+/** Filtering changes membership only: generated flags and exclusive phases
+ * still apply to every remaining file. Empty selections never discover tests. */
+export function runGroup(script, { skipTf = false, doc = loadGroups(), execute = spawnSync,
+  env = process.env, cwd = ROOT, announce = console.log } = {}) {
+  const files = filesFor(script, { skipTf, doc });
+  if (!files.length) { announce(`SKIPPED ${script} (every file already in tooling-fast)`); return 0; }
+  if (skipTf) announce(`run-group ${script}: ${files.length} onlyHere (skipped ${doc.groups[script].files.length - files.length} tooling-fast)`);
+  const phases = nodeGroupPhases({ ...doc.groups[script], files }, doc.isolatedFiles);
+  const childEnv = { ...env, ...augmentNodeCompileCache(env, cwd) };
+  delete childEnv.NODE_TEST_CONTEXT;
+  for (const args of phases) {
+    const r = execute(process.execPath, args, { cwd, stdio: "inherit", env: childEnv });
+    if (r.error || r.signal || r.status !== 0) return r.status || 1;
+  }
+  return 0;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -36,21 +54,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.error("usage: node tools/ci/run-group.mjs test:<group> [--skip-tf]");
     process.exit(2);
   }
-  const skipTf = argv.includes("--skip-tf");
-  const files = filesFor(script, { skipTf });
-  if (!files.length) {
-    console.log(`SKIPPED ${script} (every file already in tooling-fast)`);
-    process.exit(0);
-  }
-  if (skipTf) {
-    const dropped = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8"))
-      .groups[script].files.length - files.length;
-    console.log(`run-group ${script}: ${files.length} onlyHere (skipped ${dropped} tooling-fast)`);
-  }
-  const r = spawnSync(process.execPath, ["--test", ...files], {
-    cwd: ROOT,
-    stdio: "inherit",
-    env: { ...process.env, ...augmentNodeCompileCache(process.env, ROOT) },
-  });
-  process.exit(r.status === null ? 1 : r.status);
+  process.exit(runGroup(script, { skipTf: argv.includes("--skip-tf") }));
 }

@@ -111,6 +111,9 @@ const GameStore = (function () {
     // describes whether it will survive a reload. The cache write below makes
     // ok:true even when durable:false, by design. Automatic load-time repairs
     // pass {migration:true}; only those yield to an outstanding mirror restore.
+    // Explicit confirmations can require durable acceptance. A refused write
+    // then leaves prior session/retry/mirror ownership intact, rather than
+    // committing a change the domain has already reported as rejected.
     //
     // `undefined` REMOVES THE KEY. JSON.stringify(undefined) is undefined and
     // setItem coerced it to the string "undefined" — unparseable at the next
@@ -121,6 +124,7 @@ const GameStore = (function () {
       if (!ownership.ok) return ownership;
       schemaNoteWrite(k, "json");
       const key = "apex26." + k;
+      const requireDurable = options && options.requireDurable === true;
       // STRINGIFY ONCE, BEFORE ANYTHING IS TOUCHED. It ran twice (inside the try
       // and again for the mirror), so a BigInt or cyclic value threw out of
       // write() AFTER the cache and `rev` had moved: the session answered with a
@@ -132,7 +136,7 @@ const GameStore = (function () {
       try { json = v === undefined ? undefined : JSON.stringify(v); }
       catch (e) {
         noteBroken(e, "write " + k);
-        _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "json", v });
+        if (!requireDurable) _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "json", v });
         return { ok: false, durable: false, reason: this.broken || (e && e.name) || "Error" };
       }
       // JSON.stringify returns undefined for a top-level function or Symbol.
@@ -142,7 +146,7 @@ const GameStore = (function () {
       if (v !== undefined && json === undefined) {
         const e = new TypeError("value is not JSON-serializable");
         noteBroken(e, "write " + k);
-        _writeFails.set(key, { name: e.name, k, lane: "json", v });
+        if (!requireDurable) _writeFails.set(key, { name: e.name, k, lane: "json", v });
         return { ok: false, durable: false, reason: this.broken || e.name };
       }
       let durable = true;
@@ -154,7 +158,12 @@ const GameStore = (function () {
         if (json === undefined) localStorage.removeItem(key);
         else setRoomy(key, json);
         _writeFails.delete(key);
-      } catch (e) { durable = false; noteBroken(e, "write " + k); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "json", v }); }
+      } catch (e) {
+        noteBroken(e, "write " + k);
+        if (requireDurable) return { ok: false, durable: false, reason: this.broken || (e && e.name) || "Error" };
+        durable = false;
+        _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "json", v });
+      }
       _rawOverrides.delete(key);
       this._cache.set(key, v);
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
@@ -491,7 +500,11 @@ const GameStore = (function () {
   // false holds a value NEWER than the disk's copy (the quota refused it), so
   // restore must prefer it even though the key is present on disk.
   function mirrorQueue(key, json, lsOk, options) {
-    if (!careerWriteStatus(key).ok || typeof indexedDB === "undefined" || !indexedDB) return;
+    // Capability discovery itself can throw under restricted storage policies.
+    // The optional mirror must not interrupt a completed primary write.
+    if (!careerWriteStatus(key).ok) return;
+    try { if (typeof indexedDB === "undefined" || !indexedDB) return; }
+    catch (_) { return; }
     _mirrorKnown.add(key);
     const prior = _mirrorPending.get(key);
     // A refused delete needs a tombstone: removing its mirror would leave the

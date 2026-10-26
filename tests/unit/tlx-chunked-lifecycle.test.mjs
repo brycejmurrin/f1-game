@@ -311,3 +311,176 @@ test("mergeRuns joins contiguous ranges and closes the smallest gaps down to the
   assert.deepEqual(out.slice(0, 4), [0, 12, 30, 7]);   // a merged run draws the gap: a superset, never a hole
   assert.equal(S.mergeRuns(vis, 0, 4, out), 0);
 });
+
+function preparationHarness(settings = {}, fmt24 = true, extra = {}) {
+  const ctx = vm.createContext({window:{},performance,setTimeout,clearTimeout,Frustum:{},
+    Float32Array,Float64Array,Uint32Array,Uint16Array,Uint8Array,Int16Array,Int32Array,
+    localStorage:{getItem:k=>settings[k] ?? null}, ...extra});
+  seedLog(ctx);
+  vm.runInContext(CHUNK_BINS,ctx,{filename:absSrc("js/render/shared/chunk-bins.js")});
+  vm.runInContext(fs.readFileSync(SRC,"utf8"),ctx,{filename:absSrc("js/render/three/tlx-chunked.js")});
+  const S=ctx.window.TLXShaders;
+  return {ctx,S,config:S.chunkPrepareConfig(fmt24),sys:S.chunked(THREE,{isWebGPU:()=>fmt24})};
+}
+const meshSnapshot = mesh => ({
+  attributes:Object.fromEntries(Object.entries(mesh.geo.attributes).map(([k,a])=>[k,{type:a.array.constructor.name,size:a.itemSize,normalized:a.normalized,half:!!a.isFloat16BufferAttribute,values:Array.from(a.array)}])),
+  count:mesh.count,cellSize:mesh.cellSize,lampCells:mesh.lampCells,
+  chunks:mesh.chunks && Array.from(mesh.chunks,c=>({idx:Array.from(c.geo.index.array),type:c.geo.index.array.constructor.name,min:c.min,max:c.max,gx:c.gx,gz:c.gz})),
+  idx:mesh.chunks ? null : Array.from(mesh.geo.index.array),
+});
+for (const fmt24 of [false,true]) for (const pack of ["0","1"]) for (const pad4 of ["0","1"]) {
+  test(`prepared transfer preserves attributes, indices, lamp cells and bounds fmt24=${fmt24} pack=${pack} pad4=${pad4}`,()=>{
+    const h=preparationHarness({"apex26.tlxPack":pack,"apex26.tlxPad4":pad4});
+    const config=h.S.chunkPrepareConfig(fmt24), sys=h.S.chunked(THREE,{isWebGPU:()=>fmt24});
+    const data=gridMesh(),n=data.pos.length/3;
+    data.nrm=Float64Array.from({length:n*3},(_,i)=>i%3===1?1.00009:0);
+    data.col=Float64Array.from({length:n*3},(_,i)=>i%19===0?3.4:(i%8)/8);
+    data.mat=Float64Array.from({length:n},(_,i)=>i%2?15.4:300);
+    const original=structuredClone(data),sync=sys.build({...structuredClone(data),_keepPositions:true},72);
+    const payload=h.S.prepareChunks(data,72,config);
+    assert.deepEqual(data,original,"pure CPU preparation does not discard raw channels");
+    // Real structured clone removes descriptor prototypes just as postMessage does.
+    const clone=structuredClone(payload),transferred=sys.build({...structuredClone(data),_tlxPrepared:clone,_keepPositions:true},72);
+    assert.equal(JSON.stringify(meshSnapshot(transferred)),JSON.stringify(meshSnapshot(sync)));
+  });
+}
+
+test("cooperative old-worker fallback yields during a single record, and canceled ownership allocates no THREE geometry",async()=>{
+  let frames=0,live=true,uploads=0;
+  const h=preparationHarness({},true,{requestAnimationFrame(fn){frames++;live=false;queueMicrotask(fn);},
+    TrackSurface:{profile:()=>({})},Log:{info(){},warn(){}}});
+  vm.runInContext(fs.readFileSync(new URL("../../js/track/build-client.js",import.meta.url),"utf8").replace(/^const\b/gm,"var"),h.ctx,{filename:absSrc("js/track/build-client.js")});
+  const data=gridMesh(),msg={track:{meshes:{props:{__rec:0}},buildProfile:[]},recs:[{op:"chunked",args:[data,72]}],ms:100};
+  const gfx={trackPrepareConfig:()=>h.config,createChunkedMesh(){uploads++;return {};}};
+  assert.equal(await h.ctx.TrackBuildClient.replay(msg,{id:"fixture"},gfx,0.001,()=>live),null);
+  assert.equal(frames,1,"fallback yields before finishing one record");
+  assert.equal(uploads,0,"cancel is checked before accepting/finalizing prepared data");
+  assert.equal(data._tlxPrepared,undefined);
+});
+
+test("unsupported prepared versions and changed backend settings use cooperative raw fallback",async()=>{
+  for (const mismatch of ["version","config"]) {
+    let frames=0;
+    const h=preparationHarness({},true,{requestAnimationFrame(fn){frames++;queueMicrotask(fn);},TrackSurface:{profile:()=>({})}});
+    vm.runInContext(fs.readFileSync(new URL("../../js/track/build-client.js",import.meta.url),"utf8").replace(/^const\b/gm,"var"),h.ctx,{filename:absSrc("js/track/build-client.js")});
+    const data=gridMesh(),prepared=h.S.prepareChunks(data,72,h.config);
+    if(mismatch==="version")prepared.version=2;else prepared.config={...h.config,fmt24:false};
+    // Corrupt the refused payload, proving it was not used for finalization.
+    prepared.attributes.position.array=new Float32Array(0);
+    const msg={track:{meshes:{props:{__rec:0}},buildProfile:[]},recs:[{op:"chunked",args:[data,72],prepared}],ms:100};
+    const built=await h.ctx.TrackBuildClient.replay(msg,{id:"fixture"},{trackPrepareConfig:()=>h.config,createChunkedMesh:(...args)=>h.sys.build(...args)},0.001);
+    assert.ok(frames>1);
+    assert.equal(built.meshes.props.geo.attributes.position.array.length,gridMesh().pos.length);
+    assert.ok(built.buildProfile.find(r=>r.n==="replay prepare").ms>=0);
+  }
+});
+
+test("THREE finalization disposes partially allocated geometries on failure",()=>{
+  const h=preparationHarness({"apex26.tlxChunkMerge":"1"}),made=[],released=[];
+  class FailingGeometry extends BufferGeometry {
+    constructor(){super();made.push(this);}
+    setIndex(a){if(made.length===2)throw new Error("index rejected");super.setIndex(a);}
+  }
+  const sys=h.S.chunked({...THREE,BufferGeometry:FailingGeometry},{isWebGPU:()=>true,releaseGeometry:g=>released.push(g)});
+  assert.throws(()=>sys.build(gridMesh(),72),/index rejected/);
+  assert.equal(made.length,2);assert.deepEqual(released,made);assert.ok(made.every(g=>g.disposals===1));
+});
+
+test("prepared canceled owner releases payload before any THREE allocation",async()=>{
+  const h=preparationHarness({},true,{TrackSurface:{profile:()=>({})}});
+  vm.runInContext(fs.readFileSync(new URL("../../js/track/build-client.js",import.meta.url),"utf8").replace(/^const\b/gm,"var"),h.ctx,{filename:absSrc("js/track/build-client.js")});
+  const data=gridMesh(),prepared=h.S.prepareChunks(data,72,h.config),r={op:"chunked",args:[data,72],prepared};
+  let uploads=0;
+  const msg={track:{meshes:{props:{__rec:0}},buildProfile:[]},recs:[r],ms:100};
+  assert.equal(await h.ctx.TrackBuildClient.replay(msg,{id:"fixture"},{trackPrepareConfig:()=>h.config,createChunkedMesh(){uploads++;}},8,()=>false),null);
+  assert.equal(uploads,0);assert.equal(r.prepared,null);
+});
+
+test("chunk preparation configuration preserves per-instance merge setting",()=>{
+  const settings={"apex26.tlxChunkMerge":"2"},h=preparationHarness(settings,true);
+  settings["apex26.tlxChunkMerge"]="4";
+  assert.equal(h.sys.prepareConfig().merge,2);
+  assert.equal(h.S.chunkPrepareConfig(true).merge,4,"a new subsystem may capture the new setting");
+});
+
+test("accepted worker preparation carries packing diagnostics without repeating the CPU work",()=>{
+  const worker=preparationHarness(),page=preparationHarness(),data=gridMesh();
+  const prepared=structuredClone(worker.S.prepareChunks(data,72,worker.config));
+  prepared.workerPacking=true;
+  const before=page.S.packStats.zero;
+  page.sys.build({...data,_tlxPrepared:prepared},72);
+  assert.equal(page.S.packStats.zero-before,3,"three absent channels were prepared off-thread and reported on the page");
+  assert.equal(prepared.workerPacking,undefined,"accepted diagnostics transfer once");
+});
+
+function retainedSourceFixture(chunked, keepFull, keepPositions) {
+  const data=gridMesh(),vertices=data.pos.length/3;
+  data.nrm=new Float32Array(data.pos.length).fill(0.5);
+  data.col=new Float32Array(data.pos.length).fill(0.25);
+  data.mat=new Float32Array(vertices).fill(3);
+  data.trk=new Float32Array(data.pos.length);
+  if (!chunked) data.idx=data.idx.subarray(0,3);
+  if (keepFull!==undefined) data._keepFullGeometry=keepFull;
+  if (keepPositions!==undefined) data._keepPositions=keepPositions;
+  return data;
+}
+
+for (const chunked of [false,true]) for (const keepFull of [false,true,undefined]) for (const keepPositions of [false,true,undefined]) {
+  test(`synchronous source retention matches legacy points chunked=${chunked} full=${keepFull} positions=${keepPositions}`,()=>{
+    const h=preparationHarness(),data=retainedSourceFixture(chunked,keepFull,keepPositions),original={...data};
+    const dropAttributes=chunked && keepFull===false,dropPositions=chunked && !keepPositions;
+    let binned=false,allocated=0;
+    const binSteps=h.ctx.ChunkBins.binSteps;
+    h.ctx.ChunkBins={...h.ctx.ChunkBins,*binSteps(...args){
+      binned=true;
+      for(const key of ["nrm","col","mat","trk"]) assert.equal(data[key],dropAttributes?null:original[key],key+" is released before binning only when permitted");
+      assert.equal(data.pos,original.pos,"positions stay available until binning completes");
+      assert.equal(data.idx,original.idx);
+      return yield* binSteps(...args);
+    }};
+    class ObservingGeometry extends BufferGeometry {
+      constructor(){super();allocated++;
+        assert.equal(data.pos,dropPositions?null:original.pos,"unretained positions release before THREE allocation");
+        assert.equal(data.idx,dropPositions?null:original.idx);
+      }
+    }
+    const sys=h.S.chunked({...THREE,BufferGeometry:ObservingGeometry},{isWebGPU:()=>true});
+    const mesh=sys.build(data,72);
+    assert.ok(allocated>0);assert.equal(binned,chunked);
+    for(const key of ["nrm","col","mat","trk"]) assert.equal(data[key],dropAttributes?null:original[key]);
+    assert.equal(data.pos,dropPositions?null:original.pos);assert.equal(data.idx,dropPositions?null:original.idx);
+    assert.equal(mesh.count,original.idx.length);
+  });
+}
+
+test("worker and cooperative preparation preserve keep-flagged raw inputs on success and failure",()=>{
+  for(const cooperative of [false,true]) for(const fail of [false,true]) {
+    const h=preparationHarness(),data=retainedSourceFixture(true,false,false),original={...data},failure=new Error("binning failed");
+    if(fail)h.ctx.ChunkBins={...h.ctx.ChunkBins,*binSteps(){throw failure;}};
+    const run=()=>{
+      if(!cooperative)return h.S.prepareChunks(data,72,h.config);
+      const steps=h.S.prepareChunksSteps(data,72,h.config);let next;
+      do{next=steps.next();}while(!next.done);
+      return next.value;
+    };
+    if(fail)assert.throws(run,err=>err===failure);else assert.ok(run().chunks.length>0);
+    for(const key of ["pos","idx","nrm","col","mat","trk"])assert.equal(data[key],original[key],key+" stays available for a safe fallback");
+  }
+});
+
+test("failed synchronous preparation clears refused payload and follows legacy pre-bin release without THREE allocations",()=>{
+  for(const keepFull of [false,true]) {
+    const h=preparationHarness(),data=retainedSourceFixture(true,keepFull,false),original={...data},failure=new Error("binning failed");
+    data._tlxPrepared={version:2,config:h.config,attributes:{position:{array:new Float32Array(1000)}}};
+    h.ctx.ChunkBins={...h.ctx.ChunkBins,*binSteps(){throw failure;}};
+    let allocated=0;
+    class NeverGeometry extends BufferGeometry{constructor(){super();allocated++;}}
+    const sys=h.S.chunked({...THREE,BufferGeometry:NeverGeometry},{isWebGPU:()=>true});
+    assert.throws(()=>sys.build(data,72),err=>err===failure);
+    assert.equal(allocated,0,"CPU preparation failed before transferring ownership to THREE");
+    assert.equal(data._tlxPrepared,undefined,"a refused payload must not remain attached after a failed fallback");
+    for(const key of ["nrm","col","mat","trk"])assert.equal(data[key],keepFull?original[key]:null);
+    assert.equal(data.pos,original.pos,"failed binning has not reached the position-release point");
+    assert.equal(data.idx,original.idx);
+  }
+});

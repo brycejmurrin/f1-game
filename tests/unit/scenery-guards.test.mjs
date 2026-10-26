@@ -26,6 +26,34 @@ const counts = (Tracks, id) => {
   return track.modelDiagnostics.suppressedCounts || {};
 };
 
+test("water occupancy uses world footprints across Montreal's 8 m and 12 m grids", () => {
+  const Tracks = buildContext(null, { quiet: true });
+  Tracks.setKeepGeometry(true);
+  const track = Tracks.build(Tracks.LIST.find((d) => d.id === "montreal"));
+  const pos = track.waterGeo.pos, rectangles = [];
+  const sheetY = Math.min(...track.py) - 0.82;
+  for (let i = 0; i < pos.length; i += 12) {
+    if (![pos[i + 1], pos[i + 4], pos[i + 7], pos[i + 10]].every((y) => Math.abs(y - sheetY) < 1e-5)) continue;
+    const xs = [pos[i], pos[i + 3], pos[i + 6], pos[i + 9]];
+    const zs = [pos[i + 2], pos[i + 5], pos[i + 8], pos[i + 11]];
+    rectangles.push([Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)]);
+  }
+  assert.ok(rectangles.length > 0, "the production basin and shoreline emit water");
+  // Equal integer keys (-2|-75 and -1|-74) formerly let remote 12 m
+  // basin cells suppress these 8 m shore cells almost 300 m away.
+  for (const [x, z] of [[-12, -596], [-4, -588]])
+    assert.ok(rectangles.some((r) => r[0] <= x && x <= r[2] && r[1] <= z && z <= r[3]),
+      `shore water at ${x},${z} must survive an unrelated grid key`);
+  // Qualifying a key by cell width alone leaves two grids' overlapping
+  // rectangles coplanar. The final uploaded water must have no shared area.
+  for (let i = 0; i < rectangles.length; i++) for (let j = 0; j < i; j++) {
+    const a = rectangles[i], b = rectangles[j];
+    const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
+    const d = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+    assert.ok(!(w > 1e-6 && d > 1e-6), `coplanar water overlap: ${a} / ${b}`);
+  }
+});
+
 test("Monaco's armco keeps its posts: the guardrail guard margin stays below the gap", () => {
   const Tracks = buildContext();
   const c = counts(Tracks, "monaco");

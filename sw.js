@@ -616,6 +616,9 @@ async function precacheAssetLists() {
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
   }
+  // A preload and its required stylesheet share one admission. Required wins;
+  // leave optional-only hints/fonts in the background pool.
+  for (const u of essential) optional.delete(u);
   return { essential: Array.from(essential), optional: Array.from(optional), shellResponse, lazyV, shellBuild: (/<meta name="apex-build" content="(\d+)"/.exec(html) || [])[1] };
 }
 

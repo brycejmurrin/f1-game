@@ -267,7 +267,11 @@ const Ghost = (function () {
         }
         else Log.warn("car", `ghost save ${id} is session-only`);
       } catch { Log.warn("car", "ghost save fail"); }
+      // A refused write still owns this pending lap. Keep one callback for a
+      // later pause/pagehide flush, without retrying inside the current flush.
+      if (pending.get(id) === snap) armFlush(write);
     };
+    armFlush(write);
     if (typeof requestIdleCallback === "function") {
       // A LONG idle slot only: the write (trim + 2-3 stringifies of a store of up
       // to 512 KB + setItem) is one 5-30 ms job on a phone. With a 2 s timeout it
@@ -283,7 +287,6 @@ const Ghost = (function () {
         write();
       };
       requestIdleCallback(idle);
-      armFlush(write);
     }
     else if (typeof setTimeout === "function") setTimeout(write, 0);
     else write();   // bare VM harness: no scheduler, write now

@@ -117,6 +117,7 @@ test("authored mirror catches a foreign write even before its storage event arri
   await h.store.mirrorFlush(); assert.equal(h.idb.dbs.get("apex26-store").get("kv").has("apex26.setup.ferrari"), false);
 });
 function points(h, extra = {}) {
+  vm.runInContext(src("js/career/team-identity.js"), h.c, { filename: absSrc("js/career/team-identity.js") });
   vm.runInContext(src("js/career/restore-points.js") + ";globalThis.Points=CareerRestorePoints", h.c, { filename: absSrc("js/career/restore-points.js") });
   return h.c.Points.create({ store: h.store, indexedDB: h.idb, localStorage: h.storage, ...extra });
 }
@@ -322,6 +323,103 @@ test('older capture completion cannot overwrite newer failure health, and UI lab
   assert.match(text(handle.root), /No failed primary writes/);
 });
 
+
+function career(h) {
+  h.c.Teams = { POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1], isReal: (t) => t.id !== "custom",
+    LIST: [{ id: "haas", tier: 4, stats: {}, drivers: [{ name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 }] }] };
+  h.c.Tracks = { LIST: [{ id: "a" }], SEASON: [{ id: "a" }], seasonIndex: () => 0 };
+  h.c.Parts = { CATALOG: [], getFactorySetup: () => ({}), getCost: () => 0 };
+  for (const file of ["js/core/hash32.js", "js/core/mat4.js", "js/data/driver-ratings.js", "js/career/career-planning.js", "js/career/career.js"])
+    vm.runInContext(src(file), h.c, { filename: absSrc(file) });
+  return vm.runInContext("Career", h.c);
+}
+test("refused calendar adoption cannot enter the mirror or remove scored progress after recovery and reload", async () => {
+  for (const ids of [["a", "gone"], ["gone"]]) {
+    const key = "apex26.career.driver.0", original = save(1);
+    original.season.calIds = ids; original.season.pts = { "haas:0": 25 };
+    original.season.finishes = { "haas:0": [1] }; original.results = [{ r: 0, p: 1, pts: 25 }];
+    const raw = JSON.stringify(original, null, 2);
+    const h = boot({ initial: [[key, raw]] }); await h.store.mirror.ready;
+    const c = career(h);
+    // Establish the original checkpoint so recovery from a missing primary
+    // proves the scored save survives, as well as protecting an existing primary.
+    h.store.write("career.driver.0", original); await h.store.mirrorFlush();
+    h.disk.set(key, raw); c.load();
+    h.block(true); assert.equal(c.planning().adopt(), false); await h.store.mirrorFlush();
+    const row = h.idb.dbs.get("apex26-store").get("kv").get(key);
+    assert.deepEqual(JSON.parse(row.v), original); assert.equal(row.lsOk, true);
+    assert.deepEqual(Array.from(h.store.get("career.driver.0").season.calIds), ids);
+    h.block(false); assert.equal(h.store.retryFailed().retried, 0); assert.equal(h.disk.get(key), raw);
+    for (const initial of [[[key, raw]], []]) {
+      const fresh = boot({ idb: h.idb, initial }); await fresh.store.mirror.ready;
+      const reloaded = career(fresh); reloaded.load();
+      assert.deepEqual(Array.from(reloaded.data().season.calIds), ids);
+      assert.equal(reloaded.data().results.length, 1); assert.equal(reloaded.data().season.pts["haas:0"], 25);
+      assert.deepEqual(Array.from(reloaded.data().season.finishes["haas:0"]), [1]);
+      assert.equal(reloaded.conflicted(), true); await fresh.store.mirrorFlush();
+    }
+  }
+});
+test("ordinary quota-refused career saves keep session progress, retry and mirror recovery", async () => {
+  const h = boot(); await h.store.mirror.ready; const c = career(h);
+  h.store.write("career.driver.0", save()); c.load(); h.block(true);
+  c.data().money = 876; c.save();
+  assert.equal(c.saveStatus().ok, true); assert.equal(c.saveStatus().durable, false);
+  assert.equal(h.store.get("career.driver.0").money, 876);
+  assert.ok(h.store.failedKeys().some((r) => r.key === "career.driver.0")); await h.store.mirrorFlush();
+  const fresh = boot({ idb: h.idb, initial: [...h.disk] }); await fresh.store.mirror.ready;
+  assert.equal(fresh.store.get("career.driver.0").money, 876);
+  h.block(false); assert.equal(h.store.retryFailed().durable, true);
+  assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 876); await h.store.mirrorFlush();
+});
+test("supported MY TEAM emblems retain round history and before-restore undo at the identity size limit", async () => {
+  const h = boot(); await h.store.mirror.ready; const p = points(h);
+  const old = save(1, "myteam"), latest = save(5, "myteam");
+  const prefix = "data:image/png;base64,", logo = prefix + "A".repeat(400000 - prefix.length);
+  latest.myTeamIdentity = { customLogo: logo, "livery.custom": "my-paint" };
+  assert.equal(vm.runInContext("CareerTeamIdentity.value", h.c)("customLogo", logo), logo);
+  assert.equal((await p.capture("myteam", 0, old, { reason: "round" })).durable, true);
+  const oldId = (await p.list("myteam", 0)).items[0].id;
+  assert.equal((await p.capture("myteam", 0, latest, { reason: "round" })).durable, true);
+  const latestId = (await p.list("myteam", 0)).items[0].id;
+  h.store.write("career.myteam.0", latest);
+  assert.equal((await p.restore(await p.preview("myteam", 0, oldId))).durable, true);
+  assert.equal(h.store.get("career.myteam.0").season.round, 1);
+  const latestPoint = (await p.list("myteam", 0)).items.find((r) => r.id === latestId);
+  assert.equal(latestPoint.summary.round, 5);
+  assert.ok(latestPoint.bytes > p.limits.progressBytes); assert.ok(latestPoint.bytes <= p.limits.snapshotBytes);
+  assert.equal((await p.restore(await p.preview("myteam", 0, latestId))).durable, true);
+  assert.equal(h.store.get("career.myteam.0").myTeamIdentity.customLogo, logo);
+  assert.equal(h.store.get("career.myteam.0").myTeamIdentity["livery.custom"], "my-paint");
+  assert.equal(p.limits.totalBytes, p.limits.perSlot * p.limits.snapshotBytes * 6);
+  await h.store.mirrorFlush();
+});
+test("restoring an older MY TEAM point captures a large current emblem even without a prior large point", async () => {
+  const h = boot(); await h.store.mirror.ready; const p = points(h);
+  await p.capture("myteam", 0, save(1, "myteam"), { reason: "round" });
+  const id = (await p.list("myteam", 0)).items[0].id;
+  const current = { ...save(5, "myteam"), myTeamIdentity: { customLogo: "data:image/png;base64," + "A".repeat(70000) } };
+  h.store.write("career.myteam.0", current);
+  assert.equal((await p.restore(await p.preview("myteam", 0, id))).durable, true);
+  const undo = (await p.list("myteam", 0)).items.find((r) => r.reason === "before-restore");
+  assert.equal(undo.summary.round, 5);
+  assert.equal((await p.restore(await p.preview("myteam", 0, undo.id))).durable, true);
+  assert.equal(h.store.get("career.myteam.0").myTeamIdentity.customLogo, current.myTeamIdentity.customLogo);
+  await h.store.mirrorFlush();
+});
+test("history identity allowance rejects invalid or excessive emblems and preserves the progress budget", async () => {
+  const h = boot(); await h.store.mirror.ready; const p = points(h);
+  const prefix = "data:image/png;base64,", valid = prefix + "A".repeat(70000);
+  for (const data of [
+    { ...save(0, "myteam"), myTeamIdentity: { customLogo: "x".repeat(70000) } },
+    { ...save(0, "myteam"), myTeamIdentity: { customLogo: prefix + "A".repeat(400000) } },
+    { ...save(0, "myteam"), myTeamIdentity: { customLogo: valid }, huge: "x".repeat(70000) },
+    { ...save(), myTeamIdentity: { customLogo: valid } },
+  ]) {
+    assert.equal((await p.capture(data.flavour, 0, data, { reason: "round" })).reason, "invalid-or-too-large");
+    assert.equal((await p.list(data.flavour, 0)).items.length, 0);
+  }
+});
 
 test("mirror reopens after unexpected close or an InvalidStateError without losing a quota-refused batch", async () => {
   for (const notify of [true, false]) {

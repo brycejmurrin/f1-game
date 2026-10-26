@@ -40,7 +40,7 @@ test("the menu build warms its shaders BEFORE the slow extras (lamp pre-bake, fl
   // the lights finds its programs built (17 s of held card after the flyby
   // under SwiftShader before this; see warmPrograms).
   assert.match(body, /if \(await menuIdle\(current\)\) \{ warmPrograms\(\); FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/, "the first warm pair requests the program warm first");
-  assert.match(game, /const warmPrograms = \(tag = ""\) => \{ try \{ if \(gfx\.warm\) \{ const k = menuKey\(trackIdx\); _warmKey = k; if \(!_warmed\.has\(k \+ tag\)\) \{ _warmed\.add\(k \+ tag\); gfx\.warm\(\); carDraw\.warmCockpitTelemetry\(\); return true; \} \} \}/, "warmPrograms is the guarded request (GLX/WGX have no warm), remembers the world it was for, asks once per world per session, and queues the cockpit telemetry warm with it (#3673)");
+  assert.match(game, /let fresh = false; if \(!_warmed\.has\(k \+ tag\)\) \{ _warmed\.add\(k \+ tag\); gfx\.warm\(\); fresh = true; \} carDraw\.warmCockpitTelemetry\(\); return fresh;/, "warmPrograms asks the program warm once per world per session but queues cockpit telemetry every call (_rigDone dedupes; #3673, #3766 DAILY)");
   // …and the lights skip their own request for that world: with every program
   // built, compileAsync(scene) still walked the race scene for 7.5 s and linked
   // nothing (scratch/ld-link-probe.mjs, 2026-09-28).

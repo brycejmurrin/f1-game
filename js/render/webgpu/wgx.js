@@ -738,6 +738,9 @@ const WGX = (function () {
             for (let r = 0; r < 4; r++) {
               const base = r * STRIDE;
               for (let i = 0; i < LANES && base + i < px.length; i++) {
+                // Alpha carries SSR surface tags (.35/.75/1), not light.
+                // Counting it makes an opaque black patch look healthy.
+                if ((i & 3) === 3) continue;
                 const f = _f16to32(px[base + i]);
                 if (f > max) max = f;
               }
@@ -2652,15 +2655,22 @@ const WGX = (function () {
     function _mkBuffer(data, usage) {
       const size = (data.byteLength + 3) & ~3;   // writeBuffer: size multiple of 4
       const buf = device.createBuffer({ size, usage: usage | GPUBufferUsage.COPY_DST });
-      if (data.byteLength === size) {
-        device.queue.writeBuffer(buf, 0, data);
-      } else {
-        // Odd tail (an index count that leaves a 2-byte remainder): writeBuffer
-        // wants a 4-multiple, so pad through a scratch view rather than round
-        // the count and read past the array.
-        const pad = new Uint8Array(size);
-        pad.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
-        device.queue.writeBuffer(buf, 0, pad);
+      try {
+        if (data.byteLength === size) {
+          device.queue.writeBuffer(buf, 0, data);
+        } else {
+          // Odd tail (an index count that leaves a 2-byte remainder): writeBuffer
+          // wants a 4-multiple, so pad through a scratch view rather than round
+          // the count and read past the array.
+          const pad = new Uint8Array(size);
+          pad.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+          device.queue.writeBuffer(buf, 0, pad);
+        }
+      } catch (e) {
+        // The caller cannot own this buffer until the helper returns, including
+        // failures while allocating/copying the CPU pad rather than uploading it.
+        try { buf.destroy(); } catch (_) { /* already invalid */ }
+        throw e;
       }
       return buf;
     }
