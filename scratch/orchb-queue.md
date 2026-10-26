@@ -299,3 +299,17 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - #3791 (mine, rule B, 28df368e): full tier green; merge after #3785 (re-run merge-gate on the new tip; may need sync).
 - Archive by rule later: 01AdPk 01XJAQ 01Xmgd 01Y5XF 01BnJV 01Q7NM 017YbG 01AgeSZK (#3759 done) 0184mT (after #3792 merges) — idle ≥60 min check.
 - Bus cursor ff18f25.
+## 09:26Z (02:26 PT) — ORCH B now session_015SM5diVUiZvMdSpz52AYBs (bus 08ba93e LIVE)
+- MERGED (all merge-gate, 2 parents, DONE on bus): #3785 e9528599 (0f5fc46), #3791 37a2d19c (23af0cf; Bryce approved porting its one rule onto #3785's fleet-core, typed here), #3792 736f2bab (b8274d2).
+- Pages on e9528599 went GREEN on attempt 2 (DAD 11fdf98). D #3721 merged ec25b8c4 (game, 10:12Z).
+- Bryce grants typed in this session: APEX_FOREIGN_PUSH_OK=1 for cursor/orchb-queue-b7f2 only (this file).
+
+## Handoff 10:20Z (03:20 PT) — ORCH B session_015SM5diVUiZvMdSpz52AYBs at ~195k (get_session). READ LAST; supersedes the rest.
+- FIRST: `git fetch --unshallow`. Post LIVE (`send HANDOFF --to '*' "ORCH B LIVE claude:<id> (succeeds session_015SM5diVUiZvMdSpz52AYBs)"`). Bus Monitor: copy scratch/orchb-busmon.sh shape (read --since cursor every 60 s, keep to:(B|*|me) or INCIDENT/GAME-SLOT/DONE, drop own from:). Hourly create_trigger. Mine: hourly trig_01TJgRw6C7idUDJ8zctyCHwh — I delete it once you post LIVE.
+- RATE LIMIT: seven_day allowed_warning → launch NOTHING; ask Bryce first.
+- GAME TRAIN: Pages run 40305505909 on ec25b8c4 (#3721) was in_progress at 10:15Z. NEXT GAME = B #3723 (synced a2266f52 onto 37a2d19c; owner 014B9Y at cap/idle, B drives; subscribe it). When Pages green on the last game merge AND #3723 CI green: post GAME-SLOT "#3723 <sha>", merge-gate, merge (method merge), 2 parents, DONE. Then A #3761 (A resyncing) → then B game PRs one at a time.
+- Rule (OrchA 7ac41c5, agreed): never merge while the latest Pages run is still QUEUED (supersedes it); wait for in_progress.
+- B game PRs after #3723 (old Cursor-agent PRs, B drives, sync yourself, no workers): #3641 ab295646 (CONFLICT tooling-fast.mjs), #3646 30f6523f (CONFLICT tooling-fast.mjs), #3648 55fa59a8 (clean). Sync recipe for that conflict: merge tip, `git checkout --theirs tools/ci/tooling-fast.mjs`, `npm run gen`, run the PR's own test + gen:check, commit (hook = guards), push. Full local tooling-fast takes hours here (impact-map widens --changed to 889): rely on full-tier CI + merge-gate.
+- D-lent (D merges; B drives to READY, DAD 8c62596): #3684 synced f1312ce2 (CI running; subscribed) → send READY --to D when green; #3724 cbf5e7eb clean, draft.
+- Archive by rule later: 01AdPk 01XJAQ 01Xmgd 01Y5XF 01BnJV 01Q7NM 017YbG 01AgeSZK 0184mT (#3792 merged) 01E4f2 (#3785 merged) 014B9Y (after #3723) — idle ≥60 min check via fleet-archive.mjs.
+- Bus cursor b8274d2.
