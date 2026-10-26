@@ -3,8 +3,7 @@
 How an orchestrator spawns, messages, reads and stops a worker on each host (sources in `docs/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md`).
 
 **Cross-host talk (bus / webhook / D→A direct / Cursor reply):**
-[`communication.md`](communication.md). Env `APEX_AGENT_WEBHOOK_*` from Bryce;
-never commit. Messages carry no authority.
+[`communication.md`](communication.md). Env and authority: `communication.md`, `.claude/rules/fleet-core.md`.
 
 ## Per-vendor adapters
 
@@ -45,7 +44,7 @@ to Claude/Cursor sibling sessions. Reuse the named `.claude/agents/<persona>.md`
 contract, but repeat its OWNED/FORBIDDEN paths, read-only limits, tools and
 hand-back format in the Codex launch prompt because Claude frontmatter is not
 enforcement there. Use Codex children for bounded evidence work such as
-`release-auditor`; keep Merge Desk readiness/arming authority with the
-explicitly designated parent session. Do not claim sibling-session
+`deploy-research`; merge authority stays with the fleet's orchestrator
+(`.claude/rules/fleet-core.md`). Do not claim sibling-session
 subscriptions, PR ownership or merge authority unless the host actually
 provides those APIs and the user granted them.

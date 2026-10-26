@@ -46,7 +46,7 @@ once (the ladder: AGENTS.md rule 3). A started batch's verdict is its log's `= r
 
 - **Already red?** `node tools/ci/deploy.mjs --train` prints the deploy branch's last ci /
   pages / nightly conclusions; `verify-agent --base <ref>` answers `DELTA: same-red |
-  new-on-session | already-red-on-ref`; a red you did not cause → `who-is-on-it.mjs` first.
+  new-on-session | already-red-on-ref`; a red you did not cause → claim first (AGENTS.md §Git branch & deploy).
   A baseline comparison with no selected checks or unread results is unknown;
   both scoped runs green means no red, not a pre-existing failure.
 - **Which groups, in what order?** `--plan`'s `batches` can exceed AGENTS.md §Verification's

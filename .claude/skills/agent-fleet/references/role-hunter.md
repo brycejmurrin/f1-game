@@ -16,11 +16,11 @@ its follow-up PRs, not PR numbers.
 Under the orchestrator (no `NEW-PR` channel from a cloud agent, and an owner launch
 costs quota) the hunter owns its own PR: its launch prompt carries the
 Monitoring and reporting block and the watch kit from role-pr-owner.md
-(`subscribe_pr_activity` + a ~15 min `send_later` at the first push), `NEW-PR` becomes a
+(`subscribe_pr_activity` + the AGENTS.md rule 13 `send_later` at the first push), `NEW-PR` becomes a
 `fleet-status: working` comment, and the next round starts only after
 `fleet-status: done` or STOP AT.
 
-Size stop: STOP AT 150k context. At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop).
+Size stop: `STOP AT: 150k context` (launch-policy.md §Size stop).
 
 ## The loop
 

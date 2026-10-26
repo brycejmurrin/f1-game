@@ -19,6 +19,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var");
@@ -268,7 +269,7 @@ test("LATCH: a second finger landing on GAS does not cancel the latch while the 
   assert.equal(Input.throttleLatched(), false, "a fresh tap still lifts it");
 });
 
-test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt zero, Ctrl/Alt reserved, lobby asks for tilt, a silent gyro falls back", () => {
+test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt zero, Ctrl/Alt reserved, lobby asks for tilt", () => {
   const input = fs.readFileSync(path.join(ROOT, "js/input/input.js"), "utf8");
   // The d-pad walking a friend race's pause menu no longer steers the car: the
   // PAUSED car reads PAUSED_NET_INPUT (game.js inputOf), so input.js keeps
@@ -284,8 +285,6 @@ test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt ze
   const lobby = fs.readFileSync(path.join(ROOT, "js/net/lobby.js"), "utf8");
   for (const id of ["vs-host", "vs-join", "vs-ready", "vs-start", "vs-code-host", "vs-code-go"])
     assert.match(lobby, new RegExp(`on\\("${id}", tiltToo\\(`), `${id} asks for tilt inside its click`);
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(game, /if \(steerMode !== "tilt" \|\| Input\.gyroSeen \|\| headlessMode\) return;/, "no reading in 1.5 s: buttons, said");
 });
 
 test("a MIRROR press on the grid does not survive clearDriveEdges (it would toggle the mirror at lights-out)", () => {
@@ -417,3 +416,27 @@ for (const id of ["pausebtn", "btn-cam", "hud-restore", "pc-restore"]) {
     assert.equal(Input.throttle(), false, "activation-key release clears the earlier driving latch");
   });
 }
+
+
+test("a silent gyro falls back after 1.5s only while its permission attempt still owns tilt", async () => {
+  for (const change of ["none", "new-request", "different-mode", "motion-seen"]) {
+    let generation = 1;
+    const timers = [], changed = [], messages = [];
+    const input = { requestGyro: () => Promise.resolve(true), gyroRequestId: () => generation,
+      calibrate() {}, gyroSeen: false, gyroHardDenied: false, gyroDenied: false, tiltActive: () => true };
+    const ctx = vm.createContext({ Input: input, steerMode: "tilt", headlessMode: false,
+      els: { audiostate: {} }, paintSteer() {}, tiltSay: text => messages.push(text),
+      setTimeout: (fn, ms) => { timers.push({ fn, ms }); },
+      setSteerMode: mode => { changed.push(mode); ctx.steerMode = mode; } });
+    vm.runInContext(symbolSource("function enableTilt()") + "\nenableTilt();", ctx, { filename: "vm-snippet:enable-tilt-silent-sensor" });
+    await Promise.resolve();
+    assert.equal(timers.length, 1, "successful permission arms the real fallback timer");
+    assert.equal(timers[0].ms, 1500);
+    if (change === "new-request") generation++;
+    if (change === "different-mode") ctx.steerMode = "touch";
+    if (change === "motion-seen") input.gyroSeen = true;
+    timers[0].fn();
+    assert.deepEqual(changed, change === "none" ? ["buttons"] : []);
+    assert.equal(messages.includes("no motion sensor — switched to buttons"), change === "none");
+  }
+});

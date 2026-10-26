@@ -111,12 +111,36 @@ const RealReplay = (function () {
     const n = raw.length / 3 | 0, total = track.total;
     const t = new Float32Array(n), prog = new Float32Array(n), x = new Float32Array(n);
     const cos = Math.cos(fit.th), sin = Math.sin(fit.th);
-    let hint = null, p = 0;
+    let hint = null, p = 0, speed = 0;
+    const radius = 16 * total / track.n;
+    const arcDelta = (s) => { const d = s - hint; return d - total * Math.round(d / total); };
     for (let i = 0; i < n; i++) {
       const xx = raw[i * 3 + 1], yy = fit.refl * raw[i * 3 + 2];
-      const pr = Tracks.project(track, cos * xx - sin * yy + fit.tx, sin * xx + cos * yy + fit.ty, hint);
+      const wx = cos * xx - sin * yy + fit.tx, wz = sin * xx + cos * yy + fit.ty;
+      let pr = Tracks.project(track, wx, wz, hint);
+      const dt = i ? raw[i * 3] - raw[(i - 1) * 3] : 0;
+      // A hint searches only ±16 nodes. Validate its edge/residual and search
+      // overlapping windows over the distance the car could have travelled.
+      // Keep the search tied to the previous arc: a global nearest query can
+      // switch decks at Suzuka's crossing. Near geometric ties favour motion
+      // predicted from the last accepted interval, including across the seam.
+      if (i && dt > 0 && radius > 0 && (pr.dist > 8 || Math.abs(arcDelta(pr.s)) >= radius * 0.85 || speed * dt > radius)) {
+        const expected = speed * dt;
+        const score = (q) => q.dist * q.dist + Math.pow((arcDelta(q.s) - expected) * 0.02, 2);
+        const predicted = Tracks.project(track, wx, wz, hint + expected);
+        if (score(predicted) < score(pr)) pr = predicted;
+        let best = score(pr);
+        const ahead = Math.min(total / 2 - radius, dt * 120 + radius);
+        for (let offset = -Math.min(30, dt * 10); offset <= ahead; offset += radius * 1.5) {
+          const candidate = Tracks.project(track, wx, wz, hint + offset);
+          const value = score(candidate);
+          if (value < best) { best = value; pr = candidate; }
+        }
+        const refined = Tracks.project(track, wx, wz, pr.s);
+        if (score(refined) < best) pr = refined;
+      }
       if (i === 0) p = pr.s > total / 2 ? pr.s - total : pr.s;
-      else { let d = pr.s - hint; if (d > total / 2) d -= total; else if (d < -total / 2) d += total; p += d; }
+      else { const d = arcDelta(pr.s); p += d; if (dt > 0) speed = clamp(d / dt, 0, 120); }
       hint = pr.s;
       t[i] = raw[i * 3]; prog[i] = p; x[i] = pr.lat;
     }
@@ -237,7 +261,7 @@ const RealReplay = (function () {
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const at = {};
     // THE BROADCAST (js/race/broadcast.js): the timing tower, and with camera "auto" the director.
-    const bc = typeof Broadcast !== "undefined" ? Broadcast.create(G, { follow: (w) => follow(w), setFollow: (c) => setFollow(c) }) : null;
+    const bc = typeof Broadcast !== "undefined" ? Broadcast.create(G, { follow: (w) => follow(w), setFollow: (c) => setFollow(c), cameraOwner: () => run && run.cameraOwner }) : null;
     // What it reads each frame — one object for the run, the lists computed only when asked.
     const bcState = {
       get script() { return run.script; }, get T() { return run.T; }, get speed() { return run.speed; },
@@ -285,10 +309,11 @@ const RealReplay = (function () {
       run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, paused: false, follow: null, reel, reelIdx: 0, list, eventCursor: eventCursor(list, T), fit: built.fit, finished: false, onKey: null, audio: null };
       run.startT = startT; run.duration = duration; run.events = events; run.onTimeline = o.onTimeline;
       run.savedCamera = G.camMode;
+      run.cameraOwner = {};
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
       const auto = o.camera === "auto";   // the TV director cuts the shots (Broadcast)
       const camera = modes.findIndex((m) => m.id === (auto ? Broadcast.SHOTS[0] : o.camera));
-      if (camera >= 0 && G.setCamMode) G.setCamMode(camera, { persist: false });
+      if (G.setCamMode) G.setCamMode(camera >= 0 ? camera : G.camMode, { persist: false, owner: run.cameraOwner, priority: 10 });
       // Pose before snapping: a mid-race start must frame the new position, not the grid.
       pose(true);
       if (run.onTimeline) run.onTimeline(run.T);
@@ -330,7 +355,7 @@ const RealReplay = (function () {
       stopRadioClip();
       if (bc) bc.stop();
       if (G.raceRadio && G.raceRadio.setWatching) G.raceRadio.setWatching(null);
-      if (G.setCamMode && run.savedCamera != null) G.setCamMode(run.savedCamera, { persist: false });
+      if (G.setCamMode && run.savedCamera != null) G.setCamMode(run.savedCamera, { persist: false, owner: run.cameraOwner, release: true });
       run = null;
       Log.info("game", "RealReplay.stop");
     }
@@ -378,17 +403,18 @@ const RealReplay = (function () {
       }
       reposition(T, highlight, true);
     }
-    // Scrubbing and reel cuts cross the same timeline boundary. Release all
-    // history, pose the new subject, then reset the camera and repaint once.
-    function reposition(t, highlight, paint = false) {
-      captionGeneration++;
-      run.T = t; run.eventCursor = eventCursor(run.list, t);
-      // A discontinuity must release the prior audio and all broadcast history.
-      stopRadioClip();
-      pose(true);
-      if (G.raceT != null) G.raceT = Math.max(0, run.T);
-      if (run.onTimeline) run.onTimeline(run.T);
-      if (bc) bc.resetTiming();
+    // Discontinuities release timeline history. An automatic overlapping clip
+    // only changes the picture: its clock, event cursor and audio keep running.
+    function reposition(t, highlight, paint = false, continuous = false) {
+      if (!continuous) {
+        captionGeneration++;
+        run.T = t; run.eventCursor = eventCursor(run.list, t);
+        stopRadioClip();
+        pose(true);
+        if (G.raceT != null) G.raceT = Math.max(0, run.T);
+        if (run.onTimeline) run.onTimeline(run.T);
+        if (bc) bc.resetTiming();
+      }
       if (highlight) {
         const c = carOfNum(highlight.num);
         const picture = bc && bc.status();
@@ -402,7 +428,7 @@ const RealReplay = (function () {
         }
         if (bc) bc.onCut(highlight.kind);
       }
-      if (G.raceRadio && G.raceRadio.resetTimeline) G.raceRadio.resetTimeline();
+      if (!continuous && G.raceRadio && G.raceRadio.resetTimeline) G.raceRadio.resetTimeline();
       if (bc) bc.refresh(bcState);
       if (G.refreshHud) G.refreshHud(true);
       if (G.snapGameCam) G.snapGameCam(paint);
@@ -452,6 +478,21 @@ const RealReplay = (function () {
       reposition(clamp(h.t - LEAD_S, run.startT, run.duration), h);
     }
     function skip() { if (!run || !run.reel) return; run.reelIdx++; if (run.reelIdx < run.reel.length) cutTo(run.reel[run.reelIdx]); else finish(); }
+
+    function advanceReel() {
+      // A large playback step can exhaust several holds. Consume each once;
+      // never replay an expired item's lead-in or reset already crossed news.
+      do { run.reelIdx++; }
+      while (run.reelIdx < run.reel.length && run.T > Math.min(run.duration, run.reel[run.reelIdx].t + HOLD_S));
+      if (run.reelIdx >= run.reel.length) { finish(); return; }
+      const h = run.reel[run.reelIdx];
+      const lead = clamp(h.t - LEAD_S, run.startT, run.duration);
+      if (lead > run.T) {
+        const cursor = run.eventCursor;
+        cutTo(h);
+        run.eventCursor = Math.max(cursor, run.eventCursor);
+      } else reposition(run.T, h, false, true);
+    }
 
     function onKey(e) {
       if (!run || G.state !== "race" || G.paused || G.photoMode || !e || e.repeat) return;
@@ -682,7 +723,7 @@ const RealReplay = (function () {
       if (G.raceT != null) G.raceT = Math.max(0, run.T);
       if (run.reel) {
         const h = run.reel[run.reelIdx];
-        if (!h || run.T > Math.min(run.duration, h.t + HOLD_S)) skip();
+        if (!h || run.T > Math.min(run.duration, h.t + HOLD_S)) advanceReel();
         return;
       }
       // A missing or truncated winner download must not end another driver's

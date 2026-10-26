@@ -1,0 +1,1 @@
+Improved: Phones render the post-processing chain at the full scene resolution again (it had dropped to 50%, then 62.5%), so the image is sharp on iPhone. The performance governor still lowers resolution and sheds effects when a device runs hot or misses frames.

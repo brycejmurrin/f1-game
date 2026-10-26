@@ -8,8 +8,14 @@
  * adds ONE fragment file; CHANGELOG.md is written only by `--fold`, which moves the fragments under
  * `## <build>` (merging into an existing section) and deletes them. Fragment lines are `Category: entry`.
  *
- *   node tools/gen/gen-changelog.mjs --check   # fragments well-formed (exit 1 otherwise)
- *   node tools/gen/gen-changelog.mjs --fold    # fold into CHANGELOG.md, delete the fragments
+ * THE BUILD IS THE STAMPED ONE, NOT version.json (2026-10-26): version.json holds the committed placeholder
+ * (1695) since Pages stamps 2000 + `git rev-list --count HEAD` at deploy (tools/desktop/stage.mjs pagesBuild),
+ * so a fold keyed to version.json filed every entry under a build no player ever ran. `--fold` defaults to
+ * pagesBuild() of this checkout, i.e. the build the deploy tip stamps: the entries landed by that build.
+ * The weekly owner is .github/workflows/changelog-fold.yml.
+ *
+ *   node tools/gen/gen-changelog.mjs --check               # fragments well-formed (exit 1 otherwise)
+ *   node tools/gen/gen-changelog.mjs --fold [--build N]    # fold into CHANGELOG.md, delete the fragments
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -75,8 +81,20 @@ export function fold(changelog, build, entries) {
   return lines.join("\n") + "\n";
 }
 
-function main(argv) {
-  const gated = argGate(argv, { allowed: ["--check", "--fold"] });
+/** `--build N` (a positive integer), else the stamped build of this checkout. Throws on a bad value or a shallow clone. */
+export async function foldBuild(argv, stamp) {
+  const i = argv.indexOf("--build");
+  if (i >= 0) {
+    const n = Number(argv[i + 1]);
+    if (!Number.isInteger(n) || n < 1) throw new Error(`--build needs a positive integer, got ${JSON.stringify(argv[i + 1] ?? "")}`);
+    return n;
+  }
+  return (stamp || (await import("../desktop/stage.mjs")).pagesBuild)();
+}
+
+async function main(argv) {
+  const bi = argv.indexOf("--build");
+  const gated = argGate(bi < 0 ? argv : argv.filter((_, k) => k !== bi && k !== bi + 1), { allowed: ["--check", "--fold"] });
   if (gated !== null) return gated;
   const names = listFragments(), entries = [], problems = [];
   for (const n of names) {
@@ -86,7 +104,8 @@ function main(argv) {
   if (problems.length) { process.stderr.write(problems.join("\n") + "\n"); return 1; }
   if (argv.includes("--fold")) {
     if (!names.length) { process.stdout.write("no fragments to fold\n"); return 0; }
-    const build = JSON.parse(readRepo("version.json")).build;
+    let build;
+    try { build = await foldBuild(argv); } catch (e) { process.stderr.write(`gen-changelog: ${e.message}\n`); return 2; }
     fs.writeFileSync(path.join(ROOT, TARGET), fold(readRepo(TARGET), build, entries));
     for (const n of names) fs.unlinkSync(path.join(ROOT, DIR, n));
     process.stdout.write(`${TARGET}: folded ${entries.length} entries from ${names.length} fragments into ## ${build}\n`);
@@ -97,5 +116,5 @@ function main(argv) {
 }
 
 if (isMain(import.meta.url)) {
-  process.exitCode = main(process.argv.slice(2));
+  main(process.argv.slice(2)).then((code) => { process.exitCode = code; });
 }

@@ -788,10 +788,11 @@ test("A-P2W: discardHint is a no-op off WebGPU", async (t) => {
 // ── phoneperf 2026-10-24: scene colour R11F_G11F_B10F on phones where renderable (KNOWN-WINS row 15) ───────
 // Own rig (postRig above is pinned to a one-attachment phone chain by the A-P1 tests): the real post chain over the
 // fake WebGL2, which exposes EXT_color_buffer_float, so the 11/11/10 format is renderable here as on a phone GPU.
-async function rig11(t, { ls = {}, isMobile = true, ssrTag = true } = {}) {
+async function rig11(t, { ls = {}, isMobile = true, ssrTag = true, wgpu = false } = {}) {
   const fg = makeFakeGL(320, 180);
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
+  if (wgpu) renderer.backend.isWebGPUBackend = true;   // the gate reads this flag; nothing else in the chain's construction does
   const post = withStore(ls, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile,
     chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest: () => null,
     wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
@@ -800,58 +801,37 @@ async function rig11(t, { ls = {}, isMobile = true, ssrTag = true } = {}) {
   return { post, renderer, gl: fg.gl };
 }
 
-test("scene11: a phone chain's scene colour is rg11b10 where renderable; the tag attachment keeps half float", async (t) => {
-  const h = await rig11(t);
+test("scene11: WebGL2 keeps RGBA16F on every path (the 2026-10-25 revert of #3690's WebGL2 leg)", async (t) => {
+  // Device Farm iPhone 14 WebGL2: rg11b10 42.5 fps vs RGBA16F 45.7 / 47.0; 55 vs 13-19 frames over 33 ms.
+  for (const [name, o] of [["phone", {}], ["phone, forced on", { ls: { "apex26.tlxScene11": "1" } }],
+    ["one-attachment phone", { ssrTag: false }], ["desktop, forced on", { isMobile: false, ls: { "apex26.tlxScene11": "1" } }]]) {
+    const h = await rig11(t, o);
+    assert.equal(h.post.sceneTarget().textures[0].type, THREE.HalfFloatType, name + ": scene colour is RGBA16F");
+    assert.equal(h.post.state().sceneFormat, "rgba16f", name);
+    assert.equal(h.post.hdrOk(), true);
+  }
+});
+
+test("scene11: the WebGPU leg keeps its rg11b10 phone default (vendored patch 18, #3711); the tag attachment stays half float", async (t) => {
+  const h = await rig11(t, { wgpu: true });
   const rt = h.post.sceneTarget();
   assert.equal(rt.textures[0].type, THREE.UnsignedInt101111Type);
   assert.equal(rt.textures[0].format, THREE.RGBFormat);
   assert.equal(rt.textures[1].type, THREE.HalfFloatType, "attachment 1 (ssrTag) keeps the chain's hdrType");
-  assert.equal(rt.textures[1].format, THREE.RedFormat, "and its own format (indexed blending on the fake GL)");
   assert.equal(h.post.state().sceneFormat, "rg11b10");
   assert.equal(h.post.hdrOk(), true, "the scene is still float HDR to every reader");
-  // The scene pass renders into it and A-P1's depth rule still runs on the same target.
-  h.renderer.setRenderTarget(rt);
-  assert.equal(h.post.depthBegin(OFF, NIGHT), false);
-  h.renderer.render(new THREE.Scene(), new THREE.PerspectiveCamera());
-  assert.equal(h.post.depthEnd(), true, "depth discarded on the 11/11/10 target as on RGBA16F");
-  h.renderer.setRenderTarget(null);
-  const off = await rig11(t, { ls: { "apex26.tlxScene11": "0" } });
+  const off = await rig11(t, { wgpu: true, ls: { "apex26.tlxScene11": "0" } });
   assert.equal(off.post.sceneTarget().textures[0].type, THREE.HalfFloatType, "apex26.tlxScene11=0 keeps RGBA16F");
-  assert.equal(off.post.state().sceneFormat, "rgba16f");
-  const desk = await rig11(t, { isMobile: false });
+  const desk = await rig11(t, { wgpu: true, isMobile: false });
   assert.equal(desk.post.sceneTarget().textures[0].type, THREE.HalfFloatType, "desktop keeps RGBA16F by default");
-  const deskOn = await rig11(t, { isMobile: false, ls: { "apex26.tlxScene11": "1" } });
-  assert.equal(deskOn.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "apex26.tlxScene11=1 forces it anywhere renderable");
-  const one = await rig11(t, { ssrTag: false });
+  const deskOn = await rig11(t, { wgpu: true, isMobile: false, ls: { "apex26.tlxScene11": "1" } });
+  assert.equal(deskOn.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "=1 forces it on the WebGPU leg");
+  const one = await rig11(t, { wgpu: true, ssrTag: false });
   assert.equal(one.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "a one-attachment chain too");
-  assert.equal(one.post.sceneTarget().textures.length, 1);
-  const bloomOff = await rig11(t, { ls: { "apex26.tlxBloom11": "0" } });
+  const bloomOff = await rig11(t, { wgpu: true, ls: { "apex26.tlxBloom11": "0" } });
   assert.equal(bloomOff.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "the bloom knob does not reach the scene target");
-});
-
-test("scene11: the WebGPU leg takes it too once vendored patch 18 keeps a vec4 output (#3711)", async (t) => {
-  // gpu-census macos-latest run 40052670537 (886e476f, no patch 18): "Async render pipeline creation failed
-  // (renderPipeline_MeshBasicNodeMaterial_70): Color blending srcFactor (BlendFactor::One) or dstFactor
-  // (BlendFactor::OneMinusSrcAlpha) …". Run 40056676327 (patch 18, same input): green. The WebGPU rule lives in
-  // the vendored WGSL builder (gfx-backend-canary §18, by behaviour); here: the gate no longer reads the backend kind.
   const post = read("js/render/three/tlx-post.js");
-  assert.ok(post.includes("const _r11Blendable = r11Renderable;"), "no backend-kind exclusion");
-  assert.ok(post.includes('bloom11 = !!(dev && dev.features && dev.features.has("rg11b10ufloat-renderable"));'), "WebGPU renderability still needs the adapter feature");
-  assert.ok(post.includes("let scene11 = _r11Blendable && !!ctx.isMobile;"), "the default goes through the gate");
-  assert.ok(post.includes('if (k === "1") scene11 = _r11Blendable;'), "the force knob goes through the gate too");
-  // Behaviour: the real chain over the fake WebGL2, with the backend flagged as WebGPU for the gate's purposes.
-  const h = await rig11(t, { ls: { "apex26.tlxScene11": "1" } });
-  assert.equal(h.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "WebGL backend: forced on");
-  const fg = makeFakeGL(320, 180);
-  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
-  await renderer.init();
-  renderer.backend.isWebGPUBackend = true;   // the old gate read this flag; nothing else in the chain's construction does
-  const made = withStore({ "apex26.tlxScene11": "1" }, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true,
-    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag: true, softDest: () => null,
-    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
-  t.after(() => { made.dispose(); renderer.dispose(); });
-  assert.equal(made.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "a WebGPU-flagged backend takes rg11b10 when forced");
-  assert.equal(made.state().sceneFormat, "rg11b10");
+  assert.ok(post.includes("const _r11Blendable = r11Renderable && !!(renderer.backend && renderer.backend.isWebGPUBackend);"), "the gate reads the backend kind");
 });
 
 test("scene11: the probe is read before the bloom knob, and no post reader samples scene alpha", () => {

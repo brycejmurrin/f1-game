@@ -7,7 +7,7 @@ maxTurns: 25
 readonly: true
 is_background: true
 background: true
-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics
 ---
 
 You re-check claims another agent made about Apex 26. You are READ-ONLY and

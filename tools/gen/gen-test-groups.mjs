@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// @doc Regenerates package.json's `test:*` scripts and tooling-fast's file list from tests/groups.json; `--check`.
+// @doc Regenerates package.json's `test:*` scripts from tests/groups.json; `--check`.
 // @skill check-changes
 /**
  * gen-test-groups.mjs — tests/groups.json is the ONE definition of a test
- * group; this writes the two places that used to hold their own copy.
+ * group; this writes package.json's `test:*` scripts from it.
  *
  *   node tools/gen/gen-test-groups.mjs            # write
  *   node tools/gen/gen-test-groups.mjs --check    # fail on drift (fast gate)
@@ -14,8 +14,10 @@
  * tests/groups.json now, and `--check` on the fast gate makes a stale copy a
  * red run instead of a silent gap.
  *
- * The generated region of tooling-fast.mjs is delimited by @gen-shell-style
- * markers; never hand-edit between them.
+ * tooling-fast.mjs used to carry a generated copy of the `toolingFast` list
+ * (1,512 lines between @gen-test-groups markers, a weekly merge-conflict hot
+ * spot). Since 2026-10-26 it reads tests/groups.json at import time, so there
+ * is nothing to regenerate there.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -24,10 +26,6 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const GROUPS = path.join(ROOT, "tests/groups.json");
 const PKG = path.join(ROOT, "package.json");
-const TF = path.join(ROOT, "tools/ci/tooling-fast.mjs");
-
-const BEGIN = "  // @gen-test-groups:begin — generated from tests/groups.json; do not hand-edit";
-const END = "  // @gen-test-groups:end";
 
 export function loadGroups(file = GROUPS) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
@@ -77,20 +75,6 @@ export function renderPkg(doc, pkgText) {
   return JSON.stringify(pkg, null, 2) + trailing;
 }
 
-/** tools/ci/tooling-fast.mjs with its file array regenerated in place. */
-export function renderToolingFast(doc, text) {
-  const a = text.indexOf(BEGIN);
-  const b = text.indexOf(END);
-  if (a < 0 || b < 0) throw new Error(`tools/ci/tooling-fast.mjs is missing its @gen-test-groups markers`);
-  // An entry that starts with `//` is a note, emitted verbatim: the reasons a
-  // file earns its place in the edit loop (and the war stories behind them)
-  // live beside the file they explain, and regenerating must not eat them.
-  const body = doc.toolingFast
-    .map((f) => (f.startsWith("//") ? `  ${f}` : `  ${JSON.stringify(f)},`))
-    .join("\n");
-  return text.slice(0, a) + BEGIN + "\n" + body + "\n" + text.slice(b);
-}
-
 function main() {
   // An unknown flag used to fall through to WRITE mode and rewrite package.json (G1).
   const unknown = process.argv.slice(2).filter((a) => a !== "--check");
@@ -102,7 +86,6 @@ function main() {
   const doc = loadGroups();
   const targets = [
     [PKG, renderPkg(doc, fs.readFileSync(PKG, "utf8")), "package.json"],
-    [TF, renderToolingFast(doc, fs.readFileSync(TF, "utf8")), "tools/ci/tooling-fast.mjs"],
   ];
   let drift = 0;
   for (const [file, next, label] of targets) {
@@ -114,7 +97,7 @@ function main() {
   }
   if (check) {
     if (drift) process.exit(1);
-    console.log("gen-test-groups: package.json and the tooling-fast list match tests/groups.json");
+    console.log("gen-test-groups: package.json matches tests/groups.json (tooling-fast reads it at runtime)");
   }
 }
 

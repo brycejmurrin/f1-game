@@ -26,7 +26,8 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { api, DEPLOY } from "./github-api.mjs";
+import { DEPLOY } from "./github-api.mjs";
+import { createSnapshot } from "../lib/pr-snapshot.mjs";
 import { ciState } from "./pr-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -59,7 +60,10 @@ function git(args, run = spawnSync) {
  * @returns {{ ok: boolean, error?: string, branch?: string, head?: string, tip?: string, behind?: boolean, conflict?: boolean,
  *   ci?: string, verdict?: string, why?: string, note?: string|null }}
  */
-export function needsSync(branch, { fetch = true, offline = false, readGit = git, request = api } = {}) {
+export function needsSync(branch, { fetch = true, offline = false, readGit = git, request = null } = {}) {
+  // Default transport: the shared ETag-cached snapshot (tools/lib/pr-snapshot.mjs).
+  let snap = null;
+  if (!request) { snap = createSnapshot(); request = snap.get; }
   if (fetch && !offline) {
     const f = readGit(["fetch", "--no-tags", "origin", branch, DEPLOY]);
     if (f.code !== 0) return { ok: false, error: `fetch failed: ${f.err || f.out}` };
@@ -78,6 +82,7 @@ export function needsSync(branch, { fetch = true, offline = false, readGit = git
   let ci = "unknown", runStartedAt = null, note = null;
   if (behind && !conflict && !offline) {
     const r = request(`actions/workflows/ci.yml/runs?head_sha=${head.out}&per_page=20`);
+    snap?.save();
     if (r.error) note = `CI state unreadable (${r.error}): only a conflict can be detected`;
     else {
       const runs = r.json?.workflow_runs || [];

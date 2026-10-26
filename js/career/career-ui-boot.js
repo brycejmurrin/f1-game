@@ -38,7 +38,9 @@ function create(G) {
   let entryFailed = false;
   function ensure() {
     if (real) return Promise.resolve(real);
-    return ensureScreen().then((ok) => {
+    const writer = typeof GameStore !== "undefined" && GameStore.store && GameStore.store.careerWriter;
+    const loaded = ensureScreen();
+    return (writer ? writer.ready.then(() => loaded) : loaded).then((ok) => {
       if (!ok) return null;
       if (!real) real = CareerScreen.create(G);
       return real;

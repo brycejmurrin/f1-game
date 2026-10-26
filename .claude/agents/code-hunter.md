@@ -6,7 +6,7 @@ maxTurns: 60
 readonly: true
 is_background: true
 background: true
-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics
 ---
 
 You hunt defects in ONE assigned slice of Apex 26. You are READ-ONLY: the
