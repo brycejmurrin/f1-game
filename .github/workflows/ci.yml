@@ -1411,6 +1411,9 @@ jobs:
     # its retry now meets this cap first: the job reads `cancelled`, which
     # ci-verdict.mjs fails exactly like `failure` — red either way, never green.
     timeout-minutes: ${{ (inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && 120 || 20 }}
+    # playwright.config.js caps a CI run at 45 min (globalTimeout); the wide nightly/dispatch run's job cap is 120.
+    env:
+      APEX_GLOBAL_TIMEOUT_MIN: ${{ (inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && '110' || '' }}
     # NO JOB-LEVEL CONCURRENCY (2026-10-16, the 2026-10-16 CI/CD review
     # note (#2333) finding 6). From 2026-10-15 to 10-16 every ready PR's single smoke shard
     # shared ONE fleet-wide lane group, so a 2.6-minute job that
@@ -2529,6 +2532,9 @@ jobs:
       group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('selected-lane-{0}', matrix.lane) || format('selected-run-{0}-{1}', github.run_id, strategy.job-index) }}
       queue: max
     timeout-minutes: ${{ matrix.timeout }}
+    # playwright.config.js's 45-min CI globalTimeout must never undercut the plan's own per-shard cap (nightly shards run 60).
+    env:
+      APEX_GLOBAL_TIMEOUT_MIN: ${{ matrix.timeout }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
