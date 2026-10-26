@@ -1,0 +1,1 @@
+Improved: Jeddah S/F authored grandstands, cityFront and closed street masses sit past the night_pass orbit ring (gap ≥48) so near-field fascia no longer fills frac-0 survey cells (#3315; theme-dress neonTower exclusion still needs circuit-def lend).

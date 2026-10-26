@@ -380,26 +380,30 @@
       }
       const STAND_GREEN = [0.07, 0.30, 0.16];
       const STAND_GOLD  = [0.72, 0.58, 0.16];
-      grandstandEx(0.0,  1, 15, 60, STAND_GREEN, [0.42, 0.46, 0.40],
+      // Gap 48 (was 15): night_pass / dual_lite S/F orbit (az 45 / dist 40–42)
+      // puts the eye ~27 m lateral (~21 m past road edge) — old GS bowls sat
+      // on that eye so frac-0 orbit was a neon canyon (#3315).
+      grandstandEx(0.0,  1, 48, 60, STAND_GREEN, [0.42, 0.46, 0.40],
         { tiers: 2, roof: "cantilever", endWalls: true, pylons: true,
           roofCol: STAND_GOLD, fasciaCol: STAND_GOLD });
-      grandstandEx(0.02, 1, 15, 50, STAND_GREEN, [0.40, 0.44, 0.40],
+      grandstandEx(0.02, 1, 48, 50, STAND_GREEN, [0.40, 0.44, 0.40],
         { tiers: 1, roof: "cantilever", endWalls: true,
           roofCol: STAND_GOLD, fasciaCol: STAND_GOLD });
 
-      cityFront(0.88, 0.98, 1, 28, {
+      // Gap 72 (was 28): past S/F grandstandEx at 48 + stand depth (#3315).
+      // Theme-dress neonTowers on +1 SF still need circuit-def exclusion (out of OWNED).
+      cityFront(0.88, 0.98, 1, 72, {
         minH: 8, maxH: 16, depth: 12,
         palette: WALL_INL, lit: true,
         step: 70, floor: 3,
       });
 
       // ── CLOSED STREET MASSES on the S/F canyon ─────────────────────────────
-      // Survey sheet-03 SF: generic neonTower day-path reads as open skeleton
-      // frames (shared city.js open-face bug — not edited here). neonTower front
-      // row centres at gap 13–25 (w up to ~18 → inner face ~4) and back at
-      // 40–70, so ANY deep mass in 4–82 clips. Fix: (1) thin closed fascia
-      // skins at gap 5.6 (1.0 m deep, inside the canyon pocket, small overlap
-      // volume) and (2) tall closed cores at gap ≥105 (clear of the back row).
+      // Survey sheet-03 SF + #3315 night orbit: tall fascia at gap 5.9/6.0 and
+      // theme-dress neonTowers (gap 13–25) made frac-0 orbit a neon gap between
+      // two near-camera walls. concreteCanyon + neon strips still dress the
+      // street lip; closed cores sit past the orbit ring. +1 mid wall is the
+      // cityFront/grandstand pair (no overlapping closedMass — clip-audit).
       {
         const NEON_ROW = [MAGENTA, WINTEAL, GOLD, GREEN, SPANGLE, WINCOOL];
         const closedMass = (frac, side, dist, w, h, d, wallCol, neonCol) => {
@@ -414,20 +418,17 @@
           put(vadd(a.c, a.r, -side * (w * 0.5 + 0.06)), [0.14, h * 0.70, d * 0.70], neonCol);
           put(vadd(a.c, a.u, h), [w * 1.02, 0.9, d * 1.02], neonCol);
         };
-        // Closed fascia — 1.5 m radial depth at gap 5.9 (canyon at 4.35;
-        // neonTower centres ≥13). SF pocket only: the T1 wrap (s≈0.00–0.07)
-        // clipped the generic street retail place() at gap 9 (severe 1.5 m).
-        for (let i = 0; i < 14; i++) {
-          const sf = 0.875 + i * 0.0085;
+        // Mid closed street wall on −1 only — fixed gap 48 (was 5.9 staggered
+        // 48/50/52 which self-clipped). Past night_pass orbit eye; +1 uses
+        // grandstandEx@48 + cityFront@72 instead.
+        for (let i = 0; i < 10; i++) {
+          const sf = 0.880 + i * 0.012;
           const hv = hash(i * 41 + 3);
-          closedMass(sf, -1, 5.9,
-            1.5, 12 + hv * 8, 8.5 + hv * 2.5,
+          closedMass(sf, -1, 48,
+            6 + hv * 3, 14 + hv * 8, 9 + hv * 2,
             WALL_INL[i % WALL_INL.length], NEON_ROW[i % NEON_ROW.length]);
-          closedMass(sf + 0.004, 1, 6.0,
-            1.5, 11 + hv * 7, 8 + hv * 2.5,
-            WALL_INL[(i + 2) % WALL_INL.length], NEON_ROW[(i + 2) % NEON_ROW.length]);
         }
-        // Tall closed skyline well behind neonTower back row (gap ≥105).
+        // Tall closed skyline well behind the mid wall (gap ≥105).
         for (let i = 0; i < 7; i++) {
           const sf = 0.90 + i * 0.013;
           const hv = hash(i * 67 + 11);
@@ -656,31 +657,35 @@
               [0.22, 4.5, 0.55], col, b);
           }
         }
-        // Extra night-race boards on SF, T13 approach, technical sector, DRS.
+        // Night-race boards. SF pocket gaps ≥48 (#3315 orbit clear); elsewhere
+        // keep the denser Corniche board line.
         const boards = [
-          [0.98, -1, 18, 12, 10, MAGENTA],
-          [0.99,  1, 20, 11,  9, WINTEAL],
-          [0.015,-1, 16, 10,  9, GOLD],
-          [0.04,  1, 15,  9,  8, GREEN],
+          [0.98, -1, 52, 12, 10, MAGENTA],
+          [0.99,  1, 52, 11,  9, WINTEAL],
+          [0.015,-1, 52, 10,  9, GOLD],
+          [0.04,  1, 52,  9,  8, GREEN],
           [0.48, -1, 14, 10,  9, MAGENTA],
           [0.52,  1, 16, 11, 10, WINTEAL],
           [0.80, -1, 14,  9,  8, SPANGLE],
           [0.83,  1, 15, 10,  9, [0.20, 0.75, 1.15]],
-          [0.91, -1, 18, 11, 10, MAGENTA],
-          [0.94,  1, 19, 10,  9, GOLD],
+          [0.91, -1, 52, 11, 10, MAGENTA],
+          [0.94,  1, 52, 10,  9, GOLD],
           [0.25, -1, 16,  9,  8, WINTEAL],
           [0.33, -1, 15,  8,  8, GREEN],
         ];
         for (const [s, side, gap, w, h, col] of boards) {
           billboard(K(s), side, gap, w, h, col);
         }
-        // Storefront neon cubes tucked behind the canyon (gap 9–11) — cheap
-        // instanced night colour without open-face towers.
+        // Storefront neon cubes — SF wrap (authored ~0.88–0.08) at gap ≥48 so
+        // night_pass orbit at racing frac 0 is not a neon canyon (#3315);
+        // mid-lap cubes stay tucked behind the canyon lip.
         for (let i = 0; i < 16; i++) {
           const s = 0.06 + i * 0.055;
           const side = (i % 2) ? -1 : 1;
           const col = NEON_COLS[i % NEON_COLS.length];
-          const a = anchor(K(s), side, 9.5 + (i % 3) * 1.2), b = [a.r, a.u, a.t];
+          const sfHot = s >= 0.88 || s <= 0.08;
+          const gap = sfHot ? (48 + (i % 3) * 1.5) : (9.5 + (i % 3) * 1.2);
+          const a = anchor(K(s), side, gap), b = [a.r, a.u, a.t];
           if (onTrack(a.c[0], a.c[2], 3)) continue;
           addBox(out, vadd(a.c, a.u, 1.6), [2.4, 3.2, 4.5], [0.12, 0.12, 0.15], b);
           addBox(out, vadd(a.c, a.u, 3.4), [2.5, 0.55, 4.6], col, b);
@@ -697,18 +702,19 @@
       }
 
       if (typeof scaffoldStand === "function") {
-        scaffoldStand(0.876, 0.944, 1, 15, {
+        // Gap 48 (was 15): clear of night_pass S/F orbit eye (#3315).
+        scaffoldStand(0.876, 0.944, 1, 48, {
           rows: 4, rise: 1.25, setback: 1.9, step: 21, density: 0.52, legEvery: 1,
           tubeCol: [0.66, 0.67, 0.70], deckCol: [0.62, 0.58, 0.50],
           bench: [[0.08, 0.34, 0.18], [0.74, 0.60, 0.16], [0.86, 0.86, 0.84]],
           awning: true, awningCols: [[0.90, 0.89, 0.85], [0.10, 0.38, 0.20]],
         });
       } else {
-        grandstand(0.89, 1, 16, 45, [0.15, 0.15, 0.19], [0.50, 0.43, 0.47]);
-        grandstand(0.925, 1, 22, 58, [0.12, 0.13, 0.17], [0.62, 0.42, 0.50]);
+        grandstand(0.89, 1, 48, 45, [0.15, 0.15, 0.19], [0.50, 0.43, 0.47]);
+        grandstand(0.925, 1, 52, 58, [0.12, 0.13, 0.17], [0.62, 0.42, 0.50]);
       }
-      lightTower(K(0.90),  1, 11);
-      lightTower(K(0.93), -1, 11);
+      lightTower(K(0.90),  1, 52);
+      lightTower(K(0.93), -1, 52);
       floodMast(K(0.91), -1, 24);
 
       // ── CORNER PROTECTION ─────────────────────────────────────────────────
@@ -718,9 +724,10 @@
       guardrail(0.96, 0.99,  1, 2.4, [0.55, 0.56, 0.6]);
 
       // ── DRS STRAIGHT + CORNICHE SIGNAGE ──────────────────────────────────
-      billboard(K(0.95),  1, 22, 10, 10, GREEN);
-      billboard(K(0.96), -1, 22, 10,  9, SPANGLE);
-      billboard(K(0.97), -1, 20, 10, 10, MAGENTA);
+      // SF DRS boards at gap 52 (was 20–22): past night_pass orbit eye (#3315).
+      billboard(K(0.95),  1, 52, 10, 10, GREEN);
+      billboard(K(0.96), -1, 52, 10,  9, SPANGLE);
+      billboard(K(0.97), -1, 52, 10, 10, MAGENTA);
       billboard(K(0.10),  1, 15,  8,  8, [0.12, 0.68, 0.98]);
       billboard(K(0.55),  1, 13,  8,  7, [0.92, 0.12, 0.68]);
 
