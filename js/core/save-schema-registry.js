@@ -57,6 +57,7 @@ const SaveSchemaRegistry = (function () {
     "c1Pileup": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "carWarmSlice": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "crewLook": entry("js/garage/scene-crew.js", "raw", 1, "rawScalar"),
+    "crewVisit": entry("js/garage/arrival.js", "raw", 1, "rawScalar"),
     "career": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "json", 1, "json"),
     "career.freeMoney": entry("js/career/career.js", "json", 1, "bool"),
     "careerSlot": entry("js/career/career.js", "json", 1, "careerSlot"),
