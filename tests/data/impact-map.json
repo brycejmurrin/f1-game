@@ -4483,6 +4483,11 @@
         "tests/unit/service-worker.test.mjs"
       ]
     },
+    "js/circuits/scenery/mugello.js": {
+      "attach": [
+        "tests/unit/mugello-arrabbiata-orbit.test.mjs"
+      ]
+    },
     "js/circuits/scenery/redbull.js": {
       "*": [
         "tests/unit/scenery-guards.test.mjs"
