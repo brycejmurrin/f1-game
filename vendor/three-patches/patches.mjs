@@ -413,7 +413,63 @@ export const PATCHES = [
         count: 1,
       },
     ],
-  }
+  },
+  {
+    id: 18,
+    title: "a 3-component colour target keeps a vec4 WGSL fragment output",
+    file: "build/three.webgpu.js",
+    why: "NodeBuilder.getOutputType() sizes @location(i) to the target's component count, so an RGBFormat " +
+      "target (rg11b10ufloat) gets a vec3 output; WebGPU then refuses any blend factor that reads source " +
+      "alpha (gpuweb 'validating GPUFragmentState'), and every blended material's pipeline fails. The spec " +
+      "accepts a vec4 output into an RGB attachment (extra components are dropped), so the WGSL builder " +
+      "reports vec4 wherever the base answer is vec3. GLSL (WebGL2) is untouched: GL has no such rule.",
+    upstream: "unfixed on dev as of 2026-10-24 (NodeUtils.getTextureType RGBFormat -> length 3); #3690 / A·H10 lead",
+    edits: [
+      {
+        find: "\tgetOutputStructName() {\n\n\t\treturn 'output';\n\n\t}\n",
+        replace: "\tgetOutputStructName() {\n\n\t\treturn 'output';\n\n\t}\n\n\t/**\n\t * Returns the WGSL type of a colour output: a 3-component target still takes a vec4\n\t * so source-alpha blend factors stay valid (apex patch 18).\n\t *\n\t * @param {number} [index=0] - The index of the render target texture.\n\t * @return {string} The type.\n\t */\n\tgetOutputType( index = 0 ) {\n\n\t\tconst type = super.getOutputType( index );\n\n\t\treturn type === 'vec3' ? 'vec4' : type;\n\n\t}\n",
+        count: 1,
+      },
+    ],
+  },
+{
+  "id": 19,
+  "title": "skip repeated shared binding group checks at the same version",
+  "file": "build/three.webgpu.js",
+  "why": "Homogeneous shared non-object groups have already processed every member at their current version. Preserve array/member/group-node identities, Nodes cache identity and successful completion before skipping repeated ChainMap lookups. State belongs to Bindings DataMap and is released with the group.",
+  "upstream": "Local optimization against r186.1 Nodes.updateGroup semantics; https://github.com/mrdoob/three.js/blob/r186/src/renderers/common/nodes/Nodes.js",
+  "edits": [
+    {
+      "find": "\t_update( bindGroup, bindings ) {\n\n\t\tconst { backend } = this;",
+      "replace": "\t_update( bindGroup, bindings ) {\n\n\t\t// Shared groups already checked at this version need no per-binding ChainMap dispatch.\n\t\t// Keep identity checks: these private arrays and their members are mutable.\n\t\tconst groupData = this.get( bindGroup );\n\t\tconst members = bindGroup.bindings;\n\t\tlet shared = groupData.sharedUpdate;\n\t\tlet same = shared !== undefined && shared.array === members && shared.members.length === members.length;\n\t\tif ( same ) {\n\n\t\t\tfor ( let i = 0; i < members.length; i ++ ) {\n\n\t\t\t\tif ( shared.members[ i ] !== members[ i ] || members[ i ].groupNode !== shared.node ) { same = false; break; }\n\n\t\t\t}\n\n\t\t}\n\t\tif ( ! same ) {\n\n\t\t\tshared = undefined;\n\t\t\tconst node = members.length > 0 ? members[ 0 ].groupNode : undefined;\n\t\t\tif ( node && node.shared === true && node.updateType !== NodeUpdateType.OBJECT && members.every( binding => binding.groupNode === node ) ) {\n\n\t\t\t\tshared = { array: members, members: members.slice(), node, seen: false };\n\n\t\t\t}\n\t\t\tgroupData.sharedUpdate = shared;\n\n\t\t}\n\t\tconst eligible = shared !== undefined && shared.node.shared === true && shared.node.updateType !== NodeUpdateType.OBJECT;\n\t\tconst sharedVersion = eligible ? shared.node.version : undefined;\n\t\tconst sharedGroupsData = this.nodes.groupsData;\n\t\tif ( eligible && shared.seen && shared.version === sharedVersion && shared.groupsData === this.nodes.groupsData ) return;\n\t\t// Clear before callbacks: a failed update must never leave a committed skip.\n\t\tif ( shared !== undefined ) shared.seen = false;\n\n\t\tconst { backend } = this;",
+      "count": 1
+    },
+    {
+      "find": "\t\t\tthis.backend.updateBindings( bindGroup, bindings, cacheBindings ? cacheKey : '', version );\n\n\t\t}\n\n\t}\n\n}\n\nconst _emptyArray",
+      "replace": "\t\t\tthis.backend.updateBindings( bindGroup, bindings, cacheBindings ? cacheKey : '', version );\n\n\t\t}\n\n\t\tif ( eligible ) {\n\n\t\t\tshared.version = sharedVersion;\n\t\t\tshared.groupsData = sharedGroupsData;\n\t\t\tshared.seen = true;\n\n\t\t}\n\n\t}\n\n}\n\nconst _emptyArray",
+      "count": 1
+    }
+  ]
+},
+{
+  "id": 20,
+  "title": "Preserve opted-in Uint16 index buffers with aligned updates",
+  "file": "build/three.webgpu.js",
+  "why": "Owned scalar triangle indices need not use vertex integer widening. Padded shadow data preserves partial-write neighbors and four-byte WebGPU alignment.",
+  "upstream": "Local opt-in; reject format/size/restart changes so callers replace the BufferAttribute and invalidate renderer caches.",
+  "edits": [
+    {
+      "find": "\t\t\t// patch for INT16 and UINT16\n\t\t\tif ( attribute.normalized === false && attribute.isInterleavedBufferAttribute !== true ) {",
+      "replace": "\t\t\t// Only owned scalar index attributes opt out of integer vertex widening.\n\t\t\tconst apexUint16Index = attribute.__apexUint16Index === true &&\n\t\t\t\t( usage & GPUBufferUsage.INDEX ) !== 0 &&\n\t\t\t\t( usage & ( GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX ) ) === 0 &&\n\t\t\t\tattribute.usage === StaticDrawUsage && attribute.itemSize === 1 &&\n\t\t\t\tattribute.normalized === false && attribute.isInterleavedBufferAttribute !== true &&\n\t\t\t\t! attribute.isStorageBufferAttribute && ! attribute.isStorageInstancedBufferAttribute &&\n\t\t\t\t! attribute.isInstancedBufferAttribute && array.constructor === Uint16Array && ! array.includes( 65535 );\n\n\t\t\tif ( apexUint16Index ) {\n\n\t\t\t\tbufferData.apexUint16Length = array.length;\n\t\t\t\tbufferData.apexUint16Shadow = new Uint16Array( Math.ceil( array.length / 2 ) * 2 );\n\t\t\t\tbufferData.apexUint16Shadow.set( array );\n\n\t\t\t}\n\n\t\t\t// patch for INT16 and UINT16\n\t\t\tif ( ! apexUint16Index && attribute.normalized === false && attribute.isInterleavedBufferAttribute !== true ) {",
+      "count": 1
+    },
+    {
+      "find": "\t\tconst itemSize = bufferData._itemSize;\n\t\tconst paddedItemSize = bufferData._paddedItemSize;",
+      "replace": "\t\t// Keep the established format/allocation stable: a new layout needs a new attribute.\n\t\tif ( bufferData.apexUint16Shadow !== undefined ) {\n\n\t\t\tif ( array.constructor !== Uint16Array || array.length !== bufferData.apexUint16Length || array.includes( 65535 ) ) {\n\n\t\t\t\tthrow new Error( 'Apex Uint16 index format, length or restart changed; replace the BufferAttribute.' );\n\n\t\t\t}\n\n\t\t\tconst shadow = bufferData.apexUint16Shadow;\n\t\t\tconst ranges = bufferAttribute.updateRanges;\n\t\t\t// Validate all ranges before changing shadow data or issuing any GPU writes.\n\t\t\tfor ( const range of ranges ) {\n\n\t\t\t\tif ( ! Number.isInteger( range.start ) || ! Number.isInteger( range.count ) || range.start < 0 || range.count < 0 || range.start + range.count > array.length ) {\n\n\t\t\t\t\tthrow new Error( 'Apex Uint16 index update range is out of bounds.' );\n\n\t\t\t\t}\n\n\t\t\t}\n\n\t\t\tif ( ranges.length === 0 ) {\n\n\t\t\t\tshadow.set( array );\n\t\t\t\tif ( shadow.byteLength > 0 ) device.queue.writeBuffer( buffer, 0, shadow );\n\n\t\t\t} else {\n\n\t\t\t\tfor ( const range of ranges ) {\n\n\t\t\t\t\tif ( range.count === 0 ) continue;\n\t\t\t\t\tshadow.set( array.subarray( range.start, range.start + range.count ), range.start );\n\t\t\t\t\tconst start = Math.floor( range.start / 2 ) * 2;\n\t\t\t\t\tconst end = Math.ceil( ( range.start + range.count ) / 2 ) * 2;\n\t\t\t\t\tdevice.queue.writeBuffer( buffer, start * 2, shadow, start, end - start );\n\n\t\t\t\t}\n\n\t\t\t\tbufferAttribute.clearUpdateRanges();\n\n\t\t\t}\n\n\t\t\treturn;\n\n\t\t}\n\n\t\tconst itemSize = bufferData._itemSize;\n\t\tconst paddedItemSize = bufferData._paddedItemSize;",
+      "count": 1
+    }
+  ]
+}
 ];
 
 /** Retired patches, kept so the canary can assert the UPSTREAM form is present. */

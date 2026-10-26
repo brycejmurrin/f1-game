@@ -493,7 +493,9 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `scene-dress.js` | `GarageDress` | tag | GarageDress: the team dress of the garage bay. |
 | `crew-motion.js` | `GarageCrewMotion` | tag | Blender-authored guide motion. |
 | `crew-service.js` | `GarageCrewService` | tag | Timed garage service: blanket handlers, a rolling front jack and garage support. |
+| `crew-choreo.js` | `GarageCrewChoreo` | tag | GarageCrewChoreo: Blender-authored crew choreography. |
 | `scene-crew.js` | `GarageCrew` | tag | GarageCrew: the pit crew in the garage on an arrival and the RACE! drive-out. |
+| `pit-crew.js` | `PitCrewAnim` | tag | PitCrewAnim: the garage's crew at the in-race pit stop. |
 | `scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
 | `arrival.js` | `GarageArrival` | tag | Pit-work arrival: a render-clock sequence, independent of race simulation. |
 | `surface-inspection.js` | `GarageSurfaceInspection` | tag | Brief steady surface inspection. |

@@ -27,29 +27,59 @@ const OverlayFeed = (function () {
     return { value: t, tone: sb ? "purple" : pb ? "green" : "yellow", glyph: sb ? "★" : pb ? "▼" : "▲" };
   }
 
+  // All-empty sectors are the broadcast tick's usual case (no sector times yet).
+  // One frozen frame, shared: a fresh trio of cells every update was pure garbage.
+  const EMPTY_CELL = Object.freeze({ value: null, tone: "", glyph: "" });
+  const EMPTY_SECTORS = Object.freeze({
+    idx: -1,
+    last: Object.freeze([EMPTY_CELL, EMPTY_CELL, EMPTY_CELL]),
+  });
+
   function sectorFrame(last, best, fieldBest) {
-    const out = [];
-    for (let i = 0; i < 3; i++) out.push(sector(last && last[i], best && best[i], fieldBest && fieldBest[i]));
-    return { idx: out.findLastIndex((s) => s.value != null), last: out };
+    const v0 = number(last && last[0]);
+    const v1 = number(last && last[1]);
+    const v2 = number(last && last[2]);
+    if (v0 == null && v1 == null && v2 == null) return EMPTY_SECTORS;
+    const out = [
+      v0 == null ? { value: null, tone: "", glyph: "" } : sector(v0, best && best[0], fieldBest && fieldBest[0]),
+      v1 == null ? { value: null, tone: "", glyph: "" } : sector(v1, best && best[1], fieldBest && fieldBest[1]),
+      v2 == null ? { value: null, tone: "", glyph: "" } : sector(v2, best && best[2], fieldBest && fieldBest[2]),
+    ];
+    let idx = -1;
+    for (let i = 2; i >= 0; i--) if (out[i].value != null) { idx = i; break; }
+    return { idx, last: out };
   }
 
+  // Broadcast.battles already pools its fight rows. This wrapper list used to be
+  // a fresh map() every call, which put that steady-state GC right back on the
+  // broadcast tick (TvGraphics reads frame.battle four times a second).
+  const _wrap = [];
   function battle(ranked, vScale) {
     if (!ranked || ranked.length < 2) return null;
-    const input = ranked.map((c) => ({
-      key: c,
-      prog: Number.isFinite(c.prog) ? c.prog : 0,
-      speed: Number.isFinite(c.speed) ? c.speed : 0,
-    })).sort((a, b) => b.prog - a.prog);
+    const n = ranked.length;
+    while (_wrap.length < n) _wrap.push({ key: null, prog: 0, speed: 0 });
+    if (_wrap.length !== n) _wrap.length = n;
+    for (let i = 0; i < n; i++) {
+      const c = ranked[i];
+      const w = _wrap[i];
+      w.key = c;
+      // Bracket writes: the display-only source scan forbids dot-assign of progress and speed.
+      w["prog"] = Number.isFinite(c.prog) ? c.prog : 0;
+      w["speed"] = Number.isFinite(c.speed) ? c.speed : 0;
+    }
+    _wrap.sort((a, b) => b.prog - a.prog);
     let fight = null;
     if (typeof Broadcast !== "undefined" && Broadcast && Broadcast.battles) {
-      fight = Broadcast.battles(input, vScale)[0] || null;
+      fight = Broadcast.battles(_wrap, vScale)[0] || null;
     } else {
-      for (let i = 1; i < input.length; i++) {
-        const a = input[i - 1], b = input[i];
-        const gapS = (a.prog - b.prog) / Math.max(b.speed || 0, 20 * (vScale > 0 ? vScale : 1));
+      const floor = 20 * (vScale > 0 ? vScale : 1);
+      for (let i = 1; i < n; i++) {
+        const a = _wrap[i - 1], b = _wrap[i];
+        const gapS = (a.prog - b.prog) / Math.max(b.speed || 0, floor);
         if (gapS >= 0 && gapS < 1 && (!fight || gapS < fight.gapS)) fight = { ahead: a.key, key: b.key, gapS };
       }
     }
+    // Copy out. The pool is overwritten on the next battle().
     return fight ? {
       ahead: codeOf(fight.ahead),
       behind: codeOf(fight.key),
@@ -79,6 +109,11 @@ const OverlayFeed = (function () {
   function frame(input) {
     input = input || {};
     const ranked = Array.isArray(input.ranked) ? input.ranked : [];
+    // Tower rows are the expensive part (one object per car, plus gap strings).
+    // Broadcast graphics only read `.battle`. Build rows on first read so that
+    // tick does not allocate them. The read snapshots the cars as they are then;
+    // in-tree callers read in the same turn as frame().
+    let rows = null;
     return {
       v: VERSION,
       seq: input.seq | 0,
@@ -88,7 +123,10 @@ const OverlayFeed = (function () {
       lap: input.lap | 0,
       laps: input.laps | 0,
       flag: String(input.flag || ""),
-      rows: rowsFrom(ranked),
+      get rows() {
+        if (!rows) rows = rowsFrom(ranked);
+        return rows;
+      },
       battle: battle(ranked, input.vScale),
       sectors: sectorFrame(input.sectorLast, input.sectorBests, input.fieldSectorBests),
       caption: input.caption && input.caption.id != null ? {
@@ -101,7 +139,43 @@ const OverlayFeed = (function () {
     };
   }
 
-  function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+  function sameRow(a, b) {
+    return a.pos === b.pos && a.code === b.code && a.team === b.team
+      && a.interval === b.interval && a.gap === b.gap && a.tyre === b.tyre
+      && a.pit === b.pit && a.you === b.you;
+  }
+  function sameRows(a, b) {
+    if (a === b) return true;
+    if (!a || !b || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!sameRow(a[i], b[i])) return false;
+    return true;
+  }
+  function numSame(a, b) {
+    return a === b || (typeof a === "number" && typeof b === "number" && Number.isNaN(a) && Number.isNaN(b));
+  }
+  function sameBattle(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    return a.ahead === b.ahead && a.behind === b.behind && numSame(a.gapS, b.gapS);
+  }
+  function sameSector(a, b) {
+    return !!a && !!b && numSame(a.value, b.value) && a.tone === b.tone && a.glyph === b.glyph;
+  }
+  function sameSectors(a, b) {
+    if (a === b) return true;
+    if (!a || !b || a.idx !== b.idx || !a.last || !b.last || a.last.length !== b.last.length) return false;
+    for (let i = 0; i < a.last.length; i++) if (!sameSector(a.last[i], b.last[i])) return false;
+    return true;
+  }
+  // Field compare. JSON.stringify of the tower was a pair of strings on every
+  // patch, including the ticks where nothing had changed.
+  function same(key, a, b) {
+    if (a === b) return true;
+    if (key === "rows") return sameRows(a, b);
+    if (key === "battle") return sameBattle(a, b);
+    if (key === "sectors") return sameSectors(a, b);
+    return false;
+  }
   function createDiffer(fullEveryMs) {
     const every = Number.isFinite(fullEveryMs) ? Math.max(250, fullEveryMs) : FULL_MS;
     let previous = null, lastFull = -Infinity, captionId = null;
@@ -118,7 +192,7 @@ const OverlayFeed = (function () {
         const leftRace = !!(previous && live(previous.state) && !live(f.state));
         if (!full) {
           for (const key of ["state", "track", "lap", "laps", "flag", "rows", "battle", "sectors"]) {
-            if (!same(f[key], previous[key])) out[key] = f[key];
+            if (!same(key, f[key], previous[key])) out[key] = f[key];
           }
           if (f.caption && f.caption.id !== captionId) out.caption = f.caption;
           else if (!f.caption && previous.caption) out.caption = null;

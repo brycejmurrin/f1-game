@@ -30,12 +30,15 @@
     14,
     15,
     16,
-    17
+    17,
+    18,
+    19,
+    20
   ],
   "files": {
     "three.webgpu.min.js": {
-      "sha256": "4a25a16a3e22c1a36b6c3f80edd8cba5dca58b8437c0bab66037349692d1ae1c",
-      "bytes": 712134
+      "sha256": "02a9bd70c638f841e62d76925f5cddea5950720ee2a2689927fdecfd26fb40db",
+      "bytes": 714087
     },
     "three.core.min.js": {
       "sha256": "dae72ed2eea6703b95e6b57e26469ffa95733a9320675b4bfd1b5f5df1c12f8b",

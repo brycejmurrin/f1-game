@@ -349,3 +349,49 @@ Upstream: unfixed on `dev` as of 2026-10-24 (the `discardColor`/`discardDepth` c
 `src/renderers/webgpu/WebGPUBackend.js` still gate on `sampleCount > 1`). No release
 after r186 exists. Draft: `docs/notes/UPSTREAM-THREE-ISSUES.md` §4. Canary:
 `gfx-backend-canary.test.mjs` "honours the single-sample discard hint".
+
+## 18. A 3-component colour target keeps a vec4 WGSL fragment output (#3690)
+
+`NodeBuilder.getOutputType()` types `@location(i)` from `NodeUtils.getTextureType()`, which
+gives `RGBFormat` 3 components. An `rg11b10ufloat` scene target (#3690, `apex26.tlxScene11`)
+therefore gets a `vec3` output, and WebGPU rejects any blend factor that reads the source
+alpha (gpuweb "validating GPUFragmentState"; Dawn `RenderPipeline.cpp`). On the real-GPU
+census every blended material's pipeline failed (decals, glass, particles). The spec accepts
+a `vec4` output into an RGB attachment (the extra component is dropped), so
+`WGSLNodeBuilder.getOutputType()` reports `vec4` wherever the base answer is `vec3`. That one
+override covers the plain output struct, MRT members (`MRTNode` asks the builder per index)
+and `NodeMaterial`'s fragment conversion. GLSL is untouched: WebGL2 has no such rule, and
+#3690's WebGL2 leg already works.
+
+Upstream: unfixed on `dev` as of 2026-10-24. Draft: `docs/notes/UPSTREAM-THREE-ISSUES.md` §5.
+Canary: `gfx-backend-canary.test.mjs` "gives a 3-component colour target a vec4 output".
+
+## 19. Shared binding group update shortcut
+
+Homogeneous shared groups whose node version, binding array, member identities and
+member group nodes remain unchanged skip repeated `Nodes.updateGroup` dispatches.
+Object groups, mixed groups and empty groups keep the original path. The cache lives
+in Bindings' existing DataMap and commits only after the whole update succeeds;
+replacement of the Nodes group cache also invalidates it. A version change still
+processes texture generations, samplers, uniforms, storage attributes and ranges.
+
+The shipping-method CPU regression test is
+`tests/unit/three-shared-binding-update.test.mjs`. It verifies exact side-effect
+traces and 4,800 → 12 group-map reads for 400 draws with 12 shared bindings.
+This is a dispatch count, not a device frame-time claim. Revisit against upstream
+`src/renderers/common/nodes/Nodes.js` on every vendor bump.
+
+## 20. Opted-in Uint16 index storage
+
+`__apexUint16Index` opts owned static scalar Uint16 INDEX buffers into narrow
+storage when they contain no primitive-restart sentinel. Vertex/storage,
+interleaved, instanced, normalized and unmarked attributes retain upstream handling.
+A padded CPU shadow ensures four-byte-aligned whole and partial writes, preserving
+neighbor elements outside explicitly requested ranges. Array replacement with the
+same format and length is supported. Later format/length/restart changes throw
+explicitly: replace the BufferAttribute so renderer layout and allocation caches
+are invalidated. This policy never silently discards an update.
+
+`tests/unit/webgpu-uint16-index.test.mjs` exercises generated vendor methods and
+mapped/writeBuffer bytes. Alignment reference:
+https://developer.mozilla.org/en-US/docs/Web/API/GPUQueue/writeBuffer.

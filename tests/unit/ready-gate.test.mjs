@@ -83,7 +83,7 @@ test("guardsVerdict: the fourth shard counts (B2, 2026-10-24): a red or running 
   assert.equal(guardsVerdict([...green, run(GUARDS_D, "completed", "success", 5)]).state, "passed");
   const red = guardsVerdict([...green, run(GUARDS_D, "completed", "failure", 5)]);
   assert.equal(red.state, "failed");
-  assert.match(red.evidence, /tooling D/);
+  assert.ok(red.evidence.includes("tooling D"));
   assert.equal(guardsVerdict([...green, run(GUARDS_D, "in_progress", null, 5)]).state, "pending");
 });
 
