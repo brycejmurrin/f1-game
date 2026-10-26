@@ -707,6 +707,8 @@
     "tests/unit/keyboard-first-audio-vm.test.mjs",
     "// knob-ab.mjs fails a visual knob whose ON vs OFF frame does not beat the noise floor (#1885 puddles). Pure.",
     "tests/unit/knob-ab.test.mjs",
+    "// #3316: Kyalami frac-0 dual_lite orbit/trackside clear of main-grandstand bowl (buildContext, ~3 s).",
+    "tests/unit/kyalami-grandstand-orbit.test.mjs",
     "tests/unit/lamp-bake.test.mjs",
     "tests/unit/lamp-chunks.test.mjs",
     "tests/unit/lamp-density.test.mjs",

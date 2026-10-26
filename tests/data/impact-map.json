@@ -4477,6 +4477,14 @@
         "tests/unit/deploy-tool.test.mjs"
       ]
     },
+    "js/circuits/scenery/kyalami.js": {
+      "narrow": [
+        "tests/unit/kyalami-grandstand-orbit.test.mjs"
+      ],
+      "*": [
+        "tests/unit/kyalami-grandstand-orbit.test.mjs"
+      ]
+    },
     "js/circuits/scenery/monaco.js": {
       "narrow": [
         "tests/unit/monaco-fairmont-orbit.test.mjs"
