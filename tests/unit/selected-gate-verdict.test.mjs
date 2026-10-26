@@ -27,12 +27,20 @@ test("success and skipped plans pass", () => {
   const empty = selectedGateVerdict({ ...base, selected: "skipped" });
   assert.equal(empty.ok, true);
   assert.match(empty.reason, /empty plan is a pass/);
+  for (const dropped of ["0", "2"]) {
+    const draft = selectedGateVerdict({ ...base, selected: "skipped", draft: "true", dropped });
+    assert.equal(draft.ok, true);
+    assert.equal(draft.reason, "draft PR: selected legs skipped (ready_for_review runs them)");
+    assert.equal(draft.infraRetry, false);
+    assert.equal(Boolean(draft.warn), dropped !== "0");
+  }
 });
 
 test("cancelled with clean junit requires a rerun", () => {
   const v = selectedGateVerdict({ ...base, selected: "cancelled", failedSpecs: [] });
   assert.equal(v.ok, false);
   assert.equal(v.infraRetry, false);
+  assert.equal(selectedGateVerdict({ ...base, selected: "cancelled", draft: "true", dropped: "2" }).ok, false);
   assert.match(v.reason, /re-run/);
 });
 
@@ -40,6 +48,7 @@ test("failure with clean junit requires a rerun", () => {
   const v = selectedGateVerdict({ ...base, selected: "failure", failedSpecs: [] });
   assert.equal(v.ok, false);
   assert.equal(v.infraRetry, false);
+  assert.equal(selectedGateVerdict({ ...base, selected: "failure", draft: "true", dropped: "2" }).ok, false);
 });
 
 test("cancelled with junit failures stays a hard fail", () => {
@@ -57,6 +66,8 @@ test("dropped routed specs still red off the train, even when selected succeeded
   const v = selectedGateVerdict({ ...base, dropped: "3" });
   assert.equal(v.ok, false);
   assert.match(v.reason, /dropped 3/);
+  assert.equal(selectedGateVerdict({ ...base, dropped: "2", draft: "true" }).ok, false);
+  assert.equal(selectedGateVerdict({ ...base, selected: "skipped", dropped: "2" }).ok, false);
 });
 
 test("train call warns on dropped instead of failing", () => {
@@ -67,6 +78,7 @@ test("train call warns on dropped instead of failing", () => {
 
 test("a red select fails closed", () => {
   assert.equal(selectedGateVerdict({ ...base, select: "failure" }).ok, false);
+  assert.equal(selectedGateVerdict({ ...base, select: "failure", selected: "skipped", draft: "true", dropped: "2" }).ok, false);
 });
 
 test("a red guards is not repeated here, and never hides a spec failure (2026-10-16)", () => {

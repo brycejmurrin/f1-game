@@ -95,9 +95,18 @@ function judgeSpecs(input) {
   if (selected === "success") {
     reason = "selected specs passed";
   } else if (selected === "skipped") {
-    reason = draft === "true"
-      ? "draft PR: selected legs skipped (ready_for_review runs them)"
-      : "the plan had no jobs";
+    // Draft CI deliberately defers every browser leg, including budget spills.
+    // Report that deferral, rather than judging an unexecuted ready-tier plan.
+    if (draft === "true") {
+      return {
+        ok: true,
+        reason: "draft PR: selected legs skipped (ready_for_review runs them)",
+        ...(dropped !== "0" ? { warn: `draft plan dropped ${dropped} routed spec(s); resolve the budget before ready-tier validation` } : {}),
+        infraRetry,
+        failedSpecs,
+      };
+    }
+    reason = "the plan had no jobs";
   } else if (selected === "cancelled" || selected === "failure") {
     if (failedSpecs.length > 0) {
       return {

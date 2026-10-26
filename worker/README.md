@@ -90,11 +90,15 @@ the SQLite-backed class is the one available on the free plan.
 ## What it does not do
 
 - No logging of payloads, addresses, or who talked to whom.
-- No persistence past the TTL: the alarm calls `deleteAll()`, so "nothing is
-  retained" is enforced rather than intended.
+- Each slot expires after two minutes. Reads reject expired slots immediately;
+  the alarm deletes expired slots at the earliest slot expiry and reschedules
+  for any live slot. Platform-delayed alarms can delay physical cleanup, but a
+  later write cannot postpone cleanup of an older slot.
 - No accounts, usernames, or directory.
-- Only `v2.` envelopes are stored (no plaintext compatibility path), capped at
-  12 KB, so the unauthenticated endpoint cannot be used as bulk storage.
+- Only structurally valid `v2.` base64url envelopes are accepted, with room for
+  the salt, IV, and authentication tag, capped at 12 KB. Encryption and envelope
+  authentication belong to the clients; the relay cannot establish either from
+  the encoding alone. There is no plaintext compatibility path.
 - Any method other than GET/POST/OPTIONS is answered 405 in the outer Worker,
   before the rate limiter and before a Durable Object is named.
 - The Worker applies a defense-in-depth, per-isolate fixed-window limit before

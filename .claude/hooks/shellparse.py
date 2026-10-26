@@ -928,6 +928,7 @@ def held_warning(dests, root):
 RATCHET_RAISING = ("--update", "--fragment", "--absolute")
 RATCHET_RUNNERS = ("node", "nodejs", "bun", "deno", "npx", "xargs")
 AUTO_RAISE_MAX = 40   # the commit hook's absorb (AGENTS.md §Critical conventions)
+RATCHET_EVAL_RAISE = re.compile(r"autoRaise|\bupdate\b|--update|--fragment|--absolute|\bfold\b|writeFile|appendFile|writeJson|renameSync|truncate|ratchets\.json")
 
 
 def ratchet_issues(text):
@@ -938,9 +939,13 @@ def ratchet_issues(text):
         if not argv or (env or {}).get("APEX_RATCHET_RAISE_OK") == "1":
             continue
         cmd = " ".join(argv)
-        # `node -e "import('./tools/check/ratchets.mjs')…"` runs it with no visible flags
+        # `node -e "import('./tools/check/ratchets.mjs')…"` runs it with no visible flags. Only a script that
+        # can RAISE counts: one that names autoRaise/update/fold or writes a file. A read-only import
+        # (pinVerdict, PIN_METRICS, ratchetMode) is how an agent measures before shrinking (2026-10-26
+        # second pass: two such reads were refused while paying a ceiling).
         if os.path.basename(argv[0]) in RATCHET_RUNNERS and any(
                 a in ("-e", "--eval", "-p", "--print") and k + 1 < len(argv) and "ratchets" in argv[k + 1]
+                and RATCHET_EVAL_RAISE.search(argv[k + 1])
                 for k, a in enumerate(argv)):
             found.append(cmd)
             continue
@@ -1201,7 +1206,7 @@ def _blank_quotes(t):
 
 def poll_loops(text):
     """[{why}] for a shell poll loop (2026-10-26 system audit: orchestrators ran 120-iteration `ci-watch --once; sleep`
-    loops; AGENTS.md rule 12 says subscribe + one Monitor, never a loop): a for/while/until loop whose header or body
+    loops; AGENTS.md rules 4 and 13 say subscribe + one Monitor, never a loop): a for/while/until loop whose header or body
     sleeps AND watches CI/git/the API/the bus, or any `seq …` loop that sleeps. Heredoc bodies and quoted prose are
     not commands."""
     t = _blank_quotes(strip_heredocs(text))
@@ -1565,7 +1570,7 @@ def guard(payload, root):
         return 2
     if polls and os.environ.get("APEX_POLL_OK") != "1" and not re.search(r"(^|[;&|(]\s*)APEX_POLL_OK=1\s", cmd):
         sys.stderr.write("BLOCKED: a shell poll loop (" + "; ".join(sorted({p["why"] for p in polls})) + ") — AGENTS.md "
-                         "rule 12 and fleet-core: subscribe, then at most one `ci-watch.mjs --once`, or ONE Monitor on "
+                         "rules 4 and 13 and fleet-core: subscribe, then at most one `ci-watch.mjs --once`, or ONE Monitor on "
                          "`node tools/ci/ci-watch.mjs --sha <sha> --failures-only` / `node tools/ci/wait-for.mjs`; never "
                          "a for/while … sleep loop (2026-10 week: three 120-iteration loops in one orchestrator). "
                          "APEX_POLL_OK=1 <command> for a bounded retry of a network call.\n")
