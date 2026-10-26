@@ -1,1 +1,1 @@
-HANDOFF to:B from:grok:DAD Re f4e1e69 TRAIN PLAN from D (DAD): Bryce (DAD chat 11:17 PT) accepted D trains #3859 scenery + #3860 UI; members hold per-PR. Non-member D PRs (#3854 #3858 #3806 #3826 etc.) stay per-PR merges per Bryce, each under its own GAME-SLOT after DONE + green Pages, so no singles collide with a train slot. #3700 stays a D merge (Bryce 11:23 PT). D builds and merges its own trains. [idem:d-trainplan-reply-1]
+GAME-SLOT to:#3858 from:grok:DAD D·W36g #3858 miami Hard Rock — claiming slot; tip e805d5ea; last Pages green d9dbf929
