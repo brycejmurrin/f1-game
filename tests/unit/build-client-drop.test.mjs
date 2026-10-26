@@ -216,6 +216,7 @@ test("replay cancellation between upload slices frees uploads and returns null w
   const msg = { recs, track: { meshes: {}, buildProfile: [] }, ms: 0 };
   const gfx = { createMesh() { return ++uploads; }, freeMesh(h) { freed.push(h); } };
   const result = client.replay(msg, def, gfx, 1, () => live);
+  await settle(); // prepare() completes before the first upload slice
   assert.equal(uploads, 1); live = false; resume();
   assert.equal(await result, null); assert.equal(uploads, 1);
   assert.deepEqual(freed, [1]);
@@ -226,4 +227,33 @@ test("replay upload failures still reject instead of masquerading as cancellatio
   const { client } = page({ performance: { now: () => 0 } });
   const msg = { recs: [{ op: "mesh", args: [{}] }], track: { meshes: {}, buildProfile: [] } };
   await assert.rejects(client.replay(msg, def, { createMesh() { throw new Error("upload refused"); } }, 8, () => true), /upload refused/);
+});
+
+
+test("replay cancellation while plain preparation awaits its microtask allocates no uploads", async () => {
+  let live = true, uploads = 0;
+  const { client } = page({ performance: { now: () => 0 } });
+  const msg = { recs: [{ op: "mesh", args: [{}] }], track: { meshes: {} } };
+  const result = client.replay(msg, def, { createMesh() { uploads++; } }, 8, () => live);
+  live = false;
+  assert.equal(await result, null);
+  assert.equal(uploads, 0);
+});
+
+test("replay cancellation during cooperative preparation releases pending payload and allocates no uploads", async () => {
+  let tick = 0, resume, live = true, uploads = 0, steps = 0;
+  const config = { version: 1 };
+  const { client } = page({ performance: { now: () => ++tick * 10 },
+    requestAnimationFrame: r => { resume = r; }, ChunkBins: { cellSize: n => n },
+    TLXShaders: { validPrepareConfig: () => true, samePrepareConfig: (a, b) => a === b,
+      *prepareChunksSteps() { steps++; yield; steps++; return { version: 1, config }; } } });
+  const data = {}, rec = { op: "chunked", args: [data, 72] };
+  const msg = { recs: [rec], track: { meshes: {} } };
+  const result = client.replay(msg, def, { trackPrepareConfig: () => config,
+    createChunkedMesh() { uploads++; } }, 1, () => live);
+  assert.equal(steps, 1); assert.equal(typeof resume, "function");
+  live = false; resume();
+  assert.equal(await result, null); assert.equal(steps, 1);
+  assert.equal(uploads, 0); assert.equal(rec.prepared, null);
+  assert.equal(data._tlxPrepared, undefined);
 });

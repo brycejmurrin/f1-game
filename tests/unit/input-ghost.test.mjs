@@ -464,3 +464,109 @@ test("the trimmed store on disk is byte-identical to a fresh whole-store pack (#
   const strip = (s) => JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(s)).map(([id, g]) => [id, Object.assign({}, g, { _used: 0 })])));
   assert.equal(strip(repacked), strip(onDisk));
 });
+
+function compactTape(v = 2, count = 36000) {
+  return {
+    v, time: 600, seed: 7, physRev: "test-rev-1", build: 42, dt: 1 / 60, _used: 1,
+    ...(v === 3 ? { context: "native", initialState: { car: { s: 1, x: 0, speed: 55 }, seed: 7, rngState: 7, raceT: 0 },
+      packedV3: { count, steer: -0.017321, flags: 17, throttle: 0.37123456, brake: 0 } }
+      : { packedV2: { count, steer: 255, flags: 1, throttle: 123, brake: 0 } }),
+  };
+}
+
+function observeLongChannels(h) {
+  const lengths = [];
+  // Count explicit channel allocations, not heap usage or elapsed time. This
+  // small fixture represents twenty long tapes without allocating their steps.
+  h.sandbox.Array = new Proxy(Array, {
+    apply(target, receiver, args) {
+      if (args.length === 1 && args[0] >= 36000) lengths.push(args[0]);
+      return Reflect.apply(target, receiver, args);
+    },
+    get(target, key, receiver) {
+      if (key === "from") return (source, ...rest) => {
+        if (source.length >= 36000) lengths.push(source.length);
+        return Array.from(source, ...rest);
+      };
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return lengths;
+}
+
+test("twenty unselected 36000-step compact tapes stay packed on load, foreign refresh and save", () => {
+  const key = "apex26.inputGhost.v1";
+  const tapes = Object.fromEntries(Array.from({ length: 20 }, (_, i) => ["tape" + i, compactTape(i % 2 ? 3 : 2)]));
+  const h = createHarness({ disk: { [key]: JSON.stringify(tapes) } });
+  const lengths = observeLongChannels(h);
+  h.InputGhost.setTrack("missing");
+  assert.equal(h.InputGhost.hasGhost(), false);
+  assert.deepEqual(lengths, [], "unrelated constant channels never expand at initial load");
+  h.disk.set(key, JSON.stringify(tapes)); h.storageEvent(key);
+  assert.deepEqual(lengths, [], "foreign refresh also leaves unrelated tapes compact");
+  h.InputGhost.clear("absent");
+  assert.deepEqual(JSON.parse(h.disk.get(key)), tapes, "unselected payloads and access stamps survive exactly");
+  assert.deepEqual(lengths, [], "persistence never decodes unrelated tapes");
+
+  h.InputGhost.setTrack("tape0");
+  assert.equal(h.InputGhost.steps(), 36000);
+  assert.equal(h.InputGhost.atStep(35999).steer, -1 / 127);
+  assert.equal(h.InputGhost.atStep(35999).throttleLevel, 123 / 255);
+  assert.equal(lengths.length, 4, "only the selected v2 tape expands its four packed channels");
+  h.InputGhost.setTrack("tape1");
+  assert.equal(lengths.length, 8, "only the newly selected v3 tape expands its four packed channels");
+  assert.equal(h.InputGhost.atStep(35999).steer, -0.017321);
+  assert.equal(h.InputGhost.atStep(35999).throttleLevel, 0.37123456);
+  h.InputGhost.clear("absent");
+  const saved = JSON.parse(h.disk.get(key));
+  for (const [id, original] of Object.entries(tapes)) {
+    assert.deepEqual(saved[id], { ...original, _used: saved[id]._used });
+    if (id !== "tape0" && id !== "tape1") assert.equal(saved[id]._used, original._used);
+  }
+  assert.ok(saved.tape1._used > saved.tape0._used, "selected contexts retain LRU promotion");
+  const reloaded = createHarness({ store: h.disk }).InputGhost;
+  reloaded.setTrack("tape0"); assert.equal(reloaded.atStep(35999).steer, -1 / 127);
+  reloaded.setTrack("tape1"); assert.equal(reloaded.atStep(35999).throttleLevel, 0.37123456);
+});
+
+test("compact LRU trimming keeps valid unrelated tapes and enforces the exact byte cap", () => {
+  const key = "apex26.inputGhost.v1";
+  const tapes = Object.fromEntries(Array.from({ length: 20 }, (_, i) => ["tape" + i,
+    { ...compactTape(i % 2 ? 3 : 2), _used: i + 1, meta: { padding: "x".repeat(14000) } }]));
+  const h = createHarness({ disk: { [key]: JSON.stringify(tapes) } });
+  const lengths = observeLongChannels(h);
+  h.InputGhost.setTrack("tape0");
+  h.InputGhost.clear("absent");
+  const raw = h.disk.get(key), saved = JSON.parse(raw);
+  assert.ok(Buffer.byteLength(raw) <= 256 * 1024);
+  assert.ok(Object.keys(saved).length > 1, "fitting valid compact history is not discarded as invalid");
+  assert.ok(saved.tape0, "selected oldest tape is promoted before eviction");
+  assert.equal(saved.tape1, undefined, "untouched least recently used tape is evicted first");
+  assert.ok(saved.tape19);
+  assert.equal(lengths.length, 4, "budget trimming does not decode unselected tapes");
+});
+
+test("foreign compact merges preserve compatible winners, stamps and pending retry payloads", () => {
+  const key = "apex26.inputGhost.v1";
+  for (const foreignWins of [true, false]) {
+    let refuse = true;
+    const h = createHarness({ deferWrites: true, failWrites: () => refuse });
+    h.InputGhost.setTrack("monza"); assert.equal(driveLap(h.InputGhost, 40, 20), true);
+    const local = JSON.stringify(h.InputGhost.snapshot());
+    h.InputGhost.flush();
+    const foreign = { ...compactTape(), time: 19, _used: Date.now() + 100000,
+      physRev: foreignWins ? "test-rev-1" : "incompatible" };
+    const unrelated = compactTape(3);
+    h.disk.set(key, JSON.stringify({ monza: foreign, unrelated })); h.storageEvent(key);
+    assert.equal(h.InputGhost.bestTime(), foreignWins ? 19 : 20);
+    refuse = false; h.InputGhost.flush();
+    const saved = JSON.parse(h.disk.get(key));
+    assert.deepEqual(saved.unrelated, unrelated);
+    if (foreignWins) assert.equal(saved.monza._used, foreign._used, "winner keeps the latest access stamp");
+    const loaded = createHarness({ store: h.disk }).InputGhost;
+    loaded.setTrack("monza");
+    assert.equal(loaded.bestTime(), foreignWins ? 19 : 20);
+    if (foreignWins) assert.equal(loaded.atStep(35999).throttleLevel, 123 / 255);
+    else assert.deepEqual(JSON.parse(JSON.stringify(loaded.snapshot())), JSON.parse(local));
+  }
+});

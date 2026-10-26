@@ -32,11 +32,14 @@ const DesignerSceneryPreview = (function () {
       return true;
     };
     const box = (kind, k, side, gap, w, d, col, extra) => {
+      if (items.length + ground.length >= LIMIT) return false;
       const a = anchor(k, side, gap + w / 2);
       if (onTrack(a.c[0], a.c[2], Math.min(w, d) * 0.45)) return false;
       return add(kind, a, w, d, col, items, extra);
     };
     const tree = (kind, k, side, gap, h, col) => {
+      // A full output cannot accept a footprint; avoid scanning the whole road.
+      if (items.length + ground.length >= LIMIT) return false;
       const a = anchor(k, side, gap), r = kind === "bush" ? 3 : Math.max(4, h * 0.45);
       if (onTrack(a.c[0], a.c[2], r)) return false;
       return add(kind, a, r * 2, r * 2, col || def.furniture.fol || [0.2, 0.38, 0.18]);

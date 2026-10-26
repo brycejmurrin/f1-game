@@ -24,6 +24,30 @@ const Assets = (function () {
   let _tier = null;                      // "high" | "low" | "off"
   const _models = Object.create(null);   // id -> {pos,nrm,col,mat,idx} | null (miss)
   const _modelPromises = Object.create(null);
+  const _requests = new Set();
+  const REQUEST_MS = 15000;              // shared transfer lifetime, separate from a caller's readiness wait
+
+  function _request(url, body) {
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    let timer = null, cancel;
+    const deadline = new Promise((_, reject) => {
+      cancel = () => { if (controller) controller.abort(); reject(new Error("asset request canceled: " + url)); };
+      // Minimal VM schedulers may support task yields without cancellable timers.
+      if (typeof setTimeout === "function" && typeof clearTimeout === "function") timer = setTimeout(cancel, REQUEST_MS);
+    });
+    _requests.add(cancel);
+    const work = (async () => {
+      const res = await fetch(url, controller ? { signal: controller.signal } : {});
+      if (!res.ok) throw new Error("fetch " + url);
+      return res[body]();
+    })();
+    // Racing also settles a mock/transport that ignores AbortSignal. A late
+    // body has no state writes here and cannot re-enter its former consumer.
+    return Promise.race([work, deadline]).finally(() => {
+      if (timer !== null) clearTimeout(timer);
+      _requests.delete(cancel);
+    });
+  }
 
   function init(gfx) { _gfx = gfx || null; }
 
@@ -60,15 +84,13 @@ const Assets = (function () {
 
   async function _fetchManifest(generation) {
     try {
-      const res = await fetch(MANIFEST);
-      if (!res.ok) { _err = "no-pack"; return false; }
-      const j = await res.json();
+      const j = await _request(MANIFEST, "json");
       if (generation !== _loadGeneration) return false;
       if (!j || typeof j !== "object") { _err = "bad-manifest"; return false; }
       _manifest = j;
       return j;
     } catch (e) {
-      _err = "no-pack";
+      if (generation === _loadGeneration) _err = "no-pack";
       return false;
     }
   }
@@ -76,9 +98,7 @@ const Assets = (function () {
   // ── material arrays ────────────────────────────────────────────────────────
 
   async function _fetchStrip(file, md5, generation) {
-    const res = await fetch(_packUrl(file, md5));
-    if (!res.ok) throw new Error("fetch " + file);
-    const blob = await res.blob();
+    const blob = await _request(_packUrl(file, md5), "blob");
     if (generation !== _loadGeneration) return null;
     _bytes += blob.size;
     return blob;
@@ -695,6 +715,7 @@ const Assets = (function () {
     // A browser bake is a new owner, even if its upload fails: an older pack
     // load must not finish later and silently replace the requested result.
     _loadGeneration++;
+    for (const cancel of _requests) cancel();
     _loadPromise = null;
     let a = null, n = null;
     try {
@@ -716,6 +737,7 @@ const Assets = (function () {
 
   function unload() {
     _loadGeneration++;
+    for (const cancel of _requests) cancel();
     _retried = true;   // an explicit off (__apex.assetLoad(false)) is never undone behind its back
     if (_gfx && _gfx.setMaterialMaps) _gfx.setMaterialMaps(null);
     // Drop all pack-owned CPU state as well as the GPU maps. In particular,
@@ -831,9 +853,9 @@ const Assets = (function () {
         if (generation !== _loadGeneration) return null;
         const rec = m && m.models && m.models[id];
         if (!rec || !rec.file) { if (m) _models[id] = null; return null; }
-        const res = await fetch(_packUrl(rec.file, rec.md5));
-        if (!res.ok || generation !== _loadGeneration) return null;
-        const parsed = await _decodeModel(await res.arrayBuffer(), generation);
+        const body = await _request(_packUrl(rec.file, rec.md5), "arrayBuffer");
+        if (generation !== _loadGeneration) return null;
+        const parsed = await _decodeModel(body, generation);
         if (parsed && generation === _loadGeneration) _models[id] = parsed;
         return parsed;
       } catch (_) {
@@ -900,16 +922,20 @@ const Assets = (function () {
   // Prefetch EVERY model in the pack. Resolves to the number now resident.
   // The game no longer calls this (a build loads its own circuit's set through
   // modelsReady(ms, src)); tools/shot/* still do, to frame any baked model.
-  // Memoised: one run, joined by every caller.
+  // Memoised while pending: a failed transfer must allow a later run to retry.
   let _modelsPromise = null;
   function loadModels() {
     if (_modelsPromise) return _modelsPromise;
-    _modelsPromise = (async () => {
+    const generation = _loadGeneration;
+    const work = (async () => {
       const m = await manifest();
-      if (!m || !m.models) return 0;
+      if (generation !== _loadGeneration || !m || !m.models) return 0;
       await Promise.all(Object.keys(m.models).map((id) => model(id)));
+      if (generation !== _loadGeneration) return 0;
       return Object.keys(_models).reduce((n, k) => n + (_models[k] ? 1 : 0), 0);
     })();
+    const tracked = work.finally(() => { if (_modelsPromise === tracked) _modelsPromise = null; });
+    _modelsPromise = tracked;
     return _modelsPromise;
   }
 

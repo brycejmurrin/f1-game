@@ -231,20 +231,58 @@ const NetPlay = (function () {
   let epochSerial = 0;
   const modelRevision = () => typeof PhysicsConsts !== "undefined" ? PhysicsConsts.REVISION : "2026-09-coherence-1";
   const STRATEGY_FIELDS = { tyreWear: [0, 3], tyreWearF: [0, 3], tyreWearR: [0, 3], tyreTs: [0, 250], tyreTb: [0, 250],
-    tyreGrain: [0, 1], tyreBlister: [0, 1], tyreLap0: [0, 1000], tyreStints: [0, 1000], pitStops: [0, 1000], pitT: [0, 30] };
+    tyreGrain: [0, 1], tyreBlister: [0, 1], tyreLap0: [0, 1000], tyreStints: [0, 1000], pitStops: [0, 1000], pitT: [0, 30],
+    tyreLapAdj: [0, 1], pitWorked: [0, 30], pitOutT: [0, 30] };
+  const STINT_MAX = 256, COMPOUND_CODES = ["S", "M", "H", "I", "W"];
+  const colourFor = (r) => Array.isArray(r.colour) && r.colour.length === 3
+    ? r.colour.map(v => Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5) : [0.5, 0.5, 0.5];
+  function strategyTyre(r) {
+    if (!r || typeof r.id !== "string" || !Number.isInteger(r.tread) || r.tread < 0 || r.tread > 2
+        || !Number.isFinite(r.life) || r.life < 0.3 || r.life > 1.2) return null;
+    const mods = {};
+    for (const k of ["speed", "accel", "cornering", "braking"]) if (r.mods && Number.isFinite(r.mods[k])) mods[k] = Math.max(0.5, Math.min(1.5, r.mods[k]));
+    return { id: r.id.slice(0, 64), code: String(r.code || "?").slice(0, 4), life: r.life, tread: r.tread,
+      off: Number.isFinite(r.off) ? Math.max(-0.2, Math.min(0.2, r.off)) : 0, colour: colourFor(r), mods };
+  }
+  function strategyLog(log) {
+    if (!Array.isArray(log)) return null;
+    const rows = [];
+    for (const e of log) {
+      if (!e || !COMPOUND_CODES.includes(e.code) || typeof e.id !== "string" || !Number.isFinite(e.lap0)
+          || e.lap0 < 0 || e.lap0 > 1000 || (e.lap1 !== null && (!Number.isFinite(e.lap1) || e.lap1 < 0 || e.lap1 > 1000))) return null;
+      rows.push({ code: e.code, id: e.id.slice(0, 64), colour: colourFor(e), lap0: e.lap0, lap1: e.lap1 });
+    }
+    return rows;
+  }
+  function boundedLog(log) {
+    if (!Array.isArray(log)) return [];
+    if (log.length <= STINT_MAX) return strategyLog(log) || [];
+    // Keep each compound's first evidence as well as the recent strip. Simply
+    // taking the tail could erase a wet exemption or the second dry compound.
+    const first = new Set(COMPOUND_CODES.map(code => log.findIndex(e => e && e.code === code)));
+    return strategyLog(log.filter((e, i) => first.has(i) || i >= log.length - (STINT_MAX - COMPOUND_CODES.length))) || [];
+  }
   function strategyState(c, wire, track) {
     const fields = {};
     for (const k of Object.keys(STRATEGY_FIELDS)) if (Number.isFinite(c[k])) fields[k] = c[k];
     return { version: STRATEGY_VERSION, physics: modelRevision(), wire, track, fields,
-      tyre: c.tyre || null, tread: c.tread, pitState: c.pitState || "none", pitArmed: !!c.pitArmed };
+      tyre: strategyTyre(c.tyre), tread: c.tread, pitState: c.pitState || "none", pitArmed: !!c.pitArmed,
+      pitFitted: !!c.pitFitted, pitNext: strategyTyre(c.pitNext), tyreClass: ["soft", "medium", "hard", "inter", "wet"].includes(c.tyreClass) ? c.tyreClass : null,
+      tyreLog: boundedLog(c.tyreLog), compoundShortAtFinish: typeof c.compoundShortAtFinish === "boolean" ? c.compoundShortAtFinish : null,
+      tyrePhysicalOffset: Number.isFinite(c.tyrePhysicalOffset) ? Math.max(-1000, Math.min(1000, c.tyrePhysicalOffset)) : null };
   }
   function applyStrategy(c, d) {
     if (!c || !d || d.version !== STRATEGY_VERSION || d.physics !== modelRevision() || !d.fields) return false;
-    if (d.tyre && typeof d.tyre.id === "string" && Number.isInteger(d.tyre.tread) && d.tyre.tread >= 0 && d.tyre.tread <= 2
-        && Number.isFinite(d.tyre.life) && d.tyre.life >= 0.3 && d.tyre.life <= 1.2) {
-      c.tyre = { id: d.tyre.id.slice(0, 64), code: String(d.tyre.code || "?").slice(0, 4), life: d.tyre.life,
-        tread: d.tyre.tread, off: Number.isFinite(d.tyre.off) ? Math.max(-0.2, Math.min(0.2, d.tyre.off)) : 0,
-        colour: Array.isArray(d.tyre.colour) && d.tyre.colour.length === 3 ? d.tyre.colour.map(v => Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5) : [0.5, 0.5, 0.5] };
+    const tyre = strategyTyre(d.tyre), next = strategyTyre(d.pitNext);
+    const log = d.tyreLog === undefined ? null : Array.isArray(d.tyreLog) && d.tyreLog.length <= STINT_MAX ? strategyLog(d.tyreLog) : null;
+    // Extensions are optional for older v1 senders, and validate BEFORE any
+    // mutation. Never merge stale pending sets/history into a newer full state.
+    if ((d.pitFitted !== undefined && typeof d.pitFitted !== "boolean") || (d.pitNext !== undefined && d.pitNext !== null && !next)
+        || (d.tyreLog !== undefined && !log) || (d.tyreClass !== undefined && d.tyreClass !== null && !["soft", "medium", "hard", "inter", "wet"].includes(d.tyreClass))
+        || (d.compoundShortAtFinish !== undefined && d.compoundShortAtFinish !== null && typeof d.compoundShortAtFinish !== "boolean")
+        || (d.tyrePhysicalOffset !== undefined && d.tyrePhysicalOffset !== null && (!Number.isFinite(d.tyrePhysicalOffset) || Math.abs(d.tyrePhysicalOffset) > 1000))) return false;
+    if (tyre) {
+      c.tyre = tyre;
       c.tread = c.tyre.tread;
     } else if (Number.isInteger(d.tread) && d.tread >= 0 && d.tread <= 2) c.tread = d.tread;
     for (const [k, range] of Object.entries(STRATEGY_FIELDS)) {
@@ -252,6 +290,12 @@ const NetPlay = (function () {
     }
     if (["none", "lane", "box", "out"].includes(d.pitState)) c.pitState = d.pitState;
     c.pitArmed = d.pitArmed === true;
+    if (d.pitFitted !== undefined) c.pitFitted = d.pitFitted;
+    if (d.pitNext !== undefined) c.pitNext = next;
+    if (d.tyreClass != null) c.tyreClass = d.tyreClass;
+    if (log) c.tyreLog = log;
+    if (d.compoundShortAtFinish !== undefined) c.compoundShortAtFinish = d.compoundShortAtFinish;
+    if (d.tyrePhysicalOffset !== undefined) c.tyrePhysicalOffset = d.tyrePhysicalOffset;
     return true;
   }
 
@@ -328,8 +372,9 @@ const NetPlay = (function () {
       if (!r.hostAi) G.setCarRole(r.car, true, false);
     }
     let lastPublish = -Infinity, lastStrategy = -Infinity;
-    // The strategy phase, as three compared scalars rather than a joined key.
-    let lastPhaseA = null, lastPhaseB = null, lastPhaseC = null;
+    const aiStrategyPhases = new Map(); // wire -> last sent phase/time, host-owned cars only
+    // Compare phase scalars before allocating any reliable history payload.
+    let lastPhaseA = null, lastPhaseB = null, lastPhaseC = null, lastFitted = null, lastNext = null, lastCompound = null;
     let peerProfile = null;
     let lastReason = null;
     // start({onStop}): the lobby's "this race is over" hook (a guest's own race
@@ -510,9 +555,8 @@ const NetPlay = (function () {
       c._prevS = c.s;
     }
 
-    function onState(bytes, from, fromId, arrivedAt) {
+    function onState(pkt, from, fromId, arrivedAt) {
       if (!active || (!remotes.size && !aiRemotes.size)) return;
-      const pkt = NetSnapshot.decodeSnapshot(bytes);
       if (!pkt || !pkt.cars.length) return;
       const clock = from || session;
       if (!clock) return;
@@ -579,7 +623,10 @@ const NetPlay = (function () {
         ));
       }
       s.clearHandlers();
-      s.onState((bytes, at) => onState(bytes, s, id, at));
+      // Real sessions already validate/decode once. Byte-only test/legacy
+      // sessions retain the old callback contract and decode at this boundary.
+      if (typeof s.onSnapshot === "function") s.onSnapshot((pkt, at) => onState(pkt, s, id, at));
+      else s.onState((bytes, at) => onState(NetSnapshot.decodeSnapshot(bytes), s, id, at));
       s.onClose((why) => {
         // We close a BYE/incompatible peer ourselves, so close() reports "local"; the
         // LEFT other guests are told and the hand-back must keep the real reason.
@@ -664,8 +711,11 @@ const NetPlay = (function () {
           // Each receiver names a fresh race epoch. A queued pit event from a
           // previous race on the same circuit cannot change this race's tyres.
           if (name === EV.STRATEGY && d && d.epoch === epoch && G.track && G.track.def && d.track === G.track.def.id) {
-            const r = remotes.get(d.wire);
-            const authorized = role === "guest" || remoteFor(id) === d.wire;
+            // Only the connected host may speak for AI (or relay humans).
+            // Guests sending to a host remain restricted to their seated car.
+            const fromHost = (role === "guest" || role === SpectatePolicy.SPECTATOR) && s === session;
+            const r = remotes.get(d.wire) || (fromHost ? aiRemotes.get(d.wire) : null);
+            const authorized = fromHost || (role === "host" && remoteFor(id) === d.wire);
             if (r && authorized && applyStrategy(r.car, d) && role === "host") broadcastStrategy(strategyState(r.car, d.wire, d.track));
           }
           if (name === EV.BYE) {
@@ -958,7 +1008,8 @@ const NetPlay = (function () {
       publishN = 0;
 
       lastPublish = -Infinity; lastStrategy = -Infinity;
-      lastPhaseA = lastPhaseB = lastPhaseC = null;
+      aiStrategyPhases.clear();
+      lastPhaseA = lastPhaseB = lastPhaseC = lastFitted = lastNext = lastCompound = null;
       lastReason = null;
       armedPeers.clear(); leftWires.clear();
       armDeadline = 0;
@@ -1147,6 +1198,7 @@ const NetPlay = (function () {
       // two guests holding open sockets to a race that has ended.
       for (const s of sessionList()) { try { s.close(); } catch (e) { /* already gone */ } }
       sessions.clear(); peerEpochs.clear(); sessionKinds.clear(); peerInfo.clear();
+      aiStrategyPhases.clear();
       peerCar.clear();
       session = null;
       armDeadline = 0;
@@ -1265,25 +1317,42 @@ const NetPlay = (function () {
         }
       }
 
-      // THREE SCALARS, NOT AN ARRAY AND A JOIN. This ran every frame of every
-      // multiplayer race to build a string that is thrown away unchanged on all
-      // but a handful of them — two allocations a frame for a three-field
-      // comparison. The fields compare directly.
+      // Compare scalars before the cadence gate; history is copied only when
+      // sending. A fitted set, pending choice or flag verdict is a phase too.
       const phaseA = localCar && localCar.tyreStints, phaseB = localCar && localCar.pitState,
-            phaseC = localCar && localCar.pitArmed;
-      const phaseChanged = phaseA !== lastPhaseA || phaseB !== lastPhaseB || phaseC !== lastPhaseC;
+            phaseC = localCar && localCar.pitArmed, fitted = localCar && localCar.pitFitted,
+            next = localCar && localCar.pitNext && localCar.pitNext.id, compound = localCar && localCar.compoundShortAtFinish;
+      const phaseChanged = phaseA !== lastPhaseA || phaseB !== lastPhaseB || phaseC !== lastPhaseC
+        || fitted !== lastFitted || next !== lastNext || compound !== lastCompound;
+      const peerArrived = lastStrategy === -Infinity;
       if (localCar && G.track && G.track.def && (now - lastStrategy >= 1000 || phaseChanged)) {
         // MODEL (a guest supplying its race epoch) and start() reset lastStrategy to -Infinity: only
         // THEN does a terminal state need resending. On the 1 s cadence it cost one reliable event per
         // retired car per guest for the rest of the race, filling a frozen guest's EVENT_INBOX_CAP.
-        const peerArrived = lastStrategy === -Infinity;
         lastStrategy = now; lastPhaseA = phaseA; lastPhaseB = phaseB; lastPhaseC = phaseC;
+        lastFitted = fitted; lastNext = next; lastCompound = compound;
         broadcastStrategy(strategyState(localCar, G.wireId(localCar), G.track.def.id));
         // Resend the host's terminal AI state with the existing reliable sync.
         // A guest may bind its race handlers after the original retirement.
         if (role === "host" && peerArrived) for (const c of G.cars || []) {
           if (!c.local && !c.human && c.retired) reportLap({ lap: c.lap, code: c.code,
             driverId: c.driverId, retired: c.dnf || "mechanical", invalid: true });
+        }
+      }
+      // Net-owned AI never run the guest's pit/tyre simulation. Publish their
+      // strategy independently of the local driver's phase: each at 1 Hz,
+      // immediately on a pit/tyre phase change, and for each arriving epoch.
+      if (role === "host" && G.track && G.track.def) for (const c of G.cars || []) {
+        const wire = G.wireId(c);
+        if (c === localCar || wire < 0 || remotes.has(wire)) continue;
+        let last = aiStrategyPhases.get(wire);
+        if (!last || peerArrived || now - last.at >= 1000 || c.tyreStints !== last.stints
+            || c.pitState !== last.pit || c.pitArmed !== last.armed || c.pitFitted !== last.fitted
+            || (c.pitNext && c.pitNext.id) !== last.next || c.compoundShortAtFinish !== last.compound) {
+          broadcastStrategy(strategyState(c, wire, G.track.def.id));
+          if (!last) { last = {}; aiStrategyPhases.set(wire, last); }
+          last.at = now; last.stints = c.tyreStints; last.pit = c.pitState; last.armed = c.pitArmed;
+          last.fitted = c.pitFitted; last.next = c.pitNext && c.pitNext.id; last.compound = c.compoundShortAtFinish;
         }
       }
       // A HIDDEN TAB PUBLISHES NOTHING. platform-session keeps pumping tick() at

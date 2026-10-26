@@ -44,26 +44,95 @@ while IFS= read -r f; do
 done <<LIST
 $STAGED
 LIST
+# Guards read working-tree bytes. On a miss, certify that they are the bytes
+# Git will commit, using the hook's actual index (including -a/pathspec indexes).
+# Keep this check before ratchet auto-staging so a refusal preserves the index.
+require_index_worktree_match() {
+  git diff --quiet --no-ext-diff -- . ':(exclude).claude/memory/**'
+  local rc=$?
+  [ "$rc" = 0 ] && return 0
+  echo "pre-commit: BLOCKED — guards read the working tree, which does not match the commit index. Stage or stash unstaged tracked changes, then retry." >&2
+  [ "$rc" = 1 ] && git diff --name-only -- . ':(exclude).claude/memory/**' >&2
+  return 1
+}
+# A matching earlier verdict already certifies this index even if the worktree
+# subsequently changed. Never scrub GIT_INDEX_FILE for a commit cache lookup.
+if [ "$DOCS_ONLY" != 1 ] && node tools/ci/guards-verdict.mjs check; then
+  exit 0
+fi
+require_index_worktree_match || exit 1
 if [ "$DOCS_ONLY" = 1 ]; then
+  GUARD_TREE=$(git write-tree) || exit 1
   if ! without_local_git_context node --test tests/unit/docs-integrity.test.mjs >"$LOG" 2>&1; then
     echo "pre-commit: BLOCKED — docs-integrity is red ($LOG):" >&2
     grep -E 'not ok|expected|actual' "$LOG" | tail -15 >&2
     exit 1
   fi
+  require_index_worktree_match || exit 1
+  [ "$(git write-tree)" = "$GUARD_TREE" ] || { echo "pre-commit: BLOCKED — commit index changed while docs-integrity ran." >&2; exit 1; }
   exit 0
 fi
-if node tools/check/ratchets.mjs --auto-raise >artifacts/pre-commit-ratchets.log 2>&1; then
-  grep -q '^RAISED\|^LOWERED' artifacts/pre-commit-ratchets.log && { git add tests/data/ratchets.json; grep '^RAISED\|^LOWERED' artifacts/pre-commit-ratchets.log >&2; }
+# Capture the generator's actual outputs, including new topic fragments and
+# deletions from lowering/folding. Stage only bytes it changed, into THIS hook
+# index; a globbed git add would also pick up unrelated pre-existing fragments.
+if node --input-type=module >artifacts/pre-commit-ratchets.log 2>&1 <<'NODE'
+import fs from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+const base = "tests/data/ratchets.json", dir = "tests/data/ratchets.d";
+const snapshot = () => new Map([base, ...(fs.existsSync(dir)
+  ? fs.readdirSync(dir).filter((name) => name.endsWith(".json")).map((name) => `${dir}/${name}`) : [])]
+  .filter((file) => fs.existsSync(file)).map((file) => [file, fs.readFileSync(file)]));
+const before = snapshot();
+const tracked = spawnSync("git", ["ls-files", "-z", "--", base, dir], { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
+if (tracked.status !== 0) process.exit(1);
+const indexed = new Set(tracked.stdout.split("\0"));
+const untracked = [...before.keys()].filter((file) => !indexed.has(file));
+if (untracked.length) {
+  console.error(`ratchets: untracked guard inputs must be staged or stashed first: ${untracked.join(", ")}`);
+  process.exit(1);
+}
+const result = spawnSync(process.execPath, ["tools/check/ratchets.mjs", "--auto-raise"], { stdio: "inherit" });
+if (result.status !== 0) process.exit(result.status || 1);
+const after = snapshot();
+const changed = [...new Set([...before.keys(), ...after.keys()])]
+  .filter((file) => !before.has(file) || !after.has(file) || !before.get(file).equals(after.get(file)));
+if (changed.length) {
+  // Ask Git for this worktree's regular index without replacing the active
+  // selector. Only that index and its full-commit (-a) lock reconcile extras;
+  // partial/custom indexes must refuse rather than leave a ceiling deleted.
+  const regularEnv = { ...process.env };
+  delete regularEnv.GIT_INDEX_FILE;
+  const regular = spawnSync("git", ["rev-parse", "--git-path", "index"], {
+    env: regularEnv, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"],
+  });
+  if (regular.status !== 0) process.exit(1);
+  const normal = path.resolve(regular.stdout.trim());
+  const active = path.resolve(process.env.GIT_INDEX_FILE || normal);
+  if (active !== normal && active !== normal + ".lock") {
+    console.error("ratchets: pathspec commit needs generated outputs that Git cannot reconcile (partial/custom index):");
+    for (const file of changed) console.error(`  ${file}`);
+    console.error("ratchets: stage these outputs with the intended commit contents, then retry git commit without pathspecs/--only using the regular index.");
+    process.exit(1);
+  }
+  const staged = spawnSync("git", ["--literal-pathspecs", "add", "-A", "--", ...changed], { stdio: "inherit" });
+  if (staged.status !== 0) process.exit(staged.status || 1);
+}
+NODE
+then
+  grep '^RAISED\|^LOWERED' artifacts/pre-commit-ratchets.log >&2 || true
 else
-  echo "pre-commit: BLOCKED — a size ratchet is over what the auto-raise absorbs (artifacts/pre-commit-ratchets.log):" >&2
-  grep '^OVER' artifacts/pre-commit-ratchets.log >&2
+  echo "pre-commit: BLOCKED — ratchet check or auto-staging failed (artifacts/pre-commit-ratchets.log):" >&2
+  tail -15 artifacts/pre-commit-ratchets.log >&2
   exit 1
 fi
 # Verdict cache (#2889): a fresh green write-tree match skips the suite.
 # Printed on stdout so agents see the hit line; the suite log stays for misses.
-if without_local_git_context node tools/ci/guards-verdict.mjs check; then
+if node tools/ci/guards-verdict.mjs check; then
   exit 0
 fi
+require_index_worktree_match || exit 1
+GUARD_TREE=$(git write-tree) || exit 1
 # Budget: git config apex.guardTimeout, then APEX_GUARD_TIMEOUT. When neither
 # is set, keep today's behaviour (no new default timeout in this githook).
 BUDGET=$(git config --get apex.guardTimeout 2>/dev/null || true)
@@ -95,4 +164,6 @@ else
     exit 1
   fi
 fi
+require_index_worktree_match || exit 1
+[ "$(git write-tree)" = "$GUARD_TREE" ] || { echo "pre-commit: BLOCKED — commit index changed while guards ran." >&2; exit 1; }
 exit 0

@@ -88,21 +88,24 @@ const TrackGraph = (function () {
     // This is the buffer an instanced renderer uploads ONCE per model. It is also
     // how the model's vertex cost and AABB are measured — by construction rather
     // than by a per-primitive vertex-count formula that would drift from geom.js.
-    function bakeCanonical(ops) {
+    function bakeCanonical(ops, signs) {
       if (!raw) return null;
       const buf = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0, _matAt: null };
       for (const op of ops) {
         buf._mat = op.mat || 0;
         buf._matAt = op.sway ? swayAt(buf._mat, _ORIGIN, _UP, 1, op.sway) : null;
         const col = op.col === NODE_COLOR ? WHITE : op.col;
+        // replay scales centres with their sign, but primitive dimensions with
+        // absolute scale. Keep that distinction for negative-scale placements.
+        const c = signs ? op.c.map((v, a) => (signs & (1 << a)) ? -v : v) : op.c;
         const v0 = buf.pos.length / 3;
         switch (op.op) {
-          case "box": raw.addBox(buf, op.c, op.sz, col, null); break;
-          case "prism": raw.addPrism(buf, op.c, op.sz, col, null); break;
-          case "pyramid": raw.addPyramid(buf, op.c, op.sz, col, null); break;
-          case "cyl": raw.addCyl(buf, op.c, op.rad, op.h, col, op.seg, null); break;
-          case "cone": raw.addCone(buf, op.c, op.rad, op.h, col, op.seg, null); break;
-          case "frustum": raw.addFrustum(buf, op.c, op.rB, op.rT, op.h, col, op.seg, null); break;
+          case "box": raw.addBox(buf, c, op.sz, col, null); break;
+          case "prism": raw.addPrism(buf, c, op.sz, col, null); break;
+          case "pyramid": raw.addPyramid(buf, c, op.sz, col, null); break;
+          case "cyl": raw.addCyl(buf, c, op.rad, op.h, col, op.seg, null); break;
+          case "cone": raw.addCone(buf, c, op.rad, op.h, col, op.seg, null); break;
+          case "frustum": raw.addFrustum(buf, c, op.rB, op.rT, op.h, col, op.seg, null); break;
         }
         // a swaying op is a crown: round its normals toward the canonical axis
         // (the same pass nature.js's swayOff() runs on inline emission)
@@ -110,6 +113,23 @@ const TrackGraph = (function () {
       }
       buf._mat = 0; buf._matAt = null;
       return buf;
+    }
+
+    // Pair a reflected canonical mesh with the matrix's tangent flip. Both
+    // reflections cancel for positions/normals; reversing triangles keeps the
+    // reflected mesh outward, so the positive-det GPU matrix preserves culling.
+    function mirroredGeo(geo) {
+      if (!geo) return geo;
+      const g = { ...geo, pos: geo.pos.slice(), nrm: geo.nrm.slice(), idx: geo.idx.slice() };
+      for (let i = 2; i < g.pos.length; i += 3) { g.pos[i] = -g.pos[i]; g.nrm[i] = -g.nrm[i]; }
+      for (let i = 0; i < g.idx.length; i += 3) { const b = g.idx[i + 1]; g.idx[i + 1] = g.idx[i + 2]; g.idx[i + 2] = b; }
+      return g;
+    }
+
+    function variantOf(n) {
+      const r = n.r, u = n.u, t = n.t, s = n.s;
+      const det = (r[1] * u[2] - r[2] * u[1]) * t[0] + (r[2] * u[0] - r[0] * u[2]) * t[1] + (r[0] * u[1] - r[1] * u[0]) * t[2];
+      return (s && s[0] < 0 ? 1 : 0) | (s && s[1] < 0 ? 2 : 0) | (s && s[2] < 0 ? 4 : 0) | (det < 0 ? 8 : 0);
     }
 
     function aabbOf(geo) {
@@ -125,23 +145,6 @@ const TrackGraph = (function () {
       }
       return { mn, mx };
     }
-
-    function reflectZ(geo) {
-      if (!geo) return geo;
-      const pos = geo.pos.slice(), nrm = geo.nrm.slice(), idx = geo.idx.slice();
-      for (let i = 2; i < pos.length; i += 3) { pos[i] = -pos[i]; nrm[i] = -nrm[i]; }
-      for (let i = 0; i < idx.length; i += 3) {
-        const a = idx[i]; idx[i] = idx[i + 1]; idx[i + 1] = a;
-      }
-      return Object.assign({}, geo, { pos, nrm, idx });
-    }
-
-    const leftHanded = (n) => {
-      const r = n.r, u = n.u, t = n.t;
-      return (r[1] * u[2] - r[2] * u[1]) * t[0] +
-        (r[2] * u[0] - r[0] * u[2]) * t[1] +
-        (r[0] * u[1] - r[1] * u[0]) * t[2] < 0;
-    };
 
     // Define a model once. `build(rec)` records ops in canonical space.
     //
@@ -159,14 +162,22 @@ const TrackGraph = (function () {
       if (m) return m;
       const ops = [];
       build(recorder(ops));
-      let geo, mirroredGeo, aabb;
+      let geo, aabb;
+      const variants = new Map();
       const meshOf = () => (geo === undefined ? (geo = bakeCanonical(ops)) : geo);
       m = {
         key, ops, uses: 0,
         hasRadial: ops.some((o) => o.op === "cyl" || o.op === "cone" || o.op === "frustum"),
         nodeColored: ops.some((o) => o.col === NODE_COLOR),
         get geo() { return meshOf(); },
-        get mirroredGeo() { return mirroredGeo === undefined ? (mirroredGeo = reflectZ(meshOf())) : mirroredGeo; },
+        geoFor(variant) {
+          if (!variant) return meshOf();
+          if (!variants.has(variant)) {
+            const g = (variant & 7) ? bakeCanonical(ops, variant & 7) : meshOf();
+            variants.set(variant, (variant & 8) ? mirroredGeo(g) : g);
+          }
+          return variants.get(variant);
+        },
         get aabb() { return aabb === undefined ? (aabb = aabbOf(meshOf())) : aabb; },
         get verts() { const g = meshOf(); return g ? g.pos.length / 3 : 0; },
       };
@@ -406,29 +417,29 @@ const TrackGraph = (function () {
         const s = node.s;
         const nonUniformXZ = !!s && __M.abs(__M.abs(s[0]) - __M.abs(s[2])) > 1e-9;
         if (!node.full || (m.hasRadial && nonUniformXZ)) { bakeOnly.push(node); continue; }
-        let lists = byModel.get(node.model);
-        if (!lists) byModel.set(node.model, (lists = [[], []]));
-        lists[leftHanded(node) ? 1 : 0].push(node);
+        let variants = byModel.get(node.model);
+        if (!variants) byModel.set(node.model, (variants = new Map()));
+        const variant = variantOf(node);
+        let list = variants.get(variant);
+        if (!list) variants.set(variant, (list = []));
+        list.push(node);
       }
 
       const out = [];
-      for (const [key, lists] of byModel) for (let hand = 0; hand < 2; hand++) {
-        const list = lists[hand];
-        if (!list.length) continue;
+      for (const [key, variants] of byModel) for (const [variant, list] of variants) {
         const m = models.get(key);
         const count = list.length;
         const matrices = new Float32Array(count * 16);
         const colors = m.nodeColored ? new Float32Array(count * 3) : null;
         for (let i = 0; i < count; i++) {
           const n = list[i], o = n.o, r = n.r, u = n.u, t = n.t, s = n.s;
-          const sx = s ? s[0] : 1, sy = s ? s[1] : 1, sz = s ? s[2] : 1;
+          const sx = s ? __M.abs(s[0]) : 1, sy = s ? __M.abs(s[1]) : 1, sz = s ? __M.abs(s[2]) : 1;
           const b = i * 16;
           matrices[b]      = r[0] * sx; matrices[b + 1]  = r[1] * sx; matrices[b + 2]  = r[2] * sx;
           matrices[b + 4]  = u[0] * sy; matrices[b + 5]  = u[1] * sy; matrices[b + 6]  = u[2] * sy;
-          // Keep a positive determinant for backend face culling. The LH
-          // mesh also reflects local Z and reverses winding: flipping only
-          // this column moved asymmetric crowns away from their guarded sites.
-          const tz = hand ? -sz : sz;
+          // LH frames need both this matrix flip AND mirrored canonical
+          // geometry: a matrix flip alone displaces asymmetric recipe parts.
+          const tz = (variant & 8) ? -sz : sz;
           matrices[b + 8]  = t[0] * tz; matrices[b + 9]  = t[1] * tz; matrices[b + 10] = t[2] * tz;
           matrices[b + 12] = o[0];      matrices[b + 13] = o[1];      matrices[b + 14] = o[2];
           matrices[b + 15] = 1;
@@ -437,12 +448,12 @@ const TrackGraph = (function () {
             colors[i * 3] = c[0]; colors[i * 3 + 1] = c[1]; colors[i * 3 + 2] = c[2];
           }
         }
-        out.push({ model: key, geo: hand ? m.mirroredGeo : m.geo, verts: m.verts, count, matrices, colors });
+        out.push({ model: key, variant, geo: m.geoFor(variant), verts: m.verts, count, matrices, colors });
       }
       meshBatches(out);   // in BOTH sets: a mesh placement is recorded only when its triangles were withheld
       // Deterministic order: a backend uploading these must not have its draw
       // list reshuffle between builds of the same track.
-      out.sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
+      out.sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : (a.variant || 0) - (b.variant || 0)));
       return { batches: out, bakeOnly };
     }
 
