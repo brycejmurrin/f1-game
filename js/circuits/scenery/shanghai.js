@@ -572,50 +572,64 @@
       ]);
 
       (function pudongCluster() {
-        const a = anchor(K(0.30), -1, 300), b = [a.r, a.u, a.t];
-        const u = b[1];
-
-        // Detail 2026-10-05: replace open frustum "stacked slabs" with closed
-        // solid box cores + shallow window ribbons (local only; city.js untouched).
-        for (let i = 0; i < 11; i++) {
-          const off   = (i - 5) * 30 + (hash(i * 5) - 0.5) * 12;
-          const depth = 40 + hash(i * 7) * 50;
-          const h     = 55 + hash(i * 11) * 70;
-          const w     = 14 + hash(i * 13) * 10;
-          const base = vadd(vadd(a.c, a.r, off), a.t, depth);
-          const gy = groundUnder(base[0], base[2]);
-          if (gy !== null) base[1] = gy;
-          out._mat = MAT.CONCRETE;
-          seat.box(out, base, [w, h, w * 0.72],
-            hash(i * 3) > 0.5 ? GLASS_HAZE : [0.62, 0.66, 0.72], b);
-          out._mat = MAT.GLASS;
-          for (let band = 1; band <= 3; band++) {
-            addBox(out, vadd(base, u, h * (0.22 * band)),
-              [w * 1.04, h * 0.06, w * 0.76], WIN_TOWER, b);
+        // #3360 / docs/tracks/shanghai.md: SIC is in Jiading (~30+ km from
+        // central Pudong). The prior cluster sat at dist 300 with crisp
+        // Pearl/Jin Mao/Tower stacks — ground-audit reported 70–148 m
+        // unsupported footprints and it read as a near-track hero. Push to
+        // multi-km haze (fog thick past ~600 m); keep required shanghai-pudong.
+        const HORIZON = 2400;
+        const a0 = anchor(K(0.30), -1, HORIZON);
+        let hi = a0.c[1];
+        for (const alongT of [-40, -20, 0, 20, 40]) {
+          for (const sideOff of [-60, -30, 0, 30, 60]) {
+            const q = vadd(vadd(a0.c, a0.t, alongT), a0.r, sideOff);
+            const g = terrainYAt(q[0], q[2]);
+            if (g != null) hi = Math.max(hi, g);
           }
-          out._mat = 0;
+        }
+        // Fall back to groundYAt when the terrain grid does not reach the
+        // horizon pad (common past the marsh ribbon).
+        if (!(hi > a0.c[1] + 0.02)) {
+          const gyH = groundYAt(K(0.30), HORIZON);
+          if (gyH != null) hi = Math.max(hi, gyH);
+        }
+        const lift = hi - a0.c[1] > 0.02 ? hi - a0.c[1] + 0.04 : 0.04;
+        const a = Object.assign({}, a0, { c: vadd(a0.c, a0.u, lift) });
+        const b = [a.r, a.u, a.t];
+        const u = b[1];
+        // Pull silhouette colors toward the fog so the cue stays soft.
+        const haze = (c, t) => [
+          c[0] + (0.80 - c[0]) * t,
+          c[1] + (0.82 - c[1]) * t,
+          c[2] + (0.83 - c[2]) * t,
+        ];
+        const PEARL_H = haze(PEARL, 0.55);
+        const GLASS_H = haze(GLASS_HAZE, 0.5);
+        const STEEL_H = haze(STEEL, 0.45);
+        const CORE_H = haze([0.68, 0.66, 0.64], 0.4);
+
+        // Soft tower band via backdrop (settles to lap baseline — no float debt).
+        for (let i = 0; i < 14; i++) {
+          const k2 = K(0.26 + i / 14 * 0.10);
+          const h = 70 + hash(i * 19 + 100) * 90;
+          const w = 18 + hash(i * 23 + 100) * 14;
+          const dist = HORIZON - 180 + hash(i * 11) * 360;
+          backdrop(k2, -1, dist, [w, h, w * 0.55], haze(SKY_HAZE, 0.55 + hash(i) * 0.25));
         }
 
-        // Soft local backdrop band, farther and sky-haze tinted — solid boxes
-        // (backdrop isBld can read as open slabs until the shared city fix lands).
-        for (let i = 0; i < 12; i++) {
-          const k2 = K(0.25 + i / 12 * 0.12);
-          const h   = 50 + hash(i * 19 + 100) * 70;
-          const w   = 22 + hash(i * 23 + 100) * 16;
-          const aB = anchor(k2, -1, 220 + hash(i * 11) * 50);
-          if (onTrack(aB.c[0], aB.c[2], w * 0.4)) continue;
-          const bB = [aB.r, aB.u, aB.t];
-          const foot = aB.c.slice();
-          const gyB = groundUnder(foot[0], foot[2]);
-          if (gyB !== null) foot[1] = gyB;
-          seat.box(out, foot, [w * 0.55, h, w * 0.45], SKY_HAZE, bB);
-        }
-
-        const pc = vadd(vadd(a.c, a.r, -2), a.t, 50);
-        const stC = vadd(vadd(a.c, a.r, 55), a.t, 55);
-        const jmC = vadd(vadd(a.c, a.r, -32), a.t, 50);
-        const swC = vadd(vadd(a.c, a.r, 26), a.t, 63);
-        const heroCenter = vadd(vadd(a.c, a.r, 12), a.t, 52);
+        const seatXZ = (p) => {
+          const g = terrainYAt(p[0], p[2]);
+          if (g != null) { p[1] = g; return p; }
+          const g2 = groundUnder(p[0], p[2]);
+          if (g2 != null) p[1] = g2;
+          else p[1] = a.c[1];
+          return p;
+        };
+        const pc = seatXZ(vadd(vadd(a.c, a.r, -2), a.t, 50));
+        const stC = seatXZ(vadd(vadd(a.c, a.r, 55), a.t, 55));
+        const jmC = seatXZ(vadd(vadd(a.c, a.r, -32), a.t, 50));
+        const swC = seatXZ(vadd(vadd(a.c, a.r, 26), a.t, 63));
+        const heroCenter = seatXZ(vadd(vadd(a.c, a.r, 12), a.t, 52));
         modelGroup("shanghai-pudong", {
           center: vadd(heroCenter, u, 98),
           size: [130, 205, 80],
@@ -629,49 +643,49 @@
             TrackGeom.addFrustum(stage, c, r0, r1, h, col, seg, b);
           const box = (c, size, col) => TrackGeom.addBox(stage, c, size, col, b);
 
-          // Oriental Pearl tripod, observation spheres, connector, and spire.
-          const legH = 48, legR = 2.2, legCol = [0.74, 0.72, 0.70];
+          // Oriental Pearl — closed cores, hazed (no free-floating window bands).
+          const legH = 48, legR = 2.2, legCol = haze([0.74, 0.72, 0.70], 0.4);
           for (const [ro, to] of [[-10, 0], [5, -9], [5, 9]])
             cyl(vadd(vadd(pc, a.r, ro), a.t, to), legR, legH, legCol, 8);
-          frustum(pc, 14, 8, 8, [0.68, 0.66, 0.64], 12);
+          frustum(pc, 14, 8, 8, CORE_H, 12);
 
           const lSphBase = 54, lSphR = 15;
-          frustum(vadd(pc, u, lSphBase), lSphR * 0.7, lSphR, 4, PEARL, 12);
-          frustum(vadd(pc, u, lSphBase + 2), lSphR, lSphR, lSphR * 1.6, PEARL, 12);
-          frustum(vadd(pc, u, lSphBase + lSphR * 1.6 + 2), lSphR, lSphR * 0.7, 4, PEARL, 12);
+          frustum(vadd(pc, u, lSphBase), lSphR * 0.7, lSphR, 4, PEARL_H, 12);
+          frustum(vadd(pc, u, lSphBase + 2), lSphR, lSphR, lSphR * 1.6, PEARL_H, 12);
+          frustum(vadd(pc, u, lSphBase + lSphR * 1.6 + 2), lSphR, lSphR * 0.7, 4, PEARL_H, 12);
           frustum(vadd(pc, u, lSphBase + lSphR * 0.8),
-            lSphR * 1.02, lSphR * 1.02, lSphR * 0.5, WIN_LIT, 12);
+            lSphR * 1.02, lSphR * 1.02, lSphR * 0.5, haze(WIN_LIT, 0.6), 12);
 
           const connBase = 84, connTop = 108;
-          cyl(vadd(pc, u, connBase), 3.2, connTop - connBase, [0.80, 0.70, 0.66], 8);
+          cyl(vadd(pc, u, connBase), 3.2, connTop - connBase, haze([0.80, 0.70, 0.66], 0.5), 8);
           frustum(vadd(pc, u, connBase + (connTop - connBase) * 0.5 - 1),
-            4.5, 4.5, 2.5, [0.74, 0.66, 0.62], 12);
+            4.5, 4.5, 2.5, haze([0.74, 0.66, 0.62], 0.5), 12);
 
           const uSphBase = connTop, uSphR = 10;
-          frustum(vadd(pc, u, uSphBase), uSphR * 0.7, uSphR, 4, [0.80, 0.66, 0.60], 10);
-          frustum(vadd(pc, u, uSphBase + 2), uSphR, uSphR, uSphR * 1.6, [0.82, 0.68, 0.62], 10);
+          frustum(vadd(pc, u, uSphBase), uSphR * 0.7, uSphR, 4, haze([0.80, 0.66, 0.60], 0.55), 10);
+          frustum(vadd(pc, u, uSphBase + 2), uSphR, uSphR, uSphR * 1.6, haze([0.82, 0.68, 0.62], 0.55), 10);
           frustum(vadd(pc, u, uSphBase + uSphR * 1.6 + 2),
-            uSphR, uSphR * 0.7, 4, [0.80, 0.66, 0.60], 10);
+            uSphR, uSphR * 0.7, 4, haze([0.80, 0.66, 0.60], 0.55), 10);
           frustum(vadd(pc, u, uSphBase + uSphR * 0.8),
-            uSphR * 1.03, uSphR * 1.03, uSphR * 0.4, WIN_LIT, 10);
+            uSphR * 1.03, uSphR * 1.03, uSphR * 0.4, haze(WIN_LIT, 0.65), 10);
           const spireBase = uSphBase + uSphR * 1.6 + 6;
-          cyl(vadd(pc, u, spireBase), 0.9, 32, [0.88, 0.78, 0.72], 6);
-          cone(vadd(pc, u, spireBase + 32), 0.9, 12, [0.90, 0.82, 0.76], 6);
+          cyl(vadd(pc, u, spireBase), 0.9, 32, haze([0.88, 0.78, 0.72], 0.55), 6);
+          cone(vadd(pc, u, spireBase + 32), 0.9, 12, haze([0.90, 0.82, 0.76], 0.55), 6);
 
-          // Shanghai Tower and Jin Mao — solid tapering box cores (closed).
-          box(vadd(stC, u, 40), [18, 80, 16], GLASS_HAZE);
-          box(vadd(stC, u, 110), [12, 60, 11], [0.62, 0.68, 0.74]);
-          box(vadd(stC, u, 155), [6, 30, 5.5], [0.66, 0.72, 0.78]);
-          box(vadd(stC, u, 172), [2.5, 22, 2.5], STEEL);
-          box(vadd(jmC, u, 27.5), [16, 55, 14], [0.70, 0.69, 0.68]);
-          box(vadd(jmC, u, 72.5), [12, 35, 11], [0.72, 0.71, 0.70]);
-          box(vadd(jmC, u, 100), [8, 20, 7], [0.74, 0.73, 0.72]);
-          cyl(vadd(jmC, u, 110), 0.7, 18, STEEL, 5);
+          // Shanghai Tower / Jin Mao / SWFC — closed tapering cores, hazed.
+          box(vadd(stC, u, 40), [18, 80, 16], GLASS_H);
+          box(vadd(stC, u, 110), [12, 60, 11], haze([0.62, 0.68, 0.74], 0.45));
+          box(vadd(stC, u, 155), [6, 30, 5.5], haze([0.66, 0.72, 0.78], 0.45));
+          box(vadd(stC, u, 172), [2.5, 22, 2.5], STEEL_H);
+          box(vadd(jmC, u, 27.5), [16, 55, 14], haze([0.70, 0.69, 0.68], 0.4));
+          box(vadd(jmC, u, 72.5), [12, 35, 11], haze([0.72, 0.71, 0.70], 0.4));
+          box(vadd(jmC, u, 100), [8, 20, 7], haze([0.74, 0.73, 0.72], 0.4));
+          cyl(vadd(jmC, u, 110), 0.7, 18, STEEL_H, 5);
 
-          box(vadd(swC, u, 57), [16, 114, 14], [0.58, 0.66, 0.74]);
-          box(vadd(vadd(swC, u, 132), a.r, -5), [4, 36, 11], GLASS);
-          box(vadd(vadd(swC, u, 132), a.r,  5), [4, 36, 11], GLASS);
-          box(vadd(swC, u, 149), [14.4, 3, 11.4], STEEL);
+          box(vadd(swC, u, 57), [16, 114, 14], haze([0.58, 0.66, 0.74], 0.45));
+          box(vadd(vadd(swC, u, 132), a.r, -5), [4, 36, 11], haze(GLASS, 0.5));
+          box(vadd(vadd(swC, u, 132), a.r,  5), [4, 36, 11], haze(GLASS, 0.5));
+          box(vadd(swC, u, 149), [14.4, 3, 11.4], STEEL_H);
         }, { required: true });
       })();
 

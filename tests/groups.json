@@ -1149,6 +1149,8 @@
     "// The sun shadow map's depth span holds a 250 m caster: drives the real",
     "// ShadowPass.sunPass on a stub renderer and projects through its light VP.",
     "tests/unit/shadow-pass-depth.test.mjs",
+    "// #3360: Shanghai Pudong skyline stays a multi-km haze cue (not dist 300).",
+    "tests/unit/shanghai-pudong-horizon.test.mjs",
     "tests/unit/share-card-data.test.mjs",
     "tests/unit/share-card-layout.test.mjs",
     "tests/unit/share-card.test.mjs",
