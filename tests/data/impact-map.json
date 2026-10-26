@@ -2549,7 +2549,8 @@
         "tests/unit/frame-hotpath-alloc.test.mjs"
       ],
       "drawRetroTelemetry": [
-        "tests/unit/cockpit-wheels.test.mjs"
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/retro-shift-lights.test.mjs"
       ],
       "drawTailGlow": [
         "tests/unit/frame-hotpath-alloc.test.mjs"
@@ -2618,7 +2619,8 @@
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "getLedStrip": [
-        "tests/unit/cockpit-wheels.test.mjs"
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/retro-shift-lights.test.mjs"
       ],
       "getMirrorFallback": [
         "tests/unit/cockpit-wheels.test.mjs",
@@ -2641,7 +2643,8 @@
         "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
-        "tests/unit/mirror-glass-night.test.mjs"
+        "tests/unit/mirror-glass-night.test.mjs",
+        "tests/unit/retro-shift-lights.test.mjs"
       ],
       "releaseIdleFlaps": [
         "tests/unit/car-mesh-crew-cache.test.mjs"
@@ -4832,6 +4835,7 @@
         "tests/unit/real-race.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/replay-buf.test.mjs",
+        "tests/unit/retro-shift-lights.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs",
@@ -10672,6 +10676,7 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/rain-cells.test.mjs",
         "tests/unit/real-race.test.mjs",
+        "tests/unit/retro-shift-lights.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs",
