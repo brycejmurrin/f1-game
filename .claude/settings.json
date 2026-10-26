@@ -282,6 +282,16 @@
             "onFailure": "block"
           }
         ]
+      },
+      {
+        "matcher": "^mcp__claude-code-remote__create_session$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/launch-gate.py\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
