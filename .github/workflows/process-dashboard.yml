@@ -11,6 +11,11 @@ name: Process dashboard
 # TIME RATCHETS run in this job only (measurement.md §5). tools/ci/process-dashboard.mjs
 # --check reads the JSON it just wrote. It does not re-run the suites. A thin
 # sample (n < n_min) is skipped, not failed. test:guards never calls --check.
+# ADVISORY since the 2026-10-26 audit (lane X3): the check was red 3 of 7 nights
+# and nobody read it, and a red here blocked nothing but its own record. It is now
+# continue-on-error with a ::warning:: and a summary line, so the metrics branch is
+# still written on a breach night and the breach is visible in the run summary.
+# https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepscontinue-on-error
 on:
   schedule:
     - cron: "47 4 * * *"
@@ -55,8 +60,16 @@ jobs:
 
       # BEFORE the metrics checkout: that checkout replaces this tree, and the
       # tool's imports live on the deploy branch, not on `metrics`.
-      - name: Time ratchets (this job only)
+      - name: Time ratchets (this job only; advisory)
+        id: ratchets
+        continue-on-error: true
         run: node tools/ci/process-dashboard.mjs --check "$RUNNER_TEMP/process-dashboard.json"
+
+      - name: Time-ratchet breach is a warning, not a red
+        if: ${{ steps.ratchets.outcome == 'failure' }}
+        run: |
+          echo "::warning title=time ratchets::process-dashboard.mjs --check found a breach; see the Time ratchets step log"
+          echo "**Time ratchets: breach (advisory)** — see the Time ratchets step log." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Push the record to the metrics branch
         env:

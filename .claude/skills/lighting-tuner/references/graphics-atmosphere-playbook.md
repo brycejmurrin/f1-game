@@ -10,7 +10,7 @@ Translate Three.js terms to Apex knobs (`js/lighting/`, `lightTune`, `applyRaceS
 |---|---|
 | Aerial perspective / fog | `fog`, `horizon`, presets in `presets.js` |
 | Exposure / tone map | `exposure`, ACES path per backend; night washout → verify `lightState` |
-| Shadow bias / cascades | GLX `glx-shadow`; TLX `-shadow.js`; not scenery masts |
+| Shadow bias / cascades | GLX `js/render/glx/shadow.js`; TLX `js/render/three/tlx-shadow.js`; not scenery masts |
 | Color grading / bloom | Post stack; shader defects → **renderer-debug** |
 | Wet surfaces / rain | `weatherArc`, surface shaders; precipitation visuals → scenery + lighting |
 

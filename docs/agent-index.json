@@ -1068,6 +1068,7 @@
       "kind": "command",
       "files": [
         "tests/unit/agent-surface.test.mjs",
+        "tests/unit/assert-match-ratchet.test.mjs",
         "tests/unit/behind-ship.test.mjs",
         "tests/unit/carve-a-modules.test.mjs",
         "tests/unit/change-kind.test.mjs",
@@ -1100,6 +1101,7 @@
         "tests/unit/ratchets.test.mjs",
         "tests/unit/selected-gate-verdict.test.mjs",
         "tests/unit/shell-ids.test.mjs",
+        "tests/unit/source-pin-hygiene.test.mjs",
         "tests/unit/test-coverage-audit.test.mjs",
         "tests/unit/test-groups-generated.test.mjs",
         "tests/unit/test-groups.test.mjs",
@@ -2005,8 +2007,7 @@
       "path": "js/agent/agentview.js",
       "global": "AgentView",
       "order": 340,
-      "roster": "LAZY_AGENT",
-      "ratchetLines": 2316
+      "roster": "LAZY_AGENT"
     },
     {
       "path": "js/agent/apex-cam.js",
@@ -2042,8 +2043,7 @@
       "path": "js/agent/apex.js",
       "global": "ApexApi",
       "order": 346,
-      "roster": "LAZY_AGENT",
-      "ratchetLines": 2483
+      "roster": "LAZY_AGENT"
     },
     {
       "path": "js/audio/announcer-recorded.js",
@@ -2385,8 +2385,7 @@
       "path": "js/car/car3d.js",
       "global": "Car3D",
       "order": 72,
-      "roster": "tag",
-      "ratchetLines": 2330
+      "roster": "tag"
     },
     {
       "path": "js/car/crest-draw.js",
@@ -3586,8 +3585,7 @@
       "path": "js/game.js",
       "global": null,
       "order": 308,
-      "roster": "tag",
-      "ratchetLines": 9351
+      "roster": "tag"
     },
     {
       "path": "js/garage/arrival.js",
@@ -3863,8 +3861,7 @@
       "path": "js/net/lobby.js",
       "global": "NetLobby",
       "order": 510,
-      "roster": "LAZY_NET",
-      "ratchetLines": 2342
+      "roster": "LAZY_NET"
     },
     {
       "path": "js/net/netplay.js",
@@ -4440,8 +4437,7 @@
       "path": "js/render/glx/glx.js",
       "global": "GLXBackend",
       "order": 318,
-      "roster": "DEFERRED:webgl2",
-      "ratchetLines": 3002
+      "roster": "DEFERRED:webgl2"
     },
     {
       "path": "js/render/glx/post.js",
@@ -4891,8 +4887,7 @@
       "path": "js/track/tracks.js",
       "global": "Tracks",
       "order": 58,
-      "roster": "tag",
-      "ratchetLines": 800
+      "roster": "tag"
     },
     {
       "path": "js/ui/a11y-opts.js",
@@ -5072,8 +5067,7 @@
       "path": "js/ui/hud.js",
       "global": "GameHud",
       "order": 269,
-      "roster": "tag",
-      "ratchetLines": 2481
+      "roster": "tag"
     },
     {
       "path": "js/ui/key-binds.js",

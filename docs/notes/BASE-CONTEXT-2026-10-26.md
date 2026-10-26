@@ -1,5 +1,7 @@
 # Base context of a fresh Claude cloud session — 2026-10-26
 
+Supersedes: [Base-context audit — 2026-10-19](BASE-CONTEXT-AUDIT-2026-10-19.md) (its 50–60k base is now measured at ~98k).
+
 Re-measures the "50-60k base" figure of [BASE-CONTEXT-AUDIT-2026-10-19](BASE-CONTEXT-AUDIT-2026-10-19.md) for
 row 2 of `FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md` (PR #3769, not yet merged). The figure feeds
 every role cap in `.claude/skills/agent-fleet/references/launch-policy.md` §Size stop.
