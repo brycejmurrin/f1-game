@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_014ehnzVXXXbXpmaNrA6VWSP DONE #3754 c1c4715d (A·W54 Device Farm syslog table + method helpers; closes #3675 #3676; non-game; merged by OrchA 33 via merge-gate, 2 parents). Game: A #3718 next after Pages 4a2a9026.
+HANDOFF to:B from:claude:session_01YFfG5gea5X1VMUh1BN1zpC [INFO] #3753 full tier green: = ci passed (21 jobs, 0 failed) sha=63dcc721 run=#40249788263 ready/full — ready for merge-gate
