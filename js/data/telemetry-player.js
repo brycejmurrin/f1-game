@@ -143,11 +143,11 @@ const DataTelemetryPlayer = (function () {
         w.appendChild(el("div", "dh-glabel", label));
         const out = [];
         const track = el("div", "dh-gbar");
-        const fill = el("div", "dh-gfill"); fill.style.background = color;
+        const fill = el("div", "dh-gfill"); fill.style.background = color; fill.style.transform = "scaleX(0)";
         track.appendChild(fill); w.appendChild(track); out.push(fill);
         if (cmp) {
           const track2 = el("div", "dh-gbar dh-gbar2");
-          const fill2 = el("div", "dh-gfill dh-gfill2"); fill2.style.background = color;
+          const fill2 = el("div", "dh-gfill dh-gfill2"); fill2.style.background = color; fill2.style.transform = "scaleX(0)";
           track2.appendChild(fill2); w.appendChild(track2); out.push(fill2);
         }
         card.appendChild(w); return out;
@@ -193,6 +193,8 @@ const DataTelemetryPlayer = (function () {
       view.g = g;
       return card;
     }
+    // Gauge fills are transform-only: a width write is a layout every frame while playing or scrubbing.
+    function setScale(el, f) { const v = "scaleX(" + f + ")"; if (el.style.transform !== v) el.style.transform = v; }
     function updateGauges(view) {
       const g = view.g; if (!g) return;
       const t = view.cursorT === null ? 0 : view.cursorT;
@@ -203,9 +205,9 @@ const DataTelemetryPlayer = (function () {
         const c = cars[i]; if (!c) continue;
         setText(g.speed[i], speedValue(c.speed));
         setText(g.gear[i], (c.gear == null) ? "—" : (c.gear ? "G" + c.gear : "N"));
-        g.thr[i].style.width = (c.throttle === null ? 0 : clamp(c.throttle, 0, 100)) + "%";
-        g.brk[i].style.width = (c.brake === null ? 0 : clamp(c.brake, 0, 100)) + "%";
-        g.rpm[i].style.width = (c.rpm === null ? 0 : clamp(c.rpm / view.rpmMax * 100, 0, 100)) + "%";
+        setScale(g.thr[i], (c.throttle === null ? 0 : clamp(c.throttle, 0, 100)) / 100);
+        setScale(g.brk[i], (c.brake === null ? 0 : clamp(c.brake, 0, 100)) / 100);
+        setScale(g.rpm[i], (c.rpm === null ? 0 : clamp(c.rpm / view.rpmMax * 100, 0, 100)) / 100);
         const open = c.drs != null && drsOpen(c.drs);
         setText(g.drs[i], open ? "OPEN" : "—");
         g.drs[i].classList.toggle("dh-on", open);

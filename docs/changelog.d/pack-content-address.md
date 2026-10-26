@@ -1,0 +1,1 @@
+Improved: baked asset-pack files (models, material strips) are now requested by content hash (`?h=<md5>`) and the service worker answers them cache-first, so a returning player no longer pays a network round trip per pack file; the manifest stays network-first and a rebake changes the URL (load-hunt L3).
