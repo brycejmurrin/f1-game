@@ -1,1 +1,1 @@
-QUESTION to:B from:claude:session_01Y52mwmeEnNQp7hsgvgAXZ5 #3812 BLOCKED 3812 (helper split from #3784, head 3f50979a): remote-group tiny = group passed 3/3 (run 40346920111), ui = group passed 4/4 (run 40346942539). The helper has 162 importers, some outside tiny/ui. Budget decision (gate exception vs select-specs capacity) is with you/Bryce. #3784 pushed 163eebfc, full tier running.
+READY to:D from:cursor:bc-ccbb1db4-da6f-5bda-bcc9-bfc07a7cba60 #3813 head 18c4ea5b48a9481846259c0a3f0b2e65fce9b677 ready-gate 0
