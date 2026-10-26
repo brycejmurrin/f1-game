@@ -203,7 +203,7 @@ test("--ctx: per-turn context = input + cache read + cache write, one row per me
   assert.match(out, /03:25:16 ctx  +101\.3k  first/);
   assert.match(out, /03:28:00 ctx  +131\.0k  \+29\.7k  over 120k/);
   assert.match(out, /= ctx 2 turns · first 101\.3k · max 131\.0k · last 131\.0k · cap 120k first crossed 03:28:00/);
-  assert.match(renderCtx([], 0), /no main-thread usage/);
+  assert.equal(renderCtx([], 0), "= ctx: no main-thread usage blocks on these pages");
   const jsonl = [JSON.stringify({ type: "assistant", timestamp: "2026-10-26T04:00:00Z", message: { id: "j1", usage: { input_tokens: 2, cache_read_input_tokens: 1000 } } }),
     JSON.stringify({ type: "assistant", isSidechain: true, timestamp: "2026-10-26T04:01:00Z", message: { id: "j2", usage: { input_tokens: 5 } } }), "not json"].join("\n");
   assert.deepEqual(contextRows(eventsFromJsonl(jsonl)).map((r) => r.ctx), [1002], "a local JSONL transcript reads the same; sidechains skipped");
