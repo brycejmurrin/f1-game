@@ -55,7 +55,7 @@ test("FAILS on a stall, and says which of the two happened", { timeout: 5000 }, 
     (e) => {
       assert.match(e.message, /STALLED/, "the stall error must name the stall");
       assert.match(e.message, /wedged build, not a slow box/, "the message must distinguish the two");
-      assert.match(e.message, /7 records/, "the message must carry the observed record count");
+      assert.match(e.message, /Log id 7/, "the message must carry the observed progress id");
       return true;
     },
     "a wedged build did not fail — the detector waits forever");
@@ -201,6 +201,21 @@ test("awaitApexBoot: the stall window is the old BOOT_MS, never longer", async (
   const src = fs.readFileSync(new URL("../helpers/fixtures.js", import.meta.url), "utf8");
   const boot = Number(/export const BOOT_MS = (\d+)/.exec(src)[1]);
   assert.equal(BOOT_STALL_MS, boot, "a silent boot must fail exactly when the old fixed wait did");
+});
+
+test("track progress survives a full fixed-length log ring", async () => {
+  const realNow = Date.now;
+  let now = 0;
+  const win = { __apex: { info: () => ({ track: null }) } };
+  const page = livePage(win, i => {
+    now = i * 5;
+    win.__apex.logs = opts => opts?.limit === 1 ? [{ id: 500 + i }] : Array.from({ length: 500 }, (_, k) => ({ id: i + k + 1 }));
+    if (i === 8) win.__apex.info = () => ({ track: "monza" });
+  });
+  Date.now = () => now;
+  try { await awaitTrackBuild(page, 10, 200); }
+  finally { Date.now = realNow; }
+  assert.equal(page.calls, 8);
 });
 
 test("server preflight rejects HTTP errors and unrelated HTML", async t => {

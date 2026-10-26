@@ -1071,6 +1071,14 @@ function roomKeys(team, liv, info, ctx) {
   const dressId = `${team && team.id}|${(team && team.legend) || ""}|${paint}|${marks}|${logoGen}|${nums}`;
   return { geom, live, dressId, key: `${geom}|${live}|${dressId}|${boardKey(info)}` };
 }
+// A paint edit repaints a bay atlas of the SAME size: a backend that can (TLX refillTexture) re-fills the live
+// handle in place, so nothing is allocated. Free-then-create leaned on the TLX retire pool, and a handle retired
+// before its first draw (two edits between frames) came back without a GPU texture, which three made on the draw.
+function reuploadTex(old, canvas) {
+  if (old && _gfx.refillTexture && _gfx.refillTexture(old, canvas)) return old;
+  if (old && _gfx.freeTexture) _gfx.freeTexture(old);
+  return _gfx.createTexture(canvas);
+}
 function uploadLive(team, liv, ctx, now) {
   if (!_gfx.createTexture || !_gfx.createTexMesh || typeof LiveryTex === "undefined") return;
   try {
@@ -1084,9 +1092,9 @@ function uploadLive(team, liv, ctx, now) {
       try { paintTrace(liveCanvas, liv, lastTrace); traceFail = 0; }
       catch (e) { traceFail++; Log.warn("game", `GarageScene live trace failed: ${e && e.message}`); }
     }
-    if (liveTex && _gfx.freeTexture) _gfx.freeTexture(liveTex);
+    const prev = liveTex;
     liveTex = null;
-    liveTex = _gfx.createTexture(liveCanvas);
+    liveTex = reuploadTex(prev, liveCanvas);
     if (!liveTex || liveTex._phase === 4) throw new Error("live texture upload returned no handle");
     if (!liveMesh.mid) {
       const lg = GarageLive.build(FIXTURES);
@@ -1167,13 +1175,15 @@ function rebuild(team, liv, info, ctx) {
   if (dressFull === dressFullKey && dressTex) { cacheKey = key; return; }
   // Team dress. Three strikes then stop trying: an unbranded bay is far better
   // than a canvas that throws once a frame forever.
-  if (dressTex && _gfx.freeTexture) _gfx.freeTexture(dressTex);
+  const prevDress = dressTex;
   dressTex = null;
+  if (!(dressFail < 3 && _gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined") &&
+      prevDress && _gfx.freeTexture) _gfx.freeTexture(prevDress);
   if (dressFail < 3 && _gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined") {
     try {
       if (!dressCanvas) dressCanvas = paintDress(team, liv).canvas;
       paintBoards(dressCanvas, team, liv, info);
-      dressTex = _gfx.createTexture(dressCanvas);
+      dressTex = reuploadTex(prevDress, dressCanvas);
       if (!dressMesh.back) {
         const dg = buildDress(SIDES);
         for (let i = 0; i < SIDES.length; i++)

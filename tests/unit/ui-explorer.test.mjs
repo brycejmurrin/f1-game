@@ -49,12 +49,51 @@ test("race mission verifies actual track and weather instead of just a visible H
 
 test("fault profiles leave ordinary scripts alone, intercept assets and restore routing", async () => {
   let handler, restored = false, aborted = false, continued = false;
-  const context = { route: async (pattern, fn) => { handler = fn; }, unrouteAll: async ({ behavior }) => { restored = behavior === "wait"; } };
+  const context = { route: async (pattern, fn) => { handler = fn; }, unroute: async (pattern, fn) => { restored = pattern === "**/*" && fn === handler; } };
   const f = await installFault(context, "missing-assets");
-  const route = (url) => ({ request: () => ({ url: () => url }), continue: async () => { continued = true; }, abort: async () => { aborted = true; } });
+  const route = (url) => ({ request: () => ({ url: () => url }), fallback: async () => { continued = true; }, abort: async () => { aborted = true; } });
   await handler(route("http://localhost/js/probe-fixture.js")); assert(continued); assert(!aborted);
   await handler(route("http://localhost/assets/missing.glb")); assert(aborted); assert.equal(f.events.length, 1);
   await f.restore(); assert(restored);
+});
+
+test("asset faults compose with earlier fixtures and restore only their own handler", async () => {
+  const handlers = [], calls = [];
+  const context = {
+    route: async (pattern, fn) => { handlers.push(fn); },
+    unroute: async (pattern, fn) => { assert.equal(pattern, "**/*"); handlers.splice(handlers.indexOf(fn), 1); }
+  };
+  const fixture = async () => { calls.push("fixture"); return "fixture"; };
+  await context.route("**/*", fixture);
+  const request = async url => {
+    const chain = handlers.slice().reverse();
+    const dispatch = i => i === chain.length ? Promise.resolve("network") : chain[i]({
+      request: () => ({ url: () => url }), fallback: () => dispatch(i + 1),
+      continue: async () => "network", abort: async () => "aborted"
+    });
+    return dispatch(0);
+  };
+  const fault = await installFault(context, "missing-assets");
+  assert.equal(await request("https://example.test/api/schedule"), "fixture");
+  assert.equal(await request("https://example.test/assets/model.glb"), "aborted");
+  await fault.restore();
+  assert.deepEqual(handlers, [fixture]);
+  assert.equal(await request("https://example.test/assets/model.glb"), "fixture");
+  assert.equal(calls.length, 2);
+});
+
+test("restoring a slow asset fault drains its pending request through the remaining fixture", async () => {
+  let handler, removed = false, fallbackFinished = false;
+  const context = {
+    route: async (pattern, fn) => { handler = fn; },
+    unroute: async (pattern, fn) => { assert.equal(fn, handler); removed = true; }
+  };
+  const fault = await installFault(context, "slow-assets");
+  const request = handler({ request: () => ({ url: () => "https://example.test/assets/model.glb" }),
+    fallback: async () => { assert(removed); fallbackFinished = true; return "fixture"; } });
+  assert.equal(fault.events.length, 1); assert(!fallbackFinished);
+  await fault.restore();
+  assert(fallbackFinished); await request;
 });
 
 test("DOM screening ignores controls inside closed folds but preserves real offscreen findings", () => {

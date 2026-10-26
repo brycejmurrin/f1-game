@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -27,14 +28,31 @@ test("HUD metrics layout AUTO keeps every cluster and lets fitHud adapt", () => 
     "LAYOUT AUTO is a named cycle — fold chip stays text, not agency green");
   assert.match(game, /function hudLayoutNote\(\)/, "the LAYOUT help line names what AUTO resolved to");
   assert.match(game, /" Here AUTO is " \+ m\[1\]\.toUpperCase\(\)/);
-  assert.match(hud, /function resolveMetricsLayout\(\)/);
-  assert.match(hud, /return "full";/);
+  // Behaviour, not source text: the layout resolver and the class sync run over a stub body.
+  const fn = (name, next) => { const a = hud.indexOf("function " + name); return hud.slice(a, hud.indexOf(next, a + 1)); };
+  const bodyClasses = new Set();
+  const body = { classList: { toggle: (c, on) => { if (on) bodyClasses.add(c); else bodyClasses.delete(c); return !!on; },
+    contains: (c) => bodyClasses.has(c) } };
+  const G = {};
+  const ctx = { G, document: { body }, ONBOARD_IDS: { cockpit: 1 }, BCAM_IDS: {}, _fitKey: "", _cssRootKey: "",
+    _hudVis: { map: null, gaps: null, mode: null, prof: null, hideMap: null, hideGaps: null, mapLow: null },
+    _hudCamMode: "", _hudCamProf: "", CamModes: { CAM_MODES: [{ id: "chase" }, { id: "cockpit" }] } };
+  vm.createContext(ctx);
+  vm.runInContext([fn("resolveMetricsLayout", "let _hudLayoutKey"), fn("resolveHudVis", "// The last inputs"),
+    fn("syncHudVisClasses", "function syncHudLayoutClasses"), fn("syncHudCamClasses", "\nfunction ")
+      .replace(/\n\s*if \(typeof HudLayout[^\n]*/, "")].join("\n") +
+    "\n;this.api = { resolveMetricsLayout, syncHudVisClasses, syncHudCamClasses };", ctx, { filename: absSrc("js/ui/hud.js") });
+  const api = ctx.api;
+  for (const want of [undefined, "auto"]) { G.hudMetricsLayout = want; assert.equal(api.resolveMetricsLayout(), "full", `${want} resolves to full`); }
+  for (const want of ["timing", "driver", "compact"]) { G.hudMetricsLayout = want; assert.equal(api.resolveMetricsLayout(), want, "a forced name passes through"); }
   assert.equal(hud.includes("bandCapped"), false);
-  assert.match(hud, /function syncHudVisClasses\(/);
-  const camSync = hud.slice(hud.indexOf("function syncHudCamClasses"), hud.indexOf("function flashSector"));
-  assert.match(camSync, /syncHudVisClasses\(modeId\)/);
-  assert.doesNotMatch(camSync, /if \(key === _hudCamKey\) return;/);
-  assert.match(hud, /hud-hide-map/);
+  // MAP AUTO hides on an onboard camera; MAP ON keeps it; MAP OFF hides it whatever the camera.
+  G.hudMapVis = "auto"; api.syncHudVisClasses("cockpit");
+  assert.ok(bodyClasses.has("hud-hide-map"), "MAP AUTO hides on an onboard camera");
+  G.camMode = 0; G.hudMapVis = "on"; api.syncHudCamClasses();
+  assert.ok(!bodyClasses.has("hud-hide-map"), "the camera sync re-resolves MAP: ON shows it again");
+  G.hudMapVis = "off"; api.syncHudVisClasses("chase");
+  assert.ok(bodyClasses.has("hud-hide-map"), "MAP OFF hides it on the chase camera too");
 });
 
 // A FORCED LAYOUT NAME HIDES; AUTO NEVER DOES, AND NOTHING TOUCHES MAP/GAPS.
@@ -164,9 +182,22 @@ test("a hidden HUD does not keep measuring or painting the map", () => {
   const fit = hud.slice(hud.indexOf("function fitHud"), hud.indexOf("function updateHud"));
   assert.match(fit, /classList.contains\("hud-hidden"\)/);
   const mmSrc = fs.readFileSync(path.join(root, "js/ui/hud-minimap.js"), "utf8");   // #1656: the minimap's own file
-  const mm = mmSrc.slice(mmSrc.indexOf("function drawMinimap"), mmSrc.indexOf("function drawMinimap") + 800);
-  assert.match(mm, /if \(!player \|\| !track \|\| !track\.map\) return;/);
-  assert.match(mm, /classList.contains\("hud-hidden"\)/);
+  const start = mmSrc.indexOf("function drawMinimap");
+  const draw = mmSrc.slice(start, mmSrc.indexOf("\nfunction ", start + 1));
+  const hidden = new Set();
+  const mctx = { G: { player: {}, cars: [], track: { map: {} } }, _mmKey: "measured", document: { body: { classList: { contains: (c) => hidden.has(c) } } } };
+  vm.createContext(mctx);
+  vm.runInContext(draw + "\n;this.draw = drawMinimap;", mctx, { filename: absSrc("js/ui/hud-minimap.js") });
+  hidden.add("hud-hidden");
+  mctx.draw();
+  assert.equal(mctx._mmKey, null, "a hidden HUD stops at the class test and forgets its measurement");
+  hidden.clear(); hidden.add("hud-hide-map"); mctx._mmKey = "measured";
+  mctx.draw();
+  assert.equal(mctx._mmKey, null, "so does a hidden map");
+  mctx.G.player = null; mctx._mmKey = "measured";
+  hidden.clear();
+  mctx.draw();   // would throw on the missing player if it got past the guard
+  assert.equal(mctx._mmKey, "measured", "no player: it returns before it touches anything");
 });
 
 // ONE DEFAULT. The store default is "full" (and settings-export.js's def), but
@@ -210,13 +241,22 @@ test("TIMING and COMPACT drop the tyre readout but never the pit cue or the dwel
 // left KM/H on the float while the LCD said KPH/MPH.
 test("paintInstruments paints SPD via HudReadouts.spdPlate (one MPH|KPH plate)", () => {
   const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
-  const ro = fs.readFileSync(path.join(root, "js/ui/hud-readouts.js"), "utf8");
-  assert.match(ro, /function spdPlate\(/);
-  assert.match(ro, /return \(units \|\| spdUnits\(\)\) === "mph" \? "MPH" : "KPH"/);
+  const roCtx = vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(root, "js/ui/hud-readouts.js"), "utf8") + "\n;this.RO = HudReadouts;", roCtx, { filename: absSrc("js/ui/hud-readouts.js") });
+  const RO = roCtx.RO;
+  assert.deepEqual({ ...RO.spdPlate(160.934, "mph") }, { n: 100, unit: "MPH" }, "one MPH plate: the digits and the unit agree");
+  assert.deepEqual({ ...RO.spdPlate(100, "kmh") }, { n: 100, unit: "KPH" }, "and never KM/H");
   const paint = hud.slice(hud.indexOf("function paintInstruments"), hud.indexOf("function updateHud"));
-  assert.match(paint, /_ro\.spdPlate\(/);
-  assert.match(paint, /plate\.unit/);
-  assert.doesNotMatch(paint, /AppearanceOpts\.unitLabel/);
+  const unitEl = {}, speedEl = {};
+  const pctx = { clamp: (v, a, b) => Math.max(a, Math.min(b, v)), IDLE_RPM: 4000, MAX_RPM: 12000, _redline: false, _rpmPct: -1,
+    document: { body: { classList: { contains: (c) => c === "cockpit-cam" } } }, G: { dashKph: (v) => v },
+    _ro: { spdPlate: (k) => ({ n: Math.round(k), unit: "MPH" }) },
+    els: { speed: speedEl }, hText: (el, s) => { el.text = s; }, speedUnitEl: () => unitEl };
+  vm.createContext(pctx);
+  vm.runInContext(paint + ";this.paintInstruments = paintInstruments;", pctx, { filename: absSrc("js/ui/hud.js") });
+  pctx.paintInstruments({ rpm: 5000, speed: 80 });
+  assert.equal(speedEl.text, "80", "SPD digits come from the shared plate");
+  assert.equal(unitEl.text, "MPH", "and the unit from the same plate — AppearanceOpts is not even in scope here");
 });
 
 test("paintInstruments never paints a negative speed in reverse; the wheel LCD and phone pad clamp to 0 (hunt3 4-F4)", () => {
