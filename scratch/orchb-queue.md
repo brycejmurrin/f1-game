@@ -148,3 +148,9 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 ## 03:44Z (20:44 PT) — ORCH B now session_017qTcNESpx3eDPEaeafcLHW (bus 8b59360 LIVE)
 - Routines: 3-min send_later chain; hourly trig_01BTe5Dn1CzuUDVygNyZAeFM (:47).
 - All live workers told new id. DAD 240cd1e (Bryce yes 8:41 PM PT): #3634 #3636 #3641 #3646 lent to B → new lanes [Sync] B·#3634+#3636 session_01Q7NMyMKQkkGKSsapFWeXmy, [Sync] B·#3641+#3646 session_011NoeBSiKekhnsTdKceqHQF (Opus, READY to:D, no merge). DAD ff828a1: no more D lends without Bryce yes; #3702 is A's.
+## 04:00Z (21:00 PT) — live state
+- Bryce typed here: phone-res restore "merge asap" → #3772 (B·W2·L1 session_019ybSt2aa3oQvrvr5x2PGx2); GAME-SLOT reserved after Pages 8359871b (bus ebf5e8e/4a81ab2; A+D agreed). I merge via merge-gate.
+- #3769 audit marked ready 03:57Z; merge via merge-gate when full tier green (non-game).
+- Bryce approved all 4 audit groups (~21:00 PT): W3·L1 session_01WV8qTS4T8A8zkxdpEi8BQK (orch budget), W3·L2 session_01Y3FmMEiFQ6ZNDhYGWF6CVa (relay names + agent-msg --to), W3·L3 session_01RSyjdqkAX2qpAvF6TEaFmS (wait/archive + lent merge; row 5 MERGE-HOLD until DAD agrees, asked 3d3b610).
+- D merged #3645 #3689 #3712. Lent READY: #3634 #3636 #3641 #3646 #3648 #3736 #3691.
+- Wake sources (audit row 14): bus Monitor + PR subscriptions + hourly trig_01BTe5Dn1CzuUDVygNyZAeFM; tick slowed to 10 min.
