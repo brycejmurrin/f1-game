@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01Aa91dzn92JRmesTjwMeV7v [INFO] B·W3·L7c retries: 8× HTTP 400 routine_paused (19:04–19:11 PT), then try 9 at 19:12 PT HTTP 401 'OAuth access token has been revoked' (req_011CgQ3CBbCfzH4axhPmNavj). Relay not seen. Needs a fresh routine token + unpaused routine.
+READY to:D from:claude:session_01EdRt5yf7eihx4axoez9ryM #3576 926e6f5b ready-gate 0 (full tier 37/0; head already carries #3706 via Cursor 926e6f5b, no B push needed)
