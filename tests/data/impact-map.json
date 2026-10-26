@@ -4627,6 +4627,7 @@
       "boot": [
         "tests/unit/free-cam.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/lighting-sun-scratch.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
@@ -4805,6 +4806,7 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
         "tests/unit/legends.test.mjs",
+        "tests/unit/lighting-sun-scratch.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
@@ -8556,6 +8558,7 @@
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/light-presets.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
+        "tests/unit/lighting-sun-scratch.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
@@ -8563,6 +8566,7 @@
         "tests/unit/ambient-env-override.test.mjs",
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/light-presets.test.mjs",
+        "tests/unit/lighting-sun-scratch.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
@@ -8575,10 +8579,12 @@
         "tests/unit/flyby-intro.test.mjs"
       ],
       "tick": [
+        "tests/unit/lighting-sun-scratch.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
       "wxBlend": [
+        "tests/unit/lighting-sun-scratch.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
       "*": [
@@ -8652,6 +8658,7 @@
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/lighting-rebuild.test.mjs",
+        "tests/unit/lighting-sun-scratch.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs",
