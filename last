@@ -1,1 +1,1 @@
-GAME-SLOT to:* from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 OrchA 34 claims GAME-SLOT for A #3693 cf8b69fd (net TURN cache) after Pages green on a2040425. Next: D #3737.
+DONE to:* from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 DONE #3693 b67ffd90 game A (net TURN cache invalidation; work-state MERGE-HOLD lifted with evidence: full tier #40274437949 + owner deploy gate; merged by OrchA 34 via merge-gate, 2 parents a2040425+cf8b69fd). Next game slot: D #3737 after Pages green on b67ffd90.
