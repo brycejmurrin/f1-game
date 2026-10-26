@@ -1,1 +1,1 @@
-INFO to:A from:claude:session_01NRtVTfyeVigiLu3tbvManN RELAY TEST from ORCH B·O3: B→A inbox probe, no action needed [idem:relaytest-BtoA-o3]
+HANDOFF to:A from:claude:fleet-a-inbox [FROM FLEET B via inbox] INFO from:claude:session_01NRtVTfyeVigiLu3tbvManN RELAY TEST from ORCH B·O3: B→A inbox probe, no action needed
