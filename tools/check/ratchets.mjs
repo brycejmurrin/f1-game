@@ -104,7 +104,136 @@ export const TREE_METRICS = {
     return audit().flatMap((r) => r.tests).filter((t) => !t.skipped && t.verdict === "implicit").length;
   },
   twinDebt: async () => (await (await import("../ci/twinned-specs.mjs")).twinDebt()).length,
+  assertPins: async () => pinCount("assertPins"),
+  rawGameReads: async () => pinCount("rawGameReads"),
+  vmSrcLoads: async () => pinCount("vmSrcLoads"),
 };
+
+/* PIN COUNTERS, DIFF-RELATIVE ON A PR (2026-10-26, system audit §6/§9). Three
+ * shrink-only counts used to live as inline CEILING constants in their tests
+ * (assert-match-ratchet 7314, source-pin-hygiene 308, vm-filename-lint 599) with
+ * no fragment mechanism, and PR CI judges the MERGE REF: two PRs that each added
+ * one site both went red, and so did every other open PR, once either merged —
+ * 74 of 80 red PR runs and 5 of 6 shipped-red trains in three days. Their
+ * ceilings now live in ratchets.json `tree` (raises are ratchets.d fragments),
+ * and outside APEX_RATCHET_ABSOLUTE=1 (set by ci.yml on push and schedule) a row
+ * fails only when the change makes it WORSE than its base: over(head) >
+ * over(base), where the base count is head minus the delta of the files the
+ * change touched (only those blobs are read at the base, so a blob:none clone
+ * fetches a handful, not a thousand). An inherited overage warns and stays green. */
+const RAW_GAME = /game\.js(?:"|'(?!s\b))/g;
+// `assert.ok(x.includes(` is the same source pin as `assert.match(x, /…/)`: counting
+// both keeps "includes() instead of assert.match" from lowering the number.
+const ASSERT_PIN = /assert\.match\b|assert\.ok\(\s*!?\s*[\w$.]+\.includes\(/g;
+export const PIN_METRICS = {
+  assertPins: { dirs: ["tests/unit"], exempt: ["tests/unit/assert-match-ratchet.test.mjs"],
+    count: (t) => (t.match(ASSERT_PIN) || []).length },
+  rawGameReads: { dirs: ["tests"], exempt: ["tests/helpers/game-source.mjs", "tests/unit/source-pin-hygiene.test.mjs"],
+    count: (t) => (t.match(RAW_GAME) || []).length },
+  vmSrcLoads: { dirs: ["tests/unit", "tests/helpers"], exempt: [], skipDir: "fixtures",
+    count: async (t, rel) => {
+      const { lintSource } = await import("./vm-filename-lint.mjs");
+      return lintSource(t, rel).sites.filter((s) => s.kind === "missing" && s.src).length;
+    } },
+};
+export const pinPatterns = { ASSERT_PIN, RAW_GAME };
+
+const pinFile = (m, rel) => /\.(mjs|cjs|js)$/.test(rel) && !m.exempt.includes(rel)
+  && m.dirs.some((d) => rel.startsWith(d + "/")) && !rel.split("/").includes("node_modules")
+  && !(m.skipDir && rel.split("/").includes(m.skipDir));
+
+function pinWalk(m) {
+  const out = [];
+  const walk = (rel) => {
+    for (const e of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
+      const r = rel + "/" + e.name;
+      if (e.isDirectory()) { if (e.name !== "node_modules" && e.name !== m.skipDir) walk(r); }
+      else if (pinFile(m, r)) out.push(r);
+    }
+  };
+  for (const d of m.dirs) if (fs.existsSync(path.join(ROOT, d))) walk(d);
+  return out;
+}
+
+/** Per-file counts of a pin metric on the working tree, as [[rel, n]] (n > 0). */
+export async function pinSites(name) {
+  const m = PIN_METRICS[name];
+  const per = [];
+  for (const rel of pinWalk(m)) {
+    const n = await m.count(fs.readFileSync(path.join(ROOT, rel), "utf8"), rel);
+    if (n) per.push([rel, n]);
+  }
+  return per;
+}
+
+export async function pinCount(name) {
+  return (await pinSites(name)).reduce((a, [, n]) => a + n, 0);
+}
+
+/** How much the working tree's pin count grew since <ref>, reading only the
+ *  files that differ (committed, staged, unstaged, untracked). */
+export async function pinDelta(name, ref) {
+  const m = PIN_METRICS[name];
+  const git = (...a) => cp.execFileSync("git", a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 << 20 });
+  const changed = new Set([
+    ...git("diff", "--name-only", "--no-renames", ref, "--", ...m.dirs).split("\n"),
+    ...git("ls-files", "--others", "--exclude-standard", "--", ...m.dirs).split("\n"),
+  ].filter((f) => f && pinFile(m, f)));
+  let delta = 0;
+  for (const rel of changed) {
+    const abs = path.join(ROOT, rel);
+    if (fs.existsSync(abs)) delta += await m.count(fs.readFileSync(abs, "utf8"), rel);
+    let before = null;
+    try { before = git("show", `${ref}:${rel}`); } catch { /* new in this change */ }
+    if (before !== null) delta -= await m.count(before, rel);
+  }
+  return delta;
+}
+
+/** Where a pin row is judged. `absolute` (APEX_RATCHET_ABSOLUTE=1: ci.yml on push,
+ *  schedule and the Pages call) compares to the ceiling alone. Otherwise the base
+ *  is APEX_RATCHET_BASE_REF (merge-gate's merge worktree names the tip), else the
+ *  merge ref's first parent on a pull_request run (GitHub's refs/pull/N/merge), else
+ *  the merge-base with the deploy branch (a local branch; a sync merge's HEAD^1 is
+ *  NOT the base there), else absolute when no base is reachable. */
+export function ratchetMode(env = process.env) {
+  if (env.APEX_RATCHET_ABSOLUTE === "1") return { mode: "absolute", why: "APEX_RATCHET_ABSOLUTE=1" };
+  const git = (...a) => cp.execFileSync("git", a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  const ok = (ref) => { try { return git("rev-parse", "--verify", "-q", `${ref}^{commit}`); } catch { return null; } };
+  if (env.APEX_RATCHET_BASE_REF) {
+    const sha = ok(env.APEX_RATCHET_BASE_REF);
+    return sha ? { mode: "relative", base: sha, why: `APEX_RATCHET_BASE_REF=${env.APEX_RATCHET_BASE_REF}` }
+      : { mode: "absolute", why: `APEX_RATCHET_BASE_REF ${env.APEX_RATCHET_BASE_REF} is not in this clone` };
+  }
+  if (env.GITHUB_EVENT_NAME === "pull_request" && ok("HEAD^2")) {
+    const sha = ok("HEAD^1");
+    if (sha) return { mode: "relative", base: sha, why: "the merge ref's first parent (the base tip GitHub merged onto)" };
+  }
+  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH]) {
+    if (!ok(ref)) continue;
+    try { return { mode: "relative", base: git("merge-base", ref, "HEAD"), why: `merge-base with ${ref}` }; } catch { /* next */ }
+  }
+  return { mode: "absolute", why: "no base reachable" };
+}
+
+/** One pin row judged by ratchetMode: {metric, value, ceiling, over, base?, inherited, ok, mode, why}. */
+export async function pinVerdict(name, { env = process.env, data = load() } = {}) {
+  const raw = data.tree?.[name];
+  if (raw === undefined) throw new Error(`tests/data/ratchets.json has no tree.${name}`);
+  const { ceiling, slackMax } = entry(raw, `tree ${name}`);
+  const value = await pinCount(name);
+  const mode = ratchetMode(env);
+  const row = { metric: name, value, ceiling, slackMax, over: Math.max(0, value - ceiling), slack: ceiling - value, mode: mode.mode, why: mode.why, inherited: false };
+  if (mode.mode === "absolute") return { ...row, ok: row.over === 0, looseOk: row.slack <= slackMax };
+  let baseCeiling = ceiling;
+  try { const b = loadAt(mode.base).tree?.[name]; if (b !== undefined) baseCeiling = entry(b, `tree ${name} at base`).ceiling; } catch { /* base predates the entry */ }
+  const baseValue = value - await pinDelta(name, mode.base);
+  const baseOver = Math.max(0, baseValue - baseCeiling);
+  const baseLoose = baseCeiling - baseValue > slackMax;
+  return { ...row, base: { ref: mode.base, value: baseValue, ceiling: baseCeiling, over: baseOver },
+    inherited: row.over > 0 && row.over <= baseOver,
+    ok: row.over <= baseOver, looseOk: row.slack <= slackMax || baseLoose };
+}
 
 /** A ceiling entry is a bare number, or {ceiling, slack} when its guard is tighter. */
 function entry(raw, label) {
@@ -331,6 +460,23 @@ export function looseAdvisory(env = process.env) {
   return ev !== "" && ev !== "pull_request";
 }
 
+/** The pin rows of `rows` judged diff-relative (pinVerdict): an overage or a loose
+ *  ceiling the base already had is marked `inherited` and drops out of the verdict,
+ *  so a PR is red only for growth it adds. Other rows pass through unchanged. */
+export async function relativize(rows, { env = process.env, data = load() } = {}) {
+  const out = [];
+  for (const r of rows) {
+    if (!r.tree || !Object.hasOwn(PIN_METRICS, r.metric)) { out.push(r); continue; }
+    const v = await pinVerdict(r.metric, { env, data });
+    const row = { ...r, mode: v.mode, base: v.base };
+    if (v.ok && r.over > 0) Object.assign(row, { over: 0, inherited: `over by ${r.over}, as the base ${v.base.ref.slice(0, 8)} already was (${v.base.over})` });
+    else if (!v.ok && v.base) row.grew = `+${r.over - v.base.over} past the base ${v.base.ref.slice(0, 8)} (${v.base.value} at ceiling ${v.base.ceiling})`;
+    if (v.looseOk && r.slack > r.slackMax) Object.assign(row, { slack: r.slackMax, inherited: row.inherited || `loose (slack ${r.slack}), as the base already was` });
+    out.push(row);
+  }
+  return out;
+}
+
 export function verdict(rows, { looseAdvisory: advisory = false } = {}) {
   const over = rows.filter((r) => r.over > 0);
   const loose = rows.filter((r) => !r.missing && r.slack > r.slackMax);
@@ -425,7 +571,7 @@ export function autoRaiseBlockReason(r, maxRaise = 40) {
 }
 
 export async function autoRaise({ maxRaise = 40, dryRun = false, data = load(), branch } = {}) {
-  const v = verdict(await measure(data));
+  const v = verdict(await relativize(await measure(data), { data }));
   const big = v.over.map((r) => ({ ...r, reason: autoRaiseBlockReason(r, maxRaise) })).filter((r) => r.reason);
   if (big.length) return { ok: false, raised: [], lowered: [], blocked: big };
   if (!v.over.length && !v.loose.length) return { ok: true, raised: [], lowered: [], blocked: [] };
@@ -660,13 +806,19 @@ async function main() {
     return;
   }
   let v;
-  try { v = verdict(await measure(), { looseAdvisory: looseAdvisory() }); }
+  try { v = verdict(await relativize(await measure()), { looseAdvisory: looseAdvisory() }); }
   catch (e) { console.error(`ratchets: ${e.message}`); process.exitCode = 2; return; }
   if (argv.includes("--json")) { console.log(JSON.stringify(v, null, 2)); process.exitCode = v.ok ? 0 : 1; return; }
   // A tree metric's number says something drifted; --offenders says WHERE, which
   // is the half a bare count cannot carry.
-  const where = (r) => (r.tree ? " — breakdown: node tools/check/tree-counts.mjs --offenders" : "");
-  for (const r of v.over) console.log(`OVER   ${r.file} ${r.metric}: ${r.value} > ceiling ${r.ceiling} (+${r.over}) — extract, or raise it deliberately and say why in the commit${where(r)}`);
+  const where = (r) => (!r.tree ? "" : Object.hasOwn(PIN_METRICS, r.metric)
+    ? ` — breakdown: node --test ${{ assertPins: "tests/unit/assert-match-ratchet.test.mjs", rawGameReads: "tests/unit/source-pin-hygiene.test.mjs", vmSrcLoads: "tests/unit/vm-filename-lint.test.mjs" }[r.metric]}`
+    : " — breakdown: node tools/check/tree-counts.mjs --offenders");
+  for (const r of v.over) console.log(`OVER   ${r.file} ${r.metric}: ${r.value} > ceiling ${r.ceiling} (+${r.over}${r.grew ? `, ${r.grew}` : ""}) — extract, or raise it deliberately and say why in the commit${where(r)}`);
+  for (const r of v.rows.filter((x) => x.inherited)) {
+    const msg = `INHERITED ${r.file} ${r.metric}: ${r.value} vs ceiling ${r.ceiling} — ${r.inherited}; not this change's (APEX_RATCHET_ABSOLUTE=1 judges the tree alone)`;
+    console.log(process.env.GITHUB_ACTIONS === "true" ? `::warning file=tests/data/ratchets.json,title=ratchet inherited::${msg}` : msg);
+  }
   for (const r of v.loose) {
     const msg = `LOOSE  ${looseLine(r)} — lower it: node tools/check/ratchets.mjs --update --lower-only`
       + (v.looseAdvisory ? ` (advisory on ${process.env.GITHUB_EVENT_NAME}: an improvement; the PR run is the gate)` : "");
