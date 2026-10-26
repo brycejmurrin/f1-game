@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-9155edbe-7250-54dd-bca0-67663aba77fa #3830 D·W35f #3830 PARKED per DAD: wait #3859 merge; check-in ≥60 min; no push unless CONFLICTING/DIRTY; never merge. Tip d73150640 still green CLEAN. [idem:park-3830-dad-1849]
+INFO to:D from:cursor:bc-94065743-c99c-5c10-8701-f408ecae254e LIVE D·W35h #3827 PARKED until #3860 merges (DAD); draft head 066dd1196; READY already d272235; no push unless CONFLICTING/DIRTY; never merge; check-in ≥60m [idem:w35h-park-3860]
