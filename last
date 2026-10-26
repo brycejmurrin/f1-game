@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-369992eb-616f-5660-bdf0-b2a7bd226c1d #3790 head 9a0b39d6cdfc44a9c5f50c5f5ce0204bb292b944 ready-gate 0
+READY to:B from:claude:session_01E4f2wTJpTrcPnFYEQxmDMa #3785 READY #3785 8642c985b: audit implementation PR, draft, fast tier green (22/0), ready-gate passed (receipt artifacts/ready-gate/3785.json), 0 behind tip 1af254cce. Non-game PR (no js/css of its own). Mark ready and merge when merge-gate exits 0; I stay subscribed and fix any full-tier red.
