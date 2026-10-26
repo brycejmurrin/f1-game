@@ -72,11 +72,13 @@ Session shape — thirteen rules that control wall time, waiting and handoff:
 11. Never hand-edit a generated file: the `@gen-shell` blocks of `index.html` and `sw.js`, `version.json`, `package.json`'s test scripts (source `tests/groups.json`), `tools/README.md`, `js/roster.js`, `tools/carview.html`, `js/track/circuit-meta.js`, `CHANGELOG.md` (fragments go in `docs/changelog.d/`), `tests/data/ratchets.json` and `ratchets.d/*.json` (`protect-files.sh` enforces it).
     Edit the SOURCE, then `npm run gen` (`gen:check` names drift). No doc quotes the ladder's sizes — `node tools/gen/gen-ladder-figures.mjs` prints them.
 12. HAND OFF THROUGH GIT: commit and push `cursor/<topic>-<hash>` at every verified checkpoint and BEFORE any wait over ~10 min — a reclaimed container loses an unpushed branch.
+    Commit in two calls: stage in its own command, then `git commit` in the next — the commit hook reads the index as it is when `git commit` is typed, while `test:guards` reads the working tree, so the two agree only when nothing is left unstaged; never chain an edit or a `git add` into the commit call. Push with `git push -u origin <branch>` alone, no output pipe.
     Open a DRAFT PR into the deploy branch at the FIRST commit, before the work is verified (GitHub MCP, `draft: true`; a draft gets CI only with the `run-ci` label, ready the full tier; `deploy.mjs --pr` is the gated, ready form).
     The body (`.github/pull_request_template.md`) IS the session log, written for an agent arriving cold: Goal, Plan (a `- [ ]` checklist, one verifiable step per item, exactly one marked now:), Status (`node tools/ci/session-status.mjs --pr`), Verified / Not run, Next step.
-    Keep the Plan live with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line), add discovered work, strike a dropped item with why, never delete one; refresh Status at every push. A wait on something outside the PR is a Plan item, never a hold. Before starting, read `who-is-on-it.mjs` and the open draft PRs; to continue one, check out its branch.
+    Keep the Plan live with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line), add discovered work, strike a dropped item with why, never delete one; refresh Status at every push. The Plan's last item is the template's gate-exempt `- [ ] READY to …` line, never a "mark ready" step. A wait on something outside the PR is a Plan item, never a hold. Before starting, read `who-is-on-it.mjs` and the open draft PRs; to continue one, check out its branch.
 13. WATCH CI AFTER EVERY CODE PUSH: subscribe on the PR — Claude Code `subscribe_pr_activity`, Cursor `subscribe_github_ci` + `subscribe_github_pr`; never call a name your host does not list (per-host tools: skill `agent-fleet` `references/adapters.md`).
     Claude Code: a `Monitor` on `node tools/ci/ci-watch.mjs --sha <pushed sha> --timeout 30 --failures-only` (a red job and the final `= ci` line only; re-arm on expiry until the `= ci …` line; `--pages` after a deploy-branch push), and ONE check-in timer (`send_later` / `subscribe_timer`) 50–55 min out at an odd minute, inside the 1 h prompt cache — the subscription can drop `check_run` completions, so the timer is not optional (cadence pending Bryce; was 15 min / 1 h). Re-arm it until the PR is merged or closed, or you sent READY. No shell-poll loops; Cursor: at most one `ci-watch.mjs --once`.
+    The sanctioned wake signals are these four, nothing else: the PR subscription (call `subscribe_pr_activity` again after draft→ready; it has died at the flip), ONE `send_later` 50–55 min out, the `ci-watch.mjs --sha` Monitor, and `node tools/ci/wait-for.mjs --merged <sha>` as one background task for the merge. A ready flip on a dirty PR starts no CI: sync first (`needs-sync.mjs`, `sync-pr.mjs`); `ready-gate.mjs` refuses a CONFLICTING/DIRTY head.
     `ci-watch.mjs` takes the newest run per workflow (rule 8's dedupe is not a red). A red job is work NOW — agent `ci-red-triage`, fix, push (skill `steward`); no `= ci` line means still running, not green.
     PR CI and Pages are separate verdicts ("live" needs Pages and `version.json`; skill `steward` §7). Never report done with a red or pending check.
 
@@ -141,7 +143,7 @@ WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change,
 
 Hooks (full list: `.claude/rules/claude-config.md`): `session-start.sh` installs deps; `protect-files.sh` blocks generated-file
 and live-run source edits (`touch .claude/allow-protected` lifts the generated-file rules only); `bash-guard.sh` runs
-the guards on the STAGED commit (`git add`, then `git commit`) and refuses `pkill -f`, PID kills and run cancels.
+`test:guards` before a commit (the two-call procedure: rule 12) and refuses `pkill -f`, PID kills and run cancels.
 
 ## Cursor Cloud specific instructions
 `.cursor/environment.json` bootstraps every Cloud VM (`mcpServerAllowlist` = `.mcp.json`'s six servers; plugin MCPs use
@@ -166,7 +168,7 @@ nothing without `--push`; recovery in check-changes).
 `verify-track` → push; `--pr` opens a PR, `--plan` prints the union, `--gate-only` gates and stops, `--train` adds the
 nightly rota). It prints the branch's last ci/pages conclusions first, so an INHERITED red is visible.
 Shipping is a RELEASE TRAIN: a push to the deploy branch starts `pages.yml`, which gates the tip once and publishes
-exactly that commit (dispatch = "deploy now"; gated publish ~12 min median, p90 20–34, measured 2026-10-26; one running
+exactly that commit (dispatch = "deploy now"; gated publish ~20 min median, p90 ~27, 23 trains measured 2026-10-26; the macOS Metal leg adds a median 9 min; one running
 + one pending train; never dual-dispatch Pages). "Live?" = ancestor of the live `apex-sha` (agent `deploy-research`;
 `docs/TESTING.md` §Release train).
 

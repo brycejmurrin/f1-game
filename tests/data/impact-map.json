@@ -4517,6 +4517,7 @@
     "js/circuits/spa.js": {
       "*": [
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/fleet-owner.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
     },
