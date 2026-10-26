@@ -1311,6 +1311,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/title-flow.test.mjs",
   "tests/unit/title-home-scene-prepaint.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
+  // A·W50: TitleWarm runs the menu's race prep + program warm on an idle title, once per update on a phone (apex26.titleWarm = the build); never under Save-Data, a 3D Home or off the title (real module in a VM).
+  "tests/unit/title-warm.test.mjs",
   // three's per-frame tick once per drawn frame on WebGL2 (the pump), WebGPU untouched: the real pumpAnimation over a fake three Animation, and the install gate.
   "tests/unit/tlx-anim-pump.test.mjs",
   "tests/unit/tlx-car-shadow-cpu.test.mjs",
