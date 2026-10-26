@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "7c996b1445ac9c0a0690a98c133d13bcf5090ccebe84ca41194efe218e76ef4c",
+  "sourceDigest": "7e03dda5b45499389ac528391e9eb10f33abf985d915f6c9bbda852f77e38f3e",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -858,15 +858,15 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.12,
       "target": [
-        3038.57,
-        378.05,
-        90.34
+        3036.5,
+        377.79,
+        92.55
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "docs/tracks/fuji.md §4 skyline viewing station",
       "projectedFrac": 0.89832,
-      "nearestRoadDistanceM": 2449.6,
-      "viewDistanceM": 3193.5,
+      "nearestRoadDistanceM": 2447.9,
+      "viewDistanceM": 3191.3,
       "source": "tests/data/landmarks/fuji.json; js/circuits/scenery/fuji.js"
     },
     {
