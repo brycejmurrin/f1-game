@@ -13,6 +13,7 @@ import selectors
 import ssl
 import subprocess
 import time
+from urllib.parse import quote, quote_plus
 
 
 ENDPOINT = "wss://codex-cloud-backend.chatgpt.com/"
@@ -461,6 +462,7 @@ class Redactor:
         if isinstance(value, dict):
             header = normalized(value.get("name", value.get("headerName", ""))) in SECRET_HEADERS
             for key, child in value.items():
+                self.collect(key)  # Known-format credentials can also be echoed as map keys.
                 self.collect(child, secret or sensitive_key(key)
                              or header and normalized(key) in {"value", "headervalue"})
         elif isinstance(value, list):
@@ -486,9 +488,18 @@ class Redactor:
     def redact(self, value):
         if isinstance(value, dict):
             header = normalized(value.get("name", value.get("headerName", ""))) in SECRET_HEADERS
-            return {key: MARKER if (sensitive_key(key) or header and normalized(key) in {"value", "headervalue"})
-                    and child not in (None, "") else self.redact(child)
-                    for key, child in value.items()}
+            result, reserved = {}, set(value)
+            for ordinal, (key, child) in enumerate(value.items(), 1):
+                clean_key = self.redact(key)
+                if clean_key != key and (clean_key in result or clean_key in reserved):
+                    label, suffix = clean_key, ordinal
+                    while clean_key in result or clean_key in reserved:
+                        clean_key = f"{label} [key {suffix}]"
+                        suffix += 1
+                result[clean_key] = (MARKER if (sensitive_key(key) or header
+                                    and normalized(key) in {"value", "headervalue"})
+                                    and child not in (None, "") else self.redact(child))
+            return result
         if isinstance(value, list):
             if len(value) == 2 and isinstance(value[0], str) and normalized(value[0]) in SECRET_HEADERS:
                 return [value[0], MARKER]
@@ -506,7 +517,8 @@ class Redactor:
                     pass
             if self._literal_count != len(self.values):
                 variants = {variant for secret in self.values if len(secret) >= 8 and secret != MARKER
-                            for variant in (secret, json.dumps(secret, ensure_ascii=False)[1:-1])}
+                            for variant in (secret, json.dumps(secret, ensure_ascii=False)[1:-1],
+                                            quote(secret, safe=""), quote_plus(secret, safe=""))}
                 self._literal_pattern = (re.compile("|".join(map(re.escape, sorted(variants, key=len, reverse=True))))
                                          if variants else None)
                 self._literal_count = len(self.values)

@@ -136,6 +136,29 @@ assert short.redact('saved data') == 'saved data'
 assert 'password=a' not in short.redact('password=a')
 `));
 
+test("credential map keys redact without dropping collisions or mutating schema labels", () => fixture(String.raw`
+from urllib.parse import quote
+first = 'synthetic-opaque-"key-credential-123456'
+second = 'ghp_' + 'Q' * 36
+data = [{first: 'left-value', second: 'right-value', 'schemaField': 'unchanged', m.MARKER: 'existing-marker-value'},
+        {'apiKey': first}, {'nested': json.dumps({first: 1, second: 2})},
+        {'url': 'https://example.invalid/?credential='+quote(first, safe='')}]
+redactor = m.Redactor()
+redactor.collect(data)
+clean = redactor.redact(data)
+serialized = json.dumps(clean)
+assert first not in serialized and second not in serialized
+assert quote(first, safe='') not in serialized
+assert set(clean[0].values()) == {'left-value', 'right-value', 'unchanged', 'existing-marker-value'}
+assert len(clean[0]) == 4
+assert clean[0]['schemaField'] == 'unchanged'
+assert clean[0][m.MARKER] == 'existing-marker-value'
+assert clean[1]['apiKey'] == m.MARKER
+assert set(json.loads(clean[2]['nested']).values()) == {1, 2}
+assert len(json.loads(clean[2]['nested'])) == 2
+assert redactor.redact(data) == clean
+`));
+
 test("cursor failures, scope changes and mutating methods fail closed", () => fixture(String.raw`
 progress = {}
 m.next_page({'data': [], 'nextCursor': 'repeat'}, progress)

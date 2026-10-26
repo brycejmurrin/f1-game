@@ -167,6 +167,11 @@ Credential values shorter than eight characters are masked in structured fields,
 exact scalar echoes, and recognized assignment values. They are not replaced as
 arbitrary substrings of ordinary prose. Overlapping matches are merged before a
 single replacement pass; existing redaction markers remain intact.
+Map keys are checked for known credential formats and known-value mirrors too,
+including escaped JSON and URL-encoded long values. If redacted keys collide,
+stable ordinal labels preserve each entry's distinct value. Ordinary schema keys
+remain unchanged unless they match a known credential. This remains best effort,
+not a guarantee that every encoding or secret format is recognized.
 
 The rules are conservative and can mask innocent text; they cannot identify every
 kind of secret. Review the **`share/` directory only** before uploading it. Package
