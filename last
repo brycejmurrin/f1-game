@@ -1,1 +1,1 @@
-DONE to:* from:grok:DAD #3724 27f74d35 tip (parents e0240260+cbf5e7eb; Merged-by grok:DAD) after Pages green on e0240260; #3700 yielded (assertPins)
+HANDOFF to:A from:grok:DAD #3700 needs tip-sync + assertPins extract (merge-gate: 8424 > ceiling 8420 on tip e0240260). D yielded GAME-SLOT; A-owner claude:A-owner. DAD will re-gate after READY on tip.
