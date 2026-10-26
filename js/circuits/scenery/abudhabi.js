@@ -494,9 +494,11 @@
         // vertices (Asymptote), not sparse multi-colour neon beams.
         {
           const nA = shellClearances.length, step = 0.016 / (nA - 1);
-          // 9 laterals (was 5): denser diamond cells so the shell reads as a
+          // 8 laterals (was 5): denser diamond cells so the shell reads as a
           // continuous veil silhouette from the S/F orbit, not a skeleton.
-          const lats = [-24, -18, -12, -6, 0, 6, 12, 18, 24];
+          // Kept ≤ baseline +0.5 % so this PR does not touch props-tris-baseline
+          // (held by #3819 for estoril).
+          const lats = [-22.5, -16, -9.5, -3, 3, 9.5, 16, 22.5];
           const crown = (i, lat) => {
             const ak = anchor(K(0.872 + i * step), 1, 0);
             return vadd(vadd(vadd(ak.c, ak.r, lat - 8), ak.u, shellClearances[i] + shellThick * 0.5),
@@ -588,34 +590,34 @@
           modelGroup("yas-hotel-gridshell", {
             center: vadd(aLeg.c, aLeg.u, 22), size: [12, 46, 40], basis: bLeg,
           }, (stage) => {
-            const rows = 8, cols = 5;
+            const rows = 7, cols = 4;
             stage._mat = MAT.METAL;
             for (let row = 0; row < rows; row++) {
               for (let col = 0; col < cols; col++) {
-                const node = vadd(vadd(aLeg.c, aLeg.u, 4 + row * 4.8), aLeg.t, (col - 2) * 5.5);
+                const node = vadd(vadd(aLeg.c, aLeg.u, 5 + row * 5.2), aLeg.t, (col - 1.5) * 6.5);
                 if (col > 0) {
-                  const prev = vadd(vadd(aLeg.c, aLeg.u, 4 + row * 4.8), aLeg.t, (col - 3) * 5.5);
+                  const prev = vadd(vadd(aLeg.c, aLeg.u, 5 + row * 5.2), aLeg.t, (col - 2.5) * 6.5);
                   const mid = [(prev[0] + node[0]) / 2, (prev[1] + node[1]) / 2, (prev[2] + node[2]) / 2];
-                  addBox(stage, mid, [0.22, 0.22, 5.5], STEEL_DK, bLeg);
+                  addBox(stage, mid, [0.22, 0.22, 6.5], STEEL_DK, bLeg);
                 }
                 if (row > 0) {
-                  const below = vadd(vadd(aLeg.c, aLeg.u, 4 + (row - 1) * 4.8), aLeg.t, (col - 2) * 5.5);
+                  const below = vadd(vadd(aLeg.c, aLeg.u, 5 + (row - 1) * 5.2), aLeg.t, (col - 1.5) * 6.5);
                   const mid = [(below[0] + node[0]) / 2, (below[1] + node[1]) / 2, (below[2] + node[2]) / 2];
-                  addBox(stage, mid, [0.22, 4.8, 0.22], STEEL_DK, bLeg);
+                  addBox(stage, mid, [0.22, 5.2, 0.22], STEEL_DK, bLeg);
                 }
               }
             }
             stage._mat = MAT.GLASS;
             for (let row = 0; row < rows - 1; row++) {
               for (let col = 0; col < cols - 1; col++) {
-                const c0 = vadd(vadd(aLeg.c, aLeg.u, 4 + row * 4.8 + 2.4), aLeg.t, (col - 1.5) * 5.5);
-                addBox(stage, c0, [0.14, 4.4, 5.0], fritTint(LED_CYCLE[(row + col) % 3]), bLeg);
+                const c0 = vadd(vadd(aLeg.c, aLeg.u, 5 + row * 5.2 + 2.6), aLeg.t, (col - 1) * 6.5);
+                addBox(stage, c0, [0.14, 4.8, 5.8], fritTint(LED_CYCLE[(row + col) % 3]), bLeg);
               }
             }
             stage._mat = MAT.METAL;
             for (let row = 0; row < rows; row++) {
               for (let col = 0; col < cols; col++) {
-                const node = vadd(vadd(aLeg.c, aLeg.u, 4 + row * 4.8), aLeg.t, (col - 2) * 5.5);
+                const node = vadd(vadd(aLeg.c, aLeg.u, 5 + row * 5.2), aLeg.t, (col - 1.5) * 6.5);
                 addBox(stage, node, [0.5, 0.5, 0.5], LED_CYCLE[(row + col) % 3], bLeg);
               }
             }
