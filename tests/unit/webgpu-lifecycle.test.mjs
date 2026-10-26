@@ -51,6 +51,47 @@ const LIGHT_SBO_BYTES =
   Number(/LIGHT_STRIDE_BYTES:\s*(\d+)/.exec(CHUNKS_SOURCE)[1]) *
   Number(/MAX_LIGHTS:\s*(\d+)/.exec(CHUNKS_SOURCE)[1]);
 
+test("WGX black-output probe ignores opaque alpha and resets on RGB light in any copied row", async () => {
+  // Exercise the production readback decision and half-float decoder with the
+  // real 256-byte row pitch; the GPU mock cannot establish rendered pixels.
+  const decoder = WGX_MAIN_SOURCE.slice(WGX_MAIN_SOURCE.indexOf("  function _f16to32("),
+    WGX_MAIN_SOURCE.indexOf("  // Column-major 4×4 multiply"));
+  const probe = WGX_MAIN_SOURCE.slice(WGX_MAIN_SOURCE.indexOf("    function _readOutputProbe() {"),
+    WGX_MAIN_SOURCE.indexOf("    function _jsStrike("));
+  const constants = WGX_MAIN_SOURCE.match(/const OUT_PROBE_MAX =[^\n]+/)[0];
+  const pixels = new Uint16Array(512);
+  for (let row = 0; row < 4; row++) {
+    for (let pixel = 0; pixel < 4; pixel++) pixels[row * 128 + pixel * 4 + 3] = 0x3c00; // f16 alpha 1
+  }
+  let surrenders = 0, unmaps = 0;
+  const context = vm.createContext({
+    GPUMapMode: { READ: 1 },
+    _outProbeBuf: {
+      mapState: "unmapped", mapAsync: () => Promise.resolve(),
+      getMappedRange: () => pixels.buffer, unmap: () => { unmaps++; },
+    },
+    _outputBlackSurrender: () => { surrenders++; },
+  });
+  vm.runInContext(`let _outProbePending = false, _outBlack = 0; ${constants}\n${decoder}\n${probe}`, context,
+    { filename: absSrc("js/render/webgpu/wgx.js") });
+  const readPatch = async () => {
+    vm.runInContext("_outProbePending = true; _readOutputProbe();", context);
+    await new Promise(setImmediate);
+  };
+  await readPatch(); await readPatch();
+  assert.equal(vm.runInContext("_outBlack", context), 2, "opaque black increments the failure counter");
+  assert.equal(surrenders, 0, "two dark patches do not surrender");
+  pixels[3 * 128 + 3 * 4 + 2] = 0x3c00; // bright blue in the last pixel of the fourth row
+  await readPatch();
+  assert.equal(vm.runInContext("_outBlack", context), 0, "RGB light resets consecutive failures");
+  pixels[3 * 128 + 3 * 4 + 2] = 0;
+  await readPatch(); await readPatch();
+  assert.equal(surrenders, 0, "a bright patch restarts the three-frame budget");
+  await readPatch();
+  assert.equal(surrenders, 1, "three consecutive opaque black patches trigger recovery");
+  assert.equal(unmaps, 6, "every patch releases its readback mapping");
+});
+
 
 test("WGX deferred seams expose WGXShadow / WGXChunked / WGXPost globals", () => {
   function evalSeam(rel, source, exportName, { needsStorage = false } = {}) {

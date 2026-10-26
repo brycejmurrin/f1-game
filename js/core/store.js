@@ -500,7 +500,11 @@ const GameStore = (function () {
   // false holds a value NEWER than the disk's copy (the quota refused it), so
   // restore must prefer it even though the key is present on disk.
   function mirrorQueue(key, json, lsOk, options) {
-    if (!careerWriteStatus(key).ok || typeof indexedDB === "undefined" || !indexedDB) return;
+    // Capability discovery itself can throw under restricted storage policies.
+    // The optional mirror must not interrupt a completed primary write.
+    if (!careerWriteStatus(key).ok) return;
+    try { if (typeof indexedDB === "undefined" || !indexedDB) return; }
+    catch (_) { return; }
     _mirrorKnown.add(key);
     const prior = _mirrorPending.get(key);
     // A refused delete needs a tombstone: removing its mirror would leave the

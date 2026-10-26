@@ -60,7 +60,9 @@
         node, ratio, maxUV,
         sample(luv) { return node.sample(min(vec2(luv).mul(ratio), maxUV)); },
         get value() { return node.value; },
-        set value(t) { node.value = t; },
+        // Lazy post blocks bind their targets after the frame's sync().
+        // Update this slot now so its first draw uses the new logical rect.
+        set value(t) { node.value = t; syncTexture(w); },
       };
       wrappers.push(w);
       return w;
@@ -73,19 +75,20 @@
     }
     function layoutOf(t) { return (t && layouts.get(t)) || null; }
 
-    /** Push every wrapper's bound-texture rect into its uniforms (once per frame). */
-    function sync() {
-      for (let i = 0; i < wrappers.length; i++) {
-        const w = wrappers[i];
-        const L = layouts.get(w.node.value);
-        if (L) {
-          w.ratio.value.set(L.lw / L.pw, L.lh / L.ph);
-          w.maxUV.value.set((L.lw - 0.5) / L.pw, (L.lh - 0.5) / L.ph);
-        } else {
-          w.ratio.value.set(1, 1);
-          w.maxUV.value.set(1, 1);
-        }
+    function syncTexture(w) {
+      const L = layouts.get(w.node.value);
+      if (L) {
+        w.ratio.value.set(L.lw / L.pw, L.lh / L.ph);
+        w.maxUV.value.set((L.lw - 0.5) / L.pw, (L.lh - 0.5) / L.ph);
+      } else {
+        w.ratio.value.set(1, 1);
+        w.maxUV.value.set(1, 1);
       }
+    }
+
+    /** Refresh layouts changed by resize before the frame's draws. */
+    function sync() {
+      for (let i = 0; i < wrappers.length; i++) syncTexture(wrappers[i]);
     }
 
     return { enabled, view, uv, tex, layout, layoutOf, sync, wrapperCount: () => wrappers.length };

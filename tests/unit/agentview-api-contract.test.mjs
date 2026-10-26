@@ -57,6 +57,43 @@ function evalGlobals(files, extras) {
   return (name) => vm.runInContext(name, ctx);
 }
 
+test("car visibility and raster follow elevated and banked road surfaces", () => {
+  function capture(elevation, onboard) {
+    const Tracks = {
+      sample(t, s, out) {
+        out.p = [0, elevation, s]; out.t = [0, 0, 1]; out.r = [1, 0, 0]; out.hw = 6;
+      },
+      banking(t, s, x) { return { dy: x * 2 }; },
+      curvature() { return 0; },
+    };
+    const get = evalGlobals(["js/agent/agentview-raster.js", "js/agent/agentview-corners.js",
+      "js/agent/agentview.js"], { Tracks, CamModes: { CAM_MODES: [{ id: "chase" }] } });
+    const M4 = get("M4");
+    const eye = onboard ? [1, elevation + 2.55, -0.2] : [1, elevation + 6, -12];
+    const target = [1, elevation + 2.6, 10];
+    const view = new Float32Array(16), proj = new Float32Array(16), vp = new Float32Array(16);
+    M4.lookAtTo(view, eye, target, [0, 1, 0]);
+    M4.perspectiveTo(proj, Math.PI / 3, 2, 0.3, 3000);
+    M4.mulTo(vp, proj, view);
+    const player = { px: 1, pz: 0, s: 0, x: 1, head: 0, speed: 0, isPlayer: true };
+    const G = { wrapS: s => ((s % 1000) + 1000) % 1000,
+      track: { total: 1000, n: 250, def: { id: "elevated" }, props: { list: [] } },
+      player, cars: [player, { s: 15, x: 2, code: "AI" }], camEye: eye, camTgt: target,
+      camFov: 60, camMode: 0, gfx: { aspect: 2 }, frame: { eye, viewProj: vp } };
+    const api = get("AgentView").create(G);
+    return { visible: api.scene({ visible: true }), raster: api.render({ what: "view" }) };
+  }
+  for (const onboard of [false, true]) {
+    const flat = capture(0, onboard), raised = capture(100, onboard);
+    assert.equal(JSON.stringify(raised.visible.cars.map(c => c.screenPct)), JSON.stringify(flat.visible.cars.map(c => c.screenPct)),
+      "moving road and camera together must preserve mirrored-player and Frenet-rival projections");
+    assert.equal(JSON.stringify(raised.raster.grid.lines), JSON.stringify(flat.raster.grid.lines));
+    if (onboard) assert.equal(raised.raster.coveragePct.player, undefined,
+      "the banked player box containing the onboard eye must be excluded");
+    else assert.ok(raised.raster.coveragePct.player > 0, "the elevated player must paint in chase view");
+  }
+});
+
 test("agentview-raster.js exposes create() and the three rasters", () => {
   const get = evalGlobals(["js/agent/agentview-raster.js"]);
   const AgentRaster = get("AgentRaster");

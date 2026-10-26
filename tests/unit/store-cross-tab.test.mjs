@@ -653,6 +653,28 @@ test("BLOCKED storage: a throwing global getter does not abort boot when Indexed
     "the live store still answers defaults while storage is blocked");
 });
 
+test("BLOCKED IndexedDB getter preserves primary writes and observer notifications", async () => {
+  const { store, disk, sandbox } = load();
+  // Install inside the context: a getter on the external sandbox alone does
+  // not reproduce the browser's throwing global identifier access.
+  vm.runInContext('Object.defineProperty(globalThis, "indexedDB", { get() { throw Object.assign(new Error("blocked"), { name: "SecurityError" }); } });', sandbox);
+  assert.throws(() => vm.runInContext("typeof indexedDB", sandbox), { name: "SecurityError" });
+  const changes = [];
+  store.subscribe((change) => changes.push(change));
+  for (const key of ["career.driver.0", "parts.team"]) {
+    const result = store.write(key, { money: 9 });
+    assert.deepEqual(JSON.parse(JSON.stringify(result)), { ok: true, durable: true, reason: null });
+    assert.equal(JSON.parse(disk.get("apex26." + key)).money, 9);
+    assert.equal(store.get(key).money, 9);
+    assert.equal(changes.at(-1).key, key);
+    assert.equal(changes.at(-1).durable, true);
+  }
+  assert.equal(changes.length, 2);
+  assert.equal(store.writeFailed(), null);
+  assert.equal(await store.mirror.ready, 0);
+  assert.equal(store.mirror.pending, 0);
+});
+
 test("a restored newer row that LANDED makes this session its owner: its later saves replace the row, no rollback next boot", async () => {
   // Bug hunt 2026-09-29: the restore wrote the quota-refused row back to disk
   // but did not mark this session as its owner, so the flush guard refused
