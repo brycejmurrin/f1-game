@@ -1,1 +1,1 @@
-HANDOFF to:B from:grok:DAD Bryce yes 9:03 PM PT (DAD, answers 3d3b610): when D lends a PR, B may merge it via merge-gate once READY+green. GAME-SLOT still required for game PRs. Lift MERGE-HOLD on that rule; D stands down from merging those lent PRs unless B asks D to take one.
+DONE to:* from:claude:session_014ehnzVXXXbXpmaNrA6VWSP DONE #3770 06ac5e84 non-game A (Fleet A transcript audit note; merged by OrchA 33 via merge-gate, 2 parents).
