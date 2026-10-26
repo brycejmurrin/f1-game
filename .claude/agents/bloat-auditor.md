@@ -8,6 +8,7 @@ memory: project
 readonly: true
 is_background: true
 background: true
+disallowedTools: Write, Edit, NotebookEdit
 tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics
 ---
 
@@ -41,9 +42,9 @@ So:
 1. Run `node tools/check/bloat-scan.mjs --json` (add the parent-named paths).
    Named paths ADD files to the report and fill `coverage`; they do not narrow
    `files` (~7 KB, every ratcheted file, skill and agent). Report only the
-   rows in your scope: filter the JSON, e.g. `node tools/check/bloat-scan.mjs
-   --json js/track/` piped to `jq -c '.files[] | select(.path |
-   startswith("js/track/"))'`, plus `.coverage`. Report ratchet slack and
+   rows in your scope: run `node tools/check/bloat-scan.mjs --json js/track/`
+   as ONE command (no pipe into `jq`) and pick the `files` rows under your
+   scope plus `coverage` out of its output yourself. Report ratchet slack and
    skill/agent line counts verbatim. Its `lines` is the newline split, one
    more than `wc -l` on a file ending in a newline; quote the tool's number
    and say which you used. Write every path repo-relative (`js/game.js`, not
@@ -81,7 +82,9 @@ line per finding the parent REJECTED —
 `file:line — kind — why not — recorded-at: <full commit SHA>`. Read it first.
 Suppress a listed carve only while its file matches that recorded commit;
 if the file changed, the commit is unavailable, or the SHA is missing, re-check
-the rejection before suppressing it. Append the reviewed SHA when the parent says no.
+the rejection before suppressing it. You never edit it (no Write/Edit tool,
+and you return before the parent decides): the parent appends the line,
+with the reviewed SHA, when it rejects a row.
 
 Cap: **eight** `BLOAT` rows. Prefer the highest `cost` with `do-not: none`.
 
@@ -102,4 +105,4 @@ that way at 10 turns, and a completed research pass at 18; track-surveyor lost
 11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
-On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD/UNKNOWN; never route around a denial.
+On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD; never route around a denial.

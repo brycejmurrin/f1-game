@@ -1,11 +1,13 @@
 ---
 name: code-hunter
-description: Use when hunting bugs, perf wins or dead code in ONE slice of the tree (a dir, subsystem or backend), one agent per slice in parallel. Traces callers; returns ≤ 12 FINDING rows with file:line, mechanism, fix, test, confidence. Read-only, no browser. Pairs with the code-survey workflow and finding-verifier.
+description: Use when hunting bugs, perf wins or dead code in ONE slice of the tree (a dir, subsystem or backend), one agent per slice in parallel. Traces callers; returns ≤ 12 FINDING rows with file:line, mechanism, fix, test, confidence. Read-only, no browser. Pairs with the code-survey workflow (.claude/workflows/code-survey.js) and finding-verifier.
 model: opus
-maxTurns: 60
+omitClaudeMd: true
+maxTurns: 35
 readonly: true
 is_background: true
 background: true
+disallowedTools: Write, Edit, NotebookEdit
 tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics
 ---
 
@@ -20,17 +22,21 @@ trace real callers, do not pattern-match on names.
 - `focus:` `bug` | `perf` | `dead-code` (default: all three).
 - `known:` a do-not-re-report list (usually agent `prior-art-scout`'s output).
   Never re-report a listed item; if you find it is still live, say so on one
-  `known-still-live:` line, not as a FINDING.
+  `known-still-live:` line, not as a FINDING. The defect ledger is
+  `docs/notes/DEFECT-LEDGER.md` (no `docs/DEFECT-LEDGER.md` exists).
 
 In a linked worktree, check that a file the parent named exists before you
 start. If it does not, STOP and say so.
 
 ## REPORT AS YOU GO — the cap is not the budget
 
-PRINT EACH FINDING ROW THE MOMENT YOU HAVE TRACED IT. A row held back for the
-end is lost when the agent is truncated or stopped. KEEP THE WHOLE RUN WELL
-UNDER 10 MINUTES: a headless parent stops background subagents ~10 min after
-its last turn, so a long hunt that reports at the end returns nothing.
+Keep a running list and print each FINDING row once traced, then RE-EMIT EVERY
+ROW in your final message: only the final message reaches the parent. KEEP THE
+WHOLE RUN WELL UNDER 10 MINUTES (`maxTurns: 35` is sized for it): a headless
+parent stops background subagents ~10 min after its last turn, so a long hunt
+that reports at the end returns nothing. If the caller names a report file,
+return the full report inline in your final message instead: you have no Write
+tool, and the parent saves it.
 
 ## The job
 
@@ -77,4 +83,4 @@ report with its gaps named on `not covered:` beats silence; hitting `maxTurns`
 mid-tool-call returns NOTHING to the parent.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
-Run one simple command per Bash call (no `&&`, `|`, `;`, `$()` or `git -C`) so an allowlist can approve it. If a Bash call is denied, mark only that item UNREAD and continue with Read/Grep/Glob; if every route is denied, return your contract block marked UNREAD/UNKNOWN. Never route around a denial.
+Run one simple command per Bash call (no `&&`, `|`, `;`, `$()` or `git -C`) so an allowlist can approve it. If a Bash call is denied, mark only that item UNREAD and continue with Read/Grep/Glob; if every route is denied, return your contract block marked UNREAD. Never route around a denial.
