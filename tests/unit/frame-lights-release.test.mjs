@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -26,7 +27,8 @@ function load() {
     Tracks: { sample(_t, s, out) { out.p[0] = 0; out.p[1] = 0; out.p[2] = s; out.t[0] = 0; out.t[2] = 1; out.r[0] = 1; out.r[2] = 0; } },
   });
   vm.runInContext(source.replace(anchor,
-    "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release, pool: () => _tlPool.slice(), sel: () => _tlSel.slice() };"), ctx);
+    "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release, pool: () => _tlPool.slice(), sel: () => _tlSel.slice() };"), ctx,
+    { filename: absSrc("js/lighting/frame-lights.js") });
   return vm.runInContext("FrameLights", ctx);
 }
 
