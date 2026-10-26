@@ -956,6 +956,15 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/ci/js-debugger-smoke.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/junit-failed.mjs",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only"
