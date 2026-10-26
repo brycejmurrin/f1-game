@@ -135,3 +135,18 @@ test("capForeground: a foreground --timeout over 590 s is clamped and names run_
   assert.equal(parseArgs(["--pid-gone", "1", "--background"]).background, true);
   assert.equal(parseArgs(["--pid-gone", "1"]).background, false);
 });
+
+test("--merged <sha>: parsed, polled no faster than 30 s, judged through the deps.merged probe (the sanctioned merge watch)", () => {
+  const a = parseArgs(["--merged", "0DA70C389", "--poll", "3"]);
+  assert.deepEqual(a.conds, [{ kind: "merged", sha: "0da70c389" }]);
+  assert.equal(a.pollSec, 30, "a fetch per poll: never faster than 30 s");
+  assert.throws(() => parseArgs(["--merged", "not-a-sha"]), UsageError);
+  assert.throws(() => parseArgs(["--merged", "abc12"]), UsageError, "7-40 hex");
+  let on = false;
+  const deps = { merged: (sha) => { assert.equal(sha, "0da70c389"); return on; } };
+  let r = check(a.conds, deps);
+  assert.equal(r.ok, false);
+  assert.equal(r.pending[0], "0da70c389 not yet on origin/claude/f1-game-project-26h3ng");
+  on = true;
+  assert.equal(check(a.conds, deps).ok, true);
+});

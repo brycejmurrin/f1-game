@@ -44,6 +44,10 @@ node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the par
 once (the ladder: AGENTS.md rule 3). A started batch's verdict is its log's `= run …` line
 (`references/triage.md`).
 
+The commit hook (two-call procedure: AGENTS.md rule 12) runs only in Claude Code sessions: Cursor and
+Codex commits reach CI unguarded (two malformed changelog fragments did on 2026-10-26), so a
+non-Claude branch's first CI run is its guard run — run `npm run test:guards` by hand before that push.
+
 - **Already red?** `node tools/ci/deploy.mjs --train` prints the deploy branch's last ci /
   pages / nightly conclusions; `verify-agent --base <ref>` answers `DELTA: same-red |
   new-on-session | already-red-on-ref`; a red you did not cause → claim first (AGENTS.md §Git branch & deploy).

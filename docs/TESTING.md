@@ -1139,7 +1139,8 @@ artifact, monotonic) and `verify-live` as before. Measured 2026-10-14: the
 gate's median is 20.5 min and a gated publish (dispatch to live) 23 min
 median, 73 min p90 — queue waits in the 03-08 UTC bursts, not the tests, made
 the tail. Re-measured 2026-10-26 (last 40 `pages.yml` runs, system audit): p50
-11.9 min, p90 20.4.
+11.9 min, p90 20.4. Re-measured later on 2026-10-26 over 23 trains (CI review, sysaudit 2):
+median 19.6 min, p90 26.6; the macOS Metal leg adds a median 9.2 min.
 
 Inside `ci.yml` a Pages call is recognised by its `concurrency_key` (the
 caller's event is `push`, `schedule` or `workflow_dispatch` there): the

@@ -4,9 +4,9 @@
   const grid = $('capture-grid');
   const dialog = $('image-dialog');
   const categories = { body: 'BODY STYLE', finish: 'PAINT FINISH', module: 'CAR MODULE', garage: 'GARAGE', detail: 'DESIGN DETAIL' };
-  const state = { items: [], visible: [], category: 'all', search: '', lighting: 'all', scope: 'palettes', combo: 'all', body: 'all', finish: 'all', limit: 24, active: -1, opener: null };
+  const state = { items: [], visible: [], category: 'all', search: '', lighting: 'all', scope: 'palettes', combo: 'all', body: 'all', finish: 'all', limit: 24, active: -1, opener: null, filterScope: null };
   const inScope = item => state.scope === 'all' || (state.scope === 'current' ? item.geometryOnly : state.scope === 'latest' ? item.lane === 'Native CI capture' : state.scope === 'palettes' ? item.lane === 'Current PR combinations' : !item.geometryOnly);
-  const finishes = item => [...new Set([item.design?.finish, ...['nose','pod','cover','wing'].map(zone => item.design?.[zone+'Finish']), ...String(item.finish || '').split(' / ').map(value => value.split(' ')[0])].filter(value => value && /^[a-z]+$/.test(value) && !['factory','inherit'].includes(value)))];
+  const finishes = item => item._finishes || [...new Set([item.design?.finish, ...['nose','pod','cover','wing'].map(zone => item.design?.[zone+'Finish']), ...String(item.finish || '').split(' / ').map(value => value.split(' ')[0])].filter(value => value && /^[a-z]+$/.test(value) && !['factory','inherit'].includes(value)))];
   const categoryLabel = category => categories[category] || categories.module;
   const conceptNames = {rift: 'Auralis', keel: 'Cevora', delta: 'Vantrel', serpent: 'Orynth'};
   // Keep canonical deploy names intact; historical records retain their own authored titles.
@@ -60,8 +60,9 @@
     const item = state.dialogList?.[state.active + direction];
     if (item) renderDialog(item);
   }
-  function render() {
+  function render(append = false) {
     const scoped=state.items.filter(inScope);
+    if (state.filterScope !== state.scope) {
     for(const [id,field,label,values] of [
       ['body-filter','body','All bodies',scoped.map(i=>i.body)],
       ['combo-filter','combo','All palettes',scoped.map(i=>i.combo)],
@@ -74,6 +75,8 @@
       for(const value of options){const option=element('option','',lightingLabel(value));option.value=value;select.append(option);}select.value=state[field];
     }
     ['all', ...Object.keys(categories)].forEach(category => $('count-' + category).textContent = state.items.filter(item => inScope(item) && (category === 'all' || item.category === category)).length);
+    state.filterScope = state.scope;
+    }
     const query = state.search.trim().toLowerCase();
     state.visible = state.items.filter(item =>
       inScope(item) &&
@@ -82,10 +85,11 @@
       (state.body === 'all' || item.body === state.body) &&
       (state.category === 'all' || item.category === state.category) &&
       (state.lighting === 'all' || item.lighting === state.lighting) &&
-      (!query || [item.title, renameConceptText(item.title), item.description, renameConceptText(item.description), item.finish, item.module, item.partId, item.body, item.geometryOnly ? null : conceptNames[item.body], item.lane, item.lighting].filter(Boolean).join(' ').toLowerCase().includes(query))
+      (!query || item._search.includes(query))
     );
-    grid.replaceChildren();
-    state.visible.slice(0,state.limit).forEach((item, index) => {
+    if (!append) grid.replaceChildren();
+    const firstIndex = append ? grid.children.length : 0;
+    state.visible.slice(firstIndex,state.limit).forEach((item, index) => {
       const card = element('article', 'capture-card');
       const imageButton = element('button', 'capture-image');
       imageButton.type = 'button';
@@ -97,7 +101,7 @@
       image.decoding = 'async';
       image.addEventListener('error', () => imageButton.classList.add('missing'), { once: true });
       const missing = element('span', 'image-missing', 'Image unavailable');
-      const number = element('span', 'card-index', String(index + 1).padStart(2, '0'));
+      const number = element('span', 'card-index', String(firstIndex + index + 1).padStart(2, '0'));
       number.setAttribute('aria-hidden', 'true');
       const arrow = element('span', 'card-enlarge', '↗');
       arrow.setAttribute('aria-hidden', 'true');
@@ -139,21 +143,28 @@
       const response = await fetch('captures.json');
       if (!response.ok) throw new Error('Capture record unavailable');
       const data = await response.json();
-      if (!Array.isArray(data.items)) throw new Error('Invalid capture record');
+      if (!Array.isArray(data?.items)) throw new Error('Invalid capture record');
+      state.filterScope = null;
       state.items = data.items.flatMap((raw, index) => {
+        if (!raw || typeof raw !== 'object') return [];
         const src = safeSource(raw.src);
-        if (!src || !raw.title) return [];
-        return [{ ...raw, src, id: raw.id || `capture-${index}`, status: raw.status === 'archive' ? 'archive' : 'current',
+        if (!src || typeof raw.title !== 'string' || !raw.title.trim()) return [];
+        const item = { ...raw, src, id: raw.id || `capture-${index}`, status: raw.status === 'archive' ? 'archive' : 'current',
           category: Object.hasOwn(categories, raw.category) ? raw.category : 'module',
           lane: typeof raw.lane === 'string' ? raw.lane.trim() : '',
-          lighting: typeof raw.lighting === 'string' && raw.lighting.trim() ? raw.lighting.trim() : 'not-recorded' }];
+          lighting: typeof raw.lighting === 'string' && raw.lighting.trim() ? raw.lighting.trim() : 'not-recorded' };
+        delete item._finishes; // Cache metadata is derived locally, never trusted from capture JSON.
+        item._finishes = finishes(item);
+        item._search = [item.title, item.description, item.finish, item.module, item.partId, item.body, item.geometryOnly ? null : conceptNames[item.body], item.lane, item.lighting].filter(Boolean).join(' ').toLowerCase();
+        return [item];
       });
       const source = data.source || {};
       $('source-revision').textContent = source.revision ? String(source.revision).slice(0, 12) : 'Not recorded';
       $('source-revision').title = source.revision || '';
       $('source-date').textContent = formatDate(source.capturedAt);
-      $('source-backend').textContent = '373 native screenshots / 117 CPU previews';
-      $('source-note').textContent = 'Native screenshots retain their individual branch revisions. The geometry catalog is pinned to deploy snapshot '+String(source.revision || '').slice(0,12)+'. The four latest captures are from tools PR #3231. These sources are separate; appearance and triangle counts belong to the recorded recipe.';
+      const cpuCount = state.items.filter(item => item.geometryOnly).length;
+      $('source-backend').textContent = `${state.items.length - cpuCount} native screenshots / ${cpuCount} CPU previews`;
+      $('source-note').textContent = 'Native screenshots retain their individual branch revisions. The geometry catalog is pinned to deploy snapshot '+String(source.revision || '').slice(0,12)+'. These sources are separate; appearance and triangle counts belong to the recorded recipe.';
       ['all', ...Object.keys(categories)].forEach(category => $('count-' + category).textContent = state.items.filter(item => (state.scope === 'all' || item.status === 'current') && (category === 'all' || item.category === category)).length);
       const branches = Array.isArray(source.branches) ? source.branches.filter(branch => branch && typeof branch.branch === 'string' && typeof branch.sha === 'string') : [];
       $('branch-details').hidden = !branches.length;
@@ -204,7 +215,7 @@
   $('reset-filters').addEventListener('click', () => reset());
   $('clear-filters').addEventListener('click', () => reset());
   $('load-more').addEventListener('click', () => {
-    const nextIndex=state.limit;state.limit+=24;render();
+    const nextIndex=state.limit;state.limit+=24;render(true);
     grid.children[nextIndex]?.querySelector('button')?.focus();
   });
   $('retry-load').addEventListener('click', load);

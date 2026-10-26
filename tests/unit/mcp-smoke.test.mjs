@@ -11,6 +11,26 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const SMOKE = path.join(ROOT, "tools/mcp/mcp-smoke.mjs");
 const SH = path.join(ROOT, "tools/mcp/apex-tools-mcp.sh");
 
+test("bootstrap preserves machine-readable smoke evidence separately from console output", () => {
+  const fixture = fs.mkdtempSync(path.join(ROOT, "scratch/mcp-bootstrap-evidence-"));
+  try {
+    fs.mkdirSync(path.join(fixture, "tools/mcp"), { recursive: true });
+    fs.mkdirSync(path.join(fixture, "artifacts/logs"), { recursive: true });
+    fs.writeFileSync(path.join(fixture, "tools/mcp/mcp-smoke.mjs"), `
+      import fs from 'node:fs';
+      fs.writeFileSync(new URL('../../artifacts/logs/mcp-smoke.json', import.meta.url), JSON.stringify({ok:true}));
+      console.log('mcp-smoke ok');
+    `);
+    const source = fs.readFileSync(path.join(ROOT, "tools/env/ensure-mcp-ready.sh"), "utf8");
+    const fn = source.slice(source.indexOf("run_mcp_smoke() {"), source.indexOf('\nmkdir -p "$ROOT/artifacts/logs"'));
+    const result = spawnSync("bash", ["-c", fn + '\nROOT="$1"\nrun_mcp_smoke', "bootstrap-test", fixture], { encoding: "utf8", timeout: 5000 });
+    assert.equal(result.status, 0, result.stderr + result.stdout);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(fixture, "artifacts/logs/mcp-smoke.json"), "utf8")), {ok:true});
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
 function run(args, extraEnv = {}) {
   return spawnSync(process.execPath, [SMOKE, ...args], {
     encoding: "utf8",
