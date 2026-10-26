@@ -1,5 +1,7 @@
 # Tyres, degradation and pit strategy — research and design
 
+Status: shipped in js/physics/tyre-model.js, js/ui/hud-tyres.js and js/race/pit-lane.js (checked 2026-10-26; the code cites this doc's sections); the phase order in section 10 was not audited. The 'Nothing here is implemented yet' line below is the state when written.
+
 > 2026-09-14. Research pass + proposed design for the one system `docs/PHYSICS.md`
 > names as deliberately absent: **"There are no pit stops. The compound is a
 > pre-race commitment."** This doc is the plan that would change that sentence.

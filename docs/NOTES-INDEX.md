@@ -82,6 +82,51 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 | [notes/PERF-HUNT-2026-08-18.md](notes/PERF-HUNT-2026-08-18.md) | 08-17 board re-walk; union banner at cache 1421. WGX UBO flushes, `LAZY_AGENT`, DebrisWorld asleep-skip. |
 | [notes/TRACK-ROSTER-RESEARCH-2026-09-14.md](notes/TRACK-ROSTER-RESEARCH-2026-09-14.md) | The 38 World Championship venues the game does not carry, why the upstream `bacinger/f1-circuits` trace file can add no more, what each remaining candidate costs to import (Overpass-measured), and the four shipped defs whose `classic` flag the 2027 calendar contradicts. |
 | [notes/TUMFTM-RACETRACK-DATABASE.md](notes/TUMFTM-RACETRACK-DATABASE.md) | TUMFTM racetrack-database (LGPL-3.0): designer CSV importer, roster overlap vs the three missing DTM layouts, and why upstream racelines are NOT wired into TrackLine/AI (bake already min-curvature). |
+| [notes/AGENT-HISTORY-2026-10-26.md](notes/AGENT-HISTORY-2026-10-26.md) | One importer and digester for every agent the fleet runs (Claude, Codex/ChatGPT, Grok, Cursor session exports) via `tools/ci/agent-history.mjs`. |
+| [notes/AGENT-TOKEN-USE-2026-10-20.md](notes/AGENT-TOKEN-USE-2026-10-20.md) | Where Cursor cloud agents spend tokens: nine in-flight runs plus 56 cached ones read through `cursor-agents.mjs`, result characters as the input-token proxy. |
+| [notes/ASSET-COMPRESSION-2026-10-24.md](notes/ASSET-COMPRESSION-2026-10-24.md) | Asset compression survey (A·H18): inventory and what Pages gives for free, aimed at download size, GPU memory and decode time on Bryce's iPhone path. |
+| [notes/AWS-DEVICE-FARM-IPHONE-2026-10-23.md](notes/AWS-DEVICE-FARM-IPHONE-2026-10-23.md) | AWS Device Farm as the real-iPhone source after BrowserStack minutes ran out: closes G1 (the same iPhone on three.js WebGPU and WebGL2). |
+| [notes/BENCH-CAPTURE-2026-10-23.md](notes/BENCH-CAPTURE-2026-10-23.md) | BENCHMARK profiling capture (`apex26.bench/2`): `js/perf/bench-capture.js` records heap, logs and GPU data per leg. |
+| [notes/BUILD-HUNT-2026-10-24.md](notes/BUILD-HUNT-2026-10-24.md) | Build and CI wall-time hunt (A·H16): measured first, ranked by minutes saved per day times risk, without weakening a gate. |
+| [notes/CHROME-DEVTOOLS-MCP-AUDIT-2026-10-26.md](notes/CHROME-DEVTOOLS-MCP-AUDIT-2026-10-26.md) | chrome-devtools-mcp pin audit, 1.7.0 to 1.11.0 to 1.12.0 (issue #3509), from the upstream changelog. |
+| [notes/CPU-HUNT-2026-10-24.md](notes/CPU-HUNT-2026-10-24.md) | In-race main-thread CPU, per-frame allocation and GC churn in physics, AI, HUD, audio, camera and fx (A·H13). |
+| [notes/CROSS-ACCOUNT-INBOX-2026-10-25.md](notes/CROSS-ACCOUNT-INBOX-2026-10-25.md) | Fleet A and Fleet B cross-account inbox, measured both ways by OrchA 33 and approved by Bryce. |
+| [notes/DEVICE-FARM-ANALYSIS-2026-10-24.md](notes/DEVICE-FARM-ANALYSIS-2026-10-24.md) | Every AWS Device Farm iPhone session analysed: what proved real, what was noise, what to run next (A·Y1). |
+| [notes/DEVICE-FARM-LEDGER-2026-10-23.md](notes/DEVICE-FARM-LEDGER-2026-10-23.md) | One table of every Device Farm run on Apex 26, so lanes stop re-deriving it. |
+| [notes/FLAKY-QUARANTINE-3505-2026-10-25.md](notes/FLAKY-QUARANTINE-3505-2026-10-25.md) | Flaky quarantine #3505 row 1: `garage-livery-churn` verdict and fix scope (Fleet B worker B·W1·L1). |
+| [notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md](notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md) | Adaptive A+D fleet coordination plan agreed on the agent webhook; SUPERSEDED by `.claude/rules/fleet-core.md` and pass-4 DECISIONS #2/#3 (its section 7.3 is struck). |
+| [notes/GPUMEM-HUNT-2026-10-24.md](notes/GPUMEM-HUNT-2026-10-24.md) | GPU memory growth and leaks on Bryce's THREE PATH: WEBGPU (`GPUBuffer` counts across race and quit cycles; A·H12). |
+| [notes/HOOKS-SECURITY-2026-10-26.md](notes/HOOKS-SECURITY-2026-10-26.md) | Hooks, guards and permissions security pass (lane S5 of the 2026-10-26 system-audit implementation, PR #3785). |
+| [notes/IPHONE-MEMORY-2026-10-24.md](notes/IPHONE-MEMORY-2026-10-24.md) | iPhone memory read from the Device Farm syslogs, lever 5 of the Device Farm analysis (A·Y2, issue #3675); no device minutes spent. |
+| [notes/LIT-WGSL-CENSUS-2026-10-24.md](notes/LIT-WGSL-CENSUS-2026-10-24.md) | How often a deploy re-keys the phone's shader cache by changing the lit-family WGSL, and what each re-key costs (A·W44, issue #3672). |
+| [notes/LIVE-DEBUGGER-COCKPIT-FINISH-2026-10-21.md](notes/LIVE-DEBUGGER-COCKPIT-FINISH-2026-10-21.md) | Do paint finishes reach the cockpit and helmet cameras on TLX, GLX and WGX (B·H33). |
+| [notes/LIVE-DEBUGGER-GARAGE-2026-10-21.md](notes/LIVE-DEBUGGER-GARAGE-2026-10-21.md) | Garage lag on TLX: choppy while dragging, in livery select, edit, team and part changes (B·H30, B·H32). |
+| [notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md](notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md) | In-race CPU, render submission and memory on Bryce's iPhone (TLX WebGPU; iPhone 14 WebGL2; A·H10). |
+| [notes/LIVE-DEBUGGER-RACE-2026-10-24.md](notes/LIVE-DEBUGGER-RACE-2026-10-24.md) | Race flow, physics, AI, race-weekend and restart hunt reproduced the way Bryce plays (phone landscape, touch; A·H11). |
+| [notes/LIVE-FRAME-H10-2026-10-20.md](notes/LIVE-FRAME-H10-2026-10-20.md) | Live race frame time and stutter at the phone shape on the deployed build (B·H10). |
+| [notes/LIVE-INPUT-H11-2026-10-20.md](notes/LIVE-INPUT-H11-2026-10-20.md) | Live input latency and main-thread jank on the phone profile, ranked by measured ms with the fix (B·H11). |
+| [notes/LIVE-MEMORY-H12-2026-10-20.md](notes/LIVE-MEMORY-H12-2026-10-20.md) | Live JS heap and renderer memory across a 5-lap race, garage and menu round trips, and a track switch (B·H12). |
+| [notes/LOAD-HUNT-2026-10-24.md](notes/LOAD-HUNT-2026-10-24.md) | Boot, menu-to-race entry, track switches and repeat visits (A·H15, wave 34). |
+| [notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md](notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md) | MCP context cost measured; the one-tool-per-server redesign rejected; the gateway trimmed instead. |
+| [notes/MEMORY-TOOLING-RESEARCH-2026-10-21.md](notes/MEMORY-TOOLING-RESEARCH-2026-10-21.md) | Leak gates, phone memory limits and GPU accounting research for a CI memory gate (B·H12). |
+| [notes/MIRROR-WARM-2026-10-24.md](notes/MIRROR-WARM-2026-10-24.md) | Cold first-race freeze on TLX WebGPU: the menu warm was being thrown away; warm the race and mirror pipelines instead (A·W50). |
+| [notes/NIGHT-ENTRY-WEBGPU-2026-10-23.md](notes/NIGHT-ENTRY-WEBGPU-2026-10-23.md) | First night race on three.js WebGPU took 14.5 s because a lamp-bake placeholder forked the lit WGSL (A·W14). |
+| [notes/PARALLEL-HUNT-2026-10-24.md](notes/PARALLEL-HUNT-2026-10-24.md) | What can leave the main thread: ranked candidates and prototypes behind a default-OFF `apex26.*` flag (A·H14). |
+| [notes/PERF-GOVERNOR-QUANTUM-2026-10-23.md](notes/PERF-GOVERNOR-QUANTUM-2026-10-23.md) | Perf governor: the vsync-quantum probe, one-frame stalls and the thermal-drift default (A·W40). |
+| [notes/PERF-IPHONE-AUDIT-2026-10-21.md](notes/PERF-IPHONE-AUDIT-2026-10-21.md) | External audit of the live site: freeze, governor ladder, TLX phone costs and a BrowserStack profiling map. |
+| [notes/PERF-KNOWN-WINS-2026-10-23.md](notes/PERF-KNOWN-WINS-2026-10-23.md) | Known perf wins and remaining opportunities cross-checked against the Device Farm iPhone evidence (A·X1). |
+| [notes/PERF-RENDER-CPU-2026-10-20.md](notes/PERF-RENDER-CPU-2026-10-20.md) | Render-path CPU and the flyby scene index: the flyby-sight `sceneOf` deopt storm (B·H9). |
+| [notes/PERFTEST-HUNT-2026-10-24.md](notes/PERFTEST-HUNT-2026-10-24.md) | Coverage map, gaps and new perf gates; the rule is count, do not time (A·H17). |
+| [notes/PHONE-GPU-TEST-2026-10-21.md](notes/PHONE-GPU-TEST-2026-10-21.md) | How to run and read the PHONE TEST GPU TEST, the only real phone GPU timing the project can reach (B·H10). |
+| [notes/PHONE-RENDERER-AB-2026-10-21.md](notes/PHONE-RENDERER-AB-2026-10-21.md) | Phone renderer A/B, TLX versus GLX, measurements only; switching the default waits for Bryce (B·H23). |
+| [notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md](notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md) | Tooling research for race entry after the 2026-10-20 monza-foundation Pages red (B·H14). |
+| [notes/RENDER-SETTINGS-TOOLING-RESEARCH-2026-10-21.md](notes/RENDER-SETTINGS-TOOLING-RESEARCH-2026-10-21.md) | Render settings and real-device GPU timing tooling research (B·H10). |
+| [notes/SYSTEM-AUDIT-2-2026-10-26.md](notes/SYSTEM-AUDIT-2-2026-10-26.md) | Second system-audit pass after PR #3785: CI and train, orchestration transcripts, rulebook and hooks, PR flow and ownership. |
+| [notes/TLX-GPU-COST-PARAVIRTUAL-2026-10-20.md](notes/TLX-GPU-COST-PARAVIRTUAL-2026-10-20.md) | What the macos-latest paravirtual GPU can and cannot measure for TLX WebGPU per-pass cost (B·H7). |
+| [notes/TLX-PHONE-PASS-CENSUS-2026-10-23.md](notes/TLX-PHONE-PASS-CENSUS-2026-10-23.md) | TLX phone-shaped pass census: triangles, draws and culled chunks (A·W41; steps of #2657 and #2631). |
+| [notes/TOOLING-CONSOLIDATION-2026-10-26.md](notes/TOOLING-CONSOLIDATION-2026-10-26.md) | Tooling consolidation from the 2026-10-26 system audit (lane S6, PR #3785): what changed, why, what was measured. |
+| [notes/TOUCH-BOOST-FIRST-PRESS-2026-10-23.md](notes/TOUCH-BOOST-FIRST-PRESS-2026-10-23.md) | The first BOOST press froze about 0.74-0.93 s on iPhone because of the first ERS-strip draw (A·W15, PR #3611). |
+| [notes/VOICE-OPUS-TWINS-2026-10-25.md](notes/VOICE-OPUS-TWINS-2026-10-25.md) | Opus twins for the george, fable, emma and heart voice packs (A·W51, option A). |
 
 ## `research/` — cited from source, not a description of behaviour
 

@@ -1,7 +1,9 @@
 # Localisation (i18n) — plan (2026-10-04)
 
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — the I18n layer exists (js/core/i18n.js, i18n-pseudo.js, locales/en.json, tools/gen/gen-locales.mjs, pseudo-locale audit #3310); only English ships and no language picker was found.
+
 Date: 2026-10-04
-Status: **PLAN** — docs-only; implement as ten draft PRs against `claude/f1-game-project-26h3ng`, one slice each, in the
+Status when written: **PLAN** — docs-only; implement as ten draft PRs against `claude/f1-game-project-26h3ng`, one slice each, in the
 order below. Do not merge; the merge worker takes green ready PRs one at a time (AGENTS.md §Concurrent PRs).
 Scope: a no-build-step translation layer (`I18n` global, lazily fetched locale JSON, English fallback), the language picker,
 pseudo-locale layout testing, a contribution lint, and an incremental screen-by-screen migration. NOT a translation of the

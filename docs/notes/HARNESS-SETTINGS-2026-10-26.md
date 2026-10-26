@@ -110,16 +110,19 @@ BASE-CONTEXT does.
   Code lowers the … default to 30 on `UserPromptSubmit` …" https://code.claude.com/docs/en/hooks#common-fields
 - "On `PreToolUse`, a timed-out `command` … hook doesn't block the tool call … To block the action instead, set
   `"onFailure": "block"`" (v2.1.295+). https://code.claude.com/docs/en/hooks#block-the-action-when-a-hook-fails
-  — in the committed tree a slow or crashing `bash-guard.sh` / `github-mcp-guard.sh` / `protect-files.sh` **fails open**.
+  — corrected 2026-10-26: this note first said the committed guards **fail open**; the `onFailure` block has since landed.
+  `.claude/settings.json` carries `"onFailure": "block"` on every PreToolUse command hook (`protect-files.sh`,
+  `bash-guard.sh`, `mcp-browser-guard.sh`, `github-mcp-guard.sh`, `subagent-contract.py`, `context-cap.py`), so a
+  timed-out or crashing guard now BLOCKS the call (a loaded box can therefore stall a commit: the guard timeout is
+  `apex.guardTimeout` / `APEX_GUARD_TIMEOUT`).
 - `async`: "runs in the background without blocking … Async hooks can't block or control Claude's behavior …
   Claude Code doesn't enforce `timeout` on it"; results (`additionalContext`, `systemMessage`) arrive "on the
   next conversation turn". `asyncRewake` "wakes Claude on exit code 2". https://code.claude.com/docs/en/hooks#run-hooks-in-the-background
 - Context cost: "For most events, Claude Code writes stdout to the debug log … The exceptions are
   `UserPromptSubmit`, `UserPromptExpansion`, `SessionStart`, and `PostModelSwitch`, where Claude Code adds
   plain-text stdout as context." `additionalContext` is always injected as a system reminder.
-- **Adopt.** Lane S5's working tree (read 2026-10-26, uncommitted) already gives every PreToolUse guard
-  `"onFailure": "block"` and `protect-files.sh` a 30-s timeout, and drops `APEX_MERGE_DESK` from the committed
-  `env`. Still open: `memory-sync.sh save` (Stop and PostToolUse) and the advisory `lsp-hint.py` → `"async":
+- **Adopted (landed).** Every PreToolUse guard has `"onFailure": "block"` (read in `.claude/settings.json`
+  2026-10-26; this bullet first described it as lane S5's uncommitted tree). Still open: `memory-sync.sh save` (Stop and PostToolUse) and the advisory `lsp-hint.py` → `"async":
   true` (they can neither block nor need to delay the turn); keep `session-start.sh` and `skill-hint.py` stdout
   to one line each, because that stdout is context on every session/prompt. With `onFailure: "block"` on
   `bash-guard.sh`, its 20-s `fleet-owner.mjs` path (audit item 7) must be fixed, or a slow run blocks commands.
@@ -174,6 +177,25 @@ BASE-CONTEXT does.
   100 per hour — Your account"; "None of these hourly limits has overage"; beta header
   `experimental-cc-routine-2026-04-01`; body `text` "is not parsed". https://code.claude.com/docs/en/routines#usage-and-limits
   The audit measured a 400 without `anthropic-version`; each fire boots a fresh session (~98k).
+
+## 2b. Auto mode: the project's `autoMode` is ignored (added 2026-10-26)
+
+Source: https://code.claude.com/docs/en/auto-mode-config and https://code.claude.com/docs/en/permission-modes
+(fetched by the pass-4 web-claude-code slice).
+
+- "The classifier doesn't read `autoMode` from project settings in `.claude/settings.json` or
+  `.claude/settings.local.json`." It reads only user settings (`~/.claude/settings.json`), managed settings or
+  `--settings`; cloud sessions do not read the user file, and `/auto-mode-setup` is not available there. So an
+  `autoMode` block committed to this repo does nothing, and an earlier suggestion to move the needed npm/Monitor
+  rules into `autoMode.allow` cannot work from the repo.
+- `autoMode.allow` entries are prose exceptions to `soft_deny`, "natural-language rules", not tool patterns.
+- On entering auto mode, broad allow rules that grant arbitrary code execution are dropped (blanket `Bash(*)`,
+  wildcarded interpreters such as `Bash(python*)`, package-manager run commands, `Agent` and `Monitor` allows);
+  narrow rules such as `Bash(npm test)` stay in effect and skip the classifier. A narrow rule can still let a
+  destructive argument through (for example `Bash(find *)`).
+- The classifier reads the CLAUDE.md content Claude loads, so AGENTS.md (imported by CLAUDE.md) steers it.
+- Consequence for this repo: call node scripts directly (`node tools/...`) rather than relying on `npm run` or
+  `node -e` allows, and keep allow rules narrow.
 
 ## 3. Ready-to-paste fragment (for lane S5) and environment variables
 

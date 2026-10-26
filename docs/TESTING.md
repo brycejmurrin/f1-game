@@ -114,19 +114,19 @@ edited spec first, alone; an edited ADAPTED spec schedules the `page` slice
 instead, since that is the only place it runs on a pull request.
 
 A routed spec that loses the budget to smaller ones rides as **overflow** —
-up to six more `TARGET_SHARD_SEC` jobs' worth, packed with everything else —
+up to eleven more `TARGET_SHARD_SEC` jobs' worth (`MAX_OVERFLOW_SHARDS` = 11, `tools/ci/select-specs.mjs`), packed with everything else —
 instead of being skipped. A routed spec that declares a per-test timeout at or
 over the gate's 180 s runs in the **over-budget pool** (`overbudget-<k>` jobs,
 up to eight jobs' worth, each capped from its own declaration). When the
 overflow is full, leftovers ride a bounded **spill** leg (`spill-<k>` jobs,
-`MAX_SPILL_SHARDS` = two jobs' worth, logged as `SPILL`). What is still
+`MAX_SPILL_SHARDS` = 4 jobs' worth, logged as `SPILL`). What is still
 left is dropped by name as an error, and a dropped spec turns `Selected specs (verdict)`
 red on a pull request (2026-10-04). The
 **nightly** runs the same selector over the last day of deploy-branch merges
 (`ci-resolve-before.sh`'s `schedule` base) with a 60-minute budget, twelve
 jobs' worth of overflow and `--stale-first` ordering — so a routed spec no
 per-change budget can afford runs within a day rather than on its group's
-night in the 11-night rota (2026-09-29: `menu-traversal`, `ui-redesign` and
+night in the 16-night rota (`node tools/ci/nightly-group.mjs --list`, 2026-10-26) (2026-09-29: `menu-traversal`, `ui-redesign` and
 `time-trial` sat red that way). A PR also restores the deploy branch's last
 failing specs, so it ranks a spec that just failed there the way the train
 does.
@@ -357,7 +357,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 `tests/unit/test-groups.test.mjs` fails if this table and `package.json` disagree
 — or if a spec lands in two topical browser groups (the 2026-09 regroup folded
 30 browser groups into 12 with a DISJOINT partition, so `pick-tests` can never
-run a spec twice; the 115-spec union was compared file for file before and after).
+run a spec twice; the 115-spec union was compared file for file before and after; 2026-10-26: 24 browser groups, 170 specs).
 
 A browser group is 10-40 minutes of SwiftShader; run ONE at a time through
 `tools/ci/test-bg.mjs`, and `tools/ci/select-specs.mjs` for a finer per-spec cut when
@@ -436,9 +436,9 @@ tools directly.)
 
 | Group | What it runs |
 |---|---|
-| `physics-core` | the driving model proper: physics-boot (the cheap selected-gate pin), physics-characterization, physics-fixes, physics-hotpath, longitudinal, world-physics, off-track, the Rapier debris side-world and race control. ~37 tests, nearly all FAST. `physics-characterization` also runs in Node as `game-vm` in seconds — run that first |
-| `collisions` | car-to-car and wall contact: `collision*.spec.js` (collisions, collisions-deep, collision-ai-fixes). ~32 tests and the SLOWEST set in the suite (26–34 s each) — the multi-car pack separation runs a whole race |
-| `aero` | the aero and handling model: aero-zones (the slowest single spec at ~48 s/test), active-aero, drift, understeer-cue. ~37 tests |
+| `physics-core` | the driving model proper: physics-boot (the cheap selected-gate pin), physics-characterization, physics-fixes, physics-hotpath, longitudinal, world-physics, off-track, the Rapier debris side-world and race control. 42 tests (static `test(` count over the group's spec files, 2026-10-26), nearly all FAST. `physics-characterization` also runs in Node as `game-vm` in seconds — run that first |
+| `collisions` | car-to-car and wall contact: `collision*.spec.js` (collisions, collisions-deep, collision-ai-fixes). 32 tests (same count) and the SLOWEST set in the suite (26–34 s each) — the multi-car pack separation runs a whole race |
+| `aero` | the aero and handling model: aero-zones (the slowest single spec at ~48 s/test), active-aero, drift, understeer-cue. 37 tests (same count) |
 | `hooks` | the `__apex` contract end to end: dev-tools, headless, obs/act, data lifecycle, telemetry compare, assets, logging, persistence, the race wake lock, output paths, the map + new hook contracts, and the agent world view (world, trackInfo, scene, rollout, determinism, the drive bench). Union of the old `api` + `hooks` + `agent` + `map` + `paths` |
 | `circuits` | walls + autopilot + elevation + the codebase-audit edge cases; the 16 per-circuit foundation specs (`tests/specs/*-foundation.spec.js` — required models present, props clear of the racing surface, terrain grounded, water safe, walls sane); props/terrain over road, F1 track accuracy, scenery kits. Union of the old `circuit` + `foundation` + `scenery`. Routed from `js/circuits/` and the track engine; a one-circuit edit runs `verify-track.cjs <id>` then THAT circuit's foundation spec alone, not this group |
 | `car` | catalog, budget, persistence, recipes (inside `parts-physics`), factory presets, mesh caches, liveries, ERS, car effects, the custom team, the car viewer, garage aero (the old `parts`) |
@@ -675,8 +675,9 @@ spec over is a one-line import change.
 **Why.** Measured on the camera group: 45 tests, 1985 s of test time, and the
 *fastest* test took 21.7 s. That floor is not assertion work, it is
 `page.goto("/")` plus ~155 script tags plus WebGL context creation, paid again
-for every single test. Across the suite that is 294 `goto("/")` calls in 98 spec
-files, and not one of them used `beforeAll`.
+for every single test. (When this was measured the suite had 294 `goto("/")` calls in 98 spec
+files and none used `beforeAll`; 2026-10-26: 330 calls in 112 of 170 spec files, `beforeAll` in 1, and
+`index.html` carries 310 `<script src>` tags.)
 
 **Why it is safe.** `__apex.race(id)` is re-entrant against a live page —
 `tests/specs/tracks-walls.spec.js` has always raced through many circuits in ONE page
@@ -899,7 +900,7 @@ is capped at 6 min, and its Verdict is `tools/gfx/census-verdict.mjs`.
 
 ### Never run two Playwright processes at once
 
-`playwright.config.js` sets `reuseExistingServer` for local runs, so a second
+`playwright.config.js` sets `reuseExistingServer` only when `APEX_MANAGED_SERVER=1` or `APEX_REUSE_SERVER=1`, or locally with no `CI` and no `APEX_PORT` (`test-bg.mjs` sets `APEX_PORT`, so it never reuses). On that local path a second
 `playwright test` process does **not** start its own `python3 -m http.server` —
 it attaches to the one the first process owns. Kill the first run and the second
 loses its server mid-flight: every remaining test dies with
@@ -1009,7 +1010,7 @@ has to come from a measurement, which is what the note below is.
 The `webgl` group was 15 red of 32. Twelve of those were undersized budgets. The
 last three were all `lighting-tuner-grade`, and they were not slow tests — they
 were tests paying a toll nobody had priced. Measured with ONE browser and
-nothing else on the box (`scratch/tuner/cost-probe.mjs`), clicking real ids in
+nothing else on the box (a throwaway probe in gitignored `scratch/`, not in a fresh clone), clicking real ids in
 the order the spec clicked them:
 
 | click | game state | cost |
@@ -1226,7 +1227,7 @@ Two always-judged checks give the gate fixed names:
 
 - `Structural guards (tooling A)` … `(tooling D)` (four shards since 2026-10-24, A·H16 B2), `Structural guards` (the ready_for_review reuse question is a step of each job since 2026-10-15, not a `Reuse draft fast-tier?` job)
 - `Pure-node unit suites (<slice>)` (the needed legs on a READY PR only — planned by `Select specs for this change`, which replaced `Plan node unit slices` on 2026-10-15; drafts and the Pages train skip them since 2026-10-16, the nightly and a dispatch run every leg)
-- `Does this diff touch track survey inputs?` (`sweeps-parts`), `Characterization driving model` (when planned)
+- `Parts option-resolution census` (job `sweeps-parts`), `Driving model (characterization traces)` (job `driving-model`, when planned). Names as of 2026-10-26: `name:` lines in `ci.yml`
 - `Select specs for this change`, `Selected specs (…)` matrix legs when routed, `Selected specs (verdict)`
 - `CI` (aggregator `ci-verdict`; skipped jobs count as pass)
 - (`Docs guards (prose-tree unit files)` — `docs-guards.yml` — ran on every PR until 2026-10-15; retired, see the `docs-guards` group row)
