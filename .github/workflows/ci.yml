@@ -324,6 +324,16 @@ concurrency:
   group: ci-${{ inputs.concurrency_key || ((github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('label-{0}', github.run_id)) || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# DIFF-RELATIVE COUNTERS ON A PR, ABSOLUTE ON THE TIP (2026-10-26, system audit
+# §6). The pin counters in tests/data/ratchets.json `tree` (assertPins,
+# rawGameReads, vmSrcLoads) fail a pull_request run only on growth that PR adds
+# against the merge ref's first parent, so one overage no longer turns every
+# open PR red at once (74 of 80 red PR runs in three days). The train (the
+# Pages call: the caller's event is push or workflow_dispatch), schedule and
+# dispatch judge the tree alone. tools/check/ratchets.mjs ratchetMode.
+env:
+  APEX_RATCHET_ABSOLUTE: ${{ github.event_name != 'pull_request' && '1' || '' }}
+
 jobs:
 
   draft-ci-skipped:

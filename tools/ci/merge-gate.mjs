@@ -183,31 +183,42 @@ const git = (args, cwd = ROOT, extra = {}) => spawnSync("git", args, { cwd, enco
  * a ceiling on their own base can exceed it together: #3236 and #3237 took assert.match from 7316 to 7317 on the
  * deploy tip, and two Pages trains went red (2026-10-20). The PR's own CI tests the merge ref as of ITS last run,
  * so a base that moved afterwards is not covered; this reruns the checks against the base as it is now.
- * Two checks: tools/check/ratchets.mjs (file and tree-wide metrics; exit 1 on overage) and the assert.match
- * ceiling test. Returns { ok, evidence }; a check that cannot run is a failure, never a pass.
+ * Checks: tools/check/ratchets.mjs (file and tree-wide metrics, the pin counters among them; exit 1 on overage) and
+ * the whole-tree count tests below. Returns { ok, evidence }; a check that cannot run is a failure, never a pass.
  */
 export function ratchetsOnMerge({ cwd = ROOT, run = spawnSync } = {}) {
   const tail = (r) => `${r.stdout || ""}\n${r.stderr || ""}`.split("\n").map((l) => l.trim()).filter(Boolean).slice(-2).join(" | ").slice(0, 220);
+  // The whole-tree count family (system audit 2026-10-26: 63 of 86 named red-PR failures in three days). Each runs on
+  // the merge result here, so a PR that is green on its own merge ref but over once the tip moved is refused before
+  // the merge instead of turning the train red after it.
+  const counted = [
+    ["assert-match ceiling", "assert-match-ratchet"], ["source-pin ceiling", "source-pin-hygiene"],
+    ["vm-filename ceiling", "vm-filename-lint"], ["test-groups", "test-groups"],
+    ["docs-integrity", "docs-integrity"], ["output-surface", "output-surface"],
+  ];
   const steps = [
     { name: "ratchets.mjs", argv: ["tools/check/ratchets.mjs"] },
-    { name: "assert-match ceiling", argv: ["--test", "tests/unit/assert-match-ratchet.test.mjs"] },
+    ...counted.map(([name, file]) => ({ name, argv: ["--test", `tests/unit/${file}.test.mjs`] })),
   ];
   // `node --test` started inside another node test inherits NODE_TEST_CONTEXT and then exits 0 on a failing
   // test (measured 2026-10-21: inherited exit 0, stripped exit 1), which would turn this gate into a pass.
-  const env = { ...process.env };
+  // The merge worktree's HEAD is the deploy tip and its working tree the merge result, so the pin counters judge
+  // the growth THIS merge adds (ratchets.mjs ratchetMode): an overage the tip already carries is not this PR's.
+  const env = { ...process.env, APEX_RATCHET_BASE_REF: "HEAD" };
   delete env.NODE_TEST_CONTEXT;
+  delete env.APEX_RATCHET_ABSOLUTE;
   const bad = [];
   for (const s of steps) {
     const r = run(process.execPath, s.argv, { cwd, env, encoding: "utf8", timeout: 180_000, maxBuffer: 16 << 20 });
     if (r.error || r.status !== 0) {
-      // The assert-match test prints its own "N assert.match sites (ceiling M)" line: that is the evidence worth keeping.
-      const sites = `${r.stdout || ""}`.match(/\d+ assert\.match sites \(ceiling \d+\)/);
+      // A counter test prints its own "N <what> (ceiling M)" line: that is the evidence worth keeping.
+      const sites = `${r.stdout || ""}`.match(/\d+ [\w. -]+ \(ceiling \d+[^)]*\)/);
       bad.push(`${s.name}: ${sites ? sites[0] : r.error ? r.error.message : tail(r) || "exit " + r.status}`);
     }
   }
   return bad.length
     ? { ok: false, evidence: `over a ratchet on the merge result: ${bad.join("; ")} — convert the pins or extract, never raise the ceiling for someone else's overage` }
-    : { ok: true, evidence: "ratchets.mjs and the assert.match ceiling hold on the merge result" };
+    : { ok: true, evidence: "ratchets.mjs and the whole-tree count tests hold on the merge result" };
 }
 
 /**

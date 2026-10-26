@@ -382,26 +382,20 @@ test("the test-suite counts in the agent docs and README.md match the files on d
     if (specClaims.length) sawSpecCount = true;
     for (const { n, floor } of specClaims) {
       if (!floor) { figureEqual(n, specs, `${doc} claims ${n} Playwright specs; tests/ holds ${specs}`); continue; }
+      // A floor only fails when the files fall BELOW it (a deletion the prose did not follow). A floor that is
+      // "too far behind" was a growth-triggered red on every open PR's merge ref at once (2026-10-24 trains
+      // 40063395914 / 40065038253; system audit §6), so adding tests never fails this any more.
       assert.ok(n <= specs, `${doc} claims ${n}+ Playwright specs; tests/ holds only ${specs}`);
-      assert.ok(specs - n < 50, `${doc} claims ${n}+ Playwright specs and tests/ holds ${specs} — raise the floor`);
     }
 
-    // A FLOOR ("200+ unit suites") is allowed, and is what the prose should
-    // use. An exact count is one integer that every agent adding a test has to
-    // bump, in two files — and seven sessions push to one branch here, so it
-    // conflicts every time: README.md measured +64/-64 over seven days, pure
-    // rewrite, almost all of it this number. A floor keeps the drift guard that
-    // this test exists for (the count cannot silently fall, and cannot fall
-    // FAR behind) while costing an edit once per SLACK additions instead of
-    // every one. An exact figure anywhere is still pinned exactly.
-    const SLACK = 50;
+    // A FLOOR ("200+ unit suites") is what the prose should use: an exact count is one integer every agent
+    // adding a test bumps, in two files, and it conflicted on every merge (README.md +64/-64 in seven days).
+    // An exact figure anywhere is still pinned exactly; a floor fails only when it exceeds the truth.
     const unitClaims = [...text.matchAll(/(\d+)(\+?)\s+`?node --test`? unit suites/gi)]
       .map((m) => ({ n: Number(m[1]), floor: m[2] === "+" }));
     for (const { n, floor } of unitClaims) {
       if (!floor) { figureEqual(n, units, `${doc} claims ${n} unit suites; tests/ holds ${units}`); continue; }
       assert.ok(n <= units, `${doc} claims ${n}+ unit suites; tests/ holds only ${units}`);
-      assert.ok(units - n < SLACK,
-        `${doc} claims ${n}+ unit suites and tests/ holds ${units} — ${units - n} behind, raise the floor`);
     }
   }
   assert.ok(sawSpecCount, "neither CLAUDE.md nor README.md states a Playwright spec count any more");

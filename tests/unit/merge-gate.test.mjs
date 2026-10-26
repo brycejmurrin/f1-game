@@ -211,16 +211,22 @@ const NEVER_RAISE = " — convert the pins or extract, never raise the ceiling f
 
 test("ratchetsOnMerge: an overage names its sites; a check that cannot run is a failure, not a pass", () => {
   const out = (status, stdout = "", extra = {}) => ({ status, stdout, stderr: "", ...extra });
-  const runWith = (byScript) => (cmd, argv) => byScript[argv[0] === "--test" ? "ceiling" : "ratchets"];
-  const ok = ratchetsOnMerge({ run: runWith({ ratchets: out(0), ceiling: out(0) }) });
-  assert.deepEqual(ok, { ok: true, evidence: `ratchets.mjs and the ${PIN} ceiling hold on the merge result` });
-  const over = ratchetsOnMerge({ run: runWith({ ratchets: out(0), ceiling: out(1, `error: '7317 ${PIN} sites (ceiling 7316) — convert a source pin'`) }) });
+  const seen = [];
+  const runWith = (byScript) => (cmd, argv, o) => { seen.push([argv, o.env]); return byScript[argv[0] === "--test" ? argv[1] : "ratchets"] || byScript.tests; };
+  const ok = ratchetsOnMerge({ run: runWith({ ratchets: out(0), tests: out(0) }) });
+  assert.deepEqual(ok, { ok: true, evidence: "ratchets.mjs and the whole-tree count tests hold on the merge result" });
+  assert.deepEqual(seen.map(([a]) => a.at(-1)), ["tools/check/ratchets.mjs", ...["assert-match-ratchet", "source-pin-hygiene", "vm-filename-lint",
+    "test-groups", "docs-integrity", "output-surface"].map((f) => `tests/unit/${f}.test.mjs`)], "the whole count family runs on the merge result");
+  assert.ok(seen.every(([, env]) => env.APEX_RATCHET_BASE_REF === "HEAD" && !("NODE_TEST_CONTEXT" in env) && !("APEX_RATCHET_ABSOLUTE" in env)),
+    "judged against the tip the merge sits on, never inheriting a test context");
+  const pinFail = out(1, `error: '7317 ${PIN} sites (ceiling 7316) — convert a source pin'`);
+  const over = ratchetsOnMerge({ run: runWith({ ratchets: out(0), tests: out(0), "tests/unit/assert-match-ratchet.test.mjs": pinFail }) });
   assert.deepEqual(over, { ok: false, evidence: `${OVER}assert-match ceiling: 7317 ${PIN} sites (ceiling 7316)${NEVER_RAISE}` });
-  const both = ratchetsOnMerge({ run: runWith({ ratchets: out(1, "css/hud.css codeLines 2300 > 2279"), ceiling: out(1, `7317 ${PIN} sites (ceiling 7316)`) }) });
+  const both = ratchetsOnMerge({ run: runWith({ ratchets: out(1, "css/hud.css codeLines 2300 > 2279"), tests: out(0), "tests/unit/assert-match-ratchet.test.mjs": pinFail }) });
   assert.equal(both.ok, false);
   assert.equal(both.evidence, `${OVER}ratchets.mjs: css/hud.css codeLines 2300 > 2279; assert-match ceiling: 7317 ${PIN} sites (ceiling 7316)${NEVER_RAISE}`,
     "both overages are reported, not just the first");
-  const dead = ratchetsOnMerge({ run: runWith({ ratchets: out(null, "", { error: new Error("spawn ENOENT") }), ceiling: out(0) }) });
+  const dead = ratchetsOnMerge({ run: runWith({ ratchets: out(null, "", { error: new Error("spawn ENOENT") }), tests: out(0) }) });
   assert.deepEqual(dead, { ok: false, evidence: `${OVER}ratchets.mjs: spawn ENOENT${NEVER_RAISE}` });
 });
 
@@ -262,13 +268,12 @@ test("two PRs that are each at the assert-match ceiling alone are over it on the
     git(T, "init", "-q", "--bare", remote);
     git(T, "clone", "-q", remote, W);
     git(W, "checkout", "-q", "-b", "deploy-x");
-    // The real ratchet test, its ceiling lowered to 3 so the fixture stays small; ratchets.mjs is a no-op stand-in.
-    const real = fs.readFileSync(path.join(ROOT, "tests/unit/assert-match-ratchet.test.mjs"), "utf8");
-    const lowered = real.replace(/const CEILING = \d+;/, "const CEILING = 3;");
-    assert.notEqual(lowered, real, "the real test's ceiling line was found and lowered");
+    // The real ratchet test and the real ratchets.mjs, with a fixture ratchets.json whose only row is assertPins at 3.
     const UNIT = "tests/unit";   // the fixture repo's own dir: built, not spelled, so the path-reference lint reads no phantom file
-    write(W, `${UNIT}/assert-match-ratchet.test.mjs`, lowered);
-    write(W, "tools/check/ratchets.mjs", "process.exit(0);\n");
+    for (const rel of [`${UNIT}/assert-match-ratchet.test.mjs`, "tools/check/ratchets.mjs", "tools/hooks/ratchet-reason.mjs"]) {
+      write(W, rel, fs.readFileSync(path.join(ROOT, rel), "utf8"));
+    }
+    write(W, "tests/data/ratchets.json", JSON.stringify({ files: {}, tree: { assertPins: 3 } }) + "\n");
     write(W, `${UNIT}/base.test.mjs`, pins(2));
     git(W, "add", "-A"); git(W, "commit", "-q", "-m", "base: 2 pins, ceiling 3");
     git(W, "push", "-q", "origin", "deploy-x");
@@ -282,7 +287,9 @@ test("two PRs that are each at the assert-match ceiling alone are over it on the
     const head2 = git(W, "rev-parse", "pr2");
     const gate = (pr, head, headRef) => localMergeGenCheck({
       pr, head, headRef, cwd: W, deploy: "deploy-x",
-      run: (cmd, argv, o) => (cmd === "npm" ? { status: 0, stdout: "", stderr: "" } : spawnSync(cmd, argv, o)),
+      // npm (gen:check) and the other count tests are stubbed: the fixture carries only the pin counter.
+      run: (cmd, argv, o) => (cmd === "npm" || (argv[0] === "--test" && !argv[1].endsWith("assert-match-ratchet.test.mjs"))
+        ? { status: 0, stdout: "", stderr: "" } : spawnSync(cmd, argv, o)),
     });
     const alone = gate(2, head2, "pr2");
     assert.equal(alone.ok, true, alone.evidence);
@@ -294,6 +301,7 @@ test("two PRs that are each at the assert-match ceiling alone are over it on the
     // ... and now #3237's head, unchanged and still green in its own CI, is one over on the merge result.
     const together = gate(2, head2, "pr2");
     assert.equal(together.ok, true, "the merge and gen:check are fine: only the ratchet row sees the overage");
-    assert.deepEqual(together.ratchets, { ok: false, evidence: `${OVER}assert-match ceiling: 4 ${PIN} sites (ceiling 3)${NEVER_RAISE}` });
+    assert.equal(together.ratchets.ok, false, "pr2 adds the 4th pin onto a tip already at 3");
+    assert.ok(/assert-match ceiling: 4 pin-shaped asserts \(ceiling 3; base 3\/3\)/.test(together.ratchets.evidence), together.ratchets.evidence);
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });

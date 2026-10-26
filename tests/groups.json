@@ -2054,6 +2054,7 @@
       "cmd": "node tools/ci/guards-verdict.mjs run",
       "files": [
         "tests/unit/agent-surface.test.mjs",
+        "tests/unit/assert-match-ratchet.test.mjs",
         "tests/unit/behind-ship.test.mjs",
         "tests/unit/carve-a-modules.test.mjs",
         "tests/unit/change-kind.test.mjs",
@@ -2086,6 +2087,7 @@
         "tests/unit/ratchets.test.mjs",
         "tests/unit/selected-gate-verdict.test.mjs",
         "tests/unit/shell-ids.test.mjs",
+        "tests/unit/source-pin-hygiene.test.mjs",
         "tests/unit/test-coverage-audit.test.mjs",
         "tests/unit/test-groups-generated.test.mjs",
         "tests/unit/test-groups.test.mjs",

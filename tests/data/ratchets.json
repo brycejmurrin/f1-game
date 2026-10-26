@@ -43,6 +43,10 @@
     }
   },
   "tree": {
+    "assertPins": {
+      "ceiling": 8420,
+      "slack": 200
+    },
     "bareCatches": {
       "ceiling": 29,
       "slack": 15
@@ -67,6 +71,7 @@
       "ceiling": 180,
       "slack": 0
     },
+    "rawGameReads": 308,
     "rawSpacing": {
       "ceiling": 306,
       "slack": 0
@@ -83,6 +88,7 @@
       "ceiling": 0,
       "slack": 0
     },
+    "vmSrcLoads": 599,
     "waitForTimeout": 75,
     "waitNoPolling": {
       "ceiling": 42,
