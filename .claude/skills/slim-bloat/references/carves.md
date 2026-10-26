@@ -18,23 +18,22 @@ before/after counts (`bloat-scan.mjs --json`).
 3. New file is hyphenated IIFE: `"use strict"; var Name = { create(G) { … } };`
    Module never reaches into `game.js`. `Module.create(G)` at the existing
    roster site.
-4. Lockstep the same commit: file + `index.html` `<script>` position +
-   `tools/manifest.cjs` (+ `HARD_EDGES` if eval-time destructure) + lower
+4. Lockstep the same commit: file + its `tools/manifest.cjs` row (+ `HARD_EDGES` if eval-time
+   destructure), then `npm run gen` (writes the `index.html` `<script>` tag — generated, never
+   hand-edited) + lower
    the ceilings: `node tools/check/ratchets.mjs --update --lower-only` (a delta in tests/data/ratchets.d on a topic branch).
 5. `grep` every removed symbol. Then `npm run test:tooling-fast`. Near
    `game.js`: `physics-characterization` is the master gate — parent names
    leftover browser groups as not-run.
-6. No bump — `bump-cache` is deploy-only (AGENTS.md); `node tools/gen/gen-shell.mjs` only if the manifest changed.
+6. No bump — `bump-cache` is deploy-only (`.claude/rules/game-code.md`); `npm run gen` only if the manifest changed.
 
 `extract-module.mjs` does **not** write the module, manifest, or tags.
 
-## 2. Split a fat skill / always-on doc
+## 2. Split an always-on doc
 
-- `SKILL.md` stays when / entry / don'ts / dispatch. War stories go to
-  `references/*.md`. Caps live in `tests/unit/skill-progressive.test.mjs`.
-- Do not paste `AGENTS.md` into a skill. Point at it.
+- A fat skill is **agent-config** (DECISIONS #8); this section covers docs.
+- Do not paste `AGENTS.md` into a doc. Point at it.
 - The `total-audit` workflow (`docs-ref` / `docs-idx` lenses) first if the prose may be stale.
-- New skill: list it in `.claude/skills/README.md` (docs-integrity).
 
 ## 3. Split the tree (new directory / file family)
 
@@ -54,6 +53,11 @@ row. Grep the symbol; check `hooks-documented`, `global-registry`,
 `scenery-api-contract`, `css-tokens`. A suspected dead `__apex` hook is
 **unverified** until the parent pokes `agentHelp()` via **mcp-probe**
 (one browser at a time: `mcp-probe/references/traps-chrome.md`).
+
+**Dead CSS** (a selector or `--token` nothing uses): grep every `css/*.css`, `index.html`, `js/**` (class
+names built in JS: grep the stem too) and `controller.html`; the proof is a green
+`tests/unit/css-tokens.test.mjs` after the cut plus one screenshot of the touched screen by the parent
+(844×390 touch first). Restructuring what is left is **css-play**.
 
 **Duplicate:** keep one seam. Shared scalars already live on `M4`
 (`clamp`/`lerp`/`wrapDelta`) — do not add a private copy
