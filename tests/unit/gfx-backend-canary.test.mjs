@@ -197,6 +197,35 @@ test("Gfx binds TLX when the preference is unset and honours explicit backends",
   assert.equal((await bind("webgpu")).name, "wgx", "explicit WEBGPU still takes WGX");
 });
 
+test("Gfx.create discards a backend whose init owner was revoked and logs why it fell back (audit4 R3)", async () => {
+  let disposed = 0;
+  const ctx = vm.createContext({ window: {}, localStorage: makeStorage({}), navigator: { gpu: {} } });
+  seedLog(ctx);
+  vm.runInContext(read("js/render/gfx.js"), ctx, { filename: absSrc("js/render/gfx.js") });
+  const G = vm.runInContext("Gfx", ctx);
+  const owner = G.createInitOwner({ getContext: () => null });
+  // The boot timeout fires in the gap between TLX resolving and the owner check.
+  ctx.TLX = { async create() { owner.abort(); return { dispose() { disposed++; } }; } };
+  assert.equal(await G.create({}, { initOwner: owner }), null, "a revoked init never binds");
+  assert.equal(disposed, 1, "the orphaned backend is disposed, not dropped live");
+  const bind = Array.from(ctx.Log.records(), (r) => r.msg).filter((m) => m.startsWith("Gfx.bind"));   // test-realm array
+  assert.deepEqual(bind, ["Gfx.bind fallback webgl2 (Renderer initialization cancelled)"], "the fallback line carries the exception text");
+});
+
+// tools/check/dup-functions.mjs (audit4 B1): car-body-geom.js carried two `function fitBodyDetails(` in one
+// create() scope; the hoisted later copy won and edits to the first changed nothing. js/ is the scanned tree here
+// (tooling-fast); `node tools/check/dup-functions.mjs` scans js/, tools/ and tests/.
+test("dup-functions lint: a function declared twice in one scope is a finding; js/ has none", async () => {
+  const { scanFile, scanTree } = await import("../../tools/check/dup-functions.mjs");
+  const twice = "const M = (function () { function a() { return 1; }\n function b() {}\n function a() { return 2; }\n return { a, b }; })();";
+  assert.deepEqual(scanFile(twice, "x.js").map((h) => [h.name, h.first, h.line]), [["a", 1, 3]], "the dead first copy is named with both lines");
+  const sibling = "function f() { function h() {} } function g() { function h() {} } switch (1) { case 1: { function k() {} } }";
+  assert.deepEqual(scanFile(sibling, "y.js"), [], "the same helper name in two sibling scopes is fine");
+  assert.ok(scanFile("function (", "bad.js")[0].parseError, "an unparseable file is reported, not skipped");
+  const hits = scanTree(ROOT, ["js"]);
+  assert.deepEqual(hits.map((h) => `${h.file}:${h.line} ${h.name} (first ${h.first})`), [], "js/ declares no function twice in one scope");
+});
+
 test("boot canary disarms after a successful bind, not only after present()", () => {
   const game = code("js/game.js");
   const bind = game.search(/Object\.defineProperties\(\s*GLX\s*,\s*Object\.getOwnPropertyDescriptors\(\s*backend\s*\)\s*\)/);

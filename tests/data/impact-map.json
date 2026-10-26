@@ -6284,16 +6284,19 @@
     },
     "js/fx/droplets.js": {
       "clear": [
-        "tests/unit/droplets-spray.test.mjs"
+        "tests/unit/droplets-spray.test.mjs",
+        "tests/unit/visor-optics.test.mjs"
       ],
       "rate": [
         "tests/unit/droplets-spray.test.mjs"
       ],
       "stats": [
-        "tests/unit/droplets-spray.test.mjs"
+        "tests/unit/droplets-spray.test.mjs",
+        "tests/unit/visor-optics.test.mjs"
       ],
       "tick": [
-        "tests/unit/droplets-spray.test.mjs"
+        "tests/unit/droplets-spray.test.mjs",
+        "tests/unit/visor-optics.test.mjs"
       ]
     },
     "js/fx/grade-tint.js": {
@@ -6448,6 +6451,9 @@
     },
     "js/fx/visor-optics.js": {
       "blendMode": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
+      "clear": [
         "tests/unit/visor-optics.test.mjs"
       ],
       "lampAdapt": [
@@ -12993,6 +12999,7 @@
         "tests/unit/renderer-boot-timeout.test.mjs"
       ],
       "createInitOwner": [
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/init-owner-resize-observer.test.mjs",
         "tests/unit/render-final-contracts.test.mjs"
       ],

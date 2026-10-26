@@ -184,6 +184,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/destructure-usage.mjs** | Fails when a file destructures a name its script-global provider does not export (a dropped name after a rebase). | slim-bloat |
 | **check/determinism-bisect.mjs** | First-divergent-step finder: compare two per-step game-vm state traces (seeds or builds). | agent-view |
 | **check/doctor.mjs** | Read-only YAML/refs/mirrors/browser/deps doctor; --json and optional --catalog FILE. No browser or network. | check-changes |
+| **check/dup-functions.mjs** | Scans js/, tools/, tests/ for a function declared twice in one scope: the hoisted later copy wins, the first is dead. | check-changes |
 | **check/dup-keys.mjs** | Scans js/ for a DUPLICATE key in one object literal — the merge hazard where two sessions add a field and later wins. | check-changes |
 | **check/episode-diff.mjs** | Names the per-car field that broke seeded replay: replays a seed N times in the VM, diffs cold vs warm. | — |
 | **check/extract-module.mjs** | Reorg helper for `game.js` extractions: free-reference analysis of a line range, rewritten against `G.<name>` (`--out`). | slim-bloat |
