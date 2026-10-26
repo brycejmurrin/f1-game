@@ -206,24 +206,48 @@ test("boot canary disarms after a successful bind, not only after present()", ()
     "PROBE_KEY must be cleared after Gfx.create() binds, before the first present — title has no track");
 });
 
-test("a successful deferred bind clears a stale GLX live-backend latch", () => {
-  const game = code("js/game.js");
-  const bind = game.search(/Object\.defineProperties\(\s*GLX\s*,\s*Object\.getOwnPropertyDescriptors\(\s*backend\s*\)\s*\)/);
-  const fallback = game.indexOf("if (!gfx) {", bind);
-  const success = game.slice(bind, fallback);
-  assert.match(success, /if\s*\(\s*gfx\s*\)[^]*?sessionStorage\.removeItem\(\s*"apex26\.gfxBound"\s*\)/,
-    "same-tab recovery must not retain a previous GLX fallback after TLX/WGX binds");
-  assert.match(success, /dispatchEvent\(\s*new Event\(\s*"apex-gfx-live"\s*\)\s*\)/,
-    "SETTINGS and diagnostics must repaint after the live bind changes");
+function bootLiveBackend({ pref = "three", ss = {}, ls = {}, backend = { backend: "three" }, glx = { init: () => true } } = {}) {
+  // Keep boot deadlines pending while each mocked operation settles normally.
+  const h = bootRendererBoot({ ls: { "apex26.gfxBackend": pref, ...ls }, ss, setTimeout: () => 1 });
+  const events = [], creates = [];
+  h.ctx.GLX = glx;
+  h.ctx.Gfx = { async create(_canvas, opts) { creates.push(opts.backend); return backend; } };
+  h.ctx.Event = class { constructor(type) { this.type = type; } };
+  h.ctx.window.dispatchEvent = (event) => events.push({ type: event.type, bound: h.ss.getItem("apex26.gfxBound") });
+  return { ...h, events, creates, glx };
+}
+
+test("a successful deferred bind clears a stale GLX live-backend latch", async () => {
+  for (const pref of ["three", "webgpu"]) {
+    const backend = { backend: pref, get width() { return 123; } };
+    const h = bootLiveBackend({ pref, backend, ss: { "apex26.gfxBound": "webgl2", "apex26.gfxFallbackWhy": "previous refusal" } });
+    const result = await h.api.start();
+    assert.equal(result.gfx, h.glx, "bind preserves the shared GLX identity");
+    assert.equal(result.bound, true);
+    assert.equal(result.gfx.width, 123, "backend live getters survive descriptor copying");
+    assert.equal(h.ss.getItem("apex26.gfxBound"), null, "successful bind clears a prior GLX latch");
+    assert.equal(h.ss.getItem("apex26.gfxFallbackWhy"), null);
+    assert.deepEqual(h.events, [{ type: "apex-gfx-live", bound: null }], "listeners see the cleared latch at notification time");
+    assert.equal(h.ls.getItem("apex26.gfxBackendProbe"), null, "title-only bind disarms without a present");
+    assert.deepEqual(h.creates, [pref]);
+  }
 });
 
-test("every successful game.js GLX fallback publishes the live backend", () => {
-  const game = code("js/game.js");
-  const fallback = game.slice(game.indexOf("if (!gfx) {"), game.indexOf("// Baked asset pack"));
-  assert.match(fallback, /gfx\s*=\s*GLX[\s\S]*sessionStorage\.setItem\(\s*"apex26\.gfxBound"\s*,\s*"webgl2"\s*\)/,
-    "claim-fail, first-strike and null-create all converge on the successful GLX attach");
-  assert.match(fallback, /dispatchEvent\(\s*new Event\(\s*"apex-gfx-live"\s*\)\s*\)/,
-    "the picker must repaint immediately when GLX takes over");
+test("every successful game.js GLX fallback publishes the live backend", async () => {
+  for (const scenario of ["explicit", "claim-fail", "first-strike", "refused", "failed-bind"]) {
+    const glx = { init: () => true };
+    if (scenario === "failed-bind") Object.preventExtensions(glx);
+    const h = bootLiveBackend({ pref: scenario === "explicit" ? "webgl2" : "three", glx,
+      backend: scenario === "refused" ? null : { backend: "three" },
+      ss: scenario === "claim-fail" ? { "apex26.gfxClaimFail": "1" } : {},
+      ls: scenario === "first-strike" ? { "apex26.gfxBackendProbe": "three" } : {} });
+    const result = await h.api.start();
+    assert.equal(result.gfx, glx, scenario + " attaches GLX");
+    assert.equal(result.bound, false, scenario + " does not claim a deferred bind");
+    assert.equal(h.ss.getItem("apex26.gfxBound"), "webgl2", scenario + " publishes the actual renderer");
+    assert.deepEqual(h.events, [{ type: "apex-gfx-live", bound: "webgl2" }], scenario + " notifies after publishing GLX");
+    assert.deepEqual(h.creates, ["refused", "failed-bind"].includes(scenario) ? ["three"] : [], scenario + " reaches the intended boot path");
+  }
 });
 
 test("the shared Playwright fixture pins native GLX coverage", () => {
