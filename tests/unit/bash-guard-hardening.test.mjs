@@ -1400,11 +1400,12 @@ test("shell poll loops are refused: for/while … (ci-watch|gh run|git log|…) 
   assert.equal(run("APEX_POLL_OK=1 for i in $(seq 1 3); do git ls-remote origin; sleep 2; done").status, 0, "the command's own override");
 });
 
-test("a subagent may print --help / -h of a launcher that honours it; test-bg and the census producers stay refused", () => {
+test("a subagent may print --help / -h of a launcher that honours it; a test-bg run and the census producers stay refused", () => {
   const sub = (command) => hook("bash-guard.sh", { tool_name: "Bash", tool_input: { command }, agent_id: "a1", agent_type: "worker" }, { env: { APEX_HELD_CHECK: "0" } });
-  for (const c of ["node tools/shot/agent.mjs --help", "node tools/ci/verify-change.mjs --help", "node tools/ci/verify-change.mjs -h", "node tools/shot/shot.mjs -h"])
+  // test-bg.mjs honours --help since audit4 C2 (strict flags: usage, exit 0, no run), so its help is open too.
+  for (const c of ["node tools/shot/agent.mjs --help", "node tools/ci/verify-change.mjs --help", "node tools/ci/verify-change.mjs -h", "node tools/shot/shot.mjs -h", "node tools/ci/test-bg.mjs --help"])
     assert.equal(sub(c).status, 0, `help is not a browser run: ${c} ${sub(c).stderr}`);
-  for (const c of ["node tools/ci/test-bg.mjs --help", "node tools/ci/verify-change.mjs", "node tools/shot/agent.mjs spa view"])
+  for (const c of ["node tools/ci/test-bg.mjs ui", "node tools/ci/test-bg.mjs --spec tests/specs/abudhabi-foundation.spec.js", "node tools/ci/verify-change.mjs", "node tools/shot/agent.mjs spa view"])
     assert.equal(sub(c).status, 2, `still a browser run: ${c}`);
 });
 

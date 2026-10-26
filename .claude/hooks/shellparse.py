@@ -1361,7 +1361,7 @@ def _browser_script(path, args, cwd):
     b = os.path.basename(path)
     # `--help` / `-h` / `help` print and exit (2026-10-26 audit: `tools/shot/agent.mjs --help` and
     # `verify-change.mjs --help` were blocked in a read-only subagent) — but only for a script that HONOURS the
-    # flag (exitIfHelp, or a literal "--help" in its source); test-bg.mjs and the census producers do not, and an
+    # flag (exitIfHelp, or a literal "--help" in its source); the census producers do not (test-bg.mjs does since audit4 C2), and an
     # ignored flag must never authorize Chromium.
     if (any(a in ("--help", "-h") for a in args) or args[:1] == ["help"]) and _honors_help(res):
         return None
