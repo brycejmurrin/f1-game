@@ -1,4 +1,5 @@
 CHANGELOG: add a fragment `docs/changelog.d/<slug>.md` (lines `Fixed: …`; never edit CHANGELOG.md), or write `no player-facing change`.
+A PR that changes `.claude/memory/` adds, under this line, `memory-change: <reason>` (ready-gate refuses it otherwise).
 
 ## Goal
 <!-- Written when the PR opens, before the work is done; edit only if the ask changes.
@@ -15,10 +16,13 @@ CHANGELOG: add a fragment `docs/changelog.d/<slug>.md` (lines `Fixed: …`; neve
        - [ ] **now:** the step in progress (exactly one), so a pickup knows where you stopped
        - [ ] ~~dropped~~ — strike it and say why; never delete an item
        - [~] deferred — work moved to a follow-up issue (or start the text with `Deferred:`); counts as closed
-     Tick an item only with its evidence; "should work" is a [ ]. Marking ready and
-     merging are not Plan items: `ready-gate.mjs --pr <n>` refuses while one stays open. -->
+     Tick an item only with its evidence; "should work" is a [ ]. Never add a "mark
+     ready" or "merge" item: `ready-gate.mjs --pr <n>` refuses while one stays open. -->
 - [ ] **now:**
 - [ ]
+- [ ] READY to ORCH <L> via agent-msg (the orchestrator's merge-gate and merge follow)
+
+The last Plan item keeps that shape: ready-gate ignores an item that starts `READY to`, so it stays open until the READY is sent.
 
 <!-- Merge hold (the rule: .claude/rules/fleet-core.md): add, outside this comment,
      `MERGE-HOLD: <reason> | lift: <who> | until: <time or event>` and delete it when
