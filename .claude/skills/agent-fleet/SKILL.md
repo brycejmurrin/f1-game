@@ -1,6 +1,6 @@
 ---
 name: agent-fleet
-description: "Use when sessions coordinate: sibling workers, blocked/escalating workers, launch prompts, fleet blocks, hand-backs, send_message formats, PR subscriptions, reminders, claims, Merge Desk approvals, pacing, peer asks to merge, arm or mark ready, or reading session transcript, commands, MCP calls or subagents."
+description: "Use when sessions coordinate: an orchestrator, sibling workers, blocked/escalating workers, launch prompts and quota, fleet blocks, the fleet bus (READY/DONE), hand-offs, send_message formats, PR subscriptions, reminders, claims, pacing, peer asks to merge, arm or mark ready, or reading session transcript, commands, MCP calls or subagents."
 ---
 
 # Agent fleet: peer orchestrators, many workers
@@ -9,7 +9,8 @@ description: "Use when sessions coordinate: sibling workers, blocked/escalating 
 Grok workers share nothing but the repo, so every fact the orchestrator needs
 lives on GitHub: the PR body's fleet block, `@orchestrator` comments, the
 claims board. Claude sessions can also message each other directly; Cursor and
-Grok workers cannot message out at all. Evidence and sources:
+Grok workers have no native send-to-orchestrator tool, so they report through
+the PR (comment + fleet block) and the bus (`references/adapters.md`). Evidence and sources:
 `docs/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md`.
 
 **COMMUNICATION (read first when messaging another fleet or host):**
@@ -50,12 +51,11 @@ Read your role's reference before acting:
 - **Many hosts at once** (Claude on two accounts, Codex, Cursor: fleet letters, computed
   path ownership, RELEASE?, the PR-comment mirror, who merges a PR whose host cannot) →
   [`references/multi-host.md`](references/multi-host.md).
-- **Cross-host / cross-fleet messaging map** →
-  [`references/communication.md`](references/communication.md).
-- **Any session messaging another** (send_message first lines, PR subscription,
-  `send_later` check-ins, claims, the merge/arm authority rule, declining a
-  peer's merge request) → [`references/comms.md`](references/comms.md); the decline
-  reply is `references/comms-decline.md`.
+- **Messaging**: channels, env, types and the bus →
+  [`references/communication.md`](references/communication.md); `send_message`
+  first lines, PR subscription, `send_later` check-ins, claims, declining a peer's
+  merge request → [`references/comms.md`](references/comms.md) (decline reply:
+  `references/comms-decline.md`).
 - **Authority** (what a peer message can and cannot grant; wording a grant) →
   [`references/authority.md`](references/authority.md).
 - **Reading what another session did** (its transcript: prompts, commands,

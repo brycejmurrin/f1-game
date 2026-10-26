@@ -77,5 +77,9 @@ Assign every event to one tier so the game is neither dead nor exhausting.
 - **Reduce flashing** (photosensitivity): replace white flashes with a static tint.
 - **Reduce camera motion:** cut roll and zoom punches.
 
-Expose these through the existing settings UI (**ui-menu-a11y** owns the menu), and honour
-`prefers-reduced-motion` for DOM effects.
+Read the existing gates instead of adding settings: `motionReduced()` (OS
+reduce-motion) and `camComfort()` (XR / reduce-motion / touch auto-comfort) in
+`js/game.js`; new settings UI is **ui-menu-a11y**'s. Honour
+`prefers-reduced-motion` for DOM effects. Haptics on the phone: iOS Safari has no
+`navigator.vibrate`, so a kerb buzz never reaches Bryce's iPhone — check
+`js/input/haptics.js` before promising one.

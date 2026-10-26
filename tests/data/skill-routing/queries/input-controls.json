@@ -6,5 +6,7 @@
 {"query":"On mobile, the on-screen left/right steer buttons stay 'held' if I slide my thumb off them and lift it, so the car keeps turning until I tap again. Also the racing-line driving help sometimes stays highlighted. Diagnose the touch-release handling.","expect":"input-controls"},
 {"query":"The car understeers badly in slow hairpins at Monaco even with keyboard steering; turn-in should be snappier. Compare grip settings with an A/B run through the headless obs/act loop and tell me whether the driving feel improved.","expect":"tune-physics"},
 {"query":"Pressing Escape while the gamepad settings dialog is open closes the whole menu instead of just the dialog, and keyboard focus is lost afterwards. Fix the back behaviour and focus return for the controls screen.","expect":"ui-menu-a11y"},
-{"query":"I want to capture before/after screenshots of the cockpit camera while steering into Eau Rouge with full lock, and check the camera lag looks right when the wheel is turned quickly. Batch them headless.","expect":"playwright-probe"}
+{"query":"I want to capture before/after screenshots of the cockpit camera while steering into Eau Rouge with full lock, and check the camera lag looks right when the wheel is turned quickly. Batch them headless.","expect":"playwright-probe"},
+{"query": "The GRIP STEER cap maths looks wrong at the front's peak slip; A/B it with setPhysics", "expect": "tune-physics"},
+{"query": "on my iPhone the on-screen steer button stays stuck after I lift my finger", "expect": "input-controls"}
 ]

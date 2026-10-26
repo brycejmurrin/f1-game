@@ -64,7 +64,7 @@ the PR. On merge: `fleet-status: done`, `state: done`, `--release` the claim.
    re-armed on expiry until the `= ci …` line (it expires at 30 min). Plain mode
    emits one event per job leg and woke ~15 owners per PR (retro 2026-10-17); do not SAY on a green leg.
 3. One `send_later` check-in at AGENTS.md rule 13's cadence (50–55 min, pending
-   Bryce; was 15 min), re-armed until the PR is merged or closed, or you send
+   Bryce), re-armed until the PR is merged or closed, or you send
    READY or BLOCKED. After READY, disable the check-in (`update_trigger`
    `enabled=false`; the classifier has refused `delete_trigger` on a session's
    own check-in) and end the turn: a 600k owner paid ~$0.75 per wake to learn its queue position (W49);

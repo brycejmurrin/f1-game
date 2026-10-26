@@ -1,6 +1,6 @@
 ---
 name: js-debugger
-description: "Use when debugging JavaScript via js-debugger: conditional source breakpoints, stepping into/over, call frame scopes, locals, stale pause tokens, debugger daemon, exception pauses. Heap/CPU profiling → mcp-probe."
+description: "Use when debugging JavaScript via js-debugger: conditional source breakpoints, stepping into/over, call frame scopes, locals, stale pause tokens, debugger daemon, exception pauses, and heap/CPU/hitch profiling while attached (debugger_profile). Profiling a chrome-devtools page → mcp-probe."
 ---
 
 # Source debugging with the separate debugger MCP
@@ -16,6 +16,13 @@ The parent owns one browser group (`debug-chrome start` refuses beside a test ru
 Reuse the parent's authorized local Chrome page and dedicated debug profile.
 The debugger attaches; it never launches a browser. Browser setup and canvas
 inspection belong to `mcp-probe`.
+
+- Session only: `mcp-browser-guard.sh` refuses every `mcp__js-debugger__*` call
+  inside a subagent, status reads included (AGENTS.md rule 10); a subagent may use
+  only the shell `list-tools` / `status` below.
+- One browser at a time: never beside a Playwright test run, `playwright-official`
+  `browser_*` or chrome-devtools. Attached here, profile with `debugger_profile`
+  (cpu / heap / hitch; references/tools.md) instead of opening chrome-devtools.
 
 Requires Node 22+ and Bash for the wrapper. The debugger itself needs no npm
 package; source navigation and the game launcher need the checkout dependencies
@@ -34,7 +41,10 @@ alive between independent `call <tool> '<JSON object>'` clients. Do not start a
 second controller. `APEX_DEBUGGER_PORT` selects the bridge port on daemon and
 callers; the Chrome CDP endpoint is a separate address supplied by its owner.
 Starting a process does not attach tools to the chat; project MCP changes need
-client reload/trust. Never edit global agent instructions for this workflow.
+client reload/trust. After an edit to `tools/mcp/js-debugger-*.mjs`, or when
+`apex_status` reports `server.stale`: restart the MCP (client reload or `/mcp`)
+and the owned `serve-http` daemon (Ctrl-C, start again), then re-attach; every
+old pause token dies with it. Never edit global agent instructions for this workflow.
 
 ## Get a Chrome to attach to
 

@@ -10,7 +10,10 @@ is gone). What still needs Bryce's typed word in the acting session:
 own worker wrote is yours to lift; a hold Bryce wrote is his).
 
 No Merge Desk exists unless Bryce designates one; every orchestrator merges its
-own fleet's PRs, in parallel, on any host, and READY goes to it.
+own fleet's PRs, in parallel, on any host, and READY goes to it. A green, clean
+READY PR that has waited ≥ 2 h with no action by its fleet's merger may be
+merged by any live orchestrator, posting LEND then DONE, never under a
+well-formed hold (`.claude/rules/fleet-core.md` is the home; DECISIONS 2026-10-26 #7).
 
 ## The gate
 

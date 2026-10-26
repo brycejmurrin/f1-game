@@ -1,6 +1,6 @@
 ---
 name: asset-pack
-description: "Use when baked PBR materials in assets/pack are missing, wrong, garbled, or mismatched in colour or layer (MAT id) on GLX/TLX/WGX, editing js/render/shared/assets.js or tools/gen/assets.mjs, or tuning matTexMix / __apex.assets() / matTex() and the procedural-vs-textured tarmac A/B (sheen/exposure with a pack loaded is lighting-tuner; liveries garage-parts-livery). Black screen or NaN-white with no material involved: renderer-debug."
+description: "Use when baked PBR materials in assets/pack are missing, wrong, garbled, or mismatched in colour or layer (MAT id) on GLX/TLX/WGX, editing js/render/shared/assets.js or tools/gen/assets.mjs, or tuning matTexMix / __apex.assets() / matTex() and the procedural-vs-textured tarmac A/B. Sheen/exposure with a pack loaded → lighting-tuner; black or NaN-white canvas → renderer-debug."
 ---
 
 # Baked asset pack
@@ -9,8 +9,8 @@ Optional PBR material arrays in `assets/pack/` (albedo+roughness, normal+AO)
 indexed by per-vertex **MAT id**, blended over the procedural look via
 `matTexMix`. Tool: `tools/gen/assets.mjs`. Loader: `js/render/shared/assets.js`.
 
-Every failure degrades to **pure procedural** — no pack, bad manifest, decode
-error, or a backend without `createTextureArray` never breaks boot. Deep
+The pack's standing facts (ships ON, blend, layer = MAT id, degrade-to-procedural,
+the 4 s model wait, all three backends) live in AGENTS.md §Baked asset pack. Deep
 reference: `docs/research/ASSET-API-RESEARCH.md`.
 
 **Step 0, always:** read `__apex.assets()` — `uploaded: false` (or `supported: false`) means
@@ -21,12 +21,15 @@ every surface is procedural, so "flat / plasticky / no texture" is a pack-load p
 is this skill's workflow** (`references/workflow.md`, one-backend-only trace); other renderer
 defects (black canvas, GPU errors, shaders) are **renderer-debug**.
 
-**GLX, TLX, and WGX all implement the arrays.** A WGX `supported: false` is a
-device/feature miss, not "WGX has no pack."
+A WGX `supported: false` is a device/feature miss, not "WGX has no pack."
+
+**Agents cannot bake.** `.claude/settings.json` denies `node tools/gen/assets.mjs bake*`
+(every `bake-*` subcommand); only `verify` runs. A regenerate step is a hand-off:
+write the exact command into the PR body for Bryce, or ask him for a grant.
 
 ## When to Use
 
-- Regenerating the pack (`bake-synthetic`) or adding CC0 scan layers.
+- Planning a pack regeneration (`bake-synthetic`, Bryce runs it) or adding CC0 scan layers.
 - Licence/hash/size guards (`verify`).
 - Invisible / wrong / not-loading baked materials.
 - Tuning `matTexMix` / `__apex.matTex` or tier (`low`/`high`).
@@ -42,7 +45,7 @@ device/feature miss, not "WGX has no pack."
 
 | Command / hook | Role |
 |---|---|
-| `node tools/gen/assets.mjs bake-synthetic` | Regenerate pack, no network |
+| `node tools/gen/assets.mjs bake-synthetic` | Regenerate pack, no network (denied to agents: Bryce runs it) |
 | `node tools/gen/assets.mjs verify` | Licence allow-list, md5, 8 MB budget; read-only, prints `verify: OK` |
 | `__apex.assets()` (browser-only) | `{ supported, pack, uploaded, tier, layers, error, … }` |
 | `__apex.matTex(v?)` (browser-only) | Blend 0..1; same as `lightTune({ matTexMix })` |

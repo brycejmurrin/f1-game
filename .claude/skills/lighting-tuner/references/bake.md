@@ -49,10 +49,7 @@ node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs artifacts/tmp/edi
 ## Capture, review, ship
 
 Load this when you have a blob and are ready to write
-`js/lighting/presets.js`. Check the first line first: `window.LightEdits` is a
-delta and goes through the merge path below; only `window.LightPresets` reaches
-`bake.mjs`. The index's CRITICAL full-replace rule still applies — a partial
-object handed to `bake.mjs` wipes every other key.
+`js/lighting/presets.js` (the table at the top picks the tool).
 
 ### The merge path (no bake.mjs) — proposals AND player pastes
 
@@ -87,7 +84,7 @@ have a complete shipped snapshot, do **not** feed `bake.mjs` a one-key object:
    `window.LightPresets` object (plain JSON after the assignment).
 2. `Object.assign` just that key's new value — leave every other key.
 3. Write the whole object back as `window.LightPresets = {…};` and
-   `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
+   `node tools/gen/gen-shell.mjs --check` (no bump: [shell/cache](../../check-changes/references/bump.md)).
 
 Prefer the explicit `merge-proposals.mjs` path for partial player deltas.
 
@@ -95,10 +92,7 @@ Prefer the explicit `merge-proposals.mjs` path for partial player deltas.
 
 Keys are `"trackId|timeOfDay|weather"`, `"*"`, or `"*|timeOfDay"`;
 `timeOfDay` ∈ dawn|day|dusk|night, `weather` values must be registered in the current game settings.
-Values are partial `{knobId: number}` maps (only non-default knobs). A
-`window.LightPresets` blob is a FULL snapshot and REPLACES the whole literal;
-a `window.LightEdits` blob (what COPY VALUES emits) is a DELTA and must go
-through the merge path above.
+Values are partial `{knobId: number}` maps (only non-default knobs).
 
 ### Steps
 
@@ -110,8 +104,9 @@ through the merge path above.
    BLOB
    ```
 
-2. **Bake** (writes presets only; ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) —
-   validates key syntax, registered knobs, finite values, range and slider grid; never commits):
+2. **Bake** (writes presets only, never commits; no cache bump:
+   [shell/cache](../../check-changes/references/bump.md); validates key syntax,
+   registered knobs, finite values, range and slider grid):
    ```sh
    node .claude/skills/lighting-tuner/scripts/bake.mjs artifacts/tmp/presets.txt
    ```
@@ -121,8 +116,7 @@ through the merge path above.
    git --no-pager diff js/lighting/presets.js
    node --check js/lighting/presets.js
    ```
-   Every key and knob must pass the script validator. COPY VALUES is a
-   delta: use merge-proposals, never re-copy it as a full snapshot.
+   Every key and knob must pass the script validator.
 
 4. **Smoke (optional):** `node tools/ci/test-bg.mjs smoke`
 
