@@ -140,7 +140,9 @@
 .td-input {
   min-height: var(--chip-h);
   padding: 0 var(--gap);
-  font: inherit; font-size: var(--fs-2); text-transform: uppercase; letter-spacing: var(--ls-2);
+  /* 16px floor: iOS Safari auto-zooms when a focused input is under 16px.
+     var(--fs-2) is 15px at the default text scale — one px under the floor. */
+  font: inherit; font-size: 16px; text-transform: uppercase; letter-spacing: var(--ls-2);
   color: var(--text);
   background: var(--plate);
   border: 1px solid var(--plate-line);

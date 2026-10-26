@@ -144,14 +144,16 @@
     // its goldens and env/mirror parity stay as they were). apex26.tlxScene11="1" forces it on, "0" keeps
     // RGBA16F — the Device Farm A/B pair. 11/11/10 keeps 6/6/5 mantissa bits: a banding check on a night
     // gradient is the device evidence this still owes (docs/notes/PERF-KNOWN-WINS-2026-10-23.md row 15).
-    // WEBGL2 LEG ONLY. On WebGPU three sizes the fragment output to the target's three components, and the
+    // WEBGPU LEG ONLY (revert of the WebGL2 leg, 2026-10-25: Device Farm iPhone 14 WebGL2, rg11b10 42.5 fps vs
+    // RGBA16F 45.7 / 47.0, 55 vs 13-19 frames over 33 ms; docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md
+    // §Reverted). WebGL2 keeps RGBA16F whatever the knob says. Stock three sizes the WebGPU fragment output to the target's three components, and the
     // spec refuses a src-alpha blend factor when the fragment output has no alpha (gpuweb "validating
-    // GPUFragmentState"; Dawn RenderPipeline.cpp "is reading alpha but it is missing from fragment output"):
-    // every blended material's pipeline failed on the real-GPU census (macos-latest run 40052670537 on
-    // 886e476f — decals, glass and particles would vanish). GL has no such rule, so the format stays a WebGL2
-    // win and the WebGPU leg keeps RGBA16F whatever the knob says. A vendored three that kept a vec4 output
-    // for RGB targets (the spec allows "RGB requires vec3 or vec4") would let the WebGPU leg take it too.
-    const _r11Blendable = r11Renderable && !(renderer.backend && renderer.backend.isWebGPUBackend);
+    // GPUFragmentState"): every blended material's pipeline failed on the real-GPU census (macos-latest run
+    // 40052670537 on 886e476f — decals, glass and particles would vanish). Vendored three patch 18 keeps a
+    // vec4 output for RGB targets (the spec allows "RGB requires vec3 or vec4"); with it the same census is
+    // green (run 40056676327, #3711). Renderability still gates WebGPU on the adapter's
+    // "rg11b10ufloat-renderable" feature (bloom11 above); gfx-backend-canary pins patch 18 by behaviour.
+    const _r11Blendable = r11Renderable && !!(renderer.backend && renderer.backend.isWebGPUBackend);
     let scene11 = _r11Blendable && !!ctx.isMobile;
     try {
       const k = localStorage.getItem("apex26.tlxScene11");
@@ -169,6 +171,9 @@
     }
     const whiteTex = onePx(255);
     const blackTex = onePx(0);
+    // FXAA's explicit-gradient mirror tap needs a sampler even when compiled
+    // with this constant 1x1 fallback (before the first mirror, or after off).
+    blackTex.minFilter = blackTex.magFilter = THREE.LinearFilter;
 
     // LENS DIRT smudge map: the glx/post.js makeDirtTex canvas port —
     // deterministic LCG seed, value-noise base + grime blobs + dust specks +
@@ -1017,9 +1022,9 @@
     // clears depth). On WebGL2: invalidateFramebuffer(DEPTH) on the scene FBO
     // while its pass is still open (ANGLE-Metal: store action DontCare), and on
     // an MSAA target the depth resolve blit is skipped instead
-    // (resolveDepthBuffer). three r186 has no lever on WebGPU: it stores a
-    // single-sample depth whatever its usage (WebGPUBackend discardDepth is
-    // MSAA-only), so a rebuild with a non-sampled depth would buy nothing there.
+    // (resolveDepthBuffer). Pristine r186 has no lever on WebGPU (WebGPUBackend
+    // discardDepth is MSAA-only); vendored patch 17 adds the per-pass hint that
+    // depthBegin sets on a single-sample target (A-P2W, discardHint).
     // apex26.tlxDepthDiscard="0" always keeps it.
     let _depthDiscard = true;
     try { _depthDiscard = localStorage.getItem("apex26.tlxDepthDiscard") !== "0"; } catch (_) { /* no storage: on */ }
@@ -1033,11 +1038,13 @@
     // stored by every scene fragment and fetched by nothing. Same rule shape as
     // needsDepth, from the SAME opts/F present() is about to upload, so a frame
     // whose composite reads the tag always has it. Single-sample targets only (an
-    // MSAA tag has already been resolved by the time depthEnd runs). WebGPU r186
-    // has no storeOp lever, as for depth. apex26.tlxTagDiscard="0" always keeps it.
+    // MSAA tag has already been resolved by the time depthEnd runs). WebGPU: the
+    // storeOp hint of vendored patch 17 (A-P2W, discardHint). apex26.tlxTagDiscard="0" always keeps it.
     let _tagDiscard = true;
     try { _tagDiscard = localStorage.getItem("apex26.tlxTagDiscard") !== "0"; } catch (_) { /* no storage: on */ }
     let _tagKeep = true, _tagDiscards = 0, _invTag = null, _invBoth = null;
+    const isGpu = () => !!(renderer.backend && renderer.backend.isWebGPUBackend);
+    let _gpuArmed = false;   // A-P2W: depthBegin put patch 17's hint on sceneRT
     function needsTag(opts, F) {
       const o = opts || {};
       if (viz) return true;
@@ -1078,10 +1085,37 @@
       _depthKeep = !_depthDiscard || needsDepth(opts, F);
       sceneRT.resolveDepthBuffer = _depthKeep;
       _tagKeep = !_tagDiscard || !tagOn || (sceneRT.samples | 0) > 0 || needsTag(opts, F);   // A-P2
+      // A-P2W: WebGPU fixes a storeOp when the pass BEGINS, so the same decision rides on the
+      // target as patch 17's hint before the scene render; depthEnd takes it off. Single-sample only.
+      _gpuArmed = discardHint(sceneRT, _tagKeep ? 0 : 2, !_depthKeep && (sceneRT.samples | 0) === 0);
       return _depthKeep;
     }
-    // After the scene pass, before present(): drop the depth (and the tag) this frame does not read (WebGL2 only).
+    // WebGPU leg (vendored three patch 17): store nothing of the attachments in `colorMask` (bit i =
+    // colour attachment i) and, with `depth`, of the depth, in the NEXT pass into rt. Only around the
+    // LAST render of a frame into rt — the next pass's loadOp still reads what was stored. Returns
+    // true when a hint went on; discardHintOff(rt) after the render, also on a throw.
+    function discardHint(rt, colorMask, depth) {
+      if (!rt || !isGpu()) return false;
+      const c = _tagDiscard ? colorMask | 0 : 0, d = _depthDiscard && !!depth;
+      rt.apexDiscardColor = c;
+      rt.apexDiscardDepth = d;
+      return c !== 0 || d;
+    }
+    function discardHintOff(rt) {
+      const t = rt || sceneRT;
+      if (t.apexDiscardColor) t.apexDiscardColor = 0;
+      if (t.apexDiscardDepth) t.apexDiscardDepth = false;
+      if (!rt) _gpuArmed = false;
+    }
+    // After the scene pass, before present(): drop the depth (and the tag) this frame does not read
+    // (WebGL2: invalidate; WebGPU: depthBegin's hint already did it, count it and take it off).
     function depthEnd() {
+      if (_gpuArmed) {
+        discardHintOff();
+        if (!_tagKeep) _tagDiscards++;
+        if (!_depthKeep && (sceneRT.samples | 0) === 0) _depthDiscards++;
+        return true;
+      }
       if (_depthKeep && _tagKeep) return false;
       const be = renderer.backend, gl = be && be.gl, st = be && be.state;
       if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
@@ -1186,6 +1220,7 @@
       warmMirror,
       needsDepth, depthBegin, depthEnd,   // A-P1
       needsTag, discardAttachments,   // A-P2 (the mirror discards its depth + tag through this)
+      discardHint, discardHintOff,   // A-P2W: the WebGPU leg's twin (vendored three patch 17)
       present,
       dispose,
       viz,

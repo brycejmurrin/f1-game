@@ -626,6 +626,11 @@
       "presentation": "native",
       "preserve": "Empty list is real empty; consumers depend on paths only"
     },
+    "tools/ci/js-debugger-smoke.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "list-tools / profile-summary step walls; clear stderr on wrapper break; exit 0 only when both pass"
+    },
     "tools/ci/lane-preamble.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -986,6 +991,16 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/gen/blender/crew-choreo.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/compress-audio.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
     "tools/gen/garage-defaults.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1215,6 +1230,16 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "readPixels hook phases, stall watchdog state and before/after JSON report paths."
+    },
+    "tools/gfx/readback-quit-menu-oracle.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "SwiftShader quit TTI, LoopHealth sync/stall metrics and JSON report path."
+    },
+    "tools/gfx/readback-quit-menu-oracle-repeat.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Repeated quit-menu oracle runs with median/worst aggregation JSON."
     },
     "tools/gfx/res-scale-ab.mjs": {
       "action": "keep-native",
@@ -1871,6 +1896,11 @@
       "presentation": "native",
       "preserve": "Timestamped progress lines (device, session state, boot probe, bench leg states, session minutes) and the report.json path; the endpoint URL is never printed."
     },
+    "tools/perf/devicefarm-method.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "A module, not a command: pure helpers (appendUnit, tierMoved) imported by devicefarm-iphone.mjs; prints nothing."
+    },
     "tools/perf/devicefarm-opus-probe.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1897,6 +1927,11 @@
       "preserve": "@c8"
     },
     "tools/perf/mesh-census-lib.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
+    "tools/perf/idle-pipeline-census.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"

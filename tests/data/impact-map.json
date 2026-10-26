@@ -1203,6 +1203,9 @@
       ]
     },
     "js/audio/voice-pack.js": {
+      "codecs": [
+        "tests/unit/voice-pack.test.mjs"
+      ],
       "compose": [
         "tests/unit/voice-pack.test.mjs"
       ],
@@ -1286,6 +1289,7 @@
         "tests/unit/hud-dock-pack.test.mjs",
         "tests/unit/hud-elements.test.mjs",
         "tests/unit/hud-helmet-placement.test.mjs",
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ]
     },
@@ -1879,10 +1883,14 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "comfortGet": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "comfortSet": [
         "tests/unit/camera-defaults.test.mjs"
+      ],
+      "context": [
+        "tests/unit/cam-context-alloc.test.mjs"
       ],
       "copyFrom": [
         "tests/unit/camera-defaults.test.mjs"
@@ -1928,6 +1936,7 @@
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "importPack": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "importText": [
@@ -1935,11 +1944,15 @@
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "load": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/light-grid.test.mjs"
       ],
       "persist": [
         "tests/unit/camera-defaults.test.mjs"
+      ],
+      "refreshStoredContext": [
+        "tests/unit/cam-context-alloc.test.mjs"
       ],
       "reset": [
         "tests/unit/camera-defaults.test.mjs",
@@ -1951,7 +1964,11 @@
       "rollTarget": [
         "tests/unit/camera-defaults.test.mjs"
       ],
+      "scopeKey": [
+        "tests/unit/cam-context-alloc.test.mjs"
+      ],
       "setContext": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "setGlobal": [
@@ -1966,6 +1983,7 @@
       ],
       "values": [
         "tests/specs/camera-tuner.spec.js",
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "*": [
@@ -2404,6 +2422,9 @@
       "setPlayerParts": [
         "tests/unit/livery-tier.test.mjs"
       ],
+      "sharedRivalBodyMesh": [
+        "tests/unit/field-lod.test.mjs"
+      ],
       "teamBodyMesh": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs"
@@ -2427,6 +2448,7 @@
       ],
       "*": [
         "tests/specs/quali.spec.js",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -2531,7 +2553,8 @@
         "tests/unit/frame-hotpath-alloc.test.mjs"
       ],
       "drawRetroTelemetry": [
-        "tests/unit/cockpit-wheels.test.mjs"
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/retro-shift-lights.test.mjs"
       ],
       "drawTailGlow": [
         "tests/unit/frame-hotpath-alloc.test.mjs"
@@ -2600,7 +2623,8 @@
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "getLedStrip": [
-        "tests/unit/cockpit-wheels.test.mjs"
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/retro-shift-lights.test.mjs"
       ],
       "getMirrorFallback": [
         "tests/unit/cockpit-wheels.test.mjs",
@@ -2623,7 +2647,8 @@
         "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
-        "tests/unit/mirror-glass-night.test.mjs"
+        "tests/unit/mirror-glass-night.test.mjs",
+        "tests/unit/retro-shift-lights.test.mjs"
       ],
       "releaseIdleFlaps": [
         "tests/unit/car-mesh-crew-cache.test.mjs"
@@ -4814,6 +4839,7 @@
         "tests/unit/real-race.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/replay-buf.test.mjs",
+        "tests/unit/retro-shift-lights.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs",
@@ -6738,7 +6764,8 @@
         "tests/unit/race-step-snap.test.mjs"
       ],
       "retireCar": [
-        "tests/unit/net-authority.test.mjs"
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/rank-sort-alloc-vm.test.mjs"
       ],
       "scheduleFlybyTrack": [
         "tests/unit/garage-arrival.test.mjs",
@@ -6913,6 +6940,7 @@
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/rank-sort-alloc-vm.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/sim-bytecode-budget.test.mjs",
@@ -7035,7 +7063,8 @@
         "tests/unit/garage-crew.test.mjs"
       ],
       "bindSettings": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs"
       ],
       "cancel": [
         "tests/unit/garage-arrival.test.mjs"
@@ -7044,12 +7073,17 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
+      "crewFor": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
       "duration": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "pose": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "poseOut": [
@@ -7058,6 +7092,7 @@
       ],
       "settings": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "start": [
@@ -7067,19 +7102,42 @@
         "tests/unit/garage-arrival.test.mjs"
       ]
     },
+    "js/garage/crew-choreo.js": {
+      "actors": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "draw": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "pick": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "sample": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "value": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ]
+    },
     "js/garage/crew-motion.js": {
       "draw": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "free": [
         "tests/unit/garage-crew.test.mjs"
       ],
       "sample": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ]
     },
     "js/garage/crew-service.js": {
+      "actors": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
       "draw": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "free": [
@@ -7157,6 +7215,14 @@
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs"
+      ]
+    },
+    "js/garage/pit-crew.js": {
+      "draw": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "phase": [
+        "tests/unit/garage-crew-choreo.test.mjs"
       ]
     },
     "js/garage/pit-signs.js": {
@@ -7238,6 +7304,7 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "draw": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
@@ -7246,6 +7313,7 @@
         "tests/unit/garage-crew.test.mjs"
       ],
       "init": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
@@ -7255,6 +7323,9 @@
       ],
       "noseTip": [
         "tests/unit/garage-crew.test.mjs"
+      ],
+      "place": [
+        "tests/unit/garage-crew-choreo.test.mjs"
       ],
       "setLook": [
         "tests/unit/garage-crew.test.mjs",
@@ -7353,6 +7424,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "*": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -8579,7 +8651,9 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-smith-root.test.mjs",
         "tests/unit/weather-blend.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
@@ -9592,6 +9666,19 @@
         "tests/unit/loop-health.test.mjs"
       ]
     },
+    "js/perf/menu-quit-tail.js": {
+      "*": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ]
+    },
+    "js/perf/menu-teardown.js": {
+      "beginQuit": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "cover": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ]
+    },
     "js/perf/metrics-overlay.js": {
       "ensurePanel": [
         "tests/unit/metrics.test.mjs"
@@ -10595,6 +10682,7 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/rain-cells.test.mjs",
         "tests/unit/real-race.test.mjs",
+        "tests/unit/retro-shift-lights.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs",
@@ -11577,6 +11665,7 @@
       ],
       "info": [
         "tests/specs/pit-lane.spec.js",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -11637,7 +11726,8 @@
         "tests/unit/pit-lane.test.mjs"
       ],
       "reset": [
-        "tests/unit/damage.test.mjs"
+        "tests/unit/damage.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs"
       ],
       "serviceCar": [
         "tests/unit/pit-lane.test.mjs"
@@ -11672,6 +11762,7 @@
         "tests/unit/pit-lane-vm.test.mjs"
       ],
       "update": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -13124,6 +13215,7 @@
       ],
       "create": [
         "tests/unit/boot-idle-prefetch.test.mjs",
+        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs",
         "tests/unit/script-loader-preload.test.mjs"
@@ -13144,6 +13236,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "start": [
+        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs",
         "tests/unit/script-loader-preload.test.mjs"
@@ -13417,6 +13510,7 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-smith-root.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
       ]
@@ -13475,6 +13569,7 @@
       "*": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
       ]
@@ -13605,13 +13700,20 @@
       "discardAttachments": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
+      "discardHint": [
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
+      "discardHintOff": [
+        "tests/unit/tlx-hunt4c.test.mjs"
+      ],
       "dispose": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs"
       ],
       "drawWarm": [
         "tests/unit/tlx-hunt4c.test.mjs"
@@ -13638,6 +13740,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs"
       ],
@@ -13645,7 +13748,8 @@
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs"
       ],
       "present": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13655,6 +13759,7 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "resize": [
@@ -13663,10 +13768,14 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs"
       ],
       "runPass": [
         "tests/unit/tlx-post-fixed-mats.test.mjs"
+      ],
+      "setMirror": [
+        "tests/unit/tlx-mirror-inset.test.mjs"
       ],
       "syncAaRT": [
         "tests/unit/tlx-post-phone-res.test.mjs"
@@ -13942,7 +14051,8 @@
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "dropWrapper": [
-        "tests/unit/render-final-contracts.test.mjs"
+        "tests/unit/render-final-contracts.test.mjs",
+        "tests/unit/tlx-pipe-pin-warm.test.mjs"
       ],
       "ensureStream": [
         "tests/unit/tlx-hunt3.test.mjs",
@@ -13998,6 +14108,9 @@
       "onErr": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "pinPipelines": [
+        "tests/unit/tlx-pipe-pin-warm.test.mjs"
+      ],
       "pinSkyMaterial": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs"
@@ -14010,6 +14123,7 @@
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "prunePool": [
+        "tests/unit/tlx-pipe-pin-warm.test.mjs",
         "tests/unit/tlx-prune-pin.test.mjs"
       ],
       "pumpAnimation": [
@@ -14182,7 +14296,8 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-smith-root.test.mjs"
       ],
       "*": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -14217,7 +14332,8 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-smith-root.test.mjs"
       ],
       "setLampBake": [
         "tests/unit/tlx-hunt3.test.mjs"
@@ -14412,9 +14528,6 @@
       ]
     },
     "js/render/webgpu/wgx.js": {
-      "_buildPost": [
-        "tests/unit/webgpu-lifecycle.test.mjs"
-      ],
       "_capEncode": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
@@ -14423,9 +14536,6 @@
       ],
       "_destroyTargetSet": [
         "tests/unit/frame-hotpath-alloc.test.mjs"
-      ],
-      "_ensureSpatial": [
-        "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "_expandPull": [
         "tests/unit/livery-finish-contract.test.mjs"
@@ -14585,6 +14695,9 @@
       "freeTexture": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
+      "getSpatialUpscale": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "getSpatialUpscaleGather": [
@@ -14810,6 +14923,7 @@
         "tests/specs/material-shimmer.spec.js",
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/build-worker.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
@@ -14876,6 +14990,7 @@
       ],
       "resolve": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
@@ -15577,6 +15692,7 @@
       "*": [
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-survey.test.mjs"
       ]
     },
@@ -15607,6 +15723,7 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "build": [
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ],
       "clearReadouts": [
@@ -15616,6 +15733,7 @@
         "tests/unit/hud-elements.test.mjs"
       ],
       "hiddenReason": [
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ],
       "isShipped": [
@@ -15623,6 +15741,9 @@
       ],
       "migrate": [
         "tests/unit/hud-layout.test.mjs"
+      ],
+      "narrow": [
+        "tests/unit/hud-layout-hidden.test.mjs"
       ],
       "originOf": [
         "tests/unit/hud-layout.test.mjs"
@@ -16551,6 +16672,7 @@
     },
     "js/ui/setting-row.js": {
       "build": [
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/title-layout.test.mjs",

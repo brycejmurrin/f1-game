@@ -191,11 +191,18 @@
         return true;
       };
 
+      // Seat dunes on local sand, not the lap's global low point. mountain(...,
+      // pyMin, ...) rooted every wedge at the Sakhir valley floor, so mid-lap
+      // dunes sat metres under the desert mesh (ground-audit buried 13 @ duneWedge).
+      const duneBaseY = (x, z) => {
+        const gy = terrainYAt(x, z);
+        return gy != null && Number.isFinite(gy) ? gy : pyMin;
+      };
       const duneWedge = (k, side, gap, w, h) => {
         const a = anchor(k, side, gap + w * 0.3);
         const seg = 5 + Math.floor(hash(k * 19 + side * 29) * 4);        // 5-8
         const rough = 0.20 + hash(k * 23 + side * 31) * 0.20;            // 0.2-0.4
-        mountain(a.c[0], a.c[2], pyMin, w * 0.55, h, {
+        mountain(a.c[0], a.c[2], duneBaseY(a.c[0], a.c[2]), w * 0.55, h, {
           seg, seed: k * 3 + side * 17,
           rough, snowline: 99,
           forest: DUNE, rock: SAND_DARK, snow: DUNE_LIT,
@@ -829,7 +836,7 @@
       ]) {
         const k = K(s);
         const a = anchor(k, side, dist + wBase * 0.3);
-        mountain(a.c[0], a.c[2], pyMin, wBase * 0.55 + hash(k * 7) * 30,
+        mountain(a.c[0], a.c[2], duneBaseY(a.c[0], a.c[2]), wBase * 0.55 + hash(k * 7) * 30,
           hBase + hash(k * 11) * 5,
           { seg: 7, seed: k * 5 + dist, rough: 0.28, snowline: 99,
             forest: SAND_DARK, rock: SAND, snow: DUNE_LIT });
@@ -842,7 +849,7 @@
       ]) {
         const k = K(s);
         const a = anchor(k, side, dist + 24);
-        mountain(a.c[0], a.c[2], pyMin, 44 + hash(k * 9) * 28,
+        mountain(a.c[0], a.c[2], duneBaseY(a.c[0], a.c[2]), 44 + hash(k * 9) * 28,
           8 + hash(k * 13) * 4,
           { seg: 6, seed: k * 7 + dist, rough: 0.25, snowline: 99,
             forest: SAND, rock: SAND_LIGHT, snow: DUNE_LIT });

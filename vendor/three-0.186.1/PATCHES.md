@@ -324,3 +324,74 @@ What it does (backport of upstream #34601 and a reduced #34610):
 Upstream: fixed on dev for r187 (not published; npm latest is 0.186.1). Retire this
 patch at the r187 bump. References: https://github.com/mrdoob/three.js/issues/34597,
 https://github.com/mrdoob/three.js/pull/34601, https://github.com/mrdoob/three.js/pull/34610
+
+## 17. Single-sample storeOp discard: a per-pass hint for write-only attachments (#3681)
+
+`WebGPUBackend.beginRender` sets `GPUStoreOp.Discard` only when the pass is multisampled
+and `renderTarget.storeMultisampled{Color,Depth}Buffer === false`. Every single-sample
+attachment is stored, read or not. TLX has four that nothing reads on most phone frames:
+the scene `ssrTag` (attachment 1), an unread scene depth (A-P1), the mirror's depth and
+tag, and every shadow map's R8 colour, which WebGPU never writes (`depthMat.colorWrite`). The WebGL2 leg
+drops the same bytes with `invalidateFramebuffer` (#3679, A-P2). This patch is the WebGPU
+lever.
+
+Two opt-in members on the `RenderTarget`, read at every `beginRender`:
+`apexDiscardColor` (bit *i* = colour attachment *i*) and `apexDiscardDepth` (`true`).
+They change the **storeOp only**, never the loadOp (r186's MSAA discard also forces
+`Clear`). A pass that loads the attachment afterwards sees undefined contents, so the
+caller sets the hint around the LAST render of a frame into the target and clears it
+after (`tlx-post.js` `discardHint` / `discardHintOff`; the shadow maps carry bit 0
+permanently because nothing ever reads their colour). Array-camera layer descriptors
+(`_updateArrayCameraLayerDescriptors`, XR only) are not patched. A/B switches:
+`apex26.tlxTagDiscard="0"` (every colour hint) and `apex26.tlxDepthDiscard="0"` (depth).
+
+Upstream: unfixed on `dev` as of 2026-10-24 (the `discardColor`/`discardDepth` consts in
+`src/renderers/webgpu/WebGPUBackend.js` still gate on `sampleCount > 1`). No release
+after r186 exists. Draft: `docs/notes/UPSTREAM-THREE-ISSUES.md` §4. Canary:
+`gfx-backend-canary.test.mjs` "honours the single-sample discard hint".
+
+## 18. A 3-component colour target keeps a vec4 WGSL fragment output (#3690)
+
+`NodeBuilder.getOutputType()` types `@location(i)` from `NodeUtils.getTextureType()`, which
+gives `RGBFormat` 3 components. An `rg11b10ufloat` scene target (#3690, `apex26.tlxScene11`)
+therefore gets a `vec3` output, and WebGPU rejects any blend factor that reads the source
+alpha (gpuweb "validating GPUFragmentState"; Dawn `RenderPipeline.cpp`). On the real-GPU
+census every blended material's pipeline failed (decals, glass, particles). The spec accepts
+a `vec4` output into an RGB attachment (the extra component is dropped), so
+`WGSLNodeBuilder.getOutputType()` reports `vec4` wherever the base answer is `vec3`. That one
+override covers the plain output struct, MRT members (`MRTNode` asks the builder per index)
+and `NodeMaterial`'s fragment conversion. GLSL is untouched: WebGL2 has no such rule, and
+#3690's WebGL2 leg already works.
+
+Upstream: unfixed on `dev` as of 2026-10-24. Draft: `docs/notes/UPSTREAM-THREE-ISSUES.md` §5.
+Canary: `gfx-backend-canary.test.mjs` "gives a 3-component colour target a vec4 output".
+
+## 19. Shared binding group update shortcut
+
+Homogeneous shared groups whose node version, binding array, member identities and
+member group nodes remain unchanged skip repeated `Nodes.updateGroup` dispatches.
+Object groups, mixed groups and empty groups keep the original path. The cache lives
+in Bindings' existing DataMap and commits only after the whole update succeeds;
+replacement of the Nodes group cache also invalidates it. A version change still
+processes texture generations, samplers, uniforms, storage attributes and ranges.
+
+The shipping-method CPU regression test is
+`tests/unit/three-shared-binding-update.test.mjs`. It verifies exact side-effect
+traces and 4,800 → 12 group-map reads for 400 draws with 12 shared bindings.
+This is a dispatch count, not a device frame-time claim. Revisit against upstream
+`src/renderers/common/nodes/Nodes.js` on every vendor bump.
+
+## 20. Opted-in Uint16 index storage
+
+`__apexUint16Index` opts owned static scalar Uint16 INDEX buffers into narrow
+storage when they contain no primitive-restart sentinel. Vertex/storage,
+interleaved, instanced, normalized and unmarked attributes retain upstream handling.
+A padded CPU shadow ensures four-byte-aligned whole and partial writes, preserving
+neighbor elements outside explicitly requested ranges. Array replacement with the
+same format and length is supported. Later format/length/restart changes throw
+explicitly: replace the BufferAttribute so renderer layout and allocation caches
+are invalidated. This policy never silently discards an update.
+
+`tests/unit/webgpu-uint16-index.test.mjs` exercises generated vendor methods and
+mapped/writeBuffer bytes. Alignment reference:
+https://developer.mozilla.org/en-US/docs/Web/API/GPUQueue/writeBuffer.

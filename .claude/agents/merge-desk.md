@@ -118,7 +118,8 @@ branch is kept, then close. Anything short of that proof goes to Bryce.
 
 Whenever a PR is re-cut, superseded or closed in favour of another, in the
 same sweep: `send_message` the original owner (`list_sessions`, or the PR's
-fleet block `worker:`) `STAND DOWN <old PR> superseded by <new PR>`, and add a
+fleet block `worker:`; an owner on the other account, Fleet B, is reached by the bus
+`--to '#<PR>'` or the cross-account inbox instead) `STAND DOWN <old PR> superseded by <new PR>`, and add a
 line `Superseded by #<new>` to the old PR body (`update_pull_request`). The
 owner stops pushing; no owner found → say so in the summary. Evidence: #2144
 ran 3 CI cycles as a duplicate of #2027; #2276 ran ~3 h before it was closed.

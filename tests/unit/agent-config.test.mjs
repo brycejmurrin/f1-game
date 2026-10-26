@@ -1095,6 +1095,25 @@ test("a subscription never stands alone: each host's timer is named beside it", 
   assert.match(FLEET_WORKER, /tooling-fast\.mjs --changed --jobs=3/, "worker's edit loop keeps the rule-4 job cap");
 });
 
+test("the launch template's WATCH line and the orchestrator's first-act routines stay pinned", () => {
+  // Bryce 2026-10-25: owners must subscribe, and orchestrators must arm the bus routines;
+  // "subscribe with your host's tool" alone let sessions skip both.
+  const tpl = FLEET_ORCH.match(/## Launch template[\s\S]*?```text\n([\s\S]*?)```/)[1];
+  const watch = tpl.match(/^WATCH:.*(?:\n {6}.*)*/m);
+  assert.ok(watch, "launch template has a WATCH: line");
+  for (const k of ["subscribe_pr_activity", "send_later", "~15 min", "subscribe_github_ci",
+    "subscribe_github_pr", "subscribe_timer"]) {
+    assert.ok(watch[0].includes(k), `WATCH line names ${k}`);
+  }
+  const first = FLEET_ORCH.split("## First acts")[1]?.split("\n## ")[0] || "";
+  assert.match(first, /a `Monitor` that prints only NEW[^]*fleet-bus\.mjs read --to/, "first acts arm the bus Monitor (audit row 14)");
+  assert.doesNotMatch(first, /send_later` ~3 min/, "no 3-min tick on top of the bus Monitor");
+  assert.match(first, /hourly `create_trigger`[^]*0 \* \* \* \*/, "first acts arm the hourly safety net");
+  const owner = read(".claude/skills/agent-fleet/references/role-pr-owner.md");
+  assert.match(owner, /`subscribe_pr_activity` on the PR/);
+  assert.match(owner, /`send_later` check-in ~15 min/, "owner check-in is ~15 min (Bryce 2026-10-19)");
+});
+
 test("the adapter table covers each host's verified spawn path", () => {
   // The table moved from orchestrator.md to adapters.md (2026-10-18 split); the pins moved with it.
   const table = FLEET_ADAPT.match(/## Per-vendor adapters[\s\S]*?\n\| spawn \|([^\n]*)/);

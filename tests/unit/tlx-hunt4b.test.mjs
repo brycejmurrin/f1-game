@@ -735,18 +735,64 @@ test("A-P2: discardAttachments acts only on the FBO three has bound; the mirror 
   h.renderer.backend.state.bindFramebuffer(h.gl.FRAMEBUFFER, null);   // setRenderTarget(null) alone binds nothing until the next render
   assert.equal(h.post.discardAttachments(rt, [h.gl.DEPTH_ATTACHMENT]), false, "another FBO bound: no guess");
   assert.equal(h.post.discardAttachments(rt, []), false);
-  assert.match(TLX, /renderer\.render\(scene, mirCam\); \} finally \{ if \(mrt\) _mirMrtArm\(false, prevMrt\); \}\s*\n[^\n]*\n[^\n]*\n\s*if \(post && post\.discardAttachments && post\.discardAttachments\(mirRT, _mirInv\(mrt\)\)\) _mirDiscards\+\+;/,
+  assert.match(TLX, /renderer\.render\(scene, mirCam\); \} finally \{ if \(mrt\) _mirMrtArm\(false, prevMrt\); if \(hinted\) post\.discardHintOff\(mirRT\); \}\s*\n[^\n]*\n[^\n]*\n\s*if \(hinted \|\| \(post && post\.discardAttachments && post\.discardAttachments\(mirRT, _mirInv\(mrt\)\)\)\) _mirDiscards\+\+;/,
     "tlx.js: the mirror discards right after its render, before anything else binds");
   assert.match(TLX, /return mrt \? _mirInvDT : _mirInvD;/, "tag only when the mirror target carries one");
+});
+
+// ── A-P2W (#3681): the WebGPU twin — vendored three patch 17 reads rt.apexDiscardColor / apexDiscardDepth at
+// beginRender, so the decision rides on the target BEFORE the pass and comes off after it. The fake GL cannot
+// run three's WebGPU backend; the backend flag is flipped after the chain is built, and the pass is depthBegin →
+// (what beginRender would read) → depthEnd, with no draw in between.
+function gpuPass(h, opts, F) {
+  const rt = h.post.sceneTarget(), bk = h.renderer.backend;
+  bk.isWebGPUBackend = true;
+  try {
+    const keep = h.post.depthBegin(opts, F);
+    const seen = { color: rt.apexDiscardColor | 0, depth: rt.apexDiscardDepth === true };
+    const dropped = h.post.depthEnd();
+    return { keep, seen, dropped, after: { color: rt.apexDiscardColor | 0, depth: rt.apexDiscardDepth === true } };
+  } finally { delete bk.isWebGPUBackend; }
+}
+
+test("A-P2W: WebGPU — a dry phone pass hints depth + tag discard before the pass and clears it after", async (t) => {
+  const h = await postRig(t, { ssrTag: true });
+  const r = gpuPass(h, OFF, NIGHT);
+  assert.deepEqual(r.seen, { color: 2, depth: true }, "bit 1 = the ssrTag attachment; the depth");
+  assert.equal(r.dropped, true);
+  assert.deepEqual(r.after, { color: 0, depth: false }, "off after the pass: a later render into the target stores");
+  assert.equal(h.inv.length, 0, "no WebGL invalidate on the WebGPU leg");
+  assert.equal(h.post.state().tag.discards, 1); assert.equal(h.post.state().depth.discards, 1);
+  assert.deepEqual(gpuPass(h, { ...OFF, reflect: 0.4 }, NIGHT).seen, { color: 0, depth: false }, "wet: SSR reads both, nothing hinted");
+  assert.deepEqual(gpuPass(h, { ...OFF, ssao: 0.5 }, NIGHT).seen, { color: 2, depth: false }, "SSAO reads depth: the tag alone");
+});
+
+test("A-P2W: the A/B switches gate the WebGPU hint; MSAA and a one-attachment chain never hint what they lack", async (t) => {
+  const tag0 = await postRig(t, { ssrTag: true, ls: { "apex26.tlxTagDiscard": "0" } });
+  assert.deepEqual(gpuPass(tag0, OFF, NIGHT).seen, { color: 0, depth: true }, "tlxTagDiscard=0: the tag is stored");
+  const dep0 = await postRig(t, { ssrTag: true, ls: { "apex26.tlxDepthDiscard": "0" } });
+  assert.deepEqual(gpuPass(dep0, OFF, NIGHT).seen, { color: 2, depth: false }, "tlxDepthDiscard=0: the depth is stored");
+  const one = await postRig(t, { ssrTag: false });
+  assert.deepEqual(gpuPass(one, OFF, NIGHT).seen, { color: 0, depth: true }, "one attachment: no tag bit");
+  const msaa = await postRig(t, { ssrTag: true, samples: 4 });
+  assert.deepEqual(gpuPass(msaa, OFF, NIGHT).seen, { color: 0, depth: false }, "MSAA: single-sample hint only (r186's storeMultisampled* owns MSAA)");
+});
+
+test("A-P2W: discardHint is a no-op off WebGPU", async (t) => {
+  const h = await postRig(t, { ssrTag: true });
+  const rt = h.post.sceneTarget();
+  assert.equal(h.post.discardHint(rt, 2, true), false, "WebGL2 leg: the invalidate path owns it");
+  assert.equal(rt.apexDiscardColor, undefined);
 });
 
 // ── phoneperf 2026-10-24: scene colour R11F_G11F_B10F on phones where renderable (KNOWN-WINS row 15) ───────
 // Own rig (postRig above is pinned to a one-attachment phone chain by the A-P1 tests): the real post chain over the
 // fake WebGL2, which exposes EXT_color_buffer_float, so the 11/11/10 format is renderable here as on a phone GPU.
-async function rig11(t, { ls = {}, isMobile = true, ssrTag = true } = {}) {
+async function rig11(t, { ls = {}, isMobile = true, ssrTag = true, wgpu = false } = {}) {
   const fg = makeFakeGL(320, 180);
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
+  if (wgpu) renderer.backend.isWebGPUBackend = true;   // the gate reads this flag; nothing else in the chain's construction does
   const post = withStore(ls, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile,
     chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest: () => null,
     wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
@@ -755,57 +801,37 @@ async function rig11(t, { ls = {}, isMobile = true, ssrTag = true } = {}) {
   return { post, renderer, gl: fg.gl };
 }
 
-test("scene11: a phone chain's scene colour is rg11b10 where renderable; the tag attachment keeps half float", async (t) => {
-  const h = await rig11(t);
+test("scene11: WebGL2 keeps RGBA16F on every path (the 2026-10-25 revert of #3690's WebGL2 leg)", async (t) => {
+  // Device Farm iPhone 14 WebGL2: rg11b10 42.5 fps vs RGBA16F 45.7 / 47.0; 55 vs 13-19 frames over 33 ms.
+  for (const [name, o] of [["phone", {}], ["phone, forced on", { ls: { "apex26.tlxScene11": "1" } }],
+    ["one-attachment phone", { ssrTag: false }], ["desktop, forced on", { isMobile: false, ls: { "apex26.tlxScene11": "1" } }]]) {
+    const h = await rig11(t, o);
+    assert.equal(h.post.sceneTarget().textures[0].type, THREE.HalfFloatType, name + ": scene colour is RGBA16F");
+    assert.equal(h.post.state().sceneFormat, "rgba16f", name);
+    assert.equal(h.post.hdrOk(), true);
+  }
+});
+
+test("scene11: the WebGPU leg keeps its rg11b10 phone default (vendored patch 18, #3711); the tag attachment stays half float", async (t) => {
+  const h = await rig11(t, { wgpu: true });
   const rt = h.post.sceneTarget();
   assert.equal(rt.textures[0].type, THREE.UnsignedInt101111Type);
   assert.equal(rt.textures[0].format, THREE.RGBFormat);
   assert.equal(rt.textures[1].type, THREE.HalfFloatType, "attachment 1 (ssrTag) keeps the chain's hdrType");
-  assert.equal(rt.textures[1].format, THREE.RedFormat, "and its own format (indexed blending on the fake GL)");
   assert.equal(h.post.state().sceneFormat, "rg11b10");
   assert.equal(h.post.hdrOk(), true, "the scene is still float HDR to every reader");
-  // The scene pass renders into it and A-P1's depth rule still runs on the same target.
-  h.renderer.setRenderTarget(rt);
-  assert.equal(h.post.depthBegin(OFF, NIGHT), false);
-  h.renderer.render(new THREE.Scene(), new THREE.PerspectiveCamera());
-  assert.equal(h.post.depthEnd(), true, "depth discarded on the 11/11/10 target as on RGBA16F");
-  h.renderer.setRenderTarget(null);
-  const off = await rig11(t, { ls: { "apex26.tlxScene11": "0" } });
+  const off = await rig11(t, { wgpu: true, ls: { "apex26.tlxScene11": "0" } });
   assert.equal(off.post.sceneTarget().textures[0].type, THREE.HalfFloatType, "apex26.tlxScene11=0 keeps RGBA16F");
-  assert.equal(off.post.state().sceneFormat, "rgba16f");
-  const desk = await rig11(t, { isMobile: false });
+  const desk = await rig11(t, { wgpu: true, isMobile: false });
   assert.equal(desk.post.sceneTarget().textures[0].type, THREE.HalfFloatType, "desktop keeps RGBA16F by default");
-  const deskOn = await rig11(t, { isMobile: false, ls: { "apex26.tlxScene11": "1" } });
-  assert.equal(deskOn.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "apex26.tlxScene11=1 forces it anywhere renderable");
-  const one = await rig11(t, { ssrTag: false });
+  const deskOn = await rig11(t, { wgpu: true, isMobile: false, ls: { "apex26.tlxScene11": "1" } });
+  assert.equal(deskOn.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "=1 forces it on the WebGPU leg");
+  const one = await rig11(t, { wgpu: true, ssrTag: false });
   assert.equal(one.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "a one-attachment chain too");
-  assert.equal(one.post.sceneTarget().textures.length, 1);
-  const bloomOff = await rig11(t, { ls: { "apex26.tlxBloom11": "0" } });
+  const bloomOff = await rig11(t, { wgpu: true, ls: { "apex26.tlxBloom11": "0" } });
   assert.equal(bloomOff.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "the bloom knob does not reach the scene target");
-});
-
-test("scene11: never on the WebGPU leg — a blend state against an alpha-less target fails pipeline validation there", async (t) => {
-  // gpu-census macos-latest run 40052670537 (886e476f, Dawn/Metal): "Async render pipeline creation failed
-  // (renderPipeline_MeshBasicNodeMaterial_70): Color blending srcFactor (BlendFactor::One) or dstFactor
-  // (BlendFactor::OneMinusSrcAlpha) …" with the scene target in rg11b10ufloat. The fake WebGL2 cannot reproduce
-  // a WebGPU validation rule, so this pins the gate in the source and the behaviour under a WebGPU-shaped backend.
   const post = read("js/render/three/tlx-post.js");
-  assert.ok(post.includes("const _r11Blendable = r11Renderable && !(renderer.backend && renderer.backend.isWebGPUBackend);"), "the gate reads the backend kind");
-  assert.ok(post.includes("let scene11 = _r11Blendable && !!ctx.isMobile;"), "the default goes through the gate");
-  assert.ok(post.includes('if (k === "1") scene11 = _r11Blendable;'), "the force knob cannot override the WebGPU exclusion");
-  // Behaviour: the real chain over the fake WebGL2, with the backend flagged as WebGPU for the probe's purposes.
-  const h = await rig11(t, { ls: { "apex26.tlxScene11": "1" } });
-  assert.equal(h.post.sceneTarget().textures[0].type, THREE.UnsignedInt101111Type, "WebGL backend: forced on");
-  const fg = makeFakeGL(320, 180);
-  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
-  await renderer.init();
-  renderer.backend.isWebGPUBackend = true;   // the gate reads this flag; nothing else in the chain's construction does
-  const made = withStore({ "apex26.tlxScene11": "1" }, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true,
-    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag: true, softDest: () => null,
-    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
-  t.after(() => { made.dispose(); renderer.dispose(); });
-  assert.equal(made.sceneTarget().textures[0].type, THREE.HalfFloatType, "WebGPU-flagged backend keeps RGBA16F even when forced");
-  assert.equal(made.state().sceneFormat, "rgba16f");
+  assert.ok(post.includes("const _r11Blendable = r11Renderable && !!(renderer.backend && renderer.backend.isWebGPUBackend);"), "the gate reads the backend kind");
 });
 
 test("scene11: the probe is read before the bloom knob, and no post reader samples scene alpha", () => {

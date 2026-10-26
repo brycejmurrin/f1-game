@@ -33,6 +33,7 @@ test.describe("garage livery pick cost", () => {
     await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
     await page.waitForFunction((n) => document.querySelectorAll(".cs-liv-swatch:not(.cs-liv-plus)").length > n + 1,
       PICKS, { polling: 100, timeout: 30_000 });
+    await page.waitForFunction(() => typeof CarDraw !== "undefined" && CarDraw.instance && CarDraw.instance(), null, { polling: 100 });   // eslint-disable-line no-undef
     // Count through the shared globals every pick path calls at call time (Car3D / LiveryTex are not
     // frozen), and the GPU textures three allocates FOR A LIVERY ATLAS: a texture counts only when its
     // source is a canvas buildAtlas returned (or a bitmap made from one). Counting every createTexture
@@ -47,6 +48,13 @@ test.describe("garage livery pick cost", () => {
       const wrap = (obj, key, field, after) => { const f = obj[key]; obj[key] = function () { n[field]++; const r = f.apply(this, arguments); if (after) after(r); return r; }; };
       wrap(Car3D, "build", "car3dBuilds");   // eslint-disable-line no-undef -- script-level const in the page
       wrap(LiveryTex, "buildAtlas", "atlases", (c) => { if (c && typeof c === "object") atlas.set(c, window.__pick); });   // eslint-disable-line no-undef
+      const creditAtlasUpload = (src) => {
+        if (!src || !atlas.has(src)) return;
+        const k = atlas.get(src);
+        n.texByPick[k] = (n.texByPick[k] || 0) + 1;
+        if (uploaded.has(src)) n.reuploads++;
+        uploaded.add(src);
+      };
       if (typeof window.createImageBitmap === "function") {
         const cib = window.createImageBitmap;
         window.createImageBitmap = function (src) {
@@ -54,17 +62,23 @@ test.describe("garage livery pick cost", () => {
           return atlas.has(src) && p && p.then ? p.then((b) => { atlas.set(b, atlas.get(src)); return b; }) : p;
         };
       }
-      const b = window.renderer && window.renderer.backend;
-      if (b && b.createTexture) { const c = b.createTexture.bind(b);
-        b.createTexture = function (t, o) {
-          if (t && t.image && atlas.has(t.image)) {
-            const k = atlas.get(t.image);
-            n.texByPick[k] = (n.texByPick[k] || 0) + 1;
-            if (uploaded.has(t.image)) n.reuploads++;
-            uploaded.add(t.image);
-          }
-          return c(t, o);
-        }; }
+      // TLX: pooled decal re-fill and fresh uploads go through renderer.initTexture
+      // (createTexture / refillTexture / uploadTexture), not always backend.createTexture.
+      const ren = window.renderer;
+      if (ren && typeof ren.initTexture === "function") {
+        const it = ren.initTexture.bind(ren);
+        ren.initTexture = function (tex) {
+          if (tex && tex.image) creditAtlasUpload(tex.image);
+          return it(tex);
+        };
+      } else {
+        const b = ren && ren.backend;
+        if (b && b.createTexture) { const c = b.createTexture.bind(b);
+          b.createTexture = function (t, o) {
+            if (t && t.image) creditAtlasUpload(t.image);
+            return c(t, o);
+          }; }
+      }
     });
     const rows = [];
     for (let i = 1; i <= PICKS; i++) {
