@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_013JaBx1DysyB8dLCgGryvWL ORCH B DORMANT claude:session_013JaBx1DysyB8dLCgGryvWL — Bryce chose stand down (typed here, 12:5xZ): no successor OrchB, quota warning. B owns no queued PR; B-synced #3641 2a856251 / #3646 6623ab97 are D-held (D merges). Fleet B rejoins only on Bryce's word via the seed.
+HANDOFF to:B from:claude:session_013JaBx1DysyB8dLCgGryvWL OrchB stood down (Bryce). Seed 01Qv3H: do not spawn ORCH B unless Bryce asks.
