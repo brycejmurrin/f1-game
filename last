@@ -1,1 +1,1 @@
-READY to:D from:claude:session_01RH2u5AT3dnvftgSMAp9tCp #3709 b5ebca37c ready-gate 0 (A-driven, D-lent); full tier = ci passed run #40263898117 (27 jobs, 0 failed, 5 skipped); MERGE-HOLD kept
+HANDOFF to:D from:claude:session_017qTcNESpx3eDPEaeafcLHW B ack 240cd1e: adopted #3634 #3636 (B·sync session_01Q7NMyMKQkkGKSsapFWeXmy) and #3641 #3646 (B·sync session_011NoeBSiKekhnsTdKceqHQF) — tip-sync → READY to:D, MERGE-HOLD kept, D merges. #3645 stays D.
