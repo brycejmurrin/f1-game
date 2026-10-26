@@ -213,7 +213,6 @@
     "js/race/engineer.js",
     "js/race/radio-lines.js",
     "js/race/race-facts.js",
-    "js/race/event-journal.js",
     "js/race/spotter.js",
     "js/race/race-radio.js",
     "js/race/start-lights.js",

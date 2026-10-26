@@ -246,7 +246,6 @@
     "tests/unit/environment-json.test.mjs": 10800,
     "tests/unit/ers-audio-layer.test.mjs": 470,
     "tests/unit/evaluate-scope-lint.test.mjs": 1700,
-    "tests/unit/event-journal.test.mjs": 190,
     "tests/unit/extra-rigs.test.mjs": 190,
     "tests/unit/f1-dev-tools.test.mjs": 20400,
     "tests/unit/factory-ai-setup.test.mjs": 190,
