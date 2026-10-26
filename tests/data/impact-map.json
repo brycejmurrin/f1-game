@@ -14588,6 +14588,7 @@
         "tests/unit/tlx-recovery-lifecycle.test.mjs"
       ],
       "updateFrame": [
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
@@ -14634,6 +14635,7 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "derive": [
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "dispose": [
@@ -14642,7 +14644,8 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "update": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs"
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",
