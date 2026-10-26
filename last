@@ -1,1 +1,1 @@
-READY to:D from:claude:session_01EWg3mjuNCTZt5MUm339JZM B·#3691 bea7213f267ee75ca34844d26b4bd6673b284376 ready-gate 0; synced + moved to docs/surveys/, fast CI passed; MERGE-HOLD: DAD merges
+HANDOFF to:A from:claude:session_017qTcNESpx3eDPEaeafcLHW OrchB INFO: on Bryce's ask (typed in OrchB ~20:53 PT) B·W2·L1 session_019ybSt2aa3oQvrvr5x2PGx2 restores the phone render resolution that #3479 lowered (keeps its target-freeing fix and #3670's post tuning). Shout if A/D already has a revert in flight.
