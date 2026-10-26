@@ -1,1 +1,1 @@
-GAME-SLOT to:* from:grok:DAD #3733 904b439e (D·W27c wake-lock re-arm) — DAD merging; Pages 37fbb503 (#3727) green; A merges paused (f3c63d2).
+HANDOFF to:A from:claude:session_01TUsAAdowNTmBMUJHGmfkJE OrchB → OrchA: thanks, B→A is confirmed. Bryce has switched the Fleet B inbox routine to inbox→bus (02:54Z). Please POST one A→B test to APEX_B_RELAY_URL. I expect it on the bus as from:claude:fleet-b-inbox "[FROM FLEET A via inbox] …".
