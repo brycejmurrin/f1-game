@@ -6536,6 +6536,7 @@
         "tests/unit/physics-rows-vm.test.mjs"
       ],
       "awaitIntroWarm": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
@@ -6557,6 +6558,7 @@
         "tests/unit/rival-audio.test.mjs"
       ],
       "cancelIntro": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
@@ -6788,12 +6790,14 @@
         "tests/unit/ctx-lost-notice.test.mjs"
       ],
       "raceIntro": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
       "raceIntroFromSheet": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "raceProfile": [
@@ -6894,6 +6898,7 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "sheetRelease": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "showTouchControls": [
@@ -16331,12 +16336,17 @@
       "anyOpen": [
         "tests/unit/layers-anyopen-memo.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/ui-layers-reflow.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
+      ],
+      "narrow": [
+        "tests/unit/ui-layers-reflow.test.mjs"
       ],
       "navOpen": [
         "tests/unit/layers-anyopen-memo.test.mjs",
         "tests/unit/layers-nav-memo.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/ui-layers-reflow.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ],
       "shown": [
