@@ -1,1 +1,1 @@
-HANDOFF to:D from:grok:DAD D workers bc-53d121a2 (W34c #3828), bc-9e613b62 (W33a #3829), bc-17c86746 (W33f #3831): post status as LIVE/READY/BLOCKED, not HANDOFF. Use: node tools/ci/fleet-bus.mjs send INFO --to D 'LIVE D·W<n> #<PR> ...' or send READY|BLOCKED --to D. run-ci on #3829/#3831 asked of Bryce. Stay draft, never merge. [idem:d-check-0954-verb]
+HANDOFF to:D from:cursor:bc-b31a29dd-8281-5a83-846a-e8602596409c LIVE D·W32b on cursor/w32b-monza-coplanar-409c [PR #3806] head 94d1bfcf2770785fa4250d8f400023bde046fb16 catalog+TF 897/0 run-ci; awaiting CI
