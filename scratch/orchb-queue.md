@@ -271,3 +271,17 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - #3785 sysaudit owner 01E4f2 + X lanes: launch nothing; non-game READY later.
 - Archive: 17 archived 06:30–06:50Z (Bryce: all 9 no-PR; all 5 old orchs). Next by rule: 01AdPk 01XJAQ 01Xmgd 01Y5XF 01BnJV 01Q7NM (PRs merged; check idle ≥60 min). 01Y5XF/01BnJV only after #3759 merges.
 - Bus cursor 4dacf3b.
+
+## 07:38Z (00:38 PT) — ORCH B now session_016APAw9jZEDf4LayPncD2gp (bus fcd69e8 LIVE)
+- MERGED #3789 1af254cc (non-game, fleet-archive multi-PR; DONE a5232c1, 2 parents).
+- Bryce "Coordinate with dad" (typed here): X9 history proposals A–E → DAD accepted all (e2fb6b9); DAD folds A/C/D/E into its prompt. Rule B (plan/quota refusal pauses launches) = my PR #3791 (Bryce typed "Yes, edit .claude" here).
+
+## Handoff 08:45Z (01:45 PT) — ORCH B session_016APAw9jZEDf4LayPncD2gp at ~211k (get_session). READ LAST; supersedes the rest.
+- FIRST: `git fetch --unshallow`. Post LIVE (`send HANDOFF --to '*' "ORCH B LIVE claude:<id> (succeeds …)"`; INFO is not a bus type). Arm bus Monitor: my script read ALL lines `--since <cursor>` every 60 s and kept `to:(B…|*|me)` OR ` INCIDENT | GAME-SLOT | DONE ` (drop your own from:). Hourly create_trigger. Mine: Monitor stopped, hourly trig_01NH4SvWbqXvdekx3RNDn2S1 deleted.
+- GAME SLOT is B's: #3759 READY (owner session_01AgeSZKR5ktBddtThNF5f5q), head fde52df32, full tier 80/0, ready already. BLOCKED: Pages RED on last game merge 2d72c7e4 (D #3737), run 40292151072, `tests/specs/race-cycle-memory.spec.js` (oversize-race-cycle-memory leg) → verdict failed. Asked DAD (bus 0535742) to triage / re-run once; no INCIDENT posted (would freeze non-game merges). When Pages is green on the tip: post GAME-SLOT "#3759 fde52df3", trial-merge ratchets, merge-gate, merge (method merge), 2 parents, DONE. Then A #3761 → D #3721 → B #3723.
+- NON-GAME, both ready, full tier running at 08:36Z: #3791 (mine, rule B, 28df368e; subscribed) and #3785 (sysaudit, owner session_01E4f2wTJpTrcPnFYEQxmDMa; ready-gate passed on 8642c985; subscribed). Merge each when green + merge-gate, batch right after a game merge while Pages runs (or now: non-game does not need the slot).
+- #3792 X9 (session_0184mTTer8GYFdAo8HNTL7i1, past cap): agent-history tool + notes, draft run-ci; it sends READY then stops; if red after, launch a successor from its Plan.
+- B queue after #3759: #3723 (owner session_014B9YR4dsn93MnGp5Ko1Asc) #3684 #3724 #3641 #3646 #3648 — re-check CI/mergeable (last green 06:57Z).
+- Archive by rule later: 01AdPk 01XJAQ 01Xmgd 01Y5XF 01BnJV 01Q7NM 017YbG (W4·L1, #3789 merged) — idle ≥60 min check. Delete backup branch cursor/deep-review-fixes-sync-bk-a3f1 after #3759 merges (owner's ask).
+- Triage (ci-red-triage): `post-warm menu heap cycle6−cycle5=17.6 MiB` (≤10) in race-cycle-memory; heap sawtooth 140→248 then GC drop to 143.5, 161.1 = GC timing, not a leak; green on #3737 own CI (run 40265241969); no retry (retries=0). Suggest ONE re-run of that leg (D's call); red again → bisect js/lighting/atmosphere.js.
+- Bus cursor 0535742.
