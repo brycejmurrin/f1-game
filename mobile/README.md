@@ -43,10 +43,10 @@ session — do not commit `true`.
 `npx cap add android` produced `android/`. Customisations that a re-add would
 wipe (keep this list current):
 
-- `AndroidManifest.xml`: INTERNET, optional CAMERA (`required=false`),
+- `AndroidManifest.xml`: INTERNET, VIBRATE, optional CAMERA (`required=false`),
   `usesCleartextTraffic=false`, `fullSensor` orientation (portrait menus exist;
   race still shows `#rotate-device` on the web), `density` in `configChanges`.
-- `MainActivity.kt`: keep-screen-on + transient immersive system bars.
+- `MainActivity.java`: keep-screen-on + transient immersive system bars.
 - Adaptive icons from `icons/icon-512.png` + `icons/icon-maskable-512.png`
   (`node mobile/scripts/gen-icons.mjs`).
 - `app/build.gradle`: version + optional env signing.

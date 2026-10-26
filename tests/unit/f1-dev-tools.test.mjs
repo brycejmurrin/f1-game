@@ -5,6 +5,9 @@ import vm from 'node:vm';
 import {createRequire} from 'node:module';
 import path from 'node:path';
 import {webcrypto} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
+import sharp from 'sharp';
+import {lowerEnvelope, frozen} from '../../design-preview/concept-bodies/envelope-limits.mjs';
 import {compare, summarize, main} from '../../plugins/f1-dev-tools/skills/f1-dev-tools/scripts/compare.mjs';
 const require = createRequire(import.meta.url);
 const root = path.resolve(import.meta.dirname, '../..');
@@ -232,4 +235,125 @@ test('plugin advertises the checkout MCP catalog without owning server startup',
   assert.match(readme, /serve-http/);
   assert.equal(typeof manifest.extensions['com.openai'].interface.defaultPrompt, 'string');
   assert.ok(manifest.extensions['com.openai'].interface.defaultPrompt.includes('js-debugger'));
+});
+
+test('audit: comparison rejects scene identity drift and output aliases', () => {
+  for (const [field, a, b] of [['view',{dbgCamActive:true,eye:[1,2,3]},{dbgCamActive:true,eye:[3,2,1]}], ['replay',{T:10,follow:'LEC',speed:1,paused:true},{T:20,follow:'LEC',speed:1,paused:true}]]) {
+    const before=trace(),after=trace();before.before[field]=a;after.before[field]=b;
+    assert.ok(compare(before,after).mismatches.includes(field));
+  }
+  const dir=fs.mkdtempSync(path.join(root,'scratch','comparison-alias-'));
+  try {
+    const real=path.join(dir,'real');fs.mkdirSync(real);fs.symlinkSync(real,path.join(dir,'alias'),'dir');
+    const input=path.join(real,'input.json');fs.writeFileSync(input,JSON.stringify(trace()));
+    assert.throws(()=>main(['compare',input,input,'--out',path.join(dir,'alias','input.json')]),/differ/);
+    assert.equal(JSON.parse(fs.readFileSync(input)).schema,'f1-dev-trace/v1');
+  } finally {fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('audit: asset evidence identifies redirects and the final resource', async () => {
+  const ctx=vm.createContext({globalThis:null,window:null,URL,AbortController,setTimeout,clearTimeout,performance,crypto:webcrypto,
+    location:{href:'http://localhost/'},fetch:async()=>({url:'http://localhost/final.js',redirected:true,ok:true,status:200,headers:{get:()=>null},arrayBuffer:async()=>new Uint8Array([1]).buffer})});
+  ctx.globalThis=ctx;ctx.window=ctx;vm.runInContext(source,ctx,{filename:path.join(root,'plugins/f1-dev-tools/skills/f1-dev-tools/scripts/browser.js')});
+  const r=await ctx.F1Dev.checkAssets(['/initial.js']);
+  assert.equal(r.results[0].url,'http://localhost/final.js');
+  assert.equal(r.results[0].requestedUrl,'http://localhost/initial.js');assert.equal(r.results[0].redirected,true);
+});
+
+test('audit: design lab skips invalid entries, derives counts and retains existing cards on load-more', async () => {
+  class Element {
+    constructor(){this.children=[];this.listeners={};this.classList={add(){},toggle(){}};this.dataset={};}
+    append(...children){this.children.push(...children);} replaceChildren(...children){this.children=children;}
+    get firstElementChild(){return this.children[0];} setAttribute(){} addEventListener(n,fn){this.listeners[n]=fn;}
+    querySelector(){return {focus(){}};} focus(){}
+  }
+  const nodes=new Map(),get=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
+  const items=[null,{},...Array.from({length:30},(_,i)=>({title:'Capture '+i,src:'/img/'+i+'.png',lane:'Current PR combinations',geometryOnly:i===0}))];
+  const ctx=vm.createContext({URL,Intl,Date,window:{location:{href:'http://localhost/',origin:'http://localhost'}},
+    document:{getElementById:get,createElement:()=>new Element(),querySelectorAll:()=>[],addEventListener(){}},
+    fetch:async()=>({ok:true,json:async()=>({items,source:{revision:'123'}})})});
+  vm.runInContext(fs.readFileSync(path.join(root,'sites/design-lab/app.js'),'utf8'),ctx,{filename:path.join(root,'sites/design-lab/app.js')});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(get('load-error').hidden,true);assert.equal(get('capture-grid').children.length,24);
+  assert.equal(get('source-backend').textContent,'29 native screenshots / 1 CPU previews');
+  const first=get('capture-grid').children[0];get('load-more').listeners.click();
+  assert.equal(get('capture-grid').children.length,30);assert.equal(get('capture-grid').children[0],first);
+});
+
+test('audit: optics stops scheduling when paused and responds to motion preference changes', () => {
+  const html=fs.readFileSync(path.join(root,'examples/visor-lab/optics.html'),'utf8');
+  const callbacks=new Map(),listeners={},motion={addEventListener:(event,fn)=>listeners[event]=fn};let serial=0;
+  const preference={matches:false,addEventListener:(event,fn)=>listeners.media=fn};
+  const ctx=vm.createContext({window:{},document:{getElementById:()=>motion},motionPreference:preference,
+    requestAnimationFrame:fn=>{callbacks.set(++serial,fn);return serial;},cancelAnimationFrame:id=>callbacks.delete(id),
+    Droplets:{tick(){}},reduced:false,sceneLoading:false,image:{},rain:0,storm:false,speed:0});
+  const scheduler=html.slice(html.indexOf('let last=0'),html.indexOf("configure({visor:"));
+  const controls=html.slice(html.indexOf("const motion=document"),html.indexOf('const controlsButton='));
+  vm.runInContext(scheduler+controls,ctx,{filename:path.join(root,'examples/visor-lab/optics.html')});
+  assert.equal(callbacks.size,1);ctx.window.animate=false;assert.equal(callbacks.size,0);
+  ctx.window.animate=true;assert.equal(callbacks.size,1);listeners.media({matches:true});
+  assert.equal(ctx.window.animate,false);assert.equal(callbacks.size,0);assert.equal(motion.checked,false);
+  motion.checked=true;listeners.change();listeners.media({matches:true});
+  assert.equal(ctx.window.animate,true,'explicit motion override wins over later OS changes');
+});
+
+test('audit: M8 capture explicitly selects GLX and closes the browser after navigation failure', async () => {
+  const code=fs.readFileSync(path.join(root,'spike/capture-m8.mjs'),'utf8');
+  const shot=code.slice(code.indexOf('async function shot('),code.indexOf('const srv ='));
+  const preferences=new Map();let closed=0;
+  const ctx=vm.createContext({chromium:{launch:async()=>({newPage:async()=>({on(){},addInitScript:async(fn,b)=>fn(b),goto:async()=>{throw Error('navigation failed');}}),close:async()=>{closed++;}})},
+    VP:{width:960,height:540},chromePath:()=>undefined,localStorage:{setItem:(k,v)=>preferences.set(k,v),removeItem:k=>preferences.delete(k)}});
+  vm.runInContext(shot,ctx,{filename:path.join(root,'spike/capture-m8.mjs')});await assert.rejects(ctx.shot({port:1,backend:'glx',track:'monza'}),/navigation failed/);
+  assert.equal(preferences.get('apex26.gfxBackend'),'webgl2');assert.equal(closed,1);
+});
+
+test('audit: fixed-point camera result reports the coordinates used for projection', () => {
+  const source=fs.readFileSync(path.join(root,'design-preview/concept-bodies/solve-cam.mjs'),'utf8');
+  const result=[];const ctx=vm.createContext({best:[[1,2,3,0,-.5,900,380,250],0],FIX:[321,234],PTS:[[0,0,0,0,0]],proj:()=>[0,0],console:{log:x=>result.push(JSON.parse(x))}});
+  vm.runInContext(source.slice(source.indexOf('const [p, e] = best')),ctx,{filename:path.join(root,'design-preview/concept-bodies/solve-cam.mjs')});
+  assert.equal(result[0].cx,321);assert.equal(result[0].cy,234);
+});
+
+
+test('audit: envelope enforces the lower current or historical size per dimension', () => {
+  assert.deepEqual(lowerEnvelope({'n2.2h': frozen['n2.2h'] + 100, 'n1.9h': 100}), {'n2.2h': frozen['n2.2h'], 'n1.9h': 100});
+  assert.throws(()=>lowerEnvelope({unknown:1}),/Missing envelope dimension/);
+});
+
+test('audit: concept comparison writes to the supplied confined destination', async () => {
+  const dir=fs.mkdtempSync(path.join(root,'scratch','concept-comparison-'));
+  try {
+    fs.mkdirSync(path.join(dir,'scratch'));const image=await sharp({create:{width:800,height:600,channels:3,background:'red'}}).png().toBuffer();
+    fs.writeFileSync(path.join(dir,'scratch/d1d-ref.png'),image);fs.writeFileSync(path.join(dir,'shot.png'),image);
+    const out=path.join(dir,'output/cmp.jpg');const run=spawnSync(process.execPath,[path.join(root,'design-preview/concept-bodies/cmp.mjs'),path.join(dir,'shot.png'),'front','',out],{cwd:dir,encoding:'utf8',timeout:10000});
+    assert.equal(run.status,0,run.stderr);assert.ok(fs.statSync(out).size>100);
+    const overwrite=spawnSync(process.execPath,[path.join(root,'design-preview/concept-bodies/cmp.mjs'),path.join(dir,'shot.png'),'front','',path.join(dir,'shot.png')],{cwd:dir,encoding:'utf8',timeout:10000});
+    assert.notEqual(overwrite.status,0);assert.ok(overwrite.stderr.split('\n').some(line=>line.endsWith('Output must differ from source images')), overwrite.stderr);
+    assert.deepEqual(fs.readFileSync(path.join(dir,'shot.png')),image);
+  } finally {fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+
+test('audit: side-world file server rejects decoded parent traversal before accessing files', () => {
+  const source=fs.readFileSync(path.join(root,'spike/physics/deep-sideworld-run.mjs'),'utf8');
+  const route=source.slice(source.indexOf('const server = createServer('),source.indexOf('await new Promise((r) => server.listen'));
+  let handler,status=0,reads=0;
+  const ctx=vm.createContext({ROOT:root,URL,join:path.join,normalize:path.normalize,extname:path.extname,sep:path.sep,
+    createServer:fn=>{handler=fn;return {};},statSync:()=>{reads++;throw Error('must not read');}});
+  vm.runInContext(route,ctx,{filename:path.join(root,'spike/physics/deep-sideworld-run.mjs')});
+  handler({url:'/%2e%2e%2fAGENTS.md'},{writeHead:n=>{status=n;return {end(){}};},end(){}});
+  assert.equal(status,403);assert.equal(reads,0);
+});
+
+
+test('audit: failed M8 shots produce a failing verdict and close the static server', async () => {
+  const source=fs.readFileSync(path.join(root,'spike/capture-m8.mjs'),'utf8');
+  const main=source.slice(source.indexOf('try {\nfor (const j of jobs)'));
+  for(const result of [{blank:true,errors:[]},{blank:false,errors:['render failed']},null]) {
+    let closed=0;const process={exitCode:0};
+    const ctx=vm.createContext({process,jobs:[{name:'test'}],results:[],OUT:'unused',srv:{port:1,close:async()=>{closed++;}},
+      shot:async()=>{if(!result)throw Error('shot failed');return result;},writeFileSync(){},join:path.join,console:{log(){}}});
+    await vm.runInContext('(async()=>{'+main+'})()',ctx,{filename:path.join(root,'spike/capture-m8.mjs')});
+    assert.equal(process.exitCode,1);assert.equal(closed,1);
+  }
 });

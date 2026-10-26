@@ -14,6 +14,14 @@ const buffLowEvent = "bufferedamountlow";
 const channelCloseEvent = "close";
 const channelErrorEvent = "error";
 const backpressureWaitTimeoutMs = 1e4;
+// Apex local hardening: bound incomplete/deferred input owned by a remote peer.
+// Keep generous room for legitimate file actions; the game uses much smaller frames.
+const receiveTimeoutMs = 30000;
+const maxMessageBytes = 16 * 1024 * 1024;
+const maxPeerBytes = 32 * 1024 * 1024;
+const maxPeerMessages = 64;
+const maxDeferredBytes = 8 * 1024 * 1024;
+const maxDeferredMessages = 128;
 const toByteArray = (value) => value instanceof ArrayBuffer ? new Uint8Array(value) : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
 const waitForBufferedAmountLow = (channel, timeoutMs = backpressureWaitTimeoutMs) => {
 	if (channel.readyState !== "open" || channel.bufferedAmount <= channel.bufferedAmountLowThreshold) return Promise.resolve(channel.readyState === "open");
@@ -43,10 +51,42 @@ const waitForBufferedAmountLow = (channel, timeoutMs = backpressureWaitTimeoutMs
 	});
 };
 const createActionWireManager = ({ getPeer, getPeerIds, canReceiveFromPeer, throwIfAborted }) => {
-	const actions = {};
-	const actionsCache = {};
-	const pendingTransmissions = {};
-	const pendingActionPayloads = {};
+	const actions = Object.create(null);
+	const actionsCache = Object.create(null);
+	const pendingTransmissions = new Map();
+	const pendingActionPayloads = new Map();
+	let deferredBytes = 0, deferredCount = 0;
+	const expire = (f) => {
+		const timer = setTimeout(f, receiveTimeoutMs);
+		timer?.unref?.(); // Node fixtures must not be held open by remote input.
+		return timer;
+	};
+	const forgetTransmission = (id, key) => {
+		const peer = pendingTransmissions.get(id), target = peer?.messages.get(key);
+		if (!target) return;
+		clearTimeout(target.timer);
+		peer.bytes -= target.bytes;
+		peer.messages.delete(key);
+		if (!peer.messages.size && !peer.exhausted) pendingTransmissions.delete(id);
+	};
+	const blockTransmission = (id, key) => {
+		const peer = pendingTransmissions.get(id), target = peer?.messages.get(key);
+		if (!target) return;
+		clearTimeout(target.timer);
+		peer.bytes -= target.bytes; target.bytes = 0;
+		target.chunks = []; target.meta = void 0; target.blocked = true;
+		// Keep this bounded key until its final frame or peer cleanup. Deleting it
+		// on expiry lets a late final chunk publish a silently truncated suffix.
+	};
+	const forgetDeferred = (type, entry) => {
+		const pending = pendingActionPayloads.get(type);
+		const i = pending?.indexOf(entry) ?? -1;
+		if (i < 0) return;
+		clearTimeout(entry.timer);
+		pending.splice(i, 1);
+		deferredBytes -= entry.bytes; deferredCount--;
+		if (!pending.length) pendingActionPayloads.delete(type);
+	};
 	const iterate = (targets, f, { includePending = false } = {}) => (targets ? Array.isArray(targets) ? targets : [targets] : getPeerIds(includePending)).flatMap((id) => {
 		const peer = getPeer(id, includePending);
 		if (!peer) {
@@ -77,10 +117,11 @@ const createActionWireManager = ({ getPeer, getPeerIds, canReceiveFromPeer, thro
 			onProgress: noOp,
 			setOnComplete: (f) => {
 				actions[type].onComplete = f;
-				const pending = pendingActionPayloads[type];
+				const pending = pendingActionPayloads.get(type);
 				if (pending?.length) {
-					delete pendingActionPayloads[type];
-					pending.forEach(({ payload, peerId, metadata }) => f(payload, peerId, metadata));
+					const ready = [...pending];
+					ready.forEach(entry => forgetDeferred(type, entry));
+					ready.forEach(({ payload, peerId, metadata }) => f(payload, peerId, metadata));
 				}
 			},
 			setOnProgress: (f) => {
@@ -141,46 +182,66 @@ const createActionWireManager = ({ getPeer, getPeerIds, canReceiveFromPeer, thro
 	};
 	const handleData = (id, data) => {
 		const buffer = new Uint8Array(data);
+		if (buffer.byteLength < payloadIndex || buffer.byteLength > maxMessageBytes) return;
 		const type = decodeBytes(buffer.subarray(typeIndex, nonceIndex)).replaceAll("\0", "");
+		if (!type) return;
 		const action = actions[type];
 		if (!canReceiveFromPeer(id, Boolean(action?.options.receiveWhilePending))) return;
-		const nonce = (buffer[nonceIndex] ?? 0) << 8 | (buffer[33] ?? 0);
-		const tag = buffer[tagIndex] ?? 0;
-		const progress = buffer[progressIndex] ?? 0;
+		const nonce = buffer[nonceIndex] << 8 | buffer[33];
+		const tag = buffer[tagIndex], progress = buffer[progressIndex];
+		if (tag & ~15) return;
 		const payload = buffer.subarray(payloadIndex);
-		const isLast = Boolean(tag & 1);
-		const isMeta = Boolean(tag & 2);
-		const isBinary = Boolean(tag & 4);
-		const isJson = Boolean(tag & 8);
-		pendingTransmissions[id] ??= {};
-		pendingTransmissions[id][type] ??= {};
-		const target = pendingTransmissions[id][type][nonce] ??= { chunks: [] };
-		if (isMeta) target.meta = fromJson(decodeBytes(payload));
-		else target.chunks.push(payload);
+		const isLast = Boolean(tag & 1), isMeta = Boolean(tag & 2);
+		const isBinary = Boolean(tag & 4), isJson = Boolean(tag & 8);
+		const key = type + "\0" + nonce;
+		let peer = pendingTransmissions.get(id);
+		if (!peer) { peer = { messages: new Map(), bytes: 0 }; pendingTransmissions.set(id, peer); }
+		let target = peer.messages.get(key);
+		if (!target) {
+			// Once a start was dropped, this protocol has no first-chunk marker
+			// that could distinguish its late suffix from a new complete message.
+			if (peer.exhausted || peer.messages.size >= maxPeerMessages) { peer.exhausted = true; return; }
+			target = { chunks: [], bytes: 0, timer: expire(() => blockTransmission(id, key)) };
+			peer.messages.set(key, target);
+		}
+		if (target.blocked) { if (isLast) forgetTransmission(id, key); return; }
+		if (target.bytes + buffer.byteLength > maxMessageBytes || peer.bytes + buffer.byteLength > maxPeerBytes) {
+			// Retain only a bounded tombstone until completion: later chunks must not
+			// re-create this message and publish a truncated suffix.
+			blockTransmission(id, key);
+			return;
+		}
+		target.bytes += buffer.byteLength; peer.bytes += buffer.byteLength;
+		try {
+			if (isMeta) target.meta = fromJson(decodeBytes(payload));
+			else target.chunks.push(payload);
+		} catch (_) { forgetTransmission(id, key); return; }
 		action?.onProgress(progress / oneByteMax, id, target.meta);
 		if (!isLast) return;
 		const full = new Uint8Array(target.chunks.reduce((a, c) => a + c.byteLength, 0));
-		target.chunks.reduce((a, c) => {
-			full.set(c, a);
-			return a + c.byteLength;
-		}, 0);
-		delete pendingTransmissions[id][type][nonce];
-		const payloadValue = isBinary ? full : isJson ? fromJson(decodeBytes(full)) : decodeBytes(full);
-		if (action) {
-			action.onComplete(payloadValue, id, target.meta);
-			return;
-		}
-		(pendingActionPayloads[type] ??= []).push({
-			payload: payloadValue,
-			peerId: id,
-			...target.meta === void 0 ? {} : { metadata: target.meta }
-		});
+		target.chunks.reduce((a, c) => { full.set(c, a); return a + c.byteLength; }, 0);
+		forgetTransmission(id, key);
+		let payloadValue;
+		try { payloadValue = isBinary ? full : isJson ? fromJson(decodeBytes(full)) : decodeBytes(full); }
+		catch (_) { return; }
+		if (action) { action.onComplete(payloadValue, id, target.meta); return; }
+		if (deferredCount >= maxDeferredMessages || deferredBytes + target.bytes > maxDeferredBytes) return;
+		const entry = { payload: payloadValue, peerId: id, metadata: target.meta, bytes: target.bytes };
+		entry.timer = expire(() => forgetDeferred(type, entry));
+		let pending = pendingActionPayloads.get(type);
+		if (!pending) { pending = []; pendingActionPayloads.set(type, pending); }
+		pending.push(entry); deferredBytes += entry.bytes; deferredCount++;
 	};
 	return {
 		makeInternalAction,
 		handleData,
 		clearPeer: (id) => {
-			delete pendingTransmissions[id];
+			const peer = pendingTransmissions.get(id);
+			if (peer) for (const key of peer.messages.keys()) forgetTransmission(id, key);
+			pendingTransmissions.delete(id);
+			for (const [type, pending] of pendingActionPayloads) {
+				for (const entry of [...pending]) if (entry.peerId === id) forgetDeferred(type, entry);
+			}
 		}
 	};
 };

@@ -20,27 +20,42 @@ runs:
     # (job 109932275468) and was cancelled before a single spec ran — a red
     # verdict with no test behind it. Now each call is capped (`timeout`),
     # apt retries a failed fetch itself with a per-connection timeout, waits
-    # at most 60 s for the dpkg lock, and the pair gets three attempts; a
-    # mirror that is down for good still fails here, in minutes, named.
+    # at most 60 s for the dpkg lock. All attempts share a five-minute budget
+    # so setup cannot consume staged-boot's entire twenty-minute job timeout.
     # Options: apt.conf(5) Acquire::Retries, apt-transport-http(1)
     # Acquire::http::Timeout (https://manpages.debian.org/bookworm/apt/).
     - shell: bash
       run: |
         APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=60"
+        mesa_deadline=$((SECONDS + 300))
+        apt_with_budget() {
+          local remaining=$((mesa_deadline - SECONDS))
+          local cap=$1
+          shift
+          if [ "$remaining" -le 0 ]; then return 124; fi
+          if [ "$cap" -gt "$remaining" ]; then cap=$remaining; fi
+          sudo timeout "$cap" apt-get "$@" $APT_OPTS
+        }
         ok=0
         for attempt in 1 2 3; do
-          if sudo timeout 240 apt-get update -qq $APT_OPTS \
-             && sudo timeout 300 apt-get install -y -qq --no-install-recommends $APT_OPTS mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb; then
+          if apt_with_budget 120 update -qq \
+             && apt_with_budget 180 install -y -qq --no-install-recommends mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb; then
             ok=1; break
           fi
+          remaining=$((mesa_deadline - SECONDS))
+          if [ "$attempt" -eq 3 ] || [ "$remaining" -le 0 ]; then break; fi
           echo "::warning::mesa-xvfb: apt attempt $attempt failed or timed out; retrying"
-          sleep 10
+          if [ "$remaining" -gt 10 ]; then sleep 10; else sleep "$remaining"; fi
         done
-        if [ "$ok" != 1 ]; then echo "::error::mesa-xvfb: apt could not install Mesa/Xvfb in 3 bounded attempts (runner mirror down?)"; exit 1; fi
-        Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
+        if [ "$ok" != 1 ]; then echo "::error::mesa-xvfb: apt could not install Mesa/Xvfb within 300 s and up to 3 attempts (runner mirror down?)"; exit 1; fi
+        Xvfb :99 -screen 0 1280x800x24 >"$RUNNER_TEMP/apex-xvfb.log" 2>&1 &
         # WAIT FOR THE DISPLAY (2026-10-04): the first Chromium launch raced a
         # server that had not created its socket yet. Xvfb makes
         # /tmp/.X11-unix/X99 once it accepts connections; 5 s, then say so.
         for i in $(seq 50); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
-        [ -S /tmp/.X11-unix/X99 ] || echo "::warning::mesa-xvfb: Xvfb :99 has no socket after 5 s; the first browser launch may fail"
+        if [ ! -S /tmp/.X11-unix/X99 ]; then
+          echo "::error::mesa-xvfb: Xvfb :99 has no socket after 5 s"
+          cat "$RUNNER_TEMP/apex-xvfb.log"
+          exit 1
+        fi
         echo "DISPLAY=:99" >> "$GITHUB_ENV"
