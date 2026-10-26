@@ -149,7 +149,135 @@ garage camera always the same angle (`js/garage/setup-camera.js`), Photo Studio 
 old UI flashing before the profile loads. Fixed since: stuck SAFETY CAR with cautions off
 (`js/race/race-control.js:303-310`), rival noise toggle (`js/audio/engine.js:2757-2771`), mobile garage scroll.
 
+## Round 2 — Codex vs Claude, skills, orchestration, prompts, roles
+
+Bryce: "go deeper into these codex transcripts vs Claude and our skills and agent orchestration systems and prompts".
+Six more read-only lens subagents. The plan that acts on this is
+[2026-10-26-codex-parity](../plans/2026-10-26-codex-parity.md).
+
+### R2-0. Head to head: Codex waits by polling, Claude by waking
+
+Same definitions on both sides. Codex: 37 Bryce-attended parent threads, 458 active hours (gaps ≤ 30 min). Claude:
+`list_sessions` metadata for 347 sessions (10-01→17) and 172 (10-20→26), plus 65 transcript pages from 32 sessions
+(~14 active hours, tail-heavy — treat the Claude per-hour rates as indicative).
+
+| metric | Codex | Claude 10-01→17 | Claude 10-20→26 |
+|---|---|---|---|
+| tool calls / active h | 144 | 47 | 33 |
+| polls / active h | 42.8 | 6.4 | 4.9 |
+| model wakes / h | 1.67 final answers, no self-wake | 12.9 (90 % task-notification) | 9.2 (96 %) |
+| wakes with ≤ 1 tool call | — | 48 % | 31 % (median $0.18 a wake) |
+| instruction re-reads / h | 5.4 | 0.15 | 0.40 |
+| tool output per state change | ~290 kB | ~58 kB | ~26 kB |
+| sessions ending failed | — | 20 % (quota) | 1 % |
+| merged PRs / wall h (lower bounds) | ≥ 0.27 | ≥ 0.63 | — |
+
+Mechanism: Claude has `run_in_background`, Monitor and `send_later`; Codex has a foreground exec, so it waits by
+polling inside a turn and cannot wake itself — hence Bryce's "Check" and "Merge" after final answers. Claude's
+remaining waste is the other side of the same coin: a third of its wakes do nothing. Both hosts outlive the gate:
+AGENTS.md:57 files `deploy.mjs --gate-only` under "2–15 min" background jobs, but it ran a median 32.5 min on Codex
+and 60 min in a sampled Claude session; a Claude tooling-fast run died at its background limit at 64/893 files.
+`test-bg.mjs` detaches its run (`:444-457`); `deploy.mjs` and `tooling-fast.mjs` do not. Codex never bootstraps:
+`.githooks/pre-commit` guards every host only once `npm install` has run `prepare` (`package.json:75` sets
+`core.hooksPath`), and 34 Codex threads never installed — so `check-changes/SKILL.md:47-49` ("the commit hook runs
+only in Claude Code") misstates the gap. What Codex did better: one gate verdict per turn with no idle-wake spend,
+hand-built gate resume (110 commands), and cheap in-session fan-out without a fresh session's ~100k boot.
+
+### R2-1. Codex lacked the guidance, not the tools
+
+About two-thirds of the round-1 costs share a root cause with a finding in the recent Claude audits
+([TRANSCRIPT-MINING-2026-10-16](TRANSCRIPT-MINING-2026-10-16.md), [AGENT-RETRO-2026-10-17](AGENT-RETRO-2026-10-17.md),
+[SYSTEM-AUDIT-3](SYSTEM-AUDIT-3-2026-10-26.md), [SYSTEM-AUDIT-4](SYSTEM-AUDIT-4-2026-10-26.md),
+[FLEET-B](FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md), [AGENT-TOKEN-USE](AGENT-TOKEN-USE-2026-10-20.md)). The Claude-side
+fix is usually a repo tool Codex can already call (`ci-watch --failures-only`, `wait-for`, `deploy.mjs --wait`, the
+MCP output gateway). What did not reach Codex: AGENTS.md rules 4/13 and `adapters.md:13-22` name Claude Code and
+Cursor only; Codex never loads `.claude/rules/fleet-core.md` (Cursor has the generated `.cursor/rules/fleet-core.mdc`)
+or `.claude/memory/`; `.codex/hooks.json` guards Bash plus four MCP names, and Codex had no hooks at all until 10-19.
+Patterns on **both** hosts, where one repo fix serves all: the slow late-failing gate (findings 1–3); hand-rolled
+waiting because the waiters are described per host; raw API polling instead of bounded CLIs; local gates bypassed;
+generated-file conflicts; Bryce as the wake and relay channel; read/output volume (Codex and Cursor also load all
+197 MCP schemas eagerly, ~58.6k tokens, browserstack 19.7k with 0 calls); unclassified auth expiry.
+
+### R2-2. Codex's own connector bypasses the merge guard — OPEN, security
+
+Codex names connector tools `mcp__codex_apps__github_<tool>` (shape in `tests/unit/session-contracts.test.mjs:42`);
+`.codex/hooks.json:15` requires `__` before the tool name, so `mcp__codex_apps__github_merge_pull_request` does not
+match (re-checked by hand: `false`), and `github-mcp-guard.sh:78` never reads the connector's `pr_number`. Nothing
+guards `mark_pull_request_ready_for_review`, `update_ref` with `force: true` (19 forced calls on one branch, 10-16), or
+Git Data API pushes (`create_blob` 621, `create_commit` 82) that skip `.githooks/pre-push`. Agents fell back to those
+when `git push` died on "unexpected disconnect while reading sideband packet" or a credential prompt — nothing in the
+repo handles either. `tests/unit/cross-tool-guards.test.mjs:147-160` covers only `mcp__github__*` with `pullNumber`.
+
+### R2-3. Orchestration: every thread was its own merge desk — OPEN
+
+26 threads merged 99 PRs; up to 6 merged into the deploy branch inside 2 h, 17 consecutive merges by different threads
+under 10 min apart, nothing serialising game merges or waiting for Pages (the churn under round-1 finding 2's
+self-killed gates). The fleet bus, agent-msg and merge-gate post-date the archive (0 uses). Today a stand-alone merge
+(`ship/SKILL.md:32-34`) still takes no `GAME-SLOT` and posts no `DONE`. Codex **automations** were its real wake: 21
+created, 94 fires, median 47 min apart (rule 13 says 50–55) — but rule 13's "four sanctioned wake signals" and the
+adapters table never mention them, and `multi-host.md:13` (Codex = fleet-C coordinator) contradicts
+`adapters.md:40-50` (Codex children = evidence work only). Claims were honoured (STAND-DOWN / HANDOFF comments) but 21
+of 61 claiming threads never released; duplicates came from fixes started before a claim (#2322/#2323, #1809/#1817).
+`sync-pr` ran 475 times against 18 `needs-sync` checks.
+
+### R2-4. Prompts: short approval after a concrete plan wins — OPEN (templates)
+
+| prompt shape | n | commit | PR | merge |
+|---|---|---|---|---|
+| short go-ahead after a numbered agent proposal | 27 | 85 % | 44 % | 30 % |
+| pasted structured prompt (≥ 600 chars) | 53 | 51 % | 26 % | 13 % |
+| new task Bryce typed | 207 | 30 % | 15 % | 8 % |
+| tool-push ("use plugins mcps subagents") | 68 | 24 % | 9 % | 9 % |
+| automation firing with no Bryce text | 44 | 11 % | 0 % | 5 % |
+
+Among long prompts, naming tools/plugins went with fewer PRs (15 % vs 42 %), "N subagents" with far fewer commits
+(14 % vs 51 %), "deep / adversarial" with more corrections (20 % vs 4 %); 4 of 106 had a stop criterion. "Use many
+subagents like 10 to hunt…" went to 5 threads 9 times: 0 commits each. Implementation lanes with separate ownership
+and worktrees opened PRs; audit lanes returned reports. Codex automation prompts accreted: 79 % of 160 rewrites grew,
+keeping a median 98 % of the old text (one lineage 4.2k → 19.8k chars), with state and restated grants
+("LATEST USER AUTHORIZATION… supersedes…") copied in instead of read from the PR body. The repo's own launch template
+is 5.1k chars and 15 negations before it is filled (`orchestrator.md:80-128` + `role-pr-owner.md:40-60`), and comms.md
+says when to arm a wake but not what it may contain.
+
+### R2-5. Skills: found by path, followed by position — OPEN
+
+The six skills AGENTS.md names by path were read (check-changes 466 reads / 91 threads, steward 370/64, agent-fleet
+222/80); domain skills mostly were not: before editing, `js/input/` 0/6 threads read input-controls, `js/ui|css`
+11/47 ui-menu-a11y, `js/data/` 4/15, `js/render/` 1/7 (scenery 18/21 for contrast); game-feel, input-controls and
+lighting-tuner were never read. 88 of 256 working threads read no skill. Compliance tracks where a rule sits:
+gate-before-push at the top of check-changes held 62 %; steward's no-poll rule (line 161 of 184 then, a reference
+file now) lost — one thread read steward, killed its own `ci-watch` and fetched runs/jobs every ~30 s to narrate
+progress. 81 % of reads are whole-file and re-done on each new "Merge"/"Check". After reading playwright-probe, as
+many threads hand-wrote browser scripts (31) as used the shipped tools (30). The routing eval's 352 queries contain
+none of Bryce's real phrasings ("Merge", "fix all", "Retry", "Chdck").
+
+### R2-6. Roles: 2 % of Codex children used a repo agent — OPEN
+
+682 children; 16 used a repo agent name. Recurring roles with no definition: UI auditor (104), implementer (89), perf
+auditor (24), PR resumer (12, the most tool-hours: 24 gates), diff reviewer (12). `prior-art-scout` and
+`physics-contract-auditor`: 0 spawns. 49 read-only-named children edited source (26 commits, 4 pushes) because Codex
+children share the parent's checkout and sandbox; harm was small (6 same-file conflicts, 1 revert). Higher effort
+bought longer runs and scope creep, not findings: read-only hunters at high effort edited in 59 % of runs vs 12 % at
+low, with similar command time. `docs/AGENT-SURFACE.md:37` forbids a Codex persona tree; Codex now loads
+`.codex/agents/*.toml` natively and `.codex/config.toml` has no `[agents]` table.
+
+### R2-7. Codex did one thing Claude does not: live-site QA
+
+Codex drove the live github.io game in a real browser (Browser Use 49 starts, TinyFish 25 automation runs) and found
+real defects — the WebGPU "Instance dropped in popErrorScope" overlay (since handled in
+`js/render/shared/compatibility-recovery.js:15`), a Data Hub launch failure, a Baku Highlights lifecycle bug; 20
+issues filed across 5 threads. Claude's `mcp-probe` treats github.io as unreachable and `AGENT-SURFACE.md:188` limits
+hosted TinyFish to search/fetch. (Its result polling — 628 `wait_browser_result` calls, a median 7 per run — is the
+same waste as finding 5.)
+
+### R2-8. Corrections
+
+A subagent's "test-bg reads a stale registry" claim is wrong (finding 6). The test-bg exit-1 cluster is stacked
+waiters, not a registry bug. Spawn prompts are absent from the export (every `collabAgentToolCall` is a `wait`), so
+child-brief quality could not be judged.
+
 ## Next step
 
-Findings 1–3 and 6 are tool changes (`tools/ci/deploy.mjs`, `tools/ci/test-bg.mjs`); 4, 5, 9 and 10 are
-`AGENTS.md` / `.claude/**` edits that need Bryce's word; 7 and 8 are memory entries.
+Acting on these is planned in [2026-10-26-codex-parity](../plans/2026-10-26-codex-parity.md): W0 (the guard gap)
+first, then the host-independent tool fixes (W1 gate, W2 waiters), then Codex guidance, roles, skills and prompts
+(W3–W6, which need Bryce's word for `AGENTS.md` / `.claude/**`).
