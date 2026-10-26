@@ -7,6 +7,6 @@ Closed: #3719 (no win), #3692 (→#3744), #3647.
 
 DONE lanes: H13, W49, W53, W54, O4 (archive after idle 1h + Bryce done).
 
-PAUSED: merges held at Bryce's 'finish setup before continuing' (19:09 PT); Bryce archived all other A sessions.
+RESUMED 20:12 PT (Bryce: 'Yes let's continue'). Order now: #3756 (clean) → #3704 (clean) → #3757 / #3751 after A sync lane resync (both DIRTY).
 
 INBOX (works 19:50 PT): Fleet B POSTs the API endpoint of routine trig_01Vn7kMxEUVCYYBwKKmKdzVh (repo attached by Bryce); the fresh API session posts 'from:claude:fleet-a-inbox [FROM FLEET B via inbox] <text>' on the bus to:A; OrchA's 60 s bus Monitor must include claude:fleet-a-inbox. No relay session (all A·R1 archived). Lessons: API/MCP fires run in a fresh session with no messaging tools; only a routine with a repository attached can push to the bus; routine prompts edit only from the web UI.
