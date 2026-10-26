@@ -2005,8 +2005,7 @@
       "path": "js/agent/agentview.js",
       "global": "AgentView",
       "order": 339,
-      "roster": "LAZY_AGENT",
-      "ratchetLines": 2316
+      "roster": "LAZY_AGENT"
     },
     {
       "path": "js/agent/apex-cam.js",
@@ -2042,8 +2041,7 @@
       "path": "js/agent/apex.js",
       "global": "ApexApi",
       "order": 345,
-      "roster": "LAZY_AGENT",
-      "ratchetLines": 2483
+      "roster": "LAZY_AGENT"
     },
     {
       "path": "js/audio/announcer-recorded.js",
@@ -2385,8 +2383,7 @@
       "path": "js/car/car3d.js",
       "global": "Car3D",
       "order": 71,
-      "roster": "tag",
-      "ratchetLines": 2330
+      "roster": "tag"
     },
     {
       "path": "js/car/crest-draw.js",
@@ -3586,8 +3583,7 @@
       "path": "js/game.js",
       "global": null,
       "order": 307,
-      "roster": "tag",
-      "ratchetLines": 9351
+      "roster": "tag"
     },
     {
       "path": "js/garage/arrival.js",
@@ -3863,8 +3859,7 @@
       "path": "js/net/lobby.js",
       "global": "NetLobby",
       "order": 509,
-      "roster": "LAZY_NET",
-      "ratchetLines": 2342
+      "roster": "LAZY_NET"
     },
     {
       "path": "js/net/netplay.js",
@@ -4434,8 +4429,7 @@
       "path": "js/render/glx/glx.js",
       "global": "GLXBackend",
       "order": 317,
-      "roster": "DEFERRED:webgl2",
-      "ratchetLines": 3002
+      "roster": "DEFERRED:webgl2"
     },
     {
       "path": "js/render/glx/post.js",
@@ -4885,8 +4879,7 @@
       "path": "js/track/tracks.js",
       "global": "Tracks",
       "order": 57,
-      "roster": "tag",
-      "ratchetLines": 800
+      "roster": "tag"
     },
     {
       "path": "js/ui/a11y-opts.js",
@@ -5066,8 +5059,7 @@
       "path": "js/ui/hud.js",
       "global": "GameHud",
       "order": 268,
-      "roster": "tag",
-      "ratchetLines": 2481
+      "roster": "tag"
     },
     {
       "path": "js/ui/key-binds.js",

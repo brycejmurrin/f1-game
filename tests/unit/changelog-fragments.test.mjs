@@ -12,7 +12,7 @@ import cp from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseFragment, fold } from "../../tools/gen/gen-changelog.mjs";
+import { parseFragment, fold, foldBuild } from "../../tools/gen/gen-changelog.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BASE_BRANCH = "claude/f1-game-project-26h3ng";
@@ -102,4 +102,22 @@ test("fragments from two PRs and a fold on the tip merge clean; the old top-of-f
   for (const b of ["frag-b", "frag-c"]) assert.ok(clean("ship", b), `${b} against a tip that landed a and folded`);
   git("merge", "-q", "--no-ff", "-m", "land b", "frag-b");
   assert.ok(clean("ship", "frag-c"), "frag-c after b landed too");
+});
+
+// The fold heading is the build Pages STAMPS (2000 + commit count), never version.json's frozen placeholder
+// (1695 since 2026-09-01): a fold keyed to it filed every entry under a build no player ran (audit 2026-10-26).
+test("fold build: --build wins, else the stamped build; never version.json", async () => {
+  assert.equal(await foldBuild(["--fold", "--build", "4321"], () => 1), 4321);
+  assert.equal(await foldBuild(["--fold"], () => 2999), 2999);
+  await assert.rejects(foldBuild(["--fold", "--build", "x"], () => 1), /positive integer/);
+  const src = fs.readFileSync(new URL("../../tools/gen/gen-changelog.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(src, /readRepo\("version\.json"\)/);
+  const w = fs.readFileSync(new URL("../../.github/workflows/changelog-fold.yml", import.meta.url), "utf8");
+  assert.match(w, /npm run -s fold/);
+  assert.match(w, /fetch-depth: 0/);
+  assert.match(w, /gh workflow run ci\.yml --repo "\$GITHUB_REPOSITORY" --ref bot\/changelog-fold/);
+  assert.doesNotMatch(w, /git push[^\n]*claude\/f1-game-project-26h3ng/);
+  const pkg = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+  assert.match(pkg.scripts.fold, /gen-changelog\.mjs --fold/);
+  assert.match(pkg.scripts["gen:check"], /gen-changelog\.mjs --check/);
 });

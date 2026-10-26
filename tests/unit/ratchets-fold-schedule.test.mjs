@@ -49,13 +49,16 @@ test("--fold rewrites CEILING-HISTORY paths to folded fragments so docs-integrit
   } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
 });
 
-test("the workflow is weekly + dispatch, pushes a bot branch to a PR, never the deploy branch", () => {
+test("the workflow is daily + dispatch, starts its own CI, pushes a bot branch to a PR, never the deploy branch", () => {
   const w = fs.readFileSync(path.join(ROOT, ".github/workflows/ratchets-fold.yml"), "utf8");
   assert.match(w, /schedule:\s*\n\s*- cron: "[^"]+"/);
   assert.match(w, /workflow_dispatch:/);
   assert.match(w, /--fold "--min-fragments=\$MIN_FRAGMENTS"/);
   assert.match(w, /timeout-minutes: \d+/);
   assert.match(w, /git push --force-with-lease origin bot\/ratchets-fold/);
+  assert.match(w, /cron: "\d+ \d+ \* \* \*"/, "daily, so fragments do not pile up for a week");
+  assert.match(w, /gh workflow run ci\.yml --repo "\$GITHUB_REPOSITORY" --ref bot\/ratchets-fold/, "a GITHUB_TOKEN PR starts no CI; the dispatch does");
+  assert.match(w, /actions: write/);
   assert.doesNotMatch(w, /git push[^\n]*claude\/f1-game-project-26h3ng/, "the protected deploy branch is reached only through the PR");
   assert.match(w, /MIN_FRAGMENTS: \$\{\{ inputs\.min_fragments/, "the dispatch input enters shell via env only");
   assert.doesNotMatch(w, /run:[^\n]*\$\{\{ inputs\./);

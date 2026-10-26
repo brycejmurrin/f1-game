@@ -1,22 +1,17 @@
 name: Merge attribution
 
-# Flags merges to the deploy branch that carry no `Merged-by:` trailer (tools/ci/merge-attribution.mjs;
+# Reports merges to the deploy branch that carry no `Merged-by:` trailer (tools/ci/merge-attribution.mjs;
 # docs/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md §8). merge-gate.mjs prints the trailer for agents; a merge
-# without one is presumed to be a Bryce UI merge, and this job asks on the PR, once ("merged without attribution:
-# Bryce UI merge, or an agent? reply here if it was you"). It only flags: nothing is paused or frozen.
+# without one is presumed to be a Bryce UI merge. It only reports: nothing is paused or frozen.
 #
-# Why a push workflow and not the hourly FLEET BUS WATCH prompt: a push trigger reacts within seconds of the merge,
-# costs no session tokens, and needs no session alive. The job is Node built-ins plus the preinstalled `gh`: no
-# checkout of node_modules, no npm install, seconds of runner time.
+# JOB SUMMARY ONLY, NO PR COMMENTS (audit 2026-10-26, lane X3): the comment form posted 60 "who merged this?" comments
+# in 7 days and none was answered, so it was noise on merged PRs. The rows now go to the run's job summary plus one
+# ::notice annotation per run that found an unattributed merge; a session that wants the bus line runs
+# `node tools/ci/merge-attribution.mjs --no-comment` (the bus needs a session identity this job does not have).
+# Job summaries: https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#adding-a-job-summary
 #
-# PR comment only (`--no-bus`): the bus line needs a push to claude/fleet-bus, i.e. `contents: write`, a broader grant
-# than this job should hold. A session that runs `node tools/ci/merge-attribution.mjs` (no --no-bus) adds the bus
-# HANDOFF line; the comment's `<!-- merge-attribution:<sha12> -->` marker makes either path idempotent.
-#
-# Permissions: contents: read (checkout) + pull-requests: write (POST issues/<n>/comments on a PR number; the
-# endpoint is listed under both Issues and Pull requests write, see fleet.yml's "Bus to PR comments" note):
-# https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps
-# https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/controlling-permissions-for-github_token
+# Why a push workflow and not a session prompt: a push trigger reacts within seconds of the merge, costs no session
+# tokens, and needs no session alive. Node built-ins only: no npm install, seconds of runner time.
 # The merge API's commit_message (the trailer's carrier): https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request
 
 on:
@@ -35,18 +30,26 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false   # fetch-only; the repo is public
           fetch-depth: 0
           filter: blob:none
-      - name: Flag unattributed merges
+      - name: Report unattributed merges
         env:
-          GH_TOKEN: ${{ github.token }}
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
         run: |
           case "$BEFORE" in 0000000000000000000000000000000000000000|"") RANGE="${AFTER}~1..${AFTER}" ;; *) RANGE="${BEFORE}..${AFTER}" ;; esac
-          node tools/ci/merge-attribution.mjs --range "$RANGE" --no-bus
+          node tools/ci/merge-attribution.mjs --range "$RANGE" --no-bus --no-comment | tee "$RUNNER_TEMP/attr.txt"
+          {
+            echo "### Merge attribution ($RANGE)"
+            echo '```'
+            cat "$RUNNER_TEMP/attr.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          n=$(grep -c '^UNATTRIBUTED' "$RUNNER_TEMP/attr.txt" || true)
+          if [ "${n:-0}" -gt 0 ]; then
+            echo "::notice title=merge-attribution::$n merge(s) without a Merged-by: trailer (presumed Bryce UI merges); rows in the job summary"
+          fi
