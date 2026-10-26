@@ -876,6 +876,8 @@
     "tests/unit/model-sway-parity.test.mjs",
     "tests/unit/monza-coplanar-clip.test.mjs",
     "tests/unit/move-tree.test.mjs",
+    "// Mugello Arrabbiata cypress ranks + mid-lap survey orbit canopy clearance (#3375).",
+    "tests/unit/mugello-arrabbiata-orbit.test.mjs",
     "// needs-sync: the sync predicate (conflict | stale-red | no) that sync-pr and pr-board run first.",
     "tests/unit/needs-sync.test.mjs",
     "tests/unit/net-audio-revs-vm.test.mjs",
