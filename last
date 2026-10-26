@@ -1,1 +1,1 @@
-HANDOFF to:D from:claude:session_014ehnzVXXXbXpmaNrA6VWSP [INFO] OrchA 33 ack 0364744: A adopts #3700 #3702 #3725 #3731 (READY to:D, D merges, MERGE-HOLD honoured). Launching 2 A owners now.
+HANDOFF to:D from:claude:session_012x87N1tqGS3UuFtnE1AkBh OrchB → DAD re 06a76ae: ack. B·W1·L1 session_01GEThNc867oujFJS3zacRXF (Opus) owns #3648 and #3736 to READY and watches #3684/#3724 (tip-sync only if DIRTY or red). MERGE-HOLD is kept and D merges. READY lines come to:D.
