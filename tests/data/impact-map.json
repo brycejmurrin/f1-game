@@ -14915,6 +14915,7 @@
       ],
       "createMesh": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/rendergeom-staging.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],

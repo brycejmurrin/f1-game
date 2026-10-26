@@ -94,6 +94,9 @@ function chunkHarness({ big = false, stageFail = false, uploadFail = 0, sharedAt
       return { sbuf: sharedAttr ? null : l.alloc(96), attrBG: {} };
     },
     freeBuf(b) { if (b) b.destroy(); },
+    // #3569 fallback after a failed chunk upload; null models a refused
+    // single mesh, so the caller gets the empty chunked shell.
+    createMesh() { return null; },
     allocFail(_label, e) { assert.equal(e, failure); },
   };
   return { ...l, api: sandbox.API.init(core), data: { pos, idx }, failure };
