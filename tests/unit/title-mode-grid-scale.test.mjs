@@ -7,21 +7,23 @@ import assert from "node:assert/strict";
 
 test("compact-wide title mode bigbtns floor + tap-paint re-derive (#3305)", () => {
   const menus = readCssSource("css/menus.css");
-  const emRamp =
-    "calc(40px + (2.75em - 40px) * clamp(0, (var(--ui-compact-text, 1) - 1.001) * 999, 1)";
   assert.ok(
     menus.includes("@media (max-height: 460px)"),
     "scoped em ramp lives in the short-viewport band (#3305)",
   );
   assert.ok(
-    menus.includes(
-      "#overlay #menu-buttons :is(#menu-primary,#menu-explore,#menu-hero,#menu-retention,#menu-garage) .bigbtn",
-    ) && menus.includes(emRamp),
-    "compact-wide room doors use the em ramp (#3305)",
+    menus.includes("--_3305: clamp(0, calc((var(--ui-compact-text, 1) - 1) * 2.5), 1)"),
+    "compact-wide door ramp uses --_3305 (#3305)",
   );
   assert.ok(
     menus.includes(
-      "--tap-paint: max(24px, calc(var(--tap-paint-at) / var(--ui-compact-scale))); /* #3305 */",
+      "calc(40px + (2.75em - 40px) * var(--_3305))) !important",
+    ),
+    "room doors apply the em ramp (#3305)",
+  );
+  assert.ok(
+    menus.includes(
+      "--tap-paint: max(24px, calc(var(--tap-paint-at) / var(--ui-compact-scale)));",
     ),
     "compact #menu-buttons re-derives --tap-paint (#3305)",
   );

@@ -376,7 +376,7 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
   gap: calc(var(--gap) * 0.15); min-height: var(--tap); height: auto; max-height: none;
   --balance-basis: 0%; --balance-min: 0%;
 }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn { min-height: var(--tap-paint); justify-content: flex-start; white-space: normal; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn { justify-content: flex-start; white-space: normal; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary.balanced-row > :not([hidden]) {
   flex: 1 1 0; min-width: 0; width: auto;
 }
@@ -393,10 +393,10 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
   min-height: var(--tap-paint); height: auto; max-height: none;
 }
-/* #3305: ramp 40px→2.75em only when --ui-compact-text>1; beats destinations 40px cap @200%. */
 @media (max-height: 460px) {
+  :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { --_3305: clamp(0, calc((var(--ui-compact-text, 1) - 1) * 2.5), 1); }
   :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons :is(#menu-primary,#menu-explore,#menu-hero,#menu-retention,#menu-garage) .bigbtn {
-    min-height: max(var(--tap-min), var(--tap-paint), calc(40px + (2.75em - 40px) * clamp(0, (var(--ui-compact-text, 1) - 1.001) * 999, 1))) !important;
+    min-height: max(var(--tap-min), var(--tap-paint), calc(40px + (2.75em - 40px) * var(--_3305))) !important;
   }
 }
 html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
@@ -413,19 +413,6 @@ html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :
     max-height: none;
   }
 }
-@media (min-width: 700px) {
-  html[data-home-live] :where(body[data-shape="tall"]) #overlay {
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-  html[data-home-live] :where(body[data-shape="tall"]) #title-car { display: none; }
-  html[data-home-live] :where(body[data-shape="tall"]) #menu-buttons {
-    grid-row: 2;
-    align-self: stretch;
-    height: auto;
-    max-height: none;
-  }
-}
-
 /* The height half of this condition now comes from data-density, measured in the
    units the content is actually laid out in (js/ui/sheet-shape.js). Orientation
    and width stay media queries: zoom does not distort either.
@@ -864,7 +851,7 @@ html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"]
     --vwz: calc(1vw / var(--ui-compact-scale));
     --vhz: calc(1vh / var(--ui-compact-scale));
     --svhz: calc(1svh / var(--ui-compact-scale));
-    --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--ui-compact-scale))); /* #3305 */
+    --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--ui-compact-scale)));
   }
   /* Compact sheet zoom cap (#1346): --_sheet-z is the painted zoom; re-derive
      --tap-paint / vwz against it (shortHelpChips at 150%+). */
