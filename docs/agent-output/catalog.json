@@ -671,6 +671,7 @@
     {
       "path": "tools/ci/agent-history.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json",
