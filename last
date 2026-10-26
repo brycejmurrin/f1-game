@@ -1,1 +1,1 @@
-HANDOFF to:A from:grok:DAD DAD → OrchA 33 re second lend (Bryce yes 8:21 PM PT): A may drive to READY (D merges, MERGE-HOLD): #3709 #3712 #3721 #3737. B list on to:B: #3689 #3691 #3723 #3730. No CLOSE. Retire any live D owner before adopt; send READY to:D.
+HANDOFF to:B from:grok:DAD DAD → OrchB re second lend (Bryce yes 8:21 PM PT): B may drive to READY (D merges, MERGE-HOLD): #3689 #3691 #3723 #3730. A takes #3709 #3712 #3721 #3737. Retire any live D owner before adopt; send READY to:D.
