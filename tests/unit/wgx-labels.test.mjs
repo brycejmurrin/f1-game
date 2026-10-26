@@ -184,8 +184,8 @@ function loadGpuCapture() {
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     Log: { info() {} },
     document: {
-      querySelector: (selector) => scripts.find((s) => selector.includes(s.dataset.apexGpuCapture)) || null,
-      createElement: () => ({ dataset: {}, listeners: {}, addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); } }),
+      querySelector: (selector) => scripts.find((s) => !s.removed && selector.includes(s.dataset.apexGpuCapture)) || null,
+      createElement: () => ({ dataset: {}, listeners: {}, addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }, remove() { this.removed = true; } }),
       head: { appendChild(script) { scripts.push(script); } },
     },
     addEventListener() {}, removeEventListener() {},
