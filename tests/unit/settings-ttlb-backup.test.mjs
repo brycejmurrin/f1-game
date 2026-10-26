@@ -8,6 +8,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { bootEditor, design, ellipse } from "../helpers/editor-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -39,6 +40,7 @@ function boot(opts = {}) {
     },
   };
   sb.window = sb;
+  if (opts.globals) Object.assign(sb, opts.globals);
   const ctx = vm.createContext(sb);
   seedSaveMigrate(ctx);
   vm.runInContext(read("js/core/store.js"), ctx, { filename: absSrc("js/core/store.js") });
@@ -124,6 +126,29 @@ test("ttlb import retains finite track and lap work budgets", () => {
   assert.equal(result.skipped, rows.length - 1);
   assert.equal(b.GameStore.ttBoard("monza").length, 1);
   assert.equal(b.GameStore.ttBoard("monza")[0].t, 90, "rows beyond the native maximum are not applied");
+});
+
+test("settings leaderboard export round-trips the full shipped and custom roster within a finite budget", () => {
+  const editor = bootEditor();
+  const natives = editor.Tracks.LIST.filter((t) => !t.custom).map((t) => t.id);
+  const customs = [];
+  for (let i = 0; i < editor.C.LIMITS.items; i++) {
+    const r = editor.C.upsert(design({ name: "CUSTOM " + i, pts: ellipse(36, 800 + i * 5, 500) }));
+    assert.equal(r.ok, true); customs.push(r.id);
+  }
+  const ids = natives.concat(customs), globals = { Tracks: editor.Tracks, CustomTracks: editor.C };
+  assert.ok(ids.length > 64, "fixture exceeds the old import limit");
+  const src = boot({ globals });
+  for (const id of ids) assert.equal(src.GameStore.ttBoardAddResult(id, lap(90)).durable, true);
+  const file = { ...src.collect("all"), settings: {} }, dst = boot({ globals });
+  assert.equal(Object.keys(file.ttlb).length, ids.length);
+  const result = dst.loadSettings(file);
+  assert.equal(result.applied, ids.length); assert.equal(result.rejectedTtlb, 0);
+  for (const id of ids) assert.equal(dst.GameStore.ttBoard(id)[0].t, 90);
+  const oversized = { ...file, ttlb: { ...file.ttlb, "one-too-many": [lap(90)] } };
+  const untouched = boot({ globals });
+  assert.equal(untouched.loadSettings(oversized).rejectedTtlb, ids.length + 1);
+  assert.equal(untouched.disk.size, 0, "over-budget imports are refused before writes");
 });
 
 test("ttlb import reports quota-refused laps as failed rather than reloading them away", () => {

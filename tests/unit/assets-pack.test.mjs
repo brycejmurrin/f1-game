@@ -1689,6 +1689,31 @@ const packFetch = (gate) => async (url) => {
   return { ok: true, arrayBuffer: async () => MODEL_V2() };
 };
 
+test("per-circuit model loads cannot restart pack fetches after unload", async () => {
+  const fetched = [];
+  const assets = assetLoader({ fetch(url) { fetched.push(url); return packFetch()(url); } });
+  await assets.manifest();
+  const pending = assets.loadModelsFor('"box"');
+  assets.unload();
+  assert.equal(await pending, 0, "the cached manifest continuation belongs to the unloaded generation");
+  assert.equal(fetched.length, 1, "obsolete work must not refetch the manifest or start a model download");
+  assert.equal(assets.state().pack, false);
+  assert.equal(assets.modelSync("box"), null);
+  assert.equal(await assets.loadModelsFor('"box"'), 1, "a new explicit load can populate the next generation");
+  assert.ok(assets.modelSync("box"));
+});
+
+test("per-circuit model readiness does not count models unloaded during its wait", async () => {
+  const assets = assetLoader({ fetch: packFetch() });
+  await assets.model("box");
+  const pending = assets.loadModelsFor('"box"');
+  // Let the cached manifest resume and join the cached model's promise, then unload.
+  await Promise.resolve();
+  assets.unload();
+  assert.equal(await pending, 0, "readiness cannot report a model from the discarded generation");
+  assert.equal(assets.modelSync("box"), null);
+});
+
 test("modelsReady resolves once the prefetched models are resident, and loadModels is one run", async () => {
   let release; const gate = new Promise((r) => { release = r; });
   let fetches = 0;

@@ -51,6 +51,24 @@ function raceHarness(cars, player) {
   return { G, journal, step };
 }
 
+test("first-tick facts survive edge sampling and a replacement field starts a fresh journal", () => {
+  const a = car("AAA", 100, 50), b = car("BBB", 90, 50);
+  const { G, journal, step } = raceHarness([a, b], a);
+  G._caution = 3;
+  step(0.1);
+  assert.deepEqual(Array.from(journal.events(), e => e.kind), ["start", "caution"]);
+  step(0.1);
+  assert.equal(journal.events().filter(e => e.kind === "start").length, 1);
+  const c = car("CCC", 0, 50), d = car("DDD", -10, 50);
+  G.cars = [c, d]; G.player = c; G.raceT = 0; G._caution = 0;
+  step(0.1);
+  assert.deepEqual(Array.from(journal.events(), e => e.kind), ["start"]);
+  assert.equal(journal.events()[0].car, c);
+  // Edge-only ticks must reset a new field even when radio has no facts.
+  G.cars = [a, b]; journal.update(0.1);
+  assert.equal(journal.count(), 0);
+});
+
 test("capacity is 256 events", () => {
   const { EJ } = loadRaceStack();
   const G = { state: "race", raceT: 0, cars: [car("A", 0, 0), car("B", 10, 0)], track: { total: LAP },

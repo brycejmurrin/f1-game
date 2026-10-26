@@ -14,9 +14,12 @@ const SaveHealth = (function () {
   }
   function dependencies(opts) {
     opts = opts || {};
+    // Accessing the browser's storage properties can itself throw (denied
+    // origin / storage policy), before any getItem or estimate call happens.
+    const safe = (read) => { try { return read(); } catch (_) { return null; } };
     return { store: opts.store || (typeof GameStore !== "undefined" && GameStore.store),
-      disk: opts.localStorage || (typeof localStorage !== "undefined" && localStorage),
-      storage: opts.storage || (typeof navigator !== "undefined" && navigator.storage) };
+      disk: safe(() => opts.localStorage || (typeof localStorage !== "undefined" && localStorage)),
+      storage: safe(() => opts.storage || (typeof navigator !== "undefined" && navigator.storage)) };
   }
   async function inspect(opts) {
     const { store, disk, storage } = dependencies(opts), groups = new Map();
@@ -79,33 +82,41 @@ const SaveHealth = (function () {
     let reportRevision = 0;
     async function update() {
       const revision = ++reportRevision; status.textContent = "Measuring storage…"; refresh.disabled = true;
-      const report = await inspect(opts);
-      if (revision !== reportRevision) return;
-      measurements.replaceChildren();
-      measurements.appendChild(node(doc, "p", report.ok ? "Local game data: " + size(report.localBytes) + " (UTF-16 estimate)." : "Local storage could not be read."));
-      for (const row of report.categories) measurements.appendChild(node(doc, "p", row.name + ": " + size(row.bytes) + " across " + row.keys + " keys."));
-      measurements.appendChild(node(doc, "p", report.estimate ? "Whole origin estimate: " + size(report.estimate.usage) + " used of " + size(report.estimate.quota) + ". This includes IndexedDB and downloaded assets." : "Whole-origin usage estimate is unavailable in this browser."));
-      if (report.mirror) {
-        const m = report.mirror;
-        measurements.appendChild(node(doc, "p", "Local mirror: " + (m.supported ? "available" : "unavailable") + "; " + m.pending + " queued, " + m.failed + " failed writes, " + m.skipped + " skipped by limits."));
-        if (report.policy) measurements.appendChild(node(doc, "p", "Garage mirror: " + size(m.authoredBytes) + " / " + size(report.policy.totalBytes) + ", " + m.authoredKeys + " / " + report.policy.keys + " keys; each item at most " + size(report.policy.rowBytes) + "."));
+      try {
+        const report = await inspect(opts);
+        if (revision !== reportRevision) return;
+        measurements.replaceChildren();
+        measurements.appendChild(node(doc, "p", report.ok ? "Local game data: " + size(report.localBytes) + " (UTF-16 estimate)." : "Local storage could not be read."));
+        for (const row of report.categories) measurements.appendChild(node(doc, "p", row.name + ": " + size(row.bytes) + " across " + row.keys + " keys."));
+        measurements.appendChild(node(doc, "p", report.estimate ? "Whole origin estimate: " + size(report.estimate.usage) + " used of " + size(report.estimate.quota) + ". This includes IndexedDB and downloaded assets." : "Whole-origin usage estimate is unavailable in this browser."));
+        if (report.mirror) {
+          const m = report.mirror;
+          measurements.appendChild(node(doc, "p", "Local mirror: " + (m.supported ? "available" : "unavailable") + "; " + m.pending + " queued, " + m.failed + " failed writes, " + m.skipped + " skipped by limits."));
+          if (report.policy) measurements.appendChild(node(doc, "p", "Garage mirror: " + size(m.authoredBytes) + " / " + size(report.policy.totalBytes) + ", " + m.authoredKeys + " / " + report.policy.keys + " keys; each item at most " + size(report.policy.rowBytes) + "."));
+        }
+        if (report.failed.length) for (const f of report.failed) measurements.appendChild(node(doc, "p", "Not saved: " + f.key + " (" + f.reason + "). Use SAVE RETRY after making room."));
+        else measurements.appendChild(node(doc, "p", "No failed primary writes are currently recorded."));
+        for (const point of report.history) measurements.appendChild(node(doc, "p",
+          (point.flavour === "myteam" ? "MY TEAM" : "DRIVER") + " SLOT " + (point.slot + 1) + " history: " +
+          (point.state === "saved" ? "last restore point saved" : point.state === "saving" ? "capturing restore point" : "restore point unavailable (" + point.reason + ")") +
+          " · " + new Date(point.at).toLocaleString() + ". Primary save status is separate."));
+        status.textContent = "Cleanup removes only downloaded response caches. Career saves, garage work, ghosts and authored circuits are kept.";
+      } catch (_) {
+        if (revision === reportRevision) status.textContent = "Storage report is unavailable. Try refreshing again.";
+      } finally {
+        if (revision === reportRevision) refresh.disabled = false;
       }
-      if (report.failed.length) for (const f of report.failed) measurements.appendChild(node(doc, "p", "Not saved: " + f.key + " (" + f.reason + "). Use SAVE RETRY after making room."));
-      else measurements.appendChild(node(doc, "p", "No failed primary writes are currently recorded."));
-      for (const point of report.history) measurements.appendChild(node(doc, "p",
-        (point.flavour === "myteam" ? "MY TEAM" : "DRIVER") + " SLOT " + (point.slot + 1) + " history: " +
-        (point.state === "saved" ? "last restore point saved" : point.state === "saving" ? "capturing restore point" : "restore point unavailable (" + point.reason + ")") +
-        " · " + new Date(point.at).toLocaleString() + ". Primary save status is separate."));
-      status.textContent = "Cleanup removes only downloaded response caches. Career saves, garage work, ghosts and authored circuits are kept.";
-      refresh.disabled = false;
     }
     toggle.onclick = () => { panel.hidden = !panel.hidden; toggle.setAttribute("aria-expanded", String(!panel.hidden)); if (!panel.hidden) update(); };
     toggle.setAttribute("aria-expanded", "false");
     refresh.onclick = update;
     clear.onclick = async () => {
-      clear.disabled = true; const result = cleanup(opts); await update();
-      status.textContent = result.ok ? "Removed " + result.removed + " downloaded cache entries (" + size(result.bytes) + " estimated). Save failures stay recorded until SAVE RETRY succeeds." : "Some caches could not be removed. Saves were kept.";
-      clear.disabled = false;
+      clear.disabled = true;
+      try {
+        const result = cleanup(opts); await update();
+        status.textContent = result.ok ? "Removed " + result.removed + " downloaded cache entries (" + size(result.bytes) + " estimated). Save failures stay recorded until SAVE RETRY succeeds." : "Some caches could not be removed. Saves were kept.";
+      } catch (_) { status.textContent = "Caches could not be removed. Saves were kept."; }
+      finally { clear.disabled = false; }
     };
     const history = node(doc, "div"); history.className = "save-health-history";
     history.appendChild(node(doc, "p", "Restore points are local history, captured at round completion and import. Clearing site data removes them too. Keep exported files as a separate backup."));
