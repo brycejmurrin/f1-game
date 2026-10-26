@@ -261,38 +261,70 @@ test("WAITING FOR PLAYERS squelches and speaks on its first show, not on every 3
 
 const drain = async (n = 50) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
 
+function entryBarrier() {
+  let release, entered = false;
+  const pending = new Promise((resolve) => { release = resolve; });
+  return { release, entered: () => entered, hold: () => { entered = true; return pending; } };
+}
+
 test("quitToMenu() during a race load cancels it: the body does not go on to count the grid down", async () => {
   const g = await createGame({ track: "monza", carMeshes: false });
+  const profile = g.ctx.RaceEntryProfile, barrier = entryBarrier();
   try {
     const G = g.G;
     G.quitToMenu();
     const round0 = G.raceRound;
-    const started = G.startRace();   // SessionEntry hands startRaceBody its own `current`
-    for (let i = 0; i < 18; i++) await Promise.resolve();
+    // Hold inside SessionEntry's commit callback, before the body's first stale check.
+    // This exercises body cancellation independently of the preparation promise depth.
+    g.ctx.RaceEntryProfile = { ...profile, runSession(entry, key, prepare, body, valid, recover) {
+      return profile.runSession(entry, key, prepare, async (current) => {
+        await barrier.hold();
+        return body(current);
+      }, valid, recover);
+    } };
+    const started = G.startRace();
+    assert.equal(await g.settle(barrier.entered), true, "the race body has entered its cancellable phase");
+    assert.equal(G.raceRound, round0, "the held body has not committed a race");
     G.quitToMenu();
+    barrier.release();
     assert.equal(await started, false, "a canceled race body resolves false without rejecting");
     await drain();
     assert.equal(G.state, "menu", "the abandoned load must not undo the quit");
     assert.equal(G.raceRound, round0, "and must not count a race that never started");
-  } finally { g.close(); }
+    // Cancellation before preparation begins has its own typed outcome.
+    const immediate = G.startRace();
+    G.quitToMenu();
+    const canceled = await immediate;
+    assert.equal(canceled.kind, "canceled");
+    assert.equal(canceled.reason, "superseded");
+    assert.equal(G.state, "menu");
+    assert.equal(G.raceRound, round0);
+  } finally { barrier.release(); g.ctx.RaceEntryProfile = profile; g.close(); }
 });
 
 test("a second startRace() after the first passed raceIndex++ joins it: one race, round +1, state stays count", async () => {
   const g = await createGame({ track: "monza", carMeshes: false });
+  const profile = g.ctx.RaceEntryProfile, barrier = entryBarrier();
   try {
     const G = g.G;
     G.quitToMenu();
     const round0 = G.raceRound;
+    // Mesh warming follows raceIndex++; keep that real entry request pending
+    // while the duplicate arrives, irrespective of the earlier await count.
+    g.ctx.RaceEntryProfile = { ...profile, spanAsync(name, fn) {
+      return profile.spanAsync(name, name === "warmCarAssets" ? async () => { await barrier.hold(); return fn(); } : fn);
+    } };
     const first = G.startRace();
-    for (let i = 0; i < 20; i++) await Promise.resolve();
+    assert.equal(await g.settle(barrier.entered), true, "the first body has reached mesh warming");
     assert.equal(G.raceRound, round0 + 1, "the first body is past raceIndex++");
     const second = G.startRace();
-    await Promise.allSettled([first, second]);
-    await drain(80);
     assert.equal(second, first, "the in-flight request is shared, not restarted");
+    barrier.release();
+    await Promise.all([first, second]);
+    await drain(80);
     assert.equal(G.state, "count", "the freshly started race survives its duplicate");
     assert.equal(G.raceRound, round0 + 1);
-  } finally { g.close(); }
+  } finally { barrier.release(); g.ctx.RaceEntryProfile = profile; g.close(); }
 });
 
 test("manual RECOVER does nothing to a car serving a pit stop; on the track it still puts the car back", async () => {
