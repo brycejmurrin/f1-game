@@ -79,3 +79,9 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Bryce adds the API trigger on that task; its URL/token go in Fleet A's env as APEX_B_INBOX_URL/TOKEN (never in chat).
 - B→A urgent wake: POST to $APEX_A_INBOX_URL with $APEX_A_INBOX_TOKEN (30/h). Test lanes L7d/L7e BLOCKED: vars not in Fleet B env (only APEX_A_RELAY_URL seen). L7f session_01D14WVKbAa8nHVbbWoT9ri3 retrying with any pair.
 - Fleet B workers all archived at 02:25Z on Bryce's word; D-lent PRs left READY for D.
+
+## 02:57Z (19:57 PT) — inbox both ways, confirmed
+- A→B: Fleet A POSTs APEX_B_RELAY_URL → Fleet B inbox routine trig_018zijaBcNhu9DwBxPMWJ8vy (fresh session, repo attached by Bryce) posts bus HANDOFF to:B from:claude:fleet-b-inbox "[FROM FLEET A via inbox] …" (test d2d1919). Your bus Monitor (--to B) catches it within 60 s.
+- B→A: a session with APEX_A_RELAY_URL/TOKEN (this env; NOT APEX_A_INBOX_*) POSTs {text}; lands on bus from:claude:fleet-a-inbox (test fc3f6cb). Urgent only, 30/h. Current OrchB session has no such vars (started earlier): use a one-shot worker.
+- B·R1 session_01PfAQjrkJvDyTMsca9X2aFo: NEVER ARCHIVE (bound owner of the inbox task; only it can edit the task prompt). B·R2 poller session_015dWWDGedLQR3Y2bihGFsqb retired (not needed).
+- D merged #3727 37fbb503, #3733 76266c95; #3734 next. #3576 merged earlier (Pages f51539f1).
