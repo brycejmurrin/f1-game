@@ -60,11 +60,11 @@ test("a multi-PR session is ARCHIVE only when every PR it names is merged or clo
   const multi = sess({ tags: ["role:worker", "pr:3689", "pr:3691", "pr:3723", "config:session-created"], title: "fleet fixes (#3760)" });
   const states = { 3689: "merged", 3691: "closed", 3723: "open", 3760: "merged" };
   const kept = decide(multi, { now: NOW, prState: (n) => states[n] });
-  assert.equal(kept.verdict, "KEEP"); assert.match(kept.why, /^#3723 still open$/);
+  assert.equal(kept.verdict, "KEEP"); assert.equal(kept.why, "#3723 still open");
   const done = decide(multi, { now: NOW, prState: (n) => (n === 3691 ? "closed" : "merged") });
-  assert.equal(done.verdict, "ARCHIVE"); assert.match(done.why, /#3689 merged, #3691 closed, #3723 merged, #3760 merged/);
+  assert.equal(done.verdict, "ARCHIVE"); assert.ok(done.why.endsWith("#3689 merged, #3691 closed, #3723 merged, #3760 merged"), done.why);
   const offline = decide(multi, { now: NOW, prState: (n) => (n === 3689 ? "merged" : "unknown") });
-  assert.equal(offline.verdict, "KEEP"); assert.match(offline.why, /#3691, #3723, #3760 state unknown \(pr-unknown\)/);
+  assert.equal(offline.verdict, "KEEP"); assert.ok(offline.why.startsWith("#3691, #3723, #3760 state unknown (pr-unknown)"), offline.why);
 });
 
 test("main prints one row per session, caches PR lookups, and --offline never calls out", () => {
