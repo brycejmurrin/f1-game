@@ -20,7 +20,7 @@ Tip df89a10d. Last game merge D #3645 8359871b (Pages in_progress at 04:00Z). Sl
 3. #3757 (title warm, now 9a977ce1) and #3751 (pack URLs, DIRTY) — A sync lane session_011eKSAUfi58o6oKPi3LoufQ resyncs; wait for its READY.
 4. #3761 + #3766 (first-frame pre-mint, rig warm; stack on #3757) — owner session_018TxG428heVrfDa89WSiT7s (Opus).
 5. #3693 + #3696 (net TURN cache, audio resume; old MERGE-HOLD work-state lines, lift at merge with evidence) — owner session_01SoT9qynqBvf9yyaWk52LtF.
-Non-game: #3770 808bdcf7 (A·R2 transcript audit note, docs-only; full tier was running) — gate + merge. Then A·W58 / A·W59 PRs (audit fixes) — review diffs carefully (hooks must fail open), gate, merge.
+Non-game: #3770 MERGED 06ac5e84. Next: A·W58 / A·W59 PRs (audit fixes) — review diffs carefully (hooks must fail open), gate, merge.
 
 ## Live Fleet A lanes
 | slot | session | PRs / job |
@@ -28,11 +28,11 @@ Non-game: #3770 808bdcf7 (A·R2 transcript audit note, docs-only; full tier was 
 | Sync | session_011eKSAUfi58o6oKPi3LoufQ (Sonnet) | resync #3757 #3751 |
 | Owner | session_01SoT9qynqBvf9yyaWk52LtF (Sonnet) | #3693 #3696 |
 | Owner | session_018TxG428heVrfDa89WSiT7s (Opus) | #3761 #3766 (iPhone WebGPU freeze; device runs need Bryce's Go via A·D2 — archived; relaunch if he wants one) |
-| Owner (D-lent) | session_01LSsK2pE8uiPTU5gbMtpNdz | #3700 #3702 → READY to D, D merges |
+| Owner (D-lent) | session_01LSsK2pE8uiPTU5gbMtpNdz | #3700 #3702 → D (#3702 red VF6 600>599: told to add a vm filename, no ceiling raise) |
 | Owner (D-lent) | session_01LESs6Lsd4TUcsoiG7HSiNK | #3725 #3731 → D |
 | Owner (D-lent) | session_01RH2u5AT3dnvftgSMAp9tCp | #3709 READY (#3712 merged) → D |
 | Owner (D-lent) | session_01X9AfrVwmivJyz5F2my23xZ | #3721 READY, #3737 → D |
-| Review | session_016jTZC5nB2TPhJvvbLjnkyx (Opus) | #3770 audit note (READY) |
+| Review (done) | session_016jTZC5nB2TPhJvvbLjnkyx | #3770 merged — archive after 1 h idle |
 | Worker W58 | session_01QmafPRVR8CKCYzBrN8h1M6 (Opus) | audit D1–D7 + Q1: .claude rules, context-cap + launch-gate hooks |
 | Worker W59 | session_01L2JfUG9S2LF6yGzvssmSJX (Sonnet) | audit Q2–Q11 tools |
 Done, archive after 1 h idle (fleet-archive rule): A·W57 session_017S4fYMhEPQgVZHizeFJHpL, A·T1 session_016wPTxszmxyxxXKN8Y5Qsvn, A·T2 session_01BSSzUj5tzNK8ykJk433Z9W.
