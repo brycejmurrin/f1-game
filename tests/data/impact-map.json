@@ -4499,6 +4499,14 @@
         "tests/unit/select-specs.test.mjs"
       ]
     },
+    "js/circuits/scenery/suzuka.js": {
+      "scenery": [
+        "tests/unit/suzuka-circuit-wheel.test.mjs"
+      ],
+      "*": [
+        "tests/unit/suzuka-circuit-wheel.test.mjs"
+      ]
+    },
     "js/circuits/scenery/vegas.js": {
       "*": [
         "tests/unit/scenery-guards.test.mjs"
