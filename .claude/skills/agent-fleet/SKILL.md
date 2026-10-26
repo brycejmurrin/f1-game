@@ -21,7 +21,7 @@ and the no-authority rule. Env `APEX_AGENT_WEBHOOK_URL` +
 Read your role's reference before acting:
 
 - **Orchestrator** → [`references/orchestrator.md`](references/orchestrator.md)
-  (§First acts: the ~3-min `send_later` tick and the hourly `create_trigger` safety net);
+  (§First acts: the bus `Monitor` and the hourly `create_trigger` safety net);
   each wake after (roles, reading the fleet, escalations) →
   [`references/running.md`](references/running.md); the per-host spawn / message /
   status / stop table → [`references/adapters.md`](references/adapters.md).
@@ -37,7 +37,7 @@ Read your role's reference before acting:
   seed → [`references/role-seed.md`](references/role-seed.md) (one tiny depth-0 session per
   fleet that Bryce starts once; it only launches orchestrators on `SPAWN ORCH`);
   reviewer → [`references/role-reviewer.md`](references/role-reviewer.md)
-  (one pass, findings only, STOP AT 120k);
+  (one pass, findings only, STOP AT 150k);
   fleet watch → [`references/role-fleet-watch.md`](references/role-fleet-watch.md)
   (one session: PR events + 3-min ticks, routine fixes, no merges, dashboard);
   sync → [`references/role-sync.md`](references/role-sync.md) (conflict-only

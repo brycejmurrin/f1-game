@@ -1289,6 +1289,7 @@
         "tests/unit/hud-dock-pack.test.mjs",
         "tests/unit/hud-elements.test.mjs",
         "tests/unit/hud-helmet-placement.test.mjs",
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ]
     },
@@ -9056,6 +9057,9 @@
       "modsFromProfile": [
         "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
+      "narrow": [
+        "tests/unit/vsfriend-head-200.test.mjs"
+      ],
       "onConnected": [
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs"
@@ -13214,6 +13218,7 @@
       ],
       "create": [
         "tests/unit/boot-idle-prefetch.test.mjs",
+        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs",
         "tests/unit/script-loader-preload.test.mjs"
@@ -13234,6 +13239,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "start": [
+        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs",
         "tests/unit/script-loader-preload.test.mjs"
@@ -15692,6 +15698,7 @@
       "*": [
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-survey.test.mjs"
       ]
     },
@@ -15725,6 +15732,7 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "build": [
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ],
       "clearReadouts": [
@@ -15734,6 +15742,7 @@
         "tests/unit/hud-elements.test.mjs"
       ],
       "hiddenReason": [
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ],
       "isShipped": [
@@ -15741,6 +15750,9 @@
       ],
       "migrate": [
         "tests/unit/hud-layout.test.mjs"
+      ],
+      "narrow": [
+        "tests/unit/hud-layout-hidden.test.mjs"
       ],
       "originOf": [
         "tests/unit/hud-layout.test.mjs"
@@ -16670,6 +16682,7 @@
     },
     "js/ui/setting-row.js": {
       "build": [
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/title-layout.test.mjs",

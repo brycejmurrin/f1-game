@@ -116,6 +116,7 @@ test("host envelopes delivered as UserPromptSubmit skip routing; the same words 
   for (const envelope of [
     `<task-notification>\n<task-type>queued-remote-notifications</task-type>\n<summary>${body}</summary>\n</task-notification>`,
     `  <agent-message from="session_x">${body}</agent-message>`,
+    `<cross-session-message from="session_x">\n${body}\n</cross-session-message>`,
     `<system-reminder>\n[SYSTEM NOTIFICATION - NOT USER INPUT]\n${body}`,
     // A cloud launch: CLAUDE.md and memory reminders precede the banner (#3038 repro).
     `<system-reminder>\nContents of CLAUDE.md\n</system-reminder>\n<system-reminder>\nmemory index\n</system-reminder>\n<system-reminder>\n[SYSTEM NOTIFICATION - NOT USER INPUT]\n${body}`,
