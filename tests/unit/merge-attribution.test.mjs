@@ -8,7 +8,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { mergeTrailers, parseAttribution, prOfSubject, classify, listMerges, flag, commentBody, busText, busHas, marker, main, UNKNOWN_IDENTITY } from "../../tools/ci/merge-attribution.mjs";
+import { mergeTrailers, parseAttribution, prOfSubject, classify, listMerges, flag, commentBody, busText, busHas, marker, main, UNKNOWN_IDENTITY, digestText, digestIdem, DIGEST_FROM } from "../../tools/ci/merge-attribution.mjs";
+import { formatLine } from "../../tools/ci/fleet-bus.mjs";
 import { fleetOf, mergeCall } from "../../tools/ci/merge-gate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -142,4 +143,50 @@ test("main: a bad range is exit 1 with an error line", () => {
   const lines = [];
   assert.equal(main(["--range", "nope..nope", "--dry-run"], { root: ROOT, log: (s) => lines.push(s), read: () => ({ entries: [] }) }), 1);
   assert.ok(/= merge-attribution error/.test(lines[0]));
+});
+
+// --digest (2026-10-26): ONE INFO line per window instead of one HANDOFF per merge; idempotent on the newest
+// unattributed sha; silent when every merge carries the trailer.
+test("digest: one INFO body for the window, a valid bus line, idem on the newest unattributed sha", () => {
+  const A = "a".repeat(40), B = "b".repeat(40), C = "c".repeat(40);
+  const rows = [
+    { sha: A, pr: 10, state: "UNATTRIBUTED" },
+    { sha: B, pr: 11, state: "ATTRIBUTED" },
+    { sha: C, pr: null, state: "UNATTRIBUTED" },
+  ];
+  const text = digestText(rows, "x..y");
+  // A PR number, else the short sha; the attributed #11 is not listed.
+  assert.equal(text, "merge-attribution digest: 2 of 3 merges in x..y carry no Merged-by: trailer (presumed Bryce UI merges): " +
+    "#10 cccccccc. An agent merge? Merge through merge-gate.mjs so the trailer lands.");
+  assert.equal(digestIdem(rows), `merge-attr:${C.slice(0, 12)}`);
+  // fleet-bus accepts it as an INFO line from the workflow's identity (formatLine throws on a bad type/body/idem).
+  assert.ok(formatLine("INFO", "*", DIGEST_FROM, text, { idem: digestIdem(rows) }).startsWith(`INFO to:* from:${DIGEST_FROM} merge-attribution digest:`));
+  assert.equal(digestText([{ sha: B, pr: 11, state: "ATTRIBUTED" }], "x..y"), "");
+  const many = Array.from({ length: 25 }, (_, i) => ({ sha: String(i).padStart(40, "0"), pr: 100 + i, state: "UNATTRIBUTED" }));
+  assert.ok(digestText(many, "r").endsWith("#119 +5 more. An agent merge? Merge through merge-gate.mjs so the trailer lands."), "capped at 20 PRs");
+});
+
+test("main --digest over real merges sends ONE INFO line (no per-merge flags); none unattributed sends nothing", () => {
+  const dir = fixtureRepo();
+  try {
+    const sent = [], lines = [];
+    const send = (...a) => { sent.push(a); return { ok: true, sha: "abc1234" }; };
+    const gh = { comments: () => { throw new Error("digest must not read PR comments"); }, post: () => { throw new Error("digest must not post"); } };
+    assert.equal(main(["--range", "HEAD~2..HEAD", "--digest"], { root: dir, log: (s) => lines.push(s), gh, read: () => ({ entries: [] }), send }), 0);
+    assert.equal(sent.length, 1);
+    const [type, to, from, text, opts] = sent[0];
+    assert.deepEqual([type, to, from], ["INFO", "*", DIGEST_FROM]);
+    assert.equal(text, "merge-attribution digest: 1 of 2 merges in HEAD~2..HEAD carry no Merged-by: trailer (presumed Bryce UI merges): " +
+      "#2. An agent merge? Merge through merge-gate.mjs so the trailer lands.");
+    assert.ok(opts.idem.startsWith("merge-attr:"));
+    assert.ok(lines.at(-1).startsWith("= merge-attribution digest 2 merges, 1 unattributed: sent"));
+    sent.length = 0;
+    assert.equal(main(["--range", "HEAD~2..HEAD~1", "--digest"], { root: dir, log: (s) => lines.push(s), gh, read: () => ({ entries: [] }), send }), 0);
+    assert.equal(sent.length, 0, "every merge attributed: nothing sent");
+    assert.equal(main(["--range", "HEAD~2..HEAD", "--digest", "--dry-run"], { root: dir, log: (s) => lines.push(s), gh, read: () => ({ entries: [] }), send }), 0);
+    assert.equal(sent.length, 0, "a dry run sends nothing");
+    assert.equal(main(["--range", "HEAD~2..HEAD", "--digest"], { root: dir, log: (s) => lines.push(s), gh, read: () => ({ entries: [] }), send: () => ({ ok: false, reason: "push refused" }) }), 1,
+      "a failed send is exit 1, so the job shows it");
+    assert.ok(!fs.existsSync(path.join(dir, "artifacts", "merge-attribution", "cursor")));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
