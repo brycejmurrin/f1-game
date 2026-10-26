@@ -78,15 +78,17 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
 
 | Role | Soft cap (context) |
 |---|---|
-| reviewer | 120k (size batches to about 25 files so it finishes inside the cap) |
+| reviewer | 150k (size batches to about 25 files so it finishes inside the cap) |
 | worker | 150k, at a verified checkpoint |
-| PR owner | 150k (docs-only PR: 100k) |
+| PR owner | 150k (docs-only PR too) |
 | synth | 150k |
-| fleet watcher | 100k |
+| hunter, sync | 150k |
+| fleet watcher | 150k |
 | orchestrator | 200k |
 
   - **Measure** the session's own live context (`/context` or the statusline). `get_session` `used_tokens` updates only at turn end and
-    session reports disagree (race-1 said "120k (237k used)"). A fresh session starts at about 50-60k base (a fresh PR owner read ~56k per call).
+    session reports disagree (race-1 said "120k (237k used)"). A fresh session starts at about 105k base on 2026-10-26
+    (relay/test sessions 105–108k after 1–3 turns; A·W58's first call read 101.9k); every soft cap is base + working room, so no cap below ~150k.
   - **Soft cap:** finish the current unit (file, step or run in flight), commit and push helper scripts and artifacts (no container-local-only
     state: ui-2 and race-1 lost their `cdp-hit.mjs`), push a WIP note, then HANDOFF. **Hard cap = soft + 50k:** hand off immediately.
   - Watcher and orchestrator stay low because every inbound message or timer wakes them with the full context (code.claude.com/docs/en/costs §Why usage climbs).
