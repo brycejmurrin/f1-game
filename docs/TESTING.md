@@ -1382,3 +1382,5 @@ One hook, without loading `docs/DEBUG-HOOKS.md`:
 ```sh
 node tools/shot/agent.mjs help physState
 ```
+
+The `agent-contract` and `tooling-fast` groups include `free-design-tools.test.mjs`: offline capture containment, gateway routing/ownership, local glTF resource validation, and procedural-room approval gates. These are Node/Python contracts, not rendered UI evidence.

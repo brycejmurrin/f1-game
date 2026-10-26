@@ -534,6 +534,7 @@
     "// a picture. Hand-built worlds, no game VM, ~0.1 s.",
     "tests/unit/frame-math.test.mjs",
     "tests/unit/free-cam.test.mjs",
+    "tests/unit/free-design-tools.test.mjs",
     "// ...and the front-wing endplate decal, whose plate moves with every aero",
     "// recipe: measured against the real built car, not against literals.",
     "tests/unit/front-wing-decal.test.mjs",
@@ -1577,7 +1578,8 @@
     },
     "test:agent-contract": {
       "files": [
-        "tests/unit/agentview-api-contract.test.mjs"
+        "tests/unit/agentview-api-contract.test.mjs",
+        "tests/unit/free-design-tools.test.mjs"
       ],
       "kind": "node"
     },
@@ -2358,6 +2360,7 @@
     },
     "test:service-worker": {
       "files": [
+        "tests/unit/boot-script-repair-overlay.test.mjs",
         "tests/unit/pack-content-address.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/sw-build-meta.test.mjs"

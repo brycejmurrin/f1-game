@@ -132,9 +132,17 @@
       ]
     },
     "js/agent/apex-gpu-capture.js": {
-      "*": [
-        "tests/unit/global-registry.test.mjs",
+      "disable": [
         "tests/unit/wgx-labels.test.mjs"
+      ],
+      "enable": [
+        "tests/unit/wgx-labels.test.mjs"
+      ],
+      "status": [
+        "tests/unit/wgx-labels.test.mjs"
+      ],
+      "*": [
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/agent/apex-lobby.js": {
@@ -10977,6 +10985,9 @@
       "create": [
         "tests/unit/carve-a-modules.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
+      ],
+      "*": [
+        "tests/unit/boot-script-repair-overlay.test.mjs"
       ]
     },
     "js/physics/grip-steer.js": {

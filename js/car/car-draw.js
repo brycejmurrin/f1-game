@@ -335,12 +335,15 @@ const CarDraw = (function () {
       if (epoch !== _sharedRivalEpoch || carModelBuf || _farRivalBody || !_sharedRivalGeom) return;
       const geom = _sharedRivalGeom;
       _farRivalKick = true;
-      try {
-        const mesh = G.gfx.createMesh(CarGeometry.decimate(geom, FAR_BODY_TRIS));
-        if (epoch === _sharedRivalEpoch && !carModelBuf && !_farRivalBody) _farRivalBody = mesh;
-        else if (G.gfx.freeMesh) G.gfx.freeMesh(mesh); // invalidated during allocation
-      } catch (e) { Log.warn("gfx", "far rival body failed", e); }
-      finally { if (epoch === _sharedRivalEpoch && _sharedRivalGeom === geom) _sharedRivalGeom = null; }
+      let mesh = null;
+      try { mesh = G.gfx.createMesh(CarGeometry.decimate(geom, FAR_BODY_TRIS)); }
+      catch (e) { Log.warn("gfx", "far rival body failed", e); }
+      if (epoch !== _sharedRivalEpoch || carModelBuf || _farRivalBody) {
+        if (mesh && G.gfx.freeMesh) G.gfx.freeMesh(mesh); // invalidated during allocation
+        return;
+      }
+      if (mesh) { _farRivalBody = mesh; if (_sharedRivalGeom === geom) _sharedRivalGeom = null; }
+      else _farRivalKick = false; // a failed upload can retry on the next far draw
     }
     function sharedRivalBodyMesh(far) {
       if (carModelBuf) return null;

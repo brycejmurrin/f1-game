@@ -27,6 +27,90 @@ import vm from "node:vm";
 import { carDrawVm, WORKS } from "../helpers/car-draw-vm.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
+test("factory invalidation frees both shared rival LODs and rebuilds the far body", async () => {
+  const v = carDrawVm();
+  let decimates = 0;
+  v.ctx.CarGeometry = { decimate: (geom) => ({ ...geom, far: ++decimates }) };
+  const firstShared = v.carDraw.sharedRivalBodyMesh(true);
+  await Promise.resolve();
+  assert.equal(v.carDraw.farRivalBodyReady(), true);
+  const firstFar = v.carDraw.sharedRivalBodyMesh(true);
+  assert.notEqual(firstFar, firstShared);
+
+  v.carDraw.invalidateFactoryMeshCaches();
+  assert.equal(v.rec.freed, 2, "both GPU handles are released");
+  assert.equal(v.carDraw.farRivalBodyReady(), false, "the old far handle is not reused");
+
+  const nextShared = v.carDraw.sharedRivalBodyMesh(true);
+  assert.notEqual(nextShared, firstShared);
+  await Promise.resolve();
+  const nextFar = v.carDraw.sharedRivalBodyMesh(true);
+  assert.notEqual(nextFar, firstFar);
+  assert.equal(nextFar.far, 2, "far geometry was decimated from the new body");
+});
+
+test("factory invalidation cancels a queued far rival decimation", async () => {
+  const v = carDrawVm();
+  let decimates = 0;
+  v.ctx.CarGeometry = { decimate: (geom) => { decimates++; return { ...geom, far: true }; } };
+  v.carDraw.sharedRivalBodyMesh(true);
+  v.carDraw.invalidateFactoryMeshCaches();
+  await Promise.resolve();
+  assert.equal(decimates, 0, "the retired geometry is never decimated");
+  assert.equal(v.carDraw.farRivalBodyReady(), false);
+  assert.equal(v.rec.freed, 1, "only the live shared handle needed freeing");
+
+  v.carDraw.sharedRivalBodyMesh(true);
+  await Promise.resolve();
+  assert.equal(decimates, 1, "a new body can still schedule its far LOD");
+  assert.equal(v.carDraw.farRivalBodyReady(), true);
+});
+
+test("adopting a GLB releases the shared and far procedural rival bodies", async () => {
+  const v = carDrawVm();
+  v.ctx.CarGeometry = { decimate: (geom) => ({ ...geom, far: true }) };
+  v.carDraw.sharedRivalBodyMesh(true);
+  await Promise.resolve();
+  assert.equal(v.carDraw.farRivalBodyReady(), true);
+  v.ctx.fetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) });
+  v.ctx.GLTF = { toMesh: () => ({}) };
+  assert.equal(await v.carDraw.loadCarModel("car.glb"), true);
+  assert.equal(v.rec.freed, 2);
+  assert.equal(v.carDraw.farRivalBodyReady(), false);
+  assert.equal(v.carDraw.sharedRivalBodyMesh(true), null, "the model replaces the procedural rival");
+});
+
+test("a failed synchronous far rival warm can retry on the next warm", () => {
+  const v = carDrawVm();
+  let decimates = 0;
+  v.ctx.CarGeometry = { decimate: (geom) => {
+    if (++decimates === 1) throw new Error("transient far body failure");
+    return { ...geom, far: true };
+  } };
+  v.field((_car, i) => 500 + i * 5);
+  v.carDraw.warmCarAssets();
+  assert.equal(v.carDraw.farRivalBodyReady(), false);
+  v.carDraw.warmCarAssets();
+  assert.equal(v.carDraw.farRivalBodyReady(), true);
+  assert.equal(decimates, 2);
+});
+
+test("a failed idle far rival build can retry on the next far draw", async () => {
+  const v = carDrawVm();
+  let decimates = 0;
+  v.ctx.CarGeometry = { decimate: (geom) => {
+    if (++decimates === 1) throw new Error("transient far body failure");
+    return { ...geom, far: true };
+  } };
+  v.carDraw.sharedRivalBodyMesh(true);
+  await Promise.resolve();
+  assert.equal(v.carDraw.farRivalBodyReady(), false);
+  v.carDraw.sharedRivalBodyMesh(true);
+  await Promise.resolve();
+  assert.equal(v.carDraw.farRivalBodyReady(), true);
+  assert.equal(decimates, 2);
+});
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
@@ -824,4 +908,18 @@ test("shared rival cache: invalidation during mesh creation discards the unadopt
   r.idle.shift()();
   assert.equal(cd.farRivalBodyReady(), false);
   assert.notEqual(r.freed.indexOf(discarded), -1, "allocated stale result is released, never adopted");
+});
+
+test("shared rival cache: a failed far upload keeps its source and retries on the next far draw", () => {
+  const r = sharedRivalLifecycleRig(), cd = r.carDraw;
+  cd.sharedRivalBodyMesh(true);
+  const create = r.G.gfx.createMesh;
+  let fail = true;
+  r.G.gfx.createMesh = geo => { if (geo.far && fail) { fail = false; throw new Error("upload failed"); } return create(geo); };
+  r.idle.shift()();
+  assert.equal(cd.farRivalBodyReady(), false);
+  cd.sharedRivalBodyMesh(true);
+  assert.equal(r.idle.length, 1, "the next far draw schedules a retry");
+  r.idle.shift()();
+  assert.equal(cd.farRivalBodyReady(), true);
 });

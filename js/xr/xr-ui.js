@@ -12,6 +12,7 @@ const XrUi = (function () {
   let _mounted = false;
   let _unsub = null;
   let _msgTimer = 0;
+  let _enterPrompt = false;
 
   function ensureButton() {
     if (_btn) return _btn;
@@ -55,6 +56,8 @@ const XrUi = (function () {
       if (gate.reloading) { flashMessage("SWITCHING…"); return; }
       if (!gate.ok) { flashMessage(gate.message || "VR UNAVAILABLE"); return; }
     }
+    _enterPrompt = false;
+    syncLabel();
     try {
       const s = await XrSession.start();
       if (!s) {
@@ -69,8 +72,8 @@ const XrUi = (function () {
   function syncLabel() {
     if (!_btn || _btn.disabled) return;
     const on = typeof XrSession !== "undefined" && XrSession.isPresenting();
-    _btn.textContent = on ? "EXIT VR" : "ENTER VR";
-    _btn.setAttribute("aria-label", on ? "Exit VR" : "Enter VR");
+    _btn.textContent = on ? "EXIT VR" : _enterPrompt ? "TAP TO ENTER VR" : "ENTER VR";
+    _btn.setAttribute("aria-label", on ? "Exit VR" : _enterPrompt ? "Tap to enter VR" : "Enter VR");
     _btn.setAttribute("aria-pressed", on ? "true" : "false");
   }
 
@@ -80,8 +83,9 @@ const XrUi = (function () {
     if (on) syncLabel();
   }
 
-  function mount(parent) {
-    if (_mounted) return _btn;
+  function mount(parent, pendingEnter) {
+    if (pendingEnter) _enterPrompt = true;
+    if (_mounted) { syncLabel(); return _btn; }
     const host = parent || document.body;
     ensureButton();
     host.appendChild(_btn);
@@ -108,6 +112,7 @@ const XrUi = (function () {
     if (_msgTimer) { clearTimeout(_msgTimer); _msgTimer = 0; }
     if (_btn && _btn.parentNode) _btn.parentNode.removeChild(_btn);
     _mounted = false;
+    _enterPrompt = false;
   }
 
   return { mount, unmount, show, syncLabel, ensureButton, onClick, flashMessage };
