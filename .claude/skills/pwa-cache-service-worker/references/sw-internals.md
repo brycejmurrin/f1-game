@@ -30,4 +30,9 @@ responses never await generation lookup or CacheStorage writes; synchronous
 `waitUntil()` registration keeps those writes alive after the response is sent.
 Everything else = cache-first (network-first on a dev host, where every tag reads
 `?v=dev`). Deploy stamps **content hashes and shell generation** together; source tags
-stay `?v=dev` (AGENTS.md "Critical conventions"). Check with `node tools/gen/gen-shell.mjs --check`.
+stay `?v=dev` (`.claude/rules/game-code.md`). Check with `npm run gen:check`.
+
+**Measured on live (2026-10-26).** GitHub Pages serves every response with `max-age=600`; the edge is
+purged on deploy; the shell revalidates via 304; first visit ~3.3 MB gz, SW install +~1.45 MB gz. So
+`?v=<sha256>` assets are "immutable" only inside the SW: a browser with no SW (or Safari before
+install) revalidates them every 10 min. Re-measure before quoting these numbers.

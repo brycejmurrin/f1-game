@@ -9,7 +9,7 @@ Mid-corner: `{ brake: true, steer: ±0.3..0.5 }`, then read
 `physState().slipFactor` and `axFrac` while braking. Lower `slipFactor` =
 longitudinal grip eating lateral budget; compare runs directionally.
 
-`LONG_GRIP` (34 m/s²) is **not** live-tunable via `setPhysics` — A/B it with
+`LONG_GRIP` (value: `js/physics/consts.js`) is **not** live-tunable via `setPhysics` — A/B it with
 two builds or a source edit. It is the longitudinal axis of the traction
 circle; `slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip.
 

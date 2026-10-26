@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: "Use when batch headless screenshots/evals (shot.mjs, apex-eval, apex-capture), GLX-vs-TLX compares, shimmer/z-fighting motion-capture clips, CPU profiles, CAR STUDIO livery/sponsors, camera modes (cockpit/chase), or lag/framing. Not garage catalog, UI matrix, live canvas (mcp-probe)."
+description: "Use when batch headless screenshots/evals (shot.mjs, apex-eval, apex-capture), GLX-vs-TLX compares, flicker/z-fighting clips, CPU/frame-time profiles (profile.mjs), CAR STUDIO livery/sponsors capture, camera modes (cockpit/chase), measuring camera lag/framing. Not garage catalog, UI matrix, live canvas (mcp-probe)."
 ---
 
 # Headless Playwright probing
@@ -89,7 +89,9 @@ runs' PNGs/manifests (`<label>-manifest.json`) yourself. Recipe: [references/rec
 
 ```sh
 node tools/shot/motion-capture.mjs monaco 4 50      # driven clip → per-frame flicker score (trust p90)
-node tools/shot/profile-gameloop.mjs singapore render        # .cpuprofile → Chrome DevTools → Performance
+node tools/perf/profile.mjs singapore --mode spans --repeat 3              # THE profiler: per-subsystem p50/p95/p99 + noise floor
+node tools/perf/profile.mjs singapore --mode spans --repeat 3 --base HEAD  # A/B delta table (inside the spread = noise)
+node tools/shot/profile-gameloop.mjs singapore render        # raw .cpuprofile only (profile.mjs --mode cpu wraps it)
 ```
 
 `flicker-gate.mjs` (still camera, fixed SITES, `--list` is no-browser) and
@@ -108,15 +110,16 @@ both references say what the numbers mean before you A/B on them.
 - Flicker / z-fighting / shadow shimmer while driving — why headless rAF
   freezes, the `recordVideo` fix, reading `p90` →
   [references/motion-capture.md](references/motion-capture.md).
-- Frame-budget hog, GC jitter, slow track build, flame-chart symbols →
-  [references/perf-profile.md](references/perf-profile.md).
+- Frame-budget hog (`tools/perf/profile.mjs --mode spans|cpu|step`), GC jitter, slow track build,
+  flame-chart symbols → [references/perf-profile.md](references/perf-profile.md).
 - **Car studio** — track-free look at just the car (`tools/carview.html`,
   `tools/car/render-car.mjs`, team/livery/part audits) →
   [references/car-studio.md](references/car-studio.md), preset views and the
   `CARVIEW` API in
   [references/car-viewer-presets.md](references/car-viewer-presets.md).
 - **Camera semantics** — the 20 built-in modes, `orbit()` vs `snapCam()` (the
-  trap that costs a shot), `camState()`/`viewState()` →
+  trap that costs a shot), `camState()`/`viewState()`, measuring lag (measured here, FIXED in
+  f1-animation-cameras) →
   [references/cameras.md](references/cameras.md), free-cam table and framing
   recipes in
   [references/debug-cameras-framing.md](references/debug-cameras-framing.md).

@@ -26,6 +26,15 @@ Cuts ease ~0.35 s; onboard (cockpit/hood/tcam) lock instantly.
 - **drone** — smoothed tether with corner look-ahead (ExtraRigs); calmer heli alternative.
 - **trackside** — fixed corner cams that auto-switch as the car passes; **tv** — live TV director (`js/camera/director.js`); **helmet** — cockpit from inside the lid; **visor** — cockpit without the wheel.
 
+## Measuring lag (fixes belong to f1-animation-cameras)
+
+Lag is MEASURED here and FIXED in skill f1-animation-cameras (the rig code). One boot, no pixels:
+drive (`race()`, `go()`, throttle via `step()`), and each step record the distance from `camState().eye`
+to the car (`physState().px`/`pz`) next to `physState().speed`; compare with the snapped distance
+(`snapCam()` once: chase eye ≈ 5.8 m, docs/DEBUG-HOOKS.md §snapCam). Report p50/p95 of the excess
+per mode and speed band, before and after, from the SAME script (`node tools/shot/apex-eval.mjs <track> "<expr>"`).
+A screenshot is not the measurement.
+
 ## `orbit()` vs `snapCam()`
 
 `orbit()` sets `dbgCam` and **replaces** the live view — it is not layered on

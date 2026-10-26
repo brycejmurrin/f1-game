@@ -91,14 +91,15 @@ A retry-pass is a red and is quarantined by name, never skipped or widened (AGEN
 Green below never means green above (AGENTS.md rule 3; counts in
 `docs/notes/PREPUSH-GATE-LADDER.md`). Push once per VERIFIED batch: a push over
 a live run cancels it, and a killed job runs no `if: always()` step, so its
-failures are lost. A deliberate ratchet raise is part of a fix: AGENTS.md §Critical conventions.
+failures are lost. Ratchets: `.claude/rules/game-code.md`.
 
 ## 7. "Live" is an ancestry test, not a build number
 
-- A green PR does not prove Pages. Poll by `head_sha`: `node tools/ci/ci-watch.mjs --sha <sha> [--pages]`
-  under a `Monitor` (AGENTS.md rule 13); `pages.yml` gates the tip once and publishes exactly that commit.
+- A green PR does not prove Pages. Watch by `head_sha`, one `Monitor` per push (AGENTS.md rule 13 is the home):
+  `node tools/ci/ci-watch.mjs --sha <pushed sha> --timeout 30 --failures-only` (`--pages` after a deploy-branch
+  push); re-arm on expiry until the `= ci …` line. `pages.yml` gates the tip once and publishes exactly that commit.
 - **Live means your commit is an ANCESTOR of the live `apex-sha`** — ask `deploy-research` for it; never
-  curl github.io from the main context. PR CI and Pages (`pages.yml`, workflow id `295002043`) are separate verdicts;
+  curl github.io from the main context. PR CI and Pages (`pages.yml`) are separate verdicts;
   the deploy push starts Pages' reusable CI gate, not a separate ship-push CI run.
 - After every push list all check runs on the head (ready-state jobs included) and read every failed log;
   on red name the exact test, assertion and lane. `deploy.mjs --train` prints the last ci/pages conclusions
@@ -143,19 +144,18 @@ arm → `disable_pr_auto_merge` (retired methods).
 
 Via `node tools/ci/test-bg.mjs <group>` only; AGENTS.md rules 5, 6 and 10 (one run, `--stop`, never in a subagent).
 
-## 12. Draft → ready → READY → merged (the steps that broke on 2026-10-26)
+## 12. Draft → ready → READY → merged
 
 1. **Push** with `git push -u origin <branch>` alone — no output pipe (a piped push went to the
    permission classifier and was denied; the same push bare passed). Commit first in two calls (AGENTS.md rule 12).
 2. **Mergeable first**: a ready flip on a CONFLICTING/DIRTY head starts no CI (AGENTS.md rule 13); `needs-sync.mjs`,
    then `sync-pr.mjs`, then flip.
-3. **Flip**, then call `subscribe_pr_activity` again on the same PR: the subscription died at the draft→ready
-   flip on #3785 and no CI or merge event arrived after it.
+3. **Flip**, then call `subscribe_pr_activity` again on the same PR: the subscription can die at the
+   draft→ready flip, and then no CI or merge event arrives.
 4. **READY** goes out only after `node tools/ci/ready-gate.mjs --pr <n> --wait` exits 0 on the SAME head you
    name in the line (`agent-msg.mjs` refuses a head that differs from the receipt). The Plan's open terminal item
    `- [ ] READY to ORCH <L> via agent-msg …` is exempt from the gate (`.github/pull_request_template.md`).
-   A READY line never carries "do not merge" wording: a real veto is a PR-body
-   `MERGE-HOLD: <reason> | lift: <who> | until: <time|event>` line (fleet-core), and that shape is never an
-   ownership label — routing uses the `fleet:` line.
+   A READY line never carries "do not merge" wording; holds and their shape: `.claude/rules/fleet-core.md`.
+   Ownership is never a hold — routing uses the `fleet:` line.
 5. **Merge watch**: `node tools/ci/wait-for.mjs --merged <sha>` as ONE background Bash task — never a hand-rolled
    `while … sleep` loop; then `--release` the claim. The full signal list is AGENTS.md rule 13.
