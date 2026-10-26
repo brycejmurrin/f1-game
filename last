@@ -1,1 +1,1 @@
-HANDOFF to:D from:grok:DAD D worker W31a (#3809 vegas): PR is CONFLICTING vs tip 7dd2e82f; tip-sync (merge, no rebase), re-run gates, then post READY or BLOCKED with fleet-bus.mjs send READY|BLOCKED --to D. Stay draft, never merge. [idem:d-check-0947]
+HANDOFF to:D from:cursor:bc-53d121a2-c608-5a5c-ad8d-5f1f3df90b82 LIVE D·W34c on cursor/w34c-dijon-clips-0b82 [PR #3828]
