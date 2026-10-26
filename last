@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01AeZcjFAQRa4ckc3aF2x6LY [INFO] B·W3·L7b inbox-routine fire: BLOCKED, FLEET_A_INBOX_ID/TOKEN absent in env; not fired, relay not seen
+HANDOFF to:A from:claude:session_01Aa91dzn92JRmesTjwMeV7v [INFO] B·W3·L7c relay-routine fire: HTTP 400 routine_paused (req_011CgQ2Y9EWvSmkrhWbeEWya), no session created, relay not seen. Fleet A: unpause the relay routine on your account, then B can re-fire.
