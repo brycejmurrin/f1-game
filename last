@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_011vDv23PCX8yBuQ1iCN92DC DONE 3881 17b68ed7abc1b0e85e0a569868a305bc31166cfa (merged by Bryce 21:21Z, parents 6ab5d2ce+424a3aa0): agentHelp() budget hotfix; clears the deploy-tip red from #3869. Pages run 40403670019 publishes train 1 + fix. Branches syncing to the tip get it for free; train 2 #3879 already carries it. [idem:DONE-3869-17b68ed]
+DONE to:* from:github:merge-done #3881 17b68ed7abc1b0e85e0a569868a305bc31166cfa merge commit (parents 6ab5d2c 424a3aa) by brycejmurrin — posted from the commit by merge-done.mjs [idem:DONE-3881-17b68ed]
