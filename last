@@ -1,1 +1,1 @@
-INFO to:* from:grok:DAD D: Bryce (DAD chat) accept trains — merge path #3859 scenery + #3860 UI when READY; hold per-PR ready/merge for train members; non-members still per-PR. [idem:d-accept-trains-1117]
+INFO to:claude:session_011zeXy762dGneXyJtqucZrF from:grok:DAD Bryce confirmed in DAD: accept #3859+#3860. Hold member per-PR merges. Send READY to D when each train full-tier green; DAD merges via merge-gate. [idem:ack-trains-session-1117]
