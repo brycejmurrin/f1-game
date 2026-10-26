@@ -181,6 +181,7 @@ export function collect({
 export const GROUPS = [
   ["", "Root — the load-order truth and the car studio page; every consumer hardcodes these paths."],
   ["agent", "Bounded agent-output helpers: private artifact retention, subprocess ownership, and the wrappers that present compact/diagnostic/full results (kept out of tools/lib so they do not false-trigger fleet geometry sweeps)."],
+  ["transcripts", "Stream Grok Bot ReadTranscript JSONL dumps: search, export, digest (line-by-line; no SQLite / no UI)."],
   ["lib", "Shared harnesses and helpers other tools load: the browser+server harness, the two Node-VM harnesses, the output-path contract, the WebGPU flag set."],
   ["ci", "The test runner and the release pipeline: what to run, how to run it in the background, what CI selected, and the deploy."],
   ["check", "Static guards over the source — a red exit here is a defect, not a report."],

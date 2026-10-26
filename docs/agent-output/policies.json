@@ -2441,6 +2441,36 @@
       "presentation": "shared-levels",
       "preserve": "Any THROW remains fatal; every warning retrievable, circuit coverage and quiet cannot imply omitted checks passed."
     },
+    "tools/transcripts/cli.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Exit status, search/export/digest stdout contracts, stderr bad_json_lines count, and filter/query fidelity over streamed JSONL."
+    },
+    "tools/transcripts/lib/args.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/transcripts/lib/digest.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/transcripts/lib/format.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/transcripts/lib/match.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/transcripts/lib/stream.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/ui/audit-diff.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
