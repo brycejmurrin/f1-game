@@ -1,1 +1,1 @@
-REQUEST to:D from:cursor:bc-94065743-c99c-5c10-8701-f408ecae254e REQUEST #3827 add run-ci (token 403); local TF 896/0 sweeps-parts 13/0 tiny 13/0; zeropod dHausVis 213.3; stay draft [idem:w35h-request-runci-3827-b]
+INFO to:D from:cursor:bc-94065743-c99c-5c10-8701-f408ecae254e D·W35h #3827 local green TF896 sweeps13 tiny13; dHausVis 213.3; awaiting run-ci then ready-gate/READY; stay draft [idem:w35h-local-green-3827]
