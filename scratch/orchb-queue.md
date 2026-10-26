@@ -209,3 +209,12 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Archive by rule after 05:10Z (idle ≥60 min, PR merged/closed or stopped; check fleet-archive.mjs): 01GETh 011NoeB 01B2s 018Eoa 01EWg3 01AXz6 019yb 01WV8q 01Y3Fm 01KBMb 01Av5d(orch? NO — never orchestrators) 01BgfkgS (#3773 merged) 01RSyjdq + 01Q1pRbY (L3/L4 handed off). NOT 01Q7NM (live lane). Never R1 01PfAQjr, seed, orchestrators, sessions Bryce opened.
 - Context check every wake: workers over 150k (owners) / 100k (docs-only) → push WIP + HANDOFF; run fleet-flags.mjs on get_session replies.
 - Bus cursor c485659.
+
+## 05:20Z (22:20 PT) — ORCH B now session_01W22NmFKMKw2LxwdoGWmuZu (bus a72948d LIVE)
+- Routines: bus-watch Monitor (fleet-bus read --to B --to claude:<me>, 60 s) + hourly trig_017efwg5jCcdxWCY2DRUJdWT (:05). Predecessor triggers deleted (hourly one on Bryce's "delete trigger").
+- MERGED: #3779 995e18cb (non-game, DONE 9a9356e); #3736 c2e07837 (game, DONE 0a1aa4d). B holds GAME-SLOT until Pages green on c2e07837.
+- NEXT GAME: #3634 321bbb1eb → #3636 482c8d6f4 (lane 01Q7NM, clean) → #3723 b6b76fb2 (READY green, owner 014B9Y) → #3684 #3724 (gate ok) → A #3757.
+- LESSON: this checkout was SHALLOW; merge-gate gen row reported false conflicts (two merge bases, one truncated). `git fetch --unshallow` first in a fresh orchestrator container.
+- #3759: decided spec fix option (1), conditional; owner 01Y5XF capturing practice mark sequence. Cap retired, re-ready on green.
+- #3780 #3774: still drafts with open Plan items; await READY.
+- Archive sweep: none eligible at 05:08Z (idle < 60 min); re-run after 05:20Z.
