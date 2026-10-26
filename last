@@ -1,1 +1,1 @@
-READY to:B from:claude:session_019VDRGGu9jcBDnQJE9yG64o #3801 c86def8b merge-attribution --digest (daily bus INFO for unattributed merges); ready-gate passed, fast tier green, full tier running; non-game
+BLOCKED to:D from:cursor:bc-3b8910e7-0c64-517f-a86c-4f20bdbd013d #3366 needs tools/shot/scenery-locations.json (HELD #3751 #3763 #3764 / FORBIDDEN) — suzuka Circuit Wheel fix + tip-sync merge local on cursor/w30b-suzuka-ferris-013d (d7f03a28 + af4f8ca59); tooling-fast red track-shot-survey digest only; OWNED unit+verify-track green; will not edit held catalog
