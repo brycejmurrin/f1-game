@@ -2153,6 +2153,7 @@
         "tests/specs/obs-act-edge.spec.js",
         "tests/specs/output-paths.spec.js",
         "tests/specs/persistence-dom.spec.js",
+        "tests/specs/render-lifecycle.spec.js",
         "tests/specs/telemetry-compare.spec.js",
         "tests/specs/telemetry-fit.spec.js",
         "tests/specs/wake-lock.spec.js"
