@@ -41,6 +41,7 @@ function load(legacyRearCue = false) {
     "js/core/mat4.js",
     "js/physics/consts.js",
     "js/physics/tyre-model.js",
+    "js/physics/vehicle.js",
     "js/physics/player-forces.js",
   ]) {
     let source = fs.readFileSync(path.join(ROOT, f), "utf8");
