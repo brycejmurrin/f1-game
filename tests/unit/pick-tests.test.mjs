@@ -53,6 +53,13 @@ test("F1 Dev Tools package paths select structural checks without browser suites
   }
 });
 
+test("vendored Trystero changes select the wire regression group", () => {
+  const result = json("vendor/trystero-0.25.4/core/action-wire.js");
+  assert.equal(result.reason, "matched");
+  assert.deepEqual(result.groups.map(row => row.group), ["net-unit"]);
+  assert.deepEqual(result.unclaimed, []);
+});
+
 test("a file no rule claims reports 'unmatched', not an empty success", () => {
   // The distinction CI depends on: "nothing changed, run nothing" and "things
   // changed but I cannot route them, run EVERYTHING" are opposite instructions

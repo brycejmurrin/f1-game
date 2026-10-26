@@ -247,18 +247,25 @@ what the gateway costs per tool: `docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20
 |---|---|---|
 | **Skills** | `.claude/skills/*/SKILL.md` — index [`.claude/skills/README.md`](../.claude/skills/README.md) | When to load a workflow; hard don'ts; which composer to run. |
 | **Subagents** | `.claude/agents/*.md` — index [`.claude/agents/README.md`](../.claude/agents/README.md) | Isolated verify / survey / deploy-research / audits / hunts. No browser groups. |
-| **MCP wrap** | `tools/mcp/apex-tools-mcp.mjs` + catalog `tools/mcp/apex-tools-mcp.json` | Pinned argv. Tree = no lock. Browser = lock + occupancy. |
+| **MCP wrap** | `tools/mcp/apex-tools-mcp.mjs` + catalog `tools/mcp/apex-tools-mcp.json` | Pinned argv. Browser ownership follows each tool’s live help, including tree tools that start browser jobs. |
 | **CLIs** | `tools/*.mjs` / `*.cjs` — index [`tools/README.md`](../tools/README.md) | The real commands. Most exist whether or not they are wrapped. |
 
-A skill is **not** an MCP tool. An MCP tool is **not** a new implementation —
-it spawns the CLI with flags the project already considers safe (`--check`,
-`--fast`, `--json`; never `--apply`, `--wait`, `--write`, `--bg`).
+A skill is **not** an MCP tool. MCP wrappers expose bounded CLI operations
+through validated schemas. Read-only checks commonly use `--check`, `--fast`,
+and `--json`; dedicated job and persistent-session tools also own lifecycle
+operations. Inspect live `apex_help` before invoking those routes.
 
 ## Wrap map
 
-`Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
-Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Forty tools today (`apex_catalog` lists them; the wrap-map table below is the one row per tool; the history follows: 30 → 11 on 2026-09: the audits, startline,
+`Kind` describes the entry point: `tree` often performs static/VM work, while
+`browser` uses harness Chromium. It does not by itself establish resource
+ownership: `apex_job_start` is a tree tool whose browser job kinds retain
+`scratch/apex-browser.lock` until exit; persistent browser sessions also retain
+ownership. Check occupancy and the individual tool’s live help before starting.
+`Skill` names the workflow. Discover tool names through the host’s active tool
+list or the wrapper’s `list-tools` command, and schemas through `apex_help`.
+`apex_catalog` supplies valid argument IDs, not the tool inventory. The table
+below maps tools to CLIs; the historical expansion follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for

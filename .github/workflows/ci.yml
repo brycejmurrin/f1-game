@@ -2920,8 +2920,8 @@ jobs:
         env:
           APEX_WORKERS: 1
           APEX_FAIL_ON_FLAKY: 1
-          APEX_GL: llvmpipe
-          LIBGL_ALWAYS_SOFTWARE: 1
+          APEX_GL: ${{ inputs.gl != 'swiftshader' && 'llvmpipe' || '' }}
+          LIBGL_ALWAYS_SOFTWARE: ${{ inputs.gl != 'swiftshader' && '1' || '' }}
           APEX_PORT: 3460
           APEX_REUSE_SERVER: 1
         run: |

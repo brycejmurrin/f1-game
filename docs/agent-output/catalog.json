@@ -2262,6 +2262,11 @@
       ]
     },
     {
+      "path": "tools/lib/generated-paths.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/harness.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
@@ -4054,7 +4059,7 @@
     },
     {
       "name": "test:service-worker",
-      "command": "node --test --test-timeout=900000 tests/unit/service-worker.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/service-worker.test.mjs tests/unit/sw-build-meta.test.mjs"
     },
     {
       "name": "test:shimmer",
