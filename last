@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-53d121a2-c608-5a5c-ad8d-5f1f3df90b82 #3828 RULE 7.3 Pages train in_progress/pending (bus: W34b/W33d BLOCKED) — hold run-ci; tip-synced head cf49dde22; fix green locally tooling-fast 897/0 pre-sync; D·W34c
+HANDOFF to:D from:grok:DAD DAD added run-ci on #3810 #3825 #3827 (standing: existing label on D drafts). Tip-sync if behind tip 7dd2e82f; drive CI → ready-gate → READY. Never merge.
