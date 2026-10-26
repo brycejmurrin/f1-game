@@ -991,6 +991,39 @@ test("P4 (TLX #2149): the fallbacks — async null and apex26.tlxPackAsync=0 tak
   assert.equal(await e.ready, false); assert.equal(disposed, 1);
 });
 
+// #3110 F2: Save-Data (or a 2G link) takes the 128 px material tier at boot on
+// a desktop; an explicit tier and a normal link are unchanged.
+test("the material pack takes the low tier under Save-Data or 2G (#3110 F2)", async () => {
+  const run = async (connection, opts) => {
+    const urls = [];
+    const assets = assetLoader({
+      navigator: connection === undefined ? {} : { connection },
+      async fetch(url) {
+        urls.push(url);
+        return url.endsWith("manifest.json")
+          ? { ok: true, json: async () => ({ materials: {
+              size: 4, albedo: "a256.png", normal: "n256.png", layers: [{ mat: 1, scale: 1 }],
+              low: { size: 2, albedo: "a128.png", normal: "n128.png", layers: [{ mat: 1, scale: 1 }] },
+            } }) }
+          : { ok: true, blob: async () => ({ size: 16 }) };
+      },
+      async createImageBitmap() { return { close() {} }; },
+    });
+    assets.init({ createTextureArray() { return {}; }, setMaterialMaps() {} });
+    await assets.load(opts);
+    return { tier: assets.state().tier, strips: urls.filter((u) => /\.png$/.test(u)).map((u) => u.split("/").pop()) };
+  };
+  const normal = await run(undefined);
+  assert.equal(normal.tier, "high", "no Network Information API: desktop keeps 256 px");
+  assert.ok(normal.strips.every((u) => /256/.test(u)), "256 px strips: " + normal.strips);
+  assert.equal((await run({ saveData: false, effectiveType: "4g" })).tier, "high", "a normal link keeps 256 px");
+  const sd = await run({ saveData: true, effectiveType: "4g" });
+  assert.equal(sd.tier, "low", "Save-Data takes the low tier");
+  assert.ok(sd.strips.length && sd.strips.every((u) => /128/.test(u)), "only 128 px strips fetched: " + sd.strips);
+  assert.equal((await run({ saveData: false, effectiveType: "2g" })).tier, "low", "2G takes the low tier");
+  assert.equal((await run({ saveData: true }, { tier: "high" })).tier, "high", "an explicit tier still wins");
+});
+
 test("unload invalidates an in-flight pack upload and frees its partial texture", async () => {
   let releaseNormal, normalStarted;
   const normalGate = new Promise(resolve => { releaseNormal = resolve; });
@@ -1704,6 +1737,25 @@ test("modelsReady resolves once the prefetched models are resident, and loadMode
   assert.equal(await ready, 1, "resolves to the resident count once the fetch lands");
   assert.ok(assets.modelSync("box"), "the model is resident when the build runs");
   assert.equal(fetches, 2, "manifest + one model, shared by loadModels and modelsReady");
+});
+
+// #3110 F5: a resident v2/v3 model must not pin the fetched buffer. pos and
+// idx used to be views onto it, so every quantised byte stayed alive with them.
+test("a parsed v2 model owns its arrays: none aliases the fetched buffer (#3110 F5)", async () => {
+  const fetched = [];
+  const assets = assetLoader({ setTimeout, clearTimeout, fetch: async (url) => {
+    const res = await packFetch(null)(url);
+    if (!res.arrayBuffer) return res;
+    return { ok: true, arrayBuffer: async () => { const b = MODEL_V2(); fetched.push(b); return b; } };
+  } });
+  const m = await assets.model("box");
+  assert.ok(m, "the model parses");
+  assert.equal(fetched.length, 1);
+  for (const k of ["pos", "nrm", "col", "mat", "idx"]) {
+    assert.notEqual(m[k].buffer, fetched[0], k + " must not be a view onto the fetched buffer");
+    assert.equal(m[k].buffer.byteLength, m[k].byteLength, k + " owns exactly its own bytes");
+  }
+  assert.equal(m.pos.length, 9); assert.equal(m.idx.length, 3);
 });
 
 test("modelsReady gives up at its cap when the pack hangs, and never rejects on a failing pack", async () => {

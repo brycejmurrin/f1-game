@@ -701,8 +701,8 @@ function ensureLightPresets() {
   });
   return lightLoad;
 }
-/** Save-Data on, or a 2G link: the title skips its idle race-session and audio
- *  prefetches (#3110); RACE! still loads them on demand. No Network Information API (Safari,
+/** Save-Data on, or a 2G link: the title skips its idle lighting, race-session and
+ *  audio prefetches (#3110); RACE! still loads them on demand. No Network Information API (Safari,
  *  Firefox) reads as a normal link. */
 function lowDataLink() {
   const c = typeof navigator !== "undefined" ? navigator.connection : null;
@@ -764,12 +764,12 @@ function raceAssets() {
   else Promise.resolve().then(kickScenery);
   // Title prefetches on idle with LONG deadlines: a short one forced the eval as an ordinary task in the first
   // seconds of title input. RACE! awaits all three, so a late prefetch costs nothing but the prefetch.
-  // Lights stay on every link: a race start re-asks only after a FAILED fetch.
-  scheduleIdle(() => { ensureLightPresets(); }, 8000);
-  // Prefetch the session stub's real modules on idle so startRace's await is
-  // usually a no-op. Do not put them on the title paint path (microtask).
-  // Save-Data / 2G skips both: startRace awaits ensureRaceSession and ensureAudio.
+  // Prefetch the presets and the session stub's real modules on idle so
+  // startRace's awaits are usually no-ops. Do not put them on the title paint
+  // path (microtask). Save-Data / 2G skips all three (#3110 F2): startRace
+  // awaits ensureLightPresets, ensureRaceSession and ensureAudio.
   if (!lowDataLink()) {
+    scheduleIdle(() => { ensureLightPresets(); }, 8000);
     scheduleIdle(() => { ensureRaceSession(); }, 9000);
     scheduleIdle(() => { prefetchAudio(); }, 12000);
   }
