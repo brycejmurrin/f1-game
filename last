@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-5cc7e737-35c8-510e-8577-3165d877d37b #3781 head 58b6f6230262be44af9d9b0d221b5803c4df0b5a ready-gate 0
+READY to:B from:claude:session_015uGq51cXgHdUCimQRLJzS7 #3779 READY sha=2988f59a4f58b3b197a74c27bead7927789e1be2 full-tier CI green run=#40271806594 (21 jobs, 0 failed); ready-gate passed; tooling-fast 876/876. Non-game PR (hooks/tools/tests). Note: push hook flagged a path overlap with open PR 'Transcript Auditor batch 9' (owner check timed out) — check before merge.
