@@ -285,3 +285,17 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Archive by rule later: 01AdPk 01XJAQ 01Xmgd 01Y5XF 01BnJV 01Q7NM 017YbG (W4·L1, #3789 merged) — idle ≥60 min check. Delete backup branch cursor/deep-review-fixes-sync-bk-a3f1 after #3759 merges (owner's ask).
 - Triage (ci-red-triage): `post-warm menu heap cycle6−cycle5=17.6 MiB` (≤10) in race-cycle-memory; heap sawtooth 140→248 then GC drop to 143.5, 161.1 = GC timing, not a leak; green on #3737 own CI (run 40265241969); no retry (retries=0). Suggest ONE re-run of that leg (D's call); red again → bisect js/lighting/atmosphere.js.
 - Bus cursor 0535742.
+
+## 08:48Z (01:48 PT) — ORCH B now session_01XzhhVYuGX9ii1g8uymYkTp (bus 0e6d216 LIVE)
+- MERGED #3759 5805fe31 (game, GAME-SLOT b85f84a, DONE 280ee7a, 2 parents). Backup branch deleted by Bryce.
+- Pages 40295725338 on 5805fe31 RED: (1) test-groups guard TESTING.md floor 975+ (merge interaction) → MERGED #3793 1f4834b7 (docs-only, DONE b3cdc52; docs push starts NO Pages run). (2) garage-out-before-card DAILY leg: probable flake (retries=0, 3/4 passed), no base verdict; red again → bisect #3759's js/garage/setup-sheet.js, js/ui/select-screen.js.
+
+## Handoff 09:22Z (02:22 PT) — ORCH B session_01XzhhVYuGX9ii1g8uymYkTp at ~194k (get_session). READ LAST; supersedes the rest.
+- FIRST: `git fetch --unshallow`. Post LIVE (`send HANDOFF --to '*' "ORCH B LIVE claude:<id> (succeeds …)"`). Bus Monitor script: read ALL lines --since cursor every 60 s, keep `to:(B…|*|me)` OR ` INCIDENT | GAME-SLOT | DONE `, drop own from:. Hourly create_trigger. Mine: Monitors stopped, hourly trig_01N4MkJ2jjxNpDVFDCmnWWnZ deleted.
+- RATE LIMIT: seven_day `allowed_warning` at 09:20Z → launch NOTHING (quota gate); ask Bryce first.
+- NEXT MERGE (non-game): #3785 0da70c38 (owner session_01E4f2wTJpTrcPnFYEQxmDMa), synced to 5805fe31, full tier running (0 failed at 09:19Z). Owner sends READY. Then merge-gate → merge. Its push starts Pages and lowers assertPins 8429→8407 (tip over 8420 ceiling — likely another Pages red cause). Promised OrchA (ff18f25): if #3785 not mergeable by ~09:50Z, B dispatches pages.yml on the tip (never dual-dispatch).
+- GAME TRAIN paused until Pages green on the tip: A #3761 → D #3721 → B #3723 (owner session_014B9YR4dsn93MnGp5Ko1Asc) → #3684 #3724 #3641 #3646 #3648 (re-check CI/mergeable).
+- #3792 X9 (owner 0184mT stopped, past cap): I ticked its Plan + added fleet block, ready-gate passed, flipped READY 09:15Z; full tier running on 3aade8b1; subscribed. Merge when green + merge-gate (after #3785; same TESTING.md 1000+ line as #3793, identical text). If red: fix yourself or ask Bryce before launching (quota).
+- #3791 (mine, rule B, 28df368e): full tier green; merge after #3785 (re-run merge-gate on the new tip; may need sync).
+- Archive by rule later: 01AdPk 01XJAQ 01Xmgd 01Y5XF 01BnJV 01Q7NM 017YbG 01AgeSZK (#3759 done) 0184mT (after #3792 merges) — idle ≥60 min check.
+- Bus cursor ff18f25.
