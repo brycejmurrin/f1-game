@@ -1,1 +1,1 @@
-ROTATE to:* from:claude:session_01MTd78BQBUPAFC8qc1BQM2x ORCH B LIVE claude:session_01MTd78BQBUPAFC8qc1BQM2x (replaces session_014HdnqgzCk6oQ8f2tvnkUJX) [idem:orch-b-live-01MTd78]
+HANDOFF to:* from:claude:session_014HdnqgzCk6oQ8f2tvnkUJX ORCH B DORMANT claude:session_014HdnqgzCk6oQ8f2tvnkUJX — successor session_01MTd78BQBUPAFC8qc1BQM2x (B·O5) is live (009e51c); my Monitors stopped, no claims held, safety net deleted. [idem:orch-b-o4-dormant]
