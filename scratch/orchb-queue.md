@@ -180,3 +180,14 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - DAD stripped MERGE-HOLD from lent #3634 #3636 #3641 #3646 #3684 #3724 #3736 #3648 #3723 #3730 (71b14bd); all GAME → GAME-SLOT each. #3648 CONFLICTING (sync first); #3723 draft.
 - New owners (Opus): #3772 session_01KBMbLPvk5NA1NXnxoFkLXY; #3773 session_01BgfkgSBtpN3xF1wVEou5Rt (row 14 = a, + orchestrator.md:209-210); #3774 session_01AdPk5LZLqJnt5M19EamH1f.
 - Live: W3·L3 session_01RSyjdqkAX2qpAvF6TEaFmS, W3·L4 session_01Q1pRbYF9fiHFRUvtx8HwF5 (told new id).
+
+## Handoff 04:23Z (21:23 PT) — ORCH B session_01Av5dXp5nSYFd1hN95D5EWx at ~156k (get_session). READ LAST; supersedes the rest.
+- Successor: post LIVE, arm 3-min send_later + hourly create_trigger; then delete my hourly trig_01B1NdoqS7GAB214kM8U6X4T and pending tick (list_triggers, name "OrchB 3-min tick").
+- GAME-SLOT: A merged #3704 45fbf76f (aa8f619). NEXT SLOT = B #3772 after Pages green on 45fbf76f (ci-watch --sha 45fbf76f --pages --once). Merge when owner session_01XmgdKisM93VGcVMMkb77k3 sends READY + full tier green: trial merge-gate --pr 3772, merge_method merge, two parents, DONE. Bryce: "merge asap".
+- After #3772, lent game PRs one per green Pages: #3648 (CONFLICTING, needs sync owner) #3736 #3684 #3724 (ready, full tier green), #3634 #3636 #3641 #3646 #3730, #3723 (owner session_014B9YR4dsn93MnGp5Ko1Asc). D stripped MERGE-HOLD (71b14bd).
+- Owners live (Opus): #3773 session_01BgfkgSBtpN3xF1wVEou5Rt; #3774 session_01AdPk5LZLqJnt5M19EamH1f; #3759 session_01Y5XFymPZz3Ho (150k, near cap).
+- Over cap, told to push WIP + HANDOFF + stop (04:22Z): W3·L3 session_01RSyjdqkAX2qpAvF6TEaFmS (173k), W3·L4 session_01Q1pRbYF9fiHFRUvtx8HwF5 (186k). Launch successors from their PR bodies.
+- Duplicate #3772 owner session_01KBMbLPvk5NA1NXnxoFkLXY stopped (archive by rule).
+- Needs Bryce: (1) row 5 grant typed in L3 session_01RSyjdqkAX2qpAvF6TEaFmS (or its successor); (2) rename Fleet B env APEX_A_INBOX_* → APEX_A_RELAY_* (#3774); (3) any L4 .claude/hooks self-mod refusals.
+- Bus cursor 7d10075. DAD 80da0f7 HANDOFF to:B had an empty body — ask DAD to resend.
+- Archive by rule after 05:10Z: 01GETh 011NoeB 01Q7NM 01B2s 018Eoa 01EWg3 01AXz6 019yb 01WV8q 01Y3Fm 01KBMb. Never R1 01PfAQjr, seed, orchestrators.
