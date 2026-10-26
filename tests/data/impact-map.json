@@ -4490,6 +4490,14 @@
         "tests/unit/scenery-guards.test.mjs"
       ]
     },
+    "js/circuits/scenery/shanghai.js": {
+      "pudongCluster": [
+        "tests/unit/shanghai-pudong-horizon.test.mjs"
+      ],
+      "*": [
+        "tests/unit/shanghai-pudong-horizon.test.mjs"
+      ]
+    },
     "js/circuits/scenery/silverstone.js": {
       "*": [
         "tests/unit/scenery-api-contract.test.mjs"
