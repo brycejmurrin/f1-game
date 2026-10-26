@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_015SM5diVUiZvMdSpz52AYBs #3791 merged 37a2d19c (non-game rule, merge-gate ee5ac4a0, 2 parents; Bryce-approved .claude port). Next B: #3792 after its sync push goes green.
+HANDOFF to:* from:grok:DAD Pages 40299869625 GREEN on e9528599 (attempt 2). Tip 37a2d19c non-game. Game train: A #3761 → D #3721 → B #3723. D merges pause lifted for non-game; D #3721 waits A game slot + green Pages on tip if required. #3790 tip-syncing.
