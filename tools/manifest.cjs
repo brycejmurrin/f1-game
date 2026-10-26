@@ -269,7 +269,9 @@ const FULL = [
   "js/garage/scene-dress.js",
   "js/garage/crew-motion.js",
   "js/garage/crew-service.js",
+  "js/garage/crew-choreo.js",           // GarageCrewChoreo: Blender-authored crew clips (tools/gen/blender/crew-choreo.py)
   "js/garage/scene-crew.js",
+  "js/garage/pit-crew.js",              // PitCrewAnim: the crew at the player's in-race pit stop
   "js/garage/scene.js",
   "js/garage/arrival.js",
   "js/garage/surface-inspection.js",
@@ -372,6 +374,8 @@ const FULL = [
   "js/input/steer-tuning.js",
   "js/perf/thermal-drift.js",    // ThermalDrift: pure slow-drift detector + opt-in 45/30 render gate (#2652); before governor
   "js/perf/governor.js",
+  "js/perf/menu-teardown.js",
+  "js/perf/menu-quit-tail.js",
   "js/perf/loop-health.js",
   "js/perf/render-rate.js",   // RenderRate: phones draw every 2nd rAF on a 100 Hz+ display (physics unchanged)
   "js/perf/spans.js",
@@ -624,6 +628,7 @@ const TRACK_VM = [
   "js/garage/scene-dress.js",
   "js/garage/crew-motion.js",
   "js/garage/crew-service.js",
+  "js/garage/crew-choreo.js",
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "@circuits",
@@ -769,6 +774,7 @@ const HARD_EDGES = [
   ["js/garage/crew-motion.js", "js/garage/scene-crew.js"],
   ["js/garage/scene-prims.js", "js/garage/crew-service.js"],
   ["js/garage/crew-service.js", "js/garage/scene-crew.js"],
+  ["js/garage/scene-prims.js", "js/garage/crew-choreo.js"],      // the choreography's props destructure GaragePrims at eval
   ["js/garage/scene-prims.js", "js/garage/scene-crew.js"],        // the crew destructures GaragePrims at eval
   // The garage preview camera eases its flaps at the car's own X_OPEN_RATE /
   // X_CLOSE_RATE, destructured off PhysicsConsts at EVAL time exactly as

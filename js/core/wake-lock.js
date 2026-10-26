@@ -28,7 +28,19 @@ function hold() {
       }
       raceWake = lock;
       // An old sentinel may release after a replacement exists: compare identity.
-      lock.addEventListener("release", () => { if (raceWake === lock) raceWake = null; });
+      // UA may release a visible document (battery / power saver) with no
+      // visibilitychange. Re-arm next turn so a hide in this turn is seen.
+      // drop() will not re-arm: it nulls raceWake and clears wanted first.
+      lock.addEventListener("release", () => {
+        if (raceWake !== lock) return;
+        raceWake = null;
+        if (!raceWakeWanted || (typeof document !== "undefined" && document.hidden)) return;
+        setTimeout(() => {
+          if (!raceWakeWanted || raceWake || raceWakePending) return;
+          if (typeof document !== "undefined" && document.hidden) return;
+          hold();
+        }, 0);
+      });
     }).catch(() => { if (raceWakePending === pending) raceWakePending = null; });
   } catch (e) { /* unsupported or refused: the screen just sleeps as normal */ }
 }

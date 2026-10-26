@@ -122,6 +122,9 @@ test.describe("Car setup — nothing shows through from the screen below", () =>
 
       await page.locator("#cs-done").click();
       await page.locator("#carsetup").waitFor({ state: "hidden" });
+      // DONE hides #carsetup at once but reveals the destination a beat later
+      // (MenuTeardown.deferUi, #3608): wait for it, then assert exactly.
+      await page.locator(`#${backTo}`).waitFor({ state: "visible" });
       const after = await screens(page);
       expect(after[backTo], `DONE returns to #${backTo}`).toBe(false);
       expect(after.carsetup).toBe(true);

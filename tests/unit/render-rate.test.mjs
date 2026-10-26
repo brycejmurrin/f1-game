@@ -97,6 +97,38 @@ test("a stall or tab resume is not a cadence sample", () => {
   assert.ok(R.state().emaMs < 11, "a 5 s gap leaves the EMA alone");
 });
 
+test("gate pays a 100 ms frame and does not pay a gap past it or a backwards stamp", () => {
+  // ms === MAX_SANE_MS stays on the sane path (mode off draws every rAF).
+  const edge = load({ mobile: true, store: { "apex26.renderRate": "off" } });
+  assert.equal(edge.gate(0.1, 100, false, true), true);
+  assert.equal(edge.ms(), 100);
+  assert.equal(edge.dt(), 0.1);
+  // Just over the observe() window, and the resume shape game.js actually passes
+  // (dt clamped to 1/4 s, raw ms). Tier 30 is the path that used to draw the gap.
+  // dt stays the caller's step. game.js clamps that to 1/4 s, then the
+  // draw call clamps again (garage 100 ms, world 50 ms). gate must not pre-clamp to 50 ms.
+  const over = load({ mobile: true, store: { "apex26.renderRate": "off" } });
+  assert.equal(over.gate(0.25, 100.01, false, true), true);
+  assert.equal(over.ms(), 16.7);
+  assert.equal(over.dt(), 0.25);
+  const tier = load({ mobile: true, store: { "apex26.renderRate": "30" } });
+  for (let i = 0; i < 100; i++) tier.gate(1 / 60, 1000 / 60, false, true);
+  assert.equal(tier.gate(0.25, 5000, false, true), true);
+  assert.equal(tier.ms(), 16.7, "tier resume outMs " + tier.ms());
+  assert.equal(tier.dt(), 0.25, "tier resume keeps the caller dt");
+  const half = load({ mobile: true, store: { "apex26.renderRate": "half" } });
+  for (let i = 0; i < 4; i++) half.gate(1 / 120, 1000 / 120, false, true);
+  assert.equal(half.gate(0.25, 5000, false, true), true);
+  assert.equal(half.ms(), 16.7, "half resume outMs " + half.ms());
+  assert.equal(half.dt(), 0.25);
+  half.gate(1 / 120, 1000 / 120, false, true);
+  assert.ok(half.ms() <= 100, "next sane frame does not inherit the resume");
+  const neg = load({ mobile: true, store: { "apex26.renderRate": "off" } });
+  assert.equal(neg.gate(0, -40, false, true), true);
+  assert.equal(neg.ms(), 16.7);
+  assert.equal(neg.dt(), 0);
+});
+
 test("an immersive session is never gated, and returning from it flushes the carry", () => {
   const R = load({ mobile: true });
   run(R, 200, 1000 / 120);

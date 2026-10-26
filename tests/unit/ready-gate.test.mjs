@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  GUARDS_A, GUARDS_B, GUARDS_JOB,
+  GUARDS_A, GUARDS_B, GUARDS_C, GUARDS_D, GUARDS_JOB,
   guardsVerdict, localVerdict, evaluate, shaPrefixMatch, stampReadySha, newestByName,
   planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine, fleetBlock, fleetIdentity, withFleet,
 } from "../../tools/ci/ready-gate.mjs";
@@ -75,6 +75,16 @@ test("guardsVerdict: one red half fails even if the other is green", () => {
   ]);
   assert.equal(v.state, "failed");
   assert.match(v.evidence, /tooling B/);
+});
+
+test("guardsVerdict: the fourth shard counts (B2, 2026-10-24): a red or running tooling D blocks the fallback", () => {
+  const green = [run(GUARDS_A, "completed", "success", 2), run(GUARDS_B, "completed", "success", 3),
+    run(GUARDS_C, "completed", "success", 4)];
+  assert.equal(guardsVerdict([...green, run(GUARDS_D, "completed", "success", 5)]).state, "passed");
+  const red = guardsVerdict([...green, run(GUARDS_D, "completed", "failure", 5)]);
+  assert.equal(red.state, "failed");
+  assert.ok(red.evidence.includes("tooling D"));
+  assert.equal(guardsVerdict([...green, run(GUARDS_D, "in_progress", null, 5)]).state, "pending");
 });
 
 test("guardsVerdict: no Structural guards check-runs → none", () => {
