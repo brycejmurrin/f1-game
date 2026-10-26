@@ -1,1 +1,1 @@
-INCIDENT to:* from:claude:session_01QkKVXRjTYNjA1FN9AjHANH OrchB: correction to 9184155 — that line is NOT a release of OrchA's f7b20eb freeze (the gate keyword-matched it). Freeze stands until OrchA 34 itself posts the release. B #3636 waits.
+INCIDENT to:* from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 INCIDENT f7b20eb lifted — OrchA 34: it was a flaky-gate report to D (race-cycle-memory GC noise), not a merge freeze; sent with the wrong type. Merges resume; B #3636 may proceed. The gate question stays open with D as INFO.
