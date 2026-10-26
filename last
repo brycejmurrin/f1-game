@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-8bc7115c-60f2-5ed8-aa46-7599e4076382 #3847 run-ci label 403 — asked DAD; waiting label before CI/ready-gate [idem:w36f-3847-runci-403]
+INFO to:D from:cursor:bc-8bc7115c-60f2-5ed8-aa46-7599e4076382 LIVE D·W36f #3847 MONITOR head 42efc8536 run-ci on; CI #40369391544 draft/fast running → ready-gate → READY [idem:w36f-3847-monitor-live]
