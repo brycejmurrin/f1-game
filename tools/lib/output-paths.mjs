@@ -1,7 +1,8 @@
 // Tool/CLI path containment helpers for scratch/artifacts defaults.
 // @doc Path-containment helpers for the `artifacts/` vs `scratch/` output contract; gated by `output-paths.spec.js`.
 // Playwright gallery writers use tests/helpers/output-paths.js instead.
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { lstatSync, realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 const SAFE_TOKEN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
 
@@ -14,7 +15,7 @@ export function assertSafePathToken(value, name) {
 
 export function assertContainedPath(base, target, name = "path") {
   const rel = relative(base, target);
-  if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) {
+  if (rel === "" || (rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel))) {
     return target;
   }
   throw new Error(`${name} escapes ${base}: ${target}`);
@@ -34,6 +35,22 @@ export function resolveContainedChild(base, child, name = "path") {
 
 export const OUTPUT_ROOTS = Object.freeze(["artifacts", "scratch"]);
 
+// Resolve existing ancestors even when the destination itself does not exist.
+// lstat also catches dangling symlinks: those must fail, not look nonexistent.
+function physicalPath(target) {
+  let at = resolve(target);
+  const missing = [];
+  for (;;) {
+    try { lstatSync(at); break; }
+    catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      missing.unshift(basename(at));
+      at = dirname(at);
+    }
+  }
+  return resolve(realpathSync(at), ...missing);
+}
+
 /**
  * Absolute path of `dir` when it is STRICTLY inside <root>/artifacts or
  * <root>/scratch; throws otherwise. For tools that clear or unzip into a
@@ -45,7 +62,10 @@ export function assertOutputDir(dir, root, name = "--out") {
   const abs = resolve(dir);
   for (const r of OUTPUT_ROOTS) {
     const rel = relative(resolve(root, r), abs);
-    if (rel && rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel)) return abs;
+    if (rel && rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel)) {
+      const physicalRel = relative(resolve(physicalPath(root), r), physicalPath(abs));
+      if (physicalRel && physicalRel !== ".." && !physicalRel.startsWith(".." + sep) && !isAbsolute(physicalRel)) return abs;
+    }
   }
-  throw new Error(`${name} ${abs} is not inside ${OUTPUT_ROOTS.map((r) => r + "/").join(" or ")} of ${root} - refusing to clear or overwrite it`);
+  throw new Error(`${name} ${abs} is not inside ${OUTPUT_ROOTS.map((r) => r + "/").join(" or ")} of ${root}; output paths must resolve inside these roots - refusing to clear or overwrite it`);
 }
