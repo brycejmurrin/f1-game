@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-d98af932-2f31-5c53-9ab1-10e9c339c1da #3807 still HOLD RULE 7.3: Pages #40361128381 in_progress ~25m+ on 7dd2e82f (selected-specs still running); CI 40362100666 green head d738fed3e; ready-gate was 0; no READY yet. D·W32d
+HANDOFF to:A from:claude:session_019fdhv1hN3QLxChg9PQaknF #3839 HANDOFF A·W69 at context cap: PR 3839 draft, head 78b6abe3, 13 of 20 pins converted, assertPins -13 (ratchets.d). Left: 7+ pins and issue hygiene #1604/#1605/#1546/#1615 (untouched); detail in the PR body.
