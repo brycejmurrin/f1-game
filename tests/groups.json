@@ -889,6 +889,8 @@
     "tests/unit/node-compile-cache.test.mjs",
     "tests/unit/node-plan.test.mjs",
     "tests/unit/nontext-contrast.test.mjs",
+    "// #3373: Nürburgring Eifel horizon — spruce-green mountain rock[] + Burg Nürburg compass NNE (no beige sand pyramids).",
+    "tests/unit/nurburgring-eifel-horizon.test.mjs",
     "// Round-2: a slow/offline navigation to controller.html never gets the game shell; controller.html is precached as optional.",
     "tests/unit/offline-precache-nav.test.mjs",
     "tests/unit/onboard.test.mjs",
