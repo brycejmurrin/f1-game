@@ -1,6 +1,6 @@
 ---
 name: race-weekend
-description: "Use when tyre wear/compounds (tyre-model.js), pit stop time/lane (pit-lane.js), the STRATEGY/tyre HUD, quali or results sheets, start lights, flying start, rain/weather arc or sporting regs (two-compound rule, SC passes) change. Handling → tune-physics; flags/SC → race-incidents-control; calendar → season-mode."
+description: "Use when tyre wear/compounds (tyre-model.js), pit stop time/lane (pit-lane.js), the STRATEGY/tyre HUD, quali or results sheets, start lights, flying start, rain/weather arc or sporting regs (two-compound rule, SC pass penalty) change. Handling → tune-physics; flags/SC → race-incidents-control; calendar → season-mode."
 ---
 
 # Race weekend — tyres, pits, quali, start, weather, regs
@@ -11,7 +11,7 @@ The rules modules that turn a lap into a weekend. Each is one
 | File | Global | Owns |
 |---|---|---|
 | `js/physics/tyre-model.js` | `TyreModel` | wear `LEVELS` (`off`/`light`/`real`, `G.raceTyreWear`), `gripMul`, `spent`, `lapsLeft`, `planLaps` (life scales with the race DISTANCE), `fit` (writes the stint log), fuel burn |
-| `js/race/pit-lane.js` | `PitLane` | the driven lane (a state, not a cutaway): limit, box, `lossS`, `estimate`, the AI's `planFor`/`replan`, `twoCompoundRule` |
+| `js/race/pit-lane.js` | `PitLane` | the driven lane (a state, not a cutaway): limit, box, `lossS`, `estimate`, the AI's `planFor`/`replan`, `twoCompoundRule`; its curvature use (`entryRunM`) is classed **surface** in docs/PHYSICS.md's legitimate-columns table |
 | `js/track/core/pit.js` | `TrackPit` | the pit-complex geometry bands every consumer reads (circuit shape → new-track) |
 | `js/race/quali-model.js` | `Quali` | one flying lap vs the simulated field: `simulate`, `rows`, `referencePole` |
 | `js/race/quali-net.js` | `QualiNet` | VS FRIEND quali gate (rival times on NetPlay `EV.QUALI`) |
@@ -55,11 +55,13 @@ node --test tests/unit/tyre-model.test.mjs tests/unit/tyre-strategy-vm.test.mjs 
   tests/unit/pit-lane-vm.test.mjs tests/unit/sporting-regs.test.mjs tests/unit/weather-arc-plan.test.mjs \
   tests/unit/weather-arc-rain.test.mjs tests/unit/flying-start.test.mjs tests/unit/start-lights.test.mjs \
   tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/quali-persist.test.mjs
-node tools/ci/test-bg.mjs physics-core   # BROWSER: pit-lane.spec.js; background it (AGENTS.md rule 4)
-node tools/ci/test-bg.mjs modes          # BROWSER: quali.spec.js, time-trial.spec.js, real-race.spec.js
+APEX_VM_PAGE=1 node --test tests/specs/pit-lane.spec.js   # NO browser: pit-lane.spec is VM-adapted (test:vm-page-b)
+npm test -- tests/specs/quali.spec.js    # BROWSER, one spec (or time-trial / real-race), background it (AGENTS.md rule 4)
 ```
 
-Prefer one spec over its group (`npm test -- tests/specs/pit-lane.spec.js`).
+One spec, never a whole group, per change (AGENTS.md verification table); a whole group is
+`node tools/ci/remote-group.mjs <group>` on the pushed branch, ONE group per batch (rule 5). A subagent
+reports browser specs as not run.
 
 ## Pitfalls
 
@@ -72,3 +74,4 @@ Prefer one spec over its group (`npm test -- tests/specs/pit-lane.spec.js`).
 - Quali/results sheets never compute order; a wrong classification is the
   model (`Quali.rows`, `RaceControl.finishOrder`), not the DOM.
 - Sprint points / quali-on-off inside a career save → career-mode (a standalone Season → season-mode).
+- Pit stops exist: an "there are no pit stops" comment (e.g. in `ai-drive.js`) is stale history, not a rule.

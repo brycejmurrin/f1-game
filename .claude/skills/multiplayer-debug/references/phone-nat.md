@@ -18,4 +18,7 @@ The pad is VS FRIEND's wire with one seat (`docs/MULTIPLAYER.md` §Phone as cont
    TURN access, so a sandbox failure is an answer about the environment.
 6. Room-code path only hangs: `node tools/net/nostr-probe.mjs` (which public relays accept an ephemeral event from
    an unknown pubkey); `rtc-e2e-room.mjs` runs the room-code path against a local relay (`nostr-local.cjs`).
-7. Offline pins: `node --test tests/unit/phone-pad.test.mjs`. Steering/tilt once paired is input-controls.
+7. Pad feels laggy or stalls: the send cadence is the comment on `sample(force)` in `js/input/phone-pad.js` (a 15 ms send
+   gap; read the current rule there, it has changed). Evidence is the pad's `stats()` — `sent`, `queued`, `expired`,
+   `rejected` — plus the `HEARTBEAT_MS` beat; compare `sent` against the phone's input rate before blaming the network.
+8. Offline pins: `node --test tests/unit/phone-pad.test.mjs`. Steering/tilt once paired is input-controls.

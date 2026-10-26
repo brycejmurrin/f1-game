@@ -1,19 +1,20 @@
 ---
 name: survey-ui-matrix
-description: "Use when reviewing the whole UI across orientations, viewport shapes, UI scale and pointer type: enumerate every screen, measure clipping, truncation, tap targets and overflow, capture screenshots — before a restructure or to prove a CSS change regressed nothing. One cramped screen → ui-menu-a11y; restructure → css-play."
+description: "Use when reviewing the whole UI (every screen) across phone landscape 844x390, orientations, viewport shapes, UI scale and pointer type: clipping, truncation, tap targets, overflow, screenshots — before a restructure or to prove a CSS change regressed nothing. One cramped screen → ui-menu-a11y; restructure → css-play."
 ---
 
 # Surveying the whole UI across the whole matrix
 
-The parent runs the browser matrix with one Chromium session — and `--list` /
-`--report` too: `bash-guard.sh` refuses `layout-audit.mjs` / `menu-mock.mjs` in a
-subagent unless `--help` is passed. Delegate only artifact analysis. Subagents return defect tables
-with screenshot paths and missing cells; the parent applies fixes via `css-play`
-or `ui-menu-a11y`. This follows AGENTS.md rule 10.
+**One rule:** every `layout-audit.mjs` / `menu-mock.mjs` call except `--help` is the
+PARENT's — `bash-guard.sh` matches the tool name in a subagent, not whether it launches Chromium, so
+`--list`, `--report` and `--diff` (no browser) are parent-only too (AGENTS.md rule 10). Delegate only
+artifact analysis: subagents return defect tables with screenshot paths and missing cells; the parent
+applies fixes via `css-play` or `ui-menu-a11y`.
 
 ## Default-first visual verification
 
-Follow AGENTS.md’s UI review baseline: fresh shipped appearance and device input defaults first; stress scales,
+Bryce's profile first: 844×390 landscape, touch (`ios-iphone-landscape-844`; fleet-core). Then fresh shipped
+appearance and device input defaults (AGENTS.md §Seeing the game); stress scales,
 imported settings and legacy looks are separately labelled comparisons. Record requested scale and painted zoom.
 Inspect original full-size images with DOM/computed-style evidence. Thumbnails and zero inspector findings are
 insufficient. Exercise real scrolling both ways, the final action, keyboard focus visibility, and state retention
@@ -28,11 +29,15 @@ Browsers and Playwright MCP come from the SessionStart hook (AGENTS.md rule 1).
 A layout bug is never "on a screen" — it is a **cell of a matrix**: screen ×
 viewport × scale × pointer. **One CLI:** `tools/ui/layout-audit.mjs`.
 
+Run Bryce's cell FIRST — it is NOT the default (`--viewport` defaults to `ios-iphone-landscape`, 852x393):
+`node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens='*'`.
+
 ```sh
 # NO BROWSER (exits before any launch; all but --help still parent-only): --help, --list, --report, --diff
 node tools/ui/layout-audit.mjs --help
 node tools/ui/layout-audit.mjs --list            # screens × viewports catalog (counts are in its output)
-# BROWSER (Chromium, as do fit-audit/menu-fit below unless --help; /proc/loadavg < 3, no Playwright run live):
+# BROWSER (Chromium, as do fit-audit/menu-fit below unless --help; /proc/loadavg < 3, no Playwright run live;
+#   at >= 3 reap your own Chrome (AGENTS.md rule 7), wait once, else report the cells unmeasured):
 node tools/ui/layout-audit.mjs --survey          # title-path + shots (npm run ui:survey)
 node tools/ui/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
 node tools/ui/layout-audit.mjs --screen=settings # one cell
@@ -41,8 +46,6 @@ node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run
 # Notch insets only: node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,21
 ```
 
-Phone landscape 844x390 touch (NOT the default `ios-iphone-landscape`, 852x393):
-`node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens='*'`.
 Axes: pointer = viewport family (`ios-*` touch/coarse, `desktop-*` mouse/fine);
 orientation = `*-portrait` / `*-landscape` names; no ultrawide row exists — add one to
 `VIEWPORTS` (`tools/ui/menu-screens.mjs`). The whole "0.8-1.5x, touch + mouse" ask is one run:
@@ -95,6 +98,15 @@ node tools/ui/menu-mock.mjs --screens='*' --viewports=ios-iphone-landscape-844 -
 Shared pieces (held rAF, boxes, CDP capture, contact sheet, content-hash cache) live in `tools/lib/ui-mock-core.mjs`.
 
 Interactive poking: Playwright MCP (`tools/mcp/playwright-mcp.sh`) or Chrome DevTools MCP.
+
+## Hand-off and evidence
+
+Shape (one parent, at most two reviewers): the parent runs the survey as ONE background job logging to
+`artifacts/logs/` (AGENTS.md rule 4) and spawns at most two read-only reviewers over the finished
+artifacts — never over a live run. Publish the selected captures with
+`node tools/shot/publish-evidence.mjs --dir artifacts/layout-audit --label <slug> --publish`
+(`docs/EVIDENCE-STORAGE.md`); the PR body links the release assets, lists unmeasured cells as not run,
+and records the `= diff` line when proving no regression.
 
 ## Load on demand
 

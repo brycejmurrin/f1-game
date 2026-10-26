@@ -1,6 +1,6 @@
 ---
 name: pwa-cache-service-worker
-description: "Use when editing sw.js, version.json, PWA offline install, stale shell, cache invalidation, shell version guard, DEFERRED backend precache, or Playwright hangs from a mid-run version.json bump."
+description: "Use when editing sw.js, version.json or the PWA manifest: offline play, an installed PWA, stale shell, cache invalidation, shell version guard, DEFERRED backend precache, or Playwright reloads from a mid-run version.json bump."
 ---
 
 # PWA cache and service worker
@@ -31,11 +31,14 @@ committed numbers are not what is live. Live check: `tools/ci/pages-live-sha.sh`
 **Fetch.** Per-class policy is the table below; dev-host `?v=dev`, the generation
 handshake, cache retention and fetch races → [references/sw-internals.md](references/sw-internals.md).
 
-**`sw.js` anchors** (grep the symbol; line numbers drift): `currentCacheName()`
-(~L64: `version.json` no-store → `apex26-<build>`), `cacheBuild()` (~L114: numeric
-parse of the name), `sweepStaleCaches()` (~L217: deletes only numerically OLDER caches,
-after `INSTALL_SETTLED`), the `install` (~L680) / `activate` (~L757) listeners, and the
-`fetch` listener's `isVersion` branch (~L926: `version.json` network-first, never cached).
+**`sw.js` anchors** (grep the symbol): `currentCacheName()` (`version.json` no-store →
+`apex26-<build>`), `cacheBuild()` (numeric parse of the name), `sweepStaleCaches()` (deletes only
+numerically OLDER caches, after `INSTALL_SETTLED`), the `install` / `activate` listeners, and the
+`fetch` listener's `isVersion` branch (`version.json` network-first, never cached).
+
+**Generated parts.** The `@gen-shell:sw-optional` block in `sw.js` and the `@gen-shell` blocks of
+`index.html` are GENERATED (AGENTS.md rule 11; `protect-files` refuses a hand edit): edit
+`tools/manifest.cjs`, run `npm run gen`, and `npm run gen:check` names drift.
 
 **CSP.** `<meta http-equiv="Content-Security-Policy">` is a gen-shell block
 (`CSP` in `tools/gen/gen-shell.mjs`, first in `<head>`): a new third-party
@@ -47,7 +50,7 @@ refuses it. `load-order.test.mjs` pins its shape.
 - Editing `sw.js`, install/activate/fetch, or precache lists.
 - Stale PWA installs, offline boot, shell-not-updating.
 - Adding/removing DEFERRED files or optional seeds.
-- Test hangs after an accidental mid-run version bump.
+- A test pointed at a moving `version.json` (the live host, or a stub) reloads mid-run.
 
 ## When NOT to Use
 
@@ -57,10 +60,9 @@ refuses it. `load-order.test.mjs` pins its shape.
 
 | Asset class | Install | Fetch |
 |---|---|---|
-| Shell (navigations) | Essential (404 = fail) | Network-first (3 s race) |
-| Tagged `?v=` js/css | Essential (404 = fail) | Cache-first |
+| Shell (navigations) | Essential (404 = fail) | Network-first, `cache:"no-cache"` revalidation (304 when unchanged) |
+| Tagged `?v=<sha256>` js/css/assets | Essential (404 = fail) | Cache-first (immutable only inside the SW) |
 | `version.json` | Essential | Network-first (no-store) |
-| `?v=<sha256>` assets | Essential if tagged | Cache-first |
 | `assets/pack/` (unversioned) | Runtime only | Network-first (3 s race to cache) |
 | DEFERRED TLX/WGX / vendor / fonts | Optional (fail OK) | Cache-first on first use |
 | DEFERRED GLX (`js/render/glx/`) | Required at install | Cache-first |
@@ -71,7 +73,7 @@ npm run test:tooling-fast
 node tools/check/offline-precache-check.cjs   # offline precache contract — LAUNCHES CHROMIUM (Playwright), ~1 min
 ```
 
-Related: `node tools/gen/gen-shell.mjs --check`, **check-changes**.
+Related: `npm run gen:check`, **check-changes**.
 
 ## Load on demand
 
