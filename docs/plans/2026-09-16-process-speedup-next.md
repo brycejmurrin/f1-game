@@ -1,5 +1,7 @@
 # Process speed-up: the next fifteen — plans
 
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — several items exist (tools/ci/remote-group.mjs is item 6; the docs-only commit path is item 9); the rest is an open backlog, so check each against tools/ before use.
+
 Base: the `claude/agent-dev-process-optimization-t7bqz8` branch after the
 2026-09-16 landing (`docs/notes/AGENT-PROCESS-RESEARCH-2026-09-16.md` §5 is
 what already shipped; this file is what comes after it). Every plan below

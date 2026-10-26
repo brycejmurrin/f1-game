@@ -1,5 +1,7 @@
 # Racing depth: implementation register
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — the register lists what landed (oriented contact geometry is js/physics/contact-geometry.js); its validation/dependency items are open.
+
 Base: `6b2a1e0eb2f9533547f4af01ba2fd4845cfdb135`, following PR #140.
 Scope: every remaining opportunity in the September 14 mechanics survey. This
 register distinguishes implementation from validation and larger dependencies.

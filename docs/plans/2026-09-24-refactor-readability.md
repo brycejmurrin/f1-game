@@ -1,5 +1,7 @@
 # Refactor plan — readability & maintainability (2026-09-24)
 
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — Phase 0 (the js/game/ doc fiction) landed; js/game.js is still 9,556 lines, so hotspot 1 is open, while player-forces.js, wall-clamp.js, build-props.js and drive-tune.js exist.
+
 Practical, phased structure work for Apex 26. **Not a rewrite.** Preserve public
 contracts (`window.__apex`, scenery API 114 members, track def fields, CI gates,
 IIFE + `tools/manifest.cjs` load order). Measured at ship tip

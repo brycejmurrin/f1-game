@@ -1,6 +1,8 @@
 # Strategy and career depth — plan (2026-09-30)
 
-Status: **PLAN** — docs-only first; implementation in ordered slice PRs below.
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — tyreSeverity is authored on all 52 circuits (js/track/circuit-meta.js) and career export/import exists (js/career/career-backup.js); the engineer-cue and AI part-development slices were not verified.
+
+Status when written: **PLAN** — docs-only first; implementation in ordered slice PRs below.
 Owner workstream: tyre severity coverage, engineer stop honesty, AI catalog
 parts over seasons, career save export/import.
 Ship base: `claude/f1-game-project-26h3ng`. Do **not** merge; Bryce's merge

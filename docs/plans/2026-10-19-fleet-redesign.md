@@ -1,5 +1,7 @@
 # Fleet redesign: authority by rule, roles by name, one coordinator per fleet
 
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — the authority-by-rule model is live (AGENTS.md STANDING AUTHORITY, tools/ci/merge-gate.mjs, ready-gate.mjs, .claude/rules/fleet-core.md); the 2026-10-26 audits amend parts of it.
+
 Proposal, 2026-10-19 ~19:45Z, from a read-only study of the live fleet (this account's 50 sessions, the bus, 28 open PRs,
 the ORCH12→ORCH13 transcripts, every fleet note since 2026-10-05) and the current platform docs
 (code.claude.com/docs/en/{auto-mode-config,permission-modes,routines,claude-projects,claude-code-on-the-web}, read 2026-10-19).

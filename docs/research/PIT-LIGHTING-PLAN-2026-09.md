@@ -1,5 +1,7 @@
 # Lighting the pit complex at night — plan (2026-09-15)
 
+Status: partly shipped, checked 2026-10-26 - canopy lights exist in js/track/scenery/pits.js; not audited item by item. The 'nothing implemented' line is the state when written.
+
 > Plan only; nothing implemented. Every claim below was checked against the
 > tree at `c70542d` and carries a `file:line`. Measurements come from the Node
 > VM build (`tools/lib/track-build-vm.cjs`), no browser. Companion:

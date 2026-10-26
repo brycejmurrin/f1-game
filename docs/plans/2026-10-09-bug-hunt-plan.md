@@ -1,5 +1,7 @@
 # Bug hunt 2026-10-09 — findings and fix plan
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — its kept rows were fixed on batch branches per 2026-10-10-fix-all-plan.md; rows not re-verified against code 2026-10-26.
+
 **What this is.** A read-only hunt over the whole `js/` tree at `64dd7a8` by
 thirteen parallel reviewers (one per domain slice), each briefed with
 `docs/BUGS.md` and `docs/notes/DEFECT-LEDGER.md` §7 as the do-not-re-report

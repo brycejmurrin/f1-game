@@ -1,7 +1,9 @@
 # Feature roadmap: what to build next (2026-10-04)
 
+Status: **OPEN** (checked against the code 2026-10-26) — a ranking; its Tier-1 plans share-cards, stream-overlay, localisation and pwa-shortcuts have each partly or fully landed (see their own Status lines).
+
 **Date:** 2026-10-04  
-**Status:** PLAN (ranking and scoping only; no code in this PR).  
+**Status when written:** PLAN (ranking and scoping only; no code in this PR).  
 **Scope:** a brainstorm across six angles (competitors, web platform,
 engagement, F1 2026 content, presentation and creator tools, and an inventory
 of what the game already does), reduced to a ranked list of what is *missing*.

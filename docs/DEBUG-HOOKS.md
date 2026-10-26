@@ -2954,7 +2954,7 @@ Central bool/string toggles also live in `js/core/dev-flags.js` (`DevFlags.get(n
 
 | param | reader | effect |
 |---|---|---|
-| `log=<scope>:<level>` (repeatable) | `js/core/log.js` | per-scope log level, as `__apex.log()` (§Telemetry & diagnostics) |
+| `log=<scope>:<level>` (repeatable) | `js/core/log.js` | per-scope log level, as `__apex.logLevel()` (§Telemetry & diagnostics) |
 | `seed=<n>` | `js/game.js` | fixed sim seed for the session (§Physics control) |
 | `apex`, `debug`, `report` | `js/core/lazy-bundles.js` | load the lazy agent bundle (`__apex`) on a normal page; also `apex26.devApi="1"` or `navigator.webdriver` |
 | `metricsPage`, `metricsLog`, `metricsLvl`, `metricsPos`, `metricsSize` | `js/perf/metrics-overlay.js` | METRICS overlay page / log filter / level / side / size (`metrics` on/off is in the generated table above) |
@@ -4437,7 +4437,7 @@ rasters in `js/agent/agentview-raster.js`) — `world()`, `field()`, `trackInfo(
 `js/track/tracks.js` and the scenery modules, and a CLI at `tools/shot/agent.mjs`.
 **Reference documentation is `docs/DEBUG-HOOKS.md` → "Agent world view"**; the
 API also describes itself via `__apex.agentHelp()`. Tests:
-`tests/specs/agent-view.spec.js` (`node tools/ci/test-bg.mjs hooks`, 117 tests).
+`tests/specs/agent-view.spec.js` (`node tools/ci/test-bg.mjs hooks`, 119 `test(` calls on 2026-10-26).
 This document keeps the research and the reasoning — §2's audit describes the
 state of the codebase **before** the work, and is retained because it explains
 why the design is shaped the way it is.
@@ -4703,7 +4703,7 @@ driving code executes at 60 Hz.
 
 #### Layer 5 — the toolbelt
 
-> **Design sketch, partly unbuilt.** The shipped MCP toolbelt is `tools/mcp/apex-tools-mcp.mjs` (29 tools, map in
+> **Design sketch, partly unbuilt.** The shipped MCP toolbelt is `tools/mcp/apex-tools-mcp.mjs` (40 tools on 2026-10-26, map in
 > `docs/AGENT-SURFACE.md`). `apex_world`, `apex_act`, `apex_reset` and `apex_scene` below were never built; the nearest
 > shipped tools are `apex_agent` (the `tools/shot/agent.mjs` command surface) and `apex_eval`. `apex_track` and
 > `apex_eval` exist.
@@ -5183,7 +5183,7 @@ WebArena <https://webarena.dev/static/paper.pdf>
 Copy-paste blocks for debugging the **real, deployed** game from a browser
 console, plus the browser gotchas that make console work fail in confusing ways.
 
-### Why bother, when there are 250 test files
+### Why bother, when there are 1,218 test files (2026-10-26: 170 Playwright specs, 1,038 unit files, 10 others)
 
 The Playwright suite is better at regression. The console is the only thing that
 can reach four situations the suite **structurally cannot**:
@@ -5249,11 +5249,7 @@ the menu screen does not affect a track — load the track first, then set it.
 __apex.diag()
 ```
 
-Snapshots build, UA, device pixel ratio, **GPU vendor/renderer** (the thing that
-says whether you are on real silicon or SwiftShader), backend, HDR/MSAA/render
-scale, plus `info`/`assets`/`lightTune`/`lightState`/`viewState`/`physState`/
-`timing`, and downloads `apex-diag.json`. `__apex.diag({download:false})` logs
-only.
+The snapshot contents and the `{download:false}` option are described once, under `diag()` in the hook reference above.
 
 **Install an error collector _before_ reproducing a bug** — `diag()` reports
 `errors`, but nothing is captured retroactively:
