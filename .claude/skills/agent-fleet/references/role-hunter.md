@@ -15,7 +15,8 @@ its follow-up PRs, not PR numbers.
 
 Under the orchestrator (no `NEW-PR` channel from a cloud agent, and an owner launch
 costs quota) the hunter owns its own PR: its launch prompt carries the
-Monitoring and reporting block from role-pr-owner.md, `NEW-PR` becomes a
+Monitoring and reporting block and the watch kit from role-pr-owner.md
+(`subscribe_pr_activity` + a ~15 min `send_later` at the first push), `NEW-PR` becomes a
 `fleet-status: working` comment, and the next round starts only after
 `fleet-status: done` or STOP AT.
 
