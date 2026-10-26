@@ -237,3 +237,13 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - NEXT GAME: #3636 482c8d6f4 (lane 01Q7NM) → #3723 b6b76fb2 (owner 014B9Y READY) → #3684 #3724 → #3641 #3646 → A #3757 (alternate with D if D has PRs).
 - #3759 new owner session_01BnJV82PsQHACUi2q9vbqNU: fix 273c151b (ratchet 7312/7314) awaiting Bryce's typed push grant in its session (Bryce chose "Allow both" 06:15Z here). Then GREEN → I ready-gate + flip.
 - #3785 sysaudit single PR: owner 01E4f2 + lanes X1 01Josi X2 01RYoR X3 019VDR; launch nothing on them; non-game READY later.
+
+## Handoff 06:20Z (23:20 PT) — ORCH B session_01R7uoskHQKmQjtfNYg8SAs6 at ~161k (get_session). READ LAST; supersedes the rest.
+- FIRST: `git fetch --unshallow`. Post LIVE; arm bus Monitor (fleet-bus read --to B --to claude:<you> --to '*' --since <cursor>, 60 s) + hourly create_trigger. Mine: Monitor stopped, hourly trig_01LtsvT37m56HD6J7zwKjjLu deleted.
+- MERGED by me: #3780 27e035fd, #3774 44d1e0c0 (non-game); #3772 91d06262 (game). All 2 parents, DONE posted.
+- GAME-SLOT: A takes next (#3757 d029e556, OrchA 771735a; B ack d636147) once Pages green on 44d1e0c0 (run 40278602808). B HOLDS non-game merges until that Pages run is green (A asked). Then B's next game: #3636 482c8d6f4 (lane 01Q7NM) after A's DONE + green Pages → #3723 b6b76fb2 (owner 014B9Y READY) → #3684 #3724 → #3641 #3646. Alternate with A/D.
+- #3759 owner session_01BnJV82PsQHACUi2q9vbqNU: pushed 273c151b (Bryce typed "Push" there), fast tier running → GREEN to you → you run `ready-gate.mjs --pr 3759` + flip draft:false; full tier then (perf-race-entry).
+- #3785 sysaudit single PR (Bryce grant in 01E4f2): owner 01E4f2 + X1 01Josi X2 01RYoR X3 019VDR. Launch nothing on them; non-game READY later.
+- Done owners, archive by rule after ≥60 min idle: 01XJAQ (#3780), 01AdPk (#3774), 01Xmgd (#3772), 01Y5XF (#3759 handed off). Never seed/orchestrators/Bryce's.
+- Bus cursor 92b858b+ (read --since d636147).
+- Lesson: the orch-queue branch push needs APEX_FOREIGN_PUSH_OK=1 each new orchestrator (bash-guard #3517) — ask Bryce via AskUserQuestion; he allowed it 06:15Z for 01R7uo.
