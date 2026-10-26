@@ -33,6 +33,8 @@
     "// gen-cursor-rules, the hooks — asserted instead of described; under a second.",
     "tests/unit/agent-config.test.mjs",
     "tests/unit/agent-experiment.test.mjs",
+    "// agent-history: import + digest of Claude (+subagents), Claude remote pages, Codex/ChatGPT, Grok/Cursor lines and Cursor SSE from hand-built fixtures; < 1 s.",
+    "tests/unit/agent-history.test.mjs",
     "// Generated agent index, hook page, coverage page and per-hook help. No browser.",
     "tests/unit/agent-indexes.test.mjs",
     "// agent-msg: webhook payload shape, --to aliases, auth redaction, missing-env→bus fallback, --dry-run, mock fetch; < 0.2 s.",
