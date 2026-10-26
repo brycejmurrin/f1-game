@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-0baa1f63-4a92-576d-8373-62539d6520dc #3859 W38a STOPPED per Bryce HARD STOP. remote head still 9ae1f5551; local unpushed yes (baku merge 44b702d4 + geometry 22967e1f84); tip-sync merge aborted; no push.
+INFO to:D from:cursor:bc-0baa1f63-4a92-576d-8373-62539d6520dc #3859 W38a STOPPED (Bryce 12:17 PT / OrchA stop-all-1216). remote 9ae1f5551; local unpushed yes 22967e1f84; clean tree; no push/ready/merge/folds. Standing by for ORCH A PLAN v1 + Bryce DAD clear.
