@@ -2840,15 +2840,17 @@ const TLX = (function () {
           b.rec = -1;
         }
       }
-      // The warm (warmFxPrograms): the attribute-instanced program and its double-sided opaque pipeline on
-      // the car basis' sign, when no run was on screen for the scene warm.
+      // Warm the double-sided opaque pipeline used by wheels and shared rival paint.
+      // A visible run alone does not prove the scene warm compiled this pipeline.
       let _coProbe = null;
       async function _coWarm() {
         if (!_coOn || !lit || skipBatches()) return;
-        for (const pair of _coRuns.values()) for (const b of pair) if (b && b.imesh.visible) return;
         if (!_coProbe) _coProbe = buildGeometry({ pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 0, 1, 0, 0, 1, 0, 0, 1], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] });
-        const m = _coRun(_coProbe, true).imesh;
-        m.material = materialFor({ doubleSided: true }, false, 2); m.count = 1; m.visible = true;
+        const b = _coRun(_coProbe, true), m = b.imesh;
+        b.ib.array[0] = b.ib.array[5] = b.ib.array[10] = b.ib.array[15] = 1;
+        setRange0(b.ib, CO_STRIDE); b.ib.needsUpdate = true;
+        m.count = 1; m.visible = true;
+        m.material = materialFor({ doubleSided: true }, false, 2);
         try { await renderer.compileAsync(m, camera, scene); } finally { m.visible = false; }
       }
       function ensureStream(slot, verts) {
@@ -4225,6 +4227,7 @@ const TLX = (function () {
           g.setIndex(TLXShaders.packIndex
             ? TLXShaders.packIndex(THREE, data.idx, verts)
             : new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
+          if (g.index.array instanceof Uint16Array) g.index.__apexUint16Index = true; // owned final triangle indices
         }
         // FINISHES ON DEMAND: a car geometry wearing a 60-85 finish id draws its carFinish material through the
         // `fx` lit graph (materialFor), the only one that carries those tints. Scanned once, here.
@@ -4870,6 +4873,7 @@ const TLX = (function () {
           const vCount = data.pos.length / 3;
           const IndexArray = vCount > 65535 ? Uint32Array : Uint16Array;
           g.setIndex(new THREE.BufferAttribute(new IndexArray(data.idx), 1));
+          if (g.index.array instanceof Uint16Array) g.index.__apexUint16Index = true; // owned final triangle indices
           return { __tlx: true, geo: _regGeo(g, "tex"), tex: true, count: data.idx.length };
         },
         createChunkedMesh(data, cellSize) {
