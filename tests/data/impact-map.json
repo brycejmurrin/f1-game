@@ -2286,6 +2286,9 @@
       ]
     },
     "js/car/car-body-geom.js": {
+      "aeroFlapsGeom": [
+        "tests/unit/rear-wing-drs-rail.test.mjs"
+      ],
       "aeroStyleOf": [
         "tests/unit/aero-defaults-2026.test.mjs"
       ],
@@ -2314,6 +2317,9 @@
       ],
       "numberBoard": [
         "tests/unit/car-shade.test.mjs"
+      ],
+      "rearFlap": [
+        "tests/unit/rear-wing-drs-rail.test.mjs"
       ],
       "styledNoseStations": [
         "tests/unit/livery-stations.test.mjs"
@@ -2812,7 +2818,8 @@
         "tests/unit/helmets.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
-        "tests/unit/livery-wheels.test.mjs"
+        "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/rear-wing-drs-rail.test.mjs"
       ],
       "buildComplete": [
         "tests/specs/parts-physics.spec.js",
