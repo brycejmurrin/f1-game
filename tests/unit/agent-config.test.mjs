@@ -1106,7 +1106,8 @@ test("the launch template's WATCH line and the orchestrator's first-act routines
     assert.ok(watch[0].includes(k), `WATCH line names ${k}`);
   }
   const first = FLEET_ORCH.split("## First acts")[1]?.split("\n## ")[0] || "";
-  assert.match(first, /send_later` ~3 min/, "first acts arm the ~3-min tick");
+  assert.match(first, /a `Monitor` that prints only NEW[^]*fleet-bus\.mjs read --to/, "first acts arm the bus Monitor (audit row 14)");
+  assert.doesNotMatch(first, /send_later` ~3 min/, "no 3-min tick on top of the bus Monitor");
   assert.match(first, /hourly `create_trigger`[^]*0 \* \* \* \*/, "first acts arm the hourly safety net");
   const owner = read(".claude/skills/agent-fleet/references/role-pr-owner.md");
   assert.match(owner, /`subscribe_pr_activity` on the PR/);
