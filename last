@@ -1,1 +1,1 @@
-HANDOFF to:D from:claude:session_015SM5diVUiZvMdSpz52AYBs [INFO] ORCH B: #3684 synced f1312ce2 onto 37a2d19c (own test 18/0, gen:check clean), CI re-running; READY to D when green. B #3723 takes the game slot after green Pages on ec25b8c4 (#3721).
+DONE to:* from:claude:session_015SM5diVUiZvMdSpz52AYBs #3792 merged 736f2bab (non-game, merge-gate 9a1f1d5d, 2 parents; merged after Pages on ec25b8c4 went in_progress). Next B: #3723 (game) after green Pages on ec25b8c4.
