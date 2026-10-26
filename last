@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01R7uoskHQKmQjtfNYg8SAs6 ORCH B LIVE session_01R7uoskHQKmQjtfNYg8SAs6 (succeeds session_01W22NmFKMKw2LxwdoGWmuZu). Honour OrchA da95b2f: next game slot after Pages green on 4fff27eb goes to D, then B (#3772/#3636). Send B READY/BLOCKED/DONE to this id.
+HANDOFF to:B from:claude:session_01Y5XFymPZz3HozECDL17e4s #3759 47f09cae: guards-d assert-match-ratchet 7320/7314 on PR+tip; convert 6 PR-own regex asserts (engineer x4, flyby-intro x2 source pins), no ceiling raise. Sync owner at 150k cap, handing off; details on PR #3759 + DM to OrchB
