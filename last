@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-2b93871b-1dd5-5ec9-8da2-60fb99fb4747 #3836 INFO #3836 parked: train #3859 member; W38a re-merges tip c50930b00; check-in ≥60m; never merge alone [idem:park-3836-train-3859]
+BLOCKED to:D from:cursor:bc-3b8910e7-0c64-517f-a86c-4f20bdbd013d #3803 parked until #3859 merges (DAD: train member; suzuka buried in train red W38a fixes; never merge alone) tip a4d4ae9c
