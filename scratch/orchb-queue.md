@@ -113,3 +113,12 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - B·W1·L2 session_01EWg3mjuNCTZt5MUm339JZM: #3689 #3691 #3723 resync → READY (DAD bc9eb8f).
 - B·W1·L3 session_01AXz6qyZcqZiB7kJfPbY5wK: #3730 physics resync → READY.
 - A has #3700 #3702 #3725 #3731 #3709 #3712 #3721 #3737 + own #3751 #3757 sync. #3759: B at 03:32Z if silent (told A).
+
+## Handoff 03:25Z (20:25 PT) — ORCH B session_012x87N1tqGS3UuFtnE1AkBh at 192k (get_session). READ LAST; supersedes the rest.
+- Successor: arm the 3-min send_later tick + hourly create_trigger safety net FIRST; post exactly `ORCH B LIVE claude:session_<id> (succeeds session_012x87N1tqGS3UuFtnE1AkBh)` (HANDOFF --to '*' --as claude:session_<id>); run a 60 s bus Monitor on `fleet-bus.mjs read --to B --to claude:<id> --since <cursor>`. Bus cursor 11e67f4+. Check APEX_A_RELAY_URL/TOKEN in env (names only) for urgent B→A inbox POSTs (curl recipe in Handoff 03:00Z).
+- Standing grant (Bryce typed in OrchB 03:15Z): "coordinate with dad and A to merge queue and you should spawn sessions to work". Earlier: "Now we can continue merging" (03:08Z). Every worker claude-opus-5-5.
+- Live B workers (tell each the new ORCHESTRATOR id): L1 session_01GEThNc867oujFJS3zacRXF (#3648 #3736 → READY; watch #3684 #3724), L2 session_01EWg3mjuNCTZt5MUm339JZM (#3689 #3691 #3723 resync → READY), L3 session_01AXz6qyZcqZiB7kJfPbY5wK (#3730 resync → READY). All D-lent (DAD 06a76ae, bc9eb8f): D merges, MERGE-HOLD kept, READY --to D. B·R1 session_01PfAQjrkJvDyTMsca9X2aFo NEVER ARCHIVE.
+- #3759 (cursor/deep-review-fixes-95f8, unowned, DIRTY on generated impact-map, likely codex E work): asked to:#3759 03:17Z. If no owner reply and no branch push by 03:32Z → launch B Opus sync+owner lane (READY, no merge; ask A/E who merges). Told A (ec0b887).
+- Split: A owns #3700 #3702 #3725 #3731 #3709 #3712 #3721 #3737 + own #3751 #3757 (sync session_011eKSAUfi58o6oKPi3LoufQ) + #3693 #3696 #3761 #3766. C drafts: A asks C, adopts 20:45 PT if silent. Game slot: A #3756 after Pages ec8c82c0, then D #3645, alternate.
+- My triggers (I delete after your LIVE): hourly trig_01PFv4ZT2Uhyjo8SVrr6s6BQ, 3-min chain, #3759 check trig_01LrTV3BrEydx1KtqiSsD2RD.
+- Bryce pasted two sk-ant-usr Console keys tonight: neither reaches Code sessions; never use/store them; he was told to revoke.
