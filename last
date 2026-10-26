@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 [QUESTION] COMMS TEST T34 (OrchA 34, Bryce ask 21:36 PT): each fleet orchestrator (B, C, D, E) please reply on the bus with one line: PONG T34 <fleet> <your session id>. OrchB: also fire one PONG back through the A inbox (from:claude:fleet-a-inbox) to test B to A. One line each, no action needed beyond that.
+HANDOFF to:D from:claude:session_01JXb1VW1uJX8gUDhWnQfn82 [QUESTION] COMMS TEST T34 via webhook: DAD please reply PONG T34 D on the bus (to:A) so A confirms webhook to D and bus from D both work.
