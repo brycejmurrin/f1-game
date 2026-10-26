@@ -14,14 +14,22 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/perf/phone-recorder.js"), "utf8");
+const RATE_SRC = readFileSync(join(ROOT, "js/perf/render-rate.js"), "utf8");
+
+function renderRate(mode) {
+  const R = vm.runInNewContext(RATE_SRC + ';RenderRate', { localStorage: { getItem: () => mode } }, { filename: absSrc("js/perf/render-rate.js") });
+  R.init({ isMobile: true });
+  return R;
+}
 
 function load(extra) {
   const sandbox = Object.assign({ Math, JSON, Object, Array, String, Number, Date, Promise, Blob, File, Map, isFinite, setTimeout }, extra || {});
   sandbox.globalThis = sandbox;
-  return vm.runInNewContext(SRC + "\n;PhoneRecorder", sandbox);
+  return vm.runInNewContext(SRC + "\n;PhoneRecorder", sandbox, { filename: absSrc("js/perf/phone-recorder.js") });
 }
 
 function fakeEnv() {
@@ -74,6 +82,70 @@ test("a 30 Hz page (Low Power Mode) reads as 30 Hz", () => {
   let t = f.t;
   for (let i = 0; i < 130; i++) { t += 33.3; r.frame(t); }
   assert.ok(r.record().cadence.hz > 29 && r.record().cadence.hz < 31);
+});
+
+test("phone recordings distinguish rAF callbacks from forced render-gate rates and auto halving", () => {
+  for (const [mode, hz, approvedHz] of [["off", 60, 60], ["30", 60, 30], ["45", 60, 45], ["auto", 120, 60]]) {
+    const R = renderRate(mode), dt = 1000 / hz;
+    for (let i = 0; i < 240; i++) { R.observe(dt); R.gate(dt / 1000, dt, false, true); }
+    const PR = load(), f = fakeEnv(); f.env.renderRate = () => R.state();
+    const r = PR.create(f.env); r.start();
+    for (let i = 0; i < hz * 10; i++) { f.t += dt; R.observe(dt); R.gate(dt / 1000, dt, false, true); r.frame(f.t); }
+    r.stop();
+    const record = JSON.parse(r.serialize()), end = record.samples.at(-1);
+    assert.equal(record.cadence.metric, "raf-callback");
+    assert.ok(Math.abs(record.cadence.hz - hz) < 0.1);
+    assert.equal(end.rafCallbacks, hz * 10);
+    assert.equal(end.renderGate.metric, "render-gate-approvals");
+    assert.equal(end.renderRate.mode, mode);
+    assert.equal(end.renderGate.approvedHz, approvedHz);
+    assert.equal(end.renderGate.drawn, approvedHz * 10);
+    assert.equal(end.renderGate.skipped, (hz - approvedHz) * 10);
+  }
+});
+
+test("phone recordings retain render-rate transitions and identify counter resets", () => {
+  const R = renderRate("off"), PR = load(), f = fakeEnv(); f.env.renderRate = () => R.state();
+  const r = PR.create(f.env); r.start();
+  for (let i = 0; i < 200; i++) { f.t += 16.7; R.gate(.0167, 16.7, false, true); r.frame(f.t); }
+  r.sample("before-change"); R.setMode("30");
+  f.t += 16.7; r.frame(f.t);
+  assert.equal(r.record().events.at(-1).kind, "render-rate");
+  assert.equal(r.record().events.at(-1).mode, "30");
+  R.init({ isMobile: true }); f.t += 16.7;
+  const sample = r.sample("after-reset");
+  assert.equal(sample.renderGate.reset, true);
+  assert.equal(sample.renderGate.drawn, null); assert.equal(sample.renderGate.approvedHz, null);
+});
+
+test("Device Farm rAF samplers label callback cadence and retain gate counters at forced rates", () => {
+  const farm = readFileSync(join(ROOT, "tools/perf/devicefarm-iphone.mjs"), "utf8");
+  const shared = farm.slice(farm.indexOf('const RENDER_RATE_SAMPLE ='), farm.indexOf('const HITCH_ARM ='));
+  const declaration = (start, end) => farm.slice(farm.indexOf(start), farm.indexOf(end, farm.indexOf(start)));
+  const scripts = vm.runInNewContext(shared +
+    declaration('const HITCH_ARM =', '// Best effort: Settings') +
+    declaration('const SAMPLE =', 'async function tracksScenario') +
+    declaration('const WIN_FOR =', 'async function sampleWin') +
+    ';[HITCH_ARM, SAMPLE, WIN_FOR(20000, 3000)]', {}, { filename: "vm-snippet:devicefarm-sampler-declarations" });
+  for (const [index, script] of scripts.entries()) for (const [mode, hz] of [["off", 60], ["30", 30], ["45", 45]]) {
+    const R = renderRate(mode); for (let i = 0; i < 240; i++) R.gate(1 / 60, 1000 / 60, false, true);
+    let next = null, now = 1000;
+    const sb = { RenderRate: R, __apex: { info: () => ({ state: "race" }) }, performance: { now: () => now }, requestAnimationFrame: fn => { next = fn; } };
+    sb.window = sb;
+    vm.runInNewContext('(() => {' + script + '})()', sb, { filename: "vm-snippet:devicefarm-callback-sampler" });
+    for (let i = 0; i < 2000 && next; i++) {
+      now += 1000 / 60; R.gate(1 / 60, 1000 / 60, false, true);
+      const callback = next; next = null; callback(now);
+    }
+    const result = sb[index === 0 ? '__dfFrames' : index === 1 ? '__dfSample' : '__dfWin'];
+    assert.ok(result, 'bounded sampler completed');
+    assert.equal(result.metric, 'raf-callback');
+    assert.ok(Math.abs(result.callbackHz - 60) < 0.2);
+    assert.equal(result.renderRate.metric, 'render-gate-approvals');
+    assert.equal(result.renderRate.start.mode, mode); assert.equal(result.renderRate.end.mode, mode);
+    assert.ok(Math.abs(result.renderRate.approvedHz - hz) < 0.2);
+    if ('fps' in result) assert.equal(result.fps, result.callbackHz, 'deprecated alias is explicitly callback cadence');
+  }
 });
 
 test("serialize is valid JSON, mirrored to storage after each sample, and re-adoptable", () => {
@@ -218,7 +290,7 @@ test("reads game modules that are top-level consts, not window properties (the r
     tier: () => 1, userTier: () => 0, autoShed: () => 0, autoRes: () => true, scaleFutile: () => false, tierFutile: () => false };
     const GLX = { getRenderScale: () => 0.9 }; const GfxQuality = { current: () => "high" };`, ctx);
   assert.equal(ctx.PerfGov, undefined, "the premise: not a property of the global object");
-  const PR = vm.runInContext(SRC + "\n;PhoneRecorder", ctx);
+  const PR = vm.runInContext(SRC + "\n;PhoneRecorder", ctx, { filename: absSrc("js/perf/phone-recorder.js") });
   const s = PR.liveEnv().sample();
   assert.equal(s.frame.frames, 77);
   assert.equal(s.renderScale, 0.9);

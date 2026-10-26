@@ -295,7 +295,7 @@
       m.instanceMatrix = ib; m.count = n;
       return m;
     }
-    // A Mesh has no dispose(): its "dispose" event is what drops the render object (tlx.js dropWrapper).
+    // Object disposal drops the renderer's retained RenderObject (tlx.js dropWrapper).
     function disposeCaster(m) {
       try { if (m.isInstancedMesh) m.dispose(); else m.dispatchEvent({ type: "dispose" }); } catch (_) { /* */ }
     }
@@ -781,9 +781,10 @@
     // race's casters and its targets do at every switch), and a probe kept from the last warm is a render object
     // compileAsync does not rebuild, so night after day still built two lamp pipelines mid-race. The set joins
     // castScene only for the warm's compiles, then stays alive (out of every pass) until the NEXT warm has
-    // compiled its own: only then are the old geometries disposed, which drops their render objects while the new
-    // ones still hold the pipelines. Tiny geometries of their own, so a freed track never takes them down.
-    let _probePrev = null;   // { geos } of the previous warm, disposed once the next one has compiled
+    // compiled its own: retire the old meshes AND geometries while the new ones still hold the pipelines.
+    // Geometry disposal alone frees attributes but leaves three's RenderObjects strongly rooted.
+    // Tiny geometries of their own, so a freed track never takes them down.
+    let _probePrev = null;   // { meshes, geos } of the last successful warm
     function layoutSig(geo) {
       const a = geo.attributes, out = [];
       for (const k of Object.keys(a).sort()) {
@@ -853,6 +854,7 @@
         const shown = showAllCasters();
         const probes = probeCasters(sources);
         for (const m of probes.meshes) { m.visible = true; castScene.add(m); }
+        let compiled = false;
         try {
           if (sunRT) { renderer.setRenderTarget(sunRT); await renderer.compileAsync(castScene, shadowCam); }
           // The lamp maps carry depth32float when L1 is on and the car map its own
@@ -863,12 +865,16 @@
             renderer.setRenderTarget(rt); await renderer.compileAsync(castScene, shadowCam);
           }
           if (blockerQuad && blockerRT) { renderer.setRenderTarget(blockerRT); await renderer.compileAsync(blockerQuad, blockerQuad.camera); }
+          compiled = true;
         } finally {
           for (const m of probes.meshes) { castScene.remove(m); m.visible = false; }
-          // The previous set goes only now, after this one holds every pipeline it held (see _probePrev).
-          if (_probePrev) for (const g of _probePrev.geos) { try { g.dispose(); } catch (_) { /* device dying */ } }
-          _probePrev = probes;
-          S.probeLayouts = probes.geos.length;
+          // A failed partial compile must not evict the last valid pipeline holders.
+          const retired = compiled ? _probePrev : probes;
+          if (retired) {
+            for (const m of retired.meshes) disposeCaster(m);
+            for (const g of retired.geos) { try { g.dispose(); } catch (_) { /* device dying */ } }
+          }
+          if (compiled) { _probePrev = probes; S.probeLayouts = probes.geos.length; }
           hideCasters(shown);
           try { renderer.setRenderTarget(prev); } catch (_) { /* already unbound */ }
         }

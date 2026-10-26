@@ -336,14 +336,35 @@ async function cacheScenario(ctx, url, pins, report, out) {
 // tlx.js warms post and casters only when warmPlusOn() (default: three WebGL backend only) or, for post, when the
 // scene compile took < 3 s. apex26.tlxWarmPlus=1 forces both. Each arm starts from a cleared Safari (the pipeline
 // cache survives sessions on a unit, note §8), pins WebGPU, times one entry and the race's first 15 s of frames.
+// Independent rAF metrics are callback cadence. `fps` below is a deprecated
+// compatibility alias for callbackHz, never evidence of display presentation.
+const RENDER_RATE_SAMPLE = `
+  const rateTrace = { start: null, end: null, transitions: [] }; let rateAt = 0, rateKey = null;
+  const sampleRate = (t) => {
+    let r = null; try { if (typeof RenderRate !== "undefined") r = RenderRate.state(); } catch (_) {}
+    if (!r) return;
+    const key = JSON.stringify([r.mode, r.tier, r.half, r.active]);
+    if (!rateTrace.start) { rateTrace.start = r; rateAt = t; }
+    else if (key !== rateKey && rateTrace.transitions.length < 50) rateTrace.transitions.push({ ms: Math.round(t - rateAt), mode: r.mode, tier: r.tier, half: r.half, active: r.active });
+    rateKey = key; rateTrace.end = r;
+  };
+  const finishRate = (t) => {
+    const a = rateTrace.start, b = rateTrace.end, elapsedMs = t - rateAt;
+    const reset = !!(a && b && (b.drawn < a.drawn || b.skipped < a.skipped));
+    const drawn = a && b && !reset ? b.drawn - a.drawn : null;
+    return { ...rateTrace, metric: "render-gate-approvals", elapsedMs: a ? Math.round(elapsedMs) : null, reset, drawn,
+      skipped: a && b && !reset ? b.skipped - a.skipped : null,
+      approvedHz: drawn !== null && elapsedMs > 0 ? Math.round(drawn * 10000 / elapsedMs) / 10 : null };
+  };`;
 const HITCH_ARM = `
+  ${RENDER_RATE_SAMPLE}
   window.__dfFrames = null;
   const t0 = performance.now(); let last = 0, started = 0; const d = [];
   const tick = (t) => {
     let st = null; try { st = __apex.info().state; } catch (_) {}
-    if (st === "race") { if (!started) started = t; else d.push(t - last); last = t; }
+    if (st === "race") { if (!started) started = t; else d.push(t - last); last = t; sampleRate(t); }
     if (started && t - started > 15000) { d.sort((a, b) => a - b);
-      window.__dfFrames = { n: d.length, max: Math.round(d[d.length - 1] || 0), p99: Math.round(d[Math.floor(d.length * 0.99)] || 0),
+      window.__dfFrames = { metric: "raf-callback", callbackHz: Math.round(d.length * 10000 / (t - started)) / 10, renderRate: finishRate(t), n: d.length, max: Math.round(d[d.length - 1] || 0), p99: Math.round(d[Math.floor(d.length * 0.99)] || 0),
         n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length, n100: d.filter((x) => x > 100).length }; return; }
     if (performance.now() - t0 < 240000) requestAnimationFrame(tick);
   };
@@ -399,13 +420,15 @@ async function warmplusScenario(ctx, url, report, out) {
 // tracks: steady-state race frames on chosen circuits (skyline-heavy night tracks vs Monza): per track a fresh
 // reload, one timed entry, 5 s settle, then 20 s of rAF intervals.
 const SAMPLE = `
+  ${RENDER_RATE_SAMPLE}
   window.__dfSample = null;
   const d = []; let last = 0, t0 = 0;
   const tick = (t) => {
     let st = null; try { st = __apex.info().state; } catch (_) {}
-    if (st === "race") { if (!t0) t0 = t; if (t - t0 > 5000) { if (last) d.push(t - last); last = t; } }
+    if (st === "race") { if (!t0) t0 = t; if (t - t0 > 5000) { if (last) d.push(t - last); last = t; sampleRate(t); } }
     if (t0 && t - t0 > 25000) { d.sort((a, b) => a - b); const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(d.length * f))] * 10) / 10;
-      window.__dfSample = { n: d.length, fps: Math.round(d.length / 20 * 10) / 10, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
+      const callbackHz = Math.round(d.length / 20 * 10) / 10;
+      window.__dfSample = { metric: "raf-callback", callbackHz, fps: callbackHz, renderRate: finishRate(t), n: d.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
         n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length }; return; }
     requestAnimationFrame(tick);
   };
@@ -449,10 +472,12 @@ async function racesScenario(ctx, pins, report, out) {
 // ---- follow-ups for merged PRs (OrchA 31, 2026-10-23): visor A/B (#3581), LOW/renderScale soak (#3479), Photo (#3482)
 // A window of rAF intervals that starts when called: `ms` long after `delay` ms, read back from window.__dfWin.
 const WIN_FOR = (ms, delay = 3000) => `
+  ${RENDER_RATE_SAMPLE}
   window.__dfWin = null; const d = []; let last = 0, t0 = 0;
-  const tick = (t) => { if (!t0) t0 = t; if (t - t0 > ${delay}) { if (last) d.push(t - last); last = t; }
+  const tick = (t) => { if (!t0) t0 = t; if (t - t0 > ${delay}) { if (last) d.push(t - last); last = t; sampleRate(t); }
     if (t - t0 > ${delay + ms}) { d.sort((a, b) => a - b); const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(d.length * f))] * 10) / 10;
-      window.__dfWin = { n: d.length, fps: Math.round(d.length / ${ms / 1000} * 10) / 10, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
+      const callbackHz = Math.round(d.length / ${ms / 1000} * 10) / 10;
+      window.__dfWin = { metric: "raf-callback", callbackHz, fps: callbackHz, renderRate: finishRate(t), n: d.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
         n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length }; return; }
     requestAnimationFrame(tick); };
   requestAnimationFrame(tick); return true;`;

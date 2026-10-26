@@ -137,9 +137,9 @@
     //    the mobile tier never compiles them, mirroring GLX's always-bound-
     // texture trick without needing dummy bindings.
     const SHD = (ctx.shadow && ctx.shadow.S) ? ctx.shadow : null;
-    // M8: the offscreen HDR target exists — write the SSR car-paint tag into
-    // alpha (js/render/glx/shaders/glsl-lit.js). False (no post chain) keeps the M3 behaviour:
-    // the canvas is the target and a 0.35 alpha would ghost the cars.
+    // M8: capability to emit SSR receiver tags on a separate MRT attachment.
+    // Independent of initial post success: retry may create that target later.
+    // setSsrMrt arms compatible passes only; canvas alpha remains real opacity.
     const SSR_TAG = !!ctx.ssrTag;
     // M9: the live env-probe cube (tlx.js CubeRenderTarget.texture), bound at
     // factory time. Null (no probe target) keeps the analytic-gradient mirror

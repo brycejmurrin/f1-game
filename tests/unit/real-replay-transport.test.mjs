@@ -252,6 +252,115 @@ test("HIGHLIGHTS NEXT onto a reel item lands on it, and the clock never runs bac
   replay.stop();
 });
 
+for (const spoken of [false, true]) for (const next of [{ kind: "pit", t: 11 }, { kind: "pass", t: 16 }, { kind: "pit", t: 23 }]) {
+  test(`automatic HIGHLIGHTS stays forward and announces overlapping ${next.kind}@${next.t} once (${spoken ? "commentary" : "captions"})`, () => {
+    const { replay, G, drivers, options } = transportReplay({}, { completeSubject: true });
+    const messages = [], captions = [];
+    let resets = 0, finishes = 0;
+    G.announce = (text, _duration, _kind, current) => { messages.push(text); captions.push(current); return true; };
+    G.raceRadio = { resetTimeline: () => { resets++; }, commentates: () => spoken,
+      replayEvent: (h) => { messages.push(h.text); return true; } };
+    G.endRace = () => { finishes++; };
+    options.script.passes = [{ t: 10, lap: 1, by: 1, over: 2, pos: 1 }];
+    if (next.kind === "pit") { drivers[1].pits = [1]; drivers[1].pitT = [next.t]; }
+    else options.script.passes.push({ t: next.t, lap: 1, by: 2, over: 1, pos: 1 });
+    replay.start({ ...options, reel: true });
+    assert.equal(replay.status().reel, 2);
+    resets = 0;
+    let previous = replay.status().T;
+    for (let i = 0; i < 40 && !replay.status().finished; i++) {
+      replay.tick(1);
+      const state = replay.status();
+      assert.ok(state.T > previous, `automatic clock ${previous} -> ${state.T}`);
+      previous = state.T;
+      if (state.T === 16) {
+        assert.equal(state.reelIdx, 1);
+        assert.equal(state.follow, "BBB", "overlapping cut selects the next live subject");
+        assert.ok(captions.every((current) => current()), "continuous cuts retain already accepted captions");
+      }
+    }
+    assert.equal(resets, 0, "overlap and touching lead-ins never reset commentary history");
+    assert.equal(messages.filter((text) => text.includes("AAA PASSES BBB")).length, 1);
+    assert.equal(messages.filter((text) => text.includes(next.kind === "pit" ? "BBB PITS" : "BBB PASSES AAA")).length, 1);
+    assert.equal(finishes, 1); assert.equal(replay.status().finished, true);
+    replay.tick(1); assert.equal(finishes, 1, "terminal replay settles only once");
+    replay.stop();
+  });
+}
+
+test("manual HIGHLIGHTS skip, chapter and seek retain intentional replay of overlapping lead-ins", () => {
+  for (const action of ["skip", "chapter", "seek"]) {
+    const { replay, G, drivers, options } = transportReplay({}, { completeSubject: true });
+    const messages = []; let resets = 0;
+    G.announce = (text) => { messages.push(text); return true; };
+    G.raceRadio = { resetTimeline: () => { resets++; } };
+    drivers[1].pits = [1]; drivers[1].pitT = [11];
+    options.script.passes = [{ t: 10, lap: 1, by: 1, over: 2, pos: 1 }];
+    replay.start({ ...options, reel: true });
+    for (let i = 0; i < 13; i++) replay.tick(1);
+    assert.equal(replay.status().T, 15); resets = 0;
+    if (action === "skip") replay.skip();
+    else if (action === "chapter") replay.seekEvent(1);
+    else replay.seek(3);
+    assert.equal(replay.status().T, 3, action + " deliberately restores the full next lead-in");
+    assert.equal(resets, 1);
+    for (let i = 0; i < 8; i++) replay.tick(1);
+    assert.equal(messages.filter((text) => text.includes("AAA PASSES BBB")).length, 2, "explicit replay may announce the event again");
+    assert.equal(messages.filter((text) => text.includes("BBB PITS")).length, 2);
+    replay.stop();
+  }
+});
+
+test("overlapping automatic cuts keep active radio while large steps skip exhausted holds into the next forward segment", () => {
+  const clips = [];
+  const { replay, G, drivers, options } = transportReplay({ Audio: class {
+    constructor() { this.paused = true; clips.push(this); }
+    play() { this.paused = false; return Promise.resolve(); }
+    pause() { this.paused = true; }
+  } }, { completeSubject: true });
+  options.traces.cars = { 1: line(0, 50, 0, 0, 100), 2: line(0, 45, 0, 0, 100) };
+  options.script.passes = [{ t: 10, by: 1, over: 2 }, { t: 16, by: 2, over: 1 }, { t: 50, by: 1, over: 2 }];
+  drivers[1].pits = [1, 2]; drivers[1].pitT = [11, 16];
+  options.script.radio = [{ t: 14, num: 1, url: "https://example.test/radio.mp3" }];
+  G.soundOn = true;
+  let resets = 0;
+  G.raceRadio = { resetTimeline: () => { resets++; } };
+  replay.start({ ...options, reel: true }); resets = 0;
+  for (let i = 0; i < 14; i++) replay.tick(1);
+  assert.equal(replay.status().T, 16);
+  assert.equal(clips.length, 1); assert.equal(clips[0].paused, false, "continuous footage keeps its current radio clip");
+  assert.equal(resets, 0);
+  replay.tick(10);
+  assert.equal(replay.status().T, 42, "exhaust all overlapping holds in one step before the next forward lead-in");
+  assert.equal(replay.status().reelIdx, 4);
+  assert.equal(clips[0].paused, true, "a genuine forward time jump releases old audio");
+  assert.equal(resets, 1);
+  replay.tick(20);
+  assert.equal(replay.status().finished, true, "a large terminal step finishes without revisiting an old segment");
+  replay.stop();
+});
+
+test("a short automatic forward cut does not re-fire a radio event inside the new caption window", () => {
+  const clips = [], messages = [];
+  const { replay, G, options } = transportReplay({ Audio: class {
+    constructor() { this.paused = true; clips.push(this); }
+    play() { this.paused = false; return Promise.resolve(); }
+    pause() { this.paused = true; }
+  } }, { completeSubject: true });
+  options.script.passes = [{ t: 10, by: 1, over: 2 }, { t: 25, by: 2, over: 1 }];
+  options.script.radio = [{ t: 15, num: 1, url: "https://example.test/near-cut.mp3" }];
+  G.soundOn = true; G.announce = (text) => { messages.push(text); return true; };
+  replay.start({ ...options, reel: true });
+  for (let i = 0; i < 13; i++) replay.tick(1);
+  assert.equal(clips.length, 1); assert.equal(clips[0].paused, false);
+  replay.tick(1);
+  assert.equal(replay.status().T, 17); assert.equal(clips[0].paused, true);
+  replay.tick(1);
+  assert.equal(clips.length, 1, "the recent radio event was already consumed before the forward cut");
+  assert.equal(messages.filter((text) => text.includes("RADIO")).length, 1);
+  replay.stop();
+});
+
 test("WATCH paused seek repaints the timing tower and race clock without advancing the director", () => {
   const element = () => ({ children: [], dataset: {}, style: {}, textContent: "", classList: { add() {}, remove() {}, toggle() {} },
     appendChild(n) { this.children.push(n); return n; }, setAttribute() {}, addEventListener() {}, removeEventListener() {}, querySelector() { return null; } });
@@ -529,4 +638,101 @@ test("HIGHLIGHTS rejects missing and ended subject footage before nearby pass su
   assert.deepEqual(Array.from(replay.describe().events, (e) => e.num), [2]);
   assert.equal(replay.status().follow, "BBB", "restored subject footage restores the first pass");
   replay.stop();
+});
+
+// Actual CamModes / RealReplay / Broadcast / XrBoot; only DOM and XR callback
+// production are stubbed. These assert camera ownership, not headset rendering.
+function cameraOwnersFixture() {
+  // Reserve the XR dependency before this helper eagerly starts a replay.
+  // Bind it to the actual module below, before any tested lifecycle. A late
+  // lexical addition can retain an unresolved lookup in reused Node VM code.
+  const f = transportReplay({ XrBoot: { comfort: () => false } });
+  f.replay.stop();
+  const { ctx, G, replay, options } = f;
+  const stored = new Map(), writes = [];
+  let presenting = false, bindings;
+  ctx.window = ctx;
+  ctx.addEventListener = ctx.removeEventListener = () => {};
+  ctx.document = { addEventListener() {}, getElementById: () => null,
+    body: { classList: { toggle() {}, contains: () => false, remove() {} }, toggleAttribute() {} } };
+  ctx.requestAnimationFrame = () => 1; ctx.cancelAnimationFrame = () => {};
+  ctx.CamTunerPanel = { refresh() {} };
+  ctx.RealRace = { replay: () => replay };
+  ctx.XrSession = { bind: (b) => { bindings = b; }, on() {}, isPresenting: () => presenting };
+  G.$ = () => null;
+  G.store = { set(k, v) { stored.set(k, v); writes.push([k, v]); } };
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+  G.setCamMode = ctx.CamModes.create(G).setCamMode;
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/xr/xr-boot.js"), "utf8") + "\n;globalThis.boot = XrBoot;", ctx, { filename: absSrc("js/xr/xr-boot.js") });
+  ctx.XrBoot = ctx.boot;
+  const modes = ctx.CamModes.CAM_MODES, index = (id) => modes.findIndex((m) => m.id === id);
+  ctx.boot.bind({ gfx: { attachXrSession() {}, xrCapable: () => true },
+    getCamMode: () => G.camMode, setCamMode: G.setCamMode, windowTick() {}, tickBody() {} });
+  G.setCamMode(index("far"));
+  return { ...f, stored, writes, index, current: () => modes[G.camMode].id,
+    watch: (camera = "heli") => replay.start({ ...options, camera, tower: false }),
+    enter() { presenting = true; bindings.onStart(); },
+    leave() { presenting = false; bindings.onEnd(); },
+  };
+}
+
+for (const entry of ["watch-first", "vr-first"]) {
+  for (const exit of ["watch-first", "vr-first"]) {
+    test(`WATCH/XR camera owners restore FAR with ${entry} entry and ${exit} exit`, () => {
+      const h = cameraOwnersFixture();
+      if (entry === "watch-first") { h.watch(); h.enter(); }
+      else { h.enter(); h.watch(); }
+      assert.equal(h.current(), "cockpit", "XR priority wins in either entry order");
+      if (exit === "watch-first") {
+        h.replay.stop();
+        assert.equal(h.current(), "cockpit", "ending WATCH cannot replace a live XR owner");
+        h.leave();
+      } else {
+        h.leave();
+        assert.equal(h.current(), "heli", "remaining WATCH owner resumes its shot");
+        h.replay.stop();
+      }
+      assert.equal(h.current(), "far", "no ended owner's temporary camera is restored");
+      assert.equal(h.stored.get("camMode"), h.index("far"));
+      assert.deepEqual(h.writes, [["camMode", h.index("far")]], "temporary owners never persist their shots");
+      h.G.setCamMode(h.index("chase"));
+      assert.equal(h.current(), "chase", "ordinary manual controls still work after release");
+      assert.equal(h.stored.get("camMode"), h.index("chase"));
+    });
+  }
+}
+
+test("WATCH AUTO and highlight cuts retain XR cockpit, then resume the WATCH owner", () => {
+  const h = cameraOwnersFixture();
+  h.watch(); h.enter();
+  assert.equal(vm.runInContext("XrBoot.comfort()", h.ctx), true, "actual XR binding is presenting");
+  h.replay.setAuto(true);
+  const before = h.replay.status().broadcast.cuts;
+  h.replay.tick(20);
+  assert.equal(h.current(), "cockpit");
+  assert.equal(h.replay.status().broadcast.cuts, before, "director does not cut underneath XR");
+  assert.equal(h.replay.autoOn(), true, JSON.stringify(h.replay.status()));
+  h.leave();
+  assert.equal(h.current(), "heli");
+  h.replay.tick(1);
+  assert.equal(h.replay.status().broadcast.manual, false, "XR handoff is not mistaken for a manual cut");
+  assert.equal(h.replay.autoOn(), true);
+  h.replay.stop();
+  assert.equal(h.current(), "far");
+});
+
+test("WATCH restart under XR replaces only its own token and preserves manual WATCH controls", () => {
+  const h = cameraOwnersFixture();
+  h.watch(); h.enter();
+  h.watch("side");
+  assert.equal(h.current(), "cockpit");
+  h.leave();
+  assert.equal(h.current(), "side");
+  h.G.setCamMode(h.index("hood")); h.replay.takePicture();
+  assert.equal(h.current(), "hood");
+  assert.equal(h.stored.get("camMode"), h.index("far"), "manual WATCH shot is still temporary");
+  h.replay.stop();
+  assert.equal(h.current(), "far");
+  h.enter(); h.leave();
+  assert.equal(h.current(), "far", "re-entry does not retain the previous XR token");
 });

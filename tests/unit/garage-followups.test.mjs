@@ -7,6 +7,109 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const read = p => readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 const sheet = read('js/garage/setup-sheet.js');
 const plain = v => JSON.parse(JSON.stringify(v));
+
+function dirtyExitFixture(from) {
+  const dom = makeDom(), document = dom.document, saved = new Map(), observers = [];
+  const create = document.createElement, byId = document.getElementById, prepared = new WeakSet();
+  const prepare = el => {
+    if (prepared.has(el)) return el;
+    prepared.add(el);
+    let text = el.textContent;
+    const append = el.appendChild, insert = el.insertBefore;
+    el.appendChild = child => { if (child.parentNode) child.remove(); return append(child); };
+    el.insertBefore = (child, before) => { if (child.parentNode) child.remove(); return insert(child, before); };
+    Object.defineProperty(el, 'nextSibling', { get: () => el.parentNode?.children[el.parentNode.children.indexOf(el) + 1] || null });
+    Object.defineProperty(el, 'textContent', { get: () => text, set(value) { text = String(value); for (const child of [...el.children]) el.removeChild(child); } });
+    return el;
+  };
+  document.createElement = tag => prepare(create(tag));
+  document.getElementById = id => prepare(byId(id));
+  document.createTextNode = text => { const el = document.createElement('span'); el.textContent = text; return el; };
+  const store = { get: (k, d) => k === 'garageTab' ? 'livery' : saved.get(k) ?? d, set: (k, v) => saved.set(k, v) };
+  const context = vm.createContext({ document, Log: { info() {}, warn() {} }, setTimeout: () => 0, clearTimeout() {},
+    MutationObserver: class { constructor(cb) { this.cb = cb; } observe(el) { observers.push({ el, cb: this.cb }); } },
+    GameStore: { store }, addEventListener() {}, removeEventListener() {}, GameAudio: {}, ScrollFade: { refresh() {} },
+    Car3D: { appearanceParts: p => p, PART_STYLE_FIELDS: { aeroShape: 'aero', floorShape: 'floor' }, FINISH_SURFACE: {} },
+    LiveryTex: { NUM_FONT_IDS: ['default'], SPONSOR_PACK_IDS: ['default'], SPINE_LOGO_IDS: ['stripe', 'contours'], FILL_SURFACES: [] },
+  });
+  context.window = context;
+  const run = path => vm.runInContext(read(path), context, { filename: absSrc(path) });
+  for (const path of ['js/core/mat4.js', 'js/physics/consts.js', 'js/car/parts.js', 'js/data/teams.js',
+    'js/garage/experience.js', 'js/garage/setup-tune.js', 'js/garage/setup-experiments.js', 'js/car/livery-design.js', 'js/garage/livery-design-editor.js']) run(path);
+  const game = read('js/game.js');
+  const between = (start, end) => {
+    const a = game.indexOf(start), b = game.indexOf(end, a);
+    assert.ok(a >= 0 && b > a, 'production handler markers exist');
+    vm.runInContext(game.slice(a, b), context, { filename: absSrc('js/game.js') });
+  };
+  between('function armConfirm(', '\n// Every menu layer, gone.');
+  const G = { $: id => dom.byId(id), els: { select: dom.byId('select'), overlay: dom.byId('overlay') }, store,
+    cssCol: () => '#fff', arrToHex: rgb => '#' + rgb.map(n => Math.round(n * 255).toString(16).padStart(2, '0')).join(''),
+    hexToArr: hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255),
+    getTeamParts: () => ({}), saveTeamParts() {}, getLiveryId: () => 'default', saveLiveryId() {},
+    getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => [], invalidateDecalTextures() {},
+    teamIdx: 1, driverIdx: 0, soundOn: false, careerOwned: () => false, unlimitedBudget: false, peerSeats: () => [],
+    teamSwatch: () => document.createElement('span'), setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, _spMeshKey: '',
+    armConfirm: context.armConfirm, setupPreviewOn: true,
+  };
+  run('js/garage/setup-sheet.js'); context.G = G;
+  const ui = vm.runInContext('SetupUI.create(G)', context);
+  const routes = [];
+  Object.assign(context, { $: G.$, setupCam: { cancelArrival() {} }, garageReturn: from, soundOn: false,
+    loadingScreen: { phase: () => '', busy() {}, stop() {} }, setupPreviewOn: true, recomputePlayerMods() {},
+    buildSelect() {}, els: G.els, netLobby: { roomChanged: () => routes.push('vsfriend') },
+    careerUi: { openHub: () => routes.push('career') }, raceSettings: { openRaceSettings: () => routes.push('select') },
+    closePitWork() { context.leaveGarage(); routes.push('pit'); },
+  });
+  between('function leaveGarage()', '$("cs-unlimited").onclick =');
+  const label = from === 'select' ? 'RACE SETUP' : from === 'pit' ? 'RETURN TO RACE' : from === 'career' ? 'RETURN TO CAREER' : from === 'vsfriend' ? 'RETURN TO LOBBY' : 'CLOSE GARAGE';
+  dom.byId('cs-back').textContent = 'BACK'; dom.byId('cs-done').textContent = label;
+  ui.buildSetup();
+  const createDraft = (dirty = true) => {
+    dom.byId('cs-options').querySelector('.cs-liv-create').onclick();
+    if (dirty) { const name = dom.byId('cs-options').querySelector('.cs-liv-ed-name'); name.value = 'Unsaved test'; name.oninput(); }
+  };
+  // mini-dom does not model capture-phase stopImmediatePropagation; dispatch
+  // those real registered guards before the real onclick navigation handler.
+  const click = id => {
+    const button = dom.byId(id); let stopped = false;
+    for (const fn of button._listeners.get('click') || []) { fn({ stopImmediatePropagation() { stopped = true; } }); if (stopped) break; }
+    if (!stopped) button.onclick();
+    for (const o of observers) if (o.el === dom.byId('carsetup')) o.cb();
+  };
+  return { dom, G, ui, createDraft, click, routes, label };
+}
+
+test('all visible garage exit labels and BACK preserve edited drafts until the confirming tap', () => {
+  for (const from of ['menu', 'career', 'vsfriend', 'pit', 'select']) for (const id of ['cs-done', 'cs-back']) {
+    const h = dirtyExitFixture(from); h.createDraft();
+    const draft = h.G.livDraftOverride;
+    assert.ok(draft);
+    h.click(id);
+    assert.equal(h.dom.byId('carsetup').hidden, false, from + '/' + id);
+    assert.equal(h.G.livDraftOverride, draft, 'first tap retains the preview and editor');
+    assert.equal(h.dom.byId(id).textContent, 'DISCARD EDITS?');
+    assert.equal(h.routes.length, 0);
+    h.click(id);
+    assert.equal(h.dom.byId('carsetup').hidden, true);
+    assert.equal(h.G.livDraftOverride, null, 'confirmed close discards the draft preview');
+    assert.equal(h.dom.byId(id).textContent, id === 'cs-back' ? 'BACK' : h.label);
+    if (from !== 'menu' && !(from === 'select' && id === 'cs-back')) assert.deepEqual(h.routes, [from]);
+  }
+});
+
+test('an unedited garage draft exits in one tap and an old confirmation cannot authorize a newer draft', () => {
+  const clean = dirtyExitFixture('menu'); clean.createDraft(false); clean.click('cs-done');
+  assert.equal(clean.dom.byId('carsetup').hidden, true);
+  const h = dirtyExitFixture('menu'); h.createDraft(); h.click('cs-done');
+  const cancel = h.dom.byId('cs-options').querySelector('.cs-liv-ed-cancel');
+  cancel.onclick(); cancel.onclick(); // cancel the original edited draft
+  h.createDraft(); h.click('cs-done');
+  assert.equal(h.dom.byId('carsetup').hidden, false, 'a previous draft armed the footer, not this draft');
+  assert.ok(h.G.livDraftOverride);
+  h.click('cs-done'); assert.equal(h.dom.byId('carsetup').hidden, true);
+});
+
 function tuneFixture() {
   const dom = makeDom(), saved = new Map();
   const context = vm.createContext({ document: dom.document, GameStore: { store: {

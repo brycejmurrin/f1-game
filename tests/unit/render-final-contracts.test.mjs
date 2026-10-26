@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
+import { Matrix4 } from '../../vendor/three-0.186.1/three.core.min.js';
 const read = p => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 function fn(source, name) {
   const start = source.indexOf('function ' + name + '('); assert.ok(start >= 0, name);
@@ -10,6 +12,34 @@ function fn(source, name) {
   return source.slice(start, end);
 }
 const tlx = read('js/render/three/tlx.js');
+test('tier-4 recovery keeps inverse projection current through ordinary camera switches', async () => {
+  const { createGame } = createRequire(import.meta.url)('../../tools/lib/game-vm.cjs');
+  const game = await createGame({ track: 'monza' });
+  try {
+    const { G, apex } = game;
+    apex.go(); apex.headless(false); apex.jump(.2, 30, 0); apex.camera('helmet');
+    let frame;
+    G.gfx.begin = f => { if (f === G.frame) frame = { p: Array.from(f.proj), ip: Array.from(f.invProj), vp: Array.from(f.viewProj) }; };
+    const check = () => {
+      apex.snapCam(true);
+      assert.ok(frame);
+      const view = new Matrix4().multiplyMatrices(new Matrix4().fromArray(frame.ip), new Matrix4().fromArray(frame.vp));
+      const actual = new Matrix4().multiplyMatrices(new Matrix4().fromArray(frame.p), view);
+      assert.ok(Math.max(...actual.elements.map((v, i) => Math.abs(v - frame.vp[i]))) < .001,
+        'current projection and inverse must reconstruct the current VP');
+    };
+    check();
+    G.gfx.isMobile = G.gfx.mobileTier = true;
+    game.sandbox.__projectionGfx = G.gfx;
+    vm.runInContext('GameStore.store.rawSet("apex26.crashStrikesBuild",String(window.__APEX_BUILD||0));GameStore.store.rawSet("apex26.crashStrikes","2");GameStore.store.rawDel("apex26.raceActive");PerfGov.init(globalThis.__projectionGfx)', game.ctx);
+    assert.equal(vm.runInContext('PerfGov.autoTier()', game.ctx), 4);
+    check(); check();
+    apex.camera('chase'); check();
+    assert.equal(G.lens.near, .9);
+    apex.camera('helmet'); check();
+    assert.equal(G.lens.near, .3);
+  } finally { game.close(); }
+});
 function ctx(values, code) { const c = vm.createContext(values); vm.runInContext(code, c); return c; }
 for (const warm of [false, true]) test(`coalesced teardown retires object and owned geometry once (warm=${warm})`, () => {
   const events = [], geometry = { dispose() { events.push('geometry'); } };

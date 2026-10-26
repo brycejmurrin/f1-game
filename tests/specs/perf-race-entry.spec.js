@@ -2,6 +2,7 @@
 // SwiftShader race-entry stage regression — menu START RACE vs START PRACTICE (issue #1881).
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
+import { loadingProbeReady } from "../../tools/shot/loading-probe.mjs";
 import {
   SCENARIO,
   RACE_ENTRY_SOFT_MS,
@@ -34,10 +35,7 @@ async function menuStart(page, mode) {
   const t0 = await page.evaluate(() => performance.now());
   await page.locator("#rs-go").click();
   await page.waitForFunction(
-    () => {
-      const i = window.__apex && window.__apex.info ? window.__apex.info() : null;
-      return i && (i.state === "race" || i.state === "count");
-    },
+    loadingProbeReady,
     null,
     { polling: 200, timeout: 540_000 },
   );

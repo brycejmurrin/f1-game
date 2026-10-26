@@ -636,7 +636,7 @@ test("the selected-gate settings match select-budget's recommendation", () => {
 // select()'s real entry, on a real diff. select() diffs <ref> against the
 // working tree of THIS repo, so a synthetic base commit (the working tree's
 // tracked files, with `edits` swapped in) makes the diff exactly those paths:
-// tracked-file dirt in the caller's tree cancels out through `git stash create`
+// tracked-file dirt, including staged additions, cancels out through `git stash create`
 // and untracked files never appear in `git diff <ref>`.
 function selectFor(edits, budgetMin) {
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "select-ref-"));
@@ -644,6 +644,14 @@ function selectFor(edits, budgetMin) {
     GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
   const git = (args, input) => execFileSync("git", args, { cwd: ROOT, env, encoding: "utf8", input }).trim();
   try {
+    // Start from the caller's actual index: an empty private index forgets
+    // staged additions that select() will still see in the real-tree diff.
+    const realIndex = path.resolve(ROOT, execFileSync("git", ["rev-parse", "--git-path", "index"],
+      { cwd: ROOT, env: process.env, encoding: "utf8" }).trim());
+    fs.copyFileSync(realIndex, env.GIT_INDEX_FILE);
+    // Preserve Git's racily-clean stat boundary, as workTreeId does.
+    const st = fs.statSync(realIndex);
+    fs.utimesSync(env.GIT_INDEX_FILE, st.atimeMs / 1000, st.mtimeMs / 1000);
     const base = git(["stash", "create"]) || git(["rev-parse", "HEAD"]);
     git(["read-tree", base]);
     for (const [file, text] of Object.entries(edits)) {

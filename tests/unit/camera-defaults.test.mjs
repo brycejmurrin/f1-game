@@ -663,8 +663,8 @@ test("helmet inherits the production onboard SSR range and releases it outside r
   }
 });
 
-test("SSR fade keeps inverse projection current at measured tier 4, then releases the work", () => {
-  const statement = gameSource().match(/^  if \([^\n]+\) M4\.invertTo\(_mInvProj, _mProj\);$/m);
+test("inverse projection remains current through and after the tier-4 SSR fade", () => {
+  const statement = gameSource().match(/^  M4\.invertTo\(_mInvProj, _mProj\);$/m);
   assert.ok(statement, "production inverse-projection update exists");
   const math = {};
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/core/mat4.js"), "utf8") +
@@ -697,9 +697,11 @@ test("SSR fade keeps inverse projection current at measured tier 4, then release
   ctx._roadReflectionTransition.value = 0;
   M4.perspectiveTo(projection, 1.3, 2.16, 0.3, 500);
   run.runInContext(ctx);
-  assert.equal(calls, 2, "settled tier 4 still skips the unused inversion");
-  assert.deepEqual(Array.from(inverse), settled);
+  assert.equal(calls, 3, "settled tier 4 still supplies TLX's current camera inverse");
+  assert.notDeepEqual(Array.from(inverse), settled);
+  M4.mulTo(identity, projection, inverse);
+  for (let i = 0; i < 16; i++) assert.ok(Math.abs(identity[i] - (i % 5 === 0 ? 1 : 0)) < 1e-5);
   tier = 0;
   run.runInContext(ctx);
-  assert.equal(calls, 3, "restoring normal post work refreshes the camera inverse");
+  assert.equal(calls, 4, "restoring normal post work keeps the inverse current");
 });
