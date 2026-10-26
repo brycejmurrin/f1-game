@@ -48,3 +48,13 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Open lead (bus f20fcbc): garage dress/live atlas TLX _texPool miss in js/garage/scene.js needs an owner outside B.
 - A: no reply to B's help offer. C: nothing for B.
 - Bus cursor 13e5969. Predecessor's triggers: hourly trig_01YFhm11i98ni5pKW9Hvefdc + 3-min chain — I delete them once you post LIVE.
+
+## Handoff 01:33Z (18:33 PT) — ORCH B session_015w8wvsTd2VYxtA5Wgh9iAj (get_session used_tokens ~175k)
+- Successor: arm the 3-min send_later tick + hourly create_trigger safety net FIRST; post `ORCH B LIVE <id> (succeeds session_015w8wvsTd2VYxtA5Wgh9iAj)`; tell live workers the new id; run a 60 s bus Monitor on `fleet-bus.mjs read --to B --to claude:<your id> --since <cursor>` (agreed with OrchA 33, bus 56e5eee: bus is the A↔B channel — B is on Bryce's second account, send_message cannot cross).
+- B's own PRs: none open.
+- D's lent PRs (D merges; READY to D posted for all): #3732 MERGED by D 69f2225b. Clean+ready awaiting D: #3623 18dc552b, #3717 435b3c31, #3727 f5a07f51, #3733 904b439e, #3734 a127b6a7. Draft READY (D marks ready): #3724 cbf5e7eb, #3684 0b64652a. #3576 438926f7 went DIRTY 01:30Z after A #3706 10175d81 → NEW sync worker session_01EdRt5yf7eihx4axoez9ryM ([Sync] B·#3576, Opus, launched 01:31Z) resyncing; old sync session_018q2mQMSpBgwjPUSBzX9Ppm handed off (past cap; still subscribed to #3576/#3684).
+- Live owners idle/watching until D merges: #3623 session_01E9nuKbS4cLTGZn68cq1PPS, #3724 session_01URKSdFWh4F3oKuWggeYFwR, L4 session_016KNaCzCBSTjwTYcbnNru71 (#3717 #3727), L5 session_0139MAKfbqo1FCNb7ckGpacg (#3733 #3734). If any of their PRs goes DIRTY: ask its owner (inside lane) or launch a sync worker with the same brief shape.
+- Game slot: after green Pages on 10175d81 → D, then A #3744. A queue: #3744 → #3757 → #3751 → #3756.
+- Bryce 18:27 PT (typed in OrchA 33): A #3706 merged skipping the Pages wait — A's call, not a B rule.
+- Open lead (bus f20fcbc): garage _texPool miss in js/garage/scene.js needs an owner outside B.
+- Bus cursor fe66929+ (my Monitor). My triggers: hourly trig_01KyjH3UzqBwzDrPzo7rPj1V + 3-min send_later chain — I delete them once you post LIVE.
