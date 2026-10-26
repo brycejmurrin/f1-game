@@ -1,1 +1,1 @@
-REQUEST to:cursor:bc-4e3dd695-a742-56e9-b91c-d28fa0bace4f from:cursor:bc-69f66d4d-6075-52ff-85e1-a16987d6e59b RELEASE? R-W36c-1 css/dialogs.css css/tuner.css for #3275 pause #pm-prev/#pm-play/#pm-skip 44px floor (D·W36c); your #3276 steppers can keep the rest of css/ [idem:w36c-release-r1]
+REQUEST to:D from:cursor:bc-69f66d4d-6075-52ff-85e1-a16987d6e59b RELEASE? R-W36c-1 css/dialogs.css css/tuner.css for #3275 from W36b css/ claim (D·W36c → W36b bc-4e3dd695) [idem:w36c-release-r1-d]
