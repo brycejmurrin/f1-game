@@ -84,23 +84,24 @@ var EventJournal = (function () {
       for (let i = 0; i < G.cars.length; i++) {   // indexed: sampleEdges runs every step
         const c = G.cars[i];
         if (!c) continue;
+        const pos = i + 1;   // posOf(c) without its indexOf: c IS G.cars[i] (#3109 row 7)
         const pPen = pen.get(c) || 0;
         const nPen = c.penalty || 0;
         if (nPen > pPen && !c.isPlayer) {
-          push({ t: now, kind: "penalty", car: c, pos: posOf(c), gain: nPen - pPen, sev: 0 });
+          push({ t: now, kind: "penalty", car: c, pos: pos, gain: nPen - pPen, sev: 0 });
         }
         pen.set(c, nPen);
 
         const isLock = !c.offroad && (c.wheelLock || 0) > LOCK_THRESH;
         if (isLock && !locked.get(c)) {
-          push({ t: now, kind: "wheelLock", car: c, pos: posOf(c), gain: 0, sev: c.wheelLock || 0 });
+          push({ t: now, kind: "wheelLock", car: c, pos: pos, gain: 0, sev: c.wheelLock || 0 });
         }
         locked.set(c, isLock);
 
         const sev = c.hitSev || 0;
         const prevSev = hit.get(c) || 0;
         if (sev > prevSev && sev >= CONTACT_SEV) {
-          push({ t: now, kind: "contact", car: c, pos: posOf(c), gain: 0, sev });
+          push({ t: now, kind: "contact", car: c, pos: pos, gain: 0, sev });
         }
         hit.set(c, sev);
       }
