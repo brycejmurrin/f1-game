@@ -2,9 +2,9 @@
 
 - Merge commits only: after every merge, `git log -1 --format=%p <sha>` shows two parents (#1743
   was a squash). Standing authority is AGENTS.md §Concurrent PRs: an orchestrator merges its own
-  fleet's PRs when `node tools/ci/merge-gate.mjs --pr <n>` exits 0 (the hook requires that receipt,
-  pinned to the gated head). Nobody re-asks it at a hand-off; a `.claude/**` edit or a lifted hold
-  is typed in the acting session.
+  fleet's PRs (and lent ones) when `node tools/ci/merge-gate.mjs --pr <n>` exits 0 (the hook
+  requires that receipt, pinned to the gated head). Nobody re-asks it at a hand-off; a `.claude/**`
+  edit or a lifted hold is typed in the acting session.
 - Orchestrators merge in parallel, each its own PRs; no lease gates a merge. A game PR takes the bus
   `GAME-SLOT` first and waits for green Pages on the last game merge; non-game PRs batch. `DONE` via
   bus; peer READY/HANDOFF/INCIDENT/INFO/QUESTION/REQUEST via `agent-msg.mjs`; read once/tick (orch
