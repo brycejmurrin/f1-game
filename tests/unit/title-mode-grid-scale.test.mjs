@@ -12,7 +12,7 @@ test("compact-wide title mode bigbtns floor + tap-paint re-derive (#3305)", () =
     "scoped em ramp lives in the short-viewport band (#3305)",
   );
   assert.ok(
-    menus.includes("--_3305: clamp(0, calc((var(--ui-compact-text, 1) - 1) * 2.5), 1)"),
+    menus.includes("--_3305: clamp(0, calc((var(--ui-compact-text, 1) - 1.001) * 999), 1)"),
     "compact-wide door ramp uses --_3305 (#3305)",
   );
   assert.ok(
