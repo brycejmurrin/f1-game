@@ -46,7 +46,8 @@ test("the rule: ARCHIVE only when role, agent-created, idle and PR done all hold
     assert.match(decide(sess({ tags: [`role:${role}`, "pr:3020", "config:session-created"] }), { now: NOW, prState: merged }).why, /never archived/);
   assert.match(decide(sess({ session_status: "SESSION_STATUS_RUNNING" }), { now: NOW, prState: merged }).why, /still running/);
   assert.match(decide(sess({ updated_at: ago(10) }), { now: NOW, prState: merged }).why, /touched 10 min ago/);
-  assert.equal(decide(sess({ updated_at: ago(10) }), { now: NOW, idleMin: 5, prState: merged }).verdict, "ARCHIVE");
+  assert.equal(decide(sess({ updated_at: ago(20) }), { now: NOW, idleMin: 5, prState: merged }).verdict, "ARCHIVE");
+  assert.ok(/idle ≥ 15/.test(decide(sess({ updated_at: ago(10) }), { now: NOW, idleMin: 5, prState: merged }).why), "--idle-min never goes below the push floor");
   assert.match(decide(sess({ tags: ["role:worker", "config:session-created"], title: "no pr here" }), { now: NOW, prState: merged }).why, /no PR/);
   assert.match(decide(sess({ session_status: "SESSION_STATUS_ARCHIVED" }), { now: NOW, prState: merged }).why, /already archived/);
   for (const role of ["worker", "pr-owner", "sync", "review", "hunter"]) assert.ok(ARCHIVABLE_ROLES.includes(role), role);
@@ -188,4 +189,50 @@ test("merge-done CLI: one sha or one --range; unknown flags and extra positional
   const sent = [];
   assert.equal(mergeDoneMain(["--range", "x..y", "--actor", "bryce"], { run: runR, bus: () => [], send: (...a) => { sent.push(a); return { ok: true }; }, log: () => {} }), 0);
   assert.match(sent[0][3], /^#7 a{40} .* by bryce/);
+});
+
+import { workState, eventsFor, PUSH_FLOOR_MIN } from "../../tools/ci/fleet-archive.mjs";
+
+// tx-bryce-routines-failed X7 (2026-10-26 14:30Z): W65 was archived mid-conflict-work with nothing pushed.
+const EV = (min, k, body) => ({ created_at: ago(min), [k]: { internal_anthropic_catchall: body } });
+const bash = (min, id, command) => EV(min, "assistant", { message: { content: [{ type: "tool_use", id, name: "Bash", input: { command } }] } });
+const out = (min, id, text, is_error = false) => EV(min, "user", { message: { content: [{ type: "tool_result", tool_use_id: id, content: text, is_error }] } });
+
+test("workState: last ok git push, a dirty git status with no commit after it, and an unanswered call (X7)", () => {
+  const pushed = [bash(30, "a", "git status --short"), out(30, "a", " M tools/ci/fleet-archive.mjs"), bash(25, "b", "git commit -m x"), out(25, "b", "ok"),
+    bash(10, "c", "git push -u origin cursor/x"), out(10, "c", "done")];
+  const w = workState(pushed);
+  assert.equal(w.lastPushAt, Date.parse(ago(10)));
+  assert.deepEqual([w.dirty, w.midTool], ["", false]);
+  const dirty = workState([bash(100, "a", "git status"), out(100, "a", "Changes not staged for commit:\n  modified: a.js")]);
+  assert.ok(/listed changes, no commit or push after it/.test(dirty.dirty), "match /listed changes, no commit or push after it/");
+  assert.equal(workState([bash(100, "a", "git push origin x"), out(100, "a", "rejected", true)]).lastPushAt, null, "a failed push is not a push");
+  assert.equal(workState([...pushed, bash(5, "d", "git merge origin/main")]).midTool, true);
+});
+
+test("decide with events: a push under 15 min, a dirty tree or a mid-tool call keeps it; an unpushed summary keeps it (X7)", () => {
+  const merged = () => "merged";
+  const base = { now: NOW, prState: merged };
+  const s = sess({ updated_at: ago(90) });
+  assert.equal(decide(s, { ...base, work: () => ({ lastPushAt: NOW - 5 * 60000, dirty: "", midTool: false }) }).why, `last push 5 min ago (rule: ≥ ${PUSH_FLOOR_MIN})`);
+  assert.ok(/tree dirty/.test(decide(s, { ...base, work: () => ({ lastPushAt: null, dirty: "git status listed changes", midTool: false }) }).why), "match /tree dirty/");
+  assert.ok(/mid-tool/.test(decide(s, { ...base, work: () => ({ lastPushAt: null, dirty: "", midTool: true }) }).why), "match /mid-tool/");
+  assert.equal(decide(s, { ...base, work: () => ({ lastPushAt: NOW - 60 * 60000, dirty: "", midTool: false }) }).verdict, "ARCHIVE");
+  assert.ok(/"not pushed"/.test(decide(sess({ post_turn_summary: "#3788 conflicts resolved locally, not pushed yet" }), base).why), "match /\"not pushed\"/");
+});
+
+test("main --events reads each session's saved pages by id; --help exits 0; unknown flags exit 2", () => {
+  const page = JSON.stringify({ ccr: { data: [sess({ id: "session_01W65" }), sess({ id: "session_01DONE" })] } });
+  const evPage = JSON.stringify({ ccr: { data: [bash(4, "p", "git push -u origin cursor/x"), out(4, "p", "ok")] } });
+  const files = { "page.txt": page, "ev/session_01W65-p1.txt": evPage };
+  const logs = [];
+  const rc = main(["page.txt", "--events", "ev"], { read: (f) => files[f], list: () => ["session_01W65-p1.txt"], prState: () => "merged", log: (l) => logs.push(l), now: () => NOW });
+  assert.equal(rc, 0);
+  assert.ok(/^KEEP .*last push 4 min ago/.test(logs.find((l) => l.includes("session_01W65"))), "match /^KEEP .*last push 4 min ago/");
+  assert.ok(/^ARCHIVE/.test(logs.find((l) => l.includes("session_01DONE"))), "match /^ARCHIVE/");
+  assert.equal(eventsFor("ev", "cse_01NONE", { list: () => ["session_01W65-p1.txt"] }), null);
+  const h = [];
+  assert.equal(main(["--help"], { log: (l) => h.push(l) }), 0);
+  assert.ok(/--events <dir>/.test(h[0]), "match /--events <dir>/");
+  assert.equal(main(["page.txt", "--definitely-not-a-flag"], { log: () => {} }), 2);
 });

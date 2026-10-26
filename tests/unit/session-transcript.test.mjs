@@ -232,3 +232,40 @@ test("--digest: summary, prompts, replies, tally and failures within a hard size
   assert.ok(big.length <= DIGEST_MAX_CHARS, `${big.length} chars`);
   assert.doesNotMatch(big, /q{100}/, "an error's output is an excerpt, never the body");
 });
+
+import { attribution, tallySkills, cacheBreaks, renderCacheBreaks, parseArgs } from "../../tools/ci/session-transcript.mjs";
+
+// tx-bryce-routines-failed X3 (2026-10-26): list_events on Bryce's archived ios session 017TA52 returned B·H11's events
+// ($77.68 cumulative on the page against $53.68 on the session). The page has no claude.ai id, so get_session is the witness.
+test("attribution: wrong get_session id, a page costlier than the session, or events outside its lifetime is MISATTRIBUTED", () => {
+  const evs = [
+    { created_at: "2026-10-21T03:38:10Z", result: { internal_anthropic_catchall: { total_cost_usd: 77.68 } } },
+    { created_at: "2026-10-21T03:38:27Z", assistant: { message: { content: [] } } },
+  ];
+  const sess = { ccr: { id: "session_017TA52", created_at: "2026-10-20T03:00:00Z", updated_at: "2026-10-21T04:00:00Z", external_metadata: { usage: { cost_usd: 53.68 } } } };
+  const a = attribution(evs, sess, "session_017TA52");
+  assert.equal(a.ok, false);
+  assert.ok(/cumulative cost \$77\.68 exceeds the session's \$53\.68/.test(a.why.join("; ")), "match /cumulative cost \\$77\\.68 exceeds the session's \\$53\\.68/");
+  assert.equal(attribution(evs, { ...sess.ccr, external_metadata: { usage: { cost_usd: 80 } } }, "cse_017TA52").ok, true, "cse_ and session_ are one id");
+  assert.ok(/--session-json is session_017TA52, not session_OTHER/.test(attribution(evs, sess, "session_OTHER").why[0]), "match /--session-json is session_017TA52, not session_OTHER/");
+  const late = attribution(evs, { ...sess.ccr, updated_at: "2026-10-21T03:00:00Z", external_metadata: { usage: { cost_usd: 99 } } });
+  assert.ok(/2 event\(s\) after its last update/.test(late.why.join()), "match /2 event\\(s\\) after its last update/");
+  assert.throws(() => parseArgs(["p.txt", "--session", "session_x"]), /--session needs --session-json/);
+});
+
+test("--tally skills counts Skill calls by name; --tally cache-breaks lists turns whose cache read fell > 50 %", () => {
+  const rows = normalize([
+    say(20, [use("k1", "Skill", { skill: "steward" })]),
+    say(21, [use("k2", "Skill", { skill: "check" })]),
+    say(22, [use("k3", "Skill", { skill: "steward" })]),
+  ]);
+  assert.equal(tallySkills(rows), "= skills 3 calls: steward×2 check×1");
+  assert.equal(tallySkills([]), "= skills 0 calls (none on these pages)");
+  const ctx = [{ at: "2026-10-26T01:00:00Z", cacheRead: 130000 }, { at: "2026-10-26T01:01:00Z", cacheRead: 131000 },
+    { at: "2026-10-26T01:02:00Z", cacheRead: 12000 }, { at: "2026-10-26T01:03:00Z", cacheRead: 7000 }];
+  assert.deepEqual(cacheBreaks(ctx).map((c) => [c.at, c.fall]), [["2026-10-26T01:02:00Z", 91]], "the 12k -> 7k step is 42 %, not a break");
+  assert.ok(/01:02:00 cache read 131\.0k -> 12\.0k \(-91%\)\n= cache-breaks 1 of 4 turns/.test(renderCacheBreaks(ctx)), "match /01:02:00 cache read 131\\.0k -> 12\\.0k \\(-91%\\)\\n= cache-breaks 1 of 4 turns/");
+  assert.throws(() => parseArgs(["p.txt", "--tally", "bogus"]), /--tally takes skills,cache-breaks/);
+  assert.throws(() => parseArgs(["p.txt", "--definitely-not-a-flag"]), /unknown flag --definitely-not-a-flag/);
+  assert.equal(parseArgs(["p.txt", "--grep", "--x"]).grep.source, "--x", "a value is not a flag");
+});
