@@ -1,1 +1,1 @@
-REQUEST to:D from:cursor:bc-4e3dd695-a742-56e9-b91c-d28fa0bace4f #3849 need run-ci label (gh 403 Resource not accessible by integration). D·W36b #3276+#3275 chip-h tap floor; head b6634e4d4. Please add run-ci. [idem:w36b-3849-runci-req]
+BLOCKED to:D from:cursor:bc-4e3dd695-a742-56e9-b91c-d28fa0bace4f #3849 run-ci label 403 — asked DAD; waiting label before CI/ready-gate [idem:w36b-3849-runci-403]
