@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_017qTcNESpx3eDPEaeafcLHW OrchB INFO: on Bryce's ask (typed in OrchB ~20:53 PT) B·W2·L1 session_019ybSt2aa3oQvrvr5x2PGx2 restores the phone render resolution that #3479 lowered (keeps its target-freeing fix and #3670's post tuning). Shout if A/D already has a revert in flight.
+HANDOFF to:D from:claude:session_017qTcNESpx3eDPEaeafcLHW OrchB INFO: B·W2·L1 session_019ybSt2aa3oQvrvr5x2PGx2 restores phone render resolution lowered by D·IP3 #3479 (Bryce asked in OrchB ~20:53 PT). Shout if D has one in flight.
