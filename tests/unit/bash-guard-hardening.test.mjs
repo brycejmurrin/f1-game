@@ -1079,7 +1079,8 @@ test("post-edit circuit advice leaves verification until all edits are complete"
       const r = hook("post-edit.sh", { tool_name: "Edit", tool_input: { file_path: path.join(repo.dir, rel) } }, { cwd: repo.dir });
       assert.equal(r.status, 0, r.stderr);
       const advice = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
-      assert.match(advice, /after all.*edits.*verify-track\.cjs monza/i);
+      assert.ok(advice.includes("after all circuit and scenery edits"), advice);
+      assert.ok(advice.includes("`node tools/track/verify-track.cjs monza` once"), advice);
       assert.equal(fs.existsSync(marker), false, "no intermediate verification runs");
     }
   } finally { repo.rm(); }
@@ -1095,7 +1096,7 @@ test("post-edit group guidance edits the source instead of generated package scr
     const r = hook("post-edit.sh", { tool_name: "Edit", tool_input: { file_path: path.join(repo.dir, "tests/groups.json") } }, { cwd: repo.dir });
     assert.equal(r.status, 0, r.stderr);
     const advice = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
-    assert.match(advice, /gen-test-groups\.mjs/);
+    assert.ok(advice.includes("`node tools/gen/gen-test-groups.mjs`"), advice);
     assert.doesNotMatch(advice, /package\.json key added first/);
   } finally { repo.rm(); }
 });

@@ -6,6 +6,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
+import { parse as parseYaml } from "yaml";
 import { spawnSync } from "node:child_process";
 import { SELECTED_GATE } from "../../tools/ci/select-specs.mjs";
 import { report, groupSpecs } from "../../tools/ci/ci-coverage.mjs";
@@ -387,9 +389,19 @@ test("smoke.spec.js is ONE shard on PRs and the Pages call; the wide nightly/dis
 
 
 test("staged-boot honors the SwiftShader opt-out for renderer env as well as setup", () => {
-  const staged = ciWorkflow.split("\n  staged-boot:")[1].split(/^  [a-z][\w-]*:$/m)[0];
-  assert.match(staged, /APEX_GL: \$\{\{ inputs\.gl != 'swiftshader' && 'llvmpipe' \|\| '' \}\}/);
-  assert.match(staged, /LIBGL_ALWAYS_SOFTWARE: \$\{\{ inputs\.gl != 'swiftshader' && '1' \|\| '' \}\}/);
+  const { steps } = parseYaml(ciWorkflow).jobs["staged-boot"];
+  const setup = steps.find(step => step.uses === "./.github/actions/mesa-xvfb");
+  const smoke = steps.find(step => step.name === "Smoke against the staged site");
+  // These shipped expressions use the shared JS/GitHub boolean subset. Evaluate
+  // their results instead of pinning an equivalent expression's spelling.
+  const evaluate = (expression, gl) => vm.runInNewContext(
+    expression.replace(/^\$\{\{\s*/, "").replace(/\s*\}\}$/, ""), { inputs: { gl } }, { filename: path.resolve(".github/workflows/ci.yml") });
+  for (const gl of [undefined, "", "llvmpipe", "swiftshader"]) {
+    const mesa = gl !== "swiftshader";
+    assert.equal(evaluate(setup.if, gl), mesa, `setup for ${gl}`);
+    assert.equal(evaluate(smoke.env.APEX_GL, gl), mesa ? "llvmpipe" : "", `renderer for ${gl}`);
+    assert.equal(evaluate(smoke.env.LIBGL_ALWAYS_SOFTWARE, gl), mesa ? "1" : "", `software GL for ${gl}`);
+  }
 });
 
 
@@ -410,7 +422,7 @@ function runMesaFixture(t, sudoBody) {
 test("Mesa setup fails before exporting a missing Xvfb display", (t) => {
   const {r, root} = runMesaFixture(t, "return 0");
   assert.notEqual(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /::error::.*Xvfb/);
+  assert.ok(r.stdout.includes("::error::mesa-xvfb: Xvfb :99 has no socket after 5 s"), r.stdout);
   assert.equal(fs.existsSync(path.join(root, "env")), false);
 });
 
