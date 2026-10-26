@@ -385,6 +385,9 @@ test("#2184: a label-noise run (all jobs skipped, success) never hides the real 
   const noise = { ...run(2, "CI", "completed", "success", "2026-10-01T00:05:00Z"), display_title: "CI ignored: label bug" };
   const real = { ...run(1, "CI", "completed", "failure", "2026-10-01T00:00:00Z"), display_title: "Fix the thing" };
   assert.ok(labelNoiseRun(noise) && !labelNoiseRun(real) && !labelNoiseRun({}));
+  // A PR-body edit that did not newly add the `CI: run` marker is the same kind of noise (ci.yml run-name).
+  assert.ok(labelNoiseRun({ display_title: "CI ignored: edit" }), "an ignored body edit never hides the verdict");
+  assert.ok(!labelNoiseRun({ display_title: "CI: run the thing" }), "only the `CI ignored: ` prefix is noise");
   const result = await afterThreeMinutes((endpoint) => {
     if (endpoint.startsWith("actions/runs?")) return { json: { workflow_runs: [noise, real] } };
     if (endpoint === "actions/runs/1/jobs?per_page=100") return { json: { jobs: [{ id: 9, name: "CI", status: "completed", conclusion: "failure", steps: [] }] } };
@@ -523,7 +526,7 @@ test("hollow: a draft whose only real job is the skeleton is `= ci hollow`, neve
   assert.equal(hollowDraft([job(2, "guards", "completed", "success")]), null);
   const r = await watch(fixture([PR_RUN], { 60: [skel, skipped(2), skipped(3)] }));
   assert.equal(r.code, 5);
-  assert.match(r.lines.at(-1), /^= ci hollow \(draft, 2\/3 jobs skipped — add run-ci\)/);
+  assert.match(r.lines.at(-1), /^= ci hollow \(draft, 2\/3 jobs skipped — add run-ci or a CI: run body line\)/);
   const real = await watch(fixture([PR_RUN], { 60: [job(2, "guards", "completed", "success")] }));
   assert.equal(real.code, 0); assert.ok(real.lines.at(-1).startsWith("= ci passed"));
 });

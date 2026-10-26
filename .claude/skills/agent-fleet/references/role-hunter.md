@@ -28,7 +28,8 @@ Size stop: `STOP AT: 150k context` (launch-policy.md §Size stop).
 2. Hunt live. Every finding row: id, `file:line`, severity, verdict
    (CONFIRMED-LIVE / VM-ONLY / CODE-TRACED / REFUTED / BY-DESIGN), evidence.
 3. A confirmed finding: fix with a unit test that fails before and passes
-   after, `tooling-fast --changed`, push a DRAFT PR with the `run-ci` label, then send
+   after, `tooling-fast --changed`, push a DRAFT PR with the `run-ci` label or, when a
+   label 403s, a body line that starts `CI: run` (same fast tier, self-serve), then send
    `NEW-PR <#> <branch> <head sha> <one-line summary>` and stop touching that
    PR (no subscription, no sync, no ready-gate, no further push).
 4. Send `REPORT <lane> <PR#|none> <sha> <note path>` with the changed rows

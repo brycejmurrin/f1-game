@@ -165,6 +165,11 @@ test("#2182: pushStartsCi — only a ready PR or a draft labelled run-ci starts 
   assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [] }])).ci, false);
   assert.match(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [] }])).why, /#7 is a draft without run-ci/);
   assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [{ name: "run-ci" }] }])).ci, true);
+  // The self-serve body marker (2026-10-26): a line that starts `CI: run` opts a draft in like the label.
+  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [], body: "## Goal\r\nCI: run\r\n" }])).ci, true);
+  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [], body: "CI: run" }])).why, "cursor/x: PR #7 (draft, CI: run)");
+  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [], body: "put `CI: run` in the body" }])).ci, false,
+    "a mid-line quote of the marker is not the marker");
   assert.equal(pushStartsCi("cursor/x", pulls([{ number: 8, draft: false, labels: [] }])).ci, true);
   assert.equal(pushStartsCi("claude/f1-game-project-26h3ng", () => assert.fail("no lookup")).ci, true, "the deploy branch always starts a run (pages.yml, the train)");
   assert.equal(pushStartsCi("cursor/x", () => ({ error: "HTTP 502" })).ci, null, "a failed lookup is unknown");

@@ -37,8 +37,8 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   // Draft synchronize is CI-free unless label run-ci (2026-10-15 fast-track); heavy
   // jobs still wait for `ready_for_review`, which must therefore be a trigger type.
   const fastTier = "!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))";
-  assert.match(prBlock, /types: \[opened, synchronize, reopened, ready_for_review, labeled\]/,
-    "labeled run-ci must be able to opt draft PRs into CI");
+  assert.match(prBlock, /types: \[opened, synchronize, reopened, ready_for_review, labeled, edited\]/,
+    "labeled run-ci, and an edit that adds the `CI: run` body line, must be able to opt draft PRs into CI");
   assert.match(ciWorkflow, /draft-ci-skipped:/, "draft pushes without run-ci report a skip job");
   // Only the deploy branch's push starts a train; a topic branch runs through its PR.
   assert.match(pushBlock, /branches:\n\s+- claude\/f1-game-project-26h3ng\n/, "the train's push must be scoped to the deploy branch");
