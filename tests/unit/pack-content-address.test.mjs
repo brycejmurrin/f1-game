@@ -167,9 +167,10 @@ test("model and strip requests carry ?h=<md5> from the manifest", async () => {
 
 test("the committed manifest hashes every model and strip it names", async () => {
   const m = JSON.parse(await readFile(new URL("../../assets/pack/manifest.json", import.meta.url), "utf8"));
-  for (const [id, r] of Object.entries(m.models)) assert.match(r.md5, /^[0-9a-f]{32}$/, id);
+  const hex32 = (s, label = s) => assert.ok(/^[0-9a-f]{32}$/.test(s), label);
+  for (const [id, r] of Object.entries(m.models)) hex32(r.md5, id);
   for (const t of [m.materials, m.materials.low].filter(Boolean)) {
-    assert.match(t.albedoMd5, /^[0-9a-f]{32}$/);
-    assert.match(t.normalMd5, /^[0-9a-f]{32}$/);
+    hex32(t.albedoMd5);
+    hex32(t.normalMd5);
   }
 });
