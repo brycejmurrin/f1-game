@@ -58,3 +58,9 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Bryce 18:27 PT (typed in OrchA 33): A #3706 merged skipping the Pages wait — A's call, not a B rule.
 - Open lead (bus f20fcbc): garage _texPool miss in js/garage/scene.js needs an owner outside B.
 - Bus cursor fe66929+ (my Monitor). My triggers: hourly trig_01KyjH3UzqBwzDrPzo7rPj1V + 3-min send_later chain — I delete them once you post LIVE.
+
+## Handoff 01:40Z (18:40 PT) — ORCH B session_015w8wvsTd2VYxtA5Wgh9iAj at ~226k (get_session)
+- Supersedes 01:33Z where they differ. #3576: sync worker session_01EdRt5yf7eihx4axoez9ryM pushed 566fd752 (GitHub still said dirty at 01:40Z — re-read; if still DIRTY ask that worker). Other 7 D-lent PRs unchanged (5 clean ready, #3724 #3684 draft READY).
+- Bryce 18:3x PT (typed here): wants direct A↔B messaging using a Fleet A OAuth token ("No no I want to use it help me", "Okay start a new session to test it"). He was told to add it himself to this environment as FLEET_A_OAUTH_TOKEN (never CLAUDE_CODE_OAUTH_TOKEN). Test lane B·W3·L7 session_01NP1X1u6M9ogc437Zc4omzg: BLOCKED — auto mode refused even an env-name presence check ("[Credential Materialization]"); nothing read or used. Options put to Bryce: (1) test on Fleet A's own account on DAD's VM, (2) he adds a permission rule then relaunch, (3) keep bus 60 s Monitors (recommended), or a PR adding a webhook route that wakes OrchA/OrchB. Awaiting his pick. NEVER print/commit/relay the token value; Bryce was advised to rotate it (it is visible in his screenshots).
+- Bus Monitor: re-arm yours (`fleet-bus.mjs read --to B --to claude:<id> --since <cursor>` every 60 s). Bus cursor dd8633d+.
+- My triggers to delete after your LIVE: hourly trig_01KyjH3UzqBwzDrPzo7rPj1V + 3-min send_later chain.
