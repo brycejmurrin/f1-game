@@ -608,6 +608,8 @@ test("live camera scopes override saved menu choices and follow world transition
   const disk = new Map([["trackId", "monza"], ["team", 1]]);
   const hooks = {};
   const C = loadCamTune(disk, hooks);
+  let live = { track: "spa", car: "mclaren" };
+  C.bindContext(() => live);
   C.setContext("spa", "mclaren");
   C.setScoped("track", "chase", "height", 2);
   C.setScoped("car", "chase", "dist", 3);
@@ -616,8 +618,6 @@ test("live camera scopes override saved menu choices and follow world transition
   assert.deepEqual(Object.keys(C.exportPack().tracks), ["spa"]);
   assert.deepEqual(Object.keys(C.exportPack().cars), ["mclaren"]);
 
-  let live = { track: "spa", car: "mclaren" };
-  C.bindContext(() => live);
   assert.equal(C.get("chase", "height"), 2);
   assert.equal(C.get("chase", "dist"), 3);
   assert.equal(C.bob(), 0.2);

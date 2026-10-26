@@ -34,6 +34,7 @@ function bootPanel() {
   const ctx = vm.createContext(sb);
   seedLog(ctx);
   vm.runInContext(read("js/camera/offsets.js"), ctx, { filename: absSrc("js/camera/offsets.js") });
+  ctx.CamTune.bindContext(() => ({ track: G.track?.def?.id, car: sb.Teams.LIST[G.teamIdx]?.id }));
   ctx.CamModes = { CAM_MODES: [{ id: "chase", label: "CHASE" }, { id: "cockpit", label: "COCKPIT" }] };
   vm.runInContext(read("js/camera/tuner-panel.js") + "\n;globalThis.__panel = CamTunerEditor;", ctx, { filename: absSrc("js/camera/tuner-panel.js") });
   const panel = ctx.__panel.create(G);

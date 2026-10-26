@@ -218,10 +218,10 @@ function context() {
   const live = (_readContext ? _readContext() : _context) || {};
   let track = typeof live.track === "string" && live.track ? live.track : null;
   let car = typeof live.car === "string" && live.car ? live.car : null;
-  if (!track || !car) {
+  if (!_readContext || !track || !car) {
     refreshStoredContext();
-    if (!track) track = _storedContext.track;
-    if (!car) car = _storedContext.car;
+    if (!_readContext || !track) track = _storedContext.track || track;
+    if (!_readContext || !car) car = _storedContext.car || car;
   }
   return { track, car };
 }

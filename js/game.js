@@ -4130,16 +4130,10 @@ function drivingLineApi(trk) {
 }
 let rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals (recreated after ensureAudio)
 let carSfx = CarSfx.create(G);           // tyre scrub, lock-up, surface, pit limiter (recreated after ensureAudio)
-// Photo mode (js/camera/photo-cam.js).
-const photomode = Photomode.create(G), { updatePhotoCam, enterPhotoMode, exitPhotoMode } = photomode;
-// LIGHTING TUNER panel UI (js/lighting/tuner-panel.js).
-const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
+// Photo mode (js/camera/photo-cam.js) and lighting tuner (js/lighting/tuner-panel.js).
+const photomode = Photomode.create(G), { updatePhotoCam, enterPhotoMode, exitPhotoMode } = photomode, { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 // CAMERA TUNER panel UI (js/camera/tuner-panel.js) — per-camera-mode framing offsets.
-CamTune.bindContext(() => ({
-  track: G.track && G.track.def && G.track.def.id,
-  car: ((G.state === "race" || G.state === "count") && G.player && G.player.team && G.player.team.id)
-    || (Teams.LIST[G.teamIdx] && Teams.LIST[G.teamIdx].id),
-}));
+CamTune.bindContext(() => ({ track: G.track?.def?.id, car: ((G.state === "race" || G.state === "count") && G.player?.team?.id) || Teams.LIST[G.teamIdx]?.id }));
 const { closeCamTuner } = CamTunerPanel.create(G);
 // FLYBY SHOT EDITOR panel UI (js/camera/flyby-panel.js) — authors the pre-race
 // shot list; previews through __apex.flybyCam, touches no render-path state.
