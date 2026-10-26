@@ -279,6 +279,8 @@ const diskFetch = (needAbsolute) => async (u) => {
   try { b = fs.readFileSync(path.join(ROOT, rel)); } catch (_) { return { ok: false, status: 404 }; }
   return { ok: true, json: async () => JSON.parse(b.toString("utf8")), arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) };
 };
+// Pack URLs carry ?h=<md5> (L3): compare the path, not the query.
+const bare = (u) => String(u).replace(/\?.*$/, "");
 const tick = () => new Promise((r) => setTimeout(r, 0));
 function pageWithWorker({ workerPack = true, workerRefuses = () => false } = {}) {
   const T = buildContext(null, { quiet: true, instancing: true });
@@ -397,9 +399,9 @@ test("the worker fetches only the circuit's own models, none at init", async () 
   assert.ok(msg, "the worker answered a world");
   const man = JSON.parse(fs.readFileSync(path.join(ROOT, "assets/pack/manifest.json"), "utf8"));
   const files = new Set(want.map((m) => man.models[m].file));
-  const modelFetches = workerFetched.filter((u) => Object.values(man.models).some((r) => u.endsWith("/" + r.file)));
+  const modelFetches = workerFetched.filter((u) => Object.values(man.models).some((r) => bare(u).endsWith("/" + r.file)));
   assert.ok(modelFetches.length > 0, "premise: the worker fetched its models");
-  for (const u of modelFetches) assert.ok([...files].some((f) => u.endsWith("/" + f)), "fetched only this circuit's model: " + u);
+  for (const u of modelFetches) assert.ok([...files].some((f) => bare(u).endsWith("/" + f)), "fetched only this circuit's model: " + u);
   assert.deepEqual([...msg.models].sort(), [...want].sort());
 });
 
@@ -407,7 +409,7 @@ test("a worker missing one of the circuit's model ids answers null, whatever its
   const man = JSON.parse(fs.readFileSync(path.join(ROOT, "assets/pack/manifest.json"), "utf8"));
   const id = "monza";
   let want = null;
-  const { T, page, workers } = pageWithWorker({ workerRefuses: (u) => want && u.endsWith("/" + man.models[want[0]].file) });
+  const { T, page, workers } = pageWithWorker({ workerRefuses: (u) => want && bare(u).endsWith("/" + man.models[want[0]].file) });
   const def = T.LIST.find((d) => d.id === id);
   await page.Assets.modelsReady(0, String(page.TrackScenery[id]));
   want = circuitIds(page, id);

@@ -75,6 +75,13 @@ const Assets = (function () {
     return _manifestPromise;
   }
 
+  // Content-addressed pack URL: `<file>?h=<md5>` from the manifest's hash, so
+  // sw.js can answer it cache-first (a rebake changes the md5, hence the URL).
+  // A record with no valid md5 keeps the bare, network-first URL.
+  function _packUrl(file, md5) {
+    return PACK_DIR + file + (typeof md5 === "string" && /^[0-9a-f]{32}$/.test(md5) ? "?h=" + md5 : "");
+  }
+
   async function _fetchManifest(generation) {
     try {
       const j = await _request(MANIFEST, "json");
@@ -90,8 +97,8 @@ const Assets = (function () {
 
   // ── material arrays ────────────────────────────────────────────────────────
 
-  async function _fetchStrip(file, generation) {
-    const blob = await _request(PACK_DIR + file, "blob");
+  async function _fetchStrip(file, md5, generation) {
+    const blob = await _request(_packUrl(file, md5), "blob");
     if (generation !== _loadGeneration) return null;
     _bytes += blob.size;
     return blob;
@@ -639,8 +646,8 @@ const Assets = (function () {
       // (normal = null, albedo still ships) — sharing the albedo's Promise.all
       // let a missing normal strip discard the whole pack (_tier "off").
       const [albedoBlob, normalBlob] = await Promise.all([
-        _fetchStrip(variant.albedo, generation),
-        variant.normal ? _fetchStrip(variant.normal, generation).catch(() => null) : null,
+        _fetchStrip(variant.albedo, variant.albedoMd5, generation),
+        variant.normal ? _fetchStrip(variant.normal, variant.normalMd5, generation).catch(() => null) : null,
       ]);
       if (generation !== _loadGeneration || !albedoBlob) return false;
       albedo = await _decodeStrip(albedoBlob, size, present, () => generation === _loadGeneration);
@@ -846,7 +853,7 @@ const Assets = (function () {
         if (generation !== _loadGeneration) return null;
         const rec = m && m.models && m.models[id];
         if (!rec || !rec.file) { if (m) _models[id] = null; return null; }
-        const body = await _request(PACK_DIR + rec.file, "arrayBuffer");
+        const body = await _request(_packUrl(rec.file, rec.md5), "arrayBuffer");
         if (generation !== _loadGeneration) return null;
         const parsed = await _decodeModel(body, generation);
         if (parsed && generation === _loadGeneration) _models[id] = parsed;
