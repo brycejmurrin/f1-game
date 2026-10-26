@@ -114,16 +114,18 @@ test("extractTriggers reads a list_triggers page; main --triggers archives the r
   const rc = main(["s.txt", "--triggers", "t.txt"], { read: (f) => pages[f], prState: () => "open", log: (l) => logs.push(l), now: () => NOW,
     liveOrch: liveIs("claude:session_01NEW") });
   assert.equal(rc, 0);
-  assert.match(logs.join("\n"), /ARCHIVE session_01OLD .*retired orchestrator/);
+  assert.deepEqual(logs.map((l) => l.replace(/ +/g, " ")), ["ARCHIVE session_01OLD [Orch] B·O-queue4 retired orchestrator: ORCH B LIVE is session_01NEW, no enabled triggers, idle 90 min",
+    "= fleet-archive 1 archive, 0 keep"]);
   const off = [];
   main(["s.txt", "--offline", "--triggers", "t.txt"], { read: (f) => pages[f], log: (l) => off.push(l), now: () => NOW, liveOrch: () => { throw new Error("called"); } });
-  assert.match(off.join("\n"), /KEEP .*no ORCH B LIVE/);
+  assert.equal(off[0].replace(/ +/g, " "), "KEEP session_01OLD [Orch] B·O-queue4 orchestrator: no ORCH B LIVE line read (bus offline or empty)");
 });
 
 test("--hand refuses a branch that is not on origin", () => {
   const run = (branch, state) => { const logs = []; return { rc: main(["--hand", branch], { branchState: () => state, log: (l) => logs.push(l) }), out: logs.join("\n") }; };
   assert.deepEqual([run("cursor/x-1a2b", "pushed").rc, run("cursor/x-1a2b", "missing").rc, run("cursor/x-1a2b", "unknown").rc], [0, 1, 1]);
-  assert.match(run("cursor/x-1a2b", "missing").out, /REFUSE .*only in the container/);
+  assert.equal(run("cursor/x-1a2b", "missing").out,
+    "= fleet-archive hand REFUSE cursor/x-1a2b is not on origin: it lives only in the container; ask its session to commit and push first");
   assert.equal(main(["--hand"], { log: () => {} }), 1);
   const fake = (status, stdout) => () => ({ status, stdout });
   assert.equal(branchOnOrigin("b", fake(0, "abc\trefs/heads/b\n")), "pushed");
