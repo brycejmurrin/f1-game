@@ -31,6 +31,7 @@ import { api, REPO } from "./github-api.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { commitTreeId } from "../lib/work-tree-id.mjs";
 import { writeReceipt } from "../lib/gate-receipt.mjs";
+import { fleetBlock } from "../lib/fleet-block.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export { REPO };
@@ -372,23 +373,8 @@ export function withMemory(v, files, meta = {}) {
   return { ...v, memory: m };
 }
 
-/**
- * The PR body's ```fleet block as key/values (agent-fleet SKILL.md §The fleet block): `#` comments and `<placeholder>`
- * values dropped, first value of a key wins. Outside HTML comments, else inside Cursor's agent slice. {} when absent. Pure.
- */
-export function fleetBlock(body) {
-  const raw = String(body || "");
-  const agent = /<!--\s*CURSOR_AGENT_PR_BODY_BEGIN\s*-->([\s\S]*?)<!--\s*CURSOR_AGENT_PR_BODY_END\s*-->/i.exec(raw);
-  const find = (t) => /```fleet[ \t]*\r?\n([\s\S]*?)```/.exec(t);
-  const m = find(raw.replace(/<!--[\s\S]*?-->/g, "")) || (agent && find(agent[1]));
-  const out = {};
-  if (!m) return out;
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = /^\s*([a-z][a-z-]*)\s*:\s*(.*?)\s*(?:#.*)?$/.exec(line);
-    if (kv && kv[2] && !kv[2].startsWith("<") && out[kv[1]] == null) out[kv[1]] = kv[2];
-  }
-  return out;
-}
+// The fleet-block parser is tools/lib/fleet-block.mjs (audit4 A3: one parser for ready-gate, pr-body, fleet-owner, the board).
+export { fleetBlock };
 
 /** A fleet letter from a value: `A`, `A·W3` -> "A"; anything else (a `<host>:<id>`) -> "". Pure. */
 const letterOf = (v) => (/^([A-Z])(?:·\S*)?$/.exec(String(v || "").trim()) || [])[1] || "";

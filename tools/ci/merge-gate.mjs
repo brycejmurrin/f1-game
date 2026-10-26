@@ -49,7 +49,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api, evaluate, resolveSha, withPlan, withMemory } from "./ready-gate.mjs";
 import { hasMergeHold } from "./pr-board.mjs";
-import { readBus, whoAmI } from "./fleet-bus.mjs";
+import { readBus, whoAmI, slotOf, gameSlotState, doneIsGame, incidentLedger, foldIncidents } from "./fleet-bus.mjs";
 import { DEPLOY_BRANCH } from "./deploy.mjs";
 import { mergeTrailers } from "./merge-attribution.mjs";
 import { writeReceipt, headPinProblem } from "../lib/gate-receipt.mjs";
@@ -179,20 +179,15 @@ export function newestCheck(checkRuns, name = REQUIRED_CHECK) {
   return best;
 }
 
-/** Entries that are GAME-SLOT claims: the GAME-SLOT type, or the HANDOFF text form orchestrators wrote before it existed. Pure. */
-export const slotOf = (e) => {
-  if (!e) return null;
-  const text = e.type === "GAME-SLOT" ? e.text : e.type === "HANDOFF" && /^GAME-SLOT\b/.test(e.text || "") ? e.text.replace(/^GAME-SLOT\s*/, "") : null;
-  if (text == null) return null;
-  const m = /#(\d+)/.exec(text);
-  return { pr: m ? Number(m[1]) : null, from: e.from, at: e.at, text };
-};
+export { slotOf };   // fleet-bus.mjs's (audit4 A2): the same shape plus `sha`
 
-/** The newest INCIDENT line the pacing check honoured, as one printable string, or "" when the bus has none. Print-only. Pure. */
-export function incidentNote(entries) {
+/** The INCIDENT state the pacing check honoured, as one printable string, or "" when the bus has none. Print-only. Pure. */
+export function incidentNote(entries, incidents = foldIncidents(entries)) {
+  const open = Object.entries(incidents.open || {});
+  if (open.length) return `INCIDENT OPEN (freezes game merges): ${open.map(([id, o]) => `${id} from:${o.from} ${String(o.reason || "").slice(0, 120)}`).join("; ")}`;
   const e = [...(entries || [])].reverse().find((x) => x.type === "INCIDENT");
   if (!e) return "";
-  const lifted = /\blifted\b/i.test(e.text);
+  const lifted = /\blifted\b/i.test(e.text) || /^close\s/i.test(e.text);
   return `INCIDENT ${lifted ? "lifted" : "OPEN (freezes game merges)"}: from:${e.from} ${e.text.slice(0, 160)}`;
 }
 
@@ -200,20 +195,22 @@ export function incidentNote(entries) {
  * Game pacing from the bus entries (oldest first). Pure except `pagesGreen(sha)` → true | false | null (pending).
  * now in unix seconds.
  */
-export function pacingVerdict(entries, { pr, me, pagesGreen = () => null, now = Math.floor(Date.now() / 1000) } = {}) {
-  let frozen = null, slot = null, lastGame = null, lastDoneAt = 0;
+export function pacingVerdict(entries, { pr, me, pagesGreen = () => null, now = Math.floor(Date.now() / 1000),
+  isGame = () => null, incidents = foldIncidents(entries) } = {}) {
+  // Typed incidents (`open <id> …` / `close <id>`, audit4 A2 G2) come folded in `incidents`; the legacy untyped line
+  // (any INCIDENT text not followed by `lifted`) still freezes, so an old bus reads the same.
+  const openTyped = Object.entries(incidents.open || {});
+  if (openTyped.length) return row(false, `merges frozen by INCIDENT ${openTyped.map(([id, o]) => `${id} (${o.from}: ${String(o.reason || "").slice(0, 60)})`).join("; ")} — wait for \`INCIDENT close <id>\``);
+  let frozen = null;
   for (const e of entries || []) {
-    if (e.type === "INCIDENT") frozen = /\blifted\b/i.test(e.text) ? null : e;
-    const s = slotOf(e);
-    if (s) slot = s;
-    if (e.type === "DONE") {
-      lastDoneAt = e.at;
-      if (/\bgame\b/i.test(e.text) && !/\bnon-game\b/i.test(e.text)) lastGame = e;
-    }
+    if (e.type !== "INCIDENT" || /^(open|close)\s/i.test(e.text || "")) continue;
+    frozen = /\blifted\b/i.test(e.text) ? null : e;
   }
   if (frozen) return row(false, `merges frozen by INCIDENT from ${frozen.from}: ${frozen.text.slice(0, 80)} — wait for its \`INCIDENT … lifted\` line`);
+  // The slot is closed only by its OWN PR's DONE (G4); a game merge is read from the merge's diff, not the word (G3).
+  const { slot, closedAt, lastGame } = gameSlotState(entries, { isGame });
   if (!slot) return row(false, `no GAME-SLOT on the bus: \`node tools/ci/fleet-bus.mjs send GAME-SLOT --to '*' "#${pr} <head sha>"\`, re-read, then gate again`);
-  const slotLive = slot.at > lastDoneAt && now - slot.at <= SLOT_LAPSE_MIN * 60;
+  const slotLive = !closedAt && now - slot.at <= SLOT_LAPSE_MIN * 60;
   if (slot.pr !== Number(pr)) {
     if (slotLive) return row(false, `GAME-SLOT held by ${slot.from} for #${slot.pr} (${Math.round((now - slot.at) / 60)} min ago): wait for its DONE`);
     return row(false, `the newest GAME-SLOT (#${slot.pr} by ${slot.from}) is closed or lapsed: take the slot for #${pr} first`);
@@ -409,7 +406,7 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--sk
 export const UNKNOWN_RETRY_MS = [2000, 4000, 8000];
 const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
-export function main(argv, { request = api, root = ROOT, env = process.env, now = () => Date.now(), bus = readBus, localMerge = localMergeGenCheck, pages = pagesGreenFor, log = console.log, sleep = sleepSync, unknownRetryMs = UNKNOWN_RETRY_MS,
+export function main(argv, { request = api, root = ROOT, env = process.env, now = () => Date.now(), bus = readBus, ledger = (cwd) => incidentLedger({ cwd, fetch: false }), localMerge = localMergeGenCheck, pages = pagesGreenFor, log = console.log, sleep = sleepSync, unknownRetryMs = UNKNOWN_RETRY_MS,
   deployMerges = (since) => deployMergesSince(since, { cwd: root }), parents = (h) => parentsOf(h, { cwd: root, request }), onDeploy = (sha) => onDeployBranch(sha, root) } = {}) {
   exitIfHelp(argv, USAGE);
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
@@ -474,8 +471,10 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
   let incident = "";
   if (game.length) {
     const b = bus({ cwd: root, last: 200 });
-    incident = incidentNote(b.entries);
-    rows.pacing = pacingVerdict(b.entries, { pr, me, pagesGreen: (sha) => pages(sha, request, isAncestor(root)), now: Math.floor(now() / 1000) });
+    const incidents = foldIncidents(b.entries, ledger(root));   // readBus just fetched; the ledger folds the whole branch
+    incident = incidentNote(b.entries, incidents);
+    rows.pacing = pacingVerdict(b.entries, { pr, me, pagesGreen: (sha) => pages(sha, request, isAncestor(root)), now: Math.floor(now() / 1000),
+      isGame: (e) => doneIsGame(e, { cwd: root }), incidents });
     const green = newestCheck(checks.list);
     const since = green?.started_at || "";
     const m = since ? deployMerges(since) : [];

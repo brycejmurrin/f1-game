@@ -38,7 +38,7 @@ needs a decision or a merge. Merging stays with the PR's own orchestrator
 ## The wake sources
 
 The board watch is an Actions job, not a session (plan `docs/plans/2026-10-19-fleet-redesign.md` §4B item 6):
-the `tick` job in `.github/workflows/fleet.yml` runs `fleet-tick.mjs` every 30 min (:23, :53) and on every
+the `tick` job in `.github/workflows/fleet.yml` runs `fleet-tick.mjs` hourly (:23; audit4 D1) and on every
 claim/bus dispatch, on the Actions token (no proxy 403). It restores the previous state from the Actions cache,
 writes the changed PR/ship/Pages rows and the whole board to the run summary, and uploads the `fleet-board`
 artifact (`state.json` + `tick.log`, 2-day retention). A tick error is a `::warning::`, never a red run.

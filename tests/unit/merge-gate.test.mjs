@@ -56,7 +56,7 @@ test("game paths are the paced ones: js/ css/ assets/ index.html sw.js", () => {
 test("GAME-SLOT is a bus type, and the older HANDOFF text form still reads as a slot", () => {
   assert.ok(TYPES.includes("GAME-SLOT"));
   const line = formatLine("GAME-SLOT", "*", "claude:session_A", "#3076 a06b99a1");
-  assert.deepEqual(slotOf({ ...parseLine(line), at: 5 }), { pr: 3076, from: "claude:session_A", at: 5, text: "#3076 a06b99a1" });
+  assert.deepEqual(slotOf({ ...parseLine(line), at: 5 }), { pr: 3076, from: "claude:session_A", at: 5, sha: undefined, text: "#3076 a06b99a1" });
   assert.equal(slotOf(e("HANDOFF", "claude:session_B", "GAME-SLOT #2997 436e108a (OrchB 3)", 6)).pr, 2997);
   assert.equal(slotOf(e("HANDOFF", "claude:session_B", "OrchB 3 LIVE", 6)), null);
   assert.equal(slotOf(e("DONE", "x", "#1 merged abc", 1)), null);
@@ -171,7 +171,10 @@ test("main: every row must pass; the receipt records the refusal, and a pass pin
     assert.ok(logs.join("\n").includes(`gh pr merge 7 --merge --match-head-commit ${HEAD} --subject `), "the gh form is pinned to the gated head");
     assert.match(logs.join("\n"), new RegExp(`expectedHeadSha=${HEAD}`));
     // a hold refuses and the receipt says so
+    // DECISIONS #6 (audit4 A3): only the full-shape hold vetoes; a bare "MERGE-HOLD: <text>" is malformed and never a veto
     pull.body = "MERGE-HOLD: Bryce reviewing\n" + BODY_OK;
+    assert.equal(main(["--pr", "7"], deps), 0, "a malformed hold is not a veto");
+    pull.body = "MERGE-HOLD: Bryce reviewing | lift: Bryce | until: his word\n" + BODY_OK;
     assert.equal(main(["--pr", "7"], deps), 1);
     assert.match(readReceipt(dir, "merge", 7).evidence, /MERGE-HOLD/);
     pull.body = BODY_OK;

@@ -18,7 +18,7 @@ APEX STEWARD CARD (do not re-read steward / check-changes / PR template unless H
 - Merge, hold, ready, sync, authority: .claude/rules/fleet-core.md. Claims: AGENTS.md §Git branch & deploy.
 - Branch: cursor/<topic>-<hash> → DRAFT PR into claude/f1-game-project-26h3ng.
 - Commit in two calls, push with no pipe: AGENTS.md rule 12. Ready flip → READY → merge watch: steward §12.
-HASHES: steward=4ed8c2c1 check-changes=8ccdc79a pr-template=e8f2ca20
+HASHES: steward=216e9a2c check-changes=ee95002c pr-template=e8f2ca20
 ```
 
 Lane mutexes, the merge-train exclusion and the merge role moved to

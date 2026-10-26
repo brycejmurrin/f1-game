@@ -174,7 +174,7 @@ it. The bus is the `claude/fleet-bus` branch (`docs/notes/FLEET-BUS-2026-10-19.m
 node tools/ci/fleet-bus.mjs send <READY|GREEN|BLOCKED|HANDOFF|DONE|INCIDENT|LEND|RETURN|TRANSFER|ROTATE> --to <role|#PR|host:id|*> [--idem KEY] "<one line>"
 node tools/ci/fleet-bus.mjs read --to orchestrator --to '#<PR>' [--strict]
 node tools/ci/launch-lane.mjs --fleet <L> --lane <X> [--pr N] --role <r> --model <m> --title "<t>" --source-revision <branch> \
-  --session-json <saved get_session> --sessions-json <saved list_sessions>   # before every create_session: quota, sha7, twin, claim
+  --session-json <saved get_session> --sessions-json <saved list_sessions> [--pr-json <saved PR read>] [--brief <prompt file>]   # before every create_session: quota, sha7, twin, claim, brief
 node tools/ci/fleet-brief.mjs --fleet <L> [--board <saved pr-board --json>] [--trigger trig_…] [--ask "…"]   # hand-off: ≤2 KB JSON + ≤40-line digest
 ```
 

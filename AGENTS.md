@@ -91,7 +91,7 @@ Session shape — thirteen rules that control wall time, waiting and handoff:
 
 This container has no real GPU: renderers blit onto `#game-soft` and a probe waits on `awaitSoftPresent()`. Never run
 Chrome MCP while Playwright runs. A unit test of a renderer backend is not evidence that it runs: boot it live and
-confirm one positive signal (`docs/ARCHITECTURE.md` §Boot evidence is the one home; skill `mcp-probe` drives the probe;
+confirm one positive signal (`docs/ARCHITECTURE.md` §Boot evidence is the one home; skill `mcp-probe` drives the probe (`.claude/skills/mcp-probe/references/recipes.md`);
 each backend's gate is in `.claude/rules/render-wgx.md` / `render-tlx.md`).
 
 ## Layout
@@ -134,8 +134,8 @@ session. `obs()`/`physState()` need `player.px` initialised (`jump()` or `step()
 Available workflows are skills (`.claude/skills/`, index `.claude/skills/README.md`): they say when and how, and load
 when matched. Subagents (`.claude/agents/`) isolate noisy work; `docs/AGENT-SURFACE.md` maps which CLIs are
 wrapped as `apex_*`. Routes: a JS symbol → skill `code-nav`; live canvas → skill `mcp-probe`; pre-push or deploy →
-skill `check-changes` (spawns agent `verify-agent`); live `version.json` → agent `deploy-research`; dead code / fat
-skill → skill `slim-bloat`; owning or sweeping PRs → skill `steward` + `tools/ci/pr-board.mjs`; messaging, claims,
+skill `check-changes` (spawns agent `verify-agent`); live `version.json` → agent `deploy-research`; dead code →
+skill `slim-bloat`; fat skill → skill `agent-config`; owning or sweeping PRs → skill `steward` + `tools/ci/pr-board.mjs`; messaging, claims,
 launches and authority between sessions → skill `agent-fleet`; failed-CI triage → agent `ci-red-triage`; a scoped
 change handed to a subagent you message mid-task → agent `worker`.
 

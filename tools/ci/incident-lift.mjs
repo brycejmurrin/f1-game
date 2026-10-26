@@ -23,7 +23,9 @@ export function decide(entries, pagesGreen) {
   if (!open) return { action: "none" };
   const g = pagesGreen(open.sha);
   if (g !== true) return { action: "wait", sha: open.sha, entry: open.entry, pages: g };
-  return { action: "lift", sha: open.sha, entry: open.entry, text: `lifted: Pages green on ${open.sha.slice(0, 8)} (auto-lift of ${open.entry.from}'s incident)` };
+  const why = `Pages green on ${open.sha.slice(0, 8)} (auto-lift of ${open.entry.from}'s incident)`;
+  // A typed incident (audit4 A2) closes by id; the legacy untyped line still takes `lifted: …`.
+  return { action: "lift", sha: open.sha, entry: open.entry, text: open.id ? `close ${open.id} ${why}` : `lifted: ${why}` };
 }
 
 export function main(argv, { bus = readBus, pages = pagesGreenFor, send = sendBusLine, log = console.log, env = process.env } = {}) {
