@@ -137,6 +137,11 @@
         "tests/unit/wgx-labels.test.mjs"
       ]
     },
+    "js/agent/apex-lifecycle.js": {
+      "lifecycle": [
+        "tests/specs/render-lifecycle.spec.js"
+      ]
+    },
     "js/agent/apex-lobby.js": {
       "*": [
         "tests/unit/car-presentation-canary.test.mjs"
