@@ -11,7 +11,7 @@ covers Bash, `apply_patch` as Edit/Write, and MCP tools).
   one sits 51–54 min out (rule 13 is met). None is for a merged PR: all 7 PRs are open in pr-board.txt. Recurring tasks:
   FLEET BUS WATCH `48 * * * *` (Sonnet, fresh session, $0.17 a run); Apex Fleet Board refresh `50 * * * *` (Sonnet,
   $0.20 a run); Monthly knowledge audit; Backlog #1518 one-shot on 10-28; and the Fleet B inbox API task
-  (`17 10 29 2 *`, fire-only, bound to relay B·R1 01PfAQ, completed/disconnected, stored token sk-ant-oat01-PXcR…).
+  (`17 10 29 2 *`, fire-only, bound to relay B·R1 01PfAQ, completed/disconnected, stored token redacted).
 - **No duplicates.** There is one FLEET BUS WATCH and no orchestrator net bound to a dead session. ORCH B·O1 (01M5i67)
   handed off at about 16:34. Its net (trig_012p8i) fired at 16:31 and was correctly not re-armed. The successor B·O2
   (01AQHQjeAC…, booted 16:34) had no net armed yet at 16:38: re-check this.
