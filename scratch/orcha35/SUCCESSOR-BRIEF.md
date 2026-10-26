@@ -31,3 +31,8 @@ B: OrchB claude:session_01AQHQjeACArsMMMtkCajR1H (B·O2, 16:35Z); B owns C/E/H o
 - launch-gate wants the saved get_session page < 120 s old: call get_session, save it, gate, then launch ≤ 3 per gate run.
 - A non-game merge between the gate and the merge just changes the first parent. Fine, but re-run the gate if the tip moved by a game PR.
 - fleet-bus mirror pushes can 500 (agent-msg still delivers by webhook); resend to the bus if it matters.
+## BRYCE ANSWERED (typed in OrchA 35, ~16:58Z): "Yes to all" (to the four OPEN items above)
+1. Tip-sync of #3725/#3731: OrchA 35 ran `sync-pr.mjs <branch> --push --verify=fast --force-clean-behind` on both; check the result on the bus or in the PR heads, then the owner 01LESs6 re-gates and sends READY to D.
+2. The "Cursor Agent" on #3700/#3751 is Bryce's. W64 may treat #3700 as its own branch (it has been told).
+3. A·D2 iPhone WebGPU device run: wanted. It needs a launch, and the launch needs Bryce's words typed in YOUR session (quote this line when you ask him).
+4. W61 calls, read as "yes": build #1565 ai-band catchup; do #3117 F3/F5/F9 (W72 skipped them; extend W72 or a new lane); do #3110 F6/F7; #1628 default-ON; #2631 stop (close the draft plan); #2994 .claude grant for the track-surveyor `memory: local` trial. Items 1565/2631/1628 are ambiguous yes/no forms: confirm with Bryce in one line before acting.
