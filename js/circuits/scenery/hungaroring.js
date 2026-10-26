@@ -86,11 +86,11 @@
           }
         }
 
-        // Pit-straight opposite the paddock (sf≈0.045, side +1) used to sit at
-        // gap 54 — a neat columnar rank that fought the dusty amphitheatre in
-        // day/dry orbit@0 (#3317). Keep akác mid/far; push that cluster out.
+        // Akác clumps around the bowl. Orbit@0 fir-rank was forestEdge + the
+        // Lombardy belt above (#3317) — leave this mid/far akác at gap 54 so
+        // coplanar lobe cones stay at baseline 2 (gap 110 grew spots 2→4).
         for (const [sf, side, gap] of [
-          [0.045,  1, 110], [0.180, -1, 68], [0.215,  1, 50],
+          [0.045,  1, 54], [0.180, -1, 68], [0.215,  1, 50],
           [0.355, -1, 60], [0.420,  1, 72], [0.520,  1, 56],
           [0.600, -1, 64], [0.700, -1, 52], [0.775,  1, 58],
           [0.880,  1, 62], [0.940, -1, 56],
