@@ -208,6 +208,9 @@
       // Scenery-orbit eye (az 45 / dist 45) sits ~22.5 m past the verge on +1;
       // posts at dist 18 put a grey pillar through the f75 frame (#3364). Seat
       // +1 past the orbit ring; −1 stays on the near bowl rim.
+      // Lens at 19.5 m up × 18–36 m out is past the theme halogen radius (~36 m);
+      // carry throw×1.5 like floodMast (identity.js) so the pool reaches the road
+      // (lamp-fixture-anchor: 14 short by up to 10.4 m after the orbit push).
       along(0.70, 0.96, 80, (k) => {
         for (const side of [-1, 1]) {
           const a = anchor(k, side, side === 1 ? 36 : 18);
@@ -216,7 +219,11 @@
           // floodlight head cluster
           addBox(out, vadd(a.c, a.u, 20), [4.5, 0.5, 1.2], [0.95, 0.92, 0.78], [a.r, a.u, a.t]);
           addBox(out, vadd(vadd(a.c, a.t, 0.8), a.u, 19.6), [4.5, 0.5, 1.2], [0.95, 0.92, 0.78], [a.r, a.u, a.t]);
-          api.lampPost({ pos: vadd(a.c, a.u, 19.5), k, side, kind: "halogen" });
+          const lens = vadd(a.c, a.u, 19.5);
+          const kk = ((Math.round(k) % n) + n) % n;
+          const throwR = Math.hypot(lens[0] - px[kk], lens[1] - py[kk], lens[2] - pz[kk]);
+          api.lampPost({ pos: lens, k, side, kind: "halogen",
+            radius: Math.min(110, throwR * 1.5) });
         }
       });
 

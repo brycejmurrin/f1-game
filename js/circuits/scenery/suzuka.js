@@ -256,17 +256,32 @@
       const carousel = (k, side, dist, rad) => {
         const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
         if (onTrack(p.c[0], p.c[2], 4)) return;
-        addCyl(out, p.c, rad + 0.6, 1.1, [0.86, 0.80, 0.62], 16, b);          // platform
-        out._mat = MAT.METAL;
-        addCyl(out, vadd(p.c, p.u, 1.1), 0.5, 7.5, [0.90, 0.86, 0.70], 8, b); // centre pole
-        out._mat = MAT.FABRIC;
-        addCone(out, vadd(p.c, p.u, 7.5), rad + 1.3, 3.6, neonRed, 16, b);    // canopy
-        addCyl(out, vadd(p.c, p.u, 7.5), rad + 1.5, 0.6, neonYel, 16, b);     // valance rim
-        out._mat = MAT.METAL;
-        addCone(out, vadd(p.c, p.u, 11.1), 0.8, 1.6, neonBlue, 8, b);         // finial
+        // Motopia sits on the SRTM hillside: sample the rim as well as the hub
+        // so a sloping grade cannot bury the uphill seats (was 1.26 m deep).
+        let grade = p.c[1];
+        const sample = (x, z) => {
+          const gy = terrainYAt(x, z);
+          if (gy != null) grade = Math.max(grade, gy);
+        };
+        sample(p.c[0], p.c[2]);
         for (let i = 0; i < 10; i++) {
           const a = i / 10 * 6.2832;
-          const off = vadd(vadd(p.c, p.r, Math.cos(a) * rad), p.t, Math.sin(a) * rad);
+          sample(p.c[0] + p.r[0] * Math.cos(a) * rad + p.t[0] * Math.sin(a) * rad,
+                 p.c[2] + p.r[2] * Math.cos(a) * rad + p.t[2] * Math.sin(a) * rad);
+        }
+        // Platform centre sits half-height above grade so the disc rests on it.
+        const foot = [p.c[0], grade + 0.55, p.c[2]];
+        addCyl(out, foot, rad + 0.6, 1.1, [0.86, 0.80, 0.62], 16, b);          // platform
+        out._mat = MAT.METAL;
+        addCyl(out, vadd(foot, p.u, 1.1), 0.5, 7.5, [0.90, 0.86, 0.70], 8, b); // centre pole
+        out._mat = MAT.FABRIC;
+        addCone(out, vadd(foot, p.u, 7.5), rad + 1.3, 3.6, neonRed, 16, b);    // canopy
+        addCyl(out, vadd(foot, p.u, 7.5), rad + 1.5, 0.6, neonYel, 16, b);     // valance rim
+        out._mat = MAT.METAL;
+        addCone(out, vadd(foot, p.u, 11.1), 0.8, 1.6, neonBlue, 8, b);         // finial
+        for (let i = 0; i < 10; i++) {
+          const a = i / 10 * 6.2832;
+          const off = vadd(vadd(foot, p.r, Math.cos(a) * rad), p.t, Math.sin(a) * rad);
           out._mat = MAT.METAL;
           addCyl(out, vadd(off, p.u, 1.1), 0.08, 6, [0.95, 0.92, 0.80], 4, b);
           out._mat = 0;
@@ -589,7 +604,9 @@
       fence(0.92, 0.98, -1, 5, 4, [0.70, 0.72, 0.76]);
       guardrail(0.24, 0.36, -1, 3, [0.84, 0.84, 0.88]);  // Degner inner
       guardrail(0.55, 0.66,  1, 3, [0.84, 0.84, 0.88]);  // Spoon outer
-      tyreWall(0.44, 0.47, -1, 2.5, [0.85, 0.20, 0.20]);   // Hairpin inner
+      // Hairpin inner tyreWall dropped: SRTM rise under the stack buried the
+      // cap 0.71 m (ground-audit structures.js:319) and a wider gap still sat
+      // in the bowl. Casio / 130R stacks stay.
       tyreWall(0.93, 0.96,  1, 2.5, [0.20, 0.35, 0.80]);   // Casio chicane outer
       tyreWall(0.83, 0.86,  1, 3.0, [0.85, 0.20, 0.20]);   // 130R outer
       for (const [s, sd] of [[0.12, 1], [0.28, -1], [0.43, 1], [0.58, -1], [0.72, 1], [0.85, 1], [0.95, -1]]) {

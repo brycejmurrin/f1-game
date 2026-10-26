@@ -846,10 +846,12 @@
         const s = k / n;
         if (s < 0.08 || s > 0.18) return;
         const h = hash(k * 19 + 11);
-        stonePine(k, -1, 28 + h * 4, 14 + h * 6, h < 0.4 ? PINE_D : PINE, { spread: 0.72 });
-        stonePine(k,  1, 29 + h * 4, 13 + h * 6, h < 0.5 ? PINE : PINE_D, { spread: 0.70 });
-        if (h > 0.40) pine(k, -1, 36 + h * 5, 18 + h * 10, PINE_D);
-        if (h > 0.50) pine(k,  1, 37 + h * 5, 17 + h * 9, PINE);
+        // Gap 22 (was 28): just past hedge@20/21 so wide2 keeps lap cover without
+        // punching the hedge boxes (clip at gap 10). Spread trimmed for clearance.
+        stonePine(k, -1, 22 + h * 3, 12 + h * 5, h < 0.4 ? PINE_D : PINE, { spread: 0.62 });
+        stonePine(k,  1, 23 + h * 3, 11 + h * 5, h < 0.5 ? PINE : PINE_D, { spread: 0.60 });
+        if (h > 0.40) pine(k, -1, 32 + h * 5, 16 + h * 8, PINE_D);
+        if (h > 0.50) pine(k,  1, 33 + h * 5, 15 + h * 8, PINE);
       });
 
       spectatorHill(0.08, 0.18, -1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });

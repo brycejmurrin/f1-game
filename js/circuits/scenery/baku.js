@@ -127,11 +127,13 @@
         backdrop(kC, -1, 260 + hash(i * 21) * 110, [30 + hash(i * 23) * 22, 42 + hash(i * 25) * 72, 22], DARK);
       }
       // s 0.22–0.58: main straight + old city — glass towers R, open air haze L
+      // Height capped at 26 so backdrop() skips the isBld window-band path
+      // (body×glass shared the track-facing plane — coplanar 245 m² @ 0.9 mm).
       for (let i = 0; i < 10; i++) {
         const kM = K(0.22 + i / 10 * 0.36);
-        backdrop(kM, 1,  160 + i * 0.37 + hash(i * 5 + 22) * 80, [30 + hash(i * 7 + 22) * 22, 44 + hash(i * 11 + 22) * 76, 22], DARK2);
-        backdrop(kM, -1, 200 + hash(i * 9 + 22) * 70, [22 + hash(i * 3 + 22) * 12, 26 + hash(i * 13 + 22) * 34, 20], [0.08, 0.09, 0.14]);
-        backdrop(kM, 1,  340 + hash(i * 15 + 22) * 160, [34 + hash(i * 17 + 22) * 28, 52 + hash(i * 19 + 22) * 104, 24], DARK);
+        backdrop(kM, 1,  160 + i * 0.37 + hash(i * 5 + 22) * 80, [30 + hash(i * 7 + 22) * 22, 18 + hash(i * 11 + 22) * 8, 22], DARK2);
+        backdrop(kM, -1, 200 + hash(i * 9 + 22) * 70, [22 + hash(i * 3 + 22) * 12, 18 + hash(i * 13 + 22) * 8, 20], [0.08, 0.09, 0.14]);
+        backdrop(kM, 1,  340 + hash(i * 15 + 22) * 160, [34 + hash(i * 17 + 22) * 28, 20 + hash(i * 19 + 22) * 6, 28], DARK);
       }
       // s 0.58–0.97: Caspian seafront — city skyline R, open Caspian L (no backdrops)
       for (let i = 0; i < 12; i++) {

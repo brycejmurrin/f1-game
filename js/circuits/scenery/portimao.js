@@ -107,9 +107,11 @@
         [0.035, 0.095,  1, 15.5, 46], [0.470, 0.530, -1, 17.5, 46],
         [0.835, 0.890,  1, 15.5, 46], [0.280, 0.360,  1, 14.5, 46],
         [0.620, 0.700, -1, 14.5, 46],
-        [0.100, 0.135, -1, 15.5, 24.5], [0.150, 0.235,  1, 15.5, 24.5],
-        [0.400, 0.435,  1, 15.5, 24.5], [0.560, 0.612, -1, 15.5, 24.5],
-        [0.745, 0.785,  1, 15.5, 24.5],
+        // farDist 36 (was 24.5): pine crowns at dist≈28–30 still clipped the
+        // cut far edge with r=5.5 (clip-audit emitBox×tree).
+        [0.100, 0.135, -1, 15.5, 36], [0.150, 0.235,  1, 15.5, 36],
+        [0.400, 0.435,  1, 15.5, 36], [0.560, 0.612, -1, 15.5, 36],
+        [0.745, 0.785,  1, 15.5, 36],
       ];
       const keptOut = (k, side, dist, r) => KEEP_OUT.some(([s0, s1, zs, d0, d1]) =>
         zs === side && k >= K(s0 - 0.004) && k <= K(s1 + 0.004) &&
@@ -254,7 +256,7 @@
         const h = hash(k * 31);
         if (h < 0.45) return;
         const side = h < 0.5 ? -1 : 1, dist = 16 + h * 14;
-        if (keptOut(k, side, dist, 5.5) || onTerrace(anchor(k, side, dist).c, 5.5)) return;
+        if (keptOut(k, side, dist, 8) || onTerrace(anchor(k, side, dist).c, 8)) return;
         pine(k, side, dist, 9 + h * 6, h < 0.6 ? PINE : PINE_D);
       });
       // Scrub sits past the red-earth verge band (was dist 8–15): near-track
@@ -767,11 +769,14 @@
       // through the 0.620-0.700 left terrace: over the cuts it steps back to
       // gap 28 (canopy edge behind the bank); terrace runs are skipped, with a
       // few metres of margin at every terrace end.
-      for (const [s0, s1, side, gap] of [[0.1, 0.168, -1, 16], [0.181, 0.28, -1, 16],
+      // Skip CUTS bands: gap-16 through cut-final (+1 0.745–0.785) and T1-exit
+      // (−1 0.100–0.135) was 9 severe cone×box (clip-audit after #3372).
+      // Never pass s0>s1 — along() wraps the full lap and plants through terraces.
+      for (const [s0, s1, side, gap] of [[0.139, 0.168, -1, 16], [0.181, 0.28, -1, 16],
                                     [0.1, 0.130, 1, 16], [0.160, 0.239, 1, 28], [0.239, 0.274, 1, 16],
                                     [0.44, 0.464, -1, 16], [0.536, 0.556, -1, 16],
                                     [0.556, 0.614, -1, 28], [0.706, 0.91, -1, 16],
-                                    [0.44, 0.829, 1, 16], [0.896, 0.91, 1, 16]]) {
+                                    [0.44, 0.741, 1, 16], [0.789, 0.829, 1, 16], [0.896, 0.91, 1, 16]]) {
         forestEdge(s0, s1, side, gap, { density: 0.52, hMin: 9, hMax: 16, pineFrac: 0.78, col: PINE, col2: PINE_D });
       }
     };
