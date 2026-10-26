@@ -624,6 +624,12 @@ function release() {
     S.rankSrc = null; S.entrySrc = null; S.heap.length = 0; S.buf.length = 0;
     S.entryLvl = new Float32Array(0); S.entryStamp = new Uint32Array(0);
   }
+  // TRACK SWITCH (#3290): appendCarTailLights pools {c,d} entries so a night
+  // grid does not allocate per car per frame. A day track never calls it again,
+  // so those car refs would keep the previous grid reachable after loadTrack's
+  // release(). Null every pool car and drop the selection list.
+  for (let i = 0; i < _tlPool.length; i++) _tlPool[i].c = null;
+  _tlSel.length = 0;
 }
 /** THE MIRROR'S LAMPS. frame.lights is ranked for the FORWARD camera, and that
  *  ranking pushes lamps behind it down the list (lampBehindBias) — exactly the
