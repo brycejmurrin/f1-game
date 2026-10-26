@@ -39,7 +39,7 @@ Read your role's reference before acting:
   reviewer → [`references/role-reviewer.md`](references/role-reviewer.md)
   (one pass, findings only, STOP AT 120k);
   fleet watch → [`references/role-fleet-watch.md`](references/role-fleet-watch.md)
-  (one session: PR events + 3-min ticks, routine fixes, no merges, dashboard);
+  (one session: PR events + bus Monitor, routine fixes, no merges, dashboard);
   sync → [`references/role-sync.md`](references/role-sync.md) (conflict-only
   resync lane, the only non-owner that syncs). Titles and tags for every role:
   `references/launch-policy.md` §Session titles and tags.

@@ -15,7 +15,7 @@ node tools/ci/pick-tests.mjs          # 1. which GROUPS does this change need? (
 node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # 3. diff-aware edit-loop check (--quiet: failures only); `npm run test:tooling-fast` is the full floor before a code push
 node tools/ci/test-bg.mjs <group>     # 4. ONE browser group, in the background → artifacts/logs/<group>.log (rule 5)
 node tools/ci/test-bg.mjs --wait --timeout 45   # 5. the waiter, as ONE background task (rule 4); the verdict is the log's `= run …` line
-node tools/ci/deploy.mjs --gate-only  # 6. before a push: the only check that runs what the deploy runs
+node tools/ci/deploy.mjs --gate-only  # 6. before a push: the only check that runs the deploy's node suites (browser legs are CI-only)
 git commit && git push -u origin cursor/<topic>-<hash>   # 7. commit runs test:guards; push, refresh the DRAFT PR's Plan + Status (rule 12: it opened at the first commit)
 ```
 Docs-only fast path — every changed path is prose (`docs/`, `*.md`, `.claude/skills/`, `.claude/agents/`; no generated
@@ -26,7 +26,7 @@ no CI (`= ci none`); a ready PR, or a draft labelled `run-ci`, gets a fast tier 
 Then watch CI (rule 12). Every host: `.claude/memory/MEMORY.md` + `.claude/rules/fleet-core.md`; edit via `node tools/env/apex-memory.mjs list|show|retire` (docs/notes/AGENT-MEMORY.md). A measured lesson goes to `docs/notes/`, a rule to a hook or test, a work log to the PR body.
 
 ## Verification — scale it to the change
-One browser GROUP costs 10–40 minutes of serialized SwiftShader here, so running more than the change needs is slower
+One browser GROUP costs 30–45 minutes of serialized SwiftShader here (one dated local sample, 2026-09-16), so running more than the change needs is slower
 feedback, not extra safety (`docs/TESTING.md`; the measurements behind every rule below:
 `docs/notes/TESTING-FIELD-NOTES.md`). `APEX_GL=llvmpipe` is a CI-runner speed-up (GLX/TLX ~2.7×, no
 `navigator.gpu`): it needs `/dev/dri`, which this container lacks (`ls /dev/dri`; `docs/notes/CI-RENDERING-PERFORMANCE.md`).
@@ -48,14 +48,14 @@ Session shape — twelve rules that control wall time, waiting and handoff:
    a discovered executable Chromium (`node tools/lib/chromium-path.mjs --path`; fallback `bash tools/env/cloud-agent-install.sh`); a missing dependency or browser reads as a total-red run — read the FIRST failure first.
 2. Make ALL source edits first, then verify ONCE: tests serve `js/` and `css/` from the working tree, so a run in flight forbids source edits, `index.html` included (`protect-files.sh` enforces it).
 3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above: `test:guards` (the commit hook,
-   every commit) ⊂ `test:tooling-fast` (`gen-ladder-figures.mjs --table` sizes it) ⊂ `deploy.mjs --gate-only`, the only
+   every commit) ⊂ `test:tooling-fast` (`gen-ladder-figures.mjs --table` sizes it) ⊂ `deploy.mjs --gate-only`, the
    pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine; `docs/notes/PREPUSH-GATE-LADDER.md`).
    Before every code `git push`: `npm run test:tooling-fast` plus the change-aware pick (`pick-tests`) must pass; edit loops may use `verify-change --fast --json` / `tooling-fast --changed` for a diff-sized budget.
 4. BLOCK OR BACKGROUND, by duration and whether the NEXT step needs the answer. Foreground: under 2 min and needed now (`test:guards` about a minute, one `node --test`, `verify-track`, `pick-tests`).
    Background, ONE Bash `run_in_background` task logging to `artifacts/logs/`: 2–15 min (`tooling-fast`, `deploy.mjs --gate-only`) and a browser group (`test-bg.mjs <group>`, then `test-bg.mjs --wait --timeout 45` as the task; exit 1 = red, 124 = still running).
    While it runs, do work that does not touch it: research, docs/tools/tests edits, a read-only subagent, or the NEXT change in a linked worktree (`EnterWorktree`; shared-contract files stay out of worktrees). Never `js/`/`css/` in this checkout, a second browser group, or a CPU-heavy node suite on top of a browser run — that load IS the timeout.
-   A `Monitor` expires at 30 min: early warning only (`tail -f <log> | grep --line-buffered -E '^= |Error:'`); the verdict is rule 5's, never the waiter's or the process table's (`pgrep -f` matches its own shell). A hand-rolled `until ! pgrep` waiter dies with its task: use `node tools/ci/wait-for.mjs --log-matches <log> '^= '` instead.
-   Push once per green local cycle; no second push until CI reports — a push over a live CI run cancels it and loses its failures. `node tools/ci/queue-depth.mjs` is an informational gauge (JOBS vs the 40 Linux / 5 macOS slots); nothing holds a push on it (retired 2026-10-16: a held push runs later for the same slot-minutes, and the hold's release caused the synchronized bursts). Never cancel a queued or running Actions run: a queued run holds no slot, a sweep only buys a retrigger push (2026-10-15: 306 of 401 PR runs), and both doors refuse it (`APEX_RUN_CANCEL_OK=1` when the user asks).
+   A `Monitor` defaults to 5 min and caps at 30 (pass the timeout): early warning only (`tail -f <log> | grep --line-buffered -E '^= |Error:'`); the verdict is rule 5's, never the waiter's or the process table's (`pgrep -f` matches its own shell). A hand-rolled `until ! pgrep` waiter dies with its task: use `node tools/ci/wait-for.mjs --log-matches <log> '^= '` instead.
+   Push once per green local cycle; no second push until CI reports — a push over a live CI run cancels it and loses its failures. `node tools/ci/queue-depth.mjs` is an informational gauge (JOBS vs the 40 Linux / 5 macOS slots); nothing holds a push on it. Never cancel a queued or running Actions run: a queued run holds no slot, a sweep only buys a retrigger push (2026-10-15: 306 of 401 PR runs), and both doors refuse it (`APEX_RUN_CANCEL_OK=1` when the user asks).
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs` (it refuses any start at loadavg ≥ 3, and a second concurrent group).
    Anchor on `grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'`, never a looser pattern, the process table, or `| tail` on a live log.
 6. Stop a run with `node tools/ci/test-bg.mjs --stop` (`--stop --sweep` when its supervisor is dead); `bash-guard.sh` refuses a PID kill, which orphans every Chromium the run opened.
@@ -174,11 +174,11 @@ Work happens on a `cursor/<topic>-<hash>` branch (topic slug + 4–8 char disamb
 finish as they are, with no new ones. The deploy branch `claude/f1-game-project-26h3ng` is protected (a direct push is
 refused; a PR needs its one required check, `CI`, green), so work lands through a PR (`deploy.mjs --pr`) and only it ships
 (https://brycejmurrin.github.io/f1-game/). NEW generated images/galleries/reports stay under ignored `artifacts/` or `scratch/`; publish selected evidence with `node tools/shot/publish-evidence.mjs --dir artifacts/<capture> --label <slug> --publish` and link the release assets (`docs/EVIDENCE-STORAGE.md`). Do not commit new capture output on an image branch. Existing `track-survey-assets` PRs retain their base and old pinned links; never merge that branch into the deploy branch (`docs/notes/SURVEY-ASSETS-BRANCH.md`). Fixes a survey finds go in a separate image-free PR. A deploy merges other sessions' work: re-measure on the merged tree, and never force-push or rebase.
-Before fixing a red you did NOT cause, run `node tools/ci/who-is-on-it.mjs` (`--claim "<text>"` before you start, `--release` after) and list the host's live sessions: a fix already pushed, a live claim, or a session already on your paths → STOP (binding; `docs/notes/SHARED-BRANCH-COORDINATION.md`).
+Before fixing a red you did NOT cause, run `node tools/ci/who-is-on-it.mjs` (`--claim "<text>"` before you start, `--release` after) and list the host's live sessions: a fix already pushed, a live claim, or a session already on your paths → STOP (binding by convention — the tool informs and never blocks; `docs/notes/SHARED-BRANCH-COORDINATION.md`).
 SYNC ONLY WHEN YOU MUST: GitHub reports CONFLICTING/DIRTY or a required tip check is red; clean-behind is not a reason, and every re-sync buys a full PR run. Sync by merging the deploy tip (`origin/claude/f1-game-project-26h3ng`) through `node tools/ci/sync-pr.mjs <branch>`, never a hand merge (it cures ratchets and generated-file conflicts, leaves you ON `sync-pr-<branch>`, and pushes nothing without `--push`; recovery in check-changes).
 `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge → `test:tooling-fast` → ci.yml's node suites → `verify-track` → push; it cures generated-file conflicts and stops on any other).
 It prints the branch's last ci/pages conclusions first, so an INHERITED red is visible before you blame your push (`--pr` opens a PR, `--plan` prints the union, `--gate-only` gates and stops, `--train` adds the nightly rota).
-Shipping is a RELEASE TRAIN: a push to the deploy branch starts `pages.yml`, which gates the tip once and publishes exactly that commit (dispatch = "deploy now"; gated publish median 23 min, p90 73; one running + one pending train, a newer push replaces the pending one; never dual-dispatch Pages). "Live?" = ancestor
+Shipping is a RELEASE TRAIN: a push to the deploy branch starts `pages.yml`, which gates the tip once and publishes exactly that commit (dispatch = "deploy now"; gated publish median ~12 min, p90 20–34 (re-measured 2026-10-26; 23/73 was pre-#2333); one running + one pending train, a newer push replaces the pending one; never dual-dispatch Pages). "Live?" = ancestor
 of the live `apex-sha` (agent `deploy-research`; `docs/TESTING.md` §Release train).
 
 ### Backlog

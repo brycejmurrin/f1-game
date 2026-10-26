@@ -62,11 +62,16 @@ esac
 case "$REL" in
   tests/specs/*.spec.js|tests/unit/*.test.mjs|tests/unit/*.test.cjs)
     BASE=$(basename "$REL"); MISSING=()
-    if ! node tools/ci/test-coverage-audit.mjs >/dev/null 2>&1 \
-       && node tools/ci/test-coverage-audit.mjs 2>&1 | grep -qF "$BASE"; then
-      MISSING+=("add it to a group in tests/groups.json (a spec: one topical browser group; a unit file: toolingFast or a ci.yml node group), then \`node tools/gen/gen-test-groups.mjs\`")
+    # A file git already tracks passed test:guards at its own commit; only a NEW
+    # test file can be unregistered (2026-10-26: 1,154 of 1,187 tracked test files
+    # have no basename in TESTING.md, so the old check warned on every test edit).
+    if ! git ls-files --error-unmatch -- "$REL" >/dev/null 2>&1; then
+      AUDIT_RC=0; AUDIT_OUT=$(node tools/ci/test-coverage-audit.mjs 2>&1) || AUDIT_RC=$?
+      if [ "$AUDIT_RC" -ne 0 ] && printf '%s' "$AUDIT_OUT" | grep -qF "$BASE"; then
+        MISSING+=("add it to a group in tests/groups.json (a spec: one topical browser group; a unit file: toolingFast or a ci.yml node group), then \`node tools/gen/gen-test-groups.mjs\`")
+      fi
+      grep -qF "$BASE" docs/TESTING.md 2>/dev/null || MISSING+=("give it a row in the docs/TESTING.md §5 coverage table (what it covers)")
     fi
-    grep -qF "$BASE" docs/TESTING.md 2>/dev/null || MISSING+=("give it a row in the docs/TESTING.md §5 coverage table (what it covers)")
     # (No "declare > 180 s" advice: that used to tell authors how to opt a
     # spec OUT of the change-aware gate. Since 2026-10-04 a declared-slow
     # routed spec runs in select-specs' over-budget pool instead.)

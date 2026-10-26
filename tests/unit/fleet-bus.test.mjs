@@ -82,6 +82,10 @@ test("bus lines: typed, one address, round-trip; non-bus subjects are dropped", 
   assert.equal(l, "READY to:#2990 from:claude:session_A abc1234 ready-gate 0");
   assert.deepEqual(parseLine(l), { type: "READY", to: "#2990", from: A, text: "abc1234 ready-gate 0" });
   assert.throws(() => formatLine("PING", "*", A), /unknown type/);
+  // An empty or whitespace body is refused (2026-10-26: six empty HANDOFF lines from a flag that ate the text).
+  assert.throws(() => formatLine("HANDOFF", "B", A, ""), /empty text/);
+  assert.throws(() => formatLine("HANDOFF", "B", A, "   "), /empty text/);
+  assert.throws(() => formatLine("HANDOFF", "B", A), /empty text/);
   assert.throws(() => formatLine("DONE", "a b", A), /one address/);
   assert.equal(parseLine("Merge branch 'x'"), null);
   assert.equal(parseLine("SWEEP to:x from:y"), null, "only the typed set");

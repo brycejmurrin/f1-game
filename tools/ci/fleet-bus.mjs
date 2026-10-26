@@ -106,7 +106,11 @@ export function formatLine(type, to, from, text = "") {
   if (!TYPES.includes(type)) throw new Error(`unknown type ${type} (one of ${TYPES.join(" ")}). ${TYPE_HINT}`);
   const bad = addressProblem(to);
   if (bad) throw new Error(`${bad}. --to takes one of: ${ADDRESS_FORMS}`);
-  return `${type} to:${to} from:${from} ${String(text).replace(/\s+/g, " ").trim()}`.trim();
+  const body = String(text ?? "").replace(/\s+/g, " ").trim();
+  // An empty body is never a message (2026-10-26: six empty HANDOFF lines from one
+  // sender whose `--body` flag ate the text; the reader then asked for a resend).
+  if (!body) throw new Error("empty text: a bus line needs a body (text is positional: send TYPE --to ADDR \"text\")");
+  return `${type} to:${to} from:${from} ${body}`;
 }
 
 /** A commit subject -> { type, to, from, text }, or null when it is not a bus line. Pure. */
@@ -335,7 +339,7 @@ function usage(msg) {
   if (msg) console.error(`fleet-bus: ${msg}`);
   console.error("usage: fleet-bus.mjs lease [acquire|renew|release|check|break] [--ttl MIN] [--note T] [--grant T]\n" +
     "       fleet-bus.mjs send <TYPE> --to <ADDR> \"<text>\"   ADDR: " + ADDRESS_FORMS + "\n" +
-    "       fleet-bus.mjs read [--to ADDR ...] [--since SHA] [--last N] [--json]\n" +
+    "       fleet-bus.mjs read [--to ADDR ...] [--since SHA] [--last N] [--json] [--peek]   (--last applies only when no cursor is known; --peek leaves the cursor)\n" +
     "       fleet-bus.mjs who <fleet letter> [--last N] [--json]   (exit 1: no live orchestrator line)\n" +
     "       common: --as <host>:<id>   types: " + TYPES.join(" "));
   return 1;
@@ -344,16 +348,24 @@ function usage(msg) {
 export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 1000), log = console.log, dispatch = pokeFleetBoard,
   readyCheck = readyClaimVerdict } = {}) {
   const flags = {}, multi = { to: [] }, pos = [];
+  // Flags are an allow-list: an unknown `--flag` used to swallow the next word
+  // (so `--body "text"` sent an empty line). Text is positional.
+  const VALUE_FLAGS = new Set(["to", "as", "since", "last", "ttl", "note", "grant"]);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") flags.json = true;
+    else if (a === "--peek") flags.peek = true;
     else if (a.startsWith("--")) {
-      const k = a.slice(2), v = argv[++i];
+      const k = a.slice(2);
+      if (!VALUE_FLAGS.has(k)) return usage(`unknown flag ${a} (text is positional; flags: --${[...VALUE_FLAGS].join(" --")} --json --peek)`);
+      const v = argv[++i];
       if (v === undefined) return usage(`${a} needs a value`);
       if (k === "to") multi.to.push(v); else flags[k] = v;
     } else pos.push(a);
   }
   const [cmd, sub] = pos;
+  // --as is <host>:<id>; the id itself is not checked (grok:DAD and cursor bot ids are real senders).
+  if (flags.as !== undefined && !/^(claude|codex|cursor|grok):\S+$/.test(flags.as)) return usage(`--as must be <host>:<id> (got ${flags.as})`);
   const me = whoAmI(process.env, flags.as);
   const needMe = () => { if (!me) throw new Error("no identity: pass --as <host>:<id> or set APEX_FLEET_AS"); };
   try {
@@ -410,10 +422,17 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
       if (!since && file) try { since = fs.readFileSync(file, "utf8").trim(); } catch { /* first read */ }
       const r = readBus({ cwd, since, last: Number(flags.last) || 20 });
       const shown = r.entries.filter((e) => addressed(e.to, multi.to));
-      if (flags.json) log(JSON.stringify({ tip: r.tip, reset: r.reset, entries: shown }));
+      const hidden = r.entries.length - shown.length;
+      if (flags.json) log(JSON.stringify({ tip: r.tip, reset: r.reset, hidden, entries: shown }));
       else for (const e of shown) log(`${new Date(e.at * 1000).toISOString().slice(11, 16)}Z ${e.sha.slice(0, 7)} ${e.type} to:${e.to} from:${e.from} ${e.text}`.trimEnd());
-      if (file && r.tip) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, r.tip + "\n"); }
-      if (!flags.json) log(`= bus ${shown.length} new${r.reset ? " (cursor unknown: last " + (Number(flags.last) || 20) + ")" : ""}, cursor ${r.tip ? r.tip.slice(0, 7) : "none"}`);
+      // --peek reads without moving the cursor; a plain read advances it to the tip,
+      // past lines a --to filter hid (the count is printed so nothing vanishes silently).
+      if (file && r.tip && !flags.peek) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, r.tip + "\n"); }
+      if (!flags.json) {
+        const note = r.reset ? " (cursor unknown: last " + (Number(flags.last) || 20) + ")"
+          : (flags.last && !flags.since ? " (--last ignored: cursor known; use --since <sha> or --peek)" : "");
+        log(`= bus ${shown.length} new${hidden ? ` (${hidden} hidden by --to)` : ""}${note}, cursor ${r.tip ? r.tip.slice(0, 7) : "none"}${flags.peek ? " (peek: cursor not moved)" : ""}`);
+      }
       return 0;
     }
     return usage(cmd ? `unknown command ${cmd}` : "");

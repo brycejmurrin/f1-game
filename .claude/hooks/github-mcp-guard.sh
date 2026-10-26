@@ -12,11 +12,11 @@
 #                                                  -> "deny" (merge commits only)
 #   enable_pr_auto_merge without mergeMethod MERGE  -> "ask" (the repo default may be squash)
 #   merge_pull_request / enable_pr_auto_merge       -> "deny" unless artifacts/merge-gate/<pr>.json
-#                                                     is ok, < 30 min old and its head is the call's
+#                                                     is ok, < 10 min old and its head is the call's
 #                                                     expectedHeadSha (merge_policy.receipt_check)
 #   update_pull_request draft falsy (false/0/"no"/"off", any case: draft->ready)
 #                                                  -> "deny" unless artifacts/ready-gate/<pr>.json
-#                                                     is ok and < 30 min old
+#                                                     is ok and < 10 min old
 #   any other update_pull_request (title/body/base) -> silent pass
 #   actions_run_trigger *cancel* (cancel_workflow_run, force_cancel_…)
 #                                                  -> "deny" (a queued run holds no slot; a sweep

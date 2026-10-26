@@ -37,7 +37,7 @@ stayed separate in the 2026-09-03 pass.
 | **audio-debug** | Engine sounds flat at high speed, sfx not triggering, gear-shift audio wrong, music cuts out, WebAudio debugging. |
 | **career-mode** | DRIVER CAREER, MY TEAM, career saves, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs. |
 | **check** | `/check` (phone verb): one ≤ 5-line status — `session-status.mjs --pr`, `ci-watch.mjs --once`, a live `test-bg` run, live sha + ancestor-of-live. Read-only. |
-| **ship** | `/ship` ("push", "push to the deploy branch"): check-changes → `deploy.mjs --pr` or push + draft PR with `run-ci` → `ready-gate` → `SWEEP`; "skip the gate" goes in the PR body. Never merges. |
+| **ship** | `/ship` ("push", "push to the deploy branch"): check-changes → `deploy.mjs --pr` or push + draft PR with `run-ci` → `ready-gate` → READY to the fleet's orchestrator; "skip the gate" goes in the PR body. Never merges. |
 | **handoff** | `/handoff`: a paste-ready cold-start prompt (repo, branch + sha verified on the remote, PR, Plan, skills); never a repo-root HANDOFF file. |
 | **check-changes** | Pre-push validation — `verify-change.mjs --fast` / `--plan` + batched `test-bg`; generated shell/cache policy (`references/bump.md`), a Playwright timeout triage (`references/triage.md`), merging with / pushing to the deploy branch (`references/deploy.md`). |
 | **ci-watch** | **Dormant** unless Bryce designated this session as Merge Desk: `pr-board.mjs`, ready after ready-gate, disarm retired squash/rebase arms; never merges. No desk → **steward** + orchestrator pacing (`role-merge-holder`). |

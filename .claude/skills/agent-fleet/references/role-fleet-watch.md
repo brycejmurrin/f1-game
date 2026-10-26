@@ -6,6 +6,7 @@ possible and setup a system for it to constantly check and subscribe to all our
 prs", then "design a better agent role with all this setup". He picked, in the
 orchestrator's session (AskUserQuestion, 2026-10-19 ~04:55Z): **routine fixes,
 no merges**; **events plus 3-minute ticks**; **Sonnet**; **a live dashboard page**.
+(Cadence since #3773, 2026-10-26: the bus Monitor replaces the 3-minute tick — §Wake sources below; `orchestrator.md` §First acts.)
 
 One fleet-watch session runs per orchestrator. It finds problems in seconds to
 minutes, fixes the routine ones itself, and sends the orchestrator only what
