@@ -567,6 +567,7 @@ const NetTransport = (function () {
           ep.status = "open";
           Log.info("net", "rtc open");
           ep._emit("open");
+          if (pc.connectionState === "connected") listenRestart();
         }
       };
       ch.onclose = () => {
@@ -639,7 +640,7 @@ const NetTransport = (function () {
       discTimer = setTimeout(() => {
         discTimer = null;
         const s = pc.connectionState;
-        if (ep.status !== "closed" && (s === "disconnected" || s === "failed")) {
+        if (ep.status !== "closed" && s !== "connected") {
           Log.info("net", "connection closed (" + s + " " + disconnectGraceMs + " ms)");
           shutdown(s);
         }
@@ -648,6 +649,7 @@ const NetTransport = (function () {
     ep.setDisconnectGrace = function (ms) {
       if (Number.isFinite(ms) && ms > 0) disconnectGraceMs = ms;
       if (discTimer) armDisconnectGrace();
+      if (episode && episode.expiry) armRestartExpiry(episode);
       return disconnectGraceMs;
     };
     // ICE RESTART (#3556). A Wi-Fi→cellular switch, a NAT rebinding or a
@@ -673,16 +675,31 @@ const NetTransport = (function () {
     let everConnected = false;
     let restartTimer = null;
     let episode = null;               // { code, attempt, token } while an outage lasts
+    let listener = null;              // answerer-only, last completed credentials
     let iceRestarts = 0;
+    function cancelRestart(ctx) {
+      if (!ctx) return;
+      ctx.token.cancelled = true;
+      if (ctx.expiry) { clearTimeout(ctx.expiry); ctx.expiry = null; }
+    }
+    function armRestartExpiry(ctx) {
+      if (ctx.expiry) clearTimeout(ctx.expiry);
+      ctx.expiry = setTimeout(() => {
+        cancelRestart(ctx);
+        if (episode === ctx) episode = null;
+      }, disconnectGraceMs);
+    }
     function endEpisode() {
       if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
-      if (!episode) return;
-      episode.token.cancelled = true;
-      episode = null;
+      const pending = episode;
+      cancelRestart(episode); cancelRestart(listener);
+      episode = listener = null;
       // A blip that healed before the answer came leaves our restart offer
       // pending; roll it back so the next episode starts from stable.
-      if (pc.signalingState === "have-local-offer" && ep.status === "open") {
-        Promise.resolve().then(() => pc.setLocalDescription({ type: "rollback" }))
+      if (pending && pc.signalingState === "have-local-offer" && ep.status === "open") {
+        Promise.resolve().then(() => {
+          if (ep.status === "open" && !episode && pc.signalingState === "have-local-offer") return pc.setLocalDescription({ type: "rollback" });
+        })
           .catch((e) => { Log.warn("net", "ice restart rollback failed:", e && e.message); });
       }
     }
@@ -708,12 +725,15 @@ const NetTransport = (function () {
         pc.addEventListener("icegatheringstatechange", check);
       });
     }
-    const live = (ctx) => episode === ctx && !ctx.token.cancelled && ep.status === "open";
+    const live = (ctx) => (episode === ctx || listener === ctx) && !ctx.token.cancelled && ep.status === "open";
     async function offerRestart(ctx) {
       while (live(ctx) && ctx.attempt < 3) {
         if (pc.signalingState !== "stable") await pc.setLocalDescription({ type: "rollback" });
+        if (!live(ctx)) return;
         if (typeof pc.restartIce === "function") pc.restartIce();
-        await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+        const offer = await pc.createOffer({ iceRestart: true });
+        if (!live(ctx)) return;
+        await pc.setLocalDescription(offer);
         await gathered();
         if (!live(ctx)) return;
         iceRestarts++;
@@ -721,6 +741,7 @@ const NetTransport = (function () {
         const r = await courier.offer(ctx.code + "R" + ctx.attempt, pc.localDescription.sdp, ctx.token);
         if (!live(ctx) || !r || !r.ok || pc.signalingState !== "have-local-offer") return;
         await pc.setRemoteDescription({ type: "answer", sdp: r.payload });
+        if (!live(ctx)) return;
         ctx.attempt++;
         await new Promise((resolve) => { restartTimer = setTimeout(resolve, RESTART_RETRY_MS); });
         restartTimer = null;
@@ -729,22 +750,41 @@ const NetTransport = (function () {
     async function answerRestart(ctx) {
       const reply = async (sdp) => {
         if (!live(ctx)) return null;
+        if (listener === ctx) {
+          // Knowledge of the newly completed secret supersedes an older
+          // retry chain. Keep at most this active chain and one fresh listener.
+          cancelRestart(episode);
+          episode = ctx; listener = null;
+        }
+        if (!ctx.expiry) armRestartExpiry(ctx);
         await pc.setRemoteDescription({ type: "offer", sdp });
-        await pc.setLocalDescription(await pc.createAnswer());
+        if (!live(ctx)) return null;
+        const answer = await pc.createAnswer();
+        if (!live(ctx)) return null;
+        await pc.setLocalDescription(answer);
         await gathered();
+        if (!live(ctx)) return null;
         iceRestarts++;
         Log.info("net", "ice restart answer " + ctx.attempt);
+        // A one-sided outage can leave our aggregate state connected. Listen
+        // on the completed secret before the courier's answer repost window
+        // ends; the older retry chain remains bounded by its own grace.
+        if (pc.connectionState === "connected") listenRestart(true);
         return live(ctx) ? pc.localDescription.sdp : null;
       };
       while (live(ctx)) {
         const r = await courier.answer(ctx.code + "R" + ctx.attempt, reply, ctx.token);
-        if (r && r.ok) ctx.attempt++;
+        if (!live(ctx)) return;
+        if (r && r.ok) {
+          ctx.attempt++;
+        }
         else if (!r || r.error !== "expired") return;   // only a quiet relay is worth another listen
       }
     }
     function beginRestart() {
       restartTimer = null;
       if (episode || !courier || ep.status !== "open") return;
+      if (listener) { episode = listener; listener = null; return; }
       const ctx = episode = { code: null, attempt: 0, token: { cancelled: false } };
       restartCode().then((k) => {
         if (!k || !live(ctx)) return null;
@@ -752,17 +792,35 @@ const NetTransport = (function () {
         return k.offerer ? offerRestart(ctx) : answerRestart(ctx);
       }).catch((e) => { Log.warn("net", "ice restart failed:", e && e.message); });
     }
+    function listenRestart(rotate = false) {
+      // Only the original answerer listens while healthy. This is the same
+      // authenticated, bounded courier exchange used during an outage; the
+      // original offerer remains the only side allowed to create offers.
+      const local = pc.currentLocalDescription || pc.localDescription;
+      if (!courier || ep.status !== "open" || !local || local.type !== "answer") return;
+      if (rotate) { cancelRestart(listener); listener = null; }
+      if (listener) return;
+      const ctx = listener = { code: null, attempt: 0, token: { cancelled: false } };
+      restartCode().then((k) => {
+        if (!k || k.offerer || !live(ctx)) return;
+        ctx.code = k.code;
+        if (episode && episode !== ctx && episode.code === ctx.code) return;
+        return answerRestart(ctx);
+      }).catch((e) => { Log.warn("net", "ice restart listener failed:", e && e.message); })
+        .finally(() => { cancelRestart(ctx); if (listener === ctx) listener = null; if (episode === ctx) episode = null; });
+    }
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
       if (Log.enabled("net", Log.DEBUG)) Log.debug("net", "pc state -> " + s);
+      if (ep.status === "closed" || ep.status === "closing") return;
       const down = s === "disconnected" || (s === "failed" && everConnected);
-      if (!down && discTimer) { clearTimeout(discTimer); discTimer = null; }
       if (s === "connected") {
+        if (discTimer) { clearTimeout(discTimer); discTimer = null; }
         if (episode) Log.info("net", "ice restart recovered");
         everConnected = true;
+        endEpisode();
+        listenRestart();
       }
-      if (!down) endEpisode();
-      if (ep.status === "closed" || ep.status === "closing") return;
       if (s === "closed" || (s === "failed" && !everConnected)) {
         Log.info("net", "connection closed (" + s + ")");
         shutdown(s);   // releases the pc — see ch.onclose

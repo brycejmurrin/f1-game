@@ -491,7 +491,8 @@
       "script": "test:agent-contract",
       "kind": "node",
       "files": [
-        "tests/unit/agentview-api-contract.test.mjs"
+        "tests/unit/agentview-api-contract.test.mjs",
+        "tests/unit/free-design-tools.test.mjs"
       ],
       "twinned": false
     },

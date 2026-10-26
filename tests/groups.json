@@ -534,6 +534,7 @@
     "// a picture. Hand-built worlds, no game VM, ~0.1 s.",
     "tests/unit/frame-math.test.mjs",
     "tests/unit/free-cam.test.mjs",
+    "tests/unit/free-design-tools.test.mjs",
     "// ...and the front-wing endplate decal, whose plate moves with every aero",
     "// recipe: measured against the real built car, not against literals.",
     "tests/unit/front-wing-decal.test.mjs",
@@ -945,6 +946,7 @@
     "// it must fail where the baseline is edited, not on a nightly.",
     "tests/unit/physics-baseline-provenance.test.mjs",
     "tests/unit/physics-characterization-vm.test.mjs",
+    "tests/unit/physics-tune-sweep.test.mjs",
     "tests/unit/pick-tests.test.mjs",
     "tests/unit/pick-unit-slices.test.mjs",
     "// Pit canopy lamps on Bahrain working lane: real setFrameLights cull, tail reserve, phone 24 / TLX-lite 16. ~0.5 s.",
@@ -1065,6 +1067,8 @@
     "tests/unit/renderer-boot-timeout.test.mjs",
     "tests/unit/renderer-picker-unavailable.test.mjs",
     "tests/unit/renderer-soft-lifecycle.test.mjs",
+    "tests/unit/rendergeom-graph.test.mjs",
+    "tests/unit/rendergeom-staging.test.mjs",
     "// Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.",
     "tests/unit/replay-buf.test.mjs",
     "// repo-size.yml's full-history size report: refuses a shallow clone (one",
@@ -1104,6 +1108,7 @@
     "tests/unit/scenery-api-contract.test.mjs",
     "tests/unit/scenery-guards.test.mjs",
     "tests/unit/scenery-kits.test.mjs",
+    "tests/unit/scenery-preview-budget.test.mjs",
     "tests/unit/screen-looks.test.mjs",
     "// Lazy bundles preload every gated wave and still evaluate in edge order; the boot preloads its likely backend (B·H8 load hunt).",
     "tests/unit/script-loader-preload.test.mjs",
@@ -1576,7 +1581,8 @@
     },
     "test:agent-contract": {
       "files": [
-        "tests/unit/agentview-api-contract.test.mjs"
+        "tests/unit/agentview-api-contract.test.mjs",
+        "tests/unit/free-design-tools.test.mjs"
       ],
       "kind": "node"
     },

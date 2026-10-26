@@ -50,7 +50,7 @@ import { bootSheetShape } from "../helpers/sheetshape-boot.mjs";
  * delivery is silently swallowed — a harness artefact that looks exactly like
  * the bug under test and would have "proved" it on healthy code.
  */
-function boot() {
+function boot(initial = {}) {
   const winListeners = new Map();
   const vvListeners = new Map();
   const add = (map) => (type, fn) => {
@@ -76,6 +76,7 @@ function boot() {
     addEventListener: add(winListeners),
     visualViewport: vv,
     innerWidth: 390, innerHeight: 844, devicePixelRatio: 3,
+    ...initial,
   }));
 
   const fire = (target, type) => {
@@ -243,4 +244,43 @@ test("title scrollers reset when body shape flips on settle", () => {
     "a leftover #overlay scrollTop from portrait must not survive the flip");
   assert.equal(mb.scrollTop, 0,
     "a leftover #menu-buttons scrollTop from portrait must not survive the flip");
+});
+
+
+// Home Screen launch can settle without a window resize. Model the reported
+// normal-density wide launch -> compact wide viewport; rotation must be optional.
+function bootHomeLaunch() {
+  return boot({
+    innerWidth: 852, innerHeight: 700,
+    getComputedStyle: () => ({ getPropertyValue: (key) =>
+      ({ "--ui-scale": "1.09", "--compact-at": "600px" }[key] || "") }),
+  });
+}
+
+test("Home Screen startup rechecks a viewport that settles without resize", () => {
+  const { dom, sb, vv, runTimers } = bootHomeLaunch();
+  assert.equal(dom.document.body.dataset.shape, "wide");
+  assert.equal(dom.document.body.dataset.density, "normal");
+  sb.innerHeight = 393; vv.height = 393;
+  runTimers();
+  assert.equal(dom.document.body.dataset.density, "compact",
+    "a landscape launch must settle into the compact title without a rotation");
+});
+
+test("pageshow re-arms settling for a restored Home Screen window", () => {
+  const { dom, sb, vv, fire, runTimers } = bootHomeLaunch();
+  runTimers();
+  fire("win", "pageshow"); // restoration event can precede final dimensions
+  sb.innerHeight = 393; vv.height = 393;
+  runTimers();
+  assert.equal(dom.document.body.dataset.density, "compact");
+});
+
+test("visual viewport resize updates title density as well as keyboard padding", () => {
+  const { dom, sb, vv, fire, runTimers } = bootHomeLaunch();
+  fire("vv", "resize"); // prime the unchanged zero-keyboard band
+  runTimers();
+  sb.innerHeight = 393; vv.height = 393;
+  fire("vv", "resize");
+  assert.equal(dom.document.body.dataset.density, "compact");
 });

@@ -34,6 +34,11 @@ const ChunkBins = (function () {
    * (= emission, along the arc) order, key -> { idx: Int32Array [a,b,c,…], mn: [x,y,z], mx: [x,y,z] }.
    */
   function bin(pos, idx, cell) {
+    const steps = binSteps(pos, idx, cell);
+    let next; do { next = steps.next(); } while (!next.done);
+    return next.value;
+  }
+  function* binSteps(pos, idx, cell) {
     // Two passes over typed arrays rather than one over growable JS arrays: the
     // first files each triangle under its bucket (Map lookup once per triangle)
     // and grows the bucket's AABB, the second copies indices into exact-size
@@ -47,6 +52,7 @@ const ChunkBins = (function () {
     const ids = new Map();
     let nb = 0, cnt = new Int32Array(64), box = new Float64Array(64 * 6);
     for (let t = 0; t < T; t++) {
+      if ((t & 2047) === 0) yield;
       const a = idx[t*3], b = idx[t*3+1], c = idx[t*3+2];
       const ax=pos[a*3],ay=pos[a*3+1],az=pos[a*3+2], bx=pos[b*3],by=pos[b*3+1],bz=pos[b*3+2],
             cx=pos[c*3],cy=pos[c*3+1],cz=pos[c*3+2];
@@ -70,20 +76,22 @@ const ChunkBins = (function () {
       if (cx<box[o])box[o]=cx; if (cx>box[o+3])box[o+3]=cx; if (cy<box[o+1])box[o+1]=cy; if (cy>box[o+4])box[o+4]=cy; if (cz<box[o+2])box[o+2]=cz; if (cz>box[o+5])box[o+5]=cz;
     }
     const out = new Array(nb), fill = new Int32Array(nb);
-    for (let i = 0; i < nb; i++) out[i] = new Int32Array(cnt[i]);
+    for (let i = 0; i < nb; i++) { if ((i & 2047) === 0) yield; out[i] = new Int32Array(cnt[i]); }
     for (let t = 0; t < T; t++) {
+      if ((t & 2047) === 0) yield;
       const id = of[t], arr = out[id], w = fill[id];
       arr[w] = idx[t*3]; arr[w+1] = idx[t*3+1]; arr[w+2] = idx[t*3+2];
       fill[id] = w + 3;
     }
     const buckets = new Map();
-    ids.forEach((id, k) => {
+    for (const [k, id] of ids) {
+      if ((id & 2047) === 0) yield;
       const o = id * 6;
       buckets.set(k, { idx: out[id], mn: [box[o], box[o+1], box[o+2]], mx: [box[o+3], box[o+4], box[o+5]] });
-    });
+    }
     return buckets;
   }
 
-  return { CELL, BIAS, STRIDE, cellSize, cellOf, key, gxOf, gzOf, bin };
+  return { CELL, BIAS, STRIDE, cellSize, cellOf, key, gxOf, gzOf, bin, binSteps };
 })();
 Object.freeze(ChunkBins);

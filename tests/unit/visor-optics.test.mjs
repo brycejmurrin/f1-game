@@ -30,7 +30,7 @@ function ctx2d(calls) {
 }
 
 function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "" } = {}) {
-  const calls = { clear: 0, stroke: 0, arc: 0, inserted: null, props: {}, attrs: {} };
+  const calls = { clear: 0, stroke: 0, arc: 0, bendMaps: 0, inserted: null, props: {}, attrs: {} };
   const live = { visor };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } }, nextSibling: null };
   const body = {
@@ -43,7 +43,7 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
   const document = {
     body,
     getElementById: (id) => (id === "game" ? game : null),
-    createElement: () => ({ width: 0, height: 0, hidden: false, setAttribute() {}, getContext: () => ctx2d(calls), toDataURL: () => "data:," }),
+    createElement: () => ({ width: 0, height: 0, hidden: false, setAttribute() {}, getContext: () => ctx2d(calls), toDataURL: () => { calls.bendMaps++; return "data:,"; } }),
     createElementNS: () => ({ setAttribute() {}, appendChild() {}, style: {}, querySelectorAll: () => [] }),
   };
   class Path2D { constructor(d) { this.d = d; } }
@@ -59,7 +59,7 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
   });
   seedLog(ctx);
   const V = vm.runInContext(read("js/fx/visor-optics.js") + ";VisorOptics", ctx, { filename: absSrc("js/fx/visor-optics.js") });
-  return { V, calls, listeners, live };
+  return { V, calls, listeners, live, win: ctx.window };
 }
 
 const DAY = { eye: [0, 1, 0], tgt: [0, 1, -10], fov: 62, sunDir: [0.3, 0.7, -0.65], sunColor: [1.1, 1.0, 0.9], exposure: 1, ambientSky: [0.5, 0.6, 0.8], lights: null, tailStart: 0, floodEmit: 0 };
@@ -325,6 +325,21 @@ test("visor refraction: the rim bend map and its three filters are built once pe
   const { V: off } = load({ apex, refraction: "off" });
   off.tick(1 / 60, true, 0, false);
   assert.equal(off.stats().bend, "", "refraction OFF builds no map");
+});
+
+test("visor refraction builds and resizes with reflections OFF in a fresh helmet session", () => {
+  const { V, calls, win } = load({ reflections: "off", refraction: "medium" });
+  V.tick(1 / 60, true, 0, false);
+  assert.equal(V.stats().bend, "medium", "the world filter exists without reflection painting");
+  assert.equal(calls.bendMaps, 1);
+  assert.equal(calls.inserted, null, "no reflection canvas is needed");
+  assert.equal(V.stats().paints, 0);
+  V.tick(1 / 60, true, 0, false);
+  assert.equal(calls.bendMaps, 1, "unchanged viewport reuses the map");
+  win.innerWidth = 390; win.innerHeight = 844;
+  V.tick(0, true, 0, false);
+  assert.equal(calls.bendMaps, 2, "paused resize rebuilds the map for the new aperture");
+  assert.equal(V.stats().paints, 0, "reflections stay off after resize");
 });
 
 test("visor blend (#3657): plus-lighter on WebGPU only; WebGL2, GLX and an unknown backend composite as plain over", () => {

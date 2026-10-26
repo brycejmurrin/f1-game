@@ -108,6 +108,29 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/assets/gltf-check.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/assets/procedural-room.example.json",
+      "classification": "data",
+      "outputPolicy": "keep-native"
+    },
+    {
+      "path": "tools/assets/procedural-room.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/car/audit-aero.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -882,6 +905,11 @@
       ]
     },
     {
+      "path": "tools/ci/deploy-child.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/ci/deploy.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "job-status",
@@ -1563,6 +1591,11 @@
       ]
     },
     {
+      "path": "tools/desktop/minify-worker.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/desktop/minify.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -1623,10 +1656,25 @@
       ]
     },
     {
+      "path": "tools/env/chat-mcp-service.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/env/cloud-agent-install.sh",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
       "interpreter": "bash"
+    },
+    {
+      "path": "tools/env/configure-chat-mcp.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
     },
     {
       "path": "tools/env/ensure-mcp-ready.sh",
@@ -1748,7 +1796,11 @@
       "path": "tools/gen/gen-flags-table.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
-      "interpreter": "node"
+      "interpreter": "node",
+      "npmScripts": [
+        "gen:check",
+        "gen:docs"
+      ]
     },
     {
       "path": "tools/gen/gen-hooks-table.mjs",
@@ -2599,6 +2651,17 @@
       "interpreter": "python3"
     },
     {
+      "path": "tools/mcp/chat-gateway.mjs",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
+    },
+    {
+      "path": "tools/mcp/check-chat-contract.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/mcp/chrome-devtools-mcp.sh",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only"
@@ -2624,6 +2687,11 @@
       "path": "tools/mcp/garage-plan.mjs",
       "classification": "ambiguous",
       "outputPolicy": "keep-native"
+    },
+    {
+      "path": "tools/mcp/job-admission.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/mcp/js-debugger-boot.cjs",
@@ -3704,6 +3772,11 @@
       ]
     },
     {
+      "path": "tools/ui/design-evidence.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
       "path": "tools/ui/explorer.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -3818,6 +3891,12 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/ui/review-captures.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ui/ui-scale-axis.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -3863,11 +3942,11 @@
     },
     {
       "name": "gen:check",
-      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check && node tools/gen/gen-changelog.mjs --check"
+      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-flags-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check && node tools/gen/gen-changelog.mjs --check"
     },
     {
       "name": "gen:docs",
-      "command": "node tools/gen/gen-tools-readme.mjs && node tools/gen/gen-slider-doc.mjs && node tools/gen/gen-hooks-table.mjs && node tools/gen/gen-arch-table.mjs && node tools/docs/gen-coverage-table.mjs && node tools/docs/gen-agent-index.mjs && node tools/gen/gen-output-surface.mjs && node tools/gen/gen-locales.mjs"
+      "command": "node tools/gen/gen-tools-readme.mjs && node tools/gen/gen-slider-doc.mjs && node tools/gen/gen-hooks-table.mjs && node tools/gen/gen-flags-table.mjs && node tools/gen/gen-arch-table.mjs && node tools/docs/gen-coverage-table.mjs && node tools/docs/gen-agent-index.mjs && node tools/gen/gen-output-surface.mjs && node tools/gen/gen-locales.mjs"
     },
     {
       "name": "memory:list",
@@ -3907,7 +3986,7 @@
     },
     {
       "name": "test:agent-contract",
-      "command": "node --test --test-timeout=900000 tests/unit/agentview-api-contract.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/agentview-api-contract.test.mjs tests/unit/free-design-tools.test.mjs"
     },
     {
       "name": "test:agent-output",

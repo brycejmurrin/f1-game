@@ -314,6 +314,49 @@ test("B3: ensureXrBackend refuses silently only when storage is blocked; else pi
   assert.equal(ctx.XrBoot.ensureXrBackend().ok, true);
 });
 
+test("a pending VR entry waits for a fresh tap after renderer reload", async () => {
+  const store = new Map([["apex26.xrEnterPending", "1"]]);
+  const listeners = {};
+  const button = {
+    hidden: true, disabled: false, textContent: "", attrs: {},
+    addEventListener(type, fn) { listeners[type] = fn; },
+    setAttribute(key, value) { this.attrs[key] = value; },
+  };
+  const body = { appendChild(node) { node.parentNode = this; return node; } };
+  let activeGesture = false, requests = 0;
+  const ctx = vm.createContext({
+    document: { body, createElement: () => button }, window: {},
+    localStorage: { getItem: (k) => store.get(k) ?? null,
+      setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
+    navigator: { xr: { requestSession: () => {
+      requests++;
+      assert.equal(activeGesture, true, "immersive request needs the new click's activation");
+      return Promise.resolve({});
+    } } },
+    XrSession: { bind() {}, on: () => () => {}, probe: async () => true,
+      isPresenting: () => false, isSupported: () => true,
+      start() { return ctx.navigator.xr.requestSession("immersive-vr"); } },
+  });
+  seedLog(ctx);
+  vm.runInContext(read("js/xr/xr-ui.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-ui.js") });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
+  ctx.XrBoot.bind({ gfx: { xrCapable: () => true, attachXrSession() {} }, tickBody() {}, windowTick() {},
+    getCamMode: () => 0, setCamMode() {} });
+  ctx.XrBoot.mountUi();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(requests, 0, "mount never tries to auto-enter without activation");
+  assert.equal(store.has("apex26.xrEnterPending"), false);
+  assert.equal(button.hidden, false);
+  assert.equal(button.disabled, false);
+  assert.equal(button.textContent, "TAP TO ENTER VR");
+
+  activeGesture = true;
+  const click = listeners.click({ preventDefault() {}, stopPropagation() {} });
+  activeGesture = false;
+  await click;
+  assert.equal(requests, 1, "the user tap requests the immersive session");
+});
+
 test("CamModes.setCamMode({persist:false}) skips store.write", () => {
   const writes = [];
   const G = {
@@ -870,6 +913,31 @@ async function mountWith({ xr, ls = {} }) {
   for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r));
   return loads;
 }
+
+test("fresh lazy XR boot publishes capability to settings and the next boot", async () => {
+  const values = new Map();
+  const ctx = bootXr();
+  const element = () => ({ hidden: false, disabled: false, setAttribute() {}, addEventListener() {}, appendChild() {} });
+  ctx.localStorage = { getItem: (k) => values.get(k) ?? null, setItem: (k, v) => values.set(k, v), removeItem: (k) => values.delete(k) };
+  ctx.navigator = { xr: { isSessionSupported: async () => true } };
+  ctx.document = { readyState: "loading", body: element(), addEventListener() {}, createElement: element };
+  ctx.setTimeout = setTimeout; ctx.clearTimeout = clearTimeout;
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx,
+    { filename: absSrc("js/xr/xr-boot.js") });
+  ctx.ApexRoster = { LAZY_XR: ["plan", "opts", "apex", "session", "ui"], LAZY_XR_EDGES: [] };
+  ctx.ScriptLoader = { create: () => ({ load: async () => {
+    for (const name of ["xr-plan", "xr-opts", "apex-xr", "xr-session", "xr-ui"])
+      vm.runInContext(read(`js/xr/${name}.js`).replace(/^const\b/gm, "var"), ctx,
+        { filename: absSrc(`js/xr/${name}.js`) });
+    return true;
+  } }) };
+  ctx.XrBoot.mountUi();
+  for (let i = 0; i < 12; i++) await Promise.resolve();
+  assert.equal(ctx.XrSession.isSupported(), true);
+  assert.equal(ctx.XrUi.ensureButton().hidden, false);
+  assert.equal(ctx.XROpts.capsVr(), true, "VR settings see the fresh headset capability");
+  assert.equal(values.get("apex26.xrCaps"), "1", "next boot receives the positive capability");
+});
 
 test("XrBoot.mountUi: a desktop browser with navigator.xr but no headset never fetches the XR bundle", async () => {
   assert.deepEqual(await mountWith({ xr: { isSessionSupported: async (m) => { assert.equal(m, "immersive-vr"); return false; } } }), []);

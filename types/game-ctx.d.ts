@@ -127,6 +127,8 @@ interface CarState {
   aeroX: number;
   xOn: boolean;
   retired: boolean;
+  /** Compound-rule predicate frozen when this driver takes the flag. */
+  compoundShortAtFinish: boolean | null;
   dnf: string | null;
   [key: string]: unknown;
 }

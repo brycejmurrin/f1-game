@@ -282,7 +282,7 @@ test("wiring: present() dispatches the rig warm after the entry and mirror warms
   assert.ok(TLX.includes("          if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)\n          if (!_warmPending && !_deviceLost) { if (_warmRequested)"),
     "present() marks a queued job seen before its dispatch (the harness mirrors that line)");
   // A·W56: the wheel telemetry (car-independent _rigFx) is warmed with the menu's program warm, from the same draws.
-  assert.ok(GAME.includes("_warmed.add(k + tag); gfx.warm(); carDraw.warmCockpitTelemetry(); return true;"), "game.js warmPrograms queues it with every menu warm");
+  assert.ok(GAME.includes("carDraw.warmCockpitTelemetry();") && GAME.includes("return fresh;"), "game.js warmPrograms queues telemetry on every call (rigDone dedupes), not only the first program warm");
   assert.ok(TLX.includes("        warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },"), "the backend publishes warmQueued (the harness mirrors it)");
   assert.ok(GAME.includes('if (menuBlank && !(gfx.warmQueued && gfx.warmQueued()) && --_menuGate.warm === 0) Log.info("gfx", "menu warm drawn "'),
     "the menu's last hidden warm frame is never the present that starts a queued rig job");

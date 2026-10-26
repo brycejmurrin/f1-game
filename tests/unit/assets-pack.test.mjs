@@ -1322,9 +1322,9 @@ test("bake-model round-trips glTF into the game's own vertex format", async () =
   // the MAT stamping, the AX26 writer — against a hand-built single-triangle
   // .glb. Without this the bake-model command is untested code that would only
   // fail the first time somebody reached for it.
-  const os = require("node:os");
   const cp = require("node:child_process");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-pack-"));
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-pack-"));
   try {
     const pos = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
     const nrm = new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]);
@@ -1381,16 +1381,31 @@ test("bake-model round-trips glTF into the game's own vertex format", async () =
     // glTF baseColorFactor became vertex colour, since the lit path has no UVs.
     assert.ok(Math.abs(outCol[0] - 0.8) < 0.01 && Math.abs(outCol[1] - 0.3) < 0.01,
       `baseColorFactor lost: got ${[...outCol].slice(0, 3)}`);
+
+    // The same runtime parser supports a self-contained JSON data URI without
+    // a BIN chunk. Its isolated authoring VM must supply the Node decoder too.
+    json.buffers[0].uri = `data:application/octet-stream;base64,${bin.toString("base64")}`;
+    jb = Buffer.from(JSON.stringify(json), "utf8");
+    while (jb.length % 4) jb = Buffer.concat([jb, Buffer.from(" ")]);
+    const dataChunk = chunk(0x4e4f534a, jb);
+    head.writeUInt32LE(12 + dataChunk.length, 8);
+    fs.writeFileSync(glb, Buffer.concat([head, dataChunk]));
+    const dataResult = cp.spawnSync(process.execPath,
+      [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-model", "data-tri", glb, "--mat", "CONCRETE"],
+      { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8", timeout: 10000 });
+    assert.equal(dataResult.status, 0, `data-URI bake failed: ${dataResult.stderr || dataResult.stdout}`);
+    assert.deepEqual(fs.readFileSync(path.join(dir, "models", "data-tri.bin")), fs.readFileSync(binPath),
+      "data-URI and BIN inputs must emit identical geometry, colours, normals, MAT ids and indices");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("bake-atlas slices a 4x4 sheet onto the named MAT layer", () => {
-  const os = require("node:os");
+test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
   const cp = require("node:child_process");
   const zlib = require("node:zlib");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-atlas-"));
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-atlas-"));
   try {
     const grid = 4, tile = 8, size = grid * tile;
     const rgba = Buffer.alloc(size * size * 4, 255);
@@ -1442,11 +1457,12 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", () => {
       chunk("IEND", Buffer.alloc(0)),
     ]));
 
-    const r = cp.spawnSync(process.execPath, [
+    const runBake = (low) => cp.spawnSync(process.execPath, [
       path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-atlas",
       "--albedo", atlas, "--grid", "4", "--inset", "0",
-      "--size", "8", "--low", "0", "--map", "BRICK=1,0",
-    ], { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
+      "--size", "8", "--low", String(low), "--map", "BRICK=1,0",
+    ], { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8", timeout: 10000 });
+    const r = runBake(4);
     assert.equal(r.status, 0, `bake-atlas failed:\n${r.stdout}\n${r.stderr}`);
 
     const png = fs.readFileSync(path.join(dir, "mat-albedo-8.png"));
@@ -1460,6 +1476,62 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", () => {
     assert.equal(brick.mat, 2);
     assert.equal(brick.licence, "Apex26-Procedural");
     assert.match(brick.source, /generated:.*#1,0/);
+
+    const { encodePNG, decodePNG } = await import("../../tools/gen/assets.mjs");
+    const readMobile = async () => {
+      const uploads = [], requests = [];
+      const assets = assetLoader({ Blob, DecompressionStream, Uint8Array, Float32Array, DataView, ArrayBuffer,
+        async fetch(url) {
+          requests.push(url);
+          const file = path.join(dir, url.slice("assets/pack/".length));
+          return { ok: true, json: async () => JSON.parse(fs.readFileSync(file, "utf8")),
+            blob: async () => new Blob([fs.readFileSync(file)]) };
+        } });
+      assets.init({ isMobile: true, createTextureArray(size, images) {
+        uploads.push({ size, brick: [...images[2]] }); return {};
+      }, setMaterialMaps() {} });
+      assert.equal(await assets.load(), true);
+      return { state: assets.state(), uploads, requests };
+    };
+    const lowControl = await readMobile();
+    assert.equal(lowControl.state.tier, "low");
+    assert.equal(lowControl.uploads[0].size, 4);
+    assert.deepEqual(lowControl.uploads[0].brick,
+      [...decodePNG(fs.readFileSync(path.join(dir, man.materials.low.albedo))).rgba.subarray(2 * 4 * 4 * 4, 3 * 4 * 4 * 4)]);
+    const oldLow = fs.readFileSync(path.join(dir, man.materials.low.albedo));
+
+    // Retain another layer's provenance plus unrelated records during a patch.
+    const other = { mat: 1, id: "concrete", scale: 1.25, source: "procedural:keep", licence: "CC0", author: "Fixture" };
+    man.materials.layers.unshift(other);
+    man.materials.low.layers = man.materials.layers;
+    man.env.fixture = { source: "procedural:keep", licence: "CC0", author: "Fixture", sky: [1, 1, 1] };
+    fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(man));
+    const nextPixels = Buffer.alloc(size * size * 4);
+    for (let i = 0; i < size * size; i++) {
+      const x = i % tile;
+      nextPixels.set([30 + x * 25, 210 - x * 20, 70, 255], i * 4);
+    }
+    fs.writeFileSync(atlas, encodePNG(size, size, nextPixels));
+    const disabled = runBake(0);
+    assert.equal(disabled.status, 0, disabled.stderr || disabled.stdout);
+    const updated = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
+    assert.equal(Object.hasOwn(updated.materials, "low"), false, "disabled tier must not advertise old pixels");
+    assert.notDeepEqual(fs.readFileSync(path.join(dir, updated.materials.albedo)), png);
+    assert.deepEqual(fs.readFileSync(path.join(dir, man.materials.low.albedo)), oldLow, "old files may remain unreferenced");
+    assert.deepEqual(updated.materials.layers.find(L => L.mat === 1), other);
+    assert.deepEqual(updated.env, man.env);
+    assert.deepEqual(updated.models, man.models);
+    const high = decodePNG(fs.readFileSync(path.join(dir, updated.materials.albedo)));
+    const highMobile = await readMobile();
+    assert.equal(highMobile.state.tier, "high");
+    assert.equal(highMobile.uploads[0].size, 8);
+    assert.deepEqual(highMobile.uploads[0].brick, [...high.rgba.subarray(2 * 8 * 8 * 4, 3 * 8 * 8 * 4)],
+      "a mobile backend must upload the current high pixels after low is disabled");
+    assert.equal(highMobile.requests.some(url => url.endsWith("-4.png")), false);
+    const verified = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "verify"],
+      { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8", timeout: 10000 });
+    assert.equal(verified.status, 0, verified.stderr || verified.stdout);
+    assert.match(verified.stdout, /verify: OK/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1734,8 +1806,155 @@ test("modelsReady resolves once the prefetched models are resident, and loadMode
 test("modelsReady gives up at its cap when the pack hangs, and never rejects on a failing pack", async () => {
   const hung = assetLoader({ setTimeout, clearTimeout, fetch: packFetch(new Promise(() => {})) });
   assert.equal(await hung.modelsReady(20), -1, "a hanging model fetch resolves -1 at the cap");
+  hung.unload();
   const broken = assetLoader({ setTimeout, clearTimeout, async fetch() { throw Error("offline"); } });
   assert.equal(await broken.modelsReady(1000), 0, "a failing manifest resolves 0 at once, not a rejection");
+});
+
+function assetRequestClock() {
+  let next = 0;
+  const timers = new Map();
+  return {
+    setTimeout(fn, ms) {
+      const id = ++next;
+      if (ms === 0) setImmediate(fn);  // decode admission still gets a real task
+      else timers.set(id, { fn, ms });
+      return id;
+    },
+    clearTimeout(id) { timers.delete(id); },
+    fire(ms) {
+      const due = [...timers].filter(([, value]) => value.ms === ms);
+      assert.ok(due.length, `a ${ms}ms timer must be owned by this request/waiter`);
+      for (const [id, value] of due) { timers.delete(id); value.fn(); }
+    },
+    pending() { return timers.size; },
+  };
+}
+
+test("shared model fetch and body deadlines settle stalled work and permit both readiness routes to retry", async () => {
+  for (const phase of ["fetch", "body"]) for (const source of [undefined, 'bakedModel("box")']) {
+    const clock = assetRequestClock(), stalled = deferredAssetDownload();
+    let transfers = 0, signal;
+    const assets = assetLoader({ ...clock, AbortController,
+      fetch: async (url, opts) => {
+        if (url.endsWith("manifest.json")) return { ok: true, json: async () => ({ models: { box: { file: "box.bin" } } }) };
+        transfers++;
+        if (transfers > 1) return { ok: true, arrayBuffer: async () => MODEL_V2() };
+        signal = opts.signal;
+        return phase === "fetch" ? stalled.promise : { ok: true, arrayBuffer: () => stalled.promise };
+      },
+    });
+    const first = assets.model("box");
+    const short = assets.modelsReady(4000, source), patient = assets.modelsReady(20000, source);
+    await new Promise(setImmediate);
+    assert.equal(transfers, 1);
+    clock.fire(4000); assert.equal(await short, -1);
+    assert.equal(signal.aborted, false, "one caller's timeout cannot abort shared healthy work");
+    clock.fire(15000);
+    assert.equal(await first, null, `${phase} deadline settles even a transport that ignores abort`);
+    assert.equal(await patient, 0);
+    assert.equal(signal.aborted, true);
+    assert.equal(await assets.modelsReady(4000, source), 1, "a later build starts a fresh transfer");
+    assert.equal(transfers, 2);
+    const resident = assets.modelSync("box");
+    const late = MODEL_V2(); new DataView(late).setFloat32(20, 999, true);
+    stalled.resolve(phase === "fetch" ? { ok: true, arrayBuffer: async () => late } : late);
+    await new Promise(setImmediate);
+    assert.strictEqual(assets.modelSync("box"), resident, "late timed-out bytes cannot replace the successful retry");
+    assert.equal(resident.pos[0], 0);
+    assert.equal(clock.pending(), 0, "every completed request/waiter releases its timer");
+  }
+});
+
+test("a short model waiter leaves a shared healthy request alive for its remaining callers", async () => {
+  const clock = assetRequestClock(), body = deferredAssetDownload();
+  let signal, transfers = 0;
+  const assets = assetLoader({ ...clock, AbortController, fetch: async (url, opts) => {
+    if (url.endsWith("manifest.json")) return { ok: true, json: async () => ({ models: { box: { file: "box.bin" } } }) };
+    transfers++; signal = opts.signal;
+    return { ok: true, arrayBuffer: () => body.promise };
+  } });
+  const first = assets.model("box"), short = assets.modelsReady(4000, '"box"');
+  await new Promise(setImmediate);
+  clock.fire(4000); assert.equal(await short, -1);
+  assert.strictEqual(assets.model("box"), first);
+  body.resolve(MODEL_V2());
+  assert.ok(await first);
+  assert.equal(signal.aborted, false);
+  assert.equal(transfers, 1);
+  assert.equal(clock.pending(), 0);
+});
+
+test("a stalled manifest fetch or JSON body releases its memo and permits a fresh model request", async () => {
+  for (const phase of ["fetch", "body"]) {
+    const clock = assetRequestClock(), stalled = deferredAssetDownload();
+    let manifests = 0;
+    // No AbortController: the owned deadline must still settle the consumer.
+    const assets = assetLoader({ ...clock, fetch: async (url) => {
+      if (!url.endsWith("manifest.json")) return { ok: true, arrayBuffer: async () => MODEL_V2() };
+      manifests++;
+      if (manifests > 1) return { ok: true, json: async () => ({ models: { box: { file: "box.bin" } } }) };
+      return phase === "fetch" ? stalled.promise : { ok: true, json: () => stalled.promise };
+    } });
+    const first = assets.model("box"); await new Promise(setImmediate);
+    clock.fire(15000); assert.equal(await first, null);
+    assert.equal(await assets.modelsReady(4000, '"box"'), 1);
+    assert.equal(manifests, 2);
+    const old = { models: { obsolete: { file: "obsolete.bin" } } };
+    stalled.resolve(phase === "fetch" ? { ok: true, json: async () => old } : old);
+    await new Promise(setImmediate);
+    assert.deepEqual(Array.from(assets.models()), ["box"], "late expired JSON cannot repopulate the manifest");
+    assert.equal(clock.pending(), 0);
+  }
+});
+
+test("unload cancels request ownership without clearing a newer model memo or accepting late bytes", async () => {
+  const clock = assetRequestClock(), old = deferredAssetDownload(), fresh = deferredAssetDownload();
+  let transfers = 0, oldSignal;
+  const assets = assetLoader({ ...clock, AbortController, fetch: async (url, opts) => {
+    if (url.endsWith("manifest.json")) return { ok: true, json: async () => ({ models: { box: { file: "box.bin" } } }) };
+    transfers++;
+    if (transfers === 1) oldSignal = opts.signal;
+    return { ok: true, arrayBuffer: () => transfers === 1 ? old.promise : fresh.promise };
+  } });
+  const prior = assets.model("box"); await new Promise(setImmediate);
+  assets.unload();
+  const next = assets.model("box"); await new Promise(setImmediate);
+  assert.equal(await prior, null); assert.equal(oldSignal.aborted, true);
+  old.resolve(MODEL_V2()); await new Promise(setImmediate);
+  assert.strictEqual(assets.model("box"), next, "old cleanup never deletes the replacement memo");
+  assert.equal(assets.modelSync("box"), null);
+  fresh.resolve(MODEL_V2()); assert.ok(await next);
+  assert.equal(transfers, 2); assert.equal(clock.pending(), 0);
+});
+
+test("a stalled optional normal fetch or body expires while the albedo pack still uploads", async () => {
+  for (const phase of ["fetch", "body"]) {
+    const clock = assetRequestClock(), stalled = deferredAssetDownload();
+    let normalSignal, installed;
+    const assets = assetLoader({ ...clock, AbortController,
+      fetch: async (url, opts) => {
+        if (url.endsWith("manifest.json")) return { ok: true, json: async () => ({ materials: {
+          size: 1, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }],
+        } }) };
+        if (url.endsWith("a.png")) return { ok: true, blob: async () => ({ size: 10 }) };
+        normalSignal = opts.signal;
+        return phase === "fetch" ? stalled.promise : { ok: true, blob: () => stalled.promise };
+      },
+      createImageBitmap: async () => ({ close() {} }),
+    });
+    assets.init({ createTextureArray: () => ({}), setMaterialMaps(maps) { installed = maps; } });
+    const load = assets.load(); await new Promise(setImmediate);
+    clock.fire(15000);
+    assert.equal(await load, true, phase);
+    assert.ok(installed.albedo); assert.equal(installed.normal, null);
+    assert.equal(normalSignal.aborted, true);
+    assert.equal(assets.state().bytes, 10);
+    stalled.resolve(phase === "fetch" ? { ok: true, blob: async () => ({ size: 20 }) } : { size: 20 });
+    await new Promise(setImmediate);
+    assert.equal(assets.state().bytes, 10, "late optional bytes cannot modify completed pack accounting");
+    assert.equal(clock.pending(), 0);
+  }
 });
 
 test("ensureScenery awaits THIS circuit's models (Assets.modelsReady with the closure source) before any build", { timeout: 5000 }, async () => {
@@ -1874,7 +2093,27 @@ test("verify refuses model files outside the pack, unhashed, or with out-of-rang
 
 test("glTF supplied normals match transformed triangle normals for rotations, nonuniform scale and parents", () => {
   const ctx = vm.createContext({ ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array, TextDecoder, Log: { enabled: () => false } });
-  const gltf = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF", ctx, { filename: absSrc("js/render/shared/gltf.js") });
+  const source = fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8");
+  ctx.normalMatrixCalls = 0;
+  const gltf = vm.runInContext(source.replace("function normalMatrix(m) {", "function normalMatrix(m) { normalMatrixCalls++;") + ";GLTF", ctx, { filename: absSrc("js/render/shared/gltf.js") });
+  // Frozen pre-hoist arithmetic: compare complete Float32 output bit-for-bit,
+  // including the old singular fallback and signed coefficients.
+  function normalOracle(m, n) {
+    const a = m[0], b = m[1], c = m[2], d = m[4], e = m[5], f = m[6], g = m[8], h = m[9], i = m[10];
+    const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+    if (Math.abs(det) < 1e-12) return [a * n[0] + d * n[1] + g * n[2], b * n[0] + e * n[1] + h * n[2], c * n[0] + f * n[1] + i * n[2]];
+    const id = 1 / det;
+    const c00 = (e * i - f * h) * id, c01 = (f * g - d * i) * id, c02 = (d * h - e * g) * id;
+    const c10 = (c * h - b * i) * id, c11 = (a * i - c * g) * id, c12 = (b * g - a * h) * id;
+    const c20 = (b * f - c * e) * id, c21 = (c * d - a * f) * id, c22 = (a * e - b * d) * id;
+    return [c00 * n[0] + c10 * n[1] + c20 * n[2], c01 * n[0] + c11 * n[1] + c21 * n[2], c02 * n[0] + c12 * n[1] + c22 * n[2]];
+  }
+  const oracleSource = source.replace(/const nx = normals\[i \* 3\][\s\S]*?nrmOut\.push\(x \/ l, y \/ l, z \/ l\);/, `
+    const n = normalOracle(world, [normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]]);
+    const l = (Math.hypot(n[0], n[1], n[2]) || 1) * nSign;
+    nrmOut.push(n[0] / l, n[1] / l, n[2] / l);`);
+  assert.notEqual(oracleSource, source, "oracle substitution must reach the supplied-normal emission");
+  const oracle = vm.runInNewContext(oracleSource + ";GLTF", { ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array, TextDecoder, normalOracle, Log: { enabled: () => false } }, { filename: absSrc("js/render/shared/gltf.js") });
   const glb = (nodes, supplied) => {
     const bin = Buffer.from(new Float32Array([0,0,0, 1,0,0, 0,1,1, 0,-Math.SQRT1_2,Math.SQRT1_2, 0,-Math.SQRT1_2,Math.SQRT1_2, 0,-Math.SQRT1_2,Math.SQRT1_2]).buffer);
     const json = { asset: { version: "2.0" }, buffers: [{ byteLength: bin.length }],
@@ -1895,11 +2134,28 @@ test("glTF supplied normals match transformed triangle normals for rotations, no
       { mesh: 0, rotation: [Math.sin(.2), 0, 0, Math.cos(.2)], scale: [2, .5, 3] }],
   ];
   for (const nodes of cases) {
-    const supplied = gltf.toMesh(glb(nodes, true)), geometric = gltf.toMesh(glb(nodes, false));
+    const before = ctx.normalMatrixCalls;
+    const supplied = gltf.toMesh(glb(nodes, true));
+    assert.equal(ctx.normalMatrixCalls - before, 1, "one coefficient calculation for the instance's three normals");
+    const geometric = gltf.toMesh(glb(nodes, false));
+    assert.equal(ctx.normalMatrixCalls - before, 1, "generated normals never compute an unused matrix");
     assert.deepEqual(Array.from(supplied.pos), Array.from(geometric.pos));
     for (let i = 0; i < supplied.nrm.length; i += 3) {
       const dot = supplied.nrm[i] * geometric.nrm[i] + supplied.nrm[i+1] * geometric.nrm[i+1] + supplied.nrm[i+2] * geometric.nrm[i+2];
       assert.ok(dot > .999999, "supplied normal must face the transformed triangle: " + dot);
+    }
+  }
+  const equivalenceCases = cases.concat([
+    [{ mesh: 0, rotation: [0, Math.sin(.3), 0, Math.cos(.3)], scale: [-2, .5, 3] }],
+    [{ mesh: 0, scale: [0, 2, 3] }],
+    [{ mesh: 0, scale: [1e-14, 1, 1] }],
+    [{ mesh: 0, scale: [1e-10, 1, 1] }],
+  ]);
+  for (const nodes of equivalenceCases) for (const scale of [1, -2]) {
+    const bytes = glb(nodes, true), actual = gltf.toMesh(bytes, { scale }), previous = oracle.toMesh(bytes, { scale });
+    for (const field of ["pos", "nrm", "col", "idx"]) {
+      assert.deepEqual(Buffer.from(actual[field].buffer), Buffer.from(previous[field].buffer),
+        `${field} must exactly match pre-hoist arithmetic at scale ${scale}`);
     }
   }
 });

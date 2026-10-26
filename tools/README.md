@@ -23,6 +23,15 @@ the tool's own header.
 
 ## The tools, by what they do
 
+### `tools/assets/`
+
+Local glTF validation and approval-gated zero-spend procedural Blender room drafts.
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **assets/gltf-check.mjs** | Validate local glTF/GLB assets, resource containment and budgets; optionally deduplicate into a separate GLB. | asset-pack |
+| **assets/procedural-room.py** | Build zero-spend Blender room drafts, mesh-derived plans and approval-gated glTF exports. | asset-pack |
+
 ### `tools/`
 
 Root — the load-order truth and the car studio page; every consumer hardcodes these paths.
@@ -126,6 +135,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
 | **ci/claude-usage.mjs** | Digests local Claude Code JSONL: deduped requests, input/cache/output tokens by turn trigger. | agent-fleet |
 | **ci/cursor-agents.mjs** | Cursor agents client: read, wait, artifacts, usage; launch/followup/cancel/archive/delete of agents it launched. | agent-fleet |
+| **ci/deploy-child.mjs** | Bounded deploy child supervision, including descendants and cooperative shutdown. | — |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
 | **ci/fleet-board-snapshot.mjs** | Writes the Fleet Board dashboard's six snapshot datasets to artifacts/fleet-board/; read-only, no bus cursor. | agent-fleet |
 | **ci/fleet-board.mjs** | Fleet board: current/stale claims, PR associations and backlog labels on one pinned issue. | steward |
@@ -476,6 +486,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/audit-summary.mjs** | Bounded summary of a layout-audit audit.json: totals, worst cells, per-screen rollup, one cell expanded on request. | survey-ui-matrix |
 | **ui/circuit-axis.mjs** | The `--circuits` axis for the two menu screens that draw a circuit (#select preview, #track-detail) in the fit tools. | survey-ui-matrix |
 | **ui/css-play.mjs** | One-screen CSS edit loop: host the tree, open a menu, dump structured DOM, hot-swap a stylesheet, screenshot. | css-play |
+| **ui/design-evidence.mjs** | Computed design tokens, axe accessibility evidence and standalone screenshot reviews. | css-play |
 | **ui/explorer.mjs** | UI exploration: missions, navigation atlas, filmstrips, phone/fault/a11y probes, replay reduction, scene reports. | survey-ui-matrix |
 | **ui/explorer/audit-evidence.mjs** | Strict, bounded joins of native audit evidence; no audit heuristics or CLI imports. | — |
 | **ui/explorer/browser.mjs** | UI explorer browser adapter: real actions, bounded DOM evidence, fault injection and Chromium traces. | — |
@@ -493,6 +504,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/menu-mock.mjs** | Menu layout shots (SCREENS x VIEWPORTS), 3D off, one boot per pointer: boxes, tap/overflow/text numbers, cell cache. | survey-ui-matrix |
 | **ui/menu-readiness.mjs** | Serializable menu readiness predicate, used with bounded Playwright polling. | — |
 | **ui/menu-screens.mjs** | Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools. | survey-ui-matrix |
+| **ui/review-captures.mjs** | Build a portable offline screenshot review from a bounded local evidence manifest. | css-play |
 | **ui/ui-scale-axis.mjs** | The `--scale=` axis (40–200 % interface size) shared by layout-audit, menu-fit and fit-audit. | survey-ui-matrix |
 
 ### `tools/lighting/`
@@ -529,11 +541,14 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/cdmcp-lamps-tune.py** | Asserts the LAMPS tuner sliders via Chromium MCP using `lightState().meanLampRGB` / `bakedLights` / `lampPosts`. | mcp-probe |
 | **mcp/cdmcp-lamps.py** | Night lamp screenshot suite via chrome-devtools MCP (Qatar, Singapore, Bahrain, Monza); `--port`, `--only`, `--limit`. | mcp-probe |
 | **mcp/cdmcp-measure.py** | Background-friendly Chromium MCP measure suite: boot (network/console/LCP), ui floors, full(+heap); `= run` verdict. | mcp-probe |
+| **mcp/chat-gateway.mjs** | Portable namespaced chat MCP gateway with serialized browser ownership and explicit release. | mcp-probe |
+| **mcp/check-chat-contract.mjs** | Check a live stdio gateway catalog against a saved host tool-name snapshot and harmless status call. | mcp-probe |
 | **mcp/chrome-devtools-mcp.sh** | Wrapper for the local `scratch/chrome-devtools-mcp` clone: `clone`/`build`/`run`/`verify`/`status`/`help`. | mcp-probe |
 | **mcp/chrome-devtools-runtime.mjs** | Version gate for chrome-devtools-mcp: materialize the Apex 1.7.0 fixes; 1.11.0 passes unpatched; else fail closed. | — |
 | **mcp/debug-chrome.mjs** | CLI + apex_debug_chrome: start/status/stop the shared headless Chromium (CDP 9222) that debug MCPs attach to. | — |
 | **mcp/diagnostics-tools.mjs** | Typed background diagnostics and bounded report queries for Apex MCP. | renderer-debug / mcp-probe |
 | **mcp/garage-plan.mjs** | Browser-free bounded garage matrix planning over canonical cameras and livery fields. | garage-parts-livery |
+| **mcp/job-admission.mjs** | Atomic cross-owner admission and complete manifests for durable Apex jobs. | — |
 | **mcp/js-debugger-boot.cjs** | Child-process auto-attach bootloader for debugger_node_test (NODE_OPTIONS=--require): every Node | — |
 | **mcp/js-debugger-cdp.mjs** | Bounded CDP transport and loopback target discovery for js-debugger-mcp. | — |
 | **mcp/js-debugger-cli.mjs** | Separate debugger server CLI: stdio, persistent loopback daemon and state-preserving shell calls. | — |
@@ -595,7 +610,9 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | Tool | Does | Paired skill |
 |---|---|---|
 | **env/apex-memory.mjs** | List, show, and retire `.claude/memory` topic files from any host; no assume-unchanged. | agent-config |
+| **env/chat-mcp-service.mjs** | Idempotent private tunnel startup, bounded restart supervision and environment readiness diagnostics. | mcp-probe |
 | **env/cloud-agent-install.sh** | Cursor Cloud dashboard `install`: best-effort mesa/vulkan/xvfb, then `install-browsers.sh`, then the MCP clones. | check-changes |
+| **env/configure-chat-mcp.mjs** | Derive a full-gateway private runtime profile from an existing tunnel profile without changing identities. | mcp-probe |
 | **env/ensure-mcp-ready.sh** | MCP bootstrap: Playwright chrome symlink, chrome-devtools clone, browser cache env, mcp-smoke (no Chromium). | check-changes |
 | **env/install-browsers.sh** | Idempotent Chromium bootstrap: reuse an installed browser or choose a writable Playwright cache; --plan never installs. | — |
 | **env/install-lint-bins.sh** | Pinned, checksummed install of actionlint, shellcheck, zizmor, glslang and naga into artifacts/bin. | — |
@@ -607,6 +624,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **desktop/minify-worker.mjs** | Bounded persistent Terser workers; write disposable results before the stage publishes them. | — |
 | **desktop/minify.mjs** | Deploy-only minify of the staged js/ tree (terser, names kept, unlinked .map beside each file). | check-changes |
 | **desktop/pack-dry-run.mjs** | Desktop pack dry-run: stage + stamp to a temp dir, check every electron-builder input, build no installer. | check-changes |
 | **desktop/stage-files.mjs** | Shared allow-list of runtime files/dirs staged for Pages and Electron packaging. | check-changes |
@@ -703,6 +721,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 
 | File | Read by |
 |---|---|
+| **assets/procedural-room.example.json** | `tests/unit/free-design-tools.test.mjs` |
 | **check/skill-smoke-recipes.json** | `check/skill-smoke.mjs`, `tests/unit/skill-progressive.test.mjs` |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
 | **lighting/look-survey-n10.json** | `lighting/look-survey-n10.mjs`, `tests/unit/cdmcp-measure.test.mjs` |

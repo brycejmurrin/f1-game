@@ -164,6 +164,24 @@ test("resetGarage clears extras then restores the shipped garage", () => {
   assert.equal(JSON.parse(localStorage.getItem("apex26.difficulty")), "easy", "settings survive a garage reset");
 });
 
+test("resetGarage reports refused extra-key deletions even when defaults save", () => {
+  const { SettingsExport, localStorage } = load({
+    "apex26.customTeam": JSON.stringify({ name: "Keep until deleted" }),
+    "apex26.setup.extra": JSON.stringify({ arbF: 4 }),
+  });
+  const remove = localStorage.removeItem;
+  localStorage.removeItem = (key) => {
+    if (key === "apex26.customTeam" || key === "apex26.setup.extra") throw new Error("Removal denied");
+    remove(key);
+  };
+  const result = SettingsExport.resetGarage();
+  assert.equal(result.ok, true);
+  assert.ok(result.applied >= 30, "default writes still proceed");
+  assert.equal(result.failed, 2, "both refused deletes remain part of the reset result");
+  assert.notEqual(localStorage.getItem("apex26.customTeam"), null);
+  assert.notEqual(localStorage.getItem("apex26.setup.extra"), null);
+});
+
 test("RESET GARAGE restores the SHIPPED garage, not the player's edits (bug-hunt 1.1)", () => {
   // The garage mutates the object store.get returns in place (p[cat] = opt.id)
   // then store.set()s it. On a miss that object used to BE the shipped DEF

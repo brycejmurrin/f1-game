@@ -84,3 +84,25 @@ test("a healthy retry after the failed sibling recovers still skips the evaluate
   assert.deepEqual(appended.map((el) => el.src), ["a.js?v=t", "b.js?v=t", "b.js?v=t"],
     "recovery injects only the file that had not evaluated");
 });
+
+test("concurrent strict loads insert one classic script and both await it", async () => {
+  const appended = [];
+  let finish;
+  const ctx = vm.createContext({
+    ApexRoster: { DEFERRED_EDGES: [] },
+    window: { __APEX_BUILD: "t", setTimeout, clearTimeout },
+    UpdateCheck: { prepareLazyLoad: async () => true, blocksLazyLoad: () => false },
+    document: {
+      createElement: () => ({ dataset: {}, remove() {} }),
+      head: { appendChild(el) { appended.push(el); finish = () => el.onload(); } },
+    },
+  });
+  vm.runInContext(loader + "\nthis.ScriptLoader = ScriptLoader;", ctx, { filename: absSrc("js/core/script-loader.js") });
+  const first = ctx.ScriptLoader.create().load(["js/net/qr.js"], [], { strict: true });
+  const second = ctx.ScriptLoader.create().load(["js/net/qr.js"], [], { strict: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(appended.length, 1, "a second strict caller must not redeclare NetQr");
+  finish();
+  assert.deepEqual(await Promise.all([first, second]), [true, true]);
+  assert.equal(appended.length, 1);
+});

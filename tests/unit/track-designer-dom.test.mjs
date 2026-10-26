@@ -439,6 +439,58 @@ test("an insert / delete / stamp keeps zones before the edit at their distance f
   samePlace(pointAt(d3.pts, d3.elevations[0].s), pointAt(d2.pts, d2.elevations[0].s), 1e-6, "…and an upstream one");
 });
 
+test("full-lap width survives REVERSE and START HERE through storage and engine rebuild", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  const item = b.C.sanitize(design({ baseHW: 8, hwZones: [{ s0: 0, s1: 1, hw: 5, ease: 0.025 }] }));
+  for (const change of [() => b.D.reverse(), () => b.D.setStart(5), () => b.D.deletePoint(5)]) {
+    b.D.open({ design: item, shared: true });
+    assert.equal(change(), true);
+    const stored = b.C.sanitize(b.D.state().design);
+    assert.deepEqual(plain(stored.hwZones), plain(item.hwZones));
+    const tr = b.V.build(stored).tr;
+    assert.ok([...tr.hw].every((hw) => Math.abs(hw - 5) < 1e-6), "the entire road retains its authored width");
+  }
+  b.D.close();
+});
+
+test("untouched shared and imported documents remain recoverable when replaced", async () => {
+  for (const source of ["share", "import"]) {
+    const b = bootScreen();
+    const green = openGreen(b);
+    const first = b.C.sanitize({ ...green, name: "FIRST DOCUMENT", theme: "alpine" });
+    const second = b.C.sanitize({ ...green, name: "SECOND DOCUMENT", theme: "oasis" });
+    if (source === "share") b.D.open({ design: first, shared: true });
+    else assert.equal(await b.D.loadFrom(await b.CD.encode(first)), true);
+    b.C.setDraftPrev(null);
+    b.D.close();
+    b.D.open({ design: second, shared: true });
+    assert.equal(b.C.list().length, 0);
+    assert.equal(b.C.draftPrev().name, first.name, `${source}: previous draft survives replacement`);
+    assert.equal(b.D.undo(), true);
+    assert.equal(b.D.state().design.name, first.name);
+    assert.equal(b.D.state().design.theme, first.theme);
+    b.D.close();
+  }
+});
+
+test("loading unchanged library content is exempt from stashing but an edited restored draft is protected", () => {
+  const b = bootScreen(); openGreen(b);
+  assert.equal(b.D.save().ok, true);
+  const saved = b.C.list()[0];
+  b.D.load(saved, "library", saved.id);
+  b.C.setDraftPrev(null);
+  b.D.open({ design: b.C.sanitize(design({ theme: "oasis" })), shared: true });
+  assert.equal(b.C.draftPrev(), null);
+  assert.equal(b.D.state().undo, 0);
+  b.D.load({ ...saved, baseHW: saved.baseHW === 6 ? 7 : 6 }, "draft", saved.id);
+  b.C.setDraftPrev(null);
+  b.D.open({ design: saved, shared: true });
+  assert.ok(b.C.draftPrev(), "a library origin does not make edited draft content saved");
+  assert.notEqual(b.C.draftPrev().baseHW, saved.baseHW);
+  b.D.close();
+});
+
 test("open({design}), EDIT and IMPORT never drop unsaved work: UNDO brings it back and the previous draft is kept on disk", async () => {
   const b = bootScreen();
   const green = openGreen(b);
@@ -536,6 +588,24 @@ test("MY CIRCUITS recovers the previous unsaved draft after a fresh-page reload"
   assert.equal(next.D.undo(), true, "the current unsaved replacement is itself protected");
   assert.equal(next.D.state().design.theme, "oasis");
   next.D.close();
+});
+
+test("MY CIRCUITS deletion reports whether the removal was saved", () => {
+  for (const durable of [false, true]) {
+    const b = bootScreen(); openGreen(b);
+    const saved = b.D.save(); assert.equal(saved.ok, true);
+    b.D.showPane("library");
+    b.ctx.GameStore.store.write = (key, value) => {
+      b.data[key] = value;
+      return { ok: true, durable, reason: durable ? null : "quota" };
+    };
+    const library = panes(b)[1];
+    chipsIn(library, "DELETE")[0].click();
+    chipsIn(library, "DELETE?")[0].click();
+    assert.equal(b.C.list().length, 0, "the circuit disappears in this session");
+    assert.match(msgText(b), durable ? /^Deleted / : /could not be saved.*return after reload/i);
+    assert.equal(b.root.querySelector(".td-msg").dataset.warn, durable ? "" : "1");
+  }
 });
 
 test("recovering after reload keeps a name-only edit to a saved circuit in undo", () => {

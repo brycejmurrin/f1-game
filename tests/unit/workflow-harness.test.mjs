@@ -94,7 +94,8 @@ test("HTTP probes bound serialization and microtasks, reject Promise completions
     import fs from "node:fs";
     import { startServer } from ${JSON.stringify(serverModule)};
     const running = await startServer(${JSON.stringify({ repo: f.repo, runDir: f.run, plan: planFile, probeTimeoutMs: 25 })});
-    const probe = async (test, setup) => {
+    const probe = async (test, setup, timeoutMs = 1000) => {
+      running.harness.probeTimeoutMs = timeoutMs;
       const response = await fetch('http://127.0.0.1:' + running.endpoint.port + '/call', {
         method: 'POST', headers: { 'content-type': 'application/json', 'x-workflow-token': running.endpoint.token },
         body: JSON.stringify({ id: 'rg_worker', tool: 'probe', args: { files: [${JSON.stringify(VALUE_FILE)}], test, ...(setup ? { setup } : {}) } }),
@@ -112,11 +113,13 @@ test("HTTP probes bound serialization and microtasks, reject Promise completions
         ['setup microtask', 'Value.number', 'Promise.resolve().then(() => { while (true) {} })'],
       ];
       for (const [label, test, setup] of attacks) {
-        const row = await probe(test, setup);
+        const row = await probe(test, setup, 25);
         assert.equal(row.error, true, label); assert.equal(row.errorCode, 'execution_error', label);
         assert.match(row.output, /Script execution timed out/, label); checked.push(label);
+        // The attack keeps its 25 ms bound. Recovery uses the normal harness
+        // budget so a busy CI runner cannot turn a healthy probe into a timeout.
         const recovery = await probe('Value.number');
-        assert.equal(recovery.error, false); assert.equal(JSON.parse(recovery.output).result, 7);
+        assert.equal(recovery.error, false, label + ': ' + recovery.output); assert.equal(JSON.parse(recovery.output).result, 7);
       }
       for (const test of ['Promise.resolve(42)', 'Promise.reject(new Error("expected rejection"))', 'new Promise(() => {})']) {
         const row = await probe(test); assert.equal(row.error, true);

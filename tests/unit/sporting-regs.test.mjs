@@ -49,6 +49,15 @@ test("the verdict: DSQ in a race the rule covers, 30 s if it ended suspended, no
     "a retirement is not judged on a stop it never reached");
 });
 
+test("flag-time compound compliance survives later live-log changes without freezing unfinished cars", () => {
+  const car = { finished: true, compoundShortAtFinish: true, tyreLog: log("S") };
+  car.tyreLog[0].code = "W"; car.tyreLog.push({ code: "M" });
+  assert.equal(R.compoundVerdict(car, { applies: true }).dsq, "one dry compound", "post-flag fit or mutation cannot erase the verdict");
+  assert.equal(R.compoundVerdict(car, { applies: true, suspended: true }).penaltyS, 30);
+  assert.equal(R.compoundVerdict({ ...car, compoundShortAtFinish: false, tyreLog: log("S") }, { applies: true }), null, "a compliant finish remains compliant");
+  assert.equal(R.compoundVerdict({ ...car, finished: false }, { applies: true }), null, "unfinished cars still use their live log");
+});
+
 test("applyCompoundRule marks every offender, prices a suspended race, and clears a stale verdict", () => {
   const a = { driverId: "a", tyreLog: log("M", "H"), penalty: 0 };
   const b = { driverId: "b", tyreLog: log("S"), penalty: 5 };

@@ -91,7 +91,7 @@ const TrackDesigner = (function () {
   let replacementGeneration = 0, lifecycleWired = false;
   let libraryImportGeneration = 0, libraryImportPlan = null;
   let previewT = 0, draftT = 0, confirmDel = null, msgT = 0;
-  // savedSnap: the design as last loaded or saved — anything else is unsaved
+  // savedSnap: the design as last saved or loaded unchanged from MY CIRCUITS — anything else is unsaved
   // work a load must not drop. nudge: the arrow-key run one undo entry covers.
   // checksSaid: the red/amber counts last announced through ui.msg.
   let savedSnap = null, nudge = null, checksSaid = null;
@@ -212,6 +212,8 @@ const TrackDesigner = (function () {
   function zoneMap(d, at, flip) {
     const pt = (key) => (z) => { const f = at(z[key], "p"); return f == null ? null : Object.assign({}, z, { [key]: wrap01(f) }); };
     const range = (z) => {
+      // Full-lap width has no movable endpoints; retain its storage sentinel.
+      if (z.s0 === 0 && z.s1 === 1) return Object.assign({}, z);
       let a = at(z.s0, "p"), b = at(z.s1, "p");
       if (a == null && b == null) return null;
       if (a == null) a = at(z.s0, "s0");
@@ -755,7 +757,13 @@ const TrackDesigner = (function () {
     if (origin) design.originId = origin; else delete design.originId;
     sel = -1; span = -1; nudge = null;
     afterChange(label || "load");
-    savedSnap = snapshot();
+    // Imports and shares are unsaved documents even before their first edit.
+    // A restored draft may retain its library origin while containing edits:
+    // only an unchanged stored design can be replaced without stashing it.
+    const saved = origin && custom && custom.get(origin);
+    const current = saved && custom.sanitize(design);
+    savedSnap = saved && current && custom.canonical(saved) === custom.canonical(current)
+      && saved.name === current.name && (saved.country || "") === (current.country || "") ? snapshot() : null;
     if (cv) cv.fit();
     return kept;
   }
@@ -1620,10 +1628,11 @@ const TrackDesigner = (function () {
         btn("RACE", "sel-chip", () => raceId(it.id, "gp")),
         btn(confirmDel === it.id ? "DELETE?" : "DELETE", "sel-chip", () => {
           if (confirmDel !== it.id) { confirmDel = it.id; renderLibrary(); return; }
-          confirmDel = null; custom.remove(it.id);
+          confirmDel = null; const removed = custom.remove(it.id);
           if (design && design.id === it.id) delete design.id;
           if (design && design.originId === it.id) delete design.originId;
-          renderLibrary(); message("Deleted " + it.name);
+          renderLibrary();
+          message(removed.durable ? "Deleted " + it.name : "Removed " + it.name + " for now — deletion could not be saved and it may return after reload", !removed.durable);
         }),
       );
       card.append(c, name, meta, row);

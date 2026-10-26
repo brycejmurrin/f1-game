@@ -122,28 +122,14 @@ test("the d-pad ramps to full lock instead of teleporting there", async ({ page 
   });
   const oneFrame = await poll(page, { buttons: { 15: 1 } }, () => Input.steer());
   expect(oneFrame).toBeLessThan(0.5);
-  // Wall-clock rAF under SwiftShader under-counted the digital ramp (CI got
-  // ~0.74 in 700 ms). Drive 42 controlled 60 Hz polls (= 700 ms of input time)
-  // via a stubbed performance.now; padDpadSteer reads that clock, not rampDt.
+  // Drive 42 fixed physics steps. Polling samples the held direction; steer()
+  // advances the digital ramp by the simulation time of each step.
   const held = await page.evaluate(() => {
     const btns = [];
     for (let i = 0; i < 17; i++) btns.push({ pressed: i === 15, value: i === 15 ? 1 : 0 });
     navigator.getGamepads = () => [{ connected: true, mapping: "standard", axes: [0, 0, 0, 0], buttons: btns }, null, null, null];
-    const prev = Object.getOwnPropertyDescriptor(performance, "now");
-    let t = performance.now();
-    Object.defineProperty(performance, "now", {
-      configurable: true, enumerable: true, writable: true, value: () => t,
-    });
-    try {
-      for (let i = 0; i < 42; i++) {
-        t += 1000 / 60;
-        Input.poll();
-      }
-      return Input.steer();
-    } finally {
-      if (prev) Object.defineProperty(performance, "now", prev);
-      else delete performance.now;
-    }
+    for (let i = 0; i < 42; i++) { Input.poll(); Input.steer(1 / 60); }
+    return Input.steer(1 / 60);
   });
   expect(held).toBeGreaterThan(0.9);
 });

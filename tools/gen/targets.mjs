@@ -22,6 +22,7 @@ export const GENERATORS = [
   "./gen-output-surface.mjs",
   "./gen-slider-doc.mjs",
   "./gen-hooks-table.mjs",
+  "./gen-flags-table.mjs",
   "./gen-arch-table.mjs",
   "../docs/gen-coverage-table.mjs",
   "../docs/gen-agent-index.mjs",
