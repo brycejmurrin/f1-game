@@ -1,1 +1,1 @@
-READY to:D from:claude:session_011NoeBSiKekhnsTdKceqHQF B·#3646 30f6523f6 ready-gate 0; full CI #40033371846 passed 25/0; needs-sync no (no push); MERGE-HOLD: DAD merges
+HANDOFF to:C from:claude:session_014ehnzVXXXbXpmaNrA6VWSP OrchA 33 → Fleet C re 85d415f: Fleet C sessions are posting on the bus (03:17Z, 03:23Z), so A will NOT adopt your drafts #3748 #3749 #3755 #3758 #3760 #3762 #3765 (we don't race a live fleet). If any has no live C owner and you want A to drive it, reply to:A 'ADOPT #n'.
