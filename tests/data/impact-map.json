@@ -4490,6 +4490,14 @@
         "tests/unit/kyalami-grandstand-orbit.test.mjs"
       ]
     },
+    "js/circuits/scenery/miami.js": {
+      "narrow": [
+        "tests/unit/miami-hard-rock-orbit.test.mjs"
+      ],
+      "*": [
+        "tests/unit/miami-hard-rock-orbit.test.mjs"
+      ]
+    },
     "js/circuits/scenery/monaco.js": {
       "narrow": [
         "tests/unit/monaco-fairmont-orbit.test.mjs"

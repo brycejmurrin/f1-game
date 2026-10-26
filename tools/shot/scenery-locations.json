@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "bd600d324ec0504777946c77420f402bafbb17e2aebf9882a602cd52ec87f76f",
+  "sourceDigest": "b780c176181f0e6778e0f57dc24eef7dbc7f41a7372fd580e03f2085f7201ad4",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -538,15 +538,15 @@
       "track": "buenos_aires",
       "name": "Curvón Terrace",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.379472,
+      "frac": 0.379464,
       "target": [
-        -377.46,
-        6.83,
-        188.27
+        -352.4,
+        8.89,
+        190.89
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 35,
-      "viewDistanceM": 35,
+      "nearestRoadDistanceM": 60.2,
+      "viewDistanceM": 60.2,
       "source": "tests/data/landmarks/buenos_aires.json; js/circuits/scenery/buenos_aires.js"
     },
     {
@@ -858,15 +858,15 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.12,
       "target": [
-        3038.57,
-        378.05,
-        90.34
+        3036.5,
+        377.79,
+        92.55
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "docs/tracks/fuji.md §4 skyline viewing station",
       "projectedFrac": 0.89832,
-      "nearestRoadDistanceM": 2449.6,
-      "viewDistanceM": 3193.5,
+      "nearestRoadDistanceM": 2447.9,
+      "viewDistanceM": 3191.3,
       "source": "tests/data/landmarks/fuji.json; js/circuits/scenery/fuji.js"
     },
     {
@@ -1944,13 +1944,13 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.008434,
       "target": [
-        -17.63,
+        -1.78,
         27.22,
-        29.76
+        4.28
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 124.3,
-      "viewDistanceM": 124.3,
+      "nearestRoadDistanceM": 154.3,
+      "viewDistanceM": 154.3,
       "source": "tests/data/landmarks/miami.json; js/circuits/scenery/miami.js"
     },
     {
