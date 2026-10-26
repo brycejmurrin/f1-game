@@ -130,3 +130,62 @@ test("bench-run: schema /2 with the capture hooks; /1 plans still resume and sum
   assert.deepEqual(J(R.scenes([v2])), J(R.scenes([v1])));
   assert.deepEqual(J(R.summarize([v2])), J(R.summarize([v1])));
 });
+
+function timedCapture({ on = true, frame = 10, supported = true } = {}) {
+  let at = 1000;
+  const timestamps = new Map([["r:1:5:f10", 3]]);
+  const renderer = { info: { frame }, backend: { timestampQueryPool: { render: { timestamps } } } };
+  const gfx = { inspectorHost: () => ({ renderer }), gpuTimer(value) {
+    if (value !== undefined) on = supported && !!value;
+    return { supported, on };
+  } };
+  const { B } = load({ GLX: gfx, performance: { now: () => at } });
+  return { B, gfx, renderer, timestamps, time(ms) { at += ms; } };
+}
+
+test("bench-capture: retained timestamps and delayed prior-window rows are not fresh step measurements", () => {
+  const h = timedCapture();
+  h.B.legStart({}, { gfx: h.gfx });
+  let step = h.B.step();
+  assert.equal(step.gpuPasses, null);
+  assert.equal(step.gpuSample.state, "no fresh resolved frame");
+  h.renderer.info.frame = 12; h.time(100);
+  h.timestamps.set("r:1:5:f12", 4);
+  step = h.B.step();
+  assert.equal(step.gpuPasses.frame, 12);
+  assert.equal(step.gpuSample.state, "fresh");
+  assert.equal(step.gpuSample.timerOn, true);
+  assert.equal(step.gpuSample.capturedAtMs, 100);
+  h.renderer.info.frame = 14;
+  assert.equal(h.B.step().gpuPasses, null, "re-reading frame12 is not another sample");
+  h.timestamps.set("r:1:5:f13", 5);
+  assert.equal(h.B.step().gpuPasses, null, "frame13 was already submitted at this window's boundary");
+  h.gfx.gpuTimer(false);
+  step = h.B.step();
+  assert.equal(step.gpuPasses, null);
+  assert.equal(step.gpuSample.state, "timer inactive");
+  const capture = h.B.legEnd();
+  assert.equal(capture.gpu.passes, "timer inactive");
+});
+
+test("bench-capture: leg end samples before releasing its timer and excludes earlier legs", () => {
+  const h = timedCapture({ on: false });
+  h.B.legStart({}, { gfx: h.gfx });
+  h.renderer.info.frame = 11;
+  h.timestamps.set("r:1:5:f11", 4);
+  const capture = h.B.legEnd();
+  assert.equal(capture.gpu.passes.frame, 11);
+  assert.equal(capture.gpu.sample.state, "fresh");
+  assert.equal(capture.gpu.sample.scope, "leg");
+  assert.equal(h.gfx.gpuTimer().on, false, "capture still releases only its own timer");
+  h.B.legStart({}, { gfx: h.gfx });
+  assert.equal(h.B.legEnd().gpu.passes, "no fresh resolved frame", "the prior leg's retained map is not this leg");
+});
+
+test("bench-capture: missing frame identity is unavailable rather than a claimed fresh GPU measurement", () => {
+  const h = timedCapture({ frame: undefined });
+  delete h.renderer.info.frame;
+  h.B.legStart({}, { gfx: h.gfx });
+  assert.equal(h.B.step().gpuSample.state, "freshness unavailable");
+  assert.equal(h.B.legEnd().gpu.passes, "freshness unavailable");
+});

@@ -43,3 +43,145 @@ test("gpu-test-run fillSlope: frame p50 against scale squared; flat when the fra
   assert.equal(flat.msPerFullFrame, 0);
   assert.equal(G.fillSlope([{ scale: 1, p50: 30 }]), null);
 });
+
+const CAPTURE_SRC = readFileSync(join(ROOT, "js/perf/bench-capture.js"), "utf8");
+function lifecycle({ supported = true, initiallyOn = false, queryThrows = false, start = () => true } = {}) {
+  let now = 1000, next = 0, live = false, timerOn = initiallyOn;
+  const callbacks = new Map(), writes = [], store = new Map();
+  let samples = 0, sampleAt = -1, gpuMs = 4;
+  const gfx = {
+    gpuTimer(on) {
+      if (on === undefined && queryThrows) throw new Error("query unavailable");
+      if (on !== undefined) { writes.push(on); timerOn = supported && !!on; }
+      return { supported, on: timerOn, samples, sampleAt };
+    },
+    getRenderScale: () => 1, setRenderScale() {}, gpuMs: () => timerOn ? gpuMs : -1,
+  };
+  const ctx = vm.createContext({
+    performance: { now: () => now }, GLX: gfx,
+    PerfGov: { autoRes: () => true, setAutoRes() {}, tier: () => 0 },
+    SoakRun: {
+      active: () => live, status: () => ({ state: live ? "racing" : "done" }),
+      start: () => { live = true; return start(); }, stop: () => { live = false; },
+    },
+    requestAnimationFrame: (fn) => { callbacks.set(++next, fn); return next; },
+    cancelAnimationFrame: (id) => callbacks.delete(id),
+    setInterval: () => ++next, clearInterval() {},
+    localStorage: { getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
+  });
+  vm.runInContext(CAPTURE_SRC + "\n" + SRC, ctx, { filename: "vm-composite:bench-capture+gpu-test-run" });
+  const { G, B } = vm.runInContext("({ G: GpuTestRun, B: BenchCapture })", ctx);
+  function frame(ms = 0) {
+    now += ms;
+    const pending = [...callbacks.values()]; callbacks.clear();
+    for (const fn of pending) fn(now);
+  }
+  function complete() {
+    frame();
+    for (let i = 0; i < G.PHASES.length; i++) { frame(G.SETTLE_MS + 1); frame(G.MEASURE_MS + 1); }
+  }
+  return { G, B, gfx, frame, complete, writes, timerOn: () => timerOn,
+    sample(n, age = 0, ms = 4) { samples = n; sampleAt = now - age; gpuMs = ms; } };
+}
+
+for (const initiallyOn of [false, true]) {
+  test(`GPU TEST completion restores an enclosing BenchCapture timer (initially on=${initiallyOn})`, async () => {
+    const h = lifecycle({ initiallyOn });
+    h.B.legStart({ label: "WEBGPU" }, { gfx: h.gfx, state: "race" });
+    assert.equal(h.timerOn(), true);
+    assert.equal(await h.G.start(), true);
+    h.complete();
+    assert.equal(h.G.status().reason, "complete");
+    assert.equal(h.G.status().phases, h.G.PHASES.length);
+    assert.equal(h.timerOn(), true, "outer capture still owns the timer for its warm race");
+    h.B.step();
+    h.B.legEnd();
+    assert.equal(h.timerOn(), initiallyOn, "capture restores its own prior state");
+  });
+}
+
+for (const outcome of ["stopped", "refused", "rejected", "threw"]) {
+  test(`GPU TEST restores a prior enabled timer when ${outcome}`, async () => {
+    const h = lifecycle({ initiallyOn: true, start: () => {
+      if (outcome === "refused") return false;
+      if (outcome === "rejected") return Promise.reject(new Error("start failed"));
+      if (outcome === "threw") throw new Error("start failed synchronously");
+      return true;
+    } });
+    assert.equal(await h.G.start(), outcome === "stopped");
+    if (outcome === "stopped") h.G.stop();
+    assert.equal(h.G.active(), false);
+    assert.equal(h.timerOn(), true);
+  });
+}
+
+for (const config of [{}, { supported: false }, { queryThrows: true }]) {
+  test(`GPU TEST safely restores standalone timer state (${JSON.stringify(config)})`, async () => {
+    const h = lifecycle(config);
+    assert.equal(await h.G.start(), true);
+    h.complete();
+    assert.equal(h.G.active(), false);
+    assert.equal(h.timerOn(), false);
+  });
+}
+
+for (const settle of ["refused", "accepted", "rejected"]) {
+  test(`cancelled GPU TEST's late ${settle} start cannot finish a newer run`, async () => {
+    let resolve, reject, starts = 0;
+    const pending = new Promise((res, rej) => { resolve = res; reject = rej; });
+    const h = lifecycle({ initiallyOn: true, start: () => ++starts === 1 ? pending : true });
+    const first = h.G.start();
+    assert.equal(h.G.stop(), true);
+    assert.equal(h.timerOn(), true);
+    assert.equal(await h.G.start(), true);
+    if (settle === "rejected") reject(new Error("late failure"));
+    else resolve(settle === "accepted");
+    assert.equal(await first, false);
+    assert.equal(h.G.active(), true, "the newer run retains lifecycle ownership");
+    assert.equal(h.timerOn(), true);
+    h.G.stop();
+    assert.equal(h.timerOn(), true);
+  });
+}
+
+
+test("GPU TEST counts new resolutions once, including equal-duration results, and excludes prior phases", async () => {
+  const h = lifecycle(); let result;
+  await h.G.start({ onDone: (value) => { result = value; } });
+  h.sample(1); h.frame(); h.frame(h.G.SETTLE_MS + 1); // retained pre-window result
+  h.sample(2); h.frame(1); // new resolved observation
+  h.frame(100); // same serial cannot inflate n
+  h.sample(3); h.frame(1); // an identical 4ms duration is independently fresh
+  h.sample(4, 10000); h.frame(1); // delayed pre-window source result is excluded
+  h.frame(h.G.MEASURE_MS); // finish first phase
+  for (let i = 1; i < h.G.PHASES.length; i++) {
+    h.frame(h.G.SETTLE_MS + 1); h.frame(h.G.MEASURE_MS + 1);
+  }
+  assert.equal(result.reason, "complete");
+  assert.equal(result.phases[0].gpu.n, 2);
+  assert.equal(result.phases[0].gpu.p50, 4);
+  assert.equal(result.phases[0].gpuSampling.state, "fresh");
+  assert.equal(result.phases[0].gpuSampling.basis, "resolved-during-window");
+  for (const phase of result.phases.slice(1)) {
+    assert.equal(phase.gpu, null);
+    assert.equal(phase.gpuSampling.state, "no fresh sample");
+  }
+});
+
+for (const mode of ["unsupported", "inactive", "missing-serial"]) {
+  test(`GPU TEST labels ${mode} timing without counting cached readouts`, async () => {
+    const h = lifecycle({ supported: mode !== "unsupported" }); let result;
+    const timer = h.gfx.gpuTimer;
+    h.gfx.gpuTimer = (on) => {
+      const state = timer(on);
+      if (mode === "inactive") state.on = false;
+      if (mode === "missing-serial") delete state.samples;
+      return state;
+    };
+    await h.G.start({ onDone: (value) => { result = value; } });
+    h.complete();
+    assert.equal(result.phases[0].gpu, null);
+    assert.equal(result.phases[0].gpuSampling.state, mode === "unsupported" ? "unsupported"
+      : mode === "inactive" ? "timer inactive" : "freshness unavailable");
+  });
+}

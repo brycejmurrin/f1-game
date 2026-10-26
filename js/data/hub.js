@@ -541,10 +541,12 @@ const DataHub = (function () {
     return out;
   }
   const sel = { year: null, meetingKey: null, sessionKey: null, meta: null, selAt: 0, pinned: false };
+  let selectionPending = null;
   let selectionGen = 0;           // explicit picker intent, shared across tab instances
   const SESSION_STALE_MS = 120 * 1000;
 
   function ensureSession(force) {
+    if (selectionPending) return selectionPending.then(() => selectionPending ? ensureSession(force) : sel.meta);
     const have = sel.sessionKey !== null;
     const fresh = have && sel.selAt && (Date.now() - sel.selAt) < SESSION_STALE_MS;
     // A pin is an explicit user pick (buildPicker) — it outranks force, which
@@ -614,11 +616,11 @@ const DataHub = (function () {
         ++selectionGen;
         cancelRealRace();
         if (onChange) onChange();
-        sel.year = y; sel.meetingKey = null; sel.sessionKey = null; sel.pinned = false;
+        sel.year = y; sel.meetingKey = null; sel.sessionKey = null; sel.meta = null; sel.pinned = true;
         for (let i = 0; i < yearRow.children.length; i++) {
           yearRow.children[i].classList.toggle("active", yearRow.children[i] === b);
         }
-        loadGPs(true);
+        awaitSelection(loadGPs(true));
       });
       yearRow.appendChild(b);
     });
@@ -669,8 +671,8 @@ const DataHub = (function () {
       if (onChange) onChange();
       sel.meetingKey = gpSel.value ? Number(gpSel.value) : null;
       sel.sessionKey = null;
-      sel.pinned = false;
-      loadSessions(true);
+      sel.meta = null; sel.pinned = true;
+      awaitSelection(loadSessions(true));
     });
     sesSel.addEventListener("change", function () {
       if (!sesSel.value) return;
@@ -702,14 +704,20 @@ const DataHub = (function () {
       });
     }
 
+    function awaitSelection(work) {
+      const pending = Promise.resolve(work).then(function () {
+        if (selectionPending === pending) selectionPending = null;
+      });
+      selectionPending = pending;
+    }
+
     function loadGPs(userChanged) {
       const myGen = ++pickerGen, mySelection = selectionGen;
       ph(gpSel, "loading…"); ph(sesSel, "—");
-      F1API.meetings(sel.year).then(function (ms) {
+      return F1API.meetings(sel.year).then(function (ms) {
         if (myGen !== pickerGen || mySelection !== selectionGen) return;
         if (!ms.length) emptySelection(userChanged);
-        if (detached(userChanged)) return;
-        if (!ms.length) { ph(gpSel, "no data"); return; }
+        if (!ms.length) { detached(userChanged); ph(gpSel, "no data"); return; }
         // The LATEST MEETING THAT HAS STARTED, not the year's last entry: the
         // current season lists every future round, and defaulting to December's
         // Abu Dhabi showed "not published" in every tab.
@@ -718,7 +726,7 @@ const DataHub = (function () {
           sel.meetingKey = (started.length ? started[started.length - 1] : ms[0]).meetingKey;
         }
         setSelectOptions(gpSel, meetingPickerOptions(ms), sel.meetingKey);
-        loadSessions(userChanged);
+        return loadSessions(userChanged);
       }, function () {
         if (myGen !== pickerGen || mySelection !== selectionGen) return;
         ph(gpSel, "error");
@@ -728,13 +736,12 @@ const DataHub = (function () {
     function loadSessions(userChanged) {
       const myGen = ++pickerGen, mySelection = selectionGen;
       ph(sesSel, "loading…");
-      F1API.sessionsForMeeting(sel.meetingKey).then(function (ss) {
+      return F1API.sessionsForMeeting(sel.meetingKey).then(function (ss) {
         if (myGen !== pickerGen || mySelection !== selectionGen) return;
         if (!ss.length) emptySelection(userChanged);
-        if (detached(userChanged)) return;
         sesIndex = {};
         ss.forEach(function (s) { sesIndex[s.sessionKey] = s; });
-        if (!ss.length) { ph(sesSel, "no data"); return; }
+        if (!ss.length) { detached(userChanged); ph(sesSel, "no data"); return; }
         if (sel.sessionKey === null) {
           const race = ss.filter(function (s) { return (s.type || "").toLowerCase() === "race"; });
           const def = race.length ? race[race.length - 1] : ss[ss.length - 1];
@@ -744,6 +751,8 @@ const DataHub = (function () {
           return { value: s.sessionKey, label: s.name || s.type || "Session" };
         }), sel.sessionKey);
         if (userChanged) sel.pinned = true;
+        sel.selAt = Date.now();
+        if (detached(userChanged)) return;
         // Another tab's detached picker may have filled shared metadata first;
         // this view still started empty and needs its own initial body paint.
         if (userChanged || (initialSessionKey === null && openFlag && box.isConnected !== false)) onPick(sel.meta);

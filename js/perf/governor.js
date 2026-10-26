@@ -714,8 +714,10 @@ function tick(dtMs, drawn) {
   // A zero / negative / NaN interval is a stamp artefact (pause -> resume: lastFrame is set in a handler, so the next rAF stamp can be earlier), not a frame: fed to the EMA and the derived floor it drags the floor under every healthy frame and trips a spurious step-down (then a revert). The history above already skips it.
   if (!(dtMs > 0)) return;
   const stepMs = Number.isFinite(dtMs) ? Math.min(dtMs, COOL_STEP_MAX_MS) : 16.7;
+  // Thermal windows age on every active interval, but skipped rAFs are not cost evidence.
+  const driftDue = _drift && _drift.feed(drawn !== false && dtMs < SPIKE_MS ? dtMs : 0, dtMs);
   if (drawn === false) { _ageClocks(stepMs); return; }   // see _ageClocks
-  if (_drift && dtMs < SPIKE_MS && _drift.feed(dtMs) && (driftRenderRate() || driftStep())) _drift.stepped();
+  if (driftDue && dtMs < SPIKE_MS && (driftRenderRate() || driftStep())) _drift.stepped();
   // Before any smoothing: the opening window wants the raw frame, spikes and
   // all, because a spike in the first seconds IS the thing being reported.
   if (_openN < OPEN_FRAMES) {
