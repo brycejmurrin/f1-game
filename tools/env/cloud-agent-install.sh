@@ -10,6 +10,13 @@
 # (measured 2026-08-17, bld-20260817-e70b375f).
 set -uo pipefail
 
+# Optional private runtime; no credentials or tunnel IDs are tracked here.
+start_configured_chat_mcp() {
+  if [[ -n "${APEX_CHAT_MCP_PROFILE:-}" ]]; then
+    node "${ROOT}/tools/env/chat-mcp-service.mjs" start || echo "WARN: private chat MCP did not start; run chat-mcp-service.mjs doctor" >&2
+  fi
+}
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
@@ -190,6 +197,7 @@ if ! bash "$ROOT/tools/env/install-browsers.sh"; then
     if [[ -f node_modules/playwright/package.json && -f node_modules/sharp/package.json ]] \
         && npm ls --depth=0 --include=dev --offline >/dev/null 2>&1; then
       ensure_mcp_clones
+      start_configured_chat_mcp
       echo "OK: cloud-agent install complete (npm ready, browsers deferred)"
       exit 0
     fi
@@ -205,4 +213,5 @@ ensure_mcp_clones
 # use `./tools/mcp/apex-tools-mcp.sh call` when the host catalog is empty.
 bash "$ROOT/tools/env/ensure-mcp-ready.sh" || true
 
+start_configured_chat_mcp
 echo "OK: cloud-agent install complete"

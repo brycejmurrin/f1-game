@@ -2616,6 +2616,51 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/mcp/chat-gateway.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Exact JSON-RPC stdio, upstream schemas, tool results, browser ownership and explicit release; never pass through terminal-output summarization."
+    },
+    "tools/assets/gltf-check.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Validation errors, unsupported extensions, budgets, input/output hashes and source preservation; reports remain exact local evidence."
+    },
+    "tools/assets/procedural-room.example.json": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Zero-credit procedural example, coordinate contract and pending human review states."
+    },
+    "tools/assets/procedural-room.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Stage, approval refusals, geometry provenance and generated artifact paths; never infer approval from successful execution."
+    },
+    "tools/env/chat-mcp-service.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Dependency failures and repair commands, process identity and lifecycle state; process presence is not native chat readiness."
+    },
+    "tools/env/configure-chat-mcp.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Existing tunnel identity and credential references, overwrite refusal, non-secret output profile path."
+    },
+    "tools/mcp/check-chat-contract.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Missing/duplicate advertised tools, schema checks, host comparison coverage and native upstream status result."
+    },
+    "tools/ui/design-evidence.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Exact local capture metadata, automated findings and incomplete checks, computed-token coverage, containment and comparison controls."
+    },
+    "tools/ui/review-captures.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Artifact path or explicit input/budget/containment failure; no browser action or inferred UI verdict."
+    },
     "tools/ci/merge-done.mjs": {
       "action": "keep-native",
       "presentation": "native",
