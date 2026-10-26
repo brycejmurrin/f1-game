@@ -72,7 +72,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api as sharedApi, REPO, DEPLOY } from "./github-api.mjs";
-import { exitIfHelp } from "../lib/cli-args.mjs";
+import { strictFlags } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export { REPO, DEPLOY };
@@ -310,13 +310,17 @@ function annotations(jobId) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const argv = process.argv.slice(2);
-exitIfHelp(argv, `usage: node tools/ci/ci-watch.mjs [--sha <sha|ref>] [--pages] [--once] [--failures-only] [--wait] [--jobs] [--state <file|none>] [--timeout <min>] [--interval <s>] [--since <ISO>|none]
+export const USAGE = `usage: node tools/ci/ci-watch.mjs [--sha <sha|ref>] [--pages] [--once] [--failures-only] [--wait] [--jobs] [--state <file|none>] [--timeout <min>] [--interval <s>] [--since <ISO>|none]
   Polls every workflow run for a SHA (default HEAD) every 60 s, with ETag conditional GETs (a 304 is free):
   one [ci-watch] line per job, a red\'s failing step,
   then one \`= ci <verdict>\` line (passed | failed | cancelled | superseded | none). --pages adds the Pages train.
   --failures-only: only red/cancelled jobs and the final line. --wait: long poll (12 h default timeout). --jobs: list waiting legs and exit.
   --state <file|none>: reported-job keys across re-arms. --once polls one time and exits. --since: runs created earlier never count (default: the open PR's last
-  run-ci label / ready / reopen; none = no floor). Details: the header of this file and AGENTS.md §Watching CI and Pages.`);
+  run-ci label / ready / reopen; none = no floor). Details: the header of this file and AGENTS.md §Watching CI and Pages.
+  An unknown flag prints this usage and exits 2.`;
+export const KNOWN_FLAGS = ["--sha", "--pages", "--once", "--failures-only", "--wait", "--jobs", "--state", "--timeout", "--interval", "--since"];
+// Only as the entry point: fleet-board-snapshot imports this module with its own argv.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) strictFlags(argv, KNOWN_FLAGS, USAGE);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 
 /** Expand `ref` (short sha, branch, HEAD) to a full 40-char commit id: local

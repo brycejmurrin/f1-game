@@ -758,6 +758,12 @@ export function compareToBase(ref, {
 
 async function main() {
   const argv = process.argv.slice(2);
+  // --help answers from the header without measuring the tree (audit4 cli-help: it took 10 s).
+  if (argv.includes("--help") || argv.includes("-h")) {
+    const head = fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(4, 21);
+    console.log(["usage:", ...head.map((l) => l.replace(/^\/\/ ?/, ""))].join("\n"));
+    return;
+  }
   const baseAt = argv.indexOf("--base");
   if (baseAt >= 0) {
     const ref = argv[baseAt + 1];

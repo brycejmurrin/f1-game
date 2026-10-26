@@ -2271,6 +2271,10 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/git-run.mjs",
+      "classification": "library"
+    },
+    {
       "path": "tools/lib/harness.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
