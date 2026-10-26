@@ -1056,10 +1056,10 @@ const TyreModel = (function () {
   }
 
   return {
-    LEVELS, isLevel, lateralCurve, CURVE_PEAK_X, CURVE_PEAK_X_F, CURVE_FLOOR, CURVE_FALL_W, CURVE_FLOOR_R, CURVE_FALL_W_R, CURVE_HOLD_R, deriveLife, lifeOf, lifeLaps, MIN_LIFE_LAPS,
+    LEVELS, isLevel, lateralCurve, CURVE_PEAK_X, CURVE_PEAK_X_F, CURVE_FLOOR, CURVE_FALL_W, CURVE_FLOOR_R, CURVE_FALL_W_R, CURVE_HOLD_R, lifeLaps, MIN_LIFE_LAPS,
     gripFor, longFor, humanLoad, aiLoad, fuelFrac,
-    optTemp, warmRate, coolFor, stepTemp, tempGrip, stepGrain, stepBlister, defectGrip,
-    axleShare, longSigned, AXLE_LONG, AXLE_REST, BB_REF, brakeBeta, brakeFront,
+    optTemp, warmRate, stepTemp, tempGrip, stepGrain, stepBlister,
+    axleShare, AXLE_LONG, AXLE_REST, BB_REF, brakeBeta, brakeFront,
     T_AMBIENT, T_TRACK_DELTA, T_BLANKET, T_OPT_MID, T_OPT_SPAN, T_WINDOW, TEMP_FLOOR,
     HEAT_K, HEAT_ROLL, HEAT_SLIP, SINK_TRACK, SEVERITY_DEFAULT: 1.0,
     GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,

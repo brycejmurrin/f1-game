@@ -683,7 +683,9 @@ const RaceControl = (function () {
   // next one. Infinity = no car to hold behind.
   const HOLD_M = 12;
   function holdCap(c, ranked, fair) {
-    const i = ranked ? ranked.indexOf(c) : -1;
+    // c.rank - 1 is the car's slot for a running car (game.js rankByProg); the check falls back to a scan when it is not.
+    const r = (c.rank | 0) - 1;
+    const i = !ranked ? -1 : (r >= 0 && ranked[r] === c ? r : ranked.indexOf(c));
     for (let j = i - 1; j >= 0; j--) {
       const o = ranked[j];
       if (o.finished || o.retired || (fair && fair(o))) continue;

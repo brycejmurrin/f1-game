@@ -10395,6 +10395,9 @@
       "humanYieldTakes": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "hungerOf": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "isBoxed": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -10494,6 +10497,7 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "passHunger": [
+        "tests/unit/ai-drive.test.mjs",
         "tests/unit/ai-pass-complete.test.mjs"
       ],
       "passReach": [
@@ -10540,6 +10544,9 @@
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/ai-pass-complete.test.mjs"
       ],
+      "sbsArgs": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "sbsCommitT": [
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/ai-pass-complete.test.mjs"
@@ -10576,9 +10583,6 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "startGapT": [
-        "tests/unit/ai-drive.test.mjs"
-      ],
-      "startQWinBonus": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "steerDamp": [
@@ -10958,6 +10962,9 @@
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/race-control.test.mjs"
       ],
+      "tyreMarble": [
+        "tests/unit/debris-step-skip.test.mjs"
+      ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
@@ -11065,6 +11072,7 @@
         "tests/unit/player-forces.test.mjs"
       ],
       "*": [
+        "tests/unit/grip-steer.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/trail-brake-turnin.test.mjs",
@@ -11260,14 +11268,9 @@
       ]
     },
     "js/physics/vehicle.js": {
-      "forPlayer": [
-        "tests/unit/vehicle-tick-alloc.test.mjs"
-      ],
-      "stepWheel": [
-        "tests/unit/vehicle-tick-alloc.test.mjs"
-      ],
       "*": [
-        "tests/unit/player-forces.test.mjs"
+        "tests/unit/player-forces.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs"
       ]
     },
     "js/physics/wall-clamp.js": {
@@ -11297,6 +11300,7 @@
         "tests/unit/wheel-state.test.mjs"
       ],
       "stepPlayer": [
+        "tests/unit/vehicle-tick-alloc.test.mjs",
         "tests/unit/wheel-state.test.mjs"
       ]
     },
@@ -12114,15 +12118,18 @@
         "tests/unit/race-radio.test.mjs"
       ],
       "hold": [
+        "tests/unit/ai-drive.test.mjs",
         "tests/unit/race-control.test.mjs",
         "tests/unit/storm-weather.test.mjs"
       ],
       "holdCap": [
+        "tests/unit/ai-drive.test.mjs",
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/race-control.test.mjs"
       ],
       "info": [
         "tests/unit/aero-zones-vm.test.mjs",
+        "tests/unit/ai-drive.test.mjs",
         "tests/unit/career-backup.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
