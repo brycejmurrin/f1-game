@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import {
   decide, leaseState, parseLease, leaseLine, formatLine, parseLine, parseLog, addressed, whoAmI,
   writeBus, readLease, readBus, fetchBus, BUS_BRANCH, MAX_TTL_MIN, DEFAULT_TTL_MIN,
-  addressProblem, ADDRESS_FORMS, ROLES, main, parseLive, whoIs, whoLine, ageOf,
+  addressProblem, ADDRESS_FORMS, ROLES, main, parseLive, whoIs, whoLine, ageOf, whoStatus, STALE_MIN,
   TYPES, PROTOCOL_TYPES, BODY_MIN, BODY_MAX, bodyProblem, lendMerger, idemOf, idemMarker, findIdem, strictCursor, sendBusLine,
   fixMarker, fixOf, openFixIncident, handoffMisuse, autoIdem, AUTO_IDEM_TYPES, watchShows, watchStep, watchBus, WATCH_QUIET,
 } from "../../tools/ci/fleet-bus.mjs";
@@ -244,6 +244,13 @@ test("parseLive: today's free text — the id right after LIVE, not the one it r
     { letter: "B", id: "claude:session_01H8VtkpzfE5KwDeid2n46At" });
 });
 
+test("parseLive: `ORCH A LIVE is now <id>` names the id, not the word `is` (bus 1a2624d, 2026-10-26)", () => {
+  const id = "claude:session_011zeXy762dGneXyJtqucZrF";
+  assert.deepEqual(parseLive({ from: id, text: `ORCH A LIVE is now ${id} (OrchA 36 is gone). Lanes stay draft.` }), { letter: "A", id });
+  assert.deepEqual(parseLive({ from: id, text: `ORCH A LIVE ${id}.` }), { letter: "A", id });
+  assert.equal(parseLive({ from: id, text: "ORCH A LIVE soon, waiting on Bryce" }), null, "no id-shaped token: not an announcement");
+});
+
 test("parseLive: SEED/FLEET LIVE lines, a LIVE line with no fleet letter and a non-LIVE line name no orchestrator", () => {
   assert.equal(parseLive({ from: A, text: "SEED A LIVE session_01SEEDSEEDSEEDSEEDSEEDSE" }), null);
   assert.equal(parseLive({ from: A, text: "FLEET C LIVE codex:abc-1234 scope:tools orchestrator" }), null);
@@ -253,8 +260,8 @@ test("parseLive: SEED/FLEET LIVE lines, a LIVE line with no fleet letter and a n
 
 test("whoIs: the NEWEST announcing line for that letter wins; none is null; whoLine is `<letter> <host:id> <sha7> <age>`", () => {
   const entries = [
-    { sha: "1111111aaaa", at: T, from: A, text: "ORCH A LIVE claude:session_01OLDOLDOLDOLDOLDOLDOLDO" },
-    { sha: "2222222bbbb", at: T + 10, from: A, text: "ORCH B LIVE claude:session_01BBBBBBBBBBBBBBBBBBBBBB" },
+    { sha: "1111111aaaa", at: T, type: "ROTATE", from: A, text: "ORCH A LIVE claude:session_01OLDOLDOLDOLDOLDOLDOLDO" },
+    { sha: "2222222bbbb", at: T + 10, type: "ROTATE", from: A, text: "ORCH B LIVE claude:session_01BBBBBBBBBBBBBBBBBBBBBB" },
     { sha: "3333333cccc", at: T + 20, from: "claude:session_01FLdmwWhj9BAeyKz5T8VQQN", text: ORCH19 },
     { sha: "4444444dddd", at: T + 30, from: A, text: "#1 abc" },
   ];
@@ -265,6 +272,41 @@ test("whoIs: the NEWEST announcing line for that letter wins; none is null; whoL
   assert.equal(whoIs(entries, "D"), null);
   assert.equal(ageOf(T, T + 3 * 3600), "3h");
   assert.equal(ageOf(T, T + 3 * 86400), "3d");
+});
+
+test("whoIs: a peer that only QUOTES an announcement names no orchestrator; ROTATE or self does (bus adb3d55, 2026-10-26)", () => {
+  const quote = { sha: "5555555eeee", at: T, type: "INFO", from: A,
+    text: "please post once: node tools/ci/fleet-bus.mjs send ROTATE --to '*' 'ORCH D LIVE grok:DAD (Fleet D orchestrator)'" };
+  assert.deepEqual(parseLive(quote), { letter: "D", id: "grok:DAD" }, "a short host-prefixed id parses, without the quote");
+  assert.equal(whoIs([quote], "D"), null, "an INFO from someone else is not an announcement");
+  assert.equal(whoIs([{ ...quote, type: "ROTATE" }], "D").id, "grok:DAD", "a ROTATE may name a successor");
+  assert.equal(whoIs([{ ...quote, from: "grok:DAD" }], "D").id, "grok:DAD", "the sender announcing itself counts");
+  assert.equal(whoIs([{ ...quote, type: "HANDOFF", from: "cse_01ZZZZZZZZZZZZZZZZZZZZZZ",
+    text: "ORCH E LIVE claude:session_01ZZZZZZZZZZZZZZZZZZZZZZ" }], "E").id, "claude:session_01ZZZZZZZZZZZZZZZZZZZZZZ", "cse_ = session_");
+});
+
+test("whoStatus: liveness is the age of the orchestrator's OWN newest line, not its LIVE line; STALE past the threshold", () => {
+  const O = "claude:session_01OOOOOOOOOOOOOOOOOOOOOO";
+  const entries = [
+    { sha: "1111111aaaa", at: T, from: O, text: "INFO last words before the archive" },
+    { sha: "2222222bbbb", at: T + 6 * 60, type: "ROTATE", from: A, text: `ORCH A LIVE ${O}` },
+    { sha: "3333333cccc", at: T + 20 * 60, from: B, text: "#9 peer chatter keeps the bus busy" },
+  ];
+  // OrchA 36 (2026-10-26): announced by a peer at T+6m, silent since T; at T+53m `who` used to say "47m", live.
+  const s = whoStatus(entries, "A", T + 53 * 60);
+  assert.deepEqual([s.id, s.lastSeenAt, s.lastSeenMin, s.stale], [O, T, 53, true]);
+  assert.equal(whoLine(s, T + 53 * 60), `A ${O} 2222222 47m STALE (last line 53m ago)`);
+  assert.equal(STALE_MIN, 45);
+  assert.equal(whoStatus(entries, "A", T + 53 * 60, 60).stale, false, "--stale-min moves the threshold");
+  assert.equal(whoStatus(entries, "A", T + 45 * 60).stale, false, "exactly the threshold is still live");
+  // A bare cse_ sender id is the same session as its claude:session_ form.
+  const fresh = entries.concat({ sha: "4444444dddd", at: T + 50 * 60, from: "cse_01OOOOOOOOOOOOOOOOOOOOOO", text: "INFO still here" });
+  const f = whoStatus(fresh, "A", T + 53 * 60);
+  assert.deepEqual([f.lastSeenMin, f.stale], [3, false]);
+  assert.equal(whoLine(f, T + 53 * 60), `A ${O} 2222222 47m`);
+  // An orchestrator with no line of its own in the window falls back to its LIVE line's time.
+  assert.equal(whoStatus(entries.slice(1), "A", T + 53 * 60).lastSeenAt, T + 6 * 60);
+  assert.equal(whoStatus(entries, "C", T), null);
 });
 
 test("main who: prints one line for the fleet's newest LIVE line, exits 1 for a fleet with no LIVE line", () => {
@@ -278,7 +320,9 @@ test("main who: prints one line for the fleet's newest LIVE line, exits 1 for a 
     const h = path.join(dir, "h");
     g(h, "remote", "add", "origin", path.join(dir, "origin.git"));
     const out = [];
-    const opts = { cwd: h, log: (l) => out.push(l), dispatch: () => "x", now: () => T + 600 };
+    // Commits carry the wall clock, so `now` must too (a fixed T would make every line months old: STALE).
+    const NOW = Math.floor(Date.now() / 1000) + 600;
+    const opts = { cwd: h, log: (l) => out.push(l), dispatch: () => "x", now: () => NOW };
     assert.equal(main(["send", "ROTATE", "--to", "*", "--as", A, "A·O1 ORCH A LIVE claude:session_01AAAAAAAAAAAAAAAAAAAAAA"], opts), 0);
     assert.equal(main(["send", "GREEN", "--to", "A", "--as", A, "#7 green"], opts), 0);
     assert.equal(main(["who", "A"], opts), 0);
@@ -286,6 +330,17 @@ test("main who: prints one line for the fleet's newest LIVE line, exits 1 for a 
     assert.equal(main(["who", "C"], opts), 1);
     assert.ok(out.at(-1).startsWith("= who C: no ORCH C LIVE line"), out.at(-1));
     assert.equal(main(["who", "AB"], opts), 1, "one letter only");
+    assert.equal(main(["who", "C", "--json"], opts), 1);
+    assert.deepEqual(JSON.parse(out.at(-1)), { letter: "C", id: null });
+    // Live: the announced id never wrote, so the LIVE line (~10 min old) is its last sign of life.
+    assert.equal(main(["who", "A", "--json"], opts), 0);
+    { const j = JSON.parse(out.at(-1)); assert.deepEqual(Object.keys(j), ["letter", "id", "sha", "at", "age", "stale", "lastSeenMin"]); assert.equal(j.stale, false); }
+    assert.equal(main(["who", "A", "--stale-min", "5"], opts), 3, "silent past --stale-min: exit 3");
+    { const [l, id, , , tag, ...rest] = out.at(-1).split(" "); assert.deepEqual([l, id, tag, rest.slice(0, 2), rest.at(-1)], ["A", "claude:session_01AAAAAAAAAAAAAAAAAAAAAA", "STALE", ["(last", "line"], "ago)"]); }
+    const later = { ...opts, now: () => NOW + 2 * 3600 };
+    assert.equal(main(["who", "A", "--json"], later), 3, "default 45 min threshold");
+    { const j = JSON.parse(out.at(-1)); assert.equal(j.stale, true); assert.ok(j.lastSeenMin >= 120, String(j.lastSeenMin)); }
+    assert.equal(main(["who", "A", "--stale-min", "0"], opts), 1, "--stale-min must be positive");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
