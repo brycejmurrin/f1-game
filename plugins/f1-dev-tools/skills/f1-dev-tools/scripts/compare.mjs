@@ -31,6 +31,17 @@ export function compare(before, after) {
     camera: t => t.before?.camera?.mode,
     renderer: t => t.before?.renderer?.backend ? t.before.renderer : null,
     reducedMotion: t => t.before?.reducedMotion,
+    view: t => {
+      const v = t.before?.view;
+      if (!v) return { unavailable: true };
+      // Driving rigs move each frame. Only a static/debug view's pose is scenario identity.
+      return v.dbgCamActive || v.skyOverride ? v :
+        { dbgCamActive: !!v.dbgCamActive, skyOverride: !!v.skyOverride, frozen: v.frozen, weather: v.weather, state: v.state };
+    },
+    replay: t => {
+      const r = t.before?.replay;
+      return r ? { active: true, T: r.T, follow: r.follow, speed: r.speed, paused: r.paused } : { active: false };
+    },
     label: t => t.label,
     frames: t => t.samples.length,
   };
@@ -50,7 +61,7 @@ function outputPath(file) {
   const parent = fs.realpathSync(path.dirname(resolved));
   if (!roots.some(root => (parent + path.sep).startsWith(root))) throw new Error('Report parent must not escape through a symlink.');
   if (fs.existsSync(resolved) && fs.lstatSync(resolved).isSymbolicLink()) throw new Error('Refusing symlink output.');
-  return resolved;
+  return path.join(parent, path.basename(resolved));
 }
 const escape = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function imageData(file) {
@@ -62,7 +73,7 @@ export function main(args) {
   const [command, beforeFile, afterFile, option, out] = args;
   if (!['compare', 'gallery'].includes(command) || !beforeFile || !afterFile || option !== '--out' || !out || args.length !== 5) throw new Error('Usage: node compare.mjs compare|gallery before after --out artifacts/report.json|comparison.html');
   const target = outputPath(out);
-  if ([beforeFile, afterFile].some(file => fs.realpathSync(file) === target)) throw new Error('Output must differ from both inputs.');
+  if ([beforeFile, afterFile].some(file => fs.realpathSync(file) === target || (fs.existsSync(target) && fs.statSync(file).dev === fs.statSync(target).dev && fs.statSync(file).ino === fs.statSync(target).ino))) throw new Error('Output must differ from both inputs.');
   if (command === 'compare') {
     const result = compare(JSON.parse(fs.readFileSync(beforeFile, 'utf8')), JSON.parse(fs.readFileSync(afterFile, 'utf8')));
     fs.writeFileSync(target, JSON.stringify(result, null, 2) + '\n');

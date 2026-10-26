@@ -28,13 +28,15 @@ function nm(f, x0, step, iters = 20000) {
 let best = null;
 for (const ex of (process.env.BEHIND ? [3, 1, -1] : [3, 5, 7])) for (const ey of [2, 3.5]) for (const ez of (process.env.BEHIND ? [-3, -5, -7] : [3, 5, 7])) {
   const yaw = Math.atan2(-ex, -ez + 0), pitch = -Math.atan2(ey, Math.hypot(ex, ez));
-  const r = nm(err, [ex, ey, ez, yaw, pitch, 900, 380, 250], [1, 1, 1, 0.2, 0.1, 200, 50, 50]);
+  const initial = [ex, ey, ez, yaw, pitch, 900], steps = [1, 1, 1, 0.2, 0.1, 200];
+  if (!FIX) { initial.push(380, 250); steps.push(50, 50); }
+  const r = nm(err, initial, steps);
   if (!best || r[1] < best[1]) best = r;
 }
 const [p, e] = best, rms = Math.sqrt(e / PTS.length);
 const [ex, ey, ez, yaw, pitch, f] = p;
 const fw = [Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch), Math.cos(pitch) * Math.cos(yaw)];
-const out = { eye: [ex, ey, ez].map((v) => +v.toFixed(3)), dir: fw.map((v) => +v.toFixed(4)), f: +f.toFixed(1), cx: +p[6].toFixed(1), cy: +p[7].toFixed(1), rmsPx: +rms.toFixed(1),
+const out = { eye: [ex, ey, ez].map((v) => +v.toFixed(3)), dir: fw.map((v) => +v.toFixed(4)), f: +f.toFixed(1), cx: +(FIX || [p[6], p[7]])[0].toFixed(1), cy: +(FIX || [p[6], p[7]])[1].toFixed(1), rmsPx: +rms.toFixed(1),
   resid: PTS.map((q) => { const [u, v] = proj(p, q); return [+(u - q[3]).toFixed(1), +(v - q[4]).toFixed(1)]; }) };
 // a look-at point on the view ray at the car's centre distance
 const t = -(ex * fw[0] + (ey - 0.4) * fw[1] + (ez + 0.2) * fw[2]);

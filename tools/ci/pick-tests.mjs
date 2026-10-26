@@ -307,6 +307,7 @@ export const RULES = [
   // ── the rest ────────────────────────────────────────────────────────────
   [/^js\/net\/scan\.js/, ["lifecycle-unit"], "camera cancellation is an async ownership boundary"],
   [/^js\/net\//, ["net-unit", "net"], "wire logic first (1 s), then the browser session"],
+  [/^vendor\/trystero-[^/]+\//, ["net-unit"], "vendored action framing, payload bounds and peer cleanup — net-trystero-api.test.mjs"],
   [/^js\/data\//, ["hooks", "lifecycle-unit"], "the hook contracts (data-lifecycle + telemetry-compare ride test:hooks) and the async-lifecycle twins"],
   [/^sw\.js|^manifest\.json/, ["service-worker"], ""],
   [/^worker\//, ["net-unit"], "the rendezvous Durable Object"],

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .cursor/hooks/shell-guard.sh",
+            "command": "bash .codex/hooks/shell-guard.sh",
             "timeout": 200
           }
         ]
