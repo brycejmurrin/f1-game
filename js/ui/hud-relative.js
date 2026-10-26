@@ -174,10 +174,28 @@ const HudRelative = (function () {
     // fitRows forces layout (getBoundingClientRect x passes); the tick is 10 Hz, so
     // run it only when something that decides the fit moved (bug-hunt 2 P9).
     const key = fitKey();
-    if (key !== fitSeen || ++fitAge >= FIT_REFRESH) fitRows();   // the age is a 1 Hz net for layout the key cannot see
+    if (key !== fitSeen) fitRows();
+    // The age is a 1 Hz net for layout the key cannot see. It is READ-ONLY (audit4
+    // UB6): compare the boxes fitRows decides from with the ones the last fit left;
+    // only a moved box pays fitRows' reset-then-measure passes.
+    else if (++fitAge >= FIT_REFRESH) { fitAge = 0; if (geoKey() !== geoSeen) fitRows(); }
   }
-  let fitSeen = null, fitAge = 0;
+  let fitSeen = null, fitAge = 0, geoSeen = null;
   const FIT_REFRESH = 10;
+  /** The card's box and every visible clearance control's box, rounded: reads only. */
+  function geoKey() {
+    if (!root || !root.getBoundingClientRect || !doc.getElementById) return "";
+    // fitRows measures nothing for an edited card or on desktop: neither does the net.
+    if (root.hasAttribute && root.hasAttribute("data-hl-user")) return "user";
+    if (doc.body && doc.body.classList && doc.body.classList.contains("desktop")) return "desktop";
+    const r = (b) => Math.round(b.left) + "," + Math.round(b.top) + "," + Math.round(b.width) + "," + Math.round(b.height);
+    let k = r(root.getBoundingClientRect());
+    for (let i = 0; i < CLEAR_IDS.length; i++) {
+      const el = doc.getElementById(CLEAR_IDS[i]);
+      k += "|" + (el && !el.hidden && el.getBoundingClientRect ? r(el.getBoundingClientRect()) : "-");
+    }
+    return k;
+  }
   /** Everything fitRows reads that is not layout itself: occupied rows, viewport,
    *  HUD scale, the body's mode classes and each clearance control's hidden/class. */
   function fitKey() {
@@ -213,6 +231,10 @@ const HudRelative = (function () {
    *  outermost occupied rows until it fits. CSS max-height can miss TILT
    *  (no steer-* class; BRAKE sits in the map column). */
   function fitRows() {
+    fitRowsNow();
+    geoSeen = built ? geoKey() : null;   // the fitted geometry the 1 Hz net compares against
+  }
+  function fitRowsNow() {
     if (!root || !built) return;
     fitSeen = fitKey(); fitAge = 0;
     // Phone clearance is an output, never the next layout's input. Restore

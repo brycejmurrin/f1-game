@@ -94,6 +94,10 @@ const PhonePad = (function () {
   function decodeHud(text) {
     let a;
     try { a = JSON.parse(typeof text === "string" ? text : ""); } catch (e) { return null; }
+    return hudOf(a);
+  }
+  // The parsed half, so the session's STATE handler parses each packet once (audit4 UB5).
+  function hudOf(a) {
     if (!Array.isArray(a) || a.length !== 14 || a[0] !== "H") return null;
     return {
       gear: num(a[1], -1, 9) | 0, kmh: num(a[2], 0, 999) | 0, rpm: num(a[3], 0, 1),
@@ -487,6 +491,7 @@ const PhonePad = (function () {
     const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     let seq = 0, lastSent = -1e9, sent = 0, haptics = 0, huds = 0, closed = false;
     let beat = 0, helloPending = false, peerSteer = false, peerAck = false, ackAt = -1, openedAt = now();
+    let dirty = false;   // a coalesced move awaiting the 15 ms gap
     const pending = [], sentTimes = new Map();
     const EDGE_MAX_AGE_MS = 1200, NAV_MAX_AGE_MS = 250, EDGE_CAP = 24;
     let expired = 0, rejected = 0, healthState = "unavailable";
@@ -515,8 +520,10 @@ const PhonePad = (function () {
     function send(force) {
       if (closed || transport.status !== "open") return false;
       const t = now();
-      if (!force && t - lastSent < MIN_SAMPLE_GAP_MS) return false;
-      lastSent = t;
+      // A rate-limited move is COALESCED, not dropped: the next pump() (each rAF)
+      // sends the latest values once the 15 ms gap has passed (audit4 UB4).
+      if (!force && t - lastSent < MIN_SAMPLE_GAP_MS) { dirty = true; return false; }
+      lastSent = t; dirty = false;
       const ok = transport.send(T.STATE, encodeSample({
         seq: seq++, roll: src.roll(), thr: src.thr(), brk: src.brk(), held: src.held(),
         ...(peerSteer && src.steer && src.steer() != null ? { steer: src.steer() } : {}),
@@ -537,7 +544,7 @@ const PhonePad = (function () {
       if (channel === T.STATE) {
         let ack; try { ack = JSON.parse(data); } catch (_) { ack = null; }
         if (peerAck && Array.isArray(ack) && ack[0] === "A" && Number.isInteger(ack[1]) && sentTimes.has(ack[1])) { ackAt = sentTimes.get(ack[1]); for (const key of sentTimes.keys()) if (key <= ack[1]) sentTimes.delete(key); }
-        const h = decodeHud(data);
+        const h = hudOf(ack);
         if (h && opts.onHud) { huds++; try { opts.onHud(h); } catch (e) { /* page's problem */ } }
         return;
       }
@@ -564,11 +571,18 @@ const PhonePad = (function () {
     };
     if (transport.status === "open") armed(); else transport.onOpen(armed);
     return {
-      // A pedal or button CHANGE is sent at once (force); the sensor stream
-      // keeps the 15 ms gap, since the next reading is a frame away anyway.
+      // A press/release EDGE is sent at once (force); the sensor stream and a
+      // pedal slide or steer drag keep the 15 ms gap, coalesced into the next pump.
       sample: (force) => send(!!force),
       event,
-      pump: () => { const n = transport.pump(now()); flush(); if (opts.onHealth) opts.onHealth(health()); return n; },
+      // With a heartbeat running, onHealth comes from it at 100 ms, not from every
+      // rAF pump as well (audit4 UB5: one allocated object per frame).
+      pump: () => {
+        const n = transport.pump(now()); flush();
+        if (dirty) send(false);
+        if (opts.onHealth && !beat) opts.onHealth(health());
+        return n;
+      },
       health,
       close() { try { transport.close(); } catch (e) { /* already closed */ } close("local"); },
       stats: () => ({ sent, haptics, huds, seq, queued: pending.length, expired, rejected, health: health(), open: !closed && transport.status === "open" }),
@@ -715,8 +729,9 @@ const PhonePad = (function () {
       const ids = new Set();
       const anchors = new Map();   // pointerId -> clientY at touch-down
       const levels = new Map();    // each contact keeps its own pedal travel
-      const level = (v) => { if (el.style && el.style.setProperty) el.style.setProperty("--travel", v.toFixed(2)); on(v); };
-      const paintLevel = () => { let strongest = 0; for (const v of levels.values()) strongest = Math.max(strongest, v); level(strongest); };
+      // `edge` false = a slide (rate-capped, coalesced); a press or lift is sent at once.
+      const level = (v, edge) => { if (el.style && el.style.setProperty) el.style.setProperty("--travel", v.toFixed(2)); on(v, edge); };
+      const paintLevel = (edge = true) => { let strongest = 0; for (const v of levels.values()) strongest = Math.max(strongest, v); level(strongest, edge); };
       releases.push((pointersOnly) => {
         // A last-finger-up fallback says nothing about keys still held.
         // Blur, backgrounding and disconnect still clear every input source.
@@ -732,7 +747,7 @@ const PhonePad = (function () {
         if (travel) { anchors.set(e.pointerId, e.clientY); levels.set(e.pointerId, 1); paintLevel(); } else on(1);
         e.preventDefault();
       };
-      const move = (e) => { if (travel && anchors.has(e.pointerId)) { levels.set(e.pointerId, travelOf(anchors.get(e.pointerId), e.clientY)); paintLevel(); } };
+      const move = (e) => { if (travel && anchors.has(e.pointerId)) { levels.set(e.pointerId, travelOf(anchors.get(e.pointerId), e.clientY)); paintLevel(false); } };
       const up = (e) => {
         anchors.delete(e.pointerId);
         levels.delete(e.pointerId);
@@ -790,7 +805,14 @@ const PhonePad = (function () {
       const up = Math.max(0, anchorY - y - PEDAL_DEAD_PX);
       return Math.max(PEDAL_MIN, Math.min(1, 1 - up / PEDAL_TRAVEL_PX));
     }
-    const push = () => { if (dom.steer && dom.steer.setAttribute) dom.steer.setAttribute("aria-valuenow", String(steer)); if (session) session.sample(true); };
+    // aria-valuenow is an integer percent (controller.html: min -100, max 100), written
+    // only when it changes; a drag/slide (edge false) keeps the session's 15 ms cap.
+    let steerAria = "0";
+    const push = (edge = true) => {
+      const pct = String(Math.round(steer * 100));
+      if (pct !== steerAria && dom.steer && dom.steer.setAttribute) { steerAria = pct; dom.steer.setAttribute("aria-valuenow", pct); }
+      if (session) session.sample(edge !== false);
+    };
     function setSteeringMode(mode) {
       if (mode !== "tilt" && mode !== "touch") return false;
       if (mode === "touch" && (!session || !session.health().touchSupported)) { say("Touch steering needs an updated game. Reload the game and reconnect.", true); return false; }
@@ -801,12 +823,12 @@ const PhonePad = (function () {
     }
     if (dom.steeringMode) dom.steeringMode.addEventListener("change", () => { if (!setSteeringMode(dom.steeringMode.value)) dom.steeringMode.value = steeringMode; });
     if (dom.steer) {
-      let steeringPointer = null, anchorX = 0;
+      let steeringPointer = null, anchorX = 0, stripW = 40;   // strip width read once per gesture, not per move (audit4 UB4)
       const steeringKeys = new Set();
       const release = (e) => { if (e && e.pointerId !== steeringPointer) return; steeringPointer = null; if (!e) steeringKeys.clear(); steer = steeringKeys.size ? (Array.from(steeringKeys).pop() === "ArrowLeft" ? -1 : 1) : 0; push(); };
       releases.push((pointersOnly) => release(pointersOnly ? { pointerId: steeringPointer } : undefined)); pointerReleases.push(release);
-      dom.steer.addEventListener("pointerdown", (e) => { if ((e.pointerType === "mouse" && e.button !== 0) || steeringMode !== "touch" || steeringPointer !== null) return; steeringPointer = e.pointerId; anchorX = e.clientX; steer = 0; try { dom.steer.setPointerCapture(e.pointerId); } catch (_) { /* document release fanout still centers steering when capture is refused */ } e.preventDefault(); push(); });
-      dom.steer.addEventListener("pointermove", (e) => { if (steeringPointer !== e.pointerId) return; steer = num((e.clientX - anchorX) / Math.max(40, dom.steer.getBoundingClientRect().width * 0.4), -1, 1); push(); });
+      dom.steer.addEventListener("pointerdown", (e) => { if ((e.pointerType === "mouse" && e.button !== 0) || steeringMode !== "touch" || steeringPointer !== null) return; steeringPointer = e.pointerId; anchorX = e.clientX; stripW = Math.max(40, dom.steer.getBoundingClientRect().width * 0.4); steer = 0; try { dom.steer.setPointerCapture(e.pointerId); } catch (_) { /* document release fanout still centers steering when capture is refused */ } e.preventDefault(); push(); });
+      dom.steer.addEventListener("pointermove", (e) => { if (steeringPointer !== e.pointerId) return; steer = num((e.clientX - anchorX) / stripW, -1, 1); push(false); });
       dom.steer.addEventListener("pointerup", release); dom.steer.addEventListener("pointercancel", release);
       dom.steer.addEventListener("keydown", (e) => { if (steeringMode !== "touch" || !["ArrowLeft", "ArrowRight"].includes(e.key)) return; e.preventDefault(); if (steeringKeys.has(e.key)) return; steeringKeys.add(e.key); steer = e.key === "ArrowLeft" ? -1 : 1; push(); });
       dom.steer.addEventListener("keyup", (e) => {
@@ -817,8 +839,8 @@ const PhonePad = (function () {
       });
       dom.steer.addEventListener("blur", () => release());
     }
-    hold(dom.gas, (v) => { thr = v; push(); }, () => { thr = 0; push(); }, true);
-    hold(dom.brake, (v) => { brk = v; push(); }, () => { brk = 0; push(); }, true);
+    hold(dom.gas, (v, edge) => { thr = v; push(edge); }, () => { thr = 0; push(); }, true);
+    hold(dom.brake, (v, edge) => { brk = v; push(edge); }, () => { brk = 0; push(); }, true);
     hold(dom.lookBack, () => { held |= HELD.lookBack; push(); }, () => { held &= ~HELD.lookBack; push(); });
     // Edges fire on the DOWN, not the click: a paddle on a wheel answers the
     // finger, and a click waits for the release (and can be lost to a drag).
