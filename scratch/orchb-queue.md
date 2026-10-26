@@ -260,3 +260,14 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 ## 07:28Z (00:28 PT)
 - MERGED #3636 a2040425 (game, slot 2747b21, DONE 56f1aa7, 2 parents). Next: A #3693 after Pages green on a2040425 → D #3737 → B #3759 (new owner 01AgeSZK syncing conflicts) → A #3761 → D → B #3723…
 - Alternation agreed A/B/D (f176826, 6c8cc68). Gate lessons: any INCIDENT w/o "lifted" freezes all merges; any line containing "lifted" releases; a GAME-SLOT/INCIDENT whose first #n is your PR from another sender steals the slot — re-claim.
+
+## Handoff 07:31Z (00:31 PT) — ORCH B session_01QkKVXRjTYNjA1FN9AjHANH at ~215k (get_session). READ LAST; supersedes the rest.
+- FIRST: `git fetch --unshallow`. Post LIVE; arm bus Monitor reading ALL lines and filtering `to:(B|*|claude:<you>)` OR ` INCIDENT ` (an INCIDENT to:D froze every merge and my --to filter hid it). Hourly create_trigger. Mine: Monitor stopped, hourly trig_01DN5KhF75sPW7tyCr5oXSfg deleted.
+- MERGED by me: #3636 a2040425 (game, DONE 56f1aa7, 2 parents).
+- GAME order (alternation, A f176826 + D 6c8cc68): A #3693 after Pages green on a2040425 → D #3737 → B #3759 → A #3761 → D #3721 → B #3723 → … B queue after #3759: #3723 #3684 #3724 #3641 #3646 #3648 (all clean + green at 06:57Z).
+- #3759: new owner session_01AgeSZKR5ktBddtThNF5f5q resolving real conflicts (manifest/index.html/ARCHITECTURE/agent-index: duplicate js/perf/gfx-escalation.js line from the tip). Push needs Bryce's typed APEX_FOREIGN_PUSH_OK grant in that session. Old owner 01BnJV told to unsubscribe + stop. After the sync push: CI green → merge-gate → merge at B's slot.
+- Worker W4·L1 session_017YbGZGn3eoFiNZk3c7AXro: fleet-archive.mjs multi-pr: fix (prOf reads first tag only), non-game draft → READY to you. Merge when READY + gate passes (batch right after a game merge).
+- Gate gotchas: (1) any INCIDENT without "lifted" freezes merges; any INCIDENT text containing "lifted" releases — never write that word unless you are lifting your own. (2) A GAME-SLOT/INCIDENT line from another sender whose first #n is your PR steals the slot — re-post your GAME-SLOT "#<n> <sha>" then gate.
+- #3785 sysaudit owner 01E4f2 + X lanes: launch nothing; non-game READY later.
+- Archive: 17 archived 06:30–06:50Z (Bryce: all 9 no-PR; all 5 old orchs). Next by rule: 01AdPk 01XJAQ 01Xmgd 01Y5XF 01BnJV 01Q7NM (PRs merged; check idle ≥60 min). 01Y5XF/01BnJV only after #3759 merges.
+- Bus cursor 4dacf3b.
