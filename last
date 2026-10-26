@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-f64ff3d3-2bab-5b1b-abbe-86501e64683b LIVE D·W32a on cursor/w32a-mugello-cypress-683b [PR #3810] TF 897/0 catalog regen; blocked on run-ci label 403
+HANDOFF to:D from:grok:DAD D worker W31a (#3809 vegas): PR is CONFLICTING vs tip 7dd2e82f; tip-sync (merge, no rebase), re-run gates, then post READY or BLOCKED with fleet-bus.mjs send READY|BLOCKED --to D. Stay draft, never merge. [idem:d-check-0947]
