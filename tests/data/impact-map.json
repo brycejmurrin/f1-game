@@ -877,7 +877,6 @@
       "create": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/battle-earcon.test.mjs",
-        "tests/unit/event-journal.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/pause-silence.test.mjs",
@@ -6411,16 +6410,19 @@
     },
     "js/fx/droplets.js": {
       "clear": [
-        "tests/unit/droplets-spray.test.mjs"
+        "tests/unit/droplets-spray.test.mjs",
+        "tests/unit/visor-optics.test.mjs"
       ],
       "rate": [
         "tests/unit/droplets-spray.test.mjs"
       ],
       "stats": [
-        "tests/unit/droplets-spray.test.mjs"
+        "tests/unit/droplets-spray.test.mjs",
+        "tests/unit/visor-optics.test.mjs"
       ],
       "tick": [
-        "tests/unit/droplets-spray.test.mjs"
+        "tests/unit/droplets-spray.test.mjs",
+        "tests/unit/visor-optics.test.mjs"
       ]
     },
     "js/fx/grade-tint.js": {
@@ -6575,6 +6577,9 @@
     },
     "js/fx/visor-optics.js": {
       "blendMode": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
+      "clear": [
         "tests/unit/visor-optics.test.mjs"
       ],
       "lampAdapt": [
@@ -10524,6 +10529,9 @@
       "humanYieldTakes": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "hungerOf": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "isBoxed": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -10623,6 +10631,7 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "passHunger": [
+        "tests/unit/ai-drive.test.mjs",
         "tests/unit/ai-pass-complete.test.mjs"
       ],
       "passReach": [
@@ -10669,6 +10678,9 @@
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/ai-pass-complete.test.mjs"
       ],
+      "sbsArgs": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "sbsCommitT": [
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/ai-pass-complete.test.mjs"
@@ -10705,9 +10717,6 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "startGapT": [
-        "tests/unit/ai-drive.test.mjs"
-      ],
-      "startQWinBonus": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "steerDamp": [
@@ -11087,6 +11096,9 @@
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/race-control.test.mjs"
       ],
+      "tyreMarble": [
+        "tests/unit/debris-step-skip.test.mjs"
+      ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
@@ -11197,6 +11209,7 @@
         "tests/unit/player-forces.test.mjs"
       ],
       "*": [
+        "tests/unit/grip-steer.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/trail-brake-turnin.test.mjs",
@@ -11392,14 +11405,9 @@
       ]
     },
     "js/physics/vehicle.js": {
-      "forPlayer": [
-        "tests/unit/vehicle-tick-alloc.test.mjs"
-      ],
-      "stepWheel": [
-        "tests/unit/vehicle-tick-alloc.test.mjs"
-      ],
       "*": [
-        "tests/unit/player-forces.test.mjs"
+        "tests/unit/player-forces.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs"
       ]
     },
     "js/physics/wall-clamp.js": {
@@ -11429,6 +11437,7 @@
         "tests/unit/wheel-state.test.mjs"
       ],
       "stepPlayer": [
+        "tests/unit/vehicle-tick-alloc.test.mjs",
         "tests/unit/wheel-state.test.mjs"
       ]
     },
@@ -11741,20 +11750,6 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/voice-pack.test.mjs"
-      ]
-    },
-    "js/race/event-journal.js": {
-      "create": [
-        "tests/unit/event-journal.test.mjs"
-      ],
-      "onFacts": [
-        "tests/unit/event-journal.test.mjs"
-      ],
-      "push": [
-        "tests/unit/event-journal.test.mjs"
-      ],
-      "update": [
-        "tests/unit/event-journal.test.mjs"
       ]
     },
     "js/race/flying-start.js": {
@@ -12260,15 +12255,18 @@
         "tests/unit/race-radio.test.mjs"
       ],
       "hold": [
+        "tests/unit/ai-drive.test.mjs",
         "tests/unit/race-control.test.mjs",
         "tests/unit/storm-weather.test.mjs"
       ],
       "holdCap": [
+        "tests/unit/ai-drive.test.mjs",
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/race-control.test.mjs"
       ],
       "info": [
         "tests/unit/aero-zones-vm.test.mjs",
+        "tests/unit/ai-drive.test.mjs",
         "tests/unit/career-backup.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
@@ -12351,12 +12349,10 @@
     },
     "js/race/race-facts.js": {
       "create": [
-        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
       ],
       "observe": [
-        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs"
       ],
       "reset": [
@@ -12422,7 +12418,6 @@
       "create": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/battle-earcon.test.mjs",
-        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
@@ -12467,7 +12462,6 @@
       ],
       "update": [
         "tests/unit/battle-earcon.test.mjs",
-        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
       ],
@@ -12542,7 +12536,6 @@
       ],
       "create": [
         "tests/unit/battle-earcon.test.mjs",
-        "tests/unit/event-journal.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-lines.test.mjs",
@@ -13130,6 +13123,7 @@
         "tests/unit/renderer-boot-timeout.test.mjs"
       ],
       "createInitOwner": [
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/init-owner-resize-observer.test.mjs",
         "tests/unit/render-final-contracts.test.mjs"
       ],
@@ -15357,9 +15351,15 @@
       ]
     },
     "js/track/core/mesh.js": {
+      "bankingProfile": [
+        "tests/unit/bank-zone-claim.test.mjs"
+      ],
       "gridSlot": [
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/grid-boxes.test.mjs"
+      ],
+      "paint": [
+        "tests/unit/bank-zone-claim.test.mjs"
       ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",

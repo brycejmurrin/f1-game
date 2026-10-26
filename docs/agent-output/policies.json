@@ -306,6 +306,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/check/dup-functions.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/check/dup-keys.mjs": {
       "action": "keep-native",
       "presentation": "native",

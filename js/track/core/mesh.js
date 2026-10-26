@@ -223,24 +223,25 @@ const TrackMesh = (function () {
       // way). Those move to the nearest unclaimed apex, closest pair first so
       // two zones never collapse onto one corner. A zone already ON a corner is
       // left exactly where it was authored: it may deliberately sit at entry
-      // rather than apex, and re-seating it can only make it worse.
+      // rather than apex, and re-seating it can only make it worse. It does
+      // CLAIM its nearest apex, though, so a loose zone cannot be re-seated
+      // onto a corner it already banks (strongest-wins would merge the two).
       const loose = [];
+      const apexGap = (tf, f) => { const d = Math.abs(wrap01(tf) - f); return d > 0.5 ? 1 - d : d; };
       zones.forEach((z, i) => {
         if (centre[i] !== null) return;
         const f = wrap01((z.frac || 0) * mirror + dress);
         centre[i] = f;
         if (!turns) return;
-        if (Math.abs(ksm[Math.round(f * n) % n]) >= BANK_STRAIGHT_K) return;
-        loose.push({ i, f });
+        if (Math.abs(ksm[Math.round(f * n) % n]) < BANK_STRAIGHT_K) { loose.push({ i, f }); return; }
+        let best = 0;
+        turns.forEach((tf, ti) => { if (apexGap(tf, f) < apexGap(turns[best], f)) best = ti; });
+        taken.add(best);
       });
       if (loose.length) {
         const cand = [];
         for (const p of loose) {
-          turns.forEach((tf, ti) => {
-            let d = Math.abs(wrap01(tf) - p.f);
-            if (d > 0.5) d = 1 - d;
-            cand.push({ i: p.i, ti, d });
-          });
+          turns.forEach((tf, ti) => cand.push({ i: p.i, ti, d: apexGap(tf, p.f) }));
         }
         cand.sort((a, b) => a.d - b.d);
         const seated = new Set();

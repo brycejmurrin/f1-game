@@ -6069,7 +6069,7 @@ const TLX = (function () {
             // grid. Refuse rather than build a silently wrong one.
             if (!AL || !(knob > 0) || !total || cellSplit) {
               if (_lgKey !== "off") { lit.setLampGrid(null); _lgKey = "off"; }
-              if (!total) _lgChs = _lgChsFirst = null;   // no chunked geometry: do not pin the old track's cells
+              if (first !== _lgChsFirst) _lgChs = _lgChsFirst = _lgChunks = _lgSrc = null;   // ANY off cause on new chunks: do not pin the old track's cells/lamps
               const lamps = AL ? (AL.length / 15) | 0 : 0;
               const why = cellSplit ? "chunked records disagree on cellSize"
                 : !(knob > 0) ? "knob is 0"

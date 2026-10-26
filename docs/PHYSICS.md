@@ -10,18 +10,18 @@ other and it existed nowhere.
 
 ---
 
-Per-axle bicycle model. Key tuning variables (defaults in `js/physics/drive-tune.js`, `DriveTune.create`; `js/game.js` reads and writes them as `driveTune.X`, e.g. `driveTune.PACE`): `WHEELBASE`,
+Per-axle bicycle model. Key tuning variables in `game.js`: `WHEELBASE`,
 `STEER_EXPO`, `STEER_MAX_SLIP`, `STEER_SPEED_REF`, `DRIFT`, `ROAD_FOLLOW`,
 `PLAYER_GRIP`, `FRONT_GRIP`, `YAW_DAMP`, `YAW_INERTIA`, `PACE`. Modify via
 `__apex.setPhysics(o)` for A/B tests. The model's immutable constants (`VMAX`,
 `ACCEL`, `BRAKE`, `LAT_MAX`, `LONG_GRIP`, the `X_*` aero pairs, the ERS/OT
 windows, …) live in `js/physics/consts.js` (global `PhysicsConsts`),
 destructured once by game.js at eval time — anything a slider or `setPhysics`
-can change stays a live `let` in `DriveTune` (`js/physics/drive-tune.js`), never a constant.
+can change stays a `let` in game.js.
 
 **`PACE` is a ground-speed scale, not a speed cap.** The OVERALL SPEED slider
 scales the car's real m/s (and the accel curve) — nothing else. Everything else
-measured in speed is pace-normalised through two helpers in `js/race/pace-math.js` (`PaceMath.create`, which reads `driveTune.PACE`; it also holds `aStd(a)`, the same normalisation for m/s²):
+measured in speed is pace-normalised through two helpers next to `PACE` in game.js:
 `vTop()` (where the envelope tops out in m/s — divide by it to normalise) and
 `vStd(v)` (that speed on the standard, pace-5 scale — compare hard-coded
 thresholds against it). So `VMAX`, `GEAR_TOP`, `TAPER_LO/HI`, `GRASS_V` and
@@ -1171,7 +1171,7 @@ it lands.
 |---|---|---|---|
 | `js/game.js` | `updateCar` k/`c.kCur` cache | **assist-gated** | every player-path use is multiplied by `ROAD_FOLLOW` (def 0) or sits inside `if (raceLineAssist !== 0)` (def 0); `c.kCur` feeds only render, and only for AI cars: BodyAttitude's AI roll and CarDraw's AI front-wheel angle (`js/car/car-draw.js`, the bend's Ackermann `atan(L·k)`, inside `!c.human` — `tests/unit/car-fx.test.mjs` guards that a human car's wheels read no curvature) |
 | `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target / overtake side pick / next-corner `c.kTurn` / get-a-run | **AI-only** | each inside the `!c.human` arm. The side pick passes the SAME `kA` the lane target already sampled into `AiDrive.otSide`, which breaks an equal-room tie toward the inside of the next corner — the arc chooses which way an AI goes around another AI, and touches no player force path. `c.kTurn` (2026-10-01: pass side, the level side-by-side election, the defender's predicted side) and `runExtra`'s read of `k` are the same kind: they move only AI targets. `js/physics/collide.js` reads `kTurn` only for an all-AI pair, so it never picks which car a PLAYER rub scrubs |
-| `js/game.js` | `updateCar` AI lateral block: marble `latG = |k|·v²/g` for `DebrisWorld.tyreMarble` | **surface** | AI marbles from curvature feed player grip; pass-4 DECISIONS #4 changes the signal (the drop is to be driven by the AI car's own measured lateral acceleration / tyre slip, not track curvature; the player-side `marbleGrip` stays). Inside the AI arm ("AI cars don't run the slip model") and `if (DebrisWorld.active())` |
+| `js/game.js` | `updateCar` AI lateral block: marble drop from the AI car's own state — body slip `atan2(vlOwn, max(4,|v|))` of its own lateral step; lock = hard braking at speed or `c.wheelLock` — for `DebrisWorld.tyreMarble` | **surface** | no curvature read (was `|k|·v²/g` until 2026-10-26; audit4 F1, DECISIONS #4); settled marbles are road state that cuts the player's grip via `DebrisWorld.marbleGrip` (≤7 %, debris on + `apex26.marbleGrip`); guard `tests/unit/debris-step-skip.test.mjs` |
 | `js/game.js` | `updateCar` AI `yawTarget` (`steerVis·0.35 + clamp(-k·v·0.14)`) → `c.yawVis` | **broadcast-only** | the `else` arm of `if (c.human && c.head != null)`; writes the DRAWN heading only, never a force or steer input (swept 2026-10-05) |
 | `js/game.js` | `updateCar` RACING LINE assist | **assist-gated** | inside `if (raceLineAssist !== 0)`; slider def 0 |
 | `js/game.js` | `drivingLineApi` (feeds `js/render/shared/driving-line.js`) | **surface** | the DRIVING LINE ribbon: the adapter hands the builder the static curvature LUT, read once per circuit to place the line and shade its braking zones; a picture on the road, no car reads it. Same lateral formula as the assist-gated `lineX` so the two agree. The builder it feeds ALSO derives an audible cue — see the `driving-line.js` row |
@@ -1185,7 +1185,7 @@ it lands.
 | `js/camera/vantage.js` | `vantage` | **broadcast-only** | heli/side/cinematic plus ExtraRigs drone (side sway); trackside uses corner poses (no curvature); cam-avoid uses prop boxes only; 0 in every driven mode |
 | `js/camera/extra-rigs.js` | `droneFollow` | **broadcast-only** | optional `Tracks.curvature` read for drone side sway only; never reaches the car |
 | `js/race/quali-model.js` | `lapTime` | **AI-only** | offline lap-time model for the simulated field; a player-driven lap always overrides it |
-| `js/physics/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. The saved default is notch 1 = OFF (`brakeCue` `def: 1` in `js/ui/settings-export.js`); the ROOKIE/RELAX presets in `js/input/steer-tuning.js` turn it on (8-9), so a preset install hears a curvature-derived cue |
+| `js/physics/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. NOTE: ships defaulted ON (notch 6) — sensory-only, but a fresh install does hear a curvature-derived cue |
 | `js/audio/driving-cues.js` | `tick` / `cornerSide` | **assist-gated** | behind the AUDIO DRIVING CUES slider (`audioCues`, notch 1 = OFF, STANDARD/PRO stay OFF; ROOKIE/RELAX bundle mid notches); braking tone + L/R corner calls via `GameAudio.driveBrakeTone` / `cornerCall` — audio-only, no force/steer path, never `G.announce` / race radio. Early-returns before any `Tracks.curvature` read when OFF |
 | `js/agent/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |
 | `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |

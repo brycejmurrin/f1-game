@@ -77,15 +77,15 @@ const lazyBundles = LazyBundles.create({
   applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
   createNetwork: () => { netPlay = NetPlay.create(G); netLobby = NetLobby.create(G); return netLobby; },
   bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G); if (typeof VisorOptics !== "undefined") window.__apex.visorScene = () => VisorOptics.sceneFromG(G); } },
-  // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals.
-  onAudioReady: () => {
-    radioVoice = RadioVoice.create(G);
-    announcer = Announcer.create(G);
-    rivalAudio = RivalAudio.create(G);
-    carSfx = CarSfx.create(G);
-    audioPanel = AudioPanel.create(G);
-    if (audioPanel && audioPanel.init) audioPanel.init();
-    if (typeof DrivingCues !== "undefined" && DrivingCues.create) DrivingCues.create(G);
+  // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals; `once` latches each part (a retry re-runs only the one that threw).
+  onAudioReady: (once = (k, f) => f()) => {
+    once("radio", () => { radioVoice = RadioVoice.create(G); });
+    once("announcer", () => { announcer = Announcer.create(G); });
+    once("rivals", () => { rivalAudio = RivalAudio.create(G); });
+    once("carSfx", () => { carSfx = CarSfx.create(G); });
+    once("panel", () => { audioPanel = AudioPanel.create(G); });
+    once("panelInit", () => { if (audioPanel && audioPanel.init) audioPanel.init(); });
+    once("cues", () => { if (typeof DrivingCues !== "undefined" && DrivingCues.create) DrivingCues.create(G); });
   },
   // Recreate race-session instances after LAZY_RACE_SESSION reinjects real `var`s.
   onRaceSessionReady: () => {
@@ -95,7 +95,7 @@ const lazyBundles = LazyBundles.create({
     marshalPanels = MarshalPanels.create(G);
     records = SessionRecords.create(G);
     if (G.daily.isActive() && G.daily.current().class === "standard") records.prepareDaily();   // a STANDARD daily picked before this bundle landed was prepared by the stub (a no-op): every lap would be refused
-    raceRadio = (eventJournal = EventJournal.create(G), RaceRadio.create(G, EventJournal.radioHooks(eventJournal)));
+    raceRadio = RaceRadio.create(G);
     flyingStart = FlyingStart.create(G, {
       realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.isActive()) || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())),
     });
@@ -2509,7 +2509,7 @@ async function startRaceBody() {
     quitToMenu();   // a bare setState("menu") left the HUD, in-race class, lights and engine up (RESTART from the pause card)
     return false;
   }
-  resultsCam.reset(); eventJournal.reset();   // restore a montage before replacing the previous field
+  resultsCam.reset();   // restore a montage before replacing the previous field
   _roadReflectionTransition.value = NaN;   // a new race starts from its current reflection policy
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
@@ -2922,6 +2922,7 @@ function endRace(forcedOrder) {
   // the pause dialog on top of the results with a RESUME that resolves to
   // nothing, because resuming is only reachable from state "race".
   paused = false; els.pausemenu.hidden = true;
+  Droplets.clear();   // visor glints never linger over the results/menu (audit4 I1 R1)
   setState("results", isQuali() ? "quali-end" : forcedOrder ? "forced-order" : "flag");
   document.body.classList.remove("in-race");
   dropRaceWake();
@@ -3489,7 +3490,7 @@ announcer = Announcer.create(G);
 let records = SessionRecords.create(G);   // LAZY_RACE_SESSION
 const coach = DrivingCoach.create(G);     // FULL — UiExperience captures this instance
 setupTrialSession = SetupTrialSession.create(G);
-let eventJournal = EventJournal.create(G), raceRadio = RaceRadio.create(G, EventJournal.radioHooks(eventJournal));   // LAZY_RACE_SESSION — journal + radio
+let raceRadio = RaceRadio.create(G);   // LAZY_RACE_SESSION — radio
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 let flyingStart = FlyingStart.create(G, { realRace: () => realRace.isActive() || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())) });   // LAZY_RACE_SESSION
@@ -4014,7 +4015,7 @@ function raceIntroFromSheet(go, sheet, btn) {
   // A DAILY picked before LAZY_RACE_SESSION landed ran the stub's no-op prepareDaily; the bundle's hook
   // (onRaceSessionReady) then moves teamIdx/driverIdx/difficulty, entrySettings with them, and the intro
   // it lands in went stale and handed START back with no garage-out (#3591, the 9 s idle prefetch).
-  const sessionLate = typeof daily !== "undefined" && daily.isActive() && typeof SessionRecords !== "undefined" && !!SessionRecords._stub;
+  const sessionLate = typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && typeof SessionRecords !== "undefined" && !!SessionRecords._stub;
   try { if (!sessionLate && !(gfx.warming && gfx.warming())) { intro(); return; } } catch (e) { failed(e); return; }
   const n = ++_introRun;
   let settings = entrySettings();
@@ -4669,7 +4670,7 @@ function update(dt) {
   _s8Pres.dt += dt;
   if (_audioParamStep) {
     _s8Stamp = (_s8Stamp == null ? 0 : _s8Stamp) + 1;
-    updateCaution(_s8Pres.dt); coach.update(_s8Pres.dt); raceRadio.update(_s8Pres.dt); eventJournal.update(_s8Pres.dt);
+    updateCaution(_s8Pres.dt); coach.update(_s8Pres.dt); raceRadio.update(_s8Pres.dt);
     _s8Pres.dt = 0;
   }
 
@@ -5423,10 +5424,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     if (c.towing > 0) {
       // Pass hunger lifts the tow on permanents when we have a pace edge on the
       // car ahead (AiDrive.towGain); streets and the player path stay base gain.
-      const towH = AiDrive.passHunger({
-        street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0,
-        blockerVmax: paceVmax(towCar), ourVmax: S.pvA, blockerPace: scriptPace(towCar), ourPace: scriptPace(c),
-      });
+      const towH = AiDrive.hungerOf(!!track.street, aiT, vT, c.queueT || 0, paceVmax(towCar), S.pvA, scriptPace(towCar), scriptPace(c));   // pooled bag
       vmax *= 1 + AiDrive.towGain(!!track.street, towH) * c.towing;
     }
     // THE LANE'S CAP, LAST: the phase, tyre, fuel and tow multipliers above
@@ -5446,7 +5444,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // headway never held the car (it hovered at the edge, uncapped), so queue
     // pressure never built and a stuck car never got impatient.
     const followR = blocker ? AiDrive.followGap(aiT, !!track.street, c.speed, c.passOf || c.atkOn || c.towing > 0 ? 1 : c.atkWant ? 0.6 : 0, c.team, c.seat, blocker, c.houseStats, (c.runT || 0) + AiDrive.startGapT(c.calm = AiDrive.startCalm(c.launchOn, c.calmUntil, raceT))) : 0;
-    const qWin = AiDrive.queueReach(Math.max(16, followR + 6 + AiDrive.startQWinBonus(c.calm, raceT - launchT0)), c.speed, blocker ? blocker._snapSpeed : 0, BRAKE, vT / VMAX);
+    const qWin = AiDrive.queueReach(Math.max(16, followR + 6), c.speed, blocker ? blocker._snapSpeed : 0, BRAKE, vT / VMAX);
     const capBlocks = blocker && blockerGap < qWin &&
       !(blocker === c.passOf && Math.abs(c.x - blocker._snapX) >= 1.8);
     if (blocker && blockerGap < qWin) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
@@ -5478,15 +5476,10 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.
-    if (alongO && c.sbsT > AiDrive.sbsCommitT({
-      street: !!track.street, traits: aiT, vTop: vT, other: alongO,
-      ourVmax: S.pvA, ourPace: scriptPace(c),
-      otherVmax: paceVmax(alongO), otherPace: scriptPace(alongO),
-    }) && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase({
-      street: !!track.street, traits: aiT, vTop: vT, other: alongO,
-      ourVmax: S.pvA, ourPace: scriptPace(c),
-      otherVmax: paceVmax(alongO), otherPace: scriptPace(alongO),
-    }));   // COMMIT OR YIELD: tuck in behind
+    if (alongO && c.sbsT > AiDrive.SBS_COMMIT_MIN) {   // sbsCommitT's floor: below it no bag is filled
+      const sb = AiDrive.sbsArgs(!!track.street, aiT, vT, alongO, S.pvA, scriptPace(c), paceVmax(alongO), scriptPace(alongO));   // pooled
+      if (c.sbsT > AiDrive.sbsCommitT(sb) && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase(sb));   // COMMIT OR YIELD: tuck in behind
+    }
     squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn) &&
         (alongDx <= 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) < AiDrive.minLatGap(hw, !!track.street);
     if (squeezed) {
@@ -5749,7 +5742,7 @@ function updateCarLateral(c, dt, ranked, S) {
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // THE NEXT CORNER (AI-only reads): its curvature just past the turn-in owns the pass side and the level side-by-side; its zone's quality says whether to get a run.
     c.kTurn = _atk.toTurnIn < 400 ? AiDrive.cornerK(Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 10)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 30)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 55))) : 0;
-    const _passH = blocker ? AiDrive.passHunger({ street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0, blockerVmax: paceVmax(blocker), ourVmax: S.pvB, blockerPace: scriptPace(blocker), ourPace: scriptPace(c) }) : 1;
+    const _passH = blocker ? AiDrive.hungerOf(!!track.street, aiT, vT, c.queueT || 0, paceVmax(blocker), S.pvB, scriptPace(blocker), scriptPace(c)) : 1;   // pooled bag (audit4 I4 F2)
     c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street, _passH) : 0;
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
     // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
@@ -5944,7 +5937,7 @@ function updateCarLateral(c, dt, ranked, S) {
     // election below stays; a human runs no election at all, which is why
     // the aim is the right moment there (AiDrive.aimIntrudes).
     const aimClose = !!alongO && !alongClose && !!alongO.human && AiDrive.aimIntrudes(desiredX, c.x, alongO._snapX, CLEAR);
-    let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn);
+    let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, AiDrive.cornerK(c.kTurn, alongO.kTurn));   // one k for the pair (audit4 I4 F10)
     // ELECTING THE HUMAN IS ELECTING NOBODY — rule and measurement in
     // AiDrive.humanYieldGrace; this end only carries the per-car timer.
     // Are WE steering into them (aim vs where we already are), and is there
@@ -6210,15 +6203,14 @@ function updateCarBicycle(c, dt, ranked, S) {
     // so the pull it computes could never be applied. Floored while
     // unstuckActive ONLY (AiDrive.unstuckLatFloor); slow running is untouched.
     const aiLat = unstuckActive ? Math.max(latFac, AiDrive.unstuckLatFloor(!!track.street)) : latFac;
-    c.x += steer * STEER_VMAX * aiLat * gripScale * kerbGrip * bankMu * give * aiSurfMu * dt;
+    const vlOwn = steer * STEER_VMAX * aiLat * gripScale * kerbGrip * bankMu * give * aiSurfMu;   // this car's own lateral velocity (m/s)
+    c.x += vlOwn * dt;
     if (Wind.latA()) c.x += Wind.latA() * vT / VMAX * Wind.AI_TAU * dt;   // the same crosswind, as a brief drift
-    // Debris side-world (A2): AI cars don't run the slip model, so estimate a
-    // slide from lateral-g demand (|k|·v²/g) and treat hard braking at speed as
-    // lock-up. READ-ONLY, cosmetic — matches the player marble hook.
+    // Debris side-world (A2): AI marbles from the car's OWN state — the body slip of the lateral step it just made (the squeal
+    // signal) and a lock under hard braking. Never |k|·v² (DECISIONS #4): settled marbles reach the player's grip (marbleGrip).
     if (DebrisWorld.active()) {
-      const latG = Math.abs(k) * c.speed * c.speed / 9.8;   // ~lateral g demand
-      _marbleArg.lock = (braking && vStd(c.speed) > 30) ? 0.95 : 0;   // vStd: a threshold, not a force
-      _marbleArg.slip = Math.max(0, Math.min(1, latG - 1.6)) * 0.14;   // → ~slip-angle rad at the limit
+      _marbleArg.lock = (braking && vStd(c.speed) > 30) ? 0.95 : (c.wheelLock || 0);   // vStd: a threshold, not a force
+      _marbleArg.slip = Math.abs(Math.atan2(vlOwn, Math.max(4, Math.abs(c.speed))));   // rad, the player hook's units
       _marbleArg.speed = c.speed;
       DebrisWorld.tyreMarble(c, _marbleArg);
     }
@@ -9541,7 +9533,7 @@ lazyBundles.raceAssets();
 // keydown too, but on the stub — with nothing pulling the bundle, restoreOnEngine's
 // replay never ran and a keyboard-first title stayed silent. Escape is no activation.
 if (typeof window !== "undefined") {
-  window.addEventListener("pointerdown", () => { ensureAudio(); }, { once: true, capture: true });
+  window.addEventListener("pointerdown", () => { ensureAudio(); }, { once: true, capture: true });   // pointerup/touchend/click (activation-triggering for touch): lazy-bundles armAudioGesture
   const keyKick = (e) => { if (e && e.key === "Escape") return; window.removeEventListener("keydown", keyKick, true); ensureAudio(); };
   window.addEventListener("keydown", keyKick, true);
 }

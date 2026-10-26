@@ -1,6 +1,6 @@
 # Highlight reel and clip export — score the race, cut a 30-60 s reel, save it as a video
 
-Status: **OPEN** (checked against the code 2026-10-26) — no reel player, clip store or video export exists; only the unused stub js/race/event-journal.js, which an audit-4 game-code PR deletes.
+Status: **OPEN** (checked against the code 2026-10-26) — no reel player, clip store or video export exists; the unused stub `event-journal.js` (js/race/) was deleted by audit-4 game-code PR #3878.
 
 Date: 2026-10-04 Status when written: PLAN (docs-only; nothing here is built) Scope: solo races only. A new event journal, a long-horizon clip store, a pure scorer
 and clip planner, an in-game reel player, then an optional video export (WebCodecs first, MediaRecorder fallback) with share-or-download. No backend,

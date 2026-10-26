@@ -489,6 +489,12 @@
       ]
     },
     {
+      "path": "tools/check/dup-functions.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/check/dup-keys.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
