@@ -1572,6 +1572,12 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/gen/blender/crew-choreo.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/gen/compress-audio.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
