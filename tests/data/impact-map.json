@@ -4433,6 +4433,11 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/circuits/scenery/dijon.js": {
+      "narrow": [
+        "tests/unit/dijon-clips-coplanar.test.mjs"
+      ]
+    },
     "js/circuits/scenery/estoril.js": {
       "*": [
         "tests/unit/deploy-tool.test.mjs"
