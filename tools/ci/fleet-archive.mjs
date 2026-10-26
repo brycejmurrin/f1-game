@@ -14,9 +14,10 @@
 // path. A session is ARCHIVE when ALL hold: it has a fleet role tag (`role:`)
 // in the archivable set, it was created by an agent (`config:session-created`
 // tag, origin claude_code_mcp_seed), it is not running, nothing touched it in
-// the last 60 min, and its PR (the `pr:<n>` tag or a `#<n>` in the title) is
-// merged or closed — read with `gh api`, or `--offline` to report `pr-unknown`
-// instead. A `no-archive` tag, or a post_turn_summary naming running/gate/census work, also keeps it. Everything else is KEEP with the reason. A session Bryce opened
+// the last 60 min, and EVERY PR it names (each `pr:<n>` tag and each `#<n>` in the
+// title) is merged or closed — read with `gh api`, or `--offline` to report `pr-unknown`
+// instead. One open PR keeps it (2026-10-26: tags pr:3689 pr:3691 pr:3723 read only the
+// first, so a merged #3689 archived a session whose #3723 was still open). A `no-archive` tag, or a post_turn_summary naming running/gate/census work, also keeps it. Everything else is KEEP with the reason. A session Bryce opened
 // (origin ios/web, no role tag) is never ARCHIVE.
 //
 //   node tools/ci/fleet-archive.mjs <saved list_sessions page> [--offline] [--json] [--idle-min 60]
@@ -57,14 +58,11 @@ export function extractSessions(text) {
   return obj.data;
 }
 
-/** The PR a session is about: `pr:<n>` tag, else the first `#<n>` in the title. Pure. */
-export function prOf(session) {
-  for (const t of session.tags || []) {
-    const m = /^pr:(\d+)$/.exec(t);
-    if (m) return Number(m[1]);
-  }
-  const m = /#(\d{2,6})\b/.exec(session.title || "");
-  return m ? Number(m[1]) : null;
+/** Every PR a session names: all `pr:<n>` tags, then each `#<n>` in the title, deduped in order. Pure. */
+export function prsOf(session) {
+  const tags = (session.tags || []).map((t) => /^pr:(\d+)$/.exec(t)).filter(Boolean).map((m) => Number(m[1]));
+  const title = [...String(session.title || "").matchAll(/#(\d{2,6})\b/g)].map((m) => Number(m[1]));
+  return [...new Set([...tags, ...title])];
 }
 
 export const roleOf = (session) => ((session.tags || []).map((t) => /^role:(.+)$/.exec(t)).find(Boolean) || [])[1] || null;
@@ -109,11 +107,14 @@ export function decide(session, { now = Date.now(), idleMin = IDLE_MIN, prState 
     if (bare(next.id) === bare(session.id)) return out("KEEP", `the bus still names this session ORCH ${letter}`);
     return out("ARCHIVE", `retired orchestrator ${letter}, idle ${Math.round(idle)} min, successor ${next.id} LIVE on the bus`);
   }
-  const pr = prOf(session);
-  if (!pr) return out("KEEP", "no PR in its pr: tag or title: ask, or archive by hand after reading it");
-  const st = prState(pr);
-  if (st === "merged" || st === "closed") return out("ARCHIVE", `role ${role}, agent-created, idle ${Math.round(idle)} min, #${pr} ${st}`);
-  return out("KEEP", st === "open" ? `#${pr} still open` : `#${pr} state unknown (pr-unknown): run without --offline`);
+  const prs = prsOf(session);
+  if (!prs.length) return out("KEEP", "no PR in its pr: tags or title: ask, or read it and run --hand <its branch> before archiving by hand");
+  const st = prs.map((n) => [n, prState(n)]);
+  const open = st.filter(([, s]) => s === "open").map(([n]) => `#${n}`);
+  if (open.length) return out("KEEP", `${open.join(", ")} still open`);
+  const unknown = st.filter(([, s]) => s !== "merged" && s !== "closed").map(([n]) => `#${n}`);
+  if (unknown.length) return out("KEEP", `${unknown.join(", ")} state unknown (pr-unknown): run without --offline`);
+  return out("ARCHIVE", `role ${role}, agent-created, idle ${Math.round(idle)} min, ${st.map(([n, s]) => `#${n} ${s}`).join(", ")}`);
 }
 
 /** gh api pulls/<n> -> merged | closed | open | unknown. */

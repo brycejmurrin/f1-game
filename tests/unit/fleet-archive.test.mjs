@@ -6,7 +6,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decide, extractSessions, prOf, roleOf, agentCreated, main, ARCHIVABLE_ROLES } from "../../tools/ci/fleet-archive.mjs";
+import { decide, extractSessions, roleOf, agentCreated, main, ARCHIVABLE_ROLES, prsOf, fleetOf } from "../../tools/ci/fleet-archive.mjs";
 
 const NOW = Date.parse("2026-10-19T20:00:00Z");
 const ago = (min) => new Date(NOW - min * 60000).toISOString();
@@ -22,10 +22,11 @@ test("extractSessions reads the MCP envelope text and raw JSON alike", () => {
   assert.throws(() => extractSessions("nothing here"), /no JSON/);
 });
 
-test("prOf, roleOf and agentCreated read the tags, with the title as the PR fallback", () => {
-  assert.equal(prOf(sess()), 3020);
-  assert.equal(prOf(sess({ tags: ["role:worker"], title: "[W16] Frame-loop tracks (#2965) (Sonnet)" })), 2965);
-  assert.equal(prOf(sess({ tags: ["role:worker"], title: "no number" })), null);
+test("prsOf, roleOf and agentCreated read the tags, with every PR from the tags and the title", () => {
+  assert.deepEqual(prsOf(sess()), [3020]);
+  assert.deepEqual(prsOf(sess({ tags: ["role:worker"], title: "[W16] Frame-loop tracks (#2965) (Sonnet)" })), [2965]);
+  assert.deepEqual(prsOf(sess({ tags: ["role:worker"], title: "no number" })), []);
+  assert.deepEqual(prsOf(sess({ tags: ["pr:3689", "pr:3691", "pr:3723"], title: "fix #3691, then #3750" })), [3689, 3691, 3723, 3750]);
   assert.equal(roleOf(sess()), "owner");
   assert.equal(roleOf({ tags: ["f1-game-fleet"] }), null);
   assert.equal(agentCreated(sess()), true);
@@ -49,6 +50,18 @@ test("the rule: ARCHIVE only when role, agent-created, idle and PR done all hold
   assert.match(decide(sess({ tags: ["role:worker", "config:session-created"], title: "no pr here" }), { now: NOW, prState: merged }).why, /no PR/);
   assert.match(decide(sess({ session_status: "SESSION_STATUS_ARCHIVED" }), { now: NOW, prState: merged }).why, /already archived/);
   for (const role of ["worker", "pr-owner", "sync", "review", "hunter"]) assert.ok(ARCHIVABLE_ROLES.includes(role), role);
+});
+
+test("a multi-PR session is ARCHIVE only when every PR it names is merged or closed", () => {
+  // 2026-10-26: pr:3689 pr:3691 pr:3723 read only the first tag, so a merged #3689 archived a session with #3723 open.
+  const multi = sess({ tags: ["role:worker", "pr:3689", "pr:3691", "pr:3723", "config:session-created"], title: "fleet fixes (#3760)" });
+  const states = { 3689: "merged", 3691: "closed", 3723: "open", 3760: "merged" };
+  const kept = decide(multi, { now: NOW, prState: (n) => states[n] });
+  assert.equal(kept.verdict, "KEEP"); assert.equal(kept.why, "#3723 still open");
+  const done = decide(multi, { now: NOW, prState: (n) => (n === 3691 ? "closed" : "merged") });
+  assert.equal(done.verdict, "ARCHIVE"); assert.ok(done.why.endsWith("#3689 merged, #3691 closed, #3723 merged, #3760 merged"), done.why);
+  const offline = decide(multi, { now: NOW, prState: (n) => (n === 3689 ? "merged" : "unknown") });
+  assert.equal(offline.verdict, "KEEP"); assert.ok(offline.why.startsWith("#3691, #3723, #3760 state unknown (pr-unknown)"), offline.why);
 });
 
 test("main prints one row per session, caches PR lookups, and --offline never calls out", () => {
@@ -81,7 +94,7 @@ test("Q5: a no-archive tag or an in-flight post_turn_summary keeps an otherwise 
 });
 
 // System audit 2026-10-26 §1: retired orchestrators piled up (ten ORCH B in six hours).
-import { fleetOf, retired } from "../../tools/ci/fleet-archive.mjs";
+import { retired } from "../../tools/ci/fleet-archive.mjs";
 
 test("a retired orchestrator is ARCHIVE once its successor's LIVE line is on the bus; never before", () => {
   const orch = (over = {}) => sess({ id: "session_01OLD", title: "[Done → B·O-queue9] B·O-queue8 orchestrator", updated_at: ago(90),

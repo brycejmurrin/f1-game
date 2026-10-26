@@ -1340,6 +1340,63 @@ test("prefetchIce retains last-good TURN while a TTL refresh is in flight", asyn
   }
 });
 
+test("prefetchIce follows TURN endpoint changes and removal", async () => {
+  const fresh = load("js/net/transport.js", "NetTransport");
+  let turnUrl = "https://relay-a.example/creds";
+  const requested = [];
+  global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? turnUrl : null) };
+  global.fetch = async (url) => {
+    requested.push(url);
+    return { json: async () => ({ iceServers: [{
+      urls: "turn:" + new URL(url).host + ":443", username: url, credential: "c",
+    }] }) };
+  };
+  try {
+    await fresh.prefetchIce();
+    assert.deepEqual(requested, ["https://relay-a.example/creds"]);
+    assert.ok(fresh.iceServers({}).some((e) => e.username === turnUrl));
+
+    turnUrl = "https://relay-b.example/creds";
+    assert.ok(!fresh.iceServers({}).some((e) => e.username === requested[0]),
+      "old endpoint credentials must disappear as soon as the setting changes");
+    await fresh.prefetchIce();
+    assert.deepEqual(requested, ["https://relay-a.example/creds", turnUrl]);
+    assert.ok(fresh.iceServers({}).some((e) => e.username === turnUrl));
+
+    turnUrl = null;
+    await fresh.prefetchIce();
+    assert.equal(fresh.hasRelay(), false, "removing the endpoint removes its relay");
+    assert.equal(requested.length, 2, "removal does not start another fetch");
+  } finally {
+    delete global.fetch;
+    delete global.localStorage;
+  }
+});
+
+test("a late answer from an old TURN endpoint cannot replace the new relay", async () => {
+  const fresh = load("js/net/transport.js", "NetTransport");
+  let turnUrl = "https://relay-a.example/creds";
+  let resolveA;
+  global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? turnUrl : null) };
+  global.fetch = (url) => {
+    if (url.includes("relay-a")) return new Promise((resolve) => { resolveA = resolve; });
+    return Promise.resolve({ json: async () => ({ iceServers: [{ urls: "turn:relay-b.example", username: "b" }] }) });
+  };
+  try {
+    const first = fresh.prefetchIce();
+    turnUrl = "https://relay-b.example/creds";
+    await fresh.prefetchIce();
+    assert.ok(fresh.iceServers({}).some((e) => e.username === "b"));
+    resolveA({ json: async () => ({ iceServers: [{ urls: "turn:relay-a.example", username: "a" }] }) });
+    await first;
+    assert.ok(fresh.iceServers({}).some((e) => e.username === "b"));
+    assert.ok(!fresh.iceServers({}).some((e) => e.username === "a"));
+  } finally {
+    delete global.fetch;
+    delete global.localStorage;
+  }
+});
+
 test("acceptAnswer refuses an answer built for an older offer, and still takes an id-less one", async () => {
   const fp = (n) => Array.from({ length: 32 }, (_, i) => ((i * n + 1) & 255).toString(16).padStart(2, "0").toUpperCase()).join(":");
   const sdp = (ufrag, f, setup) => ["v=0", "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
