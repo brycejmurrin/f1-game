@@ -15,6 +15,8 @@
 #ps-panel[aria-busy="true"] .sheet-foot .bigbtn { opacity: 0.55; }
 #ps-panel .sheet-head { flex-wrap: nowrap; }
 #ps-body { display: flex; flex-direction: column; gap: var(--gap); overscroll-behavior: contain; }
+/* Scroll-thumb lane (components.css .sheet-body.sf-scroll::before) at -6px, not 6px - var(--pad): the thumb sits in the padding without pushing scrollWidth 10px past the clipped x-axis (#3338). */
+#ps-body.sf-scroll::before { margin-right: calc(var(--gap) / -2); }
 #ps-body > section { display: flex; flex-direction: column; gap: calc(var(--gap) * .6); min-width: 0; }
 #ps-body .adv-sec { margin: 0; }
 #ps-panel .balanced-row { gap: calc(var(--gap) * .5); --balance-basis: 6rem; }
