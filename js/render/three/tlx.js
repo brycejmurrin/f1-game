@@ -3632,7 +3632,8 @@ const TLX = (function () {
       let _rigMirrorKey = null;
       const _rigMirrorOn = () => !!(_warmFx && post && post.enabled() && !_mirDead && !vizMat && !softGpu() && !softwareGL);
       function warmDraws(fn, opts) {
-        if (_deviceLost || !lit || _drawMatMode || vizMat || typeof renderer.compileAsync !== "function" || _rigWarm) return Promise.resolve(false);
+        if (_deviceLost || !lit || _drawMatMode || vizMat || typeof renderer.compileAsync !== "function") return Promise.resolve(false);
+        // Capture NOW, while the caller's state (track, car) is current: fn never runs later (A·W56, #3673).
         const recs = [];
         const co = _coOn;
         _capture = recs; _coOn = false;   // a coalesced draw reaches draw()'s capture, which skips it, never a run
@@ -3641,19 +3642,37 @@ const TLX = (function () {
         const todo = recs.filter((r) => { const s = _rigDone.get(r.geo); return !(s && s.has(_rigKey(r))); });
         const mirror = !!(opts && opts.mirror) && opts.mirror !== _rigMirrorKey && _rigMirrorOn() ? opts.mirror : null;
         if (!todo.length && !mirror) return Promise.resolve(recs.length > 0);
+        // One job at a time. The menu's telemetry job (car-draw.js warmCockpitTelemetry) may still be queued at race
+        // entry: join it, or the race's own rig pairs went unwarmed. Waiting and capturing later ran fn after the
+        // track had gone (a 'def' of null per race) and held the race's car until then (race-cycle-memory heap slope).
+        if (_rigWarm && !_rigWarm.started) {
+          const job = _rigWarm;
+          for (const r of todo) job.recs.push(r);
+          if (mirror && !job.mirror) job.mirror = mirror;
+          return _warmRequested || _warmPending ? Promise.resolve(true) : job.finished.then(() => true);
+        }
+        // One already compiling is bounded: queue these pairs (captured above) right behind it.
+        if (_rigWarm) return _rigWarm.finished.then(() => warmDraws(() => { for (const r of todo) _capture.push(r); }, mirror ? { mirror } : null));
         // BEHIND A PROGRAM WARM, QUEUE AND RETURN. Race entry requests the program warm just before this, and the rig
         // job may only start once it is done (present() starts one warm at a time), so awaiting it held race entry for
         // the whole program warm, and on software GL (a ~17 s warm) the 20 s fallback fired first, dropped the job and
         // left the rig unwarmed (+20 s per race entry; B·H14, monza-foundation 8.4 -> 26.2 s on CI llvmpipe at #3221).
         // Queued, the job still runs before any frame paints: present() holds while either warm is pending.
         if (_warmRequested || _warmPending) {
-          const job = _rigWarm = { recs: todo, mirror, done: () => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; } };
+          let fin;
+          const job = _rigWarm = { recs: todo, mirror, seen: 0, finished: new Promise((r) => { fin = r; }),
+            done: () => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; fin(); } };
           // No present ever came (hidden tab, a race abandoned first): drop the queue, or every later warmDraws refuses.
-          job.timer = setTimeout(() => { if (!job.started) job.done(); }, 20000);
+          // A present that came but was held by the warm (`seen`) re-arms it: the menu's world warm runs ~29 s on an
+          // iPhone 14 Pro (ledger row 29), longer than the timer, and the menu queues its telemetry job behind it.
+          const arm = () => { job.timer = setTimeout(() => { if (job.started) return; if (job.seen) { job.seen = 0; arm(); } else job.done(); }, 20000); };
+          arm();
           return Promise.resolve(true);
         }
         return new Promise((resolve) => {
-          const job = _rigWarm = { recs: todo, mirror, done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; resolve(ok); } };
+          let fin;
+          const job = _rigWarm = { recs: todo, mirror, finished: new Promise((r) => { fin = r; }),
+            done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; fin(); resolve(ok); } };
           job.timer = setTimeout(() => job.done(false), 20000);   // no present came (hidden tab): race entry never waits on it
         });
       }
@@ -3661,7 +3680,8 @@ const TLX = (function () {
         if (!mesh || !mesh.geo || (opts && opts.coalesce)) return;
         const w = model;
         const neg = !!w && w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
-        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1 });
+        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1,
+          key: opts && typeof matKeyFor === "function" ? matKeyFor(opts, false, false) : "" });   // memState().warm.rig.worst
       }
       function startRigWarm() {
         const job = _rigWarm;
@@ -3672,6 +3692,7 @@ const TLX = (function () {
         const useTag = usePost && (!post.tagOn || post.tagOn());
         let ok = false;
         const t0 = performance.now();
+        const sp = { pairs: 0, mirror: 0, settle: 0, probes: 0, worst: [] };   // A·W56 (#3673): where the cold 5.7 s goes
         _warmPending = (async () => {
           try {
             // The materials were minted at capture, so the tag stamps them now, as the scene warm stamps its own.
@@ -3683,26 +3704,32 @@ const TLX = (function () {
             for (let i = 0; i < job.recs.length; i++) {
               // Menu path: yield every other cockpit pair so the title stays live (#3279).
               if (i && typeof warmIdleChunks === "function" && warmIdleChunks() && (i & 1) === 0) await _idleYield(32);
-              const r = job.recs[i];
-              await compileWarmProbe(r.geo, r.mat, r.sx);
+              const r = job.recs[i], tp = performance.now();
+              await compileWarmProbe(r.geo, r.mat, r.sx); sp.probes++;
               // A·W50: a double-sided pair keys its pipeline on the winding too, and the race draws the rig's
               // double-sided keep material mirrored as well: the first race frame built its cw twin synchronously
               // (lavapipe census, the one lit pipeline left after the pin). Compile the other sign under the cover.
-              if (r.mat.side === THREE.DoubleSide) await compileWarmProbe(r.geo, r.mat, -r.sx);
+              if (r.mat.side === THREE.DoubleSide) { await compileWarmProbe(r.geo, r.mat, -r.sx); sp.probes++; }
+              sp.worst.push([Math.round(performance.now() - tp), r.mat.id, r.key, r.geo.attributes.position ? r.geo.attributes.position.count : 0, r.sx]);
               let s = _rigDone.get(r.geo);
               if (!s) _rigDone.set(r.geo, s = new Set());
               s.add(_rigKey(r));
             }
+            sp.pairs = performance.now() - t0;
             if (job.mirror) {
               if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
               _gpuLastOperation = "compile-rig-mirror"; await warmMirrorStage(usePost, useTag); _rigMirrorKey = job.mirror;
             }
+            sp.mirror = performance.now() - t0 - sp.pairs;
             await _gpuSettled(3000);   // the driver's own compile is GPU-process side, as the draw warm's is
+            sp.settle = performance.now() - t0 - sp.pairs - sp.mirror;
             ok = true;
           } catch (e) {
             try { Log.warn("gfx", "TLX rig warm failed", String(e)); } catch (_) { /* logging is optional */ }
           } finally {
-            _warmStages.rig = { ms: Math.round(performance.now() - t0), pairs: job.recs.length, mirror: !!job.mirror, ok };
+            _warmStages.rig = { ms: Math.round(performance.now() - t0), pairs: job.recs.length, mirror: !!job.mirror, ok,
+              probes: sp.probes, pairsMs: Math.round(sp.pairs), mirrorMs: Math.round(sp.mirror), settleMs: Math.round(sp.settle),
+              worst: sp.worst.sort((a, b) => b[0] - a[0]).slice(0, 4) };
             if (job.mirror) _mirWarmUnswap();   // warmMirrorStage showed the mirror's own instanced meshes (idempotent)
             if (lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
@@ -5630,6 +5657,7 @@ const TLX = (function () {
           if (!_warmPending) { _warmWhere = _resolveWarmWhere(opts); _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !_deviceLost && !!_warmPending; },
+        warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
         // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally
@@ -6161,6 +6189,7 @@ const TLX = (function () {
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
           // later warm passes, but cannot cancel a compile already in flight.
+          if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)
           if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }
           if (_warmPending) return;
           // The last rung: even rawUnlitMat throws. AUTO on three's WebGPU takes three WebGL2 next boot (tlxAutoGL, a

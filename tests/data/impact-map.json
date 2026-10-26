@@ -2473,6 +2473,9 @@
       "warmCarAssetsAsync": [
         "tests/unit/car-presentation-vm.test.mjs"
       ],
+      "warmCockpitTelemetry": [
+        "tests/unit/tlx-rig-warm.test.mjs"
+      ],
       "*": [
         "tests/specs/quali.spec.js",
         "tests/unit/garage-crew-choreo.test.mjs",
@@ -6974,6 +6977,7 @@
         "tests/unit/results-cam.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/sporting-regs.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
