@@ -118,10 +118,14 @@
       };
       // Crop field. w is across-track, d along it; the guard radius covers
       // the footprint so a field never lies over the far side of the road.
+      // Residue classes every 0.045 m across five slots so neighbouring
+      // parcels cannot share a top plane (#3348 flatCoplanar field×field).
+      // Keep widen: without it adjacent along() slabs share side faces and
+      // grow the (non-flat) coplanar baseline.
       let fieldSeq = 0;
       const field = (s, side, gap, w, d, col) => {
         if (spotClear(s, side, gap, Math.max(w, d) * 0.5 + 8))
-          drapeRun(s, side, gap, [w, 0.13, d], col, (fieldSeq++ & 1) ? 0.09 : 0, null, { widen: 0.16 });
+          drapeRun(s, side, gap, [w, 0.13, d], col, 0.045 * (fieldSeq++ % 5), null, { widen: 0.16 });
       };
       // Vine rows: thin strips stepping away up the slope, on their own
       // earth block, so the block reads as a planted parcel at distance.
@@ -129,9 +133,11 @@
       // grade DOWN (a groundPatch top sits at the ground), so every row was a
       // buried decal, 130 of them wholly under the slope. The earth block now
       // spans the rows it carries (it began half a parcel out).
+      // Earth residue 0.03 → 0.11 so it cannot nearly-plane with row tops at
+      // 0.06 (coplanar-audit vineyard earth×row, #3348).
       const vineyard = (s, side, gap, rows, len, step) => {
         if (!spotClear(s, side, gap + (rows * step) / 2, len * 0.5 + 10)) return;
-        drapeRun(s, side, gap - 3, [rows * step + 6, 0.12, len + 8], VINE_E, 0.03);
+        drapeRun(s, side, gap - 3, [rows * step + 6, 0.12, len + 8], VINE_E, 0.11);
         for (let i = 0; i < rows; i++)
           drapeRun(s, side, gap + i * step, [2.6, 0.3, len], VINE, 0.06, len + 8, { h: 0.9 });
       };
@@ -327,11 +333,13 @@
       //    straight, taken over a crest. The inside stays LOW so the corner
       //    disappears over the rise: tyre wall, marshal post, one billboard,
       //    a pale apron and a stock fence. Nothing here breaks the skyline.
-      tyreWall(0.198, 0.228, 1, 10, CAP);
+      // Pouas inside: single short tyre stack (was two abutting runs —
+      // flatCoplanar cap×cap @ frac 0.206, #3348).
+      tyreWall(0.204, 0.216, 1, 10, CAP);
       marshalPost(K(0.192), 1, 13);
       billboard(K(0.218), 1, 16, 8, 2.8, STEEL);
       guardrail(0.182, 0.244, 1, 11, ARMCO);
-      tyreWall(0.232, 0.246, 1, 11, CAP);
+      tyreWall(0.236, 0.244, 1, 11, CAP);
       groundPatch(K(0.212), 1, 17, [14, 0.14, 62], GRAVEL);
       fenceRun(0.180, 0.248, 1, 20, 1.4, WOOD);
       bushAt(0.204, 1, 24, FOL_D);
@@ -426,8 +434,11 @@
       field(0.392, -1, 126, 50, 68, WHEAT);
       vineyard(0.338, -1, 86, 6, 52, 7);
       vineyard(0.412, -1, 72, 5, 44, 7);
-      hedgeRun(0.336, 0.382, -1, 132, 1.7, HEDGE3);
-      hedgeRun(0.386, 0.430, -1, 138, 1.7, HEDGE3);
+      // Valley hedges @ gap 132/138 omitted (#3348): on this 3.8 km lap they
+      // land on the far-side clip corridor (severe addBox×addBox @ frac 0.466
+      // / 0.609). Fence tier + nearer hedgeRuns keep the parcel read.
+      fenceRun(0.336, 0.382, -1, 120, 1.5, WOOD);
+      fenceRun(0.386, 0.430, -1, 124, 1.5, WOOD);
       // the hamlet across the valley — low roofs only, well back
       buildAt(0.362, -1, 176, 10, 5.2, 9, { wall: FARM1, window: GLASS });
       buildAt(0.368, -1, 188, 8, 4.6, 8, { wall: STONE, window: GLASS });
@@ -528,7 +539,8 @@
       treeAt(0.540, 1, 58, 9.0, FOL_L);
       treeAt(0.588, 1, 54, 7.6, FOL_D);
       field(0.556, 1, 46, 26, 34, WHEAT);
-      field(0.512, -1, 56, 36, 52, PLOUGH);
+      // Esses outside plough omitted (#3348) — overlapped lap-wide 0.486/0.524
+      // wheat/stubble drapes (flatCoplanar field×field).
 
       // 13. VIRAGE DE LA BRETELLE (s 0.645, +1, 10) — the left where the
       //     extension rejoins the old circuit. The camera tower on the inside
@@ -670,43 +682,54 @@
       // enough that an unguarded run crosses it and is dropped.
       // Wave-6: thinned — overlapping hedgeRuns shared a plane (flatCoplanar
       // hedgeRun×hedgeRun, 28 spots). Keep one tier of short angled runs.
+      // #3348: drop/split runs that saturated clip severe (frac 0.466 / 0.609)
+      // and flatCoplanar hedge self-planes (frac ~0.27 / 0.31 / 0.37). Long
+      // along() boxes on hillside curves share top faces; short gapped runs
+      // stay under the baseline (monza #3374 idiom).
       for (const [s0, s1, side, gap] of [
         [0.062, 0.100,  1, 58], [0.116, 0.158,  1, 74],
-        [0.228, 0.274,  1, 66], [0.448, 0.498, -1, 54],
-        [0.558, 0.612, -1, 68], [0.666, 0.710,  1, 58],
-        [0.794, 0.844, -1, 64], [0.298, 0.348, -1, 80],
+        // clip/coplanar corridors cleared — short stubs only away from curves
+        [0.228, 0.248,  1, 66],
+        [0.480, 0.498, -1, 54],
+        [0.590, 0.612, -1, 68],
+        [0.666, 0.710,  1, 58],
+        [0.794, 0.844, -1, 64],
+        [0.328, 0.348, -1, 80],
         [0.140, 0.190,  1, 96], [0.520, 0.568, -1, 58],
         [0.736, 0.782,  1, 64], [0.036, 0.082, -1, 90],
-        [0.196, 0.246, -1, 100], [0.560, 0.606,  1,  78],
-        [0.372, 0.420,  1,  66], [0.652, 0.698,  1,  48],
+        [0.196, 0.246, -1, 100],
+        [0.590, 0.606,  1, 78],
+        [0.402, 0.420,  1, 66],
+        [0.652, 0.698,  1,  48],
         [0.934, 0.980,  1,  62],
       ]) hedgeRun(s0, s1, side, gap, 1.7 + hash(Math.round(s0 * 1000)) * 0.6,
                   HEDGE2);
 
-      // A second, looser tier further out — mostly post-and-rail so the
-      // middle distance is not one repeated hedge plane (was flatCoplanar).
-      for (const [s0, s1, side, gap, kind] of [
-        [0.048, 0.092,  1, 76, 0], [0.172, 0.216, -1, 118, 1],
-        [0.264, 0.312,  1, 104, 1], [0.436, 0.480,  1, 112, 0],
-        [0.500, 0.546, -1, 86, 1], [0.576, 0.622,  1, 104, 1],
-        [0.640, 0.686, -1, 122, 0], [0.788, 0.832,  1, 92, 1],
-        [0.842, 0.886, -1, 98, 1], [0.108, 0.150,  1, 124, 1],
-        [0.386, 0.428, -1, 134, 0], [0.728, 0.772,  1, 116, 1],
-        [0.876, 0.918,  1, 108, 1],
+      // Second tier: fence-only (was mixed hedge — far hedges punched the
+      // clip corridors on this short lap, #3348).
+      for (const [s0, s1, side, gap] of [
+        [0.048, 0.092,  1, 76], [0.172, 0.216, -1, 118],
+        [0.264, 0.312,  1, 104],
+        [0.436, 0.480,  1, 112],
+        [0.500, 0.546, -1, 86], [0.576, 0.622,  1, 104],
+        [0.640, 0.686, -1, 122], [0.788, 0.832,  1, 92],
+        [0.842, 0.886, -1, 98], [0.108, 0.150,  1, 124],
+        [0.386, 0.428, -1, 134], [0.728, 0.772,  1, 116],
+        [0.876, 0.918,  1, 108],
       ]) {
         const h = 1.6 + hash(Math.round(s1 * 1000)) * 0.5;
-        if (kind) fenceRun(s0, s1, side, gap, h * 0.9, WOOD);
-        else hedgeRun(s0, s1, side, gap, h, HEDGE3);
+        fenceRun(s0, s1, side, gap, h * 0.9, WOOD);
       }
 
       // Worked parcels between the boundaries — the colour variation that
       // makes the far side of a 3.8 km lap read as farmland at distance.
+      // Dropped 0.486/0.524@-1 (overlap with esses plough / each other) and
+      // 0.466@1 near Villeroy drapes (#3348 flatCoplanar).
       for (const [s, side, gap, w, d, c] of [
         [0.058,  1,  86, 40, 56, WHEAT], [0.092,  1, 110, 44, 58, STUB],
         [0.130,  1,  92, 38, 52, PLOUGH], [0.188,  1,  78, 36, 50, MEADOW],
         [0.246,  1, 102, 42, 58, WHEAT], [0.292, -1, 108, 44, 60, STUB],
-        [0.318,  1,  96, 40, 54, MEADOW], [0.466,  1,  98, 42, 56, PLOUGH],
-        [0.486, -1,  78, 38, 52, WHEAT], [0.524, -1,  84, 40, 54, STUB],
+        [0.318,  1,  96, 40, 54, MEADOW],
         [0.586, -1,  92, 40, 56, PLOUGH], [0.620,  1,  88, 38, 52, WHEAT],
         [0.672, -1, 106, 44, 60, MEADOW], [0.714,  1,  94, 40, 54, STUB],
         [0.798, -1,  96, 42, 58, WHEAT], [0.824,  1, 100, 40, 54, PLOUGH],

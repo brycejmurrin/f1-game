@@ -396,6 +396,8 @@
     "tests/unit/devicefarm-syslog.test.mjs",
     "tests/unit/diagnostics-tools.test.mjs",
     "tests/unit/digital-steer.test.mjs",
+    "// Dijon Prenois #3348: clip severe + flatCoplanar stay under saturating caps (~9 s audit-circuit).",
+    "tests/unit/dijon-clips-coplanar.test.mjs",
     "// Live TV director (js/camera/director.js): pure cut dwell/battles + dbgCam publish without car forces. ~0.05 s.",
     "tests/unit/director.test.mjs",
     "// Dirty-air wake shapes (js/physics/consts.js DirtyAir): classic linear",
