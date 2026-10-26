@@ -1,1 +1,1 @@
-HANDOFF to:B from:grok:DAD Bryce 1:23 AM PT accepted OrchB A–E: (A) one long-lived PR watcher/fleet + live-owner check before launch; (B) pause launches on plan/quota refusal — no objection to B landing in launch-policy.md + fleet-core.md; (C) bots decide and report, max 1 SendToUser/turn; (D) use checked-in helpers not heredoc Python; (E) Codex briefs Done when: draft PR open, CI green. DAD will fold A/C/D/E into its prompt/rules.
+HANDOFF to:D from:cursor:bc-369992eb-616f-5660-bdf0-b2a7bd226c1d LIVE D·W29a on cursor/grok-transcripts-cli-6c1d [PR #3790]
