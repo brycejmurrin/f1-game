@@ -167,9 +167,63 @@ RACE SETTINGS → START with no waiting:
 | + title warm | yes: `world`, `done` and `warmed` true | 48 | 6 (`programWarm` 150 ms) |
 
 
+## The last two first-frame pipelines (#3673, 2026-10-26)
+
+After the pin, a driven lavapipe census found that race entry still built two pipelines **synchronously** on the first
+race frame. That is the same census as above plus a 120 s driven first lap, with a probe on the pin wrapper naming
+each RenderObject. The 120 s of driving after the lights built **0** pipelines.
+
+| pipeline | object | why the warm missed it |
+|---|---|---|
+| `tlx-fx-line-mrt` | the driving line (`position, lineAcross, lineSpeed, lineZone, lineAlong`) | the race draws it **indexed** (`drawDrivingLine`'s strip index). three keys a WebGPU render pipeline on the geometry too (`getGeometryCacheKey` appends `index,`), so the warm's unindexed probe built a pipeline the race never used |
+| `tlx-fx-blob-mrt` | the per-record blob shadow, drawn with a **mirrored** model (cw) | the fx warm compiled only the instanced blob run |
+
+Fix (`js/render/three/tlx.js`):
+- `lineIndex(slot)` builds the line's full-capacity index for both `drawDrivingLine` and the fx warm's probe.
+- `warmFxPrograms` compiles the per-record blob on both windings.
+
+After: race entry builds **0** synchronous pipelines. Only the rig warm's two async ones are left, under its
+cover, and the menu builds 68 instead of 66. Test: `tests/unit/tlx-fx-warm.test.mjs` reads three's own
+`getGeometryCacheKey` on the probe against the race geometry.
+
+These were #3673's prime suspects for "two frames over 100 ms in every first race". The device run with A·W54's
+hitch recorder (#3676) is what can confirm it.
+
+## The cold rig warm: one pipeline (A·W56, 2026-10-26)
+
+`memState().warm.rig` now splits the job into `pairsMs`, `mirrorMs` and `settleMs`, and lists the four slowest pairs
+in `worst` as `[ms, material id, matKey, vertices, winding]`. A probe (SwiftShader WebGPU, which this container's
+Chromium picks even with the lavapipe ICD and flags; Bahrain, RACE SETTINGS idle 70 s, then START) wraps
+`createShaderModule` / `createRenderPipeline(Async)` from the START click:
+
+| | before | after `warmCockpitTelemetry` |
+|---|---|---|
+| rig pairs at race entry | 28 | 25 |
+| `pairsMs` | 4823 (one pair 4356, the rest ≤ 67) | **553** |
+| pipelines built at race entry | `MeshBasicNodeMaterial_89`: one async of **4.34 s**, plus its sync twin | two sync, no async |
+| `rig.ms` | 7823–9476 | 3553 (`settleMs` 3000 of it) |
+| `mirrorMs` | 0 (no key on this path) | 0 |
+
+- The slow pair is the wheel telemetry's material, `_rigFx` (`o,0.9,0,0,0,0,0,1|ds|na`: double-sided, no alpha
+  write), on a 48-vertex gear digit. No menu draw uses that state, and it is the same for every car. So race entry
+  built its pipeline, and nothing else in the job is new. The per-probe CPU of the target-scene walk (lead 1 in the
+  handoff list) is ≤ 67 ms a pair. The mirror stage did not run on this path.
+- Fix: `car-draw.js` `warmCockpitTelemetry()` captures the gear digit, a speed digit and the LED strip with
+  `_rigFx` and no car. `game.js` `warmPrograms` queues it with every menu (and title) program warm, and
+  `warmCockpitRig` then skips those pairs (`_rigDone`).
+- Two `warmDraws` fixes go with it, because the menu job now runs ahead of the race's:
+  - A queued job's 20 s drop timer re-arms while presents keep arriving (`job.seen`). The menu world warm runs
+    ~29 s on the phone, so the timer would have dropped the telemetry job before it started.
+  - A `warmDraws` that meets a job in flight waits for it (`job.finished`) instead of returning false. The race's
+    `warmCockpitRig` can arrive while the menu job runs, and refusing skipped the car's own pairs.
+- `settleMs` 3000 is `_gpuSettled`'s cap: `onSubmittedWorkDone` does not resolve within 3 s on SwiftShader. It is the
+  same before and after, and a device record shows whether a GPU pays it.
+- Lead 4 (`warmIdleChunks()` at race entry) costs 14 × 32 ms idle yields at most, inside the 553 ms.
+
 ## Still open
 
-- The 4 race-only states: warm them in the menu, or give them a state the menu already builds.
-- The title warm on device: A·D2's S5-style dose run (title idle 0 / 15 / 45 s → START, cold), WebGPU then WebGL2.
-- The device before/after: gpu-census.yml on macos-latest (Dawn/Metal), then A·D2's iPhone 14 Pro cold entry,
-  WebGPU then WebGL2.
+- **The cold rig warm on the device**: A·D2's `coldrace` `menu30`, fresh unit, WebGPU. `rigWarm` should drop from
+  5.7 s. `warm.rig.worst` names whatever pair is left; `pairsMs` / `mirrorMs` / `settleMs` say which stage it is in.
+- Device confirmation of #3761 (the two first-frame pipelines as #3673's two >100 ms frames): A·W54's hitch
+  recorder (#3676) plus A·D2, on Bryce's Go.
+- The part-2 dose on device: A·D2's `coldrace` `quick0` vs `quick45`, one fresh unit per arm (see #3757).

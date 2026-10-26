@@ -470,3 +470,37 @@ test("#2233: listRunJobs pages 30 at a time (per_page=100 is a 502 on large runs
     assert.match((await listRunJobs(123, { token: "t" })).error, /HTTP 502/);
   } finally { setFlakeTallyTestHooks(); }
 });
+
+
+test("curlFetch rejects pre-aborted requests without creating a child", async () => {
+  const { curlFetch } = await import("../../tools/lib/proxy-fetch.mjs");
+  const controller = new AbortController();
+  const reason = new Error("already cancelled");
+  controller.abort(reason);
+  let spawned = 0;
+  await assert.rejects(curlFetch("https://example.invalid/", { signal: controller.signal }, () => {
+    spawned++;
+    return { kill() {} };
+  }), e => e === reason);
+  assert.equal(spawned, 0, "pre-aborted requests must never spawn curl");
+});
+
+
+test("curlFetch retains child error handling during cancellation and removes abort listeners", async () => {
+  const { curlFetch } = await import("../../tools/lib/proxy-fetch.mjs");
+  const { EventEmitter, getEventListeners } = await import("node:events");
+  const { PassThrough } = await import("node:stream");
+  const controller = new AbortController();
+  let child, killed = false;
+  const promise = curlFetch("https://example.invalid/", { signal: controller.signal }, () => {
+    child = new EventEmitter(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
+    child.stdin = { end() {} }; child.kill = () => { killed = true; };
+    return child;
+  });
+  const reason = new Error("cancelled while running");
+  controller.abort(reason);
+  await assert.rejects(promise, e => e === reason);
+  assert.equal(killed, true);
+  assert.doesNotThrow(() => child.emit("error", new Error("spawn failed during abort")));
+  assert.equal(getEventListeners(controller.signal, "abort").length, 0);
+});

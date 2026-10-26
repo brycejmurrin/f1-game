@@ -11,7 +11,7 @@ import path from "node:path";
 import {
   GUARDS_A, GUARDS_B, GUARDS_C, GUARDS_D, GUARDS_JOB,
   guardsVerdict, localVerdict, evaluate, shaPrefixMatch, stampReadySha, newestByName,
-  planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine, fleetBlock, fleetIdentity, withFleet,
+  planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine, fleetBlock, fleetIdentity, withFleet, mergeableProblem,
 } from "../../tools/ci/ready-gate.mjs";
 
 // Scratch dirs live under the ignored artifacts/ tree, never the system tmp (AGENTS.md).
@@ -560,4 +560,20 @@ test("Q8: a `READY to` Plan item is exempt; an open item is printed verbatim", (
   const v = withPlan({ code: 0, state: "passed", evidence: "ok" }, `## Plan\n- [ ] ${long}\n`);
   assert.equal(v.state, "plan-open");
   assert.ok(v.evidence.includes(`"${long}"`), "the item is not truncated");
+});
+
+test("a conflicting PR refuses before the CI row: mergeable_state rides on resolveSha, dirty refuses, unknown asks for a re-read, clean passes", () => {
+  const head = "c".repeat(40);
+  const req = (state) => (url) => {
+    if (url === "pulls/9") return { json: { head: { sha: head, ref: "cursor/y-2b3c" }, body: "", mergeable_state: state } };
+    if (url.startsWith("pulls/9/files")) return { json: [] };
+    return { error: `unexpected ${url}` };
+  };
+  assert.equal(resolveSha({ pr: "9", request: req("dirty") }).mergeableState, "dirty");
+  assert.equal(resolveSha({ pr: "9", request: req("clean") }).mergeableState, "clean");
+  assert.equal(resolveSha({ pr: "7", request: (u) => (u === "pulls/7" ? { json: { head: { sha: head } } } : { json: [] }) }).mergeableState, null, "absent field");
+  assert.equal(mergeableProblem("dirty").state, "dirty");
+  assert.ok(mergeableProblem("dirty").evidence.startsWith("GitHub reports mergeable_state dirty: sync first"), mergeableProblem("dirty").evidence);
+  assert.equal(mergeableProblem("unknown").state, "unknown");
+  for (const ok of ["clean", "unstable", "blocked", "behind", "has_hooks", null, undefined]) assert.equal(mergeableProblem(ok), null, String(ok));
 });

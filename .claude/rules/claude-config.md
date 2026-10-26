@@ -25,8 +25,9 @@ paths:
 - `protect-files.sh` blocks generated-file edits and source edits during a live
   browser run (Write/Edit and Bash writes). `touch .claude/allow-protected` lifts
   the generated-file rules only (never the live-run, surveyor or reviewer rules).
-- `bash-guard.sh` runs the guards on the STAGED commit (a pass names its guard
-  path), blocks `pkill -f`, PID kills of a test-bg run, a browser run inside a
+- `bash-guard.sh` runs `test:guards` when a `git commit` is typed (a pass names
+  its guard path); the guards read the working tree, so commit in two calls
+  (AGENTS.md rule 12). It also blocks `pkill -f`, PID kills of a test-bg run, a browser run inside a
   subagent (`mcp-browser-guard.sh` for the MCP browser tools) and any Actions run
   cancel. `github-mcp-guard.sh` and bash-guard's `gh pr merge`/`gh pr ready`/`gh api`
   check (one text, `merge_policy.py`) deny squash/rebase and run cancels, and

@@ -1139,7 +1139,8 @@ artifact, monotonic) and `verify-live` as before. Measured 2026-10-14: the
 gate's median is 20.5 min and a gated publish (dispatch to live) 23 min
 median, 73 min p90 — queue waits in the 03-08 UTC bursts, not the tests, made
 the tail. Re-measured 2026-10-26 (last 40 `pages.yml` runs, system audit): p50
-11.9 min, p90 20.4.
+11.9 min, p90 20.4. Re-measured later on 2026-10-26 over 23 trains (CI review, sysaudit 2):
+median 19.6 min, p90 26.6; the macOS Metal leg adds a median 9.2 min.
 
 Inside `ci.yml` a Pages call is recognised by its `concurrency_key` (the
 caller's event is `push`, `schedule` or `workflow_dispatch` there): the
@@ -1370,7 +1371,7 @@ and retention, MCP protocol/level routing and retrieval, configured launch pins,
 and the generated surface catalog. It runs without browsers and is included in
 the structural floor; its files are listed in `tests/groups.json`.
 
-The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`. Recent unit pins include `pause-taps.test.mjs` (#3274 painted pause-door floor at UI SIZE 75%) and `lighting-sun-scratch.test.mjs` (a weather-blend tick reuses the sun-colour arrays; dawn and sunElev share one scratch direction).
+The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`. Recent unit pins include `pause-taps.test.mjs` (#3274 painted pause-door floor at UI SIZE 75%), `lighting-sun-scratch.test.mjs` (a weather-blend tick reuses the sun-colour arrays; dawn and sunElev share one scratch direction), and `transcripts-cli.test.mjs` (Grok ReadTranscript JSONL streamer: search / export / digest).
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 

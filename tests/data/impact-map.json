@@ -318,19 +318,29 @@
     },
     "js/audio/crowd.js": {
       "attach": [
-        "tests/unit/crowd-audio.test.mjs"
+        "tests/unit/crowd-audio.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
       "bind": [
-        "tests/unit/crowd-audio.test.mjs"
+        "tests/unit/crowd-audio.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
       "bindHost": [
-        "tests/unit/crowd-audio.test.mjs"
+        "tests/unit/crowd-audio.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ],
+      "detach": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ],
+      "ensureAttached": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
       "fireCheer": [
         "tests/unit/crowd-audio.test.mjs"
       ],
       "inspect": [
-        "tests/unit/crowd-audio.test.mjs"
+        "tests/unit/crowd-audio.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
       "liveOk": [
         "tests/unit/crowd-audio.test.mjs"
@@ -339,7 +349,8 @@
         "tests/unit/crowd-audio.test.mjs"
       ],
       "update": [
-        "tests/unit/crowd-audio.test.mjs"
+        "tests/unit/crowd-audio.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
       ]
     },
     "js/audio/driving-cues.js": {
@@ -400,6 +411,9 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs"
       ],
+      "createCtx": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ],
       "deployBoost": [
         "tests/unit/audio-tune.test.mjs"
       ],
@@ -422,6 +436,7 @@
         "tests/unit/rival-contact-sfx.test.mjs"
       ],
       "finish": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
@@ -461,6 +476,7 @@
         "tests/unit/audio-tune.test.mjs"
       ],
       "rebuildCtx": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/reject-lint.test.mjs"
       ],
       "resetReplayScrub": [
@@ -497,6 +513,7 @@
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/engine-note-quality.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
@@ -506,6 +523,7 @@
       ],
       "setGridIdle": [
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
       ],
       "setLayer": [
@@ -541,6 +559,7 @@
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
@@ -604,6 +623,7 @@
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/engine-note-quality.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
@@ -617,6 +637,9 @@
         "tests/unit/tyre-squeal-slip.test.mjs",
         "tests/unit/wind-speed.test.mjs"
       ],
+      "startEngineGraph": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ],
       "startRain": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-recovery.test.mjs"
@@ -626,6 +649,7 @@
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
@@ -963,6 +987,7 @@
         "tests/unit/audio-sample-upgrade.test.mjs"
       ],
       "*": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/engine-note-quality.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
@@ -2447,6 +2472,9 @@
       ],
       "warmCarAssetsAsync": [
         "tests/unit/car-presentation-vm.test.mjs"
+      ],
+      "warmCockpitTelemetry": [
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "*": [
         "tests/specs/quali.spec.js",
@@ -4489,6 +4517,7 @@
     "js/circuits/spa.js": {
       "*": [
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/fleet-owner.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
     },
@@ -4876,6 +4905,7 @@
         "tests/unit/tyre-peak-slip.test.mjs",
         "tests/unit/tyre-squeal-slip.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs",
         "tests/unit/wall-clamp.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs",
@@ -6492,6 +6522,7 @@
         "tests/unit/physics-rows-vm.test.mjs"
       ],
       "awaitIntroWarm": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
@@ -6513,6 +6544,7 @@
         "tests/unit/rival-audio.test.mjs"
       ],
       "cancelIntro": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
@@ -6744,12 +6776,14 @@
         "tests/unit/ctx-lost-notice.test.mjs"
       ],
       "raceIntro": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
       "raceIntroFromSheet": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "raceProfile": [
@@ -6850,6 +6884,7 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "sheetRelease": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "showTouchControls": [
@@ -6949,6 +6984,7 @@
         "tests/unit/results-cam.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/sporting-regs.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
@@ -8902,7 +8938,8 @@
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/rendezvous-worker.test.mjs"
       ]
     },
     "js/net/handshake.js": {
@@ -9349,7 +9386,8 @@
         "tests/unit/net-rendezvous.test.mjs"
       ],
       "sealPrivate": [
-        "tests/unit/net-rendezvous.test.mjs"
+        "tests/unit/net-rendezvous.test.mjs",
+        "tests/unit/rendezvous-worker.test.mjs"
       ],
       "setSessionUrl": [
         "tests/unit/net-rendezvous.test.mjs"
@@ -9371,9 +9409,6 @@
       ],
       "waitFor": [
         "tests/unit/net-rendezvous.test.mjs"
-      ],
-      "*": [
-        "tests/unit/rendezvous-worker.test.mjs"
       ]
     },
     "js/net/scan.js": {
@@ -10203,6 +10238,9 @@
       ],
       "poll": [
         "tests/unit/title-warm.test.mjs"
+      ],
+      "*": [
+        "tests/specs/race-cycle-memory.spec.js"
       ]
     },
     "js/physics/aero-zones.js": {
@@ -10808,6 +10846,7 @@
         "tests/unit/steer-feel-lift-off.test.mjs",
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/tyre-peak-slip.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs",
         "tests/unit/voice-pack.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/wet-grip-ladder.test.mjs",
@@ -10934,10 +10973,12 @@
         "tests/unit/grip-steer.test.mjs"
       ],
       "forPlayer": [
-        "tests/unit/grip-steer.test.mjs"
+        "tests/unit/grip-steer.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs"
       ],
       "setLevel": [
-        "tests/unit/grip-steer.test.mjs"
+        "tests/unit/grip-steer.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs"
       ]
     },
     "js/physics/incident-sim.js": {
@@ -11003,13 +11044,15 @@
       "create": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
-        "tests/unit/player-forces.test.mjs"
+        "tests/unit/player-forces.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs"
       ],
       "step": [
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
         "tests/unit/speed-coupling.test.mjs",
         "tests/unit/steer-feel-lift-off.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs",
         "tests/unit/yaw-damp-speed.test.mjs",
         "tests/unit/yaw-low-speed-substep.test.mjs"
       ],
@@ -11073,6 +11116,7 @@
         "tests/unit/real-race.test.mjs",
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/tyre-model.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs",
         "tests/unit/voice-pack.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
       ],
@@ -11139,7 +11183,8 @@
         "tests/unit/grip-steer.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/real-race.test.mjs",
-        "tests/unit/tyre-model.test.mjs"
+        "tests/unit/tyre-model.test.mjs",
+        "tests/unit/vehicle-tick-alloc.test.mjs"
       ],
       "severity": [
         "tests/unit/tyre-model.test.mjs"
@@ -11207,6 +11252,17 @@
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/wheel-state.test.mjs"
+      ]
+    },
+    "js/physics/vehicle.js": {
+      "forPlayer": [
+        "tests/unit/vehicle-tick-alloc.test.mjs"
+      ],
+      "stepWheel": [
+        "tests/unit/vehicle-tick-alloc.test.mjs"
+      ],
+      "*": [
+        "tests/unit/player-forces.test.mjs"
       ]
     },
     "js/physics/wall-clamp.js": {
@@ -14057,6 +14113,9 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
       ],
+      "_coWarm": [
+        "tests/unit/tlx-fx-warm.test.mjs"
+      ],
       "_decalAppend": [
         "tests/unit/tlx-hunt4.test.mjs"
       ],
@@ -14163,7 +14222,8 @@
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
       "compileWarmProbe": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-fx-warm.test.mjs"
       ],
       "create": [
         "tests/unit/assets-pack.test.mjs",
@@ -14233,6 +14293,9 @@
       "freeInstancedBatch": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "getFxQuad": [
+        "tests/unit/tlx-fx-warm.test.mjs"
+      ],
       "getPresentSize": [
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
@@ -14244,6 +14307,9 @@
       ],
       "isWebGPU": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "lineIndex": [
+        "tests/unit/tlx-fx-warm.test.mjs"
       ],
       "lruVictim": [
         "tests/unit/tlx-round2.test.mjs"
@@ -14428,6 +14494,7 @@
       ],
       "warmFxPrograms": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-fx-warm.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
@@ -14629,7 +14696,8 @@
     },
     "js/render/webgpu/wgx-chunked.js": {
       "createChunkedMesh": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
       "drawChunked": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -14638,7 +14706,8 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "init": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
       "*": [
         "tests/unit/frustum-buckets.test.mjs",
@@ -16272,12 +16341,17 @@
       "anyOpen": [
         "tests/unit/layers-anyopen-memo.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/ui-layers-reflow.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
+      ],
+      "narrow": [
+        "tests/unit/ui-layers-reflow.test.mjs"
       ],
       "navOpen": [
         "tests/unit/layers-anyopen-memo.test.mjs",
         "tests/unit/layers-nav-memo.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/ui-layers-reflow.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ],
       "shown": [
@@ -17333,6 +17407,7 @@
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
       "strip": [
+        "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "stripEnabled": [
@@ -17347,6 +17422,7 @@
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
       "strip": [
+        "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "*": [

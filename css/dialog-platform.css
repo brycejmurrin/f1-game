@@ -48,7 +48,7 @@ dialog.screen.dim::backdrop {
   dialog.screen.dim::backdrop { background: rgba(0, 0, 0, 0.96); }
 }
 @media (prefers-reduced-motion: no-preference) {
-  dialog.screen.dim[open]::backdrop { animation: scrim-in 0.16s ease-out; }
+  :root:not([data-motion="reduce"]) dialog.screen.dim[open]::backdrop { animation: scrim-in 0.16s ease-out; }
 }
 
 /* ---------- foldables: a guard, not a layout ----------
