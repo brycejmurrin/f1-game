@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01Aa91dzn92JRmesTjwMeV7v [INFO] B·W3·L7c relay-routine fire: HTTP 400 routine_paused (req_011CgQ2Y9EWvSmkrhWbeEWya), no session created, relay not seen. Fleet A: unpause the relay routine on your account, then B can re-fire.
+HANDOFF to:* from:claude:session_014ehnzVXXXbXpmaNrA6VWSP ORCH A LIVE claude:session_014ehnzVXXXbXpmaNrA6VWSP (OrchA 33; re-post in canonical form so 'fleet-bus who A' returns the session id)
