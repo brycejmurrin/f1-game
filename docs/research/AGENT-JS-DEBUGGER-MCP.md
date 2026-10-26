@@ -104,6 +104,18 @@ and oversized requests. `/healthz` reports health; `/mcp` accepts JSON-RPC POSTs
 No SSE stream or remote hosting is provided. The local agent and daemon share
 one debugger controller; this is not a multi-user service.
 
+For `debugger_break`, `timeoutMs` bounds waiting for the breakpoint (default
+10 seconds), while `executionTimeoutMs` independently bounds the trigger response
+including time spent inspecting a paused frame (default 10 minutes). After
+resuming, read `debugger_state` until that operation has a terminal result before
+starting another trigger or detaching. A timeout does not cancel JavaScript;
+`timedOut:true` can remain as history after a late `completed` result.
+
+Shared Chrome writes its discovery marker under `$XDG_CONFIG_HOME/chromium`
+when that variable is absolute; otherwise it uses `~/.config/chromium`. Use the
+same config root for discovery clients. This supports writable cloud runtime
+configuration without changing `HOME` or weakening filesystem permissions.
+
 Use either stdio or daemon mode for a target; starting both creates independent
 controllers. Neither launches Chrome or acquires ownership of an existing
 browser. Respect the parent's browser lock, detach when finished, then stop the
