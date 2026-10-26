@@ -1,0 +1,1 @@
+Fixed: phone orientation no longer rebuilds the TLX/GLX post chain on an equal-pixel transpose (422×195 ↔ 195×422). Mobile targets keep a square max(w,h) cover so flips only move logical viewports — the hitch that was climbing PerfGov is gone.
