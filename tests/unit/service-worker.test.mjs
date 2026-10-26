@@ -675,6 +675,29 @@ for (const [label, online, fetchImpl] of [
   });
 }
 
+// #3284: the cache order is settled-first, so an OLDER settled shell came
+// before a NEWER unsettled one that already held index.html — and the first
+// shell found below `b` ended the search, failing a bust the newer cache could
+// answer. A qualifying shell anywhere in the order wins; none still fails.
+for (const [label, online, fetchImpl] of [
+  ["offline", false, () => Promise.reject(new TypeError("offline"))],
+  ["on a slow link", true, () => new Promise(() => {})],
+]) {
+  test(`${label}, a ?b= bust skips an older settled shell for a newer unsettled one (#3284)`, async () => {
+    const h = settledShellHarness({ online, fetchImpl });
+    h.stores.set("apex26-322", new Map([
+      [`${ORIGIN}/index.html`, new Response("shell 322", { status: 200 })],
+      [`${ORIGIN}/__apex_install_complete__`, new Response("c")],
+    ]));
+    const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=322` });
+    const res = await nav.responsePromise;
+    assert.equal(res.status, 200, "the newer unsettled cache holds a shell >= the bust");
+    assert.equal(await res.text(), "shell 322");
+    const newer = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=323` });
+    assert.equal((await newer.responsePromise).status, 0, "nothing cached is >= 323");
+  });
+}
+
 // The page strips the spent `b` itself: the boot guard runs on the shell it
 // asked for, so ?b= has done its job. Query and hash (#vs= invites) survive.
 test("the index.html boot guard removes ?b= from the address bar, keeping query and hash", async () => {
