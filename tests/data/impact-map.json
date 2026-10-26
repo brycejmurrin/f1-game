@@ -4454,6 +4454,14 @@
         "tests/unit/scenery-kits.test.mjs"
       ]
     },
+    "js/circuits/scenery/jeddah.js": {
+      "narrow": [
+        "tests/unit/jeddah-night-orbit.test.mjs"
+      ],
+      "*": [
+        "tests/unit/jeddah-night-orbit.test.mjs"
+      ]
+    },
     "js/circuits/scenery/jerez.js": {
       "*": [
         "tests/unit/deploy-tool.test.mjs"
