@@ -1516,6 +1516,8 @@
     "// WET_GRIP orders the treads as treadFor picks them: inter owns the damp, full wet the storm. VM, < 0.2 s.",
     "tests/unit/wet-grip-ladder.test.mjs",
     "tests/unit/wgsl-bindings.test.mjs",
+    "// #3569: WGX createChunkedMesh falls back to createMesh (chunks:null) on alloc failure so props/glass stay visible. VM, < 0.2 s.",
+    "tests/unit/wgx-chunked-fallback.test.mjs",
     "// The claim half of who-is-on-it (pure parse + the empty-tree commit shape)",
     "// and deploy --pr's REST fallback against a fake curl; both < 1 s, both",
     "// guard the two tools a session reaches for at push time.",
@@ -2359,7 +2361,8 @@
     },
     "test:service-worker": {
       "files": [
-        "tests/unit/service-worker.test.mjs"
+        "tests/unit/service-worker.test.mjs",
+        "tests/unit/sw-build-meta.test.mjs"
       ],
       "kind": "node"
     },

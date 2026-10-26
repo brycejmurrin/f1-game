@@ -26,6 +26,27 @@ const WGXChunked = (function () {
       }
       return 0;
     }
+    // Chunk alloc failed under memory pressure: mirror the triCount<2000 path
+    // (one synchronous createMesh) so props/glass stay drawable. buildRibbon
+    // already treats chunks:null as a live plain mesh; props/glass assign the
+    // handle unchecked, so an empty chunks:[] left them invisible for the
+    // session (#3569). Source geometry is still intact on every catch below.
+    function _chunkUploadFallback(data, indexFormat) {
+      try {
+        const m = core.createMesh(data);
+        if (m) m.chunks = null;
+        return m || {
+          _wgx: "chunked", vbuf: null, sbuf: null, attrBG: null,
+          chunks: [], count: 0, indexFormat,
+        };
+      } catch (e2) {
+        core.allocFail("createChunkedMesh.fallback", e2);
+        return {
+          _wgx: "chunked", vbuf: null, sbuf: null, attrBG: null,
+          chunks: [], count: 0, indexFormat,
+        };
+      }
+    }
     function createChunkedMesh(data, cellSize) {
       const cell = cellSize > 0 ? cellSize : 72;
       const pos = core.toF32(data.pos);
@@ -102,7 +123,7 @@ const WGXChunked = (function () {
           try { if (cv) cv.destroy(); } catch (_) { /* already invalid */ }
           try { if (lut && lut.sbuf) lut.sbuf.destroy(); } catch (_) { /* already invalid */ }
           core.allocFail("createChunkedMesh", e);
-          return { _wgx: "chunked", vbuf: null, ibuf: null, sbuf: null, attrBG: null, chunks: [], count: 0, indexFormat: b.indexFormat };
+          return _chunkUploadFallback(data, b.indexFormat);
         }
         if (lut) core.rememberRoadLut(lut);
         if (data._keepFullGeometry === false) data.nrm = data.col = data.mat = data.trk = null;
@@ -124,7 +145,7 @@ const WGXChunked = (function () {
       } catch (e) {
         try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
         core.allocFail("createChunkedMesh", e);
-        return { _wgx: "chunked", vbuf: null, sbuf: null, attrBG: null, chunks: [], count: 0, indexFormat };
+        return _chunkUploadFallback(data, indexFormat);
       }
       const buckets = new Map();
       for (let t = 0; t < srcIdx.length; t += 3) {
@@ -173,10 +194,11 @@ const WGXChunked = (function () {
         try { if (ibuf) ibuf.destroy(); } catch (_) { /* already invalid */ }
         try { if (sbuf) sbuf.destroy(); } catch (_) { /* already invalid */ }
         core.allocFail("createChunkedMesh", e);
-        return { _wgx: "chunked", vbuf: null, sbuf: null, attrBG: null, chunks: [], count: 0, indexFormat };
+        // Source still intact (nulled only after success below) → createMesh.
+        return _chunkUploadFallback(data, indexFormat);
       }
       // Release only after the complete chunk upload succeeds. A failed upload
-      // can then fall back to core.createMesh without finding its source nulled.
+      // falls back via _chunkUploadFallback without finding its source nulled.
       if (data._keepFullGeometry === false) data.nrm = data.col = data.mat = data.trk = null;
       if (!data._keepPositions) { data.pos = null; data.idx = null; }
       return { _wgx: "chunked", vbuf, ibuf, sbuf, attrBG, chunks, count: total, indexFormat };
