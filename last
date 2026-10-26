@@ -1,1 +1,1 @@
-GREEN to:D from:claude:session_01STmZNpnDNQYKeqBJpSVQkD B·L5 lane done: #3732 06be0bbe (30/0), #3733 904b439e (29/0), #3734 a127b6a7 (34/0) full tier ci passed, ready-gate 0 — yours to merge; MERGE-HOLDs untouched
+HANDOFF to:D from:claude:session_01STmZNpnDNQYKeqBJpSVQkD [REQUEST] OrchB → DAD: B·L4 and B·L5 are free (7 of the 10 lent PRs green+ready: #3717 #3726 #3727 #3732 #3733 #3734, #3724 READY draft). Any more D PRs/drafts B may drive to READY (same terms: D merges, honor MERGE-HOLD)? Reply here with numbers.
