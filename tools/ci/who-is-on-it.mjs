@@ -153,10 +153,44 @@ export function parseBoard(files, now = Math.floor(Date.now() / 1000)) {
   }).sort((a, b) => b.at - a.at);
 }
 
+/** Days of deploy-branch merges read to release claims whose PR has merged. */
+export const MERGE_DAYS = 14;
+
+/** `git log --merges --format=%ct%x09%s` lines of the deploy branch -> [{ pr, branch, at }]. Pure. */
+export function parseMerges(text) {
+  return String(text || "").split("\n").map((l) => {
+    const [t, ...s] = l.split("\t");
+    const m = /^Merge pull request #(\d+) from [^/\s]+\/(\S+)/.exec(s.join("\t"));
+    return m ? { pr: Number(m[1]), branch: m[2], at: Number(t) || 0 } : null;
+  }).filter(Boolean);
+}
+
+/**
+ * The merge that RELEASES a claim (audit3 #38: 15 live claims named merged PRs): a merge at or after the claim
+ * whose PR the claim names (`#n` / `pr n`) or whose head branch the claim was made from (its `[branch; …]` tag).
+ * The deploy branch itself is never a claim's PR. Returns that merge or null. Pure.
+ */
+export function mergedRelease(claim, merges) {
+  const body = String(claim.text || "").replace(/\s\s\[[^\]]*\]\s*$/, "");
+  const prs = new Set([...body.matchAll(/(?:#|\bpr\s?)(\d{2,6})\b/gi)].map((m) => Number(m[1])));
+  const branch = (/\s\s\[([^;\]]+)/.exec(String(claim.text || "")) || [])[1]?.trim() || "";
+  return (merges || []).find((m) => m.at >= claim.at && (prs.has(m.pr) || (branch && branch !== DEPLOY && m.branch === branch))) || null;
+}
+
+/** The deploy branch's PR merges in the last MERGE_DAYS from `ref` via `gitFn(...args) -> stdout`. */
+export function readMerges(gitFn, ref) {
+  return parseMerges(gitFn("log", "--merges", "--first-parent", `--since=${MERGE_DAYS} days ago`, "--format=%ct%x09%s", ref));
+}
+
 /** The board after one write. Pure: drops `slug` (a release, or the claim
- *  being replaced), drops claims older than BOARD_MAX_MIN, adds `content`. */
-export function nextBoard(files, slug, content, now = Math.floor(Date.now() / 1000)) {
-  const keep = files.filter((f) => f.slug !== slug && parseBoard([f], now)[0].ageMin <= BOARD_MAX_MIN);
+ *  being replaced), drops claims older than BOARD_MAX_MIN and claims a merged
+ *  PR released (mergedRelease over `merges`), adds `content`. */
+export function nextBoard(files, slug, content, now = Math.floor(Date.now() / 1000), merges = []) {
+  const keep = files.filter((f) => {
+    if (f.slug === slug) return false;
+    const c = parseBoard([f], now)[0];
+    return c.ageMin <= BOARD_MAX_MIN && !mergedRelease(c, merges);
+  });
   if (content != null) keep.push({ slug, content });
   return keep.sort((a, b) => (a.slug < b.slug ? -1 : 1));
 }
@@ -218,7 +252,9 @@ export function pushBoard(slug, content, { cwd = ROOT, remote = "origin", messag
   for (let i = 0; i < tries; i++) {
     run(["fetch", "--quiet", remote, `+refs/heads/${CLAIMS_BOARD}:${tracking}`]);
     const tip = run(["rev-parse", "--verify", "--quiet", tracking]).stdout.trim();
-    const files = nextBoard(readBoard(tracking, cwd), slug, content);
+    // Every write also drops claims a merged PR released (local deploy ref; a stale one only releases fewer).
+    const merges = readMerges((...a) => run(a).stdout || "", `refs/remotes/${remote}/${DEPLOY}`);
+    const files = nextBoard(readBoard(tracking, cwd), slug, content, undefined, merges);
     // Every plumbing step must succeed and yield an object id: an empty commit
     // id would make the refspec `:refs/heads/<board>`, which DELETES the board.
     const step = (a, input) => {
@@ -342,6 +378,13 @@ export function main(argv = process.argv.slice(2), { getBranch = currentBranch, 
   const claims = [...parseBoard(readBoard(`refs/remotes/origin/${CLAIMS_BOARD}`)),
     ...parseClaims(refGit("for-each-ref", "--format=%(committerdate:unix)%09%(refname)%09%(authorname)%09%(subject)",
       `refs/remotes/origin/${CLAIMS_PREFIX}`))].sort((a, b) => b.at - a.at);
+  // A claim whose PR has merged is released by the merge (audit3 #38), whether or not its author ran --release.
+  const merges = readMerges(refGit, `refs/remotes/origin/${DEPLOY}`);
+  for (const c of claims) {
+    const m = c.released ? null : mergedRelease(c, merges);
+    if (m) Object.assign(c, { released: true, mergedBy: m.pr });
+  }
+  const mergedReleased = claims.filter((c) => c.mergedBy);
   const active = claims.filter((c) => !c.released);
   const shown = showAll ? active : active.filter((c) => !c.stale);
   const staleHidden = active.length - shown.length;
@@ -393,6 +436,10 @@ export function main(argv = process.argv.slice(2), { getBranch = currentBranch, 
   const mine = session ? claimSlug(branch, session) : null;
   for (const c of shown) console.log(`${ago(c.ageMin).padStart(7)} ago  ${c.stale ? "STALE " : "      "}${c.slug}${c.slug === mine ? "  [you]" : ""}  — ${c.who}: ${c.text}`);
   if (staleHidden) console.log(`  (${staleHidden} stale claim${staleHidden === 1 ? "" : "s"} hidden — older than ${STALE_MIN} min; --all to show)`);
+  if (mergedReleased.length) {
+    console.log(`  (${mergedReleased.length} claim${mergedReleased.length === 1 ? "" : "s"} released by a merged PR: `
+      + `${[...new Set(mergedReleased.map((c) => `#${c.mergedBy}`))].join(" ")}; the next claim write drops them from the board)`);
+  }
   if (paths.length) {
     console.log(`\n# commits in the window that touched: ${paths.join(" ")}`);
     if (!touched.length) console.log("(none — nobody has pushed a change to these paths in the window)");

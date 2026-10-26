@@ -75,6 +75,14 @@ test("prRow: fleet-status beats the block, 'none' blocker is dropped, hold is fl
   assert.equal(q.fleet_state, "implementing");
   assert.equal(q.blocker, "");
   assert.equal(q.merge_hold, "MERGE-HOLD");
+  const holds = prBoard.parseHolds("MERGE-HOLD: DAD merges\n```fleet\nmerger: D\n```");
+  const o = prRow({ pr: { ...pr, body: `${pr.body}\nMERGE-HOLD: DAD merges\n` }, files: [], ci: { state: "passed", ci_detail: "" }, fleet: null, holds });
+  assert.deepEqual([o.merge_hold, o.owner], ["", "DAD"], "an owner tag is OWNER, never a hold");
+});
+
+test("parseFleetBlock is the shared tools/lib parser: first value wins, commented-out blocks are skipped (verify #37a)", () => {
+  assert.deepEqual(parseFleetBlock("```fleet\nworker: aaa\nworker: bbb\n```"), { worker: "aaa" });
+  assert.deepEqual(parseFleetBlock("<!--\n```fleet\nworker: zzz\n```\n-->\n```fleet\nworker: ddd\n```"), { worker: "ddd" });
 });
 
 test("collect builds every dataset from fixtures", () => {
@@ -82,7 +90,8 @@ test("collect builds every dataset from fixtures", () => {
   assert.deepEqual(Object.keys(r.datasets).sort(), [...DATASETS].sort());
   assert.ok(r.ok);
   const [p9, p7] = r.datasets.prs;
-  assert.deepEqual([p9.number, p9.ci, p9.game, p9.draft, p9.merge_hold, p9.mergeable], [9, "failed", "game", "ready", "MERGE-HOLD", "dirty"]);
+  // the fixture's short "MERGE-HOLD: waiting on Bryce" is not the full shape: shown, never a veto (DECISIONS #6)
+  assert.deepEqual([p9.number, p9.ci, p9.game, p9.draft, p9.merge_hold, p9.mergeable], [9, "failed", "game", "ready", "HOLD? malformed", "dirty"]);
   assert.deepEqual([p7.number, p7.ci, p7.game, p7.files, p7.labels, p7.fleet_state], [7, "running", "non-game", 2, "run-ci", "working"]);
   assert.match(p7.ci_detail, /run=#100 pull_request$/, "a label-noise run never counts");
   const [dep] = r.datasets.deploy;

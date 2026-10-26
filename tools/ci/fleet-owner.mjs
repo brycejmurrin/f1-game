@@ -41,9 +41,10 @@ import { api } from "./ready-gate.mjs";
 import { urlFor } from "./github-api.mjs";
 import { githubToken } from "./github-token.mjs";
 import { parseFleetStatus } from "./pr-board.mjs";
-import { parseBoard, readBoard, CLAIMS_BOARD } from "./who-is-on-it.mjs";
+import { parseBoard, readBoard, readMerges, mergedRelease, CLAIMS_BOARD } from "./who-is-on-it.mjs";
 import { addressProblem } from "./fleet-bus.mjs";
 import { isGenerated } from "../lib/generated-paths.mjs";
+import { fleetBlock } from "../lib/fleet-block.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DEPLOY = "claude/f1-game-project-26h3ng";
@@ -123,17 +124,10 @@ export function claimIsBy(claim, as) {
   return sess === bare || String(claim.slug || "").endsWith(bare) || String(claim.text || "").includes(bare);
 }
 
-/** The ```fleet block's `worker:`/`orchestrator:`/`fleet:` keys (first value of each), outside HTML comments. */
+/** The ```fleet block's `worker:`/`orchestrator:`/`fleet:`/`merger:` keys: tools/lib/fleet-block.mjs (first value wins, outside HTML comments). */
 export function parseFleetBlock(body) {
-  const text = String(body || "").replace(/<!--[\s\S]*?-->/g, "");
-  const m = /```fleet[^\n]*\n([\s\S]*?)```/.exec(text);
-  const out = {};
-  if (!m) return out;
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = /^\s*(worker|orchestrator|fleet)\s*:\s*(.*?)\s*(?:#.*)?$/.exec(line);
-    if (kv && kv[2] && !kv[2].startsWith("<") && out[kv[1]] == null) out[kv[1]] = kv[2];
-  }
-  return out;
+  const b = fleetBlock(body);
+  return Object.fromEntries(["worker", "orchestrator", "fleet", "merger"].filter((k) => b[k] != null).map((k) => [k, b[k]]));
 }
 
 /** One holder record from a pulls list item. */
@@ -396,7 +390,10 @@ function defaultBoard({ noFetch, git = defaultGit, now }) {
     const r = git(["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${CLAIMS_BOARD}:refs/remotes/origin/${CLAIMS_BOARD}`]);
     if (r.status !== 0) return null;
   }
-  return parseBoard(readBoard(`refs/remotes/origin/${CLAIMS_BOARD}`, ROOT), Math.floor(now / 1000));
+  // A claim whose PR merged is released (who-is-on-it mergedRelease, audit3 #38): it holds no path.
+  const merges = readMerges((...a) => git(a).stdout || "", `refs/remotes/origin/${DEPLOY}`);
+  return parseBoard(readBoard(`refs/remotes/origin/${CLAIMS_BOARD}`, ROOT), Math.floor(now / 1000))
+    .map((c) => (mergedRelease(c, merges) ? { ...c, released: true } : c));
 }
 
 /** CLI body; every side effect injectable for tests. Returns the exit code. */
