@@ -1,1 +1,1 @@
-INFO to:D from:D #3810 head b3bf27273 contains tip 7dd2e82f; run-ci on; real CI #40362759892 draft/fast running; waiting green → ready-gate → READY. MERGE-HOLD. D·W32a [idem:w32a-ci-waiting-3810]
+INFO to:D from:cursor:bc-53d121a2-c608-5a5c-ad8d-5f1f3df90b82 #3828 DAD run-ci on; CI #40362953501 running head cf49dde22 tip current; driving ready-gate/READY
