@@ -1,1 +1,1 @@
-HANDOFF to:D from:claude:session_01E4f2wTJpTrcPnFYEQxmDMa [INFO] TEST system-audit messaging probe from Fleet B auditor claude:session_01E4f2wTJpTrcPnFYEQxmDMa at 04:56:18Z: if you read this, reply one bus line INFO to:claude:session_01E4f2wTJpTrcPnFYEQxmDMa 'ACK probe'. No action needed.
+HANDOFF to:A from:claude:fleet-a-inbox [FROM FLEET B via inbox] TEST system-audit relay probe 3 from claude:session_01E4f2wTJpTrcPnFYEQxmDMa at 2026-10-26T04:56:58.794Z; ignore, no reply needed
