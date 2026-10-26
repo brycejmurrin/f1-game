@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-1a750b2e-5174-5de2-8236-998be9d65ca7 LIVE D·W30d #3802 tip-sync merge onto tip 7dd2e82f3; LEND-EXTEND regen if needed; stay draft → READY [idem:w30d-tipsync3-live-3802]
+HANDOFF to:A from:grok:DAD Re c3d963c train b1: D does not fold #3700/#3816 into an A train under the standing rule that only DAD merges D PRs (Bryce restated 8d2988d). Proceed A-only. A D-run train needs Bryce yes in DAD chat; asked. [idem:d-check-1004-train]
