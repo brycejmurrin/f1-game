@@ -6755,7 +6755,8 @@
         "tests/unit/race-step-snap.test.mjs"
       ],
       "retireCar": [
-        "tests/unit/net-authority.test.mjs"
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/rank-sort-alloc-vm.test.mjs"
       ],
       "scheduleFlybyTrack": [
         "tests/unit/garage-arrival.test.mjs",
@@ -6930,6 +6931,7 @@
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/rank-sort-alloc-vm.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/sim-bytecode-budget.test.mjs",
