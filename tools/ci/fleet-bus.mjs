@@ -27,6 +27,8 @@
 //   node tools/ci/fleet-bus.mjs send READY --to orchestrator "#2990 abc1234 ready-gate 0"
 //   Prefer agent-msg.mjs for READY/HANDOFF/INCIDENT/INFO/QUESTION/REQUEST (webhook + bus mirror).
 //   node tools/ci/fleet-bus.mjs send GAME-SLOT --to '*' "#2990 <head sha>"   # before a game merge (merge-gate.mjs reads it)
+//   node tools/ci/fleet-bus.mjs send BLOCKED --pr 2990 "text"   # --pr <n> is --to '#<n>'; empty text is refused
+//   node tools/ci/fleet-bus.mjs send INCIDENT --to '*' --fix <sha> "text"   # tools/ci/incident-lift.mjs lifts it when Pages is green on <sha>
 //   node tools/ci/fleet-bus.mjs read [--to merge-holder --to '#2990'] [--since <sha>] [--last 20] [--json]
 //   node tools/ci/fleet-bus.mjs who A [--last 500] [--json]   # fleet A's live orchestrator: `A <host:id> <sha7> <age>`; exit 1 none
 //
@@ -106,7 +108,27 @@ export function formatLine(type, to, from, text = "") {
   if (!TYPES.includes(type)) throw new Error(`unknown type ${type} (one of ${TYPES.join(" ")}). ${TYPE_HINT}`);
   const bad = addressProblem(to);
   if (bad) throw new Error(`${bad}. --to takes one of: ${ADDRESS_FORMS}`);
+  if (!String(text).trim()) throw new Error(`empty text: a ${type} line needs a body (what, which PR, which sha)`);
   return `${type} to:${to} from:${from} ${String(text).replace(/\s+/g, " ").trim()}`.trim();
+}
+
+/** `[fix:<sha>]` marker an INCIDENT carries when `send INCIDENT --fix <sha>` names the commit whose green Pages lifts it. */
+export const fixMarker = (sha) => `[fix:${sha}]`;
+export const fixOf = (text) => (/\[fix:([0-9a-f]{7,40})\]/i.exec(String(text || "")) || [])[1] || null;
+
+/**
+ * The open INCIDENT (newest not followed by a `lifted` line) whose text names a fix sha, or null. Pure.
+ * entries: oldest first. A later plain INCIDENT without a marker replaces it: the freeze is then manual.
+ */
+export function openFixIncident(entries) {
+  let open = null;
+  for (const e of entries || []) {
+    if (e.type !== "INCIDENT") continue;
+    open = /\blifted\b/i.test(e.text) ? null : e;
+  }
+  if (!open) return null;
+  const sha = fixOf(open.text);
+  return sha ? { entry: open, sha } : null;
 }
 
 /** A commit subject -> { type, to, from, text }, or null when it is not a bus line. Pure. */
@@ -334,7 +356,7 @@ const cursorFile = (me) => path.join(CURSOR_DIR, `cursor-${String(me).replace(/[
 function usage(msg) {
   if (msg) console.error(`fleet-bus: ${msg}`);
   console.error("usage: fleet-bus.mjs lease [acquire|renew|release|check|break] [--ttl MIN] [--note T] [--grant T]\n" +
-    "       fleet-bus.mjs send <TYPE> --to <ADDR> \"<text>\"   ADDR: " + ADDRESS_FORMS + "\n" +
+    "       fleet-bus.mjs send <TYPE> (--to <ADDR> | --pr <n>) [--fix <sha>, INCIDENT only] \"<text>\"   ADDR: " + ADDRESS_FORMS + "\n" +
     "       fleet-bus.mjs read [--to ADDR ...] [--since SHA] [--last N] [--json]\n" +
     "       fleet-bus.mjs who <fleet letter> [--last N] [--json]   (exit 1: no live orchestrator line)\n" +
     "       common: --as <host>:<id>   types: " + TYPES.join(" "));
@@ -386,13 +408,23 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
       needMe();
       if (!sub) return usage("send needs a TYPE");
       if (sub === "LEASE") return usage("LEASE lines are written by `lease …`, never sent by hand");
-      if (multi.to.length !== 1) return usage("send needs exactly one --to");
+      if (flags.pr !== undefined && multi.to.length === 0) {
+        if (!/^#?\d+$/.test(flags.pr)) return usage("--pr takes a PR number");
+        multi.to.push(`#${String(flags.pr).replace(/^#/, "")}`);
+      }
+      if (multi.to.length !== 1) return usage("send needs exactly one --to (or --pr <n>)");
       if (!TYPES.includes(sub)) return usage(`unknown type ${sub} (one of ${TYPES.join(" ")}). ${TYPE_HINT}`);
       if (sub === "READY" && process.env.APEX_READY_NO_RECEIPT !== "1") {
         const v = readyCheck(cwd, { text: `${multi.to[0]} ${pos.slice(2).join(" ")}` });
         if (!v.ok) { log(`= send REFUSED: ${v.why}`); return 2; }
       }
-      const r = sendBusLine(sub, multi.to[0], me, pos.slice(2).join(" "), { cwd, dispatch, log });
+      let text = pos.slice(2).join(" ");
+      if (flags.fix !== undefined) {
+        if (sub !== "INCIDENT") return usage("--fix <sha> belongs on an INCIDENT line");
+        if (!/^[0-9a-f]{7,40}$/i.test(flags.fix)) return usage("--fix takes a commit sha (7-40 hex)");
+        text = `${text} ${fixMarker(flags.fix)}`.trim();
+      }
+      const r = sendBusLine(sub, multi.to[0], me, text, { cwd, dispatch, log });
       return r.ok ? 0 : 1;
     }
     if (cmd === "who") {

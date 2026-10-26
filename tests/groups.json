@@ -471,6 +471,8 @@
     "tests/unit/fleet-flags.test.mjs",
     "// fleet-owner: HELD (open PR diff) beats CLAIMED (board glob) beats FREE, RELEASE? answers, the 60-min lapse, fail-closed file lists; fake API, < 0.2 s.",
     "tests/unit/fleet-owner.test.mjs",
+    "// fleet-queue: the committed orchestrator queue (PR, head, state, owner, next): row ops, the per-tick ownership check and the hand-off reassign; in-memory file, < 0.1 s.",
+    "tests/unit/fleet-queue.test.mjs",
     "// fleet-tick: the diff of two watcher states into changed rows, pure fixtures; < 0.1 s.",
     "tests/unit/fleet-tick.test.mjs",
     "// The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on",

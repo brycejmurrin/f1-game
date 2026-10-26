@@ -70,6 +70,19 @@ test("main prints one row per session, caches PR lookups, and --offline never ca
   assert.equal(JSON.parse(off[0]).filter((r) => /pr-unknown/.test(r.why)).length, 2);
 });
 
+test("Q5: a no-archive tag or an in-flight post_turn_summary keeps an otherwise archivable session", () => {
+  const merged = () => "merged";
+  assert.equal(decide(sess(), { now: NOW, prState: merged }).verdict, "ARCHIVE");
+  const pinned = decide(sess({ tags: [...sess().tags, "no-archive"] }), { now: NOW, prState: merged });
+  assert.equal(pinned.verdict, "KEEP"); assert.ok(/no-archive/.test(pinned.why));
+  for (const text of ["CI watch, tooling-fast, macOS census still running on #3766", "#3693 gate running … then #3696"]) {
+    const r = decide(sess({ post_turn_summary: text }), { now: NOW, prState: merged });
+    assert.equal(r.verdict, "KEEP", text); assert.ok(/in flight/.test(r.why));
+  }
+  assert.equal(decide(sess({ post_turn_summary: { text: "census running" } }), { now: NOW, prState: merged }).verdict, "KEEP");
+  assert.equal(decide(sess({ post_turn_summary: "Merged and handed off." }), { now: NOW, prState: merged }).verdict, "ARCHIVE");
+});
+
 const orch = (over = {}) => sess({ id: "session_01OLD", title: "[Orch] B·O-queue4", tags: ["fleet:b", "role:orchestrator", "config:session-created"], ...over });
 const liveIs = (id) => (letter) => (letter === "B" ? id : null);
 
