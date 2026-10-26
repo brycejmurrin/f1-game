@@ -123,20 +123,30 @@ def gate_files_check(root, receipt):
     rec = (receipt or {}).get("gateFiles") if isinstance(receipt, dict) else None
     if not isinstance(rec, dict):
         return False, "the receipt records no gate-file hashes (written by an older gate): re-run the gate"
+    # pass 4 (verify #2 / tools T4): the gate's verdict depends on everything it imports (pr-board's hasMergeHold
+    # among 18 files), so every file the receipt records is verified, not only the three fixed names. A gate from
+    # audit4 A1 also lists its static import closure as `gateClosure`: every file in it must carry a hash.
+    closure = receipt.get("gateClosure")
+    closure = [k for k in closure if isinstance(k, str)] if isinstance(closure, (list, tuple)) else []
+    missing = [k for k in closure if k not in rec]
+    if missing:
+        return False, "the receipt lists %s in the gate's import closure without a hash: re-run the gate" % missing[0]
+    files = tuple(sorted(set(GATE_FILES) | set(closure)
+                         | {k for k in rec if isinstance(k, str) and k.endswith((".mjs", ".js", ".cjs"))}))
     roots = [root]
     gr = receipt.get("gateRoot")
     if isinstance(gr, str) and gr and os.path.realpath(gr) != os.path.realpath(root) and os.path.isdir(gr):
         roots.append(gr)
     for r in roots:
-        for f in GATE_FILES:
+        for f in files:
             h = _sha256(os.path.join(r, f))
             if not h:
                 return False, "%s is missing in %s" % (f, r)
             if rec.get(f) != h:
                 return False, "%s in %s is not the file that wrote this receipt: re-run the gate from this checkout" % (f, r)
-        if not _git_ok(r, "ls-files", "--error-unmatch", "--", *GATE_FILES):
+        if not _git_ok(r, "ls-files", "--error-unmatch", "--", *files):
             return False, "the gate files are not tracked in %s" % r
-        if not _git_ok(r, "diff", "--quiet", "HEAD", "--", *GATE_FILES):
+        if not _git_ok(r, "diff", "--quiet", "HEAD", "--", *files):
             return False, ("the gate files in %s differ from HEAD (an uncommitted gate edit, the 2026-10-20 O23 incident): "
                            "commit or revert, then re-run the gate" % r)
     return True, ""
@@ -168,17 +178,22 @@ def receipt_check(root, kind, pr, head=None, now=None, verify_files=False):
     if at is None:
         return False, "the %s receipt for #%d has no timestamp; re-run the gate" % (tool, n)
     age_min = ((now if now is not None else time.time()) - at) / 60.0
+    if age_min < -1:   # pass-4 red-team R3: a receipt dated in the future never expired
+        return False, "the %s receipt for #%d is dated %d min in the future; re-run the gate" % (tool, n, round(-age_min))
     if age_min > RECEIPT_MAX_MIN:
         return False, "the %s receipt for #%d is %d min old (max %d); re-run the gate on the current head" % (
             tool, n, round(age_min), RECEIPT_MAX_MIN)
-    if kind == "merge":
-        a = str(head or "").strip().lower()
-        b = str(r.get("head") or "").strip().lower()
-        if not a:
-            return False, ("pin expectedHeadSha to the gated head %s (role-merge-holder.md: a merge is pinned to the sha "
-                           "the gate passed)" % b[:12])
-        if not (a.startswith(b) or b.startswith(a)) or min(len(a), len(b)) < 7:
-            return False, "expectedHeadSha %s is not the gated head %s; re-run merge-gate on the head you merge" % (a[:12], b[:12])
+    a = str(head or "").strip().lower()
+    b = str(r.get("head") or "").strip().lower()
+    if kind == "merge" and not a:
+        return False, ("pin expectedHeadSha (gh: --match-head-commit) to the gated head %s (role-merge-holder.md: a merge "
+                       "is pinned to the sha the gate passed)" % b[:12])
+    # A merge pin must be the gated head; a ready flip whose caller knows the PR's live head (github-mcp-guard
+    # reads it) is held to the same rule (audit4 A1 G7: the gate passed one head, the flip lands another).
+    if a and (not (a.startswith(b) or b.startswith(a)) or min(len(a), len(b)) < 7):
+        return False, "%s %s is not the gated head %s; re-run %s on the head you %s" % (
+            "expectedHeadSha" if kind == "merge" else "the PR head", a[:12], b[:12], tool,
+            "merge" if kind == "merge" else "flip")
     if verify_files:
         ok, why = gate_files_check(root, r)
         if not ok:

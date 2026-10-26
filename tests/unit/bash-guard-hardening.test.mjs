@@ -474,7 +474,10 @@ test("protect-files scopes track-surveyor writes to circuit pairs, scratch/ and 
       assert.equal(r.status, 2, `surveyor must not write ${rel}`);
       assert.match(r.stderr, /track-surveyor writes only/);
     }
-    assert.equal(write("js/track/core/def.js", "verify-agent").status, 0, "the scope is the surveyor's alone");
+    assert.equal(write("js/track/core/def.js", "worker").status, 0, "the scope is the surveyor's alone");
+    // pass 4 (2026-10-26): the eight reporter agents are sandboxed to scratch/ and artifacts/ too.
+    const ro = write("js/track/core/def.js", "verify-agent");
+    assert.deepEqual([ro.status, ro.stderr.includes("read-only reporter")], [2, true], "a reporter agent never writes the tree");
     assert.equal(write("js/track/core/def.js").status, 0, "the main session is unaffected");
     const bash = (command) => run({ tool_name: "Bash", tool_input: { command }, agent_id: "a1", agent_type: "track-surveyor" });
     assert.equal(bash("sed -i s/a/b/ js/track/core/def.js").status, 2);
@@ -766,11 +769,16 @@ test("round 2 gh: squash/rebase denied, merges / ready flips need the gate recei
     }
     assert.match(run("gh pr merge 12").stdout, /merge-gate\.mjs/, "the reason is merge_policy's");
     for (const c of pass) assert.equal(decisionOf(run(c)), null, `silent pass: ${c}`);
-    // With receipts the gated calls pass; a merge pinned to another head does not.
+    // With receipts `gh pr ready` passes; a merge passes only when pinned to the gated
+    // head (2026-10-26 pass 4: an unpinned merge can land a head the gate never saw).
     const head = "a".repeat(40);
     writeGateReceipt(dir, "merge", 12, head);
     writeGateReceipt(dir, "ready", 12, head);
-    for (const c of gated) assert.equal(decisionOf(run(c)), null, `gated pass: ${c}`);
+    for (const c of gated) {
+      const want = /\bmerge\b/.test(c) ? "deny" : null;
+      assert.equal(decisionOf(run(c)), want, `gated ${want ? "unpinned merge denied" : "pass"}: ${c}`);
+    }
+    assert.ok(run("gh pr merge 12 --merge").stdout.includes("match-head-commit"), "the unpinned reason names the pin");
     assert.equal(decisionOf(run(`gh pr merge 12 --merge --match-head-commit ${"b".repeat(40)}`)), "deny", "a pin to another head");
     assert.equal(decisionOf(run(`gh pr merge 12 --merge --match-head-commit ${head}`)), null, "a pin to the gated head");
     assert.equal(decisionOf(run("gh pr merge --merge")), "deny", "no PR number: no receipt can match");
