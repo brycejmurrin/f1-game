@@ -81,21 +81,25 @@
                  [0.22 + hash(i * 3.3) * 0.06, 0.40 + hash(i * 4.7) * 0.06, 0.20 + hash(i * 2.1) * 0.04]);
       }
 
-      const wheelK = Math.round(n * 0.02) % n;
-      // Circuit Wheel (Motopia) — 38 m radius silhouette (ikidane-nippon Circuit
-      // Wheel notes). Shared ferrisWheel still left legs 2.21 m clear of the
-      // Motopia drop (ground-audit 2026-10-05); Zandvoort pattern: local
-      // modelGroup seated on max terrainYAt across the footpad, required id for
+      // Circuit Wheel (Motopia) — owns the Casio / final-corner / S/F skyline in
+      // the day orbit survey (#3366). Radius 52 m (~109 m tip) beats the Motopia
+      // hotel mass and the single drop tower; dist 96 m clears the near forest
+      // edge and Casio stands so the teal rim reads as a disc, not a stub.
+      // Shared ferrisWheel left legs clear of the Motopia drop (ground-audit
+      // 2026-10-05); Zandvoort seat on max terrainYAt + required id for
       // landmarks/suzuka.json. Teal rim from Motopia photo (Commons Jupiter
-      // Motopia); cabins stay red/white so the rim owns the Motopia read.
-      // seg=12 (not shared 16) keeps props-tris growth under the 0.5 % ratchet.
-      place(wheelK, -1, 62, [16, 1.4, 16], [0.42, 0.44, 0.48]);
+      // Motopia). seg=12 (not shared 16) keeps props-tris under the 0.5 % ratchet.
+      const WHEEL_FRAC = 0.015;
+      const WHEEL_DIST = 96;
+      const WHEEL_R = 52;
+      const wheelK = Math.round(n * WHEEL_FRAC) % n;
+      place(wheelK, -1, WHEEL_DIST, [22, 1.6, 22], [0.42, 0.44, 0.48]);
       {
-        const radius = 38;
-        const a0 = anchor(wheelK, -1, 62);
+        const radius = WHEEL_R;
+        const a0 = anchor(wheelK, -1, WHEEL_DIST);
         let hi = a0.c[1];
-        for (const alongT of [-5, -2, 0, 2, 5]) {
-          for (const sideOff of [-3, 0, 3]) {
+        for (const alongT of [-6, -3, 0, 3, 6]) {
+          for (const sideOff of [-4, 0, 4]) {
             const q = vadd(vadd(a0.c, a0.t, alongT), a0.r, sideOff);
             const g = terrainYAt(q[0], q[2]);
             if (g != null) hi = Math.max(hi, g);
@@ -105,17 +109,18 @@
         const lift = hi - a0.c[1] > 0.02 ? hi - a0.c[1] + 0.04 : 0.04;
         const a = Object.assign({}, a0, { c: vadd(a0.c, a0.u, lift) });
         const hub = vadd(a.c, a.u, radius + 5);
-        const TEAL = [0.22, 0.62, 0.58];
-        const TEAL_DK = [0.16, 0.48, 0.46];
-        const RIM = [0.70, 0.78, 0.80];
+        // Brighter Motopia teal — readable against green hills in day orbit panels.
+        const TEAL = [0.18, 0.72, 0.68];
+        const TEAL_DK = [0.12, 0.52, 0.50];
+        const RIM = [0.78, 0.86, 0.88];
         const buildWheel = (stage) => {
           const rim = [];
           const seg = 12;
           stage._mat = MAT.METAL;
-          for (const alongT of [-4, 4]) {
+          for (const alongT of [-5, 5]) {
             const foot = vadd(a.c, a.t, alongT);
             addBox(stage, vadd(foot, a.u, (radius + 5) / 2),
-              [1.6, radius + 5, 1.6], [0.30, 0.32, 0.36], [a.r, a.u, a.t]);
+              [2.0, radius + 5, 2.0], [0.30, 0.32, 0.36], [a.r, a.u, a.t]);
           }
           // ±6 cm axis offset — shared ferrisWheel coplanar note (structures.js).
           const strut = (p0, p1, thick, col, ax) => {
@@ -138,29 +143,31 @@
             const ang = i / seg * 6.2832;
             rim.push(vadd(vadd(hub, a.t, Math.cos(ang) * radius), a.u, Math.sin(ang) * radius));
           }
-          const HUB_R = 2.0;
+          const HUB_R = 2.6;
           for (let i = 0; i < seg; i++) {
             const d = [rim[i][0] - hub[0], rim[i][1] - hub[1], rim[i][2] - hub[2]];
             const L = Math.hypot(d[0], d[1], d[2]) || 1;
             const root = [hub[0] + d[0] / L * HUB_R, hub[1] + d[1] / L * HUB_R,
                           hub[2] + d[2] / L * HUB_R];
-            strut(root, rim[i], 0.30, RIM, i % 2 ? 0.06 : -0.06);
-            strut(rim[i], rim[(i + 1) % seg], 0.40, TEAL, i % 2 ? -0.06 : 0.06);
-            addBox(stage, vadd(rim[i], a.u, -1.2), [2.3, 2.1, 2.3],
+            // Thicker spokes/rim + larger cabins so the disc reads in full-lap orbits.
+            strut(root, rim[i], 0.48, RIM, i % 2 ? 0.08 : -0.08);
+            strut(rim[i], rim[(i + 1) % seg], 0.70, TEAL, i % 2 ? -0.08 : 0.08);
+            addBox(stage, vadd(rim[i], a.u, -1.6), [3.2, 2.8, 3.2],
               i % 2 ? [0.92, 0.22, 0.22] : [0.96, 0.96, 0.98], [a.r, a.u, a.t]);
           }
-          addBox(stage, hub, [3.4, 3.4, 3.4], TEAL_DK, [a.r, a.u, a.t]);
+          addBox(stage, hub, [4.2, 4.2, 4.2], TEAL_DK, [a.r, a.u, a.t]);
           stage._mat = 0;
         };
         modelGroup("suzuka-circuit-wheel", {
           center: hub,
-          size: [12, radius * 2 + 14, radius * 2 + 14],
+          size: [16, radius * 2 + 16, radius * 2 + 16],
           basis: [a.r, a.u, a.t],
         }, buildWheel, { required: true });
       }
 
-      // Single flanking accent tower (aft of wheel) — keeps Motopia colour without crowding
-      tower(Math.round(n * 0.038) % n, -1, 105, 7, 42, { col: [0.80, 0.82, 0.86], seg: 7, cap: true, capCol: neonBlue, mast: 5 });
+      // Single flanking accent tower — shorter + deeper so it does not fight the
+      // Circuit Wheel silhouette from Casio / S/F orbits (#3366).
+      tower(Math.round(n * 0.038) % n, -1, 130, 6, 28, { col: [0.80, 0.82, 0.86], seg: 7, cap: true, capCol: neonBlue, mast: 4 });
 
       {
         const g = anchor(K(0.055), -1, 52), gb = [g.r, g.u, g.t];
@@ -184,7 +191,7 @@
       // ── Lamp posts ringing the wheel area — warm sodium emissive heads ────────
       for (let i = 0; i < 6; i++) {
         const lk = (wheelK + i - 3 + n) % n;
-        const ldist = 32 + (i % 3) * 8;   // 32–48 m — clear of wheel at 62
+        const ldist = 48 + (i % 3) * 10;   // 48–68 m — clear of wheel at 96
         if (onTrack(px[lk] + track.rx[lk] * (-1) * (hw[lk] + ldist),
                     pz[lk] + track.rz[lk] * (-1) * (hw[lk] + ldist), 3)) continue;
         const lp = anchor(lk, -1, ldist), lb = [lp.r, lp.u, lp.t];
@@ -198,32 +205,28 @@
       // Suzuka Circuit Hotel — official complex has multiple buildings with
       // motorsports-themed rooms (suzukacircuit.jp/eng/info_s/; Centrip Japan
       // notes three hotel buildings). Keep Motopia sparse: two blocks only,
-      // clear of the Ferris footprint — do not restore coaster clutter.
-      building(Math.round(n * 0.005) % n, -1, 95, 30, 36, 22, { kind: "tiered", wall: [0.74, 0.74, 0.78], window: litWin, floor: 5, setback: true, roof: true });
-      building(Math.round(n * 0.018) % n, -1, 118, 22, 20, 28, { kind: "twin", wall: [0.72, 0.73, 0.77], window: litWin, floor: 4, roof: true });
-      // Secondary pavilion / park restaurant block
-      building(Math.round(n * 0.985) % n, -1, 110, 24, 26, 16, { kind: "twin", wall: [0.76, 0.76, 0.80], window: litWin, floor: 4 });
+      // deeper than the Ferris so the wheel owns the Casio/S/F skyline (#3366).
+      building(Math.round(n * 0.005) % n, -1, 145, 30, 36, 18, { kind: "tiered", wall: [0.74, 0.74, 0.78], window: litWin, floor: 4, setback: true, roof: true });
+      building(Math.round(n * 0.022) % n, -1, 160, 22, 20, 20, { kind: "twin", wall: [0.72, 0.73, 0.77], window: litWin, floor: 3, roof: true });
+      // Secondary pavilion / park restaurant block — clear of the wheel disc
+      building(Math.round(n * 0.985) % n, -1, 150, 24, 26, 14, { kind: "twin", wall: [0.76, 0.76, 0.80], window: litWin, floor: 3 });
 
       // Domed pavilion / central gathering structure (deep behind wheel)
       {
         const pk = Math.round(n * 0.01) % n;
-        const p = anchor(pk, -1, 128), b = [p.r, p.u, p.t];
+        const p = anchor(pk, -1, 168), b = [p.r, p.u, p.t];
         addCyl(out, p.c, 11, 11, [0.92, 0.92, 0.95], 12, b);
         addCone(out, vadd(p.c, p.u, 11), 12, 10, [0.88, 0.36, 0.38], 14, b);
         addCyl(out, vadd(p.c, p.u, 10), 11.8, 0.8, neonRed, 14, b);
       }
 
-      // Sparse pavilion canopies (was 8 — cut to 4 so the Ferris owns the skyline).
-      // Roofs MUST sit on the place() box top: place() seats on terrainY, but
-      // anchor() on the steep Motopia drop (left of frac ≈0.995) disagreed by
-      // ~10 m, so cone/valance hung in the air while the box sat on the slope.
+      // Sparse pavilion canopies — deeper than the Circuit Wheel so the disc
+      // owns the Motopia skyline (#3366). Roofs MUST sit on the place() box top.
       for (let i = 0; i < 4; i++) {
         const kk = (parkA + i * 5 + 2) % n;
-        const dist = 78 + i * 14;
+        const dist = 130 + i * 14;
         const sz = [11 + (i % 3) * 2.5, 7 + (i % 2) * 2.5, 13 + (i % 4) * 1.5];
-        // i 0 (frac 0.997, 85 m left) stands inside the pit complex's
-        // footprint: the complex supersedes the place() box but not the raw
-        // cone/ring roof, which then floated 8.2 m up (float-audit).
+        // i 0 stood inside the pit complex (float-audit); still skip.
         if (i === 0) continue;
         const placed = place(kk, -1, dist, sz, parkCol[i % parkCol.length]);
         if (!placed) continue;
@@ -234,19 +237,19 @@
                [parkCol[(i + 1) % parkCol.length][0], parkCol[(i + 1) % parkCol.length][1], parkCol[(i + 1) % parkCol.length][2]], 8, b);
       }
 
-      // Flag-poles / ride masts — thinned
+      // Flag-poles / ride masts — outside the wheel disc (was 42–66 m).
       for (let i = 0; i < 5; i++) {
         const kk = (parkA + i * 3 + 1) % n;
-        const fdist = 42 + (i % 4) * 6;
+        const fdist = 118 + (i % 4) * 8;
         const p = anchor(kk, -1, fdist), b = [p.r, p.u, p.t];
         addCyl(out, p.c, 0.12, 10 + (i % 3) * 2.2, steel, 4, b);
         addBox(out, vadd(p.c, p.u, 9 + (i % 3)), [0.12, 1.6, 2.4], parkCol[i % parkCol.length], b);
       }
 
-      // Small vendor kiosks
+      // Small vendor kiosks — clear of the wheel footprint
       for (let i = 0; i < 3; i++) {
         const kk = (parkA + i * 6 + 3) % n;
-        const dist = 70 + i * 16;
+        const dist = 125 + i * 16;
         place(kk, -1, dist, [8, 4, 8], [0.88, 0.76, 0.54]);
       }
 
@@ -289,8 +292,9 @@
         out._mat = 0;
       };
 
-      carousel(Math.round(n * 0.992) % n, -1, 88, 8);
-      dropRide(Math.round(n * 0.032) % n, -1, 125, 58);   // single tall drop — behind Ferris
+      carousel(Math.round(n * 0.992) % n, -1, 118, 8);
+      // Drop tower sits deep + shorter than the Circuit Wheel rim tip (#3366).
+      dropRide(Math.round(n * 0.040) % n, -1, 175, 42);
 
       // ── Lamp posts along the park perimeter ─────────────────────────────────
       for (let i = 0; i < 8; i++) {
@@ -480,8 +484,10 @@
 
       forestEdge(0.92, 0.94,  -1, 20, { density: 0.55, hMin: 8, hMax: 14,
         col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.55 });
-      forestEdge(0.99, 0.10,  -1, 20, { density: 0.55, hMin: 8, hMax: 14,
-        col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.55 });
+      // Thin Motopia left edge so the Circuit Wheel disc is not a green wall
+      // from Casio / S/F day orbits (#3366). Keep a low hedge, not a canopy.
+      forestEdge(0.99, 0.10,  -1, 28, { density: 0.28, hMin: 5, hMax: 9,
+        col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.35 });
 
       {
         const essesSakura = [
@@ -823,7 +829,8 @@
         screen(0.94, 1, 22, 11, 6.5);
         screen(0.02, 1, 36, 12, 7.0);
       }
-      stand(0.50,  1, 8, 24,  { livery: "orange" });                    // Mid-circuit flex stand
+      // Gap was 8 m — day orbit @ 0.50 sat inside this orange mass (#3366).
+      stand(0.50,  1, 22, 24, { livery: "orange" });                   // Mid-circuit flex stand
       stand(0.875, 1, 18, 24, { livery: "orange", endWalls: true }); // 130R exit crowd
 
       openBank(0.205, 1, 20, 22, { rows: 9, rise: 0.70, setback: 0.92,
