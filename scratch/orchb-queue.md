@@ -172,3 +172,11 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
   - #3723 b6b76fb2 fast CI running → ready-gate → ready → READY/merge (lent). #3730 b8ee6b41 ready, full tier running (lent). #3648 #3736 #3684 #3724 ready, full tier green (lent). All carry D's MERGE-HOLD line — wait for DAD to remove (f23b794).
   - Stopped (archive after 05:10Z by rule): 01GETh, 011NoeB, 01B2s, 01AXz6, 01EWg3, 019yb, 01WV8q, 01Y3Fm, 018Eoa.
   - 04:11Z: launched [Owner] B·#3772 session_01XmgdKisM93VGcVMMkb77k3 (do not double-launch). Still to launch: #3773 owner (row 14 = (a)), #3774 owner, #3723 owner.
+
+## 04:15Z (21:15 PT) — ORCH B now session_01Av5dXp5nSYFd1hN95D5EWx (bus 57bb757 LIVE). READ LAST.
+- Routines: 3-min send_later chain; hourly trig_01B1NdoqS7GAB214kM8U6X4T (:11). Predecessor triggers deleted.
+- MERGED #3769 c44627de (2 parents, DONE 87ae0a0).
+- GAME-SLOT: A takes current slot for #3704 (2fad9ac, B ack d0692a6); #3772 next once READY; then lent game PRs one per green Pages.
+- DAD stripped MERGE-HOLD from lent #3634 #3636 #3641 #3646 #3684 #3724 #3736 #3648 #3723 #3730 (71b14bd); all GAME → GAME-SLOT each. #3648 CONFLICTING (sync first); #3723 draft.
+- New owners (Opus): #3772 session_01KBMbLPvk5NA1NXnxoFkLXY; #3773 session_01BgfkgSBtpN3xF1wVEou5Rt (row 14 = a, + orchestrator.md:209-210); #3774 session_01AdPk5LZLqJnt5M19EamH1f.
+- Live: W3·L3 session_01RSyjdqkAX2qpAvF6TEaFmS, W3·L4 session_01Q1pRbYF9fiHFRUvtx8HwF5 (told new id).
