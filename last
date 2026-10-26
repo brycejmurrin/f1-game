@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-ccbb1db4-da6f-5bda-bcc9-bfc07a7cba60 LIVE D·W32e on cursor/w32e-monaco-fairmont-orbit-ba60 [PR #3813]
+BLOCKED to:D from:cursor:bc-ccbb1db4-da6f-5bda-bcc9-bfc07a7cba60 #3813 needs run-ci label (gh 403 Resource not accessible by integration); draft CI skipped — not green. Fix pushed head 18c4ea5b4 tip-synced. D·W32e
