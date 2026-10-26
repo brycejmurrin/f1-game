@@ -383,17 +383,17 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 :where(body[data-density="compact"]) #overlay #menu-buttons .bigbtn {
   min-height: var(--tap); padding-block: calc(var(--gap) / 2);
 }
-/* #3305: the 2.75em floor ramps in with --ui-compact-scale (1 at default, full from 1.25) and beats destinations 40px @200%. */
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { --door-floor: calc(2.75em * clamp(0, calc((var(--ui-compact-scale) - 1) * 4), 1)); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons :is(#menu-primary,#menu-explore,#menu-hero) .bigbtn {
-  min-height: max(var(--tap-min), var(--tap-paint), calc(2.75em * clamp(0, calc((var(--ui-compact-scale) - 1) * 4), 1)));
+  min-height: max(var(--tap-min), var(--tap-paint), var(--door-floor));
   padding-block: calc(var(--gap) * 0.3); height: auto; max-height: none;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons :is(#menu-retention,#menu-garage) .bigbtn {
-  min-height: max(var(--tap), calc(2.75em * clamp(0, calc((var(--ui-compact-scale) - 1) * 4), 1))); height: auto; max-height: none;
+  min-height: max(var(--tap), var(--door-floor)); height: auto; max-height: none;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.4); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons #menu-secondary > .bigbtn {
-  min-height: max(var(--tap-paint), calc(2.75em * clamp(0, calc((var(--ui-compact-scale) - 1) * 4), 1))); height: auto; max-height: none;
+  min-height: max(var(--tap-paint), var(--door-floor)); height: auto; max-height: none;
 }
 html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
 /* Tall live Home: drop #title-car before data-home-ready. */
