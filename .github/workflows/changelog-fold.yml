@@ -30,6 +30,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write    # the "fold PR needs a hand" issue when gh pr create is refused
   actions: write   # workflow_dispatch of ci.yml on bot/changelog-fold (the fold PR's CI)
 
 concurrency:
@@ -80,10 +81,31 @@ jobs:
 
           $(cat fold.log)"
           git push --force-with-lease origin bot/changelog-fold
-          gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng --head bot/changelog-fold \
-            --title "chore(changelog): fold docs/changelog.d fragments" \
-            --body "Scheduled fold: $(cat fold.log). Opened by .github/workflows/changelog-fold.yml, which dispatched ci.yml on bot/changelog-fold for this head. CHANGELOG: no player-facing change (this PR moves existing entries)." \
-            || echo "::warning::PR creation failed (repo setting may forbid Actions PRs); open it from bot/changelog-fold"
+          PR_TITLE="chore(changelog): fold docs/changelog.d fragments"
+          PR_BODY="Scheduled fold: $(cat fold.log). Opened by .github/workflows/changelog-fold.yml, which dispatched ci.yml on bot/changelog-fold for this head. CHANGELOG: no player-facing change (this PR moves existing entries)."
+          # A REFUSED PR FAILS THE JOB (audit4 D1 / audit3 #5, 2026-10-26). This was
+          # `|| echo ::warning::`, so run 40343209239 pushed the branch, could not
+          # open the PR ("GitHub Actions is not permitted to create or approve pull
+          # requests") and ended GREEN, every day. Now the job opens (or comments
+          # on) one issue naming the branch, still dispatches the branch's CI, and
+          # exits 1. The cure is the repo setting "Allow GitHub Actions to create
+          # and approve pull requests" (DECISIONS #10, Bryce applies it) or a hand PR.
+          # https://cli.github.com/manual/gh_issue_create
+          if gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng --head bot/changelog-fold \
+            --title "$PR_TITLE" --body "$PR_BODY" 2> pr.err; then
+            PR_OK=1
+          else
+            PR_OK=0; cat pr.err
+          fi
           # A GITHUB_TOKEN PR starts no CI; a workflow_dispatch always does (header).
           gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref bot/changelog-fold \
             || echo "::warning::ci.yml dispatch failed; dispatch it on bot/changelog-fold by hand"
+          if [ "$PR_OK" = 0 ]; then
+            export ISSUE_TITLE="fold PR needs a hand (bot/changelog-fold)"
+            NOTE="The scheduled changelog fold pushed \`bot/changelog-fold\` ($(git rev-parse --short HEAD)) but \`gh pr create\` was refused: $(head -1 pr.err). Open the PR from \`bot/changelog-fold\` by hand (its ci.yml run was dispatched), or enable Settings > Actions > General > \"Allow GitHub Actions to create and approve pull requests\" (DECISIONS #10). Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            NUM="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title --jq '[.[] | select(.title == env.ISSUE_TITLE)][0].number // empty')"
+            if [ -n "$NUM" ]; then gh issue comment "$NUM" --repo "$GITHUB_REPOSITORY" --body "$NOTE"
+            else gh issue create --repo "$GITHUB_REPOSITORY" --title "$ISSUE_TITLE" --body "$NOTE"; fi
+            echo "::error::fold PR not opened: $(head -1 pr.err) — see the issue \"$ISSUE_TITLE\""
+            exit 1
+          fi

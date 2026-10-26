@@ -1434,7 +1434,9 @@ test("career / hud-layout run as ≥2 native --shard pieces of ONE worker each (
   for (const f of files) {
     const n = declaredTests(f);
     assert.ok(n >= 1, `${f} has tests`);
-    const jobs = shards(fit([f], 30, { rank: () => 0, db: EMPTY }), EMPTY)
+    // An EMPTY quarantine: this pins the piece geometry. A quarantined spec's
+    // legs add one retry (and its cap); flaky-quarantine.test.mjs pins that.
+    const jobs = shards(fit([f], 30, { rank: () => 0, db: EMPTY }), EMPTY, new Set())
       .filter((j) => j.specs.includes(f));
     assert.ok(jobs.length >= 1, `${f} runs`);
     const billed = jobs.reduce((t, j) => t + j.sec, 0);
@@ -1829,4 +1831,32 @@ test("lanes: a run's legs take distinct lanes from a run-number-rotated start", 
   assert.ok(lanes.includes(base) && lanes.includes(0), `starts at the rotated lane and wraps: ${lanes}`);
   assert.equal(new Set(lanes).size, lanes.length, "a run's own legs never share a lane");
   assert.ok(lanes.every((l) => Number.isInteger(l) && l >= 0 && l < LANES), "every lane is in range");
+});
+
+test("spec-less js dirs route to a module-specific spec, and a dir with no coverage at all is named (ci-7d C7)", async () => {
+  const { specsAffectedBySource, jsCoverageGaps, GENERIC_BOOT_SPECS, nodeTestsNaming } = await import("../../tools/ci/select-specs.mjs");
+  assert.deepEqual(specsAffectedBySource(["js/track/build-worker.js"]).sort(),
+    ["tests/specs/monza-foundation.spec.js", "tests/specs/track-switch-release.spec.js"]);
+  assert.deepEqual(specsAffectedBySource(["js/workers/bitmap-decode-worker.js"]), ["tests/specs/garage-livery-fit.spec.js"]);
+  assert.ok(nodeTestsNaming("js/workers/bitmap-decode-worker.js").includes("tests/unit/bitmap-decode-worker.test.mjs"));
+  // Real routing: none of the six dirs ci-7d named is uncovered today.
+  const six = ["js/track/build-worker.js", "js/workers/bitmap-decode-client.js", "js/overlay/feed.js",
+    "js/share/share-card.js", "js/xr/xr-plan.js", "js/roster.js"];
+  assert.deepEqual(jsCoverageGaps(six), [], "every dir ci-7d named now has browser or node coverage");
+  // The rule itself, on a fixture tree: boot-only routing and no unit test is a gap; a generated file never is.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "cov-gap-"));
+  try {
+    fs.mkdirSync(path.join(root, "js/lonely"), { recursive: true });
+    fs.mkdirSync(path.join(root, "js/tested"), { recursive: true });
+    fs.mkdirSync(path.join(root, "tests/unit"), { recursive: true });
+    fs.writeFileSync(path.join(root, ["js", "lonely", "a.js"].join("/")), "");
+    fs.writeFileSync(path.join(root, "js/tested/b.js"), "");
+    fs.writeFileSync(path.join(root, "js/roster.js"), "");
+    fs.writeFileSync(path.join(root, "tests/unit/b.test.mjs"), 'load("js/tested/b.js")');
+    const boot = () => [...GENERIC_BOOT_SPECS];
+    assert.deepEqual(jsCoverageGaps([["js", "lonely", "a.js"].join("/"), "js/tested/b.js", "js/roster.js", "docs/x.md"], { root, routeOf: boot }),
+      [{ dir: "js/lonely", files: [["js", "lonely", "a.js"].join("/")] }]);
+    assert.deepEqual(jsCoverageGaps([["js", "lonely", "a.js"].join("/")], { root, routeOf: () => ["tests/specs/own.spec.js"] }), [],
+      "a module-specific browser spec is coverage");
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
