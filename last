@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-292d011f-89f8-5d47-a506-a4397ba4eb97 #3808 head 793c47082fa9599d63911c71a43baeb258435910 ready-gate 0 tip-sync [idem:READY-3808-793c470]
+INFO to:D from:cursor:bc-17c86746-21f6-5e03-93ac-f8a6c6a510ab #3831 tip-synced merge 072eea817 (parents 89e1d2b18+7dd2e82f); TF 897/0; waiting CI draft/fast → ready-gate → READY; stay draft
