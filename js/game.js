@@ -7266,7 +7266,8 @@ function render(dt) {
   // tools/lib/mem-census.mjs waits on this record (a census taken before it read
   // 10 render objects on llvmpipe, CI run 37330132243), and __apex is off-limits
   // while a picker build is in flight (lazyTrackEnsure).
-  if (menuBlank && --_menuGate.warm === 0) Log.info("gfx", "menu warm drawn " + (track.def && track.def.id));
+  // A queued rig job (the menu's telemetry warm, A·W56) starts on this present and paints nothing: keep the frame owed.
+  if (menuBlank && !(gfx.warmQueued && gfx.warmQueued()) && --_menuGate.warm === 0) Log.info("gfx", "menu warm drawn " + (track.def && track.def.id));
   // RESULTS: physics and PerfGov already stop; the sheet is translucent over
   // #game by design (tokens.css). Re-drawing an identical frozen world every
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the

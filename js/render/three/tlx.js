@@ -5646,6 +5646,7 @@ const TLX = (function () {
           if (!_warmPending) { _warmWhere = _resolveWarmWhere(opts); _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !_deviceLost && !!_warmPending; },
+        warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
         // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally

@@ -74,7 +74,8 @@ async function rig(t, { soft = false } = {}) {
       if (!_warmPending && !_deviceLost) { if (_rigWarm) startRigWarm(); }
       return !_warmPending;
     }
-    return { warmDraws, draw, present, pending: () => _warmPending, drawn: () => drawList.n, mats, requestWarm: () => { _warmRequested = true; },
+    const warmQueued = () => !_deviceLost && !!_rigWarm && !_rigWarm.started;   // as tlx.js, pinned in the wiring test
+    return { warmDraws, draw, present, warmQueued, pending: () => _warmPending, drawn: () => drawList.n, mats, requestWarm: () => { _warmRequested = true; },
       mirror: () => ({ stages: mirrorStages, unswaps }), stages: _warmStages };`);
   const R = mk(THREE, renderer, scene, camera, lit, globalThis.Log, soft);
   renderer.render(scene, camera);   // three's own first-render programs (the output pass), so a count isolates ours
@@ -220,6 +221,22 @@ test("A·W56: a queued rig job outlives a long held warm while presents come, an
   assert.deepEqual(c.compiles.map((x) => x.geo === late.geo), [true], "the dropped job compiled nothing; the next one ran");
 });
 
+test("A·W56: a queued rig job reports warmQueued until a present starts it, so the menu keeps its last warm frame owed", async (t) => {
+  // The present that starts a rig job paints nothing. Counted as the menu's last hidden warm frame (game.js
+  // "menu warm drawn"), the paused picker never drew the built world (track-switch-memory: no proven submission).
+  const h = await rig(t);
+  const tel = { geo: geo(RIG_LAYOUT) };
+  h.R.requestWarm();
+  await h.R.warmDraws(() => h.R.draw(tel, I, FX));
+  assert.equal(h.R.warmQueued(), true, "queued behind the program warm");
+  assert.equal(h.R.present(), false, "the program warm's present");
+  assert.equal(h.R.warmQueued(), true, "still queued: the next present would paint nothing");
+  assert.equal(h.R.present(), false, "this present starts the rig job and paints nothing");
+  assert.equal(h.R.warmQueued(), false, "started: no longer queued");
+  while (h.R.pending()) await h.R.pending();
+  assert.equal(h.R.present(), true, "the frame after it paints: that one is the menu's last warm frame");
+});
+
 test("menu path: opts.mirror runs the mirror stage over the race scene once per world, never on a software GPU or without a key", async (t) => {
   const h = await rig(t);
   const g = { geo: geo(RIG_LAYOUT) };
@@ -250,6 +267,9 @@ test("wiring: present() dispatches the rig warm after the entry and mirror warms
     "present() marks a queued job seen before its dispatch (the harness mirrors that line)");
   // A·W56: the wheel telemetry (car-independent _rigFx) is warmed with the menu's program warm, from the same draws.
   assert.ok(GAME.includes("_warmed.add(k + tag); gfx.warm(); carDraw.warmCockpitTelemetry(); return true;"), "game.js warmPrograms queues it with every menu warm");
+  assert.ok(TLX.includes("        warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },"), "the backend publishes warmQueued (the harness mirrors it)");
+  assert.ok(GAME.includes('if (menuBlank && !(gfx.warmQueued && gfx.warmQueued()) && --_menuGate.warm === 0) Log.info("gfx", "menu warm drawn "'),
+    "the menu's last hidden warm frame is never the present that starts a queued rig job");
   const tel = CAR_DRAW.slice(CAR_DRAW.indexOf("function warmCockpitTelemetry()"), CAR_DRAW.indexOf("function drawCockpitRig("));
   for (const d of ["getGearDigit(1), _rigWarmBase, _rigFx", "getSpeedDigit(0), _rigWarmBase, _rigFx", "getLedStrip(0, ws), _rigWarmBase, _rigFx"])
     assert.ok(tel.includes(d), `warmCockpitTelemetry draws ${d}`);
