@@ -26,7 +26,7 @@ deployed build is newer reloads once with `?b=<build>` (hash and query kept;
 `sw.js?v=<build>` after load+idle, so a new build is a new registration URL.
 Stale installed shell = this guard did not fire or `version.json` did not move (diagnose: workflow.md).
 The deploy stamps the build (`2000 + commit count`, `pages.yml`) into `version.json` and the meta; the
-committed numbers are not what is live. Live check: `tools/ci/pages-live-sha.sh` / **deploy-research**.
+committed numbers are not what is live. Live check: `bash tools/ci/pages-live-sha.sh <url>` / **deploy-research**.
 
 **Fetch.** Per-class policy is the table below; dev-host `?v=dev`, the generation
 handshake, cache retention and fetch races → [references/sw-internals.md](references/sw-internals.md).
