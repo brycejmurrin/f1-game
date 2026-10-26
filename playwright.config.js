@@ -50,8 +50,10 @@ const LAUNCH = {
 // SwiftShader. CI's DEFAULT for the smoke gate, the `selected` shards and the
 // dispatched wide run since 2026-09-16 (ci.yml installs Mesa + Xvfb and sets
 // the env; `gl: swiftshader` is the opt-out) — measured 8-12x faster on the
-// rendering tests. It does NOT work in the dev container (no /dev/dri —
-// docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe 2026-09-16), so the
+// rendering tests. It needs libEGL.so.1 + libgles2 (and Xvfb), NOT /dev/dri:
+// without libEGL Chromium silently falls back to SwiftShader, which is what
+// the 2026-09-16 container probe saw (re-measured in a cloud container,
+// measured 2026-10-26; `--probe-gl` below catches the fallback). The
 // SwiftShader pin above stays the committed default for a local run and for
 // driving-model, the twins' parity anchor (ci-coverage guards both).
 if (process.env.APEX_GL === "llvmpipe") {
