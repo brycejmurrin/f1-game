@@ -14681,7 +14681,8 @@
     },
     "js/render/webgpu/wgx-chunked.js": {
       "createChunkedMesh": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
       "drawChunked": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -14690,7 +14691,8 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "init": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
       "*": [
         "tests/unit/frustum-buckets.test.mjs",

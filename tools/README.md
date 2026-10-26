@@ -662,7 +662,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/launch-gate.mjs** | Quota gate for create_session: saved get_session page -> launch-gate receipt (rate_limit allowed, or typed override). |
 | **ci/launch-lane.mjs** | Pre-launch gate: quota, source-revision shape, twin guard, atomic lane claim branch; prints create_session JSON. |
-| **ci/merge-attribution.mjs** | Merged-by trailer and a detector flagging deploy-branch merges that lack it (bus + PR comment). |
+| **ci/merge-attribution.mjs** | Merged-by trailer and a detector flagging deploy-branch merges that lack it (job summary; one daily bus INFO digest). |
 | **ci/merge-done.mjs** | DONE bus line from a merge commit (PR #, both parents, actor), idempotent; for a deploy-branch push workflow. |
 | **ci/merge-gate.mjs** | Gate before a PR merge: ready-gate, CI, no hold, gen:check + ratchets on a local merge, pacing; writes the receipt. |
 | **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| no (sync only when you must). |
