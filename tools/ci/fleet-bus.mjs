@@ -33,6 +33,7 @@
 //   node tools/ci/fleet-bus.mjs send INCIDENT --to '*' --fix <sha> "text"   # tools/ci/incident-lift.mjs lifts it when Pages is green on <sha>
 //   node tools/ci/fleet-bus.mjs read [--to merge-holder --to '#2990'] [--since <sha>] [--last 20] [--json] [--peek | --strict]
 //   node tools/ci/fleet-bus.mjs who A [--last 500] [--json]   # fleet A's live orchestrator: `A <host:id> <sha7> <age>`; exit 1 none
+//   node tools/ci/fleet-bus.mjs watch --to B --to '*' [--all] [--interval 20]   # the orchestrator's Monitor: each NEW line once, never exits
 //
 // `--to` must be deliverable (addressProblem): *, #<PR>, a fleet letter (A, B·O3), a role, or a real
 // <host>:<session id>; a claims-board hash is refused (plan §8.7). A `to:#<PR>` send also dispatches fleet.yml,
@@ -43,6 +44,17 @@
 // read --strict (with --to): the cursor stops before the first line the filter hid, so a later wider read still sees it.
 // Trade-off: lines shown after that hidden one are shown again next time (at-least-once), and the cursor cannot pass a hidden
 // line until some read without that filter (or --since) moves it. Default read is at-most-once for hidden lines (count printed).
+//
+// HANDOFF is a successor hand-off only (system audit 2 item 6, 2026-10-26: 78 of 138 lines were HANDOFF, ROTATE/LEND 0):
+// a HANDOFF body shaped like ORCH LIVE (ROTATE), SEED/HB/[INFO] chatter (INFO), a lend (LEND) or a return (RETURN) is refused
+// with the type to use (handoffMisuse). DONE and READY carry an automatic idempotency key `<TYPE>-<pr>-<sha7>` when no --idem
+// is given (5 PRs got two DONE lines, #3576 was READY 8 times); an automatic DONE key dedupes across senders (the merge hook
+// and the orchestrator report the same merge).
+//
+// watch: polls the bus every --interval s (default 20) and prints each line it has not printed, filtered by --to like `read`;
+// by default a broadcast (to:*) GAME-SLOT / DONE / GREEN / LEASE from another sender is dropped (other fleets' train chatter
+// woke ORCH B every ~3 min), --all keeps them. It starts at the tip (the wake pass's `read` covers the backlog), advances
+// this sender's read cursor as it prints, writes nothing to stdout but bus lines, and never exits on its own.
 //
 // Identity: --as <host>:<id>, else APEX_FLEET_AS, else claude:session_<id> (cloud), claude:<CLAUDE_CODE_SESSION_ID>
 // or codex:<CODEX_THREAD_ID>. Exit: 0 ok, 1 usage or git failure, 2 refused.
@@ -129,6 +141,22 @@ export const lendMerger = (text) => (/(?:^|\s)merger:([A-Z])(?=\s|$|[,.;)])/.exe
 export const idemMarker = (key) => `[idem:${key}]`;
 export const idemOf = (text) => (/\[idem:([A-Za-z0-9][A-Za-z0-9._:#-]{0,63})\]\s*$/.exec(String(text || "")) || [])[1] || null;
 
+/**
+ * The typed shape a HANDOFF body really has, as { type, why }, or null when it reads as a hand-off. Pure.
+ * Order matters: an `ORCH B LIVE … lent` announcement is a ROTATE, not a LEND.
+ */
+export function handoffMisuse(body) {
+  const b = String(body || "");
+  if (/\bORCH\w*\b[^.\n]{0,24}?\bLIVE\b/i.test(b)) return { type: "ROTATE", why: "an `ORCH <L> LIVE` succession announcement" };
+  if (/^\[(INFO|QUESTION|REQUEST)\]/i.test(b)) { const t = /^\[(\w+)\]/.exec(b)[1].toUpperCase(); return { type: t, why: `a [${t}] peer line` }; }
+  if (/\bSEED\b[^.\n]{0,24}?\b(SPAWNED|LIVE|QUOTA|FAILED)\b|^HB\s+[A-Z]\b|\bHB\s+[A-Z]\s+LIVE\b|\bFLEET\s+[A-Z]\s+LIVE\b|^(status|heartbeat)\b/i.test(b)) {
+    return { type: "INFO", why: "seed / heartbeat / status chatter" };
+  }
+  if (/\b(lend|lent)\b|(?:^|\s)merger:/i.test(b)) return { type: "LEND", why: "a lend (name the merger: `merger:<letter>`)" };
+  if (/\breturned\b/i.test(b) || /\bRETURN\b/.test(b)) return { type: "RETURN", why: "a returned PR" };
+  return null;
+}
+
 /** Why a body is not sendable for `type` ("" when it is). Body is whitespace-collapsed, marker excluded. Pure. */
 export function bodyProblem(type, body) {
   // An empty body is never a message (2026-10-26: six empty HANDOFF lines from one
@@ -136,6 +164,10 @@ export function bodyProblem(type, body) {
   if (!body) return "empty text: a bus line needs a body (text is positional: send TYPE --to ADDR \"text\")";
   if (PROTOCOL_TYPES.includes(type) && (body.length < BODY_MIN || body.length > BODY_MAX)) {
     return `${type} body is ${body.length} chars; protocol lines (${PROTOCOL_TYPES.join(" ")}) take ${BODY_MIN}-${BODY_MAX}: what, which PR, which sha`;
+  }
+  if (type === "HANDOFF") {
+    const m = handoffMisuse(body);
+    if (m) return `HANDOFF is a successor hand-off only; this body is ${m.why}: send ${m.type} instead (fleet-bus.mjs send ${m.type} --to …)`;
   }
   if (type === "LEND" && !lendMerger(body)) return "LEND names the fleet that merges: put `merger:<letter>` in the text (e.g. \"#3790 abc1234 merger:A\")";
   return "";
@@ -153,11 +185,25 @@ export function formatLine(type, to, from, text = "", { idem = "" } = {}) {
   return `${type} to:${to} from:${from} ${body}${idem ? " " + idemMarker(idem) : ""}`;
 }
 
-/** The newest entry in `entries` (oldest first) from `from` carrying idempotency `key`, or null. Pure. */
+/** The newest entry in `entries` (oldest first) from `from` (any sender when `from` is null) carrying idempotency `key`, or null. Pure. */
 export function findIdem(entries, from, key) {
   if (!key) return null;
-  for (let i = (entries || []).length - 1; i >= 0; i--) if (entries[i].from === from && idemOf(entries[i].text) === key) return entries[i];
+  for (let i = (entries || []).length - 1; i >= 0; i--) if ((from === null || entries[i].from === from) && idemOf(entries[i].text) === key) return entries[i];
   return null;
+}
+
+/** Types that get an automatic idempotency key when the sender gives none. */
+export const AUTO_IDEM_TYPES = ["DONE", "READY"];
+/**
+ * The automatic key for a DONE / READY line: `<TYPE>-<pr>-<sha7>` from the PR (`#<n>` in the address or body) and the
+ * first commit sha in the body (7-40 hex with a letter, so a run id is not one); "" when either is missing. Pure.
+ */
+export function autoIdem(type, to, text) {
+  if (!AUTO_IDEM_TYPES.includes(type)) return "";
+  const body = String(text || "");
+  const pr = (/^#(\d+)$/.exec(String(to || "")) || /#(\d+)\b/.exec(body) || [])[1];
+  const sha = (/(?:^|[^0-9a-f])((?=[0-9a-f]*[a-f])(?=[0-9a-f]*[0-9])[0-9a-f]{7,40})(?![0-9a-f])/.exec(body.replace(/\[idem:[^\]]*\]/g, "")) || [])[1];
+  return pr && sha ? `${type}-${pr}-${sha.slice(0, 7).toLowerCase()}` : "";
 }
 
 /** `[fix:<sha>]` marker an INCIDENT carries when `send INCIDENT --fix <sha>` names the commit whose green Pages lifts it. */
@@ -301,10 +347,13 @@ export function sendBusLine(type, to, from, text = "", {
   cwd = ROOT, dispatch = pokeFleetBoard, log = () => {}, idem = "",
 } = {}) {
   if (type === "LEASE") throw new Error("LEASE lines are written by `lease …`, never sent by hand");
+  // DONE / READY dedupe by (type, PR, sha) without a flag; an automatic DONE key is the merge's, whoever reports it.
+  const auto = idem ? "" : autoIdem(type, to, text);
+  idem = idem || auto;
   const line = formatLine(type, to, from, text, { idem });
   // The dedupe runs inside the compare-and-swap: a retry after a lost push re-reads the window it decides on.
   const r = writeBus((_lease, { recent }) => {
-    const dup = idem ? findIdem(recent(IDEM_WINDOW), from, idem) : null;
+    const dup = idem ? findIdem(recent(IDEM_WINDOW), auto && type === "DONE" ? null : from, idem) : null;
     return dup ? { ok: true, skip: dup } : { ok: true, line, lease: undefined };
   }, { cwd });
   if (r.ok && r.deduped) { log(`= deduped: idem ${idem} already sent as ${r.sha}; nothing written`); return { ...r, line }; }
@@ -417,6 +466,63 @@ export function strictCursor(entries, addrs, tip) {
   return i === 0 ? "" : entries[i - 1].sha;
 }
 
+/** Broadcast types `watch` drops from other senders unless --all: the game train's chatter, not a wake for this fleet. */
+export const WATCH_QUIET = ["GAME-SLOT", "DONE", "GREEN", "LEASE"];
+/** Does `watch` print entry `e` for a reader `me` listening on `addrs`? Pure. */
+export function watchShows(e, addrs = [], { all = false, me = "" } = {}) {
+  if (!addressed(e.to, addrs)) return false;
+  if (all) return true;
+  return !(WATCH_QUIET.includes(e.type) && e.to === "*" && e.from !== me);
+}
+/** One `read`/`watch` output line. Pure. */
+export const busOutLine = (e) => `${new Date(e.at * 1000).toISOString().slice(11, 16)}Z ${e.sha.slice(0, 7)} ${e.type} to:${e.to} from:${e.from} ${e.text}`.trimEnd();
+/**
+ * One watch poll: the entries (oldest first) not yet in `seen` that the filter shows, and the next state. `seen` is a bounded
+ * set of shas, so a bus that is re-read from an older cursor (reset) never prints a line twice. Pure.
+ */
+export function watchStep(state, read, filter) {
+  const seen = new Set(state.seen || []);
+  const out = [];
+  for (const e of read.entries || []) {
+    if (seen.has(e.sha)) continue;
+    seen.add(e.sha);
+    if (filter(e)) out.push(e);
+  }
+  return { show: out, state: { cursor: read.tip || state.cursor, seen: [...seen].slice(-500) } };
+}
+
+/**
+ * The follow mode: poll every `intervalS`, print each new shown line once, never exit (tests stop it with `polls`).
+ * Fetch errors go to `err` and the loop keeps going. Advances `cursorPath` (when given) to the tip it has read.
+ */
+export async function watchBus({ cwd = ROOT, addrs = [], all = false, me = "", intervalS = 20, since = "", log = console.log,
+  err = (l) => console.error(l), sleep = (ms) => new Promise((r) => setTimeout(r, ms)), polls = Infinity, read = readBus, cursorPath = "" } = {}) {
+  let state = { cursor: since, seen: [] };
+  if (!since) {
+    const r0 = read({ cwd, last: 1 });
+    state = { cursor: r0.tip, seen: r0.entries.map((e) => e.sha) };
+  }
+  err(`= watch from ${state.cursor ? state.cursor.slice(0, 7) : "(empty bus)"} every ${intervalS}s, to ${addrs.length ? addrs.join(" ") : "(all)"}${all ? ", --all" : ""}`);
+  let failing = false;
+  for (let i = 0; i < polls; i++) {
+    if (i > 0 || since) {
+      try {
+        const r = read({ cwd, since: state.cursor, last: 50 });
+        const step = watchStep(state, r, (e) => watchShows(e, addrs, { all, me }));
+        for (const e of step.show) log(busOutLine(e));
+        state = step.state;
+        if (cursorPath && state.cursor) { fs.mkdirSync(path.dirname(cursorPath), { recursive: true }); fs.writeFileSync(cursorPath, state.cursor + "\n"); }
+        failing = false;
+      } catch (e) {
+        if (!failing) err(`= watch: bus read failed (${e.message}); retrying every ${intervalS}s`);
+        failing = true;
+      }
+    }
+    if (i + 1 < polls) await sleep(intervalS * 1000);
+  }
+  return 0;
+}
+
 /** The per-sender read cursor file (fleet-brief.mjs reads it for the hand-off). */
 export const cursorFile = (me) => path.join(CURSOR_DIR, `cursor-${String(me).replace(/[^\w.-]+/g, "_")}.txt`);
 
@@ -427,24 +533,27 @@ function usage(msg) {
     "       (" + PROTOCOL_TYPES.join("/") + " bodies " + BODY_MIN + "-" + BODY_MAX + " chars; LEND names merger:<letter>; --idem dedupes a resend in the last " + IDEM_WINDOW + " lines)\n" +
     "       fleet-bus.mjs read [--to ADDR ...] [--since SHA] [--last N] [--json] [--peek | --strict]   (--last applies only when no cursor is known; --peek leaves the cursor; --strict never moves it past a hidden line)\n" +
     "       fleet-bus.mjs who <fleet letter> [--last N] [--json]   (exit 1: no live orchestrator line)\n" +
+    "       fleet-bus.mjs watch [--to ADDR ...] [--all] [--interval S] [--since SHA]   (follow mode for a Monitor: each new line once, never exits;\n" +
+    "         drops other senders' to:* " + WATCH_QUIET.join("/") + " unless --all)\n" +
     "       common: --as <host>:<id>   types: " + TYPES.join(" "));
   return 1;
 }
 
 export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 1000), log = console.log, dispatch = pokeFleetBoard,
-  readyCheck = readyClaimVerdict } = {}) {
+  readyCheck = readyClaimVerdict, watch = {} } = {}) {
   const flags = {}, multi = { to: [] }, pos = [];
   // Flags are an allow-list: an unknown `--flag` used to swallow the next word
   // (so `--body "text"` sent an empty line). Text is positional.
-  const VALUE_FLAGS = new Set(["to", "as", "since", "last", "ttl", "note", "grant", "idem", "pr", "fix"]);
+  const VALUE_FLAGS = new Set(["to", "as", "since", "last", "ttl", "note", "grant", "idem", "pr", "fix", "interval"]);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") flags.json = true;
+    else if (a === "--all") flags.all = true;
     else if (a === "--peek") flags.peek = true;
     else if (a === "--strict") flags.strict = true;
     else if (a.startsWith("--")) {
       const k = a.slice(2);
-      if (!VALUE_FLAGS.has(k)) return usage(`unknown flag ${a} (text is positional; flags: --${[...VALUE_FLAGS].join(" --")} --json --peek --strict)`);
+      if (!VALUE_FLAGS.has(k)) return usage(`unknown flag ${a} (text is positional; flags: --${[...VALUE_FLAGS].join(" --")} --json --peek --strict --all)`);
       const v = argv[++i];
       if (v === undefined) return usage(`${a} needs a value`);
       if (k === "to") multi.to.push(v); else flags[k] = v;
@@ -513,6 +622,13 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
       else log(w ? whoLine(w, now()) : `= who ${L}: no ORCH ${L} LIVE line in the last ${last} bus entries`);
       return w ? 0 : 1;
     }
+    if (cmd === "watch") {
+      for (const t of multi.to) { const bad = addressProblem(t); if (bad) return usage(`watch --to: ${bad}`); }
+      const iv = flags.interval === undefined ? 20 : Number(flags.interval);
+      if (!Number.isFinite(iv) || iv < 5 || iv > 600) return usage("--interval takes 5-600 seconds");
+      return watchBus({ cwd, addrs: multi.to, all: !!flags.all, me: me || "", intervalS: iv, since: flags.since || "", log,
+        cursorPath: me ? cursorFile(me) : "", ...watch });
+    }
     if (cmd === "read") {
       if (flags.peek && flags.strict) return usage("--peek and --strict are exclusive (--peek never moves the cursor)");
       const file = me ? cursorFile(me) : "";
@@ -522,7 +638,7 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
       const shown = r.entries.filter((e) => addressed(e.to, multi.to));
       const hidden = r.entries.length - shown.length;
       if (flags.json) log(JSON.stringify({ tip: r.tip, reset: r.reset, hidden, entries: shown }));
-      else for (const e of shown) log(`${new Date(e.at * 1000).toISOString().slice(11, 16)}Z ${e.sha.slice(0, 7)} ${e.type} to:${e.to} from:${e.from} ${e.text}`.trimEnd());
+      else for (const e of shown) log(busOutLine(e));
       // --peek reads without moving the cursor; a plain read advances it to the tip,
       // past lines a --to filter hid (the count is printed so nothing vanishes silently);
       // --strict stops it just before the first hidden line (strictCursor).
@@ -543,4 +659,8 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
   }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = main(process.argv.slice(2));
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const code = main(process.argv.slice(2));
+  if (code && typeof code.then === "function") code.then((c) => { process.exitCode = c; }, (e) => { console.error(`fleet-bus: ${e.message}`); process.exitCode = 1; });
+  else process.exitCode = code;
+}

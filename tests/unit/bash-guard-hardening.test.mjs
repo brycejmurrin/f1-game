@@ -1456,3 +1456,29 @@ test("lsp-hint stays quiet for SCREAMING_CASE env names; a CapitalisedSymbol or 
   for (const c of ["grep -rn RELAY_URL js/", "grep -rn APEX_MERGE_DESK js", "grep -n TURN js/ui/hud.js"]) assert.equal(hint(c), false, c);
   for (const c of ["grep -rn GameHud js/", "grep -rn Tracks.curvature js", "grep -rn MAT.tarmac js"]) assert.equal(hint(c), true, c);
 });
+
+test("a `git stash` while a merge is in progress is refused (MERGE_HEAD would be dropped); reads, pop and a stash after abort pass", () => {
+  const repo = scratchRepo("hook-stash-merge-");
+  const run = (command) => spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
+    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, APEX_GUARD_PROBE: "1" },
+  });
+  try {
+    repo.g("checkout", "-qb", "side");
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "side\n");
+    repo.g("commit", "-qam", "side");
+    repo.g("checkout", "-q", "-");
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "main\n");
+    repo.g("commit", "-qam", "main");
+    repo.g("merge", "side"); // conflicts: MERGE_HEAD stays
+    assert.equal(repo.g("rev-parse", "-q", "--verify", "MERGE_HEAD").status, 0, "fixture: a merge is in progress");
+    for (const cmd of ["git stash", "git stash push -m wip", "git stash -u", "git -C . stash"]) {
+      const r = run(cmd);
+      assert.equal(r.status, 2, `${cmd}\n${r.stderr}`);
+      assert.ok(r.stderr.trim().startsWith("BLOCKED: `git stash` while a merge is in progress drops MERGE_HEAD"), r.stderr);
+    }
+    for (const cmd of ["git stash list", "git stash show -p", "git stash pop", "git status"]) assert.equal(run(cmd).status, 0, cmd);
+    repo.g("merge", "--abort");
+    assert.equal(run("git stash").status, 0, "no merge in progress: a stash is fine");
+  } finally { repo.rm(); }
+});

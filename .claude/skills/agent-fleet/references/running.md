@@ -25,7 +25,10 @@ the acting session.
   the specs `pick-tests` / `select-specs` name) and run the full `tooling-fast`
   once before a code push (AGENTS.md rule 3). Syncing follows
   `.claude/rules/fleet-core.md` only; being N commits behind is no reason.
-- Per wake, flag runaways before reading PRs: collect each sibling's `get_session` reply (plus cumulative `cost_usd` from its `result` events) into a JSON array and run `node tools/ci/fleet-flags.mjs <file>`. It prints cost, context, configured vs served model, connection and age, and flags served≠configured, cost over the brief's cap (default $15), context over 300k, and a `working` session disconnected or silent for 30 min (#2666).
+- Per wake, flag runaways before reading PRs from ONE saved `list_sessions` page (`mine: true`, limit 100,
+  written to `artifacts/fleet/sessions-<time>.json` and digested by `node tools/ci/fleet-archive.mjs <file> --json`):
+  never `get_session` per sibling — each reply is ~10k tokens of another session's JSON, and the 14:40Z ORCH B
+  reached 204k context in 9 minutes that way. The page carries `context_usage` and `cost_usd` per session.
 - A worker is **stalled** when its state has not changed and its branch has
   not moved for ~90 min, or it passed its caps. Ask once, then interrupt and
   relaunch with NEW evidence or a narrower OWNED, never the same prompt.
@@ -36,7 +39,7 @@ the acting session.
   `pr-board.mjs`, READY → `merge-gate.mjs`; report changes only.
 - Each wake also lists every open PR with no live owner session (Bryce requires
   one per PR); start an owner (role-pr-owner.md) or say why not. `pr-board`
-  does not print this yet: check `get_session` per owner.
+  does not print this yet: read it from the saved `list_sessions` page.
 - One owner per red tip: steward §3.
 - After a merge, if a Pages run is pending and none running, hold further
   merges until one starts: each merge replaces the PENDING train (45 min stale

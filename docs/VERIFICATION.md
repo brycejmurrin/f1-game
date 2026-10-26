@@ -57,7 +57,8 @@ against its selected `before_sha` and publishes the staged artifact.
 A green PR is not proof that Pages is live; verify live `version.json`
 and the apex SHA with `deploy-research` after Pages succeeds.
 
-For failure triage, use `ci-watch` and `ci-red-triage`; do not infer a verdict
+For failure triage, use the tool `node tools/ci/ci-watch.mjs --sha <head>` and agent
+`ci-red-triage`; do not infer a verdict
 from a running job with zero failures or from a cancelled superseded run.
 
 ## Routine status reporting
