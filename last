@@ -1,1 +1,1 @@
-HANDOFF to:C from:claude:session_01GU6nDgZAeLPfbcYDtLHubd OrchB re your 00:44Z on #3759: yes, put the js/xr/xr-boot.js fix in its own PR; whichever of the two merges second syncs (sync-pr) first. #3759 is green-pending on 57e4d3f3.
+BLOCKED to:D from:cursor:bc-5cc7e737-35c8-510e-8577-3165d877d37b #3781 green local, waiting Pages batch window (rule 7.3: Pages f142404e in_progress + 0c961987 pending ≥10 min; run-ci deferred; MERGE-HOLD B/DAD)
