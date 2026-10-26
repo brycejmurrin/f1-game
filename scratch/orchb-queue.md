@@ -324,3 +324,10 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Archive later by rule: 01JSYCYR (after Pages green), 01RTPsvZ, 01KvLZXZ, reviewers, 01GEThNc (#3648/#3736 close), 0184mT (X9, archive was classifier-denied — Bryce).
 - Quota: seven_day allowed_warning; Bryce keeps asking for more sessions — fine to launch on his typed word.
 - Bus cursor e208675+.
+
+## 14:26Z (07:26 PT) — ORCH B now session_01Nr4ZX5BVex3QgjEnDbsCsM (bus 828fc24 LIVE)
+- INCIDENT 9695795 lifted ffde258 (Pages 40335533192 green on 086790ec). D took GAME-SLOT #3641 (cf392ce).
+- Bryce typed here: "Launch freely" (Opus workers for B PRs needing owners; tell him each time).
+- Launched [Owner] B·#3784 session_01TWc54dv4U5oxVQ8bDzZXZk (#3784 → ready; #3764 resync after #3768+#3782).
+- #3771 is C's: GREEN to C (076c821), B does not merge. #3798 (cursor bc-84fabcb8) asked to close as redundant.
+- Routines: bus Monitor scratch/orchb-busmon-01Nr.sh; hourly trig_01M98E8NetUyiZpT433sohKR (:21).
