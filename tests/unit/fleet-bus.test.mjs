@@ -244,6 +244,13 @@ test("parseLive: today's free text — the id right after LIVE, not the one it r
     { letter: "B", id: "claude:session_01H8VtkpzfE5KwDeid2n46At" });
 });
 
+test("parseLive: `ORCH A LIVE is now <id>` names the id, not the word `is` (bus 1a2624d, 2026-10-26)", () => {
+  const id = "claude:session_011zeXy762dGneXyJtqucZrF";
+  assert.deepEqual(parseLive({ from: id, text: `ORCH A LIVE is now ${id} (OrchA 36 is gone). Lanes stay draft.` }), { letter: "A", id });
+  assert.deepEqual(parseLive({ from: id, text: `ORCH A LIVE ${id}.` }), { letter: "A", id });
+  assert.equal(parseLive({ from: id, text: "ORCH A LIVE soon, waiting on Bryce" }), null, "no id-shaped token: not an announcement");
+});
+
 test("parseLive: SEED/FLEET LIVE lines, a LIVE line with no fleet letter and a non-LIVE line name no orchestrator", () => {
   assert.equal(parseLive({ from: A, text: "SEED A LIVE session_01SEEDSEEDSEEDSEEDSEEDSE" }), null);
   assert.equal(parseLive({ from: A, text: "FLEET C LIVE codex:abc-1234 scope:tools orchestrator" }), null);

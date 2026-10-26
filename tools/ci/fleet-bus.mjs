@@ -313,7 +313,8 @@ const LIVE_ID = /\bLIVE\s+((?:[a-z]+:)?[A-Za-z0-9][A-Za-z0-9_-]{7,})/;
 export function parseLive(entry) {
   const text = String(entry?.text || "");
   const fromHost = (/^([a-z]+):/.exec(String(entry?.from || "")) || [])[1] || "";
-  const explicit = /\bORCH\s+([A-Z])\s+LIVE\s+([^\s,;)]+)/.exec(text);
+  // The id must look like one: "ORCH A LIVE is now claude:session_X" (1a2624d, 2026-10-26) once resolved to `claude:is`.
+  const explicit = /\bORCH\s+([A-Z])\s+LIVE\s+(?:is\s+)?(?:now\s+)?((?:[a-z]+:)?[A-Za-z0-9][A-Za-z0-9_-]{7,})(?=[\s,;).]|$)/.exec(text);
   if (explicit) return { letter: explicit[1], id: withHost(explicit[2].replace(/\.$/, ""), fromHost) };
   if (/\b(?:SEED|FLEET)\s+[A-Z]\s+LIVE\b/.test(text) || !/\bORCH|orchestrator/i.test(text)) return null;
   const id = LIVE_ID.exec(text), fleet = /\bFleet\s+([A-Z])\b/.exec(text);
