@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "7c996b1445ac9c0a0690a98c133d13bcf5090ccebe84ca41194efe218e76ef4c",
+  "sourceDigest": "c34374dcf5b4fcd17533ea631b5db6898bcec7c781ea2c7ee5e723644fb08c3c",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -1647,13 +1647,13 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.95,
       "target": [
-        -533.21,
-        6.09,
-        97.17
+        -522.21,
+        3.52,
+        113.88
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 23.5,
-      "viewDistanceM": 23.5,
+      "nearestRoadDistanceM": 43.5,
+      "viewDistanceM": 43.5,
       "source": "tests/data/landmarks/kyalami.json; js/circuits/scenery/kyalami.js"
     },
     {
