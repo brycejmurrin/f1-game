@@ -5,15 +5,15 @@
 // were killed with their worker and whose exit codes were misread (issue #2386). Run it as ONE background
 // task (AGENTS.md rule 4), never a foreground wait. Conditions combine with AND; polling is in-process.
 //
+// FOREGROUND CAP (W2): only under Claude Code (`CLAUDECODE=1`, set in every Bash it runs), whose Bash kills a
+// foreground command at 600 s, is a foreground --timeout clamped to 590 s. Codex, Cursor and a plain shell have no
+// such limit, so a long blocking wait there (a host without background tasks) keeps its full --timeout.
+//
 //   node tools/ci/wait-for.mjs --load-below 2.8 --timeout 40
 //   node tools/ci/wait-for.mjs --file-nonempty artifacts/logs/x.log --timeout 10
 //   node tools/ci/wait-for.mjs --pid-gone 12345 --timeout 30
 //   node tools/ci/wait-for.mjs --log-matches artifacts/logs/x.log '^= (run|bg exit)' --timeout 45
 //   node tools/ci/wait-for.mjs --merged <sha> --timeout 240 --background   # the sanctioned merge watch (steward §7)
-//
-// FOREGROUND CAP (W2): only under Claude Code (`CLAUDECODE=1`, set in every Bash it runs), whose Bash kills a
-// foreground command at 600 s, is a foreground --timeout clamped to 590 s. Codex, Cursor and a plain shell have no
-// such limit, so a long blocking wait there (a host without background tasks) keeps its full --timeout.
 //
 // Exit 0 every condition held · 124 timeout (nothing is killed) · 1 usage error.
 import fs from "node:fs";
@@ -39,8 +39,8 @@ export const USAGE = `usage: node tools/ci/wait-for.mjs <condition>... [--timeou
   --merged <sha>          <sha> is an ancestor of origin/claude/f1-game-project-26h3ng (fetched each poll, ≥ 30 s apart):
                           the one sanctioned merge watch — never a hand-rolled 'while … sleep' loop (AGENTS.md rules 4, 13)
   --background            this waiter IS the run_in_background task: no cap on --timeout
-  under Claude Code (CLAUDECODE=1) a foreground wait is capped at ${FOREGROUND_CAP_SEC} s (its Bash limit is 600 s); longer ones belong in run_in_background.
-  other hosts (Codex, Cursor, a shell) keep the full --timeout.
+  the cap below applies only under Claude Code (CLAUDECODE=1); other hosts (Codex, Cursor, a shell) keep the full --timeout.
+  a foreground wait is capped at ${FOREGROUND_CAP_SEC} s (Bash's own limit is 600 s); longer ones belong in run_in_background.
   conditions combine with AND; exit 0 held / 124 timeout / 1 usage. Run it as one background task.`;
 
 /** Clamp a foreground --timeout (minutes) to the cap under Claude Code (`env.CLAUDECODE === "1"`);
