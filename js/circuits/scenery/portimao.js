@@ -91,7 +91,9 @@
 
       const PINE = [0.14, 0.31, 0.16], PINE_D = [0.11, 0.25, 0.14];
       const SCRUB = [0.34, 0.38, 0.21], SCRUB_D = [0.28, 0.32, 0.18];
-      const EARTH = [0.66, 0.44, 0.30], EARTH_D = [0.54, 0.34, 0.23];
+      // Algarve terra rossa (#3372): R-dominant so chase/orbit reads red cut-bank
+      // identity, not tan dirt shoulders against golf-course green.
+      const EARTH = [0.72, 0.32, 0.20], EARTH_D = [0.58, 0.24, 0.15];
       const LIME = [0.95, 0.94, 0.90];          // whitewashed Algarve lime render
       const TERRA = [0.68, 0.36, 0.26];         // terracotta pantile
       const CONC = [0.76, 0.74, 0.70];
@@ -99,13 +101,15 @@
       const openArea = (s) => (s >= 0.93 || s <= 0.08) || (s >= 0.30 && s <= 0.42);
       // Built footprints the scattered vegetation must not grow through
       // (clip-audit): [s0, s1, side, nearDist, farDist]. Terraces span the
-      // retaining wall at `gap` out to the escarpment prism (~46 m); the two
+      // retaining wall at `gap` out to the escarpment prism (~46 m); the
       // groundedSegments cut banks sit at dist 20, 9 m wide.
       const KEEP_OUT = [
         [0.035, 0.095,  1, 15.5, 46], [0.470, 0.530, -1, 17.5, 46],
         [0.835, 0.890,  1, 15.5, 46], [0.280, 0.360,  1, 14.5, 46],
         [0.620, 0.700, -1, 14.5, 46],
-        [0.150, 0.235,  1, 15.5, 24.5], [0.560, 0.612, -1, 15.5, 24.5],
+        [0.100, 0.135, -1, 15.5, 24.5], [0.150, 0.235,  1, 15.5, 24.5],
+        [0.400, 0.435,  1, 15.5, 24.5], [0.560, 0.612, -1, 15.5, 24.5],
+        [0.745, 0.785,  1, 15.5, 24.5],
       ];
       const keptOut = (k, side, dist, r) => KEEP_OUT.some(([s0, s1, zs, d0, d1]) =>
         zs === side && k >= K(s0 - 0.004) && k <= K(s1 + 0.004) &&
@@ -121,10 +125,15 @@
         return u * u + v * v < r * r;
       });
       // Red-earth cut banks (groundedSegments below): 9 m wide at dist 20.
+      // Mid-lap + climb faces added so dual_lite orbits read Algarve red, not
+      // a green/tan verge belt with only two local cuts (#3372).
       const CUTS = [
+        ["portimao-cut-t1-exit", 0.100, 0.135, -1],
         ["portimao-cut-t3", 0.150, 0.235, 1],
+        ["portimao-cut-mid", 0.400, 0.435, 1],
         // Ends at 0.612: past it the bank ran into the 0.620 left terrace.
         ["portimao-cut-t11", 0.560, 0.612, -1],
+        ["portimao-cut-final", 0.745, 0.785, 1],
       ];
       for (const [, s0, s1, side] of CUTS) {
         // Same polyline the cut is extruded along; registered up front so the
@@ -248,10 +257,12 @@
         if (keptOut(k, side, dist, 5.5) || onTerrace(anchor(k, side, dist).c, 5.5)) return;
         pine(k, side, dist, 9 + h * 6, h < 0.6 ? PINE : PINE_D);
       });
+      // Scrub sits past the red-earth verge band (was dist 8–15): near-track
+      // green bushes made dual_lite orbits read as golf-course strips (#3372).
       every(22, (k) => {
         const h = hash(k * 97 + 23);
-        if (h < 0.44) return;
-        const side = h < 0.72 ? -1 : 1, dist = 8 + h * 7;
+        if (h < 0.50) return;
+        const side = h < 0.72 ? -1 : 1, dist = 22 + h * 14;
         if (keptOut(k, side, dist, 2.5) || onTerrace(anchor(k, side, dist).c, 2.5)) return;
         bush(k, side, dist, h < 0.6 ? SCRUB : SCRUB_D);
       });
@@ -540,6 +551,25 @@
         { id: "portimao-final-gravel", samples: 6 });
       marshalPost(K(0.895), -1, 9);
 
+      // Graded red runoff belts beside the ribbon (#3372). Continuous
+      // runoffApron buried into hillsideTerrace (wave 6); these draped
+      // groundPatches stay clear of KEEP_OUT / CUT footprints and carry the
+      // Algarve red identity into chase and dual_lite orbits.
+      for (const [id, s, side, gap, w, len] of [
+        ["verge-sf-l",    0.015, -1, 7, 14, 32],
+        ["verge-t1-r",    0.110,  1, 7, 14, 34],
+        ["verge-esses-l", 0.170, -1, 7, 14, 32],
+        ["verge-crest-l", 0.250, -1, 7, 14, 34],
+        ["verge-mid-l",   0.430, -1, 7, 14, 34],
+        ["verge-mid-r",   0.490,  1, 8, 14, 32],
+        ["verge-t11-r",   0.580,  1, 7, 14, 32],
+        ["verge-final-l", 0.780, -1, 7, 14, 34],
+      ]) {
+        groundPatch(K(s), side, gap, [w, 0.16, len], EARTH, {
+          id: `portimao-${id}`, samples: 5,
+        });
+      }
+
       {
         const RK = [0.86, 0.13, 0.14], WK = [0.95, 0.95, 0.93];
         const BK = [0.14, 0.28, 0.62], YK = [0.90, 0.72, 0.12];
@@ -560,8 +590,9 @@
       }
 
       // Continuous runoffApron loop removed — slabs buried into the red cut
-      // banks beside hillsideTerrace (ground-audit). Corner gravel groundPatch
-      // + groundedSegments cuts keep the Algarve earth colour at the key offs.
+      // banks beside hillsideTerrace (ground-audit). Corner gravel + verge
+      // groundPatch ribbons + groundedSegments cuts carry the Algarve red
+      // earth colour (#3372).
       for (const [id, s0, s1, side] of CUTS) {
         const pts = [];
         for (let s = s0; s <= s1 + 1e-9; s += 0.012) pts.push({ k: K(s), side, dist: 20 });
