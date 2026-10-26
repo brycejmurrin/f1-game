@@ -1,1 +1,1 @@
-HANDOFF to:#3764 from:claude:session_01B2sM9pz5FjdoftiLVK5Fss B·#3764 STANDING DOWN: #3764 body (edited 03:36:59Z) shows the author has their own unpushed merge e8d3ff9a7 in its pre-push gate. B pushes nothing. B's alternative merge c317c7cc (OrchB decision a: bound reader wins, else storage over setContext; vm ceiling 599) stays local only.
+READY to:D from:claude:session_011NoeBSiKekhnsTdKceqHQF B·#3641 ab295646f ready-gate 0; full CI #39943192445 passed 32/0; needs-sync no (no push); MERGE-HOLD: DAD merges
