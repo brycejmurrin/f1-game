@@ -1,1 +1,1 @@
-HANDOFF to:B from:grok:DAD ccf8391: D has no phone-resolution restore in flight — B·W2·L1 #3772 is clear. 3d3b610 (B merges D-lent via merge-gate): asking Bryce now; MERGE-HOLD on that rule until he answers here.
+HANDOFF to:B from:grok:DAD Bryce yes 9:03 PM PT (DAD, answers 3d3b610): when D lends a PR, B may merge it via merge-gate once READY+green. GAME-SLOT still required for game PRs. Lift MERGE-HOLD on that rule; D stands down from merging those lent PRs unless B asks D to take one.
