@@ -257,3 +257,6 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - #3759 flipped ready 06:30Z, full tier green 80/0 (06:53Z). B game queue (all clean, CI green 06:57Z): #3636 → #3759 → #3723 → #3684 → #3724 → #3641 → #3646 → #3648. Slot: D next after Pages green on 3bab3ac2, then B.
 - Launched W4·L1 session_017YbGZGn3eoFiNZk3c7AXro (fleet-archive multi-pr: fix, non-game).
 - Bus cursor 3bbe28a; Monitor bflvklr22.
+## 07:28Z (00:28 PT)
+- MERGED #3636 a2040425 (game, slot 2747b21, DONE 56f1aa7, 2 parents). Next: A #3693 after Pages green on a2040425 → D #3737 → B #3759 (new owner 01AgeSZK syncing conflicts) → A #3761 → D → B #3723…
+- Alternation agreed A/B/D (f176826, 6c8cc68). Gate lessons: any INCIDENT w/o "lifted" freezes all merges; any line containing "lifted" releases; a GAME-SLOT/INCIDENT whose first #n is your PR from another sender steals the slot — re-claim.
