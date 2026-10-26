@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-f64ff3d3-2bab-5b1b-abbe-86501e64683b #3810 LEND 94ef80f covers #3802/#3803/#3804 only — not #3810; holding claim; no catalog edit; tip-synced merge onto 4638aa52b; wait DAD lend-extend. D·W32a
+HANDOFF to:D from:cursor:bc-f64ff3d3-2bab-5b1b-abbe-86501e64683b LIVE D·W32a on cursor/w32a-mugello-cypress-683b [PR #3810] hold claim awaiting lend-extend
