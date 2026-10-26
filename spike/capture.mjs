@@ -83,6 +83,7 @@ const blank = (file) => { try { return statSync(file).size < 5 * 1024; } catch {
 /* ── spike capture ────────────────────────────────────────────────────────── */
 async function captureSpike(baseUrl) {
   const browser = await launch();
+  try {
   const page = await browser.newPage({ viewport: VP });
   page.setDefaultTimeout(180000);
   const errors = [];
@@ -136,7 +137,6 @@ async function captureSpike(baseUrl) {
   await page.screenshot({ path: instShot, timeout: 120000 });
   await page.evaluate(() => __spike.toggleInstancing(false));
 
-  await browser.close();
   return {
     backend: s32.backend, forced: s32.forced, triangles: s32.triangles, shots, errors,
     ms32: s32.ms, fps32: s32.fps, drawCalls: s32.glDrawsPerFrame, lights32: s32.lights,
@@ -144,16 +144,19 @@ async function captureSpike(baseUrl) {
     msInstanced: sInst.ms, drawCallsInstanced: sInst.glDrawsPerFrame,
     instancedShotBlank: blank(instShot),
   };
+  } finally { await browser.close(); }
 }
 
 /* ── GLX baseline ─────────────────────────────────────────────────────────── */
 async function captureBaseline(baseUrl) {
   const browser = await launch();
+  try {
   const page = await browser.newPage({ viewport: VP });
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   // wrap the WebGL2 draw entry points so we can read draws-per-frame
   await page.addInitScript(() => {
+    localStorage.setItem("apex26.gfxBackend", "webgl2");
     window.__glxDraws = 0;
     for (const fn of ["drawElements", "drawArrays", "drawElementsInstanced", "drawArraysInstanced"]) {
       const orig = WebGL2RenderingContext.prototype[fn];
@@ -164,6 +167,8 @@ async function captureBaseline(baseUrl) {
   await page.waitForFunction(() => window.__apex != null, { timeout: 60000 });
   await page.evaluate(() => __apex.race("singapore"));
   await page.waitForFunction(() => { try { return !!__apex.probe(); } catch { return false; } }, { timeout: 120000 });
+  const activeBackend = await page.evaluate(() => __apex.diag().env.backend);
+  if (activeBackend !== "webgl2") throw new Error(`GLX baseline selected ${activeBackend}`);
   await page.evaluate(() => __apex.setTimeOfDay("night"));
   await page.evaluate(() => __apex.park(0.0));
   await page.evaluate(() => __apex.hud(false));
@@ -192,9 +197,9 @@ async function captureBaseline(baseUrl) {
     requestAnimationFrame(tick);
   }));
   const light = await page.evaluate(() => __apex.lightState());
-  await browser.close();
   return { shots, errors, ms: perf.ms, fps: 1000 / perf.ms, drawCalls: perf.drawCalls,
-           numLights: light && light.numLights };
+           numLights: light && light.numLights, backend: activeBackend };
+  } finally { await browser.close(); }
 }
 
 /* ── main ─────────────────────────────────────────────────────────────────── */
@@ -216,7 +221,7 @@ try {
 }
 writeFileSync(join(OUT, "results.json"), JSON.stringify(results, null, 2));
 console.log("wrote", join(OUT, "results.json"));
-if (results.spike && (results.spike.shots.some((s) => s.blank) || results.spike.errors.length)) {
-  console.error("SPIKE HARD GATE: blank frames or console errors — see results.json");
+if (Object.values(results).some(r => r?.shots && (r.shots.some(s => s.blank) || r.instancedShotBlank || r.errors.length))) {
+  console.error("CAPTURE HARD GATE: blank frames or console errors — see results.json");
   process.exit(1);
 }

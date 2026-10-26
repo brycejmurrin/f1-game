@@ -465,7 +465,10 @@ test("successful navigation remains attached to waitUntil through its cache writ
       if (url.pathname.endsWith("/version.json")) {
         return Promise.resolve(new Response('{"build":321}', { status: 200 }));
       }
-      return Promise.resolve(new Response("online shell", { status: 200 }));
+      return Promise.resolve(new Response(
+        '<meta name="apex-build" content="321">online shell',
+        { status: 200 },
+      ));
     },
     putImpl: async (_name, request) => {
       if (requestKey(request) === `${ORIGIN}/race`) await heldPut.promise;
@@ -490,12 +493,16 @@ test("successful navigation remains attached to waitUntil through its cache writ
   assert.equal(beforePut, "pending");
 
   const response = await event.responsePromise;
-  assert.equal(await response.text(), "online shell", "network response is available while put remains blocked");
+  assert.equal(
+    await response.text(),
+    '<meta name="apex-build" content="321">online shell',
+    "network response is available while put remains blocked",
+  );
   heldPut.resolve();
   await Promise.all(event.lifetimes);
   assert.equal(
     await (await harness.stores.get("apex26-321").get(`${ORIGIN}/race`)).text(),
-    "online shell",
+    '<meta name="apex-build" content="321">online shell',
   );
 });
 
@@ -566,23 +573,24 @@ test("a deep-link navigation is not cached under its query URL", async () => {
   // Every `?b=` / `?log=` navigation used to be put under its full URL — one
   // entry per distinct query that no fallback ever read back (the offline
   // path matches "index.html"). Only the bare shell URL is written.
+  const shell = '<meta name="apex-build" content="321">online shell';
   const harness = createHarness({
     fetchImpl: (request) => {
       const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
       if (url.pathname.endsWith("/version.json")) {
         return Promise.resolve(new Response('{"build":321}', { status: 200 }));
       }
-      return Promise.resolve(new Response("online shell", { status: 200 }));
+      return Promise.resolve(new Response(shell, { status: 200 }));
     },
   });
 
   const deep = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?log=data:debug` });
-  assert.equal(await (await deep.responsePromise).text(), "online shell");
+  assert.equal(await (await deep.responsePromise).text(), shell);
   await Promise.all(deep.lifetimes);
   assert.equal(harness.stores.has("apex26-321"), false, "a query navigation opens no cache");
 
   const bare = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
-  assert.equal(await (await bare.responsePromise).text(), "online shell");
+  assert.equal(await (await bare.responsePromise).text(), shell);
   await Promise.all(bare.lifetimes);
   assert.ok(harness.stores.get("apex26-321").has(`${ORIGIN}/`), "the bare shell URL is still written");
 });

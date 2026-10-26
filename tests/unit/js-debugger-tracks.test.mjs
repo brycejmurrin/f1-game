@@ -23,6 +23,40 @@ test("break-and-inspect auto-resume retains a newer pause delivered before the r
   await s.detach();
 });
 
+test("break workflow keeps trigger execution independent of the breakpoint wait budget", async () => {
+  for (const executionTimeoutMs of [undefined, 2000]) {
+    const { s, c } = await attached();
+    let finish;
+    c.reply = async (method, params) => {
+      if (method === "Runtime.evaluate" && params.expression === "probe()") {
+        setImmediate(() => paused(c));
+        return new Promise(resolve => { finish = resolve; });
+      }
+      if (method === "Debugger.resume") {
+        c.emit("Debugger.resumed");
+        finish({ result: { type: "number", value: 42 } });
+      }
+      return {};
+    };
+    try {
+      const args = { breakpoints: [], trigger: "probe()", timeoutMs: 100,
+        ...(executionTimeoutMs === undefined ? {} : { executionTimeoutMs }) };
+      const hit = await callTool(s, "debugger_break", args);
+      assert.equal(hit.isError, false);
+      assert.equal(hit.structuredContent.paused, true);
+      assert.equal(c.calls.find(x => x.method === "Runtime.evaluate" && x.params.expression === "probe()").timeout, executionTimeoutMs ?? 600000);
+      assert.equal((await callTool(s, "debugger_control", { action: "resume", pauseToken: hit.structuredContent.token })).isError, false);
+      await new Promise(setImmediate);
+      const operation = s.state(true).operations.find(x => x.id === hit.structuredContent.operation.id);
+      assert.equal(operation.status, "completed");
+      assert.equal(operation.result.result.value, 42);
+      assert.equal(operation.timedOut, undefined);
+    } finally { await s.detach(); }
+  }
+  const invalid = await callTool(new DebugSession(), "debugger_break", { breakpoints: [], executionTimeoutMs: 999 });
+  assert.equal(invalid.isError, true, "invalid execution budgets fail before attaching");
+});
+
 test("T7: targets lists worker/service_worker rows on request, attach accepts them (including blob: workers)", async () => {
   const rows = [{ type: "page", id: "p", url: "http://127.0.0.1:3456/", title: "g", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/p" },
     { type: "service_worker", id: "sw", url: "http://127.0.0.1:3456/sw.js", title: "sw", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/sw" },
@@ -116,7 +150,8 @@ test("T2: debugger_state carries only the latest operation's result, however man
 });
 test("T12: attach remembers the last endpoint; common parameter aliases are accepted and every rejection names the right key", async () => {
   const { s, c } = await attached(); await s.detach();
-  assert.equal((await callTool(new DebugSession(), "debugger_attach", { targetId: "t" })).structuredContent.error.includes("endpoint is required"), true);
+  const unconfigured = new DebugSession({ sharedEndpoint: () => null });
+  assert.equal((await callTool(unconfigured, "debugger_attach", { targetId: "t" })).structuredContent.error.includes("endpoint is required"), true);
   s.discover = async () => [{ type: "page", id: "t", url: "about:blank", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/t" }];
   await s.listTargets("http://127.0.0.1:9222");
   const c2 = new FakeCdp(); s.open = async () => c2;

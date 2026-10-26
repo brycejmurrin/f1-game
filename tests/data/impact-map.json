@@ -6521,6 +6521,7 @@
         "tests/unit/physics-rows-vm.test.mjs"
       ],
       "awaitIntroWarm": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
@@ -6542,6 +6543,7 @@
         "tests/unit/rival-audio.test.mjs"
       ],
       "cancelIntro": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
@@ -6770,12 +6772,14 @@
         "tests/unit/ctx-lost-notice.test.mjs"
       ],
       "raceIntro": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
       "raceIntroFromSheet": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "raceProfile": [
@@ -6876,6 +6880,7 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "sheetRelease": [
+        "tests/unit/daily-intro-session-late.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "showTouchControls": [
@@ -8931,7 +8936,8 @@
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/rendezvous-worker.test.mjs"
       ]
     },
     "js/net/handshake.js": {
@@ -9378,7 +9384,8 @@
         "tests/unit/net-rendezvous.test.mjs"
       ],
       "sealPrivate": [
-        "tests/unit/net-rendezvous.test.mjs"
+        "tests/unit/net-rendezvous.test.mjs",
+        "tests/unit/rendezvous-worker.test.mjs"
       ],
       "setSessionUrl": [
         "tests/unit/net-rendezvous.test.mjs"
@@ -9400,9 +9407,6 @@
       ],
       "waitFor": [
         "tests/unit/net-rendezvous.test.mjs"
-      ],
-      "*": [
-        "tests/unit/rendezvous-worker.test.mjs"
       ]
     },
     "js/net/scan.js": {
@@ -14675,7 +14679,8 @@
     },
     "js/render/webgpu/wgx-chunked.js": {
       "createChunkedMesh": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
       "drawChunked": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -14684,7 +14689,8 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "init": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
       "*": [
         "tests/unit/frustum-buckets.test.mjs",
@@ -16322,12 +16328,17 @@
       "anyOpen": [
         "tests/unit/layers-anyopen-memo.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/ui-layers-reflow.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
+      ],
+      "narrow": [
+        "tests/unit/ui-layers-reflow.test.mjs"
       ],
       "navOpen": [
         "tests/unit/layers-anyopen-memo.test.mjs",
         "tests/unit/layers-nav-memo.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/ui-layers-reflow.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ],
       "shown": [
@@ -17384,6 +17395,7 @@
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
       "strip": [
+        "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "stripEnabled": [
@@ -17398,6 +17410,7 @@
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
       "strip": [
+        "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "*": [

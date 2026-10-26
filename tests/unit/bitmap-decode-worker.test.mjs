@@ -314,3 +314,37 @@ test("stale worker replies after drop+respawn close their bitmap and do not sett
   workers[1].onmessage({ data: { type: "decoded", seq: workers[1].request.seq, bmp } });
   assert.equal(await next, bmp);
 });
+
+
+test("bitmap deadline retires the stalled worker before a later request", async () => {
+  const h = controlledClient();
+  const first = h.api.decode({ size: 1 });
+  const old = h.worker;
+  h.fire();
+  assert.equal(await first, h.bmp);
+  const next = h.api.decode({ size: 1 });
+  assert.notEqual(h.worker, old, "a deadline must retire the unresponsive worker");
+  h.worker.onmessage({ data: { type: "decoded", seq: h.worker.request.seq, bmp: h.bmp } });
+  assert.equal(await next, h.bmp);
+});
+
+
+test("client strip deadline retires its worker and lets a later strip respawn", async () => {
+  const CLIENT = "js/workers/bitmap-decode-client.js";
+  const workers = [], timers = [];
+  const ctx = vm.createContext({ URL, Uint8Array,
+    location: { href: "http://x/" }, localStorage: { getItem: () => "1" },
+    setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {},
+    Worker: class { constructor() { workers.push(this); } postMessage(m) { this.request = m; } terminate() { this.dead = true; } },
+  });
+  ctx.window = ctx;
+  vm.runInContext(read(CLIENT), ctx, { filename: absSrc(CLIENT) });
+  const pending = ctx.BitmapDecode.strip({}, 1, [1]);
+  timers[0]();
+  assert.equal(await pending, null);
+  assert.equal(workers[0].dead, true);
+  const next = ctx.BitmapDecode.strip({}, 1, [1]);
+  assert.equal(workers.length, 2);
+  workers[1].onmessage({ data: { type: "strip", seq: workers[1].request.seq, pix: new Uint8Array([1,2,3,4]), stride: 4 } });
+  assert.deepEqual(Array.from((await next)[0]), [1,2,3,4]);
+});

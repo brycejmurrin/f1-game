@@ -5,7 +5,7 @@
  * Preconditions: `npm run pack` has produced dist/<platform>-unpacked/.
  * Linux CI must wrap with xvfb-run and set APEX_DESKTOP_SOFT_GL=1.
  *
- * Asserts shell behaviour only: boots, renders a canvas, advances rAF frames,
+ * Asserts shell behaviour only: boots, renders a canvas, advances real game ticks,
  * no page errors. Does NOT claim GPU performance or real WebGPU (hosted runners
  * have no GPU — research B2/B4).
  *
@@ -108,20 +108,16 @@ test("packaged app: window opens, isPackaged, title/version, canvas, frames, no 
     // Canvas present (may be visibility:hidden on the title screen — still in DOM).
     await expect(window.locator("#game")).toHaveCount(1);
 
-    // Game loop advances N animation frames (title rAF is enough; no race boot).
-    const frames = await window.evaluate(async () => {
-      let n = 0;
-      await new Promise((resolve) => {
-        const tick = () => {
-          n += 1;
-          if (n >= 30) resolve();
-          else requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-      });
-      return n;
-    });
-    expect(frames).toBeGreaterThanOrEqual(30);
+    // Observe the game's own tick instrumentation; a separate rAF counter can
+    // advance even when game boot failed or its tick loop stopped.
+    await window.waitForFunction(() => typeof PerfSpans !== "undefined", null, { timeout: 60_000, polling: 100 });
+    await window.evaluate(() => { PerfSpans.reset(); PerfSpans.on(true); });
+    try {
+      await window.waitForFunction(() => (PerfSpans.stats().frame?.n || 0) >= 30, null,
+        { timeout: 60_000, polling: 100 });
+    } finally {
+      await window.evaluate(() => PerfSpans.on(false));
+    }
 
     // Report the software renderer we actually got (evidence, not a pass gate on string).
     const glInfo = await window.evaluate(() => {

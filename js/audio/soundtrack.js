@@ -586,7 +586,12 @@ var GameAudioSoundtrack = (function () {
       musicGain = null;
       for (const k in musicBuffers) delete musicBuffers[k];
       _bufKeys.length = 0;
-      musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
+      // A decoded buffer belongs to the closed context and must be released.
+      // A streamed track stores only its URL and playback offset; keep those
+      // through rebuild so the new media element can seek to the same place.
+      if (typeof musicResumeBuf !== "string") {
+        musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
+      }
     }
     function releaseEngineDuck(t, useRadio) {
       if (!musicGain) return;
