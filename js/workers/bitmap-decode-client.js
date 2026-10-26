@@ -38,8 +38,9 @@ const BitmapDecode = (function () {
   }
 
   function url(f) {
-    return new URL(f + "?v=" + (typeof window !== "undefined" && window.__APEX_BUILD || 0),
-      (typeof location !== "undefined" && location.href) || "http://x/").href;
+    // audit4 I3 B6: the same cache key ScriptLoader gives every lazy file, so bump-cache precaches it like the rest
+    const keyed = typeof ScriptLoader !== "undefined" && ScriptLoader.url ? ScriptLoader.url(f) : f + "?v=" + (typeof window !== "undefined" && window.__APEX_BUILD || 0);
+    return new URL(keyed, (typeof location !== "undefined" && location.href) || "http://x/").href;
   }
 
   function drop() {

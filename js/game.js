@@ -2919,6 +2919,7 @@ function endRace(forcedOrder) {
   // the pause dialog on top of the results with a RESUME that resolves to
   // nothing, because resuming is only reachable from state "race".
   paused = false; els.pausemenu.hidden = true;
+  Droplets.clear();   // visor glints never linger over the results/menu (audit4 I1 R1)
   setState("results", isQuali() ? "quali-end" : forcedOrder ? "forced-order" : "flag");
   document.body.classList.remove("in-race");
   dropRaceWake();
@@ -4011,7 +4012,7 @@ function raceIntroFromSheet(go, sheet, btn) {
   // A DAILY picked before LAZY_RACE_SESSION landed ran the stub's no-op prepareDaily; the bundle's hook
   // (onRaceSessionReady) then moves teamIdx/driverIdx/difficulty, entrySettings with them, and the intro
   // it lands in went stale and handed START back with no garage-out (#3591, the 9 s idle prefetch).
-  const sessionLate = typeof daily !== "undefined" && daily.isActive() && typeof SessionRecords !== "undefined" && !!SessionRecords._stub;
+  const sessionLate = typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && typeof SessionRecords !== "undefined" && !!SessionRecords._stub;
   try { if (!sessionLate && !(gfx.warming && gfx.warming())) { intro(); return; } } catch (e) { failed(e); return; }
   const n = ++_introRun;
   let settings = entrySettings();
@@ -5734,7 +5735,7 @@ function updateCarLateral(c, dt, ranked, S) {
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // THE NEXT CORNER (AI-only reads): its curvature just past the turn-in owns the pass side and the level side-by-side; its zone's quality says whether to get a run.
     c.kTurn = _atk.toTurnIn < 400 ? AiDrive.cornerK(Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 10)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 30)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 55))) : 0;
-    const _passH = blocker ? AiDrive.passHunger({ street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0, blockerVmax: paceVmax(blocker), ourVmax: S.pvB, blockerPace: scriptPace(blocker), ourPace: scriptPace(c) }) : 1;
+    const _passH = blocker ? AiDrive.hungerOf(!!track.street, aiT, vT, c.queueT || 0, paceVmax(blocker), S.pvB, scriptPace(blocker), scriptPace(c)) : 1;   // pooled bag (audit4 I4 F2)
     c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street, _passH) : 0;
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
     // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
@@ -5929,7 +5930,7 @@ function updateCarLateral(c, dt, ranked, S) {
     // election below stays; a human runs no election at all, which is why
     // the aim is the right moment there (AiDrive.aimIntrudes).
     const aimClose = !!alongO && !alongClose && !!alongO.human && AiDrive.aimIntrudes(desiredX, c.x, alongO._snapX, CLEAR);
-    let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn);
+    let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, AiDrive.cornerK(c.kTurn, alongO.kTurn));   // one k for the pair (audit4 I4 F10)
     // ELECTING THE HUMAN IS ELECTING NOBODY — rule and measurement in
     // AiDrive.humanYieldGrace; this end only carries the per-car timer.
     // Are WE steering into them (aim vs where we already are), and is there
