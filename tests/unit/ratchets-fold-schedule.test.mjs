@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import cp from "node:child_process";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -56,9 +57,11 @@ test("the workflow is daily + dispatch, starts its own CI, pushes a bot branch t
   assert.match(w, /--fold "--min-fragments=\$MIN_FRAGMENTS"/);
   assert.match(w, /timeout-minutes: \d+/);
   assert.match(w, /git push --force-with-lease origin bot\/ratchets-fold/);
-  assert.match(w, /cron: "\d+ \d+ \* \* \*"/, "daily, so fragments do not pile up for a week");
-  assert.match(w, /gh workflow run ci\.yml --repo "\$GITHUB_REPOSITORY" --ref bot\/ratchets-fold/, "a GITHUB_TOKEN PR starts no CI; the dispatch does");
-  assert.match(w, /actions: write/);
+  const wf = createRequire(import.meta.url)("yaml").parse(w);
+  assert.ok(/^\d+ \d+ \* \* \*$/.test(wf.on.schedule[0].cron), "daily, so fragments do not pile up for a week");
+  assert.ok(wf.jobs.fold.steps.find((st) => st.name === "Fold").run.includes('gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref bot/ratchets-fold'),
+    "a GITHUB_TOKEN PR starts no CI; the dispatch does");
+  assert.equal(wf.permissions.actions, "write");
   assert.doesNotMatch(w, /git push[^\n]*claude\/f1-game-project-26h3ng/, "the protected deploy branch is reached only through the PR");
   assert.match(w, /MIN_FRAGMENTS: \$\{\{ inputs\.min_fragments/, "the dispatch input enters shell via env only");
   assert.doesNotMatch(w, /run:[^\n]*\$\{\{ inputs\./);
