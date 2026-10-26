@@ -1629,6 +1629,11 @@
       "interpreter": "bash"
     },
     {
+      "path": "tools/env/codex-cloud-history.py",
+      "classification": "entrypoint-candidate",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/env/ensure-mcp-ready.sh",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
