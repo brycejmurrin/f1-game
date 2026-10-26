@@ -23,6 +23,12 @@
 # false positive here costs one retried MCP call while a false negative boots a
 # second Chromium under the parent's Playwright run.
 #
+# 2026-10-26 (system audit §4; user grant, Bryce 2026-10-26 ~23:00 PT: "Fix hook
+# or guard or perm"): apex_debug_chrome (its start action boots the debug
+# Chromium; status/stop/list stay open) and the browser-use plugin
+# (mcp__plugin_browser-use_*) were not matched, so a subagent could still start
+# a browser through them.
+#
 # Exit 2 blocks with the reason on stderr; exit 0 lets the call through.
 exec python3 -c '
 import json, re, sys
@@ -37,7 +43,9 @@ except Exception:
     sys.exit(2)
 name = d.get("tool_name") or ""
 BROWSER = re.compile(r"^mcp__(playwright-official__.+|chrome-devtools__.+|js-debugger__.+|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|ui_inspect|diagnostics|profile|job_start))$")
-if not BROWSER.match(name):
+ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
+debug_start = name == "mcp__apex-tools__apex_debug_chrome" and str(ti.get("action") or "start").strip().lower() not in ("status", "stop", "list", "help")
+if not (BROWSER.match(name) or debug_start or name.startswith("mcp__plugin_browser-use")):
     sys.exit(0)
 sub = d.get("agent_id") or d.get("agent_type") or "/subagents/" in str(d.get("transcript_path") or "")
 if not sub:

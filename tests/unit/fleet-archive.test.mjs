@@ -66,3 +66,94 @@ test("main prints one row per session, caches PR lookups, and --offline never ca
   main(["page.txt", "--offline", "--json"], { read: () => page, prState: () => { throw new Error("called"); }, log: (l) => off.push(l), now: () => NOW });
   assert.equal(JSON.parse(off[0]).filter((r) => /pr-unknown/.test(r.why)).length, 2);
 });
+
+// System audit 2026-10-26 §1: retired orchestrators piled up (ten ORCH B in six hours).
+import { fleetOf, retired } from "../../tools/ci/fleet-archive.mjs";
+
+test("a retired orchestrator is ARCHIVE once its successor's LIVE line is on the bus; never before", () => {
+  const orch = (over = {}) => sess({ id: "session_01OLD", title: "[Done → B·O-queue9] B·O-queue8 orchestrator", updated_at: ago(90),
+    tags: ["f1-game-fleet", "role:orchestrator", "fleet:B", "config:session-created"], ...over });
+  const next = (L) => (L === "B" ? { letter: "B", id: "claude:session_01NEW" } : null);
+  const r = decide(orch(), { now: NOW, successorOf: next });
+  assert.equal(r.verdict, "ARCHIVE"); assert.match(r.why, /successor claude:session_01NEW LIVE/);
+  assert.equal(decide(orch({ title: "B·O-queue8", session_status: "SESSION_STATUS_COMPLETED" }), { now: NOW, successorOf: next }).verdict, "ARCHIVE", "completed counts as retired");
+  assert.match(decide(orch({ title: "B·O-queue8 orchestrator" }), { now: NOW, successorOf: next }).why, /live orchestrator is never archived/);
+  assert.match(decide(orch(), { now: NOW, successorOf: () => null }).why, /no ORCH B LIVE line/);
+  assert.match(decide(orch(), { now: NOW, successorOf: () => ({ letter: "B", id: "claude:session_01OLD" }) }).why, /still names this session/);
+  assert.match(decide(orch({ updated_at: ago(5) }), { now: NOW, successorOf: next }).why, /touched 5 min ago/);
+  assert.match(decide(orch({ origin: "ios", tags: ["role:orchestrator", "fleet:B"] }), { now: NOW, successorOf: next }).why, /not agent-created/);
+  assert.match(decide(orch({ tags: ["role:orchestrator", "config:session-created"], title: "[Done → x] y" }), { now: NOW, successorOf: next }).why, /no fleet letter/);
+  for (const role of ["watch", "fleet-watch", "merge-desk"])
+    assert.match(decide(orch({ tags: [`role:${role}`, "fleet:B", "config:session-created"] }), { now: NOW, successorOf: next }).why, /never archived/, role);
+  assert.equal(fleetOf({ title: "[Done → ORCH C] ORCH C queue" }), "C");
+  assert.equal(fleetOf({ title: "A·O7 orchestrator" }), "A");
+  assert.equal(retired({ title: "[Done -> x] y" }), true);
+  assert.equal(retired({ title: "x [Done → y]" }), false);
+});
+
+test("main reads the bus once, only for a retired orchestrator, and never with --offline", () => {
+  const page = JSON.stringify({ ccr: { data: [
+    sess({ id: "session_01OLD", title: "[Done → n] ORCH B q", tags: ["role:orchestrator", "fleet:B", "config:session-created"] }),
+    sess({ id: "session_01OLD2", title: "[Done → n] ORCH B q2", tags: ["role:orchestrator", "fleet:B", "config:session-created"] }),
+  ] } });
+  let reads = 0;
+  const bus = () => { reads++; return [{ text: "ORCH B LIVE claude:session_01NEW", from: "claude:session_01NEW", sha: "abc", at: 1 }]; };
+  const logs = [];
+  main(["page.txt"], { read: () => page, prState: () => "merged", log: (l) => logs.push(l), now: () => NOW, bus });
+  assert.equal(reads, 1);
+  assert.match(logs.at(-1), /= fleet-archive 2 archive, 0 keep/);
+  reads = 0; logs.length = 0;
+  main(["page.txt", "--offline"], { read: () => page, prState: () => "merged", log: (l) => logs.push(l), now: () => NOW, bus });
+  assert.equal(reads, 0);
+  assert.match(logs.at(-1), /0 archive, 2 keep/);
+});
+
+// merge-done.mjs — the DONE bus line from the merge commit itself (system audit 2026-10-26 §1:
+// 88 of 326 merges in a week had no DONE line). Pinned here beside the other fleet bookkeeping.
+import { doneFacts, doneText, alreadyDone, postDone, main as mergeDoneMain } from "../../tools/ci/merge-done.mjs";
+
+const SHA = "a".repeat(40), P1 = "b".repeat(40), P2 = "c".repeat(40);
+const commitRun = (subject, parents = [P1, P2], body = "") => (args) => args[0] === "log"
+  ? { code: 0, out: [SHA, parents.join(" "), "brycejmurrin", subject, body].join("\0") } : { code: 1, out: "" };
+
+test("merge-done: a two-parent PR merge yields the DONE facts; a squash or a sync merge does not", () => {
+  const c = { sha: SHA, parents: [P1, P2], author: "brycejmurrin", subject: "Merge pull request #3785 from brycejmurrin/cursor/x", body: "" };
+  assert.deepEqual(doneFacts(c, { actor: "orchB" }), { ok: true, pr: 3785, sha: SHA, parents: [P1, P2], actor: "orchB" });
+  assert.equal(doneFacts({ ...c, body: "Merged-by: claude:session_01X\n" }).actor, "claude:session_01X");
+  assert.equal(doneFacts(c).actor, "brycejmurrin");
+  assert.match(doneFacts({ ...c, parents: [P1], subject: "Fix it (#3785)" }).why, /1 parent\(s\): not a merge commit \(a squash/);
+  assert.match(doneFacts({ ...c, subject: "Merge remote-tracking branch 'origin/claude/f1-game-project-26h3ng'" }).why, /names no PR/);
+  assert.equal(doneText(doneFacts(c, { actor: "x" })), `#3785 ${SHA} merge commit (parents bbbbbbb ccccccc) by x — posted from the commit by merge-done.mjs`);
+});
+
+test("merge-done: posts once; an existing DONE for the PR and sha (any prefix ≥ 7) is not repeated", () => {
+  const sent = [];
+  const send = (type, to, from, text) => { sent.push({ type, to, from, text }); return { ok: true }; };
+  const run = commitRun("Merge pull request #12 from o/b");
+  const r = postDone(SHA, { run, bus: () => [], send, log: () => {} });
+  assert.equal(r.code, 0); assert.equal(sent.length, 1);
+  assert.deepEqual([sent[0].type, sent[0].to, sent[0].from], ["DONE", "*", "github:merge-done"]);
+  assert.equal(alreadyDone([{ type: "DONE", text: `#12 ${SHA.slice(0, 7)} merged` }], { pr: 12, sha: SHA }), true);
+  assert.equal(alreadyDone([{ type: "DONE", text: `#13 ${SHA.slice(0, 7)}` }], { pr: 12, sha: SHA }), false, "another PR");
+  assert.equal(alreadyDone([{ type: "READY", text: `#12 ${SHA}` }], { pr: 12, sha: SHA }), false, "only DONE lines count");
+  const again = postDone(SHA, { run, bus: () => [{ type: "DONE", text: `#12 ${SHA.slice(0, 9)} by orch` }], send, log: () => {} });
+  assert.equal(again.already, true); assert.equal(sent.length, 1);
+  assert.equal(postDone(SHA, { run: commitRun("Fix (#12)", [P1]), bus: () => [], send, log: () => {} }).code, 3);
+  assert.equal(postDone(SHA, { run, bus: () => [], send: () => ({ ok: false }), log: () => {} }).code, 1);
+  const dry = postDone(SHA, { run, bus: () => [], send, dryRun: true, log: () => {} });
+  assert.equal(dry.dryRun, true); assert.equal(sent.length, 1, "a dry run sends nothing");
+});
+
+test("merge-done CLI: one sha or one --range; unknown flags and extra positionals are usage errors", () => {
+  const err = console.error; console.error = () => {};
+  try {
+    assert.equal(mergeDoneMain([]), 2);
+    assert.equal(mergeDoneMain(["--body", "x"]), 2);
+    assert.equal(mergeDoneMain(["a", "b"]), 2);
+    assert.equal(mergeDoneMain(["--range", "a..b", "c"]), 2);
+  } finally { console.error = err; }
+  const runR = (args) => args[0] === "rev-list" ? { code: 0, out: `${SHA}\n` } : commitRun("Merge pull request #7 from o/b")(args);
+  const sent = [];
+  assert.equal(mergeDoneMain(["--range", "x..y", "--actor", "bryce"], { run: runR, bus: () => [], send: (...a) => { sent.push(a); return { ok: true }; }, log: () => {} }), 0);
+  assert.match(sent[0][3], /^#7 a{40} .* by bryce/);
+});

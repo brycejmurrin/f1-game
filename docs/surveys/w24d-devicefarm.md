@@ -60,13 +60,13 @@ is only known for 18 Pro Max. Mid-range players on 14 / 14 Pro have no boot
 number; #3515 / reload revalidation claims cannot be checked on D's devices.
 
 **Evidence.** Ledger row 16 (`devicefarm-boot.mjs` / #3616); harness default
-already `iPhone 14` (`tools/perf/devicefarm-boot.mjs:9`).
+already `iPhone 14` (`tools/archive/perf/devicefarm-boot.mjs:9`).
 
-**Proposed change.** `node tools/perf/devicefarm-boot.mjs --device "iPhone 14"
+**Proposed change.** `node tools/archive/perf/devicefarm-boot.mjs --device "iPhone 14"
 --trials 3` and the same on 14 Pro against live Pages (once with `?apex=1`).
 Report already carries thermal when available (`devicefarm-boot.mjs:132–135`).
 
-**Size.** S. **Fleet.** D (`tools/perf/devicefarm-boot.mjs`).
+**Size.** S. **Fleet.** D (`tools/archive/perf/devicefarm-boot.mjs`).
 
 ### 3. Multi-minute thermal time series (not 60 s soak) — **M · D** (governor read: A)
 

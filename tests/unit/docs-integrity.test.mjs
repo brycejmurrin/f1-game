@@ -910,7 +910,7 @@ test("docs/README indexes every research doc too", () => {
   // The walk above covers docs/ top level only, so four research docs sat
   // unindexed for weeks (round-6 finding) — a doc nobody can find is a doc
   // nobody reads before re-doing its work.
-  const index = read("docs/README.md");
+  const index = read("docs/README.md") + read("docs/NOTES-INDEX.md");
   const missing = ls("docs/research", /\.md$/)
     .filter((f) => !index.includes(`research/${f}`));
   assert.deepEqual(missing, [],
@@ -1008,7 +1008,7 @@ test("no live doc points a reader at docs/archive/", () => {
   const inNotes = (p) => p.split(path.sep).join("/").startsWith("docs/notes/");
   const offenders = [];
   for (const doc of LIVE_DOCS) {
-    if (doc === "docs/README.md" || inNotes(doc)) continue;
+    if (doc === "docs/README.md" || doc === "docs/NOTES-INDEX.md" || inNotes(doc)) continue;
     if (/docs\/archive\/|\.\.\/archive\//.test(read(doc))) offenders.push(doc);
   }
   assert.deepEqual(offenders, [],
@@ -1042,7 +1042,7 @@ test("the data hub does not hardcode a season year", () => {
 // the convention and are not checked.
 test("Supersedes: / Superseded by: pairs in docs/notes are two-way and indexed", () => {
   const dir = path.join(ROOT, "docs/notes");
-  const index = read("docs/README.md");
+  const index = read("docs/README.md") + read("docs/NOTES-INDEX.md");
   const links = (line) => [...line.matchAll(/\]\(([^)#]+\.md)\)/g)].map((m) => m[1]);
   for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".md"))) {
     const text = read(`docs/notes/${f}`);

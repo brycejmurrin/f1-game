@@ -4477,6 +4477,7 @@
     },
     "js/circuits/spa.js": {
       "*": [
+        "tests/unit/deploy-tool.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
     },
@@ -6928,6 +6929,7 @@
         "tests/unit/agent-config.test.mjs",
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/body-attitude.test.mjs",
         "tests/unit/car-fx.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
@@ -6974,7 +6976,6 @@
         "tests/unit/agent-output.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
-        "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
@@ -16074,8 +16075,10 @@
       ],
       "*": [
         "tests/specs/hud-mirror.spec.js",
+        "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
+        "tests/unit/fleet-owner.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
         "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-survey.test.mjs",

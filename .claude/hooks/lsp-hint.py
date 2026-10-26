@@ -65,6 +65,11 @@ def symbol_of(pattern):
         return None, False
     if len(sym) < 3:
         return None, False
+    # 2026-10-26 (system audit §4; user grant, Bryce 2026-10-26: "Fix hook or guard or perm"): a bare
+    # SCREAMING_CASE word (RELAY_URL, APEX_MERGE_DESK, TURN) is an env name or a constant grepped as text, not a
+    # script global; only a bare CapitalisedSymbol (has a lowercase letter) or a Head.member fires.
+    if "." not in sym and not m.group("decl") and not re.search(r"[a-z]", sym):
+        return None, False
     return sym, bool(m.group("decl"))
 
 

@@ -283,7 +283,11 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--sk
   the last game merge. Writes artifacts/merge-gate/<n>.json, which github-mcp-guard.sh requires on merge_pull_request
   with expectedHeadSha pinned to the gated head (docs/plans/2026-10-19-fleet-redesign.md).`;
 
-export function main(argv, { request = api, root = ROOT, env = process.env, now = () => Date.now(), bus = readBus, localMerge = localMergeGenCheck, pages = pagesGreenFor, log = console.log } = {}) {
+/** Backoff before each re-read of a PR whose mergeable_state is still `unknown` (GitHub computes it lazily). */
+export const UNKNOWN_RETRY_MS = [2000, 4000, 8000];
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+export function main(argv, { request = api, root = ROOT, env = process.env, now = () => Date.now(), bus = readBus, localMerge = localMergeGenCheck, pages = pagesGreenFor, log = console.log, sleep = sleepSync, unknownRetryMs = UNKNOWN_RETRY_MS } = {}) {
   exitIfHelp(argv, USAGE);
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   const pr = Number(opt("--pr"));
@@ -292,8 +296,19 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
   const skipLocal = argv.includes("--skip-local-merge");
   const me = whoAmI(env, opt("--as") || "");
 
-  const one = request(`pulls/${pr}`);
+  let one = request(`pulls/${pr}`);
   if (one.error) { log(`[merge-gate] = merge-gate unknown — PR #${pr}: ${one.error}`); return 3; }
+  // `mergeable_state: unknown` means GitHub has not computed it yet (the first read after a push often says so):
+  // re-read up to 3 times with backoff instead of refusing the row (2026-10-26 system audit; user grant, Bryce
+  // 2026-10-26 ~23:00 PT: "Fix hook or guard or perm"). Still unknown after that: the open row refuses as before.
+  for (const ms of unknownRetryMs) {
+    const j = one.json || {};
+    if (j.state !== "open" || String(j.mergeable_state || "unknown") !== "unknown") break;
+    sleep(ms);
+    const again = request(`pulls/${pr}`);
+    if (again.error) break;
+    one = again;
+  }
   const pull = one.json || {};
   const head = String(pull.head?.sha || "").toLowerCase();
   const want = String(opt("--sha") || "").toLowerCase();

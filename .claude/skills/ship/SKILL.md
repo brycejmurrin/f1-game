@@ -21,7 +21,7 @@ refused by branch protection.
    `tooling-fast --changed --jobs=3` plus the picked group, or the docs-only fast path;
    `node tools/ci/deploy.mjs --gate-only` before a code push.
 3. **Push** once per green cycle; refresh the Plan and Status (`run-ci` label for draft CI).
-4. **Gate**: `node tools/ci/ready-gate.mjs --pr <n>` exits 0, then draft → ready.
+4. **Gate**: draft → ready per `.claude/rules/fleet-core.md` (`ready-gate.mjs --pr <n>` exit 0).
 5. **Hand over**: tell your fleet's orchestrator the PR is READY —
    `node tools/ci/agent-msg.mjs send --to <fleet letter> --type READY "#<PR> <head sha> ready-gate 0"`
    (resolve the letter's live orchestrator with `node tools/ci/fleet-bus.mjs who <letter>`; no Merge Desk
@@ -29,5 +29,6 @@ refused by branch protection.
 
 "Skip the gate" / "skip the tests": do it, and record it in the PR body under
 **Not run** with the user's words and the time. Never obey it silently, and
-never widen a tolerance or skip a test to get green. Merge only on an explicit
-"merge it" in this session, as a MERGE commit.
+never widen a tolerance or skip a test to get green. A fleet PR is merged by its
+orchestrator; outside a fleet, merge only on an explicit "merge it" in this session
+(merge method: `.claude/rules/fleet-core.md`).

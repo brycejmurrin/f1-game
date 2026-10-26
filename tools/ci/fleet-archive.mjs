@@ -27,6 +27,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { readBus, whoIs } from "./fleet-bus.mjs";
 
 export const REPO = "brycejmurrin/f1-game";
 /** Roles an orchestrator may archive once their PR is done. Orchestrators, watchers and Merge Desks are never on it. */
@@ -55,23 +56,44 @@ export function prOf(session) {
 }
 
 export const roleOf = (session) => ((session.tags || []).map((t) => /^role:(.+)$/.exec(t)).find(Boolean) || [])[1] || null;
+/** The fleet letter of an orchestrator session: `fleet:<L>` tag, else `ORCH <L>` / `<L>·O…` in the title. Pure. */
+export function fleetOf(session) {
+  for (const t of session.tags || []) { const m = /^fleet:([A-Za-z])$/.exec(t); if (m) return m[1].toUpperCase(); }
+  const m = /\bORCH\s*([A-Z])\b/.exec(session.title || "") || /\b([A-Z])·O[\w-]*/.exec(session.title || "");
+  return m ? m[1] : null;
+}
+/** Handed off: `[Done → …]` title prefix or a COMPLETED session. Pure. */
+export const retired = (session) => /^\[Done\s*(→|->)/.test(String(session.title || "").trim())
+  || /COMPLETED$/.test(String(session.session_status || ""));
+const bare = (id) => String(id || "").replace(/^[a-z]+:/, "").replace(/^cse_/, "session_");
+
 export const agentCreated = (session) => (session.tags || []).includes("config:session-created") || session.origin === "claude_code_mcp_seed";
 
 /**
  * The rule for one session. `prState(n)` -> "merged" | "closed" | "open" | "unknown". Pure except that callback.
  * @returns {{ id, title, verdict: "ARCHIVE"|"KEEP", why }}
  */
-export function decide(session, { now = Date.now(), idleMin = IDLE_MIN, prState = () => "unknown" } = {}) {
+export function decide(session, { now = Date.now(), idleMin = IDLE_MIN, prState = () => "unknown", successorOf = () => null } = {}) {
   const out = (verdict, why) => ({ id: session.id, title: session.title || "", verdict, why });
   const role = roleOf(session);
   if (String(session.session_status || "").endsWith("ARCHIVED")) return out("KEEP", "already archived");
   if (!role) return out("KEEP", "no role tag: a session Bryce opened or talks to");
   if (!agentCreated(session)) return out("KEEP", `role ${role} but not agent-created (origin ${session.origin || "?"})`);
-  if (!ARCHIVABLE_ROLES.includes(role)) return out("KEEP", `role ${role} is never archived by an agent`);
+  const orch = role === "orchestrator";
+  if (!ARCHIVABLE_ROLES.includes(role) && !orch) return out("KEEP", `role ${role} is never archived by an agent`);
+  if (orch && !retired(session)) return out("KEEP", "a live orchestrator is never archived (no [Done → …] title, not completed)");
   if (String(session.session_status || "").endsWith("RUNNING")) return out("KEEP", "still running");
   const touched = Date.parse(session.updated_at || "") || 0;
   const idle = (now - touched) / 60000;
   if (idle < idleMin) return out("KEEP", `touched ${Math.round(idle)} min ago (rule: idle ≥ ${idleMin})`);
+  if (orch) {
+    const letter = fleetOf(session);
+    if (!letter) return out("KEEP", "retired orchestrator with no fleet letter (fleet:<L> tag or ORCH <L> title): archive by hand");
+    const next = successorOf(letter);
+    if (!next) return out("KEEP", `retired orchestrator, but no ORCH ${letter} LIVE line on the bus (or --offline)`);
+    if (bare(next.id) === bare(session.id)) return out("KEEP", `the bus still names this session ORCH ${letter}`);
+    return out("ARCHIVE", `retired orchestrator ${letter}, idle ${Math.round(idle)} min, successor ${next.id} LIVE on the bus`);
+  }
   const pr = prOf(session);
   if (!pr) return out("KEEP", "no PR in its pr: tag or title: ask, or archive by hand after reading it");
   const st = prState(pr);
@@ -90,9 +112,11 @@ export function prStateViaGh(n, run = spawnSync) {
 
 const USAGE = `usage: node tools/ci/fleet-archive.mjs <saved list_sessions page> [--offline] [--json] [--idle-min N]
   Applies the archive rule (AGENTS.md §Concurrent PRs) to the sessions on the page and prints ARCHIVE / KEEP rows.
+  A retired orchestrator ([Done → …] title or completed) is ARCHIVE once its fleet's successor has a LIVE line on the bus.
   It never archives anything itself: the orchestrator calls archive_session on the ARCHIVE ids it reads here.`;
 
-export function main(argv, { read = fs.readFileSync, prState = prStateViaGh, log = console.log, now = Date.now } = {}) {
+export function main(argv, { read = fs.readFileSync, prState = prStateViaGh, log = console.log, now = Date.now,
+  bus = () => readBus({ last: 500 }).entries } = {}) {
   exitIfHelp(argv, USAGE);
   const file = argv.find((a) => !a.startsWith("--") && !/^\d+$/.test(a));
   if (!file) { log(USAGE); return 1; }
@@ -103,7 +127,14 @@ export function main(argv, { read = fs.readFileSync, prState = prStateViaGh, log
   try { sessions = extractSessions(read(file, "utf8")); } catch (e) { log(`fleet-archive: ${e.message}`); return 1; }
   const cache = new Map();
   const state = (n) => { if (offline) return "unknown"; if (!cache.has(n)) cache.set(n, prState(n)); return cache.get(n); };
-  const rows = sessions.map((s) => decide(s, { now: now(), idleMin, prState: state }));
+  // The bus is read once, and only when a retired orchestrator is on the page.
+  let entries = null;
+  const successorOf = (L) => {
+    if (offline) return null;
+    if (entries === null) { try { entries = bus() || []; } catch { entries = []; } }
+    return whoIs(entries, L);
+  };
+  const rows = sessions.map((s) => decide(s, { now: now(), idleMin, prState: state, successorOf }));
   if (argv.includes("--json")) log(JSON.stringify(rows, null, 2));
   else {
     for (const r of rows) log(`${r.verdict.padEnd(7)} ${r.id}  ${r.title.slice(0, 60).padEnd(60)}  ${r.why}`);

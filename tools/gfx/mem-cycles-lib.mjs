@@ -1,5 +1,5 @@
 // @doc gpu-game-check --mem-cycles helpers: an in-page live GPUBuffer/GPUTexture counter and the per-cycle plateau verdict.
-// @skill perf-memory-census
+// @skill mcp-probe
 //
 // WHY. Heap snapshots cannot see GPU residency, and three's WebGPU backend keeps
 // buffers in a WeakMap (backend.data) a snapshot reads as "retained" whether the

@@ -1137,8 +1137,9 @@ The gate group never cancels: a running gate finishes, the next push waits, a
 later push replaces the waiting one. Then `publishable`, `deploy` (exact
 artifact, monotonic) and `verify-live` as before. Measured 2026-10-14: the
 gate's median is 20.5 min and a gated publish (dispatch to live) 23 min
-median, 73 min p90 — queue waits in the 03-08 UTC bursts, not the tests, make
-the tail.
+median, 73 min p90 — queue waits in the 03-08 UTC bursts, not the tests, made
+the tail. Re-measured 2026-10-26 (last 40 `pages.yml` runs, system audit): p50
+11.9 min, p90 20.4.
 
 Inside `ci.yml` a Pages call is recognised by its `concurrency_key` (the
 caller's event is `push`, `schedule` or `workflow_dispatch` there): the
@@ -1153,14 +1154,11 @@ pins all of it. "Is my commit live?" is `git merge-base --is-ancestor <sha>
 
 The ship branch is a **merge train**: merge **one large PR at a time**; batch
 small independent PRs so the tip does not thrash. Agents open DRAFT PRs and
-mark ready only when final; keep about six or fewer ready PRs open
-(AGENTS.md §Concurrent PRs). Before marking ready, Merge Desk runs
-`node tools/ci/ready-gate.mjs` (green tooling-fast evidence on the tip: the
+mark ready only when final (`.claude/rules/fleet-core.md`). Before marking
+ready, the PR's owner runs `node tools/ci/ready-gate.mjs` (green tooling-fast evidence on the tip: the
 CI check-run named `Structural guards` — the aggregator after the
 `Structural guards (tooling A)` … `(tooling D)` shards — or a local
-full-suite stamp). There is no desk cap on ready PRs since 2026-10-16 (the
-cap of 3 read 13/3 with 12 ready PRs open; the
-cap tool was deleted in #3013). GitHub bounds the LEGS
+full-suite stamp). There is no cap on ready PRs. GitHub bounds the LEGS
 (2026-10-15): a ready PR's `selected` legs each join one of LANES fleet-wide
 `concurrency: { group: selected-lane-<n>, queue: max }` groups (the lane is a
 field of every matrix row, `tools/ci/select-specs.mjs` LANES, its start
@@ -1169,10 +1167,10 @@ ready PR at once and the rest wait FIFO without holding a runner or being
 cancelled; the train, the nightly and a dispatch get a group of their own
 per leg and never wait behind PR work. Smoke has no lane (2026-10-16: one
 2.6-min job per run that never failed waited p90 17.5 min behind other PRs'
-smoke, the 2026-10-16 CI/CD review note (#2333) finding 6). Sync with
-`node tools/ci/sync-pr.mjs <branch>`
-once before the final CI run — do **not** enable auto-update-branch bots or a
-require-up-to-date protection rule. `tools/ci/behind-ship.mjs` (at the end of
+smoke, the 2026-10-16 CI/CD review note (#2333) finding 6). Sync only by
+`.claude/rules/fleet-core.md` (CONFLICTING/DIRTY or a red required tip check,
+via `node tools/ci/sync-pr.mjs <branch>`); never enable auto-update-branch bots
+or a require-up-to-date protection rule. `tools/ci/behind-ship.mjs` (at the end of
 Structural guards tooling B since 2026-10-15, PR only) prints how far the head is behind
 ship and emits a `::warning::` over 10 commits; it never fails the job.
 Deploy / Pages runs keep their own concurrency groups with

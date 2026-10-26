@@ -17,7 +17,15 @@
 #   update_pull_request draft falsy (false/0/"no"/"off", any case: draft->ready)
 #                                                  -> "deny" unless artifacts/ready-gate/<pr>.json
 #                                                     is ok and < 10 min old
+#   update_pull_request state "closed"            -> "ask" (2026-10-26: closing a PR was neither denied nor hooked)
 #   any other update_pull_request (title/body/base) -> silent pass
+#   push_files / create_or_update_file / create_branch / delete_file
+#                                                  -> "deny" (settings.json denies them too; this is the
+#                                                     Cursor/Codex door: on the admin App token a file write
+#                                                     lands on any branch with no PR and no CI)
+#   actions_run_trigger run_workflow of pages.yml / ci.yml (or a numeric id)
+#                                                  -> "ask" (the release train: never dual-dispatch Pages)
+#   actions_run_trigger delete_workflow_run_logs     -> "ask" (evidence other sessions read)
 #   actions_run_trigger *cancel* (cancel_workflow_run, force_cancel_…)
 #                                                  -> "deny" (a queued run holds no slot; a sweep
 #                                                     only buys a retrigger push — 2026-10-15), unless
@@ -26,15 +34,21 @@
 #                                                     silent under APEX_MERGE_DESK=1 (Bryce 2026-10-15:
 #                                                     "all tools and mcps enabled", "Fix for me")
 #
-# APEX_MERGE_DESK=1 (set for EVERY session by .claude/settings.json `env` since
-# 2026-10-15) no longer decides merges or ready flips: the receipt does, whoever
-# asks. It still skips the re-run prompt. The reason texts and the receipt check
+# Receipts: merge_policy.receipt_check(..., verify_files=True) also refuses a
+# receipt whose gate files (merge-gate.mjs, ready-gate.mjs, gate-receipt.mjs)
+# differ from this checkout's committed tree (the 2026-10-20 O23 incident).
+#
+# APEX_MERGE_DESK=1 no longer decides merges or ready flips: the receipt does,
+# whoever asks. It only skips the re-run prompt, and since 2026-10-26 it is no
+# longer in the shared settings.json `env` — the orchestrator's environment sets
+# it (user grant, Bryce 2026-10-26 ~23:00 PT: "Fix hook or guard or perm";
+# docs/notes/HOOKS-SECURITY-2026-10-26.md). The reason texts and the receipt check
 # live in merge_policy.py, shared with bash-guard.sh's `gh` rule. Output is
 # the documented PreToolUse JSON (hookSpecificOutput.permissionDecision,
 # https://code.claude.com/docs/en/hooks). Exit 0 always; settings.json sets
 # onFailure "block" so a crash refuses the call instead of letting it through.
 exec python3 -c '
-import json, os, sys
+import json, os, re, sys
 sys.path.insert(0, sys.argv[1])
 import merge_policy as P
 try:
@@ -75,22 +89,30 @@ elif merging:
         decision, reason = "ask", P.ASK_DESK_METHOD
     else:
         head = first("expectedHeadSha", "expected_head_sha", "headSha", "head_sha", "sha")
-        ok, why = P.receipt_check(root, "merge", pr, head)
+        ok, why = P.receipt_check(root, "merge", pr, head, verify_files=True)
         if not ok:
             decision, reason = "deny", P.DENY_GATE_MERGE + " (" + why + ")"
+elif re.search(r"__(push_files|create_or_update_file|create_branch|delete_file)$", name):
+    decision, reason = "deny", "github-mcp-guard: " + name.rsplit("__", 1)[-1] + " " + P.DENY_WRITE
 elif name.endswith("__update_pull_request"):
     draft = ti.get("draft")
     falsy = draft is not None and draft is not True and str(draft).strip().lower() in ("false", "0", "no", "off", "")
     if falsy:
-        ok, why = P.receipt_check(root, "ready", pr)
+        ok, why = P.receipt_check(root, "ready", pr, verify_files=True)
         if not ok:
             decision, reason = "deny", P.DENY_GATE_READY + " (" + why + ")"
+    if decision is None and str(ti.get("state") or "").strip().lower() == "closed":
+        decision, reason = "ask", P.ASK_CLOSE
 elif name.endswith("__actions_run_trigger"):
     method = str(ti.get("method") or "").strip().lower()
     if "cancel" in method and os.environ.get("APEX_RUN_CANCEL_OK") != "1":
         decision, reason = "deny", P.DENY_CANCEL
     elif method in ("rerun_workflow_run", "rerun_failed_jobs") and not desk:
         decision, reason = "ask", P.ASK_RERUN
+    elif method == "run_workflow" and P.gated_workflow(ti.get("workflow_id")):
+        decision, reason = "ask", P.ASK_DISPATCH + " (" + str(ti.get("workflow_id")) + " on " + str(ti.get("ref") or "?") + ")"
+    elif method == "delete_workflow_run_logs":
+        decision, reason = "ask", "Deleting the logs of a run destroys evidence other sessions triage from. Confirm by hand."
 if decision:
     P.emit(decision, reason)
 sys.exit(0)

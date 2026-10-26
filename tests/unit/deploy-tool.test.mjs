@@ -249,6 +249,18 @@ test("only GENERATED files cure themselves, and only when their source merged cl
   assert.equal(cure(["docs/agent-output/catalog.json", "tools/README.md"]), true, "two tool indexes regenerate together");
   assert.deepEqual(cureableConflicts(["docs/agent-output/catalog.json"]).catalogF, ["docs/agent-output/catalog.json"]);
   assert.equal(cure(["docs/agent-output/catalog.json", "docs/agent-output/policies.json"]), false, "policies.json is hand-written");
+
+  // System audit 2026-10-26: the merge-conflict hot spots that are generated —
+  // gen-agent-index's three outputs, the coverage table, and the scenery survey
+  // cache (75 conflicts in 7 days) — cure; their sources still do not.
+  const derived = ["docs/agent-index.json", "tests/data/impact-map.json", "docs/AGENT-HOOKS.md", "docs/TESTING-COVERAGE.md"];
+  assert.equal(cure(derived), true);
+  assert.deepEqual(cureableConflicts(derived).derivedF, derived);
+  assert.equal(cure(["tools/shot/scenery-locations.json"]), true, "the scenery cache regenerates");
+  assert.deepEqual(cureableConflicts(["tools/shot/scenery-locations.json", "package.json"]).sceneryF, ["tools/shot/scenery-locations.json"]);
+  assert.equal(cure(["tools/shot/scenery-locations.json", "js/circuits/spa.js"]), false, "a circuit conflict is authored");
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/deploy.mjs"), "utf8");
+  assert.match(src, /run\("node", \["tools\/shot\/gen-scenery-locations\.cjs"\]/, "the cure runs the generator");
 });
 
 test("prose docs are never cured: no doc carries generated ladder digits any more", () => {

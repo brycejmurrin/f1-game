@@ -12,7 +12,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ciVerdict, openVerdict, pacingVerdict, pagesVerdict, slotOf, isGamePath, gameFiles, verdictLine, main, REQUIRED_CHECK, ratchetsOnMerge, localMergeGenCheck } from "../../tools/ci/merge-gate.mjs";
-import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN } from "../../tools/lib/gate-receipt.mjs";
+import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict } from "../../tools/lib/gate-receipt.mjs";
 import { TYPES, formatLine, parseLine } from "../../tools/ci/fleet-bus.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -296,4 +296,57 @@ test("two PRs that are each at the assert-match ceiling alone are over it on the
     assert.equal(together.ok, true, "the merge and gen:check are fine: only the ratchet row sees the overage");
     assert.deepEqual(together.ratchets, { ok: false, evidence: `${OVER}assert-match ceiling: 4 ${PIN} sites (ceiling 3)${NEVER_RAISE}` });
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+// 2026-10-26 system audit §10 (the O23 incident: an UNCOMMITTED merge-gate.mjs edit wrote an ok receipt). User grant,
+// Bryce 2026-10-26 ~23:00 PT: "Fix hook or guard or perm".
+test("a receipt records the gate files' sha256; gateFilesVerdict (JS) and gate_files_check (Python) refuse an edited or uncommitted gate", () => {
+  const dir = scratch("merge-gate-files-");
+  const g = (...a) => spawnSync("git", ["-C", dir, ...a], { encoding: "utf8" });
+  try {
+    g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    for (const f of GATE_FILES) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.copyFileSync(path.join(ROOT, f), path.join(dir, f)); }
+    g("add", "-A"); g("commit", "-qm", "gate");
+    writeReceipt(dir, "merge", { pr: 5, head: HEAD, ok: true }, { main: null, gateRoot: dir });
+    const rc = readReceipt(dir, "merge", 5);
+    assert.deepEqual(rc.gateFiles, gateFileHashes(dir));
+    assert.equal(rc.gateRoot, dir);
+    assert.match(rc.gateFiles["tools/ci/merge-gate.mjs"], /^[0-9a-f]{64}$/);
+    const py = (receipt) => JSON.parse(spawnSync("python3", ["-c", `import json,sys; sys.path.insert(0, ${JSON.stringify(path.join(ROOT, ".claude/hooks"))}); import merge_policy as P; print(json.dumps(P.gate_files_check(${JSON.stringify(dir)}, json.loads(sys.stdin.read()))))`], { input: JSON.stringify(receipt), encoding: "utf8" }).stdout);
+    const both = (receipt) => { const js = gateFilesVerdict(dir, receipt); const [ok, why] = py(receipt); assert.equal(ok, js.ok, `js=${js.why} py=${why}`); return js; };
+    assert.equal(both(rc).ok, true, "the committed gate's receipt");
+    const f = path.join(dir, "tools/ci/merge-gate.mjs");
+    const orig = fs.readFileSync(f, "utf8");
+    fs.writeFileSync(f, orig + "// --pacing-override\n");
+    assert.match(both(rc).why, /not the file that wrote this receipt/);
+    assert.match(both({ ...rc, gateFiles: gateFileHashes(dir) }).why, /differ from HEAD/, "the edited gate hashed itself: still refused");
+    fs.writeFileSync(f, orig);
+    assert.match(both({ ...rc, gateFiles: undefined }).why, /no gate-file hashes/);
+    // the receipt check proper: verify_files only where the hook doors ask for it
+    const [ok] = JSON.parse(spawnSync("python3", ["-c", `import json,sys; sys.path.insert(0, ${JSON.stringify(path.join(ROOT, ".claude/hooks"))}); import merge_policy as P; print(json.dumps(P.receipt_check(${JSON.stringify(dir)}, "merge", 5, ${JSON.stringify(HEAD)}, verify_files=True)))`], { encoding: "utf8" }).stdout);
+    assert.equal(ok, true);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("mergeable_state unknown is re-read up to 3 times with backoff before the open row refuses", () => {
+  const dir = scratch("merge-gate-unknown-");
+  try {
+    let reads = 0;
+    const states = ["unknown", "unknown", "clean"];
+    const pull = () => ({ state: "open", draft: false, mergeable_state: states[Math.min(reads - 1, states.length - 1)], head: { sha: HEAD, ref: "cursor/x" }, body: "## Plan\n- [x] done\n", changed_files: 1 });
+    const request = (p) => {
+      if (p === "pulls/7") { reads++; return { json: pull() }; }
+      if (p.startsWith("pulls/7/files")) return { json: [{ filename: "tools/ci/ready-gate.mjs" }] };
+      if (p.startsWith("commits/")) return { json: { check_runs: [{ id: 1, name: "Structural guards", status: "completed", conclusion: "success" }, { id: 2, name: "CI", status: "completed", conclusion: "success" }], total_count: 2 } };
+      return { error: `unexpected ${p}` };
+    };
+    const slept = [];
+    const deps = { request, root: dir, env: { APEX_FLEET_AS: "claude:session_ME" }, bus: () => ({ entries: [] }), localMerge: () => ({ ok: true, evidence: "ok", tip: "t".repeat(40) }), pages: () => true, log: () => {}, sleep: (ms) => slept.push(ms) };
+    assert.equal(main(["--pr", "7"], deps), 0, "clean on the third read");
+    assert.deepEqual(slept, [2000, 4000]);
+    reads = 0; slept.length = 0; states.splice(0, 3, "unknown", "unknown", "unknown", "unknown", "unknown");
+    assert.equal(main(["--pr", "7"], deps), 1);
+    assert.deepEqual(slept, [2000, 4000, 8000], "three retries, then the row refuses");
+    assert.match(readReceipt(dir, "merge", 7).evidence, /mergeable_state unknown/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
