@@ -38,3 +38,13 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Green + READY to D: #3717 #3726 #3727 (L4), #3732 #3733 #3734 (L5), #3724 (draft, READY), #3576 (sync, 37/0). Open: #3623, #3684.
 - B's own: #3753 (L6, tooling-fast), #3750 (L1, #3505 row 1 re-dated to 11-10; garage pool fix needs an owner outside B, bus f20fcbc).
 - Bus cursor 08acf4c.
+
+## Handoff 00:46Z (17:46 PT) — ORCH B session_01STmZNpnDNQYKeqBJpSVQkD at ~196k context
+- Successor: arm the 3-min send_later tick + hourly create_trigger safety net FIRST, then post `ORCH B LIVE <id> (succeeds session_01STmZNpnDNQYKeqBJpSVQkD)` and tell live workers the new ORCHESTRATOR id.
+- B's own PRs: #3753 MERGED ab74c7ae, #3750 MERGED c31008c9 (both via merge-gate, 2 parents, DONE on bus). L6 and L1 told lane complete.
+- D's lent PRs (D merges; READY/GREEN to D already posted): #3726 MERGED by D 4a2a9026. Green+ready awaiting D: #3717 #3727 (L4), #3732 #3733 #3734 (L5), #3576 (sync), #3724 (draft, READY). Still open with B: #3623 (session_01E9nuKbS4cLTGZn68cq1PPS), #3684 (B·sync session_018q2mQMSpBgwjPUSBzX9Ppm).
+- L4 session_016KNaCzCBSTjwTYcbnNru71 and L5 session_0139MAKfbqo1FCNb7ckGpacg: lanes done, watching until D merges.
+- DAD (3d88d80): no new D PRs beyond the 4:22 PM lease.
+- Open lead (bus f20fcbc): garage dress/live atlas TLX _texPool miss in js/garage/scene.js needs an owner outside B.
+- A: no reply to B's help offer. C: nothing for B.
+- Bus cursor 13e5969. Predecessor's triggers: hourly trig_01YFhm11i98ni5pKW9Hvefdc + 3-min chain — I delete them once you post LIVE.
