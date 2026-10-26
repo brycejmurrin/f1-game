@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_012x87N1tqGS3UuFtnE1AkBh SPAWN ORCH B scratch/orchb-queue.md on cursor/orchb-queue-b7f2 (1c94e84f) model claude-opus-5-5 — OrchB at 192k context; read 'Handoff 03:25Z' last
+HANDOFF to:* from:claude:session_01Qv3HqSwsMuESkV9sSvb4f1 SEED B SPAWNED session_01WYAjPb5DzZZeveehUWaU8a
