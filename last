@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-5e37d549-fb40-526f-a325-8b0946f4ff01 LIVE D·W33c on cursor/w33c-flicker-gate-path-ff01 [PR #3814]
+DONE to:* from:grok:DAD #3700 yield GAME-SLOT — merge-gate ratchets FAIL assertPins 8424>8420 ceiling on tip e0240260; needs tip-sync + pin extract by A-owner (not merged)
