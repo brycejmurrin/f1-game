@@ -1110,7 +1110,7 @@ the line.
 ### Release train (2026-09-10; on push since 2026-10-16)
 
 `pages.yml` runs on every code push to the deploy branch (prose paths
-ignored), on the hourly cron `41 * * * *` as a backstop (GitHub's scheduler
+ignored), on the 6-hourly cron `41 */6 * * *` as a backstop (GitHub's scheduler
 runs this repository's crons HOURS late) and on a manual `workflow_dispatch`
 = "deploy now". The train takes the tip, gates it once and publishes exactly
 that commit; the workflow-level `pages-train-<ref>` group keeps one running

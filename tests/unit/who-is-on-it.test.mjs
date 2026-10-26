@@ -248,7 +248,10 @@ test("a board write pokes fleet.yml by REST workflow_dispatch on the deploy bran
   assert.deepEqual(post.slice(5), ["-f", "ref=claude/f1-game-project-26h3ng"]);
   assert.match(pokeFleetBoard((cmd, args) => (
     { status: 0, stdout: isQueuedQuery(args) ? "1\n" : "" }
-  )), /already queued/);
+  )), /already queued or running/);
+  const query = calls.find((c) => c.some((a) => typeof a === "string" && a.includes("/runs?")));
+  assert.ok(query.some((a) => /in_progress/.test(a)) && query.some((a) => /queued/.test(a)),
+    "the debounce counts running as well as queued fleet.yml runs");
   assert.match(pokeFleetBoard((cmd, args) => {
     if (isQueuedQuery(args)) return { status: 0, stdout: "0\n" };
     return { status: 1 };
