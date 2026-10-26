@@ -1973,6 +1973,44 @@ test("menu stick releases outside its target when pointer capture is refused", (
   }
 });
 
+test("menu stick survives WebKit capture transfer but releases when hidden", () => {
+  const previous = { document: globalThis.document, window: globalThis.window };
+  const docListeners = {}, winListeners = {};
+  globalThis.document = { hidden: false, addEventListener(type, fn) { (docListeners[type] ||= []).push(fn); } };
+  globalThis.window = { addEventListener(type, fn) { (winListeners[type] ||= []).push(fn); } };
+  const dom = { stick: fakeEl(), nub: fakeEl(), gas: fakeEl() };
+  dom.stick.isConnected = true;
+  dom.stick.getClientRects = () => [{}];
+  const timers = fakeTimers();
+  let ctl;
+  try {
+    ctl = PhonePad.pad(dom, { timers });
+    dom.stick.dispatch("pointerdown", { pointerId: 21, pointerType: "touch", clientX: 95, clientY: 200 });
+    assert.equal(timers.pending(), 1);
+    dom.gas.dispatch("pointerdown", { pointerId: 22, pointerType: "touch", clientY: 200 });
+    dom.stick.dispatch("lostpointercapture", { pointerId: 21 });
+    assert.equal(timers.pending(), 1, "another finger stealing capture does not end the held direction");
+    assert.ok(dom.stick.classes.has("on"));
+    assert.equal(ctl.state().thr, 1);
+    for (const fn of docListeners.pointerup || []) fn({ pointerId: 22 });
+    assert.equal(timers.pending(), 1, "the other finger lifting cannot end the stick hold");
+    for (const fn of winListeners.pointerup || []) fn({ pointerId: 21 });
+    assert.equal(timers.pending(), 0, "a real lift outside the stick stops repeats");
+    assert.ok(!dom.stick.classes.has("on"));
+
+    dom.stick.dispatch("pointerdown", { pointerId: 23, pointerType: "touch", clientX: 95, clientY: 200 });
+    assert.equal(timers.pending(), 1);
+    dom.stick.getClientRects = () => [];
+    dom.stick.dispatch("lostpointercapture", { pointerId: 23 });
+    assert.equal(timers.pending(), 0, "hiding the stick ends its hold even without pointerup");
+  } finally {
+    if (ctl) ctl.cancel();
+    for (const [key, old] of Object.entries(previous)) {
+      if (old === undefined) delete globalThis[key]; else globalThis[key] = old;
+    }
+  }
+});
+
 test("phone controls ignore secondary mouse presses while keeping primary and touch input", () => {
   const dom = { gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(), stick: fakeEl(), buttons: { navDown: fakeEl() } };
   const timers = fakeTimers();
