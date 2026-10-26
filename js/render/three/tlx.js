@@ -3662,6 +3662,7 @@ const TLX = (function () {
         const useTag = usePost && (!post.tagOn || post.tagOn());
         let ok = false;
         const t0 = performance.now();
+        const sp = { pairs: 0, mirror: 0, settle: 0, probes: 0, worst: [] };   // A·W56 (#3673): where the cold 5.7 s goes
         _warmPending = (async () => {
           try {
             // The materials were minted at capture, so the tag stamps them now, as the scene warm stamps its own.
@@ -3673,26 +3674,32 @@ const TLX = (function () {
             for (let i = 0; i < job.recs.length; i++) {
               // Menu path: yield every other cockpit pair so the title stays live (#3279).
               if (i && typeof warmIdleChunks === "function" && warmIdleChunks() && (i & 1) === 0) await _idleYield(32);
-              const r = job.recs[i];
-              await compileWarmProbe(r.geo, r.mat, r.sx);
+              const r = job.recs[i], tp = performance.now();
+              await compileWarmProbe(r.geo, r.mat, r.sx); sp.probes++;
               // A·W50: a double-sided pair keys its pipeline on the winding too, and the race draws the rig's
               // double-sided keep material mirrored as well: the first race frame built its cw twin synchronously
               // (lavapipe census, the one lit pipeline left after the pin). Compile the other sign under the cover.
-              if (r.mat.side === THREE.DoubleSide) await compileWarmProbe(r.geo, r.mat, -r.sx);
+              if (r.mat.side === THREE.DoubleSide) { await compileWarmProbe(r.geo, r.mat, -r.sx); sp.probes++; }
+              sp.worst.push([Math.round(performance.now() - tp), r.mat.id]);
               let s = _rigDone.get(r.geo);
               if (!s) _rigDone.set(r.geo, s = new Set());
               s.add(_rigKey(r));
             }
+            sp.pairs = performance.now() - t0;
             if (job.mirror) {
               if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
               _gpuLastOperation = "compile-rig-mirror"; await warmMirrorStage(usePost, useTag); _rigMirrorKey = job.mirror;
             }
+            sp.mirror = performance.now() - t0 - sp.pairs;
             await _gpuSettled(3000);   // the driver's own compile is GPU-process side, as the draw warm's is
+            sp.settle = performance.now() - t0 - sp.pairs - sp.mirror;
             ok = true;
           } catch (e) {
             try { Log.warn("gfx", "TLX rig warm failed", String(e)); } catch (_) { /* logging is optional */ }
           } finally {
-            _warmStages.rig = { ms: Math.round(performance.now() - t0), pairs: job.recs.length, mirror: !!job.mirror, ok };
+            _warmStages.rig = { ms: Math.round(performance.now() - t0), pairs: job.recs.length, mirror: !!job.mirror, ok,
+              probes: sp.probes, pairsMs: Math.round(sp.pairs), mirrorMs: Math.round(sp.mirror), settleMs: Math.round(sp.settle),
+              worst: sp.worst.sort((a, b) => b[0] - a[0]).slice(0, 4) };
             if (job.mirror) _mirWarmUnswap();   // warmMirrorStage showed the mirror's own instanced meshes (idempotent)
             if (lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
