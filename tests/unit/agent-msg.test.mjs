@@ -418,7 +418,7 @@ test("main --to A --dry-run with the relay pair names the route, fires nothing",
 const T0 = 1_800_000_000, ORCH_A = "claude:session_01AAAAAAAAAAAAAAAAAAAAAA";
 const busOf = (lastOwnMinAgo) => () => [
   { sha: "1111111", at: T0 - lastOwnMinAgo * 60, from: ORCH_A, text: "INFO last line from the orchestrator" },
-  { sha: "2222222", at: T0 - 5 * 60, from: "claude:session_peer", text: `ORCH A LIVE ${ORCH_A}` },
+  { sha: "2222222", at: T0 - 5 * 60, type: "ROTATE", from: "claude:session_peer", text: `ORCH A LIVE ${ORCH_A}` },
 ];
 const staleDeps = (bus, out, errs) => ({
   env: { APEX_FLEET_AS: ME }, cwd: "/nonexistent", headShaFn: () => "abc", now: () => "ts", nowS: () => T0,

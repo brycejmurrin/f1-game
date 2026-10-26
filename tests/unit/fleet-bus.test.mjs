@@ -260,8 +260,8 @@ test("parseLive: SEED/FLEET LIVE lines, a LIVE line with no fleet letter and a n
 
 test("whoIs: the NEWEST announcing line for that letter wins; none is null; whoLine is `<letter> <host:id> <sha7> <age>`", () => {
   const entries = [
-    { sha: "1111111aaaa", at: T, from: A, text: "ORCH A LIVE claude:session_01OLDOLDOLDOLDOLDOLDOLDO" },
-    { sha: "2222222bbbb", at: T + 10, from: A, text: "ORCH B LIVE claude:session_01BBBBBBBBBBBBBBBBBBBBBB" },
+    { sha: "1111111aaaa", at: T, type: "ROTATE", from: A, text: "ORCH A LIVE claude:session_01OLDOLDOLDOLDOLDOLDOLDO" },
+    { sha: "2222222bbbb", at: T + 10, type: "ROTATE", from: A, text: "ORCH B LIVE claude:session_01BBBBBBBBBBBBBBBBBBBBBB" },
     { sha: "3333333cccc", at: T + 20, from: "claude:session_01FLdmwWhj9BAeyKz5T8VQQN", text: ORCH19 },
     { sha: "4444444dddd", at: T + 30, from: A, text: "#1 abc" },
   ];
@@ -274,11 +274,22 @@ test("whoIs: the NEWEST announcing line for that letter wins; none is null; whoL
   assert.equal(ageOf(T, T + 3 * 86400), "3d");
 });
 
+test("whoIs: a peer that only QUOTES an announcement names no orchestrator; ROTATE or self does (bus adb3d55, 2026-10-26)", () => {
+  const quote = { sha: "5555555eeee", at: T, type: "INFO", from: A,
+    text: "please post once: node tools/ci/fleet-bus.mjs send ROTATE --to '*' 'ORCH D LIVE grok:DAD (Fleet D orchestrator)'" };
+  assert.deepEqual(parseLive(quote), { letter: "D", id: "grok:DAD" }, "a short host-prefixed id parses, without the quote");
+  assert.equal(whoIs([quote], "D"), null, "an INFO from someone else is not an announcement");
+  assert.equal(whoIs([{ ...quote, type: "ROTATE" }], "D").id, "grok:DAD", "a ROTATE may name a successor");
+  assert.equal(whoIs([{ ...quote, from: "grok:DAD" }], "D").id, "grok:DAD", "the sender announcing itself counts");
+  assert.equal(whoIs([{ ...quote, type: "HANDOFF", from: "cse_01ZZZZZZZZZZZZZZZZZZZZZZ",
+    text: "ORCH E LIVE claude:session_01ZZZZZZZZZZZZZZZZZZZZZZ" }], "E").id, "claude:session_01ZZZZZZZZZZZZZZZZZZZZZZ", "cse_ = session_");
+});
+
 test("whoStatus: liveness is the age of the orchestrator's OWN newest line, not its LIVE line; STALE past the threshold", () => {
   const O = "claude:session_01OOOOOOOOOOOOOOOOOOOOOO";
   const entries = [
     { sha: "1111111aaaa", at: T, from: O, text: "INFO last words before the archive" },
-    { sha: "2222222bbbb", at: T + 6 * 60, from: A, text: `ORCH A LIVE ${O}` },
+    { sha: "2222222bbbb", at: T + 6 * 60, type: "ROTATE", from: A, text: `ORCH A LIVE ${O}` },
     { sha: "3333333cccc", at: T + 20 * 60, from: B, text: "#9 peer chatter keeps the bus busy" },
   ];
   // OrchA 36 (2026-10-26): announced by a peer at T+6m, silent since T; at T+53m `who` used to say "47m", live.

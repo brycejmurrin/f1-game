@@ -314,11 +314,23 @@ export function parseLive(entry) {
   const text = String(entry?.text || "");
   const fromHost = (/^([a-z]+):/.exec(String(entry?.from || "")) || [])[1] || "";
   // The id must look like one: "ORCH A LIVE is now claude:session_X" (1a2624d, 2026-10-26) once resolved to `claude:is`.
-  const explicit = /\bORCH\s+([A-Z])\s+LIVE\s+(?:is\s+)?(?:now\s+)?((?:[a-z]+:)?[A-Za-z0-9][A-Za-z0-9_-]{7,})(?=[\s,;).]|$)/.exec(text);
-  if (explicit) return { letter: explicit[1], id: withHost(explicit[2].replace(/\.$/, ""), fromHost) };
+  // A host prefix makes a short name an id (`grok:DAD`); quote marks end it (adb3d55 quoted the line → `grok:DAD'`).
+  const explicit = /\bORCH\s+([A-Z])\s+LIVE\s+(?:is\s+)?(?:now\s+)?([a-z]+:[A-Za-z0-9][A-Za-z0-9_-]*|[A-Za-z0-9][A-Za-z0-9_-]{7,})(?=[\s,;).'"`]|$)/.exec(text);
+  if (explicit) return { letter: explicit[1], id: withHost(explicit[2], fromHost) };
   if (/\b(?:SEED|FLEET)\s+[A-Z]\s+LIVE\b/.test(text) || !/\bORCH|orchestrator/i.test(text)) return null;
   const id = LIVE_ID.exec(text), fleet = /\bFleet\s+([A-Z])\b/.exec(text);
   return id && fleet ? { letter: fleet[1], id: withHost(id[1], fromHost) } : null;
+}
+
+/**
+ * An announcement counts only on a ROTATE line (a predecessor may name its successor) or when the sender names itself.
+ * adb3d55 (2026-10-26), an INFO that only QUOTED the line DAD should post, made `who D` answer from it. Pure.
+ */
+function announces(entry, live) {
+  if (String(entry?.type || "").toUpperCase() === "ROTATE") return true;
+  const fromHost = (/^([a-z]+):/.exec(String(entry?.from || "")) || [])[1] || "";
+  const self = withHost(String(entry?.from || "").replace(/^[a-z]+:/, ""), fromHost);
+  return self === live.id;
 }
 
 /** The newest entry announcing fleet `letter`'s orchestrator: { letter, id, sha, at }, or null. Entries oldest first. Pure. */
@@ -326,7 +338,7 @@ export function whoIs(entries, letter) {
   const want = String(letter || "").toUpperCase();
   for (let i = (entries || []).length - 1; i >= 0; i--) {
     const live = parseLive(entries[i]);
-    if (live && live.letter === want) return { ...live, sha: entries[i].sha, at: entries[i].at };
+    if (live && live.letter === want && announces(entries[i], live)) return { ...live, sha: entries[i].sha, at: entries[i].at };
   }
   return null;
 }
