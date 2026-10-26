@@ -28,7 +28,7 @@ console.log('mcp-smoke ok');`);
     });
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "artifacts/logs/mcp-smoke.json"), "utf8")), { ok: true });
-    assert.match(fs.readFileSync(path.join(root, "artifacts/logs/mcp-smoke.log"), "utf8"), /mcp-smoke ok/);
+    assert.ok(fs.readFileSync(path.join(root, "artifacts/logs/mcp-smoke.log"), "utf8").includes("mcp-smoke ok"));
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

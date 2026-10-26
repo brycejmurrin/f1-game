@@ -219,13 +219,13 @@ test("storage health tolerates denied storage getters and keeps report and clean
   const handle = h.c.Health.mount(dom.byId("health-denied-storage"), { store: h.store });
   const panel = handle.root.children[1], status = panel.children[0], refresh = panel.children[2], clear = panel.children[3];
   await handle.refresh(); assert.equal(refresh.disabled, false);
-  assert.match(panel.children[1].children[0].textContent, /could not be read/);
+  assert.ok(panel.children[1].children[0].textContent.includes("could not be read"));
   await clear.onclick(); assert.equal(clear.disabled, false); assert.equal(refresh.disabled, false);
-  assert.match(status.textContent, /could not be removed/);
+  assert.ok(status.textContent.includes("could not be removed"));
   // A failure in a health provider must not strand the buttons either.
   const failing = h.c.Health.mount(dom.byId("health-failing-history"), { store: h.store, restorePoints: { health() { throw Error("history unavailable"); } } });
   const fp = failing.root.children[1]; await failing.refresh();
-  assert.equal(fp.children[2].disabled, false); assert.match(fp.children[0].textContent, /report is unavailable/);
+  assert.equal(fp.children[2].disabled, false); assert.ok(fp.children[0].textContent.includes("report is unavailable"));
   await fp.children[3].onclick(); assert.equal(fp.children[3].disabled, false);
 });
 test("history unavailable and active-career preview are explicit refusals", async () => {
