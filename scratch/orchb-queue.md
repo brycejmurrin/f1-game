@@ -32,3 +32,9 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - READY to:D on bus already: #3726 (7ef339b) #3727 (3761899) #3732 (759dad7) #3734 (367a4d8). Open with B: #3717 (L4), #3733 (L5), #3623, #3724, #3576/#3684 (sync).
 - B's own: #3753 B·W3·L6 draft (agent-fleet docs) → merge-gate when READY+green.
 - Bus cursor: 946dd8d.
+
+## 00:20Z (17:20 PT)
+- DAD (3d88d80): no new D PRs beyond the 4:22 PM lease.
+- Green + READY to D: #3717 #3726 #3727 (L4), #3732 #3733 #3734 (L5), #3724 (draft, READY), #3576 (sync, 37/0). Open: #3623, #3684.
+- B's own: #3753 (L6, tooling-fast), #3750 (L1, #3505 row 1 re-dated to 11-10; garage pool fix needs an owner outside B, bus f20fcbc).
+- Bus cursor 08acf4c.
