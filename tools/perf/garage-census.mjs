@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // garage-census.mjs — what one GARAGE frame costs, and what a picker change costs.
 // @doc Garage perf census (#B·L24): frame CPU, draws/tris/programs, heap, DOM, Car3D.build ms per body style.
-// @skill perf-memory-census
+// @skill mcp-probe
 //
 // Counts are the evidence (tris, draws, programs, DOM nodes, heap, build ms):
 // this container renders in SwiftShader, so a frame time here measures the box,

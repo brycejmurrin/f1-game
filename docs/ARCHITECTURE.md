@@ -876,7 +876,7 @@ resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
 |---|---|---|
 | unset / `"three"` | **TLX** | three.js r186 + TSL — the shipped default; WebGPU with automatic WebGL2 fallback inside three |
 | `"webgl2"` | **GLX** | Explicit WebGL2 pick and fallback backend |
-| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md) |
+| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md) |
 
 TLX is the default when the key is absent; explicit GLX and WGX picks still
 win. The pause-menu
@@ -917,7 +917,7 @@ survivable, not a claim that every phone looks right.
 feature exists there until you have read the backend object — a missing name
 must stay an explicit `undefined` so game.js does not inherit a dead GLX
 function. The 2026-08 parity pass (recipes in
-[../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md)) landed:
+[../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md)) landed:
 
 - `gpuTimer` / `gpuMs` via `"timestamp-query"` (unsupported if the bit is absent)
 - baked material arrays (`createTextureArray` / `setMaterialMaps` / `matTexMix`)
@@ -1563,7 +1563,7 @@ from the console or a headless harness — loading/positioning
 (probe/physState/tuning/cars/corners/wallStats), deterministic physics
 (setInput/clearInput/step/setPhysics), and collision/AI scenarios
 (rival/rivals/pair/jam). Full reference in [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
-Per-circuit scenery design briefs live in [docs/tracks/](tracks/).
+Per-circuit scenery design briefs live in [docs/tracks/](tracks).
 
 ## index.html / css
 
@@ -1592,7 +1592,7 @@ project").
 
 How GLX, WGX, and TLX share one draw-API seam. Module contracts and API
 signatures live in [ARCHITECTURE.md](ARCHITECTURE.md); WGX gap recipes in
-[../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md). This page is the
+[../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md). This page is the
 boot / pipeline / parity map.
 
 ### Mental model
@@ -2015,7 +2015,7 @@ auditing drift after a lighting or rendering change. Night-looks-wrong is a
 
 **The rule: a GLX fix is not done until it is mirrored in WGX and TLX — or
 recorded as a gap** in §Parity snapshot above and in the defect inventory
-[../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md).
+[../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md).
 
 1. `node --test tests/unit/backend-surface-parity.test.mjs` first — the
    façade must carry the same member names on all three backends (a missing

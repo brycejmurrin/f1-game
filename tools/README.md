@@ -91,6 +91,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/output-paths.mjs** | Path-containment helpers for the `artifacts/` vs `scratch/` output contract; gated by `output-paths.spec.js`. | — |
 | **lib/over-road-scan.cjs** | Pure over-road triangle scan shared by tests/specs/terrain-over-road.spec.js (runs in the page) and its unit test. | — |
 | **lib/pack-assets.cjs** | Node loader for assets/pack: `parseModel` (mirrors assets.js) and `packAssets()` (the `Assets.modelSync` surface). | asset-pack |
+| **lib/pr-snapshot.mjs** | Shared per-PR GitHub reads (list, PR, files, checks, runs, jobs, comments) behind one ETag cache on disk. | — |
 | **lib/presentation.mjs** | Bounded presentation diagnostics, late-resource cleanup, and scene-specific picker receipts for probes. | — |
 | **lib/process-tree.mjs** | Process-tree shutdown shared by Apex jobs and bounded diagnostic supervisors. | — |
 | **lib/proxy-fetch.mjs** | A `fetch` honouring HTTPS_PROXY (curl-backed when Node would bypass the agent proxy) for GitHub API callers in tools/. | — |
@@ -125,7 +126,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/cursor-agents.mjs** | Cursor agents client: read, wait, artifacts, usage; launch/followup/cancel/archive/delete of agents it launched. | agent-fleet |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
 | **ci/fleet-board-snapshot.mjs** | Writes the Fleet Board dashboard's six snapshot datasets to artifacts/fleet-board/; read-only, no bus cursor. | agent-fleet |
-| **ci/fleet-board.mjs** | Fleet board: current/stale claims, PR associations and backlog labels on one pinned issue. | ci-watch |
+| **ci/fleet-board.mjs** | Fleet board: current/stale claims, PR associations and backlog labels on one pinned issue. | steward |
 | **ci/fleet-flags.mjs** | Flags model drift, cost over cap, context over 300k and stalled "working" sessions from get_session JSON. | agent-fleet |
 | **ci/fleet-owner.mjs** | Owner of each path: HELD by an open PR's diff, CLAIMED on the claims board, or FREE; prints RELEASE? answers. | agent-fleet |
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
@@ -133,7 +134,6 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/handback.mjs** | Verifies a PR head's CI + ready-gate, prints one SWEEP and one DONE line, lists check-ins to delete. | agent-fleet |
 | **ci/lane-preamble.mjs** | Prints the TOOLING block for a UI-survey launch prompt: exact audit commands with names checked against the catalog. | agent-fleet |
 | **ci/live-run-check.mjs** | Prints WARN if this branch has in-progress ci.yml runs (3 s API lookup); exit 0 always. | check-changes |
-| **ci/measure-guard-commit.mjs** | Measure commit-guard wall time vs a direct test:guards run (#2647). | check-changes |
 | **ci/measure-pr-ci-after-close.mjs** | 24 h scan: PR ci.yml job-minutes starting after close + peak-hour PR wall median (#2213, epic #1949). | steward |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
@@ -208,6 +208,20 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/vstd-lint.mjs** | REPORT, not a gate: lists every `.speed`-vs-literal comparison, always exits 0. The gate is tests/unit/vstd-invariant. | tune-physics |
 | **check/workflow-lint.mjs** | actionlint + zizmor over .github/workflows, offline; skips LOUDLY (fails under --require) without the binary. | check-changes |
 
+### `tools/archive/`
+
+One-shot probes kept for provenance; each cited only by its dated note (tools/archive/README.md).
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **archive/ci/measure-guard-commit.mjs** | Measure commit-guard wall time vs a direct test:guards run (#2647). | check-changes |
+| **archive/gen/trees/measure-tree-budget.mjs** | Read-only: builds via track-build-vm, compacts with TrackHiddenFaces like | scenery-dress |
+| **archive/gfx/decal-bake-probe.mjs** | Compare production decal bake pixels on WebGL2: five cases, baseline ref and JSON artifact. | — |
+| **archive/net/rtc-sync-probe.mjs** | Two real peers: the lights-out skew between them and the race-clock drift, in ms (archived probe). | multiplayer-debug |
+| **archive/perf/devicefarm-boot.mjs** | AWS Device Farm: cold boot to menu-interactive time of the live game in Safari on a real iPhone. | — |
+| **archive/perf/ers-deploy-census.mjs** | First-ERS-deploy pipeline census: every three createRenderPipeline across the first BOOST deploy, named | — |
+| **archive/perf/touch-boost-probe.mjs** | BUTTONS-mode pedal → BOOST tap hitch probe: CDP touch sequence at 844x390, frame gaps + traced main-thread work. | — |
+
 ### `tools/gen/`
 
 Author-time generation: the generated doc blocks, the shell, and the asset bakes.
@@ -232,7 +246,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/gen-output-surface.mjs** | Generates the agent output catalog from tools, npm scripts and configured MCP routes; --check detects drift. | agent-config |
 | **gen/gen-shell.mjs** | Generates the shell tag blocks, sw.js precache seed and js/roster.js from the manifest; `--check` fails on drift. | check-changes |
 | **gen/gen-slider-doc.mjs** | Regenerates the slider tables in `docs/LIGHTING-TUNER-SLIDERS.md` from `TUNE_DEFS`; `--check` fails on drift. | lighting-tuner |
-| **gen/gen-test-groups.mjs** | Regenerates package.json's `test:*` scripts and tooling-fast's file list from tests/groups.json; `--check`. | check-changes |
+| **gen/gen-test-groups.mjs** | Regenerates package.json's `test:*` scripts from tests/groups.json; `--check`. | check-changes |
 | **gen/gen-tools-readme.mjs** | Generates `tools/README.md` from each tool's `@doc` / `@skill` / `@section` header tags; `--check` fails on drift. | check-changes |
 | **gen/import-models.mjs** | Batch glTF → AX26 model importer for real CC0 model PACKS (directories of .gltf + .bin + textures). | asset-pack |
 | **gen/move-tree.mjs** | Tree mover: renames from a JSON old→new map, sweeps every citing path, records MOVED, regenerates the shell; `--plan`. | — |
@@ -243,7 +257,6 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/track-stills.mjs** | One car-free in-game still per circuit into `assets/stills/<id>.webp` for the picker hero (`--only/--frac/--force`). | playwright-probe |
 | **gen/trees/bake-trees.mjs** | Manual tool: `npm i --no-save @dgreenheck/ez-tree three` (never a package.json | scenery-dress |
 | **gen/trees/caps.mjs** | Frozen LOD0/LOD1 triangle caps from the 2026-10-19 tree-budget measurement | scenery-dress |
-| **gen/trees/measure-tree-budget.mjs** | Read-only: builds via track-build-vm, compacts with TrackHiddenFaces like | scenery-dress |
 | **gen/vendor-three.mjs** | Vendors three.js (patch, terser-minify, write vendor/three-<ver>/ + MANIFEST.json); `--check` verifies hashes. | check-changes |
 | **gen/voice-audition.mjs** | Generate a 12-call voice audition with Kokoro, OpenAI or ElevenLabs; credentials stay author-side. | audio-debug |
 | **gen/voice-corpus.mjs** | Races the game VM and writes radio lines by channel to `tools/gen/voice-corpus.json` for voicepack.mjs. | audio-debug |
@@ -324,15 +337,13 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 |---|---|---|
 | **perf/boost-press-census.mjs** | BOOST per-press pipeline census: counts three createRenderPipeline per spaced press vs equal no-BOOST windows. | — |
 | **perf/cpuprofile-summary.mjs** | Summarise a .cpuprofile: self ms by file, top-N self and inclusive ms by function url:line. | — |
-| **perf/devicefarm-boot.mjs** | AWS Device Farm: cold boot to menu-interactive time of the live game in Safari on a real iPhone. | — |
 | **perf/devicefarm-host.mjs** | Device Farm automated-run body: on the AWS Mac host, Safari bench legs + Instruments trace into $DEVICEFARM_LOG_DIR. | — |
 | **perf/devicefarm-iphone.mjs** | AWS Device Farm: Safari on a real iPhone (remote access + Appium); renderer probe, BENCHMARK WEBGPU vs WEBGL2. | — |
 | **perf/devicefarm-method.mjs** | Device Farm harness method helpers (#3676): unit history and governor-tier-moved, kept pure so they are unit-tested. | — |
 | **perf/devicefarm-opus-probe.mjs** | A·H18's Opus decodeAudioData probe (#3710): the function devicefarm-iphone.mjs `opus` serialises into Safari. | — |
 | **perf/devicefarm-syslog.mjs** | Device Farm iOS syslog -> WebContent footprint dumps, process memory limits, jetsam/kill and GPU-buffer lines. | — |
 | **perf/diagnostics.mjs** | Bounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses. | renderer-debug / mcp-probe |
-| **perf/ers-deploy-census.mjs** | First-ERS-deploy pipeline census: every three createRenderPipeline across the first BOOST deploy, named | — |
-| **perf/garage-census.mjs** | Garage perf census (#B·L24): frame CPU, draws/tris/programs, heap, DOM, Car3D.build ms per body style. | perf-memory-census |
+| **perf/garage-census.mjs** | Garage perf census (#B·L24): frame CPU, draws/tris/programs, heap, DOM, Car3D.build ms per body style. | mcp-probe |
 | **perf/idle-pipeline-census.mjs** | Idle pipeline-churn census: three createRenderPipeline per equal idle race window (GAS held, no BOOST). | — |
 | **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
 | **perf/lit-wgsl-census.mjs** | Hash the WGSL a TLX WebGPU race compiles (lavapipe) and diff two trees: does a change re-key Safari's pipeline cache? | — |
@@ -343,7 +354,6 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/query.mjs** | Summarise a saved profile (spans JSON or .cpuprofile: top-N self/total, fn/file filter) or compare two spans JSONs. | playwright-probe |
 | **perf/race-entry-timer.mjs** | Time one race entry: boot, race() → track flip, settle, stages, Log records; APEX_PIN / APEX_PROFILE knobs. | — |
 | **perf/runtime-memory.mjs** | Nonintrusive, feature-detected CDP heap/DOM/performance counters on a parent-owned browser session. | mcp-probe / js-debugger |
-| **perf/touch-boost-probe.mjs** | BUTTONS-mode pedal → BOOST tap hitch probe: CDP touch sequence at 844x390, frame gaps + traced main-thread work. | — |
 | **perf/vm-alloc-census.mjs** | VM allocation-per-frame census: JS bytes per race frame in the real game loop vs a checked-in baseline (--update). | — |
 | **perf/vm-leak-census.mjs** | VM leak census: live GPU handles, event listeners and timers across race → QUIT TO MENU cycles (count-based, exact). | — |
 
@@ -357,7 +367,6 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/census-verdict.mjs** | Reads one image's census + four game-check JSONs, prints the Verdict rows and fails on what the game reported. | renderer-debug |
 | **gfx/chunk-reach.cjs** | How much chunked scenery a pass reaches, counted headlessly: re-bins triangles into 72 m cells like `createChunkedMesh`. | — |
 | **gfx/chunk-share-census.mjs** | Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run. | renderer-debug / lighting-tuner |
-| **gfx/decal-bake-probe.mjs** | Compare production decal bake pixels on WebGL2: five cases, baseline ref and JSON artifact. | — |
 | **gfx/frame-hitch.mjs** | Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation). | playwright-probe / renderer-debug |
 | **gfx/gfx-probe.mjs** | WEBGPU + THREE screenshot probe with software, Lavapipe or verified hardware Chromium paths. | renderer-debug / mcp-probe |
 | **gfx/gl-object-census.mjs** | GL object census: WebGL2 create/delete counts (VAO, program, shader, buffer, texture, FBO, RBO) per circuit visit. | renderer-debug / mcp-probe |
@@ -367,14 +376,12 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | — |
 | **gfx/gpu-mem-census.mjs** | Requested WebGL2 allocation estimates by format, with explicit-delete accounting and coverage limits. | renderer-debug / playwright-probe |
 | **gfx/knob-ab.mjs** | Visual knob A/B: same frame with a lightTune knob ON twice (noise floor) and OFF; fails unless ON vs OFF beats noise. | renderer-debug |
-| **gfx/live-frame-census.mjs** | Phone-shaped driven race per backend x track: frame/JS percentiles, GC, slow GL/WebGPU calls, mid-race pipelines. | perf-memory-census |
+| **gfx/live-frame-census.mjs** | Phone-shaped driven race per backend x track: frame/JS percentiles, GC, slow GL/WebGPU calls, mid-race pipelines. | mcp-probe |
 | **gfx/mem-census.mjs** | Memory census: heap after GC, live tracks, three render objects and decoded audio per track load (picker or race path). | mcp-probe / check-changes |
-| **gfx/mem-cycles-lib.mjs** | gpu-game-check --mem-cycles helpers: an in-page live GPUBuffer/GPUTexture counter and the per-cycle plateau verdict. | perf-memory-census |
+| **gfx/mem-cycles-lib.mjs** | gpu-game-check --mem-cycles helpers: an in-page live GPUBuffer/GPUTexture counter and the per-cycle plateau verdict. | mcp-probe |
 | **gfx/pass-census.mjs** | Draw calls and triangles per render pass (main, mirror, sun/lamp shadow, post) per frame: the exact count behind #2657. | renderer-debug / playwright-probe |
 | **gfx/readback-garage-oracle.mjs** | Measures readPixels during menu→garage→close; optional race-entry path. | — |
-| **gfx/readback-quit-menu-oracle-repeat.mjs** | Aggregates N quit-menu oracle runs into median/worst TTI, stall, and garage-close metrics. | — |
 | **gfx/readback-quit-menu-oracle.mjs** | Garage close → UI Start Race (Bahrain) → grid + ~20s throttle → pause → 2-tap quit. | — |
-| **gfx/res-scale-ab.mjs** | Pixel A/B of TLX fixed render targets (tlxFixedTargets) vs legacy resize: noise floor, identity at 1.0, edge bleed. | renderer-debug |
 | **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
@@ -496,7 +503,6 @@ The lighting tuner: A/B harnesses, slider effectiveness, and the batch campaign 
 | **lighting/lighting-tuner-sweep.mjs** | Does each LIGHTING TUNER slider change the image? Sharded, resumable, paired A→B→A' sampling per (condition, knob). | lighting-tuner |
 | **lighting/look-survey-n10.mjs** | Capture/stitch 12 N10 lighting surveys → ignored artifacts/lighting/sheets/; --dry-run, --sheets-only, --force. | — |
 | **lighting/look-survey-sheet.py** | 4×5 tod×weather sheet: artifacts/lighting/shots/<id>/ → ignored artifacts/lighting/sheets/<id>_grid.png. | mcp-probe |
-| **lighting/pit-canopy-evidence.mjs** | Bahrain pit night A/B: canopy lamps on vs patched off; PNGs + lightState under artifacts/pit-canopy-night/. | — |
 | **lighting/preset-validation.mjs** | Shared lighting snapshot/proposal validation: profile keys, knob bounds and slider grid; deterministic change receipts. | lighting-tuner |
 | **lighting/slider-effect-live.mjs** | The `--live` harness imported by `slider-effect.mjs`: chase+park recipes, restores the pre-push live value on exit. | lighting-tuner |
 | **lighting/slider-effect-view.py** | Visual filter for a slider A/B: `filter.png`, `heat.png`, `sheet.png`, MAD/p99/max stats. | lighting-tuner |
@@ -579,7 +585,6 @@ WebRTC and Nostr end-to-end harnesses plus the local relay and TURN servers.
 | **net/rtc-e2e-3p.mjs** | THREE peers over real WebRTC in one room, end to end. | multiplayer-debug |
 | **net/rtc-e2e-room.mjs** | The ROOM CODE path end to end, against a relay we run (`nostr-local.cjs`). | multiplayer-debug |
 | **net/rtc-e2e.mjs** | A REAL WebRTC handshake between two pages (`npm run rtc:e2e`) — the one path the loopback transport cannot cover. | multiplayer-debug |
-| **net/rtc-sync-probe.mjs** | Two real peers: the lights-out skew between them and the race-clock drift, in ms (`node tools/net/rtc-sync-probe.mjs`). | multiplayer-debug |
 
 ### `tools/env/`
 
@@ -643,18 +648,21 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/flake-tally.mjs** | Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs. |
 | **ci/fleet-archive.mjs** | Applies the archive rule to a saved list_sessions page: ARCHIVE (role tag, agent-made, idle, PR done) or KEEP, why. |
+| **ci/fleet-brief.mjs** | Hand-off brief for a successor: lanes, slot, cursors, triggers, asks; ≤2 KB JSON + ≤40-line digest. |
 | **ci/fleet-bus-mirror.mjs** | Fleet-bus mirror: posts each `to:#<PR>` bus line as one idempotent comment on that open PR (Actions). |
 | **ci/fleet-bus.mjs** | Merge lease (one holder, expiry, refusal) and typed fleet bus on the claude/fleet-bus branch, any host. |
 | **ci/fleet-queue.mjs** | Committed fleet queue (PR, head, state, owner, next): list/set/rm/check/reassign for ticks and hand-offs. |
 | **ci/fleet-tick.mjs** | One fleet-watch fast tick: board + sync + ship/Pages CI, diffed against the saved state; prints only what changed. |
-| **ci/github-api.mjs** | Import-safe GET-only GitHub REST helper (token on stdin, 64 MB buffer) plus the repo constants the CI tools share. |
+| **ci/github-api.mjs** | The one GitHub REST client: token on curl stdin, 5xx/429 backoff, ETag/304 GETs, JSON bodies; repo constants. |
 | **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/incident-lift.mjs** | Lift an INCIDENT sent with `--fix <sha>` once Pages is green on that sha (writes the `INCIDENT … lifted` bus line). |
 | **ci/inputs-hash.mjs** | Per-job inputs hash for the CI verdict cache (#1712); sha256 of a declared path set + node version. |
 | **ci/js-debugger-smoke.mjs** | CI/agent smoke: js-debugger `list-tools` + no-browser cpuprofile-summary. No daemon, no Chromium (W25d / #3117). |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/launch-gate.mjs** | Quota gate for create_session: saved get_session page -> launch-gate receipt (rate_limit allowed, or typed override). |
+| **ci/launch-lane.mjs** | Pre-launch gate: quota, source-revision shape, twin guard, atomic lane claim branch; prints create_session JSON. |
 | **ci/merge-attribution.mjs** | Merged-by trailer and a detector flagging deploy-branch merges that lack it (bus + PR comment). |
+| **ci/merge-done.mjs** | DONE bus line from a merge commit (PR #, both parents, actor), idempotent; for a deploy-branch push workflow. |
 | **ci/merge-gate.mjs** | Gate before a PR merge: ready-gate, CI, no hold, gen:check + ratchets on a local merge, pacing; writes the receipt. |
 | **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| no (sync only when you must). |
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
@@ -699,7 +707,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
 | **mcp/js-debugger-mcp.json** | `tests/unit/js-debugger-transport.test.mjs` |
 | **perf/baselines/vm-alloc.json** | `perf/vm-alloc-census.mjs`, `tests/unit/perf-vm-alloc-budget.test.mjs` |
-| **shot/scenery-locations.json** | `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/track-shot-survey.test.mjs` |
+| **shot/scenery-locations.json** | `ci/deploy.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/track-shot-survey.test.mjs` |
 | **track/clip-baseline.json** | `ci/select-specs.mjs`, `lib/stale-rows.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/audit-circuit.test.mjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |

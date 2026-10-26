@@ -9,7 +9,7 @@ metadata:
 ---
 
 Bryce, 2026-10-19: "decide which workers should be opus or subnet based on the issue. Make this standard."
-This replaces the 2026-10-16 all-Sonnet memory (`sessions-run-sonnet`). That earlier preference still matters for the parts that did not change: never Fable for workers, verify the served model when the host exposes it, do not apply Claude model names to Codex, and keep the model Bryce chose for his own orchestrator sessions.
+This replaces the 2026-10-16 all-Sonnet memory (`sessions-run-sonnet`). That earlier preference still matters for the parts that did not change: no Fable for workers unless Bryce names it, verify the served model when the host exposes it, do not apply Claude model names to Codex, and keep the model Bryce chose for his own orchestrator sessions.
 
 **Why:** Sonnet is cheaper for scoped work; Opus earns its cost where judgement fails cheaply on Sonnet (look and design calls, unexplained reds).
 

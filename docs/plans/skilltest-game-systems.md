@@ -54,7 +54,7 @@ GPU / secret-gated work is marked **not testable**.
 | `tools/net/rtc-e2e-room.mjs` | not testable | — | Needs `ws` + `nostr-local`; skipped full E2E this pass. | Proposal R3. |
 | `tools/net/nostr-local.cjs` | works | starts on `:7448` after `npm i --no-save ws` | Correctly refuses without `ws`. | — |
 | `tools/net/nostr-probe.mjs` | not testable | — | Needs public WSS + `@noble/curves`. | — |
-| `tools/net/rtc-sync-probe.mjs` | not testable | — | Shares port 4468 with rtc-e2e-3p; long; skipped. | — |
+| `tools/archive/net/rtc-sync-probe.mjs` | not testable | — | Shares port 4468 with rtc-e2e-3p; long; skipped. | — |
 | `tools/ci/ci-watch.mjs` (steward) | broken → fixed | without env token: `= ci unknown`; with `gh auth token`: lists jobs | Env-only auth | #679 |
 | `tools/ci/who-is-on-it.mjs` / `session-status.mjs` | works | both print useful handoff | `@skill` on who-is-on-it is `check-changes` (steward documents it) — intentional split. | — |
 

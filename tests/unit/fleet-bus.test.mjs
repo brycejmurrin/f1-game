@@ -15,12 +15,15 @@ import {
   decide, leaseState, parseLease, leaseLine, formatLine, parseLine, parseLog, addressed, whoAmI,
   writeBus, readLease, readBus, fetchBus, BUS_BRANCH, MAX_TTL_MIN, DEFAULT_TTL_MIN,
   addressProblem, ADDRESS_FORMS, ROLES, main, parseLive, whoIs, whoLine, ageOf,
+  TYPES, PROTOCOL_TYPES, BODY_MIN, BODY_MAX, bodyProblem, lendMerger, idemOf, idemMarker, findIdem, strictCursor, sendBusLine,
   fixMarker, fixOf, openFixIncident,
 } from "../../tools/ci/fleet-bus.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const T = 1_800_000_000;
 const A = "claude:session_A", B = "cursor:bc-B";
+/** A protocol body long enough for HANDOFF/READY/DONE/BLOCKED/LEND (BODY_MIN chars). */
+const BODY = "#2990 abc1234 blocked on review";
 const held = (holder, minsLeft, extra = {}) => ({ holder, since: T - 600, expires: T + minsLeft * 60, ttlMin: 60, note: "", ...extra });
 
 test("acquire: a free or lapsed lease is taken; a live one held by another is refused", () => {
@@ -83,6 +86,10 @@ test("bus lines: typed, one address, round-trip; non-bus subjects are dropped", 
   assert.equal(l, "READY to:#2990 from:claude:session_A abc1234 ready-gate 0");
   assert.deepEqual(parseLine(l), { type: "READY", to: "#2990", from: A, text: "abc1234 ready-gate 0" });
   assert.throws(() => formatLine("PING", "*", A), /unknown type/);
+  // An empty or whitespace body is refused (2026-10-26: six empty HANDOFF lines from a flag that ate the text).
+  assert.throws(() => formatLine("HANDOFF", "B", A, ""), /empty text/);
+  assert.throws(() => formatLine("HANDOFF", "B", A, "   "), /empty text/);
+  assert.throws(() => formatLine("HANDOFF", "B", A), /empty text/);
   assert.throws(() => formatLine("DONE", "a b", A), /one address/);
   assert.equal(parseLine("Merge branch 'x'"), null);
   assert.equal(parseLine("SWEEP to:x from:y"), null, "only the typed set");
@@ -96,7 +103,7 @@ test("recipients: send refuses an undeliverable --to and names the accepted form
     "codex:01a1558a-88d6-73d2-8904-13327d29f012", "codex:refactor-all-b71e", "codex:track-engine-8d41",
     "cursor:bc-b5cd51dd-5056-5709-aaf7-6a320ff4ffd9", "grok:fleet-bot-a1b2"];
   for (const to of ok) assert.equal(addressProblem(to), "", to);
-  for (const to of ok) assert.equal(parseLine(formatLine("BLOCKED", to, A, "x")).to, to);
+  for (const to of ok) assert.equal(parseLine(formatLine("BLOCKED", to, A, BODY)).to, to);
   const refused = {
     "claude:1923dcd1d9ef874aad548d82": "claude:1923dcd1d9ef874aad548d82 is a claims-board hash, not a session id: no session receives it",
     "codex:75a8d0d2822ffc7d0c1393d0": "codex:75a8d0d2822ffc7d0c1393d0 is a claims-board hash, not a session id: no session receives it",
@@ -108,7 +115,7 @@ test("recipients: send refuses an undeliverable --to and names the accepted form
   };
   for (const [to, want] of Object.entries(refused)) {
     assert.equal(addressProblem(to), want, to);
-    assert.throws(() => formatLine("BLOCKED", to, A, "x"), (e) => e.message.includes(ADDRESS_FORMS), to);
+    assert.throws(() => formatLine("BLOCKED", to, A, BODY), (e) => e.message.includes(ADDRESS_FORMS), to);
   }
   for (const r of ["orchestrator", "merge-holder", "tools", "track-engine"]) assert.ok(ROLES.includes(r), `${r} is used on the bus`);
 });
@@ -133,14 +140,14 @@ test("send to #<PR> dispatches the mirror once; other addresses and a failed dis
     const out = [];
     let calls = 0;
     const opts = (dispatch) => ({ cwd: h, log: (l) => out.push(l), dispatch, readyCheck: () => ({ ok: true }) });
-    assert.equal(main(["send", "READY", "--to", "#7", "--as", A, "abc ready"], opts(() => { calls++; return "dispatched"; })), 0);
+    assert.equal(main(["send", "READY", "--to", "#7", "--as", A, "abc1234 ready-gate 0 green"], opts(() => { calls++; return "dispatched"; })), 0);
     assert.equal(calls, 1);
     assert.equal(out.at(-1), "= mirror dispatched", out.join("\n"));
     assert.equal(main(["send", "GREEN", "--to", "orchestrator", "--as", A, "#7 green"], opts(() => { calls++; return "x"; })), 0);
     assert.equal(calls, 1, "only to:#<PR> dispatches");
-    assert.equal(main(["send", "READY", "--to", "#8", "--as", A, "x"], opts(() => { throw new Error("no gh"); })), 0, "dispatch failure is not a send failure");
+    assert.equal(main(["send", "READY", "--to", "#8", "--as", A, "abc1234 ready-gate 0 green"], opts(() => { throw new Error("no gh"); })), 0, "dispatch failure is not a send failure");
     assert.equal(out.at(-1), "= mirror not dispatched (no gh)");
-    assert.equal(main(["send", "BLOCKED", "--to", "claude:1923dcd1d9ef874aad548d82", "--as", A, "x"], opts(() => { calls++; })), 1, "refused before any write");
+    assert.equal(main(["send", "BLOCKED", "--to", "claude:1923dcd1d9ef874aad548d82", "--as", A, BODY], opts(() => { calls++; })), 1, "refused before any write");
     assert.deepEqual(readBus({ cwd: h, last: 10 }).entries.map((e) => e.to), ["#7", "orchestrator", "#8"]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -191,7 +198,7 @@ test("against real git: two hosts race for one lease, exactly one wins; the bus 
     // Bus: a cursor read returns only what came after it.
     const send = (cwd, line) => writeBus(() => ({ ok: true, line, lease: undefined }), { cwd });
     const cur = readBus({ cwd: HA }).tip;
-    assert.equal(send(HA, formatLine("READY", "#7", A, "abc ready")).ok, true);
+    assert.equal(send(HA, formatLine("READY", "#7", A, "abc1234 ready-gate 0 green")).ok, true);
     assert.equal(send(HB, formatLine("GREEN", "orchestrator", B, "#7 green")).ok, true);
     const r = readBus({ cwd: HA, since: cur });
     assert.deepEqual(r.entries.map((e) => e.type), ["READY", "GREEN"]);
@@ -307,7 +314,7 @@ test("send READY needs a passing ready-gate receipt for the PR (and the head it 
     assert.ok(out.at(-1).includes("ready-gate passed on abc1234def"), out.at(-1));
     assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "ready-gate 0"], opts), 2, "no PR named");
     assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "#41 abc1234 ready-gate 0"], opts), 0);
-    assert.equal(main(["send", "READY", "--to", "#41", "--as", A, "abc1234 ready"], opts), 0, "the PR may be the address");
+    assert.equal(main(["send", "READY", "--to", "#41", "--as", A, "abc1234 ready-gate 0 green"], opts), 0, "the PR may be the address");
     const errs = [];
     const orig = console.error; console.error = (l) => errs.push(l);
     try { assert.equal(main(["send", "LIVE", "--to", "*", "--as", A, "ORCH A LIVE"], opts), 1); } finally { console.error = orig; }
@@ -319,16 +326,123 @@ test("send READY needs a passing ready-gate receipt for the PR (and the head it 
   }
 });
 
+// ---- typed schema, idempotency, strict cursor (system audit lane X1, 2026-10-26) ----------
+
+test("schema: the new peer and lending types send and parse; every old type still parses", () => {
+  for (const t of ["INFO", "QUESTION", "REQUEST", "ROTATE", "LEND", "RETURN", "TRANSFER", "READY", "GREEN", "BLOCKED", "HANDOFF", "DONE", "INCIDENT", "LEASE", "GAME-SLOT"]) {
+    assert.ok(TYPES.includes(t), t);
+    assert.equal(parseLine(`${t} to:* from:${A} some body text that is long enough merger:B`).type, t);
+  }
+  assert.equal(parseLine(formatLine("INFO", "B", A, "hi")).text, "hi", "peer types take any non-empty body");
+  assert.equal(parseLine(formatLine("ROTATE", "*", A, "ORCH B LIVE claude:session_01BBBBBBBBBBBBBBBBBBBBBB")).type, "ROTATE");
+  assert.equal(whoIs([{ sha: "1", at: T, from: A, ...parseLine(formatLine("ROTATE", "*", A, "ORCH B LIVE claude:session_01BBBBBBBBBBBBBBBBBBBBBB")) }], "B").id,
+    "claude:session_01BBBBBBBBBBBBBBBBBBBBBB", "who reads a ROTATE announcement like a HANDOFF one");
+});
+
+test("schema: protocol bodies are BODY_MIN..BODY_MAX chars after whitespace collapse; LEND names merger:<letter>", () => {
+  assert.deepEqual(PROTOCOL_TYPES, ["HANDOFF", "READY", "DONE", "BLOCKED", "LEND"]);
+  const exact = "x".repeat(BODY_MIN), over = "y".repeat(BODY_MAX + 1);
+  for (const t of ["HANDOFF", "READY", "DONE", "BLOCKED"]) {
+    assert.equal(bodyProblem(t, exact), "", t);
+    assert.ok(/19 chars.*20-600/.test(bodyProblem(t, exact.slice(1))), t);
+    assert.ok(/601 chars/.test(bodyProblem(t, over)), t);
+    assert.throws(() => formatLine(t, "*", A, "#1 merged"), /20-600/, t);
+  }
+  assert.equal(bodyProblem("GREEN", "#1 ok"), "", "non-protocol types keep short bodies");
+  assert.equal(bodyProblem("GAME-SLOT", "#3076 a06b99a1"), "");
+  assert.equal(formatLine("DONE", "*", A, "  #3790   merged\n abc1234 two parents "), `DONE to:* from:${A} #3790 merged abc1234 two parents`);
+  assert.ok(/merger:<letter>/.test(bodyProblem("LEND", "#3790 abc1234 lent for the merge")), bodyProblem("LEND", "#3790 abc1234 lent for the merge"));
+  assert.equal(bodyProblem("LEND", "#3790 abc1234 lent for the merge merger:A"), "");
+  assert.equal(lendMerger("#1 abc merger:C, until Pages"), "C");
+  assert.equal(lendMerger("#1 abc merger:CD"), null, "one letter");
+  assert.equal(lendMerger("#1 abc nomerger:C"), null, "a whole token");
+});
+
+test("idempotency: --idem appends one marker; findIdem matches the same sender and key only", () => {
+  const line = formatLine("DONE", "*", A, BODY, { idem: "done-2990" });
+  assert.ok(line.endsWith(` ${idemMarker("done-2990")}`), line);
+  assert.equal(idemOf(parseLine(line).text), "done-2990");
+  assert.equal(idemOf("[idem:k] then more"), null, "only a trailing marker counts");
+  assert.throws(() => formatLine("DONE", "*", A, BODY, { idem: "has space" }), /--idem key/);
+  assert.throws(() => formatLine("DONE", "*", A, BODY, { idem: "-lead" }), /--idem key/);
+  const e = (from, text, sha) => ({ from, text, sha });
+  const entries = [e(A, `x ${idemMarker("k")}`, "1"), e(B, `y ${idemMarker("k")}`, "2"), e(A, `z ${idemMarker("k")}`, "3")];
+  assert.equal(findIdem(entries, A, "k").sha, "3", "newest wins");
+  assert.equal(findIdem(entries, B, "k").sha, "2", "keys are per sender");
+  assert.equal(findIdem(entries, A, "other"), null);
+  assert.equal(findIdem(entries, A, ""), null);
+});
+
+test("strictCursor: tip when nothing hidden; else just before the first hidden line; unchanged when the first is hidden", () => {
+  const es = [{ sha: "s1", to: "B" }, { sha: "s2", to: "#9" }, { sha: "s3", to: "B" }];
+  assert.equal(strictCursor(es, [], "tip"), "tip");
+  assert.equal(strictCursor(es, ["B", "#9"], "tip"), "tip");
+  assert.equal(strictCursor(es, ["B"], "tip"), "s1");
+  assert.equal(strictCursor(es, ["#9"], "tip"), "");
+  assert.equal(strictCursor([], ["B"], "tip"), "tip");
+});
+
+test("against real git: an --idem resend writes nothing; read --strict keeps a hidden line for the next wider read", () => {
+  const dir = path.join(ROOT, "artifacts", `fleet-bus-idem-${process.pid}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+  const g = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const prevAs = process.env.APEX_FLEET_AS;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    g(dir, "init", "-q", "--bare", "origin.git");
+    g(dir, "init", "-q", "h");
+    const h = path.join(dir, "h");
+    g(h, "remote", "add", "origin", path.join(dir, "origin.git"));
+    const out = [];
+    const opts = { cwd: h, log: (l) => out.push(l), dispatch: () => "x" };
+    assert.equal(main(["send", "LEND", "--to", "A", "--as", A, "--idem", "lend-3790", "#3790 abc1234 lent merger:A"], opts), 0);
+    const first = readBus({ cwd: h, last: 10 }).entries;
+    assert.equal(main(["send", "LEND", "--to", "A", "--as", A, "--idem", "lend-3790", "#3790 abc1234 lent merger:A"], opts), 0, "a resend is ok");
+    assert.ok(out.at(-1).startsWith("= deduped: idem lend-3790 already sent as"), out.at(-1));
+    assert.equal(readBus({ cwd: h, last: 10 }).entries.length, first.length, "nothing written");
+    assert.equal(main(["send", "LEND", "--to", "A", "--as", B, "--idem", "lend-3790", "#3790 abc1234 lent merger:A"], opts), 0);
+    assert.equal(readBus({ cwd: h, last: 10 }).entries.length, first.length + 1, "another sender's key is its own");
+    assert.equal(sendBusLine("INFO", "B", A, "no key, no dedupe", { cwd: h }).ok, true);
+    assert.equal(sendBusLine("INFO", "B", A, "no key, no dedupe", { cwd: h }).ok, true);
+    assert.equal(readBus({ cwd: h, last: 10 }).entries.length, first.length + 3);
+    assert.equal(main(["send", "LEND", "--to", "A", "--as", A, "#3790 abc1234 lent to A"], opts), 1, "LEND without merger: refused");
+
+    // strict: a reader on B whose filter hides a #9 line in the middle.
+    process.env.APEX_FLEET_AS = "claude:session_01STRICTSTRICTSTRICTSTRI";
+    const R = process.env.APEX_FLEET_AS;
+    const cur = path.join(ROOT, "artifacts", "fleet-bus", `cursor-${R.replace(/[^\w.-]+/g, "_")}.txt`);
+    fs.rmSync(cur, { force: true });
+    const tip0 = readBus({ cwd: h, last: 1 }).tip;
+    fs.mkdirSync(path.dirname(cur), { recursive: true });
+    fs.writeFileSync(cur, tip0 + "\n");
+    for (const [to, t] of [["B", "one for B"], ["#9", "one for nine"], ["B", "two for B"]]) assert.equal(sendBusLine("INFO", to, A, t, { cwd: h }).ok, true);
+    out.length = 0;
+    assert.equal(main(["read", "--to", "B", "--strict"], opts), 0);
+    assert.deepEqual(out.filter((l) => !l.startsWith("=")).map((l) => l.split(" ").slice(-3).join(" ")), ["one for B", "two for B"]);
+    assert.ok(/1 hidden by --to.*strict: held at/.test(out.at(-1)), out.at(-1));
+    out.length = 0;
+    assert.equal(main(["read"], opts), 0, "a wider read still sees the hidden line");
+    assert.deepEqual(out.filter((l) => !l.startsWith("=")).map((l) => l.split(" ").slice(-3).join(" ")), ["one for nine", "two for B"],
+      "at-least-once: the line after the hidden one comes again");
+    assert.equal(main(["read", "--peek", "--strict"], opts), 1, "exclusive flags");
+    fs.rmSync(cur, { force: true });
+  } finally {
+    if (prevAs === undefined) delete process.env.APEX_FLEET_AS; else process.env.APEX_FLEET_AS = prevAs;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("Q3: an empty body is refused; --pr is --to '#<n>'", () => {
   assert.throws(() => formatLine("DONE", "*", A, "   "), /empty text/);
   assert.throws(() => formatLine("DONE", "*", A), /empty text/);
-  assert.equal(parseLine(formatLine("DONE", "#7", A, "x")).to, "#7");
+  // protocol bodies are BODY_MIN..BODY_MAX chars (schema lane X1), so the --pr probe uses one
+  assert.equal(parseLine(formatLine("DONE", "#7", A, BODY)).to, "#7");
   const errs = [];
   const orig = console.error; console.error = (l) => errs.push(l);
   try {
-    assert.equal(main(["send", "DONE", "--as", A, "x"], { log() {} }), 1, "no --to and no --pr");
-    assert.equal(main(["send", "DONE", "--pr", "abc", "--as", A, "x"], { log() {} }), 1, "bad --pr");
-    assert.equal(main(["send", "DONE", "--to", "*", "--as", A, "--fix", "abc1234", "x"], { log() {} }), 1, "--fix only on INCIDENT");
+    assert.equal(main(["send", "DONE", "--as", A, BODY], { log() {} }), 1, "no --to and no --pr");
+    assert.equal(main(["send", "DONE", "--pr", "abc", "--as", A, BODY], { log() {} }), 1, "bad --pr");
+    assert.equal(main(["send", "DONE", "--to", "*", "--as", A, "--fix", "abc1234", BODY], { log() {} }), 1, "--fix only on INCIDENT");
     assert.equal(main(["send", "INCIDENT", "--to", "*", "--as", A, "--fix", "zz", "x"], { log() {} }), 1, "--fix needs a sha");
   } finally { console.error = orig; }
   assert.ok(errs.some((e) => e.includes("--pr <n>")), errs.join("|"));

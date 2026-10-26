@@ -1,6 +1,6 @@
 ---
 name: audio-debug
-description: "Use when the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or WebAudio, engine pitch or music layers misbehave. Not game-feel polish that must not change physics (tune-physics), offline precache of mp3s (pwa-cache-service-worker), or the music menu layout (ui-menu-a11y)."
+description: "Use when the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or WebAudio, engine pitch or music layers misbehave. Not punchier audio polish that must not change physics (game-feel), offline precache of mp3s (pwa-cache-service-worker), or the music menu layout (ui-menu-a11y)."
 ---
 
 # Debug and tune the audio engine
@@ -43,7 +43,7 @@ user-gesture unlock (`setEngine(0.75, 0.4, false, 0.6, 4)` then
 
 | File | Owns |
 |---|---|
-| `engine.js` | `GameAudio`: buses, engine voice, limiter, gear-shift cue `shift(up)` (~2261; called from `js/game.js` ~5066-5067 manual, ~5479 auto, local car only) |
+| `engine.js` | `GameAudio`: buses, engine voice, limiter, gear-shift cue `GameAudio.shift(up)` (callers: `js/game.js` manual up/down shifts and the auto-gear change in the car update, local car only — find them with apex-lsp `lsp_references`) |
 | `car-sfx.js` | `CarSfx`: player contact levels (scrub/lock/surface/pitLim) for `setCarSfx` + pit-stop wheel guns — NOT gear audio |
 | `soundtrack.js` / `music-lib.js` / `spotify.js` | playlist, decode caches, ducking / player's own files (IndexedDB) / optional Spotify backend |
 | `panel.js` / `race-mix-audition.js` | MUSIC & SOUND mixer page (switches, sliders, source row) / its bounded sample button |

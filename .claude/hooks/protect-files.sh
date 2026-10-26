@@ -4,7 +4,8 @@
 # AGENTS.md that prose could only request, made deterministic:
 #
 #  1. §Verification 11 — a GENERATED file is never hand-edited, in any
-#     checkout: version.json, js/roster.js, tools/carview.html, tools/README.md
+#     checkout: version.json, js/roster.js, tools/carview.html, tools/README.md,
+#     tools/shot/scenery-locations.json (2026-10-26, gen-scenery-locations.cjs)
 #     outright (tests/data/ratchets.json too — moved by ratchets.mjs, not by
 #     hand); index.html and sw.js only inside their @gen-shell blocks;
 #     package.json only on a test:* script line (source: tests/groups.json).

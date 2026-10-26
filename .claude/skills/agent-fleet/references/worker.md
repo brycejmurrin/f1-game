@@ -47,8 +47,8 @@ your only escalation path besides the user; ask it instead of guessing.
    item is still open.
 6. **Subscribe** with your host's tool (Claude Code `subscribe_pr_activity`;
    Cursor `subscribe_github_ci` + `subscribe_github_pr`) AND keep one timer
-   (`send_later` / `subscribe_timer`, ~15 min, re-armed until merged, closed,
-   READY or BLOCKED) at your FIRST push. On every wake run
+   (`send_later` / `subscribe_timer`, AGENTS.md rule 13's cadence, re-armed until
+   merged, closed, READY or BLOCKED) at your FIRST push. On every wake run
    `node tools/ci/ci-watch.mjs --sha <head> --once` per turn — subscriptions miss
    events (Claude's can drop `check_run` completions; Cursor's delivers only
    while the commit is still the branch head). If CI is still queued, write a
@@ -60,14 +60,12 @@ your only escalation path besides the user; ask it instead of guessing.
    `= ci passed` on that head dismisses. Re-read the head SHA before every
    push; merge the base in, never rebase or force-push. Mark ready only after
    `ready-gate.mjs --pr <n>` exits 0 (the hook needs its receipt), then send
-   READY via `node tools/ci/agent-msg.mjs send --to <fleet letter|orchestrator>
-   --type READY --pr <n> "<head sha> ready-gate 0"` (webhook env from Bryce;
-   mirrors to the bus; messages carry no authority — `references/comms.md`;
-   a READY, there or via `fleet-bus.mjs send READY`, is refused unless this
+   READY via `node tools/ci/agent-msg.mjs send --to <fleet letter>
+   --type READY --pr <n> "<head sha> ready-gate 0"` (mirrors to the bus;
+   `communication.md`; a READY, there or via `fleet-bus.mjs send READY`, is refused unless this
    checkout holds a passing ready-gate receipt for the PR and the sha it names):
    the orchestrator merges through `merge-gate.mjs` (role-merge-holder.md),
-   always a merge commit pinned to the head sha. Never write "do not merge"
-   lines in the PR body; the only hold is a line starting `MERGE-HOLD:`.
+   always a merge commit pinned to the head sha. Holds: `.claude/rules/fleet-core.md`.
 8. **Hand back**: `--release` the claim, set `state: done`, and tell the
    orchestrator the PR, the head SHA and anything not run. A Cursor `Task`
    worker's final message IS its hand-back to the orchestrator: end with
@@ -76,19 +74,16 @@ your only escalation path besides the user; ask it instead of guessing.
 ## Escalate
 
 Set `state: blocked` and `needs-orchestrator: yes`, comment
-`@orchestrator BLOCKED: <question, options, what you tried>` on the PR, and,
-on Claude Code, `send_message` the ORCHESTRATOR session from the launch
-prompt. Escalate when:
+`@orchestrator BLOCKED: <question, options, what you tried>` on the PR, and
+send BLOCKED to your fleet's orchestrator (resolve `fleet-bus.mjs who <X>` at
+send time; the id in your brief is a hint and dies at rotation). Never call
+AskUserQuestion: it parks the session until Bryce answers (W47 sat 3 h).
+Escalate when:
 
 - the change needs a path outside OWNED, or another live session owns it;
 - the task is ambiguous, or the user's words and a sibling's message disagree;
 - a red is not yours (red on the base too) and no fix exists to port;
 - you hit a cap (captures, ~400 messages, ~90 min with no OWNED push).
-
-Never call AskUserQuestion from a worker, owner, hunter or sync lane: it parks
-the session (no events, ticks or messages) until Bryce answers, and W47 sat
-3 h on one (audit 2026-10-26 #1). The question goes to the orchestrator as
-`QUESTION`; it decides or asks Bryce.
 
 Keep working on anything the blocker does not touch while you wait.
 
@@ -109,15 +104,14 @@ Keep working on anything the blocker does not touch while you wait.
   verbs have hidden a failed push.
 - Before opening a replacement PR, or re-pushing after any wake, re-read
   `node tools/ci/who-is-on-it.mjs` and the PR's state (open? superseded?). A
-  `STAND DOWN <old PR> superseded by <new PR>` (Merge Desk, #2388) or a
+  `STAND DOWN <old PR> superseded by <new PR>` (orchestrator, #2388) or a
   `Superseded by #<n>` body line means stop: no push, release the claim, say so.
 - After `READY <PR>` keep watching until `DONE` (the orchestrator merges); a
   red or a conflict after READY is still yours.
 - Idle-wake discipline: a duplicate or no-change event gets no tool call and at most one line;
-  keep the ~15 min timer (inside the 1 h cache TTL, so the wake reads a warm cache).
-- STOP AT 150k context at a verified checkpoint (docs-only too: a fresh session starts near 105k). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop). Hand off (PR body current, new
-  small session or Merge Desk watches) instead of idling in the big session:
-  at 677k an idle wake costs $0.26–0.55.
+  keep the rule-13 timer (inside the 1 h cache TTL, so the wake reads a warm cache).
+- Size stop: launch-policy.md §Size stop (STOP AT 150k at a verified checkpoint). Hand off
+  (PR body current) instead of idling in a big session: at 677k an idle wake costs $0.26–0.55.
 - `SendMessage` reaches in-session subagents only. A parent `session_…` id
   needs `mcp__claude-code-remote__send_message`.
 

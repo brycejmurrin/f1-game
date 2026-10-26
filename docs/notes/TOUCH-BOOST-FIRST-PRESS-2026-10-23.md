@@ -43,7 +43,7 @@ reads 4.0 MJ after one deploy frame. A normal race shows it too: the first BOOST
 
 The throttle lift in Bryce's report is how the deploy starts: BOOST lands before the lift is processed.
 
-**The miss, named by `tools/perf/ers-deploy-census.mjs`.** The census holds GAS, then turns BOOST on (the first deploy) and
+**The miss, named by `tools/archive/perf/ers-deploy-census.mjs`.** The census holds GAS, then turns BOOST on (the first deploy) and
 logs every three `createRenderPipeline` and the TLX `memState().matMissKeys` delta:
 
 | run (local, three WebGL2 backend, Monza, mirror on) | deployed | new material on the first deploy |
@@ -59,13 +59,13 @@ WebGPU it compiles the pipeline mid-race. Three's WebGL2 backend reuses the prog
 is why the stall is a WebGPU one. Run 9 on the iPhone used the cockpit camera, matching this.
 
 **Owner: renderer (A·W14).** Suggested fix: warm the `doubleSided` variant of `_LATE_LIT` (on the rig meshes' layouts,
-both winding signs), or warm `_rigFxA` itself. Proof: `node tools/perf/ers-deploy-census.mjs --cam helmet` prints
+both winding signs), or warm `_rigFxA` itself. Proof: `node tools/archive/perf/ers-deploy-census.mjs --cam helmet` prints
 `misses=0`, and on the device the first BOOST tap drops from 734–934 ms to the 20–40 ms of a later tap. A first
 attempt in PR #3611 (drawing the HUD button's lit state early) was measured not to help (run 8) and was reverted.
 
 ## 3. Method
 
-- Local (`tools/perf/touch-boost-probe.mjs`): CDP `Input.dispatchTouchEvent` at 844x390 hasTouch, rAF intervals, a
+- Local (`tools/archive/perf/touch-boost-probe.mjs`): CDP `Input.dispatchTouchEvent` at 844x390 hasTouch, rAF intervals, a
   `devtools.timeline` trace, tap vs control windows, `--from/--to none` controls. It cannot see this bug: this
   container has no GPU, TLX never ticks a race here and GLX runs ~1–2 fps under SwiftShader, and any DOM change costs
   the same ~300 ms of software recomposite (lift-only and tap-only alike).

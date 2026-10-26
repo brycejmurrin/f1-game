@@ -5,7 +5,7 @@ A read-only session that reviews one PR or one diff and returns findings. It nev
 ## Launch (orchestrator)
 
 The orchestrator.md template with: model `claude-sonnet-5-5` unless the brief says Opus and why; GOAL = the PR and the
-review dimension; the last line `STOP AT: 150k context or $<cap>`. ≤ 2 concurrent reviewers (launch-policy.md §Review farm).
+review dimension; the last line `STOP AT: 150k context or $<cap>` (launch-policy.md §Size stop). ≤ 2 concurrent reviewers (launch-policy.md §Review farm).
 
 ## The loop
 
@@ -18,6 +18,6 @@ review dimension; the last line `STOP AT: 150k context or $<cap>`. ≤ 2 concurr
 
 ## Size
 
-Soft cap 150k (size batches to about 25 files). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft cap finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k hand off now (launch-policy.md §Size stop). No tool result over 10k characters enters context (comms.md §Output budget).
+Size stop: launch-policy.md §Size stop (size batches to about 25 files). No tool result over 10k characters enters context (comms.md §Output budget).
 
 Never: edit the repo, push, comment as the author's voice, merge, arm or mark ready.

@@ -1,6 +1,6 @@
 ---
 name: ui-menu-a11y
-description: "Use when menus, settings, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, screen-reader output, scroll affordances, UI scale, touch layout, a cramped or clipped screen (short landscape phone), or menu/HUD accessibility regressions change. DOM/class restructure or the token system is css-play; the full matrix → survey-ui-matrix. In-race driving input → input-controls."
+description: "Use when menus, settings, dialogs, Escape/back, keyboard navigation, screen-reader output, scroll affordances, UI scale, touch layout or a cramped/clipped screen (short landscape phone) misbehave or change. DOM restructure or tokens → css-play; full matrix → survey-ui-matrix; driving input → input-controls."
 ---
 
 # Menu / HUD accessibility
@@ -27,13 +27,12 @@ Menu-only work rarely needs `game.js`; race HUD numbers come from `G.player` / `
 
 ## Default-first visual verification
 
-Follow AGENTS.md’s UI review baseline: fresh shipped appearance and device input defaults first; stress scales,
-imported settings and legacy looks are separately labelled comparisons. Record requested scale and painted zoom.
-Inspect original full-size images with DOM/computed-style evidence. Thumbnails and zero inspector findings are
-insufficient. Exercise real scrolling both ways, the final action, keyboard focus visibility, and state retention
-through resizing and disclosure changes. Capture initial, mid-scroll, end, return, open/closed, and focus/rotation checkpoints. Show individual original captures when reporting usability.
+Shipped settings and the touch profile first, stress cases labelled separately: the procedure is
+**survey-ui-matrix** §Default-first visual verification (one copy).
 
 ## Quick Reference
+
+`apex_ui_inspect` / `apex_ui_diff` (MCP): one screen's DOM and its before/after without a screenshot.
 
 Layer gate, dialog seam, `data-esc-close` door, `MenuNav`, `SheetShape`, `AriaState`
 and `ScrollFade` (all `js/ui/<kebab>.js`): contracts in workflow steps 1-6 below.
@@ -55,5 +54,3 @@ Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
 
 - Layer/Escape/zoom implementation, pause-settings overlay, mistakes →
   [references/workflow.md](references/workflow.md).
-- Lighthouse a11y / web-quality playbook →
-  [references/lighthouse-a11y-playbook.md](references/lighthouse-a11y-playbook.md).
