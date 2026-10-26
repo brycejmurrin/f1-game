@@ -10981,6 +10981,9 @@
       "create": [
         "tests/unit/carve-a-modules.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
+      ],
+      "*": [
+        "tests/unit/boot-script-repair-overlay.test.mjs"
       ]
     },
     "js/physics/grip-steer.js": {
