@@ -57,9 +57,12 @@
         conc: CONC, concAlt: CONC_D, crowd: TERR_CROWD,
       };
       // S/F + pit-straight left — continuous wrap past the start line (brief
-      // 0.00–0.10 L). Gap 12 clears billboard/hoarding faces at gap 14.
-      // One front rank only here: a second bank clipped the plátano avenue.
-      terrace(0.968, 0.048, -1, 12, TERR_MAIN);
+      // 0.00–0.10 L). Gap 20 sits behind the kit pit-straight place() shells
+      // (dist 14, half-depth 3 → outer ~17) so terrace risers do not z-fight
+      // those faces (coplanar-audit: 4 spots @15 mm when gap was 12). Billboards
+      // / hoardings at gap 14 stay in front of the bank. One front rank only:
+      // a second bank clipped the plátano avenue.
+      terrace(0.968, 0.048, -1, 20, TERR_MAIN);
       // Back of the pit straight (pre-portico) — denser mass for the S/F orbit.
       terrace(0.930, 0.965, -1, 12, TERR_MID);
       // T1 outside apron — open concrete bank opposite the gravel (starts
@@ -242,7 +245,7 @@
       // portico at 0.928) and along the back straight's perimeter road
       // (s 0.775–0.885, skipping the talud gate at 0.835). every() takes METRES (22 m ≈ 5 nodes).
       const PLANE_L = [0.30, 0.50, 0.24];
-      // Gap 58 clears terrace() depth (~12 + 8*2.7 ≈ 36 m) on the S/F bank.
+      // Gap 58 clears terrace() depth (~20 + 8*2.7 ≈ 44 m) on the S/F bank.
       every(22, (k) => {
         const s = k / n, h = hash(k * 53 + 7);
         if (s >= 0.94 || s <= 0.065) plane(k, -1, 58, 12 + h * 5, h < 0.5 ? PLANE_L : PLANE_D, { spread: 0.85 });
