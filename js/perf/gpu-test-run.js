@@ -80,6 +80,22 @@ const GpuTestRun = (function () {
     try { if (mp) mp.setMode(ph.mirror || saved.mirror); } catch (_) { /* mirror absent */ }
   }
 
+  function gpuObservation(B, at) {
+    try {
+      const timer = B && B.gpuTimer ? B.gpuTimer() : null;
+      if (!timer || !timer.supported) return { state: "unsupported" };
+      if (!timer.on) return { state: "timer inactive" };
+      if (!Number.isFinite(timer.samples)) return { state: "freshness unavailable" };
+      // WGX's older metadata gives source-sample age; other timers publish
+      // the accepted resolution time. Neither cached duration alone is new.
+      const sampleAt = Number.isFinite(timer.sampleAt) ? timer.sampleAt
+        : Number.isFinite(timer.sampleAgeMs) && timer.sampleAgeMs >= 0 ? at - timer.sampleAgeMs : -1;
+      const ms = B.gpuMs ? B.gpuMs() : -1;
+      if (!(timer.samples > 0 && sampleAt >= 0 && Number.isFinite(ms) && ms >= 0)) return { state: "no fresh sample" };
+      return { state: "resolved", key: timer.samples, sampleAt, ms };
+    } catch (_) { return { state: "freshness unavailable" }; }
+  }
+
   function tick(ts) {
     const r = _run;
     if (!r) return;
@@ -93,14 +109,24 @@ const GpuTestRun = (function () {
     if (r.prev && age >= SETTLE_MS) {
       r.deltas.push(ts - r.prev);
       const B = backend();
-      try { const ms = B && B.gpuMs ? B.gpuMs() : -1; if (ms >= 0) r.gpu.push(ms); } catch (_) { /* no timer */ }
-      if (!r.measuring) { r.measuring = true; r.c0 = { links: r.counts.links, pipes: r.counts.pipes }; }
+      const sample = gpuObservation(B, now);
+      r.gpuState = sample.state === "resolved" ? "no fresh sample" : sample.state;
+      if (!r.measuring) {
+        // Establish this window after settling: exclude a retained result
+        // even when a previous phase or an enclosing capture kept timing on.
+        r.measuring = true; r.measureAt = now; r.gpuSeen = sample.key;
+        r.c0 = { links: r.counts.links, pipes: r.counts.pipes };
+      } else if (sample.key && sample.key !== r.gpuSeen) {
+        r.gpuSeen = sample.key;
+        if (sample.sampleAt >= r.measureAt) r.gpu.push(sample.ms);
+      }
     }
     r.prev = ts;
     if (age >= SETTLE_MS + MEASURE_MS) {
       const B = backend();
       const row = Object.assign({ id: ph.id, scale: r2(B && B.getRenderScale ? B.getRenderScale() : null),
-        mirror: ph.mirror || r.saved.mirror, tier: (() => { try { return PerfGov.tier(); } catch (_) { return null; } })() },
+        mirror: ph.mirror || r.saved.mirror, tier: (() => { try { return PerfGov.tier(); } catch (_) { return null; } })(),
+        gpuSampling: { state: r.gpu.length ? "fresh" : r.gpuState || "no fresh sample", basis: "resolved-during-window" } },
       phaseStats(r.deltas, r.gpu, { links: r.counts.links - (r.c0 ? r.c0.links : 0), pipes: r.counts.pipes - (r.c0 ? r.c0.pipes : 0) }));
       r.rows.push(row);
       r.deltas = []; r.gpu = []; r.measuring = false; r.c0 = null;
@@ -141,19 +167,24 @@ const GpuTestRun = (function () {
     const B = backend();
     const mp = typeof MirrorPass !== "undefined" && MirrorPass.instance ? MirrorPass.instance() : null;
     const saved = { scale: B && B.getRenderScale ? B.getRenderScale() : 1, autoRes: (() => { try { return PerfGov.autoRes(); } catch (_) { return true; } })(),
-      mirror: (() => { try { return mp ? mp.state().mode : "auto"; } catch (_) { return "auto"; } })(), gpuOn: false };
+      mirror: (() => { try { return mp ? mp.state().mode : "auto"; } catch (_) { return "auto"; } })(),
+      gpuOn: (() => { try { return !!(B && B.gpuTimer && B.gpuTimer().on); } catch (_) { return false; } })() };
     let timer = null;
     try { timer = B && B.gpuTimer ? B.gpuTimer(true) : null; } catch (_) { timer = null; }
     const counts = { links: 0, pipes: 0 };
-    _run = { raf: 0, i: -1, phaseAt: 0, prev: 0, deltas: [], gpu: [], rows: [], measuring: false, c0: null, saved, counts,
+    const run = _run = { raf: 0, i: -1, phaseAt: 0, prev: 0, deltas: [], gpu: [], rows: [], measuring: false, c0: null, saved, counts,
       timer: timer ? { supported: !!timer.supported } : { supported: false }, unhook: hookCounts(counts), onDone: opts.onDone || null };
     _last = { state: "starting" };
     log("start " + PHASES.length + " phases");
-    return Promise.resolve(SoakRun.start({ minutes: TOTAL_MIN + 1, weather: "dry", cam: "helmet" })).then((ok) => {
+    let started;
+    try { started = SoakRun.start({ minutes: TOTAL_MIN + 1, weather: "dry", cam: "helmet" }); }
+    catch (_) { finish("soak-failed"); return Promise.resolve(false); }
+    return Promise.resolve(started).then((ok) => {
+      if (_run !== run) return false;
       if (!ok) { finish("soak-refused"); return false; }
-      if (_run) _run.raf = requestAnimationFrame(tick);
+      run.raf = requestAnimationFrame(tick);
       return true;
-    }, () => { finish("soak-failed"); return false; });
+    }, () => { if (_run === run) finish("soak-failed"); return false; });
   }
 
   return {

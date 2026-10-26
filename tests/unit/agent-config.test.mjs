@@ -110,21 +110,8 @@ test("memory link guard catches missing Markdown/wiki targets and orphan topics"
   assert.ok(memoryLinkIssues(files, exists).includes("MEMORY.md: missing link gone.md"));
 });
 
-for (const name of ["compound-debug", "compound-review", "compound-verify"]) {
-  test(`portable ${name} keeps the explicit F1 project contract`, () => {
-    const base = `.claude/skills/${name}`;
-    const { fm, body } = stripFrontmatter(read(`${base}/SKILL.md`));
-    assert.equal(parseYAML(fm)["disable-model-invocation"], true);
-    const metadata = parseYAML(read(`${base}/agents/openai.yaml`));
-    assert.equal(metadata.policy.allow_implicit_invocation, false);
-    assert.equal(fs.realpathSync(path.join(ROOT, ".agents/skills", name)), path.join(ROOT, base));
-    assert.match(body, /explicit opt-in/);
-    assert.match(body, /check-changes/);
-    assert.match(body, /verification gates govern F1 work/);
-    assert.match(read(`${base}/references/source.md`), /Every Compound Engineering/);
-    assert.match(read(`${base}/references/LICENSE`), /Copyright \(c\) 2025 Every/);
-  });
-}
+// The three portable compound-* opt-in stubs were deleted 2026-10-26 (nothing routed to them;
+// docs/notes/BASE-CONTEXT-AUDIT-2026-10-19.md had flagged their always-on description cost).
 
 test("AGENTS.md stays under 200 lines and emphasises at most one line", () => {
   // Claude Code memory docs: "target under 200 lines per CLAUDE.md file.
@@ -1101,7 +1088,7 @@ test("the launch template's WATCH line and the orchestrator's first-act routines
   const tpl = FLEET_ORCH.match(/## Launch template[\s\S]*?```text\n([\s\S]*?)```/)[1];
   const watch = tpl.match(/^WATCH:.*(?:\n {6}.*)*/m);
   assert.ok(watch, "launch template has a WATCH: line");
-  for (const k of ["subscribe_pr_activity", "send_later", "~15 min", "subscribe_github_ci",
+  for (const k of ["subscribe_pr_activity", "send_later", "50–55 min", "subscribe_github_ci",
     "subscribe_github_pr", "subscribe_timer"]) {
     assert.ok(watch[0].includes(k), `WATCH line names ${k}`);
   }
@@ -1111,7 +1098,7 @@ test("the launch template's WATCH line and the orchestrator's first-act routines
   assert.match(first, /hourly `create_trigger`[^]*0 \* \* \* \*/, "first acts arm the hourly safety net");
   const owner = read(".claude/skills/agent-fleet/references/role-pr-owner.md");
   assert.match(owner, /`subscribe_pr_activity` on the PR/);
-  assert.match(owner, /`send_later` check-in ~15 min/, "owner check-in is ~15 min (Bryce 2026-10-19)");
+  assert.match(owner, /`send_later` check-in at AGENTS\.md rule 13's cadence \(50–55 min/, "owner check-in follows rule 13 (50–55 min, Bryce to confirm; was 15 min)");
 });
 
 test("the adapter table covers each host's verified spawn path", () => {

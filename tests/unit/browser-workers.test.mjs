@@ -74,12 +74,16 @@ test("explicit GPU stacks avoid fallback pins and divide Mesa threads across wor
   assert.equal(defaultCaptureWorkers({ env: { APEX_GPU: 'lavapipe' }, cpus: 4 }), 1);
 });
 
-test("llvmpipe without /dev/dri fails fast instead of falling back to SwiftShader", () => {
-  const noDri = (file) => file !== '/dev/dri';
-  assert.throws(() => captureGpuOptions({ gpu: 'llvmpipe', env: {}, exists: noDri }), /llvmpipe needs \/dev\/dri \(CI only\)/);
-  // GitHub's runners reach llvmpipe through Mesa + Xvfb (docs/notes/CI-RENDERING-PERFORMANCE.md).
-  assert.equal(captureGpuOptions({ gpu: 'llvmpipe', env: { GITHUB_ACTIONS: 'true' }, exists: noDri }).env.GALLIUM_DRIVER, 'llvmpipe');
-  assert.doesNotThrow(() => captureGpuOptions({ gpu: 'swiftshader', env: {}, exists: noDri }));
+test("llvmpipe without Mesa EGL fails fast instead of falling back to SwiftShader; /dev/dri is not required", () => {
+  // Measured 2026-10-26 (docs/notes/LOCAL-LLVMPIPE-2026-10-26.md): Chromium binds llvmpipe with no
+  // /dev/dri once libEGL.so.1 is installed; without it ANGLE falls back to SwiftShader silently.
+  const noEgl = (file) => !/libEGL\.so\.1$/.test(file);
+  const eglNoDri = (file) => file !== '/dev/dri' && /libEGL\.so\.1$/.test(file);
+  assert.throws(() => captureGpuOptions({ gpu: 'llvmpipe', env: {}, exists: noEgl }), /llvmpipe needs Mesa EGL \(libEGL\.so\.1 missing/);
+  assert.equal(captureGpuOptions({ gpu: 'llvmpipe', env: {}, exists: eglNoDri }).env.GALLIUM_DRIVER, 'llvmpipe', "no /dev/dri is fine when EGL is present");
+  // GitHub's runners install Mesa + Xvfb in the mesa-xvfb step.
+  assert.equal(captureGpuOptions({ gpu: 'llvmpipe', env: { GITHUB_ACTIONS: 'true' }, exists: noEgl }).env.GALLIUM_DRIVER, 'llvmpipe');
+  assert.doesNotThrow(() => captureGpuOptions({ gpu: 'swiftshader', env: {}, exists: noEgl }));
 });
 
 test("lavapipe uses the current Vulkan loader override and rejects missing ICD", () => {

@@ -581,6 +581,11 @@
       "presentation": "shared-levels",
       "preserve": "REFUSED (exit 2) versus FAILED (exit 1) on lease ops; lease holder and minutes left; every new bus line and the new cursor sha; who: the one `<letter> <host:id> <sha7> <age>` line or exit 1 none"
     },
+    "tools/ci/fleet-brief.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The ≤40-line digest and the `= brief <bytes> B, <lines> lines -> <dir>/brief.{json,md}` line; --json brief; exit 0 written, 1 usage or unreadable input"
+    },
     "tools/ci/fleet-flags.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
@@ -590,6 +595,11 @@
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "HELD versus CLAIMED versus FREE per path with PR number and head sha; unaddressable claims; the exact RELEASED/HELD bus line; exit 3 with no guessed rows"
+    },
+    "tools/ci/fleet-queue.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One line per PR (state, head, owner, next); check exits 1 naming each unowned row; exit 2 for an unknown PR"
     },
     "tools/ci/fleet-tick.mjs": {
       "action": "targeted-summary",
@@ -604,7 +614,7 @@
     "tools/ci/github-api.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "Import-only GET helper; no-token and HTTP error text unchanged"
+      "preserve": "Import-only REST client; no-token and HTTP error text unchanged; token and body never on argv"
     },
     "tools/ci/github-token.mjs": {
       "action": "no-direct-output",
@@ -620,6 +630,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "No SWEEP when pending/red/open Plan; trigger IDs; gate/CI exits"
+    },
+    "tools/ci/incident-lift.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The = incident-lift line (none / still frozen with the fix sha / lifted); exit 2 while Pages is not green on the fix sha"
     },
     "tools/ci/inputs-hash.mjs": {
       "action": "keep-native",
@@ -646,12 +661,17 @@
       "presentation": "native",
       "preserve": "The `= launch-gate ok|refused` line with its reason and receipt path; --json verdict; exit 0 ok, 1 refused, 2 usage"
     },
+    "tools/ci/launch-lane.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The `= launch REFUSED (<gate>): <why>` line (exit 2) or `= launch ok …` plus the create_session JSON; who/release lines; --json verdict; exit 0 launch, 1 usage/git, 2 refused"
+    },
     "tools/ci/live-run-check.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Advisory WARN line when a push would cancel a live ci.yml run; exit 0 always, never blocks"
     },
-    "tools/ci/measure-guard-commit.mjs": {
+    "tools/archive/ci/measure-guard-commit.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Sample count/environment; measurement invokes guards and ratchet hook path"
@@ -1166,7 +1186,7 @@
       "presentation": "shared-levels",
       "preserve": "Counts and denominators plus complete native table JSON."
     },
-    "tools/gfx/decal-bake-probe.mjs": {
+    "tools/archive/gfx/decal-bake-probe.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "Pixel correctness counts for five enabled/disabled/extent/tile cases; --json artifact path; no timing or WebGPU claim."
@@ -1245,16 +1265,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "SwiftShader quit TTI, LoopHealth sync/stall metrics and JSON report path."
-    },
-    "tools/gfx/readback-quit-menu-oracle-repeat.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Repeated quit-menu oracle runs with median/worst aggregation JSON."
-    },
-    "tools/gfx/res-scale-ab.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Control noise baseline, scale 1.0 identity, screenshot evidence and native failure exit."
     },
     "tools/gfx/res-scale-census.mjs": {
       "action": "targeted-summary",
@@ -1576,11 +1586,6 @@
       "presentation": "native",
       "preserve": "@c2"
     },
-    "tools/lighting/pit-canopy-evidence.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
-      "preserve": "@c5"
-    },
     "tools/lighting/preset-validation.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1881,7 +1886,7 @@
       "presentation": "shared-levels",
       "preserve": "@c1"
     },
-    "tools/net/rtc-sync-probe.mjs": {
+    "tools/archive/net/rtc-sync-probe.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c1"
@@ -1896,7 +1901,7 @@
       "presentation": "native",
       "preserve": "Runs on the Device Farm test host, not locally: its stdout is the run's test spec output and its files land in $DEVICEFARM_LOG_DIR."
     },
-    "tools/perf/devicefarm-boot.mjs": {
+    "tools/archive/perf/devicefarm-boot.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Timestamped progress lines (device, session state, one line per timed boot with menu time, first contentful paint, load end, resource and cached counts, thermal state, session minutes) and the boot.json path; the endpoint URL is never printed."
@@ -1966,7 +1971,7 @@
       "presentation": "native",
       "preserve": "@c8"
     },
-    "tools/perf/ers-deploy-census.mjs": {
+    "tools/archive/perf/ers-deploy-census.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c1"
@@ -2006,7 +2011,7 @@
       "presentation": "native",
       "preserve": "@c8"
     },
-    "tools/perf/touch-boost-probe.mjs": {
+    "tools/archive/perf/touch-boost-probe.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c1"
@@ -2576,10 +2581,30 @@
       "presentation": "native",
       "preserve": "@c3"
     },
-    "tools/gen/trees/measure-tree-budget.mjs": {
+    "tools/archive/gen/trees/measure-tree-budget.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c4"
+    },
+    "tools/ci/merge-done.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One `= merge-done` line per sha (skip / already / dry-run) or the fleet-bus `= sent` line; exit 0/1/2/3 as documented"
+    },
+    "tools/lib/pr-snapshot.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/fleet-brief.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The ≤40-line digest and the `= brief <bytes> B, <lines> lines -> <dir>/brief.{json,md}` line; --json brief; exit 0 written, 1 usage or unreadable input"
+    },
+    "tools/ci/launch-lane.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The `= launch REFUSED (<gate>): <why>` line (exit 2) or `= launch ok …` plus the create_session JSON; who/release lines; --json verdict; exit 0 launch, 1 usage/git, 2 refused"
     }
   }
 }

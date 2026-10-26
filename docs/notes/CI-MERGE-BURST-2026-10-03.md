@@ -1,5 +1,7 @@
 # CI merge burst, 2026-10-02/03: 30 merges held off the site
 
+**Status 2026-10-26 — superseded in part.** The `ship-fast` concurrency group below is gone since 2026-10-16: a deploy-branch push starts the `pages.yml` release train (one running + one pending), described in `docs/TESTING.md` §Release train. Read this note for the 2026-10-03 incident, not for current CI shape.
+
 ## What happened
 
 - The live site sat at `5ed4c66` (#759) while 30 PRs merged on top of it,

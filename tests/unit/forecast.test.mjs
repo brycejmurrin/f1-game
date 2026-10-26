@@ -267,3 +267,25 @@ test("source: the engineer reads Forecast through a typeof guard, and the lap-co
   assert.match(src, /case "rain": case "rainplan": return lapBucket/);
   assert.match(read("tools/manifest.cjs"), /"js\/race\/forecast\.js"/);
 });
+
+
+test("the real derived local-shower preview equals the green forecast without arming race state", () => {
+  const local = load();
+  for (const file of ["js/core/hash32.js", "js/race/rain-cells.js"])
+    vm.runInContext(read(file).replace(/^const\b/gm, "var"), local, { filename: absSrc(file) });
+  local.Career = { inCareer: () => false, hash: local.Hash32.unit };
+  const G = { state: "menu", raceT: 0, raceWeather: "dry", raceRound: 0, raceLaps: 10, lapsTarget: 10,
+    track: { total: 7004 }, simSeed: () => 20, netPlay: { active: () => false },
+    announce() {}, applyRaceSettings() {}, soundOn: false };
+  const wa = local.WeatherArc.create(G, { isTimeTrial: () => false, isQuali: () => false });
+  wa.changeable = true;
+  const preview = wa.previewArc();
+  assert.ok(preview.cell, "real Hash32 seed derives a local shower");
+  assert.equal(wa.arc, null, "preview does not arm weather");
+  const before = local.Forecast.compute({ arc: preview, seed: 20, lapS: 7004 / 45 });
+  const armed = wa.startChangeable(0);
+  const green = local.Forecast.compute({ arc: armed, seed: 20, lapS: 7004 / 45 });
+  assert.deepEqual(plain(before.events), plain(green.events));
+  assert.ok(before.events.some(e => e.kind === "rain"));
+  assert.ok(!before.events.some(e => e.kind === "heavy"), "local shower never promises global full wets");
+});

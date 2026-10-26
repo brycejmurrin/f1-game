@@ -124,21 +124,31 @@ const DailyChallenge = (function () {
       return e;
     }
 
-    // "APEX 26 DAILY 2026-09-03 · MONZA · 1:21.345 · GOLD · STREAK 4"
-    function shareText(medal) {
+    // Every share surface describes the same day's class PB, not a slower replay.
+    function shareResult() {
       const p = active || plan();
       const day = data().days[p.day];
       const context = G.records && G.records.key();
       const e = context ? day && day.classes && day.classes[context] : day;
+      const best = e && e.best != null ? e.best : undefined;
+      const medal = best != null && typeof Quali !== "undefined" && G.referencePole
+        ? Quali.medalFor(best, G.referencePole()) : null;
+      return { day: p.day, track: p.trackId, trackName: p.trackName, weather: p.weather,
+        best, medal, streak: liveStreak(), class: p.class || "standard" };
+    }
+
+    // "APEX 26 DAILY 2026-09-03 · MONZA · 1:21.345 · GOLD · STREAK 4"
+    function shareText(medal) {
+      const p = active || plan(), result = shareResult();
+      const context = G.records && G.records.key();
       const st = data().streak;
       const parts = ["APEX 26 DAILY " + p.day, p.trackName.toUpperCase(),
-        e && e.best != null ? G.fmtTime(e.best) : "NO LAP"];
+        result.best != null ? G.fmtTime(result.best) : "NO LAP"];
       if (context) parts.push((p.class === "standard" ? "STANDARD CLASS " : "OPEN CLASS ") + Hash32.fnv1a(context).toString(16));
       // No medal passed: TODAY's, from today's class best. The stored ghost's medal
       // (Ghost.medal()) belongs to the records context, which has no day in it, so
       // a later Daily on the same circuit and conditions read another day's GOLD.
-      if (medal === undefined) medal = e && e.best != null && typeof Quali !== "undefined" && G.referencePole
-        ? Quali.medalFor(e.best, G.referencePole()) : null;
+      if (medal === undefined) medal = result.medal;
       if (medal) parts.push(medal.toUpperCase());
       if (st.last === p.day && st.count > 0) parts.push("STREAK " + st.count);
       return parts.join(" · ");
@@ -151,14 +161,11 @@ const DailyChallenge = (function () {
       const p = active || plan(), day = data().days[p.day];
       const context = G.records && G.records.key();
       const entry = context ? day && day.classes && day.classes[context] : day;
-      if (medal === undefined) medal = entry && entry.best != null && typeof Quali !== "undefined" && G.referencePole
-        ? Quali.medalFor(entry.best, G.referencePole()) : null;
+      const result = shareResult();
+      if (medal === undefined) medal = result.medal;
       let link = null;
       if (typeof ShareCode !== "undefined" && ShareCode.encode) {
-        const encoded = ShareCode.encode("daily", {
-          day: p.day, track: p.trackId, trackName: p.trackName, weather: p.weather,
-          best: entry && entry.best, medal, streak: liveStreak(), class: p.class || "standard",
-        });
+        const encoded = ShareCode.encode("daily", { ...result, medal });
         if (encoded.ok) link = encoded.url;
       }
       const model = ShareCardData.fromDaily(p, entry, medal, liveStreak(), { link });
@@ -184,7 +191,7 @@ const DailyChallenge = (function () {
       return st.count > 0 && (st.last === day || st.last === prevDay(day)) ? st.count : 0;
     }
 
-    return { plan, dayKey, select, open, record, shareText, shareCard, stop, isActive, current, data, today, liveStreak };
+    return { plan, dayKey, select, open, record, shareResult, shareText, shareCard, stop, isActive, current, data, today, liveStreak };
   }
 
   return { create, plan, dayKey, prevDay };

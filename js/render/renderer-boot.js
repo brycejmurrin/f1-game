@@ -2,11 +2,12 @@
    Contract: docs/ARCHITECTURE.md. */
 const RendererBoot = (function () {
 "use strict";
-// Warm the vendored three island for the default or a stored THREE pick, so TLX is not
+// Warm the vendored three island once start() has committed to THREE, so TLX is not
 // waiting on a cold module fetch after the roster injects it. Idle-scheduled so the
 // ~735 KB modulepreload hints do not fight the last FULL scripts / title CSS for
-// bandwidth on the same turn as start(). `low`: a speculative guess (#3515) asks for
-// fetchPriority low, so a wrong guess never competes with the bytes the real pick needs.
+// bandwidth on the same turn as start(). Eval-time guess no longer calls this (#3515):
+// a wrong guess must not spend island bandwidth before the pick is known. `low` remains
+// for a speculative caller; start() uses the default (high) priority after the pick.
 function preloadThreeVendor(low) {
   const kick = () => {
     try {
@@ -517,12 +518,10 @@ function preloadLikelyBackend() {
     // 4 s cap). The eval-time TLX prefetch plus the ~735 KB three vendor island
     // contended with the GLX roster fetch and could push the fallback past
     // BOOT_STEP_MS into Graphics unavailable — measured after clearing site data
-    // with an installed SW (#3536). Explicit THREE/WGX picks still prefetch;
-    // start() also preloads TLX once the adapter probe commits to THREE.
+    // with an installed SW (#3536). Explicit THREE/WGX picks still prefetch the
+    // roster here; the vendor island waits for start() once the pick is known
+    // (#3515 item 12) so a guess miss never spends ~735 KB of boot bandwidth.
     if (unsetPick && !g.sure && g.pick === "three") return 0;
-    // The vendor island too, from here rather than only inside start(): start() runs after every deferred
-    // script and the adapter probe, so its hint reached the network seconds after this one could.
-    if (g.pick === "three") preloadThreeVendor(low);
     const files = ApexRoster.DEFERRED && ApexRoster.DEFERRED[g.pick];
     return files ? ScriptLoader.preload(files, { low }) : 0;
   } catch (_) { return 0; /* an optimisation only */ }

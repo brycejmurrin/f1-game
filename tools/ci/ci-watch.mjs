@@ -71,12 +71,11 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
+import { api as sharedApi, REPO, DEPLOY } from "./github-api.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const REPO = "brycejmurrin/f1-game";
-export const DEPLOY = "claude/f1-game-project-26h3ng";
+export { REPO, DEPLOY };
 const PAGES_WORKFLOW = 295002043;   // pages.yml (AGENTS.md §Watching CI and Pages)
 const DEFAULT_TIMEOUT_MIN = 120;     // no --timeout: CI (~15 min) + the gated Pages publish (median 23, p90 73 min)
 export const DEFAULT_INTERVAL_S = 60;       // seconds between polls; --interval overrides (min 10)
@@ -84,57 +83,16 @@ const WAIT_TIMEOUT_MIN = 720;        // --wait: one background task outlives the
 const FLOOR_GRACE_MIN = 5;           // minutes to wait for a run newer than the trigger floor
 const say = (...a) => console.log("[ci-watch]", ...a);
 
-/** url -> { etag, json }: the last 200 per URL, for If-None-Match. Bounded. */
+/** url -> { etag, json }: the last 200 per URL, for If-None-Match. Bounded
+ *  (github-api.mjs ETAG_CACHE_MAX). */
 const ETAGS = new Map();
-const ETAG_CACHE_MAX = 256;
 
 /** GET `repos/<REPO>/<pathQs>` → { json } | { error }; `cached: true` when a 304
  *  reused the stored body. `etags` (a Map, or null to disable) is the per-URL
- *  ETag store, injectable for tests. */
+ *  ETag store, injectable for tests. The client is github-api.mjs's (one door,
+ *  2026-10-26); this wrapper only defaults the store to this process's map. */
 export function api(pathQs, opts = {}) {
-  const { retries = RETRY_DELAYS_MS, sleepSync: nap = sleepSync } = opts;
-  for (let attempt = 0; ; attempt++) {
-    const r = apiOnce(pathQs, opts);
-    if (!/^HTTP 5\d\d$/.test(r.error || "") || attempt >= retries.length) return r;
-    nap(retries[attempt]);   // a 5xx is GitHub's, not ours: back off and ask again
-  }
-}
-/** Backoff before each retry of a 5xx (1 s, 2 s, 4 s), then the error stands.
- *  https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api#handle-rate-limit-errors-appropriately */
-const RETRY_DELAYS_MS = [1000, 2000, 4000];
-const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-
-function apiOnce(pathQs, { run = spawnSync, env = process.env, gh, etags = ETAGS } = {}) {
-  const token = githubToken(gh !== undefined ? { env, gh } : { env });
-  if (!token) return { error: NO_TOKEN_HINT };
-  const url = `https://api.github.com/repos/${REPO}/${pathQs}`;
-  const prior = etags?.get(url);
-  // -w: the status code and the response ETag on the last line (`%header{}`, curl ≥ 7.84).
-  const r = run("curl", ["-sS", "--max-time", "30", "-K", "-", "-w", "\n%{http_code} %header{etag}",
-    "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28",
-    // Revalidate stored HTTP responses when polling mutable CI/PR state.
-    // https://www.rfc-editor.org/rfc/rfc9111.html#section-5.2.1.4
-    "-H", "Cache-Control: no-cache",
-    ...(prior ? ["-H", `If-None-Match: ${prior.etag}`] : []),
-    url],
-  // maxBuffer: a 100-job page or a 50-run page can pass spawnSync's 1 MB
-  // default; the old ready-cap helper died of exactly that (ENOBUFS, #1733).
-  { encoding: "utf8", maxBuffer: 64 << 20, input: `header = "Authorization: Bearer ${token}"\n` });
-  if (r.status !== 0) return { error: (r.stderr || r.error?.code || "curl failed").trim() };
-  const out = (r.stdout || "").split("\n");
-  const [, codeText = "", etag = ""] = /^(\d{3})\s*(.*)$/.exec(out.pop().trim()) || [];
-  const code = Number(codeText);
-  if (code === 304 && prior) return { json: prior.json, cached: true };
-  try {
-    if (code !== 200) return { error: `HTTP ${code}` };
-    const json = JSON.parse(out.join("\n"));
-    if (etags && etag) {
-      etags.delete(url);
-      etags.set(url, { etag, json });
-      if (etags.size > ETAG_CACHE_MAX) etags.delete(etags.keys().next().value);
-    }
-    return { json };
-  } catch { return { error: "bad JSON" }; }
+  return sharedApi(pathQs, { ...opts, etags: opts.etags === undefined ? ETAGS : opts.etags });
 }
 
 /** A ci.yml run started by a label other than run-ci on a draft (#2184): its

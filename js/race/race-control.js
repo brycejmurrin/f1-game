@@ -18,12 +18,22 @@ const RaceControl = (function () {
   // classifies as before (RaceControl.shortRun when no car ever took the flag).
   // Net, TT, quali and the AI-only harnesses pass no `post` and keep the rules below.
   const POST_FINISH_CAP = 75;
-  function finishDelay(cars, raceT, lapsTarget, raceT0, post) {
-    const ran = raceT - (raceT0 > 0 ? raceT0 : 0);
-    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false, pend = 0;
+  function finishPending(cars, raceT, lapsTarget, raceT0) {
+    if (raceT - (raceT0 > 0 ? raceT0 : 0) > 360 * lapsTarget) return false;
+    let running = false, pending = false;
     for (const c of cars || []) {
       if (!c) continue;
-      if (c.finished) { anyFinished = true; if (!c.retired) pend = Math.max(pend, (c.finishT || 0) + (c.penalty || 0)); }
+      if (!c.finished && !c.retired) running = true;
+      if (c.finished && !c.retired && raceT < (c.finishT || 0) + (c.penalty || 0)) pending = true;
+    }
+    return running && pending;
+  }
+  function finishDelay(cars, raceT, lapsTarget, raceT0, post) {
+    const ran = raceT - (raceT0 > 0 ? raceT0 : 0);
+    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false;
+    for (const c of cars || []) {
+      if (!c) continue;
+      if (c.finished) anyFinished = true;
       else if (!c.retired) running = true;
       if (!c.human && !c._nHuman) continue;
       anyHuman = true;
@@ -36,7 +46,7 @@ const RaceControl = (function () {
     // rival 3 s back with a +5 s penalty against it was filed as "still
     // running" — behind, on a result it had won. Bounded by the penalty
     // itself; the hard cap below still wins.
-    if (running && raceT < pend && ran <= 360 * lapsTarget) return 0;
+    if (finishPending(cars, raceT, lapsTarget, raceT0)) return 0;
     if (post) { if (!(anyHuman && allHumansDone)) post.since = -1; else if (post.since < 0) post.since = raceT; }
     if (anyHuman && allHumansDone && post && post.solo && running) return raceT - post.since < POST_FINISH_CAP ? 0 : 0.1;
     if (anyHuman && allHumansDone) return 2.2;
@@ -684,6 +694,6 @@ const RaceControl = (function () {
     return Infinity;
   }
 
-  return { create, finishDelay, POST_FINISH_CAP, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  return { create, finishDelay, finishPending, POST_FINISH_CAP, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
 })();
 Object.freeze(RaceControl);

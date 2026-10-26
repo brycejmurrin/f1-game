@@ -9,9 +9,9 @@
 // returns old AND new (a copy, `C`, lists both as well), plus every plain
 // A/M/D/T path, in diff order, unique.
 //
-// Call sites still on `--name-only` (listed in the PR that added this helper):
-// pick-tests, verify-change, change-kind, deploy.mjs's own unions and ci.yml's
-// shell filters. The three selection tools of the pull-request gate use this.
+// Callers (2026-10-26): pick-tests, pick-unit-slices, verify-change and
+// deploy.mjs changedPaths(). Still on `--name-only`: ratchets.mjs's changed-file
+// read (another lane's file), change-kind and ci.yml's shell filters.
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

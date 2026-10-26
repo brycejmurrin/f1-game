@@ -85,12 +85,13 @@ test("manifest keeps career-ui.js in LAZY_CAREER_UI and the boot stub on FULL", 
   assert.deepEqual(m.LAZY_CAREER_UI, ["js/career/career-planning-ui.js", "js/career/career-ui.js"]);
 });
 
-function delayedCareer() {
+function delayedCareer(writer) {
   const dom = makeDom(), pending = [], messages = [], opened = [];
   for (const id of ["overlay", "career", "carsetup"]) dom.byId(id).hidden = true;
   const state = { top: null, racing: false };
   const sb = {
     Promise,
+    GameStore: writer ? { store: { careerWriter: writer } } : undefined,
     Log: { info() {}, warn() {} },
     ApexRoster: { LAZY_CAREER_UI: ["js/career/career-ui.js"] },
     UiLayers: { top: () => state.top, inRace: () => state.racing },
@@ -174,4 +175,18 @@ test("a successful explicit Career hub request still supports a simulated season
   h.complete();
   await opening;
   assert.deepEqual(h.opened, [["hub"]], "careerSim callers may reopen the hub before leaving race state");
+});
+
+
+test("career entry waits for writer readiness without blocking bundle loading", async () => {
+  let resolveWriter;
+  const writer = { ready: new Promise(resolve => { resolveWriter = resolve; }) };
+  const h = delayedCareer(writer);
+  const opening = h.ui.openSlots("title");
+  h.complete();
+  await Promise.resolve(); await Promise.resolve();
+  assert.deepEqual(h.opened, [], "screen controls cannot mount against an unarmed career");
+  resolveWriter(false); // busy tabs still open the readable screen and its notice
+  await opening;
+  assert.deepEqual(h.opened, [["slots", "title"]]);
 });
