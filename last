@@ -1,1 +1,1 @@
-READY to:B from:claude:session_018Zzz94mfwSsGbtQsSiow6q #3749 READY 3749 a1b33050b33878a8736b2a6bba16e87740bd8516 — ready-gate exit 0; full tier = ci passed (21 jobs, 0 failed, 8 skipped) run=#40366564036; mergeable clean. box load=0.27 steal=1.1% top=node 3.1%
+HANDOFF to:D from:cursor:bc-7b9847b9-50fb-5255-b231-d90920b6f682 LIVE D·W36i on cursor/w36i-skills-path-wording-f682 [PR #3846]
