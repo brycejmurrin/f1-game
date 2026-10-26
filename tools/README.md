@@ -43,6 +43,19 @@ Bounded agent-output helpers: private artifact retention, subprocess ownership, 
 | **agent/output.mjs** | Shared bounded agent output with private, retrievable original artifacts. | — |
 | **agent/process.mjs** | Owns subprocess lifecycles: forwards cancellation and bounds cleanup of descendants after exits and explicit timeouts. | — |
 
+### `tools/transcripts/`
+
+Stream Grok Bot ReadTranscript JSONL dumps: search, export, digest (line-by-line; no SQLite / no UI).
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **transcripts/cli.mjs** | Stream Grok Bot ReadTranscript JSONL dumps: search / export / digest. | — |
+| **transcripts/lib/args.mjs** | Arg parser for tools/transcripts/cli.mjs — rejects unknown flags. | — |
+| **transcripts/lib/digest.mjs** | Aggregate counters for digest command (O(1) memory beyond maps). | — |
+| **transcripts/lib/format.mjs** | Human and JSON formatters for search hits. | — |
+| **transcripts/lib/match.mjs** | Filters + query match for transcript content blocks. | — |
+| **transcripts/lib/stream.mjs** | Line-by-line JSONL streamer for Grok transcript dumps — never loads the whole file. | — |
+
 ### `tools/lib/`
 
 Shared harnesses and helpers other tools load: the browser+server harness, the two Node-VM harnesses, the output-path contract, the WebGPU flag set.
@@ -105,6 +118,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **ci/agent-history.mjs** | Import + digest Claude, Codex/ChatGPT, Grok and Cursor session logs: prompts, commands, tools, errors, tokens. | agent-fleet |
 | **ci/branch-audit.mjs** | Verdicts for branches with no PR and no commit in 48 h: ancestry, merge-tree, line presence, CI (--all: every branch). | check-changes |
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
