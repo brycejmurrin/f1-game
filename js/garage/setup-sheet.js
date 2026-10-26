@@ -1037,7 +1037,6 @@ function buildLiveryOptions(container, team) {
   // #3339: search + collapse factory finishes so phone scroll is not ~25 screens.
   {
     const tools = document.createElement("div");
-    tools.className = "cs-liv-tools";
     const search = document.createElement("input");
     search.type = "search";
     search.className = "cs-liv-search";
@@ -1113,11 +1112,9 @@ function buildLiveryOptions(container, team) {
     fold.open = !!csLivFactoryOpen || !!q;
     fold.ontoggle = () => { csLivFactoryOpen = fold.open; };
     const sum = document.createElement("summary");
-    sum.className = "cs-liv-factory-sum";
     sum.textContent = "Factory finishes (" + factoryHidden.length + ")";
     fold.appendChild(sum);
     const grid = document.createElement("div");
-    grid.className = "cs-liv-factory-grid";
     for (const liv of factoryHidden) grid.appendChild(makeLiveryRow(team, liv, cur, false));
     fold.appendChild(grid);
     container.appendChild(fold);
