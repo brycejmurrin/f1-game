@@ -228,3 +228,4 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Fable audit DONE: https://claude.ai/artifact/QJTJYMVazzK1GRb4xfqHbW, top 10 relayed to Bryce; owner 01E4f2 will send one line at v2 then stop. Bryce has not picked items yet.
 - Archive: 019yb archived. 01EWg3 KEEP (#3723 open). Re-run fleet-archive on fresh page later; 01BgfkgS 01RSyjdq 01Q1pRbY near 60 min idle.
 - Bus cursor 10d040c+ (read --since 80e0dc9).
+- 05:43Z da95b2f OrchA: alternation — next slot after Pages on 4fff27eb goes to D (DAD #3702…), then B (#3772/#3636). Honour it.
