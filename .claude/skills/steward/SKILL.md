@@ -22,7 +22,7 @@ Review, hunt or survey findings on the PR → agent `finding-verifier` before yo
 4. Fix on the branch; sync only when §2 says you must.
 5. Gate: `node tools/ci/deploy.mjs --gate-only` (§6).
 6. ONE push per verified batch; refresh the PR body's Plan and Status.
-7. Draft → ready: `.claude/rules/fleet-core.md`.
+7. Draft → ready → READY → merged: §12 (the rule: `.claude/rules/fleet-core.md`).
 8. Watch (§7, §9) until `= ci passed`; then `who-is-on-it.mjs --release`.
 
 ## 1. `cancelled`: read the jobs, not the conclusion
@@ -142,3 +142,20 @@ arm → `disable_pr_auto_merge` (retired methods).
 ## 11. Browser runs, if a fix needs one
 
 Via `node tools/ci/test-bg.mjs <group>` only; AGENTS.md rules 5, 6 and 10 (one run, `--stop`, never in a subagent).
+
+## 12. Draft → ready → READY → merged (the steps that broke on 2026-10-26)
+
+1. **Push** with `git push -u origin <branch>` alone — no output pipe (a piped push went to the
+   permission classifier and was denied; the same push bare passed). Commit first in two calls (AGENTS.md rule 12).
+2. **Mergeable first**: a ready flip on a CONFLICTING/DIRTY head starts no CI (AGENTS.md rule 13); `needs-sync.mjs`,
+   then `sync-pr.mjs`, then flip.
+3. **Flip**, then call `subscribe_pr_activity` again on the same PR: the subscription died at the draft→ready
+   flip on #3785 and no CI or merge event arrived after it.
+4. **READY** goes out only after `node tools/ci/ready-gate.mjs --pr <n> --wait` exits 0 on the SAME head you
+   name in the line (`agent-msg.mjs` refuses a head that differs from the receipt). The Plan's open terminal item
+   `- [ ] READY to ORCH <L> via agent-msg …` is exempt from the gate (`.github/pull_request_template.md`).
+   A READY line never carries "do not merge" wording: a real veto is a PR-body
+   `MERGE-HOLD: <reason> | lift: <who> | until: <time|event>` line (fleet-core), and that shape is never an
+   ownership label — routing uses the `fleet:` line.
+5. **Merge watch**: `node tools/ci/wait-for.mjs --merged <sha>` as ONE background Bash task — never a hand-rolled
+   `while … sleep` loop; then `--release` the claim. The full signal list is AGENTS.md rule 13.

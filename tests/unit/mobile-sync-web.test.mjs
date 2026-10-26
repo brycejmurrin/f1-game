@@ -11,7 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { prepareSrc, resolveSrc } from "../../mobile/scripts/sync-web.mjs";
+import { prepareSrc, resolveSrc, copyTree } from "../../mobile/scripts/sync-web.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPT = path.join(ROOT, "mobile/scripts/sync-web.mjs");
@@ -140,7 +140,7 @@ test("sync-web reuses a stage stamped from HEAD without restaging", (t) => {
   stagedTree(path.join(root, "artifacts", "site"), OLD);
   stagedTree(path.join(root, "_site"), HEAD);
   const boom = () => { throw new Error("must not restage a current tree"); };
-  assert.equal(prepareSrc({ root, explicit: null, head: HEAD, dev: false, stage: boom, stamp: boom }), path.join(root, "_site"));
+  assert.equal(prepareSrc({ root, explicit: null, head: HEAD, clean: true, dev: false, stage: boom, stamp: boom }), path.join(root, "_site"));
   assert.equal(resolveSrc({ root, explicit: null, head: null }), null, "no HEAD (git failed): nothing is provably current");
 });
 
@@ -158,4 +158,42 @@ test("desktop resolveSiteDir ignores a stale artifacts/site fallback", (t) => {
   assert.equal(resolveSiteDir(desktop, { head: HEAD }), path.join(desktop, "dist-site"),
     "a stale fallback resolves to dist-site, which prebuild then refuses as missing (run npm run stage)");
   assert.equal(resolveSiteDir(desktop, { head: OLD }), artifacts, "the fallback stays when it IS this commit's stage");
+});
+
+
+test("default destination overlap is rejected before deleting source or existing data", (t) => {
+  const root = fakeRoot(t), www = path.join(root, "www");
+  const child = path.join(www, "nested");
+  fs.mkdirSync(child, { recursive: true });
+  fs.writeFileSync(path.join(child, "index.html"), "keep");
+  const alias = path.join(root, "alias");
+  fs.symlinkSync(www, alias, "junction");
+  for (const [src, dest] of [[www, www], [child, www], [alias, www], [www, path.join(www, "new")]]) {
+    assert.throws(() => copyTree(src, dest), /must not overlap/);
+    assert.equal(fs.readFileSync(path.join(child, "index.html"), "utf8"), "keep");
+  }
+});
+
+test("dirty same-HEAD trees are freshly staged, including --dev", (t) => {
+  for (const dev of [false, true]) {
+    const root = fakeRoot(t), site = path.join(root, "artifacts", "site");
+    stagedTree(site, HEAD);
+    let staged = 0;
+    const src = prepareSrc({root, explicit: null, head: HEAD, clean: false, dev,
+      stage(dest) { staged++; stagedTree(dest, HEAD); }, stamp() {} });
+    assert.equal(src, site);
+    assert.equal(staged, 1, "same SHA cannot establish unchanged working-tree bytes");
+  }
+});
+
+test("failed default copy preserves the previous usable web tree", (t) => {
+  const {dir, www} = fixture(t);
+  fs.writeFileSync(path.join(dir, "index.html"), "new");
+  fs.mkdirSync(www);
+  fs.writeFileSync(path.join(www, "index.html"), "previous usable build");
+  const cp = fs.cpSync;
+  fs.cpSync = () => { throw new Error("copy failed: EIO"); };
+  try { assert.throws(() => copyTree(dir, www), /EIO/); }
+  finally { fs.cpSync = cp; }
+  assert.equal(fs.readFileSync(path.join(www, "index.html"), "utf8"), "previous usable build");
 });

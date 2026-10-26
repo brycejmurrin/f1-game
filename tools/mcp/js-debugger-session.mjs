@@ -71,8 +71,8 @@ const registerExpression = (gen, pid) => `(()=>{var M=globalThis.${REGISTRY}||(O
 const unregisterExpression = gen => `(()=>{var M=globalThis.${REGISTRY};if(M)delete M[${JSON.stringify(gen)}];return true})()`;
 const pidAlive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } };
 export class DebugSession {
-  constructor({ discover = targets, open = Cdp.open } = {}) {
-    this.discover = discover; this.open = open;
+  constructor({ discover = targets, open = Cdp.open, sharedEndpoint = runningEndpoint } = {}) {
+    this.discover = discover; this.open = open; this.sharedEndpoint = sharedEndpoint;
     this.cdp = null; this.pause = null; this.sequence = 0;
     this.scripts = new Map(); this.objects = new Set(); this.breakpoints = new Map();
     this.operations = new Map(); this.operationSequence = 0; this.connecting = false; this.attachGeneration = 0;
@@ -180,7 +180,7 @@ export class DebugSession {
   }
   // No endpoint: the last one used, else the shared Chromium from tools/mcp/debug-chrome.mjs.
   resolveEndpoint(endpoint) {
-    const e = endpoint || this.lastEndpoint || runningEndpoint();
+    const e = endpoint || this.lastEndpoint || this.sharedEndpoint();
     if (!e) throw Error("endpoint is required: pass endpoint (e.g. http://127.0.0.1:9222), or start the shared browser (node tools/mcp/debug-chrome.mjs start / apex_debug_chrome) and it is found automatically");
     return e;
   }

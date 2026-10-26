@@ -71,7 +71,11 @@ test("ban 1: a ratchets.mjs run that can raise is refused in both doors; the non
     "node tools/check/ratchets.mjs --base origin/claude/f1-game-project-26h3ng --advisory",
     "node tools/check/ratchets.mjs --auto-raise", "node tools/check/ratchets.mjs --auto-raise=40",
     "echo 'node tools/check/ratchets.mjs --update'", "echo 'echo --update | xargs node tools/check/ratchets.mjs'",
-    "APEX_RATCHET_RAISE_OK=1 node tools/check/ratchets.mjs --update --fragment --reason=bryce-typed"]) {
+    "APEX_RATCHET_RAISE_OK=1 node tools/check/ratchets.mjs --update --fragment --reason=bryce-typed",
+    // 2026-10-26 second pass: a READ-ONLY import that measures (pinVerdict / PIN_METRICS) is how an agent pays a
+    // ceiling by shrinking; only a script that can raise (autoRaise/update/fold or a file write) is refused
+    "node -e \"const m = await import('./tools/check/ratchets.mjs'); console.log((await m.pinVerdict('assertPins')).value)\"",
+    "node /tmp/x/pin-now.mjs"]) {
     assert.equal(claudeBash(cmd).status, 0, `claude: ${cmd}`);
     assert.deepEqual(cursorShell(cmd).out, { permission: "allow" }, `cursor: ${cmd}`);
   }

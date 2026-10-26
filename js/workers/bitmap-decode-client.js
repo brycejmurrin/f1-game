@@ -106,7 +106,11 @@ const BitmapDecode = (function () {
           signal.addEventListener("abort", p.abort, { once: true });
           if (signal.aborted) { p.abort(); return; }
         }
-        p.timer = setTimeout(() => settle(seq, new Error("bitmap worker timed out")), REQUEST_MS);
+        p.timer = setTimeout(() => {
+          // A silent worker stall affects every request on this instance.
+          // Retire it so the next decode can start a healthy worker.
+          if (_w === w) drop(); else settle(seq, new Error("bitmap worker timed out"));
+        }, REQUEST_MS);
         // drop() may have terminated `w` between spawn() and here (or the
         // browser neutered it without firing onerror). Never postMessage at a
         // corpse — that throws, and leaving `_w` pointed at it makes every
@@ -149,7 +153,9 @@ const BitmapDecode = (function () {
       got = await new Promise((resolve, reject) => {
         const p = { resolve, reject, timer: null, strip: true };
         _pending.set(seq, p);
-        p.timer = setTimeout(() => settle(seq, new Error("strip worker timed out")), STRIP_MS);
+        p.timer = setTimeout(() => {
+          if (_w === w) drop(); else settle(seq, new Error("strip worker timed out"));
+        }, STRIP_MS);
         if (_w !== w) { settle(seq, new Error("bitmap worker dropped")); return; }
         try { w.postMessage({ type: "strip", seq, blob, size, layers: last + 1 }); }
         catch (err) { if (_w === w) drop(); else settle(seq, err); }

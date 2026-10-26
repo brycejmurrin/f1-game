@@ -1099,6 +1099,41 @@ test("bash-guard: survey images and reports commit on the docs-only path; a code
 // the debug log" — UserPromptSubmit/SessionStart are the exceptions
 // (https://code.claude.com/docs/en/hooks, Exit code 0). The advice must travel as
 // hookSpecificOutput.additionalContext or the model never reads it (#2228 research).
+test("post-edit circuit advice leaves verification until all edits are complete", () => {
+  const repo = scratchRepo("hook-postedit-circuit-");
+  try {
+    fs.mkdirSync(path.join(repo.dir, "js/circuits/scenery"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "tools/track"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "js/circuits/monza.js"), "var track = {};\n");
+    fs.writeFileSync(path.join(repo.dir, "js/circuits/scenery/monza.js"), "var scenery = {};\n");
+    const marker = path.join(repo.dir, "verify-ran");
+    fs.writeFileSync(path.join(repo.dir, "tools/track/verify-track.cjs"),
+      `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'yes');`);
+    for (const rel of ["js/circuits/monza.js", "js/circuits/scenery/monza.js"]) {
+      const r = hook("post-edit.sh", { tool_name: "Edit", tool_input: { file_path: path.join(repo.dir, rel) } }, { cwd: repo.dir });
+      assert.equal(r.status, 0, r.stderr);
+      const advice = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+      assert.equal(advice.trim(), `[post-edit] ${rel} changed: after all circuit and scenery edits, run \`node tools/track/verify-track.cjs monza\` once; no intermediate build was checked`);
+      assert.equal(fs.existsSync(marker), false, "no intermediate verification runs");
+    }
+  } finally { repo.rm(); }
+});
+
+test("post-edit group guidance edits the source instead of generated package scripts", () => {
+  const repo = scratchRepo("hook-postedit-group-");
+  try {
+    fs.mkdirSync(path.join(repo.dir, "tests"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "tools/gen"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "tests/groups.json"), "{}\n");
+    fs.writeFileSync(path.join(repo.dir, "tools/gen/gen-test-groups.mjs"), "process.exit(1);\n");
+    const r = hook("post-edit.sh", { tool_name: "Edit", tool_input: { file_path: path.join(repo.dir, "tests/groups.json") } }, { cwd: repo.dir });
+    assert.equal(r.status, 0, r.stderr);
+    const advice = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+    assert.equal(advice.trim(), "[post-edit] groups.json changed: package.json test:* scripts are STALE — finish the source group " +
+      "in tests/groups.json, run `node tools/gen/gen-test-groups.mjs`, then update the docs/TESTING.md group row");
+  } finally { repo.rm(); }
+});
+
 test("post-edit.sh hands its advice to the model as PostToolUse additionalContext JSON, and stays silent with none", () => {
   const repo = scratchRepo("hook-postedit-");
   const run = (rel) => hook("post-edit.sh", { tool_name: "Write", hook_event_name: "PostToolUse",
@@ -1420,4 +1455,30 @@ test("lsp-hint stays quiet for SCREAMING_CASE env names; a CapitalisedSymbol or 
     encoding: "utf8", env: { ...process.env, APEX_LSP_HINT: "" } }).stdout.trim();
   for (const c of ["grep -rn RELAY_URL js/", "grep -rn APEX_MERGE_DESK js", "grep -n TURN js/ui/hud.js"]) assert.equal(hint(c), false, c);
   for (const c of ["grep -rn GameHud js/", "grep -rn Tracks.curvature js", "grep -rn MAT.tarmac js"]) assert.equal(hint(c), true, c);
+});
+
+test("a `git stash` while a merge is in progress is refused (MERGE_HEAD would be dropped); reads, pop and a stash after abort pass", () => {
+  const repo = scratchRepo("hook-stash-merge-");
+  const run = (command) => spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
+    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, APEX_GUARD_PROBE: "1" },
+  });
+  try {
+    repo.g("checkout", "-qb", "side");
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "side\n");
+    repo.g("commit", "-qam", "side");
+    repo.g("checkout", "-q", "-");
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "main\n");
+    repo.g("commit", "-qam", "main");
+    repo.g("merge", "side"); // conflicts: MERGE_HEAD stays
+    assert.equal(repo.g("rev-parse", "-q", "--verify", "MERGE_HEAD").status, 0, "fixture: a merge is in progress");
+    for (const cmd of ["git stash", "git stash push -m wip", "git stash -u", "git -C . stash"]) {
+      const r = run(cmd);
+      assert.equal(r.status, 2, `${cmd}\n${r.stderr}`);
+      assert.ok(r.stderr.trim().startsWith("BLOCKED: `git stash` while a merge is in progress drops MERGE_HEAD"), r.stderr);
+    }
+    for (const cmd of ["git stash list", "git stash show -p", "git stash pop", "git status"]) assert.equal(run(cmd).status, 0, cmd);
+    repo.g("merge", "--abort");
+    assert.equal(run("git stash").status, 0, "no merge in progress: a stash is fine");
+  } finally { repo.rm(); }
 });
