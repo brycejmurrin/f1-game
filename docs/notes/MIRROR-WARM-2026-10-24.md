@@ -191,7 +191,23 @@ hitch recorder (#3676) is what can confirm it.
 
 ## Still open
 
-- The 4 race-only states: warm them in the menu, or give them a state the menu already builds.
-- The title warm on device: A·D2's S5-style dose run (title idle 0 / 15 / 45 s → START, cold), WebGPU then WebGL2.
-- The device before/after: gpu-census.yml on macos-latest (Dawn/Metal), then A·D2's iPhone 14 Pro cold entry,
-  WebGPU then WebGL2.
+- **The cold rig warm** (`rigWarm` 5.7 s on a fresh iPhone 14 Pro, 81–121 ms once Safari has cached it; ledger
+  row 29). It always runs at race start. The facts so far:
+  - `car-draw.js` `warmCockpitRig` captures the race's player rig, 28 pairs. `tlx.js` `startRigWarm` compiles each
+    with `compileWarmProbe` (a `DoubleSide` pair on both windings since #3713). With `job.mirror` (the menu path)
+    it then runs `warmMirrorStage` over the whole race scene.
+  - On lavapipe it takes 9–14 s while building 0–2 new pipelines. There the cost is CPU per probe (each
+    `compileAsync(probe, camera, scene)` also walks the whole target scene for lights), or the mirror stage's
+    scene walk. On the device it is GPU pipeline compiles, cold only.
+  - Leads:
+    1. Time each probe and the mirror stage separately (the census's pin-wrapper probe shows which pipelines are
+       new).
+    2. Warm the rig's materials in the menu: the menu car assets know the selected team, but not the race's car
+       object.
+    3. Drop the rig job's `warmMirrorStage` when the menu warm's mirror stage already covered the same world (the
+       `opts.mirror` key).
+    4. Measure `warmIdleChunks()`: `_warmWhere` stays `"menu"` at race entry, because the race skips its own warm,
+       so the rig job idle-yields every other pair.
+- Device confirmation of #3761 (the two first-frame pipelines as #3673's two >100 ms frames): A·W54's hitch
+  recorder (#3676) plus A·D2, on Bryce's Go.
+- The part-2 dose on device: A·D2's `coldrace` `quick0` vs `quick45`, one fresh unit per arm (see #3757).
