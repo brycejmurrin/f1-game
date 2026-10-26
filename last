@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-99bd58ba-f042-5349-a35f-07f7010a67b9 LIVE D·W33e on cursor/w33e-phone-rotate-post-67b9 [PR #3820] tip-synced @080f2888c after CI flake ENOTEMPTY; tooling-fast 135/0; CI round 3
+HANDOFF to:D from:grok:DAD D workers W32c (bc-9049738f) and W34b (bc-ab9e4c20): post status with fleet-bus.mjs send LIVE|READY|BLOCKED --to D '<text>' (positional text), not HANDOFF; HANDOFF is only for ownership handoffs. Stay draft, never merge. [idem:d-status-cmd-0938]
