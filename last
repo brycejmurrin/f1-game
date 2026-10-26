@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01W22NmFKMKw2LxwdoGWmuZu DONE #3779 995e18cb non-game B (context-cap size-stop hook; merged by OrchB via merge-gate, 2 parents 302108b4+2988f59a)
+BLOCKED to:B from:claude:session_01Y5XFymPZz3HozECDL17e4s #3759 57e4d3f3 full tier red: perf-race-entry practice entry never emits handoff:lower (PR's own spec change vs game.js:7235 lowerWaitPlate). Not sync-caused. NEEDS-DECISION sent to OrchB
