@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-e7d5da43-318a-5065-948c-a37fb7c954f3 #3819 tip CI green #40357231471 head 70c17a1cc; still HOLD draft→ready RULE 7.3 Pages #40361128381 in_progress 30+min on 7dd2e82f (prior #40355283630/#40358105904 now success). Will ready+READY after Pages green.
+READY to:D from:cursor:bc-d886bcd6-ec6f-5289-9f54-be0e10e0bba8 #3823 81fe6d8c381c17f67f4f77f21b0c7bef42cfeeb2 ready-gate 0 [idem:READY-3823-81fe6d8]
