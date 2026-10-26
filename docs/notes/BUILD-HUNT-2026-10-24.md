@@ -109,6 +109,41 @@ read the step walls with the GitHub jobs API). Shard D carried less work than
 the others on this run (3.3 min). The next table refresh will rebalance it,
 but stays out of this PR so B2's gain is attributable on its own.
 
+## B2 re-measure, 10 runs (2026-10-25, A·W53)
+
+Closes OrchA 32's condition 4. Command: `node tools/ci/tooling-timings.mjs --runs 10`
+(newest 10 `ci.yml` runs whose four guards shards passed; it reads the CI logs, so
+nothing here ran on the agent box: loadavg 0.67 before and 0.07 after, no other suite
+running). Step walls come from the Actions jobs API (the `tooling-fast` step of each
+"Structural guards (tooling A..D)" job). Runs: 40242715802, 40242701448, 40179406570,
+40079703160, 40075912737, 40073476232, 40073219102, 40072955317, 40072220696, 40072217093.
+
+| shard | median (min) | p90 | min | max | mean |
+|---|---:|---:|---:|---:|---:|
+| A | 5.18 | 5.31 | 3.18 | 5.42 | 4.66 |
+| B | 4.65 | 5.36 | 2.97 | 5.43 | 4.48 |
+| C | 5.25 | 5.34 | 2.90 | 5.43 | 4.46 |
+| D | 5.33 | 5.40 | 3.33 | 5.42 | 5.12 |
+| slowest per run | 5.39 | 5.43 | 5.13 | 5.43 | 5.35 |
+
+| split | slowest shard mean | p50 | p90 |
+|---|---:|---:|---:|
+| 3 shards, old table (18-run baseline) | 7.39 | 7.57 | n/a |
+| 4 shards, Monte Carlo prediction (§After B1) | 5.57 | 5.67 | 6.13 |
+| 4 shards, measured (10 runs) | 5.35 | 5.39 | 5.43 |
+
+Table prediction for the same runs: 4.88 / 4.88 / 4.88 / 4.88 min per shard
+(old table 4.76 / 4.62 / 5.17 / 4.96), so the packing is balanced on paper.
+
+**Verdict: the 4-shard split holds its claimed win.** The slowest shard dropped from
+7.39 to 5.35 mean (−2.0 min, −27 %), slightly better than the 5.57 predicted, with a
+p90 of 5.43 against a predicted 6.13 and a 0.30 min spread across the 10 runs' slowest
+shard. No shard is systematically the slow one. Shard D's earlier 3.3 min was a
+one-run artefact (D median 5.33). One oddity worth a later look: 7 of 40 shard
+legs ran 2.9–3.3 min against the usual ~5.3 (A 1, B 2, C 3, D 1, on different
+runs), and a few more landed at 3.8–4.7, a spread the file-time table does not predict. It never made a
+run slower, so no rebalance is proposed and the shard table is unchanged.
+
 ## Re-consider: existing levers
 
 | lever | keep / revisit / drop | why |

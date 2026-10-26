@@ -204,6 +204,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/build-gallery.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
+  // Camera tuner reads stored track/team once per Store revision (CPU-HUNT C6). VM, < 0.1 s.
+  "tests/unit/cam-context-alloc.test.mjs",
   "tests/unit/cam-motion.test.mjs",
   // Round-2 camera: corridor-clamped hang, wall clamp on street circuits, look-free director/PiP, NaN hold, bend hysteresis, frame-rate-free drone; 30/60/144 Hz sweep.
   "tests/unit/cam-round2.test.mjs",
@@ -602,6 +604,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Garage before pack: recipe, MANIFEST, fetch --help / no-pack, workflow is
   // not Car shot. Pure + spawn, no network / Chromium.
   "tests/unit/garage-before.test.mjs",
+  // The Blender crew clips: per-visit MIX, clear of the car's path, and the in-race pit crew on stopAnim's u.
+  "tests/unit/garage-crew-choreo.test.mjs",
   // The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.
   "tests/unit/garage-crew.test.mjs",
   "tests/unit/garage-defaults.test.mjs",
@@ -721,6 +725,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/inputs-hash.test.mjs",
   // #3302: INSTALL APP lifts clear of PAUSE BACKGROUND on title landscape (844×390).
   "tests/unit/install-chip-overlap.test.mjs",
+  // #3558: iOS Safari focus auto-zoom — text inputs in FREE sheets must floor at 16px.
+  "tests/unit/ios-input-zoom.test.mjs",
   "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
   "tests/unit/js-debugger-mcp.test.mjs",
   "tests/unit/js-debugger-node.test.mjs",

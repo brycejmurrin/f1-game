@@ -231,6 +231,22 @@ In order of how much evidence each would have saved so far.
 10. **Automated route only for syslog, video or tcpdump** (lever 5); remote access for everything else. Instruments
     does not work on Device Farm (row 5, 7).
 
+### 5a. Where each method fix landed (A·W54, 2026-10-25)
+
+| item | status |
+|---|---|
+| 1 build sha | in `devicefarm-iphone.mjs` (a31bd247, #3666): `report.boot.build` and every row's `rowMeta()` |
+| 2 first arm | `first` flag on rows; `--prime TRACK:TOD` spends a throwaway entry |
+| 3 thermal per arm | `thermalState` read per arm |
+| 4 governor | `--pin-scale S`; rows carry `gov0` and `tierMoved` (`tools/perf/devicefarm-method.mjs`, unit-tested) |
+| 5 unit history | `artifacts/devicefarm/units.json` via `appendUnit()` (unit-tested) |
+| 6 hitch attribution | recorder in the `--touch`, `tracks` and `warmplus` arms (a31bd247); the first-race hitch work itself is #3673 |
+| 7 `warm.history` | on every entry read |
+| 8 timestamp-query | the harness reads no GPU timestamp query and must not add one as absolute ms: iOS reports 45–97 ms per 16.7 ms frame (rows 2, 4); use `fps`/`p95` |
+| 9 repeat counts | rule, not code: cold-entry deltas under 4 s need 3+ fresh units (check `units.json`), cached-entry deltas 2 sessions for 1 s, and chain scenarios inside the 13-minute floor |
+
+`auto` also prints the syslog memory table (#3675, `docs/notes/IPHONE-MEMORY-2026-10-24.md`).
+
 ## 6. Sent and filed
 
 Issues filed from §4 and §5 (title prefix `[A·perf]`, labels `ready` + an area label): #3672 lit-WGSL stability

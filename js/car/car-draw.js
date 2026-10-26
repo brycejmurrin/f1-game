@@ -1686,6 +1686,8 @@ const CarDraw = (function () {
       if (!c || c.pitState !== "box") return false;
       const dx = base[12] - G.camEye[0], dy = base[13] - G.camEye[1], dz = base[14] - G.camEye[2];
       if (dx * dx + dy * dy + dz * dz > 90 * 90) return false;
+      // The player's stop plays the garage crew's Blender clip (js/garage/pit-crew.js).
+      if (typeof PitCrewAnim !== "undefined" && PitCrewAnim.draw(G, c, base, opt || _crewOpts)) { _crewDrawn++; return true; }
       const col = (c.team && c.team.color) || [0.30, 0.32, 0.36];
       const m = getCrewMesh(col);
       if (!m) return false;

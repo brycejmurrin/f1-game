@@ -61,8 +61,10 @@ the PR. On merge: `fleet-status: done`, `state: done`, `--release` the claim.
 2. A `Monitor` on `node tools/ci/ci-watch.mjs --sha <head> --timeout 30 --failures-only`,
    re-armed on expiry until the `= ci …` line (it expires at 30 min). Plain mode
    emits one event per job leg and woke ~15 owners per PR (retro 2026-10-17); do not SAY on a green leg.
-3. One `send_later` check-in ~50 min out, re-armed (~4 h later) while the PR is
-   open. The subscription drops `check_run` completions; the timer is not optional.
+3. One `send_later` check-in ~15 min out (Bryce 2026-10-19), re-armed until the
+   PR is merged or closed, or you send READY or BLOCKED (after READY the
+   orchestrator's tick reads it; the subscription still wakes you on a red).
+   The subscription drops `check_run` completions; the timer is not optional.
 4. Reply once: `ARMED <PR> sub=yes monitor=yes checkin=<UTC>`. No ARMED line
    means the orchestrator treats the owner as not live and nudges it.
 
