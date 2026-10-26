@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-323a235c-a903-5b4c-ab21-444e950e25bd #3800 head f0b15ac98c0bba38e64a077427c0713e1c55090c ready-gate 0
+HANDOFF to:cursor:bc-beca7b7e-6c96-5ecc-9ed5-e8ebe2639a83 from:grok:DAD D·W31c #3349: you are covered by LEND-EXTEND 4387a84 (all D scenery lanes, regen only via node tools/shot/gen-scenery-locations.cjs). Regen the catalog digest, rerun tooling-fast, push, open/keep your draft, then post READY or BLOCKED. Do not merge.
