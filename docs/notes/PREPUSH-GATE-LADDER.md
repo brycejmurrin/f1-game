@@ -67,6 +67,13 @@ assertion about the fourth closer rather than to loosen it.
   run by that gate or named in `SWEEPS_ONLY` with the CI job that does run it,
   and that the exemption list has no stale entries. It caught itself on its
   first run, which is the correct first result.
+- `npm run test:tooling-fast` with no `--jobs` picks its own width
+  (2026-10-24, A·H16 build hunt B4, PR #3694's note): `--jobs=2` when no
+  Playwright suite or host browser is live and the 1-min loadavg is under 2,
+  else serial, and it prints which (`[tooling-fast] jobs=N (auto: …)`). Serial
+  the floor is ~47 min of file time on a 4-core container; `--jobs=3` measured
+  16.1 min. `deploy.mjs` keeps its pinned `--jobs=2`, CI its `--jobs=4`. The
+  rung's contents do not change, only how many files run at once.
 
 `test-coverage-audit` already asked "is this file in some topical group?". That
 is a different question, and a file can pass it while nothing runs the file

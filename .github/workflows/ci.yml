@@ -324,6 +324,16 @@ concurrency:
   group: ci-${{ inputs.concurrency_key || ((github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('label-{0}', github.run_id)) || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# DIFF-RELATIVE COUNTERS ON A PR, ABSOLUTE ON THE TIP (2026-10-26, system audit
+# §6). The pin counters in tests/data/ratchets.json `tree` (assertPins,
+# rawGameReads, vmSrcLoads) fail a pull_request run only on growth that PR adds
+# against the merge ref's first parent, so one overage no longer turns every
+# open PR red at once (74 of 80 red PR runs in three days). The train (the
+# Pages call: the caller's event is push or workflow_dispatch), schedule and
+# dispatch judge the tree alone. tools/check/ratchets.mjs ratchetMode.
+env:
+  APEX_RATCHET_ABSOLUTE: ${{ github.event_name != 'pull_request' && '1' || '' }}
+
 jobs:
 
   draft-ci-skipped:
@@ -393,7 +403,7 @@ jobs:
           path: .verdict-guards-a
           key: ${{ steps.h.outputs.key }}
           lookup-only: true
-      - name: Tooling-fast shard 1/3
+      - name: Tooling-fast shard 1/4
         if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
@@ -401,7 +411,7 @@ jobs:
         # failure. A red shard ran a mean 5.9 min after its first failure; files
         # already in flight finish and the log names each. The local
         # `npm run test:tooling-fast` stays without it so an author sees every red.
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=1/3 --bail
+        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=1/4 --bail
       - name: Record green verdict
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
         run: date -u > .verdict-guards-a
@@ -460,11 +470,11 @@ jobs:
           path: .verdict-guards-b
           key: ${{ steps.h.outputs.key }}
           lookup-only: true
-      - name: Tooling-fast shard 2/3
+      - name: Tooling-fast shard 2/4
         if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=2/3 --bail
+        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=2/4 --bail
       # RATCHETS, AUDIT, COVERAGE AND BEHIND-SHIP (moved from the `Structural
       # guards` aggregator 2026-10-15): the same tree and node_modules, no
       # second checkout + npm ci, and the aggregator needs no runner time.
@@ -585,7 +595,7 @@ jobs:
           path: .verdict-guards-c
           key: ${{ steps.h.outputs.key }}
           lookup-only: true
-      - name: Tooling-fast shard 3/3
+      - name: Tooling-fast shard 3/4
         if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
@@ -593,7 +603,7 @@ jobs:
         # failure. A red shard ran a mean 5.9 min after its first failure; files
         # already in flight finish and the log names each. The local
         # `npm run test:tooling-fast` stays without it so an author sees every red.
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=3/3 --bail
+        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=3/4 --bail
       - name: Record green verdict
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
         run: date -u > .verdict-guards-c
@@ -612,9 +622,72 @@ jobs:
         if: steps.reuse.outputs.reuse == 'true'
         run: echo "SKIPPED tooling C — draft fast-tier already green on this head SHA"
 
+  guards-d:
+    name: Structural guards (tooling D)
+    runs-on: ubuntu-latest
+    timeout-minutes: 18   # same budget as tooling A
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '') }}
+    permissions:
+      contents: read
+      actions: read
+    env:
+      NO_MEMO: ${{ github.event_name == 'schedule' && '1' || '' }}
+    steps:
+      # Same steps as guards-c (blob-less checkout, draft reuse, #1712 verdict cache, --bail); the fourth
+      # shard since 2026-10-24 (BUILD-HUNT B2: E[slowest shard] 7.22 -> 5.57 min under measured runner noise).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+      - name: Was this head already green as a draft?
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_ACTION: ${{ github.event.action }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/setup-apex
+        if: steps.reuse.outputs.reuse != 'true'
+      - name: Inputs hash (guards)
+        id: h
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
+        run: echo "key=guards-d-${{ runner.os }}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+      - name: Verdict cache lookup
+        id: memo
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .verdict-guards-d
+          key: ${{ steps.h.outputs.key }}
+          lookup-only: true
+      - name: Tooling-fast shard 4/4
+        if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
+        env:
+          APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
+        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=4/4 --bail
+      - name: Record green verdict
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
+        run: date -u > .verdict-guards-d
+      - name: Save verdict cache
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .verdict-guards-d
+          key: ${{ steps.h.outputs.key }}
+      - name: Memoized skip
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit == 'true'
+        env:
+          CACHE_KEY: ${{ steps.h.outputs.key }}
+        run: echo "SKIPPED tooling D — inputs-hash verdict cache hit for $CACHE_KEY"
+      - name: Reused draft
+        if: steps.reuse.outputs.reuse == 'true'
+        run: echo "SKIPPED tooling D — draft fast-tier already green on this head SHA"
+
   guards:
     name: Structural guards
-    needs: [guards-a, guards-b, guards-c]
+    needs: [guards-a, guards-b, guards-c, guards-d]
     runs-on: ubuntu-latest
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!cancelled() && inputs.fast_tier_run == '') }}
     timeout-minutes: 5
@@ -628,10 +701,11 @@ jobs:
           A: ${{ needs.guards-a.result }}
           B: ${{ needs.guards-b.result }}
           C: ${{ needs.guards-c.result }}
+          D: ${{ needs.guards-d.result }}
         run: |
           set -u
-          echo "guards-a=$A guards-b=$B guards-c=$C"
-          [ "$A" = success ] && [ "$B" = success ] && [ "$C" = success ]
+          echo "guards-a=$A guards-b=$B guards-c=$C guards-d=$D"
+          [ "$A" = success ] && [ "$B" = success ] && [ "$C" = success ] && [ "$D" = success ]
 
   lints:
     name: Workflow and shader lints
@@ -1337,6 +1411,9 @@ jobs:
     # its retry now meets this cap first: the job reads `cancelled`, which
     # ci-verdict.mjs fails exactly like `failure` — red either way, never green.
     timeout-minutes: ${{ (inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && 120 || 20 }}
+    # playwright.config.js caps a CI run at 45 min (globalTimeout); the wide nightly/dispatch run's job cap is 120.
+    env:
+      APEX_GLOBAL_TIMEOUT_MIN: ${{ (inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && '110' || '' }}
     # NO JOB-LEVEL CONCURRENCY (2026-10-16, the 2026-10-16 CI/CD review
     # note (#2333) finding 6). From 2026-10-15 to 10-16 every ready PR's single smoke shard
     # shared ONE fleet-wide lane group, so a 2.6-minute job that
@@ -2455,6 +2532,9 @@ jobs:
       group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('selected-lane-{0}', matrix.lane) || format('selected-run-{0}-{1}', github.run_id, strategy.job-index) }}
       queue: max
     timeout-minutes: ${{ matrix.timeout }}
+    # playwright.config.js's 45-min CI globalTimeout must never undercut the plan's own per-shard cap (nightly shards run 60).
+    env:
+      APEX_GLOBAL_TIMEOUT_MIN: ${{ matrix.timeout }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2895,6 +2975,7 @@ jobs:
       - guards-a
       - guards-b
       - guards-c
+      - guards-d
       - guards
       - lints
       - node-suites
@@ -2921,5 +3002,5 @@ jobs:
           # Full-tier PR runs: these must have run AND passed (a job skipped by `if:` reports success, so a hollow
           # run would otherwise read green). Measured on recent full-tier runs: they never skip there, unlike
           # driving-model / sweeps / the macOS leg, which the change-aware selection skips legitimately.
-          REQUIRE_SUCCESS: ${{ (github.event_name == 'pull_request' && !github.event.pull_request.draft) && 'guards-a,guards-b,guards-c,guards,select,smoke,staged-boot' || '' }}
+          REQUIRE_SUCCESS: ${{ (github.event_name == 'pull_request' && !github.event.pull_request.draft) && 'guards-a,guards-b,guards-c,guards-d,guards,select,smoke,staged-boot' || '' }}
         run: node tools/ci/ci-verdict.mjs

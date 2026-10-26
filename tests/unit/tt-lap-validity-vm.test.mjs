@@ -286,3 +286,26 @@ test("a practice lap (checkpoint set) is not a timed lap, with no cut involved",
     assert.equal(p.best, cleanBest, "a practice lap never becomes the best lap");
   } finally { g.close(); }
 });
+
+
+test("a settings-spoiled TT lap cannot replace accepted timing, including the next slower clean lap", async () => {
+  const g = await timeTrial();
+  try {
+    const p = armLap(g, 90); crossLine(g);
+    const accepted = p.best;
+    assert.equal(g.G.ttLaps.length, 1);
+    const pace = g.sandbox.document.getElementById("pm-pace");
+    pace.value = "12"; pace.oninput({ target: pace });
+    armLap(g, 80); crossLine(g);
+    assert.equal(p.best, accepted);
+    assert.equal(p.lastLap, accepted);
+    assert.equal(g.G.ttLaps.length, 1, "mixed-class lap was rejected exactly once");
+    assert.equal(g.G.records.board("monza").length, 0);
+    armLap(g, 85); crossLine(g);
+    assert.ok(p.best > 85 && p.best < 86, "the clean lap replaces the old accepted best");
+    assert.equal(p.best, p.lastLap);
+    assert.equal(p.best, g.G.ttRecord);
+    assert.equal(g.G.records.board("monza")[0].t, p.best);
+    assert.equal(g.G.ttLaps.length, 2);
+  } finally { g.close(); }
+});

@@ -9,6 +9,7 @@ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a gi
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,6 +41,21 @@ test("the adapter blocks what bash-guard blocks, from Cursor's and Codex's paylo
   assert.equal(guard({ command: "ls -la", cwd: ROOT }).status, 0, "an ordinary command passes");
 });
 
+/** A committed copy of the gate files under `dir` and their sha256s: since 2026-10-26 the hook refuses a receipt
+ *  whose gate files are not the committed ones (merge_policy.gate_files_check; the O23 incident). */
+function committedGate(dir) {
+  const g = (...a) => spawnSync("git", ["-C", dir, ...a], { encoding: "utf8" });
+  if (!fs.existsSync(path.join(dir, ".git"))) { g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t"); }
+  const out = {};
+  for (const f of ["tools/ci/merge-gate.mjs", "tools/ci/ready-gate.mjs", "tools/lib/gate-receipt.mjs"]) {
+    fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, f), path.join(dir, f));
+    out[f] = crypto.createHash("sha256").update(fs.readFileSync(path.join(dir, f))).digest("hex");
+  }
+  g("add", "tools"); g("commit", "-qm", "gate files");
+  return out;
+}
+
 // 2026-10-15: run cancels under the owner's account kept landing after both
 // Claude doors refused them; Cursor's MCP door had no guard at all.
 test("Cursor's MCP door: a run cancel is denied (exit 2), a merge needs the gate receipt, a read passes", () => {
@@ -58,7 +74,7 @@ test("Cursor's MCP door: a run cancel is denied (exit 2), a merge needs the gate
     const head = "a".repeat(40);
     assert.deepEqual(mcp("merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), { status: 2, permission: "deny" }, "no merge-gate receipt");
     fs.mkdirSync(path.join(dir, "artifacts/merge-gate"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "artifacts/merge-gate/1.json"), JSON.stringify({ kind: "merge", pr: 1, head, ok: true, at: new Date().toISOString() }));
+    fs.writeFileSync(path.join(dir, "artifacts/merge-gate/1.json"), JSON.stringify({ kind: "merge", pr: 1, head, ok: true, at: new Date().toISOString(), gateRoot: dir, gateFiles: committedGate(dir) }));
     assert.deepEqual(mcp("merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), { status: 0, permission: "allow" }, "gated merge passes");
     assert.deepEqual(mcp("pull_request_read", { method: "get", pullNumber: 1 }), { status: 0, permission: "allow" });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -90,7 +106,7 @@ test("Codex's MCP door: the GitHub guard runs, an ask becomes a deny, a gated me
     assert.equal(mcp("mcp__github__actions_run_trigger", { method: "rerun_failed_jobs", run_id: 1 }), "deny", "a re-run ask becomes a deny");
     assert.equal(mcp("mcp__github__actions_run_trigger", { method: "cancel_workflow_run", run_id: 1 }), "deny");
     fs.mkdirSync(path.join(dir, "artifacts/merge-gate"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "artifacts/merge-gate/1.json"), JSON.stringify({ kind: "merge", pr: 1, head, ok: true, at: new Date().toISOString() }));
+    fs.writeFileSync(path.join(dir, "artifacts/merge-gate/1.json"), JSON.stringify({ kind: "merge", pr: 1, head, ok: true, at: new Date().toISOString(), gateRoot: dir, gateFiles: committedGate(dir) }));
     assert.equal(mcp("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), null, "gated merge passes");
     assert.equal(mcp("mcp__github__update_pull_request", { pullNumber: 1, body: "x" }), null, "a body edit passes");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }

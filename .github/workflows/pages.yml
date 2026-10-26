@@ -35,7 +35,11 @@ on:
       - ".cursor/**"
       - ".codex/**"
   schedule:
-    - cron: "41 * * * *"
+    # Every 6 h since 2026-10-26 (audit lane X3; was hourly): push and dispatch start the train, so the cron
+    # only catches prose-only pushes and lost events, and GitHub delivers schedules hours late anyway ("The
+    # schedule event can be delayed during periods of high loads ... High load times include the start of every
+    # hour": https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
+    - cron: "41 */6 * * *"
   workflow_dispatch:
 
 env:

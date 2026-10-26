@@ -5,7 +5,8 @@
 // (docs/notes/NODE-DEBUGGING-2026-10-19.md §Q1). This runs the lint over the tree and pins its judgement on small inputs.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { lintSource, lintAll, count, countSrc, SRC_CEILING } from "../../tools/check/vm-filename-lint.mjs";
+import { lintSource, lintAll, count, countSrc } from "../../tools/check/vm-filename-lint.mjs";
+import { pinVerdict } from "../../tools/check/ratchets.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import path from "node:path";
 
@@ -45,13 +46,14 @@ test("VF5 the tree has no relative vm filename and every scanned file parses", (
   assert.ok(count(results, "missing") >= 0);
 });
 
-test("VF6 filename-less SOURCE loads are ratcheted at SRC_CEILING, which only goes down; snippets stay free", () => {
+test("VF6 filename-less SOURCE loads are ratcheted (tree.vmSrcLoads), which only goes down; snippets stay free", async () => {
   const src = (code) => lintSource(code).sites.map((s) => !!s.src);
   assert.deepEqual(src(`vm.runInContext(SRC + "; this.X = X;", ctx);`), [true]);
   assert.deepEqual(src(`vm.runInContext(fs.readFileSync(f, "utf8"), ctx);`), [true]);
   assert.deepEqual(src(`vm.runInContext("X.y()", ctx);`), [false]);
   assert.deepEqual(src(`vm.runInContext(\`X.y()\`, ctx);`), [false]);
-  const n = countSrc(lintAll());
-  assert.ok(n <= SRC_CEILING, `${n} filename-less source loads, over the ceiling ${SRC_CEILING}: pass { filename: absSrc(rel) }`);
-  if (n < SRC_CEILING) console.log(`vm-filename-lint: ${n} source loads, under the ceiling: lower SRC_CEILING to ${n}`);
+  const v = await pinVerdict("vmSrcLoads");
+  assert.equal(v.value, countSrc(lintAll()), "ratchets.mjs counts what the lint counts");
+  assert.ok(v.ok, `${v.value} filename-less source loads (ceiling ${v.ceiling}${v.base ? `; base ${v.base.value}/${v.base.ceiling}` : ""}): pass { filename: absSrc(rel) }`);
+  if (v.value < v.ceiling) console.log(`vm-filename-lint: ${v.value} source loads, under the ceiling ${v.ceiling}: node tools/check/ratchets.mjs --update --lower-only`);
 });

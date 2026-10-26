@@ -999,3 +999,43 @@ test("JUMP IN preserves historical set age with the production tyre clock", () =
     assert.equal(G.tyres.lapsOn(c), historical, c.code + " historical tyre age");
   }
 });
+
+test("cancelled WATCH does not create position requests after a delayed IndexedDB cache miss", async () => {
+  const { ctx } = load();
+  let openRequest, getRequest, transaction, calls = 0;
+  ctx.indexedDB = { open() { openRequest = {}; return openRequest; } };
+  ctx.F1API = { cancelAll() {}, locationData() { calls++; return Promise.reject(new Error("unexpected download")); } };
+  const D = vm.runInContext("DataRealRace", ctx), tab = D.create({ isOpen: () => true });
+  const script = { sessionKey: 42, t0: Date.UTC(2026, 8, 20), complete: true,
+    drivers: [1, 2, 3].map((num) => ({ num, lapStart: [0], laps: [90] })) };
+  assert.equal(tab.loadTraces(script, null, null), true);
+  tab.cancel();
+  openRequest.result = { close() {}, transaction() {
+    transaction = { objectStore: () => ({ get() { getRequest = {}; return getRequest; } }) };
+    return transaction;
+  } };
+  openRequest.onsuccess();
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  getRequest.result = null; getRequest.onsuccess(); transaction.oncomplete();
+  await tab.positionsSettled();
+  assert.equal(calls, 0, "the abandoned operation cannot enter the transport's new generation");
+});
+
+test("cancelling a fulfilled WATCH request before packing rejects without caching partial work", async () => {
+  const { ctx } = load();
+  let current = true, resolveRows, opens = 0, progress = 0;
+  ctx.indexedDB = { open() { opens++; throw new Error("cancelled work must not write"); } };
+  ctx.F1API = { locationData: () => new Promise((resolve) => { resolveRows = resolve; }) };
+  const D = vm.runInContext("DataRealRace", ctx);
+  const work = D.fetchTraces({ sessionKey: 42, t0: 1e12, complete: true,
+    drivers: [{ num: 1, lapStart: [0], laps: [90] }] }, () => { progress++; }, null, { refresh: true, current: () => current });
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  current = false; resolveRows([]);
+  await assert.rejects(work, { name: "AbortError" });
+  assert.equal(progress, 0); assert.equal(opens, 0);
+});
+
+test("fetchTraces preserves its rejected-promise contract when already cancelled", async () => {
+  const { ctx } = load(), D = vm.runInContext("DataRealRace", ctx);
+  await assert.rejects(D.fetchTraces({ t0: 1, drivers: [] }, null, null, { current: () => false }), { name: "AbortError" });
+});

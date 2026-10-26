@@ -147,6 +147,7 @@ const FULL = [
   "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
   "js/render/shared/chunk-bins.js",    // ChunkBins: the ONE centroid->cell binning of chunked meshes; its key is the cross-backend chunk identity (call-time read by the chunked builders)
   // GLX's shaders, pass modules and renderer are DEFERRED along with TLX/WGX.
+  "js/perf/gfx-escalation.js",
   "js/render/gfx.js",
   "js/render/renderer-boot.js", // RendererBoot: backend selection, canary and fallback boot
   "js/render/shared/gltf.js",
@@ -269,7 +270,9 @@ const FULL = [
   "js/garage/scene-dress.js",
   "js/garage/crew-motion.js",
   "js/garage/crew-service.js",
+  "js/garage/crew-choreo.js",           // GarageCrewChoreo: Blender-authored crew clips (tools/gen/blender/crew-choreo.py)
   "js/garage/scene-crew.js",
+  "js/garage/pit-crew.js",              // PitCrewAnim: the crew at the player's in-race pit stop
   "js/garage/scene.js",
   "js/garage/arrival.js",
   "js/garage/surface-inspection.js",
@@ -372,11 +375,13 @@ const FULL = [
   "js/input/steer-tuning.js",
   "js/perf/thermal-drift.js",    // ThermalDrift: pure slow-drift detector + opt-in 45/30 render gate (#2652); before governor
   "js/perf/governor.js",
+  "js/perf/menu-teardown.js",
+  "js/perf/menu-quit-tail.js",
   "js/perf/loop-health.js",
   "js/perf/render-rate.js",   // RenderRate: phones draw every 2nd rAF on a 100 Hz+ display (physics unchanged)
   "js/perf/spans.js",
   "js/perf/race-entry-profile.js",
-  "js/perf/gfx-escalation.js",
+  "js/perf/title-warm.js",       // TitleWarm: the race world's prep + program warm on an idle title, once per update on a phone (A·W50)
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
   "js/render/shared/compatibility-recovery.js",
@@ -557,6 +562,7 @@ const CARVIEW = [
   "js/render/shared/chunk-bins.js",    // ChunkBins: the ONE centroid->cell binning of chunked meshes; its key is the cross-backend chunk identity (call-time read by the chunked builders)
   "js/render/glx/chunked.js",
   "js/render/glx/soft.js",   // GLXSoft: headless soft-present overlay (before glx.js)
+  "js/perf/gfx-escalation.js",
   "js/render/glx/glx.js",
   "js/data/teams.js",
   "js/car/parts.js",
@@ -624,6 +630,7 @@ const TRACK_VM = [
   "js/garage/scene-dress.js",
   "js/garage/crew-motion.js",
   "js/garage/crew-service.js",
+  "js/garage/crew-choreo.js",
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "@circuits",
@@ -633,6 +640,7 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  ["js/perf/gfx-escalation.js", "js/render/gfx.js"],
   ["js/data/teams.js", "js/career/team-identity.js"],
   ["js/career/team-identity.js", "js/career/save-migrate.js"],
   ["js/garage/setup-tune.js", "js/garage/setup-presets.js"],
@@ -769,6 +777,7 @@ const HARD_EDGES = [
   ["js/garage/crew-motion.js", "js/garage/scene-crew.js"],
   ["js/garage/scene-prims.js", "js/garage/crew-service.js"],
   ["js/garage/crew-service.js", "js/garage/scene-crew.js"],
+  ["js/garage/scene-prims.js", "js/garage/crew-choreo.js"],      // the choreography's props destructure GaragePrims at eval
   ["js/garage/scene-prims.js", "js/garage/scene-crew.js"],        // the crew destructures GaragePrims at eval
   // The garage preview camera eases its flaps at the car's own X_OPEN_RATE /
   // X_CLOSE_RATE, destructured off PhysicsConsts at EVAL time exactly as

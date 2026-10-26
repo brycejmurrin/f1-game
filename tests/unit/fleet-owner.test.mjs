@@ -2,8 +2,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  globToRegex, tokenCovers, claimPaths, claimSession, parseFleetBlock, decide, releaseAnswer, apiFiles, main,
+  globToRegex, tokenCovers, claimPaths, claimSession, parseFleetBlock, decide, releaseAnswer, apiFiles, main, openDiffs, FILES_CAP,
 } from "../../tools/ci/fleet-owner.mjs";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 const NOW = Date.parse("2026-10-19T22:00:00Z");
 const SHA_A = "a".repeat(40), SHA_B = "b".repeat(40);
@@ -60,6 +63,13 @@ test("claim text -> paths and session; the board's hash tag is neither", () => {
   assert.equal(claimSession(t), "#3099");
   assert.equal(claimSession("on js/a.js for claude:session_01ABC"), "claude:session_01ABC");
   assert.equal(claimSession("on js/a.js cse_01XYZ"), "cse_01XYZ");
+  assert.equal(claimSession("on js/a.js codex:01a16b2c-b44f-72c4-ad07-c859b1bdf022"),
+    "codex:01a16b2c-b44f-72c4-ad07-c859b1bdf022");
+  assert.equal(claimSession("on js/a.js cursor:bc-13d1cd46-bd5d-5bf1-8ffd-79660c8979b9"),
+    "cursor:bc-13d1cd46-bd5d-5bf1-8ffd-79660c8979b9");
+  assert.equal(claimSession("on js/a.js grok:track-engine-8d41"), "grok:track-engine-8d41");
+  assert.equal(claimSession("on js/a.js codex:1923dcd1d9ef874aad548d82"), null,
+    "a claims-board hash cannot receive a bus message");
   assert.equal(claimSession("on js/a.js  [claude/x; session 1923dcd1d9ef874aad548d82]"), null);
 });
 
@@ -120,6 +130,14 @@ test("--release-answer: another session's live claim is not the caller's to rele
   assert.deepEqual(lines, ["NOT-OWNER R9 js/a.js: claimed by Claude cse_01OTHER"]);
 });
 
+test("--release-answer names a Codex claimant instead of calling it unaddressable", () => {
+  const owner = "codex:01a16b2c-b44f-72c4-ad07-c859b1bdf022";
+  const lines = releaseAnswer("R10", decide(["js/a.js"], {
+    claims: [claim(`OWNED js/a.js ${owner}`)], now: NOW,
+  }), "claude:session_01ME");
+  assert.deepEqual(lines, [`NOT-OWNER R10 js/a.js: claimed by Claude ${owner}`]);
+});
+
 test("lapse rule: only with --requested-at >= 60 min ago, only claims > 60 min old, never an open-diff path", () => {
   const claims = [claim("OWNED js/a.js js/b.js", 90), claim("OWNED js/c.js", 30)];
   const diffs = [{ holder: { pr: 5, sha: SHA_A, owner: "x" }, files: new Set(["js/b.js"]) }];
@@ -137,14 +155,40 @@ test("lapse rule: only with --requested-at >= 60 min ago, only claims > 60 min o
   assert.equal(r.out.split("\n").at(-1), "RELEASED R10 js/a.js", r.out);
 });
 
-test("an incomplete files list fails closed: exit 3, no rows", () => {
+test("an incomplete files list fails closed: --pr checks changed_files; the open-diff scan fails at GitHub's 3000-file cap", () => {
   const files = Array.from({ length: 150 }, (_, i) => `f${i}.js`);
   const { request } = fakeApi({ prs: [{ number: 9, sha: SHA_A, files }], cap: { 9: 120 } });
   assert.equal(apiFiles(9, request).error, "PR #9: incomplete files list: received 120 of 150 changed files");
-  const r = run(["f1.js"], { request, claims: [] });
+  const huge = Array.from({ length: FILES_CAP }, (_, i) => `f${i}.js`);
+  const r = run(["f1.js"], { request: fakeApi({ prs: [{ number: 9, sha: SHA_A, files: huge }] }).request, claims: [] });
   assert.equal(r.code, 3);
   assert.equal(r.out, "");
-  assert.equal(r.err, "= fleet-owner unknown — PR #9: incomplete files list: received 120 of 150 changed files");
+  assert.equal(r.err, `= fleet-owner unknown — PR #9: files list at GitHub's ${FILES_CAP}-file cap (may be incomplete)`);
+});
+
+test("speed (2026-10-26): no pulls/<n> call per PR, page 1 of every PR in ONE batch, a head+base cache answers the next run", () => {
+  const prs = [{ number: 31, sha: SHA_A, files: ["js/a.js"] }, { number: 32, sha: "c".repeat(40), files: ["js/b.js"] }];
+  const { request, calls } = fakeApi({ prs });
+  const batches = [];
+  const batch = (paths, { request: rq }) => { batches.push(paths); return new Map(paths.map((p) => [p, rq(p)])); };
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "fleet-owner-cache-"));
+  try {
+    const a = openDiffs({ request, batch, cacheDir });
+    assert.deepEqual(a.diffs.map((d) => [d.holder.pr, [...d.files]]), [[31, ["js/a.js"]], [32, ["js/b.js"]]]);
+    assert.deepEqual(batches, [["pulls/31/files?per_page=100", "pulls/32/files?per_page=100"]], "one batch of first pages");
+    assert.equal(calls.filter((c) => /^pulls\/\d+$/.test(c)).length, 0, "no changed_files call");
+    calls.length = 0; batches.length = 0;
+    const b = openDiffs({ request, batch, cacheDir });
+    assert.deepEqual(b.diffs.map((d) => [...d.files]), [["js/a.js"], ["js/b.js"]]);
+    assert.deepEqual(calls.filter((c) => c.includes("/files")), [], "every PR answered from the head-sha cache");
+    assert.deepEqual(batches, [[]]);
+  } finally { fs.rmSync(cacheDir, { recursive: true, force: true }); }
+});
+
+test("a stale claim (who-is-on-it STALE_MIN) does not hold a path", () => {
+  const stale = { ...claim("on js/ui/hud.js", 300), stale: true };
+  assert.equal(decide(["js/ui/hud.js"], { claims: [stale], now: NOW }).rows[0].state, "free");
+  assert.equal(decide(["js/ui/hud.js"], { claims: [claim("on js/ui/hud.js", 300)], now: NOW }).rows[0].state, "claimed");
 });
 
 test("pagination reads every page; API errors and an unreadable board exit 3", () => {

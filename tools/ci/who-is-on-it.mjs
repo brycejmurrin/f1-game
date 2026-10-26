@@ -249,7 +249,7 @@ export function currentBranch() {
 }
 
 /** Ask Actions to run fleet.yml now, so a claim naming `#n` labels the issue in
- *  a minute instead of at the next hourly run. A push to claude/claims-board
+ *  a minute instead of at the next scheduled run. A push to claude/claims-board
  *  cannot trigger it: GitHub runs a push-triggered workflow from the PUSHED
  *  commit's tree, and the board's tree holds claim files, not .github/
  *  (found by a live claim of #1518, 2026-10-14). REST workflow_dispatch works
@@ -257,14 +257,18 @@ export function currentBranch() {
  *  means the hourly run picks the claim up. */
 export function pokeFleetBoard(run = spawnSync) {
   const opts = { cwd: ROOT, encoding: "utf8", timeout: 20000 };
-  // Debounce: a burst of --claim/--release must not each POST workflow_dispatch;
-  // skip while fleet.yml already has a queued run (concurrency holds the rest).
-  const q = run("gh", ["api", `repos/${REPO_SLUG}/actions/workflows/fleet.yml/runs?status=queued&per_page=1`, "--jq", ".total_count"], opts);
+  // Debounce: a burst of --claim/--release must not each POST workflow_dispatch
+  // (958 of ~1,000 fleet.yml runs in the week to 2026-10-26 were these). Skip
+  // while any of the newest runs is queued or running; a claim that lands during
+  // a running board waits for the :23/:53 schedule (at most 30 min).
+  // https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-workflow
+  const active = '[.workflow_runs[] | select(.status == "queued" or .status == "in_progress" or .status == "pending" or .status == "waiting" or .status == "requested")] | length';
+  const q = run("gh", ["api", `repos/${REPO_SLUG}/actions/workflows/fleet.yml/runs?per_page=5`, "--jq", active], opts);
   if (q.status === 0 && Number(String(q.stdout ?? "").trim()) > 0) {
-    return "already queued (that run picks this claim up)";
+    return "already queued or running (the next run picks this claim up)";
   }
   const r = run("gh", ["api", "-X", "POST", `repos/${REPO_SLUG}/actions/workflows/fleet.yml/dispatches`, "-f", `ref=${DEPLOY}`], opts);
-  return r.status === 0 ? "dispatched" : "not dispatched (the hourly run will pick it up)";
+  return r.status === 0 ? "dispatched" : "not dispatched (the scheduled run will pick it up)";
 }
 
 function pushClaim(text, branch, session) {
@@ -275,7 +279,7 @@ function pushClaim(text, branch, session) {
   return pushBoard(slug, content, { message: `${text === RELEASED ? "release" : "claim"} ${slug}` });
 }
 
-export function main(argv = process.argv.slice(2)) {
+export function main(argv = process.argv.slice(2), { getBranch = currentBranch, writeClaim = pushClaim, log = console.log } = {}) {
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log('usage: node tools/ci/who-is-on-it.mjs [--hours N] [--session ID] [--no-fetch] [--json] [--all] [--claim "<text>" | --release] [path ...]');
     console.log(`  --all   also print claims older than ${STALE_MIN} min (hidden by default behind a count line)`);
@@ -307,11 +311,11 @@ export function main(argv = process.argv.slice(2)) {
   if (claim && release) { console.error("Choose --claim or --release"); return 1; }
 
   // Claim / release first, so the listing that follows shows the result.
-  const branch = currentBranch();
+  const branch = getBranch();
   let claimed = null;
   if (claim || release) {
     if (!branch || branch === "HEAD") { console.error("who-is-on-it: not on a branch, nothing to claim"); return 1; }
-    claimed = { action: release ? "release" : "claim", ...pushClaim(release ? RELEASED : claim, branch, session) };
+    claimed = { action: release ? "release" : "claim", ...writeClaim(release ? RELEASED : claim, branch, session) };
     if (claimed.ok) claimed.board = pokeFleetBoard();
   }
 
@@ -364,8 +368,8 @@ export function main(argv = process.argv.slice(2)) {
 
   const ago = (min) => min < 90 ? `${min} min` : `${Math.round(min / 60)} h`;
   if (json) {
-    console.log(JSON.stringify({ hours, fetched, branch, claimed, live, claims, touched }, null, 2));
-    return 0;
+    log(JSON.stringify({ hours, fetched, branch, claimed, live, claims, touched }, null, 2));
+    return claimed?.ok === false ? 1 : 0;
   }
   if (claimed) {
     console.log(claimed.ok ? `# ${claimed.action === "release" ? "released" : "claimed"} ${claimed.ref} @ ${claimed.sha} — fleet board ${claimed.board}`
@@ -399,7 +403,7 @@ export function main(argv = process.argv.slice(2)) {
     }
   }
   console.log("\nA fix already here, a live claim on it, or a branch on these paths minutes ago, means stand down or coordinate — not a second fix.");
-  return 0;
+  return claimed?.ok === false ? 1 : 0;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

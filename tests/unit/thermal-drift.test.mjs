@@ -47,6 +47,22 @@ test("steady frames never ask for a step, however long", () => {
   assert.ok(d.state().baseline > 16 && d.state().baseline < 17.5);
 });
 
+test("thermal windows use active elapsed time while skipped callbacks supply no cost sample", () => {
+  for (const hz of [60, 120]) for (const stride of [1, 2, 4]) {
+    const d = ThermalDrift.drift(), dt = 1000 / hz;
+    for (let i = 0; i < hz * 75; i++) d.feed(i % stride === 0 ? 16.7 : 0, dt);
+    assert.equal(d.state().windows, 7, `${hz} Hz / ${stride}`);
+    assert.equal(d.state().baseline, 16.7, "skipped intervals do not dilute the work-cost distribution");
+    assert.equal(d.state().due, false);
+  }
+  const empty = ThermalDrift.drift();
+  for (let i = 0; i < 600; i++) empty.feed(0, 20);
+  assert.equal(empty.state().windows, 1, "time still advances without valid work evidence");
+  assert.equal(empty.state().baseline, 0);
+  for (const invalid of [NaN, Infinity, -1, 0]) empty.feed(20, invalid);
+  assert.equal(empty.state().windows, 1, "invalid elapsed time cannot poison the clock");
+});
+
 test("a slow upward drift is flagged after the baseline minute, before any hitch", () => {
   const d = ThermalDrift.drift();
   let i = 0;
@@ -172,6 +188,17 @@ test("governor: drift on, steady device -> no step", () => {
   const g = makeGov(true);
   let i = 0; drive(g, 900, () => 16.7 + 0.2 * jitter(i++));
   assert.equal(g.moves.length, 0);
+});
+
+test("governor thermal baseline includes skipped elapsed intervals without judging their cost", () => {
+  for (const hz of [60, 120]) for (const stride of [1, 2]) {
+    const g = makeGov(true), dt = 1000 / hz;
+    for (let i = 0; i < hz * 75; i++) g.PerfGov.tick(dt, i % stride === 0);
+    const state = g.PerfGov.thermalDrift();
+    assert.equal(state.windows, 7, `${hz} Hz / ${stride}`);
+    assert.ok(Math.abs(state.baseline - dt) < 1e-8);
+    assert.equal(state.due, false);
+  }
 });
 
 test("governor: drift on takes an EXISTING rung early on a slow drift, off does not", () => {

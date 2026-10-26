@@ -137,9 +137,9 @@
     //    the mobile tier never compiles them, mirroring GLX's always-bound-
     // texture trick without needing dummy bindings.
     const SHD = (ctx.shadow && ctx.shadow.S) ? ctx.shadow : null;
-    // M8: the offscreen HDR target exists — write the SSR car-paint tag into
-    // alpha (js/render/glx/shaders/glsl-lit.js). False (no post chain) keeps the M3 behaviour:
-    // the canvas is the target and a 0.35 alpha would ghost the cars.
+    // M8: capability to emit SSR receiver tags on a separate MRT attachment.
+    // Independent of initial post success: retry may create that target later.
+    // setSsrMrt arms compatible passes only; canvas alpha remains real opacity.
     const SSR_TAG = !!ctx.ssrTag;
     // M9: the live env-probe cube (tlx.js CubeRenderTarget.texture), bound at
     // factory time. Null (no probe target) keeps the analytic-gradient mirror
@@ -538,9 +538,13 @@
       return a2.div(max(d.mul(d).mul(PI), 1e-6));
     };
     // Height-correlated Smith visibility (folds in 1/(4 NoL NoV)).
-    const V_SmithGGX = (NoV, NoL, a) => {
+    const smithViewRoot = (NoV, a) => {
       const a2 = a.mul(a);
-      const gv = NoL.mul(sqrt(NoV.mul(NoV).mul(a2.oneMinus()).add(a2)));
+      return sqrt(NoV.mul(NoV).mul(a2.oneMinus()).add(a2));
+    };
+    const V_SmithGGX = (NoV, NoL, a, viewRoot) => {
+      const a2 = a.mul(a);
+      const gv = NoL.mul(viewRoot || sqrt(NoV.mul(NoV).mul(a2.oneMinus()).add(a2)));
       const gl = NoV.mul(sqrt(NoL.mul(NoL).mul(a2.oneMinus()).add(a2)));
       return float(0.5).div(max(gv.add(gl), 1e-5));
     };
@@ -1953,6 +1957,11 @@
         // compile-time constant — and breaks on whichever count applies.
         // The chunk's list is nearest-first (LampChunks), so min(n, lampCap) keeps its nearest lamps.
         const lampN = PC ? select(PC.use, min(PC.n, U.lampCap), U.numLights) : U.numLights;
+        // NoV and final wet roughness stay fixed across lamps. Negative sentinels
+        // defer each positive root until its first accepted specular contribution;
+        // zero lamps, rejected lamps and inactive clearcoat do no extra root work.
+        const lampViewRoot = float(-1.0).toVar();
+        const lampCoatViewRoot = float(-1.0).toVar();
 
         Loop({ start: int(0), end: int(MAX_LIGHTS), type: "int", condition: "<" }, ({ i }) => {
           If(float(i).greaterThanEqual(lampN), () => { Break(); });
@@ -2035,18 +2044,24 @@
               });
               // GGX + clearcoat lamp speculars, NoLl-gated (js/render/glx/shaders/glsl-lit.js)
               If(NoLl.greaterThan(0.0), () => {
+                If(lampViewRoot.lessThan(0.0), () => {
+                  lampViewRoot.assign(smithViewRoot(NoV, a));
+                });
                 const Hl = normalize(Ld.add(V));
                 const NoHl = max(dot(N, Hl), 0.0).toVar();
                 const VoHl = max(dot(V, Hl), 0.0).toVar();
                 const Dl = D_GGX(NoHl, a);
-                const Vl = V_SmithGGX(NoV, NoLl, a);
+                const Vl = V_SmithGGX(NoV, NoLl, a, lampViewRoot);
                 const Fll = F_Schlick(VoHl, f0, clamp(rough.oneMinus(), 0.0, 1.0));
                 const radianceS = lCol.mul(att.mul(spotS).mul(lampSh)).toVar();
                 const lspec = Fll.mul(Dl.mul(Vl)).mul(radianceS).mul(NoLl).toVar();
                 color.addAssign(lspec.div(lspec.add(1.0)));                     // soft-clip
                 If(clearcoat.greaterThan(0.001), () => {
+                  If(lampCoatViewRoot.lessThan(0.0), () => {
+                    lampCoatViewRoot.assign(smithViewRoot(NoV, float(0.01)));
+                  });
                   const Dcc = D_GGX(NoHl, float(0.03));
-                  const Vcc = V_SmithGGX(NoV, NoLl, float(0.01));
+                  const Vcc = V_SmithGGX(NoV, NoLl, float(0.01), lampCoatViewRoot);
                   const Fcc = F_Schlick(VoHl, vec3(0.05), float(1.0)).x;
                   const ccl = radianceS.mul(Dcc.mul(Vcc).mul(Fcc)).mul(NoLl).mul(clearcoat).toVar();
                   color.addAssign(ccl.mul(2.2).div(ccl.add(2.2)));              // 2.2 HDR shoulder

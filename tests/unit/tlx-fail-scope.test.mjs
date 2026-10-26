@@ -158,7 +158,7 @@ function refuse(o = {}) {
     out.errors.push([where, msg]);
   };
   const ctx = vm.createContext({
-    _glPin: o.pin ?? null, forceWebGL: !!o.forceWebGL, _autoStayGL: !!o.autoStayGL, _sessLostN: 0,
+    _glPin: o.pin ?? null, forceWebGL: !!o.forceWebGL, _autoStayGL: !!o.autoStayGL,
     _latchWebKitGL: (why) => out.latched.push(why),
     sessionStorage: ss,
     localStorage: { removeItem: (k) => { delete out.local[k]; } },
@@ -171,6 +171,7 @@ function refuse(o = {}) {
   // the arrow function by its own closing column instead of up to present()'s `let painted`.
   const body = fnSource(src, "const refuseTab = () => {") + ";";
   assert.ok(body.startsWith("const refuseTab") && body.length < 2000, "the refuseTab needles moved — check this test, not the code");
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   out.call = vm.runInContext(body + "\n refuseTab", ctx);
   return out;
 }
@@ -213,19 +214,11 @@ test("refuseTab: bounded at two reloads per tab; past the cap the latch is kept 
   assert.equal(blocked.reloads, 2);
 });
 
-test("ctxLost window.name fallback: every reader regex parses the marker the writer stores (c91f)", () => {
-  // sessionStorage throws → the reload budget rides window.name as "apex26.ctxLostReloads=N".
-  // A double-escaped literal (/apex26\\.…\\d+/) wants a backslash and never matched, so the
-  // budget was never read back or cleared (report: codex perf-investigation-c91f, GLX twin).
-  const src = read("js/render/three/tlx.js");
-  const lits = [...src.matchAll(/\/\^apex26\\{1,2}\.ctxLostReloads=[^\n]*?\$\//g)].map((m) => m[0]);
-  assert.ok(lits.length >= 3, `expected the clear and two read regexes, found ${lits.length}`);
-  for (const lit of lits) {
-    const re = vm.runInNewContext(lit);
-    const m = "apex26.ctxLostReloads=2".match(re);
-    assert.ok(m, `${lit} does not match the stored marker`);
-    if (m[1] !== undefined) assert.equal(m[1], "2", `${lit} captures the count`);
-    assert.equal(re.test("apex26xctxLostReloads=2"), false, `${lit} must escape the dot`);
+test("ctxLost window.name fallback parses legacy and preserved-prefix markers (c91f)", () => {
+  for (const [name, expected] of [["apex26.ctxLostReloads=2", 2], ["player\napex26.ctxLostReloads=2", 2], ["apex26xctxLostReloads=2", 0]]) {
+    const ctx = vm.createContext({ window: { name }, sessionStorage: { getItem() { throw Error("blocked"); } } });
+    vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
+    assert.equal(vm.runInContext("GfxEscalation.reloadCount()", ctx), expected);
   }
 });
 
@@ -308,4 +301,22 @@ test("A-P2: no discard with another FBO bound, and none without a WebGL backend"
   const b = bootGL({ isMobile: true, gl: false });
   b.sys.shadowBegin(new Float32Array(16)); b.sys.shadowEnd();
   assert.equal(b.S.colorDiscards, 0, "WebGPU: nothing to drop, nothing thrown");
+});
+
+test("A-P2W: on WebGPU every shadow map hints its unread R8 colour discard (vendored patch 17); tlxTagDiscard=0 keeps it", () => {
+  for (const [ls, want] of [[null, 1], ["0", undefined]]) {
+    const renderer = { backend: { isWebGPUBackend: true }, getRenderTarget: () => null, setRenderTarget() {}, render() {}, autoClear: true };
+    const ctx = vm.createContext({ window: {}, localStorage: { getItem: (k) => (k === "apex26.tlxTagDiscard" ? ls : null) }, Log: { warn() {} },
+      Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
+    vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
+    // mk() swallows writes, so RenderTarget alone is a recording object (unknown members still mk()).
+    const made = [], base = mk();
+    function RT() { const o = { texture: {} }; made.push(o); return new Proxy(o, { get: (t, k) => (k in t ? t[k] : k === "then" ? undefined : mk()) }); }
+    const T = new Proxy(base, { get: (t, k) => (k === "RenderTarget" ? RT : base[k]) });
+    ctx.window.TLXShaders.shadowSys(T, mk(), { renderer, isMobile: true, softwareGL: false });
+    const sun = made.find((rt) => rt.texture && rt.texture.name === "TLXSunShadow.color");
+    assert.ok(sun, "the sun map was built");
+    assert.equal(sun.apexDiscardColor, want, ls === "0" ? "switch off: stored" : "bit 0 = the R8 colour");
+    assert.equal(sun.apexDiscardDepth, undefined, "the depth IS the shadow map: never discarded");
+  }
 });

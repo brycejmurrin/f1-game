@@ -34,7 +34,8 @@
  *   node tools/gen/voicepack.mjs --list [--id george|michael|fable|bella|emma|heart]
  *   node tools/gen/voicepack.mjs --append --id <voice> --ffmpeg /usr/bin/ffmpeg
  *   node tools/gen/voicepack.mjs --integrity-only [--out assets/voice]
- *   node tools/gen/voicepack.mjs --kokoro scratch/voicepack --id <voice> [--voice bm_george] [--dtype q4] [--speed 1.08]
+ *   node tools/gen/voicepack.mjs --kokoro scratch/voicepack --id <voice> [--voice bm_george] [--dtype q4] [--speed 1.08] [--opus]
+ *   node tools/gen/voicepack.mjs --opus-only --id <voice> [--speaker <channel>] --kokoro scratch/voicepack --ffmpeg /usr/bin/ffmpeg
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -277,6 +278,7 @@ export function stampIntegrity(outDir) {
     const jsonPath = path.join(outDir, file);
     const man = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
     man.binary = binaryIntegrity(fs.readFileSync(path.join(outDir, file.replace(/\.json$/, ".bin"))));
+    if (man.opus) man.opus.binary = binaryIntegrity(fs.readFileSync(path.join(outDir, man.opus.file)));
     fs.writeFileSync(jsonPath, JSON.stringify(man) + "\n");
     count++;
   }
@@ -289,9 +291,23 @@ const ENCODING = ["-af",
   "silenceremove=start_periods=1:start_threshold=-38dB:start_silence=0.01,areverse,silenceremove=start_periods=1:start_threshold=-38dB:start_silence=0.03,areverse",
   "-ac", "1", "-ar", "24000", "-c:a", "libmp3lame", "-b:a", "32k"];
 
+// THE OPUS TWIN (`--opus`; docs/notes/ASSET-COMPRESSION-2026-10-24.md): the
+// same trimmed render encoded a second time as self-contained Ogg Opus clips,
+// written next to the MP3 as <pack>.opus.bin and indexed under the .json's
+// `opus` block. js/audio/voice-pack.js plays it only where a real decode of an
+// Ogg Opus probe succeeds, and the MP3 stays the fallback, so the MP3 encode
+// above is never changed by this. Each clip carries its own OpusHead because
+// the game decodes clips one slice at a time. Speech at 20 kbps is ~64 % of the
+// 32 kbps MP3's bytes (measured over 150 george and fable clips).
+export const OPUS_KBPS = 20;
+const OPUS_ENCODING = [ENCODING[0], ENCODING[1], "-ac", "1", "-ar", "24000", "-c:a", "libopus",
+  "-b:a", OPUS_KBPS + "k", "-application", "voip", "-map_metadata", "-1", "-fflags", "+bitexact", "-f", "ogg"];
+
 // Shared by full builds and append: only a missing encode may load Kokoro.
 // Hash the actual recipe; bump `recipe` when a dependency upgrade changes audio.
-export async function recordClips({ list, cache, voice, dtype, speed, loadTTS, getFFmpeg, clips = {}, chunks = [] }) {
+// `opus` ({ clips, chunks }) also records the Opus twin; omitted, nothing about
+// the MP3 build changes.
+export async function recordClips({ list, cache, voice, dtype, speed, loadTTS, getFFmpeg, clips = {}, chunks = [], opus = null }) {
   // A word said on its own gets a whole sentence's prosody, which is slow:
   // Kokoro gave "to" half a second. Short fragments are rendered faster so a
   // spliced line runs at an engineer's pace; numbers stay a touch clearer.
@@ -301,33 +317,50 @@ export async function recordClips({ list, cache, voice, dtype, speed, loadTTS, g
     return +(words <= 1 ? speed * 1.22 : words === 2 ? speed * 1.12 : speed).toFixed(2);
   };
   const safe = (k) => k.replace(/[^a-z0-9]+/gi, "_").slice(0, 60);
+  const durationOf = (file) => {
+    const probe = spawnSync(getFFmpeg(), ["-i", file], { encoding: "utf8" }).stderr || "";
+    const dm = probe.match(/Duration: (\d+):(\d+):([\d.]+)/);
+    return dm ? +((+dm[1]) * 3600 + (+dm[2]) * 60 + (+dm[3])).toFixed(3) : 0;
+  };
   let off = chunks.reduce((n, buf) => n + buf.length, 0), i = 0, tts;
+  let opusOff = opus ? opus.chunks.reduce((n, buf) => n + buf.length, 0) : 0;
   for (const { key, text } of list) {
     i++;
-    if (clips[key]) continue;
+    const wantOpus = !!opus && !opus.clips[key];
+    if (clips[key] && !wantOpus) continue;
     const sp = key.startsWith("@line:") ? speed : speedFor(key);
-    const mp3 = path.join(cache, safe(key) + "_" + createHash("sha256").update(JSON.stringify({
-      recipe: 1, key, text, model: MODEL, options: { ...MODEL_OPTIONS, dtype }, voice, speed: sp, encoding: ENCODING,
-    })).digest("hex") + ".mp3");
-    if (!fs.existsSync(mp3)) {
+    const name = (encoding, ext) => path.join(cache, safe(key) + "_" + createHash("sha256").update(JSON.stringify({
+      recipe: 1, key, text, model: MODEL, options: { ...MODEL_OPTIONS, dtype }, voice, speed: sp, encoding,
+    })).digest("hex") + ext);
+    const mp3 = name(ENCODING, ".mp3");
+    const ogg = wantOpus ? name(OPUS_ENCODING, ".ogg") : null;
+    if (!fs.existsSync(mp3) || (ogg && !fs.existsSync(ogg))) {
       const wav = mp3.replace(/\.mp3$/, ".wav");
       tts ||= await loadTTS();
       const audio = await tts.generate(text, { voice, speed: sp });
       await audio.save(wav);
       // Trim Kokoro's lead-in and tail, both ends, then encode.
-      execFileSync(getFFmpeg(), ["-y", "-loglevel", "error", "-i", wav, ...ENCODING, mp3]);
+      if (!fs.existsSync(mp3)) execFileSync(getFFmpeg(), ["-y", "-loglevel", "error", "-i", wav, ...ENCODING, mp3]);
+      if (ogg && !fs.existsSync(ogg)) execFileSync(getFFmpeg(), ["-y", "-loglevel", "error", "-i", wav, ...OPUS_ENCODING, ogg]);
       fs.unlinkSync(wav);
     }
-    const buf = fs.readFileSync(mp3);
-    const probe = spawnSync(getFFmpeg(), ["-i", mp3], { encoding: "utf8" }).stderr || "";
-    const dm = probe.match(/Duration: (\d+):(\d+):([\d.]+)/);
-    const dur = dm ? (+dm[1]) * 3600 + (+dm[2]) * 60 + (+dm[3]) : 0;
-    clips[key] = [off, buf.length, +dur.toFixed(3)];
-    chunks.push(buf);
-    off += buf.length;
+    if (!clips[key]) {
+      const buf = fs.readFileSync(mp3);
+      clips[key] = [off, buf.length, durationOf(mp3)];
+      chunks.push(buf);
+      off += buf.length;
+    }
+    if (ogg) {
+      const buf = fs.readFileSync(ogg);
+      opus.clips[key] = [opusOff, buf.length, durationOf(ogg)];
+      opus.chunks.push(buf);
+      opusOff += buf.length;
+    }
     if (i % 25 === 0) console.log(`[voicepack] ${i}/${list.length}`);
   }
-  return { clips, binary: Buffer.concat(chunks) };
+  const out = { clips, binary: Buffer.concat(chunks) };
+  if (opus) out.opus = { clips: opus.clips, binary: Buffer.concat(opus.chunks) };
+  return out;
 }
 
 async function build() {
@@ -348,20 +381,42 @@ async function build() {
   const cache = path.join(ROOT, "artifacts", "voicepack", id, voice + "-" + dtype);
   fs.mkdirSync(cache, { recursive: true });
   fs.mkdirSync(outDir, { recursive: true });
-  const list = flag("append") ? [...fallbackVocabulary(id, spec.speaker), ...fullPhrases(id, spec.speaker)] : phrases(id, spec.speaker);
+  // --opus-only: add the Opus twin to a published pack without touching one MP3
+  // byte. The twin covers exactly the pack's own keys (a phrase the harvester no
+  // longer emits is spoken from its key, as fallbackVocabulary does).
+  const opusOnly = flag("opus-only");
+  let list = flag("append") || opusOnly ? [...fallbackVocabulary(id, spec.speaker), ...fullPhrases(id, spec.speaker)] : phrases(id, spec.speaker);
+  if (opusOnly) {
+    const textOf = new Map([...phrases(id, spec.speaker), ...list].map((p) => [p.key, p.text]));
+    const published = JSON.parse(fs.readFileSync(path.join(outDir, pack + ".json"), "utf8")).clips;
+    list = Object.keys(published).map((key) => ({ key, text: textOf.get(key) ?? key.replace(/^@line:/, "") }));
+  }
   const clips = {};
   const chunks = [];
-  if (flag("append")) {
+  const opusFile = pack + ".opus.bin";
+  const opus = flag("opus") || opusOnly ? { clips: {}, chunks: [] } : null;
+  if (flag("append") || opusOnly) {
     const old = JSON.parse(fs.readFileSync(path.join(outDir, pack + ".json"), "utf8"));
     if (old.voice !== voice) throw new Error("--append cannot mix different voices");
     const bin = fs.readFileSync(path.join(outDir, pack + ".bin"));
     Object.assign(clips, old.clips); chunks.push(bin);
+    // An existing twin is extended like the MP3; without one, --opus records every clip.
+    if (opus && old.opus && fs.existsSync(path.join(outDir, opusFile))) {
+      Object.assign(opus.clips, old.opus.clips); opus.chunks.push(fs.readFileSync(path.join(outDir, opusFile)));
+    }
   }
-  const { binary } = await recordClips({ list, cache, voice, dtype, speed, loadTTS, getFFmpeg, clips, chunks });
+  const { binary, opus: twin } = await recordClips({ list, cache, voice, dtype, speed, loadTTS, getFFmpeg, clips, chunks, opus });
   fs.writeFileSync(path.join(outDir, pack + ".bin"), binary);
   const man = { v: 1, id: pack, voice, speaker: spec.speaker, model: "Kokoro-82M v1.0 (ONNX " + dtype + ")", licence: "Apache-2.0", speed, clips, binary: binaryIntegrity(binary) };
+  if (twin) {
+    fs.writeFileSync(path.join(outDir, opusFile), twin.binary);
+    man.opus = { codec: "opus", container: "ogg", kbps: OPUS_KBPS, file: opusFile, binary: binaryIntegrity(twin.binary), clips: twin.clips };
+  } else if (fs.existsSync(path.join(outDir, opusFile))) {
+    fs.unlinkSync(path.join(outDir, opusFile));   // a twin must never outlive the MP3 it was cut beside
+  }
   fs.writeFileSync(path.join(outDir, pack + ".json"), JSON.stringify(man) + "\n");
-  console.log(`[voicepack] ${pack}: ${list.length} clips, ${(binary.length / 1024).toFixed(0)} KB`);
+  console.log(`[voicepack] ${pack}: ${list.length} clips, ${(binary.length / 1024).toFixed(0)} KB` +
+    (twin ? `, opus ${(twin.binary.length / 1024).toFixed(0)} KB` : ""));
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

@@ -1,13 +1,16 @@
 # Concurrent PRs / CI hygiene (2026-09-30)
 
-Canonical short pointer: AGENTS.md §Concurrent PRs. Full CI/docs detail:
+Superseded by: [Rulebook rewrite 2026-10-26](RULEBOOK-REWRITE-2026-10-26.md)
+
+Canonical rules: `.claude/rules/fleet-core.md` and AGENTS.md §Concurrent PRs (this note is 2026-09-30 history). Full CI/docs detail:
 docs/TESTING.md §Merge train, §CI aggregator, §What runs on PRs versus nightly,
 §Flaky tests.
 
 ## Concurrent PRs (full)
 
-- Agents open DRAFT PRs and mark ready only when the change is final.
-  Keep about six or fewer ready PRs open at a time; batch small ones.
+- Agents open DRAFT PRs and mark ready only when the change is final; batch
+  small ones. (The "about six ready PRs" desk cap was retired 2026-10-16;
+  superseded by `.claude/rules/fleet-core.md`, 2026-10-26.)
 - Own notes file per PR: `docs/notes/<topic>.md` (session log stays in the
   PR body — this file holds durable design evidence for the topic).
 - Sync with `node tools/ci/sync-pr.mjs <branch>` only when GitHub reports a
@@ -21,8 +24,10 @@ docs/TESTING.md §Merge train, §CI aggregator, §What runs on PRs versus nightl
 - No ratchet raises without the sanctioned route (`tools/check/ratchets.mjs
   --update` / the commit hook's ≤40-line absorb). Never loosen ratchets or
   tests to get green.
-- Report the head SHA and check counts; do not merge the PR from the agent.
-  On an expired / failed token, stop and report — do not invent a workaround.
+- Report the head SHA and check counts; a worker never merges — the fleet's
+  orchestrator merges by `merge-gate` (superseded 2026-10-26:
+  `docs/notes/RULEBOOK-REWRITE-2026-10-26.md`). On an expired / failed token,
+  stop and report — do not invent a workaround.
 - Do not add auto-update-branch bots or a require-up-to-date protection rule.
   Never press GitHub's "Update branch" (the update-branch API) either: on
   2026-10-15, 107 of 312 PR CI runs in 3.5 h were its `Merge branch

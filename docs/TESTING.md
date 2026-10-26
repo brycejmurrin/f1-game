@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 950+ `node --test` unit suites
+150+ root Playwright spec files (`tests/specs/*.spec.js`) + 1000+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -451,6 +451,8 @@ tools directly.)
 | `phone-recorder` | the PHONE TEST recorder: RECORD at 844x390 touch, rAF frames advance, SHARE hands `navigator.share` one valid `apex26.phone-soak/1` JSON file (menu-only, seconds) |
 | `perf-frametime` | SwiftShader frame-time regression: fixed Monza night race, ~5 s warm + ~20 s rAF sample, p50/p95/p99 + long-task count + `performance.memory` heap; compares to `tests/data/perf-frametime-baseline.json`. Soft by default (`APEX_PERF_FRAMETIME_STRICT=1` fails only on large deltas). Intended as a separate non-blocking CI job (continue-on-error, off the Pages verdict gate) |
 | `shimmer` | does baked tarmac crawl under motion |
+| `perf-idle-churn` | `perf-idle-pipeline-churn.spec.js` — after warm-up, equal idle race windows on TLX WebGPU build zero render pipelines (#3713 background re-mint; counts, not ms) |
+| `perf-budget` | `perf-boost-press-pipelines.spec.js` (TLX WebGPU) and `perf-boost-press-pipelines-gl.spec.js` (TLX WebGL2, its own file: a second TLX boot in one Chromium stalls), driven by `tools/perf/boost-press-census.mjs` (A·H17) — BOOST presses 2..N re-mint zero BOOST pipelines, and add no fx-stream re-mints beyond the matched no-BOOST windows; every press must deploy ERS (#3677, #3703; counts, not ms); `perf-sw-cache-hit.spec.js` — the service-worker install already holds every script and stylesheet a first race loads (cache snapshot read inside the worker; dev-only LAZY_AGENT excluded). Count-based perf gates, docs/notes/PERFTEST-HUNT-2026-10-24.md |
 | `perf-race-entry` | `perf-race-entry.spec.js` — race vs practice PREPARING stage spans (`RaceEntryProfile` / `__apex.raceEntryStages`), writes `artifacts/perf-race-entry/*.json` for regression diffs (issue #1881) |
 | `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |
 | `xr` | Immersive Web Emulation Runtime (IWER) emulated-VR suite — Playwright project `xr-emulated`, pinned `tests/vendor/iwer-2.5.0.min.js`, `forceInstall` metaQuest3. Spec-level only (not Quest GPU). Run `npm run test:xr`. Path-gated CI job (`xr-filter` → `xr`) when the diff touches `js/xr/`, IWER, or `vr-emulated.spec.js`. On-device checklist: `docs/notes/XR-QUEST-ON-DEVICE.md` |
@@ -461,8 +463,8 @@ tools directly.)
 | Group | What it runs |
 |---|---|
 | `agent-output` | Shared compact/diagnostic/full presentation, CLI process handling, MCP routing and saved evidence, experimental recorder safeguards and accounting, launch pins and generated catalog; every file also runs in `tooling-fast`. |
-| `guards` | the 41 CROSS-FILE guards in ~12 s — every one asserts a relationship BETWEEN files (or, for `no-bare-console`, `log-namespaces`, `html-sink-lint` and `lexical-window-guard`, a rule across all of `js/`; `test-coverage-audit` and `prepush-gate-coverage` put every test file in a group the gate runs) (a registry against the tree, a generated file against its source, a ceiling against what it measures), and `global-registry` parses every manifest file so a syntax error cannot reach a commit. Run it BEFORE EVERY COMMIT (AGENTS.md rule 3): four failures in one session — a suite registered in none of its registries, `tools/README.md` and `package.json` hand-edited when both are generated, and a missing comma that would have broken the game's boot — were all inside this group and all found instead by a ~10-minute deploy. `deploy.mjs` reads the same group for its post-rejection re-verify, so the two cannot drift apart. |
-| `tooling-fast` | the structural half — most unit files, ~5 min one at a time (317 s measured 2026-09-16), ~2 min at `--jobs=3` — via `tools/ci/tooling-fast.mjs` (`--changed` selects diff-owned files for the edit loop; the full command is the pre-push floor; `--test-concurrency=1` inside each file; `--jobs=N` files at once, LONGEST FIRST by `tests/data/tooling-fast-timings.json` — refresh it with `--record` — each child under `--test-timeout` plus a per-file wall that fails a hung file by name) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`. **CI (#1075):** the full suite is split across two parallel jobs — `Structural guards (tooling A)` and `Structural guards (tooling B)` — then the aggregator `Structural guards` runs ratchet/audit (~8 min wall, 461 s median 2026-10-05 per the `ci.yml` header); that aggregator name is what `ready-gate.mjs` requires green before draft→ready; `design-matrix.test.mjs` pins the design-review matrix core (`tools/shot/design-matrix.mjs`: expansion, framing, < 0.5 % diff label, batch, resume) |
+| `guards` | the 43 CROSS-FILE guards in ~12 s — every one asserts a relationship BETWEEN files (or, for `no-bare-console`, `log-namespaces`, `html-sink-lint` and `lexical-window-guard`, a rule across all of `js/`; `test-coverage-audit` and `prepush-gate-coverage` put every test file in a group the gate runs) (a registry against the tree, a generated file against its source, a ceiling against what it measures — the pin counters `assert-match-ratchet` and `source-pin-hygiene` judge only the growth this change adds), and `global-registry` parses every manifest file so a syntax error cannot reach a commit. Run it BEFORE EVERY COMMIT (AGENTS.md rule 3): four failures in one session — a suite registered in none of its registries, `tools/README.md` and `package.json` hand-edited when both are generated, and a missing comma that would have broken the game's boot — were all inside this group and all found instead by a ~10-minute deploy. `deploy.mjs` reads the same group for its post-rejection re-verify, so the two cannot drift apart. |
+| `tooling-fast` | the structural half — most unit files, ~5 min one at a time (317 s measured 2026-09-16), ~2 min at `--jobs=3` — via `tools/ci/tooling-fast.mjs` (`--changed` selects diff-owned files for the edit loop; the full command is the pre-push floor; `--test-concurrency=1` inside each file; `--jobs=N` files at once, LONGEST FIRST by `tests/data/tooling-fast-timings.json` — refresh it with `--record` — each child under `--test-timeout` plus a per-file wall that fails a hung file by name) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators; actual Three binding/index update contracts and mirror/Smith shader-generation checks. The full-fleet sweeps dominate `tooling`. **CI (#1075):** the full suite is split across parallel jobs — `Structural guards (tooling A)` … `(tooling D)` since 2026-10-24 (four shards packed by `tests/data/tooling-fast-timings.json`; two at first, three from 2026-10-21) — then the aggregator `Structural guards` runs ratchet/audit (~8 min wall, 461 s median 2026-10-05 per the `ci.yml` header); that aggregator name is what `ready-gate.mjs` requires green before draft→ready; `design-matrix.test.mjs` pins the design-review matrix core (`tools/shot/design-matrix.mjs`: expansion, framing, < 0.5 % diff label, batch, resume) |
 | `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
 | `game-vm` | the Node VM game harness (`game-vm.test.mjs`), the friend-race quali handoff (`quali-handoff-vm`), physics parity (`physics-characterization-vm`) the `*-vm.test.mjs` TWINS of the JSON-only browser specs (every `TWINNED` pair in `tools/ci/twinned-specs.mjs` is the list; it is not copied here because the copy drifted) and `new-hooks-vm` — same assertions and thresholds, one boot per file, ~1 s a circuit build. ~3 min for the set (elevation-tracks builds 40 circuits and is the bulk of it, ~3 min through the worker pool; the rest are 2–30 s each), plus `game-vm-pool` — the pool's own parity suite; in CI's node suites, which the Pages gate runs unconditionally. **The twinned browser specs no longer run on the blocking gate** — `tools/ci/twinned-specs.mjs` lists the pairs (`TWINNED`, plus the `ADAPTED` specs the VM adapter replays) and holds the drift check that keeps the substitution honest (equal declared test counts, and the twin's group must still be gated, derived from ci.yml). They still run in their own group on the nightly. `new-hooks` has a VM file but is NOT twinned: its Madrid foundation test is deliberately unported |
 | `game-vm-a` | `elevation-tracks-vm.test.mjs` ALONE, on its own CI runner (`node-suites` matrix slice `vm-a`, 2026-09-16; since 2026-09-30 TWO runners, `vm-a1` / `vm-a2`, each building every other circuit through `APEX_CIRCUIT_SHARD=i/2` — `tools/lib/circuit-scope.cjs` `shard`, a partition of the roster, so the pair is exactly this file): it builds 40 circuits and was 399-400 s on this box, the floor of any split of `game-vm` — until the same day's `tools/lib/game-vm-pool.cjs` put the 42 per-circuit races in four worker VMs: 191-210 s, 47/47 green every run (`APEX_VM_POOL=0`, the serial path, still measures 400 s; this box was shared with other agents' suites throughout, the 210 s run at mean load 5.1 of four cores). As one slice the whole group measured 9.2-9.4 min and set the job's wall; with this file alone the slice was ~6.5 min on a runner and the pool should take it to ~2. Partition — `game-vm` is still the full list locally |
@@ -490,6 +492,11 @@ tools directly.)
 | `graph-parity` | builds each track from a baseline ref AND the working tree and diffs prop geometry vertex for vertex (`tools/track/graph-parity.cjs`) |
 | `float` | floating-prop audit (`tools/track/float-audit.cjs`) |
 | `clip` | prop-clipping gate (`tools/track/clip-audit.cjs`) |
+
+The `tooling-fast` renderer contracts also include `three-shared-binding-update`
+(shared group invalidation and side effects), `webgpu-uint16-index` (mapped bytes
+and aligned partial writes), `tlx-mirror-inset` (WGSL/GLSL derivative safety), and
+`tlx-smith-root` (lazy lamp-root reuse). These Node checks do not measure device speed.
 
 ### Partitions (not topical — they do not count for coverage)
 
@@ -1103,7 +1110,7 @@ the line.
 ### Release train (2026-09-10; on push since 2026-10-16)
 
 `pages.yml` runs on every code push to the deploy branch (prose paths
-ignored), on the hourly cron `41 * * * *` as a backstop (GitHub's scheduler
+ignored), on the 6-hourly cron `41 */6 * * *` as a backstop (GitHub's scheduler
 runs this repository's crons HOURS late) and on a manual `workflow_dispatch`
 = "deploy now". The train takes the tip, gates it once and publishes exactly
 that commit; the workflow-level `pages-train-<ref>` group keeps one running
@@ -1130,8 +1137,9 @@ The gate group never cancels: a running gate finishes, the next push waits, a
 later push replaces the waiting one. Then `publishable`, `deploy` (exact
 artifact, monotonic) and `verify-live` as before. Measured 2026-10-14: the
 gate's median is 20.5 min and a gated publish (dispatch to live) 23 min
-median, 73 min p90 — queue waits in the 03-08 UTC bursts, not the tests, make
-the tail.
+median, 73 min p90 — queue waits in the 03-08 UTC bursts, not the tests, made
+the tail. Re-measured 2026-10-26 (last 40 `pages.yml` runs, system audit): p50
+11.9 min, p90 20.4.
 
 Inside `ci.yml` a Pages call is recognised by its `concurrency_key` (the
 caller's event is `push`, `schedule` or `workflow_dispatch` there): the
@@ -1146,14 +1154,11 @@ pins all of it. "Is my commit live?" is `git merge-base --is-ancestor <sha>
 
 The ship branch is a **merge train**: merge **one large PR at a time**; batch
 small independent PRs so the tip does not thrash. Agents open DRAFT PRs and
-mark ready only when final; keep about six or fewer ready PRs open
-(AGENTS.md §Concurrent PRs). Before marking ready, Merge Desk runs
-`node tools/ci/ready-gate.mjs` (green tooling-fast evidence on the tip: the
+mark ready only when final (`.claude/rules/fleet-core.md`). Before marking
+ready, the PR's owner runs `node tools/ci/ready-gate.mjs` (green tooling-fast evidence on the tip: the
 CI check-run named `Structural guards` — the aggregator after the
-`Structural guards (tooling A)` / `(tooling B)` halves — or a local
-full-suite stamp). There is no desk cap on ready PRs since 2026-10-16 (the
-cap of 3 read 13/3 with 12 ready PRs open; the
-cap tool was deleted in #3013). GitHub bounds the LEGS
+`Structural guards (tooling A)` … `(tooling D)` shards — or a local
+full-suite stamp). There is no cap on ready PRs. GitHub bounds the LEGS
 (2026-10-15): a ready PR's `selected` legs each join one of LANES fleet-wide
 `concurrency: { group: selected-lane-<n>, queue: max }` groups (the lane is a
 field of every matrix row, `tools/ci/select-specs.mjs` LANES, its start
@@ -1162,10 +1167,10 @@ ready PR at once and the rest wait FIFO without holding a runner or being
 cancelled; the train, the nightly and a dispatch get a group of their own
 per leg and never wait behind PR work. Smoke has no lane (2026-10-16: one
 2.6-min job per run that never failed waited p90 17.5 min behind other PRs'
-smoke, the 2026-10-16 CI/CD review note (#2333) finding 6). Sync with
-`node tools/ci/sync-pr.mjs <branch>`
-once before the final CI run — do **not** enable auto-update-branch bots or a
-require-up-to-date protection rule. `tools/ci/behind-ship.mjs` (at the end of
+smoke, the 2026-10-16 CI/CD review note (#2333) finding 6). Sync only by
+`.claude/rules/fleet-core.md` (CONFLICTING/DIRTY or a red required tip check,
+via `node tools/ci/sync-pr.mjs <branch>`); never enable auto-update-branch bots
+or a require-up-to-date protection rule. `tools/ci/behind-ship.mjs` (at the end of
 Structural guards tooling B since 2026-10-15, PR only) prints how far the head is behind
 ship and emits a `::warning::` over 10 commits; it never fails the job.
 Deploy / Pages runs keep their own concurrency groups with
@@ -1218,7 +1223,7 @@ Two always-judged checks give the gate fixed names:
 
 **Check names (GitHub UI)** — fast tier on a **draft** PR or a **deploy-branch push** (`ci.yml` jobs unless noted):
 
-- `Structural guards (tooling A)`, `Structural guards (tooling B)`, `Structural guards` (the ready_for_review reuse question is a step of each job since 2026-10-15, not a `Reuse draft fast-tier?` job)
+- `Structural guards (tooling A)` … `(tooling D)` (four shards since 2026-10-24, A·H16 B2), `Structural guards` (the ready_for_review reuse question is a step of each job since 2026-10-15, not a `Reuse draft fast-tier?` job)
 - `Pure-node unit suites (<slice>)` (the needed legs on a READY PR only — planned by `Select specs for this change`, which replaced `Plan node unit slices` on 2026-10-15; drafts and the Pages train skip them since 2026-10-16, the nightly and a dispatch run every leg)
 - `Does this diff touch track survey inputs?` (`sweeps-parts`), `Characterization driving model` (when planned)
 - `Select specs for this change`, `Selected specs (…)` matrix legs when routed, `Selected specs (verdict)`
@@ -1365,7 +1370,7 @@ and retention, MCP protocol/level routing and retrieval, configured launch pins,
 and the generated surface catalog. It runs without browsers and is included in
 the structural floor; its files are listed in `tests/groups.json`.
 
-The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`. Recent unit pins include `pause-taps.test.mjs` (#3274 painted pause-door floor at UI SIZE 75%).
+The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`. Recent unit pins include `pause-taps.test.mjs` (#3274 painted pause-door floor at UI SIZE 75%), `lighting-sun-scratch.test.mjs` (a weather-blend tick reuses the sun-colour arrays; dawn and sunElev share one scratch direction), and `transcripts-cli.test.mjs` (Grok ReadTranscript JSONL streamer: search / export / digest).
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 

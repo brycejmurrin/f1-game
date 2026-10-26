@@ -203,7 +203,7 @@ Sources: [`js/game.js`](../js/game.js), [`pause-opts.js`](../js/ui/pause-opts.js
 
 Sources: [`real-race-tab.js`](../js/data/real-race-tab.js),
 [`real-race.js`](../js/race/real-race.js), [`watch-transport.js`](../js/ui/watch-transport.js),
-[`js/net/`](../js/net/), [`phone-pad.js`](../js/input/phone-pad.js),
+[`js/net/`](../js/net), [`phone-pad.js`](../js/input/phone-pad.js),
 [`designer.js`](../js/editor/designer.js), [`custom-tracks.js`](../js/editor/custom-tracks.js),
 [`photo-studio.js`](../js/ui/photo-studio.js), [`settings-tabs.js`](../js/ui/settings-tabs.js),
 [`arrival.js`](../js/garage/arrival.js), [`title-layout.js`](../js/ui/title-layout.js).

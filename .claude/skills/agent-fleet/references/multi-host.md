@@ -9,9 +9,9 @@ only channels all hosts share are git (the bus and claims branches) and the PR.
 | letter | host | reach it by |
 |---|---|---|
 | A | Claude, this account | `send_message` (same account), bus, PR |
-| B | Claude, Bryce's second account | bus and PR only (`list_sessions` / `send_message` cannot cross accounts) |
+| B | Claude, Bryce's second account | bus, PR, cross-account inbox (`list_sessions` / `send_message` cannot cross accounts) |
 | C | Codex coordinator (`C·O1`) | bus `to:C` or `to:codex:<thread id>`, PR |
-| D | Cursor coordinator | bus `to:D` or `to:cursor:<agent id>`, PR |
+| D | DAD, the Grok bot (Cursor sessions appear under other letters) | agent-msg webhook + bus `to:D`, PR; Cursor agents `to:cursor:<agent id>` |
 | E+ | a stand-alone lane on any host | the next free letter, announced on the bus |
 
 Only Bryce starts a fleet: a bus line `FLEET <letter> LIVE <host>:<id> scope:<areas>`.
@@ -40,7 +40,6 @@ round, never a standing negotiation.
 
 - **Map:** [`communication.md`](communication.md) (bus = record; `agent-msg.mjs`
   webhook wakes D / routes bots; D→A direct = peer data; Cursor via DAD reply).
-  Env `APEX_AGENT_WEBHOOK_*` from Bryce — never commit. No authority in messages.
 - The bus refuses a `to:` that is not a session id, `#<PR>`, a fleet letter, a
   known role word or `*`. A claims-board hash is not an address.
 - `to:#<PR>` lines are mirrored as a comment on that PR (`fleet-bus-mirror.mjs` in

@@ -7,6 +7,10 @@
 //   2. an edit to another branch's tests/data/ratchets.d fragment
 //   3. a push over a foreign pusher (another author's commits on the remote branch)
 //   4. pkill -f
+// and the Transcript Auditor batch 9 additions (2026-10-24):
+//   5. commit signing turned off (-c commit.gpgsign=false, --no-gpg-sign, git config)
+//   6. a git ref written through `gh api` (DELETE/PATCH/PUT/POST …/git/refs)
+//   advisories: a cursor/* push touching another open PR's paths; a piped ready/merge gate
 // Fixture repos live under artifacts/. A few seconds.
 //
 // Run: node --test tests/unit/safety-bans-hook.test.mjs
@@ -23,8 +27,16 @@ const BASH_GUARD = path.join(ROOT, ".claude/hooks/bash-guard.sh");
 const PROTECT = path.join(ROOT, ".claude/hooks/protect-files.sh");
 const SHELL_GUARD = path.join(ROOT, ".cursor/hooks/shell-guard.sh");
 const EDIT_GUARD = path.join(ROOT, ".cursor/hooks/edit-guard.sh");
-const ENV = { ...process.env, APEX_LIVE_RUN_CHECK: "/nonexistent", APEX_RATCHET_RAISE_OK: "", APEX_FOREIGN_PUSH_OK: "",
-  APEX_SKIP_GUARDS: "", CLAUDECODE: "" };
+// A live Playwright run in this checkout must not flip these tests: protect-files.py refuses js/css/index.html edits
+// while one is live, by scanning /proc. A sitecustomize.py on PYTHONPATH hides /proc from the hook's python, so the
+// tests measure the safety bans only (audit Q10, finding 16). Written once, under artifacts/ (regenerable).
+const STUB_DIR = path.join(ROOT, "artifacts", "safety-bans-stub");
+fs.mkdirSync(STUB_DIR, { recursive: true });
+fs.writeFileSync(path.join(STUB_DIR, "sitecustomize.py"),
+  "import os\n_ls = os.listdir\nos.listdir = lambda p='.': [] if str(p) == '/proc' else _ls(p)\n");
+const ENV = { ...process.env, PYTHONPATH: [STUB_DIR, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter), APEX_LIVE_RUN_CHECK: "/nonexistent", APEX_RATCHET_RAISE_OK: "", APEX_FOREIGN_PUSH_OK: "",
+  APEX_SKIP_GUARDS: "", CLAUDECODE: "", APEX_CLOSED_PR_PUSH_OK: "", APEX_HELD_CHECK: "0",
+  APEX_PR_STATE_CMD: `node -e "console.log('[]')"` };
 
 const run = (hook, payload, cwd = ROOT, env = {}) => {
   const r = spawnSync("bash", [hook], { cwd, input: JSON.stringify(payload), encoding: "utf8", env: { ...ENV, ...env } });
@@ -265,4 +277,147 @@ test("edit-guard judges a path key beyond file_path/path/target_file/filePath, a
   assert.equal(perm("SomethingNew", { file_text: "hi" }), "deny");
   assert.equal(perm("Read", { targetFile: "version.json" }), "allow");
   assert.equal(perm("SomethingNew", { query: "x" }), "allow");
+});
+
+test("ban 5: turning commit signing off is refused in both doors; reading it and signed commits pass", () => {
+  for (const cmd of ["git -c commit.gpgsign=false commit -m x", "git -c commit.gpgSign=0 commit --allow-empty -m x",
+    "git -c commit.gpgsign= commit -m x", "git commit --no-gpg-sign -m x", "git merge --no-gpg-sign origin/x",
+    "git tag --no-sign v1", "git -c tag.gpgsign=off tag v1", "git config commit.gpgsign false",
+    "git config --global commit.gpgsign no", "git config --unset commit.gpgsign", "git config unset --global commit.gpgsign",
+    "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false git commit -m x",
+    "bash -c 'git -c commit.gpgsign=false commit -m x'", "cd /tmp && git commit --no-gpg-sign -m y"]) {
+    const r = claudeBash(cmd);
+    assert.equal(r.status, 2, `claude: ${cmd}`);
+    assert.ok(r.stderr.includes("shared safety ban 5"), `claude reason: ${cmd}`);
+    const c = cursorShell(cmd);
+    assert.equal(c.status, 2, `cursor: ${cmd}`);
+    assert.equal(c.out.permission, "deny");
+    assert.ok(c.out.agent_message.includes("shared safety ban 5"), "the Cursor agent reads why");
+  }
+  for (const cmd of ["git config --get commit.gpgsign", "git config commit.gpgsign", "git config commit.gpgsign true",
+    "git -c commit.gpgsign=true log -1", "git -c commit.gpgsign log -1", "git log --show-signature -1",
+    "echo 'git -c commit.gpgsign=false commit'", "git grep -n no-gpg-sign",
+    "git config --get-all commit.gpgsign false", "git config --get-regexp gpgsign", "git config -l"]) {
+    assert.equal(claudeBash(cmd).status, 0, `claude: ${cmd}`);
+    assert.deepEqual(cursorShell(cmd).out, { permission: "allow" }, `cursor: ${cmd}`);
+  }
+});
+
+test("ban 6: a git ref written through gh api is refused in both doors, even under APEX_MERGE_DESK; reads pass", () => {
+  for (const cmd of ["gh api -X DELETE repos/brycejmurrin/f1-game/git/refs/heads/cursor/x-1",
+    "gh api --method=DELETE /repos/o/r/git/refs/heads/x", "gh api -XPATCH repos/o/r/git/refs/heads/x -f sha=abc -F force=true",
+    "gh api repos/o/r/git/refs -f ref=refs/heads/x -f sha=abc", "gh api -X PUT repos/o/r/git/refs/heads/x",
+    "bash -c 'gh api -X DELETE repos/o/r/git/refs/heads/x'"]) {
+    for (const env of [{}, { APEX_MERGE_DESK: "1" }]) {
+      const r = claudeBash(cmd, ROOT, env);
+      assert.equal(r.status, 2, `claude ${JSON.stringify(env)}: ${cmd}`);
+      assert.ok(r.stderr.includes("shared safety ban 6"));
+    }
+    const c = cursorShell(cmd);
+    assert.equal(c.status, 2, `cursor: ${cmd}`);
+    assert.equal(c.out.permission, "deny");
+    assert.ok(c.out.agent_message.includes("shared safety ban 6"));
+  }
+  for (const cmd of ["gh api repos/o/r/git/refs/heads/x", "gh api repos/o/r/git/ref/heads/x --jq .object.sha",
+    "gh api -X GET repos/o/r/git/refs/heads", "gh api repos/o/r/branches/x", "echo 'gh api -X DELETE repos/o/r/git/refs/heads/x'"]) {
+    assert.equal(claudeBash(cmd).status, 0, `claude: ${cmd}`);
+    assert.deepEqual(cursorShell(cmd).out, { permission: "allow" }, `cursor: ${cmd}`);
+  }
+  // A push deletion is still refused at the push rule (unchanged), and a push of your own branch passes.
+  assert.equal(claudeBash("git push origin --delete cursor/x-1").status, 2);
+  assert.equal(claudeBash("git push origin :cursor/x-1").status, 2);
+});
+
+test("advisory: a piped ready-gate/merge-gate without pipefail gets a reminder, never a block", () => {
+  for (const cmd of ["node tools/ci/ready-gate.mjs --pr 12 | tail -3", "node tools/ci/merge-gate.mjs --pr 12 2>&1 | tail -1"]) {
+    const r = claudeBash(cmd);
+    assert.equal(r.status, 0, cmd);
+    assert.ok(r.out.hookSpecificOutput.additionalContext.includes("is piped, so this command's exit status"));
+    assert.equal(r.out.hookSpecificOutput.permissionDecision, undefined, "advice only, the call is not asked or denied");
+    const c = cursorShell(cmd);
+    assert.equal(c.out.permission, "allow");
+    assert.ok(c.out.agent_message.includes("is piped"), "the Cursor agent reads the reminder");
+  }
+  for (const cmd of ["set -o pipefail; node tools/ci/ready-gate.mjs --pr 12 | tail -3", "node tools/ci/ready-gate.mjs --pr 12",
+    "node tools/ci/merge-gate.mjs --pr 12 || echo refused", "node tools/ci/ready-gate.mjs --pr 12 > artifacts/logs/rg.log",
+    "echo 'node tools/ci/ready-gate.mjs --pr 12 | tail'", "cat > notes.md <<'EOF'\nrun `ready-gate.mjs | tee`\nEOF"]) {
+    assert.equal(claudeBash(cmd).out, null, cmd);
+  }
+});
+
+test("advisory: a cursor/* push whose diff touches another open PR's paths names the holder; its own PR does not", () => {
+  const dir = fixture("safety-held-");
+  try {
+    const origin = path.join(dir, "origin.git"), a = path.join(dir, "a");
+    execFileSync("git", ["init", "-q", "--bare", origin]);
+    const ga = gitAs(dir, "alice");
+    ga("clone", "-q", origin, a);
+    const g = gitAs(a, "alice");
+    g("checkout", "-q", "-b", "claude/f1-game-project-26h3ng");
+    fs.writeFileSync(path.join(a, "base.txt"), "0\n"); g("add", "."); g("commit", "-q", "-m", "base");
+    g("push", "-q", "origin", "claude/f1-game-project-26h3ng");
+    g("checkout", "-q", "-b", "cursor/t-1");
+    fs.writeFileSync(path.join(a, "held.js"), "1\n"); fs.writeFileSync(path.join(a, "mine.js"), "1\n");
+    g("add", "."); g("commit", "-q", "-m", "work");
+    const own = g("rev-parse", "HEAD");
+    // A stub fleet-owner: held.js is in #900's diff (someone else's head), mine.js only in this branch's own PR #901.
+    const stub = path.join(dir, "owner.mjs");
+    fs.writeFileSync(stub, `let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const rows=s.split("\\n").filter(Boolean).map(p=>({path:p,state:"held",
+      holders:p==="held.js"?[{pr:900,sha:"${"f".repeat(40)}",owner:"cursor:bc-other"}]:[{pr:901,sha:"${own}",owner:"claude:me"}]}));
+      console.log(JSON.stringify({rows}));});`);
+    const env = { APEX_FLEET_OWNER_CMD: `node ${stub}`, APEX_HELD_CHECK: "" };
+    const r = claudeBash("git push -u origin cursor/t-1", a, env);
+    assert.equal(r.status, 0, r.stderr);
+    const ctx = r.out.hookSpecificOutput.additionalContext;
+    assert.ok(ctx.includes("held.js HELD by #900 (cursor:bc-other)"), ctx);
+    assert.ok(!ctx.includes("mine.js"), "the branch's own PR is not a holder");
+    assert.ok(cursorShell("git push -u origin cursor/t-1", a, env).out.agent_message.includes("HELD by #900"));
+    // A failed lookup says so instead of passing silently.
+    const broken = claudeBash("git push origin cursor/t-1", a, { APEX_FLEET_OWNER_CMD: "false", APEX_HELD_CHECK: "" });
+    assert.ok(broken.out.hookSpecificOutput.additionalContext.includes("held-file check did not finish"));
+    // A lookup past the budget is skipped, and says so (the real budget is 20 s; fleet-owner measured ~14 s).
+    const slow = path.join(dir, "slow.mjs");
+    fs.writeFileSync(slow, "setTimeout(() => console.log('{}'), 5000);");
+    const t0 = Date.now();
+    const late = claudeBash("git push origin cursor/t-1", a, { APEX_FLEET_OWNER_CMD: `node ${slow}`, APEX_HELD_CHECK: "", APEX_HELD_BUDGET_S: "2" });
+    assert.ok(Date.now() - t0 < 4500, "the budget bounds the push");
+    assert.ok(late.out.hookSpecificOutput.additionalContext.includes("held-file check skipped"));
+    // APEX_HELD_CHECK=0 and non-cursor branches skip the lookup.
+    assert.equal(claudeBash("git push origin cursor/t-1", a, { ...env, APEX_HELD_CHECK: "0" }).out, null);
+    assert.equal(claudeBash("git push origin cursor/t-1:claude/fleet-bus", a, env).out, null);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a push to a cursor/* branch whose every PR is merged or closed is refused; an open PR or none passes", () => {
+  const dir = fixture("safety-closedpr-");
+  try {
+    const g = gitAs(dir, "alice");
+    g("init", "-q", "-b", "cursor/t-9");
+    g("commit", "-q", "--allow-empty", "-m", "x");
+    let k = 0;
+    const stub = (prs) => {   // a stand-in for the REST call: prints the PR list for the branch it is given
+      const f = path.join(dir, `prs-${k++}.mjs`);
+      fs.writeFileSync(f, `if (process.argv[2] === "brycejmurrin:cursor/t-9") console.log(${JSON.stringify(JSON.stringify(prs))});`);
+      return { APEX_PR_STATE_CMD: `node ${f}` };
+    };
+    const merged = stub([{ number: 3599, state: "closed", merged_at: "2026-10-23T00:00:00Z" }]);
+    const r = claudeBash("git push origin cursor/t-9", dir, merged);
+    assert.equal(r.status, 2, r.stderr);
+    assert.ok(r.stderr.includes("#3599 merged"), r.stderr);
+    const c = cursorShell("git push -u origin HEAD", dir, merged);
+    assert.equal(c.status, 2);
+    assert.ok(c.out.agent_message.includes("already finished"));
+    assert.equal(claudeBash("git push origin cursor/t-9", dir, stub([{ number: 1, state: "closed", merged_at: null },
+      { number: 2, state: "open", merged_at: null }])).status, 0, "a reopened / second open PR");
+    assert.equal(claudeBash("git push origin cursor/t-9", dir, stub([])).status, 0, "no PR yet: the first push");
+    assert.equal(claudeBash("APEX_CLOSED_PR_PUSH_OK=1 git push origin cursor/t-9", dir, merged).status, 0, "the push's own prefix");
+    assert.equal(claudeBash("echo APEX_CLOSED_PR_PUSH_OK=1; git push origin cursor/t-9", dir, merged).status, 2, "not text elsewhere");
+    assert.equal(claudeBash("git push origin cursor/t-9", dir, { APEX_PR_STATE_CMD: "false" }).status, 0, "an API error fails open");
+    assert.equal(claudeBash("git push origin HEAD:claude/fleet-bus", dir, merged).status, 0, "only cursor/* branches");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("Q10: the live-run stub hides /proc from the hook's python, so a live browser run cannot flip these tests", () => {
+  const r = spawnSync("python3", ["-c", "import os; print(len(os.listdir('/proc')), len(os.listdir('.')) > 0)"], { cwd: ROOT, encoding: "utf8", env: ENV });
+  assert.equal(r.stdout.trim(), "0 True");
 });
