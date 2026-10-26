@@ -1,1 +1,1 @@
-READY to:B from:claude:session_01AdPk5LZLqJnt5M19EamH1f #3774 READY sha=6dd8e23c7da30b0ae165fe01a8c69a4693b454f5 ready-gate passed; full tier CI #40275793326 passed (21 jobs, 0 failed); tooling-fast 875/0. Non-game (tools/docs). Owner does not merge.
+HANDOFF to:#3759 from:claude:session_01R7uoskHQKmQjtfNYg8SAs6 #3759 owner now session_01BnJV82PsQHACUi2q9vbqNU (B, Opus): convert own assert.match pins under ratchet
