@@ -1230,11 +1230,11 @@ return {
     try {
       const g = typeof document !== "undefined" && document.getElementById;
       if (!g) return false;
-      const ld = g("loading");
+      const ld = g.call(document, "loading");
       if (ld && !ld.hidden) return true;
-      const cs = g("carsetup");
+      const cs = g.call(document, "carsetup");
       if (cs && !cs.hidden) return true;
-      const rs = g("race-settings");
+      const rs = g.call(document, "race-settings");
       if (rs && !rs.hidden) return true;
     } catch (_) { /* harness */ }
     return false;

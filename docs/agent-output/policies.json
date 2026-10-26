@@ -531,6 +531,11 @@
       "presentation": "native",
       "preserve": "Forwarded node --test output and actual exit status; NODE_OPTIONS preload is the only change."
     },
+    "tools/ci/deploy-child.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Child exit, signal and timeout results, identity-pinned descendant cleanup, caller-owned stdio and error provenance; imported supervisor only."
+    },
     "tools/ci/deploy.mjs": {
       "action": "job-status",
       "presentation": "shared-levels",
@@ -935,6 +940,11 @@
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "Fetch failed means nothing read; stale claims hidden count; never suppress conflicting work"
+    },
+    "tools/desktop/minify-worker.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Worker message protocol and code/map bytes, task error provenance, bounded thread lifecycle and cleanup; imported helper and worker only."
     },
     "tools/desktop/minify.mjs": {
       "action": "no-direct-output",
@@ -1705,6 +1715,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "planOnly/withinBudget/limitation and argv"
+    },
+    "tools/mcp/job-admission.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Atomic admission and release tokens, recoverable epoch records, bounded history and filesystem errors; imported coordination helper only."
     },
     "tools/mcp/js-debugger-boot.cjs": {
       "action": "no-direct-output",

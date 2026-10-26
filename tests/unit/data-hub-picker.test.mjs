@@ -22,7 +22,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function harness({ motion, latest = undefined, realTelemetry = false, drivers = [], sessions, scheduleOnline = true,
-                   emptyMeeting = null, emptyYear = null } = {}) {
+                   emptyMeeting = null, emptyYear = null, clock = null } = {}) {
   let docRoot = null;
   const scrolls = [];
   class El {
@@ -108,8 +108,11 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
     liveIntervals: () => defer("int", { values: {}, cursor: null }),
     cancelAll() { cancels++; }, cacheEntryT: () => null,
   };
+  class Clock extends Date { constructor(...a) { super(...(a.length ? a : [clock.now])); } static now() { return clock.now; } }
   const ctx = vm.createContext({ document, F1API, Log: { info() {}, warn() {} }, navigator: { onLine: true }, queueMicrotask, console,
-    localStorage: { length: 0, key: () => null, getItem: () => null }, setTimeout, clearTimeout, Teams: { LIST: [] },
+    Date: clock ? Clock : Date,
+    localStorage: { length: 0, key: () => null, getItem: () => null },
+    setTimeout: clock ? clock.setTimeout : setTimeout, clearTimeout: clock ? clock.clearTimeout : clearTimeout, Teams: { LIST: [] },
     DataTelemetry: { create: () => ({ loadTelemetry: () => Promise.resolve(new El("div")), closeTelemPopup() {} }) },
     DataRealRace: { create: () => ({ loadRealRace: () => Promise.resolve(new El("div")), cancel() {} }) },
     DataExport: { create: () => ({ loadExport: () => Promise.resolve(new El("div")) }) } });
@@ -210,9 +213,10 @@ async function pickInLive(h) {
 test("a pending GP pick survives its detached picker and the next tab waits for that session", async () => {
   const h = harness();
   await pickInLive(h);
-  h.tab("results"); await h.flush();
+  h.tab("results"); await h.flush();               // explicit pending intent suppresses a new latest request
   assert.equal(h.pending.some((p) => p.name === "latestSession"), false);
   await h.settle("sessions(40)");                  // LIVE's detached picker answers
+  assert.equal(h.pending.some((p) => p.name === "latestSession"), false);
   await h.drain();
   assert.equal(h.content().querySelector(".dh-loading"), null, "RESULTS painted, not LOADING forever");
   assert.ok(h.content().querySelector(".dh-picker"), "…its own picker is up");
@@ -227,6 +231,7 @@ test("reattaching a picker while its explicit pick is pending preserves the sele
   h.tab("results"); await h.flush();               // waits for sessions(40)
   h.tab("live"); await h.flush();                  // back on LIVE: its cached picker is attached again
   await h.settle("sessions(40)");                  // the pick lands on a connected picker: pinned to 400
+  assert.equal(h.pending.some((p) => p.name === "latestSession"), false);
   await h.drain();
   h.resultKeys.length = 0;
   h.tab("results");
@@ -516,6 +521,90 @@ for (const tab of ["results", "live", "telemetry"]) for (const empty of ["meetin
     h.DataHub.close();
   });
 }
+
+for (const tab of ["results", "live", "telemetry"]) for (const failed of ["meeting", "year"]) {
+  test(`${tab}: failed explicit ${failed} clears the old body and retains a retryable selection`, async () => {
+    const year = new Date().getFullYear() - 1;
+    const h = harness({ realTelemetry: true, drivers: TWO,
+      latest: { sessionKey: 500, meetingKey: 50, year: year + 1, name: "OLD SESSION", type: "Race", circuit: "OLD CIRCUIT" } });
+    h.DataHub.open(tab); await h.drain();
+    assert.match(h.content().textContent, /OLD SESSION/);
+    if (failed === "meeting") {
+      const gp = h.content().selects()[0]; gp.value = "40"; gp.dispatch("change");
+    } else h.content().find(n => n.tagName === "BUTTON" && n.textContent === String(year)).dispatch("click");
+    await h.flush();
+    const request = h.pending.shift();
+    assert.equal(request.name, failed === "meeting" ? "sessions(40)" : "meetings");
+    request.reject(new Error("offline picker")); await h.flush();
+    assert.doesNotMatch(h.content().textContent, /OLD SESSION|OLD CIRCUIT/);
+    const retry = h.content().querySelector(".dh-picker-retry");
+    assert.ok(retry, "metadata failure provides a scoped retry button");
+    assert.match(retry.getAttribute("aria-label"), /Retry/);
+    retry.dispatch("click"); await h.flush();
+    assert.equal(h.pending[0].name, failed === "meeting" ? "sessions(40)" : "meetings");
+    h.pending.shift().reject(new Error("still offline")); await h.flush();
+    h.tab(tab === "results" ? "live" : "results"); await h.flush();
+    assert.equal(h.pending.some(p => p.name === "latestSession"), false, "failed explicit intent cannot revert to latest");
+    await h.drain();
+    if (failed === "year") assert.equal(h.meetingYears.at(-1), year);
+    else assert.equal(h.content().selects()[0].children.find(op => op.selected).value, "40");
+    assert.doesNotMatch(h.content().textContent, /OLD SESSION|OLD CIRCUIT/);
+    h.DataHub.close();
+  });
+}
+
+for (const failed of ["meeting", "year"]) test(`a detached failed ${failed} preserves intent without invalidating the current loader`, async () => {
+  const year = new Date().getFullYear() - 1;
+  const h = harness({ realTelemetry: true, drivers: TWO });
+  h.DataHub.open("results"); await h.drain();
+  if (failed === "meeting") {
+    const gp = h.content().selects()[0]; gp.value = "40"; gp.dispatch("change");
+  } else h.content().find(n => n.tagName === "BUTTON" && n.textContent === String(year)).dispatch("click");
+  h.tab("telemetry"); await h.flush();
+  const request = h.pending.shift();
+  assert.equal(request.name, failed === "meeting" ? "sessions(40)" : "meetings");
+  request.reject(new Error("detached failure")); await h.drain();
+  assert.equal(!!h.content().querySelector(".dh-loading"), false);
+  h.tab("results"); await h.flush();
+  assert.equal(h.pending.some(p => p.name === "latestSession"), false);
+  await h.drain();
+  if (failed === "year") assert.equal(h.meetingYears.at(-1), year);
+  assert.ok(h.content().querySelector(".dh-picker"));
+  h.DataHub.close();
+});
+
+for (const via of ["manual", "auto"]) test(`LIVE ${via} refresh ages phase and time copy across session boundaries`, async () => {
+  const timers = new Map(); let nextTimer = 0;
+  const clock = { now: Date.parse("2026-10-04T11:59:59Z"),
+    setTimeout(fn, ms) { const id = ++nextTimer; timers.set(id, { fn, ms }); return id; },
+    clearTimeout(id) { timers.delete(id); } };
+  const h = harness({ clock });
+  h.DataHub.open("live"); await h.drain();
+  const badge = () => h.content().querySelector(".dh-live-state");
+  assert.equal(badge().getAttribute("data-state"), "upcoming");
+  assert.match(h.content().textContent, /Starts /);
+  const auto = h.content().find(n => n.tagName === "BUTTON" && n.textContent === "AUTO");
+  const refresh = h.content().find(n => n.tagName === "BUTTON" && /REFRESH/.test(n.textContent));
+  if (via === "auto") auto.dispatch("click");
+  const run = async () => {
+    if (via === "manual") refresh.dispatch("click");
+    else {
+      assert.equal(timers.size, 1, "AUTO owns exactly one settlement-driven timer");
+      const [id, timer] = [...timers][0]; timers.delete(id);
+      assert.equal(timer.ms, 30000); timer.fn();
+    }
+    await h.drain();
+  };
+  clock.now += 2000; await run();
+  assert.equal(badge().getAttribute("data-state"), "live");
+  assert.equal(badge().textContent, "LIVE");
+  assert.match(h.content().textContent, /Started /);
+  clock.now += 4 * 3600e3; await run();
+  assert.equal(badge().getAttribute("data-state"), "completed");
+  assert.equal(badge().textContent, "COMPLETED");
+  h.DataHub.close();
+  assert.equal(timers.size, 0);
+});
 
 for (const empty of ["meeting", "year"]) for (const nextTab of ["standings", "telemetry"]) {
   test(`a detached empty ${empty} stays selected while ${nextTab}'s current load settles`, async () => {

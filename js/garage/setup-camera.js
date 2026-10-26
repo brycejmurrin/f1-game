@@ -115,8 +115,9 @@ function glareScale(tune) {
 // the PRESENCE of these four does — they gate optional strip geometry. finShape
 // is the one non-colour entry: it picks the shark fin's outline (or no fin).
 // coverVents and spineHeight are the other enums that move a vertex, and
-// spineSide moves the service panels aft of its flank band.
-const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide", "bodyStyle", "aeroShape", "floorShape", "engineShape", "suspensionShape", "brakesShape", "tyresShape", "ersShape", "gearboxShape", "fuelShape", "exhaustShape", "cockpitShape", "wheelsShape"];
+// spineSide moves the service panels aft of its flank band; spineLogo's WRAP
+// also moves the flank trim, even when vertex and triangle counts stay equal.
+const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide", "spineLogo", "bodyStyle", "aeroShape", "floorShape", "engineShape", "suspensionShape", "brakesShape", "tyresShape", "ersShape", "gearboxShape", "fuelShape", "exhaustShape", "cockpitShape", "wheelsShape"];
 // The turntable silhouette's cache key. The hull depends on POSITIONS ONLY, so it is the
 // preview key WITHOUT the livery id (partsVisualKey ends "|L:<id>"; the catalog option ids
 // before it never hold "|L:") plus the geometry-gating fields: it survives the per-value

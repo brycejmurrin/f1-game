@@ -145,3 +145,108 @@ test("navigation benchmark help and argument validation need no compiler", () =>
   assert.match(execFileSync(process.execPath, [script, "--help"], { encoding: "utf8", timeout: 5000 }), /first query and warm/);
   assert.throws(() => execFileSync(process.execPath, [script, "--iterations=0"], { encoding: "utf8", timeout: 5000, stdio: "pipe" }), error => error.status === 2 && /2 to 10/.test(error.stderr));
 });
+
+test("cold outlines coalesce by document and generation without serializing files", async () => {
+  await fixture(async lsp => {
+    lsp.ensureOpen = () => 1;
+    const requests = [];
+    lsp.request = (method, args) => {
+      assert.equal(method, "textDocument/documentSymbol");
+      return new Promise((resolve, reject) => requests.push({ uri: args.textDocument.uri, resolve, reject }));
+    };
+    const locations = Array.from({ length: 40 }, (_, line) => ({ uri: lsp.uriOf("src/ui/panel.js"), range: { start: { line, character: 0 } } }));
+    const page = lsp.locRows(locations, { where: true, limit: 40 });
+    const independent = lsp.outlineOf("src/core/ops.js");
+    await Promise.resolve();
+    assert.equal(requests.length, 2, "one cold RPC per file, with independent files dispatched together");
+    requests.forEach(r => r.resolve([]));
+    const rows = await page;
+    await independent;
+    assert.deepEqual(await lsp.locRows(locations, { where: true, limit: 40 }), rows);
+    assert.equal(requests.length, 2, "warm pages keep identical bounded row output");
+
+    lsp.mtimes.set("src/ui/panel.js", 2);
+    const edited = lsp.outlineOf("src/ui/panel.js");
+    await Promise.resolve();
+    requests[2].reject(Error("owned outline failure"));
+    await assert.rejects(edited, /owned outline failure/);
+    const retry = lsp.outlineOf("src/ui/panel.js");
+    await Promise.resolve();
+    assert.equal(requests.length, 4, "a rejection does not poison this document");
+    requests[3].resolve([]);
+    await retry;
+  });
+});
+
+test("old outline completions cannot replace edited or restarted generations", async () => {
+  await fixture(async lsp => {
+    lsp.ensureOpen = () => 1;
+    const requests = [];
+    lsp.request = () => new Promise((resolve, reject) => requests.push({ resolve, reject }));
+    const file = "src/ui/panel.js", old = lsp.outlineOf(file);
+    await Promise.resolve();
+    lsp.mtimes.set(file, 2);
+    const edited = lsp.outlineOf(file);
+    await Promise.resolve();
+    const editedTree = [{ name: "edited" }];
+    requests[1].resolve(editedTree);
+    await edited;
+    requests[0].resolve([{ name: "old" }]);
+    await old;
+    assert.deepEqual(await lsp.outlineOf(file), editedTree);
+
+    lsp.mtimes.set(file, 3);
+    const beforeReset = lsp.outlineOf(file);
+    await Promise.resolve();
+    lsp.reset();
+    const replacement = lsp.outlineOf(file);
+    await Promise.resolve();
+    const replacementTree = [{ name: "replacement" }];
+    requests[3].resolve(replacementTree);
+    await replacement;
+    requests[2].reject(Error("old generation exited"));
+    await assert.rejects(beforeReset, /old generation exited/);
+    assert.deepEqual(await lsp.outlineOf(file), replacementTree, "old rejection must not delete the new cache");
+  });
+});
+
+test("diagnostic cleanup preserves failures and leaves a replacement server alone", async () => {
+  await fixture(async lsp => {
+    lsp.prepare = async () => {};
+    const pipe = () => ({ stdin: { destroyed: false, write() {} } });
+    lsp.proc = pipe();
+    lsp.request = async () => { lsp.reset(); throw Error("tsc --lsp exited: owned fixture cause"); };
+    const exited = await callTool(lsp, "lsp_diagnostics", { file: "src/ui/panel.js", all: true });
+    assert.equal(exited.content[0].text, "tsc --lsp exited: owned fixture cause");
+    assert.equal(exited.isError, true);
+    assert.equal(lsp.open.size, 0);
+    assert.equal(lsp.syms.size, 0);
+
+    lsp.proc = pipe();
+    lsp.request = async () => { throw Error("primary diagnostic failure"); };
+    const notify = lsp.notify.bind(lsp);
+    lsp.notify = (method, args) => {
+      if (method === "textDocument/didClose") throw Error("secondary cleanup failure");
+      notify(method, args);
+    };
+    await assert.rejects(lsp.diagnose("src/ui/panel.js", true), /primary diagnostic failure/);
+    assert.equal(lsp.open.size, 0, "local cleanup runs even if didClose fails");
+    lsp.request = async () => ({ items: [] });
+    await assert.rejects(lsp.diagnose("src/ui/panel.js", true), /secondary cleanup failure/, "a cleanup failure is visible when there is no primary failure");
+    assert.equal(lsp.open.size, 0);
+
+    let closes = 0;
+    lsp.notify = (method, args) => { if (method === "textDocument/didClose") closes++; else notify(method, args); };
+    lsp.request = async () => {
+      lsp.reset(); lsp.proc = pipe();
+      lsp.open.set("src/ui/panel.js", 9);
+      lsp.syms.set("src/ui/panel.js", { replacement: true });
+      throw Error("old diagnostic generation exited");
+    };
+    await assert.rejects(lsp.diagnose("src/ui/panel.js", true), /old diagnostic generation exited/);
+    assert.equal(closes, 0);
+    assert.equal(lsp.open.get("src/ui/panel.js"), 9);
+    assert.deepEqual(lsp.syms.get("src/ui/panel.js"), { replacement: true });
+    lsp.proc = null; // owned fake pipe has no child lifecycle
+  });
+});

@@ -180,6 +180,72 @@ test("a truncated pre-sync frame does not replace a held snapshot", () => {
   assert.deepEqual(Array.from(got[0]), [1, 0, 0, 0, 0, 0]);
 });
 
+test("real session-to-NetPlay delivery decodes each field packet once and preserves byte subscribers", () => {
+  let decodes = 0;
+  const codec = { ...NetSnapshot, decodeSnapshot(bytes) { decodes++; return NetSnapshot.decodeSnapshot(bytes); } };
+  // Evaluate the unmodified modules with a counted binding for the real codec.
+  const Session = new Function("NetSnapshot", "NetTransport", "Log",
+    fs.readFileSync(path.join(ROOT, "js/net/session.js"), "utf8") + ";return NetSession;")(codec, NetTransport, globalThis.Log);
+  const tracks = { sample(_track, _s, out) { out.t[0] = 0; out.t[2] = 1; return out; } };
+  const Play = new Function("NetSnapshot", "NetSession", "Log", "Tracks",
+    fs.readFileSync(path.join(ROOT, "js/net/netplay.js"), "utf8") + ";return NetPlay;")(codec, Session, globalThis.Log, tracks);
+  let inbound;
+  const outbound = [];
+  const transport = { onMessage(fn) { inbound = fn; }, onClose() {}, close() {},
+    send(channel, data) { outbound.push({ channel, data }); return true; } };
+  const session = Session.create({ transport });
+  const cars = Array.from({ length: 22 }, (_, idx) => ({ idx, local: idx === 0, human: idx === 0,
+    driverId: `drv${idx}`, code: `D${idx}`, s: 0, x: 0, head: 0, speed: 0, lap: 1, gear: 1 }));
+  const G = { cars, player: cars[0], track: { total: 5000, def: { id: "monza" } }, lapsTarget: 5,
+    gridPreOrdered: true, raceT: 10, COUNTDOWN_S: 3, wireId: (car) => car.idx,
+    setCarRole(car, human, local) { car.human = human; car.local = local; },
+    worldFromTrack: (s, x) => ({ x, z: s }) };
+  const net = Play.create(G);
+  net.start({ role: "guest", session, interpDelayMs: 0 });
+  const raw = [], decoded = [];
+  session.onState((bytes, at) => raw.push({ bytes, at }));
+  session.onSnapshot((packet, at) => decoded.push({ packet, at }));
+  net.tick(100); // sends the PING whose real-format PONG will release held state
+  const packet = (tick, s) => NetSnapshot.encodeAged(cars.map((car) => ({ id: car.idx,
+    car: { ...car, s }, at: tick })));
+  const held = packet(100, 777);
+  inbound(NetTransport.STATE, held, 110);
+  assert.equal(decodes, 1);
+  assert.equal(decoded.length, 0, "pre-sync packets stay held");
+  inbound(NetTransport.STATE, new Uint8Array([1, 2, 3, 4]), 111);
+  inbound(NetTransport.STATE, new Uint8Array([99, 0, 0, 0, 0, 0]), 112);
+  assert.equal(session.lastHeard(), 110, "invalid frames neither replace held state nor refresh liveness");
+  const ping = outbound.find((row) => row.channel === NetTransport.STATE && NetSnapshot.toView(row.data).getUint8(0) === NetSession.PING);
+  const request = NetSnapshot.toView(ping.data), pong = new DataView(new ArrayBuffer(29));
+  pong.setUint8(0, NetSession.PONG); pong.setUint32(1, request.getUint32(1));
+  pong.setFloat64(5, request.getFloat64(5)); pong.setFloat64(13, 110); pong.setFloat64(21, 110);
+  inbound(NetTransport.STATE, new Uint8Array(pong.buffer), 120);
+  net.tick(125);
+  assert.equal(session.synced(), true);
+  assert.equal(decodes, 3, "flushing the decoded held packet does not parse it again in NetPlay");
+  assert.equal(decoded.length, 1);
+  assert.equal(decoded[0].packet.cars.length, 22);
+  assert.equal(decoded[0].at, 110, "the decoded callback keeps the original transport arrival stamp");
+  assert.deepEqual(Array.from(raw[0].bytes), Array.from(held), "the original byte callback still receives its bytes");
+  assert.equal(G.cars[0].s, 0, "the host packet cannot overwrite the local driver");
+  assert.equal(G.cars[1].s, 777);
+  assert.equal(G.cars[21].s, 777, "the whole AI field reaches the real NetPlay interpolators");
+  const fresh = packet(140, 888);
+  inbound(NetTransport.STATE, fresh, 150); net.tick(150);
+  assert.equal(decodes, 4, "a synchronized full-field packet also incurs one decode");
+  assert.equal(decoded.length, 2);
+  assert.equal(G.cars[21].s, 888);
+  inbound(NetTransport.STATE, new Uint8Array([1, 2]), 160);
+  assert.equal(session.lastHeard(), 150);
+  assert.equal(decoded.length, 2, "invalid synchronized frames never enter the decoded API");
+  assert.equal(raw.length, 3, "legacy synchronized byte subscribers retain their invalid-frame delivery contract");
+  session.clearHandlers();
+  inbound(NetTransport.STATE, fresh, 170);
+  assert.equal(raw.length, 3);
+  assert.equal(decoded.length, 2, "clearHandlers clears both subscriber kinds");
+  net.stop();
+});
+
 test("events are typed, and only their own handler sees them", () => {
   const p = pair({ latency: 10 });
   const laps = [], settings = [];

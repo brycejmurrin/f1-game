@@ -136,8 +136,8 @@ test("deploy.mjs runs test:sweeps-parts unconditionally, in the deploy and in --
   // Its CI job has no path filter, so a red there takes every push red; the
   // gate must therefore run it every time, not only when geometry moved.
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/deploy.mjs"), "utf8");
-  const gateOnly = src.slice(src.indexOf("export function gateOnly()"), src.indexOf("export function main()"));
-  const deploy = src.slice(src.indexOf("export function main()"));
+  const gateOnly = src.slice(src.indexOf("export async function gateOnly()"), src.indexOf("export async function main()"));
+  const deploy = src.slice(src.indexOf("export async function main()"));
   for (const [name, body] of [["gateOnly", gateOnly], ["main", deploy]]) {
     assert.match(body, /run\("npm", \["run", "test:sweeps-parts"\]/, `${name}() must run test:sweeps-parts`);
     assert.doesNotMatch(body.slice(0, body.indexOf('"test:sweeps-parts"')), /touchesGeometry\(/,

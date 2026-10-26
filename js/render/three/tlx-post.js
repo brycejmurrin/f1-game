@@ -68,6 +68,7 @@
     const ownedMaterials = new Set();
     let quad = null;
     let disposed = false;
+    let viewportScope = null;
     function ownRT(rt) { ownedRTs.add(rt); return rt; }
     function ownTexture(tex) { if (tex) ownedTextures.add(tex); return tex; }
     function trackMaterial(mat) { if (mat) ownedMaterials.add(mat); return mat; }
@@ -75,6 +76,7 @@
       if (disposed) return;
       disposed = true;
       if (quad) quad.material = null;
+      if (viewportScope) viewportScope.dispose();
       for (const mat of ownedMaterials) {
         try { mat.dispose(); } catch (_) { /* device already dying */ }
       }
@@ -210,7 +212,8 @@
     // flag is off we still stand up a local VP and keep a square physical cover
     // of max(w,h) so a transpose only moves logical viewports. fixedOk() stays
     // false unless ctx.fixedTargets — tlx.js canvas sizing must not flip.
-    let VP = ctx.vp || null;
+    if (ctx.fixedTargets && ctx.vp && ctx.vp.enabled && ctx.vp.scope) viewportScope = ctx.vp.scope();
+    let VP = viewportScope || ctx.vp || null;
     const fixed = !!(ctx.fixedTargets && VP && VP.enabled);
     const phonePost = !!ctx.isMobile;
     let orientCover = false;

@@ -647,7 +647,7 @@ async function loadGLTFModule() {
   const vm = await import("node:vm");
   const ctx = {
     Math, Array, Object, JSON, Uint8Array, Uint16Array, Uint32Array, Int16Array,
-    Float32Array, DataView, ArrayBuffer, TextDecoder, Promise, Error, console, fetch,
+    Float32Array, DataView, ArrayBuffer, TextDecoder, Buffer, Promise, Error, console, fetch,
   };
   ctx.window = ctx;
   ctx.Log = {
@@ -1516,6 +1516,10 @@ function bakeAtlas(args) {
     out.materials.low.size = lowSize;
     out.materials.low.albedo = `mat-albedo-${lowSize}.png`;
     out.materials.low.normal = `mat-normal-${lowSize}.png`;
+  } else {
+    // Unwritten low-tier pixels must not inherit the new high-tier provenance.
+    // Old strip files may remain on disk, but consumers must use this bake.
+    delete out.materials.low;
   }
   const layersOut = out.materials.layers || [];
   for (const rec of baked) {

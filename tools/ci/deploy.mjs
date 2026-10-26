@@ -65,6 +65,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { GEOMETRY_PATHS, targetedSuites } from "./geometry-paths.mjs";
 import { githubToken } from "./github-token.mjs";
+import { superviseDeployChild } from "./deploy-child.mjs";
 import { request } from "./github-api.mjs";
 import { changedPaths as diffPaths } from "../lib/changed-files.mjs";
 import { NODE_TEST_TIMEOUT_MS } from "../gen/gen-test-groups.mjs";
@@ -94,28 +95,28 @@ function must(r, what) {
 // ceiling killed it with no verdict line. Every child now stops at this ceiling, with SIGTERM so
 // tooling-fast can reap the process groups it leads, and run() turns that into a named failure.
 export const CHILD_TIMEOUT_MS = Math.max(1, Number(process.env.APEX_DEPLOY_CHILD_TIMEOUT_MIN) || 25) * 60e3;
-export function spawnDeployChild(cmd, args, { cwd = ROOT, env = process.env, json = JSON_OUT, root = ROOT, announce = log, timeoutMs = CHILD_TIMEOUT_MS } = {}) {
-  const stop = { timeout: timeoutMs, killSignal: "SIGTERM" };
-  if (!json) return spawnSync(cmd, args, { cwd, env, stdio: "inherit", ...stop });
+export async function spawnDeployChild(cmd, args, { cwd = ROOT, env = process.env, json = JSON_OUT, root = ROOT, announce = log, timeoutMs = CHILD_TIMEOUT_MS } = {}) {
+  const stop = { timeoutMs };
+  if (!json) return superviseDeployChild(cmd, args, { cwd, env, stdio: "inherit", ...stop });
   const artifact = saveOutputArtifact("", { root, tool: "deploy-child", kind: "log" });
   const fd = fs.openSync(path.resolve(root, artifact.path), fs.constants.O_WRONLY | fs.constants.O_NOFOLLOW);
   try {
     announce(`child stdout: ${artifact.path} (complete log; stderr remains live)`);
-    const result = spawnSync(cmd, args, { cwd, env, stdio: ["ignore", fd, "inherit"], ...stop });
+    const result = await superviseDeployChild(cmd, args, { cwd, env, stdio: ["ignore", fd, "inherit"], ...stop });
     return { ...result, stdoutArtifact: { ...artifact, bytes: fs.fstatSync(fd).size } };
   } finally { fs.closeSync(fd); }
 }
 function childFailure(result, message, timeoutMs) {
-  const detail = result.error?.code === "ETIMEDOUT" ? `timed out after ${Math.round((timeoutMs ?? CHILD_TIMEOUT_MS) / 6e3) / 10} min, stopped with SIGTERM`
+  const detail = result.error?.code === "ETIMEDOUT" ? `timed out after ${Math.round((timeoutMs ?? CHILD_TIMEOUT_MS) / 6e3) / 10} min, stopped with SIGTERM/SIGKILL`
     : result.error?.message || (result.signal ? `signal ${result.signal}` : `exit ${result.status}`);
   const error = new Error(`${message} (${detail})${result.stdoutArtifact ? ` — complete stdout: ${result.stdoutArtifact.path}` : ""}`);
   if (result.stdoutArtifact) error.stdoutArtifact = result.stdoutArtifact;
   return error;
 }
-export function run(cmd, args, what, options) {
+export async function run(cmd, args, what, options) {
   log(`${what}: ${cmd} ${args.join(" ")}`);
-  const r = spawnDeployChild(cmd, args, options);
-  if (r.status !== 0) throw childFailure(r, `${what} failed`, options?.timeoutMs);
+  const r = await spawnDeployChild(cmd, args, options);
+  if (r.error || r.signal || r.status !== 0) throw childFailure(r, `${what} failed`, options?.timeoutMs);
 }
 
 export function preflight(cwd = ROOT) {
@@ -320,9 +321,9 @@ export function targetedFor(base, cwd) {
   return targetedSuites(files);
 }
 
-function runTargeted(suites, why) {
+async function runTargeted(suites, why) {
   const names = suites.map((s) => path.basename(s));
-  run("node", ["--test", `--test-timeout=${NODE_TEST_TIMEOUT_MS}`, "--test-concurrency=1", ...suites], `${why}: targeted sweeps (${names.join(", ")}) — no fleet rebuild`);
+  await run("node", ["--test", `--test-timeout=${NODE_TEST_TIMEOUT_MS}`, "--test-concurrency=1", ...suites], `${why}: targeted sweeps (${names.join(", ")}) — no fleet rebuild`);
   return names.map((n) => `sweeps:${n}`);
 }
 
@@ -398,10 +399,10 @@ export function ratchetOverruns(base, ours, theirs, got) {
   return over;
 }
 
-function cureRatchets() {
+async function cureRatchets() {
   const base = ratchetStage(1), ours = ratchetStage(2), theirs = ratchetStage(3);
   must(git(["checkout", "--theirs", "--", RATCHETS]), `checkout --theirs ${RATCHETS}`);
-  run("node", ["tools/check/ratchets.mjs", "--update", "--absolute"], "snap the ratchets to the merged tree");
+  await run("node", ["tools/check/ratchets.mjs", "--update", "--absolute"], "snap the ratchets to the merged tree");
   if (!base || !ours || !theirs) return "ratchets re-measured (no three-way stages to bound it)";
   let got;
   try { got = ratchetMetrics(JSON.parse(fs.readFileSync(path.join(ROOT, RATCHETS), "utf8"))); }
@@ -473,14 +474,14 @@ export function cureableConflicts(conflicted) {
    about this box, not about the union. So after every merge that touched the
    lockfile, install (browsers skipped; seconds when nothing changed) before
    anything is measured. */
-export function installIfLockMoved(before) {
+export async function installIfLockMoved(before) {
   const changed = git(["diff", "--name-only", `${before}..HEAD`, "--", "package-lock.json", "package.json"]).out.trim();
   if (!changed) return false;
   log("the union changed package-lock.json — npm install before the gate measures it");
-  const r = spawnDeployChild("npm", ["install", "--no-audit", "--no-fund"], {
+  const r = await spawnDeployChild("npm", ["install", "--no-audit", "--no-fund"], {
     env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1" },
   });
-  if (r.status !== 0) throw childFailure(r, "npm install failed — the union needs a package this box could not install");
+  if (r.error || r.signal || r.status !== 0) throw childFailure(r, "npm install failed — the union needs a package this box could not install");
   return true;
 }
 
@@ -496,9 +497,9 @@ export function installIfLockMoved(before) {
    nothing. Exported for tests/unit/deploy-tool.test.mjs, which runs it against
    a real clean-but-stale merge. */
 export const REGEN_MESSAGE = "merge: regenerate derived files on the union (npm run gen)";
-export function regenerateDerived(cwd = ROOT) {
-  const r = spawnDeployChild("npm", ["run", "gen"], { cwd });
-  if (r.status !== 0) throw childFailure(r, "npm run gen failed on the merged tree — a generator's source did not merge into something it can read");
+export async function regenerateDerived(cwd = ROOT) {
+  const r = await spawnDeployChild("npm", ["run", "gen"], { cwd });
+  if (r.error || r.signal || r.status !== 0) throw childFailure(r, "npm run gen failed on the merged tree — a generator's source did not merge into something it can read");
   const dirty = git(["status", "--porcelain"], { cwd }).out;
   if (!dirty) return null;
   must(git(["add", "-A"], { cwd }), "add regenerated files");
@@ -506,13 +507,13 @@ export function regenerateDerived(cwd = ROOT) {
   return dirty.split("\n").filter(Boolean).map((l) => l.slice(3));
 }
 
-export function mergeDeployTip() {
+export async function mergeDeployTip() {
   assertMergeable("HEAD", `${REMOTE}/${DEPLOY_BRANCH}`);
   const before = git(["rev-parse", "HEAD"]).out.trim();
   const r = git(["merge", "--no-edit", `${REMOTE}/${DEPLOY_BRANCH}`]);
   if (r.code === 0) {
-    installIfLockMoved(before);
-    const regen = regenerateDerived();
+    await installIfLockMoved(before);
+    const regen = await regenerateDerived();
     return regen ? `merged (clean; regenerated ${regen.join(", ")})` : "merged";
   }
   // A REFUSAL (unrelated histories, a dirty file the merge would overwrite)
@@ -555,16 +556,16 @@ export function mergeDeployTip() {
       if (r.unresolved.length) stop(`${f} (hand-written markup conflicts outside the @gen-shell blocks, line ${r.unresolved.join(", ")})`);
       fs.writeFileSync(path.join(ROOT, f), r.text);
     }
-    run("node", ["tools/gen/gen-shell.mjs"], "regenerate the union shell from the manifest");
+    await run("node", ["tools/gen/gen-shell.mjs"], "regenerate the union shell from the manifest");
     // Every generated block has to be rewritten, not just gen-shell's.
     // title-art.mjs owns @gen-shell:title-art (the #title-car car art); without
     // this line a shell conflict silently reverts the art to whatever the
     // other side carried, which looks exactly like nobody having changed it.
-    run("node", ["tools/gen/title-art.mjs"], "regenerate the title art into the union shell");
+    await run("node", ["tools/gen/title-art.mjs"], "regenerate the title art into the union shell");
     must(git(["add", ...shellF]), "add");
     did.push("shell blocks re-applied (hand-written markup from both sides kept)");
   }
-  if (ratchetF.length) { did.push(cureRatchets()); must(git(["add", RATCHETS]), "add"); }
+  if (ratchetF.length) { did.push(await cureRatchets()); must(git(["add", RATCHETS]), "add"); }
   if (pkgF.length) {
     // A three-way merge by key, so a dependency or a non-test script from
     // either side survives; the generator then rewrites every test script
@@ -573,20 +574,20 @@ export function mergeDeployTip() {
     const m = mergePackageJson(stage(1), stage(2), stage(3));
     if (m.conflicts.length) stop(`package.json (fields edited differently on both sides: ${m.conflicts.join(", ")})`);
     fs.writeFileSync(path.join(ROOT, "package.json"), m.text);
-    run("node", ["tools/gen/gen-test-groups.mjs"], "regenerate the test scripts from the merged groups.json");
+    await run("node", ["tools/gen/gen-test-groups.mjs"], "regenerate the test scripts from the merged groups.json");
     must(git(["add", "package.json"]), "add");
     did.push("package.json merged by key; test scripts regenerated from groups.json");
   }
   if (toolsF.length) {
     must(git(["checkout", "--ours", "--", TOOLS_README]), "checkout --ours tools/README.md");
-    run("node", ["tools/gen/gen-tools-readme.mjs"], "regenerate the tools index from the merged tree");
+    await run("node", ["tools/gen/gen-tools-readme.mjs"], "regenerate the tools index from the merged tree");
     must(git(["add", TOOLS_README]), "add");
     did.push("tools index regenerated");
   }
   if (catalogF.length) {
     // After the package.json cure: the catalog lists npm scripts too.
     must(git(["checkout", "--ours", "--", OUTPUT_CATALOG]), `checkout --ours ${OUTPUT_CATALOG}`);
-    run("node", ["tools/gen/gen-output-surface.mjs"], "regenerate the agent output catalog from the merged tree");
+    await run("node", ["tools/gen/gen-output-surface.mjs"], "regenerate the agent output catalog from the merged tree");
     must(git(["add", OUTPUT_CATALOG]), "add");
     did.push("agent output catalog regenerated");
   }
@@ -604,10 +605,10 @@ export function mergeDeployTip() {
     did.push("scenery locations regenerated");
   }
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
-  installIfLockMoved(before);
+  await installIfLockMoved(before);
   // The cures above re-derive only the files that CONFLICTED; a derived file
   // that merged clean can be stale all the same (see regenerateDerived).
-  const regen = regenerateDerived();
+  const regen = await regenerateDerived();
   if (regen) did.push(`regenerated ${regen.join(", ")}`);
   return `merged (${did.join("; ")})`;
 }
@@ -679,7 +680,7 @@ export function proseOnly(files) {
   return files.length > 0 && files.every((f) => /^docs\//.test(f) || /\.md$/.test(f));
 }
 
-function reverifyUnion(before, oursProse) {
+async function reverifyUnion(before, oursProse) {
   const changed = git(["diff", "--name-only", `${before}..HEAD`]).out.split("\n").filter(Boolean);
   const ships = oursProse ? [] : changed.filter((f) => /^(js|css)\//.test(f) || f === "index.html");
   // Their geometry was swept by the session that pushed it; ours cannot move any.
@@ -693,13 +694,13 @@ function reverifyUnion(before, oursProse) {
     // place to skip them: it is the leg carrying another session's code, merged
     // seconds ago, that nothing in this process has yet measured.
     const why = `${ships.slice(0, 3).join(", ")}${ships.length > 3 ? ` +${ships.length - 3}` : ""}`;
-    run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS],
+    await run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS],
         `re-verify the new union in full — it brings shipped code (${why})`);
-    for (const script of gateNodeSuites()) run("npm", ["run", script], `re-verify: Pages gate ${script}`);
-    for (const id of touchedCircuits(before)) run("node", ["tools/track/verify-track.cjs", id], `re-verify: verify-track ${id}`);
+    for (const script of gateNodeSuites()) await run("npm", ["run", script], `re-verify: Pages gate ${script}`);
+    for (const id of touchedCircuits(before)) await run("node", ["tools/track/verify-track.cjs", id], `re-verify: verify-track ${id}`);
     label = "full gate (tooling-fast + the Pages gate's node suites + verify-track)";
   } else {
-    run("node", ["tools/ci/tooling-fast.mjs", ...MERGE_GUARDS],
+    await run("node", ["tools/ci/tooling-fast.mjs", ...MERGE_GUARDS],
         `re-verify the new union: ${changed.length} file(s), ` +
         (oursProse ? "and OUR side is prose — no interaction to have, so the cross-file guards"
                    : "no shipped code, so the cross-file guards"));
@@ -708,16 +709,16 @@ function reverifyUnion(before, oursProse) {
   // Geometry can arrive WITHOUT shipped code — a sweep suite's own baseline is
   // neither js/ nor css/ — so this is asked of the re-merge either way.
   if (geom) {
-    run("npm", ["run", "test:sweeps"], "re-verify: test:sweeps (the re-merged union can move geometry)");
+    await run("npm", ["run", "test:sweeps"], "re-verify: test:sweeps (the re-merged union can move geometry)");
     label += " + sweeps";
   } else if (!oursProse) {
     const tg = targetedSuites(changed);
-    if (tg.length) { runTargeted(tg, "re-verify"); label += ` + targeted sweeps (${tg.length})`; }
+    if (tg.length) { await runTargeted(tg, "re-verify"); label += ` + targeted sweeps (${tg.length})`; }
   }
   return { label, sweeps: geom };
 }
 
-function pushWithRetry(oursProse = false) {
+async function pushWithRetry(oursProse = false) {
   let swept = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
     const r = git(["push", REMOTE, `HEAD:${DEPLOY_BRANCH}`]);
@@ -735,8 +736,8 @@ function pushWithRetry(oursProse = false) {
     }
     const before = git(["rev-parse", "HEAD"]).out.trim();
     must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
-    mergeDeployTip();
-    const rv = reverifyUnion(before, oursProse);
+    await mergeDeployTip();
+    const rv = await reverifyUnion(before, oursProse);
     swept = swept || rv.sweeps;
     log(`re-verified: ${rv.label}`);
   }
@@ -817,11 +818,11 @@ function openPr(branch) {
    This runs exactly what main() runs before it pushes, and pushes nothing, so
    the pre-push answer comes from the same code path as the deploy's — not from
    a second list that can drift from it. */
-export function gateOnly() {
+export async function gateOnly() {
   const t0 = Date.now();
   const verified = [];
-  run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite"); verified.push("tooling-fast");
-  for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verified.push(script); }
+  await run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite"); verified.push("tooling-fast");
+  for (const script of gateNodeSuites()) { await run("npm", ["run", script], `Pages gate: ${script}`); verified.push(script); }
   // ci.yml's "Parts option-resolution census" job runs test:sweeps-parts, so a
   // red in either of its two files takes the deploy red — and until 2026-09-22
   // nothing before a push ran them (tests/unit/prepush-gate-coverage.test.mjs
@@ -834,7 +835,7 @@ export function gateOnly() {
   // build on, and running a cheap suite CI would skip is the safe direction —
   // the reverse (skipping one CI runs) is what a pre-push gate may never do.
   // The geometry sweeps stay conditional because they are 8-15 minutes, not 40 s.
-  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts"); verified.push("test:sweeps-parts");
+  await run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts"); verified.push("test:sweeps-parts");
   // Against the deploy tip, same as a real deploy: the circuits OUR side
   // touched (three-dot), not every circuit that moved on the branch.
   let circuits = [];
@@ -851,7 +852,7 @@ export function gateOnly() {
     // "could not look" read identically to the reader of the JSON.
     gaps.push(`verify-track and the geometry sweeps: could not reach ${REMOTE}/${DEPLOY_BRANCH} (${e.message}) — NOT a statement that nothing was touched`);
   }
-  for (const id of circuits) { run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verified.push(`verify-track:${id}`); }
+  for (const id of circuits) { await run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verified.push(`verify-track:${id}`); }
   // PARITY WITH main() (2026-09-22). This function's own docstring calls it
   // "exactly what main() runs before it pushes", and AGENTS.md rule 3 calls it
   // the only pre-push check that runs what the deploy runs — but it never
@@ -862,9 +863,9 @@ export function gateOnly() {
     // Mirrors main()'s branch exactly: the full sweeps when the union can move
     // geometry, otherwise the targeted suites that read it.
     const ranSweeps = touchesGeometry(base);
-    if (ranSweeps) { run("npm", ["run", "test:sweeps"], "Pages gate: test:sweeps (this union can move geometry)"); verified.push("test:sweeps"); }
+    if (ranSweeps) { await run("npm", ["run", "test:sweeps"], "Pages gate: test:sweeps (this union can move geometry)"); verified.push("test:sweeps"); }
     let targeted = [];
-    if (!ranSweeps) { targeted = targetedFor(base); if (targeted.length) verified.push(...runTargeted(targeted, "Pages gate")); }
+    if (!ranSweeps) { targeted = targetedFor(base); if (targeted.length) verified.push(...(await runTargeted(targeted, "Pages gate"))); }
     gaps.push(...notCovered(ranSweeps, targeted));
   }
   return { gate: "only", verified, pushed: false, notCovered: gaps, seconds: Math.round((Date.now() - t0) / 1000) };
@@ -958,7 +959,7 @@ function nightlyHealth() {
   if (!failed.length && !stopped.length) log("  no job failed or was cancelled — the rollup is the whole story");
 }
 
-export function main() {
+export async function main() {
   const t0 = Date.now();
   if (flag("--help") || flag("-h")) { console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 26).join("\n")); return 0; }
   if (flag("--gate-only")) {
@@ -968,7 +969,7 @@ export function main() {
     // carry over, because they are about whether a verdict means anything.
     const problems = preflight().filter((x) => !x.startsWith("working tree is dirty"));
     if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
-    const v = gateOnly();
+    const v = await gateOnly();
     if (JSON_OUT) console.log(JSON.stringify(v, null, 2)); else log(JSON.stringify(v));
     return 0;
   }
@@ -992,22 +993,22 @@ export function main() {
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
   trainHealth();
   const verdict = { branch: p.branch, merge: "none", verified: [], pushed: false, pr: null };
-  if (!p.fastForward) verdict.merge = mergeDeployTip();
-  run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite on the union"); verdict.verified.push("tooling-fast");
+  if (!p.fastForward) verdict.merge = await mergeDeployTip();
+  await run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite on the union"); verdict.verified.push("tooling-fast");
   // The Pages gate runs MORE node suites than tooling-fast (quali-persist,
   // node-slow, the VM twins, …) and two deploys went red on pins tooling-fast
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
   // from ci.yml so the two lists cannot drift apart.
-  for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
-  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts"); verdict.verified.push("test:sweeps-parts");
+  for (const script of gateNodeSuites()) { await run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
+  await run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts"); verdict.verified.push("test:sweeps-parts");
   // Conditional, for the reason recorded above touchesGeometry(): ci.yml runs
   // the sweeps AFTER the push, so skipping them here buys 10 minutes with a
   // broken tip on a branch other sessions build on.
   let ranSweeps = touchesGeometry(p.tip);
-  if (ranSweeps) { run("npm", ["run", "test:sweeps"], "Pages gate: test:sweeps (this union can move geometry)"); verdict.verified.push("test:sweeps"); }
+  if (ranSweeps) { await run("npm", ["run", "test:sweeps"], "Pages gate: test:sweeps (this union can move geometry)"); verdict.verified.push("test:sweeps"); }
   let targeted = [];
-  if (!ranSweeps) { targeted = targetedFor(p.tip); if (targeted.length) verdict.verified.push(...runTargeted(targeted, "Pages gate")); }
-  for (const id of touchedCircuits(p.tip)) { run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verdict.verified.push(`verify-track:${id}`); }
+  if (!ranSweeps) { targeted = targetedFor(p.tip); if (targeted.length) verdict.verified.push(...(await runTargeted(targeted, "Pages gate"))); }
+  for (const id of touchedCircuits(p.tip)) { await run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verdict.verified.push(`verify-track:${id}`); }
   if (flag("--pr")) {
     Object.assign(verdict, openPr(p.branch));
   } else {
@@ -1015,7 +1016,7 @@ export function main() {
     // lost race cannot make a prose deploy look like it ships code.
     const oursProse = proseOnly(git(["diff", "--name-only", `${p.tip}...HEAD`]).out.split("\n").filter(Boolean));
     if (oursProse) log("our side is prose only — a lost race re-verifies the cross-file guards, not the whole gate");
-    const push = pushWithRetry(oursProse);
+    const push = await pushWithRetry(oursProse);
     verdict.pushAttempts = push.attempts;
     if (push.race) {
       // The gate already passed on this union; the PR carries it to GitHub's
@@ -1047,7 +1048,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const marks = !["--help", "-h", "--plan", "--train"].some(flag);
   if (marks) stamp(logFile, `start pid=${process.pid} mode=${argv.filter((a) => a.startsWith("--")).join(",") || "default"}`);
   let code = 1;
-  try { code = main(); }
+  try { code = await main(); }
   catch (e) {
     log("ERROR " + (e && e.message ? e.message : e));
     if (JSON_OUT) console.log(JSON.stringify({ status: "failed", error: e.message || String(e), stdoutArtifact: e.stdoutArtifact || null }));

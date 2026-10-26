@@ -886,6 +886,20 @@ body[data-width="narrow"] .dh-thint { display: none; }
   margin-bottom: var(--gap); padding-bottom: var(--gap);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
+/* Keep metadata failures with their picker, with room for a touch retry. */
+.dh-picker > [data-role="picker-error"] {
+  flex-basis: 100%;
+  gap: calc(var(--gap) * 2 / 3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.dh-picker > [data-role="picker-error"]:not([hidden]) { display: flex; }
+.dh-picker > [data-role="picker-error"] .dh-error-msg {
+  font-size: var(--fs-2);
+  text-align: left;
+  max-width: none;
+  flex: 1 1 180px;
+}
 .dh-pick-years {
   display: flex; flex-wrap: nowrap; gap: calc(var(--gap) / 3);
   overflow-x: auto; overflow-y: hidden;

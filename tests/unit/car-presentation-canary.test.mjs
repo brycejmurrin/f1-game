@@ -135,7 +135,7 @@ test("orbit / agent-view read the mirrored world pose for the field", () => {
   assert.match(cam, /const cx = \(c\.px != null\) \? c\.px/);
   assert.match(cam, /const cz = \(c\.pz != null\) \? c\.pz/);
   assert.doesNotMatch(cam, /c\.human && c\.px != null/);
-  assert.match(view, /if \(c\.px != null\) return \[c\.px, c\.pz\];/);
+  assert.match(view, /if \(c\.px != null\) return \[c\.px, c\.pz, y\];/);
   assert.doesNotMatch(view, /c\.human && c\.px != null/);
 });
 

@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
@@ -78,7 +79,8 @@ test("TLX exports pinMesh and car-draw pins the deploy-only draws through the fe
   const cd = fs.readFileSync(path.join(ROOT, "js/car/car-draw.js"), "utf8");
   for (const g of ["getErsBar()", "getOtLamp(true)", "CarMesh.getErsLight()"])
     assert.ok(cd.includes(`pin(${g})`), `car-draw pins ${g}`);
-  assert.equal((tlx.match(/(^|[^.\w])geo\.__tlxPin = true;/gm) || []).length, 2, "both FX stream builders (ensureStream, wrapStream) pin their geometry");
+  for (const builder of ["ensureStream", "ensureGlowStream", "wrapStream"])
+    assert.ok(fnSource(tlx, `function ${builder}(`).includes("geo.__tlxPin = true;"), `${builder} pins its geometry`);
   const cm = fs.readFileSync(path.join(ROOT, "js/car/car-mesh.js"), "utf8");
   assert.ok(cm.includes("_gfx.pinMesh(_rearLightSet)"), "car-mesh pins the rear-light set (the 2026 ERS light code's flash)");
 });

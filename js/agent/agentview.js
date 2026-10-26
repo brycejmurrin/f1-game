@@ -2123,12 +2123,12 @@ const AgentView = (function () {
       };
     }
 
-    // World XZ of a car. Prefer the mirrored px/pz (player + field); else Frenet.
     function carWorld(c) {
-      if (c.px != null) return [c.px, c.pz];
       Tracks.sample(G.track, c.s, scr);
+      const bank = Tracks.banking ? Tracks.banking(G.track, c.s, c.x || 0) : null, y = scr.p[1] + (bank ? bank.dy : 0);
+      if (c.px != null) return [c.px, c.pz, y];
       const [ex, ez] = unitRight(scr);
-      return [scr.p[0] + ex * c.x, scr.p[2] + ez * c.x];
+      return [scr.p[0] + ex * c.x, scr.p[2] + ez * c.x, y];
     }
 
     function visible(opts) {
@@ -2214,8 +2214,8 @@ const AgentView = (function () {
 
       out.cars = [];
       for (const c of G.cars) {
-        const [wx, wz] = carWorld(c);
-        const p = project(vp, wx, 0.6, wz);           // ~roll-hoop height
+        const [wx, wz, wy] = carWorld(c);
+        const p = project(vp, wx, wy + 0.6, wz);     // ~roll-hoop height
         const bearing = bearingTo(wx, wz);
         out.cars.push({
           id: c.id != null ? c.id : G.cars.indexOf(c),

@@ -15,6 +15,35 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
+test("GPU capture retries a failed vendor request with a fresh script", async () => {
+  const scripts = [];
+  const sb = {
+    window: { SPECTOR: { Spector: function () { this.spyCanvases = () => {}; } } },
+    localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
+    location: { search: "" }, Log: { info() {} },
+    document: {
+      querySelector() { return scripts[0] || null; },
+      createElement() { return { dataset: {}, remove() { scripts.splice(scripts.indexOf(this), 1); } }; },
+      head: { appendChild(s) { scripts.push(s); } },
+    },
+  };
+  vm.createContext(sb);
+  vm.runInContext(read("js/agent/apex-gpu-capture.js"), sb, { filename: absSrc("js/agent/apex-gpu-capture.js") });
+  const api = sb.window.ApexGpuCapture;
+  const failed = api.enable("spector");
+  const first = scripts[0];
+  first.onerror();
+  await assert.rejects(failed, /failed to load/);
+  assert.equal(scripts.length, 0);
+  const retry = api.enable("spector");
+  assert.equal(scripts.length, 1);
+  assert.notEqual(scripts[0], first);
+  scripts[0].onload();
+  const status = await retry;
+  assert.equal(status.spector, true);
+  assert.equal(status.loading, false);
+});
+
 function loadLabels() {
   const sb = { window: {}, console };
   vm.createContext(sb);
@@ -155,8 +184,8 @@ function loadGpuCapture() {
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     Log: { info() {} },
     document: {
-      querySelector: (selector) => scripts.find((s) => selector.includes(s.dataset.apexGpuCapture)) || null,
-      createElement: () => ({ dataset: {}, listeners: {}, addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); } }),
+      querySelector: (selector) => scripts.find((s) => !s.removed && selector.includes(s.dataset.apexGpuCapture)) || null,
+      createElement: () => ({ dataset: {}, listeners: {}, addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }, remove() { this.removed = true; } }),
       head: { appendChild(script) { scripts.push(script); } },
     },
     addEventListener() {}, removeEventListener() {},

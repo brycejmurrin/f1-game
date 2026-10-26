@@ -1320,6 +1320,9 @@ const LAZY_WORKER = [
 // where the main-thread build stamps the real ones).
 const TRACK_WORKER_EXTRA = [
   "js/render/shared/assets.js",
+  "js/render/shared/frustum.js",
+  "js/render/shared/chunk-bins.js",
+  "js/render/three/tlx-chunked.js",
 ];
 
 // controller.html (the PHONE AS CONTROLLER page, a root page like bench.html)

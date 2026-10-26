@@ -218,3 +218,92 @@ test("--scale keeps a kit's relative sizes: a uniform metres-per-unit factor whe
     assert.ok(Math.abs(hb - 12) < 1e-3, `--height wins over --scale: ${hb}`);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
+
+test("import-models reads each palette once per file without changing factors or traversal order", async () => {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const tmp = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-imp-cache-"));
+  const src = path.join(tmp, "pack"), out = path.join(tmp, "out");
+  fs.mkdirSync(src); fs.mkdirSync(out);
+  try {
+    buildFixture(src);
+    const original = JSON.parse(fs.readFileSync(path.join(src, "building.gltf"), "utf8"));
+    const [a, b] = original.meshes[0].primitives;
+    original.meshes[0].primitives = [{ ...b, material: 1 }, a, { ...b, material: 1 },
+      { ...a, material: 2 }, { ...b, material: 3 }];
+    original.nodes.push({ mesh: 0, translation: [6, 0, 0] });
+    original.scenes[0].nodes.push(1);
+    original.materials.push(
+      { pbrMetallicRoughness: { baseColorFactor: [0.5, 0.25, 1, 1], baseColorTexture: { index: 0 } } },
+      { pbrMetallicRoughness: { baseColorFactor: [0.2, 0.4, 0.6, 1], baseColorTexture: { index: 1 } } },
+      { pbrMetallicRoughness: { baseColorFactor: [0.7, 0.3, 0.1, 1], baseColorTexture: { index: 1 } } });
+    original.textures.push({ source: 1 });
+    original.images.push({ uri: "textures/missing.png" });
+    // Nonsequential source indices pin the importer's first-use remap order.
+    const binFile = path.join(src, "model.bin"), bin = fs.readFileSync(binFile);
+    [5, 3, 4].forEach((index, i) => bin.writeUInt16LE(index, bin.length - 6 + i * 2));
+    fs.writeFileSync(binFile, bin);
+    const second = structuredClone(original);
+    second.materials[0].pbrMetallicRoughness.baseColorFactor = [0.25, 0.5, 0.75, 1];
+    second.materials[1].pbrMetallicRoughness.baseColorFactor = [1, 1, 1, 1];
+    const inputs = { building: original, second };
+    for (const [name, json] of Object.entries(inputs))
+      fs.writeFileSync(path.join(src, `${name}.gltf`), JSON.stringify(json));
+
+    // Count real CLI I/O and inflate work, without replacing the importer or
+    // decoder. Two files sharing a URI must each own one decode, even when
+    // multiple materials and nodes reference it. Failed images are memoized.
+    const counterFile = path.join(tmp, "counts.json"), preload = path.join(tmp, "count.cjs");
+    fs.writeFileSync(preload, `const fs = require("node:fs"), zlib = require("node:zlib");
+const counts = { reads: {}, inflates: 0 }, read = fs.readFileSync, inflate = zlib.inflateSync;
+fs.readFileSync = function(file, ...args) {
+  if (String(file).endsWith(".png")) counts.reads[String(file)] = (counts.reads[String(file)] || 0) + 1;
+  return read.call(this, file, ...args);
+};
+zlib.inflateSync = function(...args) { counts.inflates++; return inflate.apply(this, args); };
+process.on("exit", () => fs.writeFileSync(${JSON.stringify(counterFile)}, JSON.stringify(counts)));
+`);
+    const envRecord = { source: "procedural:keep", licence: "CC0", author: "Fixture", sky: [1, 1, 1] };
+    fs.writeFileSync(path.join(out, "manifest.json"), JSON.stringify({ version: 1, materials: null,
+      models: {}, env: { fixture: envRecord }, credits: [] }));
+    const r = cp.spawnSync(process.execPath, ["--require", preload,
+      path.join(ROOT, "tools", "gen", "import-models.mjs"), src, "--mat", "BRICK", "--scale", "1",
+      "--source", "fixture:palette", "--author", "Fixture Author"],
+      { env: { ...process.env, APEX_PACK_DIR: out }, encoding: "utf8", timeout: 10000 });
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+    const counts = JSON.parse(fs.readFileSync(counterFile, "utf8"));
+    assert.deepEqual(counts, { reads: { [path.join(src, "textures", "palette.png")]: 2,
+      [path.join(src, "textures", "missing.png")]: 2 }, inflates: 2 });
+
+    const { writeAX26 } = await import("../../tools/gen/assets.mjs");
+    const man = JSON.parse(fs.readFileSync(path.join(out, "manifest.json"), "utf8"));
+    assert.deepEqual(man.env, { fixture: envRecord });
+    for (const [name, json] of Object.entries(inputs)) {
+      const mesh = { pos: [], nrm: [], col: [], idx: [] };
+      const positions = [[0, 0, 0], [2, 0, 0], [0, 4, 0], [3, 0, 0], [5, 0, 0], [3, 4, 0]];
+      for (const translation of [0, 6]) for (const [primitive, pi] of json.meshes[0].primitives.entries()) {
+        const factor = json.materials[pi.material].pbrMetallicRoughness.baseColorFactor;
+        const textured = pi.material < 2, green = primitive % 2 === 0;
+        for (const index of (green ? [5, 3, 4] : [0, 1, 2])) {
+          const p = positions[index];
+          mesh.pos.push(p[0] + translation - 5.5, p[1], p[2]);
+          mesh.nrm.push(0, 0, 1);
+          const rgb = green ? [40, 200, 60] : [200, 40, 40];
+          mesh.col.push(...factor.slice(0, 3).map((c, i) => textured ? c * rgb[i] / 255 : c));
+          mesh.idx.push(mesh.idx.length);
+        }
+      }
+      const rec = man.models[name], file = path.join(out, rec.file);
+      assert.deepEqual(fs.readFileSync(file), writeAX26(mesh, "BRICK"),
+        `${name}: cache must preserve complete packed geometry, normals, colours, MAT ids and first-use indices`);
+      const geo = await readAX26(file);
+      assert.ok(geo, "the production reader accepts the cached import");
+      assert.deepEqual([...geo.idx], mesh.idx);
+      assert.deepEqual([...geo.mat], new Array(30).fill(2));
+      assert.equal(rec.licence, "CC0");
+      assert.equal(rec.source, "fixture:palette");
+      assert.equal(rec.author, "Fixture Author");
+      assert.deepEqual(rec.sizeM, [11, 4, 0]);
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(src, `${name}.gltf`), "utf8")), json);
+    }
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});

@@ -107,6 +107,9 @@ const UiExperience = (function () {
     };
   }
 
+  // Keep the boolean photoSubject API; cancellation belongs to its request,
+  // so a stale completion cannot be mistaken for an owned preparation failure.
+  const cancelledPhotoSwaps = new WeakSet();
   function openPhoto(G, deps) {
     let source = deps.source;
     if (source === "home" && deps.trackHome) {
@@ -136,7 +139,12 @@ const UiExperience = (function () {
     const fromHome = source === "home" || source === "home-track";
     const subject = fromHome && deps.photoSubject && deps.reopen ? (mode) => {
       deps.photoStudio.close(false); unhide();
-      return Promise.resolve(deps.photoSubject(mode)).then((ok) => { if (!ok) deps.photoSubject(null); return deps.reopen(); });
+      const request = deps.photoSubject(mode);
+      return Promise.resolve(request).then((ok) => {
+        if (cancelledPhotoSwaps.has(request) || (G.state && G.state !== "menu")) return false;
+        if (!ok) deps.photoSubject(null);
+        return deps.reopen();
+      });
     } : null;
     const opened = deps.photoStudio.open({ source, metadata: { title, subtitle }, back: restore, subject,
       view: source === "home-track" && deps.photoView ? deps.photoView() : null });
@@ -544,17 +552,34 @@ const UiExperience = (function () {
       photoScene = want; photoSwitching = !!want; signature = "";
       delete overlay.dataset.homeReady; stamp();
       if (!want) return Promise.resolve(true);
-      return new Promise((resolve) => {
+      const page = typeof SettingsNav !== "undefined" ? SettingsNav.current() : null;
+      const request = new Promise((resolve) => {
+        let top = null;
         const t0 = Date.now();
-        const done = (ok) => { if (gen === photoSwitch) photoSwitching = false; resolve(ok); };
+        const done = (ok, cancelled = false) => {
+          if (cancelled) cancelledPhotoSwaps.add(request);
+          if (gen === photoSwitch) {
+            photoSwitching = false;
+            if (!ok) { photoScene = null; signature = ""; stamp(); }
+          }
+          resolve(ok);
+        };
         const tick = () => {
-          if (gen !== photoSwitch || photoScene !== want || G.state !== "menu") { done(false); return; }
+          if (gen !== photoSwitch || photoScene !== want || G.state !== "menu" || overlay.hidden
+              || (typeof UiLayers !== "undefined" && UiLayers.top() !== top)
+              || (typeof SettingsNav !== "undefined" && SettingsNav.current() !== page)) { done(false, true); return; }
           if (overlay.dataset.homeReady === "1" && (want !== "track" || deps.trackReady())) { done(true); return; }
           if (Date.now() - t0 > 20000) { done(false); return; }
           setTimeout(tick, 100);
         };
-        tick();
+        // PhotoStudio just hid its dialog. Let TopModal's mutation mirror
+        // close the native modal before recording the caller's visible layer.
+        Promise.resolve().then(() => {
+          top = typeof UiLayers !== "undefined" ? UiLayers.top() : null;
+          tick();
+        });
       });
+      return request;
     }
     function photoView() {
       const s = scene();

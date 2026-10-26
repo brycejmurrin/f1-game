@@ -29,14 +29,46 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { seedStoreGlobal } from "../helpers/seed-store.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
 seedStoreGlobal();   // perf.js persists the sentinel through GameStore.store's raw lane
 const SRC = fs.readFileSync(path.join(ROOT, "js/perf/governor.js"), "utf8");
+
+test("software GL UI readback deferral preserves the Document receiver", async (t) => {
+  function readbackDeferred(visible, softwareGL = true) {
+    const document = {
+      getElementById(id) {
+        assert.equal(this, document, "native Document methods require their receiver");
+        return { hidden: id !== visible };
+      },
+    };
+    const context = vm.createContext({
+      document,
+      Log: { info() {} },
+      GameStore: { store: { raw: () => null } },
+    });
+    const governor = vm.runInContext(SRC + ";PerfGov", context, { filename: absSrc("js/perf/governor.js") });
+    governor.init({ backendState: () => ({ softwareGL }) });
+    return governor.softwareGlUiReadbackDefer();
+  }
+  for (const cover of ["loading", "carsetup", "race-settings"]) {
+    await t.test(cover + " defers readback on software GL", () => {
+      assert.equal(readbackDeferred(cover), true);
+    });
+    await t.test(cover + " does not defer readback on hardware GL", () => {
+      assert.equal(readbackDeferred(cover, false), false);
+    });
+  }
+  await t.test("hidden covers do not defer readback", () => {
+    assert.equal(readbackDeferred(null), false);
+  });
+});
 
 // A fake renderer mirroring GLX.setRenderScale (js/render/glx/glx.js) EXACTLY,
 // dead zone and all.

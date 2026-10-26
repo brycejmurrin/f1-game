@@ -47,6 +47,9 @@ const packerSrc = [
   grab(/  const _fb = new Float32Array\(1\)[\s\S]*?\n  \}/, "_toHalf"),
   grab(/  let _zeroBuf = new Float32Array\(0\);[\s\S]*?\n  \}/, "_zeros"),
   grab(/  function packAttr\(THREE, src, len, itemSize, kind(?:, fmt24)?\) \{[\s\S]*?\n  \}/, "packAttr"),
+  ...["packAttrSteps", "f32Steps", "pad4Steps", "widen4Steps", "halfAttrSteps"].map(name =>
+    grab(new RegExp("  function\\* " + name + "\\([^]*?\\n  \\}"), name)),
+  grab(/  function _fromHalf\(h\) \{[\s\S]*?\n  \}/, "_fromHalf"),
   grab(/  function packIndex\(THREE, idx, vCount\) \{[\s\S]*?\n  \}/, "packIndex"),
 ].join("\n");
 const packStats = { on: true, small: 0, wide: 0, zero: 0, savedMB: 0, half: 0,
@@ -58,9 +61,9 @@ class Float16BufferAttribute extends BufferAttribute {
   constructor(array, itemSize) { super(new Uint16Array(array), itemSize); this.isFloat16BufferAttribute = true; }
 }
 const THREE = { BufferAttribute, Float16BufferAttribute };
-const packOn = true;
+const packOn = true, pad4On = true;
 const sbx = { Float32Array, Uint16Array, Uint8Array, Int16Array, Uint32Array, Math, Infinity,
-              packStats, packOn, THREE, module: {}, console };
+              packStats, packOn, pad4On, THREE, module: {}, console };
 vm.createContext(sbx);
 vm.runInContext(packerSrc + "\n; this.packAttr = packAttr; this.packIndex = packIndex;", sbx);
 const packAttr = sbx.packAttr, packIndex = sbx.packIndex;
