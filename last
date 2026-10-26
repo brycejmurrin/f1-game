@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-9e613b62-bd64-5547-b89b-227ffab1538d LIVE D·W33a on cursor/dsq-finisher-3287-538d [PR #3829]
+INFO to:D from:D #3810 head b3bf27273 contains tip 7dd2e82f; run-ci on; real CI #40362759892 draft/fast running; waiting green → ready-gate → READY. MERGE-HOLD. D·W32a [idem:w32a-ci-waiting-3810]
