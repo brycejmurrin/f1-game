@@ -31,7 +31,8 @@ the acting session.
   not moved for ~90 min, or it passed its caps. Ask once, then interrupt and
   relaunch with NEW evidence or a narrower OWNED, never the same prompt.
 - **Bus routine (Bryce 2026-10-22: "set routine to check the bus every few mins").**
-  From the `ORCH <letter> LIVE` line until no fleet work is live, keep two timers:
+  From the `ORCH <letter> LIVE` line until no fleet work is live, keep two timers,
+  armed as your first acts (orchestrator.md §First acts):
   1. a TICK every ~3 min: one `send_later` at a time whose message runs the wake
      pass (ReadNotifications, `fleet-bus.mjs read --to <letter>`, `pr-board.mjs`,
      READY → `merge-gate.mjs`) and re-arms itself; report changes only;

@@ -163,7 +163,10 @@ test("JUMP IN with the positions loaded drops each car exactly where its trace s
     const traces = { frame: "track", cars: { 63: line(-14, 50, 0.5, -5, 400), 16: line(-22, 48, -1.5, -5, 400) } };
     RR.launch(script, { seat: "HAM", traces, startLap: 3 });
     await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
-    g.step(2);   // the countdown frame: a ROLLING start — the field is dropped in and the race is green at once
+    // Observe the director's placement before the AI starts moving toward its
+    // racing line. A different recorded timestamp can put it on a corner where
+    // even the first driven frames legitimately change its lateral position.
+    G.realRace.update(0); G.realRace.update(0);
     const st = RR.status();
     assert.equal(st.watch, false); assert.equal(st.placed, true);
     assert.equal(G.state, "race", "green at once");
@@ -172,7 +175,7 @@ test("JUMP IN with the positions loaded drops each car exactly where its trace s
     const want = -14 + 50 * t0;
     assert.ok(Math.abs(by("RUS").prog - want) < 60, "Russell at his trace's progress (a frame on): " + by("RUS").prog + " vs " + want);
     assert.equal(by("RUS").lap, Math.floor(want / G.track.total) + 1);
-    assert.ok(Math.abs(by("RUS").x - 0.5) < 0.1 && Math.abs(by("LEC").x + 1.5) < 0.1, "on their real lines (a driven frame on): " + by("RUS").x + " " + by("LEC").x);
+    assert.ok(Math.abs(by("RUS").x - 0.5) < 0.1 && Math.abs(by("LEC").x + 1.5) < 0.1, "placed on their recorded lines: " + by("RUS").x + " " + by("LEC").x);
     assert.equal(G.cars.filter((c) => c.human).length, 0, "nobody is human yet: the seat car is driven for the player");
     assert.equal(G.player.local, true, "but the camera and HUD are on it");
     assert.ok(G.player.speed > 0.3 * 80, "at speed: " + G.player.speed);
@@ -181,6 +184,31 @@ test("JUMP IN with the positions loaded drops each car exactly where its trace s
     assert.equal(G.player.human, true, "the wheel is the player's after the hand-over");
     assert.equal(G.cars.filter((c) => c.human).length, 1);
     assert.ok(G.track.total > total - 10 && G.track.total < total + 10);
+  } finally { g.close(); }
+});
+
+test("JUMP IN samples published trace time when a timing gap separates it from the pace clock", async () => {
+  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
+  try {
+    const { G } = g, RR = vm.runInContext("RealRace", g.ctx);
+    const { script } = scriptIn(g);
+    // A restart/timing gap moves the absolute feed clock, without changing the
+    // lap durations used to calibrate the simulated field's pace.
+    for (const d of script.drivers) d.lapStart = d.lapStart.map((t, i) => t != null && i >= 2 ? t + 45 : t);
+    const at = RR.fieldAt(script, 3);
+    const published = Math.min(...script.drivers.map(d => d.lapStart[2]).filter(Number.isFinite));
+    assert.ok(published - at.t0 > 40, "the fixture exercises different position and pace clocks");
+    const traces = { frame: "track", cars: { 63: line(-14, 50, 0.5, -5, 400) } };
+    RR.launch(script, { seat: "HAM", traces, startLap: 3 });
+    await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
+    g.step(2);
+    const car = G.cars.find((c) => c.code === "RUS");
+    const want = -14 + 50 * published, old = -14 + 50 * at.t0;
+    assert.ok(Math.abs(car.prog - want) < 60, "the car is at the published instant: " + car.prog + " vs " + want);
+    assert.ok(Math.abs(car.prog - old) > 1900, "the synthetic clock would drop the car over two kilometres early");
+    assert.equal(car.lap, Math.floor(want / G.track.total) + 1);
+    assert.ok(Math.abs(G.raceT - RR.status().K * at.t0) < 0.1,
+      "the simulated race clock retains its existing pace calibration");
   } finally { g.close(); }
 });
 

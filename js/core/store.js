@@ -448,6 +448,13 @@ const GameStore = (function () {
     _mirrorTimer = setTimeout(mirrorFlush, MIRROR_FLUSH_MS);
   }
 
+  // True when this burst itself must know every authored row (the cap is a
+  // total). A career/season-only burst does not: it reads just its own keys.
+  function mirrorBatchAuthored(batch) {
+    for (const k of batch.keys()) if (AUTHORED_KEY.test(k)) return true;
+    return false;
+  }
+
   // One readwrite transaction per burst. Resolves on `oncomplete`, not on the
   // requests' success: a quota failure surfaces when the transaction commits.
   function mirrorFlush(retryOnFailure = true) {
@@ -481,11 +488,10 @@ const GameStore = (function () {
       try { t = db.transaction(MIRROR_STORE, "readwrite"); } catch (e) { res(false); return; }
       const os = t.objectStore(MIRROR_STORE), committed = new Map();
       let authoredTotals = null;
-      const all = os.getAll();
-      all.onsuccess = () => {
-        const rows = new Map((all.result || []).map((r) => [r.k, r]));
-        let bytes = 0, keys = 0;
-        for (const [k, row] of rows) if (AUTHORED_KEY.test(k)) { bytes += authoredBytes(k, row.v, row.baseline); keys++; }
+      // `scan` is the full-store authored total. Null means this burst has no
+      // authored key, so the counters stay at the last restore or authored flush.
+      const applyBatch = (rows, scan) => {
+        let bytes = scan ? scan.bytes : 0, keys = scan ? scan.keys : 0;
         for (const [k, e] of batch) {
           if (e.epoch !== mirrorEpoch(k)) continue;
           const prev = rows.get(k), authored = AUTHORED_KEY.test(k);
@@ -522,8 +528,28 @@ const GameStore = (function () {
           else { const row = { k, v: e.v, lsOk: e.lsOk, baseline: e.lsOk ? null : e.disk }; os.put(row); rows.set(k, row); }
           committed.set(k, e.v);
         }
-        authoredTotals = { bytes, keys };
+        if (scan) authoredTotals = { bytes, keys };
       };
+      if (mirrorBatchAuthored(batch)) {
+        const all = os.getAll();
+        all.onsuccess = () => {
+          const rows = new Map((all.result || []).map((r) => [r.k, r]));
+          let bytes = 0, keys = 0;
+          for (const [k, row] of rows) if (AUTHORED_KEY.test(k)) { bytes += authoredBytes(k, row.v, row.baseline); keys++; }
+          applyBatch(rows, { bytes, keys });
+        };
+      } else {
+        const rows = new Map();
+        let left = batch.size;
+        for (const k of batch.keys()) {
+          let req;
+          try { req = os.get(k); } catch (e) { res(false); return; }
+          req.onsuccess = () => {
+            if (req.result) rows.set(k, req.result);
+            if (--left === 0) applyBatch(rows, null);
+          };
+        }
+      }
       t.oncomplete = () => {
         if (authoredTotals) { mirror.authoredBytes = authoredTotals.bytes; mirror.authoredKeys = authoredTotals.keys; }
         for (const [k, v] of committed) { if (v === null) _mirrorSeen.delete(k); else _mirrorSeen.set(k, v); }

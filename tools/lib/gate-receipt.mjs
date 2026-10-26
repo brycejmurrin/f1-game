@@ -83,3 +83,26 @@ export function receiptVerdict(receipt, { kind, pr, head = "", now = Date.now(),
   }
   return { ok: true, why: "" };
 }
+
+/** How long a READY message may trail its ready-gate run (a worker sends READY right after the gate). */
+export const READY_CLAIM_MAX_MIN = 60;
+
+/**
+ * May a READY message for `pr` go out? (Transcript Auditor batch 9, 2026-10-24: `ready-gate.mjs | tee` printed
+ * exit 0 while the Plan was open, and a READY went out on a refused gate.) The sender's checkout must hold an `ok`
+ * ready receipt for the PR at most READY_CLAIM_MAX_MIN old, and any sha the text names must be the gated head.
+ * `pr` falls back to the first `#<n>` in `text`. Returns { ok, why, pr }.
+ */
+export function readyClaimVerdict(root, { pr = null, text = "", now = Date.now() } = {}) {
+  const n = Number(pr) || Number((/#(\d+)\b/.exec(String(text)) || [])[1]) || 0;
+  if (!n) return { ok: false, pr: 0, why: "a READY names its PR (`--pr <n>` or `#<n>` in the text) so its ready-gate receipt can be checked" };
+  const receipt = readReceipt(root, "ready", n) || (() => { const m = mainCheckout(root); return m ? readReceipt(m, "ready", n) : null; })();
+  const v = receiptVerdict(receipt, { kind: "ready", pr: n, now, maxAgeMin: READY_CLAIM_MAX_MIN });
+  if (!v.ok) return { ok: false, pr: n, why: v.why };
+  const gated = hex(receipt.head);
+  const shas = String(text).match(/\b[0-9a-f]{7,40}\b/gi) || [];
+  if (gated && shas.length && !shas.some((s) => gated.startsWith(hex(s)) || hex(s).startsWith(gated))) {
+    return { ok: false, pr: n, why: `the READY names ${shas.join(" ")}, but ready-gate passed on ${gated.slice(0, 12)}; re-run ready-gate on the head you report` };
+  }
+  return { ok: true, pr: n, why: "" };
+}

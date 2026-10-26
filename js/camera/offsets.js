@@ -126,6 +126,8 @@ let _tracks = {};
 let _cars = {};
 let _context = { track: null, car: null };
 let _readContext = null;
+let _ctxRev = -1, _ctxList = null;   // refreshStoredContext's memo (store.rev, Teams.LIST)
+let _storedContext = { track: null, car: null };
 
 function sanitizeProf(src, keepDefaults = false) {
   const prof = {};
@@ -191,6 +193,7 @@ function persist(which) {
 }
 
 function setContext(trackId, carId) {
+  _ctxRev = -1;   // the next scopeKey re-reads storage over this, as before
   _context = {
     track: typeof trackId === "string" && trackId ? trackId : null,
     car: typeof carId === "string" && carId ? carId : null,
@@ -200,15 +203,27 @@ function setContext(trackId, carId) {
 // The live world can advance without changing the saved menu selections (career,
 // championship and WATCH). Resolve it at use time so a closed tuner follows cuts.
 function bindContext(read) { _readContext = typeof read === "function" ? read : null; }
+// Stored trackId/team only move on a Store write, and store.rev bumps on every one (set, clear, import, another
+// tab): re-read them per revision, not per call. Each scopeKey (a dozen a rendered frame from the rig's knob reads)
+// was two Store.get, each building an "apex26." key string (CPU-HUNT-2026-10-24 C6).
+function refreshStoredContext() {
+  const rev = store.rev, list = typeof Teams !== "undefined" ? Teams.LIST : null;   // a roster swap re-reads too
+  if (typeof rev === "number") { if (rev === _ctxRev && list === _ctxList) return; _ctxRev = rev; _ctxList = list; }
+  const trackId = store.get("trackId", null);
+  _storedContext.track = typeof trackId === "string" && trackId ? trackId : null;
+  const team = store.get("team", 2);
+  _storedContext.car = Number.isInteger(team) && list && list[team] ? list[team].id : null;
+}
 function context() {
   const live = (_readContext ? _readContext() : _context) || {};
-  const track = typeof live.track === "string" && live.track ? live.track : store.get("trackId", null);
+  let track = typeof live.track === "string" && live.track ? live.track : null;
   let car = typeof live.car === "string" && live.car ? live.car : null;
-  if (!car) {
-    const team = store.get("team", 2);
-    if (Number.isInteger(team) && typeof Teams !== "undefined" && Teams.LIST && Teams.LIST[team]) car = Teams.LIST[team].id;
+  if (!track || !car) {
+    refreshStoredContext();
+    if (!track) track = _storedContext.track;
+    if (!car) car = _storedContext.car;
   }
-  return { track: typeof track === "string" && track ? track : null, car };
+  return { track, car };
 }
 function scopeMap(scope) { return scope === "track" ? _tracks : scope === "car" ? _cars : null; }
 function scopeKey(scope) {

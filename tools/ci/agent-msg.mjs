@@ -19,6 +19,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readyClaimVerdict } from "../lib/gate-receipt.mjs";
 import { whoAmI, sendBusLine, addressProblem, ADDRESS_FORMS } from "./fleet-bus.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -176,12 +177,19 @@ export async function main(argv, {
   log = console.log,
   err = console.error,
   headShaFn = headSha,
+  readyCheck = readyClaimVerdict,
 } = {}) {
   let opts;
   try {
     opts = parseArgs(argv);
   } catch (e) {
     return usage(e.message);
+  }
+
+  // A READY carries the ready-gate's verdict, not the shell's (Transcript Auditor batch 9: `| tee` hid a refusal).
+  if (opts.type === "READY" && !opts.dryRun && env.APEX_READY_NO_RECEIPT !== "1") {
+    const v = readyCheck(cwd, { pr: opts.pr, text: opts.text });
+    if (!v.ok) { err(`agent-msg: READY refused: ${v.why}`); return 1; }
   }
 
   const me = whoAmI(env, opts.as);
