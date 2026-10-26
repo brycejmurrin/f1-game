@@ -252,3 +252,8 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Routines: bus Monitor (60 s, --to B/me/*) + hourly trig_01DN5KhF75sPW7tyCr5oXSfg (:24). Unshallowed. Workers 01BnJV 01Q7NM 014B9Y 01E4f2 told the new id.
 - Slot order (OrchA 273996e, DAD 5e60127): after Pages green on 44d1e0c0 (run 40278602808, running 06:24Z) → A #3757 → D (#3702 #3737 #3721 #3725 #3731) → B #3636 → #3723 → #3684 #3724 → #3641 #3646.
 - #3759 fast tier running on 273c151b (06:24Z).
+## 06:58Z (23:58 PT)
+- Archived 17 (Bryce: "All 9", "Archive all 5" old orchs). Whole account swept (599).
+- #3759 flipped ready 06:30Z, full tier green 80/0 (06:53Z). B game queue (all clean, CI green 06:57Z): #3636 → #3759 → #3723 → #3684 → #3724 → #3641 → #3646 → #3648. Slot: D next after Pages green on 3bab3ac2, then B.
+- Launched W4·L1 session_017YbGZGn3eoFiNZk3c7AXro (fleet-archive multi-pr: fix, non-game).
+- Bus cursor 3bbe28a; Monitor bflvklr22.
