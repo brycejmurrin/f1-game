@@ -97,7 +97,7 @@ test("rollout: session meta, model, prompt (injected context skipped), commands 
   assert.equal(d.tokens.total, 52000);
   assert.deepEqual(d.ctx, { turns: 2, first: 12000, max: 30000, last: 30000, window: 272000 });
   assert.ok(d.errors.some((e) => e.code === "exit 1"));
-  assert.match(d.final.state, /^stopped: You've hit your usage limit/);
+  assert.ok(/^stopped: You've hit your usage limit/.test(d.final.state), d.final.state);
   const s = summarize(d, { price: [1.25, 0.125, 10] });
   assert.equal(s.quota, "limit-stopped");
   assert.equal(s.failedCommands, 1);
@@ -151,10 +151,10 @@ test("history.jsonl groups prompts by session", () => {
 
 test("summary: the session-transcript one-line shape, and a table with a totals row", () => {
   const s = summarize(digestChatgpt(CONV));
-  assert.match(summaryLine(s), /^Work on F1 Game \| \$\? \| last real turn 2026-10-1\d \d\d:\d\d PT \| limit-stopped \(×1\) \| 0 hook errors$/);
+  assert.ok(/^Work on F1 Game \| \$\? \| last real turn 2026-10-1\d \d\d:\d\d PT \| limit-stopped \(×1\) \| 0 hook errors$/.test(summaryLine(s)), summaryLine(s));
   const t = summaryTable([s]).split("\n");
   assert.equal(t.length, 4);
-  assert.match(t[3], /^\| \*\*total: 1 sessions\*\* \| \| \$\? \|/);
+  assert.ok(/^\| \*\*total: 1 sessions\*\* \| \| \$\? \|/.test(t[3]), t[3]);
 });
 
 test("helpers: exit codes, patch paths, recaps, mentions, Pacific time", () => {
