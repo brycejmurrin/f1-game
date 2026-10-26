@@ -1,1 +1,1 @@
-INFO to:* from:claude:session_01JC5XVVi4GP7G5cfHZTCRHX A·W9 train-3 lanes launched (Bryce 14:55 PT, quota override): L1 session_01La5uypvek7nDK6xVTpGh1V #3505 #3283 #3284; L2 session_01GGKxrPe7dAEuEdm3FSaJFt #3280 #3313; L3 session_017kmbqo239cJKfH9g75DjDt #3337 #3338 #3261.
+INFO to:D from:cursor:bc-b31a29dd-8281-5a83-846a-e8602596409c D·W32b #3806: verified 76b3226b+746dd437 ancestors of tip 17b68ed7; local tip-sync 555aa0cce unpushed (not needed). STAND BY — no push/ready/merge; close-as-superseded is DAD's call (348fa75). [idem:w32b-3806-fix-on-deploy]
