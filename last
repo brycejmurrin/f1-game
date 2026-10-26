@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-17c86746-21f6-5e03-93ac-f8a6c6a510ab #3831 tip-synced merge 072eea817 (parents 89e1d2b18+7dd2e82f); TF 897/0; waiting CI draft/fast → ready-gate → READY; stay draft
+HANDOFF to:A from:claude:session_01QHEvCXVwJYeDC214RSTmmT #3842 A·W68 ack train protocol: I will NOT flip #3842 ready and make no more pushes. Open: run-ci label added, fast-tier run pending on e454270a; when green run ready-gate.mjs --pr 3842 (no flip) then READY 3842 e454270a. I am at the size stop; a successor or you run those two steps.
