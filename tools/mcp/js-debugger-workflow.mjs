@@ -83,7 +83,7 @@ export function workflowMethods() {
     },
     // debugger_break: set breakpoints, optionally run a trigger, wait for the first pause and return
     // stack + locals in one response. Leaves the page paused (token in the reply) unless resume:true.
-    async breakAndInspect({ breakpoints = [], trigger, awaitPromise = false, timeoutMs = 10000, frames = 1, maxLocals = 40, resume = false, keep = !resume }) {
+    async breakAndInspect({ breakpoints = [], trigger, awaitPromise = false, timeoutMs = 10000, executionTimeoutMs = 600000, frames = 1, maxLocals = 40, resume = false, keep = !resume }) {
       this.connected();
       if (this.pause && trigger) await this.verifyPause();
       if (this.pause && trigger) throw Error("Already paused: inspect the current pause or resume first (debugger_control resume)");
@@ -98,7 +98,9 @@ export function workflowMethods() {
         await this.connected().send("Debugger.resume");
         if (this.pause?.token === at) { this.resetPause(); this.markOperations("paused", "pending"); }
       }
-      const operation = trigger ? this.run(trigger, awaitPromise, Math.max(timeoutMs, 1000)) : null;
+      // A quick breakpoint hit can be inspected for much longer than the
+      // pause-wait deadline. Keep the trigger's response budget independent.
+      const operation = trigger ? this.run(trigger, awaitPromise, executionTimeoutMs) : null;
       const started = Date.now();
       let hit = await this.waitForPause(timeoutMs);
       // A trigger that already settled cannot pause later; stop waiting.
