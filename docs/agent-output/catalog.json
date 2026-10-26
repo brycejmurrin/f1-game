@@ -52,6 +52,26 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/assets/gltf-check.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/assets/procedural-room.example.json",
+      "classification": "data"
+    },
+    {
+      "path": "tools/assets/procedural-room.py",
+      "classification": "entrypoint-candidate",
+      "interpreter": "python3",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/car/audit-aero.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1514,10 +1534,23 @@
       ]
     },
     {
+      "path": "tools/env/chat-mcp-service.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/env/cloud-agent-install.sh",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
       "interpreter": "bash"
+    },
+    {
+      "path": "tools/env/configure-chat-mcp.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
     },
     {
       "path": "tools/env/ensure-mcp-ready.sh",
@@ -2510,6 +2543,16 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
       "interpreter": "python3"
+    },
+    {
+      "path": "tools/mcp/chat-gateway.mjs",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
+    },
+    {
+      "path": "tools/mcp/check-chat-contract.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node"
     },
     {
       "path": "tools/mcp/chrome-devtools-mcp.sh",
@@ -3610,6 +3653,10 @@
       ]
     },
     {
+      "path": "tools/ui/design-evidence.mjs",
+      "classification": "ambiguous"
+    },
+    {
       "path": "tools/ui/explorer.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -3724,6 +3771,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/ui/review-captures.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ui/ui-scale-axis.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -3821,7 +3873,7 @@
     },
     {
       "name": "test:agent-contract",
-      "command": "node --test --test-timeout=900000 tests/unit/agentview-api-contract.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/agentview-api-contract.test.mjs tests/unit/free-design-tools.test.mjs"
     },
     {
       "name": "test:agent-output",

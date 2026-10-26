@@ -1,0 +1,16 @@
+{
+  "schema": "apex.procedural-room.v1",
+  "provider": "procedural-local",
+  "paidCredits": 0,
+  "boundsMeters": [12, 4, 10],
+  "productionCamera": {"position": [8, 6, 8], "target": [0, 1, 0]},
+  "openings": [{"id": "arrival", "wall": "south", "kind": "door", "widthMeters": 3.2, "heightMeters": 3.4, "centerX": 0, "depthMeters": 2, "destination": "Pit apron"}],
+  "props": [
+    {"id": "hero-reserve", "dimensionsMeters": [3.2, 0.02, 6.5], "position": [0, 0.01, 0], "function": "Floor footprint reserved for the existing game car; not a replacement car", "source": "Authored procedural footprint"},
+    {"id": "cabinet-west", "dimensionsMeters": [0.8, 1.2, 2.2], "position": [-5, 0.6, -2], "function": "Storage draft", "source": "Authored procedural box"},
+    {"id": "cabinet-east", "dimensionsMeters": [0.8, 1.2, 2.2], "position": [5, 0.6, -2], "function": "Storage draft", "source": "Authored procedural box"},
+    {"id": "fixture-west", "dimensionsMeters": [0.3, 0.1, 6], "position": [-3, 3.95, 0], "layer": "reflected-ceiling", "function": "Ceiling-mounted light housing draft", "source": "Authored procedural box"},
+    {"id": "fixture-east", "dimensionsMeters": [0.3, 0.1, 6], "position": [3, 3.95, 0], "layer": "reflected-ceiling", "function": "Ceiling-mounted light housing draft", "source": "Authored procedural box"}
+  ],
+  "reviews": {"function": {"status": "pending"}, "form": {"status": "pending"}, "runtime": {"status": "pending"}}
+}

@@ -2570,6 +2570,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c4"
+    },
+    "tools/mcp/chat-gateway.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Exact JSON-RPC stdio, upstream schemas, tool results, browser ownership and explicit release; never pass through terminal-output summarization."
     }
   }
 }

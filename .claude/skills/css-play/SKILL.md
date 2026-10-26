@@ -81,3 +81,11 @@ Live MCP session (already on localhost): `browser_resize` →
   [references/restructure.md](references/restructure.md); the 15 checkable
   rules (screens/layers, CSS variation, DOM size, anti-methodology) in
   [references/restructure-screens-css-rules.md](references/restructure-screens-css-rules.md).
+
+## Evidence handoff
+
+Use `--tokens` for computed design-token/control evidence. Build offline screenshot
+reviews from the emitted `review.json` with `tools/ui/review-captures.mjs`.
+See [free design tooling](../../../docs/DESIGN-TOOLS.md) for bounded manifests and
+comparison controls. Accessibility scanning and interpretation stay with
+**ui-menu-a11y**; existing browser ownership rules apply.

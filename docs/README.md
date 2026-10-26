@@ -28,6 +28,8 @@ drives it.
 → [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) → [ARCHITECTURE.md](ARCHITECTURE.md) → [PHYSICS.md](PHYSICS.md) or
 [CAREER.md](CAREER.md) → [TESTING.md](TESTING.md) §1.
 
+[Free design tooling](DESIGN-TOOLS.md): private MCP recovery, token/accessibility evidence, screenshot reviews, and procedural room/glTF checks.
+
 Local screenshot galleries: [builder and viewer workflow](notes/LOCAL-SURVEY-GALLERY.md).
 Car capture matrices and portable site exports: [capture review](CAPTURE-REVIEW.md).
 

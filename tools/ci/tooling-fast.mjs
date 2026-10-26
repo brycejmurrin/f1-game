@@ -576,6 +576,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a picture. Hand-built worlds, no game VM, ~0.1 s.
   "tests/unit/frame-math.test.mjs",
   "tests/unit/free-cam.test.mjs",
+  "tests/unit/free-design-tools.test.mjs",
   // ...and the front-wing endplate decal, whose plate moves with every aero
   // recipe: measured against the real built car, not against literals.
   "tests/unit/front-wing-decal.test.mjs",
