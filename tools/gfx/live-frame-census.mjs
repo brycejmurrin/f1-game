@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // live-frame-census.mjs — race frame time and stutter at the PHONE shape, on a real GPU (gpu-census leg `live-frame`).
 // @doc Phone-shaped driven race per backend x track: frame/JS percentiles, GC, slow GL/WebGPU calls, mid-race pipelines.
-// @skill perf-memory-census
+// @skill mcp-probe
 //
 // One fresh browser per row (backend x track): 844x390 css x 1.5 (the mobile DPR cap) with touch, GRAPHICS
 // MEDIUM (the phone default), WITHOUT apex26.forceMobileTier (it loses the WebGPU device on the paravirtual

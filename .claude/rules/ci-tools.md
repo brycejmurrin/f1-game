@@ -6,9 +6,8 @@ paths:
 
 # CI tools / workflows
 
-- Never cancel an Actions run (yours is replaced by the next push; hooks refuse
-  `gh run cancel` and the MCP cancel). A queued run holds no slot.
-- Merge method is MERGE only (`merge_policy.py`); never squash or rebase-merge.
+- Run cancels and merge methods: AGENTS.md §Concurrent PRs and `.claude/rules/fleet-core.md`
+  (the hooks and `merge_policy.py` enforce both). A queued run holds no slot.
 - `= ci none` after a push means no run started — dispatch `ci.yml` by hand and
   watch by head sha. Sync via `node tools/ci/sync-pr.mjs <branch>` (merge
   origin, no force); never `update_pull_request_branch`.

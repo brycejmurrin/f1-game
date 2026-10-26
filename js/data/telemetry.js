@@ -205,11 +205,12 @@ const DataTelemetry = (function () {
         const start = lap.dateStart;
         const dur = lap.lapDuration || 90;
         const ms = Date.parse(start);
+        const paddedStart = isFinite(ms) ? new Date(ms - 1500).toISOString() : start;
         const end = isFinite(ms) ? new Date(ms + dur * 1000 + 1500).toISOString() : start;
         const jobs = [
           // These two ARE the telemetry view. A rejected request is a failed
           // load, while a fulfilled [] is a valid "not published" answer.
-          F1API.carData(sessionKey, d.num, start, end),
+          F1API.carData(sessionKey, d.num, paddedStart, end, start),
           F1API.locationData(sessionKey, d.num, start, end)
         ];
         if (withExtras) {
@@ -235,7 +236,7 @@ const DataTelemetry = (function () {
             // Coverage and sparsity do not authorize samples from the next lap.
             return kept;
           }
-          return { d: d, lap: lap, car: clipToLap(res[0]), loc: dropStrays(clipToLap(res[1])),
+          return { d: d, lap: lap, car: DataTelemetryModel.clipCar(res[0], dur), loc: dropStrays(clipToLap(res[1])),
                    stints: res[2] || [], pits: res[3] || [] };
         });
       });

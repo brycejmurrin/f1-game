@@ -109,6 +109,43 @@ function load() {
   return { D, d: D.create(G), G, stored, calls };
 }
 
+test("COPY DAILY CODE binds time and medal to the same class PB across repeats", () => {
+  const { G } = load();
+  let copied;
+  let context = "standard-class";
+  const ctx = vm.createContext({
+    TextEncoder, TextDecoder, btoa, atob,
+    Tracks: { LIST: [{ id: "monza", name: "MONZA" }], SEASON: [{ id: "monza", name: "MONZA" }] },
+    ApexClipboard: { write: (code) => { copied = code; return Promise.resolve(true); } },
+    codeBtn: {},
+  });
+  seedLog(ctx); seedHash32(ctx);
+  for (const file of ["js/race/quali-model.js", "js/race/daily-challenge.js", "js/ui/share-code.js"]) {
+    vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
+  }
+  ctx.G = { ...G, referencePole: () => 82, player: { best: 80 },
+    records: { key: () => context, prepareDaily() {}, restoreDaily() {} } };
+  ctx.G.daily = vm.runInContext("DailyChallenge.create(G)", ctx);
+  const src = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
+  const start = src.indexOf("      codeBtn.onclick = () => {", src.indexOf('codeBtn.id = "res-daily-share-code"'));
+  const end = src.indexOf("\n      };", start) + "\n      };".length;
+  assert.ok(start >= 0 && end > start);
+  vm.runInContext(src.slice(start, end), ctx, { filename: absSrc("js/ui/results-sheet.js") });
+  const day = ctx.G.daily.dayKey();
+  const click = () => { ctx.codeBtn.onclick(); return vm.runInContext("ShareCode.decode", ctx)(copied); };
+  ctx.G.daily.select(day, "standard"); ctx.G.daily.record(80, context);
+  assert.equal(click().best, 80); assert.equal(click().medal, "gold");
+  ctx.G.daily.stop(); ctx.G.daily.select(day, "standard");
+  ctx.G.player.best = 90; ctx.G.daily.record(90, context);
+  assert.equal(click().best, 80, "slower attempt shares the saved PB");
+  assert.equal(click().medal, "gold");
+  ctx.G.daily.record(79, context);
+  assert.equal(click().best, 79);
+  context = "different-class";
+  assert.equal(ctx.G.daily.shareResult().best, undefined);
+  assert.equal(ctx.G.daily.shareResult().medal, null);
+});
+
 test("the plan is a pure function of the UTC day — same day, same plan; adjacent days differ", () => {
   const { D } = load();
   const a = D.plan("2026-09-03"), b = D.plan("2026-09-03");

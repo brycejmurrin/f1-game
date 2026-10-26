@@ -14,20 +14,31 @@
 //   1. EXACT, at the MENU after a race: at most one built track (the menu may keep the last
 //      circuit as its backdrop; never two).
 //   2. EXACT, once the next circuit is built: exactly that one.
-//   (TLX's three.js renderer.info counts are logged to artifacts/logs/race-cycle-memory.json, not asserted:
-//   they warm up over ~five cycles, LIVE-MEMORY-H12 note.)
+//   3. GROWTH (W24c #1 / W25c; H17 ACK): after WARM_CYCLES (≥5) of TLX cache fill, assert
+//      menu heapMB for cycle (WARM+1) − cycle WARM ≤ HEAP_SLOPE_HARD_MB (always) and
+//      ≤ HEAP_SLOPE_SOFT_MB when APEX_PERF_MEMORY_STRICT=1 (else soft annotation). The full
+//      per-cycle series is written to artifacts/logs/race-cycle-memory.json so a flaky warm
+//      climb is visible. Catches the ~12 MB/cycle phone leak without gating mid-warm-up.
+//   4. audioMB (W24c #2): logged every reading; post-warm menu audioMB growth soft-gated
+//      (STRICT fails) so decoded PCM retention is visible even though usedJSHeapSize hides it.
+//   (TLX's three.js renderer.info counts are logged, not asserted: they warm for ~five cycles —
+//   LIVE-MEMORY-H12 / H17 note — which is why the heap slope uses the post-warm pair only.)
 //
 // Measured: on the leaking tree (2eda36c6, before #3241) assertion 2 fails at the first switch (cycle 1, spa
 // built: monza still reachable); on #3241 and on the tip it passes. #3377's one-generation holders are
 // overwritten before these readings, so tests/unit/race-retain-vm.test.mjs (built, not yet stepped) pins them.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { censusInitScript, censusAfterGc, waitFrames } from "../../tools/lib/mem-census.mjs";
+import {
+  HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, STRICT, postWarmSlope,
+} from "../helpers/race-cycle-memory.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 
 test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
 
 const CIRCUITS = ["monza", "spa"];
-const CYCLES = 3;
+/** Warm-up climb (~5) + one post-warm cycle for the slope pair (H17). */
+const CYCLES = WARM_CYCLES + 1;
 const DRIVE_STEPS = 600;   // 10 s of race: every car through the traffic buckets, the pit model and collisions
 
 async function raceAndDrive(page, id) {
@@ -42,6 +53,26 @@ async function raceAndDrive(page, id) {
   }, DRIVE_STEPS);
 }
 
+// THE MENU MUST BE QUIET BEFORE ITS HEAP COUNTS. The census forces GC, but live work in flight survives it:
+// the title warm's race prep (js/perf/title-warm.js starts it after 1.2 s of title quiet), the menu program warm
+// and the garage prebuild. One post-warm pair read mid-prep swung ±35 MiB on unchanged heads (A·W56, 2026-10-26).
+// Wait until none runs for QUIET_MS (> the title warm's start delay), then read.
+const QUIET_MS = 3000;
+async function menuQuiet(page) {
+  const t0 = Date.now();
+  const hooks = await page.evaluate(() => { window.__rcmQuiet = null; const A = window.__apex;
+    return { menuPrep: typeof A.menuPrep === "function" && !!A.menuPrep(), garagePrebuild: typeof A.garagePrebuild === "function" }; });
+  expect(hooks, "menuQuiet needs __apex.menuPrep() (a snapshot) and __apex.garagePrebuild()").toEqual({ menuPrep: true, garagePrebuild: true });
+  await page.waitForFunction((quietMs) => {
+    const A = window.__apex, p = A.menuPrep(), g = A.garagePrebuild();
+    const busy = p.building || p.warming || p.warmFrames > 0 || !!(g && g.running);
+    const now = performance.now(), q = window.__rcmQuiet || (window.__rcmQuiet = { since: now });
+    if (busy) q.since = now;
+    return !busy && now - q.since >= quietMs;
+  }, QUIET_MS, { polling: 250, timeout: 120000 });
+  return Date.now() - t0;
+}
+
 async function flagToMenu(page) {
   await page.evaluate(() => window.__apex.finishRace());
   await page.waitForFunction(() => window.__apex.info().state === "results", null, { polling: 200, timeout: 60000 });
@@ -52,8 +83,9 @@ async function flagToMenu(page) {
 }
 
 test("racing circuit after circuit keeps at most one world in memory", async ({ page }) => {
-  // Six race builds on software GL plus forced GCs.
-  test.setTimeout(600000);
+  // Twelve race builds (6 cycles × monza+spa) on software GL plus forced GCs — long enough
+  // for TLX caches to flatten before the heap/audioMB slope gate (H17).
+  test.setTimeout(1200000);
   await page.addInitScript(() => {
     try { localStorage.setItem("apex26.gfxBackend", "three"); } catch (_) {}
     try { localStorage.setItem("apex26.gfxBootStepMs", "45000"); } catch (_) {}   // as track-switch-memory: TLX init can exceed 8 s on a busy runner
@@ -65,19 +97,26 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
   await page.waitForFunction(() => window.__apex != null && typeof Tracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
 
   const readings = [];
+  /** @type {Map<number, { heapMB: number|null, audioMB: number|null }>} */
+  const menuByCycle = new Map();
   const log = (row) => { readings.push(row); mkdirSync("artifacts/logs", { recursive: true }); writeFileSync("artifacts/logs/race-cycle-memory.json", JSON.stringify(readings, null, 1)); };
   for (let cycle = 1; cycle <= CYCLES; cycle++) {
     for (const id of CIRCUITS) {
       await raceAndDrive(page, id);
       const built = await censusAfterGc(page, cdp);
-      log({ cycle, id, at: "race", aliveTracks: built.aliveTracks, heapMB: built.heapMB, three: built.three && { geometries: built.three.geometries, textures: built.three.textures } });
+      log({ cycle, id, at: "race", aliveTracks: built.aliveTracks, heapMB: built.heapMB, audioMB: built.audioMB, audioBuffers: built.audioBuffers, three: built.three && { geometries: built.three.geometries, textures: built.three.textures } });
       expect(built.instrumentation.tracksReady, "the census must see Tracks.build").toBe(true);
       expect(built.aliveTracks, `cycle ${cycle}, ${id} built: built tracks still reachable after GC`).toEqual([id]);
 
       await flagToMenu(page);
+      const quietMs = id === CIRCUITS[CIRCUITS.length - 1] ? await menuQuiet(page) : null;
       const menu = await censusAfterGc(page, cdp);
-      log({ cycle, id, at: "menu", aliveTracks: menu.aliveTracks, heapMB: menu.heapMB, three: menu.three && { geometries: menu.three.geometries, textures: menu.three.textures } });
+      log({ cycle, id, at: "menu", quietMs, aliveTracks: menu.aliveTracks, heapMB: menu.heapMB, audioMB: menu.audioMB, audioBuffers: menu.audioBuffers, three: menu.three && { geometries: menu.three.geometries, textures: menu.three.textures } });
       expect(menu.aliveTracks.length, `cycle ${cycle}, menu after ${id}: ${menu.aliveTracks.join(", ")} still reachable after GC`).toBeLessThanOrEqual(1);
+      // Final menu of the cycle (last circuit) feeds the post-warm slope series.
+      if (id === CIRCUITS[CIRCUITS.length - 1]) {
+        menuByCycle.set(cycle, { heapMB: menu.heapMB, audioMB: menu.audioMB });
+      }
       // ...and a garage visit from the title between races, as a player does (GARAGE → BACK).
       if (id === CIRCUITS[0]) {
         await page.evaluate(() => document.getElementById("mb-garage").click());
@@ -91,5 +130,36 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
   // TLX's renderer.info counts (geometries / textures) are LOGGED, not asserted: measured over seven cycles they
   // climb for ~five (menu after spa: geometries 26 → 117 → 168 → 232 → 278 → 281 → 253, textures 40 → 57) and
   // then flatten — capped caches filling, so a cycle-on-cycle bound fails at three cycles and passes at seven.
-  // A strict bound would be a flaky gate; the identity counts above are the deterministic one.
+  // Heap / audioMB slope below uses the post-warm pair only (cycle WARM+1 − WARM).
+
+  const slope = postWarmSlope(menuByCycle, CYCLES);
+  expect(slope.ok, slope.reason || "post-warm menu readings").toBe(true);
+  log({ at: "slope", ...slope, STRICT, WARM_CYCLES, HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB });
+  // Always publish the measured series (warm climb + post-warm pair) for CI artifacts / flake triage.
+  test.info().annotations.push({
+    type: "race-cycle-memory-series",
+    description: JSON.stringify(slope.series),
+  });
+  if (slope.heapDelta != null) {
+    expect(
+      slope.heapDelta,
+      `post-warm menu heap cycle${slope.later}−cycle${slope.earlier}=${slope.heapDelta} MiB after ${WARM_CYCLES} warm cycles (hard ≤${HEAP_SLOPE_HARD_MB}; H12 leak was ~12 MiB/cycle; series=${JSON.stringify(slope.series)})`,
+    ).toBeLessThanOrEqual(HEAP_SLOPE_HARD_MB);
+  }
+  const softMsgs = [];
+  if (slope.heapSoftFail) {
+    softMsgs.push(`heap slope ${slope.heapDelta} MiB > soft ${HEAP_SLOPE_SOFT_MB} (MEMORY-TOOLING nightly; post-warm after ${WARM_CYCLES})`);
+  }
+  if (slope.audioSoftFail) {
+    softMsgs.push(`audioMB slope ${slope.audioDelta} MiB > soft ${AUDIO_SLOPE_SOFT_MB}`);
+  }
+  if (softMsgs.length) {
+    const msg = softMsgs.join("; ");
+    if (STRICT) {
+      expect(softMsgs, msg).toHaveLength(0);
+    } else {
+      test.info().annotations.push({ type: "perf-soft-warning", description: msg });
+      console.log(`[race-cycle-memory soft] ${msg}`);
+    }
+  }
 });

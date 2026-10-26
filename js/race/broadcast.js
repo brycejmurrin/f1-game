@@ -245,6 +245,7 @@ const Broadcast = (function () {
     let wall = 0, lastCut = -1e9, eventUntil = -Infinity, manualUntil = 0, cuts = 0, onAirShot = null, setCam = null;
     let shown = new Set(), towerT = 0, mode = "gap", prevPos = new Map(), deltaAt = new Map();
     let clickBound = null;
+    let cameraSuspended = false;
     let pip = null;   // {key, label, at (wall), seen (wall)} — the car in the inset
     let graphics = null, graphicsLoad = null;
 
@@ -282,15 +283,25 @@ const Broadcast = (function () {
     function camTo(id) {
       const i = modeIdx(id);
       if (i < 0 || !G.setCamMode) return false;
-      G.setCamMode(i, { persist: false });
+      G.setCamMode(i, { persist: false, owner: replay.cameraOwner ? replay.cameraOwner() : null, priority: 10 });
+      if (xrPicture()) cameraSuspended = true;
       onAirShot = id; setCam = i;
       return true;
+    }
+    function xrPicture() { return typeof XrBoot !== "undefined" && XrBoot.comfort(); }
+    function suspendCamera() {
+      if (xrPicture()) { cameraSuspended = true; return true; }
+      // The remaining WATCH owner resumes its shot after XR releases it;
+      // that ownership change is not a manual camera selection.
+      if (cameraSuspended) { cameraSuspended = false; syncCamera(); }
+      return false;
     }
 
     /** start({auto, tower}) — replay has already posed the field and chosen whom to follow. */
     function start(o) {
       stop();
       on = true; auto = !!(o && o.auto); locked = false; wall = 0; lastCut = -1e9; eventUntil = -Infinity; manualUntil = 0; cuts = 0;
+      cameraSuspended = false;
       shown = new Set(); towerT = 0; mode = "gap"; prevPos = new Map(); deltaAt = new Map();
       syncCamera();
       if (auto) { camTo(SHOTS[0]); lastCut = 0; }
@@ -400,6 +411,7 @@ const Broadcast = (function () {
 
     function direct(st) {
       if (!auto || locked || wall < manualUntil) return;
+      if (suspendCamera()) return;
       // The viewer cycled the camera (C / the CAM button): theirs for a while.
       if (setCam != null && G.camMode !== setCam) { manual(); return; }
       if (st.reel) return;   // HIGHLIGHTS: the reel picks the car and calls onCut
@@ -425,6 +437,7 @@ const Broadcast = (function () {
     /** The reel cut to a new highlight (RealReplay.cutTo): a new shot for it, unless the viewer has the picture. */
     function onCut(kind) {
       if (!on || !auto || locked || wall < manualUntil) return;
+      if (suspendCamera()) return;
       if (setCam != null && G.camMode !== setCam) { manual(); return; }
       lastCut = wall; cuts++;
       camTo(shotFor(kind, onAirShot, cuts));

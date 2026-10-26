@@ -2,7 +2,7 @@
 // fleet-board.mjs — the backlog's phone view and the claim mirror, run hourly by .github/workflows/fleet.yml.
 // @doc Fleet board: current/stale claims, PR associations and backlog labels on one pinned issue.
 // Full description: Reads open issues/PRs, GitHub issue cross-references and closing links, and the claims board. Shows ownership separately from PR association (including merged partial work); derives claimed from current claims or open PRs with closing intent or an issue number explicitly in their title. Other references are displayed without claiming ownership. Syncs labels and the existing pinned board only with --apply. Incomplete API/claim evidence aborts before writes.
-// @skill ci-watch
+// @skill steward
 //
 // docs/notes/AGENT-WORK-TRACKING-2026-10-14.md: the backlog is GitHub issues
 // (AGENTS.md §Backlog) and Bryce reads the fleet from a phone, where a filtered

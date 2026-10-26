@@ -724,6 +724,7 @@ interface GameCtx {
   netStart: NetStart | null;
   /** A SESSION's clock, not the page's — netplay nulls it between sessions. */
   netNow: number | null;
+  readonly netRaceT: number;
   /** The countdown clock and how many lamps are lit. */
   countT: number;
   lightsLit: number;
@@ -846,6 +847,7 @@ declare const Collide: GameModuleFactory;
 declare const CarDraw: GameModuleFactory;
 declare const ShadowPass: GameModuleFactory;
 declare const GaragePrebuild: GameModuleFactory;
+declare const TitleWarm: GameModuleFactory;
 declare const MirrorPass: GameModuleFactory;
 declare const AgentView: GameModuleFactory;
 declare const ApexApi: GameModuleFactory;

@@ -131,3 +131,16 @@ test("previewPlan is the plan planFor would draw, for any staged laps, and cache
     assert.deepEqual(plain(b.wa.planFor()), live, "and planFor's own memo is untouched by the previews");
   }
 });
+
+
+test("fresh-race arming from a live restart uses zero, while live retargets keep their clock", () => {
+  const { G, wa } = boot({ raceT: 180, state: "race" });
+  wa.startChangeable(); wa.restoreBase();
+  const restarted = wa.startChangeable(0);
+  assert.equal(restarted.t0, 0);
+  G.state = "count"; G.raceT = 0;
+  G.state = "race"; G.raceT = 90; wa.tick(0);
+  assert.equal(restarted.t, 90, "old race time never freezes the new weather");
+  const retarget = wa.startArc("dry", "rain", 300);
+  assert.equal(retarget.t0, 90, "ordinary live retargets retain the current clock");
+});

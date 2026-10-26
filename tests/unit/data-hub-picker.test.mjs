@@ -210,24 +210,28 @@ async function pickInLive(h) {
   gpSel.value = "40"; gpSel.dispatch("change"); await h.flush();
 }
 
-test("a late pick on a picker the player left does nothing: the tab now loading still renders", async () => {
+test("a pending GP pick survives its detached picker and the next tab waits for that session", async () => {
   const h = harness();
   await pickInLive(h);
   h.tab("results"); await h.flush();               // explicit pending intent suppresses a new latest request
+  assert.equal(h.pending.some((p) => p.name === "latestSession"), false);
   await h.settle("sessions(40)");                  // LIVE's detached picker answers
-  assert.equal(h.pending.some(p => p.name === "latestSession"), false);
+  assert.equal(h.pending.some((p) => p.name === "latestSession"), false);
   await h.drain();
   assert.equal(h.content().querySelector(".dh-loading"), null, "RESULTS painted, not LOADING forever");
   assert.ok(h.content().querySelector(".dh-picker"), "…its own picker is up");
+  assert.deepEqual(h.resultKeys, [400]);
+  assert.equal(h.content().selects()[1].children.find((o) => o.selected).value, "400");
+  h.DataHub.close();
 });
 
-test("a pending explicit pick stays selected when a sibling picker is already loading", async () => {
+test("reattaching a picker while its explicit pick is pending preserves the selected session", async () => {
   const h = harness();
   await pickInLive(h);
-  h.tab("results"); await h.flush();               // sibling metadata request follows sessions(40)
+  h.tab("results"); await h.flush();               // waits for sessions(40)
   h.tab("live"); await h.flush();                  // back on LIVE: its cached picker is attached again
   await h.settle("sessions(40)");                  // the pick lands on a connected picker: pinned to 400
-  assert.equal(h.pending.some(p => p.name === "latestSession"), false);
+  assert.equal(h.pending.some((p) => p.name === "latestSession"), false);
   await h.drain();
   h.resultKeys.length = 0;
   h.tab("results");
@@ -800,4 +804,20 @@ test("transport.forget(url) drops an oversize body from memory as well as localS
   transport.forget(url);
   await transport.request(url, 60000);
   assert.equal(fetches, 2, "after forget() the body is fetched again");
+});
+
+for (const origin of ["live", "results", "telemetry"]) test(`a pending year selection from ${origin} survives switching tabs`, async () => {
+  const h = harness({ realTelemetry: true });
+  h.DataHub.open(origin); await h.drain();
+  h.resultKeys.length = 0;
+  const year = new Date().getFullYear() - 1;
+  h.content().find((n) => n.tagName === "BUTTON" && n.textContent === String(year)).dispatch("click");
+  h.tab(origin === "results" ? "live" : "results"); await h.flush();
+  assert.equal(h.pending.some((p) => p.name === "latestSession"), false);
+  await h.drain();
+  if (origin === "results") { h.tab("results"); await h.drain(); }
+  assert.equal(h.resultKeys.at(-1), 400);
+  assert.equal(h.content().selects()[1].children.find((o) => o.selected).value, "400");
+  assert.ok(h.content().find((n) => n.tagName === "BUTTON" && n.textContent === String(year) && n.classList.contains("active")));
+  h.DataHub.close();
 });

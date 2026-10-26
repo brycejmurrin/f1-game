@@ -13,7 +13,7 @@ const expression = str("JavaScript expression", 16000);
 // destructiveHint only where the call can lose page state or run arbitrary code: detach (drops owned
 // breakpoints, resumes), control (cancel terminates a running script), evaluate/run (JS can mutate the page).
 // Breakpoints, logpoints and exception pauses only change debugger state.
-const DESTRUCTIVE = new Set(["debugger_detach", "debugger_control", "debugger_evaluate", "debugger_run", "debugger_break", "debugger_collect", "debugger_node_test"]);
+const DESTRUCTIVE = new Set(["debugger_detach", "debugger_control", "debugger_evaluate", "debugger_run", "debugger_break", "debugger_collect", "debugger_node_test", "debugger_profile"]);
 const obj = (properties, required = []) => ({ type: "object", properties, required, additionalProperties: false });
 const arr = (items, maxItems, description) => ({ type: "array", items, maxItems, description });
 const location = { url: str("Script URL. Without a query it matches any ?v=…; a bare path (js/agent/apex.js) matches by suffix; on a Node target a repo path", 1000),
@@ -58,6 +58,7 @@ export const TOOLS = [
     { breakpoints: arr(obj({ ...location, condition: { type: "string", maxLength: 4000 } }, ["url", "line"]), 10, "Breakpoints to set first (may be empty to wait on existing ones)"),
       trigger: str("Expression run (debugger_run semantics) after the breakpoints are set", 16000), awaitPromise: { type: "boolean" },
       timeoutMs: integer("Wait for the pause (default 10000)", 100, 30000), frames: integer("Frames whose locals are read (default 1)", 0, 3),
+      executionTimeoutMs: integer("Trigger response deadline including time spent paused (default 600000). Check the operation's terminal state after resume before detaching.", 1000, 600000),
       maxLocals: integer("Variables per frame (default 40)", 1, 100), resume: { type: "boolean", description: "Resume after reading and remove these breakpoints" },
       keep: { type: "boolean", description: "Keep the breakpoints (default: keep unless resume)" } }, ["breakpoints"]),
   def("debugger_collect", "WORKFLOW, one call on a running page/Node target: set logpoints, run a trigger, wait, read hit counts plus recorded values, then remove the logpoints (keep:true leaves them).",
@@ -76,6 +77,15 @@ export const TOOLS = [
   def("debugger_run", "Execute potentially mutating JS while running. Returns immediately with operationId so a breakpoint cannot block resume. Read result via debugger_state. ALWAYS mutating: it has no allowSideEffects flag (only debugger_evaluate has one, default off). A new run abandons a pending/unknown one (marked abandoned; JS not cancelled).",
     { expression, awaitPromise: { type: "boolean", description: "Wait for a returned Promise in the background operation (default false)" },
       timeoutMs: integer("Response deadline in ms (default 600000). Past it the op is timedOut but still tracked and a late result is recorded", 1000, 600000) }, ["expression"]),
+  def("debugger_profile", "Realtime CDP profiling on the attached local page (CPU Profiler, sampling HeapProfiler, or rAF hitch windows). action start|stop|status|hitch; kind cpu|heap. Page must be running (resume first). stop returns a bounded summary (top files/fns + hitch windows) and optionally writes scratch/debug-profiles/*.cpuprofile. Does not measure GPU; software-GL stalls are not player conclusions. Prefer over chrome-devtools MCP when already attached here.",
+    { action: { type: "string", enum: ["start", "stop", "status", "hitch"] },
+      kind: { type: "string", enum: ["cpu", "heap"], description: "cpu (default) or heap sampling; ignored for hitch" },
+      intervalUs: integer("CPU sampling interval µs (default 1000)", 100, 100000),
+      durationMs: integer("hitch window length ms (default 2000)", 100, 30000),
+      thresholdMs: integer("Hitch threshold ms for CPU timeDelta or rAF gap (default 50)", 8, 2000),
+      top: integer("Summary rows (default 20)", 1, 50),
+      maxWindows: integer("Max hitch windows (default 10)", 1, 50),
+      save: { type: "boolean", description: "Write raw profile under scratch/debug-profiles (default true)" } }, ["action"]),
 ];
 
 // T12: parameter names agents guess. Accepted as aliases only when the tool has the real one;
@@ -133,6 +143,7 @@ export async function callTool(session, name, args = {}) {
       debugger_break: () => session.breakAndInspect(a), debugger_collect: () => session.collect(a), debugger_node_test: () => nodeTest(a),
       debugger_exceptions: () => session.exceptions(a.state), debugger_evaluate: () => session.evaluate(a.pauseToken, a.frame ?? 0, a.expression, a.allowSideEffects),
       debugger_properties: () => session.properties(a.pauseToken, a.objectId, a.offset ?? 0, a.limit ?? 30), debugger_run: () => session.runTool(a.expression, a.awaitPromise, a.timeoutMs),
+      debugger_profile: () => session.profileControl(a),
     };
     // detach never waits behind a stuck command: it is the recovery path (T13).
     // debugger_node_test owns its own processes and sockets, so it runs beside the attached session.
@@ -166,7 +177,7 @@ export async function handleRpc(session, msg) {
   const result = value => ({ jsonrpc: "2.0", id, result: value });
   if (method === "initialize") return result({ protocolVersion: "2025-06-18", capabilities: { tools: {} },
     serverInfo: { name: "js-debugger-mcp", version: "0.1.0" },
-    instructions: "Local Chrome page debugger. ONE browser, parent-owned; attaches only, never launches. Use a dedicated debug profile. ONE-based source positions, ZERO-based frame index. Inspect pause.token after every control. debugger_run returns immediately; read operation status separately. Code evaluation can mutate the page. Detach before ending." });
+    instructions: "Local Chrome page debugger. ONE browser, parent-owned; attaches only, never launches. Use a dedicated debug profile. ONE-based source positions, ZERO-based frame index. Inspect pause.token after every control. debugger_run returns immediately; read operation status separately. debugger_profile start/stop/hitch for realtime CDP CPU/heap/rAF hitch on the attached page. Code evaluation can mutate the page. Detach before ending." });
   if (method === "ping") return result({});
   if (method === "tools/list") return result({ tools: TOOLS });
   if (method === "tools/call" && Object.hasOwn(msg.params ?? {}, "arguments") &&

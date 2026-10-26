@@ -94,6 +94,15 @@ const RenderRate = (function () {
    *  XrBoot.comfort(): an immersive session is never gated. */
   function gate(dt, ms, presenting, racing) { return (last = gateOnce(dt, ms, presenting, racing)); }
   function gateOnce(dt, ms, presenting, racing) {
+    // Same window as observe(): a backwards stamp or a tab-resume gap is not a
+    // frame. Banking it paid the whole gap into the HUD. dt is the caller's
+    // already-clamped step (game.js caps it at 1/4 s, then render clamps again:
+    // 100 ms in the garage, 50 ms on the world). Sane frames fall through.
+    if (!(ms > 0) || ms > MAX_SANE_MS) {
+      accDt = 0; accMs = 0; credit = 0;
+      const step = Number.isFinite(dt) && dt > 0 ? dt : 0;
+      return draw(step, 16.7);
+    }
     const rate = tierRate();
     if (rate && !presenting) {
       if (!racing) { live = 0; credit = 0; } else {

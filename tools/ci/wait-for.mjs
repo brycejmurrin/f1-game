@@ -16,19 +16,34 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { pidAlive } from "../lib/deploy-status.mjs";
 
-export const FLAGS = ["--load-below", "--file-nonempty", "--log-matches", "--pid-gone", "--timeout", "--poll", "--help"];
+/** Bash kills a foreground command at 600 s; a waiter that outlives that is killed with a confusing exit. */
+export const FOREGROUND_CAP_SEC = 590;
+
+export const FLAGS = ["--load-below", "--file-nonempty", "--log-matches", "--pid-gone", "--timeout", "--poll", "--background", "--help"];
 export const USAGE = `usage: node tools/ci/wait-for.mjs <condition>... [--timeout <min>] [--poll <sec>]
   --load-below <n>        1-min loadavg < n
   --file-nonempty <path>  file exists with size > 0
   --log-matches <path> <re>  a line of <path> matches the regex (the verdict line; never pgrep -f, which matches its own shell)
   --pid-gone <pid>        process <pid> no longer exists
+  --background            this waiter IS the run_in_background task: no cap on --timeout
+  a foreground wait is capped at ${FOREGROUND_CAP_SEC} s (Bash's own limit is 600 s); longer ones belong in run_in_background.
   conditions combine with AND; exit 0 held / 124 timeout / 1 usage. Run it as one background task.`;
+
+/** Clamp a foreground --timeout (minutes) to the cap; `background` lifts it. Pure. */
+export function capForeground(timeoutMin, background) {
+  if (background || timeoutMin * 60 <= FOREGROUND_CAP_SEC) return { timeoutMin, note: "" };
+  return {
+    timeoutMin: FOREGROUND_CAP_SEC / 60,
+    note: `= wait-for: --timeout ${timeoutMin} min (${Math.round(timeoutMin * 60)} s) exceeds the ${FOREGROUND_CAP_SEC} s foreground cap — capped; ` +
+      "for a longer wait start this command with Bash run_in_background and add --background",
+  };
+}
 
 export class UsageError extends Error {}
 
 export function parseArgs(argv) {
   const conds = [];
-  let timeoutMin = 30, pollSec = 3;
+  let timeoutMin = 30, pollSec = 3, background = false;
   const num = (name, v, { positive = true } = {}) => {
     const n = Number(v);
     if (v === undefined || v.startsWith?.("-") || !Number.isFinite(n) || (positive && n <= 0)) throw new UsageError(`${name} needs a positive number, got ${JSON.stringify(v)}`);
@@ -40,6 +55,7 @@ export function parseArgs(argv) {
     if (!name.startsWith("--")) throw new UsageError(`unexpected argument ${argv[i]}`);
     if (!FLAGS.includes(name)) throw new UsageError(`unknown flag ${name}\n  accepts: ${FLAGS.join(" ")}`);
     if (name === "--help") return { help: true };
+    if (name === "--background") { background = true; continue; }
     if (val === undefined) val = argv[++i];
     if (name === "--timeout") timeoutMin = num(name, val);
     else if (name === "--poll") pollSec = num(name, val);
@@ -62,7 +78,7 @@ export function parseArgs(argv) {
     }
   }
   if (!conds.length) throw new UsageError("give at least one condition");
-  return { conds, timeoutMin, pollSec };
+  return { conds, timeoutMin, pollSec, background };
 }
 
 export const load1 = () => {
@@ -99,7 +115,9 @@ async function main() {
   try { a = parseArgs(process.argv.slice(2)); }
   catch (e) { if (!(e instanceof UsageError)) throw e; console.error(`wait-for: ${e.message}\n${USAGE}`); return 1; }
   if (a.help) { console.log(USAGE); return 0; }
-  const r = await waitFor(a.conds, a);
+  const cap = capForeground(a.timeoutMin, a.background || process.env.APEX_WAIT_BACKGROUND === "1");
+  if (cap.note) console.error(cap.note);
+  const r = await waitFor(a.conds, { ...a, timeoutMin: cap.timeoutMin });
   console.log(r.text);
   return r.code;
 }

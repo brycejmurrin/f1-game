@@ -20,9 +20,10 @@
    HIDDEN ELEMENTS: hiddenReason(id) says why an element is not on screen in
    the current mode (MINIMAL, a LAYOUT, a broadcast camera, the cockpit wheel,
    TYRE WEAR off, MAP/GAPS off, a per-element toggle) so the fold can grey out
-   sliders that would move nothing — from the classes that hide it, confirmed
-   by the live element (display none / hidden / zero rect) while the HUD is
-   up. A "soft" reason is one a move cures (a touch cockpit shows a chip the
+   sliders that would move nothing — from the classes that hide it while the
+   HUD is up (live element has the last word: display none / hidden / zero
+   rect), or from the store / fold preview under SETTINGS where those classes
+   lag. A "soft" reason is one a move cures (a touch cockpit shows a chip the
    player places) or a chip that only appears on an event: its sliders stay.
 
    PRESETS are pure data (PRESETS): a partial {id: {x?, y?, s?}} laid over the
@@ -1042,15 +1043,29 @@ const HudLayout = (function () {
   const REPLAY_HUD = ["tower", "map", "gaps", "sectors", "limits", "flag", "mirror", "announce"]
     .concat(BOTTOM, READOUTS);
   const replayOn = (h) => h("bc-on") || h("watch-controls-on");
+  // body.hud-prof-* / hud-met-* are painted by js/ui/hud.js while the race HUD
+  // is up. Under SETTINGS #hud is hidden, so those classes lag the store —
+  // trust shownProf() / hudMetricsLayout so MOVE & SIZE greys chips the active
+  // style already hides (#3273). A forced metrics name wins; AUTO/null falls
+  // back to whatever class is still on the body (tests + last-race leftover).
+  const profIs = (name) => (hudLive() ? has("hud-prof-" + name) : shownProf() === name);
+  const metIs = (name) => {
+    if (hudLive()) return has("hud-met-" + name);
+    // Default must match js/game.js (store-registry ratchet); AUTO/FULL mean
+    // "no forced strip" so fall back to any leftover body.hud-met-* class.
+    const want = store ? store.get("hudMetricsLayout", "full") : "full";
+    if (want && want !== "auto" && want !== "full") return want === name;
+    return has("hud-met-" + name);
+  };
   const HIDE_RULES = Object.freeze([
     [REPLAY_HUD, replayOn, "a real-race watch keeps the driving HUD off"],
     [["map"], (h) => h("hud-hide-map"), "MAP is off for this camera or style (DISPLAY › HUD › MAP)"],
     [["gaps"], (h) => h("hud-hide-gaps"), "GAPS is off for this style (DISPLAY › HUD › GAPS)"],
     [BOTTOM, (h) => h("hud-prof-broadcast") && h("hud-bcam"), "BROADCAST style on a TV camera keeps the frame clean"],
-    [CHIPS.concat(["bb", "sectors"], READOUTS), (h) => h("hud-prof-minimal"), "MINIMAL style"],
-    [CHIPS.concat(["bb"]), (h) => h("hud-met-timing"), "LAYOUT is TIMING"],
-    [CHIPS.concat(["bb", "sectors", "tyre"]), (h) => h("hud-met-compact"), "LAYOUT is COMPACT"],
-    [["sectors"], (h) => h("hud-met-driver"), "LAYOUT is DRIVER"],
+    [CHIPS.concat(["bb", "sectors"], READOUTS), () => profIs("minimal"), "MINIMAL style"],
+    [CHIPS.concat(["bb"]), () => metIs("timing"), "LAYOUT is TIMING"],
+    [CHIPS.concat(["bb", "sectors", "tyre"]), () => metIs("compact"), "LAYOUT is COMPACT"],
+    [["sectors"], () => metIs("driver"), "LAYOUT is DRIVER"],
     [["gearbox", "ot", "aero", "energy", "bb", "limits"].concat(READOUTS), (h) => h("hud-bcam"), "TV camera"],
     [["sectors"], (h) => h("hud-bcam") && !h("hud-prof-broadcast"), "TV camera"],
     // css/track-detail.css: body.cockpit-cam hides GEAR + SPEED with no data-hl-user escape.

@@ -40,6 +40,7 @@ var GameAudioSoundtrack = (function () {
     // one context for life, and iOS lets an element that a gesture has played
     // play its next src without another gesture (a fresh element per track would not).
     let musicEl = null, musicElNode = null, musicElUrl = null, musicStreaming = false;
+    let streamUnlockPending = null; // only a refused play owned by the current track may retry on a gesture
     // UPLOADS STREAM ON EVERY PLATFORM. music-lib.js caps an upload at 25 MB of
     // BYTES, which is not a bound on PCM: 25 MB of 64 kbps Opus is ~55 min, or
     // ~1.26 GB of Float32 at a 48 kHz stereo context, all allocated by one
@@ -139,6 +140,7 @@ var GameAudioSoundtrack = (function () {
     // `release` (an explicit stop) also drops the src so the media decoder and
     // its buffered bytes go; a track change keeps the element for the next src.
     function stopStream(release) {
+      streamUnlockPending = null;
       if (!musicEl) return;
       captureStreamPos();
       const el = musicEl;
@@ -174,7 +176,7 @@ var GameAudioSoundtrack = (function () {
       const off = (musicResumeBuf === url && Number.isFinite(musicResumeOff)) ? musicResumeOff : 0;
       musicResumeBuf = url; musicResumeAt = NaN; musicResumeOff = off;
       el.onloadedmetadata = () => { if (token === musicToken && off > 0 && off < (el.duration || 0)) try { el.currentTime = off; } catch (e) { /* unseekable: from the top */ } };
-      el.onplaying = () => { if (token === musicToken) { _musicFails = 0; trackHealth("playing"); } };
+      el.onplaying = () => { if (token === musicToken) { streamUnlockPending = null; _musicFails = 0; trackHealth("playing"); } };
       el.onended = () => { if (token === musicToken && musicOn) nextTrack(1); };
       el.onerror = () => {
         if (token !== musicToken) return;
@@ -184,14 +186,27 @@ var GameAudioSoundtrack = (function () {
       };
       musicElUrl = url; musicStreaming = true;
       el.src = url;
+      playStream(el, url, token);
+      return true;
+    }
+    function playStream(el, url, token) {
       const p = el.play();
       if (p && p.catch) p.catch((err) => {
         // AbortError = superseded by a pause/src swap; a load failure arrives as onerror.
-        if (token !== musicToken || !err || err.name !== "NotAllowedError") return;
-        Log.warn("audio", "music stream play refused (" + err.name + "); the next startMusic retries");
+        if (token !== musicToken || el !== musicEl || !musicOn || !err || err.name !== "NotAllowedError") return;
+        Log.warn("audio", "music stream play refused (" + err.name + "); the next gesture retries");
         musicStreaming = false;
+        streamUnlockPending = { token, url };
       });
-      return true;
+    }
+    function retryStreamUnlock() {
+      const pending = streamUnlockPending;
+      if (!pending || document.hidden || !host.enabled() || !musicEnabled || backend || !musicOn) return;
+      if (pending.token !== musicToken || pending.url !== musicElUrl || !musicEl ||
+          !PLAYLIST[musicIndex] || PLAYLIST[musicIndex].url !== pending.url) { streamUnlockPending = null; return; }
+      streamUnlockPending = null; // one play attempt per refusal, preserving the existing src and position
+      musicStreaming = true;
+      playStream(musicEl, pending.url, pending.token);
     }
     function playMusicBuffer(buf, token) {
       if (!host.context() || !musicOn || token !== musicToken) return;  // superseded
@@ -571,7 +586,12 @@ var GameAudioSoundtrack = (function () {
       musicGain = null;
       for (const k in musicBuffers) delete musicBuffers[k];
       _bufKeys.length = 0;
-      musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
+      // A decoded buffer belongs to the closed context and must be released.
+      // A streamed track stores only its URL and playback offset; keep those
+      // through rebuild so the new media element can seek to the same place.
+      if (typeof musicResumeBuf !== "string") {
+        musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
+      }
     }
     function releaseEngineDuck(t, useRadio) {
       if (!musicGain) return;
@@ -589,7 +609,7 @@ var GameAudioSoundtrack = (function () {
       musicPlaybackGeneration: () => actionGeneration,
       stopMusicIfGeneration(generation) { if (generation !== actionGeneration) return false; stopMusic(); return true; },
       startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck,
-      suspendMusic, resumeMusic, resetContext, releaseEngineDuck, duckForEngine,
+      suspendMusic, resumeMusic, resetContext, releaseEngineDuck, duckForEngine, retryStreamUnlock,
       isPlaying: () => musicOn, streaming: () => musicStreaming, lastTrack: () => lastTrackIdx, volume: () => musicVol,
     };
   }

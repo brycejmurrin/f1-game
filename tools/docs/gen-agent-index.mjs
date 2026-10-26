@@ -211,14 +211,15 @@ function circuitsTable() {
   return sortById(rows, (r) => r.id, (r) => r.file);
 }
 
+// NO ratchetLines (2026-10-26, audit lane X3): the field copied tests/data/ratchets.json alone, so between folds
+// it showed ceilings the ratchets.d fragments had already moved, and nothing read it. Applying the fragments
+// instead would make every commit-hook auto-raise stale this generated file. The live ceilings are
+// `node tools/check/ratchets.mjs` (base + fragments).
 function modulesTable() {
-  let ratchet = {};
-  try { ratchet = JSON.parse(readRepo("tests/data/ratchets.json")).files || {}; } catch { /* none */ }
   const out = [];
   let order = 0;
   for (const [rel, roster] of rosterOf()) {
     const row = { path: rel, global: fileGlobal(rel, readRepo(rel)), order, roster };
-    if (ratchet[rel]?.lines != null) row.ratchetLines = ratchet[rel].lines;
     out.push(row);
     order += 1;
   }

@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import { MessageChannel } from "node:worker_threads";
+import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const SW_SOURCE = await readFile(new URL("../../sw.js", import.meta.url), "utf8");
@@ -464,7 +465,10 @@ test("successful navigation remains attached to waitUntil through its cache writ
       if (url.pathname.endsWith("/version.json")) {
         return Promise.resolve(new Response('{"build":321}', { status: 200 }));
       }
-      return Promise.resolve(new Response("online shell", { status: 200 }));
+      return Promise.resolve(new Response(
+        '<meta name="apex-build" content="321">online shell',
+        { status: 200 },
+      ));
     },
     putImpl: async (_name, request) => {
       if (requestKey(request) === `${ORIGIN}/race`) await heldPut.promise;
@@ -489,12 +493,16 @@ test("successful navigation remains attached to waitUntil through its cache writ
   assert.equal(beforePut, "pending");
 
   const response = await event.responsePromise;
-  assert.equal(await response.text(), "online shell", "network response is available while put remains blocked");
+  assert.equal(
+    await response.text(),
+    '<meta name="apex-build" content="321">online shell',
+    "network response is available while put remains blocked",
+  );
   heldPut.resolve();
   await Promise.all(event.lifetimes);
   assert.equal(
     await (await harness.stores.get("apex26-321").get(`${ORIGIN}/race`)).text(),
-    "online shell",
+    '<meta name="apex-build" content="321">online shell',
   );
 });
 
@@ -565,23 +573,24 @@ test("a deep-link navigation is not cached under its query URL", async () => {
   // Every `?b=` / `?log=` navigation used to be put under its full URL — one
   // entry per distinct query that no fallback ever read back (the offline
   // path matches "index.html"). Only the bare shell URL is written.
+  const shell = '<meta name="apex-build" content="321">online shell';
   const harness = createHarness({
     fetchImpl: (request) => {
       const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
       if (url.pathname.endsWith("/version.json")) {
         return Promise.resolve(new Response('{"build":321}', { status: 200 }));
       }
-      return Promise.resolve(new Response("online shell", { status: 200 }));
+      return Promise.resolve(new Response(shell, { status: 200 }));
     },
   });
 
   const deep = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?log=data:debug` });
-  assert.equal(await (await deep.responsePromise).text(), "online shell");
+  assert.equal(await (await deep.responsePromise).text(), shell);
   await Promise.all(deep.lifetimes);
   assert.equal(harness.stores.has("apex26-321"), false, "a query navigation opens no cache");
 
   const bare = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
-  assert.equal(await (await bare.responsePromise).text(), "online shell");
+  assert.equal(await (await bare.responsePromise).text(), shell);
   await Promise.all(bare.lifetimes);
   assert.ok(harness.stores.get("apex26-321").has(`${ORIGIN}/`), "the bare shell URL is still written");
 });
@@ -919,6 +928,35 @@ test("the fetch-path sweep keeps one settled prior generation while a window cli
   assert.deepEqual(harness.deleted, ["apex26-319"], "N-2 and older go; N-1 stays for the open tab");
   assert.ok(harness.stores.has("apex26-320"));
 });
+
+for (const lifecycle of ["fetch", "activate"]) {
+  for (const clientWindows of [0, 1]) {
+    test(`${lifecycle} sweep retains the newest settled cache across build gaps (windows=${clientWindows})`, async () => {
+      let offline = false;
+      const h = createHarness({ clientWindows, fetchImpl: (request) => offline
+        ? Promise.reject(new TypeError("offline")) : generationFetch({ offline: false })(request) });
+      const voice = `${ORIGIN}/assets/voice/bella-radio.bin`;
+      for (const build of [290, 300, 319, 320, 321, 322]) {
+        h.stores.set(`apex26-${build}`, new Map([
+          ...([290, 300, 321].includes(build) ? [[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]] : []),
+          ...(build === 300 ? [[voice, new Response("downloaded voice")]] : []),
+        ]));
+      }
+      if (lifecycle === "activate") await h.lifecycleEvent("activate").done();
+      else await twoFetches(h);
+      assert.deepEqual(h.deleted.slice().sort(), clientWindows
+        ? ["apex26-290", "apex26-319", "apex26-320"]
+        : ["apex26-290", "apex26-300", "apex26-319", "apex26-320"]);
+      assert.ok(h.stores.has("apex26-322"), "newer installing cache is never swept");
+      offline = true;
+      const event = h.fetchEvent(new Request(voice));
+      const response = await event.responsePromise;
+      if (clientWindows) assert.equal(await response.text(), "downloaded voice");
+      else assert.equal(response.status, 0);
+      await Promise.all(event.lifetimes);
+    });
+  }
+}
 
 test("with no window clients, the sweep also deletes the immediate prior generation", async () => {
   const harness = sweepHarness({ complete: true, clientWindows: 0 });
@@ -1759,57 +1797,89 @@ for (const page of ["controller.html", "bench.html", "cockpit-view.html"]) {
   }
 }
 
-for (const failure of ["503", "quota", "interrupted"]) {
-  test(`career UI ${failure} aborts update and preserves offline prior generation`, async () => {
-    let offline = false;
-    const ordinary = lazyShellFetch({ "js/career/career-ui.js": "bbbbbbbbbbbb" });
-    const h = createHarness({
-      fetchImpl: (request) => {
-        if (offline) return Promise.reject(new TypeError("offline"));
-        if (requestKey(request).includes("/js/career/career-ui.js")) {
-          if (failure === "503") return Promise.resolve(new Response("unavailable", { status: 503 }));
-          if (failure === "interrupted") return Promise.reject(new TypeError("connection interrupted"));
-        }
-        return ordinary(request);
-      },
-      putImpl: (_name, request) => {
-        if (failure === "quota" && requestKey(request).includes("/js/career/career-ui.js")) {
-          throw new DOMException("full", "QuotaExceededError");
-        }
-      },
+for (const asset of ["js/career/career-ui.js", "js/career/career-planning-ui.js"]) {
+  for (const failure of ["503", "quota", "interrupted"]) {
+    test(`${asset} ${failure} aborts update and preserves offline prior generation`, async () => {
+      let offline = false;
+      const ordinary = lazyShellFetch(Object.fromEntries(["js/career/career-ui.js", "js/career/career-planning-ui.js"].map((u) => [u, hash12("body of " + u)])));
+      const h = createHarness({
+        fetchImpl: (request) => {
+          if (offline) return Promise.reject(new TypeError("offline"));
+          if (requestKey(request).includes("/" + asset)) {
+            if (failure === "503") return Promise.resolve(new Response("unavailable", { status: 503 }));
+            if (failure === "interrupted") return Promise.reject(new TypeError("connection interrupted"));
+          }
+          return ordinary(request);
+        },
+        putImpl: (_name, request) => {
+          if (failure === "quota" && requestKey(request).includes("/" + asset)) {
+            throw new DOMException("full", "QuotaExceededError");
+          }
+        },
+      });
+      h.stores.set("apex26-321", new Map([
+        [`${ORIGIN}/`, new Response("old shell")],
+        [`${ORIGIN}/index.html`, new Response("old shell")],
+        [`${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa`, new Response("old career")],
+        [`${ORIGIN}/__apex_install_complete__`, new Response("complete")],
+        [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+      ]));
+      await assert.rejects(h.lifecycleEvent("install").done());
+      assert.equal(h.skipped, 0);
+      assert.deepEqual(h.deleted, []);
+      assert.equal(h.stores.get("apex26-322").has(`${ORIGIN}/__apex_install_complete__`), false);
+      offline = true;
+      // A rejected installing worker never controls clients; the previous worker
+      // continues serving the retained generation, including after a restart.
+      const active = createHarness({ fetchImpl: () => Promise.reject(new TypeError("offline")) });
+      for (const [name, store] of h.stores) active.stores.set(name, store);
+      const nav = active.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+      assert.equal(await (await nav.responsePromise).text(), "old shell");
+      const lazy = active.fetchEvent({ method: "GET", url: `${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa` });
+      assert.equal(await (await lazy.responsePromise).text(), "old career");
     });
-    h.stores.set("apex26-321", new Map([
-      [`${ORIGIN}/`, new Response("old shell")],
-      [`${ORIGIN}/index.html`, new Response("old shell")],
-      [`${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa`, new Response("old career")],
-      [`${ORIGIN}/__apex_install_complete__`, new Response("complete")],
-      [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
-    ]));
-    await assert.rejects(h.lifecycleEvent("install").done());
-    assert.equal(h.skipped, 0);
-    assert.deepEqual(h.deleted, []);
-    assert.equal(h.stores.get("apex26-322").has(`${ORIGIN}/__apex_install_complete__`), false);
-    offline = true;
-    // A rejected installing worker never controls clients; the previous worker
-    // continues serving the retained generation, including after a restart.
-    const active = createHarness({ fetchImpl: () => Promise.reject(new TypeError("offline")) });
-    for (const [name, store] of h.stores) active.stores.set(name, store);
-    const nav = active.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
-    assert.equal(await (await nav.responsePromise).text(), "old shell");
-    const lazy = active.fetchEvent({ method: "GET", url: `${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa` });
-    assert.equal(await (await lazy.responsePromise).text(), "old career");
-  });
+  }
 }
 
-test("career UI is required under its content-hash key before a successful update retires old caches", async () => {
-  const map = { "js/career/career-ui.js": hash12("body of js/career/career-ui.js") };
+test("the complete strict Career group is required and loads offline under its content-hash keys", async () => {
+  const roster = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  const files = roster.LAZY_CAREER_UI, edges = roster.LAZY_CAREER_UI_EDGES;
+  const map = Object.fromEntries(files.map((u) => [u, hash12("body of " + u)]));
   const h = createHarness({ fetchImpl: lazyShellFetch(map) });
   h.stores.set("apex26-321", new Map([
     ["old", new Response("old")],
     [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
   ]));
   await h.lifecycleEvent("install").done();
-  assert.ok(h.stores.get("apex26-322").has(`${ORIGIN}/js/career/career-ui.js?v=${map["js/career/career-ui.js"]}`));
+  const store = h.stores.get("apex26-322");
+  const status = await store.get(`${ORIGIN}/__apex_offline_status__`).clone().json();
+  for (const file of files) {
+    const key = `${file}?v=${map[file]}`;
+    assert.ok(store.has(`${ORIGIN}/${key}`));
+    assert.ok(status.required.includes(key), `${file} belongs to the required install pool`);
+  }
+  const offline = createHarness({ fetchImpl: () => Promise.reject(new TypeError("offline")) });
+  for (const [name, saved] of h.stores) offline.stores.set(name, saved);
+  const loaded = [];
+  const ctx = vm.createContext({
+    window: { __APEX_BUILD: 322 }, ApexRoster: { DEFERRED_EDGES: [] }, setTimeout, clearTimeout,
+    document: {
+      getElementById: (id) => id === "apex-lazy-v" ? { textContent: JSON.stringify(map) } : null,
+      createElement: (tag) => ({ tagName: tag.toUpperCase() }),
+      head: { appendChild(script) {
+        if (script.tagName !== "SCRIPT") return;
+        const event = offline.fetchEvent({ method: "GET", url: `${ORIGIN}/${script.src}` });
+        event.responsePromise.then(async (res) => {
+          if (res.ok) { loaded.push(script.src.split("?")[0]); script.onload(); }
+          else script.onerror();
+          await Promise.all(event.lifetimes);
+        });
+      } },
+    },
+  });
+  vm.runInContext(await readFile(new URL("../../js/core/script-loader.js", import.meta.url), "utf8") + "\n;globalThis.loader = ScriptLoader.create();", ctx, { filename: absSrc("js/core/script-loader.js") });
+  assert.equal(await ctx.loader.load(files, edges, { strict: true }), true);
+  assert.deepEqual(loaded, files, "strict predecessor loads before the screen from installed caches");
   await h.lifecycleEvent("activate").done();
   assert.deepEqual(h.deleted, [], "the settled prior generation stays while matchAll is absent");
 });

@@ -9,12 +9,27 @@ Since 2026-10-19 (docs/plans/2026-10-19-fleet-redesign.md §2, "gate, don't
 grant") a merge or an arm needs a fresh `artifacts/merge-gate/<pr>.json`
 receipt from `node tools/ci/merge-gate.mjs --pr <n>` whose head is the sha the
 call pins, and a draft→ready flip a fresh `artifacts/ready-gate/<pr>.json`
-receipt from `node tools/ci/ready-gate.mjs --pr <n>`. `receipt_check` is the
-Python twin of tools/lib/gate-receipt.mjs `receiptVerdict`; the two agree by
-tests/unit/merge-gate.test.mjs.
+receipt from `node tools/ci/ready-gate.mjs --pr <n>`. A receipt lives
+RECEIPT_MAX_MIN (10) minutes. `receipt_check` is the Python twin of
+tools/lib/gate-receipt.mjs `receiptVerdict`, and `gate_files_check` the twin of
+`gateFilesVerdict`; the pairs agree by tests/unit/merge-gate.test.mjs.
+
+Since 2026-10-26 (system audit §10; user grant, Bryce 2026-10-26 ~23:00 PT: "Fix
+hook or guard or perm") the doors also call `gate_files_check`: the receipt
+records the sha256 of the gate's own files (GATE_FILES) and the hook refuses one
+whose files differ from the guarded checkout's committed tree — on 2026-10-20 an
+UNCOMMITTED edit of merge-gate.mjs (`--pacing-override`) wrote an ok receipt and
+the merge went through. It stops an edited gate, not a forger: anything that can
+Write a file can write a receipt, so branch protection is the real backstop
+(docs/notes/HOOKS-SECURITY-2026-10-26.md).
+
+Every "ask" here asks whoever runs the session: APEX_MERGE_DESK=1 skips only the
+MCP re-run prompt (github-mcp-guard.sh), never a merge, ready, close or dispatch.
 """
+import hashlib
 import json
 import os
+import subprocess
 import time
 
 GATE = "run `node tools/ci/ready-gate.mjs --pr <n>` (must exit 0 on the tip) first"
@@ -45,7 +60,29 @@ ASK_RERUN = ("Re-run a failed job at most once, and only for a timeout or infra 
              "of a SUPERSEDED run joins the branch's ci-<head.ref> group and cancels the live run; prefer "
              "`node tools/ci/ci-rerun.mjs`. Confirm by hand.")
 
+ASK_CLOSE = ("This call CLOSES a pull request (state=closed). Closing someone else's PR loses its CI and its owner's "
+             "work log; only the PR's owner, its orchestrator or Bryce closes one. Confirm by hand.")
+ASK_DISPATCH = ("This call dispatches pages.yml or ci.yml. pages.yml is the release train (one running + one pending; "
+                "never dual-dispatch, AGENTS.md §Git branch & deploy) and a ci.yml dispatch buys a full run. Confirm by hand.")
+ASK_UPDATE_BRANCH = ("This call merges the base into a PR branch on GitHub (update-branch). Sync through "
+                     "`node tools/ci/sync-pr.mjs <branch>` instead (.claude/rules/ci-tools.md). Confirm by hand.")
+DENY_WRITE = ("writes repository contents through the API (contents/ PUT|DELETE, or a file-write MCP tool) — on the "
+              "admin App token that lands a commit on any branch, the deploy branch included, with no PR and no CI "
+              "(system audit 2026-10-26 §10). Commit locally and `git push` your own cursor/<topic>-<hash> branch.")
+
 RECEIPT_MAX_MIN = 10
+GATE_FILES = ("tools/ci/merge-gate.mjs", "tools/ci/ready-gate.mjs", "tools/lib/gate-receipt.mjs")
+
+
+def gated_workflow(wf):
+    """True for a workflow id/file whose dispatch asks: pages.yml, ci.yml (any path or .yaml spelling), or a numeric
+    id the hook cannot resolve offline."""
+    w = str(wf if wf is not None else "").strip().lower()
+    if not w:
+        return False
+    if w.isdigit():
+        return True
+    return os.path.basename(w) in ("pages.yml", "pages.yaml", "ci.yml", "ci.yaml")
 
 
 def squash_or_rebase(method):
@@ -63,10 +100,53 @@ def receipt_path(root, kind, pr):
     return os.path.join(root, "artifacts", kind + "-gate", str(int(pr)) + ".json")
 
 
-def receipt_check(root, kind, pr, head=None, now=None):
+def _sha256(p):
+    try:
+        with open(p, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def _git_ok(root, *args):
+    try:
+        return subprocess.run(["git", "-C", root] + list(args), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              timeout=5).returncode == 0
+    except Exception:
+        return False
+
+
+def gate_files_check(root, receipt):
+    """(ok, why): was `receipt` written by the committed gate? Twin of gateFilesVerdict (tools/lib/gate-receipt.mjs).
+    Every GATE_FILES entry is recorded, equals the file's sha256 in `root`, is tracked there and matches HEAD
+    (`git diff --quiet HEAD`); a different `gateRoot` (a gate run in a linked worktree) passes the same test."""
+    rec = (receipt or {}).get("gateFiles") if isinstance(receipt, dict) else None
+    if not isinstance(rec, dict):
+        return False, "the receipt records no gate-file hashes (written by an older gate): re-run the gate"
+    roots = [root]
+    gr = receipt.get("gateRoot")
+    if isinstance(gr, str) and gr and os.path.realpath(gr) != os.path.realpath(root) and os.path.isdir(gr):
+        roots.append(gr)
+    for r in roots:
+        for f in GATE_FILES:
+            h = _sha256(os.path.join(r, f))
+            if not h:
+                return False, "%s is missing in %s" % (f, r)
+            if rec.get(f) != h:
+                return False, "%s in %s is not the file that wrote this receipt: re-run the gate from this checkout" % (f, r)
+        if not _git_ok(r, "ls-files", "--error-unmatch", "--", *GATE_FILES):
+            return False, "the gate files are not tracked in %s" % r
+        if not _git_ok(r, "diff", "--quiet", "HEAD", "--", *GATE_FILES):
+            return False, ("the gate files in %s differ from HEAD (an uncommitted gate edit, the 2026-10-20 O23 incident): "
+                           "commit or revert, then re-run the gate" % r)
+    return True, ""
+
+
+def receipt_check(root, kind, pr, head=None, now=None, verify_files=False):
     """(ok, why) for a merge (`head` = the call's pinned sha) or ready receipt. Mirrors receiptVerdict in
-    tools/lib/gate-receipt.mjs: same PR and kind, `ok`, at most RECEIPT_MAX_MIN old, and for a merge the pinned
-    head is the gated head (either a prefix of the other, at least 7 hex)."""
+    tools/lib/gate-receipt.mjs: same PR and kind, `ok`, at most RECEIPT_MAX_MIN (10) min old, and for a merge the
+    pinned head is the gated head (either a prefix of the other, at least 7 hex). `verify_files` (the hook doors
+    pass True) adds gate_files_check."""
     tool = "merge-gate" if kind == "merge" else "ready-gate"
     try:
         n = int(pr)
@@ -99,6 +179,10 @@ def receipt_check(root, kind, pr, head=None, now=None):
                            "the gate passed)" % b[:12])
         if not (a.startswith(b) or b.startswith(a)) or min(len(a), len(b)) < 7:
             return False, "expectedHeadSha %s is not the gated head %s; re-run merge-gate on the head you merge" % (a[:12], b[:12])
+    if verify_files:
+        ok, why = gate_files_check(root, r)
+        if not ok:
+            return False, "%s receipt for #%d: %s" % (tool, n, why)
     return True, ""
 
 

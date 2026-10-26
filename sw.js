@@ -229,10 +229,12 @@ async function sweepStaleCaches() {
   // #2194: an old tab still runs the previous shell after activate; its lazy
   // non-script fetches keep the booted ?v= keys. Keep exactly one prior SETTLED
   // generation while any window client remains (closed tabs → matchAll is
-  // empty and the predecessor can go). Installed builds can skip integers:
-  // select the newest actually SETTLED predecessor, skipping partial installs.
+  // empty and the predecessor can go). Published build numbers can skip;
+  // choose the newest settled generation actually present on this device.
   let prevName = null;
-  for (const k of keys.filter(k => cacheBuild(k) > 0 && cacheBuild(k) < build).sort((a, b) => cacheBuild(b) - cacheBuild(a))) {
+  const older = keys.filter((k) => cacheBuild(k) > 0 && cacheBuild(k) < build)
+    .sort((a, b) => cacheBuild(b) - cacheBuild(a));
+  for (const k of older) {
     if (await caches.match(INSTALL_SETTLED_URL, { cacheName: k })) { prevName = k; break; }
   }
   let retainPrev = false;
@@ -718,9 +720,9 @@ self.addEventListener("install", (event) => {
     // GLX is the fallback renderer every device can run: when TLX/WGX are not
     // cached (or fail), an offline boot without it is "graphics unavailable".
     // Career UI is also required: an update must not replace working offline
-    // career access with a shell whose lazy entry point was never cached.
+    // career access with a shell whose strict lazy group was not fully cached.
     // Stamp these files exactly as ScriptLoader requests them.
-    const isRequiredLazy = (u) => /^js\/render\/glx\//.test(u) || u === "js/career/career-ui.js";
+    const isRequiredLazy = (u) => /^js\/render\/glx\//.test(u) || /^js\/career\/career-(planning-ui|ui)\.js$/.test(u);
     const isShell = (u) => u === "./" || u === "index.html";
     // A lazy file's key: its content hash from the shell's map, else the build.
     const lazyV = urls.lazyV || new Map();
@@ -987,8 +989,12 @@ self.addEventListener("fetch", (event) => {
         const copy = res.clone();
         cacheWrite = (async () => {
           const name = await currentCacheName();
+          // Require a matching apex-build meta. A captive portal / interstitial
+          // that returns HTTP 200 HTML without the marker must not replace the
+          // shell (#3293). Missing meta used to fall through via `!m` and get
+          // stored as this generation's index.html.
           const m = /<meta name="apex-build" content="(\d+)"/.exec(await copy.clone().text());
-          if (!m || CACHE_PREFIX + m[1] === name) {
+          if (m && CACHE_PREFIX + m[1] === name) {
             const cache = await openCache(name);
             await cache.put(req, copy);
           }

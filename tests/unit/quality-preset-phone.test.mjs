@@ -14,6 +14,8 @@ import path from "path";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { seedStoreGlobal } from "../helpers/seed-store.mjs";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -23,6 +25,19 @@ function loadQuality() {
   const qsrc = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
   return eval(qsrc + ";GfxQuality");
 }
+
+test("facade applies the phone memory cap on the first legacy/import boot", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/render/shared/glx-facade.js"), "utf8");
+  const boot = (ua, high, touch = 0) => vm.runInNewContext(src + ";GLX", {
+    navigator: { userAgent: ua, maxTouchPoints: touch },
+    localStorage: { getItem: (key) => key === "apex26.gfxHigh" ? high : null },
+  }, { filename: absSrc("js/render/shared/glx-facade.js") });
+  assert.equal(boot("iPhone", "1").mobileTier, true);
+  assert.equal(boot("iPhone", null).mobileTier, true);
+  assert.equal(boot("Macintosh", "1", 5).mobileTier, true);
+  assert.equal(boot("Macintosh", "1").mobileTier, false);
+  assert.equal(boot("Macintosh", null).mobileTier, false);
+});
 
 test("capId / maxId: phones never keep ULTRA; desktop does", () => {
   const Q = loadQuality();

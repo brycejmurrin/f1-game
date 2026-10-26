@@ -1,0 +1,15 @@
+{
+  "pins": {
+    "js/ui/hud-layout.js": {
+      "narrow": [
+        "tests/unit/hud-layout-hidden.test.mjs"
+      ],
+      "hiddenReason": [
+        "tests/unit/hud-layout-hidden.test.mjs"
+      ],
+      "build": [
+        "tests/unit/hud-layout-hidden.test.mjs"
+      ]
+    }
+  }
+}

@@ -35,6 +35,7 @@
  *   node tools/gen/voicepack.mjs --append --id <voice> --ffmpeg /usr/bin/ffmpeg
  *   node tools/gen/voicepack.mjs --integrity-only [--out assets/voice]
  *   node tools/gen/voicepack.mjs --kokoro scratch/voicepack --id <voice> [--voice bm_george] [--dtype q4] [--speed 1.08] [--opus]
+ *   node tools/gen/voicepack.mjs --opus-only --id <voice> [--speaker <channel>] --kokoro scratch/voicepack --ffmpeg /usr/bin/ffmpeg
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -380,12 +381,21 @@ async function build() {
   const cache = path.join(ROOT, "artifacts", "voicepack", id, voice + "-" + dtype);
   fs.mkdirSync(cache, { recursive: true });
   fs.mkdirSync(outDir, { recursive: true });
-  const list = flag("append") ? [...fallbackVocabulary(id, spec.speaker), ...fullPhrases(id, spec.speaker)] : phrases(id, spec.speaker);
+  // --opus-only: add the Opus twin to a published pack without touching one MP3
+  // byte. The twin covers exactly the pack's own keys (a phrase the harvester no
+  // longer emits is spoken from its key, as fallbackVocabulary does).
+  const opusOnly = flag("opus-only");
+  let list = flag("append") || opusOnly ? [...fallbackVocabulary(id, spec.speaker), ...fullPhrases(id, spec.speaker)] : phrases(id, spec.speaker);
+  if (opusOnly) {
+    const textOf = new Map([...phrases(id, spec.speaker), ...list].map((p) => [p.key, p.text]));
+    const published = JSON.parse(fs.readFileSync(path.join(outDir, pack + ".json"), "utf8")).clips;
+    list = Object.keys(published).map((key) => ({ key, text: textOf.get(key) ?? key.replace(/^@line:/, "") }));
+  }
   const clips = {};
   const chunks = [];
   const opusFile = pack + ".opus.bin";
-  const opus = flag("opus") ? { clips: {}, chunks: [] } : null;
-  if (flag("append")) {
+  const opus = flag("opus") || opusOnly ? { clips: {}, chunks: [] } : null;
+  if (flag("append") || opusOnly) {
     const old = JSON.parse(fs.readFileSync(path.join(outDir, pack + ".json"), "utf8"));
     if (old.voice !== voice) throw new Error("--append cannot mix different voices");
     const bin = fs.readFileSync(path.join(outDir, pack + ".bin"));

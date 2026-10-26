@@ -2,7 +2,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chromeArgs, refusal, stop, owns, DEVICES, headlessGamePlan } from "../../tools/mcp/debug-chrome.mjs";
+import { chromeArgs, refusal, stop, owns, DEVICES, headlessGamePlan, discoveryFile } from "../../tools/mcp/debug-chrome.mjs";
+
+test("discovery honors an absolute XDG config root without redirecting home", () => {
+  assert.equal(discoveryFile({ configHome: "/workspace/runtime-config", home: "/readonly/home" }), "/workspace/runtime-config/chromium/DevToolsActivePort");
+  for (const configHome of ["", "relative/config"]) {
+    assert.equal(discoveryFile({ configHome, home: "/readonly/home" }), "/readonly/home/.config/chromium/DevToolsActivePort");
+  }
+});
 
 test("chromeArgs carries the proven flags, the loopback-only address and optional WebGPU", () => {
   const a = chromeArgs({});

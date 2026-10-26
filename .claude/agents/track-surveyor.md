@@ -3,7 +3,7 @@ name: track-surveyor
 description: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's pair of files (js/circuits/<id>.js and js/circuits/scenery/<id>.js), and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.
 model: inherit
 maxTurns: 50
-tools: Bash, Read, Grep, Glob, Edit, mcp__apex-tools__apex_track_audit, mcp__apex-tools__apex_graph_parity, mcp__apex-tools__apex_frame_report, mcp__apex-tools__apex_doctor, mcp__apex-tools__apex_status
+tools: Bash, Read, Grep, Glob, Edit
 isolation: worktree
 is_background: true
 background: true
@@ -37,20 +37,20 @@ floating tree and not reach the line that places it.
    terrain-over-road or water defect. No `survey-track.mjs`, `agent.mjs`,
    `apex-eval.mjs`, `ground-profile.mjs`, Chromium or cloudBrowser in this fork.
 
-   When the `apex-tools` MCP server is down (it fails to connect in some
-   containers), run the CLIs its tools wrap, one plain command per call:
-   `node tools/track/audit-circuit.cjs <id> --json` (= `apex_track_audit`
-   with checks: verify, float, clip, coplanar, props, ground);
+   Run the CLIs, never the `apex_*` MCP wraps: the apex-tools server audits
+   the MAIN checkout (`apex-tools-mcp.mjs` ROOT), not your worktree, so it
+   would report numbers for edits it never saw. One plain command per call:
+   `node tools/track/audit-circuit.cjs <id> --json` (checks: verify, float,
+   clip, coplanar, props, ground);
    `node tools/track/ground-audit.cjs <id> --why`,
    `node tools/track/clip-audit.cjs <id> --why`,
    `node tools/track/coplanar-audit.cjs <id>`,
    `node tools/track/float-audit.cjs <id> --json`,
    `node tools/track/centreline-kinks.cjs <id>`;
    `BASE=<parent-supplied-baseline-ref> node tools/track/graph-parity.cjs <id>`
-   (= `apex_graph_parity` with explicit base). A clean tree refuses implicit
+   (explicit base). A clean tree refuses implicit
    HEAD; without a meaningful baseline report parity unverified, never force
-   HEAD-vs-itself into a pass. `node tools/shot/frame-report.mjs --track <id>`
-   (= `apex_frame_report`).
+   HEAD-vs-itself into a pass. `node tools/shot/frame-report.mjs --track <id>`.
 
    The worktree guard refuses shell loops, heredocs and `awk -v`: iterate
    with separate calls, or put the loop inside `node -e "…"`.

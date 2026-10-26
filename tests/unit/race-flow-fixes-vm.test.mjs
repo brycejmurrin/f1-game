@@ -1014,3 +1014,150 @@ test("the garage's pause never drops the wake lock: the return to the tab re-hol
     assert.equal(h.log.at(-1), "release", "and the race's end releases the lock RETURN TO RACE raced under");
   } finally { g.close(); }
 });
+
+
+async function justFinishedPlayer(penalty = 0) {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  const { G, apex: a } = g;
+  a.headless(true); await g.race("monza", "default", "dry", { laps: 3 }); g.step(1);
+  const p = G.player, L = G.track.total, ai = G.cars.filter(c => !c.human), rival = ai[0];
+  for (const c of ai.slice(1)) a.retire(G.cars.indexOf(c));
+  rival.dnfAt = null;
+  a.aiPlace(G.cars.indexOf(rival), 0.5, 30, 2); Object.assign(rival, { lap: 3, prog: 2.5 * L });
+  a.jump((L - 0.1) / L, 40, -2); Object.assign(p, { lap: 3, prog: 3 * L - 0.1, penalty });
+  a.setInput({ throttle: true, steer: 0 });
+  for (let n = 0; n < 5 && !p.finished; n++) g.step(1);
+  assert.equal(p.finished, true); assert.equal(rival.finished, false);
+  return { g, G, p, rival, a, L, button: id => g.sandbox.document.getElementById(id) };
+}
+
+for (const timing of ["pre-existing", "late"]) test(`QUIT preserves settlement while a ${timing} penalty opportunity is pending`, async () => {
+  const { g, G, p, rival, button } = await justFinishedPlayer(timing === "pre-existing" ? 10 : 0);
+  try {
+    if (timing === "late") p.penalty = 10;
+    G.els.pausebtn.onclick();
+    assert.equal(button("pm-skip-results").hidden, true);
+    button("pm-skip-results").onclick();
+    assert.equal(G.state, "race", "SKIP cannot bypass corrected finish time");
+    button("pm-quit").onclick(); button("pm-quit").onclick();
+    assert.equal(G.state, "race", "QUIT retains the live race until safe to settle");
+    assert.equal(p.finPos, 0);
+    assert.equal(G.paused, false);
+    // A real runner crosses during the penalty interval; the normal line code settles it.
+    g.apex.aiPlace(G.cars.indexOf(rival), (G.track.total - 0.1) / G.track.total, 40, 2);
+    Object.assign(rival, { lap: 3, prog: 3 * G.track.total - 0.1 });
+    for (let n = 0; n < 120 && G.state === "race"; n++) g.step(1);
+    assert.equal(rival.finished, true);
+    assert.equal(G.state, "menu");
+    assert.equal(p.finPos, 2);
+    assert.equal(rival.finPos, 1);
+    G.quitToMenu();
+    assert.equal(p.finPos, 2, "repeated teardown cannot settle twice");
+  } finally { g.close(); }
+});
+
+test("new session clears a deferred finish QUIT", async () => {
+  const { g, G, button } = await justFinishedPlayer(10);
+  try {
+    G.els.pausebtn.onclick(); button("pm-quit").onclick();
+    await G.startRace(); g.apex.go(); g.step(120);
+    assert.equal(G.state, "race");
+    assert.equal(G.player.finished, false);
+    G.quitToMenu();
+    assert.equal(G.state, "menu", "ordinary mid-race QUIT stays immediate");
+  } finally { g.close(); }
+});
+
+for (const ending of ["green-to-SC", "SC-to-green"]) test(`the finishing-step pass uses its governing flag across ${ending}`, async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const { G, apex: a } = g;
+    a.headless(true); await g.race("monza", "default", "dry", { laps: 3 }); g.step(1);
+    const p = G.player, ai = G.cars.filter(c => !c.human), r = ai[0], L = G.track.total;
+    for (const c of ai.slice(1)) a.retire(G.cars.indexOf(c));
+    r.dnfAt = null;
+    a.aiPlace(G.cars.indexOf(r), (L - 0.05) / L, 10, 2);
+    Object.assign(r, { lap: 3, prog: 3 * L - 0.05 });
+    a.jump((L - 0.1) / L, 40, -2); Object.assign(p, { lap: 3, prog: 3 * L - 0.1 });
+    // Prime the staged positions while green: teleporting a rival ahead under
+    // caution would count as its pass, making the later re-pass exempt.
+    a.step(0); a.caution(false);
+    if (ending === "green-to-SC") G.holdCaution(3, "test boundary");
+    else G.applyCaution({ level: 3, sinceT: 90 });
+    a.setInput({ throttle: true, steer: 0 }); g.step(1);
+    assert.equal(p.finished, true);
+    assert.equal(p.penalty || 0, ending === "green-to-SC" ? 0 : 10,
+      "final-step offence is settled before post-finish controls can open");
+    assert.equal(a.caution().level, ending === "green-to-SC" ? 3 : 0, "the flag transitions after this motion");
+    g.step(1);
+    assert.equal(p.penalty || 0, ending === "green-to-SC" ? 0 : 10, "next flag cannot relabel the pass");
+  } finally { g.close(); }
+});
+
+test("restarted MIXED weather progresses from the fresh race clock", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const { G, apex: a } = g;
+    a.headless(true); await g.race("monza", "default", "dry", { laps: 10 });
+    G.raceChangeable = true; G.wxArcPlan = { to: "rain", dur: 280 };
+    await G.startRace(); a.go(); G.raceT = 180;
+    await G.startRace(); a.go(); G.raceT = 90; a.step(0);
+    assert.equal(G.weatherArc.t0, 0);
+    assert.equal(G.weatherArc.t, 90);
+  } finally { g.close(); }
+});
+
+
+function impactClock(network, remaining, dt) {
+  const body = gameSource();
+  const start = body.indexOf("let simTime = dt;"), end = body.indexOf("// Fixed-step physics", start);
+  assert.ok(start >= 0 && end > start);
+  let scale;
+  const feel = { hitStop: remaining };
+  const ctx = vm.createContext({ dt, feel, netPlay: { active: () => network }, Input: { setTimeScale: v => { scale = v; } } });
+  vm.runInContext(body.slice(start, end), ctx, { filename: "vm-snippet:game-hit-stop-clock" });
+  return { sim: scale * dt, scale, remaining: feel.hitStop };
+}
+
+test("impact slow motion clips the final frame to the remaining hold and keeps multiplayer unscaled", () => {
+  for (const network of [false, true]) for (const dt of [0, 1 / 30, 1 / 60, 1 / 120]) {
+    for (const hold of [0, 0.0018, 0.015, dt, 2 * dt]) {
+      const got = impactClock(network, hold, dt);
+      const expected = network ? dt : hold >= dt ? dt * 0.15 : (dt - hold) + hold * 0.15;
+      assert.ok(Math.abs(got.sim - expected) < 1e-14, JSON.stringify({ network, dt, hold, got, expected }));
+      assert.equal(got.remaining, Math.max(0, hold - dt));
+      if (dt === 0) assert.equal(got.scale, 1, "zero dt leaves input on its established fallback");
+      else assert.ok(got.scale >= 0.15 - 1e-14 && got.scale <= 1);
+    }
+  }
+});
+
+test("impact slow motion loses the same bounded simulation time at 30/60/120Hz and irregular frame partitions", () => {
+  const frames = [30, 60, 120].map(hz => Array.from({ length: hz / 10 }, () => 1 / hz));
+  frames.push([0.003, 0.027, 0.011, 0.001, 0.058]);
+  for (const network of [false, true]) for (const hold of [0.0018, 0.015, 0.045, 0.1, 0.12]) {
+    for (const partition of frames) {
+      let remaining = hold, simulated = 0;
+      for (const dt of partition) {
+        const next = impactClock(network, remaining, dt);
+        simulated += next.sim; remaining = next.remaining;
+      }
+      const expected = network ? 0.1 : 0.1 - Math.min(hold, 0.1) * 0.85;
+      assert.ok(Math.abs(simulated - expected) < 1e-14, JSON.stringify({ network, hold, partition, simulated, expected }));
+      assert.ok(Math.abs(remaining - Math.max(0, hold - 0.1)) < 1e-14);
+    }
+  }
+});
+
+
+test("deferred QUIT completes when the corrected-time opportunity expires, retaining unfinished classification", async () => {
+  const { g, G, p, rival, button } = await justFinishedPlayer(10);
+  try {
+    G.els.pausebtn.onclick(); button("pm-quit").onclick();
+    for (let n = 0; n < 60 * 12 && G.state === "race"; n++) g.step(1);
+    assert.equal(G.state, "menu");
+    assert.equal(rival.finished, false);
+    assert.equal(p.finPos, 1, "runner had its full penalty interval before snapshot classification");
+    assert.ok(G.raceT >= p.finishT + p.penalty);
+  } finally { g.close(); }
+});
