@@ -106,7 +106,7 @@ The public viewer is generated from the CARVIEW roster and shipped with
 content-hashed asset tags.
 
 The physical mirror glass reflects the environment, without following cars.
-The [rear-view mirror rendering contract](COCKPIT-REAR-MIRROR-DESIGN.md) defines
+The [rear-view mirror rendering contract](../archive/notes/COCKPIT-REAR-MIRROR-DESIGN.md) defines
 the depth-tested extension needed to reuse the rear camera across GLX, TLX and
 WGX. A HUD rectangle pasted over the housing would cover occluders when the
 driver looks sideways, so it is not used as a physical reflection.

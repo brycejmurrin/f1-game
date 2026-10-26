@@ -67,6 +67,7 @@ function bootPicker({ windowName = "" } = {}) {
   });
   seedLog(ctx);
   seedClipboard(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(read("js/perf/renderer-picker.js"), ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   return { G, byId, hud, overlay, dataDialog, helpDialog, document, win };
@@ -106,9 +107,11 @@ test("showUnavailable panel-only uses registered defaults for Data Hub", async (
 });
 
 test("clearGfxBootRecovery clears window.name ctx-loss tally", () => {
-  const { G, win } = bootPicker({ windowName: "apex26.ctxLostReloads=3" });
-  G.clearGfxBootRecovery();
-  assert.equal(win.name, "");
+  for (const prefix of ["", "player-owned-name", "line one\nline two"]) {
+    const { G, win } = bootPicker({ windowName: prefix + (prefix ? "\n" : "") + "apex26.ctxLostReloads=3" });
+    G.clearGfxBootRecovery();
+    assert.equal(win.name, prefix);
+  }
 });
 
 test("showUnavailable Data Hub failure re-enables the button and shows status", async () => {

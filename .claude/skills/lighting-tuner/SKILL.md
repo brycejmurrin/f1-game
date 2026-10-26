@@ -1,6 +1,6 @@
 ---
 name: lighting-tuner
-description: "Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing (dusk/dawn/night gate, lamp cap), the day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, validating knobs via lightState, or baking a pasted window.LightPresets / LightEdits blob into js/lighting/presets.js. Bloom as GPU/shader defect is renderer-debug; adding or moving floodlight masts is scenery-dress."
+description: "Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing, the day scene is flat, ambient/exposure/fog/lightTune issues, validating via lightState, or baking a pasted LightPresets blob into js/lighting/presets.js. Shader bloom → renderer-debug; floodlight masts → scenery-dress."
 
 ---
 

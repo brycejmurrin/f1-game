@@ -328,11 +328,16 @@ test("the live loop charges a caution pass first gained on the finish step", asy
     p.lap = 3; p._prevS = p.s; p.prog = 3 * L - 0.5;
     Object.assign(rival, { lap: 3, s: L - 0.4, _prevS: L - 0.4, prog: 3 * L - 0.4, speed: 20, x: 4 });
     a.setInput({ throttle: true, steer: 0 });
+    assert.equal(p.finished, false);
+    assert.equal(rival.finished, false);
+    assert.ok(rival.prog > p.prog, "the rival is ahead before the finishing-step pass");
+    assert.equal(p.penalty, 0, "no offence exists before the actual pass");
     game.step(1);
     assert.equal(p.finished, true);
-    assert.equal(p.penalty, 0, "the observation precedes the movement on this step");
+    assert.equal(p.penalty, 10, "the finishing motion is judged before result controls can settle it");
+    assert.equal(G.state, "race", "the rival still has the player's corrected-time opportunity");
     game.step(1);
-    assert.equal(p.penalty, 10, "the first finished observation still judges the final pass");
+    assert.equal(p.penalty, 10, "the next observation cannot duplicate the final-step fine");
     game.step(5);
     assert.equal(p.penalty, 10, "the offence is charged once");
   } finally { game.close(); }

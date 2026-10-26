@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+import { webcrypto } from "node:crypto";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 import worker, { Room } from "../../worker/rendezvous.js";
 
@@ -10,12 +14,18 @@ function roomHarness() {
     storage: {
       async get(key) { calls.get++; return records.get(key); },
       async put(key, value) { calls.put++; records.set(key, value); },
-      async setAlarm() { calls.alarm++; },
+      async setAlarm(at) { calls.alarm++; calls.alarmAt = at; },
+      async delete(key) { records.delete(key); },
+      async deleteAlarm() { calls.alarmAt = null; },
+      // SQLite transactions use storage itself; the legacy txn object has no alarm methods.
+      async transaction(fn) { return fn({}); },
       async deleteAll() { calls.deleteAll++; records.clear(); },
     },
   };
   return { room: new Room(state), records, calls };
 }
+
+const sealed = (label) => "v2." + Buffer.concat([Buffer.alloc(44), Buffer.from(label)]).toString("base64url");
 
 const route = "https://relay.test/v3/r/" + "a".repeat(64) + "/offer";
 const url = route + "?slot=offer";
@@ -25,12 +35,12 @@ test("Worker stores a valid bounded payload", async () => {
   const response = await h.room.fetch(new Request(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ payload: "v2.c2VhbGVkLW9mZmVy" }),
+    body: JSON.stringify({ payload: sealed("c2VhbGVkLW9mZmVy") }),
   }));
 
   assert.equal(response.status, 200);
   assert.equal(h.calls.put, 1);
-  assert.equal(h.records.get("offer").payload, "v2.c2VhbGVkLW9mZmVy");
+  assert.equal(h.records.get("offer").payload, sealed("c2VhbGVkLW9mZmVy"));
   assert.equal(h.records.get("offer").owner, null, "an owner capability is optional");
 });
 
@@ -59,11 +69,11 @@ test("Worker uses the owner capability instead of randomized ciphertext equality
     body: JSON.stringify({ payload, owner: cap }),
   }));
 
-  assert.equal((await post("v2.first-ciphertext")).status, 200);
-  assert.equal((await post("v2.second-ciphertext")).status, 200,
+  assert.equal((await post(sealed("first-ciphertext"))).status, 200);
+  assert.equal((await post(sealed("second-ciphertext"))).status, 200,
     "same owner may retry with a fresh salt + IV");
-  assert.equal((await post("v2.attacker", "different_owner_12345")).status, 409);
-  assert.equal(h.records.get("offer").payload, "v2.second-ciphertext");
+  assert.equal((await post(sealed("attacker"), "different_owner_12345")).status, 409);
+  assert.equal(h.records.get("offer").payload, sealed("second-ciphertext"));
 });
 
 test("Worker rejects an oversized Content-Length before reading the stream", async () => {
@@ -190,15 +200,65 @@ test("Worker refuses legacy secret-bearing routes and advertises the private pro
   assert.equal(legacy.status, 426);
   assert.equal(names.length, 0, "legacy requests never name a Durable Object");
   const created = await worker.fetch(new Request(route, {
-    method: "POST", body: JSON.stringify({ payload: "v2.ciphertext", owner: "owner_capability_123456" }),
+    method: "POST", body: JSON.stringify({ payload: sealed("ciphertext"), owner: "owner_capability_123456" }),
   }), env);
   assert.equal(created.status, 200);
   assert.equal(names[0], "v3:" + "a".repeat(64));
   assert.equal(created.headers.get("x-apex-rendezvous"), "3");
   assert.match(created.headers.get("access-control-expose-headers"), /x-apex-rendezvous/);
   const read = await worker.fetch(new Request(route), env);
-  assert.equal((await read.json()).payload, "v2.ciphertext");
+  assert.equal((await read.json()).payload, sealed("ciphertext"));
   const missing = await worker.fetch(new Request(route.replace("/offer", "/answer")), env);
   assert.equal(missing.status, 404);
   assert.equal(missing.headers.get("x-apex-rendezvous"), "3", "new empty room differs from an old Worker");
+});
+
+
+test("Worker keeps the earliest slot expiry and preserves a later live answer", async () => {
+  const h = roomHarness();
+  const realNow = Date.now;
+  let now = 1000000;
+  Date.now = () => now;
+  try {
+    const post = (slot) => h.room.fetch(new Request(route + "?slot=" + slot, {
+      method: "POST", body: JSON.stringify({ payload: "v2." + "A".repeat(60) }),
+    }));
+    assert.equal((await post("offer")).status, 200);
+    const firstExpiry = h.records.get("offer").expires;
+    now += 119000;
+    assert.equal((await post("answer")).status, 200);
+    assert.equal(h.calls.alarmAt, firstExpiry, "later writes must not postpone old data cleanup");
+    now = firstExpiry;
+    assert.equal((await h.room.fetch(new Request(url))).status, 404, "expiry is inclusive");
+    await h.room.alarm();
+    assert.equal(h.records.has("offer"), false);
+    assert.equal(h.records.has("answer"), true);
+    assert.equal(h.calls.alarmAt, h.records.get("answer").expires);
+    now = h.calls.alarmAt;
+    await h.room.alarm();
+    assert.equal(h.records.size, 0);
+  } finally { Date.now = realNow; }
+});
+
+test("Worker rejects malformed v2 encoding and undersized crypto envelopes", async () => {
+  const h = roomHarness();
+  for (const payload of ["v2.plaintext!", "v2." + "A".repeat(20), "v2." + "A".repeat(61)]) {
+    const res = await h.room.fetch(new Request(url, { method: "POST", body: JSON.stringify({ payload }) }));
+    assert.equal(res.status, 400, payload);
+  }
+  assert.equal(h.calls.put, 0);
+});
+
+
+test("Worker accepts actual client envelopes including the minimum empty plaintext", async () => {
+  const ctx = vm.createContext({ TextEncoder, TextDecoder, crypto: webcrypto, atob, btoa, Uint8Array });
+  vm.runInContext(readFileSync(new URL("../../js/net/bytes.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/net/bytes.js") });
+  const client = vm.runInContext(readFileSync(new URL("../../js/net/rendezvous.js", import.meta.url), "utf8") + ";NetRendezvous", ctx, { filename: absSrc("js/net/rendezvous.js") });
+  for (const plaintext of ["", "APEX1.s.OFFER", "🏁 SDP fixture"]) {
+    const payload = await client.sealPrivate("a".repeat(32), "offer", plaintext);
+    const h = roomHarness();
+    const res = await h.room.fetch(new Request(url, { method: "POST", body: JSON.stringify({ payload }) }));
+    assert.equal(res.status, 200, "valid client payload must retain compatibility");
+    assert.equal(h.records.get("offer").payload, payload);
+  }
 });

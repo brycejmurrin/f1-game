@@ -4,7 +4,7 @@ Lane brief: cut download size, GPU memory and decode time for every shipped
 asset, without visible or audible quality loss, measured on Bryce's iPhone path
 (TLX on three r186 WebGPU). This note has the inventory, what GitHub Pages
 already compresses, a ranked plan and the measurements behind each rank. It
-updates `docs/notes/ASSET-WEIGHT-AUDIT-2026-10-18.md`. Two of that audit's
+updates `docs/archive/notes/ASSET-WEIGHT-AUDIT-2026-10-18.md`. Two of that audit's
 inputs were wrong: voice is 32 kbps, not 64, and the model pack is 0.41 MB, not 2.0.
 
 Tree: deploy tip `dd923f85`. Tools: `du`/`stat`, `ffprobe`, `sharp` 0.33 (repo

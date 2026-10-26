@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/ui/layers.js": {
+      "narrow": [
+        "tests/unit/ui-layers-reflow.test.mjs"
+      ]
+    }
+  }
+}

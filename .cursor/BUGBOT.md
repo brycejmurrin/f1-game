@@ -6,18 +6,19 @@ can still ship with an explicit "not run" note.
 
 ## Merge & CI ops (blocking)
 
-- Only Merge Desk arms auto-merge, **MERGE (merge commit) only**, on ready
-  tip-green PRs (squash retired 2026-10-13, AGENTS.md §Concurrent PRs).
-  Agents, sessions and tools never arm or merge. Flag advice that recommends a
-  squash or rebase merge, or an agent arming auto-merge itself. Do not
-  suggest rewriting history on shared topic or deploy branches (sync by
-  merging origin/ship; never rebase or force-push).
+- Follow `AGENTS.md` §Concurrent PRs and `.claude/rules/fleet-core.md` for
+  current merge authority. Each orchestrator may merge its own fleet's PRs
+  after a successful `merge-gate.mjs` receipt pinned to the gated head;
+  workers do not merge. Merge Desk exists only when designated.
+  **MERGE (merge commit) only**; flag squash/rebase merges and history rewriting
+  on shared branches. Sync by merging origin/ship, never rebase or force-push.
+  Draft→ready requires the green tip and a successful `ready-gate.mjs` receipt.
 - Never dual-dispatch Pages, and never cancel another session's CI to free
   slots. Flag suggestions to re-run or cancel siblings for capacity.
 - The only veto is a PR-body line starting `MERGE-HOLD:`. "do not merge"
   wording and the launch line `Do not enable auto-merge or merge.` are not
-  vetoes — do not block Merge Desk's MERGE auto-merge for them. Flag any
-  SQUASH/REBASE auto-merge arm.
+  vetoes — assess the acting role against the canonical authority and gate
+  receipts. Flag any SQUASH/REBASE auto-merge arm.
 
 ## Hot-path evidence (blocking when absent)
 

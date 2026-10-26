@@ -1,0 +1,1 @@
+Fixed: the boot no longer guess-preloads the ~735 KB three.js vendor island before the renderer pick is known — the island waits until `start()` commits to THREE, so a wrong guess costs no boot bandwidth (#3515).

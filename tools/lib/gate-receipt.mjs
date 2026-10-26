@@ -10,9 +10,11 @@
 // only has to read it: fresh, `ok`, the same PR, and for a merge the same head
 // sha the call pins. `.claude/hooks/merge_policy.py` is the Python twin of
 // `receiptVerdict` — keep the two in step (tests/unit/merge-gate.test.mjs).
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 export const KINDS = ["merge", "ready"];
 /** A receipt older than this is stale: the tip, CI or the body may have moved. 10 min (was 30, 2026-10-21 defect hunt rows 2+3): the hook has no API, so a MERGE-HOLD added after the gate, or a push after a ready-gate, is only caught by the receipt aging out. */
@@ -37,12 +39,35 @@ export function mainCheckout(root) {
   return path.resolve(main) === path.resolve(root) ? null : main;
 }
 
+/**
+ * The gate's own code (2026-10-26 system audit §10, the O23 incident of 2026-10-20: `merge-gate --pacing-override`
+ * existed only as an UNCOMMITTED edit of merge-gate.mjs, the edited gate wrote an ok receipt and the merge went
+ * through). Every receipt records the sha256 of these files as the running gate saw them; the hook
+ * (`.claude/hooks/merge_policy.py` `gate_files_check`) recomputes them in the checkout it guards and refuses a receipt
+ * whose gate files differ from that checkout's committed tree. It stops an edited gate, not a forger: any session can
+ * Write a receipt by hand, so branch protection stays the real backstop (docs/notes/HOOKS-SECURITY-2026-10-26.md).
+ */
+export const GATE_FILES = Object.freeze(["tools/ci/merge-gate.mjs", "tools/ci/ready-gate.mjs", "tools/lib/gate-receipt.mjs"]);
+/** The checkout this module runs from: the gate files hashed are the ones actually executing. */
+export const GATE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+/** { path: sha256 hex | null (missing) } for GATE_FILES under `root`. */
+export function gateFileHashes(root = GATE_ROOT) {
+  const out = {};
+  for (const f of GATE_FILES) {
+    try { out[f] = crypto.createHash("sha256").update(fs.readFileSync(path.join(root, f))).digest("hex"); } catch { out[f] = null; }
+  }
+  return out;
+}
+
 /** Write `{ kind, pr, head, ok, at, ... }` under `root` (and the main checkout, from a worktree); returns the path. */
-export function writeReceipt(root, kind, data, { main = mainCheckout(root) } = {}) {
+export function writeReceipt(root, kind, data, { main = mainCheckout(root), gateRoot = GATE_ROOT } = {}) {
   if (!KINDS.includes(kind)) throw new Error(`unknown receipt kind ${kind}`);
   const pr = Number(data.pr);
   if (!Number.isInteger(pr) || pr < 1) throw new Error(`receipt needs a PR number, got ${data.pr}`);
-  const body = JSON.stringify({ kind, ...data, pr, at: data.at || new Date().toISOString() }, null, 2) + "\n";
+  // gateFiles/gateRoot last, so a caller's data cannot overwrite what the running gate hashed.
+  const body = JSON.stringify({ kind, ...data, pr, at: data.at || new Date().toISOString(),
+    gateRoot, gateFiles: gateFileHashes(gateRoot) }, null, 2) + "\n";
   const file = receiptPath(root, kind, pr);
   for (const f of main ? [file, receiptPath(main, kind, pr)] : [file]) {
     fs.mkdirSync(path.dirname(f), { recursive: true });
@@ -80,6 +105,32 @@ export function receiptVerdict(receipt, { kind, pr, head = "", now = Date.now(),
     if (!(a.startsWith(b) || b.startsWith(a)) || Math.min(a.length, b.length) < 7) {
       return { ok: false, why: `expectedHeadSha ${a.slice(0, 12)} is not the gated head ${b.slice(0, 12)}; re-run merge-gate on the head you merge` };
     }
+  }
+  return { ok: true, why: "" };
+}
+
+/**
+ * Was this receipt written by the committed gate? (Python twin: merge_policy.gate_files_check.) Pure apart from
+ * reading `root` (the checkout the hook guards) and the receipt's own `gateRoot`: every GATE_FILES entry must be
+ * recorded, equal the file's sha256 in `root`, be tracked by git there and match HEAD (`git diff --quiet HEAD`).
+ * A different gateRoot (a gate run from a linked worktree) must pass the same test.
+ * @returns {{ ok: boolean, why: string }}
+ */
+export function gateFilesVerdict(root, receipt, { run = spawnSync } = {}) {
+  const rec = (receipt && receipt.gateFiles) || null;
+  if (!rec) return { ok: false, why: "the receipt records no gate-file hashes (written by an older gate): re-run the gate" };
+  const roots = [root];
+  if (receipt.gateRoot && path.resolve(receipt.gateRoot) !== path.resolve(root) && fs.existsSync(receipt.gateRoot)) roots.push(receipt.gateRoot);
+  for (const r of roots) {
+    const now = gateFileHashes(r);
+    for (const f of GATE_FILES) {
+      if (!now[f]) return { ok: false, why: `${f} is missing in ${r}` };
+      if (rec[f] !== now[f]) return { ok: false, why: `${f} in ${r} is not the file that wrote this receipt: re-run the gate from this checkout` };
+    }
+    const tracked = run("git", ["-C", r, "ls-files", "--error-unmatch", "--", ...GATE_FILES], { encoding: "utf8" });
+    if (tracked.status !== 0) return { ok: false, why: `the gate files are not tracked in ${r}` };
+    const clean = run("git", ["-C", r, "diff", "--quiet", "HEAD", "--", ...GATE_FILES], { encoding: "utf8" });
+    if (clean.status !== 0) return { ok: false, why: `the gate files in ${r} differ from HEAD (an uncommitted gate edit, the 2026-10-20 O23 incident): commit or revert, then re-run the gate` };
   }
   return { ok: true, why: "" };
 }

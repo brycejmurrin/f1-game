@@ -324,6 +324,16 @@ concurrency:
   group: ci-${{ inputs.concurrency_key || ((github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('label-{0}', github.run_id)) || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# DIFF-RELATIVE COUNTERS ON A PR, ABSOLUTE ON THE TIP (2026-10-26, system audit
+# §6). The pin counters in tests/data/ratchets.json `tree` (assertPins,
+# rawGameReads, vmSrcLoads) fail a pull_request run only on growth that PR adds
+# against the merge ref's first parent, so one overage no longer turns every
+# open PR red at once (74 of 80 red PR runs in three days). The train (the
+# Pages call: the caller's event is push or workflow_dispatch), schedule and
+# dispatch judge the tree alone. tools/check/ratchets.mjs ratchetMode.
+env:
+  APEX_RATCHET_ABSOLUTE: ${{ github.event_name != 'pull_request' && '1' || '' }}
+
 jobs:
 
   draft-ci-skipped:
@@ -1401,6 +1411,9 @@ jobs:
     # its retry now meets this cap first: the job reads `cancelled`, which
     # ci-verdict.mjs fails exactly like `failure` — red either way, never green.
     timeout-minutes: ${{ (inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && 120 || 20 }}
+    # playwright.config.js caps a CI run at 45 min (globalTimeout); the wide nightly/dispatch run's job cap is 120.
+    env:
+      APEX_GLOBAL_TIMEOUT_MIN: ${{ (inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && '110' || '' }}
     # NO JOB-LEVEL CONCURRENCY (2026-10-16, the 2026-10-16 CI/CD review
     # note (#2333) finding 6). From 2026-10-15 to 10-16 every ready PR's single smoke shard
     # shared ONE fleet-wide lane group, so a 2.6-minute job that
@@ -2519,6 +2532,9 @@ jobs:
       group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('selected-lane-{0}', matrix.lane) || format('selected-run-{0}-{1}', github.run_id, strategy.job-index) }}
       queue: max
     timeout-minutes: ${{ matrix.timeout }}
+    # playwright.config.js's 45-min CI globalTimeout must never undercut the plan's own per-shard cap (nightly shards run 60).
+    env:
+      APEX_GLOBAL_TIMEOUT_MIN: ${{ matrix.timeout }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2904,8 +2920,8 @@ jobs:
         env:
           APEX_WORKERS: 1
           APEX_FAIL_ON_FLAKY: 1
-          APEX_GL: llvmpipe
-          LIBGL_ALWAYS_SOFTWARE: 1
+          APEX_GL: ${{ inputs.gl != 'swiftshader' && 'llvmpipe' || '' }}
+          LIBGL_ALWAYS_SOFTWARE: ${{ inputs.gl != 'swiftshader' && '1' || '' }}
           APEX_PORT: 3460
           APEX_REUSE_SERVER: 1
         run: |

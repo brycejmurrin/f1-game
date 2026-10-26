@@ -13,8 +13,9 @@
 // Informational (`missing`): a load with no `filename` at all; reported, not failed (a source string built at run time
 // has no single file to name; the R1 preload hashes those back to js/).
 // Ratcheted (`missing` with `src`): a filename-less load whose code is not a fixed snippet (a literal or a plain
-// template) — a source text read from a file, which V8 coverage then cannot attribute. SRC_CEILING is the count; it
-// only goes down: above it fails; below it prints the lower value (not a failure, so a PR that removes loads never
+// template) — a source text read from a file, which V8 coverage then cannot attribute. SRC_CEILING is the count
+// (`tree.vmSrcLoads` in tests/data/ratchets.json since 2026-10-26, so a raise is a ratchets.d fragment; the test judges
+// it diff-relative on a PR, tools/check/ratchets.mjs ratchetMode); it only goes down: above it fails; below it prints the lower value (not a failure, so a PR that removes loads never
 // reddens another's run) (B·H11, PR #3388).
 import fs from "node:fs";
 import path from "node:path";
@@ -23,8 +24,6 @@ import * as espree from "espree";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const SCAN_DIRS = ["tests/unit", "tests/helpers"];
-
-export const SRC_CEILING = 599;
 
 // method -> index of the options argument
 const OPTS_AT = { runInContext: 2, runInNewContext: 2, runInThisContext: 1 };
@@ -124,6 +123,8 @@ export function countSrc(results) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  // Read here, not at module scope: ratchets.mjs imports this file to count, and a static cycle deadlocks its main().
+  const SRC_CEILING = (await import("./ratchets.mjs")).load().tree.vmSrcLoads;
   const results = lintAll();
   const bad = results.flatMap((r) => r.sites.filter((s) => s.kind === "relative").map((s) => `${r.file}:${s.line}`));
   for (const b of bad) console.error(`vm-filename-lint: relative filename at ${b} (use absSrc(rel) from tests/helpers/abs-src.mjs)`);

@@ -1,17 +1,20 @@
 ---
 name: mcp-probe
-description: "Use when probing live working-tree Chrome MCP or fixing private chat MCP startup, Session terminated recovery, readiness and catalog contracts. Covers __apex heap/perf/console repros. Source stepping → js-debugger; deployed versions → deploy-research; batch captures → playwright-probe; scripted hooks → agent-view; UI matrices → survey-ui-matrix."
+description: "Use when driving the LIVE working-tree canvas with the Chrome DevTools MCP or probe-mcp.py daemon (poke __apex, heap/perf/console, memory census), or fixing private chat MCP startup, Session terminated recovery, readiness and catalog contracts. Breakpoints → js-debugger. Deployed site → deploy-research. Batch shots → playwright-probe. Scripted hooks → agent-view."
 ---
 
 # Probing the live game with the Chrome MCP
 
 One MCP server sits alongside the Playwright suite for live poking:
-**chrome-devtools** (`chrome_*`, working tree, canvas-visible, WebGPU flags
-from `tools/lib/webgpu-chrome-args.cjs`). `tools/mcp/probe-mcp.py` is a CLI (not
+**chrome-devtools** (working tree, canvas-visible, WebGPU flags
+from `tools/lib/webgpu-chrome-args.cjs`). Tool names differ by client: Claude
+Code attaches them as `mcp__chrome-devtools__<tool>` (e.g.
+`mcp__chrome-devtools__evaluate_script`); the probe-mcp.py CLI and the apex
+docs call the same tools `chrome_<tool>`. `tools/mcp/probe-mcp.py` is a CLI (not
 MCP-attached since 2026-09) whose `chrome-start` daemon keeps ONE Chromium alive across `call`s.
 The deployed site, `version.json` and the public web are **deploy-research** (table below).
 
-**Pick one client:** use attached `chrome_*` tools when the session lists them;
+**Pick one client:** use the attached `mcp__chrome-devtools__*` tools when the session lists them;
 otherwise use one persistent CLI daemon, then `call`. `chrome-start` requires
 `tmux`; on a host without it, use the owned foreground-daemon procedure in
 [offline preflight](references/offline.md). A bare `call` without a daemon
@@ -41,6 +44,15 @@ glitch reproduced as a snapshot/`evaluate_script` value (element text/rect), the
 `navigate_page about:blank` + `chrome-stop`. Flags: `node tools/lib/webgpu-chrome-args.cjs [mcp|json]`.
 Heap leak across races, console errors → [chrome.md](references/chrome.md)
 §Heap leak across N races (`take_heapsnapshot` needs `filePath`; `list_console_messages`).
+
+**Census tools** (measured before/after for phone memory, heap growth, CPU-side
+copies, GPU budgets; folded from the perf-memory-census skill):
+`node tools/perf/runtime-memory.mjs`, `tools/perf/vm-leak-census.mjs`,
+`tools/perf/mesh-census.mjs` and `tools/perf/garage-census.mjs` (flags in
+each file's header); `tools/perf/profile.mjs` / `query.mjs` for game-loop CPU. Record
+track and backend (`__apex.diag().env.backend`) with every number, cite MB
+deltas in the PR, and dispatch `gpu-census.yml` on `macos-latest` for a real
+GPU — SwiftShader here is not player evidence.
 
 Keep **`apex-tools` in root `.mcp.json`** so Cloud/Claude/this agent can load
 it. Cursor CLI also has `.cursor/mcp.json` (lockstep). If this session's host
@@ -85,7 +97,7 @@ beside an active Playwright run. UI matrix → `tools/ui/layout-audit.mjs` (not 
 - Renderer probe flags (`--backend`, secure context, `gfxBound`) →
   [`references/renderer.md`](references/renderer.md).
 
-Chrome DevTools naming: use `chrome_click` for the underlying `click` action.
+Chrome DevTools naming: `chrome_click` (CLI) and `mcp__chrome-devtools__click` (attached) are the same underlying `click` action.
 
 ## One-line summary
 

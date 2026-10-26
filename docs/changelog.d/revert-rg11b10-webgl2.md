@@ -1,0 +1,1 @@
+Fixed: On phones using the THREE.JS renderer's WebGL2 path, the scene's HDR colour is back to the 64-bit format: the 32-bit packed format measured slower on an iPhone 14 (42.5 fps against 45.7 and 47.0, and 55 against 13–19 frames over 33 ms); the WebGPU path is unchanged.

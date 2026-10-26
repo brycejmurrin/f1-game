@@ -69,7 +69,7 @@ test('real triangle GLB validates; budgets fail and dedup output preserves origi
   const before=fs.readFileSync(input),report=await validateAsset(input);assert(report.ok,JSON.stringify(report));assert.equal(report.triangles,1);
   assert(!(await validateAsset(input,{maxBytes:1})).ok);
   const reportOverwrite=spawnSync(process.execPath,['tools/assets/gltf-check.mjs',input,'--out',input],{cwd:root,encoding:'utf8'});
-  assert.notEqual(reportOverwrite.status,0);assert.match(reportOverwrite.stderr,/Report must not replace input/);assert.deepEqual(fs.readFileSync(input),before);
+  assert.notEqual(reportOverwrite.status,0);assert.ok(/Report must not replace input/.test(reportOverwrite.stderr),reportOverwrite.stderr);assert.deepEqual(fs.readFileSync(input),before);
   const result=await optimizeAsset(input,output);assert(result.ok);assert.deepEqual(fs.readFileSync(input),before);
   await assert.rejects(optimizeAsset(input,input),/separate/);await assert.rejects(optimizeAsset(input,output),/overwrite/);
 });
@@ -77,7 +77,7 @@ test('real triangle GLB validates; budgets fail and dedup output preserves origi
 test('room adapter rejects unapproved final composition and export before importing Blender',()=>{
   for(const stage of ['compose','export']){
     const r=spawnSync('python3',['tools/assets/procedural-room.py',stage,'tools/assets/procedural-room.example.json','--out','artifacts/must-not-exist'],{cwd:root,encoding:'utf8'});
-    assert.notEqual(r.status,0);assert.match(r.stderr,/Function approval required/);
+    assert.notEqual(r.status,0);assert.ok(/Function approval required/.test(r.stderr),r.stderr);
   }
 });
 
@@ -99,7 +99,7 @@ test('procedural arrival cannot be declared outside its wall',t=>{
   const dir=fixture(t),brief=JSON.parse(fs.readFileSync(path.join(root,'tools/assets/procedural-room.example.json')));
   brief.openings[0].centerX=100;const file=path.join(dir,'room.json');fs.writeFileSync(file,JSON.stringify(brief));
   const r=spawnSync('python3',['tools/assets/procedural-room.py','validate',file,'--out',path.join(dir,'unused')],{cwd:root,encoding:'utf8'});
-  assert.notEqual(r.status,0);assert.match(r.stderr,/strictly within/);
+  assert.notEqual(r.status,0);assert.ok(/strictly within/.test(r.stderr),r.stderr);
 });
 
 test('texture budgets use dimensions from the validator resource report',async t=>{

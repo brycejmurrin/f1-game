@@ -1,7 +1,7 @@
 # Graphics detail survey, round two — models, life, sky and weather (2026-10-01)
 
 Status: **RESEARCH / PROPOSAL** — no code changed. Second pass after
-[GRAPHICS-DETAIL-SURVEY-2026-10-01.md](GRAPHICS-DETAIL-SURVEY-2026-10-01.md), whose
+[GRAPHICS-DETAIL-SURVEY-2026-10-01.md](../archive/notes/GRAPHICS-DETAIL-SURVEY-2026-10-01.md), whose
 first eight slices have shipped or are open as drafts (tangent frame #658, kerb
 stripes and wear band #659, sun glint range and env probe #660, crown rounding
 #661, carbon weave #662, wheel spin blur #664, FXAA 3.11 #666, TLX scene MSAA

@@ -13,6 +13,7 @@ restart; an in-session subagent ends with its parent's turn.
 - Monitoring and reporting (paste into every launch prompt)
 - The watch kit (arm at start and after every push)
 - On every wake (event, Monitor line, check-in)
+- The steward loop for any PR owner (folded from steward/references/ownership.md)
 - Keep the box free (2026-10-17)
 - Traps that cost this role real cycles (2026-10-16)
 - A PR that edits `.claude/**`
@@ -30,7 +31,7 @@ Use the orchestrator.md launch template with:
   merge and the orchestrator armed it, say "auto-merge is armed (MERGE); leave
   it" — the owner still never arms or merges. `.claude/**` edits: `<quote> | NONE
   — push is expected to need a typed Approved: from Bryce in this session`.
-- `STOP AT: 150k context or $<cap>` as the last line (docs-only PR: 100k). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop).
+- `STOP AT: 150k context or $<cap>` as the last line (launch-policy.md §Size stop, its one home).
 - The relayed notes from the previous owner (head sha, last CI verdict, local
   sync state, files that conflicted).
 
@@ -46,8 +47,9 @@ force, no rebase); draft with a green tip and `ready-gate.mjs --pr <n>` exit 0
 → mark ready, then keep watching until merged.
 Do not enable auto-merge or merge: your orchestrator merges through
 merge-gate.mjs (role-merge-holder.md, AGENTS.md standing authority).
-REPORT: a cloud agent has no direct channel to the orchestrator. Keep this line in the
-PR body current, just under the fleet block (not inside it):
+REPORT: READY / BLOCKED / DONE to fleet <X>'s orchestrator via agent-msg.mjs (resolve
+with fleet-bus.mjs who X). Keep this line in the PR body current, just under the fleet
+block (not inside it):
   fleet-status: <working|blocked|needs-decision|ready|red|done> | <one-line reason> | <UTC time>
 and post the same line as a PR comment on every state change (never on an
 unchanged state). Decisions go to the orchestrator, not Bryce: set needs-decision and
@@ -61,10 +63,11 @@ the PR. On merge: `fleet-status: done`, `state: done`, `--release` the claim.
 2. A `Monitor` on `node tools/ci/ci-watch.mjs --sha <head> --timeout 30 --failures-only`,
    re-armed on expiry until the `= ci …` line (it expires at 30 min). Plain mode
    emits one event per job leg and woke ~15 owners per PR (retro 2026-10-17); do not SAY on a green leg.
-3. One `send_later` check-in ~15 min out (Bryce 2026-10-19), re-armed until the
-   PR is merged or closed, or you send READY or BLOCKED (after READY the
-   orchestrator's tick reads it; the subscription still wakes you on a red).
-   The subscription drops `check_run` completions; the timer is not optional.
+3. One `send_later` check-in at AGENTS.md rule 13's cadence (50–55 min, pending
+   Bryce; was 15 min), re-armed until the PR is merged or closed, or you send
+   READY or BLOCKED. After READY, delete the check-in (`delete_trigger`) and end
+   the turn: a 600k owner paid ~$0.75 per wake to learn its queue position (W49);
+   the subscription still wakes you on a red.
 4. Reply once: `ARMED <PR> sub=yes monitor=yes checkin=<UTC>`. No ARMED line
    means the orchestrator treats the owner as not live and nudges it.
 
@@ -88,12 +91,53 @@ guards; it has exited 0 while `CI` was red). A draft or unlabelled run can say
 in every READY the run id, the job ids that RAN and the tests>0 line. A
 `workflow_dispatch` pass is not a verdict on the PR head.
 
-Send `REPORT owner-<PR> <sha> <verdict>` at each push or red, `READY <PR> <sha>`
-when it goes ready, and `DONE <PR> <merge sha>` when it merges; then delete the
-check-in and stop. End every REPORT and READY with the box-health line below.
+Send `READY <PR> <sha>` when it goes ready (no per-push REPORT lines: the
+`fleet-status:` line carries progress) and stop after the merge; DONE is the
+merging orchestrator's line (SKILL.md §Glossary). End every READY with the
+box-health line below.
 
-Idle wakes: a duplicate or no-change event gets no tool call and at most one line; keep the ~1 h timer
-(fits the 1 h cache TTL), re-armed until the PR is merged or closed.
+Idle wakes: a duplicate or no-change event gets no tool call and at most one line.
+
+## The steward loop for any PR owner (folded from steward/references/ownership.md)
+
+Any session that owns a PR, fleet or not. Rules live in AGENTS.md (rules 2-5, 8,
+9, 11-13; §Git branch & deploy) and `.claude/rules/fleet-core.md`; skill
+`steward` carries the overrides. Already own the PR and a push went red: start at 3.
+
+1. **Claim and read**: AGENTS.md §Git branch & deploy (claim before a shared fix);
+   continue an existing PR by checking out its branch, new work is `cursor/<topic>-<hash>`.
+2. **Subscribe** with the host's tool (AGENTS.md rule 13). One watcher per PR; if
+   another agent holds it, run `ci-watch.mjs --sha <head> --once` at checkpoints.
+3. **Read the CURRENT head** before every decision and push (`git fetch`, then
+   `git rev-parse origin/<branch>`, or `pr-board.mjs --pr <n>`); another session
+   may have pushed.
+4. **Red is work now**: agent `ci-red-triage`; an inherited red is not yours (steward §3).
+5. **Fix, verify once, push once**: all edits first; `tooling-fast.mjs --jobs=3`
+   and `deploy.mjs --gate-only` as background tasks logging to `artifacts/logs/`
+   (rule 4; `queue-depth.mjs` is information only); whole browser groups via
+   `remote-group.mjs` after the push. Catch up only per fleet-core's sync rule,
+   with `needs-sync.mjs` then `sync-pr.mjs`.
+6. **Keep the PR body live** (rule 12).
+7. **Ready** per fleet-core (`ready-gate.mjs --pr <n>` exit 0), only if your brief
+   delegates it; merging and arming are never yours.
+8. **Report** first lines from SKILL.md §Glossary; one per transition.
+
+Stop when the PR is merged or closed (unsubscribe, `--release`, DONE), a BLOCKED
+needs the user, ~120 messages or two tip moves pass without progress, or another
+live session pushes your paths (STAND-DOWN).
+
+Spawn prompt for a non-fleet owner (a fleet owner uses the orchestrator.md template):
+
+```
+You own PR(s) <#n[, #m]> on branch <cursor/topic-hash> in brycejmurrin/f1-game.
+Follow AGENTS.md and .claude/skills/agent-fleet/references/role-pr-owner.md
+(§The steward loop). Goal: <one sentence, user's terms>.
+OWNED: <path globs>. FORBIDDEN: <path globs; shared-contract files>.
+Done when: current head green, ready-gate exits 0, PR body refreshed, then READY reported.
+Delegated: <e.g. mark ready after the gate; NOT auto-merge, NOT merge>.
+Do not enable auto-merge or merge. Do not rebase or force-push.
+Report to @parent with READY/BLOCKED/DONE/STAND-DOWN first lines only.
+```
 
 ## Keep the box free (2026-10-17)
 

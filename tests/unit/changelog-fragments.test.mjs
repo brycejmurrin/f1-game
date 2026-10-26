@@ -12,7 +12,8 @@ import cp from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseFragment, fold } from "../../tools/gen/gen-changelog.mjs";
+import { createRequire } from "node:module";
+import { parseFragment, fold, foldBuild } from "../../tools/gen/gen-changelog.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BASE_BRANCH = "claude/f1-game-project-26h3ng";
@@ -102,4 +103,28 @@ test("fragments from two PRs and a fold on the tip merge clean; the old top-of-f
   for (const b of ["frag-b", "frag-c"]) assert.ok(clean("ship", b), `${b} against a tip that landed a and folded`);
   git("merge", "-q", "--no-ff", "-m", "land b", "frag-b");
   assert.ok(clean("ship", "frag-c"), "frag-c after b landed too");
+});
+
+// The fold heading is the build Pages STAMPS (2000 + commit count), never version.json's frozen placeholder
+// (1695 since 2026-09-01): a fold keyed to it filed every entry under a build no player ran (audit 2026-10-26).
+test("fold build: --build wins, else the stamped build; never version.json", async () => {
+  assert.equal(await foldBuild(["--fold", "--build", "4321"], () => 1), 4321);
+  assert.equal(await foldBuild(["--fold"], () => 2999), 2999);
+  await assert.rejects(foldBuild(["--fold", "--build", "x"], () => 1), /positive integer/);
+  const src = fs.readFileSync(new URL("../../tools/gen/gen-changelog.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(src, /readRepo\("version\.json"\)/);
+  // Structure, not source text: the parsed workflow's one job checks out full history and its fold step
+  // runs `npm run fold`, then dispatches ci.yml on the bot branch (a GITHUB_TOKEN PR starts no CI).
+  const { parse } = createRequire(import.meta.url)("yaml");
+  const wf = parse(fs.readFileSync(new URL("../../.github/workflows/changelog-fold.yml", import.meta.url), "utf8"));
+  const steps = wf.jobs.fold.steps;
+  assert.equal(steps.find((st) => String(st.uses || "").startsWith("actions/checkout@")).with["fetch-depth"], 0);
+  const run = steps.find((st) => st.name === "Fold").run;
+  assert.ok(run.includes("npm run -s fold"));
+  assert.ok(run.includes('gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref bot/changelog-fold'));
+  assert.ok(!/git push[^\n]*claude\/f1-game-project-26h3ng/.test(run), "the deploy branch is reached only through the PR");
+  assert.equal(wf.permissions.actions, "write");
+  const pkg = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+  assert.equal(pkg.scripts.fold, "node tools/gen/gen-changelog.mjs --fold");
+  assert.ok(pkg.scripts["gen:check"].split(" && ").includes("node tools/gen/gen-changelog.mjs --check"));
 });

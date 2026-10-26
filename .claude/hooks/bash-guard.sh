@@ -2,9 +2,9 @@
 # PreToolUse guard for Bash. AGENTS.md rules made deterministic (§Verification
 # 3, 6/7 and 10 below):
 #
-#  §Verification 3 — `git commit` runs `npm run test:guards` first (~5 s since
-#    the slider-doc check stopped rebuilding a regex per slider; 16 s before
-#    2026-09-16) and a red result blocks the commit. Prefix the command with
+#  §Verification 3 — `git commit` runs `npm run test:guards` first (measured
+#    ~110 s for a code commit at loadavg 4–6 on 2026-10-26, 439 tests; the old
+#    "~5 s" dated from 2026-09-16) and a red result blocks the commit. Prefix the command with
 #    APEX_SKIP_GUARDS=1 only when the guards themselves are what you are fixing.
 #    Before the guards, `ratchets.mjs --auto-raise` absorbs ≤ 40 lines of growth
 #    in a ratcheted file into the commit (the raise is staged and printed).
@@ -27,8 +27,10 @@
 #    Chromium capture CLIs (tools/shot, tools/ui audits, gfx-probe), read from
 #    the parsed argv (round 2, see "one parse" below).
 #  git push / gh — force, mirror, delete, deploy-branch pushes are blocked;
-#    `gh pr merge --squash|--rebase` is denied and other merges / ready flips
-#    ask, silent under APEX_MERGE_DESK=1 (merge_policy.py, shared with github-mcp-guard.sh); the queue-depth
+#    `gh pr merge --squash|--rebase` is denied, `gh pr merge|ready <n>` needs the
+#    gate receipt, and other merges / ready flips ASK — for everyone since
+#    2026-10-26 (APEX_MERGE_DESK no longer silences them; merge_policy.py, shared
+#    with github-mcp-guard.sh); the queue-depth
 #    push hold is retired (2026-10-16, see below), and an Actions run cancel (`gh run cancel`,
 #    …/actions/runs/<id>/cancel) is refused (APEX_RUN_CANCEL_OK=1 overrides).
 #  Shared safety bans (Fleet A + D, Bryce 2026-10-22; Cursor reaches this file
@@ -42,13 +44,25 @@
 #  Transcript Auditor batch 9 (2026-10-24), also in guard(): ban 5 refuses
 #    turning commit signing off (`-c commit.gpgsign=false`, `--no-gpg-sign`,
 #    `git config … gpgsign false|--unset`); ban 6 refuses a git ref written
-#    through `gh api` (DELETE/PATCH/PUT/POST …/git/refs — was an ask, silent
-#    under APEX_MERGE_DESK). Advisories, never blocks (additionalContext): a
+#    through `gh api` (DELETE/PATCH/PUT/POST …/git/refs). Advisories, never blocks (additionalContext): a
 #    cursor/* push whose diff touches another open PR's paths (fleet-owner.mjs;
 #    APEX_HELD_CHECK=0 skips it), and ready-gate/merge-gate piped without
 #    `set -o pipefail`. A push to a cursor/* branch whose every PR is merged
 #    or closed is refused (one REST call; APEX_CLOSED_PR_PUSH_OK=1 as the
 #    push's own prefix when Bryce reopened it; an API error fails open).
+#  GitHub API through ANY client (2026-10-26 system audit §10; user grant, Bryce
+#    2026-10-26 ~23:00 PT: "Fix hook or guard or perm"). The egress proxy swaps
+#    any Authorization header for the admin App token, so `curl -X PUT
+#    …/pulls/N/merge` squash-merged with no hook in the way. curl, wget,
+#    `node -e` fetch and `python -c` calls to api.github.com (and a web
+#    …/pull/N/merge) get the `gh api` policy (shellparse.api_classify): squash/
+#    rebase denied, git/refs and contents writes refused, other merges, ready
+#    flips, PR/issue closes, update-branch and pages.yml/ci.yml dispatches ask,
+#    reads pass.
+#  Shell poll loops (2026-10-26): a for/while/until loop that sleeps while
+#    watching CI, git, the API or the bus, or a `seq` loop that sleeps, is
+#    refused — subscribe and arm ONE Monitor instead (APEX_POLL_OK=1 for a
+#    bounded network retry).
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
 #    .claude/agents, survey images/reports under artifacts/shots/{tracks,gallery}
 #    and artifacts/track-survey; never a generated doc) runs only
@@ -90,8 +104,13 @@ fi
 # SCAN and shellparse work for ordinary commands without relying on Claude
 # Code's non-portable per-hook `if` field (Cursor imports the file but does not
 # document that field); JSON command extraction still runs first.
-# Keep the 14 former `if: Bash(*word*)` filters plus the executable agent runner.
-GUARD_TRIGGER='git|gh |kill|pgrep|curl|node|npm|npx|playwright|chrom|python|sh |eval|xargs|agent-run'
+# WHOLE WORDS (2026-10-26 system audit §4): the substring union matched
+# `.claude/skills` (kill), `digit` (git), `high ` (gh ), `evaluate` (eval), so
+# most calls paid the ~200 ms parse. Each verb the rules below read, as a word:
+# the former 14 `if: Bash(*word*)` filters, the agent runner, wget/sleep (the
+# API and poll-loop rules), `github` (a run-cancel URL in data) and the browser
+# launchers run as bare scripts.
+GUARD_TRIGGER='\b(git|github|gh|kill|pkill|killall|pgrep|curl|wget|node|nodejs|npm|npx|pnpm|pnpx|yarn|bun|bunx|deno|tsx|playwright|chrome|chromium|google-chrome|python|python3|sh|bash|dash|zsh|eval|exec|source|xargs|sleep|agent-run|test-bg|test-solo|run-playwright|verify-change|probe-mcp|apex-tools-mcp|js-debugger-mcp)\b'
 if ! printf '%s' "$CMD" | grep -Eq "$GUARD_TRIGGER"; then
   exit 0
 fi
@@ -259,10 +278,11 @@ fi
 #    `-c remote.*.mirror`, or that config in git for a bare push). settings.json's
 #    deny globs are prefix matches on raw text and miss all of these.
 #  gh — `gh pr merge --squash|--rebase` and a gh api merge naming squash/rebase
-#    are DENIED; any other `gh pr merge` (incl. --auto), `gh pr ready`, `gh api`
-#    …/pulls/<n>/merge or GraphQL merge/auto-merge/ready mutation ASKS, unless
-#    APEX_MERGE_DESK=1 (merge_policy.py: the same words as github-mcp-guard.sh).
-#    No settings.json `ask` rule for these: it would also prompt Merge Desk.
+#    are DENIED; `gh pr merge|ready <n>` needs the gate receipt; a `gh api`
+#    …/pulls/<n>/merge, GraphQL merge/auto-merge/ready mutation, close or
+#    pages/ci dispatch ASKS (merge_policy.py: the same words as
+#    github-mcp-guard.sh). The same api_classify policy covers curl, wget,
+#    `node -e` fetch and `python -c`. APEX_MERGE_DESK no longer silences an ask.
 #  subagent browser ban (§Verification 10) — test-bg (but --status/--tail),
 #    test-solo, run-playwright, verify-change without --fast/--plan, `playwright
 #    test` however launched (npx [--yes], npm exec, node_modules/.bin, cli.js),
@@ -292,7 +312,7 @@ if [ "$GUARD_RC" != 0 ] || [ "$PARSE" != "PARSE ok" ]; then
     # playwright): every tools/shot/*.mjs except the node-VM ones (frame-report,
     # cam-corners, cam-motion), tools/ui/{layout-audit,menu-mock,css-play}.mjs and
     # tools/gfx/gfx-probe.mjs. --help / --plan print and exit, so they stay open.
-    CAPTURE="${P}(shot/(?!(frame-report|cam-corners|cam-motion)\.mjs)[A-Za-z0-9_-]+\.mjs|ui/(layout-audit|menu-mock|css-play)\.mjs|gfx/gfx-probe\.mjs)(?![^;&|]*[[:space:]]--(help|plan)([[:space:]=]|\$))"
+    CAPTURE="${P}(shot/(?!(frame-report|cam-corners|cam-motion)\.mjs)[A-Za-z0-9_-]+\.mjs|ui/(layout-audit|menu-mock|css-play)\.mjs|gfx/gfx-probe\.mjs)(?![^;&|]*[[:space:]](--(help|plan)|-h)([[:space:]=]|\$))"
     BROWSER="${BROWSER}|${CAPTURE}"
     BGROUPS=$(python3 -c '
 import json,re,sys
@@ -311,6 +331,11 @@ except Exception:
   fi
   if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}gh[[:space:]].*(pr[[:space:]]+(merge|ready)|api[[:space:]])"; then
     GH_DECISION='{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": "bash-guard could not parse this gh call; confirm it by hand."}}'
+  fi
+  # 2026-10-26: the same for a GitHub API write through curl/wget/node/python the parser could not read.
+  if printf '%s' "$SCANQ" | grep -Eiq 'api\.github\.com|github\.com/[^[:space:]]+/pull/' \
+     && printf '%s' "$SCANQ" | grep -Eiq '(-X|--request|--method)[=[:space:]]*["'"'"']?(PUT|POST|PATCH|DELETE)|method[[:space:]]*:[[:space:]]*["'"'"'`](PUT|POST|PATCH|DELETE)|requests\.(put|post|patch|delete)'; then
+    GH_DECISION='{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": "bash-guard could not parse this GitHub API write (curl/wget/node/python); confirm it by hand."}}'
   fi
 fi
 # ONE JSON object on the way out (stdout is parsed as JSON only when it is a
@@ -427,8 +452,9 @@ fi
 # `{ git commit; }`, a line holding `$((1 << n))` and an unbalanced quote — all
 # real commits. Now the fallback also runs for `[]`: a broad regex on SCAN
 # (reserved words allowed before the verb) that, if it sees a commit the parser
-# did not, treats it as a real `-a` commit. A guard run on a false positive is
-# only 25 s; a commit that skips the guards is the failure being closed.
+# did not, treats it as a real `-a` commit. A guard run on a false positive
+# costs one test:guards run (~110 s at load 4–6, 2026-10-26); a commit that
+# skips the guards is the failure being closed.
 # FOUND is how many `git … commit` the parser read (dry runs included); 0 or NULL
 # is where the broad fallback regex decides.
 case "$COMMIT_LINE" in "0 "*|NULL|"") C_FOUND=0 ;; *) C_FOUND=1 ;; esac
@@ -493,7 +519,7 @@ if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUA
   mkdir -p "$ROOT/artifacts"
   LOG="$ROOT/artifacts/pre-commit-guards.log"
   # A GUARD RUN THAT OUTLIVES THE HOOK MUST BLOCK, NOT PASS (2026-10-14). The
-  # hook's own timeout is 180 s (settings.json); a hook killed there used to let
+  # hook's own timeout is 360 s (settings.json); a hook killed there used to let
   # the commit through unguarded on a loaded box. The inner runs are capped
   # below it and rc 124 blocks with a reason; settings.json also sets
   # onFailure "block". APEX_GUARD_TIMEOUT (seconds) exists for the tests.
@@ -619,9 +645,9 @@ EOF
   # else tests/data/ratchets.json — so the raise is in this commit's diff
   # instead of a hand edit plus a second guard run. Bigger growth still blocks.
   # ONE GUARD RUN PER COMMIT, NOT ONE PER MATCHING FILTER (2026-10-17).
-  # settings.json registers this hook under 14 `if:` filters, so a commit
-  # command that also says node/sh/npm/... starts two or more copies at once:
-  # each ran the full suite, doubling the load and sharing $LOG, so one timed
+  # settings.json once registered this hook under 14 `if:` filters (one entry
+  # since; GUARD_TRIGGER above is the filter now), so a commit command that also
+  # said node/sh/npm/... started two or more copies at once: each ran the full suite, doubling the load and sharing $LOG, so one timed
   # out (160/300 s) while its twin went green in 202 s — seven blocked
   # commits in a row. Copies now queue on a lock, and a later copy reuses a
   # GREEN verdict via tools/ci/guards-verdict.mjs check (same cache as

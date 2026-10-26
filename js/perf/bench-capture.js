@@ -59,7 +59,7 @@ const BenchCapture = (function () {
     let best = -1; const rows = [];
     timestamps.forEach((ms, uid) => { const m = /^([rc]):(\d+):[^:]*:f(\d+)$/.exec(String(uid)); if (m) rows.push({ f: +m[3], call: m[1] + m[2], ms: +ms }); });
     for (const r of rows) if (r.f > best) best = r.f;
-    const last = rows.filter((r) => r.f === best && Number.isFinite(r.ms)).sort((a, b) => b.ms - a.ms);
+    const last = rows.filter((r) => r.f === best && Number.isFinite(r.ms) && r.ms >= 0).sort((a, b) => b.ms - a.ms);
     if (!last.length) return null;
     let total = 0; for (const r of last) total += r.ms;
     return { frame: best, calls: last.length, totalMs: r2(total), top: last.slice(0, CAP.passes).map((r) => ({ call: r.call, ms: r2(r.ms) })) };
@@ -97,6 +97,27 @@ const BenchCapture = (function () {
   }
   function call(name) { for (const g of gfx()) if (typeof g[name] === "function") return safe(() => g[name](), null); return null; }
   function renderer() { const h = call("inspectorHost"); return h && h.renderer ? h.renderer : null; }
+  // Timestamp UIDs carry renderer.info.frame. Bound windows by frames already
+  // submitted at their start, so a delayed old resolution is not new work.
+  function gpuBoundary(r) {
+    const frame = safe(() => r.info.frame, null);
+    const row = passTimes(safe(() => r.backend.timestampQueryPool.render.timestamps, null));
+    return Number.isFinite(frame) ? Math.max(frame, row ? row.frame : -1) : null;
+  }
+  function readGpu(L, afterFrame, scope) {
+    const r = renderer(), timer = L.gpuTimer ? safe(() => L.gpuTimer.gpuTimer(), null) : null;
+    const row = passTimes(safe(() => r.backend.timestampQueryPool.render.timestamps, null));
+    let state = L.out.gpu.timer === "supported" ? "freshness unavailable" : "unsupported";
+    if (timer && !timer.supported) state = "unsupported";
+    if (timer && timer.supported) {
+      if (!timer.on) state = "timer inactive";
+      else if (r !== L.gpuRenderer || afterFrame == null) state = "freshness unavailable";
+      else state = row && row.frame > afterFrame ? "fresh" : "no fresh resolved frame";
+    }
+    return { passes: state === "fresh" ? row : null,
+      sample: { state, scope, frame: row ? row.frame : null, afterFrame,
+        capturedAtMs: r2(now() - L.t0), timerOn: !!(timer && timer.on) } };
+  }
   function memory() {
     const w = W(), pm = safe(() => performance.memory, null);   // Chromium only; WebKit has none
     const m = call("memState") || {}, bs = call("backendState") || {};
@@ -250,6 +271,8 @@ const BenchCapture = (function () {
     const was = timer ? safe(() => timer.gpuTimer(), null) : null;
     L.out.gpu.timer = was ? (was.supported ? "supported" : "unsupported") : "unsupported";
     if (was && was.supported && !was.on) { safe(() => timer.gpuTimer(true), null); L.undo.push(() => safe(() => timer.gpuTimer(false), null)); }
+    L.gpuTimer = timer; L.gpuRenderer = renderer();
+    L.gpuStartFrame = L.gpuStepFrame = gpuBoundary(L.gpuRenderer);
     let prev = 0;
     const raf = (ts) => { if (!L.on) return; if (prev) push(L.gaps, ts - prev, 20000); prev = ts; requestAnimationFrame(raf); };
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(raf);
@@ -267,16 +290,18 @@ const BenchCapture = (function () {
   function step() {
     const L = _leg; if (!L) return null;
     pullLogs(L);
-    const t = now() - L.t0, m = memory();
+    const t = now() - L.t0, m = memory(), gpu = readGpu(L, L.gpuStepFrame, "step");
     const o = { heap: m.heapMB, geo: m.rGeo, tex: m.rTex, progs: m.progs, calls: m.calls, tris: m.tris,
-      gpuPasses: passTimes(safe(() => renderer().backend.timestampQueryPool.render.timestamps, null)),
+      gpuPasses: gpu.passes, gpuSample: gpu.sample,
       compiles: compileStats(L.compiles, L.stepFrom, t), errors: L.errors.length - L.stepErr, longTasks: L.lt.n - L.stepLt };
     L.stepFrom = t; L.stepErr = L.errors.length; L.stepLt = L.lt.n;
+    L.gpuStepFrame = gpuBoundary(renderer());
     return o;
   }
   function legEnd() {
     const L = _leg; if (!L) return null;
     pullLogs(L);
+    const gpu = readGpu(L, L.gpuStartFrame, "leg");   // read before undo disables our timer
     L.on = false; _leg = null;
     for (const f of L.undo.reverse()) safe(f, null);
     safe(() => L.out._pressure && L.out._pressure.disconnect(), null); delete L.out._pressure;
@@ -285,7 +310,8 @@ const BenchCapture = (function () {
     const c = L.out;
     c.ms = r2(end); c.raceAtMs = r2(L.raceAt);
     c.end = memory();
-    c.gpu.passes = passTimes(safe(() => renderer().backend.timestampQueryPool.render.timestamps, null)) || (c.gpu.timer === "supported" ? "no resolved frame" : "unsupported");
+    c.gpu.passes = gpu.passes || gpu.sample.state;
+    c.gpu.sample = gpu.sample;
     c.compiles = { entry: compileStats(L.compiles, 0, entryT), after: compileStats(L.compiles, entryT, Infinity), top: top(L.compiles, CAP.compiles) };
     c.longTasks = c.observers.longtask === "on" ? { n: L.lt.n, ms: r2(L.lt.ms), top: top(L.lt.top, CAP.longTasks) } : "unsupported";
     c.loaf = c.observers.loaf === "on" ? { n: L.loaf.n, ms: r2(L.loaf.ms), blockMs: r2(L.loaf.blockMs), top: top(L.loaf.top, CAP.loaf) } : "unsupported";

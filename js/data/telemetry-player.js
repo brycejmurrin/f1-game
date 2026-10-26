@@ -4,7 +4,7 @@ const DataTelemetryPlayer = (function () {
 
   function create({ el, cssColor }, renderer) {
     const { clamp, laneRole, summaryTime, signed, summaryValue, dcode, drsOpen, sampleAt,
-            PADL, PADR, distAtT, timeAtDist } = DataTelemetryModel;
+            PADL, PADR, distAtT, timeAtDist, speedUnit, speedValue, speedText } = DataTelemetryModel;
 
     // Unchanged feed samples must not replace text nodes every frame: those
     // mutations also make AriaState rescan the containing Data Hub controls.
@@ -32,7 +32,7 @@ const DataTelemetryPlayer = (function () {
           return;
         }
         bits.push(dcode(lane.d) + " " + laneRole(i).toLowerCase() + ": " +
-          "speed " + summaryValue(c.speed, " km/h") + ", gear " +
+          "speed " + speedText(c.speed) + ", gear " +
           (typeof c.gear === "number" && isFinite(c.gear) ? (c.gear ? "G" + c.gear : "N") : "—") +
           ", throttle " + summaryValue(c.throttle, "%") + ", brake " + summaryValue(c.brake, "%") +
           ", rpm " + summaryValue(c.rpm, "") + ", DRS " +
@@ -102,7 +102,7 @@ const DataTelemetryPlayer = (function () {
           result.appendChild(el("p", null, dcode((i ? view.compare : view.primary).d)));
           [["Brake onset", lane.brake], ["Minimum speed", lane.minSpeed], ["Throttle recovery", lane.throttle]].forEach(function (entry) {
             if (!entry[1]) { result.appendChild(el("span", null, entry[0] + ": unavailable. ")); return; }
-            const metric = entry[1], button = el("button", "dh-tbtn", entry[0] + ": " + Math.round(metric.distance) + "m" + (metric.value === undefined ? "" : " · " + Math.round(metric.value) + " km/h"));
+            const metric = entry[1], button = el("button", "dh-tbtn", entry[0] + ": " + Math.round(metric.distance) + "m" + (metric.value === undefined ? "" : " · " + speedText(metric.value)));
             button.type = "button";
             button.addEventListener("click", function () {
               pauseAnim(view);
@@ -153,7 +153,7 @@ const DataTelemetryPlayer = (function () {
         card.appendChild(w); return out;
       }
       const g = {};
-      g.speed = valCell("dh-gspeed", "SPEED km/h");
+      g.speed = valCell("dh-gspeed", "SPEED " + speedUnit());
       g.gear = valCell("dh-ggear", "GEAR");
       g.thr = barCell("dh-gthr", "THROTTLE", "#3fb950");
       g.brk = barCell("dh-gbrk", "BRAKE", "#ff4d4d");
@@ -201,7 +201,7 @@ const DataTelemetryPlayer = (function () {
       if (!cars[0]) return;
       for (let i = 0; i < g.speed.length; i++) {
         const c = cars[i]; if (!c) continue;
-        setText(g.speed[i], c.speed === null ? "—" : Math.round(c.speed));
+        setText(g.speed[i], speedValue(c.speed));
         setText(g.gear[i], (c.gear == null) ? "—" : (c.gear ? "G" + c.gear : "N"));
         g.thr[i].style.width = (c.throttle === null ? 0 : clamp(c.throttle, 0, 100)) + "%";
         g.brk[i].style.width = (c.brake === null ? 0 : clamp(c.brake, 0, 100)) + "%";
@@ -211,7 +211,7 @@ const DataTelemetryPlayer = (function () {
         g.drs[i].classList.toggle("dh-on", open);
       }
       // Once the reference finishes, its distance and gap clock must stop together.
-      const refT = Math.min(t, view.primary.cum.t[view.primary.cum.t.length - 1]);
+      const refT = Math.min(t, view.primary.lap && view.primary.lap.lapDuration || view.primary.cum.t[view.primary.cum.t.length - 1]);
       if (g.delta && view.compare) {
         const dP = distAtT(view.primary.cum, refT);
         const delta = timeAtDist(view.compare.cum, dP) - refT;   // >0: compare is behind
@@ -225,7 +225,7 @@ const DataTelemetryPlayer = (function () {
         view.laps.forEach(function (lane, i) {
           const cell = g.board[i]; if (!cell) return;
           const cc = sampleAt(lane.car, t);
-          setText(cell.spd, (cc && cc.speed !== null) ? Math.round(cc.speed) : "—");
+          setText(cell.spd, cc ? speedValue(cc.speed) : "—");
           if (cell.ref) return;
           const dl = timeAtDist(lane.cum, dRef) - refT;   // >0: this lane is behind the ref
           setText(cell.dl, isFinite(dl) ? signed(dl, 2) : "—");

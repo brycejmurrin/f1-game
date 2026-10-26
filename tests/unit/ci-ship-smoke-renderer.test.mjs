@@ -6,6 +6,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
+import { parse as parseYaml } from "yaml";
+import { spawnSync } from "node:child_process";
 import { SELECTED_GATE } from "../../tools/ci/select-specs.mjs";
 import { report, groupSpecs } from "../../tools/ci/ci-coverage.mjs";
 import { ciWorkflow, pagesWorkflow, selectJob, selectedJob, selectStep, shipFilter, rendererJob, rendererFilter, SELECTED_TIMEOUT_MS } from "../helpers/ci-workflow.mjs";
@@ -382,4 +385,49 @@ test("smoke.spec.js is ONE shard on PRs and the Pages call; the wide nightly/dis
     "a scheduled run must pick its group from tools/ci/nightly-group.mjs, and only when the checkout above ran");
   assert.match(smokeJob, /run: npm run "test:\$\{GROUP:-tiny\}" -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
   assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      group:\n/, "the dispatch declares the group input");
+});
+
+
+test("staged-boot honors the SwiftShader opt-out for renderer env as well as setup", () => {
+  const { steps } = parseYaml(ciWorkflow).jobs["staged-boot"];
+  const setup = steps.find(step => step.uses === "./.github/actions/mesa-xvfb");
+  const smoke = steps.find(step => step.name === "Smoke against the staged site");
+  // These shipped expressions use the shared JS/GitHub boolean subset. Evaluate
+  // their results instead of pinning an equivalent expression's spelling.
+  const evaluate = (expression, gl) => vm.runInNewContext(
+    expression.replace(/^\$\{\{\s*/, "").replace(/\s*\}\}$/, ""), { inputs: { gl } }, { filename: path.resolve(".github/workflows/ci.yml") });
+  for (const gl of [undefined, "", "llvmpipe", "swiftshader"]) {
+    const mesa = gl !== "swiftshader";
+    assert.equal(evaluate(setup.if, gl), mesa, `setup for ${gl}`);
+    assert.equal(evaluate(smoke.env.APEX_GL, gl), mesa ? "llvmpipe" : "", `renderer for ${gl}`);
+    assert.equal(evaluate(smoke.env.LIBGL_ALWAYS_SOFTWARE, gl), mesa ? "1" : "", `software GL for ${gl}`);
+  }
+});
+
+
+function runMesaFixture(t, sudoBody) {
+  const root = fs.mkdtempSync(path.resolve("scratch/mesa-action-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const yml = fs.readFileSync(new URL("../../.github/actions/mesa-xvfb/action.yml", import.meta.url), "utf8");
+  const script = yml.split("      run: |\n")[1].split("\n").map(line => line.replace(/^        /, "")).join("\n")
+    .replaceAll("/tmp/.X11-unix/X99", path.join(root, "missing-display"));
+  const prelude = `sudo() { ${sudoBody}; }; Xvfb() { return 0; }; seq() { echo 1; }; sleep() { :; };`;
+  const r = spawnSync("bash", ["-e", "-c", prelude + "\n" + script], {
+    encoding: "utf8", timeout: 2000,
+    env: { ...process.env, GITHUB_ENV: path.join(root, "env"), RUNNER_TEMP: root },
+  });
+  return {r, root};
+}
+
+test("Mesa setup fails before exporting a missing Xvfb display", (t) => {
+  const {r, root} = runMesaFixture(t, "return 0");
+  assert.notEqual(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stdout.trim().split("\n").at(-1), "::error::mesa-xvfb: Xvfb :99 has no socket after 5 s", r.stdout);
+  assert.equal(fs.existsSync(path.join(root, "env")), false);
+});
+
+test("Mesa retries share a total deadline instead of exhausting the caller job", (t) => {
+  const {r} = runMesaFixture(t, "echo APT-CALL; SECONDS=$((SECONDS + 300)); return 1");
+  assert.notEqual(r.status, 0);
+  assert.equal((r.stdout.match(/APT-CALL/g) || []).length, 1, "no retry after setup budget is spent");
 });

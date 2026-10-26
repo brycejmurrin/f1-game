@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
 import { runningEndpoint } from "./debug-chrome.mjs";
-import { recordException, traceMethods } from "./js-debugger-trace.mjs";
+import { recordException, traceMethods, profileMethods } from "./js-debugger-trace.mjs";
 import { pathSuffixRegex, workflowMethods } from "./js-debugger-workflow.mjs";
 import { saveOutputArtifact } from "../agent/output.mjs";
 
@@ -71,14 +71,14 @@ const registerExpression = (gen, pid) => `(()=>{var M=globalThis.${REGISTRY}||(O
 const unregisterExpression = gen => `(()=>{var M=globalThis.${REGISTRY};if(M)delete M[${JSON.stringify(gen)}];return true})()`;
 const pidAlive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } };
 export class DebugSession {
-  constructor({ discover = targets, open = Cdp.open } = {}) {
-    this.discover = discover; this.open = open;
+  constructor({ discover = targets, open = Cdp.open, sharedEndpoint = runningEndpoint } = {}) {
+    this.discover = discover; this.open = open; this.sharedEndpoint = sharedEndpoint;
     this.cdp = null; this.pause = null; this.sequence = 0;
     this.scripts = new Map(); this.objects = new Set(); this.breakpoints = new Map();
     this.operations = new Map(); this.operationSequence = 0; this.connecting = false; this.attachGeneration = 0;
     this.operationGroups = new Set();
     this.logpoints = new Map(); this.logpointRings = new Set(); this.logpointSequence = 0; this.exceptionLog = null; this.lost = null; this.lastEndpoint = null;
-    this.generation = randomUUID();
+    this.profiling = null; this.generation = randomUUID();
   }
   resetPause() {
     const token = this.pause?.token;
@@ -129,6 +129,7 @@ export class DebugSession {
     return { connected: !!this.cdp && !this.cdp.closed, target: this.target || null,
       ...(this.lost && !this.cdp ? { detached: `target gone: ${this.lost}` } : {}),
       paused: !!this.pause, pause: this.pause,
+      profiling: this.profiling ? { kind: this.profiling.kind, startedAt: this.profiling.startedAt } : null,
       breakpointCount: this.breakpoints.size, breakpoints: [...this.breakpoints.values()].slice(0, 20).map(b => ({ ...b, url: clip(b.url, 300) })),
       operations: withResults ? ops.map((o, i) => i === ops.length - 1 ? o : { id: o.id, status: o.status, ...(o.result?.artifact ? { artifact: o.result.artifact } : {}), ...(o.timedOut ? { timedOut: true } : {}) }) : ops.map(o => ({ id: o.id, status: o.status, ...(o.result?.artifact ? { artifact: o.result.artifact } : {}), ...(o.timedOut ? { timedOut: true } : {}) })) };
   }
@@ -179,7 +180,7 @@ export class DebugSession {
   }
   // No endpoint: the last one used, else the shared Chromium from tools/mcp/debug-chrome.mjs.
   resolveEndpoint(endpoint) {
-    const e = endpoint || this.lastEndpoint || runningEndpoint();
+    const e = endpoint || this.lastEndpoint || this.sharedEndpoint();
     if (!e) throw Error("endpoint is required: pass endpoint (e.g. http://127.0.0.1:9222), or start the shared browser (node tools/mcp/debug-chrome.mjs start / apex_debug_chrome) and it is found automatically");
     return e;
   }
@@ -256,7 +257,7 @@ export class DebugSession {
       client.on("Debugger.globalObjectCleared", () => { if (this.cdp !== client) return; this.resetPause(); this.clearScripts(); this.abortOperations("aborted: context destroyed (page reload or navigation)"); });
       client.on("disconnect", () => {
         if (this.cdp !== client) return;
-        this.resetPause(); this.scripts.clear(); this.breakpoints.clear(); this.operationGroups.clear(); this.logpoints.clear(); this.logpointRings.clear(); this.exceptionLog = null;
+        this.resetPause(); this.scripts.clear(); this.breakpoints.clear(); this.operationGroups.clear(); this.logpoints.clear(); this.logpointRings.clear(); this.exceptionLog = null; this.profiling = null;
         if (!this.deliberate) this.lost = this.lost || "CDP connection closed (Chrome exited, the page closed, or the container resumed)";
         this.abortOperations("aborted: target disconnected"); this.cdp = null; this.target = null;
       });
@@ -297,6 +298,8 @@ export class DebugSession {
     let resumedEventObserved = false, timer;
     const observed = () => { resumedEventObserved = true; };
     client.on("Debugger.resumed", observed);
+    // Drop an active CPU/heap sample so the next attach is not refused.
+    try { await this.stopProfilingQuiet(); } catch { /* best-effort */ }
     // Reset exception pauses and owned breakpoints before resuming the program.
     this.exceptionLog = null;
     const commands = [["Debugger.setPauseOnExceptions", { state: "none" }],
@@ -336,7 +339,7 @@ export class DebugSession {
       // A target-close event can make a new attach possible while old cleanup is
       // still settling. Never let that old detach erase the replacement session.
       if (this.attachGeneration === detachGeneration) {
-        this.cdp = null; this.target = null; this.pause = null; this.objects.clear(); this.exceptionLog = null;
+        this.cdp = null; this.target = null; this.pause = null; this.objects.clear(); this.exceptionLog = null; this.profiling = null;
         this.breakpoints.clear(); this.logpoints.clear(); this.logpointRings.clear(); this.scripts.clear(); this.operationGroups.clear(); this.operations.clear(); this.connecting = false;
       }
     }
@@ -527,4 +530,4 @@ export class DebugSession {
     return { operationId: id, status: "pending", timeoutMs, ...(abandoned.length ? { abandoned } : {}), note: "Inspect debugger_state; a response timeout does not cancel JavaScript execution (timedOut ops still report a late result)." };
   }
 }
-Object.assign(DebugSession.prototype, traceMethods(), workflowMethods());
+Object.assign(DebugSession.prototype, traceMethods(), workflowMethods(), profileMethods());

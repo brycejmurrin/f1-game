@@ -46,7 +46,13 @@ export function liveRun() {
 // browser-use (plugin MCP) finds a local browser only through DevToolsActivePort in a standard profile
 // dir; headless Chromium never writes one, so start writes it (Chrome's format: port, then the browser
 // target path) and stop removes it when it still names our port.
-export const BU_DISCOVERY = path.join(os.homedir(), ".config/chromium/DevToolsActivePort");
+export function discoveryFile({ configHome = process.env.XDG_CONFIG_HOME, home = os.homedir() } = {}) {
+  // XDG paths must be absolute. Respect a writable runtime config directory
+  // instead of trying to create files in a sandbox's read-only home.
+  const base = configHome && path.isAbsolute(configHome) ? configHome : path.join(home, ".config");
+  return path.join(base, "chromium", "DevToolsActivePort");
+}
+export const BU_DISCOVERY = discoveryFile();
 export const discoveryText = (port, wsUrl) => `${port}\n${new URL(wsUrl).pathname}\n`;
 async function writeDiscovery(port, file = BU_DISCOVERY) {
   const v = await (await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(3000) })).json();

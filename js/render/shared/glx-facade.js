@@ -3,10 +3,9 @@
 "use strict";
 
 var GLX = (typeof window !== "undefined" && window.GLX) || (function () {
-  let forceMobile = false, gfxHigh = false;
+  let forceMobile = false;
   try {
     forceMobile = localStorage.getItem("apex26.forceMobileTier") === "1";
-    gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1";
   } catch (_) { /* storage may be blocked */ }
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
   const touch = typeof navigator !== "undefined" ? navigator.maxTouchPoints || 0 : 0;
@@ -14,7 +13,9 @@ var GLX = (typeof window !== "undefined" && window.GLX) || (function () {
     (touch > 1 && /Mac/.test(ua));
   return {
     isMobile,
-    mobileTier: isMobile && !gfxHigh,
+    // The phone preset ceiling is HIGH, whose memory tier is always mobile.
+    // Do not let an imported legacy ULTRA bit escape that cap for one boot.
+    mobileTier: isMobile,
     // Install by descriptors: getters (width/height/aspect) stay live, and the
     // object read by eval-time consumers stays the same throughout boot.
     install(backend) {
