@@ -253,3 +253,18 @@ test("main: a READY whose ready-gate receipt is missing or refused is not sent",
   assert.equal(await main(argv, deps({ ok: true })), 0);
   assert.deepEqual([bus.length, calls.length], [1, 1]);
 });
+
+test("Q9: --to fleet:<L> is one bus broadcast to the fleet letter; the webhook keeps the raw alias", async () => {
+  assert.equal(resolveBusTo("fleet:A"), "A");
+  assert.equal(resolveBusTo("fleet:b"), "B");
+  assert.equal(resolveBusTo("fleet:AB"), "fleet:AB", "not a letter: passes through and the bus refuses it");
+  const sent = [];
+  const out = [];
+  const code = await main(["send", "--to", "fleet:A", "--type", "INFO", "--as", "claude:session_X", "hello fleet"], {
+    env: {}, cwd: "/nonexistent", headShaFn: () => "abc", err: () => {}, log: (l) => out.push(l),
+    sendBus: (...a) => { sent.push(a); return { ok: true }; },
+  });
+  assert.equal(code, 0);
+  assert.equal(sent.length, 1, "one bus line, not one per session");
+  assert.equal(sent[0][1], "A");
+});

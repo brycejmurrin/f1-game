@@ -338,6 +338,7 @@ function manifestMoved() {
 const RATCHETS = "tests/data/ratchets.json";
 const TOOLS_README = "tools/README.md";
 const OUTPUT_CATALOG = "docs/agent-output/catalog.json";
+const AGENT_INDEX = "docs/agent-index.json";
 /* Every number in ratchets.json, flattened to `scope/name` -> value, so the
    three sides of a conflict can be compared metric by metric. */
 export function ratchetMetrics(json) {
@@ -433,13 +434,16 @@ export function cureableConflicts(conflicted) {
   // that each add a tool can touch neighbouring rows. Same cure: regenerate.
   // (policies.json is hand-written, so a conflict THERE still stops the merge.)
   const catalogF = conflicted.filter((f) => f === OUTPUT_CATALOG);
+  // docs/agent-index.json is GENERATED (tools/docs/gen-agent-index.mjs) from the
+  // tests and skills; two PRs that each add a test touch neighbouring rows.
+  const agentIdxF = conflicted.filter((f) => f === AGENT_INDEX);
   // (The gate-ladder figures used to be cured here too; since 2026-09-30 no
   // doc commits them — tools/gen/gen-ladder-figures.mjs only reports — so
   // there is nothing left to conflict.)
   const sourceContested = conflicted.includes("tests/groups.json");
   const cureable = conflicted.length > 0 && !sourceContested
-    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length === conflicted.length;
-  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF };
+    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length + agentIdxF.length === conflicted.length;
+  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, agentIdxF };
 }
 
 /* THE UNION MAY NEED A DEPENDENCY THE BOX HAS NOT GOT. A merged lockfile is
@@ -506,11 +510,11 @@ export function mergeDeployTip() {
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
   // real disagreement and stops.
-  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF } = cureableConflicts(conflicted);
+  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, agentIdxF } = cureableConflicts(conflicted);
   if (!cureable) {
     git(["merge", "--abort"]);
     const moved = manifestMoved();
-    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f))
+    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f) && !agentIdxF.includes(f))
       .map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
     throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
   }
@@ -566,6 +570,12 @@ export function mergeDeployTip() {
     run("node", ["tools/gen/gen-output-surface.mjs"], "regenerate the agent output catalog from the merged tree");
     must(git(["add", OUTPUT_CATALOG]), "add");
     did.push("agent output catalog regenerated");
+  }
+  if (agentIdxF.length) {
+    must(git(["checkout", "--ours", "--", AGENT_INDEX]), `checkout --ours ${AGENT_INDEX}`);
+    run("node", ["tools/docs/gen-agent-index.mjs"], "regenerate the agent index from the merged tree");
+    must(git(["add", AGENT_INDEX]), "add");
+    did.push("agent index regenerated");
   }
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
   installIfLockMoved(before);

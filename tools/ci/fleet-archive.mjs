@@ -16,7 +16,7 @@
 // tag, origin claude_code_mcp_seed), it is not running, nothing touched it in
 // the last 60 min, and its PR (the `pr:<n>` tag or a `#<n>` in the title) is
 // merged or closed — read with `gh api`, or `--offline` to report `pr-unknown`
-// instead. Everything else is KEEP with the reason. A session Bryce opened
+// instead. A `no-archive` tag, or a post_turn_summary naming running/gate/census work, also keeps it. Everything else is KEEP with the reason. A session Bryce opened
 // (origin ios/web, no role tag) is never ARCHIVE.
 //
 //   node tools/ci/fleet-archive.mjs <saved list_sessions page> [--offline] [--json] [--idle-min 60]
@@ -32,6 +32,18 @@ export const REPO = "brycejmurrin/f1-game";
 /** Roles an orchestrator may archive once their PR is done. Orchestrators, watchers and Merge Desks are never on it. */
 export const ARCHIVABLE_ROLES = ["worker", "owner", "pr-owner", "sync", "review", "reviewer", "hunter", "survey", "research", "probe"];
 export const IDLE_MIN = 60;
+/** A tag that pins a session: never ARCHIVE (Bryce or an orchestrator is still using it). */
+export const NO_ARCHIVE_TAG = "no-archive";
+/** Work the session says is still in flight (audit finding 18: W56 "census still running", O3 "gate running" were archived). */
+export const IN_FLIGHT = /\b(running|gate|census)\b/i;
+
+/** The session's last-turn summary as text: a string, or an object with a text/summary field. Pure. */
+export const summaryOf = (session) => {
+  const p = session.post_turn_summary;
+  if (!p) return "";
+  if (typeof p === "string") return p;
+  return String(p.text || p.summary || p.description || JSON.stringify(p));
+};
 
 /** The `{ccr:{data:[…]}}` page (the MCP text with its envelope, or raw JSON) -> sessions[]. Pure. */
 export function extractSessions(text) {
@@ -69,6 +81,9 @@ export function decide(session, { now = Date.now(), idleMin = IDLE_MIN, prState 
   if (!agentCreated(session)) return out("KEEP", `role ${role} but not agent-created (origin ${session.origin || "?"})`);
   if (!ARCHIVABLE_ROLES.includes(role)) return out("KEEP", `role ${role} is never archived by an agent`);
   if (String(session.session_status || "").endsWith("RUNNING")) return out("KEEP", "still running");
+  if ((session.tags || []).includes(NO_ARCHIVE_TAG)) return out("KEEP", `tagged ${NO_ARCHIVE_TAG}`);
+  const m = IN_FLIGHT.exec(summaryOf(session));
+  if (m) return out("KEEP", `its last summary says "${m[1]}": work may be in flight — read it, then archive by hand if it is done`);
   const touched = Date.parse(session.updated_at || "") || 0;
   const idle = (now - touched) / 60000;
   if (idle < idleMin) return out("KEEP", `touched ${Math.round(idle)} min ago (rule: idle ≥ ${idleMin})`);

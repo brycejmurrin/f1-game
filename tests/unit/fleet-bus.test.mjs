@@ -15,6 +15,7 @@ import {
   decide, leaseState, parseLease, leaseLine, formatLine, parseLine, parseLog, addressed, whoAmI,
   writeBus, readLease, readBus, fetchBus, BUS_BRANCH, MAX_TTL_MIN, DEFAULT_TTL_MIN,
   addressProblem, ADDRESS_FORMS, ROLES, main, parseLive, whoIs, whoLine, ageOf,
+  fixMarker, fixOf, openFixIncident,
 } from "../../tools/ci/fleet-bus.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -316,4 +317,30 @@ test("send READY needs a passing ready-gate receipt for the PR (and the head it 
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("Q3: an empty body is refused; --pr is --to '#<n>'", () => {
+  assert.throws(() => formatLine("DONE", "*", A, "   "), /empty text/);
+  assert.throws(() => formatLine("DONE", "*", A), /empty text/);
+  assert.equal(parseLine(formatLine("DONE", "#7", A, "x")).to, "#7");
+  const errs = [];
+  const orig = console.error; console.error = (l) => errs.push(l);
+  try {
+    assert.equal(main(["send", "DONE", "--as", A, "x"], { log() {} }), 1, "no --to and no --pr");
+    assert.equal(main(["send", "DONE", "--pr", "abc", "--as", A, "x"], { log() {} }), 1, "bad --pr");
+    assert.equal(main(["send", "DONE", "--to", "*", "--as", A, "--fix", "abc1234", "x"], { log() {} }), 1, "--fix only on INCIDENT");
+    assert.equal(main(["send", "INCIDENT", "--to", "*", "--as", A, "--fix", "zz", "x"], { log() {} }), 1, "--fix needs a sha");
+  } finally { console.error = orig; }
+  assert.ok(errs.some((e) => e.includes("--pr <n>")), errs.join("|"));
+});
+
+test("Q4: INCIDENT --fix marks the freeze; openFixIncident reads the newest open one", () => {
+  const sha = "abcdef1234567";
+  assert.equal(fixOf(`pages red ${fixMarker(sha)}`), sha);
+  assert.equal(fixOf("no marker"), null);
+  const e = (type, text, at) => ({ type, text, at, from: A, to: "*" });
+  assert.equal(openFixIncident([]), null);
+  assert.equal(openFixIncident([e("INCIDENT", `red ${fixMarker(sha)}`, 1)]).sha, sha);
+  assert.equal(openFixIncident([e("INCIDENT", `red ${fixMarker(sha)}`, 1), e("INCIDENT", "lifted by hand", 2)]), null);
+  assert.equal(openFixIncident([e("INCIDENT", `red ${fixMarker(sha)}`, 1), e("INCIDENT", "second, manual", 2)]), null, "an unmarked newer incident is a manual freeze");
 });

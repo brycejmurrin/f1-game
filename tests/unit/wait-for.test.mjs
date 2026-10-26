@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { parseArgs, check, waitFor, UsageError } from "../../tools/ci/wait-for.mjs";
+import { parseArgs, check, waitFor, capForeground, UsageError, FOREGROUND_CAP_SEC } from "../../tools/ci/wait-for.mjs";
 import { readStatus, waitStatus, stamp } from "../../tools/lib/deploy-status.mjs";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "wf-"));
@@ -122,4 +122,16 @@ test("--log-matches: holds once a log line matches; names the missing verdict; b
   assert.equal(check(a.conds, { read: () => "" }).ok, false);
   assert.throws(() => parseArgs(["--log-matches", "x.log"]), UsageError);
   assert.throws(() => parseArgs(["--log-matches", "x.log", "("]), UsageError);
+});
+
+test("capForeground: a foreground --timeout over 590 s is clamped and names run_in_background", () => {
+  assert.equal(FOREGROUND_CAP_SEC, 590);
+  assert.deepEqual(capForeground(5, false), { timeoutMin: 5, note: "" });
+  const c = capForeground(30, false);
+  assert.equal(c.timeoutMin * 60, 590);
+  assert.match(c.note, /run_in_background/);
+  assert.match(c.note, /--background/);
+  assert.deepEqual(capForeground(45, true), { timeoutMin: 45, note: "" }, "--background lifts the cap");
+  assert.equal(parseArgs(["--pid-gone", "1", "--background"]).background, true);
+  assert.equal(parseArgs(["--pid-gone", "1"]).background, false);
 });
