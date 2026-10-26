@@ -3,7 +3,7 @@
 // @doc Prints WARN if this branch has in-progress ci.yml runs (3 s API lookup); exit 0 always.
 // Full description: the third waste detector from measurement.md / #1714. bash-guard.sh
 // (FORBIDDEN here; #2899) will wire this on `git push`; until then agents and tests call
-// it directly. Lifted from verify-change.mjs's liveCiRuns (proxyFetch, 3 s cap, ci.yml
+// it directly. The ONE liveCiRuns: verify-change.mjs imports it (proxyFetch, 3 s cap, ci.yml
 // path filter). Advisory only — never blocks. Refs #1714; bash-guard wiring is a follow-up.
 // @skill check-changes
 //

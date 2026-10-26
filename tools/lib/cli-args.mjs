@@ -45,6 +45,30 @@ export function parseFlags(argv, known) {
   }
 }
 
+/** STRICT ENTRY for a CLI the rulebook names (audit3 T7/T8, audit4 cli-help).
+ *  `--help`/`-h` prints `usage` and exits 0; an unknown `--flag` prints the
+ *  near-miss line plus the usage on stderr and exits 2 (a usage error, the
+ *  POSIX/sysexits convention, distinct from a tool's own exit 1 = red).
+ *  Call it FIRST, before any fetch, spawn or file write: a typo'd
+ *  `deploy.mjs --gate-onyl` used to run the full deploy. Any `known` flag the
+ *  usage text never mentions is appended as a `flags:` line, so `--help` can
+ *  never omit a parsed flag again (test-bg's `--timeout`, deploy's `--train`).
+ *  `exit` is injectable for tests. Returns the makeFlags reader. */
+export function strictFlags(argv, known, usage, { exit = (c) => process.exit(c) } = {}) {
+  const all = [...new Set([...known, "--help"])];
+  const text = String(usage).replace(/\s+$/, "");
+  const missing = all.filter((k) => k !== "--help" && !new RegExp(`${k}(?![a-z0-9-])`).test(text));
+  const full = missing.length ? `${text}\n  flags: ${missing.join(" ")}` : text;
+  if (argv.includes("--help") || argv.includes("-h")) { console.log(full); exit(0); return null; }
+  try { return makeFlags(argv, all); }
+  catch (e) {
+    if (!(e instanceof CliArgError)) throw e;
+    console.error(`${e.message}\n\n${full}`);
+    exit(2);
+    return null;
+  }
+}
+
 /** `known` is every flag the tool accepts, WITH the leading dashes. Anything
  *  else in argv that looks like a flag throws, naming the near misses. */
 export function makeFlags(argv, known) {

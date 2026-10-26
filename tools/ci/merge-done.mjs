@@ -22,7 +22,7 @@
 // Not a merge commit (one parent) or no PR number in the subject: nothing is
 // posted; exit 3 says why. Exit 0 posted / already there / dry run, 1 bus
 // write failed, 2 bad args, 3 not a PR merge.
-import { spawnSync } from "node:child_process";
+import { gitRun } from "../lib/git-run.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { exitIfHelp } from "../lib/cli-args.mjs";
@@ -31,10 +31,8 @@ import { readBus, sendBusLine, parseLine } from "./fleet-bus.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DEFAULT_FROM = "github:merge-done";
 
-const git = (args, cwd = ROOT) => {
-  const r = spawnSync("git", args, { cwd, encoding: "utf8", maxBuffer: 16 << 20 });
-  return { code: r.status, out: (r.stdout || "").trim(), err: (r.stderr || "").trim() };
-};
+// The {code,out,err} git helper is tools/lib/git-run.mjs (audit3 T11).
+const git = (args, cwd = ROOT) => gitRun(args, { cwd });
 
 /** `git log -1` fields for one commit → { sha, parents[], author, subject, body }, or null. */
 export function readCommit(sha, { run = git } = {}) {

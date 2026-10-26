@@ -22,6 +22,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { assess } from "./fleet-flags.mjs";
+import { strictFlags } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const MAX_ROWS = 40;
@@ -136,4 +137,10 @@ function main(argv) {
   if (summary) fs.appendFileSync(summary, summaryMd(lines, cur));
   if (!argv.includes("--dry")) { fs.mkdirSync(path.dirname(stateFile), { recursive: true }); fs.writeFileSync(stateFile, JSON.stringify(cur, null, 1)); }
 }
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main(process.argv.slice(2));
+export const USAGE = `usage: node tools/ci/fleet-tick.mjs [--sessions <saved list_sessions page>] [--state <file>] [--dry] [--summary <file>]
+  one fleet-watch tick: board + sync + ship/Pages CI diffed against --state (default artifacts/fleet-watch/state.json);
+  --dry leaves the state file alone. An unknown flag prints this usage and exits 2.`;
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  strictFlags(process.argv.slice(2), ["--sessions", "--state", "--dry", "--summary"], USAGE);
+  main(process.argv.slice(2));
+}

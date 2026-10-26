@@ -82,6 +82,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/game-vm.cjs** | Boots js/game.js + `__apex` in a Node VM (renderer/DOM stubbed); `createGame({track})` drives physics, no browser. | — |
 | **lib/gate-receipt.mjs** | Gate receipts under artifacts/{merge,ready}-gate/<pr>.json: a gate writes one, github-mcp-guard.sh requires it. | agent-fleet |
 | **lib/generated-paths.mjs** | Generator outputs, one list: fleet-owner reports them GENERATED (never HELD); deploy.mjs regenerates them at merge. | — |
+| **lib/git-run.mjs** | Shared git helpers: gitRun {code,out,err}, gitMust (throws), gitOut (throwing stdout), gitTry ("" on failure). | — |
 | **lib/harness.mjs** | Shared harness for the headless `__apex` tools: in-process static server + Chromium launch with teardown-safe shutdown. | playwright-probe |
 | **lib/hud-geometry.mjs** | In-page HUD box probe (rect, visibility, font px) + the pure overlap/safe-area rules of hud-layout.spec. | — |
 | **lib/hud-survey-matrix.mjs** | HUD survey core: cells, quick/full/exhaustive matrices, shards, expected-visible rules, findings, merge, report HTML. | — |
