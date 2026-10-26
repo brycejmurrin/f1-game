@@ -185,20 +185,23 @@ async function matchPreferCurrent(req) {
   try { return await caches.match(req); } catch (_) { return undefined; }
 }
 
-// THE CACHED SHELL, ONLY WHEN IT IS AT LEAST BUILD `b`. The shell a plain
-// offline navigation would get (the first generation in cacheOrder() holding
-// index.html) — a shell is only ever written into its own build's cache, so
-// the cache name IS its build. Older (or an unnumbered cache) → undefined: a
-// `?b=` bust newer than anything cached must never be answered by a stale
-// shell, because the boot guard's one-shot sessionStorage key blocks a retry.
+// THE CACHED SHELL, ONLY WHEN IT IS AT LEAST BUILD `b`: the first generation
+// in cacheOrder() holding an index.html of build >= b — a shell is only ever
+// written into its own build's cache, so the cache name IS its build. The
+// order is settled-first, so an older settled shell is skipped, not returned
+// as a miss, when a newer unsettled cache already holds a qualifying shell
+// (#3284). None (or only unnumbered caches) → undefined: a `?b=` bust newer
+// than anything cached must never be answered by a stale shell, because the
+// boot guard's one-shot sessionStorage key blocks a retry.
 async function shellAtLeast(b) {
   const want = Number(b);
   if (!Number.isFinite(want)) return undefined;
   let ordered;
   try { ordered = await cacheOrder(); } catch (_) { return undefined; }
   for (const name of ordered) {
+    if (!(cacheBuild(name) >= want)) continue;
     const hit = await caches.match("index.html", { cacheName: name });
-    if (hit) return cacheBuild(name) >= want ? hit : undefined;
+    if (hit) return hit;
   }
   return undefined;
 }

@@ -971,7 +971,10 @@ let raceLineAssist = 0;
 // Debug/screenshot freeze: skip the simulation (physics + AI) but keep rendering,
 // so the camera still settles to a parked view yet nothing moves — giving the
 // visual-regression harness a deterministic frame. Only set by __apex.park().
-let frozen = false;
+// raceRestarting: a pause-menu RESTART in flight (#3283). State is still "race" while the new field builds, so render()
+// must not drop the build plate and PerfGov must not score the rebuild's hitches; cleared by the count reset and when
+// startRace settles.
+let frozen = false, raceRestarting = false;
 // When set by __apex.sky(), overrides the normal chase-cam with a horizon-facing
 // view so clouds and the sky gradient are visible in screenshots.
 let skyViewOverride = null;
@@ -2650,7 +2653,7 @@ async function startRaceBody() {
   try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8, { deferRear: !headlessMode })); } finally { _carWarm.busy = false; }
   if (stale()) return false;
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
-  setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; skyViewOverride = null;
+  setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; raceRestarting = false; skyViewOverride = null;
   RaceEntryProfile.mark("gridCountdown:end");
   if (typeof Assets !== "undefined" && Assets.retry && PerfGov.softwareRaster()) {
     const run = () => { try { Assets.retry(); } catch (_) { /* optional pack */ } };
@@ -7245,7 +7248,7 @@ function gfxContextLost() {
 function render(dt) {
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
   if (headlessMode) { mirrorPass.cancelPreparation(); loadingScreen.lowerWaitPlate(); return; }
-  if (state === "race") loadingScreen.lowerWaitPlate();   // busy/handoff must not hide HUD docks after lights-out (hud-layout / hud-audit)
+  if (state === "race" && !raceRestarting) loadingScreen.lowerWaitPlate();   // busy/handoff must not hide HUD docks after lights-out (hud-layout / hud-audit)
   // Context / device loss: shadow+begin already no-op, but render used to return
   // before afterPresent (begin===false / stuck warm) and leave handoff up forever.
   // Inline the stop (not RaceEntryProfile) so tests/unit/garage-arrival's render
@@ -8510,7 +8513,7 @@ function tickBody(now) {
   const _dtMs = now - lastFrame;
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race. RenderRate.drew(): an interval after a skipped rAF carries no draw, so it is not evidence.
-  if (!paused && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs, RenderRate.drew());
+  if (!paused && !raceRestarting && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs, RenderRate.drew());
   PerfSpans.begin("input"); Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick(); PerfSpans.end("input");
   onboard.tick(dt);   // coach marks; the TV director ticks after the physics step (below)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
@@ -9328,7 +9331,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false); $("pm-quick-doors").insertBefore(Object.assign(document.createElement("button"), { id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: () => { setPaused(false); Input.requestRecover(); } }), $("pm-checkpoint"));   // RECOVER CAR = the R key; touch had none. Built here like REPLAY: shellNodes holds
-$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; startRace().then(() => { if (state === "race") frozen = false; }, () => {}); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it on a committed start, and a start cancelled for changed settings (or failed) ends on the title via quitToMenu — the old race is not handed back
+$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; raceRestarting = true; startRace().then(() => { raceRestarting = false; if (state === "race") frozen = false; }, () => { raceRestarting = false; }); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it on a committed start, and a start cancelled for changed settings (or failed) ends on the title via quitToMenu — the old race is not handed back
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 
