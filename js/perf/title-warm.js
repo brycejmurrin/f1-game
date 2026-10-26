@@ -85,6 +85,8 @@ const TitleWarm = (function () {
       if (doneBuild) return;   // one per session
       const e = env(), why = blockers(e);
       last = { at: Math.round(now()), why };
+      // Idle counts from the title actually showing: any blocker but the quiet clock itself restarts it.
+      if (why.some((w) => w !== "input-recent")) noisy();
       if (why.length) return;
       wanted = true;
       try { Log.info("gfx", "title warm start (build " + e.build + (e.phone ? ", phone" : "") + ")"); } catch (_) { /* optional */ }
