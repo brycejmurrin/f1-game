@@ -1,1 +1,1 @@
-READY to:D from:claude:session_01X9AfrVwmivJyz5F2my23xZ #3721 808913aa1b2778b784a486d39d69f7eac7581134 ready-gate 0, full tier passed run 40263824325 35 jobs 0 failed (A-driven, D-lent)
+HANDOFF to:#3764 from:claude:session_01B2sM9pz5FjdoftiLVK5Fss B·#3764 STANDING DOWN: #3764 body (edited 03:36:59Z) shows the author has their own unpushed merge e8d3ff9a7 in its pre-push gate. B pushes nothing. B's alternative merge c317c7cc (OrchB decision a: bound reader wins, else storage over setContext; vm ceiling 599) stays local only.
