@@ -247,9 +247,13 @@ test("Cursor's hooks.json runs the edit guard on every preToolUse, failing close
   // Content shapes the adapter cannot read never read as an empty Write (review of c2589f2a):
   // index.html and package.json edits pass, an outright generated file and a ratchet file do not.
   const cursorEdit = (ti) => run(EDIT_GUARD, { tool_name: "Write", tool_input: ti }).out.permission;
-  assert.equal(cursorEdit({ target_file: "index.html", code_edit: "<p>x</p>" }), "allow");
-  assert.equal(cursorEdit({ target_file: "package.json", code_edit: "{}" }), "allow");
-  assert.equal(cursorEdit({ file_path: "index.html", old_str: "<title>", new_str: "<title>" }), "allow");
+  // Linked worktrees retain the shared-contract restriction before content checks.
+  const gitDir = execFileSync("git", ["rev-parse", "--git-dir"], { cwd: ROOT, encoding: "utf8" }).trim();
+  const commonDir = execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd: ROOT, encoding: "utf8" }).trim();
+  const sharedPermission = gitDir !== commonDir && !fs.existsSync(path.join(ROOT, ".claude/allow-protected")) ? "deny" : "allow";
+  assert.equal(cursorEdit({ target_file: "index.html", code_edit: "<p>x</p>" }), sharedPermission);
+  assert.equal(cursorEdit({ target_file: "package.json", code_edit: "{}" }), sharedPermission);
+  assert.equal(cursorEdit({ file_path: "index.html", old_str: "<title>", new_str: "<title>" }), sharedPermission);
   assert.equal(cursorEdit({ target_file: "version.json", code_edit: "{}" }), "deny");
   assert.equal(cursorEdit({ target_file: "tests/data/ratchets.json", code_edit: "{}" }), "deny");
 });

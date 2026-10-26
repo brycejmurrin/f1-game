@@ -67,7 +67,7 @@ test("RACE! before the menu's build: prepare under the card, then drive out and 
   assert.match(ib, /reduce-motion still builds then plays the garage-out before the card and the flyby/,
     "reduced motion still builds + the garage-out at its tuned pace, then card + flyby (loadingScreen.run no longer gates it)");
   assert.match(game, /_mq = [^;]*matchMedia\("\(prefers-reduced-motion: reduce\)"\)/, "…and motionReduced still reads the OS flag");
-  assert.match(game, /function motionReduced\(\) \{\s*return !!\(_mq && _mq\.matches\)/);
+  assert.match(game, /function motionReduced\(\) \{\s*return typeof TitleFx[^;]*TitleFx\.mode\(\) === "reduce"[^;]*_mq && _mq\.matches/, "intro motion honors the resolved preference, with an OS fallback");
   const pa = ib.indexOf("prepareMenuCarAssets(");
   assert.ok(pa > l && p > pa && b > p, "assets precede overlapping plans/shaders, both settle before drive-out");
   assert.match(handoff, /try \{ _introKey = key; raceIntro\(go\); \} catch \(e\) \{[^}]*loadingScreen\.stop\(\); go\(\); \}/, "a throw in raceIntro never strands the timer-less build card");
