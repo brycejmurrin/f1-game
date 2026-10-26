@@ -1579,7 +1579,7 @@ function makeCars() {
         // road ahead currently allows X-mode at all (see inAeroZone).
         xOn: false, aeroX: 0, xArmed: false,
         lapTime: 0, best: Infinity, totalT: 0,
-        finished: false, finishT: 0, finPos: 0,
+        finished: false, finishT: 0, finPos: 0, compoundShortAtFinish: null,
         // Retirement (js/race/reliability.js). `retired`/`dnf` are the record;
         // dnfAt/dnfWhy are the plan Reliability.arm() draws at the green light.
         // Declared here so every car has the shape whether or not a race arms it.
@@ -1795,7 +1795,7 @@ function gridUp(preOrder) {
     // (the row IS the compound); an AI car's from the class it just drew. No RNG
     // here — `h` is already the per-car race hash, so arming costs the sim
     // stream nothing, exactly as Reliability's retirement draw does.
-    c.tyreStints = 0; c.tyreLog = null;   // a new race is a new strip, not an appended one
+    c.tyreStints = 0; c.tyreLog = null; c.compoundShortAtFinish = null;   // a new race is a new strip, not an appended one
     pits.reset(c); engineer.reset(c);
     // STRATEGY (js/physics/ai-drive.js stintPlan). Drawn ONCE here from its own
     // hash of seed, round and DRIVER (not grid slot + skill: tier-adjacent cars
@@ -2207,7 +2207,7 @@ const _carWarm = { busy: false };   // the stepped race car warm (startRaceBody)
 // seconds: on a phone, RACE! on a circuit already raced met it pending, so the
 // garage drive-out waited behind the card and the flyby played instead.
 const _warmed = new Set();
-const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); carDraw.warmCockpitTelemetry(); return true; } } } catch (_) { /* optimisation only */ } return false; };
+const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; let fresh = false; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); fresh = true; } carDraw.warmCockpitTelemetry(); return fresh; } } catch (_) { /* optimisation only */ } return false; };   // telemetry every call (_rigDone dedupes; A·W56 / #3766 DAILY)
 async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
   if (!current()) return;
@@ -3686,7 +3686,7 @@ function introNow() {
 async function awaitIntroWarm(current) {
   return RaceEntryProfile.spanAsync("awaitIntroWarm", async () => {
     const at = introNow();
-    while (current() && gfx.warming && gfx.warming()) {
+    while (current() && gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued()))) {
       if (introNow() - at >= 30000) throw new Error("Shader preparation timed out");
       await menuSlice();
     }
@@ -3818,7 +3818,7 @@ async function introPrepare(live, key, info, n, cold) {
   return RaceEntryProfile.spanAsync("introPrepare", async () => {
     let failed = false;
     const current = () => !failed && live();
-    if (gfx.warming && gfx.warming() && !(await awaitIntroWarm(current))) return null;
+    if (gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued())) && !(await awaitIntroWarm(current))) return null;
     if (!current()) return null;
     const lamps = _atmo.prebakeLamps();
     const plan = RaceEntryProfile.spanAsync("introPlan", () => introPlan(current, key, info, n))
@@ -4012,7 +4012,7 @@ function raceIntroFromSheet(go, sheet, btn) {
   // (onRaceSessionReady) then moves teamIdx/driverIdx/difficulty, entrySettings with them, and the intro
   // it lands in went stale and handed START back with no garage-out (#3591, the 9 s idle prefetch).
   const sessionLate = typeof daily !== "undefined" && daily.isActive() && typeof SessionRecords !== "undefined" && !!SessionRecords._stub;
-  try { if (!sessionLate && !(gfx.warming && gfx.warming())) { intro(); return; } } catch (e) { failed(e); return; }
+  try { if (!sessionLate && !(gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued())))) { intro(); return; } } catch (e) { failed(e); return; }
   const n = ++_introRun;
   let settings = entrySettings();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings();
@@ -4142,11 +4142,10 @@ function drivingLineApi(trk) {
 }
 let rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals (recreated after ensureAudio)
 let carSfx = CarSfx.create(G);           // tyre scrub, lock-up, surface, pit limiter (recreated after ensureAudio)
-// Photo mode (js/camera/photo-cam.js).
-const photomode = Photomode.create(G), { updatePhotoCam, enterPhotoMode, exitPhotoMode } = photomode;
-// LIGHTING TUNER panel UI (js/lighting/tuner-panel.js).
-const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
+// Photo mode (js/camera/photo-cam.js) and lighting tuner (js/lighting/tuner-panel.js).
+const photomode = Photomode.create(G), { updatePhotoCam, enterPhotoMode, exitPhotoMode } = photomode, { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 // CAMERA TUNER panel UI (js/camera/tuner-panel.js) — per-camera-mode framing offsets.
+CamTune.bindContext(() => ({ track: G.track?.def?.id, car: ((G.state === "race" || G.state === "count") && G.player?.team?.id) || Teams.LIST[G.teamIdx]?.id }));
 const { closeCamTuner } = CamTunerPanel.create(G);
 // FLYBY SHOT EDITOR panel UI (js/camera/flyby-panel.js) — authors the pre-race
 // shot list; previews through __apex.flybyCam, touches no render-path state.
@@ -8544,7 +8543,7 @@ function tickBody(now) {
     // state in which it should still be flying.
     // SETTINGS still needs selected live frames: the sky animates and SAVE SCREENSHOT
     // waits for a fresh present (headed GLX has no preserved buffer).
-    if (setupPreviewOn || replayBuf.isScrubbing() || ((state === "race" || state === "count") &&
+    if (XrBoot.comfort() || setupPreviewOn || replayBuf.isScrubbing() || ((state === "race" || state === "count") &&
         (!paused || !els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode || !els.pmsettings.hidden))) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete

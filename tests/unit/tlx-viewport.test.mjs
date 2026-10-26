@@ -126,3 +126,65 @@ test("enabled: uv(view) is bound to the view's size uniform", () => {
   assert.equal(u.op, "div", "screenCoordinate.xy / size");
   assert.equal(u.a[1], v.size);
 });
+
+test("post lazy targets use their logical rect on first activation and reopening", async () => {
+  // Real post orchestration and TSL graphs; record uniforms at each draw.
+  // No renderer compilation or GPU is needed to observe binding order.
+  const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
+  const ctx = vm.createContext({ window: {},
+    localStorage: { getItem: (key) => key === "apex26.tlxAoFold" ? "0" : null },
+    Log: { info() {} },
+  });
+  ctx.window = ctx;
+  for (const file of ["js/lighting/knobs.js", "js/render/shared/post-common.js",
+    "js/render/three/tsl-viewport.js", "js/render/three/tsl-chunks.js",
+    "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
+    vm.runInContext(read(file), ctx, { filename: absSrc(file) });
+  const VP = ctx.TLXShaders.viewport(THREE, THREE.TSL, { enabled: true });
+  const wrappers = [], tex = VP.tex;
+  VP.tex = (node) => { const w = tex(node); wrappers.push(w); return w; };
+  let target = null, draws = 0, reducedReads = 0;
+  const renderer = {
+    backend: { isWebGPUBackend: true }, autoClear: true,
+    getRenderTarget: () => target,
+    setRenderTarget: (value) => { target = value; },
+    render() {
+      draws++;
+      for (const w of wrappers) {
+        const L = VP.layoutOf(w.value);
+        if (!L) continue;
+        assert.equal(w.ratio.value.x, L.lw / L.pw, "width ratio at draw");
+        assert.equal(w.ratio.value.y, L.lh / L.ph, "height ratio at draw");
+        assert.equal(w.maxUV.value.x, (L.lw - 0.5) / L.pw, "right edge at draw");
+        assert.equal(w.maxUV.value.y, (L.lh - 0.5) / L.ph, "bottom edge at draw");
+        if (L.lw < L.pw) reducedReads++;
+      }
+    },
+  };
+  const identity = new THREE.Matrix4().elements;
+  const post = ctx.TLXShaders.postChain(THREE, THREE.TSL, { renderer,
+    fixedTargets: true, vp: VP, isMobile: false,
+    chunks: ctx.TLXShaders.chunks(THREE, THREE.TSL),
+    shadow: { sunTex: new THREE.DepthTexture(1, 1),
+      S: { enabled: true, lightVP: identity, lampLightVP: identity } },
+    wantSpatialUpscale: () => true,
+    getPresentSize: () => ({ width: 800, height: 400 }),
+  });
+  try {
+    post.resize(400, 200, 800, 400);
+    const frame = { invProj: identity, proj: identity, invVP: identity,
+      viewProj: identity, eye: [0, 0, 0], sunDir: [0, 1, 0], sunColor: [1, 1, 1] };
+    const on = { ssao: 1, godray: 1, bloom: 1 };
+    const off = { ssao: 0, godray: 0, bloom: 0 };
+    post.present(on, frame);
+    assert.equal(post.state().held.ssao, true);
+    assert.equal(post.state().held.shafts, true);
+    assert.equal(post.state().held.bloom, true);
+    for (let i = 0; i < 8; i++) post.present(off, frame);
+    assert.equal(Object.values(post.state().held).every((held) => !held), true);
+    const previousDraws = draws;
+    post.present(on, frame);
+    assert.ok(draws > previousDraws, "reopened blocks drew");
+    assert.ok(reducedReads > 0, "checked sub-viewport readers");
+  } finally { post.dispose(); }
+});

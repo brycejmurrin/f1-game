@@ -14,6 +14,7 @@ const XrBoot = (function () {
   const PIN_KEYS = ["gfxBackend", "tlxForceGL"];
 
   let _loopByXr = false;
+  let _presentCount = 0;     // stereo submissions in this immersive session
   let _tickBody = null;
   let _windowRaf = null;       // schedule one window.rAF(tick) — deduped
   let _windowRequest = null;
@@ -215,6 +216,7 @@ const XrBoot = (function () {
       },
       onStart: () => {
         _loopByXr = true;
+        _presentCount = 0;
         // Cancellation saves work; generation also rejects a callback already
         // dispatched (or suspended by the browser until after XR ends).
         _windowGeneration++;
@@ -293,6 +295,11 @@ const XrBoot = (function () {
       };
     }
     const finish = () => {
+      // RendererBoot runs before the lazy XR bundle exists. Publish the
+      // headset capability now so SETTINGS and the next boot share the probe.
+      if (typeof ApexXR !== "undefined" && typeof ApexXR.detect === "function") {
+        Promise.resolve(ApexXR.detect()).catch(() => { /* optional capability UI */ });
+      }
       // A reload loses the click's transient user activation. Let the XR UI
       // prompt for a fresh tap instead of requesting an immersive session here.
       const pendingEnter = consumePendingEnter();
@@ -344,6 +351,7 @@ const XrBoot = (function () {
   function present(gfx, eyes, po) {
     if (eyes && gfx && typeof gfx.presentXR === "function") {
       gfx.presentXR(eyes, po);
+      _presentCount++;
       return true;
     }
     return false;
@@ -363,6 +371,7 @@ const XrBoot = (function () {
       backend: session && session.backend ? session.backend() : null,
       features: session && session.enabledFeatures ? session.enabledFeatures() : [],
       frameCount: session && session.frameCount ? session.frameCount() : 0,
+      presentCount: _presentCount,
       visible: session && session.isVisible ? session.isVisible() : null,
       foveation: fov,
       draw: info,

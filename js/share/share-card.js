@@ -101,9 +101,6 @@ const ShareCard = (function () {
   }
 
   async function browserDownload(blob, name) {
-    if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
-      await NativeDownload.saveBlob(blob, name); return;
-    }
     const url = URL.createObjectURL(blob), anchor = document.createElement("a");
     anchor.href = url; anchor.download = name; document.body.appendChild(anchor); anchor.click(); anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 30000);
@@ -121,6 +118,13 @@ const ShareCard = (function () {
       if (nav.canShare(payload)) {
         try { await nav.share(payload); return "shared"; }
         catch (error) { if (error && error.name === "AbortError") return "cancelled"; }
+      }
+    }
+    if (!env.download && typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
+      try { await NativeDownload.saveBlob(blob, name); return "shared"; }
+      catch (error) {
+        if (NativeDownload.isCancelled(error)) return "cancelled";
+        throw error;
       }
     }
     await download(blob, name);

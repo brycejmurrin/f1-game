@@ -20,8 +20,12 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { minify } from "terser";
+import { Worker } from "node:worker_threads";
+import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
+import { minifyInWorkers } from "../../tools/desktop/minify-worker.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
-import { MINIFY_OPTIONS, canMinify, minifyExcluded, minifySource, minifyStaged, minifyTargets } from "../../tools/desktop/minify.mjs";
+import { MINIFY_OPTIONS, canMinify, minifyExcluded, minifySource, minifyStaged, minifyTargets, minifyJobCount } from "../../tools/desktop/minify.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -155,4 +159,127 @@ test("terser loads lazily: pages.yml deploy/verify-live and desktop.yml stage wi
   const src = read("tools/desktop/minify.mjs");
   assert.doesNotMatch(src, /^\s*import\b[^;]*["']terser["']/m, "terser must not be a static import");
   assert.equal(await canMinify(), true, "this checkout has terser (devDependency), so the stage minifies");
+});
+
+function minifyFixture(t) {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "stage-minify-pool-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const sources = Array.from({ length: 7 }, (_, i) => `/*! keep license */\n"use strict"; const Probe${i}=(function () { function readable(value) { return { "model-id": value + ${i} }; } return readable; })();`);
+  const targets = sources.map((src, i) => {
+    const rel = `js/probe${i}.js`;
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), src);
+    return rel;
+  });
+  const resultRoot = path.join(dir, "results");
+  fs.mkdirSync(resultRoot);
+  return { dir, sources, targets, resultRoot };
+}
+
+test("minify pool is capped by CPU and memory capacity, with a two-worker default", () => {
+  const roomy = { parallelism: 8, memory: 8 * 1024 ** 3 };
+  assert.equal(minifyJobCount(undefined, roomy), 2);
+  assert.equal(minifyJobCount(99, roomy), 2);
+  assert.equal(minifyJobCount(1, roomy), 1);
+  assert.equal(minifyJobCount(2, { ...roomy, parallelism: 1 }), 1);
+  assert.equal(minifyJobCount(2, { ...roomy, memory: 700 * 1024 ** 2 }), 1);
+  assert.equal(minifyJobCount(0, roomy), 1);
+});
+
+test("persistent minify workers execute multiple tasks and preserve exact code and maps", async (t) => {
+  const fixture = minifyFixture(t);
+  const workers = [];
+  class ObservedWorker extends Worker {
+    constructor(...args) { super(...args); this.sent = 0; workers.push(this); assert.ok(this.threadId > 0); }
+    postMessage(...args) { this.sent++; return super.postMessage(...args); }
+  }
+  const results = await minifyInWorkers({ siteRoot: fixture.dir, targets: fixture.targets,
+    resultRoot: fixture.resultRoot, jobs: 2, WorkerClass: ObservedWorker });
+  assert.equal(workers.length, 2, "actual CPU threads, not async jobs on the caller");
+  assert.ok(workers.some((worker) => worker.sent > 1), "threads are reused across files");
+  assert.ok(workers.every((worker) => worker.threadId === -1), "all workers joined before resolving");
+  for (const [i, rel] of fixture.targets.entries()) {
+    const expected = await minifySource(fixture.sources[i], rel);
+    assert.equal(fs.readFileSync(path.join(fixture.resultRoot, `${i}.js`), "utf8"), expected.code);
+    assert.equal(fs.readFileSync(path.join(fixture.resultRoot, `${i}.map`), "utf8"), expected.map);
+    assert.equal(results[i].before, Buffer.byteLength(fixture.sources[i]));
+    assert.equal(results[i].after, Buffer.byteLength(expected.code));
+    assert.equal(fs.readFileSync(path.join(fixture.dir, rel), "utf8"), fixture.sources[i], "workers only write disposable output");
+  }
+});
+
+test("a crashed minify worker stops dispatch and joins a stalled peer before rejecting", { timeout: 5000 }, async (t) => {
+  const fixture = minifyFixture(t);
+  const crash = path.join(fixture.dir, "crash.mjs");
+  fs.writeFileSync(crash, 'import { workerData } from "node:worker_threads"; if (workerData.id === 0) process.exit(17); else setInterval(() => {}, 1000);');
+  const workers = [];
+  class CrashingWorker extends Worker {
+    constructor(_url, options) {
+      super(pathToFileURL(crash), { ...options, workerData: { id: workers.length } });
+      this.sent = 0;
+      workers.push(this);
+    }
+    postMessage(...args) { this.sent++; return super.postMessage(...args); }
+  }
+  await assert.rejects(minifyInWorkers({ siteRoot: fixture.dir, targets: fixture.targets,
+    resultRoot: fixture.resultRoot, jobs: 2, WorkerClass: CrashingWorker }), /js\/probe0\.js: worker exited \(17\)/);
+  assert.equal(workers.reduce((sum, worker) => sum + worker.sent, 0), 2, "no new task after failure");
+  assert.ok(workers.every((worker) => worker.threadId === -1), "no orphan worker after rejection");
+});
+
+test("a failed minify task leaves every staged source/map untouched in serial and pool modes", async (t) => {
+  for (const jobs of [1, 2]) {
+    const fixture = minifyFixture(t);
+    // Invalid source exists only inside the disposable staged-site fixture.
+    const bad = path.posix.join("js", "zz-bad.js");
+    fs.writeFileSync(path.join(fixture.dir, bad), "function {");
+    for (const rel of fixture.targets) fs.writeFileSync(path.join(fixture.dir, rel + ".map"), "old map");
+    await assert.rejects(minifyStaged(fixture.dir, { jobs }), /minify: js\/zz-bad\.js:/);
+    for (const [i, rel] of fixture.targets.entries()) {
+      assert.equal(fs.readFileSync(path.join(fixture.dir, rel), "utf8"), fixture.sources[i]);
+      assert.equal(fs.readFileSync(path.join(fixture.dir, rel + ".map"), "utf8"), "old map");
+    }
+    assert.equal(fs.readFileSync(path.join(fixture.dir, bad), "utf8"), "function {");
+    assert.equal(fs.readdirSync(fixture.dir).some((name) => name.startsWith(".minify-")), false, "temporary results cleaned");
+  }
+});
+
+test("jobs1 does not import workers; unavailable Terser skips without changing staged bytes", (t) => {
+  const fixture = minifyFixture(t);
+  const loader = path.join(fixture.dir, "loader.mjs");
+  fs.writeFileSync(loader, `export async function resolve(name, context, next) {
+    if (name === process.env.APEX_MINIFY_BLOCK_IMPORT) throw Object.assign(new Error("fixture unavailable"), { code: "ERR_MODULE_NOT_FOUND" });
+    return next(name, context);
+  }`);
+  const moduleURL = pathToFileURL(path.join(ROOT, "tools/desktop/minify.mjs")).href;
+  const run = (blocked) => spawnSync(process.execPath, ["--experimental-loader", loader, "--input-type=module", "--eval",
+    `import { minifyStaged } from ${JSON.stringify(moduleURL)}; console.log(JSON.stringify(await minifyStaged(${JSON.stringify(fixture.dir)}, { jobs: 1 })));`],
+  { encoding: "utf8", env: { ...process.env, APEX_MINIFY_BLOCK_IMPORT: blocked } });
+  const absent = run("terser");
+  assert.equal(absent.status, 0, absent.stderr);
+  assert.match(JSON.parse(absent.stdout).skipped, /terser is not installed/);
+  for (const [i, rel] of fixture.targets.entries()) {
+    assert.equal(fs.readFileSync(path.join(fixture.dir, rel), "utf8"), fixture.sources[i]);
+    assert.equal(fs.existsSync(path.join(fixture.dir, rel + ".map")), false);
+  }
+  const serial = run("node:worker_threads");
+  assert.equal(serial.status, 0, serial.stderr);
+  assert.equal(JSON.parse(serial.stdout).files, fixture.targets.length);
+  for (const [i, rel] of fixture.targets.entries()) {
+    assert.notEqual(fs.readFileSync(path.join(fixture.dir, rel), "utf8"), fixture.sources[i]);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(fixture.dir, rel + ".map"))).sources[0], rel);
+  }
+});
+
+test("a Terser task error joins every real worker before returning its source path", async (t) => {
+  const fixture = minifyFixture(t);
+  fs.writeFileSync(path.join(fixture.dir, fixture.targets[0]), "function {");
+  const workers = [];
+  class ObservedWorker extends Worker {
+    constructor(...args) { super(...args); workers.push(this); }
+  }
+  await assert.rejects(minifyInWorkers({ siteRoot: fixture.dir, targets: fixture.targets,
+    resultRoot: fixture.resultRoot, jobs: 2, WorkerClass: ObservedWorker }), /minify: js\/probe0\.js:/);
+  assert.equal(workers.length, 2);
+  assert.ok(workers.every((worker) => worker.threadId === -1), "task errors also drain the pool");
 });

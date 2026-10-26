@@ -238,6 +238,7 @@ const TrackBuildProps = (function () {
     // Cells already emitted this build — overlapping waterBand/waterField calls
     // skip duplicates instead of stacking coplanar quads (docs/BUGS.md S7).
     const waterOccupied = new Set();
+    const waterRects = new Map();   // cell width -> emitted world rectangles
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
     const NIGHT = track._night != null ? track._night : !!def.night;
 
@@ -855,13 +856,19 @@ const TrackBuildProps = (function () {
     // Merge occupied cells into flat quad runs and emit them as the water sheet.
     const waterEmit = (cells, c, col, opts) => {
       opts = opts || {};
+      const prior = [];
+      for (const [size, rects] of waterRects) if (size !== c)
+        for (const rect of rects) prior.push(rect);
+      let mine = waterRects.get(c);
+      if (!mine) waterRects.set(c, (mine = []));
       const rows = new Map();                   // iz -> sorted list of ix
       for (const key of cells.keys()) {
         const p = key.indexOf("|");
         const ix = +key.slice(0, p), iz = +key.slice(p + 1);
         if (onTrack((ix + 0.5) * c, (iz + 0.5) * c, c / 2 + 1.5)) continue;
-        if (waterOccupied.has(key)) continue;
-        waterOccupied.add(key);
+        const occupiedKey = c + "|" + key;
+        if (waterOccupied.has(occupiedKey)) continue;
+        waterOccupied.add(occupiedKey);
         let a = rows.get(iz); if (!a) rows.set(iz, a = []);
         a.push(ix);
       }
@@ -879,9 +886,32 @@ const TrackBuildProps = (function () {
           while (j + 1 < list.length && list[j + 1] === list[j] + 1) j++;
           const x0 = list[i] * c, x1 = (list[j] + 1) * c;
           const z0 = iz * c, z1 = (iz + 1) * c;
-          emit(waterBuf, [[x0, y, z0], [x0, y, z1], [x1, y, z1], [x1, y, z0]],
-               col, [(x0 + x1) / 2, y - 10, (z0 + z1) / 2]);
-          placed++;
+          // Different cell widths describe different world grids. Integer
+          // ix|iz alone both deleted unrelated shore cells and let overlapping
+          // basin/shore cells draw coplanar. Keep same-grid runs merged, then
+          // subtract earlier grids' actual footprints before emitting.
+          let parts = [[x0, z0, x1, z1]];
+          for (const cover of prior) {
+            if (cover[0] >= x1 || cover[2] <= x0 || cover[1] >= z1 || cover[3] <= z0) continue;
+            const next = [];
+            for (const p of parts) {
+              const a = Math.max(p[0], cover[0]), b = Math.max(p[1], cover[1]);
+              const d = Math.min(p[2], cover[2]), e = Math.min(p[3], cover[3]);
+              if (!(a < d && b < e)) { next.push(p); continue; }
+              if (p[0] < a) next.push([p[0], p[1], a, p[3]]);
+              if (d < p[2]) next.push([d, p[1], p[2], p[3]]);
+              if (p[1] < b) next.push([a, p[1], d, b]);
+              if (e < p[3]) next.push([a, e, d, p[3]]);
+            }
+            parts = next;
+            if (!parts.length) break;
+          }
+          for (const p of parts) {
+            emit(waterBuf, [[p[0], y, p[1]], [p[0], y, p[3]], [p[2], y, p[3]], [p[2], y, p[1]]],
+                 col, [(p[0] + p[2]) / 2, y - 10, (p[1] + p[3]) / 2]);
+            mine.push(p);
+            placed++;
+          }
           i = j + 1;
         }
       }
