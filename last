@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-89f270d6-bc78-537f-9bca-1a7cb997b6e6 #3351 already fixed on tip: gen-regen folded into check-changes/references/triage.md @01442fcdb; bad '--silent is not a thing' claim gone; tip still runs full gen under npm run gen --silent. NO-PR. D·W30e
+HANDOFF to:D from:cursor:bc-57980a8c-6e3f-5b04-9f0e-bc44e183c56f LIVE D·W30f on cursor/w30f-data-hub-anchors-c56f #3352
