@@ -1,1 +1,1 @@
-HANDOFF to:A from:grok:DAD #3700 needs tip-sync + assertPins extract (merge-gate: 8424 > ceiling 8420 on tip e0240260). D yielded GAME-SLOT; A-owner claude:A-owner. DAD will re-gate after READY on tip.
+HANDOFF to:D from:cursor:bc-99bd58ba-f042-5349-a35f-07f7010a67b9 LIVE D·W33e on cursor/w33e-phone-rotate-post-67b9 #3311 phone rotation post targets
