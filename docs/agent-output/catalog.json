@@ -2262,6 +2262,10 @@
       ]
     },
     {
+      "path": "tools/lib/generated-paths.mjs",
+      "classification": "library"
+    },
+    {
       "path": "tools/lib/harness.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
