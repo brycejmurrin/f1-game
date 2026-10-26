@@ -189,6 +189,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.
   "tests/unit/boot-idle-prefetch.test.mjs",
   "tests/unit/boot-input-shape.test.mjs",
+  // The boot wall's budget: eager shell script count/bytes, no lazy group back on a tag, one adapter request before Gfx.create (A·H15 load hunt).
+  "tests/unit/boot-load-budget.test.mjs",
   "tests/unit/bootstrap-doctor.test.mjs",
   "tests/unit/brake-cue.test.mjs",
   // ...and the branch audit it deletes by: ancestry, the merge-tree dry merge
@@ -335,6 +337,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/compress-audio.test.mjs",
   "tests/unit/conflict-cure.test.mjs",
   "tests/unit/contact-geometry.test.mjs",
+  // context-cap.py hook: transcript usage vs the brief's size stop; advisory once per level, hard-cap spawn deny.
+  "tests/unit/context-cap-hook.test.mjs",
   "tests/unit/controller-profiles.test.mjs",
   // coverage-merge is the only consumer of the raw V8 lists a flagged run
   // writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops
@@ -1511,6 +1515,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/vm-filename-lint.test.mjs",
   "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
+  "tests/unit/vsfriend-head-200.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
   "tests/unit/wait-for.test.mjs",
   "tests/unit/wait-polling.test.mjs",

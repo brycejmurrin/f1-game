@@ -301,8 +301,8 @@ test("two PRs that are each at the assert-match ceiling alone are over it on the
 
 test("Q4: incidentNote prints the newest INCIDENT line and never changes pacing", () => {
   assert.equal(incidentNote([e("DONE", "A", "x", 1)]), "");
-  assert.match(incidentNote([e("INCIDENT", "A", "pages red [fix:abcdef1]", 1)]), /^INCIDENT OPEN .*pages red/);
-  assert.match(incidentNote([e("INCIDENT", "A", "pages red", 1), e("INCIDENT", "A", "lifted", 2)]), /^INCIDENT lifted/);
+  assert.ok(/^INCIDENT OPEN .*pages red/.test(incidentNote([e("INCIDENT", "A", "pages red [fix:abcdef1]", 1)])));
+  assert.ok(/^INCIDENT lifted/.test(incidentNote([e("INCIDENT", "A", "pages red", 1), e("INCIDENT", "A", "lifted", 2)])));
   const entries = [e("INCIDENT", "A", "pages red [fix:abcdef1]", 1)];
   assert.equal(pacingVerdict(entries, { pr: 5 }).ok, false, "an open INCIDENT still freezes");
 });
@@ -315,7 +315,7 @@ test("Q4: incident-lift lifts only when Pages is green on the fix sha", () => {
   assert.equal(liftDecide(open, () => false).action, "wait");
   const d = liftDecide(open, () => true);
   assert.equal(d.action, "lift");
-  assert.match(d.text, /lifted/);
+  assert.ok(/lifted/.test(d.text));
   const sent = [];
   const out = [];
   const opts = (green) => ({ bus: () => ({ entries: open }), pages: () => green, send: (...a) => { sent.push(a); return { ok: true }; }, log: (l) => out.push(l), env: { APEX_FLEET_AS: "claude:session_X" } });
@@ -326,5 +326,5 @@ test("Q4: incident-lift lifts only when Pages is green on the fix sha", () => {
   assert.equal(liftMain([], opts(true)), 0);
   assert.equal(sent.length, 1);
   assert.equal(sent[0][0], "INCIDENT");
-  assert.match(sent[0][3], /lifted/);
+  assert.ok(/lifted/.test(sent[0][3]));
 });

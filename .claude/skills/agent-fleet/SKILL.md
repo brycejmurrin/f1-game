@@ -21,7 +21,7 @@ and the no-authority rule. Env `APEX_AGENT_WEBHOOK_URL` +
 Read your role's reference before acting:
 
 - **Orchestrator** → [`references/orchestrator.md`](references/orchestrator.md)
-  (§First acts: the ~3-min `send_later` tick and the hourly `create_trigger` safety net);
+  (§First acts: the bus `Monitor` and the hourly `create_trigger` safety net);
   each wake after (roles, reading the fleet, escalations) →
   [`references/running.md`](references/running.md); the per-host spawn / message /
   status / stop table → [`references/adapters.md`](references/adapters.md).

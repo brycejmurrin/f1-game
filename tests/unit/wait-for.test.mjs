@@ -129,8 +129,8 @@ test("capForeground: a foreground --timeout over 590 s is clamped and names run_
   assert.deepEqual(capForeground(5, false), { timeoutMin: 5, note: "" });
   const c = capForeground(30, false);
   assert.equal(c.timeoutMin * 60, 590);
-  assert.match(c.note, /run_in_background/);
-  assert.match(c.note, /--background/);
+  assert.ok(/run_in_background/.test(c.note));
+  assert.ok(/--background/.test(c.note));
   assert.deepEqual(capForeground(45, true), { timeoutMin: 45, note: "" }, "--background lifts the cap");
   assert.equal(parseArgs(["--pid-gone", "1", "--background"]).background, true);
   assert.equal(parseArgs(["--pid-gone", "1"]).background, false);

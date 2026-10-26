@@ -284,10 +284,15 @@ test("lsp-hint.py: builtins and lowercase heads stay quiet; option values are no
   const hook = path.join(ROOT, ".claude/hooks/lsp-hint.py");
   const hint = input => !!spawnSync("python3", [hook], { input: JSON.stringify({ hook_event_name: "PostToolUse", ...input }), encoding: "utf8", env: { ...process.env, APEX_LSP_HINT: "" } }).stdout.trim();
   for (const quiet of [{ tool_name: "Grep", tool_input: { pattern: "Math.max" } }, { tool_name: "Bash", tool_input: { command: "grep -n 'head.replace(' lib-x.mjs" } },
-    { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "docs", glob: "*.js" } }, { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "js", glob: "*.css" } }])
+    { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "docs", glob: "*.js" } },
+    // A path outside js/ is text, not a script global (audit 2026-10-26 row 16).
+    { tool_name: "Grep", tool_input: { pattern: "TURN", path: "artifacts/digest.txt" } }, { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "tools/ci" } },
+    { tool_name: "Bash", tool_input: { command: "grep -n TURN /root/x/digest.txt" } }, { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "js", glob: "*.css" } }])
     assert.equal(hint(quiet), false, JSON.stringify(quiet));
   for (const loud of [{ tool_name: "Bash", tool_input: { command: "rg -t js GameHud js/" } }, { tool_name: "Bash", tool_input: { command: "grep -A 3 GameHud js/ui" } },
-    { tool_name: "Bash", tool_input: { command: "grep -rn -e Tracks.curvature js" } }, { tool_name: "Grep", tool_input: { pattern: "G\\.player" } }])
+    { tool_name: "Bash", tool_input: { command: "grep -rn -e Tracks.curvature js" } }, { tool_name: "Grep", tool_input: { pattern: "G\\.player" } },
+    { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "./js/ui" } }, { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "." } },
+    { tool_name: "Bash", tool_input: { command: "grep -rn GameHud | head" } }])
     assert.equal(hint(loud), true, JSON.stringify(loud));
 });
 
