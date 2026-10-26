@@ -167,6 +167,28 @@ RACE SETTINGS → START with no waiting:
 | + title warm | yes: `world`, `done` and `warmed` true | 48 | 6 (`programWarm` 150 ms) |
 
 
+## The last two first-frame pipelines (#3673, 2026-10-26)
+
+After the pin, a driven lavapipe census found that race entry still built two pipelines **synchronously** on the first
+race frame. That is the same census as above plus a 120 s driven first lap, with a probe on the pin wrapper naming
+each RenderObject. The 120 s of driving after the lights built **0** pipelines.
+
+| pipeline | object | why the warm missed it |
+|---|---|---|
+| `tlx-fx-line-mrt` | the driving line (`position, lineAcross, lineSpeed, lineZone, lineAlong`) | the race draws it **indexed** (`drawDrivingLine`'s strip index). three keys a WebGPU render pipeline on the geometry too (`getGeometryCacheKey` appends `index,`), so the warm's unindexed probe built a pipeline the race never used |
+| `tlx-fx-blob-mrt` | the per-record blob shadow, drawn with a **mirrored** model (cw) | the fx warm compiled only the instanced blob run |
+
+Fix (`js/render/three/tlx.js`):
+- `lineIndex(slot)` builds the line's full-capacity index for both `drawDrivingLine` and the fx warm's probe.
+- `warmFxPrograms` compiles the per-record blob on both windings.
+
+After: race entry builds **0** synchronous pipelines. Only the rig warm's two async ones are left, under its
+cover, and the menu builds 68 instead of 66. Test: `tests/unit/tlx-fx-warm.test.mjs` reads three's own
+`getGeometryCacheKey` on the probe against the race geometry.
+
+These were #3673's prime suspects for "two frames over 100 ms in every first race". The device run with A·W54's
+hitch recorder (#3676) is what can confirm it.
+
 ## Still open
 
 - The 4 race-only states: warm them in the menu, or give them a state the menu already builds.
