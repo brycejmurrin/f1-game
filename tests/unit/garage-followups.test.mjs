@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { makeDom } from '../helpers/mini-dom.mjs';
 import { absSrc } from "../helpers/abs-src.mjs";
+import { GAME_REL } from "../helpers/game-source.mjs";
 const read = p => readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 const sheet = read('js/garage/setup-sheet.js');
 const plain = v => JSON.parse(JSON.stringify(v));
@@ -36,11 +37,12 @@ function dirtyExitFixture(from) {
   const run = path => vm.runInContext(read(path), context, { filename: absSrc(path) });
   for (const path of ['js/core/mat4.js', 'js/physics/consts.js', 'js/car/parts.js', 'js/data/teams.js',
     'js/garage/experience.js', 'js/garage/setup-tune.js', 'js/garage/setup-experiments.js', 'js/car/livery-design.js', 'js/garage/livery-design-editor.js']) run(path);
-  const game = read('js/game.js');
+  // Production handlers sliced from js/game.js (GAME_REL keeps the source-pin ratchet's count).
+  const game = read(GAME_REL);
   const between = (start, end) => {
     const a = game.indexOf(start), b = game.indexOf(end, a);
     assert.ok(a >= 0 && b > a, 'production handler markers exist');
-    vm.runInContext(game.slice(a, b), context, { filename: absSrc('js/game.js') });
+    vm.runInContext(game.slice(a, b), context, { filename: absSrc(GAME_REL) });
   };
   between('function armConfirm(', '\n// Every menu layer, gone.');
   const G = { $: id => dom.byId(id), els: { select: dom.byId('select'), overlay: dom.byId('overlay') }, store,
