@@ -64,3 +64,5 @@ mobile/www/
 # Obsidian vault settings (docs/ or the repo opened as a vault; docs/notes/SECOND-BRAIN-2026-10-14.md)
 .obsidian/
 .smart-env/
+.claude/allow-protected
+.claude/allow-context-cap

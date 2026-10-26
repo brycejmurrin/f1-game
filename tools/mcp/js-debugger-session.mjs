@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
 import { runningEndpoint } from "./debug-chrome.mjs";
-import { recordException, traceMethods } from "./js-debugger-trace.mjs";
+import { recordException, traceMethods, profileMethods } from "./js-debugger-trace.mjs";
 import { pathSuffixRegex, workflowMethods } from "./js-debugger-workflow.mjs";
 import { saveOutputArtifact } from "../agent/output.mjs";
 
@@ -78,7 +78,7 @@ export class DebugSession {
     this.operations = new Map(); this.operationSequence = 0; this.connecting = false; this.attachGeneration = 0;
     this.operationGroups = new Set();
     this.logpoints = new Map(); this.logpointRings = new Set(); this.logpointSequence = 0; this.exceptionLog = null; this.lost = null; this.lastEndpoint = null;
-    this.generation = randomUUID();
+    this.profiling = null; this.generation = randomUUID();
   }
   resetPause() {
     const token = this.pause?.token;
@@ -129,6 +129,7 @@ export class DebugSession {
     return { connected: !!this.cdp && !this.cdp.closed, target: this.target || null,
       ...(this.lost && !this.cdp ? { detached: `target gone: ${this.lost}` } : {}),
       paused: !!this.pause, pause: this.pause,
+      profiling: this.profiling ? { kind: this.profiling.kind, startedAt: this.profiling.startedAt } : null,
       breakpointCount: this.breakpoints.size, breakpoints: [...this.breakpoints.values()].slice(0, 20).map(b => ({ ...b, url: clip(b.url, 300) })),
       operations: withResults ? ops.map((o, i) => i === ops.length - 1 ? o : { id: o.id, status: o.status, ...(o.result?.artifact ? { artifact: o.result.artifact } : {}), ...(o.timedOut ? { timedOut: true } : {}) }) : ops.map(o => ({ id: o.id, status: o.status, ...(o.result?.artifact ? { artifact: o.result.artifact } : {}), ...(o.timedOut ? { timedOut: true } : {}) })) };
   }
@@ -256,7 +257,7 @@ export class DebugSession {
       client.on("Debugger.globalObjectCleared", () => { if (this.cdp !== client) return; this.resetPause(); this.clearScripts(); this.abortOperations("aborted: context destroyed (page reload or navigation)"); });
       client.on("disconnect", () => {
         if (this.cdp !== client) return;
-        this.resetPause(); this.scripts.clear(); this.breakpoints.clear(); this.operationGroups.clear(); this.logpoints.clear(); this.logpointRings.clear(); this.exceptionLog = null;
+        this.resetPause(); this.scripts.clear(); this.breakpoints.clear(); this.operationGroups.clear(); this.logpoints.clear(); this.logpointRings.clear(); this.exceptionLog = null; this.profiling = null;
         if (!this.deliberate) this.lost = this.lost || "CDP connection closed (Chrome exited, the page closed, or the container resumed)";
         this.abortOperations("aborted: target disconnected"); this.cdp = null; this.target = null;
       });
@@ -297,6 +298,8 @@ export class DebugSession {
     let resumedEventObserved = false, timer;
     const observed = () => { resumedEventObserved = true; };
     client.on("Debugger.resumed", observed);
+    // Drop an active CPU/heap sample so the next attach is not refused.
+    try { await this.stopProfilingQuiet(); } catch { /* best-effort */ }
     // Reset exception pauses and owned breakpoints before resuming the program.
     this.exceptionLog = null;
     const commands = [["Debugger.setPauseOnExceptions", { state: "none" }],
@@ -336,7 +339,7 @@ export class DebugSession {
       // A target-close event can make a new attach possible while old cleanup is
       // still settling. Never let that old detach erase the replacement session.
       if (this.attachGeneration === detachGeneration) {
-        this.cdp = null; this.target = null; this.pause = null; this.objects.clear(); this.exceptionLog = null;
+        this.cdp = null; this.target = null; this.pause = null; this.objects.clear(); this.exceptionLog = null; this.profiling = null;
         this.breakpoints.clear(); this.logpoints.clear(); this.logpointRings.clear(); this.scripts.clear(); this.operationGroups.clear(); this.operations.clear(); this.connecting = false;
       }
     }
@@ -527,4 +530,4 @@ export class DebugSession {
     return { operationId: id, status: "pending", timeoutMs, ...(abandoned.length ? { abandoned } : {}), note: "Inspect debugger_state; a response timeout does not cancel JavaScript execution (timedOut ops still report a late result)." };
   }
 }
-Object.assign(DebugSession.prototype, traceMethods(), workflowMethods());
+Object.assign(DebugSession.prototype, traceMethods(), workflowMethods(), profileMethods());

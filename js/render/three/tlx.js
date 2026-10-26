@@ -719,7 +719,6 @@ const TLX = (function () {
         }
       }
       _abortRenderer = renderer;
-      try { setTimeout(function () { if (/^apex26\.ctxLostReloads=\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
@@ -1035,12 +1034,6 @@ const TLX = (function () {
       // says "Graphics reset" instead of a silent restart (#3513). Hidden-tab reloads stay quiet,
       // and so does the early-frame GPU-error heal: it fires on the title, before any race.
       let _lossCounted = false;
-      let _sessLostN = 0;   // two-reload budget when sessionStorage throws (GLX _sessLostN)
-      const _fallbackLossCount = () => {
-        try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; }
-        catch (_) { return 0; }
-      };
-      const _rememberFallbackLoss = (n) => { try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ } };
       try {
         let onShown = null, onPageShow = null;
         document.addEventListener("visibilitychange", onShown = function () { if (!document.hidden) _shownAt = _nowMs(); });
@@ -1082,12 +1075,7 @@ const TLX = (function () {
             document.addEventListener("visibilitychange", onVisible);
             return;
           }
-          const rk = "apex26.ctxLostReloads";
-          let n;
-          try {
-            n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
-            sessionStorage.setItem(rk, String(n));
-          } catch (_) { n = Math.max(++_sessLostN, _fallbackLossCount() + 1); _rememberFallbackLoss(n); }
+          const n = GfxEscalation.nextReloadCount();
           _lossCounted = true;
           if (n <= 2) setTimeout(function () { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: nothing to explain on the menu; the menu just cannot explain it */ } try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
           else {
@@ -1156,7 +1144,7 @@ const TLX = (function () {
               } catch (_) { /* picker absent in harness */ }
             }
           }
-        } catch (_) { /* visibility / picker / harness; budget uses _sessLostN when storage throws */ }
+        } catch (_) { /* visibility / picker / harness */ }
       };
       try {
         let onRestored = null;
@@ -1164,8 +1152,7 @@ const TLX = (function () {
           // Same two-reload budget as the loss handler: an unguarded restore
           // reload looped on a device that loses the context every boot.
           // Storage failure must not skip the reload (GLX: dead canvas).
-          var n = 0;
-          try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
+          const n = GfxEscalation.reloadCount();
           if (n > 2) return;
           if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ }
           try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
@@ -1214,18 +1201,38 @@ const TLX = (function () {
       // skipped, not double-counted). Software GL (SwiftShader/CI) stays
       // {supported:false}: it exposes the extension, but its time means nothing.
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
+      let _gpuSamples = 0, _gpuSampleAt = -1, _gpuResolvePending = false;
       let _inspectorHold = false;   // dev Inspector owns timestamp resolution (inspectorHost below)
       function resolveGpuTimer() {
-        if (!_gpuTimerOn) return;
-        const epoch = _gpuTimerEpoch;
+        if (!_gpuTimerOn || _deviceLost || _gpuResolvePending) return;
+        const epoch = _gpuTimerEpoch, be = renderer.backend;
+        const pool = be && be.timestampQueryPool && be.timestampQueryPool.render;
+        // r186 returns lastValue for an empty/in-flight resolve. Its frames
+        // array is replaced only after a new query batch finishes, even when
+        // that batch has exactly the same duration as the preceding one.
+        if (!pool || pool.isDisposed || pool.pendingResolve || !pool.currentQueryIndex) return;
+        const frames = pool.frames, gl = be.isWebGLBackend && be.gl;
+        const queries = [];
+        if (gl) {
+          for (const i of pool.queryOffsets.values()) if (pool.queryStates.get(i) === "ended") queries.push(pool.queries[i]);
+          if (!queries.length) return;
+        }
+        _gpuResolvePending = true;
         try {
           renderer.resolveTimestampsAsync("render").then(v => {
-            if (_gpuTimerOn && epoch === _gpuTimerEpoch && v != null && isFinite(v)) _gpuMs = v;
+            if (!_gpuTimerOn || _deviceLost || epoch !== _gpuTimerEpoch || pool.isDisposed) return;
+            // WebGL's pool also returns lastValue for interrupted queries.
+            // Require actual ready query objects and a non-disjoint clock.
+            if (gl && (gl.getParameter(pool.ext.GPU_DISJOINT_EXT) || queries.some(q => !gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)))) {
+              _gpuMs = -1; _gpuSampleAt = -1; return;
+            }
+            if (pool.frames === frames || !pool.frames.length || v == null || !isFinite(v) || v < 0) return;
+            _gpuMs = v; _gpuSampleAt = _nowMs(); _gpuSamples++;
           }).catch((e) => {
             // Per-frame call: note the first rejection only.
             if (!_gpuTimerFailLogged) { _gpuTimerFailLogged = true; Log.debug("gfx", "TLX: GPU timestamp resolve rejected:", e && e.message); }
-          });
-        } catch (_) { /* timing is optional */ }
+          }).finally(() => { _gpuResolvePending = false; });
+        } catch (_) { _gpuResolvePending = false; /* timing is optional */ }
       }
       function _gpuSupported() {
         try {
@@ -1699,7 +1706,8 @@ const TLX = (function () {
           // fragment-uniform floor (224) once three/TSL adds its own block, so
           // the lit shader fails to LINK on iOS Safari and every lit surface
           // draws nothing. Same _liteGpu gate as samples/outputType above.
-          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!post,
+          // Keep tag capability through an initial post failure; arm MRT only for compatible passes.
+          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!(TSL.mrt && renderer.setMRT),
             envCube: envRT ? envRT.texture : null, matMaps, lampGrid,
             sharedUniforms: _sharedUniforms,
             maxLights: _liteGpu ? LightBudget.LITE : LightBudget.MAX });
@@ -2840,15 +2848,17 @@ const TLX = (function () {
           b.rec = -1;
         }
       }
-      // The warm (warmFxPrograms): the attribute-instanced program and its double-sided opaque pipeline on
-      // the car basis' sign, when no run was on screen for the scene warm.
+      // Warm the double-sided opaque pipeline used by wheels and shared rival paint.
+      // A visible run alone does not prove the scene warm compiled this pipeline.
       let _coProbe = null;
       async function _coWarm() {
         if (!_coOn || !lit || skipBatches()) return;
-        for (const pair of _coRuns.values()) for (const b of pair) if (b && b.imesh.visible) return;
         if (!_coProbe) _coProbe = buildGeometry({ pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 0, 1, 0, 0, 1, 0, 0, 1], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] });
-        const m = _coRun(_coProbe, true).imesh;
-        m.material = materialFor({ doubleSided: true }, false, 2); m.count = 1; m.visible = true;
+        const b = _coRun(_coProbe, true), m = b.imesh;
+        b.ib.array[0] = b.ib.array[5] = b.ib.array[10] = b.ib.array[15] = 1;
+        setRange0(b.ib, CO_STRIDE); b.ib.needsUpdate = true;
+        m.count = 1; m.visible = true;
+        m.material = materialFor({ doubleSided: true }, false, 2);
         try { await renderer.compileAsync(m, camera, scene); } finally { m.visible = false; }
       }
       function ensureStream(slot, verts) {
@@ -4208,6 +4218,7 @@ const TLX = (function () {
           g.setIndex(TLXShaders.packIndex
             ? TLXShaders.packIndex(THREE, data.idx, verts)
             : new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
+          if (g.index.array instanceof Uint16Array) g.index.__apexUint16Index = true; // owned final triangle indices
         }
         // FINISHES ON DEMAND: a car geometry wearing a 60-85 finish id draws its carFinish material through the
         // `fx` lit graph (materialFor), the only one that carries those tints. Scanned once, here.
@@ -4601,16 +4612,7 @@ const TLX = (function () {
         try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
         if (!toGlx) _latchWebKitGL("first render refused");
         try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
-        let n;
-        try {
-          n = (parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) + 1;
-          sessionStorage.setItem("apex26.ctxLostReloads", String(n));
-        } catch (_) {
-          let prior = 0;
-          try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); prior = m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { /* best effort */ }
-          n = Math.max(++_sessLostN, prior + 1);
-          try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ }
-        }
+        const n = GfxEscalation.nextReloadCount();
         if (n <= 2) { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ } try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
         try {
           recordGfxBudgetExhausted("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
@@ -4773,18 +4775,21 @@ const TLX = (function () {
           const sup = _gpuSupported();
           if (on !== undefined) {
             const next = !!on && sup && !_inspectorHold;
-            if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuMs = -1; }
+            if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuMs = -1; _gpuSampleAt = -1; }
             _gpuTimerOn = next;
             if (!_inspectorHold) try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
-            if (!_gpuTimerOn) _gpuMs = -1;
+            if (!_gpuTimerOn) { _gpuMs = -1; _gpuSampleAt = -1; }
           }
-          return { supported: sup, on: _gpuTimerOn };
+          if (_deviceLost) { _gpuMs = -1; _gpuSampleAt = -1; }
+          // sampleAt dates resolution, not submission; reads never mint samples.
+          return { supported: sup, on: _gpuTimerOn, samples: _gpuSamples, sampleAt: _gpuSampleAt,
+            sampleAgeMs: _gpuSampleAt < 0 ? -1 : Math.max(0, _nowMs() - _gpuSampleAt) };
         },
-        gpuMs() { return _gpuMs; },
+        gpuMs() { return _deviceLost ? -1 : _gpuMs; },
         // Dev Inspector hand-off (js/perf/three-inspector.js): the renderer plus the gpuTimer interlock — while held,
         // gpuTimer stays off so only the Inspector's own pass resolves timestamp queries.
         inspectorHost() {
-          return { renderer, hold(on) { _inspectorHold = !!on; if (on) { _gpuTimerOn = false; _gpuMs = -1; _gpuTimerEpoch++; } } };
+          return { renderer, hold(on) { _inspectorHold = !!on; if (on) { _gpuTimerOn = false; _gpuMs = -1; _gpuSampleAt = -1; _gpuTimerEpoch++; } } };
         },
         // "Skipped for cadence, map still valid" — see tlx-shadow.js §KEEP.
         carShadowKeep() { return !!(shadowSys && shadowSys.carShadowKeep()); },
@@ -4853,6 +4858,7 @@ const TLX = (function () {
           const vCount = data.pos.length / 3;
           const IndexArray = vCount > 65535 ? Uint32Array : Uint16Array;
           g.setIndex(new THREE.BufferAttribute(new IndexArray(data.idx), 1));
+          if (g.index.array instanceof Uint16Array) g.index.__apexUint16Index = true; // owned final triangle indices
           return { __tlx: true, geo: _regGeo(g, "tex"), tex: true, count: data.idx.length };
         },
         createChunkedMesh(data, cellSize) {
@@ -6260,17 +6266,16 @@ const TLX = (function () {
               && _glPin !== "0" && _glPin !== "1" && !_forceHw.on && !_softBlit) {
             _healTried = true;
             try {
-              const rk = "apex26.ctxLostReloads";
-              const n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
+              const n = GfxEscalation.reloadCount() + 1;
               if (n <= 2) {
-                sessionStorage.setItem(rk, String(n));
+                GfxEscalation.nextReloadCount();
                 sessionStorage.setItem("apex26.tlxAutoGL", "1");
                 _latchWebKitGL("GPU errors in the first " + _presentN + " frames");
                 try { localStorage.setItem("apex26.gfxTlxFail", "WebGPU rejected work in the first " + _presentN + " frames (" + String(_gpuFirstError || "gpu error").slice(0, 160) + ") — AUTO takes three WebGL2"); } catch (_) { /* backendState still carries the reason */ }
                 try { Log.warn("gfx", "TLX: " + _gpuErrors + " GPU error(s) in the first " + _presentN + " frames — reloading on three WebGL2:", _gpuFirstError); } catch (_) { /* no Log in the node VM harness */ }
                 setTimeout(function () { try { location.reload(); } catch (_) { /* harness: the session key still steers the next real boot */ } }, 300);
               }
-            } catch (_) { /* no sessionStorage: cannot bound a reload, so do not start one */ }
+            } catch (_) { /* no sessionStorage: cannot persist the AUTO path, so do not reload */ }
           }
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
           // Count the CHUNKED releases too. tlxMirror reported only the static

@@ -10,7 +10,7 @@ contract** — `tests/unit/scenery-api-contract.test.mjs` fails on any rename/re
 because every circuit callback destructures from it. Everything emits
 flat-shaded geometry into the track's prop mesh.
 
-The per-circuit visual targets are the briefs in [docs/tracks/](tracks/); this
+The per-circuit visual targets are the briefs in [docs/tracks/](tracks); this
 is the toolkit for building them. Verify with the `__apex.view` survey camera —
 see [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
 

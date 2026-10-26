@@ -862,7 +862,7 @@ def closed_pr_refusal(dests, root):
     return ""
 
 
-HELD_BUDGET_S = 20   # fleet-owner.mjs --no-fetch measured ~14 s (open-PR list + per-PR files); a tighter cap skips every push
+HELD_BUDGET_S = 20   # fleet-owner.mjs --no-fetch: 12-37 s before 2026-10-26 (timed out on every push), 1.7-2.7 s since (one parallel curl + head-sha cache)
 
 
 def held_warning(dests, root):
@@ -987,6 +987,238 @@ def _gh_pr_number(words):
     return None
 
 
+GH_GQL_CLOSE = re.compile(r"\bclosePullRequest\b")
+GH_GQL_REF = re.compile(r"\b(createRef|updateRef|updateRefs|deleteRef|createCommitOnBranch)\b")
+GH_GQL_BRANCH_MERGE = re.compile(r"\bmergeBranch\b")
+_KV = r"[\"']?\s*[:=]\s*[\"']?"
+
+
+def api_endpoint(url):
+    """`https://api.github.com/repos/o/r/pulls/1/merge?x` / `repos/o/r/…` / `/graphql` → `repos/o/r/pulls/1/merge`.
+    A `${…}` / `$var` piece (a template or shell variable) reads as one opaque segment `X`."""
+    u = re.sub(r"\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*", "X", str(url or ""))
+    u = re.sub(r"^[a-z]+://", "", u, flags=re.I)
+    u = re.sub(r"^api\.github\.com(:\d+)?", "", u, flags=re.I)
+    u = re.sub(r"^(www\.)?github\.com(:\d+)?/", "web/", u, flags=re.I)
+    return u.split("?", 1)[0].split("#", 1)[0].strip("/")
+
+
+def api_classify(method, endpoint, blob):
+    """(decision, ask-text, endpoint) for one GitHub API call, or None to pass. ONE policy for every door
+    (gh api, curl, wget, node -e fetch, python -c; 2026-10-26 system audit §10 — user grant, Bryce 2026-10-26
+    ~23:00 PT: "Fix hook or guard or perm"):
+      deny       squash/rebase merges (REST merge_method, GraphQL mergeMethod)
+      deny-ref   …/git/refs writes and GraphQL ref mutations (shared safety ban 6)
+      deny-write …/contents/<path> PUT|DELETE (a commit with no PR)
+      ask        other merges (REST pulls/<n>/merge[-async], GraphQL merge/auto-merge, …/merges, web …/pull/<n>/merge),
+                 draft→ready, state=closed on a pull or issue, update-branch, pages.yml/ci.yml dispatches
+    Reads (GET, or no write verb) pass. https://docs.github.com/en/rest/pulls/pulls, …/rest/git/refs,
+    …/rest/actions/workflows."""
+    import merge_policy as P
+    ep = api_endpoint(endpoint)
+    m = (method or "GET").upper()
+    b = blob or ""
+    if ep == "graphql" or ep.endswith("/graphql"):
+        if GH_GQL_MERGE.search(b):
+            return ("deny" if re.search(r"\b(SQUASH|REBASE)\b", b, re.I) else "ask", P.ASK_MERGE, ep)
+        if GH_GQL_READY.search(b):
+            return ("ask", P.ASK_READY, ep)
+        if GH_GQL_CLOSE.search(b):
+            return ("ask", P.ASK_CLOSE, ep)
+        if GH_GQL_REF.search(b):
+            return ("deny-ref", "", ep)
+        if GH_GQL_BRANCH_MERGE.search(b):
+            return ("ask", P.ASK_REF, ep)
+        return None
+    if m in ("GET", "HEAD", "OPTIONS"):
+        return None
+    if re.search(r"^web/[^/]+/[^/]+/pull/[^/]+/merge$", ep):
+        return ("ask", P.ASK_MERGE, ep)
+    if re.search(r"(^|/)pulls/[^/]+/merge(-async)?$", ep) and m in ("PUT", "POST"):
+        return ("deny" if re.search(r"merge_method" + _KV + r"(squash|rebase)", b, re.I) else "ask", P.ASK_MERGE, ep)
+    if re.search(r"(^|/)pulls/[^/]+/update-branch$", ep) and m in ("PUT", "POST"):
+        return ("ask", P.ASK_UPDATE_BRANCH, ep)
+    if re.search(r"(^|/)(pulls|issues)/[^/]+$", ep) and m in ("PATCH", "POST"):
+        if "pulls/" in ep and re.search(r"\bdraft" + _KV + r"(false|0)\b", b, re.I):
+            return ("ask", P.ASK_READY, ep)
+        if re.search(r"\bstate" + _KV + r"closed\b", b, re.I):
+            return ("ask", P.ASK_CLOSE, ep)
+        return None
+    if re.search(r"(^|/)git/refs(/|$)", ep):
+        return ("deny-ref", "", ep)
+    if re.search(r"(^|/)merges$", ep) and m == "POST":
+        return ("ask", P.ASK_REF, ep)
+    if re.search(r"(^|/)contents(/|$)", ep) and m in ("PUT", "DELETE", "POST", "PATCH"):
+        return ("deny-write", "", ep)
+    w = re.search(r"(^|/)actions/workflows/([^/]+)/dispatches$", ep)
+    if w and m == "POST" and (P.gated_workflow(w.group(2)) or w.group(2) == "X"):
+        return ("ask", P.ASK_DISPATCH, ep)
+    return None
+
+
+GH_HOST = re.compile(r"(^|[/@.\s\"'`(])(api\.github\.com|(www\.)?github\.com/[^/\s]+/[^/\s]+/pull/)", re.I)
+CURL_DATA = {"-d", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode", "--json", "-F", "--form",
+             "--form-string"}
+CURL_ARG = {"-H", "--header", "-o", "--output", "-u", "--user", "-A", "--user-agent", "-e", "--referer", "-b",
+            "--cookie", "-c", "--cookie-jar", "-w", "--write-out", "-m", "--max-time", "--connect-timeout", "-x",
+            "--proxy", "--retry", "--retry-delay", "--retry-max-time", "-T", "--upload-file", "--cacert", "--cert",
+            "--key", "-D", "--dump-header", "--output-dir", "-r", "--range", "-y", "-Y", "-z", "--limit-rate",
+            "--resolve", "--connect-to", "--stderr", "--trace", "--trace-ascii", "--oauth2-bearer", "-K", "--config",
+            "--variable", "--expand-url", "--expand-data"}
+SCRIPT_URL = re.compile(r"""(https?://(?:api\.)?github\.com/[^\s"'`)]+|`https?://(?:api\.)?github\.com/[^`]+`)""", re.I)
+
+
+def _data_arg(v, c):
+    """A curl/wget body argument; `@file` is read (a missing file reads as empty)."""
+    if v.startswith("@") and v != "@-":
+        return v + " " + _read(_abs(v[1:], c))
+    return v
+
+
+def _http_from_script(body, interp):
+    """[(method, url, blob)] for GitHub calls in a `node -e` / `python -c` body (fetch, https.request, requests.*)."""
+    out = []
+    if not re.search(r"github\.com", body, re.I):
+        return out
+    urls = [u.strip("`") for u in SCRIPT_URL.findall(body)]
+    if not urls:
+        return out
+    mm = re.search(r"""method\s*[:=]\s*["'`](\w+)""", body, re.I) or \
+        re.search(r"\brequests\.(put|post|patch|delete)\s*\(", body, re.I) or \
+        re.search(r"""-X\s*["']?(PUT|POST|PATCH|DELETE)""", body)
+    method = (mm.group(1) if mm else ("POST" if re.search(r"\bbody\s*[:=]|\bdata\s*=|\bjson\s*=", body) else "GET")).upper()
+    for u in urls:
+        out.append((method, u, body))
+    return out
+
+
+def http_issues(text, cwd=None):
+    """[{cmd, decision, ask, why}] for GitHub API writes made with curl, wget, `node -e`/`--eval`/`-p` fetch or
+    `python -c` (2026-10-26 system audit §10: the egress proxy swaps ANY Authorization header for the admin App token,
+    so `curl -X PUT …/pulls/N/merge` squash-merged with no hook in the way). The policy is api_classify, the
+    same as `gh api`. Raises ParseError on untokenisable text."""
+    out = []
+    for _env, argv, _r, c in commands(text, cwd or os.getcwd(), strict=True):
+        b = os.path.basename(argv[0])
+        args = argv[1:]
+        calls = []
+        if b == "curl":
+            method, urls, data, get = None, [], [], False
+            k = 0
+            while k < len(args):
+                a = args[k]
+                nxt = args[k + 1] if k + 1 < len(args) else ""
+                if a in ("-X", "--request"):
+                    method = nxt.upper(); k += 2; continue
+                if a.startswith("--request="):
+                    method = a.split("=", 1)[1].upper()
+                elif re.match(r"^-X[A-Za-z]+$", a):
+                    method = a[2:].upper()
+                elif a in CURL_DATA:
+                    data.append(_data_arg(nxt, c)); k += 2; continue
+                elif any(a.startswith(f + "=") for f in CURL_DATA if f.startswith("--")):
+                    data.append(_data_arg(a.split("=", 1)[1], c))
+                elif re.match(r"^-d.+", a):
+                    data.append(_data_arg(a[2:], c))
+                elif a == "--url":
+                    urls.append(nxt); k += 2; continue
+                elif a.startswith("--url="):
+                    urls.append(a.split("=", 1)[1])
+                elif a in ("-G", "--get"):
+                    get = True
+                elif a in ("-I", "--head"):
+                    method = method or "HEAD"
+                elif a in CURL_ARG:
+                    k += 2; continue
+                elif not a.startswith("-"):
+                    urls.append(a)
+                k += 1
+            if get:
+                method = "GET"
+            method = method or ("POST" if data else "GET")
+            calls = [(method, u, " ".join(data)) for u in urls if GH_HOST.search(" " + u)]
+        elif b == "wget":
+            method, urls, data = None, [], []
+            k = 0
+            while k < len(args):
+                a = args[k]
+                nxt = args[k + 1] if k + 1 < len(args) else ""
+                if a.startswith("--method="):
+                    method = a.split("=", 1)[1].upper()
+                elif a == "--method":
+                    method = nxt.upper(); k += 2; continue
+                elif re.match(r"^--(post|body)-(data|file)=", a):
+                    v = a.split("=", 1)[1]
+                    data.append(_read(_abs(v, c)) if "-file=" in a else v)
+                    if a.startswith("--post-"):
+                        method = method or "POST"
+                elif re.match(r"^--(post|body)-(data|file)$", a):
+                    data.append(_read(_abs(nxt, c)) if a.endswith("file") else nxt)
+                    if a.startswith("--post-"):
+                        method = method or "POST"
+                    k += 2; continue
+                elif a in ("-O", "--output-document", "-o", "--output-file", "--header", "-U", "--user-agent", "-e",
+                           "--execute", "-P", "--directory-prefix", "--user", "--password", "-T", "--timeout"):
+                    k += 2; continue
+                elif not a.startswith("-"):
+                    urls.append(a)
+                k += 1
+            method = method or ("POST" if data else "GET")
+            calls = [(method, u, " ".join(data)) for u in urls if GH_HOST.search(" " + u)]
+        elif b in ("node", "nodejs", "bun", "deno", "python", "python3"):
+            for m_, a in enumerate(args[:-1]):
+                if a in ("-e", "--eval", "-p", "--print", "-c"):
+                    calls += _http_from_script(args[m_ + 1], b)
+        for method, url, blob in calls:
+            hit = api_classify(method, url, blob)
+            if hit:
+                out.append({"cmd": " ".join(argv)[:200], "decision": hit[0], "ask": hit[1],
+                            "why": f"{b} {method} {hit[2]}"})
+    return out
+
+
+POLL_WATCH = re.compile(r"\b(ci-watch(\.mjs)?|gh\s+(run|api|pr\s+(checks|view|status|list))|git\s+(log|ls-remote|fetch)|"
+                        r"api\.github\.com|pr-board(\.mjs)?|fleet-bus(\.mjs)?\s+read|who-is-on-it(\.mjs)?)\b")
+
+
+def _blank_quotes(t):
+    """Quoted text blanked (prose is not a command), except a shell `-c` body, which IS commands."""
+    out, i, n = [], 0, len(t)
+    while i < n:
+        ch = t[i]
+        if ch in "'\"":
+            j = i + 1
+            while j < n and t[j] != ch:
+                j += 2 if (ch == '"' and t[j] == "\\") else 1
+            body = t[i + 1:j]
+            out.append(" " + body + " " if re.search(r"(^|\s)-[a-z]*c\s*$", t[:i]) else " ")
+            i = j + 1
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
+def poll_loops(text):
+    """[{why}] for a shell poll loop (2026-10-26 system audit: orchestrators ran 120-iteration `ci-watch --once; sleep`
+    loops; AGENTS.md rule 12 says subscribe + one Monitor, never a loop): a for/while/until loop whose header or body
+    sleeps AND watches CI/git/the API/the bus, or any `seq …` loop that sleeps. Heredoc bodies and quoted prose are
+    not commands."""
+    t = _blank_quotes(strip_heredocs(text))
+    out = []
+    for m in re.finditer(r"(^|[;&|(\s])(for|while|until)\b([\s\S]*?)\bdo\b([\s\S]*?)\bdone\b", t):
+        head, body = m.group(3), m.group(4)
+        whole = head + " " + body
+        if not re.search(r"\bsleep\b", whole):
+            continue
+        w = POLL_WATCH.search(whole)
+        if w:
+            out.append({"why": m.group(2) + " … " + re.sub(r"\s+", " ", w.group(0)) + " … sleep"})
+        elif re.search(r"\bseq\b", head):
+            out.append({"why": "seq … sleep"})
+    return out
+
+
 def gh_issues(text, cwd=None):
     """[{cmd, decision: deny|ask, why}] for every `gh` call that merges a PR,
     arms auto-merge, flips a draft ready or moves a branch outside a PR
@@ -1044,25 +1276,11 @@ def gh_issues(text, cwd=None):
                 elif not a.startswith("-") and a != "api" and endpoint is None:
                     endpoint = a
                 k += 1
-            ep = (endpoint or "").split("?", 1)[0].strip("/")
             blob = " ".join(fields)
             method = method or ("POST" if fields else "GET")
-            dec = None
-            if ep == "graphql":
-                if GH_GQL_MERGE.search(blob):
-                    dec = "deny" if re.search(r"\b(SQUASH|REBASE)\b", blob, re.I) else "ask"
-                elif GH_GQL_READY.search(blob):
-                    dec = "ask"
-            elif re.search(r"(^|/)pulls/[^/]+/merge$", ep) and method in ("PUT", "POST"):
-                dec = "deny" if re.search(r"merge_method=\s*\"?(squash|rebase)", blob, re.I) else "ask"
-            elif re.search(r"(^|/)pulls/[^/]+$", ep) and method == "PATCH" and re.search(r"\bdraft=\s*(false|0)\b", blob, re.I):
-                dec = "ask"
-            elif re.search(r"(^|/)git/refs(/|$)", ep) and method in ("POST", "PATCH", "PUT", "DELETE"):
-                dec = "deny-ref"   # shared safety ban 6: a branch moves or dies only through git push / a PR
-            elif re.search(r"(^|/)merges$", ep) and method == "POST":
-                dec = "ref"
-            if dec:
-                out.append({"cmd": cmd, "decision": dec, "why": f"gh api {method} {ep}"})
+            hit = api_classify(method, endpoint or "", blob)
+            if hit:
+                out.append({"cmd": cmd, "decision": hit[0], "ask": hit[1], "why": f"gh api {method} {hit[2]}"})
     return out
 
 
@@ -1099,11 +1317,26 @@ def _first_positional(args, with_arg):
     return k
 
 
+def _honors_help(path):
+    try:
+        with open(path, encoding="utf8", errors="replace") as f:
+            src = f.read(400000)
+    except OSError:
+        return False
+    return "exitIfHelp(" in src or '"--help"' in src or "'--help'" in src
+
+
 def _browser_script(path, args, cwd):
     """Why running this script (path) with args boots a browser, else None."""
     res = _abs(path, cwd) if cwd else path
     names = {path, res}
     b = os.path.basename(path)
+    # `--help` / `-h` / `help` print and exit (2026-10-26 audit: `tools/shot/agent.mjs --help` and
+    # `verify-change.mjs --help` were blocked in a read-only subagent) — but only for a script that HONOURS the
+    # flag (exitIfHelp, or a literal "--help" in its source); test-bg.mjs and the census producers do not, and an
+    # ignored flag must never authorize Chromium.
+    if (any(a in ("--help", "-h") for a in args) or args[:1] == ["help"]) and _honors_help(res):
+        return None
     if any(PW_BIN.search(n) for n in names) or (b == "cli.js" and "playwright" in res):
         k = _first_positional(args, set())
         return "playwright test" if k < len(args) and args[k] == "test" else None
@@ -1280,7 +1513,8 @@ def guard(payload, root):
     try:
         pushes = push_issues(cmd, dests=dests)
         raises = ratchet_issues(cmd)
-        gh = gh_issues(cmd)
+        gh = gh_issues(cmd) + http_issues(cmd)
+        polls = poll_loops(cmd)
         browser = browser_starts(cmd, browser_groups(root)) if sub else []
     except ParseError:
         print("PARSE null")
@@ -1325,12 +1559,22 @@ def guard(payload, root):
     if refs:
         sys.stderr.write("BLOCKED: `" + refs[0]["cmd"] + "` (" + refs[0]["why"] + ") " + P.DENY_REF + "\n")
         return 2
+    writes = [x for x in gh if x["decision"] == "deny-write"]
+    if writes:
+        sys.stderr.write("BLOCKED: `" + writes[0]["cmd"] + "` (" + writes[0]["why"] + ") " + P.DENY_WRITE + "\n")
+        return 2
+    if polls and os.environ.get("APEX_POLL_OK") != "1" and not re.search(r"(^|[;&|(]\s*)APEX_POLL_OK=1\s", cmd):
+        sys.stderr.write("BLOCKED: a shell poll loop (" + "; ".join(sorted({p["why"] for p in polls})) + ") — AGENTS.md "
+                         "rule 12 and fleet-core: subscribe, then at most one `ci-watch.mjs --once`, or ONE Monitor on "
+                         "`node tools/ci/ci-watch.mjs --sha <sha> --failures-only` / `node tools/ci/wait-for.mjs`; never "
+                         "a for/while … sleep loop (2026-10 week: three 120-iteration loops in one orchestrator). "
+                         "APEX_POLL_OK=1 <command> for a bounded retry of a network call.\n")
+        return 2
     closed = closed_pr_refusal(dests, root) if dests and os.environ.get("APEX_CLOSED_PR_PUSH_OK") != "1" else ""
     if closed:
         sys.stderr.write(closed)
         return 2
     ctx = "\n".join(w for w in (gate_pipe_warning(cmd), held_warning(dests, root) if dests else "") if w)
-    desk = os.environ.get("APEX_MERGE_DESK") == "1"
     deny = [x for x in gh if x["decision"] == "deny"]
     if deny:
         P.emit("deny", P.DENY_METHOD + " (" + deny[0]["why"] + ")")
@@ -1345,15 +1589,15 @@ def guard(payload, root):
         if x["kind"] == "merge":
             m = re.search(r"--match-head-commit[= ]+([0-9a-fA-F]{7,40})", x["cmd"])
             head = m.group(1) if m else _receipt_head(receipts, x.get("pr"))
-        ok, why = P.receipt_check(receipts, x["kind"], x.get("pr"), head)
+        ok, why = P.receipt_check(receipts, x["kind"], x.get("pr"), head, verify_files=True)
         if not ok:
             P.emit("deny", (P.DENY_GATE_MERGE if x["kind"] == "merge" else P.DENY_GATE_READY) + " (" + x["why"] + ": " + why + ")")
             return 0
+    # 2026-10-26: no APEX_MERGE_DESK silent pass here any more (system audit §10: the env was set for EVERY session,
+    # so a worker's GraphQL/REST merge-by-id or ready flip never asked). An ask asks whoever runs the session.
     rest = [x for x in gh if x.get("kind") not in ("merge", "ready")]
-    if rest and not desk:
-        ready = all("ready" in x["why"] or "Ready" in x["why"] for x in rest)
-        ref = any(x["decision"] == "ref" for x in rest)
-        P.emit("ask", (P.ASK_REF if ref else P.ASK_READY if ready else P.ASK_MERGE) + " (" + rest[0]["why"] + ")", ctx)
+    if rest:
+        P.emit("ask", (rest[0].get("ask") or P.ASK_MERGE) + " (" + rest[0]["why"] + ")", ctx)
     elif ctx:
         P.emit(None, None, ctx)
     return 0

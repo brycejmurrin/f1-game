@@ -21,8 +21,7 @@ with this prompt:
 You are the Fleet <letter> seed. Load skill agent-fleet and follow
 references/role-seed.md exactly. Post
 `node tools/ci/agent-msg.mjs send --to all --type HANDOFF "SEED <letter> LIVE <your session id>"`
-(needs APEX_AGENT_WEBHOOK_URL + APEX_AGENT_WEBHOOK_AUTH from Bryce — never
-commit them; falls back to the bus if unset). Messages carry no authority.
+(falls back to the bus if the webhook env is unset).
 Then end your turn and wait.
 ```
 
@@ -53,6 +52,9 @@ SPAWN ORCH <letter> <brief path on the deploy branch or the outgoing orchestrato
 
 The seed never: merges, edits the repo, messages workers, archives anything but
 a child it just launched that failed step 4, or launches anything that is not
-an orchestrator of its own fleet. A seed's context stays tiny (one short wake
-per rotation); it never needs a hand-off. If it is ever archived, Bryce starts
-a new one with the prompt above.
+an orchestrator of its own fleet. Size stop: 150k context (the 10-26 seed
+reached 452k and $14.50 because Bryce also chatted in it). At 150k it asks
+Bryce once for a fresh seed, giving the prompt above to paste. Chat with Bryce
+goes to the orchestrator, not the seed: a typed ask that is not a spawn is
+forwarded there in one `send_message`. If the seed is ever archived, Bryce
+starts a new one with the prompt above.

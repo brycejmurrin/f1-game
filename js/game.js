@@ -703,8 +703,8 @@ function dirtyAirMul(wake, speed) {
 }
 
 // ---------- state ----------
-let state = "menu";
-function setState(next, why) { if (next !== state) Log.info("game", "State " + state + "->" + next + " why=" + why + " raceT=" + (+raceT || 0).toFixed(1)); state = next; }   // THE one writer: every transition is logged
+let state = "menu", titleVisit = 0;
+function setState(next, why) { if (next !== state) Log.info("game", "State " + state + "->" + next + " why=" + why + " raceT=" + (+raceT || 0).toFixed(1)); if (next !== state) titleVisit++; state = next; }   // THE one writer: every transition is logged
 let track = null, builtTrackId = null, builtTrackNight = null;
 let gridPreOrdered = false;   // set by gridUp(); read by js/net/netplay.js — see there
 // The field size the painted grid was built for. In the rebuild guard with
@@ -718,6 +718,7 @@ let builtGridSlots = null, builtTrackBare = false;
 const bareStale = () => builtTrackBare && !!builtTrackId && sceneryResident(builtTrackId);
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0, netGreen = null;
+let pendingFinishQuit = false;
 const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (solo race only)
 // Countdown setGridIdle opts — reused every frame (was a fresh {} on the
 // countdown return path, ~60 allocs/s until lights-out).
@@ -2267,7 +2268,7 @@ function scheduleFlybyTrack(settle) {
   const prep = _menuGate.prep = { want, tod: raceTimeOfDay, weather: raceWeather, key: menuKey(want), bkey: buildKey(want), building: false, owner: null, step: null };
   const current = prep.current = () => generation === _menuGate.generation && state === "menu" &&
     !setupPreviewOn && trackIdx === want && raceTimeOfDay === prep.tod && raceWeather === prep.weather &&
-    (!els.select.hidden || !$("race-settings").hidden || (uiExperience && uiExperience.wantsTrack()));
+    (!els.select.hidden || !$("race-settings").hidden || (uiExperience && uiExperience.wantsTrack()) || (typeof titleWarm !== "undefined" && titleWarm.wants()));
   const prepare = async () => {
     if (!current()) return;
     try {
@@ -2596,7 +2597,7 @@ async function startRaceBody() {
   RaceEntryProfile.mark("gridCountdown:start");
   gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : null));
   rlap("gridUp");
-  wxArc.startChangeable();
+  wxArc.startChangeable(0);
   recomputePlayerMods();
   rlap("finish");
   if (isTimeTrial()) { records.begin(); Ghost.startLap(); /* InputGhost armed in records.begin */ }
@@ -2729,6 +2730,7 @@ function entrySettings() {
 }
 const _customTrackStarts = new WeakSet();
 function startRace() {
+  pendingFinishQuit = false; titleVisit++;
   if (setupTrialSession && !setupTrialSession.pending()) { setupTrialSession.cancel(); SetupTrials.invalidate("Session restarted"); }
   // TopModal mirrors hidden→close via MutationObserver (next task). Sync-close
   // so #loading is not trapped under :modal for the rest of this long task.
@@ -2899,7 +2901,7 @@ function netOrder(order) {
 function endRace(forcedOrder) {
   Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (replayBuf.isScrubbing()) return; // scrub: no career settle / results
-  try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* a clean race: the context-loss budget counts CONSECUTIVE losses, not the tab's lifetime */ }   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
+  GfxEscalation.resetReloadBudget();   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
   PerfGov.cleanRace(); if (paused) { closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode(); closeSettings(); }   // clean finish: disarm + pay a crash strike down; a (net) flag under the pause gets RESUME's tool teardown, before the weather is judged
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
@@ -3367,6 +3369,7 @@ const G = {
   // would make an Object.seal(G) throw rather than no-op, since every writer is
   // a strict-mode IIFE. A session's clock, not the page's: netplay nulls it
   // between sessions so a stale value cannot date a fresh session's deadlines.
+  get netRaceT() { const t = state === "race" && netGreen ? (netGreen.now() - netGreen.base) / 1000 : raceT; return Number.isFinite(t) ? Math.max(raceT, t) : raceT; },
   get netNow() { return netNow; }, set netNow(v) { netNow = v; },
   // The countdown clock and how many lamps are lit. netStartArm has always
   // written G.countT and, with no accessor here, it has always gone nowhere —
@@ -3394,7 +3397,7 @@ const G = {
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   followCar: (c) => { cars.forEach((o) => setCarRole(o, false, o === c)); player = c; },   // a replay: the camera, HUD and audio move to this car; nobody drives (js/race/real-replay.js)
   setPip: (c, m) => mirrorPass.setSubject(c, m),   // the broadcast PiP's car and shot (js/race/broadcast.js → js/render/shared/mirror-pass.js)
-  goRolling: () => { if (state !== "count") return false; try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* a clean rolling start: the reload budget counts consecutive losses, not the tab's lifetime */ } setState("race", "rolling-start"); launchT0 = raceT; els.lights.hidden = true; for (const l of els.lights.children) l.classList.remove("on"); lightsLit = COUNTDOWN_S; cars.forEach((c) => { c.launchOn = false; }); return true; },   // a mid-race jump-in: green at once, no gantry, no launch model — the field is already at speed (js/race/real-race.js)
+  goRolling: () => { if (state !== "count") return false; GfxEscalation.resetReloadBudget(); setState("race", "rolling-start"); launchT0 = raceT; els.lights.hidden = true; for (const l of els.lights.children) l.classList.remove("on"); lightsLit = COUNTDOWN_S; cars.forEach((c) => { c.launchOn = false; }); return true; },   // a mid-race jump-in: green at once, no gantry, no launch model — the field is already at speed (js/race/real-race.js)
   // …and its hand-over counts on the gantry's plate (4, 3, 2, 1, GO; null clears): a big number where the lights are, not a queued radio card.
   handoverCount: (v) => { const on = v != null; els.lights.classList.toggle("count", on); if (on) els.lights.dataset.count = String(v); else delete els.lights.dataset.count; els.lights.hidden = !on; },
   wireId,                               // stable cross-peer car identity
@@ -3533,6 +3536,10 @@ const garagePre = GaragePrebuild.create(G, { gate: _menuGate, setupCam, menuIdle
   ui: () => uiExperience, studio: () => _studio, worldReady: () => menuWorld() });
 const renderSetupPreview = garagePre.timed(setupCam.renderSetupPreview);
 garagePre.start();
+// The same prep and program warm on an idle TITLE, once per update on a phone (js/perf/title-warm.js, A·W50).
+const titleWarm = TitleWarm.create(G, { $, ui: () => uiExperience, schedule: () => scheduleFlybyTrack(true), idleMs: MENU_IDLE_MS,
+  warmable: () => !!gfx.warm, prepReady: () => { const p = menuPrep(); return p.world && p.done && p.warmed && p.warmFrames === 0 && !p.warming; } });
+titleWarm.start();
 // The three shadow-map passes (js/render/shared/shadow-pass.js): sun snap cache,
 // per-frame car map, night lamp map, the caster pools and the blob flush.
 const shadowPass = ShadowPass.create(G, { teamMesh, vStd, cockpitCaster: carDraw.cockpitCaster });
@@ -3589,7 +3596,7 @@ raceSettings = RaceSettings.create(G, {
   GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
   qualiResults: () => quali.results(), openQuali, enableTilt,
   getSteerMode: () => steerMode, buildStandings, raceIntro: raceIntroFromSheet,
-  previewWxPlan: (o) => wxArc.previewPlan(o),   // the MIXED plan WITHOUT caching it (FORECAST line)
+  previewWxPlan: (o) => wxArc.previewArc(o),   // the MIXED plan WITHOUT caching it (FORECAST line)
 });
 // PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
 // over the world scheduleFlybyTrack() already warmed, and startRaceBody keeps
@@ -4323,6 +4330,13 @@ if (typeof GfxEscalation !== "undefined" && GfxEscalation.registerMenuRecover) {
 // A quit from under the pit garage (WORK ON CAR, then any path to quitToMenu) takes the garage down
 // with the race: left open, the title showed RETURN TO RACE, whose closePitWork charged a dead race.
 function quitToMenu() {
+  if (!frozen && !gfxContextLost() && soloPlayerDone() && !postFinishWait()) {
+    if (!pendingFinishQuit) announce("SETTLING FINISH — RETURNING TO MENU", 4, "info");
+    pendingFinishQuit = true;
+    setPaused(false);   // normal physics gives runners their corrected-time opportunity
+    return;
+  }
+  pendingFinishQuit = false;
   clearRaceEntrySoften();
   Ghost.flush();
   cancelIntro();
@@ -4402,7 +4416,12 @@ function quitToMenu() {
 // ---------- per-frame update ----------
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
-const ranked = [], parked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comparator closure per step
+const ranked = [], parked = [], _colField = [];   // _colField: ranked + parked for resolveCollisions, refilled (was ranked.concat(parked) per step, PP-8)
+// Progress order, descending, by STABLE insertion: the order ranked.sort((a, b) => b.prog - a.prog) gave from the same
+// input, without the work array both V8's and JSC's Array.prototype.sort allocate per call (CPU-HUNT-2026-10-24 C1).
+function rankByProg(a) {
+  for (let i = 1; i < a.length; i++) { const c = a[i], p = c.prog; let j = i - 1; while (j >= 0 && a[j].prog < p) { a[j + 1] = a[j]; j--; } a[j + 1] = c; }
+}
 // AFTER THE FLAG a finished car keeps accruing prog in coast(), so a later but faster finisher out-progressed an
 // earlier one and took its c.rank (the HUD position, the relative board). The finishers' rank SLOTS are handed
 // back out in classification order (RaceControl.finishOrder: laps, then the clock); running cars keep theirs and
@@ -4417,7 +4436,7 @@ function rankFinishers() {
 // A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
 // Cutting _lk.track (a cache: lk.track !== track rebuilds it) leaves any other stale scratch holding a car, not a circuit.
 function releaseFieldScratch() {
-  ranked.length = 0; parked.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(); pits.releaseTrack();
+  ranked.length = 0; parked.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(); pits.releaseTrack();
   _wallCtx.track = null; _tfSamp.track = null; _tfSamp.s = NaN;
   for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i]._lk) cars[i]._lk.track = null;
 }
@@ -4504,7 +4523,7 @@ function update(dt) {
     }
     if (lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + feel.startHold) {
       setState("race", feel.restartPending ? "restart-green" : "lights-out");
-      try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* survived to green: the loss budget was for the start hitch, not this race */ }
+      GfxEscalation.resetReloadBudget();
       if (!feel.restartPending) raceT = 0;   // a red-flag restart resumes the clock the flag stopped
       launchT0 = raceT;   // …so the launch model measures from THIS green, not the first one
       // A NETWORKED RACE KEEPS WALL TIME from the shared green (netStart.at is
@@ -4567,7 +4586,7 @@ function update(dt) {
   // own `c.retired` check and one of them would eventually be forgotten.
   ranked.length = 0;
   for (let i = 0; i < cars.length; i++) if (!cars[i].retired) ranked.push(cars[i]);   // indexed, not for-of: update() runs unoptimized enough that each for-of allocated its iterator results (PERF-SCENE-CPU-2026-10-20)
-  ranked.sort(byProgDesc);
+  rankByProg(ranked);
   let nFin = 0;
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
@@ -4575,7 +4594,7 @@ function update(dt) {
   }
   if (nFin > 1) rankFinishers();
   if (!isPractice() && !isQuali() && !realRace.owns(player)) {
-    scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
+    scPassCall(scWatch.tick(player, ranked, raceCtl.level, 0));
     // Race only (TT/quali already gated): blue-flag compliance for the player.
     if (session === "race" && track) {
       _blueCtx.total = track.total; _blueCtx.vRef = vTop(); _blueCtx.caution = raceCtl.level;
@@ -4609,7 +4628,8 @@ function update(dt) {
   }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
 
-  PerfSpans.begin("collide"); collide.resolveCollisions(parked.length ? ranked.concat(parked) : ranked, dt); PerfSpans.end("collide");
+  PerfSpans.begin("collide"); let field = ranked; if (parked.length) { field = _colField; field.length = 0; for (let i = 0; i < ranked.length; i++) field.push(ranked[i]); for (let i = 0; i < parked.length; i++) field.push(parked[i]); }
+  collide.resolveCollisions(field, dt); PerfSpans.end("collide");
 
   // Rapier debris side-world: reads car poses (kinematic mirrors), owns only
   // its own shards, writes NOTHING back to gameplay. Inert unless enabled.
@@ -4626,6 +4646,11 @@ function update(dt) {
   }
   incidentSim.postStep(dt);
   RaceControl.endLineStep();
+  // Judge the motion against the flag that governed it, before caution updates.
+  // The pre-motion zero-dt sample primes new races; this sample also charges
+  // final-step offences before any result/exit action becomes available.
+  if (!isPractice() && !isQuali() && !realRace.owns(player)) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
+  if (pendingFinishQuit && postFinishWait()) { quitToMenu(); return; }
 
   // B1 — debris caution + driving coach + race radio: presentation only
   // (announce / audio). Once per FRAME on the last physics step with the
@@ -6306,17 +6331,21 @@ function updateCarAdvance(c, dt, ranked, S) {
     // A takeover (R2/R3/C1) during this lap invalidates it EXPLICITLY: the car
     // was moved by Rapier, so it is not a timed lap — no personal best, no
     // stored ghost. The flag is set by IncidentSim and cleared here at the line.
-    const lapValid = !c.incidentInvalidLap && !(c.isPlayer && coach.practiceActive());
+    let lapValid = !c.incidentInvalidLap && !(c.isPlayer && coach.practiceActive());
     // The flag: the distance, or the leader already home (RaceControl.flagOut —
     // a lapped car is flagged at its next crossing, not after the full count).
     lineCross.lapValid = lapValid && c.lap > 1 && !lineCross.recross;
     if (c.lap > 1 && !lineCross.recross) {   // a re-crossing after a reverse was timed the first time
       const lapDone = lineCross.lapDone;
+      if (c.isPlayer && isTimeTrial()) {
+        if (lapValid) lapValid = onTTLap(lapDone);
+        else restartTTRecorders();
+        lineCross.lapValid = lapValid;
+      }
       if (lapValid) c.lastLap = lapDone;
       else if (c.isPlayer && isQuali()) c.qualiCut = true;   // ANY deleted quali lap (a takeover, a practice rewind — not only a cut) is NO TIME, never the model's
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
-      if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else restartTTRecorders(); }
     } else if (c.isPlayer && isTimeTrial()) {
       restartTTRecorders();
     }
@@ -6588,7 +6617,7 @@ function checkRetirements() {
 }
 
 // Results, ghosts and matching-class records share one settlement path.
-function onTTLap(lapTime) { records.finish(lapTime, lapRec.ttLaps, quali.referencePole()); }
+function onTTLap(lapTime) { return records.finish(lapTime, lapRec.ttLaps, quali.referencePole()); }
 
 function coast(c, dt) {
   // Same shape as the grass-drag floor (see updateCar): a bare Math.max(24, …)
@@ -8052,10 +8081,12 @@ function render(dt) {
     }
     // Body-only mesh + planted wheels for every procedural car. Attitude
     // (tmpMat) is chassis-only; wheels stay on _groundMat. A glb is one piece.
+    const sharedBody = FieldLod.on && !c.isPlayer && _lod >= 2;
     const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c)
-      : (FieldLod.on && !c.isPlayer && _lod >= 2 ? carDraw.sharedRivalBodyMesh(FieldLod.farBody(_lodD2, fovY, c)) : teamBodyMesh(c.team, c)));
+      : (sharedBody ? carDraw.sharedRivalBodyMesh(FieldLod.farBody(_lodD2, fovY, c)) : teamBodyMesh(c.team, c)));
     if (body) {
-      gfx.draw(body, tmpMat, paint);
+      // Only the neutral shared distant bodies share paint and geometry; keep chassis attitude.
+      gfx.draw(body, tmpMat, sharedBody ? carDraw.coOpt(paint) : paint);
       if (_lod < 2) queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m
       _wheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
@@ -8521,11 +8552,14 @@ function tickBody(now) {
   }
   replayBuf.onTick(raceT, cars, state); // 30 Hz solo ring — never under netplay / scrub
   banner.tick(dt);
-  // hit-stop: slow the simulation to a crawl for a few frames after a hard
-  // crash so the impact reads, but keep the camera (render) at full dt so the
-  // shake still plays out.
+  // Hit-stop runs at 0.15x only for the hold's remaining wall time; the rest
+  // of the frame advances normally. Camera/render dt stays on the wall clock.
   let simTime = dt;
-  if (feel.hitStop > 0) { feel.hitStop = Math.max(0, feel.hitStop - dt); simTime = dt * 0.15; }
+  if (feel.hitStop > 0) {
+    const held = Math.min(dt, feel.hitStop);
+    feel.hitStop = Math.max(0, feel.hitStop - dt);
+    if (!netPlay.active()) simTime = dt - held * 0.85;
+  }
   // The steering ramps are part of the control loop, so they run on the SIM's
   // clock, not the wall's — otherwise hit-stop lets the wheel travel ~6.7x
   // further per simulated second and the car leaves a crash already turned. The
@@ -8612,7 +8646,9 @@ function paintSteer() {
 function enableTilt() {   // enableTilt.asked: it ran (startRace asks once more only when nothing did)
   // Must run inside a user gesture for the iOS permission prompt.
   enableTilt.asked = true;
-  Input.requestGyro().then((ok) => {
+  const request = Input.requestGyro(), attempt = Input.gyroRequestId();
+  request.then((ok) => {
+    if (steerMode !== "tilt" || attempt !== Input.gyroRequestId()) return;
     if (!ok && !Input.gyroHardDenied) enableTilt.asked = false;   // a transient rejection: the next launch may ask again
     if (ok) {
       Input.calibrate();
@@ -8621,7 +8657,7 @@ function enableTilt() {   // enableTilt.asked: it ran (startRace asks once more 
       // (https://w3c.github.io/deviceorientation/): tilt stayed selected with the
       // steer at 0 and nothing said why. No reading in 1.5 s -> buttons, said.
       setTimeout(() => {
-        if (steerMode !== "tilt" || Input.gyroSeen || headlessMode) return;
+        if (steerMode !== "tilt" || attempt !== Input.gyroRequestId() || Input.gyroSeen || headlessMode) return;
         setSteerMode("buttons"); paintSteer();
         tiltSay("no motion sensor — switched to buttons");
       }, 1500);
@@ -8684,7 +8720,13 @@ if (typeof MenuQuitTail !== "undefined" && MenuQuitTail.wire) {
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
 // A refused or offline bundle says so: the tap sound already played, a silent door reads as broken.
-const openDataHub = (tab) => ensureDataHub().then((ok) => { if (ok) DataHub.open(tab); else announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning"); });
+const openDataHub = (tab) => {
+  const visit = titleVisit;
+  return ensureDataHub().then((ok) => {
+    if (state !== "menu" || visit !== titleVisit) return;
+    if (ok) DataHub.open(tab); else announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning");
+  });
+};
 $("mb-data").onclick = () => {
   // The click sound fires immediately — the bundle is one network round trip
   // on a cold tap and the button must not feel dead while it lands.
@@ -9236,7 +9278,8 @@ function setPaused(p, why) {
 }
 els.pausebtn.onclick = () => setPaused(true);
 // SKIP TO RESULTS: the player is home and the solo field is still finishing (RaceControl.finishDelay waits for it).
-function postFinishWait() { return state === "race" && postFinish.solo && postFinish.since >= 0; }
+function soloPlayerDone() { return state === "race" && session === "race" && !netPlay.active() && !realRace.isWatch() && player && (player.finished || player.retired); }
+function postFinishWait() { return soloPlayerDone() && !RaceControl.finishPending(cars, raceT, lapsTarget, realRace.raceT0()); }
 function skipToResults() { if (!postFinishWait()) return false; resultT = 0; endRace(); return true; }
 $("pm-skip-results").onclick = () => skipToResults();
 addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.repeat && !paused && postFinishWait() && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test((e.target && e.target.tagName) || "")) skipToResults(); });
@@ -9425,9 +9468,9 @@ if (Tracks.LIST[trackIdx]) {
 }
 { const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
   $("mb-standings").hidden = !hasSeason; }
-Career.load();            // resolve + migrate the career save once at boot
-clampDriverIdx();         // MY TEAM gridDrivers() is 2 after load; team.drivers may still be 1
-refreshCareerButton();
+const loadBootCareer = () => { Career.load(); clampDriverIdx(); refreshCareerButton(); };
+if (store.careerWriter && store.careerWriter.ready) store.careerWriter.ready.then(loadBootCareer);
+else loadBootCareer();
 platformSession.initInput({ steerMode, throttleLatchOpt });
 // No DataHub.init here: js/data is LAZY_DATA, so ensureDataHub() (awaited by
 // the DATA button) initialises it.

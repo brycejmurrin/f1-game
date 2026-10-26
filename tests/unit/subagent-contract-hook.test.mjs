@@ -52,7 +52,6 @@ const GOOD = {
   "bloat-auditor": `${bloat(1)}\n${bloat(2)}\nCOVERED: x/a.js`,
   "physics-contract-auditor": `${site(1)}\nvstd-invariant: pass\ncurvature-channels: pass\ncovered: js/physics  not covered: none`,
   "ci-red-triage": "SHA abc1234 · run https://g/1 · fast · RED\nspec — Expected 1 Received 2 — lane: ui\nbase: unknown  (base run unread)\nnext: fix X\n- job ui, log line 12",
-  "ci-watcher": "BOARD 2 open · full-tier slots 1/3 · 2026-10-14T00:00:00Z\n#12 draft abc1234 clean ci=green gate=ok armed=- → READY\n  call: mcp__github__update_pull_request {pullNumber: 12, draft: false}\n#13 ready def5678 dirty ci=red gate=- armed=- → SYNC\nact only if the parent is CI Watch by Bryce's designation",
 };
 
 test("a good report from every contracted agent passes", () => {
@@ -76,7 +75,6 @@ test("a missing verdict / required line blocks", () => {
   blocks(stop("code-hunter", finding(1) + "\ncovered: a\nnot covered: b"), /measured:/, "no measured line");
   blocks(stop("agent-surface-reviewer", "Report written to scratch/r.md. Looks fine."), /VERDICT/, "no VERDICT");
   blocks(stop("ci-red-triage", "SHA abc · run https://g/1 · fast · RED\nnext: fix"), /base:/, "no base line");
-  blocks(stop("ci-watcher", "#12 draft abc clean ci=green gate=ok armed=- → READY"), /BOARD/, "no BOARD header");
   blocks(stop("physics-contract-auditor", site(1) + "\ncovered: x"), /vstd-invariant/, "no gate lines");
 });
 
@@ -88,7 +86,6 @@ test("a wrong prefix or row shape blocks", () => {
   blocks(stop("bloat-auditor", `${bloat(1)} &lt;x&gt;\nCOVERED: x`), /HTML entities/, "entities");
   blocks(stop("prior-art-scout", "| KNOWN | a.js | claim |\nKNOWN a.js:1 claim\nsources read: x\nnot read: none"), /does not match/, "table / no separators");
   blocks(stop("agent-surface-reviewer", "VERDICT GREAT — fine | report: scratch/r.md\nGAP1 x\nGAP2 y"), /does not match/, "unknown verdict");
-  blocks(stop("ci-watcher", "BOARD 1 open\n#12 draft abc clean → MERGE"), /does not match/, "unknown suggestion");
   blocks(stop("physics-contract-auditor", "SITE x/a.js:1 k column:player in-table:no\nvstd-invariant: pass\ncurvature-channels: pass\ncovered: x"), /does not match/, "bad column");
 });
 
@@ -102,11 +99,11 @@ test("fail open: loop guard, unknown agents, denial reports, empty and garbage i
   passes(stop("code-hunter", "nothing", { stop_hook_active: true }), "stop_hook_active never blocks");
   passes(stop("general-purpose", "anything"), "general-purpose");
   passes(stop("Explore", "anything"), "Explore");
+  passes(stop("ci-watcher", "anything"), "ci-watcher has no contract since the agent was deleted (2026-10-26)");
   passes(stop(undefined, "anything"), "no agent_type");
   passes(stop("code-hunter", ""), "empty final message");
   passes(stop("code-hunter", null), "missing final message");
   passes(stop("code-hunter", "UNREAD: every Bash call was denied"), "denial contract");
-  passes(stop("ci-watcher", "pr-board.mjs exit 3: no token"), "ci-watcher exit 3 line");
   passes(run("not json {"), "garbage stdin");
   passes(run(""), "empty stdin");
   passes(run("[1,2]"), "non-object JSON");

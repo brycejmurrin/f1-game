@@ -93,3 +93,132 @@ test("a stream with no dumps still summarises", () => {
   assert.equal(s.peakDump, null);
   assert.equal(s.limits.webContent, null);
 });
+
+// tools/perf/devicefarm-method.mjs — pure harness helpers (#3676 items 4 and 5).
+import { appendUnit, tierMoved } from "../../tools/perf/devicefarm-method.mjs";
+
+test("appendUnit counts the sessions a unit had before this one", () => {
+  const db = {};
+  assert.equal(appendUnit(db, "U1", { out: "a" }), 0);
+  assert.equal(appendUnit(db, "U1", { out: "b" }), 1);
+  assert.equal(appendUnit(db, "U2", { out: "c" }), 0);
+  assert.deepEqual(db.U1.map((e) => e.out), ["a", "b"]);
+});
+
+test("tierMoved only flags a changed autoTier between two reads", () => {
+  assert.equal(tierMoved({ autoTier: 2 }, { autoTier: 2 }), false);
+  assert.equal(tierMoved({ autoTier: 2 }, { autoTier: 1 }), true);
+  assert.equal(tierMoved(null, { autoTier: 1 }), false);
+  assert.equal(tierMoved({ autoTier: 1 }, undefined), false);
+});
+
+// Local execution of the shipped Device Farm scripts; no AWS, Safari or GPU.
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+import { fnSource } from "../helpers/fn-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
+import { loadingProbeReady } from "../../tools/shot/loading-probe.mjs";
+const read = (file) => readFileSync(new URL(`../../${file}`, import.meta.url), "utf8");
+const FARM = read("tools/perf/devicefarm-iphone.mjs");
+const between = (from, to) => FARM.slice(FARM.indexOf(from), FARM.indexOf(to, FARM.indexOf(from)));
+function entryHarness(extra = {}) {
+  return vm.runInNewContext(between("const KICK_API =", "const ENTRY_MENU =") +
+    between("const ENTRY =", "async function waitReady(") + fnSource(FARM, "async function timedEntry(") +
+    ";({ KICK_API, KICK_MENU, ENTRY, timedEntry })", { loadingProbeReady, log() {}, ...extra },
+  { filename: "vm-snippet:devicefarm-entry-harness" });
+}
+function pollHarness(poll) {
+  let now = 1000, calls = 0;
+  const h = entryHarness({ Date: { now: () => now }, sleep: async (ms) => { now += ms; },
+    exec: async () => ++calls === 1 ? 7 : poll(calls - 1) });
+  return { h, calls: () => calls };
+}
+const closedEntry = { race: { ok: true }, ready: true, winT0: 8, armed: false, windowMs: 40, api: "webgpu" };
+
+for (const race of [{ err: "circuit unavailable" }, { ok: false }]) {
+  test(`Device Farm rejects a failed closed entry (${JSON.stringify(race)})`, async () => {
+    const { h } = pollHarness(() => ({ ...closedEntry, race }));
+    await assert.rejects(h.timedEntry({}, "entry", "kick"), /race start failed/);
+  });
+}
+
+test("Device Farm waits for a new closed profile and visible readiness together", async () => {
+  const polls = [
+    { ...closedEntry, winT0: 7 },
+    { ...closedEntry, ready: false },
+    { ...closedEntry, armed: true },
+    closedEntry,
+  ];
+  const { h, calls } = pollHarness((n) => polls[n - 1]);
+  assert.equal(await h.timedEntry({}, "entry", "kick"), closedEntry);
+  assert.equal(calls(), 5);
+});
+
+for (const errors of [false, true]) {
+  test(`Device Farm times out with an error instead of emitting a timing row (poll errors=${errors})`, async () => {
+    const { h, calls } = pollHarness(() => {
+      if (errors) throw new Error("endpoint unavailable");
+      return { ...closedEntry, ready: false };
+    });
+    await assert.rejects(h.timedEntry({}, "entry", "kick"), /timed out waiting for visible race readiness/);
+    assert.ok(calls() <= 92, "poll errors cannot bypass the deadline");
+  });
+}
+
+test("Device Farm ENTRY uses the shared presented-frame, cover and loss readiness contract", () => {
+  const { ENTRY } = entryHarness();
+  for (const [state, hidden, marks, ready] of [
+    ["menu", true, ["present:ready", "handoff:lower"], false],
+    ["count", false, ["present:ready", "handoff:lower"], false],
+    ["count", true, ["present:ready"], false],
+    ["count", true, ["present:ready", "handoff:lower", "handoff:lower-lost"], false],
+    ["count", true, ["present:ready", "handoff:lower"], true],
+    ["race", true, ["present:ready", "handoff:lower"], true],
+  ]) {
+    const snapshot = { marks: marks.map((n) => ({ n })), armed: false, winT0: 8 };
+    const page = { document: { getElementById: () => ({ hidden }) }, performance: { now: () => 2000 },
+      RaceEntryProfile: { snapshot: () => snapshot, stageTable: () => ({ windowMs: 40, stages: [] }) },
+      __apex: { info: () => ({ state }), raceEntryProfile: () => snapshot } };
+    page.window = page;
+    assert.equal(vm.runInNewContext("(function(){" + ENTRY + "})()", page,
+      { filename: "vm-snippet:devicefarm-entry-readiness" }).ready, ready);
+  }
+});
+
+test("Device Farm rejects actual SessionEntry/Profile failure after the profile closes", async () => {
+  let now = 1000, h;
+  const page = vm.createContext({ performance: { now: () => now }, document: { getElementById: () => ({ hidden: true }) } });
+  page.window = page;
+  for (const file of ["js/race/session-entry.js", "js/perf/race-entry-profile.js"]) {
+    vm.runInContext(read(file), page, { filename: absSrc(file) });
+  }
+  const { S, P } = vm.runInContext("({ S: SessionEntry.create(), P: RaceEntryProfile })", page);
+  const settled = vm.runInContext(fnSource(read("js/agent/apex.js"), "function settled(") + ";settled", page,
+    { filename: "vm-snippet:apex-settled-entry" });
+  page.__apex = { info: () => ({ state: "menu" }), raceEntryProfile: () => P.snapshot(),
+    race: () => settled(P.runSession(S, "entry", async () => { now += 10; },
+      async () => { now += 10; return false; }, () => true, () => {}), { track: "monza" }) };
+  const exec = async (_base, _sid, script) => vm.runInContext("(function(){" + script + "})()", page,
+    { filename: "vm-snippet:devicefarm-page-entry" });
+  h = entryHarness({ exec, Date: { now: () => now }, sleep: async (ms) => {
+    now += ms; for (let i = 0; i < 20; i++) await Promise.resolve();
+  } });
+  await assert.rejects(h.timedEntry({}, "entry", h.KICK_API("monza", "day")), /did not reach the grid/);
+  assert.equal(P.snapshot().armed, false);
+  assert.ok(P.stageTable().windowMs > 0, "the failed profile is closed and has positive duration");
+});
+
+test("Device Farm menu kickoff records a timeout as failure when no race starts", async () => {
+  let now = 1000;
+  const { KICK_MENU } = entryHarness();
+  const el = { hidden: false, click() {} };
+  const page = { performance: { now: () => now }, setTimeout: (fn, ms) => { now += ms; queueMicrotask(fn); },
+    document: { getElementById: (id) => id === "rs-time-sel" ? null : el, querySelector: () => el },
+    Tracks: { LIST: [{ id: "monza" }] }, __apex: { info: () => ({ state: "menu" }), menuPrep: () => ({}) } };
+  page.window = page;
+  vm.runInNewContext("(function(){" + KICK_MENU("monza", "default", 0, true) + "})()", page,
+    { filename: "vm-snippet:devicefarm-menu-timeout" });
+  await new Promise(setImmediate);
+  assert.equal(page.__dfRace.err, "Error: race never left the menu");
+  assert.equal(page.__dfRace.ok, undefined);
+});

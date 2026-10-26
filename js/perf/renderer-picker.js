@@ -233,6 +233,7 @@ function clearRendererStorage() {
     if (GameStore.store.raw(k) != null) { GameStore.store.rawDel(k); removed.push(k); }
   }
   try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode / blocked storage */ }
+  clearCtxLostWindowName();
   return removed;
 }
 
@@ -294,7 +295,7 @@ function openUnavailableDialog(dialog, closeButton, returnFocus) {
 // reset or a strike/probe left behind makes every reload hit Graphics unavailable.
 function clearCtxLostWindowName() {
   try {
-    if (/^apex26\.ctxLostReloads=\d+$/.test(String(window.name || ""))) window.name = "";
+    GfxEscalation.resetReloadBudget();
   } catch (_) { /* harness */ }
 }
 function clearGfxBootRecovery({ webgl2Pick = false } = {}) {
@@ -414,6 +415,7 @@ function applyBackend(next, rb) {
   }
   GameStore.store.rawSet("apex26.gfxBackend", next); GameStore.store.rawDel("apex26.gfxBackendProbe");
   try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
+  clearCtxLostWindowName();
   // Landing on WEBGPU by hand is the retry signal (browser update, new
   // device state): reset the WGX loss ladder so the boot re-attempts from
   // the sniffed baseline instead of a rung a long-dead session earned.
@@ -489,6 +491,7 @@ function applyThreePath(next, opts) {
   // Same session-latch wipe as applyBackend — THREE PATH reload must not keep
   // wgxHoldPresent / gfxClaimFail / gfxBound from the previous path.
   try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
+  clearCtxLostWindowName();
   paintPresent();
   if (readBackend() === "three" && !(opts && opts.noReload)) {
     const btn = typeof document !== "undefined" ? document.getElementById("pm-three-path") : null;
@@ -562,6 +565,7 @@ function applyShotMode(next, opts) {
   // Drop inherited session latches, then write the new shot mode (which may
   // put apex26.wgxCapture back into sessionStorage for this tab).
   try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
+  clearCtxLostWindowName();
   writeShotMode(next);
   paintPresent();
   if (shotReloadLive() && !(opts && opts.noReload)) {

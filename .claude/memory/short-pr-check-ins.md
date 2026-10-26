@@ -1,6 +1,6 @@
 ---
 name: short-pr-check-ins
-description: "PR safety-net check-ins every ~15 min, never hours (Bryce 2026-10-19)"
+description: "PR check-ins short, never hours (Bryce 2026-10-19); the number is pending Bryce"
 metadata:
   node_type: memory
   type: feedback
@@ -8,8 +8,10 @@ metadata:
   modified: 2026-10-20T00:52:02.429Z
 ---
 
-A session that owns or drives a PR re-arms its `send_later` safety-net check-in about every 15 minutes while the PR is open, not the 50-min/4-hour cadence of the generic PR-watch default.
+A session that owns or drives a PR keeps a short `send_later` safety-net check-in while the PR is open, never hours apart.
 
-**Why:** Bryce, 2026-10-19 ~22:30Z: "Four hours is way too long do way sooner", when a PR check-in was armed hours out.
+**Why:** Bryce, 2026-10-19 ~22:30Z: "Four hours is way too long do way sooner", when a PR check-in was armed hours out. The "~15 min" figure was an agent's inference from that sentence, not his number.
 
-**How to apply:** after each push or wake on an open PR, arm the next check-in ~15 min out; cancel it when the PR merges or closes. Orchestrators keep their own cadence: [[orchestrator-checkin-cadence]] and [[orchestrator-tick-3min]].
+**Number pending Bryce (2026-10-26 audit):** 15 min costs $0.11–0.15 per idle wake on a 200k+ owner, and a wake past 60 min misses the 1 h prompt cache. The current rule is AGENTS.md rule 13 (50–55 min, inside the cache) until Bryce picks the number.
+
+**How to apply:** follow AGENTS.md rule 13; cancel the check-in when the PR merges, closes, or you sent READY. Orchestrator cadence: `agent-fleet` orchestrator.md §First acts.

@@ -105,7 +105,7 @@ var SessionRecords = (function () {
       return false;
     }
     function finish(lapTime, laps, pole) {
-      if (!accept()) return;
+      if (!accept()) return false;
       laps.push(lapTime);
       const c = G.player;
       GameStore.ttBoardAdd(G.track.def.id, { t: lapTime, teamId: c.team.id, code: c.code, name: c.name, ts: Date.now(), context: key });
@@ -130,6 +130,7 @@ var SessionRecords = (function () {
       if (record) { G.ttRecord = lapTime; G.ttNewRecord = true; }
       const line = record ? (won ? won + " — NEW RECORD " : "NEW RECORD ") + G.fmtTime(lapTime) : won;
       if (line) G.announce(line, record && won ? 2.6 : 2, "info");
+      return true;
     }
     function board(id) { return id === Ghost.track() ? comparableBoard(id) : GameStore.ttBoard(id); }
     return { begin, current, config, sample, sampleInput, accept, board, invalidate, finish, prepareDaily, restoreDaily, key: () => key };

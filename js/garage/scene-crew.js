@@ -69,7 +69,7 @@ const GarageCrew = (function () {
   const LOOKS = ["classic", "sculpted", "pitstop", "workshop", "welcome"];
   const GLOVE = [0.07, 0.07, 0.08], RUBBER = [0.035, 0.035, 0.04], ALLOY = [0.62, 0.63, 0.66];
   const GUN = [0.10, 0.10, 0.11], HOSE = [0.08, 0.08, 0.09], JACK = [0.72, 0.12, 0.08], BLANKET = [0.16, 0.16, 0.18];
-  let look = "classic", lookMesh = null, motionRig = null, serviceRig = null;
+  let look = "classic", lookMesh = null, motionRig = null, serviceRig = null, choreoProps = null;
   const J0 = { foot: [0.11, 0.05, 0.03], knee: [0.11, 0.50, 0.02], hip: [0.10, 0.92, 0], pelvis: [0, 0.95, 0],
     chest: [0, 1.32, 0], neck: [0, 1.46, 0], head: [0, 1.62, 0], shoulder: [0.22, 1.38, 0],
     elbow: [0.26, 1.10, 0], hand: [0.27, 0.84, 0.03] };
@@ -276,6 +276,7 @@ const GarageCrew = (function () {
     if (style !== "classic" && style !== "welcome" && typeof GarageCrewMotion !== "undefined")
       motionRig = GarageCrewMotion.create(gfx, c1, c2, helmet);
     if (style === "service" && typeof GarageCrewService !== "undefined") serviceRig = GarageCrewService.create(gfx, nose, frontJack, c2);
+    if (style === "choreo" && typeof GarageCrewChoreo !== "undefined") choreoProps = GarageCrewChoreo.createProps(gfx, c2);
   }
   function free() {
     if (!gfx || !gfx.freeMesh) return 0;
@@ -283,7 +284,8 @@ const GarageCrew = (function () {
     for (const mesh of [mechMesh, bodyMesh, poleMesh, lookMesh]) if (mesh) { gfx.freeMesh(mesh); n++; }
     if (motionRig && typeof GarageCrewMotion !== "undefined") n += GarageCrewMotion.free(motionRig, gfx);
     if (serviceRig && typeof GarageCrewService !== "undefined") n += GarageCrewService.free(serviceRig, gfx);
-    motionRig = serviceRig = null;
+    if (choreoProps && typeof GarageCrewChoreo !== "undefined") n += GarageCrewChoreo.freeProps(choreoProps, gfx);
+    motionRig = serviceRig = choreoProps = null;
     mechMesh = bodyMesh = poleMesh = lookMesh = null; key = null;
     return n;
   }
@@ -324,26 +326,31 @@ const GarageCrew = (function () {
   function draw(liv, eye, pose, opts, teamId) {
     if (!gfx || !pose || pose.crew === "none") return;
     // Per-direction animation choices never change the saved Team-tab crew.
-    const style = pose.crew === "service" ? "service" : pose.crew === "guides" ? "sculpted" : pose.crew === "welcome" ? "welcome" : look;
+    const choreo = typeof GarageCrewChoreo !== "undefined" && GarageCrewChoreo.has(pose.crew);
+    const style = choreo ? "choreo" : pose.crew === "service" ? "service" : pose.crew === "guides" ? "sculpted" : pose.crew === "welcome" ? "welcome" : look;
     build(liv, teamId, style);
     const L = layout(pose, eye && eye[0] > 0 ? 1 : -1);
-    const moving = Math.abs(pose.z || 0) > 1e-6 || Math.abs(pose.x || 0) > 1e-6;
-    // Service tools and people leaning into the cockpit belong to a parked
-    // car. The already-built guides take over while it enters or leaves.
-    const guides = style === "service" || style === "classic" || style === "sculpted" || (moving && (style === "pitstop" || style === "workshop"));
-    if (guides)
-      for (let i = 0; i < L.mechanics.length; i++) {
-        const p = L.mechanics[i];
-        if (motionRig) GarageCrewMotion.draw(motionRig, gfx, p[0], p[1], p[2], pose, i, opts || OPTS);
-        else gfx.draw(mechMesh, mk(p[0], 0, p[1], p[2], 0), opts || OPTS);
-      }
-    if (serviceRig && motionRig) GarageCrewService.draw(serviceRig, motionRig, gfx, pose, opts || OPTS);
-    if (lookMesh && !guides) gfx.draw(lookMesh, mk(0, 0, 0, 0, 0), opts || OPTS);
+    // A Blender variant (GarageCrewChoreo) is the whole crew bar the lollipop.
+    if (choreo && motionRig) GarageCrewChoreo.draw(motionRig, choreoProps, gfx, pose.crew, pose.seconds || 0, pose.side, pose.seconds || 0, !!pose.calm, opts || OPTS);
+    else {
+      const moving = Math.abs(pose.z || 0) > 1e-6 || Math.abs(pose.x || 0) > 1e-6;
+      // Service tools and people leaning into the cockpit belong to a parked
+      // car. The already-built guides take over while it enters or leaves.
+      const guides = style === "service" || style === "classic" || style === "sculpted" || (moving && (style === "pitstop" || style === "workshop"));
+      if (guides)
+        for (let i = 0; i < L.mechanics.length; i++) {
+          const p = L.mechanics[i];
+          if (motionRig) GarageCrewMotion.draw(motionRig, gfx, p[0], p[1], p[2], pose, i, opts || OPTS);
+          else gfx.draw(mechMesh, mk(p[0], 0, p[1], p[2], 0), opts || OPTS);
+        }
+      if (serviceRig && motionRig) GarageCrewService.draw(serviceRig, motionRig, gfx, pose, opts || OPTS);
+      if (lookMesh && !guides) gfx.draw(lookMesh, mk(0, 0, 0, 0, 0), opts || OPTS);
+    }
     const lp = L.lollipop;
     gfx.draw(bodyMesh, mk(lp.x, 0, lp.z, lp.yaw + Math.PI, 0), opts || OPTS);   // facing the garage
     // The pole from the right shoulder, across the car's path, lifted by `raise`.
     const sx = lp.x + (lp.yaw === 0 ? 0.25 : -0.25);
     gfx.draw(poleMesh, mk(sx, 1.38, lp.z, lp.yaw, lp.raise), opts || OPTS);
   }
-  return Object.freeze({ init, draw, layout, free, setLook, noseTip, look: () => look, LOOKS, RAISED, LOWERED });
+  return Object.freeze({ init, draw, layout, free, setLook, noseTip, helmet, look: () => look, LOOKS, RAISED, LOWERED });
 })();
