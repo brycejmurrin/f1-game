@@ -1620,10 +1620,11 @@ const TrackDesigner = (function () {
         btn("RACE", "sel-chip", () => raceId(it.id, "gp")),
         btn(confirmDel === it.id ? "DELETE?" : "DELETE", "sel-chip", () => {
           if (confirmDel !== it.id) { confirmDel = it.id; renderLibrary(); return; }
-          confirmDel = null; custom.remove(it.id);
+          confirmDel = null; const removed = custom.remove(it.id);
           if (design && design.id === it.id) delete design.id;
           if (design && design.originId === it.id) delete design.originId;
-          renderLibrary(); message("Deleted " + it.name);
+          renderLibrary();
+          message(removed.durable ? "Deleted " + it.name : "Removed " + it.name + " for now — deletion could not be saved and it may return after reload", !removed.durable);
         }),
       );
       card.append(c, name, meta, row);

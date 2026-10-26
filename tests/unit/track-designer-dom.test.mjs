@@ -538,6 +538,24 @@ test("MY CIRCUITS recovers the previous unsaved draft after a fresh-page reload"
   next.D.close();
 });
 
+test("MY CIRCUITS deletion reports whether the removal was saved", () => {
+  for (const durable of [false, true]) {
+    const b = bootScreen(); openGreen(b);
+    const saved = b.D.save(); assert.equal(saved.ok, true);
+    b.D.showPane("library");
+    b.ctx.GameStore.store.write = (key, value) => {
+      b.data[key] = value;
+      return { ok: true, durable, reason: durable ? null : "quota" };
+    };
+    const library = panes(b)[1];
+    chipsIn(library, "DELETE")[0].click();
+    chipsIn(library, "DELETE?")[0].click();
+    assert.equal(b.C.list().length, 0, "the circuit disappears in this session");
+    assert.match(msgText(b), durable ? /^Deleted / : /could not be saved.*return after reload/i);
+    assert.equal(b.root.querySelector(".td-msg").dataset.warn, durable ? "" : "1");
+  }
+});
+
 test("recovering after reload keeps a name-only edit to a saved circuit in undo", () => {
   const b = bootScreen(); openGreen(b);
   b.D.setName("Previous A"); b.D.setTheme("alpine");
