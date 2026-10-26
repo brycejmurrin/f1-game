@@ -1875,7 +1875,7 @@ const AgentView = (function () {
             + "what: 'view'|'map'|'circuit'|'car'. For intuition, not measurement",
           "awaitPresent(timeoutMs)?":
             "WAIT FOR THE PIXELS — resolve once the next real frame has "
-            + "reached the screen; a screenshot tool taken before this "
+            + "reached the screen; a screenshot taken before this "
             + "resolves can read a stale or black canvas under HeadlessChrome",
         },
         detail: {
@@ -1902,7 +1902,7 @@ const AgentView = (function () {
             "GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/autoShed/userTier/strikes "
             + "(alias of renderScale report)",
           "spatialUpscale(0|1)":
-            "GLX + WGX + TLX SGSR1 (flag OFF by default). active only when on "
+            "GLX/WGX/TLX SGSR1 (flag OFF by default). active only when on "
             + "AND renderScale<~1; see UPSCALING-2026-09 §6–7",
         },
         act: {
@@ -1947,7 +1947,7 @@ const AgentView = (function () {
         read: {
           telemetry: "probe() physState() obs() scan() inputState() cars() carAt(i)",
           timing: "timing() sectorState() lapHistory() fieldState()",
-          rendering: "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})",
+          rendering: "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)",
           geometry: "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()",
           catalog: "tracks() teams() info()",
         },

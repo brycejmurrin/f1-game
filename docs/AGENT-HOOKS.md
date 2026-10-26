@@ -11,7 +11,7 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 | Hook | Signature | Summary |
 |---|---|---|
 | `atmosphere` | `atmosphere()` | WHAT IS THE LIGHT DOING — day/night, sun or moon, floodlights, fog visibility, wet road. Raw values kept for measurement |
-| `awaitPresent` | `awaitPresent(timeoutMs)?` | WAIT FOR THE PIXELS — resolve once the next real frame has reached the screen; a screenshot tool taken before this resolves can read a stale or black canvas under HeadlessChrome |
+| `awaitPresent` | `awaitPresent(timeoutMs)?` | WAIT FOR THE PIXELS — resolve once the next real frame has reached the screen; a screenshot taken before this resolves can read a stale or black canvas under HeadlessChrome |
 | `field` | `field({detail})` | THE GRID — race order, gap-to-leader and interval. world().rivals is the egocentric nearest-few |
 | `render` | `render({what,cols,ss,...})` | SHOW IT — the one optional raster, APPROXIMATE. what: 'view'\|'map'\|'circuit'\|'car'. For intuition, not measurement |
 | `scene` | `scene({radius,kinds,limit} \| {visible:true})` | WHAT IS AROUND ME — named scenery by distance and bearing; {visible:true} switches to the camera's on-screen list |
@@ -28,7 +28,7 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 |---|---|---|
 | `carView` | `carView({team,parts,bodyStyle,detail})` | WHAT AM I DRIVING — team, parts spec + effects, chassis silhouette, measured geometry; detail:"parts" adds per-part boxes |
 | `perf` | `perf()` | GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/autoShed/userTier/strikes (alias of renderScale report) |
-| `spatialUpscale` | `spatialUpscale(0\|1)` | GLX + WGX + TLX SGSR1 (flag OFF by default). active only when on AND renderScale<~1; see UPSCALING-2026-09 §6–7 |
+| `spatialUpscale` | `spatialUpscale(0\|1)` | GLX/WGX/TLX SGSR1 (flag OFF by default). active only when on AND renderScale<~1; see UPSCALING-2026-09 §6–7 |
 | `survey` | `survey({stations,lats,reachM,limit,profile})` | IS ANYTHING BROKEN — floating/buried props, props over the line, terrain through the road, holes and cliffs |
 | `trackInfo` | `trackInfo({what})` | STATIC substrate — corners\|sectors\|profile\|all. Fetch ONCE. Corners carry radius, apexSpeedKph, straightAfterM/exitsOntoStraight (no line), plus bankingDeg/camber,… |
 ## act
@@ -59,22 +59,22 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 
 | Hook | Signature | Summary |
 |---|---|---|
-| `camState` | `camState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
+| `camState` | `camState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `carAt` | `carAt(i)` | probe() physState() obs() scan() inputState() cars() carAt(i) |
 | `cars` | `cars()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
 | `corners` | `corners()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `fieldState` | `fieldState()` | timing() sectorState() lapHistory() fieldState() |
-| `gpuTimer` | `gpuTimer()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
+| `gpuTimer` | `gpuTimer()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `groundY` | `groundY(f,l)` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `info` | `info()` | tracks() teams() info() |
 | `inputState` | `inputState()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
-| `inspector` | `inspector(on)` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
+| `inspector` | `inspector(on)` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `lapHistory` | `lapHistory()` | timing() sectorState() lapHistory() fieldState() |
-| `lifecycle` | `lifecycle({hidden,bfcache,resize,loseContext})` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
-| `lightState` | `lightState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
-| `lightTune` | `lightTune()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
+| `lifecycle` | `lifecycle(o)` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
+| `lightState` | `lightState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
+| `lightTune` | `lightTune()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `obs` | `obs()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
-| `perf` | `perf({on,reset,measure})` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
+| `perf` | `perf({on,reset,measure})` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `physState` | `physState()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
 | `pitSigns` | `pitSigns()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `probe` | `probe()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
@@ -85,7 +85,7 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 | `trackProfile` | `trackProfile()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `trackShape` | `trackShape()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `tracks` | `tracks()` | tracks() teams() info() |
-| `viewState` | `viewState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
+| `viewState` | `viewState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `wallStats` | `wallStats()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 ## control
 
