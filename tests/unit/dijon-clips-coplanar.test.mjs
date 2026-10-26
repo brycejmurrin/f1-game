@@ -37,19 +37,28 @@ function auditDijon() {
   return JSON.parse(out);
 }
 
+// The pre-#3348 saturating caps. Later trains ratchet the baselines lower
+// (#3859 lowered them to the measured 0/2), so the rows must stay under these
+// and the measured audit must stay under both the old cap and the live row.
+const SATURATED_CLIP = 4;
+const SATURATED_FLAT = 5;
+
 test("dijon clip severe and flatCoplanar stay strictly below saturating caps (#3348)", () => {
-  assert.equal(CLIP_CAP, 4, "clip-baseline dijon row");
-  assert.equal(FLAT_CAP, 5, "scenery-audit-baseline dijon flatCoplanar row");
+  assert.ok(CLIP_CAP < SATURATED_CLIP, `clip-baseline dijon row ${CLIP_CAP} must stay below ${SATURATED_CLIP}`);
+  assert.ok(
+    FLAT_CAP < SATURATED_FLAT,
+    `scenery-audit-baseline dijon flatCoplanar row ${FLAT_CAP} must stay below ${SATURATED_FLAT}`,
+  );
   const r = auditDijon();
   assert.equal(r.ok, true, JSON.stringify(r.checks));
   const severe = r.checks.clip.severe;
   const flat = r.checks.ground.counts.flatCoplanar;
   assert.ok(
-    severe < CLIP_CAP,
-    `clip severe ${severe} must drop below saturating cap ${CLIP_CAP}`,
+    severe <= CLIP_CAP && severe < SATURATED_CLIP,
+    `clip severe ${severe} must stay within cap ${CLIP_CAP} and below ${SATURATED_CLIP}`,
   );
   assert.ok(
-    flat < FLAT_CAP,
-    `flatCoplanar ${flat} must drop below saturating cap ${FLAT_CAP}`,
+    flat <= FLAT_CAP && flat < SATURATED_FLAT,
+    `flatCoplanar ${flat} must stay within cap ${FLAT_CAP} and below ${SATURATED_FLAT}`,
   );
 });

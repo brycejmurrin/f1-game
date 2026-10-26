@@ -36,19 +36,28 @@ function auditMonza() {
   return JSON.parse(out);
 }
 
+// The pre-#3374 saturating caps. Later trains ratchet the baselines lower
+// (#3859 lowered both to the measured 3/3), so the rows must stay under these
+// and the measured audit must stay under both the old cap and the live row.
+const SATURATED_CLIP = 7;
+const SATURATED_COPLANAR = 5;
+
 test("monza coplanar spots and clip severe stay strictly below saturating caps (#3374)", () => {
-  assert.equal(CLIP_CAP, 7, "clip-baseline monza row");
-  assert.equal(COPLANAR_CAP, 5, "coplanar-baseline monza row");
+  assert.ok(CLIP_CAP < SATURATED_CLIP, `clip-baseline monza row ${CLIP_CAP} must stay below ${SATURATED_CLIP}`);
+  assert.ok(
+    COPLANAR_CAP < SATURATED_COPLANAR,
+    `coplanar-baseline monza row ${COPLANAR_CAP} must stay below ${SATURATED_COPLANAR}`,
+  );
   const r = auditMonza();
   assert.equal(r.ok, true, JSON.stringify(r.checks));
   const severe = r.checks.clip.severe;
   const spots = r.checks.coplanar.spots;
   assert.ok(
-    severe < CLIP_CAP,
-    `clip severe ${severe} must drop below saturating cap ${CLIP_CAP}`,
+    severe <= CLIP_CAP && severe < SATURATED_CLIP,
+    `clip severe ${severe} must stay within cap ${CLIP_CAP} and below ${SATURATED_CLIP}`,
   );
   assert.ok(
-    spots < COPLANAR_CAP,
-    `coplanar spots ${spots} must drop below saturating cap ${COPLANAR_CAP}`,
+    spots <= COPLANAR_CAP && spots < SATURATED_COPLANAR,
+    `coplanar spots ${spots} must stay within cap ${COPLANAR_CAP} and below ${SATURATED_COPLANAR}`,
   );
 });
