@@ -229,3 +229,11 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Archive: 019yb archived. 01EWg3 KEEP (#3723 open). Re-run fleet-archive on fresh page later; 01BgfkgS 01RSyjdq 01Q1pRbY near 60 min idle.
 - Bus cursor 10d040c+ (read --since 80e0dc9).
 - 05:43Z da95b2f OrchA: alternation — next slot after Pages on 4fff27eb goes to D (DAD #3702…), then B (#3772/#3636). Honour it.
+
+## 06:15Z (23:15 PT) — ORCH B now session_01R7uoskHQKmQjtfNYg8SAs6 (bus c030647 LIVE)
+- Routines: bus Monitor (60 s, --to B/me/*) + hourly trig_01LtsvT37m56HD6J7zwKjjLu (:13). Unshallowed.
+- MERGED: #3780 27e035fd, #3774 44d1e0c0 (non-game); #3772 91d06262 (game, slot a491aad, DONE 5c99b04). All 2 parents.
+- Pages on 91d06262 superseded by A #3777; Pages on 44d1e0c0 running = the gate for B's next game slot.
+- NEXT GAME: #3636 482c8d6f4 (lane 01Q7NM) → #3723 b6b76fb2 (owner 014B9Y READY) → #3684 #3724 → #3641 #3646 → A #3757 (alternate with D if D has PRs).
+- #3759 new owner session_01BnJV82PsQHACUi2q9vbqNU: fix 273c151b (ratchet 7312/7314) awaiting Bryce's typed push grant in its session (Bryce chose "Allow both" 06:15Z here). Then GREEN → I ready-gate + flip.
+- #3785 sysaudit single PR: owner 01E4f2 + lanes X1 01Josi X2 01RYoR X3 019VDR; launch nothing on them; non-game READY later.
