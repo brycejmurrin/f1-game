@@ -10,16 +10,19 @@ const src = (file) => fs.readFileSync(new URL("../../" + file, import.meta.url),
 // A transactional async fixture: readwrite transactions commit in creation
 // order, requests can enqueue more work, and aborts never publish staged puts.
 function database() {
-  const dbs = new Map(); let failures = 0;
+  const dbs = new Map(), handles = []; let failures = 0;
   return {
-    dbs, failNext() { failures++; },
+    dbs, handles, failNext() { failures++; },
     open(name) {
       if (!dbs.has(name)) dbs.set(name, new Map());
       const stores = dbs.get(name); let tail = Promise.resolve();
+      let closed = false;
       const db = {
         objectStoreNames: { contains: (s) => stores.has(s) },
-        createObjectStore(s) { stores.set(s, new Map()); }, close() {},
+        createObjectStore(s) { stores.set(s, new Map()); }, close() { closed = true; },
+        forceClose(notify = true) { closed = true; if (notify && db.onclose) db.onclose(); },
         transaction(s, mode) {
+          if (closed) throw Object.assign(Error("closed"), { name: "InvalidStateError" });
           const tx = { oncomplete: null, onerror: null, onabort: null };
           const operations = []; let active = false, busy = false, staged;
           const fail = mode === "readwrite" && failures > 0; if (fail) failures--;
@@ -49,15 +52,16 @@ function database() {
           return tx;
         },
       };
+      handles.push(db);
       const r = { result: db }; queueMicrotask(() => { if (r.onupgradeneeded) r.onupgradeneeded(); if (r.onsuccess) r.onsuccess(); }); return r;
     },
   };
 }
-function boot({ idb = database(), initial = [] } = {}) {
-  const disk = new Map(initial); let blocked = false;
+function boot({ idb = database(), initial = [], disk = new Map(initial), navigator } = {}) {
+  let blocked = false;
   const storage = { get length() { return disk.size; }, key: (i) => [...disk.keys()][i], getItem: (k) => disk.get(k) ?? null,
     setItem(k, v) { if (blocked) throw Object.assign(new Error("full"), { name: "QuotaExceededError" }); disk.set(k, String(v)); }, removeItem: (k) => disk.delete(k) };
-  const c = vm.createContext({ console, setTimeout, clearTimeout, Promise, indexedDB: idb, localStorage: storage,
+  const c = vm.createContext({ console, setTimeout, clearTimeout, Promise, navigator, indexedDB: idb, localStorage: storage,
     Log: { info() {}, warn() {} }, Teams: { LIST: [] }, window: { addEventListener() {} } });
   seedSaveMigrate(c); vm.runInContext(src("js/core/store.js") + ";globalThis.store=GameStore.store", c, { filename: absSrc("js/core/store.js") });
   return { c, store: c.store, disk, storage, idb, block: (on) => { blocked = on; } };
@@ -221,7 +225,7 @@ test("storage health tolerates denied storage getters and keeps report and clean
   await handle.refresh(); assert.equal(refresh.disabled, false);
   assert.ok(panel.children[1].children[0].textContent.includes("could not be read"));
   await clear.onclick(); assert.equal(clear.disabled, false); assert.equal(refresh.disabled, false);
-  assert.ok(status.textContent.includes("could not be removed"));
+  assert.equal(status.textContent.includes("could not be removed"), true);
   // A failure in a health provider must not strand the buttons either.
   const failing = h.c.Health.mount(dom.byId("health-failing-history"), { store: h.store, restorePoints: { health() { throw Error("history unavailable"); } } });
   const fp = failing.root.children[1]; await failing.refresh();
@@ -316,4 +320,83 @@ test('older capture completion cannot overwrite newer failure health, and UI lab
   assert.match(text(handle.root), /restore point unavailable \(invalid-or-too-large\)/);
   assert.match(text(handle.root), /Primary save status is separate/);
   assert.match(text(handle.root), /No failed primary writes/);
+});
+
+
+test("mirror reopens after unexpected close or an InvalidStateError without losing a quota-refused batch", async () => {
+  for (const notify of [true, false]) {
+    const h = boot(); await h.store.mirror.ready;
+    const old = h.idb.handles[0];
+    old.forceClose(notify);
+    if (notify) assert.equal(h.store.mirror.supported, false);
+    h.block(true); h.store.write("career.driver.0", save(8));
+    if (!notify) {
+      assert.equal(await h.store.mirrorFlush(), false);
+      assert.equal(h.store.mirror.pending, 1, "failed transaction retains its batch");
+      assert.equal(h.store.mirror.supported, false);
+    }
+    assert.equal(await h.store.mirrorFlush(), true);
+    assert.equal(h.idb.handles.length, 2, "closed handles are never reused");
+    assert.equal(h.store.mirror.pending, 0);
+    const row = h.idb.dbs.get("apex26-store").get("kv").get("apex26.career.driver.0");
+    assert.equal(JSON.parse(row.v).season.round, 8);
+    assert.equal(row.lsOk, false);
+    old.onclose();
+    assert.equal(h.store.mirror.supported, true, "a late event from the old handle cannot poison its replacement");
+  }
+});
+
+test("a non-owning tab cannot restore, mirror, retry, import or checkpoint career saves", async () => {
+  const idb = database(), disk = new Map([["apex26.career.driver.0", JSON.stringify(save(1))]]);
+  const owner = boot({ idb, disk, navigator: { locks: { request: (_n, _o, cb) => Promise.resolve().then(() => cb({})) } } });
+  await owner.store.mirror.ready;
+  owner.block(true); owner.store.write("career.driver.0", save(9));
+  await owner.store.mirrorFlush();
+  const viewer = boot({ idb, disk, navigator: { locks: { request: (_n, _o, cb) => Promise.resolve().then(() => cb(null)) } } });
+  await viewer.store.mirror.ready;
+  assert.equal(viewer.store.careerWriter.state, "busy");
+  assert.equal(JSON.parse(disk.get("apex26.career.driver.0")).season.round, 1, "viewer restore never publishes primary bytes");
+  viewer.store.onForeignWrite({ key: "apex26.career.driver.0", storageArea: viewer.storage });
+  assert.equal(await viewer.store.mirrorFlush(), false, "storage events cannot mirror stale career bytes from a viewer");
+  assert.equal((await points(viewer).capture("driver", 0, save(2), { reason: "round" })).reason, "writer-busy");
+  vm.runInContext(src("js/career/career-backup.js") + ";globalThis.backup=CareerBackup", viewer.c, { filename: absSrc("js/career/career-backup.js") });
+  assert.equal(viewer.c.backup.writeSlot("driver", 0, save(2)).reason, "writer-busy");
+  assert.equal(viewer.c.backup.wipeAllSlots().reason, "writer-busy");
+  assert.equal(viewer.store.write("career.driver.0", save(3)).reason, "writer-busy");
+  assert.equal(viewer.store.retryFailed().retried, 0);
+  const row = idb.dbs.get("apex26-store").get("kv").get("apex26.career.driver.0");
+  assert.equal(JSON.parse(row.v).season.round, 9, "quota-refused owner's durable mirror is preserved");
+});
+
+test("SAVE RETRY heals unrelated settings in a read-only career tab and still retries the owning career", async () => {
+  const source = src("js/ui/select-screen.js");
+  const begin = source.indexOf("const retrySave = () => {");
+  const end = source.indexOf("let recoveryExporting", begin);
+  assert.ok(begin >= 0 && end > begin);
+  for (const owns of [false, true]) {
+    const h = boot({ navigator: { locks: { request: (_n, _o, cb) => Promise.resolve().then(() => cb(owns ? {} : null)) } } });
+    await h.store.mirror.ready;
+    const notices = [], warnings = []; let careerSaves = 0, hidden = 0, result;
+    const career = save(2);
+    h.c.Career = {
+      data: () => career, inCareer: () => owns,
+      save() { careerSaves++; result = h.store.write("career.driver.0", career); },
+      saveStatus: () => result,
+    };
+    h.c.G = { season: null, announce: message => notices.push(message) };
+    h.c.hideSaveWarning = () => { hidden++; };
+    h.c.showSaveWarning = reason => warnings.push(reason);
+    vm.runInContext(source.slice(begin, end) + ";globalThis.retrySaveAction=retrySave", h.c, { filename: absSrc("js/ui/select-screen.js") });
+    h.block(true); h.store.write("volume", 0.25);
+    if (owns) h.c.Career.save();
+    h.block(false); h.c.retrySaveAction();
+    assert.equal(careerSaves, owns ? 2 : 0, "intentional career read-only state is not a failed save retry");
+    assert.equal(h.storage.getItem("apex26.volume"), "0.25");
+    if (owns) assert.equal(JSON.parse(h.storage.getItem("apex26.career.driver.0")).season.round, 2);
+    assert.equal(hidden, 1);
+    assert.deepEqual(warnings, []);
+    assert.deepEqual(notices, ["SAVE RESTORED"]);
+    assert.equal(h.store.writeFailed(), null);
+    await h.store.mirrorFlush();
+  }
 });

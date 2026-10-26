@@ -1436,6 +1436,19 @@ const CarDraw = (function () {
       return G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); },
         { mirror: mirrorKey || null });
     }
+    // THE WHEEL TELEMETRY, BEFORE ANY CAR (A·W56, #3673). Its material (_rigFx: double-sided, no alpha write) is the
+    // same for every car, and no menu draw uses it, so race entry built its pipeline: one createRenderPipelineAsync of
+    // 4.3 s in a 7.8 s rigWarm on SwiftShader WebGPU, every other pair a cache hit (rigWarm 5.7 s cold on an iPhone
+    // 14 Pro, ledger row 29). The menu warm (game.js warmPrograms) compiles it; warmCockpitRig then skips these pairs.
+    function warmCockpitTelemetry() {
+      if (carModelBuf || typeof G.gfx.warmDraws !== "function") return Promise.resolve(false);
+      return G.gfx.warmDraws(() => {
+        const ws = CockpitOpts.wheel();
+        G.gfx.draw(getGearDigit(1), _rigWarmBase, _rigFx);
+        G.gfx.draw(getSpeedDigit(0), _rigWarmBase, _rigFx);
+        if (CockpitOpts.wheelHasScreen(ws)) G.gfx.draw(getLedStrip(0, ws), _rigWarmBase, _rigFx);
+      });
+    }
     function drawCockpitRig(c, base, dt, paint, noWheel) {
       // Match game.js sessionDarkFor / skyNight: an explicit night, or a night
       // circuit on the default TOD. (Was the same check; kept next to the glass
@@ -2087,7 +2100,7 @@ const CarDraw = (function () {
       teamMesh, teamBodyMesh, sharedRivalBodyMesh, farRivalBodyReady, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures, sweepStaleDecals, decalBytes,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
-      advanceWheelPhases, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, warmCockpitRig, drainDeferredCarWarm, drawExhaustFx, glassState, drawMirrorCar,
+      advanceWheelPhases, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, warmCockpitRig, warmCockpitTelemetry, drainDeferredCarWarm, drawExhaustFx, glassState, drawMirrorCar,
       warmCarAssets, warmCarAssetsAsync, loadCarModel, buildCarData,
       // __apex.menuPrep().cars: the last menu car prep that ran to its end.
       prepareMenuCarAssets: (current) => prepareMenuCarAssets(current).then((r) => { if (r) _menuCarPrep = r; return r; }),

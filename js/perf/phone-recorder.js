@@ -4,8 +4,8 @@
    six-line how-to. Nothing runs until RECORD is tapped. On start it captures
    the device FACTS once (UA, DPR, navigator.gpu, backend path/pin, the WebGL2
    extensions the perf plan asks about, the rAF cadence the page really gets),
-   then samples every SAMPLE_MS and every WINDOW_FRAMES rendered frames:
-   frame p50/p95/p99, render scale, governor tier, renderer retained counts,
+   then samples every SAMPLE_MS and every WINDOW_FRAMES rAF callbacks:
+   callback interval p50/p95/p99, render gate counts, scale, governor tier, retained counts,
    minutes since start, circuit / weather / preset. SHARE hands one JSON file to
    the share sheet (iOS Safari), else a download link; COPY is the clipboard
    fallback. Plan: docs/notes/PERF-RESEARCH-2026-10-17.md §4 steps A, A2, B.
@@ -53,6 +53,7 @@ const PhoneRecorder = (function () {
   function scope() {
     const w = {};
     if (typeof PerfGov !== "undefined") w.PerfGov = PerfGov;
+    if (typeof RenderRate !== "undefined") w.RenderRate = RenderRate;
     if (typeof PerfSpans !== "undefined") w.PerfSpans = PerfSpans;
     if (typeof GLX !== "undefined") w.GLX = GLX;
     if (typeof GfxQuality !== "undefined") w.GfxQuality = GfxQuality;
@@ -134,7 +135,7 @@ const PhoneRecorder = (function () {
         return o;
       }, null),
       gl: probeGl(),
-      lowPowerHint: null,   // not exposed to pages: the cadence below is the only tell (30 Hz = LPM)
+      lowPowerHint: null,   // not exposed to pages; callback cadence alone cannot identify Low Power Mode
     };
     if (nav.gpu && nav.gpu.requestAdapter) {
       try {
@@ -149,9 +150,12 @@ const PhoneRecorder = (function () {
     const w = g(); const L = scope(); const PG = L.PerfGov; const apex = w.__apex;
     const fs = safe(() => PG.frameStats(), null) || {};
     const o = {
-      frame: { frames: fs.frames | 0, p50: r2(fs.p50), p95: r2(fs.p95), p99: r2(fs.p99), max: r2(fs.maxMs),
+      frame: { metric: "raf-interval", frames: fs.frames | 0, p50: r2(fs.p50), p95: r2(fs.p95), p99: r2(fs.p99), max: r2(fs.maxMs),
         droppedSimS: r2(fs.droppedSimS) },
+      workIntervalMsEMA: r2(safe(() => PG.fpsEMA(), null)),
+      // Deprecated inverse work-interval alias; intentional skipping makes this unsuitable as displayed FPS.
       fpsEMA: r2(safe(() => 1000 / PG.fpsEMA(), null)),
+      renderRate: safe(() => L.RenderRate.state(), null),
       floorMs: r2(safe(() => PG.floorMs(), null)),
       renderScale: r2(safe(() => L.GLX.getRenderScale(), null)),
       tier: safe(() => PG.tier(), null), userTier: safe(() => PG.userTier(), null),
@@ -184,6 +188,7 @@ const PhoneRecorder = (function () {
       now: () => (w.performance && w.performance.now ? w.performance.now() : Date.now()),
       wall: () => Date.now(),
       facts: liveFacts, sample: liveSample,
+      renderRate: () => safe(() => L.RenderRate.state(), null),
       spans: (on) => safe(() => { const S = L.PerfSpans; if (!S) return null; if (on) { env._spansWas = S.isOn(); S.on(true); } else if (!env._spansWas) S.on(false); }, null),
       save: (txt) => safe(() => { if (L.GameStore && L.GameStore.store) return L.GameStore.store.rawSet(KEY, txt); w.localStorage.setItem(KEY, txt); }, null),
       load: () => safe(() => (L.GameStore && L.GameStore.store ? L.GameStore.store.raw(KEY) : w.localStorage.getItem(KEY)), null),
@@ -197,6 +202,15 @@ const PhoneRecorder = (function () {
     let on = false; let rec = null; let quick = false;
     let t0 = 0; let lastSampleAt = 0; let framesSince = 0; let totalFrames = 0;
     let lastFrameAt = 0; let deltas = [];
+    let lastGateSample = null, lastRateKey = null;
+
+    function observeRate(rate) {
+      if (!rate) return;
+      const state = { mode: rate.mode, tier: rate.tier, half: rate.half, active: rate.active };
+      const key = JSON.stringify(state);
+      if (lastRateKey !== null && key !== lastRateKey) event("render-rate", state);
+      lastRateKey = key;
+    }
 
     function event(kind, extra) {
       if (!rec || rec.events.length >= MAX_EVENTS) return;
@@ -204,7 +218,21 @@ const PhoneRecorder = (function () {
     }
     function sample(trigger) {
       if (!on) return null;
-      const s = Object.assign({ n: rec.samples.length, trigger, min: r2((env.now() - t0) / 60000), frames: totalFrames }, env.sample());
+      const at = env.now();
+      const s = Object.assign({ n: rec.samples.length, trigger, min: r2((at - t0) / 60000), frames: totalFrames, rafCallbacks: totalFrames }, env.sample());
+      const rate = s.renderRate || safe(() => env.renderRate(), null);
+      observeRate(rate);
+      if (rate) {
+        s.renderRate = rate;
+        const elapsedMs = lastGateSample ? at - lastGateSample.at : 0;
+        const reset = !!lastGateSample && (rate.drawn < lastGateSample.drawn || rate.skipped < lastGateSample.skipped);
+        const drawn = lastGateSample && !reset ? rate.drawn - lastGateSample.drawn : null;
+        const skipped = lastGateSample && !reset ? rate.skipped - lastGateSample.skipped : null;
+        // Gate approvals include work that may subsequently skip presentation (warm-up/backpressure).
+        s.renderGate = { metric: "render-gate-approvals", elapsedMs: r2(elapsedMs), drawn, skipped, reset,
+          approvedHz: drawn !== null && elapsedMs > 0 ? r2(drawn * 1000 / elapsedMs) : null };
+        lastGateSample = { at, drawn: rate.drawn, skipped: rate.skipped };
+      }
       if (rec.samples.length < MAX_SAMPLES) rec.samples.push(s); else rec.truncated = true;
       lastSampleAt = env.now(); framesSince = 0;
       persist();
@@ -219,8 +247,10 @@ const PhoneRecorder = (function () {
       quick = !!(opts && opts.quick);
       if (env.spans) env.spans(true);
       on = true; t0 = env.now(); lastSampleAt = t0; framesSince = 0; totalFrames = 0; lastFrameAt = 0; deltas = [];
+      lastGateSample = null; lastRateKey = null;
       rec = { schema: SCHEMA, startedAt: new Date(env.wall()).toISOString(), endedAt: null,
         facts: env.facts(), cadence: null, samples: [], events: [], truncated: false,
+        metrics: { frames: "deprecated alias of rafCallbacks", cadence: "raf-callback", fpsEMA: "deprecated inverse of workIntervalMsEMA; not presented FPS", renderGate: "gate approvals, not successful GPU or display presents" },
         mode: quick ? "quick" : "soak", plan: { sampleMs: SAMPLE_MS, windowFrames: WINDOW_FRAMES, quickMs: QUICK_MS } };
       sample("start");
       return true;
@@ -233,16 +263,17 @@ const PhoneRecorder = (function () {
       on = false; if (env.spans) env.spans(false); persist();
       return true;
     }
-    // One call per rendered rAF frame while recording.
+    // One call per independent rAF callback while recording, including skipped game draws.
     function frame(nowMs) {
       if (!on) return;
       const now = nowMs == null ? env.now() : nowMs;
       totalFrames++; framesSince++;
+      if (env.renderRate) observeRate(safe(() => env.renderRate(), null));
       if (lastFrameAt && !rec.cadence) {
         deltas.push(now - lastFrameAt);
         if (deltas.length >= CADENCE_FRAMES) {
           const m = median(deltas);
-          rec.cadence = { frames: deltas.length, medianMs: r2(m), hz: m > 0 ? r2(1000 / m) : null,
+          rec.cadence = { metric: "raf-callback", frames: deltas.length, medianMs: r2(m), hz: m > 0 ? r2(1000 / m) : null,
             maxMs: r2(Math.max.apply(null, deltas)) };
           deltas = [];
         }

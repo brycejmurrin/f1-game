@@ -6,7 +6,8 @@ import { loadSurveyDesigns } from '../lib/custom-survey-locations.mjs';
  * apex-tools-mcp — wrap committed tools/ CLIs as MCP tools (apex_* only).
  *
  * One of the FOUR .mcp.json servers (beside playwright-official, chrome-devtools and js-debugger).
- * The catalog serves 40 tools (apex_help, apex_viewer, five bounded UI/diagnostics tools, and the prior wraps);
+ * The catalog serves 40 tools (apex_help, apex_viewer, five bounded UI/diagnostics tools, and the prior wraps;
+ * apex_session_status / apex_ci_status left 2026-10-26 — plain CLIs);
  * `node tools/mcp/apex-tools-mcp.mjs list-tools` is the live count. Never chrome_* / tinyfish_*. Local working tree only; no github.io.
  * Design: docs/research/APEX-TOOLS-MCP.md — map: docs/AGENT-SURFACE.md
  *
@@ -858,23 +859,10 @@ const CATALOG = [
       required: ["track"],
     },
   },
-  // 12 → 15 on 2026-10-02: the three read-only checks AGENTS.md rule 12 runs
-  // every session (status block for the PR body, who else is on a red, one CI
-  // poll after a push). Each answers in 0.1–2 s and only reads.
-  {
-    name: "apex_session_status",
-    week: 6,
-    kind: "tree",
-    description: "Tree — this branch's handoff block as JSON (commits vs deploy, dirty/unpushed, test-log verdicts, live run). Read-only. Skill: steward.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        dryRun: { type: "boolean" },
-        target: { type: "string", enum: ["local", "deploy"] },
-        url: { type: "string" },
-      },
-    },
-  },
+  // 12 → 15 on 2026-10-02: three read-only session checks; 2026-10-26 (system
+  // audit §7) apex_session_status and apex_ci_status left again — each was the
+  // plain CLI (`session-status.mjs --json`, `ci-watch.mjs --once`) with the same
+  // output and a schema in every session's context. apex_who_is_on_it stays.
   {
     name: "apex_who_is_on_it",
     week: 6,
@@ -886,21 +874,6 @@ const CATALOG = [
         hours: { type: "number", description: "Look-back window in hours (1..168, default 6)." },
         paths: { type: "array", items: { type: "string" }, description: "Repo-relative paths whose recent authors to list." },
         noFetch: { type: "boolean", description: "Skip the git fetch (faster, may be stale)." },
-        dryRun: { type: "boolean" },
-        target: { type: "string", enum: ["local", "deploy"] },
-        url: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "apex_ci_status",
-    week: 6,
-    kind: "tree",
-    description: "Tree — ONE poll of a SHA's CI runs (ci-watch --once): per-job lines, a red's failing step, `= ci <verdict>`. Never waits. Skill: steward.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        sha: { type: "string", description: "Commit SHA (7–40 hex) or HEAD (default)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -2003,8 +1976,6 @@ function buildArgv(name, args) {
       }
       return argv;
     }
-    case "apex_session_status":
-      return [...nodeTool("ci/session-status.mjs"), "--json"];
     case "apex_who_is_on_it": {
       const argv = [...nodeTool("ci/who-is-on-it.mjs"), "--json"];
       if (args.hours != null) {
@@ -2040,13 +2011,6 @@ function buildArgv(name, args) {
         if (args.headlessGame) argv.push("--headless-game");
       }
       return argv;
-    }
-    case "apex_ci_status": {
-      const sha = args.sha == null || args.sha === "" ? "HEAD" : String(args.sha);
-      if (sha !== "HEAD" && !/^[0-9a-f]{7,40}$/i.test(sha)) {
-        badArgs(`sha must be 7–40 hex characters or HEAD (got ${sha})`, 'Pass {"sha":"e21bcf4"}.');
-      }
-      return [...nodeTool("ci/ci-watch.mjs"), "--once", "--sha", sha];
     }
     default:
       throw new Error(`no argv builder for ${name}`);
@@ -2241,17 +2205,6 @@ export function rotateReport(stdout) {
   return { wouldChange: n ? Number(n[1]) : circuits.length, circuits };
 }
 
-/** ci-watch prints text: lift its terminal `= ci <verdict> (…)` line, and
- *  the per-job lines, into `out` so a caller need not regex stdout. */
-export function ciVerdict(stdout) {
-  const lines = String(stdout || "").split("\n").filter((l) => l.startsWith("[ci-watch]"));
-  const term = lines.map((l) => /\]\s*= ci (\S+)\s*(.*)$/.exec(l)).filter(Boolean).pop();
-  return {
-    verdict: term ? term[1] : null,
-    summary: term ? term[2].trim() : null,
-    jobs: lines.filter((l) => !/\]\s*= ci /.test(l)).map((l) => l.replace(/^\[ci-watch\]\s*/, "")),
-  };
-}
 /**
  * cursor-agents.mjs prints one typed line per fact (LAUNCH, BUSY, REFUSED, TWIN, ERROR, ...). Move them into
  * out.lines with the first token as out.verdict, and turn the exit code into ok/error: only exit 0 is ok.
@@ -2277,19 +2230,6 @@ export async function withCursorVerdict(pending) {
   }
   result.content[0].text = JSON.stringify(body);
   if (body.ok === false) result.isError = true;
-  return result;
-}
-
-async function withCiVerdict(pending) {
-  const result = await pending;
-  const body = JSON.parse(result.content[0].text);
-  // The job lines and the verdict move into `out`; stdout keeps the raw text
-  // only when nothing parsed (no token, API down) so the reason survives.
-  if (!body.error) {
-    body.out = ciVerdict(body.stdout);
-    if (body.out.verdict) body.stdout = "";
-  }
-  result.content[0].text = JSON.stringify(body);
   return result;
 }
 
@@ -2544,13 +2484,6 @@ export function pinOk(name, argv) {
       "pin_violated",
       "apex_who_is_on_it is read-only — never --claim / --release",
       "Run `node tools/ci/who-is-on-it.mjs --claim \"<text>\"` from a shell when you mean to claim.",
-    );
-  }
-  if (name === "apex_ci_status" && (!argv.includes("--once") || argv.includes("--timeout") || argv.includes("--pages"))) {
-    return refuse(
-      "pin_violated",
-      "apex_ci_status is one poll — --once, never a wait",
-      "Arm a Monitor on `node tools/ci/ci-watch.mjs --sha <sha> --timeout 30` to watch a run.",
     );
   }
   if ((name === "apex_hud_shot" || name === "apex_hud_survey")
@@ -2948,11 +2881,6 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     const ms = { wait: 75000, transcript: 115000, launch: 100000, followup: 70000, call: 115000 }[args.verb] ?? 60000;
     return withCursorVerdict(runSpawn(argv, { timeoutMs: ms, allowExit: new Set([0, 1, 2, 3, 124]), env, signal }));
   }
-  if (name === "apex_ci_status") {
-    // ci-watch exits: 0 green / no run, 1 red, 2 cancelled, 4 superseded, 124
-    // still running — each a verdict, not a tool failure. 3 (no token / API down) is one.
-    return withCiVerdict(runSpawn(argv, { timeoutMs: 60000, allowExit: new Set([0, 1, 2, 4, 124]), env, signal }));
-  }
   const longTree = name === "apex_verify_change_fast"
     || name === "apex_rotate_markings_check" || name === "apex_graph_parity"
     || name === "apex_frame_report" || name === "apex_who_is_on_it";
@@ -2977,7 +2905,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 // not a permission boundary — the pins and the lock remain the real guards.
 const NOT_READ_ONLY = new Set(["apex_debug_chrome", "apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity", "apex_viewer", "apex_cursor_agents"]);
 const DESTRUCTIVE = new Set(["apex_job_cancel", "apex_cursor_agents"]);
-const OPEN_WORLD = new Set(["apex_ci_status", "apex_cursor_agents", "apex_who_is_on_it"]);
+const OPEN_WORLD = new Set(["apex_cursor_agents", "apex_who_is_on_it"]);
 // launch and followup are not idempotent (a client must not auto-retry them on the strength of a hint).
 const NOT_IDEMPOTENT = new Set(["apex_cursor_agents"]);
 function toolAnnotations(entry) {
@@ -3057,9 +2985,6 @@ const OUTPUT_SCHEMAS = {
   apex_pick_tests: cliOut({ reason: S("string"), receipts: S("array"), unclaimed: S("array"), files: S("array"), groups: S("array") }),
   apex_select_specs: cliOut({ reason: S("string"), changed: S("number"), groups: S("array"), selected: S("array"), skipped: S("array"),
     shards: S("array"), cap: S("object"), testsSelected: S("number"), testsFit: S("number"), secSelected: S("number"), secFit: S("number") }),
-  apex_session_status: cliOut({ at: S("string"), branch: S("string"), base: S(["string", "null"]), upstream: S(["string", "null"]), ahead: S(["number", "null"]),
-    behind: S(["number", "null"]), unpushed: S(["number", "null"]), sessions: S("array"), commits: S("array"), dirty: S("array"), logs: S("array"),
-    live: S(["string", "null"]) }),
   apex_bump_cache_check: cliOut({ consistent: S("boolean"), mode: S("string"), tagCount: S("number"), assetMismatches: S("array"),
     shellBuild: S("number"), versionJson: S("number") }),
   apex_who_is_on_it: cliOut({ hours: S("number"), fetched: S("boolean"), branch: S("string"), live: S("array"), claims: S("array"),

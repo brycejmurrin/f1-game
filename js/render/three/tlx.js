@@ -719,7 +719,6 @@ const TLX = (function () {
         }
       }
       _abortRenderer = renderer;
-      try { setTimeout(function () { if (/^apex26\.ctxLostReloads=\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
@@ -1035,12 +1034,6 @@ const TLX = (function () {
       // says "Graphics reset" instead of a silent restart (#3513). Hidden-tab reloads stay quiet,
       // and so does the early-frame GPU-error heal: it fires on the title, before any race.
       let _lossCounted = false;
-      let _sessLostN = 0;   // two-reload budget when sessionStorage throws (GLX _sessLostN)
-      const _fallbackLossCount = () => {
-        try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; }
-        catch (_) { return 0; }
-      };
-      const _rememberFallbackLoss = (n) => { try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ } };
       try {
         let onShown = null, onPageShow = null;
         document.addEventListener("visibilitychange", onShown = function () { if (!document.hidden) _shownAt = _nowMs(); });
@@ -1082,12 +1075,7 @@ const TLX = (function () {
             document.addEventListener("visibilitychange", onVisible);
             return;
           }
-          const rk = "apex26.ctxLostReloads";
-          let n;
-          try {
-            n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
-            sessionStorage.setItem(rk, String(n));
-          } catch (_) { n = Math.max(++_sessLostN, _fallbackLossCount() + 1); _rememberFallbackLoss(n); }
+          const n = GfxEscalation.nextReloadCount();
           _lossCounted = true;
           if (n <= 2) setTimeout(function () { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: nothing to explain on the menu; the menu just cannot explain it */ } try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
           else {
@@ -1156,7 +1144,7 @@ const TLX = (function () {
               } catch (_) { /* picker absent in harness */ }
             }
           }
-        } catch (_) { /* visibility / picker / harness; budget uses _sessLostN when storage throws */ }
+        } catch (_) { /* visibility / picker / harness */ }
       };
       try {
         let onRestored = null;
@@ -1164,8 +1152,7 @@ const TLX = (function () {
           // Same two-reload budget as the loss handler: an unguarded restore
           // reload looped on a device that loses the context every boot.
           // Storage failure must not skip the reload (GLX: dead canvas).
-          var n = 0;
-          try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
+          const n = GfxEscalation.reloadCount();
           if (n > 2) return;
           if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ }
           try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
@@ -1214,18 +1201,38 @@ const TLX = (function () {
       // skipped, not double-counted). Software GL (SwiftShader/CI) stays
       // {supported:false}: it exposes the extension, but its time means nothing.
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
+      let _gpuSamples = 0, _gpuSampleAt = -1, _gpuResolvePending = false;
       let _inspectorHold = false;   // dev Inspector owns timestamp resolution (inspectorHost below)
       function resolveGpuTimer() {
-        if (!_gpuTimerOn) return;
-        const epoch = _gpuTimerEpoch;
+        if (!_gpuTimerOn || _deviceLost || _gpuResolvePending) return;
+        const epoch = _gpuTimerEpoch, be = renderer.backend;
+        const pool = be && be.timestampQueryPool && be.timestampQueryPool.render;
+        // r186 returns lastValue for an empty/in-flight resolve. Its frames
+        // array is replaced only after a new query batch finishes, even when
+        // that batch has exactly the same duration as the preceding one.
+        if (!pool || pool.isDisposed || pool.pendingResolve || !pool.currentQueryIndex) return;
+        const frames = pool.frames, gl = be.isWebGLBackend && be.gl;
+        const queries = [];
+        if (gl) {
+          for (const i of pool.queryOffsets.values()) if (pool.queryStates.get(i) === "ended") queries.push(pool.queries[i]);
+          if (!queries.length) return;
+        }
+        _gpuResolvePending = true;
         try {
           renderer.resolveTimestampsAsync("render").then(v => {
-            if (_gpuTimerOn && epoch === _gpuTimerEpoch && v != null && isFinite(v)) _gpuMs = v;
+            if (!_gpuTimerOn || _deviceLost || epoch !== _gpuTimerEpoch || pool.isDisposed) return;
+            // WebGL's pool also returns lastValue for interrupted queries.
+            // Require actual ready query objects and a non-disjoint clock.
+            if (gl && (gl.getParameter(pool.ext.GPU_DISJOINT_EXT) || queries.some(q => !gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)))) {
+              _gpuMs = -1; _gpuSampleAt = -1; return;
+            }
+            if (pool.frames === frames || !pool.frames.length || v == null || !isFinite(v) || v < 0) return;
+            _gpuMs = v; _gpuSampleAt = _nowMs(); _gpuSamples++;
           }).catch((e) => {
             // Per-frame call: note the first rejection only.
             if (!_gpuTimerFailLogged) { _gpuTimerFailLogged = true; Log.debug("gfx", "TLX: GPU timestamp resolve rejected:", e && e.message); }
-          });
-        } catch (_) { /* timing is optional */ }
+          }).finally(() => { _gpuResolvePending = false; });
+        } catch (_) { _gpuResolvePending = false; /* timing is optional */ }
       }
       function _gpuSupported() {
         try {
@@ -1699,7 +1706,8 @@ const TLX = (function () {
           // fragment-uniform floor (224) once three/TSL adds its own block, so
           // the lit shader fails to LINK on iOS Safari and every lit surface
           // draws nothing. Same _liteGpu gate as samples/outputType above.
-          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!post,
+          // Keep tag capability through an initial post failure; arm MRT only for compatible passes.
+          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!(TSL.mrt && renderer.setMRT),
             envCube: envRT ? envRT.texture : null, matMaps, lampGrid,
             sharedUniforms: _sharedUniforms,
             maxLights: _liteGpu ? LightBudget.LITE : LightBudget.MAX });
@@ -3135,6 +3143,16 @@ const TLX = (function () {
         try { await renderer.compileAsync(m, camera, scene); }
         finally { if (!--p.pending && p.dead) p.release(); }
       }
+      // The driving line's index is a pure function of position — (i, i+1, i+2) — so it is built ONCE per stream
+      // geometry at full capacity and the draw range trims it. A fresh BufferAttribute per re-upload orphaned the
+      // old index's GPU buffer (three frees an index only on geo dispose). Shared with the fx warm (A·W50, #3673).
+      function lineIndex(slot) {
+        const capTris = Math.max(0, slot.cap - 2);
+        if (slot.geo.index && slot.geo.index.count >= capTris * 3) return;
+        const idx = new Uint32Array(capTris * 3);
+        for (let i = 0; i < capTris; i++) { idx[i * 3] = i; idx[i * 3 + 1] = i + 1; idx[i * 3 + 2] = i + 2; }
+        slot.geo.setIndex(new THREE.BufferAttribute(idx, 1));
+      }
       async function warmFxPrograms() {
         if (!_warmFx || !fx) return;
         const jobs = [[skidStream, fx.skidMat], [partStreams[0], fx.particleMats && fx.particleMats[0]],
@@ -3142,8 +3160,15 @@ const TLX = (function () {
         for (const [stream, mat] of jobs) {
           if (!mat) continue;
           ensureStream(stream, 1);
+          // A·W50 (#3673): the line draws INDEXED, and three keys a pipeline on the geometry's index too ("index,"
+          // in getGeometryCacheKey), so an unindexed probe warmed a pipeline the race never used: the first race
+          // frame built it synchronously (lavapipe census after the pin).
+          if (stream === lineStream) lineIndex(stream);
           await compileWarmProbe(stream.geo, mat);
         }
+        // The per-record blob (a run past BLOB_CAP, a second run in a pass, software WebGPU) on both windings: a
+        // mirrored model draws it cw, the census's other first-race-frame pipeline. One tiny fx program, two states.
+        if (fx.shadowMat) for (const sx of [1, -1]) await compileWarmProbe(getFxQuad(), fx.shadowMat, sx);
         // The instanced blob program (A6) and decal runs (F3), if none was on screen for the scene warm.
         for (const run of [_blob, ..._decalRuns.values()]) {
           if (!run || run.imesh.visible) continue;
@@ -3607,7 +3632,8 @@ const TLX = (function () {
       let _rigMirrorKey = null;
       const _rigMirrorOn = () => !!(_warmFx && post && post.enabled() && !_mirDead && !vizMat && !softGpu() && !softwareGL);
       function warmDraws(fn, opts) {
-        if (_deviceLost || !lit || _drawMatMode || vizMat || typeof renderer.compileAsync !== "function" || _rigWarm) return Promise.resolve(false);
+        if (_deviceLost || !lit || _drawMatMode || vizMat || typeof renderer.compileAsync !== "function") return Promise.resolve(false);
+        // Capture NOW, while the caller's state (track, car) is current: fn never runs later (A·W56, #3673).
         const recs = [];
         const co = _coOn;
         _capture = recs; _coOn = false;   // a coalesced draw reaches draw()'s capture, which skips it, never a run
@@ -3616,19 +3642,37 @@ const TLX = (function () {
         const todo = recs.filter((r) => { const s = _rigDone.get(r.geo); return !(s && s.has(_rigKey(r))); });
         const mirror = !!(opts && opts.mirror) && opts.mirror !== _rigMirrorKey && _rigMirrorOn() ? opts.mirror : null;
         if (!todo.length && !mirror) return Promise.resolve(recs.length > 0);
+        // One job at a time. The menu's telemetry job (car-draw.js warmCockpitTelemetry) may still be queued at race
+        // entry: join it, or the race's own rig pairs went unwarmed. Waiting and capturing later ran fn after the
+        // track had gone (a 'def' of null per race) and held the race's car until then (race-cycle-memory heap slope).
+        if (_rigWarm && !_rigWarm.started) {
+          const job = _rigWarm;
+          for (const r of todo) job.recs.push(r);
+          if (mirror && !job.mirror) job.mirror = mirror;
+          return _warmRequested || _warmPending ? Promise.resolve(true) : job.finished.then(() => true);
+        }
+        // One already compiling is bounded: queue these pairs (captured above) right behind it.
+        if (_rigWarm) return _rigWarm.finished.then(() => warmDraws(() => { for (const r of todo) _capture.push(r); }, mirror ? { mirror } : null));
         // BEHIND A PROGRAM WARM, QUEUE AND RETURN. Race entry requests the program warm just before this, and the rig
         // job may only start once it is done (present() starts one warm at a time), so awaiting it held race entry for
         // the whole program warm, and on software GL (a ~17 s warm) the 20 s fallback fired first, dropped the job and
         // left the rig unwarmed (+20 s per race entry; B·H14, monza-foundation 8.4 -> 26.2 s on CI llvmpipe at #3221).
         // Queued, the job still runs before any frame paints: present() holds while either warm is pending.
         if (_warmRequested || _warmPending) {
-          const job = _rigWarm = { recs: todo, mirror, done: () => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; } };
+          let fin;
+          const job = _rigWarm = { recs: todo, mirror, seen: 0, finished: new Promise((r) => { fin = r; }),
+            done: () => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; fin(); } };
           // No present ever came (hidden tab, a race abandoned first): drop the queue, or every later warmDraws refuses.
-          job.timer = setTimeout(() => { if (!job.started) job.done(); }, 20000);
+          // A present that came but was held by the warm (`seen`) re-arms it: the menu's world warm runs ~29 s on an
+          // iPhone 14 Pro (ledger row 29), longer than the timer, and the menu queues its telemetry job behind it.
+          const arm = () => { job.timer = setTimeout(() => { if (job.started) return; if (job.seen) { job.seen = 0; arm(); } else job.done(); }, 20000); };
+          arm();
           return Promise.resolve(true);
         }
         return new Promise((resolve) => {
-          const job = _rigWarm = { recs: todo, mirror, done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; resolve(ok); } };
+          let fin;
+          const job = _rigWarm = { recs: todo, mirror, finished: new Promise((r) => { fin = r; }),
+            done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; fin(); resolve(ok); } };
           job.timer = setTimeout(() => job.done(false), 20000);   // no present came (hidden tab): race entry never waits on it
         });
       }
@@ -3636,7 +3680,8 @@ const TLX = (function () {
         if (!mesh || !mesh.geo || (opts && opts.coalesce)) return;
         const w = model;
         const neg = !!w && w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
-        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1 });
+        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1,
+          key: opts && typeof matKeyFor === "function" ? matKeyFor(opts, false, false) : "" });   // memState().warm.rig.worst
       }
       function startRigWarm() {
         const job = _rigWarm;
@@ -3647,6 +3692,7 @@ const TLX = (function () {
         const useTag = usePost && (!post.tagOn || post.tagOn());
         let ok = false;
         const t0 = performance.now();
+        const sp = { pairs: 0, mirror: 0, settle: 0, probes: 0, worst: [] };   // A·W56 (#3673): where the cold 5.7 s goes
         _warmPending = (async () => {
           try {
             // The materials were minted at capture, so the tag stamps them now, as the scene warm stamps its own.
@@ -3658,26 +3704,32 @@ const TLX = (function () {
             for (let i = 0; i < job.recs.length; i++) {
               // Menu path: yield every other cockpit pair so the title stays live (#3279).
               if (i && typeof warmIdleChunks === "function" && warmIdleChunks() && (i & 1) === 0) await _idleYield(32);
-              const r = job.recs[i];
-              await compileWarmProbe(r.geo, r.mat, r.sx);
+              const r = job.recs[i], tp = performance.now();
+              await compileWarmProbe(r.geo, r.mat, r.sx); sp.probes++;
               // A·W50: a double-sided pair keys its pipeline on the winding too, and the race draws the rig's
               // double-sided keep material mirrored as well: the first race frame built its cw twin synchronously
               // (lavapipe census, the one lit pipeline left after the pin). Compile the other sign under the cover.
-              if (r.mat.side === THREE.DoubleSide) await compileWarmProbe(r.geo, r.mat, -r.sx);
+              if (r.mat.side === THREE.DoubleSide) { await compileWarmProbe(r.geo, r.mat, -r.sx); sp.probes++; }
+              sp.worst.push([Math.round(performance.now() - tp), r.mat.id, r.key, r.geo.attributes.position ? r.geo.attributes.position.count : 0, r.sx]);
               let s = _rigDone.get(r.geo);
               if (!s) _rigDone.set(r.geo, s = new Set());
               s.add(_rigKey(r));
             }
+            sp.pairs = performance.now() - t0;
             if (job.mirror) {
               if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
               _gpuLastOperation = "compile-rig-mirror"; await warmMirrorStage(usePost, useTag); _rigMirrorKey = job.mirror;
             }
+            sp.mirror = performance.now() - t0 - sp.pairs;
             await _gpuSettled(3000);   // the driver's own compile is GPU-process side, as the draw warm's is
+            sp.settle = performance.now() - t0 - sp.pairs - sp.mirror;
             ok = true;
           } catch (e) {
             try { Log.warn("gfx", "TLX rig warm failed", String(e)); } catch (_) { /* logging is optional */ }
           } finally {
-            _warmStages.rig = { ms: Math.round(performance.now() - t0), pairs: job.recs.length, mirror: !!job.mirror, ok };
+            _warmStages.rig = { ms: Math.round(performance.now() - t0), pairs: job.recs.length, mirror: !!job.mirror, ok,
+              probes: sp.probes, pairsMs: Math.round(sp.pairs), mirrorMs: Math.round(sp.mirror), settleMs: Math.round(sp.settle),
+              worst: sp.worst.sort((a, b) => b[0] - a[0]).slice(0, 4) };
             if (job.mirror) _mirWarmUnswap();   // warmMirrorStage showed the mirror's own instanced meshes (idempotent)
             if (lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
@@ -4604,16 +4656,7 @@ const TLX = (function () {
         try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
         if (!toGlx) _latchWebKitGL("first render refused");
         try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
-        let n;
-        try {
-          n = (parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) + 1;
-          sessionStorage.setItem("apex26.ctxLostReloads", String(n));
-        } catch (_) {
-          let prior = 0;
-          try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); prior = m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { /* best effort */ }
-          n = Math.max(++_sessLostN, prior + 1);
-          try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ }
-        }
+        const n = GfxEscalation.nextReloadCount();
         if (n <= 2) { try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage: the reload still runs; the menu just cannot explain it */ } try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
         try {
           recordGfxBudgetExhausted("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
@@ -4776,18 +4819,21 @@ const TLX = (function () {
           const sup = _gpuSupported();
           if (on !== undefined) {
             const next = !!on && sup && !_inspectorHold;
-            if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuMs = -1; }
+            if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuMs = -1; _gpuSampleAt = -1; }
             _gpuTimerOn = next;
             if (!_inspectorHold) try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
-            if (!_gpuTimerOn) _gpuMs = -1;
+            if (!_gpuTimerOn) { _gpuMs = -1; _gpuSampleAt = -1; }
           }
-          return { supported: sup, on: _gpuTimerOn };
+          if (_deviceLost) { _gpuMs = -1; _gpuSampleAt = -1; }
+          // sampleAt dates resolution, not submission; reads never mint samples.
+          return { supported: sup, on: _gpuTimerOn, samples: _gpuSamples, sampleAt: _gpuSampleAt,
+            sampleAgeMs: _gpuSampleAt < 0 ? -1 : Math.max(0, _nowMs() - _gpuSampleAt) };
         },
-        gpuMs() { return _gpuMs; },
+        gpuMs() { return _deviceLost ? -1 : _gpuMs; },
         // Dev Inspector hand-off (js/perf/three-inspector.js): the renderer plus the gpuTimer interlock — while held,
         // gpuTimer stays off so only the Inspector's own pass resolves timestamp queries.
         inspectorHost() {
-          return { renderer, hold(on) { _inspectorHold = !!on; if (on) { _gpuTimerOn = false; _gpuMs = -1; _gpuTimerEpoch++; } } };
+          return { renderer, hold(on) { _inspectorHold = !!on; if (on) { _gpuTimerOn = false; _gpuMs = -1; _gpuSampleAt = -1; _gpuTimerEpoch++; } } };
         },
         // "Skipped for cadence, map still valid" — see tlx-shadow.js §KEEP.
         carShadowKeep() { return !!(shadowSys && shadowSys.carShadowKeep()); },
@@ -5611,6 +5657,7 @@ const TLX = (function () {
           if (!_warmPending) { _warmWhere = _resolveWarmWhere(opts); _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !_deviceLost && !!_warmPending; },
+        warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
         // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally
@@ -5891,16 +5938,7 @@ const TLX = (function () {
             lineStream.ib.array.set(verts.length <= vertCount * 7 ? verts : verts.subarray(0, vertCount * 7));
             uploadStream(lineStream, vertCount * 7);
             const tris = Math.max(0, vertCount - 2);
-            // The index is a pure function of position — (i, i+1, i+2) — so it
-            // is built ONCE per stream geometry at full capacity and the draw
-            // range trims it. A fresh BufferAttribute per re-upload orphaned the
-            // old index's GPU buffer (three frees an index only on geo dispose).
-            const capTris = Math.max(0, lineStream.cap - 2);
-            if (!lineStream.geo.index || lineStream.geo.index.count < capTris * 3) {
-              const idx = new Uint32Array(capTris * 3);
-              for (let i = 0; i < capTris; i++) { idx[i * 3] = i; idx[i * 3 + 1] = i + 1; idx[i * 3 + 2] = i + 2; }
-              lineStream.geo.setIndex(new THREE.BufferAttribute(idx, 1));
-            }
+            lineIndex(lineStream);
             lineStream.geo.setDrawRange(0, tris * 3);
           }
           fx.lineSpeed.value = (opts && opts.speed) || 0;
@@ -6151,6 +6189,7 @@ const TLX = (function () {
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
           // later warm passes, but cannot cancel a compile already in flight.
+          if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)
           if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }
           if (_warmPending) return;
           // The last rung: even rawUnlitMat throws. AUTO on three's WebGPU takes three WebGL2 next boot (tlxAutoGL, a
@@ -6264,17 +6303,16 @@ const TLX = (function () {
               && _glPin !== "0" && _glPin !== "1" && !_forceHw.on && !_softBlit) {
             _healTried = true;
             try {
-              const rk = "apex26.ctxLostReloads";
-              const n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
+              const n = GfxEscalation.reloadCount() + 1;
               if (n <= 2) {
-                sessionStorage.setItem(rk, String(n));
+                GfxEscalation.nextReloadCount();
                 sessionStorage.setItem("apex26.tlxAutoGL", "1");
                 _latchWebKitGL("GPU errors in the first " + _presentN + " frames");
                 try { localStorage.setItem("apex26.gfxTlxFail", "WebGPU rejected work in the first " + _presentN + " frames (" + String(_gpuFirstError || "gpu error").slice(0, 160) + ") — AUTO takes three WebGL2"); } catch (_) { /* backendState still carries the reason */ }
                 try { Log.warn("gfx", "TLX: " + _gpuErrors + " GPU error(s) in the first " + _presentN + " frames — reloading on three WebGL2:", _gpuFirstError); } catch (_) { /* no Log in the node VM harness */ }
                 setTimeout(function () { try { location.reload(); } catch (_) { /* harness: the session key still steers the next real boot */ } }, 300);
               }
-            } catch (_) { /* no sessionStorage: cannot bound a reload, so do not start one */ }
+            } catch (_) { /* no sessionStorage: cannot persist the AUTO path, so do not reload */ }
           }
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
           // Count the CHUNKED releases too. tlxMirror reported only the static

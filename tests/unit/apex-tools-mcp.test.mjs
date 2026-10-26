@@ -219,7 +219,6 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_bump_cache_check",
     "apex_car_audit",
     "apex_catalog",
-    "apex_ci_status",
     "apex_cursor_agents",
     "apex_debug_chrome",
     "apex_diagnostics",
@@ -242,7 +241,6 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_profile_query",
     "apex_rotate_markings_check",
     "apex_select_specs",
-    "apex_session_status",
     "apex_shot",
     "apex_shot_survey",
     "apex_status",
@@ -990,11 +988,11 @@ test("every tool carries title and honest MCP annotations; tool-specific outputS
     if (/^apex_(eval|shot|agent|garage|track|ui_fit|ui_shot|hud_shot|hud_survey)$/.test(t.name)) assert.equal(a.readOnlyHint, false, `${t.name} takes the browser lock and writes artifacts`);
   }
   assert.deepEqual(withSchema.sort(), ["apex_bump_cache_check", "apex_car_audit", "apex_catalog", "apex_doctor", "apex_help", "apex_hud_mock",
-    "apex_hud_shot", "apex_hud_survey", "apex_job_status", "apex_locations", "apex_pick_tests", "apex_select_specs", "apex_session_status",
+    "apex_hud_shot", "apex_hud_survey", "apex_job_status", "apex_locations", "apex_pick_tests", "apex_select_specs",
     "apex_status", "apex_track_audit", "apex_viewer", "apex_who_is_on_it"], "exactly the tools with a measured result shape");
   assert.deepEqual(destructive, ["apex_cursor_agents", "apex_job_cancel"]);
-  assert.deepEqual(openWorld.sort(), ["apex_ci_status", "apex_cursor_agents", "apex_who_is_on_it"]);
-  for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
+  assert.deepEqual(openWorld.sort(), ["apex_cursor_agents", "apex_who_is_on_it"]);
+  for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
   for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer", "apex_cursor_agents"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
@@ -1021,19 +1019,9 @@ test("real results of the fast tree tools conform to their advertised outputSche
   };
   const calls = [
     ["apex_status", {}], ["apex_doctor", {}], ["apex_pick_tests", {}], ["apex_select_specs", { since: "HEAD~1" }],
-    ["apex_session_status", {}], ["apex_bump_cache_check", {}], ["apex_job_status", {}],
+    ["apex_bump_cache_check", {}], ["apex_job_status", {}],
     ["apex_track_audit", { track: "monza" }], ["apex_car_audit", { check: "ladder" }],
   ];
-  // Fresh or detached checkouts have no resolvable base/upstream; the CLI
-  // reports unknown push counts as null rather than inventing zero commits.
-  const sessionSchema = schemaOf("apex_session_status");
-  for (const out of [
-    { base: null, upstream: null, ahead: null, behind: null, unpushed: null, live: null },
-    { base: "origin/main", upstream: "origin/topic", ahead: 2, behind: 1, unpushed: 2, live: "123:456 artifacts/logs/ui.log" },
-  ]) assert.deepEqual(validate({ ok: true, out }, sessionSchema, "session", []), []);
-  for (const out of [{ base: 3 }, { upstream: false }, { ahead: "unknown" }, { behind: false }, { unpushed: "unknown" }, { live: {} }]) {
-    assert.equal(validate({ ok: true, out }, sessionSchema, "session", []).length, 1, "metadata still rejects incorrect non-null types");
-  }
   const results = rpc(calls.map(([name, args], i) => ({ jsonrpc: "2.0", id: 10 + i, method: "tools/call", params: { name, arguments: args } })));
   for (const [i, [name]] of calls.entries()) {
     const r = results.find((m) => m.id === 10 + i).result;
@@ -1336,26 +1324,8 @@ test("splitOut returns the JSON once: in out, and only the text before it in res
   assert.deepEqual(splitOut(""), { out: null, rest: "" });
 });
 
-test("ciVerdict lifts ci-watch's terminal line into out", async () => {
-  const { ciVerdict } = await import("../../tools/mcp/apex-tools-mcp.mjs");
-  const v = ciVerdict([
-    "[ci-watch] CI #1 (push) queued https://x/1",
-    "[ci-watch] CI › Smoke (2) → failure — step \"Run smoke shard\": boom https://x/2",
-    "[ci-watch] = ci failed (19 jobs, 1 failed, 4 skipped) sha=e3bd067",
-  ].join("\n"));
-  assert.equal(v.verdict, "failed");
-  assert.equal(v.summary, "(19 jobs, 1 failed, 4 skipped) sha=e3bd067");
-  assert.equal(v.jobs.length, 2);
-  assert.match(v.jobs[1], /^CI › Smoke/);
-  assert.equal(ciVerdict("").verdict, null);
-});
-
 test("session-check wraps are read-only and pinned", () => {
   const body = (r) => JSON.parse(r.stdout);
-  const ss = callCli("apex_session_status", { dryRun: true });
-  assert.equal(ss.status, 0, ss.stderr);
-  assert.match(body(ss).argv.join(" "), /ci\/session-status\.mjs --json$/);
-
   const who = callCli("apex_who_is_on_it", { dryRun: true, hours: 12, noFetch: true, paths: ["js/game.js"] });
   assert.equal(who.status, 0, who.stderr);
   assert.match(body(who).argv.join(" "), /ci\/who-is-on-it\.mjs --json --hours 12 --no-fetch js\/game\.js$/);
@@ -1370,16 +1340,12 @@ test("session-check wraps are read-only and pinned", () => {
     assert.equal(body(r).error, "bad_args", JSON.stringify(args));
     assert.match(body(r).message, re);
   }
-
-  const ci = callCli("apex_ci_status", { dryRun: true, sha: "e21bcf4" });
-  assert.equal(ci.status, 0, ci.stderr);
-  assert.match(body(ci).argv.join(" "), /ci\/ci-watch\.mjs --once --sha e21bcf4$/);
-  for (const sha of ["--pages", "main", "e21b", "e21bcf4; rm -rf /"]) {
-    assert.equal(body(callCli("apex_ci_status", { sha })).error, "bad_args", sha);
-  }
   const src = fs.readFileSync(MCP, "utf8");
-  for (const n of ["apex_session_status", "apex_who_is_on_it", "apex_ci_status"]) {
-    assert.match(src, new RegExp(`name: "${n}",\\s*week: 6,\\s*kind: "tree"`), `${n} takes no browser lock`);
+  assert.match(src, /name: "apex_who_is_on_it",\s*week: 6,\s*kind: "tree"/, "apex_who_is_on_it takes no browser lock");
+  // 2026-10-26 (system audit §7): the two pass-throughs left; the CLIs print the same thing.
+  for (const gone of ["apex_session_status", "apex_ci_status"]) {
+    assert.doesNotMatch(src, new RegExp(`name: "${gone}"`), `${gone} is a plain CLI now`);
+    assert.equal(body(callCli(gone, { dryRun: true })).error, "unknown_tool", `${gone} is not callable`);
   }
 });
 

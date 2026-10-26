@@ -194,18 +194,37 @@ const NetTransport = (function () {
   let fetchedIce = null;
   let fetchedIceAt = 0;
   let fetchingIce = null;
+  let activeTurnApi = null;
+  let turnApiVersion = 0;
+  function configuredTurnApi() {
+    let url = null;
+    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) { /* storage blocked (private mode): stay STUN-only */ }
+    return url || TURN_API;
+  }
+  function syncTurnApi() {
+    const url = configuredTurnApi();
+    if (url !== activeTurnApi) {
+      // Credentials belong to their endpoint. A late answer from the previous
+      // endpoint must not revive its relay after the setting changes.
+      activeTurnApi = url;
+      turnApiVersion++;
+      fetchedIce = null;
+      fetchedIceAt = 0;
+      fetchingIce = null;
+    }
+    return url;
+  }
   function iceCredFresh() {
     return !!(fetchedIce && (Date.now() - fetchedIceAt) < ICE_CRED_TTL_MS);
   }
   function prefetchIce() {
     const jobs = [derivedRelays()];
-    let url = null;
-    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) { /* storage blocked (private mode): stay STUN-only */ }
-    if (!url) url = TURN_API;
+    const url = syncTurnApi();
     // Re-fetch when the previous answer is past ICE_CRED_TTL_MS (or never
     // landed). iceServers are fixed at RTCPeerConnection construction, so
     // stale credentials only hurt the NEXT gather — refresh before that.
     if (url && !iceCredFresh() && !fetchingIce) {
+      const version = turnApiVersion;
       // Keep last-good fetchedIce while the refresh runs. Nulling it here made
       // iceServers() STUN-only mid-refresh, so a PC built in that window lost a
       // still-usable TURN. Replace only when a new list lands (or rtc() drops a
@@ -225,7 +244,7 @@ const NetTransport = (function () {
         // connection attempt for as long as the fetch stays cached (55 min).
         // The two localStorage-sourced lists already validate per entry.
         const list = Array.isArray(raw) ? raw.filter((e) => e && e.urls) : null;
-        if (Array.isArray(list) && list.length) {
+        if (version === turnApiVersion && Array.isArray(list) && list.length) {
           fetchedIce = list;
           fetchedIceAt = Date.now();
         }
@@ -238,7 +257,10 @@ const NetTransport = (function () {
         // symptom has a cause attached to it. Last-good stays if we had one.
         Log.warn("net", "TURN credential fetch failed, gathering STUN-only:", err && err.message);
         return fetchedIce;
-      }).finally(() => { clearTimeout(bail); fetchingIce = null; });
+      }).finally(() => {
+        clearTimeout(bail);
+        if (version === turnApiVersion) fetchingIce = null;
+      });
     }
     if (fetchingIce) jobs.push(fetchingIce);
     // Failure-silent by design: no relay is a NORMAL state, and a lobby that
@@ -363,6 +385,7 @@ const NetTransport = (function () {
   // `stunOnly` leaves every fetched/derived relay out — the retry path in
   // rtc() below, after a construction that a fetched entry made throw.
   function iceServers(opts, stunOnly) {
+    syncTurnApi();
     if (opts.iceServers) return opts.iceServers;
     const list = [{ urls: STUN }];
     if (stunOnly) return list;

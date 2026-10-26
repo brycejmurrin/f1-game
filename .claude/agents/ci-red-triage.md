@@ -63,11 +63,20 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
    that previous run (never write `new-on-this-push` for an unread base). `tools/ci/base-verdict.sh`
    and `tools/ci/pages-live-sha.sh` exist for this.
 6. **Stale generated files (not a rerun):** when logs or node suites mention
-   `gen:check`, `agent-indexes.test.mjs`, `declaredTests` count mismatch,
+   `gen:check`, `agent-indexes.test.mjs`,
    missing keys in `tests/data/impact-map.json`, or the ARCHITECTURE.md module
    table drift — prescribe **`npm run gen`**, then **`npm run gen:check`**, commit
-   only generated outputs, and push. Skill **gen-regen** lists symptoms; do not
-   recommend a blind Actions re-run for index drift alone.
+   only generated outputs, and push (`check-changes` `references/triage.md`
+   §Stale generated indexes); do not recommend a blind Actions re-run for index
+   drift alone.
+6b. **A red `pages.yml` on the deploy branch** (folded from the
+   pages-red-triage skill, 2026-10-26): PR CI green proves nothing about it.
+   Open the nested `ci / …` job inside the Pages run, not the wrapper; stale
+   generated indexes there mean a regen fix PR (step 6). For real breakage,
+   bisect the merges since the last green Pages run
+   (`git log <last green sha>..<red sha> --merges`) and name the merge that
+   introduced it. `next:` is one fix PR, with no further game merges until
+   Pages is green again. Never recommend cancelling a running Pages train.
 7. Diagnose before blaming the box: `caution().enabled=false` is the
    `SettingsDefaults` default, not a reason to pin WebGL2 or raise `BOOT_MS`;
    a one-ULP Suzuka arc mismatch needs an epsilon; a bare 120 s timeout on a

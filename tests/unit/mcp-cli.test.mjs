@@ -96,8 +96,8 @@ test("browser MCP launches prefer cached exact pins while retaining cold-cache d
       const args = fs.readFileSync(log, "utf8").trim().split("\n");
       assert.deepEqual(args.slice(0, 3), ["--yes", "--prefer-offline", "@playwright/mcp@0.0.79"]);
       assert.equal(args.includes("--offline"), false, "cold cache can still fetch");
-      assert.ok(args.includes(cdp ? "--cdp-endpoint" : "--isolated"));
-      assert.ok(args.includes("iPhone 15"));
+      assert.equal(args.includes(cdp ? "--cdp-endpoint" : "--isolated"), true);
+      assert.equal(args.includes("iPhone 15"), true);
     }
     const r = spawnSync("bash", [path.join(mcp, "chrome-devtools-mcp.sh"), "run"], { env, encoding: "utf8", timeout: 5000 });
     assert.equal(r.status, 0, r.stderr);

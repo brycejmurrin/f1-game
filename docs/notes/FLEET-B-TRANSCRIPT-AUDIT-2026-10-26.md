@@ -17,9 +17,9 @@ tool or a test is listed as a proposal, not applied.
   L7 (2) and L7c; R1 (2); W1·L1 tests; owner #3732; sync #3576+#3684. That is 13 sessions and 28 pages, about
   9 MB of raw events. Per-turn context comes from the assistant `usage` blocks: input + cache read + cache write.
 - **Prior art.** Not re-reported here: [TRANSCRIPT-MINING-2026-10-16](TRANSCRIPT-MINING-2026-10-16.md),
-  [CLAUDE-TRANSCRIPT-TOKEN-AUDIT-2026-10-18](CLAUDE-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md),
-  [CLAUDE-TRANSCRIPT-MINING-2026-10-19](CLAUDE-TRANSCRIPT-MINING-2026-10-19.md) and
-  [ORCHESTRATION-AUDIT-A-B-2026-10-22](ORCHESTRATION-AUDIT-A-B-2026-10-22.md). A row marked **recurring** is a known
+  [CLAUDE-TRANSCRIPT-TOKEN-AUDIT-2026-10-18](../archive/notes/CLAUDE-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md),
+  [CLAUDE-TRANSCRIPT-MINING-2026-10-19](../archive/notes/CLAUDE-TRANSCRIPT-MINING-2026-10-19.md) and
+  [ORCHESTRATION-AUDIT-A-B-2026-10-22](../archive/notes/ORCHESTRATION-AUDIT-A-B-2026-10-22.md). A row marked **recurring** is a known
   finding that is still live, with new numbers.
 - **Not covered.** Thinking text (it arrives empty) and subagent sidechains. Only the newest 1–4 pages of each
   long session were read, so a Bryce message on an older page can be missing.

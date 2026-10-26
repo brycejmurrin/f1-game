@@ -13,20 +13,17 @@ import { TYPES, formatLine, parseLine } from "../../tools/ci/fleet-bus.mjs";
 
 const ME = "cursor:bc-agent-msg-test-0ff0";
 
-test("busTypeFor: INFO/QUESTION/REQUEST → HANDOFF; READY/HANDOFF/INCIDENT keep type", () => {
-  assert.equal(busTypeFor("INFO"), "HANDOFF");
-  assert.equal(busTypeFor("QUESTION"), "HANDOFF");
-  assert.equal(busTypeFor("REQUEST"), "HANDOFF");
-  assert.equal(busTypeFor("READY"), "READY");
-  assert.equal(busTypeFor("HANDOFF"), "HANDOFF");
-  assert.equal(busTypeFor("INCIDENT"), "INCIDENT");
-  for (const t of ["READY", "HANDOFF", "INCIDENT"]) assert.ok(TYPES.includes(t), t);
-  assert.ok(TYPES.includes(busTypeFor("INFO")));
+test("busTypeFor: every --type is its own bus type (INFO/QUESTION/REQUEST no longer ride as HANDOFF)", () => {
+  for (const t of MSG_TYPES) {
+    assert.equal(busTypeFor(t.toLowerCase()), t);
+    assert.ok(TYPES.includes(busTypeFor(t)), `${t} is a bus type`);
+  }
+  for (const t of ["INFO", "QUESTION", "REQUEST", "ROTATE", "LEND", "RETURN", "TRANSFER"]) assert.ok(MSG_TYPES.includes(t), t);
 });
 
-test("busTextFor prefixes mapped types and optional #pr", () => {
-  assert.equal(busTextFor("INFO", "hello"), "[INFO] hello");
-  assert.equal(busTextFor("QUESTION", "need sync?", 12), "#12 [QUESTION] need sync?");
+test("busTextFor: optional #pr prefix, no [TYPE] tag", () => {
+  assert.equal(busTextFor("INFO", "hello"), "hello");
+  assert.equal(busTextFor("QUESTION", "need sync?", 12), "#12 need sync?");
   assert.equal(busTextFor("READY", "abc ready-gate 0", 3499), "#3499 abc ready-gate 0");
 });
 
@@ -74,8 +71,9 @@ test("redactSecrets never leaves the auth value or URL userinfo in output", () =
 
 test("parseArgs: send flags, type uppercased, --pr, --no-bus, --dry-run; refuses junk", () => {
   assert.deepEqual(parseArgs(["send", "--to", "DAD", "--type", "ready", "--pr", "12", "hello world"]), {
-    cmd: "send", to: "DAD", type: "READY", pr: 12, text: "hello world", noBus: false, dryRun: false, as: "",
+    cmd: "send", to: "DAD", type: "READY", pr: 12, text: "hello world", noBus: false, dryRun: false, as: "", idem: "",
   });
+  assert.equal(parseArgs(["send", "--to", "A", "--type", "lend", "--idem", "k1", "x"]).idem, "k1");
   assert.equal(parseArgs(["send", "--to", "A", "--type", "INFO", "--no-bus", "--dry-run", "x"]).noBus, true);
   assert.equal(parseArgs(["send", "--to", "A", "--type", "INFO", "--dry-run", "x"]).dryRun, true);
   assert.throws(() => parseArgs(["send", "--to", "A", "no type"]), /--type/);
@@ -150,7 +148,7 @@ test("main: missing webhook env warns, still mirrors to bus, exits 0", async () 
   );
   assert.equal(code, 0);
   assert.equal(bus.length, 1);
-  assert.deepEqual(bus[0], { type: "HANDOFF", to: "*", from: ME, text: "[INFO] hello fleets" });
+  assert.deepEqual(bus[0], { type: "INFO", to: "*", from: ME, text: "hello fleets" });
   assert.ok(errs.join("\n").includes("APEX_AGENT_WEBHOOK"), "warns about missing env");
   assert.equal(errs.join("\n").includes("Bearer"), false);
 });
@@ -255,6 +253,39 @@ test("main: a READY whose ready-gate receipt is missing or refused is not sent",
   assert.deepEqual([bus.length, calls.length], [1, 1]);
 });
 
+test("main: a protocol body the bus would refuse reaches neither channel; --idem rides to the bus and the webhook", async () => {
+  const bus = [], calls = [], errs = [];
+  const deps = {
+    env: { APEX_FLEET_AS: ME, APEX_AGENT_WEBHOOK_URL: "https://h.example/x", APEX_AGENT_WEBHOOK_AUTH: "tok" },
+    fetchFn: async (url, init) => { calls.push(JSON.parse(init.body)); return { ok: true, status: 200, text: async () => "" }; },
+    sendBus: (type, to, from, text, o) => { bus.push({ type, to, text, idem: o.idem }); return { ok: true, sha: "abc1234" }; },
+    log: () => {}, err: (l) => errs.push(l), headShaFn: () => "s", now: () => "t",
+  };
+  assert.equal(await main(["send", "--to", "A", "--type", "HANDOFF", "too short"], deps), 1);
+  assert.equal(await main(["send", "--to", "A", "--type", "LEND", "#3790 abc1234 lent to fleet A for merge"], deps), 1, "LEND without merger:");
+  assert.deepEqual([bus.length, calls.length], [0, 0], "refused before either channel");
+  assert.ok(errs.some((e) => e.includes("20-600")) && errs.some((e) => e.includes("merger:")), errs.join("|"));
+  assert.equal(await main(["send", "--to", "A", "--type", "LEND", "--pr", "3790", "--idem", "lend-3790", "abc1234 lent for merge merger:A"], deps), 0);
+  assert.deepEqual(bus[0], { type: "LEND", to: "A", text: "#3790 abc1234 lent for merge merger:A", idem: "lend-3790" });
+  assert.equal(calls[0].idem, "lend-3790");
+  assert.equal(calls[0].type, "LEND");
+});
+
+test("Q9: --to fleet:<L> is one bus broadcast to the fleet letter; the webhook keeps the raw alias", async () => {
+  assert.equal(resolveBusTo("fleet:A"), "A");
+  assert.equal(resolveBusTo("fleet:b"), "B");
+  assert.equal(resolveBusTo("fleet:AB"), "fleet:AB", "not a letter: passes through and the bus refuses it");
+  const sent = [];
+  const out = [];
+  const code = await main(["send", "--to", "fleet:A", "--type", "INFO", "--as", "claude:session_X", "hello fleet"], {
+    env: {}, cwd: "/nonexistent", headShaFn: () => "abc", err: () => {}, log: (l) => out.push(l),
+    sendBus: (...a) => { sent.push(a); return { ok: true }; },
+  });
+  assert.equal(code, 0);
+  assert.equal(sent.length, 1, "one bus line, not one per session");
+  assert.equal(sent[0][1], "A");
+});
+
 // ── Cross-account relay: --to <L> with APEX_<L>_RELAY_URL/TOKEN (audit 2026-10-26 rows 3, 11) ──
 const RELAY_URL = "https://api.example/v1/claude_code/routines/trig_x/fire";
 const RELAY_TOKEN = "sk-ant-oat01-relay-secret-value";
@@ -340,7 +371,7 @@ test("main --to A with the relay pair: fires once, mirrors to the bus, skips the
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, RELAY_URL, "relay, not the webhook");
   assert.equal(calls[0].body.text, `INFO from:${ME} #12 slot free`);
-  assert.deepEqual(bus, [{ type: "HANDOFF", to: "A", text: "#12 [INFO] slot free" }]);
+  assert.deepEqual(bus, [{ type: "INFO", to: "A", text: "#12 slot free" }]);
   const all = out.concat(errs).join("\n");
   assert.ok(all.includes("request-id req_9"), all);
   assert.equal(all.includes(RELAY_TOKEN), false);

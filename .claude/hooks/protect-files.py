@@ -52,6 +52,8 @@ GENERATED = {
     "tools/carview.html": "node tools/gen/gen-shell.mjs writes it from tools/manifest.cjs",
     "tools/README.md": "node tools/gen/gen-tools-readme.mjs writes it from the tools' @doc headers",
     "CHANGELOG.md": "a PR adds a fragment docs/changelog.d/<slug>.md; node tools/gen/gen-changelog.mjs --fold writes it",
+    # Under gen:check since 2026-10-26 (system-audit lane X3; user grant, Bryce 2026-10-26: "Fix hook or guard or perm").
+    "tools/shot/scenery-locations.json": "node tools/shot/gen-scenery-locations.cjs writes it (~2 min; gen:check names drift)",
     # Not generated, but never hand-edited: a ceiling moves through the tool
     # (--auto-raise in the commit hook, --update with a reason in the commit),
     # so the number in the diff is a measurement, not a wish (AGENTS.md

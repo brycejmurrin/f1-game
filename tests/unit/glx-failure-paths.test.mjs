@@ -75,8 +75,8 @@ test("storage-denied context losses keep the two-reload budget across page boots
     h.sandbox.__apexReportError = (_kind, error) => overlays.push(error.message);
     let reloads = 0;
     h.sandbox.location.reload = () => { reloads++; };
-    // A context loss during boot happens before the healthy-session reset.
-    h.sandbox.__timers.length = 0;
+    // A boot timer is not a clean race: the marker must survive every boot callback.
+    for (const timer of h.sandbox.__timers.splice(0)) timer();
     h.loseContext();
     inheritedName = h.sandbox.name;
     assert.equal(inheritedName, "apex26.ctxLostReloads=" + loss);
@@ -90,12 +90,26 @@ test("storage-denied context losses keep the two-reload budget across page boots
   }
 });
 
-test("a healthy GLX boot clears only its own fallback retry marker", () => {
-  for (const [before, after] of [["apex26.ctxLostReloads=2", ""], ["race-window", "race-window"],
-    ["apex26XctxLostReloads=2", "apex26XctxLostReloads=2"], ["apex26.ctxLostReloads=x", "apex26.ctxLostReloads=x"]]) {
+test("GLX boot retains its retry marker until an explicit clean boundary", () => {
+  for (const [before, count, after] of [
+    ["apex26.ctxLostReloads=2", 2, ""],
+    ["race-window\napex26.ctxLostReloads=2", 2, "race-window"],
+    ["race-window", 0, "race-window"],
+    ["apex26XctxLostReloads=2", 0, "apex26XctxLostReloads=2"],
+    ["apex26.ctxLostReloads=x", 0, "apex26.ctxLostReloads=x"],
+  ]) {
     const h = bootGlx();
     h.sandbox.name = before;
+    const budget = h.sandbox.GfxEscalation;
+    assert.equal(typeof budget.resetReloadBudget, "function", "the real shared owner is loaded");
     for (const timer of h.sandbox.__timers.splice(0)) timer();
-    assert.equal(h.sandbox.name, after);
+    assert.equal(h.sandbox.name, before, "boot callbacks cannot clear a recovery episode");
+    assert.equal(budget.reloadCount(), count);
+    budget.resetReloadBudget();
+    assert.equal(h.sandbox.name, after, "clean boundary removes only the owned suffix");
+    assert.equal(budget.reloadCount(), 0);
+    assert.equal(h.sandbox.sessionStorage.getItem("apex26.ctxLostReloads"), null);
+    assert.equal(budget.nextReloadCount(), 1, "a clean race restores the first recovery attempt");
+    assert.equal(h.sandbox.sessionStorage.getItem("apex26.ctxLostReloads"), "1");
   }
 });

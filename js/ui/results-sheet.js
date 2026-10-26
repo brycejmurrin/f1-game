@@ -648,16 +648,7 @@ function buildTTResults() {
       codeBtn.id = "res-daily-share-code";
       codeBtn.textContent = "COPY DAILY CODE";
       codeBtn.onclick = () => {
-        const p = G.daily.current() || G.daily.plan();
-        const text = G.daily.shareText();
-        const medalMatch = /\b(GOLD|SILVER|BRONZE)\b/.exec(text);
-        const encoded = ShareCode.encode("daily", {
-          day: p.day, track: p.trackId, trackName: p.trackName, weather: p.weather,
-          best: G.player && isFinite(G.player.best) ? G.player.best : undefined,
-          medal: medalMatch ? medalMatch[1].toLowerCase() : undefined,
-          streak: G.daily.liveStreak ? G.daily.liveStreak() : 0,
-          class: p.class || "standard",
-        });
+        const encoded = ShareCode.encode("daily", G.daily.shareResult());
         if (!encoded.ok) { codeBtn.textContent = "UNAVAILABLE"; return; }
         ApexClipboard.write(encoded.code).then((ok) => {
           codeBtn.textContent = ok ? "COPIED" : encoded.code;

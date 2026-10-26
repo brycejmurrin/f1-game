@@ -4,7 +4,7 @@ name: Ratchets fold
 #
 # `ratchets.mjs --update` / `--auto-raise` on a topic branch writes a per-branch
 # delta fragment (#2291, #2514); nothing folded them, so they piled up. This
-# runs `ratchets.mjs --fold --min-fragments=N` weekly (and on dispatch): the
+# runs `ratchets.mjs --fold --min-fragments=N` daily (and on dispatch): the
 # effective ceilings do not change, only where the number lives moves. The
 # result goes to the bot branch `bot/ratchets-fold` and a PR into the deploy
 # branch, never a direct push (the deploy branch is protected).
@@ -12,16 +12,30 @@ name: Ratchets fold
 # In-flight PRs are not touched: a fold only deletes fragments that are already
 # on the deploy branch, and a PR's own new fragment merges beside the folded
 # ratchets.json. A run is a no-op while fewer than `min_fragments` exist or
-# while an earlier fold PR is still open. A PR opened with GITHUB_TOKEN starts
-# no workflow run, so a session pushes one commit or adds the `run-ci` label to
-# get the CI check (AGENTS.md rule 12).
+# while an earlier fold PR is still open.
+#
+# DAILY, AND IT STARTS ITS OWN CI (audit 2026-10-26, lane X3). Weekly let the
+# fragments pile up between folds, and the fold PR sat with no CI: a PR opened
+# with GITHUB_TOKEN creates no `pull_request` run (or one in an approval-required
+# state), but `workflow_dispatch` is the documented exception that always
+# creates a run ("events triggered by the GITHUB_TOKEN will not create a new
+# workflow run ... workflow_dispatch and repository_dispatch events always create
+# workflow runs": https://docs.github.com/en/actions/concepts/security/github_token).
+# So the job dispatches ci.yml on bot/ratchets-fold itself (`actions: write`);
+# that run's check rows land on the fold commit, which is the PR's head. A GitHub
+# App installation token (https://github.com/actions/create-github-app-token)
+# would let the PR event start CI directly, but it needs an App and a secret this
+# repo does not have; the dispatch needs neither.
+# Schedules fire late (the measured lag is 3-7 h; "The schedule event can be
+# delayed during periods of high loads", https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule),
+# so the minute is off the hour and nothing depends on the exact time.
 #
 # Syntax: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
 # (on.schedule cron is UTC, runs from the default branch; permissions per job).
 
 on:
   schedule:
-    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+    - cron: "17 6 * * *"   # daily 06:17 UTC
   workflow_dispatch:
     inputs:
       min_fragments:
@@ -32,6 +46,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write   # workflow_dispatch of ci.yml on bot/ratchets-fold (the fold PR's CI)
 
 concurrency:
   group: ratchets-fold
@@ -73,9 +88,8 @@ jobs:
             echo "nothing to fold"; exit 0
           fi
           node tools/check/ratchets.mjs
-          # docs/agent-index.json embeds each file's ratchetLines from ratchets.json,
-          # so the fold changes a generated file: regenerate it, or the commit hook's
-          # test:guards blocks the commit (run 39277641065).
+          # Regenerate on the folded tree so no generated file drifts (run 39277641065
+          # failed on docs/agent-index.json's old ratchetLines copy, dropped 2026-10-26).
           npm run -s gen
           git config user.name "apex-ratchets-bot"
           git config user.email "noreply@anthropic.com"
@@ -87,5 +101,8 @@ jobs:
           git push --force-with-lease origin bot/ratchets-fold
           gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng --head bot/ratchets-fold \
             --title "chore(ratchets): fold ratchets.d fragments" \
-            --body "Scheduled fold (#2538): $(cat fold.log). Every effective ceiling is unchanged. Opened by .github/workflows/ratchets-fold.yml; push once or add run-ci to start CI." \
+            --body "Scheduled fold (#2538): $(cat fold.log). Every effective ceiling is unchanged. Opened by .github/workflows/ratchets-fold.yml, which dispatched ci.yml on bot/ratchets-fold for this head." \
             || echo "::warning::PR creation failed (repo setting may forbid Actions PRs); open it from bot/ratchets-fold"
+          # A GITHUB_TOKEN PR starts no CI; a workflow_dispatch always does (header).
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref bot/ratchets-fold \
+            || echo "::warning::ci.yml dispatch failed; dispatch it on bot/ratchets-fold by hand"

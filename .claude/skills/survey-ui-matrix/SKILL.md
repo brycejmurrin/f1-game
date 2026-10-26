@@ -1,6 +1,6 @@
 ---
 name: survey-ui-matrix
-description: "Use when reviewing the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — before a restructure, to prove a CSS change regressed no other shape. Not a single cramped screen (ui-menu-a11y) or the restructure itself (css-play)."
+description: "Use when reviewing the whole UI across orientations, viewport shapes, UI scale and pointer type: enumerate every screen, measure clipping, truncation, tap targets and overflow, capture screenshots — before a restructure or to prove a CSS change regressed nothing. One cramped screen → ui-menu-a11y; restructure → css-play."
 ---
 
 # Surveying the whole UI across the whole matrix
@@ -20,6 +20,8 @@ insufficient. Exercise real scrolling both ways, the final action, keyboard focu
 through resizing and disclosure changes. Capture initial, mid-scroll, end, return, open/closed, and focus/rotation checkpoints. Show individual original captures when reporting usability.
 
 ## Prerequisites
+
+`apex_ui_mission_plan` (MCP) plans the matrix — screens × viewports × pointer — before any capture.
 
 Browsers and Playwright MCP come from the SessionStart hook (AGENTS.md rule 1).
 
