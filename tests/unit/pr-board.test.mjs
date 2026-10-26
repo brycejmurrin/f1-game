@@ -126,7 +126,7 @@ test("parseHolds: owner tags are never vetoes; any other short MERGE-HOLD line i
   assert.equal(row.owner, "D,DAD");
   assert.equal(row.merger, "D");
   assert.equal(row.suggest, "ARM", "an owner tag and a malformed line hold nothing");
-  assert.match(render({ rows: [row] }).split("\n")[1], /^#7\s+A\s+-\s+D,DAD\s.*ARM \(HOLD\? malformed, not a veto\)$/);
+  assert.equal(render({ rows: [row] }).split("\n")[1], "#7  A   -     D,DAD  pr 7   ready  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa7  clean      -           success  -             passed  -     -      ARM (HOLD? malformed, not a veto)");
 });
 
 test("suggest: READY waits while the draft's Plan has open items", () => {
@@ -185,7 +185,7 @@ test("render: header, one line per PR, a footer; empty board says so", () => {
   const out = render(r);
   const lines = out.split("\n");
   assert.equal(lines[0].split(/\s+/).join(" "), "PR FL SLOT OWNER TITLE STATE HEAD MERGEABLE AUTO-MERGE CI FAILING JOBS GATE PLAN FLEET SUGGEST");
-  assert.match(lines[1], /^#1\s+-\s+-\s+-\s+x{39}…\s+ready\s+a{39}1\s+clean\s+-\s+none\s+-\s+passed\s+-\s+-\s+WAIT$/);
+  assert.equal(lines[1], "#1  -   -     -      xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…  ready  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1  clean      -           none  -             passed  -     -      WAIT");
   assert.match(lines.at(-1), /^pr-board: 1 open PR\(s\)$/);
   const empty = render(evaluate([]));
   assert.match(empty, /no open PRs into claude\/f1-game-project-26h3ng/);
@@ -574,7 +574,7 @@ test("--alarm: ready + green + no hold + no ci run for 2 h is a stall; drafts, h
   assert.equal(r.rows[0].ciAt, old, "the row carries the head run's created_at");
   assert.deepEqual(stalled(r.rows, { now }).map((x) => x.number), [1, 6, 8], "an owner tag is no hold: #8 stalls");
   const lines = alarmLines(r.rows, { now });
-  assert.match(lines[0], /^#1 STALLED 3h ready\+green, no hold, no push/);
+  assert.equal(lines[0], "#1 STALLED 3h ready+green, no hold, no push (fleet -): pr 1 https://example.test/pull/1");
   assert.match(lines[1], /armed merge/);
   assert.equal(lines[2].split(": ")[0], "#8 STALLED 3h ready+green, no hold, no push (fleet -, owner DAD)");
   assert.equal(lines.at(-1), "= alarm 3 stalled, 0 fleet (ready > 2 h, green, no hold, no push; bus not read)");
@@ -591,16 +591,16 @@ test("busAlarms: a lend on the bus with no merger: in the block, and a fleet wit
     { number: 3700, fleetLetter: "D", merger: "" }, { number: 3800, fleetLetter: "B", merger: "" },
   ];
   const bus = [
-    { sha: "a".repeat(40), at: t("2026-10-26T11:00:00Z"), type: "HANDOFF", from: "claude:session_01A", to: "*", text: "ORCH A LIVE claude:session_01A" },
-    { sha: "b".repeat(40), at: t("2026-10-24T11:00:00Z"), type: "HANDOFF", from: "claude:session_01B", to: "*", text: "ORCH B LIVE claude:session_01B" },
+    { sha: "a".repeat(40), at: t("2026-10-26T11:00:00Z"), type: "HANDOFF", from: "claude:session_01AAAAAAAAAAAAAAAAAAAAAAAAA", to: "*", text: "ORCH A LIVE claude:session_01AAAAAAAAAAAAAAAAAAAAAAAAA" },
+    { sha: "b".repeat(40), at: t("2026-10-24T11:00:00Z"), type: "HANDOFF", from: "claude:session_01BBBBBBBBBBBBBBBBBBBBBBBBB", to: "*", text: "ORCH B LIVE claude:session_01BBBBBBBBBBBBBBBBBBBBBBBBB" },
     { sha: "c".repeat(40), at: t("2026-10-26T04:00:00Z"), type: "INFO", from: "grok:DAD", to: "A", text: "#3725 #3731 lent to A for the scenery train merger:B" },
-    { sha: "d".repeat(40), at: t("2026-10-26T05:00:00Z"), type: "LEASE", from: "claude:session_01A", to: "*", text: "LEND-EXTEND #3800 30m" },
+    { sha: "d".repeat(40), at: t("2026-10-26T05:00:00Z"), type: "LEASE", from: "claude:session_01AAAAAAAAAAAAAAAAAAAAAAAAA", to: "*", text: "LEND-EXTEND #3800 30m" },
   ];
   // #3800's LEND-EXTEND is a lease word, not a lend: no row for it
   assert.deepEqual(busAlarms(rows, bus, { now }), [
     "#3725 LEND on the bus (ccccccc, merger B) but the fleet block has no merger: — pr-body --fleet merger=B",
     "#3731 LEND names merger B (ccccccc) but the fleet block says merger: D",
-    "fleet B NO ORCHESTRATOR: newest ORCH B LIVE claude:session_01B is 2d old (> 24 h; #3800)",
+    "fleet B NO ORCHESTRATOR: newest ORCH B LIVE claude:session_01BBBBBBBBBBBBBBBBBBBBBBBBB is 2d old (> 24 h; #3800)",
     "fleet D NO ORCHESTRATOR: no ORCH D LIVE line in the last 4 bus entries (#3700)",
   ]);
   assert.equal(alarmLines(rows, { now, bus }).at(-1),

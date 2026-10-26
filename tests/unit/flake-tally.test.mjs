@@ -228,7 +228,7 @@ test("#2188: GitHub callers default to the proxy-aware fetch; curl carries heade
   assert.deepEqual(await res.json(), { ok: 1 });
   assert.match(stdin, /Authorization: Bearer T/);
   // The three callers import it instead of a bare fetch.
-  for (const f of ["tools/ci/flake-tally.mjs", "tools/ci/verify-change.mjs", "tools/shot/garage-before.mjs"]) {
+  for (const f of ["tools/ci/flake-tally.mjs", "tools/ci/live-run-check.mjs", "tools/shot/garage-before.mjs"]) {   // live-run-check: verify-change imports liveCiRuns from it (audit4 C2)
     const src = fs.readFileSync(fileURLToPath(new URL(`../../${f}`, import.meta.url)), "utf8");
     assert.match(src, /import \{ proxyFetch \} from "\.\.\/lib\/proxy-fetch\.mjs"/, f);
     assert.doesNotMatch(src.replace(/\/\/.*$/gm, ""), /(^|[^.\w])fetch\(|globalThis\.fetch/m, `${f} has no bare fetch left`);
@@ -520,8 +520,9 @@ test("node jobs count: tooling-fast FAIL blocks become first-try fails on the un
     { spec: "tests/unit/census-verdict.test.mjs", title: "census gate repo cleans up", kind: "fail", runId: 7 },
     { spec: "tests/unit/safety-bans-hook.test.mjs", title: "deny beats allow", kind: "fail", runId: 7 },
   ]);
-  for (const n of ["Structural guards (tooling B)", "Pure-node unit suites (vm-a1)", "ci / Parts option-resolution census"]) assert.ok(NODE_JOB.test(n), n);
-  assert.ok(!NODE_JOB.test("Smoke (page boots, __apex responds)") && BROWSER_JOB.test("Selected specs (change-aware gate) (selected-2)"));
+  // NODE_JOB / BROWSER_JOB are the subject here: every job name is classified exactly once.
+  const names = ["Structural guards (tooling B)", "Pure-node unit suites (vm-a1)", "ci / Parts option-resolution census", "Smoke (page boots, __apex responds)", "Selected specs (change-aware gate) (selected-2)"];
+  assert.deepEqual([...names.map((n) => NODE_JOB.test(n)), BROWSER_JOB.test(names[4])], [true, true, true, false, false, true]);
   // A unit file's repeat failure is printed, never proposed as a Playwright quarantine row.
   const rows = quarantineRows([{ spec: ["tests", "unit", "x.test.mjs"].join("/"), test: "t", reason: "r", fails: 3, flakyPasses: 0, runsSeen: 3, lastSeenRunId: 1 },
     { spec: ["tests", "specs", "y.spec.js"].join("/"), test: "t", reason: "r", fails: 0, flakyPasses: 2, runsSeen: 2, lastSeenRunId: 2 }], { schemaKeys: ["spec", "title"] });

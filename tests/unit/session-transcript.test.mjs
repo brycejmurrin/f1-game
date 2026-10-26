@@ -245,11 +245,11 @@ test("attribution: wrong get_session id, a page costlier than the session, or ev
   const sess = { ccr: { id: "session_017TA52", created_at: "2026-10-20T03:00:00Z", updated_at: "2026-10-21T04:00:00Z", external_metadata: { usage: { cost_usd: 53.68 } } } };
   const a = attribution(evs, sess, "session_017TA52");
   assert.equal(a.ok, false);
-  assert.ok(/cumulative cost \$77\.68 exceeds the session's \$53\.68/.test(a.why.join("; ")), "match /cumulative cost \\$77\\.68 exceeds the session's \\$53\\.68/");
+  assert.equal(a.why.join("; "), "the page's cumulative cost $77.68 exceeds the session's $53.68", "match /cumulative cost \\$77\\.68 exceeds the session's \\$53\\.68/");
   assert.equal(attribution(evs, { ...sess.ccr, external_metadata: { usage: { cost_usd: 80 } } }, "cse_017TA52").ok, true, "cse_ and session_ are one id");
-  assert.ok(/--session-json is session_017TA52, not session_OTHER/.test(attribution(evs, sess, "session_OTHER").why[0]), "match /--session-json is session_017TA52, not session_OTHER/");
+  assert.equal(attribution(evs, sess, "session_OTHER").why[0], "--session-json is session_017TA52, not session_OTHER", "match /--session-json is session_017TA52, not session_OTHER/");
   const late = attribution(evs, { ...sess.ccr, updated_at: "2026-10-21T03:00:00Z", external_metadata: { usage: { cost_usd: 99 } } });
-  assert.ok(/2 event\(s\) after its last update/.test(late.why.join()), "match /2 event\\(s\\) after its last update/");
+  assert.equal(late.why.join(), "2 event(s) after its last update (2026-10-21T03:00:00Z)", "match /2 event\\(s\\) after its last update/");
   assert.throws(() => parseArgs(["p.txt", "--session", "session_x"]), /--session needs --session-json/);
 });
 
@@ -264,7 +264,7 @@ test("--tally skills counts Skill calls by name; --tally cache-breaks lists turn
   const ctx = [{ at: "2026-10-26T01:00:00Z", cacheRead: 130000 }, { at: "2026-10-26T01:01:00Z", cacheRead: 131000 },
     { at: "2026-10-26T01:02:00Z", cacheRead: 12000 }, { at: "2026-10-26T01:03:00Z", cacheRead: 7000 }];
   assert.deepEqual(cacheBreaks(ctx).map((c) => [c.at, c.fall]), [["2026-10-26T01:02:00Z", 91]], "the 12k -> 7k step is 42 %, not a break");
-  assert.ok(/01:02:00 cache read 131\.0k -> 12\.0k \(-91%\)\n= cache-breaks 1 of 4 turns/.test(renderCacheBreaks(ctx)), "match /01:02:00 cache read 131\\.0k -> 12\\.0k \\(-91%\\)\\n= cache-breaks 1 of 4 turns/");
+  assert.equal(renderCacheBreaks(ctx), "01:02:00 cache read 131.0k -> 12.0k (-91%)\n= cache-breaks 1 of 4 turns (fall > 50%)", "match /01:02:00 cache read 131\\.0k -> 12\\.0k \\(-91%\\)\\n= cache-breaks 1 of 4 turns/");
   assert.throws(() => parseArgs(["p.txt", "--tally", "bogus"]), /--tally takes skills,cache-breaks/);
   assert.throws(() => parseArgs(["p.txt", "--definitely-not-a-flag"]), /unknown flag --definitely-not-a-flag/);
   assert.equal(parseArgs(["p.txt", "--grep", "--x"]).grep.source, "--x", "a value is not a flag");

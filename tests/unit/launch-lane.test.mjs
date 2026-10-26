@@ -28,7 +28,7 @@ test("quota: launch-gate's rule (allowed, or the user's quoted words over a warn
   const v = quotaVerdict(page("get-session-warning.json"));
   assert.equal(v.ok, false);
   assert.equal(v.status, "allowed_warning");
-  assert.ok(/launch nothing but owners\/sync/.test(v.why), v.why);
+  assert.equal(v.why, "rate_limit_info.status allowed_warning: launch nothing but owners/sync for a READY PR, or an orchestrator for a fleet with none live (DECISIONS #1); no role launches (no hunters, no workers); a launch Bryce typed goes through --override \"<his words>\"", v.why);
   const o = quotaVerdict(page("get-session-warning.json"), "launch all lanes now");
   assert.equal(o.ok, true);
   assert.equal(o.override, "launch all lanes now");
@@ -130,7 +130,7 @@ test("main gate: a pass claims, writes the receipt and prints the create_session
   assert.equal(main(["--fleet", "B", "--lane", "X9", "--bogus", "1"], { log: () => {} }), 2, "unknown flag (makeFlags)");
   const help = [];
   assert.equal(main(["--help"], { log: (l) => help.push(l) }), 0, "--help exits 0");
-  assert.ok(/usage: launch-lane\.mjs[\s\S]*--pr-json[\s\S]*--brief/.test(help.join("\n")), help.join("\n"));
+  assert.deepEqual(help.join("\n").split("\n").slice(0, 3), ["usage: launch-lane.mjs --fleet L --lane X [--pr N] --role R [--scope S] --model M --title T --source-revision B \\", "         --session-json <saved get_session> --sessions-json <saved list_sessions> [--pr-json <saved PR read>] \\", "         [--brief <launch prompt file>] [--override \"<user's words>\"] [--no-claim] [--json]"], help.join("\n"));
 });
 
 test("against real git: the first claim wins, a second is refused with the holder; release is a tombstone the next claim builds on", () => {
@@ -185,13 +185,13 @@ test("quota at allowed_warning: owner/sync for a READY PR, an orchestrator only 
   for (const role of ["owner", "sync", "pr-owner"]) {
     assert.equal(quotaVerdict(warn, { role, prReady: true }).ok, true, role);
     assert.equal(quotaVerdict(warn, { role, prReady: false }).ok, false, `${role} on a draft`);
-    assert.ok(/--pr-json/.test(quotaVerdict(warn, { role }).why), "no PR evidence refuses");
+    assert.equal(quotaVerdict(warn, { role }).why, `rate_limit_info.status allowed_warning: launch nothing but owners/sync for a READY PR, or an orchestrator for a fleet with none live (DECISIONS #1); this ${role} launch needs --pr-json <saved PR read> showing the PR open and not a draft`, "no PR evidence refuses");
   }
   for (const role of ["worker", "hunter", "survey", ""]) assert.equal(quotaVerdict(warn, { role, prReady: true }).ok, false, role || "no role");
   assert.equal(quotaVerdict(warn, { role: "orchestrator", liveOrchs: [] }).ok, true);
   const busy = quotaVerdict(warn, { role: "orchestrator", liveOrchs: ["session_01LIVE"] });
   assert.equal(busy.ok, false);
-  assert.ok(/session_01LIVE/.test(busy.why), busy.why);
+  assert.equal(busy.why, "rate_limit_info.status allowed_warning: launch nothing but owners/sync for a READY PR, or an orchestrator for a fleet with none live (DECISIONS #1); live orchestrator(s): session_01LIVE", busy.why);
   assert.equal(quotaVerdict(warn, { role: "hunter", override: "Bryce: launch a hunter" }).ok, true, "Bryce's typed word still passes a warning");
   const allowed = extractSession(fs.readFileSync(fx("get-session-allowed.json"), "utf8"));
   assert.equal(quotaVerdict(allowed, { role: "hunter" }).ok, true, "allowed launches anything");
@@ -206,12 +206,12 @@ test("quota rejected / usage_limit_reached: refused even with an override, and t
   assert.deepEqual([u.ok, u.status], [false, "usage_limit_reached"]);
   // 2026-10-27T05:00Z is still 10-26 in Pacific.
   const line = quotaIncidentLine(q, Date.parse("2026-10-27T05:00:00Z"));
-  assert.ok(line.startsWith(`node tools/ci/fleet-bus.mjs send INCIDENT --to '*' --idem quota-2026-10-26 "open quota-2026-10-26 seven_day rejected resets `), line);
+  assert.equal(line, "node tools/ci/fleet-bus.mjs send INCIDENT --to '*' --idem quota-2026-10-26 \"open quota-2026-10-26 seven_day rejected resets 2026-10-26T07:33Z: no launches until the reset\"", line);
   const files = { "rej.json": JSON.stringify({ ccr: { id: "session_x", ...rej } }) };
   const r = run(["--session-json", "rej.json", "--override", "go"], { deps: { read: (f) => files[f] ?? fs.readFileSync(f, "utf8") } });
   assert.equal(r.code, 2);
-  assert.ok(/REFUSED \(quota\): quota seven_day rejected/.test(r.out.at(-2)), r.out.join("\n"));
-  assert.ok(/^= post once: node tools\/ci\/fleet-bus\.mjs send INCIDENT .*"open quota-\d{4}-\d\d-\d\d /.test(r.out.at(-1)), r.out.at(-1));
+  assert.equal(r.out.at(-2), "= launch REFUSED (quota): quota seven_day rejected: nothing launches until the reset; post the INCIDENT line below once", r.out.join("\n"));
+  assert.equal(r.out.at(-1), "= post once: node tools/ci/fleet-bus.mjs send INCIDENT --to '*' --idem quota-2026-10-25 \"open quota-2026-10-25 seven_day rejected resets 2026-10-26T07:33Z: no launches until the reset\"", r.out.at(-1));
   assert.equal(r.receipts.length, 0);
 });
 
@@ -220,8 +220,8 @@ test("prReadyOf: MCP/REST `draft` or gh `isDraft`; a draft, a closed PR, another
   assert.equal(prReadyOf('{"number":3790,"isDraft":false,"state":"OPEN"}', 3790).ready, true);
   assert.equal(prReadyOf('{"number":3790,"draft":true,"state":"open"}', 3790).ready, false);
   assert.equal(prReadyOf('{"number":3790,"draft":false,"state":"closed"}', 3790).ready, false);
-  assert.ok(/not #3791/.test(prReadyOf('{"number":3790,"draft":false}', 3791).why));
-  assert.ok(/no draft/.test(prReadyOf('{"number":3790}', 3790).why));
+  assert.equal(prReadyOf('{"number":3790,"draft":false}', 3791).why, "--pr-json is #3790, not #3791");
+  assert.equal(prReadyOf('{"number":3790}', 3790).why, "--pr-json carries no draft/isDraft field");
 });
 
 test("main at allowed_warning: an owner with a READY --pr-json launches (default lane pr<N>, claim B-pr<N>); a worker is refused", () => {
@@ -235,10 +235,10 @@ test("main at allowed_warning: an owner with a READY --pr-json launches (default
   assert.deepEqual(claims, ["B-pr3791"]);
   assert.equal(receipts[0].status, "allowed_warning");
   assert.equal(main([...owner, "--pr-json", "draft.json"], deps), 2);
-  assert.ok(/REFUSED \(quota\).*draft/.test(out.at(-1)), out.at(-1));
+  assert.equal(out.at(-1), "= launch REFUSED (quota): rate_limit_info.status allowed_warning: launch nothing but owners/sync for a READY PR, or an orchestrator for a fleet with none live (DECISIONS #1); this owner launch needs --pr-json <saved PR read> showing the PR open and not a draft (it is a draft or not open) [--pr-json: the PR is a draft]", out.at(-1));
   const worker = owner.map((a) => (a === "owner" ? "worker" : a));
   assert.equal(main([...worker, "--pr-json", "pr.json"], deps), 2);
-  assert.ok(/no worker launches/.test(out.at(-1)), out.at(-1));
+  assert.equal(out.at(-1), "= launch REFUSED (quota): rate_limit_info.status allowed_warning: launch nothing but owners/sync for a READY PR, or an orchestrator for a fleet with none live (DECISIONS #1); no worker launches (no hunters, no workers); a launch Bryce typed goes through --override \"<his words>\"", out.at(-1));
   const noPr = owner.filter((a, i) => a !== "--pr" && owner[i - 1] !== "--pr");
   assert.equal(main(noPr, deps), 1, "owner without --pr is usage");
 });

@@ -46,6 +46,41 @@
       "presentation": "native",
       "preserve": "Child stdio choice and original exit/signal, timeout and cleanup outcomes."
     },
+    "tools/archive/ci/measure-guard-commit.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Sample count/environment; measurement invokes guards and ratchet hook path"
+    },
+    "tools/archive/gen/trees/measure-tree-budget.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
+    "tools/archive/gfx/decal-bake-probe.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Pixel correctness counts for five enabled/disabled/extent/tile cases; --json artifact path; no timing or WebGPU claim."
+    },
+    "tools/archive/net/rtc-sync-probe.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
+    "tools/archive/perf/devicefarm-boot.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Timestamped progress lines (device, session state, one line per timed boot with menu time, first contentful paint, load end, resource and cached counts, thermal state, session minutes) and the boot.json path; the endpoint URL is never printed."
+    },
+    "tools/archive/perf/ers-deploy-census.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c1"
+    },
+    "tools/archive/perf/touch-boost-probe.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c1"
+    },
     "tools/car/audit-aero.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -441,6 +476,16 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/ci/agent-history.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "Per-session digest fields and the summary row shape; transcripts are data; never prints secret values"
+    },
+    "tools/ci/agent-msg.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "Dry-run JSON payload (no auth); webhook ok/FAILED (auth redacted); missing APEX_AGENT_WEBHOOK_* warn + bus still posted exit 0; bus mirror sha/line; never print APEX_AGENT_WEBHOOK_AUTH"
+    },
     "tools/ci/assert-audit.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -561,30 +606,20 @@
       "presentation": "shared-levels",
       "preserve": "Dry-run versus applied; pin failure; exact board issue number"
     },
+    "tools/ci/fleet-brief.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The ≤40-line digest and the `= brief <bytes> B, <lines> lines -> <dir>/brief.{json,md}` line; --json brief; exit 0 written, 1 usage or unreadable input"
+    },
     "tools/ci/fleet-bus-mirror.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "Dry-run versus posted; each posted, skipped (with reason) and FAILED PR comment by bus sha; exit 1 on any failed post"
     },
-    "tools/ci/agent-history.mjs": {
-      "action": "page-results",
-      "presentation": "shared-levels",
-      "preserve": "Per-session digest fields and the summary row shape; transcripts are data; never prints secret values"
-    },
-    "tools/ci/agent-msg.mjs": {
-      "action": "page-results",
-      "presentation": "shared-levels",
-      "preserve": "Dry-run JSON payload (no auth); webhook ok/FAILED (auth redacted); missing APEX_AGENT_WEBHOOK_* warn + bus still posted exit 0; bus mirror sha/line; never print APEX_AGENT_WEBHOOK_AUTH"
-    },
     "tools/ci/fleet-bus.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "REFUSED (exit 2) versus FAILED (exit 1) on lease ops; lease holder and minutes left; every new bus line and the new cursor sha; who: the one `<letter> <host:id> <sha7> <age>` line or exit 1 none"
-    },
-    "tools/ci/fleet-brief.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "The ≤40-line digest and the `= brief <bytes> B, <lines> lines -> <dir>/brief.{json,md}` line; --json brief; exit 0 written, 1 usage or unreadable input"
     },
     "tools/ci/fleet-flags.mjs": {
       "action": "page-results",
@@ -641,15 +676,15 @@
       "presentation": "native",
       "preserve": "Hash/key output consumed by ci.yml cache lookups; exit status and the printed key must stay byte-stable"
     },
-    "tools/ci/junit-failed.mjs": {
-      "action": "protocol-only",
-      "presentation": "native",
-      "preserve": "Empty list is real empty; consumers depend on paths only"
-    },
     "tools/ci/js-debugger-smoke.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "list-tools / profile-summary step walls; clear stderr on wrapper break; exit 0 only when both pass"
+    },
+    "tools/ci/junit-failed.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Empty list is real empty; consumers depend on paths only"
     },
     "tools/ci/lane-preamble.mjs": {
       "action": "keep-native",
@@ -671,11 +706,6 @@
       "presentation": "native",
       "preserve": "Advisory WARN line when a push would cancel a live ci.yml run; exit 0 always, never blocks"
     },
-    "tools/archive/ci/measure-guard-commit.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Sample count/environment; measurement invokes guards and ratchet hook path"
-    },
     "tools/ci/measure-pr-ci-after-close.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -685,6 +715,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Each merge's ATTRIBUTED/UNATTRIBUTED verdict, sha and PR; the posted/exists/dry-run outcome per channel; the final = merge-attribution count line"
+    },
+    "tools/ci/merge-done.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One `= merge-done` line per sha (skip / already / dry-run) or the fleet-bus `= sent` line; exit 0/1/2/3 as documented"
     },
     "tools/ci/merge-gate.mjs": {
       "action": "keep-native",
@@ -1141,6 +1176,16 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/gen/trees/bake-trees.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
+    "tools/gen/trees/caps.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/gen/vendor-three.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1185,11 +1230,6 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "Counts and denominators plus complete native table JSON."
-    },
-    "tools/archive/gfx/decal-bake-probe.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
-      "preserve": "Pixel correctness counts for five enabled/disabled/extent/tile cases; --json artifact path; no timing or WebGPU claim."
     },
     "tools/gfx/frame-hitch.mjs": {
       "action": "artifact-first",
@@ -1241,15 +1281,15 @@
       "presentation": "native",
       "preserve": "Per-row frame/JS percentiles, slow-call and pipeline rows, and the --json file; paravirtual ms read as structure only."
     },
-    "tools/gfx/mem-cycles-lib.mjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c3"
-    },
     "tools/gfx/mem-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "= mem-census line, raw JSONL/heap snapshots and max-growth limit semantics."
+    },
+    "tools/gfx/mem-cycles-lib.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
     },
     "tools/gfx/pass-census.mjs": {
       "action": "keep-native",
@@ -1376,6 +1416,16 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/fleet-block.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/fleet-block.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/flicker-metric.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1407,6 +1457,21 @@
       "preserve": "@c4"
     },
     "tools/lib/gate-receipt.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/generated-paths.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/git-run.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/git-run.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
@@ -1457,6 +1522,11 @@
       "preserve": "@c3"
     },
     "tools/lib/pack-assets.cjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/pr-snapshot.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
@@ -1886,10 +1956,15 @@
       "presentation": "shared-levels",
       "preserve": "@c1"
     },
-    "tools/archive/net/rtc-sync-probe.mjs": {
-      "action": "keep-native",
+    "tools/perf/baselines/vm-alloc.json": {
+      "action": "no-direct-output",
       "presentation": "native",
-      "preserve": "@c1"
+      "preserve": "@c8"
+    },
+    "tools/perf/boost-press-census.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
     },
     "tools/perf/cpuprofile-summary.mjs": {
       "action": "keep-native",
@@ -1900,11 +1975,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Runs on the Device Farm test host, not locally: its stdout is the run's test spec output and its files land in $DEVICEFARM_LOG_DIR."
-    },
-    "tools/archive/perf/devicefarm-boot.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Timestamped progress lines (device, session state, one line per timed boot with menu time, first contentful paint, load end, resource and cached counts, thermal state, session minutes) and the boot.json path; the endpoint URL is never printed."
     },
     "tools/perf/devicefarm-iphone.mjs": {
       "action": "keep-native",
@@ -1926,27 +1996,37 @@
       "presentation": "native",
       "preserve": "The window and process-limit lines, one row per game-page WebContent footprint dump (time, pid, event, footprint, internal, compressed, resident), the peak-versus-limit line and the kill, SIGKILL and buffer-failure counts; --json prints the same as one object."
     },
-    "tools/perf/live-render-matrix.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Per-row `= row <name> <verdict>` lines, the final `= live-render-matrix` summary and the checkpointed --json report."
-    },
     "tools/perf/diagnostics.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c1"
+    },
+    "tools/perf/garage-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-phase `- <label> <phase>` lines, the `= garage-census` summary JSON line and the --json artifact."
+    },
+    "tools/perf/idle-pipeline-census.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
     },
     "tools/perf/lib.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"
     },
-    "tools/perf/mesh-census-lib.mjs": {
-      "action": "no-direct-output",
+    "tools/perf/lit-wgsl-census.mjs": {
+      "action": "keep-native",
       "presentation": "native",
-      "preserve": "@c8"
+      "preserve": "The `= capture` / `= lit-wgsl CHANGED|unchanged` verdict lines, the family hash and the advisory markdown table the CI step appends to the job summary."
     },
-    "tools/perf/idle-pipeline-census.mjs": {
+    "tools/perf/live-render-matrix.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-row `= row <name> <verdict>` lines, the final `= live-render-matrix` summary and the checkpointed --json report."
+    },
+    "tools/perf/mesh-census-lib.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"
@@ -1955,36 +2035,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Stubbed/real link qualification, measured-frame denominator, distance band, the `= mesh-census` summary JSON line and the --json / --md artifacts."
-    },
-    "tools/perf/vm-leak-census.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Per-reading counts (meshes, textures, batches, listeners by scope, intervals, timers), every LEAK row, the `= vm-leak-census clean|LEAK` line, exit status and the --json artifact."
-    },
-    "tools/perf/vm-alloc-census.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Window KB/frame values with their (gc) marks, the mean, the baseline ratio and limit, the `= vm-alloc-census ok|OVER` line, exit status and the --json artifact."
-    },
-    "tools/perf/baselines/vm-alloc.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/archive/perf/ers-deploy-census.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
-      "preserve": "@c1"
-    },
-    "tools/perf/lit-wgsl-census.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "The `= capture` / `= lit-wgsl CHANGED|unchanged` verdict lines, the family hash and the advisory markdown table the CI step appends to the job summary."
-    },
-    "tools/perf/garage-census.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Per-phase `- <label> <phase>` lines, the `= garage-census` summary JSON line and the --json artifact."
     },
     "tools/perf/profile.mjs": {
       "action": "artifact-first",
@@ -2006,15 +2056,15 @@
       "presentation": "native",
       "preserve": "@c8"
     },
-    "tools/perf/boost-press-census.mjs": {
-      "action": "no-direct-output",
+    "tools/perf/vm-alloc-census.mjs": {
+      "action": "keep-native",
       "presentation": "native",
-      "preserve": "@c8"
+      "preserve": "Window KB/frame values with their (gc) marks, the mean, the baseline ratio and limit, the `= vm-alloc-census ok|OVER` line, exit status and the --json artifact."
     },
-    "tools/archive/perf/touch-boost-probe.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
-      "preserve": "@c1"
+    "tools/perf/vm-leak-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-reading counts (meshes, textures, batches, listeners by scope, intervals, timers), every LEAK row, the `= vm-leak-census clean|LEAK` line, exit status and the --json artifact."
     },
     "tools/shot/ab-gallery.mjs": {
       "action": "artifact-first",
@@ -2076,6 +2126,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/shot/capture-gallery.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Image hash failures, exact source/status receipts, native-versus-geometry counts and output path; no capture or upload implied."
+    },
     "tools/shot/capture-options.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -2085,16 +2140,6 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c2"
-    },
-    "tools/shot/run-capture-request.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Validated cell count, native backend, producer failures and artifact locations; planning does not prove capture."
-    },
-    "tools/shot/capture-gallery.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Image hash failures, exact source/status receipts, native-versus-geometry counts and output path; no capture or upload implied."
     },
     "tools/shot/design-matrix.mjs": {
       "action": "keep-native",
@@ -2230,6 +2275,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c2"
+    },
+    "tools/shot/run-capture-request.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Validated cell count, native backend, producer failures and artifact locations; planning does not prove capture."
     },
     "tools/shot/scenery-locations.json": {
       "action": "no-direct-output",
@@ -2476,6 +2526,11 @@
       "presentation": "native",
       "preserve": "Library invoked by layout-audit: preserve per-cell added/fixed findings, skipped/missing counts and final diff verdict. No standalone verbosity flags."
     },
+    "tools/ui/audit-summary.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "AUDIT / TOTALS / SKIPPED / CELL / BYSCREEN / CLEAN lines and exit status (2 bad argument or missing file); output is bounded by --top and a per-cell cap, so it is already compact"
+    },
     "tools/ui/circuit-axis.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -2541,11 +2596,6 @@
       "presentation": "shared-levels",
       "preserve": "@c5"
     },
-    "tools/ui/audit-summary.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "AUDIT / TOTALS / SKIPPED / CELL / BYSCREEN / CLEAN lines and exit status (2 bad argument or missing file); output is bounded by --top and a per-cell cap, so it is already compact"
-    },
     "tools/ui/layout-audit.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
@@ -2600,36 +2650,6 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c2"
-    },
-    "tools/gen/trees/bake-trees.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "@c4"
-    },
-    "tools/gen/trees/caps.mjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c3"
-    },
-    "tools/archive/gen/trees/measure-tree-budget.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "@c4"
-    },
-    "tools/ci/merge-done.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "One `= merge-done` line per sha (skip / already / dry-run) or the fleet-bus `= sent` line; exit 0/1/2/3 as documented"
-    },
-    "tools/lib/pr-snapshot.mjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c3"
-    },
-    "tools/lib/generated-paths.mjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c3"
     }
   }
 }
