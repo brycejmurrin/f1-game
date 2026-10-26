@@ -32,6 +32,8 @@ import {
   resolveRepoDefault,
 } from "../lib/output-paths.mjs";
 
+import { collectDesignTokens, collectAxe, tokenHTML } from "./design-evidence.mjs";
+import { execFileSync } from "node:child_process";
 import { menuReady } from "./menu-readiness.mjs";
 import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 const ROOT = pathFromModule(import.meta.url);
@@ -144,6 +146,8 @@ export function parseCssPlayArgs(argv) {
       out.scale = Number(next());
       if (!Number.isFinite(out.scale) || out.scale < 40 || out.scale > 200) throw new Error("scale must be finite, 40..200");
     }
+    else if (a === "--axe") out.axe = true;
+    else if (a === "--tokens") out.tokens = true;
     else if (a.startsWith("--")) throw new Error(`unknown flag: ${a}`);
     else out.screen = resolveScreen(a);
   }
@@ -165,6 +169,8 @@ Flags:
   --css css/FILE    hot-swap that stylesheet from disk (?play=<mtime>, no cache bump)
   --inject CSS      overlay <style id="apex-css-play"> after the screen opens
   --viewport WxH    default 852x393 (play-shape iPhone landscape)
+  --axe             write local axe.json for the opened screen (automated evidence only)
+  --tokens          write computed tokens.json and an HTML inspection page
   --desktop         desktop mouse profile at 1280x720 (default: mobile touch)
   --scale N         __apex.uiScale(N) after boot (finite 40..200 %)
   --click SEL,SEL   extra clicks after the catalog path (or instead, with --root)
@@ -391,6 +397,18 @@ export async function runCssPlay(opts) {
     await sleep(200);
 
     const dom = await page.evaluate(collectDomInfo, { sel: opts.sel, root });
+    let tokensPath = null, axePath = null;
+    if (opts.tokens) {
+      const tokens = await page.evaluate(collectDesignTokens, {selector:root});
+      tokensPath = resolve(outDir, "tokens.json");
+      writeFileSync(tokensPath, JSON.stringify(tokens, null, 2));
+      writeFileSync(resolve(outDir, "tokens.html"), tokenHTML(tokens));
+    }
+    if (opts.axe) {
+      const axe = await collectAxe(page, root);
+      axePath = resolve(outDir, "axe.json");
+      writeFileSync(axePath, JSON.stringify(axe, null, 2));
+    }
     const domPath = resolve(outDir, "dom.json");
     writeFileSync(domPath, JSON.stringify(dom, null, 2));
 
@@ -400,7 +418,11 @@ export async function runCssPlay(opts) {
       await page.screenshot({ path: shotPath, fullPage: false, timeout: 15000 });
     }
 
+    let commit = null;
+    try { commit = execFileSync("git", ["rev-parse", "HEAD"], {cwd:ROOT, encoding:"utf8"}).trim(); } catch {}
+    const captureEnvironment = await page.evaluate(() => ({reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches, renderer:'DOM UI; game canvas hidden', dpr:devicePixelRatio}));
     const meta = {
+      commit, ...captureEnvironment, tokens: tokensPath, axe: axePath,
       screen: screenId,
       name: def.name,
       root,
@@ -415,6 +437,7 @@ export async function runCssPlay(opts) {
       dom: domPath,
     };
     writeFileSync(resolve(outDir, "meta.json"), JSON.stringify(meta, null, 2));
+    if (shotPath) writeFileSync(resolve(outDir, "review.json"), JSON.stringify({title:def.name,source:{commit, ...captureEnvironment},shots:[{file:"shot.png",label:def.name,metadata:{viewport:meta.viewport,screen:screenId}}]},null,2));
     return { ok: true, ...meta, dump: dom };
   } finally {
     await Promise.allSettled([browser?.close(), srv.close()]);
