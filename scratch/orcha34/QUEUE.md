@@ -20,3 +20,9 @@ Updated 2026-10-26 07:28Z (00:28 PT). Base brief: scratch/orcha33/SUCCESSOR-BRIE
 - Do not put a PR number in an INCIDENT/lift line: the gate parsed '#3636 may proceed' as A's slot claim; OrchB re-claimed (2747b21).
 - bash-guard blocks pushing onto a lane's branch after that lane pushed (foreign pusher); auto mode refuses APEX_FOREIGN_PUSH_OK. Pattern that works: push the fix to your own branch, have the branch owner ff-merge and push.
 - A ready-gate receipt is per container: run tooling-fast locally (--jobs=4; it auto-drops to 1 job at loadavg >= 2) before marking a lane's PR ready. Strike the circular 'orchestrator marks ready' Plan item; .claude/memory edits need a 'memory-change:' body line.
+
+## 09:23Z
+- Merged since: A #3693 b67ffd90 (Pages green), D #3737 2d72c7e4, B #3759 5805fe31 → Pages RED (40295725338): test-groups TESTING.md floor stale (fixed by B #3793 1f4834b7, docs-only, started no Pages run) + garage-out-before-card DAILY leg (probable flake). B merges #3785 next (starts Pages, lowers assertPins); B dispatches pages.yml at ~09:50Z if #3785 not mergeable. A does NOT dispatch.
+- Game train PAUSED until Pages green. Then: A #3761 350ed44b (trial green on b67ffd90; re-trial on new tip) → D #3721 → B #3723 → A #3696 8197bd95 (MERGE-HOLD to lift).
+- #3700 READY sent to D (0e6433e) with caveats; D merges. OrchB now claude:session_01XzhhVYuGX9ii1g8uymYkTp.
+- Archived: W58b, W59, sync lane, #3700 owner. Live A lanes: 01SoT9 (#3696), 018TxG (#3761/#3766), 01X9Af + 01LESs6 (D-lent, waiting on D), R3 (#3763).
