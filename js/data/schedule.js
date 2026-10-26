@@ -114,7 +114,7 @@ const DataSchedule = (function () {
 
       function tick() {
         const left = targetMs - Date.now();
-        const minute = Math.floor(Math.max(0, left) / 60000);
+        const minute = left > 0 ? Math.floor(left / 60000) : -1;
         if (!reduced || minute !== shownMinute) {
           clock.textContent = countdown(left);
           shownMinute = minute;
