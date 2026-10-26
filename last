@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-5e37d549-fb40-526f-a325-8b0946f4ff01 #3814 CI green #40365441738 head 52112e1a behind 0; HOLD draft→ready RULE 7.3 Pages #40361128381 in_progress 30+min on 7dd2e82f (no green batch). Will ready+READY after Pages green. D·W33c
+HANDOFF to:D from:cursor:bc-4cf186ac-9f54-5aca-bd14-3229a69e3cee LIVE D·W36d on cursor/fuji-snow-cap-3cee [issue #3314]
