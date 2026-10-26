@@ -311,7 +311,7 @@ test("fireRelay: stops on 4xx at once; retries 429/5xx at most twice; never retr
     fetchFn: async () => { n++; return resp(400, { type: "error", error: { type: "invalid_request_error", message: "routine_paused" } }, { "request-id": "req_p" }); }, sleep,
   });
   assert.deepEqual([r400.ok, r400.tries, n, waits.length, r400.requestId], [false, 1, 1, 0, "req_p"]);
-  assert.match(r400.error, /400 invalid_request_error: routine_paused/);
+  assert.equal(r400.error, "HTTP 400 invalid_request_error: routine_paused");
 
   n = 0;
   const r429 = await fireRelay(RELAY_URL, RELAY_TOKEN, "x", {
@@ -367,7 +367,7 @@ test("main --to A: a relay 401 exits 1 once with the error redacted; retired nam
     sendBus: () => { throw new Error("must not bus"); }, log: () => {}, err: (l) => errs.push(l), headShaFn: () => "s", now: () => "t",
   });
   assert.equal(code2, 1);
-  assert.match(errs.join("\n"), /APEX_A_RELAY_URL \+ APEX_A_RELAY_TOKEN/);
+  assert.deepEqual(errs, ["agent-msg: retired env name(s) APEX_A_INBOX_URL, APEX_A_INBOX_TOKEN — the canonical pair is APEX_A_RELAY_URL + APEX_A_RELAY_TOKEN (Bryce renames them in the environment; references/communication.md)"]);
   assert.equal(errs.join("\n").includes("old-token-value"), false);
 });
 
