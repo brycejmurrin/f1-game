@@ -169,6 +169,9 @@
     }
     const whiteTex = onePx(255);
     const blackTex = onePx(0);
+    // FXAA's explicit-gradient mirror tap needs a sampler even when compiled
+    // with this constant 1x1 fallback (before the first mirror, or after off).
+    blackTex.minFilter = blackTex.magFilter = THREE.LinearFilter;
 
     // LENS DIRT smudge map: the glx/post.js makeDirtTex canvas port —
     // deterministic LCG seed, value-noise base + grime blobs + dust specks +
