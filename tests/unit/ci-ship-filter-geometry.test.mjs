@@ -111,6 +111,10 @@ test("ci.yml runs on PRs into the deploy branch only, and a label event other th
   for (const [id, job] of Object.entries(wf.jobs)) {
     const cond = String(job.if || "");
     if (id === "draft-ci-skipped") assert.ok(cond.includes("github.event.action != 'labeled'"), "the skip notice is not re-posted by a label event");
+    // ci-verdict RUNS on a label event (P9: a skipped job's check-run is named by
+    // the raw expression); its work steps carry LABEL_OK instead, and the test
+    // below proves its evaluated name is never the required `CI` there.
+    else if (id === "ci-verdict") assert.ok(job.steps.filter((st) => st.run && /ci-verdict\.mjs/.test(st.run)).every((st) => String(st.if).includes(LABEL_OK)));
     else assert.ok(cond.includes(LABEL_OK), `job ${id} must skip a label event other than run-ci on a draft`);
   }
   // 3. A skipped job reports SUCCESS, so the noise run's verdict must not carry the required name.
@@ -215,4 +219,40 @@ test("every tools/ci/*.sh is cited by a workflow, another tool or a test", () =>
     return !out.stdout.trim();
   });
   assert.deepEqual(orphans, [], `orphan step scripts (nothing runs them): ${orphans.join(", ")}`);
+});
+
+test("ci-verdict always reports under an evaluated name, and never `CI` where it does no work (P9, #2664)", () => {
+  // GitHub names a SKIPPED job's check-run by the raw `name:` text, so the
+  // aggregator runs on every non-cancelled run. The invariant that makes that
+  // safe: wherever its work steps are off (a label event, a draft without
+  // run-ci), the evaluated name is not exactly "CI", so the required check
+  // stays pending rather than reporting success. Evaluated, not pattern-matched:
+  // both expressions are taken from the YAML and run over every event shape.
+  const job = parseYAML(ciWorkflow).jobs["ci-verdict"];
+  assert.equal(job.if, "${{ !cancelled() }}", "the aggregator must not skip on a label event or an opted-out draft");
+  const work = job.steps.find((st) => st.run && /ci-verdict\.mjs/.test(st.run));
+  const noop = job.steps.find((st) => /No verdict for a label event/.test(st.name || ""));
+  assert.ok(work && noop, "the aggregate step and the no-op step");
+  const js = (expr) => new Function("ev", "act", "lbl", "draft", "runCi", "return (" + String(expr)
+    .replace(/^\$\{\{\s*|\s*\}\}$/g, "")
+    .replace(/contains\(github\.event\.pull_request\.labels\.\*\.name, 'run-ci'\)/g, "runCi")
+    .replace(/github\.event_name/g, "ev").replace(/github\.event\.action/g, "act")
+    .replace(/github\.event\.label\.name/g, "lbl").replace(/github\.event\.pull_request\.draft/g, "draft") + ");");
+  const name = js(job.name), works = js(work.if), idle = js(noop.if);
+  let cases = 0;
+  for (const ev of ["pull_request", "push", "workflow_dispatch", "schedule"])
+    for (const act of ev === "pull_request" ? ["opened", "synchronize", "ready_for_review", "labeled"] : [undefined])
+      for (const draft of ev === "pull_request" ? [true, false] : [undefined])
+        for (const runCi of ev === "pull_request" ? [true, false] : [false])
+          for (const lbl of act === "labeled" ? ["run-ci", "bug"] : [undefined]) {
+            if (act === "labeled" && lbl === "run-ci" && !runCi) continue;   // the label just added is on the PR
+            cases++;
+            const n = name(ev, act, lbl, draft, runCi), w = !!works(ev, act, lbl, draft, runCi);
+            assert.equal(!!idle(ev, act, lbl, draft, runCi), !w, `exactly one of the two steps runs (${ev}/${act}/${lbl}/draft=${draft}/run-ci=${runCi})`);
+            if (!w) assert.notEqual(n, "CI", `a run that does no verdict work must not be named CI: ${ev}/${act}/${lbl}/draft=${draft}`);
+            if (ev === "pull_request" && draft) assert.notEqual(n, "CI", "a draft never reports the required name (#2664)");
+            if (w && !(ev === "pull_request" && draft)) assert.equal(n, "CI", `a real non-draft run is named CI: ${ev}/${act}`);
+            assert.ok(!/\$\{\{/.test(n), "an evaluated name");
+          }
+  assert.ok(cases >= 20, `${cases} event shapes`);
 });

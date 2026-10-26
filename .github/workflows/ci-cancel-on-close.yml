@@ -23,6 +23,12 @@ name: Cancel CI of a closed PR
 #
 # Reopening the PR starts a fresh CI run in the same group, so nothing is lost.
 # tests/unit/ci-guard-tools.test.mjs pins the group string against ci.yml.
+#
+# NOT FOLDED INTO pages.yml (audit4 D1 / ci-train F10, 2026-10-26). Its value is
+# its trigger: `pull_request: closed` joins the closed PR's own concurrency
+# group, which no job in pages.yml (push / schedule / dispatch) can do. Zero
+# failures is the expected signal of a cancel-only workflow, not dead weight;
+# ~76 runs a day of about 0.1 min each.
 
 on:
   pull_request:

@@ -8,8 +8,11 @@ name: Fleet board
 # a `fleet-board` artifact.
 # Why: docs/notes/AGENT-WORK-TRACKING-2026-10-14.md.
 #
-# Every 30 minutes at :23 and :53 (Merge Desk cadence; 2026-10-14 CI-volume cut, process-review fix 1;
-# was hourly; scheduled runs queue at the top of the hour,
+# Hourly at :23 (audit4 D1 / audit3 F5, 2026-10-26: the 30-minute :23,:53 cron
+# delivered 42 of 336 expected runs in 7 d, 12.5 %, while dispatches brought
+# ~132 runs a day; GitHub drops and delays schedules under load, so the
+# sub-hourly cron bought nothing but a promise it did not keep. Dispatch after
+# every board or bus write is the real cadence; the cron is the backstop.
 # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule),
 # and on workflow_dispatch, which `who-is-on-it.mjs --claim/--release` sends after
 # every board write. NOT `push: [claude/claims-board]`: GitHub runs a
@@ -21,7 +24,7 @@ name: Fleet board
 
 on:
   schedule:
-    - cron: "23,53 * * * *"
+    - cron: "23 * * * *"
   workflow_dispatch:
 
 # Per-job permissions: the board job writes issues, the tick job only reads
@@ -64,7 +67,7 @@ jobs:
         run: node tools/ci/fleet-board.mjs --apply
       # Bus -> PR comments (tools/ci/fleet-bus-mirror.mjs; docs/plans/2026-10-19-fleet-redesign.md §7 item 2):
       # each `to:#<PR>` line on claude/fleet-bus becomes one comment on that open PR, which wakes its owner on
-      # any host. Idempotent (a mirrored sha is skipped), so the 30-min schedule and the dispatch that
+      # any host. Idempotent (a mirrored sha is skipped), so the hourly schedule and the dispatch that
       # `fleet-bus.mjs send --to '#<n>'` sends never double-post. PR conversation comments are issue comments,
       # so `issues: write` above covers them:
       # https://docs.github.com/en/rest/issues/comments#create-an-issue-comment ("Issues" write in
