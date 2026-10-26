@@ -212,7 +212,7 @@ test("main: webhook error redacts auth; bus line round-trips through fleet-bus p
   const errs = [];
   const secret = "Bearer leak-me-now";
   const code = await main(
-    ["send", "--to", "A", "--type", "INCIDENT", "runner down"],
+    ["send", "--to", "A", "--type", "INCIDENT", "open runner-down runner down"], // typed INCIDENT (fleet-bus, audit4 G2)
     {
       env: {
         APEX_FLEET_AS: ME,

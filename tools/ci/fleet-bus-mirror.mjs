@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // fleet-bus-mirror.mjs — posts each `to:#<PR>` fleet-bus line as one comment on that PR, run by .github/workflows/fleet.yml.
 // @doc Fleet-bus mirror: posts each `to:#<PR>` bus line as one idempotent comment on that open PR (Actions).
-// Full description: Reads the claude/fleet-bus lines addressed `to:#<n>` (never `to:*` or any other address) after a cursor or within the last --max-age-h hours, and posts each as ONE comment on PR #n headed `fleet-bus <short sha> <TYPE> from:<from>`. Idempotent: a PR comment already carrying that header is skipped, as are closed or merged PRs. `--dry` prints the plan.
+// Full description: Reads the claude/fleet-bus lines addressed `to:#<n>` (never `to:*` or any other address) after a cursor or within the last --max-age-h hours, and posts each as ONE comment on PR #n headed `fleet-bus <short sha> <TYPE> from:<from>`. Idempotent: a PR comment already carrying that header, by github-actions[bot] or the repo owner, is skipped (another author's copy is ignored and counted: the repo is public), as are closed or merged PRs. `--dry` prints the plan.
 // @section runner
 // @skill agent-fleet
 //
@@ -40,11 +40,25 @@ export const header = (e) => `fleet-bus ${e.sha.slice(0, SHORT)} ${e.type} from:
 /** The comment body for one bus entry. Pure. */
 export const commentBody = (e) => `${header(e)}\n${e.text}${FOOTER}`;
 
-/** Has any of these comment bodies already mirrored the bus line `sha`? Pure. */
-export const alreadyMirrored = (bodies, sha) => {
+/**
+ * The comment authors whose `fleet-bus <sha7>` header counts (security X3, audit4): the Actions bot that posts mirrors and
+ * the repo owner. The repo is public, so anyone can post the same header; an outsider's copy must neither suppress the real
+ * line nor read as a bus line. Pure.
+ */
+export const trustedAuthors = (repo = "") => ["github-actions[bot]", String(repo).split("/")[0]].filter(Boolean);
+
+/** A comment as { body, user }; a bare string is a comment this run posted (author = the bot). Pure. */
+const asComment = (c) => (c && typeof c === "object" ? { body: String(c.body || ""), user: String(c.user || "") } : { body: String(c || ""), user: "github-actions[bot]" });
+
+/** Has a comment by a trusted author already mirrored the bus line `sha`? Untrusted authors are ignored. Pure. */
+export const alreadyMirrored = (comments, sha, trusted = trustedAuthors()) => {
   const re = new RegExp(`(^|\\n)fleet-bus ${sha.slice(0, SHORT)}\\b`);
-  return bodies.some((b) => re.test(String(b || "")));
+  return comments.map(asComment).some((c) => trusted.includes(c.user) && re.test(c.body));
 };
+
+/** How many comments carry a `fleet-bus <sha7>` header but come from an untrusted author (logged, never acted on). Pure. */
+export const untrustedMirrors = (comments, trusted = trustedAuthors()) =>
+  comments.map(asComment).filter((c) => !trusted.includes(c.user) && /(^|\n)fleet-bus [0-9a-f]{7}\b/.test(c.body)).length;
 
 /** Entries that mirror: addressed `#<n>`, and (with `now`) not older than maxAgeS. Pure. */
 export function mirrorable(entries, { now = 0, maxAgeS = 0 } = {}) {
@@ -52,11 +66,12 @@ export function mirrorable(entries, { now = 0, maxAgeS = 0 } = {}) {
 }
 
 /**
- * The mirror plan. Pure given `gh`: gh.pr(n) -> { state, merged } | null (not a PR), gh.comments(n) -> [body].
- * Returns { post: [{ pr, sha, body }], skip: [{ pr, sha, reason }] }. Each PR is looked up once.
+ * The mirror plan. Pure given `gh`: gh.pr(n) -> { state, merged } | null (not a PR), gh.comments(n) -> [{ body, user }]
+ * (or bare bodies). Only `trusted` authors' headers count as mirrored; others are counted in `untrusted` (per PR).
+ * Returns { post: [{ pr, sha, body }], skip: [{ pr, sha, reason }], untrusted: { pr: n } }. Each PR is looked up once.
  */
-export function planMirror(entries, gh) {
-  const prs = new Map(), comments = new Map(), post = [], skip = [];
+export function planMirror(entries, gh, { trusted = trustedAuthors() } = {}) {
+  const prs = new Map(), comments = new Map(), post = [], skip = [], untrusted = {};
   for (const e of entries) {
     const n = prOf(e.to);
     if (!n) continue;
@@ -64,13 +79,17 @@ export function planMirror(entries, gh) {
     const pr = prs.get(n);
     if (!pr) { skip.push({ pr: n, sha: e.sha, reason: "not a PR" }); continue; }
     if (pr.merged || pr.state !== "open") { skip.push({ pr: n, sha: e.sha, reason: pr.merged ? "merged" : "closed" }); continue; }
-    if (!comments.has(n)) comments.set(n, gh.comments(n));
-    if (alreadyMirrored(comments.get(n), e.sha)) { skip.push({ pr: n, sha: e.sha, reason: "already mirrored" }); continue; }
+    if (!comments.has(n)) {
+      comments.set(n, gh.comments(n));
+      const bad = untrustedMirrors(comments.get(n), trusted);
+      if (bad) untrusted[n] = bad;
+    }
+    if (alreadyMirrored(comments.get(n), e.sha, trusted)) { skip.push({ pr: n, sha: e.sha, reason: "already mirrored" }); continue; }
     const body = commentBody(e);
     post.push({ pr: n, sha: e.sha, body });
-    comments.get(n).push(body); // a re-sent sha in one run never posts twice
+    comments.get(n).push({ body, user: trusted[0] }); // a re-sent sha in one run never posts twice
   }
-  return { post, skip };
+  return { post, skip, untrusted };
 }
 
 /** The gh-backed lookups; `run` is execFileSync-shaped so tests never need gh. */
@@ -82,7 +101,8 @@ export function ghApi(repo, run = (args, input) => execFileSync("gh", args, { en
         return { state: p.state, merged: !!p.merged };
       } catch { return null; }
     },
-    comments: (n) => JSON.parse(run(["api", "--paginate", "--slurp", `repos/${repo}/issues/${n}/comments?per_page=100`])).flat().map((c) => c.body),
+    comments: (n) => JSON.parse(run(["api", "--paginate", "--slurp", `repos/${repo}/issues/${n}/comments?per_page=100`])).flat()
+      .map((c) => ({ body: c.body, user: (c.user && c.user.login) || "" })),
     post: (n, body) => run(["api", "-X", "POST", `repos/${repo}/issues/${n}/comments`, "--input", "-"], JSON.stringify({ body })),
   };
 }
@@ -95,9 +115,11 @@ export function main(argv = process.argv.slice(2), { gh, read = readBus, now = M
   const bus = read({ since, last: Number(val("--last", DEFAULT_LAST)) || DEFAULT_LAST, fetch: !argv.includes("--no-fetch") });
   // A known cursor already bounds the window; the age cap stops a cursor-less first run replaying old lines.
   const entries = mirrorable(bus.entries, since && !bus.reset ? {} : { now, maxAgeS: maxAgeH * 3600 });
-  const api = gh || ghApi(process.env.GITHUB_REPOSITORY || "brycejmurrin/f1-game");
-  const plan = planMirror(entries, api);
+  const repo = process.env.GITHUB_REPOSITORY || "brycejmurrin/f1-game";
+  const api = gh || ghApi(repo);
+  const plan = planMirror(entries, api, { trusted: trustedAuthors(repo) });
   for (const s of plan.skip) log(`  skip #${s.pr} ${s.sha.slice(0, SHORT)}: ${s.reason}`);
+  for (const [n, c] of Object.entries(plan.untrusted)) log(`  ignored #${n}: ${c} fleet-bus header comment(s) by authors other than ${trustedAuthors(repo).join(" / ")}`);
   let failed = 0;
   for (const p of plan.post) {
     if (dry) { log(`  would post #${p.pr}:\n${p.body.split("\n").map((l) => "    " + l).join("\n")}`); continue; }
