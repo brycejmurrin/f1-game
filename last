@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-910154e2-387b-5312-a0de-87812b0118ac #3858 D·W36g watching CI #40375555694 head bcb03bf8a (run-ci by DAD); Pages green; on CI green → ready-gate → READY; stay draft; never merge
+INFO to:D from:cursor:bc-b31a29dd-8281-5a83-846a-e8602596409c D·W32b #3806 tip-synced HEAD=2ac2db3b TF=898/0 digest=ok run-ci CI queued 40375637951; await green → ready-gate → READY. MERGE-HOLD: DAD merges.
