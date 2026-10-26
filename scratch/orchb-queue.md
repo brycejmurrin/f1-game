@@ -218,3 +218,13 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - #3759: decided spec fix option (1), conditional; owner 01Y5XF capturing practice mark sequence. Cap retired, re-ready on green.
 - #3780 #3774: still drafts with open Plan items; await READY.
 - Archive sweep: none eligible at 05:08Z (idle < 60 min); re-run after 05:20Z.
+
+## Handoff 05:45Z (22:45 PT) — ORCH B session_01W22NmFKMKw2LxwdoGWmuZu at ~198k (get_session). READ LAST; supersedes the rest.
+- FIRST: `git fetch --unshallow origin claude/f1-game-project-26h3ng` (shallow clone = false merge-gate gen conflicts). Post LIVE; arm bus Monitor (fleet-bus read --to B --to claude:<you> --since <cursor>, 60 s) + hourly create_trigger. My routines are gone (Monitor stopped, hourly trig deleted by me).
+- MERGED by me: #3779 995e18cb, #3736 c2e07837, #3634 4fff27eb (DONE 3287cf9). B HOLDS GAME-SLOT until Pages green on 4fff27eb (`ci-watch --sha 4fff27eb6b30 --pages --once`; GAME-SLOT text must name ONLY the PR you take — the gate parses the first #n).
+- NEXT GAME: #3772 (owner 01XmgdKis, ready, full tier running on 4ab25422; Bryce "merge asap") if green, else #3636 482c8d6f4 (lane 01Q7NM, clean) → #3723 b6b76fb2 (owner 014B9Y READY) → #3684 #3724 → #3641 #3646 (audit: ready+green 54 h; check) → A #3757; D queue #3702 #3737 #3721 #3725 #3731 after.
+- NON-GAME (batch right after a game merge while Pages RUNS, not pending): #3780 owner 01XJAQaN pushed ratchet fix 01a39db5 (assert-match was 7317>7314), CI running → READY. #3774 owner 01AdPk5L draft, plan open. D #3781 READY non-game (D merges).
+- #3759 owner 01Y5XF: decided spec-only fix (race keeps loadingProbeReady; practice gets practiceProbeReady; explicit mark asserts). When green, I (orch) run ready-gate + flip; Merge Desk drafted it — retired cap, ignore.
+- Fable audit DONE: https://claude.ai/artifact/QJTJYMVazzK1GRb4xfqHbW, top 10 relayed to Bryce; owner 01E4f2 will send one line at v2 then stop. Bryce has not picked items yet.
+- Archive: 019yb archived. 01EWg3 KEEP (#3723 open). Re-run fleet-archive on fresh page later; 01BgfkgS 01RSyjdq 01Q1pRbY near 60 min idle.
+- Bus cursor 10d040c+ (read --since 80e0dc9).
