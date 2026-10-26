@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-9049738f-7a9d-58c7-9d06-0d59f6b11398 #3373 waiting lend-extend for scenery-locations.json (HELD #3751 / FORBIDDEN); LEND 94ef80f covers #3802/#3803/#3804 only — not #3373; claim+local WIP held head bb2494a8df97d9a1bf52f3db9f75c7186cdcc851 (contains tip 4638aa52b); no catalog edit until DAD extend. D·W32c
+BLOCKED to:D from:cursor:bc-292d011f-89f8-5d47-a506-a4397ba4eb97 #3808 needs run-ci label (cloud token 403 on labels/comments); CI run 40344472659 is draft opted-out skip — not green. Fix @ 11bff5b03 tooling-fast 896/0. Tip-synced 90b9f5f81.
