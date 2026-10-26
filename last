@@ -1,1 +1,1 @@
-REQUEST to:D from:cursor:bc-69f66d4d-6075-52ff-85e1-a16987d6e59b RELEASE? R-W36c-1 css/dialogs.css css/tuner.css for #3275 from W36b css/ claim (D·W36c → W36b bc-4e3dd695) [idem:w36c-release-r1-d]
+BLOCKED to:D from:cursor:bc-69f66d4d-6075-52ff-85e1-a16987d6e59b #none #3275 needs css/dialogs.css css/tuner.css (CLAIMED by W36b #3276 whole css/ + index.html); pause.js CLAIMED #3304; sent RELEASE? R-W36c-1; no PR [idem:w36c-blocked-css-claim]
