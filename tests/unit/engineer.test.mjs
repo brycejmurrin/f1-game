@@ -152,9 +152,9 @@ test("a LOCAL SHOWER names its sector, and says whether the lap as a whole wants
 });
 
 test("a strong GUST is a word below every pit line, said once per gusty spell", () => {
-  assert.match(line({ gust: 7, gustKmh: 46 }), /GUSTY OUT THERE — 46 KM\/H/);
+  assert.equal(line({ gust: 7, gustKmh: 46 }), "GUSTY OUT THERE — 46 KM/H, CAREFUL ON THE BRAKES");
   assert.equal(E.create({}).callFor(sense({ gust: 7, gustKmh: 46 }))[1], "gust");
-  assert.match(line({ gust: 7, gustKmh: 46, wrongTread: true, wet: true }), /BOX FOR WETS/, "the tread still comes first");
+  assert.equal(line({ gust: 7, gustKmh: 46, wrongTread: true, wet: true }), "RAIN — BOX FOR WETS", "the tread still comes first");
   assert.equal(line({ gust: null }), "", "no gust, no line");
 });
 
@@ -169,24 +169,24 @@ test("gust advice follows real speed preferences while retaining canonical wind 
     const [message, key] = advice.callFor(snapshot);
     assert.equal(message, `GUSTY OUT THERE — ${value} ${label}, CAREFUL ON THE BRAKES`);
     assert.equal(key, "gust"); assert.equal(snapshot.gustKmh, rawSpeed);
-    assert.match(advice.callFor(sense({ gust: 7, gustKmh: rawSpeed, wrongTread: true, wet: true }))[0], /BOX FOR WETS/);
+    assert.equal(advice.callFor(sense({ gust: 7, gustKmh: rawSpeed, wrongTread: true, wet: true }))[0], "RAIN — BOX FOR WETS");
   }
   const session = sessionFor(), car = carOn(session.tyres), eng = Engineer.create(session.G);
   let bucket = 7;
   ctx.Wind = { gustCall: () => bucket, state: () => ({ kmh: rawSpeed }) };
   preferences.setUnits("kmh");
   eng.update(car, Engineer.QUIET_S + 1);
-  assert.match(session.said.at(-1), /161 KM\/H/);
+  assert.equal(session.said.at(-1), "GUSTY OUT THERE — 161 KM/H, CAREFUL ON THE BRAKES");
   const initialCalls = session.said.length;
   preferences.setUnits("mph");
   eng.update(car, Engineer.QUIET_S + 1);
   assert.equal(session.said.length, initialCalls, "changing units never repeats the same gust bucket");
   bucket++;
   eng.update(car, Engineer.QUIET_S + 1);
-  assert.match(session.said.at(-1), /100 MPH/);
+  assert.equal(session.said.at(-1), "GUSTY OUT THERE — 100 MPH, CAREFUL ON THE BRAKES");
   preferences.setUnits("kmh"); bucket++;
   eng.update(car, Engineer.QUIET_S + 1);
-  assert.match(session.said.at(-1), /161 KM\/H/);
+  assert.equal(session.said.at(-1), "GUSTY OUT THERE — 161 KM/H, CAREFUL ON THE BRAKES");
   assert.equal(eng.senseOf(car).gustKmh, rawSpeed, "only the announcement converts wind units");
 });
 

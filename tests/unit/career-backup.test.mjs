@@ -2000,7 +2000,9 @@ test("read-only career screen explains ownership, disables mutations and keeps e
     const left = h.G.$("cr-left");
     const notice = left.querySelector("#cr-writer-status");
     assert.ok(notice);
-    assert.match(notice.textContent, reason === "writer-busy" ? /another tab.*reload/ : /read-only.*HTTPS/);
+    assert.equal(notice.textContent, reason === "writer-busy"
+      ? "Career is open in another tab. Close it, then reload this tab to play or change saves. You can still read and export your saves here."
+      : "This browser cannot safely coordinate career saves. Career is read-only; use a current browser over HTTPS to play. You can still export your saves.");
     assert.equal(left.querySelector('[data-cr-act="import"]').disabled, true);
     assert.equal(left.querySelector(".cr-slot-del").disabled, true);
     assert.equal(left.querySelector(".cr-slot-main").disabled, true);

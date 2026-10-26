@@ -219,6 +219,6 @@ test("Device Farm menu kickoff records a timeout as failure when no race starts"
   vm.runInNewContext("(function(){" + KICK_MENU("monza", "default", 0, true) + "})()", page,
     { filename: "vm-snippet:devicefarm-menu-timeout" });
   await new Promise(setImmediate);
-  assert.match(page.__dfRace.err, /race never left the menu/);
+  assert.equal(page.__dfRace.err, "Error: race never left the menu");
   assert.equal(page.__dfRace.ok, undefined);
 });
