@@ -260,3 +260,119 @@ test("an offer signed by a host clock 45 s behind this device is still heard", a
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(heard, ["skewed-offer"], "skew is heard; an hour-old replay is still dropped");
 });
+
+
+async function wireHarness() {
+  const { createActionWireManager } = await import("../../vendor/trystero-0.25.4/core/action-wire.js");
+  return createActionWireManager({ getPeer: () => null, getPeerIds: () => [],
+    canReceiveFromPeer: () => true, throwIfAborted() {} });
+}
+function actionFrame(type, text = "ok", { nonce = 0, last = true, json = false } = {}) {
+  const bytes = new TextEncoder().encode(text), frame = new Uint8Array(36 + bytes.length);
+  frame.set(new TextEncoder().encode(type));
+  frame[32] = nonce >> 8; frame[33] = nonce & 255;
+  frame[34] = (last ? 1 : 0) | (json ? 8 : 0);
+  frame.set(bytes, 36); return frame.buffer;
+}
+
+test("vendored action wire treats inherited names as ordinary unregistered actions", async () => {
+  const w = await wireHarness();
+  for (const type of ["constructor", "__proto__", "toString"]) {
+    assert.doesNotThrow(() => w.handleData("peer", actionFrame(type)));
+    const got = [];
+    w.makeInternalAction(type).onMessage((v) => got.push(v));
+    assert.deepEqual(got, ["ok"]);
+  }
+});
+
+test("vendored action wire drops queued unknown actions when the peer leaves", async () => {
+  const w = await wireHarness(), got = [];
+  w.handleData("old", actionFrame("late", "old"));
+  w.handleData("live", actionFrame("late", "live"));
+  w.clearPeer("old");
+  w.makeInternalAction("late").onMessage((v, id) => got.push([v, id]));
+  assert.deepEqual(got, [["live", "live"]]);
+});
+
+test("vendored action wire rejects short and invalid JSON frames without poisoning later messages", async () => {
+  const w = await wireHarness(), got = [];
+  const a = w.makeInternalAction("a"); a.onMessage(v => got.push(v));
+  assert.doesNotThrow(() => w.handleData("peer", new Uint8Array(2).buffer));
+  assert.doesNotThrow(() => w.handleData("peer", actionFrame("a", "{", { json: true })));
+  w.handleData("peer", actionFrame("a", "good"));
+  assert.deepEqual(got, ["good"]);
+});
+
+
+test("vendored action wire never delivers a suffix after an incomplete message expires", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const w = await wireHarness(), got = [];
+  w.makeInternalAction("known").onMessage(v => got.push(v));
+  w.handleData("peer", actionFrame("known", "prefix", { last: false }));
+  t.mock.timers.tick(30001);
+  w.handleData("peer", actionFrame("known", "suffix"));
+  assert.deepEqual(got, [], "an expired transfer must not complete with truncated content");
+  w.handleData("peer", actionFrame("known", "healthy", { nonce: 1 }));
+  assert.deepEqual(got, ["healthy"]);
+  w.clearPeer("peer");
+});
+
+test("vendored action wire bounds pending messages and expires incomplete input", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const w = await wireHarness(), got = [];
+  w.makeInternalAction("known").onMessage(v => got.push(v));
+  for (let nonce = 0; nonce < 80; nonce++) w.handleData("peer", actionFrame("known", "unfinished", { nonce, last: false }));
+  w.handleData("peer", actionFrame("known", "blocked", { nonce: 79 }));
+  assert.deepEqual(got, [], "new transmissions beyond the peer cap must not be retained");
+  t.mock.timers.tick(30001);
+  w.handleData("peer", actionFrame("known", "healthy", { nonce: 80 }));
+  assert.deepEqual(got, [], "a saturated peer must not reinterpret rejected chunks as new messages");
+  w.clearPeer("peer");
+  w.handleData("peer", actionFrame("known", "healthy", { nonce: 80 }));
+  assert.deepEqual(got, ["healthy"], "disconnect releases bounded tombstones and exhausted-peer state");
+});
+
+test("vendored action wire bounds deferred unknown actions and expires their payloads", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const w = await wireHarness(), got = [];
+  for (let nonce = 0; nonce < 200; nonce++) w.handleData("peer", actionFrame("unknown", "ok", { nonce }));
+  w.makeInternalAction("unknown").onMessage(v => got.push(v));
+  assert.equal(got.length, 128, "deferred messages have a global hard cap");
+  w.handleData("peer", actionFrame("late", "expired"));
+  t.mock.timers.tick(30001);
+  w.makeInternalAction("late").onMessage(v => got.push(v));
+  assert.equal(got.length, 128, "unclaimed payloads expire without registration or disconnect");
+});
+
+test("vendored action wire bounds cumulative message bytes and rejects trailing chunks after overflow", async () => {
+  const w = await wireHarness(), got = [];
+  w.makeInternalAction("large").onMessage(v => got.push(v));
+  const part = "x".repeat(1024 * 1024);
+  for (let i = 0; i < 18; i++) w.handleData("peer", actionFrame("large", part, { last: false }));
+  w.handleData("peer", actionFrame("large", "tail"));
+  assert.equal(got.length, 0, "oversized message must not emit a truncated suffix");
+  w.clearPeer("peer");
+  w.handleData("peer", actionFrame("large", "healthy", { nonce: 1 }));
+  assert.deepEqual(got, ["healthy"]);
+});
+
+test("vendored action wire preserves multipart text, JSON, binary and metadata round trips", async () => {
+  const { createActionWireManager } = await import("../../vendor/trystero-0.25.4/core/action-wire.js");
+  const receiver = await wireHarness(), got = [];
+  receiver.makeInternalAction("roundtrip").onMessage((v, id, meta) => got.push({ v, id, meta }));
+  const peer = { sendData(chunk) { receiver.handleData("sender", chunk); } };
+  const sender = createActionWireManager({ getPeer: () => peer, getPeerIds: () => ["receiver"],
+    canReceiveFromPeer: () => true, throwIfAborted() {} });
+  const action = sender.makeInternalAction("roundtrip");
+  const text = "lap🏁".repeat(10000), object = { laps: [1, 2], info: "ok" };
+  const binary = new Uint8Array(40000).map((_, i) => i % 251);
+  for (const value of [text, object, binary]) await action.send(value, "receiver", { file: "fixture" });
+  assert.equal(got.length, 3);
+  assert.equal(got[0].v, text);
+  assert.deepEqual(got[1].v, object);
+  assert.deepEqual(got[2].v, binary);
+  for (const result of got) {
+    assert.equal(result.id, "sender");
+    assert.deepEqual(result.meta, { file: "fixture" });
+  }
+});

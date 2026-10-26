@@ -8936,7 +8936,8 @@
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/rendezvous-worker.test.mjs"
       ]
     },
     "js/net/handshake.js": {
@@ -9383,7 +9384,8 @@
         "tests/unit/net-rendezvous.test.mjs"
       ],
       "sealPrivate": [
-        "tests/unit/net-rendezvous.test.mjs"
+        "tests/unit/net-rendezvous.test.mjs",
+        "tests/unit/rendezvous-worker.test.mjs"
       ],
       "setSessionUrl": [
         "tests/unit/net-rendezvous.test.mjs"
@@ -9405,9 +9407,6 @@
       ],
       "waitFor": [
         "tests/unit/net-rendezvous.test.mjs"
-      ],
-      "*": [
-        "tests/unit/rendezvous-worker.test.mjs"
       ]
     },
     "js/net/scan.js": {
@@ -14677,7 +14676,8 @@
     },
     "js/render/webgpu/wgx-chunked.js": {
       "createChunkedMesh": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
       "drawChunked": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -14686,7 +14686,8 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "init": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
       "*": [
         "tests/unit/frustum-buckets.test.mjs",
@@ -17386,6 +17387,7 @@
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
       "strip": [
+        "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "stripEnabled": [
@@ -17400,6 +17402,7 @@
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
       "strip": [
+        "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "*": [

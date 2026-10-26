@@ -203,7 +203,6 @@ test("awaitApexBoot: the stall window is the old BOOT_MS, never longer", async (
   assert.equal(BOOT_STALL_MS, boot, "a silent boot must fail exactly when the old fixed wait did");
 });
 
-
 test("track progress survives a full fixed-length log ring", async () => {
   const realNow = Date.now;
   let now = 0;
@@ -217,4 +216,63 @@ test("track progress survives a full fixed-length log ring", async () => {
   try { await awaitTrackBuild(page, 10, 200); }
   finally { Date.now = realNow; }
   assert.equal(page.calls, 8);
+});
+
+test("server preflight rejects HTTP errors and unrelated HTML", async t => {
+  const http = (await import("node:http")).default;
+  const { EventEmitter } = await import("node:events");
+  const { default: globalSetup } = await import("../helpers/global-setup.js");
+  for (const [status, body] of [[500, "broken"], [200, "<html>another app</html>"]]) {
+    t.mock.method(http, "get", (_url, cb) => {
+      const req = new EventEmitter();
+      req.setTimeout = () => req; req.destroy = () => {};
+      queueMicrotask(() => {
+        const res = new EventEmitter(); res.statusCode = status; res.resume = () => {};
+        cb(res); res.emit("data", Buffer.from(body)); res.emit("end");
+      });
+      return req;
+    });
+    await assert.rejects(globalSetup({ projects: [{ use: { baseURL: "http://localhost:3456" } }] }, { attempts: 1 }), /HTTP 500|Apex shell/);
+    t.mock.restoreAll();
+  }
+});
+
+
+test("server retry pauses and request timeouts share one overall deadline", async () => {
+  const { waitForServer } = await import("../helpers/global-setup.js");
+  let now = 0;
+  const budgets = [];
+  await assert.rejects(waitForServer("http://localhost:3456", {
+    now: () => now,
+    request: async (_url, budget) => { budgets.push(budget); now += budget; throw new Error("request deadline"); },
+    delay: async ms => { now += ms; },
+  }), /after 2 attempts \(budget 10000 ms\)/);
+  assert.deepEqual(budgets, [5000, 4800]);
+  assert.equal(now, 10000, "pauses cannot extend the overall deadline");
+});
+
+test("server preflight accepts the Apex marker and times out an unfinished body", async t => {
+  const http = (await import("node:http")).default;
+  const { EventEmitter } = await import("node:events");
+  const { ping } = await import("../helpers/global-setup.js");
+  for (const valid of [true, false]) {
+    let destroyed = false;
+    t.mock.method(http, "get", (_url, cb) => {
+      const req = new EventEmitter(); req.destroy = () => { destroyed = true; };
+      queueMicrotask(() => {
+        const res = new EventEmitter(); res.statusCode = 200;
+        cb(res);
+        if (valid) {
+          res.emit("data", Buffer.from('<meta na'));
+          res.emit("data", Buffer.from('me="apex-build" content="1695">'));
+        }
+      });
+      return req;
+    });
+    try {
+      if (valid) await ping("http://localhost:3456", 50);
+      else await assert.rejects(ping("http://localhost:3456", 5), /Timed out after 5 ms/);
+      assert.equal(destroyed, true, "request is closed after either verdict");
+    } finally { t.mock.restoreAll(); }
+  }
 });

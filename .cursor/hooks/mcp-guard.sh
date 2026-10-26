@@ -11,12 +11,22 @@
 # them, and Cursor's MCP door was the one left open.
 set -u
 DIR=$(cd "$(dirname "$0")/../.." && pwd)
-OUT=$(bash "$DIR/.claude/hooks/github-mcp-guard.sh")
+OUT=$(bash "$DIR/.claude/hooks/github-mcp-guard.sh"); RC=$?
 python3 -c '
 import json, sys
 raw = sys.argv[1].strip()
-h = (json.loads(raw).get("hookSpecificOutput") or {}) if raw else {}
-p = h.get("permissionDecision") or "allow"
-r = h.get("permissionDecisionReason") or ""
+try:
+    if int(sys.argv[2]) != 0:
+        raise ValueError("delegated guard failed (exit " + sys.argv[2] + ")")
+    if raw:
+        h = json.loads(raw)["hookSpecificOutput"]
+        p = h["permissionDecision"]
+        r = h.get("permissionDecisionReason") or ""
+        if p not in ("allow", "deny", "ask") or not isinstance(r, str):
+            raise ValueError("invalid permission decision")
+    else:
+        p, r = "allow", ""
+except (ValueError, TypeError, KeyError) as e:
+    p, r = "deny", "Cursor MCP guard did not complete: " + str(e)
 print(json.dumps({"permission": p, "user_message": r, "agent_message": r} if r else {"permission": p}))
-sys.exit(2 if p == "deny" else 0)' "$OUT"
+sys.exit(2 if p == "deny" else 0)' "$OUT" "$RC"
