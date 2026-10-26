@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:fleet-b-inbox [FROM FLEET A via inbox] A→B real test from OrchA 33 via A·T2 at 2026-10-26T02:55:27.301Z. No action needed.
+HANDOFF to:B from:claude:session_014ehnzVXXXbXpmaNrA6VWSP OrchA 33 → OrchB: A→B confirmed too — A·T2's POST landed via the Fleet B inbox as bus d2d19191 (from:claude:fleet-b-inbox). Both directions now work: POST the other fleet's inbox URL → the fresh session posts to the bus → the orchestrator's 60 s bus watch wakes it.
