@@ -33,7 +33,7 @@ function fixture(title, k, { sidechainK = null } = {}) {
   fs.writeFileSync(t, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
   return { root, t };
 }
-const run = ({ root, t }, event, tool = "Edit", input = {}, env = {}) => {
+const run = ({ root, t }, event, tool = "Grep", input = {}, env = {}) => {
   const r = spawnSync("python3", [HOOK], {
     input: JSON.stringify({ hook_event_name: event, session_id: "s1", transcript_path: t, cwd: root, tool_name: tool, tool_input: input }),
     encoding: "utf8", timeout: 10000, env: { ...process.env, APEX_STOP_AT_K: "", ...env, CLAUDE_PROJECT_DIR: root },
@@ -63,13 +63,17 @@ test("past soft: PostToolUse warns once per 25k step; PreToolUse still allows", 
 
 test("past hard: PreToolUse denies work tools, allows the hand-off kit", () => {
   const f = fixture(W, 205);
-  assert.equal(run(f, "PreToolUse", "Edit").permissionDecision, "deny");
-  assert.match(run(f, "PreToolUse", "Edit").permissionDecisionReason, /205k >= 200k/);
+  assert.equal(run(f, "PreToolUse", "Grep").permissionDecision, "deny");
+  assert.match(run(f, "PreToolUse", "Grep").permissionDecisionReason, /205k >= 200k/);
   assert.equal(run(f, "PreToolUse", "Bash", { command: "npm run test:tooling-fast" }).permissionDecision, "deny");
   assert.equal(run(f, "PreToolUse", "Bash", { command: "git push -u origin cursor/x-1" }), null);
   assert.equal(run(f, "PreToolUse", "Bash", { command: "node tools/ci/fleet-bus.mjs send DONE" }), null);
   assert.equal(run(f, "PreToolUse", "mcp__claude-code-remote__send_message"), null);
   assert.equal(run(f, "PreToolUse", "mcp__github__update_pull_request"), null);
+  // Enough to commit what is on disk (A·W58 was locked out holding unregistered files).
+  for (const t of ["Edit", "Write", "ReadNotifications", "SendMessage"]) assert.equal(run(f, "PreToolUse", t), null, t);
+  for (const command of ["node --test tests/unit/agent-config.test.mjs", "npm run gen", "npm run test:guards"])
+    assert.equal(run(f, "PreToolUse", "Bash", { command }), null, command);
 });
 
 test("caps per role: an orchestrator gets 200k; an untitled session has no cap; a sidechain row is ignored", () => {
@@ -82,7 +86,7 @@ test("caps per role: an orchestrator gets 200k; an untitled session has no cap; 
 
 test("overrides: APEX_STOP_AT_K wins; an override file needs Bryce's quote", () => {
   const f = fixture(W, 205);
-  assert.equal(run(f, "PreToolUse", "Edit", {}, { APEX_STOP_AT_K: "300" }), null);
+  assert.equal(run(f, "PreToolUse", "Grep", {}, { APEX_STOP_AT_K: "300" }), null);
   fs.mkdirSync(path.join(f.root, "artifacts/context-cap"), { recursive: true });
   const o = path.join(f.root, "artifacts/context-cap/override.json");
   fs.writeFileSync(o, JSON.stringify({ soft_k: 300 }));
@@ -102,7 +106,7 @@ test("fails open: junk payload, missing transcript, garbage transcript, subagent
   assert.equal(run(f, "PreToolUse"), null);
   const g = fixture(W, 205);
   const sub = spawnSync("python3", [HOOK], {
-    input: JSON.stringify({ hook_event_name: "PreToolUse", agent_id: "a1", transcript_path: g.t, tool_name: "Edit" }),
+    input: JSON.stringify({ hook_event_name: "PreToolUse", agent_id: "a1", transcript_path: g.t, tool_name: "Grep" }),
     encoding: "utf8", env: { ...process.env, APEX_STOP_AT_K: "", CLAUDE_PROJECT_DIR: g.root },
   });
   assert.equal(sub.stdout.trim(), "");

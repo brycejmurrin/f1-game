@@ -38,8 +38,12 @@ WARN_STEP_K = 25
 TAIL_BYTES = 2 << 20
 HEAD_LINES = 400
 HANDOFF_TOOLS = re.compile(r"^(mcp__claude-code-remote__.*|mcp__github__(update_pull_request|pull_request_read|add_issue_comment"
-                           r"|create_pull_request)|ToolSearch|TaskStop|Read)$")
-HANDOFF_BASH = re.compile(r"^\s*(git\s|node\s+tools/ci/(fleet-bus|agent-msg|who-is-on-it|session-status|handback)\.mjs\b)")
+                           r"|create_pull_request)|ToolSearch|TaskStop|Read|Edit|Write|ReadNotifications|SendMessage)$")
+# The kit must be enough to COMMIT what is on disk: bash-guard refuses a commit
+# while the guards are red, so registering a file (Edit, `npm run gen`) and
+# re-checking it (`node --test`, `npm run test:guards`) stay allowed past the cap.
+HANDOFF_BASH = re.compile(r"^\s*(git\s|node\s+--test\b|npm\s+run\s+(gen|test:guards)\b"
+                          r"|node\s+tools/ci/(fleet-bus|agent-msg|who-is-on-it|session-status|handback)\.mjs\b)")
 
 
 def first_prompt(path):
