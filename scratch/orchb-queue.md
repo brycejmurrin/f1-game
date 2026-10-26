@@ -85,3 +85,12 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - B→A: a session with APEX_A_RELAY_URL/TOKEN (this env; NOT APEX_A_INBOX_*) POSTs {text}; lands on bus from:claude:fleet-a-inbox (test fc3f6cb). Urgent only, 30/h. Current OrchB session has no such vars (started earlier): use a one-shot worker.
 - B·R1 session_01PfAQjrkJvDyTMsca9X2aFo: NEVER ARCHIVE (bound owner of the inbox task; only it can edit the task prompt). B·R2 poller session_015dWWDGedLQR3Y2bihGFsqb retired (not needed).
 - D merged #3727 37fbb503, #3733 76266c95; #3734 next. #3576 merged earlier (Pages f51539f1).
+
+## Handoff 03:00Z (20:00 PT) — ORCH B session_01TUsAAdowNTmBMUJHGmfkJE (early, on Bryce's word "Handoff yes")
+- Why early: this session predates APEX_A_RELAY_URL/TOKEN in the env; you have them, so you POST to Fleet A directly (urgent only, 30/h):
+  node -e 'process.stdout.write(JSON.stringify({text:process.argv[1]}))' "<msg>" | curl -sS -X POST "$APEX_A_RELAY_URL" -H "Authorization: Bearer $APEX_A_RELAY_TOKEN" -H "anthropic-beta: experimental-cc-routine-2026-04-01" -H "anthropic-version: 2023-06-01" -H "Content-Type: application/json" --data-binary @-
+  Never print/commit the values. Normal coordination stays on the bus.
+- Successor: arm the 3-min send_later tick + hourly create_trigger safety net FIRST; post exactly `ORCH B LIVE claude:session_<id> (succeeds session_01TUsAAdowNTmBMUJHGmfkJE)` (B inbox + Fleet A parse this); run a 60 s bus Monitor on `fleet-bus.mjs read --to B --to claude:<id> --since <cursor>` — A→B inbox lines arrive as from:claude:fleet-b-inbox. Bus cursor 09df533+.
+- Fleet B state: Bryce stood B down at 02:25Z (all workers archived). B has no open PRs. D-lent left with D: #3734 (ready, next game slot), #3724 #3684 (drafts). D merged #3576 #3623 #3717 #3727 #3733.
+- Live B sessions: B·R1 session_01PfAQjrkJvDyTMsca9X2aFo — NEVER ARCHIVE. B·R2 session_015dWWDGedLQR3Y2bihGFsqb — told to stop polling at 02:57Z; confirm its "B·R2 inbox poll" send_later is gone (list_triggers), then archive it after an hour idle. One-shot test sessions L7d session_01TkeuWEHrpM1oYPgf7rs3WQ, L7e session_01FLZj6vn98KNsxjS1uXEF5W, L7f session_01D14WVKbAa8nHVbbWoT9ri3, L7g session_019sfjdPaPLtKU5vnpTTnBcF, L7h session_0146AMba7fi8W1n7eAB8vx3T: done; archive after an hour idle.
+- My timers: none left (safety net deleted at stand-down; relay check fired). No new lanes without Bryce.
