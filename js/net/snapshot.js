@@ -18,6 +18,10 @@ const NetSnapshot = (function () {
 
   const TAU = Math.PI * 2;
   const MAX_AHEAD_MS = 3000;         // createInterp().push refuses a tick further ahead than this
+  // Adjacent samples farther apart than this are a dropout, not jitter: at()
+  // snaps to the newer pose instead of lerping across the hole (#3288).
+  // Well under netplay's STALE_MS (2000) and above a honest publish interval.
+  const MAX_INTERP_GAP_MS = 500;
   const U16 = 65536;
 
   // Flags packed above the gear nibble.
@@ -192,6 +196,7 @@ const NetSnapshot = (function () {
     const baseDelay = delayMs;
     let jitter = 0, lag = 0, interval = 0, lastArrival = null, lastTick = null, presentedAt = -Infinity;
     const maxExtrapMs = opts.maxExtrapMs != null ? opts.maxExtrapMs : 250;
+    const maxInterpGapMs = opts.maxInterpGapMs != null ? opts.maxInterpGapMs : MAX_INTERP_GAP_MS;
     const keep = opts.keep || 32;
     let samples = [];                      // ascending by t
 
@@ -342,6 +347,14 @@ const NetSnapshot = (function () {
         const a = samples[i - 1], b = samples[i];
         if (target >= a.t && target <= b.t) {
           const span = b.t - a.t;
+          // A multi-second hole is not a publish interval: blending walks the
+          // car back along the gap the moment the next pose lands. Snap to the
+          // newer sample so recovery is a teleport, not a slide (#3288).
+          if (span > maxInterpGapMs) {
+            const o = Object.assign(out || {}, b);
+            o.extrapolated = false;
+            return o;
+          }
           return blend(a, b, span > 0 ? (target - a.t) / span : 0, out);
         }
       }
@@ -375,7 +388,7 @@ const NetSnapshot = (function () {
   }
 
   return {
-    TYPE_SNAPSHOT, TYPE_AGED, CAR_BYTES, AGED_BYTES, MAX_AHEAD_MS, encodeAged,
+    TYPE_SNAPSHOT, TYPE_AGED, CAR_BYTES, AGED_BYTES, MAX_AHEAD_MS, MAX_INTERP_GAP_MS, encodeAged,
     encodeSnapshot, decodeSnapshot,
     // Shared with session.js, which decodes off the same channel.
     toView,

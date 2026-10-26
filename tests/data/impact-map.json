@@ -132,9 +132,17 @@
       ]
     },
     "js/agent/apex-gpu-capture.js": {
-      "*": [
-        "tests/unit/global-registry.test.mjs",
+      "disable": [
         "tests/unit/wgx-labels.test.mjs"
+      ],
+      "enable": [
+        "tests/unit/wgx-labels.test.mjs"
+      ],
+      "status": [
+        "tests/unit/wgx-labels.test.mjs"
+      ],
+      "*": [
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/agent/apex-lobby.js": {
@@ -2384,6 +2392,9 @@
       "drawPlayerWheels": [
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "farRivalBodyReady": [
+        "tests/unit/car-presentation-vm.test.mjs"
+      ],
       "finish": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -2408,11 +2419,17 @@
         "tests/unit/livery-tex-dispose.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
+      "invalidateFactoryMeshCaches": [
+        "tests/unit/car-presentation-vm.test.mjs"
+      ],
       "kick": [
         "tests/unit/livery-tier.test.mjs"
       ],
       "liveryBitmapOpts": [
         "tests/unit/car-draw-decal-budget.test.mjs"
+      ],
+      "loadCarModel": [
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "menuStepYield": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -2450,6 +2467,7 @@
         "tests/unit/livery-tier.test.mjs"
       ],
       "sharedRivalBodyMesh": [
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs"
       ],
       "teamBodyMesh": [
@@ -10971,6 +10989,9 @@
       "create": [
         "tests/unit/carve-a-modules.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
+      ],
+      "*": [
+        "tests/unit/boot-script-repair-overlay.test.mjs"
       ]
     },
     "js/physics/grip-steer.js": {
