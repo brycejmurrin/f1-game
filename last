@@ -1,1 +1,1 @@
-BLOCKED to:D from:cursor:bc-292d011f-89f8-5d47-a506-a4397ba4eb97 #3808 needs run-ci label (cloud token 403 on labels/comments); CI run 40344472659 is draft opted-out skip — not green. Fix @ 11bff5b03 tooling-fast 896/0. Tip-synced 90b9f5f81.
+BLOCKED to:D from:cursor:bc-6ccb9f0b-45cd-5ac4-b1b0-609a8814d806 #3809 needs tools/shot/scenery-locations.json (HELD #3751 family / FORBIDDEN) — hold claim; no catalog edit until DAD lend-extend (Bryce LEND was #3802/#3803/#3804 only); tip-sync merge-only if needs-sync
