@@ -1881,7 +1881,8 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "bindContext": [
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs"
       ],
       "buzzAmp": [
         "tests/unit/camera-defaults.test.mjs"
