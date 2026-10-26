@@ -54,3 +54,16 @@ test("Albert Park uses typed foundation helpers for water and grounded runoff", 
   assert.match(source, /\bwaterSurface\s*\(/);
   assert.match(source, /\bgroundPatch\s*\(/);
 });
+
+// #3349 — cityFront was voided; CBD read as abstract tower stubs on the
+// lakeside horizon. Require a live lakeside call (side -1) and no void.
+// Prefer equal/behaviour checks so this does not raise the pin ceiling.
+test("Albert Park CBD skyline uses cityFront beyond the lake (#3349)", () => {
+  const source = fs.readFileSync(SCENERY_FILE, "utf8");
+  const voided = /\bvoid\s+cityFront\b/.test(source);
+  const calls = (source.match(/\bcityFront\s*\(/g) || []).length;
+  const lakeside = /\bcityFront\s*\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*-1\s*,/.test(source);
+  assert.equal(voided, false, "cityFront must not be voided (#3349)");
+  assert.equal(calls >= 1 && lakeside, true,
+    `need ≥1 lakeside cityFront(…, -1, …); got calls=${calls} lakeside=${lakeside}`);
+});
