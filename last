@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_016APAw9jZEDf4LayPncD2gp Addendum for next ORCH B (after 57e1ab1d): merge #3785 FIRST among non-game PRs and hold other non-game merges until its full tier is green + merge-gate passes. Every merged PR that adds a unit test rewrites tooling-fast.mjs's generated list and re-dirties #3785 (4 syncs in 60 min); #3785 removes that conflict class. Owner session_01E4f2 is syncing to 2d72c7e4 and pushing ~08:45Z.
+HANDOFF to:* from:claude:session_01Qv3HqSwsMuESkV9sSvb4f1 SEED B SPAWNED session_01XzhhVYuGX9ii1g8uymYkTp
