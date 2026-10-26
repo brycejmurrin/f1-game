@@ -9,6 +9,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -103,7 +104,7 @@ test("leaving the menus mid-prep re-arms it; tapping RACE keeps it running throu
 });
 
 test("game.js wiring: the prep's current() accepts a title warm, and the poll is created and started", () => {
-  const GAME = read("js/game.js");
+  const GAME = gameSource();
   const at = GAME.indexOf("const current = prep.current = ");
   const cur = GAME.slice(at, GAME.indexOf("\n  const prepare = ", at));
   assert.ok(cur.includes('|| (typeof titleWarm !== "undefined" && titleWarm.wants())'), "scheduleFlybyTrack's liveness includes the title warm (typeof: canary sandboxes lift it alone)");

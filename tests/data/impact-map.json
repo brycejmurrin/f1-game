@@ -6771,8 +6771,7 @@
       ],
       "scheduleFlybyTrack": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/settings-open-perf.test.mjs",
-        "tests/unit/title-warm.test.mjs"
+        "tests/unit/settings-open-perf.test.mjs"
       ],
       "seatsFor": [
         "tests/unit/legends-team.test.mjs"
@@ -6900,7 +6899,6 @@
         "tests/unit/results-cam.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/sporting-regs.test.mjs",
-        "tests/unit/title-warm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
