@@ -1220,8 +1220,12 @@
         stonePine(k, -1, 30 + hash(k * 2.3) * 12, 13 + hash(k * 5.1) * 6, PINEGRN,
                   { lean: 1.15, spread: 1.05 });
       }
+      // Past the dual_lite / scenery orbit ring (~42–45 m, az 45). Was gap 9–11:
+      // seven plane crowns sat on the mid-lap (racing ~0.46–0.51) Fairmont-cliff
+      // sightline, so the 0.50 orbit cell showed only stairs / two trees / a
+      // retaining wall and T=0 to the asphalt (#3368 day+night).
       along(0.672, 0.728, 28, (k) => {
-        plane(k, -1, 9 + hash(k * 7.9) * 2, 9 + hash(k * 4.1) * 3, PLANEGRN,
+        plane(k, -1, 58 + hash(k * 7.9) * 10, 9 + hash(k * 4.1) * 3, PLANEGRN,
               { stages: 2, spread: 0.62 });
       });
 

@@ -874,6 +874,8 @@
     "tests/unit/mobile-sync-web.test.mjs",
     "tests/unit/model-pack-format.test.mjs",
     "tests/unit/model-sway-parity.test.mjs",
+    "// #3368: Monaco mid-lap dual_lite/night_pass/scenery orbit sightline clears Fairmont-cliff plane crowns (game-vm, ~5 s).",
+    "tests/unit/monaco-fairmont-orbit.test.mjs",
     "tests/unit/move-tree.test.mjs",
     "// needs-sync: the sync predicate (conflict | stale-red | no) that sync-pr and pr-board run first.",
     "tests/unit/needs-sync.test.mjs",

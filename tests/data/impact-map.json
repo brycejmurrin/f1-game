@@ -4460,7 +4460,11 @@
       ]
     },
     "js/circuits/scenery/monaco.js": {
+      "narrow": [
+        "tests/unit/monaco-fairmont-orbit.test.mjs"
+      ],
       "*": [
+        "tests/unit/monaco-fairmont-orbit.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/scenery-ground-audit.test.mjs",
         "tests/unit/stage-minify.test.mjs"
