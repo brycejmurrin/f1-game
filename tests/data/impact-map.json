@@ -5015,7 +5015,8 @@
         "tests/unit/script-loader-starved.test.mjs",
         "tests/unit/script-loader-throw.test.mjs",
         "tests/unit/service-worker.test.mjs",
-        "tests/unit/settings-open-perf.test.mjs"
+        "tests/unit/settings-open-perf.test.mjs",
+        "tests/unit/share-card.test.mjs"
       ],
       "preload": [
         "tests/unit/script-loader-preload.test.mjs"
@@ -9363,7 +9364,8 @@
         "tests/unit/share-card.test.mjs"
       ],
       "*": [
-        "tests/unit/lazy-bundles-prefetch.test.mjs"
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/script-loader-retry-eval.test.mjs"
       ]
     },
     "js/net/rendezvous.js": {
