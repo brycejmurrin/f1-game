@@ -472,8 +472,28 @@ test("warm: TLX compiles the flame / ERS lit keys during the lights", () => {
 });
 
 test("game.js swaps rivals to the one shared body mesh past tier 2", () => {
-  assert.match(gameSource(), /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(FieldLod\.farBody\(_lodD2, fovY, c\)\) : teamBodyMesh\(c\.team, c\)/,
-    "past tier 2 the render loop shares one rival body (apex26.fieldLod=0 keeps per-seat meshes)");
+  // Behaviour, not source shape: run the production body-selection lines.
+  const source = gameSource();
+  const start = source.indexOf("    const sharedBody = FieldLod.on");
+  const end = source.indexOf("    if (body) {", start);
+  assert.ok(start >= 0 && end > start, "body selection remains bounded before submission");
+  const select = new Function("FieldLod", "c", "_lod", "carDraw", "playerBodyMesh", "teamBodyMesh", "_lodD2", "fovY",
+    source.slice(start, end) + "return body;");
+  for (const [on, isPlayer, lod, modelBuf, expected] of [
+    [true, false, 2, null, "shared"], [true, false, 3, null, "shared"],
+    [false, false, 2, null, "team"], [true, false, 1, null, "team"],
+    [true, true, 2, null, "player"], [true, false, 2, {}, null],
+  ]) {
+    const car = { isPlayer, team: 7 };
+    let farCalls = 0;
+    const actual = select({ on, farBody(d2, fov, c) {
+      farCalls++; assert.equal(d2, 90000); assert.equal(fov, 1); assert.equal(c, car); return true;
+    } }, car, lod, { modelBuf, sharedRivalBodyMesh(far) { assert.equal(far, true); return "shared"; } },
+    (team, c) => { assert.equal(team, 7); assert.equal(c, car); return "player"; },
+    (team, c) => { assert.equal(team, 7); assert.equal(c, car); return "team"; }, 90000, 1);
+    assert.equal(actual, expected);
+    assert.equal(farCalls, expected === "shared" ? 1 : 0, "only the shared branch evaluates far LOD");
+  }
 });
 
 test("warm: warmCarAssets builds the caster silhouette, the field wheels and the flame (not a whole-car mesh per rival)", () => {

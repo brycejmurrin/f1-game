@@ -144,14 +144,16 @@
     // its goldens and env/mirror parity stay as they were). apex26.tlxScene11="1" forces it on, "0" keeps
     // RGBA16F — the Device Farm A/B pair. 11/11/10 keeps 6/6/5 mantissa bits: a banding check on a night
     // gradient is the device evidence this still owes (docs/notes/PERF-KNOWN-WINS-2026-10-23.md row 15).
-    // BOTH LEGS. Stock three sizes the WebGPU fragment output to the target's three components, and the
+    // WEBGPU LEG ONLY (revert of the WebGL2 leg, 2026-10-25: Device Farm iPhone 14 WebGL2, rg11b10 42.5 fps vs
+    // RGBA16F 45.7 / 47.0, 55 vs 13-19 frames over 33 ms; docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md
+    // §Reverted). WebGL2 keeps RGBA16F whatever the knob says. Stock three sizes the WebGPU fragment output to the target's three components, and the
     // spec refuses a src-alpha blend factor when the fragment output has no alpha (gpuweb "validating
     // GPUFragmentState"): every blended material's pipeline failed on the real-GPU census (macos-latest run
     // 40052670537 on 886e476f — decals, glass and particles would vanish). Vendored three patch 18 keeps a
     // vec4 output for RGB targets (the spec allows "RGB requires vec3 or vec4"); with it the same census is
     // green (run 40056676327, #3711). Renderability still gates WebGPU on the adapter's
     // "rg11b10ufloat-renderable" feature (bloom11 above); gfx-backend-canary pins patch 18 by behaviour.
-    const _r11Blendable = r11Renderable;
+    const _r11Blendable = r11Renderable && !!(renderer.backend && renderer.backend.isWebGPUBackend);
     let scene11 = _r11Blendable && !!ctx.isMobile;
     try {
       const k = localStorage.getItem("apex26.tlxScene11");
@@ -169,6 +171,9 @@
     }
     const whiteTex = onePx(255);
     const blackTex = onePx(0);
+    // FXAA's explicit-gradient mirror tap needs a sampler even when compiled
+    // with this constant 1x1 fallback (before the first mirror, or after off).
+    blackTex.minFilter = blackTex.magFilter = THREE.LinearFilter;
 
     // LENS DIRT smudge map: the glx/post.js makeDirtTex canvas port —
     // deterministic LCG seed, value-noise base + grime blobs + dust specks +

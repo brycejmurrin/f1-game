@@ -1104,6 +1104,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/res-scale-census.test.mjs",
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
+  // #3297: retro (2000s) shift lights flash 9↔8 at the limiter, never dark; reduced motion stays on 9.
+  "tests/unit/retro-shift-lights.test.mjs",
   "tests/unit/ribbon-cpu-release.test.mjs",
   "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
@@ -1288,6 +1290,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tex-census.test.mjs",
   "tests/unit/thermal-drift.test.mjs",
   "tests/unit/three-inspector.test.mjs",
+  // Round 7: actual vendor binding/index updates and generated post/lamp shader contracts.
+  "tests/unit/three-shared-binding-update.test.mjs",
   // ...and THROTTLE = LATCH, which shares digital-steer's VM harness and runs
   // in 0.1 s: the pedal is the one control that can be left ON, so the drop on
   // blur/reset belongs in the edit loop rather than in a browser group.
@@ -1323,6 +1327,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // failure mode is a STALE key, which returns the wrong material and shows
   // up only on screen. Fuzzes the real lifted source over every field.
   "tests/unit/tlx-mat-key-memo.test.mjs",
+  "tests/unit/tlx-mirror-inset.test.mjs",
   // A·W50: TLX pins the warm's render pipelines (pinPipelines) so prunePool's 20 s drop no longer destroys them and race entry rebuilds none (three r186 releases a pipeline at usedTimes 0; real renderer over fake GL).
   "tests/unit/tlx-pipe-pin-warm.test.mjs",
   // TLX post P2 / audit #6: fixed H/V blur + per-mip bloom materials (no .tex.value ping-pong).
@@ -1341,6 +1346,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // against three r186's real Texture). The pit-crew mesh cache is capped.
   // Round-2 TLX: post chain retries after death, shadowStr 0 when the sun pass failed, DPR cap on mobileTier, caster geometry clone, warm-guarded releaseGeometry, true-LRU materials, pack CPU copy dropped, devtools-gated globals.
   "tests/unit/tlx-round2.test.mjs",
+  "tests/unit/tlx-smith-root.test.mjs",
   "tests/unit/tlx-texture-release.test.mjs",
   // Fixed render targets (#2655): the viewport helper + the raw-screenUV canary. VM + source scan, ~0.1 s.
   "tests/unit/tlx-viewport.test.mjs",
@@ -1513,6 +1519,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Six arcs plus surface-water persistence. VM-executed weather-arc.js.
   // Round-2: WATCH scrub `input` events coalesce to one seek per rAF; `change` seeks at once; stop() drops a pending seek.
   "tests/unit/watch-transport-scrub.test.mjs",
+  // #3281: waterSurface seats on local terrainY, not lap pyMin (Spa brook).
+  "tests/unit/water-local-level.test.mjs",
   "tests/unit/weather-arc-plan.test.mjs",
   "tests/unit/weather-arc-rain.test.mjs",
   // A weather-arc step cross-fades sun, cloud, ambient and fog over WX_BLEND_S;
@@ -1521,6 +1529,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/webgpu-lifecycle.test.mjs",
   // D·W21b / #3279: WebGPU menu warm enables warmPlus + idle-chunks post/shadow/cockpit; records where.
   "tests/unit/webgpu-menu-warm.test.mjs",
+  "tests/unit/webgpu-uint16-index.test.mjs",
   // WET_GRIP orders the treads as treadFor picks them: inter owns the damp, full wet the storm. VM, < 0.2 s.
   "tests/unit/wet-grip-ladder.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
