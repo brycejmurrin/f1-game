@@ -205,15 +205,25 @@
         }
       });
       // Grandstand lamp posts flanking the stadium bowl (s≈0.70–0.95).
+      // Scenery-orbit eye (az 45 / dist 45) sits ~22.5 m past the verge on +1;
+      // posts at dist 18 put a grey pillar through the f75 frame (#3364). Seat
+      // +1 past the orbit ring; −1 stays on the near bowl rim.
+      // Lens at 19.5 m up × 18–36 m out is past the theme halogen radius (~36 m);
+      // carry throw×1.5 like floodMast (identity.js) so the pool reaches the road
+      // (lamp-fixture-anchor: 14 short by up to 10.4 m after the orbit push).
       along(0.70, 0.96, 80, (k) => {
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 18);
+          const a = anchor(k, side, side === 1 ? 36 : 18);
           if (onTrack(a.c[0], a.c[2], 3)) continue;   // per-side reject, not per-node (see above)
           addCyl(out, a.c, 0.18, 20, [0.70, 0.70, 0.74], 5, [a.r, a.u, a.t]);
           // floodlight head cluster
           addBox(out, vadd(a.c, a.u, 20), [4.5, 0.5, 1.2], [0.95, 0.92, 0.78], [a.r, a.u, a.t]);
           addBox(out, vadd(vadd(a.c, a.t, 0.8), a.u, 19.6), [4.5, 0.5, 1.2], [0.95, 0.92, 0.78], [a.r, a.u, a.t]);
-          api.lampPost({ pos: vadd(a.c, a.u, 19.5), k, side, kind: "halogen" });
+          const lens = vadd(a.c, a.u, 19.5);
+          const kk = ((Math.round(k) % n) + n) % n;
+          const throwR = Math.hypot(lens[0] - px[kk], lens[1] - py[kk], lens[2] - pz[kk]);
+          api.lampPost({ pos: lens, k, side, kind: "halogen",
+            radius: Math.min(110, throwR * 1.5) });
         }
       });
 
@@ -272,7 +282,9 @@
         // the parallel climb (modelGroup "footprint rejected"). Steiermark
         // extends past the apex toward the runoff (oversteer48).
         const sLauda = 0.096;
-        const a0 = anchor(K(sLauda), 1, 30);
+        // Tiers were 22–36 m: the outer fascia sat in the scenery-orbit wedge
+        // on the T1 exit. Seat the bank past the orbit eye (~30 m gap).
+        const a0 = anchor(K(sLauda), 1, 38);
         if (!onTrack(a0.c[0], a0.c[2], 8)) {
           modelGroup("redbull-lauda-kurve-stand", {
             center: vadd(a0.c, a0.u, 7),
@@ -281,7 +293,7 @@
           }, (stage) => {
             const len = 36;
             for (let t = 0; t < 5; t++) {
-              const ai = anchor(K(sLauda), 1, 22 + t * 2.6);
+              const ai = anchor(K(sLauda), 1, 30 + t * 2.6);
               const bi = [ai.r, ai.u, ai.t];
               const h = 1.5 + t * 1.8;
               const tierLen = len - t * 1.2;
@@ -291,11 +303,11 @@
               addBox(stage, vadd(vadd(ai.c, ai.r, -(3.2 * 0.5 + 0.5)), ai.u, h * 0.55),
                 [0.9, h * 0.62, tierLen * 0.92], t % 2 ? rbRed : rbNavy, bi);
             }
-            const aB = anchor(K(sLauda), 1, 36);
+            const aB = anchor(K(sLauda), 1, 44);
             addBox(stage, vadd(aB.c, aB.u, 6), [2.0, 12, len - 4], [0.40, 0.41, 0.46],
               [aB.r, aB.u, aB.t]);
             // Brand fascia only — Steiermark has no roof canopy.
-            const aT = anchor(K(sLauda), 1, 28);
+            const aT = anchor(K(sLauda), 1, 36);
             addBox(stage, vadd(aT.c, aT.u, 10.6), [6.0, 0.65, len - 8], rbNavy,
               [aT.r, aT.u, aT.t]);
             addBox(stage, vadd(aT.c, aT.u, 11.2), [4.5, 0.4, len - 14], rbRed,
@@ -307,19 +319,25 @@
       {
         const total = ds * n; // metres per lap (== track.total)
         const mToFrac = (m) => m / total;
+        // Scenery survey orbit (az 45 / el 22 / dist 45) puts the eye ~29.5 m
+        // lateral on +1 (~22.5 m past the verge). Climb shells at gap 8–9.5
+        // swallowed that eye at f17 and put white roofs through f25 (#3364);
+        // seat the +1 climb past the orbit ring. Gaps stay staggered so
+        // neighbouring shells do not re-coplanar.
+        const ORBIT_GAP = 30;
         const segs = [
           // Red Bull climb stand (largest permanent stand after T1 exit) —
           // Steiermark / Lauda Kurve owns the T1 apex as a named modelGroup above.
-          { len: 100, gap: 9.0, h: 12, tiers: 2, roof: "cantilever", suites: true, livery: "crimson" },
-          { len: 115, gap: 8.5, h: 13, tiers: 2, roof: "truss",      suites: true, pylons: true, shell: rbNavy, crowd: rbNavy },
+          { len: 100, gap: ORBIT_GAP,     h: 12, tiers: 2, roof: "cantilever", suites: true, livery: "crimson" },
+          { len: 115, gap: ORBIT_GAP + 0.5, h: 13, tiers: 2, roof: "truss",      suites: true, pylons: true, shell: rbNavy, crowd: rbNavy },
           // Remus crest — tallest point. Was roof:"truss": measured via
           // float-audit, one bay of the truss's per-bay cross-braces lost
           // the support chain to the roof deck (same class as
           // albert_park's chicane-complex stand); switched to the solid
           // cantilever slab used by five of the other seven stands here.
-          { len: 120, gap: 8.0, h: 14, tiers: 2, roof: "cantilever", suites: true, pylons: true, livery: "crimson" },
-          { len: 110, gap: 8.5, h: 12, tiers: 2, roof: "cantilever", suites: true, shell: rbNavy, crowd: rbNavy },
-          { len: 80,  gap: 9.5, h: 11, tiers: 1, roof: "cantilever", livery: "crimson" },
+          { len: 120, gap: ORBIT_GAP + 1.0, h: 14, tiers: 2, roof: "cantilever", suites: true, pylons: true, livery: "crimson" },
+          { len: 110, gap: ORBIT_GAP + 0.5, h: 12, tiers: 2, roof: "cantilever", suites: true, shell: rbNavy, crowd: rbNavy },
+          { len: 80,  gap: ORBIT_GAP + 1.5, h: 11, tiers: 1, roof: "cantilever", livery: "crimson" },
         ];
         let sCursor = 0.135; // after Steiermark / Lauda Kurve just past T1 apex
         segs.forEach((seg, i) => {
@@ -345,13 +363,17 @@
           crowd: RB_HILL_CROWD, density: 0.55,
           bench: [[0.85, 0.85, 0.88], rbNavy, rbRed] });
       // Final sector dropping into the stadium bowl.
-      grandstandEx(0.70, 1, 8, 26, shell, rbNavy, { roof: "cantilever" });
+      // +1 bowl stands were gap 8–12: orbit eye at f75/f92 sat in / behind the
+      // shell (grey wall half-frame at f92, #3364) and ground-audit flagged
+      // unsupported addBox footprints ~17 m at frac 0.88. Seat +1 past the
+      // scenery-orbit ring; −1 stays on the near bowl face.
+      grandstandEx(0.70, 1, 30, 26, shell, rbNavy, { roof: "cantilever" });
       grandstandEx(0.72, -1, 8, 28, shell, rbRed, { tiers: 2, roof: "truss", pylons: true, h: 12 });
       grandstandEx(0.76, -1, 9, 24, shell, rbNavy, { roof: "flat" });
-      grandstandEx(0.80, 1, 12, 22, shell, rbRed, { livery: "crimson", roof: "cantilever" });
+      grandstandEx(0.80, 1, 30, 22, shell, rbRed, { livery: "crimson", roof: "cantilever" });
       grandstandEx(0.86, -1, 8, 26, shell, rbRed, { tiers: 2, roof: "cantilever", suites: true, h: 12 });
-      grandstandEx(0.88, 1, 8, 34, shell, rbNavy, { tiers: 2, roof: "truss", pylons: true, suites: true, h: 13 });
-      grandstandEx(0.92, 1, 9, 28, shell, rbRed, { roof: "flat" });
+      grandstandEx(0.88, 1, 31, 34, shell, rbNavy, { tiers: 2, roof: "truss", pylons: true, suites: true, h: 13 });
+      grandstandEx(0.92, 1, 30, 28, shell, rbRed, { roof: "flat" });
       bleacher(...rbSpan(0.95, 22), 1, 10,
         { rows: 7, rise: 1.2, setback: 1.6, step: 8,
           frameCol: [0.70, 0.71, 0.75], plankCol: [0.78, 0.79, 0.82],
@@ -646,6 +668,7 @@
         }
       }
 
-      broadcastCompound(K(0.865), 1, 34, { vans: 3, dishes: 2, mastH: 9 });
-      cameraTower(K(0.855), 1, 26, { h: 16 });
+      broadcastCompound(K(0.865), 1, 38, { vans: 3, dishes: 2, mastH: 9 });
+      // Was dist 26 — sat in the f92 orbit wedge next to the bowl stands.
+      cameraTower(K(0.855), 1, 36, { h: 16 });
     };

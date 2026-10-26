@@ -1,0 +1,12 @@
+{
+  "pins": {
+    "js/circuits/scenery/qatar.js": {
+      "narrow": [
+        "tests/unit/qatar-day-sf-orbit.test.mjs",
+        "tests/unit/floodmast-lamp-register.test.mjs",
+        "tests/unit/scenery-guards.test.mjs",
+        "tests/specs/qatar-foundation.spec.js"
+      ]
+    }
+  }
+}

@@ -1,0 +1,47 @@
+# Slice: TESTS — cost vs value (third pass, 2026-10-26, tip b07a5ac6f, read-only)
+Sources: artifacts/logs/tooling-fast-suite.log + tooling-fast-audit2/2b.log (two full local runs today, 895 files, jobs=3,
+4 cores), artifacts/logs/tooling-fast-timings.json (local per-file ms), tests/data/tooling-fast-timings.json (committed, jobs=4),
+tests/groups.json, tools/check/ratchets.mjs PIN_METRICS (counted via pinSites("assertPins")), git log --since=2026-10-01
+(17 865 message lines) + docs/notes/*.md + bus-800.txt as the "named in a red" corpus. Timings are under load (loadavg 4.7 on
+4 cores), so they are 1.3–2x a quiet box; committed CI timings agree on ranking.
+
+## Headline numbers
+- Floor wall: 1214.7 s and 1234.9 s (20.2 / 20.6 min). Sum of per-file durations 3599 s → 3599 / (3 × 1235) = **97 % parallel
+  efficiency**; the pool is CPU-bound, not badly scheduled. The serial isolated prefix (game-vm 24.8 s + catalog-discovery 24.7 s
+  + car-shade 3.4 s = 53 s with 2 of 3 slots idle) is the only scheduling loss (~4 % of wall).
+- 143 files > 5 s carry 3067 s = **85 % of the floor's CPU**; 76 files > 10 s. 752 files < 5 s cost 532 s together.
+- Top 20 (s, local): bash-guard-hardening 204, apex-tools-mcp 176, barrier-runoff-jumps 120, real-replay-vm 107, flyby-shots 106,
+  track-line-circuits 99, ratchets 98, real-replay-broadcast 91, safety-bans-hook 88, body-styles 83, track-designer-dom 66,
+  script-loader-preload 50, select-specs 43, replay-buf 41, car-mesh-budget 40, wait-polling 37, cockpit-crest-stripe 36,
+  car-mesh-anchors 35, stage-minify 33, scenery-guards 33. Hooks (2), MCP (1), fleet circuit builds (2), game VM replays (3),
+  car mesh builds (5) dominate.
+- assertPins: 8420 counted sites in 637 files; plus **327 uncounted `assert.ok(/re/.test(…))` sites in 98 files** (2nd pass: 296).
+- Browser: 170 specs; 169 in a named group, material-shimmer.spec.js only via the `test:shimmer` command. 0 orphans. Every browser
+  group is reached by some CI path (select-specs per-spec, nightly-group ROTATION of 16, or a named job: gfx/xr/smoke/baseline/
+  webkit-leg). Node groups never invoked by CI by name: test:mobile-unit, test:agent-output, test:docs-guards — all 100 % inside
+  the floor, so no hole.
+
+## Findings
+| id | what is wrong | evidence | cost to Bryce | one-line fix | conf | new/still |
+|---|---|---|---|---|---|---|
+| T1 | The commit hook (`test:guards`) is no longer a seconds gate: ratchets.test.mjs alone is its critical path | ratchets.test 98 s local / 68 s committed CI timing; guards' 43 files sum 212 s local (186 s CI). The test calls `measure()` (whole-tree walk of 32 metrics) at :13, :35 and :130, plus ~8 partial tree measures (:49-72, :107-112, :144-177). Docs still quote 5–25 s (AGENT-PROCESS-RESEARCH:93, CICD-REVIEW:267) | ≥ 70–100 s per `git commit` per session; dozens of commits/day across the fleet → tens of agent-minutes daily | memoise one full `measure()` per process (or a module-level promise) and run the synthetic-ceiling tests on a 1-file data set; move tools-runnable (33 s, parses every tool + MCP ping) out of guards to the floor | high | NEW |
+| T2 | AGENTS.md rule 4 sizes `tooling-fast` as "2–15 min"; both full runs today took 20.2 and 20.6 min | AGENTS.md:57; tooling-fast-audit2.log `duration=1214.7s`, tooling-fast-suite.log `duration=1234.9s` | agents arm Monitors/timeouts too short and read "still running" as a hang | say "~20 min full (`--changed` for the edit loop)" or regenerate from gen-ladder-figures | high | NEW |
+| T3 | Fleet-geometry and car-mesh SWEEPS sit in the edit-loop floor, though `test:sweeps` exists for exactly that and is diff-gated by geometry-paths | barrier-runoff-jumps 120 s (5 circuit builds), track-line-circuits 99 s (7 builds, 112 lines, 4+7 tests), elevation-smoothness 27 s (1 test), car-mesh-budget 40 s, cockpit-crest-stripe 36 s (2 tests), car-mesh-anchors 35 s — none named in any red/fail commit/note since 10-01, each 1–2 commits since 10-01, none in another node group except car-mesh-budget (garage-unit) | 357 s CPU ≈ 2 min wall off every floor run (~10 %) | move the six to `test:sweeps` (and garage-unit for the car ones) — they still gate the deploy via deploy.mjs | med | NEW |
+| T4 | Tests that re-boot the game VM per `test()` for one or two assertions | lockup-bench-vm: `measureLockup()` run twice (:13, :29) for 1 extra assert; ot-ahead-scan-gate: `rig()` x3 (:45,:59,:75) 23 s; finish-coast-rev-vm: `bootOneLapRace()` x3 23 s; 12 files with ≤ 3 tests cost ≥ 10 s each (sum ≈ 288 s) | ~1–1.5 min floor wall | hoist the boot to a module-level `before`/shared promise where the tests do not mutate it (lockup-bench trivially) | med | NEW |
+| T5 | The car VM is rebuilt per file: 43 unit files import tools/car/parts-sweep.mjs (its mesh `_cache` is per-process, ≤ 8 entries) and cost 394 s together; 14 import tools/lib/game-vm.cjs (265 s) | modmap of imports; parts-sweep.mjs:243-260 | the largest single CPU block in the floor | fold the small car-mesh files into 3–4 files per subject (one VM each), or a shared worker as sweepParallel already does (:847,:1001) | med | NEW |
+| T6 | The assert-pin counter is still gamed by `assert.ok(/re/.test(src))` and grows | ratchets.mjs:127 ASSERT_PIN unchanged; 327 sites / 98 files today vs 296 in pass 2 (+31 since 09:28Z); top apex-tools-mcp 41, gfx-backend-canary 14, launch-lane 13, pre-commit-guards 12 | the ratchet books new pins as flat | add `assert\.ok\(\s*!?\s*\/.+\/[a-z]*\.test\(` to ASSERT_PIN and re-baseline | high | STILL OPEN (2nd pass #2) |
+| T7 | Pure source-text pin files with no behaviour twin | top counts: gfx-backend-canary 775 pins/273 tests, webgpu-lifecycle 315, ui-improve-pass 196, apex-tools-mcp 137, car-multi-shot-tools 113, perf-try 95, skill-progressive 92, announcer 83, track-designer-dom 80, loading-card 75, cdmcp-measure 73, bash-guard-hardening 71, hud-metrics-layout 69, agent-config 68, hud-feel 66. Spot-check of 5: `apex-gfx-live`, `clearAttemptArtifacts` (gfx-backend-canary), `_presentFormat` (webgpu-lifecycle), `--ld-card-scale` (loading-card) appear in NO other test; `leavePracticePick` only in a 2nd pin file (ui-experience). Covered by behaviour: `apex26.gfxBound` (5 specs), `hudMapVis` (settings-reload, ui-button-touch specs), `hud-met-*` (hud-layout.spec) | refactors fail on text, not behaviour; the 3 uncovered ones would pass a broken runtime | convert the gfx-bound/apex-gfx-live and present-format pins into one VM boot assert each; leave the rest | med | NEW |
+| T8 | The pin counter also counts runtime-value regexes as "source pins" | loading-card.test.mjs `assert.match(v["--ld-card-scale"], /^[0-9]+…$/)`, `assert.match(bars.get("height"), /2\.35/)` — computed CSS values, not source | ceiling is inflated; real source pins under-reported | count only `assert.match(<id bound to readFileSync/gameSource>…)`; low priority | low | NEW |
+| T9 | Stale in-file / groups.json cost claims | safety-bans-hook header "A few seconds" vs 88 s; body-styles groups.json note "~3 s" vs 83 s; car-mesh-budget "~5 s" vs 40 s; game-vm "3 s" vs 25 s; garage-finish-remap "0.1 s" vs 13 s | agents pick these as "cheap" single checks | drop numeric costs from comments; tooling-timings.json is the source | med | NEW |
+| T10 | Hook tests: 292 s for two files that spawn bash-guard.sh + python shellparse per case | bash-guard-hardening 58 tests/53 hook spawns 204 s; safety-bans-hook 12 tests 88 s (git fixture repos). Shared command strings across hook test files are few (bash-guard-hardening ∩ safety-bans 1, ∩ cross-tool-guards 3, ∩ pre-commit 1) — the cost is spawn overhead, not duplication | 8 % of floor CPU | call shellparse.py's classifier in one python process over a batch of commands; keep ~5 end-to-end hook spawns | med | NEW |
+| T11 | Duplicate-coverage clusters are small: fleet-bus (32 tests) / fleet-bus-mirror (8) / agent-msg (21) test disjoint units (lease/address vs mirror/dedupe vs payload/webhook); merge-gate / ready-gate are reused by 4–6 files but as fixtures | titles diffed; modmap counts | none worth action | — | med | NEW (negative) |
+| T12 | test:guards carries non-guards | title-art (index.html art invariants), legends (driver-record facts), carve-a-modules (game.js bag values), log-namespaces: pure game/data tests, ~0.6 s together; behind-ship is self-described "never fails" | negligible time; dilutes "guards = repo-structure invariants" | move the four to the floor; drop behind-ship from guards | low | NEW |
+
+## Never named in a red since 2026-10-01 and > 5 s (move-out candidates)
+94 of 143 files > 5 s match no "red/fail/broke/flake/timeout/fix" line in commits, docs/notes or the bus (proxy, not CI logs);
+they cost 1832 s CPU. The top: barrier-runoff-jumps 120, real-replay-vm 107, flyby-shots 106, track-line-circuits 99,
+real-replay-broadcast 91, safety-bans-hook 88, track-designer-dom 66, replay-buf 41, car-mesh-budget 40, wait-polling 37,
+cockpit-crest-stripe 36, car-mesh-anchors 35, stage-minify 33, tools-runnable 33, cockpit-wheels 30. Most were added 10-18..10-22,
+so "never red" is two weeks of evidence, not history. The real-replay pair already double-runs in game-vm-b1/b2 on CI
+(node-plan.mjs THINNED_VM skips them only on a matched plan) — candidates to leave the floor for game-vm. flaky-quarantine.json
+holds browser specs only (hud-mirror, menu-baseline, garage-livery-churn, image-grade); no unit file has ever been quarantined.

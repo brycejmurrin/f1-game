@@ -205,13 +205,28 @@
     // chain draws into — rt.viewport (0, 0, lw, lh), the top-left of the target on
     // both backends — and the ratio uniforms of the VP.tex readers. Off: place()
     // is rtSetSize and nothing else here changes.
+    //
+    // ORIENT COVER (#3311): on phones an equal-pixel orientation swap (422×195 ↔
+    // 195×422) used to miss the same-size early-out, dispose+realloc every post
+    // target, hitch the frame, and climb PerfGov. When the governor fixed-targets
+    // flag is off we still stand up a local VP and keep a square physical cover
+    // of max(w,h) so a transpose only moves logical viewports. fixedOk() stays
+    // false unless ctx.fixedTargets — tlx.js canvas sizing must not flip.
     if (ctx.fixedTargets && ctx.vp && ctx.vp.enabled && ctx.vp.scope) viewportScope = ctx.vp.scope();
-    const VP = viewportScope || ctx.vp || null;
+    let VP = viewportScope || ctx.vp || null;
     const fixed = !!(ctx.fixedTargets && VP && VP.enabled);
-    let PW = 1, PH = 1;   // the physical (present) size; fixed mode only
+    const phonePost = !!ctx.isMobile;
+    let orientCover = false;
+    if (!fixed && phonePost && window.TLXShaders && TLXShaders.viewport) {
+      try {
+        VP = TLXShaders.viewport(THREE, TSL, { enabled: true });
+        orientCover = !!(VP && VP.enabled);
+      } catch (_) { VP = ctx.vp || null; orientCover = false; }
+    }
+    const phys = fixed || orientCover;   // place() uses physical + viewport
+    let PW = 1, PH = 1;   // the physical (present) size; phys mode only
     // Post working size. Phones use PHONE_POST_SCALE of the scene dimensions;
     // aux passes (SSAO/godray/bloom) then halve that again. Desktop keeps pW===W.
-    const phonePost = !!ctx.isMobile;
     let pW = 1, pH = 1;
 
     // render-target helpers
@@ -358,10 +373,11 @@
       rt.setSize(w, h);
     }
     // Give rt its logical size lw x lh inside the physical pw x ph. Off: a plain
-    // resize. On: the allocation only changes when the physical size does; the
-    // viewport and the readers' ratio follow the logical size every time.
+    // resize. On (fixed or #3311 orient cover): the allocation only changes when
+    // the physical size does; the viewport and the readers' ratio follow the
+    // logical size every time.
     function place(rt, lw, lh, pw, ph) {
-      if (!fixed) { rtSetSize(rt, lw, lh); return; }
+      if (!phys) { rtSetSize(rt, lw, lh); return; }
       rtSetSize(rt, pw, ph);                 // no-op once allocated at this size
       rt.viewport.set(0, 0, lw, lh);         // rtSetSize/setSize resets it: set AFTER
       const ts = rt.textures || (rt.texture ? [rt.texture] : []);
@@ -372,13 +388,13 @@
     const PHONE_POST_SCALE = 1;   // phone post size × scene; 1 = full res (pre-#3479)
     const postSize = (v) => Math.max(1, Math.floor(Math.max(1, v | 0) * (phonePost ? PHONE_POST_SCALE : 1)));
     function layoutHalf() {
-      // Base AO/GR off the post working size, including fixed allocations.
+      // Base AO/GR off the post working size, including physical allocations.
       aoW = halfOf(pW);
       aoH = halfOf(pH);
       grW = aoW; grH = aoH;
-      const physBaseW = fixed ? postSize(PW) : pW;
-      const physBaseH = fixed ? postSize(PH) : pH;
-      const pw = fixed ? halfOf(physBaseW) : aoW, ph = fixed ? halfOf(physBaseH) : aoH;
+      const physBaseW = fixed ? postSize(PW) : (orientCover ? PW : pW);
+      const physBaseH = fixed ? postSize(PH) : (orientCover ? PH : pH);
+      const pw = phys ? halfOf(physBaseW) : aoW, ph = phys ? halfOf(physBaseH) : aoH;
       if (ssaoRT) { place(ssaoRT, aoW, aoH, pw, ph); place(ssaoBlurRT, aoW, aoH, pw, ph); }
       if (godrayRT) { place(godrayRT, grW, grH, pw, ph); place(godrayBlurRT, grW, grH, pw, ph); }
     }
@@ -386,17 +402,17 @@
       if (!bloomLv) return;
       let bw = Math.max(1, Math.floor(pW / BLOOM_DIV));
       let bh = Math.max(1, Math.floor(pH / BLOOM_DIV));
-      const physBloomW = fixed ? postSize(PW) : pW;
-      const physBloomH = fixed ? postSize(PH) : pH;
+      const physBloomW = fixed ? postSize(PW) : (orientCover ? PW : pW);
+      const physBloomH = fixed ? postSize(PH) : (orientCover ? PH : pH);
       let pbw = Math.max(1, Math.floor(physBloomW / BLOOM_DIV)), pbh = Math.max(1, Math.floor(physBloomH / BLOOM_DIV));
       nLv = 0;
       for (let i = 0; i < bloomLv.length; i++) {
-        // Fixed: a level exists while the PHYSICAL one does; the logical count can only be lower.
+        // Phys: a level exists while the PHYSICAL one does; the logical count can only be lower.
         if (bw >= 8 && bh >= 8) {
           place(bloomLv[i].rt, bw, bh, pbw, pbh);
           bloomLv[i].w = bw; bloomLv[i].h = bh;
           nLv++;
-        } else if (fixed && pbw >= 8 && pbh >= 8) {
+        } else if (phys && pbw >= 8 && pbh >= 8) {
           place(bloomLv[i].rt, 1, 1, pbw, pbh);   // allocated, unused at this scale
           bloomLv[i].w = 1; bloomLv[i].h = 1;
         }
@@ -410,7 +426,7 @@
       chunks: ctx.chunks, shadow,
       sceneTex: sceneRT.texture, sceneTagTex, sceneDepthTex,
       dirtTex, whiteTex, blackTex,
-      trackMaterial, vp: fixed ? VP : null,
+      trackMaterial, vp: phys ? VP : null,
     });
     ownTexture(P.composite && P.composite.grOffTex);   // the godray slot's own "off" black
     if (P.composite && P.composite.U) P.composite.U.sceneHdr.value = _sceneHdr;
@@ -579,9 +595,29 @@
     const _last = { ssao: false, bloom: false, shafts: false, ssr: false, fxaa: false, sgsr: false };
     let _lastPresentRT = null;
 
-    // w x h: the render (logical) size; pw x ph: the present size (fixed mode only).
+    // w x h: the render (logical) size; pw x ph: the present size (phys mode).
+    // Orient cover (#3311): physical is a square max(w,h) so a transpose fits
+    // with no realloc.
     function resize(w, h, pw, ph) {
-      const nPW = fixed ? Math.max(1, pw | 0, w | 0) : 0, nPH = fixed ? Math.max(1, ph | 0, h | 0) : 0;
+      let nPW = 0, nPH = 0;
+      if (fixed) {
+        nPW = Math.max(1, pw | 0, w | 0);
+        nPH = Math.max(1, ph | 0, h | 0);
+        // #3311: equal-pixel orientation — grow physical to cover both axes so a
+        // 422×195 ↔ 195×422 swap does not dispose the chain (PerfGov hitch).
+        if (PW > 1 && PH > 1 && Math.abs(nPW - PH) <= 1 && Math.abs(nPH - PW) <= 1) {
+          nPW = Math.max(PW, nPW); nPH = Math.max(PH, nPH);
+        }
+      } else if (orientCover) {
+        const side = Math.max(1, w | 0, h | 0);
+        nPW = side; nPH = side;
+        // Grow-only across flips: never shrink the cover on a transpose (the
+        // new side equals the old max). A real shrink (scale step) may reduce.
+        if (PW > 1 && PH > 1) {
+          const transpose = Math.abs((w | 0) - H) <= 1 && Math.abs((h | 0) - W) <= 1;
+          if (transpose) { nPW = Math.max(PW, nPW); nPH = Math.max(PH, nPH); }
+        }
+      }
       const nPostW = postSize(w);
       const nPostH = postSize(h);
       if (w === W && h === H && nPW === PW && nPH === PH && nPostW === pW && nPostH === pH) {
@@ -592,8 +628,9 @@
       W = Math.max(1, w | 0); H = Math.max(1, h | 0);
       PW = nPW; PH = nPH;
       pW = nPostW; pH = nPostH;
-      const ldrPW = fixed ? postSize(PW) : pW;
-      const ldrPH = fixed ? postSize(PH) : pH;
+      // Fixed: LDR physical tracks present. Orient cover: same square as scene.
+      const ldrPW = fixed ? postSize(PW) : (orientCover ? PW : pW);
+      const ldrPH = fixed ? postSize(PH) : (orientCover ? PH : pH);
       place(sceneRT, W, H, PW, PH);
       place(ldrRT, pW, pH, ldrPW, ldrPH);
       layoutHalf();
@@ -606,11 +643,11 @@
       const want = !!(P.sgsr && (fixed || (ctx.wantSpatialUpscale && ctx.wantSpatialUpscale())));
       if (want) {
         if (!aaRT) {
-          aaRT = makeRT(fixed ? 1 : pW, fixed ? 1 : pH, THREE.UnsignedByteType);
+          aaRT = makeRT(phys ? 1 : pW, phys ? 1 : pH, THREE.UnsignedByteType);
           aaRT.texture.name = "TLXPostAA";
         }
-        const aaPW = fixed ? postSize(PW) : pW;
-        const aaPH = fixed ? postSize(PH) : pH;
+        const aaPW = fixed ? postSize(PW) : (orientCover ? PW : pW);
+        const aaPH = fixed ? postSize(PH) : (orientCover ? PH : pH);
         place(aaRT, pW, pH, aaPW, aaPH);
       } else if (aaRT) {
         // _lastPresentRT may still BE this target (present() stores `dest ||
@@ -624,8 +661,8 @@
       }
     }
 
-    // Output logical size of a pass (fixed mode only; the shaders' VP.uv reads it).
-    function vset(pass, w, h) { if (fixed && pass && pass.V) pass.V.set(w, h); }
+    // Output logical size of a pass (phys mode; the shaders' VP.uv reads it).
+    function vset(pass, w, h) { if (phys && pass && pass.V) pass.V.set(w, h); }
     function presentSize() {
       const ps = ctx.getPresentSize ? ctx.getPresentSize() : null;
       return [ps && ps.width ? ps.width : PW, ps && ps.height ? ps.height : PH];
@@ -650,7 +687,7 @@
       // throw mid-chain latches autoClear=false for every later classic-path
       // frame, which skips three's clear and smears the canvas until reload.
       try {
-      if (fixed) VP.sync();   // the readers' logical/physical ratio for the targets as bound NOW
+      if (phys) VP.sync();   // the readers' logical/physical ratio for the targets as bound NOW
 
       const threshold = o.threshold !== undefined ? o.threshold : 0.75;
       const bloomAmt = o.bloom !== undefined ? o.bloom : 0.55;
@@ -1250,6 +1287,8 @@
         held: { ssao: !!ssaoRT, bloom: !!bloomLv, shafts: !!godrayRT },
         rtResizes: _rtResizes,
         fixed: fixed ? { physical: [PW, PH], logical: [W, H], post: [pW, pH] } : null,
+        // #3311 phone orientation cover (square physical; logical follows the flip).
+        orientCover: orientCover ? { physical: [PW, PH], logical: [W, H], post: [pW, pH] } : null,
       }),
       // Drop last-presented block flags (Home garage / mid-warm frames must
       // not satisfy a race probe that waits on shafts/bloom before Singapore

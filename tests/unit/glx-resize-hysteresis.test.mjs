@@ -46,3 +46,18 @@ test("a real change (≥ 2 px) still rebuilds, once", () => {
   setCss(h, 802, 400);
   assert.equal(fbos(h), after, "an unchanged size rebuilt again");
 });
+
+test("#3311 equal-pixel orientation swap does not rebuild post targets on mobile", () => {
+  // forceMobileTier makes IS_MOBILE/MOBILE_TIER take the square cover path in
+  // createTargets — a 800×400 ↔ 400×800 transpose then fits without realloc.
+  const h = bootGlx({ ls: { "apex26.forceMobileTier": "1" } });
+  setCss(h, 800, 400);
+  assert.equal(h.GLX.width, 800);
+  h.reset();
+  setCss(h, 400, 800);
+  assert.equal(fbos(h), 0, "equal-pixel transpose reallocated framebuffers");
+  assert.deepEqual(sizeOf(h), { width: 400, height: 800 }, "logical size follows the flip");
+  const after = fbos(h);
+  setCss(h, 800, 400);
+  assert.equal(fbos(h), after, "flip back rebuilt the cover again");
+});

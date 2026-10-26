@@ -403,7 +403,7 @@ const CarDraw = (function () {
     // texture leaves the cache: invalidation, LRU eviction and photo release.
     function dropDecalTexture(key) {
       const tex = _decalTexCache[key];
-      if (tex && G.gfx.freeTexture) G.gfx.freeTexture(tex);
+      if (tex && G.gfx.freeTexture && !parkDraftAtlas(key, tex)) G.gfx.freeTexture(tex);
       delete _decalTexCache[key]; delete _decalTexFail[key]; delete _decalTexBytes[key];
       _decalTexUse.delete(key); _photoKeys.delete(key);
       _hiResDone.delete(key); _hiResPending.delete(key); _hiResFail.delete(key); _decalSeen.delete(key);
@@ -453,6 +453,30 @@ const CarDraw = (function () {
       let b = 0;
       for (let i = 0; i < _decalTexOrder.length; i++) b += _decalTexBytes[_decalTexOrder[i]] || 0;
       return { bytes: b, live: _decalTexOrder.length, recorded: Object.keys(_decalTexBytes).length };
+    }
+    // A PAINT DRAFT RE-FILLS ITS OWN ATLAS (#3505). Every garage edit drops the draft key and mints the
+    // next one at the same size. Through freeTexture that leaned on TLX's shared retire pool: an entry
+    // evicted by other frees, or one retired before its first draw (three creates a GPU texture on a
+    // texture's first update), made a fresh GPU allocation on the edit (garage-livery-churn). The
+    // dropped draft handle is parked here and re-filled in place (refillTexture, TLX only) by the next
+    // draft mint; spares left when the draft closes are freed by the next non-draft lookup.
+    const _draftSpare = [], DRAFT_SPARE_MAX = 2;
+    const isDraftKey = (key) => key.indexOf(":" + DRAFT_TAG) > 0;
+    function parkDraftAtlas(key, tex) {
+      if (!G.gfx.refillTexture || !G.livDraftOverride || !isDraftKey(key)) return false;
+      _draftSpare.push(tex);
+      while (_draftSpare.length > DRAFT_SPARE_MAX) G.gfx.freeTexture(_draftSpare.shift());
+      return true;
+    }
+    function takeDraftSpare(key, canvas) {
+      if (!isDraftKey(key)) return null;
+      for (let i = 0; i < _draftSpare.length; i++) {
+        if (G.gfx.refillTexture(_draftSpare[i], canvas)) return _draftSpare.splice(i, 1)[0];
+      }
+      return null;
+    }
+    function freeDraftSpares() {
+      while (_draftSpare.length) G.gfx.freeTexture(_draftSpare.pop());
     }
     function invalidateDecalTextures(teamId, draftOnly) {
       const prefix = teamId + ":" + (draftOnly ? DRAFT_TAG : "");
@@ -732,6 +756,7 @@ const CarDraw = (function () {
     }
     function getCarDecalTexture(team, num, isPlayer, allowHiRes) {
       if (typeof LiveryTex === "undefined" || !G.gfx.createTexture) return null;
+      if (_draftSpare.length && !G.livDraftOverride) freeDraftSpares();
       // isPlayer is part of the key: on the mobile tier the player's atlas uploads
       // at 512² and AI atlases at 256², so a team the player later switches to
       // must not reuse a cached AI-resolution atlas (and vice versa).
@@ -752,7 +777,7 @@ const CarDraw = (function () {
           // Sync path is ALWAYS the preview tier for the player (hiRes false).
           // Full 2048 is schedulePlayerHiRes only — never boot / garage-open.
           const canvas = LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer, false);
-          t = G.gfx.createTexture(canvas, isPlayer ? { anisotropy: 8 } : undefined);
+          t = takeDraftSpare(key, canvas) || G.gfx.createTexture(canvas, isPlayer ? { anisotropy: 8 } : undefined);
           if (!t) throw new Error("createTexture returned no texture");   // a lost GLX context: retry, never cache a silent null
           if (isPlayer) t = crispPlayerDecal(t);
           _decalTexBytes[key] = atlasBytes(canvas);

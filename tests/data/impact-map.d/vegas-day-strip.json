@@ -1,0 +1,11 @@
+{
+  "pins": {
+    "js/circuits/scenery/vegas.js": {
+      "desertN": ["tests/unit/vegas-day-strip.test.mjs"],
+      "casinoDayWall": ["tests/unit/vegas-day-strip.test.mjs"],
+      "vegas-sphere": ["tests/unit/vegas-day-strip.test.mjs"],
+      "vegas-bellagio": ["tests/unit/vegas-day-strip.test.mjs"],
+      "vegas-paris-balloon": ["tests/unit/vegas-day-strip.test.mjs"]
+    }
+  }
+}

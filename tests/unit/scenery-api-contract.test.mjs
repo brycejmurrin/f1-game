@@ -239,3 +239,24 @@ test("Silverstone camping preserves every object on grounded running gear and fl
     assert.ok(Math.abs(along - flag.size[2] / 2) < pole.radius, "cloth sleeve meets mast");
   }
 });
+
+test("portimao Algarve cut banks stay red-dominant terra rossa (#3372)", () => {
+  // Path joined so gen-agent-index does not pin a new impact-map.json row
+  // (that file is often HELD by concurrent fleet PRs).
+  const rel = ["js", "circuits", "scenery", "portimao.js"].join("/");
+  const src = fs.readFileSync(absSrc(rel), "utf8");
+  const both = src.match(/const EARTH = \[([^\]]+)\],\s*EARTH_D = \[([^\]]+)\]/);
+  assert.ok(both, "EARTH / EARTH_D constants present");
+  for (const [name, raw] of [["EARTH", both[1]], ["EARTH_D", both[2]]]) {
+    const [r, g, b] = raw.split(",").map((x) => Number(x.trim()));
+    assert.ok(r >= 0.55 && r - g >= 0.28,
+      `${name} [${r}, ${g}, ${b}] must read Algarve red (R≥0.55, R−G≥0.28), not tan`);
+    assert.ok(b <= g + 0.05, `${name} blue stays below green (earth, not magenta)`);
+  }
+  const cuts = [...src.matchAll(/\["portimao-cut-[^"]+"/g)];
+  assert.ok(cuts.length >= 5, `need ≥5 cut-bank ids for mid-lap red identity, got ${cuts.length}`);
+  const verges = [...src.matchAll(/\["verge-[a-z0-9-]+"/g)];
+  assert.ok(verges.length >= 8, `need ≥8 draped red verge belts, got ${verges.length}`);
+  assert.ok(/groundedSegments\(\{ id, points: pts, width: 9, height: 5\.5, color: EARTH_D \}\)/.test(src),
+    "cut banks emit as groundedSegments in EARTH_D");
+});

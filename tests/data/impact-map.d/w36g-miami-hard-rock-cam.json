@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/circuits/scenery/miami.js": {
+      "narrow": [
+        "tests/unit/miami-hard-rock-orbit.test.mjs"
+      ]
+    }
+  }
+}

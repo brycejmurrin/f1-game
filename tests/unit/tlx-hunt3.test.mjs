@@ -938,3 +938,19 @@ test("R1: production body coalescing selects only distant procedural shared riva
     assert.deepEqual(calls, expected ? [[expected, matrix, expected === 'shared' ? coPaint : paint]] : []);
   }
 });
+
+test("#3115 F8/F9: the per-frame sky update/derive and lit updateFrame mint no closure or array per call", () => {
+  const body = (src, head) => {
+    const i = src.indexOf(head);
+    assert.ok(i >= 0, head);
+    let d = 0, j = src.indexOf("{", i);
+    for (let k = j; k < src.length; k++) { if (src[k] === "{") d++; else if (src[k] === "}" && --d === 0) return src.slice(j, k + 1); }
+    throw new Error("unbalanced " + head);
+  };
+  const sky = read("js/render/three/tsl-sky.js"), lit = read("js/render/three/tsl-lit.js");
+  for (const [src, head] of [[sky, "function derive()"], [sky, "function update(sky)"], [lit, "function updateFrame(frame, mirror)"]])
+    assert.doesNotMatch(body(src, head), /=>/, head + " defines an arrow closure per call");
+  // updateFrame's `|| [..]` defaults only mint when a frame field is absent; the sky path has none at all.
+  for (const head of ["function derive()", "function update(sky)"])
+    assert.doesNotMatch(body(sky, head), /(?:=|\|\|)\s*\[\s*[-\d]/, head + " mints a literal array per call");
+});
