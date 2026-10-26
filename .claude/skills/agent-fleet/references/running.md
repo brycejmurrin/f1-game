@@ -45,7 +45,7 @@ the acting session.
   own safety net (it fires into your session only) and let the successor arm its own.
   3. a FLEET BUS WATCH that survives the orchestrator (Bryce 2026-10-22: "setup
      up a webhook or routine to track the bus"). This is one account-wide
-     `create_trigger` with `create_new_session_on_fire: true`, hourly, Sonnet (OrchA 23 created `trig_01JY5wYatqkrVwPXPsMD1ryZ`, "Fleet bus watch (A+D liveness)").
+     `create_trigger` with `create_new_session_on_fire: true`, hourly, Sonnet (OrchA 23 created `trig_01JY5wYatqkrVwPXPsMD1ryZ`, "Fleet bus watch (A+D liveness)"; that id is historical, find the current one with `list_triggers`).
      Each fire gets a fresh, short-lived session that reads the bus once and
      works out each fleet orchestrator's last line, from `read --last N --json`
      filtered by `from`. Do not use `who`'s age: `who` dates the `ORCH LIVE` line,
@@ -54,7 +54,10 @@ the acting session.
      wakes the other fleet (webhook to D, `send_message` to A's live session),
      and ends. It never merges, pushes or edits a PR. An orchestrator keeps it
      across hand-offs: list it with `list_triggers` and never create a second.
-  The webhook wakes D only. A's wake pass also reads DAD's direct messages
+  The webhook wakes D only; Fleet B wakes A through the cross-account inbox,
+  which lands on the bus as `[FROM FLEET B via inbox]` lines from
+  `claude:fleet-b-inbox` (communication.md). Read them in the wake pass.
+  A's wake pass also reads DAD's direct messages
   through ReadNotifications (orchestrator.md §Talking to other fleets).
 - Each wake also lists every open PR with no live owner session (Bryce requires
   one per PR); start an owner (role-pr-owner.md) or say why not. `pr-board`

@@ -205,14 +205,19 @@ work left:
    - Bryce's open asks and his decisions in force, quoted with times;
    - the other fleets' orchestrators and how to reach them (bus id, webhook,
      direct session);
-   - the env-secret presence check (names only);
-   - the FIRST steps: bus `ORCH <letter> LIVE`, `send_message` to the
+   - the env-secret presence check (names only): the webhook pair above plus
+     the inbox pair (`APEX_B_RELAY_URL` / `APEX_B_RELAY_TOKEN` on A,
+     `APEX_A_INBOX_URL` / `APEX_A_INBOX_TOKEN` on B);
+   - the FIRST steps: bus `ORCH <letter> LIVE` in the canonical form
+     `ORCH <letter> LIVE claude:session_<id> (…)` (a free-text line makes
+     `fleet-bus.mjs who` return the wrong id, bus 5ca9880), `send_message` to the
      predecessor, arm the tick and the hourly safety net, one message to each
      lane, the queue branch.
    - which timers are the successor's: the account-wide FLEET BUS WATCH
      routine (running.md §Bus routine 3) survives the hand-off and is never
      recreated; the per-session tick and safety net are re-armed by the
-     successor.
+     successor, whose 60 s bus watch includes `claude:fleet-<letter>-inbox`
+     (communication.md rule 6).
 2. `get_session` (no id) on yourself; read `lineage.depth` and `rate_limit_info`.
    - quota at `allowed_warning` or worse → no launch; tell Bryce once and park.
    - depth < 7 → `create_session` the successor yourself (source_url + deploy
