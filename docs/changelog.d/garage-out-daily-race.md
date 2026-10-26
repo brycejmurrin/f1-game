@@ -1,0 +1,1 @@
+Fixed: DAILY's START could hand back to the settings sheet with no garage-out when the race modules finished loading mid-preparation (the Daily's standard car and difficulty landed late). The sheet now waits for them first (#3591).
