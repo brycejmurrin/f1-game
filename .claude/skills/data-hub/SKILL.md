@@ -25,11 +25,11 @@ follow-owner state → **f1-animation-cameras** (`references/replay.md`).
 | export | `loadExport` | 24 h |
 
 `MAX_AGE` controls reuse of tab DOM nodes (the check is `showTab` in
-`js/data/hub.js` ~373-386: `st.node` younger than `maxAge` and not past its own
-`nextFlipAt`); it is independent of the API cache TTL in `js/data/api.js`
+`js/data/hub.js` ~374-386: `maxAge` then `st.node` younger than `maxAge` and not
+past its own `nextFlipAt`); it is independent of the API cache TTL in `js/data/api.js`
 (schedule responses: 24 h). Refreshing a tab can reuse a cached API response.
 A standings table tagged `LAST SEASON · <y> FINAL` is the intended fallback
-(`loadStandings` in `js/data/standings.js` ~123-130: the current year is empty,
+(`loadStandings` in `js/data/standings.js` ~124-130: the current year is empty,
 so it fetches `season() − 1`), not a stale cache.
 
 RACE IT (`js/data/real-race-tab.js`) builds one Grand Prix's timing into the
