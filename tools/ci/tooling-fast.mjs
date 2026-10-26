@@ -1517,6 +1517,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Six arcs plus surface-water persistence. VM-executed weather-arc.js.
   // Round-2: WATCH scrub `input` events coalesce to one seek per rAF; `change` seeks at once; stop() drops a pending seek.
   "tests/unit/watch-transport-scrub.test.mjs",
+  // #3281: waterSurface seats on local terrainY, not lap pyMin (Spa brook).
+  "tests/unit/water-local-level.test.mjs",
   "tests/unit/weather-arc-plan.test.mjs",
   "tests/unit/weather-arc-rain.test.mjs",
   // A weather-arc step cross-fades sun, cloud, ambient and fog over WX_BLEND_S;
