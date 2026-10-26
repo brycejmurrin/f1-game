@@ -284,7 +284,11 @@ export const MAX_OVERFLOW_SHARDS = 11;
 // parts-physics (70 s). One extra allowance merely displaced dev-tools;
 // four carry every candidate with two extra matrix jobs. Keep the verdict
 // strict: anything beyond this bounded allowance is still a named failure.
-export const MAX_SPILL_SHARDS = 4;
+// 4 -> 7 (2026-10-26, PR #3812, Bryce: "Raise to 7"): a tests/helpers change
+// routes the whole suite; at 4 career-season, career-hub and props-over-road
+// ran nowhere. Measured on --since <merge-base>: 4 -> 3 skipped, 5 -> 2,
+// 6 -> 1, 7 -> 0 (58 shards, +6 jobs).
+export const MAX_SPILL_SHARDS = 7;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on

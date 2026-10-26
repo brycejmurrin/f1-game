@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/circuits/scenery/baku.js": {
+      "narrow": [
+        "tests/unit/baku-night-orbit.test.mjs"
+      ]
+    }
+  }
+}

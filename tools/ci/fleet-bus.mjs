@@ -33,7 +33,8 @@
 //   node tools/ci/fleet-bus.mjs send INCIDENT --to '*' --fix <sha> "open pages-red-3801 Pages red on abc1234"   # typed: open <id> <reason> | close <id>
 //   node tools/ci/fleet-bus.mjs incidents [--json]   # open INCIDENT ids (artifacts/fleet-bus/incidents.json, whole branch log); exit 3 = a freeze is open
 //   node tools/ci/fleet-bus.mjs read [--to merge-holder --to '#2990'] [--since <sha>] [--last 20] [--json] [--peek | --strict]
-//   node tools/ci/fleet-bus.mjs who A [--last 500] [--json]   # fleet A's live orchestrator: `A <host:id> <sha7> <age>`; exit 1 none
+//   node tools/ci/fleet-bus.mjs who A [--last 500] [--stale-min 45] [--json]   # fleet A's live orchestrator: `A <host:id> <sha7> <age>`; exit 1 none,
+//     exit 3 + ` STALE (last line <age> ago)` when its newest own bus line is older than --stale-min
 //   node tools/ci/fleet-bus.mjs watch --to B --to '*' [--all] [--interval 20]   # the orchestrator's Monitor: each NEW line once, never exits
 //
 // `--to` must be deliverable (addressProblem): *, #<PR>, a fleet letter (A, B·O3), a role, or a real
@@ -365,24 +366,43 @@ export function parseLog(text) {
   }).filter(Boolean);
 }
 
-/** Types whose `ORCH <L> LIVE` line names an orchestrator (ROTATE; INFO and HANDOFF for the pre-ROTATE habit). */
-export const LIVE_TYPES = ["ROTATE", "INFO", "HANDOFF"];
-/** Sender hosts an orchestrator runs on. */
-const ORCH_HOSTS = ["claude", "cursor", "grok"];
+/** A bare session id -> `<host>:<id>`; `fromHost` decides an id no prefix identifies. Pure. */
+function withHost(id, fromHost) {
+  if (/^[a-z]+:/.test(id)) return id.replace(/^claude:cse_/, "claude:session_");
+  if (/^cse_/.test(id)) return `claude:${id.replace(/^cse_/, "session_")}`;
+  if (/^session_/.test(id)) return `claude:${id}`;
+  if (/^bc-/.test(id)) return `cursor:${id}`;
+  return fromHost ? `${fromHost}:${id}` : id;
+}
+const LIVE_ID = /\bLIVE\s+((?:[a-z]+:)?[A-Za-z0-9][A-Za-z0-9_-]{7,})/;
 
 /**
- * The orchestrator a bus entry announces, as { letter, id }, or null. Pure. The id is the SENDER (audit4 BH1/G9): the
- * body token after LIVE was free text (`claude:OrchA`, `claude:on`, `claude:(booting` answered `who` for ~68 h), and any
- * quoting line re-pointed a fleet. So: a ROTATE/INFO/HANDOFF whose body starts `ORCH <L> LIVE` (after an optional `[INFO]`
- * and at most one lane tag such as `A·O1`), from a deliverable claude/cursor/grok id. `cse_` normalises to `session_`.
+ * The orchestrator a bus entry announces, as { letter, id } (id = `<host>:<session id>`), or null. Pure.
+ * Explicit form (comms.md §Fleet bus): `ORCH <letter> LIVE <host>:<session id>` anywhere in the text.
+ * Tolerated free text (ORCH19, 2026-10-19): "ORCH19 LIVE session_X (replaces ORCH18 session_Y), Fleet A orchestrator":
+ * LIVE, the id right after it, "Fleet <letter>" and an ORCH/orchestrator word. SEED and FLEET lines name no orchestrator.
  */
 export function parseLive(entry) {
-  if (!entry || (entry.type && !LIVE_TYPES.includes(entry.type))) return null;
-  const m = /^(?:\[INFO\]\s*)?(?:[A-Z](?:·[A-Za-z0-9]+)+\s+)?ORCH\s+([A-Z])\s+LIVE\b/.exec(String(entry.text || "").trim());
-  const from = String(entry.from || "").replace(/^claude:cse_/, "claude:session_");
-  const host = (/^([a-z]+):/.exec(from) || [])[1];
-  if (!m || !ORCH_HOSTS.includes(host) || addressProblem(from)) return null;
-  return { letter: m[1], id: from };
+  const text = String(entry?.text || "");
+  const fromHost = (/^([a-z]+):/.exec(String(entry?.from || "")) || [])[1] || "";
+  // The id must look like one: "ORCH A LIVE is now claude:session_X" (1a2624d, 2026-10-26) once resolved to `claude:is`.
+  // A host prefix makes a short name an id (`grok:DAD`); quote marks end it (adb3d55 quoted the line → `grok:DAD'`).
+  const explicit = /\bORCH\s+([A-Z])\s+LIVE\s+(?:is\s+)?(?:now\s+)?([a-z]+:[A-Za-z0-9][A-Za-z0-9_-]*|[A-Za-z0-9][A-Za-z0-9_-]{7,})(?=[\s,;).'"`]|$)/.exec(text);
+  if (explicit) return { letter: explicit[1], id: withHost(explicit[2], fromHost) };
+  if (/\b(?:SEED|FLEET)\s+[A-Z]\s+LIVE\b/.test(text) || !/\bORCH|orchestrator/i.test(text)) return null;
+  const id = LIVE_ID.exec(text), fleet = /\bFleet\s+([A-Z])\b/.exec(text);
+  return id && fleet ? { letter: fleet[1], id: withHost(id[1], fromHost) } : null;
+}
+
+/**
+ * An announcement counts only on a ROTATE line (a predecessor may name its successor) or when the sender names itself.
+ * adb3d55 (2026-10-26), an INFO that only QUOTED the line DAD should post, made `who D` answer from it. Pure.
+ */
+function announces(entry, live) {
+  if (String(entry?.type || "").toUpperCase() === "ROTATE") return true;
+  const fromHost = (/^([a-z]+):/.exec(String(entry?.from || "")) || [])[1] || "";
+  const self = withHost(String(entry?.from || "").replace(/^[a-z]+:/, ""), fromHost);
+  return self === live.id;
 }
 
 /** The newest entry announcing fleet `letter`'s orchestrator: { letter, id, sha, at }, or null. Entries oldest first. Pure. */
@@ -390,7 +410,7 @@ export function whoIs(entries, letter) {
   const want = String(letter || "").toUpperCase();
   for (let i = (entries || []).length - 1; i >= 0; i--) {
     const live = parseLive(entries[i]);
-    if (live && live.letter === want) return { ...live, sha: entries[i].sha, at: entries[i].at };
+    if (live && live.letter === want && announces(entries[i], live)) return { ...live, sha: entries[i].sha, at: entries[i].at };
   }
   return null;
 }
@@ -401,8 +421,28 @@ export function ageOf(at, now) {
   return m < 60 ? `${m}m` : m < 48 * 60 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`;
 }
 
-/** The `who` output line: `<letter> <host:id> <sha7> <age>`. Pure. */
-export const whoLine = (w, now) => `${w.letter} ${w.id} ${String(w.sha).slice(0, 7)} ${ageOf(w.at, now)}`;
+/** Minutes of bus silence from a fleet's orchestrator after which `who` calls it STALE (OrchA 36, 2026-10-26). */
+export const STALE_MIN = 45;
+
+/**
+ * whoIs plus liveness: the age of the newest line SENT BY the announced id (not of its LIVE line, which a peer may
+ * have written), falling back to the LIVE line's time when the id sent nothing in the window. Adds
+ * { lastSeenAt, lastSeenMin, stale }; null when no LIVE line. Entries oldest first. Pure.
+ */
+export function whoStatus(entries, letter, now, staleMin = STALE_MIN) {
+  const w = whoIs(entries, letter);
+  if (!w) return null;
+  let lastSeenAt = w.at;
+  for (let i = (entries || []).length - 1; i >= 0; i--) {
+    if (withHost(String(entries[i].from || ""), "") === w.id) { lastSeenAt = entries[i].at; break; }
+  }
+  const lastSeenMin = Math.max(0, Math.round((now - lastSeenAt) / 60));
+  return { ...w, lastSeenAt, lastSeenMin, stale: lastSeenMin > staleMin };
+}
+
+/** The `who` output line: `<letter> <host:id> <sha7> <age>`, plus ` STALE (last line <age> ago)` when stale. Pure. */
+export const whoLine = (w, now) => `${w.letter} ${w.id} ${String(w.sha).slice(0, 7)} ${ageOf(w.at, now)}` +
+  (w.stale ? ` STALE (last line ${ageOf(w.lastSeenAt, now)} ago)` : "");
 
 /**
  * Write one typed bus line (shared with agent-msg.mjs). Does not shell out.
@@ -703,7 +743,7 @@ function usage(msg, { help = false, out = help ? console.log : console.error } =
     "        LIVE is an alias of INFO; --idem dedupes a resend in the last " + IDEM_WINDOW + " lines)\n" +
     "       fleet-bus.mjs incidents [--json]   (open typed INCIDENT ids over the whole bus; exit 3: a freeze is open)\n" +
     "       fleet-bus.mjs read [--to ADDR ...] [--since SHA] [--last N] [--json] [--peek | --strict]   (--last applies only when no cursor is known; --peek leaves the cursor; --strict never moves it past a hidden line)\n" +
-    "       fleet-bus.mjs who <fleet letter> [--last N] [--json]   (exit 1: no live orchestrator line)\n" +
+    "       fleet-bus.mjs who <fleet letter> [--last N] [--stale-min M] [--json]   (exit 1: no live orchestrator line; exit 3: STALE, its last bus line older than M min, default " + STALE_MIN + ")\n" +
     "       fleet-bus.mjs watch [--to ADDR ...] [--all] [--interval S] [--since SHA]   (follow mode for a Monitor: each new line once, never exits;\n" +
     "         drops other senders' to:* " + WATCH_QUIET.join("/") + " unless --all)\n" +
     "       common: --as <host>:<id> (only this session's own id, unless APEX_FLEET_AS is a fleet letter); identity env APEX_FLEET_AS,\n" +
@@ -717,7 +757,7 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
   if (argv.includes("--help") || argv.includes("-h") || argv[0] === "help") return usage("", { help: true, out: log });
   // Flags are an allow-list: an unknown `--flag` used to swallow the next word
   // (so `--body "text"` sent an empty line). Text is positional.
-  const VALUE_FLAGS = new Set(["to", "as", "since", "last", "ttl", "note", "grant", "idem", "pr", "fix", "interval"]);
+  const VALUE_FLAGS = new Set(["to", "as", "since", "last", "ttl", "note", "grant", "idem", "pr", "fix", "interval", "stale-min"]);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") flags.json = true;
@@ -810,10 +850,13 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
       if (!sub || !/^[A-Za-z]$/.test(sub)) return usage("who needs one fleet letter (A, B, C, D, …)");
       const L = sub.toUpperCase(), last = Number(flags.last) || 500;
       // Not cursor-based: the newest LIVE line may sit behind this session's read cursor.
-      const w = whoIs(readBus({ cwd, last }).entries, L);
-      if (flags.json) log(JSON.stringify(w ? { ...w, age: ageOf(w.at, now()) } : { letter: L, id: null }));
-      else log(w ? whoLine(w, now()) : `= who ${L}: no ORCH ${L} LIVE line in the last ${last} bus entries`);
-      return w ? 0 : 1;
+      const staleMin = flags["stale-min"] === undefined ? STALE_MIN : Number(flags["stale-min"]);
+      if (!Number.isFinite(staleMin) || staleMin <= 0) return usage("--stale-min takes a positive number of minutes");
+      const t = now(), w = whoStatus(readBus({ cwd, last }).entries, L, t, staleMin);
+      if (flags.json) log(JSON.stringify(w ? { letter: w.letter, id: w.id, sha: w.sha, at: w.at, age: ageOf(w.at, t), stale: w.stale, lastSeenMin: w.lastSeenMin } : { letter: L, id: null }));
+      else log(w ? whoLine(w, t) : `= who ${L}: no ORCH ${L} LIVE line in the last ${last} bus entries`);
+      // 3 = announced but silent past --stale-min: messages to that fleet may go unread (archived without a hand-off).
+      return !w ? 1 : w.stale ? 3 : 0;
     }
     if (cmd === "watch") {
       for (const t of multi.to) { const bad = addressProblem(t); if (bad) return usage(`watch --to: ${bad}`); }

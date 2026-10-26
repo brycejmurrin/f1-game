@@ -27,7 +27,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readyClaimVerdict } from "../lib/gate-receipt.mjs";
 import { api } from "./github-api.mjs";
-import { whoAmI, sendBusLine, addressProblem, bodyProblem, ADDRESS_FORMS } from "./fleet-bus.mjs";
+import { whoAmI, sendBusLine, addressProblem, bodyProblem, ADDRESS_FORMS, readBus, whoStatus, ageOf } from "./fleet-bus.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -270,11 +270,38 @@ export async function fireRelay(url, token, text, { fetchFn = globalThis.fetch, 
   }
 }
 
+/** The local bus (no fetch: a send just updated the tracking ref; a read never touches the network). */
+const localBusEntries = (cwd) => readBus({ cwd, last: 500, fetch: false }).entries;
+
 /**
- * CLI entry. deps: { cwd, env, now, fetchFn, sendBus, log, err, headShaFn }.
- * Exit: 0 ok / dry-run / missing-env-with-bus; 1 usage or hard failure.
+ * The warning a message to a fleet letter earns when `fleet-bus.mjs who` would call its orchestrator STALE
+ * (OrchA 36 was archived without a hand-off and `= webhook ok` still printed, 2026-10-26), else "". Never throws. Pure
+ * given `entries`.
  */
-export async function main(argv, {
+export function staleWarning(to, { cwd = ROOT, busEntries = localBusEntries, nowS = Math.floor(Date.now() / 1000), dryRun = false } = {}) {
+  const L = resolveBusTo(to);
+  if (!/^[A-Z]$/.test(L)) return "";
+  try {
+    const w = whoStatus(busEntries(cwd) || [], L, nowS);
+    return w && w.stale ? `! orchestrator ${L} stale: last bus line ${ageOf(w.lastSeenAt, nowS)} ago (${w.id}); message ${dryRun ? "would be " : ""}delivered but may be unread` : "";
+  } catch { return ""; }
+}
+
+/**
+ * CLI entry. deps: { cwd, env, now, fetchFn, sendBus, log, err, headShaFn, busEntries, nowS }.
+ * Exit: 0 ok / dry-run / missing-env-with-bus; 1 usage or hard failure. A STALE warning never changes it.
+ */
+export async function main(argv, deps = {}) {
+  const code = await send(argv, deps);
+  if (code === 0) {
+    const o = (() => { try { return parseArgs(argv); } catch { return { to: "" }; } })();
+    const warn = staleWarning(o.to, { cwd: deps.cwd || ROOT, dryRun: !!o.dryRun, ...(deps.busEntries ? { busEntries: deps.busEntries } : {}), ...(deps.nowS ? { nowS: deps.nowS() } : {}) });
+    if (warn) (deps.err || console.error)(warn);
+  }
+  return code;
+}
+
+async function send(argv, {
   cwd = ROOT,
   env = process.env,
   now = () => new Date().toISOString(),

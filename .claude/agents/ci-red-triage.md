@@ -72,7 +72,7 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
    deploy tip for a PR, the previous tip for a ship push) and say
    `already-red-on-base` or `new-on-this-push`, or `unknown` when you did not read
    that previous run (never write `new-on-this-push` for an unread base). `tools/ci/base-verdict.sh`
-   and `tools/ci/pages-live-sha.sh` exist for this.
+   and `bash tools/ci/pages-live-sha.sh <url>` exist for this.
 6. **Stale generated files (not a rerun):** when logs or node suites mention
    `gen:check`, `agent-indexes.test.mjs`,
    missing keys in `tests/data/impact-map.json`, or the ARCHITECTURE.md module

@@ -15,8 +15,10 @@ is live use agent `deploy-research`; for UI at phone size use survey-ui-matrix /
 Search connected tools (ToolSearch) for `browser_open`. If it is there, call it. Do not start a second browser beside it.
 
 `browser_open` (`tools/mcp/browser-http.mjs`) takes ONE optional argument,
-`orientation`: `"landscape"` (default, 852×393 — how the game is raced) or
-`"portrait"` (393×852). There is no URL argument: it serves THIS checkout's
+`orientation`: `"landscape"` (default, 852×393 — Grok bridge size) or
+`"portrait"` (393×852). That is the connector viewport only; AGENTS.md and
+survey-ui-matrix use **844×390** landscape for play/UI review — do not treat
+852×393 as the same. There is no URL argument: it serves THIS checkout's
 working tree on a local static server and opens the game there (WebGL2, iPhone
 user agent, touch). It returns `{url, title, apex, width, height, coarse}`.
 Changing orientation rebuilds the page. `browser_eval({expression})` and

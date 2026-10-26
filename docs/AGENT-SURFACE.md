@@ -685,3 +685,10 @@ API references: [Chrome CSS domain](https://chromedevtools.github.io/devtools-pr
 [Playwright traces](https://playwright.dev/docs/trace-viewer),
 [MDN visual viewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport),
 [MDN box generation](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Display/Visual_formatting_model#the_principal_box).
+
+## Free design workflow
+
+[Design tools](DESIGN-TOOLS.md) connects private MCP readiness, CSS/token inspection,
+automated accessibility, offline screenshot review, existing interactive viewers,
+procedural room drafts and local glTF validation. Reuse the existing skills and
+agent roles; the parent owns browser work and publication follows its review gates.

@@ -1,9 +1,10 @@
 name: CI
-# A label-noise run (#2184, see `on.pull_request`) is NAMED so tools can drop
-# it: ci-watch.mjs's labelNoiseRun() reads this prefix. Empty = GitHub's own
+# A label-noise or edit-noise run (#2184 and THE BODY MARKER, see
+# `on.pull_request`) is NAMED so tools can drop it: ci-watch.mjs's
+# labelNoiseRun() reads the `CI ignored: ` prefix. Empty = GitHub's own
 # default title ("omitted or only whitespace": the run-name docs,
 # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#run-name).
-run-name: "${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('CI ignored: label {0}', github.event.label.name) || '' }}"
+run-name: "${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('CI ignored: label {0}', github.event.label.name) || (github.event_name == 'pull_request' && github.event.action == 'edited' && !(github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) && 'CI ignored: edit' || '' }}"
 
 # The test gate. Until this existed, .github/workflows/pages.yml deployed on
 # every push and ran NOTHING — 141 test files gated only by whether a human
@@ -177,7 +178,34 @@ on:
     #   (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft))
     # and the verdict job is renamed, because a skipped job reports success and
     # must never sit on the head as the required `CI`. No runner is taken.
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    #
+    # THE BODY MARKER (Bryce 2026-10-26). Cursor cloud workers get 403
+    # "Resource not accessible by integration" adding a label, so a dozen
+    # Fleet D drafts in 90 min waited on a human for run-ci. A PR-body LINE
+    # that starts `CI: run` buys exactly what run-ci buys, nothing more: the
+    # same draft fast tier (the `selected` legs and node-suites still skip
+    # every draft; a ready PR is full tier with or without it). The test is
+    #   contains(format('{0}{1}', fromJSON('"\n"'), body), fromJSON('"\nCI: run"'))
+    # — a newline is prepended so line 1 counts, `:` is the colon (a
+    # literal `: ` would end a YAML plain scalar), `contains` is
+    # case-insensitive, and a null body coerces to ''. Prose that quotes the
+    # marker mid-line does not match. Docs (read 2026-10-26):
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#contains
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#fromjson
+    # The body is read on opened/synchronize/reopened, so the next push sees it.
+    # `edited` starts the fast tier at once, but ONLY for the edit that GIVES a
+    # draft without run-ci the marker: `changes.body` is present (title-only
+    # and base edits omit it) and `changes.body.from`, the previous body,
+    # lacked the marker (https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request
+    # action edited; field shape: github.com/octokit/webhooks
+    # payload-schemas/api.github.com/pull_request/edited.schema.json). Every
+    # other edit — a Plan tick, a Status refresh — is noise handled like a
+    # label: its own `edit-<run_id>` group (it never cancels the live run),
+    # every job skips on the edit gate
+    #   (github.event.action != 'edited' || (draft && changes.body && !run-ci && marker(body) && !marker(changes.body.from)))
+    # the run is titled `CI ignored: edit` (ci-watch.mjs labelNoiseRun drops
+    # `CI ignored: ` runs) and the verdict is `CI edit event (ignored)`.
+    types: [opened, synchronize, reopened, ready_for_review, labeled, edited]
     # THE DEPLOY BRANCH AS BASE ONLY (#2179, 2026-10-15). `branches` on
     # pull_request matches the PR's BASE branch. PRs into track-survey-assets
     # (images and reports, never merged here: docs/notes/SURVEY-ASSETS-BRANCH.md)
@@ -321,7 +349,7 @@ concurrency:
   # concurrency_key, and its own `pages-gate-*` group has cancel-in-progress
   # false. (The deploy branch's `ship-fast` push group, 2026-10-03 to
   # 2026-10-16, is gone with the push trigger.)
-  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('label-{0}', github.run_id)) || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}
+  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('label-{0}', github.run_id)) || ((github.event_name == 'pull_request' && github.event.action == 'edited' && !(github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && format('edit-{0}', github.run_id)) || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # DIFF-RELATIVE COUNTERS ON A PR, ABSOLUTE ON THE TIP (2026-10-26, system audit
@@ -340,14 +368,14 @@ jobs:
     name: Draft push (CI skipped — add run-ci label)
     runs-on: ubuntu-latest
     timeout-minutes: 2
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'labeled' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-ci') }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'labeled' && github.event.action != 'edited' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-ci') && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) }}
     steps:
-      - run: echo "No CI on a draft without the run-ci label. Add run-ci for the fast tier (guards, parts census, driving-model; no node suites or selected browser specs until ready), or mark it ready for the full tier."
+      - run: 'echo "No CI on a draft without the run-ci label or a PR-body line starting CI: run (self-serve when labels 403). Either gives the fast tier (guards, parts census, driving-model; no node suites or selected browser specs until ready); mark it ready for the full tier."'
   guards-a:
     name: Structural guards (tooling A)
     runs-on: ubuntu-latest
     timeout-minutes: 18   # 12 cancelled this job at load 6+ with every file passing (2026-10-21); the shards are balanced since #3389
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
       actions: read
@@ -434,7 +462,7 @@ jobs:
     name: Structural guards (tooling B)
     runs-on: ubuntu-latest
     timeout-minutes: 18   # same budget as tooling A
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
       actions: read
@@ -539,7 +567,7 @@ jobs:
     name: Structural guards (tooling C)
     runs-on: ubuntu-latest
     timeout-minutes: 18   # same budget as tooling A
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
       actions: read
@@ -626,7 +654,7 @@ jobs:
     name: Structural guards (tooling D)
     runs-on: ubuntu-latest
     timeout-minutes: 18   # same budget as tooling A
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
       actions: read
@@ -689,7 +717,7 @@ jobs:
     name: Structural guards
     needs: [guards-a, guards-b, guards-c, guards-d]
     runs-on: ubuntu-latest
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!cancelled() && inputs.fast_tier_run == '') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (!cancelled() && inputs.fast_tier_run == '') }}
     timeout-minutes: 5
     # NO CHECKOUT, NO npm ci (2026-10-15): the ratchet / audit / coverage /
     # behind-ship steps run at the end of tooling B, where the tree and the
@@ -711,7 +739,7 @@ jobs:
     name: Workflow and shader lints
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
     env:
@@ -773,7 +801,7 @@ jobs:
     # Pages call (`concurrency_key` set) skip the job; a merge interaction in
     # a node slice surfaces at the nightly. With no draft run to reuse, this
     # job no longer asks the ready_for_review reuse question.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (inputs.fast_tier_run == '' && inputs.concurrency_key == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request')) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (inputs.fast_tier_run == '' && inputs.concurrency_key == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request')) }}
     # actions:read for base-green.sh (the plan step asks whether the previous
     # tip was gated green). A job that names permissions gets ONLY what it
     # names, hence contents too.
@@ -1044,7 +1072,7 @@ jobs:
   sweeps-parts:
     name: Parts option-resolution census
     runs-on: ubuntu-latest
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) }}
     permissions:
       contents: read
       actions: read
@@ -1163,7 +1191,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [select]
     # Not in a draft PR's FAST tier; the train (a Pages call) runs it.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) && (needs.select.outputs.geometry != 'false' || needs.select.outputs.geometry_targeted != '') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) && (needs.select.outputs.geometry != 'false' || needs.select.outputs.geometry_targeted != '') }}
     # FOUR suite shards (2026-10-14). Pages train 38500310338 spent 1118 s in
     # the single-runner Geometry sweeps step (1218 s job) while every browser
     # spec shard was done by ~529 s — ~11 min of train idle on this job alone.
@@ -1290,7 +1318,7 @@ jobs:
   sweeps-roll-up:
     name: Per-circuit geometry sweeps
     needs: [select, sweeps]
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (always() && !cancelled() && needs.select.result == 'success' && (needs.sweeps.result != 'skipped' || (needs.select.outputs.geometry == 'false' && needs.select.outputs.geometry_targeted == ''))) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (always() && !cancelled() && needs.select.result == 'success' && (needs.sweeps.result != 'skipped' || (needs.select.outputs.geometry == 'false' && needs.select.outputs.geometry_targeted == ''))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -1308,7 +1336,7 @@ jobs:
     name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
     # Not in a draft PR's FAST tier; the train (a Pages call) runs it.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
     # NO job-level `if` (2026-09-10). Two guards lived here and both were wrong
     # in opposite directions. `inputs.smoke != false` skipped this job on EVERY
     # branch and PR push: `inputs` is empty on a plain push, null coerces like
@@ -1644,7 +1672,7 @@ jobs:
     # (ci-verdict treats that skip as a pass). Not on the Pages call
     # (`concurrency_key` set; decision D2 in the CI selection plan,
     # PR #2560 §6): 0 train catches in 40 h; PRs and the nightly keep it.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '' && inputs.concurrency_key == '' && needs.select.outputs.driving == 'true') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (inputs.fast_tier_run == '' && inputs.concurrency_key == '' && needs.select.outputs.driving == 'true') }}
     # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
     # consumed entirely by an uncached Chromium install on run 32083395969, so
     # the characterization never started and Pages was blocked. Keep the same
@@ -1775,7 +1803,7 @@ jobs:
     # Nightly, a dispatch that asked for it (`renderer_macos: true`), or a
     # ready PR whose filter said the diff touches the renderer. Never a
     # draft PR or a bare topic-branch push — see the filter's header.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (needs.select.outputs.renderer == 'true' && (inputs.concurrency_key != '' || github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (needs.select.outputs.renderer == 'true' && (inputs.concurrency_key != '' || github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))) }}
     runs-on: macos-latest
     # 30 is a GUESS, and the header says what to do about that: the six specs
     # declare 240-480 s budgets measured under SwiftShader, where a boot is
@@ -1865,7 +1893,7 @@ jobs:
   xr:
     name: Emulated VR (IWER / xr-emulated)
     needs: select
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!inputs.concurrency_key && needs.select.outputs.xr == 'true') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (!inputs.concurrency_key && needs.select.outputs.xr == 'true') }}
     runs-on: ubuntu-latest
     # Unmeasured on CI; local IWER suite is minutes. Cap generously.
     timeout-minutes: 25
@@ -1903,7 +1931,7 @@ jobs:
   train-twins:
     name: VM twins on the train (dropped browser twins)
     needs: [select]
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!cancelled() && inputs.concurrency_key != '' && needs.select.result == 'success' && (needs.select.outputs.twins != '' || needs.select.outputs.adapted != '')) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (!cancelled() && inputs.concurrency_key != '' && needs.select.result == 'success' && (needs.select.outputs.twins != '' || needs.select.outputs.adapted != '')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1976,7 +2004,7 @@ jobs:
     # whenever the node matrix does (`fast_tier_run == ''`), so a dispatch
     # without a diff still gets its --all plan; the spec selection keeps its
     # own event test on the step.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '' || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (inputs.fast_tier_run == '' || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '') }}
     # actions:read on top of the workflow default — the base-verdict step at the
     # end lists this workflow's runs on the deploy branch. A job that names
     # permissions gets ONLY what it names, hence contents too.
@@ -2556,7 +2584,7 @@ jobs:
     # — "If a job fails or is skipped, all jobs that need it are skipped".)
     needs: [select]
     # Drafts skip the matrix (required name is selected-verdict).
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (needs.select.outputs.any == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft)) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (needs.select.outputs.any == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft)) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -2792,7 +2820,7 @@ jobs:
     #
     # A failed/cancelled selected matrix is red, including setup failures before
     # its marker. Clean sibling JUnit cannot prove every planned test ran.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '')) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (!cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '')) }}
     steps:
       # Collect JUnit before the verdict for diagnostics and carry-forward.
       # Missing execution evidence never authorizes a failed selected matrix.
@@ -2921,7 +2949,7 @@ jobs:
     # "re-bless, then confirm across a few runs", which a nightly and a
     # dispatch answer without a runner slot on every push while 200-290 jobs
     # queue (docs/notes/CI-CAPACITY-2026-09-29.md).
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -2975,7 +3003,7 @@ jobs:
   staged-boot:
     name: Staged build boots (minified _site, as Pages ships it)
     runs-on: ubuntu-latest
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
     timeout-minutes: 20
     steps:
       # fetch-depth: 0 because the stamp's build is 2000 + the commit count
@@ -3055,7 +3083,7 @@ jobs:
     # The DRAFT fast tier is named apart too (#2664): its success would otherwise sit on the head under the required
     # name `CI`, and when the PR goes ready that stale success satisfies the requirement while the full tier is still
     # running (retro finding 10: a merge landed with the full-tier run in progress). Only a non-draft run supplies `CI`.
-    name: ${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && 'CI label event (ignored)' || (github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-ci')) && 'CI draft (opted out)' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && 'CI (draft fast tier)' || 'CI' }}
+    name: ${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && 'CI label event (ignored)' || (github.event_name == 'pull_request' && github.event.action == 'edited' && !(github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && 'CI edit event (ignored)' || (github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-ci') && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && 'CI draft (opted out)' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && 'CI (draft fast tier)' || 'CI' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs:
@@ -3092,14 +3120,14 @@ jobs:
     if: ${{ !cancelled() }}
     steps:
       - name: No verdict for a label event or an opted-out draft
-        if: ${{ !((github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft))) }}
+        if: ${{ !((github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"'))))) }}
         run: echo "label event or opted-out draft — every job skipped by design; this check is not the required CI"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) }}
+        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) }}
         with:
           persist-credentials: false
       - name: Aggregate job results
-        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) }}
+        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) }}
         env:
           NEEDS: ${{ toJSON(needs) }}
           # Full-tier PR runs: these must have run AND passed (a job skipped by `if:` reports success, so a hollow

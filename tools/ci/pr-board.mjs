@@ -167,7 +167,7 @@ export function ciState(runs) {
   // A label-noise run (#2184: ci-watch.mjs labelNoiseRun) skips every job and
   // concludes success; as the newest run it would read a red head as green.
   const list = (runs || []).filter((r) => r && (r.path ? r.path.endsWith("/ci.yml") : true)
-    && !/^CI ignored: label /.test(String(r.display_title || "")));
+    && !/^CI ignored: /.test(String(r.display_title || "")));
   if (!list.length) return { state: "none", runId: null };
   const byId = (a, b) => (b.id || 0) - (a.id || 0);
   const live = list.filter((r) => LIVE.has(r.status)).sort(byId);

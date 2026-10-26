@@ -184,7 +184,7 @@ handing the page to the test. `pageErrors` collects every `pageerror` event.
 ## Tunnel before/after (Monaco bore, GLX and TLX)
 
 `park` is the chase rig and sits behind the car; use `eye` or `cinematic` inside a bore. Mid-bore fracs
-come from `flicker-gate.mjs --list` (`monaco-tunnel-vault` 0.47, `monaco-tunnel-top` 0.49).
+come from `node tools/shot/flicker-gate.mjs --list` (`monaco-tunnel-vault` 0.47, `monaco-tunnel-top` 0.49).
 
 ```sh
 node tools/shot/backend-compare.mjs monaco 0.47 eye --backends webgl2,three --out artifacts/cmp/before --label tunnel-mid

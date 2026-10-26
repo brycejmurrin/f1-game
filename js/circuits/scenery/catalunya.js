@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["catalunya"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
-        pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
+        pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill, bleacher,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         floodMast, sailCanopy, sponsorHoarding, seat, stonePine, cameraTower, circuitKit,
@@ -51,8 +51,9 @@
       every(30, (k) => {
         const s = k / n;
         if (openInfield(s)) return;
-        // Clear of sun terraces / stonePine fights around La Caixa (~0.70).
-        if (s >= 0.66 && s <= 0.74) return;
+        // Clear of Stadium stands + T10 (La Caixa→New Holland ~0.68–0.90) and
+        // the mid-lap sun terrace that fought pine crowns (~0.36–0.41).
+        if ((s >= 0.66 && s <= 0.90) || (s >= 0.35 && s <= 0.41)) return;
         const h = hash(k * 31);
         if (h < 0.42) return;
         pine(k, h < 0.5 ? -1 : 1, 14 + h * 12, 11 + h * 7, h < 0.6 ? PINE : PINE_D);
@@ -60,8 +61,8 @@
       every(22, (k) => {
         const s = k / n;
         if (openInfield(s)) return;
-        // Keep scrub off the sun-terrace banks (clip bush×terrace ~0.88–0.92).
-        if ((s >= 0.82 && s <= 0.95) || (s >= 0.66 && s <= 0.72)) return;
+        // Keep scrub off stadium stands and remaining sun-terrace banks.
+        if ((s >= 0.66 && s <= 0.92) || (s >= 0.35 && s <= 0.41)) return;
         const h = hash(k * 97 + 23);
         if (h < 0.40) return;
         bush(k, h < 0.72 ? -1 : 1, 7 + h * 6, h < 0.6 ? SCRUB : SCRUB_D);
@@ -250,20 +251,50 @@
 
       grandstandEx(0.145, 1, 20, 96, null, null,
         { livery: "orange", tiers: 2, roof: "cantilever", endWalls: true });
-      // Wider step on the final-corner bends so terrace units do not fold into
-      // each other (clip addBox×addBox ~0.92) or fight stonePine (~0.70).
-      sunTerrace(0.360, 0.400, -1, 19, 5);
+      // Mid-lap open terraces (keep clear of stonePine crowns — was 1.19 m clip
+      // at ~0.40). Gap pushed out; stadium zone uses named stands below.
+      sunTerrace(0.360, 0.400, -1, 28, 4, 11);
       sunTerrace(0.630, 0.655, 1, 22, 4, 12);
-      sunTerrace(0.678, 0.705, -1, 20, 5, 12);
-      sunTerrace(0.830, 0.862, -1, 20, 5, 12);
-      sunTerrace(0.880, 0.908,  1, 19, 4, 12);
-      sunTerrace(0.920, 0.945, 1, 18, 4, 12);
-      for (const [s, side, gap] of [[0.690, -1, 33], [0.932, 1, 30], [0.845, -1, 33]]) {
+      // Soft GA bank on the Campsa→La Caixa drop (inside), not a fake stand wall.
+      sunTerrace(0.880, 0.900, 1, 24, 3, 12);
+      sunTerrace(0.920, 0.945, 1, 22, 3, 12);
+      for (const [s, side, gap] of [[0.932, 1, 36], [0.845, -1, 42]]) {
         const a = anchor(K(s), side, gap);
         sailCanopy(a.c, [a.r, a.u, a.t],
           { rad: 15, rx: 9, rz: 17, h: 15, col: [0.94, 0.92, 0.86], ribs: 6, thick: 0.4 });
       }
       spectatorHill(0.438, 0.498, 1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
+
+      // ── Stadium section (T10–T14 / La Caixa → New Holland) ─────────────────
+      // Sources: P1 Travel Barcelona grandstand guide; oversteer48 Tribuna B/G;
+      // circuitcat F1 folio map (B/G/C cluster + H). Arena feel: uncovered B/G/C
+      // as bleachers on the outside (−1) of the T12–T13 complex (grandstandEx
+      // roof:"none" still builds a 12 m shell — wrong and expensive here),
+      // covered H at the final corner, covered T10 on the La Caixa entry inside.
+      // T10 covered — the one roofed stand that sees this sector (oversteer48 B).
+      grandstandEx(0.700, -1, 14, 40, null, null,
+        { livery: "concrete", tiers: 1, roof: "flat", endWalls: true,
+          roofCol: [0.72, 0.74, 0.78] });
+      // Tribuna B — outside T12, uncovered (follows the arc).
+      // https://oversteer48.com/grandstand-b-circuit-de-catalunya-barcelona/
+      bleacher(0.778, 0.788, -1, 12, {
+        rows: 6, rise: 0.55, setback: 0.85, frame: "steel",
+        frameCol: [0.55, 0.56, 0.58], plankCol: [0.78, 0.30, 0.24], density: 0.35, step: 8,
+      });
+      // Tribuna G — larger neighbour curving T12→T13 (heart of the stadium).
+      bleacher(0.790, 0.802, -1, 13, {
+        rows: 6, rise: 0.55, setback: 0.85, frame: "steel",
+        frameCol: [0.52, 0.53, 0.55], plankCol: BONE, density: 0.35, step: 8,
+      });
+      // Tribuna C — beside G toward T13–14; farther gap (gravel runoff between).
+      bleacher(0.804, 0.812, -1, 22, {
+        rows: 5, rise: 0.55, setback: 0.85, frame: "steel",
+        frameCol: [0.55, 0.56, 0.58], plankCol: [0.90, 0.78, 0.30], density: 0.30, step: 9,
+      });
+      // Tribuna H — covered view of stadium + final corner (New Holland).
+      grandstandEx(0.860, -1, 14, 40, null, null,
+        { livery: "concrete", tiers: 1, roof: "cantilever", endWalls: true, pylons: true,
+          roofCol: [0.70, 0.72, 0.76] });
 
       // Gravel + tyre walls at the heavy-braking corners.
       // Elf is a right-hander: run-off, tyres and catch fence on its outside (-1).
@@ -318,7 +349,8 @@
 
       for (const [s, side, gap] of [
         [0.030, -1, 32], [0.155, 1, 34], [0.383, -1, 30],
-        [0.643, 1, 34], [0.700, -1, 36], [0.935, 1, 34],
+        // Stadium: masts behind the B/G/C/H shells (was cone×terrace at ~0.91).
+        [0.643, 1, 34], [0.700, -1, 48], [0.860, -1, 46], [0.935, 1, 48],
       ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3 });
 
       for (const [i, s, gap] of [[0, 0.030, 46], [1, 0.045, 34], [2, 0.060, 46]]) {
@@ -347,17 +379,15 @@
       // Single-side hedges where both sides would share a plane.
       hedge(0.955, 0.045, -1, 16, 3.0, [0.18, 0.36, 0.18]);
       hedge(0.022, 0.078, 1, 16, 2.6, [0.19, 0.37, 0.19]);
-      hedge(0.660, 0.715, -1, 15, 2.6, [0.19, 0.37, 0.19]);
-      // One hedge band through the final complex (was two coplanar mirrors).
-      hedge(0.780, 0.820, -1, 16, 2.6, [0.18, 0.36, 0.18]);
+      // Hedge behind T10 stand only — not through the B/G/C rake.
+      hedge(0.660, 0.695, -1, 28, 2.6, [0.19, 0.37, 0.19]);
       {
-        // Cypress ranks — keep clear of pit/paddock boxes (clip-audit was
-        // addCone×addBox at ~0.09 / 0.69 / 0.90). Gaps pushed out; drop the
-        // 0.09 cluster near the T1 stand entirely.
+        // Cypress ranks — clear of Stadium B/G/C/H and pit boxes (clip was
+        // addCone×addBox at ~0.09 / 0.69 / 0.90). Keep a short rank at pit entry
+        // and one past New Holland; drop the stadium-cluster ranks.
         const CYP = [0.13, 0.28, 0.15], CYP_D = [0.10, 0.22, 0.13];
         for (const [s0, side, gap, count] of [
-          [0.955, -1, 32, 3], [0.672, -1, 36, 2],
-          [0.798, -1, 32, 3],
+          [0.955, -1, 36, 3], [0.910, -1, 38, 2],
         ]) {
           for (let i = 0; i < count; i++) {
             const a = anchor(K(s0 + i * 0.008), side, gap + (i & 1) * 3.5);
@@ -398,15 +428,17 @@
       // (14–38 m) so the crowns never overlap the near row.
       every(26, (k) => {
         const s = k / n;
-        if (!((s > 0.17 && s < 0.43) || (s > 0.47 && s < 0.556))) return;
+        // Skip T1 stand corridor (~0.13) and the sun-terrace band (~0.36–0.41)
+        // — crowns sat in those boxes (clip 0.50–1.19 m).
+        if (!((s > 0.20 && s < 0.35) || (s > 0.42 && s < 0.556))) return;
         const h = hash(k * 43 + 11);
         if (h < 0.45) return;
-        stonePine(k, h < 0.72 ? 1 : -1, 46 + h * 22, 10 + h * 5,
+        stonePine(k, h < 0.72 ? 1 : -1, 52 + h * 22, 10 + h * 5,
           h < 0.6 ? [0.20, 0.33, 0.17] : [0.16, 0.29, 0.15], { spread: 1.1 });
       });
       // Broadcast camera towers on the outside of the long corners (T3, Repsol,
       // Campsa, La Caixa) — the familiar high-angle feeds of this circuit.
-      for (const [s, side, gap] of [[0.240, -1, 26], [0.352, 1, 24], [0.612, -1, 26], [0.735, 1, 28]]) {
+      for (const [s, side, gap] of [[0.240, -1, 26], [0.352, 1, 24], [0.612, -1, 26], [0.735, 1, 36]]) {
         cameraTower(K(s), side, gap, { h: 14, col: [0.60, 0.62, 0.66] });
       }
       if (circuitKit) {

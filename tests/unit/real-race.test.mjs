@@ -635,6 +635,53 @@ test("the review's fixes: a filled cum row, a DSQ that saw the flag, the kept st
   assert.equal(wins[0].done, false);
 });
 
+// #3287: a script DSQ that saw the flag must get c.dsq (like watch mode), and
+// driven endRace must take the published-classification path (status().watch)
+// so SportingRegs.applyCompoundRule cannot wipe those markers.
+test("arm marks a DSQ finisher with c.dsq; endRace sees published classification", () => {
+  const { R, script, Teams } = load();
+  const odd = host(script);
+  const rus = odd.drivers.find((d) => d.num === 63);
+  rus.dnf = true; rus.dsq = true; rus.dns = false; rus.pos = null; rus.lapsDone = odd.laps;
+  const cars = makeCars(Teams, "ferrari:0");
+  const { G } = makeG(Teams, cars);
+  let during = null, car = null, rr = null;
+  G.endRace = function () {
+    // Mirror game.js endRace's DSQ branch: watch → keep c.dsq; else compound wipe.
+    const st = rr.status();
+    during = { watch: !!st.watch, isWatch: rr.isWatch(), dsq: car.dsq };
+    if (!st.watch) delete car.dsq;
+  };
+  rr = R.create(G);
+  rr.stage(odd, { seat: "LEC" });
+  G.state = "count"; rr.update(1 / 60);
+  car = cars.find((c) => c.code === "RUS");
+  assert.ok(car, "Russell is on the field");
+  assert.equal(car.dsq, "real race classification", "arm sets the watch-mode DSQ reason");
+  assert.equal(car.dnfAt, null, "a flag-to-flag DSQ never retires by distance");
+  assert.equal(car.dnfWhy, null, "not an accident retirement");
+  assert.equal(rr.status().watch, false, "driven race is not WATCH while racing");
+  assert.equal(rr.isWatch(), false);
+  G.endRace();
+  assert.equal(during.watch, true, "endRace sees published classification");
+  assert.equal(during.isWatch, false, "isWatch() stays false (audio/camera gates)");
+  assert.equal(during.dsq, "real race classification");
+  assert.equal(car.dsq, "real race classification", "markers survive endRace");
+  assert.ok(!cars.find((c) => c.code === "LEC").dsq, "the seat car is not a script DSQ");
+  rr.stop();
+  // After stop the wrap is gone: endRace no longer forces the watch path.
+  during = null;
+  car.dsq = "real race classification";
+  G.endRace = function () {
+    const st = rr.status();
+    during = { watch: !!st.watch };
+    if (!st.watch) delete car.dsq;
+  };
+  G.endRace();
+  assert.equal(during.watch, false);
+  assert.equal(car.dsq, undefined);
+});
+
 test("a JUMP IN records the clock it seeded, so the race's hard cap counts from the join (RaceControl.finishDelay)", () => {
   // PR #402 audit: place() seeds raceT to the real race's time at the join
   // lap; the 360 s/lap cap read that as time raced and ended a short race at once.

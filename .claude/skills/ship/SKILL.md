@@ -21,7 +21,7 @@ refused by branch protection.
    `tooling-fast --changed --jobs=3` plus the picked group, or the docs-only fast path;
    `node tools/ci/deploy.mjs --gate-only` before a code push.
 3. **Push** once per green cycle; refresh the Plan and Status. Draft CI needs the `run-ci` label
-   (GitHub MCP `issue_write` labels, or `gh pr edit <n> --add-label run-ci`).
+   (GitHub MCP `issue_write` labels, or `gh pr edit <n> --add-label run-ci`) or a body line starting `CI: run`.
 4. **Gate, then flip**: `node tools/ci/ready-gate.mjs --pr <n> --wait` must exit 0 on the head you flip
    (`.claude/rules/fleet-core.md`). The PR's OWNER (the worker or session that pushed it) flips it — GitHub MCP
    `update_pull_request` with `draft: false`, or `gh pr ready <n>` (the hook checks the ready-gate receipt).

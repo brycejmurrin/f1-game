@@ -35,6 +35,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // A budget (minutes) whose allowance is exactly `sec` seconds of work at the
 // gate's settings: fit()'s allowance is budget - one failure + one fallback test.
 const budgetFor = (sec) => (sec + SELECTED_GATE.perTestTimeoutSec - MEASURED.secPerTest) / 60;
+// The PR #1204/#1289 regression fixtures were sized to a 4-job spill leg;
+// pin them there so raising MAX_SPILL_SHARDS (7, PR #3812) keeps them saturated.
+const FIXTURE_SPILL = 4;
 const EMPTY = { specs: {} };
 const at = (files, secPerTest) => ({ specs: Object.fromEntries(files.map((f) => [f,
   { s: [1, 2, 3].map((i) => [`2026-09-2${i}T00:00:00Z`, "llvmpipe", secPerTest * declaredTests(f), declaredTests(f)]) }])) });
@@ -133,7 +136,7 @@ test("a FULL overflow spills into bounded spill jobs instead of skipping (PR #12
     const db = { specs: { ...Object.fromEntries(fill.map((f) => [f, row(300, declaredTests(f))])),
       [dev]: row(129, declaredTests(dev)) } };
     const rank = () => 3;
-    return { db, r: fit([...fill, dev], DEFAULT_BUDGET_MIN, { db, rank, overflowShards: MAX_OVERFLOW_SHARDS, includeTwinned: true, ...opts }) };
+    return { db, r: fit([...fill, dev], DEFAULT_BUDGET_MIN, { db, rank, overflowShards: MAX_OVERFLOW_SHARDS, spillShards: FIXTURE_SPILL, includeTwinned: true, ...opts }) };
   };
   const secOf = (xs) => xs.reduce((n, x) => n + x.sec, 0);
   const devSec = 129;
@@ -153,12 +156,12 @@ test("a FULL overflow spills into bounded spill jobs instead of skipping (PR #12
   // Past the spill: bounded, and what is left is still NAMED in skipped (the
   // CLI/step report it as an error; the verdict reds on dropped > 0).
   const over = plan(20, { overBudgetShards: 0 }).r;
-  assert.ok(secOf(over.spill) <= MAX_SPILL_SHARDS * TARGET_SHARD_SEC, `spill ${secOf(over.spill)} s is bounded`);
+  assert.ok(secOf(over.spill) <= FIXTURE_SPILL * TARGET_SHARD_SEC, `spill ${secOf(over.spill)} s is bounded`);
   assert.ok(over.skipped.length > 0, "what the spill cannot carry is named, not silently dropped");
   const placed = [...over.selected, ...over.overflow, ...over.spill, ...over.oversize, ...over.skipped].map((s) => s.file);
   assert.equal(placed.length, 21, "every spec lands in exactly one bucket");
   assert.equal(new Set(placed).size, 21);
-  assert.equal(MAX_SPILL_SHARDS, 4, "the measured spill allowance stays bounded");
+  assert.equal(MAX_SPILL_SHARDS, 7, "the measured spill allowance stays bounded");
 });
 
 test("full oversize slots carry expensive suites before a smaller hoisted failure (PR #1289)", () => {
@@ -218,7 +221,7 @@ test("terrain and ordinary parts leftovers use only spare over-budget capacity (
   const affected = new Set(oversized.map(([file]) => file));
   const rank = (file) => file === budgeted ? 0 : affected.has(file) ? 2 : 3;
   const plan = (overBudgetShards) => fit(rows.map(([file]) => file), DEFAULT_BUDGET_MIN,
-    { db, rank, overBudgetShards, includeTwinned: true });
+    { db, rank, overBudgetShards, spillShards: FIXTURE_SPILL, includeTwinned: true });
   assert.equal(maxDeclaredTimeout(terrain), SELECTED_GATE.perTestTimeoutSec * 1000);
   assert.equal(measuredCheap(terrain, db), true, "terrain remains eligible for the ordinary measured cut first");
   const full = plan(MAX_OVER_BUDGET_SHARDS);
@@ -229,7 +232,7 @@ test("terrain and ordinary parts leftovers use only spare over-budget capacity (
   // Per-test rate rounding changes with the real specs' case counts. Assert
   // the saturated capacity boundary, not a historical rounded total.
   const spillSec = full.spill.reduce((n, s) => n + s.sec, 0);
-  const spillRoom = MAX_SPILL_SHARDS * TARGET_SHARD_SEC - spillSec;
+  const spillRoom = FIXTURE_SPILL * TARGET_SHARD_SEC - spillSec;
   assert.ok(spillRoom >= 0 && spillRoom < full.overBudgetRun.find((s) => s.file === terrain).sec,
     "spill stays bounded and cannot carry terrain");
   assert.deepEqual(full.overBudgetRun.map((s) => s.file), [slow, terrain]);
@@ -265,14 +268,14 @@ test("terrain and ordinary parts leftovers use only spare over-budget capacity (
       : file === "tests/specs/dev-tools.spec.js" ? 495 : sec]), [parts, 70]];
   const ordinaryDb = dbFor(ordinaryRows);
   const ordinaryPlan = (overBudgetShards) => fit(ordinaryRows.map(([file]) => file), DEFAULT_BUDGET_MIN,
-    { db: ordinaryDb, rank: (file) => file === props ? 1 : rank(file), overBudgetShards, includeTwinned: true });
+    { db: ordinaryDb, rank: (file) => file === props ? 1 : rank(file), overBudgetShards, spillShards: FIXTURE_SPILL, includeTwinned: true });
   assert.equal(maxDeclaredTimeout(parts), 0, "this regression covers ordinary, not declared-slow, work");
   const ordinary = ordinaryPlan(MAX_OVER_BUDGET_SHARDS);
   assert.deepEqual(ordinary.skipped, []);
   assert.deepEqual(ordinary.overBudgetRun.map((s) => s.file), [slow, parts]);
   const ordinarySpillSec = ordinary.spill.reduce((n, s) => n + s.sec, 0);
-  assert.ok(ordinarySpillSec <= MAX_SPILL_SHARDS * TARGET_SHARD_SEC
-    && MAX_SPILL_SHARDS * TARGET_SHARD_SEC - ordinarySpillSec < 70, "parts cannot fit the bounded ordinary spill");
+  assert.ok(ordinarySpillSec <= FIXTURE_SPILL * TARGET_SHARD_SEC
+    && FIXTURE_SPILL * TARGET_SHARD_SEC - ordinarySpillSec < 70, "parts cannot fit the bounded ordinary spill");
   const partJobs = shards(ordinary, ordinaryDb).filter((j) => j.specs.split(" ").includes(parts));
   assert.equal(partJobs.length, 1, "all 70 parts tests stay in one job");
   assert.ok(partJobs.every((j) => j.specs === parts && j.perTest === SELECTED_GATE.perTestTimeoutSec

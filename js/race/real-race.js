@@ -16,6 +16,9 @@ const RealRace = (function () {
   const COMPOUND = { SOFT: "soft", MEDIUM: "medium", HARD: "hard", INTERMEDIATE: "inter", WET: "wet" };
   const CLASSES = new Set(Object.keys(COMPOUND).map((k) => COMPOUND[k]));
   const DNS_AT = 0.002;   // a game seat with no real driver retires on the first metres: "did not start"
+  // Watch mode (real-replay finish) and driven arm() share this reason so endRace
+  // treats a script DSQ the same way (out of the timed order, last, no points).
+  const SCRIPT_DSQ = "real race classification";
   const K_FALLBACK = 1.4;   // sim seconds per real second when no reference lap can be modelled (measured: this box runs ~1.5x real)
   const LOOK_M = 220;       // m: how far ahead a mid-race drop-in reads the road for the speed it can carry (AiDrive.brakeTarget's budget)
   const LOOK_STEP = 10;
@@ -393,6 +396,10 @@ const RealRace = (function () {
     let fed = null;       // the narration lines already said (feed keys)
     let handover = null;  // {c, t, said}: the seat car driven by the AI until t runs out, then the player's
     let goHold = 0, plateUp = false;   // the hand-over's on-screen count: GO's remaining seconds, and whether the plate is up at all
+    // Driven real race: endRace's compound-rule path deletes every c.dsq. Flip
+    // status().watch for that call only so classification uses the published
+    // markers arm() set (same path as WATCH). SportingRegs is frozen — cannot wrap it.
+    let endRaceWrap = null, classifyPublished = false;
     const replay = typeof RealReplay !== "undefined" ? RealReplay.create(G) : null;   // WATCH / HIGHLIGHTS: the field posed from real positions
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // a reusable Tracks.sample slot
 
@@ -494,6 +501,27 @@ const RealRace = (function () {
       if (plateUp) count(null);
       goHold = 0;
       if (replay) replay.stop();
+      if (endRaceWrap) {
+        // Computed key: GameCtx marks endRace readonly; the façade is mutable at
+        // runtime, and check-gctx only tracks non-computed G.<name> writes.
+        G["endRace"] = endRaceWrap.orig;
+        endRaceWrap = null;
+      }
+      classifyPublished = false;
+    }
+
+    // While a driven real race is armed, wrap G.endRace so status().watch reads
+    // true for that call: endRace then keeps arm()'s SCRIPT_DSQ markers instead
+    // of wiping them via SportingRegs.applyCompoundRule (#3287). isWatch() stays false.
+    function installEndRacePreserve() {
+      if (endRaceWrap || typeof G.endRace !== "function") return;
+      const orig = G.endRace;
+      G["endRace"] = function (forcedOrder) {
+        classifyPublished = true;
+        try { return orig.apply(this, arguments); }
+        finally { classifyPublished = false; }
+      };
+      endRaceWrap = { orig };
     }
 
     // The first frame of the countdown: the field is gridded and armed (the
@@ -540,18 +568,23 @@ const RealRace = (function () {
       tables = { pace: paceTable(script), cum, refNum, wins: cautionsFor(script, simLaps), at: fieldAt(script, active.startLap),
         watchStarts: winner && winner.lapStart || [], watchCautions: script.cautions || [] };
       const wearOn = G.tyres && G.tyres.on && G.tyres.on();
+      if (!active.watch) installEndRacePreserve();
       for (const c of cars) {
         const f = field.get(c);
         if (!c.human) {
           c.tierV = tierV; c.skill = base / tierV; f.base = c.skill;
           // A real did-not-start is parked on the first metres like an empty seat, not half a lap out.
+          // A DSQ that saw the flag (dnfAtFor → null) is not an accident retirement — mark c.dsq
+          // like watch mode (real-replay finish) so classification keeps them out of the timed order.
           c.dnfAt = !f.d || f.d.dns ? DNS_AT : dnfAtFor(f.d, realLaps);
-          c.dnfWhy = !f.d || f.d.dns ? "dns" : "accident";
+          c.dnfWhy = !f.d || f.d.dns ? "dns" : (f.d && f.d.dsq ? null : "accident");
           // Lap 1 at its real pace: the open loop starts at the line (the closed loop cannot measure
           // before the first crossing), so the run to turn 1 is the data's, not the launch draw's.
           const rel1 = f.d && tables.pace.rel[f.d.num] ? tables.pace.rel[f.d.num][realLapFor(1, simLaps, realLaps)] : null;
           if (rel1 > 0) { f.mul = paceMul(0, 0, rel1); c.skill = f.base * f.mul; }
         }
+        if (f.d && f.d.dsq) c.dsq = SCRIPT_DSQ;
+        else if (c.dsq === SCRIPT_DSQ) c.dsq = null;
         if (!f.d) continue;
         if (wearOn) {
           const plan = planFor(f.d, simLaps, realLaps, c.pitPlan && c.pitPlan.pitLossLaps);
@@ -918,7 +951,7 @@ const RealRace = (function () {
         start: c.pitPlan ? c.pitPlan.start : null, tyre: c.tyre ? c.tyre.cls || c.tyre.code || null : null, wear: c.tyreWear != null ? +c.tyreWear.toFixed(3) : null, pitStops: c.pitStops | 0 });
       return { active: true, armed, placed, name: active.script.name, trackId: active.script.trackId, laps: active.laps, realLaps: active.script.laps,
                startLap: active.startLap, seat: active.seatCode, K: +K.toFixed(4), caution: heldLevel, weather: rainWant, cars,
-               watch: !!active.watch, reel: !!active.reel, replay: replay ? replay.status() : null, handover: handover ? +handover.t.toFixed(2) : 0 };
+               watch: !!(active.watch || classifyPublished), reel: !!active.reel, replay: replay ? replay.status() : null, handover: handover ? +handover.t.toFixed(2) : 0 };
     }
 
     live = { stage, launch, stop, update, status, intro, raceT0: () => raceT0, isActive: () => !!active, isWatch: () => !!active && !!active.watch, current: () => active && active.script,

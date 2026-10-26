@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   MSG_TYPES, busTypeFor, busTextFor, buildPayload, resolveBusTo, redactSecrets, parseArgs, postWebhook, main,
-  relayEnvNames, relayRoute, relayTextFor, relayBackoff, fireRelay, livePrHead,
+  relayEnvNames, relayRoute, relayTextFor, relayBackoff, fireRelay, livePrHead, staleWarning,
 } from "../../tools/ci/agent-msg.mjs";
 import { TYPES, formatLine, parseLine } from "../../tools/ci/fleet-bus.mjs";
 
@@ -428,4 +428,47 @@ test("audit 4 G6/G7/G11: livePrHead reads the PR's head; APEX_READY_NO_RECEIPT n
   });
   assert.equal(code, 1);
   assert.equal(checked, 1, "the env flag is not a bypass");
+});
+
+// ── STALE orchestrator warning (OrchA 36 archived without a hand-off, 2026-10-26) ──
+const T0 = 1_800_000_000, ORCH_A = "claude:session_01AAAAAAAAAAAAAAAAAAAAAA";
+const busOf = (lastOwnMinAgo) => () => [
+  { sha: "1111111", at: T0 - lastOwnMinAgo * 60, from: ORCH_A, text: "INFO last line from the orchestrator" },
+  { sha: "2222222", at: T0 - 5 * 60, type: "ROTATE", from: "claude:session_peer", text: `ORCH A LIVE ${ORCH_A}` },
+];
+const staleDeps = (bus, out, errs) => ({
+  env: { APEX_FLEET_AS: ME }, cwd: "/nonexistent", headShaFn: () => "abc", now: () => "ts", nowS: () => T0,
+  fetchFn: async () => ({ ok: true, status: 200, text: async () => "ok" }),
+  sendBus: () => ({ ok: true, sha: "1" }), busEntries: bus,
+  log: (l) => out.push(l), err: (l) => errs.push(l),
+});
+
+test("staleWarning: a fleet letter (or fleet:<L>) whose orchestrator is silent past 45 min warns; live, unknown or non-fleet do not", () => {
+  const warn = `! orchestrator A stale: last bus line 53m ago (${ORCH_A}); message delivered but may be unread`;
+  assert.equal(staleWarning("A", { busEntries: busOf(53), nowS: T0 }), warn);
+  assert.equal(staleWarning("fleet:a", { busEntries: busOf(53), nowS: T0 }), warn);
+  assert.equal(staleWarning("A", { busEntries: busOf(10), nowS: T0 }), "", "live");
+  assert.equal(staleWarning("B", { busEntries: busOf(53), nowS: T0 }), "", "no LIVE line for B: nothing to say");
+  assert.equal(staleWarning("all", { busEntries: busOf(53), nowS: T0 }), "", "not a fleet letter");
+  assert.equal(staleWarning("#3499", { busEntries: busOf(53), nowS: T0 }), "");
+  assert.equal(staleWarning("A", { busEntries: () => { throw new Error("no bus"); }, nowS: T0 }), "", "a bus read failure never throws");
+});
+
+test("main: a send to a STALE fleet still delivers and exits 0, then prints one warning; a live fleet prints none", async () => {
+  const env = { APEX_FLEET_AS: ME, APEX_AGENT_WEBHOOK_URL: "https://hooks.example/agent", APEX_AGENT_WEBHOOK_AUTH: "Bearer w" };
+  for (const [ago, want] of [[53, 1], [10, 0]]) {
+    const out = [], errs = [];
+    const deps = { ...staleDeps(busOf(ago), out, errs), env };
+    assert.equal(await main(["send", "--to", "A", "--type", "INFO", "is the slot free?"], deps), 0);
+    assert.ok(out.some((l) => l.startsWith("= webhook ok")), out.join("\n"));
+    assert.equal(errs.filter((l) => l.startsWith("! orchestrator A stale")).length, want, errs.join("\n"));
+  }
+  // --dry-run sends nothing but names the risk; a failed send (exit 1) adds no warning on top of its error.
+  const out = [], errs = [];
+  assert.equal(await main(["send", "--to", "fleet:A", "--type", "INFO", "--dry-run", "x"], staleDeps(busOf(53), out, errs)), 0);
+  assert.deepEqual(errs.filter((l) => l.startsWith("! orchestrator A stale")).map((l) => l.split("; ")[1]), ["message would be delivered but may be unread"]);
+  const errs2 = [];
+  const failing = { ...staleDeps(busOf(53), [], errs2), env, fetchFn: async () => ({ ok: false, status: 500, text: async () => "boom" }) };
+  assert.equal(await main(["send", "--to", "A", "--type", "INFO", "is the slot free?"], failing), 1);
+  assert.equal(errs2.some((l) => l.startsWith("! orchestrator")), false);
 });

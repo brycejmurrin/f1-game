@@ -1,6 +1,6 @@
 ---
 name: asset-pack
-description: "Use when baked PBR materials in assets/pack are missing, wrong, garbled, or mismatched in colour or layer (MAT id) on GLX/TLX/WGX, editing js/render/shared/assets.js or tools/gen/assets.mjs, or tuning matTexMix / __apex.assets() / matTex() and the procedural-vs-textured tarmac A/B. Sheen/exposure with a pack loaded → lighting-tuner; black or NaN-white canvas → renderer-debug."
+description: "Use when inspecting baked PBR materials/MAT layers, assets/pack, matTexMix, __apex.assets(), or validating local glTF/GLB and authoring zero-spend procedural room drafts. Covers assets.js, tools/gen/assets.mjs, GLX/TLX/WGX material mismatches. Exposure/shine → lighting-tuner; car liveries → garage-parts-livery; rendering defects → renderer-debug."
 ---
 
 # Baked asset pack
@@ -30,6 +30,7 @@ write the exact command into the PR body for Bryce, or ask him for a grant.
 ## When to Use
 
 - Planning a pack regeneration (`bake-synthetic`, Bryce runs it) or adding CC0 scan layers.
+- Validate local glTF/GLB assets or create zero-spend procedural Blender room drafts.
 - Licence/hash/size guards (`verify`).
 - Invisible / wrong / not-loading baked materials.
 - Tuning `matTexMix` / `__apex.matTex` or tier (`low`/`high`).
@@ -58,3 +59,10 @@ Related: [shell/cache](../check-changes/references/bump.md), **renderer-debug**,
 
 - MAT 17-slot lockstep, bake/A/B, one-backend-only garble trace, mistakes →
   [references/workflow.md](references/workflow.md).
+
+## Local 3D authoring and interchange
+
+For zero-spend procedural room drafts and validation of exported glTF assets,
+use the project adapter in [free design tooling](../../../docs/DESIGN-TOOLS.md).
+This extends authoring evidence, not the baked material-array loader. Preserve
+Function/Form/Runtime review gates; primitive drafts are not final assets.

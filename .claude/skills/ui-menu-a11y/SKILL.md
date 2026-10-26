@@ -56,3 +56,10 @@ Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
 
 - Layer/Escape/zoom implementation, pause-settings overlay, mistakes →
   [references/workflow.md](references/workflow.md).
+
+## Local automated evidence
+
+The existing CSS loop accepts `--axe` to scan the opened screen with the locked
+local axe-core package. See [free design tooling](../../../docs/DESIGN-TOOLS.md).
+Retain incomplete checks for review; automated results do not replace the
+keyboard, touch, screen-reader, focus, and scroll checks above.

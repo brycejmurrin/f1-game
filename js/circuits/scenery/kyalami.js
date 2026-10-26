@@ -207,7 +207,10 @@
           stage._mat = 0;
         });
       };
-      ironTerrace("kyalami-terrace-main", K(0.005), -1, 13, 15, { rows: 7 });
+      // Gap 36 (was 13): dual_lite day S/F orbit (az 45 / el 20 / dist 42) puts
+      // the eye ~28 m lateral — inside the old terrace roof / crowd mass, so
+      // frac-0 orbit+trackside looked into/under the slatted bowl (#3316).
+      ironTerrace("kyalami-terrace-main", K(0.005), -1, 36, 15, { rows: 7 });
       ironTerrace("kyalami-terrace-crowthorne", K(0.078), -1, 20, 10, { rows: 6 });
       ironTerrace("kyalami-terrace-leeukop", K(0.565), -1, 22, 8, { rows: 5 });
       // Main grandstand opposite the pits on the S/F straight — face-brick /
@@ -216,10 +219,11 @@
       // place the main spectator bank on the pit-straight (exact bay count and
       // seat total not surveyed — length kept modest ~80 m).
       // Emit body lives in a local fn so BATCH-01's 2200-char required window fits.
-      // Side -1, opposite the pit complex on +1 (def `pit.side`). 16 m out:
-      // the slab's track edge clears the sponsor hoarding 7 m out.
+      // Side -1 (authored). Gap 36 (was 16): past the dual_lite S/F orbit eye
+      // (~28 m lateral) so start cells see the Highveld pit straight, not the
+      // lean-to underside (#3316). Sponsor hoarding stays at 7 m.
       {
-        const side = -1, dist = 16;
+        const side = -1, dist = 36;
         const a = anchor(K(0.950), side, dist);
         if (!onTrack(a.c[0], a.c[2], 10)) {
           const b = [a.r, a.u, a.t], inw = IN(side);

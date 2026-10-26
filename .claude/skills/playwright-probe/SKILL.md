@@ -74,7 +74,7 @@ Speed notes: `docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md`.
 
 `trackside` here is the free-cam `view({look:"in"})`, not the `trackside` CAM_MODES rig.
 `turns:` has no tunnel/bridge entries: read the circuit file's comments (Monaco bore
-racing 0.449-0.524) or `flicker-gate.mjs --list` (sites carry racing/scenery fracs).
+racing 0.449-0.524) or `node tools/shot/flicker-gate.mjs --list` (sites carry racing/scenery fracs).
 
 **Before/after:** the tools serve the working tree, and rule 2 forbids source edits while a
 capture runs. Edit already made: `git stash push -m pp-<tag>` → shoot BEFORE → `git stash apply <sha>`
@@ -94,7 +94,7 @@ node tools/perf/profile.mjs singapore --mode spans --repeat 3 --base HEAD  # A/B
 node tools/shot/profile-gameloop.mjs singapore render        # raw .cpuprofile only (profile.mjs --mode cpu wraps it)
 ```
 
-`flicker-gate.mjs` (still camera, fixed SITES, `--list` is no-browser) and
+`node tools/shot/flicker-gate.mjs` (still camera, fixed SITES, `--list` is no-browser) and
 `tools/track/coplanar-audit.cjs <id>` (no browser) are the z-fight pair
 motion-capture's reference points at. A still frame cannot show shimmer and a CPU chart cannot see fill-bound work —
 both references say what the numbers mean before you A/B on them.

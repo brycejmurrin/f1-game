@@ -186,20 +186,19 @@
         else tower(k(s), -1, dist, bw, th, { col, seg: 8,
           cap: true, capCol: [0.20, 0.26, 0.36], mast });
       }
-      // Thin haze silhouette band — distant mid-rise depth, not a wall
-      for (let i = 0; i < 6; i++) {
-        const f = i / 5;
-        const bh = 50 + hash(i * 13) * 70;
-        const bw = 22 + hash(i * 9) * 18;
-        backdrop(k(0.36 + f * 0.16), -1, 400 + hash(i * 5) * 50,
-                 [bw, bh, 20],
-                 [0.38 + hash(i * 7) * 0.06, 0.42 + hash(i * 3) * 0.05, 0.54 + hash(i * 11) * 0.05]);
-      }
-      for (let i = 0; i < 4; i++) {
-        backdrop(k(0.35 + i * 0.055), -1, 455 + hash(80 + i) * 34,
-                 [18 + hash(90 + i) * 12, 38 + hash(100 + i) * 28, 16],
-                 [0.43, 0.47, 0.56]);
-      }
+      // Melbourne CBD fabric beyond Albert Park Lake (lakeside Drive, side -1).
+      // cityFront was voided and the horizon fell back to abstract backdrop
+      // stubs; restore a recognisable mid-rise silhouette under the heroes.
+      // One sparse band (large step, low floor grid) stays inside the
+      // albert_park props-tris ±0.5 % band without raising the baseline.
+      const CBD_PAL = [
+        [0.58, 0.62, 0.68], [0.52, 0.56, 0.64],
+        [0.62, 0.64, 0.70], [0.48, 0.52, 0.60],
+      ];
+      cityFront(0.37, 0.53, -1, 405, {
+        minH: 36, maxH: 82, depth: 18, step: 150,
+        palette: CBD_PAL, lit: true, windowCol: [0.62, 0.76, 0.92], floor: 3,
+      });
 
       every(100, (kk) => {
         for (const side of [-1, 1]) {
@@ -784,5 +783,5 @@
       gantry(0.0,  7.5, [0.30, 0.32, 0.36]);
       gantry(0.50, 7.0, [0.25, 0.27, 0.32]);
 
-      void prop; void WATER; void pyMin; void bush; void hedge; void cityFront; void addPyramid; void place;
+      void prop; void WATER; void pyMin; void bush; void hedge; void addPyramid; void place;
     };

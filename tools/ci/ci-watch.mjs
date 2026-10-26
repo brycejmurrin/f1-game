@@ -51,7 +51,7 @@
 //   --jobs            one line per job still queued/pending, with its wait age (replaces paging list_workflow_jobs)
 //   --state <file>    already-reported `<run>:<job>` keys; default artifacts/ci-watch/<sha7>.json (not under --once),
 //                     so a re-armed watch never replays a job or a cancelled run; `--state none` disables
-//   `= ci hollow (draft, n/m jobs skipped — add run-ci)` · `= ci superseded (merged | new head <sha>)` ·
+//   `= ci hollow (draft, n/m jobs skipped — add run-ci or a CI: run body line)` · `= ci superseded (merged | new head <sha>)` ·
 //   `= ci cancelled-external` (one run, every job cancelled within 60 s, no newer run) · the final line
 //   names the run(s): `run=#<id> <event> <tier>` · a 5xx is retried with backoff (1/2/4 s) before it is an error.
 //
@@ -95,11 +95,12 @@ export function api(pathQs, opts = {}) {
   return sharedApi(pathQs, { ...opts, etags: opts.etags === undefined ? ETAGS : opts.etags });
 }
 
-/** A ci.yml run started by a label other than run-ci on a draft (#2184): its
+/** A ci.yml run started by a label other than run-ci on a draft (#2184), or by a
+ *  PR-body edit that did not newly give a draft the `CI: run` marker line: its
  *  jobs all skip, so it concludes success while testing nothing. ci.yml's
- *  `run-name` titles it `CI ignored: label <name>`; as the newest run on the
- *  head it would hide the real verdict, so it never counts. Pure. */
-export const labelNoiseRun = (r) => /^CI ignored: label /.test(String(r?.display_title || ""));
+ *  `run-name` titles it `CI ignored: label <name>` or `CI ignored: edit`; as the
+ *  newest run on the head it would hide the real verdict, so it never counts. Pure. */
+export const labelNoiseRun = (r) => /^CI ignored: /.test(String(r?.display_title || ""));
 
 /** One run per workflow: the NEWEST by creation. A push run the PR run on the
  *  same head_sha cancelled seconds in (AGENTS.md rule 8's designed dedupe) is
@@ -493,7 +494,7 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
     if (v.state === "passed") {
       const hollow = hollowDraft(runs.flatMap((x) => jobsByRun[x.id] || []));
       if (hollow) {
-        report(`= ci hollow (draft, ${hollow.skipped}/${hollow.total} jobs skipped — add run-ci) nothing ran but the draft skeleton${via(runs)} sha=${sha}`);
+        report(`= ci hollow (draft, ${hollow.skipped}/${hollow.total} jobs skipped — add run-ci or a CI: run body line) nothing ran but the draft skeleton${via(runs)} sha=${sha}`);
         return 5;
       }
     }

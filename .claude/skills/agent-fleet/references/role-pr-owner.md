@@ -88,7 +88,8 @@ the base also has: port the fix if one exists, else one PR comment naming it.
 What this role adds at draft → ready: mark ready only when `ready-gate.mjs --pr <n>`
 exits 0 AND `node tools/ci/ci-watch.mjs --sha <head>` shows `= ci passed` (ready-gate reads the structural
 guards; it has exited 0 while `CI` was red). A draft or unlabelled run can say
-`passed` with 16 of 17 jobs skipped: put the `run-ci` label on first, and cite
+`passed` with 16 of 17 jobs skipped: put the `run-ci` label on first (or, when a
+label 403s, a PR-body line that starts `CI: run`: same fast tier, no one else needed), and cite
 in every READY the run id, the job ids that RAN and the tests>0 line. A
 `workflow_dispatch` pass is not a verdict on the PR head. The flip itself (mergeable
 first, re-subscribe after it, READY after `ready-gate --wait` on the same head, the

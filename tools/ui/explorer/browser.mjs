@@ -215,15 +215,28 @@ export async function installFault(context, profile) {
   if (!["offline", "missing-assets", "slow-assets"].includes(profile)) throw new Error(`Unknown fault profile ${profile}`);
   const events = [];
   if (profile === "offline") { await context.setOffline(true); return { events, restore: () => context.setOffline(false) }; }
-  const handler = async (route) => {
+  const pending = new Set(), delays = new Set();
+  const handle = async (route) => {
     const url = new URL(route.request().url());
-    if (!/\/(assets|models|textures)\//.test(url.pathname) && !/\.(png|jpg|webp|wasm|bin|glb|ogg|mp3|woff2)$/.test(url.pathname)) return route.continue();
+    if (!/\/(assets|models|textures)\//.test(url.pathname) && !/\.(png|jpg|webp|wasm|bin|glb|ogg|mp3|woff2)$/.test(url.pathname)) return route.fallback();
     if (events.length < 100) events.push({ url: url.href, profile });
     if (profile === "missing-assets") return route.abort("failed");
-    await new Promise((r) => setTimeout(r, 700)); await route.continue();
+    await new Promise((resolve) => {
+      const release = () => { clearTimeout(timer); delays.delete(release); resolve(); };
+      const timer = setTimeout(release, 700); delays.add(release);
+    });
+    await route.fallback();
+  };
+  const handler = async (route) => {
+    const work = handle(route); pending.add(work);
+    try { return await work; } finally { pending.delete(work); }
   };
   await context.route("**/*", handler);
-  return { events, restore: () => context.unrouteAll({ behavior: "wait" }) };
+  return { events, restore: async () => {
+    await context.unroute("**/*", handler);
+    for (const release of [...delays]) release();
+    await Promise.allSettled([...pending]);
+  } };
 }
 
 export async function positionScene(page, a) {

@@ -140,3 +140,7 @@ catalog's click route. With an explicit custom `--root`, the supplied clicks are
 the complete route; inspect `screenClicks` when authoring a custom screen.
 Open-state and stylesheet waits are bounded and identify the screen/root on
 failure. Infinite decorative animations must not block transition readiness.
+
+Computed token inspection also supports `--tokens`: `tokens.json` records custom
+properties, selected computed styles, viewport/motion and bounded control samples.
+Control and token truncation are explicit. See [design tools](../../../../docs/DESIGN-TOOLS.md).

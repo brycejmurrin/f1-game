@@ -171,7 +171,7 @@ test('aero bench reports saturation and no Corner Mode standing gain', () => {
   f.button('STRAIGHT MODE').onclick(); assert.match(text(), /speed ceiling trade \+10\.0% · downforce loss 20\.0%/);
 });
 test('live atlas retries same-key failures with bounded backoff and skips unsupported backend', () => {
-  const source = read('js/garage/scene.js'), start = source.indexOf('function uploadLive('), end = source.indexOf('// Squeegeed resin:', start);
+  const source = read('js/garage/scene.js'), start = source.indexOf('function reuploadTex('), end = source.indexOf('// Squeegeed resin:', start);
   let attempts = 0, now = 0;
   const c = vm.createContext({ roomKeys: () => ({ geom: 'g', live: 'l', dressId: 'd', key: 'k' }), performance: { now: () => now },
     cacheKey: 'k', shellMesh: {}, geomKey: 'g', liveKey: 'l', liveTex: null, liveCanvas: {}, liveMesh: { mid: {} },
