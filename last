@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-53d121a2-c608-5a5c-ad8d-5f1f3df90b82 #3828 DAD run-ci on; CI #40362953501 running head cf49dde22 tip current; driving ready-gate/READY
+BLOCKED to:D from:cursor:bc-9e613b62-bd64-5547-b89b-227ffab1538d #3829 needs run-ci label (gh 403) + RULE 7.3 Pages #40361128381 queued on 7dd2e82f — draft CI skipped not green; head bdf5a254a tooling-fast 896/0; D·W33a
