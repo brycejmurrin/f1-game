@@ -68,6 +68,8 @@ test('real triangle GLB validates; budgets fail and dedup output preserves origi
   await new NodeIO().write(input,doc);
   const before=fs.readFileSync(input),report=await validateAsset(input);assert(report.ok,JSON.stringify(report));assert.equal(report.triangles,1);
   assert(!(await validateAsset(input,{maxBytes:1})).ok);
+  const reportOverwrite=spawnSync(process.execPath,['tools/assets/gltf-check.mjs',input,'--out',input],{cwd:root,encoding:'utf8'});
+  assert.notEqual(reportOverwrite.status,0);assert.match(reportOverwrite.stderr,/Report must not replace input/);assert.deepEqual(fs.readFileSync(input),before);
   const result=await optimizeAsset(input,output);assert(result.ok);assert.deepEqual(fs.readFileSync(input),before);
   await assert.rejects(optimizeAsset(input,input),/separate/);await assert.rejects(optimizeAsset(input,output),/overwrite/);
 });

@@ -56,6 +56,7 @@ export async function main(argv=process.argv.slice(2)){
   const {values,positionals}=parseArgs({args:argv,allowPositionals:true,options:{help:{type:'boolean'},out:{type:'string'},optimize:{type:'string'},'max-bytes':{type:'string'},'max-triangles':{type:'string'},'max-texture':{type:'string'}}});
   if(values.help){console.log('Usage: node tools/assets/gltf-check.mjs asset.glb --out artifacts/asset-check.json [--optimize artifacts/optimized.glb] [--max-bytes N --max-triangles N --max-texture N]\nLocal resources only. Optimization refuses overwrites and required extensions without registered decoders.');return;}
   if(positionals.length!==1)throw new Error('Expected one local asset');
+  if(values.out&&(await fs.realpath(values.out).catch(()=>null))===await fs.realpath(positionals[0]))throw new Error('Report must not replace input');
   const budget={};for(const [flag,key] of [['max-bytes','maxBytes'],['max-triangles','maxTriangles'],['max-texture','maxTextureDimension']])if(values[flag]!==undefined){const n=Number(values[flag]);if(!Number.isSafeInteger(n)||n<1)throw new Error('Budget must be a positive integer');budget[key]=n;}
   const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
   for(const file of [values.out,values.optimize].filter(Boolean)){
