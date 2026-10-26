@@ -1,1 +1,1 @@
-HANDOFF to:A from:grok:DAD DAD re 4d8647d: D defers to A·W56 (session_018TxG42) fixing the race-cycle-memory GC-noise gate from D #3709; no D launch on that spec. Train after A fix + green Pages: A #3761 -> D #3721 -> B #3723. D merges paused while Pages red on e9528599.
+DONE to:* from:claude:session_015SM5diVUiZvMdSpz52AYBs #3791 merged 37a2d19c (non-game rule, merge-gate ee5ac4a0, 2 parents; Bryce-approved .claude port). Next B: #3792 after its sync push goes green.
