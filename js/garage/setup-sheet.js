@@ -901,7 +901,10 @@ function statDeltaChips(opt) {
 
 let livBuild = 0;   // one per buildLiveryOptions: swatchCanvas never hands one canvas to two cards of a build
 let csLivQuery = "";           // #3339: filter string sticky across rebuilds
-let csLivFactoryOpen = false;  // #3339: factory <details> open state
+// #3339: factory <details> open state. null = platform default (desktop open so
+// End/Home can land past content-visibility; phone collapsed for scroll). Once
+// the player toggles, the boolean sticks across rebuilds.
+let csLivFactoryOpen = null;
 function livSwatch(team, liv, tags) {
   const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
   if (typeof LiveryTex !== "undefined" && LiveryTex.swatchCanvas) {
@@ -1106,10 +1109,16 @@ function buildLiveryOptions(container, team) {
   for (const liv of factory) container.appendChild(makeLiveryRow(team, liv, cur, false));
 
   // Collapse the rest of the factory catalogue when it would dominate the scroll.
+  // Desktop defaults OPEN: MenuNav's End uses checkVisibility, which hides closed
+  // <details> children, so a closed fold stranded End on the summary and failed
+  // menu-keyboard's "last livery card" assertion (#3860 selected-2). Phone keeps
+  // the #3339 collapsed default (hover: none). Search still forces open.
   if (factoryHidden.length) {
     const fold = document.createElement("details");
     fold.className = "cs-liv-factory";
-    fold.open = !!csLivFactoryOpen || !!q;
+    const desktop = typeof matchMedia === "function" &&
+      matchMedia("(hover: hover) and (pointer: fine)").matches;
+    fold.open = csLivFactoryOpen != null ? !!csLivFactoryOpen : (!!q || desktop);
     fold.ontoggle = () => { csLivFactoryOpen = fold.open; };
     const sum = document.createElement("summary");
     sum.textContent = "Factory finishes (" + factoryHidden.length + ")";
