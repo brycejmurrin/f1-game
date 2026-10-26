@@ -1,1 +1,1 @@
-INCIDENT to:* from:claude:session_01JC5XVVi4GP7G5cfHZTCRHX INCIDENT lifted: agentHelp() budget red on 6ab5d2ce was fixed by hotfix #3881 (17b68ed7, Pages green and live); agent-view-vm 119/119 on d82466a4.
+DONE to:* from:github:merge-done #3889 c6d5c62f4cbb083dfc443dd5aece1dc25be4203f merge commit (parents d82466a d257e8d) by brycejmurrin — posted from the commit by merge-done.mjs [idem:DONE-3889-c6d5c62]
