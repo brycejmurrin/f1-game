@@ -3,7 +3,8 @@
  * night_pass cell survey-83-orbit (frac 0.8333, az 45, el 18, dist 40) used to
  * sit inside theme-dress front-row neonTowers (gap 13–25) on Neftchilar +1.
  * Capture classified black-scene-with-edge-content; other night fracs (0–0.67) were fine.
- * Fix: dressingExclusions city on +1 for 0.58–0.97; authored cityFront at gap 48.
+ * Fix: dressingExclusions city on +1 for 0.58–0.97; authored cityFront at gap 48
+ * (unlit; towers at 96+) so the eye clears the glass canyon without neon coplanars.
  *
  * Run: node --test tests/unit/baku-night-orbit.test.mjs
  */

@@ -396,7 +396,7 @@
       });
       cityFront(0.553, 0.56, 1, 26, {
         minH: 6, maxH: 16, depth: 12, step: 16,
-        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
+        palette: SAND_PAL, lit: false, windowCol: WIN_WARM, floor: 3,
       });
 
       for (let i = 0; i < 4; i++) {
@@ -661,17 +661,20 @@
         addCone(out, vadd(aFt.c, aFt.u, 4.5), 0.5, 3, WIN_COOL, 6, b);
       }
 
+      // lit:false — with theme city dress excluded on +1 (#3340), cityFront's
+      // night neon band vs drawFace detail was unmasked as coplanar growth.
+      // Towers / billboards still light the boulevard; façades stay readable.
       cityFront(0.63, 0.738, 1, 14, {
         minH: 40, maxH: 100, depth: 20, step: 20,
-        palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
+        palette: GLASS_PAL, lit: false, windowCol: WIN_COOL, floor: 4,
       });
-      // Gap 48 (was 14): night_pass / dual_lite orbit at frac≈0.833 (az 45,
-      // dist 40) sits ~21 m past the road edge on +1 — the glass canyon at
-      // gap 14 buried the eye (black-scene-with-edge-content, #3340). Near
-      // face past the orbit ring; towers below move out in lockstep.
+      // Gap 48 (was 14): night_pass orbit at frac≈0.833 (az 45, dist 40) sits
+      // ~21 m past the road edge on +1 — gap 14 buried the eye even after the
+      // dress exclusion. building() outer ≈ gap+w (w≤30) → ~78; towers below
+      // clear that shell.
       cityFront(0.762, 0.9203, 1, 48, {
-        minH: 40, maxH: 100, depth: 20, step: 20,
-        palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
+        minH: 40, maxH: 100, depth: 20, step: 26,
+        palette: GLASS_PAL, lit: false, windowCol: WIN_COOL, floor: 4,
       });
 
       {
@@ -710,13 +713,14 @@
         grandstand(0.755, -1, 14, 70, [0.50, 0.52, 0.56], [0.60, 0.40, 0.36]);
       }
 
-      // Tower gaps 72+ (was 52+): clear of cityFront far face at gap 48 + depth 20.
+      // Centres 96+ (was 52+): clear cityFront outer ≈78 (gap 48 + w≤30) and
+      // baseW/2 so tower near faces do not share a plane with the façade strip.
       for (let i = 0; i < 9; i++) {
         const k   = K(0.77 + i * 0.011);
         const isPortBaku = i === 2 || i === 3;
         const bW  = 14 + (i % 2) * 4;
         const h   = isPortBaku ? 150 : 85 + (i % 3) * 45;
-        const gap = 72 + (i % 4) * 24;
+        const gap = 96 + (i % 4) * 24;
         tower(k, 1, gap, bW, h,
           { col: GLASS, seg: 7, cap: true, capCol: i % 3 ? WIN_COOL : WIN_WARM });
         // Lit crown ring on each tower (emissive band near top)
