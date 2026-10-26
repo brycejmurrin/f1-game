@@ -209,7 +209,6 @@
     // Post working size. Phones use PHONE_POST_SCALE of the scene dimensions;
     // aux passes (SSAO/godray/bloom) then halve that again. Desktop keeps pW===W.
     const phonePost = !!ctx.isMobile;
-    const PHONE_POST_SCALE = 1;
     let pW = 1, pH = 1;
 
     // render-target helpers
@@ -367,6 +366,7 @@
       if (rt.depthTexture) VP.layout(rt.depthTexture, lw, lh, pw, ph);
     }
     const halfOf = (v) => Math.max(1, Math.floor(v / 2));
+    const PHONE_POST_SCALE = 1;   // phone post size × scene; 1 = full res (pre-#3479)
     const postSize = (v) => Math.max(1, Math.floor(Math.max(1, v | 0) * (phonePost ? PHONE_POST_SCALE : 1)));
     function layoutHalf() {
       // Base AO/GR off the post working size, including fixed allocations.

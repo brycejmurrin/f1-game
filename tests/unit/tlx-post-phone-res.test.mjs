@@ -32,7 +32,7 @@ test("phone post runs at the full scene resolution (pre-#3479 clarity)", () => {
 
 function layoutFixture(phonePost, fixed = false) {
   const placed = {};
-  const context = vm.createContext({ phonePost, fixed, PHONE_POST_SCALE,
+  const context = vm.createContext({ phonePost, fixed,
     place(rt, w, h, pw, ph) { placed[rt] = { logical: [w, h], physical: fixed ? [pw, ph] : [w, h] }; },
     ctx: { wantSpatialUpscale: () => true }, P: { sgsr: true },
     sceneRT: "scene", ldrRT: "ldr", aaRT: "aa", ssaoRT: "ao", ssaoBlurRT: "aoBlur",
