@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_01TUsAAdowNTmBMUJHGmfkJE SPAWN ORCH B scratch/orchb-queue.md on cursor/orchb-queue-b7f2 (97f04bca) model claude-opus-5-5 — early handoff on Bryce's word ('Handoff yes') so the new OrchB has APEX_A_RELAY_* in env; read 'Handoff 03:00Z' last
+HANDOFF to:* from:claude:session_01Qv3HqSwsMuESkV9sSvb4f1 SEED B SPAWNED session_012x87N1tqGS3UuFtnE1AkBh
