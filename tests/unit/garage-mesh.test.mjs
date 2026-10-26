@@ -478,6 +478,43 @@ test("the trace tick re-fills the live atlas in place: no texture created after 
   assert.equal(freed.length, freedBefore + 1);
 });
 
+// A paint edit repaints the bay dress (1024²) and live (512²) atlases. Free-then-create leaned on TLX's retire
+// pool, and a handle retired before its first draw came back without a GPU texture (garage-livery-churn flake,
+// #3505): with refillTexture the same handles are re-filled and nothing is allocated or freed.
+test("a paint edit re-fills the bay dress and live atlases in place: no texture created or freed", () => {
+  const c2d = new Proxy(function () {}, {
+    get: (_, k) => (k === Symbol.toPrimitive ? () => 0 : c2d),
+    set: () => true, apply: () => c2d,
+  });
+  const made = [], freed = [], refills = [];
+  const gfx = {
+    createMesh: () => ({}), createTexMesh: () => ({ tex: true }), freeMesh() {},
+    createTexture(src) { const h = { tex: made.length + 1, w: src.width }; made.push(h); return h; },
+    refillTexture(h, src) { refills.push({ h, w: src.width }); return true; },
+    freeTexture(t) { freed.push(t); },
+    draw() {}, drawDecal() {}, drawGlow() {},
+  };
+  const ctx = vm.createContext({
+    console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array,
+    Uint32Array, isFinite, parseFloat, parseInt, Date,
+    performance: { now: () => 0 },
+    document: { createElement: () => ({ width: 0, height: 0, getContext: () => c2d }) },
+    LiveryTex: {},
+    Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
+  });
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
+                   "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const garage = vm.runInContext("GarageScene", ctx);
+  garage.init(gfx);
+  garage.draw(TEAM, LIV, [0, 1.6, 0], null, 0);
+  assert.deepEqual(made.map((h) => h.w).sort((a, b) => a - b), [512, 1024], "warm-up creates one live and one dress atlas");
+  for (let i = 1; i <= 4; i++) garage.draw(TEAM, { ...LIV, c1: [0.1 * i, 0.3, 0.6] }, [0, 1.6, 0], null, 0);
+  assert.equal(made.length, 2, "paint edits created textures");
+  assert.equal(freed.length, 0, "paint edits freed textures");
+  assert.ok(refills.some((r) => r.w === 1024) && refills.some((r) => r.w === 512), "both atlases were re-filled");
+});
+
 test("garage dress upload retries after a transient failure, and a new team clears its cutoff", () => {
   const c2d = new Proxy(function () {}, {
     get: (_, k) => (k === Symbol.toPrimitive ? () => 0 : c2d),
