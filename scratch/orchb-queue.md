@@ -197,3 +197,15 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Routines: 3-min send_later chain ("OrchB 3-min tick"); hourly trig_01Wbak5zU1pzpmsJQibPjWyX (:23). Predecessor triggers deleted.
 - GAME-SLOT order: #3772 (draft 4ab25422, fast tier green; owner 01Xmgd → ready-gate → full tier) after Pages green on 45fbf76f; then #3634 321bbb1eb, #3636 482c8d6f4 (READY green, lane 01Q7NM); then #3736 #3684 #3724 #3641 #3646 #3730 #3648(sync) #3723.
 - Owners: #3779 (L4) session_015uGq51cXgHdUCimQRLJzS7; #3780 (L3) session_01XJAQaNpRDAGvVkH4Bg67hk (row-5 grant goes here). All told new id.
+
+## Handoff 05:03Z (22:03 PT) — ORCH B session_01GU6nDgZAeLPfbcYDtLHubd at ~199k (get_session). READ LAST; supersedes the rest.
+- Successor: post LIVE; wake source per merged #3773 (2324d989): bus Monitor (`fleet-bus.mjs read --to B --to claude:<id> --since <cursor>`) + hourly create_trigger net. Then delete mine: hourly trig_01Wbak5zU1pzpmsJQibPjWyX and pending "OrchB 3-min tick" (list_triggers). Budget = boot + 100k (#3773); hand off by then.
+- MERGED by me: #3773 0c961987 (2 parents, DONE 7d3b341). Lesson: a non-game merge supersedes a pending Pages run a GAME-SLOT waits on — prefer batching non-game merges right after a game merge.
+- GAME-SLOT: A merged #3745 24a4ce47 (slot c485659, B ack 22a9517). NEXT SLOT = B after Pages green on 24a4ce47: #3772 if READY, else #3634 (321bbb1eb) then #3636 (482c8d6f4) (READY green, lane session_01Q7NMyMKQkkGKSsapFWeXmy). Then #3759 (game, RED full tier perf-race-entry; owner 01Y5XF bisecting; wait for GREEN), #3736 #3684 #3724 #3641 #3646 #3730 #3648(sync) #3723.
+- #3772 owner session_01XmgdKisM93VGcVMMkb77k3 (~132k): draft 4ab25422 fast tier green; deploy --gate-only running on a slow box, ETA READY ~05:40Z. If it passes 150k, launch a fresh Opus owner pinned to branch cursor/phone-res-restore-b2l1.
+- Non-game, merge when READY+green (batch right after a game merge): #3780 owner session_01XJAQaNpRDAGvVkH4Bg67hk (row 5 applied e506d7e8, CI running); #3774 owner session_01AdPk5LZLqJnt5M19EamH1f; #3779 owner session_015uGq51cXgHdUCimQRLJzS7.
+- Fable system audit (Bryce asked 21:47 PT): [Review] session_01E4f2wTJpTrcPnFYEQxmDMa, read-only, delivers an Artifact "Apex System Audit" + top 10 to ORCH B. Relay link to Bryce. Told to stop bus/webhook probes (it sent 6, two empty-body).
+- Bryce env: APEX_A_RELAY_URL/TOKEN present (rename done). B→A relay POST needs header `anthropic-version: 2023-06-01` (else 400).
+- Archive by rule after 05:10Z (idle ≥60 min, PR merged/closed or stopped; check fleet-archive.mjs): 01GETh 011NoeB 01B2s 018Eoa 01EWg3 01AXz6 019yb 01WV8q 01Y3Fm 01KBMb 01Av5d(orch? NO — never orchestrators) 01BgfkgS (#3773 merged) 01RSyjdq + 01Q1pRbY (L3/L4 handed off). NOT 01Q7NM (live lane). Never R1 01PfAQjr, seed, orchestrators, sessions Bryce opened.
+- Context check every wake: workers over 150k (owners) / 100k (docs-only) → push WIP + HANDOFF; run fleet-flags.mjs on get_session replies.
+- Bus cursor c485659.
