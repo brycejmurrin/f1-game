@@ -562,6 +562,14 @@ const Assets = (function () {
     _releaseStrip(albedo); _releaseStrip(normal);
   }
 
+  // Save-Data on, or a 2G link (#3110 F2): the boot idle load takes the 128 px
+  // tier (~0.57 MB) instead of 256 px (~1.67 MB). No Network Information API
+  // (Safari, Firefox) reads as a normal link — the same test as LazyBundles.
+  function _lowDataLink() {
+    const c = typeof navigator !== "undefined" ? navigator.connection : null;
+    return !!(c && (c.saveData || /2g$/.test(c.effectiveType || "")));
+  }
+
   // Load + upload the baked material arrays. Resolves to true only when the
   // arrays are actually live on the GPU; false (never a rejection) otherwise.
   // Safe to call repeatedly — concurrent calls share one in-flight promise.
@@ -603,7 +611,7 @@ const Assets = (function () {
     const mats = m.materials;
 
     const wantLow = opts.tier ? opts.tier === "low"
-                              : !!(_gfx.isMobile || _gfx.mobileTier);
+                              : !!(_gfx.isMobile || _gfx.mobileTier || _lowDataLink());
     const variant = (wantLow && mats.low) ? mats.low : mats;
     const size = variant.size | 0;
     if (!size || !variant.albedo) { _err = "bad-materials"; _tier = "off"; return false; }
@@ -761,7 +769,9 @@ const Assets = (function () {
   //
   // v2/v3 COPY where v1 returned views onto the fetched buffer. That is the
   // trade: the 1.35 MB saving is on the wire and the decoded arrays are the
-  // same size either way, since the consumers need float32.
+  // same size either way, since the consumers need float32. pos and idx are
+  // copied too (.slice()): a view would pin the WHOLE fetched buffer, quantised
+  // bytes included, for as long as the model stays resident (#3110 F5).
   // Keep in lockstep with TrackGeom.SWAY_FRAC (js/track/core/geom.js).
   const SWAY_FRAC = 0.45;
   function _parseModel(buf) {
@@ -787,11 +797,11 @@ const Assets = (function () {
     }
     const need = o + nv * 12 + nv * 6 + nv * 3 + nv + ni * 2 + (ver === 3 ? nv : 0);
     if (dv.byteLength < need) return null;
-    const pos = new Float32Array(buf, o, nv * 3); o += nv * 12;
+    const pos = new Float32Array(buf, o, nv * 3).slice(); o += nv * 12;
     const qn = new Int16Array(buf, o, nv * 3);     o += nv * 6;
     const qc = new Uint8Array(buf, o, nv * 3);     o += nv * 3;
     const qm = new Uint8Array(buf, o, nv);         o += nv;
-    const idx = new Uint16Array(buf, o, ni);       o += ni * 2;
+    const idx = new Uint16Array(buf, o, ni).slice(); o += ni * 2;
     const nrm = new Float32Array(nv * 3), col = new Float32Array(nv * 3);
     const mat = new Float32Array(nv);
     for (let i = 0; i < nv * 3; i++) { nrm[i] = qn[i] / 32767; col[i] = qc[i] / 255; }

@@ -19,8 +19,8 @@
  * measures the machine, not the code".
  *
  * So: a slow machine is not a failure, a STUCK build is. Poll for the track,
- * and treat the Log ring buffer growing as proof the build is still working.
- * No growth for TRACK_STALL_MS and it is genuinely wedged — which this reports
+ * and treat the newest Log record id advancing as proof the build is working.
+ * No activity for TRACK_STALL_MS and it is genuinely wedged — which this reports
  * FASTER than the old deadline did, and with a message that says which of the
  * two happened instead of a bare "timeout".
  *
@@ -53,7 +53,10 @@ export async function awaitTrackBuild(page, stallMs = TRACK_STALL_MS, hardMs = T
   for (;;) {
     const s = await page.evaluate((flag) => {
       let n = 0;
-      try { n = (window.__apex.logs && window.__apex.logs().length) || 0; } catch (_) { n = 0; }
+      try {
+        const records = window.__apex.logs ? window.__apex.logs({ limit: 1 }) : [];
+        n = (records.length && records[0].id) || 0;
+      } catch (_) { n = 0; }
       let ready = false;
       try { ready = window.__apex.info().track != null; } catch (_) { ready = false; }
       const done = flag ? window[flag] : "ok";
@@ -67,12 +70,12 @@ export async function awaitTrackBuild(page, stallMs = TRACK_STALL_MS, hardMs = T
     else if (now - lastMoved > stallMs) {
       throw new Error(
         `track build STALLED: no Log activity for ${stallMs}ms and info().track is still null ` +
-        `(${s.n} records). This is a wedged build, not a slow box.`);
+        `(latest Log id ${s.n}). This is a wedged build, not a slow box.`);
     }
     if (now - started > hardMs) {
       throw new Error(
         `track build exceeded the ${hardMs}ms hard cap while still reporting progress ` +
-        `(${s.n} records). Not a stall — something is building without ever finishing.`);
+        `(latest Log id ${s.n}). Not a stall — something is building without ever finishing.`);
     }
     await page.waitForTimeout(100);
   }

@@ -3,11 +3,30 @@
 
 const ShareCard = (function () {
   let fontsReady = null;
+  let qrLoad = null;
+
+  function hasQr() {
+    try { return typeof NetQr !== "undefined" && typeof NetQr.encode === "function"; }
+    catch (_) { return false; } // a failed classic script can leave its const in the temporal dead zone
+  }
+  function ensureQr() {
+    if (hasQr()) return Promise.resolve();
+    if (typeof ScriptLoader === "undefined" || !ScriptLoader.create) {
+      return Promise.reject(new Error("Share-card QR encoder is unavailable"));
+    }
+    if (!qrLoad) {
+      qrLoad = ScriptLoader.create().load(["js/net/qr.js"], [], { strict: true, ready: hasQr })
+        .then((ok) => {
+          if (!ok || !hasQr()) throw new Error("Share-card QR encoder could not load");
+        }).finally(() => { qrLoad = null; });
+    }
+    return qrLoad;
+  }
 
   function paintQr(ctx, op) {
-    if (typeof NetQr === "undefined" || !NetQr.encode) return;
+    if (!hasQr()) throw new Error("Share-card QR encoder is unavailable");
     const qr = NetQr.encode(op.text);
-    if (!qr) return;
+    if (!qr) throw new Error("Share link cannot fit in a QR code");
     const quiet = NetQr.QUIET || 4, total = qr.size + quiet * 2;
     const scale = Math.max(1, Math.floor(Math.min(op.width, op.height) / total));
     const size = total * scale, ox = op.x + (op.width - size) / 2, oy = op.y + (op.height - size) / 2;
@@ -61,7 +80,7 @@ const ShareCard = (function () {
   async function render(model, specName, opts) {
     opts = opts || {};
     const doc = opts.document || (typeof document !== "undefined" ? document : null);
-    await ensureFonts(doc);
+    await Promise.all([ensureFonts(doc), model && model.link ? ensureQr() : Promise.resolve()]);
     const spec = ShareCardLayout.SPECS[specName || "portrait"];
     if (!spec) throw new Error("Unknown share-card size");
     let canvas;

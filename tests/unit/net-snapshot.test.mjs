@@ -215,6 +215,28 @@ test("a late packet extrapolates ALONG THE ROAD, and gives up after a bound", ()
   assert.ok(Math.abs(at2s.s - 1025) < 0.001, `should cap at 250 ms (+25 m), got ${at2s.s}`);
 });
 
+test("a multi-second dropout snaps to the new pose instead of lerping across the hole", () => {
+  // #3288: after ~STALE_MS of silence the next pose must not blend against the
+  // pre-gap sample still sitting in the ring — that draws the car part-way back
+  // along the hole. maxExtrapMs only bounds past the newest sample.
+  assert.equal(NetSnapshot.MAX_INTERP_GAP_MS, 500);
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
+  buf.push(1000, car({ s: 100, x: 0, head: 0, speed: 50 }));
+  buf.push(3000, car({ s: 300, x: 4, head: 1, speed: 50 }));   // 2 s gap > STALE_MS-ish
+  const mid = buf.sample(2000);                                 // target mid-gap
+  assert.ok(Math.abs(mid.s - 300) < 0.001, `expected snap to s=300, got ${mid.s}`);
+  assert.equal(mid.x, 4);
+  assert.equal(mid.head, 1);
+  assert.equal(mid.extrapolated, false);
+  // An honest publish interval still blends.
+  const ok = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
+  ok.push(1000, car({ s: 100, x: 0, speed: 50 }));
+  ok.push(1100, car({ s: 150, x: 2, speed: 50 }));
+  const half = ok.sample(1050);
+  assert.ok(Math.abs(half.s - 125) < 0.001, `100 ms span must still blend, got ${half.s}`);
+  assert.ok(Math.abs(half.x - 1) < 0.001);
+});
+
 test("extrapolation wraps at the line rather than running past the track length", () => {
   const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
   buf.push(0, car({ s: TOTAL - 10, speed: 100 }));

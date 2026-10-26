@@ -2,7 +2,7 @@
   "buried": {
     "albert_park": 3,
     "anderstorp": 2,
-    "bahrain": 16,
+    "bahrain": 2,
     "buenos_aires": 2,
     "catalunya": 5,
     "cota": 4,
@@ -35,10 +35,9 @@
     "zolder": 5
   },
   "unsupported": {
-    "bahrain": 1,
     "imola": 1,
     "jeddah": 1,
-    "miami": 8,
+    "miami": 7,
     "paul_ricard": 6,
     "qatar": 1
   },
@@ -49,7 +48,7 @@
     "buddh": 2,
     "buenos_aires": 1,
     "cota": 1,
-    "dijon": 5,
+    "dijon": 2,
     "donington": 1,
     "fuji": 2,
     "hungaroring": 1,
@@ -69,7 +68,6 @@
     "paul_ricard": 6,
     "sepang": 1,
     "silverstone": 3,
-    "singapore": 0,
     "sochi": 1,
     "zandvoort": 6
   }

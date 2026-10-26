@@ -1,6 +1,6 @@
 ---
 name: mcp-probe
-description: "Use when driving the LIVE working-tree canvas with the Chrome DevTools MCP or probe-mcp.py daemon: poke __apex, heap/perf/console, memory census. Breakpoints → js-debugger. Deployed site → deploy-research. Batch shots → playwright-probe. Scripted hooks → agent-view."
+description: "Use when driving the LIVE working-tree canvas with the Chrome DevTools MCP or probe-mcp.py daemon (poke __apex, heap/perf/console, memory census), or fixing private chat MCP startup, Session terminated recovery, readiness and catalog contracts. Breakpoints → js-debugger. Deployed site → deploy-research. Batch shots → playwright-probe. Scripted hooks → agent-view."
 ---
 
 # Probing the live game with the Chrome MCP
@@ -103,3 +103,10 @@ Chrome DevTools naming: `chrome_click` (CLI) and `mcp__chrome-devtools__click` (
 
 Playwright asserts the tree in batch; Chrome looks at the working tree live;
 deploy-research looks at the deploy; never let Chrome render while Playwright runs.
+
+## Private chat attachment
+
+For existing-tunnel startup/recovery, namespaced gateway contracts and environment
+checks, follow [free design tooling](../../../docs/DESIGN-TOOLS.md). Local readiness
+and live native chat verification are separate. Keep existing app identities,
+credential references, and the configured upstream catalog.

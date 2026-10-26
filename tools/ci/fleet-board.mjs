@@ -130,10 +130,23 @@ export function coverageOf(nodes, repo) {
   return by;
 }
 
-/** Paginated GraphQL issue timelines and canonical open-PR closing links. Fail closed on incomplete data. */
-export function readCoverage(repo, request = (query, variables) => JSON.parse(gh(["api", "graphql", "-f", `query=${query}`, ...Object.entries(variables).flatMap(([k, v]) => ["-f", `${k}=${v}`])])).data) {
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/** Run a READ-ONLY `gh` call, retrying only a transient gateway error (HTTP 502/503/504) after each delay; any other error throws at once. */
+export function ghRetry(args, { run = (a) => gh(a), delays = [2000, 5000], sleep = sleepSync } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    try { return run(args); } catch (e) {
+      if (attempt >= delays.length || !/HTTP 50[234]/.test(`${e?.message || ""}\n${e?.stderr || ""}`)) throw e;
+      sleep(delays[attempt]);
+    }
+  }
+}
+
+/** Paginated GraphQL issue timelines and canonical open-PR closing links. Fail closed on incomplete data.
+ *  A transient HTTP 502/503/504 is retried twice (ghRetry); every other error, and a third gateway error, still aborts. */
+export function readCoverage(repo, request = (query, variables) => JSON.parse(ghRetry(["api", "graphql", "-f", `query=${query}`, ...Object.entries(variables).flatMap(([k, v]) => ["-f", `${k}=${v}`])])).data) {
   const [owner, name] = repo.split("/");
-  const query = `query($owner:String!,$name:String!,$cursor:String){repository(owner:$owner,name:$name){issues(first:50,after:$cursor,states:OPEN){nodes{number timelineItems(first:100,itemTypes:[CROSS_REFERENCED_EVENT]){nodes{... on CrossReferencedEvent{willCloseTarget source{... on PullRequest{number title state isDraft repository{nameWithOwner}}}}}pageInfo{hasNextPage}}}pageInfo{hasNextPage endCursor}}}}`;
+  const query = `query($owner:String!,$name:String!,$cursor:String){repository(owner:$owner,name:$name){issues(first:25,after:$cursor,states:OPEN){nodes{number timelineItems(first:100,itemTypes:[CROSS_REFERENCED_EVENT]){nodes{... on CrossReferencedEvent{willCloseTarget source{... on PullRequest{number title state isDraft repository{nameWithOwner}}}}}pageInfo{hasNextPage}}}pageInfo{hasNextPage endCursor}}}}`;
   const nodes = [];
   let cursor;
   do {

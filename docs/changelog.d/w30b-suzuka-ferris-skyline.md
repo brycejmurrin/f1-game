@@ -1,0 +1,1 @@
+Fixed: Suzuka's Motopia Circuit Wheel is taller and farther out so the teal Ferris disc owns the Casio / start-finish skyline in day orbit surveys; the mid-lap orange flex stand is pushed clear of the survey camera (#3366).

@@ -247,11 +247,19 @@
       }
 
       // ── Hard Rock Stadium — coral/teal rim bowl + night neon hero ────────
-      // Not a required modelGroup: the 132×100 m ellipse at gap 155 reaches the
-      // pit-straight edge, so a whole-bowl footprint test rejects every build.
+      // Not a required modelGroup: the 132×100 m ellipse reaches toward the
+      // pit-straight, so a whole-bowl footprint test rejects every build.
       // Individual prims still go through rejBox; the silhouette is the hero.
+      //
+      // Gap 160 (was 128): dual_lite day S/F orbit (az 45 / el 20 / dist 42) and
+      // trackside (side +1 / dist 42) put the eye ~28–42 m on +1 — inside the
+      // old bowl rim (128−100=28) and under the roof frustum (r≈118 → near edge
+      // ~10 m), so frac-0 cells were interior grey slabs (#3369). Near rim at
+      // 160−100=60 and a roof that fits inside RB clear that corridor; the
+      // exterior still reads from the grid / trackside beyond.
       {
-        const a = anchor(K(0.0), 1, 128);
+        const HARD_ROCK_GAP = 160; // past dual_lite S/F orbit (~28 m) + trackside (42 m)
+        const a = anchor(K(0.0), 1, HARD_ROCK_GAP);
         const r = a.r, u = a.u, t = a.t;
         const RA = 132, RB = 100;
         const segC = 48;
@@ -299,14 +307,16 @@
           addCyl(out, vadd(c, u, 70), 5.0, 1.4, FLOOD_WH, 8, [r, u, t]);
           addBox(out, vadd(c, u, 0.05), [20, 0.2, 20], [0.96, 0.96, 0.88], [r, u, t]);
         }
-        addFrustum(out, vadd(stadiumBase, u, 56), 118, 74, 18,
+        // Roof radii fit inside RB (was 118–122: overshot the short axis and
+        // put the canopy over the dual_lite eye). Near roof edge ≈ gap−96.
+        addFrustum(out, vadd(stadiumBase, u, 56), 96, 62, 18,
           [0.82, 0.84, 0.86], 48, [r, u, t]);
-        addFrustum(out, vadd(stadiumBase, u, 55), 120, 76, 0.8,
+        addFrustum(out, vadd(stadiumBase, u, 55), 98, 64, 0.8,
           [0.55, 0.55, 0.57], 48, [r, u, t]);
         // DETAIL: top neon ring (readable night cue even when rim segments reject)
-        addFrustum(out, vadd(stadiumBase, u, 74.5), 122, 78, 1.6,
+        addFrustum(out, vadd(stadiumBase, u, 74.5), 100, 66, 1.6,
           NEON_PINK, 48, [r, u, t]);
-        addFrustum(out, vadd(stadiumBase, u, 76.2), 118, 74, 1.2,
+        addFrustum(out, vadd(stadiumBase, u, 76.2), 96, 62, 1.2,
           NEON_CYAN, 48, [r, u, t]);
         for (let i = 0; i < 8; i++) {
           const ang = i / 8 * 6.2832;
@@ -324,8 +334,10 @@
 
       // Hard Rock neon landmark — compact guitar-neck / LED tower near S/F
       // (whole-bowl footprint rejects; this required group is the night hero).
+      // Gap 148 (was 118): rides with HARD_ROCK_GAP so the tower stays on the
+      // bowl rim, past the dual_lite corridor (#3369).
       {
-        const a = anchor(K(0.008), 1, 118);
+        const a = anchor(K(0.008), 1, 148);
         const bv = [a.r, a.u, a.t];
         const ty = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
         const base = [a.c[0], (ty != null ? ty : a.c[1]), a.c[2]];
@@ -400,10 +412,12 @@
         addBox(out, vadd(aR.c, aR.u, 10.0), [1.6, 0.5, 1.2], LAMP_WARM, [aR.r, aR.u, aR.t]);
       }
 
-      // Palms lining the pit straight
+      // Palms lining the pit straight. +1 gap 56 (was 46): dual_lite trackside
+      // (side +1 / dist 42) put the eye inside the near canopy fringe (#3369);
+      // seat past that corridor so S/F cells see grid + Hard Rock exterior.
       for (let i = 0; i < 14; i++) {
         palm(K(0.0 + i * 0.006), -1,  9 + (i % 2) * 4,  8 + hash(i)     * 4, PALM_GREEN);
-        palm(K(0.0 + i * 0.006),  1, 46 + (i % 2) * 6,  9 + hash(i * 5) * 4, PALM_DARK);
+        palm(K(0.0 + i * 0.006),  1, 56 + (i % 2) * 6,  9 + hash(i * 5) * 4, PALM_DARK);
       }
       // Sponsor billboards along the pit wall
       billboard(K(0.02),  -1, 11, 16, 7, TEAL);
