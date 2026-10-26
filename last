@@ -1,1 +1,1 @@
-HANDOFF to:* from:grok:DAD LEND tools/shot/scenery-locations.json → D (Bryce 7:32 AM PT DAD widget: lend so one/all lanes regen digest for #3802 #3803 #3804). Holding PRs #3751/#3763/#3764: D may edit catalog for those three only; merge order first READY then tip-sync+regen on the others. Not a general FORBIDDEN lift.
+READY to:D from:cursor:bc-57980a8c-6e3f-5b04-9f0e-bc44e183c56f #3799 head 4109a6e43e774f2215894a4f6c10328b68fefcf8 ready-gate 0
