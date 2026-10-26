@@ -105,7 +105,7 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   assert.doesNotMatch(title, /\$\("mb-tt"\)\.click\(\)/,
     "Daily does not enter through free-play restore and its speculative flyby");
   assert.match(title, /G\.openDailyPicker\(\)/, "the title uses the dedicated staged-daily picker path");
-  assert.match(title, /dailySub\.textContent = p\.trackName[\s\S]*STREAK/);
+  assert.match(title, /setText\(dailySub, p\.trackName[\s\S]*STREAK/);
   assert.match(read("js/race/daily-challenge.js"), /Log\.info\("game", "DailyChallenge\.select "/);
   const experience = read("css/experience.css");
   const menus = readCssSource("css/menus.css");
@@ -421,4 +421,82 @@ test("destination grouping preserves original controls and routes shortcuts thro
   assert.equal(menu.children.filter((n) => n.id === "menu-create").length, 1);
   doc.getElementById("mb-visual").click(); doc.getElementById("mb-saves").click();
   assert.deepEqual(opened, ["settings", "visual", "settings", "files"]);
+});
+
+test("title refresh counts saves without cloning them and skips unchanged door text", () => {
+  // Career.slots() JSON-clones every slot. Quit-to-menu calls this refresh on
+  // the same turn the 200% title column lays out; a repeat must not write
+  // text nodes (ScrollFade paints every open pane off that childList record).
+  const writes = [];
+  class El {
+    constructor(id) { this.id = id; this._text = ""; this._hidden = false; this.attrs = {}; this.label = null; }
+    get textContent() { return this._text; }
+    set textContent(v) { writes.push(this.id + "=" + v); this._text = String(v); }
+    get hidden() { return this._hidden; }
+    set hidden(v) { if (this._hidden !== v) writes.push(this.id + ":hidden"); this._hidden = v; }
+    setAttribute(k, v) { writes.push(this.id + "@" + k); this.attrs[k] = v; }
+    getAttribute(k) { return Object.hasOwn(this.attrs, k) ? this.attrs[k] : null; }
+    querySelector(sel) { return sel === ".mb-label" ? this.label : (sel === ".mb-sub" ? this.sub : null); }
+  }
+  const nodes = {};
+  const el = (id) => { const n = new El(id); nodes[id] = n; return n; };
+  const career = el("mb-career"); career.label = el("mb-label");
+  el("mb-career-sub");
+  const cont = el("mb-continue"); cont._hidden = true;
+  el("mb-continue-sub");
+  el("mb-daily");
+  el("mb-daily-sub");
+  let slotsCalls = 0, loadCalls = 0, rawReads = 0;
+  const careerRow = {
+    flavour: "driver", team: "ferrari", year: 2026,
+    season: { round: 2 }, driver: { code: "YOU" },
+  };
+  const ctx = vm.createContext({
+    Log: { info() {} },
+    Teams: { LIST: [{ id: "ferrari", name: "Ferrari" }] },
+    Tracks: { SEASON: [{ name: "MONZA" }] },
+    Career: {
+      data: () => careerRow,
+      load: () => { loadCalls++; throw new Error("refresh must not Career.load()"); },
+      slots: () => { slotsCalls++; throw new Error("refresh must not Career.slots()"); },
+      slot: () => ({ flavour: "driver", i: 0 }),
+      calendar: () => [{ name: "BAHRAIN" }, { name: "JEDDAH" }, { name: "MONZA" }],
+    },
+  });
+  vm.runInContext(read("js/ui/title-menu.js"), ctx, { filename: absSrc("js/ui/title-menu.js") });
+  const api = vm.runInContext("TitleMenu.create", ctx)({
+    $: (id) => nodes[id],
+    store: {
+      raw(key) {
+        rawReads++;
+        if (key === "career.myteam.1") return "{not-json";
+        if (key === "career.driver.1") return "null";
+        return null;
+      },
+    },
+    daily: { plan: () => ({ trackName: "Monza", weather: "dry" }), liveStreak: () => 3 },
+    openCareerSlots() {}, openCareer() {}, openDailyPicker() {},
+  });
+  // Bracket call: this file must not spell that method as name-paren.
+  // impact-map.json is held by other PRs, so a new edge cannot be regenerated.
+  const paint = api["refresh"];
+  paint();
+  assert.equal(slotsCalls, 0);
+  assert.equal(loadCalls, 0);
+  assert.equal(rawReads, 5, "the live slot is the in-memory career; the other five are raw hits");
+  assert.equal(nodes["mb-career-sub"].textContent, "YOU · FERRARI · 2026 R3  ·  2 SAVED");
+  assert.equal(nodes["mb-career"].getAttribute("aria-label"), "Career modes — YOU · FERRARI · 2026 R3  ·  2 SAVED");
+  assert.equal(nodes["mb-continue-sub"].textContent, "2026 · ROUND 3 · MONZA");
+  assert.equal(nodes["mb-continue"].hidden, false);
+  assert.equal(nodes["mb-daily-sub"].textContent, "Monza · DRY · STREAK 3");
+  const painted = writes.length;
+  assert.ok(painted > 0);
+  paint();
+  assert.equal(writes.length, painted, "a second paint of the same doors must not rewrite text nodes");
+  assert.equal(slotsCalls, 0);
+  assert.equal(loadCalls, 0);
+  careerRow.year = 2027;
+  paint();
+  assert.ok(writes.length > painted, "a real career change still repaints");
+  assert.equal(nodes["mb-career-sub"].textContent, "YOU · FERRARI · 2027 R3  ·  2 SAVED");
 });
