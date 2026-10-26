@@ -74,13 +74,9 @@ node tools/shot/shot.mjs bahrain 0.06 orbit out.png --team audi --dist 5.5 --el 
 
 ### Cover design / number-mark legibility
 
-A NUMBER / MARK unreadable on its paint: start with `node --test tests/unit/crest-marks.test.mjs`;
-the fix is in the ink pickers of `js/car/liverytex.js` (`inkOn` → `haloFor`, `drawNumber`,
-`buildAtlas`'s `ink`/`finNum`/flank picks) or a team's `logo3` in `js/data/teams.js`.
-`livery-contrast` scores panels, never glyphs. **Paint guard set** (none implies another):
-`crest-marks`, `cover-legibility`, `livery-contrast`, `fill-gating`, `team-livery`, plus
-`fin-design` for placement. Offline placement first: `node tools/car/spine-station.mjs --team=redbull`.
-Detail → [references/placement.md](references/placement.md) § Cover-design guards.
+A NUMBER / MARK unreadable on its paint: `node --test tests/unit/crest-marks.test.mjs` first; the fix is
+in the ink pickers of `js/car/liverytex.js` or a team's `logo3` in `js/data/teams.js`. Paint guard set,
+pickers and placement → [references/placement.md](references/placement.md) § Cover-design guards.
 
 Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **career-mode**,
 **tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `node tools/gen/gen-shell.mjs --check`.
@@ -91,23 +87,9 @@ Never capture your own 11-team garage BEFORE grid (12–28 min): fetch the
 **Garage before** pack with `node tools/garage-angles-fetch.mjs`, then shoot
 only AFTER angles → [references/before-pack.md](references/before-pack.md).
 
-## Design loop — spine top / side, fin, any paint row
-
-1. **Placement, no browser** (0.2 s): `node tools/car/spine-station.mjs --team=X --png=artifacts/spine`
-   says where the ink lands (`v` 0 crease → 1 sidepod line) and rasterises the flat art.
-2. **Look at it lit, once**: `garage-angles.mjs --team=X --spineLogo=wrap` — no camera
-   flag, so it shoots the field's own STATION (`spineTop`; `spineSide` for a side
-   design, `finBadge` for a fin). `--flat` puts the atlas art beside the frame.
-3. **Iterate hot**: `garage-angles.mjs --serve --watch --team=X` (or `apex_garage`)
-   keeps the garage open; edit the painter in `js/car/liverytex.js`, and each save
-   re-shoots the last camera in ~10 s. Swap designs with `{"design":{…}}`, move with
-   `{"frame":"spineSide"}` or an explicit `eye`/`look`, `{"diff":[a,b]}` for Δ + overlay.
-4. **Choose**: `--pair='spineLogo:wrap|saddle'` scores the two in one run
-   (`design-pairs.png`, magenta overlay of what changed).
-5. **Gate**: the paint guard set above (`node --test tests/unit/<x>.test.mjs`).
-
 ## Load on demand
 
+- Paint design loop (spine-station placement → lit garage-angles → --serve --watch → --pair → paint guards) → [references/design-loop.md](references/design-loop.md).
 - Fin/spine/cover/draft field catalog + paint-sheet lockstep → [references/livery-fields.md](references/livery-fields.md).
 - ERS ids, ownership gate, edit loop, node catalog gates (`parts-distinct-mesh`, `parts-ladder`), where a wing part goes (`aero`), mistakes → [references/workflow.md](references/workflow.md).
 - Which surface answers a PLACEMENT question, and what each is blind to → [references/placement.md](references/placement.md).

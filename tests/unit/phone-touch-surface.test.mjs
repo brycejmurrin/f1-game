@@ -444,7 +444,7 @@ function bootInput({ DeviceOrientationEvent, pads, console: con = console, debug
     Math, console: con, Object, Array, Number, String, JSON, Map, Set, Promise, Date, Error, parseFloat, parseInt, isFinite,
     performance: { now: () => clock.t },
     document: {
-      addEventListener() {}, removeEventListener() {}, getElementById: () => null, activeElement: null, readyState: "complete",
+      addEventListener: on, removeEventListener: off, getElementById: () => null, activeElement: null, readyState: "complete", hidden: false,
       body: { classList: { contains: () => false }, appendChild(node) { nodes.push(node); } }, createElement: () => ({ style: {} }),
     },
     navigator: { getGamepads: () => pads(), maxTouchPoints: 5, userAgent: "node" },
@@ -458,13 +458,80 @@ function bootInput({ DeviceOrientationEvent, pads, console: con = console, debug
   if (DeviceOrientationEvent) sb.DeviceOrientationEvent = DeviceOrientationEvent;
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   Input.init({ addEventListener() {} }, {});
   const count = (type) => (listeners.get(type) || []).length;
   const fire = (type, e) => { for (const fn of [...(listeners.get(type) || [])]) fn(e); };
-  return { Input, count, fire, clock, intervals, nodes };
+  return { Input, count, fire, clock, intervals, nodes, document: sb.document };
 }
+
+test("local tilt releases on blur and hide until a fresh reading, preserving its calibrated centre", async () => {
+  for (const interruption of ["blur", "visibilitychange"]) {
+    const h = bootInput({ DeviceOrientationEvent: {}, pads: () => [] });
+    h.Input.setSteerMode("tilt"); await h.Input.requestGyro();
+    const roll = (angle, steps = 60) => {
+      let steer;
+      for (let i = 0; i < steps; i++) {
+        h.clock.t += 16; h.fire("deviceorientation", { beta: 0, gamma: angle });
+        steer = h.Input.steer(1 / 60);
+      }
+      return steer;
+    };
+    roll(10); h.Input.calibrate();
+    assert.ok(roll(30) > 0.2);
+    if (interruption === "visibilitychange") h.document.hidden = true;
+    h.fire(interruption, {}); h.document.hidden = false;
+    h.clock.t += 60000;
+    for (let i = 0; i < 120; i++) assert.equal(h.Input.steer(1 / 60), 0);
+    assert.equal(h.Input.gyroSeen, false); assert.equal(h.Input.tiltActive(), false);
+    assert.equal(h.Input.debugState().steerMode, "tilt");
+    assert.ok(Math.abs(roll(10, 1)) < 1e-10, "fresh level sample uses the previous calibrated centre");
+    assert.ok(roll(30) > 0.2, "fresh leaning input resumes normally");
+  }
+});
+
+test("a stalled local sensor expires even when invalid events keep arriving, and restarts on a fresh sample", async () => {
+  const h = bootInput({ DeviceOrientationEvent: {}, pads: () => [] });
+  h.Input.setSteerMode("tilt"); await h.Input.requestGyro();
+  h.fire("deviceorientation", { beta: 0, gamma: 10 }); h.Input.calibrate();
+  for (let i = 0; i < 60; i++) { h.clock.t += 16; h.fire("deviceorientation", { beta: 0, gamma: 30 }); h.Input.steer(1 / 60); }
+  assert.ok(h.Input.steer(1 / 60) > 0.2);
+  h.clock.t += 500;
+  assert.equal(h.Input.tiltActive(), true, "ordinary sensor delivery gaps retain ownership");
+  h.fire("deviceorientation", { beta: null, gamma: null });
+  h.clock.t += 600;
+  h.fire("deviceorientation", { beta: Infinity, gamma: 0 });
+  assert.equal(h.Input.gyroSeen, false);
+  assert.equal(h.Input.steer(1 / 60), 0);
+  h.fire("deviceorientation", { beta: 0, gamma: 10 });
+  assert.equal(h.Input.tiltActive(), true);
+  assert.ok(Math.abs(h.Input.steer(1 / 60)) < 1e-10, "the filter does not retain the stale lean");
+});
+
+test("obsolete gyro permission outcomes cannot reattach a sensor or mutate a newer attempt", async () => {
+  for (const outcome of ["granted", "denied", "reject"]) {
+    const pending = [];
+    const h = bootInput({ DeviceOrientationEvent: { requestPermission: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) }, pads: () => [] });
+    h.Input.setSteerMode("tilt");
+    const first = h.Input.requestGyro(), id = h.Input.gyroRequestId();
+    h.Input.setSteerMode("touch");
+    assert.notEqual(h.Input.gyroRequestId(), id);
+    if (outcome === "reject") pending[0].reject(new Error("NotAllowedError")); else pending[0].resolve(outcome);
+    assert.equal(await first, false);
+    assert.equal(h.count("deviceorientation"), 0);
+    assert.equal(h.Input.gyroDenied, false, "the obsolete refusal does not relabel a newer choice");
+    assert.equal(h.Input.debugState().steerMode, "touch");
+    h.Input.setSteerMode("tilt");
+    const second = h.Input.requestGyro(), secondId = h.Input.gyroRequestId();
+    const third = h.Input.requestGyro();
+    assert.notEqual(h.Input.gyroRequestId(), secondId);
+    pending[2].resolve("granted"); assert.equal(await third, true);
+    pending[1].resolve("denied"); assert.equal(await second, false);
+    assert.equal(h.count("deviceorientation"), 1);
+    assert.equal(h.Input.gyroDenied, false);
+  }
+});
 
 test("requestGyro: a grant clears an earlier refusal, and leaving tilt detaches the sensor", async () => {
   let answer = () => Promise.reject(new Error("NotAllowedError: requires a user gesture"));

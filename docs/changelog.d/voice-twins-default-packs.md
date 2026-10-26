@@ -1,0 +1,1 @@
+Improved: the four default radio voices (george, fable, emma, heart) now ship 20 kbps Ogg Opus twins, so browsers that decode Opus fetch roughly 40 % fewer voice bytes; every other browser keeps the MP3 packs unchanged.

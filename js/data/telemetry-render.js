@@ -4,7 +4,7 @@ const DataTelemetryRender = (function () {
 
   function create({ cssColor }) {
     const { clamp, CHANNELS, PADL, PADR, PADY, chartX, chanNorm, sampleAt,
-            distAtT, timeAtDist, locAt, locBounds, gapLimitMs, isGap, dcode } = DataTelemetryModel;
+            distAtT, timeAtDist, locAt, locBounds, gapLimitMs, isGap, dcode, speedUnit, speedValue } = DataTelemetryModel;
 
     // composite one frame: cached bases + moving cursor, car dots, delta, gauges
     function paintFrame(view) {
@@ -122,11 +122,11 @@ const DataTelemetryRender = (function () {
           g.beginPath(); g.moveTo(PADL, y); g.lineTo(W - PADR, y); g.stroke();
           if (y < 17) continue;   // would collide with the km/h unit label
           g.fillStyle = "rgba(57,208,255,0.8)";
-          g.fillText(String(v), PADL - 5, y);
+          g.fillText(String(speedValue(v)), PADL - 5, y);
         }
         g.textAlign = "left"; g.textBaseline = "top";
         g.fillStyle = "rgba(57,208,255,0.6)";
-        g.fillText("km/h", 2, 3);
+        g.fillText(speedUnit(), 2, 3);
       }
       if (anyVis("rpm")) {
         g.textAlign = "left"; g.textBaseline = "middle";

@@ -1,61 +1,44 @@
-/* assert-match-ratchet.test.mjs — repo-wide `assert.match` under tests/unit
- * only ever goes down (#1682).
+/* assert-match-ratchet.test.mjs — pin-shaped asserts under tests/unit only ever go down (#1682).
  *
  * Source-text pins break on refactors that change no behaviour. Converting
- * them (gfx-backend-canary first) must lower this ceiling; a new assert.match
- * anywhere under tests/unit raises it and fails until the ceiling is updated
- * with a reason (or the call is replaced by a behaviour assertion).
+ * them (gfx-backend-canary first) lowers the count; a new pin raises it and
+ * fails until the change converts one, or raises the ceiling deliberately with
+ * a reason (`node tools/check/ratchets.mjs --update --fragment --reason="<why>"`).
  *
- * Count: `rg -rho 'assert\.match' tests/unit | wc -l` (same pattern).
- * Same shrink-only idiom as source-pin-hygiene / waitForTimeout.
+ * The count is `tree.assertPins` in tests/data/ratchets.json (raises are
+ * ratchets.d fragments, so two PRs that each add one stay mergeable), and it
+ * counts `assert.ok(x.includes(` alongside the regex form: the 2026-10 commits
+ * that swapped one for the other lowered the number with every pin intact.
+ *
+ * DIFF-RELATIVE (2026-10-26). On a PR the row fails only on growth the PR adds
+ * against its base (the merge ref's first parent; locally the merge-base with
+ * the deploy branch); the absolute ceiling runs with APEX_RATCHET_ABSOLUTE=1,
+ * which ci.yml sets on push and schedule. tools/check/ratchets.mjs ratchetMode.
  *
  * Run: node --test tests/unit/assert-match-ratchet.test.mjs
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { pinVerdict, pinSites, pinPatterns } from "../../tools/check/ratchets.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-// 2026-10-19: #1682 first slice (gfx-backend-canary preference / latch / recovery
-// pins → behaviour). Post-merge tip absorb 7401 (other PRs added pins outside
-// canary); 2026-10-19 net-lobby-lifecycle slice lowered it (7401 -> 7316 on the merged tip).
+const count = (t) => (t.match(pinPatterns.ASSERT_PIN) || []).length;
 
-// 2026-10-22 #3465: shot-jobs A/B path + --batch/--clear usage pins → behaviour (7318 → 7315); tip #3483/#3459 left 7314.
-// Lower this when more pins convert; never raise without a reason.
-const CEILING = 7314;
+test("the pin pattern counts assert.match and assert.ok(x.includes(, not other asserts", () => {
+  assert.equal(count("assert.match(src, /x/);"), 1);
+  assert.equal(count('assert.ok(src.includes("x"));'), 1);
+  assert.equal(count('assert.ok(!game.src.includes("x"), "gone");'), 1);
+  assert.equal(count("assert.ok(a > 1); assert.equal(src, 'x');"), 0);
+  assert.equal(count("assert.doesNotMatch(src, /x/);"), 0);
+});
 
-const EXEMPT = new Set([
-  "tests/unit/assert-match-ratchet.test.mjs",
-]);
-const PIN = /assert\.match\b/g;
-
-function sites() {
-  const per = [];
-  const walk = (rel) => {
-    for (const e of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
-      const r = rel + "/" + e.name;
-      if (e.isDirectory()) {
-        if (e.name !== "node_modules") walk(r);
-      } else if (/\.(mjs|cjs|js)$/.test(e.name) && !EXEMPT.has(r)) {
-        const n = (fs.readFileSync(path.join(ROOT, r), "utf8").match(PIN) || []).length;
-        if (n) per.push([r, n]);
-      }
-    }
-  };
-  walk("tests/unit");
-  return per;
-}
-
-test("assert.match under tests/unit never grows (convert source pins to behaviour)", () => {
-  const per = sites();
-  const total = per.reduce((a, [, n]) => a + n, 0);
-  assert.ok(total <= CEILING,
-    `${total} assert.match sites (ceiling ${CEILING}) — convert a source pin to a ` +
-    `VM/behaviour assertion (see #1682 / gfx-backend-canary). Biggest: ` +
-    per.sort((a, b) => b[1] - a[1]).slice(0, 5).map(([f, n]) => `${f} ${n}`).join(", "));
-  assert.ok(total > CEILING - 200,
-    `${total} assert.match is far under the ceiling ${CEILING}: lower CEILING to ${total} ` +
-    `so the ratchet keeps its grip`);
+test("pin-shaped asserts under tests/unit never grow (convert source pins to behaviour)", async () => {
+  const v = await pinVerdict("assertPins");
+  const biggest = async () => (await pinSites("assertPins")).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([f, n]) => `${f} ${n}`).join(", ");
+  assert.ok(v.ok,
+    `${v.value} pin-shaped asserts (ceiling ${v.ceiling}${v.base ? `; base ${v.base.value}/${v.base.ceiling}` : ""}) — ` +
+    `this change adds pins: convert a source pin to a VM/behaviour assertion (#1682 / gfx-backend-canary). Biggest: ${await biggest()}`);
+  if (v.inherited) console.log(`assert-match-ratchet: over by ${v.over}, inherited from the base (${v.why})`);
+  assert.ok(v.looseOk,
+    `${v.value} pin-shaped asserts is far under the ceiling ${v.ceiling}: ` +
+    "node tools/check/ratchets.mjs --update --lower-only so the ratchet keeps its grip");
 });

@@ -251,7 +251,7 @@ test("API polling is conditional: the URL's ETag rides in If-None-Match and a 30
   const reply = (stdout) => (command, args, options) => {
     seen.push(args);
     assert.ok(options.maxBuffer >= 16 << 20, "a 100-job page must not hit spawnSync's 1 MB default (ENOBUFS, #1733)");
-    assert.ok(args.includes("\n%{http_code} %header{etag}"), "-w reports the status and the response ETag");
+    assert.ok(args.includes("\n%{http_code} %header{etag} %header{retry-after}"), "-w reports the status, the response ETag and Retry-After");
     return { status: 0, stdout };
   };
   const env = { GH_TOKEN: "fixture" };

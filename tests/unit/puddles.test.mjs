@@ -38,10 +38,19 @@ test("GLX key GGX follows the final ripple normal while diffuse keeps its origin
       (...Object.values(values), dot, Math.max);
   };
   const keyBlock = src.slice(src.indexOf("if (keySpecNoL > 0.0)"), src.indexOf("float ccSaaVar ="));
-  assert.match(keyBlock, /D_GGX\(keySpecNoH, a\)/);
-  assert.match(keyBlock, /V_SmithGGX\(keySpecNoV, keySpecNoL, a\)/);
-  assert.match(keyBlock, /specCol = .*keySpecNoL \* shadow \* uKeyMul/);
-  assert.match(src, /float litNoL = NoL \* shadow \* uKeyMul;/);
+  // Evaluate the shipped key-light expressions with recording stubs: GGX terms take the
+  // ripple-normal inputs, and both lit paths scale by keySpecNoL/NoL * shadow * uKeyMul.
+  const evalDecl = (block, decl, values) => {
+    const expr = block.match(new RegExp(`${decl} = ([^;]+);`))?.[1];
+    assert.ok(expr, `shader declares ${decl}`);
+    return new Function(...Object.keys(values), `return ${expr};`)(...Object.values(values));
+  };
+  const args = (...a) => a;
+  assert.deepEqual(evalDecl(keyBlock, "float D", { D_GGX: args, keySpecNoH: "H", a: "a" }), ["H", "a"]);
+  assert.deepEqual(evalDecl(keyBlock, "float Vis", { V_SmithGGX: args, keySpecNoV: "V", keySpecNoL: "L", a: "a" }), ["V", "L", "a"]);
+  const lit = { shadow: 0.4, uKeyMul: 3 };
+  assert.equal(evalDecl(keyBlock, "vec3 specCol", { D: 1, Vis: 1, F: 1, uSunColor: 1, keySpecNoL: 0.5, ...lit }), 0.5 * 0.4 * 3);
+  assert.equal(evalDecl(src, "float litNoL", { NoL: 0.5, ...lit }), 0.5 * 0.4 * 3);
   const L = [0, 1, 0], V = normalize([0.2, 1, 0]), H = normalize(L.map((x, i) => x + V[i]));
   const flat = { N: L, L, V, H }, rippled = { ...flat, N: normalize([0.05, 1, 0]) };
   for (const name of ["keySpecNoL", "keySpecNoH", "keySpecNoV"]) {

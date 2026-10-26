@@ -60,6 +60,7 @@ const CareerRestorePoints = (function () {
         team: typeof d.team === "string" ? d.team.slice(0, 64) : "", money: Number(d.money) || 0 };
     }
     async function capture(flavour, i, data, options) {
+      if (store && store.careerWriteStatus && !store.careerWriteStatus().ok) return store.careerWriteStatus();
       const key = slotKey(flavour, i), json = key && clean(data, flavour);
       if (!key) return refused("invalid-or-too-large");
       const reason = options && options.reason;
@@ -133,6 +134,7 @@ const CareerRestorePoints = (function () {
       if (!p) return refused("preview-required");
       previews.delete(token);
       if (engaged()) return refused("leave-career-first");
+      if (store.careerWriteStatus && !store.careerWriteStatus().ok) return store.careerWriteStatus();
       try {
         const unchanged = () => store.keyRevision(p.key) === p.revision && disk.getItem("apex26." + p.key) === p.raw &&
           JSON.stringify(store.get(p.key, null)) === p.session;

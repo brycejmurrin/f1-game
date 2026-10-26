@@ -117,6 +117,8 @@ const GameStore = (function () {
     // boot. Removal is what a get() of that key then answered anyway (the
     // default), and it is what the mirror below already did with it.
     write(k, v, options) {
+      const ownership = careerWriteStatus(k);
+      if (!ownership.ok) return ownership;
       schemaNoteWrite(k, "json");
       const key = "apex26." + k;
       // STRINGIFY ONCE, BEFORE ANYTHING IS TOUCHED. It ran twice (inside the try
@@ -216,6 +218,7 @@ const GameStore = (function () {
       catch (e) { noteBroken(e, "read " + k); return def(); }
     },
     rawSet(k, v) {
+      if (!careerWriteStatus(k).ok) return false;
       schemaNoteWrite(k, "raw");
       const key = fullKey(k);
       this._cache.delete(key);   // a key lives in one lane; if one ever strays, the disk wins
@@ -226,6 +229,7 @@ const GameStore = (function () {
       catch (e) { noteBroken(e, "write " + k); _rawOverrides.set(key, v); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "set", v }); return false; }
     },
     rawDel(k) {
+      if (!careerWriteStatus(k).ok) return false;
       const key = fullKey(k);
       this._cache.delete(key);
       this.rawRev++;
@@ -296,6 +300,52 @@ const GameStore = (function () {
 
   function shortKey(k) { return k.indexOf("apex26.") === 0 ? k.slice("apex26.".length) : k; }
   function fullKey(k) { return "apex26." + shortKey(k); }
+  // One document owns every career mutation for its lifetime. A synchronous
+  // read/compare/write cannot coordinate tabs: a busy document can keep seeing
+  // its old localStorage snapshot after another document has committed. Taking
+  // this lock once also covers synchronous gameplay callers without claiming
+  // an asynchronous transaction has already committed. No automatic takeover:
+  // a losing tab must reload, never promote its previously loaded career.
+  const careerKey = (k) => /^apex26\.career/.test(fullKey(k));
+  const careerWriter = { state: typeof navigator === "undefined" ? "owned" : "pending", ready: null };
+  function careerWriteStatus(k) {
+    const ok = (k != null && !careerKey(k)) || careerWriter.state === "owned";
+    return { ok, durable: false, reason: ok ? null : "writer-" + careerWriter.state };
+  }
+  function acquireCareerWriter() {
+    // Non-browser consumers have no other documents. Browsers without the lock
+    // API fail closed, with an explicit status, rather than persisting unlocked.
+    if (typeof navigator === "undefined") return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const finish = (state) => {
+        careerWriter.state = state;
+        // Reads made before lock acquisition cannot arm a new writer. Reload
+        // them after the asynchronous acquisition boundary, while exclusively
+        // owning all participating primary/mirror writers.
+        const keys = new Set(["careerSlot", "career", ...["driver", "myteam"].flatMap(f => [0, 1, 2].map(i => `career.${f}.${i}`))]);
+        for (const key of store._cache.keys()) if (careerKey(key)) keys.add(shortKey(key));
+        for (const key of keys) {
+          store._cache.delete(fullKey(key));
+          store._keyRev.set(fullKey(key), (store._keyRev.get(fullKey(key)) || 0) + 1);
+        }
+        store.rev++;
+        store._notify({ key: null, keys: [...keys], foreign: true, restoredBatch: true, writer: true });
+        resolve(state === "owned");
+      };
+      try {
+        if (!navigator.locks || typeof navigator.locks.request !== "function") { finish("unavailable"); return; }
+        navigator.locks.request("apex26-career-writer", { mode: "exclusive", ifAvailable: true }, (lock) => {
+          if (!lock) { finish("busy"); return; }
+          // Return a pending promise to retain ownership until the document
+          // dies. pagehide must not release it while a mirror commit is live.
+          finish("owned");
+          return new Promise(() => {});
+        }).catch(() => { finish("unavailable"); });
+      } catch (_) { finish("unavailable"); }
+    });
+  }
+  store.careerWriter = careerWriter;
+  store.careerWriteStatus = () => careerWriteStatus();
   function schemaNoteWrite(k, lane) {
     if (typeof SaveSchemaRegistry === "undefined" || !SaveSchemaRegistry.noteWrite) return;
     SaveSchemaRegistry.noteWrite(shortKey(k), lane);
@@ -353,6 +403,7 @@ const GameStore = (function () {
   const AUTHORED_KEY = /^apex26\.(?:customTeam|customLogo|(?:parts|setup|setupPresets)\.[A-Za-z0-9_-]{1,64}|livery\.(?:custom\.)?[A-Za-z0-9_-]{1,64})$/;
   const AUTHORED_ROW_BYTES = 512 * 1024, AUTHORED_TOTAL_BYTES = 2 * 1024 * 1024, AUTHORED_KEYS = 96;
   const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, inFlight: 0, settled: false, skipped: 0, authoredBytes: 0, authoredKeys: 0, limitReason: null, ready: null };
+  let _mirrorHandle = null;
   let _mirrorDb = null;             // memoised open (a failure is never memoised)
   let _mirrorPending = new Map();   // full key -> { v: JSON string or null for a delete, lsOk }
   // Compare the last COMMITTED/restored payload, not permanent key ownership:
@@ -385,6 +436,16 @@ const GameStore = (function () {
     try { mirrorQueue(key, localStorage.getItem(key), true, { foreign: true }); } catch (_) { /* unavailable */ }
   }
 
+  function mirrorInvalidate(db) {
+    if (_mirrorHandle !== db) return;
+    _mirrorHandle = null;
+    _mirrorDb = null;
+    mirror.supported = false;
+  }
+  function mirrorTransactionFailed(db, error) {
+    if (error && error.name === "InvalidStateError") mirrorInvalidate(db);
+  }
+
   function mirrorOpen() {
     if (_mirrorDb) return _mirrorDb;
     _mirrorDb = new Promise((res) => {
@@ -396,11 +457,14 @@ const GameStore = (function () {
         // The handle is closed for good, so the memo that resolves to it must go
         // too: the next mirrorOpen() would otherwise hand every later flush a
         // closed db (InvalidStateError -> "no mirror" until reload).
-        if (db) db.onversionchange = () => {
-          try { db.close(); } catch (e) { /* another lifecycle path closed it first */ }
-          mirror.supported = false;
-          _mirrorDb = null;
-        };
+        if (db) {
+          _mirrorHandle = db;
+          db.onclose = () => mirrorInvalidate(db);
+          db.onversionchange = () => {
+            mirrorInvalidate(db);
+            try { db.close(); } catch (_) { /* already closed */ }
+          };
+        }
         res(db || null);
       };
       try {
@@ -429,6 +493,7 @@ const GameStore = (function () {
   function mirrorQueue(key, json, lsOk, options) {
     // Capability discovery itself can throw under restricted storage policies.
     // The optional mirror must not interrupt a completed primary write.
+    if (!careerWriteStatus(key).ok) return;
     try { if (typeof indexedDB === "undefined" || !indexedDB) return; }
     catch (_) { return; }
     _mirrorKnown.add(key);
@@ -485,7 +550,7 @@ const GameStore = (function () {
     const work = mirrorOpen().then((db) => new Promise((res) => {
       if (!db) { res(false); return; }
       let t;
-      try { t = db.transaction(MIRROR_STORE, "readwrite"); } catch (e) { res(false); return; }
+      try { t = db.transaction(MIRROR_STORE, "readwrite"); } catch (e) { mirrorTransactionFailed(db, e); res(false); return; }
       const os = t.objectStore(MIRROR_STORE), committed = new Map();
       let authoredTotals = null;
       // `scan` is the full-store authored total. Null means this burst has no
@@ -493,7 +558,7 @@ const GameStore = (function () {
       const applyBatch = (rows, scan) => {
         let bytes = scan ? scan.bytes : 0, keys = scan ? scan.keys : 0;
         for (const [k, e] of batch) {
-          if (e.epoch !== mirrorEpoch(k)) continue;
+          if (!careerWriteStatus(k).ok || e.epoch !== mirrorEpoch(k)) continue;
           const prev = rows.get(k), authored = AUTHORED_KEY.test(k);
           const value = e.v === null ? "null" : e.v;
           if (!e.foreign && prev && prev.lsOk === false && e.lsOk === true && value !== prev.v && _mirrorSeen.get(k) !== prev.v) {
@@ -596,14 +661,14 @@ const GameStore = (function () {
       if (!db) { res([]); return; }
       let r;
       try { r = db.transaction(MIRROR_STORE, "readonly").objectStore(MIRROR_STORE).getAll(); }
-      catch (e) { res([]); return; }
+      catch (e) { mirrorTransactionFailed(db, e); res([]); return; }
       r.onsuccess = () => res(r.result || []);
       r.onerror = () => res([]);
     })).then((rows) => {
       const restored = [];
       let authoredTotal = 0, authoredCount = 0;
       for (const row of rows) {
-        if (!row || typeof row.k !== "string" || !mirrorKey(row.k)) continue;
+        if (!row || typeof row.k !== "string" || !mirrorKey(row.k) || !careerWriteStatus(row.k).ok) continue;
         if (epoch !== _foreignEpoch) { if (!_mirrorPending.has(row.k)) mirrorQueue(row.k, null, true); continue; }
         if ((foreignKeys.get(row.k) || 0) !== (_foreignKeys.get(row.k) || 0)) continue;
         _mirrorKnown.add(row.k);
@@ -673,7 +738,9 @@ const GameStore = (function () {
     }).then((n) => { _restoreDone = mirror.settled = true; return n; });
   }
 
-  mirror.ready = mirrorRestore();
+  careerWriter.ready = acquireCareerWriter();
+  mirror.ready = careerWriter.state === "owned" && typeof navigator === "undefined"
+    ? mirrorRestore() : careerWriter.ready.then(() => mirrorRestore());
   store.mirror = mirror;           // pending = queued keys; inFlight = uncommitted batch keys; flushed = committed operations — __apex.persistState()
   store.mirrorPolicy = Object.freeze({ authoredRowBytes: AUTHORED_ROW_BYTES, authoredTotalBytes: AUTHORED_TOTAL_BYTES, authoredKeys: AUTHORED_KEYS,
     includes: (key) => mirrorKey(fullKey(key)) });
@@ -692,7 +759,7 @@ const GameStore = (function () {
 
   function dropCorrupt(key, k, raw, e) {
     let removed = true;
-    try { localStorage.removeItem(key); } catch (err) { removed = false; noteBroken(err, "remove " + k); }
+    try { if (careerWriteStatus(key).ok) localStorage.removeItem(key); else removed = false; } catch (err) { removed = false; noteBroken(err, "remove " + k); }
     Log.warn("game", `${key} was unreadable (${(e && e.name) || "Error"}: ${(e && e.message) || e}; ${String(raw).length} chars)` +
       (removed ? " — removed, using the default" : " — using the default"));
   }

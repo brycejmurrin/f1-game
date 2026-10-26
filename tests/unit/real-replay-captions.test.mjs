@@ -58,7 +58,7 @@ test("WATCH captions SC/VSC ending before clearance and still announces the actu
     replay.tick(5); G.raceRadio.update(0.1); drain();
     replay.tick(5); G.raceRadio.update(0.1);
     assert.equal(G._caution, level, "the ending call precedes clearance");
-    assert.match(drain().join(" | "), /IN THIS LAP/, "ending copy survives with commentary enabled");
+    assert.ok(drain().some((line) => line.includes("IN THIS LAP")), "ending copy survives with commentary enabled");
     replay.tick(5); G.raceRadio.update(0.1);
     assert.equal(G._caution, 0);
     assert.ok(pending.some(card => card.kind === "comm" && /GREEN/.test(card.text)),

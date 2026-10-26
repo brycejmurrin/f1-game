@@ -482,7 +482,10 @@ for (const sampleCount of [8, 9, 801]) test(`telemetry clipping, lane colors and
     F1API: {
       sessionDrivers: async () => drivers,
       fastestLap: async () => ({ dateStart: new Date(1e12).toISOString(), lapDuration: 80, lapNumber: 3, s1: 25, s2: 25, s3: 30 }),
-      carData: async (_session, num) => num === 2 ? [] : trace.car,
+      carData: async (_session, num, start, _end, origin) => {
+        assert.equal(Date.parse(origin) - Date.parse(start), 1500, "the controller requests a pre-lap boundary sample");
+        return num === 2 ? [] : trace.car;
+      },
       locationData: async (_session, num) => num === 2 ? [] : trace.loc,
       stints: async () => [], pits: async () => []
     }
@@ -546,4 +549,104 @@ for (const sampleCount of [8, 9, 801]) test(`telemetry clipping, lane colors and
   assert.ok(observers.every((observer) => observer.disconnected));
   assert.equal(dom.document.querySelector(".dh-tpopup"), null);
   assert.equal(dom.document.activeElement, chips[0], "close restores focus to the selected driver");
+});
+
+test("windowed telemetry retains the lap clock and refuses unequal leading/trailing distance coverage", async () => {
+  const epoch = Date.parse("2026-01-01T12:00:00Z");
+  const source = readFileSync("js/data/api.js", "utf8");
+  const modelSource = readFileSync("js/data/telemetry-model.js", "utf8");
+  for (const sessionKey of [1, 2]) for (const leading of [0, 0.05, 2]) for (const trailing of [0, 2]) {
+    const start = epoch + (sessionKey - 1) * 3600000;
+    const iso = (t) => new Date(start + t * 1000).toISOString();
+    const context = vm.createContext({ F1Transport: { create: () => ({ request: async () =>
+      [leading, ...Array.from({ length: 100 }, (_, i) => i + 1)].filter((t, i, a) => t >= leading && t <= 100 - trailing && a.indexOf(t) === i)
+        .map((t) => ({ date: iso(t), speed: 180, n_gear: 7 })) }) } });
+    vm.runInContext(readFileSync("js/core/mat4.js", "utf8") + source + modelSource + readFileSync("js/data/telemetry-player.js", "utf8"), context, { filename: "vm-composite:mat4+api+telemetry-model+telemetry-player" });
+    const api = vm.runInContext("F1API", context), model = vm.runInContext("DataTelemetryModel", context);
+    const car = await api.carData(sessionKey, 2, iso(0), iso(100));
+    assert.ok(Math.abs(car[0].t - leading) < 1e-9);
+    assert.equal(car.at(-1).t, 100 - trailing);
+    const noOrigin = await api.carData(sessionKey, 2);
+    assert.equal(noOrigin[0].t, 0, "unwindowed consumers keep the first-sample origin");
+    const control = driver(100, 1600, 180);
+    control.loc = Array.from({ length: 101 }, (_, t) => ({ date: epoch + t * 1000, x: t * 50, y: 0 }));
+    control.car.forEach((row) => { row.date = epoch + row.t * 1000; });
+    const compare = { car, cum: model.cumDist(car, 100), lap: { lapDuration: 100 },
+      loc: Array.from({ length: 101 }, (_, t) => ({ date: start + t * 1000, x: t * 50, y: 0 })) };
+    control.cum = model.cumDist(control.car, 100); control.lap = { lapDuration: 100 };
+    const cell = () => ({ textContent: "", style: {}, classList: { toggle() {} } });
+    const g = Object.fromEntries(["speed", "gear", "thr", "brk", "rpm", "drs"].map((key) => [key, [cell(), cell()]]));
+    g.delta = cell();
+    const view = { primary: control, compare, laps: [control, compare], cursorT: 100, tMax: 100, g, rpmMax: 12000 };
+    const player = vm.runInContext("DataTelemetryPlayer", context).create({}, { paintFrame() {} });
+    player.paintFrame(view);
+    assert.equal(g.delta.textContent, leading || trailing ? "—" : "+0.00s", `session ${sessionKey}, leading ${leading}, trailing ${trailing}`);
+    for (const time of [0, 0.025, 5]) {
+      const point = model.locAt(view, compare, time);
+      assert.ok(Math.abs(point.x - time * 50) < 1e-6, `GPS stays on its own lap clock at ${time}s`);
+    }
+    if (leading) assert.equal(model.brakingDuel(control, compare, 0, 100).available, false);
+  }
+});
+
+test("telemetry uses speed preferences in channels, gauges, axis and summary without changing canonical data", () => {
+  const context = vm.createContext({ GameStore: { store: { get: (_key, fallback) => fallback, set() {} } } });
+  for (const file of ["js/core/mat4.js", "js/ui/appearance-opts.js", "js/data/telemetry-model.js", "js/data/telemetry-player.js", "js/data/telemetry-render.js"])
+    vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });
+  const opts = vm.runInContext("AppearanceOpts", context), model = vm.runInContext("DataTelemetryModel", context);
+  const dom = makeDom();
+  const el = (tag, cls, text) => {
+    const node = dom.document.createElement(tag); if (cls) node.className = cls; if (text != null) node.textContent = String(text); return node;
+  };
+  const car = [{ t: 0, speed: 160.9344, gear: 4 }, { t: 1, speed: 160.9344, gear: 4 }];
+  const distance = model.cumDist(car).d[1];
+  for (const units of ["kmh", "mph", "kmh", "mph"]) {
+    opts.setUnits(units);
+    const value = units === "mph" ? "100" : "161", label = units === "mph" ? "mph" : "km/h";
+    const texts = [];
+    const drawing = new Proxy({ fillText: (text) => texts.push(String(text)) }, { get: (target, key) => target[key] || (() => {}) });
+    const lane = { d: { code: "PRI", num: 1 }, car, cum: model.cumDist(car) };
+    const view = { primary: lane, laps: [lane], cursorT: 0, rpmMax: 12000, speedMax: 200,
+      chartBase: { getContext: () => drawing }, cw: 400, ch: 200, tMax: 1,
+      visible: { speed: true }, a11ySummary: { textContent: "" } };
+    const player = vm.runInContext("DataTelemetryPlayer", context).create({ el, cssColor: () => "white" }, { paintFrame() {} });
+    const gauges = player.buildGauges(view); player.paintFrame(view); player.updateTextSummary(view);
+    assert.equal(view.g.speed[0].textContent, value);
+    assert.equal(gauges.querySelector(".dh-gspeed").querySelector(".dh-glabel").textContent, "SPEED " + label);
+    assert.equal(model.CHANNELS[0].fmt(car[0].speed), value + " " + label);
+    assert.ok(view.a11ySummary.textContent.includes("speed " + value + " " + label));
+    vm.runInContext("DataTelemetryRender", context).create({ cssColor: () => "white" }).buildBases(view);
+    assert.ok(texts.includes(label), "chart axis names the selected unit");
+    assert.ok(texts.includes(units === "mph" ? "31" : "50"), "chart tick labels convert the canonical speed");
+    assert.equal(car[0].speed, 160.9344); assert.equal(model.cumDist(car).d[1], distance);
+  }
+});
+
+test("normal sub-sample boundary skew uses observed bracketing rows while a leading outage stays unknown", async () => {
+  const epoch = Date.parse("2026-01-01T12:00:00Z"), iso = (t) => new Date(epoch + t * 1000).toISOString();
+  for (const first of [0.05, 0.27, 2]) {
+    let url;
+    const context = vm.createContext({ F1Transport: { create: () => ({ request: async (requested) => {
+      url = requested;
+      return [-0.1, ...Array.from({ length: 100 }, (_, i) => first + i), 100.1]
+        .map((t) => ({ date: iso(t), speed: 180, n_gear: 7 }));
+    } }) } });
+    for (const file of ["js/core/mat4.js", "js/data/api.js", "js/data/telemetry-model.js"])
+      vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });
+    const api = vm.runInContext("F1API", context), model = vm.runInContext("DataTelemetryModel", context);
+    const raw = await api.carData(1, 1, iso(-1.5), iso(101.5), iso(0));
+    assert.ok(url.includes(encodeURIComponent(iso(-1.5))), "request includes the pre-lap bracketing interval");
+    assert.equal(raw[0].t, -0.1, "the temporal origin remains the actual lap start");
+    const clipped = model.clipCar(raw, 100), distance = model.cumDist(clipped, 100);
+    assert.ok(clipped.every((c) => c.t >= 0 && c.t <= 100));
+    assert.equal(clipped.at(-1).t, 100, "a bracketed final sample closes ordinary trailing skew");
+    if (first < 1.5) {
+      assert.equal(clipped[0].t, 0); assert.equal(clipped[0].date, epoch);
+      assert.ok(Math.abs(model.distAtT(distance, 100) - 5000) < 1e-6);
+      assert.ok(Math.abs(model.timeAtDist(distance, 2500) - 50) < 1e-6, "normal coverage remains available for distance comparison");
+    } else {
+      assert.equal(clipped[0].t, 2);
+      assert.ok(Number.isNaN(model.distAtT(distance, 100)), "the missing leading travel is never invented");
+    }
+  }
 });

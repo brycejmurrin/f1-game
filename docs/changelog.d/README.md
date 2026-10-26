@@ -14,13 +14,19 @@ Categories: `New`, `Improved`, `Fixed`, `Removed` (same rules as the header of `
 only, no refactors, CI or tooling). A PR with no player-facing change adds no fragment and says
 `CHANGELOG: no player-facing change` in its body.
 
-Check: `node tools/gen/gen-changelog.mjs --check` (part of `npm run gen:check`).
+Check: `node tools/gen/gen-changelog.mjs --check` (part of `npm run gen:check`, so `test:tooling-fast` and CI
+reject a malformed fragment).
 
-Fold: Merge Desk opens one fold PR (`npm run fold` on a fresh branch off the deploy tip) when the
-fragments pile up, at most daily. A fold PR conflicts with no open PR, because no PR edits CHANGELOG.md or
-another PR's fragment. It folds the ratchet raise fragments too (`tests/data/ratchets.d/`,
-`docs/notes/RATCHET-FRAGMENTS-2026-10-15.md`):
+Fold: `.github/workflows/changelog-fold.yml` owns it. Weekly (Mondays, and on dispatch) it runs `npm run fold`
+on the deploy tip, pushes `bot/changelog-fold`, opens one fold PR and dispatches `ci.yml` on it (a PR opened
+with `GITHUB_TOKEN` starts no CI of its own). A fold PR conflicts with no open PR, because no PR edits
+CHANGELOG.md or another PR's fragment. The heading is the tip's STAMPED build (2000 + commit count, the number
+Pages stamps), never `version.json`'s placeholder 1695:
 
 ```sh
-npm run fold     # gen-changelog --fold (fragments -> "## <build>" from version.json) + ratchets.mjs --fold
+npm run fold                                          # gen-changelog --fold: fragments -> "## <stamped build>"
+node tools/gen/gen-changelog.mjs --fold --build 4321  # explicit heading (a shallow clone cannot count commits)
 ```
+
+The ratchet raise fragments (`tests/data/ratchets.d/`) fold separately, daily, in
+`.github/workflows/ratchets-fold.yml`.

@@ -48,7 +48,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
+import { request } from "./github-api.mjs";
 import { defaultRemoteWorkers } from "../lib/browser-workers.mjs";
 import { CI_BUCKETS, MIN_SAMPLES, declaredTests, specSecPerTest } from "./select-budget.mjs";
 import { specsOf } from "./select-specs.mjs";
@@ -263,29 +263,16 @@ export function groupVerdict(run, jobs) {
   return { done: true, line: run.conclusion === "success" ? `passed ${tail}` : `${run.conclusion} ${tail}`, code: run.conclusion === "success" ? 0 : 1 };
 }
 
+/* github-api.mjs's client (one door, 2026-10-26): the token and the JSON body
+   ride curl's stdin config (no temp file), 5xx/429 back off. Shape kept:
+   { code, json } | { code, text } | { error, code }. */
 function api(method, pathQs, body, { raw = false } = {}) {
-  const token = githubToken();
-  if (!token) return { error: NO_TOKEN_HINT };
-  const args = ["-sS", "-L", "--max-time", "60", "-K", "-", "-w", "\n%{http_code}", "-X", method,
-    "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28"];
-  // The token rides curl's stdin config, so a JSON body goes through a temp file.
-  let tmp = null;
-  if (body) {
-    tmp = path.join(ROOT, "artifacts", `.remote-group-${process.pid}.json`);
-    fs.mkdirSync(path.dirname(tmp), { recursive: true });
-    fs.writeFileSync(tmp, JSON.stringify(body));
-    args.push("-H", "Content-Type: application/json", "--data-binary", "@" + tmp);
-  }
-  args.push(`https://api.github.com/repos/${REPO}/${pathQs}`);
-  const r = spawnSync("curl", args, { encoding: "utf8", input: `header = "Authorization: Bearer ${token}"\n`, maxBuffer: 64 << 20 });
-  if (tmp) fs.rmSync(tmp, { force: true });
-  if (r.status !== 0) return { error: (r.stderr || "curl failed").trim() };
-  const out = (r.stdout || "").split("\n");
-  const code = Number(out.pop());
-  const text = out.join("\n");
-  if (code < 200 || code > 299) return { error: `HTTP ${code} ${text.slice(0, 200)}`, code };
-  if (raw || !text.trim()) return { code, text };
-  try { return { code, json: JSON.parse(text) }; } catch { return { code, text }; }
+  const r = request(pathQs, { method, ...(body ? { body } : {}), timeoutS: 60, follow: true });
+  if (r.error) return { error: r.error };
+  const text = r.text || "";
+  if (r.status < 200 || r.status > 299) return { error: `HTTP ${r.status} ${text.slice(0, 200)}`, code: r.status };
+  if (raw || !text.trim() || r.badJson) return { code: r.status, text };
+  return { code: r.status, json: r.json };
 }
 
 const git = (...a) => (spawnSync("git", a, { cwd: ROOT, encoding: "utf8" }).stdout || "").trim();

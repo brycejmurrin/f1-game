@@ -656,7 +656,8 @@ for (const failure of ["stalled", "rejected"]) {
     await playing;
     assert.equal(audio.backend, null, "built-in music regains ownership");
     assert.equal(SpotifyMusic.lastPlayError().status, 403);
-    assert.match(SpotifyMusic.status().message, /refused playback \(403\).*own music/);
+    assert.equal(SpotifyMusic.status().message, "Spotify refused playback (403). Full Premium is required to play here. " +
+      "The game's own music is playing instead — fix that and press PLAY to retry.");
     const message = SpotifyMusic.status().message;
     resolveBody('{"error":{"message":"late error"}}');
     await settle();

@@ -3,7 +3,7 @@
 
    drift(): a slow-drift detector. The governor reacts to frame MISSES; a phone
    that is slowly heating gets there minutes later than its cost curve says.
-   Frames are cut into WINDOW_MS windows by their own durations, each window
+   Samples are cut into WINDOW_MS windows by elapsed time, each window
    reduces to its p50, the first BASE_WINDOWS (after WARM_WINDOWS of settling)
    fix the baseline, and an EMA of later window p50s above baseline*(1+OVER)
    (and at least MIN_OVER_MS above it) says "due". It only SAYS due: the
@@ -44,10 +44,11 @@ const ThermalDrift = (() => {
       else due = false;
     }
     return {
-      /** One frame interval in ms. Returns true while a step is due and not yet acked. */
-      feed(frameMs) {
-        if (!(frameMs > 0)) return due;
-        buf.push(frameMs); ms += frameMs;
+      /** Drawn-work cost plus elapsed active time; skipped frames supply 0 cost. */
+      feed(frameMs, elapsedMs = frameMs) {
+        if (!(elapsedMs > 0) || !Number.isFinite(elapsedMs)) return due;
+        if (frameMs > 0 && Number.isFinite(frameMs)) buf.push(frameMs);
+        ms += elapsedMs;
         if (ms >= WINDOW_MS) closeWindow();
         return due;
       },

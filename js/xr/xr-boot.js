@@ -22,6 +22,7 @@ const XrBoot = (function () {
   let _windowPending = false;  // true while a window tick is queued
   let _cockpitIdx = -1;
   let _savedCam = -1;
+  let _cameraOwner = null;
   let _bound = false;
   let _boundGfx = null;
   let _getCamMode = null;
@@ -121,21 +122,23 @@ const XrBoot = (function () {
   }
 
   /** Switch camera without writing apex26.camMode (VR override is ephemeral). */
-  function setCamTransient(idx) {
-    if (typeof _setCamMode === "function") return _setCamMode(idx, { persist: false });
+  function setCamTransient(idx, release) {
+    if (typeof _setCamMode === "function") return _setCamMode(idx, { persist: false, owner: _cameraOwner, priority: 100, release: !!release });
   }
 
   function saveAndForceCockpit() {
     const ci = findCockpit();
-    if (ci < 0 || typeof _getCamMode !== "function") return;
+    if (ci < 0 || typeof _getCamMode !== "function" || _cameraOwner) return;
     _savedCam = _getCamMode();
-    if (_savedCam !== ci) setCamTransient(ci);
+    _cameraOwner = {};
+    setCamTransient(ci);
   }
 
   function restoreSavedCam() {
-    if (_savedCam < 0) return;
-    try { setCamTransient(_savedCam); } catch (_) { /* */ }
+    if (!_cameraOwner) return;
+    try { setCamTransient(_savedCam, true); } catch (_) { /* */ }
     _savedCam = -1;
+    _cameraOwner = null;
   }
 
   /**

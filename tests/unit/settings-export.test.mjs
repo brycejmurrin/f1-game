@@ -1604,7 +1604,7 @@ test("garage reset stays on screen when deleting an extra key is not durable", (
   const row = b.SettingsExport.garageRow(); b.dom.body.appendChild(row);
   const reset = b.dom.byId("cs-garage-reset");
   reset.click(); reset.click();
-  assert.match(reset.textContent, /STORAGE FULL — 1 NOT SAVED/);
+  assert.equal(reset.textContent, "RESET GARAGE TO DEFAULTS — STORAGE FULL — 1 NOT SAVED");
   assert.doesNotMatch(reset.textContent, /RELOADING/);
   b.flushReloads(); assert.equal(b.reloads(), 0);
 });
