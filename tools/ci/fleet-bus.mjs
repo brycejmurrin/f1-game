@@ -26,13 +26,23 @@
 //   node tools/ci/fleet-bus.mjs lease break --grant "<the user's words>"   # take a live lease on a user grant
 //   node tools/ci/fleet-bus.mjs send READY --to orchestrator "#2990 abc1234 ready-gate 0"
 //   Prefer agent-msg.mjs for READY/HANDOFF/INCIDENT/INFO/QUESTION/REQUEST (webhook + bus mirror).
+//   node tools/ci/fleet-bus.mjs send LEND --to A --idem lend-3790 "#3790 abc1234 lent for merge merger:A"   # HANDOFF/READY/DONE/BLOCKED/LEND: 20-600 chars
+//   node tools/ci/fleet-bus.mjs send ROTATE --to '*' "ORCH B LIVE claude:session_<id> (replaces …)"   # size-stop succession (HANDOFF still parses)
 //   node tools/ci/fleet-bus.mjs send GAME-SLOT --to '*' "#2990 <head sha>"   # before a game merge (merge-gate.mjs reads it)
-//   node tools/ci/fleet-bus.mjs read [--to merge-holder --to '#2990'] [--since <sha>] [--last 20] [--json]
+//   node tools/ci/fleet-bus.mjs send BLOCKED --pr 2990 "text"   # --pr <n> is --to '#<n>'; empty text is refused
+//   node tools/ci/fleet-bus.mjs send INCIDENT --to '*' --fix <sha> "text"   # tools/ci/incident-lift.mjs lifts it when Pages is green on <sha>
+//   node tools/ci/fleet-bus.mjs read [--to merge-holder --to '#2990'] [--since <sha>] [--last 20] [--json] [--peek | --strict]
 //   node tools/ci/fleet-bus.mjs who A [--last 500] [--json]   # fleet A's live orchestrator: `A <host:id> <sha7> <age>`; exit 1 none
 //
 // `--to` must be deliverable (addressProblem): *, #<PR>, a fleet letter (A, B·O3), a role, or a real
 // <host>:<session id>; a claims-board hash is refused (plan §8.7). A `to:#<PR>` send also dispatches fleet.yml,
 // whose fleet-bus-mirror.mjs step posts the line as a comment on that PR (plan §7, item 2).
+//
+// --idem <key>: an idempotency key (Stripe's pattern: the same key from the same sender is one message). A resend whose key
+// appears in the last 200 bus lines from the same sender writes nothing and exits 0, so a retry after a lost reply is safe.
+// read --strict (with --to): the cursor stops before the first line the filter hid, so a later wider read still sees it.
+// Trade-off: lines shown after that hidden one are shown again next time (at-least-once), and the cursor cannot pass a hidden
+// line until some read without that filter (or --since) moves it. Default read is at-most-once for hidden lines (count printed).
 //
 // Identity: --as <host>:<id>, else APEX_FLEET_AS, else claude:session_<id> (cloud), claude:<CLAUDE_CODE_SESSION_ID>
 // or codex:<CODEX_THREAD_ID>. Exit: 0 ok, 1 usage or git failure, 2 refused.
@@ -47,11 +57,22 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const BUS_BRANCH = "claude/fleet-bus";
 /** GAME-SLOT (2026-10-19): the claim a session pushes before a game merge — `#<PR> <head sha>`; the earlier line wins the
  *  push race, and merge-gate.mjs requires the newest live one to name the PR and come from the merging session. */
-export const TYPES = ["READY", "GREEN", "BLOCKED", "HANDOFF", "DONE", "INCIDENT", "LEASE", "GAME-SLOT"];
+/** Typed peer and lending lines (system audit lane X1, 2026-10-26): INFO/QUESTION/REQUEST used to ride as `HANDOFF [INFO] …`,
+ *  so a reader filtering HANDOFF for rotations got every chat line too. ROTATE is an orchestrator's or worker's size-stop
+ *  succession; LEND / RETURN / TRANSFER move a PR's merge between fleets (LEND names the merger: `merger:<letter>`).
+ *  Old lines keep parsing: every earlier type stays in the list. */
+export const TYPES = ["READY", "GREEN", "BLOCKED", "HANDOFF", "DONE", "INCIDENT", "LEASE", "GAME-SLOT",
+  "INFO", "QUESTION", "REQUEST", "ROTATE", "LEND", "RETURN", "TRANSFER"];
+/** Protocol lines a reader acts on: the body must say what, which PR, which sha (BODY_MIN..BODY_MAX chars, marker excluded). */
+export const PROTOCOL_TYPES = ["HANDOFF", "READY", "DONE", "BLOCKED", "LEND"];
+export const BODY_MIN = 20;
+export const BODY_MAX = 600;
+/** `--idem <key>`: a resend carrying the same key from the same sender within the last IDEM_WINDOW lines is not written again. */
+export const IDEM_WINDOW = 200;
+const IDEM_KEY = /^[A-Za-z0-9][A-Za-z0-9._:#-]{0,63}$/;
 /** Transcript Auditor batch 9: workers that hit "unknown type LIVE" fell back to a burst of HANDOFFs. */
-export const TYPE_HINT = "Report status with READY / BLOCKED / DONE; HANDOFF is only a size-stop rotation to a successor, " +
-  "and an orchestrator announces itself with `send HANDOFF --to '*' \"ORCH <X> LIVE <host>:<id>\"` (agent-fleet communication.md).";
-/** agent-msg INFO/QUESTION/REQUEST map to bus HANDOFF (see agent-fleet references/communication.md). */
+export const TYPE_HINT = "Report status with READY / BLOCKED / DONE; peers talk with INFO / QUESTION / REQUEST; a size-stop " +
+  "succession is ROTATE (HANDOFF still parses), and an orchestrator announces itself with `send ROTATE --to '*' \"ORCH <X> LIVE <host>:<id>\"` (agent-fleet communication.md).";
 export const DEFAULT_TTL_MIN = 60;
 /** A lease longer than this outlives the Pages p90 (73 min) three times over: a dead holder would block for hours. */
 export const MAX_TTL_MIN = 240;
@@ -101,12 +122,61 @@ export function addressProblem(to) {
   return SESSION_ID[m[1]].test(m[2]) ? "" : `${a} is not a ${m[1]} session id`;
 }
 
-/** One bus line. Pure; throws on an unknown type or an unaddressable recipient (parseLine still reads old lines). */
-export function formatLine(type, to, from, text = "") {
+/** The merger fleet letter a LEND line names (`merger:<letter>`), or null. Pure. */
+export const lendMerger = (text) => (/(?:^|\s)merger:([A-Z])(?=\s|$|[,.;)])/.exec(String(text || "")) || [])[1] || null;
+
+/** The `[idem:<key>]` marker `--idem` appends, and the key a line carries (null when none). Pure. */
+export const idemMarker = (key) => `[idem:${key}]`;
+export const idemOf = (text) => (/\[idem:([A-Za-z0-9][A-Za-z0-9._:#-]{0,63})\]\s*$/.exec(String(text || "")) || [])[1] || null;
+
+/** Why a body is not sendable for `type` ("" when it is). Body is whitespace-collapsed, marker excluded. Pure. */
+export function bodyProblem(type, body) {
+  // An empty body is never a message (2026-10-26: six empty HANDOFF lines from one
+  // sender whose `--body` flag ate the text; the reader then asked for a resend).
+  if (!body) return "empty text: a bus line needs a body (text is positional: send TYPE --to ADDR \"text\")";
+  if (PROTOCOL_TYPES.includes(type) && (body.length < BODY_MIN || body.length > BODY_MAX)) {
+    return `${type} body is ${body.length} chars; protocol lines (${PROTOCOL_TYPES.join(" ")}) take ${BODY_MIN}-${BODY_MAX}: what, which PR, which sha`;
+  }
+  if (type === "LEND" && !lendMerger(body)) return "LEND names the fleet that merges: put `merger:<letter>` in the text (e.g. \"#3790 abc1234 merger:A\")";
+  return "";
+}
+
+/** One bus line. Pure; throws on an unknown type, an unaddressable recipient or a bad body (parseLine still reads old lines). */
+export function formatLine(type, to, from, text = "", { idem = "" } = {}) {
   if (!TYPES.includes(type)) throw new Error(`unknown type ${type} (one of ${TYPES.join(" ")}). ${TYPE_HINT}`);
   const bad = addressProblem(to);
   if (bad) throw new Error(`${bad}. --to takes one of: ${ADDRESS_FORMS}`);
-  return `${type} to:${to} from:${from} ${String(text).replace(/\s+/g, " ").trim()}`.trim();
+  const body = String(text ?? "").replace(/\s+/g, " ").trim();
+  const why = bodyProblem(type, body);
+  if (why) throw new Error(why);
+  if (idem && !IDEM_KEY.test(idem)) throw new Error(`--idem key must match ${IDEM_KEY} (got ${idem})`);
+  return `${type} to:${to} from:${from} ${body}${idem ? " " + idemMarker(idem) : ""}`;
+}
+
+/** The newest entry in `entries` (oldest first) from `from` carrying idempotency `key`, or null. Pure. */
+export function findIdem(entries, from, key) {
+  if (!key) return null;
+  for (let i = (entries || []).length - 1; i >= 0; i--) if (entries[i].from === from && idemOf(entries[i].text) === key) return entries[i];
+  return null;
+}
+
+/** `[fix:<sha>]` marker an INCIDENT carries when `send INCIDENT --fix <sha>` names the commit whose green Pages lifts it. */
+export const fixMarker = (sha) => `[fix:${sha}]`;
+export const fixOf = (text) => (/\[fix:([0-9a-f]{7,40})\]/i.exec(String(text || "")) || [])[1] || null;
+
+/**
+ * The open INCIDENT (newest not followed by a `lifted` line) whose text names a fix sha, or null. Pure.
+ * entries: oldest first. A later plain INCIDENT without a marker replaces it: the freeze is then manual.
+ */
+export function openFixIncident(entries) {
+  let open = null;
+  for (const e of entries || []) {
+    if (e.type !== "INCIDENT") continue;
+    open = /\blifted\b/i.test(e.text) ? null : e;
+  }
+  if (!open) return null;
+  const sha = fixOf(open.text);
+  return sha ? { entry: open, sha } : null;
 }
 
 /** A commit subject -> { type, to, from, text }, or null when it is not a bus line. Pure. */
@@ -228,11 +298,16 @@ export const whoLine = (w, now) => `${w.letter} ${w.id} ${String(w.sha).slice(0,
  * callers that already print their own status stay quiet; the CLI passes console.log.
  */
 export function sendBusLine(type, to, from, text = "", {
-  cwd = ROOT, dispatch = pokeFleetBoard, log = () => {},
+  cwd = ROOT, dispatch = pokeFleetBoard, log = () => {}, idem = "",
 } = {}) {
   if (type === "LEASE") throw new Error("LEASE lines are written by `lease …`, never sent by hand");
-  const line = formatLine(type, to, from, text);
-  const r = writeBus(() => ({ ok: true, line, lease: undefined }), { cwd });
+  const line = formatLine(type, to, from, text, { idem });
+  // The dedupe runs inside the compare-and-swap: a retry after a lost push re-reads the window it decides on.
+  const r = writeBus((_lease, { recent }) => {
+    const dup = idem ? findIdem(recent(IDEM_WINDOW), from, idem) : null;
+    return dup ? { ok: true, skip: dup } : { ok: true, line, lease: undefined };
+  }, { cwd });
+  if (r.ok && r.deduped) { log(`= deduped: idem ${idem} already sent as ${r.sha}; nothing written`); return { ...r, line }; }
   if (r.ok) log(`= sent ${r.sha}: ${line}`);
   else log(`= send FAILED: ${r.reason}`);
   // A `to:#<PR>` line reaches the PR's owner as a comment (fleet-bus-mirror.mjs in fleet.yml).
@@ -276,7 +351,8 @@ const readFileAt = (run, rev, file) => {
 /**
  * One write: fetch, let `plan(lease)` decide on the fetched lease, commit on top of the fetched tip, push as a
  * fast-forward. A rejected push means another host wrote first: refetch and decide again (that is the CAS).
- * plan returns { ok, lease?, line, reason } — `lease: undefined` keeps lease.json as it is.
+ * plan(lease, { tip, recent }) returns { ok, lease?, line, reason } — `lease: undefined` keeps lease.json as it is;
+ * `skip: <entry>` writes nothing and reports that entry (an idempotent resend). `recent(n)` = the last n bus entries at tip.
  */
 export function writeBus(plan, { cwd = ROOT, remote = "origin", tries = 5 } = {}) {
   const run = gitIn(cwd);
@@ -291,8 +367,10 @@ export function writeBus(plan, { cwd = ROOT, remote = "origin", tries = 5 } = {}
   for (let i = 0; i < tries; i++) {
     const tip = fetchBus({ cwd, remote });
     const leaseText = tip ? readFileAt(run, tip, LEASE_FILE) : "";
-    const d = plan(parseLease(leaseText));
+    const recent = (n) => (tip ? parseLog(run(["log", "--reverse", "--format=%H%x09%ct%x09%s", `-${n}`, tip]).stdout) : []);
+    const d = plan(parseLease(leaseText), { tip, recent });
     if (!d.ok) return { ok: false, refused: true, reason: d.reason, sha: "" };
+    if (d.skip) return { ok: true, deduped: true, sha: String(d.skip.sha).slice(0, 7), line: "", lease: undefined };
     let commit;
     try {
       const nextLease = d.lease === undefined ? leaseText : d.lease ? JSON.stringify(d.lease) + "\n" : "{}\n";
@@ -329,13 +407,25 @@ export function readBus({ cwd = ROOT, remote = "origin", since = "", last = 20, 
 
 // ---- CLI -------------------------------------------------------------------
 
-const cursorFile = (me) => path.join(CURSOR_DIR, `cursor-${String(me).replace(/[^\w.-]+/g, "_")}.txt`);
+/**
+ * Where a `read --strict` leaves the cursor: the tip when the filter hid nothing, else the last entry before the first
+ * hidden one; "" (leave the cursor as it was) when the very first entry is hidden. Entries oldest first. Pure.
+ */
+export function strictCursor(entries, addrs, tip) {
+  const i = (entries || []).findIndex((e) => !addressed(e.to, addrs));
+  if (i < 0) return tip;
+  return i === 0 ? "" : entries[i - 1].sha;
+}
+
+/** The per-sender read cursor file (fleet-brief.mjs reads it for the hand-off). */
+export const cursorFile = (me) => path.join(CURSOR_DIR, `cursor-${String(me).replace(/[^\w.-]+/g, "_")}.txt`);
 
 function usage(msg) {
   if (msg) console.error(`fleet-bus: ${msg}`);
   console.error("usage: fleet-bus.mjs lease [acquire|renew|release|check|break] [--ttl MIN] [--note T] [--grant T]\n" +
-    "       fleet-bus.mjs send <TYPE> --to <ADDR> \"<text>\"   ADDR: " + ADDRESS_FORMS + "\n" +
-    "       fleet-bus.mjs read [--to ADDR ...] [--since SHA] [--last N] [--json]\n" +
+    "       fleet-bus.mjs send <TYPE> (--to <ADDR> | --pr <n>) [--fix <sha>, INCIDENT only] [--idem KEY] \"<text>\"   ADDR: " + ADDRESS_FORMS + "\n" +
+    "       (" + PROTOCOL_TYPES.join("/") + " bodies " + BODY_MIN + "-" + BODY_MAX + " chars; LEND names merger:<letter>; --idem dedupes a resend in the last " + IDEM_WINDOW + " lines)\n" +
+    "       fleet-bus.mjs read [--to ADDR ...] [--since SHA] [--last N] [--json] [--peek | --strict]   (--last applies only when no cursor is known; --peek leaves the cursor; --strict never moves it past a hidden line)\n" +
     "       fleet-bus.mjs who <fleet letter> [--last N] [--json]   (exit 1: no live orchestrator line)\n" +
     "       common: --as <host>:<id>   types: " + TYPES.join(" "));
   return 1;
@@ -344,16 +434,25 @@ function usage(msg) {
 export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 1000), log = console.log, dispatch = pokeFleetBoard,
   readyCheck = readyClaimVerdict } = {}) {
   const flags = {}, multi = { to: [] }, pos = [];
+  // Flags are an allow-list: an unknown `--flag` used to swallow the next word
+  // (so `--body "text"` sent an empty line). Text is positional.
+  const VALUE_FLAGS = new Set(["to", "as", "since", "last", "ttl", "note", "grant", "idem", "pr", "fix"]);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") flags.json = true;
+    else if (a === "--peek") flags.peek = true;
+    else if (a === "--strict") flags.strict = true;
     else if (a.startsWith("--")) {
-      const k = a.slice(2), v = argv[++i];
+      const k = a.slice(2);
+      if (!VALUE_FLAGS.has(k)) return usage(`unknown flag ${a} (text is positional; flags: --${[...VALUE_FLAGS].join(" --")} --json --peek --strict)`);
+      const v = argv[++i];
       if (v === undefined) return usage(`${a} needs a value`);
       if (k === "to") multi.to.push(v); else flags[k] = v;
     } else pos.push(a);
   }
   const [cmd, sub] = pos;
+  // --as is <host>:<id>; the id itself is not checked (grok:DAD and cursor bot ids are real senders).
+  if (flags.as !== undefined && !/^(claude|codex|cursor|grok):\S+$/.test(flags.as)) return usage(`--as must be <host>:<id> (got ${flags.as})`);
   const me = whoAmI(process.env, flags.as);
   const needMe = () => { if (!me) throw new Error("no identity: pass --as <host>:<id> or set APEX_FLEET_AS"); };
   try {
@@ -386,13 +485,23 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
       needMe();
       if (!sub) return usage("send needs a TYPE");
       if (sub === "LEASE") return usage("LEASE lines are written by `lease …`, never sent by hand");
-      if (multi.to.length !== 1) return usage("send needs exactly one --to");
+      if (flags.pr !== undefined && multi.to.length === 0) {
+        if (!/^#?\d+$/.test(flags.pr)) return usage("--pr takes a PR number");
+        multi.to.push(`#${String(flags.pr).replace(/^#/, "")}`);
+      }
+      if (multi.to.length !== 1) return usage("send needs exactly one --to (or --pr <n>)");
       if (!TYPES.includes(sub)) return usage(`unknown type ${sub} (one of ${TYPES.join(" ")}). ${TYPE_HINT}`);
       if (sub === "READY" && process.env.APEX_READY_NO_RECEIPT !== "1") {
         const v = readyCheck(cwd, { text: `${multi.to[0]} ${pos.slice(2).join(" ")}` });
         if (!v.ok) { log(`= send REFUSED: ${v.why}`); return 2; }
       }
-      const r = sendBusLine(sub, multi.to[0], me, pos.slice(2).join(" "), { cwd, dispatch, log });
+      let text = pos.slice(2).join(" ");
+      if (flags.fix !== undefined) {
+        if (sub !== "INCIDENT") return usage("--fix <sha> belongs on an INCIDENT line");
+        if (!/^[0-9a-f]{7,40}$/i.test(flags.fix)) return usage("--fix takes a commit sha (7-40 hex)");
+        text = `${text} ${fixMarker(flags.fix)}`.trim();
+      }
+      const r = sendBusLine(sub, multi.to[0], me, text, { cwd, dispatch, log, idem: flags.idem || "" });
       return r.ok ? 0 : 1;
     }
     if (cmd === "who") {
@@ -405,15 +514,26 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
       return w ? 0 : 1;
     }
     if (cmd === "read") {
+      if (flags.peek && flags.strict) return usage("--peek and --strict are exclusive (--peek never moves the cursor)");
       const file = me ? cursorFile(me) : "";
       let since = flags.since || "";
       if (!since && file) try { since = fs.readFileSync(file, "utf8").trim(); } catch { /* first read */ }
       const r = readBus({ cwd, since, last: Number(flags.last) || 20 });
       const shown = r.entries.filter((e) => addressed(e.to, multi.to));
-      if (flags.json) log(JSON.stringify({ tip: r.tip, reset: r.reset, entries: shown }));
+      const hidden = r.entries.length - shown.length;
+      if (flags.json) log(JSON.stringify({ tip: r.tip, reset: r.reset, hidden, entries: shown }));
       else for (const e of shown) log(`${new Date(e.at * 1000).toISOString().slice(11, 16)}Z ${e.sha.slice(0, 7)} ${e.type} to:${e.to} from:${e.from} ${e.text}`.trimEnd());
-      if (file && r.tip) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, r.tip + "\n"); }
-      if (!flags.json) log(`= bus ${shown.length} new${r.reset ? " (cursor unknown: last " + (Number(flags.last) || 20) + ")" : ""}, cursor ${r.tip ? r.tip.slice(0, 7) : "none"}`);
+      // --peek reads without moving the cursor; a plain read advances it to the tip,
+      // past lines a --to filter hid (the count is printed so nothing vanishes silently);
+      // --strict stops it just before the first hidden line (strictCursor).
+      const next = flags.strict ? strictCursor(r.entries, multi.to, r.tip) : r.tip;
+      if (file && next && !flags.peek) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, next + "\n"); }
+      if (!flags.json) {
+        const note = r.reset ? " (cursor unknown: last " + (Number(flags.last) || 20) + ")"
+          : (flags.last && !flags.since ? " (--last ignored: cursor known; use --since <sha> or --peek)" : "");
+        const held = flags.strict && next !== r.tip ? ` (strict: held at ${next ? next.slice(0, 7) : "unchanged"}, before a hidden line)` : "";
+        log(`= bus ${shown.length} new${hidden ? ` (${hidden} hidden by --to)` : ""}${note}, cursor ${(flags.strict ? next : r.tip) ? (flags.strict ? next : r.tip).slice(0, 7) : "none"}${flags.peek ? " (peek: cursor not moved)" : ""}${held}`);
+      }
       return 0;
     }
     return usage(cmd ? `unknown command ${cmd}` : "");

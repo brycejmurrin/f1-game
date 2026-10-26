@@ -328,7 +328,7 @@ test('audit: concept comparison writes to the supplied confined destination', as
     const out=path.join(dir,'output/cmp.jpg');const run=spawnSync(process.execPath,[path.join(root,'design-preview/concept-bodies/cmp.mjs'),path.join(dir,'shot.png'),'front','',out],{cwd:dir,encoding:'utf8',timeout:10000});
     assert.equal(run.status,0,run.stderr);assert.ok(fs.statSync(out).size>100);
     const overwrite=spawnSync(process.execPath,[path.join(root,'design-preview/concept-bodies/cmp.mjs'),path.join(dir,'shot.png'),'front','',path.join(dir,'shot.png')],{cwd:dir,encoding:'utf8',timeout:10000});
-    assert.notEqual(overwrite.status,0);assert.ok(overwrite.stderr.includes("differ from source images"), overwrite.stderr);
+    assert.notEqual(overwrite.status,0);assert.ok(overwrite.stderr.split('\n').some(line=>line.endsWith('Output must differ from source images')), overwrite.stderr);
     assert.deepEqual(fs.readFileSync(path.join(dir,'shot.png')),image);
   } finally {fs.rmSync(dir,{recursive:true,force:true});}
 });

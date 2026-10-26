@@ -443,9 +443,8 @@ test("CSS: each new LAYOUT and every lookPause knob has a rule in the pause bloc
 test("dialog backdrop animations respect the explicit in-game reduced-motion preference", () => {
   const rules = cssRules(fs.readFileSync(path.join(ROOT, "css/dialog-platform.css"), "utf8"));
   const animated = rules.filter(r => r.selector.includes("::backdrop") && r.decls.has("animation"));
-  assert.ok(animated.length, "normal-motion dialogs retain their entrance animation");
-  for (const rule of animated) {
-    assert.ok(rule.context.some(c => c.includes("prefers-reduced-motion: no-preference")));
-    assert.ok(rule.selector.includes(':root:not([data-motion="reduce"])'), "the in-game motion override must exclude backdrops too");
-  }
+  // The only animated backdrop is scoped by both the OS preference and the in-game override.
+  assert.deepEqual(animated.map(r => r.selector), [':root:not([data-motion="reduce"]) dialog.screen.dim[open]::backdrop'],
+    "normal-motion dialogs retain their entrance animation; the in-game motion override excludes backdrops too");
+  assert.ok(animated[0].context.some(c => c.includes("prefers-reduced-motion: no-preference")));
 });

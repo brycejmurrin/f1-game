@@ -16,20 +16,14 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Parallel survey and review](parallel-survey-and-review.md) — UI/HUD reports: background apex survey job + ≤2 read-only review agents in parallel; plan as a docs/notes file on the PR branch
 - [Orchestrator may spawn sessions](orchestrator-may-spawn-sessions.md) — fleet work: launch sibling sessions without asking, tell Bryce each time; respect a single denied launch
 - [Worker model by task](worker-model-by-task.md) — 2026-10-19: orchestrator picks Opus or Sonnet per worker; Fable only when Bryce names it (2026-10-22 visor)
-- [Fixers may screenshot](fixers-may-screenshot.md) — recorded UI campaign permits screenshot loops without count cap; keep time and host limits
-- [Lanes keep working](lanes-keep-working.md) — 2026-10-17 campaign: continue scoped work after dry rounds; preserve resource and ownership limits
-- [Ask via AskUserQuestion](ask-via-askuserquestion.md) — decisions/asks for Bryce go through AskUserQuestion with what/why/options explained
+- [Ask via AskUserQuestion](ask-via-askuserquestion.md) — Bryce-attended sessions only; unattended fleet sessions post BLOCKED to their orchestrator
 - [Preview must look different](preview-must-look-different.md) — design sheets must differ in the picture (pixel-diff, close-up framing), not just in mm metrics; Bryce: "they all look the same"
-- [Synced plugins not in child sessions](synced-plugins-not-in-child-sessions.md) — dated Claude sibling-session limitation; verify availability on each host
-- [Watcher tiered cadence](watcher-tiered-cadence.md) — fleet watcher: CI reds every 1 min, rest every 3 min, no per-PR subscriptions; takes over stale non-Claude PRs
+- [Synced plugins in child sessions](synced-plugins-not-in-child-sessions.md) — 2026-10-18 limitation; re-verified 2026-10-26 that child sessions list plugin skills
 - [Orchestrator dispatches Pages](orchestrator-dispatches-pages.md) — dispatch pages.yml after merges instead of waiting for the cron; never dual-dispatch
-- [Archive only after Bryce is done](archive-only-after-bryce-done.md) — a DONE line is not enough; Bryce may still be using the session
-- [Bryce merges manually](bryce-merges-manually.md) — merges with no bus line are usually Bryce's; keep pacing, do not chase
-- [Orchestrator check-in cadence](orchestrator-checkin-cadence.md) — check in every ~10 min and roll-call all sessions each time; settle slot ambiguity from history at once
-- [Orchestrator tick every 3 min](orchestrator-tick-3min.md) — 2026-10-19: Bryce wants orchestrator check-ins every 3 min, self-rescheduled, changes only
 - [Design lanes: one living artifact](design-lanes-living-artifact.md) — each design session republishes ONE gallery to the same URL per round; Bryce iterates on it
-- [Short PR check-ins](short-pr-check-ins.md) — PR safety-net check-ins every ~15 min, never hours (Bryce 2026-10-19)
-- [Orchestrator saves queue](orchestrator-saves-queue.md) — persist tasks + merge order to a pushed state branch every tick (Bryce 2026-10-21)
+- [Short PR check-ins](short-pr-check-ins.md) — check-ins short, never hours (Bryce 2026-10-19); the number is pending Bryce
+- [Orchestrator saves queue](orchestrator-saves-queue.md) — persist tasks + merge order to a pushed state branch every wake (Bryce 2026-10-21)
 - [Idle lanes do parallel work](idle-lanes-parallel-work.md) — 2026-10-22: idle hunters/workers use worktrees, MCPs, subagents, web research while waiting
 - [Discuss decisions with fleets](discuss-decisions-with-fleets.md) — 2026-10-22: cross-fleet decisions go to bus + webhook (DAD, Merlin) before acting
 - [Bryce iPhone uses TLX WebGPU](bryce-iphone-tlx-webgpu.md) — plays THREE PATH: WEBGPU on iPhone and it works; measure that path first
+- [Rules are agent-written drafts](rules-are-agent-written-drafts.md) — Bryce 2026-10-26: reconsider AGENTS.md/CLAUDE.md/memory; audit improvements in one PR

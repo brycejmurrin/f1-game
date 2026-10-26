@@ -151,6 +151,7 @@ const Input = (function () {
   let tiltZero = 0;           // calibrated neutral
   let tiltSeen = false, tiltRemote = false; // seen data and ownership of the shared tilt sample
   let gyroAttached = false;
+  let gyroRequestGeneration = 0;
   let gyroDenied = false;
   // HARD refusal only: the sensor API is absent, or requestPermission()
   // RESOLVED to something other than "granted" (the player said no in the
@@ -173,6 +174,7 @@ const Input = (function () {
   let steerMode = "buttons";
   let tiltSmoothed = 0;       // One-Euro-filtered tilt angle (deg)
   let lastOrientMs = 0;
+  const LOCAL_TILT_STALE_MS = 1000; // live sensors normally deliver many samples per second
   let OE_MIN_CUTOFF = 1.2;    // Hz — THE smoothing knob (set by the SMOOTHING slider)
   let OE_BETA = 0.10;
   const OE_DCUTOFF = 1.0;     // Hz, cutoff for the derivative estimate
@@ -256,6 +258,7 @@ const Input = (function () {
     // A non-finite roll (Infinity angles from a broken sensor) would seed the One-Euro
     // state with NaN and every later reading would stay NaN: drop it like a no-sensor event.
     if (roll === null || !Number.isFinite(roll) || remoteSteers()) return; // a live phone owns the shared tilt pipeline
+    localTiltFresh(); // a stalled stream restarts its filter on this reading
     tiltRaw = roll;
     const n = nowMs();
     const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
@@ -283,6 +286,7 @@ const Input = (function () {
   // Must be called from a user gesture (iOS permission prompt).
   // Resolves true if tilt data can be expected.
   function requestGyro() {
+    const generation = ++gyroRequestGeneration;
     if (typeof DeviceOrientationEvent === "undefined") {
       gyroDenied = gyroHardDenied = true;   // no sensor API at all: as final as a "denied"
       return Promise.resolve(false);
@@ -291,6 +295,7 @@ const Input = (function () {
       try {
         return DeviceOrientationEvent.requestPermission()
           .then(res => {
+            if (generation !== gyroRequestGeneration) return false;
             if (res === "granted") {
               // A grant clears an earlier refusal. The flag latched true on ANY
               // rejection — including the transient kind (a request outside a
@@ -305,6 +310,7 @@ const Input = (function () {
             return false;
           })
           .catch(() => {
+            if (generation !== gyroRequestGeneration) return false;
             gyroDenied = true;   // rejected: no user activation, ask again from a real tap
             return false;
           });
@@ -326,7 +332,7 @@ const Input = (function () {
      (A phone controller's roll and a detached sensor keep the immediate zero.) */
   let calibPending = false;
   function calibrate() {
-    if (gyroAttached && !tiltSeen && !remoteSteers()) { calibPending = true; return; }
+    if (gyroAttached && !localTiltFresh() && !remoteSteers()) { calibPending = true; return; }
     calibPending = false;
     tiltZero = tiltRaw;
     oePrev = tiltRaw; oeDPrev = 0; oeInit = true;
@@ -336,7 +342,14 @@ const Input = (function () {
   }
 
   function tiltActive() {
-    return steerMode === "tilt" && tiltSeen && (!tiltRemote || remoteSteers());
+    return steerMode === "tilt" && localTiltFresh() && (!tiltRemote || remoteSteers());
+  }
+  function localTiltFresh() {
+    if (tiltSeen && !tiltRemote && nowMs() - lastOrientMs >= LOCAL_TILT_STALE_MS) {
+      tiltSeen = false;
+      tiltFilterClear();
+    }
+    return tiltSeen;
   }
 
   function remoteActive() {
@@ -456,6 +469,7 @@ const Input = (function () {
   function simTilt(rawDeg, dt) {
     const step = dt > 0 ? dt : 0.016;
     tiltSeen = true; tiltRemote = false;
+    lastOrientMs = nowMs();
     tiltRaw = rawDeg;
     tiltSmoothed = oneEuro(rawDeg, step);
     // Same map and same slew the live path uses — deliberately WITHOUT
@@ -565,6 +579,10 @@ const Input = (function () {
   }
 
   function keyboardSteer() {
+    // Resting keys already at centre: digitalStep(0, 0) is two Math.pow and still 0,
+    // and steer() asks this every physics step. Stamp the clock so the next press
+    // is one frame, not a capped 100 ms jump on the wall-clock path.
+    if (!keyLeft && !keyRight && keySteerVal === 0) { keySteerT = nowMs(); return 0; }
     const t = nowMs();
     const dt = rampDtSince(keySteerT, t);
     keySteerT = t;
@@ -753,8 +771,16 @@ const Input = (function () {
     return true;
   }
 
+  // PAD_AXIS_DEF's keys never change. Object.keys of it allocated an array on every
+  // poll (wheelFirst), including for a pad that is only plugged in.
+  let padAxisDefKeys = null;
   function padAxesAreDefault() {
-    return Object.keys(PAD_AXIS_DEF).every((k) => padAxisMap[k] === PAD_AXIS_DEF[k]);
+    if (!padAxisDefKeys) padAxisDefKeys = Object.keys(PAD_AXIS_DEF);
+    for (let i = 0; i < padAxisDefKeys.length; i++) {
+      const k = padAxisDefKeys[i];
+      if (padAxisMap[k] !== PAD_AXIS_DEF[k]) return false;
+    }
+    return true;
   }
   /* Capture where the steering axis RESTS and subtract it forever after. This
      is the honest answer to stick drift: a worn potentiometer's wiper no longer
@@ -891,14 +917,20 @@ const Input = (function () {
   function padPedalLevel(v) { return v > PAD_PEDAL_DZ ? clamp((v - PAD_PEDAL_DZ) / (1 - PAD_PEDAL_DZ), 0, 1) : 0; }
   function padDpadSteer(pad) {
     const t = nowMs();
-    const dt = (padDpadT ? Math.min(0.1, (t - padDpadT) / 1000) : 0) * timeScale;
-    padDpadT = t;
     // LAST PRESS WINS — same contract as keyboardSteer / buttonSteering.
     // Worn pads and some maps briefly report both left+right; right−left
     // cancelled to centre and the ramp unwound mid-corner.
     // 14/15 are the d-pad only on the standard layout; a wheel's are its own buttons.
     const dp = padStd(pad);
     const left = dp && btnDown(pad, 14), right = dp && btnDown(pad, 15);
+    // Centred and untouched: the shaped-space ramp is Math.pow twice and still 0.
+    if (!left && !right && padDpadVal === 0) {
+      padDpadLeftHeld = false; padDpadRightHeld = false;
+      padDpadT = t;
+      return 0;
+    }
+    const dt = (padDpadT ? Math.min(0.1, (t - padDpadT) / 1000) : 0) * timeScale;
+    padDpadT = t;
     if (left && !padDpadLeftHeld) padDpadLeftSeq = ++padDpadSeq;
     if (right && !padDpadRightHeld) padDpadRightSeq = ++padDpadSeq;
     padDpadLeftHeld = left; padDpadRightHeld = right;
@@ -1392,18 +1424,19 @@ const Input = (function () {
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/timestamp */
   const PAD_WAKE = 0.3;
   const padUse = new Map();    // padKey -> { axes, btn, usedAt }
+  const padUseLive = new Set(); // reused each poll; a fresh Set here was one alloc per frame
   // The W3C standard layout (d-pad on 12-15, right stick on 2/3). Gamepad.mapping is
   // always a string in a browser; a missing one is a bare harness pad, read as standard.
   const padStd = (p) => p.mapping == null || p.mapping === "standard";
   function padKey(p, slot) { return (Number.isInteger(p.index) ? p.index : slot) + ":" + p.id; }
   function notePadUse(pads, t) {
     if (!pads) return;
-    const live = new Set();
+    padUseLive.clear();
     for (let i = 0; i < pads.length; i++) {
       const p = pads[i];
       if (!p || !p.connected) continue;
       const k = padKey(p, i), axes = p.axes || [], nb = p.buttons ? p.buttons.length : 0;
-      live.add(k);
+      padUseLive.add(k);
       let rec = padUse.get(k), used = false;
       if (!rec) { rec = { axes: [], btn: [], usedAt: 0 }; padUse.set(k, rec); }
       else {
@@ -1418,7 +1451,7 @@ const Input = (function () {
       for (let b = 0; b < nb; b++) rec.btn[b] = btnDown(p, b);
       if (used) rec.usedAt = t > 0 ? t : 1;
     }
-    for (const k of padUse.keys()) if (!live.has(k)) padUse.delete(k);
+    for (const k of padUse.keys()) if (!padUseLive.has(k)) padUse.delete(k);
   }
   // `lastUse(pad, slot)` -> ms of its last use, 0 = never. Defaults to the
   // module's own record; the unit test passes its own. `pickPad(pads, true)`
@@ -1980,7 +2013,7 @@ const Input = (function () {
       touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
       dragFilterClear();
     }
-    if (steerMode !== "tilt") detachGyro();
+    if (steerMode !== "tilt") { ++gyroRequestGeneration; detachGyro(); }
   }
 
   // TOUCH SENSITIVITY: the drag mode's touchRangeFrac (read by touchRangePx()),
@@ -2351,6 +2384,7 @@ const Input = (function () {
     keySteerT = 0;
     tiltSteerVal = 0;
     tiltSteerT = 0;
+    tiltSeen = false; lastOrientMs = 0; // interruption releases local sensor ownership; keep tiltZero
     oeInit = false; oePrev = 0; oeDPrev = 0;
     overtakePressed = false;
     boostTogglePressed = false;
@@ -2481,6 +2515,7 @@ const Input = (function () {
     poll,
     rumble,
     requestGyro,
+    gyroRequestId: () => gyroRequestGeneration,
     calibrate,
     steer,
     throttle,
@@ -2551,7 +2586,7 @@ const Input = (function () {
     onPointerKindChange,
     clearEdges, clearDriveEdges,
     get padConnected() { return padConnected; },
-    get gyroSeen() { return tiltSeen; },
+    get gyroSeen() { return localTiltFresh(); },
     get gyroDenied() { return gyroDenied; },
     get gyroHardDenied() { return gyroHardDenied; },
     // True once init() has finished wiring listeners. Specs wait on ready() —

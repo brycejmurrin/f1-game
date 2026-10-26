@@ -97,7 +97,7 @@ boxes cross the 120 m cap; at 168×48 that is about 9 triangles a pixel.
 
 - Tool: `tools/perf/mesh-census.mjs` (`--viewport`, `--preset`, per-target and per-group tables added here),
   helpers `tools/perf/mesh-census-lib.mjs`, tests `tests/unit/mesh-census.test.mjs`.
-- Earlier counts: [MESH-CENSUS-2026-10-19](MESH-CENSUS-2026-10-19.md), [PASS-CENSUS-2026-10-17](PASS-CENSUS-2026-10-17.md),
+- Earlier counts: [MESH-CENSUS-2026-10-19](MESH-CENSUS-2026-10-19.md), [PASS-CENSUS-2026-10-17](../../docs/archive/notes/PASS-CENSUS-2026-10-17.md),
   #2657 comment of 2026-10-17 (monaco phone tier, before the road split).
 - Phone evidence: [AWS-DEVICE-FARM-IPHONE-2026-10-23](AWS-DEVICE-FARM-IPHONE-2026-10-23.md),
   [PERF-KNOWN-WINS-2026-10-23](PERF-KNOWN-WINS-2026-10-23.md).

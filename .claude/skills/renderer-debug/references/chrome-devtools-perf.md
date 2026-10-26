@@ -14,7 +14,7 @@ Apex uses the box **chrome-devtools** MCP against `http://localhost:3456` (skill
 4. Suspect detached DOM, closures holding `G`, unremoved listeners, unbounded caches.
 5. `close_heapsnapshot` when done — snapshots are large.
 
-Fix in `js/` only with a measured before/after; census skill **perf-memory-census**.
+Fix in `js/` only with a measured before/after; census tools in skill **mcp-probe**.
 
 ## LCP / load (PWA shell)
 

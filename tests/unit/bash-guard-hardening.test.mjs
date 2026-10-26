@@ -13,6 +13,7 @@
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -109,9 +110,11 @@ test("the pkill guard blocks -f however the flags are spelled (M36)", () => {
     assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
 });
 
-test("settings.json keeps the merge prompts off, and the gate receipts decide merges and ready flips (2026-10-19)", () => {
+test("settings.json no longer sets APEX_MERGE_DESK for everyone, and the gate receipts decide merges and ready flips (2026-10-19)", () => {
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
-  assert.equal(settings.env.APEX_MERGE_DESK, "1", "re-runs run without a tap; merges and ready flips are gated by receipts, not prompts");
+  // 2026-10-26 system audit §10: the shared env made every worker a desk; the orchestrator's environment sets it now.
+  assert.equal(Object.hasOwn(settings.env || {}, "APEX_MERGE_DESK"), false, "APEX_MERGE_DESK is not in the shared env");
+  settings.env = { ...settings.env, APEX_MERGE_DESK: "1" };   // the receipts decide even for a desk session
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "hook-receipt-"));
   const run = (tool_name, tool_input) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/github-mcp-guard.sh")], {
     input: JSON.stringify({ tool_name, tool_input }), encoding: "utf8",
@@ -132,11 +135,33 @@ test("settings.json keeps the merge prompts off, and the gate receipts decide me
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+const GATE_FILES = ["tools/ci/merge-gate.mjs", "tools/ci/ready-gate.mjs", "tools/lib/gate-receipt.mjs"];
+const sha256 = (f) => crypto.createHash("sha256").update(fs.readFileSync(f)).digest("hex");
+
+/** `root` holds a COMMITTED copy of the gate files (git init when needed), as merge_policy.gate_files_check demands
+ *  (2026-10-26: a receipt counts only when the gate that wrote it is the committed one). Returns their sha256s. */
+function gateFixture(root) {
+  const g = (...a) => spawnSync("git", ["-C", root, ...a], { encoding: "utf8" });
+  if (!fs.existsSync(path.join(root, ".git"))) { g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t"); }
+  const hashes = {};
+  for (const f of GATE_FILES) {
+    const to = path.join(root, f);
+    if (!fs.existsSync(to)) { fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(path.join(ROOT, f), to); }
+    hashes[f] = sha256(to);
+  }
+  if (g("ls-files", "--error-unmatch", "--", ...GATE_FILES).status !== 0) {
+    g("add", "--", ...GATE_FILES);
+    g("commit", "-qm", "gate files", "--only", "--", ...GATE_FILES);
+  }
+  return hashes;
+}
+
 /** A fresh gate receipt (tools/lib/gate-receipt.mjs shape) under <root>/artifacts/<kind>-gate/<pr>.json. */
 function writeGateReceipt(root, kind, pr, head, extra = {}) {
+  const gateFiles = gateFixture(root);
   const dir = path.join(root, "artifacts", `${kind}-gate`);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, `${pr}.json`), JSON.stringify({ kind, pr, head, ok: true, at: new Date().toISOString(), ...extra }));
+  fs.writeFileSync(path.join(dir, `${pr}.json`), JSON.stringify({ kind, pr, head, ok: true, at: new Date().toISOString(), gateRoot: root, gateFiles, ...extra }));
 }
 
 test("settings.json registers bash-guard once, without unsupported per-step filters", () => {
@@ -155,9 +180,11 @@ test("bash-guard fast-exits non-trigger commands (trigger union pinned)", () => 
   const src = fs.readFileSync(HOOK, "utf8");
   const trigger = src.match(/^GUARD_TRIGGER='([^']+)'$/m);
   assert.ok(trigger, "bash-guard declares its fast-path trigger union");
-  assert.deepEqual(trigger[1].split("|").sort(),
-    ["git", "gh ", "kill", "pgrep", "curl", "node", "npm", "npx", "playwright", "chrom", "python", "sh ", "eval", "xargs", "agent-run"].sort(),
-    "the fast path covers the 14 former settings filters and the executable agent runner");
+  const words = /^\\b\((.+)\)\\b$/.exec(trigger[1]);
+  assert.ok(words, "whole words: \\b(a|b|…)\\b (2026-10-26: the substring union matched .claude/skills, digit, evaluate)");
+  for (const w of ["git", "gh", "kill", "pkill", "pgrep", "curl", "wget", "node", "npm", "npx", "playwright", "chrome", "chromium",
+    "python", "python3", "sh", "bash", "eval", "xargs", "sleep", "agent-run", "test-bg", "verify-change"])
+    assert.ok(words[1].split("|").includes(w), `the fast path covers ${w}`);
   const r = spawnSync("bash", [HOOK], {
     input: JSON.stringify({ tool_name: "Bash", tool_input: { command: "echo ordinary-command" } }),
     encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
@@ -376,8 +403,13 @@ test("a commit guard that outlives its time cap BLOCKS (rc 124 → exit 2), for 
   assert.ok(/GUARD_T=160/.test(hookSrc), "default inner guard cap");
   const inner = 160;
   assert.ok(inner + 15 <= bg.timeout, `inner guard cap ${inner} s must sit below the hook timeout ${bg.timeout} s`);
-  for (const h of settings.hooks.PreToolUse.flatMap((g) => g.hooks))
+  // A budget gate, not a safety guard: a crashed launch-gate must not block
+  // every launch (A·W58, 2026-10-26), so it fails OPEN; launch-gate.test pins it.
+  const FAIL_OPEN = /\/\.claude\/hooks\/launch-gate\.py"$/;
+  for (const h of settings.hooks.PreToolUse.flatMap((g) => g.hooks)) {
+    if (FAIL_OPEN.test(h.command)) continue;
     assert.equal(h.onFailure, "block", `${h.command}: a PreToolUse guard that crashes or times out must block`);
+  }
 });
 
 test("a subagent cannot boot Chromium through the capture CLIs either (tools/shot, tools/ui audits, gfx-probe)", () => {
@@ -730,7 +762,7 @@ test("round 2 gh: squash/rebase denied, merges / ready flips need the gate recei
     for (const c of ask) {
       const r = run(c);
       assert.equal(decisionOf(r), "ask", `${c}: ${r.stdout}`);
-      assert.equal(decisionOf(run(c, { APEX_MERGE_DESK: "1" })), null, `desk passes ${c}`);
+      assert.equal(decisionOf(run(c, { APEX_MERGE_DESK: "1" })), "ask", `the desk no longer silences ${c} (2026-10-26)`);
     }
     assert.match(run("gh pr merge 12").stdout, /merge-gate\.mjs/, "the reason is merge_policy's");
     for (const c of pass) assert.equal(decisionOf(run(c)), null, `silent pass: ${c}`);
@@ -935,12 +967,14 @@ test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks"
   const noDesk = { APEX_MERGE_DESK: "" };
   assert.equal(mcp({ method: "rerun_failed_jobs", run_id: 1 }, noDesk), "ask", "a re-run is at most once, infra only");
   assert.equal(mcp({ method: "rerun_workflow_run", run_id: 1 }, noDesk), "ask");
-  // Bryce 2026-10-15 ("all tools and mcps enabled", "Fix for me"): settings.json sets
-  // APEX_MERGE_DESK=1 for every session, so a re-run passes silently; cancels stay denied.
+  // Bryce 2026-10-15 ("all tools and mcps enabled", "Fix for me"): under APEX_MERGE_DESK=1 (the orchestrator's
+  // environment since 2026-10-26) a re-run passes silently; cancels stay denied.
   for (const method of ["rerun_failed_jobs", "rerun_workflow_run"])
     assert.equal(mcp({ method, run_id: 1 }, { APEX_MERGE_DESK: "1" }), null, `desk passes ${method}`);
   assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }, { APEX_MERGE_DESK: "1" }), "deny", "the desk never cancels");
-  assert.equal(mcp({ method: "run_workflow", workflow_id: "ci.yml", ref: "x" }), null, "a dispatch passes");
+  for (const wf of ["ci.yml", "pages.yml", ".github/workflows/pages.yml", "123456"])
+    assert.equal(mcp({ method: "run_workflow", workflow_id: wf, ref: "x" }, { APEX_MERGE_DESK: "1" }), "ask", `a ${wf} dispatch asks (2026-10-26)`);
+  assert.equal(mcp({ method: "run_workflow", workflow_id: "gpu-census.yml", ref: "x" }), null, "another workflow's dispatch passes");
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
   const g = settings.hooks.PreToolUse.find((x) => x.hooks.some((h) => h.command.includes("github-mcp-guard.sh")));
   assert.ok(new RegExp(g.matcher).test("mcp__github__actions_run_trigger"), "the matcher must route actions_run_trigger through the guard");
@@ -1079,8 +1113,7 @@ test("post-edit circuit advice leaves verification until all edits are complete"
       const r = hook("post-edit.sh", { tool_name: "Edit", tool_input: { file_path: path.join(repo.dir, rel) } }, { cwd: repo.dir });
       assert.equal(r.status, 0, r.stderr);
       const advice = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
-      assert.ok(advice.includes("after all circuit and scenery edits"), advice);
-      assert.ok(advice.includes("`node tools/track/verify-track.cjs monza` once"), advice);
+      assert.equal(advice.trim(), `[post-edit] ${rel} changed: after all circuit and scenery edits, run \`node tools/track/verify-track.cjs monza\` once; no intermediate build was checked`);
       assert.equal(fs.existsSync(marker), false, "no intermediate verification runs");
     }
   } finally { repo.rm(); }
@@ -1096,8 +1129,8 @@ test("post-edit group guidance edits the source instead of generated package scr
     const r = hook("post-edit.sh", { tool_name: "Edit", tool_input: { file_path: path.join(repo.dir, "tests/groups.json") } }, { cwd: repo.dir });
     assert.equal(r.status, 0, r.stderr);
     const advice = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
-    assert.ok(advice.includes("`node tools/gen/gen-test-groups.mjs`"), advice);
-    assert.doesNotMatch(advice, /package\.json key added first/);
+    assert.equal(advice.trim(), "[post-edit] groups.json changed: package.json test:* scripts are STALE — finish the source group " +
+      "in tests/groups.json, run `node tools/gen/gen-test-groups.mjs`, then update the docs/TESTING.md group row");
   } finally { repo.rm(); }
 });
 
@@ -1304,4 +1337,122 @@ test('diagnostics and UI browser entry points remain parent-owned across MCP and
     assert.equal(matcher.test(name), false);
     assert.equal(hook('mcp-browser-guard.sh', { tool_name: name, agent_type: 'worker' }).status, 0);
   }
+});
+
+// ---- 2026-10-26 system audit §4/§10 (user grant, Bryce 2026-10-26 ~23:00 PT: "Fix hook or guard or perm") ----------
+// Every payload is fake: nothing below reaches GitHub (bash-guard only parses the command).
+
+test("GitHub API through curl, wget, node -e fetch and python -c gets the gh api policy (squash deny, ref/contents refuse, close/dispatch ask)", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "hook-http-"));
+  const run = (command, env = {}) => hook("bash-guard.sh", bashCall(command), { env: { APEX_MERGE_DESK: "1", APEX_HELD_CHECK: "0", ...env }, cwd: dir });
+  const A = "https://api.github.com/repos/o/r";
+  try {
+    const deny = [`curl -X PUT ${A}/pulls/9/merge -d '{"merge_method":"squash"}'`, `curl -sS -XPUT --json '{"merge_method": "rebase"}' ${A}/pulls/9/merge`,
+      `curl --request=PUT --url ${A}/pulls/9/merge-async -d merge_method=squash`,
+      `wget --method=PUT --body-data='{"merge_method":"rebase"}' ${A}/pulls/9/merge`,
+      `node -e 'fetch("${A}/pulls/9/merge",{method:"PUT",body:JSON.stringify({merge_method:"squash"})})'`,
+      `curl -X POST https://api.github.com/graphql -d '{"query":"mutation { mergePullRequest(input:{pullRequestId:\\"x\\", mergeMethod: SQUASH}) { clientMutationId } }"}'`];
+    for (const c of deny) { const r = run(c); assert.equal(decisionOf(r), "deny", `${c}\n${r.stdout}${r.stderr}`); assert.match(r.stdout, /MERGE-COMMIT-ONLY/); }
+    const refuse = [[`curl -sS -XDELETE ${A}/git/refs/heads/cursor/x-1`, /safety ban 6/], [`curl -X PATCH ${A}/git/refs/heads/main -d '{"sha":"a","force":true}'`, /safety ban 6/],
+      [`node -e 'fetch(\`${A}/git/refs/heads/\${b}\`,{method:"DELETE"})'`, /safety ban 6/],
+      [`curl -X POST ${A}/git/refs -d '{"ref":"refs/heads/x","sha":"a"}'`, /safety ban 6/],
+      [`curl -X PUT ${A}/contents/js/ui/hud.js -d '{"message":"m","content":"eA=="}'`, /writes repository contents/],
+      [`curl -X DELETE ${A}/contents/js/game.js`, /writes repository contents/]];
+    for (const [c, why] of refuse) { const r = run(c); assert.equal(r.status, 2, c); assert.match(r.stderr, why, c); }
+    const ask = [[`curl -X PUT ${A}/pulls/9/merge`, /merges or arms/], [`curl -X PATCH ${A}/pulls/9 -d '{"state":"closed"}'`, /CLOSES a pull request/],
+      [`curl -X PATCH ${A}/issues/9 -d '{"state": "closed"}'`, /CLOSES/], [`curl -X PATCH ${A}/pulls/9 --json '{"draft":false}'`, /full CI tier/],
+      [`curl -X POST ${A}/merges -d '{"base":"a","head":"b"}'`, /outside a pull request/],
+      [`curl -X PUT ${A}/pulls/9/update-branch`, /sync-pr\.mjs/],
+      [`curl -X POST ${A}/actions/workflows/pages.yml/dispatches -d '{"ref":"main"}'`, /release train/],
+      [`python3 -c 'import requests; requests.patch("${A}/pulls/9", json={"state":"closed"})'`, /CLOSES/],
+      [`curl -X POST https://github.com/o/r/pull/9/merge`, /merges or arms/],
+      [`gh api -X PATCH repos/o/r/pulls/9 -f state=closed`, /CLOSES/],
+      [`gh api -X POST repos/o/r/actions/workflows/ci.yml/dispatches -f ref=x`, /release train/]];
+    for (const [c, why] of ask) { const r = run(c); assert.equal(decisionOf(r), "ask", `${c}\n${r.stdout}${r.stderr}`); assert.match(r.stdout, why, c); }
+    const pass = [`curl -sS ${A}/pulls/9`, `curl -sS ${A}/pulls/9/merge`, `curl -X PATCH ${A}/pulls/9 -d '{"body":"x"}'`,
+      `curl -X POST ${A}/actions/workflows/gpu-census.yml/dispatches -d '{"ref":"x"}'`, `curl -X POST ${A}/issues/9/comments -d '{"body":"state closed"}'`,
+      `curl -sS http://127.0.0.1:3456/version.json`, `node -e 'console.log("https://api.github.com/repos/o/r/pulls/9/merge")'`,
+      `echo 'curl -X PUT ${A}/pulls/9/merge -d merge_method=squash'`, `wget -qO- ${A}/pulls/9`];
+    for (const c of pass) { const r = run(c); assert.equal(r.status, 0, `${c}: ${r.stderr}`); assert.equal(decisionOf(r), null, `silent pass: ${c} ${r.stdout}`); }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("shell poll loops are refused: for/while … (ci-watch|gh run|git log|…) … sleep, and seq … sleep", () => {
+  const run = (command, env = {}) => hook("bash-guard.sh", bashCall(command), { env: { APEX_HELD_CHECK: "0", ...env } });
+  for (const c of ["while true; do node tools/ci/ci-watch.mjs --once; sleep 60; done", "for i in $(seq 1 120); do gh run list -L 1; sleep 30; done",
+    "until git log -1 origin/x | grep -q y; do git fetch -q; sleep 20; done", "for i in $(seq 1 5); do cat /proc/loadavg; sleep 1; done",
+    "bash -c 'while :; do gh pr checks 12; sleep 30; done'", "while true; do curl -s https://api.github.com/repos/o/r/actions/runs; sleep 10; done"]) {
+    const r = run(c);
+    assert.equal(r.status, 2, `must refuse: ${c}`);
+    assert.match(r.stderr, /shell poll loop/);
+  }
+  for (const c of ["for f in a b; do node --check $f; done", "while read -r l; do echo $l; done < x", "git commit --dry-run -m 'while true; do ci-watch; sleep 5; done'",
+    "for i in 1 2 3; do git push -u origin cursor/x-1 && break; sleep 2; done"])
+    assert.notEqual(/shell poll loop/.test(run(c).stderr), true, `not a poll loop: ${c}`);
+  assert.equal(run("APEX_POLL_OK=1 for i in $(seq 1 3); do git ls-remote origin; sleep 2; done").status, 0, "the command's own override");
+});
+
+test("a subagent may print --help / -h of a launcher that honours it; test-bg and the census producers stay refused", () => {
+  const sub = (command) => hook("bash-guard.sh", { tool_name: "Bash", tool_input: { command }, agent_id: "a1", agent_type: "worker" }, { env: { APEX_HELD_CHECK: "0" } });
+  for (const c of ["node tools/shot/agent.mjs --help", "node tools/ci/verify-change.mjs --help", "node tools/ci/verify-change.mjs -h", "node tools/shot/shot.mjs -h"])
+    assert.equal(sub(c).status, 0, `help is not a browser run: ${c} ${sub(c).stderr}`);
+  for (const c of ["node tools/ci/test-bg.mjs --help", "node tools/ci/verify-change.mjs", "node tools/shot/agent.mjs spa view"])
+    assert.equal(sub(c).status, 2, `still a browser run: ${c}`);
+});
+
+test("github-mcp-guard: close asks, pages/ci dispatch asks, file-write tools are denied; the receipt's gate files must be committed", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "hook-mcp-sec-"));
+  const run = (tool_name, tool_input, env = { APEX_MERGE_DESK: "1" }) => hook("github-mcp-guard.sh", { tool_name, tool_input }, { env, cwd: dir });
+  try {
+    assert.equal(decisionOf(run("mcp__github__update_pull_request", { pullNumber: 1, state: "closed" })), "ask");
+    assert.equal(decisionOf(run("mcp__github__update_pull_request", { pullNumber: 1, body: "x", state: "open" })), null);
+    for (const t of ["push_files", "create_or_update_file", "create_branch", "delete_file"]) {
+      const r = run(`mcp__github__${t}`, { owner: "o", repo: "r", branch: "claude/f1-game-project-26h3ng" });
+      assert.equal(decisionOf(r), "deny", t); assert.match(r.stdout, /no PR and no CI/);
+    }
+    assert.equal(decisionOf(run("push_files", { branch: "x" })), "deny", "the Cursor/Codex bare name maps to the same rule");
+    // A receipt is only as good as the gate that wrote it (the 2026-10-20 O23 incident).
+    const head = "e".repeat(40);
+    writeGateReceipt(dir, "merge", 3, head);
+    const merge = () => run("mcp__github__merge_pull_request", { pullNumber: 3, merge_method: "merge", expectedHeadSha: head });
+    assert.equal(merge().stdout.trim(), "", "a committed gate's receipt passes");
+    const gate = path.join(dir, "tools/ci/merge-gate.mjs");
+    const orig = fs.readFileSync(gate, "utf8");
+    fs.writeFileSync(gate, orig + "\n// --pacing-override\n");
+    assert.match(merge().stdout, /"deny".*not the file that wrote this receipt/, "an edited gate file");
+    const rc = path.join(dir, "artifacts/merge-gate/3.json");
+    const j = JSON.parse(fs.readFileSync(rc, "utf8"));
+    j.gateFiles["tools/ci/merge-gate.mjs"] = sha256(gate);   // the edited gate hashed itself
+    fs.writeFileSync(rc, JSON.stringify(j));
+    assert.match(merge().stdout, /"deny".*differ from HEAD/, "an UNCOMMITTED gate edit is refused even when the hash matches");
+    fs.writeFileSync(gate, orig);
+    delete j.gateFiles; fs.writeFileSync(rc, JSON.stringify(j));
+    assert.match(merge().stdout, /"deny".*no gate-file hashes/, "a receipt from an older gate");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("settings.json: file-write MCP tools denied, every hook has an explicit timeout, browser guard covers debug chrome and browser-use", () => {
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
+  for (const t of ["mcp__github__push_files", "mcp__github__create_or_update_file", "mcp__github__create_branch"])
+    assert.ok(settings.permissions.deny.includes(t), `deny ${t}`);
+  for (const [ev, groups] of Object.entries(settings.hooks))
+    for (const g of groups) for (const h of g.hooks) assert.ok(Number.isFinite(h.timeout), `${ev} ${h.command}: explicit timeout (the default is 600 s)`);
+  const browser = settings.hooks.PreToolUse.find((g) => g.hooks.some((h) => h.command.includes("mcp-browser-guard.sh")));
+  for (const t of ["mcp__apex-tools__apex_debug_chrome", "mcp__plugin_browser-use_browser-use__navigate", "mcp__playwright-official__browser_click"])
+    assert.match(t, new RegExp(browser.matcher), t);
+  assert.doesNotMatch("mcp__apex-tools__apex_status", new RegExp(browser.matcher));
+  const gh = settings.hooks.PreToolUse.find((g) => g.hooks.some((h) => h.command.includes("github-mcp-guard.sh")));
+  assert.match("mcp__github__push_files", new RegExp(gh.matcher));
+  const sub = (tool_name, tool_input) => hook("mcp-browser-guard.sh", { tool_name, tool_input, agent_id: "a1" }).status;
+  assert.equal(sub("mcp__apex-tools__apex_debug_chrome", { action: "start" }), 2);
+  assert.equal(sub("mcp__apex-tools__apex_debug_chrome", { action: "status" }), 0);
+  assert.equal(sub("mcp__plugin_browser-use_browser-use__navigate", {}), 2);
+});
+
+test("lsp-hint stays quiet for SCREAMING_CASE env names; a CapitalisedSymbol or Head.member still fires", () => {
+  const lsp = path.join(ROOT, ".claude/hooks/lsp-hint.py");
+  const hint = (command) => !!spawnSync("python3", [lsp], { input: JSON.stringify({ hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command } }),
+    encoding: "utf8", env: { ...process.env, APEX_LSP_HINT: "" } }).stdout.trim();
+  for (const c of ["grep -rn RELAY_URL js/", "grep -rn APEX_MERGE_DESK js", "grep -n TURN js/ui/hud.js"]) assert.equal(hint(c), false, c);
+  for (const c of ["grep -rn GameHud js/", "grep -rn Tracks.curvature js", "grep -rn MAT.tarmac js"]) assert.equal(hint(c), true, c);
 });

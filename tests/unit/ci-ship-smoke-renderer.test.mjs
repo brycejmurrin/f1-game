@@ -422,7 +422,7 @@ function runMesaFixture(t, sudoBody) {
 test("Mesa setup fails before exporting a missing Xvfb display", (t) => {
   const {r, root} = runMesaFixture(t, "return 0");
   assert.notEqual(r.status, 0, r.stdout + r.stderr);
-  assert.ok(r.stdout.includes("::error::mesa-xvfb: Xvfb :99 has no socket after 5 s"), r.stdout);
+  assert.equal(r.stdout.trim().split("\n").at(-1), "::error::mesa-xvfb: Xvfb :99 has no socket after 5 s", r.stdout);
   assert.equal(fs.existsSync(path.join(root, "env")), false);
 });
 

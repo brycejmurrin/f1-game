@@ -10,7 +10,7 @@
 #   tests/groups.json             -> node tools/gen/gen-test-groups.mjs --check
 #   js/lighting/knobs.js          -> node tools/gen/gen-slider-doc.mjs --check
 #   js/circuits/<id>.js,
-#   js/circuits/scenery/<id>.js   -> advise a final verify-track check
+#   js/circuits/scenery/<id>.js   -> advise a final verify-track check (draft PR #3784, folded in 2026-10-26)
 #
 # ADVISORY, NEVER BLOCKING: the edit has already happened, this exits 0, and
 # the check's verdict reaches the model as hookSpecificOutput.additionalContext.
@@ -60,11 +60,16 @@ esac
 case "$REL" in
   tests/specs/*.spec.js|tests/unit/*.test.mjs|tests/unit/*.test.cjs)
     BASE=$(basename "$REL"); MISSING=()
-    if ! node tools/ci/test-coverage-audit.mjs >/dev/null 2>&1 \
-       && node tools/ci/test-coverage-audit.mjs 2>&1 | grep -qF "$BASE"; then
-      MISSING+=("add it to a group in tests/groups.json (a spec: one topical browser group; a unit file: toolingFast or a ci.yml node group), then \`node tools/gen/gen-test-groups.mjs\`")
+    # A file git already tracks passed test:guards at its own commit; only a NEW
+    # test file can be unregistered (2026-10-26: 1,154 of 1,187 tracked test files
+    # have no basename in TESTING.md, so the old check warned on every test edit).
+    if ! git ls-files --error-unmatch -- "$REL" >/dev/null 2>&1; then
+      AUDIT_RC=0; AUDIT_OUT=$(node tools/ci/test-coverage-audit.mjs 2>&1) || AUDIT_RC=$?
+      if [ "$AUDIT_RC" -ne 0 ] && printf '%s' "$AUDIT_OUT" | grep -qF "$BASE"; then
+        MISSING+=("add it to a group in tests/groups.json (a spec: one topical browser group; a unit file: toolingFast or a ci.yml node group), then \`node tools/gen/gen-test-groups.mjs\`")
+      fi
+      grep -qF "$BASE" docs/TESTING.md 2>/dev/null || MISSING+=("give it a row in the docs/TESTING.md §5 coverage table (what it covers)")
     fi
-    grep -qF "$BASE" docs/TESTING.md 2>/dev/null || MISSING+=("give it a row in the docs/TESTING.md §5 coverage table (what it covers)")
     # (No "declare > 180 s" advice: that used to tell authors how to opt a
     # spec OUT of the change-aware gate. Since 2026-10-04 a declared-slow
     # routed spec runs in select-specs' over-budget pool instead.)
@@ -79,8 +84,8 @@ case "$REL" in
     if node tools/gen/gen-shell.mjs --check >/dev/null 2>&1; then say "manifest.cjs: index.html / js/roster.js / tools/carview.html are in sync"
     else say "manifest.cjs changed: the shell is now STALE — run \`node tools/gen/gen-shell.mjs\` (or npm run gen) before testing"; fi ;;
   tests/groups.json)
-    if node tools/gen/gen-test-groups.mjs --check >/dev/null 2>&1; then say "groups.json: package.json scripts and the tooling-fast list are in sync"
-    else say "groups.json changed: package.json test:* scripts and tools/ci/tooling-fast.mjs are STALE — finish the source group in tests/groups.json, run \`node tools/gen/gen-test-groups.mjs\`, then update the docs/TESTING.md group row"; fi ;;
+    if node tools/gen/gen-test-groups.mjs --check >/dev/null 2>&1; then say "groups.json: package.json test:* scripts are in sync (tooling-fast reads groups.json at runtime)"
+    else say "groups.json changed: package.json test:* scripts are STALE — finish the source group in tests/groups.json, run \`node tools/gen/gen-test-groups.mjs\`, then update the docs/TESTING.md group row"; fi ;;
   js/lighting/knobs.js)
     if node tools/gen/gen-slider-doc.mjs --check >/dev/null 2>&1; then say "knobs.js: docs/LIGHTING-TUNER-SLIDERS.md is in sync"
     else say "knobs.js changed: docs/LIGHTING-TUNER-SLIDERS.md is STALE — run \`node tools/gen/gen-slider-doc.mjs\` (npm run gen:docs)"; fi ;;

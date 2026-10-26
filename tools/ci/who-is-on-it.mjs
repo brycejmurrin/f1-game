@@ -249,7 +249,7 @@ export function currentBranch() {
 }
 
 /** Ask Actions to run fleet.yml now, so a claim naming `#n` labels the issue in
- *  a minute instead of at the next hourly run. A push to claude/claims-board
+ *  a minute instead of at the next scheduled run. A push to claude/claims-board
  *  cannot trigger it: GitHub runs a push-triggered workflow from the PUSHED
  *  commit's tree, and the board's tree holds claim files, not .github/
  *  (found by a live claim of #1518, 2026-10-14). REST workflow_dispatch works
@@ -257,14 +257,18 @@ export function currentBranch() {
  *  means the hourly run picks the claim up. */
 export function pokeFleetBoard(run = spawnSync) {
   const opts = { cwd: ROOT, encoding: "utf8", timeout: 20000 };
-  // Debounce: a burst of --claim/--release must not each POST workflow_dispatch;
-  // skip while fleet.yml already has a queued run (concurrency holds the rest).
-  const q = run("gh", ["api", `repos/${REPO_SLUG}/actions/workflows/fleet.yml/runs?status=queued&per_page=1`, "--jq", ".total_count"], opts);
+  // Debounce: a burst of --claim/--release must not each POST workflow_dispatch
+  // (958 of ~1,000 fleet.yml runs in the week to 2026-10-26 were these). Skip
+  // while any of the newest runs is queued or running; a claim that lands during
+  // a running board waits for the :23/:53 schedule (at most 30 min).
+  // https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-workflow
+  const active = '[.workflow_runs[] | select(.status == "queued" or .status == "in_progress" or .status == "pending" or .status == "waiting" or .status == "requested")] | length';
+  const q = run("gh", ["api", `repos/${REPO_SLUG}/actions/workflows/fleet.yml/runs?per_page=5`, "--jq", active], opts);
   if (q.status === 0 && Number(String(q.stdout ?? "").trim()) > 0) {
-    return "already queued (that run picks this claim up)";
+    return "already queued or running (the next run picks this claim up)";
   }
   const r = run("gh", ["api", "-X", "POST", `repos/${REPO_SLUG}/actions/workflows/fleet.yml/dispatches`, "-f", `ref=${DEPLOY}`], opts);
-  return r.status === 0 ? "dispatched" : "not dispatched (the hourly run will pick it up)";
+  return r.status === 0 ? "dispatched" : "not dispatched (the scheduled run will pick it up)";
 }
 
 function pushClaim(text, branch, session) {

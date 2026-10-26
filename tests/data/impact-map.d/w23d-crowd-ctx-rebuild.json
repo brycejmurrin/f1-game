@@ -1,0 +1,26 @@
+{
+  "pins": {
+    "js/audio/crowd.js": {
+      "attach": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ],
+      "detach": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ],
+      "ensureAttached": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ],
+      "update": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ]
+    },
+    "js/audio/engine.js": {
+      "rebuildCtx": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ],
+      "startEngineGraph": [
+        "tests/unit/crowd-ctx-rebuild.test.mjs"
+      ]
+    }
+  }
+}

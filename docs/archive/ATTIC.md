@@ -54,7 +54,7 @@ the table" narrative, now `research/PERF-LEDGER-2026-08.md` in this directory.
 
 ## Tools surface cleanup (2026-09-10)
 
-Live plans stay in `tools/moves/` (currently none). Applied Phase 2/4 batch
+`tools/moves/` was removed on 2026-10-26 (it held only a README). Applied Phase 2/4 batch
 maps, the reversed spike-backends map, and closed gfx/orphan CLIs live under `docs/archive/`:
 
 | Original path | Archive path | Why |
