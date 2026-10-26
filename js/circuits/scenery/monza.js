@@ -24,7 +24,10 @@
           [0.415, 0.545,  1, 74],
           [0.640, 0.780, -1, 62],
         ]) {
-          wall(s0, s1, side, gap, 2.6, BRICK, 0.55);
+          // alt 0.08: park brick runs follow terrain undulation; without it,
+          // slope-overlapped neighbour slabs share a side plane (coplanar-
+          // audit: 1 of monza's 5 saturating spots was wall×wall @ 17.5 mm).
+          wall(s0, s1, side, gap, 2.6, BRICK, 0.55, 0.08);
           const span = (s1 - s0 + 1) % 1;
           const count = Math.max(3, Math.round(span * n * ds / 34));
           for (let i = 0; i <= count; i++) {
@@ -75,10 +78,18 @@
       // Ascari Sopraelevata flyover + banking ruin — keep trees out of the
       // concrete (clip-audit severe cone×box at ~0.70 / 0.74).
       const flyoverClear = (s) => s >= 0.685 && s <= 0.775;
+      // Curva Grande park hedges @ gap 20–21. Rank A/B crowns + bushes at
+      // gap 5–20 punched them (clip-audit: six severe cone/cyl×hedge @
+      // frac 0.07–0.11). Skip near foliage in the hedge corridor — do not
+      // push gaps outward (that stacked into grandstandEx @ 0.11, 26 severe).
+      const curvaGrandeHedge = (s) => s >= 0.06 && s <= 0.18;
+      // Parabolica steel grandstandEx@0.775 gap 30 — Rank D crowns at gap
+      // 42–72 overlapped outer tiers (clip-audit 4.68 m cone×box @ 0.824).
+      const parabolicaStandClear = (s) => s >= 0.74 && s <= 0.88;
       every(24, (k) => {
         const h = hash(k * 31);
         const s = k / n;
-        if (flyoverClear(s)) return;
+        if (flyoverClear(s) || curvaGrandeHedge(s)) return;
         const thin = openParkland(s);
         if (h < (thin ? 0.78 : 0.08)) return;
         const side = h < 0.5 ? -1 : 1;
@@ -91,7 +102,7 @@
       every(28, (k) => {
         const h = hash(k * 53 + 9);
         const s = k / n;
-        if (flyoverClear(s)) return;
+        if (flyoverClear(s) || curvaGrandeHedge(s)) return;
         const thin = openParkland(s);
         if (h < (thin ? 0.80 : 0.15)) return;
         const side = h < 0.5 ? -1 : 1;
@@ -104,7 +115,7 @@
       every(36, (k) => {
         const h = hash(k * 41 + 3);
         const s = k / n;
-        if (flyoverClear(s)) return;
+        if (flyoverClear(s) || parabolicaStandClear(s)) return;
         const thin = openParkland(s);
         if (h < (thin ? 0.82 : 0.20)) return;
         const side = h < 0.5 ? -1 : 1;
@@ -123,7 +134,7 @@
       every(55, (k) => {
         const h = hash(k * 67 + 17);
         const s = k / n;
-        if (flyoverClear(s)) return;
+        if (flyoverClear(s) || parabolicaStandClear(s)) return;
         const thin = openParkland(s);
         if (h < (thin ? 0.85 : 0.35)) return;
         tree(k, h < 0.5 ? -1 : 1, 42 + h * 30, 13 + h * 10, LEAF_D);
@@ -133,7 +144,8 @@
       every(24, (k) => {
         const h = hash(k * 97 + 23);
         if (h < 0.50) return;
-        if (flyoverClear(k / n)) return;
+        const s = k / n;
+        if (flyoverClear(s) || curvaGrandeHedge(s)) return;
         bush(k, h < 0.77 ? -1 : 1, 6.5 + h * 4,
              h < 0.66 ? [0.16, 0.36, 0.16] : [0.20, 0.42, 0.18]);
         if (h > 0.82) bush(k, h > 0.91 ? -1 : 1, 5 + h * 3, [0.18, 0.40, 0.17]);
@@ -151,12 +163,17 @@
       });
 
       // Clipped park hedge banding through several sweeps for a manicured edge.
+      // Near ranks skip curvaGrandeHedge (above) so gap 20/21 stays clear.
       hedge(0.06, 0.18, -1, 20, 6, [0.12, 0.33, 0.16]);
       hedge(0.06, 0.18,  1, 21, 6, [0.12, 0.33, 0.16]);
       hedge(0.32, 0.46, -1, 22, 5, [0.13, 0.34, 0.17]);
       hedge(0.66, 0.78,  1, 22, 5, [0.13, 0.34, 0.17]);
       hedge(0.82, 0.94, -1, 24, 5, [0.12, 0.33, 0.16]);
-      hedge(0.19, 0.28, -1, 18, 4.5, [0.13, 0.35, 0.17]);   // west park lake
+      // West park lake was one continuous hedge(0.19–0.28)@18 — abutting
+      // segments shared side planes (coplanar-audit: 5.0 + 4.1 m² stacks).
+      // Split into two short runs so neighbours no longer touch.
+      hedge(0.19, 0.225, -1, 18, 4.5, [0.13, 0.35, 0.17]);
+      hedge(0.245, 0.28, -1, 18, 4.5, [0.13, 0.35, 0.17]);
       hedge(0.36, 0.42,  1, 22, 4.5, [0.13, 0.35, 0.17]);   // Villa lake
       hedge(0.58, 0.66,  1, 24, 4.5, [0.13, 0.35, 0.17]);   // Villa Reale approach
       every(14, (k) => {
@@ -823,14 +840,16 @@
         }
       }
 
+      // Past the Curva Grande hedge@20/21 (was stonePine@10–13.5 + pine@20–25
+      // into the hedge boxes — clip addCyl×hedge @ frac 0.089 / 0.100).
       every(14, (k) => {
         const s = k / n;
         if (s < 0.08 || s > 0.18) return;
         const h = hash(k * 19 + 11);
-        stonePine(k, -1, 10 + h * 3, 14 + h * 6, h < 0.4 ? PINE_D : PINE, { spread: 0.72 });
-        stonePine(k,  1, 10 + h * 3.5, 13 + h * 6, h < 0.5 ? PINE : PINE_D, { spread: 0.70 });
-        if (h > 0.40) pine(k, -1, 20 + h * 4, 18 + h * 10, PINE_D);
-        if (h > 0.50) pine(k,  1, 21 + h * 4, 17 + h * 9, PINE);
+        stonePine(k, -1, 28 + h * 4, 14 + h * 6, h < 0.4 ? PINE_D : PINE, { spread: 0.72 });
+        stonePine(k,  1, 29 + h * 4, 13 + h * 6, h < 0.5 ? PINE : PINE_D, { spread: 0.70 });
+        if (h > 0.40) pine(k, -1, 36 + h * 5, 18 + h * 10, PINE_D);
+        if (h > 0.50) pine(k,  1, 37 + h * 5, 17 + h * 9, PINE);
       });
 
       spectatorHill(0.08, 0.18, -1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });

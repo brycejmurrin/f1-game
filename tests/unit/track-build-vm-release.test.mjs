@@ -252,7 +252,10 @@ const STRIP = {
   //   a row of 3-4 kit garage modules. Emission 320414 → 321026, strip-after
   //   290722 → 291224 (modules turned to face the road, MAT.FLAT).
   //   Re-measured on the merged tree (#3044 over #3145): 321026/291892.
-  monza: { before: 321026, after: 291892 },
+  // → #3374 D·W32b Monza coplanar/clip (2026-10-26): Curva Grande near ranks
+  //   skip the hedge corridor; west-park lake hedge split; Parabolica Rank C/D
+  //   clear the steel stand. Emission 321026 → 315410, strip-after 291892 → 286386.
+  monza: { before: 315410, after: 286386 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
