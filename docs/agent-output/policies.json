@@ -566,6 +566,11 @@
       "presentation": "shared-levels",
       "preserve": "Dry-run versus posted; each posted, skipped (with reason) and FAILED PR comment by bus sha; exit 1 on any failed post"
     },
+    "tools/ci/agent-history.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "Per-session digest fields and the summary row shape; transcripts are data; never prints secret values"
+    },
     "tools/ci/agent-msg.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",

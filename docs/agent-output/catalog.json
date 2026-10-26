@@ -722,6 +722,17 @@
       ]
     },
     {
+      "path": "tools/ci/agent-history.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out",
+        "--summary"
+      ]
+    },
+    {
       "path": "tools/ci/agent-msg.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",

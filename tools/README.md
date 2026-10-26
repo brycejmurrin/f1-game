@@ -105,6 +105,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **ci/agent-history.mjs** | Import + digest Claude, Codex/ChatGPT, Grok and Cursor session logs: prompts, commands, tools, errors, tokens. | agent-fleet |
 | **ci/branch-audit.mjs** | Verdicts for branches with no PR and no commit in 48 h: ancestry, merge-tree, line presence, CI (--all: every branch). | check-changes |
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
