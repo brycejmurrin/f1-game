@@ -2384,6 +2384,9 @@
       "drawPlayerWheels": [
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "farRivalBodyReady": [
+        "tests/unit/car-presentation-vm.test.mjs"
+      ],
       "finish": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -2408,11 +2411,17 @@
         "tests/unit/livery-tex-dispose.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
+      "invalidateFactoryMeshCaches": [
+        "tests/unit/car-presentation-vm.test.mjs"
+      ],
       "kick": [
         "tests/unit/livery-tier.test.mjs"
       ],
       "liveryBitmapOpts": [
         "tests/unit/car-draw-decal-budget.test.mjs"
+      ],
+      "loadCarModel": [
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "menuStepYield": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -2450,6 +2459,7 @@
         "tests/unit/livery-tier.test.mjs"
       ],
       "sharedRivalBodyMesh": [
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs"
       ],
       "teamBodyMesh": [
