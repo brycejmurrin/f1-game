@@ -60,10 +60,12 @@ async function raceAndDrive(page, id) {
 const QUIET_MS = 3000;
 async function menuQuiet(page) {
   const t0 = Date.now();
-  await page.evaluate(() => { window.__rcmQuiet = null; });
+  const hooks = await page.evaluate(() => { window.__rcmQuiet = null; const A = window.__apex;
+    return { menuPrep: typeof A.menuPrep === "function" && !!A.menuPrep(), garagePrebuild: typeof A.garagePrebuild === "function" }; });
+  expect(hooks, "menuQuiet needs __apex.menuPrep() (a snapshot) and __apex.garagePrebuild()").toEqual({ menuPrep: true, garagePrebuild: true });
   await page.waitForFunction((quietMs) => {
-    const A = window.__apex, p = A.menuPrep && A.menuPrep(), g = A.garagePrebuild && A.garagePrebuild();
-    const busy = !p || p.building || p.warming || p.warmFrames > 0 || !!(g && g.running);
+    const A = window.__apex, p = A.menuPrep(), g = A.garagePrebuild();
+    const busy = p.building || p.warming || p.warmFrames > 0 || !!(g && g.running);
     const now = performance.now(), q = window.__rcmQuiet || (window.__rcmQuiet = { since: now });
     if (busy) q.since = now;
     return !busy && now - q.since >= quietMs;
