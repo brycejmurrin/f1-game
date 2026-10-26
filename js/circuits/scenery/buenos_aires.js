@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["buenos_aires"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack,
-        bush, ridge, building, grandstandEx, spectatorHill,
+        bush, ridge, building, grandstandEx, spectatorHill, terrace,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         cameraTower, sponsorHoarding,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
@@ -44,49 +44,47 @@
         bush(k, side, 26 + hash(k * 17) * 4, [0.19, 0.40, 0.19]);
       });
 
-      function concreteTerrace(id, s, side, gap, len, tiers) {
-        const a = anchor(K(s), side, gap);
-        const b = [a.r, a.u, a.t];
-        modelGroup(id, {
-          // Tiers span lateral [-1.55, tiers*3.2+0.3] from the anchor: centre the
-          // footprint on that span (it was centred on the anchor, so the mass
-          // escaped the declared box by 4-6 m).
-          center: vadd(vadd(a.c, a.r, side * (tiers * 1.6 - 0.6)), a.u, tiers * 1.4),
-          size: [tiers * 3.2 + 2.4, tiers * 3.2, len + 4],
-          basis: b,
-        }, (stage) => {
-          // STEP AWAY FROM THE TRACK, WHICHEVER SIDE THIS IS. The tiers rise
-          // with t, so they must also walk outward with t — but the offset was
-          // a bare `+a.r` for both sides, which only walks outward on side +1.
-          // The two side=-1 terraces (main, back) therefore climbed back over
-          // the road and were culled, so the main grandstand of this circuit
-          // has never been on screen.
-          for (let t = 0; t < tiers; t++) {
-            const hgt = 1.2 + t * 1.9;
-            addBox(stage, vadd(vadd(a.c, a.r, side * t * 3.2), a.u, hgt * 0.5),
-              [3.1, hgt, len], t % 2 ? CONC : CONC_D, b);
-            stage._mat = MAT.FABRIC;
-            addBox(stage, vadd(vadd(a.c, a.r, side * t * 3.2), a.u, hgt + 0.55),
-              [2.6, 1.1, len - 2],
-              [CELESTE, [0.94, 0.93, 0.90], [0.86, 0.30, 0.24]][t % 3], b);
-            stage._mat = 0;
-          }
-          addBox(stage, vadd(vadd(a.c, a.r, side * tiers * 3.2), a.u, tiers * 1.5),
-            [0.6, tiers * 3.0, len + 2], CONC_D, b);
-        });
-      }
-      concreteTerrace("baires-terrace-main", 0.005, -1, 11, 150, 5);
-      concreteTerrace("baires-terrace-back", 0.955, -1, 11, 96, 4);
-      concreteTerrace("baires-terrace-t1", 0.075, 1, 18, 80, 4);
-      // Curvón terrace — literal modelGroup id required by BATCH-01.
+      // #3350 — Gálvez reads as vast open mass-concrete tribunas, not modest
+      // coloured seat boxes. Shared terrace() follows the arc (brief §4/§6);
+      // crowd bands stay pale concrete + sparse celeste, never bright fabric.
+      const TERR_CROWD = [CONC_D, [0.78, 0.77, 0.74], CELESTE, [0.90, 0.89, 0.86]];
+      const TERR_MAIN = {
+        rows: 8, rise: 1.45, depth: 2.7, step: 10, density: 0.52,
+        conc: CONC, concAlt: CONC_D, crowd: TERR_CROWD,
+      };
+      const TERR_MID = {
+        rows: 6, rise: 1.4, depth: 2.6, step: 11, density: 0.44,
+        conc: CONC, concAlt: CONC_D, crowd: TERR_CROWD,
+      };
+      // S/F + pit-straight left — continuous wrap past the start line (brief
+      // 0.00–0.10 L). Gap 20 sits behind the kit pit-straight place() shells
+      // (dist 14, half-depth 3 → outer ~17) so terrace risers do not z-fight
+      // those faces (coplanar-audit: 4 spots @15 mm when gap was 12). Billboards
+      // / hoardings at gap 14 stay in front of the bank. One front rank only:
+      // a second bank clipped the plátano avenue.
+      terrace(0.968, 0.048, -1, 20, TERR_MAIN);
+      // Back of the pit straight (pre-portico) — denser mass for the S/F orbit.
+      terrace(0.930, 0.965, -1, 12, TERR_MID);
+      // T1 outside apron — open concrete bank opposite the gravel (starts
+      // clear of the S/F wrap end so end-caps do not self-clip).
+      terrace(0.062, 0.095, 1, 16, TERR_MID);
+      // Curvón Salotto — arc-following front bank; required modelGroup below
+      // keeps the BATCH-01 landmark id (deeper mass). Gap 18 clears grandstandEx@38.
+      terrace(0.348, 0.412, 1, 18, {
+        rows: 7, rise: 1.45, depth: 2.7, step: 10, density: 0.48,
+        conc: CONC, concAlt: CONC_D, crowd: TERR_CROWD,
+      });
+      // Recta del Lago — open terrace so the lake loop reads from S/F orbit
+      // (pastel grandstandEx@22 stays secondary covered seating behind).
+      terrace(0.628, 0.682, -1, 14, TERR_MID);
+      // Curvón terrace — literal modelGroup id required by BATCH-01 / landmarks.
+      // Sits behind terrace()@18 (depth ~20 m → clear by gap 42). Muted crowd
+      // bands (no bright fabric seat slabs); larger concrete mass for S/F orbit.
       {
-        const s = 0.380, side = 1, gap = 20, len = 120, tiers = 5;
+        const s = 0.380, side = 1, gap = 42, len = 148, tiers = 7;
         const a = anchor(K(s), side, gap);
         const b = [a.r, a.u, a.t];
         modelGroup("baires-terrace-curvon", {
-          // Tiers span lateral [-1.55, tiers*3.2+0.3] from the anchor: centre the
-          // footprint on that span (it was centred on the anchor, so the mass
-          // escaped the declared box by 4-6 m).
           center: vadd(vadd(a.c, a.r, side * (tiers * 1.6 - 0.6)), a.u, tiers * 1.4),
           size: [tiers * 3.2 + 2.4, tiers * 3.2, len + 4],
           basis: b,
@@ -95,10 +93,10 @@
             const hgt = 1.2 + t * 1.9;
             addBox(stage, vadd(vadd(a.c, a.r, side * t * 3.2), a.u, hgt * 0.5),
               [3.1, hgt, len], t % 2 ? CONC : CONC_D, b);
-            stage._mat = MAT.FABRIC;
-            addBox(stage, vadd(vadd(a.c, a.r, side * t * 3.2), a.u, hgt + 0.55),
-              [2.6, 1.1, len - 2],
-              [CELESTE, [0.94, 0.93, 0.90], [0.86, 0.30, 0.24]][t % 3], b);
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(vadd(a.c, a.r, side * t * 3.2), a.u, hgt + 0.45),
+              [2.4, 0.85, len - 4],
+              TERR_CROWD[t % TERR_CROWD.length], b);
             stage._mat = 0;
           }
           addBox(stage, vadd(vadd(a.c, a.r, side * tiers * 3.2), a.u, tiers * 1.5),
@@ -186,10 +184,11 @@
       // chord does not clip the arc. Positive rake (rows rise away from track)
       // is grandstandEx's default. Sources: Wikipedia (Curvón / Recta del Lago
       // as named sections); city news (existing tribunas retained on classic).
-      // Outside the Curvón terrace (gap 36 clears the required terrace mass).
-      grandstandEx(0.355, 1, 38, 40, null, null,
+      // Outside Curvón terrace@18 + required modelGroup@42 (tiers ~22 m deep).
+      grandstandEx(0.355, 1, 68, 40, null, null,
         { livery: "concrete", tiers: 2, roof: "flat", endWalls: true, h: 10 });
-      grandstandEx(0.655, -1, 22, 44, null, null,
+      // Behind Recta del Lago terrace@14 (depth ~18 m → clear by gap 36).
+      grandstandEx(0.655, -1, 36, 44, null, null,
         { livery: "pastel", tiers: 2, roof: "flat", endWalls: true, pylons: true, h: 10 });
 
       // Grass banks — wider step (9→14) kills coplanar tread pairs (old :160).
@@ -246,9 +245,10 @@
       // portico at 0.928) and along the back straight's perimeter road
       // (s 0.775–0.885, skipping the talud gate at 0.835). every() takes METRES (22 m ≈ 5 nodes).
       const PLANE_L = [0.30, 0.50, 0.24];
+      // Gap 58 clears terrace() depth (~20 + 8*2.7 ≈ 44 m) on the S/F bank.
       every(22, (k) => {
         const s = k / n, h = hash(k * 53 + 7);
-        if (s >= 0.94 || s <= 0.065) plane(k, -1, 44, 12 + h * 5, h < 0.5 ? PLANE_L : PLANE_D, { spread: 0.85 });
+        if (s >= 0.94 || s <= 0.065) plane(k, -1, 58, 12 + h * 5, h < 0.5 ? PLANE_L : PLANE_D, { spread: 0.85 });
         else if (s >= 0.775 && s <= 0.885 && (s < 0.822 || s > 0.848))
           plane(k, -1, 62, 12 + h * 5, h < 0.5 ? PLANE_L : PLANE_D, { spread: 0.85 });
       });

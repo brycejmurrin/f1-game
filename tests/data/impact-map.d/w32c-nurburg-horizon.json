@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/circuits/scenery/nurburgring.js": {
+      "narrow": [
+        "tests/unit/nurburgring-eifel-horizon.test.mjs"
+      ]
+    }
+  }
+}

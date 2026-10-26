@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["bahrain"] =
   function (api) {
       const { def, K, lapBounds, out, MAT, n, ds, px, pz, pyMin, hash, vadd,
-        place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid,
+        place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid, addMountain,
         bush, palm, acacia, terrace, grandstand, grandstandEx, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
         floodMast: apiFloodMast, floodMastRing, ledFacadeBands, cameraTower, broadcastCompound,
@@ -60,6 +60,10 @@
       const STEEL       = [0.16, 0.16, 0.19];
       const PIT_CREAM   = [0.91, 0.89, 0.84];  // cream-white for main pit building
       const STAND_CREAM = [0.84, 0.82, 0.76];  // slightly warm for grandstand shells
+      // Day-orbit cream for closed tribunas: brighter than STAND_CREAM, and paired
+      // with _mat = 0 so MAT.CONCRETE's baked map cannot grey the shell (#3347).
+      const TRIBUNA_CREAM = [0.94, 0.91, 0.84];
+      const TRIBUNA_BACK  = [0.88, 0.85, 0.78];
       // Floodlights: warmer night-race identity (sheet-01 — cool pools washed out)
       const FLOOD       = [1.18, 1.06, 0.78];
       const POOL        = [0.90, 0.74, 0.42];
@@ -192,17 +196,26 @@
       };
 
       // Seat dunes on local sand, not the lap's global low point. mountain(...,
-      // pyMin, ...) rooted every wedge at the Sakhir valley floor, so mid-lap
-      // dunes sat metres under the desert mesh (ground-audit buried 13 @ duneWedge).
+      // pyMin, ...) rooted every wedge at the Sakhir valley floor; seating on
+      // terrainYAt still buried the skirt because mountain() plants it at
+      // baseY-2 (nature.js) — tops stayed under the desert mesh (ground-audit
+      // buried 13 @ duneWedge, worst ~1.2 m). Build the wedge without that sink.
       const duneBaseY = (x, z) => {
         const gy = terrainYAt(x, z);
         return gy != null && Number.isFinite(gy) ? gy : pyMin;
       };
       const duneWedge = (k, side, gap, w, h) => {
         const a = anchor(k, side, gap + w * 0.3);
+        const ww = w * 0.55;
+        if (onTrack(a.c[0], a.c[2], ww * 0.45 + 8)) return;
+        const gy = duneBaseY(a.c[0], a.c[2]);
         const seg = 5 + Math.floor(hash(k * 19 + side * 29) * 4);        // 5-8
         const rough = 0.20 + hash(k * 23 + side * 31) * 0.20;            // 0.2-0.4
-        mountain(a.c[0], a.c[2], duneBaseY(a.c[0], a.c[2]), w * 0.55, h, {
+        // Skirt foot slightly under sand so the underside is supported; crest
+        // height matches the old mountain() silhouette (no baseY-2 bury).
+        addFrustum(out, [a.c[0], gy - 0.12, a.c[2]], ww * 0.62, ww * 0.42, Math.max(0.45, h * 0.18),
+          DUNE, 9, null);
+        addMountain(out, [a.c[0], gy, a.c[2]], ww * 0.5, h, {
           seg, seed: k * 3 + side * 17,
           rough, snowline: 99,
           forest: DUNE, rock: SAND_DARK, snow: DUNE_LIT,
@@ -231,6 +244,7 @@
 
       // Closed Sakhir tribuna — local modelGroup (not grandstandEx open shell).
       // Cream shell + blue/slate seat rake + roof canopy + end walls + posts.
+      // FLAT mat on cream faces so day orbit reads bone/cream, not grey (#3347).
       const sakhirTribuna = (id, s, side, gap, len, required) => {
         const depth = 15, h = 15;
         const a = anchor(K(s), side, gap + depth / 2), b = [a.r, a.u, a.t];
@@ -241,27 +255,28 @@
           size: [depth + 6, h + 4, len + 4],
           basis: b,
         }, (stage) => {
-          stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(a.c, a.u, h * 0.32), [depth, h * 0.64, len], STAND_CREAM, b);
+          stage._mat = 0;
+          addBox(stage, vadd(a.c, a.u, h * 0.32), [depth, h * 0.64, len], TRIBUNA_CREAM, b);
           // Closed back wall (side away from track).
           addBox(stage, vadd(vadd(a.c, a.r, -toward * (depth * 0.42)), a.u, h * 0.38),
-            [1.1, h * 0.72, len * 0.98], [0.78, 0.76, 0.72], b);
+            [1.1, h * 0.72, len * 0.98], TRIBUNA_BACK, b);
           for (let t = 0; t < 3; t++) {
             const lat = toward * (depth * 0.12 - t * 1.7);
             const y = 2.0 + t * 2.6;
             stage._mat = MAT.FABRIC;
+            // Blue/slate rake — avoid dark SEAT bands that read as grey slab by day.
             addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, y),
-              [2.2, 2.0, len * (0.93 - t * 0.02)], t % 2 ? SEAT_BLUE : SEAT, b);
+              [2.2, 2.0, len * (0.93 - t * 0.02)], t === 1 ? SEAT : SEAT_BLUE, b);
           }
           stage._mat = MAT.METAL;
           addBox(stage, vadd(vadd(a.c, a.r, toward * 1.5), a.u, h + 0.35),
             [depth + 3.5, 0.7, len + 2], PIT_CREAM, b);
           addBox(stage, vadd(vadd(a.c, a.r, toward * (depth * 0.48)), a.u, h + 0.1),
             [0.3, 0.45, len * 0.9], FLOOD, b);
-          stage._mat = MAT.CONCRETE;
+          stage._mat = 0;
           for (const dz of [-len * 0.48, len * 0.48]) {
             addBox(stage, vadd(vadd(a.c, a.t, dz), a.u, h * 0.42),
-              [depth * 0.92, h * 0.78, 1.1], STAND_CREAM, b);
+              [depth * 0.92, h * 0.78, 1.1], TRIBUNA_CREAM, b);
           }
           stage._mat = MAT.METAL;
           for (const dz of [-len * 0.32, 0, len * 0.32]) {
@@ -283,6 +298,7 @@
       // Main tribuna — closed cream shell with blue seat rake + canopy
       // (sheet-01: grey placeholder bars → Sakhir / main tribuna).
       // Literal modelGroup id required for landmarks/BATCH-01 (not via helper).
+      // FLAT cream (not MAT.CONCRETE): baked concrete greys the shell by day (#3347).
       {
         const depth = 15, h = 15, len = 58, side = -1, gap = 18;
         const a = anchor(K(SF), side, gap + depth / 2), b = [a.r, a.u, a.t];
@@ -293,26 +309,26 @@
             size: [depth + 6, h + 4, len + 4],
             basis: b,
           }, (stage) => {
-            stage._mat = MAT.CONCRETE;
-            addBox(stage, vadd(a.c, a.u, h * 0.32), [depth, h * 0.64, len], STAND_CREAM, b);
+            stage._mat = 0;
+            addBox(stage, vadd(a.c, a.u, h * 0.32), [depth, h * 0.64, len], TRIBUNA_CREAM, b);
             addBox(stage, vadd(vadd(a.c, a.r, -toward * (depth * 0.42)), a.u, h * 0.38),
-              [1.1, h * 0.72, len * 0.98], [0.78, 0.76, 0.72], b);
+              [1.1, h * 0.72, len * 0.98], TRIBUNA_BACK, b);
             for (let t = 0; t < 3; t++) {
               const lat = toward * (depth * 0.12 - t * 1.7);
               const y = 2.0 + t * 2.6;
               stage._mat = MAT.FABRIC;
               addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, y),
-                [2.2, 2.0, len * (0.93 - t * 0.02)], t % 2 ? SEAT_BLUE : SEAT, b);
+                [2.2, 2.0, len * (0.93 - t * 0.02)], t === 1 ? SEAT : SEAT_BLUE, b);
             }
             stage._mat = MAT.METAL;
             addBox(stage, vadd(vadd(a.c, a.r, toward * 1.5), a.u, h + 0.35),
               [depth + 3.5, 0.7, len + 2], PIT_CREAM, b);
             addBox(stage, vadd(vadd(a.c, a.r, toward * (depth * 0.48)), a.u, h + 0.1),
               [0.3, 0.45, len * 0.9], FLOOD, b);
-            stage._mat = MAT.CONCRETE;
+            stage._mat = 0;
             for (const dz of [-len * 0.48, len * 0.48]) {
               addBox(stage, vadd(vadd(a.c, a.t, dz), a.u, h * 0.42),
-                [depth * 0.92, h * 0.78, 1.1], STAND_CREAM, b);
+                [depth * 0.92, h * 0.78, 1.1], TRIBUNA_CREAM, b);
             }
             stage._mat = MAT.METAL;
             for (const dz of [-len * 0.32, 0, len * 0.32]) {
@@ -829,6 +845,15 @@
       // bands lived here. As free-standing 7-9 m slabs on the sand they read as
       // stray pink/cyan boxes (survey f75/f83), not painted runoff — removed.)
 
+      // Mid-lap dune ridges: same no-sink seating as duneWedge (mountain()'s
+      // baseY-2 skirt buried tops under local sand after the pyMin→terrain fix).
+      const duneRidge = (x, z, w, h, opts) => {
+        if (onTrack(x, z, w * 0.45 + 8)) return;
+        const gy = duneBaseY(x, z);
+        addFrustum(out, [x, gy - 0.12, z], w * 0.62, w * 0.42, Math.max(0.5, h * 0.18),
+          opts.forest || DUNE, 9, null);
+        addMountain(out, [x, gy, z], w * 0.5, h, opts);
+      };
       for (const [s, side, dist, wBase, hBase] of [
         [0.20, -1, 120, 86, 10],   // T3 infield dune ridge
         [0.48,  1, 270, 96, 12],   // desert section right-side ridge (0.42 leg is 200 m out; 155 stood on it)
@@ -836,7 +861,7 @@
       ]) {
         const k = K(s);
         const a = anchor(k, side, dist + wBase * 0.3);
-        mountain(a.c[0], a.c[2], duneBaseY(a.c[0], a.c[2]), wBase * 0.55 + hash(k * 7) * 30,
+        duneRidge(a.c[0], a.c[2], wBase * 0.55 + hash(k * 7) * 30,
           hBase + hash(k * 11) * 5,
           { seg: 7, seed: k * 5 + dist, rough: 0.28, snowline: 99,
             forest: SAND_DARK, rock: SAND, snow: DUNE_LIT });
@@ -849,7 +874,7 @@
       ]) {
         const k = K(s);
         const a = anchor(k, side, dist + 24);
-        mountain(a.c[0], a.c[2], duneBaseY(a.c[0], a.c[2]), 44 + hash(k * 9) * 28,
+        duneRidge(a.c[0], a.c[2], 44 + hash(k * 9) * 28,
           8 + hash(k * 13) * 4,
           { seg: 6, seed: k * 7 + dist, rough: 0.25, snowline: 99,
             forest: SAND, rock: SAND_LIGHT, snow: DUNE_LIT });
@@ -1108,16 +1133,20 @@
       ]) {
         const k = K(sf), a = anchor(k, side, gap + w * 0.5), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 30)) continue;
+        // Seat on local sand — road-height a.c buried the scree skirt (#3342).
+        // Lift ~0.3 m so the wide scree top clears uneven terrain; keep the
+        // scree underside ~0.08 m below the main slab so flatCoplanar stays 0.
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const foot = a.c.slice();
+        if (gy != null && Number.isFinite(gy)) foot[1] = gy + 0.45;
         const hv = hash(k * 41 + gap);
         // Two offset slabs make a stepped ledge rather than a single block.
-        addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, len],
+        addBox(out, vadd(foot, a.u, h * 0.5), [w, h, len],
           [0.60 + hv * 0.05, 0.55 + hv * 0.04, 0.45], b);
-        addBox(out, vadd(vadd(a.c, a.u, h + 0.35), a.r, w * 0.16),
+        addBox(out, vadd(vadd(foot, a.u, h + 0.35), a.r, w * 0.16),
           [w * 0.62, 0.7, len * 0.74], [0.72 + hv * 0.06, 0.67, 0.55], b);
-        // Scree skirt at the foot, where the blasted rock spilled. Its base
-        // sits 0.06 m under the slab's so the two undersides are not one
-        // plane (ground-audit flatCoplanar counted 3 of the 7 original shelves).
-        addBox(out, vadd(a.c, a.u, 0.16), [w * 1.22, 0.44, len * 1.1],
+        // Scree skirt at the foot, where the blasted rock spilled.
+        addBox(out, vadd(foot, a.u, 0.14), [w * 1.22, 0.44, len * 1.1],
           [0.56, 0.50, 0.40], b);
       }
 

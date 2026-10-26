@@ -27,3 +27,4 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Discuss decisions with fleets](discuss-decisions-with-fleets.md) — 2026-10-22: cross-fleet decisions go to bus + webhook (DAD, Merlin) before acting
 - [Bryce iPhone uses TLX WebGPU](bryce-iphone-tlx-webgpu.md) — plays THREE PATH: WEBGPU on iPhone and it works; measure that path first
 - [Rules are agent-written drafts](rules-are-agent-written-drafts.md) — Bryce 2026-10-26: reconsider AGENTS.md/CLAUDE.md/memory; audit improvements in one PR
+- [Fan out with subagents](fan-out-with-subagents.md) — 2026-10-26: multi-part fleet tasks go to worker subagents in worktrees

@@ -1,0 +1,1 @@
+Fixed: Paint edits in the garage now refill the bay dress, live telemetry and car decal atlases in place on the default renderer instead of freeing and re-creating them, so a run of edits no longer allocates new GPU textures (#3505).

@@ -1,0 +1,1 @@
+Fixed: Shanghai Pudong skyline cue moves to multi-km haze (~2.4 km), seats the required `shanghai-pudong` pad on `terrainYAt`, and replaces near-track glass/window-band towers with hazed `backdrop` silhouettes (#3360).

@@ -557,6 +557,14 @@
    instead — see the rules list in game.js buildRaceSettings. */
 
 /* ---------- customize my team ---------- */
+/* #3336: .sheet-body.sf-scroll::before uses margin-right: calc(6px - var(--pad))
+   (components.css). When |margin| exceeds the thumb width, Chromium grows
+   scrollWidth (menu-mock customize/ios-iphone-portrait: clipped [#cz-body,10,0]).
+   Zero the override here — thumb stays at the content-edge of the padding lane
+   with no overflow-x clip and no new rawSpacing px literal. */
+#customize #cz-body.sf-scroll::before {
+  margin-right: 0;
+}
 #customize .cz-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--gap); margin: 6px 0;

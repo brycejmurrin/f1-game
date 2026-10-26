@@ -20,6 +20,9 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 
 | Note | What it records |
 |---|---|
+| [System audit, fourth pass](notes/SYSTEM-AUDIT-4-2026-10-26.md) | 2026-10-26: ~75 reviewers; re-verifies pass 3 (13 corrections), whole-population bus/PR/CI/session/Cursor/skill/card/docs/economics review; evidence in `notes/system-audit-4/` |
+| [System audit, third pass](notes/SYSTEM-AUDIT-3-2026-10-26.md) | 2026-10-26: 12 reviewers, 137 findings ranked into 39 items; what #3785/#3811 fixed; slice evidence in `notes/system-audit-3/` |
+| [System audit, second pass](notes/SYSTEM-AUDIT-2-2026-10-26.md) | 2026-10-26: 16 ranked setup-and-coordination findings after #3785; fixed in #3811 |
 | [notes/AGENT-WORK-TRACKING-2026-10-14.md](notes/AGENT-WORK-TRACKING-2026-10-14.md) | Where the fleet's backlog lives and why: GitHub Issues + sub-issues vs Linear, Jira, Plane, Notion, Beads, Backlog.md, Taskmaster, Claude Tasks, Obsidian and the agent orchestrators, scored on free / headless / phone / PR tie-in / atomic claim; the four-layer setup behind AGENTS.md §Backlog. |
 | [notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md](notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md) | Fleet B Claude transcripts, 2026-10-25/26 (30 sessions, $91.61): orchestrator boot uses ~65 % of its 200k cap (7 orchestrators in 4.5 h), base context ~100k, cross-fleet env-name drift, a lost staged tool change, lent-PR re-conflicts; 17 ranked findings and the `.claude/**` proposals that need Bryce |
 | [notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md](notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md) | Which `permissions.allow` shapes pre-approve which MCP servers in cloud sessions, read off `permission_decision` in `list_events` (a repo cannot pre-approve its own `.mcp.json` servers, so auto mode's classifier does; auto siblings need an auto parent; MDN/BrowserStack are a claude.ai connector setting); spawning siblings needs `source_url` and a quoted user grant. |
