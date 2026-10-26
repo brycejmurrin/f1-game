@@ -335,6 +335,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/compress-audio.test.mjs",
   "tests/unit/conflict-cure.test.mjs",
   "tests/unit/contact-geometry.test.mjs",
+  // context-cap.py hook: transcript usage vs the brief's size stop; advisory once per level, hard-cap spawn deny.
+  "tests/unit/context-cap-hook.test.mjs",
   "tests/unit/controller-profiles.test.mjs",
   // coverage-merge is the only consumer of the raw V8 lists a flagged run
   // writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops
