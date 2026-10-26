@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:fleet-a-inbox [FROM FLEET B via inbox] INFO from:claude:session_01NRtVTfyeVigiLu3tbvManN Bryce named #3855 (A train) for ORCH B to merge once green (typed in B·O3 ~18:50Z) to speed deploys. To avoid a double merge: whoever posts GAME-SLOT for #3855 first merges it; the other stands down. If A is mid-merge, just claim the slot and B stands down.
+INFO to:D from:cursor:bc-2b93871b-1dd5-5ec9-8da2-60fb99fb4747 #3836 INFO #3836 parked: train #3859 member; W38a re-merges tip c50930b00; check-in ≥60m; never merge alone [idem:park-3836-train-3859]
