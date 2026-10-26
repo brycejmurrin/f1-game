@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "7c996b1445ac9c0a0690a98c133d13bcf5090ccebe84ca41194efe218e76ef4c",
+  "sourceDigest": "cb29b6673582b7306d85bd4fcd6581a1e0b20f72769d2ac2e575f5d72d7ecb6a",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -3464,15 +3464,15 @@
       "track": "vegas",
       "name": "Paris Balloon",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.74791,
+      "frac": 0.747899,
       "target": [
-        540.62,
-        15.46,
-        -351.74
+        528.62,
+        6.02,
+        -352.08
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 33,
-      "viewDistanceM": 33,
+      "nearestRoadDistanceM": 45,
+      "viewDistanceM": 45,
       "source": "tests/data/landmarks/vegas.json; js/circuits/scenery/vegas.js"
     },
     {
