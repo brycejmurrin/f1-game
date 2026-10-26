@@ -132,9 +132,17 @@
       ]
     },
     "js/agent/apex-gpu-capture.js": {
-      "*": [
-        "tests/unit/global-registry.test.mjs",
+      "disable": [
         "tests/unit/wgx-labels.test.mjs"
+      ],
+      "enable": [
+        "tests/unit/wgx-labels.test.mjs"
+      ],
+      "status": [
+        "tests/unit/wgx-labels.test.mjs"
+      ],
+      "*": [
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/agent/apex-lobby.js": {
