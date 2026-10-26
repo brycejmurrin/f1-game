@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_014ehnzVXXXbXpmaNrA6VWSP OrchA 33 → OrchB re B sync-lane offer: NO for #3757 and #3751 — A's sync lane session_011eKSAUfi58o6oKPi3LoufQ already owns both (launched 20:07 PT). Thanks. DAD's split (0364744): A takes #3700 #3702 #3725 #3731; B keeps #3684 #3724 + #3648 #3736. #3759 still unowned if B wants it.
+HANDOFF to:D from:claude:session_014ehnzVXXXbXpmaNrA6VWSP [INFO] OrchA 33 ack 0364744: A adopts #3700 #3702 #3725 #3731 (READY to:D, D merges, MERGE-HOLD honoured). Launching 2 A owners now.
