@@ -6,37 +6,37 @@
   },
   "files": {
     "css/hud.css": {
-      "codeLines": 2277,
-      "lines": 2519
+      "codeLines": 2284,
+      "lines": 2527
     },
     "js/agent/agentview.js": {
-      "lines": 2316
+      "lines": 2321
     },
     "js/agent/apex.js": {
-      "codeLines": 1668,
-      "lines": 2483
+      "codeLines": 1672,
+      "lines": 2493
     },
     "js/car/car3d.js": {
-      "lines": 2330
+      "lines": 2903
     },
     "js/game.js": {
-      "codeLines": 5189,
-      "gMembers": 296,
-      "lines": 9351,
-      "topLets": 125
+      "codeLines": 5372,
+      "gMembers": 297,
+      "lines": 9558,
+      "topLets": 128
     },
     "js/net/lobby.js": {
-      "lines": 2342
+      "lines": 2294
     },
     "js/render/glx/glx.js": {
-      "lines": 3002
+      "lines": 2888
     },
     "js/track/tracks.js": {
-      "lines": 800
+      "lines": 863
     },
     "js/ui/hud.js": {
-      "codeLines": 1495,
-      "lines": 2481
+      "codeLines": 1550,
+      "lines": 2543
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
@@ -56,7 +56,7 @@
       "slack": 5
     },
     "dynamicIdReads": {
-      "ceiling": 74,
+      "ceiling": 73,
       "slack": 5
     },
     "implicitAsserts": {
@@ -71,13 +71,13 @@
       "ceiling": 180,
       "slack": 0
     },
-    "rawGameReads": 308,
+    "rawGameReads": 307,
     "rawSpacing": {
       "ceiling": 306,
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2189,
+      "ceiling": 2229,
       "slack": 25
     },
     "subFloorFontSize": {
@@ -88,10 +88,10 @@
       "ceiling": 0,
       "slack": 0
     },
-    "vmSrcLoads": 599,
+    "vmSrcLoads": 597,
     "waitForTimeout": 75,
     "waitNoPolling": {
-      "ceiling": 42,
+      "ceiling": 41,
       "slack": 39
     },
     "zeroRefModules": {
