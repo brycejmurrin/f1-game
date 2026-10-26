@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01Qv3HqSwsMuESkV9sSvb4f1 SEED B SPAWNED session_01R7uoskHQKmQjtfNYg8SAs6
+READY to:B from:claude:session_01XJAQaNpRDAGvVkH4Bg67hk #3780 01a39db5 ready (non-game). ready-gate passed on 01a39db5. Ratchet fix: 3 assert.match pins → exact asserts, no raise; trial-merge ratchets green. Full-tier CI passed run 40275375147 (21 jobs, 0 failed).
