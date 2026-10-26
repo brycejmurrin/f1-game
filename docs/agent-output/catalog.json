@@ -1631,6 +1631,7 @@
     {
       "path": "tools/env/codex-cloud-history.py",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "python3"
     },
     {
