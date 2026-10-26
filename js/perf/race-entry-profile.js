@@ -155,8 +155,20 @@ const RaceEntryProfile = (() => {
         ms: e ? +((e.t - m.t)).toFixed(2) : null,
         kind: "span",
         open: !e,
+        t0: m.t, t1: e ? e.t : null,
       });
     }
+    // SPANS NEST, SO `ms` DOES NOT ADD UP (#3674): gridCountdown encloses warmCarAssets and debrisPrime, mirrorPrepare
+    // encloses programWarm. Summed, the Device Farm read 0.7-0.9 s of "grid" next to 0.7-1.4 s of car warm; the grid's
+    // own work was 24-51 ms. `selfMs` is a closed span minus the closed spans directly inside it — the column to sum.
+    const spans = rows.filter((r) => r.kind === "span" && r.t1 != null);
+    const inside = (c, p) => c !== p && c.t0 >= p.t0 && c.t1 <= p.t1 && !(c.t0 === p.t0 && c.t1 === p.t1 && spans.indexOf(c) < spans.indexOf(p));
+    for (const p of spans) {
+      const kids = spans.filter((c) => inside(c, p));
+      const direct = kids.filter((c) => !kids.some((k) => inside(c, k)));
+      p.selfMs = +Math.max(0, p.ms - direct.reduce((s, c) => s + c.ms, 0)).toFixed(2);
+    }
+    for (const r of rows) { delete r.t0; delete r.t1; }
     return rows;
   }
 

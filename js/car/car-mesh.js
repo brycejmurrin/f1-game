@@ -1625,8 +1625,9 @@ const LED_ROWS = { std: { y: 0.082, half: 0.077, r: 0.005 }, gt: { y: 0.076, hal
   yoke: { y: 0.0625, half: 0.070, r: 0.0045 } };
 // `lit` 0-8 lights that many LEDs left-to-right. 9 is SHIFT NOW: the whole
 // row blue, the cue a driver actually upshifts on (8 lit and 8 lit-plus-past-
-// it looked identical). The strip never goes DARK at the limiter — the caller
-// (car-draw.js) alternates 8 and 9, steady 9 under reduced motion.
+// it looked identical). The strip never goes DARK at the limiter — modern
+// (car-draw.js) and retro (drawRetroTelemetry) alternate 8 and 9, steady 9
+// under reduced motion.
 // `style` picks the row (LED_ROWS); anything else — the 2000s wheel scales the
 // standard row onto its own LCD — gets the standard one.
 function getLedStrip(lit, style) {
@@ -1782,6 +1783,13 @@ const _AX_FX = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true 
 // Compact monochrome telemetry for the 2000s wheel, using cached digits.
 const _RETRO_FX={emissive:1,roughness:.9,specular:0,noAlphaWrite:true,alpha:1};
 const _retroDigits={}, _retroT=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]), _retroM=new Float32Array(16);
+// Same pair as car-draw.js / game.js motionReduced: OS prefers-reduced-motion OR
+// SETTINGS › ACCESSIBILITY MOTION: REDUCED (html[data-motion]=reduce).
+const _retroRmq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+function _retroMotionReduced() {
+  return !!(_retroRmq && _retroRmq.matches)
+    || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
+}
 function drawRetroTelemetry(mat,c,kph,t) {
   // Same integer as #hud-speed-n / modern LCD (HudReadouts.spdDigits).
   const speed=(typeof HudReadouts!=='undefined'&&HudReadouts.spdDigits)?HudReadouts.spdDigits(kph):Math.max(0,Math.min(999,typeof AppearanceOpts!=='undefined'?AppearanceOpts.speed(kph):Math.round(kph)));
@@ -1805,7 +1813,8 @@ function drawRetroTelemetry(mat,c,kph,t) {
   _retroT[12]=0;_retroT[13]=.023;_retroT[14]=0;
   M4.mulTo(_retroM,mat,_retroT);
   const rpm=Math.max(0,Math.min(1,((c.rpm||PhysicsConsts.IDLE_RPM)-PhysicsConsts.IDLE_RPM)/(PhysicsConsts.MAX_RPM-PhysicsConsts.IDLE_RPM)));
-  _gfx.draw(getLedStrip(rpm>.965?(t*14%1<.5?9:0):Math.round(rpm*8)),_retroM,_AX_FX);
+  // #3297: never flash lit 0 (fully dark). Match modern: 9 <-> 8, steady 9 when reduced.
+  _gfx.draw(getLedStrip(rpm>.965?(_retroMotionReduced()||t*14%1<.5?9:8):Math.round(rpm*8)),_retroM,_AX_FX);
   _retroT[0]=_retroT[5]=_retroT[10]=.50;
   _retroT[12]=0;_retroT[13]=.023;_retroT[14]=0;
   M4.mulTo(_retroM,mat,_retroT);drawWheelExtras(_retroM,c,t);
@@ -1889,7 +1898,11 @@ function getRearLightSet() {
   const ep = _flatQuadData(0.030, 0.038, [1.75, 0.18, 0.12]);
   _appendAt(out, ep, -E[0], E[1], E[2]);
   _appendAt(out, ep, E[0], E[1], E[2]);
-  return (_rearLightSet = _gfx.createMesh(out));
+  _rearLightSet = _gfx.createMesh(out);
+  // Pinned against TLX's idle prune (#3677): on a dry day the 2026 ERS light code is the player's only rear-light
+  // draw, so every BOOST press after a straight rebuilt its pipeline on WebGPU.
+  if (typeof _gfx.pinMesh === "function") _gfx.pinMesh(_rearLightSet);
+  return _rearLightSet;
 }
 // Its own opts bag ON PURPOSE. game.js's _ringWorld / _rainLightOpts are shared
 // singletons walked by the brake ring, the ERS strip and the flame inside one

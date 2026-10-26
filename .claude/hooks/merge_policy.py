@@ -33,6 +33,10 @@ ASK_DESK_METHOD = ("Arm auto-merge with the MERGE method named explicitly: an om
                    "the repository default, which may be squash. Pass mergeMethod: MERGE.")
 ASK_REF = ("This GitHub API call merges or moves a branch outside a pull request; branch protection is the only "
            "other check. Confirm it by hand.")
+DENY_REF = ("writes a git ref through the API — shared safety ban 6 (Transcript Auditor batch 9: a branch was deleted "
+            "with `gh api -X DELETE …/git/refs/heads/…` to get around the push hook). A branch moves only by `git push` "
+            "to your own cursor/<topic>-<hash> branch (never forced, never deleted) and lands only through a PR; ask "
+            "your orchestrator, or Bryce, to delete a branch.")
 DENY_CANCEL = ("NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Concurrent PRs, 2026-10-15): a queued run holds no slot, so a "
                "cancel only throws away its queue position and the branch owner pushes a retrigger commit — 306 of 401 PR "
                "runs died that way on 2026-10-15. Your own superseded run is replaced by your next push; a closed PR's runs "
@@ -113,7 +117,11 @@ def _parse_iso(s):
         return None
 
 
-def emit(decision, reason):
-    """Print the documented PreToolUse decision JSON."""
-    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                      "permissionDecision": decision, "permissionDecisionReason": reason}}))
+def emit(decision, reason, context=""):
+    """Print the documented PreToolUse decision JSON; `decision` None = advice only (additionalContext)."""
+    h = {"hookEventName": "PreToolUse"}
+    if decision:
+        h.update(permissionDecision=decision, permissionDecisionReason=reason)
+    if context:
+        h["additionalContext"] = context
+    print(json.dumps({"hookSpecificOutput": h}))

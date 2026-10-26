@@ -9,6 +9,7 @@ AGENTS.md §Concurrent PRs — a successor never re-asks it at a hand-off.
 
 ## Contents
 
+- First acts (every orchestrator, before the first launch)
 - Before launching
 - Launch template (every vendor; SKILL.md §Launch policy makes these fields mandatory)
 - Hand-off to a successor (the one tested path; plan §7)
@@ -19,6 +20,21 @@ AGENTS.md §Concurrent PRs — a successor never re-asks it at a hand-off.
 Elsewhere: grants, auto mode and measuring permissions → `authority.md`;
 spawn / message / status / stop per host → `adapters.md`; roles, reading the
 fleet each wake, answering an escalation → `running.md`.
+
+## First acts (every orchestrator, before the first launch)
+
+Bryce 2026-10-25: "we should setup routines on orchestrator for checking bus
+every few mins". Before planning or launching anything:
+
+1. Bus `ORCH <letter> LIVE` (`fleet-bus.mjs send`).
+2. TICK: one self-re-arming `send_later` ~3 min out that runs the wake pass
+   (running.md §Bus routine 1).
+3. SAFETY NET: an hourly `create_trigger` (`cron_expression: "0 * * * *"`,
+   `initiation: human_request`) bound to this session that re-arms the tick
+   if the chain broke (running.md §Bus routine 2). Cursor: `subscribe_timer`
+   for both.
+4. `list_triggers`: the account-wide FLEET BUS WATCH exists (running.md §Bus
+   routine 3); never create a second.
 
 ## Before launching
 
@@ -55,6 +71,11 @@ MEASUREMENT: <automatic recorder + exact FIRST command, or not measured; host by
 PR: <worker | orchestrator> opens the DRAFT PR, base <deploy branch | track-survey-assets>.
 DELIVERABLES: <the full checklist: every section, weather/frame, doc, merge step the PR must contain>
 PUSH: when your own cycle is green, and before any browser run or wait over ~10 min.
+REPORT: to me, only READY <PR> <head sha> | BLOCKED <PR> <question> | DONE <PR>; never a
+      HANDOFF for progress (HANDOFF = a size-stop rotation to a successor only).
+WAIT: a suite over ~2 min runs in the background (AGENTS.md rule 4: test-bg.mjs, tooling-fast,
+      deploy --gate-only → artifacts/logs/), never a foreground block; CI is a subscription
+      plus one timer, then end the turn. Never pipe ready-gate/merge-gate (`| tail` hides the exit).
 PARALLEL: while CI or a browser run waits, keep working inside OWNED: start the
       next item in a linked worktree (EnterWorktree), and hand read-only checks to
       ≤ 2 subagents (finding-verifier, code-hunter, verify-agent). Never give a
@@ -67,7 +88,11 @@ DEDUPE: before the first edit, list open PRs and claims for each issue
       race it.
 Never @-mention @cursor on GitHub: it wakes that PR's Cursor agent.
 Load skill agent-fleet and follow references/worker.md.
-Open a DRAFT PR; keep its fleet block current; subscribe with your host's tool.
+Open a DRAFT PR; keep its fleet block current.
+WATCH: at your first push, Claude `subscribe_pr_activity` on the PR plus ONE
+      `send_later` check-in ~15 min out, re-armed until merged, closed, READY or
+      BLOCKED; Cursor `subscribe_github_ci` + `subscribe_github_pr` + `subscribe_timer`.
+      Read CI on every wake (`ci-watch.mjs --sha <head> --once`).
 When blocked or unsure: set state: blocked, needs-orchestrator: yes, comment
 "@orchestrator BLOCKED: <question>" on the PR, and (Claude only) send_message
 the ORCHESTRATOR session. Do not guess past a blocker.

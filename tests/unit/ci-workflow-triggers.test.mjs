@@ -287,7 +287,7 @@ test("every inline `node -e '…'` script in the workflows is syntactically comp
  * poke-train did. Pinned so it cannot quietly stop covering a case. */
 test("the CI guard shards stop starting files after their first failure (--bail)", () => {
   const parsed = parseYAML(ciWorkflow).jobs;
-  for (const [id, shard] of [["guards-a", "1/3"], ["guards-b", "2/3"], ["guards-c", "3/3"]]) {
+  for (const [id, shard] of [["guards-a", "1/4"], ["guards-b", "2/4"], ["guards-c", "3/4"], ["guards-d", "4/4"]]) {
     const step = parsed[id].steps.find((st) => /tooling-fast\.mjs/.test(st.run || ""));
     assert.ok(step, `${id} runs tooling-fast`);
     assert.match(step.run, new RegExp(`--shard=${shard.replace("/", "\\/")} --bail$`),
