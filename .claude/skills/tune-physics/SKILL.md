@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: "Use when the car understeers/oversteers, turn-in is too lazy or snappy, grip, trail braking, road-follow or pace feels wrong, A/B physics settings, a sweep, ROAD_FOLLOW, or skidpad/step-steer/player-dyn VM A/B. Shake/juice → game-feel; camera lag → playwright-probe; steer sliders → input-controls; AI → ai-racecraft."
+description: "Use when the car understeers/oversteers, runs wide, won't turn in, turn-in is lazy or snappy, front slip/yaw, grip, trail braking, road-follow (ROAD_FOLLOW), GRIP STEER maths or pace feels wrong, or a physics A/B or sweep (skidpad/step-steer/player-dyn VM). Shake/juice → game-feel; camera lag → playwright-probe; steer sliders → input-controls; AI → ai-racecraft."
 ---
 
 # Tune the physics
@@ -24,7 +24,7 @@ absolute magnitudes.
 | `yawDamp` (`YAW_DAMP`) | yaw damping | calmer |
 | `yawInertia` (`YAW_INERTIA`) | rotational inertia | lazier (`<1` snappier) |
 | `pace` (`PACE`) | ground-speed scale | faster everywhere |
-| GRIP STEER (`js/physics/grip-steer.js`; notch 1 = OFF) | assist-gated steering cap at the front's peak slip | steadier front under steer |
+| GRIP STEER (`js/physics/grip-steer.js`; notch 1 = OFF) | assist-gated steering cap at the front's peak slip (maths here; its slider → input-controls) | steadier front under steer |
 
 `expo` / `maxSlip` / `speedRef` are also the player's STEER sliders (LINEARITY / STEER LOCK /
 SPEED STEER): the slider UI, defaults and migration are **input-controls**; here they are A/B knobs.
@@ -38,8 +38,15 @@ defaults come from `js/input/steer-tuning.js` `applySteerTuning()` (slider defau
 the game.js literals are dead.
 `PACE` is a scale, not a cap; compare speeds via `vTop()`/`vStd()`/`aStd()`.
 
-**The arc must not reach the driver** (AGENTS.md §Physics; columns in `docs/PHYSICS.md`): never "help"
-the player by feeding path curvature into steer/throttle with assists off.
+**The arc must not reach the driver** (AGENTS.md §Physics; the table is `docs/PHYSICS.md` §Curvature channels):
+never "help" the player by feeding path curvature into steer/throttle with assists off. After any player-path
+change run `node --test tests/unit/curvature-channels.test.mjs` and spawn agent `physics-contract-auditor`.
+
+**Touching steering or GRIP STEER:** `GripSteer.forPlayer` (called from `js/physics/player-forces.js`) must
+receive the SHAPED lock (`og.shaped` — the `expo`/`maxSlip`/taper output), as `grip-steer.js`'s `apply()`
+contract says, not the raw stick; an `expo` A/B is exactly what makes the two diverge. Pins:
+`node --test tests/unit/grip-steer.test.mjs`. `player-dyn.mjs` measures a bare seat (GRIP STEER off), so A/B it
+with `--seat shipped` plus a GRIP STEER on/off pair and say which seat each row came from.
 
 **`ROAD_FOLLOW` ships at `0` (OFF)** on purpose. The DRIVING HELP slider maps
 notch 1..10 to `0..0.70` (notch 1 = off). Recommending a raised default is a
@@ -49,7 +56,7 @@ Fixed in `js/physics/consts.js` (`PhysicsConsts`, not `setPhysics`): `LONG_GRIP`
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
 ```sh
-# Browser verify (AGENTS.md table): ONE spec — understeer-cue.spec.js or physics-characterization.spec.js — via test-bg.mjs.
+npm test -- tests/specs/understeer-cue.spec.js   # BROWSER verify: ONE spec (or physics-characterization.spec.js), backgrounded (AGENTS.md rule 4); a subagent reports it not run
 node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>  # browser (launchChromium) — stability probe, not an A/B
 ```
 
@@ -63,7 +70,7 @@ node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SH
 
 `player-dyn.mjs` exports `measure(g, frac)`: to A/B one setting, copy the sweep script in
 [references/understeer-recipe.md](references/understeer-recipe.md) step 2 and diff the JSON (read `aF`/`aR`, `uF`/`uR`, `yaw`; front
-slip past its peak with rear settled = understeer). `physics-tune-sweep.mjs` is BROWSER + long (sharded
+slip past its peak with rear settled = understeer). `tools/check/physics-tune-sweep.mjs` is BROWSER + long (sharded
 DOM-slider laps, `APEX_WORKERS`): not for one setting. Verdict: a directional change in the
 same tables; worked "understeers in slow corners" example → [references/understeer-recipe.md](references/understeer-recipe.md).
 

@@ -11,7 +11,7 @@
 //   node tools/ci/wait-for.mjs --log-matches artifacts/logs/x.log '^= (run|bg exit)' --timeout 45
 //   node tools/ci/wait-for.mjs --merged <sha> --timeout 240 --background   # the sanctioned merge watch (steward §7)
 //
-// Exit 0 every condition held · 124 timeout (nothing is killed) · 1 usage error.
+// Exit 0 every condition held · 124 timeout (nothing is killed) · 2 usage error (an unknown flag included).
 import fs from "node:fs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
@@ -35,7 +35,7 @@ export const USAGE = `usage: node tools/ci/wait-for.mjs <condition>... [--timeou
                           the one sanctioned merge watch — never a hand-rolled 'while … sleep' loop (AGENTS.md rules 4, 13)
   --background            this waiter IS the run_in_background task: no cap on --timeout
   a foreground wait is capped at ${FOREGROUND_CAP_SEC} s (Bash's own limit is 600 s); longer ones belong in run_in_background.
-  conditions combine with AND; exit 0 held / 124 timeout / 1 usage. Run it as one background task.`;
+  conditions combine with AND; exit 0 held / 124 timeout / 2 usage. Run it as one background task.`;
 
 /** Clamp a foreground --timeout (minutes) to the cap; `background` lifts it. Pure. */
 export function capForeground(timeoutMin, background) {
@@ -134,7 +134,7 @@ export async function waitFor(conds, { timeoutMin, pollSec = 3, deps, sleep = (m
 async function main() {
   let a;
   try { a = parseArgs(process.argv.slice(2)); }
-  catch (e) { if (!(e instanceof UsageError)) throw e; console.error(`wait-for: ${e.message}\n${USAGE}`); return 1; }
+  catch (e) { if (!(e instanceof UsageError)) throw e; console.error(`wait-for: ${e.message}\n${USAGE}`); return 2; }
   if (a.help) { console.log(USAGE); return 0; }
   const cap = capForeground(a.timeoutMin, a.background || process.env.APEX_WAIT_BACKGROUND === "1");
   if (cap.note) console.error(cap.note);

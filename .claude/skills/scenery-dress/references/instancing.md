@@ -28,7 +28,7 @@ Not for first-time dressing (`SKILL.md`), spline/elevation (**agent-view**) or G
 node tools/track/graph-parity.cjs <id>            # or --all
 BASE=<ref> node tools/track/graph-parity.cjs --all
 npm run test:tooling-fast
-node tools/ci/test-bg.mjs gfx                # instanced-draw.spec.js
+npm test -- tests/specs/instanced-draw.spec.js   # BROWSER, one spec, background (parent only)
 node tools/track/verify-track.cjs <id>
 ```
 
@@ -81,10 +81,12 @@ judging a `graph-parity` mismatch.
 5. **Fast contract** (`node --test tests/unit/track-graph.test.mjs`, <1 s) **then GL wiring** (browser):
    ```sh
    npm run test:tooling-fast
-   node tools/ci/test-bg.mjs gfx    # instanced-draw.spec.js — background
+   npm test -- tests/specs/instanced-draw.spec.js   # BROWSER, one spec, background (AGENTS.md rule 4)
    ```
+   A subagent reports it not run. The whole `gfx` group (`node tools/ci/remote-group.mjs gfx`, pushed
+   branch) only when the TLX/GLX instanced-draw path itself changed.
 
-6. **Ship** — `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) if you edited `js/`. Visual spot-check:
+6. **Ship** — `npm run gen:check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) if you edited `js/`. Visual spot-check:
    **playwright-probe** on a dense track (Spa, Vegas).
 
 `batches()` routing: instanced when `node.full` and no radial op under
@@ -93,7 +95,7 @@ non-uniform XZ scale; otherwise the node lands in `bakeOnly` (caller must
 
 **Hand-off record** (PR body): emitter + `meta.kind`, `BASE=<ref>` used and its
 `parity exact` line, the `+K -> bake` count before/after, `track-graph.test.mjs`
-result; Not run: `gfx` group / `instanced-draw.spec.js` (browser).
+result; Not run: `instanced-draw.spec.js` (browser) when you could not run it.
 
 ### Common mistakes
 

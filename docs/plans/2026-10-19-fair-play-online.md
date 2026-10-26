@@ -1,7 +1,9 @@
 # Fair-play online — reduced collisions and a clean-racing score (2026-10-19)
 
+Status: **OPEN** (checked against the code 2026-10-26) — no clean-racing score or ghosted-collision option found in js/; plan only.
+
 Date: 2026-10-19  
-Status: **PLAN** — docs-only; implement later as draft PRs against
+Status when written: **PLAN** — docs-only; implement later as draft PRs against
 `claude/f1-game-project-26h3ng`. No game code in this PR.  
 Parent: [feature roadmap Tier 2](2026-10-04-feature-roadmap.md#tier-2-deepens-the-racing-each-needs-its-own-plan)
 ([#1588](https://github.com/brycejmurrin/f1-game/issues/1588)).  

@@ -11,16 +11,9 @@
       "mcp__claude-code-remote",
       "mcp__Context7",
       "mcp__Claude_Docs",
-      "mcp__Google_Drive",
       "mcp__tinyfish",
-      "mcp__TinyFish",
       "mcp__MDN",
       "mcp__mcp_browserstack_com",
-      "mcp__813042a4-1783-4439-9035-5366956542b0",
-      "mcp__e4d9838f-eacf-4d80-b94e-7c08a958f03b",
-      "mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c",
-      "mcp__300390ff-8699-4331-80f2-e910f3ac8956",
-      "mcp__b9469654-2d04-45d3-95eb-72cd58f42a04",
       "mcp__plugin_browser-use_browser-use",
       "mcp__github__*",
       "mcp__apex-tools__*",
@@ -32,7 +25,6 @@
       "mcp__claude-code-remote__*",
       "mcp__Context7__*",
       "mcp__Claude_Docs__*",
-      "mcp__TinyFish__*",
       "mcp__MDN__*",
       "mcp__mcp_browserstack_com__*",
       "Bash",
@@ -158,7 +150,20 @@
       "Bash(cat /proc/loadavg)",
       "Bash(ps *)",
       "Bash(curl http://127.0.0.1:3*)",
-      "Bash(curl http://localhost:3*)"
+      "Bash(curl http://localhost:3*)",
+      "mcp__Google_Drive__search_files",
+      "mcp__Google_Drive__read_file_content",
+      "mcp__Google_Drive__get_file_metadata",
+      "mcp__Google_Drive__list_recent_files",
+      "mcp__Google_Drive__download_file_content",
+      "mcp__Google_Drive__get_file_permissions",
+      "mcp__TinyFish__search",
+      "mcp__TinyFish__fetch_content",
+      "mcp__TinyFish__get_search_usage",
+      "mcp__TinyFish__list_fetch_usage",
+      "mcp__TinyFish__get_wallet",
+      "mcp__TinyFish__get_run",
+      "mcp__TinyFish__list_runs"
     ],
     "deny": [
       "Bash(git push --force*)",
@@ -190,7 +195,16 @@
       "Skill(engineering:debug)",
       "Skill(engineering:deploy-checklist)",
       "Skill(engineering:incident-response)",
-      "Skill(agent-smith:create-agent)"
+      "Skill(agent-smith:create-agent)",
+      "mcp__TinyFish__top_up_wallet",
+      "mcp__TinyFish__create_dataset",
+      "mcp__Google_Drive__share_file",
+      "mcp__Google_Drive__trash_file",
+      "mcp__Google_Drive__update_file",
+      "mcp__Google_Drive__create_file",
+      "mcp__Google_Drive__copy_file",
+      "Bash(git config core.hooksPath*)",
+      "Bash(git config --global *)"
     ]
   },
   "enabledPlugins": {
@@ -259,7 +273,7 @@
         ]
       },
       {
-        "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|js-debugger__.*|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|ui_inspect|diagnostics|profile|job_start|debug_chrome)|plugin_browser-use.*)$",
+        "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|js-debugger__.*|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|ui_inspect|diagnostics|profile|job_start|debug_chrome)|plugin_browser-use.*|browserstack__(run\\w*Session|run\\w*Tests\\w*|take\\w*Screenshot|startAccessibilityScan|runPercyScan))$",
         "hooks": [
           {
             "type": "command",
@@ -314,6 +328,16 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "mcp__claude-code-remote__get_session",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/launch-page.py\"",
+            "timeout": 10
+          }
+        ]
+      },
       {
         "matcher": "Grep|Bash",
         "hooks": [

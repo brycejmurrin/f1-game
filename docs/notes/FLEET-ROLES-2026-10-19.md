@@ -1,8 +1,10 @@
 # Apex 26 fleet: coordination system, roles, gaps, taxonomy, title/tag scheme
 
+Retired since this study: the Merge Desk agent card (`merge-desk.md`) and the `bryce-merges-manually` memory were deleted in 01442fcdb (pass-3 rulebook rewrite), and the `ci-watch` skill no longer exists; every mention below of those files describes the state on 2026-10-19 and no longer resolves. Merge authority now lives in `.claude/rules/fleet-core.md` and AGENTS.md section Concurrent PRs.
+
 Study by Fleet B (ORCH-B), 2026-10-19; Bryce approved "Land it as proposed" for the §4 taxonomy and §5 title/tag scheme (ORCH-B session, AskUserQuestion). Implementation: the follow-up roles PR.
 
-Status: taxonomy (§4) and title/tag scheme (§5) landed in `.claude/skills/agent-fleet/` by the roles-implementation PR (stacks on #3074); role 6 has the card `references/role-sync.md`, Merge Desk is dormant-unless-designated. `.claude/agents/merge-desk.md:3` (outside that lane) still carries the old wording.
+Status: taxonomy (§4) and title/tag scheme (§5) landed in `.claude/skills/agent-fleet/` by the roles-implementation PR (stacks on #3074); role 6 has the card `references/role-sync.md`, Merge Desk is dormant-unless-designated. the retired merge-desk card (deleted in 01442fcdb) (outside that lane) still carries the old wording.
 
 Read-only study, 2026-10-19 (~17:50Z). Sources: `.claude/skills/agent-fleet/**`, `.claude/rules/fleet-core.md`,
 AGENTS.md §Concurrent PRs, `.claude/agents/*.md`, `docs/notes/{MULTI-AGENT-ORCHESTRATION-2026-10-10,AGENT-RETRO-2026-10-17,FLEET-COST-2026-10-19,FLEET-BUS-2026-10-19,SHARED-BRANCH-COORDINATION,AGENT-WORK-TRACKING-2026-10-14}.md`,
@@ -62,16 +64,16 @@ Bus evidence = `origin/claude/fleet-bus` (58 lines, 08:03-17:45Z 10-19). Claims 
 |---|---|---|---|---|---|---|---|
 | Orchestrator | orchestrator.md, running.md, adapters.md | Bryce (typed) | batch plan, launches, escalations, merge queue at Level 3 | **y** (own PRs; lease was the gate until 17:50Z) | until 200k → HANDOFF | **Yes**: ORCH9-12, ORCH-B write 50 of 58 bus lines; session `[Orchestrator] Fleet B · backlog waves + Level 3 merges`, tags `fleet:b role:orchestrator` | merge holder, Merge Desk, Pages dispatcher, archiver |
 | Merge holder | role-merge-holder.md | n/a (a hat the lease-holding orchestrator wears) | lease, merge mechanics, pacing | y | per lease | Was: ORCH12 LEASE/DONE lines; **retired as a role 17:50Z** (every orchestrator merges its own PRs; the card's mechanics survive) | orchestrator (identical in practice) |
-| Merge Desk | ci-watch SKILL.md, agents/merge-desk.md, AGENTS.md:188-189 | Bryce designation only | sweep pr-board, ready, disarm foreign arms, staff lanes | arm only (≤2) | Routine or session | **No** (dormant since 10-18, ci-watch SKILL.md:8-12; no bus line) | orchestrator, fleet watch, sync lane |
+| Merge Desk | the retired ci-watch skill, the retired merge-desk card, AGENTS.md:188-189 | Bryce designation only | sweep pr-board, ready, disarm foreign arms, staff lanes | arm only (≤2) | Routine or session | **No** (dormant since 10-18, the retired ci-watch skill:8-12; no bus line) | orchestrator, fleet watch, sync lane |
 | Fleet watch | role-fleet-watch.md | orchestrator | PR/CI/session/cost watch, dashboard, routine fixes | n | 100k → HANDOFF | Yes: FLEET-WATCH 2 lines 12:05, 12:39Z | Merge Desk (sweep), archiver, cost steward |
 | Worker (builder / lane) | worker.md, launch-policy.md | orchestrator | one task + OWNED globs, its PR to ready | n | task / 150k | **Yes**: 8 `[Worker] B·W1·L1-8` sessions; claims 17:37-17:41 | PR owner (owns own PR) |
 | PR owner | role-pr-owner.md, existing-pr.md, steward ownership.md | orchestrator, fleet watch | one existing PR to merged | n | PR life / 150k | Yes (READY lines 10:09, 12:48 from owners; memory) | worker, sync lane, Merge Desk "steward" lane |
 | Hunter | role-hunter.md | orchestrator | lane bug hunt + fix PRs | n | ≤3 rounds / ~$15 | Occasional (claims `cursor--hunt-regressions-20261019`) | worker |
 | Reviewer | role-reviewer.md | orchestrator | one PR/diff review, FINAL ≤50 lines | n | 120k | Yes ("REVIEW-SYNTH-2" in FLEET-COST:140) | review farm, "synth" (no card) |
 | Review farm / synth | launch-policy.md:16, 66 (Size table "synth"), orchestrator.md:93 | orchestrator | ≤2 reviewers + a synthesiser | n | 150k | Yes (REVIEW-SYNTH-2) | reviewer; **no card for synth** |
-| Sync lane (conflict-only) | launch-policy.md:43-48, merge-desk.md:86 "sync" lane | Merge Desk / orchestrator / fleet watch | PRs `needs-sync` rates conflict/stale-red | n | per PR | Yes: `[Sync] stale Claude PR #2920` (tags `lane:sync pr:2920`); claims `sync-pr-cursor-*` | PR owner (syncs own PR), fleet watch (syncs itself) |
+| Sync lane (conflict-only) | launch-policy.md:43-48, the retired merge-desk card "sync" lane | Merge Desk / orchestrator / fleet watch | PRs `needs-sync` rates conflict/stale-red | n | per PR | Yes: `[Sync] stale Claude PR #2920` (tags `lane:sync pr:2920`); claims `sync-pr-cursor-*` | PR owner (syncs own PR), fleet watch (syncs itself) |
 | Resolve swarm | launch-policy.md:17, APEX-STEWARD-CARD:42 | orchestrator / desk | red/dirty PRs with no specialist owner | n | capped | Not seen 10-19 | sync lane + fix lane |
-| Merge Desk lanes: re-cut, fix, steward, survey-assets | merge-desk.md:84-90 | Merge Desk | listed PR classes | n | per lane | No (desk dormant) | sync lane, PR owner |
+| Merge Desk lanes: re-cut, fix, steward, survey-assets | the retired merge-desk card | Merge Desk | listed PR classes | n | per lane | No (desk dormant) | sync lane, PR owner |
 | Survey lane (track/UI) | launch-policy.md:19-25, survey-track / survey-ui-matrix skills | orchestrator | findings-first, ≤20-line fix | n | one pass | Occasional | track-surveyor subagent |
 | Tip fixer (base red) | steward §3 "one owner per red tip", SHARED-BRANCH-COORDINATION | whoever claims it | the ship red | n | until green | Yes: INCIDENT 12:09Z "Fix #3058 by ORCH10"; 14:35Z ORCH12 | orchestrator, fleet watch, every session that sees the red |
 | Codex/Cursor coordinator ("DAD", `codex:coordination-…`) | FLEET-BUS:3-15, adapters.md | Bryce on another host | Cursor agents via API | was y (10-19 incident) | ad hoc | Yes: 2 BLOCKED lines 01:45-01:50 (Cursor API 429) | orchestrator |
@@ -120,7 +122,7 @@ Bus evidence = `origin/claude/fleet-bus` (58 lines, 08:03-17:45Z 10-19). Claims 
 | `references/worker.md:58-62` | "Arming is the merge desk's when live; the merge desk or orchestrator merges…"; "paced by the brief's `PUSH SLOT`" | singular + PUSH SLOT retired 10-16 (launch-policy.md:49). |
 | `references/role-pr-owner.md:4-5` | "The orchestrator (or Fleet Desk) starts one per PR" | "Fleet Desk" is defined nowhere. |
 | `.claude/skills/ci-watch/SKILL.md:3, 10-12, 26-28` | "orchestrator holds merge pacing (role-merge-holder)"; "the orchestrator (when no desk is live) merges" | singular. |
-| `.claude/agents/merge-desk.md` description (line 3) | "merge desk user/orchestrator merges at Level 3 per role-merge-holder" | singular; role dormant. |
+| the retired merge-desk card (deleted in 01442fcdb) description (line 3) | "merge desk user/orchestrator merges at Level 3 per role-merge-holder" | singular; role dormant. |
 | `tools/ci/fleet-bus.mjs` (see §3c) | lease subcommands and header | lease retired for merging. |
 | `docs/notes/FLEET-BUS-2026-10-19.md` (see §3c) | lease design as the merge refusal | add a 10-19 17:50Z superseding note. |
 | `docs/notes/FLEET-BUS-2026-10-19.md:13` | "AGENTS.md named 'Grok Bot' as the sole merge holder" | history, fine; but adapters.md never caught up. |
@@ -133,7 +135,7 @@ Bus evidence = `origin/claude/fleet-bus` (58 lines, 08:03-17:45Z 10-19). Claims 
    *2026-10-25:* Fleet B now reaches A through the cross-account inbox (`CROSS-ACCOUNT-INBOX-2026-10-25.md`); `send_message` is same-account only and listing/archiving still do not cross.
 4. **Backlog partition between orchestrators.** "ORCH12 keeps existing queue, ORCH-B new backlog" exists only as a bus HANDOFF (17:25Z). Issues have no `fleet:` label; claims have no fleet/orchestrator field; lane mutexes (launch-policy.md:15) are per orchestrator's own plan, so two fleets can each staff a `js/car/*` or lighting lane.
 5. **Sync policy conflict.** ORCH12 bus 16:55Z: "game PRs re-sync only on ORCH12 'SYNC <PR#>'"; role-fleet-watch.md:77 lets the watcher `sync-pr --push` any conflict/stale-red PR; role-pr-owner.md:44 tells owners to sync on CONFLICTING; launch-policy.md:43 wants ONE conflict-only resync lane. Four actors, no card for the lane. `SYNC` is not a bus TYPE.
-6. **Archiver duplicated.** Archive rights in role-merge-holder.md:80, running.md:11, role-fleet-watch.md:80, merge-desk.md §Archiving, memory `archive-only-after-bryce-done`. Cross-account sessions cannot be archived by the other orchestrator at all.
+6. **Archiver duplicated.** Archive rights in role-merge-holder.md:80, running.md:11, role-fleet-watch.md:80, the retired merge-desk card, memory `archive-only-after-bryce-done`. Cross-account sessions cannot be archived by the other orchestrator at all.
 7. **Message vocabulary split.** Bus TYPES (fleet-bus.mjs:39) lack NEW-PR, REPORT, FINAL, ARMED, SWEEP, SYNC, STAND-DOWN, MERGE?; those exist only on `send_message`, which Cursor/Codex/Grok and the other account cannot read.
 8. **Quota/cost per account.** `rate_limit_info` and cost are per account; `fleet-flags.mjs` (running.md:27) runs per orchestrator. No fleet-wide cost line; fine as a fleet-watch duty, but the watcher card assumes one account.
 9. **Base-red (tip) ownership.** "One owner per red tip" (steward §3) relies on `who-is-on-it --claim`; INCIDENT lines name a fixer but nothing ties the claim to the bus. Two orchestrators seeing the same ship red is exactly the 2026-09-18 three-fix incident (SHARED-BRANCH-COORDINATION:6-31).
@@ -162,7 +164,7 @@ No hook or workflow enforces the lease today (grep: no `lease check` in `.claude
 | `.claude/skills/agent-fleet/SKILL.md:28-29, 83-89` | "merge holder … the orchestrator holds the queue"; "(sole coordinator) merges … the orchestrator holds that queue" | "each orchestrator merges its own fleet's PRs" |
 | `.claude/skills/agent-fleet/references/role-fleet-watch.md:12-13` | "Merging stays with the merge holder" | "with the PR's own orchestrator" |
 | `.claude/skills/ci-watch/SKILL.md:3, 10-12, 26-28, 61-63` | "orchestrator holds merge pacing (role-merge-holder)" | "each orchestrator; pacing from the bus" |
-| `.claude/agents/merge-desk.md:3` (description) | "merge desk user/orchestrator merges at Level 3 per role-merge-holder" | same rewording |
+| the retired merge-desk card (deleted in 01442fcdb) (description) | "merge desk user/orchestrator merges at Level 3 per role-merge-holder" | same rewording |
 | `tools/ci/fleet-bus.mjs:2-4, 22-26, 39` | header "the host-neutral merge lease", usage lines for lease acquire/renew/check/break; TYPES without GAME-SLOT | header: "bus (lease subcommands retained, not a merge gate)"; add GAME-SLOT type (tool change + test) |
 | `tools/README.md:564` | "Merge lease (one holder, expiry, refusal) and typed fleet bus" | generated from fleet-bus.mjs `@doc` (`npm run gen`), not hand-edited |
 | `tests/unit/fleet-bus.test.mjs` (44 `lease` refs), `tests/groups.json:413`, `tools/ci/tooling-fast.mjs:470`, `docs/TESTING-COVERAGE.md:453` | describe "the cross-host merge lease" | keep the lease tests if the subcommand stays (it is still a valid generic mutex); reword descriptions via `tests/groups.json` + `npm run gen`; add a GAME-SLOT race test |
@@ -211,7 +213,7 @@ In-session subagents (unchanged): `worker`, `track-surveyor` (writers in worktre
 ```
 [<Role>] <Fleet>·<Slot> · <scope> · <Model> — <task, ≤ 60 chars>
 ```
-- `<Role>` ∈ `Orchestrator | Watch | Worker | Hunter | Owner | Sync | Review | Coordinator | Merge Desk` (bracket keeps the existing `[Merge Desk]` / `[Worker]` / `[Sync]` / `[Orchestrator]` prefixes that `list_sessions` filters and merge-desk.md:81 already use).
+- `<Role>` ∈ `Orchestrator | Watch | Worker | Hunter | Owner | Sync | Review | Coordinator | Merge Desk` (bracket keeps the existing `[Merge Desk]` / `[Worker]` / `[Sync]` / `[Orchestrator]` prefixes that `list_sessions` filters and the retired merge-desk card already use).
 - `<Fleet>` = one capital letter per orchestrator fleet (`A` = ORCH12's account, `B` = Fleet B). Survives orchestrator rotation (ORCH12→13 stays `A`).
 - `<Slot>` = the stable id other lines reference:
   - Orchestrator `O<gen>` (A·O12, B·O1); Watch `FW<n>`; Worker `W<wave>·L<lane>`; Hunter `H<n>·<lane>`; Owner / Sync `#<PR>`; Review `R<n>·#<PR>`; Coordinator `<host>`.

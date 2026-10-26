@@ -76,6 +76,10 @@ IMPROVED | SAME | WORSE
 
 ## Return — exactly three lines
 
+The report file's first line is `VERDICT:` WITH a colon; the return line is
+`VERDICT <verdict>` with NO colon. `subagent-contract.py` reads the return,
+and a `VERDICT:` line there fails its row check and bounces the hand-back.
+
 ```
 VERDICT <verdict> — <why> | report: <path>
 GAP1 <file:line — gap>
@@ -88,4 +92,4 @@ stop and DELIVER what you have (sections not done marked UNREAD); hitting
 `maxTurns` mid-tool-call returns NOTHING to the parent.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
-Run one simple command per Bash call (no `&&`, `|`, `;`, `$()` or `git -C`) so an allowlist can approve it. If a Bash call is denied, mark only that item UNREAD and continue with Read/Grep/Glob; if every route is denied, return your contract block marked UNREAD/UNKNOWN. Never route around a denial.
+Run one simple command per Bash call (no `&&`, `|`, `;`, `$()` or `git -C`) so an allowlist can approve it. If a Bash call is denied, mark only that item UNREAD and continue with Read/Grep/Glob; if every route is denied, return your contract block marked UNREAD. Never route around a denial.

@@ -17,13 +17,18 @@ import {
   addressProblem, ADDRESS_FORMS, ROLES, main, parseLive, whoIs, whoLine, ageOf, whoStatus, STALE_MIN,
   TYPES, PROTOCOL_TYPES, BODY_MIN, BODY_MAX, bodyProblem, lendMerger, idemOf, idemMarker, findIdem, strictCursor, sendBusLine,
   fixMarker, fixOf, openFixIncident, handoffMisuse, autoIdem, AUTO_IDEM_TYPES, watchShows, watchStep, watchBus, WATCH_QUIET,
+  TYPE_ALIASES, resolveType, identityHint, asVerdict, incidentOf, foldIncidents, incidentLedger, GAME_PATH_RE, shaOf, prOfLine,
+  slotOf, doneIsGame, gameSlotState, tipDrift, DEPLOY_BRANCH,
 } from "../../tools/ci/fleet-bus.mjs";
+import { GAME_PATH } from "../../tools/ci/merge-gate.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const T = 1_800_000_000;
 const A = "claude:session_A", B = "cursor:bc-B";
 /** A protocol body long enough for HANDOFF/READY/DONE/BLOCKED/LEND (BODY_MIN chars). */
 const BODY = "#2990 abc1234 blocked on review";
+/** main() with no session env (so `--as` is this test's to choose), no deploy-tip fetch and no stderr notes. */
+const QUIET = { env: {}, drift: () => "", err: () => {} };
 const held = (holder, minsLeft, extra = {}) => ({ holder, since: T - 600, expires: T + minsLeft * 60, ttlMin: 60, note: "", ...extra });
 
 test("acquire: a free or lapsed lease is taken; a live one held by another is refused", () => {
@@ -101,7 +106,7 @@ test("recipients: send refuses an undeliverable --to and names the accepted form
   const ok = ["*", "#3099", "A", "B·O3", "C·W4·L12", "orchestrator", "merge-holder", "tools", "track-engine",
     "claude:session_01VUPaKEF34eo9fQAj79ugGP", "claude:session_f075b3d5a84821cfffa13bb7", "claude:cse_01VUPaKEF34eo9fQAj79ugGP",
     "codex:01a1558a-88d6-73d2-8904-13327d29f012", "codex:refactor-all-b71e", "codex:track-engine-8d41",
-    "cursor:bc-b5cd51dd-5056-5709-aaf7-6a320ff4ffd9", "grok:fleet-bot-a1b2"];
+    "cursor:bc-b5cd51dd-5056-5709-aaf7-6a320ff4ffd9", "grok:fleet-bot-a1b2", "grok:DAD"];
   for (const to of ok) assert.equal(addressProblem(to), "", to);
   for (const to of ok) assert.equal(parseLine(formatLine("BLOCKED", to, A, BODY)).to, to);
   const refused = {
@@ -139,7 +144,7 @@ test("send to #<PR> dispatches the mirror once; other addresses and a failed dis
     g(h, "remote", "add", "origin", path.join(dir, "origin.git"));
     const out = [];
     let calls = 0;
-    const opts = (dispatch) => ({ cwd: h, log: (l) => out.push(l), dispatch, readyCheck: () => ({ ok: true }) });
+    const opts = (dispatch) => ({ ...QUIET, cwd: h, log: (l) => out.push(l), dispatch, readyCheck: () => ({ ok: true }) });
     assert.equal(main(["send", "READY", "--to", "#7", "--as", A, "abc1234 ready-gate 0 green"], opts(() => { calls++; return "dispatched"; })), 0);
     assert.equal(calls, 1);
     assert.equal(out.at(-1), "= mirror dispatched", out.join("\n"));
@@ -224,7 +229,8 @@ test("against real git: two hosts race for one lease, exactly one wins; the bus 
   }
 });
 
-// ---- who <fleet letter> (fleet redesign §4B item 4, §8 multi-host) ----------
+// ---- who <fleet letter> (fleet redesign §4B item 4; audit4 BH1/G9: the SENDER, never a body token) ----------
+const OA = "claude:session_01AAAAAAAAAAAAAAAAAAAAAA", OB = "claude:session_01BBBBBBBBBBBBBBBBBBBBBB", OF = "claude:session_01FLdmwWhj9BAeyKz5T8VQQN";
 const ORCH19 = "ORCH19 LIVE session_01FLdmwWhj9BAeyKz5T8VQQN (replaces ORCH18 session_01MQVTPLSi3hPtVi3b29w3YH), Fleet A orchestrator. Game slot after green Pages on 4cb1d80d: Fleet A #3082, then Fleet B";
 
 test("parseLive: the explicit `ORCH <letter> LIVE <host>:<id>` form, any host", () => {
@@ -322,7 +328,8 @@ test("main who: prints one line for the fleet's newest LIVE line, exits 1 for a 
     const out = [];
     // Commits carry the wall clock, so `now` must too (a fixed T would make every line months old: STALE).
     const NOW = Math.floor(Date.now() / 1000) + 600;
-    const opts = { cwd: h, log: (l) => out.push(l), dispatch: () => "x", now: () => NOW };
+    // `--as` is this session's own id unless APEX_FLEET_AS is a fleet letter (audit4 A2 G10): the test speaks as fleet A
+    const opts = { ...QUIET, env: { APEX_FLEET_AS: "A" }, cwd: h, log: (l) => out.push(l), dispatch: () => "x", now: () => NOW };
     assert.equal(main(["send", "ROTATE", "--to", "*", "--as", A, "A·O1 ORCH A LIVE claude:session_01AAAAAAAAAAAAAAAAAAAAAA"], opts), 0);
     assert.equal(main(["send", "GREEN", "--to", "A", "--as", A, "#7 green"], opts), 0);
     assert.equal(main(["who", "A"], opts), 0);
@@ -347,7 +354,7 @@ test("main who: prints one line for the fleet's newest LIVE line, exits 1 for a 
 });
 
 test("send READY needs a passing ready-gate receipt for the PR (and the head it names); unknown types say what to use", async () => {
-  const { writeReceipt } = await import("../../tools/lib/gate-receipt.mjs");
+  const { writeReceipt, readyClaimVerdict } = await import("../../tools/lib/gate-receipt.mjs");
   const dir = path.join(ROOT, "artifacts", `fleet-bus-ready-${process.pid}`);
   fs.rmSync(dir, { recursive: true, force: true });
   const g = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
@@ -358,7 +365,9 @@ test("send READY needs a passing ready-gate receipt for the PR (and the head it 
     const h = path.join(dir, "h");
     g(h, "remote", "add", "origin", path.join(dir, "origin.git"));
     const out = [];
-    const opts = { cwd: h, log: (l) => out.push(l), dispatch: () => "x" };
+    // The gate-file closure check (A1) refuses in any tree with an uncommitted gate edit; this test pins the receipt rows.
+    const readyCheck = (root, a) => readyClaimVerdict(root, { ...a, files: () => ({ ok: true }) });
+    const opts = { ...QUIET, cwd: h, log: (l) => out.push(l), dispatch: () => "x", readyCheck };
     assert.equal(main(["send", "READY", "--to", "orchestrator", "--as", A, "#41 abc1234 ready-gate 0"], opts), 2, "no receipt");
     assert.ok(out.at(-1).includes("REFUSED: no ready-gate receipt for #41"), out.at(-1));
     writeReceipt(h, "ready", { pr: 41, head: "abc1234def", ok: false, evidence: "plan-open: 1 open item" }, { main: null });
@@ -372,10 +381,19 @@ test("send READY needs a passing ready-gate receipt for the PR (and the head it 
     assert.equal(main(["send", "READY", "--to", "#41", "--as", A, "abc1234 ready-gate 0 green"], opts), 0, "the PR may be the address");
     const errs = [];
     const orig = console.error; console.error = (l) => errs.push(l);
-    try { assert.equal(main(["send", "LIVE", "--to", "*", "--as", A, "ORCH A LIVE"], opts), 1); } finally { console.error = orig; }
+    try { assert.equal(main(["send", "PING", "--to", "*", "--as", A, "ORCH A LIVE"], opts), 1); } finally { console.error = orig; }
     assert.ok(errs.join("\n").includes("READY / BLOCKED / DONE"));
     assert.ok(errs.join("\n").includes("ORCH <X> LIVE"));
-    assert.throws(() => formatLine("LIVE", "*", A, "x"), /READY \/ BLOCKED \/ DONE/);
+    assert.throws(() => formatLine("LIVE", "*", A, "x"), /READY \/ BLOCKED \/ DONE/, "formatLine stays strict: the alias is resolved at send");
+    // audit4 BH3/C4: `send LIVE` is never refused; it is stored as INFO with the word kept and a one-line hint.
+    out.length = 0;
+    assert.equal(main(["send", "LIVE", "--to", "D", "--as", A, "D·W33 on #3828, tooling-fast green"], opts), 0);
+    assert.equal(out[0], TYPE_ALIASES.LIVE.hint);
+    assert.deepEqual(readBus({ cwd: h, last: 1 }).entries.map((e) => [e.type, e.text]), [["INFO", "LIVE D·W33 on #3828, tooling-fast green"]]);
+    assert.equal(main(["send", "LIVE", "--to", "D", "--as", A, "LIVE D·W34 idle"], opts), 0);
+    assert.equal(readBus({ cwd: h, last: 1 }).entries[0].text, "LIVE D·W34 idle", "the word is not doubled");
+    assert.equal(main(["send", "LIVE", "--to", "D", "--as", A], opts), 1, "an empty LIVE is still an empty line");
+    assert.deepEqual(resolveType("READY"), { type: "READY", hint: "", prefix: "" });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -390,8 +408,8 @@ test("schema: the new peer and lending types send and parse; every old type stil
   }
   assert.equal(parseLine(formatLine("INFO", "B", A, "hi")).text, "hi", "peer types take any non-empty body");
   assert.equal(parseLine(formatLine("ROTATE", "*", A, "ORCH B LIVE claude:session_01BBBBBBBBBBBBBBBBBBBBBB")).type, "ROTATE");
-  assert.equal(whoIs([{ sha: "1", at: T, from: A, ...parseLine(formatLine("ROTATE", "*", A, "ORCH B LIVE claude:session_01BBBBBBBBBBBBBBBBBBBBBB")) }], "B").id,
-    "claude:session_01BBBBBBBBBBBBBBBBBBBBBB", "who reads a ROTATE announcement like a HANDOFF one");
+  assert.equal(whoIs([{ sha: "1", at: T, ...parseLine(formatLine("ROTATE", "*", OB, `ORCH B LIVE ${OB} (replaces …)`)) }], "B").id,
+    OB, "who reads a ROTATE announcement's sender");
 });
 
 test("schema: protocol bodies are BODY_MIN..BODY_MAX chars after whitespace collapse; LEND names merger:<letter>", () => {
@@ -449,7 +467,7 @@ test("against real git: an --idem resend writes nothing; read --strict keeps a h
     const h = path.join(dir, "h");
     g(h, "remote", "add", "origin", path.join(dir, "origin.git"));
     const out = [];
-    const opts = { cwd: h, log: (l) => out.push(l), dispatch: () => "x" };
+    const opts = { ...QUIET, get env() { return { APEX_FLEET_AS: process.env.APEX_FLEET_AS }; }, cwd: h, log: (l) => out.push(l), dispatch: () => "x" };
     assert.equal(main(["send", "LEND", "--to", "A", "--as", A, "--idem", "lend-3790", "#3790 abc1234 lent merger:A"], opts), 0);
     const first = readBus({ cwd: h, last: 10 }).entries;
     assert.equal(main(["send", "LEND", "--to", "A", "--as", A, "--idem", "lend-3790", "#3790 abc1234 lent merger:A"], opts), 0, "a resend is ok");
@@ -495,10 +513,10 @@ test("Q3: an empty body is refused; --pr is --to '#<n>'", () => {
   const errs = [];
   const orig = console.error; console.error = (l) => errs.push(l);
   try {
-    assert.equal(main(["send", "DONE", "--as", A, BODY], { log() {} }), 1, "no --to and no --pr");
-    assert.equal(main(["send", "DONE", "--pr", "abc", "--as", A, BODY], { log() {} }), 1, "bad --pr");
-    assert.equal(main(["send", "DONE", "--to", "*", "--as", A, "--fix", "abc1234", BODY], { log() {} }), 1, "--fix only on INCIDENT");
-    assert.equal(main(["send", "INCIDENT", "--to", "*", "--as", A, "--fix", "zz", "x"], { log() {} }), 1, "--fix needs a sha");
+    assert.equal(main(["send", "DONE", "--as", A, BODY], { ...QUIET, log() {} }), 1, "no --to and no --pr");
+    assert.equal(main(["send", "DONE", "--pr", "abc", "--as", A, BODY], { ...QUIET, log() {} }), 1, "bad --pr");
+    assert.equal(main(["send", "DONE", "--to", "*", "--as", A, "--fix", "abc1234", BODY], { ...QUIET, log() {} }), 1, "--fix only on INCIDENT");
+    assert.equal(main(["send", "INCIDENT", "--to", "*", "--as", A, "--fix", "zz", "x"], { ...QUIET, log() {} }), 1, "--fix needs a sha");
   } finally { console.error = orig; }
   assert.ok(errs.some((e) => e.includes("--pr <n>")), errs.join("|"));
 });
@@ -519,15 +537,15 @@ test("Q4: INCIDENT --fix marks the freeze; openFixIncident reads the newest open
 test("HANDOFF typing: ORCH LIVE, seed/heartbeat chatter, lends and returns are refused with the type to use", () => {
   const cases = {
     "ORCH B LIVE claude:session_01BBBBBBBBBBBBBBBBBBBBBB (replaces session_01OLD)": "ROTATE",
-    "A·O1 ORCH A LIVE claude:session_01AAAAAAAAAAAAAAAAAAAAAA": "ROTATE",
-    "OrchB 7 LIVE session_01H8VtkpzfE5KwDeid2n46At for Fleet B": "ROTATE",
-    "SEED B SPAWNED session_01CHILDCHILDCHILDCHILDCH": "INFO",
+    "ORCH B·O3 LIVE (replaces B·O2)": "ROTATE",
+    "ORCH B LIVE again (Bryce typed: fix deploy asap + spawn sessions)": "ROTATE",
     "SEED D LIVE session_01SEEDSEEDSEEDSEEDSEEDSE": "INFO",
     "HB D LIVE cursor:bc-1234abcd 14:00Z all quiet": "INFO",
     "[INFO] scenery-locations.json is regenerated by deploy": "INFO",
     "[QUESTION] does #3790 need a GAME-SLOT first?": "QUESTION",
     "#3790 abc1234 lent to A for the merge, D is busy": "LEND",
     "#3790 abc1234 merger:A after green Pages": "LEND",
+    "lend #3790 to B: D is busy": "LEND",
     "#3700 def5678 returned to D after the sync": "RETURN",
     "RETURN #3700 def5678 to fleet D now": "RETURN",
   };
@@ -535,7 +553,12 @@ test("HANDOFF typing: ORCH LIVE, seed/heartbeat chatter, lends and returns are r
     assert.equal(handoffMisuse(body)?.type, type, body);
     assert.throws(() => formatLine("HANDOFF", "*", A, body), new RegExp(`send ${type} instead`), body);
   }
-  for (const body of ["B·W3 at 210k: successor owns #3790 abc1234, next = re-run ready-gate", "#3764 285c00d re-sync after #3768 then ready-gate"]) {
+  // audit4 BH3 / verify-11-20 #14: anchored. A quoted ORCH LIVE, a mid-sentence "lent", a SPAWN line and an old
+  // free-text LIVE pass as hand-offs; a LIVE status body is the alias's job (send LIVE), not a refusal.
+  for (const body of ["B·W3 at 210k: successor owns #3790 abc1234, next = re-run ready-gate", "#3764 285c00d re-sync after #3768 then ready-gate",
+    "A·O1 ORCH A LIVE claude:session_01AAAAAAAAAAAAAAAAAAAAAA", "OrchB 7 LIVE session_01H8VtkpzfE5KwDeid2n46At for Fleet B",
+    "SEED B SPAWNED session_01CHILDCHILDCHILDCHILDCH", "SPAWN B·W7 for #3790 merger:A after the sync", "LIVE D·W33 #3828 cf49dde tooling-fast green",
+    "#3725 successor: the PR was lent to A on 10-25, finish the Plan", "context cap: hand #3700 to the next worker (ORCH B LIVE knows)"]) {
     assert.equal(handoffMisuse(body), null, body);
     assert.equal(parseLine(formatLine("HANDOFF", "B", A, body)).type, "HANDOFF");
   }
@@ -647,4 +670,186 @@ test("main watch: refuses a bad --to or --interval before polling; otherwise ret
     watch: { read: () => ({ tip: "", entries: [] }), sleep: async () => {}, polls: 2, err: () => {}, cursorPath: "" } });
   assert.equal(code, 0);
   assert.deepEqual(out, []);
+});
+
+// ---- fourth-pass audit (A2, 2026-10-26): identity, typed INCIDENT, GAME-SLOT by diff, tip drift, --help ----------
+
+test("identity: APEX_SESSION_ID is an alias of APEX_FLEET_AS (with a hint); --as must be this session unless APEX_FLEET_AS is a letter", () => {
+  const C = "cursor:bc-b5cd51dd-5056-5709-aaf7-6a320ff4ffd9";
+  assert.equal(whoAmI({ APEX_SESSION_ID: C }), C, "audit4 C6: the Cursor brief's variable identifies the lane");
+  assert.equal(whoAmI({ APEX_SESSION_ID: "1923dcd1", CODEX_THREAD_ID: "t" }), "codex:t", "a bare hash is not an identity");
+  assert.equal(whoAmI({ APEX_FLEET_AS: "grok:DAD", APEX_SESSION_ID: C }), "grok:DAD", "APEX_FLEET_AS wins");
+  assert.equal(identityHint({ APEX_SESSION_ID: C }), `fleet-bus: identity ${C} from APEX_SESSION_ID (alias); set APEX_FLEET_AS to the same value`);
+  assert.equal(identityHint({ APEX_FLEET_AS: C, APEX_SESSION_ID: C }), "");
+  assert.equal(identityHint({ APEX_SESSION_ID: C }, C), "", "--as names it: no hint");
+  assert.deepEqual(asVerdict({}, OA), { ok: true, note: "" }, "no own id: any <host>:<id>");
+  assert.deepEqual(asVerdict({ CLAUDE_CODE_REMOTE_SESSION_ID: "cse_01AAAAAAAAAAAAAAAAAAAAAA" }, OA), { ok: true, note: "" }, "its own id");
+  const spoof = asVerdict({ CLAUDE_CODE_REMOTE_SESSION_ID: "cse_01AAAAAAAAAAAAAAAAAAAAAA" }, "grok:DAD");
+  assert.deepEqual(spoof, { ok: false, note: `--as grok:DAD is not this session (${OA}): a session signs only as itself (APEX_FLEET_AS=<fleet letter> to relay)` });
+  assert.deepEqual(asVerdict({ APEX_FLEET_AS: "D·W33" }, "grok:DAD"),
+    { ok: true, note: "fleet-bus: --as grok:DAD differs from this session (APEX_FLEET_AS=D·W33); sending as grok:DAD" }, "the mismatch is logged");
+});
+
+test("main send: --as another session is refused (exit 2) before any write; a letter APEX_FLEET_AS relays with a note", () => {
+  const { dir, h } = bareBus("as");
+  try {
+    const notes = [];
+    const env = { CLAUDE_CODE_REMOTE_SESSION_ID: "cse_01AAAAAAAAAAAAAAAAAAAAAA" };
+    const errs = [];
+    const orig = console.error; console.error = (l) => errs.push(l);
+    try { assert.equal(main(["send", "INFO", "--to", "D", "--as", "grok:DAD", "hi"], { ...QUIET, env, cwd: h, log() {} }), 2); } finally { console.error = orig; }
+    assert.deepEqual(errs, [`fleet-bus: ${asVerdict(env, "grok:DAD").note}`]);
+    assert.equal(readBus({ cwd: h, last: 5 }).entries.length, 0);
+    assert.equal(main(["send", "INFO", "--to", "D", "--as", OA, "hi"], { ...QUIET, env, cwd: h, log() {} }), 0, "its own id");
+    assert.equal(main(["send", "INFO", "--to", "D", "--as", "grok:DAD", "relay"], { ...QUIET, env: { APEX_FLEET_AS: "D" }, cwd: h, log() {}, err: (l) => notes.push(l) }), 0);
+    assert.deepEqual(notes, [asVerdict({ APEX_FLEET_AS: "D" }, "grok:DAD").note]);
+    notes.length = 0;
+    assert.equal(main(["send", "INFO", "--to", "grok:DAD", "x"], { ...QUIET, env: { APEX_SESSION_ID: "cursor:bc-12345678" }, cwd: h, log() {}, err: (l) => notes.push(l) }), 0,
+      "audit4 BH4: grok:DAD is deliverable; APEX_SESSION_ID identifies");
+    assert.deepEqual(notes, [identityHint({ APEX_SESSION_ID: "cursor:bc-12345678" })]);
+    assert.deepEqual(readBus({ cwd: h, last: 5 }).entries.map((e) => `${e.from}>${e.to}`), [`${OA}>D`, "grok:DAD>D", "cursor:bc-12345678>grok:DAD"]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("typed INCIDENT: open <id> <reason> / close <id>; an untyped line is refused at send but legacy lines still read", () => {
+  assert.deepEqual(incidentOf({ type: "INCIDENT", text: "open quota-2026-10-26 launches rejected" }), { op: "open", id: "quota-2026-10-26", reason: "launches rejected" });
+  assert.deepEqual(incidentOf({ type: "INCIDENT", text: "close quota-2026-10-26" }), { op: "close", id: "quota-2026-10-26", reason: "" });
+  assert.equal(incidentOf({ type: "INCIDENT", text: "open bare-id" }), null, "an open needs a reason");
+  assert.equal(incidentOf({ type: "INCIDENT", text: "open x [fix:abcdef1]" }), null, "a marker is not a reason");
+  assert.equal(incidentOf({ type: "INFO", text: "open a b" }), null);
+  assert.equal(incidentOf({ type: "INCIDENT", text: "Pages red, freeze until 'lifted'" }), null);
+  assert.equal(bodyProblem("INCIDENT", "open pages-red-3801 Pages red on abc1234 [fix:abc1234]"), "");
+  assert.equal(bodyProblem("INCIDENT", "close pages-red-3801 green again"), "");
+  assert.equal(bodyProblem("INCIDENT", "lifted: Pages green on abcdef12 (auto-lift of x's incident)"), "", "incident-lift.mjs's legacy lift line still sends");
+  assert.equal(bodyProblem("INCIDENT", "runner down").slice(0, 19), "INCIDENT is typed: ");
+  assert.equal(parseLine("INCIDENT to:* from:x Pages red, freeze until lifted").type, "INCIDENT", "old lines parse");
+});
+
+test("foldIncidents: a freeze is open while any open id has no close; closes are by id; keywords never lift; legacy lift by fix sha", () => {
+  const e = (sha, text, at = 1) => ({ sha, at, type: "INCIDENT", from: OA, to: "*", text });
+  const open = (es) => Object.keys(foldIncidents(es).open).sort();
+  // redteam G2: 28fb4b168 said "until … 'lifted'", 1be0755b2 "CLEARED … resume": free text no longer opens or lifts.
+  assert.deepEqual(open([e("1", "open a pages red"), e("2", "Pages red until 'lifted'"), e("3", "freeze lifted? asking")]), ["a"]);
+  assert.deepEqual(open([e("1", "open a pages red"), e("2", "open b quota rejected"), e("3", "close a")]), ["b"]);
+  assert.deepEqual(open([e("1", "open a pages red"), e("2", "close b")]), ["a"], "closing another id changes nothing");
+  assert.deepEqual(open([e("1", `open a red ${fixMarker("abcdef1234")}`), e("2", "lifted: Pages green on abcdef12 (auto-lift)")]), [], "incident-lift's line closes the id whose fix it names");
+  assert.deepEqual(open([e("1", `open a red ${fixMarker("abcdef1234")}`), e("2", "lifted: Pages green on 99999999")]), ["a"]);
+  const ledger = foldIncidents([e("1", "open a pages red", 5)]);
+  assert.deepEqual(ledger.open.a, { sha: "1", from: OA, at: 5, reason: "pages red", fix: null });
+  assert.deepEqual(Object.keys(foldIncidents([e("2", "close a")], ledger).open), [], "folds onto a cached ledger");
+  const t = openFixIncident([e("1", `open pr-red red ${fixMarker("abcdef1234")}`), e("2", "manual freeze")]);
+  assert.deepEqual([t.id, t.sha, t.entry.sha], ["pr-red", "abcdef1234", "1"], "a typed open with a fix wins and carries its id");
+});
+
+test("against real git: incidentLedger reads the whole branch (no 200-line window), caches, extends, rebuilds when missing", () => {
+  const { dir, h } = bareBus("incidents");
+  try {
+    const file = path.join(dir, "incidents.json");
+    assert.equal(sendBusLine("INCIDENT", "*", OA, "open old-freeze Pages red on abc1234", { cwd: h }).ok, true);
+    for (let i = 0; i < 205; i++) assert.equal(writeBus(() => ({ ok: true, line: formatLine("GREEN", "*", OB, `#${i} green`), lease: undefined }), { cwd: h }).ok, true);
+    let l = incidentLedger({ cwd: h, file });
+    assert.deepEqual(Object.keys(l.open), ["old-freeze"], "an open 206 lines back still freezes (G16)");
+    assert.equal(l.rebuilt, true);
+    assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).tip, l.tip, "cached");
+    assert.equal(sendBusLine("INCIDENT", "*", OB, "close old-freeze Pages green", { cwd: h }).ok, true);
+    l = incidentLedger({ cwd: h, file });
+    assert.equal(l.rebuilt, false, "extended from the cached tip");
+    assert.deepEqual(l.open, {});
+    fs.rmSync(file);
+    assert.equal(sendBusLine("INCIDENT", "*", OB, "open quota-2026-10-26 launch rejected", { cwd: h }).ok, true);
+    l = incidentLedger({ cwd: h, file });
+    assert.equal(l.rebuilt, true, "a missing cache rebuilds from the full log");
+    assert.deepEqual(Object.keys(l.open), ["quota-2026-10-26"]);
+    const out = [];
+    assert.equal(main(["incidents"], { ...QUIET, cwd: h, log: (x) => out.push(x) }), 3, "exit 3: a freeze is open");
+    assert.deepEqual(out[0].split(" ").filter((_, i) => i !== 2 && i !== 4), ["OPEN", "quota-2026-10-26", `from:${OB}`, "launch", "rejected"], out[0]);
+    assert.throws(() => formatLine("INCIDENT", "*", OA, "runner down"), /INCIDENT is typed/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("GAME-SLOT: a slot ends only on its own PR's DONE; a game merge is decided by the merge's diff, not the word", () => {
+  assert.equal(String(GAME_PATH_RE), String(GAME_PATH), "one GAME_PATH regex with merge-gate.mjs");
+  assert.equal(shaOf("#3790 merged 1a2b3c4d two parents [idem:DONE-3790-1a2b3c4]"), "1a2b3c4d");
+  assert.equal(shaOf("#3790 merged in run 40322290836"), "");
+  assert.equal(prOfLine({ to: "#12", text: "#99" }), 12);
+  assert.equal(prOfLine({ to: "*", text: "DONE #99 abc" }), 99);
+  assert.equal(prOfLine({ to: "*", text: "no pr" }), null);
+  assert.deepEqual(slotOf({ type: "HANDOFF", text: "GAME-SLOT #5 abc1234", from: OA, at: 1, sha: "s" }), { pr: 5, from: OA, at: 1, sha: "s", text: "#5 abc1234" });
+  const e = (sha, type, text, at) => ({ sha, at, type, to: "*", from: OA, text });
+  const entries = [
+    e("1", "GAME-SLOT", "#10 aaaa111", 1),
+    e("2", "DONE", "#11 bbbb222 merged, game", 2), // another PR's DONE (redteam G4): the slot stays
+    e("3", "DONE", "#12 cccc333 merged, non-game", 3), // the diff says game (G3): it counts
+  ];
+  const isGame = (x) => ({ 2: false, 3: true })[x.sha] ?? null;
+  let s = gameSlotState(entries, { isGame });
+  assert.equal(s.slot.pr, 10);
+  assert.equal(s.closedAt, 0, "a DONE for #11 does not end #10's slot");
+  assert.equal(s.lastGame.sha, "3", "the diff decides: #12 was a game merge whatever its text says");
+  s = gameSlotState([...entries, e("4", "DONE", "#10 dddd444 merged", 4)], { isGame });
+  assert.equal(s.closedAt, 4, "its own DONE closes it");
+  assert.equal(s.lastGame.sha, "4", "unknown diff with a sha: fail-closed, counted as game");
+  s = gameSlotState([e("5", "DONE", "#13 closed unmerged, game yield", 5), e("6", "DONE", "#14 closed unmerged", 6)]);
+  assert.equal(s.lastGame.sha, "5", "no sha and no diff: the old word decides");
+  s = gameSlotState([...entries, e("7", "GAME-SLOT", "#20 eeee555", 7)], { isGame });
+  assert.deepEqual([s.slot.pr, s.closedAt], [20, 0], "a newer slot starts open");
+});
+
+test("against real git: doneIsGame reads `git diff --name-only <sha>^1 <sha>`; tipDrift warns when this file differs from the deploy tip", () => {
+  const { dir, h } = bareBus("game");
+  const g = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  try {
+    const commit = (file, body, msg) => {
+      fs.mkdirSync(path.dirname(path.join(h, file)), { recursive: true });
+      fs.writeFileSync(path.join(h, file), body);
+      g(h, "add", file);
+      g(h, "commit", "-q", "-m", msg);
+      return g(h, "rev-parse", "HEAD");
+    };
+    commit("README.md", "x\n", "base");
+    const tools = commit(["tools", "ci", "x.mjs"].join("/"), "1\n", "tools");
+    const game = commit(["js", "core", "a.js"].join("/"), "1\n", "game");
+    assert.equal(doneIsGame({ text: `#1 ${tools.slice(0, 8)} merged` }, { cwd: h }), false);
+    assert.equal(doneIsGame({ text: `#2 ${game.slice(0, 8)} merged` }, { cwd: h }), true);
+    assert.equal(doneIsGame({ text: "#3 deadbee1 merged" }, { cwd: h }), null, "not in this clone");
+    assert.equal(doneIsGame({ text: "#4 merged" }, { cwd: h }), null, "no sha");
+    const self = path.join(dir, "fleet-bus.mjs");
+    fs.writeFileSync(self, "old copy\n");
+    commit("tools/ci/fleet-bus.mjs", "new copy\n", "tip");
+    g(h, "push", "-q", "origin", `HEAD:refs/heads/${DEPLOY_BRANCH}`);
+    const file = path.join(dir, "tip-check.json");
+    const [lb, rb] = [g(h, "hash-object", self), g(h, "rev-parse", "HEAD:tools/ci/fleet-bus.mjs")];
+    assert.equal(tipDrift({ cwd: h, self, file, now: T }),
+      `= WARNING fleet-bus is behind the deploy tip; merge origin (blob ${lb.slice(0, 7)} vs ${rb.slice(0, 7)} on ${DEPLOY_BRANCH})`);
+    fs.writeFileSync(self, "new copy\n");
+    assert.equal(tipDrift({ cwd: h, self, file, now: T + 60 }), "", "same blob: no warning");
+    let fetched = 0;
+    const run = (args) => {
+      if (args[0] === "fetch") fetched++;
+      try { return { status: 0, stdout: execFileSync("git", args, { cwd: h, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) }; } catch (e) { return { status: 1, stdout: "" }; }
+    };
+    tipDrift({ cwd: h, self, file, now: T + 120, run });
+    assert.equal(fetched, 0, "at most one fetch per 10 min: the cached blob answers");
+    tipDrift({ cwd: h, self, file, now: T + 700, run });
+    assert.equal(fetched, 1, "a stale cache fetches once");
+    assert.equal(tipDrift({ cwd: h, self: path.join(dir, "missing.mjs"), file, now: T }), "", "no file, no warning");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("--help prints the usage on stdout and exits 0, before parsing anything else", () => {
+  const out = [];
+  assert.equal(main(["--help"], { ...QUIET, log: (l) => out.push(l) }), 0);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].slice(0, 26), "usage: fleet-bus.mjs lease");
+  assert.equal(out[0].split("\n").filter((l) => l.trim().startsWith("fleet-bus.mjs incidents [--json]")).length, 1);
+  assert.equal(main(["send", "INFO", "--help"], { ...QUIET, log() {} }), 0);
+  const errs = [];
+  const orig = console.error; console.error = (l) => errs.push(l);
+  try { assert.equal(main(["--definitely-not-a-flag"], { ...QUIET, log() {} }), 1); } finally { console.error = orig; }
 });

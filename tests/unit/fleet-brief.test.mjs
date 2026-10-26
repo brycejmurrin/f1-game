@@ -84,8 +84,20 @@ test("main: writes brief.json and brief.md from a queue file, a saved board and 
     const md = fs.readFileSync(path.join(dir, "out", "brief.md"), "utf8");
     assert.ok(/\| #3791 \| queued \| \*\*none\*\* \|/.test(md), "an unowned lane is loud");
     assert.ok(/#3792 FIX/.test(md), md);
+    const auth = md.split("\n")[1];
+    assert.ok(auth.startsWith('authority (AGENTS.md §Concurrent PRs, verbatim; nobody re-asks it): "STANDING AUTHORITY (Bryce 2026-10-19'), auth);
+    assert.ok(auth.includes("It also launches sessions") && md.trimEnd().split("\n").length <= MAX_LINES, "one line, inside the cap");
     assert.equal(main(["--fleet", "BB"], { log: () => {} }), 1);
-    assert.equal(main(["--fleet", "B", "--wat"], { log: () => {} }), 1);
+    assert.equal(main(["--fleet", "B", "--wat"], { log: () => {} }), 2, "unknown flag (makeFlags)");
+    assert.equal(main(["--fleet", "B", "--queue-md", "x.md"], { log: () => {} }), 2, "the never-built --queue-md is unknown");
+    const help = [];
+    assert.equal(main(["--help"], { log: (l) => help.push(l) }), 0);
+    assert.equal(help[0], "usage: fleet-brief.mjs --fleet L [--queue F] [--board F] [--bus-json F | --no-bus] [--trigger ID …] [--ask T …] [--slot T] [--out DIR] [--as ID] [--last N] [--json]\n  Writes artifacts/fleet-brief/brief.{json,md} (≤ 2 KB, ≤ 40 lines). An --ask/--slot that narrows the standing authority is refused.\n  Exit 0 written, 1 usage or unreadable input, 2 refused or an unknown flag.", "match /^usage: fleet-brief\\.mjs --fleet L/");
+    const refused = [];
+    assert.equal(main(["--fleet", "B", "--no-bus", "--ask", "Launch only on my typed word", "--out", path.join(dir, "no")],
+      { log: (l) => refused.push(l), bus: () => assert.fail("refused before any read") }), 2);
+    assert.ok(refused[0].startsWith('= brief REFUSED: "Launch only on my typed word" narrows the standing authority'), refused[0]);
+    assert.equal(fs.existsSync(path.join(dir, "no")), false, "nothing written on a refusal");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

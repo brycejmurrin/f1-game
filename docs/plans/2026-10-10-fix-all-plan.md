@@ -1,5 +1,7 @@
 # Fix-all plan — bug hunts 1 + 2 and the launch sequence (2026-10-10)
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — the batch branches landed per git history; the plan is a record, not a to-do list.
+
 Owner: session `claude/code-review-bug-hunt-mkrcf5`. Registers: `2026-10-09-bug-hunt-plan.md` (hunt 1, 75 rows,
 every kept row already fixed on a batch branch) and `2026-10-10-bug-hunt-2-register.md` (hunt 2, 31 bug rows,
 10 perf, cleanup census). Ship tip at writing: `928e21146` (#1298). Every fix lands by PR into the ship branch;

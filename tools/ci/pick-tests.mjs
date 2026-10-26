@@ -495,15 +495,12 @@ function changedFiles(argv) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
 
-  try { validateSelectionArgs(argv); } catch (e) { console.error(e.message); process.exit(1); }
-
   // --help must answer without consulting git. On a clean deploy tip,
   // changedFiles() is empty and the default prose is "no changed files" —
   // which does not contain `group`/`test:`, so the MCP smoke in
   // tools-runnable.test.mjs fails even though the selector itself is fine.
   // That smoke used to pass accidentally whenever the working tree had diffs.
-  if (argv.includes("--help") || argv.includes("-h")) {
-    console.log(`Usage: node tools/ci/pick-tests.mjs [options] [paths…]
+  const USAGE = `Usage: node tools/ci/pick-tests.mjs [options] [paths…]
   (no args)     groups for files not yet on ${DEPLOY_BRANCH}, plus the working tree
   --staged      only staged files
   --since <ref> files changed since <ref>
@@ -511,9 +508,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   --json        machine-readable {reason,files,groups} (asserted by pick-tests.test.mjs)
   --help        this message
 
-Each matched path maps to one or more test:<group> scripts (see RULES).`);
-    process.exit(0);
-  }
+Each matched path maps to one or more test:<group> scripts (see RULES).
+An unknown option prints this usage and exits 2.`;
+  if (argv.includes("--help") || argv.includes("-h")) { console.log(USAGE); process.exit(0); }
+  try { validateSelectionArgs(argv); } catch (e) { console.error(`${e.message}\n${USAGE}`); process.exit(2); }
 
   const files = changedFiles(argv);
 

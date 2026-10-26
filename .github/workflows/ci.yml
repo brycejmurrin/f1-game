@@ -1921,6 +1921,46 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # THE TRAIN'S VM TWINS (audit4 D1 / ci-7d C2, 2026-10-26). A Pages call
+  # only: node-suites skips the train (D2), and the selected legs skip every
+  # VM-twinned spec, so without this job a merge interaction in a twinned
+  # behaviour surfaced only at the nightly. It runs exactly the twins of the
+  # specs the train's plan dropped (select's `twins` / `adapted` outputs), so
+  # its cost follows the diff. tools/ci/twinned-specs.mjs trainCoverage()
+  # reads this job's `if:` and reds the fast gate if it stops reaching the train.
+  train-twins:
+    name: VM twins on the train (dropped browser twins)
+    needs: [select]
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (!cancelled() && inputs.concurrency_key != '' && needs.select.result == 'success' && (needs.select.outputs.twins != '' || needs.select.outputs.adapted != '')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # elevation-tracks-vm (40 circuit builds) is the slowest twin, ~7.6 min on
+    # a runner; 25 is the node-suites cap for the same files.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      - name: Run the dropped specs' VM twins
+        env:
+          TWINS: ${{ needs.select.outputs.twins }}
+          ADAPTED: ${{ needs.select.outputs.adapted }}
+          APEX_CIRCUITS: ${{ needs.select.outputs.twin_circuits }}
+        run: |
+          set -eu
+          if [ -n "$TWINS" ]; then
+            echo "hand twins: $TWINS"
+            # shellcheck disable=SC2086 # a space-separated file list
+            node --test --test-timeout=900000 $TWINS
+          fi
+          if [ -n "$ADAPTED" ]; then
+            echo "adapted specs under APEX_VM_PAGE=1: $ADAPTED"
+            # shellcheck disable=SC2086
+            APEX_VM_PAGE=1 node --test --test-timeout=900000 $ADAPTED
+          fi
+
   # THE CHANGE-AWARE GATE, in two jobs (2026-09-10): `select` plans, `selected`
   # runs the plan as a matrix. It used to be one job that ran on branch pushes
   # and PRs only. Three things about it were wrong, all fixed here:
@@ -1993,6 +2033,14 @@ jobs:
       geometry: ${{ steps.geometry.outputs.geometry }}
       geometry_targeted: ${{ steps.geometry.outputs.targeted }}
       geometry_circuits: ${{ steps.geometry.outputs.circuits }}
+      # The VM twins of the browser specs a Pages call's plan dropped as twinned
+      # (tools/ci/twinned-specs.mjs trainTwinPlan; the train-twins job runs them).
+      twins: ${{ steps.twins.outputs.twins }}
+      adapted: ${{ steps.twins.outputs.adapted }}
+      twin_circuits: ${{ steps.twins.outputs.twin_circuits }}
+      # Touched js dirs with no module-specific browser spec AND no unit test
+      # naming them (select-specs.mjs jsCoverageGaps); selected-verdict reds a PR.
+      coverage_gaps: ${{ steps.gaps.outputs.coverage_gaps }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2222,6 +2270,32 @@ jobs:
           BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || '' }}
           OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || '' }}
         run: bash tools/ci/ci-select-specs-step.sh
+      # THE TRAIN'S VM TWINS (audit4 D1 / ci-7d C2, 2026-10-26). The plan drops
+      # every VM-twinned browser spec (coveredByVmTwin) on the premise that the
+      # node job runs its twin, but node-suites skips a Pages call (decision
+      # D2), so 354 of 354 trains ran neither copy. This names the twins the
+      # plan dropped; train-twins runs them. Diff-scoped, so a docs or tools
+      # train runs none; cheaper than the six node slices D2 removed.
+      - name: VM twins the train must run
+        id: twins
+        if: ${{ inputs.concurrency_key != '' && steps.sel.outcome == 'success' }}
+        run: node tools/ci/twinned-specs.mjs --train-plan sel.json --github-output
+      # NO-COVERAGE DIRS (audit4 D1 / ci-7d C7). Six js dirs routed only to the
+      # boot specs for a week (build-worker, bitmap decode, …). select-specs
+      # names any touched dir with neither a module-specific browser spec nor a
+      # unit test that names its files; selected-verdict turns that into a red.
+      - name: Touched js dirs with no coverage
+        id: gaps
+        if: ${{ steps.sel.outcome == 'success' }}
+        run: |
+          # shellcheck disable=SC2016 # the ${…} below are JavaScript template literals
+          node -e '
+            const r = require("./sel.json");
+            const gaps = r.coverageGaps || [];
+            for (const g of gaps) console.log(`::warning::NO COVERAGE: ${g.dir} (${g.files.join(", ")}) — no module-specific browser spec routed and no unit test names it`);
+            console.log(`${gaps.length} touched js dir(s) with no coverage`);
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `coverage_gaps=${gaps.map((g) => g.dir).join(" ")}\n`);
+          '
       # DOES THIS DIFF CHANGE ANYTHING THAT ACTUALLY SHIPS?
       #
       # pages.yml stages a fixed list of runtime paths into _site/. A commit that
@@ -2802,6 +2876,19 @@ jobs:
       # groups with tools/ci/remote-group.mjs, or split the change. The train
       # (a Pages call, its plan against LIVE) still warns: dropped specs there
       # ran on the PRs that carried them.
+      # A touched js dir with no coverage at all is a red on a PR (ci-7d C7):
+      # route it in select-specs.mjs SOURCE_AFFECTED / pick-tests, or add the
+      # unit test it lacks. The train warns: the PR that carried it was judged.
+      - name: Every touched js dir has coverage
+        env:
+          GAPS: ${{ needs.select.outputs.coverage_gaps }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
+        run: |
+          set -u
+          [ -z "${GAPS:-}" ] && { echo "every touched js dir has browser or node coverage"; exit 0; }
+          if [ "$CALLED" = "true" ]; then echo "::warning::no coverage for: $GAPS"; exit 0; fi
+          echo "::error::NO COVERAGE for touched js dir(s): $GAPS — route a module-specific spec (tools/ci/select-specs.mjs SOURCE_AFFECTED) or add a unit test that names the file"
+          exit 1
       - name: One answer for the change-aware gate
         env:
           SELECT: ${{ needs.select.result }}
@@ -3015,16 +3102,32 @@ jobs:
       - driving-model
       - renderer-macos
       - xr
+      - train-twins
       - select
       - selected
       - selected-verdict
       - baseline-trial
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) && (!cancelled()) }}
+    # RUNS ON A LABEL EVENT AND AN OPTED-OUT DRAFT TOO (audit4 D1 / pr-flow P9,
+    # 2026-10-26). It used to carry every job's label/draft prefix, so on those
+    # runs it SKIPPED, and a skipped job's check-run is named by the raw
+    # `${{ … }}` text of `name:` above (389 such check-runs in 7 d). Running,
+    # it reports under its EVALUATED name ("CI label event (ignored)" / "CI
+    # draft (opted out)"), never `CI`, so the required check is not satisfied
+    # by it (#2664); the steps below do no work on those runs. A fixed
+    # `name: CI` with the routing in `if:` would be worse: a skipped job
+    # reports success under the required name. A CANCELLED run still has no
+    # verdict (#510), so `!cancelled()` stays.
+    if: ${{ !cancelled() }}
     steps:
+      - name: No verdict for a label event or an opted-out draft
+        if: ${{ !((github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"'))))) }}
+        run: echo "label event or opted-out draft — every job skipped by design; this check is not the required CI"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) }}
         with:
           persist-credentials: false
       - name: Aggregate job results
+        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) && !contains(format('{0}{1}', fromJSON('"\n"'), github.event.changes.body.from), fromJSON('"\nCI\u003a run"')))) }}
         env:
           NEEDS: ${{ toJSON(needs) }}
           # Full-tier PR runs: these must have run AND passed (a job skipped by `if:` reports success, so a hollow

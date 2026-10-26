@@ -15,7 +15,9 @@ geometry bug.
    individual modules. New full-screen overlays must be added to the internal
    `DEFS` array in `js/ui/layers.js` (only `LAYER_IDS` is exported — do
    not assign `UiLayers.DEFS`). Modal rank comes from managed opening order,
-   never `querySelectorAll` document order.
+   never `querySelectorAll` document order. Cost: `top()` / `anyOpen()` are layer
+   queries, not per-frame state — called from a rAF or pad tick they must be cached
+   and invalidated on open/close (as `navOpen()` is).
 
 2. **Use the declared close door.** For real dialogs, let `TopModal` mirror
    `hidden` to `showModal()`/`close()`. Add
@@ -51,8 +53,9 @@ geometry bug.
    pointer only; use `any-pointer` when the question is "does any attached
    input exist?"
 
-8. **Verify.** `npm run test:tooling-fast`, then the one spec for the surface (`menu-keyboard`, `ui-button-touch`, `ui-scale`) or `remote-group.mjs ui` on the pushed branch (AGENTS.md verification table).
-   If JS/CSS changed, `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) before commit.
+8. **Verify.** `npm run test:tooling-fast`, then the one spec for the surface, backgrounded (AGENTS.md rule 4):
+   `npm test -- tests/specs/<menu-keyboard|ui-button-touch|ui-scale>.spec.js`, or `remote-group.mjs ui` on the
+   pushed branch (AGENTS.md verification table). Shell/cache: [bump.md](../../check-changes/references/bump.md).
 
 ### Pause settings overlay
 
@@ -126,7 +129,7 @@ keeps a pannable toolbar"), `sheetshape-density-scale.test.mjs` (zoom-aware
 density). Measured fit is BROWSER-only (`tools/ui/layout-audit.mjs`;
 `menu-fit.mjs` is deprecated, kept only for `--safe=` notch insets;
 `ui-scale-axis.mjs`, `ui-scale.spec.js`); record the cell (viewport, scale,
-pointer) and the unrun tool in the PR.
+pointer — `ios-iphone-landscape-844` touch first) and the unrun tool in the PR.
 
 ## Common mistakes
 

@@ -203,6 +203,14 @@ const SOURCE_EXEMPT = new Map([
   ["docs/archive/OLD.md", /move-tree\.test\.mjs|docs-integrity/],
   ["tools/nested/README.md", /move-tree\.test\.mjs|docs-integrity/],
   ["tests/unit/joins.test.mjs", /move-tree\.test\.mjs|docs-integrity/],
+  // Scratch-root fixtures of the CI planners (audit4 D1, 2026-10-26): select-specs' jsCoverageGaps writes a fake
+  // js/ tree plus one unit test and one spec into a temp root; twinned-specs names a spec that must have no VM
+  // twin. Strings the planner classifies, never files it must find.
+  ["js/tested/b.js", /select-specs\.test\.mjs|docs-integrity/],
+  ["tests/unit/b.test.mjs", /select-specs\.test\.mjs|docs-integrity/],
+  ["docs/x.md", /select-specs\.test\.mjs|docs-integrity/],
+  ["tests/specs/own.spec.js", /select-specs\.test\.mjs|docs-integrity/],
+  ["tests/specs/not-a-twin.spec.js", /twinned-specs\.test\.mjs|docs-integrity/],
   // Fake package.json scripts inside the coverage-audit's own fixtures.
   ["tests/alpha.spec.js", /test-coverage-audit\.test\.mjs|docs-integrity/],
   ["tests/worker.test.mjs", /test-coverage-audit\.test\.mjs|docs-integrity/],

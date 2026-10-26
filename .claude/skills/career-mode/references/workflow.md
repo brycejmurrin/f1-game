@@ -52,7 +52,9 @@ Load from the SKILL.md index when the task needs this detail.
    - `tests/unit/career-determinism.test.mjs` fails on any `simRnd` or a new
      `Math.random()` in `js/career/*.js` (two allowlisted non-draw sites).
 
-7. **Verify through hooks before UI assertions.**
+7. **Verify through hooks before UI assertions.** Browser steps are session
+   only (a subagent reports them unverified); reproduce hub/HUD UI at Bryce's
+   phone profile first (844×390 landscape, touch).
    - Start with `careerState()`, `careerSlots()`, `careerSim()`, and
      `qualiSim()` to prove the rule.
    - **`careerSim()` needs the career hub plus a loaded track/grid first** — stage
@@ -110,8 +112,8 @@ Load from the SKILL.md index when the task needs this detail.
 in THESE lines, not in the DNF path (a DNF changes only `pts`/`dnf`/`clean`, never the pay branch): (1) `settleRound`
 returns null when `career.results` already has row `r === season.round - 1`; (2) `settleSponsor` pushes the window
 `idx` onto `career.paidSponsors` BEFORE checking `met`, so a window pays once. `rollover()` resets `paidSponsors`;
-`save-migrate.js` normalises it to `[]` on old saves. Pins: `career-settle.test.mjs` "MY TEAM completing a sponsor window through settleRound cannot pay twice" (settle twice, then rewind `results` and settle again: `paidSponsors` blocks it) and "sponsor settlement records one payout even when settlement is retried", `tests/specs/career-hub.spec.js` ~505 "a window pays at most once across a whole season" (browser: no double pay, ledger cleared
-at rollover), `docs/CAREER.md` ~839. Those units use `dnf: false` rows only: a window whose rows include a DNF is unpinned.
+`save-migrate.js` normalises it to `[]` on old saves. Pins: `career-settle.test.mjs` "MY TEAM completing a sponsor window through settleRound cannot pay twice" (settle twice, then rewind `results` and settle again: `paidSponsors` blocks it) and "sponsor settlement records one payout even when settlement is retried", `tests/specs/career-hub.spec.js` "a window pays at most once across a whole season" (browser: no double pay, ledger cleared
+at rollover), `docs/CAREER.md` §Sponsors — MY TEAM's second income. Those units use `dnf: false` rows only: a window whose rows include a DNF is unpinned.
 "No pay after a DNF" is usually the contract, not a bug: a DNF row scores 0 pts / `double` false / `clean` unmet (`sponsorAt` counts `!r.dnf && r.clean`), so `met` can fail; pay lands only on the window's LAST round (`raced >= sp.end`). To repro: `__apex.retire()` in a driven race, or `careerSim(n)` (its draws include DNFs).
 Hand-off: record which guard the repro defeats (results row vs `paidSponsors`) and the `paidSponsors` value before/after.
 

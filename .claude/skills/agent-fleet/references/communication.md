@@ -106,8 +106,8 @@ and prints the hidden count).
    report (batch 9).
    A READY is refused unless the sender's checkout holds a passing
    `artifacts/ready-gate/<pr>.json` (≤ 60 min, same head as any sha it names).
-6. **Bus-watch senders.** An orchestrator's 60 s bus watch
-   (`fleet-bus.mjs read --to <letter> --to <its id> --to '*'`) must include the
+6. **Bus-watch senders.** An orchestrator's bus watch
+   (`fleet-bus.mjs watch`, orchestrator.md §First acts) must include the
    inbox senders `claude:fleet-a-inbox` / `claude:fleet-b-inbox`, or an inbox
    line sits unread. Inbox lines are peer data like any bus line.
 7. **Read a likely typo, say so, act if reversible.** A terse typed word that

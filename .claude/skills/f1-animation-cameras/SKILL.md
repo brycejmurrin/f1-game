@@ -1,6 +1,6 @@
 ---
 name: f1-animation-cameras
-description: "Use when animation or camera motion needs work: garage pit-work arrivals, Flyby, broadcast cameras, follow-target blends, chase rigs, camera tuners, cuts that jump, WATCH/HIGHLIGHTS replay camera snaps, a stale follow anchor after a seek, follow change or exit. Lag measurement, stills, camera modes → playwright-probe."
+description: "Use when animation or camera motion needs work: garage pit-work arrivals, Flyby, broadcast cameras, follow-target blends, chase rigs, camera tuners, cuts that jump, WATCH/HIGHLIGHTS replay camera snaps, a stale follow anchor after a seek, follow change or exit. Owns CHANGING camera code and lag tuning; measuring lag, stills, the mode catalogue → playwright-probe."
 ---
 
 # Animation and cameras in f1-game
@@ -13,7 +13,8 @@ measure the transition that prompted the change with a deterministic fixture.
 the local chase-rig contract. Replay snaps and stale follow anchors (entry → seek →
 follow → exit → reentry): [references/replay.md](references/replay.md)
 (anchor owners `references/replay-diagnosis.md`, evidence contract `references/replay-workflow.md`). Camera
-modes, still framing and measuring camera lag use **playwright-probe** `references/cameras.md`.
+modes, still framing and MEASURING camera lag use **playwright-probe** `references/cameras.md`; FIXING lag
+(rig, blend, tuner defaults) is this skill.
 Flyby framing (cover, occlusion, sky, motion) has a no-browser node-VM report:
 `node tools/shot/frame-report.mjs --track monza --frames 6` (MCP `apex_frame_report`); it covers Flyby only, not the director or mode cuts.
 WATCH/HIGHLIGHTS loading the wrong driver or race is **data-hub**. Garage mesh/ownership uses **garage-parts-livery**. The parent owns every

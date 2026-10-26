@@ -37,6 +37,8 @@
 //                                       #   exit 0 passed / 1 failed or died / 124 still running
 //   node tools/ci/deploy.mjs --wait --timeout 45   # block (minutes) until it leaves "running"; run as ONE
 //                                       #   background task. Every deploy run stamps `= deploy start|done`.
+//   --log <file>                        # the status log (default artifacts/logs/deploy.log)
+//   An unknown flag prints this usage and exits 2 BEFORE any fetch (strictFlags).
 //
 // What it replaces: the prose protocol in the deploy-merge skill — fetch, look,
 // merge, re-bump the union, tooling-fast, sweeps, push; pages.yml verify-live
@@ -71,23 +73,28 @@ import { NODE_TEST_TIMEOUT_MS } from "../gen/gen-test-groups.mjs";
 import { resolveGenBlocks, mergePackageJson } from "../lib/conflict-cure.mjs";
 import { saveOutputArtifact } from "../agent/output.mjs";
 import { DEFAULT_LOG, stamp, readStatus, waitStatus } from "../lib/deploy-status.mjs";
+import { strictFlags } from "../lib/cli-args.mjs";
+import { gitRun, gitMust } from "../lib/git-run.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
 const flag = (n) => argv.includes(n);
+export const KNOWN_FLAGS = ["--json", "--gate-only", "--train", "--plan", "--pr", "--pr-on-race", "--status", "--wait", "--timeout", "--log", "--help"];
+/** The header's usage block (`node tools/ci/deploy.mjs …` through the strict-flags line), comment marks stripped. */
+export function usage() {
+  const lines = fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n");
+  const a = lines.findIndex((l) => l.startsWith("//   node tools/ci/deploy.mjs"));
+  const b = lines.findIndex((l) => l.startsWith("//   An unknown flag"));
+  return ["usage: node tools/ci/deploy.mjs [flags]", ...lines.slice(a, b + 1).map((l) => l.replace(/^\/\/ ?/, ""))].join("\n");
+}
 const JSON_OUT = flag("--json");
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
 const REMOTE = "origin";
 const log = (m) => process.stderr.write(`[deploy] ${m}\n`);
 
-function git(args, opts = {}) {
-  const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", ...opts });
-  return { code: r.status, out: (r.stdout || "").trim(), err: (r.stderr || "").trim() };
-}
-function must(r, what) {
-  if (r.code !== 0) throw new Error(`${what} failed: ${r.err || r.out}`);
-  return r.out;
-}
+// The {code,out,err} git helper is tools/lib/git-run.mjs (audit3 T11).
+const git = (args, opts = {}) => gitRun(args, { cwd: ROOT, ...opts });
+const must = gitMust;
 // Node supports parent file descriptors as child stdio: no maxBuffer or
 // in-memory capture. https://nodejs.org/api/child_process.html#optionsstdio
 // A hung child (a test file that never ends) used to hang the whole gate until the 30-minute background
@@ -960,7 +967,7 @@ function nightlyHealth() {
 
 export function main() {
   const t0 = Date.now();
-  if (flag("--help") || flag("-h")) { console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 26).join("\n")); return 0; }
+  if (flag("--help") || flag("-h")) { console.log(usage()); return 0; }
   if (flag("--gate-only")) {
     // NOT preflight(): that refuses a dirty tree because merging and pushing one
     // is wrong. Gating one is the entire point — this is the check you run with
@@ -1036,6 +1043,8 @@ export function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  // FIRST, before the log stamp, any fetch or merge: a typo exits 2 with the usage (audit3 T7).
+  strictFlags(argv, KNOWN_FLAGS, usage());
   const rd = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : (argv.find((a) => a.startsWith(n + "=")) || "").slice(n.length + 1) || undefined; };
   const logFile = path.resolve(ROOT, rd("--log") || DEFAULT_LOG);
   if (flag("--status") || flag("--wait")) {

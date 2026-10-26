@@ -33,7 +33,7 @@ paths:
   `node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'`)
   and confirm one positive signal: a clean WGX boot writes nothing, so assert
   `canvas.getContext("webgl2") === null`. Traps: `docs/ARCHITECTURE.md`
-  §Boot evidence, `.claude/skills/mcp-probe/references/recipes.md`.
+  §Boot evidence (the one home; skill `mcp-probe` drives the probe).
 - Real pixels on SwiftShader: `node tools/gfx/wgx-capture.mjs <track>` reads
   back via `GLX.capturePixels()` (software adapters soft-present into a
   COPY_SRC texture and never call `getCurrentTexture()`, whose first call breaks

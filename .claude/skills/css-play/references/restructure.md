@@ -13,7 +13,7 @@ it rename things?** Renaming is not restructuring.
 ## Before you touch anything
 
 ```sh
-node tools/ui/layout-audit.mjs                    # the screen x viewport matrix
+node tools/ui/layout-audit.mjs                    # the screen x viewport matrix, ONCE as the before-count (never per edit)
 node tools/ci/pick-tests.mjs --staged             # which groups this change needs
 node tools/ci/tooling-fast.mjs --changed --jobs=3 # diff-aware no-browser guard suite
 ```

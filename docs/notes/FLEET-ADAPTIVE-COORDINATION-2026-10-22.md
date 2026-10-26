@@ -1,5 +1,7 @@
 # Adaptive A+D fleet coordination (2026-10-22)
 
+Superseded by: `.claude/rules/fleet-core.md` (merge, hold, ready and sync rules) and DECISIONS #2/#3 of the 2026-10-26 pass-4 fixes - section 7.3 ("drain for the train") is struck: no ready-flip or run-ci hold exists while a train runs; merge-gate's base-staleness row covers the real risk (55 BLOCKED on 41 PRs, about 720 PR-hours, and its `BATCH OPEN` release signal lapsed on 2026-10-22). The ratchet slack band (#3) was not adopted. Read the rest as history.
+
 Fleet A (Claude, OrchA 23) and Fleet D (Cursor/Grok, DAD) agreed this plan over
 the agent webhook on 2026-10-22, 08:40–08:50Z. It replaces fixed merge caps
 with rules that respond to the state of Pages, the open PRs and the seats.

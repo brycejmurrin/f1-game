@@ -2749,8 +2749,8 @@ test("apex_cursor_agents maps each verb to cursor-agents.mjs argv", () => {
   assert.deepEqual(cursorArgv({ verb: "archive", id: AID }), ["archive", AID]);
   assert.deepEqual(cursorArgv({ verb: "followup", id: AID, options: { text: "go", mode: "plan", mcpFile: "scratch/m.json" } }), ["followup", AID, "--text", "go", "--mode", "plan", "--mcp-file", "scratch/m.json"]);
   assert.deepEqual(cursorArgv({ verb: "followup", id: AID, options: { textFile: "artifacts/t.txt" } }), ["followup", AID, "--text-file", "artifacts/t.txt"]);
-  assert.deepEqual(cursorArgv({ verb: "launch", options: { prompt: "do it", name: "n", model: "composer-2.5", branch: "main", mode: "agent", allowTwin: true, mcpFile: "scratch/m.json", subagentFile: "scratch/s.json", envNames: ["A_B", "C"] } }),
-    ["launch", "--prompt", "do it", "--name", "n", "--model", "composer-2.5", "--ref", "main", "--mode", "agent", "--allow-twin", "--mcp-file", "scratch/m.json", "--subagent-file", "scratch/s.json", "--env", "A_B", "--env", "C"]);
+  assert.deepEqual(cursorArgv({ verb: "launch", options: { prompt: "do it", name: "n", model: "composer-2.5", branch: "main", mode: "agent", allowTwin: true, mcpFile: "scratch/m.json", subagentFile: "scratch/s.json", envNames: ["APEX_FLEET_AS", "APEX_AGENT_WEBHOOK_URL"] } }),
+    ["launch", "--prompt", "do it", "--name", "n", "--model", "composer-2.5", "--ref", "main", "--mode", "agent", "--allow-twin", "--mcp-file", "scratch/m.json", "--subagent-file", "scratch/s.json", "--env", "APEX_FLEET_AS", "--env", "APEX_AGENT_WEBHOOK_URL"]);
   assert.deepEqual(cursorArgv({ verb: "launch", options: { promptFile: "scratch/p.txt", pr: "https://github.com/o/r/pull/3", repo: "https://github.com/o/r" } }), ["launch", "--prompt-file", "scratch/p.txt", "--repo", "https://github.com/o/r", "--pr", "https://github.com/o/r/pull/3"]);
   assert.deepEqual(cursorArgv({ verb: "cancel", id: AID, options: { confirm: AID, run: "run-3d266b1c" } }), ["cancel", AID, "--run", "run-3d266b1c"]);
   assert.deepEqual(cursorArgv({ verb: "delete", id: AID, options: { confirm: AID } }), ["delete", AID]);
@@ -2781,6 +2781,11 @@ test("apex_cursor_agents refuses what must never reach the CLI", () => {
   assert.ok(/not starting with CURSOR_/.test(msg({ verb: "launch", options: { prompt: "x", envNames: ["CURSOR_API_KEY"] } })));
   assert.ok(/variable names/.test(msg({ verb: "launch", options: { prompt: "x", envNames: ["has space"] } })));
   assert.ok(/array of variable NAMES/.test(msg({ verb: "launch", options: { prompt: "x", envNames: "A" } })));
+  // security audit 4 X1: only the launch allowlist leaves the box; every other secret-bearing family is refused by name
+  for (const n of ["AWS_SECRET_ACCESS_KEY", "FLEET_A_OAUTH_TOKEN", "GROK_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN", "HTTPS_PROXY", "A_B"]) {
+    const m = msg({ verb: "launch", options: { prompt: "x", envNames: [n] } });
+    assert.ok(new RegExp(`${n} is not in the launch env allowlist \\(APEX_FLEET_AS, APEX_SESSION_ID, APEX_AGENT_WEBHOOK_URL, APEX_AGENT_WEBHOOK_AUTH\\)`).test(m), m);
+  }
   for (const f of ["/etc/passwd", "../x", "scratch/../../etc/passwd", "x.md", "scratch/", "artifacts/..\\x", "scratch"]) {
     assert.ok(/under scratch\/ or artifacts\//.test(msg({ verb: "launch", options: { promptFile: f } })), f);
   }

@@ -53,7 +53,7 @@
 //   node tools/ci/spec-staleness.mjs --top 20
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { gitOut } from "../lib/git-run.mjs";
 import { fileURLToPath } from "node:url";
 import { select } from "./select-specs.mjs";
 
@@ -73,7 +73,7 @@ const DAYS = Math.max(1, parseInt(flag("--days", "30"), 10) || 30);
 const TOP = Math.max(1, parseInt(flag("--top", "25"), 10) || 25);
 const JSON_OUT = argv.includes("--json");
 
-const git = (...a) => execFileSync("git", a, { cwd: ROOT, encoding: "utf8" }).trim();
+const git = (...a) => gitOut(a, { cwd: ROOT });   // throws on failure (tools/lib/git-run.mjs)
 
 const allSpecs = fs.readdirSync(path.join(ROOT, "tests/specs"))
   .filter((f) => f.endsWith(".spec.js")).map((f) => `tests/specs/${f}`).sort();

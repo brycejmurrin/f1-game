@@ -39,8 +39,8 @@ Do **not** use this for:
 | `js/net/transport.js` | Two channels: `state` unreliable/unordered, `event` reliable/ordered; `loopback()` is deterministic and in-page |
 | `js/net/sdp.js` | Packs gathered SDP facts into a scannable invite code; round-robins candidates by kind so a relay survives the cap |
 | `js/net/handshake.js` | ICE -> slim SDP -> deflate -> base64url invite; refuses mismatched builds (authoritative `apex-build` meta; `version.json` fallback only when unstamped) |
-| `js/net/nostr.js` | Public Nostr rendezvous, signalling only |
-| `js/net/rendezvous.js` | Backup room-code courier; typed errors, never throws |
+| `js/net/nostr.js` | Public Nostr rendezvous, signalling only; the relay list is its `RELAYS` array |
+| `js/net/rendezvous.js` | Backup room-code courier; typed errors, never throws; no default URL — `localStorage` key `apex26.rendezvous` |
 | `js/net/snapshot.js` | 13 B/car snapshots, interpolation, road-following extrapolation |
 | `js/net/session.js` | Clock sync, packet routing, heartbeat |
 | `js/net/netplay.js` | Authority: own car never corrected; host relays guests and owns AI/race control |
@@ -68,11 +68,14 @@ Hooks:
 | `__apex.lobbyPairs()` | Inspect ICE candidate-pair state |
 | `__apex.turnProbe(ms?)` | Probe TURN relays with relay-only gathers |
 
+Hook names drift: `__apex.agentHelp()` is the live manifest.
+
 Commands:
 
 ```sh
-npm run test:net-unit
-node tools/ci/test-bg.mjs net
+npm run test:net-unit                                  # node, no browser: run first
+npm test -- tests/specs/multiplayer-lobby.spec.js      # ONE spec for the symptom (lobby/room/scan/seats/session/roles/npeer), backgrounded (rule 4)
+node tools/ci/remote-group.mjs net                     # the whole 8-spec group, on the pushed branch only
 node tools/net/rtc-e2e.mjs
 node tools/net/rtc-e2e-3p.mjs
 npm run rtc:e2e-3p-relay   # relay-only ICE

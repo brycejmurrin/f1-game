@@ -3810,6 +3810,7 @@
         "tests/unit/reliability.test.mjs",
         "tests/unit/save-migrate.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
@@ -9727,6 +9728,9 @@
       ],
       "sector": [
         "tests/unit/overlay-feed.test.mjs"
+      ],
+      "*": [
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/overlay/render.js": {
@@ -13610,6 +13614,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pack-content-address.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
       ],
@@ -13675,7 +13680,6 @@
         "tests/unit/baked-model-road-guard.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/import-models.test.mjs",
-        "tests/unit/select-specs.test.mjs",
         "tests/unit/stage-minify.test.mjs"
       ]
     },
@@ -15159,6 +15163,7 @@
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/safety-bans-hook.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/three-inspector.test.mjs"
       ]
     },
@@ -15185,6 +15190,9 @@
       ],
       "render": [
         "tests/unit/share-card.test.mjs"
+      ],
+      "*": [
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/track/build-client.js": {
@@ -15230,6 +15238,7 @@
       ],
       "*": [
         "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/stage-minify.test.mjs"
       ]
     },
@@ -17570,7 +17579,8 @@
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "*": [
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/workers/bitmap-decode-worker.js": {
@@ -17582,7 +17592,8 @@
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "*": [
-        "tests/unit/deploy-staging.test.mjs"
+        "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/xr/apex-xr.js": {
@@ -17709,6 +17720,7 @@
     },
     "js/xr/xr-plan.js": {
       "resolve": [
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/xr-opts.test.mjs",
         "tests/unit/xr-phase0.test.mjs",
         "tests/unit/xr-plan.test.mjs"

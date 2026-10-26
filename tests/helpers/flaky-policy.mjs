@@ -22,7 +22,7 @@ export function loadQuarantine(file = QUARANTINE, now = new Date()) {
     const q = JSON.parse(fs.readFileSync(file, "utf8")).quarantine || [];
     const active = q.filter((e) => e.title && e.owner && e.review && e.evidence &&
       /^\d{4}-\d{2}-\d{2}$/.test(e.expires || "") && Number.isFinite(Date.parse(e.expires + "T00:00:00Z")) &&
-      now.toISOString().slice(0, 10) <= e.expires);
+      now.toISOString().slice(0, 10) <= e.expires && signatureOk(e));
     // Keep spec membership for shard scheduling, exact identities for verdicts.
     const specs = new Set(active.map((e) => e.spec));
     specs.policies = active;
@@ -32,8 +32,35 @@ export function loadQuarantine(file = QUARANTINE, now = new Date()) {
   }
 }
 
+/** A row's optional `signature` (audit4 D1, 2026-10-26): a case-sensitive
+ *  regex SOURCE anchored with `^`, matched against the retried attempt's
+ *  normalised first error line (errorLine). A row that carries one exempts
+ *  ONLY that failure: the same test failing with another message still blocks.
+ *  A signature that is not a string, not anchored or does not compile makes
+ *  the row inactive — fail closed, like every other missing policy field. */
+export function signatureOk(row) {
+  if (row.signature === undefined) return true;
+  if (typeof row.signature !== "string" || !row.signature.startsWith("^")) return false;
+  try { new RegExp(row.signature); return true; } catch { return false; }
+}
+
+/** The first non-empty line of an error message, ANSI colour codes and a
+ *  leading `Error: ` removed — the text a quarantine signature is matched on. */
+export function errorLine(message = "") {
+  const first = String(message).replace(/\u001b\[[0-9;]*m/g, "").split("\n").map((l) => l.trim()).find(Boolean) || "";
+  return first.replace(/^Error: /, "");
+}
+
+/** Does this quarantine row cover this flaky test (spec, exact title, and the
+ *  signature when the row has one)? */
+export function rowCovers(row, t) {
+  if (row.spec !== t.spec || row.title !== t.title) return false;
+  if (row.signature === undefined) return true;
+  return signatureOk(row) && new RegExp(row.signature).test(errorLine(t.error));
+}
+
 /**
- * @param {{spec: string, title: string}[]} flaky  tests that passed only on retry
+ * @param {{spec: string, title: string, error?: string}[]} flaky  tests that passed only on retry
  * @param {Set<string>} quarantine  spec paths whose flakes are known and owned
  * @returns {{ blocking: object[], quarantined: object[], fail: boolean }}
  */
@@ -41,7 +68,7 @@ export function flakyVerdict(flaky, quarantine) {
   const blocking = [], quarantined = [];
   for (const t of flaky) {
     const known = quarantine.policies
-      ? quarantine.policies.some((row) => row.spec === t.spec && row.title === t.title)
+      ? quarantine.policies.some((row) => rowCovers(row, t))
       : false;
     (known ? quarantined : blocking).push(t);
   }

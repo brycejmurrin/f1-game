@@ -77,6 +77,9 @@ const SWEEPS_ONLY = new Map([
   ["track-validate-fleet.test.mjs", "test:sweeps — per-circuit geometry (the designer's validator judged on all 52 centrelines)"],
   ["track-themes-build.test.mjs", "test:sweeps — per-circuit geometry (eight theme presets × two seeds, full custom-circuit builds)"],
   ["spline-project-height.test.mjs", "test:sweeps — per-circuit geometry"],
+  ["barrier-runoff-jumps.test.mjs", "test:sweeps — per-circuit geometry (audit4 E1: left the floor 2026-10-26)"],
+  ["elevation-smoothness.test.mjs", "test:sweeps — per-circuit geometry (audit4 E1)"],
+  ["track-line-circuits.test.mjs", "test:sweeps — per-circuit geometry (audit4 E1)"],
 ]);
 
 const base = (f) => path.basename(f);

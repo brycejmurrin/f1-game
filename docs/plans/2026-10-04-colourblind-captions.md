@@ -1,7 +1,9 @@
 # Colour-blind-safe mode + complete captions — plan (2026-10-04)
 
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — cvdMode COLOUR VISION and COLOURBLIND CUES exist (js/ui/appearance-opts.js, a11y-opts.js) and captions are js/ui/captions.js; the single-palette-module goal was not verified.
+
 Date: 2026-10-04
-Status: **PLAN** — docs-only; implement as five draft PRs against
+Status when written: **PLAN** — docs-only; implement as five draft PRs against
 `claude/f1-game-project-26h3ng`, one slice each, in the order below. Do not merge.
 Scope: (A) one global colour-vision system that every colour source (CSS tokens,
 2D canvas, GLSL/WGSL/TSL uniforms, 3D vertex colours) reads from a single palette

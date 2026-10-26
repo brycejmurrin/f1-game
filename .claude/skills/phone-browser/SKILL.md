@@ -1,11 +1,14 @@
 ---
 name: phone-browser
-description: "Use when the user is on a phone or iPhone and wants the game in Chromium through the Grok custom connector (tunnel, portrait/landscape), or its link or localhost will not open. Not for chrome-devtools, Playwright tests, or desktop."
+description: "Use when a user with only a phone or iPhone (no computer) wants the game in Chromium via the Grok custom connector, or its tunnel URL or localhost link will not open. Not the deployed site → deploy-research. Not an 844x390 UI review → survey-ui-matrix."
 ---
 
 # Phone browser
 
-The user has a phone and no computer. Do not tell them to install anything or run a command.
+The user has a phone and no computer, and talks to you through Grok's custom connector. Do not tell them to install
+anything or run a command. This is NOT Bryce's route for "look at it on my phone": the page is this checkout's working
+tree on software GL in an emulated 852×393 phone (the repo's phone profile is 844×390), never the live build — for what
+is live use agent `deploy-research`; for UI at phone size use survey-ui-matrix / ui-menu-a11y.
 
 ## Already connected
 
@@ -36,8 +39,17 @@ A line that starts `phone-browser new` means the public host changed. Give them 
 
 The script throws, takes long, or a URL needs checking (`browser_status`, `orientation`): `references/failures.md`.
 
+## The tunnel URL is a credential
+
+The `…/mcp?token=…` URL lets whoever holds it run `browser_eval` (arbitrary `page.evaluate`) in a page that can reach
+this container's 127.0.0.1 services (apex-tools :3713 among them). The token rides in the query string, so it lands in
+tunnel and proxy logs. Give it to the user only; never paste it into a PR body, commit, doc, bus line or a shared
+transcript. To rotate it: delete `scratch/browser-http/state.json` and re-run `browser-http-up.mjs` (a kept state file
+reuses the old token), then give them the `new` URL.
+
 ## Do not
 
 - Add this server to `.mcp.json`. Keep the checkout's configured catalog; phone-browser stays a separate bridge.
-- Run it while Playwright tests or the Chrome DevTools server are up. One browser.
+- Run it beside another browser (Playwright, chrome-devtools, playwright-official `browser_*`, `apex_*` browser
+  tools) — one browser at a time — or from a subagent (AGENTS.md rule 10; hooks: `.claude/rules/claude-config.md`).
 - Hand them a localhost address. The phone cannot open it.

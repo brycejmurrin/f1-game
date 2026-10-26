@@ -163,3 +163,13 @@ print("forced", m.cmd_chrome_start(argparse.Namespace(port=0, force=True)))
   assert.match(r.stdout, /^clear 1 1$/m, "no live run: it goes on to the tmux check (stubbed missing -> 1)");
   assert.match(r.stdout, /^forced 1$/m, "--force skips the live-run check");
 });
+
+test("parseTestBgArgv: --spec runs one spec as a pseudo-group, --workers is read, an unknown flag throws (audit3 T8)", () => {
+  const p = parseTestBgArgv(["--spec", "tests/specs/hud-layout.spec.js", "--workers=1"]);
+  assert.deepEqual(p.specs, ["tests/specs/hud-layout.spec.js"]);
+  assert.deepEqual(p.groups, ["spec-hud-layout"]);
+  assert.equal(p.workers, "1");
+  assert.throws(() => parseTestBgArgv(["--spec"]), /--spec requires a value/);
+  assert.throws(() => parseTestBgArgv(["--wait", "--timout", "45"]), /unknown flag --timout/);
+  assert.throws(() => parseTestBgArgv(["--workers", "0", "smoke"]), /--workers requires a positive integer/);
+});

@@ -755,7 +755,7 @@ state object; the `TUNE_DEFS` hand-mirrors in `glx.js`/`gfx.js`) is tracked in
 case: 118 lines in the middle of `game.js` had exactly one assertion anywhere
 in the suite, because the only way to reach the machine was to stage real
 settled debris in a browser. As a module taking its hazard picture through a
-seam, it gets `tests/unit/race-control.test.mjs` — sixteen tests in milliseconds
+seam, it gets `tests/unit/race-control.test.mjs` — 55 tests (2026-10-26 count) in milliseconds
 covering the hysteresis, the time caps and the storage-format migration. None
 of that was reachable before, and nobody had chosen for it not to be.
 
@@ -1105,9 +1105,12 @@ reads every one of them off the BUILT def (`tests/unit/circuit-def-fields.test.m
 pins that they survive the copy).
 The bespoke `scenery(api)` closure lives in `js/circuits/scenery/<id>.js`
 (registered on `window.TrackScenery[id]`, no `<script>` tag: `game.js` fetches
-the one it is about to build, ~27 KB each, so a session does not parse all 52). Loaded *before* `js/track/tracks.js`, in the order their
-`<script>` tags appear in `index.html` (this is **not** the real-world F1
-calendar order). **Tag order == `Tracks.LIST` order == picker/season order.**
+the one it is about to build, ~41 KiB each on average (2026-10-26: 2,190,521 bytes over 52 files), so a session does not parse all 52).
+Def files carry **no `<script>` tag**: `index.html` loads only the generated picker roster `js/track/circuit-meta.js`
+(`tools/gen/gen-circuit-meta.mjs`), and a circuit's full def hydrates when it is picked (`LAZY_CIRCUIT` in
+`tools/manifest.cjs`, `ensureCircuit` in `js/core/lazy-bundles.js`). **Picker/season order == the `CIRCUITS` array order in
+`tools/manifest.cjs`** (which the generator copies into `circuit-meta.js`; it is **not** the real-world F1 calendar order).
+A new circuit is a def file + a `CIRCUITS` entry + `npm run gen`, never a hand-added tag.
 
 ```
 def = { id, name, gp, country, night, theme, lengthKm, baseHW,
@@ -1136,17 +1139,20 @@ road/terrain meshes through `TrackMesh`/`TrackSurface`, props through
 `Scenery*.create(ctx)` bands.
 
 ```
-Tracks.LIST -> [ trackDef, ... ]   // 52 circuits. LIST order == the `<script>` load
-                                   // order in index.html (each circuits/<id>.js registers
-                                   // itself as it loads) — it is NOT the real F1 calendar
-                                   // order. Check tools/manifest.cjs / index.html.
+Tracks.LIST -> [ trackDef, ... ]   // 52 circuits. LIST order == the `CIRCUITS` order in
+                                   // tools/manifest.cjs, as emitted into the generated
+                                   // js/track/circuit-meta.js (full defs hydrate lazily
+                                   // per pick; no per-circuit <script> tag) — it is NOT
+                                   // the real F1 calendar order.
 trackDef = { id, name:"MONZA", gp:"Italian GP", country:"Italy",
              laps:3, night:false, lengthKm:5.79,
              palette: { zenith,horizon,sun:[r,g,b], grass:[r,g,b], runoff:[r,g,b],
                         fog:[r,g,b], fogDensity:number, kerbA:[r,g,b], kerbB:[r,g,b],
                         ambientSky:[r,g,b], ambientGround:[r,g,b], sunColor:[r,g,b],
                         sunDir:[x,y,z] },
-             points: [ [x, y, z, halfWidth?, bank?], ... ] }  // halfWidth default 7, bank rad default 0
+             // authored as def.path = { len, pts:[[x,z],...] } (sketch above; e.g. js/circuits/monza.js);
+             // `js/track/tracks.js` derives the resolved points [x, y, z, halfWidth?, bank?] (halfWidth default 7, bank rad default 0)
+             points: [ [x, y, z, halfWidth?, bank?], ... ] }
 
 Tracks.build(trackDef, { night?, gfx? }) -> track   // gfx = active renderer backend
                                                     //   (façade wiring; falls back to

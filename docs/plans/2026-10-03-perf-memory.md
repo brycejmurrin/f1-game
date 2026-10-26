@@ -1,6 +1,8 @@
 # Memory and performance — how we find the next wins, and the wins we already see
 
-Status: **PLAN** (docs-only). Follows the track-switch leak fix (#773,
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — the instruments exist (js/perf/soak-run.js, race-entry-profile.js, spans.js); Phase II/III code changes were not re-audited.
+
+Status when written: **PLAN** (docs-only). Follows the track-switch leak fix (#773,
 [`../notes/TRACK-SWITCH-LEAKS-2026-10-02.md`](../notes/TRACK-SWITCH-LEAKS-2026-10-02.md)),
 field LOD (#810) and the race hot-path pass (#779). Ship branch:
 `claude/f1-game-project-26h3ng`; one PR per slice, drafts until the gate

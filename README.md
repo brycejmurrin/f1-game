@@ -74,7 +74,7 @@ Menu routes and regression journeys: [docs/USAGE-PATHS.md](docs/USAGE-PATHS.md).
 
 **Build your own circuit** in the TRACK DESIGNER (title menu): RANDOMISE or
 draw a loop, drag its points, stamp corners, hairpins and chicanes, pick a
-theme (27, each with time of day, trees and crowd options), and let the
+theme (30, each with time of day, trees and crowd options), and let the
 designer's checks (and their FIX buttons) make it raceable —
 then SAVE it and race the full field or a time trial on it, or share it as a
 link. The designer's HOW TO tab walks through it; the long form is
@@ -213,7 +213,7 @@ tail -f artifacts/logs/smoke.log             # watch one live
 node tools/ci/test-bg.mjs --status              # running / how each ended
 
 npm run test:tiny                            # start here: page loads, __apex responds
-npm run test:physics-core                    # the driving model (browser; ~45 tests, mostly fast)
+npm run test:physics-core                    # the driving model (browser; 42 tests, mostly fast)
 npm run test:collisions                      # car-to-car + wall contact (browser; ~32 tests, the slowest set)
 npm run test:aero                            # aero-zones, active-aero, drift, understeer (browser; ~37 tests)
 npm test -- tests/specs/autopilot.spec.js          # single file

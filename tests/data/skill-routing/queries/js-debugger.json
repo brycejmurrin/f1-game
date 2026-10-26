@@ -34,5 +34,6 @@
   {
     "query": "Check whether the live deployed apex-sha contains our merged commit and verify stamped asset bytes.",
     "expect": "deploy-research"
-  }
+  },
+{"query": "I'm already attached with the debugger; take a CPU profile of the hitch on this page", "expect": "js-debugger"}
 ]

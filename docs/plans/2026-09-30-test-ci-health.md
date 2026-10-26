@@ -1,6 +1,8 @@
 # Test and CI health — plan (2026-09-30)
 
-Status: **PLAN** — docs-only PR first; each numbered slice lands as its own
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — tools/check/wait-polling-lint.mjs and tools/ci/twinned-specs.mjs exist; per-slice state not re-audited.
+
+Status when written: **PLAN** — docs-only PR first; each numbered slice lands as its own
 small draft PR against `claude/f1-game-project-26h3ng`. Do not merge; Bryce's
 merge worker merges one at a time. Owner: this workstream (claim via
 `who-is-on-it.mjs --claim`).
