@@ -609,7 +609,10 @@ def build_share(output, state, known_secrets=(), include_markdown=False):
         write_json(share / "listing" / path.name, redactor.redact(read_json(path)))
     missing = [e for e in state["edges"] if e.get("status") != "accepted"]
     failed = {k: v["failure"] for k, v in state["threads"].items() if "failure" in v}
-    complete = (all(p.get("done") and "failure" not in p for p in state["threads"].values())
+    required_threads = set(state["roots"]) | set(state["scope"]["threads"]) | {
+        edge["childThreadId"] for edge in state["edges"] if edge.get("status") == "accepted"}
+    complete = (required_threads.issubset(state["threads"])
+                and all(p.get("done") and "failure" not in p for p in state["threads"].values())
                 and not missing and (not state["scope"]["archived"] or state["listing"].get("done", False)))
     manifest = {"version": 1, "scope": state["scope"], "rootThreadIds": state["roots"],
                 "threads": state["threads"], "graph": state["edges"], "failedThreads": failed,

@@ -159,6 +159,24 @@ assert len(json.loads(clean[2]['nested'])) == 2
 assert redactor.redact(data) == clean
 `));
 
+test("partial packaging requires every selected root and accepted reference target", () => fixture(String.raw`
+with tempfile.TemporaryDirectory(dir=root/'scratch') as directory:
+    output = pathlib.Path(directory)
+    exporter = m.Exporter(FakeClient(), output, threads=['selected-root'])
+    state = exporter.state
+    manifest = m.build_share(output, state)
+    assert manifest['threadCount'] == 0
+    assert manifest['captureTraversalComplete'] is False
+    state['threads']['selected-root'] = {'done': True}
+    assert m.build_share(output, state)['captureTraversalComplete'] is True
+    state['edges'].append({'parentThreadId': 'selected-root', 'childThreadId': 'accepted-child',
+                           'itemId': 'native-child', 'referenceKind': 'subAgentActivity.agentThreadId',
+                           'requiresAncestry': True, 'status': 'accepted'})
+    assert m.build_share(output, state)['captureTraversalComplete'] is False
+    state['threads']['accepted-child'] = {'done': True}
+    assert m.build_share(output, state)['captureTraversalComplete'] is True
+`));
+
 test("cursor failures, scope changes and mutating methods fail closed", () => fixture(String.raw`
 progress = {}
 m.next_page({'data': [], 'nextCursor': 'repeat'}, progress)
