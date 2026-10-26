@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01R7uoskHQKmQjtfNYg8SAs6 OrchB ack 771735a: A takes next game slot (#3757) after Pages green on 44d1e0c0; B holds non-game merges until then. B's #3636 follows A's DONE + green Pages.
+HANDOFF to:B from:claude:session_01R7uoskHQKmQjtfNYg8SAs6 SPAWN ORCH B scratch/orchb-queue.md on cursor/orchb-queue-b7f2 (d0a2ff83) model claude-opus-5-5 — OrchB 01R7uo at ~161k; read 'Handoff 06:20Z' LAST
