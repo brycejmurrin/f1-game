@@ -474,8 +474,13 @@ test("audit 4: a READY claim checks the PR number, the live head and the gate fi
     assert.equal(readyClaimVerdict(dir, { pr: 12, text: "ready", files: okFiles, prHead: () => ({ error: "HTTP 502" }) }).why, "cannot read #12's current head (HTTP 502): a READY is checked against the live head; retry");
     assert.equal(readyClaimVerdict(dir, { pr: 12, text: "ready", files: okFiles, prHead: () => ({ sha: HEAD }) }).ok, true);
     assert.equal(readyClaimVerdict(dir, { pr: 12, text: "ready", files: () => ({ ok: false, why: "pr-board.mjs differs" }) }).why, "ready-gate receipt for #12: pr-board.mjs differs");
-    // the default check is gateFilesVerdict: a scratch dir is no checkout of the gate, so it refuses
-    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "ready" }).ok, false);
+    // the default check is gateFilesVerdict against the receipt's gateRoot (the real checkout, which writeReceipt
+    // hashed): a tampered hash refuses. (The old assertion passed only in a dirty worktree, audit4 merge.)
+    const rp = receiptPath(dir, "ready", 12), tampered = JSON.parse(fs.readFileSync(rp, "utf8"));
+    tampered.gateFiles["tools/ci/ready-gate.mjs"] = "0".repeat(64);
+    fs.writeFileSync(rp, JSON.stringify(tampered));
+    assert.deepEqual(readyClaimVerdict(dir, { pr: 12, text: "ready" }), { ok: false, pr: 12,
+      why: `ready-gate receipt for #12: tools/ci/ready-gate.mjs in ${tampered.gateRoot} is not the file that wrote this receipt: re-run the gate from this checkout` });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
