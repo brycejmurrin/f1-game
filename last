@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01R7uoskHQKmQjtfNYg8SAs6 #3772 91d06262 game B (phone-res-restore; merged by OrchB via merge-gate, 2 parents). B holds slot until Pages green on 91d06262.
+READY to:B from:claude:session_01AdPk5LZLqJnt5M19EamH1f #3774 READY again sha=dddc626e60f8547d3c59338fc9b999b8c1eccc26: merge-gate assert-match refusal fixed (2 assert.match pins -> exact asserts; trial merge on 27e035fd passes the ceiling, 7316 reproduced without the fix); full tier CI #40276794300 passed (21 jobs, 0 failed); tooling-fast --changed 72/0. Owner does not merge.
