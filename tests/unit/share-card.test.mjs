@@ -174,7 +174,7 @@ test("a solo share card loads only the QR encoder before painting its link", asy
     head: { appendChild(el) {
       injected.push(el.src);
       queueMicrotask(() => {
-        vm.runInContext(fs.readFileSync(path.join(ROOT, "js/net/qr.js"), "utf8"), sb);
+        vm.runInContext(fs.readFileSync(path.join(ROOT, "js/net/qr.js"), "utf8"), sb, { filename: absSrc("js/net/qr.js") });
         el.onload();
       });
     } },
