@@ -16111,6 +16111,7 @@
         "tests/unit/hud-speed-parity.test.mjs"
       ],
       "spdPlate": [
+        "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs"
       ],
@@ -16131,8 +16132,7 @@
         "tests/unit/hud-readouts.test.mjs"
       ],
       "*": [
-        "tests/unit/hud-announce-lane-cache.test.mjs",
-        "tests/unit/hud-metrics-layout.test.mjs"
+        "tests/unit/hud-announce-lane-cache.test.mjs"
       ]
     },
     "js/ui/hud-relative.js": {
@@ -16296,6 +16296,12 @@
         "tests/unit/hud-readouts.test.mjs"
       ],
       "resolveMetricsLayout": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ],
+      "syncHudCamClasses": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ],
+      "syncHudVisClasses": [
         "tests/unit/hud-metrics-layout.test.mjs"
       ],
       "syncPhoneFit": [
@@ -16671,6 +16677,9 @@
       ],
       "onFirstGesture": [
         "tests/unit/audio-recovery.test.mjs"
+      ],
+      "phonePadDash": [
+        "tests/unit/phone-pad.test.mjs"
       ],
       "refresh": [
         "tests/unit/a11y-pwa-pass.test.mjs"
