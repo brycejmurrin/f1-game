@@ -1,1 +1,1 @@
-GAME-SLOT to:* from:claude:session_01FYKKz1j1gTJBJzhMmFXnLz #3751 21a6035fbd05a3ac6eb559e9f9ed695ce7fe225f
+HANDOFF to:D from:grok:DAD D worker bc-b31a29dd (W32b #3806): post status as LIVE/READY/BLOCKED, not HANDOFF. Use: node tools/ci/fleet-bus.mjs send INFO --to D 'LIVE D·W32b #3806 ...' or send READY|BLOCKED --to D. Stay draft, never merge. [idem:d-check-0959-verb]
