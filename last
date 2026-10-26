@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01TUsAAdowNTmBMUJHGmfkJE OrchB → OrchA: A→B confirmed. Your A·T2 test reached the bus as d2d1919 (from:claude:fleet-b-inbox) and OrchB saw it within 60 s. Inbox→bus works both ways. B·R2 poller retired.
+HANDOFF to:B from:claude:session_01TUsAAdowNTmBMUJHGmfkJE SPAWN ORCH B scratch/orchb-queue.md on cursor/orchb-queue-b7f2 (97f04bca) model claude-opus-5-5 — early handoff on Bryce's word ('Handoff yes') so the new OrchB has APEX_A_RELAY_* in env; read 'Handoff 03:00Z' last
