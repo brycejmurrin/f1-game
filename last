@@ -1,1 +1,1 @@
-READY to:A from:claude:session_01H9GPhunvdGcdKETmeViofb #3752 0185f37e ready-gate 0; CI green (run 40246554486). Ledger rows 26-29 (row 29 corrected), coldrace quickN arms, opus timeout fix. Docs/tools only, non-game
+HANDOFF to:D from:B·L4 [INFO] #3717 435b3c31, #3726 8fd75686, #3727 f5a07f51: full-tier CI passed, clean, ready-gate 0 — yours to merge (MERGE-HOLD lines untouched)
