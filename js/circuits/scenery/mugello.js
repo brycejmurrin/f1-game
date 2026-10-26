@@ -185,9 +185,14 @@
       const openArea = (s) => (s >= 0.92 || s <= 0.18) || (s >= 0.36 && s <= 0.46)
         || (s >= 0.200 && s <= 0.260)
         || (s >= 0.286 && s <= 0.342) || (s >= 0.852 && s <= 0.906);   // Casanova / Bucine terrazze
+      // Mid-lap day orbit (survey scenery preset: frac 0.50, az 45, el 22,
+      // dist 45) sits ~30 m lateral of the Arrabbiata apex — near trees and
+      // forestEdge crowns put the eye inside foliage (#3375). Keep ordered
+      // cypress ranks (below) for Tuscan identity; skip CLOSE scatter here.
+      const midLapOrbit = (s) => s >= 0.475 && s <= 0.545;
       every(22, (k) => {
         const s = k / n;
-        if (openArea(s)) return;
+        if (openArea(s) || midLapOrbit(s)) return;
         const h = hash(k * 31);
         if (h < 0.24) return;
         const side = h < 0.5 ? -1 : 1;
@@ -202,6 +207,12 @@
         if (openArea(s)) return;
         const h = hash(k * 53 + 9);
         if (h < 0.35) return;
+        // Push mid-lap far trees past the survey orbit eye (~30 m lat).
+        if (midLapOrbit(s)) {
+          if (h > 0.62 && offCasale(k, 1, 62 + h * 10)) cypress(k, 1, 62 + h * 10, 15 + h * 6);
+          if (h > 0.78 && offCasale(k, -1, 64 + h * 8)) cypress(k, -1, 64 + h * 8, 14 + h * 6);
+          return;
+        }
         if (offCasale(k, h < 0.5 ? -1 : 1, 30 + h * 18)) tree(k, h < 0.5 ? -1 : 1, 30 + h * 18, 12 + h * 8, LEAF_D);
         if (h <= 0.72) return;
         // pine() clears the TRUNK off the road, not the crown: at 0.633 one
@@ -213,7 +224,7 @@
       });
       every(26, (k) => {
         const s = k / n;
-        if (openArea(s)) return;
+        if (openArea(s) || midLapOrbit(s)) return;
         const h = hash(k * 97 + 23);
         if (h < 0.55) return;
         bush(k, h < 0.75 ? -1 : 1, 7 + h * 5, [0.18, 0.38, 0.18]);
@@ -243,7 +254,11 @@
       }
       // Avenue up to the paddock, and ranks on the hillside above the Arrabbiate.
       for (let i = 0; i < 10; i++) cypress(K(0.955 + i * 0.005), 1, 46 + (i % 2) * 4, 15 + hash(i * 9) * 6);
-      for (let i = 0; i < 8; i++) cypress(K(0.470 + i * 0.008), 1, 54 + (i % 2) * 5, 14 + hash(i * 5) * 6);
+      // Arrabbiata ranks (#3375): denser Tuscan cypress beyond the mid-lap orbit
+      // eye (survey dist 45 → ~30 m lat). Was 8 trees @ 54–59 m; now two ranks
+      // past 58 m so the banking reads cypress, not a generic pine wall.
+      for (let i = 0; i < 12; i++) cypress(K(0.472 + i * 0.0055), 1, 58 + (i % 2) * 5, 15 + hash(i * 5) * 5);
+      for (let i = 0; i < 10; i++) cypress(K(0.476 + i * 0.0055), -1, 60 + (i % 2) * 4, 14 + hash(i * 7) * 5);
       for (let i = 0; i < 6; i++) cypress(K(0.180 + i * 0.008), -1, 50 + (i % 2) * 4, 13 + hash(i * 11) * 6);
       // More ordered ranks on the ridge lines (the single most identifying plant).
       for (let i = 0; i < 10; i++) cypress(K(0.262 + i * 0.0028), 1, 50 + (i % 2) * 4, 14 + hash(i * 13) * 6);
@@ -698,13 +713,17 @@
       cameraTower(K(0.880), 1, 28, { h: 16 });
       // Forest edge stops short of the Casanova (-1, 0.292-0.334) and Bucine (+1, 0.858-0.902)
       // terrazze: their foliage cones cut the tier boxes (clip-audit 0.294-0.334, 0.888).
+      // Arrabbiata mid-lap (0.475–0.545) is also open: the gap-14 / gap-30 belts
+      // put FOLIAGE AABBs on the survey orbit eye (#3375). Resume past 0.55 with
+      // cypress-dark colours (not generic pine) so the hillside still reads Tuscan.
       for (const [s0, s1, side] of [
         [0.18, 0.282, -1], [0.18, 0.34, 1],
-        [0.48, 0.9, -1], [0.48, 0.850, 1],
+        [0.55, 0.9, -1], [0.55, 0.850, 1],
       ]) {
-        if (s1 > s0) forestEdge(s0, s1, side, 14, { density: 0.64, hMin: 11, hMax: 20, pineFrac: 0.12, col: PINE, col2: LEAF_D });
+        if (s1 > s0) forestEdge(s0, s1, side, 14, { density: 0.64, hMin: 11, hMax: 20, pineFrac: 0.05, col: CYP, col2: LEAF_D });
       }
-      forestEdge(0.50, 0.68, 1, 30, { density: 0.22, hMin: 15, hMax: 24, pineFrac: 0.12, col: PINE_D, col2: LEAF_D });
+      // Far Arrabbiata belt — beyond the orbit eye (~30 m lat), cypress-dark.
+      forestEdge(0.56, 0.68, 1, 58, { density: 0.22, hMin: 15, hMax: 24, pineFrac: 0.05, col: CYP_D, col2: LEAF_D });
 
       grandstandEx(0.154, -1, 36, 88, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true,

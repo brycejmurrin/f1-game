@@ -206,7 +206,10 @@ const STRIP = {
   //   on the shore lip become 10 m procedural houses again. Emission 273709 →
   //   274207, strip-after 254112 → 254614.
   //   Re-measured on the merged tree (#3044 over #3145): 274207/255274.
-  monaco: { before: 274207, after: 255274 },
+  // → #3368 Fairmont-cliff plane crowns past orbit ring (2026-10-26): gap 9–11
+  //   → 58–68; one plane onTrack-suppressed. Emission 274207 → 274147,
+  //   strip-after 255274 → 255214.
+  monaco: { before: 274147, after: 255214 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -252,7 +255,10 @@ const STRIP = {
   //   a row of 3-4 kit garage modules. Emission 320414 → 321026, strip-after
   //   290722 → 291224 (modules turned to face the road, MAT.FLAT).
   //   Re-measured on the merged tree (#3044 over #3145): 321026/291892.
-  monza: { before: 321026, after: 291892 },
+  // → #3374 D·W32b Monza coplanar/clip (2026-10-26): Curva Grande near ranks
+  //   skip the hedge corridor; west-park lake hedge split; Parabolica Rank C/D
+  //   clear the steel stand. Emission 321026 → 315410, strip-after 291892 → 286386.
+  monza: { before: 315410, after: 286386 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

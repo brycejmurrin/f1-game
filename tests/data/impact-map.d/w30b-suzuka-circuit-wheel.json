@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/circuits/scenery/suzuka.js": {
+      "scenery": [
+        "tests/unit/suzuka-circuit-wheel.test.mjs"
+      ]
+    }
+  }
+}

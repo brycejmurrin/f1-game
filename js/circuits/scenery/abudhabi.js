@@ -33,6 +33,16 @@
       const FERRARI   = [0.85, 0.08, 0.10];
       const DARK      = [0.10, 0.10, 0.14];
       const DUSK      = [0.30, 0.16, 0.20];    // deep dusk masonry
+      // Yas Hotel gridshell: steel primary structure + fritted glass veil.
+      // LEDs sit at lattice vertices only (Asymptote / Arup — not neon beams).
+      const STEEL     = [0.46, 0.48, 0.52];
+      const STEEL_DK  = [0.10, 0.11, 0.14];
+      const GLASS_FRIT = [0.70, 0.76, 0.82];
+      const fritTint = (led) => [
+        Math.min(1, GLASS_FRIT[0] * 0.55 + led[0] * 0.55),
+        Math.min(1, GLASS_FRIT[1] * 0.55 + led[1] * 0.55),
+        Math.min(1, GLASS_FRIT[2] * 0.55 + led[2] * 0.55),
+      ];
 
       // RACING-frame keys. This file is authored against the OLD scenery origin
       // (sceneryStartFrac 0.075 -> def._sceneryShift +0.1015 lap, ~536 m), so a
@@ -472,17 +482,23 @@
             frac, clearance: shellClearances[i], minimumClearance: 4.8,
             thickness: shellThick, depth: 2.2, span: 56,
             supportGap: 14.5, supportWidth: 1.2, supports: false,
-            color: LED_CYCLE[i % LED_CYCLE.length], required: true,
+            // Steel ribs — the LED colour lives on the frit veil / vertices, not
+            // the primary arches (#3346 rainbow-skeleton read).
+            color: STEEL, required: true,
           });
         }
 
-        // LED gridshell VEIL: the seven arches above are single thin bars (read as
-        // ribbons over the road). Tie them into a lattice — longitudinal rails along
-        // the crown plus diagonal X-bracing between neighbouring arches — so the
-        // hotel's canopy reads as a diamond-grid shell, not seven loose bars.
+        // LED gridshell VEIL (#3346): denser diamond lattice of steel struts +
+        // fritted glass panel fills + small LED nodes at vertices. Real W Yas
+        // Hotel is a continuous steel/glass envelope with LEDs at lattice
+        // vertices (Asymptote), not sparse multi-colour neon beams.
         {
           const nA = shellClearances.length, step = 0.016 / (nA - 1);
-          const lats = [-22.5, -11.25, 0, 11.25, 22.5];
+          // 8 laterals (was 5): denser diamond cells so the shell reads as a
+          // continuous veil silhouette from the S/F orbit, not a skeleton.
+          // Kept ≤ baseline +0.5 % so this PR does not touch props-tris-baseline
+          // (held by #3819 for estoril).
+          const lats = [-22.5, -16, -9.5, -3, 3, 9.5, 16, 22.5];
           const crown = (i, lat) => {
             const ak = anchor(K(0.872 + i * step), 1, 0);
             return vadd(vadd(vadd(ak.c, ak.r, lat - 8), ak.u, shellClearances[i] + shellThick * 0.5),
@@ -494,7 +510,6 @@
             const t = [d[0] / len, d[1] / len, d[2] / len];
             const ak = anchor(K(0.88), 1, 0);
             const rr = ak.r;
-            // right axis made perpendicular to the member; up completes the frame
             const dot = rr[0] * t[0] + rr[1] * t[1] + rr[2] * t[2];
             let r2 = [rr[0] - dot * t[0], rr[1] - dot * t[1], rr[2] - dot * t[2]];
             const rl = Math.hypot(r2[0], r2[1], r2[2]) || 1;
@@ -503,40 +518,110 @@
             const mid = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2];
             addBox(out, mid, [th, th, len + 0.3], col, [r2, u2, t]);
           };
+          const panel = (p00, p01, p10, p11, col) => {
+            // Thin quad approximating the diamond cell (average of the four
+            // corners); oriented by the cell's local tangent/up.
+            const mid = [
+              (p00[0] + p01[0] + p10[0] + p11[0]) / 4,
+              (p00[1] + p01[1] + p10[1] + p11[1]) / 4,
+              (p00[2] + p01[2] + p10[2] + p11[2]) / 4,
+            ];
+            const across = [p01[0] - p00[0], p01[1] - p00[1], p01[2] - p00[2]];
+            const alongV = [p10[0] - p00[0], p10[1] - p00[1], p10[2] - p00[2]];
+            const w = Math.hypot(across[0], across[1], across[2]) || 1;
+            const d = Math.hypot(alongV[0], alongV[1], alongV[2]) || 1;
+            const t = [alongV[0] / d, alongV[1] / d, alongV[2] / d];
+            let r2 = [across[0] / w, across[1] / w, across[2] / w];
+            const u2 = [
+              t[1] * r2[2] - t[2] * r2[1],
+              t[2] * r2[0] - t[0] * r2[2],
+              t[0] * r2[1] - t[1] * r2[0],
+            ];
+            const ul = Math.hypot(u2[0], u2[1], u2[2]) || 1;
+            const uu = [u2[0] / ul, u2[1] / ul, u2[2] / ul];
+            // Re-orthogonalise right against up × tangent.
+            r2 = [
+              uu[1] * t[2] - uu[2] * t[1],
+              uu[2] * t[0] - uu[0] * t[2],
+              uu[0] * t[1] - uu[1] * t[0],
+            ];
+            addBox(out, mid, [w * 0.92, 0.12, d * 0.92], col, [r2, uu, t]);
+          };
           out._mat = MAT.METAL;
           for (let i = 0; i < nA - 1; i++) {
             for (let j = 0; j < lats.length; j++) {
-              member(crown(i, lats[j]), crown(i + 1, lats[j]), LED_CYCLE[(i + j) % 3], 0.42);
+              member(crown(i, lats[j]), crown(i + 1, lats[j]), STEEL_DK, 0.28);
               if (j < lats.length - 1) {
                 const flip = (i + j) % 2;
-                member(crown(i, lats[j + flip]), crown(i + 1, lats[j + 1 - flip]), [0.10, 0.11, 0.15], 0.3);
+                member(crown(i, lats[j + flip]), crown(i + 1, lats[j + 1 - flip]), STEEL_DK, 0.22);
+                // Fritted glass diamond fill — continuous veil silhouette.
+                out._mat = MAT.GLASS;
+                panel(
+                  crown(i, lats[j]), crown(i, lats[j + 1]),
+                  crown(i + 1, lats[j]), crown(i + 1, lats[j + 1]),
+                  fritTint(LED_CYCLE[(i + j) % 3]),
+                );
+                out._mat = MAT.METAL;
               }
             }
           }
-          out._mat = 0;
+          // LED luminaires at lattice vertices only (real shell: one per diamond
+          // corner). Small nodes so colour cycles read as a wash, not beams.
+          {
+            const akLed = anchor(K(0.88), 1, 0);
+            const bLed = [akLed.r, akLed.u, akLed.t];
+            out._mat = MAT.METAL;
+            for (let i = 0; i < nA; i++) {
+              for (let j = 0; j < lats.length; j++) {
+                addBox(out, crown(i, lats[j]), [0.55, 0.55, 0.55],
+                  LED_CYCLE[(i + j) % 3], bLed);
+              }
+            }
+            out._mat = 0;
+          }
         }
 
-        // Landmark-pinned lattice (clear of the road) for scenery-api Must landmarks.
+        // Landmark-pinned veil fragment (clear of the road) for scenery-api Must
+        // landmarks — denser frit panels + steel frame, same language as the
+        // over-track shell (not a sparse neon box grid).
         {
           const aLeg = anchor(k, -1, 28);
           const bLeg = [aLeg.r, aLeg.u, aLeg.t];
           modelGroup("yas-hotel-gridshell", {
-            center: vadd(aLeg.c, aLeg.u, 22), size: [10, 44, 36], basis: bLeg,
+            center: vadd(aLeg.c, aLeg.u, 22), size: [12, 46, 40], basis: bLeg,
           }, (stage) => {
+            const rows = 7, cols = 4;
             stage._mat = MAT.METAL;
-            for (let row = 0; row < 6; row++) {
-              for (let col = 0; col < 4; col++) {
-                const node = vadd(vadd(aLeg.c, aLeg.u, 6 + row * 6), aLeg.t, (col - 1.5) * 7);
-                const colr = LED_CYCLE[(row + col) % 3];
-                addBox(stage, node, [0.7, 2.8, 5.0], colr, bLeg);
+            for (let row = 0; row < rows; row++) {
+              for (let col = 0; col < cols; col++) {
+                const node = vadd(vadd(aLeg.c, aLeg.u, 5 + row * 5.2), aLeg.t, (col - 1.5) * 6.5);
                 if (col > 0) {
-                  const prev = vadd(vadd(aLeg.c, aLeg.u, 6 + row * 6), aLeg.t, (col - 2.5) * 7);
+                  const prev = vadd(vadd(aLeg.c, aLeg.u, 5 + row * 5.2), aLeg.t, (col - 2.5) * 6.5);
                   const mid = [(prev[0] + node[0]) / 2, (prev[1] + node[1]) / 2, (prev[2] + node[2]) / 2];
-                  addBox(stage, mid, [0.35, 0.35, 7], [0.06, 0.07, 0.10], bLeg);
+                  addBox(stage, mid, [0.22, 0.22, 6.5], STEEL_DK, bLeg);
+                }
+                if (row > 0) {
+                  const below = vadd(vadd(aLeg.c, aLeg.u, 5 + (row - 1) * 5.2), aLeg.t, (col - 1.5) * 6.5);
+                  const mid = [(below[0] + node[0]) / 2, (below[1] + node[1]) / 2, (below[2] + node[2]) / 2];
+                  addBox(stage, mid, [0.22, 5.2, 0.22], STEEL_DK, bLeg);
                 }
               }
             }
-            addCyl(stage, aLeg.c, 0.7, 28, [0.06, 0.07, 0.10], 6, bLeg);
+            stage._mat = MAT.GLASS;
+            for (let row = 0; row < rows - 1; row++) {
+              for (let col = 0; col < cols - 1; col++) {
+                const c0 = vadd(vadd(aLeg.c, aLeg.u, 5 + row * 5.2 + 2.6), aLeg.t, (col - 1) * 6.5);
+                addBox(stage, c0, [0.14, 4.8, 5.8], fritTint(LED_CYCLE[(row + col) % 3]), bLeg);
+              }
+            }
+            stage._mat = MAT.METAL;
+            for (let row = 0; row < rows; row++) {
+              for (let col = 0; col < cols; col++) {
+                const node = vadd(vadd(aLeg.c, aLeg.u, 5 + row * 5.2), aLeg.t, (col - 1.5) * 6.5);
+                addBox(stage, node, [0.5, 0.5, 0.5], LED_CYCLE[(row + col) % 3], bLeg);
+              }
+            }
+            addCyl(stage, aLeg.c, 0.7, 28, STEEL_DK, 6, bLeg);
             stage._mat = 0;
           }, { required: true });
         }

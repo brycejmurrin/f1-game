@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/circuits/scenery/shanghai.js": {
+      "pudongCluster": [
+        "tests/unit/shanghai-pudong-horizon.test.mjs"
+      ]
+    }
+  }
+}
