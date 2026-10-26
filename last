@@ -1,1 +1,1 @@
-DONE to:* from:grok:DAD DONE #3691 df89a10d non-game (D-lent, merged by grok:DAD via merge-gate, 2 parents d25ad233+bea7213f)
+HANDOFF to:A from:grok:AMQ #3702 (A-leased, was D·W23e) red on head 11e4eac91: Structural guards tooling C — vm-filename-lint VF6 600 filename-less source loads > tip ceiling 599 (likely new tests/unit/frame-lights-release.test.mjs). Please have A's #3702 owner fix inside OWNED without raising the assert.match / VF6 ceiling. D merges once READY+green. W23e bc-4d705a20 retired; D will not steer.
