@@ -383,14 +383,21 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 :where(body[data-density="compact"]) #overlay #menu-buttons .bigbtn {
   min-height: var(--tap); padding-block: calc(var(--gap) / 2);
 }
-/* #3305: 2.75em !important beats destinations 40px @200%. */
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons :is(#menu-primary,#menu-explore,#menu-hero,#menu-retention,#menu-garage) .bigbtn {
-  min-height: max(32px, var(--tap-min), var(--tap-paint), 2.75em) !important;
-  padding-block: calc(var(--gap) * 0.3); height: auto; max-height: none;
+:where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-primary, #menu-explore, #menu-hero) .bigbtn {
+  min-height: max(var(--tap-min), var(--tap-paint));
+  padding-block: calc(var(--gap) * 0.3);
 }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.4); }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons #menu-secondary > .bigbtn {
-  min-height: max(32px, var(--tap-paint), 2.75em) !important; height: auto; max-height: none;
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn {
+  padding-block: calc(var(--gap) * 0.4);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
+  min-height: var(--tap-paint); height: auto; max-height: none;
+}
+/* #3305: ramp 40px→2.75em only when --ui-compact-text>1; beats destinations 40px cap @200%. */
+@media (max-height: 460px) {
+  :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons :is(#menu-primary,#menu-explore,#menu-hero,#menu-retention,#menu-garage) .bigbtn {
+    min-height: max(var(--tap-min), var(--tap-paint), calc(40px + (2.75em - 40px) * clamp(0, (var(--ui-compact-text, 1) - 1.001) * 999, 1))) !important;
+  }
 }
 html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
 /* Tall live Home: drop #title-car before data-home-ready. */
