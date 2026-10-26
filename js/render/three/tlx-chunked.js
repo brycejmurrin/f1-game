@@ -315,8 +315,11 @@
   // Uint16 indices wherever the vertex count allows — three picks the GL type
   // from the array, so this is a straight halving with no shader involvement.
   function packIndex(THREE, idx, vCount) {
-    return new THREE.BufferAttribute(
+    const attribute = new THREE.BufferAttribute(
       (!packOn || vCount > 65535) ? new Uint32Array(idx) : new Uint16Array(idx), 1);
+    // The vendor keeps owned scalar indices narrow and aligns later updates.
+    if (attribute.array instanceof Uint16Array) attribute.__apexUint16Index = true;
+    return attribute;
   }
 
   function chunked(THREE, ctx) {
@@ -361,6 +364,7 @@
         geo.setAttribute("mat", attrOrZero(data.mat, vCount, 1, "id"));
         geo.setIndex(new THREE.BufferAttribute(
           big ? new Uint32Array(srcIdx) : new Uint16Array(srcIdx), 1));
+        if (geo.index.array instanceof Uint16Array) geo.index.__apexUint16Index = true;
         return { __tlx: true, chunked: true, geo, chunks: null, count: srcIdx.length };
       }
       let pos = toF32(data.pos);
@@ -515,6 +519,7 @@
         geo.setAttribute("color", aCol);
         geo.setAttribute("mat", aMat);
         geo.setIndex(new THREE.BufferAttribute(arr, 1));
+        if (geo.index.array instanceof Uint16Array) geo.index.__apexUint16Index = true;
         // Boundings from the bin AABB: three must never compute them itself —
         // that walks the FULL shared position array once per chunk.
         const mn = bk.mn, mx = bk.mx;
