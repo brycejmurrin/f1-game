@@ -1428,6 +1428,7 @@
         "tests/unit/hud-gap-decimals.test.mjs",
         "tests/unit/hud-helmet-placement.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-portrait-cluster.test.mjs",
@@ -1538,7 +1539,8 @@
         "tests/unit/spline-project-height.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/track-themes-build.test.mjs",
-        "tests/unit/track-validate-fleet.test.mjs"
+        "tests/unit/track-validate-fleet.test.mjs",
+        "tests/unit/water-local-level.test.mjs"
       ],
       "twinned": false
     },

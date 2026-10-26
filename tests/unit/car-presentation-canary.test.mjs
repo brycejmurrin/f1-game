@@ -84,12 +84,14 @@ test("AI world pose is mirrored after this step's (s, x) writes", () => {
 // how they key: car-presentation-vm.test.mjs.
 test("the draw loop draws body + planted wheels for every procedural car", () => {
   const game = gameSource();
-  const draw = game.match(
-    /const body = carDraw\.modelBuf \? null :[\s\S]{0,520}drawPlayerWheels\(c, _groundMat/
-  );
-  assert.ok(draw, "body + wheels on _groundMat for every procedural car");
-  assert.match(game, /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(FieldLod\.farBody\(_lodD2, fovY, c\)\) : teamBodyMesh\(c\.team, c\)/,
-    "rivals past tier 2 share one distant body mesh");
+  const start = game.indexOf("    const sharedBody = FieldLod.on");
+  const end = game.indexOf("      const wholeCarMat =", start);
+  assert.ok(start >= 0 && end > start, "procedural body branch precedes the whole-car fallback");
+  const draw = game.slice(start, end);
+  // Which body each car gets (shared / team / player / model) runs as
+  // behaviour in field-lod.test.mjs; this pins only what is drawn with it.
+  assert.match(draw, /gfx\.draw\(body, tmpMat, sharedBody \? carDraw\.coOpt\(paint\) : paint\);[\s\S]*drawPlayerWheels\(c, _groundMat, dt, _wheelOpts\);/,
+    "only shared bodies coalesce paint (others keep it, all keep chassis attitude), then wheels plant on the ground matrix");
   assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
   // The player's pair takes the team so livery wheel tints (rimTint / caliperTint) join its cache key.
   const cd = read("js/car/car-draw.js");

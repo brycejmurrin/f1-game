@@ -84,3 +84,12 @@ Angles NOT covered, for a successor (in rank order):
 Small confirmed-but-unfixed rows a game.js pass could batch: PP-8 (`ranked.concat(parked)` per step), the four
 `for…of` car loops at `game.js` render / `mirror-pass.js` drawCars / checkRetirements (CPU hunter #5), the
 catch-up `AiBand` ctx + `applyVmax` objects per car per step (CPU hunter #1, catch-up pace only).
+
+## Reverted 2026-10-25: scene colour rg11b10 on the WebGL2 leg
+
+Device Farm A·D2, iPhone 14, WebGL2 (ledger row 28, draft PR #3752): rg11b10 42.5 fps against RGBA16F 45.7 / 47.0
+(off-arm spread 1.3 fps); 55 against 13–19 frames over 33 ms. Bryce chose "Revert it" (2026-10-25 ~23:42Z).
+`tlx-post.js` now gates `scene11` on the WebGPU backend (`_r11Blendable`): WebGL2 phones get RGBA16F whatever
+`apex26.tlxScene11` says; the WebGPU leg (vendored three patch 18, #3711) is untouched. The `tlxScene11` store key stays
+registered (it still drives the WebGPU A/B), and the `tlx.js` readback probe guard stays for the same reason.
+The history above is kept as written.

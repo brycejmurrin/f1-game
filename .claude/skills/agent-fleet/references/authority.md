@@ -59,4 +59,5 @@ auto-mode-config, read 2026-10-19).
 - **Reach.** Workers `send_message` the orchestrator id in the brief (~20 s
   delivery) and may message sibling owners directly; a fleet-wide instruction
   is one `send_message` per live session. The other account's fleet is reached
-  only through the bus.
+  through the bus and the cross-account inbox (which posts to the bus); no
+  authority either way.
