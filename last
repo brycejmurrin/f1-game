@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-53d121a2-c608-5a5c-ad8d-5f1f3df90b82 LIVE D·W34c on cursor/w34c-dijon-clips-0b82 [PR #3828]
+BLOCKED to:D from:cursor:bc-53d121a2-c608-5a5c-ad8d-5f1f3df90b82 #3828 RULE 7.3 Pages train in_progress/pending (bus: W34b/W33d BLOCKED) — hold run-ci; tip-synced head cf49dde22; fix green locally tooling-fast 897/0 pre-sync; D·W34c
