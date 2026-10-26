@@ -126,6 +126,23 @@ const TrackGraph = (function () {
       return { mn, mx };
     }
 
+    function reflectZ(geo) {
+      if (!geo) return geo;
+      const pos = geo.pos.slice(), nrm = geo.nrm.slice(), idx = geo.idx.slice();
+      for (let i = 2; i < pos.length; i += 3) { pos[i] = -pos[i]; nrm[i] = -nrm[i]; }
+      for (let i = 0; i < idx.length; i += 3) {
+        const a = idx[i]; idx[i] = idx[i + 1]; idx[i + 1] = a;
+      }
+      return Object.assign({}, geo, { pos, nrm, idx });
+    }
+
+    const leftHanded = (n) => {
+      const r = n.r, u = n.u, t = n.t;
+      return (r[1] * u[2] - r[2] * u[1]) * t[0] +
+        (r[2] * u[0] - r[0] * u[2]) * t[1] +
+        (r[0] * u[1] - r[1] * u[0]) * t[2] < 0;
+    };
+
     // Define a model once. `build(rec)` records ops in canonical space.
     //
     // The canonical mesh is built LAZILY. A shipping build never needs it — the
@@ -142,13 +159,14 @@ const TrackGraph = (function () {
       if (m) return m;
       const ops = [];
       build(recorder(ops));
-      let geo, aabb;
+      let geo, mirroredGeo, aabb;
       const meshOf = () => (geo === undefined ? (geo = bakeCanonical(ops)) : geo);
       m = {
         key, ops, uses: 0,
         hasRadial: ops.some((o) => o.op === "cyl" || o.op === "cone" || o.op === "frustum"),
         nodeColored: ops.some((o) => o.col === NODE_COLOR),
         get geo() { return meshOf(); },
+        get mirroredGeo() { return mirroredGeo === undefined ? (mirroredGeo = reflectZ(meshOf())) : mirroredGeo; },
         get aabb() { return aabb === undefined ? (aabb = aabbOf(meshOf())) : aabb; },
         get verts() { const g = meshOf(); return g ? g.pos.length / 3 : 0; },
       };
@@ -388,13 +406,15 @@ const TrackGraph = (function () {
         const s = node.s;
         const nonUniformXZ = !!s && __M.abs(__M.abs(s[0]) - __M.abs(s[2])) > 1e-9;
         if (!node.full || (m.hasRadial && nonUniformXZ)) { bakeOnly.push(node); continue; }
-        let list = byModel.get(node.model);
-        if (!list) byModel.set(node.model, (list = []));
-        list.push(node);
+        let lists = byModel.get(node.model);
+        if (!lists) byModel.set(node.model, (lists = [[], []]));
+        lists[leftHanded(node) ? 1 : 0].push(node);
       }
 
       const out = [];
-      for (const [key, list] of byModel) {
+      for (const [key, lists] of byModel) for (let hand = 0; hand < 2; hand++) {
+        const list = lists[hand];
+        if (!list.length) continue;
         const m = models.get(key);
         const count = list.length;
         const matrices = new Float32Array(count * 16);
@@ -405,16 +425,10 @@ const TrackGraph = (function () {
           const b = i * 16;
           matrices[b]      = r[0] * sx; matrices[b + 1]  = r[1] * sx; matrices[b + 2]  = r[2] * sx;
           matrices[b + 4]  = u[0] * sy; matrices[b + 5]  = u[1] * sy; matrices[b + 6]  = u[2] * sy;
-          // Same test as TrackGeom.addBox: the track frame is left-handed
-          // (r×u · t < 0). Canonical meshes are wound CCW-outward for a
-          // right-handed basis, so a negative-det instance matrix turns the
-          // exterior walls inside-out under GPU back-face culling (see-through
-          // UNIT_BOX masses). Negating the t column restores det > 0; a
-          // centred model occupies the same eight corners, just rewound.
-          const cr0 = r[1] * u[2] - r[2] * u[1];
-          const cr1 = r[2] * u[0] - r[0] * u[2];
-          const cr2 = r[0] * u[1] - r[1] * u[0];
-          const tz = (cr0 * t[0] + cr1 * t[1] + cr2 * t[2]) < 0 ? -sz : sz;
+          // Keep a positive determinant for backend face culling. The LH
+          // mesh also reflects local Z and reverses winding: flipping only
+          // this column moved asymmetric crowns away from their guarded sites.
+          const tz = hand ? -sz : sz;
           matrices[b + 8]  = t[0] * tz; matrices[b + 9]  = t[1] * tz; matrices[b + 10] = t[2] * tz;
           matrices[b + 12] = o[0];      matrices[b + 13] = o[1];      matrices[b + 14] = o[2];
           matrices[b + 15] = 1;
@@ -423,7 +437,7 @@ const TrackGraph = (function () {
             colors[i * 3] = c[0]; colors[i * 3 + 1] = c[1]; colors[i * 3 + 2] = c[2];
           }
         }
-        out.push({ model: key, geo: m.geo, verts: m.verts, count, matrices, colors });
+        out.push({ model: key, geo: hand ? m.mirroredGeo : m.geo, verts: m.verts, count, matrices, colors });
       }
       meshBatches(out);   // in BOTH sets: a mesh placement is recorded only when its triangles were withheld
       // Deterministic order: a backend uploading these must not have its draw

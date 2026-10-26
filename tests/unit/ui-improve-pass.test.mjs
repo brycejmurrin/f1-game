@@ -1229,17 +1229,16 @@ test("the d-pad ramps to lock like every other digital source", () => {
   const h = bootInput();
   const DPAD_RIGHT = 15;
   h.state.pad = h.pad(0, [DPAD_RIGHT]);
-  h.Input.poll();                       // seeds the ramp clock; dt is 0 here by design
-  h.state.now += 16; h.Input.poll();    // one 60 Hz frame of hold
-  const first = h.Input.steer();
+  h.Input.poll();
+  const first = h.Input.steer(1 / 60); // one fixed physics step of hold
   assert.ok(first > 0, "it steers");
   assert.ok(first < 0.5, "but nowhere near full lock after one frame");
   // Hold it across enough simulated frames and it does reach full lock.
-  for (let i = 0; i < 200; i++) { h.state.now += 16; h.Input.poll(); }
-  assert.ok(h.Input.steer() > 0.95, "a held d-pad still reaches full lock");
+  for (let i = 0; i < 200; i++) { h.state.now += 16; h.Input.poll(); h.Input.steer(1 / 60); }
+  assert.ok(h.Input.steer(1 / 60) > 0.95, "a held d-pad still reaches full lock");
   // Release: it unwinds rather than snapping to centre.
   h.state.pad = h.pad(0, []); h.state.now += 16; h.Input.poll();
-  const releasing = h.Input.steer();
+  const releasing = h.Input.steer(1 / 60);
   assert.ok(releasing > 0 && releasing < 1, "release unwinds, it does not snap");
 });
 

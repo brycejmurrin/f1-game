@@ -257,7 +257,7 @@ test('previewScene skips software GL and downscales capture edges', async () => 
   assert.match(frames[0], /512x384/, 'preview capture is capped at PREVIEW_MAX_EDGE');
 });
 
-test('a Home Photo SUBJECT pick closes the studio, swaps the scene for the visit and reopens through the door; DONE restores', async () => {
+test('a Home Photo SUBJECT pick restores and reopens after an owned preparation failure; DONE restores', async () => {
   const settings={hidden:false}, garage={hidden:true}, pause={hidden:false};
   const G={paused:false,teamIdx:0,track:{def:{name:'Monza'}},$:id=>({pmsettings:settings,carsetup:garage,pausemenu:pause})[id]};
   ctx.Teams={LIST:[{name:'McLaren'}]};
@@ -273,7 +273,7 @@ test('a Home Photo SUBJECT pick closes the studio, swaps the scene for the visit
   assert.equal(settings.hidden,false,'the caller comes back before the reopen so the reopened studio restores it on DONE');
   log.length=0; settings.hidden=true;
   assert.equal(await opened.subject('garage'),true);
-  assert.deepEqual(log,['close:false','subject:garage','subject:null','reopen'],'a swap that fails hands the scene back before reopening');
+  assert.deepEqual(log,['close:false','subject:garage','subject:null','reopen'],'an owned preparation failure restores the previous studio');
   log.length=0; back();
   assert.deepEqual(log,['done'],'DONE clears the visit override');
   assert.equal(settings.hidden,false);
@@ -282,17 +282,31 @@ test('a Home Photo SUBJECT pick closes the studio, swaps the scene for the visit
   assert.equal(opened.subject,null,'the pause-menu door is on the circuit already: no subject');
 });
 
+test('a Home Photo swap completion cannot reopen over a race', async () => {
+  let finish, opened, reopens = 0;
+  const nodes = { pmsettings: { hidden: true }, carsetup: { hidden: true }, pausemenu: { hidden: true } };
+  const G = { state: 'menu', teamIdx: 0, $: id => nodes[id] };
+  ctx.Teams = { LIST: [{ name: 'McLaren' }] };
+  ctx.api.openPhoto(G, { source: 'home', photoStudio: { open(o) { opened = o; return true; }, close() {} },
+    photoSubject: () => new Promise(resolve => { finish = resolve; }), reopen: () => ++reopens });
+  const pending = opened.subject('circuit');
+  G.state = 'race'; finish(true);
+  assert.equal(await pending, false);
+  assert.equal(reopens, 0);
+});
+
 test('photoSubject lays a scene over the stored one for the visit only, resolves on the rendered swap, and never writes the store', async () => {
   const dom = makeDom();
   for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
-  const writes=[]; let trackReady=false, worldRendered=false;
+  const writes=[]; let trackReady=false, worldRendered=false, topLayer=null, page='home', now=0;
   const setupCam = { captureCamera: () => ({}), restoreCamera() {}, beginHome: () => true, endHome() {}, homeState: () => ({}), renderHome: () => true };
   const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1440, innerHeight: 900,
     HomeWorld: { create: (_G, d) => ({ begin() { if (d.prepareTrack) d.prepareTrack(); return true; }, end() {}, active: () => worldRendered, wantsTrack: () => true, needsFrame: () => true, camera: () => null, didRender: () => worldRendered, state: () => ({}) }) },
     GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
     GameStore: { store: { get: (_key, value) => value, set(k, v) { writes.push([k, v]); } } }, TitleFx: { mode: () => 'on' },
     AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'hero', onSceneChange() {} },
-    addEventListener() {}, Log: { warn() {} }, setTimeout, Date };
+    UiLayers: { top: () => topLayer }, SettingsNav: { current: () => page },
+    addEventListener() {}, Log: { warn() {} }, setTimeout, Date: { now: () => now } };
   sandbox.window = sandbox;
   const local = vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local);
@@ -315,11 +329,34 @@ test('photoSubject lays a scene over the stored one for the visit only, resolves
   ui.photoSubject(null);
   assert.equal(ui.state().scene.mode, 'garage', 'DONE hands the stored scene back');
   assert.deepEqual(writes.filter(([k]) => k === 'homeScene'), [], 'the Home scene setting is never written');
+  let opened, reopens=0;
+  local.Teams={LIST:[{name:'McLaren'}]}; G.teamIdx=0;
+  local.api.openPhoto(G, { source:'home', photoStudio:{ open(o) { opened=o; return true; }, close() {} },
+    photoSubject:ui.photoSubject, reopen:()=>{ reopens++; return true; } });
   // A newer pick supersedes a pending one.
-  const first = ui.photoSubject('circuit'); const second = ui.photoSubject('garage');
+  const first = opened.subject('circuit'); const second = ui.photoSubject('garage');
   ui.renderHome(1 / 60);
   assert.equal(await first, false); assert.equal(await second, true);
   ui.photoSubject(null);
+  // An old request must leave a newer scene intact, even after it completes.
+  assert.equal(ui.state().scene.mode, 'garage');
+  const navigation = opened.subject('circuit');
+  await Promise.resolve();   // the dialog close mirror settles before a later user action
+  topLayer = dom.byId('select');
+  assert.equal(await navigation, false);
+  assert.equal(ui.state().scene.mode, 'garage', 'navigation releases the cancelled visit override');
+  const subpage = opened.subject('circuit'); page = 'controls';
+  assert.equal(await subpage, false, 'in-sheet navigation cancels even when the top layer stays the same');
+  const racing = opened.subject('circuit'); G.state = 'race';
+  assert.equal(await racing, false);
+  assert.equal(ui.state().scene.mode, 'garage');
+  assert.equal(reopens, 0, 'superseded, navigation, page and race cancellations never reopen');
+  G.state='menu';
+  const timeout = opened.subject('circuit');
+  await Promise.resolve(); now=21000;
+  assert.equal(await timeout, true, 'an owned preparation timeout reopens the prior studio');
+  assert.equal(reopens, 1);
+  assert.equal(ui.state().scene.mode, 'garage', 'timeout restores the stored scene');
 });
 
 test("Home stamp survives game-vm's detached querySelector stub", () => {

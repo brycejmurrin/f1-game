@@ -833,14 +833,12 @@ const Tracks = (function () {
   // page's keepGeometry flag, so replay must stamp _keepPositions itself.
   function getKeepGeometry() { return keepGeometry; }
 
-  // M-3b: road/terrain nrm/col/mat are only needed until GPU copies exist (chunked
-  // or fused). Pos+idx stay for debris, groundY and late-chunk recovery is gone
-  // once both ribbons are settled on this tier.
+  // M-3b: keep ribbon attributes until chunked copies exist. A fused upload
+  // at LOW can still be chunked after a graphics increase or governor recovery.
+  // Pos+idx stay for debris and groundY after the remaining channels are freed.
   function ribbonGpuSettled(track, which) {
     const m = track && track.meshes;
     if (!m) return false;
-    const tierHigh = typeof PerfGov !== "undefined" && PerfGov.tier() >= 3;
-    if (tierHigh && m[which]) return true;   // no lazy chunked rebuild this session
     const ch = m[which + "Chunked"];
     return !!(ch && ch.chunks && ch.chunks.length);
   }

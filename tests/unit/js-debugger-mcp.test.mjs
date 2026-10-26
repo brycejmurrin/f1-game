@@ -468,7 +468,8 @@ test("A4: instances queries the prototype, reads the array length and releases t
 });
 
 test("W25a: summarizeCpuProfile ranks self time and hitch windows", () => {
-  assert.equal(shortUrl("http://127.0.0.1:3456/js/game.js?v=dev"), "js/game.js");
+  const scriptUrl = "http://127.0.0.1:3456/js/game.js?v=dev";
+  assert.equal(shortUrl(scriptUrl), new URL(scriptUrl).pathname.slice(1));
   const summary = summarizeCpuProfile(fixtureCpuProfile(), { top: 5 });
   assert.equal(summary.kind, "cpu");
   assert.ok(summary.totalMs >= 80);

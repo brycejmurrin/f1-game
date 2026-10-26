@@ -132,9 +132,11 @@
       ]
     },
     "js/agent/apex-gpu-capture.js": {
-      "*": [
-        "tests/unit/global-registry.test.mjs",
+      "enable": [
         "tests/unit/wgx-labels.test.mjs"
+      ],
+      "*": [
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/agent/apex-lobby.js": {
@@ -1906,6 +1908,10 @@
       "applyPreset": [
         "tests/unit/camera-defaults.test.mjs"
       ],
+      "bindContext": [
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs"
+      ],
       "buzzAmp": [
         "tests/unit/camera-defaults.test.mjs"
       ],
@@ -1916,8 +1922,13 @@
       "comfortSet": [
         "tests/unit/camera-defaults.test.mjs"
       ],
+      "comfortSetScoped": [
+        "tests/unit/camera-defaults.test.mjs"
+      ],
       "context": [
-        "tests/unit/cam-context-alloc.test.mjs"
+        "tests/unit/cam-context-alloc.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs"
       ],
       "copyFrom": [
         "tests/unit/camera-defaults.test.mjs"
@@ -1949,6 +1960,7 @@
       ],
       "exportPack": [
         "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs",
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "fovBias": [
@@ -1961,6 +1973,9 @@
       "getModeOnly": [
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/import-hardening-apxc1.test.mjs"
+      ],
+      "getScoped": [
+        "tests/unit/camera-tuner-a11y.test.mjs"
       ],
       "importPack": [
         "tests/unit/cam-context-alloc.test.mjs",
@@ -2002,6 +2017,10 @@
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
+      "setScoped": [
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs"
+      ],
       "shakeOffset": [
         "tests/unit/camera-defaults.test.mjs"
       ],
@@ -2012,9 +2031,6 @@
         "tests/specs/camera-tuner.spec.js",
         "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
-      ],
-      "*": [
-        "tests/unit/camera-tuner-a11y.test.mjs"
       ]
     },
     "js/camera/photo-cam.js": {
@@ -2223,6 +2239,9 @@
       ],
       "openCamTuner": [
         "tests/unit/flyby-panel.test.mjs"
+      ],
+      "refreshCamTunePanel": [
+        "tests/unit/camera-tuner-a11y.test.mjs"
       ],
       "*": [
         "tests/specs/camera-tuner.spec.js"
@@ -4757,12 +4776,14 @@
         "tests/unit/shared-math.test.mjs"
       ],
       "lookAtTo": [
+        "tests/unit/agentview-api-contract.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/shared-math.test.mjs"
       ],
       "mulTo": [
+        "tests/unit/agentview-api-contract.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
@@ -4778,6 +4799,7 @@
         "tests/unit/shared-math.test.mjs"
       ],
       "perspectiveTo": [
+        "tests/unit/agentview-api-contract.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
@@ -4795,7 +4817,6 @@
         "tests/specs/telemetry-compare.spec.js",
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/aero-defaults-2026.test.mjs",
-        "tests/unit/agentview-api-contract.test.mjs",
         "tests/unit/ai-pass-complete.test.mjs",
         "tests/unit/ai-queue-reach-vm.test.mjs",
         "tests/unit/ai-strategy.test.mjs",
@@ -8091,6 +8112,7 @@
       "brakeLevel": [
         "tests/specs/gamepad.spec.js",
         "tests/specs/touch-pedals.spec.js",
+        "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
@@ -8352,6 +8374,9 @@
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "setSteerExpo": [
+        "tests/unit/digital-steer.test.mjs"
+      ],
       "setSteerMode": [
         "tests/specs/gamepad.spec.js",
         "tests/specs/tilt-pipeline.spec.js",
@@ -8422,6 +8447,7 @@
       "throttleLevel": [
         "tests/specs/gamepad.spec.js",
         "tests/specs/touch-pedals.spec.js",
+        "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/key-binds-pad-menu.test.mjs",
         "tests/unit/key-binds.test.mjs",
@@ -8761,6 +8787,7 @@
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/tlx-smith-root.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/weather-blend.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
@@ -12568,6 +12595,7 @@
       "highlightsFor": [
         "tests/unit/data-replay-improvements.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "index": [
@@ -12588,6 +12616,7 @@
         "tests/unit/capture-tools-regressions.test.mjs"
       ],
       "reelFor": [
+        "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "sampleAt": [
@@ -13781,6 +13810,7 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
       ]
@@ -13925,7 +13955,8 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
-        "tests/unit/tlx-recovery-lifecycle.test.mjs"
+        "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "drawWarm": [
         "tests/unit/tlx-hunt4c.test.mjs"
@@ -13955,7 +13986,8 @@
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
-        "tests/unit/tlx-post-phone-res.test.mjs"
+        "tests/unit/tlx-post-phone-res.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "postChain": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -13963,7 +13995,8 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
-        "tests/unit/tlx-recovery-lifecycle.test.mjs"
+        "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "present": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13975,7 +14008,8 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
-        "tests/unit/tlx-recovery-lifecycle.test.mjs"
+        "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "resize": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13985,7 +14019,8 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs",
-        "tests/unit/tlx-recovery-lifecycle.test.mjs"
+        "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "runPass": [
         "tests/unit/tlx-post-fixed-mats.test.mjs"
@@ -14434,7 +14469,8 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
-        "tests/unit/tlx-round2.test.mjs"
+        "tests/unit/tlx-round2.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "resizeNow": [
         "tests/unit/tlx-round2.test.mjs"
@@ -14536,7 +14572,8 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
-        "tests/unit/tlx-smith-root.test.mjs"
+        "tests/unit/tlx-smith-root.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "*": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -14652,6 +14689,9 @@
     },
     "js/render/three/tsl-viewport.js": {
       "layout": [
+        "tests/unit/tlx-viewport.test.mjs"
+      ],
+      "layoutOf": [
         "tests/unit/tlx-viewport.test.mjs"
       ],
       "sync": [
@@ -14784,6 +14824,9 @@
       "_expandPull": [
         "tests/unit/livery-finish-contract.test.mjs"
       ],
+      "_f16to32": [
+        "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
       "_fail": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -14801,6 +14844,9 @@
       ],
       "_matLayerBytes": [
         "tests/unit/assets-pack.test.mjs"
+      ],
+      "_readOutputProbe": [
+        "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "_retireFlush": [
         "tests/unit/webgpu-lifecycle.test.mjs"
@@ -17618,6 +17664,9 @@
         "tests/unit/xr-phase0.test.mjs",
         "tests/unit/xr-visibility-pause.test.mjs"
       ],
+      "isSupported": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "isVisible": [
         "tests/unit/xr-visibility-pause.test.mjs"
       ],
@@ -17646,6 +17695,9 @@
       ]
     },
     "js/xr/xr-ui.js": {
+      "ensureButton": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "mount": [
         "tests/unit/xr-phase0.test.mjs"
       ],

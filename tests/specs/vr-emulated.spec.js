@@ -322,6 +322,23 @@ test("controller disconnect and visibility-blurred pause the race and restore on
   await page.waitForFunction(() => XrSession.getSession().visibilityState === "visible" && XrSession.isVisible(),
     null, { polling: 100, timeout: 15_000 });
 
+  // The headset continues submitting XR presentations while the solo race is
+  // paused. XR rAF alone is insufficient: a frozen picture can keep receiving
+  // callbacks without game.js ever reaching the stereo presentation path.
+  const held = await page.evaluate(() => ({
+    raceT: window.__apex.info().raceT,
+    presents: XrBoot.diag().presentCount,
+    paused: !document.getElementById("pausemenu").hidden,
+  }));
+  expect(held.paused, "the headset menu leaves the race paused").toBe(true);
+  await waitXrFrames(page, 2, { timeout: 45_000 });
+  const heldAfter = await page.evaluate(() => ({
+    presents: XrBoot.diag().presentCount,
+    raceT: window.__apex.info().raceT,
+  }));
+  expect(heldAfter.presents, "paused immersive frames reach XR presentation").toBeGreaterThan(held.presents);
+  expect(heldAfter.raceT, "paused immersive frames do not advance the race").toBe(held.raceT);
+
   await endVr(page);
   expect(page.__xrPageErrors || []).toEqual([]);
 });

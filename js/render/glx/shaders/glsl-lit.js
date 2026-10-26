@@ -1188,7 +1188,6 @@ void main() {
   vec3 H = normalize(L + V + vec3(1e-5));   // +eps: normalize(0) NaNs when V==-L
   float NoL = max(dot(N, L), 0.0);
   float NoV = max(dot(N, V), 1e-4);
-  float NoH = max(dot(N, H), 0.0);
   float VoH = max(dot(V, H), 0.0);
 
   vec3 albedo = vCol;
@@ -1523,8 +1522,9 @@ void main() {
   // cloudShadow's 2 vnoise. The fragments are spatially coherent (whole surfaces
   // face away together), so warp divergence is low. This is the same argument the
   // lamp loop already makes at 1077 — the sun path never got it.
+  float keySpecNoL = max(dot(N, L), 0.0);   // includes pooled-water ripples; diffuse keeps NoL
   float shadow = 1.0;
-  if (NoL > 0.0 || clearcoat > 0.001) {
+  if (NoL > 0.0 || keySpecNoL > 0.0 || clearcoat > 0.001) {
     shadow = sampleShadow(vWorldPos) * (1.0 - cloudShadow(vWorldPos) * uCloudShadowDim);
   }
   // uKeyMul (KEY LIGHT tuner slider, default 1.0) scales all DIRECT sun lighting
@@ -1727,14 +1727,15 @@ void main() {
   color = max(color, vec3(0.0));
 
   // Cook-Torrance specular, soft-clipped so highlights sheen instead of clipping.
-  // specCol is * litNoL (= NoL * …). A backface paid GGX + F_Schlick + Reinhard
-  // for a result of exactly 0. Verbatim the lamp GGX gate above. H stays live
-  // (sparkle reads it inside litNoL > 0).
-  if (NoL > 0.0) {
-    float D = D_GGX(NoH, a);
-    float Vis = V_SmithGGX(NoV, NoL, a);
+  // Read the final normal: rain ripples perturb pooled water after the diffuse
+  // NoL was cached. The key highlight must move with them, like the lamp lobe.
+  if (keySpecNoL > 0.0) {
+    float keySpecNoH = max(dot(N, H), 0.0);
+    float keySpecNoV = max(dot(N, V), 1e-4);
+    float D = D_GGX(keySpecNoH, a);
+    float Vis = V_SmithGGX(keySpecNoV, keySpecNoL, a);
     vec3 F = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
-    vec3 specCol = (D * Vis) * F * uSunColor * litNoL;
+    vec3 specCol = (D * Vis) * F * uSunColor * (keySpecNoL * shadow * uKeyMul);
     // Soft knee with an asymptote of uSpecKnee (def 4), not a hard Reinhard
     // cap at 1.0: a raw GGX of 10+ used to come out at ~0.91, UNDER the day
     // bloom threshold (0.78 is the knee, not the ceiling), so a sun glint off
