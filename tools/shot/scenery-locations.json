@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "7c996b1445ac9c0a0690a98c133d13bcf5090ccebe84ca41194efe218e76ef4c",
+  "sourceDigest": "5181a0ed065aa83c707316387ac905c8625f682b59b0b11f657d995fb6e7b9ae",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -538,15 +538,15 @@
       "track": "buenos_aires",
       "name": "Curvón Terrace",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.379472,
+      "frac": 0.379464,
       "target": [
-        -377.46,
-        6.83,
-        188.27
+        -352.4,
+        8.89,
+        190.89
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 35,
-      "viewDistanceM": 35,
+      "nearestRoadDistanceM": 60.2,
+      "viewDistanceM": 60.2,
       "source": "tests/data/landmarks/buenos_aires.json; js/circuits/scenery/buenos_aires.js"
     },
     {
