@@ -1,0 +1,1 @@
+Improved: Phone TEST soak SHARE is documented as the field path for FPS, render scale and governor tier samples on real devices; logging gaps for hitch/governor export and Device Farm join keys are filed in docs/surveys/w24a-logging.md (W24a).

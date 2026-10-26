@@ -189,6 +189,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.
   "tests/unit/boot-idle-prefetch.test.mjs",
   "tests/unit/boot-input-shape.test.mjs",
+  // The boot wall's budget: eager shell script count/bytes, no lazy group back on a tag, one adapter request before Gfx.create (A·H15 load hunt).
+  "tests/unit/boot-load-budget.test.mjs",
   "tests/unit/bootstrap-doctor.test.mjs",
   "tests/unit/brake-cue.test.mjs",
   // ...and the branch audit it deletes by: ancestry, the merge-tree dry merge
@@ -683,6 +685,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-gap-decimals.test.mjs",
   "tests/unit/hud-helmet-placement.test.mjs",
   "tests/unit/hud-inputs.test.mjs",
+  // #3273: MOVE & SIZE greys sliders for chips the active MINIMAL/COMPACT preset hides (store, not lagging body class).
+  "tests/unit/hud-layout-hidden.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
   "tests/unit/hud-minimap-pitmark.test.mjs",

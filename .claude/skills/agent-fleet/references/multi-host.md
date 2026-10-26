@@ -9,9 +9,9 @@ only channels all hosts share are git (the bus and claims branches) and the PR.
 | letter | host | reach it by |
 |---|---|---|
 | A | Claude, this account | `send_message` (same account), bus, PR |
-| B | Claude, Bryce's second account | bus and PR only (`list_sessions` / `send_message` cannot cross accounts) |
+| B | Claude, Bryce's second account | bus, PR, cross-account inbox (`list_sessions` / `send_message` cannot cross accounts) |
 | C | Codex coordinator (`C·O1`) | bus `to:C` or `to:codex:<thread id>`, PR |
-| D | Cursor coordinator | bus `to:D` or `to:cursor:<agent id>`, PR |
+| D | DAD, the Grok bot (Cursor sessions appear under other letters) | agent-msg webhook + bus `to:D`, PR; Cursor agents `to:cursor:<agent id>` |
 | E+ | a stand-alone lane on any host | the next free letter, announced on the bus |
 
 Only Bryce starts a fleet: a bus line `FLEET <letter> LIVE <host>:<id> scope:<areas>`.
