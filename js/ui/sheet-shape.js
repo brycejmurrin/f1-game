@@ -722,9 +722,17 @@ window.SheetShape = (function () {
        of gap. Kept for that reason, not for the incident that prompted it. */
     addEventListener("resize", onViewport, { passive: true });
     addEventListener("orientationchange", onViewport, { passive: true });
+    // Home Screen launch/restore can settle after the first measurement without
+    // a window resize. Use the same bounded settle path as rotation, rather than
+    // leaving the title on its launch-time density until the player turns it.
+    addEventListener("pageshow", onViewport, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", onViewport, { passive: true });
+    }
     watchVisibility();
     watchScale();
     watchKeyboard();
+    onViewport();
     // A screen that builds its sheet later (the data hub) still gets measured.
     if (typeof MutationObserver === "function") {
       new MutationObserver((muts) => {
