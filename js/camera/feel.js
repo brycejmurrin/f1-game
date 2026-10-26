@@ -204,6 +204,18 @@ const CamFeel = (function () {
     tcam:      { sp: 5.0, yaw: 4, brake: 8, slip: 4 },
     rear:      { sp: 5.5, yaw: 7, brake: 8, slip: 4 },
   });
+  // One lens context and one set of follow keys per mode, filled in place.
+  const _driveRateFallback = Object.freeze({ sp: 3, yaw: 3, brake: 5, slip: 3 });
+  const _driveCtx = { sp: 0, yaw: 0, brake: 0, slip: 0 };
+  const _driveKeys = Object.create(null);
+  for (const _driveMode of Object.keys(DRIVE_RESPONSE)) {
+    _driveKeys[_driveMode] = {
+      sp: "sp:" + _driveMode,
+      yaw: "yaw:" + _driveMode,
+      brk: "brk:" + _driveMode,
+      slp: "slp:" + _driveMode,
+    };
+  }
   function drive(mode, eye, tgt, fov, extra, spN) {
     if (!extra || extra.reduceMotion) return fov;
     // A snap (no dt) reseeds the follow keys below, so the next live frame
@@ -211,14 +223,22 @@ const CamFeel = (function () {
     const dt = extra.dt > 0 ? extra.dt : 0;
     if (!dt && !extra.snap) return fov;
     const att = extra.att || {};
-    const rate = DRIVE_RESPONSE[mode] || { sp: 3, yaw: 3, brake: 5, slip: 3 };
+    const rate = DRIVE_RESPONSE[mode] || _driveRateFallback;
     let delta = null;
-    const ctx = {
-      sp: follow("sp:" + mode, clamp(spN || 0, 0, 1), rate.sp, dt),
-      yaw: follow("yaw:" + mode, clamp((att.yawRateCur || 0) / 1.1, -1, 1), rate.yaw, dt),
-      brake: follow("brk:" + mode, clamp((att.baPitch || 0) / 0.025, 0, 1), rate.brake, dt),
-      slip: follow("slp:" + mode, clamp((extra.slipLat || 0) / 6, -1, 1), rate.slip, dt),
-    };
+    let keys = _driveKeys[mode];
+    if (!keys) {
+      keys = _driveKeys[mode] = {
+        sp: "sp:" + mode,
+        yaw: "yaw:" + mode,
+        brk: "brk:" + mode,
+        slp: "slp:" + mode,
+      };
+    }
+    _driveCtx.sp = follow(keys.sp, clamp(spN || 0, 0, 1), rate.sp, dt);
+    _driveCtx.yaw = follow(keys.yaw, clamp((att.yawRateCur || 0) / 1.1, -1, 1), rate.yaw, dt);
+    _driveCtx.brake = follow(keys.brk, clamp((att.baPitch || 0) / 0.025, 0, 1), rate.brake, dt);
+    _driveCtx.slip = follow(keys.slp, clamp((extra.slipLat || 0) / 6, -1, 1), rate.slip, dt);
+    const ctx = _driveCtx;
     if (typeof DriveChase !== "undefined") delta = DriveChase.apply(mode, eye, tgt, ctx);
     if (delta == null && typeof DriveBroadcast !== "undefined") delta = DriveBroadcast.apply(mode, eye, tgt, ctx);
     if (delta == null && typeof DriveOnboard !== "undefined") delta = DriveOnboard.apply(mode, eye, tgt, ctx);

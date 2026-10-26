@@ -448,18 +448,19 @@ async function r1Rig(t, ls = {}) {
     }
     function resetRecs() { for (let i = 0; i < drawList.n; i++) drawList[i].instanced = null; drawList.n = 0; }
     const cache = new Map();
+    const fxFor = (geo, opts) => !!(opts && opts.carFinish && geo && geo.userData.tlxFx);
     function materialFor(o, chunked, instanced) {
       const k = JSON.stringify(o) + instanced;
       if (!cache.has(k)) { const m = lit.makeMaterial(instanced ? Object.assign({ instanced: true }, o) : o); if (instanced === 2) _attrInst(m); cache.set(k, m); }
       return cache.get(k);
     }
-    function buildGeometry() { throw new Error("unused"); }
+    function buildGeometry() { return new THREE.BoxGeometry(); }
     let _warmPending = null;
     ${DROP}
     ${H1_USAGE}
     ${R1}
     return { warming(value) { _warmPending = value; }, flush: flushDropped, append: _coAppend, drop: _coDrop, runs: _coRuns, stat: _coStat, drawList, resetRecs, materialFor, _instRegistry,
-      aiMesh: _aiMesh, aiOf: _aiOf, aiOn: _aiInst, unlitMat,
+      aiMesh: _aiMesh, aiOf: _aiOf, aiOn: _aiInst, unlitMat, warm: _coWarm,
       show() { for (let i = 0; i < drawList.n; i++) { const r = drawList[i]; if (!r.instanced) continue;
         const b = r.instanced; b.imesh.count = b.visible; b.imesh.material = r.mat; b.imesh.userData.tlxEmissive = r.em; b.imesh.visible = true; } } };`);
   const R = mk(THREE, TSL, scene, renderer, camera, { getItem: (k) => (k in ls ? ls[k] : null) }, lit, env);
@@ -543,6 +544,48 @@ test("R1: the sentinel, the fallbacks and the kill switch", async (t) => {
   assert.equal(R.runs.has(geo), false); assert.equal(R._instRegistry.length, reg - 2, "a freed source takes both runs");
   const off = await r1Rig(t, { "apex26.tlxCoalesce": "0" });
   assert.equal(off.R.append(geo, carWheel(0), o), false, "apex26.tlxCoalesce=0: per record");
+});
+
+test("R1: shared body transforms, finish fallback and warm remain bounded", async (t) => {
+  const { R, renderer } = await r1Rig(t);
+  const geo = r1Geo(), paint = { carFinish: true, carPaint: 1, doubleSided: true, coalesce: true };
+  const w = new THREE.Matrix4().makeRotationY(0.7).multiply(new THREE.Matrix4().makeScale(-2, 0.6, 1.3));
+  w.elements[4] += 0.17; // shear: exercise more than a rigid car basis
+  w.setPosition(123, 4, -83);
+  const model = Float32Array.from(w.elements);
+  assert.equal(R.append(geo, model, paint), true);
+  const run = R.drawList[0].instanced;
+  const instance = new THREE.Matrix4().fromArray(run.ib.array);
+  const composed = run.imesh.matrixWorld.clone().multiply(instance);
+  assert.deepEqual(composed.elements.map(Math.fround), Array.from(model));
+  const expectedNormal = new THREE.Matrix3().getNormalMatrix(new THREE.Matrix4().fromArray(model));
+  const instanceNormal = new THREE.Matrix3().getNormalMatrix(instance);
+  const objectNormal = new THREE.Matrix3().getNormalMatrix(run.imesh.matrixWorld);
+  for (const n of [[1, 2, 3], [-2, 1, 0.7], [0.3, -0.5, 1]]) {
+    const expected = new THREE.Vector3(...n).applyMatrix3(expectedNormal).normalize();
+    const actual = new THREE.Vector3(...n).applyMatrix3(instanceNormal).normalize().applyMatrix3(objectNormal).normalize();
+    assert.ok(expected.distanceTo(actual) < 1e-12, "inverse-transpose composition preserves the normal direction");
+  }
+  geo.userData.tlxFx = true;
+  assert.equal(R.append(geo, model, paint), false, "finish geometry keeps its ordinary material path");
+  delete geo.userData.tlxFx;
+  R.show();
+  const warm = [];
+  renderer.compileAsync = async (m) => warm.push({ side: m.material.side, sign: Math.sign(m.matrixWorld.determinant()) });
+  await R.warm();
+  assert.deepEqual(warm, [{ side: THREE.DoubleSide, sign: -1 }], "visible runs cannot skip the reflected paint warm");
+  assert.equal(run.imesh.visible, true, "warm never hides a submitted body");
+  const probes = [...R.runs.keys()].filter(g => g !== geo);
+  assert.equal(probes.length, 1);
+  assert.equal(R.runs.get(probes[0])[1].imesh.visible, false);
+  await R.warm();
+  assert.equal(R.runs.size, 2, "re-entry reuses the warm geometry");
+  R.resetRecs();
+  assert.equal(R.append(geo, model, paint), true);
+  assert.equal(run.visible, 1, "new pass does not retain old instances");
+  R.drop(geo);
+  assert.equal(R.runs.has(geo), false);
+  assert.equal(R._instRegistry.includes(run.imesh), false);
 });
 
 test("R1: the AI material is the lit instanced fragment on its own program key; tlx.js wires draw, warm, release and the capability", async (t) => {
@@ -876,4 +919,22 @@ test("carFinish rides the material's packB.w and its cache key (finish 60-85 blo
   const key = vm.runInNewContext("(" + fnSource(TLX, "function buildMatKey(") + ")", {});
   assert.notEqual(key({ carPaint: 1, carFinish: true }, false, 2), key({ carPaint: 1 }, false, 2),
     "matCache never hands a car-paint draw a material minted without the flag");
+});
+
+test("R1: production body coalescing selects only distant procedural shared rivals", () => {
+  const source = gameSource();
+  const start = source.indexOf('    const sharedBody = FieldLod.on && !c.isPlayer && _lod >= 2;');
+  assert.ok(start >= 0);
+  const end = source.indexOf('      if (_lod < 2) queueCarDecals', start);
+  const submit = new Function('FieldLod', 'c', '_lod', 'carDraw', 'playerBodyMesh', 'teamBodyMesh', 'gfx', 'tmpMat', 'paint',
+    `const _lodD2 = 100000, fovY = 1; ${source.slice(start, end)} }`);
+  const paint = {}, coPaint = { coalesce: true }, matrix = new Float32Array(16);
+  for (const [on, player, lod, glb, expected] of [[true, false, 2, false, 'shared'], [true, false, 3, false, 'shared'],
+    [true, true, 2, false, 'player'], [true, false, 1, false, 'team'], [false, false, 2, false, 'team'], [true, false, 2, true, null]]) {
+    const calls = [];
+    submit({ on, farBody: () => true }, { isPlayer: player }, lod,
+      { modelBuf: glb, sharedRivalBodyMesh: () => 'shared', coOpt: o => { assert.equal(o, paint); return coPaint; } },
+      () => 'player', () => 'team', { draw: (...args) => calls.push(args) }, matrix, paint);
+    assert.deepEqual(calls, expected ? [[expected, matrix, expected === 'shared' ? coPaint : paint]] : []);
+  }
 });

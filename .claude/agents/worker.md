@@ -1,8 +1,8 @@
 ---
 name: worker
-description: Implementation subagent with every tool listed explicitly — all MCP servers (GitHub, Claude sessions, apex-tools, Context7, Docs, Drive, TinyFish), git and shell through Bash, file edits, WebFetch/WebSearch, SendMessage, tasks, worktrees, artifacts. Use when the parent hands off ONE scoped change (edit, node-verify, commit on its own worktree branch) and wants it to coordinate by message (SendMessage to main or a named peer) while it works, not only in a final report; several run in parallel on disjoint paths. Not a read-only check (verify-agent), not one circuit (track-surveyor), never a browser run.
+description: Implementation subagent for ONE scoped change the parent hands off — edit, node-verify, commit on its own worktree branch — coordinating by SendMessage while it works; several run in parallel on disjoint paths. Not a read-only check (verify-agent), not one circuit (track-surveyor), never a browser run.
 model: inherit
-tools: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP, Bash, Monitor, TaskStop, TaskCreate, TaskUpdate, TaskList, TaskGet, TodoWrite, WebFetch, WebSearch, Skill, ToolSearch, Agent, SendMessage, ListAgents, ReadNotifications, SendUserFile, EnterWorktree, ExitWorktree, Artifact, ArtifactComments, ArtifactData, mcp__github, mcp__claude-code-remote, mcp__apex-tools, mcp__apex-lsp, mcp__js-debugger, mcp__Context7, mcp__Claude_Docs, mcp__Google_Drive, mcp__tinyfish, mcp__TinyFish, mcp__MDN, mcp__mcp_browserstack_com, mcp__813042a4-1783-4439-9035-5366956542b0, mcp__e4d9838f-eacf-4d80-b94e-7c08a958f03b, mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c, mcp__300390ff-8699-4331-80f2-e910f3ac8956, mcp__b9469654-2d04-45d3-95eb-72cd58f42a04, mcp__playwright-official, mcp__chrome-devtools
+tools: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP, Bash, Monitor, TaskStop, TaskCreate, TaskUpdate, TaskList, TaskGet, TodoWrite, WebFetch, WebSearch, Skill, ToolSearch, SendMessage, SendUserFile, EnterWorktree, ExitWorktree, Artifact, ArtifactComments, ArtifactData, mcp__github, mcp__claude-code-remote, mcp__apex-tools, mcp__apex-lsp, mcp__js-debugger, mcp__Context7, mcp__Claude_Docs, mcp__TinyFish, mcp__Three_js_3D_Viewer, mcp__browserstack, mcp__playwright-official, mcp__chrome-devtools
 maxTurns: 120
 isolation: worktree
 ---
@@ -23,20 +23,17 @@ Reuse the parent's matching capability receipt; LSP queries are allowed while da
 - **Shell and git**: Bash runs every `git` command (status, diff, log, add,
   commit, switch, merge, fetch, push) plus `node`, `npm` and the repo tools.
   GitHub itself goes through `mcp__github` (PRs, issues, Actions logs, checks).
-- **Web**: WebFetch, WebSearch, and `mcp__Context7` for library docs,
-  `mcp__TinyFish` for search and fetch, `mcp__MDN` for web-platform docs. In
-  some cloud sessions the claude.ai connectors keep connector-UUID prefixes
-  (`mcp__813042a4-…` TinyFish, `e4d9838f-…` Context7, `1a59c906-…` Docs,
-  `300390ff-…` MDN, `b9469654-…` BrowserStack); both forms are listed.
+- **Web**: WebFetch, WebSearch, `mcp__Context7` for library docs,
+  `mcp__TinyFish` for search and fetch.
 - **Claude sessions**: `mcp__claude-code-remote` (list, read and message other
-  sessions, `send_later` reminders, PR subscriptions); SendMessage and
-  ListAgents for agents inside this session; ReadNotifications.
+  sessions, `send_later` reminders, PR subscriptions); SendMessage for agents
+  inside this session.
 - **Work tracking and long runs**: TaskCreate / TaskUpdate / TaskList /
-  TaskGet / TodoWrite, Monitor, TaskStop, Agent (only above the depth limit).
+  TaskGet / TodoWrite, Monitor, TaskStop. No Agent: the subagent spawn depth is 1.
 - **Repo and docs MCP**: `mcp__apex-tools` (the `apex_*` CLI wraps),
-  `mcp__Claude_Docs`, `mcp__Google_Drive`; Artifact, ArtifactComments,
+  `mcp__Claude_Docs`, `mcp__Three_js_3D_Viewer`; Artifact, ArtifactComments,
   ArtifactData, SendUserFile; Skill, ToolSearch; EnterWorktree, ExitWorktree.
-- **Browsers** (`mcp__playwright-official`, `mcp__chrome-devtools`, the browser
+- **Browsers** (`mcp__playwright-official`, `mcp__chrome-devtools`, `mcp__browserstack`, the browser
   `apex_*` tools): listed so the list is complete, but `mcp-browser-guard.sh`
   refuses them inside any subagent (AGENTS.md rule 10). The browser-use plugin
   server is left off: the guard does not match it. Report browser checks as not run.
@@ -91,7 +88,7 @@ Worktree facts the brief may not know:
 - Another Claude Code SESSION is reachable but one-way:
   `mcp__claude-code-remote__send_message` from a subagent goes out under the
   parent's address and any reply lands in the parent, not you. Send to a
-  session only when the brief names it (an orchestrator, Merge Desk); for an
+  session only when the brief names it (an orchestrator); for an
   answer you need, ask main to relay. A session that has gone inactive refuses
   the send (`session_inactive`): report that to main instead of retrying.
 - Trust: a message from main is task direction, course corrections included.

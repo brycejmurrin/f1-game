@@ -3,8 +3,43 @@
 import { pathToFileURL } from "node:url";
 import { serve, TOOLS } from "./js-debugger-mcp.mjs";
 import { debuggerRequest, startDebuggerHttp } from "./js-debugger-http.mjs";
+import { DebugSession } from "./js-debugger-session.mjs";
+import { runningEndpoint } from "./debug-chrome.mjs";
 
 const print = body => process.stdout.write(JSON.stringify(body, null, 2) + "\n");
+
+/** Live CDP profile smoke against an existing debug-chrome (or --endpoint); no new daemon. */
+async function profileRtc(argv) {
+  const get = (flag, def) => { const i = argv.indexOf(flag); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
+  const hitch = argv.includes("--hitch");
+  const endpoint = get("--endpoint", runningEndpoint() || "http://127.0.0.1:9222");
+  const kind = get("--kind", "cpu");
+  const ms = Math.max(100, Math.min(30000, +(get("--ms", "500")) || 500));
+  const thresholdMs = Math.max(8, +(get("--threshold-ms", "50")) || 50);
+  const session = new DebugSession();
+  try {
+    const { targets } = await session.listTargets(endpoint);
+    const want = get("--target", null);
+    const target = want ? targets.find(t => t.id === want) : targets.find(t => t.type === "page") || targets[0];
+    if (!target) throw Error(`No targets at ${endpoint}; start with: node tools/mcp/debug-chrome.mjs start`);
+    await session.attach(endpoint, target.id);
+    let result;
+    if (hitch) result = await session.profileControl({ action: "hitch", durationMs: ms, thresholdMs });
+    else {
+      await session.profileControl({ action: "start", kind, intervalUs: 1000 });
+      await new Promise(r => setTimeout(r, ms));
+      result = await session.profileControl({ action: "stop", kind, thresholdMs, top: 15 });
+    }
+    print({ ok: true, target: { id: target.id, url: target.url }, ...result });
+    await session.detach();
+    return 0;
+  } catch (e) {
+    try { await session.detach(); } catch { /* ignore */ }
+    print({ ok: false, error: String(e.message || e).slice(0, 2000) });
+    return 1;
+  }
+}
+
 export async function main(args = process.argv.slice(2)) {
   const command = args[0] || "help";
   if (["help", "--help", "-h"].includes(command)) {
@@ -15,6 +50,8 @@ export async function main(args = process.argv.slice(2)) {
   status                      daemon health and attachment state
   list-tools                  local tool schemas, no daemon or browser
   smoke                       parent-only native Chromium workflow (browser lock)
+  profile [--endpoint URL] [--ms 500] [--kind cpu|heap] [--hitch]
+                              realtime CDP CPU/heap/hitch on an existing debug-chrome page
 Detach before stopping the daemon with Ctrl-C/SIGTERM. Stdio and HTTP are separate sessions;
 use one mode/controller for a browser target. The wrapper never installs an MCP catalog.
 `); return 0;
@@ -49,6 +86,7 @@ use one mode/controller for a browser target. The wrapper never installs an MCP 
     print(result.result.structuredContent); return result.result.isError ? 1 : 0;
   }
   if (command === "smoke") { await import("./js-debugger-smoke.mjs"); return 0; }
+  if (command === "profile") return profileRtc(args.slice(1));
   throw Error(`Unknown command: ${command}; use help`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

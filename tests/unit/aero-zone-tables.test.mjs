@@ -161,3 +161,18 @@ test("the circuit picker names the zones the way the HUD does (AERO, never DRS)"
   assert.deepEqual(visible, [], "a string literal still says DRS");
   assert.match(src, /\["AERO ZONES", /);
 });
+
+test("every current-calendar circuit has an authored ZONE_COUNT — none races the raw scan (#3557)", () => {
+  // Both ways, like circuit-lore: Tracks.SEASON and the REAL_2026 calendar
+  // (read from source — season-cal.js needs a career context to load).
+  const cal = fs.readFileSync(new URL("../../js/career/season-cal.js", import.meta.url), "utf8");
+  const block = cal.match(/const REAL_2026 = Object\.freeze\(\[([\s\S]*?)\]\.map\(/);
+  assert.ok(block, "REAL_2026 block not found in js/career/season-cal.js");
+  const real = [...block[1].matchAll(/\["([a-z_0-9]+)",/g)].map((m) => m[1]);
+  assert.ok(real.length >= 20, `REAL_2026 parsed only ${real.length} ids`);
+  const ids = new Set([...Tracks.SEASON.map((t) => t.id), ...real]);
+  const missing = [...ids].filter((id) => AeroZones.ZONE_COUNT[id] == null);
+  assert.deepEqual(missing, [],
+    "a current-calendar circuit has no ZONE_COUNT entry and falls back to every straight over 210 m — " +
+    "author its FIA zone count in js/physics/aero-zones.js");
+});

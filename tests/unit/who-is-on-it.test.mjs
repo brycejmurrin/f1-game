@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseClaims, claimCommit, claimSlug, sessionId, parseBoard, nextBoard, readBoard, pushBoard, parseCatFileBatch, parseRefs, fetchRefCache, CLAIMS_BOARD, BOARD_MAX_MIN, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
+import { parseClaims, claimCommit, claimSlug, sessionId, parseBoard, nextBoard, readBoard, pushBoard, parseCatFileBatch, parseRefs, fetchRefCache, main as whoMain, CLAIMS_BOARD, BOARD_MAX_MIN, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NOW = 1_800_000_000;
@@ -128,6 +128,17 @@ test("a FAILED fetch must not print as an empty claim list", () => {
   assert.match(src, empty, "the empty-claims wording must branch on `fetched`");
 });
 
+test("a failed claim write exits nonzero even when the stale listing prints", () => {
+  const printed = [];
+  const code = whoMain(["--claim", "fixture", "--session", "test-session", "--no-fetch", "--json"], {
+    getBranch: () => "cursor/claim-failure-fixture",
+    writeClaim: () => ({ ok: false, ref: "claude/claims-board:fixture", sha: "", err: "push rejected" }),
+    log: (line) => printed.push(line),
+  });
+  assert.equal(JSON.parse(printed[0]).claimed.ok, false);
+  assert.equal(code, 1, "a shell `&&` workflow must stop before editing without a claim");
+});
+
 test("the claims BOARD: one file per claim, a release removes it, a write drops day-old claims", () => {
   const f = (slug, ageMin, text = "on it") => ({ slug, content: `${NOW - ageMin * 60}\tClaude\t${text}\n` });
   const [c] = parseBoard([f("fix-a-s1", 30, "fixing\tthe red")], NOW);
@@ -237,7 +248,10 @@ test("a board write pokes fleet.yml by REST workflow_dispatch on the deploy bran
   assert.deepEqual(post.slice(5), ["-f", "ref=claude/f1-game-project-26h3ng"]);
   assert.match(pokeFleetBoard((cmd, args) => (
     { status: 0, stdout: isQueuedQuery(args) ? "1\n" : "" }
-  )), /already queued/);
+  )), /already queued or running/);
+  const query = calls.find((c) => c.some((a) => typeof a === "string" && a.includes("/runs?")));
+  assert.ok(query.some((a) => /in_progress/.test(a)) && query.some((a) => /queued/.test(a)),
+    "the debounce counts running as well as queued fleet.yml runs");
   assert.match(pokeFleetBoard((cmd, args) => {
     if (isQueuedQuery(args)) return { status: 0, stdout: "0\n" };
     return { status: 1 };

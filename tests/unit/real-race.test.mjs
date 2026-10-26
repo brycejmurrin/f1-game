@@ -433,6 +433,29 @@ test("fieldAt(): the race as it stood at the start of a lap — who was where, o
   assert.equal(R.fieldAt(aged, 5).by[63].age, 7, "4 laps run plus 3 laps old at the start");
 });
 
+test("fieldAt keeps published trace time separate from the filled pace clock", () => {
+  const { R } = load();
+  const driver = { num: 1, laps: [null, 100, 100], lapStart: [0, 120, 220], lapsDone: 3, stints: [] };
+  const script = { laps: 3, drivers: [driver] };
+  const at = R.fieldAt(script, 3);
+  assert.equal(at.t0, 200, "the untimed opening lap still uses the pace fallback");
+  assert.equal(at.traceT0, 220, "positions use the published start of lap 3");
+  const later = { ...driver, num: 2, lapStart: [0, 125, 225] };
+  const retired = { ...driver, num: 3, dnf: true, lapsDone: 1, laps: [100], lapStart: [0, 100, 1] };
+  const dns = { ...driver, num: 4, dns: true, lapStart: [0, 0, 0] };
+  assert.equal(R.fieldAt({ laps: 3, drivers: [later, retired, dns, driver] }, 3).traceT0, 220,
+    "the earliest running driver's published start wins, independent of roster order");
+  for (const published of [null, undefined, -1, NaN, Infinity, "220"]) {
+    assert.equal(R.fieldAt({ ...script, drivers: [{ ...driver, lapStart: [0, 120, published] }] }, 3).traceT0, 200,
+      "missing or malformed published starts fall back to the synthetic clock: " + published);
+  }
+  for (const lapStart of [undefined, null, { 2: 220 }]) {
+    assert.equal(R.fieldAt({ ...script, drivers: [{ ...driver, lapStart }] }, 3).traceT0, 200);
+  }
+  assert.equal(R.fieldAt({ ...script, drivers: [{ ...driver, lapStart: [null, null, 0] }] }, 3).traceT0, 0,
+    "a published zero is a valid lights-out timestamp");
+});
+
 test("a mid-race jump-in drops every car where it was, on its set, with the clock and the reference seeded", () => {
   const { R, script, Teams } = load();
   const cars = makeCars(Teams, "ferrari:0");
@@ -975,4 +998,44 @@ test("JUMP IN preserves historical set age with the production tyre clock", () =
     const historical = Math.max(0, Math.max(0, c.lap - 1) - Math.max(0, c.tyreLap0 - 1));
     assert.equal(G.tyres.lapsOn(c), historical, c.code + " historical tyre age");
   }
+});
+
+test("cancelled WATCH does not create position requests after a delayed IndexedDB cache miss", async () => {
+  const { ctx } = load();
+  let openRequest, getRequest, transaction, calls = 0;
+  ctx.indexedDB = { open() { openRequest = {}; return openRequest; } };
+  ctx.F1API = { cancelAll() {}, locationData() { calls++; return Promise.reject(new Error("unexpected download")); } };
+  const D = vm.runInContext("DataRealRace", ctx), tab = D.create({ isOpen: () => true });
+  const script = { sessionKey: 42, t0: Date.UTC(2026, 8, 20), complete: true,
+    drivers: [1, 2, 3].map((num) => ({ num, lapStart: [0], laps: [90] })) };
+  assert.equal(tab.loadTraces(script, null, null), true);
+  tab.cancel();
+  openRequest.result = { close() {}, transaction() {
+    transaction = { objectStore: () => ({ get() { getRequest = {}; return getRequest; } }) };
+    return transaction;
+  } };
+  openRequest.onsuccess();
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  getRequest.result = null; getRequest.onsuccess(); transaction.oncomplete();
+  await tab.positionsSettled();
+  assert.equal(calls, 0, "the abandoned operation cannot enter the transport's new generation");
+});
+
+test("cancelling a fulfilled WATCH request before packing rejects without caching partial work", async () => {
+  const { ctx } = load();
+  let current = true, resolveRows, opens = 0, progress = 0;
+  ctx.indexedDB = { open() { opens++; throw new Error("cancelled work must not write"); } };
+  ctx.F1API = { locationData: () => new Promise((resolve) => { resolveRows = resolve; }) };
+  const D = vm.runInContext("DataRealRace", ctx);
+  const work = D.fetchTraces({ sessionKey: 42, t0: 1e12, complete: true,
+    drivers: [{ num: 1, lapStart: [0], laps: [90] }] }, () => { progress++; }, null, { refresh: true, current: () => current });
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  current = false; resolveRows([]);
+  await assert.rejects(work, { name: "AbortError" });
+  assert.equal(progress, 0); assert.equal(opens, 0);
+});
+
+test("fetchTraces preserves its rejected-promise contract when already cancelled", async () => {
+  const { ctx } = load(), D = vm.runInContext("DataRealRace", ctx);
+  await assert.rejects(D.fetchTraces({ t0: 1, drivers: [] }, null, null, { current: () => false }), { name: "AbortError" });
 });

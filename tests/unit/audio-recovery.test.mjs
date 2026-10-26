@@ -36,7 +36,7 @@ function boot(opts = {}) {
   const fetched = [], decoded = [], mediaEls = [];
   const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date: opts.Date || Date, Error, parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn(...a) { if (opts.log) console.log("  Log.warn:", a.join(" ")); }, debug() {}, error() {} },
-    document: { addEventListener(type, fn) { listeners[type] = fn; }, hidden: !!opts.hidden }, addEventListener() {}, removeEventListener() {},
+    document: { addEventListener(type, fn) { listeners[type] = fn; }, hidden: !!opts.hidden }, addEventListener(type, fn) { listeners[type] = fn; }, removeEventListener() {},
     setTimeout: opts.setTimeout || ((fn, ms) => { if (typeof fn === "function") return setTimeout(fn, ms || 0); return 0; }),
     clearTimeout: opts.clearTimeout || ((id) => { if (id) clearTimeout(id); }),
     navigator: opts.userActivation ? { userActivation: opts.userActivation } : {},
@@ -349,6 +349,61 @@ function fakeAudio(duration) {
 }
 const UPLOAD = { id: "user:7", name: "dj mix", url: "blob:apex/7" };
 
+test("a refused stream retries on the next visible gesture even with an already-running context", async () => {
+  const BaseAudio = fakeAudio(240);
+  let plays = 0;
+  function Audio() {
+    const el = new BaseAudio();
+    el.play = () => ++plays === 1 ? Promise.reject(Object.assign(new Error("blocked"), { name: "NotAllowedError" })) : Promise.resolve();
+    return el;
+  }
+  const h = boot({ Audio, mediaSource: true });
+  h.A.init(); h.A.addTracks([UPLOAD]); h.A.playTrackId(UPLOAD.id); await flush();
+  assert.equal(plays, 1); assert.equal(h.contexts[0].state, "running");
+  const el = h.mediaEls[0]; el.currentTime = 17;
+  h.listeners.pointerdown({ isTrusted: false });
+  assert.equal(plays, 1, "synthetic events do not consume the pending retry");
+  h.document.hidden = true; h.listeners.touchend({ isTrusted: true });
+  assert.equal(plays, 1, "late hidden gestures do not resume playback");
+  h.document.hidden = false; h.listeners.touchend({ isTrusted: true }); await flush();
+  assert.equal(plays, 2); assert.equal(el.src, UPLOAD.url, "retry keeps the selected media source");
+  assert.equal(el.currentTime, 17, "retry does not rewind the song");
+  assert.equal(h.A.currentTrackId(), UPLOAD.id);
+  for (const type of ["pointerdown", "keydown", "touchend"]) h.listeners[type]({ isTrusted: true });
+  assert.equal(plays, 2, "healthy playback is not restarted by later controls");
+});
+
+test("stopping or replacing a blocked stream cancels its gesture retry, including late rejection", async () => {
+  for (const action of ["stop", "disable", "replace", "backend"]) {
+    const BaseAudio = fakeAudio(240);
+    let plays = 0, reject;
+    function Audio() { const el = new BaseAudio(); el.play = () => { plays++; return new Promise((_resolve, r) => { reject = r; }); }; return el; }
+    const h = boot({ Audio, mediaSource: true });
+    h.A.init(); h.A.addTracks([UPLOAD]); h.A.playTrackId(UPLOAD.id); await flush();
+    if (action === "stop") h.A.stopMusic();
+    else if (action === "disable") h.A.setMusicEnabled(false);
+    else if (action === "replace") h.A.playTrackId("builtin:song3");
+    else h.A.setMusicBackend({ setVolume() {}, start() {}, stop() {} });
+    reject(Object.assign(new Error("blocked"), { name: "NotAllowedError" })); await flush();
+    h.listeners.touchend({ isTrusted: true }); await flush();
+    assert.equal(plays, 1, action + " revoked the old request");
+  }
+});
+
+test("late init and gestures keep an existing hidden context suspended and defer rebuilds", async () => {
+  let now = 10000;
+  const h = boot({ clock: () => now });
+  h.A.init(); await flush();
+  h.document.hidden = true; h.listeners.visibilitychange(); await flush();
+  assert.equal(h.contexts[0].state, "suspended");
+  const before = h.resumes();
+  for (let i = 0; i < 4; i++) { now += 1000; h.A.init(); h.listeners.pointerdown({ isTrusted: true }); }
+  assert.equal(h.resumes(), before, "hidden continuation never wakes the existing context");
+  assert.equal(h.contexts.length, 1, "hidden init is not a new unlock/rebuild attempt");
+  h.document.hidden = false; h.listeners.visibilitychange();
+  assert.ok(h.resumes() > before, "show still owns context recovery");
+});
+
 test("an upload streams through the media element on desktop, never through decodeAudioData", async () => {
   const Audio = fakeAudio(3300);
   const { A, fetched, decoded, mediaEls } = boot({ Audio, mediaSource: true });
@@ -537,6 +592,24 @@ test("device-driven context rebuilds are capped (three per 30 s)", async () => {
   for (let i = 0; i < 6; i++) { fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 40); }
   await flush();
   assert.equal(contexts.length, 1 + 3, "three rebuilds in the window, then the cap holds");
+});
+
+// #3561: the capped request must stay pending, not be dropped — a context
+// still running on a dead output never fails a resume, so nothing re-asks.
+test("a rate-capped device rebuild stays pending and a gesture after the window serves it", async () => {
+  let now = 1000;
+  const { A, contexts, fireDeviceChange } = boot({ userActivation: sticky, clock: () => now });
+  A.init(); await flush();
+  for (let i = 0; i < 4; i++) { fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 40); now += 1000; }
+  await flush();
+  assert.equal(contexts.length, 1 + 3, "precondition: the fourth swap hit the cap");
+  A.init(); await flush();
+  assert.equal(contexts.length, 1 + 3, "a gesture inside the window still respects the cap");
+  now += 30000;
+  A.init(); await flush();
+  assert.equal(contexts.length, 1 + 4, "the capped swap is rebuilt for once the window has passed");
+  A.init(); await flush();
+  assert.equal(contexts.length, 1 + 4, "served once, then forgotten");
 });
 
 test("a rebuild forgets the old clock: revFlare and the limiter hold clock restart", async () => {

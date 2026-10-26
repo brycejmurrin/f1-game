@@ -467,7 +467,7 @@ const DataRealRace = (function () {
     const q = (path, opts) => F1API.request(OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey), TTL, fresh ? Object.assign({}, opts, { cache: false }) : opts);
     return Promise.all([
       q("/sessions?"), q("/drivers?"), q("/laps?", { cache: false }), q("/stints?"), q("/pit?"), q("/overtakes?"),
-      q("/race_control?"), q("/weather?"), q("/session_result?"), q("/position?"), q("/team_radio?"),
+      q("/race_control?"), q("/weather?"), q("/session_result?"), q("/position?", { cache: "memory" }), q("/team_radio?"),
     ]).then((r) => {
       const session = arr(r[0])[0] || { session_key: sessionKey };
       const raw = { session, drivers: r[1], laps: r[2], stints: r[3], pits: r[4], overtakes: r[5], raceControl: r[6], weather: r[7], result: r[8], positions: r[9], teamRadio: r[10] };
@@ -620,8 +620,15 @@ const DataRealRace = (function () {
    *  options.refresh skips IndexedDB and the in-memory recording and downloads every car again. */
   function fetchTraces(script, onProgress, previous, options) {
     const refresh = !!(options && options.refresh);
+    const checkCurrent = () => {
+      if (options && options.current && !options.current()) {
+        const error = new Error("positions download cancelled"); error.name = "AbortError"; throw error;
+      }
+    };
+    try { checkCurrent(); } catch (error) { return Promise.reject(error); }
     if (!script || !script.t0 || !script.drivers) return Promise.reject(new Error("no timestamps in the script"));
     return (refresh ? Promise.resolve(null) : traceGet(script.sessionKey, script)).then((hit) => {
+      checkCurrent();
       if (hit) return hit;
       const t0 = script.t0;
       const end = traceEnd(script);
@@ -634,17 +641,26 @@ const DataRealRace = (function () {
       for (const d of script.drivers) if (traces.cars[d.num] && !usableTrace(traces.cars[d.num], d)) delete traces.cars[d.num];
       let done = 0;
       const total = script.drivers.length;
-      return Promise.all(script.drivers.map((d) => (d.dns
-        ? Promise.resolve().then(() => { traces.cars[d.num] = new Float32Array(0); })
-        : Object.prototype.hasOwnProperty.call(traces.cars, d.num)
-        // This layer owns coverage-aware caching. A raw HTTP cache entry may
-        // predate the completed timing even when its URL/window is identical.
-        ? Promise.resolve() : F1API.locationData(script.sessionKey, d.num, startISO, endISO, { cache: false })
-          .then((rows) => { const car = packTrace(rows, t0); traces.cars[d.num] = car; if (!usableTrace(car, d)) { traces.failed.push(d.num); } }, () => { traces.failed.push(d.num); traces.cars[d.num] = new Float32Array(0); }))
-        .then(() => { done++; if (onProgress) onProgress(done, total, traces); })))
+      return Promise.all(script.drivers.map((d) => {
+        checkCurrent();
+        const work = d.dns
+          ? Promise.resolve().then(() => { checkCurrent(); traces.cars[d.num] = new Float32Array(0); })
+          : Object.prototype.hasOwnProperty.call(traces.cars, d.num)
+          // Coverage-aware caching belongs here, rather than in the HTTP cache.
+          ? Promise.resolve() : F1API.locationData(script.sessionKey, d.num, startISO, endISO, { cache: false })
+            .then((rows) => {
+              checkCurrent();
+              const car = packTrace(rows, t0); traces.cars[d.num] = car;
+              if (!usableTrace(car, d)) traces.failed.push(d.num);
+            }, () => {
+              checkCurrent(); traces.failed.push(d.num); traces.cars[d.num] = new Float32Array(0);
+            });
+        return work.then(() => { checkCurrent(); done++; if (onProgress) onProgress(done, total, traces); });
+      }))
         // A failed request is not "no positions": a hub closed mid-load (F1API.cancelAll) or a dropped
         // connection. Such a set is NEVER cached (it would read as loaded, and every WATCH replay nothing).
         .then(() => {
+          checkCurrent();
           const participating = script.drivers.filter((d) => !d.dns);
           // RealReplay needs >100 samples to fit a reference car to the circuit.
           // Sparse fulfilled responses must remain retryable just like errors.
@@ -883,7 +899,7 @@ const DataRealRace = (function () {
       traceWork = fetchTraces(script, (done, total, tr) => {
         if (!current()) return;
         partialTraces = tr; loading = { done, total, sessionKey: script.sessionKey }; updateReplayRow();
-      }, traceFits(traces, script) ? traces : partialTraces, { refresh })
+      }, traceFits(traces, script) ? traces : partialTraces, { refresh, current })
         .then((tr) => {
           if (!current()) return;
           traces = tr; partialTraces = tr; loading = null; updateReplayRow();

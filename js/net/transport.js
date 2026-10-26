@@ -194,18 +194,37 @@ const NetTransport = (function () {
   let fetchedIce = null;
   let fetchedIceAt = 0;
   let fetchingIce = null;
+  let activeTurnApi = null;
+  let turnApiVersion = 0;
+  function configuredTurnApi() {
+    let url = null;
+    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) { /* storage blocked (private mode): stay STUN-only */ }
+    return url || TURN_API;
+  }
+  function syncTurnApi() {
+    const url = configuredTurnApi();
+    if (url !== activeTurnApi) {
+      // Credentials belong to their endpoint. A late answer from the previous
+      // endpoint must not revive its relay after the setting changes.
+      activeTurnApi = url;
+      turnApiVersion++;
+      fetchedIce = null;
+      fetchedIceAt = 0;
+      fetchingIce = null;
+    }
+    return url;
+  }
   function iceCredFresh() {
     return !!(fetchedIce && (Date.now() - fetchedIceAt) < ICE_CRED_TTL_MS);
   }
   function prefetchIce() {
     const jobs = [derivedRelays()];
-    let url = null;
-    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) { /* storage blocked (private mode): stay STUN-only */ }
-    if (!url) url = TURN_API;
+    const url = syncTurnApi();
     // Re-fetch when the previous answer is past ICE_CRED_TTL_MS (or never
     // landed). iceServers are fixed at RTCPeerConnection construction, so
     // stale credentials only hurt the NEXT gather — refresh before that.
     if (url && !iceCredFresh() && !fetchingIce) {
+      const version = turnApiVersion;
       // Keep last-good fetchedIce while the refresh runs. Nulling it here made
       // iceServers() STUN-only mid-refresh, so a PC built in that window lost a
       // still-usable TURN. Replace only when a new list lands (or rtc() drops a
@@ -225,7 +244,7 @@ const NetTransport = (function () {
         // connection attempt for as long as the fetch stays cached (55 min).
         // The two localStorage-sourced lists already validate per entry.
         const list = Array.isArray(raw) ? raw.filter((e) => e && e.urls) : null;
-        if (Array.isArray(list) && list.length) {
+        if (version === turnApiVersion && Array.isArray(list) && list.length) {
           fetchedIce = list;
           fetchedIceAt = Date.now();
         }
@@ -238,7 +257,10 @@ const NetTransport = (function () {
         // symptom has a cause attached to it. Last-good stays if we had one.
         Log.warn("net", "TURN credential fetch failed, gathering STUN-only:", err && err.message);
         return fetchedIce;
-      }).finally(() => { clearTimeout(bail); fetchingIce = null; });
+      }).finally(() => {
+        clearTimeout(bail);
+        if (version === turnApiVersion) fetchingIce = null;
+      });
     }
     if (fetchingIce) jobs.push(fetchingIce);
     // Failure-silent by design: no relay is a NORMAL state, and a lobby that
@@ -363,6 +385,7 @@ const NetTransport = (function () {
   // `stunOnly` leaves every fetched/derived relay out — the retry path in
   // rtc() below, after a construction that a fetched entry made throw.
   function iceServers(opts, stunOnly) {
+    syncTurnApi();
     if (opts.iceServers) return opts.iceServers;
     const list = [{ urls: STUN }];
     if (stunOnly) return list;
@@ -484,6 +507,7 @@ const NetTransport = (function () {
       terminalReason = drain ? reason : null;
       ep.status = drain ? "closing" : "closed";
       if (discTimer) { clearTimeout(discTimer); discTimer = null; }
+      endEpisode();
       if (!drain) inbox.length = 0;
       eventOut.length = 0;
       if (!drain) queuedState = queuedEvents = queuedBytes = 0;
@@ -614,9 +638,10 @@ const NetTransport = (function () {
       if (discTimer) { clearTimeout(discTimer); discTimer = null; }
       discTimer = setTimeout(() => {
         discTimer = null;
-        if (ep.status !== "closed" && pc.connectionState === "disconnected") {
-          Log.info("net", "connection closed (disconnected " + disconnectGraceMs + " ms)");
-          shutdown("disconnected");
+        const s = pc.connectionState;
+        if (ep.status !== "closed" && (s === "disconnected" || s === "failed")) {
+          Log.info("net", "connection closed (" + s + " " + disconnectGraceMs + " ms)");
+          shutdown(s);
         }
       }, disconnectGraceMs);
     }
@@ -625,16 +650,128 @@ const NetTransport = (function () {
       if (discTimer) armDisconnectGrace();
       return disconnectGraceMs;
     };
+    // ICE RESTART (#3556). A Wi-Fi→cellular switch, a NAT rebinding or a
+    // router reboot kills the selected candidate pair for good: the old path
+    // never comes back, so ICE goes disconnected → failed and only a restart —
+    // fresh credentials, a fresh gather, one more offer/answer — finds the new
+    // one. W3C webrtc-pc: "Performing an ICE restart is recommended when
+    // iceConnectionState transitions to failed"; MDN restartIce(): the next
+    // createOffer() carries new credentials and the data channels ride on.
+    // A "failed" once connected therefore gets the same grace as
+    // "disconnected" (closing at once pre-empted the race's 25 s), and inside
+    // that window the ORIGINAL offerer restarts; only it ever offers, so there
+    // is no glare. The offer and answer cannot ride our own data channel (it
+    // is the thing that died), so they cross through restartCourier — public
+    // Nostr by default — sealed under a code derived from the ice-pwd pair of
+    // the last completed negotiation, which only the two peers ever held
+    // (both values crossed inside the sealed/QR invite). A pc that never
+    // connected keeps the old instant close, so a lobby attempt still fails fast.
+    const RESTART_DELAY_MS = 3000;    // a disconnect shorter than this usually heals itself
+    const RESTART_RETRY_MS = 8000;    // answer applied, still not connected: offer again
+    const RESTART_GATHER_MS = 4000;   // non-trickle like the invite: a partial gather beats none
+    const courier = opts.restartCourier !== undefined ? opts.restartCourier : nostrCourier();
+    let everConnected = false;
+    let restartTimer = null;
+    let episode = null;               // { code, attempt, token } while an outage lasts
+    let iceRestarts = 0;
+    function endEpisode() {
+      if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
+      if (!episode) return;
+      episode.token.cancelled = true;
+      episode = null;
+      // A blip that healed before the answer came leaves our restart offer
+      // pending; roll it back so the next episode starts from stable.
+      if (pc.signalingState === "have-local-offer" && ep.status === "open") {
+        Promise.resolve().then(() => pc.setLocalDescription({ type: "rollback" }))
+          .catch((e) => { Log.warn("net", "ice restart rollback failed:", e && e.message); });
+      }
+    }
+    async function restartCode() {
+      const local = pc.currentLocalDescription || pc.localDescription;
+      const remote = pc.currentRemoteDescription || pc.remoteDescription;
+      if (!local || !remote || typeof crypto === "undefined" || !crypto.subtle) return null;
+      const pwd = (d) => { const m = /a=ice-pwd:(\S+)/.exec(d.sdp || ""); return m ? m[1] : ""; };
+      const offer = local.type === "offer" ? local : remote;
+      const answer = local.type === "offer" ? remote : local;
+      if (!pwd(offer) || !pwd(answer)) return null;
+      const digest = await crypto.subtle.digest("SHA-256",
+        new TextEncoder().encode("apex26-ice-restart|" + pwd(offer) + "|" + pwd(answer)));
+      return { code: [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join(""),
+        offerer: local.type === "offer" };
+    }
+    function gathered() {
+      if (pc.iceGatheringState === "complete") return Promise.resolve();
+      return new Promise((resolve) => {
+        const t = setTimeout(done, RESTART_GATHER_MS);
+        function done() { clearTimeout(t); pc.removeEventListener("icegatheringstatechange", check); resolve(); }
+        function check() { if (pc.iceGatheringState === "complete") done(); }
+        pc.addEventListener("icegatheringstatechange", check);
+      });
+    }
+    const live = (ctx) => episode === ctx && !ctx.token.cancelled && ep.status === "open";
+    async function offerRestart(ctx) {
+      while (live(ctx) && ctx.attempt < 3) {
+        if (pc.signalingState !== "stable") await pc.setLocalDescription({ type: "rollback" });
+        if (typeof pc.restartIce === "function") pc.restartIce();
+        await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+        await gathered();
+        if (!live(ctx)) return;
+        iceRestarts++;
+        Log.info("net", "ice restart offer " + ctx.attempt);
+        const r = await courier.offer(ctx.code + "R" + ctx.attempt, pc.localDescription.sdp, ctx.token);
+        if (!live(ctx) || !r || !r.ok || pc.signalingState !== "have-local-offer") return;
+        await pc.setRemoteDescription({ type: "answer", sdp: r.payload });
+        ctx.attempt++;
+        await new Promise((resolve) => { restartTimer = setTimeout(resolve, RESTART_RETRY_MS); });
+        restartTimer = null;
+      }
+    }
+    async function answerRestart(ctx) {
+      const reply = async (sdp) => {
+        if (!live(ctx)) return null;
+        await pc.setRemoteDescription({ type: "offer", sdp });
+        await pc.setLocalDescription(await pc.createAnswer());
+        await gathered();
+        iceRestarts++;
+        Log.info("net", "ice restart answer " + ctx.attempt);
+        return live(ctx) ? pc.localDescription.sdp : null;
+      };
+      while (live(ctx)) {
+        const r = await courier.answer(ctx.code + "R" + ctx.attempt, reply, ctx.token);
+        if (r && r.ok) ctx.attempt++;
+        else if (!r || r.error !== "expired") return;   // only a quiet relay is worth another listen
+      }
+    }
+    function beginRestart() {
+      restartTimer = null;
+      if (episode || !courier || ep.status !== "open") return;
+      const ctx = episode = { code: null, attempt: 0, token: { cancelled: false } };
+      restartCode().then((k) => {
+        if (!k || !live(ctx)) return null;
+        ctx.code = k.code;
+        return k.offerer ? offerRestart(ctx) : answerRestart(ctx);
+      }).catch((e) => { Log.warn("net", "ice restart failed:", e && e.message); });
+    }
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
       if (Log.enabled("net", Log.DEBUG)) Log.debug("net", "pc state -> " + s);
-      if (s !== "disconnected" && discTimer) { clearTimeout(discTimer); discTimer = null; }
+      const down = s === "disconnected" || (s === "failed" && everConnected);
+      if (!down && discTimer) { clearTimeout(discTimer); discTimer = null; }
+      if (s === "connected") {
+        if (episode) Log.info("net", "ice restart recovered");
+        everConnected = true;
+      }
+      if (!down) endEpisode();
       if (ep.status === "closed" || ep.status === "closing") return;
-      if (s === "failed" || s === "closed") {
+      if (s === "closed" || (s === "failed" && !everConnected)) {
         Log.info("net", "connection closed (" + s + ")");
         shutdown(s);   // releases the pc — see ch.onclose
-      } else if (s === "disconnected" && !discTimer) {
-        armDisconnectGrace();
+      } else if (down) {
+        if (!discTimer) armDisconnectGrace();
+        if (!episode && courier) {
+          if (restartTimer) clearTimeout(restartTimer);
+          restartTimer = setTimeout(beginRestart, s === "failed" ? 0 : RESTART_DELAY_MS);
+        }
       }
     };
 
@@ -708,8 +845,20 @@ const NetTransport = (function () {
       candidates: Object.assign({}, found),
       turn: hadTurn,
       ownTurn: !!turnFromStore(),
+      iceRestarts,
     });
     return ep;
+  }
+
+  // The default ICE-restart courier (see rtc()): the room service's Nostr bus,
+  // hosting the restart offer / replying to it under a per-connection code.
+  // Null where there is no bus, which leaves the grace window as the only cure.
+  function nostrCourier() {
+    if (typeof NetNostr === "undefined" || !NetNostr.available()) return null;
+    return {
+      offer: (code, sdp, token) => NetNostr.directExchange({ code, send: sdp, token }),
+      answer: (code, reply, token) => NetNostr.directExchange({ code, reply, token }),
+    };
   }
 
   function supported() {

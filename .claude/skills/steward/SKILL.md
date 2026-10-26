@@ -9,20 +9,20 @@ description: "Use when you own, pick up or are handed a PR, or a PR or the deplo
 are right about most things and wrong about the specifics below, each of
 which has cost a session before. Everything not listed here: `AGENTS.md`.
 
-Routes: owning PRs (claim → ready → report, spawn prompt) → [`references/ownership.md`](references/ownership.md). A red `ci.yml` / `pages.yml` run → agent `ci-red-triage` (read-only, returns
+Routes: owning PRs (claim → ready → report, spawn prompt) → `agent-fleet` `references/role-pr-owner.md` §The steward loop ([`references/ownership.md`](references/ownership.md) is its forwarding stub). A red `ci.yml` / `pages.yml` run → agent `ci-red-triage` (read-only, returns
 the status line). Pre-push validation → `check-changes`. Live `version.json` or
 anything on github.io → agent `deploy-research` (the only thing here that reaches it).
 Review, hunt or survey findings on the PR → agent `finding-verifier` before you fix any of them.
 
 ## Drive to green — the loop
 
-1. Check out the PR's branch, then claim it: `node tools/ci/who-is-on-it.mjs`, then `--claim "<PR#> <text>"` (§3: someone already on it → stand down).
+1. Check out the PR's branch, then claim it (§3).
 2. Read CI on the current tip: `node tools/ci/ci-watch.mjs --sha <head> --once` (§1 for `cancelled`, §8 for `running`).
 3. Triage a red: agent `ci-red-triage` names the job, test and assertion.
 4. Fix on the branch; sync only when §2 says you must.
 5. Gate: `node tools/ci/deploy.mjs --gate-only` (§6).
 6. ONE push per verified batch; refresh the PR body's Plan and Status.
-7. Draft → ready only when `node tools/ci/ready-gate.mjs --pr <n>` exits 0 (no ready cap).
+7. Draft → ready: `.claude/rules/fleet-core.md`.
 8. Watch (§7, §9) until `= ci passed`; then `who-is-on-it.mjs --release`.
 
 ## 1. `cancelled`: read the jobs, not the conclusion
@@ -61,7 +61,7 @@ answers it (`= sync needed: conflict | stale-red | no`) and `sync-pr` refuses `n
 - Generated-file conflicts `sync-pr` cures; hand-written ones it aborts and
   hands back. The temp-branch trap and the hand-resolve recipe:
   `check-changes` [`references/sync-pr.md`](../check-changes/references/sync-pr.md).
-  After a cure: `npm run gen` (**gen-regen**) then `gen:check`. Record the files
+  After a cure: `npm run gen` (check-changes references/triage.md §Stale generated indexes) then `gen:check`. Record the files
   and resolution as a ticked Plan item with the merge sha.
 
 ## 3. A red you did not cause → find out who is on it FIRST
@@ -70,11 +70,9 @@ answers it (`= sync needed: conflict | stale-red | no`) and `sync-pr` refuses `n
     node tools/ci/who-is-on-it.mjs --claim "<text>" # before you start
     node tools/ci/who-is-on-it.mjs --release        # after
 
-Every session's PR lands on the same deploy branch, so one red there is seen
-by all at once. **This overrides "port the fix now and push":** a fix already pushed, a
-live claim, or a live host session on it means STAND DOWN and say so. Three
-sessions fixed one bug on 2026-09-18 and the result was a revert
-(`docs/notes/SHARED-BRANCH-COORDINATION.md`). Also search open PR titles/branches for the failing test name: first claimant fixes, the rest wait.
+The rule is AGENTS.md §Git branch & deploy (claim before a shared fix); it
+**overrides "port the fix now and push"** (three sessions fixed one bug on
+2026-09-18 and the result was a revert). Also search open PR titles/branches for the failing test name: first claimant fixes, the rest wait.
 
 ## 4. Never push to the deploy branch
 
@@ -98,7 +96,7 @@ failures are lost. A deliberate ratchet raise is part of a fix: AGENTS.md §Crit
 ## 7. "Live" is an ancestry test, not a build number
 
 - A green PR does not prove Pages. Poll by `head_sha`: `node tools/ci/ci-watch.mjs --sha <sha> [--pages]`
-  under a `Monitor` (AGENTS.md rule 12); `pages.yml` gates the tip once and publishes exactly that commit.
+  under a `Monitor` (AGENTS.md rule 13); `pages.yml` gates the tip once and publishes exactly that commit.
 - **Live means your commit is an ANCESTOR of the live `apex-sha`** — ask `deploy-research` for it; never
   curl github.io from the main context. PR CI and Pages (`pages.yml`, workflow id `295002043`) are separate verdicts;
   the deploy push starts Pages' reusable CI gate, not a separate ship-push CI run.
@@ -116,8 +114,8 @@ the **current** tip — not the notification commit (two commands):
 
 - `= ci failed` → triage → fix → push → re-subscribe (never "stale" because the
   notif SHA ≠ tip).
-- `= ci running` → do **not** claim stale or fixed; stay subscribed or re-arm a
-  ≤15m once-timer. **"0 failed" while running is not green.**
+- `= ci running` → do **not** claim stale or fixed; stay subscribed and keep the
+  AGENTS.md rule 13 timer. **"0 failed" while running is not green.**
 - `= ci hollow` → only the draft skip skeleton ran, not verification; report
   it and use the authorized draft CI route when actual CI is needed.
 - `= ci none` / `unknown` → no run observed / API evidence unavailable,
@@ -132,11 +130,15 @@ Fix with Agent.
 ## 9. Host-neutral watch and claims
 
 Use `--session <unique-id>` with `who-is-on-it.mjs --claim/--release` on hosts without a Claude session variable.
-Subscribe with the host's own tool: Claude Code `subscribe_pr_activity`, Cursor `subscribe_github_ci` +
-`subscribe_github_pr`; never call a name the host does not list (`agent-fleet` `references/comms.md`). Keep one timer beside it
-(`send_later` / `subscribe_timer`) and read CI on every wake: the subscription can drop `check_run` completions. Without
-subscription or timers: `references/host-watch.md`. Record missing capabilities as unverified.
+Subscription and timer per host (Claude Code `subscribe_pr_activity` + `send_later`; Cursor `subscribe_github_ci` +
+`subscribe_github_pr` + `subscribe_timer`): AGENTS.md rule 13. Without subscription or timers: `references/host-watch.md`. Record missing capabilities as unverified.
 
-## 10. Browser runs, if a fix needs one
+## 10. Sweeping many PRs
+
+PR board: `node tools/ci/pr-board.mjs --json` (read-only; exit 3 = no token). Stand down on a PR a live session
+pushed in the last ~10 min. SYNC only when `needs-sync.mjs` says conflict/stale-red. A SQUASH/REBASE auto-merge
+arm → `disable_pr_auto_merge` (retired methods).
+
+## 11. Browser runs, if a fix needs one
 
 Via `node tools/ci/test-bg.mjs <group>` only; AGENTS.md rules 5, 6 and 10 (one run, `--stop`, never in a subagent).

@@ -163,16 +163,27 @@ const WeatherArc = (function () {
       const i = planInputs();
       return drawPlan(i.seed, i.round, o.from != null ? o.from : i.from, o.laps != null ? o.laps : capLaps(), o.len != null ? o.len : G.track && G.track.total);
     }
-    function startChangeable() {
+    function plannedArc(from, p, len) {
+      const a = { from, to: p.to, dur: Math.max(1, p.dur || 60), t: 0, w0: wetOf(from) };
+      if (typeof RainCells !== "undefined" && len > 0) a.cell = RainCells.forPlan(from, a.to, a.dur, len, wetOf);
+      a.wetIn = wetInOf(a);
+      return a;
+    }
+    function previewArc(o) {
+      o = o || {};
+      return plannedArc(o.from != null ? o.from : planInputs().from, previewPlan(o), o.len != null ? o.len : G.track && G.track.total);
+    }
+    function startChangeable(origin) {
       if (!changeable || isTimeTrial() || isQuali()) return null;
       const p = plan || planFor();
       base = G.raceWeather;
       const a = startArc(G.raceWeather, p.to, p.dur);
+      if (a && Number.isFinite(origin)) a.t0 = origin;
       // A LOCAL SHOWER (js/race/rain-cells.js): drawn from the start weather, the plan and the track length —
       // what both peers of a friend race already hold — so host and guest derive the same cell.
-      if (a && typeof RainCells !== "undefined" && G.track) {
-        a.cell = RainCells.forPlan(a.from, a.to, a.dur, G.track.total, wetOf);
-        if (a.cell) a.wetIn = wetInOf(a);
+      if (a) {
+        const preview = plannedArc(a.from, p, G.track && G.track.total);
+        a.cell = preview.cell; a.wetIn = preview.wetIn;
       }
       if (a) Log.info("game", "changeable " + G.raceWeather + " -> " + p.to + " over " + p.dur + " s" + (a && a.cell ? " (local shower, " + Math.round(a.cell.h * 200) + "% of the lap)" : ""));
       return a;
@@ -505,7 +516,7 @@ const WeatherArc = (function () {
 
     return {
       setWeatherLive, setTimeOfDay, weather,
-      startArc, tick, syncWetness, wetness, wetnessAt, viewWetness, rainfallAt, viewRainfall, rainSectors, planFor, previewPlan, startChangeable, endChangeable, restoreBase, endSession,
+      startArc, tick, syncWetness, wetness, wetnessAt, viewWetness, rainfallAt, viewRainfall, rainSectors, planFor, previewPlan, previewArc, startChangeable, endChangeable, restoreBase, endSession,
       get arc() { return arc; }, set arc(v) { arc = v; if (!arc) setWeatherLive(G.raceWeather); },
       get changeable() { return changeable; }, set changeable(v) { changeable = v; },
       get plan() { return plan; }, set plan(v) { plan = v; },

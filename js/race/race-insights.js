@@ -141,7 +141,8 @@ const RaceInsights = (function () {
         rival, rivalCode: rival ? rival.code || "RIVAL" : "", rivalX0: rival ? rival.x || 0 : 0,
         gap0: rival ? Math.abs(gapTo(rival, c)) : 0, gapMin: Infinity, gapNow: 0,
         towS: 0, wakeS: 0, closed: 0, pressT: 0, escapeT: 0, clearT: 0, phase2: 0, lastT: null,
-        attacked: false, conceded: false, gifted: false, gaveUp: false, cleared: 0, passing: new Set(),
+        attacked: false, conceded: false, gifted: false, gaveUp: false, cleared: 0,
+        passing: new Set(), clearedIds: new Set(),
         clean: true, reason: "", done: false };
       if (mode === "cooling") drill.cooling = { car: c, track: G.track, tyre: c.tyre,
         stint: c.tyreStints || 0, compound: c.tyre && c.tyre.id, wet: G.trackWetness ? G.trackWetness() : 0, start: null };
@@ -464,14 +465,19 @@ const RaceInsights = (function () {
         // next, which is what makes traffic traffic. A car counts once, when it
         // goes from clearly ahead to clearly behind — the SIDE_M band between
         // the two keeps a car weaving either side of the line from scoring
-        // twice, and dropping it from the set keeps it from scoring again if it
-        // re-passes you.
+        // twice. `clearedIds` keeps a re-lapped opponent from banking mastery
+        // three times for one car.
         for (const o of (G.cars || [])) {
           if (o === c || o.retired || o.finished) continue;
           const g = gapTo(o, c);
           if (g == null) continue;
-          if (g > SIDE_M) { if (isBackmarker(o, c)) drill.passing.add(o); }   // a quicker car crossing the half-lap wrap flips ahead->behind without being passed
-          else if (g < -SIDE_M && drill.passing.delete(o)) drill.cleared++;
+          if (g > SIDE_M) {
+            // a quicker car crossing the half-lap wrap flips ahead->behind without being passed
+            if (isBackmarker(o, c) && !drill.clearedIds.has(o)) drill.passing.add(o);
+          } else if (g < -SIDE_M && drill.passing.delete(o) && !drill.clearedIds.has(o)) {
+            drill.clearedIds.add(o);
+            drill.cleared++;
+          }
         }
         if (drill.cleared >= TRAFFIC_N) { finishDrill(current, c); return; }
         if (now - drill.time > 90) { failDrill("ran out of time in traffic"); finishDrill(current, c); }

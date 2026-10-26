@@ -33,6 +33,24 @@ export const STAGE_DIRS = Object.freeze([
   "locales",
 ]);
 
+/**
+ * Paths inside STAGE_DIRS that are never staged: author-time inputs the game
+ * does not fetch. `assets/atlases/` (15.1 MB) feeds only
+ * `tools/gen/assets.mjs bake-atlas` (assets/atlases/README.md); runtime
+ * sampling reads the baked `assets/pack/` strips. Repo-relative, `/`-separated,
+ * no trailing slash. tests/unit/deploy-staging.test.mjs asserts nothing the
+ * shipped code requests sits under one.
+ */
+export const STAGE_EXCLUDE = Object.freeze([
+  "assets/atlases",
+]);
+
+/** True when repo-relative `rel` is, or is inside, a STAGE_EXCLUDE entry. */
+export function stageExcluded(rel) {
+  const p = String(rel).split("\\").join("/").replace(/^\.\//, "");
+  return STAGE_EXCLUDE.some((x) => p === x || p.startsWith(x + "/"));
+}
+
 /** Every top-level name the stage writes (files + directories). */
 export function stagedNames() {
   return new Set([...STAGE_ROOT_FILES, ...STAGE_DIRS]);

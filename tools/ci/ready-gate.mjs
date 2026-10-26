@@ -27,40 +27,29 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
+import { api, REPO } from "./github-api.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { commitTreeId } from "../lib/work-tree-id.mjs";
 import { writeReceipt } from "../lib/gate-receipt.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const REPO = "brycejmurrin/f1-game";
+export { REPO };
 /** Sidecar written by a full green tooling-fast suite (see tooling-fast.mjs). */
 const LOCAL_STAMP = path.join(ROOT, "artifacts/logs/tooling-fast-ready.sha");
 const LOCAL_LOG = path.join(ROOT, "artifacts/logs/tooling-fast-suite.log");
-/** Aggregator job name in ci.yml — halves are tooling A/B. */
+/** Aggregator job name in ci.yml; its shards are tooling A–D (four since 2026-10-24, three before, two before that). */
 export const GUARDS_JOB = "Structural guards";
 export const GUARDS_A = "Structural guards (tooling A)";
 export const GUARDS_B = "Structural guards (tooling B)";
 export const GUARDS_C = "Structural guards (tooling C)";
+export const GUARDS_D = "Structural guards (tooling D)";
 
 const say = (...a) => console.log("[ready-gate]", ...a);
 
-export function api(pathQs, { run = spawnSync, env = process.env, gh } = {}) {
-  const token = githubToken(gh !== undefined ? { env, gh } : { env });
-  if (!token) return { error: NO_TOKEN_HINT };
-  const r = run("curl", ["-sS", "--max-time", "30", "-K", "-", "-w", "\n%{http_code}",
-    "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28",
-    "-H", "Cache-Control: no-cache",
-    `https://api.github.com/repos/${REPO}/${pathQs}`],
-  // maxBuffer: 100 check-runs with their output text can pass spawnSync's 1 MB
-  // default (ENOBUFS → "curl failed"; the old ready-cap helper's #1733).
-  { encoding: "utf8", maxBuffer: 64 << 20, input: `header = "Authorization: Bearer ${token}"\n` });
-  if (r.status !== 0) return { error: (r.stderr || r.error?.code || "curl failed").trim() };
-  const out = (r.stdout || "").split("\n");
-  const code = Number(out.pop());
-  try { return code === 200 ? { json: JSON.parse(out.join("\n")) } : { error: `HTTP ${code}` }; }
-  catch { return { error: "bad JSON" }; }
-}
+/* The GitHub client is github-api.mjs's (2026-10-26): ready-gate's private copy
+   had no 5xx/429 retry, so one GitHub 502 refused a gate whose receipt the
+   hooks require. Re-exported for fleet-owner.mjs and merge-gate.mjs. */
+export { api };
 
 /** Newest check-run per name (by attempt id, with started_at as the fallback). */
 export function newestByName(checkRuns) {
@@ -95,9 +84,9 @@ export function guardsVerdict(checkRuns) {
     }
     // cancelled / skipped / neutral — fall through to halves (reuse-draft path)
   }
-  const a = by.get(GUARDS_A), b = by.get(GUARDS_B), c = by.get(GUARDS_C);
+  const a = by.get(GUARDS_A), b = by.get(GUARDS_B), c = by.get(GUARDS_C), d = by.get(GUARDS_D);
   if (a && b) {
-    const halves = c ? [a, b, c] : [a, b];
+    const halves = [a, b, c, d].filter(Boolean);
     const pending = halves.some((j) => j.status && j.status !== "completed");
     if (pending) return { state: "pending", evidence: `${halves.map((j) => j.name).join("/")} still running`, code: 1 };
     if (halves.every((j) => j.conclusion === "success")) {
@@ -268,7 +257,8 @@ export function evaluate({ sha, localOnly = false, request = api, localOpts } = 
 
 /** The PR body's `## Plan` checklist (AGENTS.md rule 12). An item is OPEN when
  *  it is neither ticked (`[x]`), struck (`~~dropped~~ — why`) nor deferred
- *  (`[~]`, or text starting `Deferred:`); an empty
+ *  (`[~]`, or text starting `Deferred:`), or the hand-off item `READY to <orchestrator>`
+ *  (it can only be ticked after the gate it waits on passes); an empty
  *  `- [ ]` (the template's placeholder) is open. HTML comments — where the
  *  template keeps its example items — are not part of the list.
  *  @returns {{ state: "none"|"open"|"done", items: number, open: string[] }} */
@@ -304,7 +294,7 @@ export function planVerdict(body) {
   const items = [...section.matchAll(/^[ \t]*[-*][ \t]+\[([ xX~])\][ \t]*(.*)$/gm)];
   if (!items.length) return { state: "none", items: 0, open: [] };
   const open = items
-    .filter(([, mark, t]) => mark === " " && !/^~~/.test(t.trim()) && !/^(\*\*)?Deferred:/i.test(t.trim()))
+    .filter(([, mark, t]) => mark === " " && !/^~~/.test(t.trim()) && !/^(\*\*)?Deferred:/i.test(t.trim()) && !/^(\*\*)?READY to\b/.test(t.trim()))
     .map(([, , t]) => t.trim() || "(empty item)");
   return { state: open.length ? "open" : "done", items: items.length, open };
 }
@@ -316,7 +306,7 @@ export function withPlan(v, body) {
   if (!v || v.code !== 0 || body == null) return v;
   const p = planVerdict(body);
   if (p.state === "open") {
-    const shown = p.open.slice(0, 3).map((t) => `"${t.length > 60 ? t.slice(0, 57) + "..." : t}"`).join(", ");
+    const shown = p.open.slice(0, 3).map((t) => `"${t}"`).join(", ");
     return { ...v, state: "plan-open", code: 1, plan: p,
       evidence: `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why (AGENTS.md rule 12)` };
   }

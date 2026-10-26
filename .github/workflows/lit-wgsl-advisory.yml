@@ -1,0 +1,69 @@
+name: Lit WGSL advisory
+
+# ADVISORY, never required (#3672). Safari keeps its WebGPU pipeline cache across reload, kill and data-clear, keyed
+# on the shader CODE, so a PR that changes the lit WGSL three.js generates re-charges ~14 s of race compile and
+# ~7.5 s of menu compile to every iPhone (PR #3671 §4 (docs/notes/DEVICE-FARM-ANALYSIS-2026-10-24.md once merged)). This job captures the
+# WGSL a TLX WebGPU race compiles (Mesa lavapipe) for the PR's base tip and for the merge result, and prints
+# changed / unchanged in the job summary and as a notice (tools/perf/lit-wgsl-census.mjs, docs/notes/LIT-WGSL-CENSUS-2026-10-24.md).
+#
+# Why its own workflow and not a ci.yml job: ci.yml's verdict job aggregates every job in it, and this one must never
+# be able to turn a PR red or hold the merge; a separate pull_request workflow that is not a required check cannot.
+# `continue-on-error` on the job keeps even a tool failure out of the PR's checks.
+#
+# Draft PRs skip it unless labelled run-ci (the same fast-tier rule ci.yml uses); no `labeled` trigger (audit
+# 2026-10-26: 157 runs in 7 days, 6 CHANGED, and label events re-ran it on unchanged heads), so a draft labelled
+# run-ci gets the advisory at its next push. The paths filter is the lit shader's own inputs: the renderer
+# (js/render/**) and the vendored three.js island; game logic, circuits and assets do not change the generated WGSL.
+# The summary and notice are written only when the census says CHANGED (an unchanged run stays silent).
+# https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore
+# Job summary: https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#adding-a-job-summary
+# Notice annotation: https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-a-notice-message
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - claude/f1-game-project-26h3ng
+    paths:
+      - "js/render/**"
+      - "vendor/three-*/**"
+      - "tools/perf/lit-wgsl-census.mjs"
+      - ".github/workflows/lit-wgsl-advisory.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lit-wgsl-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  census:
+    # A draft without run-ci does nothing.
+    if: ${{ !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - name: Checkout head (the merge result)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout base tip (what the PR is measured against)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - uses: ./.github/actions/setup-apex
+      - uses: ./.github/actions/playwright-chromium
+      - name: Install the lavapipe Vulkan driver
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mesa-vulkan-drivers
+      - name: Capture both trees and diff
+        run: |
+          set -o pipefail
+          node tools/perf/lit-wgsl-census.mjs advisory --base base --head . --md-out "$RUNNER_TEMP/lit-wgsl.md" | tee "$RUNNER_TEMP/lit-wgsl.out"
+          if grep -q 'lit-WGSL CHANGED' "$RUNNER_TEMP/lit-wgsl.md"; then
+            cat "$RUNNER_TEMP/lit-wgsl.md" >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=lit-WGSL changed::This PR re-keys the lit shader family: every phone with a warm WebGPU pipeline cache recompiles it (~20 s on an iPhone 14). See the job summary."
+          fi

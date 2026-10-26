@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import { MessageChannel } from "node:worker_threads";
+import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const SW_SOURCE = await readFile(new URL("../../sw.js", import.meta.url), "utf8");
@@ -920,6 +921,35 @@ test("the fetch-path sweep keeps one settled prior generation while a window cli
   assert.ok(harness.stores.has("apex26-320"));
 });
 
+for (const lifecycle of ["fetch", "activate"]) {
+  for (const clientWindows of [0, 1]) {
+    test(`${lifecycle} sweep retains the newest settled cache across build gaps (windows=${clientWindows})`, async () => {
+      let offline = false;
+      const h = createHarness({ clientWindows, fetchImpl: (request) => offline
+        ? Promise.reject(new TypeError("offline")) : generationFetch({ offline: false })(request) });
+      const voice = `${ORIGIN}/assets/voice/bella-radio.bin`;
+      for (const build of [290, 300, 319, 320, 321, 322]) {
+        h.stores.set(`apex26-${build}`, new Map([
+          ...([290, 300, 321].includes(build) ? [[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]] : []),
+          ...(build === 300 ? [[voice, new Response("downloaded voice")]] : []),
+        ]));
+      }
+      if (lifecycle === "activate") await h.lifecycleEvent("activate").done();
+      else await twoFetches(h);
+      assert.deepEqual(h.deleted.slice().sort(), clientWindows
+        ? ["apex26-290", "apex26-319", "apex26-320"]
+        : ["apex26-290", "apex26-300", "apex26-319", "apex26-320"]);
+      assert.ok(h.stores.has("apex26-322"), "newer installing cache is never swept");
+      offline = true;
+      const event = h.fetchEvent(new Request(voice));
+      const response = await event.responsePromise;
+      if (clientWindows) assert.equal(await response.text(), "downloaded voice");
+      else assert.equal(response.status, 0);
+      await Promise.all(event.lifetimes);
+    });
+  }
+}
+
 test("with no window clients, the sweep also deletes the immediate prior generation", async () => {
   const harness = sweepHarness({ complete: true, clientWindows: 0 });
   await twoFetches(harness);
@@ -1454,6 +1484,135 @@ test("the broken-install repair sweeps apex26- caches and reloads once a network
   assert.equal(r.calls.reload, 1);
 });
 
+// ── The error catcher's reason serializer (same inline shell, other half) ──
+// (r && (r.message || r)) || "unknown" rendered a plain-object rejection as
+// "[object Object]" in BOTH the overlay and the __apexErrors ring, destroying
+// the one detail a field report needs. No game code rejects with a plain
+// object, so the shape that lands here is a platform object: its name and
+// shape must survive.
+async function runErrorCatcher() {
+  const html = await readFile(new URL("../../index.html", import.meta.url), "utf8");
+  const script = html.split("<script>").map((c) => c.split("</script>")[0])
+    .find((c) => c.includes("ON-SCREEN ERROR CATCHER"));
+  assert.ok(script, "the error catcher script is found");
+  const listeners = {};
+  let overlay = null;
+  const win = { addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); } };
+  const ctx = vm.createContext({
+    window: win,
+    document: {
+      querySelector: () => ({ content: "123" }),
+      getElementById: () => overlay,
+      createElement: () => ({ style: {}, textContent: "", onclick: null }),
+      body: { appendChild: (d) => { overlay = d; } },
+      documentElement: { appendChild: (d) => { overlay = d; } },
+    },
+    navigator: { onLine: true },
+    location: { origin: "https://x.test" },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    fetch: () => new Promise(() => {}),
+  });
+  vm.runInContext(script, ctx);
+  return {
+    win,
+    fire: (type, ev) => { for (const fn of listeners[type] || []) fn(ev); },
+    text: () => (overlay ? overlay.textContent : ""),
+    last: () => win.__apexErrors[win.__apexErrors.length - 1],
+  };
+}
+
+test("the error catcher serializes a plain-object rejection instead of [object Object]", async () => {
+  const h = await runErrorCatcher();
+  h.fire("unhandledrejection", { reason: { code: "E_GL_LOST", detail: "context gone", status: 42 } });
+  assert.ok(h.text().includes("Promise rejection"), h.text());
+  assert.ok(h.text().includes('"code":"E_GL_LOST"'), h.text());
+  assert.ok(h.text().includes('"detail":"context gone"'), h.text());
+  assert.ok(!h.text().includes("[object Object]"), h.text());
+  const rec = h.last();
+  assert.equal(rec.kind, "rejection");
+  assert.ok(rec.msg.includes('"code":"E_GL_LOST"'), rec.msg);
+  assert.ok(!rec.msg.includes("[object Object]"), rec.msg);
+});
+
+test("the error catcher survives circular and BigInt reasons via the key-listing fallback", async () => {
+  const h = await runErrorCatcher();
+  const circ = { stage: "shader-compile" };
+  circ.self = circ;
+  h.fire("unhandledrejection", { reason: circ });
+  assert.ok(h.text().includes("stage") && h.text().includes("self"), h.text());
+  assert.ok(!h.text().includes("[object Object]"), h.text());
+  assert.ok(h.last().msg.includes("self"), h.last().msg);
+  h.fire("unhandledrejection", { reason: { n: 10n } });
+  assert.ok(h.text().includes("(keys: n)"), h.text());
+});
+
+test("the error catcher keeps a platform object's name and message (DOMException shape)", async () => {
+  const h = await runErrorCatcher();
+  h.fire("unhandledrejection", { reason: new DOMException("GPU is not supported here", "NotSupportedError") });
+  assert.ok(h.text().includes("NotSupportedError"), h.text());
+  assert.ok(h.text().includes("GPU is not supported here"), h.text());
+  assert.ok(!h.text().includes("[object Object]"), h.text());
+  assert.ok(h.last().msg.includes("NotSupportedError"), h.last().msg);
+});
+
+test("the error catcher leaves Errors, strings, numbers and empty reasons as they were", async () => {
+  const h = await runErrorCatcher();
+  const err = new Error("kaboom");
+  h.fire("unhandledrejection", { reason: err });
+  assert.equal(h.last().msg, "kaboom", "an Error reason records its message exactly");
+  assert.equal(h.last().detail, String(err.stack).slice(0, 800), "the stack still rides as the detail");
+  assert.ok(h.text().includes("kaboom"), h.text());
+  h.fire("unhandledrejection", { reason: "a plain string reason" });
+  assert.equal(h.last().msg, "a plain string reason");
+  h.fire("unhandledrejection", { reason: 42 });
+  assert.equal(h.last().msg, "42");
+  h.fire("unhandledrejection", {});
+  assert.equal(h.last().msg, "unknown");
+});
+
+test("an empty-message Error surfaces its name instead of [object Object]", async () => {
+  const h = await runErrorCatcher();
+  const err = new TypeError("");
+  err.stack = "STACKMARK";
+  h.fire("unhandledrejection", { reason: err });
+  assert.equal(h.last().msg, "TypeError");
+  assert.ok(h.text().includes("STACKMARK"), h.text());
+});
+
+test("the error catcher caps an oversized object reason", async () => {
+  const h = await runErrorCatcher();
+  h.fire("unhandledrejection", { reason: { blob: "x".repeat(2000) } });
+  assert.ok(h.text().includes('"blob":"' + "x".repeat(100)), h.text());
+  assert.ok(!h.text().includes("x".repeat(600)), "the serialized reason is truncated, not dumped whole");
+  assert.ok(h.text().includes("..."), h.text());
+});
+
+test("__apexReportError records the serialized shape of a non-Error value", async () => {
+  const h = await runErrorCatcher();
+  h.win.__apexReportError("gpu init", { code: 7, why: "no webgpu" });
+  const rec = h.last();
+  assert.equal(rec.kind, "caught");
+  assert.ok(rec.msg.startsWith("Caught @ gpu init: "), rec.msg);
+  assert.ok(rec.msg.includes('"why":"no webgpu"'), rec.msg);
+  assert.ok(!rec.msg.includes("[object Object]"), rec.msg);
+  assert.ok(h.text().includes('"why":"no webgpu"'), h.text());
+  h.win.__apexReportError("loop", new Error("tick failed"));
+  assert.equal(h.last().msg, "Caught @ loop: tick failed");
+});
+
+test("the window error handler serializes a non-Error e.error instead of String(e)", async () => {
+  const h = await runErrorCatcher();
+  h.fire("error", { message: "", error: { code: "X1", info: "bad thing" }, filename: "js/core/log.js", lineno: 1, colno: 2 });
+  const rec = h.last();
+  assert.equal(rec.kind, "error");
+  assert.ok(rec.msg.includes('"code":"X1"'), rec.msg);
+  assert.ok(!h.text().includes("[object Object]") && !h.text().includes("[object ErrorEvent]"), h.text());
+  const err = new Error("script blew up");
+  h.fire("error", { message: "script blew up", error: err, filename: "a.js", lineno: 3, colno: 4 });
+  assert.equal(h.last().msg, "script blew up", "a messaged JS error is unchanged");
+  assert.equal(h.last().detail, String(err.stack).slice(0, 800));
+});
+
 // R3-ASYNC-1: the generation query is a LOCAL fact. Answered from a no-store
 // version.json read with no timeout, it left every lazy load() on lie-fi (a
 // request that hangs while navigator.onLine is true) to the page's 1.5 s timer.
@@ -1630,57 +1789,89 @@ for (const page of ["controller.html", "bench.html", "cockpit-view.html"]) {
   }
 }
 
-for (const failure of ["503", "quota", "interrupted"]) {
-  test(`career UI ${failure} aborts update and preserves offline prior generation`, async () => {
-    let offline = false;
-    const ordinary = lazyShellFetch({ "js/career/career-ui.js": "bbbbbbbbbbbb" });
-    const h = createHarness({
-      fetchImpl: (request) => {
-        if (offline) return Promise.reject(new TypeError("offline"));
-        if (requestKey(request).includes("/js/career/career-ui.js")) {
-          if (failure === "503") return Promise.resolve(new Response("unavailable", { status: 503 }));
-          if (failure === "interrupted") return Promise.reject(new TypeError("connection interrupted"));
-        }
-        return ordinary(request);
-      },
-      putImpl: (_name, request) => {
-        if (failure === "quota" && requestKey(request).includes("/js/career/career-ui.js")) {
-          throw new DOMException("full", "QuotaExceededError");
-        }
-      },
+for (const asset of ["js/career/career-ui.js", "js/career/career-planning-ui.js"]) {
+  for (const failure of ["503", "quota", "interrupted"]) {
+    test(`${asset} ${failure} aborts update and preserves offline prior generation`, async () => {
+      let offline = false;
+      const ordinary = lazyShellFetch(Object.fromEntries(["js/career/career-ui.js", "js/career/career-planning-ui.js"].map((u) => [u, hash12("body of " + u)])));
+      const h = createHarness({
+        fetchImpl: (request) => {
+          if (offline) return Promise.reject(new TypeError("offline"));
+          if (requestKey(request).includes("/" + asset)) {
+            if (failure === "503") return Promise.resolve(new Response("unavailable", { status: 503 }));
+            if (failure === "interrupted") return Promise.reject(new TypeError("connection interrupted"));
+          }
+          return ordinary(request);
+        },
+        putImpl: (_name, request) => {
+          if (failure === "quota" && requestKey(request).includes("/" + asset)) {
+            throw new DOMException("full", "QuotaExceededError");
+          }
+        },
+      });
+      h.stores.set("apex26-321", new Map([
+        [`${ORIGIN}/`, new Response("old shell")],
+        [`${ORIGIN}/index.html`, new Response("old shell")],
+        [`${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa`, new Response("old career")],
+        [`${ORIGIN}/__apex_install_complete__`, new Response("complete")],
+        [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+      ]));
+      await assert.rejects(h.lifecycleEvent("install").done());
+      assert.equal(h.skipped, 0);
+      assert.deepEqual(h.deleted, []);
+      assert.equal(h.stores.get("apex26-322").has(`${ORIGIN}/__apex_install_complete__`), false);
+      offline = true;
+      // A rejected installing worker never controls clients; the previous worker
+      // continues serving the retained generation, including after a restart.
+      const active = createHarness({ fetchImpl: () => Promise.reject(new TypeError("offline")) });
+      for (const [name, store] of h.stores) active.stores.set(name, store);
+      const nav = active.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+      assert.equal(await (await nav.responsePromise).text(), "old shell");
+      const lazy = active.fetchEvent({ method: "GET", url: `${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa` });
+      assert.equal(await (await lazy.responsePromise).text(), "old career");
     });
-    h.stores.set("apex26-321", new Map([
-      [`${ORIGIN}/`, new Response("old shell")],
-      [`${ORIGIN}/index.html`, new Response("old shell")],
-      [`${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa`, new Response("old career")],
-      [`${ORIGIN}/__apex_install_complete__`, new Response("complete")],
-      [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
-    ]));
-    await assert.rejects(h.lifecycleEvent("install").done());
-    assert.equal(h.skipped, 0);
-    assert.deepEqual(h.deleted, []);
-    assert.equal(h.stores.get("apex26-322").has(`${ORIGIN}/__apex_install_complete__`), false);
-    offline = true;
-    // A rejected installing worker never controls clients; the previous worker
-    // continues serving the retained generation, including after a restart.
-    const active = createHarness({ fetchImpl: () => Promise.reject(new TypeError("offline")) });
-    for (const [name, store] of h.stores) active.stores.set(name, store);
-    const nav = active.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
-    assert.equal(await (await nav.responsePromise).text(), "old shell");
-    const lazy = active.fetchEvent({ method: "GET", url: `${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa` });
-    assert.equal(await (await lazy.responsePromise).text(), "old career");
-  });
+  }
 }
 
-test("career UI is required under its content-hash key before a successful update retires old caches", async () => {
-  const map = { "js/career/career-ui.js": hash12("body of js/career/career-ui.js") };
+test("the complete strict Career group is required and loads offline under its content-hash keys", async () => {
+  const roster = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  const files = roster.LAZY_CAREER_UI, edges = roster.LAZY_CAREER_UI_EDGES;
+  const map = Object.fromEntries(files.map((u) => [u, hash12("body of " + u)]));
   const h = createHarness({ fetchImpl: lazyShellFetch(map) });
   h.stores.set("apex26-321", new Map([
     ["old", new Response("old")],
     [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
   ]));
   await h.lifecycleEvent("install").done();
-  assert.ok(h.stores.get("apex26-322").has(`${ORIGIN}/js/career/career-ui.js?v=${map["js/career/career-ui.js"]}`));
+  const store = h.stores.get("apex26-322");
+  const status = await store.get(`${ORIGIN}/__apex_offline_status__`).clone().json();
+  for (const file of files) {
+    const key = `${file}?v=${map[file]}`;
+    assert.ok(store.has(`${ORIGIN}/${key}`));
+    assert.ok(status.required.includes(key), `${file} belongs to the required install pool`);
+  }
+  const offline = createHarness({ fetchImpl: () => Promise.reject(new TypeError("offline")) });
+  for (const [name, saved] of h.stores) offline.stores.set(name, saved);
+  const loaded = [];
+  const ctx = vm.createContext({
+    window: { __APEX_BUILD: 322 }, ApexRoster: { DEFERRED_EDGES: [] }, setTimeout, clearTimeout,
+    document: {
+      getElementById: (id) => id === "apex-lazy-v" ? { textContent: JSON.stringify(map) } : null,
+      createElement: (tag) => ({ tagName: tag.toUpperCase() }),
+      head: { appendChild(script) {
+        if (script.tagName !== "SCRIPT") return;
+        const event = offline.fetchEvent({ method: "GET", url: `${ORIGIN}/${script.src}` });
+        event.responsePromise.then(async (res) => {
+          if (res.ok) { loaded.push(script.src.split("?")[0]); script.onload(); }
+          else script.onerror();
+          await Promise.all(event.lifetimes);
+        });
+      } },
+    },
+  });
+  vm.runInContext(await readFile(new URL("../../js/core/script-loader.js", import.meta.url), "utf8") + "\n;globalThis.loader = ScriptLoader.create();", ctx, { filename: absSrc("js/core/script-loader.js") });
+  assert.equal(await ctx.loader.load(files, edges, { strict: true }), true);
+  assert.deepEqual(loaded, files, "strict predecessor loads before the screen from installed caches");
   await h.lifecycleEvent("activate").done();
   assert.deepEqual(h.deleted, [], "the settled prior generation stays while matchAll is absent");
 });

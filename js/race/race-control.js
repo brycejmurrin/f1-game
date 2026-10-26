@@ -18,12 +18,22 @@ const RaceControl = (function () {
   // classifies as before (RaceControl.shortRun when no car ever took the flag).
   // Net, TT, quali and the AI-only harnesses pass no `post` and keep the rules below.
   const POST_FINISH_CAP = 75;
-  function finishDelay(cars, raceT, lapsTarget, raceT0, post) {
-    const ran = raceT - (raceT0 > 0 ? raceT0 : 0);
-    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false, pend = 0;
+  function finishPending(cars, raceT, lapsTarget, raceT0) {
+    if (raceT - (raceT0 > 0 ? raceT0 : 0) > 360 * lapsTarget) return false;
+    let running = false, pending = false;
     for (const c of cars || []) {
       if (!c) continue;
-      if (c.finished) { anyFinished = true; if (!c.retired) pend = Math.max(pend, (c.finishT || 0) + (c.penalty || 0)); }
+      if (!c.finished && !c.retired) running = true;
+      if (c.finished && !c.retired && raceT < (c.finishT || 0) + (c.penalty || 0)) pending = true;
+    }
+    return running && pending;
+  }
+  function finishDelay(cars, raceT, lapsTarget, raceT0, post) {
+    const ran = raceT - (raceT0 > 0 ? raceT0 : 0);
+    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false;
+    for (const c of cars || []) {
+      if (!c) continue;
+      if (c.finished) anyFinished = true;
       else if (!c.retired) running = true;
       if (!c.human && !c._nHuman) continue;
       anyHuman = true;
@@ -36,7 +46,7 @@ const RaceControl = (function () {
     // rival 3 s back with a +5 s penalty against it was filed as "still
     // running" — behind, on a result it had won. Bounded by the penalty
     // itself; the hard cap below still wins.
-    if (running && raceT < pend && ran <= 360 * lapsTarget) return 0;
+    if (finishPending(cars, raceT, lapsTarget, raceT0)) return 0;
     if (post) { if (!(anyHuman && allHumansDone)) post.since = -1; else if (post.since < 0) post.since = raceT; }
     if (anyHuman && allHumansDone && post && post.solo && running) return raceT - post.since < POST_FINISH_CAP ? 0 : 0.1;
     if (anyHuman && allHumansDone) return 2.2;
@@ -368,9 +378,12 @@ const RaceControl = (function () {
         if (lowGripNoted) Log.info("race", "Overtake disabled why=low-grip raceT=" + (+G.raceT || 0).toFixed(1));
       }
       if (!G.netPlay.ownsRaceControl()) return;
-      stormTick();
-      // A held flag flies whether or not the hazard loop is switched on: the
-      // player's CAUTIONS setting governs debris, not a race replayed by script.
+      // CAUTIONS off means no flag the local sim raises, the storm's included
+      // (Bryce 2026-10-23: a storm SC flew with the row OFF). setEnabled(false)
+      // resets wxHeld; this keeps a storm from raising it again.
+      if (enabled) stormTick();
+      // A SCRIPTED held flag flies whether or not the hazard loop is switched
+      // on: the player's CAUTIONS setting governs the sim, not a race replayed by script.
       if (held > caution.level && caution.level !== 4) {
         const prev = caution.level;
         caution.level = held; caution.sector = -1; caution.frac = 0;
@@ -541,9 +554,9 @@ const RaceControl = (function () {
     // (Storm.SC_START_S / SC_ROLL_S) so a race that STAYS a storm still races.
     // Read off raceWeather — on the shared clock in a friend race — and only on
     // the race-control owner, so it is deterministic and a guest mirrors it.
-    // The existing hold machinery flies it: exempt from the SC cap, raised
-    // regardless of CAUTIONS (weather is not debris), the AI queue and the
-    // Overtake rule (B7.2.2c) follow the level as for any safety car.
+    // The existing hold machinery flies it: exempt from the SC cap; the AI
+    // queue and the Overtake rule (B7.2.2c) follow the level as for any safety
+    // car. Only with CAUTIONS on (update() gates the call): OFF raises no flag.
     function stormTick() {
       const S = typeof Storm !== "undefined" ? Storm : null;
       const t = typeof G.raceT === "number" && Number.isFinite(G.raceT) ? G.raceT : 0;
@@ -681,6 +694,6 @@ const RaceControl = (function () {
     return Infinity;
   }
 
-  return { create, finishDelay, POST_FINISH_CAP, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  return { create, finishDelay, finishPending, POST_FINISH_CAP, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
 })();
 Object.freeze(RaceControl);

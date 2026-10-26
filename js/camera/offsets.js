@@ -125,6 +125,7 @@ let _comfort = {};
 let _tracks = {};
 let _cars = {};
 let _context = { track: null, car: null };
+let _ctxRev = -1, _ctxList = null;   // refreshStoredContext's memo (store.rev, Teams.LIST)
 
 function sanitizeProf(src, keepDefaults = false) {
   const prof = {};
@@ -190,6 +191,7 @@ function persist(which) {
 }
 
 function setContext(trackId, carId) {
+  _ctxRev = -1;   // the next scopeKey re-reads storage over this, as before
   _context = {
     track: typeof trackId === "string" && trackId ? trackId : null,
     car: typeof carId === "string" && carId ? carId : null,
@@ -198,7 +200,12 @@ function setContext(trackId, carId) {
 }
 function context() { return { ..._context }; }
 function scopeMap(scope) { return scope === "track" ? _tracks : scope === "car" ? _cars : null; }
+// Stored trackId/team only move on a Store write, and store.rev bumps on every one (set, clear, import, another
+// tab): re-read them per revision, not per call. Each scopeKey (a dozen a rendered frame from the rig's knob reads)
+// was two Store.get, each building an "apex26." key string (CPU-HUNT-2026-10-24 C6).
 function refreshStoredContext() {
+  const rev = store.rev, list = typeof Teams !== "undefined" ? Teams.LIST : null;   // a roster swap re-reads too
+  if (typeof rev === "number") { if (rev === _ctxRev && list === _ctxList) return; _ctxRev = rev; _ctxList = list; }
   const trackId = store.get("trackId", null);
   if (typeof trackId === "string" && trackId) _context.track = trackId;
   const team = store.get("team", 2);
@@ -527,6 +534,10 @@ function importPack(raw) {
 
 // Compact share code: APXC1 + base64url(JSON). No compression — packs stay small.
 const SHARE_MAGIC = "APXC1";
+// Bound paste/decode BEFORE JSON.parse — siblings (ShareCode, GhostShare, handshake)
+// all cap input; an uncapped APXC1 paste was self-inflicted CPU/memory jank (#3560 F1).
+const MAX_SHARE_CHARS = 256 * 1024;
+const MAX_DECODED_BYTES = 256 * 1024;
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 function bytesToB64(bytes) {
   let out = "", i = 0;
@@ -594,14 +605,19 @@ function encodeShare(pack) {
 }
 function decodeShare(text) {
   if (typeof text !== "string") return { ok: false, reason: "not a string" };
+  if (text.length > MAX_SHARE_CHARS) return { ok: false, reason: "too-large" };
   const t = text.trim();
   if (!t) return { ok: false, reason: "empty" };
   // Share code: bare, or the last line of the COPY VALUES block (CameraEdits +
   // comments + pack JSON + code), so the token is looked for anywhere in the paste.
   const sc = /(?:^|\s)APXC1\.([A-Za-z0-9_-]+)/.exec(t);
   if (sc) {
+    // Cap the token itself before base64→JSON work (a short APXC1. prefix + a
+    // giant body still fits under MAX_SHARE_CHARS on `text`).
+    if (sc[1].length > MAX_SHARE_CHARS) return { ok: false, reason: "too-large" };
     try {
       const json = b64urlDecode(sc[1]);
+      if (json.length > MAX_DECODED_BYTES) return { ok: false, reason: "too-large" };
       const obj = JSON.parse(json);
       return { ok: true, pack: obj, kind: "share" };
     } catch (e) {
@@ -612,6 +628,7 @@ function decodeShare(text) {
   let json = t;
   const m = /CameraEdits\s*=\s*(\{[\s\S]*\})\s*;?\s*$/.exec(t);
   if (m) json = m[1];
+  if (json.length > MAX_DECODED_BYTES) return { ok: false, reason: "too-large" };
   try {
     const obj = JSON.parse(json);
     return { ok: true, pack: obj, kind: m ? "edits" : "json" };
@@ -674,6 +691,7 @@ function apply(mode, eye, tgt, fov) {
 }
 
 return { CAM_TUNE_DEFS, COMFORT_DEFS, PRESETS, FOV_MIN, FOV_MAX, GLOBAL_MODE, SHARE_MAGIC,
+         MAX_SHARE_CHARS, MAX_DECODED_BYTES,
          KEY, KEY_GLOBAL, KEY_COMFORT, KEY_TRACK, KEY_CAR,
          apply, values, get, getModeOnly, getGlobal, getScoped, stored, storedGlobal, storedScoped, cornerLead, cornerHang,
          exportEdits, exportGlobal, exportPack,

@@ -176,6 +176,14 @@ let _scaleFutile = false;
 // player changes preset (either changes what a step means).
 let _tierFutile = false;
 
+// PHONE SLOW LATCH (BrowserStack iPhone 15 deep profile 2026-10-22): JS was
+// only 3.8–6.4 ms of 17–28 ms frames (GPU/fill-bound), yet the governor still
+// restored to autoTier 0 once EMA looked calm at the shed quality — and the
+// full look-post stack came back. A verified feature shed on a phone therefore
+// latches for the rest of the session: the restore branch must not promote
+// effects back. Cleared by clearStrikes / safeMode(false), or when the player
+// RAISES GRAPHICS (setUserTier to a lower rung) to opt back in.
+let _phoneSlowLatch = false;
 // THE §2au DISCRIMINATOR (docs/notes/PERF-FINDINGS.md §2au). The floor below does
 // what it was built to do — and that is the defect: on a genuinely slow phone
 // it converges on the sustained frame time within ~2.7 s, `degradeAt` becomes
@@ -297,6 +305,25 @@ const RESTORE_WITHIN = 0.6;    // restore once the EMA is back within 0.6 of the
 let _pendingVerify = null;   // {kind:"scale"|"tier", prev, ema} for the last unverified step
 const VERIFY_MARGIN = 0.5;
 const VERIFY_COOL = 5000;   // ms: the wait after a step that made things worse
+// ONE STALL IS NOT A VERDICT EITHER, and the verify above is where it lands.
+// A single 50-100 ms frame (a compositor hitch, a GC: SPIKE_MS lets anything
+// under 100 ms through) lifts `_frameEMA` 3-8 ms, decaying over ~10 frames.
+// Taken just before an evaluation it crosses `degradeAt`, the cut is priced
+// against that inflated EMA, and 75-135 frames later the EMA has relaxed back,
+// so the step "verifies" by regression to the mean, whatever it bought. On a
+// phone a verified shed then latches `_phoneSlowLatch` for the session (raised
+// by #3657; replays: docs/notes/PERF-GOVERNOR-QUANTUM-2026-10-23.md). So the degrade
+// gate and both ends of a verify read `_evEMA`: the same alpha-0.1 average,
+// fed the same samples, except that a multi-vsync stall (over 2.5 floors)
+// enters as ONE missed vsync (2 floors), for at most STALL_TRIM per evaluation
+// window. A 16.7/33.3 mixture, the shape of real overload at 60 Hz, is fed
+// unchanged; so is every frame of a run of stalls past the second, and onset
+// is as fast as the EMA's (a boxcar window mean was tried first: it lags a step
+// in load, and replay D's slow-from-lights-out device was never cut). The
+// restore gate keeps the plain EMA, so a stall can still only delay a climb.
+const STALL_TRIM = 2;
+let _evEMA = 16.7;
+let _stallsTrimmed = 0;   // this evaluation window
 
 // Feature-shedding tiers: the governor's SECOND stage.
 // Resolution scaling can't rescue costs that don't shrink with the render
@@ -385,6 +412,7 @@ let _autoShed = 0;
 // tier at 0; this is the missing pin. Held: no shed, no restore; the scale
 // lever and every accessor keep working. Never set by the game itself.
 let _tierHold = false;
+let _swGarageScaleSaved = null;
 // THE OPENING WINDOW, recorded so a player's own device can answer a question
 // this repo's containers cannot. "WebGPU lags for the first few seconds and
 // then runs fine" is a report about frames that have already gone by the time
@@ -488,6 +516,7 @@ function init(gfx) {
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
   _perfTier = _perfTierFloor;
   _autoShed = 0;
+  _phoneSlowLatch = false;
   // Two strikes: the phone was killed twice, so boot with the smallest backing store too (TLX reads this after create; GLX has no capDpr).
   if (_crashStrikes >= 2 && gfx && gfx.isMobile && typeof gfx.capDpr === "function") gfx.capDpr(1);
 }
@@ -532,7 +561,7 @@ function sentinelArm(on) {
             // race's only opening window while the derived floor catches the
             // slow frame cost. A provisional verdict from the previous circuit is
             // equally invalid against the new race's reset averages.
-            _govT = 0; _govCool = 0; _govCoolMs = 0; _pendingVerify = null;
+            _govT = 0; _govCool = 0; _govCoolMs = 0; _pendingVerify = null; _evEMA = 16.7; _stallsTrimmed = 0;
             _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS;
             _scaleMoves = 0; _degradeArm = 0;
             // A futile ladder measured in a DRY race must not block the next (wet) race's shed.
@@ -564,15 +593,23 @@ function cleanRace() {
     // forces that reload (it flips the mobileHigh bit, see
     // js/perf/quality-preset.js syncBootTier), so the symptom reads as "wet
     // sheen and per-chunk only work on ULTRA" rather than as a stuck floor.
-    // clearStrikes() recomputes the floor the same way; both paths then release
-    // `_perfTier` to the new floor so they cannot drift apart.
-    _perfTierFloor = _floorFromStrikes(_crashStrikes);
-    // The floor just dropped. _perfTier may be sitting on the OLD one (the
-    // degrade branch steps from _floorTier(), so it absorbs whatever floor was
-    // live when it fired). Release it to the new floor and let the governor
-    // re-earn any shed from its own measurements.
-    if (_perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
+    // clearStrikes() recomputes the floor the same way; both go through
+    // _setCrashFloor() so they cannot drift apart.
+    _setCrashFloor();
   }
+}
+
+// Re-derive the crash floor from the strike counter. When it DROPS, _perfTier
+// may be sitting on the OLD one (init() seeds it there, and the degrade branch
+// steps from _floorTier(), so it absorbs whatever floor was live when it fired).
+// Release it to the new CRASH floor and let the governor re-earn any shed from
+// its own measurements. Not _floorTier(): that folds in the GRAPHICS preset, so
+// one strike paid down on MEDIUM (2 > 2 is false) left autoTier() pinned at the
+// old floor for the session (#3294). tier() still applies the preset at read time.
+function _setCrashFloor() {
+  const prev = _perfTierFloor;
+  _perfTierFloor = _floorFromStrikes(_crashStrikes);
+  if (_perfTierFloor < prev && _perfTier > _perfTierFloor) { _perfTier = _perfTierFloor; _autoShed = 0; }
 }
 
 // Bounded raw-frame history supplements the EMA: occasional hitches must not
@@ -677,8 +714,10 @@ function tick(dtMs, drawn) {
   // A zero / negative / NaN interval is a stamp artefact (pause -> resume: lastFrame is set in a handler, so the next rAF stamp can be earlier), not a frame: fed to the EMA and the derived floor it drags the floor under every healthy frame and trips a spurious step-down (then a revert). The history above already skips it.
   if (!(dtMs > 0)) return;
   const stepMs = Number.isFinite(dtMs) ? Math.min(dtMs, COOL_STEP_MAX_MS) : 16.7;
+  // Thermal windows age on every active interval, but skipped rAFs are not cost evidence.
+  const driftDue = _drift && _drift.feed(drawn !== false && dtMs < SPIKE_MS ? dtMs : 0, dtMs);
   if (drawn === false) { _ageClocks(stepMs); return; }   // see _ageClocks
-  if (_drift && dtMs < SPIKE_MS && _drift.feed(dtMs) && (driftRenderRate() || driftStep())) _drift.stepped();
+  if (driftDue && dtMs < SPIKE_MS && (driftRenderRate() || driftStep())) _drift.stepped();
   // Before any smoothing: the opening window wants the raw frame, spikes and
   // all, because a spike in the first seconds IS the thing being reported.
   if (_openN < OPEN_FRAMES) {
@@ -692,19 +731,25 @@ function tick(dtMs, drawn) {
   // shows one; a device whose slowness comes with scene-variance cheap
   // frames clears the latch with them and is governed exactly as before.
   if (dtMs < _floorMinMs) { _computeBound = false; _cheapSeen = true; }
+  let fed = -1;
   if (dtMs < SPIKE_MS) {
     _slowRun = 0;
-    _frameEMA += (dtMs - _frameEMA) * 0.1;
-    _floorStep(dtMs);
+    fed = dtMs;
   } else if (++_slowRun >= SPIKE_RUN) {
-    const s = Math.min(dtMs, SLOW_CAP);
-    _frameEMA += (s - _frameEMA) * 0.1;
-    _floorStep(s);
+    fed = Math.min(dtMs, SLOW_CAP);
+  }
+  if (fed >= 0) {
+    _frameEMA += (fed - _frameEMA) * 0.1;
+    // Against the floor BEFORE this sample moves it. See STALL_TRIM.
+    const ev = fed > _floorMs * 2.5 && _stallsTrimmed < STALL_TRIM ? (_stallsTrimmed++, _floorMs * 2) : fed;
+    _evEMA += (ev - _evEMA) * 0.1;
+    _floorStep(fed);
   }
   if (_ageClocks(stepMs)) return;
   if (_govCool > 0) { _govCool--; return; }   // a verify window: frames, so the EMA has its samples
   if (++_govT < 45) return;   // evaluate ~every 45 frames (an EMA settling span, not a clock)
   _govT = 0;
+  const ev = _evEMA; _stallsTrimmed = 0;   // see STALL_TRIM
 
   // Verify the last step before taking a new one.
   if (_pendingVerify) {
@@ -714,8 +759,11 @@ function tick(dtMs, drawn) {
     // headroom was real — so it is judged the other way round: revert if the
     // EMA got WORSE by that margin. Same instrument, mirrored, because a step
     // that made things worse should be undone whichever direction it went.
-    const failed = v.up ? (_frameEMA > v.ema + VERIFY_MARGIN)
-                        : (_frameEMA > v.ema - VERIFY_MARGIN);
+    // The floor probe (below) must buy back at least half the miss: crossing a
+    // quantum moves the average by a whole vsync, and a probe that deep must
+    // not be kept on the 0.5 ms of evaluation-phase noise a small step is.
+    const failed = v.up ? (ev > v.ema + VERIFY_MARGIN)
+                        : (ev > v.ema - (v.big ? Math.max(VERIFY_MARGIN, (v.ema - _floorMs) / 2) : VERIFY_MARGIN));
     if (failed) {
       // Env may already be off while bloom is still expensive. Test the next
       // rung before declaring the whole ladder futile. Keep the original
@@ -734,13 +782,21 @@ function tick(dtMs, drawn) {
         // the EMA cannot move and the cut reads as buying nothing. Replayed, cost
         // c*(0.4+0.6*s^2) with c = 22 or 20 ended at scale 1, floor 33.3: 30 fps
         // for good where ~0.75 scale gives 60. So a small cut that failed is
-        // retried ONCE as a big one, to the scale that halves the pixel count
-        // (the smallest cut that could halve a fill-bound frame, i.e. drop it a
-        // whole quantum), judged against the same pre-cut EMA. A capped clock or
-        // a CPU-bound frame fails that too and is declared futile exactly as
-        // before, at the price of one more cut and revert; a cut that crossed
-        // climbs back through the usual verified restore steps under the ceiling.
-        const now = _gfx.getRenderScale ? _gfx.getRenderScale() : 1, big = Math.max(0.5, v.prev * Math.SQRT1_2);
+        // retried ONCE as a big one, judged against the same pre-cut EMA. A
+        // capped clock or a CPU-bound frame fails that too and is declared
+        // futile exactly as before, at the price of one more cut and revert; a
+        // cut that crossed climbs back through the usual verified restore steps
+        // under the ceiling.
+        // THE PROBE GOES TO THE FLOOR, not to half the pixels. Half the pixels
+        // crosses only while the fixed share leaves room: replayed with 40 %
+        // fixed cost, c = 24-30 ms ended at scale 1 / 33.3 ms, where 0.5-0.7
+        // holds 60 (sweep: docs/notes/PERF-GOVERNOR-QUANTUM-2026-10-23.md).
+        // The floor is the one probe that answers "can the scale lever cross a
+        // quantum at all"; a second, deeper probe would cost every Low Power
+        // Mode phone one more reallocation per race. The climb then finds the
+        // highest scale that holds: the ceiling (one step under the small cut)
+        // and the verified halving climb do the search.
+        const now = _gfx.getRenderScale ? _gfx.getRenderScale() : 1, big = 0.5;
         if (!v.up && !v.big && _autoRes && big < now - 0.05 && _gfx.setRenderScale(big)) {
           _scaleCap = Math.min(_scaleCap, now); _armCapProbe();   // the small cut's scale missed too
           _pendingVerify = { kind: "scale", prev: v.prev, ema: v.ema, big: true };
@@ -772,6 +828,10 @@ function tick(dtMs, drawn) {
       if (v.up) _latchBound(); else _computeBound = false;
       return;
     }
+    // Verified feature shed on a phone: latch so headroom cannot restore full
+    // effects (tile-GPU fill cost comes back with autoTier 0). A futile probe
+    // that rolls every rung back never reaches here.
+    if (v.kind === "tier" && !v.up && _gfx && _gfx.isMobile) _phoneSlowLatch = true;
     // §2au, the success half: a DOWN step the EMA felt is the compute-bound
     // proof; an UP step it accepted means the headroom was real and the
     // episode, if any, is over.
@@ -811,9 +871,9 @@ function tick(dtMs, drawn) {
   // when this gate applied to every step. Confirmation is therefore only asked
   // of REPEAT cuts, which is where the oscillation lives: one spike costs at
   // most one reallocation per race instead of dozens.
-  if (_frameEMA <= degradeAt) _degradeArm = 0;
+  if (ev <= degradeAt) _degradeArm = 0;
   else if (_scaleMoves > 0 && ++_degradeArm < DEGRADE_CONFIRM) return;
-  if (_frameEMA > degradeAt + boundOver) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
+  if (ev > degradeAt + boundOver) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
     // With the scale PINNED (_autoRes false) the ladder is the only lever left,
     // so fall straight through to shedding instead of skipping the evaluation.
     // THE RENDERER'S BOOLEAN IS THE "SCALE LEVER EXHAUSTED" SIGNAL — ask it,
@@ -836,7 +896,7 @@ function tick(dtMs, drawn) {
     let stepped = false;
     if (_autoRes && cur > 0.5 && !_scaleFutile) stepped = !!_gfx.setRenderScale(cur - 0.1);
     if (stepped) {
-      _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
+      _pendingVerify = { kind: "scale", prev: cur, ema: ev };
       _scaleCap = cur; _armCapProbe();   // this resolution missed the budget
       // _chargeCut() returns the plain 10 s hold unless this cut is undoing a
       // climb still on probation, so it subsumes the constant it replaces.
@@ -864,7 +924,7 @@ function tick(dtMs, drawn) {
       // 4"); the accessor was corrected and the producer that feeds it was not.
       // Stepping still starts from the floor, so LOW takes one felt 0 -> 4 step
       // and every other preset behaves exactly as before.
-      _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: _frameEMA };
+      _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: ev };
       _perfTier = Math.min(4, Math.max(_perfTier, _floorTier()) + 1); _autoShed++; _govCool = 90; _downHold = _chargeCut();
       // A shed rung changes what the frame is bound BY, so let the scale lever
       // prove itself again from the new baseline rather than staying latched
@@ -875,7 +935,10 @@ function tick(dtMs, drawn) {
     }
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
     _scaleFutile = false;   // headroom is back — nothing about the old verdict still applies
-    _tierFutile = false;
+    // Futility may clear (a later wet race can use a rung that was useless dry),
+    // but a phone that already measured a helpful shed stays latched — calm EMA
+    // at the shed quality is not evidence the full stack fits again.
+    if (!_phoneSlowLatch) _tierFutile = false;
     _computeBound = false;   // §2au: the EMA is back within RESTORE_WITHIN of the (rewound) floor — the episode is over
     _cheapSeen = false;
     // The up-step is VERIFIED like the down-step. Restoring is a guess that the
@@ -928,15 +991,16 @@ function tick(dtMs, drawn) {
       const next = gap < 0.12 ? ceil : Math.min(ceil, cur + Math.max(0.06, gap / 2));
       stepped = !!_gfx.setRenderScale(next);
       if (stepped) {
-        _pendingVerify = { kind: "scale", prev: cur, next, ema: _frameEMA, up: true };
+        _pendingVerify = { kind: "scale", prev: cur, next, ema: ev, up: true };
         _govCoolMs = 4000; _sinceUp = 0;
       }
     }
     // Features come back only at full res under the same sustained headroom,
     // one per ~4 s. tier() retains both floors even when a measured post cut
     // taken AT the user's floor is released; the crash floor is never lifted.
-    if (!stepped && !_tierHold && (_perfTier > _floorTier() || (_autoShed > 0 && _perfTier > _perfTierFloor))) {
-      _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: _frameEMA, up: true };
+    // Phone slow latch: never promote effects back after a verified shed.
+    if (!stepped && !_tierHold && !_phoneSlowLatch && (_perfTier > _floorTier() || (_autoShed > 0 && _perfTier > _perfTierFloor))) {
+      _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: ev, up: true };
       // LOW starts at its preset floor: its measured post/lamp cut still
       // needs recovery. tier() keeps the preset and crash floors intact.
       if (_perfTier > _floorTier()) {
@@ -997,12 +1061,12 @@ function driftStep() {
 
 function clearStrikes() {
   _crashStrikes = 0;
-  _perfTierFloor = _floorFromStrikes(_crashStrikes);
   // Same latch release as cleanRace(): lifting the floor alone leaves
   // `_perfTier` on evidence earned under the old floor, so tier() stays high
   // after __apex.safeMode(false) until a reload. Drop to the new floor so the device
   // can prove itself again (governor may re-shed if frames still miss).
-  if (_perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
+  _setCrashFloor();
+  _phoneSlowLatch = false;   // safeMode(false) / clearStrikes: prove the device again
   GameStore.store.rawSet(SENT_STRIKES, "0"); GameStore.store.rawDel(SENT_ACTIVE);
   GameStore.store.rawDel(SENT_TICKED);
 }
@@ -1010,22 +1074,25 @@ function clearStrikes() {
 return {
   init, tick, setThermalDrift, thermalDrift: () => _drift && _drift.state(), frameStats, recordSimulation, resetFrameStats, sentinelArm, sentinelResume, cleanRace, clearStrikes,
   tier: () => Math.max(_perfTierFloor, _userTier, _perfTier),
-  // Crash + measured only — no GRAPHICS user floor. Look-defining post
-  // (bloom / SSAO / god-rays / contact / lamp volumetrics) reads this so
-  // GRAPHICS: LOW still sheds env/dry-SSR/shadows via tier() but the lighting
-  // tuner stays live unless the device proved it cannot afford the pass.
-  // READS _perfTier ON PURPOSE, and a draft of the preset-release fix below got
-  // this wrong in a way worth recording. That draft derived the governor tier as
-  // (floor + its own shed count) so the two could be separated cleanly — but the
-  // degrade branch stops once _floorTier() + sheds reaches 4, and _floorTier()
-  // folds in _userTier while this accessor does not. The shed count was therefore
-  // capped at 4 - _userTier, and this returned at most that: measured 2 on
-  // GRAPHICS: MEDIUM (every phone's default) and 0 on LOW, so bloom, SSAO,
-  // god-rays, contact shadows and lamp volumetrics became UNSHEDABLE however
-  // badly the device was missing frames — the opposite of what a low preset is
-  // for. _perfTier is the effective tier and can always climb to 4, so the
-  // tier-4 consumers stay reachable on every preset.
+  // Crash + measured only — no GRAPHICS user floor. Wet-road SSR and the
+  // lighting-tuner "why off" path still read this: a healthy LOW must keep a
+  // reduced wet-reflection budget (post-common.roadReflection) without the
+  // crash floor, and raising the preset must not need a reload to undo a
+  // measured shed. READS _perfTier ON PURPOSE — see the degrade-branch note
+  // above autoShed(). Do NOT gate bloom/SSAO/god-rays/contact/lampVol on this
+  // alone: that left GRAPHICS: LOW with the full look-post stack on a healthy
+  // phone (autoTier 0 while tier() is already 4), which measured slower than
+  // MEDIUM on iPhone WebGPU (BrowserStack 2026-10-21). Those passes read
+  // lookPostShed() instead.
   autoTier: () => Math.max(_perfTierFloor, _perfTier),
+  // Look-defining post (bloom / SSAO / god-rays / contact / lamp volumetrics).
+  // True when the crash/measured ladder is at 4 OR the player chose GRAPHICS:
+  // LOW (userTier 4). Keeps autoTier() free for wet-SSR / tuner notes while
+  // making LOW actually cheaper than MEDIUM on tile GPUs.
+  lookPostShed: () => Math.max(_perfTierFloor, _perfTier) >= 4 || _userTier >= 4,
+  // True after a verified feature shed on a phone — restore must not promote
+  // effects back (see _phoneSlowLatch). Exposed for __apex.renderScale() / tests.
+  phoneSlowLatch: () => _phoneSlowLatch,
   // What the GOVERNOR shed on its own measurements, plus the crash floor, and
   // nothing the player asked for. The gate for anything held off "because this
   // device is actually missing frames" — see _autoShed for why this is a second
@@ -1056,8 +1123,12 @@ return {
     // flips the mobileHigh bit and forces one). Dropping to the new floor on a
     // RAISE gives the device a clean chance to prove itself; if it still cannot
     // hold the budget the governor re-sheds within a couple of evaluations, on
-    // its own measurements.
-    if (t < prev && _perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
+    // its own measurements. Also clears the phone slow latch: the player opted
+    // back into more effects.
+    if (t < prev) {
+      _phoneSlowLatch = false;
+      if (_perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
+    }
     // _perfTier is deliberately NOT touched here. It is the governor's OWN
     // evidence-based tier; the floors are applied at READ time in tier(). An
     // earlier draft pulled _perfTier up to the new floor, which conflated "shed
@@ -1140,6 +1211,20 @@ return {
   // seconds while these menu/race-entry sheets are up (#3589 garage; live
   // race-settings flyby + #loading entry on tip 775097e). Matches loop-health
   // slowPathCover plus the race-settings sheet (flyby stays live behind it).
+  // Garage drive-out preview on SwiftShader: shed fill rate for the intro bay only.
+  softwareGaragePreviewBegin(gfx) {
+    if (!PerfGov.softwareRaster() || !gfx || !gfx.setRenderScale || !gfx.getRenderScale) return;
+    if (_swGarageScaleSaved != null) return;
+    const cur = gfx.getRenderScale();
+    if (cur > 0.55) { _swGarageScaleSaved = cur; gfx.setRenderScale(0.55); }
+    try { if (gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = true; } catch (_) { /* harness */ }
+  },
+  softwareGaragePreviewEnd(gfx) {
+    if (_swGarageScaleSaved == null) return;
+    if (gfx && gfx.setRenderScale) gfx.setRenderScale(_swGarageScaleSaved);
+    _swGarageScaleSaved = null;
+    try { if (gfx && gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = false; } catch (_) { /* harness */ }
+  },
   softwareGlUiReadbackDefer() {
     if (!PerfGov.softwareRaster()) return false;
     try {

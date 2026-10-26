@@ -53,14 +53,25 @@ const X_ZONE_K = 0.0014;
 // well-sourced half of the research is encoded here: the count. Placement stays
 // with the geometry, which keeps the N longest qualifying straights.
 //
-// A circuit with NO entry keeps the pure length filter — right for the retired
-// classics, which have no FIA zone list under either ruleset.
+// A circuit with NO entry keeps the pure length filter — right ONLY for the
+// retired classics, which have no FIA zone list under either ruleset. Every
+// Tracks.SEASON and REAL_2026 circuit must have an entry
+// (tests/unit/aero-zone-tables.test.mjs), so a new calendar circuit cannot
+// silently race the scan (#3557). Sources for the four added then:
+//   madrid 2 (2026 FIA SM zones: start/finish straight, T3->T4)
+//     https://www.planetf1.com/news/fia-spanish-grand-prix-2026-madring-active-aero
+//   sepang 4 (2026 FIA SM zones for the relocated Bahrain GP)
+//     https://www.planetf1.com/news/fia-bahrain-grand-prix-2026-sepang-active-aero
+//   istanbul 2 (last FIA list, 2021 DRS: T9->T11 approach, T14->T1)
+//     https://www.fia.com/sites/default/files/2021_turkish_grand_prix_-_preview.pdf
+//   portimao 2 (last list, 2021 DRS: main straight, T4->T5)
+//     https://en.wikipedia.org/wiki/2021_Portuguese_Grand_Prix
 const ZONE_COUNT = {
   monaco: 0, suzuka: 2, albert_park: 5, shanghai: 4, miami: 3, montreal: 4,
   catalunya: 4, redbull: 4, silverstone: 4, spa: 5, hungaroring: 4,
   bahrain: 3, jeddah: 3, imola: 1, zandvoort: 2, monza: 2, baku: 2,
   singapore: 4, cota: 2, mexico: 3, interlagos: 2, vegas: 2, qatar: 1,
-  abudhabi: 2,
+  abudhabi: 2, madrid: 2, sepang: 4, istanbul: 2, portimao: 2,
 };
 
 // WHICH straights, expressed as the turns that bound them — the half of the
@@ -72,8 +83,10 @@ const ZONE_COUNT = {
 //
 // Per `docs/tracks/START-LINES.md` every circuit below has a verified start line (line on a straight, first apex hand-checked), so
 // `def.turns[0]` really is Turn 1 and the array runs in physical order. That
-// makes turn-pair authoring safe again — with one deliberate omission: BAHRAIN
-// stays on the length-only fallback below (no located start coordinate yet).
+// makes turn-pair authoring safe again — with deliberate omissions that stay
+// count-only on ZONE_COUNT's N-longest fallback: BAHRAIN (no located start
+// coordinate yet), JEDDAH (spans not re-keyed after a start-line move), and
+// MADRID, SEPANG, ISTANBUL, PORTIMAO (counts sourced, start lines not verified).
 //
 // Each pair is the turn BEFORE the straight and the turn AFTER it (1-based, T1
 // meaning `def.turns[0]`; a pair naming the last turn and T1 wraps across the

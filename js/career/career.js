@@ -76,7 +76,7 @@ const driverRec = (d) => ({ name: d.name, code: d.code, num: d.num });
 
 let career = null;        // the loaded save, or null
 let engaged = false;
-function engage(on) { engaged = !!on && !calendarProtection; adoptTeamIdentity(); if (applyRegs()) save({ migration: true }); identityChanged(); }
+function engage(on) { engaged = !!on && !calendarProtection && writerStatus().ok; adoptTeamIdentity(); if (applyRegs()) save({ migration: true }); identityChanged(); }
 function inCareer() { return engaged && career != null && !calendarProtection; }
 
 // Career draws never touch simRnd(): consuming that stream here would make a
@@ -115,7 +115,8 @@ let careerRevision = null;
 let careerConflict = false;
 let calendarProtection = null;
 const protectedRaw = new Map();
-function blocked() { return careerConflict || !!calendarProtection; }
+function writerStatus() { return store.careerWriteStatus ? store.careerWriteStatus() : { ok: true }; }
+function blocked() { return careerConflict || !!calendarProtection || !writerStatus().ok; }
 
 const liveSlotKey = () => slotKey(slotFlavour, slotIdx);
 const currentRevision = () => store.keyRevision ? store.keyRevision(liveSlotKey()) : null;
@@ -173,7 +174,8 @@ const unsupportedSlot = (f, i) => {
   const raw = store.get(slotKey(f, i), null);
   return !!(raw && Number(raw.v) > GameStore.CAREER_V);
 };
-const readSlot = (f, i) => { const key = slotKey(f, i); let c = store.get(key, null); if (protectedRaw.has(key) && store.raw && store.raw(key) === protectedRaw.get(key)) c = JSON.parse(protectedRaw.get(key)); return migrateCareer(c && JSON.parse(JSON.stringify(c))); };
+// #3559: only trust a string captured raw — null means cache-only (quota write-back failed).
+const readSlot = (f, i) => { const key = slotKey(f, i); let c = store.get(key, null); const pr = protectedRaw.get(key); if (typeof pr === "string" && store.raw && store.raw(key) === pr) c = JSON.parse(pr); return migrateCareer(c && JSON.parse(JSON.stringify(c))); };
 
 if (store.subscribe) store.subscribe((change) => {
   if (!change.foreign) return;
@@ -257,6 +259,8 @@ function writeResult(key, value, options) {
   return { ok: true, durable, reason: durable ? null : (store.broken || "Error") };
 }
 function save(options) {
+  const ownership = writerStatus();
+  if (!ownership.ok) { lastSave = ownership; return career; }
   if (calendarProtection) { lastSave = { ok: false, durable: false, reason: "calendar-unavailable" }; return career; }
   if (unsupportedSlot(slotFlavour, slotIdx)) {
     lastSave = { ok: false, durable: false, reason: "newer-version" };
@@ -281,6 +285,8 @@ function saveStatus() { return Object.assign({}, lastSave); }
 // Wipes the LIVE slot only. The other five are untouched — deleting one career
 // must never be a way to lose the others.
 function clear() {
+  const ownership = writerStatus();
+  if (!ownership.ok) return (lastSave = ownership);
   if (calendarProtection) return { ok: false, durable: false, reason: "calendar-unavailable" };
   const now = currentRevision();
   if (careerConflict || (careerRevision != null && now !== careerRevision)) {
@@ -354,6 +360,8 @@ function useSlot(flavour, i) {
   return career;
 }
 function deleteSlot(flavour, i, expectedRevision) {
+  const ownership = writerStatus();
+  if (!ownership.ok) return (lastSave = ownership);
   const f = flavourIn(flavour);
   const n = slotIn(i);
   const key = slotKey(f, n);
@@ -383,6 +391,8 @@ function rosterEntry(agent, left) {
 }
 
 function start(opts) {
+  const ownership = writerStatus();
+  if (!ownership.ok) { lastSave = ownership; return null; }
   const o = opts || {};
   const flavour = flavourIn(o.flavour);
   // A new career may not overwrite a protected target, even through the public API.
@@ -864,7 +874,7 @@ function applyRegs() {
   const e = inCareer() ? era() : null;
   if (!e || !Regulations) { Parts.setLegality(null, ""); return; }
   Parts.setLegality(Regulations.legalityFor(e.id), e.id);
-  return !careerConflict && refitBudget();
+  return !blocked() && refitBudget();
 }
 
 // An era can lower the works-based cap even when every fitted part stays legal.

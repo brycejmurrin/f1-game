@@ -89,14 +89,16 @@
       ownedMaterials.clear(); ownedRTs.clear(); ownedTextures.clear();
     }
     try {
-    // ctx.isMobile is deliberately NOT read here, and that is a decision, not a
-    // dropped gate: the scene MSAA decision is the caller's (ctx.sceneSamples,
-    // 0 on a phone — the GLX mobile-tier recipe, FXAA carries the AA), and
-    // every remaining block is gated by the caller —
-    // present(opts) receives ssao/godray/bloom already zeroed by PerfGov.tier()
-    // and the GRAPHICS preset, so a disabled block allocates nothing (the
-    // per-block bail above). A second phone-only gate here would shadow the
-    // governor's decision rather than add to it. FORMATS: the SSAO pair is R8
+    // Phone post working size = PHONE_POST_SCALE × the scene (W×H). #3479 cut
+    // it to 1/2 (BrowserStack iPhone 15 deep profile 2026-10-22: JS 3.8–6.4 ms
+    // of 17–28 ms frames → GPU/fill-bound) and #3670 raised it to 5/8; both read
+    // as a blurry image on Bryce's iPhone (TLX WebGPU), so it is back at 1 —
+    // the pre-#3479 full-res composite. Frame cost is the governor's job: its
+    // renderScale step shrinks W×H (and so pW×pH), and the look-post shed /
+    // phone slow latch drop the passes. LDR + bloom L0 + SSAO/godray base off
+    // pW×pH. Desktop keeps pW===W. Scene MSAA remains the caller's (ctx.sceneSamples).
+    // Block gates still come from present(opts) / PerfGov — this only shrinks
+    // the surfaces those blocks draw into. FORMATS: the SSAO pair is R8
     // and bloom R11F_G11F_B10F (when renderable) on both; the godray pair stays
     // RGBA16F here (GLX: R11F_G11F_B10F) because its alpha carries the folded
     // SSAO term (hunt D7).
@@ -128,9 +130,36 @@
         bloom11 = !!(dev && dev.features && dev.features.has("rg11b10ufloat-renderable"));
       }
     } catch (_) { hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend); bloom11 = false; }
+    // The probe's verdict, before the bloom knob: the scene target below shares it.
+    const r11Renderable = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;
     try { if (localStorage.getItem("apex26.tlxBloom11") === "0") bloom11 = false; } catch (_) { /* no storage: on */ }
     const hdrType = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
     bloom11 = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;
+    // SCENE COLOUR FORMAT (phoneperf 2026-10-24, PERF-KNOWN-WINS row 15): R11F_G11F_B10F / rg11b10ufloat for
+    // the scene target where it is renderable (the bloom probe above), 4 B/px instead of RGBA16F's 8 for the
+    // one target every 3D fragment is written to and that the composite, SSR, haze and the mirror fold read
+    // back at full res — on a tile GPU that is the store plus every read of the frame's biggest surface. No
+    // reader takes scene alpha (tsl-post.js samples .rgb; the car tag is attachment 1, which keeps its own
+    // half-float type), lit colour is never negative, and the composite's sceneHdr uniform is unchanged: the
+    // scene is still float HDR. PHONES ONLY by default (the bandwidth-bound tier; a desktop keeps RGBA16F so
+    // its goldens and env/mirror parity stay as they were). apex26.tlxScene11="1" forces it on, "0" keeps
+    // RGBA16F — the Device Farm A/B pair. 11/11/10 keeps 6/6/5 mantissa bits: a banding check on a night
+    // gradient is the device evidence this still owes (docs/notes/PERF-KNOWN-WINS-2026-10-23.md row 15).
+    // WEBGPU LEG ONLY (revert of the WebGL2 leg, 2026-10-25: Device Farm iPhone 14 WebGL2, rg11b10 42.5 fps vs
+    // RGBA16F 45.7 / 47.0, 55 vs 13-19 frames over 33 ms; docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md
+    // §Reverted). WebGL2 keeps RGBA16F whatever the knob says. Stock three sizes the WebGPU fragment output to the target's three components, and the
+    // spec refuses a src-alpha blend factor when the fragment output has no alpha (gpuweb "validating
+    // GPUFragmentState"): every blended material's pipeline failed on the real-GPU census (macos-latest run
+    // 40052670537 on 886e476f — decals, glass and particles would vanish). Vendored three patch 18 keeps a
+    // vec4 output for RGB targets (the spec allows "RGB requires vec3 or vec4"); with it the same census is
+    // green (run 40056676327, #3711). Renderability still gates WebGPU on the adapter's
+    // "rg11b10ufloat-renderable" feature (bloom11 above); gfx-backend-canary pins patch 18 by behaviour.
+    const _r11Blendable = r11Renderable && !!(renderer.backend && renderer.backend.isWebGPUBackend);
+    let scene11 = _r11Blendable && !!ctx.isMobile;
+    try {
+      const k = localStorage.getItem("apex26.tlxScene11");
+      if (k === "0") scene11 = false; else if (k === "1") scene11 = _r11Blendable;
+    } catch (_) { /* no storage: the default above */ }
     // sceneHdr is fixed for the chain's life — hdr is decided once at factory time.
     let _sceneHdr = hdr ? 1 : 0;
 
@@ -143,6 +172,9 @@
     }
     const whiteTex = onePx(255);
     const blackTex = onePx(0);
+    // FXAA's explicit-gradient mirror tap needs a sampler even when compiled
+    // with this constant 1x1 fallback (before the first mirror, or after off).
+    blackTex.minFilter = blackTex.magFilter = THREE.LinearFilter;
 
     // LENS DIRT smudge map: the glx/post.js makeDirtTex canvas port —
     // deterministic LCG seed, value-noise base + grime blobs + dust specks +
@@ -174,6 +206,10 @@
     const VP = ctx.vp || null;
     const fixed = !!(ctx.fixedTargets && VP && VP.enabled);
     let PW = 1, PH = 1;   // the physical (present) size; fixed mode only
+    // Post working size. Phones use PHONE_POST_SCALE of the scene dimensions;
+    // aux passes (SSAO/godray/bloom) then halve that again. Desktop keeps pW===W.
+    const phonePost = !!ctx.isMobile;
+    let pW = 1, pH = 1;
 
     // render-target helpers
     function makeRT(w, h, type, format) {
@@ -208,6 +244,7 @@
       samples: ctx.sceneSamples || 0, resolveDepthBuffer: true,   // SCENE MSAA (header)
     }));
     ownedTextures.delete(sceneDepthTex); // sceneRT.dispose owns it from here
+    if (scene11) { sceneRT.texture.type = THREE.UnsignedInt101111Type; sceneRT.texture.format = THREE.RGBFormat; }   // attachment 0 only
     sceneRT.texture.name = "output";
     sceneRT.texture.generateMipmaps = false;
     sceneRT.texture.colorSpace = THREE.NoColorSpace;
@@ -304,19 +341,18 @@
       }
       return nLv > 0;
     }
-    // three r184 leaked RT textures on setSize(); r185 (#33511) disposes them.
-    // Keep the explicit texture disposals so a stale vendor cannot regress the
-    // "black frame after resize" report; double-dispose is safe.
+    // three r185+ (#33511): RenderTarget.setSize updates image dims then calls
+    // this.dispose(), which frees GPU memory via the renderer while keeping the
+    // Texture objects on the RT. The r184 workaround disposed those Texture
+    // objects AFTER setSize; on r186 that destroys the textures the RT still
+    // holds, so the next draw mints replacements while the disposed ones can
+    // linger in three's caches — a permanent cost after every renderScale step
+    // (BrowserStack iPhone 2026-10-21: return to 0.5 never recovered).
     let _rtResizes = 0;   // state().rtResizes: target reallocations (#2655 evidence)
     function rtSetSize(rt, w, h) {
       if (rt.width === w && rt.height === h) return;
       _rtResizes++;
       rt.setSize(w, h);
-      try {
-        const ts = rt.textures || (rt.texture ? [rt.texture] : []);
-        for (let i = 0; i < ts.length; i++) ts[i].dispose();
-        if (rt.depthTexture) rt.depthTexture.dispose();
-      } catch (_) { /* best-effort; the worst case is r184's own leak */ }
     }
     // Give rt its logical size lw x lh inside the physical pw x ph. Off: a plain
     // resize. On: the allocation only changes when the physical size does; the
@@ -330,19 +366,26 @@
       if (rt.depthTexture) VP.layout(rt.depthTexture, lw, lh, pw, ph);
     }
     const halfOf = (v) => Math.max(1, Math.floor(v / 2));
+    const PHONE_POST_SCALE = 1;   // phone post size × scene; 1 = full res (pre-#3479)
+    const postSize = (v) => Math.max(1, Math.floor(Math.max(1, v | 0) * (phonePost ? PHONE_POST_SCALE : 1)));
     function layoutHalf() {
-      aoW = halfOf(W);
-      aoH = halfOf(H);
+      // Base AO/GR off the post working size, including fixed allocations.
+      aoW = halfOf(pW);
+      aoH = halfOf(pH);
       grW = aoW; grH = aoH;
-      const pw = fixed ? halfOf(PW) : aoW, ph = fixed ? halfOf(PH) : aoH;
+      const physBaseW = fixed ? postSize(PW) : pW;
+      const physBaseH = fixed ? postSize(PH) : pH;
+      const pw = fixed ? halfOf(physBaseW) : aoW, ph = fixed ? halfOf(physBaseH) : aoH;
       if (ssaoRT) { place(ssaoRT, aoW, aoH, pw, ph); place(ssaoBlurRT, aoW, aoH, pw, ph); }
       if (godrayRT) { place(godrayRT, grW, grH, pw, ph); place(godrayBlurRT, grW, grH, pw, ph); }
     }
     function layoutBloom() {
       if (!bloomLv) return;
-      let bw = Math.max(1, Math.floor(W / BLOOM_DIV));
-      let bh = Math.max(1, Math.floor(H / BLOOM_DIV));
-      let pbw = Math.max(1, Math.floor(PW / BLOOM_DIV)), pbh = Math.max(1, Math.floor(PH / BLOOM_DIV));
+      let bw = Math.max(1, Math.floor(pW / BLOOM_DIV));
+      let bh = Math.max(1, Math.floor(pH / BLOOM_DIV));
+      const physBloomW = fixed ? postSize(PW) : pW;
+      const physBloomH = fixed ? postSize(PH) : pH;
+      let pbw = Math.max(1, Math.floor(physBloomW / BLOOM_DIV)), pbh = Math.max(1, Math.floor(physBloomH / BLOOM_DIV));
       nLv = 0;
       for (let i = 0; i < bloomLv.length; i++) {
         // Fixed: a level exists while the PHYSICAL one does; the logical count can only be lower.
@@ -536,15 +579,20 @@
     // w x h: the render (logical) size; pw x ph: the present size (fixed mode only).
     function resize(w, h, pw, ph) {
       const nPW = fixed ? Math.max(1, pw | 0, w | 0) : 0, nPH = fixed ? Math.max(1, ph | 0, h | 0) : 0;
-      if (w === W && h === H && nPW === PW && nPH === PH) {
+      const nPostW = postSize(w);
+      const nPostH = postSize(h);
+      if (w === W && h === H && nPW === PW && nPH === PH && nPostW === pW && nPostH === pH) {
         // Still may need aaRT when flag toggles at same render size.
         syncAaRT();
         return;
       }
       W = Math.max(1, w | 0); H = Math.max(1, h | 0);
       PW = nPW; PH = nPH;
+      pW = nPostW; pH = nPostH;
+      const ldrPW = fixed ? postSize(PW) : pW;
+      const ldrPH = fixed ? postSize(PH) : pH;
       place(sceneRT, W, H, PW, PH);
-      place(ldrRT, W, H, PW, PH);
+      place(ldrRT, pW, pH, ldrPW, ldrPH);
       layoutHalf();
       layoutBloom();
       syncAaRT();
@@ -555,10 +603,12 @@
       const want = !!(P.sgsr && (fixed || (ctx.wantSpatialUpscale && ctx.wantSpatialUpscale())));
       if (want) {
         if (!aaRT) {
-          aaRT = makeRT(fixed ? 1 : W, fixed ? 1 : H, THREE.UnsignedByteType);
+          aaRT = makeRT(fixed ? 1 : pW, fixed ? 1 : pH, THREE.UnsignedByteType);
           aaRT.texture.name = "TLXPostAA";
         }
-        place(aaRT, W, H, PW, PH);
+        const aaPW = fixed ? postSize(PW) : pW;
+        const aaPH = fixed ? postSize(PH) : pH;
+        place(aaRT, pW, pH, aaPW, aaPH);
       } else if (aaRT) {
         // _lastPresentRT may still BE this target (present() stores `dest ||
         // aaRT`), and presentedTarget() hands it to a capture. Disposing
@@ -875,6 +925,8 @@
       C.ssrQuality.value = o.ssrQuality >= 2 ? 2 : o.ssrQuality >= 1 ? 1 : 0;
       C.lensDirt.value = dirtTex ? gk("lensDirt") : 0;
       // uReflTexel drives SSR + SHARPEN + the vignette aspect — every frame.
+      // SSR samples the full-res scene, so the UV quantum stays 1/W even when
+      // the LDR composite runs at a reduced phone post size pW.
       C.reflTexel.value.set(1 / W, 1 / H);
       // Wet-road/car SSR needs depth + view/proj + world-up-in-view; uSsrOk
       // gates the whole branch on probe-less paths (setup preview).
@@ -909,16 +961,16 @@
         if (fixed) { const ps = presentSize(); vset(B, ps[0], ps[1]); }
         runPass(B.mat, dest);
       } else {
-        vset(P.composite, W, H); vset(P.fxaa, W, H);
+        vset(P.composite, pW, pH); vset(P.fxaa, pW, pH);
         runPass(P.composite.mat, ldrRT);
         P.fxaa.tex.value = ldrRT.texture;
-        P.fxaa.U.texel.value.set(1 / W, 1 / H);
+        P.fxaa.U.texel.value.set(1 / pW, 1 / pH);
         const useUpscale = !!(P.sgsr && aaRT && ctx.wantSpatialUpscale && ctx.wantSpatialUpscale());
         if (useUpscale) {
           if (P.fxaa.mirTex) fxaaMirror(false);   // FXAA -> aaRT: the inset goes on after SGSR
           runPass(P.fxaa.mat, aaRT);
           P.sgsr.tex.value = aaRT.texture;
-          P.sgsr.U.viewport.value.set(1 / W, 1 / H, W, H);
+          P.sgsr.U.viewport.value.set(1 / pW, 1 / pH, pW, pH);
           if (fixed) {
             const ps = presentSize();
             vset(P.sgsr, ps[0], ps[1]);   // the canvas / soft target: always present-sized
@@ -929,6 +981,10 @@
           _lastPresentRT = dest || aaRT;
           _last.sgsr = true;
         } else {
+          // FXAA reads the post-sized LDR but draws the whole destination.
+          // Fixed phone targets keep that destination present-sized even at
+          // scale 1, where SGSR is bypassed; pW/pH here would crop the image.
+          if (fixed) { const ps = presentSize(); vset(P.fxaa, ps[0], ps[1]); }
           const mirIn = !!P.fxaa.mirTex && fxaaMirror(true);
           runPass(P.fxaa.mat, dest);
           if (mirIn) _mirComposites++;
@@ -940,7 +996,7 @@
       _last.ssao = !!(haveAO || (aoFold && haveGR));
       _last.bloom = !!haveBloom;
       _last.shafts = !!haveGR;
-      _last.ssr = !!(haveRefl && reflStr > 0.001);
+      _last.ssr = !!(haveRefl && (C.reflect.value > 0.001 || C.carReflect.value > 0.001));
       _last.fxaa = !viz;
       // After the composite has rebound the 1x1 fallbacks. Releasing on the
       // same frame the block drew would dispose a target runPass just wrote.
@@ -968,13 +1024,47 @@
     // clears depth). On WebGL2: invalidateFramebuffer(DEPTH) on the scene FBO
     // while its pass is still open (ANGLE-Metal: store action DontCare), and on
     // an MSAA target the depth resolve blit is skipped instead
-    // (resolveDepthBuffer). three r186 has no lever on WebGPU: it stores a
-    // single-sample depth whatever its usage (WebGPUBackend discardDepth is
-    // MSAA-only), so a rebuild with a non-sampled depth would buy nothing there.
+    // (resolveDepthBuffer). Pristine r186 has no lever on WebGPU (WebGPUBackend
+    // discardDepth is MSAA-only); vendored patch 17 adds the per-pass hint that
+    // depthBegin sets on a single-sample target (A-P2W, discardHint).
     // apex26.tlxDepthDiscard="0" always keeps it.
     let _depthDiscard = true;
     try { _depthDiscard = localStorage.getItem("apex26.tlxDepthDiscard") !== "0"; } catch (_) { /* no storage: on */ }
     let _depthKeep = true, _depthDiscards = 0, _invDepth = null;
+    // A-P2 (phoneperf 2026-10-24): THE SSR TAG, DISCARDED THE SAME WAY. Attachment 1
+    // (ssrTag) stays on every chain so a wet spell never reallocates the scene target
+    // (_wantTag), yet its only readers are the composite's SSR gate (ssrOk &&
+    // reflect|carReflect > 0.001, tsl-post.js) and the heat-haze plume (hazeStr >
+    // 0.002) — both uniform-gated If blocks, so on a dry phone frame at tier >= 2
+    // (carReflect 0, reflect 0, haze null on mobileTier) the tag is written and
+    // stored by every scene fragment and fetched by nothing. Same rule shape as
+    // needsDepth, from the SAME opts/F present() is about to upload, so a frame
+    // whose composite reads the tag always has it. Single-sample targets only (an
+    // MSAA tag has already been resolved by the time depthEnd runs). WebGPU: the
+    // storeOp hint of vendored patch 17 (A-P2W, discardHint). apex26.tlxTagDiscard="0" always keeps it.
+    let _tagDiscard = true;
+    try { _tagDiscard = localStorage.getItem("apex26.tlxTagDiscard") !== "0"; } catch (_) { /* no storage: on */ }
+    let _tagKeep = true, _tagDiscards = 0, _invTag = null, _invBoth = null;
+    const isGpu = () => !!(renderer.backend && renderer.backend.isWebGPUBackend);
+    let _gpuArmed = false;   // A-P2W: depthBegin put patch 17's hint on sceneRT
+    function needsTag(opts, F) {
+      const o = opts || {};
+      if (viz) return true;
+      const hz = o.haze;
+      if (hz && hz.str > 0.002) return true;   // the plume's car-mask fetch
+      const car = o.carReflect != null ? o.carReflect : PostCommon.knob(o.tune || null, "carReflect");
+      return !!(F.invProj && F.proj && F.upVS) && ((o.reflect || 0) > 0.001 || car > 0.001);   // the composite's SSR gate, exactly
+    }
+    // WebGL2 only: invalidate `list` on rt's FBO, and only while three still has THAT FBO bound
+    // (the pass it just rendered) — never a guess. Returns true when it did.
+    function discardAttachments(rt, list) {
+      const be = renderer.backend, gl = be && be.gl, st = be && be.state;
+      if (!rt || !list || !list.length || !gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
+      const d = be.get(rt), fb = st.currentBoundFramebuffers[gl.DRAW_FRAMEBUFFER];
+      if (!fb || !d || !d.framebuffers || Object.values(d.framebuffers).indexOf(fb) < 0) return false;
+      gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, list);
+      return true;
+    }
     function needsDepth(opts, F) {
       const o = opts || {};
       if (viz) return true;
@@ -996,11 +1086,39 @@
     function depthBegin(opts, F) {
       _depthKeep = !_depthDiscard || needsDepth(opts, F);
       sceneRT.resolveDepthBuffer = _depthKeep;
+      _tagKeep = !_tagDiscard || !tagOn || (sceneRT.samples | 0) > 0 || needsTag(opts, F);   // A-P2
+      // A-P2W: WebGPU fixes a storeOp when the pass BEGINS, so the same decision rides on the
+      // target as patch 17's hint before the scene render; depthEnd takes it off. Single-sample only.
+      _gpuArmed = discardHint(sceneRT, _tagKeep ? 0 : 2, !_depthKeep && (sceneRT.samples | 0) === 0);
       return _depthKeep;
     }
-    // After the scene pass, before present(): drop the depth this frame does not read (WebGL2 only).
+    // WebGPU leg (vendored three patch 17): store nothing of the attachments in `colorMask` (bit i =
+    // colour attachment i) and, with `depth`, of the depth, in the NEXT pass into rt. Only around the
+    // LAST render of a frame into rt — the next pass's loadOp still reads what was stored. Returns
+    // true when a hint went on; discardHintOff(rt) after the render, also on a throw.
+    function discardHint(rt, colorMask, depth) {
+      if (!rt || !isGpu()) return false;
+      const c = _tagDiscard ? colorMask | 0 : 0, d = _depthDiscard && !!depth;
+      rt.apexDiscardColor = c;
+      rt.apexDiscardDepth = d;
+      return c !== 0 || d;
+    }
+    function discardHintOff(rt) {
+      const t = rt || sceneRT;
+      if (t.apexDiscardColor) t.apexDiscardColor = 0;
+      if (t.apexDiscardDepth) t.apexDiscardDepth = false;
+      if (!rt) _gpuArmed = false;
+    }
+    // After the scene pass, before present(): drop the depth (and the tag) this frame does not read
+    // (WebGL2: invalidate; WebGPU: depthBegin's hint already did it, count it and take it off).
     function depthEnd() {
-      if (_depthKeep) return false;
+      if (_gpuArmed) {
+        discardHintOff();
+        if (!_tagKeep) _tagDiscards++;
+        if (!_depthKeep && (sceneRT.samples | 0) === 0) _depthDiscards++;
+        return true;
+      }
+      if (_depthKeep && _tagKeep) return false;
       const be = renderer.backend, gl = be && be.gl, st = be && be.state;
       if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
       const d = be.get(sceneRT), msaa = (sceneRT.samples | 0) > 0;
@@ -1009,8 +1127,10 @@
       const fb = st.currentBoundFramebuffers[target];
       const ours = msaa ? (fb && fb === d.msaaFrameBuffer) : (fb && d.framebuffers && Object.values(d.framebuffers).indexOf(fb) >= 0);
       if (!ours) return false;
-      gl.invalidateFramebuffer(target, _invDepth || (_invDepth = [gl.DEPTH_ATTACHMENT]));
-      _depthDiscards++;
+      if (!_invDepth) { _invDepth = [gl.DEPTH_ATTACHMENT]; _invTag = [gl.COLOR_ATTACHMENT1]; _invBoth = [gl.DEPTH_ATTACHMENT, gl.COLOR_ATTACHMENT1]; }
+      gl.invalidateFramebuffer(target, _depthKeep ? _invTag : _tagKeep ? _invDepth : _invBoth);
+      if (!_tagKeep) _tagDiscards++;
+      if (!_depthKeep) _depthDiscards++;
       return true;
     }
 
@@ -1101,6 +1221,8 @@
       drawWarm,   // A-W1
       warmMirror,
       needsDepth, depthBegin, depthEnd,   // A-P1
+      needsTag, discardAttachments,   // A-P2 (the mirror discards its depth + tag through this)
+      discardHint, discardHintOff,   // A-P2W: the WebGPU leg's twin (vendored three patch 17)
       present,
       dispose,
       viz,
@@ -1110,16 +1232,21 @@
         on: true,
         hdr,
         attachments: tagOn ? 2 : 1,
+        sceneFormat: scene11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",   // phoneperf: the scene colour attachment
         ssrQuality: P.composite.U.ssrQuality.value,
         depth: { discard: _depthDiscard, kept: _depthKeep, discards: _depthDiscards },   // A-P1: the last frame's call
+        tag: { discard: _tagDiscard, kept: _tagKeep, discards: _tagDiscards },   // A-P2
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],
+        // Post working size (PHONE_POST_SCALE of scene on phones). Aux passes half of this.
+        postTargets: [pW, pH],
+        phonePost,
         // Lazy targets still alive. A shed that stuck must drop these; the
         // leak test counts them after N closed presents.
         held: { ssao: !!ssaoRT, bloom: !!bloomLv, shafts: !!godrayRT },
         rtResizes: _rtResizes,
-        fixed: fixed ? { physical: [PW, PH], logical: [W, H] } : null,
+        fixed: fixed ? { physical: [PW, PH], logical: [W, H], post: [pW, pH] } : null,
       }),
       // Drop last-presented block flags (Home garage / mid-warm frames must
       // not satisfy a race probe that waits on shafts/bloom before Singapore
