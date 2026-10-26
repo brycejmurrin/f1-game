@@ -609,6 +609,32 @@ test("3.10 pause-menu RESTART does not run the old race through the async start 
   } finally { g.close(); }
 });
 
+test("3.10b pause-menu RESTART keeps the build plate up and the governor off until the new grid commits (#3283)", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, Perf = vm.runInContext("PerfGov", g.ctx), plate = g.sandbox.document.getElementById("loading");
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    await G.startRace();
+    g.apex.go(); g.step(120);
+    assert.equal(G.state, "race");
+    const carsBefore = G.cars, ema = Perf.fpsEMA();
+    {
+      g.sandbox.document.getElementById("pm-restart").onclick();
+      assert.equal(G.state, "race", "precondition: state is still race while the restart builds");
+      assert.equal(plate.hidden, false, "precondition: the restart raised the build plate");
+      let t = g.sandbox.performance.now() + 1000;
+      // Rebuild hitches: 120 ms frames. A lowered plate lets render() draw the half-torn race (the VM's stub gfx throws
+      // there), so stop at the first frame that drops it and let the plate assertion name the defect.
+      for (let i = 0; i < 30 && !plate.hidden; i++) { try { g.pumpFrame(t += 120); } catch (_) { break; } }
+      assert.equal(G.cars, carsBefore, "precondition: the new field is not built yet");
+      assert.equal(plate.hidden, false, "render() must not lower the build plate mid-restart");
+      assert.equal(Perf.fpsEMA(), ema, "PerfGov must not score the rebuild's hitch frames");
+    }
+    await g.settle(() => G.cars !== carsBefore && G.state === "count", 8000);
+    assert.equal(G.frozen, false);
+  } finally { g.close(); }
+});
+
 // 3.14 — the garage drive-out on the three routes that used to call startRaceCovered (card only, no garage-out, no flyby).
 // The VM has no frame pump and flushes its timer queue by hand: drive both to the first garage frame (setupPreviewOn is
 // what studioOpen raises for the drive-out) and assert that state is still "menu", i.e. before the countdown.
