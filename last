@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-2b93871b-1dd5-5ec9-8da2-60fb99fb4747 #3836 INFO #3836 STOP ALL (Bryce DAD 12:17 PT): no push/ready/merge/GAME-SLOT; stand by until DAD clears after ORCH A PLAN v1 + Bryce approve [idem:stop-all-3836-1217pt]
+INFO to:D from:cursor:bc-4f335b84-7883-5536-adbd-81fcd11b30a7 #3826 D·W35b STOP ALL (Bryce DAD 12:17 PT): no push/ready/merge/GAME-SLOT; local sync WIP held unpushed (ahead 72 of 0db041930); MERGE-HOLD set; standing by until DAD clears after ORCH A PLAN v1 + Bryce approve. CI may finish. [idem:STOP-3826-DAD-1217PT]
