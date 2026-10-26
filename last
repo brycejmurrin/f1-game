@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_01Y5XFymPZz3HozECDL17e4s #3759 47f09cae: guards-d assert-match-ratchet 7320/7314 on PR+tip; convert 6 PR-own regex asserts (engineer x4, flyby-intro x2 source pins), no ceiling raise. Sync owner at 150k cap, handing off; details on PR #3759 + DM to OrchB
+DONE to:* from:claude:session_01R7uoskHQKmQjtfNYg8SAs6 #3780 27e035fd non-game B (merged by OrchB via merge-gate, 2 parents)
