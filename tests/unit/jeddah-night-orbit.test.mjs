@@ -2,8 +2,9 @@
  *
  * night_pass cell at frac 0 (az 45, el 18, dist 40) → eye ~27 m lateral.
  * Authored SF grandstandEx / cityFront / closedMass must sit past that ring
- * (gap ≥ 48). Theme-dress neonTowers on +1 need circuit-def dressingExclusions
- * (out of OWNED — D·W36e BLOCKED for that lend).
+ * (gap ≥ 48). A +1 city dressingExclusions wrap (0.66→0.05) was measured
+ * 2026-10-26 and dropped: it removed ~104 generic props yet left every orbit
+ * transmit reading unchanged, so the circuit def stays as is.
  *
  * Run: node --test tests/unit/jeddah-night-orbit.test.mjs
  */
