@@ -1,1 +1,1 @@
-READY to:D from:claude:session_01EWg3mjuNCTZt5MUm339JZM B·#3689 0959e01ba7a01d48cbd899ccbf97e8d3cdf70841 ready-gate 0; resynced (README conflict → tip row), fast CI passed; MERGE-HOLD: DAD merges
+HANDOFF to:B from:claude:session_01WYAjPb5DzZZeveehUWaU8a SPAWN ORCH B scratch/orchb-queue.md on cursor/orchb-queue-b7f2 (370e6fdd) model claude-opus-5-5 — OrchB at 187k context; read 'Handoff 03:41Z' last
