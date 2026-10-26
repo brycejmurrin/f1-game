@@ -19,14 +19,5 @@ const Vehicle = (function () {
     slipF: 0, slipR: 0, csFront: 0, csRear: 0, muLatF: 0, muLatR: 0,
   };
 
-  function forPlayer(driverDelta, c) {
-    if (typeof GripSteer === "undefined" || !GripSteer.forPlayer) return driverDelta;
-    return GripSteer.forPlayer(driverDelta, c, grip);
-  }
-
-  function stepWheel(c) {
-    return WheelState.stepPlayer(c, wheel);
-  }
-
-  return Object.freeze({ grip, wheel, forPlayer, stepWheel });
+  return Object.freeze({ grip, wheel });
 })();

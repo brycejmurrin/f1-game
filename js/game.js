@@ -5416,10 +5416,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     if (c.towing > 0) {
       // Pass hunger lifts the tow on permanents when we have a pace edge on the
       // car ahead (AiDrive.towGain); streets and the player path stay base gain.
-      const towH = AiDrive.passHunger({
-        street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0,
-        blockerVmax: paceVmax(towCar), ourVmax: S.pvA, blockerPace: scriptPace(towCar), ourPace: scriptPace(c),
-      });
+      const towH = AiDrive.hungerOf(!!track.street, aiT, vT, c.queueT || 0, paceVmax(towCar), S.pvA, scriptPace(towCar), scriptPace(c));   // pooled bag
       vmax *= 1 + AiDrive.towGain(!!track.street, towH) * c.towing;
     }
     // THE LANE'S CAP, LAST: the phase, tyre, fuel and tow multipliers above
@@ -5439,7 +5436,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // headway never held the car (it hovered at the edge, uncapped), so queue
     // pressure never built and a stuck car never got impatient.
     const followR = blocker ? AiDrive.followGap(aiT, !!track.street, c.speed, c.passOf || c.atkOn || c.towing > 0 ? 1 : c.atkWant ? 0.6 : 0, c.team, c.seat, blocker, c.houseStats, (c.runT || 0) + AiDrive.startGapT(c.calm = AiDrive.startCalm(c.launchOn, c.calmUntil, raceT))) : 0;
-    const qWin = AiDrive.queueReach(Math.max(16, followR + 6 + AiDrive.startQWinBonus(c.calm, raceT - launchT0)), c.speed, blocker ? blocker._snapSpeed : 0, BRAKE, vT / VMAX);
+    const qWin = AiDrive.queueReach(Math.max(16, followR + 6), c.speed, blocker ? blocker._snapSpeed : 0, BRAKE, vT / VMAX);
     const capBlocks = blocker && blockerGap < qWin &&
       !(blocker === c.passOf && Math.abs(c.x - blocker._snapX) >= 1.8);
     if (blocker && blockerGap < qWin) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
@@ -5471,15 +5468,10 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.
-    if (alongO && c.sbsT > AiDrive.sbsCommitT({
-      street: !!track.street, traits: aiT, vTop: vT, other: alongO,
-      ourVmax: S.pvA, ourPace: scriptPace(c),
-      otherVmax: paceVmax(alongO), otherPace: scriptPace(alongO),
-    }) && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase({
-      street: !!track.street, traits: aiT, vTop: vT, other: alongO,
-      ourVmax: S.pvA, ourPace: scriptPace(c),
-      otherVmax: paceVmax(alongO), otherPace: scriptPace(alongO),
-    }));   // COMMIT OR YIELD: tuck in behind
+    if (alongO && c.sbsT > AiDrive.SBS_COMMIT_MIN) {   // sbsCommitT's floor: below it no bag is filled
+      const sb = AiDrive.sbsArgs(!!track.street, aiT, vT, alongO, S.pvA, scriptPace(c), paceVmax(alongO), scriptPace(alongO));   // pooled
+      if (c.sbsT > AiDrive.sbsCommitT(sb) && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase(sb));   // COMMIT OR YIELD: tuck in behind
+    }
     squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn) &&
         (alongDx <= 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) < AiDrive.minLatGap(hw, !!track.street);
     if (squeezed) {
@@ -6203,15 +6195,14 @@ function updateCarBicycle(c, dt, ranked, S) {
     // so the pull it computes could never be applied. Floored while
     // unstuckActive ONLY (AiDrive.unstuckLatFloor); slow running is untouched.
     const aiLat = unstuckActive ? Math.max(latFac, AiDrive.unstuckLatFloor(!!track.street)) : latFac;
-    c.x += steer * STEER_VMAX * aiLat * gripScale * kerbGrip * bankMu * give * aiSurfMu * dt;
+    const vlOwn = steer * STEER_VMAX * aiLat * gripScale * kerbGrip * bankMu * give * aiSurfMu;   // this car's own lateral velocity (m/s)
+    c.x += vlOwn * dt;
     if (Wind.latA()) c.x += Wind.latA() * vT / VMAX * Wind.AI_TAU * dt;   // the same crosswind, as a brief drift
-    // Debris side-world (A2): AI cars don't run the slip model, so estimate a
-    // slide from lateral-g demand (|k|·v²/g) and treat hard braking at speed as
-    // lock-up. READ-ONLY, cosmetic — matches the player marble hook.
+    // Debris side-world (A2): AI marbles from the car's OWN state — the body slip of the lateral step it just made (the squeal
+    // signal) and a lock under hard braking. Never |k|·v² (DECISIONS #4): settled marbles reach the player's grip (marbleGrip).
     if (DebrisWorld.active()) {
-      const latG = Math.abs(k) * c.speed * c.speed / 9.8;   // ~lateral g demand
-      _marbleArg.lock = (braking && vStd(c.speed) > 30) ? 0.95 : 0;   // vStd: a threshold, not a force
-      _marbleArg.slip = Math.max(0, Math.min(1, latG - 1.6)) * 0.14;   // → ~slip-angle rad at the limit
+      _marbleArg.lock = (braking && vStd(c.speed) > 30) ? 0.95 : (c.wheelLock || 0);   // vStd: a threshold, not a force
+      _marbleArg.slip = Math.abs(Math.atan2(vlOwn, Math.max(4, Math.abs(c.speed))));   // rad, the player hook's units
       _marbleArg.speed = c.speed;
       DebrisWorld.tyreMarble(c, _marbleArg);
     }
