@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "7c996b1445ac9c0a0690a98c133d13bcf5090ccebe84ca41194efe218e76ef4c",
+  "sourceDigest": "7d29a44bab57212c179b9b0d58a38eb650ec3ff428f54d09a1fe70d12ce7da87",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -3311,15 +3311,15 @@
       "track": "suzuka",
       "name": "Circuit Wheel",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.020249,
+      "frac": 0.015662,
       "target": [
-        -682.86,
-        31.14,
-        88.14
+        -692.22,
+        42.73,
+        130.26
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 69,
-      "viewDistanceM": 69,
+      "nearestRoadDistanceM": 103,
+      "viewDistanceM": 103,
       "source": "tests/data/landmarks/suzuka.json; js/circuits/scenery/suzuka.js"
     },
     {
