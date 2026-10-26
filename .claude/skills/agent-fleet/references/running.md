@@ -55,8 +55,9 @@ the acting session.
      and ends. It never merges, pushes or edits a PR. An orchestrator keeps it
      across hand-offs: list it with `list_triggers` and never create a second.
   The webhook wakes D only; Fleet B wakes A through the cross-account inbox,
-  which lands on the bus as `[FROM FLEET B via inbox]` lines from
-  `claude:fleet-b-inbox` (communication.md). Read them in the wake pass.
+  whose routine (A's own) posts `[FROM FLEET B via inbox]` lines on the bus
+  from `claude:fleet-a-inbox` (B's side gets `claude:fleet-b-inbox`;
+  communication.md). Read them in the wake pass.
   A's wake pass also reads DAD's direct messages
   through ReadNotifications (orchestrator.md §Talking to other fleets).
 - Each wake also lists every open PR with no live owner session (Bryce requires
