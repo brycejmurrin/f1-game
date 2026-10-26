@@ -8,6 +8,7 @@
   wrote) the fleet's orchestrator may lift it. Waiting on something is a Plan item, not a hold.
 - On in-session rejection or "wait": add `MERGE-HOLD:` at once, tell the orchestrator,
   still commit and push WIP. "wait" pauses this session, not the fleet.
+- A plan/quota launch refusal pauses all launches until reset; report it once.
 - Draft→ready only when the tip is green and `node tools/ci/ready-gate.mjs --pr <n>` exits 0.
 - Sync only when GitHub reports CONFLICTING/DIRTY or a required tip check is red
   (`needs-sync.mjs`); never for clean-behind, no exceptions. Merge origin; never force or rebase.
