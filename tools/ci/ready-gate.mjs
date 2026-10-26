@@ -60,6 +60,9 @@ export function newestByName(checkRuns) {
     const t = Date.parse(c.started_at || "") || 0;
     const ct = cur ? (Date.parse(cur.started_at || "") || 0) : -Infinity;
     const hasIds = c.id > 0 && cur?.id > 0;
+    // A skipped run (a `CI ignored:` edit/label event on the same head) is never evidence over a real one.
+    const skipped = (r) => r.conclusion === "skipped";
+    if (cur && skipped(c) !== skipped(cur)) { if (skipped(cur)) by.set(c.name, c); continue; }
     if (!cur || (hasIds ? c.id > cur.id : t > ct)) by.set(c.name, c);
   }
   return by;
