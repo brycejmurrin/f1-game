@@ -42,6 +42,8 @@ import { whoAmI } from "./fleet-bus.mjs";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 /** Claims live on branches: the cloud git proxy answers a push to a non-branch ref (refs/fleet/…) with HTTP 403 (measured
  *  2026-10-26), and no workflow triggers on `fleet-claims/**` (.github/workflows `on.push.branches`). */
+export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
+
 export const CLAIM_NS = "refs/heads/fleet-claims";
 /** Fleet lane tags an orchestrator stamps on every launch (launch-policy.md §Session titles and tags). */
 export const BASE_TAG = "f1-game-fleet";
@@ -230,6 +232,12 @@ export function main(argv, { cwd = ROOT, log = console.log, now = () => Date.now
     // 2. revision
     const rv = revisionProblem(f["source-revision"]);
     if (rv) return refuse("revision", rv);
+    // An ORCHESTRATOR boots from the deploy tip, never a queue or topic branch: on 2026-10-26 nine ORCH B
+    // successors booted from cursor/orchb-queue* branches 298 commits behind the tip and ran a retired
+    // rulebook (200k cap, hourly cron). The brief is passed by path; the rules are the tip's.
+    if (String(f.role) === "orchestrator" && f["source-revision"] !== DEPLOY_BRANCH && !f.override) {
+      return refuse("revision", `an orchestrator boots from ${DEPLOY_BRANCH} (got ${f["source-revision"]}): pass the brief by path, or --override "<the user's words>"`);
+    }
     // 3. twins
     if (!f["sessions-json"]) return usage(log, "--sessions-json is required: save one `list_sessions` page and pass the file");
     const selfId = me ? me.replace(/^claude:/, "") : "";

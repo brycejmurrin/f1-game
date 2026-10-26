@@ -4,6 +4,7 @@
 // real diff, preflight refuses what the protocol refuses, and --help exits 0
 // without touching git. plan()/main() need the network and are not run here.
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
+import { GENERATED_PATHS } from "../../tools/lib/generated-paths.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
@@ -970,4 +971,8 @@ console.log(JSON.stringify({error:r.error?.code,survivors:r.survivors}));`;
   const r = spawnSync(process.execPath, ["--input-type=module", "-e", entry], { encoding: "utf8", timeout: 5000 });
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(JSON.parse(r.stdout), { error: "SIGTERM", survivors: [] });
+});
+
+test("every path tools/lib/generated-paths.mjs calls generated is one deploy.mjs's conflict cure regenerates (fleet-owner relies on it)", () => {
+  for (const p of GENERATED_PATHS) assert.equal(cureableConflicts([p]).cureable, true, `${p} is listed as generated but deploy.mjs cannot cure a conflict in it`);
 });
