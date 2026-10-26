@@ -1046,6 +1046,8 @@
     "tests/unit/real-replay-vm.test.mjs",
     "// Rear wing active aero to FIA 2026 C3.11.6: one rigid RW Flap, one aft pivot, Straight Mode flattens (never inverts). VM, ~1 s.",
     "tests/unit/rear-wing-active-aero.test.mjs",
+    "// #3413: DRS rail/pod clear the closed top rear flap (no coplanar banding on wing preset). VM, ~1 s.",
+    "tests/unit/rear-wing-drs-rail.test.mjs",
     "tests/unit/red-flag-fuel-vm.test.mjs",
     "// #3364: redbull scenery-orbit eye clear of +1 climb/stadium shells at",
     "// survey f17/f25/f75/f92 (az 45 / el 22 / dist 45). createGame×1 ~4 s.",
