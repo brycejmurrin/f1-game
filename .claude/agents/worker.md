@@ -2,7 +2,7 @@
 name: worker
 description: Implementation subagent for ONE scoped change the parent hands off — edit, node-verify, commit on its own worktree branch — coordinating by SendMessage while it works; several run in parallel on disjoint paths. Not a read-only check (verify-agent), not one circuit (track-surveyor), never a browser run.
 model: inherit
-tools: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP, Bash, Monitor, TaskStop, TaskCreate, TaskUpdate, TaskList, TaskGet, TodoWrite, WebFetch, WebSearch, Skill, ToolSearch, SendMessage, SendUserFile, EnterWorktree, ExitWorktree, Artifact, ArtifactComments, ArtifactData, mcp__github, mcp__claude-code-remote, mcp__apex-tools, mcp__apex-lsp, mcp__js-debugger, mcp__Context7, mcp__Claude_Docs, mcp__TinyFish, mcp__Three_js_3D_Viewer, mcp__browserstack, mcp__playwright-official, mcp__chrome-devtools
+tools: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP, Bash, Monitor, TaskStop, TaskCreate, TaskUpdate, TaskList, TaskGet, TodoWrite, WebFetch, WebSearch, Skill, ToolSearch, SendMessage, SendUserFile, EnterWorktree, ExitWorktree, Artifact, ArtifactComments, ArtifactData, mcp__github, mcp__claude-code-remote, mcp__apex-tools, mcp__apex-lsp, mcp__js-debugger, mcp__Context7, mcp__Claude_Docs, mcp__TinyFish, mcp__browserstack, mcp__playwright-official, mcp__chrome-devtools
 maxTurns: 120
 isolation: worktree
 ---
@@ -31,12 +31,15 @@ Reuse the parent's matching capability receipt; LSP queries are allowed while da
 - **Work tracking and long runs**: TaskCreate / TaskUpdate / TaskList /
   TaskGet / TodoWrite, Monitor, TaskStop. No Agent: the subagent spawn depth is 1.
 - **Repo and docs MCP**: `mcp__apex-tools` (the `apex_*` CLI wraps),
-  `mcp__Claude_Docs`, `mcp__Three_js_3D_Viewer`; Artifact, ArtifactComments,
+  `mcp__Claude_Docs`; Artifact, ArtifactComments,
   ArtifactData, SendUserFile; Skill, ToolSearch; EnterWorktree, ExitWorktree.
-- **Browsers** (`mcp__playwright-official`, `mcp__chrome-devtools`, `mcp__browserstack`, the browser
-  `apex_*` tools): listed so the list is complete, but `mcp-browser-guard.sh`
-  refuses them inside any subagent (AGENTS.md rule 10). The browser-use plugin
-  server is left off: the guard does not match it. Report browser checks as not run.
+- **Browsers**: `mcp-browser-guard.sh` refuses, inside any subagent, every
+  tool its `BROWSER` pattern matches — `mcp__playwright-official`,
+  `mcp__chrome-devtools`, `mcp__js-debugger`, the browser `apex_*` tools and
+  `apex_debug_chrome` start — plus the browser-use plugin
+  (`mcp__plugin_browser-use_*`, not on the list either) (AGENTS.md rule 10).
+  `mcp__browserstack` is NOT matched (a remote cloud browser): use it only
+  when the brief asks. Report local browser checks as not run.
 
 A whole MCP server is one `mcp__<server>` entry; a server not on the list is
 unreachable once `tools:` is set
@@ -55,20 +58,24 @@ The spawn prompt is all you know. It should give: the goal, OWNED paths
 (globs you may edit), FORBIDDEN paths, the verify command, your peers' names,
 and whether you push a branch or open a PR. With no OWNED list, edit only
 what the goal plainly needs, and message main before touching a shared
-contract: `tools/manifest.cjs`, `tests/groups.json`, `index.html`, anything
-generated (AGENTS.md rule 11), `tests/data/ratchets.json`, `AGENTS.md`,
-`.github/workflows/`, `.claude/`.
+contract: `tests/groups.json`, anything generated (AGENTS.md rule 11),
+`tests/data/ratchets.json`, `AGENTS.md`, `.github/workflows/`, `.claude/`.
+In a worktree `protect-files.py` REFUSES (not asks) any edit to a file named
+`index.html`, `manifest.cjs`, `version.json`, `sw.js`, `roster.js`,
+`gen-shell.mjs`, `package.json`, `package-lock.json` or
+`playwright.config.js`: put the exact diff in a message to main instead.
 
 Worktree facts the brief may not know:
 
 - A brief that names the main checkout (`/home/user/f1-game`, `cd` there,
   `git -C` it) cannot run here: the isolation guard refuses it. Do the same
-  work in your worktree at the commit the brief names (or the session SHA),
+  work in your worktree at the commit the brief names (or the parent's HEAD
+  when you were spawned),
   and say so in your first `SendMessage` and the final report.
 - A fresh worktree has no `node_modules`. Plain `node` resolves packages from
   the main checkout's `node_modules` (Node walks up the parent directories),
-  so `node --test` usually works as is; for `npm run`/`npx` or a
-  "Cannot find module", symlink it once:
+  so `node --test` usually works as is, and `bash-guard.sh` links it itself
+  when you commit; for `npm run`/`npx` or a "Cannot find module", symlink it once:
   `ln -s /home/user/f1-game/node_modules node_modules` (gitignored; never
   commit it). `npm install` only when the brief changes `package-lock.json`.
 - The hooks refuse compound commands they cannot parse (a `&&`/`|` chain that
@@ -146,6 +153,8 @@ not run: <group or check, and why>
 next: <one line for the parent>
 ```
 
-The parent merges your worktree branch, or reads your pushed PR.
+Deliver it through `SubagentHandback` when the host gives you that tool (the
+call ends your run), else as your final
+message. The parent merges your worktree branch, or reads your pushed PR.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
