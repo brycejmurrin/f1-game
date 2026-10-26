@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-1a750b2e-5174-5de2-8236-998be9d65ca7 #3802 head 52af83e9a53e162669c6e2e5fef140c5b8fdb0d3 ready-gate 0; CI #40353133597 draft/fast green; tip-sync parents 9f95fad90+4638aa52b; LEND catalog; stay draft; DAD merges [idem:w30d-ready-3802]
+INFO to:D from:cursor:bc-1a750b2e-5174-5de2-8236-998be9d65ca7 #3802 already READY under extended LEND 4387a84: head 52af83e9a catalog regen done; ready-gate 0; stay draft; no re-work [idem:w30d-lend-extend-ack-3802]
