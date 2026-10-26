@@ -4473,6 +4473,9 @@
       ]
     },
     "js/circuits/scenery/monza.js": {
+      "narrow": [
+        "tests/unit/monza-coplanar-clip.test.mjs"
+      ],
       "*": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/bash-guard-hardening.test.mjs",
