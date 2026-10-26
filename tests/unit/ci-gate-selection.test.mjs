@@ -10,7 +10,7 @@ import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { report } from "../../tools/ci/ci-coverage.mjs";
-import { ciWorkflow, pagesWorkflow, selectJob, selectedJob, selectStep } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, pagesWorkflow, selectJob, selectedJob, selectStep, PR_ACTIVE, LABEL_OK, EDIT_OK } from "../helpers/ci-workflow.mjs";
 
 test("every path a ci.yml change filter names still exists", () => {
   // The job filters are `grep -qE` alternations over the changed-file list, and
@@ -62,7 +62,8 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // of merges routed; tools/ci/ci-resolve-before.sh).
   // 2026-10-15: the job also plans the node slices (was unit-plan), so it runs whenever the node
   // matrix does (`fast_tier_run == ''`); the spec selection keeps its own event test on the step.
-  assert.match(selectJob, /if: \$\{\{ \(github\.event_name != 'pull_request' \|\| !github\.event\.pull_request\.draft \|\| contains\(github\.event\.pull_request\.labels\.\*\.name, 'run-ci'\)\) && \(github\.event\.action != 'labeled' \|\| \(github\.event\.label\.name == 'run-ci' && github\.event\.pull_request\.draft\)\) && \(inputs\.fast_tier_run == '' \|\| github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| inputs\.concurrency_key != ''\) \}\}/);
+  assert.ok(selectJob.includes(`if: \${{ ${PR_ACTIVE} && ${LABEL_OK} && ${EDIT_OK} && (inputs.fast_tier_run == '' || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '') }}`),
+    "the select job carries the shared draft/label/edit gate, then its own clause");
   // The JOB and the selection STEP never exclude the deploy gate; the ship
   // filter step inside the same job legitimately sits out the fast tier.
   const selectJobIf = (selectJob.match(/^    if: (.*)$/m) || [])[1] || "";
@@ -188,7 +189,7 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
   assert.ok(pushIgnore.at < pagesOn.indexOf("  schedule:"), "the one paths-ignore list must be the push one");
   assert.doesNotMatch(onBlock, /^\s+paths-ignore:/m, "ci.yml carries no paths-ignore list at all: no push trigger, an unfiltered pull_request");
   const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  schedule:"));
-  assert.ok(prBlock.includes("types: [opened, synchronize, reopened, ready_for_review, labeled]"), "the pull_request block was sliced whole");
+  assert.ok(prBlock.includes("types: [opened, synchronize, reopened, ready_for_review, labeled, edited]"), "the pull_request block was sliced whole");
   assert.doesNotMatch(prBlock, /paths(-ignore)?:/,
     "ci.yml's pull_request must not be path-filtered: a prose-only PR that starts no run can never satisfy the required check");
 

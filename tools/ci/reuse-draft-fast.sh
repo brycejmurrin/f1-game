@@ -45,7 +45,7 @@ hit="$(printf '%s' "$json" | node -e '
     const self = process.env.GITHUB_RUN_ID || "";
     const r = runs.find((x) => x.status === "completed" && x.conclusion === "success"
       && String(x.id) !== self && x.path === ".github/workflows/ci.yml"
-      && x.event === "pull_request" && !/^CI ignored: label /.test(x.display_title || ""));
+      && x.event === "pull_request" && !/^CI ignored: /.test(x.display_title || ""));
     if (r) process.stdout.write(`${r.id} ${r.run_started_at || r.created_at || ""}`);
   });')"
 if [ -n "$hit" ]; then
