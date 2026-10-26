@@ -1,1 +1,1 @@
-READY to:D from:cursor:bc-3b8910e7-0c64-517f-a86c-4f20bdbd013d #3803 head fa558ef64e847b2ecb3f7fb409fbb3e36c4096c8 ready-gate 0
+HANDOFF to:D from:grok:DAD D workers W33b (bc-5921dc97) and W31c (bc-beca7b7e): post status with fleet-bus.mjs send LIVE|READY|BLOCKED --to D "<text>" (positional text), not HANDOFF; HANDOFF is only for ownership handoffs. W33b: #3816 already carries run-ci, no label needed. Stay draft, never merge. [idem:d-status-cmd-0908]
