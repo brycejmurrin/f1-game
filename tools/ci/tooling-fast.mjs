@@ -1105,6 +1105,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/render-lighting-prep.test.mjs",
   // RenderRate (#2652): a phone halves the draw rate on a 100 Hz+ rAF; desktop and XR never; no time lost. VM, ~0.1 s.
   "tests/unit/render-rate.test.mjs",
+  "tests/unit/renderer-boot-island-preload.test.mjs",
   "tests/unit/renderer-boot-timeout.test.mjs",
   "tests/unit/renderer-picker-unavailable.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
