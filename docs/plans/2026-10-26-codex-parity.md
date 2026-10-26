@@ -6,6 +6,10 @@ Evidence: [CODEX-ARCHIVE-MINING-2026-10-26](../notes/CODEX-ARCHIVE-MINING-2026-1
 round 2 §R2-1…R2-8). Ask: Bryce, 2026-10-26 PT — "go deeper into these codex transcripts vs Claude and our skills
 and agent orchestration systems and prompts", then "Yes start planning".
 
+**Grant (Bryce, typed in session_01RrkwnTotSpmGMJQggtig8F, 2026-10-26 ~16:30 PT, AskUserQuestion):** start W0, W1+W2,
+W3 and W4–W6 (covers the `.claude/**` and `AGENTS.md` edits they list); W7 "Allow, one run at a time" (sanction
+hosted TinyFish live-site QA, one run at a time, read once at completion; browserstack stays).
+
 ## Principle
 
 About two-thirds of the Codex costs share a root cause with a Claude finding, and the Claude-side fix is usually a
