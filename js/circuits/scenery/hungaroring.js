@@ -53,9 +53,13 @@
         const AKAC_D = [0.36, 0.47, 0.26];
         const BARK   = [0.34, 0.29, 0.23];
 
+        // Lombardy rows. The +1 belt at authored 0.23–0.34 sat in the day/dry
+        // orbit@0 sightline across the bowl (Cartesian ~44 m off the S/F
+        // tangent) and read as a neat European fir rank (#3317) — push it to
+        // the far amphitheatre rim so the dusty bowl stays the first read.
         for (const [s0, s1, side, gap] of [
           [0.060, 0.165, -1, 62],
-          [0.230, 0.335,  1, 70],
+          [0.230, 0.335,  1, 130],
           [0.455, 0.560, -1, 58],
           [0.650, 0.760,  1, 66],
           [0.825, 0.920, -1, 74],
@@ -82,8 +86,11 @@
           }
         }
 
+        // Pit-straight opposite the paddock (sf≈0.045, side +1) used to sit at
+        // gap 54 — a neat columnar rank that fought the dusty amphitheatre in
+        // day/dry orbit@0 (#3317). Keep akác mid/far; push that cluster out.
         for (const [sf, side, gap] of [
-          [0.045,  1, 54], [0.180, -1, 68], [0.215,  1, 50],
+          [0.045,  1, 110], [0.180, -1, 68], [0.215,  1, 50],
           [0.355, -1, 60], [0.420,  1, 72], [0.520,  1, 56],
           [0.600, -1, 64], [0.700, -1, 52], [0.775,  1, 58],
           [0.880,  1, 62], [0.940, -1, 56],
@@ -283,20 +290,23 @@
       // and akác, not conifers. Inner mid-lap passes thinned to density .20 (along()
       // halves the stride) to pay for the wider poplar rows and the dome hills
       // inside the props-triangle ratchet.
-      forestEdge(0.0,  0.18, 1, 8, { density: 0.58, hMin: 9, hMax: 15,
-                                      col: TREE, col2: TREE2, pineFrac: 0.06 });
+      //
+      // Pit-straight carve (#3317): day/dry orbit@0 used to read a neat European
+      // fir rank opposite the paddock. Skip near forestEdge on 0.88–0.12 (both
+      // sides); residual planting is far, pineFrac 0, so the straw-olive bowl
+      // and amphitheatre banking stay the first read.
+      forestEdge(0.12, 0.18, 1, 36, { density: 0.28, hMin: 8, hMax: 13,
+                                      col: TREE, col2: TREE2, pineFrac: 0 });
       forestEdge(0.18, 0.50, 1, 8, { density: 0.46, hMin: 7, hMax: 13,
                                       col: TREE2, col2: TREE, pineFrac: 0.06 });
-      forestEdge(0.50, 1.00, 1, 8, { density: 0.50, hMin: 8, hMax: 14,
+      forestEdge(0.50, 0.88, 1, 8, { density: 0.50, hMin: 8, hMax: 14,
                                       col: TREE, col2: TREE2, pineFrac: 0.06 });
-      // Inside: tighter valley wall
-      forestEdge(0.0,  0.12, -1, 8, { density: 0.52, hMin: 7, hMax: 13,
-                                       col: TREE, col2: TREE2, pineFrac: 0.06 });
+      // Inside: tighter valley wall — same pit-straight carve
       forestEdge(0.14, 0.35, -1, 8, { density: 0.20, hMin: 8, hMax: 13,
                                        col: TREE2, col2: TREE, pineFrac: 0.06 });
       forestEdge(0.35, 0.55, -1, 8, { density: 0.20, hMin: 8, hMax: 14,
                                        col: TREE, col2: TREE2, pineFrac: 0.06 });
-      forestEdge(0.55, 1.00, -1, 8, { density: 0.46, hMin: 7, hMax: 12,
+      forestEdge(0.55, 0.88, -1, 8, { density: 0.46, hMin: 7, hMax: 12,
                                        col: TREE2, col2: TREE, pineFrac: 0.06 });
 
       // Dry scrub spots at the edge (gap=9, sparse)
@@ -406,21 +416,34 @@
         const b = [a.r, a.u, a.t];
         const totalH = STOREYS * STOREY_H;
         const dressPit = (stage) => {
+          // 2025 DVM/IADA mass: white/glazed continuous facade. Orbit@0 used to
+          // read a dark slab because charcoal garage doors dominated the track
+          // face (#3317) — keep door rhythm, lighten to pale glazing + white
+          // mullions so the multi-storey paddock stays the first read.
           const PERGOLA = [0.42, 0.58, 0.62];
-          const SLAB = [0.90, 0.91, 0.93];
-          const SLAB2 = [0.84, 0.85, 0.88];
+          const SLAB = [0.94, 0.95, 0.97];
+          const SLAB2 = [0.90, 0.91, 0.94];
+          const GLAZE = [0.78, 0.84, 0.90];
+          const GLAZE_T = [0.62, 0.68, 0.76];
+          const MULLION = [0.92, 0.93, 0.95];
           const DOOR_N = 16, DOOR_PITCH = LEN / DOOR_N;
           stage._mat = MAT.CONCRETE;
           // The retaining footing reaches the entire ground-storey footprint
           // and meets its floor exactly, including both ends and side edges.
-          foundation(stage, { center: a.c, size: [11.5, LEN], top: a.c[1], basis: b, col: PADDOCK });
-          addBox(stage, vadd(a.c, a.u, STOREY_H * 0.5), [11.5, STOREY_H, LEN], WHITE, b);
+          foundation(stage, { center: a.c, size: [11.5, LEN], top: a.c[1], basis: b, col: [0.72, 0.72, 0.74] });
+          addBox(stage, vadd(a.c, a.u, STOREY_H * 0.5), [11.5, STOREY_H, LEN], [0.94, 0.95, 0.97], b);
+          // Continuous pale glazed band on the track face (behind door reveals).
+          addBox(stage, vadd(vadd(a.c, a.r, 5.85), a.u, STOREY_H * 0.48),
+                 [0.18, STOREY_H * 0.78, LEN - 6], GLAZE, b);
           for (let i = 0; i < DOOR_N; i++) {
             const off = (i - (DOOR_N - 1) / 2) * DOOR_PITCH;
             const technical = i >= DOOR_N - 3;
             addBox(stage, vadd(vadd(a.c, a.u, STOREY_H * 0.42), a.t, off),
-                   [11.9, STOREY_H * 0.7, DOOR_PITCH * 0.5],
-                   technical ? [0.18, 0.19, 0.22] : [0.26, 0.28, 0.32], b);
+                   [11.9, STOREY_H * 0.7, DOOR_PITCH * 0.42],
+                   technical ? GLAZE_T : GLAZE, b);
+            // White mullion / reveal so doors do not merge into one dark slab.
+            addBox(stage, vadd(vadd(a.c, a.u, STOREY_H * 0.42), a.t, off + DOOR_PITCH * 0.28),
+                   [12.0, STOREY_H * 0.72, DOOR_PITCH * 0.08], MULLION, b);
           }
           for (let f = 1; f < STOREYS; f++) {
             const y0 = f * STOREY_H;

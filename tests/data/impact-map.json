@@ -4443,6 +4443,11 @@
         "tests/unit/deploy-tool.test.mjs"
       ]
     },
+    "js/circuits/scenery/hungaroring.js": {
+      "*": [
+        "tests/unit/hungaroring-pit-firs-orbit.test.mjs"
+      ]
+    },
     "js/circuits/scenery/imola.js": {
       "*": [
         "tests/unit/node-plan.test.mjs",
