@@ -58,9 +58,12 @@ function read(rel) {
 }
 
 function literalSource(src) {
-  assert.ok(src.includes(GRIP_SCRATCH), "grip scratch hunk missing");
-  assert.ok(src.includes(WHEEL_SCRATCH), "wheel scratch hunk missing");
-  return src.replace(GRIP_SCRATCH, GRIP_LITERAL).replace(WHEEL_SCRATCH, WHEEL_LITERAL);
+  // Each swap must take effect, or the literal arm silently runs the scratch code.
+  const grip = src.replace(GRIP_SCRATCH, GRIP_LITERAL);
+  assert.notEqual(grip, src, "grip scratch hunk missing");
+  const both = grip.replace(WHEEL_SCRATCH, WHEEL_LITERAL);
+  assert.notEqual(both, grip, "wheel scratch hunk missing");
+  return both;
 }
 
 function baseCtx() {

@@ -139,7 +139,7 @@ export function bootGlx(opts = {}) {
     setTimeout: (fn) => { sandbox.__timers.push(fn); return sandbox.__timers.length; },
     clearTimeout: noop, __timers: [],
     document: {
-      hidden: false, addEventListener: noop,
+      hidden: false, addEventListener: noop, getElementById: () => null,
       // opts.overlay: createElement answers a recording 2D canvas (the #game-soft overlay).
       createElement: () => (opts.overlay ? opts.overlay.make() : { getContext: () => null, width: 0, height: 0 }),
       body: { appendChild: noop },

@@ -333,6 +333,8 @@ oversubscribed. Those are all SwiftShader-shaped.
 
 ## 2. Sharding is the wrong first move
 
+**Status 2026-10-26 — superseded.** A whole browser group now runs as four llvmpipe shards packed by measured time (`tools/ci/remote-group.mjs`, `browser-group.yml`; AGENTS.md §Verification). The argument below is the 2026-09 reasoning, kept as history.
+
 Consistent advice across sources, and it contradicts the obvious instinct:
 
 - **The default GitHub runner has 2 cores.** Pushing workers past ~2-3 there
@@ -391,13 +393,13 @@ commentary about it is stale.
 **What this does NOT imply.** It is not an argument to flip the default
 renderer. §6 of `ARCHITECTURE-REVIEW.md` makes the real point: the cost
 is *one look in three shading languages*. The 2026-08 WGX parity pass closed
-the documented API/shader gaps (see [WEBGPU-PARITY.md](../../docs/research/WEBGPU-PARITY.md));
+the documented API/shader gaps (see [WEBGPU-PARITY.md](../research/WEBGPU-PARITY.md));
 keeping two shader trees in sync is still the tax. Broader platform support
 does not reduce that cost. The honest options are still "invest in one of
 TLX/WGX" or "keep GLX and let the seam be insurance", and this finding only
 changes the input to that decision, not the answer. The API recipes and
 slice order live in
-[WEBGPU-PARITY.md](../../docs/research/WEBGPU-PARITY.md) — every listed gap is implementable in
+[WEBGPU-PARITY.md](../research/WEBGPU-PARITY.md) — every listed gap is implementable in
 core WebGPU; the freeze was a cost call, not an API wall.
 
 ---

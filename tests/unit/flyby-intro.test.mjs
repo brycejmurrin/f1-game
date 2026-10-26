@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { gameSource } from "../helpers/game-source.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -40,7 +40,7 @@ test("the menu build warms its shaders BEFORE the slow extras (lamp pre-bake, fl
   // the lights finds its programs built (17 s of held card after the flyby
   // under SwiftShader before this; see warmPrograms).
   assert.match(body, /if \(await menuIdle\(current\)\) \{ warmPrograms\(\); FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/, "the first warm pair requests the program warm first");
-  assert.match(game, /const warmPrograms = \(tag = ""\) => \{ try \{ if \(gfx\.warm\) \{ const k = menuKey\(trackIdx\); _warmKey = k; if \(!_warmed\.has\(k \+ tag\)\) \{ _warmed\.add\(k \+ tag\); gfx\.warm\(\); return true; \} \} \}/, "warmPrograms is the guarded request (GLX/WGX have no warm), remembers the world it was for, and asks once per world per session");
+  assert.match(game, /const warmPrograms = \(tag = ""\) => \{ try \{ if \(gfx\.warm\) \{ const k = menuKey\(trackIdx\); _warmKey = k; if \(!_warmed\.has\(k \+ tag\)\) \{ _warmed\.add\(k \+ tag\); gfx\.warm\(\); carDraw\.warmCockpitTelemetry\(\); return true; \} \} \}/, "warmPrograms is the guarded request (GLX/WGX have no warm), remembers the world it was for, asks once per world per session, and queues the cockpit telemetry warm with it (#3673)");
   // …and the lights skip their own request for that world: with every program
   // built, compileAsync(scene) still walked the race scene for 7.5 s and linked
   // nothing (scratch/ld-link-probe.mjs, 2026-09-28).
@@ -197,9 +197,13 @@ test("intro builds cancel at async boundaries and never fly over pending compila
     }
   }
   for (const name of ["quitToMenu", "clearMenuScreens"]) {
-    const start = game.indexOf("function " + name + "()");
-    const span = name === "quitToMenu" ? 240 : 100;
-    assert.match(game.slice(start, start + span), /cancelIntro\(\)/);
+    const body = symbolSource("function " + name + "()");
+    if (name === "quitToMenu") {
+      const teardown = body.indexOf("  pendingFinishQuit = false;");
+      assert.ok(teardown > 0, "normal quit teardown follows the deferred finish branch");
+      assert.doesNotMatch(body.slice(0, teardown), /cancelIntro\(\)/, "a deferred quit retains the active race");
+      assert.match(body.slice(teardown), /cancelIntro\(\)/, "normal quit teardown cancels intro ownership");
+    } else assert.match(body, /cancelIntro\(\)/);
   }
 });
 

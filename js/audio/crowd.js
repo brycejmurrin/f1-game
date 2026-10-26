@@ -119,19 +119,28 @@ var CrowdAudio = (function () {
   // rebuildCtx() / hide-show restart the engine via startEngineGraph(), which
   // bypasses the startEngine wrapper below — so a bed built on the old context
   // would keep aiming dead nodes (silent crowd, leaked BufferSources on the
-  // closed ctx). Re-bind whenever the live context or SFX bus moved.
+  // closed ctx). Re-bind whenever the live context or SFX bus moved, and never
+  // treat a bedGain whose AudioContext is already "closed" as attached (#3289).
+  function ctxLive(c) {
+    return !!(c && c.state !== "closed");
+  }
   function ensureAttached() {
     const c = context(), d = sfxBus();
-    if (!c || !d) return false;
-    if (bedSrc && actx === c && bus === d) return true;
+    if (!c || !d || !ctxLive(c)) {
+      // Stale host still naming a closed ctx (mid-rebuild): drop the dead bed so
+      // update()/inspect never treat bedGain as attached (#3289).
+      if (bedSrc) detach();
+      return false;
+    }
+    if (bedSrc && actx === c && bus === d && ctxLive(actx)) return true;
     return attach(c, d);
   }
 
   function attach(ac, dest) {
     const c = ac || context();
     const d = dest || sfxBus();
-    if (!c || !d) return false;
-    if (bedSrc && actx === c && bus === d) return true;
+    if (!c || !d || !ctxLive(c)) return false;
+    if (bedSrc && actx === c && bus === d && ctxLive(actx)) return true;
     detach();
     actx = c;
     bus = d;
@@ -422,6 +431,10 @@ var CrowdAudio = (function () {
       cheers: cheerPool,
       stands: standN,
       sfxOn: !!sfxOn,
+      // Which AudioContext owns the bed graph (null when detached). Tests for
+      // #3289 assert this identity after rebuildCtx / a closed-ctx swap.
+      ctx: actx,
+      bedGain: bedGain,
     };
   }
   function tSwell() {

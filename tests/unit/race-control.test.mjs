@@ -983,3 +983,17 @@ test("replay flag snapshots bypass live hazards and red restarts, and normal app
   run(rc, 1);
   assert.ok(queries > 0, "leaving even a green replay releases its authority for the next race");
 });
+
+
+test("manual settlement shares the corrected-time opportunity, even after an ordinary wait was armed", () => {
+  const R = load(), player = { human: true, finished: true, finishT: 100, penalty: 0 };
+  const rival = { finished: false }, cars = [player, rival], post = { solo: true, since: -1 };
+  R.finishDelay(cars, 100, 3, 0, post);
+  assert.equal(post.since, 100);
+  player.penalty = 10;
+  assert.equal(R.finishPending(cars, 101, 3, 0), true);
+  assert.equal(R.finishDelay(cars, 101, 3, 0, post), 0);
+  assert.equal(R.finishPending(cars, 110, 3, 0), false);
+  rival.finished = true;
+  assert.equal(R.finishPending(cars, 103, 3, 0), false, "actual rival finish permits immediate settlement");
+});

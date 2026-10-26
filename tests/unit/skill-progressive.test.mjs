@@ -41,27 +41,24 @@ test("mcp-probe SKILL.md stays a thin index (not the war-story dump)", () => {
   const lines = skill.split("\n").length;
   assert.ok(lines <= 120,
     `mcp-probe/SKILL.md is ${lines} lines — move traps/recipes to references/ (cap 120)`);
-  assert.match(skill, /references\/traps\.md/);
-  assert.match(skill, /references\/recipes\.md/);
+  for (const ref of ["references/traps.md", "references/recipes.md"]) assert.ok(skill.includes(ref), `SKILL.md no longer points at ${ref}`);
 });
 
 test("mcp-probe references keep the measured traps and recipes", () => {
-  const traps = fs.readFileSync(path.join(MCP, "references/traps.md"), "utf8");
-  const chrome = fs.readFileSync(path.join(MCP, "references/traps-chrome.md"), "utf8");
-  const camera = fs.readFileSync(path.join(MCP, "references/traps-camera.md"), "utf8");
+  // Index stays thin; war stories live in chrome / camera / scene slices. One
+  // table, one assertion site: the phrases each reference must still carry.
+  const keeps = {
+    "references/traps.md": [/never render in the MCP browser while Playwright/, /snapCam/, /traps-chrome\.md/, /traps-camera\.md/, /traps-scene\.md/],
+    "references/traps-chrome.md": [/never render in the MCP browser while Playwright/],
+    "references/traps-camera.md": [/snapCam/],
+    "references/recipes.md": [/tinyfish|deploy-check/, /Probing a specific renderer|secure context|navigator\.gpu/i],
+  };
+  for (const [file, res] of Object.entries(keeps)) {
+    const text = fs.readFileSync(path.join(MCP, file), "utf8");
+    for (const re of res) assert.match(text, re, `${file} lost ${re}`);
+  }
   const scene = fs.readFileSync(path.join(MCP, "references/traps-scene.md"), "utf8");
-  const recipes = fs.readFileSync(path.join(MCP, "references/recipes.md"), "utf8");
-  // Index stays thin; war stories live in chrome / camera / scene slices.
-  assert.match(traps, /never render in the MCP browser while Playwright/);
-  assert.match(traps, /snapCam/);
-  assert.match(traps, /traps-chrome\.md/);
-  assert.match(traps, /traps-camera\.md/);
-  assert.match(traps, /traps-scene\.md/);
-  assert.match(chrome, /never render in the MCP browser while Playwright/);
-  assert.match(camera, /snapCam/);
   assert.ok(scene.split("\n").length > 40, "traps-scene.md lost its measured content");
-  assert.match(recipes, /tinyfish|deploy-check/);
-  assert.match(recipes, /Probing a specific renderer|secure context|navigator\.gpu/i);
 });
 
 test("every skill: name matches folder, description has a trigger, body ≤ 500 lines", () => {
@@ -318,14 +315,14 @@ test("every custom subagent declares name, description, and model", () => {
   // does not silently pick a different model; readonly / is_background optional.
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
   assert.deepEqual(files.sort(), [
-    "agent-surface-reviewer.md", "bloat-auditor.md", "ci-red-triage.md", "ci-watcher.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
-    "merge-desk.md", "physics-contract-auditor.md", "prior-art-scout.md", "release-auditor.md", "track-surveyor.md", "verify-agent.md", "worker.md",
-  ], "fourteen agents since 2026-10-16 (release-auditor added; merge-desk and worker added; agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-watcher 2026-10-10; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+    "agent-surface-reviewer.md", "bloat-auditor.md", "ci-red-triage.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
+    "physics-contract-auditor.md", "prior-art-scout.md", "track-surveyor.md", "verify-agent.md", "worker.md",
+  ], "eleven agents since 2026-10-26 (ci-watcher and merge-desk deleted with the retired Merge Desk; release-auditor → deploy-research; worker 2026-10-15; agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
   // Model tiering (2026-09-22): a scan-and-report agent runs on a cheaper
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
     "bloat-auditor.md": "sonnet", "deploy-research.md": "haiku", "verify-agent.md": "haiku",
-    "ci-red-triage.md": "sonnet", "ci-watcher.md": "haiku", "physics-contract-auditor.md": "sonnet", "track-surveyor.md": "inherit",
+    "ci-red-triage.md": "sonnet", "physics-contract-auditor.md": "sonnet", "track-surveyor.md": "inherit",
     // 2026-10-14: hunt agents. code-hunter is the ONE opus pin (depth is the
     // product, 4 of 11 hunt campaigns asked for opus); verify on sonnet, recall on haiku.
     "code-hunter.md": "opus", "finding-verifier.md": "sonnet", "prior-art-scout.md": "haiku",
@@ -335,11 +332,6 @@ test("every custom subagent declares name, description, and model", () => {
     // 2026-10-15: the all-tools implementation worker runs on the session's
     // model, like track-surveyor — it writes code, so no cheaper tier.
     "worker.md": "inherit",
-    // 2026-10-15: Merge Desk readies, arms and launches lane workers — judgement,
-    // so it runs on the session's model.
-    "merge-desk.md": "inherit",
-    // 2026-10-16: read-only release verification; scan-and-report, so the cheap tier.
-    "release-auditor.md": "haiku",
   };
   const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
@@ -431,7 +423,7 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
 });
 
 test("readonly review agents stay --fast and never start Playwright", () => {
-  for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research", "ci-red-triage", "ci-watcher",
+  for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research", "ci-red-triage",
     "code-hunter", "finding-verifier", "prior-art-scout"]) {
     const file = path.join(AGENTS, `${id}.md`);
     assert.ok(fs.existsSync(file), `missing .claude/agents/${id}.md`);

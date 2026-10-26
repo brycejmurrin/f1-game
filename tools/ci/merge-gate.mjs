@@ -97,6 +97,14 @@ export const slotOf = (e) => {
   return { pr: m ? Number(m[1]) : null, from: e.from, at: e.at, text };
 };
 
+/** The newest INCIDENT line the pacing check honoured, as one printable string, or "" when the bus has none. Print-only. Pure. */
+export function incidentNote(entries) {
+  const e = [...(entries || [])].reverse().find((x) => x.type === "INCIDENT");
+  if (!e) return "";
+  const lifted = /\blifted\b/i.test(e.text);
+  return `INCIDENT ${lifted ? "lifted" : "OPEN (freezes game merges)"}: from:${e.from} ${e.text.slice(0, 160)}`;
+}
+
 /**
  * Game pacing from the bus entries (oldest first). Pure except `pagesGreen(sha)` → true | false | null (pending).
  * now in unix seconds.
@@ -183,31 +191,42 @@ const git = (args, cwd = ROOT, extra = {}) => spawnSync("git", args, { cwd, enco
  * a ceiling on their own base can exceed it together: #3236 and #3237 took assert.match from 7316 to 7317 on the
  * deploy tip, and two Pages trains went red (2026-10-20). The PR's own CI tests the merge ref as of ITS last run,
  * so a base that moved afterwards is not covered; this reruns the checks against the base as it is now.
- * Two checks: tools/check/ratchets.mjs (file and tree-wide metrics; exit 1 on overage) and the assert.match
- * ceiling test. Returns { ok, evidence }; a check that cannot run is a failure, never a pass.
+ * Checks: tools/check/ratchets.mjs (file and tree-wide metrics, the pin counters among them; exit 1 on overage) and
+ * the whole-tree count tests below. Returns { ok, evidence }; a check that cannot run is a failure, never a pass.
  */
 export function ratchetsOnMerge({ cwd = ROOT, run = spawnSync } = {}) {
   const tail = (r) => `${r.stdout || ""}\n${r.stderr || ""}`.split("\n").map((l) => l.trim()).filter(Boolean).slice(-2).join(" | ").slice(0, 220);
+  // The whole-tree count family (system audit 2026-10-26: 63 of 86 named red-PR failures in three days). Each runs on
+  // the merge result here, so a PR that is green on its own merge ref but over once the tip moved is refused before
+  // the merge instead of turning the train red after it.
+  const counted = [
+    ["assert-match ceiling", "assert-match-ratchet"], ["source-pin ceiling", "source-pin-hygiene"],
+    ["vm-filename ceiling", "vm-filename-lint"], ["test-groups", "test-groups"],
+    ["docs-integrity", "docs-integrity"], ["output-surface", "output-surface"],
+  ];
   const steps = [
     { name: "ratchets.mjs", argv: ["tools/check/ratchets.mjs"] },
-    { name: "assert-match ceiling", argv: ["--test", "tests/unit/assert-match-ratchet.test.mjs"] },
+    ...counted.map(([name, file]) => ({ name, argv: ["--test", `tests/unit/${file}.test.mjs`] })),
   ];
   // `node --test` started inside another node test inherits NODE_TEST_CONTEXT and then exits 0 on a failing
   // test (measured 2026-10-21: inherited exit 0, stripped exit 1), which would turn this gate into a pass.
-  const env = { ...process.env };
+  // The merge worktree's HEAD is the deploy tip and its working tree the merge result, so the pin counters judge
+  // the growth THIS merge adds (ratchets.mjs ratchetMode): an overage the tip already carries is not this PR's.
+  const env = { ...process.env, APEX_RATCHET_BASE_REF: "HEAD" };
   delete env.NODE_TEST_CONTEXT;
+  delete env.APEX_RATCHET_ABSOLUTE;
   const bad = [];
   for (const s of steps) {
     const r = run(process.execPath, s.argv, { cwd, env, encoding: "utf8", timeout: 180_000, maxBuffer: 16 << 20 });
     if (r.error || r.status !== 0) {
-      // The assert-match test prints its own "N assert.match sites (ceiling M)" line: that is the evidence worth keeping.
-      const sites = `${r.stdout || ""}`.match(/\d+ assert\.match sites \(ceiling \d+\)/);
+      // A counter test prints its own "N <what> (ceiling M)" line: that is the evidence worth keeping.
+      const sites = `${r.stdout || ""}`.match(/\d+ [\w. -]+ \(ceiling \d+[^)]*\)/);
       bad.push(`${s.name}: ${sites ? sites[0] : r.error ? r.error.message : tail(r) || "exit " + r.status}`);
     }
   }
   return bad.length
     ? { ok: false, evidence: `over a ratchet on the merge result: ${bad.join("; ")} — convert the pins or extract, never raise the ceiling for someone else's overage` }
-    : { ok: true, evidence: "ratchets.mjs and the assert.match ceiling hold on the merge result" };
+    : { ok: true, evidence: "ratchets.mjs and the whole-tree count tests hold on the merge result" };
 }
 
 /**
@@ -283,7 +302,11 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--sk
   the last game merge. Writes artifacts/merge-gate/<n>.json, which github-mcp-guard.sh requires on merge_pull_request
   with expectedHeadSha pinned to the gated head (docs/plans/2026-10-19-fleet-redesign.md).`;
 
-export function main(argv, { request = api, root = ROOT, env = process.env, now = () => Date.now(), bus = readBus, localMerge = localMergeGenCheck, pages = pagesGreenFor, log = console.log } = {}) {
+/** Backoff before each re-read of a PR whose mergeable_state is still `unknown` (GitHub computes it lazily). */
+export const UNKNOWN_RETRY_MS = [2000, 4000, 8000];
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+export function main(argv, { request = api, root = ROOT, env = process.env, now = () => Date.now(), bus = readBus, localMerge = localMergeGenCheck, pages = pagesGreenFor, log = console.log, sleep = sleepSync, unknownRetryMs = UNKNOWN_RETRY_MS } = {}) {
   exitIfHelp(argv, USAGE);
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   const pr = Number(opt("--pr"));
@@ -292,8 +315,19 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
   const skipLocal = argv.includes("--skip-local-merge");
   const me = whoAmI(env, opt("--as") || "");
 
-  const one = request(`pulls/${pr}`);
+  let one = request(`pulls/${pr}`);
   if (one.error) { log(`[merge-gate] = merge-gate unknown — PR #${pr}: ${one.error}`); return 3; }
+  // `mergeable_state: unknown` means GitHub has not computed it yet (the first read after a push often says so):
+  // re-read up to 3 times with backoff instead of refusing the row (2026-10-26 system audit; user grant, Bryce
+  // 2026-10-26 ~23:00 PT: "Fix hook or guard or perm"). Still unknown after that: the open row refuses as before.
+  for (const ms of unknownRetryMs) {
+    const j = one.json || {};
+    if (j.state !== "open" || String(j.mergeable_state || "unknown") !== "unknown") break;
+    sleep(ms);
+    const again = request(`pulls/${pr}`);
+    if (again.error) break;
+    one = again;
+  }
   const pull = one.json || {};
   const head = String(pull.head?.sha || "").toLowerCase();
   const want = String(opt("--sha") || "").toLowerCase();
@@ -327,8 +361,10 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
   }
 
   const game = gameFiles(resolved.files || []);
+  let incident = "";
   if (game.length) {
     const b = bus({ cwd: root, last: 200 });
+    incident = incidentNote(b.entries);
     rows.pacing = pacingVerdict(b.entries, { pr, me, pagesGreen: (sha) => pages(sha, request, isAncestor(root)), now: Math.floor(now() / 1000) });
   } else rows.pacing = row(true, "non-game paths: no slot needed");
 
@@ -340,6 +376,7 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
   if (asJson) log(JSON.stringify(v, null, 2));
   else {
     log(`[merge-gate] ${verdictLine(v)}`);
+    if (incident) log(`[merge-gate] ${incident}`);
     if (ok) log(`[merge-gate] merge now: merge_pull_request pullNumber=${pr} merge_method=merge expectedHeadSha=${head} commit_title=${JSON.stringify(v.merge.commit_title)} commit_message=${JSON.stringify(v.merge.commit_message)} (pass them verbatim: the Merged-by trailer is how the merge is attributed); then \`git log -1 --format=%p <merge sha>\` shows two parents and \`fleet-bus.mjs send DONE\`.`);
   }
   return ok ? 0 : 1;

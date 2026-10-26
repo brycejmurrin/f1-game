@@ -20,11 +20,10 @@ CHANGELOG: add a fragment `docs/changelog.d/<slug>.md` (lines `Fixed: …`; neve
 - [ ] **now:**
 - [ ]
 
-<!-- Merge hold: to block merging AND arming, add a line that STARTS with
-     `MERGE-HOLD: <reason>` right here, outside this comment; delete that line as
-     soon as the hold is over. It is the ONLY veto. "do not merge", "do not enable
-     auto-merge" or any other wording is NOT a veto: never paste such lines here.
-     Every merge is a merge commit (AGENTS.md §Cursor Cloud specific instructions). -->
+<!-- Merge hold (the rule: .claude/rules/fleet-core.md): add, outside this comment,
+     `MERGE-HOLD: <reason> | lift: <who> | until: <time or event>` and delete it when
+     the hold is over. A wait on something ("deploy gate pending") is a Plan item,
+     not a hold. Never paste "do not merge" wording here. -->
 
 ## Status
 <!-- Paste `node tools/ci/session-status.mjs --pr` output here and refresh it at every push.

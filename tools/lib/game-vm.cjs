@@ -425,6 +425,9 @@ function buildSandbox(opts) {
     con[m] = (...a) => { record.console.push([m, a.map((x) => (typeof x === "string" ? x : safeStr(x))).join(" ")]); if (echo) console[m === "assert" ? "log" : m](...a); };
   }
 
+  // Each game VM has isolated storage and its own origin lock manager. Model
+  // async acquisition and lifetime ownership; browser cross-tab tests use real locks.
+  const vmLocks = new Set();
   const sandbox = {
     console: con,
     performance,
@@ -454,6 +457,12 @@ function buildSandbox(opts) {
       hardwareConcurrency: 4, maxTouchPoints: 0, deviceMemory: 8, vendor: "", cookieEnabled: true,
       getGamepads: () => [], vibrate: () => false, sendBeacon: () => false,
       permissions: { query: () => Promise.reject(new Error("no permissions")) },
+      locks: { request: (name, _options, callback) => Promise.resolve().then(async () => {
+        if (vmLocks.has(name)) return callback(null);
+        vmLocks.add(name);
+        try { return await callback({ name, mode: "exclusive" }); }
+        finally { vmLocks.delete(name); }
+      }) },
     },
     screen: { width: 1280, height: 720, availWidth: 1280, availHeight: 720, colorDepth: 24, pixelDepth: 24,
       orientation: { type: "landscape-primary", angle: 0, addEventListener: noop, removeEventListener: noop,

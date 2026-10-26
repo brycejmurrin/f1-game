@@ -129,6 +129,31 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `shadow-pass.js` | `ShadowPass` | tag | ShadowPass: the three shadow-map passes out of js/game.js — the snap-cached SUN map (terrain + road ribbons + props, rebuilt when the camera crosses a… |
 | `mirror-pass.js` | `MirrorPass` | tag | MirrorPass: the HUD REAR-VIEW MIRROR. |
 
+**`js/perf/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `gfx-escalation.js` | `GfxEscalation` | tag | GfxEscalation: when a backend exhausts its ctx-lost reload budget, decide between the terminal Graphics unavailable panel and an in-tab title-menu recovery… |
+| `thermal-drift.js` | `ThermalDrift` | tag | ThermalDrift: a pure, clock-free helper for a phone that throttles over a long session (#2652). |
+| `governor.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
+| `menu-teardown.js` | `MenuTeardown` | tag | MenuTeardown: software-GL readback cover, sync-task probes, and UI-yield helpers for quit-to-menu and garage-close teardown. |
+| `menu-quit-tail.js` | `MenuQuitTail` | tag | deferred quit-to-menu tail (js/game.js quitToMenu after #overlay is up). |
+| `loop-health.js` | `LoopHealth` | tag | LoopHealth: the frame-loop fault policy and the one heartbeat that outlives the loop. |
+| `render-rate.js` | `RenderRate` | tag | RenderRate: draw every second requestAnimationFrame when a PHONE's display delivers rAF at 100 Hz or more. |
+| `spans.js` | `PerfSpans` | tag | PerfSpans: the per-subsystem frame budget. begin(name)/end(name) bracket a phase of the frame loop (game.js tickBody: frame, input, physics, ai, collide,… |
+| `race-entry-profile.js` | `RaceEntryProfile` | tag | RaceEntryProfile: the race-entry stopwatch OUTSIDE the track build. |
+| `title-warm.js` | `TitleWarm` | tag | TitleWarm: the race world's prep and program warm on an idle TITLE (A·W50, 2026-10-25). |
+| `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
+| `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
+| `gfx-debug-overlay.js` | `GfxDebug` | tag | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
+| `three-inspector.js` | `ThreeInspector` | tag | ThreeInspector: OPT-IN dev panel, the official three.js Inspector (Performance / Memory / Timeline / Viewer / Parameters / Console) on the TLX renderer. |
+| `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
+| `soak-run.js` | `SoakRun` | tag | SoakRun: the hands-free half of PhoneRecorder (AUTO SOAK). |
+| `gpu-test-run.js` | `GpuTestRun` | tag | GpuTestRun: the one-tap GPU TEST on a real phone (SETTINGS > METRICS > PHONE TEST > GPU TEST). |
+| `phone-recorder.js` | `PhoneRecorder` | tag | PhoneRecorder: a phone-only soak recorder (issue #1633). |
+| `bench-capture.js` | `BenchCapture` | tag | BenchCapture: the profiling record BENCHMARK (js/perf/bench-run.js) writes beside its frame stats. |
+| `bench-run.js` | `BenchRun` | tag | BenchRun: SETTINGS > GRAPHICS > BENCHMARK, a hands-free device benchmark with a results file. |
+
 **`js/render/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
@@ -560,30 +585,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `feed.js` | `OverlayFeed` | tag | stream/broadcast overlay frame schema. |
 | `render.js` | `OverlayRender` | tag | transform-only DOM painter for overlay.html. |
 
-**`js/perf/`**
-
-| File | Global | Loaded | Purpose (header, first sentence) |
-|---|---|---|---|
-| `thermal-drift.js` | `ThermalDrift` | tag | ThermalDrift: a pure, clock-free helper for a phone that throttles over a long session (#2652). |
-| `governor.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
-| `menu-teardown.js` | `MenuTeardown` | tag | MenuTeardown: software-GL readback cover, sync-task probes, and UI-yield helpers for quit-to-menu and garage-close teardown. |
-| `menu-quit-tail.js` | `MenuQuitTail` | tag | deferred quit-to-menu tail (js/game.js quitToMenu after #overlay is up). |
-| `loop-health.js` | `LoopHealth` | tag | LoopHealth: the frame-loop fault policy and the one heartbeat that outlives the loop. |
-| `render-rate.js` | `RenderRate` | tag | RenderRate: draw every second requestAnimationFrame when a PHONE's display delivers rAF at 100 Hz or more. |
-| `spans.js` | `PerfSpans` | tag | PerfSpans: the per-subsystem frame budget. begin(name)/end(name) bracket a phase of the frame loop (game.js tickBody: frame, input, physics, ai, collide,… |
-| `race-entry-profile.js` | `RaceEntryProfile` | tag | RaceEntryProfile: the race-entry stopwatch OUTSIDE the track build. |
-| `gfx-escalation.js` | `GfxEscalation` | tag | GfxEscalation: when a backend exhausts its ctx-lost reload budget, decide between the terminal Graphics unavailable panel and an in-tab title-menu recovery… |
-| `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
-| `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
-| `gfx-debug-overlay.js` | `GfxDebug` | tag | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
-| `three-inspector.js` | `ThreeInspector` | tag | ThreeInspector: OPT-IN dev panel, the official three.js Inspector (Performance / Memory / Timeline / Viewer / Parameters / Console) on the TLX renderer. |
-| `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
-| `soak-run.js` | `SoakRun` | tag | SoakRun: the hands-free half of PhoneRecorder (AUTO SOAK). |
-| `gpu-test-run.js` | `GpuTestRun` | tag | GpuTestRun: the one-tap GPU TEST on a real phone (SETTINGS > METRICS > PHONE TEST > GPU TEST). |
-| `phone-recorder.js` | `PhoneRecorder` | tag | PhoneRecorder: a phone-only soak recorder (issue #1633). |
-| `bench-capture.js` | `BenchCapture` | tag | BenchCapture: the profiling record BENCHMARK (js/perf/bench-run.js) writes beside its frame stats. |
-| `bench-run.js` | `BenchRun` | tag | BenchRun: SETTINGS > GRAPHICS > BENCHMARK, a hands-free device benchmark with a results file. |
-
 **`js/xr/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
@@ -876,7 +877,7 @@ resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
 |---|---|---|
 | unset / `"three"` | **TLX** | three.js r186 + TSL — the shipped default; WebGPU with automatic WebGL2 fallback inside three |
 | `"webgl2"` | **GLX** | Explicit WebGL2 pick and fallback backend |
-| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md) |
+| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md) |
 
 TLX is the default when the key is absent; explicit GLX and WGX picks still
 win. The pause-menu
@@ -917,7 +918,7 @@ survivable, not a claim that every phone looks right.
 feature exists there until you have read the backend object — a missing name
 must stay an explicit `undefined` so game.js does not inherit a dead GLX
 function. The 2026-08 parity pass (recipes in
-[../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md)) landed:
+[../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md)) landed:
 
 - `gpuTimer` / `gpuMs` via `"timestamp-query"` (unsupported if the bit is absent)
 - baked material arrays (`createTextureArray` / `setMaterialMaps` / `matTexMix`)
@@ -1563,7 +1564,7 @@ from the console or a headless harness — loading/positioning
 (probe/physState/tuning/cars/corners/wallStats), deterministic physics
 (setInput/clearInput/step/setPhysics), and collision/AI scenarios
 (rival/rivals/pair/jam). Full reference in [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
-Per-circuit scenery design briefs live in [docs/tracks/](tracks/).
+Per-circuit scenery design briefs live in [docs/tracks/](tracks).
 
 ## index.html / css
 
@@ -1592,7 +1593,7 @@ project").
 
 How GLX, WGX, and TLX share one draw-API seam. Module contracts and API
 signatures live in [ARCHITECTURE.md](ARCHITECTURE.md); WGX gap recipes in
-[../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md). This page is the
+[../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md). This page is the
 boot / pipeline / parity map.
 
 ### Mental model
@@ -2015,7 +2016,7 @@ auditing drift after a lighting or rendering change. Night-looks-wrong is a
 
 **The rule: a GLX fix is not done until it is mirrored in WGX and TLX — or
 recorded as a gap** in §Parity snapshot above and in the defect inventory
-[../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md).
+[../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md).
 
 1. `node --test tests/unit/backend-surface-parity.test.mjs` first — the
    façade must carry the same member names on all three backends (a missing

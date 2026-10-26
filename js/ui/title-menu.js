@@ -95,6 +95,43 @@ const TitleMenu = (function () {
     return true;
   }
 
+  // A textContent write replaces the text node even when the string is the
+  // same. #menu-buttons / #overlay are ScrollFade subtrees, so that childList
+  // record schedules paintAll — getComputedStyle + scrollHeight on every open
+  // pane. At UI scale 200% the title column is the zoomed scrollport (menus.css),
+  // and quit-to-menu already refreshes these doors on that same turn.
+  function setText(node, text) {
+    if (node && node.textContent !== text) node.textContent = text;
+  }
+  function setAttr(node, name, value) {
+    if (node && node.getAttribute(name) !== value) node.setAttribute(name, value);
+  }
+  function setHidden(node, hidden) {
+    if (node && node.hidden !== hidden) node.hidden = hidden;
+  }
+
+  // "N SAVED" only. Career.slots() migrate-clones every slot
+  // (JSON.parse(JSON.stringify) inside readSlot) — a multi-save career is
+  // hundreds of KB on the title paint, including every return from a race.
+  // The raw string is enough to know a slot is occupied; a stored null is
+  // the JSON text "null". The live career counts even when its disk write
+  // has not landed yet.
+  function usedSaveCount(store, live) {
+    const slot = live && Career.slot ? Career.slot() : null;
+    const liveKey = slot ? ("career." + slot.flavour + "." + (slot.i | 0)) : "";
+    let n = slot ? 1 : 0;
+    if (!store || typeof store.raw !== "function") return n;
+    for (const flavour of ["driver", "myteam"]) {
+      for (let i = 0; i < 3; i++) {
+        const key = "career." + flavour + "." + i;
+        if (key === liveKey) continue;
+        const text = store.raw(key);
+        if (text && text !== "null") n++;
+      }
+    }
+    return n;
+  }
+
   function create(G) {
     Log.info("game", "TitleMenu.create");
     const { $ } = G;
@@ -102,23 +139,25 @@ const TitleMenu = (function () {
 
     function refresh() {
       const btn = $("mb-career");
-      const c = Career.data() || Career.load();
-      const cal = Career.calendar ? Career.calendar() : Tracks.SEASON;   // the stamped season, not whatever this build ships
-      const used = Career.slots().filter((s) => s.used).length;
+      // Paint must not Career.load(): that migrates and may write the slot
+      // pointer. Boot and the career store subscriber already load first.
+      const c = Career.data();
+      const cal = c ? (Career.calendar ? Career.calendar() : Tracks.SEASON) : null;   // the stamped season, not whatever this build ships
       if (btn) {
         const label = btn.querySelector(".mb-label");
-        if (label) label.textContent = "CAREER MODES";
+        setText(label, "CAREER MODES");
         const sub = $("mb-career-sub");
         if (sub) {
-          if (!c) sub.textContent = "DRIVER CAREER  ·  MY TEAM";
+          if (!c) setText(sub, "DRIVER CAREER  ·  MY TEAM");
           else {
             const team = Teams.LIST.find((t) => t.id === c.team);
             const who = c.flavour === "myteam" ? "MY TEAM" : (c.driver ? c.driver.code : "YOU");
-            sub.textContent = who + " · " + String(team ? team.name : c.team).toUpperCase()
+            const used = usedSaveCount(G.store, c);
+            setText(sub, who + " · " + String(team ? team.name : c.team).toUpperCase()
               + " · " + c.year + " R" + Math.min(c.season.round + 1, cal.length)
-              + (used > 1 ? "  ·  " + used + " SAVED" : "");
+              + (used > 1 ? "  ·  " + used + " SAVED" : ""));
           }
-          btn.setAttribute("aria-label", "Career modes — " + sub.textContent);
+          setAttr(btn, "aria-label", "Career modes — " + sub.textContent);
         }
       }
 
@@ -127,28 +166,28 @@ const TitleMenu = (function () {
         // Priority: open career → daily streak / unfinished yesterday → lastSession.
         const hint = (typeof ShareCode !== "undefined" && ShareCode.continueHint)
           ? ShareCode.continueHint(G) : (c ? { kind: "career" } : null);
-        cont.hidden = !hint;
+        setHidden(cont, !hint);
         cont._apexContinue = hint || null;
         if (hint) {
           if (hint.kind === "career" && c && !hint.sub) {
             // ShareCode absent: the same stamped-calendar line continueHint builds
             const next = cal[Math.min(c.season.round, cal.length - 1)];
-            contSub.textContent = c.year + " · ROUND " + Math.min(c.season.round + 1, cal.length)
-              + (next ? " · " + next.name : "");
+            setText(contSub, c.year + " · ROUND " + Math.min(c.season.round + 1, cal.length)
+              + (next ? " · " + next.name : ""));
           } else {
-            contSub.textContent = hint.sub || "";
+            setText(contSub, hint.sub || "");
           }
-          cont.setAttribute("aria-label", "Continue — " + contSub.textContent);   // starts with the visible "CONTINUE"
+          setAttr(cont, "aria-label", "Continue — " + contSub.textContent);   // starts with the visible "CONTINUE"
         }
       }
 
       const dailyBtn = $("mb-daily"), dailySub = $("mb-daily-sub");
       if (dailyBtn && dailySub) {
         const p = G.daily.plan(), streak = G.daily.liveStreak ? G.daily.liveStreak() : 0;   // a broken streak is not shown
-        dailySub.textContent = p.trackName + " · " + p.weather.toUpperCase()
-          + (streak > 0 ? " · STREAK " + streak : "");
+        setText(dailySub, p.trackName + " · " + p.weather.toUpperCase()
+          + (streak > 0 ? " · STREAK " + streak : ""));
         // WCAG 2.5.3 (label in name): the name must contain the visible label, "DAILY TIME TRIAL".
-        dailyBtn.setAttribute("aria-label", "Daily time trial — " + dailySub.textContent);
+        setAttr(dailyBtn, "aria-label", "Daily time trial — " + dailySub.textContent);
       }
     }
 
