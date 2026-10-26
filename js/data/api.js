@@ -418,7 +418,7 @@ const F1API = (function () {
   }
 
   // car telemetry samples within a time window: speed/throttle/brake/gear/rpm/drs
-  function carData(sessionKey, driverNumber, startISO, endISO) {
+  function carData(sessionKey, driverNumber, startISO, endISO, originISO) {
     return windowed("/car_data", sessionKey, driverNumber, startISO, endISO).then(function (list) {
       // Same dropout rule as locationData: an unparseable date must not become
       // t:0 / date:0. That row sorted to the lap start (or broke monotonic t for
@@ -436,7 +436,9 @@ const F1API = (function () {
         });
       }
       const ordered = orderedSamples(out);
-      const t0 = ordered.length ? ordered[0].date : 0;
+      const origin = Date.parse(originISO);
+      const start = isFinite(origin) ? origin : Date.parse(startISO);
+      const t0 = isFinite(start) ? start : ordered.length ? ordered[0].date : 0;
       return ordered.map(function (row) { row.t = (row.date - t0) / 1000; return row; });
     });
   }

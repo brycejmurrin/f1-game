@@ -12,4 +12,4 @@ Bryce (2026-10-21 03:43Z): "Make sure we save our current tasks constantly and m
 
 **Why:** orchestrators rotate at 200k context and containers get reclaimed; the queue, lane roster and merge order must survive without anyone re-deriving them.
 
-**How to apply:** keep `scratch/orch<fleet><gen>/QUEUE.md` (gate state, numbered merge order, lane table with session ids, pending Bryce asks) on a pushed `cursor/orch…-queue-…` branch that is never merged; refresh + push it on every tick and after every merge, routing change or launch; name it in the successor's handoff brief. Related: [[orchestrator-tick-3min]].
+**How to apply:** keep `scratch/orch<fleet><gen>/QUEUE.md` (gate state, numbered merge order, lane table with session ids, pending Bryce asks) on a pushed `cursor/orch…-queue-…` branch that is never merged; refresh + push it on every wake and after every merge, routing change or launch; name it in the successor's handoff brief. Keep the live part ≤ 40 lines (`tools/ci/fleet-brief.mjs`); history stays in `git log` (audit 2026-10-26).

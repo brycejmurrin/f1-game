@@ -33,6 +33,15 @@ window.CamModes = (function () {
   function create(G) {
     Log.info("game", "CamModes.create");
     const $ = G.$;
+    // Temporary lifetimes can end out of order (WATCH under XR). Only live
+    // owners participate in restoration; none saves another owner's camera.
+    const cameraOwners = new Map();
+    let baseCamera = G.camMode;
+    function pictureOwner() {
+      let top = null;
+      for (const entry of cameraOwners.values()) if (!top || entry.priority >= top.priority) top = entry;
+      return top;
+    }
 
     // A REAL RACE WATCH (js/race/real-replay.js): its TV director is one more
     // "camera" — AUTO — in the picker and the C / CAM cycle. Never a CAM_MODES
@@ -90,6 +99,27 @@ window.CamModes = (function () {
         if (!Number.isFinite(idx)) idx = 0;
       }
       idx = ((idx % n) + n) % n;
+      const owner = opts && opts.owner;
+      if (owner) {
+        if (opts.release) {
+          if (!cameraOwners.delete(owner)) return CAM_MODES[G.camMode].id;
+        } else {
+          if (!cameraOwners.size) {
+            const base = Number(G.camMode);
+            baseCamera = Number.isFinite(base) ? ((base % n) + n) % n : 0;
+          }
+          const entry = cameraOwners.get(owner);
+          if (entry) entry.idx = idx;
+          else cameraOwners.set(owner, { idx, priority: Number(opts.priority) || 0 });
+        }
+        const top = pictureOwner();
+        idx = top ? top.idx : baseCamera;
+      } else {
+        // Explicit controls remain usable during a temporary view. A WATCH
+        // selection belongs to that view and never replaces the driving base.
+        const top = pictureOwner();
+        if (top) top.idx = idx;
+      }
       // -1 when the stored index was already poisoned: recovering must cut /
       // resetFollow, not compare equal to the freshly sanitised idx.
       const prevRaw = Number(G.camMode);
@@ -98,7 +128,10 @@ window.CamModes = (function () {
       // opts.persist === false: ephemeral override (WebXR cockpit) — do not
       // write apex26.camMode so EXIT VR restores the player's saved choice.
       const replay = typeof RealRace !== "undefined" && RealRace.replay ? RealRace.replay() : null;
-      if (!(opts && opts.persist === false) && !(replay && replay.isRunning())) G.store.set("camMode", G.camMode);
+      if (!owner && !(opts && opts.persist === false) && !(replay && replay.isRunning())) {
+        baseCamera = G.camMode;
+        G.store.set("camMode", G.camMode);
+      }
       if (G.camMode !== prev) {
         G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut ?? 0.35;   // cut: 0 is an instant cut, not missing
         const from = (prev >= 0 && CAM_MODES[prev]) ? CAM_MODES[prev].id : "?";

@@ -1,6 +1,6 @@
 ---
 name: deploy-research
-description: Public-web and post-deploy research — `curl` for the deployed artifact (it reaches github.io from this container and is the only way to read a `<meta>` tag), the host fetch/search tools for prose pages and search. Use proactively for live apex-sha / version.json / shipped JS markers, deploy lag checks, and external track or reference gathering that would flood the main context. Never Chrome DevTools, never Playwright, never the in-repo tinyfish wrapper.
+description: Public-web and post-deploy research — `curl` for the deployed artifact (it reaches github.io from this container and is the only way to read a `<meta>` tag), the host fetch/search tools for prose pages and search. Use proactively for live apex-sha / version.json / shipped JS markers, exact-byte asset hashes and headers, deploy lag checks, and external track or reference gathering that would flood the main context. Never Chrome DevTools, never Playwright, never the in-repo tinyfish wrapper.
 model: haiku
 omitClaudeMd: true
 maxTurns: 30
@@ -49,8 +49,8 @@ return a short summary with citations (URLs + live vs local build numbers).
    **STALE-IN-TRAIN** when `LIVE` is an older ancestor of TIP and the train
    is still carrying TIP — the tip's `pages.yml` run is queued or in progress,
    or TIP's commit is younger than the release-train window (AGENTS.md §Git
-   branch & deploy, the "RELEASE TRAIN" paragraph: gated publish median 23 min,
-   p90 73 — read the figures there, they move); **STALE** when `LIVE` is an
+   branch & deploy, the "RELEASE TRAIN" paragraph — read the figures there,
+   they move); **STALE** when `LIVE` is an
    older ancestor and the window has passed with no live `pages.yml` run for
    TIP (`curl -sS "https://api.github.com/repos/brycejmurrin/f1-game/actions/workflows/pages.yml/runs?head_sha=<TIP>&per_page=1"`); **UNKNOWN** when `LIVE` is empty (site unreadable, meta
    missing) or not in this clone's history (`git cat-file -e <live sha>` fails on a
@@ -78,6 +78,21 @@ return a short summary with citations (URLs + live vs local build numbers).
    `*` `_` and backticks, and may TRUNCATE a large file: an ABSENT marker
    past the first few KB is **not a verdict** — say so and fall back to git
    provenance (is the commit an ancestor of the deploy tip?).
+2b. **Exact bytes / hash evidence** (folded from the release-auditor agent,
+   2026-10-26). When the parent asks WHICH bytes shipped, not only whether a
+   commit did: `curl` the live `index.html` for the exact `<meta>` and script
+   tags, read its `?v=` values and service-worker references, then fetch each
+   requested URL with cache bypass and record status, content type, cache
+   headers, byte length and `sha256sum`. No list from the parent: sample
+   `sw.js`, `version.json` and 10 entries evenly spaced through the shell's
+   `apex-lazy-integrity` JSON block, and name the sample under unverified. A
+   failed or truncated fetch is UNVERIFIED evidence, never an absent marker.
+   `node tools/ci/verify-live.mjs <base-url> <root>` is GET-only but compares
+   against a STAMPED tree (pages.yml runs it on `_site`); against this checkout
+   the shell, `version.json` and `sw.js` always differ (`?v=dev`), so prefer
+   the tip's `pages.yml` `verify-live` job conclusion. Report one line per
+   asset: `ASSET <url> status=<s> bytes=<n> sha256=<digest> cache=<header>`;
+   a byte or provenance mismatch is verdict **MISMATCH**.
 3. **External grounding** — search, then fetch the best URLs. Prefer primary
    sources (FIA, circuit sites, official docs) over blogs.
 4. **From this container**, `curl` reaches github.io through the agent proxy.
@@ -87,7 +102,7 @@ return a short summary with citations (URLs + live vs local build numbers).
 
 ## Return format
 
-1. One-line verdict (OK / STALE-IN-TRAIN / STALE / UNKNOWN / findings).
+1. One-line verdict (OK / STALE-IN-TRAIN / STALE / MISMATCH / UNKNOWN / findings).
 2. Live build vs deploy-tip (and local) `version.json` when relevant.
 3. Bullet evidence with URLs.
 4. Anything left unverified — name it, do not invent it.

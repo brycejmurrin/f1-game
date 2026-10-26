@@ -619,3 +619,29 @@ test("host remove: evict stays in the room, broadcasts lobby LEFT, and rotates t
   assert.match(LOBBY_SRC, /wasHostEvictGuest \? "The host removed you from the room\." : "The host left the room\."/);
   assert.match(LOBBY_SRC, /t\._hostRemovedMe = true/);
 });
+
+
+test("a receiver with frozen physics validates and stamps the guest finish against the live shared clock", () => {
+  for (const frozen of [false, true]) {
+    const G = stubG(2), s = fakeSession(), net = NetPlay.create(G);
+    G.track.def = { id: "monza" }; G.raceT = 160;
+    Object.defineProperty(G, "netRaceT", { get: () => G.netNow == null ? G.raceT : G.netNow / 1000 });
+    const r = G.cars[1];
+    Object.assign(r, { lap: 3, s: 4900, speed: 60, gear: 5 });
+    net.start({ role: "host", session: s, interpDelayMs: 100 });
+    const pose = (at, lap, arc, speed) => {
+      s.deliverState(NetSnapshot.encodeSnapshot(at, [{ id: r.idx, car: { ...r, lap, s: arc, speed } }]));
+      net.tick(at);
+    };
+    for (let i = 0; i <= 80; i++) { G.raceT = 160 + i * 0.5; pose(160000 + i * 500, 3, 2500 + i * 30, 60); }
+    for (let i = 1; i < 20; i++) { if (!frozen) G.raceT = 200 + i * 0.5; pose(200000 + i * 500, 3, 4900 + i * 5, 10); }
+    s.deliver("lap", { lap: 4, time: 80, best: 80, code: r.code, fin: 210 });
+    pose(210000, 4, 0, 10); pose(210500, 4, 5, 10);
+    assert.equal(r.finished, true);
+    assert.equal(r.finishT, 210, "owner clock survives a ten-second receiver stall");
+    if (frozen) assert.equal(G.raceT, 200, "network timing needs no hidden physics");
+    G.raceT = 211; net.tick(211000);
+    assert.equal(r.finishT, 210, "foreground resume cannot change the latched timestamp");
+    net.stop("local");
+  }
+});

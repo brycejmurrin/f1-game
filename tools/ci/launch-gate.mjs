@@ -4,7 +4,7 @@
 // @section runner
 // @skill agent-fleet
 //
-// Why (docs/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md #5, D7/Q1): orchestrator.md
+// Why (docs/archive/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md #5, D7/Q1): orchestrator.md
 // §Pre-launch quota check says "at `allowed_warning` or worse, launch nothing",
 // and OrchA 33 still launched 7 sessions into a 75 % weekly quota. Prose did not
 // hold, so the rule is a receipt like merge-gate's: this tool reads ONE saved

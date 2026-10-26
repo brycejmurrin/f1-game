@@ -5,7 +5,8 @@ sessions and their transcripts etc", then "check much more frequently if
 possible and setup a system for it to constantly check and subscribe to all our
 prs", then "design a better agent role with all this setup". He picked, in the
 orchestrator's session (AskUserQuestion, 2026-10-19 ~04:55Z): **routine fixes,
-no merges**; **events plus 3-minute ticks**; **Sonnet**; **a live dashboard page**.
+no merges**; **events plus 3-minute ticks** (superseded 2026-10-26, below); **Sonnet**; **a live dashboard page**.
+(Cadence since #3773, 2026-10-26: the bus Monitor replaces the 3-minute tick — §Wake sources below; `orchestrator.md` §First acts.)
 
 One fleet-watch session runs per orchestrator. It finds problems in seconds to
 minutes, fixes the routine ones itself, and sends the orchestrator only what
@@ -28,9 +29,8 @@ needs a decision or a merge. Merging stays with the PR's own orchestrator
 - `create_session`: model `claude-sonnet-5-5`, `permission_mode: "auto"`,
   `source_url` + `source_revision` = the deploy branch, tags `f1-game-fleet`,
   `role:fleet-watch`.
-- The prompt carries this file's path, the orchestrator id, the Merge Desk id
-  (or `none`), `USER GRANTS:` quoting every standing grant verbatim with its date and the
-  session it was typed in (the quotes above included), and `STOP AT: 150k context`.
+- The prompt carries this file's path, `ORCHESTRATOR: fleet <X>`, `USER GRANTS:` quoting every standing grant verbatim with its date and the
+  session it was typed in (the quotes above included), and `STOP AT: 150k context` (launch-policy.md §Size stop).
   A changed grant is a relaunch with the amended brief, never a message: relayed grants are refused (authority.md).
 - One watcher at a time. Before launching, archive the old one and delete its
   pending `FLEET-WATCH` scheduled tasks (`list_triggers`).
@@ -71,10 +71,10 @@ Routine actions only; each one is logged in state and in the report.
 | Condition | Action | Guard |
 |---|---|---|
 | A PR is `conflict` or `stale-red` (needs-sync), and no live owner | `node tools/ci/sync-pr.mjs <branch> --push` | fleet PRs only; never Bryce's or a Cursor agent's own branch while its owner is live; one sync per PR per hour |
-| A job died before any test ran (checkout, install, runner lost) | `node tools/ci/ci-rerun.mjs <run_id>` (failed jobs only), once; it refuses superseded or live runs | at most one re-run per job and head (AGENTS.md §Concurrent PRs); a second failure is real |
+| A job died before any test ran (checkout, install, runner lost) | `node tools/ci/ci-rerun.mjs <run_id>` (failed jobs only), once; it refuses superseded or live runs | at most one re-run per job and head (AGENTS.md §Concurrent PRs, no approval needed); a second failure is real |
 | An open fleet PR has no live owner session | start one PR owner (role-pr-owner.md launch), model chosen per launch-policy §Model by task | skip Cursor-owned PRs and Bryce's own; pre-launch claim check |
 | A `working` worker is silent 30 min | one `status?` message | after a second silent 30 min, interrupt it and relaunch with its brief plus the evidence; at most once per worker, PR owners and reviewers only |
-| A session finished (DONE sent, its PR merged or closed, or its report posted) | `archive_session` | never the orchestrator, a Merge Desk, a session Bryce opened himself, or one with `needs_action` |
+| A session finished (DONE sent, its PR merged or closed, or its report posted) | `archive_session` | by `fleet-archive.mjs` only (`.claude/rules/fleet-core.md`); never one with `needs_action` |
 | A session parked on quota | note it; do not wake it | references/transcripts.md §4 |
 
 The watcher never: merges, arms auto-merge, marks a PR ready, pushes code of
@@ -114,7 +114,7 @@ republishing. Send its URL to the orchestrator once.
 
 ## Handoff
 
-Soft cap 150k context. At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft cap finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k hand off now (launch-policy.md §Size stop). Send
+At the size stop (launch-policy.md §Size stop) send
 `FLEET-WATCH HANDOFF | dashboard <url> | pending triggers <ids>` and stop arming ticks. State is in the
 dashboard `db`, so the handoff carries only the URL and the pending trigger ids. The orchestrator starts a
 fresh watcher from this card.

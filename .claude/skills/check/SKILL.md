@@ -1,6 +1,6 @@
 ---
 name: check
-description: "Use when the user types \"check\" or asks status: is it green, live, still running, branch state? Not sweeps (ci-watch), reds (steward) or test picks (check-changes)."
+description: "Use when the user types \"check\" or asks status: is it green, live, still running, branch state? Not PR sweeps or reds (steward) or test picks (check-changes)."
 user-invocable: true
 ---
 

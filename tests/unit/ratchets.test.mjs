@@ -6,10 +6,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { load, measure, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES } from "../../tools/check/ratchets.mjs";
+import { load, measure, relativize, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES } from "../../tools/check/ratchets.mjs";
 
 test("every ratcheted metric is at or under its ceiling", async () => {
-  const v = verdict(await measure());
+  // relativize: a pin counter's overage the base already carries is not this change's (ratchetMode).
+  const v = verdict(await relativize(await measure()));
   // Put the over list in the assertion message (and on the not-ok line via
   // assert.equal) so tooling-fast's TAP filter cannot strip the metric name —
   // deepEqual's `actual: / 0: …` rows were dropped from CI logs until
@@ -335,4 +336,21 @@ test("applyFragments: a delta is matched on own keys and must be a finite number
   // ...but a bad number for a real entry is an error that names it, not a silent no-op.
   assert.throws(() => applyFragments(base, [{ name: "x.json", data: { files: { "a.js": { lines: "3" } } } }]), /a\.js lines must be a finite number/);
   assert.throws(() => applyFragments(base, [{ name: "x.json", data: { tree: { rawColor: null } } }]), /tree rawColor must be a finite number/);
+});
+
+test("pin counters: APEX_RATCHET_ABSOLUTE judges the tree alone, a named base judges this change's growth (2026-10-26)", async () => {
+  const { ratchetMode, pinVerdict } = await import("../../tools/check/ratchets.mjs");
+  assert.equal(ratchetMode({ APEX_RATCHET_ABSOLUTE: "1", APEX_RATCHET_BASE_REF: "HEAD" }).mode, "absolute");
+  const named = ratchetMode({ APEX_RATCHET_BASE_REF: "HEAD" });
+  assert.equal(named.mode, "relative");
+  assert.equal(named.base.length, 40, "the base is resolved to a full sha");
+  assert.equal(ratchetMode({ APEX_RATCHET_BASE_REF: "refs/heads/no-such-ref-xyz" }).mode, "absolute", "an unreachable base falls back to absolute, never to a pass");
+  // Against a synthetic ceiling 5 below the count: absolute is over; relative to HEAD with an equally
+  // over base (the same ceiling at HEAD) is an inherited overage, green unless this tree grew past HEAD.
+  const data = load();
+  const value = (await pinVerdict("rawGameReads", { env: { APEX_RATCHET_ABSOLUTE: "1" }, data })).value;
+  const tight = { ...data, tree: { ...data.tree, rawGameReads: value - 5 } };
+  const abs = await pinVerdict("rawGameReads", { env: { APEX_RATCHET_ABSOLUTE: "1" }, data: tight });
+  assert.equal(abs.ok, false);
+  assert.equal(abs.over, 5);
 });

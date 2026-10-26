@@ -30,6 +30,10 @@ test("Russell's real lap lands on the game's Baku centreline: mirrored, turned, 
     const raw = Float32Array.from(ex.rows.flatMap((r) => [r[0] / 1000, r[1] / 10, r[2] / 10]));
     const tr = R.trackTrace(track, fit, raw);
     assert.equal(tr.n, ex.rows.length);
+    const point = R.mapPoint(fit, raw[114 * 3 + 1], raw[114 * 3 + 2]);
+    const nearest = vm.runInContext("Tracks", g.ctx).project(track, point[0], point[1]);
+    let gapError = tr.prog[114] - nearest.s; gapError -= track.total * Math.round(gapError / track.total);
+    assert.ok(Math.abs(gapError) < 3, "the recorded 1.381s interval recovers its position: " + gapError);
     const len = tr.prog[tr.n - 1] - tr.prog[0];
     assert.ok(len > 5700 && len < 6100, "one lap of progress: " + len);
     let back = 0;
@@ -107,4 +111,69 @@ test("trackTrace reuses one transform while mapPoint still observes mutable fits
   const first = Array.from(R.mapPoint(fit, 123, 456));
   fit.th += 0.25;
   assert.notDeepEqual(Array.from(R.mapPoint(fit, 123, 456)), first, "public single-point transforms do not cache mutable fit angles");
+});
+
+test("WATCH projection recovers telemetry gaps on straights, corners and the lap seam", () => {
+  const { buildContext } = require("../../tools/track/verify-track.cjs");
+  const Tracks = buildContext();
+  const R = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8") + "; RealReplay", { Tracks, M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } }, { filename: absSrc("js/race/real-replay.js") });
+  const track = Tracks.buildCenterline(Tracks.LIST.find((d) => d.id === "monza"), { line: false });
+  const frame = { refl: 1, th: 0, tx: 0, ty: 0 }, pose = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+  for (const start of [100, 550, track.total - 220]) {
+    const raw = [], truth = [];
+    for (let t = 0; t <= 8; t += 0.25) {
+      if (t > 0.5 && t < 4.5) continue;
+      const s = start + t * 80; Tracks.sample(track, s, pose);
+      raw.push(t, pose.p[0], pose.p[2]); truth.push(s);
+    }
+    const trace = R.trackTrace(track, frame, Float32Array.from(raw));
+    const shift = trace.prog[0] - truth[0];
+    for (let i = 0; i < truth.length; i++) {
+      // Ordinary hinted projection deliberately pays CONT * deltaArc². On
+      // Monza's corner, truth=570 with hint=550 projects to 568.155m even
+      // without any missing samples. Its existing contract is <6m; the first
+      // returning gap sample must instead recover within 1m immediately.
+      const returned = trace.t[i] === 4.5;
+      assert.ok(Math.abs(trace.prog[i] - truth[i] - shift) < (returned ? 1 : 6),
+        `start ${start}, t ${trace.t[i]}: expected ${truth[i] + shift}, got ${trace.prog[i]}`);
+      if (returned) {
+        const stale = Tracks.project(track, raw[i * 3 + 1], raw[i * 3 + 2], truth[i - 1]);
+        assert.ok(stale.dist > 200, "the original local window cannot reach the returning sample");
+      }
+    }
+  }
+});
+
+test("gap recovery keeps the established branch through a crossing with an identical world point", () => {
+  // Both legs share x/z at the crossing. The unrestricted nearest point owns
+  // the earlier deck, while a continuous car belongs to the later deck.
+  const n = 1000, total = 4000, crossing = 2200;
+  const track = { n, total };
+  const project = (_track, x, _z, hint) => {
+    const choices = [x, x + 2000];
+    let s = hint == null ? choices[0] : choices.reduce((a, b) => Math.abs(a - hint) < Math.abs(b - hint) ? a : b);
+    if (hint != null) s = Math.max(hint - 64, Math.min(hint + 64, s));
+    return { s, lat: 0, dist: Math.min(...choices.map((a) => Math.abs(a - s))) };
+  };
+  const R = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8") + "; RealReplay", { Tracks: { project }, M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } }, { filename: absSrc("js/race/real-replay.js") });
+  // Establish the later branch before returning to its shared world position.
+  const raw = Float32Array.from([0, 1900, 0, 0.25, 1920, 0, 0.5, 1940, 0, 3.75, crossing - 2000, 0, 4, 220, 0]);
+  const trace = R.trackTrace(track, { refl: 1, th: 0, tx: 0, ty: 0 }, raw);
+  assert.ok(Math.abs(trace.prog[3] - crossing) < 1);
+  assert.ok(Math.abs(trace.prog[4] - 2220) < 1);
+});
+
+test("WATCH gap recovery preserves both actual Suzuka crossing branches", () => {
+  const { buildContext } = require("../../tools/track/verify-track.cjs");
+  const Tracks = buildContext(), track = Tracks.buildCenterline(Tracks.LIST.find((d) => d.id === "suzuka"), { line: false });
+  const R = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8") + "; RealReplay", { Tracks, M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } }, { filename: absSrc("js/race/real-replay.js") });
+  const pose = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+  for (const frac of [0.437, 0.845]) {
+    const start = frac * track.total - 200, raw = [], times = [0, 0.25, 0.5, 2.5, 2.75, 3];
+    for (const t of times) { Tracks.sample(track, start + t * 80, pose); raw.push(t, pose.p[0], pose.p[2]); }
+    const trace = R.trackTrace(track, { refl: 1, th: 0, tx: 0, ty: 0 }, Float32Array.from(raw));
+    const shift = trace.prog[0] - start;
+    for (let i = 1; i < times.length; i++) assert.ok(Math.abs(trace.prog[i] - shift - start - times[i] * 80) < 6,
+      `Suzuka branch ${frac}, t ${times[i]}: ${trace.prog[i]}`);
+  }
 });
