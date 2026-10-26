@@ -11,6 +11,10 @@
 //   node tools/ci/wait-for.mjs --log-matches artifacts/logs/x.log '^= (run|bg exit)' --timeout 45
 //   node tools/ci/wait-for.mjs --merged <sha> --timeout 240 --background   # the sanctioned merge watch (steward §7)
 //
+// FOREGROUND CAP (W2): only under Claude Code (`CLAUDECODE=1`, set in every Bash it runs), whose Bash kills a
+// foreground command at 600 s, is a foreground --timeout clamped to 590 s. Codex, Cursor and a plain shell have no
+// such limit, so a long blocking wait there (a host without background tasks) keeps its full --timeout.
+//
 // Exit 0 every condition held · 124 timeout (nothing is killed) · 1 usage error.
 import fs from "node:fs";
 import os from "node:os";
@@ -22,7 +26,8 @@ import { pidAlive } from "../lib/deploy-status.mjs";
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
 export const MERGED_POLL_MIN_SEC = 30;
 
-/** Bash kills a foreground command at 600 s; a waiter that outlives that is killed with a confusing exit. */
+/** Claude Code's Bash kills a foreground command at 600 s; a waiter that outlives that is killed with a confusing exit.
+ *  Applied only when `CLAUDECODE=1` (capForeground). */
 export const FOREGROUND_CAP_SEC = 590;
 
 export const FLAGS = ["--load-below", "--file-nonempty", "--log-matches", "--pid-gone", "--merged", "--timeout", "--poll", "--background", "--help"];
@@ -34,12 +39,14 @@ export const USAGE = `usage: node tools/ci/wait-for.mjs <condition>... [--timeou
   --merged <sha>          <sha> is an ancestor of origin/claude/f1-game-project-26h3ng (fetched each poll, ≥ 30 s apart):
                           the one sanctioned merge watch — never a hand-rolled 'while … sleep' loop (AGENTS.md rules 4, 13)
   --background            this waiter IS the run_in_background task: no cap on --timeout
-  a foreground wait is capped at ${FOREGROUND_CAP_SEC} s (Bash's own limit is 600 s); longer ones belong in run_in_background.
+  under Claude Code (CLAUDECODE=1) a foreground wait is capped at ${FOREGROUND_CAP_SEC} s (its Bash limit is 600 s); longer ones belong in run_in_background.
+  other hosts (Codex, Cursor, a shell) keep the full --timeout.
   conditions combine with AND; exit 0 held / 124 timeout / 1 usage. Run it as one background task.`;
 
-/** Clamp a foreground --timeout (minutes) to the cap; `background` lifts it. Pure. */
-export function capForeground(timeoutMin, background) {
-  if (background || timeoutMin * 60 <= FOREGROUND_CAP_SEC) return { timeoutMin, note: "" };
+/** Clamp a foreground --timeout (minutes) to the cap under Claude Code (`env.CLAUDECODE === "1"`);
+ *  `background` lifts it, and any other host is never capped. Pure given `env`. */
+export function capForeground(timeoutMin, background, env = process.env) {
+  if (background || env.CLAUDECODE !== "1" || timeoutMin * 60 <= FOREGROUND_CAP_SEC) return { timeoutMin, note: "" };
   return {
     timeoutMin: FOREGROUND_CAP_SEC / 60,
     note: `= wait-for: --timeout ${timeoutMin} min (${Math.round(timeoutMin * 60)} s) exceeds the ${FOREGROUND_CAP_SEC} s foreground cap — capped; ` +

@@ -47,7 +47,8 @@
  *   node tools/ci/pr-board.mjs --alarm      # only the stall alarm: READY > 12 h, green, no hold, no push
  *
  * Exit: 0 printed (--alarm: none stalled), 1 --alarm found a stalled PR, 2 bad args (or --pr is not open
- * into the deploy branch), 3 no token / API error.
+ * into the deploy branch), 3 no token / API error, 77 auth expired (a 401 / revoked token prints
+ * `= auth expired — stop`; tools/lib/auth-error.mjs).
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,6 +56,7 @@ import { DEPLOY } from "./github-api.mjs";
 import { createSnapshot, runsByHead } from "../lib/pr-snapshot.mjs";
 import { guardsVerdict, planVerdict, fleetIdentity } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { exitOnAuth } from "../lib/auth-error.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
 
 export { DEPLOY };
@@ -261,6 +263,13 @@ export function render(result, { now = Date.now() } = {}) {
   return out.join("\n");
 }
 
+/** Why `--pr <n>` cannot be read: merged (when, by merge commit) vs closed unmerged vs open into another base (W2). Pure. */
+export function notOpenReason(n, pr) {
+  if (pr.merged_at || pr.merged) return `PR #${n} is merged${pr.merged_at ? ` (${pr.merged_at})` : ""}${pr.merge_commit_sha ? ` as ${String(pr.merge_commit_sha).slice(0, 9)}` : ""} — not open into ${DEPLOY}`;
+  if (pr.state === "closed") return `PR #${n} is closed without merging${pr.closed_at ? ` (${pr.closed_at})` : ""} — not open into ${DEPLOY}`;
+  return `PR #${n} is open into ${pr.base?.ref || "another branch"}, not into ${DEPLOY}`;
+}
+
 /**
  * Gather every open PR into the deploy branch and evaluate. GET requests only,
  * through tools/lib/pr-snapshot.mjs (conditional GETs: a 304 on an unchanged
@@ -296,7 +305,7 @@ export function measure(opts = {}) {
     if (one.error) return fail(`PR #${n}: ${one.error}`);
     const pr = one.json || {};
     if (opts.only != null && (pr.state !== "open" || pr.base?.ref !== DEPLOY)) {
-      return { ok: false, badArgs: true, error: `PR #${n} is not open into ${DEPLOY}`, rows: [] };
+      return { ok: false, badArgs: true, error: notOpenReason(n, pr), rows: [] };
     }
     const sha = pr.head?.sha;
     if (!sha) return fail(`PR #${n}: no head sha`);
@@ -390,6 +399,7 @@ Exit 0 printed, 1 --alarm hit, 2 bad args, 3 API/token.`);
   const snapshot = createSnapshot();
   const v = measure({ only: args.only, snapshot });
   if (!v.ok) {
+    if (!v.badArgs) exitOnAuth(v.error, { tool: "pr-board" });
     console.error(`pr-board: ${v.error}`);
     process.exit(v.badArgs ? 2 : 3);
   }

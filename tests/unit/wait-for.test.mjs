@@ -124,16 +124,23 @@ test("--log-matches: holds once a log line matches; names the missing verdict; b
   assert.throws(() => parseArgs(["--log-matches", "x.log", "("]), UsageError);
 });
 
-test("capForeground: a foreground --timeout over 590 s is clamped and names run_in_background", () => {
+test("capForeground: under Claude Code a foreground --timeout over 590 s is clamped and names run_in_background", () => {
+  const cc = { CLAUDECODE: "1" };
   assert.equal(FOREGROUND_CAP_SEC, 590);
-  assert.deepEqual(capForeground(5, false), { timeoutMin: 5, note: "" });
-  const c = capForeground(30, false);
+  assert.deepEqual(capForeground(5, false, cc), { timeoutMin: 5, note: "" });
+  const c = capForeground(30, false, cc);
   assert.equal(c.timeoutMin * 60, 590);
   assert.ok(/run_in_background/.test(c.note));
   assert.ok(/--background/.test(c.note));
-  assert.deepEqual(capForeground(45, true), { timeoutMin: 45, note: "" }, "--background lifts the cap");
+  assert.deepEqual(capForeground(45, true, cc), { timeoutMin: 45, note: "" }, "--background lifts the cap");
   assert.equal(parseArgs(["--pid-gone", "1", "--background"]).background, true);
   assert.equal(parseArgs(["--pid-gone", "1"]).background, false);
+});
+
+test("capForeground: off Claude Code (no CLAUDECODE=1: Codex, Cursor, a shell) a foreground wait keeps its full --timeout (W2)", () => {
+  assert.deepEqual(capForeground(45, false, {}), { timeoutMin: 45, note: "" });
+  assert.deepEqual(capForeground(45, false, { CLAUDECODE: "0" }), { timeoutMin: 45, note: "" });
+  assert.equal(capForeground(45, false, { CLAUDECODE: "1" }).timeoutMin * 60, 590, "the same call under Claude Code is capped");
 });
 
 test("--merged <sha>: parsed, polled no faster than 30 s, judged through the deps.merged probe (the sanctioned merge watch)", () => {

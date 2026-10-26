@@ -80,3 +80,45 @@ test("Q6: foreignClaims names live claims on the branch held by another session"
   assert.equal(foreignClaims([c("x-" + other)], "claude/x", null).length, 1, "claude/ prefix folded like claimSlug");
   assert.deepEqual(foreignClaims(null, "x"), []);
 });
+
+test("cachedRef / cachedPlan: a PR ref the clone never fetched is fetched, not handed back as an instruction (W2)", async () => {
+  const { cachedRef, cachedPlan } = await import("../../tools/ci/sync-pr.mjs");
+  const have = new Set(["origin/claude/f1-game-project-26h3ng"]);
+  const seen = [];
+  const g = (args) => {
+    seen.push(args.join(" "));
+    if (args[0] === "rev-parse") return have.has(args[2]) ? { code: 0, out: "a".repeat(40), err: "" } : { code: 128, out: "", err: "fatal: Needed a single revision" };
+    if (args[0] === "fetch") { have.add(args[4].split(":")[1].replace("refs/remotes/", "")); return { code: 0, out: "", err: "" }; }
+    return { code: 0, out: "", err: "" };
+  };
+  const plan = cachedPlan("cursor/new-pr-1a2b", g);
+  assert.deepEqual(seen.filter((c) => c.startsWith("fetch")), ["fetch --quiet --no-tags origin +refs/heads/cursor/new-pr-1a2b:refs/remotes/origin/cursor/new-pr-1a2b"],
+    "the missing PR ref is fetched once; the cached deploy ref is not re-fetched");
+  assert.equal(plan.source, "cached-remote-refs (fetched missing: cursor/new-pr-1a2b)");
+  const gone = (args) => (args[0] === "fetch" ? { code: 128, out: "", err: "fatal: couldn't find remote ref refs/heads/nope" } : { code: 128, out: "", err: "bad" });
+  assert.throws(() => cachedRef("nope", gone), /origin\/nope is not cached and fetching it failed: fatal: couldn't find remote ref/);
+});
+
+test("gitPush: GIT_TERMINAL_PROMPT=0 always; one retry on a sideband / hung-up disconnect, never on auth (W2)", async () => {
+  const { gitPush, isTransientPushError } = await import("../../tools/lib/git-push.mjs");
+  assert.equal(isTransientPushError("error: RPC failed; curl 92\nfatal: unexpected disconnect while reading sideband packet"), true);
+  assert.equal(isTransientPushError("fatal: the remote end hung up unexpectedly"), true);
+  assert.equal(isTransientPushError("! [rejected] x -> x (fetch first)"), false);
+  assert.equal(isTransientPushError("fatal: Authentication failed for 'https://github.com/a/b'\nfatal: the remote end hung up unexpectedly"), false, "auth is never retried");
+  const script = (results) => {
+    const calls = [];
+    return { calls, run: (cmd, args, opts) => { calls.push({ cmd, args, prompt: opts.env.GIT_TERMINAL_PROMPT }); return results[calls.length - 1]; } };
+  };
+  const drop = { status: 1, stdout: "", stderr: "fatal: the remote end hung up unexpectedly" };
+  const ok = { status: 0, stdout: "", stderr: "To github.com:x/y\n   a..b  x -> x" };
+  let s = script([drop, ok]);
+  let r = gitPush(["origin", "a:b"], { run: s.run, sleep: () => {}, env: {} });
+  assert.deepEqual([r.code, r.attempts], [0, 2]);
+  assert.deepEqual(s.calls.map((c) => [c.cmd, c.args.join(" "), c.prompt]), [["git", "push origin a:b", "0"], ["git", "push origin a:b", "0"]]);
+  s = script([drop, drop]);
+  r = gitPush(["origin", "a:b"], { run: s.run, sleep: () => {}, env: {} });
+  assert.deepEqual([r.code, r.attempts, s.calls.length], [1, 2, 2], "a second drop is reported, not looped");
+  s = script([{ status: 1, stdout: "", stderr: "! [rejected] (non-fast-forward)" }]);
+  r = gitPush(["origin", "a:b"], { run: s.run, sleep: () => {}, env: {} });
+  assert.deepEqual([r.code, r.attempts], [1, 1], "a rejection is not a disconnect");
+});

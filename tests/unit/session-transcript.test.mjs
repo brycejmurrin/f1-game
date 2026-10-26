@@ -97,6 +97,72 @@ test("describeCall shows the part a reader wants", () => {
   assert.equal(describeCall("mcp__x__y", { a: 1 }), '{"a":1}');
 });
 
+// ── --waits (W7b): turn origins, no-op wakes, $ per wake, polls ──
+import { waitsTally, renderWaits } from "../../tools/ci/session-transcript.mjs";
+import { spawnSync as spawnWaits } from "node:child_process";
+import fsW from "node:fs";
+import osW from "node:os";
+import pathW from "node:path";
+
+const WAIT_EVENTS = [
+  hear(20, "Ship the fix"),                                                                          // turn 1: user, 3 calls
+  say(21, [use("w1", "Bash", { command: "git status" }), use("w2", "Bash", { command: "npm test" })]),
+  say(22, [use("w3", "Bash", { command: "git push -u origin x" })]),
+  wrap("result", 23, { subtype: "success", total_cost_usd: 1.0 }),
+  hear(24, "<task-notification><status>completed</status></task-notification>"),                  // turn 2: no-op wake, 1 poll
+  say(25, [use("w4", "Bash", { command: "node tools/ci/ci-watch.mjs --sha abc --once" })]),
+  wrap("result", 26, { subtype: "success", total_cost_usd: 1.2 }),
+  hear(27, "<system-reminder>check-in timer</system-reminder>"),                                  // turn 3: no-op wake, 0 calls
+  wrap("result", 28, { subtype: "success", total_cost_usd: 1.3 }),
+  hear(29, "<task-notification>done</task-notification>"),                                        // turn 4: busy wake
+  say(30, [use("w5", "mcp__claude-code-remote__get_session", {}), use("w6", "Bash", { command: "sleep 60" })]),
+  say(31, [use("s9", "Bash", { command: "sleep 5" })], "w5"),                                      // subagent: not counted
+  wrap("result", 32, { subtype: "success", total_cost_usd: 1.9 }),
+];
+
+test("--waits: origins, no-op wakes (≤ 1 call), cost deltas per wake and polls (W7b)", () => {
+  const w = waitsTally(WAIT_EVENTS);
+  assert.equal(w.turns, 4);
+  assert.deepEqual(w.origins, { user: 1, "task-notification": 2, other: 1 });
+  assert.equal(w.wakes, 3);
+  assert.equal(w.noopWakes, 2);
+  assert.equal(Math.round(w.noopShare * 100), 67);
+  assert.equal(w.perWake.n, 3);
+  assert.equal(w.perWake.usd.toFixed(3), "0.300", "(0.2 + 0.1 + 0.6) / 3");
+  assert.equal(w.perNoopWake.usd.toFixed(3), "0.150");
+  assert.equal(w.perUserTurn, null, "the first turn on the pages has no baseline");
+  assert.equal(w.polls, 3);
+  assert.equal(w.pollsInNoopWakes, 1);
+  assert.deepEqual(w.pollKinds, { "ci-watch --once": 1, get_session: 1, sleep: 1 });
+  assert.deepEqual(renderWaits(w).split("\n"), [
+    "= waits turns 4: user 1 · task-notification 2 · other 1",
+    "= waits wakes 3 (non-user turns): no-op 2 (67 %) with ≤ 1 tool call",
+    "= waits $ per wake $0.300 (n=3) · per no-op wake $0.150 (n=2) · per user turn n/a",
+    "= waits polls 3 (1 in no-op wakes): ci-watch --once×1 get_session×1 sleep×1",
+  ]);
+  // a cost drop is a restart: the new cumulative value is that turn's delta
+  const restart = waitsTally([hear(40, "go"), wrap("result", 41, { total_cost_usd: 5 }), hear(42, "<task-notification>x</task-notification>"), wrap("result", 43, { total_cost_usd: 0.4 })]);
+  assert.equal(restart.perWake.usd.toFixed(2), "0.40");
+  assert.equal(renderWaits(waitsTally([hear(50, "hi")])).split("\n")[2], "= waits $ per wake n/a · per no-op wake n/a · per user turn n/a — no total_cost_usd deltas on these pages");
+});
+
+test("--waits CLI: additive — prints only the tally, leaves the default timeline alone, --json is the object (W7b)", () => {
+  const dir = fsW.mkdtempSync(pathW.join(osW.tmpdir(), "waits-"));
+  try {
+    const page = pathW.join(dir, "page.txt");
+    fsW.writeFileSync(page, JSON.stringify({ ccr: { data: WAIT_EVENTS } }));
+    const cli = pathW.resolve("tools/ci/session-transcript.mjs");
+    const r = spawnWaits(process.execPath, [cli, page, "--waits"], { encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.trim().split("\n").length, 4);
+    assert.equal(r.stdout.split("\n")[0], "= waits turns 4: user 1 · task-notification 2 · other 1");
+    const j = spawnWaits(process.execPath, [cli, page, "--waits", "--json"], { encoding: "utf8" });
+    assert.equal(JSON.parse(j.stdout).noopWakes, 2);
+    const plain = spawnWaits(process.execPath, [cli, page], { encoding: "utf8" });
+    assert.equal(plain.stdout.split("\n").filter((l) => l.startsWith("= waits")).length, 0, "the default output is unchanged");
+  } finally { fsW.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // ── quota-parked sessions (#2382): the retry run folds to one row, the state flags, --summary is one line ──
 import { foldQuota, quotaState, summarize, summaryLine } from "../../tools/ci/session-transcript.mjs";
 

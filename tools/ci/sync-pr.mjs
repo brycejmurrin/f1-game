@@ -13,6 +13,11 @@
 //   node tools/ci/sync-pr.mjs <branch> --ignore-claims           # sync although another session holds a live who-is-on-it claim on the branch
 //   --wait-load=<min>  wait up to N min (default 10) for loadavg < 2.8 instead of refusing at once (0 = refuse at once)
 //
+// Exit: 0 synced / planned / stopped, 1 a stage or the push failed, 3 refused, 4 no sync needed, 124 a stage timed
+// out, 77 auth expired (a 401, revoked token or git "Authentication failed": prints `= auth expired — stop`;
+// tools/lib/auth-error.mjs). `--push` goes through tools/lib/git-push.mjs (GIT_TERMINAL_PROMPT=0, one retry on a
+// dropped connection); `--plan` fetches a PR ref the clone does not have yet instead of asking you to (W2).
+//
 // STAGED, TIMED, DIFF-AWARE VERIFY (#2186, 2026-10-15). It ran tooling-fast at
 // --jobs=1 and EVERY ci.yml node suite (game-vm-a/b1/b2, vm-page, node-slow …)
 // serially with no timeout, whatever the diff — and outran a 30-min background
@@ -55,6 +60,8 @@ import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { exitOnAuth } from "../lib/auth-error.mjs";
+import { gitPush } from "../lib/git-push.mjs";
 import { DEPLOY_BRANCH, plan, preflight, mergeDeployTip, gateNodeSuites, touchedCircuits, changedPaths } from "./deploy.mjs";
 import { plan as nodePlan } from "./node-plan.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
@@ -153,12 +160,26 @@ function usage() {
   ].join("\n"));
 }
 
-// Cached refs only: no fetch, checkout, branch deletion or object-writing merge-tree.
+/** `origin/<ref>` from the cache; a ref this clone never fetched is fetched (that one remote-tracking ref, nothing
+ *  checked out or merged) instead of telling the agent to fetch it (W2). Records each fetched ref in `fetched`. */
+export function cachedRef(ref, readGit = git, fetched = []) {
+  let r = readGit(["rev-parse", "--verify", `${REMOTE}/${ref}`]);
+  if (r.code !== 0) {
+    const f = readGit(["fetch", "--quiet", "--no-tags", REMOTE, `+refs/heads/${ref}:refs/remotes/${REMOTE}/${ref}`]);
+    if (f.code !== 0) throw new Error(`${REMOTE}/${ref} is not cached and fetching it failed: ${(f.err || f.out || "no such branch on origin?").split("\n")[0]}`);
+    fetched.push(ref);
+    r = readGit(["rev-parse", "--verify", `${REMOTE}/${ref}`]);
+  }
+  return must(r, `${REMOTE}/${ref}`);
+}
+
+// Cached refs, plus a fetch of a ref that is missing: no checkout, branch deletion or object-writing merge-tree.
 export function cachedPlan(prBranch, readGit = git) {
-  const head = must(readGit(["rev-parse", "--verify", `origin/${prBranch}`]), "cached PR ref (fetch explicitly first if absent)");
-  const tip = must(readGit(["rev-parse", "--verify", `origin/${DEPLOY_BRANCH}`]), "cached deploy ref");
+  const fetched = [];
+  const head = cachedRef(prBranch, readGit, fetched);
+  const tip = cachedRef(DEPLOY_BRANCH, readGit, fetched);
   const fastForward = readGit(["merge-base", "--is-ancestor", tip, head]).code === 0;
-  return { branch: prBranch, head, tip, fastForward, source: "cached-remote-refs", conflicts: null,
+  return { branch: prBranch, head, tip, fastForward, source: fetched.length ? `cached-remote-refs (fetched missing: ${fetched.join(", ")})` : "cached-remote-refs", conflicts: null,
     conflictsChecked: false, note: "Refs may be stale. Exact merge conflicts are checked during sync; plan changes nothing.",
     theirCommits: must(readGit(["log", "--oneline", `${head}..${tip}`]), "cached commits").split("\n").filter(Boolean) };
 }
@@ -191,7 +212,18 @@ export function returnTo(startedOn, keptBranch, readGit = git) {
   return { ok: true, line: `working tree back on ${startedOn}; the attempt is kept on branch ${keptBranch} for inspection` };
 }
 
+/** main() with one rule on top: an auth failure anywhere (fetch, push, a GitHub read) prints `= auth expired — stop`
+ *  and exits 77 instead of the generic ERROR/STOPPED exit 1 that invites a retry (W2). */
 export async function main() {
+  try {
+    return await syncMain();
+  } catch (e) {
+    exitOnAuth(e, { tool: "sync-pr" });
+    throw e;
+  }
+}
+
+async function syncMain() {
   if (flag("--help") || flag("-h")) { usage(); return 0; }
   if (!branch) { usage(); return 1; }
   const unknown = argv.find((a) => a.startsWith("-") && !["--plan", "--push", "--resume", "--force-clean-behind", "--stop", "--ignore-claims"].includes(a) && !/^--(verify|from|wait-load)=/.test(a));
@@ -284,6 +316,7 @@ export async function main() {
       throw e;
     }
   } catch (e) {
+    exitOnAuth(e, { tool: "sync-pr" });
     log(`STOPPED: ${e.message}`);
     log(returnTo(startedOn, localBranch).line + " — fix, then either re-run or push it yourself.");
     if (e.resume) log(`resume from the stopped stage: ${e.resume}`);
@@ -300,7 +333,7 @@ export async function main() {
       log(returnTo(startedOn, localBranch).line);
       return 1;
     }
-    must(git(["push", REMOTE, `${localBranch}:${branch}`]), `push to origin/${branch}`);
+    must(gitPush([REMOTE, `${localBranch}:${branch}`], { cwd: ROOT, log }), `push to origin/${branch}`);
     log(`pushed to origin/${branch}`);
     const back = returnTo(startedOn, localBranch);
     log(back.line);

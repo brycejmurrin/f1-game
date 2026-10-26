@@ -72,6 +72,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | Tool | Does | Paired skill |
 |---|---|---|
 | **lib/ai-ratings-math.mjs** | Pure Pearson / means / style zero-mean helpers for `ai-ratings.mjs` (personality dial census). | — |
+| **lib/auth-error.mjs** | isAuthError(textOrErr): HTTP 401 / Bad credentials / revoked token / git or gh auth failure; AUTH_EXIT 77, AUTH_LINE. | — |
 | **lib/browser-workers.mjs** | GL-aware Playwright / capture worker defaults (llvmpipe vs SwiftShader). | — |
 | **lib/census-entry.mjs** | gpu-game-check's --entry api\|menu\|menu-full and --cam A>B parsing, its menu-prep wait and its race gate. | — |
 | **lib/centreline-kinks.cjs** | Centreline kink scan: nodes whose chord-to-chord turn radius is below the road half-width (#2209). | — |
@@ -91,6 +92,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/game-vm.cjs** | Boots js/game.js + `__apex` in a Node VM (renderer/DOM stubbed); `createGame({track})` drives physics, no browser. | — |
 | **lib/gate-receipt.mjs** | Gate receipts under artifacts/{merge,ready}-gate/<pr>.json: a gate writes one, github-mcp-guard.sh requires it. | agent-fleet |
 | **lib/generated-paths.mjs** | Generator outputs, one list: fleet-owner reports them GENERATED (never HELD); deploy.mjs regenerates them at merge. | — |
+| **lib/git-push.mjs** | gitPush(args): git push with GIT_TERMINAL_PROMPT=0, one retry on a sideband/hung-up disconnect; {code,out,err,attempts}. | — |
 | **lib/harness.mjs** | Shared harness for the headless `__apex` tools: in-process static server + Chromium launch with teardown-safe shutdown. | playwright-probe |
 | **lib/hud-geometry.mjs** | In-page HUD box probe (rect, visibility, font px) + the pure overlap/safe-area rules of hud-layout.spec. | — |
 | **lib/hud-survey-matrix.mjs** | HUD survey core: cells, quick/full/exhaustive matrices, shards, expected-visible rules, findings, merge, report HTML. | — |

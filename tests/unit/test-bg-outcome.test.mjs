@@ -14,7 +14,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { failingHalf, claimWaiter, releaseWaiter, nothingRanLine } from "../../tools/ci/test-bg.mjs";
 import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv, probeChromeSessions, chromeRefusal } from "../../tools/ci/test-bg.mjs";
 
 test("parseTestBgArgv reads --timeout and --timeout=N as minutes", () => {
@@ -29,6 +32,46 @@ test("a non-zero exit wins over an earlier passing summary", () => {
   assert.match(outcomeOf(log), /^failed \(exit 1; last summary: passed/);
   const killed = "# pass 12\n# fail 0\n[pw] running…\n= bg exit 137\n";
   assert.match(outcomeOf(killed), /^failed \(exit 137/, "a twin's `# fail 0` never covers a killed Playwright half");
+});
+
+test("failingHalf: a non-zero exit names WHICH half failed (W2)", () => {
+  const twoHalves = "[tooling-fast] = run passed (249 passed, 0 failed)\n…sweeps…\n# pass 3\n# fail 1\n= bg exit 1\n";
+  assert.equal(failingHalf(twoHalves), "node --test (3 passed, 1 failed)");
+  assert.equal(outcomeOf(twoHalves), "failed (exit 1; last summary: passed (249 passed, 0 failed); failing half: node --test (3 passed, 1 failed))");
+  const killed = "# pass 12\n# fail 0\n[pw] running…\n= bg exit 137\n";
+  assert.equal(outcomeOf(killed), "failed (exit 137; failing half: the command after the node --test half (which passed: 12 passed, 0 failed) — it printed no summary)");
+  const pwRed = "# pass 4\n# fail 0\n= run failed (10 passed, 2 failed)\n= bg exit 1\n";
+  assert.equal(failingHalf(pwRed), "browser (failed (10 passed, 2 failed))");
+  assert.equal(failingHalf("= run passed (5 passed)\n= bg exit 1\n"), "the command after the browser half (which passed: passed (5 passed)) — it printed no summary");
+  assert.equal(failingHalf("no summaries\n= bg exit 1\n"), null);
+  assert.equal(outcomeOf("no summaries\n= bg exit 1\n"), "failed (exit 1)", "no summary: the line is unchanged");
+});
+
+test("nothingRanLine: a --wait with no live run names the newest recorded verdict (W2)", () => {
+  assert.equal(nothingRanLine([]), "nothing ran during this wait; last verdict: none recorded");
+  const runs = [
+    { group: "smoke", started: "2026-10-26T10:00:00Z" },
+    { group: "physics-core", started: "2026-10-26T12:00:00Z" },
+  ];
+  assert.equal(nothingRanLine(runs, (r) => (r.group === "physics-core" ? "passed (3 passed)" : "failed")),
+    "nothing ran during this wait; last verdict: physics-core passed (3 passed) (started 2026-10-26T12:00:00Z)");
+});
+
+test("claimWaiter: one live --wait holds the lock; a second attaches; a dead holder is taken over (W2)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "test-bg-waiter-"));
+  const file = path.join(dir, "waiter.json");
+  try {
+    assert.equal(claimWaiter({ file, pid: 111, isAlive: () => true }).ok, true);
+    const second = claimWaiter({ file, pid: 222, isAlive: (h) => h.pid === 111 });
+    assert.equal(second.ok, false, "a live first waiter: the second does not stack");
+    assert.equal(second.holder.pid, 111);
+    releaseWaiter({ file, pid: 222 });
+    assert.ok(fs.existsSync(file), "release by a non-holder leaves the lock alone");
+    assert.equal(claimWaiter({ file, pid: 333, isAlive: () => false }).ok, true, "a dead holder's lock is taken over");
+    assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).pid, 333);
+    releaseWaiter({ file, pid: 333 });
+    assert.equal(fs.existsSync(file), false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("exit 0 keeps the rich summary; the old formats still read", () => {

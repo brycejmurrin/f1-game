@@ -18,6 +18,8 @@
  *   node tools/ci/test-bg.mjs --wait                # block until all groups finish (the waiter:
  *                                                   #   run it as a background task; exit 1 = a red)
  *   node tools/ci/test-bg.mjs --wait --timeout 45   # ...giving up after 45 min (exit 124, runs left alive)
+ *                                                   #   ONE waiter: a second bare --wait while one is live prints
+ *                                                   #   the first's state and exits 124 instead of stacking (W2)
  *   node tools/ci/test-bg.mjs --wait smoke aero     # start each, wait, then next (waits ≤ 10 min for
  *                                                   #   loadavg < 3 between groups; exit 3 if it never settles)
  *   node tools/ci/test-bg.mjs --stop                # kill everything still running
@@ -178,7 +180,8 @@ export function outcomeOf(text) {
   const bgExit = [...text.matchAll(/^= bg exit (\d+)$/gm)].pop();
   const detail = [...text.matchAll(/= run (\w+)\s+\(([^)]*)\)/g)].pop();
   if (bgExit && bgExit[1] !== "0") {
-    return `failed (exit ${bgExit[1]}${detail ? `; last summary: ${detail[1]} (${detail[2]})` : ""})`;
+    const half = failingHalf(text);
+    return `failed (exit ${bgExit[1]}${detail ? `; last summary: ${detail[1]} (${detail[2]})` : ""}${half ? `; failing half: ${half}` : ""})`;
   }
   // --stop can terminate the supervisor shell before it writes a bg trailer.
   // A VM twin's TAP pass (or an earlier browser shard's summary) then says
@@ -212,6 +215,56 @@ export function outcomeOf(text) {
 
   const fails = [...text.matchAll(/^\[[\d:]+\] x FAIL/gm)].length;
   return fails ? `died after ${fails} failure(s)` : "died before finishing";
+}
+
+/** Which half of a two-command group failed, for a log whose `= bg exit` is
+ *  non-zero (W2, Codex archive: "summary says passed, exit 1" cost a re-run to
+ *  read). Halves are the Playwright `= run <status> (…)` and node --test
+ *  `# pass/# fail` summaries in log order: a red summary names itself; when
+ *  every summary passed, the failing half is the one after the last summary,
+ *  which printed none (killed, crashed, or a plain script). null: no summary. */
+export function failingHalf(text) {
+  const halves = [];
+  for (const m of text.matchAll(/= run (\w+)\s+\(([^)]*)\)/g)) halves.push({ at: m.index, kind: "browser", ok: m[1] === "passed", what: `${m[1]} (${m[2]})` });
+  for (const m of text.matchAll(/^# pass (\d+)$[\s\S]*?^# fail (\d+)$/gm)) halves.push({ at: m.index, kind: "node --test", ok: m[2] === "0", what: `${m[1]} passed, ${m[2]} failed` });
+  if (!halves.length) return null;
+  halves.sort((a, b) => a.at - b.at);
+  const red = halves.filter((h) => !h.ok).pop();
+  if (red) return `${red.kind} (${red.what})`;
+  const last = halves[halves.length - 1];
+  return `the command after the ${last.kind} half (which passed: ${last.what}) — it printed no summary`;
+}
+
+/* ONE WAITER (W2; CODEX-ARCHIVE-MINING: 65 stacked `--wait`s in one thread).
+ * A bare `--wait` claims artifacts/logs/test-bg-waiter.json with an atomic
+ * `wx` create; a second one, while the holder is alive (pid + start time, the
+ * aliveRun identity), prints the holder and the current state and exits 124
+ * ("still running") instead of polling the same runs a second time. A dead
+ * holder's file is taken over. */
+export const WAITER_FILE = path.join(LOGDIR, "test-bg-waiter.json");
+export function claimWaiter({ file = WAITER_FILE, pid = process.pid, isAlive = aliveRun, now = () => new Date().toISOString(), timeoutMin = 0 } = {}) {
+  const me = { pid, starttime: procStart(pid), bootId: BOOT_ID, started: now(), timeoutMin };
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const fd = fs.openSync(file, "wx");
+      fs.writeSync(fd, JSON.stringify(me));
+      fs.closeSync(fd);
+      return { ok: true, me };
+    } catch (e) {
+      if (e.code !== "EEXIST") throw e;
+    }
+    let holder = null;
+    try { holder = JSON.parse(fs.readFileSync(file, "utf8")); } catch (_) { /* half-written or gone */ }
+    if (holder && holder.pid !== pid && isAlive(holder)) return { ok: false, holder };
+    try { fs.unlinkSync(file); } catch (_) { /* another waiter took it over first */ }
+  }
+  let holder = null;
+  try { holder = JSON.parse(fs.readFileSync(file, "utf8")); } catch (_) { /* gone */ }
+  return { ok: false, holder };
+}
+export function releaseWaiter({ file = WAITER_FILE, pid = process.pid } = {}) {
+  try { if (JSON.parse(fs.readFileSync(file, "utf8")).pid === pid) fs.unlinkSync(file); } catch (_) { /* not ours, or gone */ }
 }
 
 function status() {
@@ -263,12 +316,20 @@ export function parseTestBgArgv(argv) {
   };
 }
 
+/** A `--wait` that found no live run says so, with the newest recorded verdict, so an
+ *  exit 0/1 is never read as "this wait watched a run" (W2). Exit semantics are unchanged. */
+export function nothingRanLine(runs, outcomeFn = outcome) {
+  const last = (runs || []).filter((r) => r.started).sort((a, b) => Date.parse(b.started) - Date.parse(a.started))[0];
+  return `nothing ran during this wait; last verdict: ${last ? `${last.group} ${outcomeFn(last)} (started ${last.started})` : "none recorded"}`;
+}
+
 async function waitForRunning({ deadline, waitTimeoutMin = 0 } = {}) {
   const dl = deadline ?? waitDeadlineFromMin(waitTimeoutMin);
   const t0 = Date.now();
   // Re-read the registry every poll: a group another shell starts while this
   // waits is part of "everything still running" (it used to be read once).
   const running = () => readState().runs.filter((r) => alive(r));
+  if (!running().length) say(nothingRanLine(readState().runs));
   while (running().length) {
     if (Date.now() > dl) {
       process.stderr.write("\r" + " ".repeat(80) + "\r");
@@ -720,7 +781,19 @@ else if (argv.includes("--tail")) {
   console.log(r ? `tail -f ${path.relative(ROOT, r.log)}` : `no run recorded for group "${g}"`);
 } else if (argv.includes("--wait")) {
   if (groups.length) await waitChain(groups, { force, waitTimeoutMin });
-  else await waitForRunning({ waitTimeoutMin });
+  else {
+    const claim = claimWaiter({ timeoutMin: waitTimeoutMin });
+    if (!claim.ok) {
+      const h = claim.holder || {};
+      say(`another --wait (pid ${h.pid ?? "?"}, since ${h.started ?? "?"}) already watches these runs — not stacking a second waiter; exit 124 = still running. Its verdict is each log's \`= run\` line:`);
+      status();
+      process.exitCode = 124;
+    } else {
+      process.on("exit", () => releaseWaiter());
+      for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143]]) process.on(sig, () => { releaseWaiter(); process.exit(code); });
+      await waitForRunning({ waitTimeoutMin });
+    }
+  }
 } else if (!groups.length) {
   console.error("usage: node tools/ci/test-bg.mjs <group> [group...] [--parallel] [--force] [--last-failed]");
   console.error("       node tools/ci/test-bg.mjs --wait [group...] [--keep-going] [--force]");

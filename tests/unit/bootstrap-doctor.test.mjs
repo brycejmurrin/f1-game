@@ -50,6 +50,44 @@ test("doctor checks the inspected package Node engine rather than a stale minimu
   assert.equal(check("25.0.0").status, "warn", "unsupported ranges must remain unverified");
 });
 
+test("doctor warns when the local Node major differs from CI's setup-apex node-version (W2)", (t) => {
+  const dir = fixture(t);
+  skillTree(dir);
+  const check = (nodeVersion) => diagnose({ root: dir, nodeVersion }).checks.find((c) => c.id === "runtime.node-ci");
+  assert.equal(check("22.1.0").status, "warn", "no action.yml: unreadable is a warning");
+  put(dir, ".github/actions/setup-apex/action.yml", 'runs:\n  steps:\n    - uses: actions/setup-node@x\n      with:\n        node-version: "22"\n');
+  assert.equal(check("22.11.0").status, "pass");
+  const off = check("24.2.0");
+  assert.equal(off.status, "warn");
+  assert.equal(off.message, "Node 24.2.0 here, CI runs Node 22 (.github/actions/setup-apex/action.yml): a local result may differ from CI's");
+  assert.deepEqual(off.details, { local: 24, ci: 22 });
+});
+
+test("doctor without the yaml package warns and leaves skill YAML unverified instead of crashing (W2)", (t) => {
+  const dir = fixture(t);
+  skillTree(dir);
+  const result = diagnose({ root: dir, yamlParse: null });
+  assert.equal(result.checks.find((c) => c.id === "runtime.yaml").status, "warn");
+  assert.equal(result.checks.find((c) => c.id === "skills.demo.yaml").status, "warn");
+  assert.equal(diagnose({ root: dir }).checks.find((c) => c.id === "runtime.yaml").status, "pass");
+});
+
+test("doctor CLI runs from a tree with NO node_modules anywhere above it and reports runtime.yaml (W2)", async (t) => {
+  const os = await import("node:os");
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "doctor-nomods-"));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  for (const rel of ["tools/check/doctor.mjs", "tools/lib/chromium-path.mjs", "tools/lib/session-contracts.mjs"]) {
+    fs.mkdirSync(path.dirname(path.join(tmp, rel)), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, rel), path.join(tmp, rel));
+  }
+  const dir = fixture(t);
+  skillTree(dir);
+  const r = run(process.execPath, [path.join(tmp, "tools/check/doctor.mjs"), "--json", "--root", dir]);
+  assert.notEqual(r.stderr.includes("ERR_MODULE_NOT_FOUND"), true, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.checks.find((c) => c.id === "runtime.yaml").status, "warn");
+});
+
 test("doctor checks the MCP SDK entry used by the project", (t) => {
   const dir = fixture(t);
   skillTree(dir);

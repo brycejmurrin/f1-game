@@ -56,7 +56,8 @@
  * An API error is retried; three in a row exit 3.
  *
  * Exit: 0 ok or hold (the gauge never blocks; read the line), 2 bad args,
- * 3 no token / API unreachable, 124 --wait timeout.
+ * 3 no token / API unreachable, 124 --wait timeout, 77 auth expired (a 401 / revoked
+ * token: `= auth expired — stop`, never retried; tools/lib/auth-error.mjs).
  *
  * REST (read 2026-10-14):
  *   https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28#list-workflow-runs-for-a-repository
@@ -76,6 +77,7 @@ import { fileURLToPath } from "node:url";
 import { api } from "./github-api.mjs";   // githubToken + curl -K - (token on stdin) + 64 MB maxBuffer
 import { createSnapshot } from "../lib/pr-snapshot.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { isAuthError, exitOnAuth, AUTH_EXIT, AUTH_LINE } from "../lib/auth-error.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** Concurrent standard (Linux) job slots on the account. */
@@ -347,6 +349,7 @@ export async function waitForOk({ minutes, intervalS = WAIT_INTERVAL_S, hysteres
   for (;;) {
     const v = measureFn();
     if (v.error) {
+      if (isAuthError(v.error)) { report(AUTH_LINE); return { code: AUTH_EXIT, trend, last }; }
       if (++errors >= 3) { report(`= queue unknown — API: ${v.error} (3 polls in a row)`); return { code: 3, trend, last }; }
     } else {
       errors = 0; last = v;
@@ -403,7 +406,7 @@ Exit 0 = ok or hold (never blocks), 2 = bad args, 3 = API/token.`);
     process.exit(w.code);
   }
   const v = measure();
-  if (v.error) { console.log(`= queue unknown — API: ${v.error}`); process.exit(3); }
+  if (v.error) { exitOnAuth(v.error, { tool: "queue-depth" }); console.log(`= queue unknown — API: ${v.error}`); process.exit(3); }
   if (args.write) {
     const file = path.resolve(ROOT, args.write);
     fs.mkdirSync(path.dirname(file), { recursive: true });

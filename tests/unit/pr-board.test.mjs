@@ -250,12 +250,42 @@ test("measure --pr refreshes the selected PR's armed state after listing sibling
 
 test("measure --pr on a PR that is closed or targets another base is a bad-args error", () => {
   const { request } = fakeApi({ prs: [prObj(4, { state: "closed" }), prObj(6, { base: { ref: "main" } })] });
+  const want = { 4: `PR #4 is closed without merging — not open into ${DEPLOY}`, 6: `PR #6 is open into main, not into ${DEPLOY}` };
   for (const n of [4, 6]) {
     const v = measure({ request, only: n });
     assert.equal(v.ok, false);
     assert.equal(v.badArgs, true);
-    assert.match(v.error, new RegExp(`PR #${n} is not open into`));
+    assert.equal(v.error, want[n]);
   }
+});
+
+test("notOpenReason: --pr on a gone PR says merged (when, as which commit) vs closed unmerged (W2)", async () => {
+  const { notOpenReason } = await import("../../tools/ci/pr-board.mjs");
+  assert.equal(notOpenReason(7, { state: "closed", merged_at: "2026-10-26T20:00:00Z", merge_commit_sha: "abcdef1234567890" }),
+    `PR #7 is merged (2026-10-26T20:00:00Z) as abcdef123 — not open into ${DEPLOY}`);
+  assert.equal(notOpenReason(8, { state: "closed", merged_at: null, closed_at: "2026-10-26T21:00:00Z" }),
+    `PR #8 is closed without merging (2026-10-26T21:00:00Z) — not open into ${DEPLOY}`);
+  assert.equal(notOpenReason(9, { state: "open", base: { ref: "main" } }), `PR #9 is open into main, not into ${DEPLOY}`);
+});
+
+test("auth: a 401 is its own verdict — isAuthError, exitOnAuth prints `= auth expired — stop` and exits 77 (W2)", async () => {
+  const { isAuthError, exitOnAuth, AUTH_EXIT, AUTH_LINE } = await import("../../tools/lib/auth-error.mjs");
+  assert.equal(AUTH_EXIT, 77);
+  assert.equal(AUTH_LINE, "= auth expired — stop");
+  for (const t of ["HTTP 401", "401 Unauthorized", '{"message":"Bad credentials"}', "the token has been revoked",
+    "fatal: Authentication failed for 'https://github.com/x/y.git/'", "To get started with GitHub CLI, please run:  gh auth login",
+    "You are not logged into any GitHub hosts", "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+    new Error("fetch failed: remote: Invalid username or token."), { status: 401 }]) assert.equal(isAuthError(t), true, String(t?.message || t));
+  for (const t of ["HTTP 403", "HTTP 500", "HTTP 404", "curl: (28) timeout", "", null, undefined, { status: 403 }, "fetched 401 objects"])
+    assert.equal(isAuthError(t), false, String(t));
+  const seen = [];
+  assert.equal(exitOnAuth("HTTP 500", { exit: (c) => seen.push(c) }), false);
+  assert.deepEqual(seen, []);
+  const out = [];
+  exitOnAuth("HTTP 401", { tool: "pr-board", exit: (c) => seen.push(c), out: (l) => out.push(l), err: (l) => out.push(l) });
+  assert.deepEqual(seen, [77]);
+  assert.equal(out[0], "= auth expired — stop");
+  assert.equal(out[1], "pr-board: HTTP 401 — refresh the GitHub credential; retrying will not help (exit 77)");
 });
 
 test("measure: any API error fails the whole board with the error text", () => {

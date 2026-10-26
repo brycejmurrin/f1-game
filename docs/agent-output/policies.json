@@ -1326,6 +1326,16 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/auth-error.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "exitOnAuth: the one `= auth expired — stop` stdout line, the cause on stderr, exit 77"
+    },
+    "tools/lib/git-push.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/browser-workers.mjs": {
       "action": "no-direct-output",
       "presentation": "native",

@@ -43,7 +43,8 @@
 // push in the same concurrency group — pages.yml's `pages-train-*` — before it
 // ran a step, or the PR merged / moved to a new head; re-arm on the `--sha` it
 // names), 5 hollow (a draft's skeleton ran, nothing was tested — not green),
-// 124 --timeout (default 120 min).
+// 124 --timeout (default 120 min), 77 auth expired (a 401 / revoked token: prints
+// `= auth expired — stop`; tools/lib/auth-error.mjs — re-arming will not help).
 //
 // FRICTION FIXES (#2384, agent friction plan WS2):
 //   --failures-only   a Monitor event only for a failed/cancelled job and the final `= ci …` line
@@ -69,6 +70,7 @@
 // (read 2026-10-14; measured here: x-ratelimit-remaining unchanged across 304s).
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
+import { exitOnAuth } from "../lib/auth-error.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api as sharedApi, REPO, DEPLOY } from "./github-api.mjs";
@@ -92,8 +94,13 @@ const ETAGS = new Map();
  *  ETag store, injectable for tests. The client is github-api.mjs's (one door,
  *  2026-10-26); this wrapper only defaults the store to this process's map. */
 export function api(pathQs, opts = {}) {
-  return sharedApi(pathQs, { ...opts, etags: opts.etags === undefined ? ETAGS : opts.etags });
+  const r = sharedApi(pathQs, { ...opts, etags: opts.etags === undefined ? ETAGS : opts.etags });
+  // An expired credential is not "API unreachable": stop with the one auth line (W2). Entry point only —
+  // fleet-board-snapshot imports this module and must not be exited from under it.
+  if (r?.error && IS_ENTRY) exitOnAuth(r.error, { tool: "ci-watch" });
+  return r;
 }
+const IS_ENTRY = !!process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 /** A ci.yml run started by a label other than run-ci on a draft (#2184), or by a
  *  PR-body edit that did not newly give a draft the `CI: run` marker line: its

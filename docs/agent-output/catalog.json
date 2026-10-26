@@ -2207,6 +2207,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/auth-error.mjs",
+      "classification": "library",
+      "outputPolicy": "keep-native"
+    },
+    {
       "path": "tools/lib/browser-workers.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
@@ -2315,6 +2320,11 @@
     },
     {
       "path": "tools/lib/generated-paths.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/git-push.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },

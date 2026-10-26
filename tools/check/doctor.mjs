@@ -2,12 +2,18 @@
 // @doc Read-only YAML/refs/mirrors/browser/deps doctor; --json and optional --catalog FILE. No browser or network.
 // @skill check-changes
 // YAML API: https://eemeli.org/yaml/#parsing-documents
+// `yaml` is imported DYNAMICALLY (W2): a fresh clone with no node_modules is exactly when the doctor is
+// needed, and a static import made it die with ERR_MODULE_NOT_FOUND before reporting "run npm install".
+// Without it, runtime.yaml warns and the skill frontmatter checks read "unverified" instead of failing.
+// runtime.node-ci warns when this Node's major differs from CI's (node-version in
+// .github/actions/setup-apex/action.yml): a local green on another major is not CI's green.
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { parseDocument } from "yaml";
+let parseDocument = null;
+try { ({ parseDocument } = await import("yaml")); } catch { /* reported as runtime.yaml by diagnose() */ }
 import { resolveChromium, executableFile, browserCacheResolution } from "../lib/chromium-path.mjs";
 import { analyzeSessionCatalog, reconcilePluginState } from "../lib/session-contracts.mjs";
 
@@ -50,11 +56,26 @@ function resourceState(resource, root) {
   return fs.existsSync(file) ? "local-present" : "missing";
 }
 
+/** CI's Node major from the setup action (`node-version: "22"`), or null when unreadable. Pure given `root`. */
+export function ciNodeMajor(root = ROOT) {
+  try {
+    const m = fs.readFileSync(path.join(root, ".github/actions/setup-apex/action.yml"), "utf8").match(/^\s*node-version:\s*["']?(\d+)/m);
+    return m ? Number(m[1]) : null;
+  } catch { return null; }
+}
+
 /** Pure inspections only: no child process, network, npm install or browser. */
-export function diagnose({ root = ROOT, catalog, env = process.env, nodeVersion = process.versions.node } = {}) {
+export function diagnose({ root = ROOT, catalog, env = process.env, nodeVersion = process.versions.node, yamlParse = parseDocument } = {}) {
   root = path.resolve(root);
   const checks = [];
   const add = (id, status, message, details) => checks.push({ id, status, message, ...(details ? { details } : {}) });
+  add("runtime.yaml", yamlParse ? "pass" : "warn", yamlParse ? "yaml package loads" : "yaml package is missing (no node_modules?); run npm install — skill frontmatter stays unverified");
+  const ciMajor = ciNodeMajor(root);
+  const localMajor = Number(String(nodeVersion).split(".")[0]);
+  if (ciMajor == null) add("runtime.node-ci", "warn", "CI's Node version is unreadable (.github/actions/setup-apex/action.yml)");
+  else add("runtime.node-ci", localMajor === ciMajor ? "pass" : "warn", localMajor === ciMajor
+    ? `Node ${localMajor} matches CI (node-version ${ciMajor})`
+    : `Node ${nodeVersion} here, CI runs Node ${ciMajor} (.github/actions/setup-apex/action.yml): a local result may differ from CI's`, { local: localMajor, ci: ciMajor });
   if (!fs.existsSync(path.join(root, "package.json"))) {
     add("runtime.node", "warn", "Node requirement is unverified without package.json");
     add("tree.root", "fail", "Root has no package.json");
@@ -100,8 +121,9 @@ export function diagnose({ root = ROOT, catalog, env = process.env, nodeVersion 
         const text = read(file);
         const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
         if (!match) throw new Error("Missing YAML frontmatter");
-        const doc = parseDocument(match[1], { uniqueKeys: true });
-        if (doc.errors.length) {
+        const doc = yamlParse ? yamlParse(match[1], { uniqueKeys: true }) : null;
+        if (!doc) add(`skills.${name}.yaml`, "warn", "Skill YAML unverified: the yaml package is missing (run npm install)");
+        else if (doc.errors.length) {
           add(`skills.${name}.yaml`, "fail", "Invalid skill YAML frontmatter", { codes: doc.errors.map((e) => e.code) });
         } else {
           const fm = doc.toJS({ maxAliasCount: 20 });

@@ -295,3 +295,12 @@ test("--wait: 124 on timeout with the last trend; an API error retries, three in
   const down = await waitForOk({ minutes: 30, intervalS: 30, measureFn: () => ({ error: "HTTP 502" }), ...clock() });
   assert.equal(down.code, 3);
 });
+
+test("waitForOk: a 401 stops at once with `= auth expired — stop` and exit 77 — never three retries (W2)", async () => {
+  const lines = [];
+  let polls = 0;
+  const w = await waitForOk({ minutes: 30, intervalS: 30, measureFn: () => { polls++; return { error: "runs (queued): HTTP 401" }; }, ...clock(), report: (l) => lines.push(l) });
+  assert.equal(w.code, 77);
+  assert.equal(polls, 1);
+  assert.deepEqual(lines, ["= auth expired — stop"]);
+});
