@@ -5,13 +5,12 @@ const GameHud = (function () {
 const { IDLE_RPM, MAX_RPM } = PhysicsConsts;   // eval-time read: HARD_EDGES pins js/physics/consts.js first
 const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
 // REDUCED MOTION for the one HUD motion no stylesheet reaches — the canvas
-// minimap's armed pit-marker pulse. The same pair js/game.js motionReduced
-// reads: the OS flag, OR SETTINGS › APPEARANCE › MOTION: REDUCED
-// (html[data-motion], js/ui/title-fx.js), both live.
+// minimap's armed pit-marker pulse. Share TitleFx's resolved accessibility
+// choice with game-world motion, including OFF overriding the OS.
 const _rmq = (typeof window !== "undefined" && window.matchMedia)
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
-const motionReduced = () => !!(_rmq && _rmq.matches)
-  || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
+function motionReduced() { return typeof TitleFx !== "undefined" && typeof TitleFx.mode === "function" ? TitleFx.mode() === "reduce" : !!(_rmq && _rmq.matches)
+  || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce"); }
 // F-01: browsers without Element.currentCSSZoom (iOS Safari < 26.4, Firefox < 126)
 // still paint CSS zoom into getBoundingClientRect — divide by the published zoom.
 // DOM-less mini-dom harnesses (no Element) keep the layout-px fallback of 1.
@@ -1097,7 +1096,7 @@ function fitHud() {
   const tail = "|" + document.body.className;
   const sameKey = head + hlKey() + tail === _fitKey;
   if (sameKey && _fitWait === 1 && fitBoxesSettled()) _fitWait = 31;   // backstop due, nothing resized: wait another 3 s
-  if (sameKey && --_fitWait > 0) {
+  if (sameKey && --_fitWait > 0) { if (_fitObs && !_fitObsDirty) { _fitClashRun = 0; return; } // settled: no gBCR / getComputedStyle this backoff
     // Same-key backoff must not lock a short --dock-r-w while wrap-reverse
     // still crawls BOOST left under load (CI oversize APEX_WORKERS=2:
     // #hud-sectors+btn-boost after the wait already saw clearance).

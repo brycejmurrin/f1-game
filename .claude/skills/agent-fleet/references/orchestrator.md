@@ -65,7 +65,7 @@ The wake pass itself: `running.md` §Reading the fleet.
 ## Before launching
 
 1. `node tools/ci/who-is-on-it.mjs` and the open draft PRs: a live claim or a
-   branch pushed in the last ~15 min on the same paths means that work is
+   branch pushed in the last ~10 min on the same paths means that work is
    owned. Fold it into the plan instead of launching a twin.
 2. Split the work so no two workers share an OWNED glob. Lane mutexes from
    SKILL.md §Launch policy still apply (garage CSS → UI Survey, `js/car/*` →

@@ -9,7 +9,8 @@ import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
-import { ciWorkflow } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, evalTemplate, LABEL_NOISE, EDIT_NOISE, LABEL_OK, EDIT_OK } from "../helpers/ci-workflow.mjs";
+import { hasCiRunMarker } from "../../tools/ci/queue-depth.mjs";
 
 test("ship-filter: a ready PR skips smoke only when neither its own diff nor its base ships anything new (C2a)", () => {
   const step = parseYAML(ciWorkflow).jobs.select.steps.find((st) => st.id === "shipfilter");
@@ -99,33 +100,123 @@ test("ci.yml runs on PRs into the deploy branch only, and a label event other th
     "pull_request must be scoped to PRs whose base is the deploy branch");
   assert.equal(wf.on.pull_request["branches-ignore"], undefined);
   assert.ok(wf.on.pull_request.types.includes("labeled"), "run-ci on a draft still needs the labeled trigger");
-  // #2184: the label-noise predicate, written once per place it is used.
-  const NOISE = "(github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft))";
-  const LABEL_OK = "(github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft))";
+  // #2184: the label-noise predicate, written once per place it is used; the BODY MARKER's edit noise (2026-10-26)
+  // rides beside it everywhere.
+  const NOISE = LABEL_NOISE;
   // 1. Its own group, BEFORE the head-ref term: it can never cancel the PR's live run.
   const group = wf.concurrency.group;
   assert.ok(group.includes(`${NOISE} && format('label-{0}', github.run_id))`), "a label-noise run gets a throwaway group");
-  assert.ok(group.indexOf(NOISE) < group.indexOf("github.event.pull_request.head.ref"), "the throwaway group must win over the head ref");
-  assert.ok(group.indexOf("inputs.concurrency_key") < group.indexOf(NOISE), "a Pages call's key still comes first");
+  // (The edit-noise group's VALUE is evaluated in the BODY MARKER test below: `ci-edit-<run_id>`.)
+  for (const n of [NOISE, EDIT_NOISE]) {
+    assert.ok(group.indexOf(n) < group.indexOf("github.event.pull_request.head.ref"), "the throwaway group must win over the head ref");
+    assert.ok(group.indexOf("inputs.concurrency_key") < group.indexOf(n), "a Pages call's key still comes first");
+  }
   // 2. Every job skips on it (skipped jobs take no runner), so the run ends in seconds.
   for (const [id, job] of Object.entries(wf.jobs)) {
     const cond = String(job.if || "");
+    // The skip notice's edit clause is evaluated below (no notice on any edit).
     if (id === "draft-ci-skipped") assert.ok(cond.includes("github.event.action != 'labeled'"), "the skip notice is not re-posted by a label event");
-    else assert.ok(cond.includes(LABEL_OK), `job ${id} must skip a label event other than run-ci on a draft`);
+    else assert.ok(cond.includes(`${LABEL_OK} && ${EDIT_OK}`), `job ${id} must skip a label event other than run-ci on a draft, and a body edit that does not newly add the CI: run line`);
   }
   // 3. A skipped job reports SUCCESS, so the noise run's verdict must not carry the required name.
-  assert.ok(wf.jobs["ci-verdict"].name.startsWith(`\${{ ${NOISE} && 'CI label event (ignored)' || `));
+  assert.ok(wf.jobs["ci-verdict"].name.startsWith(`\${{ ${NOISE} && 'CI label event (ignored)' || ${EDIT_NOISE} && 'CI edit event (ignored)' || `));
   assert.ok(wf.jobs["ci-verdict"].name.endsWith("|| 'CI' }}"));
   // 4. Tools drop it by title (ci-watch.mjs labelNoiseRun, reuse-draft-fast.sh).
-  assert.equal(wf["run-name"], `\${{ ${NOISE} && format('CI ignored: label {0}', github.event.label.name) || '' }}`);
+  assert.equal(wf["run-name"], `\${{ ${NOISE} && format('CI ignored: label {0}', github.event.label.name) || ${EDIT_NOISE} && 'CI ignored: edit' || '' }}`);
   const reuse = fs.readFileSync(new URL("../../tools/ci/reuse-draft-fast.sh", import.meta.url), "utf8");
-  assert.ok(reuse.includes("^CI ignored: label ") && reuse.includes('"Structural guards (tooling A)"'),
+  assert.ok(reuse.includes("^CI ignored: /") && reuse.includes('"Structural guards (tooling A)"'),
     "a green run whose tooling A did not run is never reused as the fast tier");
   // run-ci is a documented label, and the docs say what it buys (no selected browser specs on a draft).
   const labels = JSON.parse(fs.readFileSync(new URL("../../.github/labels.json", import.meta.url), "utf8"));
   assert.ok(labels.some((l) => l.name === "run-ci"), ".github/labels.json documents run-ci");
   assert.match(String(wf.jobs.selected.if), /!\(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\)/,
     "the selected legs skip every draft; the header and docs/TESTING.md say so");
+});
+
+// THE BODY MARKER (Bryce 2026-10-26): Cursor workers 403 on adding a label, so a PR-body line starting `CI: run`
+// buys a draft exactly what run-ci buys. Evaluated, not just pinned: every job's `if`, the run name, the group and
+// the verdict name under each event, against the run-ci label as the reference.
+test("a `CI: run` body line opts a draft into the fast tier exactly like run-ci, and a body edit starts it only once", () => {
+  const wf = parseYAML(ciWorkflow);
+  const ctx = ({ action = "synchronize", draft = true, labels = [], body = "", label, changes } = {}) => ({
+    github: {
+      event_name: "pull_request", run_id: 4242, ref_name: "77/merge",
+      event: { action, label: label ? { name: label } : undefined, changes,
+        pull_request: { draft, body, labels: labels.map((name) => ({ name })), head: { ref: "cursor/x" } } },
+    },
+    inputs: { fast_tier_run: "", concurrency_key: "", renderer_macos: false },
+    // The plan routes everything, so only the tier gates decide what runs.
+    needs: { select: { result: "success", outputs: { any: "true", any_node: "true", driving: "true", renderer: "true", xr: "true",
+      geometry: "true", geometry_targeted: "" } } },
+  });
+  const view = (c) => {
+    const jobs = {};
+    for (const [id, job] of Object.entries(wf.jobs)) jobs[id] = Boolean(job.if === undefined ? true : evalTemplate(String(job.if), c));
+    return { jobs, runName: evalTemplate(wf["run-name"], c), group: evalTemplate(wf.concurrency.group, c),
+      verdict: evalTemplate(wf.jobs["ci-verdict"].name, c) };
+  };
+  const ran = (v) => Object.entries(v.jobs).filter(([, on]) => on).map(([id]) => id).sort();
+  const MARK = "## Goal\r\nShip it.\r\nCI: run\r\n\r\n## Plan\r\n- [ ] a";
+
+  // Reference points.
+  const bare = view(ctx());
+  assert.deepEqual(ran(bare), ["draft-ci-skipped"], "a draft with neither runs only the skip notice");
+  assert.equal(bare.verdict, "CI draft (opted out)");
+  const label = view(ctx({ labels: ["run-ci"] }));
+  assert.ok(label.jobs["guards-a"] && label.jobs.select && label.jobs["driving-model"], "run-ci gives the fast tier");
+  assert.ok(!label.jobs["node-suites"] && !label.jobs.selected && !label.jobs.smoke, "...and nothing of the full tier");
+
+  // 1. Marker present on a push: the SAME job set as the label, the same name and group.
+  for (const body of [MARK, "CI: run", "ci: RUN please\n"]) {
+    assert.deepEqual(view(ctx({ body })), label, `body ${JSON.stringify(body)} must equal run-ci exactly`);
+    assert.ok(hasCiRunMarker(body), "queue-depth's mirror agrees");
+  }
+  assert.equal(label.verdict, "CI (draft fast tier)", "a draft never supplies the required `CI` name");
+  // 2. Marker absent or only quoted mid-line: the same as a bare draft.
+  for (const body of ["Put `CI: run` in the body", "  CI: run", "xCI: run", null, ""]) {
+    assert.deepEqual(view(ctx({ body })), bare, `body ${JSON.stringify(body)} is not the marker`);
+    assert.ok(!hasCiRunMarker(body), "queue-depth's mirror agrees");
+  }
+  // 3. A ready PR: the marker changes nothing (full tier either way).
+  for (const action of ["synchronize", "ready_for_review"]) {
+    const ready = view(ctx({ action, draft: false }));
+    assert.deepEqual(view(ctx({ action, draft: false, body: MARK })), ready, `ready ${action}: the marker is inert`);
+    assert.equal(ready.verdict, "CI");
+    assert.ok(ready.jobs.selected && ready.jobs["node-suites"], "ready is the full tier");
+  }
+
+  // 4. `edited`: the ONE edit that gives a draft without run-ci the marker starts the fast tier in the PR's group.
+  const gained = view(ctx({ action: "edited", body: MARK, changes: { body: { from: "## Goal\r\nShip it." } } }));
+  assert.deepEqual(gained.jobs, label.jobs, "the gaining edit runs exactly run-ci's jobs");
+  assert.equal(gained.runName, "");
+  assert.equal(gained.group, "ci-cursor/x", "it replaces the PR's live run like a push");
+  assert.equal(gained.verdict, "CI (draft fast tier)");
+  const fromNull = view(ctx({ action: "edited", body: "CI: run", changes: { body: { from: null } } }));
+  assert.deepEqual(fromNull.jobs, label.jobs, "a first body (from null) that carries the marker starts it");
+
+  // 5. Every other edit is noise: nothing runs, a throwaway group (never cancels the live run), a non-`CI` name.
+  const noise = [
+    ["a Plan tick with the marker already there", { body: MARK + "\r\n- [x] b", changes: { body: { from: MARK } } }],
+    ["a title-only edit (no changes.body)", { body: MARK, changes: { title: { from: "old" } } }],
+    ["a base change", { body: MARK, changes: { base: { ref: { from: "x" }, sha: { from: "y" } } } }],
+    ["a Plan edit on a draft without the marker", { body: "## Plan\r\n- [x] a", changes: { body: { from: "## Plan\r\n- [ ] a" } } }],
+    ["the marker removed", { body: "## Plan", changes: { body: { from: MARK } } }],
+    ["the marker added on a ready PR", { draft: false, body: MARK, changes: { body: { from: "" } } }],
+    ["the marker added while run-ci is already on", { labels: ["run-ci"], body: MARK, changes: { body: { from: "" } } }],
+  ];
+  for (const [why, o] of noise) {
+    const v = view(ctx({ action: "edited", ...o }));
+    assert.deepEqual(ran(v), [], `${why}: every job skips`);
+    assert.equal(v.runName, "CI ignored: edit", `${why}: titled for labelNoiseRun`);
+    assert.equal(v.group, "ci-edit-4242", `${why}: its own group`);
+    assert.equal(v.verdict, "CI edit event (ignored)", `${why}: never the required name`);
+  }
+  // The label path is unchanged: run-ci on a draft starts the fast tier, any other label is noise.
+  assert.deepEqual(view(ctx({ action: "labeled", label: "run-ci", labels: ["run-ci"] })).jobs, label.jobs);
+  const bug = view(ctx({ action: "labeled", label: "bug", labels: ["bug"], body: MARK }));
+  assert.deepEqual(ran(bug), []);
+  assert.equal(bug.runName, "CI ignored: label bug");
+  assert.equal(bug.group, "ci-label-4242");
 });
 
 test("geometry planning avoids empty fanout without guessing an unknown diff is empty", () => {

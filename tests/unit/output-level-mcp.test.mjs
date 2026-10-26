@@ -269,6 +269,90 @@ test('closed object branches in composed input schemas accept the presentation k
   assert.equal((await h.call('upstream-validation', 'echo', { unknown: true, outputLevel: 'full' })).error.message, 'unknown upstream argument');
 });
 
+test('same-object local refs accept outputLevel without opening nested values or original definitions', async t => {
+  const schema = { type: 'object', $ref: '#/$defs/Args', $defs: {
+    Args: { type: 'object', properties: { value: { type: 'string' }, child: { $ref: '#/$defs/Args' } }, additionalProperties: false },
+    __outputLevel: { type: 'number' },
+  } };
+  const code = fixture.replace("inputSchema:{type:'object',properties:{value:{type:'string'}},additionalProperties:false}", 'inputSchema:' + JSON.stringify(schema));
+  const h = harness(t, code);
+  const decorated = (await h.request('local-ref', 'tools/list')).result.tools[0].inputSchema;
+  assert.notEqual(decorated.$ref, schema.$ref);
+  const refName = decorated.$ref.split('/').at(-1);
+  const args = decorated.$defs[refName];
+  assert.deepEqual(args.properties.outputLevel.enum, ['compact', 'diagnostic', 'full']);
+  assert.equal(args.additionalProperties, false);
+  assert.deepEqual(decorated.$defs.Args, schema.$defs.Args, 'nested child ref retains the original closed schema');
+  const preserved = Object.keys(decorated.$defs).find(name => name.startsWith('__upstreamInput'));
+  assert.deepEqual(args.properties.child, { $ref: '#/$defs/' + preserved + '/$defs/Args' }, 'recursive property resolves to the preserved source');
+  assert.deepEqual(decorated.$defs.__outputLevel, { type: 'number' }, 'generated definition avoids upstream names');
+  assert.deepEqual((await h.call('ref-call', 'echo', { value: 'ok', outputLevel: 'full' })).result.structuredContent.args, { value: 'ok' });
+});
+
+test('nested root refs retain the original argument restrictions', async t => {
+  const schema = { type: 'object', $ref: '#/$defs/Args', $defs: {
+    Args: { type: 'object', properties: { child: { $ref: '#' } }, additionalProperties: false },
+  } };
+  const code = fixture.replace("inputSchema:{type:'object',properties:{value:{type:'string'}},additionalProperties:false}", 'inputSchema:' + JSON.stringify(schema));
+  const h = harness(t, code);
+  const decorated = (await h.request('nested-root-ref', 'tools/list')).result.tools[0].inputSchema;
+  const args = decorated.$defs[decorated.$ref.split('/').at(-1)];
+  const originalRoot = decorated.$defs[args.properties.child.$ref.split('/').at(-1)];
+  const originalArgs = originalRoot.$defs.Args;
+  assert.equal(originalArgs.additionalProperties, false);
+  assert.equal(originalArgs.properties.outputLevel, undefined, 'nested object must still reject presentation arguments');
+  assert.equal(originalRoot.$ref, args.properties.child.$ref + '/$defs/Args');
+});
+
+test('same-instance reference cycles terminate while being decorated', async t => {
+  const schema = { type: 'object', $ref: '#/$defs/A', $defs: { A: { $ref: '#/$defs/B' }, B: { $ref: '#/$defs/A' } } };
+  const code = fixture.replace("inputSchema:{type:'object',properties:{value:{type:'string'}},additionalProperties:false}", 'inputSchema:' + JSON.stringify(schema));
+  const h = harness(t, code);
+  const decorated = (await h.request('cyclic-refs', 'tools/list')).result.tools[0].inputSchema;
+  const first = decorated.$defs[decorated.$ref.split('/').at(-1)];
+  const second = decorated.$defs[first.$ref.split('/').at(-1)];
+  assert.equal(second.$ref, decorated.$ref);
+  assert.deepEqual(decorated.$defs.A, schema.$defs.A);
+});
+
+test('local refs inside an embedded resource use its own definitions', async t => {
+  const outerArgs = { type: 'object', properties: { outer: { type: 'string' } }, additionalProperties: false };
+  const innerArgs = { type: 'object', properties: { inner: { type: 'string' } }, additionalProperties: false };
+  const schema = { type: 'object', $defs: { Args: outerArgs }, allOf: [{
+    $id: 'https://example.invalid/local', $ref: '#/$defs/Args', $defs: { Args: innerArgs },
+  }] };
+  const code = fixture.replace("inputSchema:{type:'object',properties:{value:{type:'string'}},additionalProperties:false}", 'inputSchema:' + JSON.stringify(schema));
+  const h = harness(t, code);
+  const decorated = (await h.request('resource-refs', 'tools/list')).result.tools[0].inputSchema;
+  const inner = decorated.allOf[0];
+  assert.equal(inner.$id, schema.allOf[0].$id);
+  const target = inner.$defs[inner.$ref.split('/').at(-1)];
+  assert.ok(target, 'adapted definition must be inside its resource');
+  assert.deepEqual(target.properties.inner, { type: 'string' });
+  assert.equal(target.properties.outer, undefined);
+  assert.deepEqual(target.properties.outputLevel.enum, ['compact', 'diagnostic', 'full']);
+  assert.equal(target.additionalProperties, false);
+  assert.deepEqual(decorated.$defs.Args, outerArgs);
+  const original = Object.values(inner.$defs).find(value => value.$ref);
+  assert.equal(original.$id, undefined, 'preserved source must not redeclare the resource id');
+});
+
+test('a root resource id is retained once while local refs are relocated', async t => {
+  const schema = { $id: 'https://example.invalid/root', type: 'object', $ref: '#/$defs/Args', $defs: {
+    Args: { type: 'object', properties: { inner: { type: 'string' }, child: { $ref: '#' } }, additionalProperties: false },
+  } };
+  const code = fixture.replace("inputSchema:{type:'object',properties:{value:{type:'string'}},additionalProperties:false}", 'inputSchema:' + JSON.stringify(schema));
+  const h = harness(t, code);
+  const decorated = (await h.request('root-resource', 'tools/list')).result.tools[0].inputSchema;
+  assert.equal(decorated.$id, schema.$id);
+  const target = decorated.$defs[decorated.$ref.split('/').at(-1)];
+  assert.ok(target.properties.outputLevel);
+  const source = decorated.$defs[target.properties.child.$ref.split('/').at(-1)];
+  assert.equal(source.$id, undefined);
+  assert.ok(source.$ref.startsWith('#/$defs/'), 'preserved root refs use their new document position');
+  assert.equal(source.$defs.Args.properties.outputLevel, undefined);
+});
+
 
 test('retrieval tool name avoids upstream names regardless of pagination order', async t => {
   const code = fixture.replace("name:'plain'", "name:'_output_read'").replace("name:'failure'", "name:'output_read'");

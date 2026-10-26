@@ -41,8 +41,14 @@ var EventJournal = (function () {
       log.push(row);
     }
 
+    function syncField() {
+      if (G.cars !== lastCars) { reset(); lastCars = G.cars; }
+    }
+
     function onFacts(ev, f) {
       if (!ev || !ev.length) return;
+      // Radio forwards this tick's facts before update() samples its edges.
+      syncField();
       const ft = f && Number.isFinite(f.t) ? f.t : (G.raceT || 0);
       for (const e of ev) {
         const row = rowFromFacts(e, f, ft);
@@ -77,10 +83,7 @@ var EventJournal = (function () {
       if (G.state !== "race" || !G.cars || G.cars.length < 2) return;
       if (G.timeTrial || G.practice) return;
       const now = G.raceT || 0;
-      if (G.cars !== lastCars) {
-        reset();
-        lastCars = G.cars;
-      }
+      syncField();
       for (let i = 0; i < G.cars.length; i++) {   // indexed: sampleEdges runs every step
         const c = G.cars[i];
         if (!c) continue;

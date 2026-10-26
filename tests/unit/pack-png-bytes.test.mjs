@@ -40,7 +40,7 @@ function loader({ ls = {}, decompress = true, files = {}, stream = Decompression
     Blob, TextDecoder, DataView, Uint8Array: byteArray, ArrayBuffer, Promise, setTimeout,
     localStorage: { getItem: (k) => (k in ls ? ls[k] : null), setItem() {}, removeItem() {} },
     async fetch(url) {
-      const name = url.split("/").pop();
+      const name = url.split("?")[0].split("/").pop();   // pack URLs carry ?h=<md5> (L3)
       if (name === "manifest.json") return { ok: true, json: async () => manifest };
       const bytes = name in files ? files[name] : fs.readFileSync(path.join(PACK, name));
       return { ok: true, blob: async () => new Blob([bytes]) };

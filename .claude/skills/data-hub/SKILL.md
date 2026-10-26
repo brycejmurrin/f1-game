@@ -61,7 +61,7 @@ Season/year (schedule/results take no year, standings an optional one; `LAST SEA
 stale `apex26.api.*` cache, mock answering every year as 2026) → `references/season-year.md`.
 
 Start with `tests/specs/data-lifecycle.spec.js` or `tests/specs/telemetry-compare.spec.js`
-through `test-solo.mjs <path>` as one background task with a log in `artifacts/logs/`
+through `node tools/ci/test-solo.mjs <path>` as one background task with a log in `artifacts/logs/`
 (parent-owned browser, AGENTS.md rule 4). Reserve the
 `test-bg.mjs hooks` group for changes that need its wider surface. Node-only, seconds, run first:
 `node --test tests/unit/data-api-status.test.mjs` (also `data-standings`, `data-results`,

@@ -67,9 +67,11 @@ const ShareCode = (function () {
     const out = { id: l.id.slice(0, 64), c1: clamp01(l.c1), c2: clamp01(l.c2) };
     if (typeof l.name === "string") out.name = l.name.slice(0, 64);
     let n = 0;
+    // Match garage-file imports as the optional paint schema grows.
+    const max = (typeof Liveries !== "undefined" && Liveries.FIELDS ? Liveries.FIELDS.length : 64) + 32;
     for (const k of Object.keys(l)) {
       if (k === "id" || k === "c1" || k === "c2" || k === "name" || k === "__proto__") continue;
-      if (n >= 64) break;
+      if (n >= max) break;
       if (rgb3(l[k])) { out[k] = clamp01(l[k]); n++; }
       else if (typeof l[k] === "string" && l[k].length <= 64 && !(l[k] in Object.prototype)) { out[k] = l[k]; n++; }
     }

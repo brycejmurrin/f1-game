@@ -3103,6 +3103,7 @@
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/settings-export.test.mjs",
+        "tests/unit/share-code.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ]
     },
@@ -6719,9 +6720,6 @@
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
-      "motionReduced": [
-        "tests/unit/storm-vm.test.mjs"
-      ],
       "naturalGear": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
@@ -7795,7 +7793,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "csTabId": [
-        "tests/unit/livery-design.test.mjs"
+        "tests/unit/livery-design.test.mjs",
+        "tests/unit/share-code.test.mjs"
       ],
       "discardLivDraft": [
         "tests/unit/team-livery.test.mjs"
@@ -7819,6 +7818,7 @@
       ],
       "livDraftTo": [
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/share-code.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "openSetup": [
@@ -13468,6 +13468,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/pack-content-address.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
       ],
@@ -13477,6 +13478,7 @@
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/build-worker.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/pack-content-address.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
@@ -13484,6 +13486,9 @@
       "loadModels": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/build-worker.test.mjs"
+      ],
+      "loadModelsFor": [
+        "tests/unit/assets-pack.test.mjs"
       ],
       "manifest": [
         "tests/specs/assets-api.spec.js",
@@ -13493,7 +13498,8 @@
       ],
       "model": [
         "tests/unit/assets-pack.test.mjs",
-        "tests/unit/build-worker.test.mjs"
+        "tests/unit/build-worker.test.mjs",
+        "tests/unit/pack-content-address.test.mjs"
       ],
       "modelIds": [
         "tests/unit/build-worker.test.mjs"
@@ -15954,6 +15960,9 @@
       ],
       "snapshot": [
         "tests/unit/hud-inputs.test.mjs"
+      ],
+      "*": [
+        "tests/unit/a11y-opts.test.mjs"
       ]
     },
     "js/ui/hud-layout.js": {
@@ -16317,6 +16326,7 @@
       ],
       "*": [
         "tests/specs/hud-mirror.spec.js",
+        "tests/unit/a11y-opts.test.mjs",
         "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
@@ -16982,6 +16992,7 @@
       ],
       "applySettings": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/key-binds.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/settings-ttlb-backup.test.mjs"

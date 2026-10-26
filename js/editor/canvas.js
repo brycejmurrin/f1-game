@@ -485,16 +485,24 @@ const DesignerCanvas = (function () {
       g.fillStyle = COL.text; g.font = LABEL_FONT; g.textBaseline = "top";
       g.fillText(stepM + " m grid", 8, 6);
     }
-    function road() {
-      if (!built || !built.n) return;
+    // The road's L/R edge rings depend only on the built centreline, so they are cached per setBuilt
+    // instead of reallocated on every pointermove repaint.
+    let ringsFor = null, ringsL = null, ringsR = null;
+    function rings() {
+      if (ringsFor === built && ringsL) return;
       const n = built.n, px = built.px, pz = built.pz, hw = built.hw;
-      const L = [], R = [];
+      ringsL = []; ringsR = []; ringsFor = built;
       for (let k = 0; k < n; k++) {
         const a = (k - 1 + n) % n, b = (k + 1) % n;
         let tx = px[b] - px[a], tz = pz[b] - pz[a]; const len = Math.hypot(tx, tz) || 1; tx /= len; tz /= len;
         const w = hw[k] || hw[0] || 7;
-        L.push([px[k] - tz * w, pz[k] + tx * w]); R.push([px[k] + tz * w, pz[k] - tx * w]);
+        ringsL.push([px[k] - tz * w, pz[k] + tx * w]); ringsR.push([px[k] + tz * w, pz[k] - tx * w]);
       }
+    }
+    function road() {
+      if (!built || !built.n) return;
+      const n = built.n, px = built.px, pz = built.pz, hw = built.hw;
+      rings(); const L = ringsL, R = ringsR;
       g.beginPath();
       for (let k = 0; k < n; k++) { const p = L[k]; k ? g.lineTo(toSX(p[0]), toSY(p[1])) : g.moveTo(toSX(p[0]), toSY(p[1])); }
       g.closePath();
@@ -724,7 +732,7 @@ const DesignerCanvas = (function () {
       setPoints(pts) { base = Array.isArray(pts) ? pts : []; ghostKey = null; if (sel >= base.length) sel = -1; if (span >= base.length) span = -1; if (!fitted && base.length) fit(); render(); },
       // A preview the PREVIOUS edit scheduled can land mid-drag: the road it
       // brings is still the old loop, so a moved drag stays stale.
-      setBuilt(tr) { built = tr && tr.n ? tr : null; if (!(mode === "drag" && moved)) stale = false; render(); },
+      setBuilt(tr) { built = tr && tr.n ? tr : null; ringsFor = null; ringsL = ringsR = null; if (!(mode === "drag" && moved)) stale = false; render(); },
       setIssues(list) { issues = Array.isArray(list) ? list : []; render(); },
       setScenery(design, on) {
         sceneryOn = !!on && typeof DesignerSceneryPreview !== "undefined";

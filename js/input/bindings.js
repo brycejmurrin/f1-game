@@ -112,7 +112,9 @@ const InputBindings = (function () {
           const v = Array.isArray(saved[a.id]) ? saved[a.id] : null;
           if (!v) continue;
           const slots = [0, 1].map((i) => {
-            const c = v[i] == null ? null : normCode(String(v[i]));
+            // JSON objects can shadow toString/valueOf with non-callable values.
+            // Saved keyboard codes are strings; never coerce an imported object.
+            const c = typeof v[i] === "string" ? normCode(v[i]) : null;
             if (!c || !/^[A-Za-z0-9]{1,24}$/.test(c) || KEY_RESERVED[c] || seen[c]) return null;
             seen[c] = 1;
             return c;
@@ -234,7 +236,10 @@ const InputBindings = (function () {
           const v = Array.isArray(saved[a.id]) ? saved[a.id] : null;
           if (!v) continue;
           padMap[a.id] = [0, 1].map((i) => {
-            const b = v[i] == null ? null : Number(v[i]);
+            // Keep legacy numeric strings, but reject objects before Number()
+            // can invoke their (possibly malformed) coercion methods.
+            const raw = v[i];
+            const b = typeof raw === "number" || typeof raw === "string" ? Number(raw) : null;
             if (b == null || !padIndexOk(b) || PAD_RESERVED[b] || seen[b]) return null;
             seen[b] = 1;
             return b;
