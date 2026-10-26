@@ -53,3 +53,32 @@ jobs:
           if [ "${n:-0}" -gt 0 ]; then
             echo "::notice title=merge-attribution::$n merge(s) without a Merged-by: trailer (presumed Bryce UI merges); rows in the job summary"
           fi
+
+  # THE BUS DONE LINE FROM THE MERGE ITSELF (audit 2026-10-26: 88 of 326 merges in a week had no DONE line).
+  # tools/ci/merge-done.mjs reads each first-parent merge in the pushed range and sends one fleet-bus DONE
+  # (PR number, both parents, actor; sender github:merge-done; idempotent per PR + sha), so no session has to
+  # remember it. Its own job: the bus is a git branch (claude/fleet-bus), so this job needs contents: write and
+  # the persisted checkout credentials, and the attribution job above stays read-only. The actor and shas enter
+  # the shell through env only (zizmor template-injection: https://docs.zizmor.sh/audits/#template-injection).
+  # Until merge-done.mjs is on the deploy branch the step is a notice, not a red.
+  done:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write   # git push to claude/fleet-bus
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1   # zizmor: ignore[artipacked] this job pushes the claude/fleet-bus branch with the persisted checkout credentials
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - name: Bus DONE for each merge
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          if [ ! -f tools/ci/merge-done.mjs ]; then echo "::notice::tools/ci/merge-done.mjs not on this tree yet; no DONE line"; exit 0; fi
+          case "$BEFORE" in 0000000000000000000000000000000000000000|"") RANGE="${AFTER}~1..${AFTER}" ;; *) RANGE="${BEFORE}..${AFTER}" ;; esac
+          git config user.name "apex-merge-done"
+          git config user.email "noreply@users.noreply.github.com"
+          node tools/ci/merge-done.mjs --range "$RANGE" --actor "$ACTOR" | tee -a "$GITHUB_STEP_SUMMARY"
