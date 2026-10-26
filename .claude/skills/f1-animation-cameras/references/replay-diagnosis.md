@@ -1,7 +1,9 @@
 # Diagnosis and prerequisites
 
 ## Anchor owners (grep these first)
-- `js/race/real-replay.js` — replay `follow` / `setLocked` / seek state (the followed car id).
+- `js/race/real-replay.js` — replay `follow` / `setLocked` / seek state (the followed car id);
+  `setLocked` delegates to the Broadcast object built by `Broadcast.create` (`js/race/broadcast.js`),
+  which holds the lock and the auto-cut shots; `reposition()` skips `setFollow` while the picture is locked.
 - `js/ui/watch-transport.js` — FOLLOWED DRIVER select, FOLLOW LOCK, director chip.
 - `js/camera/director.js`, `js/camera/replay-buf.js` — TV director cuts, replay buffer.
 - `js/game.js` `cameraDampingState()` (`__apex.cameraState()`): eye, target, fov,

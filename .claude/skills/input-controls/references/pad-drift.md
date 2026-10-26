@@ -11,3 +11,10 @@
 4. Code fix: dead-zone default is `PAD_DZ_DEFAULT` (input.js). A raised default reaches fresh installs only; a stored
    `padDeadzone` needs a STEER_SCHEMA step (steer-migration.spec).
 5. Repro in a spec: mock `navigator.getGamepads` as `tests/specs/gamepad.spec.js` does; poll once per frame.
+
+No added lag: `padAxisShape` (`input.js`) is STATELESS (rest → dead zone →
+saturation, no filter), so a drift fix belongs there or in `padRest`, never a
+smoothing/slew stage; the response curve is `analogShape` (same file). Full lock:
+each side is divided by its own travel (`1 ± rest`, `|rest| ≤ 0.5` so neither
+divisor is below 0.5) and `span = max(0.05, 1 − dz − sat)` — a worn pad that
+tops out short needs SATURATION, not a bigger rest.
