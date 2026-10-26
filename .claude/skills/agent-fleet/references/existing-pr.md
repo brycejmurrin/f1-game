@@ -20,5 +20,5 @@ Worker, instead of loop step 1's branch and draft PR:
   CONFLICTING or the tip is red (AGENTS.md §Git branch & deploy), via
   `sync-pr.mjs`; never rebase or force-push.
 - Keep the existing PR body; add the fleet block and refresh it at each push.
-- A pusher other than you on that branch in the last ~15 min is live:
+- A pusher other than you on that branch in the last ~10 min is live:
   escalate rather than race it.

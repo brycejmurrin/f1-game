@@ -92,7 +92,7 @@ home); this file holds the policy numbers.
 - **Monitoring and reporting:** every hunter and PR-owner prompt carries `role-pr-owner.md` §Monitoring and reporting.
 - **No desk field.** READY goes to the lane's own fleet (`ORCHESTRATOR: fleet <X>`). No Merge Desk exists unless
   Bryce designates one; a lane never runs `list_sessions` to look for one.
-- **Before launching an owner:** skip a PR that is armed and green or pushed in the last 15 min.
+- **Before launching an owner:** skip a PR that is armed and green or pushed in the last ~10 min.
 - **Hunters and perf lanes:** stop after the first zero-finding round; cap at ~3 rounds or 25 min, then FINAL.
 - **A lane that edits `.claude/**`** needs Bryce's quoted grant in its own launch prompt.
 - **Stand-down** is a message with a 2-minute window to push a WIP findings note before any interrupt.

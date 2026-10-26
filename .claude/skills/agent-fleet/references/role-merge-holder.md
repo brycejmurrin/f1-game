@@ -10,7 +10,9 @@ is gone). What still needs Bryce's typed word in the acting session:
 own worker wrote is yours to lift; a hold Bryce wrote is his).
 
 No Merge Desk exists unless Bryce designates one; every orchestrator merges its
-own fleet's PRs, in parallel, on any host, and READY goes to it.
+own fleet's PRs, in parallel, on any host, and READY goes to it. When a tip is
+clean for merge, say it is ready for the **orchestrator** to merge via
+`merge-gate.mjs` — not "the merge desk" while the desk is dormant (#3328).
 
 ## The gate
 

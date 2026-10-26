@@ -13465,6 +13465,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/pack-content-address.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
       ],
@@ -13474,6 +13475,7 @@
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/build-worker.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/pack-content-address.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
@@ -13493,7 +13495,8 @@
       ],
       "model": [
         "tests/unit/assets-pack.test.mjs",
-        "tests/unit/build-worker.test.mjs"
+        "tests/unit/build-worker.test.mjs",
+        "tests/unit/pack-content-address.test.mjs"
       ],
       "modelIds": [
         "tests/unit/build-worker.test.mjs"
