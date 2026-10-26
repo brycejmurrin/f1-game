@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  fullTierPassed, DEPLOY, MAX_ARMED, ALARM_HOURS, stalled, alarmLines, SUGGESTIONS, hasMergeHold, parseFleetStatus, fleetStatus, ageLabel, ciState, decide, suggest, evaluate, render, measure,
+  fullTierPassed, DEPLOY, MAX_ARMED, ALARM_HOURS, stalled, alarmLines, busAlarms, SUGGESTIONS, hasMergeHold, parseHolds, parseFleetStatus, fleetStatus, ageLabel, ciState, decide, suggest, evaluate, render, measure,
 } from "../../tools/ci/pr-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -92,12 +92,41 @@ test("suggest: ARM waits on a MERGE-HOLD line and at MAX_ARMED armed repo-wide",
   assert.equal(suggest({ ...base }, { ...ctx(), armed: 2 }), "WAIT");
 });
 
-test("hasMergeHold: a line STARTING with MERGE-HOLD:, outside comments, is the only veto", () => {
-  assert.equal(hasMergeHold("## Goal\nx\nMERGE-HOLD: waiting on Bryce\n"), true);
-  assert.equal(hasMergeHold("please see MERGE-HOLD: mid-sentence"), false);
-  assert.equal(hasMergeHold("<!-- MERGE-HOLD: example -->\n## Goal"), false);
+test("hasMergeHold: only the full shape `MERGE-HOLD: <reason> | lift: <who> | until: <t>` a reader can see is a veto (G12)", () => {
+  const full = "MERGE-HOLD: waiting on Bryce | lift: Bryce | until: 18:00 PT";
+  assert.equal(hasMergeHold(`## Goal\nx\n${full}\n`), true);
+  // markdown dress, case and Unicode dashes still read as the hold a human sees (redteam-gates G12: 11 forms missed)
+  for (const dressed of [`**MERGE-HOLD:** x | lift: y | until: z`, `**MERGE-HOLD**: x | lift: y | until: z`, `- ${full}`,
+    `> ${full}`, `  * ${full}`, `## ${full}`, `1. ${full}`, `merge-hold: x | lift: y | until: z`, "MERGE‑HOLD: x | lift: y | until: z",
+    "- [ ] MERGE-HOLD: x | lift: y | until: z"]) {
+    assert.equal(hasMergeHold(dressed), true, dressed);
+  }
+  // examples a reader does not see are no veto: comments (closed or not), fenced code, <details>
+  for (const hidden of [`<!-- ${full} -->`, `<!-- unclosed\n${full}`, "```\n" + full + "\n```", "~~~md\n" + full + "\n~~~",
+    `<details><summary>old</summary>\n\n${full}\n</details>`]) {
+    assert.equal(hasMergeHold(hidden), false, hidden);
+  }
+  assert.equal(hasMergeHold(`please see ${full}`), false, "a mid-sentence mention");
   assert.equal(hasMergeHold("do not merge"), false);
   assert.equal(hasMergeHold(null), false);
+  assert.equal(hasMergeHold("MERGE-HOLD: <reason> | lift: <who> | until: <time|event>"), false, "the template placeholder");
+});
+
+test("parseHolds: owner tags are never vetoes; any other short MERGE-HOLD line is malformed (DECISIONS #6)", () => {
+  assert.deepEqual(parseHolds("MERGE-HOLD: DAD merges (do not remove)"), { holds: [], owners: ["DAD"], malformed: [] });
+  assert.deepEqual(parseHolds("MERGE-HOLD: DAD merges (do not remove) | lift: D orchestrator | until: READY+merge-gate").owners, ["DAD"],
+    "#3835's well-shaped owner tag is still an owner tag");
+  assert.deepEqual(parseHolds("**owner:** D  # lent").owners, ["D"]);
+  assert.deepEqual(parseHolds("MERGE-HOLD: deploy gate remains pending"), { holds: [], owners: [], malformed: ["deploy gate remains pending"] });
+  assert.deepEqual(parseHolds("MERGE-HOLD: x | lift: Bryce").malformed, ["x | lift: Bryce"], "no until: is not the shape");
+  assert.deepEqual(parseHolds("MERGE-HOLD: x | lift: Bryce | until: 9pm").holds, [{ reason: "x", lift: "Bryce", until: "9pm" }]);
+  const row = evaluate([{ pr: prObj(7, { body: "MERGE-HOLD: DAD merges\n\n```fleet\nfleet: A\nmerger: D\n```\nMERGE-HOLD: pending" }),
+    runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() }]).rows[0];
+  assert.equal(row.hold, false);
+  assert.equal(row.owner, "D,DAD");
+  assert.equal(row.merger, "D");
+  assert.equal(row.suggest, "ARM", "an owner tag and a malformed line hold nothing");
+  assert.match(render({ rows: [row] }).split("\n")[1], /^#7\s+A\s+-\s+D,DAD\s.*ARM \(HOLD\? malformed, not a veto\)$/);
 });
 
 test("suggest: READY waits while the draft's Plan has open items", () => {
@@ -155,8 +184,8 @@ test("render: header, one line per PR, a footer; empty board says so", () => {
   const r = evaluate([{ pr: prObj(1, { title: "x".repeat(80) }), runs: [], checkRuns: guard() }]);
   const out = render(r);
   const lines = out.split("\n");
-  assert.match(lines[0], /^PR\s+FL\s+SLOT\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+PLAN\s+FLEET\s+SUGGEST$/);
-  assert.match(lines[1], /^#1\s+-\s+-\s+x{39}…\s+ready\s+a{39}1\s+clean\s+-\s+none\s+-\s+passed\s+-\s+-\s+WAIT$/);
+  assert.equal(lines[0].split(/\s+/).join(" "), "PR FL SLOT OWNER TITLE STATE HEAD MERGEABLE AUTO-MERGE CI FAILING JOBS GATE PLAN FLEET SUGGEST");
+  assert.match(lines[1], /^#1\s+-\s+-\s+-\s+x{39}…\s+ready\s+a{39}1\s+clean\s+-\s+none\s+-\s+passed\s+-\s+-\s+WAIT$/);
   assert.match(lines.at(-1), /^pr-board: 1 open PR\(s\)$/);
   const empty = render(evaluate([]));
   assert.match(empty, /no open PRs into claude\/f1-game-project-26h3ng/);
@@ -281,14 +310,24 @@ test("measure without a token reports the hint (no request leaves the box)", () 
 test("only GET requests are ever issued: every curl the default transport spawns is a bare GET", () => {
   const prs = [prObj(1), prObj(2, { draft: true })];
   const spawned = [];
+  const pooled = [];
   const run = (cmd, args, opts) => {
+    // A pr-snapshot pool round: the URLs ride the stdin config. Answer nothing, so every URL falls back to the
+    // serial GET below (the fallback path is what this test pins); the config itself must carry no write verb.
+    if (args.includes("--parallel")) {
+      pooled.push(opts.input);
+      assert.equal(cmd, "curl");
+      assert.ok(!args.join(" ").includes("t0k3n"), "the token never appears in argv");
+      assert.doesNotMatch(opts.input, /^\s*(request|data[\w-]*|form|upload-file|json)\s*=/m, "a pool round is GETs only");
+      return { status: 0, stdout: "", stderr: "" };
+    }
     spawned.push({ cmd, args, opts });
     const url = args.find((a) => a.startsWith("https://api.github.com/repos/"));
     const qs = url.split("/repos/brycejmurrin/f1-game/")[1];
     const f = fakeApi({ prs, checksBySha: { [SHA(1)]: guard(), [SHA(2)]: guard() } }).request(qs);
     return { status: 0, stdout: `${JSON.stringify(f.json)}\n${f.error ? 500 : 200}`, stderr: "" };
   };
-  const v = measure({ run, env: { GH_TOKEN: "t0k3n" } });
+  const v = measure({ snapshot: createSnapshot({ run, env: { GH_TOKEN: "t0k3n" }, cacheFile: null }) });   // never the real ETag store
   assert.equal(v.ok, true);
   assert.ok(spawned.length > 4);
   for (const { cmd, args, opts } of spawned) {
@@ -301,6 +340,7 @@ test("only GET requests are ever issued: every curl the default transport spawns
     assert.ok(!args.join(" ").includes("t0k3n"), "the token never appears in argv");
     assert.match(opts.input, /Authorization: Bearer t0k3n/);
   }
+  assert.ok(pooled.length >= 2 && pooled.every((cfg) => /^url = "https:\/\/api\.github\.com\/repos\/brycejmurrin\/f1-game\//m.test(cfg)));
 });
 
 test("the source names no write verb: no method override, no body, no mutating REST route", () => {
@@ -362,7 +402,7 @@ test("evaluate + render: PLAN is done/items from the body, HOLD is flagged, a sw
   const items = [
     { pr: prObj(1, { auto_merge: { merge_method: "merge" } }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
     { pr: prObj(2, { body }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
-    { pr: prObj(3, { body: "MERGE-HOLD: Bryce\n" }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
+    { pr: prObj(3, { body: "MERGE-HOLD: Bryce reviews | lift: Bryce | until: his word\n" }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
     { pr: prObj(4), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
     { pr: prObj(5), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
   ];
@@ -472,7 +512,7 @@ test("suggest: a MERGE-HOLD: body never yields ARM or READY, at any gate/ci stat
     assert.equal(green.action, "WAIT");
     assert.match(green.why, /MERGE-HOLD:/);
   }
-  const body = "## Goal\nx\nMERGE-HOLD: waiting on Bryce\n";
+  const body = "## Goal\nx\nMERGE-HOLD: waiting on Bryce | lift: Bryce | until: 18:00 PT\n";
   const item = (draft) => ({ pr: prObj(1, { draft, body }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() });
   assert.equal(evaluate([item(true)]).rows[0].suggest, "WAIT", "#2789: no READY under a hold");
   assert.equal(evaluate([item(false)]).rows[0].suggest, "WAIT");
@@ -524,21 +564,47 @@ test("fleet letter and slot: JSON fleetLetter/slot and the FL/SLOT columns come 
 // The ci-watch skill and the ci-watcher / merge-desk agents were deleted with the
 // retired Merge Desk (system audit 2026-10-26); their pins went with them.
 
-test("--alarm: ready + green + no hold + no ci run for 12 h is a stall; drafts, holds, reds and fresh pushes are not", () => {
+test("--alarm: ready + green + no hold + no ci run for 2 h is a stall; drafts, holds, reds and fresh pushes are not", () => {
   const now = Date.parse("2026-10-26T12:00:00Z");
-  const old = "2026-10-25T20:00:00Z", fresh = "2026-10-26T10:00:00Z";
+  const old = "2026-10-26T09:00:00Z", fresh = "2026-10-26T11:00:00Z";
   const item = (n, over = {}, at = old, conclusion = "success") => ({ pr: prObj(n, over),
     runs: [{ id: n, status: "completed", conclusion, created_at: at }], jobs: fullJobs(), jobsRunId: n, checkRuns: guard() });
-  const r = evaluate([item(1), item(2, { draft: true }), item(3, { body: "MERGE-HOLD: Bryce\n" }), item(4, {}, old, "failure"), item(5, {}, fresh),
-    item(6, { auto_merge: { merge_method: "merge" } })]);
+  const r = evaluate([item(1), item(2, { draft: true }), item(3, { body: "MERGE-HOLD: Bryce | lift: Bryce | until: his word\n" }),
+    item(4, {}, old, "failure"), item(5, {}, fresh), item(6, { auto_merge: { merge_method: "merge" } }), item(8, { body: "MERGE-HOLD: DAD merges\n" })]);
   assert.equal(r.rows[0].ciAt, old, "the row carries the head run's created_at");
-  assert.deepEqual(stalled(r.rows, { now }).map((x) => x.number), [1, 6]);
+  assert.deepEqual(stalled(r.rows, { now }).map((x) => x.number), [1, 6, 8], "an owner tag is no hold: #8 stalls");
   const lines = alarmLines(r.rows, { now });
-  assert.match(lines[0], /^#1 STALLED 16h ready\+green, no hold, no push/);
+  assert.match(lines[0], /^#1 STALLED 3h ready\+green, no hold, no push/);
   assert.match(lines[1], /armed merge/);
-  assert.equal(lines.at(-1), "= alarm 2 stalled (ready > 12 h, green, no hold, no push)");
-  assert.equal(alarmLines([], { now }).at(-1), "= alarm none (ready > 12 h, green, no hold, no push)");
-  assert.equal(ALARM_HOURS, 12);
+  assert.equal(lines[2].split(": ")[0], "#8 STALLED 3h ready+green, no hold, no push (fleet -, owner DAD)");
+  assert.equal(lines.at(-1), "= alarm 3 stalled, 0 fleet (ready > 2 h, green, no hold, no push; bus not read)");
+  assert.equal(alarmLines([], { now, bus: [] }).at(-1),
+    "= alarm none (ready > 2 h, green, no hold, no push; lends without merger:, fleets without a live orchestrator)");
+  assert.equal(ALARM_HOURS, 2);
+});
+
+test("busAlarms: a lend on the bus with no merger: in the block, and a fleet with no live orchestrator (BH5, audit3 #12)", () => {
+  const now = Date.parse("2026-10-26T12:00:00Z");
+  const t = (iso) => Date.parse(iso) / 1000;
+  const rows = [
+    { number: 3725, fleetLetter: "A", merger: "" }, { number: 3731, fleetLetter: "A", merger: "D" },
+    { number: 3700, fleetLetter: "D", merger: "" }, { number: 3800, fleetLetter: "B", merger: "" },
+  ];
+  const bus = [
+    { sha: "a".repeat(40), at: t("2026-10-26T11:00:00Z"), type: "HANDOFF", from: "claude:session_01A", to: "*", text: "ORCH A LIVE claude:session_01A" },
+    { sha: "b".repeat(40), at: t("2026-10-24T11:00:00Z"), type: "HANDOFF", from: "claude:session_01B", to: "*", text: "ORCH B LIVE claude:session_01B" },
+    { sha: "c".repeat(40), at: t("2026-10-26T04:00:00Z"), type: "INFO", from: "grok:DAD", to: "A", text: "#3725 #3731 lent to A for the scenery train merger:B" },
+    { sha: "d".repeat(40), at: t("2026-10-26T05:00:00Z"), type: "LEASE", from: "claude:session_01A", to: "*", text: "LEND-EXTEND #3800 30m" },
+  ];
+  // #3800's LEND-EXTEND is a lease word, not a lend: no row for it
+  assert.deepEqual(busAlarms(rows, bus, { now }), [
+    "#3725 LEND on the bus (ccccccc, merger B) but the fleet block has no merger: — pr-body --fleet merger=B",
+    "#3731 LEND names merger B (ccccccc) but the fleet block says merger: D",
+    "fleet B NO ORCHESTRATOR: newest ORCH B LIVE claude:session_01B is 2d old (> 24 h; #3800)",
+    "fleet D NO ORCHESTRATOR: no ORCH D LIVE line in the last 4 bus entries (#3700)",
+  ]);
+  assert.equal(alarmLines(rows, { now, bus }).at(-1),
+    "= alarm 0 stalled, 4 fleet (ready > 2 h, green, no hold, no push; lends without merger:, fleets without a live orchestrator)");
 });
 
 test("measure: one recent ci.yml page answers covered heads; only uncovered heads get their own runs read", () => {
@@ -557,7 +623,7 @@ test("measure: one recent ci.yml page answers covered heads; only uncovered head
 
 // tools/lib/pr-snapshot.mjs — the shared per-PR reads behind pr-board, needs-sync,
 // session-status --pr and queue-depth (pinned here: pr-board is its main reader).
-import { createSnapshot, loadStore, saveStore, runsByHead } from "../../tools/lib/pr-snapshot.mjs";
+import { createSnapshot, loadStore, saveStore, capStore, batchGet, parseBatchOut, POOL, runsByHead } from "../../tools/lib/pr-snapshot.mjs";
 
 test("pr-snapshot: one process never asks the same URL twice; errors are not memoised; stats count requests", () => {
   const calls = [];
@@ -591,4 +657,56 @@ test("pr-snapshot: the ETag store round-trips through artifacts/ and a 304 reuse
     assert.ok(loadStore(file).has(url));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   assert.deepEqual([...runsByHead([{ head_sha: "a", id: 1 }, { head_sha: "a", id: 2 }, { id: 3 }]).get("a")].map((r) => r.id), [1, 2]);
+});
+
+test("pr-snapshot store: gzipped on disk, legacy plain JSON still read, capped by bytes oldest-first (tools T12)", () => {
+  const dir = path.join(ROOT, "artifacts", "tmp", `pr-snapshot-gz-${process.pid}`);
+  const file = path.join(dir, "etags.json");
+  try {
+    const big = { etag: 'W/"b"', json: { blob: "x".repeat(5000) } };
+    saveStore(new Map([["u1", big], ["u2", big], ["u3", { etag: 'W/"c"', json: 1 }]]), file, { maxBytes: 6000 });
+    const raw = fs.readFileSync(file);
+    assert.deepEqual([raw[0], raw[1]], [0x1f, 0x8b], "gzip magic");
+    assert.deepEqual([...loadStore(file).keys()], ["u2", "u3"], "the oldest entry went first to fit the byte cap");
+    fs.writeFileSync(file, JSON.stringify({ u9: { etag: "e", json: 2 } }));
+    assert.deepEqual(loadStore(file).get("u9"), { etag: "e", json: 2 }, "a pre-gzip store still loads");
+    assert.equal(capStore(new Map([["a", big]]), 10).size, 0);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("pr-snapshot pool: one curl --parallel round, ETag per URL, 200 stored, 304 reused, anything else left to the serial GET (tools T1)", () => {
+  const dir = path.join(ROOT, "artifacts", "tmp", `pr-snapshot-pool-${process.pid}`);
+  const U = (q) => `https://api.github.com/repos/brycejmurrin/f1-game/${q}`;
+  const store = new Map([[U("pulls/2"), { etag: 'W/"two"', json: { number: 2, old: true } }]]);
+  const calls = [];
+  const run = (cmd, args, opts) => {
+    calls.push({ cmd, args, input: opts.input });
+    const outs = [...opts.input.matchAll(/^output = "(.+)"$/gm)].map((m) => m[1]);
+    fs.writeFileSync(outs[0], JSON.stringify({ number: 1 }));
+    return { status: 0, stdout: `=1 304 W/"two"\n=0 200 W/"one"\n=2 502 \n` };
+  };
+  try {
+    const got = batchGet([U("pulls/1"), U("pulls/2"), U("pulls/3")], { store, run, env: { GH_TOKEN: "t0k" }, dir });
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].args.slice(0, 4), ["-sS", "--parallel", "--parallel-max", String(POOL)]);
+    assert.ok(!calls[0].args.join(" ").includes("t0k"), "the token rides stdin, never argv");
+    assert.deepEqual(calls[0].input.split("\nnext\n").map((b) => b.split("\n").filter((l) => l.startsWith('header = "If-None-Match'))),
+      [[], ['header = "If-None-Match: W/\\"two\\""'], []], "pulls/2's stored ETag rides its own block, and only that one");
+    assert.equal(calls[0].input.split("\nnext\n").length, 3, "one config block per URL");
+    assert.doesNotMatch(calls[0].input, /^write-out = "@/m, "curl reads a write-out starting with @ from a FILE: no status would come back");
+    assert.deepEqual(got.get(U("pulls/1")), { json: { number: 1 } });
+    assert.deepEqual(got.get(U("pulls/2")), { json: { number: 2, old: true }, cached: true });
+    assert.equal(got.has(U("pulls/3")), false, "a 502 is not answered here: the serial GET retries it");
+    assert.equal(store.get(U("pulls/1")).etag, 'W/"one"');
+    assert.equal(batchGet([U("x")], { store, run, env: {}, gh: () => null, dir }), null, "no token: no round");
+    assert.deepEqual(parseBatchOut('=3 200 W/"e"\r\nnoise\n=4 000 '), new Map([[3, { status: 200, etag: 'W/"e"' }], [4, { status: 0, etag: "" }]]));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  // prefetch fills the memo the serial reads hit; a miss falls through to `request`
+  const asked = [];
+  const snap = createSnapshot({ request: (q) => { asked.push(q); return { json: { q } }; },
+    batch: (urls) => new Map(urls.filter((u) => !u.endsWith("/3")).map((u) => [u, { json: { pooled: u } }])) });
+  assert.equal(snap.prefetch(["pulls/1", "pulls/3", "pulls/1"]), 1);
+  assert.deepEqual(snap.pr(1).json, { pooled: U("pulls/1") });
+  assert.deepEqual(snap.pr(3).json, { q: "pulls/3" });
+  assert.deepEqual(asked, ["pulls/3"]);
 });

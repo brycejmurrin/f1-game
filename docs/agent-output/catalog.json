@@ -2215,6 +2215,10 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/fleet-block.mjs",
+      "classification": "library"
+    },
+    {
       "path": "tools/lib/flicker-metric.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"

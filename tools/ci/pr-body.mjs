@@ -32,6 +32,7 @@ import { fileURLToPath } from "node:url";
 import { NO_TOKEN_HINT } from "./github-token.mjs";
 import { api } from "./github-api.mjs";
 import { CliArgError, exitIfHelp, makeFlags } from "../lib/cli-args.mjs";
+import { fleetBlockSpan, fleetEntries } from "../lib/fleet-block.mjs";
 
 export const REPO = "brycejmurrin/f1-game";
 
@@ -149,25 +150,21 @@ export function setStatus(body, text) {
   return body.slice(0, sec.start) + keep + block + tail + body.slice(sec.end).replace(/^\s*/, "");
 }
 
-/** Set `key: value` inside the ```fleet block (add the key, or the whole block, when absent). */
+/** Set `key: value` inside the ```fleet block outside HTML comments (add the key, or a whole block, when absent;
+ *  the template's commented-out example is never edited — tools/lib/fleet-block.mjs). */
 export function setFleet(body, key, value) {
   if (!/^[a-z][a-z0-9-]*$/i.test(key)) throw new CliArgError(`--fleet key "${key}" must be a word like state or checkin`);
-  const m = /```fleet[ \t]*\n([\s\S]*?)```/.exec(body);
-  if (!m) return `${body.replace(/\s*$/, "")}\n\n\`\`\`fleet\n${key}: ${value}\n\`\`\`\n`;
-  const lines = m[1].replace(/\n$/, "").split("\n");
+  const span = fleetBlockSpan(body);
+  if (!span) return `${body.replace(/\s*$/, "")}\n\n\`\`\`fleet\n${key}: ${value}\n\`\`\`\n`;
+  const lines = span.inner.replace(/\n$/, "").split("\n");
   const at = lines.findIndex((l) => new RegExp(`^${key}[ \\t]*:`, "i").test(l));
   const comment = at >= 0 ? (/\s+#.*$/.exec(lines[at]) || [""])[0] : "";
   if (at >= 0) lines[at] = `${key}: ${value}${comment}`; else lines.push(`${key}: ${value}`);
-  return body.slice(0, m.index) + "```fleet\n" + lines.join("\n") + "\n```" + body.slice(m.index + m[0].length);
+  return body.slice(0, span.start) + "```fleet\n" + lines.join("\n") + "\n```" + body.slice(span.end);
 }
 
-/** `key: value` lines of the fleet block (a key may repeat; trailing # comments dropped). */
-export function fleetEntries(body) {
-  const m = /```fleet[ \t]*\n([\s\S]*?)```/.exec(body || "");
-  if (!m) return [];
-  return m[1].split("\n").map((l) => /^([a-z][a-z0-9-]*)[ \t]*:[ \t]*(.*?)(?:[ \t]+#.*)?$/i.exec(l)).filter(Boolean)
-    .map((x) => [x[1].toLowerCase(), x[2].trim()]);
-}
+/** `key: value` lines of the fleet block outside HTML comments (a key may repeat): tools/lib/fleet-block.mjs. */
+export { fleetEntries };
 
 /** Apply every requested edit to one body, in a fixed order. */
 export function applyEdits(body, o) {

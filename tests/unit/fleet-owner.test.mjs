@@ -76,6 +76,8 @@ test("fleet block keys parsed; template placeholders and comments ignored", () =
   assert.deepEqual(parseFleetBlock(BODY_A), { worker: "claude:session_01WORKER", orchestrator: "claude:session_01ORCH", fleet: "A" });
   assert.deepEqual(parseFleetBlock("```fleet\nworker: <host>:<id>\n```"), {});
   assert.deepEqual(parseFleetBlock("<!--\n```fleet\nworker: claude:x\n```\n-->"), {});
+  // the shared tools/lib/fleet-block.mjs semantics (verify #37a): first value wins, merger: kept (BH5)
+  assert.deepEqual(parseFleetBlock("```fleet\nworker: aaa\nworker: bbb\nmerger: D\nstate: x\n```"), { worker: "aaa", merger: "D" });
 });
 
 test("HELD beats CLAIMED: an open diff owns the path even when a claim names it", () => {

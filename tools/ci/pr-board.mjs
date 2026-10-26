@@ -44,30 +44,71 @@
  *   node tools/ci/pr-board.mjs              # the table
  *   node tools/ci/pr-board.mjs --json       # rows, for the skill
  *   node tools/ci/pr-board.mjs --pr 1234    # one PR
- *   node tools/ci/pr-board.mjs --alarm      # only the stall alarm: READY > 12 h, green, no hold, no push
+ *   node tools/ci/pr-board.mjs --alarm      # only the alarm: ready > 2 h green unheld, lends without merger:, fleets with no live orchestrator
+ *   node tools/ci/pr-board.mjs --no-alarm   # the board without the alarm (it is ON by default)
+ * OWNER is the fleet block's `merger:` plus owner tags (`MERGE-HOLD: <X> merges`, `owner: <X>`): never a veto.
  *
  * Exit: 0 printed (--alarm: none stalled), 1 --alarm found a stalled PR, 2 bad args (or --pr is not open
  * into the deploy branch), 3 no token / API error.
  */
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { DEPLOY } from "./github-api.mjs";
-import { createSnapshot, runsByHead } from "../lib/pr-snapshot.mjs";
+import { createSnapshot, runsByHead, paths } from "../lib/pr-snapshot.mjs";
 import { guardsVerdict, planVerdict, fleetIdentity } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
+import { fleetBlock } from "../lib/fleet-block.mjs";
+import { readBus, whoIs, lendMerger } from "./fleet-bus.mjs";
 
 export { DEPLOY };
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** At most this many PRs armed repo-wide (AGENTS.md §Concurrent PRs, Merge Desk's hard gate). */
 export const MAX_ARMED = 2;
 /** The one merge method allowed (AGENTS.md MERGE-COMMIT-ONLY). */
 const MERGE_METHOD = "merge";
 
-/** A PR-body line that STARTS with `MERGE-HOLD:`, outside an HTML comment, is
- *  the one veto on arming or merging (AGENTS.md); a mid-sentence mention is not. */
-export function hasMergeHold(body) {
-  return /^MERGE-HOLD:/m.test(String(body || "").replace(/<!--[\s\S]*?-->/g, ""));
+/** The text a reader SEES: HTML comments (an unclosed `<!--` runs to the end), fenced code and `<details>`
+ *  blocks dropped; NFKC with Unicode dashes folded to `-`. Pure. */
+export function visibleText(body) {
+  return String(body || "").normalize("NFKC").replace(/[‐-―−﹘﹣－]/g, "-")
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, "")
+    .replace(/^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^[ \t]*\1[^\n]*$|(?![\s\S]))/gm, "")
+    .replace(/<details\b[\s\S]*?(?:<\/details>|$)/gi, "");
 }
+/** One line with its markdown dress removed: quote/list/heading markers and emphasis around the start. Pure. */
+const undress = (line) => line.replace(/^(?:\s*(?:>|[-*+]\s|\d+[.)]\s|#{1,6}\s|\[[ xX~]\]\s))*\s*/, "")
+  .replace(/^(?:\*\*|__|\*|_)+/, "").replace(/^([A-Za-z-]+?)(?:\*\*|__|\*|_)+(\s*:)/, "$1$2")
+  .replace(/^([A-Za-z-]+\s*:)\s*(?:\*\*|__|\*|_)+/, "$1 ").replace(/(?:\*\*|__)+\s*$/, "").trim();
+
+/**
+ * The PR body's MERGE-HOLD lines (DECISIONS #6, audit4 G12). A VETO is only the full shape
+ * `MERGE-HOLD: <reason> | lift: <who> | until: <time|event>`; `MERGE-HOLD: <X> merges` and `owner: <X>` are OWNER
+ * TAGS (who merges), never a veto; any other MERGE-HOLD line is `malformed` (shown, not a veto). Matched after
+ * visibleText + undress, so a bold/list/quote/heading/lower-case hold counts and a fenced/commented example does not.
+ * @returns {{ holds: {reason:string, lift:string, until:string}[], owners: string[], malformed: string[] }}
+ */
+export function parseHolds(body) {
+  const out = { holds: [], owners: [], malformed: [] };
+  for (const raw of visibleText(body).split(/\r?\n/)) {
+    const line = undress(raw);
+    const own = /^owner\s*:\s*(\S.*)$/i.exec(line);
+    if (own) { out.owners.push(own[1].replace(/\s+#.*$/, "").trim()); continue; }
+    const m = /^MERGE[- ]HOLD\s*:\s*(.*)$/i.exec(line);
+    if (!m || !m[1] || m[1].startsWith("<")) continue;
+    const [reason, ...rest] = m[1].split("|").map((s) => s.trim());
+    const tag = /^(\S+)\s+merges\b/i.exec(reason);
+    if (tag) { out.owners.push(tag[1]); continue; }
+    const field = (k) => (rest.map((s) => new RegExp(`^${k}\\s*:\\s*(\\S.*)$`, "i").exec(s)).find(Boolean) || [])[1] || "";
+    const lift = field("lift"), until = field("until");
+    if (reason && lift && until) out.holds.push({ reason, lift, until });
+    else out.malformed.push(clip(m[1], 60));
+  }
+  return out;
+}
+/** The one veto on arming or merging (fleet-core.md): a well-formed MERGE-HOLD line a reader can see. */
+export const hasMergeHold = (body) => parseHolds(body).holds.length > 0;
 /** One `fleet-status: <state> | <reason> | <utc>` line (body or comment), outside
  *  HTML comments; the last one in the text wins. null when absent. */
 export function parseFleetStatus(text) {
@@ -210,6 +251,8 @@ export function evaluate(items, opts = {}) {
     const gate = guardsVerdict(it.checkRuns || []);
     const failing = [...new Set((it.jobs || []).filter((j) => BAD_JOB.has(j.conclusion)).map((j) => j.name))].sort();
     const who = fleetIdentity(pr.body);
+    const holds = parseHolds(pr.body);
+    const merger = fleetBlock(pr.body).merger || "";
     const row = {
       number: pr.number,
       fleetLetter: who.letter || "-",
@@ -229,7 +272,10 @@ export function evaluate(items, opts = {}) {
       gate: gate.state,
       gateEvidence: gate.evidence,
       plan: planVerdict(pr.body),
-      hold: hasMergeHold(pr.body),
+      hold: holds.holds.length > 0,
+      holdMalformed: holds.malformed,
+      merger,
+      owner: [...new Set([...(merger ? [merger] : []), ...holds.owners])].join(",") || "-",
       fleet: fleetStatus(pr.body, it.comments),
       url: pr.html_url || "",
     };
@@ -245,13 +291,13 @@ const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 /** The table plus a one-line footer. */
 export function render(result, { now = Date.now() } = {}) {
   const { rows } = result;
-  const head = ["PR", "FL", "SLOT", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "FLEET", "SUGGEST"];
+  const head = ["PR", "FL", "SLOT", "OWNER", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "FLEET", "SUGGEST"];
   const plan = (p) => (!p || p.state === "none" ? "-" : `${p.items - p.open.length}/${p.items}`);
   const fleet = (f) => (!f ? "-" : clip(`${f.state} ${ageLabel(f.at, now)}${f.reason ? `: ${f.reason}` : ""}`, 40));
   const body = rows.map((r) => [
-    `#${r.number}`, r.fleetLetter || "-", clip(r.slot || "-", 12), clip(r.title, 40), r.draft ? "draft" : "ready", r.sha || "-",
+    `#${r.number}`, r.fleetLetter || "-", clip(r.slot || "-", 12), clip(r.owner || "-", 10), clip(r.title, 40), r.draft ? "draft" : "ready", r.sha || "-",
     r.mergeableState || "-", r.armed ? (r.mergeMethod || "armed") : "-", r.ci,
-    clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan), fleet(r.fleet), r.hold ? `${r.suggest} (HOLD)` : r.suggest,
+    clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan), fleet(r.fleet), r.hold ? `${r.suggest} (HOLD)` : r.holdMalformed?.length ? `${r.suggest} (HOLD? malformed, not a veto)` : r.suggest,
   ]);
   const all = [head, ...body];
   const w = head.map((_, i) => Math.max(...all.map((row) => row[i].length)));
@@ -281,6 +327,9 @@ export function measure(opts = {}) {
   // --pr limits expensive detail/CI reads, not the repository-wide armed cap.
   // The list includes auto_merge metadata; no sibling detail request is needed.
   // https://docs.github.com/en/rest/pulls/pulls#list-pull-requests
+  // Every round of independent reads goes out as one parallel prefetch (pr-snapshot POOL); the serial reads
+  // below then hit the memo, and anything the pool missed is asked again with backoff.
+  if (opts.only == null) snap.prefetch([paths.openPrs(1), paths.recentCiRuns()]);
   const list = snap.openPrs();
   if (list.error) return fail(list.error);
   const armedByPr = new Map(list.json.map((pr) => [pr.number, !!pr.auto_merge]));
@@ -290,6 +339,21 @@ export function measure(opts = {}) {
   // read skips it: one per-head call is cheaper than a 100-run page.
   const recent = opts.only == null && nums.length > 1 ? snap.recentCiRuns() : { json: null };
   const byHead = runsByHead(recent.error ? [] : recent.json?.workflow_runs);
+  // Round 2: every PR's detail plus the per-head reads keyed by the LIST's head sha (a head that moved in between
+  // is read again serially below); round 3: comments (their count is in the detail) and jobs (they need the ci state).
+  const listSha = new Map(list.json.map((pr) => [pr.number, pr.head?.sha]));
+  snap.prefetch(nums.flatMap((n) => {
+    const sha = listSha.get(n);
+    return [paths.pr(n), ...(sha ? [paths.checkRuns(sha), ...(byHead.has(sha) ? [] : [paths.ciRuns(sha)])] : [])];
+  }));
+  const prs = nums.map((n) => snap.pr(n).json).filter((pr) => pr?.head?.sha);
+  snap.prefetch(prs.flatMap((pr) => [paths.checkRuns(pr.head.sha), ...(byHead.has(pr.head.sha) ? [] : [paths.ciRuns(pr.head.sha)])]));
+  snap.prefetch(prs.flatMap((pr) => {
+    const runs = byHead.get(pr.head.sha) || snap.ciRuns(pr.head.sha).json?.workflow_runs || [];
+    const ci = ciState(runs);
+    const jobs = ci.runId && (ci.state === "failure" || ci.state === "cancelled" || (ci.state === "success" && !pr.draft && !pr.auto_merge));
+    return [...(jobs ? [paths.jobs(ci.runId)] : []), ...(pr.comments > 0 ? [paths.comments(pr.number, pr.comments)] : [])];
+  }));
   const items = [];
   for (const n of nums) {
     const one = snap.pr(n);
@@ -332,55 +396,119 @@ export function measure(opts = {}) {
   return { ok: true, ...result, requests: snap.stats() };
 }
 
-/** Hours a ready, green, unheld PR may sit with no push before it is a stall (audit 2026-10-26 Top 10 #3). */
-export const ALARM_HOURS = 12;
+/** Hours a ready, green, unheld PR may sit with no push before it is a stall (DECISIONS #7: any live
+ *  orchestrator may merge a green READY PR its merger left ≥ 2 h; was 12 h, audit 2026-10-26 Top 10 #3). */
+export const ALARM_HOURS = 2;
+/** A fleet whose newest `ORCH <L> LIVE` bus line is older than this has no live orchestrator (BH5, audit3 #12). */
+export const ORCH_LIVE_HOURS = 24;
+/** Bus lines the board reads for lends and LIVE lines (the `fleet-bus who` window). */
+export const BUS_WINDOW = 500;
 
 /**
  * The stall alarm: ready (not draft), ci.yml green on the head, Structural
  * guards passed, no MERGE-HOLD:, and the head's newest ci.yml run created
  * ≥ ALARM_HOURS ago (a push or a draft→ready flip starts a run, so this is
- * "nothing has happened for 12 h"). Pure.
+ * "nothing has happened for 2 h"). Pure.
  */
 export function stalled(rows, { now = Date.now(), hours = ALARM_HOURS } = {}) {
   return (rows || []).filter((r) => !r.draft && r.ci === "success" && r.gate === "passed" && !r.hold
     && r.ciAt && now - Date.parse(r.ciAt) >= hours * 3600e3);
 }
+
+/** A bus line that lends PRs: type LEND, or a lend verb (not LEND-EXTEND, a lease word). Pure. */
+const LEND_RE = /\b(?:lend|lends|lending|lent)\b(?!-)/i;
+/** The fleet a lend line names as merger: `merger:<L>` or "lent to <L>". Pure. */
+const lendTo = (text) => lendMerger(text) || (/\blent\s+to\s+(?:fleet\s+)?([A-Z])\b/.exec(String(text || "")) || [])[1] || null;
+
+/**
+ * Fleet-level alarms from the bus (entries oldest first, readBus shape {sha, at, type, from, to, text}). Pure.
+ *  - LEND: an open PR named by the newest lend line on the bus whose fleet block has no `merger:` (or a different one);
+ *  - ORCH: a fleet letter on an open PR with no `ORCH <L> LIVE` line within ORCH_LIVE_HOURS.
+ */
+export function busAlarms(rows, entries, { now = Date.now(), orchHours = ORCH_LIVE_HOURS } = {}) {
+  const out = [];
+  const open = new Map((rows || []).map((r) => [r.number, r]));
+  const lent = new Map();
+  for (const e of entries || []) {
+    if (e?.type !== "LEND" && !LEND_RE.test(String(e?.text || ""))) continue;
+    for (const m of String(e.text || "").matchAll(/#(\d{2,6})\b/g)) lent.set(Number(m[1]), e);
+  }
+  for (const [n, e] of [...lent].sort((a, b) => a[0] - b[0])) {
+    const r = open.get(n);
+    if (!r) continue;
+    const to = lendTo(e.text);
+    if (!r.merger) out.push(`#${n} LEND on the bus (${String(e.sha).slice(0, 7)}${to ? `, merger ${to}` : ""}) but the fleet block has no merger: — pr-body --fleet merger=${to || "<L>"}`);
+    else if (to && r.merger !== to) out.push(`#${n} LEND names merger ${to} (${String(e.sha).slice(0, 7)}) but the fleet block says merger: ${r.merger}`);
+  }
+  const letters = [...new Set((rows || []).map((r) => r.fleetLetter).filter((l) => /^[A-Z]$/.test(l || "")))].sort();
+  for (const L of letters) {
+    const w = whoIs(entries || [], L);
+    const prs = (rows || []).filter((r) => r.fleetLetter === L).map((r) => `#${r.number}`);
+    if (!w) out.push(`fleet ${L} NO ORCHESTRATOR: no ORCH ${L} LIVE line in the last ${(entries || []).length} bus entries (${prs.join(" ")})`);
+    else if (now - w.at * 1000 > orchHours * 3600e3) {
+      out.push(`fleet ${L} NO ORCHESTRATOR: newest ORCH ${L} LIVE ${w.id} is ${ageLabel(new Date(w.at * 1000).toISOString(), now)} old (> ${orchHours} h; ${prs.join(" ")})`);
+    }
+  }
+  return out;
+}
+
+/** Every alarm line plus the `= alarm …` verdict. `bus`: readBus entries, or null when the bus was not read. Pure. */
 export function alarmLines(rows, opts = {}) {
   const now = opts.now ?? Date.now();
   const hit = stalled(rows, opts);
+  const fleet = opts.bus ? busAlarms(rows, opts.bus, { now }) : [];
+  const n = hit.length + fleet.length;
   return [
     ...hit.map((r) => `#${r.number} STALLED ${ageLabel(r.ciAt, now)} ready+green, no hold, no push`
-      + ` (fleet ${r.fleetLetter || "-"}${r.armed ? `, armed ${r.mergeMethod}` : ""}): ${clip(r.title, 60)} ${r.url}`),
-    `= alarm ${hit.length ? `${hit.length} stalled` : "none"} (ready > ${opts.hours ?? ALARM_HOURS} h, green, no hold, no push)`,
+      + ` (fleet ${r.fleetLetter || "-"}${r.owner && r.owner !== "-" ? `, owner ${r.owner}` : ""}${r.armed ? `, armed ${r.mergeMethod}` : ""}): ${clip(r.title, 60)} ${r.url}`),
+    ...fleet,
+    `= alarm ${n ? `${hit.length} stalled, ${fleet.length} fleet` : "none"} (ready > ${opts.hours ?? ALARM_HOURS} h, green, no hold, no push;`
+      + ` ${opts.bus ? "lends without merger:, fleets without a live orchestrator" : "bus not read"})`,
   ];
 }
 
 function parseArgs(argv) {
-  const out = { json: false, only: null, alarm: false };
+  const out = { json: false, only: null, alarm: false, noAlarm: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") out.json = true;
     else if (a === "--alarm") out.alarm = true;
+    else if (a === "--no-alarm") out.noAlarm = true;
     else if (a === "--pr") {
       const n = Number(argv[++i]);
       if (!Number.isInteger(n) || n < 1) return { error: `--pr needs a positive integer (got ${argv[i]})` };
       out.only = n;
     } else return { error: `unknown arg: ${a}` };
   }
+  if (out.alarm && out.noAlarm) return { error: "--alarm and --no-alarm contradict" };
   return out;
+}
+
+/** The newest BUS_WINDOW bus entries, or null when the bus cannot be read (the alarm then says "bus not read"). */
+function busEntries() {
+  try {
+    const r = readBus({ last: BUS_WINDOW });
+    return r.tip ? r.entries : null;
+  } catch { return null; }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
-  exitIfHelp(argv, `usage: node tools/ci/pr-board.mjs [--json] [--pr <n>] [--alarm]
+  exitIfHelp(argv, `usage: node tools/ci/pr-board.mjs [--json] [--pr <n>] [--alarm | --no-alarm]
 
 Read-only board of every open PR into ${DEPLOY}: draft/ready, mergeable_state,
 auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
 the worker's fleet-status report (state, age, reason), the fleet block's letter (FL)
-and slot (SLOT), and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
+and slot (SLOT), OWNER (the block's merger: plus owner tags \`MERGE-HOLD: <X> merges\` / \`owner: <X>\`,
+never a veto), and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
+A hold is a veto only in the full shape \`MERGE-HOLD: <reason> | lift: <who> | until: <time|event>\`;
+any other MERGE-HOLD line shows as "HOLD? malformed".
 Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|stale-red|no; git fetch, no writes).
---alarm prints only the stall alarm: PRs ready > ${ALARM_HOURS} h, green, no MERGE-HOLD, no push
-(\`= alarm none|<n> stalled\`; exit 1 when any). Requests go through tools/lib/pr-snapshot.mjs (ETag cache).
+The ALARM is ON by default on the full board (--no-alarm skips it): PRs ready > ${ALARM_HOURS} h, green, no
+MERGE-HOLD, no push; a PR lent on the bus whose fleet block has no merger:; a fleet letter on an open PR with no
+ORCH <L> LIVE bus line in ${ORCH_LIVE_HOURS} h (reads the last ${BUS_WINDOW} bus entries).
+--alarm prints only the alarm (\`= alarm none|<n> stalled, <m> fleet\`; exit 1 when any).
+Requests go through tools/lib/pr-snapshot.mjs (ETag cache, a pool of parallel GETs).
 Exit 0 printed, 1 --alarm hit, 2 bad args, 3 API/token.`);
   const args = parseArgs(argv);
   if (args.error) {
@@ -393,21 +521,33 @@ Exit 0 printed, 1 --alarm hit, 2 bad args, 3 API/token.`);
     console.error(`pr-board: ${v.error}`);
     process.exit(v.badArgs ? 2 : 3);
   }
+  // A single --pr read has no fleet picture: the bus half of the alarm needs every open PR.
+  const bus = args.noAlarm || args.only != null ? null : busEntries();
+  const fleetAlarms = bus ? busAlarms(v.rows, bus) : [];
+  const alarms = args.noAlarm ? [] : alarmLines(v.rows, { bus });
+  const alarmHit = !args.noAlarm && (stalled(v.rows).length > 0 || fleetAlarms.length > 0);
   if (args.alarm) {
-    const lines = alarmLines(v.rows);
-    if (args.json) console.log(JSON.stringify({ stalled: stalled(v.rows), requests: v.requests }, null, 2));
-    else console.log(lines.join("\n"));
-    process.exit(stalled(v.rows).length ? 1 : 0);
+    if (args.json) console.log(JSON.stringify({ stalled: stalled(v.rows), fleet: bus ? fleetAlarms : null, requests: v.requests }, null, 2));
+    else console.log(alarms.join("\n"));
+    process.exit(alarmHit ? 1 : 0);
   }
   // needs-sync.mjs runs FIRST for every row the board would send to SYNC or FIX
   // (a red may be stale, a "dirty" may be generated-file-only): one verdict line each.
+  // ONE fetch of every such branch and the deploy tip (needs-sync fetched them one by one, ~1.6 s each); when it
+  // fails (a branch deleted meanwhile) each needs-sync fetches its own as before.
   const sync = {};
-  for (const r of v.rows) if (r.suggest === "SYNC" || r.suggest === "FIX") sync[r.number] = needsSync(r.branch, { request: snapshot.get });
+  const syncRows = v.rows.filter((r) => r.suggest === "SYNC" || r.suggest === "FIX");
+  const oneFetch = syncRows.length > 0 && spawnSync("git", ["fetch", "--quiet", "--no-tags", "origin", ...new Set(syncRows.map((r) => r.branch)), DEPLOY],
+    { cwd: ROOT, encoding: "utf8", timeout: 120_000 }).status === 0;
+  for (const r of syncRows) sync[r.number] = needsSync(r.branch, { request: snapshot.get, fetch: !oneFetch });
   snapshot.save();
   const syncLine = (n) => (sync[n].ok ? `${verdictLine(sync[n])} (${sync[n].why})` : `= sync needed: unknown (${sync[n].error})`);
-  if (args.json) console.log(JSON.stringify({ rows: v.rows.map((r) => (sync[r.number] ? { ...r, sync: sync[r.number] } : r)) }, null, 2));
-  else {
+  if (args.json) {
+    console.log(JSON.stringify({ rows: v.rows.map((r) => (sync[r.number] ? { ...r, sync: sync[r.number] } : r)),
+      ...(args.noAlarm ? {} : { alarms }) }, null, 2));
+  } else {
     console.log(render(v));
     for (const n of Object.keys(sync)) console.log(`#${n} ${syncLine(n)}`);
+    if (alarms.length) console.log(alarms.join("\n"));
   }
 }
