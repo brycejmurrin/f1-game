@@ -1,0 +1,1 @@
+1792986800	Bryce Murrin	Native hunt fixes: assets loadModelsFor generation, input binding validation, settings/share/save health, event journal, MCP smoke/schema/workflow, explicit reduced-motion consumers; separate from existing warmup and HUD fit work  [cursor/hunt-regressions-26a9; session 8a3e2b760e98dd4f94e3f297]
