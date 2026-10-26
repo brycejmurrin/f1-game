@@ -204,6 +204,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/build-gallery.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
+  // Camera tuner reads stored track/team once per Store revision (CPU-HUNT C6). VM, < 0.1 s.
+  "tests/unit/cam-context-alloc.test.mjs",
   "tests/unit/cam-motion.test.mjs",
   // Round-2 camera: corridor-clamped hang, wall clamp on street circuits, look-free director/PiP, NaN hold, bend hysteresis, frame-rate-free drone; 30/60/144 Hz sweep.
   "tests/unit/cam-round2.test.mjs",
@@ -602,6 +604,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Garage before pack: recipe, MANIFEST, fetch --help / no-pack, workflow is
   // not Car shot. Pure + spawn, no network / Chromium.
   "tests/unit/garage-before.test.mjs",
+  // The Blender crew clips: per-visit MIX, clear of the car's path, and the in-race pit crew on stopAnim's u.
+  "tests/unit/garage-crew-choreo.test.mjs",
   // The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.
   "tests/unit/garage-crew.test.mjs",
   "tests/unit/garage-defaults.test.mjs",
@@ -721,6 +725,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/inputs-hash.test.mjs",
   // #3302: INSTALL APP lifts clear of PAUSE BACKGROUND on title landscape (844×390).
   "tests/unit/install-chip-overlap.test.mjs",
+  // #3558: iOS Safari focus auto-zoom — text inputs in FREE sheets must floor at 16px.
+  "tests/unit/ios-input-zoom.test.mjs",
   "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
   "tests/unit/js-debugger-mcp.test.mjs",
   "tests/unit/js-debugger-node.test.mjs",
@@ -1098,6 +1104,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/res-scale-census.test.mjs",
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
+  // #3297: retro (2000s) shift lights flash 9↔8 at the limiter, never dark; reduced motion stays on 9.
+  "tests/unit/retro-shift-lights.test.mjs",
   "tests/unit/ribbon-cpu-release.test.mjs",
   "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
@@ -1282,6 +1290,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tex-census.test.mjs",
   "tests/unit/thermal-drift.test.mjs",
   "tests/unit/three-inspector.test.mjs",
+  // Round 7: actual vendor binding/index updates and generated post/lamp shader contracts.
+  "tests/unit/three-shared-binding-update.test.mjs",
   // ...and THROTTLE = LATCH, which shares digital-steer's VM harness and runs
   // in 0.1 s: the pedal is the one control that can be left ON, so the drop on
   // blur/reset belongs in the edit loop rather than in a browser group.
@@ -1302,7 +1312,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pass no longer clears the SUN flag; a retired post chain is rebuilt at the
   // next realloc and a post-only death keeps the bound label.
   "tests/unit/tlx-fail-scope.test.mjs",
-  // A·W50: TLX pins the warm's render pipelines (pinPipelines) so prunePool's 20 s drop no longer destroys them and race entry rebuilds none (three r186 releases a pipeline at usedTimes 0; real renderer over fake GL).
   // A·W50 #3673: the fx warm indexes the driving-line probe like the race (three keys a pipeline on the index) and warms the per-record blob on both windings: 0 sync first-race pipelines.
   "tests/unit/tlx-fx-warm.test.mjs",
   // A·H12 GPU-memory hunt (G1): over three r186 on the fake WebGL2, the real tlx-shadow warm releases the previous race's probe-caster render objects — Renderer._objects stays flat across six warms (budget pin).
@@ -1322,6 +1331,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // failure mode is a STALE key, which returns the wrong material and shows
   // up only on screen. Fuzzes the real lifted source over every field.
   "tests/unit/tlx-mat-key-memo.test.mjs",
+  "tests/unit/tlx-mirror-inset.test.mjs",
+  // A·W50: TLX pins the warm's render pipelines (pinPipelines) so prunePool's 20 s drop no longer destroys them and race entry rebuilds none (three r186 releases a pipeline at usedTimes 0; real renderer over fake GL).
   "tests/unit/tlx-pipe-pin-warm.test.mjs",
   // TLX post P2 / audit #6: fixed H/V blur + per-mip bloom materials (no .tex.value ping-pong).
   "tests/unit/tlx-post-fixed-mats.test.mjs",
@@ -1337,6 +1348,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // against three r186's real Texture). The pit-crew mesh cache is capped.
   // Round-2 TLX: post chain retries after death, shadowStr 0 when the sun pass failed, DPR cap on mobileTier, caster geometry clone, warm-guarded releaseGeometry, true-LRU materials, pack CPU copy dropped, devtools-gated globals.
   "tests/unit/tlx-round2.test.mjs",
+  "tests/unit/tlx-smith-root.test.mjs",
   "tests/unit/tlx-texture-release.test.mjs",
   // Fixed render targets (#2655): the viewport helper + the raw-screenUV canary. VM + source scan, ~0.1 s.
   "tests/unit/tlx-viewport.test.mjs",
@@ -1509,6 +1521,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Six arcs plus surface-water persistence. VM-executed weather-arc.js.
   // Round-2: WATCH scrub `input` events coalesce to one seek per rAF; `change` seeks at once; stop() drops a pending seek.
   "tests/unit/watch-transport-scrub.test.mjs",
+  // #3281: waterSurface seats on local terrainY, not lap pyMin (Spa brook).
+  "tests/unit/water-local-level.test.mjs",
   "tests/unit/weather-arc-plan.test.mjs",
   "tests/unit/weather-arc-rain.test.mjs",
   // A weather-arc step cross-fades sun, cloud, ambient and fog over WX_BLEND_S;
@@ -1517,6 +1531,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/webgpu-lifecycle.test.mjs",
   // D·W21b / #3279: WebGPU menu warm enables warmPlus + idle-chunks post/shadow/cockpit; records where.
   "tests/unit/webgpu-menu-warm.test.mjs",
+  "tests/unit/webgpu-uint16-index.test.mjs",
   // WET_GRIP orders the treads as treadFor picks them: inter owns the damp, full wet the storm. VM, < 0.2 s.
   "tests/unit/wet-grip-ladder.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",

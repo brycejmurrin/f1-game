@@ -203,6 +203,8 @@ function fakeIndexedDb(seed = []) {
   let writeHolds = 0;
   let writeTransactions = 0;
   let opens = 0;
+  let getAllCalls = 0;
+  let getCalls = 0;
   const heldWrites = [];
   const request = (result) => {
     const r = { result, error: null, onsuccess: null, onerror: null };
@@ -221,8 +223,8 @@ function fakeIndexedDb(seed = []) {
       t.objectStore = () => ({
         put(row) { writes.push(() => { rows.set(row.k, row.v); lsOk.set(row.k, row.lsOk); if (Object.hasOwn(row, "baseline")) baseline.set(row.k, row.baseline); else baseline.delete(row.k); }); return request(row.k); },
         delete(k) { writes.push(() => { rows.delete(k); lsOk.delete(k); baseline.delete(k); }); return request(undefined); },
-        get(k) { return request(rows.has(k) ? rowAt(k) : undefined); },
-        getAll() { return request(Array.from(rows.keys(), rowAt)); },
+        get(k) { getCalls++; return request(rows.has(k) ? rowAt(k) : undefined); },
+        getAll() { getAllCalls++; return request(Array.from(rows.keys(), rowAt)); },
       });
       const settle = () => {
         if (fail) { if (t.onabort) t.onabort(); }
@@ -246,6 +248,8 @@ function fakeIndexedDb(seed = []) {
     get heldWrites() { return heldWrites.length; },
     get writeTransactions() { return writeTransactions; },
     get opens() { return opens; },
+    get getAllCalls() { return getAllCalls; },
+    get getCalls() { return getCalls; },
     db,
     open() {
       opens++;
@@ -284,6 +288,51 @@ function loadMirrored({ seed = [], disk = new Map(), writeError = null, quota = 
     visibility(state) { document.visibilityState = state; documentListeners.get("visibilitychange")?.(); },
     pagehide() { windowListeners.get("pagehide")?.(); } };
 }
+
+test("a career-only mirror flush reads its own key and leaves authored totals", async () => {
+  const paint = JSON.stringify({ paint: "x".repeat(32) });
+  const seed = [0, 1, 2].map((i) => [`apex26.livery.custom.car${i}`, paint, true]);
+  const disk = new Map(seed.map(([k, v]) => [k, v]));
+  const idb = fakeIndexedDb(seed);
+  const { store } = loadMirrored({ seed, disk, idb });
+  await store.mirror.ready;
+  const bytes = store.mirror.authoredBytes, keys = store.mirror.authoredKeys;
+  assert.equal(keys, 3, "restore counted the seeded liveries");
+  assert.ok(bytes > 0);
+  const scans = idb.getAllCalls, reads = idb.getCalls;
+  store.write("career.driver.0", { money: 7 });
+  assert.equal(store.get("career.driver.0").money, 7, "write stays synchronous");
+  await store.mirrorFlush();
+  assert.equal(idb.getAllCalls, scans, "a career flush must not getAll the mirror");
+  assert.equal(idb.getCalls, reads + 1, "the flush reads the one career key");
+  assert.equal(JSON.parse(idb.rows.get("apex26.career.driver.0")).money, 7);
+  assert.equal(idb.lsOk.get("apex26.career.driver.0"), true);
+  assert.equal(store.mirror.authoredBytes, bytes, "authored totals stay at the last full scan");
+  assert.equal(store.mirror.authoredKeys, keys);
+  // The stale-tab guard still sees the previous row via get(), with liveries present.
+  idb.rows.set("apex26.career.driver.0", JSON.stringify({ money: 9 }));
+  idb.lsOk.set("apex26.career.driver.0", false);
+  store.write("career.driver.0", { money: 1 });
+  await store.mirrorFlush();
+  assert.equal(idb.getAllCalls, scans, "the refused-row guard does not scan authored rows");
+  assert.equal(JSON.parse(idb.rows.get("apex26.career.driver.0")).money, 9);
+  assert.equal(idb.lsOk.get("apex26.career.driver.0"), false);
+});
+
+test("an authored mirror flush still scans every row and refreshes the totals", async () => {
+  const { store, idb } = loadMirrored();
+  await store.mirror.ready;
+  const scans = idb.getAllCalls;
+  assert.equal(store.mirror.authoredKeys, 0);
+  store.write("career.driver.0", { money: 1 });
+  store.write("livery.custom.car0", { paint: "red" });
+  await store.mirrorFlush();
+  assert.equal(idb.getAllCalls, scans + 1, "a batch that contains an authored key still getAlls");
+  assert.equal(store.mirror.authoredKeys, 1);
+  assert.ok(store.mirror.authoredBytes > 0);
+  assert.equal(JSON.parse(idb.rows.get("apex26.livery.custom.car0")).paint, "red");
+  assert.equal(JSON.parse(idb.rows.get("apex26.career.driver.0")).money, 1);
+});
 
 test("career and season writes are mirrored into IndexedDB; other keys are not", async () => {
   const { store, idb } = loadMirrored();
