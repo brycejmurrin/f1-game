@@ -189,25 +189,41 @@ cover, and the menu builds 68 instead of 66. Test: `tests/unit/tlx-fx-warm.test.
 These were #3673's prime suspects for "two frames over 100 ms in every first race". The device run with A·W54's
 hitch recorder (#3676) is what can confirm it.
 
+## The cold rig warm: one pipeline (A·W56, 2026-10-26)
+
+`memState().warm.rig` now splits the job into `pairsMs`, `mirrorMs` and `settleMs`, and lists the four slowest pairs
+in `worst` as `[ms, material id, matKey, vertices, winding]`. A probe (SwiftShader WebGPU, which this container's
+Chromium picks even with the lavapipe ICD and flags; Bahrain, RACE SETTINGS idle 70 s, then START) wraps
+`createShaderModule` / `createRenderPipeline(Async)` from the START click:
+
+| | before | after `warmCockpitTelemetry` |
+|---|---|---|
+| rig pairs at race entry | 28 | 25 |
+| `pairsMs` | 4823 (one pair 4356, the rest ≤ 67) | **553** |
+| pipelines built at race entry | `MeshBasicNodeMaterial_89`: one async of **4.34 s**, plus its sync twin | two sync, no async |
+| `rig.ms` | 7823–9476 | 3553 (`settleMs` 3000 of it) |
+| `mirrorMs` | 0 (no key on this path) | 0 |
+
+- The slow pair is the wheel telemetry's material, `_rigFx` (`o,0.9,0,0,0,0,0,1|ds|na`: double-sided, no alpha
+  write), on a 48-vertex gear digit. No menu draw uses that state, and it is the same for every car. So race entry
+  built its pipeline, and nothing else in the job is new. The per-probe CPU of the target-scene walk (lead 1 in the
+  handoff list) is ≤ 67 ms a pair. The mirror stage did not run on this path.
+- Fix: `car-draw.js` `warmCockpitTelemetry()` captures the gear digit, a speed digit and the LED strip with
+  `_rigFx` and no car. `game.js` `warmPrograms` queues it with every menu (and title) program warm, and
+  `warmCockpitRig` then skips those pairs (`_rigDone`).
+- Two `warmDraws` fixes go with it, because the menu job now runs ahead of the race's:
+  - A queued job's 20 s drop timer re-arms while presents keep arriving (`job.seen`). The menu world warm runs
+    ~29 s on the phone, so the timer would have dropped the telemetry job before it started.
+  - A `warmDraws` that meets a job in flight waits for it (`job.finished`) instead of returning false. The race's
+    `warmCockpitRig` can arrive while the menu job runs, and refusing skipped the car's own pairs.
+- `settleMs` 3000 is `_gpuSettled`'s cap: `onSubmittedWorkDone` does not resolve within 3 s on SwiftShader. It is the
+  same before and after, and a device record shows whether a GPU pays it.
+- Lead 4 (`warmIdleChunks()` at race entry) costs 14 × 32 ms idle yields at most, inside the 553 ms.
+
 ## Still open
 
-- **The cold rig warm** (`rigWarm` 5.7 s on a fresh iPhone 14 Pro, 81–121 ms once Safari has cached it; ledger
-  row 29). It always runs at race start. The facts so far:
-  - `car-draw.js` `warmCockpitRig` captures the race's player rig, 28 pairs. `tlx.js` `startRigWarm` compiles each
-    with `compileWarmProbe` (a `DoubleSide` pair on both windings since #3713). With `job.mirror` (the menu path)
-    it then runs `warmMirrorStage` over the whole race scene.
-  - On lavapipe it takes 9–14 s while building 0–2 new pipelines. There the cost is CPU per probe (each
-    `compileAsync(probe, camera, scene)` also walks the whole target scene for lights), or the mirror stage's
-    scene walk. On the device it is GPU pipeline compiles, cold only.
-  - Leads:
-    1. Time each probe and the mirror stage separately (the census's pin-wrapper probe shows which pipelines are
-       new).
-    2. Warm the rig's materials in the menu: the menu car assets know the selected team, but not the race's car
-       object.
-    3. Drop the rig job's `warmMirrorStage` when the menu warm's mirror stage already covered the same world (the
-       `opts.mirror` key).
-    4. Measure `warmIdleChunks()`: `_warmWhere` stays `"menu"` at race entry, because the race skips its own warm,
-       so the rig job idle-yields every other pair.
+- **The cold rig warm on the device**: A·D2's `coldrace` `menu30`, fresh unit, WebGPU. `rigWarm` should drop from
+  5.7 s. `warm.rig.worst` names whatever pair is left; `pairsMs` / `mirrorMs` / `settleMs` say which stage it is in.
 - Device confirmation of #3761 (the two first-frame pipelines as #3673's two >100 ms frames): A·W54's hitch
   recorder (#3676) plus A·D2, on Bryce's Go.
 - The part-2 dose on device: A·D2's `coldrace` `quick0` vs `quick45`, one fresh unit per arm (see #3757).

@@ -68,6 +68,7 @@ async function rig(t, { soft = false } = {}) {
       drawList.n++;
     }
     function present() {
+      if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // as tlx.js present(), pinned in the wiring test
       // A requested program warm (game.js startRaceBody asks for it just before the rig): this present runs it, paints nothing.
       if (!_warmPending && !_deviceLost && _warmRequested) { _warmRequested = false; return false; }
       if (!_warmPending && !_deviceLost) { if (_rigWarm) startRigWarm(); }
@@ -176,6 +177,49 @@ test("behind a requested program warm, warmDraws resolves at once and the rig st
   assert.equal(await h.R.warmDraws(() => h.R.draw(cab, I, CAB)), true, "and it is recorded as done");
 });
 
+test("A·W56: a warmDraws while another rig job is in flight waits for it, then compiles its own pairs (was: refused)", async (t) => {
+  // The menu queues the wheel telemetry (car-draw.js warmCockpitTelemetry); race entry's warmCockpitRig can meet it.
+  const h = await rig(t);
+  const tel = { geo: geo(RIG_LAYOUT) }, cab = { geo: geo(RIG_LAYOUT) };
+  const p1 = h.R.warmDraws(() => h.R.draw(tel, I, FX));
+  let v2 = "pending";
+  const p2 = h.R.warmDraws(() => h.R.draw(cab, I, CAB));
+  p2.then((v) => { v2 = v; });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(v2, "pending", "the second job waits for the first rather than resolving false unwarmed");
+  h.R.present(); assert.equal(await p1, true);
+  await new Promise((r) => setImmediate(r));
+  h.R.present(); assert.equal(await p2, true);
+  assert.deepEqual(h.compiles.map((c) => c.geo === tel.geo ? "tel" : c.geo === cab.geo ? "cab" : "?"), ["tel", "cab"], "both jobs' pairs compiled, in order");
+});
+
+test("A·W56: a queued rig job outlives a long held warm while presents come, and is dropped only when none came for 20 s", async (t) => {
+  // The menu's world warm runs ~29 s on an iPhone 14 Pro (ledger row 29): the 20 s timer dropped the job behind it.
+  const h = await rig(t);
+  const tel = { geo: geo(RIG_LAYOUT) };
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  h.R.requestWarm();
+  assert.equal(await h.R.warmDraws(() => h.R.draw(tel, I, FX)), true, "queued behind the program warm");
+  assert.equal(h.R.present(), false, "a present came, held by the warm");
+  t.mock.timers.tick(20000);
+  t.mock.timers.tick(19999);
+  t.mock.timers.reset();
+  assert.equal(h.R.present(), false, "the job survived the first 20 s and starts now");
+  while (h.R.pending()) await h.R.pending();
+  assert.deepEqual(h.compiles.map((c) => c.geo === tel.geo), [true]);
+  // Control: queued, and no present ever came (hidden tab): dropped, so a later warmDraws is not blocked forever.
+  const c = await rig(t);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  c.R.requestWarm();
+  await c.R.warmDraws(() => c.R.draw({ geo: geo(RIG_LAYOUT) }, I, FX));
+  t.mock.timers.tick(20000);
+  t.mock.timers.reset();
+  const late = { geo: geo(RIG_LAYOUT) };
+  const p = c.R.warmDraws(() => c.R.draw(late, I, CAB));
+  c.R.present(); c.R.present(); assert.equal(await p, true);
+  assert.deepEqual(c.compiles.map((x) => x.geo === late.geo), [true], "the dropped job compiled nothing; the next one ran");
+});
+
 test("menu path: opts.mirror runs the mirror stage over the race scene once per world, never on a software GPU or without a key", async (t) => {
   const h = await rig(t);
   const g = { geo: geo(RIG_LAYOUT) };
@@ -202,6 +246,14 @@ test("wiring: present() dispatches the rig warm after the entry and mirror warms
   assert.ok(TLX.includes("\n        warmDraws,   //"), "the backend publishes warmDraws");
   assert.ok(CAR_DRAW.includes("G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); },"),
     "cockpit/helmet (wheel) and visor (no wheel)");
+  assert.ok(TLX.includes("          if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)\n          if (!_warmPending && !_deviceLost) { if (_warmRequested)"),
+    "present() marks a queued job seen before its dispatch (the harness mirrors that line)");
+  // A·W56: the wheel telemetry (car-independent _rigFx) is warmed with the menu's program warm, from the same draws.
+  assert.ok(GAME.includes("_warmed.add(k + tag); gfx.warm(); carDraw.warmCockpitTelemetry(); return true;"), "game.js warmPrograms queues it with every menu warm");
+  const tel = CAR_DRAW.slice(CAR_DRAW.indexOf("function warmCockpitTelemetry()"), CAR_DRAW.indexOf("function drawCockpitRig("));
+  for (const d of ["getGearDigit(1), _rigWarmBase, _rigFx", "getSpeedDigit(0), _rigWarmBase, _rigFx", "getLedStrip(0, ws), _rigWarmBase, _rigFx"])
+    assert.ok(tel.includes(d), `warmCockpitTelemetry draws ${d}`);
+  assert.ok(CAR_DRAW.includes("const fx = _rigFx;\n      G.gfx.draw(getGearDigit("), "the race draws the same telemetry with the same material object");
   const i = GAME.indexOf('spanAsync("rigWarm"'), j = GAME.indexOf('spanAsync("mirrorPrepare"');
   assert.ok(i > 0 && j > i, "startRaceBody awaits the rig warm under the cover, before the mirror preparation");
   assert.ok(GAME.indexOf('spanAsync("warmCarAssets"') < i, "after the car meshes exist");

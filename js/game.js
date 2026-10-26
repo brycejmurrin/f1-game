@@ -2207,7 +2207,7 @@ const _carWarm = { busy: false };   // the stepped race car warm (startRaceBody)
 // seconds: on a phone, RACE! on a circuit already raced met it pending, so the
 // garage drive-out waited behind the card and the flyby played instead.
 const _warmed = new Set();
-const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); return true; } } } catch (_) { /* optimisation only */ } return false; };
+const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); carDraw.warmCockpitTelemetry(); return true; } } } catch (_) { /* optimisation only */ } return false; };
 async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
   if (!current()) return;

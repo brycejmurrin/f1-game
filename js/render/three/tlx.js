@@ -3622,7 +3622,10 @@ const TLX = (function () {
       let _rigMirrorKey = null;
       const _rigMirrorOn = () => !!(_warmFx && post && post.enabled() && !_mirDead && !vizMat && !softGpu() && !softwareGL);
       function warmDraws(fn, opts) {
-        if (_deviceLost || !lit || _drawMatMode || vizMat || typeof renderer.compileAsync !== "function" || _rigWarm) return Promise.resolve(false);
+        if (_deviceLost || !lit || _drawMatMode || vizMat || typeof renderer.compileAsync !== "function") return Promise.resolve(false);
+        // One job at a time. The menu's telemetry job (car-draw.js warmCockpitTelemetry) may still be queued or running
+        // at race entry: wait for it, then capture, or the race's own rig pairs went unwarmed (A·W56, #3673).
+        if (_rigWarm) return _rigWarm.finished.then(() => warmDraws(fn, opts));
         const recs = [];
         const co = _coOn;
         _capture = recs; _coOn = false;   // a coalesced draw reaches draw()'s capture, which skips it, never a run
@@ -3637,13 +3640,20 @@ const TLX = (function () {
         // left the rig unwarmed (+20 s per race entry; B·H14, monza-foundation 8.4 -> 26.2 s on CI llvmpipe at #3221).
         // Queued, the job still runs before any frame paints: present() holds while either warm is pending.
         if (_warmRequested || _warmPending) {
-          const job = _rigWarm = { recs: todo, mirror, done: () => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; } };
+          let fin;
+          const job = _rigWarm = { recs: todo, mirror, seen: 0, finished: new Promise((r) => { fin = r; }),
+            done: () => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; fin(); } };
           // No present ever came (hidden tab, a race abandoned first): drop the queue, or every later warmDraws refuses.
-          job.timer = setTimeout(() => { if (!job.started) job.done(); }, 20000);
+          // A present that came but was held by the warm (`seen`) re-arms it: the menu's world warm runs ~29 s on an
+          // iPhone 14 Pro (ledger row 29), longer than the timer, and the menu queues its telemetry job behind it.
+          const arm = () => { job.timer = setTimeout(() => { if (job.started) return; if (job.seen) { job.seen = 0; arm(); } else job.done(); }, 20000); };
+          arm();
           return Promise.resolve(true);
         }
         return new Promise((resolve) => {
-          const job = _rigWarm = { recs: todo, mirror, done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; resolve(ok); } };
+          let fin;
+          const job = _rigWarm = { recs: todo, mirror, finished: new Promise((r) => { fin = r; }),
+            done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; fin(); resolve(ok); } };
           job.timer = setTimeout(() => job.done(false), 20000);   // no present came (hidden tab): race entry never waits on it
         });
       }
@@ -3651,7 +3661,8 @@ const TLX = (function () {
         if (!mesh || !mesh.geo || (opts && opts.coalesce)) return;
         const w = model;
         const neg = !!w && w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
-        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1 });
+        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1,
+          key: opts && typeof matKeyFor === "function" ? matKeyFor(opts, false, false) : "" });   // memState().warm.rig.worst
       }
       function startRigWarm() {
         const job = _rigWarm;
@@ -3680,7 +3691,7 @@ const TLX = (function () {
               // double-sided keep material mirrored as well: the first race frame built its cw twin synchronously
               // (lavapipe census, the one lit pipeline left after the pin). Compile the other sign under the cover.
               if (r.mat.side === THREE.DoubleSide) { await compileWarmProbe(r.geo, r.mat, -r.sx); sp.probes++; }
-              sp.worst.push([Math.round(performance.now() - tp), r.mat.id]);
+              sp.worst.push([Math.round(performance.now() - tp), r.mat.id, r.key, r.geo.attributes.position ? r.geo.attributes.position.count : 0, r.sx]);
               let s = _rigDone.get(r.geo);
               if (!s) _rigDone.set(r.geo, s = new Set());
               s.add(_rigKey(r));
@@ -6162,6 +6173,7 @@ const TLX = (function () {
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
           // later warm passes, but cannot cancel a compile already in flight.
+          if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)
           if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }
           if (_warmPending) return;
           // The last rung: even rawUnlitMat throws. AUTO on three's WebGPU takes three WebGL2 next boot (tlxAutoGL, a
