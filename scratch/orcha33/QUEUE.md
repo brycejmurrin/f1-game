@@ -7,5 +7,6 @@ Closed: #3719 (no win), #3692 (→#3744), #3647.
 
 DONE lanes: H13, W49, W53, W54, O4 (archive after idle 1h + Bryce done).
 
-RELAY (live 19:19 PT): A·R1 session_01Gw61XfuKqRA4hXbgMNVmwy (never archive) owns self-bound task trig_01Vn7kMxEUVCYYBwKKmKdzVh 'Fleet A inbox → A·R1 (Fleet B API)'; Fleet B POSTs its API endpoint; A·R1 forwards to `fleet-bus who A` (LIVE line must read 'ORCH A LIVE claude:session_<id>'). Scheduled self-test OK. Pending Bryce: API token → Fleet B env APEX_A_INBOX_URL/TOKEN. Lessons: task-started sessions have no messaging tools; tasks fire into a session only if self-bound.
 PAUSED: merges held at Bryce's 'finish setup before continuing' (19:09 PT); Bryce archived all other A sessions.
+
+INBOX (works 19:50 PT): Fleet B POSTs the API endpoint of routine trig_01Vn7kMxEUVCYYBwKKmKdzVh (repo attached by Bryce); the fresh API session posts 'from:claude:fleet-a-inbox [FROM FLEET B via inbox] <text>' on the bus to:A; OrchA's 60 s bus Monitor must include claude:fleet-a-inbox. No relay session (all A·R1 archived). Lessons: API/MCP fires run in a fresh session with no messaging tools; only a routine with a repository attached can push to the bus; routine prompts edit only from the web UI.
