@@ -43,7 +43,12 @@ A hillside lap: it climbs from Turn 1 to the high ground at Campsa, then falls a
 | 0.30–0.36 | — | mid | Open crowd terracing + shade sails |
 | 0.50 | — | — | Campsa: blind crest, wide ochre run-off |
 | 0.685 | R | near | La Caixa hairpin: gravel + yellow tyre wall |
-| 0.80 | both | mid | Clipped hedges + columnar cypress |
+| 0.700 | L (−1) | near | **T10 covered stand** (inside of La Caixa entry) | oversteer48 B guide |
+| 0.783 | L (−1) | near | **Tribuna B** bleacher (Stadium, uncovered, outside T12) | [oversteer48 B](https://oversteer48.com/grandstand-b-circuit-de-catalunya-barcelona/) |
+| 0.796 | L (−1) | near | **Tribuna G** bleacher (Stadium heart, uncovered, T12→T13) | [P1 Travel](https://www.p1travel.com/en-GB/blog/what-are-the-best-grandstands-at-the-barcelona-gp) |
+| 0.808 | L (−1) | mid | **Tribuna C** bleacher (beside G, farther — gravel runoff) | P1 Travel / circuitcat folio |
+| 0.860 | L (−1) | near | **Tribuna H** (covered; stadium + final corner) | P1 Travel |
+| 0.80 | both | mid | Clipped hedges + columnar cypress (behind stands) |
 | 0.95–0.10 | L | near | Sponsor hoarding on main straight |
 | — | ring | far | Thin ochre terrace benches + **unnamed** hazy hills (not Montseny) |
 
@@ -58,5 +63,6 @@ A hillside lap: it climbs from Turn 1 to the high ground at Campsa, then falls a
 - Grandstand J is uncovered and shorter; do not give it the Main’s roof.
 - Scoreboard is a modest totem at pit exit on the pit side — proportions approximate.
 - Rail strip stays low and behind the Main; never a train model.
+- Stadium section (T10–14): covered T10 on the La Caixa entry inside; uncovered bleachers B/G/C on the outside of T12–T13; covered H at the final corner. Do not fake this with sunTerrace walls.
 - Keep planting thin and low. Leave the Campsa / La Caixa infield open.
 - Do **not** re-add `sceneryStartFrac` (removed 2026-09-22; residual shift is already 0).
