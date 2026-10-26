@@ -1,3 +1,4 @@
+import { GAME_REL } from "../helpers/game-source.mjs";
 /* a11y-opts — SETTINGS › ACCESSIBILITY: reduce motion / focus / colourblind cues.
  *
  * Run: node --test tests/unit/a11y-opts.test.mjs */
@@ -8,6 +9,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FILE = "js/ui/a11y-opts.js";
@@ -163,6 +165,30 @@ test("REDUCE MOTION AUTO follows OS; ON always; OFF overrides OS", () => {
   assert.equal(load({ osReduce: false, stored: { motion: "reduce" } }).T.mode(), "reduce");
   assert.equal(load({ osReduce: true, stored: { motion: "auto" } }).T.mode(), "reduce");
   assert.equal(load({ stored: { motion: "on" } }).T.choice(), "auto", "legacy MOTION: ON → AUTO");
+});
+
+test("game-world, minimap and input-trace motion follow the resolved accessibility choice live", () => {
+  for (const [file, name] of [[GAME_REL, "motionReduced"], ["js/ui/hud.js", "motionReduced"], ["js/ui/hud-inputs.js", "reduced"]]) {
+    const source = fs.readFileSync(path.join(ROOT, file), "utf8");
+    const helper = fnSource(source, "function " + name + "()");
+    for (const osReduce of [false, true]) {
+      const { T, stored, html, document } = load({ osReduce });
+      const mq = { matches: osReduce };
+      const ctx = vm.createContext({ TitleFx: T, document, doc: document, _mq: mq, _rmq: mq });
+      vm.runInContext(helper, ctx, { filename: absSrc(file) });
+      for (const choice of ["auto", "reduce", "off", "auto"]) {
+        stored.motion = choice;
+        assert.equal(vm.runInContext(name + "()", ctx, { filename: "motion-preference-probe" }), T.mode() === "reduce", file + ": " + choice + ", OS=" + osReduce);
+      }
+      // In small/early-boot harnesses TitleFx may be absent; retain the OS/DOM fallback.
+      delete ctx.TitleFx;
+      html.dataset.motion = undefined;
+      assert.equal(vm.runInContext(name + "()", ctx, { filename: "motion-preference-probe" }), osReduce, file + ": OS fallback");
+      html.dataset.motion = "reduce";
+      mq.matches = false;
+      assert.equal(vm.runInContext(name + "()", ctx, { filename: "motion-preference-probe" }), true, file + ": DOM fallback");
+    }
+  }
 });
 
 test("panel mounts five rows and wires them", () => {

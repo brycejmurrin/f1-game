@@ -37,6 +37,25 @@ test("Browser Use does not satisfy deterministic browser or cancel prerequisites
   assert.equal(analyzeSessionCatalog([null]).ok, false);
 });
 
+test("attached browser primitives do not require separately advertised skills", () => {
+  const tools = [
+    { name: "mcp__codex_apps__browser_use_automate_browser" },
+    { name: "mcp__codex_apps__f1_cloud_mcp_playwright_official__browser_evaluate" },
+    { name: "mcp__codex_apps__f1_cloud_mcp_playwright_official__browser_snapshot" },
+  ];
+  const result = analyzeSessionCatalog({ tools });
+  assert.equal(result.capabilities.deterministicBrowser, true);
+  assert.equal(result.warnings.some((w) => w.code === "BROWSER_PRIMITIVES_ABSENT"), false);
+  assert.equal(result.capabilities.browserCancellation, false);
+  for (const name of ["browser_evaluate", "mcp__playwright-official__browser_snapshot"]) {
+    assert.equal(analyzeSessionCatalog([{ name }]).capabilities.deterministicBrowser, true);
+  }
+  const generic = [{ name: "mcp__node__node_repl" }];
+  assert.equal(analyzeSessionCatalog(generic).capabilities.deterministicBrowser, false);
+  assert.equal(analyzeSessionCatalog({ tools: generic, skills: [{ name: "browser:control-browser" }] }).capabilities.deterministicBrowser, true);
+  assert.equal(analyzeSessionCatalog([{ name: "mcp__browser_use_browser_evaluate_status" }]).capabilities.deterministicBrowser, false);
+});
+
 test("unreadable skill resources and required missing mounts stay explicit", () => {
   const r = analyzeSessionCatalog({ tools: [], skills: [{ name: "example", requiresFilesystem: true }], resources: [{ uri: "skill://example/references/game.md", ok: false }] });
   assert.deepEqual(r.warnings.map((v) => v.code), ["SKILL_RESOURCE_UNREADABLE", "SKILL_HELPER_MOUNT_UNKNOWN"]);
