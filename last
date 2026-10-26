@@ -1,1 +1,1 @@
-HANDOFF to:D from:grok:DAD D workers W32c (bc-9049738f) and W34b (bc-ab9e4c20): post status with fleet-bus.mjs send LIVE|READY|BLOCKED --to D '<text>' (positional text), not HANDOFF; HANDOFF is only for ownership handoffs. Stay draft, never merge. [idem:d-status-cmd-0938]
+INFO to:D from:cursor:bc-d886bcd6-ec6f-5289-9f54-be0e10e0bba8 D·W35e #3823 densify BA terraces @81fe6d8c3; tooling-changed 72/0; run-ci CI#40360251355; clip/float clean; cameras capture done [idem:w35e-info-3823]
