@@ -982,3 +982,192 @@ console.log(JSON.stringify({error:r.error?.code,survivors:r.survivors}));`;
 test("every path tools/lib/generated-paths.mjs calls generated is one deploy.mjs's conflict cure regenerates (fleet-owner relies on it)", () => {
   for (const p of GENERATED_PATHS) assert.equal(cureableConflicts([p]).cureable, true, `${p} is listed as generated but deploy.mjs cannot cure a conflict in it`);
 });
+
+/* ---- W1 (2026-10-26): node-half dedupe, fast prefix, receipts/--resume, --detach, autoJobs, --wait-load, baselines ---- */
+import * as W1 from "../../tools/ci/deploy.mjs";
+import { GATE_RECEIPTS, DETACH_RECEIPT, DETACH_LOG, resumeVerdict, stagePassed, readStatus } from "../../tools/lib/deploy-status.mjs";
+import { commandFor as w1CommandFor } from "../../tools/gen/gen-test-groups.mjs";
+
+const w1Doc = {
+  isolatedFiles: [],
+  groups: {
+    "test:a": { kind: "node", files: ["t/a1.test.mjs", "t/a2.test.mjs", "t/a3.test.mjs"] },
+    "test:b": { kind: "node", flags: ["--test-concurrency=1"], files: ["t/b1.test.mjs"] },
+    "test:c": { kind: "command", cmd: "APEX_X=1 node --test t/c.test.mjs", files: ["t/c.test.mjs"] },
+    "test:d": { kind: "node", flags: ["--experimental-vm-modules"], files: ["t/a1.test.mjs"] },
+    "test:e": { kind: "node", files: ["t/a2.test.mjs"] },
+  },
+};
+const w1Pkg = Object.fromEntries(Object.entries(w1Doc.groups).map(([k, d]) => [k, w1CommandFor(d, [], k)]));
+
+test("W1 nodeHalfPlan: node groups run only files tooling-fast did not; command / odd-flag / hand-edited scripts run whole", () => {
+  const ran = new Set(["t/a1.test.mjs", "t/a2.test.mjs", "t/b1.test.mjs", "t/c.test.mjs"]);
+  const plan = Object.fromEntries(W1.nodeHalfPlan(Object.keys(w1Doc.groups), { ran, doc: w1Doc, pkgScripts: { ...w1Pkg, "test:e": "node --test --foo t/a2.test.mjs" } }).map((p) => [p.script, p]));
+  assert.deepEqual([plan["test:a"].mode, plan["test:a"].files, plan["test:a"].skipped], ["remainder", ["t/a3.test.mjs"], ["t/a1.test.mjs", "t/a2.test.mjs"]]);
+  assert.equal(plan["test:b"].mode, "skip", "--test-concurrency=1 is a flag tooling-fast's own child sets");
+  assert.equal(plan["test:c"].mode, "npm", "a command group's cmd may set env: run as written");
+  assert.equal(plan["test:d"].mode, "npm", "a flag tooling-fast does not set: run as written");
+  assert.equal(plan["test:e"].mode, "npm", "a script that is not the generated command runs as written");
+  for (const p of Object.values(plan)) assert.deepEqual([...p.files, ...p.skipped].sort(), [...w1Doc.groups[p.script].files].sort(), `${p.script}: no file lost`);
+});
+
+test("W1 runNodeHalf: one verdict per script, and the dedupe it reports", async () => {
+  const calls = [];
+  const ran = new Set(["t/a1.test.mjs", "t/a2.test.mjs", "t/b1.test.mjs"]);
+  const doc = { isolatedFiles: [], groups: { "test:a": w1Doc.groups["test:a"], "test:b": w1Doc.groups["test:b"] } };
+  // stage() records instead of spawning (run() itself is covered by the child-supervision tests above).
+  const r = await W1.runNodeHalf(["test:a", "test:b"], ran, { doc, pkgScripts: w1Pkg, stage: async (name) => { calls.push(name); } });
+  assert.deepEqual(r.verified, ["test:a", "test:b"]);
+  assert.deepEqual(calls, ["test:a", "test:b"]);
+  assert.deepEqual(r.plan.map((p) => p.mode), ["remainder", "skip"]);
+  assert.deepEqual(r.dedupe, { skippedFiles: 3, scripts: { "test:a": { ran: 1, skipped: 2 }, "test:b": { ran: 0, skipped: 1 } } });
+  // Against the real package.json (no test:a there) the same group is never thinned.
+  const real = await W1.runNodeHalf(["test:a"], ran, { doc, stage: async () => {} });
+  assert.equal(real.plan[0].mode, "npm");
+});
+
+test("W1 test:guards counts as prefix evidence only while its runner is guards-verdict's plain `node --test`", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  assert.equal(pkg.scripts["test:guards"], W1.GUARDS_COMMAND);
+  assert.ok(W1.guardsEquivalentFiles().length > 0, "today's guards-verdict spawns a plain `node --test <files>`: its files count");
+  assert.deepEqual(W1.guardsEquivalentFiles({ pkgScripts: { "test:guards": "node --test --other x" } }), [], "a different command keeps every guard file in the full pass");
+  assert.deepEqual(W1.guardsEquivalentFiles({ guardsSource: "spawnSync(process.execPath, [\"--test\", \"--import=x\", ...args]" }), [], "a runner with its own flags keeps them too");
+});
+
+test("W1 remainderFiles: the full pass is the floor minus what the prefix passed", () => {
+  assert.deepEqual(W1.remainderFiles(["a", "b", "c"], new Set(["b", "z"])), ["a", "c"]);
+});
+
+test("W1 gateOnly's stage order: guards, the --changed prefix, the remainder, the node half, sweeps-parts", async () => {
+  const names = [];
+  // A recording stager runs no stage; tip() throws, so nothing touches the network (the gaps path).
+  const stager = () => ({ tree: null, head: "0".repeat(40), skipped: [], file: path.join(ROOT, "artifacts/logs/never.json"),
+    stage: async (name) => { names.push(name); return { verdict: "passed", files: [] }; } });
+  const v = await W1.gateOnly({ stager, tip: () => { throw new Error("offline"); } });
+  assert.deepEqual(names, ["test:guards", "tooling-fast:changed", "tooling-fast", ...W1.gateNodeSuites(), "test:sweeps-parts"]);
+  assert.deepEqual(v.verified, names, "one verdict name per stage");
+  assert.ok(Number.isInteger(v.jobs) && v.jobs >= 1, "the width comes from gateJobs()");
+  assert.equal(v.notCovered.length, 1, "an unreachable tip is named, not read as nothing touched");
+});
+
+test("W1 gateJobs: tooling-fast autoJobs decides (2 quiet, 1 busy or loaded); APEX_GATE_JOBS overrides", async () => {
+  assert.equal((await W1.gateJobs({ env: { APEX_GATE_JOBS: "3" } })).jobs, 3);
+  assert.equal((await W1.gateJobs({ env: {}, ps: () => "  PID ARGS\n", load1: 0.5 })).jobs, 2);
+  assert.equal((await W1.gateJobs({ env: {}, ps: () => "  PID ARGS\n", load1: 2.5 })).jobs, 1);
+  assert.equal((await W1.gateJobs({ env: {}, ps: () => { throw new Error("no ps"); }, load1: 0.1 })).jobs, 1, "unknown occupancy is busy");
+});
+
+test("W1 receipts: resumeVerdict refuses a moved tree, stagePassed needs a pass on the same tree", () => {
+  const A = "a".repeat(40), B = "b".repeat(40);
+  const doc = { tree: A, head: "h", stages: { x: { tree: A, verdict: "passed" }, y: { tree: A, verdict: "failed" } } };
+  assert.equal(resumeVerdict(doc, A).ok, true);
+  const moved = resumeVerdict(doc, B);
+  assert.equal(moved.ok, false);
+  assert.equal(resumeVerdict(null, A).ok, true);
+  assert.equal(resumeVerdict(doc, null).ok, false);
+  assert.equal(stagePassed(doc, "x", A), true);
+  assert.equal(stagePassed(doc, "y", A), false);
+  assert.equal(stagePassed(doc, "x", B), false);
+  assert.equal(GATE_RECEIPTS, path.join("artifacts", "logs", "gate-receipts.json"));
+});
+
+test("W1 gateStager: records each stage, --resume skips passed stages on the same tree and refuses a moved one", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gate-receipts-"));
+  try {
+    const file = path.join(dir, "r.json");
+    let tree = "a".repeat(40);
+    const mk = (resume) => W1.gateStager({ resume, file, treeId: () => tree, head: () => "f".repeat(40), announce() {} });
+    const g = mk(false);
+    let runs = 0;
+    await g.stage("one", async () => { runs++; return { files: ["x"] }; });
+    await assert.rejects(g.stage("two", async () => { throw new Error("red"); }), /red/);
+    let doc = JSON.parse(fs.readFileSync(file, "utf8"));
+    assert.equal(doc.stages.one.verdict, "passed"); assert.deepEqual(doc.stages.one.files, ["x"]);
+    assert.equal(doc.stages.two.verdict, "failed");
+    assert.equal(typeof doc.stages.one.seconds, "number");
+    const r = mk(true);
+    const one = await r.stage("one", async () => { runs++; });
+    assert.equal(runs, 1, "a passed stage on the same tree is skipped"); assert.deepEqual(one.files, ["x"]);
+    await r.stage("two", async () => { runs++; });
+    assert.equal(runs, 2, "a failed stage re-runs");
+    assert.deepEqual(r.skipped, ["one"]);
+    // The tree moves DURING a stage: the stage records tree-moved and the gate stops.
+    await assert.rejects(r.stage("three", async () => { tree = "b".repeat(40); }), /changed while three ran/);
+    doc = JSON.parse(fs.readFileSync(file, "utf8"));
+    assert.equal(doc.stages.three.verdict, "tree-moved");
+    // A resume on the moved tree refuses with a GateRefusal (main() turns it into exit 3).
+    assert.throws(() => mk(true), (e) => e instanceof W1.GateRefusal && /moved/.test(e.message));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("W1 --detach: a detached child without --detach, the status log stamped with its pid, a receipt", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gate-detach-"));
+  try {
+    const seen = {};
+    const spawnFn = (cmd, args, opts) => { Object.assign(seen, { cmd, args, opts }); return { pid: 4242, unref() { seen.unref = true; } }; };
+    const statusLog = path.join(dir, "artifacts/logs/deploy.log");
+    const r = W1.detachGate(["--gate-only", "--detach", "--resume"], { statusLog, root: dir, spawnFn, tree: () => "t" });
+    assert.equal(seen.cmd, process.execPath);
+    assert.deepEqual(seen.args.slice(1), ["--gate-only", "--resume", "--log", "artifacts/logs/deploy.log"], "the child re-runs the gate without --detach");
+    assert.equal(seen.opts.detached, true); assert.equal(seen.opts.stdio[0], "ignore"); assert.equal(seen.unref, true);
+    // What --status reads right after the parent returns: the child's pid, running.
+    const s = readStatus(statusLog, (pid) => pid === 4242);
+    assert.deepEqual([s.state, s.pid, s.mode, s.code], ["running", 4242, "--gate-only,--resume", 124]);
+    const receipt = JSON.parse(fs.readFileSync(path.join(dir, DETACH_RECEIPT), "utf8"));
+    assert.deepEqual([receipt.pid, receipt.log, receipt.tree], [4242, DETACH_LOG, "t"]);
+    assert.equal(r.pid, 4242);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("W1 `--gate-only --resume` on a moved tree refuses (exit 3) before any wait or stage", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gate-resume-"));
+  try {
+    const receipts = path.join(dir, "r.json");
+    fs.writeFileSync(receipts, JSON.stringify({ tree: "0".repeat(40), head: "1".repeat(40), stages: { "test:guards": { tree: "0".repeat(40), verdict: "passed" } } }));
+    const r = spawnSync("node", ["tools/ci/deploy.mjs", "--gate-only", "--resume", "--log", path.join(dir, "deploy.log")],
+      { cwd: ROOT, encoding: "utf8", env: { ...process.env, APEX_GATE_RECEIPTS: receipts }, timeout: 60_000 });
+    assert.equal(r.status, 3, r.stderr);
+    // Exit 3 is also preflight's (a loaded box): the refusal line itself says which refused.
+    const refused = r.stderr.split("\n").filter((l) => l.startsWith("[deploy] REFUSED"));
+    assert.deepEqual(refused.map((l) => l.slice(0, 47)), ["[deploy] REFUSED: --resume: the work tree moved"], r.stderr);
+    assert.doesNotMatch(r.stderr, /guard suite|waiting up to/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("W1 --detach outside --gate-only exits 2 before stamping anything", () => {
+  const log = "artifacts/logs/deploy-detach-refused-never.log";
+  const r = spawnSync("node", ["tools/ci/deploy.mjs", "--detach", "--log", log], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(r.status, 2, r.stderr);
+  assert.equal(r.stderr.trim(), "[deploy] --detach applies to --gate-only only (a deploy that pushes stays attached)");
+  assert.ok(!fs.existsSync(path.join(ROOT, log)));
+});
+
+test("W1 --wait-load: default 10 min, =0 refuses at once, waits only at loadavg >= 2.8", () => {
+  assert.equal(W1.waitLoadMinutes([]), 10);
+  assert.equal(W1.waitLoadMinutes(["--wait-load=0"]), 0);
+  assert.equal(W1.waitLoadMinutes(["--wait-load=3"]), 3);
+  const waits = [];
+  assert.equal(W1.waitForLoad(5, { load1: () => 1.0, wait: (m) => waits.push(m) }), false);
+  assert.equal(W1.waitForLoad(0, { load1: () => 9, wait: (m) => waits.push(m) }), false);
+  assert.equal(W1.waitForLoad(5, { load1: () => 3.5, wait: (m) => waits.push(m) }), true);
+  assert.deepEqual(waits, [5]);
+});
+
+test("W1 the per-circuit ratchet baselines cure by a three-way merge by circuit, never a regeneration", () => {
+  for (const f of W1.BASELINES) {
+    assert.ok(fs.existsSync(path.join(ROOT, f)), `${f} moved — update BASELINES`);
+    assert.equal(W1.cureableConflicts([f]).cureable, true);
+  }
+  assert.deepEqual(W1.cureableConflicts(["tools/track/clip-baseline.json", "package.json"]).baselineF, ["tools/track/clip-baseline.json"]);
+  const base = JSON.stringify({ monza: 3, spa: 1, baku: 2 });
+  const ok = W1.mergeBaseline(base, JSON.stringify({ monza: 2, spa: 1, baku: 2 }), JSON.stringify({ monza: 3, spa: 1, baku: 2, imola: 0 }));
+  assert.deepEqual([JSON.parse(ok.text), ok.conflicts], [{ monza: 2, spa: 1, baku: 2, imola: 0 }, []]);
+  const clash = W1.mergeBaseline(base, JSON.stringify({ monza: 2, spa: 1, baku: 2 }), JSON.stringify({ monza: 4, spa: 1, baku: 2 }));
+  assert.deepEqual(clash.conflicts, ["monza"], "the same circuit raised and lowered stops the merge");
+});
+
+test("W1 flags reach strictFlags' KNOWN_FLAGS once that list exists (mega train 3)", () => {
+  // Before the train lands deploy.mjs has no KNOWN_FLAGS; after it, a missing entry makes strictFlags exit 2 on --resume.
+  if (!W1.KNOWN_FLAGS) return;
+  assert.deepEqual(W1.GATE_FLAGS.filter((f) => !W1.KNOWN_FLAGS.includes(f)), [], "add the W1 flags to deploy.mjs KNOWN_FLAGS");
+});

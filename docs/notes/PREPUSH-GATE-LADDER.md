@@ -72,8 +72,52 @@ assertion about the fourth closer rather than to loosen it.
   Playwright suite or host browser is live and the 1-min loadavg is under 2,
   else serial, and it prints which (`[tooling-fast] jobs=N (auto: …)`). Serial
   the floor is ~47 min of file time on a 4-core container; `--jobs=3` measured
-  16.1 min. `deploy.mjs` keeps its pinned `--jobs=2`, CI its `--jobs=4`. The
-  rung's contents do not change, only how many files run at once.
+  16.1 min. Since 2026-10-26 (W1) `deploy.mjs` asks the same `autoJobs()`
+  instead of pinning `--jobs=2` (`APEX_GATE_JOBS=<n>` overrides); CI keeps its
+  `--jobs=4`. The rung's contents do not change, only how many files run at once.
+
+## The gate runs every file once, cheapest first (2026-10-26, W1)
+
+The node half re-ran most of its files: the groups in ci.yml's "Pure-node unit
+suites" step overlap tooling-fast heavily (`deploy.mjs`'s `nodeHalfPlan()`
+prints the split; the counts are not committed, see below). The SET the gate
+runs is unchanged; the ORDER and the repeats changed:
+
+1. `test:guards` (the commit hook's cross-file group).
+2. tooling-fast on the diff's own files — tooling-fast's exported
+   `selectToolingFastChanged`, the selection `--changed` uses — with `--bail`.
+   A fail-safe widening to the whole floor skips this step: that is the full pass.
+3. The rest of the tooling-fast floor: every file the first two did not pass.
+   The gate then writes ready-gate's stamp itself, for the tree both halves
+   measured, since tooling-fast stamps only a whole floor run in one process.
+4. Each node-kind gate group's files minus everything above, through the same
+   runner its npm script uses (run-node-group's phases, the group's flags,
+   `NODE_TEST_CONTEXT` dropped) — what CI's `run-group.mjs --skip-tf` already
+   does on a PR. A `command` group (vm-page-a/b set `APEX_VM_PAGE_GROUP`), a flag
+   other than `--test-concurrency` / `--test-timeout`, or a script that is not
+   the generated command runs whole. Evidence that the flags match, read
+   2026-10-26: a node-kind script is `node --test --test-timeout=900000
+   [--test-concurrency=1] <files>` with no env; tooling-fast runs each file as
+   `node --test --test-concurrency=1 --test-timeout=540000 <file>` (stricter);
+   `--test-concurrency` bounds files in flight, not what one file asserts.
+   `prepush-gate-coverage.test.mjs` pins the overlap at 0 (allowlist empty).
+5. `test:sweeps-parts`, verify-track, the sweeps — unchanged.
+
+Every stage writes `{ tree, head, verdict, seconds, at }` to
+`artifacts/logs/gate-receipts.json`, keyed by the work-tree id
+(`tools/lib/work-tree-id.mjs`). `--gate-only --resume` skips a stage that passed
+on the SAME tree and refuses (exit 3) when the tree moved; an edit while a stage
+runs records `tree-moved` and stops the gate. `--gate-only --detach` starts the
+gate as a detached child (output `artifacts/logs/deploy-gate.log`, receipt
+`artifacts/logs/deploy-detach.json`) that outlives a dropped task;
+`deploy.mjs --status` / `--wait` read its `= deploy` markers. `--wait-load=<min>`
+(from sync-pr, default 10, 0 = refuse at once) waits for loadavg < 2.8 before
+the loadavg ≥ 3 refusal.
+
+Not done here: the plan's "last-failed first" prefix step (the gate has no
+per-file failure record of its own yet), and `tooling-fast.mjs --detach`
+(another worker owns tooling-fast.mjs). Before/after wall time of one gate:
+recorded by the parent session when it times one.
 
 `test-coverage-audit` already asked "is this file in some topical group?". That
 is a different question, and a file can pass it while nothing runs the file

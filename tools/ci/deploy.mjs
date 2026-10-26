@@ -28,6 +28,15 @@
 //                                       #   Its union is commits + staged + unstaged + untracked
 //                                       #   (changedPaths), so an uncommitted circuit edit still
 //                                       #   gets the sweeps and its verify-track.
+//                                       #   Order: test:guards → tooling-fast on the diff's files
+//                                       #   (--bail) → the rest of tooling-fast → the node suites'
+//                                       #   files tooling-fast did NOT run → sweeps-parts → ….
+//   … --gate-only --resume              # skip stages whose receipt (artifacts/logs/gate-receipts.json)
+//                                       #   passed on THIS work tree; refuses (exit 3) when it moved
+//   … --gate-only --detach              # run the gate as a detached child (log artifacts/logs/
+//                                       #   deploy-gate.log) that outlives a dropped task; --status/--wait
+//   … --wait-load=<min>                 # wait up to N min (default 10) for loadavg < 2.8 before the
+//                                       #   loadavg >= 3 refusal (0 = refuse at once)
 //   node tools/ci/deploy.mjs --train       # print train health (last push ci, pages, and the
 //                                       #   NIGHTLY rota by JOB) and stop. Two curl calls, no
 //                                       #   preflight: the "is the branch already red, and did
@@ -57,19 +66,24 @@
 // Refuses: a dirty tree, loadavg >= 3, a live Playwright run, any conflict
 // outside index.html/version.json, a non-fast-forward it cannot cure with a
 // re-merge in three tries. Never --force, never rebase, never amend.
-import { spawnSync, execFileSync } from "node:child_process";
+import { spawn, spawnSync, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { GEOMETRY_PATHS, targetedSuites } from "./geometry-paths.mjs";
+// W1 (2026-10-26): gate receipts / --resume / --detach, and the node half's tooling-fast dedupe.
+import { GATE_RECEIPTS, DETACH_RECEIPT, DETACH_LOG, readJson, writeJson, resumeVerdict, stagePassed } from "../lib/deploy-status.mjs";
+import { loadGroups, commandFor } from "../gen/gen-test-groups.mjs";
+import { nodeGroupPhases } from "./run-node-group.mjs";
+import { workTreeId } from "../lib/work-tree-id.mjs";
 import { githubToken } from "./github-token.mjs";
 import { superviseDeployChild } from "./deploy-child.mjs";
 import { request } from "./github-api.mjs";
 import { changedPaths as diffPaths } from "../lib/changed-files.mjs";
 import { NODE_TEST_TIMEOUT_MS } from "../gen/gen-test-groups.mjs";
-import { resolveGenBlocks, mergePackageJson } from "../lib/conflict-cure.mjs";
+import { resolveGenBlocks, mergePackageJson, mergeJson3 } from "../lib/conflict-cure.mjs";
 import { saveOutputArtifact } from "../agent/output.mjs";
 import { DEFAULT_LOG, stamp, readStatus, waitStatus } from "../lib/deploy-status.mjs";
 
@@ -209,8 +223,8 @@ export function plan() {
     touchedCircuits: touchedCircuits(tip),
     steps: [
       ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json, tools/README.md from the tools' @doc headers, docs/agent-output/catalog.json from gen-output-surface; then `npm run gen` re-derives every generated file on the union, conflict or not, and commits any drift)",
-      `tools/ci/tooling-fast.mjs ${GATE_JOBS} (the full node gate, two files at a time)`,
-      "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
+      "tools/ci/tooling-fast.mjs (the full node gate; width from tooling-fast's autoJobs: 2 on a quiet box, else 1)",
+      "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file) — minus the files tooling-fast just passed",
       touchesGeometry(tip) ? "test:sweeps (~10 min — this union can move geometry)"
                            : (targetedFor(tip).length
                                ? `targeted sweeps only — ${targetedFor(tip).map((s) => path.basename(s)).join(", ")} (the suites that read this union; no fleet rebuild)`
@@ -354,6 +368,14 @@ const DERIVED_DOCS = ["docs/agent-index.json", "tests/data/impact-map.json", "do
 // tree's top hot spot; system audit 2026-10-26 §7). Its generator takes ~2 min,
 // so it is not in `npm run gen`: the cure path alone runs it.
 const SCENERY_LOCATIONS = "tools/shot/scenery-locations.json";
+// Per-circuit ratchet ceilings; cured by a per-circuit three-way merge (cureableConflicts).
+export const BASELINES = ["tools/track/props-tris-baseline.json", "tools/track/clip-baseline.json"];
+/** Three-way merge of a per-circuit baseline by key: `{ text, conflicts }` (conflicts = circuits both sides changed differently). */
+export function mergeBaseline(baseText, oursText, theirsText) {
+  const parse = (t) => (t && t.trim() ? JSON.parse(t) : {});
+  const r = mergeJson3(parse(baseText), parse(oursText), parse(theirsText), () => false);
+  return { text: JSON.stringify(r.merged, null, 2) + "\n", conflicts: r.conflicts };
+}
 /* Every number in ratchets.json, flattened to `scope/name` -> value, so the
    three sides of a conflict can be compared metric by metric. */
 export function ratchetMetrics(json) {
@@ -457,13 +479,23 @@ export function cureableConflicts(conflicted) {
   // tools/shot/scenery-locations.json (gen-scenery-locations.cjs): same cure,
   // take ours and regenerate from the merged TRACK_VM sources.
   const sceneryF = conflicted.filter((f) => f === SCENERY_LOCATIONS);
+  // tools/track/props-tris-baseline.json and clip-baseline.json (W1, 2026-10-26):
+  // one number per circuit, so two circuit PRs touching neighbouring rows
+  // conflict. NOT regenerated: they are RATCHET CEILINGS (props-tri-ratchet /
+  // prop-clipping), a raise is a decision its commit argues, and no tool writes
+  // them whole (props-tris.cjs only reports; clip-audit.cjs --lower only lowers),
+  // so a measured rewrite would bless whatever the union measures. The cure is
+  // a three-way merge BY CIRCUIT (each side's edits against the base, the same
+  // mergeJson3 package.json uses); the same circuit edited differently on both
+  // sides still stops, and test:sweeps (both suites) then measures the union.
+  const baselineF = conflicted.filter((f) => BASELINES.includes(f));
   // (The gate-ladder figures used to be cured here too; since 2026-09-30 no
   // doc commits them — tools/gen/gen-ladder-figures.mjs only reports — so
   // there is nothing left to conflict.)
   const sourceContested = conflicted.includes("tests/groups.json");
   const cureable = conflicted.length > 0 && !sourceContested
-    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length + derivedF.length + sceneryF.length === conflicted.length;
-  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF };
+    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length + derivedF.length + sceneryF.length + baselineF.length === conflicted.length;
+  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF, baselineF };
 }
 
 /* THE UNION MAY NEED A DEPENDENCY THE BOX HAS NOT GOT. A merged lockfile is
@@ -530,11 +562,11 @@ export async function mergeDeployTip() {
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
   // real disagreement and stops.
-  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF } = cureableConflicts(conflicted);
+  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF, baselineF } = cureableConflicts(conflicted);
   if (!cureable) {
     git(["merge", "--abort"]);
     const moved = manifestMoved();
-    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f) && !derivedF.includes(f) && !sceneryF.includes(f))
+    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f) && !derivedF.includes(f) && !sceneryF.includes(f) && !baselineF.includes(f))
       .map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
     throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
   }
@@ -604,6 +636,14 @@ export async function mergeDeployTip() {
     must(git(["add", SCENERY_LOCATIONS]), "add");
     did.push("scenery locations regenerated");
   }
+  for (const f of baselineF) {
+    const stage = (n) => git(["show", `:${n}:${f}`]).out;
+    const m = mergeBaseline(stage(1), stage(2), stage(3));
+    if (m.conflicts.length) stop(`${f} (the same circuit's ceiling changed differently on both sides: ${m.conflicts.join(", ")})`);
+    fs.writeFileSync(path.join(ROOT, f), m.text);
+    must(git(["add", f]), "add");
+    did.push(`${path.basename(f)} merged by circuit`);
+  }
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
   await installIfLockMoved(before);
   // The cures above re-derive only the files that CONFLICTED; a derived file
@@ -635,11 +675,23 @@ const MERGE_GUARDS = Object.freeze(
    the >= 3 line this repo refuses to deploy above — and a gate that drives the
    box past its own "the machine is too busy to be measured" threshold is buying
    speed with the credibility of its verdicts. Two peaks at 2.57.
-   The gate stays pinned at 2 whatever the box looks like. Since 2026-10-24
-   (BUILD-HUNT B4) a bare `npm run test:tooling-fast` also takes 2, but only on a
-   quiet box (no live browser run, loadavg < 2; else 1: tooling-fast.mjs
-   autoJobs); CI passes its own --jobs=4. */
-const GATE_JOBS = "--jobs=2";
+   UNPINNED 2026-10-26 (W1): the gate used to stay at 2 whatever the box looked
+   like. It now asks tooling-fast's own autoJobs() — 2 on a quiet box (no live
+   browser run, loadavg < 2), else 1 — the same rule a bare
+   `npm run test:tooling-fast` follows since BUILD-HUNT B4, so a gate started
+   beside a browser run stops adding the load that times that run out.
+   APEX_GATE_JOBS=<n> is the explicit override; CI passes its own --jobs=4. */
+export async function gateJobs({ env = process.env, ps = () => execFileSync("ps", ["-eo", "pid,args"], { encoding: "utf8" }), load1 = os.loadavg()[0] } = {}) {
+  const pinned = Number(env.APEX_GATE_JOBS);
+  if (Number.isInteger(pinned) && pinned >= 1) return { jobs: pinned, why: `APEX_GATE_JOBS=${pinned}` };
+  const { autoJobs } = await import("./tooling-fast.mjs");
+  let busy = null;   // unknown → autoJobs treats it as busy (1)
+  try {
+    const { scanPlaywrightLines } = await import("./playwright-occupancy.mjs");
+    busy = scanPlaywrightLines(ps()).busy;
+  } catch { /* no ps: stay serial */ }
+  return autoJobs({ busy, load1 });
+}
 
 /* WHAT A REJECTED PUSH ACTUALLY NEEDS RE-VERIFIED.
    The full gate ran before attempt 1 and it passed; the commits that beat us
@@ -694,9 +746,9 @@ async function reverifyUnion(before, oursProse) {
     // place to skip them: it is the leg carrying another session's code, merged
     // seconds ago, that nothing in this process has yet measured.
     const why = `${ships.slice(0, 3).join(", ")}${ships.length > 3 ? ` +${ships.length - 3}` : ""}`;
-    await run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS],
+    await run("node", ["tools/ci/tooling-fast.mjs", `--jobs=${(await gateJobs()).jobs}`],
         `re-verify the new union in full — it brings shipped code (${why})`);
-    for (const script of gateNodeSuites()) await run("npm", ["run", script], `re-verify: Pages gate ${script}`);
+    await runNodeHalf(gateNodeSuites(), await toolingFastRan(), { label: "re-verify: Pages gate" });
     for (const id of touchedCircuits(before)) await run("node", ["tools/track/verify-track.cjs", id], `re-verify: verify-track ${id}`);
     label = "full gate (tooling-fast + the Pages gate's node suites + verify-track)";
   } else {
@@ -809,6 +861,168 @@ function openPr(branch) {
   return { pr: url, note: "PR opened; do not arm auto-merge — Merge Desk arms MERGE on ready tip-green" };
 }
 
+/* THE NODE HALF RUNS ONLY WHAT TOOLING-FAST DID NOT (W1, 2026-10-26).
+   gateNodeSuites() exists for the pins tooling-fast never runs (run 1889) — but
+   211 of its scripts' 343 files WERE in tooling-fast, so every gate ran them
+   twice, ~18 serial min of repeats. A node-kind group now runs only its files
+   that this gate's tooling-fast pass did not, through the same runner the npm
+   script uses (run-node-group's phases: the group's flags, isolated files
+   first), with the same environment (NODE_TEST_CONTEXT dropped, the compile
+   cache on) — exactly what CI's `run-group.mjs --skip-tf` does on a PR.
+
+   WHY THAT IS THE SAME EVIDENCE, read 2026-10-26: a node-kind script is
+   `node --test --test-timeout=900000 [--test-concurrency=1] <files>` with no
+   env of its own (tests/groups.json → gen-test-groups commandFor). tooling-fast
+   runs each file as `node --test --test-concurrency=1 --test-timeout=540000
+   <file>` (a STRICTER timeout, plus a 600 s file bound) in a fresh process,
+   which is node's own per-file isolation too. --test-concurrency limits how
+   many FILES run at once, so it cannot change what a single file asserts.
+   Anything else keeps every file and says why: a `command` group (vm-page-a/b
+   set APEX_VM_PAGE_GROUP), a flag outside TF_EQUIVALENT_FLAG, or a package.json
+   script that is not the generated command. */
+export const TF_EQUIVALENT_FLAG = /^--test-(concurrency|timeout)=\d+$/;
+
+/** Pure: per gate script, what to run. `ran` = files this gate's tooling-fast already passed.
+ *  mode "npm" (run the script whole), "remainder" (run `files` only) or "skip" (nothing left). */
+export function nodeHalfPlan(scripts, { ran, doc = loadGroups(), pkgScripts = readPkgScripts() } = {}) {
+  return scripts.map((script) => {
+    const def = doc.groups[script];
+    const all = def?.files || [];
+    const whole = (why) => ({ script, mode: "npm", files: all, skipped: [], why });
+    if (!def) return whole("no tests/groups.json group — run the npm script as written");
+    if (def.kind !== "node") return whole(`a ${def.kind} group: its command may set env (e.g. APEX_VM_PAGE_GROUP), so it runs as written`);
+    const odd = (def.flags || []).filter((f) => !TF_EQUIVALENT_FLAG.test(f));
+    if (odd.length) return whole(`flags tooling-fast does not set: ${odd.join(" ")}`);
+    if (pkgScripts[script] !== commandFor(def, doc.isolatedFiles, script)) return whole("package.json's script is not the generated command (run npm run gen), so it runs as written");
+    const skipped = all.filter((f) => ran.has(f));
+    const files = all.filter((f) => !ran.has(f));
+    return { script, mode: files.length ? "remainder" : "skip", files, skipped,
+      why: `${skipped.length} of ${all.length} file(s) already passed in this gate's tooling-fast` };
+  });
+}
+function readPkgScripts() {
+  try { return JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts || {}; } catch { return {}; }
+}
+
+/** The files a full tooling-fast pass runs (the floor). */
+export async function toolingFastRan() {
+  const { TOOLING_FAST_FILES } = await import("./tooling-fast.mjs");
+  return new Set(TOOLING_FAST_FILES);
+}
+
+/** Run the node half under `ran`; verdict names stay one per script. */
+export async function runNodeHalf(scripts, ran, { stage = (name, fn) => fn(), label = "Pages gate", doc = loadGroups(), pkgScripts = readPkgScripts() } = {}) {
+  const plan = nodeHalfPlan(scripts, { ran, doc, pkgScripts });
+  const require = createRequire(import.meta.url);
+  const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
+  const env = { ...process.env, ...augmentNodeCompileCache(process.env, ROOT) };
+  delete env.NODE_TEST_CONTEXT;
+  const verified = [];
+  const dedupe = { skippedFiles: 0, scripts: {} };
+  for (const p of plan) {
+    await stage(p.script, async () => {
+      if (p.mode === "npm") return run("npm", ["run", p.script], `${label}: ${p.script}`);
+      if (p.mode === "skip") { log(`${label}: ${p.script}: every file (${p.skipped.length}) already passed in this gate's tooling-fast — nothing left to run`); return; }
+      const def = { ...doc.groups[p.script], files: p.files };
+      for (const args of nodeGroupPhases(def, doc.isolatedFiles)) {
+        await run("node", args, `${label}: ${p.script} (${p.files.length} file(s) tooling-fast does not run; ${p.skipped.length} already passed there)`, { env });
+      }
+    });
+    verified.push(p.script);
+    if (p.skipped.length) { dedupe.skippedFiles += p.skipped.length; dedupe.scripts[p.script] = { ran: p.files.length, skipped: p.skipped.length }; }
+    else if (p.mode === "npm" && p.files.some((f) => ran.has(f))) dedupe.scripts[p.script] = { ran: p.files.length, skipped: 0, why: p.why };
+  }
+  return { verified, dedupe, plan };
+}
+
+/* THE FAST PREFIX (W1). The full gate is ~33 min median; a red in the file the
+   session edited used to surface somewhere inside it. Now: test:guards (the
+   commit hook's cross-file group), then tooling-fast on the diff's own files
+   (tooling-fast's --changed selection, --bail), and only then the rest of the
+   floor — minus everything the prefix already passed on this tree.
+   test:guards counts as passed evidence for its files because its runner
+   (guards-verdict.mjs run) is `node --test <files>` with no env of its own and
+   node's default (no) per-test timeout. Checked at RUN time, fail safe: a
+   different npm script, or a guards-verdict whose spawn line is no longer that
+   plain `node --test`, keeps every guard file in the full pass. */
+export const GUARDS_COMMAND = "node tools/ci/guards-verdict.mjs run";
+export const GUARDS_SPAWN = 'spawnSync(process.execPath, ["--test", ...args]';
+export function guardsEquivalentFiles({ doc = loadGroups(), pkgScripts = readPkgScripts(),
+  guardsSource = (() => { try { return fs.readFileSync(path.join(ROOT, "tools/ci/guards-verdict.mjs"), "utf8"); } catch { return ""; } })() } = {}) {
+  const def = doc.groups["test:guards"];
+  const plain = pkgScripts["test:guards"] === GUARDS_COMMAND && def?.cmd === GUARDS_COMMAND && guardsSource.includes(GUARDS_SPAWN);
+  return plain ? [...(def.files || [])] : [];
+}
+
+/** tooling-fast's --changed selection (its own exported selector; the diff read the way its CLI reads it). */
+export async function prefixSelection(changed = changedVsDeploy()) {
+  const { selectToolingFastChanged } = await import("./tooling-fast.mjs");
+  const meta = selectToolingFastChanged(changed);
+  return { files: meta.reason === "empty" ? [] : meta.files, reason: meta.reason, changed: changed.length };
+}
+function changedVsDeploy() {
+  try {
+    const base = execFileSync("git", ["merge-base", "HEAD", `${REMOTE}/${DEPLOY_BRANCH}`], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return diffPaths([base], { cwd: ROOT });
+  } catch {
+    try { return diffPaths(["HEAD~1"], { cwd: ROOT }); } catch { return []; }
+  }
+}
+
+/** The full pass after the prefix: the floor minus what the prefix passed. */
+export function remainderFiles(floor, prefixPassed) {
+  return floor.filter((f) => !prefixPassed.has(f));
+}
+
+/* PER-STAGE RECEIPTS + --resume (W1). Every stage writes { tree, head, verdict,
+   seconds, at } to artifacts/logs/gate-receipts.json (tools/lib/deploy-status.mjs).
+   The tree is re-read after each stage: an edit while a stage ran makes its verdict
+   about neither tree (AGENTS.md rule 2), so that stage records `tree-moved` and the
+   gate stops. `--resume` skips a stage that passed on the SAME work tree and refuses
+   (exit 3) when the tree moved since the receipts. */
+export class GateRefusal extends Error {}
+/** The receipts file; APEX_GATE_RECEIPTS relocates it (tests, a second gate on another tree). */
+export const receiptsFile = (env = process.env) => path.resolve(ROOT, env.APEX_GATE_RECEIPTS || GATE_RECEIPTS);
+export function gateStager({ resume = false, file = receiptsFile(), treeId = () => workTreeId(ROOT),
+  head = () => git(["rev-parse", "HEAD"]).out, announce = log, now = () => new Date() } = {}) {
+  const tree = treeId();
+  let doc = null;
+  if (resume) {
+    doc = readJson(file);
+    const v = resumeVerdict(doc, tree);
+    if (!v.ok) throw new GateRefusal(`--resume: ${v.why}`);
+    announce(`--resume: ${v.why}`);
+  }
+  const h = head();
+  if (!doc) doc = { tree, head: h, startedAt: now().toISOString(), stages: {} };
+  else doc.resumedAt = now().toISOString();
+  writeJson(file, doc);
+  const skipped = [];
+  const stage = async (name, fn) => {
+    if (resume && stagePassed(doc, name, tree)) {
+      announce(`--resume: ${name} already passed on this tree (${doc.stages[name].seconds}s at ${doc.stages[name].at}) — skipped`);
+      skipped.push(name);
+      return doc.stages[name];
+    }
+    const t0 = Date.now();
+    let verdict = "failed", extra = null;
+    try { extra = await fn(); verdict = "passed"; }
+    finally {
+      const after = tree ? treeId() : null;
+      if (verdict === "passed" && tree && after !== tree) verdict = "tree-moved";
+      doc.stages[name] = { tree, head: h, verdict, seconds: Math.round((Date.now() - t0) / 1000), at: now().toISOString(),
+        ...(extra && Array.isArray(extra.files) ? { files: extra.files } : {}) };
+      writeJson(file, doc);
+      if (verdict === "tree-moved") {
+        // eslint-disable-next-line no-unsafe-finally -- a passed stage on a moved tree must not read as passed
+        throw new Error(`the work tree changed while ${name} ran (${tree.slice(0, 12)} -> ${String(after).slice(0, 12)}): its verdict is about neither tree — make all edits first, then gate once (AGENTS.md rule 2)`);
+      }
+    }
+    return doc.stages[name];
+  };
+  return { stage, tree, head: h, doc, skipped, file };
+}
+
 /* THE GATE, WITHOUT THE DEPLOY. `npm run test:tooling-fast` is the documented
    edit-loop check and it is a SUBSET — the gate's node suites are not on its
    list — so "tooling-fast is green" has never meant "the deploy gate is
@@ -817,12 +1031,49 @@ function openPr(branch) {
    only way to learn it was to start a deploy.
    This runs exactly what main() runs before it pushes, and pushes nothing, so
    the pre-push answer comes from the same code path as the deploy's — not from
-   a second list that can drift from it. */
-export async function gateOnly() {
+   a second list that can drift from it. Since W1 (2026-10-26) it runs the same
+   SET in a cheaper order: the fast prefix first, every file once. */
+function fetchTip() {
+  must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
+  return must(git(["rev-parse", `${REMOTE}/${DEPLOY_BRANCH}`]), "rev-parse");
+}
+export async function gateOnly({ resume = false, stager = gateStager, tip = fetchTip } = {}) {
   const t0 = Date.now();
   const verified = [];
-  await run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite"); verified.push("tooling-fast");
-  for (const script of gateNodeSuites()) { await run("npm", ["run", script], `Pages gate: ${script}`); verified.push(script); }
+  const g = stager({ resume });
+  const jobs = await gateJobs();
+  const J = `--jobs=${jobs.jobs}`;
+  const { TOOLING_FAST_FILES } = await import("./tooling-fast.mjs");
+  // 1. The commit hook's cross-file guards: seconds, and the likeliest red after a merge.
+  await g.stage("test:guards", () => run("npm", ["run", "test:guards"], "guard suite: test:guards (fast prefix)")); verified.push("test:guards");
+  // 2. tooling-fast on the diff's own files, stopping at the first red.
+  const pre = await g.stage("tooling-fast:changed", async () => {
+    const sel = await prefixSelection();
+    if (!sel.files.length) { log(`fast prefix: tooling-fast --changed selected nothing (${sel.reason}, ${sel.changed} changed path(s)) — the full pass covers it`); return { files: [] }; }
+    // A fail-safe widening selects the whole floor: that IS the full pass, so run it once, there, without --bail.
+    const picked = new Set(sel.files);
+    if (TOOLING_FAST_FILES.every((f) => picked.has(f))) { log(`fast prefix: --changed widened to the whole floor (${sel.reason}) — the full pass runs it`); return { files: [] }; }
+    await run("node", ["tools/ci/tooling-fast.mjs", "--bail", J, ...sel.files], `fast prefix: tooling-fast --changed (${sel.reason}, ${sel.files.length} file(s), --bail, jobs=${jobs.jobs}: ${jobs.why})`);
+    return { files: sel.files };
+  });
+  verified.push("tooling-fast:changed");
+  const prefixPassed = new Set([...(pre.files || []), ...guardsEquivalentFiles()]);
+  // 3. The rest of the floor, every file once.
+  const rest = remainderFiles(TOOLING_FAST_FILES, prefixPassed);
+  const full = await g.stage("tooling-fast", async () => {
+    if (!rest.length) { log(`tooling-fast: all ${TOOLING_FAST_FILES.length} file(s) passed in the prefix — nothing left`); return; }
+    await run("node", ["tools/ci/tooling-fast.mjs", J, ...rest], `guard suite remainder: tooling-fast (${rest.length} of ${TOOLING_FAST_FILES.length}; ${TOOLING_FAST_FILES.length - rest.length} passed in the prefix)`);
+  });
+  verified.push("tooling-fast");
+  // tooling-fast stamps ready-gate only for a whole floor in ONE run, which the split never is: the gate stamps it
+  // here, for the tree both halves measured (the stager already refused a moved tree), and only when both ran now.
+  if (g.tree && !g.skipped.includes("tooling-fast") && !g.skipped.includes("tooling-fast:changed") && full.verdict === "passed") {
+    try { const { stampReadySha } = await import("./ready-gate.mjs"); stampReadySha(g.head, { tree: g.tree }); } catch { /* advisory */ }
+  }
+  // 4. The Pages gate's node half: only the files tooling-fast (and the prefix) did not run.
+  const ran = new Set([...TOOLING_FAST_FILES, ...prefixPassed]);
+  const half = await runNodeHalf(gateNodeSuites(), ran, { stage: g.stage });
+  verified.push(...half.verified);
   // ci.yml's "Parts option-resolution census" job runs test:sweeps-parts, so a
   // red in either of its two files takes the deploy red — and until 2026-09-22
   // nothing before a push ran them (tests/unit/prepush-gate-coverage.test.mjs
@@ -835,15 +1086,14 @@ export async function gateOnly() {
   // build on, and running a cheap suite CI would skip is the safe direction —
   // the reverse (skipping one CI runs) is what a pre-push gate may never do.
   // The geometry sweeps stay conditional because they are 8-15 minutes, not 40 s.
-  await run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts"); verified.push("test:sweeps-parts");
+  await g.stage("test:sweeps-parts", () => run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts")); verified.push("test:sweeps-parts");
   // Against the deploy tip, same as a real deploy: the circuits OUR side
   // touched (three-dot), not every circuit that moved on the branch.
   let circuits = [];
   let base = "";
   const gaps = [];
   try {
-    must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
-    base = must(git(["rev-parse", `${REMOTE}/${DEPLOY_BRANCH}`]), "rev-parse");
+    base = tip();
     circuits = touchedCircuits(base);
   } catch (e) {
     log(`verify-track skipped: cannot reach ${REMOTE}/${DEPLOY_BRANCH} (${e.message})`);
@@ -852,7 +1102,7 @@ export async function gateOnly() {
     // "could not look" read identically to the reader of the JSON.
     gaps.push(`verify-track and the geometry sweeps: could not reach ${REMOTE}/${DEPLOY_BRANCH} (${e.message}) — NOT a statement that nothing was touched`);
   }
-  for (const id of circuits) { await run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verified.push(`verify-track:${id}`); }
+  for (const id of circuits) { await g.stage(`verify-track:${id}`, () => run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`)); verified.push(`verify-track:${id}`); }
   // PARITY WITH main() (2026-09-22). This function's own docstring calls it
   // "exactly what main() runs before it pushes", and AGENTS.md rule 3 calls it
   // the only pre-push check that runs what the deploy runs — but it never
@@ -863,13 +1113,62 @@ export async function gateOnly() {
     // Mirrors main()'s branch exactly: the full sweeps when the union can move
     // geometry, otherwise the targeted suites that read it.
     const ranSweeps = touchesGeometry(base);
-    if (ranSweeps) { await run("npm", ["run", "test:sweeps"], "Pages gate: test:sweeps (this union can move geometry)"); verified.push("test:sweeps"); }
+    if (ranSweeps) { await g.stage("test:sweeps", () => run("npm", ["run", "test:sweeps"], "Pages gate: test:sweeps (this union can move geometry)")); verified.push("test:sweeps"); }
     let targeted = [];
-    if (!ranSweeps) { targeted = targetedFor(base); if (targeted.length) verified.push(...(await runTargeted(targeted, "Pages gate"))); }
+    if (!ranSweeps) {
+      targeted = targetedFor(base);
+      if (targeted.length) {
+        await g.stage("sweeps:targeted", () => runTargeted(targeted, "Pages gate"));
+        verified.push(...targeted.map((s) => `sweeps:${path.basename(s)}`));
+      }
+    }
     gaps.push(...notCovered(ranSweeps, targeted));
   }
-  return { gate: "only", verified, pushed: false, notCovered: gaps, seconds: Math.round((Date.now() - t0) / 1000) };
+  return { gate: "only", verified, pushed: false, notCovered: gaps, seconds: Math.round((Date.now() - t0) / 1000),
+    jobs: jobs.jobs, dedupe: half.dedupe, resumed: g.skipped, receipts: path.relative(ROOT, g.file) };
 }
+
+/* --detach (W1): the gate outlives the task that started it. A background Bash
+   task, an exec transport or a session restart that drops its child used to
+   take a 30-minute gate with it, verdict and all. Modelled on test-bg.mjs's
+   start(): a detached child with ignored stdin and its output in a log, a
+   receipt naming it, and the `= deploy start|done` markers --status/--wait read
+   (the parent stamps the child's start so a --status right after reads it). */
+export function detachGate(args, { statusLog, root = ROOT, spawnFn = spawn, tree = () => workTreeId(root), now = () => new Date() } = {}) {
+  const out = path.join(root, DETACH_LOG);
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  const fd = fs.openSync(out, "w");
+  const rel = (p) => path.relative(root, p);
+  const hasLog = args.some((a) => a === "--log" || a.startsWith("--log="));
+  const childArgs = [fileURLToPath(import.meta.url), ...args.filter((a) => a !== "--detach"), ...(hasLog ? [] : ["--log", rel(statusLog)])];
+  let child;
+  try {
+    child = spawnFn(process.execPath, childArgs, { cwd: root, detached: true, stdio: ["ignore", fd, fd], env: { ...process.env } });
+    child.unref?.();
+  } finally { fs.closeSync(fd); }
+  const mode = childArgs.slice(1).filter((a) => a.startsWith("--") && a !== "--log").join(",");
+  stamp(statusLog, `start pid=${child.pid} mode=${mode} detached=1`);
+  const receipt = { pid: child.pid, started: now().toISOString(), log: rel(out), statusLog: rel(statusLog), args: childArgs.slice(1), tree: tree() };
+  writeJson(path.join(root, DETACH_RECEIPT), receipt);
+  return { ...receipt, text: `[deploy] detached the gate: pid ${child.pid}, output ${receipt.log}, receipt ${DETACH_RECEIPT}\n` +
+    `[deploy] verdict: node tools/ci/deploy.mjs --status   (or --wait --timeout 60 as ONE background task; exit 0 passed / 1 failed / 124 running)` };
+}
+
+/** --wait-load=<min> (ported from sync-pr.mjs): a busy box is a reason to wait, not to refuse. Default 10 min; 0 = refuse at once. */
+export const WAIT_LOAD_BELOW = 2.8;
+export function waitLoadMinutes(args) {
+  const a = args.find((x) => x.startsWith("--wait-load="));
+  return a === undefined ? 10 : Math.max(0, Number(a.slice("--wait-load=".length)) || 0);
+}
+export function waitForLoad(minutes, { load1 = () => os.loadavg()[0], wait = (m) => spawnSync("node", ["tools/ci/wait-for.mjs", "--load-below", String(WAIT_LOAD_BELOW), "--timeout", String(m)], { cwd: ROOT, stdio: ["ignore", "inherit", "inherit"] }) } = {}) {
+  if (!(minutes > 0) || load1() < WAIT_LOAD_BELOW) return false;
+  log(`loadavg ${load1().toFixed(2)} >= ${WAIT_LOAD_BELOW} — waiting up to ${minutes} min for it to drop (--wait-load=0 refuses at once)`);
+  wait(minutes);
+  return true;
+}
+
+/** Flags this change adds; tools/lib/cli-args strictFlags (KNOWN_FLAGS, mega train 3) must list them. */
+export const GATE_FLAGS = Object.freeze(["--resume", "--detach", "--wait-load"]);
 
 /* IS THE TRAIN ALREADY RED? A deploy inherits the branch it lands on, and a red
    tip means your green push still ships nothing: on 2026-09-18 pages.yml runs
@@ -967,9 +1266,17 @@ export async function main() {
     // is wrong. Gating one is the entire point — this is the check you run with
     // the edit still in your working tree. The load and Playwright refusals do
     // carry over, because they are about whether a verdict means anything.
+    // A moved tree refuses --resume BEFORE any load wait: there is nothing to wait for.
+    if (flag("--resume")) {
+      const rv = resumeVerdict(readJson(receiptsFile()), workTreeId(ROOT));
+      if (!rv.ok) { log("REFUSED: --resume: " + rv.why); return 3; }
+    }
+    waitForLoad(waitLoadMinutes(argv));
     const problems = preflight().filter((x) => !x.startsWith("working tree is dirty"));
     if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
-    const v = await gateOnly();
+    let v;
+    try { v = await gateOnly({ resume: flag("--resume") }); }
+    catch (e) { if (e instanceof GateRefusal) { log("REFUSED: " + e.message); return 3; } throw e; }
     if (JSON_OUT) console.log(JSON.stringify(v, null, 2)); else log(JSON.stringify(v));
     return 0;
   }
@@ -989,17 +1296,22 @@ export async function main() {
     }
     return 0;
   }
+  waitForLoad(waitLoadMinutes(argv));
   const problems = preflight();
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
   trainHealth();
   const verdict = { branch: p.branch, merge: "none", verified: [], pushed: false, pr: null };
   if (!p.fastForward) verdict.merge = await mergeDeployTip();
-  await run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite on the union"); verdict.verified.push("tooling-fast");
+  const jobs = await gateJobs();
+  await run("node", ["tools/ci/tooling-fast.mjs", `--jobs=${jobs.jobs}`], `guard suite on the union (jobs=${jobs.jobs}: ${jobs.why})`); verdict.verified.push("tooling-fast");
   // The Pages gate runs MORE node suites than tooling-fast (quali-persist,
   // node-slow, the VM twins, …) and two deploys went red on pins tooling-fast
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
-  // from ci.yml so the two lists cannot drift apart.
-  for (const script of gateNodeSuites()) { await run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
+  // from ci.yml so the two lists cannot drift apart — minus the files the
+  // tooling-fast pass above just ran (runNodeHalf).
+  const half = await runNodeHalf(gateNodeSuites(), await toolingFastRan());
+  verdict.verified.push(...half.verified);
+  verdict.dedupe = half.dedupe;
   await run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts"); verdict.verified.push("test:sweeps-parts");
   // Conditional, for the reason recorded above touchesGeometry(): ci.yml runs
   // the sweeps AFTER the push, so skipping them here buys 10 minutes with a
@@ -1045,7 +1357,14 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log(s.text);
     process.exit(s.code);
   }
-  const marks = !["--help", "-h", "--plan", "--train"].some(flag);
+
+  // --detach (W1): hand the gate to a detached child and return at once; the child stamps the verdict.
+  if (flag("--detach")) {
+    if (!flag("--gate-only")) { console.error("[deploy] --detach applies to --gate-only only (a deploy that pushes stays attached)"); process.exit(2); }
+    console.log(detachGate(argv, { statusLog: logFile }).text);
+    process.exit(0);
+  }
+  const marks =!["--help", "-h", "--plan", "--train"].some(flag);
   if (marks) stamp(logFile, `start pid=${process.pid} mode=${argv.filter((a) => a.startsWith("--")).join(",") || "default"}`);
   let code = 1;
   try { code = await main(); }

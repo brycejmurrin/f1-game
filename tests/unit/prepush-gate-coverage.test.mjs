@@ -136,11 +136,33 @@ test("deploy.mjs runs test:sweeps-parts unconditionally, in the deploy and in --
   // Its CI job has no path filter, so a red there takes every push red; the
   // gate must therefore run it every time, not only when geometry moved.
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/deploy.mjs"), "utf8");
-  const gateOnly = src.slice(src.indexOf("export async function gateOnly()"), src.indexOf("export async function main()"));
+  const gateOnly = src.slice(src.indexOf("export async function gateOnly("), src.indexOf("export async function main()"));
   const deploy = src.slice(src.indexOf("export async function main()"));
   for (const [name, body] of [["gateOnly", gateOnly], ["main", deploy]]) {
     assert.match(body, /run\("npm", \["run", "test:sweeps-parts"\]/, `${name}() must run test:sweeps-parts`);
     assert.doesNotMatch(body.slice(0, body.indexOf('"test:sweeps-parts"')), /touchesGeometry\(/,
       `${name}(): test:sweeps-parts must not sit behind the geometry condition`);
   }
+});
+
+/* OVERLAP = 0 (W1, 2026-10-26). The node half used to re-run 211 of its 343
+   files that tooling-fast had just passed in the same gate. deploy.mjs's
+   nodeHalfPlan() now runs a node-kind group's files minus tooling-fast's; a
+   group it must run whole (a `command` group whose cmd sets env, a flag
+   tooling-fast does not set, a hand-edited script) may overlap only with a
+   reason here. Empty today: vm-page-a/b are the only whole-run groups, and
+   none of their files is in tooling-fast. */
+const OVERLAP_ALLOWED = new Map([]);
+
+test("the gate runs no unit file twice: the node half's overlap with tooling-fast is 0", async () => {
+  const { nodeHalfPlan } = await import("../../tools/ci/deploy.mjs");
+  const tf = new Set(TOOLING_FAST_FILES);
+  const groups = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8")).groups;
+  const twice = [];
+  for (const p of nodeHalfPlan(gateNodeSuites(), { ran: tf })) {
+    assert.deepEqual([...p.files, ...p.skipped].sort(), [...(groups[p.script].files || [])].sort(), `${p.script}: the plan must not drop a file`);
+    for (const f of p.files) if (tf.has(f) && !OVERLAP_ALLOWED.has(`${p.script} ${f}`)) twice.push(`${p.script} ${f} (${p.mode}: ${p.why})`);
+    for (const f of p.skipped) assert.ok(tf.has(f), `${p.script} skipped ${f}, which tooling-fast does not run`);
+  }
+  assert.deepEqual(twice, [], "these files run in tooling-fast AND again in the node half — fix the group, or allowlist with a reason");
 });

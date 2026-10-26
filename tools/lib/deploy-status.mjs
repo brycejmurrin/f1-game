@@ -48,3 +48,43 @@ export async function waitStatus(file, { timeoutMin = 0, pollMs = 3000, alive = 
     await sleep(pollMs);
   }
 }
+
+/* ---- Per-stage gate receipts (W1, 2026-10-26) ----
+ * `deploy.mjs --gate-only` is ~33 min median; a dropped task, a reclaimed exec transport or one red stage used to
+ * mean starting over. Each stage now records { tree, head, verdict, seconds, at } under its name in
+ * artifacts/logs/gate-receipts.json, keyed by the WORK-TREE id (tools/lib/work-tree-id.mjs: the content the stage
+ * measured, dirty edits included), and `--resume` skips a stage whose receipt passed on the SAME tree. A different
+ * tree refuses: a pass on other content proves nothing about this one. */
+export const GATE_RECEIPTS = path.join("artifacts", "logs", "gate-receipts.json");
+/** Where `--detach` records its child (pid, logs, tree) for --status and for a reader arriving cold. */
+export const DETACH_RECEIPT = path.join("artifacts", "logs", "deploy-detach.json");
+/** The detached gate's stdout/stderr (the status markers stay in the --log file). */
+export const DETACH_LOG = path.join("artifacts", "logs", "deploy-gate.log");
+
+export function readJson(file) {
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return null; }
+}
+export function writeJson(file, obj) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + "\n");
+  fs.renameSync(tmp, file);   // atomic: a reader never sees half a receipt
+}
+
+/** Can `--resume` reuse `doc` on work tree `tree`? `{ ok, why }`; `doc` null = nothing to resume (ok, run all). */
+export function resumeVerdict(doc, tree) {
+  if (!tree) return { ok: false, why: "cannot compute the work-tree id (git failed), so no receipt can be matched — run without --resume" };
+  if (!doc) return { ok: true, why: "no receipts yet — every stage runs" };
+  if (doc.tree !== tree) {
+    return { ok: false, why: `the work tree moved since the receipts were written (receipts: tree ${String(doc.tree).slice(0, 12)} at head ${String(doc.head || "?").slice(0, 7)}; now: tree ${tree.slice(0, 12)}). ` +
+      "A stage that passed there says nothing about this tree — run without --resume for a fresh gate" };
+  }
+  const passed = Object.entries(doc.stages || {}).filter(([, s]) => s.verdict === "passed" && s.tree === tree).map(([k]) => k);
+  return { ok: true, why: `${passed.length} stage(s) already passed on this tree: ${passed.join(", ") || "none"}` };
+}
+
+/** True when `--resume` may skip `name`. */
+export function stagePassed(doc, name, tree) {
+  const s = doc && doc.stages && doc.stages[name];
+  return !!(s && s.verdict === "passed" && tree && s.tree === tree);
+}

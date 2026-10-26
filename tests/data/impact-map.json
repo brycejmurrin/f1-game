@@ -6683,6 +6683,7 @@
       ],
       "announce": [
         "tests/specs/multiplayer-room.spec.js",
+        "tests/unit/deploy-tool.test.mjs",
         "tests/unit/engineer.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
@@ -7268,7 +7269,6 @@
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/damage.test.mjs",
         "tests/unit/debris-opts.test.mjs",
-        "tests/unit/deploy-tool.test.mjs",
         "tests/unit/design-matrix.test.mjs",
         "tests/unit/desktop-app-protocol.test.mjs",
         "tests/unit/episode-transients.test.mjs",
