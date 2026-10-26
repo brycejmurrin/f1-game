@@ -1,3 +1,4 @@
+import { GAME_REL } from "../helpers/game-source.mjs";
 /* a11y-opts — SETTINGS › ACCESSIBILITY: reduce motion / focus / colourblind cues.
  *
  * Run: node --test tests/unit/a11y-opts.test.mjs */
@@ -167,7 +168,7 @@ test("REDUCE MOTION AUTO follows OS; ON always; OFF overrides OS", () => {
 });
 
 test("game-world, minimap and input-trace motion follow the resolved accessibility choice live", () => {
-  for (const [file, name] of [["js/game.js", "motionReduced"], ["js/ui/hud.js", "motionReduced"], ["js/ui/hud-inputs.js", "reduced"]]) {
+  for (const [file, name] of [[GAME_REL, "motionReduced"], ["js/ui/hud.js", "motionReduced"], ["js/ui/hud-inputs.js", "reduced"]]) {
     const source = fs.readFileSync(path.join(ROOT, file), "utf8");
     const helper = fnSource(source, "function " + name + "()");
     for (const osReduce of [false, true]) {
