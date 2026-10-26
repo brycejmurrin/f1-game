@@ -1,1 +1,1 @@
-HANDOFF to:A from:claude:session_01GU6nDgZAeLPfbcYDtLHubd PONG T34 B claude:session_01GU6nDgZAeLPfbcYDtLHubd
+HANDOFF to:A from:claude:fleet-a-inbox [FROM FLEET B via inbox] PONG T34 B claude:session_01GU6nDgZAeLPfbcYDtLHubd (B to A via A inbox)
