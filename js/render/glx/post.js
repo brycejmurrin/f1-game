@@ -35,6 +35,12 @@ const GLXPost = (function () {
     let sgsrProg = null, sgsrU = null, aaFBO = null, aaTex = null;
     let sgsrTried = false;
     let targetW = 0, targetH = 0, aaW = 0, aaH = 0;
+    // #3311 phone orientation cover: GPU targets allocate at max(w,h)² so an
+    // equal-pixel transpose only updates logical size + uUVScale (no hitch).
+    let allocW = 0, allocH = 0;
+    let coverMode = false;   // true when targets are a mobile max(w,h)² cover (#3311)
+    let _uvScaleX = 1, _uvScaleY = 1;
+    const _uvLocs = new Map();
 
     // Post-processing state. postEnabled stays false (and rendering goes straight
     // to the default framebuffer, exactly as before) if any target/program setup
@@ -107,6 +113,21 @@ const GLXPost = (function () {
     // Partial select nearest-K over _grSel — PostCommon.keepNearest (one copy for
     // GLX / WGX / TLX; swap-not-overwrite eviction).
     const _grKeepNearest = (total, k) => PostCommon.keepNearest(_grSel, total, k);
+
+    // POST_VS uUVScale — must be set on every use (WebGL defaults unset to 0).
+    function usePost(prog) {
+      useProg(prog);
+      let loc = _uvLocs.get(prog);
+      if (loc === undefined) {
+        loc = prog ? gl.getUniformLocation(prog, "uUVScale") : null;
+        _uvLocs.set(prog, loc);
+      }
+      if (loc) gl.uniform2f(loc, _uvScaleX, _uvScaleY);
+    }
+    function setCoverScale(logicalW, logicalH) {
+      _uvScaleX = allocW > 0 ? (logicalW / allocW) : 1;
+      _uvScaleY = allocH > 0 ? (logicalH / allocH) : 1;
+    }
 
     function ensureSpatial() {
       if (sgsrProg || sgsrTried) return !!sgsrProg;
@@ -258,6 +279,8 @@ const GLXPost = (function () {
       drop(godrayBlurFBO, godrayBlurTex); godrayBlurTex = null;
       drop(ldrFBO, ldrTex); ldrTex = null;
       drop(aaFBO, aaTex); aaTex = null;
+      allocW = 0; allocH = 0; aaW = 0; aaH = 0; coverMode = false;
+      _uvScaleX = 1; _uvScaleY = 1;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
     }
 
@@ -270,6 +293,29 @@ const GLXPost = (function () {
       if (sceneTex && width === targetW && height === targetH) {
         syncSpatialTarget(width, height); return;
       }
+      // #3311: on the mobile cover path, a size that still fits the square
+      // (equal-pixel orientation swap, or a scale step inside max(w,h)²) is a
+      // logical update only — no dispose/realloc hitch that climbs PerfGov.
+      // Desktop keeps exact alloc and must still rebuild on a real size change.
+      if (sceneTex && coverMode && allocW >= width && allocH >= height) {
+        targetW = width; targetH = height;
+        ssaoW = Math.max(1, Math.floor(width / 2));
+        ssaoH = Math.max(1, Math.floor(height / 2));
+        godrayW = ssaoW; godrayH = ssaoH;
+        let bw = Math.max(1, Math.floor(width / BLOOM_DIV));
+        let bh = Math.max(1, Math.floor(height / BLOOM_DIV));
+        for (let i = 0; i < bloomLv.length; i++) {
+          bloomLv[i].w = bw; bloomLv[i].h = bh;
+          bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1);
+        }
+        setCoverScale(width, height);
+        syncSpatialTarget(width, height);
+        return;
+      }
+      // Phone / mobile-tier: allocate a square cover of max(w,h) so the first
+      // portrait↔landscape flip never rebuilds (#3311). Desktop keeps exact size.
+      const cover = (IS_MOBILE || MOBILE_TIER) ? Math.max(1, width, height) : 0;
+      const aw = cover || width, ah = cover || height;
       const internal = colorType === gl.HALF_FLOAT ? gl.RGBA16F : gl.RGBA8;
       // Slimmer formats where full RGBA16F is waste (bandwidth is the tiled-GPU
       // frame cost): SSAO stores one scalar (sampled .r) -> R8; bloom + godray
@@ -300,10 +346,10 @@ const GLXPost = (function () {
       gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
       if (sceneTex) gl.deleteTexture(sceneTex);
       if (sceneDepth) gl.deleteTexture(sceneDepth);
-      sceneTex = mk(width, height);
+      sceneTex = mk(aw, ah);
       sceneDepth = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, width, height, 0,
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, aw, ah, 0,
         gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
@@ -333,10 +379,10 @@ const GLXPost = (function () {
         if (msDepthRB) gl.deleteRenderbuffer(msDepthRB);
         msColorRB = gl.createRenderbuffer();
         gl.bindRenderbuffer(gl.RENDERBUFFER, msColorRB);
-        gl.renderbufferStorageMultisample(gl.RENDERBUFFER, msaaSamples, internal, width, height);
+        gl.renderbufferStorageMultisample(gl.RENDERBUFFER, msaaSamples, internal, aw, ah);
         msDepthRB = gl.createRenderbuffer();
         gl.bindRenderbuffer(gl.RENDERBUFFER, msDepthRB);
-        gl.renderbufferStorageMultisample(gl.RENDERBUFFER, msaaSamples, internalD, width, height);
+        gl.renderbufferStorageMultisample(gl.RENDERBUFFER, msaaSamples, internalD, aw, ah);
         gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, msColorRB);
         gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, msDepthRB);
         if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
@@ -349,13 +395,17 @@ const GLXPost = (function () {
           msaaSamples = 0;
         }
       }
-      // bloom mip chain (half res, /4, /8, … — stop once a level gets tiny)
+      // bloom mip chain (half res, /4, /8, … — stop once a level gets tiny).
+      // Physical levels follow the cover (aw/ah); lv.w/h stay LOGICAL for
+      // viewports + texels; uUVScale maps sampling into the cover rect.
       for (const lv of bloomLv) { if (lv.tex) gl.deleteTexture(lv.tex); if (lv.fbo) gl.deleteFramebuffer(lv.fbo); }
       bloomLv = [];
       let bw = Math.max(1, Math.floor(width / BLOOM_DIV));
       let bh = Math.max(1, Math.floor(height / BLOOM_DIV));
+      let abw = Math.max(1, Math.floor(aw / BLOOM_DIV));
+      let abh = Math.max(1, Math.floor(ah / BLOOM_DIV));
       for (let i = 0; i < BLOOM_LEVELS_MAX && bw >= 8 && bh >= 8; i++) {
-        const tex = mk(bw, bh, "hdr3");
+        const tex = mk(abw, abh, "hdr3");
         const fbo = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
@@ -369,6 +419,7 @@ const GLXPost = (function () {
         }
         bloomLv.push({ fbo, tex, w: bw, h: bh });
         bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1);
+        abw = Math.max(1, abw >> 1); abh = Math.max(1, abh >> 1);
       }
       // SSAO targets (HALF res): raw AO + a blurred copy to denoise the 12-tap pass.
       // AO is low-frequency, so half-res + LINEAR upscale in the composite is ~75%
@@ -376,16 +427,17 @@ const GLXPost = (function () {
       if (ssaoProg) {
         ssaoW = Math.max(1, Math.floor(width / 2));
         ssaoH = Math.max(1, Math.floor(height / 2));
+        const asW = Math.max(1, Math.floor(aw / 2)), asH = Math.max(1, Math.floor(ah / 2));
         if (!ssaoFBO) ssaoFBO = gl.createFramebuffer();
         if (!ssaoBlurFBO) ssaoBlurFBO = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO);
         if (ssaoTex) gl.deleteTexture(ssaoTex);
-        ssaoTex = mk(ssaoW, ssaoH, "r8");
+        ssaoTex = mk(asW, asH, "r8");
         gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ssaoTex, 0);
         gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoBlurFBO);
         if (ssaoBlurTex) gl.deleteTexture(ssaoBlurTex);
-        ssaoBlurTex = mk(ssaoW, ssaoH, "r8");
+        ssaoBlurTex = mk(asW, asH, "r8");
         gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoBlurFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ssaoBlurTex, 0);
       }
@@ -393,16 +445,17 @@ const GLXPost = (function () {
       if (godrayProg) {
         godrayW = Math.max(1, Math.floor(width / 2));
         godrayH = Math.max(1, Math.floor(height / 2));
+        const agW = Math.max(1, Math.floor(aw / 2)), agH = Math.max(1, Math.floor(ah / 2));
         if (!godrayFBO) godrayFBO = gl.createFramebuffer();
         if (!godrayBlurFBO) godrayBlurFBO = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
         if (godrayTex) gl.deleteTexture(godrayTex);
-        godrayTex = mk(godrayW, godrayH, "hdr3");
+        godrayTex = mk(agW, agH, "hdr3");
         gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayTex, 0);
         gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
         if (godrayBlurTex) gl.deleteTexture(godrayBlurTex);
-        godrayBlurTex = mk(godrayW, godrayH, "hdr3");
+        godrayBlurTex = mk(agW, agH, "hdr3");
         gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayBlurTex, 0);
       }
@@ -415,7 +468,7 @@ const GLXPost = (function () {
         if (ldrTex) gl.deleteTexture(ldrTex);
         ldrTex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, ldrTex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, aw, ah, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -423,7 +476,10 @@ const GLXPost = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, ldrFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ldrTex, 0);
       }
+      allocW = aw; allocH = ah;
+      coverMode = !!cover;
       targetW = width; targetH = height;
+      setCoverScale(width, height);
       syncSpatialTarget(width, height);
     }
 
@@ -433,13 +489,21 @@ const GLXPost = (function () {
       // ldrTex directly — no aa target. Freed when the flag is off / scale≈1.
       const wantUp = !!(sgsrProg && fxaaProg && core.wantSpatialUpscale && core.wantSpatialUpscale());
       if (wantUp) {
-        if (aaTex && aaW === width && aaH === height) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */ return; }
+        // Cover path: aa stays at alloc size (logical aaW/H move). Exact path:
+        // same logical size → no-op. One class-C reset (glx-output-target count).
+        if (aaTex && ((coverMode && allocW >= width && allocH >= height) ||
+            (aaW === width && aaH === height))) {
+          aaW = width; aaH = height;
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */ return;
+        }
         if (!aaFBO) aaFBO = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, aaFBO);
         if (aaTex) gl.deleteTexture(aaTex);
         aaTex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, aaTex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        const aaAW = coverMode ? (allocW || width) : width;
+        const aaAH = coverMode ? (allocH || height) : height;
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, aaAW, aaAH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -513,6 +577,7 @@ const GLXPost = (function () {
       SH.lampArmed = false;
       if (!postEnabled) { _lastPath = { on: false }; mirrorComposite(opts); core.gpuTimerEnd(); return; }
       const { width, height } = core.getSize();
+      setCoverScale(width, height);   // #3311: POST_VS uUVScale for cover sampling
       let threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
       let bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
       // Software GL often lacks real HDR headroom (8-bit scene, or float that still
@@ -591,7 +656,7 @@ const GLXPost = (function () {
       if (haveAO) {
         gl.viewport(0, 0, ssaoW, ssaoH);
         bindOverwrite(ssaoFBO);
-        useProg(ssaoProg);
+        usePost(ssaoProg);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
         gl.uniform1i(ssaoU.uDepth, 0);
@@ -607,7 +672,7 @@ const GLXPost = (function () {
         gl.uniform1f(ssaoU.uContact, csOn ? contactStr : 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         // Blur H (ssaoTex -> ssaoBlurFBO) then V (ssaoBlurTex -> ssaoFBO). Half res.
-        useProg(blurProg);
+        usePost(blurProg);
         gl.uniform1i(blurU.uTex, 0);
         bindOverwrite(ssaoBlurFBO);
         gl.bindTexture(gl.TEXTURE_2D, ssaoTex);
@@ -628,7 +693,7 @@ const GLXPost = (function () {
       if (haveGR) {
         gl.viewport(0, 0, godrayW, godrayH);
         bindOverwrite(godrayFBO);
-        useProg(godrayProg);
+        usePost(godrayProg);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
         gl.uniform1i(godrayU.uDepth, 0);
@@ -701,7 +766,7 @@ const GLXPost = (function () {
         gl.uniform1f(godrayU.uHgAniso, PostCommon.knob(GT, "godrayAniso"));
         gl.uniform1f(godrayU.uHgFloor, PostCommon.knob(GT, "godrayFloor"));
         gl.drawArrays(gl.TRIANGLES, 0, 3);
-        useProg(blurProg);
+        usePost(blurProg);
         gl.uniform1i(blurU.uTex, 0);
         gl.activeTexture(gl.TEXTURE0);
         // Double separable blur (H+V twice): the march + shadow slices otherwise
@@ -744,7 +809,7 @@ const GLXPost = (function () {
         // 1) bright-pass scene -> bloom level 0 (half res)
         gl.viewport(0, 0, bloomLv[0].w, bloomLv[0].h);
         bindOverwrite(bloomLv[0].fbo);
-        useProg(brightProg);
+        usePost(brightProg);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, sceneTex);
         gl.uniform1i(brightU.uScene, 0);
@@ -755,7 +820,7 @@ const GLXPost = (function () {
         // 2) mip-chain bloom: progressive 13-tap downsample to the smallest level,
         //    then additive 9-tap tent upsample back up — each level contributes one
         //    octave of blur, so bright sources get a tight core AND a wide soft halo.
-        useProg(downProg);
+        usePost(downProg);
         gl.uniform1i(downU.uTex, 0);
         for (let i = 1; i < useLv; i++) {
           bindOverwrite(bloomLv[i].fbo);
@@ -768,7 +833,7 @@ const GLXPost = (function () {
           gl.uniform1f(downU.uKaris, i === 1 ? 1 : 0);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
-        useProg(upProg);
+        usePost(upProg);
         gl.uniform1i(upU.uTex, 0);
         // BLOOM SPREAD knob: widen/tighten every octave's tent radius uniformly.
         gl.uniform1f(upU.uSpread, PostCommon.knob(opts && opts.tune, "bloomSpread"));
@@ -808,7 +873,7 @@ const GLXPost = (function () {
         const _compVP = core.outputViewport(width, height);
         gl.viewport(_compVP[0], _compVP[1], _compVP[2], _compVP[3]);
       }
-      useProg(compProg);
+      usePost(compProg);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, sceneTex);
       gl.uniform1i(compU.uScene, 0);
@@ -986,7 +1051,7 @@ const GLXPost = (function () {
           const _fxaaVP = core.outputViewport(width, height);
           gl.viewport(_fxaaVP[0], _fxaaVP[1], _fxaaVP[2], _fxaaVP[3]);
         }
-        useProg(fxaaProg);
+        usePost(fxaaProg);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, ldrTex);
         gl.uniform1i(fxaaU.uTex, 0);
@@ -1003,7 +1068,7 @@ const GLXPost = (function () {
         bindOverwrite(core.outputFBO());
         const _sgsrVP = core.outputViewport(ps.width, ps.height);
         gl.viewport(_sgsrVP[0], _sgsrVP[1], _sgsrVP[2], _sgsrVP[3]);
-        useProg(sgsrProg);
+        usePost(sgsrProg);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, src);
         gl.uniform1i(sgsrU.uTex, 0);
@@ -1173,7 +1238,7 @@ const GLXPost = (function () {
       gl.viewport(x, y, w, h);
       gl.disable(gl.DEPTH_TEST);
       setBlend(false);
-      useProg(mirProg);
+      usePost(mirProg);
       bindVAO(core.skyVAO);   // POST_VS is a gl_VertexID triangle; WebGL2 still wants a VAO
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, mirTex);
