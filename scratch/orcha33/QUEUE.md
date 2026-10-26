@@ -5,5 +5,7 @@ A game queue: #3757 66eb0f2b (W50 title warm) → #3751 819c9baf (W52 pack URLs;
 In flight: W51 voice twins, W52 #3751 (re-READY pending), W55 revert #3690, W56 01MrkRrP (owns #3757 #3761 + #3673 rigWarm; W50 retired at size cap), O3 #3693 #3696 #3704, D2 device runs on Bryce Go. DONE: W53, W54 (#3754 c1c4715d).
 Closed: #3719 (no win), #3692 (→#3744), #3647.
 
-Relay: Fleet A inbox relay trig_01GUQysN2MQtisEnDijSjTF4 (API token set by Bryce 18:57 PT) → fires newest 'Fleet A orchestrator inbox' (OrchA 33: trig_01X5wbQDSLnAmkoXpDvTmssK). Successor: create own inbox task bound to itself, disable the old.
 DONE lanes: H13, W49, W53, W54, O4 (archive after idle 1h + Bryce done).
+
+RELAY (live 19:19 PT): A·R1 session_01Gw61XfuKqRA4hXbgMNVmwy (never archive) owns self-bound task trig_01Vn7kMxEUVCYYBwKKmKdzVh 'Fleet A inbox → A·R1 (Fleet B API)'; Fleet B POSTs its API endpoint; A·R1 forwards to `fleet-bus who A` (LIVE line must read 'ORCH A LIVE claude:session_<id>'). Scheduled self-test OK. Pending Bryce: API token → Fleet B env APEX_A_INBOX_URL/TOKEN. Lessons: task-started sessions have no messaging tools; tasks fire into a session only if self-bound.
+PAUSED: merges held at Bryce's 'finish setup before continuing' (19:09 PT); Bryce archived all other A sessions.
