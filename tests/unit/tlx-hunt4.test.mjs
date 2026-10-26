@@ -384,15 +384,22 @@ async function warmProbeRig(t) {
   // The empty baseline span lets these behavioral regressions run against the old warm function too.
   const at = TLX.indexOf("      const _warmProbes = new WeakMap();");
   const helper = at < 0 ? "" : TLX.slice(at, TLX.indexOf("      async function warmFxPrograms() {", at));
-  const warm = new Function("THREE", "renderer", "scene", "camera", "geos", "materials", `
+  const rig = new Function("THREE", "renderer", "scene", "camera", "geos", "materials", `
     const _warmFx = true, fx = { skidMat: materials[0], particleMats: [materials[1], materials[2]], glowMat: materials[3], lineMat: materials[4] };
     const [skidStream, a, b, glowStream, lineStream] = geos.map(geo => ({ geo })), partStreams = [a, b];
     const ensureStream = () => {}, _blob = null, _decalRuns = new Map(), _coWarm = async () => {};
+    const _instUsage = THREE.StreamDrawUsage, releaseGeometry = () => {};
+    const _glowCorners = ${TLX.match(/const _glowCorners = (\[[^;]+\]);/)[1]};
+    ${fnSource(TLX, "function disposeGeometry(geo) {")}
+    ${fnSource(TLX, "function ensureGlowStream(instances, slot = glowStream) {")}
+    // Build the live layout separately: warm owns a dedicated one-instance stream.
+    glowStream.geo.dispose(); glowStream.geo = null; glowStream.cap = 0;
+    ensureGlowStream(2); glowStream.geo.instanceCount = 2; geos[3] = glowStream.geo;
     ${helper}
     ${fnSource(TLX, "async function warmFxPrograms() {")}
-    return warmFxPrograms;
+    return { warm: warmFxPrograms, glowStream };
   `)(THREE, renderer, scene, camera, geos, materials);
-  return { fg, renderer, geos, materials, calls, warm,
+  return { fg, renderer, geos, materials, calls, warm: rig.warm, glowStream: rig.glowStream,
     reject: (on) => { reject = on; }, hold: (p) => { hold = p; },
     listeners: () => materials.map(m => m._listeners?.dispose?.length || 0) };
 }
@@ -403,12 +410,24 @@ test("warm probes: repeated actual FX compilation keeps five owned meshes and th
   const programs = h.fg.counts.createProgram;
   assert.ok(programs > 0, "the first warm really compiles programs");
   const listeners = h.listeners();
+  const glowProbe = h.glowStream.warm.geo;
+  assert.notEqual(glowProbe, h.geos[3], "glow warm does not borrow the live geometry/count");
+  assert.notEqual(glowProbe.attributes.fxCenter.data, h.geos[3].attributes.fxCenter.data,
+    "glow warm owns an independent buffer, not a mutable live view");
+  assert.equal(glowProbe.attributes.position.data.array.byteLength + glowProbe.attributes.fxCenter.data.array.byteLength, 100);
   for (let i = 0; i < 4; i++) await h.warm();
+  assert.equal(h.glowStream.warm.geo, glowProbe, "repeated glow warm reuses its small allocation");
+  assert.equal(h.geos[3].instanceCount, 2, "warm leaves the live instance count unchanged");
   assert.equal(new Set(h.calls).size, 5, "one probe per live stream/material, reused across five warms");
   assert.deepEqual(h.listeners(), listeners, "the material listener counts plateau after the first warm");
   assert.equal(h.fg.counts.createProgram, programs, "keeping ownership preserves warmed programs");
   for (const geo of h.geos) geo.dispose();
-  assert.deepEqual(h.listeners(), [0, 0, 0, 0, 0], "releasing stream geometries releases every probe/render object");
+  assert.deepEqual(h.listeners().filter((_, i) => i !== 3), [0, 0, 0, 0],
+    "releasing ordinary stream geometries releases their probe/render objects");
+  assert.equal(h.listeners()[3], listeners[3], "live glow disposal leaves its independent warmed layout owned");
+  h.materials[3].dispose();
+  assert.equal(h.glowStream.warm, null, "retiring the glow material releases the dedicated probe buffer");
+  assert.deepEqual(h.listeners(), [0, 0, 0, 0, 0], "geometry/material ownership releases every probe/render object");
 });
 
 test("warm probes: rejected compile retries reuse the probe; material disposal releases it", async (t) => {

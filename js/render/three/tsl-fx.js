@@ -170,12 +170,12 @@
     lineMat.opacityNode = Fn(() => min(lineAlpha().mul(0.85).mul(lineOpacity), float(1.0)))();
 
     // Billboard corner expansion (GLOW_VS / PARTICLE_VS, identical math). The
-    // record's centre rides in "position" so three's draw count derives
-    // naturally; corner is -1..1 (tlx.js pre-bakes GLX's y*2-1 remap at fill
-    // time). uEye == cameraPosition (tlx.js begin() sets it from frame.eye).
-    function billboardPosition(sizeNode) {
+    // particles use per-vertex position centres; glow supplies fxCenter from
+    // its instance stream while position defines the six-vertex quad. Corner
+    // is -1..1 (the GLX y*2-1 remap is pre-baked). cameraPosition follows frame.eye.
+    function billboardPosition(sizeNode, centerNode = positionGeometry) {
       return Fn(() => {
-        const ctr = vec3(positionGeometry).toVar();             // anchor
+        const ctr = vec3(centerNode).toVar();                   // anchor
         const c = vec2(attribute("fxCorner", "vec2")).toVar();  // anchor
         const fwd = normalize(cameraPosition.sub(ctr));
         const right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd).add(vec3(1e-4, 0.0, 0.0)));
@@ -186,7 +186,7 @@
 
     const glowStr = uniform(0.12);   // uStr — set per drawGlow call (LT.glareStr def)
     const glowMat = trackFx(fxMaterial({ additive: true, doubleSided: true, key: "tlx-fx-glow" }));
-    glowMat.positionNode = billboardPosition(attribute("fxRadius", "float"));
+    glowMat.positionNode = billboardPosition(attribute("fxRadius", "float"), attribute("fxCenter", "vec3"));
     glowMat.colorNode = Fn(() => {
       const c = vec2(attribute("fxCorner", "vec2")).toVar();    // anchor
       const col = vec3(attribute("fxColor", "vec3")).toVar();   // anchor

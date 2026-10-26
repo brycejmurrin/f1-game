@@ -323,13 +323,32 @@ const CarDraw = (function () {
     // FAR_BODY_TRIS (CarGeometry.decimate). The clustering costs ~130 ms, so it runs once in an idle
     // callback after the full shared body exists; until it lands a far rival draws the full shared body.
     const FAR_BODY_TRIS = 1500;
-    let _sharedRivalBody = null, _sharedRivalGeom = null, _farRivalBody = null, _farRivalKick = false, _sharedRivalEpoch = 0;
-    function invalidateSharedRivalBody() {
-      _sharedRivalEpoch++; // a queued idle decimation must not publish a retired body
-      if (_sharedRivalBody && G.gfx.freeMesh) G.gfx.freeMesh(_sharedRivalBody);
-      if (_farRivalBody && G.gfx.freeMesh) G.gfx.freeMesh(_farRivalBody);
-      _sharedRivalBody = _sharedRivalGeom = _farRivalBody = null;
+    let _sharedRivalBody = null, _sharedRivalGeom = null, _farRivalBody = null, _farRivalKick = false;
+    let _sharedRivalEpoch = 0;
+    function freeSharedRivalBodies() {
+      _sharedRivalEpoch++; // queued idle work belongs to the old cache generation
+      const near = _sharedRivalBody, far = _farRivalBody;
+      _sharedRivalBody = _farRivalBody = _sharedRivalGeom = null;
       _farRivalKick = false;
+      if (G.gfx.freeMesh) {
+        if (near) G.gfx.freeMesh(near);
+        if (far && far !== near) G.gfx.freeMesh(far);
+      }
+    }
+    // Shared by the synchronous race warm and its deferred first-use fallback.
+    function buildFarRivalBody(epoch) {
+      if (epoch !== _sharedRivalEpoch || carModelBuf || _farRivalBody || !_sharedRivalGeom) return;
+      const geom = _sharedRivalGeom;
+      _farRivalKick = true;
+      let mesh = null;
+      try { mesh = G.gfx.createMesh(CarGeometry.decimate(geom, FAR_BODY_TRIS)); }
+      catch (e) { Log.warn("gfx", "far rival body failed", e); }
+      if (epoch !== _sharedRivalEpoch || carModelBuf || _farRivalBody) {
+        if (mesh && G.gfx.freeMesh) G.gfx.freeMesh(mesh); // invalidated during allocation
+        return;
+      }
+      if (mesh) { _farRivalBody = mesh; if (_sharedRivalGeom === geom) _sharedRivalGeom = null; }
+      else _farRivalKick = false; // a failed upload can retry on the next far draw
     }
     function sharedRivalBodyMesh(far) {
       if (carModelBuf) return null;
@@ -347,13 +366,7 @@ const CarDraw = (function () {
       if (far && !_farRivalKick && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
         _farRivalKick = true;
         const epoch = _sharedRivalEpoch;
-        const make = () => {
-          if (epoch !== _sharedRivalEpoch || !_sharedRivalGeom || _farRivalBody) return;
-          try { _farRivalBody = G.gfx.createMesh(CarGeometry.decimate(_sharedRivalGeom, FAR_BODY_TRIS)); }
-          catch (e) { Log.warn("gfx", "far rival body failed", e); }
-          if (_farRivalBody) _sharedRivalGeom = null;
-          else _farRivalKick = false; // a failed upload can retry on the next far draw
-        };
+        const make = () => buildFarRivalBody(epoch);
         if (typeof requestIdleCallback === "function") requestIdleCallback(make, { timeout: 2000 }); else setTimeout(make, 0);
       }
       return _sharedRivalBody;
@@ -1033,11 +1046,7 @@ const CarDraw = (function () {
         try {
           sharedRivalBodyMesh(false);
           if (!_farRivalBody && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
-            _farRivalKick = true;
-            try { _farRivalBody = G.gfx.createMesh(CarGeometry.decimate(_sharedRivalGeom, FAR_BODY_TRIS)); }
-            catch (e2) { Log.warn("gfx", "far rival body warm failed", e2); }
-            if (_farRivalBody) _sharedRivalGeom = null;
-            else _farRivalKick = false;
+            buildFarRivalBody(_sharedRivalEpoch);
           }
         } catch (e) { Log.warn("gfx", "shared rival body warm failed", e); }
       }
@@ -2061,7 +2070,7 @@ const CarDraw = (function () {
         for (const k in teamMeshes) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
         for (const k in teamBodies) { freeBodyPair(teamBodies[k]); delete teamBodies[k]; }
         for (const k in playerBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
-        invalidateSharedRivalBody();
+        freeSharedRivalBodies();
         playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = 0;
         for (const k in cockpitBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
         cockpitBodyOrder.length = 0;
@@ -2136,7 +2145,7 @@ const CarDraw = (function () {
       wheelMeshOrder.length = 0;
       for (const k in fieldWheelCache) { freeWheelPair(fieldWheelCache[k]); delete fieldWheelCache[k]; }
       fieldWheelOrder.length = 0;
-      invalidateSharedRivalBody();
+      freeSharedRivalBodies();
       _teamMeshKeyCache.clear();
     }
 
