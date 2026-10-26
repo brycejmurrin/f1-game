@@ -798,7 +798,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-gval { font-family: var(--font-hud); font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); line-height: 1; }
 .dh-gspeed .dh-gval { color: #39d0ff; }
 .dh-gbar { height: 8px; border-radius: var(--r-sm); background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-top: auto; }
-.dh-gfill { height: 100%; width: 0%; border-radius: var(--r-sm); transition: width 0.05s linear; }
+.dh-gfill { height: 100%; width: 100%; border-radius: var(--r-sm); transform: scaleX(0); transform-origin: left center; }
 .dh-gdrs-pill { font-size: var(--fs-4); font-weight: 800; letter-spacing: var(--ls-3); color: var(--dim); line-height: 1; margin-top: calc(var(--gap) / 6); display: inline-block; margin-right: calc(var(--gap) * 2 / 3); }
 .dh-gdrs-pill.dh-on { color: #00e0c0; text-shadow: 0 0 8px rgba(0, 224, 192, 0.6); }
 /* compare-mode dual gauges: primary value/bar first, compare second */

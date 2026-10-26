@@ -1096,7 +1096,7 @@ function fitHud() {
   const tail = "|" + document.body.className;
   const sameKey = head + hlKey() + tail === _fitKey;
   if (sameKey && _fitWait === 1 && fitBoxesSettled()) _fitWait = 31;   // backstop due, nothing resized: wait another 3 s
-  if (sameKey && --_fitWait > 0) {
+  if (sameKey && --_fitWait > 0) { if (_fitObs && !_fitObsDirty) { _fitClashRun = 0; return; } // settled: no gBCR / getComputedStyle this backoff
     // Same-key backoff must not lock a short --dock-r-w while wrap-reverse
     // still crawls BOOST left under load (CI oversize APEX_WORKERS=2:
     // #hud-sectors+btn-boost after the wait already saw clearance).
