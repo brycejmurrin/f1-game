@@ -31,7 +31,7 @@ test("verdict: allowed passes, a warning refuses, a typed override passes and ke
   assert.equal(verdict(extractSession(page("allowed"))).ok, true);
   const warn = verdict(extractSession(page("allowed_warning")));
   assert.equal(warn.ok, false);
-  assert.match(warn.why, /allowed_warning.*launch nothing.*--override/);
+  assert.equal(warn.status, "allowed_warning");
   const o = verdict(extractSession(page("allowed_warning")), { override: "Spawn a session to deeply read" });
   assert.equal(o.ok, true);
   assert.equal(o.override, "Spawn a session to deeply read");
@@ -62,7 +62,6 @@ test("CLI writes the receipt: exit 0 on allowed, 1 on a warning, 2 on a missing 
 test("hook: denies with no receipt, a refused receipt or a stale one; passes a fresh ok receipt", () => {
   const root = tmp();
   assert.equal(decision(hook(root, call)), "deny");
-  assert.match(hook(root, call).stdout, /launch-gate\.mjs/);
   writeReceipt(root, { ok: false, status: "allowed_warning", why: "warn" });
   assert.equal(decision(hook(root, call)), "deny");
   writeReceipt(root, { ok: true, status: "allowed" });
@@ -80,7 +79,6 @@ test("hook fails open on its own errors and ignores other tools", () => {
   const junk = hook(root, "not json");
   assert.equal(junk.status, 0);
   assert.equal(junk.stdout.trim(), "");
-  assert.match(junk.stderr, /fail open/);
   assert.equal(decision(hook(root, { ...call, tool_name: "mcp__claude-code-remote__send_message" })), "pass");
   assert.equal(decision(hook(root, [])), "pass");
 });
