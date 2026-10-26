@@ -87,6 +87,19 @@ test("never under Save-Data, a 3D Home, no warm(), a hidden tab, or off the titl
   assert.ok(pick.W.state().last.why.includes("surface"));
 });
 
+test("idle counts from the title showing: a blocker held for longer than MENU_IDLE_MS does not pre-age the quiet clock", () => {
+  const h = rig({ phone: true });
+  h.els.select.hidden = false;
+  h.tick(100); h.tick(5000);
+  h.els.select.hidden = true;
+  h.tick(100);
+  assert.equal(h.calls.schedule, 0, "the title just came back: no start although no input happened for 5 s");
+  h.tick(1000);
+  assert.equal(h.calls.schedule, 0, "still inside MENU_IDLE_MS of the title showing");
+  h.tick(500);
+  assert.equal(h.calls.schedule, 1, "MENU_IDLE_MS after the title showed");
+});
+
 test("leaving the menus mid-prep re-arms it; tapping RACE keeps it running through the picker", () => {
   const h = rig({ phone: true });
   h.idle();
