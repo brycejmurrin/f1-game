@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = new URL("../../", import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), "utf8");
@@ -74,7 +75,7 @@ test("the renderer boot spends at most one adapter request before Gfx.create, fo
     });
     ctx.window = ctx;
     ctx.dispatchEvent = () => true;
-    vm.runInContext(src.replace(/^const\b/gm, "var"), ctx);
+    vm.runInContext(src.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/renderer-boot.js") });
     const rb = vm.runInContext("RendererBoot", ctx).create({ $: () => null, els: {}, canvas: {}, ensureDataHub() {}, loadBackendScripts: async () => {} });
     const r = await rb.start();
     assert.equal(r.bound, true, (stored || "unset") + ": bound");

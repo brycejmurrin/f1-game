@@ -11,6 +11,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const src = readFileSync(new URL("../../js/render/renderer-boot.js", import.meta.url), "utf8");
 const BOOT_STEP_MS = Number(src.match(/let ms = (\d+);/)?.[1] || 15000);
@@ -297,7 +298,7 @@ test("a GLX guess asks the GPU process nothing at eval", async () => {
       navigator: { gpu: { requestAdapter: async () => { asked++; return {}; } } },
       document: { createElement: () => ({}), head: { appendChild() {} } },
     });
-    vm.runInContext(src.replace(/^const\b/gm, "var"), ctx);
+    vm.runInContext(src.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/renderer-boot.js") });
     assert.equal(asked, 0, why);
   }
 });
