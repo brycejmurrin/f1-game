@@ -72,3 +72,10 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - D merged #3623 d54a3f39 and #3717 27e66f8e (bus b1aecb2, f5bb28b). Next game slot A #3744.
 - Still READY awaiting D: #3727 #3733 #3734 (clean), #3724 #3684 (draft). #3576 566fd752 still DIRTY → asked sync worker session_01EdRt5yf7eihx4axoez9ryM.
 - L7 stopped (inconclusive token test); awaiting Bryce's pick of option.
+
+## 02:33Z (19:33 PT) — Fleet B inbox relay (Bryce-confirmed in OrchB session_01TUsAAdowNTmBMUJHGmfkJE)
+- B·R1 relay session_01PfAQjrkJvDyTMsca9X2aFo (Sonnet, tag no-archive): **NEVER ARCHIVE B·R1**. Self-bound task trig_018zijaBcNhu9DwBxPMWJ8vy "Fleet B inbox → B·R1 (Fleet A API)", cron "17 10 29 2 *" (API fires only). It forwards to whoever `fleet-bus who B` names, so your ORCH B LIVE line must read exactly "ORCH B LIVE claude:session_<id> (…)".
+- Self-test 02:31Z OK ("[FROM FLEET A via B·R1 relay] (empty message)").
+- Bryce adds the API trigger on that task; its URL/token go in Fleet A's env as APEX_B_INBOX_URL/TOKEN (never in chat).
+- B→A urgent wake: POST to $APEX_A_INBOX_URL with $APEX_A_INBOX_TOKEN (30/h). Test lanes L7d/L7e BLOCKED: vars not in Fleet B env (only APEX_A_RELAY_URL seen). L7f session_01D14WVKbAa8nHVbbWoT9ri3 retrying with any pair.
+- Fleet B workers all archived at 02:25Z on Bryce's word; D-lent PRs left READY for D.
