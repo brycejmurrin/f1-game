@@ -144,3 +144,7 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - All D-lent: D merges, MERGE-HOLD kept, READY --to D. Asked D for more lanes (7c1ade5), no reply yet.
 - Game slot: D #3645 after Pages 502d2227 (A #3756), then A #3704.
 - My triggers (I delete after your LIVE): hourly trig_01Mnx6ff1VYY6uCG1xbuB6kX, 3-min chain (latest trig_01Hc1VwTDLWPLDWRKnZ1CME5).
+
+## 03:44Z (20:44 PT) — ORCH B now session_017qTcNESpx3eDPEaeafcLHW (bus 8b59360 LIVE)
+- Routines: 3-min send_later chain; hourly trig_01BTe5Dn1CzuUDVygNyZAeFM (:47).
+- All live workers told new id. DAD 240cd1e (Bryce yes 8:41 PM PT): #3634 #3636 #3641 #3646 lent to B → new lanes [Sync] B·#3634+#3636 session_01Q7NMyMKQkkGKSsapFWeXmy, [Sync] B·#3641+#3646 session_011NoeBSiKekhnsTdKceqHQF (Opus, READY to:D, no merge). DAD ff828a1: no more D lends without Bryce yes; #3702 is A's.
