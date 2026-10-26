@@ -1487,6 +1487,8 @@ const api = {
     : ThreeInspector.set(gfx, on),
   // gpuCapture — one-line registration of ApexGpuCapture (#2964); Spector / webgl-lint, off by default.
   gpuCapture: (a) => typeof ApexGpuCapture === "undefined" ? { on: false, supported: false, reason: "apex-gpu-capture.js not loaded" } : ApexGpuCapture.api(a),
+  // lifecycle — resize / hidden / bfcache / context-loss read + drive (#2572, apex-lifecycle.js).
+  lifecycle: (o) => typeof ApexLifecycle === "undefined" ? { error: "apex-lifecycle.js not loaded" } : ApexLifecycle.api(G, () => gfx, o),
   // lightTune(o?) — get or set the live lighting-tuner values (same registry as
   // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every
   // tunable. With an object: merges valid entries (clamped to each slider's

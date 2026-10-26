@@ -145,6 +145,11 @@
         "tests/unit/global-registry.test.mjs"
       ]
     },
+    "js/agent/apex-lifecycle.js": {
+      "lifecycle": [
+        "tests/specs/render-lifecycle.spec.js"
+      ]
+    },
     "js/agent/apex-lobby.js": {
       "*": [
         "tests/unit/car-presentation-canary.test.mjs"
@@ -2289,6 +2294,9 @@
       ]
     },
     "js/car/car-body-geom.js": {
+      "aeroFlapsGeom": [
+        "tests/unit/rear-wing-drs-rail.test.mjs"
+      ],
       "aeroStyleOf": [
         "tests/unit/aero-defaults-2026.test.mjs"
       ],
@@ -2317,6 +2325,9 @@
       ],
       "numberBoard": [
         "tests/unit/car-shade.test.mjs"
+      ],
+      "rearFlap": [
+        "tests/unit/rear-wing-drs-rail.test.mjs"
       ],
       "styledNoseStations": [
         "tests/unit/livery-stations.test.mjs"
@@ -2825,7 +2836,8 @@
         "tests/unit/helmets.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
-        "tests/unit/livery-wheels.test.mjs"
+        "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/rear-wing-drs-rail.test.mjs"
       ],
       "buildComplete": [
         "tests/specs/parts-physics.spec.js",
@@ -5028,7 +5040,8 @@
         "tests/unit/script-loader-starved.test.mjs",
         "tests/unit/script-loader-throw.test.mjs",
         "tests/unit/service-worker.test.mjs",
-        "tests/unit/settings-open-perf.test.mjs"
+        "tests/unit/settings-open-perf.test.mjs",
+        "tests/unit/share-card.test.mjs"
       ],
       "preload": [
         "tests/unit/script-loader-preload.test.mjs"
@@ -9376,7 +9389,8 @@
         "tests/unit/share-card.test.mjs"
       ],
       "*": [
-        "tests/unit/lazy-bundles-prefetch.test.mjs"
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/script-loader-retry-eval.test.mjs"
       ]
     },
     "js/net/rendezvous.js": {
@@ -9621,6 +9635,9 @@
       ]
     },
     "js/overlay/render.js": {
+      "boot": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
       "clear": [
         "tests/unit/overlay-feed.test.mjs"
       ],
@@ -14609,6 +14626,7 @@
         "tests/unit/tlx-recovery-lifecycle.test.mjs"
       ],
       "updateFrame": [
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
@@ -14655,6 +14673,7 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "derive": [
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "dispose": [
@@ -14663,7 +14682,8 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "update": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs"
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",

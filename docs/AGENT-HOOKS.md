@@ -59,21 +59,22 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 
 | Hook | Signature | Summary |
 |---|---|---|
-| `camState` | `camState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) |
+| `camState` | `camState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
 | `carAt` | `carAt(i)` | probe() physState() obs() scan() inputState() cars() carAt(i) |
 | `cars` | `cars()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
 | `corners` | `corners()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `fieldState` | `fieldState()` | timing() sectorState() lapHistory() fieldState() |
-| `gpuTimer` | `gpuTimer()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) |
+| `gpuTimer` | `gpuTimer()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
 | `groundY` | `groundY(f,l)` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `info` | `info()` | tracks() teams() info() |
 | `inputState` | `inputState()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
-| `inspector` | `inspector(on)` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) |
+| `inspector` | `inspector(on)` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
 | `lapHistory` | `lapHistory()` | timing() sectorState() lapHistory() fieldState() |
-| `lightState` | `lightState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) |
-| `lightTune` | `lightTune()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) |
+| `lifecycle` | `lifecycle({hidden,bfcache,resize,loseContext})` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
+| `lightState` | `lightState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
+| `lightTune` | `lightTune()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
 | `obs` | `obs()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
-| `perf` | `perf({on,reset,measure})` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) |
+| `perf` | `perf({on,reset,measure})` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
 | `physState` | `physState()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
 | `pitSigns` | `pitSigns()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `probe` | `probe()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
@@ -84,7 +85,7 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 | `trackProfile` | `trackProfile()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `trackShape` | `trackShape()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `tracks` | `tracks()` | tracks() teams() info() |
-| `viewState` | `viewState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) |
+| `viewState` | `viewState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext}) |
 | `wallStats` | `wallStats()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 ## control
 

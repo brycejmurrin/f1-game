@@ -182,7 +182,7 @@
       "name": "camState",
       "group": "read",
       "signature": "camState()",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
     },
     {
       "name": "carAt",
@@ -212,7 +212,7 @@
       "name": "gpuTimer",
       "group": "read",
       "signature": "gpuTimer()",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
     },
     {
       "name": "groundY",
@@ -236,7 +236,7 @@
       "name": "inspector",
       "group": "read",
       "signature": "inspector(on)",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
     },
     {
       "name": "lapHistory",
@@ -245,16 +245,22 @@
       "summary": "timing() sectorState() lapHistory() fieldState()"
     },
     {
+      "name": "lifecycle",
+      "group": "read",
+      "signature": "lifecycle({hidden,bfcache,resize,loseContext})",
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
+    },
+    {
       "name": "lightState",
       "group": "read",
       "signature": "lightState()",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
     },
     {
       "name": "lightTune",
       "group": "read",
       "signature": "lightTune()",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
     },
     {
       "name": "obs",
@@ -266,7 +272,7 @@
       "name": "perf",
       "group": "read",
       "signature": "perf({on,reset,measure})",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
     },
     {
       "name": "physState",
@@ -332,7 +338,7 @@
       "name": "viewState",
       "group": "read",
       "signature": "viewState()",
-      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})"
     },
     {
       "name": "wallStats",
@@ -1134,6 +1140,7 @@
         "tests/specs/obs-act-edge.spec.js",
         "tests/specs/output-paths.spec.js",
         "tests/specs/persistence-dom.spec.js",
+        "tests/specs/render-lifecycle.spec.js",
         "tests/specs/telemetry-compare.spec.js",
         "tests/specs/telemetry-fit.spec.js",
         "tests/specs/wake-lock.spec.js"
@@ -2027,6 +2034,12 @@
       "roster": "LAZY_AGENT"
     },
     {
+      "path": "js/agent/apex-lifecycle.js",
+      "global": "ApexLifecycle",
+      "order": 347,
+      "roster": "LAZY_AGENT"
+    },
+    {
       "path": "js/agent/apex-lobby.js",
       "global": "ApexLobby",
       "order": 345,
@@ -2047,109 +2060,109 @@
     {
       "path": "js/agent/apex.js",
       "global": "ApexApi",
-      "order": 347,
+      "order": 348,
       "roster": "LAZY_AGENT"
     },
     {
       "path": "js/audio/announcer-recorded.js",
       "global": "RecordedAnnouncer",
-      "order": 528,
+      "order": 529,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/announcer.js",
       "global": "Announcer",
-      "order": 529,
+      "order": 530,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/battle-earcon.js",
       "global": "BattleEarcon",
-      "order": 526,
+      "order": 527,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/car-sfx.js",
       "global": "CarSfx",
-      "order": 524,
+      "order": 525,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/crowd.js",
       "global": "CrowdAudio",
-      "order": 523,
+      "order": 524,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/driving-cues.js",
       "global": "DrivingCues",
-      "order": 531,
+      "order": 532,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/engine.js",
       "global": "GameAudio",
-      "order": 519,
+      "order": 520,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/ers-layer.js",
       "global": "ErsLayer",
-      "order": 518,
+      "order": 519,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/music-lib.js",
       "global": "MusicLib",
-      "order": 520,
+      "order": 521,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/panel.js",
       "global": "AudioPanel",
-      "order": 530,
+      "order": 531,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/race-mix-audition.js",
       "global": "RaceMixAudition",
-      "order": 515,
+      "order": 516,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/radio-fx.js",
       "global": "GameAudioRadioFx",
-      "order": 516,
+      "order": 517,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/radio-voice.js",
       "global": "RadioVoice",
-      "order": 527,
+      "order": 528,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/rivals.js",
       "global": "RivalAudio",
-      "order": 522,
+      "order": 523,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/signal.js",
       "global": "GameAudioSignal",
-      "order": 513,
+      "order": 514,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/soundtrack.js",
       "global": "GameAudioSoundtrack",
-      "order": 514,
+      "order": 515,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/spotify.js",
       "global": "SpotifyMusic",
-      "order": 521,
+      "order": 522,
       "roster": "LAZY_AUDIO"
     },
     {
@@ -2161,13 +2174,13 @@
     {
       "path": "js/audio/tone-model.js",
       "global": "GameAudioToneModel",
-      "order": 517,
+      "order": 518,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/voice-pack.js",
       "global": "VoicePack",
-      "order": 525,
+      "order": 526,
       "roster": "LAZY_AUDIO"
     },
     {
@@ -2251,7 +2264,7 @@
     {
       "path": "js/camera/flyby-editor.js",
       "global": "FlybyEditor",
-      "order": 556,
+      "order": 557,
       "roster": "LAZY_CAM_EDITOR"
     },
     {
@@ -2329,7 +2342,7 @@
     {
       "path": "js/camera/tuner-panel.js",
       "global": "CamTunerEditor",
-      "order": 555,
+      "order": 556,
       "roster": "LAZY_CAM_EDITOR"
     },
     {
@@ -2503,7 +2516,7 @@
     {
       "path": "js/career/career-planning-ui.js",
       "global": "CareerPlanningUI",
-      "order": 557,
+      "order": 558,
       "roster": "LAZY_CAREER_UI"
     },
     {
@@ -2521,7 +2534,7 @@
     {
       "path": "js/career/career-ui.js",
       "global": "CareerScreen",
-      "order": 558,
+      "order": 559,
       "roster": "LAZY_CAREER_UI"
     },
     {
@@ -2581,625 +2594,625 @@
     {
       "path": "js/circuits/abudhabi.js",
       "global": "TrackDefs",
-      "order": 400,
+      "order": 401,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/albert_park.js",
       "global": "TrackDefs",
-      "order": 390,
+      "order": 391,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/anderstorp.js",
       "global": "TrackDefs",
-      "order": 422,
+      "order": 423,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/bahrain.js",
       "global": "TrackDefs",
-      "order": 377,
+      "order": 378,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/baku.js",
       "global": "TrackDefs",
-      "order": 397,
+      "order": 398,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/brands_hatch.js",
       "global": "TrackDefs",
-      "order": 423,
+      "order": 424,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/buddh.js",
       "global": "TrackDefs",
-      "order": 426,
+      "order": 427,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/buenos_aires.js",
       "global": "TrackDefs",
-      "order": 415,
+      "order": 416,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/catalunya.js",
       "global": "TrackDefs",
-      "order": 403,
+      "order": 404,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/cota.js",
       "global": "TrackDefs",
-      "order": 384,
+      "order": 385,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/dijon.js",
       "global": "TrackDefs",
-      "order": 425,
+      "order": 426,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/donington.js",
       "global": "TrackDefs",
-      "order": 421,
+      "order": 422,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/estoril.js",
       "global": "TrackDefs",
-      "order": 411,
+      "order": 412,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/fuji.js",
       "global": "TrackDefs",
-      "order": 417,
+      "order": 418,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/hockenheim.js",
       "global": "TrackDefs",
-      "order": 401,
+      "order": 402,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/hungaroring.js",
       "global": "TrackDefs",
-      "order": 396,
+      "order": 397,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/imola.js",
       "global": "TrackDefs",
-      "order": 393,
+      "order": 394,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/indianapolis.js",
       "global": "TrackDefs",
-      "order": 414,
+      "order": 415,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/interlagos.js",
       "global": "TrackDefs",
-      "order": 385,
+      "order": 386,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/istanbul.js",
       "global": "TrackDefs",
-      "order": 405,
+      "order": 406,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/jacarepagua.js",
       "global": "TrackDefs",
-      "order": 416,
+      "order": 417,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/jeddah.js",
       "global": "TrackDefs",
-      "order": 389,
+      "order": 390,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/jerez.js",
       "global": "TrackDefs",
-      "order": 420,
+      "order": 421,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/korea.js",
       "global": "TrackDefs",
-      "order": 419,
+      "order": 420,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/kyalami.js",
       "global": "TrackDefs",
-      "order": 412,
+      "order": 413,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/madrid.js",
       "global": "TrackDefs",
-      "order": 387,
+      "order": 388,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/magny_cours.js",
       "global": "TrackDefs",
-      "order": 410,
+      "order": 411,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/mexico.js",
       "global": "TrackDefs",
-      "order": 398,
+      "order": 399,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/miami.js",
       "global": "TrackDefs",
-      "order": 392,
+      "order": 393,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/monaco.js",
       "global": "TrackDefs",
-      "order": 378,
+      "order": 379,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/mont_tremblant.js",
       "global": "TrackDefs",
-      "order": 427,
+      "order": 428,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/montreal.js",
       "global": "TrackDefs",
-      "order": 394,
+      "order": 395,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/monza.js",
       "global": "TrackDefs",
-      "order": 381,
+      "order": 382,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/mosport.js",
       "global": "TrackDefs",
-      "order": 428,
+      "order": 429,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/mugello.js",
       "global": "TrackDefs",
-      "order": 409,
+      "order": 410,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/nurburgring.js",
       "global": "TrackDefs",
-      "order": 402,
+      "order": 403,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/okayama.js",
       "global": "TrackDefs",
-      "order": 418,
+      "order": 419,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/paul_ricard.js",
       "global": "TrackDefs",
-      "order": 406,
+      "order": 407,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/portimao.js",
       "global": "TrackDefs",
-      "order": 407,
+      "order": 408,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/qatar.js",
       "global": "TrackDefs",
-      "order": 399,
+      "order": 400,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/redbull.js",
       "global": "TrackDefs",
-      "order": 395,
+      "order": 396,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/scenery/abudhabi.js",
       "global": "TrackScenery",
-      "order": 452,
+      "order": 453,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/albert_park.js",
       "global": "TrackScenery",
-      "order": 442,
+      "order": 443,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/anderstorp.js",
       "global": "TrackScenery",
-      "order": 474,
+      "order": 475,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/bahrain.js",
       "global": "TrackScenery",
-      "order": 429,
+      "order": 430,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/baku.js",
       "global": "TrackScenery",
-      "order": 449,
+      "order": 450,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/brands_hatch.js",
       "global": "TrackScenery",
-      "order": 475,
+      "order": 476,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/buddh.js",
       "global": "TrackScenery",
-      "order": 478,
+      "order": 479,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/buenos_aires.js",
       "global": "TrackScenery",
-      "order": 467,
+      "order": 468,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/catalunya.js",
       "global": "TrackScenery",
-      "order": 455,
+      "order": 456,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/cota.js",
       "global": "TrackScenery",
-      "order": 436,
+      "order": 437,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/dijon.js",
       "global": "TrackScenery",
-      "order": 477,
+      "order": 478,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/donington.js",
       "global": "TrackScenery",
-      "order": 473,
+      "order": 474,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/estoril.js",
       "global": "TrackScenery",
-      "order": 463,
+      "order": 464,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/fuji.js",
       "global": "TrackScenery",
-      "order": 469,
+      "order": 470,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/hockenheim.js",
       "global": "TrackScenery",
-      "order": 453,
+      "order": 454,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/hungaroring.js",
       "global": "TrackScenery",
-      "order": 448,
+      "order": 449,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/imola.js",
       "global": "TrackScenery",
-      "order": 445,
+      "order": 446,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/indianapolis.js",
       "global": "TrackScenery",
-      "order": 466,
+      "order": 467,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/interlagos.js",
       "global": "TrackScenery",
-      "order": 437,
+      "order": 438,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/istanbul.js",
       "global": "TrackScenery",
-      "order": 457,
+      "order": 458,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/jacarepagua.js",
       "global": "TrackScenery",
-      "order": 468,
+      "order": 469,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/jeddah.js",
       "global": "TrackScenery",
-      "order": 441,
+      "order": 442,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/jerez.js",
       "global": "TrackScenery",
-      "order": 472,
+      "order": 473,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/korea.js",
       "global": "TrackScenery",
-      "order": 471,
+      "order": 472,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/kyalami.js",
       "global": "TrackScenery",
-      "order": 464,
+      "order": 465,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/madrid.js",
       "global": "TrackScenery",
-      "order": 439,
+      "order": 440,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/magny_cours.js",
       "global": "TrackScenery",
-      "order": 462,
+      "order": 463,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/mexico.js",
       "global": "TrackScenery",
-      "order": 450,
+      "order": 451,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/miami.js",
       "global": "TrackScenery",
-      "order": 444,
+      "order": 445,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/monaco.js",
       "global": "TrackScenery",
-      "order": 430,
+      "order": 431,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/mont_tremblant.js",
       "global": "TrackScenery",
-      "order": 479,
+      "order": 480,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/montreal.js",
       "global": "TrackScenery",
-      "order": 446,
+      "order": 447,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/monza.js",
       "global": "TrackScenery",
-      "order": 433,
+      "order": 434,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/mosport.js",
       "global": "TrackScenery",
-      "order": 480,
+      "order": 481,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/mugello.js",
       "global": "TrackScenery",
-      "order": 461,
+      "order": 462,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/nurburgring.js",
       "global": "TrackScenery",
-      "order": 454,
+      "order": 455,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/okayama.js",
       "global": "TrackScenery",
-      "order": 470,
+      "order": 471,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/paul_ricard.js",
       "global": "TrackScenery",
-      "order": 458,
+      "order": 459,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/portimao.js",
       "global": "TrackScenery",
-      "order": 459,
+      "order": 460,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/qatar.js",
       "global": "TrackScenery",
-      "order": 451,
+      "order": 452,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/redbull.js",
       "global": "TrackScenery",
-      "order": 447,
+      "order": 448,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/sepang.js",
       "global": "TrackScenery",
-      "order": 456,
+      "order": 457,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/shanghai.js",
       "global": "TrackScenery",
-      "order": 443,
+      "order": 444,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/silverstone.js",
       "global": "TrackScenery",
-      "order": 431,
+      "order": 432,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/singapore.js",
       "global": "TrackScenery",
-      "order": 435,
+      "order": 436,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/sochi.js",
       "global": "TrackScenery",
-      "order": 460,
+      "order": 461,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/spa.js",
       "global": "TrackScenery",
-      "order": 432,
+      "order": 433,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/suzuka.js",
       "global": "TrackScenery",
-      "order": 434,
+      "order": 435,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/vegas.js",
       "global": "TrackScenery",
-      "order": 438,
+      "order": 439,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/watkins_glen.js",
       "global": "TrackScenery",
-      "order": 465,
+      "order": 466,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/zandvoort.js",
       "global": "TrackScenery",
-      "order": 440,
+      "order": 441,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/scenery/zolder.js",
       "global": "TrackScenery",
-      "order": 476,
+      "order": 477,
       "roster": "LAZY_SCENERY"
     },
     {
       "path": "js/circuits/sepang.js",
       "global": "TrackDefs",
-      "order": 404,
+      "order": 405,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/shanghai.js",
       "global": "TrackDefs",
-      "order": 391,
+      "order": 392,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/silverstone.js",
       "global": "TrackDefs",
-      "order": 379,
+      "order": 380,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/singapore.js",
       "global": "TrackDefs",
-      "order": 383,
+      "order": 384,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/sochi.js",
       "global": "TrackDefs",
-      "order": 408,
+      "order": 409,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/spa.js",
       "global": "TrackDefs",
-      "order": 380,
+      "order": 381,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/suzuka.js",
       "global": "TrackDefs",
-      "order": 382,
+      "order": 383,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/vegas.js",
       "global": "TrackDefs",
-      "order": 386,
+      "order": 387,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/watkins_glen.js",
       "global": "TrackDefs",
-      "order": 413,
+      "order": 414,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/zandvoort.js",
       "global": "TrackDefs",
-      "order": 388,
+      "order": 389,
       "roster": "LAZY_CIRCUIT"
     },
     {
       "path": "js/circuits/zolder.js",
       "global": "TrackDefs",
-      "order": 424,
+      "order": 425,
       "roster": "LAZY_CIRCUIT"
     },
     {
@@ -3301,13 +3314,13 @@
     {
       "path": "js/data/api-transport.js",
       "global": "F1Transport",
-      "order": 482,
+      "order": 483,
       "roster": "LAZY_DATA"
     },
     {
       "path": "js/data/api.js",
       "global": "F1API",
-      "order": 483,
+      "order": 484,
       "roster": "LAZY_DATA"
     },
     {
@@ -3325,7 +3338,7 @@
     {
       "path": "js/data/export.js",
       "global": "DataExport",
-      "order": 489,
+      "order": 490,
       "roster": "LAZY_DATA"
     },
     {
@@ -3343,7 +3356,7 @@
     {
       "path": "js/data/hub.js",
       "global": "DataHub",
-      "order": 495,
+      "order": 496,
       "roster": "LAZY_DATA"
     },
     {
@@ -3355,25 +3368,25 @@
     {
       "path": "js/data/live.js",
       "global": "DataLive",
-      "order": 493,
+      "order": 494,
       "roster": "LAZY_DATA"
     },
     {
       "path": "js/data/real-race-tab.js",
       "global": "DataRealRace",
-      "order": 494,
+      "order": 495,
       "roster": "LAZY_DATA"
     },
     {
       "path": "js/data/results.js",
       "global": "DataResults",
-      "order": 492,
+      "order": 493,
       "roster": "LAZY_DATA"
     },
     {
       "path": "js/data/schedule.js",
       "global": "DataSchedule",
-      "order": 490,
+      "order": 491,
       "roster": "LAZY_DATA"
     },
     {
@@ -3385,13 +3398,13 @@
     {
       "path": "js/data/standings.js",
       "global": "DataStandings",
-      "order": 491,
+      "order": 492,
       "roster": "LAZY_DATA"
     },
     {
       "path": "js/data/tab-utils.js",
       "global": "DataTabUtils",
-      "order": 481,
+      "order": 482,
       "roster": "LAZY_DATA"
     },
     {
@@ -3403,49 +3416,49 @@
     {
       "path": "js/data/telemetry-model.js",
       "global": "DataTelemetryModel",
-      "order": 484,
+      "order": 485,
       "roster": "LAZY_DATA"
     },
     {
       "path": "js/data/telemetry-player.js",
       "global": "DataTelemetryPlayer",
-      "order": 486,
+      "order": 487,
       "roster": "LAZY_DATA"
     },
     {
       "path": "js/data/telemetry-render.js",
       "global": "DataTelemetryRender",
-      "order": 485,
+      "order": 486,
       "roster": "LAZY_DATA"
     },
     {
       "path": "js/data/telemetry-view.js",
       "global": "DataTelemetryView",
-      "order": 487,
+      "order": 488,
       "roster": "LAZY_DATA"
     },
     {
       "path": "js/data/telemetry.js",
       "global": "DataTelemetry",
-      "order": 488,
+      "order": 489,
       "roster": "LAZY_DATA"
     },
     {
       "path": "js/editor/bridge-panel.js",
       "global": "DesignerBridges",
-      "order": 546,
+      "order": 547,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/canvas.js",
       "global": "DesignerCanvas",
-      "order": 540,
+      "order": 541,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/codec.js",
       "global": "TrackCodec",
-      "order": 538,
+      "order": 539,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3457,37 +3470,37 @@
     {
       "path": "js/editor/designer.js",
       "global": "TrackDesigner",
-      "order": 548,
+      "order": 549,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/elev-presets.js",
       "global": "ElevPresets",
-      "order": 541,
+      "order": 542,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/fixes.js",
       "global": "TrackFixes",
-      "order": 537,
+      "order": 538,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/followup-tools.js",
       "global": "DesignerFollowup",
-      "order": 544,
+      "order": 545,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/insight.js",
       "global": "TrackInsight",
-      "order": 536,
+      "order": 537,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/profile.js",
       "global": "DesignerProfile",
-      "order": 542,
+      "order": 543,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3499,37 +3512,37 @@
     {
       "path": "js/editor/randomise.js",
       "global": "TrackRandom",
-      "order": 534,
+      "order": 535,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/scenery-panel.js",
       "global": "DesignerScenery",
-      "order": 545,
+      "order": 546,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/scenery-preview.js",
       "global": "DesignerSceneryPreview",
-      "order": 539,
+      "order": 540,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/selection-panel.js",
       "global": "DesignerSelection",
-      "order": 543,
+      "order": 544,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/shape.js",
       "global": "TrackShape",
-      "order": 532,
+      "order": 533,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/stamps.js",
       "global": "TrackStamps",
-      "order": 533,
+      "order": 534,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3541,13 +3554,13 @@
     {
       "path": "js/editor/validate.js",
       "global": "TrackValidate",
-      "order": 535,
+      "order": 536,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/workspace.js",
       "global": "DesignerWorkspace",
-      "order": 547,
+      "order": 548,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3763,7 +3776,7 @@
     {
       "path": "js/input/phone-pad.js",
       "global": "PhonePad",
-      "order": 512,
+      "order": 513,
       "roster": "LAZY_NET"
     },
     {
@@ -3811,7 +3824,7 @@
     {
       "path": "js/lighting/presets.js",
       "global": "LightPresets",
-      "order": 348,
+      "order": 349,
       "roster": "LAZY_RACE"
     },
     {
@@ -3835,97 +3848,97 @@
     {
       "path": "js/net/bytes.js",
       "global": "NetBytes",
-      "order": 496,
+      "order": 497,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/handshake.js",
       "global": "NetHandshake",
-      "order": 503,
+      "order": 504,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/lobby-codes.js",
       "global": "LobbyCodes",
-      "order": 504,
+      "order": 505,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/lobby-roster.js",
       "global": "LobbyRoster",
-      "order": 505,
+      "order": 506,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/lobby-settings.js",
       "global": "LobbySettings",
-      "order": 506,
+      "order": 507,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/lobby.js",
       "global": "NetLobby",
-      "order": 511,
+      "order": 512,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/netplay.js",
       "global": "NetPlay",
-      "order": 510,
+      "order": 511,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/nostr.js",
       "global": "NetNostr",
-      "order": 497,
+      "order": 498,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/qr.js",
       "global": "NetQr",
-      "order": 500,
+      "order": 501,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/rendezvous.js",
       "global": "NetRendezvous",
-      "order": 498,
+      "order": 499,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/scan.js",
       "global": "NetScan",
-      "order": 501,
+      "order": 502,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/sdp.js",
       "global": "NetSdp",
-      "order": 499,
+      "order": 500,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/session.js",
       "global": "NetSession",
-      "order": 508,
+      "order": 509,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/snapshot.js",
       "global": "NetSnapshot",
-      "order": 507,
+      "order": 508,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/spectate.js",
       "global": "NetSpectate",
-      "order": 509,
+      "order": 510,
       "roster": "LAZY_NET"
     },
     {
       "path": "js/net/transport.js",
       "global": "NetTransport",
-      "order": 502,
+      "order": 503,
       "roster": "LAZY_NET"
     },
     {
@@ -4207,7 +4220,7 @@
     {
       "path": "js/race/damage.js",
       "global": "Damage",
-      "order": 350,
+      "order": 351,
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -4219,25 +4232,25 @@
     {
       "path": "js/race/duel.js",
       "global": "Duel",
-      "order": 351,
+      "order": 352,
       "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/engineer.js",
       "global": "RaceEngineer",
-      "order": 354,
+      "order": 355,
       "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/event-journal.js",
       "global": "EventJournal",
-      "order": 357,
+      "order": 358,
       "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/flying-start.js",
       "global": "FlyingStart",
-      "order": 362,
+      "order": 363,
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -4249,7 +4262,7 @@
     {
       "path": "js/race/jump-start-penalty.js",
       "global": "JumpStartPenalty",
-      "order": 363,
+      "order": 364,
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -4267,7 +4280,7 @@
     {
       "path": "js/race/marshal-panels.js",
       "global": "MarshalPanels",
-      "order": 361,
+      "order": 362,
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -4285,7 +4298,7 @@
     {
       "path": "js/race/pit-lane.js",
       "global": "PitLane",
-      "order": 353,
+      "order": 354,
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -4309,7 +4322,7 @@
     {
       "path": "js/race/race-facts.js",
       "global": "RaceFacts",
-      "order": 356,
+      "order": 357,
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -4321,7 +4334,7 @@
     {
       "path": "js/race/race-radio.js",
       "global": "RaceRadio",
-      "order": 359,
+      "order": 360,
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -4333,7 +4346,7 @@
     {
       "path": "js/race/radio-lines.js",
       "global": "RadioLines",
-      "order": 355,
+      "order": 356,
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -4357,7 +4370,7 @@
     {
       "path": "js/race/reliability.js",
       "global": "Reliability",
-      "order": 349,
+      "order": 350,
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -4369,7 +4382,7 @@
     {
       "path": "js/race/session-records.js",
       "global": "SessionRecords",
-      "order": 352,
+      "order": 353,
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -4393,13 +4406,13 @@
     {
       "path": "js/race/spotter.js",
       "global": "Spotter",
-      "order": 358,
+      "order": 359,
       "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/start-lights.js",
       "global": "StartLights",
-      "order": 360,
+      "order": 361,
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -4771,7 +4784,7 @@
     {
       "path": "js/track/core/hidden-faces.js",
       "global": "TrackHiddenFaces",
-      "order": 368,
+      "order": 369,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
@@ -4813,19 +4826,19 @@
     {
       "path": "js/track/scenery/build-props.js",
       "global": "TrackBuildProps",
-      "order": 376,
+      "order": 377,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/circuit-kit.js",
       "global": "CircuitKit",
-      "order": 367,
+      "order": 368,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/city.js",
       "global": "SceneryCity",
-      "order": 371,
+      "order": 372,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
@@ -4843,55 +4856,55 @@
     {
       "path": "js/track/scenery/guards.js",
       "global": "SceneryGuards",
-      "order": 375,
+      "order": 376,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/identity.js",
       "global": "SceneryIdentity",
-      "order": 372,
+      "order": 373,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/landmark-kit.js",
       "global": "LandmarkKit",
-      "order": 366,
+      "order": 367,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/models.js",
       "global": "TrackModels",
-      "order": 364,
+      "order": 365,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/nature.js",
       "global": "SceneryNature",
-      "order": 369,
+      "order": 370,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/pits.js",
       "global": "SceneryPits",
-      "order": 373,
+      "order": 374,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/structures.js",
       "global": "SceneryStructures",
-      "order": 370,
+      "order": 371,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/themes.js",
       "global": "SceneryThemes",
-      "order": 365,
+      "order": 366,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/venue.js",
       "global": "SceneryVenue",
-      "order": 374,
+      "order": 375,
       "roster": "LAZY_TRACK_BUILD"
     },
     {
@@ -5305,7 +5318,7 @@
     {
       "path": "js/xr/apex-xr.js",
       "global": "ApexXR",
-      "order": 553,
+      "order": 554,
       "roster": "LAZY_XR"
     },
     {
@@ -5317,7 +5330,7 @@
     {
       "path": "js/xr/xr-input.js",
       "global": "XrInput",
-      "order": 551,
+      "order": 552,
       "roster": "LAZY_XR"
     },
     {
@@ -5329,25 +5342,25 @@
     {
       "path": "js/xr/xr-plan.js",
       "global": "XRPlan",
-      "order": 549,
+      "order": 550,
       "roster": "LAZY_XR"
     },
     {
       "path": "js/xr/xr-rig.js",
       "global": "XrRig",
-      "order": 550,
+      "order": 551,
       "roster": "LAZY_XR"
     },
     {
       "path": "js/xr/xr-session.js",
       "global": "XrSession",
-      "order": 552,
+      "order": 553,
       "roster": "LAZY_XR"
     },
     {
       "path": "js/xr/xr-ui.js",
       "global": "XrUi",
-      "order": 554,
+      "order": 555,
       "roster": "LAZY_XR"
     }
   ]

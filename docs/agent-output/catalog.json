@@ -4055,7 +4055,7 @@
     },
     {
       "name": "test:hooks",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/agent-determinism-frame.spec.js tests/specs/agent-drive-bench.spec.js tests/specs/agent-view.spec.js tests/specs/assets-api.spec.js tests/specs/data-lifecycle.spec.js tests/specs/dev-tools-dom.spec.js tests/specs/gpu-capture.spec.js tests/specs/headless-api.spec.js tests/specs/logging.spec.js tests/specs/map-hooks.spec.js tests/specs/new-hooks.spec.js tests/specs/obs-act-edge.spec.js tests/specs/output-paths.spec.js tests/specs/persistence-dom.spec.js tests/specs/telemetry-compare.spec.js tests/specs/telemetry-fit.spec.js tests/specs/wake-lock.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/agent-determinism-frame.spec.js tests/specs/agent-drive-bench.spec.js tests/specs/agent-view.spec.js tests/specs/assets-api.spec.js tests/specs/data-lifecycle.spec.js tests/specs/dev-tools-dom.spec.js tests/specs/gpu-capture.spec.js tests/specs/headless-api.spec.js tests/specs/logging.spec.js tests/specs/map-hooks.spec.js tests/specs/new-hooks.spec.js tests/specs/obs-act-edge.spec.js tests/specs/output-paths.spec.js tests/specs/persistence-dom.spec.js tests/specs/render-lifecycle.spec.js tests/specs/telemetry-compare.spec.js tests/specs/telemetry-fit.spec.js tests/specs/wake-lock.spec.js"
     },
     {
       "name": "test:input",

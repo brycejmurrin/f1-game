@@ -1044,6 +1044,8 @@
     "tests/unit/real-replay-vm.test.mjs",
     "// Rear wing active aero to FIA 2026 C3.11.6: one rigid RW Flap, one aft pivot, Straight Mode flattens (never inverts). VM, ~1 s.",
     "tests/unit/rear-wing-active-aero.test.mjs",
+    "// #3413: DRS rail/pod clear the closed top rear flap (no coplanar banding on wing preset). VM, ~1 s.",
+    "tests/unit/rear-wing-drs-rail.test.mjs",
     "tests/unit/red-flag-fuel-vm.test.mjs",
     "// ...and its sibling over js/: a try/catch cannot swallow a promise",
     "// REJECTION, and index.html turns an unhandled one into a full-screen",
@@ -2155,6 +2157,7 @@
         "tests/specs/obs-act-edge.spec.js",
         "tests/specs/output-paths.spec.js",
         "tests/specs/persistence-dom.spec.js",
+        "tests/specs/render-lifecycle.spec.js",
         "tests/specs/telemetry-compare.spec.js",
         "tests/specs/telemetry-fit.spec.js",
         "tests/specs/wake-lock.spec.js"
