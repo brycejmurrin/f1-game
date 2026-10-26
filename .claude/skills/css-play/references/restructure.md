@@ -13,7 +13,7 @@ it rename things?** Renaming is not restructuring.
 ## Before you touch anything
 
 ```sh
-node tools/ui/layout-audit.mjs                    # the screen x viewport matrix
+node tools/ui/layout-audit.mjs                    # the screen x viewport matrix, ONCE as the before-count (never per edit)
 node tools/ci/pick-tests.mjs --staged             # which groups this change needs
 node tools/ci/tooling-fast.mjs --changed --jobs=3 # diff-aware no-browser guard suite
 ```
@@ -59,4 +59,4 @@ reject a named methodology, take rules 8 and 10 only.
 3. Edit, then the css-play hot-swap loop for the after shot.
 4. `node tools/check/tree-counts.mjs`, then `node tools/check/ratchets.mjs --update --lower-only` (lowers).
 5. Remove or update the family entry in `docs/COMPONENTS.md` (`component-inventory.test.mjs`).
-6. Type metrics moved? SKILL.md hard don't 6: run `menu-baseline` yourself.
+6. Type metrics moved? SKILL.md hard don't 5: run `menu-baseline` yourself.

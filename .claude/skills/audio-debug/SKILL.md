@@ -1,6 +1,6 @@
 ---
 name: audio-debug
-description: "Use when the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or WebAudio, engine pitch or music layers misbehave. Not punchier audio polish that must not change physics (game-feel), offline precache of mp3s (pwa-cache-service-worker), or the music menu layout (ui-menu-a11y)."
+description: "Use when the game is silent on iPhone or the first tap, the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or WebAudio, engine pitch or music layers misbehave. Not punchier audio polish that must not change physics (game-feel), offline precache of mp3s (pwa-cache-service-worker), or the music menu layout (ui-menu-a11y)."
 ---
 
 # Debug and tune the audio engine
@@ -30,7 +30,8 @@ GameAudio.centroidHz()              // spectral centroid of live engine
 ```
 
 ```sh
-node tools/ci/test-solo.mjs tests/specs/audio-smoke.spec.js  # focused browser check; parent only
+node tools/ci/test-solo.mjs tests/specs/audio-smoke.spec.js  # focused browser check; session only (subagents report unverified)
+node tools/ci/test-solo.mjs tests/specs/engine-audio-offline.spec.js  # after an engine.js context/rebuild or lifecycle edit
 # Add music-library.spec.js for library behavior; ui is a broader group.
 node tools/check/audio-test.cjs     # LAUNCHES CHROMIUM, objective pitch probe; starts its own static server (a <baseURL> arg reuses one)
 ```
@@ -38,6 +39,13 @@ node tools/check/audio-test.cjs     # LAUNCHES CHROMIUM, objective pitch probe; 
 `tests/specs/audio-smoke.spec.js` covers init, re-enable during a race, and a
 user-gesture unlock (`setEngine(0.75, 0.4, false, 0.6, 4)` then
 `centroidHz() > 50`). Shell/cache after an edit: **check-changes**.
+
+**Context rebuild** (`engine.js` `rebuildCtx`): a failed resume or a device
+change rebuilds the AudioContext; device-driven rebuilds are debounced and
+capped (`DEVICE_REBUILD_MAX` per `DEVICE_REBUILD_WINDOW_MS`). Services read
+the context through functions, so a rebuild never leaves one on the old
+context; a sound that dies after a device switch is this path. Verify with
+`engine-audio-offline.spec.js` plus `audio-smoke.spec.js`.
 
 ## Which `js/audio/` file
 

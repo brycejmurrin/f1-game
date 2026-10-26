@@ -2,7 +2,7 @@
 
 Season/year: schedule and results take NO year argument and standings take an
 OPTIONAL one. `F1API` derives the Jolpica season from the clock per call
-(`season()`, `js/data/api.js` ~L18; URL = `/<year>/driverstandings.json`;
+(`season()` in `js/data/api.js`; URL = `/<year>/driverstandings.json`;
 a past year caches 7 d). `loadStandings` (`standings.js`) asks for the current
 year and, when that table is empty (Jan to the opener), falls back to last
 season's FINAL table, headings tagged `LAST SEASON · <y> FINAL` (pinned by
@@ -18,5 +18,10 @@ year's path with it).
 Cache check: API bodies live in localStorage under the prefix `apex26.api.`
 (`CACHE_PREFIX`, `js/data/api-transport.js`; past-year entries 7 d). To rule a
 stale entry out, remove every key with that prefix in the page and reload the
-hub. Then fetch the live Jolpica `/<year>/driverstandings.json` yourself to
-tell a stale cache from the API itself returning last year's table.
+hub (a live-page step: mcp-probe `evaluate_script`, session only — a subagent
+cannot run it). Then fetch the live Jolpica `/<year>/driverstandings.json`
+yourself to tell a stale cache from the API itself returning last year's table.
+Base URLs are the `JOLPICA` / `OPENF1` constants in `js/data/api.js`. From this
+container outbound HTTPS goes through the agent proxy: use `curl` (it honours
+`HTTPS_PROXY` and the CA bundle, `/root/.ccr/README.md`); a 403/407 or TLS error
+there is the proxy, not the API returning nothing.

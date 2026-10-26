@@ -1,6 +1,6 @@
 ---
 name: code-nav
-description: "Use when finding where a JS symbol is defined, who uses or calls it, its exports or type, an edit's new errors: apex-lsp, not grep. Dead code → slim-bloat."
+description: "Use when finding where a JS symbol is defined (go to definition), who uses or calls it (callers, find usages, rename impact), its exports or type, an edit's new type errors: apex-lsp, not grep. Dead code → slim-bloat."
 ---
 
 # Code navigation with apex-lsp (instead of grep)
@@ -56,7 +56,7 @@ bare JS symbol. Take it for the next lookup.
 
 1. **Understand a module.** `lsp_outline {symbol: "Ghost", limit: 40}` lists the exports,
    then `lsp_definition {symbol: "Ghost.snapshot", body: true, maxLines: 60}` gives the body
-   (up to 60 lines).
+   (the default cap is 40 lines, max 400; pass `maxLines` for a longer one).
    That's two calls and no full-file Read.
 2. **Before changing a shared function.** `lsp_callers {symbol, limit: 40}` lists the functions that
    use it. Read those, not every grep hit. For a façade member, `files: true`
