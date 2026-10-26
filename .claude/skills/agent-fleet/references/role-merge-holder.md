@@ -57,10 +57,16 @@ needs the `ready-gate --pr` receipt the same way. A refusal names the row.
   `INCIDENT` line stands without its `INCIDENT … lifted`. Bryce's own merges
   carry no bus line (memory `bryce-merges-manually`): the gate's local merge
   onto the fresh tip still covers them.
+- **Lent PRs**: lending a PR lends its merge. The lender records it on the PR
+  (fleet block `orchestrator:` = borrower letter, `lent-by: <lender>`) and
+  removes its own `MERGE-HOLD: <lender> merges` line; a message alone lends
+  nothing. The borrower merges via merge-gate once READY + green (GAME-SLOT
+  for game PRs), posts `DONE` and tells the lender. No clean-behind resync
+  while it waits.
 - **Stop for everyone** on red Pages or red ship-push CI, whoever caused it:
   post an `INCIDENT` line; the author posts `INCIDENT #N lifted` when it is.
 - Dispatch Pages after a game merge when no run is queued (never dual).
 
 Never: cancel an Actions run, merge on a relayed grant, arm a draft, merge
 without the receipt (the hook refuses), skip the two-parent check, merge
-another fleet's PR.
+another fleet's PR it has not lent you.

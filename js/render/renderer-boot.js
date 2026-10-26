@@ -74,7 +74,7 @@ async function gpuAdapterAvailable() {
   _adapterWhy = ""; _adapterSlow = false; _probeAdapter = null;
   try {
     if (typeof navigator === "undefined" || !navigator.gpu || !navigator.gpu.requestAdapter) { _adapterWhy = "no navigator.gpu"; return false; }
-    const adapterP = navigator.gpu.requestAdapter();
+    const adapterP = takeEarlyAdapter() || navigator.gpu.requestAdapter();
     // Cap the probe: a stuck requestAdapter() on broken WebGPU stacks delays
     // the entire title boot (unset default waits here before choosing GLX).
     // Hang cap is seconds (not ~250 ms): CI adapters often need longer than a
@@ -304,11 +304,16 @@ try {
     // needed beyond this: a failed fetch leaves the backend global absent,
     // which Gfx.create treats as unavailable and falls through to GLX.
     if (pref === "three") preloadThreeVendor();
+    // An EXPLICIT pick ran no probe, so TLX's adapter sniff asked the GPU process itself, after the backend fetch and
+    // before three's own requestAdapter: two serial round trips. The eval-time adapter (kickEarlyAdapter) rides along
+    // instead, awaited beside the fetch under the probe's 4 s cap; null (none, slow, refused) leaves TLX to ask.
+    const earlyP = !_probeAdapter && pref === "three" ? cappedEarlyAdapter() : null;
     const fetched = await withIdleProgressTimeout(
       (touch) => loadDeferredScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu, touch),
       BOOT_STEP_MS, BOOT_STEP_MAX_MS, "backend script fetch");
     // A slow fetch is the network's verdict, not the device's: GLX for this boot,
     // canary state untouched. A hung create() IS the device's (see _createHung).
+    if (earlyP) _probeAdapter = await earlyP;
     if (fetched !== TIMED_OUT && Gfx.createInitOwner) _initOwner = Gfx.createInitOwner(canvas);
     const made = fetched === TIMED_OUT ? null : await withTimeout(Gfx.create(canvas, { backend: pref, initOwner: _initOwner, adapter: _probeAdapter }), BOOT_STEP_MS, "backend " + pref + " init", () => { if (_initOwner) _initOwner.abort(); });
     const backend = made === TIMED_OUT ? (_createHung = true, null) : made;
@@ -469,6 +474,37 @@ function guess() {
   return { pick: "", sure: false };
 }
 function guessBackend() { return guess().pick; }
+// THE ADAPTER DURING THE BOOT WALL (A·H15 load hunt, 2026-10-24). start() asked navigator.gpu.requestAdapter() only
+// once game.js had evaluated, and every later boot step waits on it: measured on a warm SW boot (150 ms RTT,
+// SwiftShader), the unset default's probe ran 840 -> 1405 ms while this file had evaluated at ~350 ms, and an explicit
+// THREE pick's TLX sniff ran 995 -> 1396 ms, after DOMContentLoaded. The request is GPU-process work, not bandwidth
+// (#3536's contention was the ~1 MB fetch), so it goes out here for a guess of THREE or WGX — a GLX guess (no
+// navigator.gpu, a WebGL2 pick, an armed canary, a claim-fail skip, a last boot that bound GLX) asks nothing — and
+// start() consumes it once: the unset/WGX probe instead of a second request, an explicit THREE pick as the adapter TLX
+// sniffs. A null or rejected answer means exactly what it meant from start().
+let _earlyAdapterP = null;
+function kickEarlyAdapter() {
+  try {
+    const pick = guess().pick;
+    if (pick !== "three" && pick !== "webgpu") return null;
+    if (typeof navigator === "undefined" || !navigator.gpu || typeof navigator.gpu.requestAdapter !== "function") return null;
+    const p = Promise.resolve(navigator.gpu.requestAdapter());
+    p.catch(() => {});   // start() reads the rejection; unread, it must not surface as unhandled
+    _earlyAdapterP = p;
+    return p;
+  } catch (_) { return null; }
+}
+function takeEarlyAdapter() { const p = _earlyAdapterP; _earlyAdapterP = null; return p; }
+// The early adapter for an explicit pick: never a fresh request, null after the probe's own 4 s cap or on a rejection.
+function cappedEarlyAdapter() {
+  const p = takeEarlyAdapter();
+  if (!p) return null;
+  const answer = p.then((ad) => ad || null, () => null);
+  if (typeof setTimeout !== "function") return answer;
+  let timer = null;
+  return Promise.race([answer, new Promise((resolve) => { timer = setTimeout(() => resolve(null), 4000); })])
+    .finally(() => { if (timer != null) clearTimeout(timer); });
+}
 function preloadLikelyBackend() {
   try {
     if (typeof ScriptLoader === "undefined" || !ScriptLoader.preload || typeof ApexRoster === "undefined") return 0;
@@ -492,6 +528,7 @@ function preloadLikelyBackend() {
   } catch (_) { return 0; /* an optimisation only */ }
 }
 preloadLikelyBackend();
+kickEarlyAdapter();
   return { create, guessBackend };
 })();
 Object.freeze(RendererBoot);

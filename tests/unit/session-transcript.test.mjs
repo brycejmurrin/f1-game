@@ -5,7 +5,7 @@
 // call, a failed hook, a harness-injected turn and a turn result. Pure functions only; under a second.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractPage, normalize, render, describeCall } from "../../tools/ci/session-transcript.mjs";
+import { extractPage, normalize, render, describeCall, contextRows, renderCtx, eventsFromJsonl } from "../../tools/ci/session-transcript.mjs";
 
 const at = (s) => `2026-10-16T07:00:${String(s).padStart(2, "0")}.000Z`;
 let n = 0;
@@ -186,4 +186,25 @@ test("--summary / --json surface by_type from result.subagent_stats (#2893 item 
       total_cost_usd: 0.1, subagent_stats: { spawned: 0, completed: 0, failed: 0, by_type: {} } }),
   ];
   assert.equal(Object.hasOwn(summarize(normalize(emptyType)), "by_type"), false, "empty by_type omitted");
+});
+
+test("--ctx: per-turn context = input + cache read + cache write, one row per message id, main thread only", () => {
+  const a = (at, id, u, extra = {}) => ({ created_at: at, assistant: { message: { id, usage: u }, ...extra } });
+  const evs = [
+    a("2026-10-26T03:25:16Z", "m1", { input_tokens: 3, cache_read_input_tokens: 90000, cache_creation_input_tokens: 11258 }),
+    a("2026-10-26T03:25:17Z", "m1", { input_tokens: 3, cache_read_input_tokens: 90000, cache_creation_input_tokens: 11258 }),
+    a("2026-10-26T03:26:00Z", "s1", { input_tokens: 9, cache_read_input_tokens: 500000 }, { parent_tool_use_id: "toolu_x" }),
+    a("2026-10-26T03:28:00Z", "m2", { input_tokens: 1, cache_read_input_tokens: 130000, cache_creation_input_tokens: 999 }),
+    { created_at: "2026-10-26T03:29:00Z", user: { message: { content: "hi" } } },
+  ];
+  const rows = contextRows(evs);
+  assert.deepEqual(rows.map((r) => r.ctx), [101261, 131000], "streamed repeats fold; the subagent turn is not the session's");
+  const out = renderCtx(rows, 120);
+  assert.match(out, /03:25:16 ctx  +101\.3k  first/);
+  assert.match(out, /03:28:00 ctx  +131\.0k  \+29\.7k  over 120k/);
+  assert.match(out, /= ctx 2 turns · first 101\.3k · max 131\.0k · last 131\.0k · cap 120k first crossed 03:28:00/);
+  assert.equal(renderCtx([], 0), "= ctx: no main-thread usage blocks on these pages");
+  const jsonl = [JSON.stringify({ type: "assistant", timestamp: "2026-10-26T04:00:00Z", message: { id: "j1", usage: { input_tokens: 2, cache_read_input_tokens: 1000 } } }),
+    JSON.stringify({ type: "assistant", isSidechain: true, timestamp: "2026-10-26T04:01:00Z", message: { id: "j2", usage: { input_tokens: 5 } } }), "not json"].join("\n");
+  assert.deepEqual(contextRows(eventsFromJsonl(jsonl)).map((r) => r.ctx), [1002], "a local JSONL transcript reads the same; sidechains skipped");
 });

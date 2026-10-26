@@ -33,19 +33,22 @@ the acting session.
 - **Bus routine (Bryce 2026-10-22: "set routine to check the bus every few mins").**
   From the `ORCH <letter> LIVE` line until no fleet work is live, keep two timers,
   armed as your first acts (orchestrator.md §First acts):
-  1. a TICK every ~3 min: one `send_later` at a time whose message runs the wake
-     pass (ReadNotifications, `fleet-bus.mjs read --to <letter>`, `pr-board.mjs`,
-     READY → `merge-gate.mjs`) and re-arms itself; report changes only;
-  2. a recurring SAFETY NET, `create_trigger` `cron_expression: "0 * * * *"`,
-     `initiation: human_request`, bound to this session: it re-arms the tick
-     chain if it broke, then runs the same pass. Recurring schedules under 1 h
-     are refused (`*/5` measured 2026-10-22: "the minimum interval is 1 hour"),
-     so the few-minute cadence is the `send_later` chain, not the cron.
+  1. a BUS WATCH `Monitor` (audit 2026-10-26 row 14: a 3-min `send_later` tick
+     on top of it read the bus twice, so there is no tick): it prints only NEW
+     `fleet-bus.mjs read --to <letter>` lines, and each line wakes you for the
+     wake pass (ReadNotifications, `fleet-bus.mjs read --to <letter>`,
+     `pr-board.mjs`, READY → `merge-gate.mjs`); re-arm it when it expires
+     (30 min); report changes only;
+  2. a recurring SAFETY NET, an hourly `create_trigger`
+     (`cron_expression: "0 * * * *"`, `initiation: human_request`) bound to this
+     session: it re-arms the Monitor if it died, then runs the same pass.
+     Recurring schedules under 1 h are refused (`*/5` measured 2026-10-22: "the
+     minimum interval is 1 hour"), so the cron is the net, never the cadence.
   Cursor hosts use `subscribe_timer` for both. At hand-off, `delete_trigger` your
   own safety net (it fires into your session only) and let the successor arm its own.
   3. a FLEET BUS WATCH that survives the orchestrator (Bryce 2026-10-22: "setup
      up a webhook or routine to track the bus"). This is one account-wide
-     `create_trigger` with `create_new_session_on_fire: true`, hourly, Sonnet (OrchA 23 created `trig_01JY5wYatqkrVwPXPsMD1ryZ`, "Fleet bus watch (A+D liveness)").
+     `create_trigger` with `create_new_session_on_fire: true`, hourly, Sonnet (OrchA 23 created `trig_01JY5wYatqkrVwPXPsMD1ryZ`, "Fleet bus watch (A+D liveness)"; that id is historical, find the current one with `list_triggers`).
      Each fire gets a fresh, short-lived session that reads the bus once and
      works out each fleet orchestrator's last line, from `read --last N --json`
      filtered by `from`. Do not use `who`'s age: `who` dates the `ORCH LIVE` line,
@@ -54,7 +57,11 @@ the acting session.
      wakes the other fleet (webhook to D, `send_message` to A's live session),
      and ends. It never merges, pushes or edits a PR. An orchestrator keeps it
      across hand-offs: list it with `list_triggers` and never create a second.
-  The webhook wakes D only. A's wake pass also reads DAD's direct messages
+  The webhook wakes D only; Fleet B wakes A through the cross-account inbox,
+  whose routine (A's own) posts `[FROM FLEET B via inbox]` lines on the bus
+  from `claude:fleet-a-inbox` (B's side gets `claude:fleet-b-inbox`;
+  communication.md). Read them in the wake pass.
+  A's wake pass also reads DAD's direct messages
   through ReadNotifications (orchestrator.md §Talking to other fleets).
 - Each wake also lists every open PR with no live owner session (Bryce requires
   one per PR); start an owner (role-pr-owner.md) or say why not. `pr-board`

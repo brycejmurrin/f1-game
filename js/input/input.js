@@ -579,6 +579,10 @@ const Input = (function () {
   }
 
   function keyboardSteer() {
+    // Resting keys already at centre: digitalStep(0, 0) is two Math.pow and still 0,
+    // and steer() asks this every physics step. Stamp the clock so the next press
+    // is one frame, not a capped 100 ms jump on the wall-clock path.
+    if (!keyLeft && !keyRight && keySteerVal === 0) { keySteerT = nowMs(); return 0; }
     const t = nowMs();
     const dt = rampDtSince(keySteerT, t);
     keySteerT = t;
@@ -767,8 +771,16 @@ const Input = (function () {
     return true;
   }
 
+  // PAD_AXIS_DEF's keys never change. Object.keys of it allocated an array on every
+  // poll (wheelFirst), including for a pad that is only plugged in.
+  let padAxisDefKeys = null;
   function padAxesAreDefault() {
-    return Object.keys(PAD_AXIS_DEF).every((k) => padAxisMap[k] === PAD_AXIS_DEF[k]);
+    if (!padAxisDefKeys) padAxisDefKeys = Object.keys(PAD_AXIS_DEF);
+    for (let i = 0; i < padAxisDefKeys.length; i++) {
+      const k = padAxisDefKeys[i];
+      if (padAxisMap[k] !== PAD_AXIS_DEF[k]) return false;
+    }
+    return true;
   }
   /* Capture where the steering axis RESTS and subtract it forever after. This
      is the honest answer to stick drift: a worn potentiometer's wiper no longer
@@ -905,14 +917,20 @@ const Input = (function () {
   function padPedalLevel(v) { return v > PAD_PEDAL_DZ ? clamp((v - PAD_PEDAL_DZ) / (1 - PAD_PEDAL_DZ), 0, 1) : 0; }
   function padDpadSteer(pad) {
     const t = nowMs();
-    const dt = (padDpadT ? Math.min(0.1, (t - padDpadT) / 1000) : 0) * timeScale;
-    padDpadT = t;
     // LAST PRESS WINS — same contract as keyboardSteer / buttonSteering.
     // Worn pads and some maps briefly report both left+right; right−left
     // cancelled to centre and the ramp unwound mid-corner.
     // 14/15 are the d-pad only on the standard layout; a wheel's are its own buttons.
     const dp = padStd(pad);
     const left = dp && btnDown(pad, 14), right = dp && btnDown(pad, 15);
+    // Centred and untouched: the shaped-space ramp is Math.pow twice and still 0.
+    if (!left && !right && padDpadVal === 0) {
+      padDpadLeftHeld = false; padDpadRightHeld = false;
+      padDpadT = t;
+      return 0;
+    }
+    const dt = (padDpadT ? Math.min(0.1, (t - padDpadT) / 1000) : 0) * timeScale;
+    padDpadT = t;
     if (left && !padDpadLeftHeld) padDpadLeftSeq = ++padDpadSeq;
     if (right && !padDpadRightHeld) padDpadRightSeq = ++padDpadSeq;
     padDpadLeftHeld = left; padDpadRightHeld = right;
@@ -1406,18 +1424,19 @@ const Input = (function () {
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/timestamp */
   const PAD_WAKE = 0.3;
   const padUse = new Map();    // padKey -> { axes, btn, usedAt }
+  const padUseLive = new Set(); // reused each poll; a fresh Set here was one alloc per frame
   // The W3C standard layout (d-pad on 12-15, right stick on 2/3). Gamepad.mapping is
   // always a string in a browser; a missing one is a bare harness pad, read as standard.
   const padStd = (p) => p.mapping == null || p.mapping === "standard";
   function padKey(p, slot) { return (Number.isInteger(p.index) ? p.index : slot) + ":" + p.id; }
   function notePadUse(pads, t) {
     if (!pads) return;
-    const live = new Set();
+    padUseLive.clear();
     for (let i = 0; i < pads.length; i++) {
       const p = pads[i];
       if (!p || !p.connected) continue;
       const k = padKey(p, i), axes = p.axes || [], nb = p.buttons ? p.buttons.length : 0;
-      live.add(k);
+      padUseLive.add(k);
       let rec = padUse.get(k), used = false;
       if (!rec) { rec = { axes: [], btn: [], usedAt: 0 }; padUse.set(k, rec); }
       else {
@@ -1432,7 +1451,7 @@ const Input = (function () {
       for (let b = 0; b < nb; b++) rec.btn[b] = btnDown(p, b);
       if (used) rec.usedAt = t > 0 ? t : 1;
     }
-    for (const k of padUse.keys()) if (!live.has(k)) padUse.delete(k);
+    for (const k of padUse.keys()) if (!padUseLive.has(k)) padUse.delete(k);
   }
   // `lastUse(pad, slot)` -> ms of its last use, 0 = never. Defaults to the
   // module's own record; the unit test passes its own. `pickPad(pads, true)`

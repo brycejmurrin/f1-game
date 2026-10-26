@@ -381,6 +381,7 @@ const FULL = [
   "js/perf/render-rate.js",   // RenderRate: phones draw every 2nd rAF on a 100 Hz+ display (physics unchanged)
   "js/perf/spans.js",
   "js/perf/race-entry-profile.js",
+  "js/perf/title-warm.js",       // TitleWarm: the race world's prep + program warm on an idle title, once per update on a phone (A·W50)
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
   "js/render/shared/compatibility-recovery.js",

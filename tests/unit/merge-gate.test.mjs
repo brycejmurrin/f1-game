@@ -11,9 +11,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { ciVerdict, openVerdict, pacingVerdict, pagesVerdict, slotOf, isGamePath, gameFiles, verdictLine, main, REQUIRED_CHECK, ratchetsOnMerge, localMergeGenCheck } from "../../tools/ci/merge-gate.mjs";
+import { ciVerdict, openVerdict, pacingVerdict, pagesVerdict, slotOf, isGamePath, gameFiles, verdictLine, main, incidentNote, REQUIRED_CHECK, ratchetsOnMerge, localMergeGenCheck } from "../../tools/ci/merge-gate.mjs";
 import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN } from "../../tools/lib/gate-receipt.mjs";
 import { TYPES, formatLine, parseLine } from "../../tools/ci/fleet-bus.mjs";
+import { decide as liftDecide, main as liftMain } from "../../tools/ci/incident-lift.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const scratch = (prefix) => fs.mkdtempSync(path.join(fs.mkdirSync(path.join(ROOT, "artifacts", "tmp"), { recursive: true }) || path.join(ROOT, "artifacts", "tmp"), prefix));
@@ -296,4 +297,34 @@ test("two PRs that are each at the assert-match ceiling alone are over it on the
     assert.equal(together.ok, true, "the merge and gen:check are fine: only the ratchet row sees the overage");
     assert.deepEqual(together.ratchets, { ok: false, evidence: `${OVER}assert-match ceiling: 4 ${PIN} sites (ceiling 3)${NEVER_RAISE}` });
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("Q4: incidentNote prints the newest INCIDENT line and never changes pacing", () => {
+  assert.equal(incidentNote([e("DONE", "A", "x", 1)]), "");
+  assert.ok(/^INCIDENT OPEN .*pages red/.test(incidentNote([e("INCIDENT", "A", "pages red [fix:abcdef1]", 1)])));
+  assert.ok(/^INCIDENT lifted/.test(incidentNote([e("INCIDENT", "A", "pages red", 1), e("INCIDENT", "A", "lifted", 2)])));
+  const entries = [e("INCIDENT", "A", "pages red [fix:abcdef1]", 1)];
+  assert.equal(pacingVerdict(entries, { pr: 5 }).ok, false, "an open INCIDENT still freezes");
+});
+
+test("Q4: incident-lift lifts only when Pages is green on the fix sha", () => {
+  const open = [e("INCIDENT", "claude:A", "pages red [fix:abcdef1234]", 1)];
+  assert.equal(liftDecide([], () => true).action, "none");
+  assert.equal(liftDecide([e("INCIDENT", "A", "manual freeze", 1)], () => true).action, "none");
+  assert.equal(liftDecide(open, () => null).action, "wait");
+  assert.equal(liftDecide(open, () => false).action, "wait");
+  const d = liftDecide(open, () => true);
+  assert.equal(d.action, "lift");
+  assert.ok(/lifted/.test(d.text));
+  const sent = [];
+  const out = [];
+  const opts = (green) => ({ bus: () => ({ entries: open }), pages: () => green, send: (...a) => { sent.push(a); return { ok: true }; }, log: (l) => out.push(l), env: { APEX_FLEET_AS: "claude:session_X" } });
+  assert.equal(liftMain([], opts(null)), 2);
+  assert.equal(sent.length, 0);
+  assert.equal(liftMain(["--dry-run"], opts(true)), 0);
+  assert.equal(sent.length, 0, "dry run sends nothing");
+  assert.equal(liftMain([], opts(true)), 0);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0][0], "INCIDENT");
+  assert.ok(/lifted/.test(sent[0][3]));
 });
