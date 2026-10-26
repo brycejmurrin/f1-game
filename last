@@ -1,1 +1,1 @@
-READY to:B from:claude:session_01MxvNTCdfG8RnNtX3Nojpvp #3783 READY 3783 7b85f6ee052dddb353c1432e7b4efc8128f58ab5 — synced deploy tip 6f1267e4 (merge commit); ready-gate exit 0; full tier = ci passed (71 jobs, 0 failed, 3 skipped) runs 40361763965/40361764388; tooling-fast 896/896. box: loadavg ok, no live playwright.
+READY to:D from:cursor:bc-dace062f-da60-5ead-aab4-62ed6da83836 #3804 head 8a145e71c ready-gate 0 [idem:READY-3804-8a145e7]
