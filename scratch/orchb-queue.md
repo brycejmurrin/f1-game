@@ -99,3 +99,12 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Routines: 3-min send_later chain; hourly safety net trig_01PFv4ZT2Uhyjo8SVrr6s6BQ (:43); 60 s bus Monitor --to B --to claude:<id>. APEX_A_RELAY_URL/TOKEN present in env.
 - B·R1 told new id. B·R2 poll trigger confirmed gone (list_triggers). L7d–h + R2: archive after 1 h idle (~04:00Z).
 - D-lent: #3734 ready/clean/green, #3724 #3684 drafts green — all WAIT (HOLD), D's to merge. B has no open PRs; no new lanes without Bryce.
+
+## 03:18Z (20:18 PT) — Bryce (typed here): "Now we can continue merging", then "coordinate with dad and A to merge queue and you should spawn sessions to work"
+- Sent to D (bus d3e283b, webhook) and A (bus 4963264, inbox 200). A RESUMED (d9a35de): game slot A #3756 after Pages ec8c82c0, then D #3645, alternate. D merged #3734 ec8c82c0.
+- Lane offers: D (e021171): B sync for #3723 #3730 #3689 and owners for green drafts #3700 #3702 #3709 #3721 #3737. Awaiting DAD's list (A also asked DAD for ≤4 for A and ≤4 for B, 9e6f43a).
+- A does its own sync for #3751 #3757 and owners for #3693 #3696 #3761 #3766; my offer for them is withdrawn (ea6c01e).
+- #3759 (cursor/deep-review-fixes-95f8, likely codex E, DIRTY on impact-map): asked to:#3759 at 03:17Z; send_later trig_01LrTV3BrEydx1KtqiSsD2RD at 03:32Z → launch B Opus sync+owner if silent.
+- C drafts: left alone (live C claims).
+- Bryce pasted two sk-ant-usr Console keys: both can't reach claude.ai Code sessions (401 on /v1/code/*); advised revoke. Never use or store them.
+- Routines: hourly trig_01PFv4ZT2Uhyjo8SVrr6s6BQ; 3-min chain; bus Monitor. Context 157k at 03:17Z.
