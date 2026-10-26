@@ -21,30 +21,8 @@ const box = (key, role, x, y, w, h, round = false) => ({
   round, cx: x + w / 2, cy: y + h / 2, rr: w / 2, contains: [],
 });
 
-test("fitHud publishes --hud-fit-stamp after painted phone clearance", () => {
-  assert.match(HUD_JS, /--hud-fit-stamp/,
-    "fitHud bumps a published stamp specs can wait on");
-  assert.match(HUD_JS, /phonePaintedClash\(\)/,
-    "stamp must not advance while painted readout-on-control clashes remain");
-  assert.match(HUD_JS, /towerGapsPaintedClash\(\)/,
-    "stamp must not advance while .hud-top still rects onto .hud-gaps");
-  assert.match(HUD_JS, /gapPaintedDrop\(\)/,
-    "phone fit can drop the gap strip when the painted boxes overlap");
-  assert.match(HUD_JS, /_fitPending/,
-    "invalidateFit mid-tick must not republish --hud-fit-stamp before the next fitHud");
-  assert.match(HUD_JS, /phoneFitStampSync/,
-    "stamp publishes at end of updateHud after REL/sectors land");
-  assert.match(HUD_JS, /syncPhoneFit/,
-    "specs can force one painted phone-fit pass before probe");
-});
-
-test("the stamp is published on a clash-to-clear transition or a probe, not every 10 Hz tick", () => {
-  // Behavioural twin: hud-fit-idempotent.test.mjs ticks a booted HUD and counts the writes.
-  const fn = HUD_JS.slice(HUD_JS.indexOf("function phoneFitStampSync("), HUD_JS.indexOf("function fitHud("));
-  assert.match(fn, /if \(force \|\| !_fitStamped\)/, "an already-published stamp is not rewritten");
-  assert.match(fn, /_fitStamped = false/, "a clash voids it, so its clearing publishes a new one");
-  assert.match(HUD_JS, /phoneFitStampSync\([^\n]*_cssScale,\s*true\)/, "syncPhoneFit (the spec's probe) forces a fresh stamp");
-});
+// The --hud-fit-stamp contract (published after painted clearance, voided by a clash, rewritten only on a
+// clash-to-clear transition or a syncPhoneFit probe) is behaviour: tests/unit/hud-fit-idempotent.test.mjs.
 
 test("CSS: #hud-sectors clears the right dock on every phone steer mode", () => {
   // game.js only toggles body.steer-touch / body.steer-buttons — tilt is the

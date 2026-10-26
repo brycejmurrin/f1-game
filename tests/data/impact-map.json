@@ -16120,6 +16120,7 @@
         "tests/unit/hud-speed-parity.test.mjs"
       ],
       "spdPlate": [
+        "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs"
       ],
@@ -16140,8 +16141,7 @@
         "tests/unit/hud-readouts.test.mjs"
       ],
       "*": [
-        "tests/unit/hud-announce-lane-cache.test.mjs",
-        "tests/unit/hud-metrics-layout.test.mjs"
+        "tests/unit/hud-announce-lane-cache.test.mjs"
       ]
     },
     "js/ui/hud-relative.js": {
@@ -16247,10 +16247,8 @@
       ],
       "fitHud": [
         "tests/specs/hud-layout.spec.js",
-        "tests/unit/hud-control-clearance.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
-        "tests/unit/hud-layout.test.mjs",
-        "tests/unit/hud-portrait-cluster.test.mjs"
+        "tests/unit/hud-layout.test.mjs"
       ],
       "flashSector": [
         "tests/unit/hud-feel.test.mjs"
@@ -16288,7 +16286,6 @@
         "tests/unit/hud-speed-parity.test.mjs"
       ],
       "phoneFitStampSync": [
-        "tests/unit/hud-control-clearance.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs"
       ],
       "pickDocks": [
@@ -16307,8 +16304,15 @@
       "resolveMetricsLayout": [
         "tests/unit/hud-metrics-layout.test.mjs"
       ],
+      "syncHudCamClasses": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ],
+      "syncHudVisClasses": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ],
       "syncPhoneFit": [
         "tests/specs/hud-layout.spec.js",
+        "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-readouts.test.mjs"
       ],
       "updateHud": [
@@ -16328,7 +16332,9 @@
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
         "tests/unit/fleet-owner.test.mjs",
+        "tests/unit/hud-control-clearance.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
+        "tests/unit/hud-portrait-cluster.test.mjs",
         "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/node-plan.test.mjs",
@@ -16681,6 +16687,9 @@
       ],
       "onFirstGesture": [
         "tests/unit/audio-recovery.test.mjs"
+      ],
+      "phonePadDash": [
+        "tests/unit/phone-pad.test.mjs"
       ],
       "refresh": [
         "tests/unit/a11y-pwa-pass.test.mjs"

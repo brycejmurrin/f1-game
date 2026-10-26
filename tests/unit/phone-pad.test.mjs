@@ -31,6 +31,20 @@ const NetTransport = globalThis.NetTransport = load("js/net/transport.js", "NetT
 const TiltRoll = globalThis.TiltRoll = load("js/input/tilt-roll.js", "TiltRoll");
 const PhonePad = globalThis.PhonePad = load("js/input/phone-pad.js", "PhonePad");
 
+// phonePadDash is the sampler the game paints the wheel from. It is nested in PlatformSession.create(G), so
+// the test cuts it out of the source and runs it over a stub G — the flags are asserted, not the text.
+function phonePadDash(G, controls) {
+  const src = read("js/ui/platform-session.js");
+  const a = src.indexOf("function phonePadDash()");
+  const fnSrc = src.slice(a, src.indexOf("\n}\n", a) + 3);
+  const ctx = vm.createContext({ PhonePad, MAX_RPM: 12000, IDLE_RPM: 4000,
+    G: { recordControls: () => controls, aeroZones: [1], dashKph: (v) => v, cars: [], cautionLevel: () => 0, lapsTarget: 5, state: "race", ...G } });
+  vm.runInContext(fnSrc + "\n;this.f = phonePadDash;", ctx, { filename: absSrc("js/ui/platform-session.js") });
+  return ctx.f();
+}
+const player = { gear: 3, speed: 50, rpm: 6000, lap: 1, rank: 2, energy: 0.5, team: null, lastLap: 0 };
+const manual = { gearsManual: true, autoThrottle: false };
+
 // The real js/input/input.js in a VM (digital-steer.test.mjs's harness), with
 // TiltRoll present so a local orientation event and a remote sample can be
 // compared, and a clock the test steps.
@@ -499,8 +513,10 @@ test("the LCD says Q / PRAC where the race HUD does, not a race position (R2-08)
   assert.equal(el.pos.textContent, "DNF", "a retirement outranks the session tag, as on the HUD");
   const back = PhonePad.decodeHud(PhonePad.encodeHud({ ...base, flags: D.quali | D.practice }));
   assert.equal(back.flags, D.quali | D.practice, "the session bits survive the wire");
-  assert.match(read("js/ui/platform-session.js"), /G\.session === "quali" \? D\.quali : G\.practice && !G\.timeTrial \? D\.practice/,
-    "the sampler tags the session from the game's own state");
+  const D2 = PhonePad.DASH;
+  assert.equal(phonePadDash({ player, session: "quali" }, manual).flags & (D2.quali | D2.practice), D2.quali, "the sampler tags quali from the game's own state");
+  assert.equal(phonePadDash({ player, practice: true }, manual).flags & (D2.quali | D2.practice), D2.practice, "…and practice");
+  assert.equal(phonePadDash({ player, practice: true, timeTrial: true }, manual).flags & (D2.quali | D2.practice), 0, "a time trial is not a practice session");
 });
 
 test("the control modes reach the wheel's layout: no paddles on AUTO gears, no GAS zone on AUTO throttle, AERO greyed on AUTO or no zones", () => {
@@ -525,8 +541,11 @@ test("the control modes reach the wheel's layout: no paddles on AUTO gears, no G
   for (const rule of ["body.gears-auto .shift", "body.gears-auto .tap { display: flex; }", "body.throttle-auto #gas", "body.aero-auto #b-aero, body.aero-none #b-aero"]) {
     assert.ok(page.includes(rule), `controller.html styles ${rule}`);
   }
-  assert.match(read("js/ui/platform-session.js"), /controls\.gearsManual \? 0 : D\.gearsAuto[\s\S]*controls\.autoThrottle \? D\.throttleAuto[\s\S]*G\.raceAeroMode === "auto" \? D\.aeroAuto[\s\S]*D\.aeroNone/,
+  const modes = D.gearsAuto | D.throttleAuto | D.aeroAuto | D.aeroNone;
+  assert.equal(phonePadDash({ player, raceAeroMode: "manual" }, manual).flags & modes, 0, "everything manual, zones present: no mode bit");
+  assert.equal(phonePadDash({ player, raceAeroMode: "auto", aeroZones: [] }, { gearsManual: false, autoThrottle: true }).flags & modes, modes,
     "the sampler reads the game's own mode functions");
+  assert.equal(phonePadDash({ player, raceAeroMode: "manual" }, { gearsManual: false, autoThrottle: false }).flags & modes, D.gearsAuto, "one mode at a time");
 });
 
 test("closing the link drops the pedals and the source at once and unhooks the haptics", () => {
