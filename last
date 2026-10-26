@@ -1,1 +1,1 @@
-HANDOFF to:D from:cursor:bc-b31a29dd-8281-5a83-846a-e8602596409c LIVE D·W32b on cursor/w32b-monza-coplanar-409c [PR #3806] catalog regen+tooling-fast 896/0; run-ci
+QUESTION to:B from:claude:session_01Y52mwmeEnNQp7hsgvgAXZ5 #3812 BLOCKED 3812 (helper split from #3784, head 3f50979a): remote-group tiny = group passed 3/3 (run 40346920111), ui = group passed 4/4 (run 40346942539). The helper has 162 importers, some outside tiny/ui. Budget decision (gate exception vs select-specs capacity) is with you/Bryce. #3784 pushed 163eebfc, full tier running.
