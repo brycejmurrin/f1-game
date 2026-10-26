@@ -167,6 +167,7 @@ test("renderer-picker readBackend is Three.js when unset and preserves explicit 
     });
     seedLog(ctx);
     seedStore(ctx);
+    vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
     vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
     const G = vm.runInContext("RendererPicker", ctx);
     assert.equal(G.readBackend(), expected, `stored ${stored} resolves to ${expected}`);
@@ -512,9 +513,6 @@ test("TLX past ctx-loss budget records ring only, not the full-screen error over
       _shownAt: 0,
       localStorage: { setItem() {}, removeItem() {} },
       sessionStorage: ss,
-      _sessLostN: 0,
-      _fallbackLossCount: () => 0,
-      _rememberFallbackLoss: () => {},
       _glPin: "1",
       forceWebGL: true,
       _autoStayGL: false,
@@ -529,6 +527,7 @@ test("TLX past ctx-loss budget records ring only, not the full-screen error over
       },
     });
     ctx.document.getElementById = (id) => ({ id });
+    vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
     return { ctx, ring, overlays };
   };
 
@@ -882,6 +881,7 @@ test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgp
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
   seedLog(ctx);
   seedStore(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   assert.equal(G.nextBackend("webgl2"), "three");
@@ -945,6 +945,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: ls, sessionStorage: ss });
   seedLog(ctx);
   seedStore(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   // Frozen deepEqual, not spot includes(): a round-6 audit found 7 of 12 keys
@@ -1205,6 +1206,7 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
   });
   seedLog(ctx);
   seedStore(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   G.init();
@@ -2217,6 +2219,7 @@ function bootPicker(opts) {
   });
   seedLog(ctx);
   seedStore(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   // readyState is "complete", so the IIFE already called init().
@@ -2444,6 +2447,7 @@ test("terminal graphics recovery works before the late menu wiring", async () =>
     DataHub: { open() { dataOpens++; dataDialog.hidden = false; } },
   });
   seedClipboard(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(read("js/perf/renderer-picker.js"), ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   ctx.RendererPicker = vm.runInContext("RendererPicker", ctx);
   vm.runInContext(src.slice(from, to) + "\nglobalThis.__showGraphicsUnavailable = showGraphicsUnavailable;", ctx);
@@ -2625,6 +2629,7 @@ test("presentStatus names the three screenshot paths in plain language", () => {
     sessionStorage: makeStorage(),
   });
   seedStore(ctx);
+  vm.runInContext(read("js/perf/gfx-escalation.js"), ctx, { filename: absSrc("js/perf/gfx-escalation.js") });
   vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   assert.match(G.presentStatus(), /native swapchain/);
@@ -5875,7 +5880,8 @@ test("TLX timing enables the bundled backend, not a shadow renderer property", a
   const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0, _inspectorHold = false;
-  const _gpuSupported = () => true;
+  let _gpuSampleAt = -1, _gpuSamples = 0;
+  const _deviceLost = false, _nowMs = () => 100, _gpuSupported = () => true;
   const body = fnBody(code("js/render/three/tlx.js"), "gpuTimer");
   const timer = eval("(function(on){" + body + "})");
   assert.equal(timer(true).on, true);
@@ -6132,18 +6138,104 @@ test("TLX defers resize during compilation and applies the latest requested size
   resize(); assert.equal(calls.length, 2, "deferred changes apply once");
 });
 
-test("TLX ignores a timing result after disabling or restarting its measurement session", async () => {
-  let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _inspectorHold = false;
-  const pending = [], _gpuSupported = () => true;
-  const renderer = { backend: {}, resolveTimestampsAsync: () => new Promise(r => pending.push(r)) };
-  const src = code("js/render/three/tlx.js");
-  const timer = eval("(function(on){" + fnBody(src, "gpuTimer") + "})");
-  const resolve = eval("(function(){" + fnBody(src, "resolveGpuTimer") + "})");
-  timer(true); resolve(); timer(false); pending.shift()(7.25); await Promise.resolve();
-  assert.equal(_gpuMs, -1);
-  timer(true); resolve(); timer(false); timer(true);
-  pending.shift()(8); await Promise.resolve(); assert.equal(_gpuMs, -1);
-  resolve(); pending.shift()(4); await Promise.resolve(); assert.equal(_gpuMs, 4);
+function tlxTimerFixture(webgl = false) {
+  const src = read("js/render/three/tlx.js"), pending = [];
+  let now = 100, disjoint = false;
+  const pool = { frames: [], currentQueryIndex: 0, pendingResolve: false, isDisposed: false,
+    queryOffsets: new Map(), queryStates: new Map(), queries: [], ext: { GPU_DISJOINT_EXT: 1 } };
+  const renderer = { backend: { timestampQueryPool: { render: pool }, isWebGLBackend: webgl,
+    gl: { QUERY_RESULT_AVAILABLE: 2, getParameter: () => disjoint, getQueryParameter: q => q.ready } },
+    resolveTimestampsAsync: () => new Promise(resolve => pending.push(resolve)) };
+  const state = span(src, "      let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch", "      function _gpuSupported()", "GPU timer state");
+  const make = new Function("renderer", "clock", `
+    let _deviceLost = false;
+    const _nowMs = clock, _gpuSupported = () => true, Log = { debug() {} };
+    ${state}
+    return { timer(on) { ${fnBody(src, "gpuTimer")} }, resolve: resolveGpuTimer,
+      ms() { ${fnBody(src, "gpuMs")} }, lost() { _deviceLost = true; },
+      inspectorHost() { ${fnBody(src, "inspectorHost")} } };
+  `);
+  const api = make(renderer, () => now);
+  return { ...api, pool, pending, clock(t) { now = t; }, disjoint(v) { disjoint = v; },
+    queue() { pool.currentQueryIndex = 2; pool.queryOffsets.set("r:1:0:f1", 0); pool.queryStates.set(0, "ended"); pool.queries[0] = { ready: true }; },
+    async finish(ms, fresh = true) {
+      if (fresh) pool.frames = [1]; // new array even for a second resolved batch with the same frame/duration
+      pool.currentQueryIndex = 0;
+      pending.shift()(ms);
+      await new Promise(resolve => setImmediate(resolve));
+    } };
+}
+
+test("TLX timer publishes one serial per fresh resolution, including identical durations, never cached reads", async () => {
+  for (const webgl of [false, true]) {
+    const h = tlxTimerFixture(webgl);
+    h.timer(true); h.queue(); h.resolve(); h.resolve();
+    assert.equal(h.pending.length, 1, "one owned asynchronous resolve");
+    h.clock(120); await h.finish(4);
+    assert.equal(h.ms(), 4); assert.equal(h.timer().samples, 1); assert.equal(h.timer().sampleAt, 120);
+    h.clock(125);
+    assert.equal(h.timer().sampleAgeMs, 5); assert.equal(h.timer().samples, 1);
+    h.resolve(); assert.equal(h.pending.length, 0, "empty pool cannot produce a sample");
+    h.queue(); h.resolve(); await h.finish(4, false);
+    assert.equal(h.timer().samples, 1, "vendor cached lastValue is not a new observation");
+    assert.equal(h.timer().sampleAt, 120);
+    h.queue(); h.resolve(); h.clock(140); await h.finish(4);
+    assert.equal(h.timer().samples, 2, "equal-valued newly resolved timing still advances");
+    assert.equal(h.timer().sampleAt, 140);
+  }
+});
+
+test("TLX ignores old epochs, inspector/lost-device completions and disjoint results", async () => {
+  const h = tlxTimerFixture(true);
+  h.timer(true); h.queue(); h.resolve(); h.timer(false); await h.finish(7.25);
+  assert.equal(h.ms(), -1); assert.equal(h.timer().samples, 0); assert.equal(h.timer().sampleAt, -1);
+  h.timer(true); h.queue(); h.resolve(); h.timer(false); h.timer(true); await h.finish(8);
+  assert.equal(h.ms(), -1); assert.equal(h.timer().samples, 0);
+  h.queue(); h.resolve(); await h.finish(4);
+  assert.equal(h.ms(), 4); assert.equal(h.timer().samples, 1);
+  h.disjoint(true); h.queue(); h.resolve(); await h.finish(4);
+  assert.equal(h.ms(), -1); assert.equal(h.timer().samples, 1); assert.equal(h.timer().sampleAt, -1);
+  h.disjoint(false); h.queue(); h.resolve();
+  h.inspectorHost().hold(true); await h.finish(6);
+  assert.equal(h.timer().on, false); assert.equal(h.timer().sampleAt, -1); assert.equal(h.timer().samples, 1);
+  h.inspectorHost().hold(false); h.timer(true); h.queue(); h.resolve(); h.lost(); await h.finish(9);
+  assert.equal(h.ms(), -1); assert.equal(h.timer().samples, 1); assert.equal(h.timer().sampleAt, -1);
+});
+
+function glxTimerFixture() {
+  const src = read("js/render/glx/glx.js");
+  let now = 100, disjoint = false, lost = false, available = true;
+  const ext = { TIME_ELAPSED_EXT: 1, GPU_DISJOINT_EXT: 2 };
+  const gl = { QUERY_RESULT_AVAILABLE: 3, QUERY_RESULT: 4, createQuery: () => ({}), beginQuery() {}, endQuery() {}, deleteQuery() {},
+    getParameter: () => disjoint, getQueryParameter: (_q, k) => k === 3 ? available : 4e6 };
+  const make = new Function("gl", "ext", "clock", "ctxGone", `
+    let _gpuTimerExt = ext, _gpuTimerOn = false, _gpuQPending = [], _gpuQActive = null, _gpuMs = -1;
+    let _gpuSamples = 0, _gpuSampleAt = -1;
+    const performance = { now: clock };
+    ${fnSource(src, "function _gpuTimerBegin() {")}
+    ${fnSource(src, "function _gpuTimerEnd() {")}
+    return { timer(on) { ${fnBody(src, "gpuTimer")} }, ms() { ${fnBody(src, "gpuMs")} },
+      begin: _gpuTimerBegin, end: _gpuTimerEnd };
+  `);
+  return { ...make(gl, ext, () => now, () => lost), clock(t) { now = t; }, disjoint(v) { disjoint = v; },
+    lost() { lost = true; }, ready(v) { available = v; } };
+}
+
+test("GLX timing serial counts completed queries, not cached reads, and survives invalidation", () => {
+  const h = glxTimerFixture();
+  h.timer(true); h.begin(); h.ready(false); h.end();
+  assert.equal(h.timer().samples, 0); assert.equal(h.ms(), -1);
+  h.ready(true); h.clock(120); h.end();
+  assert.equal(h.ms(), 4); assert.equal(h.timer().samples, 1); assert.equal(h.timer().sampleAt, 120);
+  h.clock(125); h.end();
+  assert.equal(h.timer().samples, 1); assert.equal(h.timer().sampleAt, 120); assert.equal(h.timer().sampleAgeMs, 5);
+  h.begin(); h.clock(140); h.end();
+  assert.equal(h.ms(), 4); assert.equal(h.timer().samples, 2); assert.equal(h.timer().sampleAt, 140);
+  h.begin(); h.disjoint(true); h.end();
+  assert.equal(h.ms(), -1); assert.equal(h.timer().samples, 2); assert.equal(h.timer().sampleAt, -1);
+  h.disjoint(false); h.timer(false); h.timer(true); h.begin(); h.end();
+  assert.equal(h.timer().samples, 3, "serial is monotonic across timer toggles");
+  h.lost(); assert.equal(h.ms(), -1); assert.equal(h.timer().sampleAt, -1); assert.equal(h.timer().samples, 3);
 });
 
 test("all track loaders release selector ownership before building, even on failure", () => {
@@ -6645,7 +6737,7 @@ test("the eager GLX handle preserves eval-time mobile tier and live backend gett
   next.window = next;
   vm.runInContext(source("js/render/shared/glx-facade.js"), next, { filename: absSrc("js/render/shared/glx-facade.js") });
   assert.equal(next.GLX.isMobile, true);
-  assert.equal(next.GLX.mobileTier, false, "high quality overrides only the safe tier");
+  assert.equal(next.GLX.mobileTier, true, "legacy high-quality bit cannot bypass the phone memory cap");
 });
 
 test("GLX implementation is deferred and ordered, while the facade precedes its consumers", () => {
@@ -6770,7 +6862,7 @@ test("GLX racing-line chevrons keep vAlong at highp, and a restored context obey
     const src = code(f);
     const i = src.indexOf('"webglcontextrestored"');
     assert.ok(i > 0, f);
-    assert.match(src.slice(i, i + 600), /ctxLostReloads[\s\S]*> 2\) return;/, f + ": the restore reload checks the counter");
+    assert.match(src.slice(i, i + 600), /GfxEscalation\.reloadCount\(\)[\s\S]*> 2\) return;/, f + ": the restore reload checks the counter");
   }
 });
 

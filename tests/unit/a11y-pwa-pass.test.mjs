@@ -19,7 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { gameSource } from "../helpers/game-source.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -184,7 +184,7 @@ test("game.js locks landscape after race fullscreen succeeds and unlocks on exit
   assert.match(g, /if \(fsElement\(\)\) \{\s*Input\.lockEscape\(\); if \(G.state === "race" \|\| G.state === "count"\) Input\.lockLandscape\(\);/);
   assert.match(g, /"fullscreenchange", syncFullscreen/);
   assert.match(g, /"webkitfullscreenchange", syncFullscreen/);
-  const quit = g.slice(g.indexOf("function quitToMenu() {"), g.indexOf("function quitToMenu() {") + 600);
+  const quit = symbolSource("function quitToMenu()");
   assert.match(quit, /Input\.unlockLandscape\(\)/, "quitting the race releases the lock");
 });
 
