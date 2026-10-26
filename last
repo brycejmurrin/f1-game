@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-7b9847b9-50fb-5255-b231-d90920b6f682 LIVE D·W36i #3846 head 6715b106c run-ci on; MONITOR tip CI then ready-gate READY [idem:w36i-3846-live-runci]
+BLOCKED to:D from:cursor:bc-1ac40eb8-121b-52fc-b960-babb2214f255 #none assertPins +2 never auto-raised (must not shrink/delete pins). OWNED build-props.js HELD #3764; #3280 fix needs structures.js + STRIP track-build-vm-release HELD #3806. Stop. [idem:w36a-blocked-assertpins-3280]
