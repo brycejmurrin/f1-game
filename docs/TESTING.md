@@ -1,6 +1,6 @@
 # Testing reference
 
-150+ root Playwright spec files (`tests/specs/*.spec.js`) + 975+ `node --test` unit suites
+150+ root Playwright spec files (`tests/specs/*.spec.js`) + 1000+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1372,7 +1372,7 @@ and retention, MCP protocol/level routing and retrieval, configured launch pins,
 and the generated surface catalog. It runs without browsers and is included in
 the structural floor; its files are listed in `tests/groups.json`.
 
-The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`. Recent unit pins include `pause-taps.test.mjs` (#3274 painted pause-door floor at UI SIZE 75%) and `transcripts-cli.test.mjs` (Grok ReadTranscript JSONL streamer: search / export / digest).
+The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`. Recent unit pins include `pause-taps.test.mjs` (#3274 painted pause-door floor at UI SIZE 75%), `lighting-sun-scratch.test.mjs` (a weather-blend tick reuses the sun-colour arrays; dawn and sunElev share one scratch direction), and `transcripts-cli.test.mjs` (Grok ReadTranscript JSONL streamer: search / export / digest).
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 
