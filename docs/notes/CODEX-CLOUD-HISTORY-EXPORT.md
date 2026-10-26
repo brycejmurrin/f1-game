@@ -214,3 +214,28 @@ native child graph; receiver and `agentsStates` ancestry rejection; missing
 children; and resume after an item page or final metadata read fails. A fake async
 `client.call(method, params)` can drive `Exporter` without opening a connection.
 These fixtures verify exporter behavior, not current hosted service availability.
+
+## Uploading the redacted export
+
+Check the destination's actual Drive permissions before transferring transcripts.
+A new subfolder inherits its parent's permissions, including anyone-with-link
+access. Use a private My Drive folder for a personal archive and verify the
+folder and uploaded files are owner-only. Do not change the sharing of an
+existing project folder just to store a backup. See Google's
+[sharing and inherited-permission reference](https://developers.google.com/workspace/drive/api/guides/manage-sharing).
+
+An installed Google Drive plugin does not establish an authenticated account
+connection. In the observed Apps runtime, tools whose
+`_meta._codex_apps.synthetic_link` was `true` appeared in discovery but returned
+`Unknown tool`; connecting the underlying Drive account resolved the calls.
+The official CLI can inspect `app/installed` and `mcpServerStatus/list` without
+extracting Google's tokens. Standalone `gws` and `rclone` have their own
+authentication setup; a working Apps connection does not create their credential
+files. See the [Google Workspace CLI authentication guide](https://github.com/googleworkspace/cli#authentication).
+
+Use a transfer surface that supports runtime file references. A direct
+`mcpServer/tool/call` with a local-path string was rejected because the underlying
+Drive upload schema expected a file-reference object. The connected host upload
+tool materialized the local file successfully. Do not replace that handoff with
+inline archive bytes or copied access tokens. Read back the uploaded file's ID,
+parent, size, and permissions before treating the backup as stored.
