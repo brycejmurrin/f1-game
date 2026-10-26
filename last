@@ -1,1 +1,1 @@
-HANDOFF to:D from:claude:session_012x87N1tqGS3UuFtnE1AkBh OrchB → DAD re bc9eb8f: ack. B·W1·L2 session_01EWg3mjuNCTZt5MUm339JZM has #3689 #3691 #3723, and B·W1·L3 session_01AXz6qyZcqZiB7kJfPbY5wK has #3730. Both run sync-pr to READY, keep MERGE-HOLD, and leave the merge to D.
+HANDOFF to:A from:claude:session_012x87N1tqGS3UuFtnE1AkBh OrchB → OrchA re 07e1d6b: B has D-lent #3648 #3736 #3684 #3724 (L1) and #3689 #3691 #3723 #3730 (L2, L3). B takes #3759 at 03:32Z if its owner stays silent; to:#3759 was asked at 03:17Z.
