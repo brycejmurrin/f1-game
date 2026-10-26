@@ -128,3 +128,19 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Bryce (typed here 20:29 PT): "Let's archive old sessions and spawn new ones". Archived predecessor queue4 (completed, timers gone); all other old B sessions already archived.
 - New lanes (Opus): [Sync] B·#3759 session_01Y5XFymPZz3HozECDL17e4s, [Sync] B·#3764 session_01B2sM9pz5FjdoftiLVK5Fss → READY, no merge; merger TBD (E/A). Asked D for more lanes (7c1ade5).
 - Live: L1 session_01GEThNc867oujFJS3zacRXF, L2 session_01EWg3mjuNCTZt5MUm339JZM, L3 session_01AXz6qyZcqZiB7kJfPbY5wK, B·R1 (NEVER ARCHIVE).
+
+## Handoff 03:41Z (20:41 PT) — ORCH B session_01WYAjPb5DzZZeveehUWaU8a at 187k (get_session). READ LAST; supersedes the rest.
+- Successor: arm 3-min send_later tick + hourly create_trigger safety net FIRST; post exactly `ORCH B LIVE claude:session_<id> (succeeds session_01WYAjPb5DzZZeveehUWaU8a)` (HANDOFF --to '*' --as claude:session_<id>); 60 s bus Monitor `fleet-bus.mjs read --to B --to claude:<id> --since <cursor>`. Bus cursor 7c1ade5+. APEX_A_RELAY_URL/TOKEN present in env (names only; curl recipe Handoff 03:00Z). AVOID `list_sessions limit:100` inline-spill reads: they cost ~80k context — use fleet-archive.mjs output only.
+- Bryce grants (typed here): 20:29 PT "Let's archive old sessions and spawn new ones"; 20:36 PT "Spawn a session to deeply read Claude fleet b chats and transcripts to find issues or ways to help agents or our roles or skills or anything". Standing 03:15Z: "coordinate with dad and A to merge queue and you should spawn sessions to work". Workers claude-opus-5-5.
+- Archived: predecessor queue4. All other old B sessions already archived.
+- Live B workers (tell each the new ORCHESTRATOR id):
+  - L1 session_01GEThNc867oujFJS3zacRXF — #3648 9765222c + #3736 598f7270 READY to D (full tier running); watching #3684 #3724.
+  - L2 session_01EWg3mjuNCTZt5MUm339JZM — #3689 0959e01b READY to D; #3691 CI running; #3723 resynced locally, tooling-fast before push.
+  - L3 session_01AXz6qyZcqZiB7kJfPbY5wK — #3730 resync b8ee6b41, tooling-fast → run-ci → READY.
+  - [Sync] B·#3759 session_01Y5XFymPZz3HozECDL17e4s — resync + drive to READY; merger TBD (E/A).
+  - [Sync] B·#3764 session_01B2sM9pz5FjdoftiLVK5Fss — DECISION given (a): unbound → storage wins (shipped); only #3764's own camera-defaults.test.mjs:610-616 moves its setContext checks onto the bindContext-bound path; base cam-context-alloc untouched; PR body flags "needs author (codex/E) sign-off". Merger TBD.
+  - [Review] B·R3·fleet session_018Eoa7nP176V7hSdjvntn8v — Fleet B transcript audit → docs/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md draft PR; .claude/** only as proposals (needs Bryce). Fleet B's own PR: merge via merge-gate when READY+green (non-game).
+  - B·R1 relay session_01PfAQjrkJvDyTMsca9X2aFo NEVER ARCHIVE.
+- All D-lent: D merges, MERGE-HOLD kept, READY --to D. Asked D for more lanes (7c1ade5), no reply yet.
+- Game slot: D #3645 after Pages 502d2227 (A #3756), then A #3704.
+- My triggers (I delete after your LIVE): hourly trig_01Mnx6ff1VYY6uCG1xbuB6kX, 3-min chain (latest trig_01Hc1VwTDLWPLDWRKnZ1CME5).
