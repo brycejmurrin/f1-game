@@ -23,6 +23,18 @@ async function boot(page) {
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
+// Practice's rolling start goes count->race before the first ready present, so
+// render()'s lowerWaitPlate() closes the raised handoff and afterPresent never
+// writes handoff:lower (measured 2026-10-26: handoff:raise, no lower, then
+// session:committed/end). Wait for that real path; race keeps loadingProbeReady.
+function practiceProbeReady() {
+  const a = window.__apex, plate = document.getElementById("loading");
+  if (!a || !plate || !plate.hidden || a.info().state !== "race") return false;
+  const names = (a.raceEntryProfile()?.marks || []).map(m => m.n);
+  return names.includes("present:ready") && names.includes("handoff:raise")
+    && names.includes("session:committed") && !names.includes("handoff:lower-lost");
+}
+
 async function menuStart(page, mode) {
   if (mode === "practice") {
     await page.locator("#mb-practice").click();
@@ -35,7 +47,7 @@ async function menuStart(page, mode) {
   const t0 = await page.evaluate(() => performance.now());
   await page.locator("#rs-go").click();
   await page.waitForFunction(
-    loadingProbeReady,
+    mode === "practice" ? practiceProbeReady : loadingProbeReady,
     null,
     { polling: 200, timeout: 540_000 },
   );
@@ -102,6 +114,10 @@ test.describe("perf race-entry — SwiftShader stage table", () => {
       markNames.some((n) => n === "awaitIntroWarm:start" || n === "introBuild:start" || n === "introPrepare:start"),
     ).toBe(true);
     expect(markNames.some((n) => n === "flyby:start" || n === "flyby:end")).toBe(true);
+    expect(markNames, "race lowers its handoff on a ready present").toContain("handoff:lower");
+    const practiceMarks = practice.snap.marks.map((m) => m.n);
+    expect(practiceMarks, "practice raises the handoff").toContain("handoff:raise");
+    expect(practiceMarks, "practice's rolling start closes it via lowerWaitPlate, not afterPresent").not.toContain("handoff:lower");
 
     if (STRICT) {
       expect(race.wallMs, "race menu entry wall time").toBeLessThan(RACE_ENTRY_SOFT_MS);
