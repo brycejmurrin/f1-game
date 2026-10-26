@@ -1028,10 +1028,10 @@ test("real results of the fast tree tools conform to their advertised outputSche
   // reports unknown push counts as null rather than inventing zero commits.
   const sessionSchema = schemaOf("apex_session_status");
   for (const out of [
-    { base: null, upstream: null, unpushed: null },
-    { base: "origin/main", upstream: "origin/topic", unpushed: 2 },
+    { base: null, upstream: null, ahead: null, behind: null, unpushed: null, live: null },
+    { base: "origin/main", upstream: "origin/topic", ahead: 2, behind: 1, unpushed: 2, live: "123:456 artifacts/logs/ui.log" },
   ]) assert.deepEqual(validate({ ok: true, out }, sessionSchema, "session", []), []);
-  for (const out of [{ base: 3 }, { upstream: false }, { unpushed: "unknown" }]) {
+  for (const out of [{ base: 3 }, { upstream: false }, { ahead: "unknown" }, { behind: false }, { unpushed: "unknown" }, { live: {} }]) {
     assert.equal(validate({ ok: true, out }, sessionSchema, "session", []).length, 1, "metadata still rejects incorrect non-null types");
   }
   const results = rpc(calls.map(([name, args], i) => ({ jsonrpc: "2.0", id: 10 + i, method: "tools/call", params: { name, arguments: args } })));
