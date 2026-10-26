@@ -1,1 +1,1 @@
-1792971531	Bryce Murrin	Fleet C far-rival cache invalidation and retry fix; separate PR approved by Fleet A bus 93e6fb97, disjoint hunks from #3706  [cursor/far-rival-cache-5d3e; session 47ccbaa4f1c27ced126be805]
+1792983256	Bryce Murrin	#3760 far-rival cache: source-preserving deploy-tip sync; car-draw.js and generated impact-map; local only, no push yet  [cursor/far-rival-cache-5d3e; session 47ccbaa4f1c27ced126be805]
