@@ -409,8 +409,14 @@ function collect(mode, G) {
 // import validates through GameStore.ttParseBoard (same filter as ttRead) and
 // merges per track via ttBoardAdd so caps and class limits stay enforced.
 const TTLB_TRACK_RE = /^[A-Za-z0-9_.-]{1,64}$/;
-const TTLB_TRACKS_MAX = 64;
-const TTLB_LAPS_MAX = TTLB_TRACKS_MAX * 6 * 10;   // every native board: 6 classes × 10 laps
+// Include every supported custom circuit as well as the shipped roster. The
+// old 64-track cap refused our own exports once 13 customs joined 52 natives.
+// Keep the legacy floor for backups from builds with a different roster.
+function ttlbTracksMax() {
+  const native = typeof Tracks !== "undefined" && Array.isArray(Tracks.LIST) ? Tracks.LIST.filter((t) => t && !t.custom).length : 0;
+  const custom = typeof CustomTracks !== "undefined" && CustomTracks.LIMITS ? CustomTracks.LIMITS.items : 0;
+  return Math.max(64, native + custom);
+}
 // Read disk without load-time repairs, then overlay refused JSON writes. Those
 // values are still usable in GameStore (including keys disk never accepted),
 // and exporting them is the player's recovery path. Never retry a write here.
@@ -474,7 +480,8 @@ function applyTtlb(bag) {
     return { applied: 0, skipped: 0, rejected: 0 };
   }
   const tracks = Object.keys(bag);
-  if (tracks.length > TTLB_TRACKS_MAX) return { applied: 0, skipped: tracks.length, rejected: tracks.length };
+  const maxTracks = ttlbTracksMax(), maxLaps = maxTracks * 6 * 10;   // 6 classes × 10 laps per board
+  if (tracks.length > maxTracks) return { applied: 0, skipped: tracks.length, rejected: tracks.length };
   let applied = 0, skipped = 0, rejected = 0, failed = 0, lapsSeen = 0;
   for (const trackId of tracks) {
     if (!TTLB_TRACK_RE.test(trackId)) { skipped++; rejected++; continue; }
@@ -484,7 +491,7 @@ function applyTtlb(bag) {
     rejected += Math.max(0, rawLen - laps.length);
     const seen = new Set(GameStore.ttBoard(trackId).map(ttlbEntryKey));
     for (const lap of laps) {
-      if (lapsSeen >= TTLB_LAPS_MAX) { skipped++; continue; }
+      if (lapsSeen >= maxLaps) { skipped++; continue; }
       lapsSeen++;
       const k = ttlbEntryKey(lap);
       if (seen.has(k)) {

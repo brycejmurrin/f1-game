@@ -120,8 +120,8 @@ test("WP1 wait-polling-lint counts a sloppy-mode .cjs and a parse failure is an 
 
 // ---- G1: an unknown flag fell through to WRITE mode -----------------------------------
 test("G1 every generator refuses an unknown flag with exit 2 and writes nothing", () => {
-  const gens = ["gen-tools-readme", "gen-slider-doc", "gen-hooks-table", "gen-flags-table", "gen-arch-table", "gen-circuit-meta", "gen-test-groups", "title-art", "gen-shell"];
-  const targets = ["tools/README.md", "docs/LIGHTING-TUNER-SLIDERS.md", "docs/DEBUG-HOOKS.md", "docs/ARCHITECTURE.md", "js/track/circuit-meta.js", "package.json", "index.html"];
+  const gens = ["gen-tools-readme", "gen-slider-doc", "gen-hooks-table", "gen-flags-table", "gen-arch-table", "gen-circuit-meta", "gen-test-groups", "gen-locales", "title-art", "gen-shell"];
+  const targets = ["tools/README.md", "docs/LIGHTING-TUNER-SLIDERS.md", "docs/DEBUG-HOOKS.md", "docs/ARCHITECTURE.md", "js/track/circuit-meta.js", "package.json", "index.html", "locales/en.json", "locales/manifest.json"];
   const sig = () => targets.map((t) => crypto.createHash("sha1").update(fs.existsSync(path.join(ROOT, t)) ? read(t) : "").digest("hex")).join();
   const before = sig();
   for (const g of gens) for (const flag of ["--chek", "-c", "--dry"]) {
@@ -166,7 +166,7 @@ test("G1b every tools/gen/gen-*.mjs generator is in the G1 list or named here as
   const src = fs.readFileSync(new URL(import.meta.url), "utf8");
   const listed = new Set(/const gens = \[([^\]]*)\]/.exec(src)[1].match(/"([^"]+)"/g).map((q) => q.slice(1, -1)));
   // Not covered by G1 today; each needs its own --chek probe before it can join (some write on a bare run).
-  const NOT_YET_COVERED = new Set(["gen-changelog", "gen-cursor-rules", "gen-ladder-figures", "gen-locales", "gen-output-surface", "gen-lib"]);
+  const NOT_YET_COVERED = new Set(["gen-changelog", "gen-cursor-rules", "gen-ladder-figures", "gen-output-surface", "gen-lib"]);
   const found = fs.readdirSync(path.join(ROOT, "tools/gen")).filter((f) => /^gen-.*\.mjs$/.test(f)).map((f) => f.replace(/\.mjs$/, ""));
   assert.ok(found.length >= 10, "generators discovered");
   assert.deepEqual(found.filter((g) => !listed.has(g) && !NOT_YET_COVERED.has(g)), [],
