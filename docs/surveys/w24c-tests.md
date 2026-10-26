@@ -3,9 +3,8 @@
 Report-only. **No code or new tests in this PR.** Tip surveyed:
 `82e4ad4b3` (`claude/f1-game-project-26h3ng`).
 
-Path note: under `docs/survey/` (already indexed). DAD brief named
-`docs/surveys/`; the plural dir needs a README row that W24a/b/d also claimed —
-singular matches the existing perf-survey tree and avoids that race.
+Path note: under `docs/surveys/` with the other Fleet D W24*/W25* surveys
+(the `docs/README.md` `surveys/` row is on the deploy branch).
 
 fleet: D · orchestrator: D · session: `cursor:bc-48c7fcc7-34db-5939-8fbf-6f437ae36f78`
 
