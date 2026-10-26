@@ -4486,6 +4486,7 @@
     },
     "js/circuits/scenery/redbull.js": {
       "*": [
+        "tests/unit/redbull-orbit-clear.test.mjs",
         "tests/unit/scenery-guards.test.mjs"
       ]
     },

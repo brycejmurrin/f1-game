@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "7c996b1445ac9c0a0690a98c133d13bcf5090ccebe84ca41194efe218e76ef4c",
+  "sourceDigest": "9df2d0d9041184322eccdea7b18b83367c8df26eeffe6f8932aa0e02392ac9d2",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -2766,15 +2766,15 @@
       "track": "redbull",
       "name": "Lauda Kurve Stand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.096023,
+      "frac": 0.096035,
       "target": [
-        78.04,
-        12.27,
-        -401.05
+        71.27,
+        8.8,
+        -396.79
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 34.8,
-      "viewDistanceM": 34.8,
+      "nearestRoadDistanceM": 42.8,
+      "viewDistanceM": 42.8,
       "source": "tests/data/landmarks/redbull.json; js/circuits/scenery/redbull.js"
     },
     {
