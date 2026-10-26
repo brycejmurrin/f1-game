@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "7c996b1445ac9c0a0690a98c133d13bcf5090ccebe84ca41194efe218e76ef4c",
+  "sourceDigest": "bc4ae230c07f2143f44a9f0af1af567d88b13198d20ab0b3dcde4b96782a7890",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -2386,15 +2386,15 @@
       "track": "nurburgring",
       "name": "Burg Nurburg",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.681681,
+      "frac": 0.796557,
       "target": [
-        785.62,
-        87.28,
-        1026.16
+        -100.15,
+        105.03,
+        1230.66
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 802.7,
-      "viewDistanceM": 802.7,
+      "nearestRoadDistanceM": 562.9,
+      "viewDistanceM": 562.9,
       "source": "tests/data/landmarks/nurburgring.json; js/circuits/scenery/nurburgring.js"
     },
     {
