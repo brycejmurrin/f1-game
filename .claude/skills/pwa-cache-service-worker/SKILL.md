@@ -32,10 +32,10 @@ committed numbers are not what is live. Live check: `bash tools/ci/pages-live-sh
 handshake, cache retention and fetch races → [references/sw-internals.md](references/sw-internals.md).
 
 **`sw.js` anchors** (grep the symbol; line numbers drift): `currentCacheName()`
-(~L64: `version.json` no-store → `apex26-<build>`), `cacheBuild()` (~L114: numeric
-parse of the name), `sweepStaleCaches()` (~L217: deletes only numerically OLDER caches,
-after `INSTALL_SETTLED`), the `install` (~L680) / `activate` (~L757) listeners, and the
-`fetch` listener's `isVersion` branch (~L926: `version.json` network-first, never cached).
+(~L66: `version.json` no-store → `apex26-<build>`), `cacheBuild()` (~L114: numeric
+parse of the name), `sweepStaleCaches()` (~L218: deletes only numerically OLDER caches,
+after `INSTALL_SETTLED`), the `install` (~L711) / `activate` (~L788) listeners, and the
+`fetch` listener's `isVersion` branch (~L957: `version.json` network-first, never cached).
 
 **CSP.** `<meta http-equiv="Content-Security-Policy">` is a gen-shell block
 (`CSP` in `tools/gen/gen-shell.mjs`, first in `<head>`): a new third-party
