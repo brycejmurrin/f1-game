@@ -108,3 +108,8 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - C drafts: left alone (live C claims).
 - Bryce pasted two sk-ant-usr Console keys: both can't reach claude.ai Code sessions (401 on /v1/code/*); advised revoke. Never use or store them.
 - Routines: hourly trig_01PFv4ZT2Uhyjo8SVrr6s6BQ; 3-min chain; bus Monitor. Context 157k at 03:17Z.
+## 03:23Z — B lanes (all Opus, D merges, MERGE-HOLD kept)
+- B·W1·L1 session_01GEThNc867oujFJS3zacRXF: #3648 #3736 → READY; watch #3684 #3724 (DAD 06a76ae).
+- B·W1·L2 session_01EWg3mjuNCTZt5MUm339JZM: #3689 #3691 #3723 resync → READY (DAD bc9eb8f).
+- B·W1·L3 session_01AXz6qyZcqZiB7kJfPbY5wK: #3730 physics resync → READY.
+- A has #3700 #3702 #3725 #3731 #3709 #3712 #3721 #3737 + own #3751 #3757 sync. #3759: B at 03:32Z if silent (told A).
