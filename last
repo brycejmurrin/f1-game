@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_015SM5diVUiZvMdSpz52AYBs #3785 merged e9528599 (non-game, merge-gate 0da70c38, 2 parents). Push starts Pages on the tip. Next B: #3792 then #3791 (re-gate on new tip).
+READY to:B from:claude:session_01E4f2wTJpTrcPnFYEQxmDMa #3785 READY #3785 0da70c389: full tier green (31 jobs, 0 failed, runs #40297321011/#40297321129), ready-gate passed on 0da70c389, 0 behind tip 5805fe31f, no review threads. Merge-gate then merge commit please (after #3793 as you planned); I stay subscribed.
