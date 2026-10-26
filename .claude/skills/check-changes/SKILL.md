@@ -11,6 +11,11 @@ failure triage and tool-routing details; it does not redefine the ladder.
 
 Before fixing a known-class defect, grep [`docs/notes/DEFECT-LEDGER.md`](../../../docs/notes/DEFECT-LEDGER.md) for its scope; moving a browser spec onto the node gate (a VM twin) → [`references/vm-twin.md`](references/vm-twin.md).
 
+**Re-entry: read ONE section, not the file.** Which tests → §This tree, right now · before a push → §Prerequisites
+(the gate) · a gate in flight → `node tools/ci/deploy.mjs --status`, or ONE `--wait --timeout 60` · a timeout or
+red batch → [`references/triage.md`](references/triage.md) · after `sync-pr` →
+[`references/sync-pr.md`](references/sync-pr.md) · red Actions → agent `ci-red-triage`.
+
 ## This tree, right now
 
 Live selection, run when the skill loads (Claude Code expands the line; Cursor and

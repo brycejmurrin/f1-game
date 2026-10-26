@@ -18,3 +18,6 @@ lazy-loaded (reference: `docs/SCENERY-API.md`).
 - After ANY edit: `node tools/track/verify-track.cjs <id>` FIRST (2 s), then the
   groups `node tools/ci/pick-tests.mjs` names. A misplaced prop or terrain
   reading usually means a raw-frac mistake, not a geometry bug.
+- Skills (`.claude/skills/<name>/SKILL.md`; Codex `.agents/skills/`): layout, geometry, metadata →
+  `new-track`; props and `scenery/<id>.js` → `scenery-dress`; an accuracy or grounding pass →
+  `survey-track`; corner / grade / wall diagnosis → `agent-view`.

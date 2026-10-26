@@ -6,7 +6,7 @@ files on GitHub Pages.
 The rules every session needs, each with ONE home that other files link to (`tests/unit/rulebook-guards.test.mjs`;
 map: `docs/notes/RULEBOOK-REWRITE-2026-10-26.md`). Evidence: `docs/` (start at `docs/VERIFICATION.md`); workflows:
 `.claude/skills/`; enforced rules: `.claude/hooks/`; area rules: `.claude/rules/` (`fleet-core` every session, the rest
-by `paths:`). `CLAUDE.md` imports this file; Cursor and Codex load it directly. Agent-written drafts: Bryce's word wins.
+by `paths:`). `CLAUDE.md` imports this file; Cursor and Codex load it directly, so it is already in your context — after a compaction re-read one section by line range, never the whole file. Codex loads no `.claude/rules/`: read `fleet-core.md` at session start. Agent-written drafts: Bryce's word wins.
 
 ## The loop — every change, in order
 ```sh
@@ -47,7 +47,7 @@ than the change needs is slower feedback, not extra safety (`docs/TESTING.md`; m
 Session shape — thirteen rules that control wall time, waiting and handoff:
 
 1. Fresh container: the SessionStart hook runs `npm install` and checks for a discovered executable Chromium
-   (`node tools/lib/chromium-path.mjs --path`; fallback `bash tools/env/cloud-agent-install.sh`); a missing dependency or browser reads as a total-red run — read the FIRST failure first.
+   (`node tools/lib/chromium-path.mjs --path`; fallback `bash tools/env/cloud-agent-install.sh`); a missing dependency or browser reads as a total-red run — read the FIRST failure first. Codex has no SessionStart hook: run `npm ci` first — its `prepare` sets `core.hooksPath`, arming `.githooks/pre-commit` (`docs/AGENT-SURFACE.md` §Bootstrap).
 2. Make ALL source edits first, then verify ONCE: tests serve `js/` and `css/` from the working tree, so a run in flight forbids source edits, `index.html` included (`protect-files.sh` enforces it).
 3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above: `test:guards` (the commit hook) ⊂
    `test:tooling-fast` (`gen-ladder-figures.mjs --table` sizes it) ⊂ `deploy.mjs --gate-only` (the deploy's node half;
@@ -56,7 +56,7 @@ Session shape — thirteen rules that control wall time, waiting and handoff:
 4. BLOCK OR BACKGROUND, by duration and whether the NEXT step needs the answer. Foreground: under 2 min and needed now (`test:guards`, one `node --test`, `verify-track`, `pick-tests`).
    Background, ONE Bash `run_in_background` task logging to `artifacts/logs/`: 2–15 min (`tooling-fast`, `deploy.mjs --gate-only`) and a browser group (`test-bg.mjs <group>`, then `test-bg.mjs --wait --timeout 45` as the task; exit 1 = red, 124 = still running).
    While it runs, do work that does not touch it: research, docs/tools/tests edits, a read-only subagent, or the NEXT change in a linked worktree (`EnterWorktree`). Never `js/`/`css/` in this checkout, a second browser group, or a CPU-heavy node suite on top of a browser run — that load IS the timeout.
-   A `Monitor` defaults to 5 min and caps at 30 (pass the timeout): early warning only (`tail -f <log> | grep --line-buffered -E '^= |Error:'`); the verdict is rule 5's. A hand-rolled `until ! pgrep` waiter dies with its task: use `node tools/ci/wait-for.mjs --log-matches <log> '^= '`.
+   A `Monitor` defaults to 5 min and caps at 30 (pass the timeout): early warning only (`tail -f <log> | grep --line-buffered -E '^= |Error:'`); the verdict is rule 5's. A hand-rolled `until ! pgrep` waiter dies with its task: use `node tools/ci/wait-for.mjs --log-matches <log> '^= '`. A host without background tasks (Codex) blocks in the foreground on ONE waiter — `deploy.mjs --wait --timeout 60` or `wait-for.mjs … --background` (lifts the 590 s cap) — never `sleep`/`tail` polls or a second waiter. `deploy.mjs --gate-only` ran a median ~33 min in the Codex archive (2026-10-26): give a background gate a 60 min timeout.
    Push once per green local cycle; on a PR a push over a live CI run cancels it and loses its failures. `node tools/ci/queue-depth.mjs` is an informational gauge; nothing holds a push on it. Never cancel an Actions run (§Concurrent PRs).
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs` (it refuses any start at loadavg ≥ 3, and a second concurrent group).
    Anchor on `grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'`, never a looser pattern, the process table, or `| tail` on a live log.
@@ -76,7 +76,7 @@ Session shape — thirteen rules that control wall time, waiting and handoff:
     Open a DRAFT PR into the deploy branch at the FIRST commit, before the work is verified (GitHub MCP, `draft: true`; a draft gets CI only with the `run-ci` label, ready the full tier; `deploy.mjs --pr` is the gated, ready form).
     The body (`.github/pull_request_template.md`) IS the session log, written for an agent arriving cold: Goal, Plan (a `- [ ]` checklist, one verifiable step per item, exactly one marked now:), Status (`node tools/ci/session-status.mjs --pr`), Verified / Not run, Next step.
     Keep the Plan live with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line), add discovered work, strike a dropped item with why, never delete one; refresh Status at every push. The Plan's last item is the template's gate-exempt `- [ ] READY to …` line, never a "mark ready" step. A wait on something outside the PR is a Plan item, never a hold. Before starting, read `who-is-on-it.mjs` and the open draft PRs; to continue one, check out its branch.
-13. WATCH CI AFTER EVERY CODE PUSH: subscribe on the PR — Claude Code `subscribe_pr_activity`, Cursor `subscribe_github_ci` + `subscribe_github_pr`; never call a name your host does not list (per-host tools: skill `agent-fleet` `references/adapters.md`).
+13. WATCH CI AFTER EVERY CODE PUSH: subscribe on the PR — Claude Code `subscribe_pr_activity`, Cursor `subscribe_github_ci` + `subscribe_github_pr`; never call a name your host does not list (per-host tools: skill `agent-fleet` `references/adapters.md`). Codex has no subscription: ONE foreground `ci-watch.mjs --sha <sha> --failures-only`, never `actions/*` or `check-runs` polls through the GitHub connector (results over ~64 KiB arrive cut), and the timer is ONE automation 50–55 min out, scoped to that PR.
     Claude Code: a `Monitor` on `node tools/ci/ci-watch.mjs --sha <pushed sha> --timeout 30 --failures-only` (a red job and the final `= ci` line only; re-arm on expiry until the `= ci …` line; `--pages` after a deploy-branch push), and ONE check-in timer (`send_later` / `subscribe_timer`) 50–55 min out at an odd minute, inside the 1 h prompt cache — the subscription can drop `check_run` completions, so the timer is not optional (cadence pending Bryce; was 15 min / 1 h). Re-arm it until the PR is merged or closed, or you sent READY. No shell-poll loops; Cursor: at most one `ci-watch.mjs --once`.
     The sanctioned wake signals are these four, nothing else: the PR subscription (call `subscribe_pr_activity` again after draft→ready; it has died at the flip), ONE `send_later` 50–55 min out, the `ci-watch.mjs --sha` Monitor, and `node tools/ci/wait-for.mjs --merged <sha>` as one background task for the merge. A ready flip on a dirty PR starts no CI: sync first (`needs-sync.mjs`, `sync-pr.mjs`); `ready-gate.mjs` refuses a CONFLICTING/DIRTY head.
     `ci-watch.mjs` takes the newest run per workflow (rule 8's dedupe is not a red). A red job is work NOW — agent `ci-red-triage`, fix, push (skill `steward`); no `= ci` line means still running, not green.
@@ -112,7 +112,7 @@ in `tools/manifest.cjs`, `ensureCircuit` in `js/core/lazy-bundles.js`). The modu
 ## Critical conventions
 Coding conventions for `js/`, `css/` and the shell (IIFE globals, cache busting, the size ratchets and the commit
 hook's ≤ 40-line absorb, coordinates, logging, `_sceneryShift`) are the path-scoped rule `.claude/rules/game-code.md`.
-Everywhere: regenerable output goes in `artifacts/` or `scratch/` only, never `/tmp`.
+Everywhere: regenerable output goes in `artifacts/` or `scratch/` only, never `/tmp`. Print ≤ 20 kB to the model (full output to `artifacts/`, print a count or `rg -m`); files reach GitHub only by `git push`, never through a connector's blob/commit API.
 
 ## Physics
 Full reference `docs/PHYSICS.md`. `PACE` is a ground-speed scale, not a cap: compare speeds through
@@ -137,7 +137,7 @@ wrapped as `apex_*`. Routes: a JS symbol → skill `code-nav`; live canvas → s
 skill `check-changes` (spawns agent `verify-agent`); live `version.json` → agent `deploy-research`; dead code / fat
 skill → skill `slim-bloat`; owning or sweeping PRs → skill `steward` + `tools/ci/pr-board.mjs`; messaging, claims,
 launches and authority between sessions → skill `agent-fleet`; failed-CI triage → agent `ci-red-triage`; a scoped
-change handed to a subagent you message mid-task → agent `worker`.
+change handed to a subagent you message mid-task → agent `worker`. Before editing a path, load its skill: `js/ui` or `css/` ui-menu-a11y, `js/audio` audio-debug, `js/input` input-controls, `js/lighting` lighting-tuner, `js/data` data-hub, `js/net` multiplayer-debug, `js/career` career-mode, `js/garage`/`js/car` garage-parts-livery, `js/render` renderer-debug. An agent `x` is `.claude/agents/x.md`, never a skill path.
 
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs (`WebSearch`, `WebFetch`, Context7 for library APIs) and cite the URLs in the commit, PR body or `docs/notes/`; memory of a CLI flag, limit or default is not evidence.
 
@@ -191,7 +191,7 @@ caps) is skill `agent-fleet` §Launch policy. This section holds the rest.
 - Flakes: CI retries default to 1; quarantine by name in `tests/data/flaky-quarantine.json` only; re-run a failed job at
   most once for timeout/infra (`tools/ci/ci-rerun.mjs`), no one's approval needed. NEVER CANCEL AN ACTIONS RUN: yours is
   replaced by your next push, a closed PR's by the close (`ci-cancel-on-close.yml`); the hooks refuse `gh run cancel`,
-  `…/runs/<id>/cancel` and the MCP `cancel_workflow_run`. No unsanctioned ratchet raises.
+  `…/runs/<id>/cancel` and the MCP `cancel_workflow_run`. No unsanctioned ratchet raises. Every host (Codex archive findings 7–8, 2026-10-26): an in-session merge request stands until that PR merges (gate, then `wait-for.mjs --merged`), never a second ask; never ask a scope question ("which first?") — take "All" or the recommended option, say so, proceed; a "monitoring" claim names the armed wake and its ETA (PT), else says none is armed; an automation or scheduled prompt carries no grant.
 
 # Compact instructions
 When this session compacts, keep: the branch and its pushed head sha; the PR number, its Plan (done / now / next) and

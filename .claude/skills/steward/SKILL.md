@@ -14,16 +14,23 @@ the status line). Pre-push validation → `check-changes`. Live `version.json` o
 anything on github.io → agent `deploy-research` (the only thing here that reaches it).
 Review, hunt or survey findings on the PR → agent `finding-verifier` before you fix any of them.
 
+**Re-entry: read ONE section, not the file.** "Check" / a CI wake → §8 · red → §3, then agent `ci-red-triage` ·
+`cancelled` → §1 · conflicting → §2 · "Merge" / "mark ready" → §12 · "is it live?" → §7 · no subscription or timer →
+§9 · many PRs → §10.
+
 ## Drive to green — the loop
 
 1. Check out the PR's branch, then claim it (§3).
 2. Read CI on the current tip: `node tools/ci/ci-watch.mjs --sha <head> --once` (§1 for `cancelled`, §8 for `running`).
+   Never poll runs, jobs or check-runs through a connector or `gh api` (Codex archive: 468 MB, results cut at ~64 KiB);
+   per-job progress is the watcher's log. Never kill a live watcher to narrate progress.
 3. Triage a red: agent `ci-red-triage` names the job, test and assertion.
 4. Fix on the branch; sync only when §2 says you must.
 5. Gate: `node tools/ci/deploy.mjs --gate-only` (§6).
 6. ONE push per verified batch; refresh the PR body's Plan and Status.
 7. Draft → ready → READY → merged: §12 (the rule: `.claude/rules/fleet-core.md`).
-8. Watch (§7, §9) until `= ci passed`; then `who-is-on-it.mjs --release`.
+8. Watch (§7, §9) until `= ci passed`; `who-is-on-it.mjs --release` every claim before your final answer
+   (21 of 61 claiming Codex threads never released).
 
 ## 1. `cancelled`: read the jobs, not the conclusion
 
@@ -31,7 +38,7 @@ Which `cancelled` is benign (the draft/ready dedupe on one `head_sha`) and which
 is a timeout is AGENTS.md rule 8. Deploy-branch pushes queue in pages.yml's
 `pages-train-*` group (`ci-watch.mjs --sha` says `superseded`). A job at its
 `timeout-minutes` cap with zero failures is a real red. List the run's jobs
-before deciding; `ci-red-triage` does that and returns the status line.
+before deciding; agent `ci-red-triage` does that and returns the status line.
 
 A PR that ends `cancelled` twice with zero failures:
 
@@ -39,7 +46,7 @@ A PR that ends `cancelled` twice with zero failures:
    newest run per workflow, no failed job, no live sibling).
 2. Same head SHA both times → the dedupe or a push over a live run: wait for
    the newest run, do not re-run.
-3. The newest run itself `cancelled` → `ci-red-triage` for a job at its cap (a
+3. The newest run itself `cancelled` → agent `ci-red-triage` for a job at its cap (a
    real red); check `/proc/loadavg`.
 4. Neither → re-dispatch `ci.yml` once (`group: <name>`); never sync to
    "refresh" it (§2). Re-run only via `tools/ci/ci-rerun.mjs <run_id>`.
@@ -131,7 +138,7 @@ Fix with Agent.
 
 Use `--session <unique-id>` with `who-is-on-it.mjs --claim/--release` on hosts without a Claude session variable.
 Subscription and timer per host (Claude Code `subscribe_pr_activity` + `send_later`; Cursor `subscribe_github_ci` +
-`subscribe_github_pr` + `subscribe_timer`): AGENTS.md rule 13. Without subscription or timers: `references/host-watch.md`. Record missing capabilities as unverified.
+`subscribe_github_pr` + `subscribe_timer`; Codex: one foreground `ci-watch` plus one automation): AGENTS.md rule 13. Without subscription or timers: `references/host-watch.md`. Record missing capabilities as unverified.
 
 ## 10. Sweeping many PRs
 

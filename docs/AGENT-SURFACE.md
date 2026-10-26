@@ -56,6 +56,12 @@ host provides a redacted JSON snapshot, inspect it with
 `node tools/check/doctor.mjs --catalog <snapshot.json> --json`; the doctor
 does not discover, install or validate hosted tools.
 
+**Codex bootstrap** (no SessionStart hook; 34 Codex threads ran without an install, Codex archive 2026-10-26 §11):
+`npm ci` first — its `prepare` script sets `core.hooksPath=.githooks`, which arms `.githooks/pre-commit`
+(`test:guards`) and `pre-push`; check with `git config core.hooksPath`. Then `bash tools/env/mirror-skills.sh`
+(the `.agents/skills/` links), trust the project for `.codex/config.toml` and `/hooks`, and read
+`.claude/rules/fleet-core.md` once (Codex loads no `.claude/rules/`; AGENTS.md header).
+
 **Layout principles (Claude + Codex + Cursor, 2026):**
 
 1. **One always-on file.** `AGENTS.md` stays short: commands, hard don'ts,
@@ -185,7 +191,7 @@ rows in repo `.mcp.json`):
 | **mcp-context7** | `resolve-library-id` / `query-docs` | Library docs. | — |
 | **Github** | `get_me` / `issue_*` / `pull_request_*` | GitHub API. | `gh` (read-only in Cloud) |
 | **cursor-cloud** | `run-info` / `environment-*` | This Cloud run / environment. | — |
-| **TinyFish (hosted connector)** | `search` / `fetch_content` | Public web / Pages when the main session has it. | host fetch tool (WebFetch) |
+| **TinyFish (hosted connector)** | `search` / `fetch_content`; `run_web_automation` (metered) | Public web / Pages when the main session has it. Exploratory live-site QA of the deployed game (Bryce 2026-10-26, "Allow, one run at a time"): one run at a time, read once at completion, findings in the fixed row format of skill `mcp-probe` §Live-site QA. | host fetch tool (WebFetch); browserstack for real devices |
 
 `playwright-official` is **not** `test-bg` and is **not** an `apex_*` wrap.
 Never start it while Chrome DevTools / `probe-mcp.py chrome-start` is up, and

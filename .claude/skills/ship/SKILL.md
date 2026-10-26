@@ -32,3 +32,9 @@ refused by branch protection.
 never widen a tolerance or skip a test to get green. A fleet PR is merged by its
 orchestrator; outside a fleet, merge only on an explicit "merge it" in this session
 (merge method: `.claude/rules/fleet-core.md`).
+
+A stand-alone merge (no fleet orchestrator, or a host without one) follows the fleet protocol too: `merge-gate.mjs
+--pr <n>`; for a game PR (`js/` `css/` `assets/` `index.html` `sw.js`) first
+`node tools/ci/fleet-bus.mjs send GAME-SLOT --to '*' "#<n> <head sha>"`, and after every merge
+`node tools/ci/fleet-bus.mjs send DONE --to '*' "#<n> <merge sha> game|non-game <host>"` (`agent-fleet`
+`references/multi-host.md` §Merging). An early "merge it" is not used up by the CI wait (AGENTS.md §Concurrent PRs).

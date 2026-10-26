@@ -14,6 +14,9 @@ docs call the same tools `chrome_<tool>`. `tools/mcp/probe-mcp.py` is a CLI (not
 MCP-attached since 2026-09) whose `chrome-start` daemon keeps ONE Chromium alive across `call`s.
 The deployed site, `version.json` and the public web are **deploy-research** (table below).
 
+Before writing a scratch script, name the `apex-eval` / `shot.mjs` flag or `apex_*` tool that cannot do it
+(skill `playwright-probe` §Committed tools); a live poke is for what a scripted run cannot show.
+
 **Pick one client:** use the attached `mcp__chrome-devtools__*` tools when the session lists them;
 otherwise use one persistent CLI daemon, then `call`. `chrome-start` requires
 `tmux`; on a host without it, use the owned foreground-daemon procedure in
@@ -110,3 +113,16 @@ For existing-tunnel startup/recovery, namespaced gateway contracts and environme
 checks, follow [free design tooling](../../../docs/DESIGN-TOOLS.md). Local readiness
 and live native chat verification are separate. Keep existing app identities,
 credential references, and the configured upstream catalog.
+
+## Live-site QA (hosted TinyFish, the deployed game)
+
+Container browsers cannot reach github.io; the main session's hosted TinyFish `run_web_automation` can
+(sanctioned by Bryce 2026-10-26, "Allow, one run at a time"; metered). Rules:
+
+- ONE run at a time, synchronous; `run_web_automation_async` only when asked. Read the result ONCE when it
+  completes; after an error or timeout, one `get_run` — never a re-run or a status poll loop. Never `top_up_wallet`.
+- The goal text names the URL, the viewport (844×390 landscape, touch first — fleet-core) and the flow, and asks for
+  the console errors. The live `apex-sha` comes from agent `deploy-research`, not the run.
+- Findings, one row each: `LIVE-QA | <apex-sha> | <url> | <viewport/device> | <steps> | <expected> | <observed> | <severity> | <evidence>`.
+  Reproduce on the working tree (this skill, or `playwright-probe`) before filing or fixing; an unreproduced row is
+  reported as live-only. Real devices: the browserstack MCP; a player's device report: `references/device-report.md`.

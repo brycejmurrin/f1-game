@@ -9,6 +9,10 @@ The parent owns one browser session and serialized captures. Subagents may inspe
 source, plan recipes or review artifacts; they never launch a browser (AGENTS.md rule 10, hook-enforced).
 Write captures under `artifacts/` and return paths plus explicit unverified cells.
 
+Before writing a scratch browser script, name the `shot.mjs` / `apex-eval.mjs` / `apex-capture.mjs` flag that cannot
+do it (§Committed tools and §Single framed screenshot list the flags). As many Codex threads hand-wrote harnesses after reading this skill as
+used the shipped tools (31 vs 30, Codex archive 2026-10-26 R2-5).
+
 ## Prerequisites
 
 The SessionStart hook installs deps and the headless shell (AGENTS.md

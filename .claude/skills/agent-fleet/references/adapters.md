@@ -37,14 +37,22 @@ launching Cursor workers uses the Cursor API column (needs a key).
   waits on it sits idle through a red. Read CI with `ci-watch.mjs --once` on
   every timer wake.
 
-## Codex in-session adapter
+## Codex (desktop / CLI thread)
 
-Codex collaboration agents are in-session tasks, not automatically equivalent
-to Claude/Cursor sibling sessions. Reuse the named `.claude/agents/<persona>.md`
-contract, but repeat its OWNED/FORBIDDEN paths, read-only limits, tools and
-hand-back format in the Codex launch prompt because Claude frontmatter is not
-enforcement there. Use Codex children for bounded evidence work such as
-`deploy-research`; merge authority stays with the fleet's orchestrator
-(`.claude/rules/fleet-core.md`). Do not claim sibling-session
-subscriptions, PR ownership or merge authority unless the host actually
-provides those APIs and the user granted them.
+A top-level Codex thread Bryce starts can be fleet C's coordinator (`C·O1`, `multi-host.md` §Fleets and letters) or
+a stand-alone PR owner: it pushes, opens and owns PRs, and merges only by `merge-gate.mjs` like any host. Its
+collaboration CHILDREN are in-session tasks, not sibling sessions (rows below; `multi-host.md` §Codex children).
+
+| need | Codex |
+|---|---|
+| spawn | a collaboration child in this thread; repeat the persona's OWNED/FORBIDDEN paths, read-only limits, tools and hand-back in the prompt (Claude frontmatter is not enforced there) |
+| message a running worker | none mid-run: brief it fully up front; a user turn interrupts every running child |
+| worker → orchestrator | the child's final message; mid-run only the PR |
+| status / stop | `wait` on ONE named child with a timeout (never an untargeted `wait`); the host's close/stop on that child |
+| PR events | none: no subscription tool |
+| timer | ONE Codex automation 50–55 min out, scoped to one PR; its prompt carries no grant (AGENTS.md §Concurrent PRs) |
+| CI | ONE foreground `node tools/ci/ci-watch.mjs --sha <sha> --failures-only` (AGENTS.md rule 13); never poll `actions/*` or `check-runs` through the GitHub connector |
+
+Children suit bounded evidence work (`deploy-research`) or one disjoint OWNED slice; merge authority stays with the
+thread that owns the PR or the fleet's orchestrator (`.claude/rules/fleet-core.md`). Do not claim sibling-session
+subscriptions, PR ownership or merge authority for a child.

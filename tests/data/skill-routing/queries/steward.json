@@ -14,5 +14,8 @@
 {"query": "The tests/specs run for the track group exited 124 on --wait and the box loadavg looked high. Was that a real failure or just the machine timing out? Decide whether to re-run.", "expect": "check-changes"},
 {"query": "The Pages deploy went green but the live site still serves the old version.json and the service worker keeps installing a stale shell. Diagnose why the cache isn't invalidating and what sw.js precaches for the DEFERRED backends.", "expect": "pwa-cache-service-worker"},
 {"query": "What message format should I use to tell my parent session that I'm blocked?", "expect": "agent-fleet"},
-{"query": "pages.yml went red on the deploy branch after two merges while PR CI was green. Triage it and say what to do about further merges.", "expect": "steward"}
+{"query": "pages.yml went red on the deploy branch after two merges while PR CI was green. Triage it and say what to do about further merges.", "expect": "steward"},
+{"query": "Merge", "expect": "steward"},
+{"query": "merge it when green", "expect": "steward"},
+{"query": "Fix all in pr", "expect": "steward"}
 ]

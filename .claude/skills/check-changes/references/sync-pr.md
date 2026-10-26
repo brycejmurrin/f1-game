@@ -30,9 +30,17 @@ dance entirely when you already intend to publish.
 `sync-pr` runs `merge --abort`, prints `real conflicts … resolve by hand` (a
 `(moved to <path>)` tag = re-apply their edit there) and returns you to the
 branch you started on; `sync-pr-<branch>` is left as an unmerged copy of the
-PR head, so inspect it before removing or renaming it. Then, in order:
-`who-is-on-it.mjs` if the base file is not yours → `git checkout <branch> &&
-git merge origin/claude/f1-game-project-26h3ng` → keep BOTH sides' intent in
-each hand-written file → generated leftovers at the source + `npm run gen`
-(AGENTS.md rule 11) → `git add` / commit → `deploy.mjs --gate-only` → plain
-`git push` (never force).
+PR head, so inspect it before removing or renaming it. Resolve ON that temp branch, so `--resume` re-verifies it
+without a fresh merge:
+
+```sh
+node tools/ci/who-is-on-it.mjs                       # the base file is not yours? claim or stand down first
+git checkout sync-pr-<branch>
+git merge origin/claude/f1-game-project-26h3ng       # the same conflicts; keep BOTH sides' intent per file
+npm run gen                                          # generated leftovers from the source (AGENTS.md rule 11)
+git add <resolved files>                             # then `git commit` as its own call (AGENTS.md rule 12)
+node tools/ci/sync-pr.mjs <branch> --resume          # re-verifies the kept temp branch; add --push to publish
+```
+
+Without `--push`, finish as in the block above (`checkout <branch>`, `merge --ff-only sync-pr-<branch>`), then a
+plain `git push` (never force).

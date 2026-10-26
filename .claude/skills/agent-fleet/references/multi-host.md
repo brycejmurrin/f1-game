@@ -72,3 +72,12 @@ The merger gates and merges it like its own, and the DONE names the PR's host.
 | Claude Code | `bash-guard.sh` | `github-mcp-guard.sh` |
 | Cursor | `.cursor/hooks/shell-guard.sh` → `bash-guard.sh` | `.cursor/hooks/mcp-guard.sh` → `github-mcp-guard.sh` |
 | Codex | `.codex/hooks.json` → `shell-guard.sh` → `bash-guard.sh` | `.codex/hooks/mcp-guard.sh` → `github-mcp-guard.sh`; every ask becomes a deny (Codex cannot ask). Trust it once with `/hooks` (Bryce approved 2026-10-19) |
+
+## Codex children (measured in the Codex archive, 2026-10-26 §9, R2-6)
+
+- A user turn interrupts EVERY running child (37 of 55 interruptions came within 60 s of one; 6 were respawned).
+  After any user message, list the children, then respawn or strike each one — never assume they kept running.
+- Never block on an untargeted `wait` (2,323 calls, 45 % timed out empty): wait on one named child with a timeout,
+  and do independent work between waits.
+- Children share the parent's checkout and sandbox: "read-only" is advice, not enforcement (49 read-only children
+  edited source). Give each a disjoint OWNED path list, or a worktree, and repeat the limits in its prompt.
