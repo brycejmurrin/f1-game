@@ -5,68 +5,85 @@ menu-baseline and image-grade rows; the split is on the fleet bus at 40497cf.
 
 ## Verdict
 
-**Row removed.** The cause was found and fixed on 2026-10-20, about three
-hours after the quarantine merged. Every cold llvmpipe run of the exact test
-since then has passed on the first try.
+**The row is re-dated to 2026-11-10, not removed.**
 
-## Cause
+- The texture-creation log named a third leaking texture source in run
+  39876864967 on 2026-10-23. That failure came after both earlier fixes, and
+  no fix for it has landed.
+- Since then there have been 37 cold llvmpipe first-try passes and no failure.
+  That is not a fix: the failure rate before was about 1 in 38 jobs, so 37
+  passes is what you would expect anyway.
+- Removing the row would put that failure rate back into required CI.
 
-The failing run was 39415873380 (car 2/4, job 118604624380). Both attempts
-failed the same way:
+## Three causes, one after another
 
-- Before the final edit, no GPU texture was created at any point.
-- During the edit burst, the number of live textures dropped by one (37 → 36
-  in attempt 1, 55 → 53 in attempt 2).
-- The edit after the 2.5 s pause then created exactly one texture.
+Each failure happened on the edit after the spec's 2.5 s pause. The
+texture-creation log (#3204) names every texture made after the warm-up.
 
-So one texture was freed and then made again, and the timing depended on the
-wall clock. That matches the garage live-atlas trace tick in
-`js/garage/scene.js`:
-
-- Every 1.5 s it repainted a 512² canvas, called `createTexture`, and freed the
-  old handle.
-- On TLX that call reuses a retired texture from the pool when a same-size
-  entry is still there. When that entry has already been pruned, the call
-  makes a new GPU texture.
-- A 2.5 s pause always contains at least one tick, so whether the post-pause
-  edit counted a new texture depended on whether the pool entry survived.
-
-The diagnostic logging (name, size and creation stack) landed with the
-quarantine (#3204). It has never fired because no failure has happened since.
-The texture is identified from the mechanism above, and the unit test below
-reproduces it.
-
-| fix | merged (UTC) | what changed | test |
-|---|---|---|---|
-| #3201 (4eafa778) | 2026-10-20 | stale flap sets are released on the frame after a bust | `tests/unit/car-mesh-crew-cache.test.mjs` |
-| #3205 (43007e66) | 2026-10-20 15:16 | the trace tick calls `refillTexture` and re-fills the same texture in place (TLX) | `tests/unit/garage-mesh.test.mjs`: 8 ticks create 0 textures (8 before the fix); `tests/unit/tlx-texture-release.test.mjs` |
-| 45d576dd | 2026-10-21 | a paint draft gets its own decal key; no 2048 hi-res atlas is built while a draft is live | `tests/unit/car-draw-decal-budget.test.mjs` |
-
-## Exit criterion: three cold llvmpipe runs with no retry
-
-The row's review clause asks for three cold llvmpipe runs of the exact test
-with no retry. While the row was active, a quarantined spec ran on its own
-retrying shard (`oversize-garage-livery-churn`, `--retries=1`). In the
-live-reporter log a retry shows as `! retry` or `(retry 1)`, and every log
-below has neither:
-
-| run | event | sha | job | first-try verdict |
+| run (job) | when (UTC) | textures created | source | status |
 |---|---|---|---|---|
-| 39576288897 | nightly | 6c631c57 | 119142707024 | `= run passed (1/1)` |
-| 39755074269 | nightly | e8630e9d | 119745801620 | `= run passed (1/1)` |
-| 39931115193 | nightly | e64e4259 | 120345863435 | `= run passed (1/1)` |
-| 40079703160 | nightly | b86aedbd | 120830588401 | `= run passed (1/1)` |
+| 39415873380 (118604624380) | 10-20 11:36 | 1 (logged by count only) | live-atlas trace tick (`js/garage/scene.js`): it freed and re-created its 512² texture every 1.5 s | fixed by #3205 (43007e66, `refillTexture`), 10-20 15:16 |
+| 39501456087 (118900056868) | 10-20 21:36 | 1 × 1024×1280, both attempts | the player decal-atlas preview (`js/car/car-draw.js`) | 45d576dd (10-21): a paint draft gets its own decal key; no hi-res atlas while a draft is live |
+| 39876864967 (120164712044 and re-run 120169556802) | 10-23 00:16 | 1024² + 512², both attempts | the garage bay **dress** atlas (`scene-dress.js`, `DRESS = 1024`) and **live** atlas (`scene-live.js`, `LIVE = 512`) | **open** |
 
-A scan of the newest 100 `ci.yml` and `pages.yml` runs (10-23 to 10-25) found 19 more
-llvmpipe jobs of the exact test, PR and deploy-branch pushes included. All passed on the first try. The
-full scan of every run since 2026-10-20 12:00Z is in the PR body.
+For the third source, three created both textures on first draw
+(`Rb._createBindings → Gb.updateTexture`, in `_renderTransparents`). Every
+paint edit makes `scene.js` call `freeTexture` and then `createTexture` for
+both atlases (`uploadLive` and the dress block in `rebuild`).
 
-All of them ran `APEX_GL: llvmpipe` on a fresh GitHub runner.
+On TLX, the free retires the texture into `_texPool` (up to 4 entries, aged
+out after 10 s), and the create takes a same-size entry back. That should
+mean no new GPU texture. The miss means the reused `THREE.Texture` still had
+no GPU texture.
 
-## After removal
+**Hypothesis, not measured:** a texture that was retired before three ever
+uploaded it is still `isDefaultTexture` when it is taken back. Two rebuilds
+in a row with no draw between them would cause that, and the first edit after
+a pause might do it. Three would then allocate on the next draw.
 
-The test blocks again: under `APEX_FAIL_ON_FLAKY=1` a pass that needed a retry
-turns the run red. If it recurs, the failure
-message lists every texture created after warm-up (name, size, creation
-stack). Fix it from that list; do not add the row back without a fresh
-failed-run link (AGENTS.md rule 9).
+The fix belongs in `js/garage/scene.js` or in the TLX pool. Both are outside
+this lane: `js/garage/**` is forbidden here, and a `tlx.js` change needs a
+claim and the gpu-census gate. The fix is handed to Fleet B's orchestrator.
+
+## Scan: every run since the quarantine
+
+Method:
+
+- Read every non-cancelled `ci.yml` and `pages.yml` run created from
+  2026-10-20 12:00Z to 2026-10-25 (1,080 runs).
+- The pages were fetched one by one, because the proxy refuses `--paginate`
+  link URLs.
+- Kept every job whose name contains `churn`.
+- In each job's log, read the live-reporter lines: `! retry` or `x FAIL` means
+  a retry or a failure, and `= run …` gives the verdict.
+
+Results:
+
+- 107 jobs ran the exact test.
+- One run's job list returned HTTP 502 every time: 39841058813 (`a8ec4735`,
+  pull_request). It is not counted.
+- Every job counted ran with `APEX_GL: llvmpipe` on a fresh runner.
+- Failures in both attempts: 3 jobs, in the two failing runs listed above,
+  10-20 21:36 and 10-23 00:16.
+- Passes that needed a retry: 0. Each failing job failed both attempts.
+- After 10-23 00:16Z: 37 first-try passes and 0 failures (18 pull_request,
+  16 push, 2 nightly, 1 dispatch).
+
+Nightly first-try passes:
+
+| run | sha | job | first-try verdict |
+|---|---|---|---|
+| 39576288897 | 6c631c57 | 119142707024 | `= run passed (1/1)` |
+| 39755074269 | e8630e9d | 119745801620 | `= run passed (1/1)` |
+| 39931115193 | e64e4259 | 120345863435 | `= run passed (1/1)` |
+| 40079703160 | b86aedbd | 120830588401 | `= run passed (1/1)` |
+
+## Exit for the renewed row
+
+1. Fix the dress/live atlas pool miss.
+2. A unit test should fail before the fix: free and re-create a texture that
+   was never drawn, then draw it, and expect `texMade` to stay flat.
+3. Remove the row after three cold llvmpipe car runs pass without retry on a
+   tree that contains the fix.
+
+Don't extend the row again without a fresh failed-run link (AGENTS.md rule 9).
