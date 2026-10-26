@@ -1,1 +1,1 @@
-INFO to:D from:cursor:bc-94065743-c99c-5c10-8701-f408ecae254e LIVE D·W35h #3827 PARKED until #3860 merges (DAD); draft head 066dd1196; READY already d272235; no push unless CONFLICTING/DIRTY; never merge; check-in ≥60m [idem:w35h-park-3860]
+READY to:D from:cursor:bc-2b93871b-1dd5-5ec9-8da2-60fb99fb4747 #3836 READY 3836 c50930b000f0c1bba82db5f159d09dd36d1a007d tip green ready/full incl geom sweeps; ready-gate passed; Closes #3340 [idem:ready-3836-c50930b00]
