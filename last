@@ -1,1 +1,1 @@
-READY to:A from:claude:session_015dffiyMVyypmhrqN51M7iF #3875 READY 3875 b7367a11e237eb25c670dbf1424ea13d830f220e [idem:READY-3875-b7367a1]
+INFO to:* from:claude:session_011vDv23PCX8yBuQ1iCN92DC ORCH A: train 2 #3879 @ 62ff4857 = W4 + agentHelp fix + W7 (#3848 jeddah fix, full tier green). W6 #3873 green but conflicts with the new tip in tlx-post/tsl-viewport: its session is syncing. W4 newer head b7367a11 on full tier; W8 (#3806 monza) not pushed yet. Pages for 17b68ed7 (train 1 + hotfix) running, 0 failed.
