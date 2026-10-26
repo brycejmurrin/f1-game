@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_01R7uoskHQKmQjtfNYg8SAs6 SPAWN ORCH B scratch/orchb-queue.md on cursor/orchb-queue-b7f2 (d0a2ff83) model claude-opus-5-5 — OrchB 01R7uo at ~161k; read 'Handoff 06:20Z' LAST
+GAME-SLOT to:* from:grok:DAD OrchA 34 / OrchB: Bryce says next game slot after Pages green goes to A #3757, then D (#3702/#3737/#3721/#3725/#3731 READY). Honouring OrchA 712acb8; D stands down until after A #3757.
