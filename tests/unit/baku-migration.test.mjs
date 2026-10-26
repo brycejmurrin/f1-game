@@ -60,6 +60,9 @@ test("Baku owns its coordinate space and protected scenery sectors", () => {
       // Old City / castle section, then the open Caspian side of Neftchilar Ave.
       { kinds: ["city", "foliage", "lighting"], s0: 0.36, s1: 0.56, side: undefined },
       { kinds: ["city", "foliage", "lighting"], s0: 0.58, s1: 0.97, side: -1 },
+      // #3340: Neftchilar +1 — theme-dress neonTowers buried night_pass orbit;
+      // authored cityFront/towers in scenery/baku.js own that skyline.
+      { kinds: ["city"], s0: 0.58, s1: 0.97, side: 1 },
     ],
   );
   // The 14 m castle rise is asserted by what it BUILDS (crest height and
