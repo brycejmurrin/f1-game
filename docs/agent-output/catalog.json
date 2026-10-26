@@ -981,6 +981,7 @@
     {
       "path": "tools/ci/launch-gate.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"

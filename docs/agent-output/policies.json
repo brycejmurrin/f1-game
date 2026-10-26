@@ -636,6 +636,11 @@
       "presentation": "native",
       "preserve": "the TOOLING block text and its exact commands; ERROR line with the nearest valid name and exit 2 for a bad screen, viewport or scale"
     },
+    "tools/ci/launch-gate.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The `= launch-gate ok|refused` line with its reason and receipt path; --json verdict; exit 0 ok, 1 refused, 2 usage"
+    },
     "tools/ci/live-run-check.mjs": {
       "action": "keep-native",
       "presentation": "native",

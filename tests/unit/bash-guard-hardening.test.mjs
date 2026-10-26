@@ -376,8 +376,14 @@ test("a commit guard that outlives its time cap BLOCKS (rc 124 → exit 2), for 
   assert.ok(/GUARD_T=160/.test(hookSrc), "default inner guard cap");
   const inner = 160;
   assert.ok(inner + 15 <= bg.timeout, `inner guard cap ${inner} s must sit below the hook timeout ${bg.timeout} s`);
-  for (const h of settings.hooks.PreToolUse.flatMap((g) => g.hooks))
+  // Budget gates, not safety guards: a crashed context-cap or launch-gate must
+  // not lock a session out (A·W58, 2026-10-26), so they fail OPEN and their own
+  // tests (context-cap-hook, launch-gate) pin the absent onFailure.
+  const FAIL_OPEN = /\/\.claude\/hooks\/(context-cap|launch-gate)\.py"$/;
+  for (const h of settings.hooks.PreToolUse.flatMap((g) => g.hooks)) {
+    if (FAIL_OPEN.test(h.command)) continue;
     assert.equal(h.onFailure, "block", `${h.command}: a PreToolUse guard that crashes or times out must block`);
+  }
 });
 
 test("a subagent cannot boot Chromium through the capture CLIs either (tools/shot, tools/ui audits, gfx-probe)", () => {
