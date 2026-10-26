@@ -20,6 +20,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 
 | Note | What it records |
 |---|---|
+| [System audit, fourth pass](notes/SYSTEM-AUDIT-4-2026-10-26.md) | 2026-10-26: ~75 reviewers; re-verifies pass 3 (13 corrections), whole-population bus/PR/CI/session/Cursor/skill/card/docs/economics review; evidence in `notes/system-audit-4/` |
 | [System audit, third pass](notes/SYSTEM-AUDIT-3-2026-10-26.md) | 2026-10-26: 12 reviewers, 137 findings ranked into 39 items; what #3785/#3811 fixed; slice evidence in `notes/system-audit-3/` |
 | [System audit, second pass](notes/SYSTEM-AUDIT-2-2026-10-26.md) | 2026-10-26: 16 ranked setup-and-coordination findings after #3785; fixed in #3811 |
 | [notes/AGENT-WORK-TRACKING-2026-10-14.md](notes/AGENT-WORK-TRACKING-2026-10-14.md) | Where the fleet's backlog lives and why: GitHub Issues + sub-issues vs Linear, Jira, Plane, Notion, Beads, Backlog.md, Taskmaster, Claude Tasks, Obsidian and the agent orchestrators, scored on free / headless / phone / PR tie-in / atomic claim; the four-layer setup behind AGENTS.md §Backlog. |
