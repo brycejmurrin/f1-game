@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/render/renderer-boot.js": {
+      "narrow": [
+        "tests/unit/renderer-boot-island-preload.test.mjs"
+      ]
+    }
+  }
+}
