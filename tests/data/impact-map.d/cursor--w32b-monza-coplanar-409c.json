@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/circuits/scenery/monza.js": {
+      "narrow": [
+        "tests/unit/monza-coplanar-clip.test.mjs"
+      ]
+    }
+  }
+}

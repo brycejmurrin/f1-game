@@ -176,6 +176,12 @@
     const clamp01 = (x) => Math.min(1, Math.max(0, x));
     const lerp = (a, b, t) => a + (b - a) * t;
     const set3 = (u, x, y, z) => u.value.set(x, y, z);
+    const lid = (a, b) => (a + b) * 1.25;
+    // update()'s frameSky readers, hoisted: update + derive run every frame, so
+    // no closure or array is minted per call (#3115 F8/F9).
+    const s3 = (u, a) => { if (a) u.value.set(a[0], a[1], a[2]); };
+    const s1 = (u, v, def) => { u.value = v !== undefined ? v : def; };
+    const NO_GLOW = Object.freeze([0, 0, 0]);
     function derive() {
       const sd = U.sunDir.value, sc = U.sunColor.value, ze = U.zenith.value, ho = U.horizon.value;
       const cloud = U.cloud.value;
@@ -190,14 +196,18 @@
       D.nightSky.value = night; D.overcast.value = overcast;
       // Gradient: the overcast-flattened zenith / horizon (night lid = (z+h)*1.25).
       const kz = overcast * 0.75, kh = overcast * 0.60;
-      const lid = (a, b) => (a + b) * 1.25;
       // Match atmosphere's grey deck/fog target: heavy cloud loses solar colour
       // at twilight without inheriting the full daylight grey radiance.
       const greyLight = 0.35 + 0.65 * daytime;
-      const gz = [lerp(0.55 * greyLight, lid(ze.x, ho.x), night), lerp(0.56 * greyLight, lid(ze.y, ho.y), night), lerp(0.58 * greyLight, lid(ze.z, ho.z), night)];
-      const gh = [lerp(0.58 * greyLight, lid(ze.x, ho.x), night), lerp(0.58 * greyLight, lid(ze.y, ho.y), night), lerp(0.60 * greyLight, lid(ze.z, ho.z), night)];
-      set3(D.zenithO, lerp(ze.x, gz[0], kz), lerp(ze.y, gz[1], kz), lerp(ze.z, gz[2], kz));
-      set3(D.horizonO, lerp(ho.x, gh[0], kh), lerp(ho.y, gh[1], kh), lerp(ho.z, gh[2], kh));
+      const lx = lid(ze.x, ho.x), ly = lid(ze.y, ho.y), lz = lid(ze.z, ho.z);
+      set3(D.zenithO,
+        lerp(ze.x, lerp(0.55 * greyLight, lx, night), kz),
+        lerp(ze.y, lerp(0.56 * greyLight, ly, night), kz),
+        lerp(ze.z, lerp(0.58 * greyLight, lz, night), kz));
+      set3(D.horizonO,
+        lerp(ho.x, lerp(0.58 * greyLight, lx, night), kh),
+        lerp(ho.y, lerp(0.58 * greyLight, ly, night), kh),
+        lerp(ho.z, lerp(0.60 * greyLight, lz, night), kh));
       D.dayClear.value = daytime * (1 - overcast);
       // Golden hour + low-sun band: the sun-only factors and colours.
       D.goldenK.value = (1 - sstep(0.0, 0.72, sunE)) * (1 - overcast * 0.9);
@@ -449,8 +459,6 @@
      * invViewProj the frame carries — the env-probe pass (M9) swaps it. */
     function update(sky) {
       if (!sky) return;
-      const s3 = (u, a) => { if (a) u.value.set(a[0], a[1], a[2]); };
-      const s1 = (u, v, def) => { u.value = v !== undefined ? v : def; };
       if (sky.invViewProj) U.invViewProj.value.fromArray(sky.invViewProj);
       s3(U.zenith, sky.zenith);
       s3(U.horizon, sky.horizon);
@@ -460,7 +468,7 @@
       s1(U.cloud, sky.cloud, 0);
       s1(U.time, sky.time, 0);
       s1(U.moon, sky.moon, 0);
-      s3(U.cityGlow, sky.cityGlow || [0, 0, 0]);
+      s3(U.cityGlow, sky.cityGlow || NO_GLOW);
       s1(U.starBright, sky.starBright, 1);
       s1(U.cloudSpeed, sky.cloudSpeed, 1);
       s1(U.skyGrad, sky.skyGrad, 0.35);

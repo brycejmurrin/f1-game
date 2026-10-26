@@ -1,0 +1,17 @@
+{
+  "pins": {
+    "js/car/car3d.js": {
+      "build": [
+        "tests/unit/rear-wing-drs-rail.test.mjs"
+      ]
+    },
+    "js/car/car-body-geom.js": {
+      "aeroFlapsGeom": [
+        "tests/unit/rear-wing-drs-rail.test.mjs"
+      ],
+      "rearFlap": [
+        "tests/unit/rear-wing-drs-rail.test.mjs"
+      ]
+    }
+  }
+}

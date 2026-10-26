@@ -162,7 +162,8 @@ const OverlayRender = (function () {
     const root = typeof document !== "undefined" && document.querySelector('main#overlay[role="region"]');
     if (!root) return null;
     const config = options(typeof location !== "undefined" ? location.search : "");
-    document.documentElement.dataset.chroma = config.chroma;
+    if (config.chroma) document.documentElement.dataset.chroma = config.chroma;
+    else delete document.documentElement.dataset.chroma;
     document.body.dataset.side = config.side;
     document.body.dataset.only = config.only;
     root.style.setProperty("--ov-scale", String(config.scale));

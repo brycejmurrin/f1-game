@@ -15,6 +15,7 @@ const ApexGpuCapture = (function () {
   let lastSummary = null;
   let lintFindings = [];
   let loadPromise = null;
+  let loadGeneration = 0;
   let scriptErrHook = null;
 
   function say(msg) {
@@ -105,6 +106,7 @@ const ApexGpuCapture = (function () {
   }
 
   function disable() {
+    loadGeneration++;
     mode = null;
     spector = null;
     lastSummary = null;
@@ -118,10 +120,12 @@ const ApexGpuCapture = (function () {
   async function enable(next) {
     const want = next === "webgl-lint" || next === "lint" ? "webgl-lint" : "spector";
     if (mode === want && (want !== "spector" || spector)) return status();
+    const generation = ++loadGeneration;
     store(want);
     mode = want;
     const src = want === "webgl-lint" ? LINT_SRC : SPECTOR_SRC;
-    loadPromise = loadScript(src).then(function () {
+    const pending = loadScript(src).then(function () {
+      if (generation !== loadGeneration) return; // disabled or replaced while the script loaded
       if (want === "spector") {
         // Bracket read: SPECTOR is injected by the vendored bundle, not a
         // manifest global (same pattern as jsQR / Spotify SDK).
@@ -137,12 +141,14 @@ const ApexGpuCapture = (function () {
         say("webgl-lint on");
       }
     }).catch(function (e) {
+      if (generation !== loadGeneration) return;
       mode = null;
       spector = null;
       say("enable failed: " + ((e && e.message) || e));
       throw e;
-    }).finally(function () { loadPromise = null; });
-    await loadPromise;
+    }).finally(function () { if (loadPromise === pending) loadPromise = null; });
+    loadPromise = pending;
+    await pending;
     return status();
   }
 

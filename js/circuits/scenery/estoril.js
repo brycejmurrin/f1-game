@@ -34,24 +34,31 @@
         out._mat = 0;
       };
       const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.34 && s <= 0.46);
-      every(26, (k) => {
+      // Plateau dress: survey batch-1 scored estoril 2/5 / lightest props tris —
+      // tighten gaps and lower skip thresholds so Atlantic stone-pine + scrub
+      // read as a filled plateau without inventing beachfront (#3345).
+      every(18, (k) => {
         const s = k / n;
         if (openArea(s)) return;
         const h = hash(k * 31);
-        if (h < 0.36) return;
+        if (h < 0.22) return;
         stonePine(k, h < 0.5 ? -1 : 1, 12 + h * 12, 11 + h * 8, h < 0.55 ? PINE : PINE_D);
-        if (h > 0.74) stonePine(k, h > 0.88 ? -1 : 1, 30 + h * 18, 13 + h * 8, PINE_D);
+        if (h > 0.62) stonePine(k, h > 0.82 ? -1 : 1, 30 + h * 18, 13 + h * 8, PINE_D);
       });
-      every(22, (k) => {
+      every(16, (k) => {
+        const s = k / n;
+        // Skip main-straight / Parabólica / hairpin open zones — near-curb
+        // scrub there clips scaffoldStand and the shared along hedges.
+        if (openArea(s)) return;
         const h = hash(k * 97 + 23);
-        if (h < 0.44) return;
-        bush(k, h < 0.72 ? -1 : 1, 7 + h * 6, h < 0.6 ? SCRUB : SCRUB_D);
+        if (h < 0.32) return;
+        bush(k, h < 0.72 ? -1 : 1, 9 + h * 7, h < 0.6 ? SCRUB : SCRUB_D);
       });
-      every(46, (k) => {
+      every(32, (k) => {
         const s = k / n;
         if (openArea(s)) return;
         const h = hash(k * 67 + 19);
-        if (h < 0.58) return;
+        if (h < 0.42) return;
         stonePine(k, h < 0.5 ? -1 : 1, 48 + h * 20, 10 + h * 4, PINE_D);   // no generic yellow tiered tree
       });
 
@@ -183,10 +190,18 @@
           stage._mat = 0;
         });
       };
-      scaffoldStand("estoril-stand-parabolica-exit", K(0.005), -1, 13, 18, { rows: 5, awning: true });
-      scaffoldStand("estoril-stand-main-straight", K(0.078), -1, 22, 11, { rows: 4 });
+      // Main-straight / Parabólica stand mass (#3345): survey found a single
+      // grandstandEx and thin scaffold bays. Grow the main-straight scaffold,
+      // add a mid-straight grandstandEx bay, and twin the Parabólica exit so
+      // the gravel apron reads as a stand cluster (clip-safe bay counts).
+      scaffoldStand("estoril-stand-parabolica-exit", K(0.005), -1, 13, 20, { rows: 5, awning: true });
+      scaffoldStand("estoril-stand-parabolica-mid", K(0.028), -1, 15, 12, { rows: 4, awning: true });
+      scaffoldStand("estoril-stand-main-straight", K(0.078), -1, 20, 16, { rows: 5, awning: true });
+      scaffoldStand("estoril-stand-main-straight-upper", K(0.108), -1, 28, 10, { rows: 4 });
       scaffoldStand("estoril-stand-pitlane-superseded", K(0.140), 1, 20, 9, { rows: 4 });
-      scaffoldStand("estoril-stand-t13", K(0.900), 1, 18, 14, { rows: 5, awning: true });
+      scaffoldStand("estoril-stand-t13", K(0.900), 1, 18, 16, { rows: 5, awning: true });
+      grandstandEx(0.048, -1, 14, 64, null, null,
+        { livery: "terracotta", roof: "none", endWalls: true, h: 7 });
       grandstandEx(0.955, -1, 12, 78, null, null,
         { livery: "terracotta", roof: "none", endWalls: true, h: 8 });
 
@@ -219,13 +234,16 @@
       // corner always swallows road, whatever its lateral offset (gap 6 and 10
       // both rejected). Three shorter patches each take their own K(s) basis
       // and follow the arc, which is what the apron actually is.
-      for (const [g, id] of [[0.884, "a"], [0.900, "b"], [0.916, "c"]])
+      for (const [g, id] of [[0.876, "z"], [0.884, "a"], [0.900, "b"], [0.916, "c"], [0.928, "d"]])
         groundPatch(K(g), -1, 10, [44, 0.18, 34], GRAVEL,
           { id: "estoril-t13-gravel-" + id, samples: 9 });
-      tyreWall(0.880, 0.925, -1, 5, [0.85, 0.78, 0.20]);
-      spectatorHill(0.865, 0.935, 1, 32, { rows: 4, rise: 1.2, depth: 1.9, density: 0.68, step: 7 });
+      tyreWall(0.870, 0.932, -1, 5, [0.85, 0.78, 0.20]);
+      // Keep four rows (six rows clip on this R~122 m arc); raise density and
+      // add a second outer bank so Parabólica reads as a filled stand cluster.
+      spectatorHill(0.865, 0.935, 1, 32, { rows: 4, rise: 1.2, depth: 1.9, density: 0.78, step: 6 });
+      spectatorHill(0.878, 0.922, 1, 42, { rows: 3, rise: 1.0, depth: 1.7, density: 0.55, step: 8 });
       marshalPost(K(0.895), 1, 10);
-      for (const s of [0.875, 0.905]) billboard(K(s), -1, 14, 12, 4.5, [0.88, 0.20, 0.16]);
+      for (const s of [0.875, 0.890, 0.905, 0.920]) billboard(K(s), -1, 14, 12, 4.5, [0.88, 0.20, 0.16]);
 
       for (const [s0, s1] of [[0.11, 0.32], [0.37, 0.52], [0.57, 0.72], [0.78, 0.86]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
@@ -377,13 +395,15 @@
       }
       // Pine belts: stone pines only (forestEdge's stacked-cone firs are a
       // northern look, wrong for Sintra's Atlantic coast).
-      every(15, (k) => {
+      every(12, (k) => {
         const s = k / n;
         if (!((s >= 0.12 && s <= 0.32) || (s >= 0.48 && s <= 0.90))) return;
         for (const side of [-1, 1]) {
           const h = hash(k * 41 + side * 7);
-          if (h < 0.54) continue;
-          stonePine(k, side, 22 + h * 14, 10 + h * 6, h < 0.77 ? PINE : PINE_D);
+          if (h < 0.44) continue;
+          stonePine(k, side, 24 + h * 14, 10 + h * 6, h < 0.77 ? PINE : PINE_D);
+          if (h > 0.78)
+            stonePine(k, side, 40 + h * 16, 9 + h * 5, PINE_D);
         }
       });
 
@@ -391,14 +411,22 @@
       // Scattered cork oaks (sobreiros): the low, spreading, dark-crowned tree
       // of the Portuguese plateau, kept 40 m+ back so the hairpin sightline
       // stays open. acacia()'s flat umbrella + low fork is the closest form.
-      every(18, (k) => {
+      // Far scrub only (28 m+) — near-curb meadow bushes clip the along hedge.
+      every(14, (k) => {
         const s = k / n;
         if (s < 0.345 || s > 0.455) return;
         const h = hash(k * 59 + 7);
-        if (h < 0.5) return;
+        if (h < 0.40) return;
         acacia(k, h < 0.75 ? -1 : 1, 40 + h * 30, 6 + h * 3,
           h < 0.65 ? [0.20, 0.27, 0.15] : [0.17, 0.23, 0.13],
           { spread: 1.25, barkCol: [0.36, 0.24, 0.17] });
+      });
+      every(14, (k) => {
+        const s = k / n;
+        if (s < 0.345 || s > 0.455) return;
+        const h = hash(k * 113 + 3);
+        if (h < 0.42) return;
+        bush(k, h < 0.55 ? -1 : 1, 28 + h * 16, h < 0.6 ? SCRUB : SCRUB_D);
       });
       // Braking boards into the hairpin and the high camera over it.
       sponsorHoarding(0.388, 0.412, -1, 9, { h: 1.2, step: 10,

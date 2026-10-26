@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/circuits/scenery/mugello.js": {
+      "attach": [
+        "tests/unit/mugello-arrabbiata-orbit.test.mjs"
+      ]
+    }
+  }
+}

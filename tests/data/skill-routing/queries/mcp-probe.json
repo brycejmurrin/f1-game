@@ -7,5 +7,7 @@
 {"query": "Fetch https://brycejmurrin.github.io/f1-game/version.json and check whether the live site's apex-sha matches my last push, and grep the deployed js for the marker string I just added to see if it shipped.", "expect": "deploy-research"},
 {"query": "Take before and after screenshots of Monza and Spa from the chase camera in headless mode, batch them into one folder, and profile the game loop CPU for flame charts and GC spikes over a 60 second run.", "expect": "playwright-probe"},
 {"query": "Without any screenshots, dump world() and field() for a headless lap at Bahrain, and report field order, gaps, sector timing and slip/grip telemetry as text so I can see what the car is doing.", "expect": "agent-view"},
-{"query": "Phone memory keeps climbing across races — measure heap before/after with the tools/perf census tools and a live heap snapshot.", "expect": "mcp-probe"}
+{"query": "Phone memory keeps climbing across races — measure heap before/after with the tools/perf census tools and a live heap snapshot.", "expect": "mcp-probe"},
+{"query": "Recover the private chat MCP tunnel after Session terminated and check its live catalog contract.", "expect": "mcp-probe"},
+{"query": "Check the F1 environment readiness and restart the existing private MCP gateway.", "expect": "mcp-probe"}
 ]

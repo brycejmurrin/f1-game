@@ -127,11 +127,13 @@
         backdrop(kC, -1, 260 + hash(i * 21) * 110, [30 + hash(i * 23) * 22, 42 + hash(i * 25) * 72, 22], DARK);
       }
       // s 0.22–0.58: main straight + old city — glass towers R, open air haze L
+      // Height capped at 26 so backdrop() skips the isBld window-band path
+      // (body×glass shared the track-facing plane — coplanar 245 m² @ 0.9 mm).
       for (let i = 0; i < 10; i++) {
         const kM = K(0.22 + i / 10 * 0.36);
-        backdrop(kM, 1,  160 + i * 0.37 + hash(i * 5 + 22) * 80, [30 + hash(i * 7 + 22) * 22, 44 + hash(i * 11 + 22) * 76, 22], DARK2);
-        backdrop(kM, -1, 200 + hash(i * 9 + 22) * 70, [22 + hash(i * 3 + 22) * 12, 26 + hash(i * 13 + 22) * 34, 20], [0.08, 0.09, 0.14]);
-        backdrop(kM, 1,  340 + hash(i * 15 + 22) * 160, [34 + hash(i * 17 + 22) * 28, 52 + hash(i * 19 + 22) * 104, 24], DARK);
+        backdrop(kM, 1,  160 + i * 0.37 + hash(i * 5 + 22) * 80, [30 + hash(i * 7 + 22) * 22, 18 + hash(i * 11 + 22) * 8, 22], DARK2);
+        backdrop(kM, -1, 200 + hash(i * 9 + 22) * 70, [22 + hash(i * 3 + 22) * 12, 18 + hash(i * 13 + 22) * 8, 20], [0.08, 0.09, 0.14]);
+        backdrop(kM, 1,  340 + hash(i * 15 + 22) * 160, [34 + hash(i * 17 + 22) * 28, 20 + hash(i * 19 + 22) * 6, 28], DARK);
       }
       // s 0.58–0.97: Caspian seafront — city skyline R, open Caspian L (no backdrops)
       for (let i = 0; i < 12; i++) {
@@ -396,7 +398,7 @@
       });
       cityFront(0.553, 0.56, 1, 26, {
         minH: 6, maxH: 16, depth: 12, step: 16,
-        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
+        palette: SAND_PAL, lit: false, windowCol: WIN_WARM, floor: 3,
       });
 
       for (let i = 0; i < 4; i++) {
@@ -661,13 +663,20 @@
         addCone(out, vadd(aFt.c, aFt.u, 4.5), 0.5, 3, WIN_COOL, 6, b);
       }
 
+      // lit:false — with theme city dress excluded on +1 (#3340), cityFront's
+      // night neon band vs drawFace detail was unmasked as coplanar growth.
+      // Towers / billboards still light the boulevard; façades stay readable.
       cityFront(0.63, 0.738, 1, 14, {
         minH: 40, maxH: 100, depth: 20, step: 20,
-        palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
+        palette: GLASS_PAL, lit: false, windowCol: WIN_COOL, floor: 4,
       });
-      cityFront(0.762, 0.9203, 1, 14, {
-        minH: 40, maxH: 100, depth: 20, step: 20,
-        palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
+      // Gap 48 (was 14): night_pass orbit at frac≈0.833 (az 45, dist 40) sits
+      // ~21 m past the road edge on +1 — gap 14 buried the eye even after the
+      // dress exclusion. building() outer ≈ gap+w (w≤30) → ~78; towers below
+      // clear that shell.
+      cityFront(0.762, 0.9203, 1, 48, {
+        minH: 40, maxH: 100, depth: 20, step: 26,
+        palette: GLASS_PAL, lit: false, windowCol: WIN_COOL, floor: 4,
       });
 
       {
@@ -706,15 +715,18 @@
         grandstand(0.755, -1, 14, 70, [0.50, 0.52, 0.56], [0.60, 0.40, 0.36]);
       }
 
+      // Centres 96+ (was 52+): clear cityFront outer ≈78 (gap 48 + w≤30) and
+      // baseW/2 so tower near faces do not share a plane with the façade strip.
       for (let i = 0; i < 9; i++) {
         const k   = K(0.77 + i * 0.011);
         const isPortBaku = i === 2 || i === 3;
         const bW  = 14 + (i % 2) * 4;
         const h   = isPortBaku ? 150 : 85 + (i % 3) * 45;
-        tower(k, 1, 52 + (i % 4) * 24, bW, h,
+        const gap = 96 + (i % 4) * 24;
+        tower(k, 1, gap, bW, h,
           { col: GLASS, seg: 7, cap: true, capCol: i % 3 ? WIN_COOL : WIN_WARM });
         // Lit crown ring on each tower (emissive band near top)
-        const a = anchor(k, 1, 52 + (i % 4) * 24);
+        const a = anchor(k, 1, gap);
         addFrustum(out, vadd(a.c, a.u, h - 6), bW * 0.32 * 1.1, bW * 0.32 * 0.9, 4,
           i % 3 ? WIN_COOL : WIN_WARM, 7, [a.r, a.u, a.t]);
         if (isPortBaku) {

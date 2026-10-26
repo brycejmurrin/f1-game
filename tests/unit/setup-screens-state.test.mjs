@@ -611,7 +611,7 @@ test("season setup: the sprint note names the unit of the points it quotes", () 
 
 /* ── GARAGE (#carsetup): SetupUI in a VM ────────────────────────────────── */
 
-function loadSetupUi() {
+function loadSetupUi(opts = {}) {
   const dom = makeDom();
   const observers = [];
   const G = {
@@ -619,12 +619,15 @@ function loadSetupUi() {
     cssCol: () => "#fff", store: { get: (k, d) => (k === "garageTab" ? "livery" : d), set() {} },
     arrToHex: () => "#112233", hexToArr: () => [0.1, 0.2, 0.3],
     getTeamParts: () => ({}), saveTeamParts() {}, getLiveryId: () => "default", saveLiveryId() {},
-    getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => [], invalidateDecalTextures: null,
+    getCustomLiveries: opts.getCustomLiveries || (() => []),
+    setCustomLiveries() {},
+    getLiveries: opts.getLiveries || (() => []),
+    invalidateDecalTextures: null,
     teamIdx: 1, driverIdx: 0, soundOn: false, careerOwned: () => false, unlimitedBudget: false,
     peerSeats: () => [], teamSwatch: () => dom.document.createElement("span"),
     setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
   };
-  const sb = sandbox(dom, {
+  const extra = {
     MutationObserver: class { constructor(cb) { this.cb = cb; observers.push(this); } observe(t, o) { this.target = t; this.opts = o; } },
     Parts: { STAT_KEYS: [{ key: "speed", label: "SPEED" }], displayStat: (x) => x,
              getMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), CATALOG: [{ id: "aero", label: "AERO", options: [] }, { id: "floor", label: "FLOOR", options: [] }], BUDGET: 780,
@@ -635,7 +638,10 @@ function loadSetupUi() {
     LiveryTex: { NUM_FONT_IDS: ["default", "block"], SPONSOR_PACK_IDS: ["default", "clean"] },
     M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
     PhysicsConsts: { WET_GRIP: { rain: [1, 1.2, 1.4] } },
-  });
+  };
+  // Optional matchMedia so the factory-fold desktop/phone default is testable.
+  if (opts.matchMedia) extra.matchMedia = opts.matchMedia;
+  const sb = sandbox(dom, extra);
   vm.runInNewContext(src("js/garage/setup-experiments.js"), sb, { filename: absSrc("js/garage/setup-experiments.js") });
   vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: absSrc("js/garage/setup-sheet.js") });
   return { dom, ui: sb.SetupUI.create(G), G, $: G.$, observers };
@@ -715,6 +721,45 @@ test("garage: hiding the screen with no editor open is a no-op", () => {
   mo.cb([]);
   assert.equal(G.livDraftOverride, null);
   assert.ok($("cs-options").classList.contains("cs-liv-grid"));
+});
+
+test("garage: livery grid search + factory fold (#3339)", () => {
+  const factory = [];
+  for (let i = 0; i < 12; i++) factory.push({ id: i ? "f" + i : "default", name: "Paint " + i, c1: [1, 0, 0], c2: [0, 0, 1] });
+  const customs = [{ id: "mine1", name: "My Special", c1: [0, 1, 0], c2: [0, 0, 1] }];
+  const livOpts = {
+    getLiveries: () => factory.concat(customs),
+    getCustomLiveries: () => customs,
+  };
+  const { dom, ui, $ } = loadSetupUi(livOpts);
+  empty(dom, "cs-options");
+  ui.buildSetup();
+  const opts = $("cs-options");
+  assert.ok(opts.querySelector(".cs-liv-search") && opts.querySelector(".cs-liv-create"), "search + create outside the fold");
+  // mini-dom keeps dataset as a plain object (no attribute mirror), so match on
+  // dataset rather than [data-cs-livery=…] attribute selectors.
+  const byLiv = (id) => opts.querySelectorAll("button").find((b) => b.dataset.csLivery === id);
+  assert.ok(byLiv("default") && byLiv("mine1"), "fitted factory + custom stay visible");
+  const fold = opts.querySelector("details.cs-liv-factory");
+  // No matchMedia → phone-safe collapsed default (also the mini-dom path).
+  assert.ok(fold && fold.open === false, "remaining factory finishes start collapsed");
+  assert.equal(fold.querySelector("summary").textContent, "Factory finishes (11)");
+  assert.equal(fold.querySelectorAll(".cs-liv-row").length, 11);
+
+  // Desktop (hover+fine): default OPEN so MenuNav End can land in the last row
+  // past content-visibility (#3860). Phone (hover:none): stays collapsed (#3339).
+  const mm = (q) => ({ matches: q.includes("hover: hover") && q.includes("pointer: fine") });
+  const desk = loadSetupUi({ ...livOpts, matchMedia: mm });
+  empty(desk.dom, "cs-options");
+  desk.ui.buildSetup();
+  assert.equal(desk.$("cs-options").querySelector("details.cs-liv-factory").open, true,
+    "desktop defaults the factory fold open");
+  const phoneMm = () => ({ matches: false });
+  const phone = loadSetupUi({ ...livOpts, matchMedia: phoneMm });
+  empty(phone.dom, "cs-options");
+  phone.ui.buildSetup();
+  assert.equal(phone.$("cs-options").querySelector("details.cs-liv-factory").open, false,
+    "phone keeps the factory fold collapsed");
 });
 
 test("career hub: the round's brief is three pressable choices, with the taken one marked", () => {
