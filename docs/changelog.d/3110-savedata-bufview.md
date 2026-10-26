@@ -1,0 +1,1 @@
+Fixed: with Save-Data on (or a 2G link) the title no longer prefetches the lighting presets and loads the 128 px material pack instead of 256 px; baked models no longer keep their whole download in memory (#3110).

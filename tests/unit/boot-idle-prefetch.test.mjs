@@ -271,10 +271,10 @@ test("Assets strip decode gives a future task a turn between successive layers",
   }
 });
 
-// #3110: Save-Data or a 2G link skips the title's idle race-session and audio
-// prefetches (startRace awaits both); the lights (re-asked only after a FAILED
-// fetch) and the selected circuit's scenery still load. A normal link keeps all.
-test("raceAssets skips the race-session and audio prefetches under Save-Data or 2G, keeps them otherwise (#3110)", async () => {
+// #3110: Save-Data or a 2G link skips the title's idle lighting, race-session
+// and audio prefetches (startRace awaits all three); the selected circuit's
+// scenery still loads. A normal link keeps all.
+test("raceAssets skips the lighting, race-session and audio prefetches under Save-Data or 2G, keeps them otherwise (#3110)", async () => {
   const loader = read("js/core/script-loader.js");
   const bundles = read("js/core/lazy-bundles.js");
   const run = async (connection) => {
@@ -322,8 +322,9 @@ test("raceAssets skips the race-session and audio prefetches under Save-Data or 
   assert.deepEqual((await run({ saveData: false, effectiveType: "4g" })).idles, [8000, 9000, 12000], "a normal link prefetches");
   assert.deepEqual((await run({ saveData: false, effectiveType: "3g" })).idles, [8000, 9000, 12000], "3G still prefetches");
   const sd = await run({ saveData: true, effectiveType: "4g" });
-  assert.deepEqual(sd.idles, [8000], "Save-Data: only the lights prefetch");
+  // #3110 F2: the lights skip too — startRace awaits ensureLightPresets when they are absent.
+  assert.deepEqual(sd.idles, [], "Save-Data: no idle prefetch at all");
   assert.ok(sd.sceneryKicks > 0, "the selected circuit's scenery still kicks under Save-Data");
-  assert.deepEqual((await run({ saveData: false, effectiveType: "slow-2g" })).idles, [8000], "slow-2g: only the lights prefetch");
-  assert.deepEqual((await run({ saveData: false, effectiveType: "2g" })).idles, [8000], "2g: only the lights prefetch");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "slow-2g" })).idles, [], "slow-2g: no idle prefetch");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "2g" })).idles, [], "2g: no idle prefetch");
 });
