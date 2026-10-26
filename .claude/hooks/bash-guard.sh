@@ -184,6 +184,16 @@ PRE='((sudo|env|exec|nice|nohup|command|setsid|doas|stdbuf([[:space:]]+-[^[:spac
 # names the worktree actually committing; the old value stays as the fallback
 # for a cwd that is not a work tree at all.
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+# A `git stash` while a merge is in progress drops MERGE_HEAD, and the next commit lands
+# with ONE parent (2026-10-26: a sync merge of the deploy tip was committed as a squash and
+# caught only by a manual `%p` check; fleet-core rule 1 needs two parents). Reading forms
+# (list/show) and the ones that restore state (pop/apply/drop) pass.
+if [ -n "$ROOT" ] && git -C "$ROOT" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 \
+   && printf '%s' "$SCAN" | grep -qE '(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+stash([[:space:]]|$)' \
+   && ! printf '%s' "$SCAN" | grep -qE 'git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+stash[[:space:]]+(list|show|pop|apply|drop|branch)'; then
+  echo "BLOCKED: \`git stash\` while a merge is in progress drops MERGE_HEAD, and the next commit lands with ONE parent (fleet-core: merge commits only). Commit the merge or \`git merge --abort\` first; stash afterwards." >&2
+  exit 2
+fi
 [ -n "$ROOT" ] || ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 # --- git checkout --theirs/--ours <path> on a multi-hunk conflict (#2429) -----
@@ -676,7 +686,14 @@ EOF
   fi
   T0=$(date +%s)
   RAISED=$(grep -c '^RAISED\|^LOWERED' "$RLOG" 2>/dev/null)
-  CACHE_HIT=$(cd "$ROOT" && node tools/ci/guards-verdict.mjs check 2>/dev/null) || true
+  # The cache is keyed on the INDEX tree as it is now. A `git add`/`commit -a` in the same
+  # command commits a different tree, so a green cached verdict says nothing about it
+  # (2026-10-26 second pass, finding 3): run the guards instead.
+  if [ "$C_ALL" = 1 ] || [ -n "$ADD_PATHS" ]; then
+    CACHE_HIT=""
+  else
+    CACHE_HIT=$(cd "$ROOT" && node tools/ci/guards-verdict.mjs check 2>/dev/null) || true
+  fi
   if [ -n "$CACHE_HIT" ]; then
     printf '%s\n' "$CACHE_HIT" >&2
     COMMIT_CTX="bash-guard: code commit — ratchets --auto-raise (${RAISED:-0} raised/lowered); $CACHE_HIT (a concurrent copy of this hook or a foreground test:guards already certified this tree; log $LOG)."

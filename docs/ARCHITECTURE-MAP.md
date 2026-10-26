@@ -111,9 +111,11 @@ never hand-edit those (see `AGENTS.md` rule 11).
 | `node tools/ci/pick-tests.mjs` | Which browser GROUPS this diff needs |
 | `node tools/ci/deploy.mjs --gate-only` | Full pre-push gate (no push) |
 
-Ship branch: `claude/f1-game-project-26h3ng` → `ci.yml` then `pages.yml` →
+Ship branch: `claude/f1-game-project-26h3ng` → Pages release train (`pages.yml`)
+→ reusable CI release gate → publication at
 https://brycejmurrin.github.io/f1-game/. Feature work: `cursor/<topic>-<hash>`
 branches; sync with `node tools/ci/sync-pr.mjs`, not hand merges.
+See [VERIFICATION.md](VERIFICATION.md#ci-and-pages) for PR, Pages, and live-site evidence.
 
 Verification scales to the change — one browser group is expensive on
 SwiftShader. Details: [TESTING.md](TESTING.md).

@@ -65,8 +65,10 @@ async function startServer() {
 
 async function shot({ port, backend, track, name, query = "", postCheck = false }) {
   const browser = await chromium.launch({ executablePath: chromePath(), args: ["--no-sandbox"] });
+  try {
   const page = await browser.newPage({ viewport: VP });
   const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
   page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
   await page.addInitScript((b) => {
     try {
@@ -74,7 +76,7 @@ async function shot({ port, backend, track, name, query = "", postCheck = false 
         localStorage.setItem("apex26.gfxBackend", "three");
         localStorage.setItem("apex26.tlxForceGL", "1");
       } else {
-        localStorage.removeItem("apex26.gfxBackend");
+        localStorage.setItem("apex26.gfxBackend", "webgl2");
       }
     } catch (_) {}
   }, backend);
@@ -82,6 +84,9 @@ async function shot({ port, backend, track, name, query = "", postCheck = false 
   await page.waitForFunction(() => window.__apex != null, null, { timeout: 60_000 });
   await page.evaluate((t) => window.__apex.race(t), track);
   await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 120_000 });
+  const activeBackend = await page.evaluate(() => window.__apex.diag().env.backend);
+  const expectedBackend = backend === "three" ? "three" : "webgl2";
+  if (activeBackend !== expectedBackend) throw new Error(`Expected ${expectedBackend}, got ${activeBackend}`);
   await page.evaluate(() => window.__apex.park(0.1));
   await sleep(1500);
   let post = null;
@@ -96,8 +101,8 @@ async function shot({ port, backend, track, name, query = "", postCheck = false 
   await page.screenshot({ path: file, clip: { x: 0, y: 0, width: VP.width, height: VP.height },
     animations: "disabled", timeout: 90_000 });
   const size = statSync(file).size;
-  await browser.close();
-  return { name, size, blank: size < 5000, errors: errors.slice(0, 5), post };
+  return { name, size, blank: size < 5000, errors: errors.slice(0, 5), post, backend: activeBackend };
+  } finally { await browser.close(); }
 }
 
 const srv = await startServer();
@@ -109,6 +114,7 @@ const jobs = [
   { backend: "glx", track: "singapore", name: "tlx-m8-singapore-night-glx" },
   { backend: "three", track: "monza", name: "tlx-m8-monza-viz-ssao", query: "?viz=ssao", postCheck: true },
 ];
+try {
 for (const j of jobs) {
   try {
     const r = await shot({ port: srv.port, ...j });
@@ -120,4 +126,5 @@ for (const j of jobs) {
   }
 }
 writeFileSync(join(OUT, "tlx-m8-results.json"), JSON.stringify(results, null, 2));
-await srv.close();
+if (results.some(r => r.error || r.blank || r.errors?.length)) process.exitCode = 1;
+} finally { await srv.close(); }

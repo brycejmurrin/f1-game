@@ -312,3 +312,38 @@ describe("the interior gate on a cleared-buffer frame", () => {
       "no second boot — openGarage + store writes keep ONE Chromium");
   });
 });
+
+
+describe("garage capture CLI preflight", () => {
+  const preflight = async args => {
+    const { runInNewContext } = await import("node:vm");
+    const paths = await import("../../tools/lib/output-paths.mjs");
+    const src = fs.readFileSync(path.join(REPO, "tools/shot/garage-frame.mjs"), "utf8");
+    const prefix = src.slice(src.indexOf("const argv ="), src.indexOf("mkdirSync(outDir"));
+    return runInNewContext(prefix, { ROOT: REPO, resolve: path.resolve, process: { argv: ["node", "garage-frame", ...args] }, exitIfHelp() {}, ...paths }, { filename: path.join(REPO, "tools/shot/garage-frame.mjs") });
+  };
+  it("rejects source directories before any output or browser activity", async () => {
+    await assert.rejects(preflight(["--out", "js"]), /not inside/);
+  });
+  it("rejects unknown backends, invalid viewports and missing values", async () => {
+    for (const args of [["--backend", "typo"], ["--viewport", "NaNx900"], ["--viewport", "0x900"], ["--out"]])
+      await assert.rejects(preflight(args), /backend|viewport|needs a value/);
+  });
+});
+
+
+it("tool containment accepts dot-prefixed child names and rejects traversal", async () => {
+  const { resolveContainedChild } = await import("../../tools/lib/output-paths.mjs");
+  assert.equal(resolveContainedChild(REPO, "..capture"), path.join(REPO, "..capture"));
+  assert.throws(() => resolveContainedChild(REPO, "../escape"), /escapes/);
+});
+
+it("capture output cannot escape through an existing directory symlink", async () => {
+  const { assertOutputDir } = await import("../../tools/lib/output-paths.mjs");
+  const root = fs.mkdtempSync(path.join(REPO, "scratch", "capture-path-"));
+  try {
+    fs.mkdirSync(path.join(root, "artifacts")); fs.mkdirSync(path.join(root, "js"));
+    fs.symlinkSync(path.join(root, "js"), path.join(root, "artifacts", "alias"), "dir");
+    assert.throws(() => assertOutputDir(path.join(root, "artifacts", "alias", "capture"), root), /not inside/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});

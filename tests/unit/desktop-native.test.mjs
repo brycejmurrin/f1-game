@@ -300,3 +300,52 @@ test("cross-device links use public HTTPS in wrappers and preserve web deploymen
     assert.equal(qrs.at(-1), null);
   }
 });
+
+
+function smokeHarness(execute = () => new Promise(() => {})) {
+  const timers = new Map(), events = new Map(), exits = [], output = [];
+  let id = 0;
+  const body = MAIN.slice(MAIN.indexOf("  if (SMOKE) {"), MAIN.indexOf("\n  return win;"));
+  vm.runInNewContext(body, {
+    SMOKE: true, Date, JSON,
+    setTimeout(fn, ms) { const key = ++id; timers.set(key, {fn, ms}); return key; },
+    clearTimeout(key) { timers.delete(key); },
+    app: {exit(code) { exits.push(code); }},
+    process: {stdout: {write(s) { output.push(JSON.parse(s)); }}},
+    win: {webContents: {executeJavaScript: execute, once(name, fn) { events.set(name, fn); }}},
+  }, { filename: absSrc("desktop/main.js") });
+  return {timers, events, exits, output};
+}
+
+test("desktop smoke deadline fires even if navigation never completes", () => {
+  const h = smokeHarness();
+  const deadline = [...h.timers.values()].find(t => t.ms === 60000);
+  assert.ok(deadline, "deadline must be armed before waiting for load");
+  deadline.fn();
+  assert.deepEqual(h.exits, [1]);
+  assert.equal(h.output[0].smoke, "timeout");
+});
+
+test("desktop smoke has an independent deadline while page execution never settles", async () => {
+  const h = smokeHarness();
+  h.events.get("did-finish-load")();
+  const poll = [...h.timers.values()].find(t => t.ms === 200);
+  poll.fn();
+  const deadline = [...h.timers.values()].find(t => t.ms === 60000);
+  assert.ok(deadline);
+  deadline.fn();
+  await Promise.resolve();
+  assert.deepEqual(h.exits, [1]);
+});
+
+test("desktop smoke ignores a successful result delivered after the deadline", async () => {
+  let complete;
+  const h = smokeHarness(() => new Promise(resolve => { complete = resolve; }));
+  h.events.get("did-finish-load")();
+  const tick = [...h.timers.values()].find(t => t.ms === 200).fn();
+  [...h.timers.values()].find(t => t.ms === 60000).fn();
+  complete({readyState: "complete", native: {desktop: true}, href: "app://apex/"});
+  await tick;
+  assert.deepEqual(h.exits, [1]);
+  assert.equal(h.output.length, 1);
+});

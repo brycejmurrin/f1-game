@@ -158,3 +158,19 @@ test("against real git: the first claim wins, a second is refused with the holde
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("main gate: an orchestrator boots from the deploy branch, never a queue branch (2026-10-26: nine successors ran a retired rulebook)", () => {
+  const orch = [...ARGS];
+  orch[orch.indexOf("--role") + 1] = "orchestrator";
+  orch[orch.indexOf("claude/f1-game-project-26h3ng")] = "cursor/orchb-queue-b7f2";
+  const out = [];
+  const deps = { log: (l) => out.push(l), now: () => NOW, mtime: () => NOW, claim: () => assert.fail("no claim"), writeReceipt: () => assert.fail("no receipt") };
+  assert.equal(main([...orch, "--session-json", fx("get-session-allowed.json")], deps), 2);
+  assert.ok(/REFUSED \(revision\): an orchestrator boots from claude\/f1-game-project-26h3ng \(got cursor\/orchb-queue-b7f2\)/.test(out.at(-1)), out.at(-1));
+  const worker = [...ARGS];
+  worker[worker.indexOf("claude/f1-game-project-26h3ng")] = "cursor/orchb-queue-b7f2";
+  const out2 = [];
+  const code = main([...worker, "--session-json", fx("get-session-allowed.json"), "--no-claim"], { log: (l) => out2.push(l), now: () => NOW, mtime: () => NOW, writeReceipt: () => {} });
+  assert.notEqual(out2.at(-1) && /REFUSED \(revision\)/.test(out2.at(-1)), true, `a worker may boot from a topic branch: ${out2.at(-1)}`);
+  void code;
+});

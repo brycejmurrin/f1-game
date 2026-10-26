@@ -82,7 +82,7 @@
       try {
         const response = await fetch(url.href, { cache: "no-store", credentials: "same-origin", signal: controller.signal });
         const bytes = new Uint8Array(await response.arrayBuffer());
-        results.push({ url: url.href, ok: response.ok, status: response.status,
+        results.push({ url: response.url || url.href, requestedUrl: url.href, redirected: !!response.redirected, ok: response.ok, status: response.status,
           contentType: response.headers.get("content-type"), contentLength: response.headers.get("content-length"),
           cacheControl: response.headers.get("cache-control"), etag: response.headers.get("etag"),
           bytes: bytes.byteLength, sha256: hex(await crypto.subtle.digest("SHA-256", bytes)),
