@@ -191,3 +191,4 @@ B merges nothing (all PRs are D's). Off: #3512, D's other drafts, A PRs, js/car/
 - Needs Bryce: (1) row 5 grant typed in L3 session_01RSyjdqkAX2qpAvF6TEaFmS (or its successor); (2) rename Fleet B env APEX_A_INBOX_* → APEX_A_RELAY_* (#3774); (3) any L4 .claude/hooks self-mod refusals.
 - Bus cursor 7d10075. DAD 80da0f7 HANDOFF to:B had an empty body — ask DAD to resend.
 - Archive by rule after 05:10Z: 01GETh 011NoeB 01Q7NM 01B2s 018Eoa 01EWg3 01AXz6 019yb 01WV8q 01Y3Fm 01KBMb. Never R1 01PfAQjr, seed, orchestrators.
+- 04:23Z addendum: L4 → draft #3779 (5e5945e7), owner session_015uGq51cXgHdUCimQRLJzS7. L3 → draft #3780 (8a9cfd48), owner session_01SMXUtKAU4RogSZgfRi2MBE; Bryce's row-5 grant must now be typed in session_01SMXUtKAU4RogSZgfRi2MBE. L3/L4 stopped (archive by rule).
