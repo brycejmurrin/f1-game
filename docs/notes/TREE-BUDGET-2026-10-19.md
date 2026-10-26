@@ -1,7 +1,7 @@
 # Tree budget decision — 2026-10-19
 
 Refs [#1619](https://github.com/brycejmurrin/f1-game/issues/1619). Measured on
-deploy tip `484d7ea10` with `node tools/gen/trees/measure-tree-budget.mjs`
+deploy tip `484d7ea10` with `node tools/archive/gen/trees/measure-tree-budget.mjs`
 (`tools/lib/track-build-vm.cjs` + `TrackHiddenFaces.compact`, same path as
 `tools/track/props-tris.cjs`).
 

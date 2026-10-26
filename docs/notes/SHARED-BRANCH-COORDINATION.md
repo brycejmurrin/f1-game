@@ -1,5 +1,7 @@
 # Five sessions, one shipping branch: fixing a red you did not cause
 
+**Status 2026-10-26 — superseded in part.** Sessions no longer develop on the deploy branch: it is protected and work lands only through a PR (AGENTS.md §Git branch & deploy). The who-is-on-it check below still applies; the "everyone pushes to one branch" setting does not.
+
 Evidence behind the one clause in AGENTS.md §Git branch & deploy. Written
 2026-09-18, the morning three sessions fixed one bug.
 

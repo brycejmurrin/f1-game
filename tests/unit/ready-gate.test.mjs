@@ -549,3 +549,15 @@ test("resolveSha --pr fails closed when the API returns fewer files than the PR 
   assert.match(resolved.filesError, /received 3000 of 3001/);
   assert.equal(withMemory(GREEN, resolved.files, resolved).state, "memory-unknown");
 });
+
+test("Q8: a `READY to` Plan item is exempt; an open item is printed verbatim", () => {
+  const body = "## Plan\n- [x] a — sha\n- [ ] READY to OrchA 33 once the gate passes\n- [ ] **READY to** me\n";
+  const p = planVerdict(body);
+  assert.equal(p.state, "done");
+  assert.deepEqual(p.open, []);
+  assert.equal(planVerdict("## Plan\n- [ ] READYING the thing\n").state, "open", "only the `READY to` form is exempt");
+  const long = "x".repeat(90);
+  const v = withPlan({ code: 0, state: "passed", evidence: "ok" }, `## Plan\n- [ ] ${long}\n`);
+  assert.equal(v.state, "plan-open");
+  assert.ok(v.evidence.includes(`"${long}"`), "the item is not truncated");
+});

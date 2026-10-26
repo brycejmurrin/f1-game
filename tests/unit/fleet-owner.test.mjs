@@ -2,8 +2,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  globToRegex, tokenCovers, claimPaths, claimSession, parseFleetBlock, decide, releaseAnswer, apiFiles, main,
+  globToRegex, tokenCovers, claimPaths, claimSession, parseFleetBlock, decide, releaseAnswer, apiFiles, main, openDiffs, FILES_CAP,
 } from "../../tools/ci/fleet-owner.mjs";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 const NOW = Date.parse("2026-10-19T22:00:00Z");
 const SHA_A = "a".repeat(40), SHA_B = "b".repeat(40);
@@ -152,14 +155,40 @@ test("lapse rule: only with --requested-at >= 60 min ago, only claims > 60 min o
   assert.equal(r.out.split("\n").at(-1), "RELEASED R10 js/a.js", r.out);
 });
 
-test("an incomplete files list fails closed: exit 3, no rows", () => {
+test("an incomplete files list fails closed: --pr checks changed_files; the open-diff scan fails at GitHub's 3000-file cap", () => {
   const files = Array.from({ length: 150 }, (_, i) => `f${i}.js`);
   const { request } = fakeApi({ prs: [{ number: 9, sha: SHA_A, files }], cap: { 9: 120 } });
   assert.equal(apiFiles(9, request).error, "PR #9: incomplete files list: received 120 of 150 changed files");
-  const r = run(["f1.js"], { request, claims: [] });
+  const huge = Array.from({ length: FILES_CAP }, (_, i) => `f${i}.js`);
+  const r = run(["f1.js"], { request: fakeApi({ prs: [{ number: 9, sha: SHA_A, files: huge }] }).request, claims: [] });
   assert.equal(r.code, 3);
   assert.equal(r.out, "");
-  assert.equal(r.err, "= fleet-owner unknown — PR #9: incomplete files list: received 120 of 150 changed files");
+  assert.equal(r.err, `= fleet-owner unknown — PR #9: files list at GitHub's ${FILES_CAP}-file cap (may be incomplete)`);
+});
+
+test("speed (2026-10-26): no pulls/<n> call per PR, page 1 of every PR in ONE batch, a head+base cache answers the next run", () => {
+  const prs = [{ number: 31, sha: SHA_A, files: ["js/a.js"] }, { number: 32, sha: "c".repeat(40), files: ["js/b.js"] }];
+  const { request, calls } = fakeApi({ prs });
+  const batches = [];
+  const batch = (paths, { request: rq }) => { batches.push(paths); return new Map(paths.map((p) => [p, rq(p)])); };
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "fleet-owner-cache-"));
+  try {
+    const a = openDiffs({ request, batch, cacheDir });
+    assert.deepEqual(a.diffs.map((d) => [d.holder.pr, [...d.files]]), [[31, ["js/a.js"]], [32, ["js/b.js"]]]);
+    assert.deepEqual(batches, [["pulls/31/files?per_page=100", "pulls/32/files?per_page=100"]], "one batch of first pages");
+    assert.equal(calls.filter((c) => /^pulls\/\d+$/.test(c)).length, 0, "no changed_files call");
+    calls.length = 0; batches.length = 0;
+    const b = openDiffs({ request, batch, cacheDir });
+    assert.deepEqual(b.diffs.map((d) => [...d.files]), [["js/a.js"], ["js/b.js"]]);
+    assert.deepEqual(calls.filter((c) => c.includes("/files")), [], "every PR answered from the head-sha cache");
+    assert.deepEqual(batches, [[]]);
+  } finally { fs.rmSync(cacheDir, { recursive: true, force: true }); }
+});
+
+test("a stale claim (who-is-on-it STALE_MIN) does not hold a path", () => {
+  const stale = { ...claim("on js/ui/hud.js", 300), stale: true };
+  assert.equal(decide(["js/ui/hud.js"], { claims: [stale], now: NOW }).rows[0].state, "free");
+  assert.equal(decide(["js/ui/hud.js"], { claims: [claim("on js/ui/hud.js", 300)], now: NOW }).rows[0].state, "claimed");
 });
 
 test("pagination reads every page; API errors and an unreadable board exit 3", () => {

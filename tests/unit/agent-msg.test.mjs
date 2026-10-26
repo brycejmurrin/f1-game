@@ -7,25 +7,23 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   MSG_TYPES, busTypeFor, busTextFor, buildPayload, resolveBusTo, redactSecrets, parseArgs, postWebhook, main,
+  relayEnvNames, relayRoute, relayTextFor, relayBackoff, fireRelay,
 } from "../../tools/ci/agent-msg.mjs";
 import { TYPES, formatLine, parseLine } from "../../tools/ci/fleet-bus.mjs";
 
 const ME = "cursor:bc-agent-msg-test-0ff0";
 
-test("busTypeFor: INFO/QUESTION/REQUEST → HANDOFF; READY/HANDOFF/INCIDENT keep type", () => {
-  assert.equal(busTypeFor("INFO"), "HANDOFF");
-  assert.equal(busTypeFor("QUESTION"), "HANDOFF");
-  assert.equal(busTypeFor("REQUEST"), "HANDOFF");
-  assert.equal(busTypeFor("READY"), "READY");
-  assert.equal(busTypeFor("HANDOFF"), "HANDOFF");
-  assert.equal(busTypeFor("INCIDENT"), "INCIDENT");
-  for (const t of ["READY", "HANDOFF", "INCIDENT"]) assert.ok(TYPES.includes(t), t);
-  assert.ok(TYPES.includes(busTypeFor("INFO")));
+test("busTypeFor: every --type is its own bus type (INFO/QUESTION/REQUEST no longer ride as HANDOFF)", () => {
+  for (const t of MSG_TYPES) {
+    assert.equal(busTypeFor(t.toLowerCase()), t);
+    assert.ok(TYPES.includes(busTypeFor(t)), `${t} is a bus type`);
+  }
+  for (const t of ["INFO", "QUESTION", "REQUEST", "ROTATE", "LEND", "RETURN", "TRANSFER"]) assert.ok(MSG_TYPES.includes(t), t);
 });
 
-test("busTextFor prefixes mapped types and optional #pr", () => {
-  assert.equal(busTextFor("INFO", "hello"), "[INFO] hello");
-  assert.equal(busTextFor("QUESTION", "need sync?", 12), "#12 [QUESTION] need sync?");
+test("busTextFor: optional #pr prefix, no [TYPE] tag", () => {
+  assert.equal(busTextFor("INFO", "hello"), "hello");
+  assert.equal(busTextFor("QUESTION", "need sync?", 12), "#12 need sync?");
   assert.equal(busTextFor("READY", "abc ready-gate 0", 3499), "#3499 abc ready-gate 0");
 });
 
@@ -73,8 +71,9 @@ test("redactSecrets never leaves the auth value or URL userinfo in output", () =
 
 test("parseArgs: send flags, type uppercased, --pr, --no-bus, --dry-run; refuses junk", () => {
   assert.deepEqual(parseArgs(["send", "--to", "DAD", "--type", "ready", "--pr", "12", "hello world"]), {
-    cmd: "send", to: "DAD", type: "READY", pr: 12, text: "hello world", noBus: false, dryRun: false, as: "",
+    cmd: "send", to: "DAD", type: "READY", pr: 12, text: "hello world", noBus: false, dryRun: false, as: "", idem: "",
   });
+  assert.equal(parseArgs(["send", "--to", "A", "--type", "lend", "--idem", "k1", "x"]).idem, "k1");
   assert.equal(parseArgs(["send", "--to", "A", "--type", "INFO", "--no-bus", "--dry-run", "x"]).noBus, true);
   assert.equal(parseArgs(["send", "--to", "A", "--type", "INFO", "--dry-run", "x"]).dryRun, true);
   assert.throws(() => parseArgs(["send", "--to", "A", "no type"]), /--type/);
@@ -149,7 +148,7 @@ test("main: missing webhook env warns, still mirrors to bus, exits 0", async () 
   );
   assert.equal(code, 0);
   assert.equal(bus.length, 1);
-  assert.deepEqual(bus[0], { type: "HANDOFF", to: "*", from: ME, text: "[INFO] hello fleets" });
+  assert.deepEqual(bus[0], { type: "INFO", to: "*", from: ME, text: "hello fleets" });
   assert.ok(errs.join("\n").includes("APEX_AGENT_WEBHOOK"), "warns about missing env");
   assert.equal(errs.join("\n").includes("Bearer"), false);
 });
@@ -252,4 +251,165 @@ test("main: a READY whose ready-gate receipt is missing or refused is not sent",
   assert.deepEqual([bus.length, calls.length], [0, 0], "nothing sent");
   assert.equal(await main(argv, deps({ ok: true })), 0);
   assert.deepEqual([bus.length, calls.length], [1, 1]);
+});
+
+test("main: a protocol body the bus would refuse reaches neither channel; --idem rides to the bus and the webhook", async () => {
+  const bus = [], calls = [], errs = [];
+  const deps = {
+    env: { APEX_FLEET_AS: ME, APEX_AGENT_WEBHOOK_URL: "https://h.example/x", APEX_AGENT_WEBHOOK_AUTH: "tok" },
+    fetchFn: async (url, init) => { calls.push(JSON.parse(init.body)); return { ok: true, status: 200, text: async () => "" }; },
+    sendBus: (type, to, from, text, o) => { bus.push({ type, to, text, idem: o.idem }); return { ok: true, sha: "abc1234" }; },
+    log: () => {}, err: (l) => errs.push(l), headShaFn: () => "s", now: () => "t",
+  };
+  assert.equal(await main(["send", "--to", "A", "--type", "HANDOFF", "too short"], deps), 1);
+  assert.equal(await main(["send", "--to", "A", "--type", "LEND", "#3790 abc1234 lent to fleet A for merge"], deps), 1, "LEND without merger:");
+  assert.deepEqual([bus.length, calls.length], [0, 0], "refused before either channel");
+  assert.ok(errs.some((e) => e.includes("20-600")) && errs.some((e) => e.includes("merger:")), errs.join("|"));
+  assert.equal(await main(["send", "--to", "A", "--type", "LEND", "--pr", "3790", "--idem", "lend-3790", "abc1234 lent for merge merger:A"], deps), 0);
+  assert.deepEqual(bus[0], { type: "LEND", to: "A", text: "#3790 abc1234 lent for merge merger:A", idem: "lend-3790" });
+  assert.equal(calls[0].idem, "lend-3790");
+  assert.equal(calls[0].type, "LEND");
+});
+
+test("Q9: --to fleet:<L> is one bus broadcast to the fleet letter; the webhook keeps the raw alias", async () => {
+  assert.equal(resolveBusTo("fleet:A"), "A");
+  assert.equal(resolveBusTo("fleet:b"), "B");
+  assert.equal(resolveBusTo("fleet:AB"), "fleet:AB", "not a letter: passes through and the bus refuses it");
+  const sent = [];
+  const out = [];
+  const code = await main(["send", "--to", "fleet:A", "--type", "INFO", "--as", "claude:session_X", "hello fleet"], {
+    env: {}, cwd: "/nonexistent", headShaFn: () => "abc", err: () => {}, log: (l) => out.push(l),
+    sendBus: (...a) => { sent.push(a); return { ok: true }; },
+  });
+  assert.equal(code, 0);
+  assert.equal(sent.length, 1, "one bus line, not one per session");
+  assert.equal(sent[0][1], "A");
+});
+
+// ── Cross-account relay: --to <L> with APEX_<L>_RELAY_URL/TOKEN (audit 2026-10-26 rows 3, 11) ──
+const RELAY_URL = "https://api.example/v1/claude_code/routines/trig_x/fire";
+const RELAY_TOKEN = "sk-ant-oat01-relay-secret-value";
+const relayEnv = { APEX_FLEET_AS: ME, APEX_A_RELAY_URL: RELAY_URL, APEX_A_RELAY_TOKEN: RELAY_TOKEN };
+const resp = (status, body = {}, headers = {}) => ({
+  ok: status >= 200 && status < 300, status,
+  headers: { get: (k) => headers[k.toLowerCase()] ?? null },
+  text: async () => JSON.stringify(body),
+});
+
+test("relayRoute: a letter with the canonical pair → relay; retired names refused; else webhook", () => {
+  assert.deepEqual(relayEnvNames("a").url, "APEX_A_RELAY_URL");
+  assert.equal(relayRoute("A", relayEnv).kind, "relay");
+  assert.equal(relayRoute("a", relayEnv).letter, "A");
+  assert.equal(relayRoute("A", { APEX_A_RELAY_URL: RELAY_URL }).kind, "webhook", "half a pair is not a route");
+  assert.equal(relayRoute("DAD", relayEnv).kind, "webhook");
+  assert.equal(relayRoute("B", relayEnv).kind, "webhook");
+  const old = relayRoute("A", { APEX_A_INBOX_URL: "x", FLEET_A_INBOX_TOKEN: "y" });
+  assert.equal(old.kind, "retired");
+  assert.deepEqual(old.legacy, ["APEX_A_INBOX_URL", "FLEET_A_INBOX_TOKEN"]);
+});
+
+test("relayBackoff: 429 honours Retry-After up to the cap; 5xx exponential; other 4xx never; bounded", () => {
+  assert.equal(relayBackoff(429, 1, "30"), 30);
+  assert.equal(relayBackoff(429, 1, "3600"), null, "a reset past the cap stops");
+  assert.equal(relayBackoff(429, 1, null), 2);
+  assert.equal(relayBackoff(503, 1), 2);
+  assert.equal(relayBackoff(500, 2), 4);
+  assert.equal(relayBackoff(500, 3), null, "bounded");
+  for (const s of [400, 401, 403, 404]) assert.equal(relayBackoff(s, 1, "1"), null, String(s));
+});
+
+test("fireRelay: one POST with the documented headers; returns request id and session id", async () => {
+  const calls = [];
+  const r = await fireRelay(RELAY_URL, RELAY_TOKEN, "INFO from:me hi", {
+    fetchFn: async (url, init) => { calls.push({ url, init }); return resp(200, { type: "routine_fire", claude_code_session_id: "session_9" }, { "request-id": "req_1" }); },
+    sleep: async () => { throw new Error("no sleep on success"); },
+  });
+  assert.deepEqual([r.ok, r.status, r.requestId, r.sessionId, r.tries], [true, 200, "req_1", "session_9", 1]);
+  assert.equal(calls.length, 1);
+  const h = calls[0].init.headers;
+  assert.equal(h.Authorization, `Bearer ${RELAY_TOKEN}`);
+  assert.ok(h["anthropic-version"]);
+  assert.equal(h["content-type"], "application/json");
+  assert.deepEqual(JSON.parse(calls[0].init.body), { text: "INFO from:me hi" });
+  assert.equal((await fireRelay("http://plain", RELAY_TOKEN, "x", { fetchFn: async () => { throw new Error("no"); } })).ok, false);
+});
+
+test("fireRelay: stops on 4xx at once; retries 429/5xx at most twice; never retries a network error", async () => {
+  let n = 0;
+  const waits = [];
+  const sleep = async (ms) => { waits.push(ms); };
+  const r400 = await fireRelay(RELAY_URL, RELAY_TOKEN, "x", {
+    fetchFn: async () => { n++; return resp(400, { type: "error", error: { type: "invalid_request_error", message: "routine_paused" } }, { "request-id": "req_p" }); }, sleep,
+  });
+  assert.deepEqual([r400.ok, r400.tries, n, waits.length, r400.requestId], [false, 1, 1, 0, "req_p"]);
+  assert.equal(r400.error, "HTTP 400 invalid_request_error: routine_paused");
+
+  n = 0;
+  const r429 = await fireRelay(RELAY_URL, RELAY_TOKEN, "x", {
+    fetchFn: async () => { n++; return n < 3 ? resp(429, {}, { "retry-after": "5" }) : resp(200, {}); }, sleep,
+  });
+  assert.deepEqual([r429.ok, r429.tries, waits], [true, 3, [5000, 5000]]);
+
+  n = 0; waits.length = 0;
+  const r503 = await fireRelay(RELAY_URL, RELAY_TOKEN, "x", { fetchFn: async () => { n++; return resp(503); }, sleep });
+  assert.deepEqual([r503.ok, n, waits], [false, 3, [2000, 4000]], "1 + 2 retries, then stop");
+
+  n = 0;
+  const rNet = await fireRelay(RELAY_URL, RELAY_TOKEN, "x", { fetchFn: async () => { n++; throw new Error("reset"); }, sleep });
+  assert.deepEqual([rNet.ok, n], [false, 1]);
+});
+
+test("main --to A with the relay pair: fires once, mirrors to the bus, skips the webhook, never prints the token", async () => {
+  const out = [], errs = [], bus = [], calls = [];
+  const code = await main(["send", "--to", "A", "--type", "INFO", "--pr", "12", "slot free"], {
+    env: { ...relayEnv, APEX_AGENT_WEBHOOK_URL: "https://hooks.example/agent", APEX_AGENT_WEBHOOK_AUTH: "Bearer w" },
+    fetchFn: async (url, init) => { calls.push({ url, body: JSON.parse(init.body) }); return resp(200, { claude_code_session_id: "session_7" }, { "request-id": "req_9" }); },
+    sendBus: (type, to, from, text) => { bus.push({ type, to, text }); return { ok: true, sha: "1" }; },
+    log: (l) => out.push(l), err: (l) => errs.push(l), headShaFn: () => "sha", now: () => "ts",
+  });
+  assert.equal(code, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, RELAY_URL, "relay, not the webhook");
+  assert.equal(calls[0].body.text, `INFO from:${ME} #12 slot free`);
+  assert.deepEqual(bus, [{ type: "INFO", to: "A", text: "#12 slot free" }]);
+  const all = out.concat(errs).join("\n");
+  assert.ok(all.includes("request-id req_9"), all);
+  assert.equal(all.includes(RELAY_TOKEN), false);
+  assert.equal(all.includes(RELAY_URL), false);
+});
+
+test("main --to A: a relay 401 exits 1 once with the error redacted; retired names exit 1 naming the pair", async () => {
+  const errs = [];
+  let n = 0;
+  const code = await main(["send", "--to", "A", "--type", "INFO", "--no-bus", "x"], {
+    env: relayEnv,
+    fetchFn: async () => { n++; return resp(401, { type: "error", error: { type: "authentication_error", message: `bad ${RELAY_TOKEN}` } }); },
+    sendBus: () => { throw new Error("no bus"); }, log: () => {}, err: (l) => errs.push(l), headShaFn: () => "s", now: () => "t",
+    sleep: async () => { throw new Error("4xx never sleeps"); },
+  });
+  assert.deepEqual([code, n], [1, 1]);
+  assert.equal(errs.join("\n").includes(RELAY_TOKEN), false);
+  assert.ok(errs.join("\n").includes("[APEX_A_RELAY_TOKEN]"));
+
+  errs.length = 0;
+  const code2 = await main(["send", "--to", "A", "--type", "INFO", "x"], {
+    env: { APEX_FLEET_AS: ME, APEX_A_INBOX_URL: "https://old", APEX_A_INBOX_TOKEN: "old-token-value" },
+    fetchFn: async () => { throw new Error("must not fire"); },
+    sendBus: () => { throw new Error("must not bus"); }, log: () => {}, err: (l) => errs.push(l), headShaFn: () => "s", now: () => "t",
+  });
+  assert.equal(code2, 1);
+  assert.deepEqual(errs, ["agent-msg: retired env name(s) APEX_A_INBOX_URL, APEX_A_INBOX_TOKEN — the canonical pair is APEX_A_RELAY_URL + APEX_A_RELAY_TOKEN (Bryce renames them in the environment; references/communication.md)"]);
+  assert.equal(errs.join("\n").includes("old-token-value"), false);
+});
+
+test("main --to A --dry-run with the relay pair names the route, fires nothing", async () => {
+  const out = [];
+  const code = await main(["send", "--to", "A", "--type", "INFO", "--dry-run", "x"], {
+    env: relayEnv, fetchFn: async () => { throw new Error("no"); }, sendBus: () => { throw new Error("no"); },
+    log: (l) => out.push(l), err: () => {}, headShaFn: () => "s", now: () => "t",
+  });
+  assert.equal(code, 0);
+  assert.ok(out.join("\n").includes("would fire relay APEX_A_RELAY_URL"));
+  assert.equal(out.join("\n").includes(RELAY_TOKEN), false);
+  assert.equal(relayTextFor({ type: "READY", from: "x", pr: null, text: "t" }), "READY from:x t");
 });

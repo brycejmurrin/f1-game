@@ -36,11 +36,12 @@ node tools/ui/css-play.mjs garage --sel "#cs-tabs" --css css/carsetup.css
 `no-store`). `--inject ".sheet{…}"` is an overlay. Output:
 `artifacts/css-play/<screen>-<stamp>/{shot.png,dom.json,meta.json}`.
 
-Unknown screen or a sub-panel: `--click "#mb-foo" --root "#id"`. `--click`
-REPLACES the catalog path, so give the whole route: settings DISPLAY panel =
-`--click "#mb-settings,#pm-open-display" --root "#pm-panel-display" --sel ".tune-row"`
-(door ids: `pm-open-{controls,driving,display,appearance,files}`, `pm-advanced`,
-`pm-audio`). Catalog ids are a subset of `SCREENS` in `tools/ui/menu-screens.mjs`.
+Unknown screen or a sub-panel: `--click "#mb-foo" --root "#id"`. With `--screen`,
+`--click` runs EXTRA clicks after the catalog path; only with `--root` (no catalog
+id) does it REPLACE the path, so give the whole route: settings DISPLAY panel =
+`--click "#mb-settings,#pm-open-display" --root "#pm-panel-display" --sel ".tune-row"`.
+Door and screen ids drift: read them from `--list` (catalog ids are a subset of
+`SCREENS` in `tools/ui/menu-screens.mjs`), not from this file.
 Every step here needs a browser (Chromium via harness.mjs); `--help`/`--list` do not.
 
 Who owns a row (tune-row, set-row, the pause sheet): [references/loop.md §Who owns a row](references/loop.md#who-owns-a-row).

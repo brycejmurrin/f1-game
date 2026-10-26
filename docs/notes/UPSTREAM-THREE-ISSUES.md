@@ -196,7 +196,7 @@ census). It is open and High priority with no linked PR as of 2026-10-24
 (https://github.com/mrdoob/three.js/issues/30560); sunag (2026-01-06): sharing buffers across groups of
 similar objects is in progress. r186 already ships `BundleGroup` (render bundles), which
 TLX does not use yet, so that is the lever to measure first. See
-`docs/notes/RENDERER-ALTERNATIVES-2026-10-24.md`.
+`docs/archive/notes/RENDERER-ALTERNATIVES-2026-10-24.md`.
 
 ## 5. WGSLNodeBuilder: a 3-component colour target gets a `vec3` fragment output, which makes alpha blending invalid (draft, 2026-10-24; carried as vendored patch 18)
 

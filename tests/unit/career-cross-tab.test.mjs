@@ -85,8 +85,10 @@ function load(options = {}) {
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, Date, Set, Map, Promise,
     isNaN, isFinite, parseInt, console, setTimeout, clearTimeout, queueMicrotask, indexedDB,
+    navigator: options.navigator,
     localStorage: {
-      getItem: (k) => disk.has(k) ? disk.get(k) : null,
+      getItem: (k) => options.getItem ? options.getItem(k, disk) : disk.has(k) ? disk.get(k) : null,
+      removeItem: (k) => disk.delete(k),
       setItem: (k, v) => options.setItem
         ? options.setItem(k, String(v), disk)
         : disk.set(k, String(v)),
@@ -758,4 +760,90 @@ test("a fallback with nothing to restore persists the fallback pointer once the 
   await new Promise((r) => setImmediate(r));
   assert.equal(JSON.parse(disk.get("apex26.careerSlot")), "driver:1", "no restore came: the fallback becomes the pointer");
   assert.equal(Career.slot().i, 1);
+});
+
+// Each callback is scheduled separately, as with the browser lock task. The
+// owner persists until its document is destroyed (simulated by close()).
+function writerLocks() {
+  let owner = null;
+  return {
+    client() {
+      const client = { request(name, options, callback) {
+        assert.equal(name, "apex26-career-writer");
+        assert.equal(options.ifAvailable, true);
+        return Promise.resolve().then(() => {
+          if (owner) return callback(null);
+          owner = client;
+          return callback({ name });
+        });
+      }, close() { if (owner === client) owner = null; } };
+      return client;
+    },
+  };
+}
+
+test("one lifetime writer protects saves before storage events, including a stale localStorage snapshot", async () => {
+  const locks = writerLocks(), aLocks = locks.client(), bLocks = locks.client();
+  const a = load({ navigator: { locks: aLocks } });
+  a.Career.load(); // pre-lock snapshot must be invalidated on acquisition
+  await a.store.mirror.ready;
+  a.Career.engage(true);
+  const stale = new Map(a.disk);
+  const b = load({ disk: a.disk, navigator: { locks: bLocks }, getItem: k => stale.get(k) ?? null });
+  b.Career.load(); await b.store.mirror.ready;
+  assert.equal(a.store.careerWriter.state, "owned");
+  assert.equal(b.store.careerWriter.state, "busy");
+  a.Career.data().money = 9999; a.Career.save();
+  b.Career.data().money = 101; b.Career.save();
+  assert.equal(b.Career.saveStatus().reason, "writer-busy");
+  assert.equal(JSON.parse(a.disk.get("apex26.career.driver.0")).money, 9999);
+  assert.equal(b.store.write("career.driver.0", save(1, 3)).ok, false);
+  assert.equal(b.store.rawSet("career.driver.0", "null"), false);
+  assert.equal(b.store.rawDel("career.driver.0"), false);
+  assert.equal(b.Career.clear().ok, false);
+  assert.equal(b.Career.deleteSlot("driver", 0).ok, false);
+  assert.equal(b.Career.start({ flavour: "driver", slot: 1 }), null);
+  assert.equal(b.Career.grant(100), null);
+  assert.equal(b.Career.data().money, 101, "refused gameplay does not mutate the readable session");
+  aLocks.close();
+  assert.equal(b.store.careerWriter.state, "busy", "a stale document never takes over automatically");
+  const next = load({ disk: a.disk, navigator: { locks: locks.client() } });
+  await next.store.mirror.ready; next.Career.load();
+  assert.equal(next.Career.data().money, 9999);
+  assert.equal(next.store.careerWriter.state, "owned");
+  next.Career.data().money++; next.Career.save();
+  assert.equal(JSON.parse(a.disk.get("apex26.career.driver.0")).money, 10000);
+});
+
+test("writer acquisition discards pre-lock reads and owner quota failures preserve session progress", async () => {
+  const locks = writerLocks(); let blocked = false;
+  const h = load({ navigator: { locks: locks.client() }, setItem(k, v, disk) {
+    if (blocked) throw Object.assign(Error("full"), { name: "QuotaExceededError" });
+    disk.set(k, v);
+  } });
+  h.Career.load();
+  assert.equal(h.Career.saveStatus().reason, "writer-pending");
+  h.disk.set("apex26.career.driver.0", JSON.stringify(save(5, 999)));
+  await h.store.mirror.ready;
+  assert.equal(h.Career.data().money, 999);
+  h.Career.engage(true); blocked = true;
+  h.Career.grant(10); h.Career.grant(20);
+  assert.equal(h.Career.data().money, 1029);
+  assert.equal(h.Career.saveStatus().ok, true);
+  assert.equal(h.Career.saveStatus().durable, false);
+  blocked = false; assert.equal(h.store.retryFailed().durable, true);
+  assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 1029);
+});
+
+test("missing or denied browser locks fail closed while leaving career reads and other settings available", async () => {
+  for (const navigator of [{}, { locks: { request: () => Promise.reject(Error("denied")) } }]) {
+    const h = load({ navigator }); await h.store.mirror.ready; h.Career.load();
+    const original = h.disk.get("apex26.career.driver.0");
+    assert.equal(h.Career.data().money, 100);
+    assert.equal(h.Career.saveStatus().reason, "writer-unavailable");
+    assert.equal(h.Career.deleteSlot("driver", 0).ok, false);
+    assert.equal(h.store.write("career.driver.1", save(0, 1)).ok, false);
+    assert.equal(h.disk.get("apex26.career.driver.0"), original);
+    assert.equal(h.store.write("volume", 0.5).durable, true);
+  }
 });

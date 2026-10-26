@@ -50,13 +50,36 @@ const LAUNCH = {
 // SwiftShader. CI's DEFAULT for the smoke gate, the `selected` shards and the
 // dispatched wide run since 2026-09-16 (ci.yml installs Mesa + Xvfb and sets
 // the env; `gl: swiftshader` is the opt-out) — measured 8-12x faster on the
-// rendering tests. It does NOT work in the dev container (no /dev/dri —
-// docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe 2026-09-16), so the
+// rendering tests. It needs libEGL.so.1 + libgles2 (and Xvfb), NOT /dev/dri:
+// without libEGL Chromium silently falls back to SwiftShader, which is what
+// the 2026-09-16 container probe saw (re-measured in a cloud container,
+// measured 2026-10-26; `--probe-gl` below catches the fallback). The
 // SwiftShader pin above stays the committed default for a local run and for
 // driving-model, the twins' parity anchor (ci-coverage guards both).
 if (process.env.APEX_GL === "llvmpipe") {
   LAUNCH.args = LAUNCH.args.map((a) => (a === "--use-angle=swiftshader" ? "--use-angle=gl" : a))
     .concat(["--use-gl=angle", "--ignore-gpu-blocklist"]);
+}
+
+// FAIL FAST WHEN llvmpipe DID NOT BIND (2026-10-26, system audit §9). A runner
+// whose Mesa/Xvfb step half-worked falls back to SwiftShader silently: every
+// spec then runs ~10x slower and the shard dies on its job cap, which reads as
+// a red the PR did not cause. ci.yml and browser-group.yml run
+// `node playwright.config.js --probe-gl` after the Mesa step: it launches the
+// suite's own Chromium flags on a blank page and exits 1 unless
+// WEBGL_debug_renderer_info names llvmpipe. One launch, a few seconds.
+export async function probeGl(launch = LAUNCH) {
+  const { chromium } = await import("@playwright/test");
+  const browser = await chromium.launch(launch);
+  try {
+    const page = await browser.newPage();
+    return await page.evaluate(() => {
+      const gl = document.createElement("canvas").getContext("webgl2") || document.createElement("canvas").getContext("webgl");
+      if (!gl) return "no WebGL context";
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      return String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+    });
+  } finally { await browser.close(); }
 }
 
 // The render suite: specs that take screenshots / pixel-diffs, drive real GL
@@ -159,7 +182,18 @@ if (MANUAL_RUN) process.env.APEX_MANUAL_RUN = "1";
 export const TEST_MATCH = MANUAL_RUN ? ["specs/**/*.spec.js", "manual/**/*.spec.js"] : ["specs/**/*.spec.js"];
 export const MANUAL_IGNORE = MANUAL_RUN ? [] : ["**/manual/**"];
 
+// A WHOLE-RUN CAP ON CI (2026-10-26). Without one a run that hangs, or slowly
+// outgrows its job's timeout-minutes, is killed by the runner mid-run and writes
+// no report; with it Playwright stops the run itself and the reporters still
+// write. 45 min sits under browser-group.yml's 60-min job cap; APEX_GLOBAL_TIMEOUT_MIN
+// overrides it (ci.yml's 120-min nightly wide run passes 110). 0 locally: no cap.
+// https://playwright.dev/docs/ci#global-timeout , https://playwright.dev/docs/api/class-testconfig#test-config-global-timeout
+const GLOBAL_TIMEOUT_MIN = Number.parseInt(process.env.APEX_GLOBAL_TIMEOUT_MIN || "", 10);
+export const GLOBAL_TIMEOUT_MS = (Number.isFinite(GLOBAL_TIMEOUT_MIN) && GLOBAL_TIMEOUT_MIN >= 0
+  ? GLOBAL_TIMEOUT_MIN : process.env.CI ? 45 : 0) * 60_000;
+
 export default defineConfig({
+  globalTimeout: GLOBAL_TIMEOUT_MS,
   testDir: "./tests",
   testMatch: TEST_MATCH,
   testIgnore: MANUAL_IGNORE,
@@ -289,5 +323,19 @@ export default defineConfig({
     ["./tests/helpers/live-reporter.js"],
     ["html", { open: "never", outputFolder: `artifacts/report${SUF}` }],
     ["junit", { outputFile: `artifacts/test-results${SUF}/junit.xml` }],
+    // One mergeable blob per CI shard (2026-10-26): browser-group.yml and ci.yml's
+    // sharded jobs upload it, and a merge-reports job writes ONE html + ONE json
+    // per group instead of four partial reports. https://playwright.dev/docs/test-sharding
+    ...(process.env.CI ? [["blob", { outputDir: `artifacts/blob-report${SUF}` }]] : []),
   ],
 });
+
+if (process.argv[1] && process.argv[1].endsWith("playwright.config.js") && process.argv.includes("--probe-gl")) {
+  const renderer = await probeGl();
+  const want = process.env.APEX_GL === "llvmpipe";
+  console.log(`probe-gl: APEX_GL=${process.env.APEX_GL || "(unset)"} renderer="${renderer}"`);
+  if (want && !/llvmpipe/i.test(renderer)) {
+    console.error(`::error title=llvmpipe did not bind::APEX_GL=llvmpipe but WebGL reports "${renderer}" — the Mesa/Xvfb step failed silently; this shard would run on SwiftShader ~10x slower and time out`);
+    process.exit(1);
+  }
+}

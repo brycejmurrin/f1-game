@@ -41,6 +41,19 @@ Document Window HTMLElement""".split())
 ARG_OPTS = set("-A -B -C -m -t -T -g -f --type --type-not --glob --iglob --max-count --context --after-context --before-context --max-depth -d -D --include --exclude --exclude-dir".split())
 
 
+def outside_js(where):
+    """True when a search names a path that is neither js/ (or below), types/, nor the whole tree.
+
+    A capitalised word grepped in a transcript digest or a tools/ file is text, not a script global
+    (audit 2026-10-26 row 16: `TURN` in a digest drew the hint)."""
+    w = (where or "").strip().strip("'\"")
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or ""
+    if root and w.startswith(root):
+        w = w[len(root):]
+    w = re.sub(r"^(\./|/)+", "", w)
+    return bool(w) and w not in (".", "|", "||", "&&", ";") and not re.match(r"(js|types)(/|$)", w)
+
+
 def symbol_of(pattern):
     m = SYMBOL.match(pattern or "")
     if not m:
@@ -51,6 +64,11 @@ def symbol_of(pattern):
     if not m.group("decl") and (not head[0].isupper() or head in BUILTINS):
         return None, False
     if len(sym) < 3:
+        return None, False
+    # 2026-10-26 (system audit §4; user grant, Bryce 2026-10-26: "Fix hook or guard or perm"): a bare
+    # SCREAMING_CASE word (RELAY_URL, APEX_MERGE_DESK, TURN) is an env name or a constant grepped as text, not a
+    # script global; only a bare CapitalisedSymbol (has a lowercase letter) or a Head.member fires.
+    if "." not in sym and not m.group("decl") and not re.search(r"[a-z]", sym):
         return None, False
     return sym, bool(m.group("decl"))
 
@@ -85,14 +103,14 @@ def main():
     tool, inp = data.get("tool_name"), data.get("tool_input") or {}
     if tool == "Grep":
         pattern = inp.get("pattern")
-        if inp.get("type") not in (None, "", "js", "ts") or SKIP_PATH.search(str(inp.get("path") or "")) or SKIP_GLOB.search(str(inp.get("glob") or "")):
+        if inp.get("type") not in (None, "", "js", "ts") or SKIP_PATH.search(str(inp.get("path") or "")) or outside_js(inp.get("path")) or SKIP_GLOB.search(str(inp.get("glob") or "")):
             return
         where = ""
     elif tool == "Bash":
         pattern, where = from_bash(inp.get("command") or "")
     else:
         return
-    if not pattern or SKIP_PATH.search((where or "").strip()):
+    if not pattern or SKIP_PATH.search((where or "").strip()) or (tool == "Bash" and outside_js(where)):
         return
     sym, is_decl = symbol_of(pattern)
     if not sym:

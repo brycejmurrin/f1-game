@@ -42,6 +42,7 @@ import { fileURLToPath } from "node:url";
 import { pick, DEPLOY_BRANCH, validateSelectionArgs, selectionReceipt } from "./pick-tests.mjs";
 import { estimateToolingFast, loadTimings, selectToolingFastChanged, TOOLING_FAST_FILES } from "./tooling-fast.mjs";
 import { proxyFetch } from "../lib/proxy-fetch.mjs";
+import { changedPaths } from "../lib/changed-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -82,11 +83,13 @@ function changedFiles() {
   const explicit = argv.filter((a, n) =>
     !a.startsWith("--") && !(sinceIdx >= 0 && n === sinceIdx + 1));
   if (explicit.length) return explicit;
-  if (flag("--staged")) return git(["diff", "--cached", "--name-only"]).split("\n").filter(Boolean);
-  if (opt("--since")) return git(["diff", "--name-only", opt("--since")]).split("\n").filter(Boolean);
+  // Rename SOURCES too (ledger M36; tools/lib/changed-files.mjs): `--name-only`
+  // lists only a moved file's destination, so its old directory's rules never fired.
+  if (flag("--staged")) return changedPaths(["--cached"], { cwd: ROOT });
+  if (opt("--since")) return changedPaths([opt("--since")], { cwd: ROOT });
   const base = mergeBase();
-  const out = new Set(git(["diff", "--name-only", "HEAD"]).split("\n").filter(Boolean));
-  if (base) for (const f of git(["diff", "--name-only", base]).split("\n")) if (f) out.add(f);
+  const out = new Set(changedPaths(["HEAD"], { cwd: ROOT }));
+  if (base) for (const f of changedPaths([base], { cwd: ROOT })) out.add(f);
   for (const f of git(["ls-files", "--others", "--exclude-standard"]).split("\n")) if (f) out.add(f);
   return [...out];
 }

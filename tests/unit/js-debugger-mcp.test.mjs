@@ -2,20 +2,36 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync, unlinkSync } from "node:fs";
+import { readFileSync, unlinkSync, existsSync } from "node:fs";
 import { localUrl } from "../../tools/mcp/js-debugger-cdp.mjs";
 import { DebugSession } from "../../tools/mcp/js-debugger-session.mjs";
 import { callTool, TOOLS } from "../../tools/mcp/js-debugger-mcp.mjs";
+import {
+  summarizeCpuProfile, hitchWindowsFromCpuProfile, summarizeHeapSample, shortUrl,
+} from "../../tools/mcp/js-debugger-trace.mjs";
 import http from "node:http";
 import { debuggerRequest } from "../../tools/mcp/js-debugger-http.mjs";
 import { frame, paused, attached } from "../helpers/js-debugger-rig.mjs";
+
+/** Minimal V8 CPU profile: one hot sample with an 80 ms timeDelta (hitch). */
+function fixtureCpuProfile() {
+  return {
+    startTime: 0, endTime: 100000,
+    nodes: [
+      { id: 1, callFrame: { functionName: "(root)", url: "", lineNumber: -1, columnNumber: -1 }, children: [2] },
+      { id: 2, callFrame: { functionName: "tick", url: "http://127.0.0.1:3456/js/game.js?v=dev", lineNumber: 9, columnNumber: 0 }, children: [] },
+    ],
+    samples: [2, 2, 2],
+    timeDeltas: [1000, 80000, 2000],
+  };
+}
 
 test("loopback validation refuses remote/rebinding/credentials and wrong protocols", () => {
   for (const u of ["http://example.com", "http://127.0.0.1.evil.test", "http://user@localhost", "https://localhost", "http://localhost/?secret=1"]) assert.throws(() => localUrl(u));
   for (const u of ["http://127.0.0.1:9222", "http://localhost:9222", "http://[::1]:9222"]) assert.equal(localUrl(u).protocol, "http:");
 });
 test("tools expose actual debugger operations; malformed arguments fail before attachment", async () => {
-  assert.equal(TOOLS.length, 22);
+  assert.equal(TOOLS.length, 23);
   const s = new DebugSession();
   for (const [name, args] of [["debugger_breakpoint", { url: "x", line: 0 }], ["debugger_control", { action: "unknown" }],
     ["debugger_source", { scriptId: "s1", count: 201 }], ["debugger_state", { surprise: true }], ["debugger_evaluate", { pauseToken: "x", expression: "x", allowSideEffects: "true" }]]) {
@@ -449,4 +465,70 @@ test("A4: instances queries the prototype, reads the array length and releases t
   assert.ok(c.calls.some(x => x.method === "Runtime.releaseObjectGroup" && x.params.objectGroup === "apex-dbg-instances"));
   c.reply = async () => ({ result: {}, exceptionDetails: { text: "x" } });
   assert.equal((await callTool(s, "debugger_instances", { expression: "Nope" })).isError, true);
+});
+
+test("W25a: summarizeCpuProfile ranks self time and hitch windows", () => {
+  assert.equal(shortUrl("http://127.0.0.1:3456/js/game.js?v=dev"), "js/game.js");
+  const summary = summarizeCpuProfile(fixtureCpuProfile(), { top: 5 });
+  assert.equal(summary.kind, "cpu");
+  assert.ok(summary.totalMs >= 80);
+  assert.ok(summary.byFnSelf[0].name.includes("tick"));
+  const hitches = hitchWindowsFromCpuProfile(fixtureCpuProfile(), { thresholdMs: 50 });
+  assert.equal(hitches.windows.length, 1);
+  assert.equal(hitches.windows[0].durationMs, 80);
+  const heap = summarizeHeapSample({
+    head: { callFrame: { functionName: "(root)", url: "", lineNumber: -1, columnNumber: -1 }, selfSize: 0,
+      children: [{ callFrame: { functionName: "alloc", url: "http://127.0.0.1/js/x.js", lineNumber: 2, columnNumber: 0 }, selfSize: 4096, children: [] }] },
+  });
+  assert.equal(heap.totalKb, 4);
+});
+
+test("W25a: debugger_profile start/stop cpu returns bounded summary", async () => {
+  const { s, c } = await attached();
+  c.reply = async (method) => method === "Profiler.stop" ? { profile: fixtureCpuProfile() } : {};
+  assert.equal((await callTool(s, "debugger_profile", { action: "start", kind: "cpu", intervalUs: 500 })).isError, false);
+  assert.equal((await callTool(s, "debugger_profile", { action: "status" })).structuredContent.profiling.kind, "cpu");
+  const stopped = await callTool(s, "debugger_profile", { action: "stop", kind: "cpu", thresholdMs: 50, top: 5 });
+  assert.equal(stopped.isError, false, JSON.stringify(stopped.structuredContent));
+  assert.equal(stopped.structuredContent.summary.hitches.windows[0].durationMs, 80);
+  assert.ok(stopped.structuredContent.artifact && existsSync(stopped.structuredContent.artifact));
+  unlinkSync(stopped.structuredContent.artifact);
+  assert.deepEqual(
+    c.calls.map(x => x.method).filter(m => m.startsWith("Profiler")),
+    ["Profiler.enable", "Profiler.setSamplingInterval", "Profiler.start", "Profiler.stop", "Profiler.disable"],
+  );
+  await s.detach();
+});
+
+test("W25a: debugger_profile refuses while paused; hitch uses evaluate", async () => {
+  const { s, c } = await attached();
+  paused(c);
+  const refused = await callTool(s, "debugger_profile", { action: "start" });
+  assert.equal(refused.isError, true);
+  assert.match(refused.structuredContent.error, /Resume before profiling/);
+  c.emit("Debugger.resumed");
+  c.reply = async (method, params) => {
+    if (method === "Runtime.evaluate" && /requestAnimationFrame/.test(params?.expression || "")) {
+      return { result: { value: { ok: true, durationMs: 200, thresholdMs: 50, frames: 12, windows: [{ t: 1, durationMs: 60, sinceStartMs: 10 }] } } };
+    }
+    return {};
+  };
+  const hitch = await callTool(s, "debugger_profile", { action: "hitch", durationMs: 200 });
+  assert.equal(hitch.isError, false);
+  assert.equal(hitch.structuredContent.windows[0].durationMs, 60);
+  await s.detach();
+});
+
+test("W25a: debugger_profile heap start/stop summarises sampling tree", async () => {
+  const { s, c } = await attached();
+  c.reply = async (method) => method === "HeapProfiler.stopSampling"
+    ? { profile: { head: { callFrame: { functionName: "(root)", url: "", lineNumber: -1, columnNumber: -1 }, selfSize: 0,
+      children: [{ callFrame: { functionName: "buf", url: "http://127.0.0.1/js/a.js", lineNumber: 0, columnNumber: 0 }, selfSize: 8192, children: [] }] } } }
+    : {};
+  assert.equal((await callTool(s, "debugger_profile", { action: "start", kind: "heap" })).isError, false);
+  const stopped = await callTool(s, "debugger_profile", { action: "stop", kind: "heap", save: false });
+  assert.equal(stopped.isError, false);
+  assert.equal(stopped.structuredContent.summary.totalKb, 8);
+  assert.equal(stopped.structuredContent.artifact, undefined);
+  await s.detach();
 });
