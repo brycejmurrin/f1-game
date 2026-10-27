@@ -43,7 +43,8 @@ test("weather grip is continuous through the old discrete transition boundaries"
     g.apex.step(0,1);   // A3: settle frame.wetness to the lerp (look=drive)
     const w=g.G.trackWetness();
     samples.push({t,w,fw:g.G.frame.wetness,grip:g.G.gripMult({tread:0})});
-    assert.ok(Math.abs(g.G.frame.wetness-w)<1e-6,
+    // frame.wetness is the field under the view's (s, x): the lap value, shaved by at most the drying line (#1627)
+    assert.ok(g.G.frame.wetness<=w+1e-6&&g.G.frame.wetness>=w*(1-0.6)-1e-6,
       "frame.wetness must track trackWetness at t="+t+" (fw="+g.G.frame.wetness+" w="+w+")");
   }
   assert.equal(samples[0].grip,1);assert.equal(samples.at(-1).grip,.72);
