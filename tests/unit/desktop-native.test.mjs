@@ -270,9 +270,10 @@ test("cross-device links use public HTTPS in wrappers and preserve web deploymen
     // Drive the real platform UI callback using the generic pairing builder.
     // The adapter must preserve relay configuration and null QR teardown.
     const native = vm.runInContext("Native", ctx);
-    const pad = vm.runInNewContext(readFileSync(join(ROOT, "js/input/phone-pad.js"), "utf8") + ";PhonePad", {
-      location: sandbox.location, URL,
-    }, { filename: absSrc("js/input/phone-pad.js") });
+    const padCtx = vm.createContext({ location: sandbox.location, URL });
+    for (const f of ["js/input/phone-pad-codec.js", "js/input/phone-pad-page.js"])
+      vm.runInContext(readFileSync(join(ROOT, f), "utf8"), padCtx, { filename: absSrc(f) });
+    const pad = vm.runInContext(readFileSync(join(ROOT, "js/input/phone-pad.js"), "utf8") + ";PhonePad", padCtx, { filename: absSrc("js/input/phone-pad.js") });
     const nodes = new Map(), qrs = [];
     const $ = (id) => {
       if (!nodes.has(id)) nodes.set(id, { textContent: "", hidden: true, setAttribute() {}, scrollIntoView() {}, append() {} });

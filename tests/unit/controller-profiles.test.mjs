@@ -17,7 +17,7 @@ function boot() {
     document: { addEventListener(t, f) { (listeners[t] ||= []).push(f); }, removeEventListener() {}, getElementById: el, querySelector: el, querySelectorAll: () => [], hidden: false, body: el() } };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ['js/core/mat4.js', 'js/input/tilt-roll.js', 'js/input/bindings.js', 'js/input/pad-menu.js', 'js/input/haptics.js', 'js/input/hold-buttons.js', 'js/input/controller-profiles.js', 'js/input/input.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  for (const f of ['js/core/mat4.js', 'js/input/tilt-roll.js', 'js/input/bindings.js', 'js/input/pad-menu.js', 'js/input/haptics.js', 'js/input/pedal-travel.js', 'js/input/hold-buttons.js', 'js/input/controller-profiles.js', 'js/input/input.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext('Input', ctx), Profiles = vm.runInContext('ControllerProfiles', ctx);
   Input.init(el());
   const drive = (pad) => { state.pads = [pad]; (listeners.gamepadconnected || []).forEach((fn) => fn({ gamepad: pad })); clock.t += 17; Input.poll(); };

@@ -45,7 +45,7 @@ const NAME = /^-?[_a-zA-Z][\w-]*$/;
 // that reads as a hook and is in fact decoration, with the selector that does
 // the real work. Adding a row is a decision; leaving one out is a test failure.
 export const KNOWN = {
-  // PHONE AS CONTROLLER page state (js/input/phone-pad.js pad()): both are
+  // PHONE AS CONTROLLER page state (js/input/phone-pad-page.js pad()): both are
   // defined in controller.html's own <style>, which is a root page like
   // bench.html and not under css/ — `body.linked` swaps the pairing screen
   // for the pedals, `#status.bad` colours a refusal.
