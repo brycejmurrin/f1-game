@@ -191,16 +191,19 @@ window.UiLayers = (function () {
      querySelectorAll plus :modal plus a getComputedStyle per open layer. The same
      observer drops the memo (navDirty), a second one sees any `open` attribute in
      the document (showModal on a dynamic dialog), and a detached answer is never
-     returned. */
+     returned. Drain BEFORE computing, and return the local: draining after it
+     (navDirty drops topMemo) handed callers `undefined` whenever records were
+     pending, so experience.js's photo swap saw the layer "change" and gave up. */
   let topMemo, topMemoAt = 0;
   function top() {
+    if (!navObs) return topNow();
     const now = clock();
-    if (navObs && now - topMemoAt < NAV_MEMO_MS && !navDirty() && topMemo !== undefined
+    if (!navDirty() && topMemo !== undefined && now - topMemoAt < NAV_MEMO_MS
       && (!topMemo || topMemo.isConnected !== false)) return topMemo;
-    topMemo = topNow();
+    const best = topNow();
+    topMemo = best;
     topMemoAt = now;
-    if (navObs) { navDirty(); navStale = false; }
-    return topMemo;
+    return best;
   }
   function topNow() {
     let best = null;
@@ -310,10 +313,11 @@ window.UiLayers = (function () {
   function navOpen() {
     const now = clock();
     if (navMemo !== null && now - navMemoAt < NAV_MEMO_MS && !navDirty()) return navMemo;
-    navMemo = navOpenNow();
-    navMemoAt = now;
+    const open = navOpenNow();
     if (navObs) { navDirty(); navStale = false; } // watch before trusting; a write after the read above is caught by the next call
-    return navMemo;
+    navMemo = open;   // AFTER the drain: navDirty() nulls navMemo, and a null return reads as "closed"
+    navMemoAt = now;
+    return open;
   }
 
   function navOpenNow() {
