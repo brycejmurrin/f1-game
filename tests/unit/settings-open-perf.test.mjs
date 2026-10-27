@@ -267,6 +267,51 @@ test("MenuSheetGate.idle defers while Settings is open", async () => {
   assert.equal(await Gate.idle(() => true, 0, () => 0, () => Promise.resolve()), true);
 });
 
+test("MenuSheetGate.open ignores door focus once the sheet is hidden (review F4)", () => {
+  const sheet = { hidden: true };
+  const dom = {
+    getElementById: (id) => (id === "pmsettings" ? sheet : null),
+    activeElement: { id: "mb-settings" },
+  };
+  const ctx = vm.createContext({
+    performance: { mark() {} },
+    setTimeout: (fn) => { fn(); return 1; },
+    document: dom,
+    Object, Promise, WeakMap, MutationObserver: class { observe() {} disconnect() {} },
+  });
+  vm.runInContext(read("js/core/menu-sheet-gate.js"), ctx, { filename: absSrc("js/core/menu-sheet-gate.js") });
+  const Gate = vm.runInContext("MenuSheetGate", ctx);
+  assert.equal(Gate.open(dom), false, "closed sheet + door focus is not open");
+  sheet.hidden = false;
+  assert.equal(Gate.open(dom), true, "visible sheet is open");
+  const gate = { warm: 3, garageWarm: 0 };
+  Gate.parkWarm(gate);
+  assert.equal(gate.warm, 0);
+  // Simulate close: sheet hides while focus stays on the door — must resume.
+  sheet.hidden = true;
+  let sync = null;
+  class MO {
+    constructor(fn) { sync = fn; }
+    observe() {}
+    disconnect() {}
+  }
+  ctx.MutationObserver = MO;
+  const unwatch = Gate.watch(gate, { document: dom });
+  assert.equal(typeof unwatch, "function");
+  // watch() parks if already open; sheet is hidden so it should not park.
+  assert.equal(gate.warm, 0);
+  // Open then close via observer sync.
+  sheet.hidden = false;
+  sync();
+  assert.equal(gate.warm, 0);
+  assert.ok(Gate.parkedWarm(gate));
+  sheet.hidden = true;
+  sync();
+  assert.equal(gate.warm, 3, "resumeWarm restores counters after close despite door focus");
+  assert.equal(Gate.parkedWarm(gate), null);
+  unwatch();
+});
+
 test("MenuSheetGate.parkWarm holds menu warm counters until resume", () => {
   const marks = [];
   const ctx = vm.createContext({

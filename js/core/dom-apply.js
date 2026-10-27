@@ -34,17 +34,42 @@ const I18nDom = (function () {
     const attrSpec = el.getAttribute("data-i18n-attr");
     if (attrSpec) {
       for (const { attr, key: k } of parseAttrSpec(attrSpec)) {
-        const fallback = el.getAttribute(attr) || "";
+        const defAttr = "data-i18n-default-" + attr;
+        let fallback = el.getAttribute(defAttr);
+        if (fallback == null) {
+          fallback = el.getAttribute(attr) || "";
+          el.setAttribute(defAttr, fallback);
+        }
         el.setAttribute(attr, I18n.t(k, null, fallback));
       }
     }
   }
 
+  /** Restore English source text/attrs saved on first non-en apply. */
+  function restoreNode(el) {
+    const key = el.getAttribute("data-i18n");
+    if (key) {
+      const fallback = el.getAttribute("data-i18n-default");
+      if (fallback != null) el.textContent = fallback;
+    }
+    const attrSpec = el.getAttribute("data-i18n-attr");
+    if (attrSpec) {
+      for (const { attr } of parseAttrSpec(attrSpec)) {
+        const fallback = el.getAttribute("data-i18n-default-" + attr);
+        if (fallback != null) el.setAttribute(attr, fallback);
+      }
+    }
+  }
+
   function apply(root) {
-    if (!shouldApply()) return;
     const scope = root && root.querySelectorAll ? root : document;
     if (!scope || !scope.querySelectorAll) return;
-    for (const el of scope.querySelectorAll("[data-i18n], [data-i18n-attr]")) applyNode(el);
+    const nodes = scope.querySelectorAll("[data-i18n], [data-i18n-attr]");
+    if (!shouldApply()) {
+      for (const el of nodes) restoreNode(el);
+      return;
+    }
+    for (const el of nodes) applyNode(el);
   }
 
   if (typeof I18n !== "undefined") {
@@ -53,7 +78,8 @@ const I18nDom = (function () {
     if (I18n.lang() !== "en") apply();
   }
 
-  return { apply, applyNode, shouldApply };
+  // applyNode / shouldApply stay module-private (review F5: no game caller).
+  return { apply };
 })();
 
 if (typeof window !== "undefined") window.I18nDom = I18nDom;

@@ -25,7 +25,8 @@
  *
  * The scanner is the hunter's (scratch/hunt3-persistence/inventory.cjs), kept
  * for the original direct lanes, with AST-proven indirect writers added. js/circuits/ is excluded
- * (circuit data writes no keys), as are *presets.js data tables.
+ * (circuit data writes no keys), as are lighting/elev `presets.js` data tables
+ * (not `setup-presets.js`, which writes `setupPresets.<team>`).
  *
  * Run: node --test tests/unit/store-registry.test.mjs
  */
@@ -325,5 +326,6 @@ test("local forwarding chains resolve writers without treating a read-only wrapp
 test("the shared js/ walk includes the engine and skips circuit data, vendored code and presets tables", () => {
   const files = jsFiles();
   assert.ok(files.includes("js/game.js") && files.includes("js/core/save-schema-registry.js"));
-  assert.ok(!files.some((f) => f.startsWith("js/circuits/") || f.endsWith("presets.js") || /vendor|three\/lib/.test(f)));
+  assert.ok(files.includes("js/garage/setup-presets.js"), "setup-presets.js writes setupPresets.* and must be scanned");
+  assert.ok(!files.some((f) => f.startsWith("js/circuits/") || f.endsWith("/presets.js") || f.endsWith("/elev-presets.js") || /vendor|three\/lib/.test(f)));
 });
