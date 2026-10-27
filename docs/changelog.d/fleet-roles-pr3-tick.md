@@ -1,2 +1,0 @@
-New: the fleet watch runs as a job in the fleet workflow: every 30 minutes fleet-tick.mjs diffs the PR board, ship CI and Pages against the last run, writes the changes and the whole board to the run summary (`--summary`) and uploads a `fleet-board` artifact; a tick error is a warning, never a red run.
-Improved: the fleet workflow's permissions are per job, and the session-side fleet watcher only reads sessions and cost and posts flags.
