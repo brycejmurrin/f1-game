@@ -79,6 +79,23 @@ full-overwrite pass clears rather than loads (`runPass`), so there is no needles
   Verdict prints it as `store: submits=… stored=…/f discarded=…/f` plus the top passes. A flag arm shows up as a
   changed format in that list (rgba16float → rg11b10ufloat, r16float → r8unorm).
 
+## Census result (macos-latest, Dawn on Metal; montreal night, chase, `forceMobileTier=1`)
+
+| arm | run | WebGPU gpuErrors | store row | scene pass |
+|---|---|---|---|---|
+| flags (`tlxMir11`, `tlxTag8`, `tlxGodray11`) | 40561149896 | 0 | submits=8, stored 9.08/f, discarded 2.05/f | `1280x720/rg11b10ufloat:clear>store + r8unorm:clear>discard + d:clear>discard` |
+| control | 40565792193 | 0 | submits=8, stored 9.07/f, discarded 2.05/f | the same with `r16float` for the tag |
+
+- The runner exposes `rg11b10ufloat-renderable`, so scene11 is on in both arms.
+- The tag changed format. It is discarded in both arms, because the governor sits at tier 3 there and sheds SSR, so
+  the r8 tag saves nothing on this runner.
+- No godray pass ran in either arm, because tier 3 sheds it.
+- The mirror was `shown=false` in the window. Only its warm draws ran into the rg11b10 + r8 target, and they raised
+  no GPU error.
+- Eight submits a frame confirms finding 5's count at this tier.
+- fps (23.3 vs 20.1) is runner noise (PP-19) and is not quoted as a result.
+- What is still open: the device arms on #3954 — the mirror drawn, a lower tier, and a fill-bound scale.
+
 ## A/B recipe
 
 - Census, one run per arm, sequentially (render-tlx.md): `gpu-census.yml` with
