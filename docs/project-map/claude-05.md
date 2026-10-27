@@ -1,0 +1,69 @@
+# Claude source map — batch 05
+
+Source-only review of 160,000 assigned bytes in 32 file parts. Byte ranges are half-open; `claude-05-evidence.json` records whole-file, part and independently read chunk hashes. The first livery reference starts mid-file; no claim covers its preceding bytes. No audited instructions, hooks, scripts, tests, browser or network workflow was executed. Four read-only LSP definition lookups anchor runtime seams; other statements below describe the audited contracts rather than runtime verification.
+
+## Discovery and registration
+
+The six complete skill entrypoints use YAML `name`/`description` front matter to match prompts. `handoff` additionally declares `user-invocable: true`. `.claude/skills/README.md` lists all six plus the livery owner; existing `.agents/skills/` symlinks point back to each canonical directory. References load on demand from their owning skill, rather than registering independent commands. The two lighting scripts are standalone Node CLIs invoked by prose, not hooks.
+
+`.mcp.json` and `.codex/config.toml` register the separate debugger and Chrome DevTools through `output-level-mcp.sh` and their server wrappers. `.claude/settings.json` connects matching browser/debugger MCP calls to `mcp-browser-guard.sh`; the declared parent-only browser ownership is therefore both prose and a configured hook boundary in Claude. Codex does not run those Claude hooks. This batch contains no standalone agent or hook definition.
+
+## Livery reference continuation
+
+`livery-fields.md` (assigned tail) distinguishes authored logo colors from legibility treatments: `logo3` is outline, plates/derived halos solve contrast without replacing authored color. Dynamic mark slots and live fill surfaces feed the garage editor and capture planner. LSP locates `LiveryTex.markSlots` at `js/car/liverytex.js:904`, exported at line 2668, with a caller in custom-team UI. Color, glyph and fill-gating tests have separate responsibilities.
+
+`placement.md` owns the evidence ladder: atlas ink station → real mesh/wheel occlusion → flat raster → lit racing-distance capture. Inputs are team, crown, side design, camera and optional framing. Outputs are station bounds, hidden-ink fractions, atlas PNGs or browser captures. `spine-station.mjs` subtracts the no-side-design atlas; `flank-occlusion.mjs` projects real decal/body/wheel geometry. This avoids reimplementing body profiles. Diff caveats include removed filler badges, image-backed crest fallbacks and metric boxes for text. Crown rows measure crown art separately. Content uses a visible-region axis distinct from decorative bands; trim moves aft when it conflicts with lettering. Garage panel compensation and top-view truss explain intentional framing. Cross-run brightness changes remain a documented unresolved confounder; compare axes inside one capture run. Color, placement, glyph, lit and geometry tests cannot substitute for one another.
+
+`shot-cli.md` declares team/design/view/output/plan inputs, artifact-only capture writes, preflight before reset, parent-owned serialized Chromium, and routes placement to offline stations, isolated meshes to the car renderer and interactive work to mcp-probe. `workflow.md` maps catalog option → resolved stats → visual registry → mesh, with career ownership confined to write/UI gates. ERS IDs are catalog entries, signatures share equivalent cost/stats, and finish belongs to livery/team. Its capture matrix nests team/paint/parts/view/framing to amortize browser startup; `--plan` validates before launch. Distinct-mesh and purchase-ladder pins precede browser coverage.
+
+## Complete skill contracts
+
+| Skill | Trigger / inputs | Output and consumers | Dependencies and boundary |
+|---|---|---|---|
+| `handoff` | Cold-start prompt, context cap, new session; branch, PR Plan, grants, evidence and pending work | One chat code block under about 25 lines; PR body remains durable handoff | Session-status, git remote SHA confirmation, draft PR/template, skills index and worker contract. Push-first/WIP instructions are mapped, not performed here. No root handoff file. |
+| `input-controls` | Steering device, touch/gyro, drift/calibration, menu leaks, assist settings/migrations | Device command diagnosis or scoped input/settings changes, phone-first evidence and focused pins | Input singleton → physics-step consumer; keyboard > deflected pad > fresh roll-carrying remote phone > buttons > tilt > drag. Phone pairing routes to multiplayer; handling forces route to tune-physics. Defaults and stored-value migrations are separate acts. |
+| `js-debugger` | Branch/local/stack questions, pause-token errors, exceptions, attached CPU/heap/hitch profiling | Break/collect/state evidence, bounded artifacts and cleanup records | Existing parent-owned Chrome, CDP endpoint, separate debugger daemon; Node 22+/Bash. It attaches rather than launches; browser launcher is separate. Mutating evaluation is scoped to reproduction. |
+| `lighting-tuner` | Night/day exposure, dawn sun, lamps, fog, knob wiring or pasted tuning exports | Resolved light-state A/B evidence, per-knob captures, delta merge or full preset replacement | Live knob definitions, profiles/localStorage, shipped presets, shared validation and targeted lighting coverage. Bloom GPU defects and mast geometry route elsewhere. |
+| `mcp-probe` | Local working-tree canvas, console/heap/perf census, private MCP readiness/recovery | Exact URL/backend/command/response evidence, DOM snapshots before images, bounded artifacts | Attached Chrome tools or one persistent probe daemon; serialized parent-owned browser, positive boot evidence and presented-canvas waits. Deployed/public targets route to research. |
+| `multiplayer-debug` | VS FRIEND, phone pairing, invite/QR/room/Nostr/ICE/TURN, build mismatch, replicated peers | Layer diagnosis, loopback packets/state evidence and focused net coverage | Local player authority; host AI/race control; unreliable state versus reliable event channels, build-stamped handshake, Nostr signalling and optional rendezvous. Paired tilt response routes to input-controls. |
+
+`input-controls/references/menu-leak-touch.md` traces key gating (`typing`, HUD exceptions, layer openness), focus restoration, latch clearing and touch release capture. It separates driving-line appearance from steering assistance and requires real activating gestures for iOS gyro. `pad-drift.md` reads live pad/rest/map state, keeps shaping stateless, normalizes asymmetric travel and distinguishes calibration, dead zone and saturation. LSP locates `Input.steer` at `js/input/input.js:1813` with its game consumer at line 5693.
+
+`js-debugger/references/step-loop.md` maps target → attach → source URL → conditional breakpoint → operation → pause token → locals → step/resume → final result. Script IDs, handles and pause tokens expire on reload; URL breakpoints persist. One-based locations differ from zero-based frame indices. A timeout leaves execution unknown; unowned pauses are not resumed by this workflow. `tools.md` adds bounded logpoint rings, nonpausing exceptions, listener/instance counts, worker/service-worker targets and inspector-backed Node tests (up to eight files). Cleanup removes unused breakpoints, detaches, records cleanup errors, and stops only owned daemon/browser launchers.
+
+## Lighting implementation seam
+
+`bake.md` separates COPY VALUES `LightEdits` deltas from complete `LightPresets` snapshots. `symptoms.md` maps resolved ambient, sun, exposure, active light count and built-night state to tuning knobs, with day/night behavior coverage distinct from image-grade UI coverage. `graphics-atmosphere-playbook.md` is an attributed MIT adaptation mapping atmosphere/grading/shadow vocabulary to Apex knobs and backends; retain its provenance comment.
+
+Precedence is knob default → shipped global → shared condition stamp → track condition → per-TOD chunk-light layer → local global → local track condition. Live edits write the current condition. RESET and legacy global overrides matter when comparing shipped changes. LSP resolves `LightStore.set` to `js/lighting/profiles.js:257` through module-file fallback; the server explicitly leaves direct export/caller coverage unverified.
+
+`lighting-tuner/scripts/bake.mjs`: file/stdin → refuse explicitly named delta → strip snapshot assignment → JSON parse or one-second VM fallback → shared validation → line-anchored assignment replacement. It preserves surrounding file text, writes only presets unless check/dry-run, and emits optional JSON change receipts. Unknown long flags and multiple inputs fail. Shrinking below half the shipped profile count warns but still writes. Old snapshot parsing/change computation is best effort, so a successful write may lack changes. No commit or cache bump occurs inside the script.
+
+`lighting-tuner/scripts/merge-proposals.mjs`: one file or sorted proposal JSON directory → VM-evaluated LightEdits or `{track,combos}` JSON → key/knob/grid validation → normalize/reduce → deterministic profile ordering → replace assignment. Player deltas merge knobs without deleting profiles; proposals replace each condition and an empty cleaned proposal deletes it. Wetness is refused. Default-valued/redundant knobs are dropped with fallback checks; those checks inspect shipped global and per-TOD layers. Errors collect before any write (first 40 printed). Check/dry-run emits a receipt only. Consumers are the shipped profile resolver and in-game tuning UI; shared `preset-validation.mjs` is imported by both scripts.
+
+## Probe reference routing and limits
+
+| Reference | Contract |
+|---|---|
+| `chrome.md` | Serve local tree, preload models, start real race, position, await presentation, then capture. Heap A/B/C distinguishes repeated growth from warm-up; close snapshots. Two-port comparisons record actual source identity. MCP roots constrain saved files. |
+| `device-report.md` | Device bundle includes diagnostics/GL/store/log/frame/verdict; local report server receives artifacts, deployed device downloads instead. LAN URL and report gesture matter; local evidence cannot establish iOS behavior. |
+| `hud-freeze.md` | Arm pit with wear enabled; sample HUD text and moving pit states in one call; only then separate DOM stall from render stall, inspect errors, and clean up. |
+| `offline.md` | Browser-free doctor/status, discovery and daemon identity preflight; foreground daemon fallback without tmux, explicit owned cleanup/status confirmation. Config presence does not attach tools or repair upstream permissions. |
+| `recipes.md` | Narrow reference index; shared debug-browser ownership, renderer/console identity and positive boot signals. |
+| `renderer.md` | Backend/reload in one batch; secure localhost context, lexical globals, TLX path pins and fallback markers. Absence of errors alone is insufficient. SwiftShader proves validation/lifecycle with limited pixel/device claims. |
+| `research.md` | Public/deployed fetch and marker verification route to deploy research; captures historical hosted-tool identifier and polling caveats as observations. |
+| `traps.md` | Thin router to Chrome, camera and scene slices. |
+| `traps-chrome.md` | Busy Chrome contaminates suites; parking alone may retain a busy GPU process. Shut down using recorded owner/controller. Garage tab fallback and per-interaction presentation wait; historical teleport interpolation fix is diagnostic context. |
+| `traps-camera.md` | Snap only after park/jump; free-cam cancellation, idle camera cuts, startup reseating, uncapped debug culling, real-rAF camera updates and road-edge versus centerline coordinates confound comparisons. Verify actual view vectors. |
+| `traps-scene.md` | Read live knob definitions, establish same-value noise floor, attribute occluders using real matrices, await rendered light-state updates and distinguish requested props from emitted geometry. |
+| `web-egress.md` | Dated browser proxy-CA and fetch-format observations; prose extraction can omit shell metadata. These are historical environment observations, not fresh capability checks. |
+
+`multiplayer-debug/references/phone-nat.md` maps game-host/phone-joiner roles, pad QR fragment, host-only probes versus phone `__apexPad.state()`, TCP/443 relay diagnosis, optional TURN credential URL and Nostr tooling. Send/queued/expired/rejected statistics separate cadence from connection failures. LSP anchors `NetTransport` at `js/net/transport.js:4`. Real network/TURN access and physical phone behavior remain unverified.
+
+## Comment cleanup candidates and evidence boundaries
+
+Preserve safety rationale, protocol distinctions, ownership/cleanup requirements, upstream provenance and separate evidence surfaces. Trim narrative measurements only after their operational rule retains one authoritative home. Dated anecdotes are observations, not current benchmarks.
+
+The bake script's header and shrink-detector comments still describe COPY VALUES as a full snapshot, contradicting both its delta refusal and `bake.md`. The merge script's top comment claims within-key merging universally, while its implementation intentionally replaces proposal conditions. Its `LIGHTING` constant is declared but unused in this source. The phone NAT reference ends in a dangling numbered item. The Chrome recipe labels itself read-only despite temporary page mutation and saved artifacts; distinguish source ownership from page effects in future cleanup. Camera guidance includes both player-relative A/B advice and later idle-cut caveats; retain the conditions when consolidating. No cleanup was applied.
+
+Historical/archive/missing path strings and complete extracted reference inventories are confined to the JSON evidence. Tests, live renderer behavior, attached chat readiness, transport connectivity, hardware performance and physical device behavior were not verified.
