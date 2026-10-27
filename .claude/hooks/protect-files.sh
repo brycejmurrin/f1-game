@@ -1,6 +1,6 @@
 #!/bin/bash
 # PreToolUse guard for Write/Edit/MultiEdit/NotebookEdit AND Bash (the files a
-# command writes, read by shellparse.py — 2026-10-04). Five rules from
+# command writes, read by shellparse.py — 2026-10-04). Six rules from
 # AGENTS.md that prose could only request, made deterministic:
 #
 #  1. §Verification 11 — a GENERATED file is never hand-edited, in any
@@ -28,6 +28,9 @@
 #     branch (lowering or reverting this branch's file is fine). A removal or
 #     move (rm, git rm, mv, find -delete, a directory) counts. Cursor reaches
 #     this file through .cursor/hooks/edit-guard.sh and shell-guard.sh.
+#  6. Gate receipts (WP-L4, Bryce 2026-10-27), no escape hatch: nothing typed
+#     writes, moves or removes artifacts/{merge,ready,launch}-gate/ or the
+#     quota page artifacts/launch/ — the gate scripts and launch-page.py do.
 # Every target is resolved with realpath first, so a symlink is judged as the
 # file it points at (round 2, 2026-10-14).
 #

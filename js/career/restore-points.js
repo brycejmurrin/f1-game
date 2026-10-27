@@ -2,7 +2,8 @@
    This is local storage, not an off-device backup; clearing site data removes it. */
 const CareerRestorePoints = (function () {
   "use strict";
-  const LIMIT = 3, SNAPSHOT_BYTES = 128 * 1024, OPEN_MS = 4000;
+  const LIMIT = 3, PROGRESS_BYTES = 128 * 1024, IDENTITY_BYTES = 800000, OPEN_MS = 4000;
+  const SNAPSHOT_BYTES = PROGRESS_BYTES + IDENTITY_BYTES;
   const SLOT_RE = /^(driver|myteam)\.[0-2]$/;
   function create(opts) {
     opts = opts || {};
@@ -41,11 +42,21 @@ const CareerRestorePoints = (function () {
       }).then((db) => { if (!db) opening = null; return db; });
       return opening;
     }
+    function withinBudget(data, raw, flavour) {
+      const bytes = raw.length * 2;
+      if (bytes <= PROGRESS_BYTES) return true;
+      if (bytes > SNAPSHOT_BYTES || flavour !== "myteam" || typeof CareerTeamIdentity === "undefined") return false;
+      const logo = data.myTeamIdentity && data.myTeamIdentity.customLogo;
+      // Only a supported, unchanged emblem earns the authored identity budget.
+      // Progress and arbitrary extra fields retain their original bounded budget.
+      return typeof logo === "string" && logo.length * 2 <= IDENTITY_BYTES &&
+        CareerTeamIdentity.value("customLogo", logo) === logo && bytes - logo.length * 2 <= PROGRESS_BYTES;
+    }
     function clean(data, flavour) {
       if (!data || typeof data !== "object" || Array.isArray(data)) return null;
       try {
         const raw = JSON.stringify(data);
-        if (raw.length * 2 > SNAPSHOT_BYTES) return null;
+        if (!withinBudget(data, raw, flavour)) return null;
         const copy = JSON.parse(raw);
         if (!Number.isSafeInteger(copy.v) || copy.v < 0 ||
             (typeof SaveMigrate !== "undefined" && copy.v > SaveMigrate.CAREER_V) ||
@@ -53,7 +64,7 @@ const CareerRestorePoints = (function () {
         const migrated = typeof SaveMigrate !== "undefined" ? SaveMigrate.migrateCareer(copy) : null;
         if (!migrated || migrated.flavour !== flavour) return null;
         const json = JSON.stringify(migrated);
-        return json.length * 2 <= SNAPSHOT_BYTES ? json : null;
+        return withinBudget(migrated, json, flavour) ? json : null;
       } catch (_) { return null; }
     }
     function summary(json) {
@@ -66,7 +77,7 @@ const CareerRestorePoints = (function () {
       const key = slotKey(flavour, i), json = key && clean(data, flavour);
       if (!key) return refused("invalid-or-too-large");
       const reason = options && options.reason;
-      if (!["round", "import", "before-import", "before-restore"].includes(reason)) return refused("explicit-boundary-required");
+      if (!["round", "before-import", "before-restore"].includes(reason)) return refused("explicit-boundary-required");
       const owner = (captureOwners.get(key) || 0) + 1; captureOwners.set(key, owner);
       captureHealth.set(key, { state: "saving", at: now(), boundary: reason, reason: null });
       const finish = (result) => {
@@ -160,7 +171,7 @@ const CareerRestorePoints = (function () {
         return Object.assign({}, result, { reloadRequired: result.ok === true });
       } catch (_) { return refused("restore-failed"); }
     }
-    return { capture, list, preview, restore, health, limits: { perSlot: LIMIT, snapshotBytes: SNAPSHOT_BYTES, totalBytes: LIMIT * SNAPSHOT_BYTES * 6 } };
+    return { capture, list, preview, restore, health, limits: { perSlot: LIMIT, snapshotBytes: SNAPSHOT_BYTES, progressBytes: PROGRESS_BYTES, identityBytes: IDENTITY_BYTES, totalBytes: LIMIT * SNAPSHOT_BYTES * 6 } };
   }
   let instance;
   const current = () => instance || (instance = create());

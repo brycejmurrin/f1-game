@@ -230,7 +230,7 @@ const AgentRaster = (function () {
 
       // cars (painted last so they win ties against scenery at equal depth)
       for (const c of G.cars) {
-        const [wx, wz] = carWorld(c);
+        const [wx, wz, wy] = carWorld(c);
         const dist = Math.hypot(wx - eye[0], wz - eye[2]);
         if (dist > range) continue;
         // ~F1 dimensions; the box is axis-aligned, which over-covers a yawed car
@@ -242,8 +242,8 @@ const AgentRaster = (function () {
         // COCKPIT_EYE_FWD is -0.20 (js/camera/vantage.js) — the eye sits BEHIND
         // the car's centre, so the centre is legitimately in shot while the car
         // around it is not something the driver can see.
-        if (containsEye(eye, wx, 0.55, wz, 1.1, 0.55, 2.6)) continue;
-        const rect = boxRect(vp, wx, 0.55, wz, 1.1, 0.55, 2.6);
+        if (containsEye(eye, wx, wy + 0.55, wz, 1.1, 0.55, 2.6)) continue;
+        const rect = boxRect(vp, wx, wy + 0.55, wz, 1.1, 0.55, 2.6);
         if (!rect) continue;
         const k = c.isPlayer ? "player" : "car";
         const painted = paint(rect, k, c.id != null ? c.id : G.cars.indexOf(c));

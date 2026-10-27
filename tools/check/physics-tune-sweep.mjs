@@ -46,28 +46,20 @@
 // or lower --aggr rather than reading the metrics.
 
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
-import { fileURLToPath } from "node:url";
-import { parseFlags } from "../lib/cli-args.mjs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
+import { CliArgError, makeFlags, runCli } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
+const { CIRCUITS } = createRequire(import.meta.url)("../manifest.cjs");
 
 // ---- CLI ----
-const argv = process.argv.slice(2);
-if (argv.includes("--help") || argv.includes("-h")) {
-  console.log(`physics-tune-sweep — driveability of each handling-slider notch (browser)
+const HELP = `physics-tune-sweep — driveability of each handling-slider notch (browser)
 
   node tools/check/physics-tune-sweep.mjs [--sliders pm-rate,pm-pace] [--tracks monza,monaco]
        [--notches 1,3,5,7,10] [--aggr 0.88] [--json out.json]
 
-  Env: APEX_WORKERS=N (default 3). Owned by tune-physics.`);
-  process.exit(0);
-}
-// A typo (`--tema`) used to fall through to the default sweep; reject it instead.
-parseFlags(argv, ["--sliders", "--tracks", "--notches", "--aggr", "--steps", "--json", "--help"]);
-function flag(name, def) {
-  const i = argv.indexOf("--" + name);
-  return i >= 0 && argv[i + 1] ? argv[i + 1] : def;
-}
+  Env: APEX_WORKERS=N (default 3). Owned by tune-physics.`;
 
 // The handling sliders, by the DOM id the player actually drags. We set the
 // real element and dispatch a real "input" event rather than reimplementing the
@@ -86,17 +78,51 @@ const SLIDERS = [
   { id: "pm-help",       label: "DRIVING HELP (road follow)",    key: "roadFollow" },
 ];
 
-const wanted = flag("sliders", "").split(",").filter(Boolean);
-const SWEEP = wanted.length ? SLIDERS.filter((s) => wanted.includes(s.id)) : SLIDERS;
-const TRACKS = flag("tracks", "monza,suzuka,bahrain").split(",").filter(Boolean);
-// An explicit --notches applies to every slider swept; otherwise each takes its
-// own range (10 unless it says otherwise).
-const NOTCHES_FLAG = flag("notches", "").split(",").map(Number).filter(Number.isFinite);
-const notchesFor = (s) => NOTCHES_FLAG.length ? NOTCHES_FLAG
-  : Array.from({ length: s.notches || 10 }, (_, i) => i + 1);
-const AGGR = Number(flag("aggr", "0.88"));
-const STEPS = Number(flag("steps", "2600"));
-const JSON_OUT = flag("json", "");
+/** Pure launch plan: both flag spellings describe the same validated work. */
+export function planSweep(argv) {
+  if (argv.includes("--help") || argv.includes("-h")) return { help: true };
+  const known = ["--sliders", "--tracks", "--notches", "--aggr", "--steps", "--json", "--help"];
+  const flags = makeFlags(argv, known);
+  // Every supported option here takes a value. Reject stray positionals and
+  // short flags as well, rather than silently launching a default workload.
+  for (let i = 0; i < argv.length; i++) {
+    const name = argv[i].split("=", 1)[0];
+    if (!known.includes(name) || name === "--help") throw new CliArgError(`unexpected argument ${JSON.stringify(argv[i])}`);
+    if (!argv[i].includes("=")) {
+      if (argv[i + 1] == null || argv[i + 1].startsWith("-")) throw new CliArgError(`${name}: needs a value`);
+      i++;
+    }
+  }
+  const value = (name, dflt) => {
+    if (!flags.has(name)) return dflt;
+    const raw = flags.flag(name, null);
+    if (raw == null || !raw.trim()) throw new CliArgError(`${name}: needs a value`);
+    return raw.trim();
+  };
+  const ids = (name, dflt, valid) => {
+    const raw = value(name, dflt.join(","));
+    const selected = flags.list(name, raw);
+    const bad = selected.filter((id) => !valid.includes(id));
+    if (!selected.length || bad.length) throw new CliArgError(`${name}: ${bad.length ? `unknown id ${bad.join(", ")}` : "needs at least one id"}\n  valid ids: ${valid.join(" ")}`);
+    return [...new Set(selected)];
+  };
+  const wanted = ids("--sliders", SLIDERS.map((s) => s.id), SLIDERS.map((s) => s.id));
+  const sweep = SLIDERS.filter((s) => wanted.includes(s.id));
+  const tracks = ids("--tracks", ["monza", "suzuka", "bahrain"], CIRCUITS);
+  const notches = flags.has("--notches") ? flags.list("--notches", value("--notches", "")).map(Number) : null;
+  if (notches && (!notches.length || notches.some((n) => !Number.isSafeInteger(n) || n < 1
+      || sweep.some((s) => n > (s.notches || 10))))) {
+    throw new CliArgError("--notches: expected integers within each selected slider's range (1..10, or 1..19 for pm-pace)");
+  }
+  const aggr = Number(value("--aggr", "0.88"));
+  const steps = Number(value("--steps", "2600"));
+  if (!Number.isFinite(aggr) || aggr <= 0) throw new CliArgError("--aggr: expected a finite positive number");
+  if (!Number.isSafeInteger(steps) || steps <= 0) throw new CliArgError("--steps: expected a positive integer");
+  const jsonOut = value("--json", "");
+  const jobs = sweep.flatMap((s) => (notches || Array.from({ length: s.notches || 10 }, (_, i) => i + 1))
+    .map((notch) => ({ sliderId: s.id, tuningKey: s.key, notch, label: s.label })));
+  return { sweep, tracks, jobs, aggr, steps, jsonOut };
+}
 
 function workers(def = 3) {
   return Math.max(1, Math.min(8, parseInt(process.env.APEX_WORKERS || String(def), 10) || def));
@@ -238,14 +264,14 @@ async function bootWorker(baseUrl) {
   return { browser, page };
 }
 
-async function runTrack(page, trackId, jobs, onRow) {
+async function runTrack(page, trackId, jobs, onRow, { aggr, steps }) {
   await page.evaluate((t) => window.__apex.race(t), trackId);
   await page.waitForFunction((t) => window.__apex.info().track === t, trackId, { timeout: 30000 });
   await sleep(1600);   // mesh build settle
   for (const job of jobs) {
     const row = await page.evaluate(
       ([fn, arg]) => new Function("return (" + fn + ")")()(arg),
-      [episodeInPage.toString(), { ...job, aggr: AGGR, steps: STEPS }],
+      [episodeInPage.toString(), { ...job, aggr, steps }],
     );
     onRow(trackId, job, row);
   }
@@ -260,40 +286,41 @@ function fmtTable(slider, rows) {
   return [`\n### ${slider.label}  (#${slider.id})`, head, rule, ...body].join("\n");
 }
 
-async function main() {
-  const srv = await startStaticServer(ROOT);
+export async function main(argv, { startServer = startStaticServer, openWorker = bootWorker,
+  driveTrack = runTrack, cleanup = shutdown, log = console.log } = {}) {
+  const plan = planSweep(argv);
+  if (plan.help) { log(HELP); return; }
+  const { sweep, tracks, jobs, aggr, steps, jsonOut } = plan;
+  const srv = await startServer(ROOT);
   const base = `http://127.0.0.1:${srv.port}/`;
   const results = {};
   try {
     const pool = [];
-    const n = Math.min(workers(), TRACKS.length);
-    for (let i = 0; i < n; i++) pool.push(await bootWorker(base));
+    const n = Math.min(workers(), tracks.length);
+    for (let i = 0; i < n; i++) pool.push(await openWorker(base));
 
     // One worker per circuit, each sweeping every slider x notch on it.
-    const jobs = [];
-    for (const s of SWEEP) for (const notch of notchesFor(s)) jobs.push({ sliderId: s.id, tuningKey: s.key, notch, label: s.label });
-
-    const queue = TRACKS.slice();
+    const queue = tracks.slice();
     await Promise.all(pool.map(async (w) => {
       for (;;) {
         const t = queue.shift();
         if (!t) break;
-        await runTrack(w.page, t, jobs, (trackId, job, row) => {
+        await driveTrack(w.page, t, jobs, (trackId, job, row) => {
           (results[job.sliderId] ||= {});
           (results[job.sliderId][trackId] ||= []).push(row);
           const tag = `${trackId} ${job.sliderId}=${job.notch}`;
-          console.log(`${tag.padEnd(28)} ${row.error ? "ERROR " + row.error
+          log(`${tag.padEnd(28)} ${row.error ? "ERROR " + row.error
             : `${row.completed ? "lap " + row.lapTime + "s" : "DNF " + row.distM + "m"}` +
               `  offs=${row.excursions} off=${row.offSec}s slip=${row.slipMean}/${row.slipPeak} latG=${row.latPeak}`}`);
-        });
+        }, { aggr, steps });
       }
     }));
 
     // Summary: average each metric across circuits so one hard corner on one
     // track cannot decide a default.
-    console.log("\n\n========== SUMMARY (mean across circuits) ==========");
-    console.log(`policy aggression ${AGGR}, ${STEPS} steps, circuits: ${TRACKS.join(", ")}`);
-    for (const s of SWEEP) {
+    log("\n\n========== SUMMARY (mean across circuits) ==========");
+    log(`policy aggression ${aggr}, ${steps} steps, circuits: ${tracks.join(", ")}`);
+    for (const s of sweep) {
       const per = results[s.id] || {};
       const byNotch = new Map();
       for (const t of Object.keys(per)) {
@@ -320,18 +347,20 @@ async function main() {
         slipMean: +(a.slipMean / a.n).toFixed(2),
         slipPeak: a.slipPeak, latPeak: a.latPeak,
       }));
-      console.log(fmtTable(s, rows));
+      log(fmtTable(s, rows));
     }
-    if (JSON_OUT) {
+    if (jsonOut) {
       const { writeFileSync, mkdirSync } = await import("node:fs");
       const { dirname } = await import("node:path");
-      mkdirSync(dirname(JSON_OUT), { recursive: true });
-      writeFileSync(JSON_OUT, JSON.stringify({ aggr: AGGR, steps: STEPS, tracks: TRACKS, results }, null, 2));
-      console.log(`\nwrote ${JSON_OUT}`);
+      mkdirSync(dirname(jsonOut), { recursive: true });
+      writeFileSync(jsonOut, JSON.stringify({ aggr, steps, tracks, results }, null, 2));
+      log(`\nwrote ${jsonOut}`);
     }
   } finally {
-    await shutdown();
+    await cleanup();
   }
 }
 
-main().catch((e) => { console.error(e); process.exitCode = 1; });
+if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+  runCli(() => main(process.argv.slice(2)));
+}

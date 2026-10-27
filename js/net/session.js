@@ -57,6 +57,7 @@ const NetSession = (function () {
 
     const eventHandlers = new Map();   // type -> [fn]
     const stateHandlers = [];          // fn(bytes, fromPeerTimeMs)
+    const snapshotHandlers = [];       // fn(decodedSnapshot, arrivalMs), validated once here
     const closeHandlers = [];
 
     let pingId = 0;
@@ -158,26 +159,30 @@ const NetSession = (function () {
         if (synced() && heldState) {
           const held = heldState;
           heldState = null;
-          deliverState(held.data, held.now);
+          deliverState(held.data, held.now, held.snapshot);
         }
         return true;
       }
-      const valid = !!NetSnapshot.decodeSnapshot(dv);
+      const snapshot = NetSnapshot.decodeSnapshot(dv);
+      const valid = !!snapshot;
       if (!synced()) {
         // Only a real snapshot is worth replaying when the clock lands: a
         // truncated or unknown-type frame used to overwrite heldState and then
         // flush into the game on the first PONG (one garbage pose, or the loss
         // of a good snapshot that arrived earlier in the same pre-sync window).
-        if (valid) heldState = { data: data, now: now };
+        if (valid) heldState = { data: data, now: now, snapshot };
         return valid;
       }
-      deliverState(data, now);
+      deliverState(data, now, snapshot);
       return valid;
     }
 
-    function deliverState(data, now) {
+    function deliverState(data, now, snapshot) {
       for (const fn of stateHandlers) {
         try { fn(data, now); } catch (e) { /* a consumer bug is not a disconnect */ }
+      }
+      if (snapshot) for (const fn of snapshotHandlers) {
+        try { fn(snapshot, now); } catch (e) { /* as above */ }
       }
     }
 
@@ -282,6 +287,7 @@ const NetSession = (function () {
         return transport.send(CH_EVENT, JSON.stringify({ t: type, d: data === undefined ? null : data }));
       },
       onState(fn) { stateHandlers.push(fn); return this; },
+      onSnapshot(fn) { snapshotHandlers.push(fn); return this; },
       onEvent(type, fn) {
         if (!eventHandlers.has(type)) eventHandlers.set(type, []);
         eventHandlers.get(type).push(fn);
@@ -290,6 +296,7 @@ const NetSession = (function () {
       onClose(fn) { closeHandlers.push(fn); return this; },
       clearHandlers() {
         stateHandlers.length = 0;
+        snapshotHandlers.length = 0;
         closeHandlers.length = 0;
         eventHandlers.clear();
         return this;

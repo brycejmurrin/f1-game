@@ -47,6 +47,10 @@
       "ceiling": 8420,
       "slack": 200
     },
+    "assertPinsAll": {
+      "ceiling": 10580,
+      "slack": 200
+    },
     "bareCatches": {
       "ceiling": 29,
       "slack": 15

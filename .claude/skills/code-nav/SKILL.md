@@ -1,6 +1,6 @@
 ---
 name: code-nav
-description: "Use when finding where a JS symbol is defined, who uses or calls it, its exports or type, an edit's new errors: apex-lsp, not grep. Dead code → slim-bloat."
+description: "Use when finding where a JS symbol is defined (go to definition), who uses or calls it (callers, find usages, rename impact), its exports or type, an edit's new type errors: apex-lsp, not grep. Dead code → slim-bloat."
 ---
 
 # Code navigation with apex-lsp (instead of grep)
@@ -37,16 +37,21 @@ below also support the common terminal entrypoint, for example
 | where it is defined (and its code) | `lsp_definition {symbol, body: true}` | `tools/mcp/lsp-mcp.sh def Liveries.forTeam --body` |
 | uses, with enclosing functions (first page) | `lsp_references {symbol, format: "concise", limit: 40}` | `… refs Tracks.curvature --concise --limit=40` |
 | who would an edit touch (first caller page) | `lsp_callers {symbol, limit: 40}` | `… callers AiDrive.cornerK --limit=40` |
-| which files use it, counts only | `lsp_references {symbol, files: true}` | `… refs G.player --files` |
+| which files use it, counts only | `lsp_references {symbol, files: true}` (or `lsp_callers {…, files: true}`; any call takes `path` to scope) | `… refs G.player --files` |
 | a module's exports without reading it | `lsp_outline {symbol, limit: 40}` or `{file, limit: 40}` | `… outline GameHud --limit=40` / `… outline js/physics/consts.js --limit=40` |
 | a name you only half know | `lsp_symbols {query}` | `… sym clamp` |
 | its type / JSDoc | `lsp_hover {symbol}` | `… hover G.wrapS` |
 | did my edit break anything in this file | `lsp_diagnostics {file}` | `… diag js/ui/hud.js` |
 
 Targets: `Name` (a global such as `GameHud`), `Head.member` (`Liveries.forTeam`),
-`G.member` (the façade: answered from `interface GameCtx` in `types/game-ctx.d.ts`),
+`G.member` (the façade: ONLY the rows of `interface GameCtx` in `types/game-ctx.d.ts`),
 a contract type (`TrackModel`, found in `types/*.d.ts`),
+an IIFE-local function (most of `js/game.js`: `updateCar`, `dashKph`; not on GameCtx, so
+`G.updateCar` misses): the bare name (`lsp_definition {symbol: "updateCar"}`) or `file` + `line`,
 or `file` + `line` [+ `column`] (ONE-based; shell `js/ui/hud.js:237:15`).
+
+On a miss (`has no member`, `not found`): `lsp_symbols {query: <member>}`, then retry with the
+bare name or the `file` + `line` it lists. Never guess a neighbour or fall back to grep.
 
 grep stays right for: text, comments, log strings, CSS/HTML, regex shapes, files
 outside `js/`. The `lsp-hint.py` hook names the apex-lsp call after a grep for a
@@ -56,7 +61,7 @@ bare JS symbol. Take it for the next lookup.
 
 1. **Understand a module.** `lsp_outline {symbol: "Ghost", limit: 40}` lists the exports,
    then `lsp_definition {symbol: "Ghost.snapshot", body: true, maxLines: 60}` gives the body
-   (up to 60 lines).
+   (the default cap is 40 lines, max 400; pass `maxLines` for a longer one).
    That's two calls and no full-file Read.
 2. **Before changing a shared function.** `lsp_callers {symbol, limit: 40}` lists the functions that
    use it. Read those, not every grep hit. For a façade member, `files: true`

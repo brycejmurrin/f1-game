@@ -12,7 +12,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, THINNED_VM, topicalTfOverlap, adaptedGroups, circuitsOf, scriptBuilds, unitFileOwnership } from "../../tools/ci/node-plan.mjs";
-import { filesFor } from "../../tools/ci/run-group.mjs";
+import { filesFor, runGroup } from "../../tools/ci/run-group.mjs";
+import { nodeGroupPhases } from "../../tools/ci/run-node-group.mjs";
 import { TOOLING_FAST_FILES } from "../../tools/ci/tooling-fast.mjs";
 import { gateNodeSuites } from "../../tools/ci/deploy.mjs";
 import { ADAPTED, ADAPTED_RUNNER } from "../../tools/ci/twinned-specs.mjs";
@@ -68,7 +69,9 @@ test("known unit ownership narrows the node plan, while tooling-fast and unknown
 test("PR matched plans skip only tooling-fast ∩ always-on topical; --all and fail-safe do not", () => {
   const tf = new Set(TOOLING_FAST_FILES);
   const overlap = topicalTfOverlap();
-  assert.ok(overlap.length >= 40, `expected ~49–55 double-run files, got ${overlap.length}`);
+  // audit4 E1 (2026-10-26): the floor carve moved every always-on topical file out of tooling-fast, so the
+  // planner has nothing left to skip; a reappearing overlap is a double run, not a feature.
+  assert.deepEqual(overlap, [], "a file in both tooling-fast and an always-on topical group runs twice per CI run");
   for (const f of overlap) {
     assert.ok(tf.has(f), `${f} must be in tooling-fast (anti-vacuity)`);
     assert.ok(ALWAYS_ON_TOPICAL.some((s) => (groups[s]?.files || []).includes(f)),
@@ -96,6 +99,40 @@ test("PR matched plans skip only tooling-fast ∩ always-on topical; --all and f
   assert.match(toShell(plan(["package.json"])), /unset NODE_PLAN_SKIP_TF/);
   for (const script of ALWAYS_ON_TOPICAL)
     assert.deepEqual(filesFor(script, { skipTf: false }), groups[script].files);
+});
+
+test("matched PR runners preserve generated flags, exact remaining rosters and isolation", () => {
+  for (const script of [...ALWAYS_ON_TOPICAL, ...THINNED_VM]) {
+    const calls = [];
+    const files = filesFor(script, { skipTf: true });
+    assert.equal(runGroup(script, { skipTf: true, announce() {},
+      execute(cmd, args, opts) { calls.push({ cmd, args, opts }); return { status: 0 }; },
+    }), 0);
+    const doc = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8"));
+    const expected = files.length ? nodeGroupPhases({ ...groups[script], files }, doc.isolatedFiles) : [];
+    assert.deepEqual(calls.map(call => call.args), expected, script);
+    for (const call of calls) {
+      assert.equal(call.cmd, process.execPath);
+      assert.equal(call.opts.env.NODE_TEST_CONTEXT, undefined);
+      assert.ok(call.opts.env.NODE_COMPILE_CACHE || process.env.NODE_DISABLE_COMPILE_CACHE === "1" || process.env.NODE_V8_COVERAGE || process.env.APEX_JS_COVERAGE === "1");
+    }
+  }
+  // Explicit group-owned deadline and serial flags survive filtering, and a
+  // remaining isolated benchmark runs in its own exclusive phase.
+  const shared = TOOLING_FAST_FILES[0], isolated = "isolated.test.mjs", ordinary = "ordinary.test.mjs";
+  const doc = { isolatedFiles: [isolated], groups: { "test:fixture": {
+    kind: "node", flags: ["--test-timeout=4321", "--test-concurrency=1"], files: [shared, ordinary, isolated],
+  } } };
+  const calls = [];
+  assert.equal(runGroup("test:fixture", { doc, skipTf: true, announce() {},
+    env: { NODE_TEST_CONTEXT: "child-v8" }, execute(cmd, args) { calls.push(args); return { status: 0 }; },
+  }), 0);
+  assert.deepEqual(calls, [isolated, ordinary].map(file => ["--test", "--test-timeout=4321", "--test-concurrency=1", file]));
+  for (const result of [{ status: 7 }, { status: null, signal: "SIGTERM" }, { status: 0, error: new Error("launch") }]) {
+    let launched = 0;
+    assert.notEqual(runGroup("test:fixture", { doc, announce() {}, execute() { launched++; return result; } }), 0);
+    assert.equal(launched, 1, "a failed isolated phase prevents ordinary work");
+  }
 });
 
 test("a circuit-only diff runs the elevation twin narrowed to that circuit", () => {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # MCP-call guard for Codex → the repo's GitHub MCP guard
-# (.claude/hooks/github-mcp-guard.sh): merge commits only, a merge-gate receipt
-# before a merge or an arm, a ready-gate receipt before draft→ready, no Actions
+# (.claude/hooks/github-mcp-guard.sh): merge commits only, no session merge or
+# arm (land.yml lands), a ready-gate receipt before draft→ready, no Actions
 # run cancel. Bryce approved this hook in his session (2026-10-19 ~22:10Z,
 # AskUserQuestion "Yes, add the Codex MCP hook"): Codex ran only a Bash hook, so
 # a Codex merge through an MCP GitHub tool skipped the gate

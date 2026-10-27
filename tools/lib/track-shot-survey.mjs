@@ -176,6 +176,7 @@ export function buildTrackShotSurveyPlan(args = {}) {
         h: s.h == null ? null : Number(s.h),
         side: s.side == null ? 1 : Number(s.side),
         hud: !!s.hud,
+        clear: cam === "trackside", // #3313: re-site the S/F eye out of the pit complex (__apex view opts.clear)
         ...cameraControls(s),
         ...(s.location ? { location: s.location, angle: s.angle, verification: s.verification } : {}),
       };
@@ -220,6 +221,7 @@ export function buildTrackShotSurveyPlan(args = {}) {
         h: args.h == null ? null : Number(args.h),
         side: args.side == null ? 1 : Number(args.side),
         hud: !!args.hud,
+        clear: cam === "trackside", // #3313
       });
     }
   }

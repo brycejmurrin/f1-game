@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * @doc Actions queue gauge: queued + running JOBS by OS vs the 40 Linux / 5 macOS slots; `= queue ok|hold`.
+ * @doc Informational queue gauge, never a push hold: queued + running JOBS by OS vs 40 Linux / 5 macOS slots.
  * @section runner
  * @skill steward
  *
- * AGENTS.md rule 4's push hold. The old rule counted queued RUNS (">15"), but a
+ * AGENTS.md rule 4's informational gauge (nothing holds a push on it). It replaced
+ * a push hold that counted queued RUNS (">15"), but a
  * run's own queue wait is 0 for 95 % of runs — the backlog lives at JOB level.
  * Measured over 2,881 Linux jobs (docs/notes/ACTIONS-AUDIT-2026-10-14.md
  * finding 6): median job queue wait 2 s under 20 jobs in flight, 25 s at 20–35,

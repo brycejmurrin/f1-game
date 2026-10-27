@@ -29,7 +29,6 @@ const RACE_SESSION_READY = {
   "js/race/engineer.js": () => typeof RaceEngineer !== "undefined" && !!RaceEngineer && !RaceEngineer._stub,
   "js/race/radio-lines.js": () => typeof RadioLines !== "undefined" && !!RadioLines && !RadioLines._stub,
   "js/race/race-facts.js": () => typeof RaceFacts !== "undefined" && !!RaceFacts && !RaceFacts._stub,
-  "js/race/event-journal.js": () => typeof EventJournal !== "undefined" && !!EventJournal && !EventJournal._stub,
   "js/race/spotter.js": () => typeof Spotter !== "undefined" && !!Spotter && !Spotter._stub,
   "js/race/race-radio.js": () => typeof RaceRadio !== "undefined" && !!RaceRadio && !RaceRadio._stub,
   "js/race/start-lights.js": () => typeof StartLights !== "undefined" && !!StartLights && !StartLights._stub,
@@ -562,6 +561,47 @@ function restoreOnEngine() {
   } catch (e) { Log.warn("audio", "first-gesture replay failed: " + (e && e.message)); }
   return true;
 }
+// ACTIVATION-TRIGGERING GESTURE UNLOCK (audit4 UB1). The title's kick is a pointerdown,
+// which for touch is NOT an activation-triggering event (HTML: keydown, mousedown,
+// pointerdown for a mouse, pointerup for non-mouse, touchend —
+// https://html.spec.whatwg.org/multipage/interaction.html#activation-triggering-input-event),
+// and WebKit starts/resumes an AudioContext only inside such a gesture
+// (https://bugs.webkit.org/show_bug.cgi?id=190410). restoreOnEngine's init runs after
+// the bundle lands, outside any gesture, so on iPhone the context stayed suspended
+// until a later tap. This capture listener runs on every activation event until the
+// context is running: before the bundle lands it kicks the load; after, it calls the
+// real GameAudio.init() INSIDE the gesture (creates the context, or resumes it).
+const AUDIO_GESTURES = ["pointerup", "touchend", "click", "keydown"];
+let audioGestureArmed = false;
+function audioGestureUnlock(e) {
+  if (e && (e.isTrusted === false || (e.type === "keydown" && e.key === "Escape"))) return;
+  if (!audioHooked) ensureAudio();   // memoised; after a failed load or ready hook this is the retry
+  if (typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) return;
+  const G = deps.getContext();
+  if (!G || !G.soundOn) return;
+  const ctx = GameAudio.context ? GameAudio.context() : null;
+  try { if (!ctx || ctx.state !== "running") GameAudio.init(); } catch (err) { Log.warn("audio", "gesture unlock failed: " + (err && err.message)); }
+  const now = GameAudio.context ? GameAudio.context() : null;
+  if (now && now.state === "running") disarmAudioGesture();
+}
+function armAudioGesture() {
+  if (audioGestureArmed || typeof window === "undefined" || !window.addEventListener) return;
+  audioGestureArmed = true;
+  for (const t of AUDIO_GESTURES) window.addEventListener(t, audioGestureUnlock, true);
+}
+function disarmAudioGesture() {
+  for (const t of AUDIO_GESTURES) window.removeEventListener(t, audioGestureUnlock, true);
+}
+armAudioGesture();   // at create: game.js's pointerdown/keydown kicks are the other two load triggers
+// onAudioReady's per-part latch: a part counts as done once it returns, so a retry
+// after a throw re-runs only the part that threw. Re-running RadioVoice.create /
+// Announcer.create stacked their page-lifetime observers (audit4 F1 / UB3).
+const audioReadyDone = new Set();
+function audioReadyOnce(key, fn) {
+  if (audioReadyDone.has(key)) return;
+  fn();
+  audioReadyDone.add(key);
+}
 function ensureAudio() {
   if (audioLoad) return audioLoad;
   if (!AUDIO_FILES.length) return Promise.resolve(false);
@@ -596,12 +636,12 @@ function ensureAudio() {
       return false;
     }
     if (audioHooked) return true;
-    // onAudioReady is counted as fired only once it returns: a throw (it rebuilds
-    // panel / voice / announcer instances) clears the memo so the next call
-    // retries it, instead of latching a rejection.
+    // onAudioReady is counted as fired only once it returns: a throw clears the
+    // memo so the next call retries it, and audioReadyOnce latches each part that
+    // already returned so the retry re-runs only the part that threw.
     await audioYieldToMain("task");
     if (typeof deps.onAudioReady === "function") try {
-      deps.onAudioReady();
+      deps.onAudioReady(audioReadyOnce);
     } catch (e) {
       Log.error("audio", "the audio ready hook threw: " + (e && e.message));
       audioLoad = null;

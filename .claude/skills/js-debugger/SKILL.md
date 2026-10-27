@@ -1,6 +1,6 @@
 ---
 name: js-debugger
-description: "Use when debugging JavaScript via js-debugger: conditional source breakpoints, stepping into/over, call frame scopes, locals, stale pause tokens, debugger daemon, exception pauses. Heap/CPU profiling → mcp-probe."
+description: "Use when debugging JavaScript via js-debugger: conditional source breakpoints, stepping into/over, call frame scopes, locals, stale pause tokens, debugger daemon, exception pauses, and heap/CPU/hitch profiling while attached (debugger_profile). Profiling a chrome-devtools page → mcp-probe."
 ---
 
 # Source debugging with the separate debugger MCP
@@ -16,6 +16,13 @@ The parent owns one browser group (`debug-chrome start` refuses beside a test ru
 Reuse the parent's authorized local Chrome page and dedicated debug profile.
 The debugger attaches; it never launches a browser. Browser setup and canvas
 inspection belong to `mcp-probe`.
+
+- Session only: `mcp-browser-guard.sh` refuses every `mcp__js-debugger__*` call
+  inside a subagent, status reads included (AGENTS.md rule 10); a subagent may use
+  only the shell `list-tools` / `status` below.
+- One browser at a time: never beside a Playwright test run, `playwright-official`
+  `browser_*` or chrome-devtools. Attached here, profile with `debugger_profile`
+  (cpu / heap / hitch; references/tools.md) instead of opening chrome-devtools.
 
 Requires Node 22+ and Bash for the wrapper. The debugger itself needs no npm
 package; source navigation and the game launcher need the checkout dependencies
@@ -34,7 +41,10 @@ alive between independent `call <tool> '<JSON object>'` clients. Do not start a
 second controller. `APEX_DEBUGGER_PORT` selects the bridge port on daemon and
 callers; the Chrome CDP endpoint is a separate address supplied by its owner.
 Starting a process does not attach tools to the chat; project MCP changes need
-client reload/trust. Never edit global agent instructions for this workflow.
+client reload/trust. After an edit to `tools/mcp/js-debugger-*.mjs` (`apex_status`'s
+`server.stale` watches only apex-tools' own files): restart the MCP (client reload or `/mcp`)
+and the owned `serve-http` daemon (Ctrl-C, start again), then re-attach; every
+old pause token dies with it. Never edit global agent instructions for this workflow.
 
 ## Get a Chrome to attach to
 
@@ -47,7 +57,8 @@ This starts the static server on 3456 and headless Chromium on 9222 at 844×390
 with touch (`--device desktop` selects 1280×720); it refuses beside a test run.
 `--headless-game` suppresses game drawing for logic hunts on software GL; omit
 it when pixels are required. Reuse an existing authorized browser instead of
-starting another. The launcher is a CLI; the debugger never launches Chrome.
+starting another. The launcher is a CLI (MCP: `apex_debug_chrome`); the debugger
+never launches Chrome. With it running, `debugger_targets`/`attach` need no `endpoint`.
 
 Once the browser is ready, check daemon health and discover targets (attached
 MCP users make the equivalent `debugger_targets` call):
@@ -70,6 +81,11 @@ Logpoints, exception logs, listener/instance counts, `debugger_run` side effects
   Which vm filenames bind, breakpoint cost and the hang-on-exit trap: `docs/TESTING.md` §Debug a Node test.
 - "Stop here and show me the locals" → `debugger_break {breakpoints, trigger}`: stack, cause and
   locals in one reply, paused with a token (or `resume:true`).
+- A `condition` is an expression evaluated IN the paused frame: write `c.speed`, not `speed`. A
+  condition that throws never pauses, and `debugger_break` just times out (default 10 s, max
+  `timeoutMs:30000`), so dry-run it with `debugger_collect` (same expression as a logpoint) first.
+  A per-car function (`updateCar` runs for every car, every tick) needs `c.isPlayer &&` (a VS FRIEND rival is also `c.human`); worked
+  in-race example: [references/step-loop.md](references/step-loop.md) §Pause the player at a speed.
 - "How often, with what values" on a running page → `debugger_collect {logpoints, trigger}`.
 - When the next step depends on what a pause shows: the step-by-step loop (targets → attach →
   source → breakpoint → run → state/token → control → resume), the in-race pause recipe and

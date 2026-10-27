@@ -62,5 +62,6 @@
 {
 "query": "How much does the chase camera lag behind the car through Monza's first chicane? Measure it with camState at a few fracs; don't change any code.",
 "expect": "playwright-probe"
-}
+},
+{"query": "The chase camera trails too far behind the car out of slow corners; change the rig so it keeps up", "expect": "f1-animation-cameras"}
 ]

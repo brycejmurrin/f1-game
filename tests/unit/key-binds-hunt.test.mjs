@@ -55,13 +55,13 @@ test("I-01: a mapping-\"\" pad's buttons 14/15 do not steer; a standard pad's st
   sb.navigator.getGamepads = () => [pad];
   fire("gamepadconnected", { gamepad: pad });
   setBtn(pad, 14, true);
-  for (let i = 0; i < 30; i++) { t += 16; Input.poll(); }
+  for (let i = 0; i < 30; i++) { t += 16; Input.poll(); Input.steer(1 / 60); }
   assert.equal(Input.debugState().pad.steer, 0, "an unknown button 14 does not slam full lock");
   const std = rawPad({ id: "Pad Std" });
   sb.navigator.getGamepads = () => [std];
   fire("gamepadconnected", { gamepad: std });
   setBtn(std, 14, true);
-  for (let i = 0; i < 30; i++) { t += 16; Input.poll(); }
+  for (let i = 0; i < 30; i++) { t += 16; Input.poll(); Input.steer(1 / 60); }
   assert.ok(Input.debugState().pad.steer < 0, "control: the standard d-pad left steers");
 });
 

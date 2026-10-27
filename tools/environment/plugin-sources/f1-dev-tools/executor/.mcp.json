@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "apex-tools": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/scripts/apex-tools-bridge.mjs"
+      ],
+      "env": {}
+    },
+    "apex-lsp": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/scripts/apex-tools-bridge.mjs",
+        "apex-lsp"
+      ],
+      "env": {}
+    },
+    "js-debugger": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/scripts/apex-tools-bridge.mjs",
+        "js-debugger"
+      ],
+      "env": {}
+    }
+  }
+}

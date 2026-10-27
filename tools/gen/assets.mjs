@@ -647,7 +647,7 @@ async function loadGLTFModule() {
   const vm = await import("node:vm");
   const ctx = {
     Math, Array, Object, JSON, Uint8Array, Uint16Array, Uint32Array, Int16Array,
-    Float32Array, DataView, ArrayBuffer, TextDecoder, Promise, Error, console, fetch,
+    Float32Array, DataView, ArrayBuffer, TextDecoder, Buffer, Promise, Error, console, fetch,
   };
   ctx.window = ctx;
   ctx.Log = {
@@ -1516,6 +1516,10 @@ function bakeAtlas(args) {
     out.materials.low.size = lowSize;
     out.materials.low.albedo = `mat-albedo-${lowSize}.png`;
     out.materials.low.normal = `mat-normal-${lowSize}.png`;
+  } else {
+    // Unwritten low-tier pixels must not inherit the new high-tier provenance.
+    // Old strip files may remain on disk, but consumers must use this bake.
+    delete out.materials.low;
   }
   const layersOut = out.materials.layers || [];
   for (const rec of baked) {
@@ -1551,10 +1555,11 @@ function checkAX26(buf, rec) {
   const out = [];
   if (buf.length < 20 || buf.toString("ascii", 0, 4) !== "AX26") return ["not an AX26 file"];
   const ver = buf.readUInt32LE(4), nv = buf.readUInt32LE(8), ni = buf.readUInt32LE(12);
-  if (ver !== 1 && ver !== 2) return [`AX26 version ${ver} is not 1 or 2`];
+  if (ver < 1 || ver > 3) return [`AX26 version ${ver} is not 1, 2 or 3`];
   if (!nv || !ni) return [`empty mesh (${nv} verts, ${ni} indices)`];
   if (ni % 3) out.push(`${ni} indices is not whole triangles`);
-  const need = ver === 1 ? 20 + nv * 40 + ni * 4 : 20 + nv * 22 + ni * 2;
+  // v3 = the v2 body + one trailing u8 sway weight per vertex (tools/lib/pack-assets.cjs writeAX26v3)
+  const need = ver === 1 ? 20 + nv * 40 + ni * 4 : 20 + nv * 22 + ni * 2 + (ver === 3 ? nv : 0);
   if (buf.length !== need) return [...out, `AX26 v${ver} is ${buf.length} bytes, header says ${need}`];
   const matAt = ver === 1 ? 20 + nv * 36 : 20 + nv * 21;
   let badMat = 0, firstMat = 0;

@@ -820,3 +820,106 @@ test("with no car or lamp map, resolvePlayer builds no first-person caster", () 
   sp.resolvePlayer(smp, 0.08);
   assert.equal(rec.builds.filter((x) => x.kind === "sh").length, before + 1, "a lamp map: the first-person caster is built");
 });
+
+function sharedRivalLifecycleRig() {
+  const v = carDrawVm(), idle = [], made = [], freed = [], decimated = [];
+  let revision = 1;
+  const build = v.ctx.Car3D.build;
+  v.ctx.Car3D.build = (...args) => Object.assign(build(...args), { revision });
+  v.ctx.requestIdleCallback = fn => { idle.push(fn); return idle.length; };
+  v.ctx.CarGeometry = { decimate(geo) {
+    decimated.push(geo);
+    if (!geo) throw new Error("missing source geometry");
+    return { ...geo, far: true };
+  } };
+  v.G.gfx.createMesh = geo => { const mesh = { geo }; made.push(mesh); return mesh; };
+  v.G.gfx.freeMesh = mesh => { assert.equal(freed.indexOf(mesh), -1, "mesh freed once"); freed.push(mesh); };
+  v.ctx.fetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+  v.ctx.GLTF = { toMesh() { return {}; } };
+  return { ...v, idle, made, freed, decimated, nextRevision() { revision++; } };
+}
+
+test("shared rival cache: invalidation releases both LODs and rebuilds the far body", () => {
+  const r = sharedRivalLifecycleRig(), cd = r.carDraw;
+  const near = cd.sharedRivalBodyMesh(true); r.idle.shift()();
+  const far = cd.sharedRivalBodyMesh(true);
+  cd.invalidateFactoryMeshCaches();
+  assert.notEqual(r.freed.indexOf(near), -1); assert.notEqual(r.freed.indexOf(far), -1);
+  assert.equal(cd.farRivalBodyReady(), false);
+  cd.invalidateFactoryMeshCaches(); // no double free
+  r.nextRevision(); const nextNear = cd.sharedRivalBodyMesh(true); r.idle.shift()();
+  const nextFar = cd.sharedRivalBodyMesh(true);
+  assert.notEqual(nextNear, near); assert.notEqual(nextFar, far);
+  assert.equal(nextFar.geo.revision, 2);
+});
+
+test("shared rival cache: a stale idle callback cannot consume the next generation", () => {
+  const r = sharedRivalLifecycleRig(), cd = r.carDraw;
+  cd.sharedRivalBodyMesh(true); const stale = r.idle.shift();
+  cd.invalidateFactoryMeshCaches(); r.nextRevision();
+  const near = cd.sharedRivalBodyMesh(true);
+  stale();
+  assert.equal(r.decimated.length, 0, "invalidated job performs no decimation");
+  assert.equal(cd.farRivalBodyReady(), false);
+  assert.equal(r.idle.length, 1, "new generation schedules its own work");
+  r.idle.shift()();
+  assert.equal(cd.sharedRivalBodyMesh(true).geo.revision, near.geo.revision);
+});
+
+test("shared rival cache: synchronous warm supersedes idle work without a second build", () => {
+  const r = sharedRivalLifecycleRig(), cd = r.carDraw;
+  cd.sharedRivalBodyMesh(true); const idle = r.idle.shift();
+  cd.warmCarAssets();
+  const far = cd.sharedRivalBodyMesh(true), builds = r.decimated.length;
+  assert.equal(builds, 1);
+  idle();
+  assert.equal(r.decimated.length, builds, "completed warm leaves the queued job inert");
+  assert.equal(cd.sharedRivalBodyMesh(true), far);
+});
+
+test("shared rival cache: GLB adoption releases both LODs and cancels pending work; failed loads preserve them", async () => {
+  for (const ready of [false, true]) {
+    const r = sharedRivalLifecycleRig(), cd = r.carDraw;
+    const near = cd.sharedRivalBodyMesh(true), idle = r.idle.shift();
+    if (ready) idle();
+    const far = ready ? cd.sharedRivalBodyMesh(true) : null;
+    r.ctx.GLTF.toMesh = () => { throw new Error("invalid GLB"); };
+    assert.equal(await cd.loadCarModel("invalid.glb"), false);
+    assert.equal(cd.sharedRivalBodyMesh(false), near); assert.equal(r.freed.length, 0);
+    r.ctx.GLTF.toMesh = () => ({});
+    assert.equal(await cd.loadCarModel("valid.glb"), true);
+    assert.notEqual(r.freed.indexOf(near), -1); if (far) assert.notEqual(r.freed.indexOf(far), -1);
+    const count = r.decimated.length; if (!ready) idle();
+    assert.equal(r.decimated.length, count);
+    assert.equal(cd.sharedRivalBodyMesh(true), null); assert.equal(cd.farRivalBodyReady(), false);
+  }
+});
+
+test("shared rival cache: invalidation during mesh creation discards the unadopted far mesh", () => {
+  const r = sharedRivalLifecycleRig(), cd = r.carDraw;
+  cd.sharedRivalBodyMesh(true);
+  const create = r.G.gfx.createMesh;
+  let discarded;
+  r.G.gfx.createMesh = geo => {
+    const mesh = create(geo);
+    if (geo.far) { discarded = mesh; cd.invalidateFactoryMeshCaches(); }
+    return mesh;
+  };
+  r.idle.shift()();
+  assert.equal(cd.farRivalBodyReady(), false);
+  assert.notEqual(r.freed.indexOf(discarded), -1, "allocated stale result is released, never adopted");
+});
+
+test("shared rival cache: a failed far upload keeps its source and retries on the next far draw", () => {
+  const r = sharedRivalLifecycleRig(), cd = r.carDraw;
+  cd.sharedRivalBodyMesh(true);
+  const create = r.G.gfx.createMesh;
+  let fail = true;
+  r.G.gfx.createMesh = geo => { if (geo.far && fail) { fail = false; throw new Error("upload failed"); } return create(geo); };
+  r.idle.shift()();
+  assert.equal(cd.farRivalBodyReady(), false);
+  cd.sharedRivalBodyMesh(true);
+  assert.equal(r.idle.length, 1, "the next far draw schedules a retry");
+  r.idle.shift()();
+  assert.equal(cd.farRivalBodyReady(), true);
+});

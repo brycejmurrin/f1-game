@@ -50,6 +50,17 @@ test("doctor checks the inspected package Node engine rather than a stale minimu
   assert.equal(check("25.0.0").status, "warn", "unsupported ranges must remain unverified");
 });
 
+test("doctor checks the MCP SDK entry used by the project", (t) => {
+  const dir = fixture(t);
+  skillTree(dir);
+  put(dir, "package.json", JSON.stringify({ devDependencies: { "@modelcontextprotocol/sdk": "1.32.2" } }));
+  put(dir, "node_modules/@modelcontextprotocol/sdk/package.json", JSON.stringify({ exports: { ".": "./missing.js", "./server/index.js": "./server.js" } }));
+  const check = () => diagnose({ root: dir }).checks.find((c) => c.id === "runtime.dependencies");
+  assert.equal(check().status, "fail");
+  put(dir, "node_modules/@modelcontextprotocol/sdk/server.js", "");
+  assert.equal(check().status, "pass");
+});
+
 test("doctor parses real YAML and rejects colon descriptions and duplicate keys", (t) => {
   const dir = fixture(t);
   skillTree(dir);

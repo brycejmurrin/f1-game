@@ -7,7 +7,7 @@ subagents to dive into everything deeply to find patterns". Session `session_01R
 
 Read-only evidence. Every proposal below is a proposal; none is applied by this note. Prior art not re-reported:
 [TRANSCRIPT-MINING-2026-10-16](TRANSCRIPT-MINING-2026-10-16.md), [AGENT-RETRO-2026-10-17](AGENT-RETRO-2026-10-17.md),
-[FLEET-B-TRANSCRIPT-AUDIT-2026-10-26](FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md) (all Claude Code sessions; this is the
+[FLEET-B-TRANSCRIPT-AUDIT-2026-10-26](../archive/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md) (all Claude Code sessions; this is the
 first pass over Codex).
 
 ## Method and coverage
@@ -188,7 +188,7 @@ hand-built gate resume (110 commands), and cheap in-session fan-out without a fr
 About two-thirds of the round-1 costs share a root cause with a finding in the recent Claude audits
 ([TRANSCRIPT-MINING-2026-10-16](TRANSCRIPT-MINING-2026-10-16.md), [AGENT-RETRO-2026-10-17](AGENT-RETRO-2026-10-17.md),
 [SYSTEM-AUDIT-3](SYSTEM-AUDIT-3-2026-10-26.md), [SYSTEM-AUDIT-4](SYSTEM-AUDIT-4-2026-10-26.md),
-[FLEET-B](FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md), [AGENT-TOKEN-USE](AGENT-TOKEN-USE-2026-10-20.md)). The Claude-side
+[FLEET-B](../archive/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md), [AGENT-TOKEN-USE](AGENT-TOKEN-USE-2026-10-20.md)). The Claude-side
 fix is usually a repo tool Codex can already call (`ci-watch --failures-only`, `wait-for`, `deploy.mjs --wait`, the
 MCP output gateway). What did not reach Codex: AGENTS.md rules 4/13 and `adapters.md:13-22` name Claude Code and
 Cursor only; Codex never loads `.claude/rules/fleet-core.md` (Cursor has the generated `.cursor/rules/fleet-core.mdc`)

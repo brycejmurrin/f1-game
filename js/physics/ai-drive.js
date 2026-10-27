@@ -226,6 +226,15 @@ const AiDrive = (function () {
     const craft = lerp(0.75, 1.15, ctx.traits ? ctx.traits.craft : 0.75);
     return 1 + edgeN * Math.max(stuckN, 0.25) * 1.15 * craft;
   }
+  // passHunger for the per-AI-per-tick caller (game.js) through ONE pooled bag: a fresh literal per call was most of the
+  // ~35 objects a tick a packed field built (audit4 F2). Filled, read, never kept.
+  const _hungerBag = { street: false, traits: null, vTop: 0.5, queueT: 0.5, blockerVmax: 0.5, ourVmax: 0.5, blockerPace: 0.5, ourPace: 0.5 };
+  function hungerOf(street, traits, vTop, queueT, blockerVmax, ourVmax, blockerPace, ourPace) {
+    const b = _hungerBag;
+    b.street = street; b.traits = traits; b.vTop = vTop; b.queueT = queueT;
+    b.blockerVmax = blockerVmax; b.ourVmax = ourVmax; b.blockerPace = blockerPace; b.ourPace = ourPace;
+    return passHunger(b);
+  }
   // 0..1: defender yields the cover against a clearly faster attacker.
   // Awareness / experience decide how soon they recognise they are beaten.
   // AI-AI only: a human chaser must not zero the cover — that drops the AI
@@ -815,10 +824,8 @@ const AiDrive = (function () {
   }
   function startCalmS() { return START_CALM; }
   function startGapT(calm) { return START_GAP_T * (calm || 0); }
-  // Calm is already zero after startCalmS, but widening qWin during the opening
-  // seconds reshapes the whole race (measured: +0.7 s Bahrain normal ai-pace).
-  // Lap-1 headway is startGapT only.
-  function startQWinBonus() { return 0; }
+  // No qWin bonus on calm: widening qWin during the opening seconds reshaped the
+  // whole race (measured: +0.7 s Bahrain normal ai-pace). Lap-1 headway is startGapT only.
 
   // PACE PHASE. Two AI cars of equal pace ran in lockstep for a whole race:
   // identical vmax, identical acceleration, so the gap between them never
@@ -863,7 +870,9 @@ const AiDrive = (function () {
     // and its yielder lifting under the caution cap, for ~8 s. Only a break in
     // the gap bleeds.
     if (!ahead || !open || ahead.finished || (ahead.pitState && ahead.pitState !== "none")) { c.trailT = 0; c._trOf = null; return 1; }
-    const on = trailCase(street, scriptPaceOf(c), scriptPaceOf(ahead), ahead.prog - c.prog, c.speed, !!ahead.human);
+    // The gap reads the tick-start snapshot (game.js _snapProg), so a neighbour updated earlier this tick shows the same
+    // pose as one updated later: update order must not decide (audit4 F3). A bare object (unit tests) falls back to prog.
+    const on = trailCase(street, scriptPaceOf(c), scriptPaceOf(ahead), snapProg(ahead) - snapProg(c), c.speed, !!ahead.human);
     c.trailT = trailTime(ahead === c._trOf ? c.trailT : 0, on, dt);
     if (on || !c.trailT) c._trOf = on ? ahead : null;
     return trailPush(c.trailT, street);
@@ -887,11 +896,12 @@ const AiDrive = (function () {
   // slowed the train behind it, with no pass on offer (quali-pace-parity,
   // monza PER for GAS 53-75 m back); the trailer's push closes that gap.
   const TRAIL_NEAR_S = 0.6, TRAIL_FAR_S = 1.2;
+  function snapProg(o) { return o._snapProg ?? o.prog; }
   function trailYieldStep(c, behind, street) {
-    const near = behind ? clamp((TRAIL_FAR_S - (c.prog - behind.prog) / Math.max(behind.speed || 0, 1)) / (TRAIL_FAR_S - TRAIL_NEAR_S), 0, 1) : 0;
+    const near = behind ? clamp((TRAIL_FAR_S - (snapProg(c) - snapProg(behind)) / Math.max((behind._snapSpeed ?? behind.speed) || 0, 1)) / (TRAIL_FAR_S - TRAIL_NEAR_S), 0, 1) : 0;
     if (!(behind && behind._trOf === c && trailYield(behind.trailT, street) && near > 0)) { c._trYT = 0; return false; }
     c._trYT = behind.trailT * near;
-    c._trYS = behind.passOf === c ? -behind.passSide : (c.x >= behind.x ? 1 : -1);
+    c._trYS = behind.passOf === c ? -behind.passSide : ((c._snapX ?? c.x) >= (behind._snapX ?? behind.x) ? 1 : -1);
     return true;
   }
   // The blue-flag ease (letPassEase, 1-3.5 %) let the follower draw alongside
@@ -1035,32 +1045,28 @@ const AiDrive = (function () {
   // fights never changed the order. Past SBS_COMMIT s alongside as the
   // yielder, a car that is not clearly the faster lifts to SBS_EASE of the
   // other's speed and tucks in behind.
-  function sbsCommitT(ctx) {
-    // Defender cover-concede: tuck sooner so a ≥0.8 % pair does not sit
-    // alongside (sbs max 20–25 s). Streets and no-arg stay at 2 s.
-    if (ctx && !ctx.street) {
-      const concede = coverConcede({
-        street: false, traits: ctx.traits, vTop: ctx.vTop,
-        ourVmax: ctx.ourVmax, ourPace: ctx.ourPace,
-        chaserVmax: ctx.otherVmax, chaserPace: ctx.otherPace,
-        other: ctx.other,
-      });
-      if (concede >= 0.70) return 1.15;
-    }
-    return 2;
+  // Defender cover-concede: tuck sooner so a ≥0.8 % pair does not sit
+  // alongside (sbs max 20–25 s). Streets and no-arg stay at 2 s. SBS_COMMIT_MIN
+  // is the floor, so a caller below it can skip the bag (game.js). Both bags
+  // are pooled (audit4 F2): sbsArgs fills the caller's, _ccBag the concede's.
+  const SBS_COMMIT_MIN = 1.15;
+  const _sbsBag = { street: false, traits: null, vTop: 0.5, other: null, ourVmax: 0.5, ourPace: 0.5, otherVmax: 0.5, otherPace: 0.5 };
+  function sbsArgs(street, traits, vTop, other, ourVmax, ourPace, otherVmax, otherPace) {
+    const b = _sbsBag;
+    b.street = street; b.traits = traits; b.vTop = vTop; b.other = other;
+    b.ourVmax = ourVmax; b.ourPace = ourPace; b.otherVmax = otherVmax; b.otherPace = otherPace;
+    return b;
   }
-  function sbsEase(ctx) {
-    if (ctx && !ctx.street) {
-      const concede = coverConcede({
-        street: false, traits: ctx.traits, vTop: ctx.vTop,
-        ourVmax: ctx.ourVmax, ourPace: ctx.ourPace,
-        chaserVmax: ctx.otherVmax, chaserPace: ctx.otherPace,
-        other: ctx.other,
-      });
-      if (concede >= 0.70) return 0.94;
-    }
-    return 0.97;
+  const _ccBag = { street: false, traits: null, vTop: 0.5, ourVmax: 0.5, ourPace: 0.5, chaserVmax: 0.5, chaserPace: 0.5, other: null };
+  function sbsConcedes(ctx) {
+    if (!ctx || ctx.street) return false;
+    const b = _ccBag;
+    b.traits = ctx.traits; b.vTop = ctx.vTop; b.ourVmax = ctx.ourVmax; b.ourPace = ctx.ourPace;
+    b.chaserVmax = ctx.otherVmax; b.chaserPace = ctx.otherPace; b.other = ctx.other;
+    return coverConcede(b) >= 0.70;
   }
+  function sbsCommitT(ctx) { return sbsConcedes(ctx) ? SBS_COMMIT_MIN : 2; }
+  function sbsEase(ctx) { return sbsConcedes(ctx) ? 0.94 : 0.97; }
 
   // SIDE RUB: WHO YIELDS. Identical treatment of two cars alongside (sepShares
   // 50/50, contactGive cutting BOTH to 0.25-0.55, rubScrub bleeding BOTH by
@@ -1188,8 +1194,9 @@ const AiDrive = (function () {
   // runs wide, fronts locked for the render) then a GATHER phase (85 % pace
   // while the car is collected) — half a second to a second and a half lost,
   // and never while alongside another car.
-  // TYRES AS STRATEGY. There are no pit stops (docs/PHYSICS.md), so the
-  // compound IS the strategy, so the field must not run one. Each AI car
+  // TYRES AS STRATEGY — the TYRE-WEAR-OFF pace curve (game.js: with wear on, the
+  // tyre model and the pit plan below own pace). The compound IS the strategy,
+  // so the field must not run one. Each AI car
   // starts a race on a class drawn for the distance (sprints on softs, long
   // races mixed): a soft is up on pace and fades, a hard is down and lasts,
   // so soft-starters and hard-starters cross over mid-race — real F1 2026 deg
@@ -1793,10 +1800,9 @@ const AiDrive = (function () {
     return street ? 20 : 16;
   }
 
-  // AI has no heading slide; this is the clamp-frame speed scrub.
-  function wallAiScrub(street) {
-    return street ? 12 : 12;
-  }
+  // AI has no heading slide; this is the clamp-frame speed scrub (m/s²), the same on streets and permanents.
+  const WALL_AI_SCRUB = 12;
+  function wallAiScrub() { return WALL_AI_SCRUB; }
 
   // CONTACT IS NOT CONFINEMENT. `contactT > 0 => boxed` would declare ANY rub —
   // even a clean side-by-side on a 15 m-wide permanent — wedged. Boxed feeds
@@ -1923,20 +1929,22 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followTime, followGap, followBase, towGain, queueBrake, queueReach, sepClamp,
-    humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
+    lateralScale, yawScale, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
+    humanInvMass, contactGive, steerDamp, unstuckPull, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
-    passHunger, coverConcede, paceEdgeN, pairEdgeN, softPairEdgeN, pullReachM,
+    passHunger, hungerOf, coverConcede, pairEdgeN, softPairEdgeN, pullReachM,
     PASS_EDGE, PASS_EDGE_FULL, CONCEDE_EDGE_FULL, PULL_EDGE, PULL_EDGE_FULL, PULL_REACH,
-    defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
+    defendPull, mirrorReach, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, lookWindow, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
-    otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, passSideBonus, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
-    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, startQWinBonus, pacePhase, trailCase, trailTime, trailStep, trailN, trailPush, trailYield, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
+    otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll,
+    // Internals pinned only by tests/unit/ai-drive.test.mjs — no game caller (audit4 P4/F8). Not API.
+    _t: Object.freeze({ isMate, ordersMul, followTime, followBase, streetOtScale, defendWindowT, queuePatience, trailCase, trailTime, trailPush, trailYield }),
     STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, UNDERCUT_REACH, UNDERCUT_LAPS, UNDERCUT_MIN_WEAR, STUCK_GAP_S, STUCK_LAPS, COVER_GAP_S, REPLAN_GAP, TEMPER, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN, MIN_STINT, ONE_SET_LAPS },
   };
 })();

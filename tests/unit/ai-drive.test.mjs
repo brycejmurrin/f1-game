@@ -121,10 +121,10 @@ test("awareness shortens the stuck dig-out threshold", () => {
 });
 
 test("the follow gap is a time headway: s0 + v·T, awareness widens T", () => {
-  assert.equal(A.followBase(false), 6);
-  assert.equal(A.followBase(true), 8);
-  assert.ok(A.followTime(ace) > A.followTime(rook), "awareness leaves more time");
-  const T = A.followTime(mid, false);
+  assert.equal(A._t.followBase(false), 6);
+  assert.equal(A._t.followBase(true), 8);
+  assert.ok(A._t.followTime(ace) > A._t.followTime(rook), "awareness leaves more time");
+  const T = A._t.followTime(mid, false);
   assert.ok(T >= 0.15 && T <= 0.30, `T ${T} s outside the 0.15..0.30 s band`);
   // IN SECONDS AT SPEED: the gap grows with speed (it was a flat ~7.5 m, 0.1 s at 75 m/s)
   const g40 = A.followGap(mid, false, 40), g20 = A.followGap(mid, false, 20);
@@ -344,7 +344,7 @@ test("aggression raises otFireRate and shortens queue patience (fire half)", () 
   const cold = { ...base, traits: { ...mid, aggression: -1 } };
   assert.ok(A.otFireRate(hot) > A.otFireRate(base));
   assert.ok(A.otFireRate(base) > A.otFireRate(cold));
-  assert.ok(A.queuePatience(hot.traits) < A.queuePatience(base.traits));
+  assert.ok(A._t.queuePatience(hot.traits) < A._t.queuePatience(base.traits));
   assert.ok(A.passHold(hot.traits) > A.passHold(base.traits));
 });
 
@@ -556,8 +556,8 @@ test("minLatGap and lineFollow keep street home seats", () => {
 });
 
 test("street OT scale still uses a clean gap after the seating fix", () => {
-  assert.ok(A.streetOtScale(rook) >= 0.72);
-  assert.ok(A.streetOtScale(ace) > A.streetOtScale(rook));
+  assert.ok(A._t.streetOtScale(rook) >= 0.72);
+  assert.ok(A._t.streetOtScale(ace) > A._t.streetOtScale(rook));
 });
 
 test("street tow is half-size and queue brake eases in", () => {
@@ -659,6 +659,7 @@ test("street sep/mass/wall keep the player from bouncing into Armco", () => {
   assert.ok(A.wallHitLoss(true) < 0.36);
   assert.ok(A.wallSteerScrub(true) < 26);
   assert.equal(A.wallAiScrub(true), A.wallAiScrub(false));
+  assert.equal(A.wallAiScrub(), 12, "one constant: no street split hides in a ternary (audit4 F7)");
 });
 
 test("otPull and defendPull: streets use an open gap, not an Armco dive", () => {
@@ -706,7 +707,7 @@ test("houseStyle: Mercedes attacks more than Cadillac; missing stats are neutral
     roomL: 1.2, roomR: 3.4, street: false,
   };
   assert.ok(A.otPull({ ...openOt, team: mer }) > A.otPull(openOt));
-  assert.ok(A.followTime(ace, false, mcl) > A.followTime(ace, false),
+  assert.ok(A._t.followTime(ace, false, mcl) > A._t.followTime(ace, false),
     "hold-car teams leave a wider follow gap");
 });
 
@@ -735,11 +736,11 @@ test("team orders: #2 holds vs #1; #1 may pass #2", () => {
   const lead = { team, seat: 0 };
   const second = { team, seat: 1 };
   const rival = { team: { id: "ferrari" }, seat: 0 };
-  assert.equal(A.isMate(team, lead), true);
-  assert.equal(A.isMate(team, rival), false);
-  assert.equal(A.ordersMul(team, 1, lead, "ot"), 0.22);
-  assert.equal(A.ordersMul(team, 0, second, "ot"), 1.18);
-  assert.equal(A.ordersMul(team, 1, rival, "ot"), 1);
+  assert.equal(A._t.isMate(team, lead), true);
+  assert.equal(A._t.isMate(team, rival), false);
+  assert.equal(A._t.ordersMul(team, 1, lead, "ot"), 0.22);
+  assert.equal(A._t.ordersMul(team, 0, second, "ot"), 1.18);
+  assert.equal(A._t.ordersMul(team, 1, rival, "ot"), 1);
   const midOpen = {
     traits: mid, blockerGap: 5, gapAhead: 5, roomL: 3, roomR: 2,
     speed: 58, aheadSpeed: 54, kAhead: 0.002, street: false, team,
@@ -749,7 +750,7 @@ test("team orders: #2 holds vs #1; #1 may pass #2", () => {
   const vsRival = A.otFireRate({ ...midOpen, seat: 1, other: rival });
   assert.ok(vsLead < vsRival, `#2 vs #1 ${vsLead} should be colder than vs rival ${vsRival}`);
   assert.ok(vsSecond > vsRival, `#1 vs #2 ${vsSecond} should be hotter than vs rival ${vsRival}`);
-  assert.ok(A.followTime(mid, false, team, 1, lead) > A.followTime(mid, false, team, 0, second),
+  assert.ok(A._t.followTime(mid, false, team, 1, lead) > A._t.followTime(mid, false, team, 0, second),
     "#2 leaves #1 more space than #1 leaves #2");
   const cover = {
     traits: ace, chaser: true, chaserGap: 6, chaserSpeed: 58, speed: 54,
@@ -907,30 +908,30 @@ test("pacePhase is a zero-mean drift whose amplitude falls with consistency", ()
 
 test("trailPush: a quicker car held behind the same slower car pushes past the pace phase (#2356)", () => {
   // the case: scripted-slower AI directly ahead, inside 1.2 s, on a permanent
-  assert.equal(A.trailCase(false, 1.004, 1.0, 40, 50, false), true, "+0.4 % at 0.8 s is a trail");
-  assert.equal(A.trailCase(false, 1.002, 1.0, 40, 50, false), false, "under the 0.25 % edge floor");
-  assert.equal(A.trailCase(false, 1.01, 1.0, 70, 50, false), false, "1.4 s back is not held");
-  assert.equal(A.trailCase(true, 1.01, 1.0, 20, 50, false), false, "streets keep their gates");
-  assert.equal(A.trailCase(false, 1.01, 1.0, 20, 50, true), false, "a human ahead never triggers it");
-  assert.equal(A.trailCase(false, 1.01, 0, 20, 50, false), false, "no scripted pace ahead (a human) is no case");
+  assert.equal(A._t.trailCase(false, 1.004, 1.0, 40, 50, false), true, "+0.4 % at 0.8 s is a trail");
+  assert.equal(A._t.trailCase(false, 1.002, 1.0, 40, 50, false), false, "under the 0.25 % edge floor");
+  assert.equal(A._t.trailCase(false, 1.01, 1.0, 70, 50, false), false, "1.4 s back is not held");
+  assert.equal(A._t.trailCase(true, 1.01, 1.0, 20, 50, false), false, "streets keep their gates");
+  assert.equal(A._t.trailCase(false, 1.01, 1.0, 20, 50, true), false, "a human ahead never triggers it");
+  assert.equal(A._t.trailCase(false, 1.01, 0, 20, 50, false), false, "no scripted pace ahead (a human) is no case");
   // the timer: builds while held, bleeds (not resets) on a flicker
-  let t = 0; for (let i = 0; i < 600; i++) t = A.trailTime(t, true, 1 / 60);
+  let t = 0; for (let i = 0; i < 600; i++) t = A._t.trailTime(t, true, 1 / 60);
   assert.ok(Math.abs(t - 10) < 1e-6, "10 s held");
-  assert.ok(Math.abs(A.trailTime(t, false, 0.5) - 8.5) < 1e-9, "a 0.5 s break bleeds 1.5 s");
-  assert.equal(A.trailTime(0.5, false, 1), 0, "never negative");
+  assert.ok(Math.abs(A._t.trailTime(t, false, 0.5) - 8.5) < 1e-9, "a 0.5 s break bleeds 1.5 s");
+  assert.equal(A._t.trailTime(0.5, false, 1), 0, "never negative");
   // the push: none before the patience runs out, then a ramp that beats the
   // metronome's phase swing (±0.5 %) and matches a rookie's (±1.6 %)
-  assert.equal(A.trailPush(5, false), 1, "no push in the first seconds of a trail");
-  assert.ok(A.trailPush(13, false) > 1 && A.trailPush(13, false) < A.trailPush(20, false), "ramps");
-  assert.ok(A.trailPush(60, false) >= 1.016, "full push at least a rookie's phase amplitude");
-  assert.ok(A.trailPush(60, false) <= 1.025, "bounded: a push, not a second car");
-  assert.equal(A.trailPush(60, true), 1, "streets: no push");
+  assert.equal(A._t.trailPush(5, false), 1, "no push in the first seconds of a trail");
+  assert.ok(A._t.trailPush(13, false) > 1 && A._t.trailPush(13, false) < A._t.trailPush(20, false), "ramps");
+  assert.ok(A._t.trailPush(60, false) >= 1.016, "full push at least a rookie's phase amplitude");
+  assert.ok(A._t.trailPush(60, false) <= 1.025, "bounded: a push, not a second car");
+  assert.equal(A._t.trailPush(60, true), 1, "streets: no push");
 });
 
 test("trailYield: past its patience the slower car lifts and lets the trailing car by (#2356)", () => {
-  assert.equal(A.trailYield(5, false), false, "a short trail is racing, not a yield");
-  assert.equal(A.trailYield(20, false), true, "past the patience: let it by");
-  assert.equal(A.trailYield(60, true), false, "streets never yield on a trail");
+  assert.equal(A._t.trailYield(5, false), false, "a short trail is racing, not a yield");
+  assert.equal(A._t.trailYield(20, false), true, "past the patience: let it by");
+  assert.equal(A._t.trailYield(60, true), false, "streets never yield on a trail");
   // the lift starts at the blue-flag ease and deepens; the corner eases a third as deep
   const t = { experience: 1 };
   assert.ok(Math.abs(A.trailYieldEase(8, t) - A.letPassEase(t)) < 1e-9, "starts at the blue-flag ease");
@@ -979,6 +980,36 @@ test("trailStep: a closed gate or a pitting car ahead ends the trail at once, no
   [c, ahead] = mk(); ahead.prog = 1000 + 70;   // 1.4 s: a gap break still bleeds
   A.trailStep(c, ahead, true, false, 0.5);
   assert.ok(Math.abs(c.trailT - 30.5) < 1e-9 && c._trOf === ahead, "a gap break bleeds, keeping the pair");
+});
+
+test("trail steps read the tick-start snapshot, not a neighbour already moved this tick (audit4 F3)", () => {
+  // The car ahead was updated first this tick: its live prog moved past the 60 m window (1.2 s x 50 m/s), its snapshot did not.
+  const mk = (live, snap) => ({ prog: 1000 + live, _snapProg: 1000 + snap, speed: 50, tierV: 1, skill: 0.99, pitState: "none" });
+  const a1 = mk(61, 59), c1 = { prog: 1000, _snapProg: 1000, speed: 50, tierV: 1, skill: 1, trailT: 10, _trOf: a1 };
+  A.trailStep(c1, a1, true, false, 1 / 60);
+  assert.ok(c1.trailT > 10, "inside the 60 m window by snapshot: the trail grows even though the live prog says 61 m");
+  // trailYieldStep: the trailer's snapshot gap and speed decide, and its snapshot x picks the side
+  const lead = { prog: 1000, _snapProg: 1000, x: 0, _snapX: 0 };
+  const tr = { prog: 975 + 1.2, _snapProg: 975, x: 3, _snapX: -1, speed: 60, _snapSpeed: 50, trailT: 20, _trOf: lead, passOf: null };
+  assert.equal(A.trailYieldStep(lead, tr, false), true);
+  assert.equal(lead._trYT, 20, "0.5 s back by snapshot (25 m at 50 m/s): the full trail time");
+  assert.equal(lead._trYS, 1, "steps away from the trailer's snapshot side (x -1), not its live x 3");
+});
+
+test("pooled hunger / side-by-side bags give the literal-ctx answers and allocate nothing per call (audit4 F2)", () => {
+  const tr = { craft: 0.9, awareness: 0.6, experience: 0.5 };
+  for (const [street, ourV, blkV, ourP, blkP, qT] of [[false, 62, 60, 1.01, 1, 6], [false, 60, 60, 1, 1, 0], [true, 64, 60, 1.02, 1, 9]]) {
+    const lit = A.passHunger({ street, traits: tr, vTop: 70, queueT: qT, blockerVmax: blkV, ourVmax: ourV, blockerPace: blkP, ourPace: ourP });
+    assert.equal(A.hungerOf(street, tr, 70, qT, blkV, ourV, blkP, ourP), lit);
+    const other = { human: false };
+    const sLit = { street, traits: tr, vTop: 70, other, ourVmax: blkV, ourPace: blkP, otherVmax: ourV, otherPace: ourP };
+    const sb = A.sbsArgs(street, tr, 70, other, blkV, blkP, ourV, ourP);
+    assert.equal(A.sbsCommitT(sb), A.sbsCommitT({ ...sLit }));
+    assert.equal(A.sbsEase(sb), A.sbsEase({ ...sLit }));
+    assert.ok(A.sbsCommitT(sb) >= A.SBS_COMMIT_MIN, "SBS_COMMIT_MIN is the floor game.js gates on");
+  }
+  assert.equal(A.sbsArgs(false, tr, 70, null, 1, 1, 1, 1), A.sbsArgs(true, null, 60, null, 2, 2, 2, 2), "one pooled bag");
+  assert.equal(A.sbsCommitT(A.sbsArgs(false, { craft: 1, awareness: 1, experience: 1 }, 70, { human: false }, 60, 1, 64, 1.03)), A.SBS_COMMIT_MIN, "a clearly faster other: the floor");
 });
 
 test("otWant: a blocker that is slow but PULLING AWAY is a launching car, not an obstacle", () => {
@@ -1087,7 +1118,7 @@ test("startCalm: full while launching, fades out by calmUntil, never for a car t
   assert.equal(A.startCalmS(), 24);
   assert.ok(A.startGapT(1) > 0.4 && A.startGapT(0) === 0);
   assert.equal(A.startGapT(1), 0.42, "lap-1 headway bump is pinned");
-  assert.equal(A.startQWinBonus(1, 5), 0, "qWin does not widen on calm — headway only");
+  assert.equal(A.startQWinBonus, undefined, "qWin does not widen on calm — headway only (the always-0 helper is gone)");
   assert.equal(A.startCalm(false, 32, 30), 0.2, "calm fades over 10 s, not a step");
   const t = { craft: 0.75 };
   const zone = { traits: t, speed: 46, blockerSpeed: 40, roll: 0.5, kAhead: 0, toTurnIn: 80, attackQ: 0.55 };
@@ -1488,14 +1519,14 @@ test("queue pressure: time held behind one car lowers the pass bar, craft spends
   assert.equal(A.queueTime(0, true, 0.5), 0.5);
   assert.equal(A.queueTime(1, false, 0.25), 0.5);
   assert.equal(A.queueTime(0.1, false, 1), 0);
-  assert.ok(A.queuePatience({ craft: 1 }) < A.queuePatience({ craft: 0.2 }), "a racer tries sooner than a rookie");
+  assert.ok(A._t.queuePatience({ craft: 1 }) < A._t.queuePatience({ craft: 0.2 }), "a racer tries sooner than a rookie");
   assert.equal(A.queuePress({ traits: mid, queueT: 0 }), 0);
   assert.equal(A.queuePress({ traits: mid, queueT: 60 }), 1);
   // THE TRAIN: two equal cars, the follower in the tow (+4.5 %). Fresh, the 7 %
   // margin refuses it; after the patience window, it wants the pass.
   const tow = { street: false, speed: 60, blockerSpeed: 60, vTop: 72, freeSpeed: 66 * 1.045, blockerVmax: 66, traits: mid };
   assert.equal(A.otWant({ ...tow, queueT: 0 }), false, "not the moment a car arrives behind another");
-  assert.equal(A.otWant({ ...tow, queueT: A.queuePatience(mid) }), true, "held long enough: the tow is enough");
+  assert.equal(A.otWant({ ...tow, queueT: A._t.queuePatience(mid) }), true, "held long enough: the tow is enough");
   // Equal pace alone still refuses (the 30 % margin floor) — but with a CLEAR
   // side open, full pressure takes the move so packs can split without tow.
   assert.equal(A.otWant({ ...tow, freeSpeed: 66, queueT: 60, roomL: 1, roomR: 1 }), false,
@@ -1637,7 +1668,7 @@ test("the cover starts a time behind, grows as the attacker closes, and awarenes
   assert.ok(at(0.1 * v) > at(0.4 * v), "the cover grows as the attacker closes");
   assert.equal(at(0.5 * v, { ...ace, awareness: 0 }), 0, "a dull driver's window is shorter");
   assert.ok(at(0.5 * v, { ...ace, awareness: 1 }) > 0, "a sharp one's reaches it");
-  assert.ok(Math.abs(A.defendWindowT({ awareness: 0 }) - 0.35) < 1e-9 && Math.abs(A.defendWindowT({ awareness: 1 }) - 0.7) < 1e-9);
+  assert.ok(Math.abs(A._t.defendWindowT({ awareness: 0 }) - 0.35) < 1e-9 && Math.abs(A._t.defendWindowT({ awareness: 1 }) - 0.7) < 1e-9);
 });
 
 /* LET PASS IS A BLUE FLAG. The move-aside used to wave ANY quicker car through after a
@@ -1785,4 +1816,34 @@ test("game.js hands wantBoost and defendPull the pace envelope (vTop)", () => {
   assert.match(game, /_aiDefend\.vTop = (?:vTop\(\)|vT);/, "defendPull's not-closing gate needs vTop");
   if (/\.vTop = vT;/.test(game)) assert.match(game, /\bconst vT = vTop\(\)/, "vT is vTop()");
   assert.match(game, /_aiBr\.pace = driveTune\.PACE; _aiBr\.vmax = VMAX/, "brakeTarget reads vScale from pace");
+});
+
+test("RaceControl.holdCap finds the car by its rank slot, with a scan fallback (audit4 P6)", () => {
+  const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number, isNaN, isFinite, console, DebrisWorld: { active: () => false } });
+  seedLog(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx, { filename: absSrc("js/race/race-control.js") });
+  const R = vm.runInContext("RaceControl", ctx);
+  const lead = { prog: 110, _snapProg: 110, _snapSpeed: 50, rank: 1 };
+  const me = { prog: 100, _snapProg: 100, speed: 50, rank: 2 };
+  let scans = 0;
+  const ranked = [lead, me];
+  ranked.indexOf = function (x) { scans++; return Array.prototype.indexOf.call(this, x); };
+  assert.equal(R.holdCap(me, ranked, null), 50, "rank slot: the car ahead within HOLD_M holds us");
+  assert.equal(scans, 0, "a running car is found by c.rank - 1, no O(n) scan per AI per tick");
+  me.rank = 1;   // a finisher's permuted slot: ranked[0] is not me, so the scan finds index 1
+  assert.equal(R.holdCap(me, ranked, null), 50, "a stale rank falls back to the scan, same verdict");
+  assert.equal(scans, 1);
+  me.rank = undefined;
+  assert.equal(R.holdCap(me, ranked, null), 50);
+  assert.equal(R.holdCap(lead, ranked, null), Infinity, "the leader holds behind nobody");
+});
+
+test("a level AI-AI side rub takes ONE k for the pair, so bucket order cannot pick the yielder (audit4 F10)", () => {
+  const src = readFileSync(join(ROOT, "js/physics/collide.js"), "utf8");
+  assert.equal(/kTurn \?\? \w\.kTurn/.test(src), false, "`a.kTurn ?? b.kTurn` picks whichever car the walk names a");
+  // cornerK is symmetric, so either naming of the pair sees the same k and exactly one car yields.
+  const ka = 0, kb = 0.01;
+  assert.equal(A.cornerK(ka, kb), A.cornerK(kb, ka));
+  const yA = A.sideYieldsA(0, 2, -2, A.cornerK(ka, kb)), yB = A.sideYieldsA(0, -2, 2, A.cornerK(kb, ka));
+  assert.notEqual(yA, yB, "exactly one of the pair yields");
 });

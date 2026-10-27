@@ -1,6 +1,6 @@
 # Camera owners and cut-jump recipe
 
-Owners in `js/camera/` (locate symbols with `rg`):
+Owners in `js/camera/` (locate symbols with apex-lsp, skill code-nav; when `ls js/camera` grows, add the new file here):
 - `mode-switch.js` — the mode list; each mode's `cut` is its blend time in seconds (side, heli, trackside differ).
 - `vantage.js` (`GameCams`) — per-mode framing/placement, incl. heli, side, cinematic, low and the ExtraRigs modes.
 - `extra-rigs.js` — rival / pitwall / drone rigs.
@@ -14,6 +14,15 @@ Owners in `js/camera/` (locate symbols with `rg`):
   tests `flyby-shots.test.mjs`, `flyby-panel.test.mjs`.
 - `trackside.js` (`TracksideCams`) — roadside fixed eyes per corner; test `trackside.test.mjs`.
 - `free-cam.js` (`FreeCam`) — photo-mode fly-cam panel; test `free-cam.test.mjs`.
+- `drive-chase.js` (`DriveChase`) — chase-family LENS only (FOV delta); the chase pose (distance, lead, brake tuck) is `vantage.js`.
+- `drive-onboard.js` (`DriveOnboard`) — lens only for car-mounted cameras.
+- `fov-fit.js` — aspect-aware vertical FOV fit (wide vs portrait screens).
+- `cam-groups.js` (`CamGroups`) — which modes count as onboard and take the cockpit HUD layout.
+- `cockpit-opts.js` / `cockpit-finishes.js` / `cockpit-preview.js` — first-person options, cockpit finishes, the isolated cockpit preview.
+- `flyby-sight.js` — what a Flyby eye can see (occlusion between eye and subject).
+- `photo-cam.js` (`Photomode`) / `photo-kit.js` — photo-mode enter/exit and fly-cam; grids, DoF hint, bookmarks.
+- `results-cam.js` (`ResultsCam`) — chequered-flag cut, results orbit, highlights montage.
+- `replay-buf.js` — the replay buffer (see `replay-diagnosis.md`).
 
 Recipe for "cut jumps" (e.g. at a hairpin when switching to TV):
 1. Read the target mode's `cut` in `mode-switch.js`; a 0 means a hard cut by design.

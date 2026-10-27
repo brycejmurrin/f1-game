@@ -28,9 +28,10 @@ Load this when driving a lap, writing a policy, or debugging a typed error. SKIL
   Don't chain several in one shell command. Serialize browser boots; prefer the Node VM for numeric batches.
   Renames: `trackInfo`→`track`, `carView`→`car`, `agentHelp`→`help`;
   `model` = `render({what:"circuit"})`. `terminal`/`seed` are in-page only.
-- `node tools/shot/apex-eval.mjs <track> "<expr>"` — one boot, `a` = `__apex`.
-  Batch multi-reads into one expression. Stages `race()` only — stage the rest
-  inside the expression (or use the CLI).
+- `node tools/shot/apex-eval.mjs <track> "<expr>" [--vm] [--raw]` — one boot, `a` = `__apex`;
+  `--vm` boots the Node VM instead of Chromium. Batch multi-reads into one expression.
+  Stages `race()` only — stage the rest inside the expression (or use the CLI). Output is
+  shape-compacted: pass `--raw` for arrays.
 - `window.__apex.<tool>(...)` in a live page — **stage first**: `race(id)` →
   `go()` → `jump(frac, speed)`, then two frames. Skip it → `PlayerNotPlacedError`
   or a stale camera. Full rules under Staging below.
@@ -66,7 +67,8 @@ Load this when driving a lap, writing a policy, or debugging a typed error. SKIL
   `trackInfo({what:"corners"})` and join by turn id). `summary|sections|full`.
   The first call for "understand a place I can't see."
 - `trackInfo({what})` (CLI `track`) — corners (with signed `k` and `bankingDeg`) /
-  sectors / elevation profile; grounded in the real circuit (`gp`, `realLengthKm`,
+  sectors / elevation profile (60 points of `y`/`widthM`/`radiusM`, no slope: grade is
+  `trackProfile(n).slope`); grounded in the real circuit (`gp`, `realLengthKm`,
   `lengthErrorPct`).
 - `carView({detail})` (CLI `car`) — the car as JSON: team, the CHOSEN parts spec +
   net `mods` multipliers, measured geometry. `detail:"parts"` adds per-part boxes —
@@ -189,10 +191,8 @@ An LLM can't decide at 60 Hz — that is what `rollout({policy})` is for.
 reads as "my policy stalled" when it merely ran out of interval. One lap of Monza
 at the pace above takes ~200 s, so a lap is 2-3 chained `rollout()` calls, not
 one; carry your own distance/lap total across them and check `terminal()` between
-each. Measured with the policy above: ~10.5 km over three 120 s calls, no rescue,
-~7 % off-track. Those figures are illustrative, not reproducible to the digit —
-the recipe drives a live AI field and pins no seed, so your run will differ.
-Pin `seed(n)` before `race()` if you need to compare two runs.
+each. The recipe drives a live AI field and pins no seed, so runs differ: pin
+`seed(n)` before `race()` to compare two.
 **Reaching `finished` takes a real race.** The default is 3 laps, so ~600 s —
 five-plus chained calls. `setLap(n)` only moves the counter: `finished` is set
 by the line-crossing handler, so you must still drive across the line after it.

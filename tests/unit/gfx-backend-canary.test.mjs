@@ -42,7 +42,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx, recordingOverlay } from "../helpers/glx-mock.mjs";
-import { gameSource, GAME_REL } from "../helpers/game-source.mjs";
+import { gameSource, symbolSource, GAME_REL } from "../helpers/game-source.mjs";
 import { bootRendererBoot } from "../helpers/renderer-boot-vm.mjs";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -197,6 +197,35 @@ test("Gfx binds TLX when the preference is unset and honours explicit backends",
   assert.equal((await bind("webgpu")).name, "wgx", "explicit WEBGPU still takes WGX");
 });
 
+test("Gfx.create discards a backend whose init owner was revoked and logs why it fell back (audit4 R3)", async () => {
+  let disposed = 0;
+  const ctx = vm.createContext({ window: {}, localStorage: makeStorage({}), navigator: { gpu: {} } });
+  seedLog(ctx);
+  vm.runInContext(read("js/render/gfx.js"), ctx, { filename: absSrc("js/render/gfx.js") });
+  const G = vm.runInContext("Gfx", ctx);
+  const owner = G.createInitOwner({ getContext: () => null });
+  // The boot timeout fires in the gap between TLX resolving and the owner check.
+  ctx.TLX = { async create() { owner.abort(); return { dispose() { disposed++; } }; } };
+  assert.equal(await G.create({}, { initOwner: owner }), null, "a revoked init never binds");
+  assert.equal(disposed, 1, "the orphaned backend is disposed, not dropped live");
+  const bind = Array.from(ctx.Log.records(), (r) => r.msg).filter((m) => m.startsWith("Gfx.bind"));   // test-realm array
+  assert.deepEqual(bind, ["Gfx.bind fallback webgl2 (Renderer initialization cancelled)"], "the fallback line carries the exception text");
+});
+
+// tools/check/dup-functions.mjs (audit4 B1): car-body-geom.js carried two `function fitBodyDetails(` in one
+// create() scope; the hoisted later copy won and edits to the first changed nothing. js/ is the scanned tree here
+// (tooling-fast); `node tools/check/dup-functions.mjs` scans js/, tools/ and tests/.
+test("dup-functions lint: a function declared twice in one scope is a finding; js/ has none", async () => {
+  const { scanFile, scanTree } = await import("../../tools/check/dup-functions.mjs");
+  const twice = "const M = (function () { function a() { return 1; }\n function b() {}\n function a() { return 2; }\n return { a, b }; })();";
+  assert.deepEqual(scanFile(twice, "x.js").map((h) => [h.name, h.first, h.line]), [["a", 1, 3]], "the dead first copy is named with both lines");
+  const sibling = "function f() { function h() {} } function g() { function h() {} } switch (1) { case 1: { function k() {} } }";
+  assert.deepEqual(scanFile(sibling, "y.js"), [], "the same helper name in two sibling scopes is fine");
+  assert.ok(scanFile("function (", "bad.js")[0].parseError, "an unparseable file is reported, not skipped");
+  const hits = scanTree(ROOT, ["js"]);
+  assert.deepEqual(hits.map((h) => `${h.file}:${h.line} ${h.name} (first ${h.first})`), [], "js/ declares no function twice in one scope");
+});
+
 test("boot canary disarms after a successful bind, not only after present()", () => {
   const game = code("js/game.js");
   const bind = game.search(/Object\.defineProperties\(\s*GLX\s*,\s*Object\.getOwnPropertyDescriptors\(\s*backend\s*\)\s*\)/);
@@ -207,24 +236,48 @@ test("boot canary disarms after a successful bind, not only after present()", ()
     "PROBE_KEY must be cleared after Gfx.create() binds, before the first present — title has no track");
 });
 
-test("a successful deferred bind clears a stale GLX live-backend latch", () => {
-  const game = code("js/game.js");
-  const bind = game.search(/Object\.defineProperties\(\s*GLX\s*,\s*Object\.getOwnPropertyDescriptors\(\s*backend\s*\)\s*\)/);
-  const fallback = game.indexOf("if (!gfx) {", bind);
-  const success = game.slice(bind, fallback);
-  assert.match(success, /if\s*\(\s*gfx\s*\)[^]*?sessionStorage\.removeItem\(\s*"apex26\.gfxBound"\s*\)/,
-    "same-tab recovery must not retain a previous GLX fallback after TLX/WGX binds");
-  assert.match(success, /dispatchEvent\(\s*new Event\(\s*"apex-gfx-live"\s*\)\s*\)/,
-    "SETTINGS and diagnostics must repaint after the live bind changes");
+function bootLiveBackend({ pref = "three", ss = {}, ls = {}, backend = { backend: "three" }, glx = { init: () => true } } = {}) {
+  // Keep boot deadlines pending while each mocked operation settles normally.
+  const h = bootRendererBoot({ ls: { "apex26.gfxBackend": pref, ...ls }, ss, setTimeout: () => 1 });
+  const events = [], creates = [];
+  h.ctx.GLX = glx;
+  h.ctx.Gfx = { async create(_canvas, opts) { creates.push(opts.backend); return backend; } };
+  h.ctx.Event = class { constructor(type) { this.type = type; } };
+  h.ctx.window.dispatchEvent = (event) => events.push({ type: event.type, bound: h.ss.getItem("apex26.gfxBound") });
+  return { ...h, events, creates, glx };
+}
+
+test("a successful deferred bind clears a stale GLX live-backend latch", async () => {
+  for (const pref of ["three", "webgpu"]) {
+    const backend = { backend: pref, get width() { return 123; } };
+    const h = bootLiveBackend({ pref, backend, ss: { "apex26.gfxBound": "webgl2", "apex26.gfxFallbackWhy": "previous refusal" } });
+    const result = await h.api.start();
+    assert.equal(result.gfx, h.glx, "bind preserves the shared GLX identity");
+    assert.equal(result.bound, true);
+    assert.equal(result.gfx.width, 123, "backend live getters survive descriptor copying");
+    assert.equal(h.ss.getItem("apex26.gfxBound"), null, "successful bind clears a prior GLX latch");
+    assert.equal(h.ss.getItem("apex26.gfxFallbackWhy"), null);
+    assert.deepEqual(h.events, [{ type: "apex-gfx-live", bound: null }], "listeners see the cleared latch at notification time");
+    assert.equal(h.ls.getItem("apex26.gfxBackendProbe"), null, "title-only bind disarms without a present");
+    assert.deepEqual(h.creates, [pref]);
+  }
 });
 
-test("every successful game.js GLX fallback publishes the live backend", () => {
-  const game = code("js/game.js");
-  const fallback = game.slice(game.indexOf("if (!gfx) {"), game.indexOf("// Baked asset pack"));
-  assert.match(fallback, /gfx\s*=\s*GLX[\s\S]*sessionStorage\.setItem\(\s*"apex26\.gfxBound"\s*,\s*"webgl2"\s*\)/,
-    "claim-fail, first-strike and null-create all converge on the successful GLX attach");
-  assert.match(fallback, /dispatchEvent\(\s*new Event\(\s*"apex-gfx-live"\s*\)\s*\)/,
-    "the picker must repaint immediately when GLX takes over");
+test("every successful game.js GLX fallback publishes the live backend", async () => {
+  for (const scenario of ["explicit", "claim-fail", "first-strike", "refused", "failed-bind"]) {
+    const glx = { init: () => true };
+    if (scenario === "failed-bind") Object.preventExtensions(glx);
+    const h = bootLiveBackend({ pref: scenario === "explicit" ? "webgl2" : "three", glx,
+      backend: scenario === "refused" ? null : { backend: "three" },
+      ss: scenario === "claim-fail" ? { "apex26.gfxClaimFail": "1" } : {},
+      ls: scenario === "first-strike" ? { "apex26.gfxBackendProbe": "three" } : {} });
+    const result = await h.api.start();
+    assert.equal(result.gfx, glx, scenario + " attaches GLX");
+    assert.equal(result.bound, false, scenario + " does not claim a deferred bind");
+    assert.equal(h.ss.getItem("apex26.gfxBound"), "webgl2", scenario + " publishes the actual renderer");
+    assert.deepEqual(h.events, [{ type: "apex-gfx-live", bound: "webgl2" }], scenario + " notifies after publishing GLX");
+    assert.deepEqual(h.creates, ["refused", "failed-bind"].includes(scenario) ? ["three"] : [], scenario + " reaches the intended boot path");
+  }
 });
 
 test("the shared Playwright fixture pins native GLX coverage", () => {
@@ -271,10 +324,22 @@ test("first world present re-arms the canary so a jetsam mid-frame still reverts
   assert.match(before, /armBackendProbe\(\)\s*;\s*(?:\n\s*if \(!XrBoot\.present\(gfx, _xrEyes, po\)\) )?$/,
     "the last statement before gfx.present(po) must arm the canary");
   assert.match(after, /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/);
-  const helper = fnBody(game, "armBackendProbe");
-  assert.match(helper, /backendPreference\(\)/,
-    "canary re-arm must resolve an unset preference to the default THREE pick");
-  assert.match(helper, /setItem\(\s*"apex26\.gfxBackendProbe"/);
+  const helper = symbolSource("function armBackendProbe()");
+  for (const pref of ["three", "webgpu", "webgl2"]) {
+    const writes = [];
+    const ctx = vm.createContext({ _backendProved: false, _backendBound: true, _probeArmed: false,
+      backendPreference: () => pref, localStorage: { setItem: (...args) => writes.push(args) } });
+    vm.runInContext(helper + "\narmBackendProbe(); armBackendProbe();", ctx, { filename: absSrc(GAME_REL) });
+    assert.deepEqual(writes, pref === "webgl2" ? [] : [["apex26.gfxBackendProbe", pref]],
+      "only deferred backends arm, once, using the resolved preference");
+    assert.equal(ctx._probeArmed, pref !== "webgl2");
+    for (const flags of [{ _backendProved: true }, { _backendBound: false }]) {
+      Object.assign(ctx, { _backendProved: false, _backendBound: true, _probeArmed: false }, flags);
+      writes.length = 0;
+      vm.runInContext("armBackendProbe()", ctx, { filename: absSrc(GAME_REL) });
+      assert.deepEqual(writes, [], "proved and unbound backends never arm");
+    }
+  }
 });
 
 test("RENDERER picker lives in renderer-picker.js, not game.js or gfx-quality.js", () => {
@@ -691,9 +756,16 @@ test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
   const fx = read("js/render/three/tsl-fx.js");
   const start = fx.indexOf("if (decalCache.size >= DECAL_CACHE_CAP)");
   const evict = fx.slice(start, fx.indexOf("m = fxMaterial({ doubleSided: true, key: \"tlx-fx-decal\" })", start));
-  assert.match(evict, /decalCache\.delete\(k\)/);
-  const code = evict.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-  assert.doesNotMatch(code, /\.dispose\s*\(/);
+  let disposed = 0;
+  const current = { __tlxFrame: 8, dispose() { disposed++; } };
+  const old = { __tlxFrame: 7, dispose() { disposed++; } };
+  const decalCache = new Map([["current", current], ["old", old]]);
+  const _evicted = [], _fxMats = [current, old], _decalFrame = 8, DECAL_CACHE_CAP = 2;
+  eval(evict);
+  assert.deepEqual([...decalCache.keys()], ["current"], "eviction skips materials used in this frame");
+  assert.deepEqual(_evicted, [old], "disposal is deferred until after presentation");
+  assert.deepEqual(_fxMats, [current], "eviction releases the per-frame material registry too");
+  assert.equal(disposed, 0, "neither live nor evicted material is disposed during draw-list construction");
 });
 
 test("TLX decal programs share a material map reference, not the first car's texture node", () => {
@@ -5622,6 +5694,8 @@ test("the packing round-trip check is wired to the shader's own decisions", () =
     "tlx-chunked packAttr signature drifted — update tools/gfx/tlx-pack-check.cjs");
   assert.match(tool, /kind\(\?:, fmt24\)\?/,
     "tlx-pack-check lift regex must allow the optional fmt24 arg");
+  for (const dependency of ["packAttrSteps", "f32Steps", "pad4Steps", "widen4Steps", "halfAttrSteps"])
+    assert.ok(tool.includes('"' + dependency + '"'), "source lift includes resumable packer dependency " + dependency);
   // The tool must LIFT the packer out of the shipping file. A reimplementation
   // drifts, and then it verifies its own copy rather than what ships.
   assert.match(tool, /readFileSync\(path\.join\(ROOT, "js\/render\/three\/tlx-chunked\.js"\)/,
@@ -6238,7 +6312,7 @@ test("all track loaders release selector ownership before building, even on fail
     assert.equal(_menuGate.warm, 0);
     throw new Error("build failed");
   };
-  const load = eval("(function(idx){" + fnBody(read("js/game.js"), "loadTrack") + "})");
+  const load = eval("(function(idx){" + fnBody(symbolSource("function loadTrack("), "loadTrack") + "})");
   assert.throws(() => load(0), /build failed/);
   assert.equal(_menuGate.track, null, "failed replacement cannot retain a stale world");
 });
@@ -6284,7 +6358,10 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const cockpitBodies = {}, cockpitBodyOrder = [], COCKPIT_BODY_CACHE_MAX = 3;
   let cockpitStyle = "standard";
   const CockpitOpts = { halo: () => true, haloSize: () => 2, body: () => cockpitStyle }, Parts = { getVisualTiers: () => ({}) };
-  const Car3D = { build: () => { builds++; return {}; } };
+  const recipes = [];
+  const Car3D = { build: (_c1, _c2, recipe) => { builds++; recipes.push(recipe); return {}; } };
+  let playerParts = null, playerPartsTeam = "";
+  const playerPartsFor = eval("(" + fnSource(read("js/car/car-draw.js"), "function playerPartsFor(") + ")");
   // js/car/car-draw.js reads the backend and the parts through the G façade and the livery through deps.
   const G = { gfx: { createMesh: x => x }, getTeamParts: () => ({}) };
   const deps = { resolveLivery: () => ({ c1: [], c2: [] }) };
@@ -6292,14 +6369,17 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
   const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "playerBodyMesh") + "})");
   // cockpitBodyMesh memoises its key on the last inputs and builds through a hoisted factory.
-  let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "";
+  let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;
   const buildPendingCockpitBody = eval("(function(){" + fnBody(read("js/car/car-draw.js"), "buildPendingCockpitBody") + "})");
   const cockpitKey = eval("(function(team, car, visualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitKey") + "})");
   const cockpit = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitBodyMesh") + "})");
   const team = { id: "mclaren" }, car = { num: 81 };
   const preparedBody = body(team, car, "selected-setup"), preparedCockpit = cockpit(team, car, "selected-setup");
   assert.equal(playerVisualKey, "previous-setup", "menu preparation does not mutate race globals");
+  assert.equal(recipes[0].parts != null, true, "menu preparation resolves body parts before race state exists");
+  assert.deepEqual(recipes[1].parts, recipes[0].parts, "cockpit preparation resolves the same parts recipe");
   playerVisualKey = "selected-setup";
+  playerParts = { race: true }; playerPartsTeam = team.id;
   assert.equal(body(team, car), preparedBody); assert.equal(cockpit(team, car), preparedCockpit);
   assert.equal(builds, 2, "race reuses both prepared meshes instead of rebuilding");
   cockpitStyle = "wide";
@@ -7419,9 +7499,8 @@ test("GLX mirrorBegin / envFaceBegin put their active flag down when begin() thr
 // 08-F3: render() asked the backend for its full backendState() (TLX: ~50 fields, a meshPool walk, ~1 KB of garbage)
 // every frame to read one boolean. Every backend now carries a cheap ctxLost(); backendState() is only the fallback.
 test("game.js gfxContextLost reads the cheap ctxLost() accessor, not backendState() (08-F3)", () => {
-  const game = read("js/game.js");
-  const fn = span(game, "function gfxContextLost()", "function render(dt)", "gfxContextLost");
-  const run = (gfx) => vm.runInContext(fn + "\ngfxContextLost();", vm.createContext({ gfx }));
+  const fn = symbolSource("function gfxContextLost()");
+  const run = (gfx) => vm.runInContext(fn + "\ngfxContextLost();", vm.createContext({ gfx }), { filename: absSrc(GAME_REL) });
   let built = 0;
   const bs = () => { built++; return { ctxLost: true }; };
   assert.equal(run({ ctxLost: () => false, backendState: bs }), false);
@@ -7431,12 +7510,27 @@ test("game.js gfxContextLost reads the cheap ctxLost() accessor, not backendStat
   assert.equal(run({}), false);
   assert.equal(run(null), false);
   assert.equal(run({ ctxLost() { throw new Error("x"); } }), false, "a throwing accessor reads as not lost");
-  // Each backend exposes it, and it reads the same flag its backendState reports.
-  assert.match(read("js/render/glx/glx.js"), /ctxLost: \(\) => _ctxLost,/);
-  assert.match(read("js/render/webgpu/wgx.js"), /ctxLost: \(\) => !!_lost,/);
+  // Execute backend accessors as well: a boolean must track loss without a diagnostic snapshot.
+  const glx = bootGlx();
+  assert.equal(glx.GLX.ctxLost(), false);
+  glx.loseContext();
+  assert.equal(glx.GLX.ctxLost(), true);
+  const wgx = read("js/render/webgpu/wgx.js");
+  const accessor = wgx.match(/ctxLost:\s*(\(\)\s*=>[^,\n]+)/);
+  assert.ok(accessor, "WGX exposes its context-loss accessor");
+  const lost = vm.createContext({ _lost: false });
+  vm.runInContext("var accessor = " + accessor[1], lost, { filename: absSrc("js/render/webgpu/wgx.js") });
+  assert.equal(vm.runInContext("accessor()", lost, { filename: absSrc("js/render/webgpu/wgx.js") }), false);
+  lost._lost = { reason: "destroyed" };
+  assert.equal(vm.runInContext("accessor()", lost, { filename: absSrc("js/render/webgpu/wgx.js") }), true);
   const tlx = read("js/render/three/tlx.js");
-  assert.match(tlx, /ctxLost\(\) \{ return !!_deviceLost; \},/, "the __tlx object");
-  assert.match(tlx, /ctxLost\(\) \{\s*const t = this && this\.__tlx;\s*return !!\(t && typeof t\.ctxLost === "function" && t\.ctxLost\(\)\);/, "the façade that game.js sees");
+  const facade = new Function(fnBody(tlx, "ctxLost"));
+  assert.equal(facade.call({}), false);
+  assert.equal(facade.call({ __tlx: { ctxLost: () => false } }), false);
+  assert.equal(facade.call({ __tlx: { ctxLost: () => true } }), true);
+  const backend = new Function("_deviceLost", fnBody(tlx.slice(tlx.lastIndexOf("ctxLost()")), "ctxLost"));
+  assert.equal(backend(false), false);
+  assert.equal(backend({ reason: "destroyed" }), true);
 });
 
 // 14-F1: window.__apex is NULL on the shipped build (game.js declares it null, only dev surfaces fill it), so
@@ -7456,7 +7550,7 @@ test("COPY DIAG copies a real payload when __apex is null, and prefers __apex.di
       liveBackend: () => "three", unavailableDiagnostics: () => JSON.stringify({ renderer: { stored: null } }),
       setTimeout() {},
     });
-    vm.runInContext(fn + "\ncopyDiag(btn);", ctx);
+    vm.runInContext(fn + "\ncopyDiag(btn);", ctx, { filename: absSrc("js/perf/renderer-picker.js") });
     for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
     return { btn, written };
   };

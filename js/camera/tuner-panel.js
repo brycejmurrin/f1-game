@@ -17,7 +17,7 @@ let _scope = "mode";   // "mode" | "global" | "track" | "car"
 function curMode() { return (CAM_MODES[G.camMode] || CAM_MODES[0]).id; }
 function curLabel() { return (CAM_MODES[G.camMode] || CAM_MODES[0]).label; }
 function syncContext() {
-  const trackId = G.track && G.track.id || G.store.get("trackId", null);
+  const trackId = G.track && G.track.def && G.track.def.id || G.track && G.track.id || G.store.get("trackId", null);
   const team = typeof Teams !== "undefined" && Teams.LIST && Teams.LIST[G.teamIdx];
   CamTune.setContext(trackId, team && team.id);
 }

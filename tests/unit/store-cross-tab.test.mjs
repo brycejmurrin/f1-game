@@ -62,6 +62,42 @@ function load(writeError = null) {
     onStorage: listeners.get("storage") || null };
 }
 
+test("durable-only refusal preserves prior pending session ownership for retry", () => {
+  const h = load();
+  const original = { money: 100 }, pending = { money: 150 };
+  h.store.write("career.driver.0", original);
+  h.fail("QuotaExceededError");
+  h.store.write("career.driver.0", pending);
+  const revision = h.store.rev, failed = JSON.stringify(h.store.failedKeys());
+  const changes = [];
+  h.store.subscribe(change => changes.push(change));
+  const refused = h.store.write("career.driver.0", { money: 0 }, { requireDurable: true });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.durable, false);
+  assert.equal(h.store.get("career.driver.0"), pending);
+  assert.equal(h.store.rev, revision);
+  assert.equal(JSON.stringify(h.store.failedKeys()), failed);
+  assert.deepEqual(changes, []);
+  assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 100);
+  h.fail(null);
+  assert.equal(h.store.retryFailed().durable, true);
+  assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 150);
+});
+
+test("durable-only serialization refusals never replace prior cache or enqueue invalid retries", () => {
+  const h = load(), original = { money: 100 }, cyclic = {};
+  cyclic.self = cyclic;
+  h.store.write("career.driver.0", original);
+  const revision = h.store.rev, raw = h.disk.get("apex26.career.driver.0");
+  for (const value of [() => {}, Symbol("unsupported"), 1n, cyclic]) {
+    assert.equal(h.store.write("career.driver.0", value, { requireDurable: true }).ok, false);
+    assert.equal(h.store.get("career.driver.0"), original);
+    assert.equal(h.store.rev, revision);
+    assert.equal(h.store.failedKeys().length, 0);
+    assert.equal(h.disk.get("apex26.career.driver.0"), raw);
+  }
+});
+
 test("write reports session success separately from reload durability", () => {
   const { store } = load("QuotaExceededError");
   const changes = [];
@@ -615,6 +651,28 @@ test("BLOCKED storage: a throwing global getter does not abort boot when Indexed
   assert.equal(idb.opens, 0, "restore cannot write into blocked localStorage");
   assert.equal(ctx.GS.store.get("career.driver.0", null), null,
     "the live store still answers defaults while storage is blocked");
+});
+
+test("BLOCKED IndexedDB getter preserves primary writes and observer notifications", async () => {
+  const { store, disk, sandbox } = load();
+  // Install inside the context: a getter on the external sandbox alone does
+  // not reproduce the browser's throwing global identifier access.
+  vm.runInContext('Object.defineProperty(globalThis, "indexedDB", { get() { throw Object.assign(new Error("blocked"), { name: "SecurityError" }); } });', sandbox);
+  assert.throws(() => vm.runInContext("typeof indexedDB", sandbox), { name: "SecurityError" });
+  const changes = [];
+  store.subscribe((change) => changes.push(change));
+  for (const key of ["career.driver.0", "parts.team"]) {
+    const result = store.write(key, { money: 9 });
+    assert.deepEqual(JSON.parse(JSON.stringify(result)), { ok: true, durable: true, reason: null });
+    assert.equal(JSON.parse(disk.get("apex26." + key)).money, 9);
+    assert.equal(store.get(key).money, 9);
+    assert.equal(changes.at(-1).key, key);
+    assert.equal(changes.at(-1).durable, true);
+  }
+  assert.equal(changes.length, 2);
+  assert.equal(store.writeFailed(), null);
+  assert.equal(await store.mirror.ready, 0);
+  assert.equal(store.mirror.pending, 0);
 });
 
 test("a restored newer row that LANDED makes this session its owner: its later saves replace the row, no rollback next boot", async () => {

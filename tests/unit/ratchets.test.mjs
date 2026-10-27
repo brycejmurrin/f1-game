@@ -8,6 +8,22 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { load, measure, relativize, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES } from "../../tools/check/ratchets.mjs";
 
+// ONE TREE WALK PER METRIC PER PROCESS (pass-3 T1 / audit4 E1, 2026-10-26). This
+// file called measure() three times in full, the TREE_METRICS loop once more, and
+// a doctored-ceiling measure() per test: ~6 walks of every tree metric, which made
+// it the critical path of the commit hook (68 s CI, 98 s local). No test here
+// edits the tree between measurements — the doctored inputs change CEILINGS, never
+// the counted files — so each tree metric and each async per-file metric is
+// computed once and shared. measure() reads TREE_METRICS[name] at call time, so
+// it, verdict() and autoRaise() all see the memo; the module itself is unchanged.
+const memo = new Map();
+const once = (key, fn) => { if (!memo.has(key)) memo.set(key, fn()); return memo.get(key); };
+for (const [name, fn] of Object.entries(TREE_METRICS)) TREE_METRICS[name] = () => once(`tree:${name}`, fn);
+for (const name of ["blanketOnlyRoutes", "gMembers"]) {
+  const fn = METRICS[name];
+  if (fn) METRICS[name] = (rel, text) => once(`file:${name}:${rel}`, () => fn(rel, text));
+}
+
 test("every ratcheted metric is at or under its ceiling", async () => {
   // relativize: a pin counter's overage the base already carries is not this change's (ratchetMode).
   const v = verdict(await relativize(await measure()));
@@ -353,4 +369,30 @@ test("pin counters: APEX_RATCHET_ABSOLUTE judges the tree alone, a named base ju
   const abs = await pinVerdict("rawGameReads", { env: { APEX_RATCHET_ABSOLUTE: "1" }, data: tight });
   assert.equal(abs.ok, false);
   assert.equal(abs.over, 5);
+});
+
+test("assertPinsAll counts every source-pin SHAPE, loop arrays element by element (audit4 E1)", async () => {
+  const { countPinsAll, loopRegexPins, PIN_METRICS, pinPatterns, seedTreeMetric } = await import("../../tools/check/ratchets.mjs");
+  // Fixtures are built from `${A}` so this file's own pin counts do not grow with them.
+  const A = "assert";
+  const one = {
+    [`${A}.match(src, /x/)`]: 1, [`${A}.ok(src.includes("x"))`]: 1, [`${A}.doesNotMatch(src, /x/)`]: 1,
+    [`${A}.ok(/x\\(/.test(src))`]: 1, [`${A}.ok(!RE.test(src))`]: 1, [`${A}.ok(src.indexOf("x") >= 0)`]: 1,
+    [`${A}.equal(src.includes("x"), false)`]: 1, [`${A}.equal((src.match(/x/g) || []).length, 2)`]: 1,
+    [`${A}.ok(src.startsWith("#!"))`]: 1, [`${A}.ok(!src.endsWith("z"))`]: 1,
+    [`${A}.equal(f(1), 2)`]: 0, [`${A}.deepEqual(rows, [])`]: 0,
+  };
+  for (const [line, n] of Object.entries(one)) assert.equal(countPinsAll(line), n, line);
+  // A loop over N patterns is N pins, inline or through the const it names; `]` in a
+  // string or a character class does not close the array early.
+  assert.equal(loopRegexPins('for (const re of [/a\\]b/, "x]", [/c[\\]]/, 1], /d/g]) check(s, re);'), 3);
+  assert.equal(loopRegexPins("const PINS = [/a/, /b/];\nfor (const re of PINS) check(s, re);"), 2);
+  assert.equal(loopRegexPins("for (const x of [1, 2]) check(x, x);"), 0);
+  // assertPins is untouched: the new metric is a superset, not a redefinition.
+  assert.equal(PIN_METRICS.assertPins.count(`${A}.doesNotMatch(s, /x/)`), 0);
+  assert.equal(pinPatterns.ASSERT_PIN.source, /assert\.match\b|assert\.ok\(\s*!?\s*[\w$.]+\.includes\(/.source);
+  // The ceiling exists and was SEEDED by the tool; a second seed is refused (it would be a raise).
+  assert.ok(load().tree.assertPinsAll, "tests/data/ratchets.json must carry tree.assertPinsAll (node tools/check/ratchets.mjs --seed=assertPinsAll)");
+  await assert.rejects(seedTreeMetric("assertPinsAll", { dryRun: true }), /already has a ceiling/);
+  await assert.rejects(seedTreeMetric("noSuchMetric", { dryRun: true }), /unknown tree metric/);
 });

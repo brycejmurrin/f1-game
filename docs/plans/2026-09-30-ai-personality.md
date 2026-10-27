@@ -1,6 +1,8 @@
 # AI personality — workstream plan (2026-09-30)
 
-Status: **PLAN** — docs-only PR first; then one draft PR per slice.
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — the aggression and optimism rating axes exist (js/data/driver-ratings.js STYLE_AXES, js/physics/ai-drive.js); the mistake-visibility and rubber-band slices were not verified.
+
+Status when written: **PLAN** — docs-only PR first; then one draft PR per slice.
 Owner: this workstream (Cursor agent). Ship base: `claude/f1-game-project-26h3ng`.
 Prior art (do not re-litigate): `docs/notes/AI-PERSONALITY-PLAN-2026-09-16.md`,
 `docs/notes/AI-FIELD-RESEARCH.md`, `docs/PHYSICS.md` §Mistakes.

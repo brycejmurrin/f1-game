@@ -13,6 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { strictFlags } from "../lib/cli-args.mjs";
 
 /** Walk every <testcase> with a failure/error child. Yields {name, file}:
  *  `file` is the normalised tests/specs path, or "" when the case has no
@@ -71,6 +72,9 @@ export function failedSpecsUnder(root, reader = failedSpecsFrom) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  strictFlags(process.argv.slice(2), [], `usage: node tools/ci/junit-failed.mjs [root]
+  prints each spec file with a failed/errored testcase in <root>/test-results-*/junit.xml (default root: artifacts),
+  one per line, for select-specs --failed-from. An unknown flag prints this usage and exits 2.`);
   const root = process.argv[2] || "artifacts";
   const list = failedSpecsUnder(root);
   process.stdout.write(list.join("\n") + (list.length ? "\n" : ""));

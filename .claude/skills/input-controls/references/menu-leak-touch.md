@@ -26,11 +26,19 @@ Cross-check `UiLayers.anyOpen()` and `document.activeElement` when debugging foc
 
 ## Touch and tilt (phone)
 
-- On-screen buttons (`steerMode "buttons"`, `js/input/hold-buttons.js`): a
-  button stuck held is the release path — window capture-phase
-  `pointerup`/`pointercancel`, and `lostpointercapture` only through
-  `lostCaptureShouldRelease`. Spec `touch-buttons.spec.js`
-  ("releasing returns to centre", "holding GAS survives tapping a turn arrow").
+- Probe first: `__apex.inputState().steerMode`, then `.btn.{left,right,leftVal,rightVal,steerVal}`
+  (buttons) or `.touchSteer` / `.touchActive` (drag). `btn.left` false with `steerVal` decaying is
+  `KEY_RAMP_OUT` by design; `btn.left` still true after the lift is a stuck latch.
+- On-screen buttons (`steerMode "buttons"`): the steer buttons are wired in `js/input/input.js` init
+  (`wireHold("btn-steer-left"/"btn-steer-right")`); `js/input/hold-buttons.js` is the factory. A button
+  stuck held is a release-net miss. The four nets:
+  1. window capture-phase `pointerup`/`pointercancel` (`input.js` init) → `holdReleasePointer`;
+  2. `lostpointercapture`, only through `lostCaptureShouldRelease` (hold-buttons.js);
+  3. `reset()` on window `blur` / `visibilitychange` hidden (OS interruptions with no pointer event);
+  4. passive window `touchend`/`touchcancel` with `touches.length === 0` → release all + clear the drag
+     `touches` (`input.js`; the WebKit ghost-pointer case, w3c/pointerevents#407) — the net for
+     "sticks after I lift".
+  Spec `touch-buttons.spec.js` ("releasing returns to centre", "holding GAS survives tapping a turn arrow").
 - Canvas drag: relative from touch-down, the most recently MOVED finger
   steers — `touch-steer.spec.js`. Pedal travel: `touch-pedals.spec.js`.
 - Tilt: One-Euro filter → dead zone → `MAX_TILT` map → slew

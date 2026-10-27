@@ -88,7 +88,7 @@ test("importScripts retries transient scenery failures with a cache-busted URL",
       for (const f of files) {
         attempts.push(f);
         const rel = f.replace(/^https?:\/\/[^/]+\//, "").replace(/\?.*$/, "");
-        if (rel === sceneryPath && !/retry=/.test(f)) throw new Error("503");
+        if (rel === sceneryPath && !/retry=/.test(f)) throw Object.assign(new Error("503"), { name: "NetworkError" });
         vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8"), ctx, { filename: absSrc(rel) });
       }
     },
@@ -656,4 +656,95 @@ test("a ready result cannot post an old request to a same-turn replacement worke
   assert.equal((await fresh).id, "fresh");
   assert.deepEqual(posts.filter(p => p.data.type === "build").map(p => p.data.id), ["fresh"]);
   assert.equal(c.busy(), false);
+});
+
+test("partial import retry evaluates the successful const prefix once", async () => {
+  const attempts = [];
+  const w = spawnWorker({ importScripts(ctx, ...urls) {
+    for (const url of urls) {
+      attempts.push(url);
+      if (url.includes("second") && !url.includes("retry=")) throw Object.assign(new Error("503"), { name: "NetworkError" });
+      vm.runInContext(url.includes("first") ? "const alreadyLoaded = 1" : "const recovered = 2", ctx, { filename: "vm-import:fixture" });
+    }
+  } });
+  await w.send({ type: "init", files: ["first.js", "second.js"] });
+  assert.equal(w.posted.at(-1).type, "ready");
+  assert.deepEqual(attempts, ["first.js", "second.js", "second.js?retry=1"]);
+});
+
+test("import evaluation errors are terminal without reexecuting a changed global", async () => {
+  for (const name of ["SyntaxError", "Error"]) {
+    let calls = 0;
+    const w = spawnWorker({ importScripts(ctx) { calls++; vm.runInContext("const changed = 1", ctx); throw Object.assign(new Error("evaluation failed"), { name }); } });
+    await w.send({ type: "init", files: ["bad.js"] });
+    assert.equal(w.posted.at(-1).type, "error");
+    assert.equal(calls, 1);
+  }
+});
+
+test("worker prepares immutable TLX buffers after build and transfers raw fallback inputs once", async () => {
+  const w = spawnWorker();
+  await w.send({ type: "init", files: ["js/render/shared/frustum.js", "js/render/shared/chunk-bins.js", "js/render/three/tlx-chunked.js"] });
+  const config = w.ctx.TLXShaders.chunkPrepareConfig(true);
+  // Real worker protocol; isolate the sealed-record boundary from track generation.
+  vm.runInContext(`
+    const geometry = {pos: new Float64Array([71.9999999,0,0,71.9999999,1,0,71.9999999,0,1]), idx: new Uint32Array(6000)};
+    for (let i=0; i<6000; i++) geometry.idx[i]=i%3;
+    self.Tracks = { LIST:[{id:"fixture"}], build(def,opts) {
+      const token=opts.gfx.createChunkedMesh(geometry,72);
+      return {meshes:{props:token},buildProfile:[{n:"props",k:"geo",ms:80},{n:"props",k:"up",ms:20}]};
+    }};
+  `, w.ctx);
+  await w.send({ type: "build", seq: 71, idx: 0, id: "fixture", opts: {}, prepare: config });
+  const msg = w.posted.at(-1);
+  assert.equal(msg.type, "built", msg.message);
+  assert.equal(msg.seq, 71);
+  const { prepared, args } = msg.recs[0];
+  assert.equal(prepared.attributes.position.array[0], 72, "F32 conversion precedes binning");
+  assert.equal(prepared.lampCells[0].gx, 1025, "rounded positions choose the positive neighbour cell");
+  assert.equal(args[0].pos[0], 71.9999999, "raw doubles remain available for a config change or old receiver");
+  assert.ok(msg.prepareMs >= 0);
+  assert.equal(w.transferred.at(-1), 5, "raw and prepared storage transfer once each; absent channels share their zero buffer");
+  assert.equal(vm.runInContext("geometry.pos.byteLength", w.ctx), 0, "transfer releases the worker's raw ownership");
+});
+
+test("worker profile summary counts elapsed worker CPU once and records main replay CPU", async () => {
+  let clock = 0;
+  const c = smallClient({ performance: { now: () => clock }, PitSigns: { upload() { clock += 7; } } });
+  const msg = { track: { meshes: { props: { __rec: 0 } }, buildProfile: [{n:"props",k:"geo",ms:80},{n:"props",k:"up",ms:20}] },
+    recs: [{ op: "mesh", args: [{}] }], ms: 100, prepareMs: 25 };
+  const track = await c.replay(msg, { id: "fixture" }, { createMesh() { clock += 13; return {}; } });
+  const src = fs.readFileSync(path.join(ROOT,"tools/gfx/gpu-game-check.mjs"),"utf8");
+  const start = src.indexOf("    const p = window.__apex && window.__apex.buildProfile"), end = src.indexOf('  }), 20000, "build-profile");', start);
+  const summarize = new Function("window", src.slice(start,end));
+  const summary = summarize({__apex:{buildProfile:()=>track.buildProfile}});
+  assert.equal(summary.workerCpuMs,125);
+  assert.equal(summary.workerPrepareMs,25);
+  assert.equal(summary.mainCpuMs,20);
+  assert.equal(summary.totalMs,145,"worker detail rows must not duplicate worker elapsed");
+  assert.equal(summary.upMs,20,"main finalize CPU includes uploads and sign/surface finish");
+  assert.equal(summary.gpuWaitMs,null,"replay call duration is not GPU wait");
+  const main = summarize({__apex:{buildProfile:()=>[{n:"props",k:"geo",ms:80},{n:"props",k:"up",ms:20}]}});
+  assert.equal(main.totalMs,100); assert.equal(main.geoShare,0.8);
+  const legacy = summarize({__apex:{buildProfile:()=>[{n:"props",k:"geo",ms:80},{n:"props",k:"up",ms:20},{n:"worker",k:"off",ms:100}]}});
+  assert.equal(legacy.totalMs,100); assert.equal(legacy.mainCpuMs,null);
+});
+
+test("worker preparation admits Monaco-sized props ahead of earlier terrain within its cumulative budget",async()=>{
+  const w=spawnWorker();
+  await w.send({type:"init",files:["js/render/shared/frustum.js","js/render/shared/chunk-bins.js","js/render/three/tlx-chunked.js"]});
+  vm.runInContext(`
+    self.Tracks={LIST:[{id:"fixture"}],build(def,opts){
+      const mesh=(vertices,indices)=>opts.gfx.createChunkedMesh({pos:new Float32Array(vertices*3),idx:new Uint32Array(indices)},72);
+      return {meshes:{terrain:mesh(100000,140001),props:mesh(334708,538128),glass:mesh(1000,3000)},buildProfile:[]};
+    }};
+  `,w.ctx);
+  await w.send({type:"build",seq:72,idx:0,id:"fixture",opts:{},prepare:w.ctx.TLXShaders.chunkPrepareConfig(true)});
+  const msg=w.posted.at(-1);
+  assert.equal(msg.type,"built",msg.message);
+  assert.deepEqual(msg.recs.map(r=>r.args[0].pos.length),[300000,1004124,3000],"record/replay order stays unchanged");
+  assert.equal(msg.recs[0].prepared,undefined,"earlier terrain uses the cooperative fallback");
+  assert.ok(msg.recs[1].prepared,"actual Monaco-sized largest props record receives worker CPU preparation");
+  assert.ok(msg.recs[2].prepared,"small records can use the remaining budget");
+  assert.ok(msg.preparationBytes<=64*1048576,"admission remains bounded across the complete reply");
 });

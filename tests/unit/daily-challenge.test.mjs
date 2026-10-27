@@ -16,10 +16,75 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedHash32 } from "../helpers/seed-hash32.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // VM objects carry the VM realm's prototypes: compare plain-data copies.
 const host = (v) => JSON.parse(JSON.stringify(v));
+
+test("STANDARD Daily and ordinary factory bodies share the factory recipe across cache histories", () => {
+  // Execute actual Daily prepare/restore, Parts resolution, recomputePlayerMods
+  // and all three CarDraw caches. Geometry/GPU seams record the requested ids.
+  const { Parts, Teams, Car3D } = loadParts(), team = Teams.LIST.find(t => t.id === "mclaren");
+  const factory = Parts.getFactorySetup(team), custom = { ...factory, aero: "style_aero_spoon" };
+  assert.notEqual(Parts.resolveSetup(custom, team).ids.aero, factory.aero);
+  for (const history of ["cold", "factory-warm", "custom-warm"]) {
+    let saved = custom, builds = 0;
+    let livery = { c1: team.color, c2: team.color2 };
+    const player = { team, num: team.drivers[0].num };
+    const G = { player, teamIdx: Teams.LIST.indexOf(team), driverIdx: 0, seed: 37, ttDistance: 3,
+      store: { rev: 1, get: (k, d) => d }, getTeamParts: () => saved,
+      gfx: { createMesh: data => ({ serial: ++builds, ...data }), freeMesh() {} } };
+    const ctx = vm.createContext({ G, Parts, Teams, Float32Array, CarMesh: {}, FieldLod: { init() {} },
+      Log: { info() {}, warn() {} },
+      Car3D: { ...Car3D, build: (c1, c2, o) => ({ ids: { ...Car3D.appearanceParts(o.parts, o.livery)._ids },
+        kind: o.cockpit ? "cockpit" : o.silhouette ? "shadow" : "body" }) },
+      CockpitOpts: { haloSize: () => 2, body: () => "full" }, Input: { setSteerSpeedRef() {} },
+      Tracks: { SEASON: [{ id: "fixture" }], LIST: [{ id: "fixture" }] },
+      getTeamParts: () => saved, getLiveryId: () => "default",
+      SetupTune: { mods() {}, BB_REF: 0.5, brakeBias() {}, balance() {}, aero() {} },
+      modsFor: () => ({}), tyreBaseModsFor: () => ({}), tyres: { applyCompound() {}, optionRecord: () => ({}) } });
+    for (const file of ["js/core/hash32.js", "js/race/session-records.js", "js/race/daily-challenge.js", "js/car/car-draw.js"])
+      vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
+    G.records = vm.runInContext("SessionRecords.create(G)", ctx);
+    const daily = ctx.daily = vm.runInContext("DailyChallenge.create(G)", ctx);
+    const draw = ctx.carDraw = vm.runInContext("CarDraw.create", ctx)(G, { resolveLivery: () => livery });
+    Object.defineProperty(ctx, "player", { get: () => G.player });
+    Object.defineProperty(ctx, "teamIdx", { get: () => G.teamIdx });
+    vm.runInContext("let playerMods, playerAeroLoad, playerErs;\n" +
+      fnSource(readFileSync(join(ROOT, "js/game.js"), "utf8"), "function recomputePlayerMods()"), ctx,
+    { filename: absSrc("js/game.js") });
+    const refresh = () => vm.runInContext("recomputePlayerMods()", ctx);
+    const meshes = (key = draw.playerVisualKey) => [draw.playerBodyMesh(team, player, key),
+      draw.cockpitBodyMesh(team, player, key), draw.cockpitShadowMesh(team, player, key)];
+    let warmed;
+    if (history !== "cold") {
+      saved = history === "factory-warm" ? factory : custom; refresh(); warmed = meshes();
+    }
+    saved = custom;
+    assert.equal(daily.select("2026-10-24", "standard").class, "standard");
+    assert.equal(G.driverIdx, 0);
+    refresh();
+    const key = draw.playerVisualKey, standard = meshes();
+    assert.ok(standard.every(m => m.ids.aero === factory.aero), history + ": STANDARD uses factory exterior, cockpit and shadow");
+    if (history === "factory-warm") assert.ok(standard.every((m, i) => m === warmed[i]), "factory entries remain reusable");
+    if (history === "custom-warm") assert.ok(standard.every((m, i) => m !== warmed[i]), "custom meshes keep a distinct key");
+    daily.stop(); saved = factory; G.store.rev++; refresh();
+    assert.equal(draw.playerVisualKey, key);
+    assert.ok(meshes().every((m, i) => m === standard[i]), "ordinary factory requests hit the correct Daily entries");
+    // Menu preparation can ask for another saved key before recompute runs.
+    saved = custom;
+    const vt = Parts.getVisualTiers(saved, team), customKey = Parts.CATALOG.map(c => vt._ids[c.id]).join("|") + "|L:default";
+    assert.ok(meshes(customKey).every(m => m.ids.aero === custom.aero), "explicit menu key uses its saved custom recipe");
+    refresh();
+    assert.ok(meshes().every(m => m.ids.aero === custom.aero), "ordinary custom parts remain custom after Daily");
+    livery = { ...livery, aeroShape: "style_aero_rift" }; refresh(); draw.invalidateCustomMeshCaches(team.id);
+    assert.ok(meshes().every(m => m.ids.aero === livery.aeroShape), "livery appearance is applied over fitted parts");
+    livery = { c1: team.color, c2: team.color2 }; draw.invalidateCustomMeshCaches(team.id);
+    assert.ok(meshes().every(m => m.ids.aero === custom.aero), "removing an appearance override restores the fitted recipe");
+  }
+});
 
 function load() {
   const season = ["bahrain", "jeddah", "melbourne", "suzuka", "monaco", "montreal", "monza", "spa"]

@@ -1543,40 +1543,6 @@ const CarBodyGeom = (function () {
     return st;
   }
 
-  // New concepts opt into detail fitting; legacy recipes keep their emitted streams.
-  function fitBodyDetails(anchors, style) {
-    if (!style.fitBodyDetails) return null;
-    return {
-      floorStep(step, ride) {
-        const bottom = Math.max(CHASSIS.floor.cy + ride, 0.052) - CHASSIS.floor.sy / 2;
-        const needed = (base, down, up = down) => {
-          const dy = bottom - base - ride; return dy / (dy > 0 ? up : down);
-        };
-        return Math.max(step * 0.85, -0.030, needed(0.084, 1, 0.825), needed(0.087, 0.675, 0.425),
-          needed(0.090, 0.45), needed(0.116, 0.25), needed(0.120, 0.70, 0.30));
-      },
-      noseMount(side) {
-        const z = Math.min(2.40, CHASSIS.nose[0].z + style.noseTipZ - 0.065), n = anchors.noseAt(z);
-        const w = Math.min(anchors.noseAt(z - 0.060).side, anchors.noseAt(z + 0.060).side);
-        return [side * Math.min(0.09, Math.max(0, w * 0.40 - 0.020)), n.bottom + 0.012, z];
-      },
-      coverStripe(out, color) {
-        const band = (z, w) => { const c = anchors.coverAt(z), p = coverProfile(c);
-          return [z, 0, coverSurfaceY(c, 0) + COVER_STACK.vent - 0.010,
-            Math.min(w, p.pts[p.pts.length - 1][0] * 1.8), 0.020]; };
-        const front = band(-0.64, 0.070), mid = band(-0.94, 0.075), rear = band(-1.95, 0.060);
-        addLoft(out, ...mid, ...front, color); addLoft(out, ...rear, ...mid, color);
-      },
-      tVane(vane) {
-        // Cover crown bounds every inner-span point; pay for foil thickness/camber
-        // and the decal layer before raising the unchanged foil as one rigid shape.
-        const skin = Math.max(coverSurfaceY(anchors.coverAt(vane.zLead), 0), coverSurfaceY(anchors.coverAt(vane.zTrail), 0));
-        const lift = Math.max(0, skin + COVER_STACK.decal + 0.018 - vane.yLead);
-        vane.yLead += lift; vane.yTrail += lift;
-        return { foot: coverSurfaceY(anchors.coverAt(-1.98), 0) - 0.006, head: foilAt(vane, 0, 0.5).y };
-      },
-    };
-  }
   // podShape (B·D1d concept bodies, opt-in; absent = shipped): per-station metre offsets on the
   // seven pod stations, front to rear — top (both tops), out (outer half-width), bot (outer belly;
   // + raises it = deeper undercut), chine (outer-top chamfer depth, see chineCut). The validity clamp below still runs after it.
@@ -2203,18 +2169,14 @@ const CarBodyGeom = (function () {
     return {
       styledNoseStations, noseFlankX, bodySpan, haloHoopPath,
       endplateGeom, wingOf, wingFoilOf, frontCascade, frontBakedCount, frontHalf, frontPlateGeom,
-      noseUnderAt, elemPoint, elemRecord, elemTopAt, hinged, flapSig, aeroFlapsGeom, solveFlapsGeom,
-      buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard, shapeLift, rearMainOf,
+      aeroFlapsGeom, solveFlapsGeom, buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard, shapeLift, rearMainOf,
       FIN_SHAPES, FIN_SHAPE_IDS, FIN, sharkFinRoot, sharkFinPanel, sharkFinBadge, finOf, finTop,
       COVER_VENT_IDS, SPINE_HEIGHT_IDS, spineRise, COVER_STACK,
       coverProfile, coverFlankX, coverSurfaceY,
       mirrorLightAnchors, cockpitMirrorGlass,
       buildPartRecipes, aeroLevelOf, aeroStyleOf,
-      buildSharedChassis, sidepodStation, sampleStations, sidepodStations,
-      bodyAnchors, buildBodyAnchors, fitBodyDetails, addInletMouth,
-      buildSidepodBodywork, buildEngineCoverBodywork, addNoseSDuct,
-      REAR_TYRE_CROWN, REAR_WING_TOP, FW_MOVEABLE, FW_SPAN, WING_BAND,
-      CAR_HALF, COVER_CROWN, COVER_SHOULDER, COVER_DROP,
+      buildSharedChassis, bodyAnchors, fitBodyDetails, addInletMouth,
+      buildSidepodBodywork, buildEngineCoverBodywork, addNoseSDuct, CAR_HALF, COVER_CROWN,
     };
   }
   return { create, chineCut };

@@ -1171,7 +1171,7 @@ it lands.
 |---|---|---|---|
 | `js/game.js` | `updateCar` k/`c.kCur` cache | **assist-gated** | every player-path use is multiplied by `ROAD_FOLLOW` (def 0) or sits inside `if (raceLineAssist !== 0)` (def 0); `c.kCur` feeds only render, and only for AI cars: BodyAttitude's AI roll and CarDraw's AI front-wheel angle (`js/car/car-draw.js`, the bend's Ackermann `atan(L·k)`, inside `!c.human` — `tests/unit/car-fx.test.mjs` guards that a human car's wheels read no curvature) |
 | `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target / overtake side pick / next-corner `c.kTurn` / get-a-run | **AI-only** | each inside the `!c.human` arm. The side pick passes the SAME `kA` the lane target already sampled into `AiDrive.otSide`, which breaks an equal-room tie toward the inside of the next corner — the arc chooses which way an AI goes around another AI, and touches no player force path. `c.kTurn` (2026-10-01: pass side, the level side-by-side election, the defender's predicted side) and `runExtra`'s read of `k` are the same kind: they move only AI targets. `js/physics/collide.js` reads `kTurn` only for an all-AI pair, so it never picks which car a PLAYER rub scrubs |
-| `js/game.js` | `updateCar` AI lateral block: marble `latG = |k|·v²/g` for `DebrisWorld.tyreMarble` | **broadcast-only** | inside the AI arm ("AI cars don't run the slip model") and `if (DebrisWorld.active())`; feeds only the cosmetic Rapier side-world, no force (swept 2026-10-05) |
+| `js/game.js` | `updateCar` AI lateral block: marble drop from the AI car's own state — body slip `atan2(vlOwn, max(4,|v|))` of its own lateral step; lock = hard braking at speed or `c.wheelLock` — for `DebrisWorld.tyreMarble` | **surface** | no curvature read (was `|k|·v²/g` until 2026-10-26; audit4 F1, DECISIONS #4); settled marbles are road state that cuts the player's grip via `DebrisWorld.marbleGrip` (≤7 %, debris on + `apex26.marbleGrip`); guard `tests/unit/debris-step-skip.test.mjs` |
 | `js/game.js` | `updateCar` AI `yawTarget` (`steerVis·0.35 + clamp(-k·v·0.14)`) → `c.yawVis` | **broadcast-only** | the `else` arm of `if (c.human && c.head != null)`; writes the DRAWN heading only, never a force or steer input (swept 2026-10-05) |
 | `js/game.js` | `updateCar` RACING LINE assist | **assist-gated** | inside `if (raceLineAssist !== 0)`; slider def 0 |
 | `js/game.js` | `drivingLineApi` (feeds `js/render/shared/driving-line.js`) | **surface** | the DRIVING LINE ribbon: the adapter hands the builder the static curvature LUT, read once per circuit to place the line and shade its braking zones; a picture on the road, no car reads it. Same lateral formula as the assist-gated `lineX` so the two agree. The builder it feeds ALSO derives an audible cue — see the `driving-line.js` row |
@@ -1223,6 +1223,14 @@ the same for every car at the same `s` and on every peer. Tread advice and pit
 calls (`treadFor`) read the LAP MEAN (`trackWetness()`), which is what makes a
 half-wet lap a tyre dilemma. Ruled 2026-10-14 with the localized-rain change; a
 curvature or line read added to the cell model would make it a table row.
+
+**The drying line** (`dryLine` in `js/race/weather-arc.js`, #1627) extends that surface read laterally:
+`wetnessAt(s, x)` shaves up to 60 % off the wetness inside a groove ~2.2 m either side of a worn-in line, scaled by
+`sqrt(1 - w)`, so a part-dry road dries on the line first while a soaked (1) or bone-dry (0) road has no line and the
+dry pins stay unchanged. The groove centre is a smooth hash of the lap fraction alone (traffic-worn rubber, a surface
+property): no curvature, no `kCur`, no racing-line or AI-line read, so nothing the arc could tell the driver. `gripMult`
+passes `c.x` and `frame.wetness` reads the view's own `(s, x)`, so grip, shaders and the HUD agree. Tread advice stays on
+the lap mean.
 
 **The incident handback heading reset** (`js/physics/incident-sim.js`, the
 settled-backwards branch of the Rapier takeover's handback, fbaf18822) is a

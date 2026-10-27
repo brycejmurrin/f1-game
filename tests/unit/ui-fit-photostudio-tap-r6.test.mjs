@@ -12,13 +12,13 @@ const css = fs.readFileSync(path.join(ROOT, "css/photo-studio.css"), "utf8");
 const rules = cssRules(css);
 const SELECTS = "#ps-panel :is(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard, #ps-tod, #ps-weather, #ps-look-room, #ps-look-crew, #ps-look-mood)";
 
-test("Photo Studio setting-row selects floor at --tap-paint", () => {
+test("Photo Studio setting-row selects floor at max(--tap, --tap-paint)", () => {
   assert.match(
     css,
-    /#ps-panel :is\(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard, #ps-tod, #ps-weather, #ps-look-room, #ps-look-crew, #ps-look-mood\)\s*\{[^}]*min-height:\s*var\(--tap-paint\)/s,
-    "#ps-subject / #ps-aspect / #ps-grid-select / #ps-postcard / #ps-tod / #ps-weather / #ps-look-* must paint at --tap-paint, not --chip-h",
+    /#ps-panel :is\(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard, #ps-tod, #ps-weather, #ps-look-room, #ps-look-crew, #ps-look-mood\)\s*\{[^}]*min-height:\s*max\(var\(--tap\), var\(--tap-paint\)\)/s,
+    "#ps-subject / #ps-aspect / #ps-grid-select / #ps-postcard / #ps-tod / #ps-weather / #ps-look-* must paint at max(--tap, --tap-paint) (#3337), not --chip-h",
   );
-  assert.equal(decl(rules, SELECTS, "min-height"), "var(--tap-paint)");
+  assert.equal(decl(rules, SELECTS, "min-height"), "max(var(--tap), var(--tap-paint))");
 });
 
 test("r6 select floor is min-height only (no height lock that would shrink landscape)", () => {

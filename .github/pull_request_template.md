@@ -5,7 +5,7 @@ A PR that changes `.claude/memory/` adds, under this line, `memory-change: <reas
 <!-- Written when the PR opens, before the work is done; edit only if the ask changes.
      What the user asked for, in their words, and the change this branch makes to
      deliver it — enough for an agent arriving cold to continue without the chat.
-     Picked from the backlog? Add `Closes #<n>` (AGENTS.md §Backlog). -->
+     Picked from the backlog? Add `Closes #<n>` (AGENTS.md §Coordination). -->
 
 ## Plan
 <!-- The LIVING checklist — the first thing a pickup agent reads. Write it when the
@@ -16,31 +16,32 @@ A PR that changes `.claude/memory/` adds, under this line, `memory-change: <reas
        - [ ] **now:** the step in progress (exactly one), so a pickup knows where you stopped
        - [ ] ~~dropped~~ — strike it and say why; never delete an item
        - [~] deferred — work moved to a follow-up issue (or start the text with `Deferred:`); counts as closed
-     Tick an item only with its evidence; "should work" is a [ ]. Never add a "mark
-     ready" or "merge" item: `ready-gate.mjs --pr <n>` refuses while one stays open. -->
+     Tick an item only with its evidence; "should work" is a [ ]. Never add a "merge"
+     item: `ready-gate.mjs --pr <n>` refuses while one stays open. -->
 - [ ] **now:**
 - [ ]
-- [ ] READY to ORCH <L> via agent-msg (the orchestrator's merge-gate and merge follow)
+- [ ] land: add the `land` label once ready-gate exits 0
 
-The last Plan item keeps that shape: ready-gate ignores an item that starts `READY to`, so it stays open until the READY is sent.
-
-<!-- Merge hold (the rule: .claude/rules/fleet-core.md): add, outside this comment,
-     `MERGE-HOLD: <reason> | lift: <who> | until: <time or event>` and delete it when
-     the hold is over. A wait on something ("deploy gate pending") is a Plan item,
-     not a hold. Never paste "do not merge" wording here. -->
-
-## Status
-<!-- Paste `node tools/ci/session-status.mjs --pr` output here and refresh it at every push.
-     It is generated from git, the test logs and the PR; do not hand-edit it. -->
+The last Plan item keeps that shape: ready-gate ignores an item that starts `land:`, so it stays open until the label is on and GitHub lands the PR (docs/WORKERS.md).
 
 ## Verified / Not run
-<!-- Each check you ran and its verdict line, e.g. `test:tooling-fast = run passed`.
-     Every group the change needs that did NOT run, named, with why (AGENTS.md rule 9). -->
+<!-- Each check you ran and its verdict line, e.g. `tooling-fast --changed = run passed`.
+     Every group the change needs that did NOT run, named, with why (AGENTS.md rule 9).
+     The full tiers run on the PR (`run-ci` on a draft; the full tier once ready). -->
 
-## Next step / handoff
-<!-- What the next agent (or you, after a restart) should do first; blockers and open
-     questions for the user; anything half-done in the tree or uncommitted.
-     "Done — ready for review" when every Plan item is ticked or struck. -->
+## Hand-off
+<!-- The dispatcher parses this block (docs/WORKERS.md): refresh it at every push and
+     when you add `land`, `needs-owner` or `needs-decision`. One value per line, no prose
+     outside the fence. A hold is the `hold` label on the PR, not a line here. -->
+```handoff
+branch: <branch>
+head: <sha>
+owner: <host>:<session or agent id>
+lane: claude | cursor | codex
+verified: <what ran, verdict lines>
+not-run: <groups the change needs that did not run, and why>
+next: <the one next step>
+```
 
 ## Locale checklist
 <!-- Fill when this PR adds or edits `locales/<lang>.json` (non-en) or migrates a

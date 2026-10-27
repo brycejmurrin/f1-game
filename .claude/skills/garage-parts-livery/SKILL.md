@@ -1,6 +1,6 @@
 ---
 name: garage-parts-livery
-description: "Use when editing the GARAGE parts catalog, livery/finish/fin, paint legibility for numbers/crests/sponsors, SIGNATURE/FACTORY_PRESETS, ersProfile/aeroLoad, career owned-part UI, Car3D recipes. Deep tables in references/livery-fields.md; studio shots: playwright-probe."
+description: "Use when editing the GARAGE parts catalog, livery/finish/fin data or paint code, paint legibility for numbers/crests/sponsors, SIGNATURE/FACTORY_PRESETS, ersProfile/aeroLoad, career owned-part UI, car mesh/geometry modules. Livery screenshots and studio captures → playwright-probe."
 ---
 
 # Garage — parts, livery, and car mesh
@@ -19,7 +19,11 @@ Paint: `js/car/liveries.js` + `js/car/liverytex.js`. Geometry: `js/car/car3d.js`
 | Arrival motion | `js/garage/arrival.js` | Pit-lane entry into the bay (not race `PitLane`) |
 | Title prebuild | `js/garage/prebuild.js` | `GaragePrebuild.create` — warm room/car; `__apex.garagePrebuild()` |
 | Backend pick | `js/render/gfx.js` | `Gfx.create(canvas)` → TLX / GLX / WGX; `game.js` holds `gfx` for race + studio |
-| Car mesh recipe | `js/car/car3d.js`, `js/car/car-draw.js` | Field + garage `Car3D` build; livery textures via `liverytex.js` |
+| Car mesh facade | `js/car/car3d.js`, `js/car/car-draw.js` | Field + garage `Car3D` build; livery textures via `liverytex.js` |
+| Car geometry | `js/car/car-body-geom.js`, `car-mesh.js`, `car-wheels.js`, `car-geometry.js` | the `fit*` / `coverSurfaceY` builders `car3d.js` calls; after an edit run apex-lsp `lsp_outline` + `lsp_diagnostics` on the module (two `function X` in one IIFE: the later silently wins) |
+| Finishes | `js/car/car-materials.js` | `FINISH_SURFACE` and material params |
+| Livery design | `js/garage/livery-design-editor.js`; `js/car/livery-design.js`, `livery-graphics.js`, `livery-stations.js`, `custom-liveries.js` | the paint editor; graphics, stations, saved custom liveries |
+| Setup sheet helpers | `js/garage/setup-presets.js`, `setup-tune.js`, `setup-trials.js`, `setup-experiments.js` | presets, tune, trials, experiments behind `#carsetup` |
 | Agent garage shots | `js/agent/apex.js` | `garageCam()`, `garagePrebuild()`, `render({what:"car"})` |
 
 Garage CSS is the **UI Survey** lane (not this skill's OWNED). Race-track rendering defects → **renderer-debug**.

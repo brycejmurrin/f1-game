@@ -364,15 +364,16 @@ function entryRows(g) {
   if (bp.note || bp.error) {
     rows.push(`${IND}build: NOT MEASURED — ${bp.note || bp.error}`);
   } else if (bp.totalMs != null) {
-    rows.push(`${IND}build: total=${bp.totalMs}ms geo=${bp.geoMs}ms up=${bp.upMs}ms geoShare=${bp.geoShare}`);
+    rows.push(`${IND}build: cpuTotal=${bp.totalMs}ms main=${bp.mainCpuMs ?? "unknown"}ms worker=${bp.workerCpuMs ?? "unknown"}ms geo=${bp.geoMs}ms finalize=${bp.upMs}ms geoShare=${bp.geoShare}`);
     rows.push(`${IND}       hottest: ${(bp.top || []).join("  ")}`);
     // CONDITION 2, computed — two ratios: against the longest single task (the
     // condition as written) and against ALL blocking in the window (what
     // decides whether a worker helps).
     const lb = re.longestBlockMs, tb = (re.longestBlockMs || 0) + (re.otherBlockMs || 0);
-    if (lb) {
-      const ofLongest = Math.round(100 * bp.totalMs / lb), ofAll = Math.round(100 * bp.totalMs / tb);
-      rows.push(`${IND}       cond2: build is ${ofLongest}% of the longest block, ${ofAll}% of ALL blocking in the window`);
+    const mainCpu = bp.mainCpuMs === undefined ? bp.totalMs : bp.mainCpuMs;
+    if (lb && mainCpu != null) {
+      const ofLongest = Math.round(100 * mainCpu / lb), ofAll = Math.round(100 * mainCpu / tb);
+      rows.push(`${IND}       cond2: main build CPU is ${ofLongest}% of the longest block, ${ofAll}% of ALL blocking in the window`);
       rows.push(`${IND}       ${ofAll >= 50
         ? "condition 2 HOLDS on both ratios"
         : ofLongest >= 50

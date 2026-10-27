@@ -32,6 +32,55 @@ before(async () => {
   a.clearInput();
 });
 after(() => { if (g) g.close(); });
+
+test("a tyre fitted after the actual flag cannot erase compound DSQ at natural results", async () => {
+  const game = await createGame({ track: ID, carMeshes: false, storage: { tyreWear: "real", team: 4 } });
+  try {
+    const run = async (codes, lane) => {
+      await game.race(ID, "day", "dry", { laps: 10 });
+      const a = game.apex, G = game.G, p = G.player, L = G.track.total;
+      a.tyres({ level: "real" }); a.go();
+      assert.equal(p.team.id, "alpine", "Alpine's box lies just past the finish line");
+      assert.equal(G.pits.twoCompoundApplies(), true);
+      assert.equal(p.compoundShortAtFinish, null, "new race clears a previous flag snapshot");
+      for (const c of G.cars) { c.dnfAt = null; if (c !== p) { c.retired = true; c.dnf = "fixture"; } }
+      p.tyreLog = []; p.lap = 1;
+      for (const code of codes) G.tyres.fit(p, G.tyres.classRecord({ S: "soft", M: "medium", I: "inter" }[code]));
+      p.lap = 10;
+      a.jump((L - 0.01) / L, G.vTop() * 0.06 + 0.01, 0); a.aim(0);
+      a.jump((L - 0.01) / L, G.vTop() * 0.06 + 0.01, lane ? a.pit().laneX : 0); a.aim(0);
+      p.pitState = "lane"; p.pitArmed = true; p.pitNext = G.tyres.classRecord("medium");
+      assert.equal(p.finished, false);
+      game.step(1);
+      assert.equal(p.finished, true, "normal updateCar motion actually crosses and RaceControl sets the flag");
+      assert.deepEqual(Array.from(p.tyreLog, e => e.code), codes, "no new set was fitted before the flag");
+      const frozen = p.compoundShortAtFinish;
+      for (let tick = 0; tick < 300 && G.state === "race"; tick++) game.step(1);
+      assert.equal(G.state, "results", "finishDelay settles naturally without endRace/debug finish");
+      assert.equal(p.compoundShortAtFinish, frozen, "repeated settlement does not replace the flag-time value");
+      assert.deepEqual(Array.from(p.tyreLog, e => e.code), lane ? codes.concat("M") : codes, "physical post-finish service still runs");
+      return { p, frozen };
+    };
+    const offender = await run(["S"], true);
+    assert.equal(offender.frozen, true);
+    assert.equal(offender.p.dsq, "one dry compound");
+    const control = await run(["S"], false);
+    assert.equal(control.p.dsq, "one dry compound", "the on-road negative control agrees");
+    const compliant = await run(["S", "M"], true);
+    assert.equal(compliant.frozen, false);
+    assert.equal(compliant.p.dsq, undefined, "two dry sets before the flag remain compliant");
+    const wet = await run(["S", "I"], true);
+    assert.equal(wet.frozen, false);
+    assert.equal(wet.p.dsq, undefined, "a wet set before the flag still exempts the car");
+    // gridUp also reuses car objects (e.g. multiplayer rearm), rather than
+    // relying only on makeCars creating new ones for the next race.
+    const p = game.G.player;
+    game.G.gridUp();
+    assert.equal(game.G.player, p);
+    assert.equal(p.finished, false);
+    assert.equal(p.compoundShortAtFinish, null, "re-grid drops the old race's immutable verdict");
+  } finally { game.close(); }
+});
 // Drive toward a lateral by AIMING the car (re-aim along the track cannot
 // move it sideways; a steer alone drifts in bends).
 function aimTo(a, x, seconds, throttle) {

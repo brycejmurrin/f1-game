@@ -1,7 +1,9 @@
 # PWA shortcuts, race-weekend calendar (.ics) and install enhancements
 
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — manifest.json has shortcuts and js/data/schedule.js has a race countdown; no .ics export found in js/.
+
 **Date:** 2026-10-04
-**Status:** PLAN
+**Status when written:** PLAN
 **Scope:** `manifest.json` shortcuts and richer install metadata, boot-time deep links for them, a client-side `.ics` download plus a "next GP" tile with countdown built from the schedule the Data Hub already fetches, and an evaluation (not a commitment) of Web Share Target, `file_handlers` and `launch_handler`. No server, no Web Push, no new dependency.
 
 ## Related (do not duplicate)
