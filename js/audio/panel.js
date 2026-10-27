@@ -56,17 +56,21 @@ var AudioPanel = (() => {
       els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
       if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }
       else if (G.state === "menu") GameAudio.startMusic(-1);
-      // Not under the pause menu: resume starts the engine, and in a friend race
-      // the loop keeps driving an engine started here, audibly.
-      else if ((G.state === "race" || G.state === "count") && !G.paused) {   // the countdown is the race's first seconds
-        GameAudio.startMusic(G.trackIdx);
-        // A race that began with SOUND OFF skipped game.js's setVoice/setVenue, so
-        // lifting the master mid-race would otherwise run the default voice and venue.
+      // Mid-race SOUND ON (countdown is the race's first seconds). A race that
+      // began with SOUND OFF skipped game.js's setVoice/setVenue (BUGS M31).
+      // Apply them even under the pause card — resume starts the engine without
+      // setVenue (game.js setPaused), so venue/voice must land here.
+      else if (G.state === "race" || G.state === "count") {
         if (G.player && G.player.team && GameAudio.setVoice) GameAudio.setVoice(G.player.team.engine);
         if (G.track && G.track.def && GameAudio.setVenue) GameAudio.setVenue(G.track.def);
-        GameAudio.startEngine();
-        // The cloud can clear while the road remains wet.
-        if (G.viewRainfall() > 0.01) GameAudio.startRain();
+        // Not under the pause menu: resume starts the engine, and in a friend
+        // race the loop keeps driving an engine started here, audibly.
+        if (!G.paused) {
+          GameAudio.startMusic(G.trackIdx);
+          GameAudio.startEngine();
+          // The cloud can clear while the road remains wet.
+          if (G.viewRainfall() > 0.01) GameAudio.startRain();
+        }
       }
       // SOUND is the master, so the panel's music controls follow it.
       syncAudioPanel();

@@ -28,9 +28,10 @@ Load this when driving a lap, writing a policy, or debugging a typed error. SKIL
   Don't chain several in one shell command. Serialize browser boots; prefer the Node VM for numeric batches.
   Renames: `trackInfo`→`track`, `carView`→`car`, `agentHelp`→`help`;
   `model` = `render({what:"circuit"})`. `terminal`/`seed` are in-page only.
-- `node tools/shot/apex-eval.mjs <track> "<expr>"` — one boot, `a` = `__apex`.
-  Batch multi-reads into one expression. Stages `race()` only — stage the rest
-  inside the expression (or use the CLI).
+- `node tools/shot/apex-eval.mjs <track> "<expr>" [--vm] [--raw]` — one boot, `a` = `__apex`;
+  `--vm` boots the Node VM instead of Chromium. Batch multi-reads into one expression.
+  Stages `race()` only — stage the rest inside the expression (or use the CLI). Output is
+  shape-compacted: pass `--raw` for arrays.
 - `window.__apex.<tool>(...)` in a live page — **stage first**: `race(id)` →
   `go()` → `jump(frac, speed)`, then two frames. Skip it → `PlayerNotPlacedError`
   or a stale camera. Full rules under Staging below.
@@ -66,7 +67,8 @@ Load this when driving a lap, writing a policy, or debugging a typed error. SKIL
   `trackInfo({what:"corners"})` and join by turn id). `summary|sections|full`.
   The first call for "understand a place I can't see."
 - `trackInfo({what})` (CLI `track`) — corners (with signed `k` and `bankingDeg`) /
-  sectors / elevation profile; grounded in the real circuit (`gp`, `realLengthKm`,
+  sectors / elevation profile (60 points of `y`/`widthM`/`radiusM`, no slope: grade is
+  `trackProfile(n).slope`); grounded in the real circuit (`gp`, `realLengthKm`,
   `lengthErrorPct`).
 - `carView({detail})` (CLI `car`) — the car as JSON: team, the CHOSEN parts spec +
   net `mods` multipliers, measured geometry. `detail:"parts"` adds per-part boxes —

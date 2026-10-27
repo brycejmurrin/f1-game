@@ -270,7 +270,8 @@ test("skills only name real test-bg groups", () => {
       if (e.isDirectory()) walk(p);
       else if (e.name.endsWith(".md")) {
         const text = fs.readFileSync(p, "utf8");
-        for (const m of text.matchAll(/test-bg\.mjs((?:[ \t]+(?:--[a-z]+|[a-z][a-z0-9-]*))+)/g)) {
+        // `--spec <path>` takes a spec file, not a group: drop the pair before reading group names.
+        for (const m of text.replace(/test-bg\.mjs[ \t]+--spec\b(?:[ \t]+[^\s`]+)?/g, "test-bg.mjs").matchAll(/test-bg\.mjs((?:[ \t]+(?:--[a-z]+|[a-z][a-z0-9-]*))+)/g)) {
           for (const tok of m[1].trim().split(/[ \t]+/)) {
             if (flags.has(tok) || groups.has(tok)) continue;
             bad.push(`${path.relative(ROOT, p)}: ${tok}`);

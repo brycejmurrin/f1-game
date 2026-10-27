@@ -81,18 +81,26 @@ GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
 2. `GameAudio.debug().samplesReady` — if `false`, MP3s have not decoded
    (network/CORS, or CC0 files absent); synth fallback should be active.
    `usingSamples` says which core is running.
-3. Suspended AudioContext (autoplay; silent on iPhone or the first tap): a
-   user gesture resumes it, but only an activation-triggering event counts —
-   `touchend`, `pointerup`, `click`, a key press; NOT `pointerdown` (touch) or
-   `touchstart`. The real `GameAudio` arrives with the lazy audio bundle
-   (`js/core/lazy-bundles.js`, `LAZY_AUDIO`); until then calls hit `stub.js`,
-   and the bundle runs `GameAudio.init()` only when
-   `navigator.userActivation.hasBeenActive`. After the first tap read
-   `navigator.userActivation.hasBeenActive` and `GameAudio.debug().contextState`
-   (on the phone profile, 844×390 touch). Script-dispatched events do not
-   establish trusted user activation; programmatic probes work only after
-   unlock. Handlers doubled after a failed bundle load point at the bundle's
-   `onAudioReady` path, not at `engine.js`.
+3. Suspended AudioContext (silent on iPhone / first tap). First read
+   `GameAudio._stub`: `true` means the lazy audio bundle (`LAZY_AUDIO`) has
+   not landed and every call hits `js/audio/stub.js` (which has no `enabled()`).
+   The unlock is `audioGestureUnlock` in `js/core/lazy-bundles.js`: capture
+   listeners on `AUDIO_GESTURES` (`pointerup`, `touchend`, `click`, `keydown` —
+   the activation-triggering events; NOT `pointerdown` for touch or `touchstart`).
+   Each trusted gesture kicks `ensureAudio()` and, once the real bundle is in
+   and `G.soundOn`, calls `GameAudio.init()` INSIDE the gesture until
+   `GameAudio.context().state === "running"`, then disarms. A title tap whose
+   `touchend` lands before the bundle evaluates leaves the context suspended:
+   the bundle's own `init()` (restoreOnEngine, gated on
+   `navigator.userActivation.hasBeenActive`) runs outside a gesture, so only the
+   NEXT tap unlocks it — that is the first-tap-silent shape. engine.js's
+   `resumeIfNeeded` listeners (`touchend`/`pointerdown`/`keydown`) only recover a
+   context that already exists (iOS lock / interruption). After the first tap
+   read `GameAudio._stub`, `GameAudio.context().state` and
+   `navigator.userActivation.hasBeenActive` (phone profile, 844×390 touch).
+   Script-dispatched events are untrusted and never unlock. Handlers doubled
+   after a failed bundle load point at the bundle's `onAudioReady` path, not at
+   `engine.js`.
 4. Chrome DevTools → **Web Audio** — confirm oscillators / buffer sources
    reach the destination.
 5. `__apex.timing().raceT` should be increasing. A frozen sim means
@@ -104,12 +112,12 @@ GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
    revs the limiter chops, and in top gear it fades to a steady note after
    `LIM_HOLD` + `LIM_FADE` (`limiterHeld()`, `limiterDepth()`). Read
    `GameAudio.rate()` (or `__apex.audio().rate`) at two speeds in top gear:
-   equal = pinned by design. `apex_eval` boots Chromium (parent only); the
+   equal = pinned by design. `apex_eval` boots Chromium (AGENTS.md rule 10); the
    Node VM has no AudioContext, so `rate()` is 0 there. To
    widen the top, raise `__apex.audioTune({ revRange })` or bend `curve`.
 
-The AudioContext itself is a private var — not exposed. Use
-`GameAudio.debug().samplesReady` and `centroidHz()`.
+`GameAudio.context()` returns the live AudioContext (read `.state`);
+`GameAudio.debug().contextState` is the same value as a string.
 
 ## Gear-shift cue silent
 
@@ -142,8 +150,8 @@ decaying over ~90 ms on the sample core only (the synth fallback ignores it; `Ga
 
 ## Music cuts out on pause / never resumes
 
-Pausing does NOT stop music: `setPaused(true)` (`js/game.js`) stops only the
-engine and skid; the soundtrack keeps playing under the pause card. Music stops
+Pausing does NOT stop music: `setPaused(true)` (`js/game.js`) stops the engine,
+skid, rain and the radio voice, never music; the soundtrack keeps playing under the pause card. Music stops
 for exactly these reasons, so find which one applies:
 
 1. Hidden tab / lock (`onVisibility` in `engine.js`): `stopMusic()` + `ctx.suspend()`,

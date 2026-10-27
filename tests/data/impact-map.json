@@ -1544,17 +1544,78 @@
       ]
     },
     "js/camera/feel.js": {
+      "applyFreeLook": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "consumeAimSnap": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "drive": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
       "follow": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs"
       ],
       "freeLookState": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
+      "isBuzzMode": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "isFreeLookMode": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "lookBackLatch": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "lookingBackNow": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "modeFov": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "resetFollow": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "resetFreeLook": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "resetLatch": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "scoped": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "setLookBackLatch": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "setSpeedVignette": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "shake": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "shakeNoise": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "shouldLookBack": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "speedFov": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "speedVignette": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
       "tick": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "tickRace": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ]
     },
@@ -3513,6 +3574,9 @@
         "tests/unit/settings-export.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
+      "applyWithUndo": [
+        "tests/unit/career-backup.test.mjs"
+      ],
       "build": [
         "tests/unit/career-backup.test.mjs"
       ],
@@ -3868,6 +3932,7 @@
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "objective": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "objectiveChoices": [
@@ -4421,10 +4486,10 @@
     },
     "js/career/team-identity.js": {
       "capture": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/save-durability.test.mjs"
       ],
       "*": [
-        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs"
       ]
     },
@@ -13118,6 +13183,9 @@
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
+      "dryLine": [
+        "tests/unit/weather-arc-rain.test.mjs"
+      ],
       "endSession": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/storm-weather.test.mjs",
@@ -13164,7 +13232,8 @@
       ],
       "syncWetness": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
-        "tests/unit/rain-cells.test.mjs"
+        "tests/unit/rain-cells.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs"
       ],
       "tick": [
         "tests/unit/forecast.test.mjs",

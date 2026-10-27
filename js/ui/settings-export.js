@@ -899,7 +899,7 @@ function careerRevisions() {
   const s = typeof GameStore !== "undefined" ? GameStore.store : null;
   return { expectedRevisions, expectedSelectionRevision: s && s.keyRevision ? s.keyRevision("careerSlot") : null };
 }
-function applyCareer(file, revisions) {
+async function applyCareer(file, revisions) {
   const refused = (reason) => ({ ok: false, reason, applied: 0, skipped: 0, failed: 0 });
   if (!file || file.format !== CAREER_FORMAT) return refused(`not an ${CAREER_FORMAT} file`);
   const bag = file.careers;
@@ -925,7 +925,8 @@ function applyCareer(file, revisions) {
   if (!slots.length && liveSlot == null) return { ok: true, applied: 0, skipped, failed: 0, reason: null };
   // Both file formats share the same live-conflict gate and preflight of ALL
   // destination revisions. No slot is written if any destination changed.
-  const r = CareerBackup.apply({ format: CareerBackup.FORMAT, slots },
+  // applyWithUndo keeps each replaced slot as a restore point first, or refuses.
+  const r = await CareerBackup.applyWithUndo({ format: CareerBackup.FORMAT, slots },
     Object.assign({}, revisions || careerRevisions(), { liveSlot, includeExtras: false }));
   if (!r.ok) return refused(r.reason);
   const failed = r.failed || 0;
@@ -1051,11 +1052,7 @@ function create(G) {
       }
       const revisions = armed.snapshot;
       disarm();
-      pick((obj) => {
-        if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
-        let r;
-        // A throw here would surface as an unhandled rejection over the game (#2191).
-        try { r = apply(obj, revisions); } catch (e) { Log.warn("ui", "file load threw", e && e.message); r = null; }
+      const loaded = (r) => {
         if (!r || !r.ok) { flash(b, label, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
@@ -1068,6 +1065,16 @@ function create(G) {
         b.textContent = `${label} — ${r.applied} APPLIED${r.droppedLiveries ? `, ${r.droppedLiveries} LIVERIES SKIPPED` : ""}, RELOADING…`;
         reloading = true; b.disabled = true;
         setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
+      };
+      pick((obj) => {
+        if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
+        let r;
+        // A throw here would surface as an unhandled rejection over the game (#2191).
+        const threw = (e) => { Log.warn("ui", "file load threw", e && e.message); return null; };
+        try { r = apply(obj, revisions); } catch (e) { r = threw(e); }
+        // The career loader is async: it awaits its restore points before writing.
+        if (r && typeof r.then === "function") r.then(loaded, (e) => loaded(threw(e)));
+        else loaded(r);
       }, maxBytes);
       tick();
     };
