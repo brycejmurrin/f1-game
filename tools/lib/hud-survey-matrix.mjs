@@ -437,8 +437,8 @@ export const LEADS = Object.freeze([
   { name: "lead02-base", device: PL, steer: "buttons", hudScale: 150, lead: "baseline for lead 2" },
   ...[["x40", { gearbox: { x: 40 } }], ["s200", { gearbox: { s: 200 } }]].map(([n, p]) => ({
     name: `lead02-gearbox-${n}`, device: PL, steer: "buttons", hudScale: 150, preset: p,
-    lead: `SPEED & GEAR ${n} must leave --hud-z-bot / --hud-z-dock unchanged`,
-    checks: [{ type: "varSame", var: "--hud-z-bot", vs: "lead02-base" }, { type: "varSame", var: "--hud-z-dock", vs: "lead02-base" }] })),
+    lead: `SPEED & GEAR ${n} must not shrink --hud-z-bot and must leave --hud-z-dock unchanged`,
+    checks: [{ type: "varSame", var: "--hud-z-bot", vs: "lead02-base", noShrink: true }, { type: "varSame", var: "--hud-z-dock", vs: "lead02-base" }] })),
   // 3. MAP y+40: the dock cap must not move; the limits chip stays sane.
   { name: "lead03-map-y40", device: PL, preset: { map: { y: 40 } }, lead: "MAP y+40: dock cap unchanged, #hud-limits on-screen",
     checks: [{ type: "varSame", var: "--hud-z-dock", vs: "lead01-base" }, { type: "onScreen", keys: ["limits"], pool: "transient" }] },
@@ -539,8 +539,12 @@ export function evaluateChecks(cell, rec, byId = () => null) {
       if (!base || !base.records) { add(`baseline ${ch.vs} not measured (run it in the same survey)`, "info"); return; }
       if (ch.type === "varSame") {
         const a = vars(base)[ch.var], b = vars(rec)[ch.var];
-        const na = num(a), nb = num(b);
-        if (a === b || (na != null && nb != null && Math.abs(na - nb) <= (ch.tol ?? 0.005))) add(`${ch.var} ${JSON.stringify(b)} = baseline — OK`, "info");
+        let na = num(a), nb = num(b);
+        // noShrink: the var is a CAP, and an empty value is "uncapped" (the player's own number). A moved or
+        // scaled cluster leaves the row's width budget (data-hl-user), so the rest may grow, never shrink (#3270).
+        if (ch.noShrink) { if (a === "" || a == null) na = Infinity; if (b === "" || b == null) nb = Infinity; }
+        if (ch.noShrink && na != null && nb != null && nb >= na) add(`${ch.var} ${JSON.stringify(a)} → ${JSON.stringify(b)} (not below baseline) — OK`, "info");
+        else if (a === b || (na != null && nb != null && Math.abs(na - nb) <= (ch.tol ?? 0.005))) add(`${ch.var} ${JSON.stringify(b)} = baseline — OK`, "info");
         else add(`${ch.var} ${JSON.stringify(a)} → ${JSON.stringify(b)} vs ${ch.vs}${na != null && nb != null && nb < na ? " (DROPPED)" : ""}`,
           na != null && nb != null && nb < na ? "high" : (na == null) !== (nb == null) ? "high" : "medium");
       } else {

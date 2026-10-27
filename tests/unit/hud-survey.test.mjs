@@ -455,6 +455,11 @@ test("lead checks decide from the numbers, and merge re-decides across shards", 
   const [drop] = ev(mk([{ type: "varSame", var: "--hud-z-top", vs: "b" }]));
   assert.equal(drop.severity, "high");
   assert.equal(ev(mk([{ type: "varSame", var: "--hud-z-top", vs: "missing" }]))[0].severity, "info");
+  // noShrink (#3270): "" is uncapped, so 0.7 → "" passes; a lower value still fails.
+  const ns = (vars, bv) => ev({ ...mk([{ type: "varSame", var: "--hud-z-top", vs: "b", noShrink: true }]), state: { vars } })[0];
+  assert.equal(ns({ "--hud-z-top": "" }).severity, "info");
+  assert.equal(ns({ "--hud-z-top": "0.9" }).severity, "info");
+  assert.equal(ns({ "--hud-z-top": "0.5" }).severity, "high");
   assert.equal(ev(mk([{ type: "varWritten", var: "--hud-z-dock" }]))[0].severity, "high");
   const shift = ev(mk([{ type: "shift", key: "map", vs: "b", axis: "y", pct: 10, tolPct: 3 }]))[0];
   assert.equal(shift.severity, "info", shift.detail);   // 72px at 720 = 10 %
