@@ -34,6 +34,9 @@ try:
         ti = json.loads(ti)
     if not isinstance(ti, dict):
         raise ValueError("invalid GitHub tool input")
+    # the hosted connector names the PR `pr_number`, a key the shared guard does not read
+    if ti.get("pullNumber") is None and ti.get("pr_number") is not None:
+        ti["pullNumber"] = ti["pr_number"]
     data["tool_input"] = ti
     result = subprocess.run(["bash", sys.argv[1]], input=json.dumps(data), stdout=subprocess.PIPE, text=True)
     if result.returncode != 0:

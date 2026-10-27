@@ -173,6 +173,7 @@ test("Codex's MCP door guards legacy and hosted GitHub operations, preserving re
     fs.writeFileSync(path.join(dir, "artifacts/merge-gate/1.json"), JSON.stringify({ kind: "merge", pr: 1, head, ok: true, at: new Date().toISOString(), gateRoot: dir, gateFiles: committedGate(dir) }));
     for (const prefix of prefixes) {
       assert.equal(mcp(prefix + "merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), null, prefix + "gated merge passes");
+      assert.equal(mcp(prefix + "merge_pull_request", { pr_number: 1, merge_method: "merge", expectedHeadSha: head }), null, prefix + "gated merge passes with pr_number");
       assert.equal(mcp(prefix + "update_pull_request", JSON.stringify({ pullNumber: 1, body: "x" })), null, prefix + "JSON-object string remains supported");
     }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
