@@ -1,0 +1,33 @@
+# Historical notes map — group 43
+
+Fully read all 100,000 assigned bytes across 16 half-open intervals in 19 individually returned, untruncated reads of at most 10,000 bytes. Three complete reports were split at byte 8,000. All whole-file SHA-256 values match the assignment manifest. Exact source locations, whole/part/chunk hashes, historical path mentions and literal backlinks are preserved in `notes-43-paths.json`; `notes-batches.json` defines the assignment. Raw historical locations are confined to that JSON.
+
+This is provenance mapping, not a fresh audit or permission to execute historical commands. The material belongs to the fourth system audit on 2026-10-26. Most skill reviews omit their own dates and individual reviewer identities; those are not invented here. The UI matrix handback explicitly says a card reviewer produced it and main saved it. Transcript and test-estate reports identify their sampling and analysis methods, rather than a named author.
+
+## Skill-review relationships
+
+The incident-control tail records a disputed curvature-derived marble effect reaching player grip, a stale line anchor and missing single-spec runner guidance. Its opening is outside this group. Race-weekend follows pit/tyre/quali ownership, distinguishing standalone season and career saves; it questions expensive whole-group checks and missing pit-entry classification pointers. The renderer review asks for evidence from the player's TLX/WebGPU phone path, a permitted census route, and DOM-overlay/duplicate-function checks before shader diagnosis.
+
+Scenery review ties dressing to the generated location inventory, frozen scenery API, frame conventions and instancing parity. Season review traces a concrete description-token regex collision with career routing and proposes a wording change whose fixtures still needed execution. Shipping review identifies readiness-refusal and draft-transition gaps; stewardship review checks its existing Plan/receipt flow and flags CI-watch options, duplicated hold grammar and an ownership forwarding stub. These records describe the fleet model then in use; current coordination instructions take precedence.
+
+Bloat review finds two ownership loops: skill size versus agent configuration, and dead CSS versus CSS editing. It also notes a missing coverage handback marker and lack of concrete extraction targets. Track survey review connects realism vocabulary to routing, isolated surveyor worktrees to a parent-owned assigned-file diff check, and campaign integration to merge/removal procedures. UI matrix review connects evidence publication and parent/reviewer roles to a viewport-default trap. Physics tuning review identifies missing shaped-input/GRIP STEER checks, absent contract-auditor routing and an invalid verification recipe. Menu accessibility review carries the same phone viewport concern plus first-gesture audio and per-frame layer-query gaps.
+
+These are recommendations, including inconsistent historical advice about the single-spec runner: several reviews say the runner lacks spec support, while another proposes a spec form without validating it. Preserve the disagreement as evidence; resolve it from current tooling rather than copying either recipe.
+
+## Population reports and their limits
+
+The test-estate report is dated 2026-10-26 at checkout `7da0df7bc`. It combines static inventory, committed/local timings, shallow first-parent co-edit history and failed CI logs. Its fifteen findings cover overlapping floor/topical jobs, repeated MCP-server and VM/repository setup, incomplete pin accounting, expensive sweeps, mostly unused generated impact data, missing node-flake visibility, guard growth, nightly selection holes, stale timing overlays, opt-in tests and quarantine-title drift. Its carve plan separates measured savings from estimates. No suites ran; a VM timing probe timed out under load, green-run analysis and real-PR selection experiments were omitted.
+
+The Bryce/routines report is dated around 17:40Z on 2026-10-26. It links failed sessions and quota cliffs to silent ownership loss, repeated authority questions, unsafe archival, stale dashboards and no-op routines. Its transcript-contamination finding materially weakens archived-session conclusions: multiple archived sessions returned another container occupant's events. The author explicitly treats bus quotations as lower bounds and does not claim full human-session coverage. A disabled Merge Desk routine is recorded as resolved historically, not as current state.
+
+The orchestrator report is dated around 17:20Z and compares 38 Fleet B orchestrators plus two seeds across four rule eras. It attributes substantial cost to rotation, highlights quota-policy contradictions and unsafe receipt/archive practices, and records improvements after specific messages and PRs. Only selected transcripts were complete; most sessions contributed their newest page, and Fleet A comparisons use bus data because that account was inaccessible. Cost and causality claims therefore remain sampled historical evidence.
+
+The worker report opening covers sampled worker/owner/hunter/sync/reviewer sessions from 10-19 through 10-26 17:10Z. It presents spend/outcomes and blocker distributions, reports no local or remote browser-group runs in the sample, and begins the first no-op-wake finding. The finding is cut mid-row at the assigned boundary; the remainder and later conclusions belong to group 44. Its model-price comparison explicitly acknowledges role confounding and cannot establish model superiority.
+
+## Cleanup findings and present use
+
+Keep these notes as dated evidence behind follow-up work, with source hashes and sampling caveats intact. Do not promote their historical verdicts, temporary fleet authority, quota grants, launch receipts, stale anchors, fixed counts or command recipes into current rules. Current canonical guides and source must establish whether any proposed fix remains open.
+
+Useful cleanup candidates recorded here are duplicate frame/hold/verification prose, stale numeric anchors and workflow IDs, an ownership forwarding stub conditional on inbound-link checks, an orphan grandstand paragraph, oversized routing descriptions and repeated browser-group prescriptions. None was edited or independently confirmed during this mapping. Backlinks in the support JSON are literal tracked-content references, including relative filename links; they are navigation evidence, not a claim of semantic ownership or exhaustive dynamic use.
+
+No tests, browser, network, runtime, source changes or commits were performed. Coverage credit applies only to these assigned intervals; it does not imply the incident-control opening or worker-report remainder was read here.
