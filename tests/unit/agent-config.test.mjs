@@ -934,7 +934,7 @@ test("every skill reference is linked from its SKILL.md and, past 100 lines, ope
 });
 
 // 2026-10-13 retired squash: Merge Desk arms MERGE-commit auto-merge only
-// (AGENTS.md §Concurrent PRs, github-mcp-guard.sh). A day later the Merge Desk
+// (AGENTS.md §Coordination, github-mcp-guard.sh). A day later the Merge Desk
 // subagent, Bugbot's rules, the Cursor/Grok plugin, the steward card and
 // deploy.mjs's PR notes still said "arms SQUASH" — each tool read a different
 // rule. Nothing any agent reads may tell it to squash again.

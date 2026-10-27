@@ -4,7 +4,7 @@
  * @section runner
  * @skill steward
  *
- * CI Watch (AGENTS.md §Concurrent PRs) needs five facts per PR before it may act:
+ * CI Watch (AGENTS.md §Coordination) needs five facts per PR before it may act:
  * draft or ready, mergeable_state, whether auto-merge is armed and with which
  * method, the newest `ci.yml` state on the head sha, and the ready-gate verdict
  * (the `Structural guards` check-run, read through ready-gate.mjs's own
@@ -56,7 +56,7 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
 
 export { DEPLOY };
-/** At most this many PRs armed repo-wide (AGENTS.md §Concurrent PRs, Merge Desk's hard gate). */
+/** At most this many PRs armed repo-wide (AGENTS.md §Coordination, Merge Desk's hard gate). */
 export const MAX_ARMED = 2;
 /** The one merge method allowed (AGENTS.md MERGE-COMMIT-ONLY). */
 const MERGE_METHOD = "merge";

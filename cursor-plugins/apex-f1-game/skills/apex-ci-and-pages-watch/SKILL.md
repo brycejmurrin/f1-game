@@ -9,7 +9,7 @@ description: >-
 
 Repo: `brycejmurrin/f1-game`. Current local gate meanings: [`docs/VERIFICATION.md`](../../../../docs/VERIFICATION.md). Ship / deploy branch: `claude/f1-game-project-26h3ng`. Prefer GitHub MCP (`user-GitHub-xai`) over a broken local `gh` token.
 
-**Authority and readiness:** follow `AGENTS.md` §Concurrent PRs and `.claude/rules/fleet-core.md`. Each orchestrator merges only its own fleet’s PRs after the pinned `merge-gate.mjs` receipt; workers do not merge. Draft→ready requires a green tip and successful `ready-gate.mjs --pr <n>`. There is no fixed ready-PR cap. This watch skill observes and reports; it does not grant merge, arm, readiness, or cancellation authority.
+**Authority and readiness:** follow `AGENTS.md` §Coordination and `docs/WORKERS.md`. GitHub lands PRs: a worker flips its PR ready and adds the `land` label, and `land.yml` runs the `gate` check and arms auto-merge; no session merges or arms. Draft→ready requires a green tip and successful `ready-gate.mjs --pr <n>`. There is no fixed ready-PR cap. This watch skill observes and reports; it does not grant merge, arm, readiness, or cancellation authority.
 
 ## What to watch (do not conflate)
 

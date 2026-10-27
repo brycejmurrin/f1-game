@@ -8,8 +8,8 @@ alwaysApply: false
 - Cars: meshes/liveries/presentation — not UI chrome
 - Tracks: scenery/audits — one open PR per circuit
 - Perf: boot/particles/probes — not weather design
-- CI Watch: read-only CI/Pages watcher — merge authority is defined in
-  `.claude/skills/agent-fleet/references/role-merge-holder.md` (fleet-core)
+- CI Watch: read-only CI/Pages watcher — merge authority: GitHub lands PRs via the
+  `land` label and `land.yml` (`docs/WORKERS.md`)
 - Audio / Net / Docs / Insights: stay in named lanes
 Prefer Auto/`default` only (no alternate-model fallback); draft PRs on `cursor/<topic>-<hash>` → ship; attach evidence.
 Handoff is incomplete without paths, PR/bc, OWNED globs, ranked next ≤3, blockers (or `idle / no PR`).

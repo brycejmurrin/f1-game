@@ -1,4 +1,4 @@
-/* archive-sessions.test.mjs — the archive rule (AGENTS.md §Concurrent PRs, 2026-10-19) over a saved
+/* archive-sessions.test.mjs — the archive rule (AGENTS.md §Coordination, 2026-10-19) over a saved
  * list_sessions page: only an agent-created, idle, role-tagged session whose PR is merged or closed
  * is ARCHIVE; a session Bryce opened, an orchestrator, a watcher or a running one is KEEP.
  *

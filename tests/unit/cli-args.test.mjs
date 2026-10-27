@@ -86,7 +86,7 @@ test("git-run: gitRun never throws, gitMust names the step, gitTry reads '' on f
 // Every rulebook-named CLI under tools/ci (cli-help.md's list, AGENTS.md rules 3-13): `--help` answers
 // in < 10 s with exit 0, and a typo exits 2 before any work (audit3 T7/T8, audit4 cli-help).
 const RULEBOOK = ["deploy", "session-status", "test-bg", "ci-watch", "wait-for", "needs-sync", "sync-pr", "remote-group",
-  "verify-change", "pick-tests", "bump-cache", "fleet-tick", "junit-failed", "queue-depth", "verify-live"];
+  "verify-change", "pick-tests", "bump-cache", "junit-failed", "queue-depth", "verify-live"];
 test("rulebook CLIs: --help exits 0 within 10 s; --definitely-not-a-flag exits 2", () => {
   const cwd = new URL("../..", import.meta.url).pathname;
   // 10 s each. sync-pr / remote-group / verify-change pay ~1 s of select-specs import before their

@@ -3,7 +3,7 @@
 Shared by github-mcp-guard.sh (the GitHub MCP tools) and bash-guard.sh (the
 same actions through `gh pr merge`, `gh pr ready` and `gh api`, via
 shellparse.gh_issues), so the two doors refuse with the same words
-(AGENTS.md §Concurrent PRs, MERGE-COMMIT-ONLY, #1458).
+(AGENTS.md §Coordination, MERGE-COMMIT-ONLY, #1458).
 
 Since 2026-10-19 (docs/plans/2026-10-19-fleet-redesign.md §2, "gate, don't
 grant") a merge or an arm needs a fresh `artifacts/merge-gate/<pr>.json`
@@ -52,11 +52,11 @@ DENY_REF = ("writes a git ref through the API — shared safety ban 6 (Transcrip
             "with `gh api -X DELETE …/git/refs/heads/…` to get around the push hook). A branch moves only by `git push` "
             "to your own cursor/<topic>-<hash> branch (never forced, never deleted) and lands only through a PR; ask "
             "your orchestrator, or Bryce, to delete a branch.")
-DENY_CANCEL = ("NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Concurrent PRs, 2026-10-15): a queued run holds no slot, so a "
+DENY_CANCEL = ("NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Coordination, 2026-10-15): a queued run holds no slot, so a "
                "cancel only throws away its queue position and the branch owner pushes a retrigger commit — 306 of 401 PR "
                "runs died that way on 2026-10-15. Your own superseded run is replaced by your next push; a closed PR's runs "
                "are cancelled by the close. APEX_RUN_CANCEL_OK=1 only when the user asked for this cancel.")
-ASK_RERUN = ("Re-run a failed job at most once, and only for a timeout or infra error (AGENTS.md §Concurrent PRs). A re-run "
+ASK_RERUN = ("Re-run a failed job at most once, and only for a timeout or infra error (AGENTS.md §Coordination). A re-run "
              "of a SUPERSEDED run joins the branch's ci-<head.ref> group and cancels the live run; prefer "
              "`node tools/ci/ci-rerun.mjs`. Confirm by hand.")
 
@@ -186,7 +186,7 @@ def receipt_check(root, kind, pr, head=None, now=None, verify_files=False):
     a = str(head or "").strip().lower()
     b = str(r.get("head") or "").strip().lower()
     if kind == "merge" and not a:
-        return False, ("pin expectedHeadSha (gh: --match-head-commit) to the gated head %s (role-merge-holder.md: a merge "
+        return False, ("pin expectedHeadSha (gh: --match-head-commit) to the gated head %s (a merge "
                        "is pinned to the sha the gate passed)" % b[:12])
     # A merge pin must be the gated head; a ready flip whose caller knows the PR's live head (github-mcp-guard
     # reads it) is held to the same rule (audit4 A1 G7: the gate passed one head, the flip lands another).
