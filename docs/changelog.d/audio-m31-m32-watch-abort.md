@@ -1,0 +1,1 @@
+Fixed: mid-race SOUND ON under the pause card now applies team voice and circuit venue (BUGS M31 residual); WATCH radio clips abort their CORS fallback fetch on stop so a late decode cannot resurrect audio.
