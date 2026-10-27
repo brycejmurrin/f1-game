@@ -61,6 +61,8 @@ python3 tools/env/codex-cloud-history.py --thread THREAD_ID --output scratch/sel
 Repeat `--thread` to select additional roots. `--thread` and `--archived` are
 mutually exclusive, and one is required. Thread IDs and output artifacts belong
 in ignored local paths, never in source, fixtures, commits, or PR descriptions.
+Inside a git checkout the exporter enforces this: an `--output` whose `_private/`
+would not be git-ignored fails with `output_not_gitignored` before any request.
 
 To continue an interrupted capture, repeat the same scope and output with
 `--resume`. This continues existing page cursors and retries incomplete threads;

@@ -63,6 +63,22 @@ def strip_reasoning(value):
     return value
 
 
+def refuse_tracked_output(path):
+    """Inside a git checkout, private transcripts may only land on an ignored path (scratch/, artifacts/)."""
+    probe = path.resolve()
+    while not probe.exists():
+        probe = probe.parent
+    cwd = probe if probe.is_dir() else probe.parent
+    inside = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=cwd,
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        return
+    ignored = subprocess.run(["git", "check-ignore", "-q", "--no-index", str(path.resolve() / "_private")], cwd=cwd,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if ignored.returncode != 0:
+        raise ExportError("output_not_gitignored")
+
+
 def private_dir(path):
     if path.is_symlink():
         raise ExportError("symlink_output_refused")
@@ -652,6 +668,7 @@ def arguments(argv=None):
 
 
 async def main(args):
+    refuse_tracked_output(args.output)
     client = HostedClient(args.auth_command)
     exporter = Exporter(client, args.output, args.archived, args.thread, args.resume)
     try:

@@ -209,3 +209,14 @@ async def check():
             pass
 asyncio.run(check())
 `));
+
+test("private output inside the checkout must be a git-ignored path", () => fixture(String.raw`
+m.refuse_tracked_output(root/'scratch/codex-history-probe')
+try:
+    m.refuse_tracked_output(root/'docs/codex-history-probe')
+    raise AssertionError('tracked output accepted')
+except m.ExportError as error:
+    assert str(error) == 'output_not_gitignored'
+with tempfile.TemporaryDirectory() as outside:
+    m.refuse_tracked_output(pathlib.Path(outside)/'export')
+`));
