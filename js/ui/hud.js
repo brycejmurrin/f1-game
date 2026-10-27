@@ -929,6 +929,20 @@ function gapPaintedDrop() {
   if (gaps) void gaps.offsetHeight;
   return true;
 }
+/** Gap strip painted over the rear-view mirror frame (#3271: portrait cockpit, the dropped strip sits in the mirror's row). */
+function gapsMirrorPaintedClash() {
+  if (document.body.classList.contains("desktop") || !_mirEl || _mirEl.hidden || !document.body.classList.contains("hud-mirror-on")) return false;
+  const gaps = document.querySelector(".hud-gaps");
+  if (!gaps || gaps.hidden || manualHud(gaps) || manualHud(_mirEl) || document.body.classList.contains("hud-hide-gaps")) return false;
+  return _hudRectsHit(gaps.getBoundingClientRect(), _mirEl.getBoundingClientRect());
+}
+/** Park the strip under the mirror frame; css/hud.css reads --mir-paint-b through [data-gap-mir]. */
+function gapMirrorDrop() {
+  if (document.documentElement.dataset.gapMir || !gapsMirrorPaintedClash()) return false;
+  document.documentElement.dataset.gapMir = "1";
+  void document.documentElement.offsetHeight;
+  return true;
+}
 const _PEDAL_STEER = () => [els.btnBrake, els.btnThrottle, els.btnSteerLeft, els.btnSteerRight];
 const _hitPedalSteer = (rr) => _PEDAL_STEER().some((el) => el && !el.hidden && _hudRectsHit(rr, el.getBoundingClientRect()));
 /** Slide #hud-aero right past a steer/pedal button it paints over (#3272), never into the right dock. */
@@ -949,7 +963,7 @@ function nudgeAero(z) {
 /** Painted phone readout-on-control clashes the spec measures (not budget math). */
 function phonePaintedClash(boostIn) {
   if (document.body.classList.contains("desktop")) return false;
-  if (towerGapsPaintedClash()) return true;
+  if (towerGapsPaintedClash() || gapsMirrorPaintedClash()) return true;
   const sectors = els.hudSectors;
   const boost = boostIn !== undefined ? boostIn : _boostOnRightHalf();   // a caller that already measured it this tick passes it
   if (sectors && !manualHud(sectors) && !sectors.hidden && boost && _hudRectsHit(sectors.getBoundingClientRect(), boost.getBoundingClientRect())) return true;
@@ -1028,9 +1042,10 @@ function phoneFitStampSync(scale, force) {
   if (!force && _fitStamped && !_fitPending && sk === _stampKey && --_stampWait > 0) return;
   if (els.aero && els.aero.style.left) { els.aero.style.left = ""; els.aero.style.position = ""; }   // a stale #3272 nudge: the probe re-applies it
   // One probe per pass: the verdict after the last pass feeds the stamp below.
+  if (root.dataset && "gapMir" in root.dataset) delete root.dataset.gapMir;   // re-derived by the probe below
   let clash = phonePaintedClash();
   for (let pass = 0; pass < 8 && clash; pass++, clash = phonePaintedClash()) {
-    if (gapPaintedDrop()) continue;
+    if (gapPaintedDrop() || gapMirrorDrop()) continue;
     if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
     bumpDock();
     shrinkSectors();

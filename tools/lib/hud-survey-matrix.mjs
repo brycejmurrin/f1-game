@@ -437,8 +437,8 @@ export const LEADS = Object.freeze([
   { name: "lead02-base", device: PL, steer: "buttons", hudScale: 150, lead: "baseline for lead 2" },
   ...[["x40", { gearbox: { x: 40 } }], ["s200", { gearbox: { s: 200 } }]].map(([n, p]) => ({
     name: `lead02-gearbox-${n}`, device: PL, steer: "buttons", hudScale: 150, preset: p,
-    lead: `SPEED & GEAR ${n} must leave --hud-z-bot / --hud-z-dock unchanged`,
-    checks: [{ type: "varSame", var: "--hud-z-bot", vs: "lead02-base" }, { type: "varSame", var: "--hud-z-dock", vs: "lead02-base" }] })),
+    lead: `SPEED & GEAR ${n} must not shrink --hud-z-bot and must leave --hud-z-dock unchanged`,
+    checks: [{ type: "varSame", var: "--hud-z-bot", vs: "lead02-base", noShrink: true }, { type: "varSame", var: "--hud-z-dock", vs: "lead02-base" }] })),
   // 3. MAP y+40: the dock cap must not move; the limits chip stays sane.
   { name: "lead03-map-y40", device: PL, preset: { map: { y: 40 } }, lead: "MAP y+40: dock cap unchanged, #hud-limits on-screen",
     checks: [{ type: "varSame", var: "--hud-z-dock", vs: "lead01-base" }, { type: "onScreen", keys: ["limits"], pool: "transient" }] },
@@ -450,11 +450,15 @@ export const LEADS = Object.freeze([
   // live switch to BROADCAST. Since #843 each HUD STYLE keeps its own layout
   // (js/ui/hud-layout.js SIX LAYOUTS), so the move is written into the
   // broadcast style's other set (presetProf) — a STANDARD-set move no longer
-  // reaches the BROADCAST HUD at all, by design.
+  // reaches the BROADCAST HUD at all, by design. The move is IN RANGE for
+  // BROADCAST's left-anchored tower (x+3): a saved entry is never clamped, so
+  // the old x-30 (a centred-tower habit) put it at -374 by design (#3267).
   { name: "lead05-base", profileLive: "broadcast", lead: "baseline for lead 5 (STANDARD boot, live switch to BROADCAST)" },
-  { name: "lead05-broadcast-moved", profileLive: "broadcast", presetProf: "broadcast", preset: { tower: { x: -30 }, map: { y: 10 } },
-    lead: "BROADCAST-style other-set TOWER x-30 + MAP y+10, then a live switch to BROADCAST: tower on-screen, map moved once",
-    checks: [{ type: "onScreen", keys: ["tower", "map"] }, { type: "shift", key: "map", vs: "lead05-base", axis: "y", pct: 10, tolPct: 3 }] },
+  { name: "lead05-broadcast-moved", profileLive: "broadcast", presetProf: "broadcast", preset: { tower: { x: 3 }, map: { y: 10 } },
+    lead: "BROADCAST-style other-set TOWER x+3 + MAP y+10, then a live switch to BROADCAST: tower on-screen, map placed once",
+    // No shift-vs-base check: a saved MAP entry anchors at the top edge (y 8 + 10 %), while the unmoved BROADCAST map
+    // hangs below the tower, so the two differ by ~13 px, not 10 %. The absolute spot is asserted in hud-layout.spec.js.
+    checks: [{ type: "onScreen", keys: ["tower", "map"] }] },
   // 6. Light theme: tower digits must read against their plate.
   { name: "lead06-light-contrast", theme: "light", lead: "LIGHT theme: .hud-top .hud-value contrast vs plate >= 4.5",
     checks: [{ type: "contrast", sel: ".hud-top .hud-value", min: 4.5 }] },
@@ -539,8 +543,12 @@ export function evaluateChecks(cell, rec, byId = () => null) {
       if (!base || !base.records) { add(`baseline ${ch.vs} not measured (run it in the same survey)`, "info"); return; }
       if (ch.type === "varSame") {
         const a = vars(base)[ch.var], b = vars(rec)[ch.var];
-        const na = num(a), nb = num(b);
-        if (a === b || (na != null && nb != null && Math.abs(na - nb) <= (ch.tol ?? 0.005))) add(`${ch.var} ${JSON.stringify(b)} = baseline — OK`, "info");
+        let na = num(a), nb = num(b);
+        // noShrink: the var is a CAP, and an empty value is "uncapped" (the player's own number). A moved or
+        // scaled cluster leaves the row's width budget (data-hl-user), so the rest may grow, never shrink (#3270).
+        if (ch.noShrink) { if (a === "" || a == null) na = Infinity; if (b === "" || b == null) nb = Infinity; }
+        if (ch.noShrink && na != null && nb != null && nb >= na) add(`${ch.var} ${JSON.stringify(a)} → ${JSON.stringify(b)} (not below baseline) — OK`, "info");
+        else if (a === b || (na != null && nb != null && Math.abs(na - nb) <= (ch.tol ?? 0.005))) add(`${ch.var} ${JSON.stringify(b)} = baseline — OK`, "info");
         else add(`${ch.var} ${JSON.stringify(a)} → ${JSON.stringify(b)} vs ${ch.vs}${na != null && nb != null && nb < na ? " (DROPPED)" : ""}`,
           na != null && nb != null && nb < na ? "high" : (na == null) !== (nb == null) ? "high" : "medium");
       } else {

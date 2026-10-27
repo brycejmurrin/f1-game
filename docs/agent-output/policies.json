@@ -2506,6 +2506,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/ui/explorer/summary.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/ui/explorer/transitions.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
