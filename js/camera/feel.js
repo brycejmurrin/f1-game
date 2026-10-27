@@ -78,40 +78,13 @@ const CamFeel = (function () {
   function isFreeLookMode(mode) { return FREELOOK_MODES.indexOf(mode) >= 0; }
   function looksAftAlready(mode) { return LOOKBACK_SKIP.indexOf(mode) >= 0; }
 
-  /* Shared speed FOV: FOV = base + widen * spN * scale + depBoost.
-     Modes that used to ignore speed (tcam / side / heli) pass scale < 1 so they
-     share the curve without jumping to chase-like widen. */
+  // The curve itself is CamFov (js/camera/fov-mode.js). These names stay on CamFeel
+  // because vantage.js and the feel tests already call them.
   function speedFov(base, widen, spN, scale, depBoost) {
-    const s = scale == null ? 1 : scale;
-    const n = clamp(spN, 0, 1);
-    return base + widen * n * s + (depBoost || 0);
+    return CamFov.speedFov(base, widen, spN, scale, depBoost);
   }
-
-  // Per-mode FOV recipe used by vantage.js — one table, one function.
-  // scale defaults to 1; mild scales restore a curve where FOV was fixed.
-  const FOV_BY_MODE = Object.freeze({
-    cockpit:    { base: 64, widen: 14, scale: 1,   dep: 3 },
-    hood:       { base: 64, widen: 14, scale: 1,   dep: 3 },
-    visor:      { base: 64, widen: 14, scale: 1,   dep: 3 },
-    helmet:     { base: 64, widen: 14, scale: 1,   dep: 3 },   // the cockpit's lens; the visor frame is CSS
-    overhead:   { base: 46, widen: 0,  scale: 1,   dep: 0 },
-    heli:       { base: 36, widen: 8,  scale: 0.5, dep: 2 },
-    reverse:    { base: 60, widen: 12, scale: 1,   dep: 0 },
-    side:       { base: 44, widen: 6,  scale: 0.5, dep: 0 },
-    cinematic:  { base: 50, widen: 10, scale: 1,   dep: 0 },
-    low:        { base: 55, widen: 13, scale: 1,   dep: 0 },
-    tcam:       { base: 46, widen: 8,  scale: 0.5, dep: 2 },
-    rear:       { base: 58, widen: 12, scale: 1,   dep: 2 },
-    drift:      { base: 55, widen: 15, scale: 1,   dep: 3 },
-    chase:      { base: 57, widen: 6,  scale: 1,   dep: 3 },
-    far:        { base: 61, widen: 6,  scale: 1,   dep: 3 },
-  });
-
-  // `sp` is the FOV speed blend (0..1). vantage.js passes CamTune-scaled
-  // `spFov` so COMFORT › SPEED FOV still lands; look-ahead keeps full spN.
   function modeFov(mode, sp, deploy) {
-    const r = FOV_BY_MODE[mode] || FOV_BY_MODE.chase;
-    return speedFov(r.base, r.widen, sp, r.scale, (deploy ? 1 : 0) * r.dep);
+    return CamFov.modeFov(mode, sp, deploy);
   }
 
   function shouldLookBack(mode, held) {
@@ -239,9 +212,7 @@ const CamFeel = (function () {
     _driveCtx.brake = follow(keys.brk, clamp((att.baPitch || 0) / 0.025, 0, 1), rate.brake, dt);
     _driveCtx.slip = follow(keys.slp, clamp((extra.slipLat || 0) / 6, -1, 1), rate.slip, dt);
     const ctx = _driveCtx;
-    if (typeof DriveChase !== "undefined") delta = DriveChase.apply(mode, eye, tgt, ctx);
-    if (delta == null && typeof DriveBroadcast !== "undefined") delta = DriveBroadcast.apply(mode, eye, tgt, ctx);
-    if (delta == null && typeof DriveOnboard !== "undefined") delta = DriveOnboard.apply(mode, eye, tgt, ctx);
+    if (typeof DriveLens !== "undefined") delta = DriveLens.apply(mode, eye, tgt, ctx);
     return delta == null ? fov : fov + delta;
   }
 
@@ -447,7 +418,8 @@ const CamFeel = (function () {
   }
 
   return {
-    BUZZ_MODES, FREELOOK_MODES, LOOKBACK_SKIP, FOV_BY_MODE,
+    BUZZ_MODES, FREELOOK_MODES, LOOKBACK_SKIP,
+    get FOV_BY_MODE() { return CamFov.FOV_BY_MODE; },
     K_LATCH, K_VIGNETTE,
     speedFov, modeFov,
     isBuzzMode, isFreeLookMode, looksAftAlready,

@@ -30,11 +30,11 @@ function boot() {
     vm.runInContext(src, ctx, { filename: rel });
   };
   for (const f of [
-    "js/camera/drive-chase.js",
-    "js/camera/drive-broadcast.js",
-    "js/camera/drive-onboard.js",
+    "js/camera/fov-mode.js",
+    "js/camera/drive-lens.js",
     "js/camera/feel.js",
     "js/camera/extra-rigs.js",
+    "js/camera/vantage-ride.js",
     "js/camera/vantage.js",
   ]) run(f);
   ctx.GameCams.init({ vmax: 72 });

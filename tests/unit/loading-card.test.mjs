@@ -666,7 +666,7 @@ function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = t
     GameAudio: { radioLeadS: () => 0.43, radioSting: (ch, life) => stings.push(life) },
   };
   sb.window = sb;
-  for (const f of ["js/camera/flyby-seq.js", "js/race/radio-lines.js", "js/ui/loading-screen.js"]) {
+  for (const f of ["js/camera/flyby-clear.js", "js/camera/flyby-seq.js", "js/race/radio-lines.js", "js/ui/loading-screen.js"]) {
     vm.runInNewContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   }
   const screen = sb.LoadingScreen.create({
@@ -746,7 +746,7 @@ test("the turn on camera is tagged on the map, and only redrawn when it changes"
 });
 
 test("FlybySeq.airCorner: 0 until a corner shot is solved, and reset() clears it", () => {
-  const sb = modules(["js/camera/flyby-seq.js"]);
+  const sb = modules(["js/camera/flyby-clear.js", "js/camera/flyby-seq.js"]);
   assert.equal(sb.FlybySeq.airCorner(), 0);
   sb.FlybySeq.reset();
   assert.equal(sb.FlybySeq.airCorner(), 0);
@@ -852,7 +852,7 @@ test("stop() and a skip cut a radio check that is on air", () => {
 });
 
 test("FlybySeq.shotAt names the shot solve() cuts to, without planning it", () => {
-  const F = modules(["js/camera/flyby-seq.js"]).FlybySeq;
+  const F = modules(["js/camera/flyby-clear.js", "js/camera/flyby-seq.js"]).FlybySeq;
   assert.equal(F.shotAt(0).id, F.DEFAULT[0].id);
   assert.equal(F.shotAt(1).id, "grid-mine");
   assert.equal(F.shotAt(0.87).id, "grid-front");

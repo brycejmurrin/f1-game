@@ -2,7 +2,7 @@
    "onboard" and which take the cockpit HUD layout, by CamModes id.
 
    Two questions, two frozen tables, decided from what each rig draws
-   (js/camera/vantage.js, js/camera/drive-onboard.js):
+   (js/camera/vantage.js, js/camera/drive-lens.js):
 
    ONBOARD — the driver's own car fills the view, so MAP AUTO hides the map
    (js/ui/hud.js) to keep the road clear:

@@ -52,7 +52,7 @@ function boot() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/clipboard.js", "js/camera/photo-kit.js", "js/camera/free-cam.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/clipboard.js", "js/camera/photo-looks.js", "js/camera/photo-kit.js", "js/camera/free-cam.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const FC = vm.runInContext("FreeCam", ctx);
   const G = {
     $: (id) => dom.byId(id), photoCam: { pos: [0, 0, 0], yaw: 0, pitch: 0, fov: 60 },
@@ -331,7 +331,7 @@ test("snap to a corner on built Monza: the real planner frames it from the outsi
   const { buildContext } = createRequire(import.meta.url)(path.join(ROOT, "tools/track/verify-track.cjs"));
   const Trk = buildContext(undefined, { quiet: true });
   const ctx = Trk._vmContext;
-  for (const f of ["js/ui/track-maps.js", "js/camera/flyby-seq.js", "js/camera/photo-kit.js", "js/camera/free-cam.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
+  for (const f of ["js/ui/track-maps.js", "js/camera/flyby-clear.js", "js/camera/flyby-seq.js", "js/camera/photo-looks.js", "js/camera/photo-kit.js", "js/camera/free-cam.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const FC = vm.runInContext("FreeCam", ctx), Fly = vm.runInContext("FlybySeq", ctx);
   const track = Trk.buildCenterline(Trk.LIST.find((d) => d.id === "monza"));
 

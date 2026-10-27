@@ -1344,6 +1344,18 @@
         "tests/unit/hud-layout.test.mjs"
       ]
     },
+    "js/camera/cam-picker.js": {
+      "attach": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
+      "*": [
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-ride.test.mjs",
+        "tests/unit/real-replay-transport.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
+      ]
+    },
     "js/camera/cam-tuner-boot.js": {
       "create": [
         "tests/unit/flyby-panel.test.mjs",
@@ -1509,17 +1521,7 @@
         "tests/unit/director.test.mjs"
       ]
     },
-    "js/camera/drive-broadcast.js": {
-      "apply": [
-        "tests/unit/director.test.mjs"
-      ]
-    },
-    "js/camera/drive-chase.js": {
-      "apply": [
-        "tests/unit/director.test.mjs"
-      ]
-    },
-    "js/camera/drive-onboard.js": {
+    "js/camera/drive-lens.js": {
       "apply": [
         "tests/unit/director.test.mjs"
       ]
@@ -1617,6 +1619,27 @@
       "tickRace": [
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
+      ]
+    },
+    "js/camera/flyby-clear.js": {
+      "blockers": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "clearEye": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "insideProp": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "isSolid": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "onRoadPose": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "*": [
+        "tests/unit/free-cam.test.mjs",
+        "tests/unit/loading-card.test.mjs"
       ]
     },
     "js/camera/flyby-editor.js": {
@@ -1880,6 +1903,11 @@
         "tests/unit/fov-fit.test.mjs"
       ]
     },
+    "js/camera/fov-mode.js": {
+      "*": [
+        "tests/unit/director.test.mjs"
+      ]
+    },
     "js/camera/free-cam.js": {
       "carPose": [
         "tests/unit/free-cam.test.mjs"
@@ -2134,13 +2162,7 @@
       ]
     },
     "js/camera/photo-kit.js": {
-      "apply": [
-        "tests/unit/photo-kit.test.mjs"
-      ],
       "applyDof": [
-        "tests/unit/photo-kit.test.mjs"
-      ],
-      "createLookSession": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "deleteMark": [
@@ -2149,13 +2171,24 @@
       "marksFor": [
         "tests/unit/photo-kit.test.mjs"
       ],
-      "mountLookControls": [
-        "tests/unit/photo-kit.test.mjs"
-      ],
       "nextGrid": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "saveMark": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
+      "*": [
+        "tests/unit/free-cam.test.mjs"
+      ]
+    },
+    "js/camera/photo-looks.js": {
+      "apply": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
+      "createLookSession": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
+      "mountLookControls": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "*": [
@@ -2328,6 +2361,17 @@
       ],
       "*": [
         "tests/specs/camera-tuner.spec.js"
+      ]
+    },
+    "js/camera/vantage-ride.js": {
+      "*": [
+        "tests/unit/camera-feel.test.mjs",
+        "tests/unit/camera-ride.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/director.test.mjs",
+        "tests/unit/rival-audio.test.mjs",
+        "tests/unit/xr-phase0.test.mjs"
       ]
     },
     "js/camera/vantage.js": {

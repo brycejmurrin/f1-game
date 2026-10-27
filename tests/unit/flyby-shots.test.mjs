@@ -239,6 +239,7 @@ function loadFlybyRuntime(extra = {}) {
     Float32Array, Uint32Array, isFinite, setTimeout: () => 0,
   }, extra);
   vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/flyby-clear.js"), "utf8"), sb, { filename: absSrc("js/camera/flyby-clear.js") });
   return vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/flyby-seq.js"), "utf8") + ";FlybySeq", sb, { filename: absSrc("js/camera/flyby-seq.js") });
 }
 

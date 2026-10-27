@@ -30,6 +30,7 @@ function loadOpts(disk, search = "", withCams = false) {
   vm.runInContext(read("js/camera/cockpit-opts.js") + "\n;this.CockpitOpts = CockpitOpts;", ctx, { filename: absSrc("js/camera/cockpit-opts.js") });
   if (withCams) {
     vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
+    vm.runInContext(read("js/camera/vantage-ride.js"), ctx, { filename: absSrc("js/camera/vantage-ride.js") });
     vm.runInContext(read("js/camera/vantage.js") + "\n;this.GameCams = GameCams;", ctx, { filename: absSrc("js/camera/vantage.js") });
   }
   return { opts: ctx.CockpitOpts, cams: ctx.GameCams, store };

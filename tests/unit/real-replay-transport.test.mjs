@@ -49,6 +49,7 @@ test("WATCH AUTO handoff updates the actual camera and cockpit HUD immediately, 
     ctx.RealRace = { replay: () => replay };
     ctx.HudLayout = { setCam: (id) => { layout = id; } };
     ctx.CamTunerPanel = { refresh() {} };
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
     vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     G.$ = (id) => id === "btn-cam" ? button : null;
     G.store = { set: (...args) => writes.push(args) };
@@ -661,7 +662,8 @@ function cameraOwnersFixture() {
   ctx.XrSession = { bind: (b) => { bindings = b; }, on() {}, isPresenting: () => presenting };
   G.$ = () => null;
   G.store = { set(k, v) { stored.set(k, v); writes.push([k, v]); } };
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   G.setCamMode = ctx.CamModes.create(G).setCamMode;
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/xr/xr-boot.js"), "utf8") + "\n;globalThis.boot = XrBoot;", ctx, { filename: absSrc("js/xr/xr-boot.js") });
   ctx.XrBoot = ctx.boot;

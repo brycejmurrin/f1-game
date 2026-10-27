@@ -25,11 +25,11 @@ function loadRig() {
   });
   const files = [
     "js/core/mat4.js",
-    "js/camera/drive-chase.js",
-    "js/camera/drive-broadcast.js",
-    "js/camera/drive-onboard.js",
+    "js/camera/fov-mode.js",
+    "js/camera/drive-lens.js",
     "js/camera/feel.js",
     "js/camera/extra-rigs.js",
+    "js/camera/vantage-ride.js",
     "js/camera/vantage.js",
   ];
   for (const f of files) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
