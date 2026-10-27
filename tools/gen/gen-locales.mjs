@@ -9,6 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { argGate } from "./gen-lib.mjs";
 
@@ -55,8 +56,22 @@ function scanCallSites() {
   return keys;
 }
 
+/** `radio.*` pools: js/race/radio-lines.js owns the English variants (the runtime default, no fetch
+ *  for English); en.json mirrors them so translators copy one file and the lint sees every pool. */
+function radioPools() {
+  const file = path.join(ROOT, "js/race/radio-lines.js");
+  if (!fs.existsSync(file)) return {};
+  const ctx = vm.createContext({});
+  const RL = vm.runInContext(fs.readFileSync(file, "utf8") + "\n;RadioLines", ctx, { filename: file });
+  const out = {};
+  for (const [k, v] of Object.entries(RL.POOLS)) out["radio." + k] = [...v];
+  for (const [k, v] of Object.entries(RL.WHY)) out["radio.why." + k] = v;
+  return out;
+}
+
 export function generate(root = ROOT) {
   const keys = scanCallSites();
+  for (const [k, v] of Object.entries(radioPools())) keys.set(k, v);
   const sorted = [...keys.keys()].sort();
   const en = {};
   for (const k of sorted) en[k] = keys.get(k);

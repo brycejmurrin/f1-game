@@ -82,6 +82,15 @@
    two different numbers. */
 .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #hud-damage, #hud-mirror,
 #lights, #announce, .hud-bottom { --vwzh: calc(1vw / var(--hud-z)); }
+/* Painted floor for every bare `var(--fs-micro)` inside a zoomed band: at HUD SIZE 70% the 14px token
+   painted 9.8px (hud-survey phoneL-chase-hud70, 9 tinyText). Re-derive it per band against the band's own
+   --hud-z with the same micro/1.4 floor as .hud-label, so TEXT SIZE still lifts it; --fs-hud-micro is the
+   untouched token (a custom property cannot reference itself). Identical at zoom >= 1. */
+:root { --fs-hud-micro: var(--fs-micro); }
+.hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #hud-damage, #hud-mirror,
+#lights, #announce, .hud-bottom, #bc-pip, #hud-rel, #hud-strat, #hud-inputs {
+  --fs-micro: max(var(--fs-hud-micro), calc(var(--fs-hud-micro) / 1.4 / var(--hud-z, 1)));
+}
 .hud-top {
   position: absolute;
   top: calc(8px + var(--sat) / var(--hud-z));
