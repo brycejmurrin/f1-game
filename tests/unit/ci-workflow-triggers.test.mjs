@@ -201,7 +201,7 @@ test("base-verdict.sh: the newest deploy-branch run strictly below this head, na
   // pages.yml run on the base IS the base verdict; any other workflow still is not.
   assert.match(verdict([ci(B, { path: ".github/workflows/pages.yml" })]).out, new RegExp(`base ${B.slice(0, 7)} was green`),
     "a pages.yml train on the base is the base verdict");
-  assert.match(verdict([ci(B, { path: ".github/workflows/fleet.yml" })]).out, /no completed ci\.yml \/ pages\.yml run/,
+  assert.match(verdict([ci(B, { path: ".github/workflows/gpu-census.yml" })]).out, /no completed ci\.yml \/ pages\.yml run/,
     "another workflow's verdict is not this gate's base");
   assert.match(verdict([ci(B, { status: "in_progress", conclusion: null })]).out, /no completed ci\.yml \/ pages\.yml run/,
     "a run still going has no verdict to report");
