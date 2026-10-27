@@ -14271,7 +14271,8 @@
         "tests/unit/tlx-recovery-lifecycle.test.mjs"
       ],
       "*": [
-        "tests/unit/godray-keep-nearest.test.mjs"
+        "tests/unit/godray-keep-nearest.test.mjs",
+        "tests/unit/tlx-post-orient-cover-webgpu.test.mjs"
       ]
     },
     "js/render/three/tlx-shadow.js": {
