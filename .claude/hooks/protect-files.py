@@ -32,6 +32,7 @@ READONLY = any(agent == a or agent.endswith(":" + a) for a in READONLY_AGENTS)
 READONLY_OK = re.compile(r"^(scratch|artifacts)(/|$)")
 READONLY_GIT = re.compile(r"\bgit\s+(-C\s+\S+\s+)?(commit|push|stash|reset|checkout|switch|rebase|merge|cherry-pick|am|apply|rm|mv|clean|worktree)\b")
 HATCHES = ("allow-protected", "allow-context-cap", "allow-stop")
+RECEIPT_DIR = re.compile(r"^artifacts/((merge|ready|launch)-gate|launch)(/|$)")
 SURVEYOR_OK = re.compile(r"^(js/circuits/(scenery/)?[a-z0-9_-]+\.js|scratch/.+|artifacts/.+)$")
 # agent-surface-reviewer has Write for its own report only: Write/Edit to
 # scratch/**.md, and no Bash writes at all (rule 5 below, 2026-10-14).
@@ -303,6 +304,15 @@ def check(file, tool, ti, proposed=None, how=""):
                   "finding in its report instead.", root or os.getcwd(), hatch=False)
     if not root:
         return
+    # 6. Gate receipts (WP-L4, 2026-10-27; Bryce's grant on the receipt doors): only the gate scripts write
+    # artifacts/{merge,ready,launch}-gate/ and only launch-page.py writes artifacts/launch/ (the quota page the
+    # launch receipt is bound to). A hand-written receipt was the whole bypass; no escape hatch, any agent.
+    rel_g = os.path.relpath(file, root).replace(os.sep, "/")
+    if RECEIPT_DIR.match(rel_g):
+        block(f"{rel_g}{f' (via Bash: {how})' if tool in ('Bash', 'Remove') else ''}: gate receipts are written only by "
+              "their gate (`node tools/ci/ready-gate.mjs --pr <n>`, `node tools/ci/launch-gate.mjs "
+              "artifacts/launch/self.json`) and the quota page only by the launch-page.py hook. Run the gate instead.",
+              root, hatch=False)
     # pass 4 (H5): a subagent never creates an escape hatch (an active hatch is announced by bash-guard.sh, whose
     # stdout is context; this hook's stdout is its decision, so nothing is printed here).
     if IN_SUBAGENT and os.path.basename(file) in HATCHES and os.path.dirname(file).endswith(".claude"):

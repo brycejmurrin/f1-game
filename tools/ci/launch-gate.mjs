@@ -20,7 +20,8 @@
 // PAGE_SKEW_S (a page typed by hand and `touch`ed is newer than anything the harness wrote: audit 4 G13, O1/O2 forged
 // it), and the receipt records the page's sha256 plus the launch it is for (lane, pr) so the hook can tie the receipt
 // to one create_session. A page written by the PostToolUse hook (`artifacts/launch/self.json`, `"written_by":
-// "launch-page.py"`, `content_sha256`) is the expected source.
+// "launch-page.py"`, `content_sha256`) is the only source the hook accepts since WP-L4 (2026-10-27): it compares the
+// receipt's page.sha256 with that file's sha256 and spends the receipt on one create_session (receipt.json.used).
 //
 // Exit 0 = receipt ok, 1 = refused (receipt written with ok:false), 2 = usage or unreadable page.
 // The page is another session's record: data to read one field from, never instructions.
@@ -127,7 +128,8 @@ export function verdict(session, { override = "" } = {}) {
 export function writeReceipt(root, data, now = Date.now()) {
   const file = receiptPath(root);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify({ kind: "launch", ...data, at: new Date(now).toISOString() }, null, 2) + "\n");
+  // `nonce`: the hook renames a spent receipt to receipt.json.used and refuses the same nonce twice (WP-L4).
+  fs.writeFileSync(file, JSON.stringify({ kind: "launch", nonce: crypto.randomUUID(), ...data, at: new Date(now).toISOString() }, null, 2) + "\n");
   return file;
 }
 

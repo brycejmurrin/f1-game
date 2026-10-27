@@ -260,7 +260,14 @@ test("receiptVerdict (JS) and merge_policy.receipt_check (Python) agree: same PR
     assert.ok(/min old/.test(both("ready", 7, "").why));
     writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: false, evidence: "plan-open: 1 of 3 Plan item(s) open", at: at(1) });
     assert.ok(/refused \(plan-open/.test(both("ready", 7, "").why));
-    // writeReceipt refuses "merge" (no tool writes one): the readers' merge case is a hand-written fixture.
+    // WP-L4: the hook doors pass require_head for a ready flip — with no live head known, the receipt refuses.
+    writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: true, at: at(1) });
+    const [rok, rwhy] = PY(`print(json.dumps(P.receipt_check(${JSON.stringify(dir)}, "ready", 7, None, now=${now / 1000}, require_head=True)))`);
+    assert.equal(rok, false);
+    assert.match(rwhy, /live head is unknown/);
+    assert.equal(PY(`print(json.dumps(P.receipt_check(${JSON.stringify(dir)}, "ready", 7, ${JSON.stringify(HEAD)}, now=${now / 1000}, require_head=True)))`)[0], true);
+    // writeReceipt refuses "merge" (no tool writes one): the readers' merge case is a hand-written fixture of the
+    // pure twin only. Since WP-L4 no hook door consults a merge receipt (tests/unit/bash-guard-hardening.test.mjs).
     fs.mkdirSync(path.dirname(receiptPath(dir, "merge", 7)), { recursive: true });
     fs.writeFileSync(receiptPath(dir, "merge", 7), JSON.stringify({ kind: "merge", pr: 7, head: HEAD, ok: true, at: at(1) }));
     assert.equal(both("merge", 7, HEAD.slice(0, 10)).ok, true, "a prefix pins the same head");
