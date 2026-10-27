@@ -9,6 +9,7 @@ import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {ListToolsRequestSchema,CallToolRequestSchema} from '@modelcontextprotocol/sdk/types.js';
+import {hostToolNamesSchema, doctorWithCatalog} from './doctor-catalog.mjs';
 export const UPSTREAMS = ['apex-tools','apex-lsp','js-debugger','playwright-official','chrome-devtools'];
 export const RELEASE = 'f1_gateway_browser_release';
 export async function createGateway({root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'), connect}={}) {
@@ -40,6 +41,8 @@ export async function createGateway({root=path.resolve(path.dirname(fileURLToPat
         cursor=list.nextCursor;if(cursor&&seen.has(cursor))throw new Error('Repeated catalog cursor');if(cursor)seen.add(cursor);
       }while(cursor);
     }
+    const doctor = result.get('apex_tools__apex_doctor');
+    if (doctor) doctor.tool.inputSchema = {...doctor.tool.inputSchema, properties: {...doctor.tool.inputSchema.properties, hostToolNames: hostToolNamesSchema}};
     result.set(RELEASE,{tool:{name:RELEASE,description:'Close this gateway session’s active browser client and release ownership. Detach debugger first.',inputSchema:{type:'object',properties:{},additionalProperties:false}}});
     routes=result;return routes;
   }
@@ -53,6 +56,10 @@ export async function createGateway({root=path.resolve(path.dirname(fileURLToPat
       }
       const route=(await catalog()).get(request.name);
       if(!route)throw new Error('Unknown tool: '+request.name);
+      if (request.name === 'apex_tools__apex_doctor' && request.arguments?.hostToolNames !== undefined) {
+        const body = await doctorWithCatalog(root, request.arguments);
+        return {isError: !body.ok, content: [{type: 'text', text: JSON.stringify(body)}], structuredContent: body};
+      }
       const browser=['playwright-official','chrome-devtools'].includes(route.upstream)||(route.upstream==='apex-tools'&&/^Browser\b/i.test(route.tool.description||''));
       if(browser&&owner&&owner!==route.upstream)return {isError:true,content:[{type:'text',text:'Another browser mode owns this session. Close/release it first.'}]};
       if(browser)owner=route.upstream;

@@ -3,13 +3,15 @@
 Shared by github-mcp-guard.sh (the GitHub MCP tools) and bash-guard.sh (the
 same actions through `gh pr merge`, `gh pr ready` and `gh api`, via
 shellparse.gh_issues), so the two doors refuse with the same words
-(AGENTS.md §Concurrent PRs, MERGE-COMMIT-ONLY, #1458).
+(AGENTS.md §Coordination, MERGE-COMMIT-ONLY, #1458).
 
-Since 2026-10-19 (docs/plans/2026-10-19-fleet-redesign.md §2, "gate, don't
-grant") a merge or an arm needs a fresh `artifacts/merge-gate/<pr>.json`
-receipt from `node tools/ci/merge-gate.mjs --pr <n>` whose head is the sha the
-call pins, and a draft→ready flip a fresh `artifacts/ready-gate/<pr>.json`
-receipt from `node tools/ci/ready-gate.mjs --pr <n>`. A receipt lives
+Since 2026-10-27 (WP-L4; Bryce 2026-10-27, asked "may I make the hook edits for the merge/arm door, receipts
+and hold removal?": "You consider the options and make the best decisions") no session merges or arms at all: MCP
+merge_pull_request / enable_pr_auto_merge and `gh pr merge` are denied outright (land.yml lands; merge-gate.mjs
+writes no receipt, and a hand-written one used to open the door). A draft→ready flip needs a fresh
+`artifacts/ready-gate/<pr>.json` receipt from `node tools/ci/ready-gate.mjs --pr <n>` whose head is the PR's LIVE
+head (`live_head`); an unknown live head refuses. Removing the `hold` label asks (ASK_HOLD). The merge case of
+`receipt_check` stays as the twin of receiptVerdict; no door calls it. A receipt lives
 RECEIPT_MAX_MIN (10) minutes. `receipt_check` is the Python twin of
 tools/lib/gate-receipt.mjs `receiptVerdict`, and `gate_files_check` the twin of
 `gateFilesVerdict`; the pairs agree by tests/unit/merge-gate.test.mjs.
@@ -23,26 +25,27 @@ the merge went through. It stops an edited gate, not a forger: anything that can
 Write a file can write a receipt, so branch protection is the real backstop
 (docs/notes/HOOKS-SECURITY-2026-10-26.md).
 
-Every "ask" here asks whoever runs the session: APEX_MERGE_DESK=1 skips only the
-MCP re-run prompt (github-mcp-guard.sh), never a merge, ready, close or dispatch.
+Every "ask" here asks whoever runs the session; no environment variable silences one.
 """
 import hashlib
 import json
 import os
+import re
 import subprocess
 import time
 
 GATE = "run `node tools/ci/ready-gate.mjs --pr <n>` (must exit 0 on the tip) first"
-DENY_METHOD = ("MERGE-COMMIT-ONLY (AGENTS.md §Concurrent PRs): every PR lands as a merge commit; "
+DENY_METHOD = ("MERGE-COMMIT-ONLY (AGENTS.md §Coordination): every PR lands as a merge commit; "
                "use the merge method, never squash or rebase.")
-DENY_GATE_MERGE = ("A merge needs a fresh merge-gate receipt (AGENTS.md §Concurrent PRs, standing authority): "
-                   "`node tools/ci/merge-gate.mjs --pr <n>` must exit 0 (open, ready-gate 0, CI green on the head, no MERGE-HOLD, "
-                   "gen:check on a local merge onto the current tip, game pacing from the bus), then merge with merge_method "
-                   "merge and expectedHeadSha pinned to the gated head.")
+DENY_GATE_MERGE = ("No session merges or arms (AGENTS.md §Coordination, docs/WORKERS.md §The contract): flip the PR "
+                   "ready and add the `land` label; land.yml runs `merge-gate.mjs --check` as the `gate` check (no `hold` "
+                   "label, Plan closed, CI green on the head, gen:check and ratchets on the merge result, base distance) "
+                   "and arms auto-merge with the merge method. This door is shut for every session, receipt or not (WP-L4, "
+                   "2026-10-27).")
 DENY_GATE_READY = ("A draft→ready flip needs a fresh ready-gate receipt: `node tools/ci/ready-gate.mjs --pr <n>` must exit 0 "
                    "on the tip (Structural guards green, Plan closed, memory marker) — it starts the full CI tier.")
 ASK_MERGE = ("This gh call merges or arms outside the receipt check (a GraphQL or REST merge by id). Before confirming, " + GATE +
-             "; never a draft, DIRTY/CONFLICTING or MERGE-HOLD PR.")
+             "; never a draft, DIRTY/CONFLICTING or `hold`-labelled PR.")
 ASK_READY = "Marking a draft ready starts the full CI tier. Before the flip, " + GATE + "."
 ASK_DESK_METHOD = ("Arm auto-merge with the MERGE method named explicitly: an omitted method uses "
                    "the repository default, which may be squash. Pass mergeMethod: MERGE.")
@@ -51,17 +54,19 @@ ASK_REF = ("This GitHub API call merges or moves a branch outside a pull request
 DENY_REF = ("writes a git ref through the API — shared safety ban 6 (Transcript Auditor batch 9: a branch was deleted "
             "with `gh api -X DELETE …/git/refs/heads/…` to get around the push hook). A branch moves only by `git push` "
             "to your own cursor/<topic>-<hash> branch (never forced, never deleted) and lands only through a PR; ask "
-            "your orchestrator, or Bryce, to delete a branch.")
-DENY_CANCEL = ("NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Concurrent PRs, 2026-10-15): a queued run holds no slot, so a "
+            "Bryce to delete a branch.")
+DENY_CANCEL = ("NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Coordination, 2026-10-15): a queued run holds no slot, so a "
                "cancel only throws away its queue position and the branch owner pushes a retrigger commit — 306 of 401 PR "
                "runs died that way on 2026-10-15. Your own superseded run is replaced by your next push; a closed PR's runs "
                "are cancelled by the close. APEX_RUN_CANCEL_OK=1 only when the user asked for this cancel.")
-ASK_RERUN = ("Re-run a failed job at most once, and only for a timeout or infra error (AGENTS.md §Concurrent PRs). A re-run "
+ASK_RERUN = ("Re-run a failed job at most once, and only for a timeout or infra error (AGENTS.md §Coordination). A re-run "
              "of a SUPERSEDED run joins the branch's ci-<head.ref> group and cancels the live run; prefer "
              "`node tools/ci/ci-rerun.mjs`. Confirm by hand.")
 
 ASK_CLOSE = ("This call CLOSES a pull request (state=closed). Closing someone else's PR loses its CI and its owner's "
-             "work log; only the PR's owner, its orchestrator or Bryce closes one. Confirm by hand.")
+             "work log; only the PR's owner or Bryce closes one. Confirm by hand.")
+ASK_HOLD = ("This call REMOVES the `hold` label (or deletes or replaces the label list). `hold` is the only veto "
+            "(AGENTS.md §Coordination): whoever set it removes it, and Bryce can always remove it. Confirm by hand.")
 ASK_DISPATCH = ("This call dispatches pages.yml or ci.yml. pages.yml is the release train (one running + one pending; "
                 "never dual-dispatch, AGENTS.md §Git branch & deploy) and a ci.yml dispatch buys a full run. Confirm by hand.")
 ASK_UPDATE_BRANCH = ("This call merges the base into a PR branch on GitHub (update-branch). Sync through "
@@ -152,11 +157,62 @@ def gate_files_check(root, receipt):
     return True, ""
 
 
-def receipt_check(root, kind, pr, head=None, now=None, verify_files=False):
+def _repo_slug(root):
+    """owner/repo of `root`'s origin remote (a GitHub URL or the session's /git/<owner>/<repo> proxy), else gh's own
+    `{owner}/{repo}` placeholder."""
+    try:
+        url = subprocess.run(["git", "-C", root, "remote", "get-url", "origin"], capture_output=True, text=True,
+                             timeout=5).stdout.strip()
+    except Exception:
+        url = ""
+    m = (re.search(r"github\.com[/:]([^/\s]+)/([^/\s]+?)(?:\.git)?/?$", url)
+         or re.search(r"/git/([^/\s]+)/([^/\s]+?)(?:\.git)?/?$", url))
+    return "%s/%s" % (m.group(1), m.group(2)) if m else "{owner}/{repo}"
+
+
+def _slug(root, owner=None, repo=None):
+    o, r = str(owner or "").strip(), str(repo or "").strip()
+    name = re.compile(r"^[A-Za-z0-9_.-]+$")
+    return "%s/%s" % (o, r) if name.match(o) and name.match(r) else _repo_slug(root)
+
+
+def gh_api(root, endpoint, jq, timeout=6):
+    """stdout of `gh api <endpoint> --jq <jq>` run in `root`, or None on any failure (no gh, no auth, timeout).
+    github-mcp-guard.sh has a 10 s hook timeout, so one call stays under 6 s."""
+    try:
+        r = subprocess.run(["gh", "api", endpoint, "--jq", jq], cwd=root if os.path.isdir(str(root)) else None,
+                           capture_output=True, text=True, timeout=timeout)
+    except Exception:
+        return None
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def live_head(root, pr, owner=None, repo=None):
+    """The PR's head sha on GitHub NOW (`gh api repos/<r>/pulls/<n> --jq .head.sha`), or None when unknown."""
+    try:
+        n = int(pr)
+    except (TypeError, ValueError):
+        return None
+    out = gh_api(root, "repos/%s/pulls/%d" % (_slug(root, owner, repo), n), ".head.sha")
+    return out.lower() if out and re.fullmatch(r"[0-9a-fA-F]{40}", out) else None
+
+
+def live_labels(root, number, owner=None, repo=None):
+    """The issue's or PR's label names on GitHub NOW (lower case), or None when unknown."""
+    try:
+        n = int(number)
+    except (TypeError, ValueError):
+        return None
+    out = gh_api(root, "repos/%s/issues/%d" % (_slug(root, owner, repo), n), '[.labels[].name] | join("\\n")')
+    return None if out is None else [x.strip().lower() for x in out.splitlines() if x.strip()]
+
+
+def receipt_check(root, kind, pr, head=None, now=None, verify_files=False, require_head=False):
     """(ok, why) for a merge (`head` = the call's pinned sha) or ready receipt. Mirrors receiptVerdict in
     tools/lib/gate-receipt.mjs: same PR and kind, `ok`, at most RECEIPT_MAX_MIN (10) min old, and for a merge the
     pinned head is the gated head (either a prefix of the other, at least 7 hex). `verify_files` (the hook doors
-    pass True) adds gate_files_check."""
+    pass True) adds gate_files_check. `require_head` (the ready doors since WP-L4) refuses a ready receipt when the
+    PR's live head is unknown: a receipt for head A must not flip a PR whose head is now an unverified B."""
     tool = "merge-gate" if kind == "merge" else "ready-gate"
     try:
         n = int(pr)
@@ -185,8 +241,12 @@ def receipt_check(root, kind, pr, head=None, now=None, verify_files=False):
             tool, n, round(age_min), RECEIPT_MAX_MIN)
     a = str(head or "").strip().lower()
     b = str(r.get("head") or "").strip().lower()
+    if kind == "ready" and require_head and not a:
+        return False, ("the PR's live head is unknown (`gh api repos/<r>/pulls/%d --jq .head.sha` gave no sha), so "
+                       "the ready-gate receipt (head %s) cannot be tied to the head you flip; retry when the API answers"
+                       % (n, b[:12]))
     if kind == "merge" and not a:
-        return False, ("pin expectedHeadSha (gh: --match-head-commit) to the gated head %s (role-merge-holder.md: a merge "
+        return False, ("pin expectedHeadSha (gh: --match-head-commit) to the gated head %s (a merge "
                        "is pinned to the sha the gate passed)" % b[:12])
     # A merge pin must be the gated head; a ready flip whose caller knows the PR's live head (github-mcp-guard
     # reads it) is held to the same rule (audit4 A1 G7: the gate passed one head, the flip lands another).

@@ -36,7 +36,7 @@ Verdicts: exists, line-ok, line-drifted, heading-missing, path-missing; added `n
 | docs/archive/notes/test-review-2026-10-19/reports/net.md | 50 | 95 |
 | docs/archive/notes/test-review-2026-10-19/reports/ui-2.part-1ofn.md | 46 | 92 |
 | docs/archive/notes/test-review-2026-10-19/reports/physics-2.part-3aof3.md | 45 | 62 |
-| docs/notes/FLEET-ROLES-2026-10-19.md | 42 | 106 |
+| docs/archive/notes/FLEET-ROLES-2026-10-19.md | 42 | 106 |
 | docs/notes/SPIKE-BACKENDS-CHECKLIST.md | 41 | 100 |
 | docs/plans/2026-10-03-perf-memory.md | 38 | 48 |
 | docs/research/RENDERER-PERF-AUDIT-2026-09-02.md | 37 | 68 |
@@ -55,16 +55,16 @@ Verdicts: exists, line-ok, line-drifted, heading-missing, path-missing; added `n
 | 4 | docs/notes/CICD-REVIEW-2026-10-16.md:280 | stacked-prs-land-bottom-up.md:3 | path-missing | no file at this path or basename: retarget or drop |
 | 5 | docs/notes/CICD-REVIEW-2026-10-16.md:280 | pr-auto-merge.md:16 | path-missing | no file at this path or basename: retarget or drop |
 | 6 | docs/notes/CICD-REVIEW-2026-10-16.md:281 | merge-fast-verify-on-ci.md:18 | path-missing | no file at this path or basename: retarget or drop |
-| 7 | docs/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md:46 | orchb-queue.md:91 | path-missing | no file at this path or basename: retarget or drop |
-| 8 | docs/notes/FLEET-ROLES-2026-10-19.md:5 | .claude/agents/merge-desk.md:3 | path-missing | deleted in git 01442fcdb: no file at this path or basename: retarget or drop |
-| 9 | docs/notes/FLEET-ROLES-2026-10-19.md:72 | merge-desk.md:86 | path-missing | no file at this path or basename: retarget or drop |
-| 10 | docs/notes/FLEET-ROLES-2026-10-19.md:74 | merge-desk.md:84-90 | path-missing | no file at this path or basename: retarget or drop |
-| 11 | docs/notes/FLEET-ROLES-2026-10-19.md:122 | .claude/skills/ci-watch/SKILL.md:3 | path-missing | 45 files share this basename; cite the full path |
-| 12 | docs/notes/FLEET-ROLES-2026-10-19.md:136 | merge-desk.md §Archiving | path-missing | no file at this path or basename: retarget or drop |
-| 13 | docs/notes/FLEET-ROLES-2026-10-19.md:164 | .claude/skills/ci-watch/SKILL.md:3 | path-missing | 45 files share this basename; cite the full path |
-| 14 | docs/notes/FLEET-ROLES-2026-10-19.md:165 | .claude/agents/merge-desk.md:3 | path-missing | deleted in git 01442fcdb: no file at this path or basename: retarget or drop |
-| 15 | docs/notes/FLEET-ROLES-2026-10-19.md:170 | .claude/memory/bryce-merges-manually.md:3 | path-missing | deleted in git 01442fcdb: no file at this path or basename: retarget or drop |
-| 16 | docs/notes/FLEET-ROLES-2026-10-19.md:214 | merge-desk.md:81 | path-missing | no file at this path or basename: retarget or drop |
+| 7 | docs/archive/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md:46 | orchb-queue.md:91 | path-missing | no file at this path or basename: retarget or drop |
+| 8 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:5 | .claude/agents/merge-desk.md:3 | path-missing | deleted in git 01442fcdb: no file at this path or basename: retarget or drop |
+| 9 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:72 | merge-desk.md:86 | path-missing | no file at this path or basename: retarget or drop |
+| 10 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:74 | merge-desk.md:84-90 | path-missing | no file at this path or basename: retarget or drop |
+| 11 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:122 | .claude/skills/ci-watch/SKILL.md:3 | path-missing | 45 files share this basename; cite the full path |
+| 12 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:136 | merge-desk.md §Archiving | path-missing | no file at this path or basename: retarget or drop |
+| 13 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:164 | .claude/skills/ci-watch/SKILL.md:3 | path-missing | 45 files share this basename; cite the full path |
+| 14 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:165 | .claude/agents/merge-desk.md:3 | path-missing | deleted in git 01442fcdb: no file at this path or basename: retarget or drop |
+| 15 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:170 | .claude/memory/bryce-merges-manually.md:3 | path-missing | deleted in git 01442fcdb: no file at this path or basename: retarget or drop |
+| 16 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:214 | merge-desk.md:81 | path-missing | no file at this path or basename: retarget or drop |
 | 17 | docs/notes/PERF-HUNT-3-2026-10-13.md:72 | NodeMaterialObserver.js:932-936 | path-missing | no file at this path or basename: retarget or drop |
 | 18 | docs/notes/PERF-HUNT-3-2026-10-13.md:101 | renderers/common/Bindings.js:356-500 | path-missing | no file at this path or basename: retarget or drop |
 | 19 | docs/notes/PERF-HUNT-3-2026-10-13.md:164 | hunt3/three.webgpu.pretty.js:12852 | path-missing | no file at this path or basename: retarget or drop |

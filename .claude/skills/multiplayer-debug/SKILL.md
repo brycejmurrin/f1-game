@@ -9,6 +9,16 @@ Multiplayer has local authority for the player's own car: each peer owns itself,
 the host owns AI plus race control, and the wire carries state/events rather than
 host corrections.
 
+## First evidence (every "never connects")
+
+1. Capture BOTH sides before classifying: the lobby's status text, `__apex.logs({ns:"net"})` and
+   `await __apex.lobbyPairs()` on the game page; `window.__apexPad.state()` plus `#status` on a pad.
+2. TURN is NOT configured by default. `js/net/transport.js` ships `TURN_API = ""` (honest STUN-only);
+   a relay exists only through `localStorage` `apex26.turnApi` (your credentials URL), `apex26.turn`
+   (one static server) or the opt-in `apex26.freeTurn` (measured dead; the transport.js comment says
+   why). A guest behind carrier/symmetric NAT on STUN-only never connects: check the TURN config
+   before anything in `sdp.js` ([references/workflow.md](references/workflow.md) step 6).
+
 ## When to Use
 
 Use this for:
@@ -41,7 +51,7 @@ Do **not** use this for:
 | `js/net/handshake.js` | ICE -> slim SDP -> deflate -> base64url invite; refuses mismatched builds (authoritative `apex-build` meta; `version.json` fallback only when unstamped) |
 | `js/net/nostr.js` | Public Nostr rendezvous, signalling only; the relay list is its `RELAYS` array |
 | `js/net/rendezvous.js` | Backup room-code courier; typed errors, never throws; no default URL — `localStorage` key `apex26.rendezvous` |
-| `js/net/snapshot.js` | 13 B/car snapshots, interpolation, road-following extrapolation |
+| `js/net/snapshot.js` | Fixed-size per-car snapshots, interpolation, road-following extrapolation |
 | `js/net/session.js` | Clock sync, packet routing, heartbeat |
 | `js/net/netplay.js` | Authority: own car never corrected; host relays guests and owns AI/race control |
 | `js/net/lobby.js` | VS FRIEND UI; sequential invites; profiles filed by connection |
@@ -50,8 +60,9 @@ Do **not** use this for:
 | `js/net/qr.js` / `js/net/scan.js` | `NetQr` encodes the invite QR; `NetScan` reads one in-page (BarcodeDetector, else jsQR) — the phone Camera→Safari route needs neither |
 | `js/net/spectate.js` | `NetSpectate` driver/spectator role policy for seats and send gates |
 | `js/net/bytes.js` | `NetBytes` shared base64url/hex codecs (loads first in LAZY_NET) |
+| `js/net/lobby-settings.js` | Lobby race settings (the full module list: `LAZY_NET` in `tools/manifest.cjs`) |
 
-Hooks:
+Hooks (`js/agent/apex-net.js`; `turnProbe` is in `js/agent/apex.js`):
 
 | Hook | Use |
 |---|---|
@@ -74,11 +85,11 @@ Commands:
 
 ```sh
 npm run test:net-unit                                  # node, no browser: run first
-npm test -- tests/specs/multiplayer-lobby.spec.js      # ONE spec for the symptom (lobby/room/scan/seats/session/roles/npeer), backgrounded (rule 4)
-node tools/ci/remote-group.mjs net                     # the whole 8-spec group, on the pushed branch only
+node tools/ci/test-bg.mjs --spec tests/specs/multiplayer-lobby.spec.js   # ONE spec for the symptom (lobby/room/scan/seats/session/roles/npeer), backgrounded (rule 4)
+node tools/ci/remote-group.mjs net                     # the whole `net` group (tests/groups.json), on the pushed branch only
 node tools/net/rtc-e2e.mjs
 node tools/net/rtc-e2e-3p.mjs
-npm run rtc:e2e-3p-relay   # relay-only ICE
+node tools/net/rtc-e2e-3p.mjs --relay --turn=turn:host:port,user,pass   # relay-only ICE; a bare rtc:e2e-3p-relay has no TURN (STUN-only default) and proves nothing
 # Room-code / relay diagnosis (not a package.json dep — install on demand):
 npm i --no-save ws @noble/curves
 node tools/net/nostr-probe.mjs

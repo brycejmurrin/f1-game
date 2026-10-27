@@ -28,8 +28,8 @@ for the economy; this skill for how those axes drive the field).
 `AiDrive.traits(c)` reads `craft`/`awareness`/`experience`/`skill`/`consistency`/
 `aggression`/`optimism` (0.75 mid-grid fallbacks; a reused scratch). Every map
 below is in `ai-drive.js`; the game.js caller builds its ctx. Find the caller with
-apex-lsp `lsp_references` (skill code-nav) before tuning an `AiDrive` export: ~20
-exports have no game.js caller, and tuning one changes nothing.
+apex-lsp `lsp_references` (skill code-nav) before tuning an `AiDrive` export: some
+exports are test-only (`_t`) or have no game.js caller, and tuning one changes nothing.
 
 | Behaviour | Function → game.js caller | Ratings read | Unit pin (`ai-drive.test.mjs`) |
 |---|---|---|---|
@@ -39,9 +39,17 @@ exports have no game.js caller, and tuning one changes nothing.
 | Pull out to pass | `otPull` (gated by `otWant`) | craft; street scale | `otPull: a queue-limited car pulls out…`, `otWant: a blocker that is slow but PULLING AWAY…` |
 | Let a faster car by | `letPassCase` / `letPassDelay` / `letPassPull` / `letPassEase` | awareness (earlier) | `letPass: awareness commits earlier…` |
 
-Making low-craft drivers passive is a constant in the map, never a second
-`simRnd()` draw (the seeded stream is drawn in game.js). Check the field with
-`ai-race.mjs ratings` and `tactics` after.
+To make a rating band more or less aggressive, change that map's lerp endpoints in
+`ai-drive.js` (a constant), never add a `simRnd()` draw (the seeded stream is drawn in
+game.js). Check `ai-race.mjs ratings` and `tactics` BEFORE and after.
+
+**"Dive-bombs" (late lunges into a corner, esp. turn 1) are NOT `otFireRate`.** `otFireRate`
+never reads calm. A dive is decided by: `attackOK`'s quality gate (scaled by `ctx.calm` to
+`START_ATTACK` while `startCalm` is on) plus `passReach` (can it be half alongside by the
+turn-in), game.js's lunge rule (abandon at `toTurnIn < 6` when not half alongside; find it via
+`lsp_references` on `AiDrive.sideLevel`), and the late brake in `brakeTarget` (below). Recipe:
+`references/tactics.md` §Lap-1. A per-track (Monza-only) fix is wrong: these are field-wide
+rules; prove the fix on two circuits.
 
 ## Do not
 
@@ -59,12 +67,18 @@ game.js's call order when you touch either (pin: `ai-trail-yield-vm.test.mjs`).
 ## Brake target (AI brakes too early / late)
 
 `AiDrive.brakeTarget(ctx)` (ai-drive.js) = min over look-ahead samples of
-`sqrt(vC² + 2·brake·0.85·d)`, `vC = cornerSpeed(k, latMax·bank·grip)·skill·diffCorner`;
+`sqrt(vC² + 2·brake·0.85·d)`, `vC = cornerSpeed(k, latMax·bank·grip)·skill·diffCorner`
+(`latMax` carries the aeroLoad scale), then multiplied by house `hold`, the craft
+LATE-BRAKE (attacking with room > 1.6 m: up to ×`lerp(1, 1.07, craft)` × house attack),
+`optimism` (±1.2 %) and `errMul` (a missed marker). "Dives too deep" = the late-brake /
+optimism terms; "brakes too early" = low `vC` or `hold`/`errMul`.
 `brakeDecision` turns `speed - vLim` into a pedal (soft/full band from `consistency`).
 Samples and ctx are built in `game.js` (`_aiBr`, grep `AiDrive.brakeDecision`): node-aligned
 `pushLook` from the car out to `look`, on-line uses `TrackLine.pathK`. Early braking = too
 low `vC` (k, grip, `diffCorner`, `skill`), too small `0.85`, or `errMul`/`hold`. Unit pins:
-`ai-drive.test.mjs` (brake* tests) and `ai-racecraft-vm.test.mjs`. No CLI prints the brake
+`ai-drive.test.mjs` (`brakeTarget: a cached bank grip…`, `brakeDecision: no pedal under the
+envelope…`, `brakeDecision's P trim…`, `craft late-brake raises the limit…`, `optimism raises
+brakeTarget…`, `brake planner carries the public corner envelope…`). No CLI prints the brake
 point itself: `ai-race.mjs pace` (lap time) and `line` (approach/apex) are the closest VM
 proxies; for the exact point probe `__apex` live (browser, `mcp-probe`).
 
@@ -84,7 +98,8 @@ Which check for which edit (node, subagent-safe unless marked):
 
 | Edit | Gate |
 |---|---|
-| OT fire, ERS, lane nudge, brake target | `node --test tests/unit/ai-drive.test.mjs` (~1 s) + `ai-racecraft-vm.test.mjs` (read its header) |
+| OT fire, ERS, lane nudge, brake target | `node --test tests/unit/ai-drive.test.mjs` (~1 s) |
+| otWant / pass latch / side yield | `ai-racecraft-vm.test.mjs` (read its header) |
 | pass / defend / tactics | `ai-pass-complete.test.mjs` + `ai-pass-defend-vm.test.mjs` + `ai-trail-yield-vm.test.mjs` |
 | stuck / rescue | `ai-stuck-vm.test.mjs` + `ai-pack-stuck-vm.test.mjs` |
 | pace band | `ai-band.test.mjs` |
@@ -94,7 +109,6 @@ Which check for which edit (node, subagent-safe unless marked):
 `collisions` is optional browser evidence, session only, in the background.
 
 ```sh
-
 # Field instruments (VM, no browser) — one dispatcher:
 node tools/check/ai-race.mjs pace    [--track monza] [--diff normal]
 node tools/check/ai-race.mjs field   [--track monza] [--seconds 240] [--runs 5]

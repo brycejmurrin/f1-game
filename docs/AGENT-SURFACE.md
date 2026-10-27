@@ -47,8 +47,7 @@ agents, read the named `.claude/agents/<persona>.md` and its skill, then launch
 the task with an explicit persona label, OWNED paths, forbidden actions,
 allowed tools, and the required hand-back format. Claude frontmatter such as
 `readonly`, `tools`, `background` and `model` is reference metadata in Codex;
-repeat the safety limits in the launch prompt. Keep Merge Desk authority with
-the explicitly designated parent session. Delegate bounded read-only evidence
+repeat the safety limits in the launch prompt. Landing is GitHub's (`land.yml`, docs/WORKERS.md).
 work (for example `deploy-research`), never ready/arm/merge authority.
 
 The doctor catalog warning is host metadata, not a repository failure. If the
@@ -272,7 +271,7 @@ and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-
 `apex_frame_report`, a node-VM framing report that answers in seconds what a
 flyby render answers in minutes; 12 → 13 on 2026-10-01 for the read-only
 `apex_doctor` capability and skill diagnostics; 13 → 16 on 2026-10-02 for
-`apex_who_is_on_it`, the one
+`apex_who_is_on_it` (retired 2026-10-27 with the claims board), the one
 read-only session checks; 16 → 24 on 2026-10-03 for `apex_track` (a persistent
 track session: boot once, then shots in ~10–25 s instead of ~45 s each),
 `apex_job_start`/`_status`/`_cancel` (survey-track, layout-audit matrices,
@@ -314,7 +313,7 @@ scenario preparation), `apex_garage_plan` (browser-free camera/design matrix) an
 `apex_diagnostics` (capabilities, background memory/GPU/renderer/VM probes, and
 saved report queries). Browser diagnostics use the existing job lock; planning
 and report comparison do not launch Chromium.
-`apex_cursor_agents` (2026-10-20, Cursor cloud-agent launch/status over `cursor-agents.mjs`) and `apex_who_is_on_it` (the claims/branches board) are in the table below. The table is the count's source: 40 rows on 2026-10-26, equal to the live server's tool list (an earlier revision of this line said "40 → 42"; that sum did not match the table).
+`apex_cursor_agents` (2026-10-20, Cursor cloud-agent launch/status over `cursor-agents.mjs`) is in the table below; `apex_who_is_on_it` left it when it was retired on 2026-10-27 with the claims board (40 → 39). The table is the count's source: 39 rows on 2026-10-27, equal to the live server's tool list (an earlier revision of this line said "40 → 42"; that sum did not match the table).
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -336,9 +335,8 @@ and report comparison do not launch Chromium.
 | `apex_rotate_markings_check` | `track/rotate-markings.cjs` | tree | new-track |
 | `apex_graph_parity` | `track/graph-parity.cjs` | tree | scenery-dress |
 | `apex_frame_report` | `shot/frame-report.mjs` | tree | playwright-probe |
-| `apex_who_is_on_it` | `ci/who-is-on-it.mjs` | tree | steward |
 | `apex_debug_chrome` | `mcp/debug-chrome.mjs` | tree | mcp-probe |
-| `apex_cursor_agents` | `ci/cursor-agents.mjs` | tree | agent-fleet |
+| `apex_cursor_agents` | `ci/cursor-agents.mjs` | tree | steward |
 | `apex_track` | `shot/track-session.mjs` | browser | survey-track |
 | `apex_job_start` | `mcp/apex-extras.mjs` | tree | check-changes |
 | `apex_job_status` | `mcp/apex-extras.mjs` | tree | check-changes |
@@ -388,7 +386,6 @@ Pins the wrap always applies (you cannot override them):
   existing JSON file under `artifacts/` or `scratch/` (symlinks resolved); never
   `--out` / `--fleet` / `--diff` / `--pose`. The fleet sweep
   (`frame-report.mjs --fleet`, ~10 min) and `--diff old.json new.json` stay CLI.
-- `apex_who_is_on_it` → `--json`, never `--claim` / `--release` (they push refs);
   `paths` that start with `-` are refused so none reaches the CLI as a flag
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
 - `apex_cursor_agents` → `cursor-agents.mjs <verb>`: ONE tool with a `verb` argument, only `verb`, `id`, `options` and
@@ -435,7 +432,7 @@ Pins the wrap always applies (you cannot override them):
   enum or a bounded number, inline `preset` offsets and a `matrix` file (JSON
   under `artifacts/` or `scratch/`) are validated by the CLI's own pure
   validators before the lock; `matrix: exhaustive` (~4 h) is refused without
-  a `shard` (or dispatch `.github/workflows/hud-survey.yml`). A cell is ~2 min
+  a `shard`. A cell is ~2 min
   and the quick matrix ~10, past the host's ~60–120 s MCP call, so both default
   to `apex_job_start` kinds `hud_shot` / `hud_survey` and return a `jobId`
   (poll `apex_job_status`). `async: false` blocks instead; only that path's
@@ -645,6 +642,7 @@ boot-time classifiers see the phone. `--safe T,R,B,L` sets real
 (0–200 px each; the iPhone Pro Max landscape notch is about 0,59,21,59).
 `--summary` prints tab-separated coverage and issue lines (screen, size, kind,
 selector, message) instead of the JSON, which is still written to `--out`.
+`explorer.mjs summarize <replay.json>` is offline (no Chromium): it reads the final cumulative action history once (checkpoint records overlap) and reports action counts, current binding assertions, other action assertions and assertions after the last reload. `--group-unmapped` (on `summarize <inspection.json>` or `inspect --summary`) lists unmapped controls by stable group id (selector prefix, else role) with names; status stays `unknown`, no binding is inferred from a label.
 `provenance.emulation` records the settings. A sweep record that has not settled
 gets one more settlement budget (`settlement.retried`). Settlement also waits for finite running CSS animations on, inside or above the root (`settlement.animating`): a fade or pointer-events transition leaves geometry final while hit tests still answer `<html>`; infinite animations are ignored. If it is still moving,
 its issues carry `provisional: true`. A hit test whose visible centre lands on

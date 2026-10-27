@@ -45,7 +45,7 @@ import fs from "node:fs";
 // WIDENED 2026-10-03: a branch whose newest PR was CLOSED UNMERGED at least
 // SURVEY_QUIET_HOURS ago is surveyed too — nobody reopened it, so nothing else
 // would ever decide it (its verdict is usually pr-closed). The claims board
-// (who-is-on-it.mjs) is coordination state, never surveyed.
+// (the retired claims board) is coordination state, never surveyed.
 export const SURVEY_QUIET_HOURS = 48;
 const NEVER_SURVEYED = /^claude\/claims(\/|-board$)/;
 export function inSurvey(b, { prs = new Map(), now = Math.floor(Date.now() / 1000), quietHours = SURVEY_QUIET_HOURS } = {}) {

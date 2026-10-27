@@ -1,6 +1,6 @@
 // gate-receipt.mjs — the receipt a gate writes and a hook reads (2026-10-19).
 // @doc Gate receipts under artifacts/{merge,ready}-gate/<pr>.json: a gate writes one, github-mcp-guard.sh requires it.
-// @skill agent-fleet
+// @skill steward
 //
 // Why: merging, arming and draft→ready were gated by a human word ("Level 3",
 // a re-granted AskUserQuestion per orchestrator rotation) while no hook checked
@@ -16,7 +16,12 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+/** Receipt kinds the READERS understand (receiptVerdict, merge_policy.py): an old merge receipt still parses. */
 export const KINDS = ["merge", "ready"];
+/** Receipt kinds a tool may WRITE. Not "merge": a session never merges (land.yml arms, the ruleset merges), so the
+ *  hooks' merge door stays shut — `node -e "…writeReceipt(…,'merge',{ok:true})"` was a live bypass of the `hold`
+ *  veto (review M2, 2026-10-27). */
+export const WRITABLE_KINDS = Object.freeze(["ready"]);
 /** A receipt older than this is stale: the tip, CI or the body may have moved. 10 min (was 30, 2026-10-21 defect hunt rows 2+3): the hook has no API, so a MERGE-HOLD added after the gate, or a push after a ready-gate, is only caught by the receipt aging out. */
 export const MAX_AGE_MIN = 10;
 /** A receipt dated further ahead than this is refused (audit 4 redteam-gates G5/G7, redteam-hooks R3: one dated 2099
@@ -97,7 +102,8 @@ export function gateFileHashes(root = GATE_ROOT, files = gateClosure(root)) {
 
 /** Write `{ kind, pr, head, ok, at, ... }` under `root` (and the main checkout, from a worktree); returns the path. */
 export function writeReceipt(root, kind, data, { main = mainCheckout(root), gateRoot = GATE_ROOT } = {}) {
-  if (!KINDS.includes(kind)) throw new Error(`unknown receipt kind ${kind}`);
+  if (kind === "merge") throw new Error("no tool writes a merge receipt: sessions never merge (land.yml arms, the branch ruleset merges)");
+  if (!WRITABLE_KINDS.includes(kind)) throw new Error(`unknown receipt kind ${kind}`);
   const pr = Number(data.pr);
   if (!Number.isInteger(pr) || pr < 1) throw new Error(`receipt needs a PR number, got ${data.pr}`);
   // gateFiles/gateRoot last, so a caller's data cannot overwrite what the running gate hashed.
@@ -141,7 +147,7 @@ export function receiptVerdict(receipt, { kind, pr, head = "", now = Date.now(),
   const pin = headPinProblem(head, receipt.head);
   if (kind === "ready" && hex(head) && pin) return { ok: false, why: `the PR head is ${hex(head).slice(0, 12)}, but ready-gate passed on ${hex(receipt.head).slice(0, 12)}: re-run ready-gate on the current head` };
   if (kind === "merge") {
-    if (!hex(head)) return { ok: false, why: `pin expectedHeadSha to the gated head ${hex(receipt.head).slice(0, 12)} (role-merge-holder.md: a merge is pinned to the sha the gate passed)` };
+    if (!hex(head)) return { ok: false, why: `pin expectedHeadSha to the gated head ${hex(receipt.head).slice(0, 12)} (a merge is pinned to the sha the gate passed)` };
     if (pin) return { ok: false, why: `expectedHeadSha ${hex(head).slice(0, 12)} is not the gated head ${hex(receipt.head).slice(0, 12)}; re-run merge-gate on the head you merge` };
   }
   return { ok: true, why: "" };
@@ -182,43 +188,4 @@ export function gateFilesVerdict(root, receipt, { run = spawnSync } = {}) {
     if (clean.status !== 0) return { ok: false, why: `the gate files in ${r} differ from HEAD (an uncommitted gate edit, the 2026-10-20 O23 incident): commit or revert, then re-run the gate` };
   }
   return { ok: true, why: "" };
-}
-
-/** How long a READY message may trail its ready-gate run (a worker sends READY right after the gate). */
-export const READY_CLAIM_MAX_MIN = 60;
-
-/**
- * May a READY message for `pr` go out? (Transcript Auditor batch 9, 2026-10-24: `ready-gate.mjs | tee` printed
- * exit 0 while the Plan was open, and a READY went out on a refused gate.) The sender's checkout must hold an `ok`
- * ready receipt for the PR at most READY_CLAIM_MAX_MIN old, written by the committed gate (gateFilesVerdict, audit 4
- * verify item 2: this path skipped it), and any sha the text names must be the gated head. A text `#<n>` that is not
- * `pr` refuses (G11). `prHead(n)` -> { sha } | { error } (optional; agent-msg passes the GitHub read): the receipt must
- * be for the PR's CURRENT head (G6/G7), and a failed read refuses. `pr` falls back to the first `#<n>` in `text`.
- * Returns { ok, why, pr }.
- */
-export function readyClaimVerdict(root, { pr = null, text = "", now = Date.now(), prHead = null, files = gateFilesVerdict } = {}) {
-  const named = Number((/#(\d+)\b/.exec(String(text)) || [])[1]) || 0;
-  const n = Number(pr) || named;
-  if (!n) return { ok: false, pr: 0, why: "a READY names its PR (`--pr <n>` or `#<n>` in the text) so its ready-gate receipt can be checked" };
-  if (named && named !== n) return { ok: false, pr: n, why: `the text names #${named}, but --pr is ${n}: one READY is for one PR` };
-  const main = mainCheckout(root);
-  const receipt = readReceipt(root, "ready", n) || (main ? readReceipt(main, "ready", n) : null);
-  let head = "";
-  if (prHead) {
-    const h = prHead(n) || {};
-    if (h.error || !h.sha) return { ok: false, pr: n, why: `cannot read #${n}'s current head (${h.error || "no sha"}): a READY is checked against the live head; retry` };
-    head = h.sha;
-  }
-  const v = receiptVerdict(receipt, { kind: "ready", pr: n, head, now, maxAgeMin: READY_CLAIM_MAX_MIN });
-  if (!v.ok) return { ok: false, pr: n, why: v.why };
-  // The gate that wrote the receipt is the one to prove committed: its own checkout when it still exists.
-  const gateRoot = receipt.gateRoot && fs.existsSync(receipt.gateRoot) ? receipt.gateRoot : root;
-  const fv = files(gateRoot, receipt);
-  if (!fv.ok) return { ok: false, pr: n, why: `ready-gate receipt for #${n}: ${fv.why}` };
-  const gated = hex(receipt.head);
-  const shas = String(text).match(/\b[0-9a-f]{7,40}\b/gi) || [];
-  if (gated && shas.length && !shas.some((s) => gated.startsWith(hex(s)) || hex(s).startsWith(gated))) {
-    return { ok: false, pr: n, why: `the READY names ${shas.join(" ")}, but ready-gate passed on ${gated.slice(0, 12)}; re-run ready-gate on the head you report` };
-  }
-  return { ok: true, pr: n, why: "" };
 }

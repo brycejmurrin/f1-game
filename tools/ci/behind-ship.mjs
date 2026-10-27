@@ -4,7 +4,7 @@
  * @section runner
  * @skill check-changes
  *
- * Non-blocking advisory for concurrent PRs (AGENTS.md §Concurrent PRs). A PR
+ * Non-blocking advisory for concurrent PRs (AGENTS.md §Coordination). A PR
  * that sits far behind ship is more likely to conflict or inherit tip reds;
  * this prints the count and emits a GitHub Actions `::warning::` annotation
  * when behind exceeds WARN_BEHIND (10). Exit is always 0 — never fails a job.

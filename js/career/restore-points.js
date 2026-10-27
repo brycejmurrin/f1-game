@@ -77,7 +77,7 @@ const CareerRestorePoints = (function () {
       const key = slotKey(flavour, i), json = key && clean(data, flavour);
       if (!key) return refused("invalid-or-too-large");
       const reason = options && options.reason;
-      if (!["round", "import", "before-import", "before-restore"].includes(reason)) return refused("explicit-boundary-required");
+      if (!["round", "before-import", "before-restore"].includes(reason)) return refused("explicit-boundary-required");
       const owner = (captureOwners.get(key) || 0) + 1; captureOwners.set(key, owner);
       captureHealth.set(key, { state: "saving", at: now(), boundary: reason, reason: null });
       const finish = (result) => {

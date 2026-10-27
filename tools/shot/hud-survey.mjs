@@ -62,8 +62,8 @@
 // minutes per cell with shots on software GL. Measure first, shoot second:
 // quick --no-shots --gl llvmpipe = 5.4 min (was ~35 min with shots, 2026-10-10),
 // then --only the cells with findings for pixels. full ≈ 45 min with shots,
-// exhaustive ≈ 4 h (shard it: .github/workflows/hud-survey.yml runs it on
-// llvmpipe). AGENTS.md rule 4:
+// exhaustive ≈ 4 h (shard it: --shard i/n per background run, then --merge).
+// AGENTS.md rule 4:
 // run it in the BACKGROUND with its log in artifacts/logs/, never beside a
 // Playwright run (check /proc/loadavg < 3).
 import fs from "node:fs";

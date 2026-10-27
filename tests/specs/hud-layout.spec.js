@@ -1754,6 +1754,32 @@ test.describe("speed readouts", () => {
 test.describe("unrestricted manual widgets", () => {
   test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
   test.setTimeout(300_000);
+  // #3267: a live switch to the BROADCAST style paints that style's own layout set; the tower
+  // must land on screen and the map must carry the move once (hud-survey lead05).
+  test("a live switch to BROADCAST keeps the tower on screen and moves the map once", async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { __apex.headless(true); __apex.race("monza"); });
+    await page.waitForFunction(() => __apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { __apex.go(); __apex.camera("chase"); __apex.jump(.1, 30, 0); });
+    const read = () => page.evaluate(async () => {
+      __apex.freeze(false);
+      await new Promise(r => setTimeout(r, 1200));   // the 10 Hz HUD tick refits after the switch
+      const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top }; };
+      return { tower: r(".hud-top"), map: r("#minimap"), w: innerWidth };
+    });
+    const live = () => page.evaluate(() => { const s = document.getElementById("pm-hudprofile-sel"); s.value = "broadcast"; s.dispatchEvent(new Event("change", { bubbles: true })); });
+    await page.evaluate(() => { __apex.freeze(false); const s = document.getElementById("pm-hudprofile-sel"); s.value = "standard"; s.dispatchEvent(new Event("change", { bubbles: true }));
+      HudLayout.set("tower", { x: 3 }, "other", "broadcast"); HudLayout.set("map", { y: 10 }, "other", "broadcast"); });
+    await live();
+    const moved = await read();
+    expect(moved.tower.l).toBeGreaterThanOrEqual(0);
+    expect(moved.tower.r).toBeLessThanOrEqual(moved.w);
+    // MAP y+10 = 10 % of 390 on top of the style's 10 px anchor, applied once (not doubled by the switch).
+    expect(Math.abs(moved.map.t - (10 + 390 * 0.1))).toBeLessThan(8);
+  });
+
   test("all widgets keep offscreen geometry through Done, Resume and rotation", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });

@@ -1,5 +1,6 @@
-/* ready-gate.test.mjs — draft→ready requires tooling-fast / Structural guards
- * green on the tip (AGENTS.md §Concurrent PRs; evidence #1111 designer-canvas).
+/* ready-gate.test.mjs — the worker's pre-flip check as behaviour: the Structural guards verdict, the local
+ * tooling-fast stamp, the Plan parser (`land:` exempt), the memory marker, the PR shape (open draft, not
+ * conflicting) and the CLI over a fake API and a captured receipt (AGENTS.md rule 12; evidence #1111).
  *
  * Run: node --test tests/unit/ready-gate.test.mjs
  */
@@ -8,582 +9,228 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import {
-  GUARDS_A, GUARDS_B, GUARDS_C, GUARDS_D, GUARDS_JOB,
-  guardsVerdict, localVerdict, evaluate, shaPrefixMatch, stampReadySha, newestByName,
-  planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine, fleetBlock, fleetIdentity, withFleet, mergeableProblem,
+  GUARDS_A, GUARDS_B, GUARDS_C, GUARDS_D, GUARDS_JOB, guardsVerdict, newestByName, localVerdict, evaluate, shaPrefixMatch,
+  stampReadySha, planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine, mergeableProblem, draftProblem, main,
 } from "../../tools/ci/ready-gate.mjs";
 
-// Scratch dirs live under the ignored artifacts/ tree, never the system tmp (AGENTS.md).
-const TMP_BASE = (() => {
-  const d = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..", "artifacts", "tmp");
-  fs.mkdirSync(d, { recursive: true });
-  return d;
-})();
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const TMP = path.join(ROOT, "artifacts", "tmp");
+fs.mkdirSync(TMP, { recursive: true });
+const SHA = "a".repeat(40);
+const run = (name, status, conclusion, id = 1) => ({ id, name, status, conclusion, started_at: "2026-10-06T11:00:00Z" });
+const GREEN = { state: "passed", evidence: "Structural guards success", code: 0, sha: SHA, source: "ci" };
 
-
-const run = (name, status, conclusion, id = 1) => ({
-  id, name, status, conclusion,
-  completed_at: status === "completed" ? "2026-10-06T12:00:00Z" : null,
-  started_at: "2026-10-06T11:00:00Z",
+test("guardsVerdict: the aggregator decides; its shards are the fallback when it was cancelled/skipped; a red or running shard blocks", () => {
+  assert.equal(guardsVerdict([run(GUARDS_JOB, "completed", "success")]).code, 0);
+  assert.equal(guardsVerdict([run(GUARDS_JOB, "completed", "failure"), run(GUARDS_A, "completed", "success", 2)]).state, "failed");
+  assert.equal(guardsVerdict([run(GUARDS_JOB, "in_progress", null)]).state, "pending");
+  const shards = (d) => [run(GUARDS_JOB, "completed", "cancelled"), run(GUARDS_A, "completed", "success", 2), run(GUARDS_B, "completed", "success", 3), run(GUARDS_C, "completed", "success", 4), run(GUARDS_D, "completed", d, 5)];
+  assert.equal(guardsVerdict(shards("success")).state, "passed");
+  assert.equal(guardsVerdict(shards("failure")).state, "failed", "the fourth shard counts (2026-10-24)");
+  assert.equal(guardsVerdict([...shards("success").slice(0, 4), run(GUARDS_D, "queued", null, 5)]).state, "pending");
+  assert.equal(guardsVerdict([run(GUARDS_A, "completed", "failure"), run(GUARDS_B, "completed", "success", 2)]).state, "failed");
+  assert.equal(guardsVerdict([run("CI", "completed", "success")]).state, "none");
+  // WP-L8: A+B green with C/D missing is pending, never passed.
+  const ab = guardsVerdict([run(GUARDS_JOB, "completed", "cancelled"), run(GUARDS_A, "completed", "success", 2), run(GUARDS_B, "completed", "success", 3)]);
+  assert.deepEqual([ab.state, ab.code, ab.evidence], ["pending", 1, `${GUARDS_C}, ${GUARDS_D} missing (all four tooling shards must report)`]);
+  assert.equal(guardsVerdict([run(GUARDS_A, "completed", "success"), run(GUARDS_B, "completed", "success", 2), run(GUARDS_C, "completed", "success", 3)]).state, "pending");
+  assert.equal(guardsVerdict([run(GUARDS_C, "completed", "failure")]).state, "failed", "a red shard fails even when others are missing");
 });
 
-test("shaPrefixMatch accepts short/full mutual prefixes", () => {
+test("newestByName: the newest attempt per name wins; a skipped run never hides a real result (#3862)", () => {
+  const by = newestByName([run(GUARDS_JOB, "completed", "failure", 1), run(GUARDS_JOB, "completed", "success", 2), run(GUARDS_JOB, "completed", "skipped", 3)]);
+  assert.equal(by.get(GUARDS_JOB).id, 2);
+  assert.equal(guardsVerdict([run(GUARDS_JOB, "completed", "success", 1), run(GUARDS_JOB, "completed", "skipped", 2)]).state, "passed");
+  assert.equal(newestByName([{ ...run(GUARDS_JOB, "queued", null, 0), started_at: null }, run(GUARDS_JOB, "completed", "success", 1)]).get(GUARDS_JOB).id, 1, "a queued attempt without started_at cannot reuse an old pass");
+});
+
+test("shaPrefixMatch: mutual prefixes of at least 7 hex", () => {
   assert.equal(shaPrefixMatch("abcdef1", "abcdef1234567890"), true);
   assert.equal(shaPrefixMatch("abcdef1234567890", "abcdef1"), true);
   assert.equal(shaPrefixMatch("abcdef1", "abcdef2"), false);
   assert.equal(shaPrefixMatch("abc", "abcdef1"), false);
 });
 
-test("guardsVerdict: aggregator success is enough", () => {
-  const v = guardsVerdict([run(GUARDS_JOB, "completed", "success")]);
-  assert.equal(v.state, "passed");
-  assert.equal(v.code, 0);
-  assert.match(v.evidence, /Structural guards success/);
+/** A stamp + suite log pair under a scratch dir; `tree` makes a tree stamp, the log carries the same tree. */
+function stamp(dirPrefix, { sha = SHA, tree = "", log = "= run passed", logTree = tree } = {}) {
+  const dir = fs.mkdtempSync(path.join(TMP, dirPrefix));
+  const stampPath = path.join(dir, "ready.sha"), logPath = path.join(dir, "suite.log");
+  stampReadySha(sha, { tree, stampPath });
+  fs.writeFileSync(logPath, `${logTree ? `= tree ${logTree}\n` : ""}${log}\n`);
+  return { dir, opts: { stampPath, logPath, treeOf: () => TREE } };
+}
+const TREE = "c".repeat(40);
+
+test("localVerdict: a bare-sha stamp matches the tip by prefix; the suite log must say passed; a tree stamp must be the tip's tree and the log's run", () => {
+  const cases = [
+    [stamp("rg-ok-"), SHA, "passed"],
+    [stamp("rg-other-", { sha: "b".repeat(40) }), SHA, "failed"],
+    [stamp("rg-red-", { log: "= run passed\n= run failed" }), SHA, "failed"],
+    [stamp("rg-nolog-", { log: "nothing" }), SHA, "none"],
+    [stamp("rg-tree-", { tree: TREE }), SHA, "passed"],
+    [stamp("rg-tree-moved-", { tree: "d".repeat(40) }), SHA, "failed"],
+    [stamp("rg-tree-log-", { tree: TREE, logTree: "d".repeat(40) }), SHA, "none"],
+  ];
+  try {
+    for (const [s, tip, state] of cases) assert.equal(localVerdict(tip, s.opts).state, state, localVerdict(tip, s.opts).evidence);
+    assert.equal(localVerdict(SHA, { ...cases[0][0].opts, stampPath: path.join(TMP, "missing.sha") }).state, "none");
+    assert.equal(localVerdict("not-a-sha", cases[0][0].opts).state, "none");
+    assert.equal(stampReadySha("zz"), false); assert.equal(stampReadySha(SHA, { tree: "short", stampPath: "/nowhere" }), false);
+  } finally { for (const [s] of cases) fs.rmSync(s.dir, { recursive: true, force: true }); }
 });
 
-test("guardsVerdict: aggregator failure is a hard refuse", () => {
-  const v = guardsVerdict([
-    run(GUARDS_JOB, "completed", "failure"),
-    run(GUARDS_A, "completed", "success", 2),
-    run(GUARDS_B, "completed", "success", 3),
-  ]);
-  assert.equal(v.state, "failed");
-  assert.equal(v.code, 1);
-});
-
-test("guardsVerdict: pending aggregator blocks ready", () => {
-  const v = guardsVerdict([run(GUARDS_JOB, "in_progress", null)]);
-  assert.equal(v.state, "pending");
-  assert.equal(v.code, 1);
-});
-
-test("guardsVerdict: both tooling halves green when aggregator skipped", () => {
-  const v = guardsVerdict([
-    run(GUARDS_JOB, "completed", "skipped"),
-    run(GUARDS_A, "completed", "success", 2),
-    run(GUARDS_B, "completed", "success", 3),
-  ]);
-  assert.equal(v.state, "passed");
-  assert.match(v.evidence, /tooling A/);
-});
-
-test("guardsVerdict: one red half fails even if the other is green", () => {
-  const v = guardsVerdict([
-    run(GUARDS_A, "completed", "success", 2),
-    run(GUARDS_B, "completed", "failure", 3),
-  ]);
-  assert.equal(v.state, "failed");
-  assert.match(v.evidence, /tooling B/);
-});
-
-test("guardsVerdict: the fourth shard counts (B2, 2026-10-24): a red or running tooling D blocks the fallback", () => {
-  const green = [run(GUARDS_A, "completed", "success", 2), run(GUARDS_B, "completed", "success", 3),
-    run(GUARDS_C, "completed", "success", 4)];
-  assert.equal(guardsVerdict([...green, run(GUARDS_D, "completed", "success", 5)]).state, "passed");
-  const red = guardsVerdict([...green, run(GUARDS_D, "completed", "failure", 5)]);
-  assert.equal(red.state, "failed");
-  assert.ok(red.evidence.includes("tooling D"));
-  assert.equal(guardsVerdict([...green, run(GUARDS_D, "in_progress", null, 5)]).state, "pending");
-});
-
-test("guardsVerdict: no Structural guards check-runs → none", () => {
-  assert.equal(guardsVerdict([run("CI", "completed", "success")]).state, "none");
-  assert.equal(guardsVerdict([]).state, "none");
-});
-
-test("newestByName keeps the latest completed check-run per name", () => {
-  const by = newestByName([
-    { id: 1, name: GUARDS_JOB, status: "completed", conclusion: "failure", completed_at: "2026-10-06T10:00:00Z" },
-    { id: 2, name: GUARDS_JOB, status: "completed", conclusion: "success", completed_at: "2026-10-06T12:00:00Z" },
-  ]);
-  assert.equal(by.get(GUARDS_JOB).conclusion, "success");
-  assert.equal(by.get(GUARDS_JOB).id, 2);
-});
-
-test("a skipped check-run from an ignored edit/label event never hides a real result (#3862, 2026-10-26)", () => {
-  // A `CI ignored: edit` run on the same head posts a newer, skipped Structural guards.
-  const green = run(GUARDS_JOB, "completed", "success", 10), noise = run(GUARDS_JOB, "completed", "skipped", 11);
-  for (const list of [[green, noise], [noise, green]]) assert.equal(guardsVerdict(list).state, "passed");
-  const red = run(GUARDS_JOB, "completed", "failure", 10);
-  for (const list of [[red, noise], [noise, red]]) assert.equal(guardsVerdict(list).state, "failed");
-  // Only skipped runs: still the reuse-draft fallback to the shards.
-  assert.equal(newestByName([noise]).get(GUARDS_JOB).conclusion, "skipped");
-});
-
-test("localVerdict: stamp + passed log matching tip is green", () => {
-  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
-  const stamp = path.join(dir, "tooling-fast-ready.sha");
-  const log = path.join(dir, "tooling-fast-suite.log");
-  const tip = "abcdef1234567890abcdef1234567890abcdef12";
-  fs.writeFileSync(stamp, tip + "\n");
-  fs.writeFileSync(log, "[tooling-fast] = run passed (10 passed, 0 failed)\n");
-  const v = localVerdict(tip, { stampPath: stamp, logPath: log });
-  assert.equal(v.state, "passed");
-  assert.equal(v.code, 0);
-});
-
-test("localVerdict: stamp for another tip refuses", () => {
-  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
-  const stamp = path.join(dir, "tooling-fast-ready.sha");
-  const log = path.join(dir, "tooling-fast-suite.log");
-  fs.writeFileSync(stamp, "1111111111111111111111111111111111111111\n");
-  fs.writeFileSync(log, "[tooling-fast] = run passed (10 passed, 0 failed)\n");
-  const v = localVerdict("abcdef1234567890abcdef1234567890abcdef12", { stampPath: stamp, logPath: log });
-  assert.equal(v.state, "failed");
-  assert.match(v.evidence, /≠ tip/);
-});
-
-test("localVerdict: failed suite log refuses even with matching stamp", () => {
-  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
-  const stamp = path.join(dir, "tooling-fast-ready.sha");
-  const log = path.join(dir, "tooling-fast-suite.log");
-  const tip = "abcdef1";
-  fs.writeFileSync(stamp, tip + "\n");
-  fs.writeFileSync(log, "[tooling-fast] = run failed (9 passed, 1 failed)\n");
-  assert.equal(localVerdict(tip, { stampPath: stamp, logPath: log }).state, "failed");
-});
-
-test("evaluate: CI success wins; CI failure refuses even with local stamp", () => {
-  const tip = "abcdef1234567890abcdef1234567890abcdef12";
-  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
-  const stamp = path.join(dir, "tooling-fast-ready.sha");
-  const log = path.join(dir, "tooling-fast-suite.log");
-  fs.writeFileSync(stamp, tip + "\n");
-  fs.writeFileSync(log, "[tooling-fast] = run passed (1 passed, 0 failed)\n");
-  const localOpts = { stampPath: stamp, logPath: log };
-
-  const ok = evaluate({
-    sha: tip,
-    request: () => ({ json: { check_runs: [run(GUARDS_JOB, "completed", "success")] } }),
-    localOpts,
-  });
-  assert.equal(ok.state, "passed");
-  assert.equal(ok.source, "ci");
-
-  const bad = evaluate({
-    sha: tip,
-    request: () => ({ json: { check_runs: [run(GUARDS_JOB, "completed", "failure")] } }),
-    localOpts,
-  });
-  assert.equal(bad.state, "failed");
-  assert.equal(bad.source, "ci");
-  assert.equal(bad.code, 1);
-});
-
-test("evaluate: pending CI can be unblocked by a matching local stamp", () => {
-  const tip = "abcdef1234567890abcdef1234567890abcdef12";
-  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
-  const stamp = path.join(dir, "tooling-fast-ready.sha");
-  const log = path.join(dir, "tooling-fast-suite.log");
-  fs.writeFileSync(stamp, tip + "\n");
-  fs.writeFileSync(log, "[tooling-fast] = run passed (1 passed, 0 failed)\n");
-  const v = evaluate({
-    sha: tip,
-    request: () => ({ json: { check_runs: [run(GUARDS_JOB, "in_progress", null)] } }),
-    localOpts: { stampPath: stamp, logPath: log },
-  });
-  assert.equal(v.state, "passed");
-  assert.equal(v.source, "local");
-});
-
-test("evaluate: API error with no local stamp is unknown (exit 3)", () => {
-  const v = evaluate({
-    sha: "abcdef1234567890abcdef1234567890abcdef12",
-    request: () => ({ error: "no token" }),
-    localOpts: {
-      stampPath: path.join(TMP_BASE, "no-such-ready-stamp"),
-      logPath: path.join(TMP_BASE, "no-such-ready-log"),
-      exists: () => false,
-    },
-  });
-  assert.equal(v.state, "unknown");
-  assert.equal(v.code, 3);
-});
-
-test("stampReadySha writes the tip", () => {
-  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
-  const stamp = path.join(dir, "nested", "tooling-fast-ready.sha");
-  assert.equal(stampReadySha("abcdef1234567890", { stampPath: stamp }), true);
-  assert.equal(fs.readFileSync(stamp, "utf8").trim(), "abcdef1234567890");
-});
-
-// M36 (2026-10-09): the stamp names the tree the suite MEASURED, not HEAD read afterwards.
-const T1 = "1".repeat(40), T2 = "2".repeat(40);
-const stampFiles = (stampBody, logBody) => {
-  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
-  const stampPath = path.join(dir, "tooling-fast-ready.sha"), logPath = path.join(dir, "tooling-fast-suite.log");
-  fs.writeFileSync(stampPath, stampBody); fs.writeFileSync(logPath, logBody);
-  return { stampPath, logPath };
-};
-const PASS = "[tooling-fast] = run passed (10 passed, 0 failed)\n";
-
-test("a tree stamp matches the tip's TREE: verify dirty, commit exactly that, and the gate agrees", () => {
-  const tip = "abcdef1234567890abcdef1234567890abcdef12";
-  const files = stampFiles(`${"9".repeat(40)} tree=${T1}\n`, `[tooling-fast] = tree ${T1} head ${"9".repeat(40)}\n${PASS}`);
-  // the stamp's HEAD is the pre-edit commit and is NOT the tip: irrelevant, the tree is what was verified
-  assert.equal(localVerdict(tip, { ...files, treeOf: () => T1 }).state, "passed");
-  // a red committed tip with an uncommitted fix: the run measured T1, the tip is T2 -> refuse
-  const hole = localVerdict(tip, { ...files, treeOf: () => T2 });
-  assert.equal(hole.state, "failed");
-  assert.match(hole.evidence, /HEAD moved|not what was committed/);
-  assert.equal(localVerdict(tip, { ...files, treeOf: () => null }).state, "none", "an unresolvable tip tree is no evidence");
-});
-
-test("a tree stamp needs the suite log of the SAME run", () => {
-  const tip = "abcdef1234567890abcdef1234567890abcdef12";
-  const sameRun = stampFiles(`${tip} tree=${T1}\n`, `[tooling-fast] = tree ${T1} head ${tip}\n${PASS}`);
-  assert.equal(localVerdict(tip, { ...sameRun, treeOf: () => T1 }).state, "passed");
-  // a subset run overwrote the log afterwards: no `= tree` line
-  const subset = stampFiles(`${tip} tree=${T1}\n`, PASS);
-  assert.equal(localVerdict(tip, { ...subset, treeOf: () => T1 }).state, "none");
-  const other = stampFiles(`${tip} tree=${T1}\n`, `[tooling-fast] = tree ${T2} head ${tip}\n${PASS}`);
-  assert.equal(localVerdict(tip, { ...other, treeOf: () => T1 }).state, "none");
-});
-
-test("stampReadySha writes `sha tree=<hash>` and refuses a malformed tree", () => {
-  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
-  const stamp = path.join(dir, "s.sha");
-  assert.equal(stampReadySha("abcdef1234567890", { tree: T1, stampPath: stamp }), true);
-  assert.equal(fs.readFileSync(stamp, "utf8").trim(), `abcdef1234567890 tree=${T1}`);
-  assert.equal(stampReadySha("abcdef1234567890", { tree: "not-a-tree", stampPath: stamp }), false);
-});
-
-test("workTreeId is the committed tree once the dirty edits are committed, and moves when they change", async () => {
+test("a tree stamp agrees with the tip once exactly the verified edits are committed (work-tree-id)", async () => {
   const { workTreeId, commitTreeId } = await import("../../tools/lib/work-tree-id.mjs");
-  const { execFileSync } = await import("node:child_process");
-  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-tree-"));
+  const dir = fs.mkdtempSync(path.join(TMP, "ready-gate-tree-"));
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   try {
     g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
     fs.writeFileSync(path.join(dir, "a.js"), "1\n"); g("add", "-A"); g("commit", "-qm", "base");
-    const clean = workTreeId(dir);
-    assert.equal(clean, commitTreeId("HEAD", dir), "a clean tree is HEAD's tree");
-    fs.writeFileSync(path.join(dir, "a.js"), "2\n"); fs.writeFileSync(path.join(dir, "new.test.mjs"), "x\n");   // tracked edit + UNTRACKED new file
+    assert.equal(workTreeId(dir), commitTreeId("HEAD", dir), "a clean tree is HEAD's tree");
+    fs.writeFileSync(path.join(dir, "a.js"), "2\n"); fs.writeFileSync(path.join(dir, "new.test.mjs"), "x\n");
     const dirty = workTreeId(dir);
-    assert.notEqual(dirty, clean, "a dirty tree is not HEAD's tree (the old HEAD stamp could not tell)");
-    assert.equal(g("status", "--porcelain").split("\n").length, 2, "the real index and tree were left alone");
+    assert.notEqual(dirty, commitTreeId("HEAD", dir));
     g("add", "-A"); g("commit", "-qm", "the verified edits");
-    assert.equal(commitTreeId("HEAD", dir), dirty, "commit exactly what was verified -> the gate's tree comparison agrees");
-    fs.writeFileSync(path.join(dir, "a.js"), "3\n");
-    assert.notEqual(workTreeId(dir), dirty);
+    const tip = g("rev-parse", "HEAD");
+    assert.equal(commitTreeId("HEAD", dir), dirty, "commit exactly what was verified and the gate's comparison agrees");
+    const s = stamp("rg-real-tree-", { sha: tip, tree: dirty });
+    assert.equal(localVerdict(tip, { ...s.opts, treeOf: (sha) => commitTreeId(sha, dir) }).state, "passed");
+    fs.rmSync(s.dir, { recursive: true, force: true });
   } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
 
-test("workTreeId sees a same-size rewrite that git's stat cache would call clean (racy index)", async () => {
-  // Deterministic version of the CI flake: no timing luck. The real index is made older than the entry
-  // (so git itself treats the entry as racily clean), ctime is not trusted (a rewrite always moves it), and
-  // the file is rewritten with the SAME size and its ORIGINAL mtime restored. A copy of the index with a
-  // fresh mtime made every entry look safely older, git trusted the stat cache, and the old tree came back.
-  const { workTreeId } = await import("../../tools/lib/work-tree-id.mjs");
-  const { execFileSync } = await import("node:child_process");
-  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-racy-"));
-  const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
+test("evaluate: CI decides when it has; a pending/none CI falls back to a green local stamp; an API error with no stamp is exit 3", () => {
+  const s = stamp("rg-eval-");
+  const checks = (...runs) => () => ({ json: { check_runs: runs, total_count: runs.length } });
   try {
-    g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t"); g("config", "core.trustctime", "false");
-    const file = path.join(dir, "a.js");
-    fs.writeFileSync(file, "1\n"); g("add", "-A"); g("commit", "-qm", "base");
-    const X = Date.now() / 1000 - 50;
-    fs.utimesSync(file, X, X);
-    g("update-index", "--refresh");                      // the entry now records mtime X
-    const index = path.join(dir, ".git", "index");
-    fs.utimesSync(index, X - 10, X - 10);                // index older than the entry: racily clean for git
-    const before = workTreeId(dir);
-    fs.writeFileSync(file, "3\n"); fs.utimesSync(file, X, X);   // same size, same mtime, different content
-    fs.utimesSync(index, X - 10, X - 10);
-    assert.notEqual(workTreeId(dir), before, "a same-size rewrite in a racy window must still move the tree id");
-  } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+    assert.equal(evaluate({ sha: SHA, request: checks(run(GUARDS_JOB, "completed", "success")), localOpts: s.opts }).source, "ci");
+    const red = evaluate({ sha: SHA, request: checks(run(GUARDS_JOB, "completed", "failure")), localOpts: s.opts });
+    assert.deepEqual([red.state, red.code], ["failed", 1], "CI failure refuses even with a local stamp");
+    const pending = evaluate({ sha: SHA, request: checks(run(GUARDS_JOB, "in_progress", null)), localOpts: s.opts });
+    assert.deepEqual([pending.state, pending.source], ["passed", "local"]);
+    const down = evaluate({ sha: SHA, request: () => ({ error: "HTTP 502" }), localOpts: s.opts });
+    assert.deepEqual([down.state, down.source], ["passed", "local-fallback"]);
+    const none = evaluate({ sha: SHA, request: () => ({ error: "HTTP 502" }), localOpts: { ...s.opts, stampPath: path.join(TMP, "missing.sha") } });
+    assert.deepEqual([none.state, none.code], ["unknown", 3]);
+    assert.equal(evaluate({ sha: SHA, localOnly: true, request: () => { throw new Error("no API in --local"); }, localOpts: s.opts }).source, "local");
+    // pagination: a later page's error fails closed
+    let page = 0;
+    const paged = (p) => { page++; return p.includes("page=2") ? { error: "HTTP 500" } : { json: { check_runs: Array.from({ length: 100 }, (_, i) => run("x", "completed", "success", i)), total_count: 150 } }; };
+    assert.equal(evaluate({ sha: SHA, request: paged, localOpts: { ...s.opts, stampPath: path.join(TMP, "missing.sha") } }).code, 3);
+    assert.equal(page, 2);
+  } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
 });
 
-// THE PLAN CHECKLIST (AGENTS.md rule 12): with --pr, a green tip still refuses
-// while the PR body's ## Plan has an item neither ticked nor struck.
-const TEMPLATE = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "../../.github/pull_request_template.md"), "utf8");
 const body = (plan) => `## Goal\nfix it\n\n## Plan\n${plan}\n\n## Status\n- [ ] not a plan item\n`;
-const GREEN = { state: "passed", evidence: "Structural guards success", code: 0, sha: "a".repeat(40), source: "ci" };
 
-test("planVerdict: ticked and struck items close; unticked ones stay open", () => {
-  const v = planVerdict(body("- [x] edit — abc1234\n- [ ] ~~drop it~~ — superseded\n- [ ] **now:** run tests\n* [X] push"));
-  assert.equal(v.state, "open");
-  assert.equal(v.items, 4);
-  assert.deepEqual(v.open, ["**now:** run tests"]);
-  assert.equal(planVerdict(body("- [x] a — sha\n- [ ] ~~b~~ — why")).state, "done");
-});
-
-test("planVerdict: only the Plan section counts, and HTML comments are not items", () => {
-  const v = planVerdict(body("<!-- - [ ] example in a comment -->\n- [x] real"));
-  assert.equal(v.state, "done", "the Status section's [ ] and the commented example are ignored");
-  assert.equal(v.items, 1);
-});
-
-test("planVerdict: the untouched template is open (empty placeholders count)", () => {
-  const v = planVerdict(TEMPLATE);
-  assert.equal(v.state, "open");
-  assert.deepEqual(v.open, ["**now:**", "(empty item)"], "the template's two placeholder items, not its commented examples");
-});
-
-test("planVerdict: no Plan section, or a Plan with no items, is none", () => {
-  assert.equal(planVerdict("## Goal\nx\n## Status\ny").state, "none");
+test("planVerdict: ticked, struck, deferred and `land:` items close; unticked ones stay open; only the Plan section counts", () => {
+  assert.deepEqual(planVerdict(body("- [x] a\n- [ ] ~~b~~ — dropped\n- [~] c\n- [ ] Deferred: d\n- [ ] land: flip ready, add `land`\n- [ ] **land:** bold")), { state: "done", items: 6, open: [] });
+  const open = planVerdict(body("- [x] a\n- [ ] write the test\n- [ ] \n- [ ] READY to ORCH A via agent-msg"));
+  assert.deepEqual([open.state, open.items, open.open], ["open", 4, ["write the test", "(empty item)"]], "the older `READY to` terminal item is still exempt");
+  assert.equal(planVerdict(body("- [x] a\n<!-- - [ ] example in a comment -->")).state, "done", "HTML comments are not items");
+  assert.equal(planVerdict("## Goal\nx\n").state, "none");
   assert.equal(planVerdict(body("prose only")).state, "none");
-  assert.equal(planVerdict(null).state, "none");
+  const tpl = fs.readFileSync(path.join(ROOT, ".github/pull_request_template.md"), "utf8");
+  assert.equal(planVerdict(tpl).state, "open", "the untouched template is open");
+  const cursor = `## Plan\n- [ ] outer stale\n<!-- CURSOR_AGENT_PR_BODY_BEGIN -->\n## Plan\n- [x] agent ticked\n<!-- CURSOR_AGENT_PR_BODY_END -->`;
+  assert.equal(planVerdict(cursor).state, "done", "Cursor's agent slice wins when it carries a Plan (#2899)");
 });
 
-test("withPlan: an open Plan turns a green tip into plan-open (exit 1)", () => {
-  const v = withPlan(GREEN, body("- [x] a — sha\n- [ ] **now:** b"));
-  assert.equal(v.state, "plan-open");
-  assert.equal(v.code, 1);
-  assert.match(v.evidence, /1 of 2 Plan item\(s\) open: "\*\*now:\*\* b"/);
+test("planVerdict on edited bodies (moved from pr-body.test.mjs): a struck or deferred item closes, `**now:**` stays open", () => {
+  const plan = "<!-- example:\n       - [x] done — sample\n       - [ ] todo -->\n- [ ] **now:** first step\n- [ ] second step\n- [x] third — sha";
+  assert.deepEqual(planVerdict(body(plan)).open, ["**now:** first step", "second step"], "commented example items do not count");
+  assert.deepEqual(planVerdict(body(plan.replace("- [ ] second step", "- [ ] ~~second step~~ — covered by #5"))).open.length, 1, "struck closes");
+  assert.deepEqual(planVerdict(body(plan.replace("- [ ] second step", "- [~] second step"))).open.length, 1, "deferred closes");
 });
 
-test("withPlan: a closed Plan passes; no Plan passes with a warning; red and no-PR are untouched", () => {
-  assert.equal(withPlan(GREEN, body("- [x] a — sha")).code, 0);
-  const none = withPlan(GREEN, "## Goal\nolder PR");
-  assert.equal(none.code, 0);
-  assert.match(none.planWarning, /no ## Plan/);
-  const red = { ...GREEN, state: "failed", code: 1 };
-  assert.equal(withPlan(red, body("- [ ] open")), red, "a red verdict keeps its own reason");
-  assert.equal(withPlan(GREEN, undefined), GREEN, "--sha / HEAD: no PR body, no Plan check");
+test("withPlan: an open Plan turns a green tip into plan-open (exit 1); no Plan warns; red and no-PR pass through", () => {
+  const v = withPlan(GREEN, body("- [ ] one\n- [ ] two\n- [ ] three\n- [ ] four"));
+  assert.deepEqual([v.state, v.code], ["plan-open", 1]);
+  assert.ok(v.evidence.startsWith('4 of 4 Plan item(s) open: "one", "two", "three", ...'), v.evidence);
+  assert.equal(withPlan(GREEN, body("- [x] one")).code, 0);
+  assert.ok(withPlan(GREEN, "## Goal\nx").planWarning);
+  assert.equal(withPlan({ ...GREEN, state: "failed", code: 1 }, body("- [ ] x")).state, "failed");
+  assert.equal(withPlan(GREEN, null), GREEN);
 });
 
-test("resolveSha --pr returns the PR body alongside its head sha", () => {
-  const head = "b".repeat(40);
-  const request = (url) => {
-    if (url === "pulls/7") return { json: { head: { sha: head }, body: "## Plan\n- [x] a", title: "t" } };
-    if (url.startsWith("pulls/7/files")) return { json: [] };
-    return { error: `unexpected ${url}` };
+test("memoryVerdict / withMemory: .claude/memory/ edits need `memory-change: <reason>` or the label; a missing file list fails closed", () => {
+  assert.equal(memoryVerdict(["js/core/log.js"]).state, "ok");
+  assert.equal(memoryVerdict([".claude/memory/MEMORY.md"], { body: "touches memory" }).state, "memory-leak", "a bare word is no marker");
+  assert.equal(memoryVerdict([".claude/memory/MEMORY.md"], { body: "memory-change:" }).state, "memory-leak", "a marker needs a reason");
+  assert.equal(memoryVerdict([".claude/memory/MEMORY.md"], { body: "memory-change: retire a stale entry" }).state, "ok");
+  assert.equal(memoryVerdict([".claude/memory/x.md"], { labels: ["Memory-Change"] }).state, "ok");
+  assert.equal(memoryVerdict(["./.claude/memory/x.md"]).state, "memory-leak");
+  assert.deepEqual([withMemory(GREEN, [".claude/memory/x.md"]).state, withMemory(GREEN, [".claude/memory/x.md"]).code], ["memory-leak", 1]);
+  assert.equal(withMemory(GREEN, null, { filesError: "HTTP 500" }).state, "memory-unknown");
+  assert.equal(withMemory(GREEN, null).code, 0, "no file list and no error: nothing to judge");
+  assert.equal(withMemory({ ...GREEN, state: "failed", code: 1 }, [".claude/memory/x.md"]).state, "failed");
+});
+
+/** A fake GitHub for --pr runs: the PR, its files (paginated by `files`) and the head's check-runs. */
+function github({ files = [{ filename: "js/core/log.js" }], pull = {}, checks = [run(GUARDS_JOB, "completed", "success")] } = {}) {
+  const pr = { head: { sha: SHA, ref: "cursor/x" }, state: "open", draft: true, mergeable_state: "clean", body: body("- [x] done"), title: "t", labels: [], changed_files: files.length, ...pull };
+  return (p) => {
+    if (p === "pulls/7") return { json: pr };
+    if (p.startsWith("pulls/7/files")) { const page = Number((p.match(/[?&]page=(\d+)/) || [])[1] || 1); return { json: files.slice((page - 1) * 100, page * 100) }; }
+    if (p.startsWith("commits/")) return { json: { check_runs: checks, total_count: checks.length } };
+    return { error: `unexpected ${p}` };
   };
-  const r = resolveSha({ pr: "7", request });
-  assert.equal(r.sha, head);
-  assert.equal(r.pr, 7);
-  assert.equal(r.body, "## Plan\n- [x] a");
-  assert.equal(r.branch, "", "no head.ref in the fixture");
-  const withRef = (url) => (url === "pulls/7" ? { json: { head: { sha: head, ref: "cursor/x-1a2b" }, body: "" } } : request(url));
-  assert.equal(resolveSha({ pr: "7", request: withRef }).branch, "cursor/x-1a2b", "the head branch feeds withFleet");
+}
+
+test("resolveSha --pr: head, body, labels, draft/state and the full file list (both rename paths); a short or failed list is filesError", () => {
+  const many = Array.from({ length: 150 }, (_, i) => ({ filename: `f${i}` }));
+  const r = resolveSha({ pr: 7, request: github({ files: many, pull: { labels: [{ name: "run-ci" }], draft: false, state: "closed" } }) });
+  assert.deepEqual([r.sha, r.pr, r.branch, r.labels, r.draft, r.state, r.files.length, r.filesError], [SHA, 7, "cursor/x", ["run-ci"], false, "closed", 150, null]);
+  const ren = resolveSha({ pr: 7, request: github({ files: [{ filename: "docs/x.md", previous_filename: ".claude/memory/x.md" }] }) });
+  assert.deepEqual(ren.files, ["docs/x.md", ".claude/memory/x.md"]);
+  assert.ok(/incomplete files list: received 1 of 3/.test(resolveSha({ pr: 7, request: github({ files: [{ filename: "a" }], pull: { changed_files: 3 } }) }).filesError));
+  const down = resolveSha({ pr: 7, request: (p) => (p === "pulls/7" ? github()(p) : { error: "HTTP 500" }) });
+  assert.deepEqual([down.files, down.filesError], [null, "HTTP 500"]);
+  assert.ok(/HTTP 404/.test(resolveSha({ pr: 7, request: () => ({ error: "HTTP 404" }) }).error));
+  assert.ok(resolveSha({ pr: "x" }).error);
+  assert.equal(resolveSha({ sha: "deadbeefcafe" }).sha, "deadbeefcafe", "a bare hex tip not in this clone passes through");
 });
 
-const fleetBody = (lines) => "## Plan\n- [x] a — sha\n\n## Next step\n\n```fleet\n" + lines.join("\n") + "\n```\n";
-
-test("fleetBlock / fleetIdentity: letters from fleet:, a letter orchestrator: or the slot; placeholders and comments ignored", () => {
-  assert.deepEqual(fleetBlock(fleetBody(["worker: claude:s1   # who", "fleet: A", "orchestrator: A", "blocker: <one line>"])),
-    { worker: "claude:s1", fleet: "A", orchestrator: "A" });
-  assert.deepEqual(fleetBlock("<!--\n```fleet\nfleet: A\n```\n-->"), {}, "a commented-out block is no block");
-  assert.deepEqual(fleetBlock("<!-- CURSOR_AGENT_PR_BODY_BEGIN -->\n```fleet\nfleet: D\norchestrator: D\n```\n<!-- CURSOR_AGENT_PR_BODY_END -->"),
-    { fleet: "D", orchestrator: "D" }, "Cursor's agent slice counts");
-  assert.deepEqual(fleetIdentity(fleetBody(["orchestrator: B"])), { block: true, letter: "B", orchestrator: "B", slot: "" });
-  assert.deepEqual(fleetIdentity(fleetBody(["fleet: C·W2", "orchestrator: codex:refactor-all-b71e"])),
-    { block: true, letter: "C", orchestrator: "codex:refactor-all-b71e", slot: "" }, "back-compat <host>:<id> orchestrator");
-  assert.equal(fleetIdentity(fleetBody(["orchestrator: claude:session_01X", "title: [Worker] A·W3 · tools"])).slot, "A·W3");
-  assert.equal(fleetIdentity(fleetBody(["orchestrator: claude:session_01X", "title: [Worker] A·W3 · tools"])).letter, "A", "slot letter fallback");
-  assert.deepEqual(fleetIdentity("no block"), { block: false, letter: "", orchestrator: "", slot: "" });
+test("the PR shape: an open draft that is not conflicting; dirty refuses, unknown asks for a re-read, ready/closed have nothing to flip", () => {
+  assert.equal(mergeableProblem("clean"), null); assert.equal(mergeableProblem("behind"), null);
+  assert.equal(mergeableProblem("dirty").state, "dirty"); assert.equal(mergeableProblem("unknown").state, "unknown");
+  assert.equal(draftProblem({ state: "open", draft: true }), null);
+  assert.equal(draftProblem({ state: "open", draft: false }).state, "not-draft");
+  assert.equal(draftProblem({ state: "closed", draft: false, merged: true }).state, "closed");
+  assert.ok(verdictLine({ ...GREEN }).includes(`sha=${SHA} source=ci`), "the line carries the FULL sha (#2430)");
 });
 
-test("withFleet: a cursor/ branch without fleet letter + orchestrator: is refused (fleet-block, exit 1), naming the field", () => {
-  const none = withFleet(GREEN, "cursor/topic-1a2b", "## Plan\n- [x] a — sha");
-  assert.equal(none.state, "fleet-block");
-  assert.equal(none.code, 1);
-  assert.ok(none.evidence.includes("missing ```fleet block"), none.evidence);
-  const noLetter = withFleet(GREEN, "cursor/topic-1a2b", fleetBody(["orchestrator: claude:session_01ORCHORCHORCHORCHORCH"]));
-  assert.equal(noLetter.code, 1);
-  assert.ok(noLetter.evidence.includes("missing fleet:"), noLetter.evidence);
-  assert.doesNotMatch(noLetter.evidence, /missing fleet: and/, "a <host>:<id> orchestrator: is present, only the letter is missing");
-  const noOrch = withFleet(GREEN, "cursor/topic-1a2b", fleetBody(["fleet: A", "orchestrator: <letter>"]));
-  assert.ok(noOrch.evidence.includes("missing orchestrator:"), noOrch.evidence);
-  assert.ok(verdictLine(noOrch).startsWith("= ready-gate fleet-block — "), verdictLine(noOrch));
-});
-
-test("withFleet: a complete block passes; letter or <host>:<id> orchestrator; other branches, no PR and reds pass through", () => {
-  for (const lines of [["fleet: A", "orchestrator: A"], ["orchestrator: B"], ["fleet: C", "orchestrator: codex:refactor-all-b71e"]]) {
-    const v = withFleet(GREEN, "cursor/topic-1a2b", fleetBody(lines));
-    assert.equal(v.code, 0, lines.join(" / "));
-    assert.equal(v.state, GREEN.state);
-  }
-  assert.equal(withFleet(GREEN, "claude/legacy-topic", "no block"), GREEN, "only cursor/ branches need the block");
-  assert.equal(withFleet(GREEN, null, "no block"), GREEN, "--sha / HEAD: no PR, no fleet check");
-  const red = { ...GREEN, state: "failed", code: 1 };
-  assert.equal(withFleet(red, "cursor/x", "no block"), red, "a red verdict keeps its own reason");
-  const planOpen = withPlan(GREEN, "## Plan\n- [ ] open");
-  assert.equal(withFleet(planOpen, "cursor/x", "## Plan\n- [ ] open").state, "plan-open", "plan-open is reported first");
-});
-
-for (const state of ["in_progress", "completed"]) test(`newer ${state} attempt wins despite older late success`, () => {
-  const old = { ...run(GUARDS_JOB, "completed", "success", 1), started_at: "2026-10-06T10:00:00Z", completed_at: "2026-10-06T10:10:00Z" };
-  const recent = { ...run(GUARDS_JOB, state, state === "completed" ? "failure" : null, 2), started_at: "2026-10-06T10:05:00Z", completed_at: null };
-  for (const list of [[old, recent], [recent, old]]) assert.equal(guardsVerdict(list).state, state === "completed" ? "failed" : "pending");
-});
-
-test("evaluate paginates globally and fails closed on a later API error", () => {
-  const calls = [], sha = "a".repeat(40), localOpts = { exists: () => false };
-  const request = (url) => {
-    calls.push(url);
-    return { json: { total_count: 101, check_runs: url.includes("page=2") ? [run(GUARDS_JOB, "completed", "failure", 101)] : Array.from({ length: 100 }, (_, i) => run("other", "completed", "success", i)) } };
-  };
-  assert.equal(evaluate({ sha, request, localOpts }).state, "failed");
-  assert.equal(calls.length, 2);
-  assert.match(calls[1], /&page=2$/);
-  assert.equal(evaluate({ sha, localOpts, request: url => url.includes("page=2") ? { error: "page failed" } : request(url) }).code, 3);
-});
-
-test("a newer queued attempt without started_at cannot reuse an old pass", () => {
-  const old = run(GUARDS_JOB, "completed", "success", 1);
-  const queued = { ...run(GUARDS_JOB, "queued", null, 2), started_at: null };
-  for (const checks of [[old, queued], [queued, old]]) assert.equal(guardsVerdict(checks).state, "pending");
-});
-
-test("planVerdict: [~] and Deferred: items count as closed (#2397)", () => {
-  const body = "## Plan\n- [x] a — sha\n- [~] later thing\n- [ ] Deferred: follow-up #12\n- [ ] ~~dropped~~ — why\n";
-  assert.deepEqual(planVerdict(body), { state: "done", items: 4, open: [] });
-  const open = planVerdict("## Plan\n- [~] later\n- [ ] still todo\n- [ ] Deferred-ish not closed\n");
-  assert.equal(open.state, "open");
-  assert.deepEqual(open.open, ["still todo", "Deferred-ish not closed"]);
-});
-
-test("planVerdict: CURSOR_AGENT_PR_BODY Plan wins over an outer open Plan (#2899)", () => {
-  const dual = [
-    "## Plan",
-    "- [ ] **now:** outer human opener still open",
-    "- [x] publish",
-    "",
-    "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->",
-    "## Plan",
-    "- [x] synced tip — 8e0900369",
-    "- [x] CI passed — run 39126646785",
-    "- [~] Deferred: Bryce follow-up",
-    "<!-- CURSOR_AGENT_PR_BODY_END -->",
-    "",
-  ].join("\n");
-  assert.deepEqual(planVerdict(dual), { state: "done", items: 3, open: [] });
-  // Ordinary HTML comments still do not count as Plan items.
-  assert.equal(planVerdict(body("<!-- - [ ] example -->\n- [x] real")).state, "done");
-});
-
-test("#2430: the verdict line carries the FULL 40-char sha a merge call needs", () => {
-  const sha = "4dc3d6226176b48601a9e9cb0612989cc7ec916b";
-  assert.match(verdictLine({ state: "passed", evidence: "ok", sha, source: "ci" }), /^= ready-gate passed — ok sha=[0-9a-f]{40} source=ci$/);
-});
-
-test("memoryVerdict: .claude/memory/ edits refuse without an explicit memory-change marker", () => {
-  assert.equal(memoryVerdict(["AGENTS.md", "js/game.js"]).state, "ok");
-  assert.equal(memoryVerdict([".claude/memory/MEMORY.md"], { title: "fix hud" }).state, "memory-leak");
-  // A bare "memory" word or a path mention must NOT unlock the gate (#2901 review).
-  assert.equal(memoryVerdict([".claude/memory/foo.md"], { title: "Memory index prune" }).state, "memory-leak");
-  assert.equal(memoryVerdict([".claude/memory/foo.md"], {
-    title: "harness", body: "## Goal\nsee `.claude/memory/MEMORY.md` and prune",
-  }).state, "memory-leak");
-  assert.equal(memoryVerdict([".claude/memory/foo.md"], {
-    title: "harness", body: "memory-change: prune stale index lines\n## Goal\nx",
-  }).state, "ok");
-  assert.equal(memoryVerdict([".claude/memory/foo.md"], {
-    title: "harness", body: "## Goal\nx", labels: ["memory-change"],
-  }).state, "ok");
-  assert.match(memoryVerdict([".claude/memory/a.md", "css/hud.css"], { title: "livery" }).evidence, /non-memory PR|memory-change/);
-});
-
-test("withMemory: a memory-leak turns a green tip into memory-leak (exit 1)", () => {
-  const v = withMemory(GREEN, [".claude/memory/MEMORY.md"], { title: "Harness audit" });
-  assert.equal(v.state, "memory-leak");
-  assert.equal(v.code, 1);
-  assert.equal(withMemory(GREEN, ["AGENTS.md"], { title: "docs" }).code, 0);
-  assert.equal(withMemory(GREEN, null), GREEN, "no file list ( --sha ) skips the check");
-});
-
-test("memoryVerdict: a marker needs a reason on the same line", () => {
-  const files = [".claude/memory/foo.md"];
-  for (const body of ["memory-change:\n## Goal\nUnrelated text", "memory-change:\t \r\n## Goal", "memory-change:\t "]) {
-    assert.equal(memoryVerdict(files, { body }).state, "memory-leak", JSON.stringify(body));
-  }
-  assert.equal(memoryVerdict(files, { body: "## Goal\nMemory cleanup\nmemory-change:\t prune stale links\r\n## Plan" }).state, "ok");
-});
-
-test("PR-file renames into or out of memory require explicit intent", () => {
-  const head = "c".repeat(40);
-  for (const [previous, current, expected] of [
-    [".claude/memory/orphan.md", "docs/README.md", "memory-leak"],
-    ["docs/README.md", ".claude/memory/orphan.md", "memory-leak"],
-    ["docs/VERIFICATION.md", "docs/DEBUG-HOOKS.md", "passed"],
-  ]) {
-    const request = (url) => {
-      if (url === "pulls/9") return { json: { head: { sha: head }, changed_files: 101 } };
-      if (url === "pulls/9/files?per_page=100") return { json: Array.from({ length: 100 }, (_, i) => ({ filename: `docs/page-${i}.md` })) };
-      if (url === "pulls/9/files?per_page=100&page=2") return { json: [{ status: "renamed", previous_filename: previous, filename: current }] };
-      return { error: `unexpected ${url}` };
-    };
-    const resolved = resolveSha({ pr: "9", request });
-    assert.equal(resolved.filesError, null);
-    const verdict = withMemory(GREEN, resolved.files, resolved);
-    assert.equal(verdict.state, expected, `${previous} -> ${current}`);
-    if (expected === "memory-leak") {
-      assert.equal(withMemory(GREEN, resolved.files, { ...resolved, body: "memory-change: move topic" }).state, "passed");
-    }
-  }
-});
-
-test("withMemory: a files-API failure fails closed (never treats as no memory edits)", () => {
-  const v = withMemory(GREEN, undefined, { filesError: "HTTP 502" });
-  assert.equal(v.state, "memory-unknown");
-  assert.equal(v.code, 1);
-  assert.match(v.evidence, /HTTP 502|files/);
-});
-
-test("resolveSha --pr returns title and files for the memory gate", () => {
-  const head = "c".repeat(40);
-  const request = (url) => {
-    if (url === "pulls/9") return { json: { head: { sha: head }, body: "## Plan\n- [x] a", title: "Plugin policy", labels: [{ name: "run-ci" }] } };
-    if (url.startsWith("pulls/9/files")) return { json: [{ filename: ".claude/memory/MEMORY.md" }, { filename: "AGENTS.md" }] };
-    return { error: `unexpected ${url}` };
-  };
-  const r = resolveSha({ pr: "9", request });
-  assert.equal(r.sha, head);
-  assert.equal(r.title, "Plugin policy");
-  assert.deepEqual(r.files, [".claude/memory/MEMORY.md", "AGENTS.md"]);
-  assert.equal(r.filesError, null);
-});
-
-test("resolveSha --pr records filesError when the files list cannot be fetched", () => {
-  const head = "d".repeat(40);
-  const request = (url) => {
-    if (url === "pulls/11") return { json: { head: { sha: head }, body: "memory-change: x", title: "t", labels: [] } };
-    if (url.startsWith("pulls/11/files")) return { error: "HTTP 502" };
-    return { error: `unexpected ${url}` };
-  };
-  const r = resolveSha({ pr: "11", request });
-  assert.equal(r.sha, head);
-  assert.match(r.filesError || "", /HTTP 502/);
-  assert.equal(r.files, null, "a failed files fetch must not look like an empty diff");
-});
-
-test("resolveSha --pr fails closed when the API returns fewer files than the PR reports", () => {
-  const request = (url) => url === "pulls/11"
-    ? { json: { head: { sha: "d".repeat(40) }, changed_files: 3001 } }
-    : { json: Array.from({ length: url.includes("page=31") ? 0 : 100 }, (_, i) => ({ filename: `docs/file-${i}.md` })) };
-  const resolved = resolveSha({ pr: "11", request });
-  assert.equal(resolved.files, null);
-  assert.match(resolved.filesError, /received 3000 of 3001/);
-  assert.equal(withMemory(GREEN, resolved.files, resolved).state, "memory-unknown");
-});
-
-test("Q8: a `READY to` Plan item is exempt; an open item is printed verbatim", () => {
-  const body = "## Plan\n- [x] a — sha\n- [ ] READY to OrchA 33 once the gate passes\n- [ ] **READY to** me\n";
-  const p = planVerdict(body);
-  assert.equal(p.state, "done");
-  assert.deepEqual(p.open, []);
-  assert.equal(planVerdict("## Plan\n- [ ] READYING the thing\n").state, "open", "only the `READY to` form is exempt");
-  const long = "x".repeat(90);
-  const v = withPlan({ code: 0, state: "passed", evidence: "ok" }, `## Plan\n- [ ] ${long}\n`);
-  assert.equal(v.state, "plan-open");
-  assert.ok(v.evidence.includes(`"${long}"`), "the item is not truncated");
-});
-
-test("a conflicting PR refuses before the CI row: mergeable_state rides on resolveSha, dirty refuses, unknown asks for a re-read, clean passes", () => {
-  const head = "c".repeat(40);
-  const req = (state) => (url) => {
-    if (url === "pulls/9") return { json: { head: { sha: head, ref: "cursor/y-2b3c" }, body: "", mergeable_state: state } };
-    if (url.startsWith("pulls/9/files")) return { json: [] };
-    return { error: `unexpected ${url}` };
-  };
-  assert.equal(resolveSha({ pr: "9", request: req("dirty") }).mergeableState, "dirty");
-  assert.equal(resolveSha({ pr: "9", request: req("clean") }).mergeableState, "clean");
-  assert.equal(resolveSha({ pr: "7", request: (u) => (u === "pulls/7" ? { json: { head: { sha: head } } } : { json: [] }) }).mergeableState, null, "absent field");
-  assert.equal(mergeableProblem("dirty").state, "dirty");
-  assert.ok(mergeableProblem("dirty").evidence.startsWith("GitHub reports mergeable_state dirty: sync first"), mergeableProblem("dirty").evidence);
-  assert.equal(mergeableProblem("unknown").state, "unknown");
-  for (const ok of ["clean", "unstable", "blocked", "behind", "has_hooks", null, undefined]) assert.equal(mergeableProblem(ok), null, String(ok));
+test("main --pr: green draft + closed Plan exits 0 and writes an ok receipt; each refusal exits 1 with a refused receipt; unknown re-reads; API error exits 3", () => {
+  const s = stamp("rg-main-");
+  const receipts = [], logs = [], slept = [];
+  const deps = (request) => ({ request, judge: (a) => evaluate({ ...a, localOpts: s.opts }), receipt: (d) => receipts.push(d), sleep: (x) => slept.push(x), log: (...a) => logs.push(a.join(" ")) });
+  try {
+    assert.equal(main(["--pr", "7"], deps(github())), 0);
+    assert.deepEqual(receipts.at(-1), { pr: 7, head: SHA, ok: true, evidence: "" });
+    assert.ok(logs.at(-1).startsWith(`[ready-gate] = ready-gate passed — Structural guards success sha=${SHA}`), logs.at(-1));
+    assert.equal(main(["--pr", "7"], deps(github({ pull: { body: body("- [ ] open") } }))), 1);
+    assert.ok(receipts.at(-1).ok === false && receipts.at(-1).evidence.startsWith("plan-open:"), JSON.stringify(receipts.at(-1)));
+    assert.equal(main(["--pr", "7"], deps(github({ files: [{ filename: ".claude/memory/x.md" }] }))), 1);
+    assert.ok(receipts.at(-1).evidence.startsWith("memory-leak:"));
+    assert.equal(main(["--pr", "7"], deps(github({ checks: [run(GUARDS_JOB, "completed", "failure")] }))), 1);
+    assert.equal(main(["--pr", "7"], deps(github({ pull: { draft: false } }))), 1);
+    assert.ok(receipts.at(-1).evidence.startsWith("not-draft:"));
+    assert.equal(main(["--pr", "7"], deps(github({ pull: { mergeable_state: "dirty" } }))), 1);
+    assert.ok(receipts.at(-1).evidence.startsWith("conflicting:"));
+    const states = ["unknown", "unknown", "clean"];
+    let reads = 0;
+    const flaky = (p) => (p === "pulls/7" ? { json: { ...github()(p).json, mergeable_state: states[Math.min(reads++, 2)] } } : github()(p));
+    assert.equal(main(["--pr", "7"], deps(flaky)), 0, "clean on the third read");
+    assert.deepEqual(slept, [2, 4]);
+    slept.length = 0; reads = 0; states.fill("unknown");
+    assert.equal(main(["--pr", "7"], deps(flaky)), 1);
+    assert.deepEqual(slept, [2, 4, 8], "three re-reads, then conflicting refuses");
+    const n = receipts.length;
+    assert.equal(main(["--pr", "7"], deps(() => ({ error: "HTTP 500" }))), 3);
+    assert.equal(receipts.length, n, "no receipt on an API error");
+    assert.equal(main(["--sha", SHA, "--local"], deps(() => { throw new Error("no API"); })), 0, "--local never calls GitHub");
+    assert.equal(receipts.length, n, "no receipt without --pr");
+  } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
 });

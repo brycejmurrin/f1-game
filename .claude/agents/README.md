@@ -30,7 +30,7 @@ same-red on tip → `verify-agent --base <ref>`. One circuit →
 `track-surveyor`. Stale prose → the `total-audit` workflow (`docs-ref` /
 `docs-idx` lenses), not a bespoke agent. Curvature / PACE semantics →
 `physics-contract-auditor`. Fat skill / extract / dead code → `bloat-auditor`
-(parent applies via **slim-bloat**). A red Actions or Pages run → `ci-red-triage`. The open-PR board → `node tools/ci/pr-board.mjs` (skill `steward`). A hunt → `prior-art-scout`, then one `code-hunter` per slice, then `finding-verifier` on the rows before anyone fixes. A skill / agent / hook / AGENTS.md edit → `agent-surface-reviewer`. A scoped implementation to hand off and talk to while it runs → `worker` (one per disjoint path set, named so peers can message it). Parent keeps cache bump, PR readiness and deploy FF.
+(parent applies via **slim-bloat**). A red Actions or Pages run → `ci-red-triage`. The open-PR board → `node tools/ci/pr-board.mjs` (skill `steward`). A hunt → `prior-art-scout`, then one `code-hunter` per slice, then `finding-verifier` on the rows before anyone fixes. A skill / agent / hook / AGENTS.md edit → `agent-surface-reviewer`. A scoped implementation to hand off and talk to while it runs → `worker` (one per disjoint path set, named so peers can message it). The parent keeps the PR: its readiness (`ready-gate`, then the `land` label; `docs/WORKERS.md` §5); nobody fast-forwards the deploy branch.
 
 **One prohibition line, not five blocks.** Every agent body ends with:
 "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no

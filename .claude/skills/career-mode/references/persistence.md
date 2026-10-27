@@ -8,7 +8,7 @@ Where state lives and what can drop it:
   into IndexedDB and restores keys localStorage lacks at boot (asynchronously, after the first `Career.load()` read).
 - `js/career/save-migrate.js` normalises old saves (`owned`, `paidSponsors`); a migration can drop a field.
 - `Career.acceptOffer(i)` RE-SEEDS `owned`/`fitted` from the new team's factory preset (moving seats is not a bug).
-- `scrubFitted` heals a `fitted` works id missing from `owned`; era legality (`Parts.setLegality`) never touches `owned`.
+- `CareerAiDev.scrubFitted` (`js/career/ai-dev.js`, called from `career.js`) heals a `fitted` works id missing from `owned`; era legality (`Parts.setLegality`) never touches `owned`.
 - Stale second tab: `Career.save()` refuses a stale revision (`Career.armedRevision()`); `career-cross-tab` pins it.
 - `js/career/career-backup.js` export/import goes through `SaveMigrate.migrateCareer` and `store.write`.
 
