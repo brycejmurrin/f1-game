@@ -446,6 +446,9 @@ var GameAudioRadioFx = (function () {
       let ended = false;
       const entry = {};
       let unbindFocus = null;
+      // Abort the CORS fallback fetch on stop (IMPROVEMENT-CANDIDATES §6). Without
+      // it a late response still decoded and plainFallback could resurrect audio.
+      let fetchAbort = null;
       function bindMediaFocus(a) {
         let playing = false;
         const sync = () => {
@@ -469,6 +472,7 @@ var GameAudioRadioFx = (function () {
         dead = true;
         ended = true;
         _watchClips.delete(entry);
+        if (fetchAbort) { try { fetchAbort.abort(); } catch (e) { /* already */ } fetchAbort = null; }
         if (unbindFocus) unbindFocus();
         releaseDuck();
         if (voiceHandle && voiceHandle.stop) { try { voiceHandle.stop(); } catch (e) { /* gone */ } voiceHandle = null; }
@@ -477,6 +481,9 @@ var GameAudioRadioFx = (function () {
         if (el) {
           el.onended = el.onerror = null;
           try { el.pause(); } catch (e) { /* gone */ }
+          // Drop the network src so a paused element does not keep fetching.
+          try { el.removeAttribute ? el.removeAttribute("src") : (el.src = ""); } catch (e) { /* gone */ }
+          try { if (el.load) el.load(); } catch (e) { /* gone */ }
           el = null;
         }
       };
@@ -508,7 +515,13 @@ var GameAudioRadioFx = (function () {
         if (unbindFocus) unbindFocus();
         for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
         nodes = [];
-        if (el) { el.onended = el.onerror = null; el = null; }
+        if (el) {
+          el.onended = el.onerror = null;
+          try { el.pause(); } catch (e) { /* gone */ }
+          try { el.removeAttribute ? el.removeAttribute("src") : (el.src = ""); } catch (e) { /* gone */ }
+          try { if (el.load) el.load(); } catch (e) { /* gone */ }
+          el = null;
+        }
         chained = false;
       };
       // ONE FALLBACK PER CLIP. A failing media element fires `error` AND rejects the
@@ -523,18 +536,33 @@ var GameAudioRadioFx = (function () {
       };
       const tryFetchDecode = () => {
         if (dead || typeof fetch !== "function" || !host.context()) { plainFallback(); return; }
-        fetch(url, { mode: "cors", credentials: "omit" }).then((r) => {
+        const ac = (typeof AbortController === "function") ? new AbortController() : null;
+        fetchAbort = ac;
+        const opts = { mode: "cors", credentials: "omit" };
+        if (ac) opts.signal = ac.signal;
+        fetch(url, opts).then((r) => {
+          if (dead) throw new Error("aborted");
           if (!r.ok) throw new Error("fetch " + r.status);
           return r.arrayBuffer();
-        }).then((ab) => decodeClip(ab)).then((buf) => {
+        }).then((ab) => {
+          // Pre-decode liveness: decodeAudioData is expensive and uncancellable.
+          if (dead) throw new Error("aborted");
+          return decodeClip(ab);
+        }).then((buf) => {
           if (dead) return;
+          fetchAbort = null;
           const h = radioVoice([buf], host.now(), { fx: "radio", channel: "radio", volume: vol });
           if (!h) { plainFallback(); return; }
           chained = true;
           voiceHandle = h;
           const endAt = (h.end - host.now()) * 1000 + 150;
           setTimeout(() => { if (!dead) teardown(); }, Math.max(50, endAt));
-        }).catch(() => { if (!dead) plainFallback(); });
+        }).catch((err) => {
+          fetchAbort = null;
+          // An abort is intentional silence — do not resurrect via plainFallback.
+          if (dead || (ac && ac.signal.aborted) || (err && err.name === "AbortError")) return;
+          if (!dead) plainFallback();
+        });
       };
       const ctx = host.context();
       if (!ctx || ctx.state === "closed" || ctx.state !== "running") return plainFallback();

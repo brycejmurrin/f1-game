@@ -93,7 +93,7 @@ floating tree and not reach the line that places it.
 - Never flip a curvature sign yourself (+k = LEFT-hand turn): you cannot run
   the rendered lap that proves it, so report the suspect sign to the parent.
 - Scenery edits stale the generated `tools/shot/scenery-locations.json`; leave
-  it (the deploy regenerates it), never run its generator.
+  it — the PARENT regenerates it after merging (`survey-track` §Hand-back); never run its generator.
 - Hand-back: you work in your OWN worktree (`isolation: worktree`, at the
   parent's HEAD when spawned). Verify a session-known file first, commit your
   pair when `verify-track` is clean, put the branch name and worktree path at
