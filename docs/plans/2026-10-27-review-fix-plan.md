@@ -53,16 +53,16 @@ Sources: [r2/landing-design.md](../notes/review-2026-10-27/r2/landing-design.md)
   bind to `artifacts/launch/self.json` and make it single-use; (e) removing `hold` is unguarded on every route
   (`gh pr edit`, `gh api -X DELETE`, `gh label delete`, MCP `issue_write`) — classify as ask.
 - [x] WP-L5 `gate` as a commit status (#3917, merged).
-- [ ] **WP-L6 dispatcher children-only** (#3921): CI green; gate refused on distance (3 behind), synced (fb2c516b);
+- [x] **WP-L6 dispatcher children-only** — #3921 merged 8a58c266 (#3921): CI green; gate refused on distance (3 behind), synced (fb2c516b);
   then land and tell the dispatcher.
-- [ ] **WP-L7 dispatch follow-ups (MED/LOW).** `landProblem` (dispatch.mjs:186) reads check runs only, so a land PR
+- [x] **WP-L7 dispatch follow-ups (MED/LOW).** — #3933 merged 0af0148d `landProblem` (dispatch.mjs:186) reads check runs only, so a land PR
   whose `gate` status failed parks forever — read `commits/<sha>/status` (2×); stale rule ignores a live worker
   session naming the PR (:282); `--apply` without `--sessions` bypasses `maxLiveWorkers` (:391); two accounts can both
   launch for one issue (claim posted after launch); `mergePause` / `baseBehindMax` do nothing.
   **Label clobber (reported by the dispatcher, 2026-10-27):** the worker prompt's "add `claimed`" leads workers to
   MCP `issue_write` with `labels`, which REPLACES the list — #3263–#3267 lost `bug` / `area:ui` (restored by hand). The
   dispatch.mjs brief and docs/WORKERS.md say add it with `gh api POST issues/<n>/labels`, never `issue_write` labels.
-- [ ] **WP-L9 workers stall waiting for the user** (Bryce, 2026-10-27: "they are sometimes getting stuck waiting for
+- [x] **WP-L9 workers stall waiting for the user** — #3933 merged 0af0148d (rule 13 wording: #3939) (Bryce, 2026-10-27: "they are sometimes getting stuck waiting for
   user instead of asking you or dispatcher message them and set this up"; evidence
   [r2/worker-stalls.md](../notes/review-2026-10-27/r2/worker-stalls.md)). Bryce unblocked 5 of 8 children by typing
   into them. Causes: STOP AT 150k leaves ~57k of work after a ~93k first request; last turns addressed to "you";
@@ -182,13 +182,13 @@ Sources: [r2/docs.md](../notes/review-2026-10-27/r2/docs.md), [r2/relay-fleet.md
   `github-fleet.cjs`; widen `rulebook-guards.test.mjs` to scan plugin-sources, cursor-plugins, `.cursor`, `.codex`;
   stale hook text ("ask your orchestrator", `QUEUE_BRANCH`, `fleet-bus` in the poll regex, `APEX_MERGE_DESK`) —
   hook edits need Bryce; `APEX-TOOLS-MCP.md` `apex_who_is_on_it`; `policies.json:747`; `ci-watch.mjs:323`.
-- [ ] **WP-D2 dead tools** (each with its `tests/groups.json` row + `npm run gen`): `tools/mcp/check-doctor-catalog.mjs`;
+- [x] **WP-D2 dead tools** — #3935 merged (each with its `tests/groups.json` row + `npm run gen`): `check-doctor-catalog.mjs (deleted, #3935)`;
   `archive-sessions.mjs` (+ AGENTS.md:187, settings.json:74 — Bryce); `pr-body.mjs` + `fleet-block.mjs` (move the 3
   `planVerdict` cases to ready-gate's test first); `lane-preamble.mjs`; `measure-pr-ci-after-close.mjs`;
   `publish-shots.mjs`; `lsp-navigation-bench.mjs`; `readyClaimVerdict` in gate-receipt.mjs. Fix headers:
   `queue-depth.mjs` (not a hold), `launch-gate.mjs` (orchestrator.md). Bryce decides: the workflow-harness trio,
   `visor-lab-export.mjs`.
-- [ ] **WP-W1 workflows (Bryce for deletes).** Delete never-run `hud-survey.yml` and `webkit-leg.yml` (+ their rows in
+- [x] **WP-W1 workflows (Bryce for deletes).** — #3935 merged (gpu-census kept push for its request-file legs; ci.yml `edited` kept for the `CI: run` marker) Delete never-run `hud-survey.yml` and `webkit-leg.yml` (+ their rows in
   pick-tests / select-specs / nightly-group); gpu-census and capture-gallery become dispatch-only (agents dispatch
   fine; renderer-debug SKILL.md:18 still teaches the push relay); car-shot into capture-gallery; import-models gets a
   read-only bake job (it downloads an arbitrary URL with `contents: write`); process-dashboard dispatch-only or
