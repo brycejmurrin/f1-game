@@ -4,6 +4,17 @@ A worker is one session, one task, one PR. GitHub holds every piece of state: is
 the PR is the work and the report, checks are the gates, comments are the only messages. GitHub lands the PR;
 no agent merges. The design and its evidence: `docs/plans/2026-10-27-orchestration-redesign.md` §3–4.
 
+## Where the work is
+
+- **The Board** is issue #1780 (the dispatcher's one status comment, `deploy:red` while the Pages train is red).
+  **The Dispatch issue** is #3899 (Bryce's switch: `dispatch:pause`, `dispatch:merge-pause`).
+- **Find work with GitHub search**, never by paging `list_issues` (its pages miss issues): the GitHub MCP
+  `search_issues` with `repo:brycejmurrin/f1-game is:issue is:open label:ready -label:claimed -label:blocked
+  -label:epic`. An `epic` is a parent; its sub-issues are the work. In a Claude cloud session `gh api search/*`
+  is refused (repo-scoped REST only).
+- **`dispatch:pause` stops launches, not workers.** A running worker carries on to `land` or its cap; the label
+  changes nothing for it. A session Bryce starts by hand may still take a `ready` issue.
+
 ## The contract
 
 1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. If an older claim comment
@@ -13,21 +24,32 @@ no agent merges. The design and its evidence: `docs/plans/2026-10-27-orchestrati
    checklist), Verified / Not run, Hand-off. Add `lane:<host>` and `Closes #<n>`.
 3. **Work.** AGENTS.md §The loop, local part only: make all edits, then `node tools/ci/tooling-fast.mjs --changed
    --jobs=3` and ONE spec (`npm test -- tests/specs/<file>.spec.js`, or `verify-track` for a circuit). That is the
-   local verification floor. The full tiers run on the PR: add `run-ci` to the draft for the fast tier; the full
-   tier runs once the PR is ready; the `gate` check runs on the merge result. Do not run `deploy.mjs --gate-only`
-   or a whole browser group in the foreground.
+   local verification floor, and the one home of it (AGENTS.md rule 3 points here). The full tiers run on the PR:
+   add `run-ci` to the draft for the fast tier; the full tier runs once the PR is ready; the `gate` check runs on
+   the merge result. Do not run `deploy.mjs --gate-only`, the full `npm run test:tooling-fast` or a whole browser
+   group in the foreground; they are optional tools for a Bryce-attended session. `ready-gate` (step 5) needs
+   `Structural guards` green on your head, so let the `run-ci` fast tier finish once before you land (a full local
+   tooling-fast run writes the other accepted stamp).
 4. **Watch.** Subscribe to the PR (Claude: `subscribe_pr_activity`) only while CI runs on your own head. No
-   timers. A red on your head is work now; a red elsewhere is not yours.
+   timers. A red on your head while you still own it is work now; a red elsewhere is not yours. Never claim done
+   on a red.
 5. **Land.** When `node tools/ci/ready-gate.mjs --pr <n>` exits 0: flip the PR ready, add the `land` label, refresh
    the Hand-off block. Then the session ENDS. `land.yml` runs `merge-gate.mjs --check` as the check named `gate`
-   and arms auto-merge pinned to your head; the branch ruleset merges when `CI` and `gate` are green. Adding `land`
+   and arms auto-merge pinned to your head; the ruleset merges when `gate` is green (its ci row requires the newest
+   check named exactly `CI` green on your head). Adding `land`
    while CI still runs is fine: `gate` shows in progress ("waiting") and re-evaluates when CI ends. A red or a
    conflict after that is a fresh launch (`CONTINUE PR #<n>`), not you.
 6. **Stop at the cost cap.** The brief's cap is $10 soft. At the cap: finish the current unit, leave the Plan and
-   the Hand-off block current, add `needs-owner`, and end. Over the hard cap the dispatcher archives the session.
+   the Hand-off block current, add `needs-owner`, and end. The $15 hard-cap archive is NOT built (`dispatch.mjs`
+   reads no cost), so the soft cap is yours to keep.
 7. **Ask through a label.** A question only Bryce can answer is `needs-decision` plus one comment listing the
    options and your pick. Keep working on everything that does not depend on the answer. There is no
-   `AskUserQuestion` in a worker.
+   `AskUserQuestion` in a worker. When Bryce answers in the thread, the worker removes `needs-decision` and
+   carries on. The dispatcher skips a PR or issue carrying it, so a waiting PR is never re-owned.
+8. **Take over.** A `CONTINUE PR #<n>` worker adopts the PR: comment `adopts PR #<n> — <host>:<session id>` on it
+   and remove `needs-owner`, then work from the Hand-off block and the Plan. On a PR the NEWEST adoption comment
+   wins (stand down if a newer one appears), the opposite of issue claims: a takeover replaces an owner that went
+   silent.
 
 The PR is the report. Nothing else is read.
 
@@ -65,6 +87,9 @@ starts from this block and the Plan; it reads nothing else.
 | `dispatch:pause` | Dispatch issue | launch nothing |
 | `dispatch:merge-pause` | Dispatch issue | arm nothing |
 | `deploy:red` | Board issue | the latest Pages train failed; one fixer is launched |
+| `epic` | issue | a parent; the work is in its sub-issues, so never take the epic itself |
+| `bug` | issue | something is broken (GitHub's default label) |
+| `flaky` | issue | a test that passed on retry or fails across branches (AGENTS.md rule 9) |
 | `area:*` | issue | the subsystem (unchanged) |
 
 The labels live in `.github/labels.json`; applying new rows to GitHub is a `gh label create` by hand (or the
@@ -72,26 +97,49 @@ dispatcher) until a sync job exists again.
 
 ## The dispatcher
 
-A stateless hourly job (the dispatcher script of plan §4.4, `dispatch --apply`, run by one scheduled task per
-Claude account; it is a pure function of GitHub state and its JSON config of caps). Its rules:
+`node tools/ci/dispatch.mjs` is a pure function of GitHub state and `tools/ci/dispatch.json` (the caps). A node
+script cannot call the session tools, so it only PLANS: GitHub writes (labels, launch comments, the Board
+comment) happen with `--apply`, and every session action is printed as a `CREATE_SESSION <json>` or
+`ARCHIVE_SESSION <id>` line that the running agent executes. One cycle, in order: `list_sessions` (every page,
+saved for `--sessions`) → `get_session` (its `rate_limit_info.status` is `--quota`) → `dispatch.mjs --apply` → per
+`CREATE_SESSION` line: `get_session` (must complete; `launch-gate.py` refuses `create_session` without that fresh
+quota receipt) → `create_session` → run the printed `RECORD_LAUNCH` line, which posts the launch comment after the
+launch. Live workers are `role:worker` sessions that are RUNNING or WORKING; nothing else counts against the caps.
 
-1. A `ready` issue with no `claimed` gets one worker (`priority` first), up to the caps, when the account's quota allows.
-2. An open PR with no push and no comment for 2 h (6 h for `lane:codex`) and no `hold` gets `needs-owner` and ONE
-   takeover worker launched with `CONTINUE PR #<n>`.
-3. A red Pages train on the tip labels the Board `deploy:red` and launches one fixer unless one is claimed.
-4. A session whose PR merged or closed more than 60 min ago is archived; sessions without a claim comment are never touched.
+It runs in ONE persistent session per Claude account, woken hourly by a scheduled task bound to that session. A
+fresh scheduled session (`create_new_session_on_fire`) lacks `get_session`, `list_sessions` and `create_session`,
+so it cannot execute the lines. Two accounts are two dispatchers on one Board comment (marker
+`<!-- dispatch-board -->`, the last run wins it): the `dispatch: launched <host>:<title> for #<n> at <iso>`
+comment is the lock (younger than `launchClaimHours` = a live launch), and each account's quota, caps and
+archive scope are its own; one account cannot archive or message the other's sessions. Its rules:
+
+1. A `ready` issue with no `claimed`, `blocked` or `needs-decision` gets one worker (`priority` first), up to the
+   caps, when the account's quota allows. The script reads one page of 100 open issues (a known gap; a hand
+   search with `search_issues` sees them all).
+2. An open PR whose `updated_at` is older than 2 h (6 h for `lane:codex`), with no `hold` or `needs-decision`, gets
+   `needs-owner` and ONE takeover worker launched with `CONTINUE PR #<n>` (contract step 8). Never re-owned: a
+   `land` PR with no red and no conflict (GitHub is landing it), and bot PRs.
+3. When the latest COMPLETED `pages.yml` run on the deploy branch is red, it labels the Board `deploy:red` and
+   launches one fixer unless an open PR already carries `deploy:red`.
+4. A session whose PR merged or closed more than 60 min ago is archived. Never archived: a session tagged
+   `no-archive` or `role:dispatcher`, an untagged one, one without a claim comment, and one that is RUNNING, WORKING
+   or BLOCKED.
 5. It rewrites the Board comment: open PRs, state, age, owner, launches, quota per host, caps.
+
+`node tools/ci/pr-board.mjs` suggests LAND (the `land` label) for a PR that is ready to go, never ARM: no session
+arms. The veto is the `hold` label; a `MERGE-HOLD:` body line is retired and binds nothing.
 
 ## Per vendor
 
 - **Claude cloud session** (the default, `lane:claude`): the whole contract above. `subscribe_pr_activity` on your
   PR while CI runs on your head; no `send_later`, no bus, no orchestrator to report to.
-- **Cursor cloud agent** (`lane:cursor`, self-contained issues only): one run that ends at ready. You cannot set
-  labels: the dispatcher sets `run-ci` and `land` for you from the Hand-off block, so keep it current. No bus, no
-  timers, no `MERGE-HOLD` line. A red after your run is a follow-up turn from the dispatcher.
+- **Cursor cloud agent** (`lane:cursor`, self-contained issues only; `hosts.cursor.enabled` is false today): one
+  run that ends at ready, with the Hand-off block current. NOT BUILT: the dispatcher sets neither `run-ci` nor
+  `land` for a Cursor PR and sends no follow-up turn, so until it does Bryce adds them by hand. No bus, no timers.
 - **Codex thread** (`lane:codex`, Bryce's own tool, pull-only): write the Hand-off block at the first push and add
   `lane:codex`; the same `land` label lands you. A draft silent for 6 h is re-owned without asking. AGENTS.md stays
-  under 32 KiB and names no Claude-only tool, because it is all a Codex thread loads.
+  under 32 KiB because it is all a Codex thread loads; where it names a Claude-only tool (`Monitor`,
+  `run_in_background`, `subscribe_pr_activity`), Codex uses its own equivalent or skips the step.
 
 ## `LAND_TOKEN`
 
@@ -99,8 +147,11 @@ Claude account; it is a pure function of GitHub state and its JSON config of cap
 `contents: write` and `pull-requests: write` on this repository). Without it the workflow falls back to
 `GITHUB_TOKEN`, which still lands the PR, but "events triggered by the GITHUB_TOKEN will not create a new workflow
 run": the merge starts no Pages train, and the change ships on the 6-hourly cron or a manual dispatch. The job
-summary says so when it fell back. The deploy branch ruleset (set in the GitHub UI by Bryce) requires the checks
-`CI` and `gate`, allows merge commits only, forbids direct pushes and binds administrators; `pages.yml`'s
+summary says so when it fell back. The deploy branch ruleset "Deploy-reset" (set in the GitHub UI by Bryce; since
+2026-10-27 the only rule, classic branch protection is deleted) requires ONE check, `gate` (source: GitHub Actions).
+`CI` is not a GitHub-required check: `merge-gate.mjs`'s ci row enforces it, reading the newest check named exactly
+`CI` (the "CI ignored: edit/label" runs never post one, so they cannot leave a required `CI` "expected"). The ruleset
+allows merge commits only, forbids direct pushes and binds administrators; `pages.yml`'s
 workflow-level concurrency group (one running train, one pending, the newest pending replaces the older) is the
 pacing rule, so nobody has to remember "never dual-dispatch".
 

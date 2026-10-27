@@ -197,9 +197,9 @@ serializes the agent behind SwiftShader several times over.
 
 | When | Run |
 |---|---|
-| in the edit loop | `node tools/ci/verify-change.mjs --fast` (or `node tools/ci/tooling-fast.mjs --changed --jobs=3`) selects only the structural files owned by the diff and reports an estimated critical path; this is the quick local loop. `npm run test:tooling-fast` remains the full structural floor required before a code push. In CI the same full suite is **Structural guards**: two parallel tooling-fast shards named `Structural guards (tooling A)` / `Structural guards (tooling B)` (`tooling-fast.mjs --jobs=4 --shard=1/2 --bail` and `2/2 --bail`: since 2026-10-16 a shard stops STARTING files after its first failure, the files in flight finish, and the log says how many it skipped; the local full command has no `--bail`), then ratchet/audit on the aggregator still named `Structural guards` (~8 min wall, 461 s median 2026-10-05 — `.github/workflows/ci.yml` header; #1075). `ready-gate.mjs` reads that aggregator name |
+| in the edit loop | `node tools/ci/verify-change.mjs --fast` (or `node tools/ci/tooling-fast.mjs --changed --jobs=3`) selects only the structural files owned by the diff and reports an estimated critical path; this is the quick local loop and, with ONE relevant spec, a worker's whole local floor ([WORKERS.md](WORKERS.md) §3). The full `npm run test:tooling-fast` is optional locally (a green run writes the stamp `ready-gate` accepts); in CI the same full suite is **Structural guards**: two parallel tooling-fast shards named `Structural guards (tooling A)` / `Structural guards (tooling B)` (`tooling-fast.mjs --jobs=4 --shard=1/2 --bail` and `2/2 --bail`: since 2026-10-16 a shard stops STARTING files after its first failure, the files in flight finish, and the log says how many it skipped; the local full command has no `--bail`), then ratchet/audit on the aggregator still named `Structural guards` (~8 min wall, 461 s median 2026-10-05 — `.github/workflows/ci.yml` header; #1075). `ready-gate.mjs` reads that aggregator name |
 | track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |
-| once, when the edits are done | `node tools/ci/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
+| once, when the edits are done | a worker runs ONE relevant spec; the groups `pick-tests` names run on the PR (`run-ci`, `remote-group.mjs`). A Bryce-attended session may run `node tools/ci/test-bg.mjs tiny` (page loads, `__apex` responds) and then up to two named groups locally |
 | before pushing | + `npm run test:sweeps` if you touched the fleet build's inputs (`node tools/ci/geometry-paths.mjs --ere` prints them: `js/track/`, `js/circuits/`, `tools/track|lib`, the `TRACK_VM` modules); a lighting, car, debris-world or driving-line edit needs only the suite that reads it (`--targeted <list>` names it) — `deploy.mjs` and ci.yml's sweeps job make both calls for you |
 | single spec | `npm test -- tests/specs/<file>.spec.js` |
 | single unit suite | `node --test tests/unit/<file>.test.mjs` |
@@ -1160,9 +1160,11 @@ pins all of it. "Is my commit live?" is `git merge-base --is-ancestor <sha>
 
 ### Merge train (concurrent PRs)
 
-The ship branch is a **merge train**: merge **one large PR at a time**; batch
-small independent PRs so the tip does not thrash. Agents open DRAFT PRs and
-mark ready only when final (AGENTS.md §Coordination). Before marking
+No agent merges: a worker opens a DRAFT PR, and when it is final flips it
+ready and adds the `land` label; `land.yml` runs the `gate` check
+(`merge-gate.mjs`, which also holds a PR whose base is too far behind) and
+arms auto-merge, and `pages.yml`'s concurrency group paces the trains
+([WORKERS.md](WORKERS.md) §5). Before marking
 ready, the PR's owner runs `node tools/ci/ready-gate.mjs` (green tooling-fast evidence on the tip: the
 CI check-run named `Structural guards` — the aggregator after the
 `Structural guards (tooling A)` … `(tooling D)` shards — or a local
@@ -1202,8 +1204,8 @@ Two always-judged checks give the gate fixed names:
   cancel fails the aggregator. Advisory jobs (`baseline-trial`) never fail it.
   It carries the FAILURES of smoke, the sweeps, renderer-macos and xr, not their
   execution: only the `REQUIRE_SUCCESS` set (full-tier PR runs) must have run, and
-  the job summary lists which jobs executed vs were skipped (#3507). Since 2026-10-15 it is the deploy branch's ONE required check (an
-  owner setting; the twelve-name list before it is in
+  the job summary lists which jobs executed vs were skipped (#3507). From 2026-10-15 it was the deploy branch's one required check; since
+  2026-10-27 the ruleset requires only `gate` (land.yml), whose ci row requires `CI` green (an owner setting); the twelve-name list before it is in
   `docs/notes/CI-CLOG-SURVEY-2026-10-15.md` §4 C, the settings record in its §8).
 - **`Selected specs (verdict)`** (`selected-verdict` job, #507): one fixed
   name for the change-aware gate. `select` must succeed and `selected` must
