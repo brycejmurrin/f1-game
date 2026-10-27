@@ -11,6 +11,8 @@ run is long, hung, or targets a worker.
 - `debugger_logpoint` records a value per hit into a bounded ring; read it with
   `debugger_logpoint_read`.
 - `debugger_exception_log` (start/read/clear/stop) collects exceptions without pausing.
+- `debugger_incident` saves the latest exception-log entry, `__apex` state and a JPEG under
+  `scratch/debug-incidents` (the shot is later than the failing frame).
 - `debugger_listeners` and `debugger_instances` report counts across restarts.
 - `debugger_run` is always mutating (no `allowSideEffects`; only `debugger_evaluate`
   has it), and a new run abandons a hung one.
@@ -30,8 +32,8 @@ run is long, hung, or targets a worker.
   up to 8 test files under the inspector at once and returns exit code, TAP pass/fail, failing test
   names, per-probe hit counts, values and locals. No attach; it runs beside a page session.
 - Probing `js/` game code a test loads through `vm`: give the repo path (`js/physics/brake-cue.js`);
-  every filename form and unnamed copies bind (see the reference §Node). Probe a body line, not the
-  `function` header line.
+  every filename form and unnamed copies bind (see the reference §Node). Probe a body line past
+  the early returns you care about, not the `function` header line (page breakpoints too).
 - `runner:"test"` = real `node --test`; `children:true` auto-attaches Node processes the test spawns.
 - Interactive instead: `node --inspect-brk=127.0.0.1:9229 <file>`, then `debugger_targets` on
   `http://127.0.0.1:9229` and attach the `node` row (stops at Break on start; repo paths as URLs).
