@@ -64,7 +64,7 @@ archive/notes/, archive/superpowers/, archive/slider-effect/, archive/manual-pro
 archive/tracks/, archive/workflows/, archive/moves/, archive/tools/) · [changelog.d/](changelog.d/README.md)
 per-PR changelog fragments · [tracks/](tracks) per-circuit reference · [look-survey/](look-survey/README.md)
 contact sheets · [surveys/](surveys) and survey/ profiling surveys · perf/ device measurements ·
-[evidence/](evidence/historical-catalog.json) capture catalog · [project-map/](project-map/shell.md) source mapping and coverage reports.
+[evidence/](evidence/historical-catalog.json) capture catalog · [project-map/](project-map/GOAL.md) source mapping goal, coverage index and reports.
 
 For day-to-day workflows, see the skills (`.claude/skills/README.md`) and the
 tools (`tools/README.md`).
