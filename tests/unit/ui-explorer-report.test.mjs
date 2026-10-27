@@ -176,3 +176,28 @@ test('missingEvidence names linked evidence files absent from the output directo
     assert.deepEqual(missingEvidence(bundle, dir).map((m) => m.kind), ['repro']);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('summarize counts the final cumulative replay history once, offline', async () => {
+  const { summarizeReplay } = await import('../../tools/ui/explorer/summary.mjs');
+  const click = (n) => ({ type: 'click', selector: `#b${n}` });
+  const bind = { type: 'assert', oracle: { type: 'binding', selector: '#pm-x', runtime: 1 } };
+  const actions = [click(1), click(2), bind, click(3), { type: 'reload' }, click(4), click(5), bind];
+  const rec = (id, n) => ({ id, actions: actions.slice(0, n) });
+  const bundle = { capabilities: [{ id: 'missions', records: [rec('s-3', 3), rec('s-5', 5), rec('s-final', actions.length)] }] };
+  const [row] = summarizeReplay(bundle);
+  assert.deepEqual([row.actions, row.byType.click, row.byType.reload, row.currentBindings, row.actionAssertions, row.assertionsAfterReload], [8, 5, 1, 2, 0, 1]);
+});
+
+test('--group-unmapped groups by stable id, keeps totals, infers no binding', async () => {
+  const { groupUnmapped } = await import('../../tools/ui/explorer/summary.mjs');
+  const ctl = (selector, name, status) => ({ selector, name, role: 'button', binding: { status } });
+  const controls = [ctl('#pm-a', 'A', 'unmapped'), ctl('#pm-b', 'B', 'unmapped'), ctl('#mb-race', 'Race', 'unmapped'), ctl('#pm-c', 'C', 'matches'), ctl('#go', 'Go', 'not-applicable')];
+  const text = groupUnmapped({ controls });
+  assert.equal(text, 'unmapped\t?\tgroups=2; controls=3; status=unknown\n  mb\t1\tRace\n  pm\t2\tA | B');
+});
+
+test('summarize CLI is browser-free and rejects --group-unmapped elsewhere', async () => {
+  const { parseOptions } = await import('../../tools/ui/explorer.mjs');
+  assert.equal(parseOptions(['summarize', 'r.json', '--group-unmapped']).groupUnmapped, true);
+  assert.throws(() => parseOptions(['report', 'r.json', '--group-unmapped']), /requires inspect or summarize/);
+});
