@@ -314,7 +314,9 @@ test("the CI guard shards always run; only their file list narrows, and the mode
     assert.match(steps[scope].run, /tooling-fast\.mjs --print-scope/);
     const hash = steps.find((st) => st.id === "h");
     assert.ok(steps.indexOf(hash) > scope, `${id}: the scope is known before the cache key`);
-    assert.match(hash.run, /\$\{\{ steps\.scope\.outputs\.mode \}\}/, `${id}: the mode is part of the verdict-cache key`);
+    // Through env, not inline: zizmor's template-injection audit fails the lints job on an inline step output.
+    assert.equal(hash.env.GUARDS_MODE, "${{ steps.scope.outputs.mode }}");
+    assert.match(hash.run, /-\$\{GUARDS_MODE\}-/, `${id}: the mode is part of the verdict-cache key`);
     const run = steps.find((st) => /tooling-fast\.mjs.*--shard=/.test(st.run || ""));
     assert.match(run.run, new RegExp(`\\$\\{GUARDS_CHANGED:\\+--changed\\} --jobs=4 --shard=${shard.replace("/", "\\/")} --bail$`));
     assert.equal(run.env.GUARDS_CHANGED, "${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}");

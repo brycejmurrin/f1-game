@@ -434,7 +434,9 @@ jobs:
       - name: Inputs hash (guards)
         id: h
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
-        run: echo "key=guards-a-${{ runner.os }}-${{ steps.scope.outputs.mode }}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        env:
+          GUARDS_MODE: ${{ steps.scope.outputs.mode }}
+        run: echo "key=guards-a-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -507,7 +509,9 @@ jobs:
       - name: Inputs hash (guards)
         id: h
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
-        run: echo "key=guards-b-${{ runner.os }}-${{ steps.scope.outputs.mode }}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        env:
+          GUARDS_MODE: ${{ steps.scope.outputs.mode }}
+        run: echo "key=guards-b-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -638,7 +642,9 @@ jobs:
       - name: Inputs hash (guards)
         id: h
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
-        run: echo "key=guards-c-${{ runner.os }}-${{ steps.scope.outputs.mode }}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        env:
+          GUARDS_MODE: ${{ steps.scope.outputs.mode }}
+        run: echo "key=guards-c-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -711,7 +717,9 @@ jobs:
       - name: Inputs hash (guards)
         id: h
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
-        run: echo "key=guards-d-${{ runner.os }}-${{ steps.scope.outputs.mode }}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        env:
+          GUARDS_MODE: ${{ steps.scope.outputs.mode }}
+        run: echo "key=guards-d-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
