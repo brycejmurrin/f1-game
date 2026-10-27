@@ -30,7 +30,14 @@ const PlayerForces = (function () {
   function create(g) {
     G = g;
     Log.info("game", "PlayerForces.create");
-    return { step, tyreSat };
+    return { step, tyreSat, recoverBlocked };
+  }
+
+  // M42 pit-lane guard: RECOVER and the stuck auto-rescue snap the car to x = 0 (the racing
+  // surface), so a car in the lane or serving a stop in its box is never recovered — it would
+  // be thrown across the lane while its pitState stays lane/box. `inLane` comes from pits.inLane.
+  function recoverBlocked(c, inLane) {
+    return !!inLane || c.pitState === "box";
   }
 
   // Combined slip → axle µ → Fy → yaw/vLat/head. Writes force fields on `c`.
@@ -453,6 +460,6 @@ const PlayerForces = (function () {
     }
   }
 
-  return { create, tyreSat };
+  return { create, tyreSat, recoverBlocked };
 })();
 Object.freeze(PlayerForces);
