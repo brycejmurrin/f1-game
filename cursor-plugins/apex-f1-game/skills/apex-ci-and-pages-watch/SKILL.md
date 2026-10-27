@@ -2,8 +2,8 @@
 name: Apex CI and Pages watch
 description: >-
   Use this when watching Apex (f1-game) GitHub Actions CI or Deploy to GitHub
-  Pages, diagnosing a red check, reading failed job logs, or deciding whether to
-  merge or redeploy.
+  Pages, diagnosing a red check, reading failed job logs, or deciding whether a
+  PR or a Pages train is green.
 ---
 # Apex CI and Pages watch
 
@@ -21,9 +21,9 @@ A green PR CI does **not** prove Pages will pass. Pages diffs against `before_sh
 
 ## Watcher (no sleep / `gh run view` loops)
 
-Use `node tools/ci/ci-watch.mjs --sha <head> [--pages] [--once]` (rule 12). Match **head_sha**. Re-arm on expiry until the `= ci …` line. Ignore cancelled twins superseded by a newer run on the same SHA (draft/ready dedupe).
+Use `node tools/ci/ci-watch.mjs --sha <head> [--pages] [--once]` (AGENTS.md rule 13). Match **head_sha**. Watch only while CI runs on your own head (`docs/WORKERS.md` §4): a Cursor run ends at ready, and a red after it is a dispatcher follow-up turn. Ignore cancelled twins superseded by a newer run on the same SHA (draft/ready dedupe).
 
-If `mergeable_state` is `dirty`, sync by **merging** `origin/claude/f1-game-project-26h3ng` (`sync-pr.mjs`), never rebase or force-push. Sync only when CONFLICTING/DIRTY or a required tip check is red. Ship-checkpoint freeze: no sync pushes/merges. After merge, watch Pages and its nested release gate, not the closed PR.
+Sync by **merging** `origin/claude/f1-game-project-26h3ng` (`sync-pr.mjs`), never rebase or force-push, and only when AGENTS.md §Git branch & deploy says so: GitHub reports CONFLICTING/DIRTY or the `gate` check refuses the base distance; never for clean-behind. After a merge, Pages and its nested release gate are the verdict, not the closed PR.
 
 `node tools/ci/queue-depth.mjs` reports capacity only. Either queue verdict exits 0; it does not hold a launch, sync, or push. Use the current canonical launch and merge policies for actual gates.
 
@@ -46,21 +46,21 @@ If `mergeable_state` is `dirty`, sync by **merging** `origin/claude/f1-game-proj
 | Per-circuit geometry sweeps: `debris-hazard-hint` float ULP | Suzuka arc `assert.equal` on floats | Blaming the last feature PR blindly |
 | Boot / `__apex` timeout under CI | Three/TLX default under llvmpipe, or dead `DISPLAY` | Reverting player default without checking fixtures |
 | PR green, Pages red | Pages `before_sha` selects specs not in the PR matrix | Merging then ignoring Pages |
-| `tooling-fast` green locally, Pages red | Pages runs more node suites + sweeps than tooling-fast | Skipping `deploy.mjs` Pages-gate suites |
+| `tooling-fast` green locally, Pages red | Pages runs more node suites + sweeps than tooling-fast | Treating the local floor as the whole gate |
 
 Product defaults live in `js/data/settings-defaults.js`. Align tests to intentional defaults; do not “fix” CI by changing player defaults unless product says so.
 
-Pre-push for a fix: `npm run test:tooling-fast` plus pick-tests Structural guards. Push once per green local cycle.
+Pre-push for a fix: the local floor in `docs/WORKERS.md` §3; the PR's CI tiers run the rest. Push once per green local cycle.
 
 ## Deploy / redeploy
 
-- Preferred local protocol: `node tools/ci/deploy.mjs` (see AGENTS.md). A deploy-branch push starts the Pages train directly.
-- Manual: `actions_run_trigger` `run_workflow` on workflow `295002043`, `ref: claude/f1-game-project-26h3ng`. One green tip → one train; do not dual-dispatch Pages.
+- A deploy is a PR landing: the `land` label → `land.yml` → GitHub's merge commit on the deploy branch starts the Pages train. No session pushes to the deploy branch (refused) or runs plain `deploy.mjs`.
+- Manual "deploy now" is Bryce's: `actions_run_trigger` `run_workflow` on workflow `295002043`, `ref: claude/f1-game-project-26h3ng`. `pages.yml`'s concurrency group keeps one running and one pending train.
 - After dispatch, watch that Pages run with `ci-watch.mjs --sha <sha> --pages`. On failure, read **nested** failed jobs (`ci / Selected specs…`), not only the Pages wrapper conclusion.
 - Geometry pushed to ship: also run / expect `test:sweeps`. Sweeps are not in tooling-fast.
 
 ## Report shape to the user
 
-Lead with: merged or not, head SHA, which run URL, green or red. If red: failing test name + Expected/Received (or timeout). Say whether PR CI or Pages’ release gate/publication failed. Next action in one sentence. Handoff: paths, PR/bc, OWNED, ranked next ≤3, blockers.
+Lead with: merged or not, head SHA, which run URL, green or red. If red: failing test name + Expected/Received (or timeout). Say whether PR CI or Pages’ release gate/publication failed. Next action in one sentence. On your own PR, the hand-off is its ```handoff block (`docs/WORKERS.md` §The Hand-off block).
 
 Never narrate cancelled superseded runs as the verdict. Never declare deploy live until Pages succeeded (or verify-live / version confirms the merge commit).

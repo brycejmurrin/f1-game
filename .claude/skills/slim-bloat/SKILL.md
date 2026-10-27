@@ -47,8 +47,8 @@ locksteps; if `tools/manifest.cjs` changed, run `npm run gen`
    (`ARCHITECTURE.md` §Reorg — copied constants, leftover `_cautionOn`).
 2. **Ratchets only go down here** (`.claude/rules/game-code.md`): `node tools/check/ratchets.mjs --update --lower-only`
    in the same commit as the extract.
-3. **Never convert IIFE → ESM**; a carved-out file follows AGENTS.md §Critical
-   conventions' new-file recipe.
+3. **Never convert IIFE → ESM**; a carved-out file follows the new-file recipe in
+   `.claude/rules/game-code.md`.
 4. **Never hand the auditor a browser run** (AGENTS.md rule 10, `bash-guard.sh`).
    Dead `__apex` hooks: the parent confirms with **mcp-probe**.
 5. **Never "simplify" physics, the timestep, or `updateCar`/`render()`.**

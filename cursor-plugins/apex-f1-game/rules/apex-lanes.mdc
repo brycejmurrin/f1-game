@@ -1,15 +1,16 @@
 ---
-description: Apex specialty lane boundaries for f1-game work (agent-requested)
+description: Apex work contract and subsystem boundaries for f1-game Cursor agents (agent-requested)
 alwaysApply: false
 ---
 
 # Apex lanes
-- UI Survey: menus/HUD chrome/garage sheets — not meshes or GarageDefaults
-- Cars: meshes/liveries/presentation — not UI chrome
-- Tracks: scenery/audits — one open PR per circuit
-- Perf: boot/particles/probes — not weather design
-- CI Watch: read-only CI/Pages watcher — merge authority: GitHub lands PRs via the
-  `land` label and `land.yml` (`docs/WORKERS.md`)
-- Audio / Net / Docs / Insights: stay in named lanes
-Prefer Auto/`default` only (no alternate-model fallback); draft PRs on `cursor/<topic>-<hash>` → ship; attach evidence.
-Handoff is incomplete without paths, PR/bc, OWNED globs, ranked next ≤3, blockers (or `idle / no PR`).
+The contract is `docs/WORKERS.md` (one session, one issue, one PR); this rule only points at it.
+- Work comes from a `ready` issue: claim comment `claims #<n> — cursor:<agent id>` (the older claim wins).
+- Draft PR on `cursor/<topic>-<hash>` into `claude/f1-game-project-26h3ng`, template body, `Closes #<n>`,
+  `lane:cursor`, and a ```handoff block (branch, head, owner, lane, verified, not-run, next) kept current. A
+  Cursor agent cannot set labels: the dispatcher reads the block (WORKERS §Per vendor).
+- Comments on the issue or PR are the only messages; the PR is the report. No bus, no watcher lane, no
+  second hand-off format.
+- Subsystem boundaries follow the issue's `area:*` label: UI chrome (menus, HUD, garage sheets) vs car meshes and
+  liveries vs track scenery vs perf. A path in an OPEN PR's diff belongs to that PR (AGENTS.md §Git branch & deploy).
+- GitHub lands PRs (`land` label, `land.yml`); no agent merges or arms. Model Auto/`default` only.
