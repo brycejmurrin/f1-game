@@ -56,3 +56,14 @@ Codex workflows, profiling/workflow references, browser helper and comparison
 helper. Environment references were adapted to the canonical checkout. The
 saved startup text had named 0.2.9, but no corresponding retained manifest was
 available; the consolidated Dev Tools release is 0.3.0 to avoid a downgrade.
+
+Clean-source restoration validation reconstructed both plugin ZIPs byte-for-byte
+from an archive of the staged Git source tree, without retained uploads or
+plugin output. The archive's main package-lock restored 170 dependencies via
+npm ci; npm ls was valid and all 13 gateway/asset contract tests passed there.
+This is source/dependency restoration evidence, not a fresh provider instance.
+Environment verification also passed seven environment regressions, one native
+health regression, two initialization-shim protocol tests, five package-builder
+regressions and 24 package tests. Static GLSL compiled all 33 variants; naga WGSL
+and static TLX checks remain explicit skips. No rendered/gameplay change is
+claimed. Browser smoke helper was consolidated but not run for this repair.
