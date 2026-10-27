@@ -50,7 +50,18 @@ const NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 const NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetSnapshot = NetSnapshot;
 globalThis.NetSession = NetSession;
+globalThis.QualiWire = eval(src("js/net/quali-wire.js") + ";QualiWire");
+globalThis.StrategyWire = eval(src("js/net/strategy-wire.js") + ";StrategyWire");
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
+
+test("quali-wire and strategy-wire evaluate before netplay", () => {
+  const { LAZY_NET, LAZY_NET_EDGES } = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
+  const play = LAZY_NET.indexOf("js/net/netplay.js");
+  for (const file of ["js/net/quali-wire.js", "js/net/strategy-wire.js"]) {
+    assert.ok(LAZY_NET.indexOf(file) >= 0 && LAZY_NET.indexOf(file) < play, file + " loads before netplay.js");
+    assert.ok(LAZY_NET_EDGES.some(([a, b]) => a === file && b === "js/net/netplay.js"), file + " is an eval-time edge");
+  }
+});
 
 test("a host RESULT must be a bijection before its timing mutates any guest car", () => {
   const netOrderSource = symbolSource("function netOrder(order)");

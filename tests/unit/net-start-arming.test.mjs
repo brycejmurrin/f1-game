@@ -31,6 +31,8 @@ globalThis.NetTransport = eval(src("js/net/transport.js") + ";NetTransport");
 globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 globalThis.NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 globalThis.NetSession = eval(src("js/net/session.js") + ";NetSession");
+globalThis.QualiWire = eval(src("js/net/quali-wire.js") + ";QualiWire");
+globalThis.StrategyWire = eval(src("js/net/strategy-wire.js") + ";StrategyWire");
 globalThis.Tracks = { sample: (t, s, o) => { o.t = [0, 0, 1]; return o; } };
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 

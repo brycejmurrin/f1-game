@@ -343,6 +343,8 @@ const NET_READY = {
   "js/net/lobby-codes.js": () => typeof LobbyCodes !== "undefined",
   "js/net/snapshot.js": () => typeof NetSnapshot !== "undefined",
   "js/net/session.js": () => typeof NetSession !== "undefined",
+  "js/net/quali-wire.js": () => typeof QualiWire !== "undefined",
+  "js/net/strategy-wire.js": () => typeof StrategyWire !== "undefined",
   "js/net/netplay.js": () => typeof NetPlay !== "undefined",
   "js/net/lobby.js": () => typeof NetLobby !== "undefined",
   "js/input/phone-pad.js": () => typeof PhonePad !== "undefined",

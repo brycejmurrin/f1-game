@@ -700,6 +700,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `interp.js` | `NetInterp` | LAZY_NET | NetInterp — draw a rival smoothly from late, reordered or missing poses. |
 | `snapshot.js` | `NetSnapshot` | LAZY_NET | NetSnapshot — what actually goes on the wire, and how a rival is drawn smoothly from packets that arrive late, out of order, or not at all. |
 | `session.js` | `NetSession` | LAZY_NET | NetSession — the layer between a transport and the game. |
+| `quali-wire.js` | `QualiWire` | LAZY_NET | QualiWire — one validation site for a peer's qualifying time. |
+| `strategy-wire.js` | `StrategyWire` | LAZY_NET | StrategyWire — the versioned tyre and pit payload on the reliable channel. |
 | `spectate.js` | `NetSpectate` | LAZY_NET | NetSpectate — the role policy shared by NetPlay's seat assignment and send gates. |
 | `netplay.js` | `NetPlay` | LAZY_NET | NetPlay — the game side of multiplayer. |
 | `lobby.js` | `NetLobby` | LAZY_NET | NetLobby — getting two people into the same race, with no server. |

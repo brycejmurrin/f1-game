@@ -38,6 +38,8 @@ const NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 const NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetSnapshot = NetSnapshot;
 globalThis.NetSession = NetSession;
+globalThis.QualiWire = eval(src("js/net/quali-wire.js") + ";QualiWire");
+globalThis.StrategyWire = eval(src("js/net/strategy-wire.js") + ";StrategyWire");
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 // poseRemote samples the track for yawVis; a straight is enough here.
 globalThis.Tracks = { sample: (_t, _s, out) => { out.t[0] = 0; out.t[2] = 1; return out; } };

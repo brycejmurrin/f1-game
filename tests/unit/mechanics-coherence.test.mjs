@@ -63,7 +63,7 @@ test("ghost classes isolate records, retain legacy laps and survive immediate sw
 });
 
 test("network strategic state clamps telemetry and never changes car pose", () => {
-  const N=load(["js/net/netplay.js"]).get("NetPlay");
+  const N=load(["js/net/quali-wire.js", "js/net/strategy-wire.js", "js/net/netplay.js"]).get("NetPlay");
   const c={px:3,pz:5,speed:40,tyre:{id:"soft",code:"S",life:.67,tread:0,colour:[1,0,0]},tyreWear:.7,pitState:"box",pitT:2,tyreStints:2};
   const d=N.strategyState(c,7,"monza"), remote={px:10,speed:30};
   d.fields.tyreWear=1e8; d.fields.speed=1000;

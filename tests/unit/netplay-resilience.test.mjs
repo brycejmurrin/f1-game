@@ -24,6 +24,8 @@ const spectatePath = path.join(ROOT, "js/net/spectate.js");
 globalThis.NetSpectate = fs.existsSync(spectatePath)
   ? eval(fs.readFileSync(spectatePath, "utf8") + ";NetSpectate")
   : undefined;
+globalThis.QualiWire = eval(src("js/net/quali-wire.js") + ";QualiWire");
+globalThis.StrategyWire = eval(src("js/net/strategy-wire.js") + ";StrategyWire");
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 globalThis.Tracks = { sample: (_track, _s, out) => { out.t[0] = 0; out.t[2] = 1; return out; } };
 

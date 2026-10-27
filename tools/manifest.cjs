@@ -1292,6 +1292,8 @@ const LAZY_NET = [
   "js/net/interp.js",       // NetInterp: rival smoothing; NetSnapshot.createInterp forwards
   "js/net/snapshot.js",
   "js/net/session.js",
+  "js/net/quali-wire.js",   // QualiWire: QUALI/QLIVE validation; NetPlay calls create(EV) at eval
+  "js/net/strategy-wire.js", // StrategyWire: tyre/pit codec; NetPlay calls create() at eval
   "js/net/spectate.js",
   "js/net/netplay.js",
   "js/net/lobby.js",
@@ -1351,6 +1353,8 @@ const LAZY_NET_EDGES = [
   ["js/net/ice.js", "js/net/transport.js"], // transport calls NetIce.create() while evaluating
   ["js/net/interp.js", "js/net/snapshot.js"], // createInterp forwards at call time; keep the codec's dependency ordered
   ["js/net/snapshot.js", "js/net/session.js"],
+  ["js/net/quali-wire.js", "js/net/netplay.js"], // NetPlay calls QualiWire.create(EV) while evaluating
+  ["js/net/strategy-wire.js", "js/net/netplay.js"], // NetPlay calls StrategyWire.create() while evaluating
   ["js/net/spectate.js", "js/net/netplay.js"],
   ["js/net/sdp.js", "js/net/handshake.js"],
   ["js/net/qr.js", "js/net/lobby-codes.js"],

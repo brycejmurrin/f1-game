@@ -275,7 +275,10 @@ clamp, `NetPlay.clampWire` — s to the lap, x/speed to ±200, head wrapped, lap
 to target+1. The QUALI/QLIVE receivers and senders are NetPlay's too
 (`bindQuali` / `qualiReporters`): the lobby registers the same handlers during
 qualifying, so a peer's `t` is coerced and bounded (20 s .. 1 h) at ONE site in
-both phases and stored as a number. tick() also runs
+both phases and stored as a number. That site is `js/net/quali-wire.js`
+(`QualiWire.create(EV)` while NetPlay evaluates). The tyre/pit codec is
+`js/net/strategy-wire.js`; `strategyState`, `applyStrategy` and
+`STRATEGY_VERSION` stay on NetPlay. tick() also runs
 through the paused gate: one player opening a menu cannot stop a shared world.
 AI retirements use the existing reliable LAP event, bound to the receiving
 race's epoch. The host repeats terminal AI state with its one-second strategy

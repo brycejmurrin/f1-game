@@ -521,6 +521,8 @@
     "js/net/interp.js",
     "js/net/snapshot.js",
     "js/net/session.js",
+    "js/net/quali-wire.js",
+    "js/net/strategy-wire.js",
     "js/net/spectate.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
@@ -538,6 +540,14 @@
     [
       "js/net/snapshot.js",
       "js/net/session.js"
+    ],
+    [
+      "js/net/quali-wire.js",
+      "js/net/netplay.js"
+    ],
+    [
+      "js/net/strategy-wire.js",
+      "js/net/netplay.js"
     ],
     [
       "js/net/spectate.js",

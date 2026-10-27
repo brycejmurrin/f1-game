@@ -33,6 +33,10 @@ const NetTransport = load("js/net/transport.js", "NetTransport");
 const NetInterp = load("js/net/interp.js", "NetInterp");
 const NetSnapshot = load("js/net/snapshot.js", "NetSnapshot");
 const NetSession = load("js/net/session.js", "NetSession");
+// netplay.js calls both create() while it evaluates. The delivery test below
+// builds NetPlay with new Function, which resolves these names on the global.
+globalThis.QualiWire = load("js/net/quali-wire.js", "QualiWire");
+globalThis.StrategyWire = load("js/net/strategy-wire.js", "StrategyWire");
 
 const seededRnd = (seed) => {
   let s = (seed >>> 0) || 1;
