@@ -12,12 +12,22 @@
         ]
       },
       {
-        "matcher": "^mcp__.*__(merge_pull_request|enable_pr_auto_merge|update_pull_request|actions_run_trigger)$",
+        "matcher": "^(mcp__.*[_.]|github[_.])(merge_pull_request|enable_pr_auto_merge|update_pull_request|actions_run_trigger|mark_pull_request_ready_for_review|update_ref|create_ref|delete_ref|create_branch|delete_branch|delete_file|create_blob|create_tree|create_commit|update_file|create_or_update_file|push_files)$",
         "hooks": [
           {
             "type": "command",
             "command": "bash .codex/hooks/mcp-guard.sh",
             "timeout": 20
+          }
+        ]
+      },
+      {
+        "matcher": "^apply_patch$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .codex/hooks/edit-guard.sh",
+            "timeout": 30
           }
         ]
       }

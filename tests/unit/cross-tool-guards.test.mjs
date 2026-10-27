@@ -159,6 +159,77 @@ test("Codex's MCP door: the GitHub guard runs, an ask becomes a deny, a gated me
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// W0 of the 2026-10-26 Codex parity plan (archive-mining finding R2-2): Codex's GitHub
+// connector reaches hooks as mcp__codex_apps__github_<tool> (session-contracts.test.mjs fixture shape) and sends
+// pr_number / expected_head_sha; the old matcher needed "__" before the tool, so merges, ready flips, forced
+// update_ref and Git Data pushes ran unguarded. No live Codex connector payload is captured yet: the matcher also
+// accepts "." between github and the tool.
+test("Codex connector shape: merge/ready need receipts, forced or deploy-branch refs and Git Data pushes are denied", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "codex-connector-"));
+  const mcp = (tool, input) => {
+    const r = spawnSync("bash", [path.join(ROOT, ".codex/hooks/mcp-guard.sh")],
+      { input: JSON.stringify({ tool_name: tool, tool_input: input, hook_event_name: "PreToolUse" }), encoding: "utf8",
+        env: { ...process.env, APEX_RUN_CANCEL_OK: "", APEX_MERGE_DESK: "", CLAUDE_PROJECT_DIR: dir } });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput : null;
+  };
+  const C = "mcp__codex_apps__github_";
+  try {
+    const g = JSON.parse(fs.readFileSync(path.join(ROOT, ".codex/hooks.json"), "utf8")).hooks.PreToolUse
+      .find((x) => x.hooks.some((h) => h.command.includes(".codex/hooks/mcp-guard.sh")));
+    const re = new RegExp(g.matcher);
+    for (const t of ["merge_pull_request", "mark_pull_request_ready_for_review", "update_ref", "create_blob", "create_tree",
+      "create_commit", "update_file", "create_branch", "push_files", "create_or_update_file", "update_pull_request"])
+      assert.ok(re.test(C + t), C + t);
+    for (const n of ["mcp__codex_apps__github.merge_pull_request", "github.update_ref", "mcp__github__merge_pull_request"]) assert.ok(re.test(n), n);
+    for (const n of [C + "get_pull_request", C + "update_pull_request_branch", "mcp__codex_apps__browser_use_automate_browser", "apply_patch"])
+      assert.ok(!re.test(n), `matcher must not catch ${n}`);
+    const head = "b".repeat(40);
+    assert.equal(mcp(C + "merge_pull_request", { pr_number: 7, merge_method: "merge", expected_head_sha: head })?.permissionDecision, "deny", "merge without a receipt");
+    assert.equal(mcp(C + "mark_pull_request_ready_for_review", { pr_number: 7 })?.permissionDecision, "deny", "ready without a receipt");
+    const gateFiles = committedGate(dir), at = new Date().toISOString();
+    for (const kind of ["merge", "ready"]) {
+      fs.mkdirSync(path.join(dir, `artifacts/${kind}-gate`), { recursive: true });
+      fs.writeFileSync(path.join(dir, `artifacts/${kind}-gate/7.json`), JSON.stringify({ kind, pr: 7, head, ok: true, at, gateRoot: dir, gateFiles }));
+    }
+    assert.equal(mcp(C + "merge_pull_request", { pr_number: 7, merge_method: "merge", expected_head_sha: head }), null, "gated merge with pr_number passes");
+    assert.equal(mcp(C + "merge_pull_request", { pr_number: 7, merge_method: "squash", expected_head_sha: head })?.permissionDecision, "deny", "squash");
+    assert.equal(mcp(C + "mark_pull_request_ready_for_review", { pr_number: 7 }), null, "ready with a fresh ready-gate receipt passes");
+    assert.equal(mcp(C + "update_ref", { ref: "heads/cursor/x-1", sha: head, force: true })?.permissionDecision, "deny", "forced update_ref");
+    assert.equal(mcp(C + "update_ref", { ref: "refs/heads/claude/f1-game-project-26h3ng", sha: head })?.permissionDecision, "deny", "deploy-branch ref");
+    assert.equal(mcp(C + "update_ref", { ref: "heads/cursor/x-1", sha: head, force: false }), null, "a fast-forward of a work branch passes");
+    for (const t of ["create_blob", "create_tree", "create_commit", "update_file"]) {
+      const out = mcp(C + t, { content: "x" });
+      assert.equal(out?.permissionDecision, "deny", t);
+      assert.ok(/git push.*R2-2/s.test(out.permissionDecisionReason), `${t}: ${out.permissionDecisionReason}`);
+    }
+    assert.equal(mcp("github.push_files", { branch: "cursor/x-1" })?.permissionDecision, "deny", "dotted name, push_files");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Codex edits files only through apply_patch (tool_input.command; https://learn.chatgpt.com/docs/hooks).
+test("Codex edit door: apply_patch reaches protect-files (generated files, ratchet bans), fails closed", () => {
+  const g = JSON.parse(fs.readFileSync(path.join(ROOT, ".codex/hooks.json"), "utf8")).hooks.PreToolUse
+    .find((x) => x.hooks.some((h) => h.command === "bash .codex/hooks/edit-guard.sh"));
+  assert.ok(g && new RegExp(g.matcher).test("apply_patch") && !new RegExp(g.matcher).test("Bash"), "apply_patch is wired");
+  assert.ok(fs.statSync(path.join(ROOT, ".codex/hooks/edit-guard.sh")).mode & 0o111, "edit-guard.sh must be executable");
+  const edit = (patch) => {
+    const r = spawnSync("bash", [path.join(ROOT, ".codex/hooks/edit-guard.sh")],
+      { input: JSON.stringify({ tool_name: "apply_patch", tool_input: { command: patch }, cwd: ROOT, hook_event_name: "PreToolUse" }),
+        encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT } });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : null;
+  };
+  const P = (body) => `*** Begin Patch\n${body}\n*** End Patch\n`;
+  assert.equal(edit(P("*** Add File: version.json\n+{}")), "deny", "a generated file");
+  assert.equal(edit(P("*** Update File: version.json\n@@\n-{\n+{ ")), "deny", "an update of a generated file");
+  assert.equal(edit(P("*** Update File: tests/data/ratchets.json\n@@\n+  \"x\": 1,")), "deny", "a context-free ratchet insert");
+  assert.equal(edit(P("*** Delete File: tests/data/ratchets.json")), "deny", "a ratchet removal");
+  assert.equal(edit("not a patch"), "deny", "an unreadable payload");
+  assert.equal(edit(P("*** Add File: scratch/codex-edit-guard-probe.txt\n+hello")), null, "an ordinary new file passes");
+  assert.equal(edit(P("*** Update File: scratch/codex-edit-guard-probe.txt\n@@\n-hello\n+bye")), null, "an ordinary update passes");
+});
+
 test("pre-push refuses the deploy branch, deletes and rewrites; passes a fast-forward and a new branch", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "prepush-"));
   try {

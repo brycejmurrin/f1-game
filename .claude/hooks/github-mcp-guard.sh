@@ -23,6 +23,12 @@
 #                                                  -> "deny" (settings.json denies them too; this is the
 #                                                     Cursor/Codex door: on the admin App token a file write
 #                                                     lands on any branch with no PR and no CI)
+#   mark_pull_request_ready_for_review (Codex connector) -> as a draft->ready update_pull_request
+#   update_ref with force truthy, or a ref write (update_ref / create_ref / delete_ref / delete_branch)
+#   naming the deploy branch                       -> "deny" (`git push` only; never forced, never the deploy branch)
+#   create_blob / create_tree / create_commit / update_file
+#                                                  -> "deny" (a Git Data API file push skips .githooks/pre-push;
+#                                                     docs/notes/CODEX-ARCHIVE-MINING-2026-10-26.md R2-2)
 #   actions_run_trigger run_workflow of pages.yml / ci.yml (or a numeric id)
 #                                                  -> "ask" (the release train: never dual-dispatch Pages)
 #   actions_run_trigger delete_workflow_run_logs     -> "ask" (evidence other sessions read)
@@ -33,6 +39,11 @@
 #   actions_run_trigger rerun_*                      -> "ask" (at most once, infra only; never a superseded run);
 #                                                     silent under APEX_MERGE_DESK=1 (Bryce 2026-10-15:
 #                                                     "all tools and mcps enabled", "Fix for me")
+#
+# Tool names: Claude Code sends mcp__<server>__<tool>, Cursor the bare <tool>, Codex its connector as
+# mcp__codex_apps__github_<tool> (shape: tests/unit/session-contracts.test.mjs). The tool is the last "__"
+# segment when that is a known name, else the longest known name the call ends with after "_" or "."
+# (2026-10-26, W0 of docs/plans/2026-10-26-codex-parity.md; no live Codex connector payload captured yet).
 #
 # Receipts: merge_policy.receipt_check(..., verify_files=True) also refuses a
 # receipt whose gate files (merge-gate.mjs, ready-gate.mjs, gate-receipt.mjs)
@@ -75,9 +86,26 @@ def first(*keys):
         if v is not None and str(v).strip() != "":
             return v
     return None
-pr = first("pullNumber", "pull_number", "number", "pr")
+pr = first("pullNumber", "pull_number", "pr_number", "number", "pr")
+TOOLS = ("merge_pull_request", "enable_pr_auto_merge", "update_pull_request", "actions_run_trigger",
+         "mark_pull_request_ready_for_review", "update_ref", "create_ref", "delete_ref", "create_branch",
+         "delete_branch", "delete_file", "create_blob", "create_tree", "create_commit", "update_file",
+         "create_or_update_file", "push_files")
+tool = name.rsplit("__", 1)[-1]
+if tool not in TOOLS:
+    tool = max((t for t in TOOLS if name.endswith("_" + t) or name.endswith("." + t)), key=len, default=tool)
+DEPLOY = "claude/f1-game-project-26h3ng"
+def deploy_ref():
+    for k in ("ref", "branch", "branch_name", "branchName", "new_branch", "name"):
+        if re.sub(r"^(refs/)?heads/", "", str(ti.get(k) or "").strip()) == DEPLOY:
+            return True
+    return False
+def truthy(v):
+    return v is True or str(v).strip().lower() in ("true", "1", "yes", "on")
+DENY_GITDATA = ("writes files through the GitHub Git Data / contents API, which skips .githooks/pre-push: files reach "
+                "GitHub by `git push` (AGENTS.md); see docs/notes/CODEX-ARCHIVE-MINING-2026-10-26.md R2-2.")
 decision, reason = None, None
-merging = name.endswith("__merge_pull_request") or name.endswith("__enable_pr_auto_merge")
+merging = tool in ("merge_pull_request", "enable_pr_auto_merge")
 if name == "unknown":
     decision, reason = "ask", "github-mcp-guard could not parse this call; confirm it by hand."
 elif merging:
@@ -85,16 +113,26 @@ elif merging:
     method = str(raw or "").strip().lower()
     if P.squash_or_rebase(raw):
         decision, reason = "deny", P.DENY_METHOD
-    elif name.endswith("__enable_pr_auto_merge") and method != "merge":
+    elif tool == "enable_pr_auto_merge" and method != "merge":
         decision, reason = "ask", P.ASK_DESK_METHOD
     else:
         head = first("expectedHeadSha", "expected_head_sha", "headSha", "head_sha", "sha")
         ok, why = P.receipt_check(root, "merge", pr, head, verify_files=True)
         if not ok:
             decision, reason = "deny", P.DENY_GATE_MERGE + " (" + why + ")"
-elif re.search(r"__(push_files|create_or_update_file|create_branch|delete_file)$", name):
-    decision, reason = "deny", "github-mcp-guard: " + name.rsplit("__", 1)[-1] + " " + P.DENY_WRITE
-elif name.endswith("__update_pull_request"):
+elif tool in ("update_ref", "create_ref", "delete_ref", "delete_branch") and deploy_ref():
+    decision, reason = "deny", "github-mcp-guard: " + tool + " names the deploy branch " + DEPLOY + ": it " + P.DENY_REF
+elif tool == "update_ref" and truthy(ti.get("force")):
+    decision, reason = "deny", "github-mcp-guard: a forced update_ref " + P.DENY_REF
+elif tool in ("push_files", "create_or_update_file", "create_branch", "delete_file"):
+    decision, reason = "deny", "github-mcp-guard: " + tool + " " + P.DENY_WRITE
+elif tool in ("create_blob", "create_tree", "create_commit", "update_file"):
+    decision, reason = "deny", "github-mcp-guard: " + tool + " " + DENY_GITDATA
+elif tool == "mark_pull_request_ready_for_review":
+    ok, why = P.receipt_check(root, "ready", pr, verify_files=True)
+    if not ok:
+        decision, reason = "deny", P.DENY_GATE_READY + " (" + why + ")"
+elif tool == "update_pull_request":
     draft = ti.get("draft")
     falsy = draft is not None and draft is not True and str(draft).strip().lower() in ("false", "0", "no", "off", "")
     if falsy:
@@ -103,7 +141,7 @@ elif name.endswith("__update_pull_request"):
             decision, reason = "deny", P.DENY_GATE_READY + " (" + why + ")"
     if decision is None and str(ti.get("state") or "").strip().lower() == "closed":
         decision, reason = "ask", P.ASK_CLOSE
-elif name.endswith("__actions_run_trigger"):
+elif tool == "actions_run_trigger":
     method = str(ti.get("method") or "").strip().lower()
     if "cancel" in method and os.environ.get("APEX_RUN_CANCEL_OK") != "1":
         decision, reason = "deny", P.DENY_CANCEL
