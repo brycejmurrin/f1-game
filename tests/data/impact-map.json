@@ -892,6 +892,9 @@
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
+      "hasVoiceFor": [
+        "tests/unit/radio-voice.test.mjs"
+      ],
       "inert": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/loading-card.test.mjs",
@@ -920,6 +923,12 @@
         "tests/unit/pause-silence.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/voice-pack.test.mjs"
+      ],
+      "spoken": [
+        "tests/unit/announcer.test.mjs"
+      ],
+      "spokenLang": [
+        "tests/unit/radio-voice.test.mjs"
       ],
       "squelchPlan": [
         "tests/unit/radio-voice.test.mjs"
@@ -4829,13 +4838,18 @@
     },
     "js/core/i18n.js": {
       "_installCatalog": [
-        "tests/unit/i18n.test.mjs"
+        "tests/unit/i18n.test.mjs",
+        "tests/unit/race-radio.test.mjs"
       ],
       "_resetForTest": [
-        "tests/unit/i18n.test.mjs"
+        "tests/unit/i18n.test.mjs",
+        "tests/unit/race-radio.test.mjs"
       ],
       "boot": [
         "tests/unit/i18n.test.mjs"
+      ],
+      "date": [
+        "tests/unit/race-radio.test.mjs"
       ],
       "pluralCategories": [
         "tests/unit/i18n.test.mjs"
