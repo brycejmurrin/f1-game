@@ -149,9 +149,7 @@ const DataLive = (function () {
       const stateBadge = el("span", "dh-live-state");
       infoTitle.appendChild(stateBadge);
       info.appendChild(infoTitle);
-      const place = (typeof F1API !== "undefined" && F1API.placeLabel)
-        ? F1API.placeLabel(meta.circuit, meta.country, " · ")
-        : [meta.circuit, meta.country].filter(Boolean).join(" · ");
+      const place = DataTabUtils.placeLabel(meta.circuit, meta.country, " · ");
       if (place) info.appendChild(el("div", "dh-live-sub", place));
       const timeLabel = el("div", "dh-live-sub");
       if (meta.dateStart) info.appendChild(timeLabel);

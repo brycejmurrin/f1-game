@@ -34,6 +34,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 const ROOT_C = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -528,7 +529,7 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
   pause();
   assert.equal(instantReplayButton().hidden, false, "the actual solo loop offers instant replay after three seconds");
   g.sandbox.document.getElementById("pm-resume").onclick();
-  vm.runInContext(readFileSync(join(ROOT_C, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(g.ctx);
   const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
   const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
   const fixture = JSON.parse(readFileSync(join(ROOT_C, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));

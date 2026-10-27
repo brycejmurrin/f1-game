@@ -2,11 +2,10 @@
 // @doc Offline VM lifecycle census: typed resource snapshots and diffs across entry, reset, cancellation and failed boot.
 // @skill check-changes
 import vm from 'node:vm';
-import { readFileSync } from 'node:fs';
-import { ROOT } from '../shot/capture-contract.mjs';
 import { createRequire } from 'node:module';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { evalRealRace } from '../../tests/helpers/eval-real-race.mjs';
 import { parseCaptureArgs, usage, invoked } from '../shot/capture-contract.mjs';
 const { createGame } = createRequire(import.meta.url)('../lib/game-vm.cjs');
 export function snapshot(game, phase) {
@@ -54,7 +53,7 @@ export async function pendingWatchCancellation() {
     RealRace: { launch: () => { launches++; return true; } },
     Log: { info() {}, warn() {} },
   });
-  vm.runInContext(readFileSync(resolve(ROOT, 'js/data/real-race-tab.js'), 'utf8'), context);
+  evalRealRace(context);
   const Data = vm.runInContext('DataRealRace', context);
   const tab = Data.create({ sel: { meta: { sessionKey: 987654 } }, isOpen: () => true });
   const script = { sessionKey: 987654, t0: 1700000000000, laps: 1, drivers: [{ num: 1, code: 'FIX', laps: [60], lapStart: [0] }] };

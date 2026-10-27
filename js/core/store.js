@@ -361,7 +361,7 @@ const GameStore = (function () {
   }
   // A FULL QUOTA MUST NOT COST A SAVE: the data hub's response cache
   // (apex26.api.*, js/data/api.js) and its real-race scripts (apex26.realrace.*,
-  // js/data/real-race-tab.js) are disposable and could fill the whole 5 MiB
+  // js/data/real-race-fetch.js) are disposable and could fill the whole 5 MiB
   // origin quota, after which every career/settings/ghost write failed.
   // On a failed write, drop those caches and try once more.
   const DISPOSABLE_PREFIXES = ["apex26.api.", "apex26.realrace."];

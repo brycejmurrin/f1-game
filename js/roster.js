@@ -388,6 +388,8 @@
     "js/data/standings.js",
     "js/data/results.js",
     "js/data/live.js",
+    "js/data/real-race-script.js",
+    "js/data/real-race-fetch.js",
     "js/data/real-race-tab.js",
     "js/data/hub.js"
   ],
@@ -442,6 +444,14 @@
     ],
     [
       "js/data/live.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/real-race-script.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/real-race-fetch.js",
       "js/data/hub.js"
     ],
     [
@@ -503,6 +513,18 @@
     [
       "js/data/telemetry-view.js",
       "js/data/telemetry.js"
+    ],
+    [
+      "js/data/real-race-script.js",
+      "js/data/real-race-fetch.js"
+    ],
+    [
+      "js/data/real-race-script.js",
+      "js/data/real-race-tab.js"
+    ],
+    [
+      "js/data/real-race-fetch.js",
+      "js/data/real-race-tab.js"
     ]
   ],
     LAZY_NET: [

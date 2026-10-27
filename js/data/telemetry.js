@@ -49,9 +49,8 @@ const DataTelemetry = (function () {
       tray = tray.filter(function (e) { return e.meetingKey == null || e.meetingKey === meta.meetingKey; });
     }
     function trayNeedsBadges() {
-      const byNum = {};
-      for (const e of tray) byNum[e.d.num] = (byNum[e.d.num] || 0) + 1;
-      return tray.some(function (e) { return byNum[e.d.num] > 1; });
+      const counts = DataTabUtils.countsByDriver(tray);
+      return tray.some(function (e) { return counts[e.d.num] > 1; });
     }
 
     function renderTelemetryBody(meta, leftPane, rightPane) {
@@ -73,9 +72,7 @@ const DataTelemetry = (function () {
         title.appendChild(el("span", null, meta.name || meta.type || "Session"));
         if (meta.type && meta.type !== meta.name) title.appendChild(el("span", "dh-live-type", meta.type));
         info.appendChild(title);
-        const place = (typeof F1API !== "undefined" && F1API.placeLabel)
-          ? F1API.placeLabel(meta.circuit, meta.country, " · ")
-          : [meta.circuit, meta.country].filter(Boolean).join(" · ");
+        const place = DataTabUtils.placeLabel(meta.circuit, meta.country, " · ");
         if (place) info.appendChild(el("div", "dh-live-sub", place));
         // Two short lines — a single long ·-joined string was clipped mid-word
         // in the narrow split pane ("drag chart to .").
@@ -315,7 +312,7 @@ const DataTelemetry = (function () {
       const dupName = DataTabUtils.countsByDriver(tels);
       const label = tels.map(function (t) {
         const nm = t.d.name || dcode(t.d);
-        return (dupName[t.d.num] > 1 && t.sessionLabel) ? nm + " " + t.sessionLabel : nm;
+        return nm + DataTabUtils.sessionSuffix(dupName, t.d.num, t.sessionLabel);
       }).join(" vs ");
       titleEl.appendChild(el("span", null, label));
       const oneSession = tels.every(function (t) { return !t.sessionLabel || t.sessionLabel === tels[0].sessionLabel; });

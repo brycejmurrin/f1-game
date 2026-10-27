@@ -11,6 +11,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -320,7 +321,7 @@ test("stepUntil rejects invalid inputs before advancing simulation", async () =>
 test("stepUntil arms a real WATCH countdown and advances its replay clock", async () => {
   const fs = require("node:fs"), vm = require("node:vm");
   const { ROOT } = require("../../tools/lib/game-vm.cjs");
-  vm.runInContext(fs.readFileSync(`${ROOT}/js/data/real-race-tab.js`, "utf8"), g.ctx);
+  evalRealRace(g.ctx);
   const { D, Teams, Tracks, RR } = vm.runInContext("({ D: DataRealRace, Teams, Tracks, RR: RealRace })", g.ctx);
   const fixture = JSON.parse(fs.readFileSync(`${ROOT}/tests/fixtures/openf1-baku-2026-race.json`, "utf8"));
   const script = D.build(fixture, (name) => Teams.LIST.find((t) => t.name === name) || null, Tracks.LIST);

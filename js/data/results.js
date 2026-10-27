@@ -183,9 +183,7 @@ const DataResults = (function () {
       head.id = "dh-lr-head";
       head.appendChild(el("div", "dh-lr-name", meta.name || meta.type || "Session"));
       const parts = [];
-      const place = (typeof F1API !== "undefined" && F1API.placeLabel)
-        ? F1API.placeLabel(meta.circuit, meta.country)
-        : [meta.circuit, meta.country].filter(Boolean).join(", ");
+      const place = DataTabUtils.placeLabel(meta.circuit, meta.country);
       if (place) parts.push(place);
       if (meta.dateStart) parts.push(fmtDateTime(meta.dateStart));
       head.appendChild(el("div", "dh-lr-meta", parts.join(" · ")));

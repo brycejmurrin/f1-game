@@ -8,6 +8,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { absSrc } from "./abs-src.mjs";
+import { evalRealRace } from "./eval-real-race.mjs";
 
 const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 
@@ -21,7 +22,7 @@ export const host = (v) => JSON.parse(JSON.stringify(v));   // VM objects into t
 
 export function scriptIn(g) {
   // The tab's builder in the game's own realm (Teams and Tracks are the game's).
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(g.ctx);
   const D = vm.runInContext("DataRealRace", g.ctx);
   const Teams = vm.runInContext("Teams", g.ctx), Tracks = vm.runInContext("Tracks", g.ctx);
   const findTeam = (name) => Teams.LIST.find((t) => t.name === name) || null;

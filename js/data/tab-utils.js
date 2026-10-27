@@ -22,6 +22,17 @@ const DataTabUtils = (function () {
     return counts;
   }
 
-  return { driverColor, countsByDriver };
+  // Same join as F1API.placeLabel: an omitted separator is ", ".
+  function placeLabel(circuit, country, sep) {
+    if (typeof F1API !== "undefined" && F1API.placeLabel) return F1API.placeLabel(circuit, country, sep);
+    return [circuit, country].filter(Boolean).join(sep || ", ");
+  }
+
+  // A second lane with the same car number shows its session; one lane does not.
+  function sessionSuffix(counts, num, sessionLabel) {
+    return counts && counts[num] > 1 && sessionLabel ? " " + sessionLabel : "";
+  }
+
+  return { driverColor, countsByDriver, placeLabel, sessionSuffix };
 })();
 Object.freeze(DataTabUtils);

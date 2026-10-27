@@ -8,7 +8,7 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -37,7 +37,7 @@ test("WATCH followed car and rivals rev with speed, not idle rpm", async () => {
     await settle(() => !sb.GameAudio._stub && !sb.AudioPanel._stub, 4000);
     for (let i = 0; i < 50; i++) await new Promise((r) => setImmediate(r));
     sb.GameAudio.init();
-    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
+    evalRealRace(g.ctx);
     const D = vm.runInContext("DataRealRace", g.ctx);
     const Teams = vm.runInContext("Teams", g.ctx);
     const Tracks = vm.runInContext("Tracks", g.ctx);
@@ -69,7 +69,7 @@ async function watchStraight(g, transportSpeed) {
   await settle(() => !sb.GameAudio._stub && !sb.AudioPanel._stub, 4000);
   for (let i = 0; i < 50; i++) await new Promise((r) => setImmediate(r));
   sb.GameAudio.init();
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(g.ctx);
   const D = vm.runInContext("DataRealRace", g.ctx);
   const Teams = vm.runInContext("Teams", g.ctx);
   const Tracks = vm.runInContext("Tracks", g.ctx);

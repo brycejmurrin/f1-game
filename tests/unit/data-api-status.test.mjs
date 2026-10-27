@@ -8,6 +8,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const apiSource = (await Promise.all(["api-transport", "api"].map((name) =>
   readFile(new URL(`../../js/data/${name}.js`, import.meta.url), "utf8")))).join("\n");
@@ -1268,8 +1269,7 @@ test("RACE IT caches bulk positions without serializing them and fresh bypasses 
     if (value && Array.isArray(value.data) && value.data.length === big.length) serialized.push(value);
     return JSON.stringify(value);
   } };
-  vm.runInContext(await readFile(new URL("../../js/data/real-race-tab.js", import.meta.url), "utf8") +
-    ";globalThis.realRace=DataRealRace", h.context, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(h.context, ";globalThis.realRace=DataRealRace");
   const first = await h.context.realRace.fetchRaw(123, false);
   assert.equal(first.positions.length, big.length);
   assert.equal(serialized.length, 0, "the bulk history never reaches JSON.stringify");

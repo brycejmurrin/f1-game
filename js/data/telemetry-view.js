@@ -42,7 +42,7 @@ const DataTelemetryView = (function () {
       const nameEl = el("span", "dh-tname", (t.d.name || dcode(t.d)));
       nameEl.title = t.d.name || dcode(t.d);
       ht.appendChild(nameEl);
-      if (dupNum[t.d.num] > 1 && t.sessionLabel) ht.appendChild(el("span", "dh-lane-ses", t.sessionLabel));
+      if (DataTabUtils.sessionSuffix(dupNum, t.d.num, t.sessionLabel)) ht.appendChild(el("span", "dh-lane-ses", t.sessionLabel));
       if (role) ht.appendChild(el("span", "dh-tsect", role));
       buildTail(ht);
       return ht;
@@ -193,7 +193,7 @@ const DataTelemetryView = (function () {
       if (view.compare) {
         // driver key: each lane's code chip in its own trace/dot colour
         view.laps.forEach(function (t, i) {
-          const badge = (dupNum[t.d.num] > 1 && t.sessionLabel) ? " " + t.sessionLabel : "";
+          const badge = DataTabUtils.sessionSuffix(dupNum, t.d.num, t.sessionLabel);
           const chip = el("span", "dh-codechip", dcode(t.d) + badge + " · " + laneRole(i));
           chip.setAttribute("aria-label", dcode(t.d) + " " + laneRole(i).toLowerCase());
           const col = view.laneCols[i];
@@ -282,7 +282,7 @@ const DataTelemetryView = (function () {
         }
         // one map-legend chip per lane, in that lane's colour
         view.laps.forEach(function (t, i) {
-          const badge = (dupNum[t.d.num] > 1 && t.sessionLabel) ? " " + t.sessionLabel : "";
+          const badge = DataTabUtils.sessionSuffix(dupNum, t.d.num, t.sessionLabel);
           mkey.appendChild(mchip(view.laneCols[i], dcode(t.d) + badge + " · " + laneRole(i)));
         });
         // track colouring key: slow (blue) -> fast (red), sectors marked S2/S3

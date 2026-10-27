@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { seedDom } from "../helpers/seed-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -39,7 +40,7 @@ test("lap row key handler leaves descendant button activation to the browser", (
 
 test("pit duel uses observed crossings and suppresses incomplete or lap-down timing", () => {
   const ctx = vm.createContext({});
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(ctx);
   const api = vm.runInContext("DataRealRace", ctx);
   const driver = (num, offset) => ({ num, code: "D" + num, laps: [10, 10, 10, 10, 10], lapStart: [0, 10, 20, 30, 40].map((t) => t + offset), lapsDone: 5, pits: [2], stints: [{ c: "SOFT", from: 1 }, { c: "HARD", from: 3 }] });
   const script = { laps: 5, drivers: [driver(1, 2), driver(2, 0)], cautions: [{ from: 2, to: 2 }], rain: [false, false, true] };
@@ -57,7 +58,7 @@ test("pit duel uses observed crossings and suppresses incomplete or lap-down tim
 
 test("feed coverage records windows and gaps without implying retirement", () => {
   const ctx = vm.createContext({});
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(ctx);
   const api = vm.runInContext("DataRealRace", ctx);
   const script = { drivers: [{ num: 1, code: "A" }, { num: 2, code: "B", dnf: true }, { num: 3, code: "C", dns: true }] };
   const rows = api.traceDetails(script, { cars: { 1: Float32Array.from([-2, 0, 0, 0, 1, 1, 6, 2, 2]) }, failed: [2] });
@@ -71,6 +72,7 @@ function loadModule(api) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedDom(ctx);   // results.js formats lap times through Dom.fmtLap
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/tab-utils.js"), "utf8"), ctx, { filename: absSrc("js/data/tab-utils.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/results.js"), "utf8"), ctx, { filename: absSrc("js/data/results.js") });
   return vm.runInContext("DataResults", ctx);
 }
