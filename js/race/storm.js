@@ -44,14 +44,11 @@ const Storm = (function () {
   const rainK = (w) => (w === "storm" ? RAIN_K : RAIN_1);
   const sprayK = (w) => (w === "storm" ? SPRAY_STORM : w === "rain" ? 1 : 0.6);
 
-  // 32-bit integer hash (Wang/murmur finaliser mix) → [0, 1). Its own, so the
-  // schedule needs no other module and draws nothing from the sim stream.
+  // 32-bit integer hash → [0, 1). The input mix is this schedule's own (so a
+  // storm and the wind do not share draws); the finaliser is Hash32.mix.
   function h01(seed, slot, salt) {
-    let x = (Math.imul((seed >>> 0) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(slot | 0, 0xc2b2ae35) ^ Math.imul(salt | 0, 0x27d4eb2f)) >>> 0;
-    x ^= x >>> 16; x = Math.imul(x, 0x7feb352d) >>> 0;
-    x ^= x >>> 15; x = Math.imul(x, 0x846ca68b) >>> 0;
-    x ^= x >>> 16;
-    return (x >>> 0) / 4294967296;
+    const x = (Math.imul((seed >>> 0) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(slot | 0, 0xc2b2ae35) ^ Math.imul(salt | 0, 0x27d4eb2f)) >>> 0;
+    return Hash32.mix(x) / 4294967296;
   }
 
   /** The strike in window `k`, or null: { t, delay, near }. `rate` is the

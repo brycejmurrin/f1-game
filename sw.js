@@ -454,6 +454,7 @@ async function precacheAssetLists() {
     "js/race/damage.js",
     "js/race/duel.js",
     "js/race/session-records.js",
+    "js/race/pit-geom.js",
     "js/race/pit-lane.js",
     "js/race/engineer.js",
     "js/race/radio-lines.js",

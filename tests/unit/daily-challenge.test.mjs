@@ -45,7 +45,7 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
       getTeamParts: () => saved, getLiveryId: () => "default",
       SetupTune: { mods() {}, BB_REF: 0.5, brakeBias() {}, balance() {}, aero() {} },
       modsFor: () => ({}), tyreBaseModsFor: () => ({}), tyres: { applyCompound() {}, optionRecord: () => ({}) } });
-    for (const file of ["js/core/hash32.js", "js/race/session-records.js", "js/race/daily-challenge.js", "js/car/car-draw.js"])
+    for (const file of ["js/core/hash32.js", "js/race/session-phys.js", "js/race/session-records.js", "js/race/daily-challenge.js", "js/car/car-draw.js"])
       vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
     G.records = vm.runInContext("SessionRecords.create(G)", ctx);
     const daily = ctx.daily = vm.runInContext("DailyChallenge.create(G)", ctx);

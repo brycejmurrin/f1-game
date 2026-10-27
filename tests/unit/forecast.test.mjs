@@ -36,7 +36,7 @@ function load() {
   ctx.Particles = { rainShow() {} };
   ctx.GameAudio = { startRain() {}, stopRain() {} };
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js",
-                   "js/physics/tyre-model.js", "js/race/weather-arc.js", "js/race/forecast.js", "js/race/engineer.js"])
+                   "js/physics/tyre-model.js", "js/race/wx-hash.js", "js/race/weather-arc.js", "js/race/forecast.js", "js/race/engineer.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   return ctx;
 }
@@ -271,7 +271,7 @@ test("source: the engineer reads Forecast through a typeof guard, and the lap-co
 
 test("the real derived local-shower preview equals the green forecast without arming race state", () => {
   const local = load();
-  for (const file of ["js/core/hash32.js", "js/race/rain-cells.js"])
+  for (const file of ["js/core/hash32.js", "js/race/wx-hash.js", "js/race/rain-cells.js"])
     vm.runInContext(read(file).replace(/^const\b/gm, "var"), local, { filename: absSrc(file) });
   local.Career = { inCareer: () => false, hash: local.Hash32.unit };
   const G = { state: "menu", raceT: 0, raceWeather: "dry", raceRound: 0, raceLaps: 10, lapsTarget: 10,

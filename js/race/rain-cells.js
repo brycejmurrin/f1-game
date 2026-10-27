@@ -27,13 +27,8 @@ const RainCells = (function () {
   const SEGS = 24;           // the lap's wetness grid: ~290 m segments at Spa, ~140 m at Monaco
   const LOCAL_ODDS = 0.35;   // the share of road-wetting MIXED plans that arrive as a local shower
 
-  // A 32-bit FNV-1a of the key → [0, 1) (forecast.js h01's mixer). No Math.random, no wall clock.
-  function h01(str) {
-    let h = 0x811c9dc5;
-    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
-    h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d) >>> 0; h ^= h >>> 12;
-    return (h >>> 0) / 4294967296;
-  }
+  // WxHash.fnv01, the forecast's mixer. No Math.random, no wall clock.
+  function h01(str) { return WxHash.fnv01(str); }
 
   /** The cell a MIXED plan brings, or null for the global (blanket) behaviour. `wetOf` maps a weather to its
    *  wetness (WeatherArc's own). Only a plan that WETS the road can be local: a drying arc stays global. */

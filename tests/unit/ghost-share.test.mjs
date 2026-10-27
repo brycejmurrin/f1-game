@@ -650,6 +650,7 @@ test("starting TT compares the built car once per rival and session configuratio
     difficulty: "normal", raceTimeOfDay: "day", announce: message => notices.push(message) };
   const ctx = vm.createContext({ G, GhostShare, PhysicsConsts: { REVISION: 7 },
     Ghost: { contextKey: JSON.stringify, setTrack() {}, bestTime: () => Infinity }, GameStore: { ttBoard: () => [] } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-phys.js"), "utf8"), ctx, { filename: absSrc("js/race/session-phys.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-records.js"), "utf8"), ctx, { filename: absSrc("js/race/session-records.js") });
   const records = ctx.SessionRecords.create(G);
   const recorded = records.config(); recorded.car[0] = "mclaren";
@@ -801,6 +802,7 @@ test("TT records find historical wear classes without crossing other settings", 
     Quali: { medalFor: () => null },
     GameStore: { ttBoard: (id, key) => board.get(key) || [],
       ttBoardAdd(id, entry) { board.set(entry.context, [entry]); } } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-phys.js"), "utf8"), ctx, { filename: absSrc("js/race/session-phys.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-records.js"), "utf8"), ctx, { filename: absSrc("js/race/session-records.js") });
   const records = ctx.SessionRecords.create(G), normalized = records.current();
   for (const wear of ["real", "light", "off"]) {

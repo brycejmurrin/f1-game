@@ -36,7 +36,7 @@ function context(extra) {
 function bootArc(hash) {
   const ctx = context();
   ctx.Career = { inCareer: () => false, hash: hash || ((_s, _r, _k, n) => (n === "dur" ? 0.5 : 0.1)) };
-  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/fx/particles.js", "js/race/storm.js", "js/race/weather-arc.js"]) run(ctx, f);
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/core/hash32.js", "js/physics/tyre-model.js", "js/fx/particles.js", "js/race/storm.js", "js/race/weather-arc.js"]) run(ctx, f);
   const P = ctx.Particles;
   let drawn = 0;
   P.init({ drawParticles: (d, floats, additive) => { if (!additive) drawn += floats / 60; } });
@@ -180,6 +180,7 @@ test("lightning never flashes under reduced motion (source guard on renderLighti
 /** race-control with storm.js, single-player owner, raceT driven by the test. */
 function bootRC(over) {
   const ctx = context({ DebrisWorld: { active: () => false, hazards: () => ({ total: 0, redTotal: 0, sectors: [0, 0, 0], worst: { count: 0, sector: -1, frac: 0 } }) } });
+  run(ctx, "js/core/hash32.js");
   run(ctx, "js/race/storm.js");
   run(ctx, "js/race/race-control.js");
   const saved = new Map([["caution", true]]);

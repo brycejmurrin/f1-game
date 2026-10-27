@@ -38,6 +38,7 @@ test("STRATEGY after a pick: the pin is asked and written for the selected circu
     G.trackIdx = spa;   // the picker's write
     // The VM race shortcut retains session-stub; install the production model
     // so the integration checks storage rather than only forwarding arguments.
+    vm.runInContext(readFileSync(new URL("../../js/race/pit-geom.js", import.meta.url), "utf8"), g.ctx, { filename: absSrc("js/race/pit-geom.js") });
     vm.runInContext(readFileSync(new URL("../../js/race/pit-lane.js", import.meta.url), "utf8"), g.ctx, { filename: absSrc("js/race/pit-lane.js") });
     const pits = g.sandbox.PitLane.create(G), seen = [];
     assert.equal(pits._stub, undefined, "production PitLane loaded");
@@ -148,6 +149,7 @@ test("fresh STRATEGY pins persist through the lazy PitLane handoff", async () =>
     assert.equal(G.store.get("pitPlan.track"), "auto");
 
     // Recreate exactly the real model the lazy bundle installs, sharing store.
+    vm.runInContext(readFileSync(new URL("../../js/race/pit-geom.js", import.meta.url), "utf8"), g.ctx, { filename: absSrc("js/race/pit-geom.js") });
     vm.runInContext(readFileSync(new URL("../../js/race/pit-lane.js", import.meta.url), "utf8"), g.ctx, { filename: absSrc("js/race/pit-lane.js") });
     const real = g.sandbox.PitLane.create(G);
     Object.defineProperty(G, "pits", { configurable: true, get: () => real });
