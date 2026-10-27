@@ -2,7 +2,7 @@
   "pause": false,
   "mergePause": false,
   "maxLaunchesPerRun": 4,
-  "maxLiveWorkers": { "claude": 8, "cursor": 4 },
+  "maxLiveWorkers": { "claude": 8, "cursor": 1 },
   "workerCostCapUsd": 10,
   "staleHours": { "default": 2, "codex": 6 },
   "launchClaimHours": 2,

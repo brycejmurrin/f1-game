@@ -231,6 +231,19 @@ Steps 1–3 are three PRs; the `.claude/**` and `.github/**` edits in them need 
 8. **Upload Codex export parts 032–061** if the fleet-era Codex threads should be read in full (the Drive folder holds
    parts 001–031 = 2026-10-01 → 10-16; the fleet era was reconstructed from index files and the bus).
 
+### Decided 2026-10-27 (Bryce: "Make best decisions for me")
+
+1. Ruleset: yes — `CI` + `gate` required, merge commits only, no bypass list (admins bound). Applied by Bryce after
+   this PR merges, so the PR that adds `land.yml` is not blocked by its own `gate`.
+2. Token: a fine-grained PAT as `LAND_TOKEN` (contents, pull requests, checks: write; this repository only).
+3. Stay user-owned: a transfer changes the Pages URL Bryce plays on; the base-distance row covers the risk.
+4. At most one console session per account (Bryce's own); every other session is a dispatcher launch.
+5. Sonnet is the default worker model (`tools/ci/dispatch.json` `model`); a brief names Opus/Fable when needed.
+6. DAD and the Codex coordinator retired; Cursor kept for self-contained issues, `maxLiveWorkers.cursor` 1 and
+   `hosts.cursor.enabled` false until a dispatcher week reads its cost; Codex is Bryce's tool (`lane:codex`).
+7. $10 soft cap in every brief (`workerCostCapUsd`); the $15 hard-cap archive is not implemented yet (follow-up).
+8. Parts 032–061 are not needed: the design is decided; they would only add history.
+
 ## 8. Risks and how the design absorbs them
 
 - **Two dispatchers race on one issue.** The claim comment is ordered by GitHub; the loser archives its launch within
