@@ -1,12 +1,15 @@
 // dispatch — the hourly dispatcher's pure plan (tools/ci/dispatch.mjs planDispatch) over fixture GitHub state:
 // ready-issue launches, priority order, caps, quota, claims, stale PRs → needs-owner + CONTINUE, codex 6 h, hold,
-// double-launch guard, deploy red, the archive rule, pause flags, the Board markdown, the launch line formats. No network.
+// double-launch guard, deploy red, the archive rule, pause flags, the Board markdown, the launch line formats, and the
+// 2026-10-27 review fixes: live = working role:worker sessions (H1), archive guards + closed-issue claims (H2), pagination
+// (H3), RECORD_LAUNCH after the launch (M4), land/bot PRs never stale (M5), STOP AT (M8), #12 ≠ #123, completed trains. No network.
 // Every check is an exact equality on the produced string (no regex pins: the assertPins ratchet counts those).
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
   planDispatch, DEFAULT_CONFIG, parseHandoff, liveLaunch, extractSessions, sessionRefs, activityAt, applyPlan, loadConfig,
   issuePrompt, continuePrompt, deployRedPrompt, PROMPT_MAX_LINES, BOARD_MARKER, LAUNCH_RE,
+  titleNames, readSessionPages, readState, getAll, landProblem, recordToken, recordComment, main, claimedSessionIds,
 } from "../../tools/ci/dispatch.mjs";
 
 const NOW = Date.parse("2026-10-27T12:00:00Z");
@@ -15,7 +18,7 @@ const ago = (h) => new Date(NOW - h * 3.6e6).toISOString();
 const cfg = (on = {}) => ({ ...DEFAULT_CONFIG, ...on, maxLiveWorkers: { ...DEFAULT_CONFIG.maxLiveWorkers, ...on.maxLiveWorkers } });
 const issue = (number, labels, on = {}) => ({ number, title: `Task ${number}`, body: `Do the thing ${number}.`, labels, updated_at: ago(1), comments: [], ...on });
 const pr = (number, on = {}) => ({ number, title: `PR ${number}`, draft: true, labels: [], head_sha: "a".repeat(40), head_ref: `cursor/x-${number}`,
-  body: "", created_at: ago(30), updated_at: ago(0.5), last_push_at: ago(0.5), last_comment_at: null, mergeable: true, lane: null, comments: [], ...on });
+  body: "", created_at: ago(30), updated_at: ago(0.5), last_comment_at: null, mergeable: true, lane: null, comments: [], ...on });
 const board = (on = {}) => issue(1, [], { title: "Board", ...on });
 const dispatchIssue = (labels = []) => issue(2, labels, { title: "Dispatch" });
 const launched = (n, h) => ({ author: "bot", body: `dispatch: launched claude:[Worker] #${n} Task for #${n} at ${ago(h)}`, created_at: ago(h) });
@@ -23,6 +26,7 @@ const state = (on = {}) => ({ issues: [board(), dispatchIssue()], prs: [], deplo
 const skips = (p) => p.skipped.map((s) => `${s.what}: ${s.why}`);
 const COMMON = (n = "it") => ["Read docs/WORKERS.md and follow it.",
   "Lane label: lane:claude. Model: claude-sonnet-5-5. Base: claude/f1-game-project-26h3ng (branch cursor/<topic>-<hash> from it; draft PR into it at the first commit).",
+  "STOP AT: 150k",
   "Cost cap: $10 (soft). At the cap, or stuck: leave the Plan and the ```handoff block current, add `needs-owner` on the PR, end.",
   `End at \`land\`: when ready-gate passes flip ready, add \`land\`, refresh the handoff block; GitHub merges ${n}, not you.`];
 
@@ -34,7 +38,7 @@ test("rule 1: a ready, unclaimed issue launches one claude worker with a launch 
   assert.equal(l.comment.body, `dispatch: launched claude:[Worker] #10 Task 10 for #10 at ${ISO}`);
   assert.deepEqual(LAUNCH_RE.exec(l.comment.body).slice(1), ["claude", "[Worker] #10 Task 10", "#10", ISO]);
   assert.deepEqual({ ...l.spec, prompt: "" }, { source_url: "https://github.com/brycejmurrin/f1-game", source_revision: DEFAULT_CONFIG.deployBranch,
-    permission_mode: "auto", model: "claude-sonnet-5-5", title: "[Worker] #10 Task 10", tags: ["f1-game-dispatch", "issue:10", "lane:claude"], prompt: "" });
+    permission_mode: "auto", model: "claude-sonnet-5-5", title: "[Worker] #10 Task 10", tags: ["f1-game-dispatch", "role:worker", "issue:10", "lane:claude"], prompt: "" });
   assert.deepEqual(l.spec.prompt.split("\n"), ["Task: #10 — Task 10", "Do the thing 10.",
     'Claim first: comment "claims #10 — claude:<your session id>" on the issue and add `claimed`; stand down if an older claim comment exists. Put `Closes #10` in the PR body.', ...COMMON()]);
 });
@@ -46,10 +50,39 @@ test("rule 1: priority first, then the newest updated; the per-run cap and the l
   const capped = planDispatch(state({ issues }), cfg({ maxLaunchesPerRun: 2 }), NOW);
   assert.deepEqual(capped.launches.map((l) => l.number), [12, 11]);
   assert.deepEqual(skips(capped), ["issue [Worker] #13 Task 13: maxLaunchesPerRun 2 reached", "issue [Worker] #10 Task 10: maxLaunchesPerRun 2 reached"]);
-  const sessions = [{ id: "session_A", title: "w", status: "SESSION_STATUS_IDLE" }, { id: "session_B", title: "w", status: "SESSION_STATUS_RUNNING" }];
+  // H1: only role:worker sessions RUNNING (or status_bucket WORKING) are live; idle/finished workers, Bryce's own
+  // running session and the dispatcher never count (the live page had 8 idle + 1 Bryce = 9 ≥ cap 8: nothing launched).
+  const w = (id, status, bucket, tags = ["role:worker"]) => ({ id, title: "w", status, bucket, tags });
+  const sessions = [w("session_A", "SESSION_STATUS_IDLE", "SESSION_STATUS_BUCKET_COMPLETED"), w("session_B", "SESSION_STATUS_RUNNING", ""),
+    w("session_C", "SESSION_STATUS_RUNNING", "SESSION_STATUS_BUCKET_WORKING", []), w("session_D", "SESSION_STATUS_IDLE", "SESSION_STATUS_BUCKET_WORKING"),
+    w("session_E", "SESSION_STATUS_RUNNING", "SESSION_STATUS_BUCKET_WORKING", ["no-archive", "role:dispatcher"]),
+    w("session_F", "SESSION_STATUS_IDLE", "SESSION_STATUS_BUCKET_BLOCKED")];
   const live = planDispatch(state({ issues, sessions }), cfg({ maxLiveWorkers: { claude: 3 } }), NOW);
+  assert.equal(live.live.claude, 3, "B running + D working, plus the one launch");
   assert.equal(live.launches.length, 1, "3 - 2 live = one slot");
   assert.equal(skips(live)[0], "issue [Worker] #11 Task 11: maxLiveWorkers.claude 3 reached (3 live)");
+  const idle = Array.from({ length: 9 }, (_, i) => w(`session_I${i}`, "SESSION_STATUS_IDLE", "SESSION_STATUS_BUCKET_COMPLETED"));
+  assert.equal(planDispatch(state({ issues, sessions: idle }), cfg(), NOW).launches.length, 4, "nine idle workers block nothing");
+});
+
+test("H1/L2: a recent launch comment counts as live unless a listed session names its target as a whole token (#12 is not #123)", () => {
+  const issues = [board(), issue(12, ["ready", "claimed"], { comments: [launched(12, 1)] }), issue(20, ["ready"])];
+  const s123 = [{ id: "session_X", title: "[Worker] #123 other", status: "SESSION_STATUS_IDLE", tags: ["role:worker"] }];
+  assert.equal(planDispatch(state({ issues, sessions: s123 }), cfg(), NOW).live.claude, 2, "#123 does not match the #12 launch: it stays live");
+  const s12 = [{ id: "session_Y", title: "[Worker] #12 Task", status: "SESSION_STATUS_IDLE", tags: ["role:worker"] }];
+  assert.equal(planDispatch(state({ issues, sessions: s12 }), cfg(), NOW).live.claude, 1, "the idle #12 session matched: the launch is done, not live");
+  assert.deepEqual([titleNames("[Worker] #123 x", "#12"), titleNames("[Worker] #12 x", "#12"), titleNames("x #12", "#12"), titleNames("[Worker] deploy:red fixer", "deploy:red")], [false, true, true, true]);
+});
+
+test("has_more: a last list_sessions page with has_more launches nothing; pages merge by id", () => {
+  const page = (data, more) => JSON.stringify({ ccr: { data, has_more: more } });
+  const a = { id: "session_01A", title: "a", session_status: "SESSION_STATUS_RUNNING", status_bucket: "SESSION_STATUS_BUCKET_WORKING", tags: ["role:worker"] };
+  const b = { id: "session_01B", title: "b", session_status: "SESSION_STATUS_IDLE", tags: [] };
+  const r = readSessionPages([page([a], true), page([a, b], false)]);
+  assert.deepEqual([r.sessions.map((s) => s.id), r.complete, r.sessions[0].bucket], [["session_01A", "session_01B"], true, "SESSION_STATUS_BUCKET_WORKING"]);
+  assert.equal(readSessionPages([page([a], true)]).complete, false);
+  const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], sessionsComplete: false }), cfg(), NOW);
+  assert.deepEqual([p.launches.length, skips(p)[0]], [0, "issue [Worker] #10 Task 10: the last list_sessions page says has_more: pass every page (--sessions per page) so live workers are counted"]);
 });
 
 test("rule 1: a quota that is not `allowed` launches nothing and says why; claimed/blocked/needs-decision issues are skipped", () => {
@@ -84,34 +117,34 @@ test("rule 1: lane:cursor launches a CURSOR body only when hosts.cursor.enabled"
 
 test("rule 2: a PR silent 2 h gets needs-owner and ONE CONTINUE takeover carrying the handoff block", () => {
   const body = "## Goal\nx\n```handoff\nbranch: cursor/x-20\nhead: abc1234\nverified: tooling-fast = run passed\nnot run: group tlx\nnext: fix the red spec\nowner: claude:session_01OLDOLDOLDOLDOLD\n```\n";
-  const p = planDispatch(state({ prs: [pr(20, { last_push_at: ago(3), body })] }), cfg(), NOW);
+  const p = planDispatch(state({ prs: [pr(20, { updated_at: ago(3), body })] }), cfg(), NOW);
   assert.deepEqual(p.labels, [{ number: 20, add: ["needs-owner"], remove: [] }]);
   assert.equal(p.launches.length, 1);
   const l = p.launches[0];
-  assert.deepEqual([l.kind, l.comment.on, l.spec.tags], ["continue", 20, ["f1-game-dispatch", "pr:20", "lane:claude"]]);
+  assert.deepEqual([l.kind, l.comment.on, l.spec.tags], ["continue", 20, ["f1-game-dispatch", "role:worker", "pr:20", "lane:claude"]]);
   assert.deepEqual(l.spec.prompt.split("\n"), ["CONTINUE PR #20 — PR 20", "Hand-off block from the PR body:", "  branch: cursor/x-20", "  head: abc1234",
     "  verified: tooling-fast = run passed", "  notRun: group tlx", "  next: fix the red spec", "  owner: claude:session_01OLDOLDOLDOLDOLD",
     'Adopt: comment "adopts PR #20 — claude:<your session id>" on the PR and remove `needs-owner`; stand down if a newer adoption comment exists.',
     "Check out its branch (cursor/x-20); fix the red or the conflict (merge origin via sync-pr.mjs, never rebase); push; `land` when ready-gate passes.", ...COMMON("#20")]);
   assert.deepEqual(parseHandoff(body), { branch: "cursor/x-20", head: "abc1234", verified: "tooling-fast = run passed", notRun: "group tlx", next: "fix the red spec", owner: "claude:session_01OLDOLDOLDOLDOLD" });
   assert.equal(parseHandoff("no block"), null);
-  const fresh = planDispatch(state({ prs: [pr(21, { last_push_at: ago(3), last_comment_at: ago(1) })] }), cfg(), NOW);
+  const fresh = planDispatch(state({ prs: [pr(21, { updated_at: ago(3), last_comment_at: ago(1) })] }), cfg(), NOW);
   assert.equal(fresh.launches.length, 0, "a comment 1 h ago is activity");
 });
 
 test("rule 2: lane:codex waits 6 h; hold or needs-decision blocks the takeover; a takeover launched < 2 h ago is not repeated", () => {
-  const codex = (h, on = {}) => pr(30, { labels: ["lane:codex"], last_push_at: ago(h), ...on });
+  const codex = (h, on = {}) => pr(30, { labels: ["lane:codex"], updated_at: ago(h), ...on });
   assert.equal(planDispatch(state({ prs: [codex(5)] }), cfg(), NOW).launches.length, 0);
   assert.equal(planDispatch(state({ prs: [codex(7)] }), cfg(), NOW).launches.length, 1);
   for (const blocker of ["hold", "needs-decision"]) {
-    const p = planDispatch(state({ prs: [pr(31, { labels: [blocker], last_push_at: ago(9) })] }), cfg(), NOW);
+    const p = planDispatch(state({ prs: [pr(31, { labels: [blocker], updated_at: ago(9) })] }), cfg(), NOW);
     assert.deepEqual([p.launches.length, p.labels.length, skips(p)], [0, 0, [`PR #31: stale 9h but ${blocker}`]], blocker);
   }
   const taken = { author: "bot", body: `dispatch: launched claude:[Worker] CONTINUE PR #32 for #32 at ${ago(1)}`, created_at: ago(1) };
-  const p = planDispatch(state({ prs: [pr(32, { labels: ["needs-owner"], last_push_at: ago(9), comments: [taken] })] }), cfg(), NOW);
+  const p = planDispatch(state({ prs: [pr(32, { labels: ["needs-owner"], updated_at: ago(9), comments: [taken] })] }), cfg(), NOW);
   assert.deepEqual([p.launches.length, p.labels.length, skips(p)], [0, 0, ["PR #32: takeover launched 1h ago (live claim)"]]);
-  assert.equal(activityAt(pr(32, { last_push_at: ago(9), comments: [taken] })), NOW - 9 * 3.6e6, "a dispatcher launch comment is not activity");
-  assert.equal(activityAt(pr(32, { last_push_at: ago(9), comments: [{ body: "fixed it", created_at: ago(4) }] })), NOW - 4 * 3.6e6);
+  assert.equal(activityAt(pr(32, { updated_at: ago(9), comments: [taken] })), NOW - 9 * 3.6e6, "a dispatcher launch comment is not activity");
+  assert.equal(activityAt(pr(32, { updated_at: ago(9), comments: [{ body: "fixed it", created_at: ago(4) }] })), NOW - 4 * 3.6e6);
 });
 
 test("rule 3: deploy red labels the Board and launches one fixer, unless a PR carries deploy:red or one was launched < 2 h ago; green removes the label", () => {
@@ -131,15 +164,16 @@ test("rule 3: deploy red labels the Board and launches one fixer, unless a PR ca
 
 test("rule 4: archive only a claimed session whose every PR and issue is done > archiveAfterMinutes; never unclaimed, running or open", () => {
   const claim = (id) => ({ author: "w", body: `claims #50 — claude:${id}`, created_at: ago(5) });
+  const W = ["role:worker"];
   const sessions = [
-    { id: "session_01DONE000000", title: "[Worker] CONTINUE PR #60 x", status: "SESSION_STATUS_IDLE" },
-    { id: "session_01ISSUE000000", title: "[Worker] #50 Task 50", status: "SESSION_STATUS_IDLE", tags: ["issue:50"] },
-    { id: "session_01NOCLAIM0000", title: "[Worker] #61", status: "SESSION_STATUS_IDLE", tags: ["pr:61"] },
-    { id: "session_01RUNNING0000", title: "[Worker] #62", status: "SESSION_STATUS_RUNNING", pr: 62 },
-    { id: "session_01OPEN00000000", title: "[Worker] #63", status: "SESSION_STATUS_IDLE", pr: 63 },
-    { id: "session_01YOUNG0000000", title: "[Worker] #64", status: "SESSION_STATUS_IDLE", pr: 64 },
-    { id: "session_01OPENISSUE000", title: "[Worker] #10 Task 10", status: "SESSION_STATUS_IDLE" },
-    { id: "session_01NOPR00000000", title: "[Worker] no pr", status: "SESSION_STATUS_IDLE" },
+    { id: "session_01DONE000000", title: "[Worker] CONTINUE PR #60 x", status: "SESSION_STATUS_IDLE", tags: W },
+    { id: "session_01ISSUE000000", title: "[Worker] #50 Task 50", status: "SESSION_STATUS_IDLE", tags: ["issue:50", ...W] },
+    { id: "session_01NOCLAIM0000", title: "[Worker] #61", status: "SESSION_STATUS_IDLE", tags: ["pr:61", ...W] },
+    { id: "session_01RUNNING0000", title: "[Worker] #62", status: "SESSION_STATUS_RUNNING", pr: 62, tags: W },
+    { id: "session_01OPEN00000000", title: "[Worker] #63", status: "SESSION_STATUS_IDLE", pr: 63, tags: W },
+    { id: "session_01YOUNG0000000", title: "[Worker] #64", status: "SESSION_STATUS_IDLE", pr: 64, tags: W },
+    { id: "session_01OPENISSUE000", title: "[Worker] #10 Task 10", status: "SESSION_STATUS_IDLE", tags: W },
+    { id: "session_01NOPR00000000", title: "[Worker] no pr", status: "SESSION_STATUS_IDLE", tags: W },
   ];
   const issues = [board(), issue(10, ["claimed"], { comments: sessions.filter((s) => !/NOCLAIM/.test(s.id)).map((s) => claim(s.id)) })];
   const closedPrs = [{ number: 60, merged: true, merged_at: ago(3), closed_at: ago(3) }, { number: 61, merged: false, closed_at: ago(3) },
@@ -150,6 +184,23 @@ test("rule 4: archive only a claimed session whose every PR and issue is done > 
     "session session_01OPEN00000000: keep: PR #63 still open", "session session_01YOUNG0000000: keep: closed 30 min ago (rule: ≥ 60)",
     "session session_01OPENISSUE000: keep: #10 still open", "session session_01NOPR00000000: keep: names no PR or issue"]);
   assert.deepEqual(sessionRefs({ pr: 5, tags: ["pr:6", "issue:8"], title: "[Worker] CONTINUE PR #7 and #9" }), { prs: [5, 6, 7], issues: [8, 9] });
+});
+
+test("rule 4 (H2): claims on CLOSED issues count; the Board comment is never a claim; no-archive, role:dispatcher, untagged and BLOCKED sessions are kept", () => {
+  const closedIssue = (n, id) => ({ number: n, closed_at: ago(3), comments: [{ body: `claims #${n} — claude:${id}`, created_at: ago(5) }] });
+  const s = (id, n, tags, extra = {}) => ({ id, title: `[Worker] #${n} x`, status: "SESSION_STATUS_IDLE", bucket: "SESSION_STATUS_BUCKET_COMPLETED", tags: [`issue:${n}`, ...tags], ...extra });
+  const sessions = [s("session_01CLOSEDCLAIM", 90, ["role:worker"]), s("session_01BRYCEIOS000", 91, ["no-archive"]), s("session_01DISPATCHER0", 92, ["role:dispatcher"]),
+    s("session_01UNTAGGED0000", 93, []), s("session_01BLOCKED00000", 94, ["role:worker"], { bucket: "SESSION_STATUS_BUCKET_BLOCKED" }),
+    s("session_01BOARDONLY000", 95, ["role:worker"])];
+  // The Board comment lists sessions in its skip list: that must never make them "claimed" (review H2 bypass).
+  const boardComment = { body: `${BOARD_MARKER}\n- session session_01BOARDONLY000: keep: no claim comment names it (claims #95 — claude:session_01BOARDONLY000)`, created_at: ago(1) };
+  const closedIssues = [closedIssue(90, "session_01CLOSEDCLAIM"), ...[91, 92, 93, 94].map((n) => closedIssue(n, sessions[n - 90].id)), { number: 95, closed_at: ago(3), comments: [] }];
+  const p = planDispatch(state({ issues: [board({ comments: [boardComment] })], sessions, closedIssues }), cfg(), NOW);
+  assert.deepEqual(p.archives, [{ id: "session_01CLOSEDCLAIM", why: "#90 closed 180 min ago" }]);
+  assert.deepEqual(skips(p), ["session session_01BRYCEIOS000: keep: tagged no-archive", "session session_01DISPATCHER0: keep: role:dispatcher",
+    "session session_01UNTAGGED0000: keep: no role:worker tag (not a dispatched worker)", "session session_01BLOCKED00000: keep: blocked (waiting on a human)",
+    "session session_01BOARDONLY000: keep: no claim comment names it"]);
+  assert.deepEqual([...claimedSessionIds({ prs: [pr(1, { body: "```handoff\nowner: claude:session_01OWNER0000000\n```\nsee session_01MENTION000000" })] })], ["session_01OWNER0000000"]);
 });
 
 test("pause: the config file or a dispatch:pause label on the Dispatch issue launches nothing; merge-pause is reported", () => {
@@ -175,35 +226,91 @@ test("board: the markdown carries the marker, one row per open PR (owner from th
   assert.equal(p.boardIssue, 1);
 });
 
-test("prompts: every launch prompt is at most 25 lines and ends with the four common lines (WORKERS.md, lane, base, cost cap, land)", () => {
+test("prompts: every launch prompt is at most 25 lines and ends with the five common lines (WORKERS.md, lane, base, STOP AT, cost cap, land)", () => {
   const c = cfg();
   const long = issue(10, ["ready"], { body: Array.from({ length: 40 }, (_, i) => `line ${i} ${"x".repeat(200)}`).join("\n") });
   const hand = "```handoff\n" + Array.from({ length: 20 }, (_, i) => `k${i}: v`).join("\n") + "\n```";
   for (const [text, n] of [[issuePrompt(long, c, "claude"), "it"], [continuePrompt(pr(20, { body: hand }), c, "claude"), "#20"], [continuePrompt(pr(21), c, "claude"), "#21"], [deployRedPrompt(c, "claude"), "it"]]) {
     const lines = text.split("\n");
     assert.ok(lines.length <= PROMPT_MAX_LINES, `${lines.length} lines`);
-    assert.deepEqual(lines.slice(-4), COMMON(n));
+    assert.deepEqual(lines.slice(-5), COMMON(n));
+    assert.equal(lines.filter((l) => l === "STOP AT: 150k").length, 1, "M8: context-cap.py reads the brief's one STOP AT line");
   }
   assert.equal(issuePrompt(long, c, "claude").split("\n")[1].length, 160, "a body line is cut at 160 chars");
 });
 
-test("apply: labels, launch comments and the Board edit go through the client; the session-side lines are printed in the documented shapes", () => {
+test("apply (M4): labels and the Board edit go through the client; NO launch comment before the launch — a RECORD_LAUNCH line follows each launch", () => {
   const calls = [], out = [];
   const api = (p, o = {}) => {
     calls.push(`${o.method || "GET"} ${p}`);
-    if (p === "issues/1/comments?per_page=100") return { json: [{ id: 9, body: `${BOARD_MARKER}\nold` }] };
+    if (p === "issues/1/comments?per_page=100&page=1") return { json: [{ id: 9, body: `${BOARD_MARKER}\nold` }] };
     return { json: {} };
   };
-  const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(20, { last_push_at: ago(3) })] }), cfg(), NOW);
+  const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(20, { updated_at: ago(3) })] }), cfg(), NOW);
   p.archives.push({ id: "session_01DONE000000", why: "test" });   // exercise the print path directly
   const writes = applyPlan(p, { api, config: cfg(), log: (s) => out.push(s) });
-  assert.deepEqual(calls, ["POST issues/20/labels", "POST issues/10/comments", "POST issues/20/comments", "GET issues/1/comments?per_page=100", "PATCH issues/comments/9"]);
-  assert.equal(writes, 4);
+  assert.deepEqual(calls, ["POST issues/20/labels", "GET issues/1/comments?per_page=100&page=1", "PATCH issues/comments/9"]);
+  assert.equal(writes, 2);
   const line = (s, tag) => [s.slice(0, tag.length), JSON.parse(s.slice(tag.length))];
-  assert.deepEqual(line(out[0], "CREATE_SESSION ")[0], "CREATE_SESSION ");
   assert.deepEqual(line(out[0], "CREATE_SESSION ")[1].source_url, "https://github.com/brycejmurrin/f1-game");
-  assert.equal(line(out[1], "CREATE_SESSION ")[1].title, "[Worker] CONTINUE PR #20 PR 20");
-  assert.equal(out[2], "ARCHIVE_SESSION session_01DONE000000");
+  assert.equal(out[1], `RECORD_LAUNCH node tools/ci/dispatch.mjs --record-launch ${recordToken(p.launches[0])}`);
+  assert.equal(line(out[2], "CREATE_SESSION ")[1].title, "[Worker] CONTINUE PR #20 PR 20");
+  assert.equal(out[3].slice(0, 14), "RECORD_LAUNCH ");
+  assert.equal(out[4], "ARCHIVE_SESSION session_01DONE000000");
+  // --record-launch posts the launch comment, stamped when it runs, on the planned issue.
+  const later = NOW + 60e3, posted = [], log = [];
+  const rc = main(["--record-launch", recordToken(p.launches[0])], { api: (path, o) => (posted.push([path, o.method, o.body.body]), { json: {} }), log: (s) => log.push(s), now: () => later });
+  assert.equal(rc, 0);
+  assert.deepEqual(posted, [["issues/10/comments", "POST", "dispatch: launched claude:[Worker] #10 Task 10 for #10 at 2026-10-27T12:01:00.000Z"]]);
+  assert.equal(liveLaunch([{ body: posted[0][2] }], later, 2).target, "#10");
+  assert.equal(recordComment(recordToken({ host: "claude", title: "[Worker] #7 fix for #5 crash", number: 7, comment: { on: 7 } }), NOW).body,
+    `dispatch: launched claude:[Worker] #7 fix / #5 crash for #7 at ${ISO}`, "a title saying 'for #5' is reworded so the target parses");
+  assert.equal(main(["--record-launch", "bm90IGpzb24"], { api: () => assert.fail("no POST"), log: () => {} }), 1);
+});
+
+test("H3: readState paginates issues, PRs and comments, so the Board and Dispatch issues are found past page 1; L1: deployRed reads the newest COMPLETED train", () => {
+  const calls = [];
+  const iss = (n, title = `Issue ${n}`, labels = []) => ({ number: n, title, labels: labels.map((name) => ({ name })), body: "", updated_at: ago(1) });
+  const page1 = Array.from({ length: 100 }, (_, i) => iss(500 - i));
+  const page2 = [iss(5, "Board"), iss(6, "Dispatch", ["dispatch:pause"]), iss(7, "Old ready", ["ready"])];
+  const comments = Array.from({ length: 100 }, (_, i) => ({ id: i, body: `c${i}`, created_at: ago(5) }));
+  const api = (p) => {
+    calls.push(p);
+    if (p === "issues?state=open&per_page=100&page=1") return { json: page1 };
+    if (p === "issues?state=open&per_page=100&page=2") return { json: page2 };
+    if (p.startsWith("pulls?state=open")) return { json: p.endsWith("page=1") ? [{ number: 9, title: "p", head: { sha: "b".repeat(40), ref: "bot/changelog-fold" }, user: { login: "github-actions[bot]" }, labels: [], updated_at: ago(9) }] : [] };
+    if (p === "issues/9/comments?per_page=100&page=1") return { json: comments };
+    if (p === "issues/9/comments?per_page=100&page=2") return { json: [{ id: 100, body: "newest", created_at: ago(0.2) }] };
+    if (p.includes("/comments")) return { json: [] };
+    if (p.startsWith("actions/workflows/pages.yml/runs")) return { json: { workflow_runs: [{ conclusion: "failure" }] } };
+    return { json: {} };
+  };
+  const s = readState({ api, config: DEFAULT_CONFIG, quota: "allowed" });
+  assert.deepEqual(s.issues.slice(-3).map((i) => i.title), ["Board", "Dispatch", "Old ready"]);
+  assert.equal(s.prs[0].comments.length, 101, "the newest comment sits on page 2");
+  assert.equal(s.prs[0].last_comment_at, ago(0.2));
+  assert.equal(s.deployRed, true);
+  assert.equal(calls.find((c) => c.startsWith("actions/")), `actions/workflows/pages.yml/runs?branch=${encodeURIComponent(DEFAULT_CONFIG.deployBranch)}&status=completed&per_page=1`);
+  const p = planDispatch(s, DEFAULT_CONFIG, NOW);
+  assert.deepEqual([p.boardIssue, p.dispatchIssue, p.flags.pause], [5, 6, true]);
+  assert.equal(skips(p).includes("issue [Worker] #7 Old ready: paused (dispatch:pause)"), true, "a ready issue on page 2 is planned");
+  assert.deepEqual(getAll(() => ({ json: { check_runs: [{ id: 1 }] } }), "commits/x/check-runs", { pick: (j) => j.check_runs }), [{ id: 1 }]);
+});
+
+test("M5: a `land` PR waiting on CI/gate is not stale; a red or conflicting one is; fold-bot PRs are never re-owned; updated_at is the activity clock", () => {
+  const land = (on) => pr(80, { labels: ["land"], updated_at: ago(5), ...on });
+  const waiting = planDispatch(state({ prs: [land({ checks: [{ id: 1, name: "CI", status: "in_progress", conclusion: null }, { id: 2, name: "gate", status: "in_progress", conclusion: null }] })] }), cfg(), NOW);
+  assert.deepEqual([waiting.launches.length, skips(waiting)], [0, ["PR #80: stale 5h but labelled land and waiting on CI/gate/train"]]);
+  const rerun = land({ checks: [{ id: 1, name: "CI", status: "completed", conclusion: "failure" }, { id: 3, name: "CI", status: "completed", conclusion: "success" }] });
+  assert.equal(landProblem(rerun), null, "the newest run of a check name decides");
+  const red = land({ checks: [{ id: 1, name: "CI", status: "completed", conclusion: "failure" }] });
+  assert.equal(planDispatch(state({ prs: [red] }), cfg(), NOW).launches[0].kind, "continue");
+  assert.equal(landProblem(land({ mergeable_state: "dirty" })), "merge conflict");
+  for (const bot of [{ head_ref: "bot/changelog-fold" }, { head_ref: "bot/ratchets-fold" }, { author: "github-actions[bot]" }]) {
+    const p = planDispatch(state({ prs: [pr(81, { updated_at: ago(9), ...bot })] }), cfg(), NOW);
+    assert.deepEqual([p.launches.length, p.labels.length, skips(p)], [0, 0, ["PR #81: stale 9h but a fold bot's PR (never re-owned)"]]);
+  }
+  assert.equal(activityAt(pr(82, { updated_at: ago(1), comments: [{ body: "x", created_at: ago(4) }] })), NOW - 3.6e6, "a push or label bumps updated_at");
 });
 
 test("extractSessions reads an MCP page with its envelope; loadConfig merges the file over the defaults", () => {

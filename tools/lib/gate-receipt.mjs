@@ -16,7 +16,12 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+/** Receipt kinds the READERS understand (receiptVerdict, merge_policy.py): an old merge receipt still parses. */
 export const KINDS = ["merge", "ready"];
+/** Receipt kinds a tool may WRITE. Not "merge": a session never merges (land.yml arms, the ruleset merges), so the
+ *  hooks' merge door stays shut — `node -e "…writeReceipt(…,'merge',{ok:true})"` was a live bypass of the `hold`
+ *  veto (review M2, 2026-10-27). */
+export const WRITABLE_KINDS = Object.freeze(["ready"]);
 /** A receipt older than this is stale: the tip, CI or the body may have moved. 10 min (was 30, 2026-10-21 defect hunt rows 2+3): the hook has no API, so a MERGE-HOLD added after the gate, or a push after a ready-gate, is only caught by the receipt aging out. */
 export const MAX_AGE_MIN = 10;
 /** A receipt dated further ahead than this is refused (audit 4 redteam-gates G5/G7, redteam-hooks R3: one dated 2099
@@ -97,7 +102,8 @@ export function gateFileHashes(root = GATE_ROOT, files = gateClosure(root)) {
 
 /** Write `{ kind, pr, head, ok, at, ... }` under `root` (and the main checkout, from a worktree); returns the path. */
 export function writeReceipt(root, kind, data, { main = mainCheckout(root), gateRoot = GATE_ROOT } = {}) {
-  if (!KINDS.includes(kind)) throw new Error(`unknown receipt kind ${kind}`);
+  if (kind === "merge") throw new Error("no tool writes a merge receipt: sessions never merge (land.yml arms, the branch ruleset merges)");
+  if (!WRITABLE_KINDS.includes(kind)) throw new Error(`unknown receipt kind ${kind}`);
   const pr = Number(data.pr);
   if (!Number.isInteger(pr) || pr < 1) throw new Error(`receipt needs a PR number, got ${data.pr}`);
   // gateFiles/gateRoot last, so a caller's data cannot overwrite what the running gate hashed.
