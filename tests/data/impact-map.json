@@ -17978,6 +17978,9 @@
       "stickToSteer": [
         "tests/unit/xr-phase0.test.mjs"
       ],
+      "unionViewProjTo": [
+        "tests/unit/xr-cull-union.test.mjs"
+      ],
       "worldFromAnchorTo": [
         "tests/unit/xr-phase0.test.mjs"
       ],

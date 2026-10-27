@@ -64,7 +64,7 @@ const XrInput = (function () {
       if (hand === "right") thr = Math.max(thr, t);
       else if (hand === "left") brk = Math.max(brk, t);
       else {
-        // Ambiguous / none: treat first stick as steer, average pedals later.
+        // Ambiguous / none handedness: fold the trigger into throttle (no brake pair).
         thr = Math.max(thr, t);
       }
       const sx = axis(gp, AXIS_STICK_X);
@@ -77,8 +77,8 @@ const XrInput = (function () {
       }
       if (btn(gp, BTN_PRIMARY) > 0.5) primaryDown = true;
       if (btn(gp, BTN_SECONDARY) > 0.5) secondaryDown = true;
-      // Squeeze never turns the seated XR anchor; look behind physically.
-      void BTN_STICK; void AXIS_STICK_Y;
+      // Thumbstick click is unused (BTN_STICK exported for diagnostics only).
+      void BTN_STICK;
     }
     const latch = prev || { primary: false, secondary: false };
     const events = [];

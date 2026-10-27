@@ -83,7 +83,8 @@ test("arming VR does not modify apex26.gfxBackend (bootPick override only)", () 
   // Seed caps so sync bootPick sees vr.
   ctx.ApexXR.invalidate();
   const pick = ctx.ApexXR.bootPick();
-  assert.equal(pick, "webgl2", "armed + vr caps ⇒ GLX override");
+  assert.equal(pick, "three", "armed + vr caps ⇒ TLX override (GLX cannot attach XR)");
+  assert.equal(ctx.ApexXR.plan().forceGL, true, "shippable path needs forceWebGL");
   assert.equal(ls.getItem("apex26.gfxBackend"), "three", "2D pick untouched");
 });
 

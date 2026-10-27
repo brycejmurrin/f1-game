@@ -162,14 +162,17 @@ const ApexXR = (function () {
   function rendererMatchesPlan() {
     const p = plan();
     if (p.xrMode !== "armed") return true;
-    // Until task 40/45 wire GLX/TLX XR attach for every path, "can attach"
-    // is the practical gate for ENTER VR (Phase 0 TLX+forceGL).
+    // Shippable VR attaches only via TLX+forceGL (XrBoot.canAttach). Prefer that
+    // live gate over gfxBound — GLX also reports bound===webgl2 but cannot attach.
     if (typeof XrBoot !== "undefined" && typeof XrBoot.canAttach === "function") {
       try { if (XrBoot.canAttach()) return true; } catch (_) { /* */ }
     }
     let bound = null;
     try { bound = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { bound = null; }
-    if (p.path === "webgl2") return bound === "webgl2";
+    if (p.path === "webgl2") {
+      // Plan boots TLX (backendPref three + forceGL); soft-bound WebGL2 is ok.
+      return bound === "webgl2" || bound === "three";
+    }
     // webgpu experimental: TLX clears gfxBound on a successful bind.
     return bound == null;
   }
