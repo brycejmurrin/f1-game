@@ -323,7 +323,7 @@ test("listAllRuns pages FAILED ci.yml / pages.yml runs since the window; green, 
         ? [{ id: 1, path: ".github/workflows/ci.yml", conclusion: "success" },
           { id: 2, path: ".github/workflows/pages.yml", conclusion: "failure" },
           { id: 3, path: ".github/workflows/ci.yml", conclusion: "cancelled" },
-          { id: 4, path: ".github/workflows/fleet.yml", conclusion: "failure" },
+          { id: 4, path: ".github/workflows/gpu-census.yml", conclusion: "failure" },
           { id: 5, path: ".github/workflows/ci.yml", conclusion: "failure" }]
         : [];
       return { status: 200, arrayBuffer: async () => Buffer.from(JSON.stringify({ workflow_runs: runs })) };
@@ -426,7 +426,7 @@ test("flake-tally.yml: a 2-hourly base-red mode beside the daily tally, same lea
   assert.match(wf, /^permissions:\n  contents: read\n  actions: read\n  issues: write$/m, "no new permission");
   const labels = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/labels.json"), "utf8"));
   const l = labels.find((x) => x.name === "base-red");
-  assert.ok(l && l.description.length <= 100, "fleet.yml syncs labels.json; GitHub caps a description at 100 chars");
+  assert.ok(l && l.description.length <= 100, "labels.json is the label source; GitHub caps a description at 100 chars");
 });
 
 test("flake-tally.yml runs the daily tally with least privilege, and the flaky label exists", () => {
@@ -438,7 +438,7 @@ test("flake-tally.yml runs the daily tally with least privilege, and the flaky l
   assert.match(wf, /persist-credentials: false/);
   assert.match(wf, /node tools\/ci\/flake-tally\.mjs --events all --days "\$DAYS" --propose --issue/);
   const labels = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/labels.json"), "utf8"));
-  assert.ok(labels.some((l) => l.name === "flaky"), "fleet.yml syncs labels.json; the issue needs the label");
+  assert.ok(labels.some((l) => l.name === "flaky"), "labels.json is the label source; the issue needs the label");
 });
 
 test("#2233: listRunJobs pages 30 at a time (per_page=100 is a 502 on large runs) and keeps what it read when a later page fails", async () => {
