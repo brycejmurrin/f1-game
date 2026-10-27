@@ -1,0 +1,2 @@
+Improved: the garage opens on a different camera angle each visit (hero, front and rear three-quarters, side) instead of the same framing every time; the reset-view button still returns to the default.
+Fixed: the menu no longer flashes the old red accent, normal text size and normal contrast for a moment at startup — your theme, accent, text size, contrast and UI scale apply before the first frame.
