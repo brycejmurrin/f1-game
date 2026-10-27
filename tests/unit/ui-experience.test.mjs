@@ -79,6 +79,14 @@ test('Home varies real environments and shots per visit, preserving the shot thr
   assert.deepEqual(writes,[1,2,3,4,5]);
 });
 
+test('peek before the first enter already answers this visit, so the eval stamp and the pre-paint guess do not flash garage first', () => {
+  for (const saved of [0, 1, 3, 7, 19, -1, 2.5, Infinity]) {
+    let v = saved; const picker = ctx.api.homeVariation({ get: () => v, set: (_k, n) => { v = n; } });
+    const first = picker.peek('auto', 'auto').mode;
+    assert.equal(picker.enter('auto', 'auto').mode, first, 'saved ' + saved);
+  }
+});
+
 test('Invalid visit metadata is bounded; a fixed Home camera survives changing environments', () => {
   const picker=ctx.api.homeVariation({get:()=>Infinity,set:()=>{}});
   assert.equal(picker.enter('track','front').shot,'front');

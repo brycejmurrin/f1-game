@@ -404,7 +404,7 @@ test("GaragePrebuild.instance() is the page's one instance (for __apex.garagePre
   assert.match(game, /garagePre\.start\(\);/, "the title poll is armed at boot");
   const openAt = game.indexOf("function openGarage(from)");
   const open = game.slice(openAt, game.indexOf("$(\"mb-garage\").onclick", openAt));
-  assert.match(open, /resetSetupCam\(\);[\s\S]*else vt\(enterGarage\);/,
+  assert.match(open, /resetSetupCam\(setupCam\.nextEntryPose\(\)\);[\s\S]*else vt\(enterGarage\);/,
     "openGarage resets the camera before vt(enterGarage); endHome lets renderHome yield");
   assert.match(open, /renderSetupPreview\(0\)/,
     "enterGarage draws one bay frame on entry so vt/rAF cannot leave #game black");

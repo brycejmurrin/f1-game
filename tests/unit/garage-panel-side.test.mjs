@@ -42,7 +42,7 @@ test('garage gesture lifecycle drops old fingers and held owners without breakin
   const common = source.slice(source.indexOf('const setupGestureResets ='), source.indexOf('function holdSetupCtl('));
   const hold = source.slice(source.indexOf('function holdSetupCtl('), source.indexOf('holdSetupCtl("cs-view-in"'));
   const orbit = source.slice(source.indexOf('{\n  const canvas = $("game");'), source.indexOf('// Preset jumps are immediate'));
-  const reset = source.slice(source.indexOf('function resetSetupCam()'), source.indexOf('// Rebuild-on-change only'));
+  const reset = source.slice(source.indexOf('// GARAGE ENTRY ROTATION'), source.indexOf('// Rebuild-on-change only'));
   const target = () => ({ listeners: {}, addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); } });
   for (const end of ['blur', 'pagehide', 'hidden', 'garage-exit', 'photo-exit', 'reset']) {
     const canvas = Object.assign(target(), { clientWidth: 1000 }), control = Object.assign(target(), { setPointerCapture() {} });
@@ -51,7 +51,7 @@ test('garage gesture lifecycle drops old fingers and held owners without breakin
     const c = vm.createContext({ window: win, document: doc, G: { setupPreviewOn: true, soundOn: false }, home: { active: false },
       $: id => ({ game: canvas, left: control, carsetup: garage, 'photo-studio': photo })[id] || null,
       preview: false, arrival: { cancel() {} }, spHeld: null, setupPreviewAz: 0, setupPreviewEl: 0,
-      SP_EL_MIN: 0, SP_EL_MAX: 1.5, SP_EL_DEF: .5, SP_DIST_DEF: 8, SP_ORBIT_DEF: [0, 0, 0], SP_TGT_DEF: [0, 0, 0], setupPreviewPan: [0, 0, 0],
+      SP_EL_MIN: 0, SP_EL_MAX: 1.5, SP_EL_DEF: .5, SP_DIST_DEF: 8, SP_VIEWS: { hero: {}, side: {} }, SP_ORBIT_DEF: [0, 0, 0], SP_TGT_DEF: [0, 0, 0], setupPreviewPan: [0, 0, 0],
       setSetupSpin() {}, endHome() {}, setupZoom: value => zooms.push(value), clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)),
       GarageExperience: { canOrbit: (on, _home, _photo, blocked) => on && !blocked },
       MutationObserver: class { constructor(fn) { this.fn = fn; } observe(el) { observers.set(el, this.fn); } },
@@ -323,4 +323,40 @@ test("garage frames memoise the career sponsor + achievements on (store.rev, res
   h.garageCtx();
   assert.equal(h.calls.meta, 3);
   assert.equal(h.garageCtx().wins, 2, "and the tally follows the pushed win");
+});
+
+// GARAGE ENTRY ROTATION (W8, Bryce: "not always the same garage angle"): openGarage
+// passes nextEntryPose(); #cs-view-reset calls resetSetupCam() bare, the fixed default.
+test("consecutive garage opens rotate the entry angle; RESET still lands on the default", () => {
+  const source = read("js/garage/setup-camera.js");
+  const pick = (from, to) => { const at = source.indexOf(from); return source.slice(at, source.indexOf(to, at)); };
+  const consts = [pick("const SP_EL_DEF =", "\n"), pick("const SP_EL_MIN =", "\n"), pick("const SP_VIEWS = {", "\n};") + "\n};"].join("\n");
+  const rotation = pick("// GARAGE ENTRY ROTATION", "// Rebuild-on-change only");
+  const data = {};
+  const c = vm.createContext({ G: { store: { get: (k, d) => (k in data ? data[k] : d), set: (k, v) => { data[k] = v; } } },
+    clearSetupGestures() {}, endHome() {}, arrival: { cancel() {} }, setSetupSpin(on) { c.spin = on; },
+    setupPreviewPan: [1, 2, 3], SP_ORBIT_DEF: [0, 0, 0], SP_TGT_DEF: [0, 0, 0] });
+  vm.runInContext("var setupPreviewAz, setupPreviewEl, setupPreviewDist, setupPreviewOrbit, setupPreviewTgt, setupPreviewMinDist, setupPreviewFree;\n"
+    + consts + "\n" + rotation
+    + ";var cam = () => ({ az: setupPreviewAz, el: setupPreviewEl, dist: setupPreviewDist });"
+    + "var limits = { elMin: SP_EL_MIN, elMax: SP_EL_MAX, dMin: SP_DIST_MIN, dMax: SP_DIST_MAX, elDef: SP_EL_DEF, dDef: SP_DIST_DEF };", c,
+    { filename: absSrc("js/garage/setup-camera.js") });
+  const L = c.limits, seen = [];
+  const plainCam = (p) => ({ az: p.az, el: p.el, dist: p.dist });
+  for (let i = 0; i < 8; i++) {
+    c.resetSetupCam(c.nextEntryPose());
+    const p = plainCam(c.cam());
+    assert.ok(p.el >= L.elMin && p.el <= L.elMax && p.dist >= L.dMin && p.dist <= L.dMax, "entry pose inside the orbit limits: " + JSON.stringify(p));
+    assert.equal(c.spin, true, "every entry keeps the turntable");
+    if (seen.length) assert.notEqual(p.az, seen[seen.length - 1].az, "two consecutive opens differ in az");
+    seen.push(p);
+  }
+  assert.ok(new Set(seen.map((p) => p.az)).size >= 3, "the rotation visits several angles");
+  assert.ok(Number.isSafeInteger(data.garageVisit), "the visit counter persists through the store");
+  c.resetSetupCam();
+  assert.deepEqual(plainCam(c.cam()), { az: 0.6, el: L.elDef, dist: L.dDef }, "RESET (no pose) is the fixed default");
+  data.garageVisit = Infinity;
+  assert.equal(c.nextEntryPose().az, 0.6, "junk visit metadata falls back to the first pose");
+  // openGarage's call is pinned in garage-prebuild.test.mjs (resetSetupCam(setupCam.nextEntryPose()));
+  // #cs-view-reset calls resetSetupCam() bare, which is the default asserted above.
 });

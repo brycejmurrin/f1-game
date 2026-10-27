@@ -7830,6 +7830,9 @@
       ]
     },
     "js/garage/setup-camera.js": {
+      "clearSetupGestures": [
+        "tests/unit/garage-panel-side.test.mjs"
+      ],
       "create": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-finish-remap.test.mjs",
@@ -7874,6 +7877,9 @@
       ],
       "hullKeyOf": [
         "tests/unit/setup-preview-hull.test.mjs"
+      ],
+      "nextEntryPose": [
+        "tests/unit/garage-panel-side.test.mjs"
       ],
       "panelCover": [
         "tests/unit/garage-panel-side.test.mjs"

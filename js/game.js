@@ -9070,8 +9070,8 @@ function openGarage(from) {
   // as remembered. The turntable is the front door; the controls are there for
   // anyone who wants off it.
   // ONE reset, shared with #cs-view-reset, so the two doors to "fresh camera"
-  // agree on all five fields.
-  resetSetupCam();
+  // agree on all five fields; the visit picks a rotating entry angle (nextEntryPose).
+  resetSetupCam(setupCam.nextEntryPose());
   setSetupCamPanel(false);   // same reasoning: the front door is the turntable
   // vt at the CALL site: SetupUI.create runs before Menus.create at boot, so
   // the module cannot hold the helper itself. The build runs inside the

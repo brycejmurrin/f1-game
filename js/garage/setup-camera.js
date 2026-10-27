@@ -495,13 +495,30 @@ function applyHeldSetupCam(dt) {
   if (spHeld.strafe || spHeld.dolly)
     setupPan((spHeld.strafe || 0) * dt, (spHeld.dolly || 0) * dt);
 }
-function resetSetupCam() {
+// GARAGE ENTRY ROTATION (Bryce: "not always the same garage angle"). openGarage
+// opens on the next of these by a persisted visit counter (the homeVariation
+// pattern, js/ui/experience.js); #cs-view-reset keeps the fixed default, entry 0.
+// Each sits inside the player's orbit limits, and the jump is instant (no motion).
+const SP_ENTRY_POSES = [
+  { az: 0.6, el: SP_EL_DEF, dist: SP_DIST_DEF },   // front three-quarter (the default)
+  SP_VIEWS.hero,                                    // rear three-quarter
+  { az: -0.6, el: SP_EL_DEF, dist: SP_DIST_DEF },  // front three-quarter, other flank
+  SP_VIEWS.side,
+];
+function nextEntryPose() {
+  const saved = G.store ? G.store.get("garageVisit", 0) : 0;
+  const i = Number.isSafeInteger(saved) && saved >= 0 ? saved % SP_ENTRY_POSES.length : 0;
+  if (G.store) G.store.set("garageVisit", (i + 1) % SP_ENTRY_POSES.length);
+  return SP_ENTRY_POSES[i];
+}
+function resetSetupCam(pose) {
+  const p = pose || SP_ENTRY_POSES[0];
   clearSetupGestures();
   endHome();
   arrival.cancel();
-  setupPreviewAz = 0.6;
-  setupPreviewEl = SP_EL_DEF;
-  setupPreviewDist = SP_DIST_DEF;
+  setupPreviewAz = p.az;
+  setupPreviewEl = p.el;
+  setupPreviewDist = p.dist;
   setupPreviewPan[0] = setupPreviewPan[1] = setupPreviewPan[2] = 0;
   // …and the FRAMING, which az/el/dist do not carry. A WING or BRAKES preset
   // aims the camera by moving the orbit point and the look-at (setSetupAim /
@@ -1112,7 +1129,7 @@ return {
   captureCamera, restoreCamera,
   startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival: arrival.cancel,
   startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); },
-  renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
+  renderSetupPreview, resetSetupCam, nextEntryPose, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },
   // on: boolean, or a lens {fov, centre} (a matched-lens dev shot, which is free too).

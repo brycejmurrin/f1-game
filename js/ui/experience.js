@@ -85,7 +85,10 @@ const UiExperience = (function () {
 
   function homeVariation(store) {
     const shots = ["hero", "front", "side", "rear"], environments = ["garage", "track", "night", "pitlane", "studio"];
-    let visiting = false, index = 0;
+    // index starts at THIS visit's saved slot, so peek() before enter() (stamp at
+    // eval) and index.html's pre-paint "auto" guess agree with what enter() picks.
+    const savedIndex = () => { const s = store.get("homeVisit", 0); return Number.isSafeInteger(s) && s >= 0 ? s % 20 : 0; };
+    let visiting = false, index = savedIndex();
     // Reused — enter/peek run every title Home frame; callers read fields sync.
     const _values = { mode: "garage", shot: "hero" };
     function values(mode, camera) {
@@ -96,8 +99,7 @@ const UiExperience = (function () {
     return {
       enter(mode, camera, retainScene = false) {
         if (!visiting && !retainScene) {
-          const saved = store.get("homeVisit", 0);
-          index = Number.isSafeInteger(saved) && saved >= 0 ? saved % 20 : 0;
+          index = savedIndex();
           store.set("homeVisit", (index + 1) % 20); visiting = true;
         }
         return values(mode, camera);
